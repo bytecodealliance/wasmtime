@@ -1461,9 +1461,9 @@
 ;;;; Rules for `trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (trap code))
-      (value_regs_none (ud2 code)))
+      (safepoint (ud2 code)))
 
 ;;;; Rules for `resumable_trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (resumable_trap code))
-      (value_regs_none (ud2 code)))
+      (safepoint (ud2 code)))

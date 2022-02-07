@@ -2993,13 +2993,13 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                 &Opcode::Trap => {
                     // Rule at src/isa/x64/lower.isle line 1463.
                     let expr0_0 = constructor_ud2(ctx, &pattern2_1)?;
-                    let expr1_0 = constructor_value_regs_none(ctx, &expr0_0)?;
+                    let expr1_0 = constructor_safepoint(ctx, &expr0_0)?;
                     return Some(expr1_0);
                 }
                 &Opcode::ResumableTrap => {
                     // Rule at src/isa/x64/lower.isle line 1468.
                     let expr0_0 = constructor_ud2(ctx, &pattern2_1)?;
-                    let expr1_0 = constructor_value_regs_none(ctx, &expr0_0)?;
+                    let expr1_0 = constructor_safepoint(ctx, &expr0_0)?;
                     return Some(expr1_0);
                 }
                 _ => {}
