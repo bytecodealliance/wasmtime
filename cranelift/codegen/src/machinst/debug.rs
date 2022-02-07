@@ -378,16 +378,26 @@ where
 ///   which that label is bound.
 pub(crate) fn compute<I: VCodeInst>(
     insts: &[I],
-    inst_ends: &[u32],
-    label_insn_index: &[u32],
+    layout_info: &InstsLayoutInfo,
 ) -> ValueLabelsRanges {
-    let inst_start = |idx: usize| if idx == 0 { 0 } else { inst_ends[idx - 1] };
+    let inst_start = |idx: usize| {
+        if idx == 0 {
+            0
+        } else {
+            layout_info.inst_end_offsets[idx - 1]
+        }
+    };
 
     trace!("compute: insts =");
     for i in 0..insts.len() {
-        trace!(" #{} end: {} -> {:?}", i, inst_ends[i], insts[i]);
+        trace!(
+            " #{} end: {} -> {:?}",
+            i,
+            layout_info.inst_end_offsets[i],
+            insts[i]
+        );
     }
-    trace!("label_insn_index: {:?}", label_insn_index);
+    trace!("label_insn_index: {:?}", layout_info.label_inst_indices);
 
     // Info at each block head, indexed by label.
     let mut block_starts: HashMap<u32, AnalysisInfo> = HashMap::new();
@@ -409,7 +419,7 @@ pub(crate) fn compute<I: VCodeInst>(
         trace!("at block {} -> state: {:?}", block, state);
         // Iterate for each instruction in the block (we break at the first
         // terminator we see).
-        let mut index = label_insn_index[block as usize];
+        let mut index = layout_info.label_inst_indices[block as usize];
         while index < insts.len() as u32 {
             state.step(&insts[index as usize]);
             trace!(" -> inst #{}: {:?}", index, insts[index as usize]);
@@ -446,18 +456,33 @@ pub(crate) fn compute<I: VCodeInst>(
     // value-label locations.
 
     let mut value_labels_ranges: ValueLabelsRanges = HashMap::new();
-    for block in 0..label_insn_index.len() {
-        let start_index = label_insn_index[block];
-        let end_index = if block == label_insn_index.len() - 1 {
+    for block in 0..layout_info.label_inst_indices.len() {
+        let start_index = layout_info.label_inst_indices[block];
+        let end_index = if block == layout_info.label_inst_indices.len() - 1 {
             insts.len() as u32
         } else {
-            label_insn_index[block + 1]
+            layout_info.label_inst_indices[block + 1]
         };
         let block = block as u32;
         let mut state = block_starts.get(&block).unwrap().clone();
         for index in start_index..end_index {
             let offset = inst_start(index as usize);
-            let end = inst_ends[index as usize];
+            let end = layout_info.inst_end_offsets[index as usize];
+
+            // Cold blocks cause instructions to occur out-of-order wrt
+            // others. We rely on the monotonic mapping from instruction
+            // index to offset in machine code for this analysis to work,
+            // so we just skip debuginfo for cold blocks. This should be
+            // generally fine, as cold blocks generally constitute
+            // slowpaths for expansions of particular ops, rather than
+            // user-written code.
+            if layout_info.start_of_cold_code.is_some()
+                && offset >= layout_info.start_of_cold_code.unwrap()
+            {
+                continue;
+            }
+
+            assert!(offset <= end);
             state.step(&insts[index as usize]);
 
             for (label, locs) in &state.label_to_locs {
