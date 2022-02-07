@@ -233,8 +233,12 @@ where
         }
     }
 
-    fn emit_safepoint(&mut self, _inst: &MInst) -> Unit {
-        unimplemented!();
+    fn emit_safepoint(&mut self, inst: &MInst) -> Unit {
+        use crate::machinst::MachInst;
+        for inst in inst.clone().mov_mitosis() {
+            let is_safepoint = !inst.is_move().is_some();
+            self.emitted_insts.push((inst, is_safepoint));
+        }
     }
 
     #[inline]
