@@ -554,10 +554,6 @@ mod test {
 
     #[test]
     fn instantiate_no_image() {
-        if skip_tests_due_to_qemu_madvise_semantics() {
-            return;
-        }
-
         // 4 MiB mmap'd area, not accessible
         let mut mmap = Mmap::accessible_reserved(0, 4 << 20).unwrap();
         // Create a MemFdSlot on top of it
@@ -590,10 +586,6 @@ mod test {
 
     #[test]
     fn instantiate_image() {
-        if skip_tests_due_to_qemu_madvise_semantics() {
-            return;
-        }
-
         // 4 MiB mmap'd area, not accessible
         let mut mmap = Mmap::accessible_reserved(0, 4 << 20).unwrap();
         // Create a MemFdSlot on top of it
@@ -636,20 +628,5 @@ mod test {
         memfd.instantiate(64 << 10, Some(&image)).unwrap();
         let slice = mmap.as_slice();
         assert_eq!(&[1, 2, 3, 4], &slice[4096..4100]);
-    }
-
-    /// qemu's madvise implementation does not implement the
-    /// "flash-reset back to zero or CoW backing" semantics that Linux
-    /// does. Our CI setup uses qemu (in usermode-binary mode, not
-    /// whole-system mode) to run tests on aarch64 and s390x. We want
-    /// to skip these tests when under qemu, but not when someone is
-    /// developing natively on one of these architectures. So instead,
-    /// we dynamically detect an environment variable that our CI
-    /// setup sets.
-    ///
-    /// See `skip_pooling_allocator_tests()` in `tests/all/main.rs`
-    /// for more.
-    fn skip_tests_due_to_qemu_madvise_semantics() -> bool {
-        std::env::var("WASMTIME_TEST_NO_HOG_MEMORY").is_ok()
     }
 }
