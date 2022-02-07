@@ -13,7 +13,7 @@ use std::{
 };
 use structopt::{clap::AppSettings, StructOpt};
 use wasmtime::{Engine, Func, Linker, Module, Store, Trap, Val, ValType};
-use wasmtime_wasi::sync::{ambient_authority, Dir, WasiCtxBuilder};
+use wasmtime_wasi::sync::{ambient_authority, Dir, TcpListener, WasiCtxBuilder};
 
 #[cfg(feature = "wasi-nn")]
 use wasmtime_wasi_nn::WasiNnCtx;
@@ -91,6 +91,19 @@ pub struct RunCommand {
     #[structopt(long = "allow-precompiled")]
     allow_precompiled: bool,
 
+    /// Inherit environment variables and file descriptors following the
+    /// systemd listen fd specification (UNIX only)
+    #[structopt(long = "listenfd")]
+    listenfd: bool,
+
+    /// Grant access to the given TCP listen socket
+    #[structopt(
+        long = "tcplisten",
+        number_of_values = 1,
+        value_name = "SOCKET ADDRESS"
+    )]
+    tcplisten: Vec<String>,
+
     /// Grant access to the given host directory
     #[structopt(long = "dir", number_of_values = 1, value_name = "DIRECTORY")]
     dirs: Vec<String>,
@@ -151,6 +164,8 @@ impl RunCommand {
         let engine = Engine::new(&config)?;
         let mut store = Store::new(&engine, Host::default());
 
+        let preopen_sockets = self.compute_preopen_sockets()?;
+
         // Make wasi available by default.
         let preopen_dirs = self.compute_preopen_dirs()?;
         let argv = self.compute_argv();
@@ -165,6 +180,8 @@ impl RunCommand {
             &argv,
             &self.vars,
             &self.common.wasi_modules.unwrap_or(WasiModules::default()),
+            self.listenfd,
+            preopen_sockets,
         )?;
 
         // Load the preload wasm modules.
@@ -241,6 +258,20 @@ impl RunCommand {
         }
 
         Ok(preopen_dirs)
+    }
+
+    fn compute_preopen_sockets(&self) -> Result<Vec<TcpListener>> {
+        let mut listeners = vec![];
+
+        for address in &self.tcplisten {
+            let stdlistener = std::net::TcpListener::bind(address)
+                .with_context(|| format!("failed to bind to address '{}'", address))?;
+
+            let _ = stdlistener.set_nonblocking(true)?;
+
+            listeners.push(TcpListener::from_std(stdlistener))
+        }
+        Ok(listeners)
     }
 
     fn compute_argv(&self) -> Vec<String> {
@@ -415,6 +446,8 @@ fn populate_with_wasi(
     argv: &[String],
     vars: &[(String, String)],
     wasi_modules: &WasiModules,
+    listenfd: bool,
+    mut tcplisten: Vec<TcpListener>,
 ) -> Result<()> {
     if wasi_modules.wasi_common {
         wasmtime_wasi::add_to_linker(linker, |host| host.wasi.as_mut().unwrap())?;
@@ -422,9 +455,23 @@ fn populate_with_wasi(
         let mut builder = WasiCtxBuilder::new();
         builder = builder.inherit_stdio().args(argv)?.envs(vars)?;
 
+        let mut num_fd: usize = 3;
+
+        if listenfd {
+            let (n, b) = ctx_set_listenfd(num_fd, builder)?;
+            num_fd = n;
+            builder = b;
+        }
+
+        for listener in tcplisten.drain(..) {
+            builder = builder.preopened_socket(num_fd as _, listener)?;
+            num_fd += 1;
+        }
+
         for (name, dir) in preopen_dirs.into_iter() {
             builder = builder.preopened_dir(dir, name)?;
         }
+
         store.data_mut().wasi = Some(builder.build());
     }
 
@@ -453,4 +500,36 @@ fn populate_with_wasi(
     }
 
     Ok(())
+}
+
+#[cfg(not(unix))]
+fn ctx_set_listenfd(num_fd: usize, builder: WasiCtxBuilder) -> Result<(usize, WasiCtxBuilder)> {
+    Ok((num_fd, builder))
+}
+
+#[cfg(unix)]
+fn ctx_set_listenfd(num_fd: usize, builder: WasiCtxBuilder) -> Result<(usize, WasiCtxBuilder)> {
+    use listenfd::ListenFd;
+
+    let mut builder = builder;
+    let mut num_fd = num_fd;
+
+    for env in ["LISTEN_FDS", "LISTEN_FDNAMES"] {
+        if let Ok(val) = std::env::var(env) {
+            builder = builder.env(env, &val)?;
+        }
+    }
+
+    let mut listenfd = ListenFd::from_env();
+
+    for i in 0..listenfd.len() {
+        if let Some(stdlistener) = listenfd.take_tcp_listener(i)? {
+            let _ = stdlistener.set_nonblocking(true)?;
+            let listener = TcpListener::from_std(stdlistener);
+            builder = builder.preopened_socket((3 + i) as _, listener)?;
+            num_fd = 3 + i;
+        }
+    }
+
+    Ok((num_fd, builder))
 }

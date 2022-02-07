@@ -39,6 +39,7 @@ rayon = "1.5.0"
 humantime = "2.0.0"
 wasmparser = "0.82.0"
 lazy_static = "1.4.0"
+listenfd = "0.3.5"
 
 [target.'cfg(unix)'.dependencies]
 rustix = "0.33.0"
