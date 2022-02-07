@@ -94,7 +94,6 @@ default = [
   "wasmtime/wat",
   "wasmtime/parallel-compilation",
   "wasi-nn",
-  "memfd",
   "pooling-allocator",
 ]
 jitdump = ["wasmtime/jitdump"]
