@@ -104,6 +104,7 @@ pub struct Config {
     pub(crate) module_version: ModuleVersionStrategy,
     pub(crate) parallel_compilation: bool,
     pub(crate) paged_memory_initialization: bool,
+    pub(crate) memfd: bool,
 }
 
 impl Config {
@@ -129,6 +130,7 @@ impl Config {
             parallel_compilation: true,
             // Default to paged memory initialization when using uffd on linux
             paged_memory_initialization: cfg!(all(target_os = "linux", feature = "uffd")),
+            memfd: false,
         };
         #[cfg(compiler)]
         {
@@ -1170,6 +1172,33 @@ impl Config {
         self
     }
 
+    /// Configures whether `memfd`, if supported, will be used to initialize
+    /// applicable module memories.
+    ///
+    /// This is a Linux-specific feature since `memfd` is only supported on
+    /// Linux. Support for this is also enabled by default at compile time but
+    /// is otherwise disabled at runtime by default. This feature needs to be
+    /// enabled to `true` for support to be used.
+    ///
+    /// Also note that even if this feature is enabled it may not be applicable
+    /// to all memories in all wasm modules. At this time memories must meet
+    /// specific criteria to be memfd-initialized:
+    ///
+    /// * Only memories defined in the module can be initialized this way.
+    /// * Data segments for memory must use statically known offsets.
+    /// * Data segments for memory must all be in-bounds.
+    ///
+    /// If all of the above applies, this setting is enabled, and the current
+    /// platform is Linux the `memfd` will be used to efficiently initialize
+    /// linear memories with `mmap` to avoid copying data from initializers into
+    /// linear memory.
+    #[cfg(feature = "memfd")]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "memfd")))]
+    pub fn memfd(&mut self, memfd: bool) -> &mut Self {
+        self.memfd = memfd;
+        self
+    }
+
     pub(crate) fn build_allocator(&self) -> Result<Box<dyn InstanceAllocator>> {
         #[cfg(feature = "async")]
         let stack_size = self.async_stack_size;
@@ -1239,6 +1268,7 @@ impl Clone for Config {
             module_version: self.module_version.clone(),
             parallel_compilation: self.parallel_compilation,
             paged_memory_initialization: self.paged_memory_initialization,
+            memfd: self.memfd,
         }
     }
 }

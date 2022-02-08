@@ -61,6 +61,7 @@ pub struct WasmtimeConfig {
     pub(crate) consume_fuel: bool,
     memory_config: MemoryConfig,
     force_jump_veneers: bool,
+    memfd: bool,
 }
 
 #[derive(Arbitrary, Clone, Debug, Eq, Hash, PartialEq)]
@@ -99,7 +100,8 @@ impl Config {
             .cranelift_nan_canonicalization(self.wasmtime.canonicalize_nans)
             .cranelift_opt_level(self.wasmtime.opt_level.to_wasmtime())
             .interruptable(self.wasmtime.interruptable)
-            .consume_fuel(self.wasmtime.consume_fuel);
+            .consume_fuel(self.wasmtime.consume_fuel)
+            .memfd(self.wasmtime.memfd);
 
         // If the wasm-smith-generated module use nan canonicalization then we
         // don't need to enable it, but if it doesn't enable it already then we
