@@ -1034,21 +1034,19 @@ impl TermEnv {
         }
 
         // Check for cycles in the extractor call graph.
-        let mut seen = BTreeSet::new();
         let mut stack = vec![];
         'outer: for root in extractor_call_graph.keys().copied() {
-            seen.clear();
             stack.clear();
-            stack.push((root, vec![root]));
+            stack.push((root, vec![root], BTreeSet::new()));
 
-            while let Some((caller, path)) = stack.pop() {
+            while let Some((caller, path, mut seen)) = stack.pop() {
                 let is_new = seen.insert(caller);
                 if is_new {
                     if let Some(callees) = extractor_call_graph.get(&caller) {
                         stack.extend(callees.iter().map(|callee| {
                             let mut path = path.clone();
                             path.push(*callee);
-                            (*callee, path)
+                            (*callee, path, seen.clone())
                         }));
                     }
                 } else {

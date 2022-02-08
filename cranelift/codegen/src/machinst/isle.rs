@@ -6,8 +6,9 @@ use regalloc::{Reg, Writable};
 use smallvec::SmallVec;
 
 pub use super::MachLabel;
-pub use crate::ir::ExternalName;
+pub use crate::ir::{ExternalName, FuncRef, GlobalValue, SigRef};
 pub use crate::isa::unwind::UnwindInst;
+pub use crate::machinst::RelocDistance;
 
 pub type Unit = ();
 pub type ValueSlice<'a> = &'a [Value];
@@ -276,6 +277,34 @@ macro_rules! isle_prelude_methods {
 
         fn avoid_div_traps(&mut self, _: Type) -> Option<()> {
             if self.flags.avoid_div_traps() {
+                Some(())
+            } else {
+                None
+            }
+        }
+
+        #[inline]
+        fn func_ref_data(&mut self, func_ref: FuncRef) -> (SigRef, ExternalName, RelocDistance) {
+            let funcdata = &self.lower_ctx.dfg().ext_funcs[func_ref];
+            (
+                funcdata.signature,
+                funcdata.name.clone(),
+                funcdata.reloc_distance(),
+            )
+        }
+
+        #[inline]
+        fn symbol_value_data(
+            &mut self,
+            global_value: GlobalValue,
+        ) -> Option<(ExternalName, RelocDistance, i64)> {
+            let (name, reloc, offset) = self.lower_ctx.symbol_value_data(global_value)?;
+            Some((name.clone(), reloc, offset))
+        }
+
+        #[inline]
+        fn reloc_distance_near(&mut self, dist: RelocDistance) -> Option<()> {
+            if dist == RelocDistance::Near {
                 Some(())
             } else {
                 None

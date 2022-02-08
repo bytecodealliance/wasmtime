@@ -1156,27 +1156,23 @@
 ;;;; Rules for `func_addr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Load the address of a function, target reachable via PC-relative instruction.
-(rule (lower (and (func_addr _)
-                  (call_target_data name (reloc_distance_near))))
+(rule (lower (func_addr (func_ref_data _ name (reloc_distance_near))))
       (value_reg (load_addr (memarg_symbol name 0 (memflags_trusted)))))
 
 ;; Load the address of a function, general case.
-(rule (lower (and (func_addr _)
-                  (call_target_data name _)))
+(rule (lower (func_addr (func_ref_data _ name _)))
       (value_reg (load_ext_name_far name 0)))
 
 
 ;;;; Rules for `symbol_value` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Load the address of a symbol, target reachable via PC-relative instruction.
-(rule (lower (and (symbol_value _)
-                  (symbol_value_data name (reloc_distance_near)
-                                          (memarg_symbol_offset offset))))
+(rule (lower (symbol_value (symbol_value_data name (reloc_distance_near)
+                                                   (memarg_symbol_offset offset))))
       (value_reg (load_addr (memarg_symbol name offset (memflags_trusted)))))
 
 ;; Load the address of a symbol, general case.
-(rule (lower (and (symbol_value _)
-                  (symbol_value_data name _ offset)))
+(rule (lower (symbol_value (symbol_value_data name _ offset)))
       (value_reg (load_ext_name_far name offset)))
 
 

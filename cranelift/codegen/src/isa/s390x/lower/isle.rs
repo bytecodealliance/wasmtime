@@ -13,12 +13,12 @@ use crate::machinst::isle::*;
 use crate::settings::Flags;
 use crate::{
     ir::{
-        condcodes::*, immediates::*, types::*, AtomicRmwOp, Endianness, ExternalName, Inst,
-        InstructionData, StackSlot, TrapCode, Value, ValueLabel, ValueList,
+        condcodes::*, immediates::*, types::*, AtomicRmwOp, Endianness, Inst, InstructionData,
+        StackSlot, TrapCode, Value, ValueLabel, ValueList,
     },
     isa::s390x::inst::s390x_map_regs,
     isa::unwind::UnwindInst,
-    machinst::{InsnOutput, LowerCtx, RelocDistance},
+    machinst::{InsnOutput, LowerCtx},
 };
 use std::boxed::Box;
 use std::cell::Cell;
@@ -125,18 +125,6 @@ where
         } else {
             None
         }
-    }
-
-    #[inline]
-    fn symbol_value_data(&mut self, inst: Inst) -> Option<(BoxExternalName, RelocDistance, i64)> {
-        let (name, dist, offset) = self.lower_ctx.symbol_value(inst)?;
-        Some((Box::new(name.clone()), dist, offset))
-    }
-
-    #[inline]
-    fn call_target_data(&mut self, inst: Inst) -> Option<(BoxExternalName, RelocDistance)> {
-        let (name, dist) = self.lower_ctx.call_target(inst)?;
-        Some((Box::new(name.clone()), dist))
     }
 
     #[inline]
@@ -405,15 +393,6 @@ where
     }
 
     #[inline]
-    fn reloc_distance_near(&mut self, dist: &RelocDistance) -> Option<()> {
-        if *dist == RelocDistance::Near {
-            Some(())
-        } else {
-            None
-        }
-    }
-
-    #[inline]
     fn zero_offset(&mut self) -> Offset32 {
         Offset32::new(0)
     }
@@ -444,6 +423,11 @@ where
     }
 
     #[inline]
+    fn box_external_name(&mut self, name: ExternalName) -> BoxExternalName {
+        Box::new(name)
+    }
+
+    #[inline]
     fn memflags_trusted(&mut self) -> MemFlags {
         MemFlags::trusted()
     }
@@ -459,9 +443,9 @@ where
     }
 
     #[inline]
-    fn memarg_symbol(&mut self, name: BoxExternalName, offset: i32, flags: MemFlags) -> MemArg {
+    fn memarg_symbol(&mut self, name: ExternalName, offset: i32, flags: MemFlags) -> MemArg {
         MemArg::Symbol {
-            name,
+            name: Box::new(name),
             offset,
             flags,
         }
