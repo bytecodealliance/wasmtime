@@ -97,22 +97,26 @@ impl ModuleLimits {
 
 impl<'a> Arbitrary<'a> for ModuleLimits {
     fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
-        const MAXIMUM: u32 = 1000;
+        const MAX_IMPORTS: u32 = 1000;
+        const MAX_TYPES: u32 = 1000;
+        const MAX_FUNCTIONS: u32 = 1000;
         const MAX_TABLES: u32 = 10;
         const MAX_MEMORIES: u32 = 10;
+        const MAX_GLOBALS: u32 = 1000;
+        const MAX_ELEMENTS: u32 = 1000;
         const MAX_MEMORY_PAGES: u64 = 65536;
 
         Ok(Self {
-            imported_functions: u.int_in_range(0..=MAXIMUM)?,
-            imported_tables: u.int_in_range(0..=MAXIMUM)?,
-            imported_memories: u.int_in_range(0..=MAXIMUM)?,
-            imported_globals: u.int_in_range(0..=MAXIMUM)?,
-            types: u.int_in_range(0..=MAXIMUM)?,
-            functions: u.int_in_range(0..=MAXIMUM)?,
+            imported_functions: u.int_in_range(0..=MAX_IMPORTS)?,
+            imported_tables: u.int_in_range(0..=MAX_IMPORTS)?,
+            imported_memories: u.int_in_range(0..=MAX_IMPORTS)?,
+            imported_globals: u.int_in_range(0..=MAX_IMPORTS)?,
+            types: u.int_in_range(0..=MAX_TYPES)?,
+            functions: u.int_in_range(0..=MAX_FUNCTIONS)?,
             tables: u.int_in_range(0..=MAX_TABLES)?,
             memories: u.int_in_range(0..=MAX_MEMORIES)?,
-            globals: u.int_in_range(0..=MAXIMUM)?,
-            table_elements: u.int_in_range(0..=MAXIMUM)?,
+            globals: u.int_in_range(0..=MAX_GLOBALS)?,
+            table_elements: u.int_in_range(0..=MAX_ELEMENTS)?,
             memory_pages: u.int_in_range(0..=MAX_MEMORY_PAGES)?,
         })
     }
@@ -132,10 +136,10 @@ impl InstanceLimits {
 
 impl<'a> Arbitrary<'a> for InstanceLimits {
     fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
-        const MAXIMUM: u32 = 100;
+        const MAX_COUNT: u32 = 100;
 
         Ok(Self {
-            count: u.int_in_range(1..=MAXIMUM)?,
+            count: u.int_in_range(1..=MAX_COUNT)?,
         })
     }
 }
