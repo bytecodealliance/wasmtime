@@ -112,6 +112,26 @@
       (shift_imm u8)
       (shift_reg Reg))
 
+    ;; A rotate-then-<op>-selected-bits instruction with a register
+    ;; in/out-operand, another register source, and three immediates.
+    (RxSBG
+        (op RxSBGOp)
+        (rd WritableReg)
+        (rn Reg)
+        (start_bit u8)
+        (end_bit u8)
+        (rotate_amt i8))
+
+    ;; The test-only version of RxSBG, which does not modify any register
+    ;; but only sets the condition code.
+    (RxSBGTest
+        (op RxSBGOp)
+        (rd Reg)
+        (rn Reg)
+        (start_bit u8)
+        (end_bit u8)
+        (rotate_amt i8))
+
     ;; An unary operation with a register source and a register destination.
     (UnaryRR
       (op UnaryOp)
@@ -658,6 +678,19 @@
       (rd WritableReg)
       (mem MemArg))
 
+    ;; Meta-instruction to emit a loop around a sequence of instructions.
+    ;; This control flow is not visible to the compiler core, in particular
+    ;; the register allocator.  Therefore, instructions in the loop may not
+    ;; write to any virtual register, so any writes must use reserved hard
+    ;; registers (e.g. %r0, %r1).  *Reading* virtual registers is OK.
+    (Loop
+      (body VecMInst)
+      (cond Cond))
+
+    ;; Conditional branch breaking out of a loop emitted via Loop.
+    (CondBreak
+      (cond Cond))
+
     ;; Marker, no-op in generated code SP "virtual offset" is adjusted. This
     ;; controls how MemArg::NominalSPOffset args are lowered.
     (VirtualSPOffsetAdj
@@ -732,6 +765,8 @@
     (Neg64Ext32)
     (PopcntByte)
     (PopcntReg)
+    (BSwap32)
+    (BSwap64)
 ))
 
 ;; A shift operation.
@@ -745,6 +780,15 @@
     (LShR64)
     (AShR32)
     (AShR64)
+))
+
+;; A rotate-then-<op>-selected-bits operation.
+(type RxSBGOp
+  (enum
+    (Insert)
+    (And)
+    (Or)
+    (Xor)
 ))
 
 ;; An integer comparison operation.
@@ -1395,6 +1439,13 @@
             (_ Unit (emit (MInst.ShiftRR op dst src shift_imm shift_reg))))
         (writable_reg_to_reg dst)))
 
+;; Helper for emitting `MInst.RxSBGTest` instructions.
+(decl rxsbg_test (RxSBGOp Reg Reg u8 u8 i8) ProducesFlags)
+(rule (rxsbg_test op src1 src2 start_bit end_bit rotate_amt)
+      (ProducesFlags.ProducesFlags (MInst.RxSBGTest op src1 src2
+                                    start_bit end_bit rotate_amt)
+                                   (invalid_reg)))
+
 ;; Helper for emitting `MInst.UnaryRR` instructions.
 (decl unary_rr (Type UnaryOp Reg) Reg)
 (rule (unary_rr ty op src)
@@ -1719,6 +1770,95 @@
         result))
 
 
+;; Helpers for instruction sequences ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Completed instruction sequence for use in MInst.Loop.
+(type VecMInst (primitive VecMInst))
+
+;; Partial (mutable) instruction sequence in the process of being created.
+(type VecMInstBuilder extern (enum))
+
+;; Create a new empty instruction sequence builder.
+(decl inst_builder_new () VecMInstBuilder)
+(extern constructor inst_builder_new inst_builder_new)
+
+;; Push an instruction to a sequence under construction.
+(decl inst_builder_push (VecMInstBuilder MInst) Unit)
+(extern constructor inst_builder_push inst_builder_push)
+
+;; Complete the sequence under construction.
+(decl inst_builder_finish (VecMInstBuilder) VecMInst)
+(extern constructor inst_builder_finish inst_builder_finish)
+
+;; It is not safe to write to virtual registers in the loop, so all destination
+;; registers must be real.  This must be handled by the user of these helpers,
+;; so we simply verify this constraint here.
+(decl real_reg (WritableReg) WritableReg)
+(extern extractor real_reg real_reg)
+
+;; Similarly, because we cannot allocate temp registers, if an instruction
+;; requires matching source and destination registers, this needs to be handled
+;; by the user.  Another helper to verify that constraint.
+(decl same_reg (WritableReg) Reg)
+(extern extractor same_reg same_reg (in))
+
+;; Push a `MInst.AluRRR` instruction to a sequence.
+(decl push_alu_reg (VecMInstBuilder ALUOp WritableReg Reg Reg) Reg)
+(rule (push_alu_reg ib op (real_reg dst) src1 src2)
+      (let ((_ Unit (inst_builder_push ib (MInst.AluRRR op dst src1 src2))))
+        (writable_reg_to_reg dst)))
+
+;; Push a `MInst.AluRUImm32Shifted` instruction to a sequence.
+(decl push_alu_uimm32shifted (VecMInstBuilder ALUOp WritableReg Reg UImm32Shifted) Reg)
+(rule (push_alu_uimm32shifted ib op (real_reg dst) (same_reg <dst) imm)
+      (let ((_ Unit (inst_builder_push ib (MInst.AluRUImm32Shifted op dst imm))))
+        (writable_reg_to_reg dst)))
+
+;; Push a `MInst.ShiftRR` instruction to a sequence.
+(decl push_shift (VecMInstBuilder ShiftOp WritableReg Reg u8 Reg) Reg)
+(rule (push_shift ib op (real_reg dst) src shift_imm shift_reg)
+      (let ((_ Unit (inst_builder_push ib
+                      (MInst.ShiftRR op dst src shift_imm shift_reg))))
+        (writable_reg_to_reg dst)))
+
+;; Push a `MInst.RxSBG` instruction to a sequence.
+(decl push_rxsbg (VecMInstBuilder RxSBGOp WritableReg Reg Reg u8 u8 i8) Reg)
+(rule (push_rxsbg ib op (real_reg dst) (same_reg <dst) src start_bit end_bit rotate_amt)
+      (let ((_ Unit (inst_builder_push ib
+                      (MInst.RxSBG op dst src start_bit end_bit rotate_amt))))
+        (writable_reg_to_reg dst)))
+
+;; Push a `MInst.UnaryRR` instruction to a sequence.
+(decl push_unary (VecMInstBuilder UnaryOp WritableReg Reg) Reg)
+(rule (push_unary ib op (real_reg dst) src)
+      (let ((_ Unit (inst_builder_push ib (MInst.UnaryRR op dst src))))
+        (writable_reg_to_reg dst)))
+
+;; Push a `MInst.AtomicCas32` instruction to a sequence.
+(decl push_atomic_cas32 (VecMInstBuilder WritableReg Reg MemArg) Reg)
+(rule (push_atomic_cas32 ib (real_reg dst_src1) src2 mem)
+      (let ((_ Unit (inst_builder_push ib (MInst.AtomicCas32 dst_src1 src2 mem))))
+        (writable_reg_to_reg dst_src1)))
+
+;; Push a `MInst.AtomicCas64` instruction to a sequence.
+(decl push_atomic_cas64 (VecMInstBuilder WritableReg Reg MemArg) Reg)
+(rule (push_atomic_cas64 ib (real_reg dst_src1) src2 mem)
+      (let ((_ Unit (inst_builder_push ib (MInst.AtomicCas64 dst_src1 src2 mem))))
+        (writable_reg_to_reg dst_src1)))
+
+;; Push instructions to break out of the loop if condition is met.
+(decl push_break_if (VecMInstBuilder ProducesFlags Cond) Reg)
+(rule (push_break_if ib (ProducesFlags.ProducesFlags inst result) cond)
+      (let ((_1 Unit (inst_builder_push ib inst))
+            (_2 Unit (inst_builder_push ib (MInst.CondBreak cond))))
+        result))
+
+;; Emit a `MInst.Loop` instruction holding a loop body instruction sequence.
+(decl emit_loop (VecMInstBuilder Cond) Unit)
+(rule (emit_loop ib cond)
+      (emit (MInst.Loop (inst_builder_finish ib) cond)))
+
+
 ;; Helpers for generating register moves ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Move source register into destination.  (Non-SSA form.)
@@ -1746,6 +1886,13 @@
 ;; Likewise, but returning a Reg instead of a WritableReg.
 (decl copy_reg (Type Reg) Reg)
 (rule (copy_reg ty reg) (writable_reg_to_reg (copy_writable_reg ty reg)))
+
+;; Move from memory location into destination.
+(decl emit_load (Type WritableReg MemArg) Unit)
+(rule (emit_load $I32 dst addr)
+      (emit (MInst.Load32 dst addr)))
+(rule (emit_load $I64 dst addr)
+      (emit (MInst.Load64 dst addr)))
 
 
 ;; Helpers for generating immediate values ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -2249,6 +2396,123 @@
         (trap_if_impl cond trap_code)))
 
 
+;;;; Helpers for compare-and-swap loops ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; We use the emit_loop functionality to create compare-and-swap loops.
+;; As noted there, code inside a loop emitted via emit_loop cannot write
+;; to any virtual register, only hard registers.  We use the two reserved
+;; registers %r0 and %r1 in compare-and-swap loops.
+
+;; %r0 always holds the value currently loaded from the memory location.
+(decl casloop_val_reg () WritableReg)
+(rule (casloop_val_reg) (writable_gpr 0))
+
+;; %r1 is available to compute the new value to be written.
+(decl casloop_tmp_reg () WritableReg)
+(rule (casloop_tmp_reg) (writable_gpr 1))
+
+;; This takes a loop body for a compare-and-swap loop, completes it by
+;; adding the actual compare-and-swap instruction, and emits the initial
+;; memory load followed by the loop itself.  "val" is the new value to
+;; be written if the memory location still holds the old value in %r0.
+;; The result should be passed to "casloop_result" or (in the case of
+;; subword loops) to "casloop_rotate_result".
+(decl casloop_emit (VecMInstBuilder Type MemFlags Reg Reg) Reg)
+(rule (casloop_emit ib ty flags aligned_addr val)
+      (let (;; Construct a memory argument for the aligned word.
+            (aligned_mem MemArg (memarg_reg_plus_off aligned_addr 0 flags))
+            ;; Add the compare-and-swap instruction to the builder.
+            (result Reg (push_atomic_cas ib (ty_ext32 ty)
+                          (casloop_val_reg) val aligned_mem))
+            ;; Emit initial load followed by compare-and-swap loop.
+            (_1 Unit (emit_load (ty_ext32 ty) (casloop_val_reg) aligned_mem))
+            (_2 Unit (emit_loop ib (intcc_as_cond (IntCC.NotEqual)))))
+        result))
+
+;; Compute the previous memory value after a (fullword) compare-and-swap loop.
+;; In the big-endian case, the value is already correct, but may need to be
+;; copied out of the hard register.  In the little-endian case, we need to
+;; byte-swap since the compare-and-swap instruction is always big-endian.
+(decl casloop_result (Type MemFlags Reg) Reg)
+(rule (casloop_result (ty_32_or_64 ty) (bigendian) result)
+      (copy_reg ty result))
+(rule (casloop_result (ty_32_or_64 ty) (littleendian) result)
+      (bswap_reg ty result))
+
+;; Emit a fullword compare-and-swap loop, returning the previous memory value.
+(decl casloop (VecMInstBuilder Type MemFlags Reg Reg) Reg)
+(rule (casloop ib ty flags aligned_addr val)
+      (casloop_result ty flags (casloop_emit ib ty flags aligned_addr val)))
+
+;; For types smaller than $I32, we have no native compare-and-swap
+;; instruction, so we need to perform the compare-and-swap loop on the
+;; surrounding aligned word.  To actually operate on the target $I8 or
+;; $I16 data, that aligned word then needs to be rotated by an amount
+;; determined by the low address bits.
+
+;; Determine the rotate amount to bring the target data into a position
+;; in the high bytes of the enclosing $I32.  Since the compare-and-swap
+;; instruction performs a big-endian memory access, this can be done by
+;; rotating (left) by "(addr & 3) * 8" bits, or "(addr << 3) & 31" bits.
+;; We can omit the "& 31" since this is implicit with a 32-bit rotate.
+(decl casloop_bitshift (Reg) Reg)
+(rule (casloop_bitshift addr)
+      (lshl_imm $I32 addr 3))
+
+;; The address of the surrounding 32-bit word, by masking off low bits.
+(decl casloop_aligned_addr (Reg) Reg)
+(rule (casloop_aligned_addr addr)
+      (and_uimm16shifted $I64 addr (uimm16shifted 0xfffc 0)))
+
+;; Push an instruction sequence to rotate a value loaded from memory
+;; to the well-defined location: the high bytes in case of a big-endian
+;; memory operation, and the low bytes in the little-endian case.
+;; (This is somewhat arbitary but chosen to allow the most efficient
+;; sequences to compute the various atomic operations.)
+;; Note that $I8 accesses always use the big-endian case.
+(decl casloop_rotate_in (VecMInstBuilder Type MemFlags Reg Reg) Reg)
+(rule (casloop_rotate_in ib $I8 _ bitshift val)
+      (push_rot_imm_reg ib $I32 (casloop_tmp_reg) val 0 bitshift))
+(rule (casloop_rotate_in ib $I16 (bigendian) bitshift val)
+      (push_rot_imm_reg ib $I32 (casloop_tmp_reg) val 0 bitshift))
+(rule (casloop_rotate_in ib $I16 (littleendian) bitshift val)
+      (push_rot_imm_reg ib $I32 (casloop_tmp_reg) val 16 bitshift))
+
+;; The inverse operation: rotate values back to the original memory order.
+;; This can be done by simply using the negated shift count.  As an extra
+;; optimization, we note that in the $I16 case the shift count can only
+;; take the values 0 or 16, both of which negate to themselves (mod 32),
+;; so the explicit negation operation can be omitted here.
+(decl casloop_rotate_out (VecMInstBuilder Type MemFlags Reg Reg) Reg)
+(rule (casloop_rotate_out ib $I8 _ bitshift val)
+      (push_rot_imm_reg ib $I32 (casloop_tmp_reg) val 0 (neg_reg $I32 bitshift)))
+(rule (casloop_rotate_out ib $I16 (bigendian) bitshift val)
+      (push_rot_imm_reg ib $I32 (casloop_tmp_reg) val 0 bitshift))
+(rule (casloop_rotate_out ib $I16 (littleendian) bitshift val)
+      (push_rot_imm_reg ib $I32 (casloop_tmp_reg) val 16 bitshift))
+
+;; Compute the previous memory value after a subword compare-and-swap loop.
+;; This is similar to casloop_rotate_in, but brings the value to the *low*
+;; bytes.  This can be achieved simply by adding the type size to the rotate
+;; amount, which can be done within the same instruction.  In the little-
+;; endian case, we also need to byte-swap the result.  Since we only have
+;; a 32-bit byte-swap instruction, we load the value to the high bytes in
+;; this case before performing the 32-bit byte-swap.
+(decl casloop_rotate_result (Type MemFlags Reg Reg) Reg)
+(rule (casloop_rotate_result $I8 _ bitshift result)
+      (rot_imm_reg $I32 result 8 bitshift))
+(rule (casloop_rotate_result $I16 (bigendian) bitshift result)
+      (rot_imm_reg $I32 result 16 bitshift))
+(rule (casloop_rotate_result $I16 (littleendian) bitshift result)
+      (bswap_reg $I32 (rot_reg $I32 result bitshift)))
+
+;; Emit a subword compare-and-swap loop, returning the previous memory value.
+(decl casloop_subword (VecMInstBuilder Type MemFlags Reg Reg Reg) Reg)
+(rule (casloop_subword ib ty flags aligned_addr bitshift val)
+      (casloop_rotate_result ty flags bitshift
+        (casloop_emit ib ty flags aligned_addr val)))
+
+
 ;; Helpers for generating `clz` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Count leading zeroes.  For a zero input, return the specified value.
@@ -2497,6 +2761,9 @@
 (decl xor_mem (Type Reg MemArg) Reg)
 (rule (xor_mem ty x y) (alu_rx ty (aluop_xor ty) x y))
 
+(decl push_xor_uimm32shifted (VecMInstBuilder Type WritableReg Reg UImm32Shifted) Reg)
+(rule (push_xor_uimm32shifted ib ty dst src imm)
+      (push_alu_uimm32shifted ib (aluop_xor ty) dst src imm))
 
 ;; Helpers for generating `not` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -2507,6 +2774,13 @@
       (xor_uimm32shifted ty
         (xor_uimm32shifted ty x (uimm32shifted 0xffffffff 0))
         (uimm32shifted 0xffffffff 32)))
+
+(decl push_not_reg (VecMInstBuilder Type WritableReg Reg) Reg)
+(rule (push_not_reg ib (gpr32_ty ty) dst src)
+      (push_xor_uimm32shifted ib ty dst src (uimm32shifted 0xffffffff 0)))
+(rule (push_not_reg ib (gpr64_ty ty) dst src)
+      (let ((val Reg (push_xor_uimm32shifted ib ty dst src (uimm32shifted 0xffffffff 0))))
+        (push_xor_uimm32shifted ib ty dst val (uimm32shifted 0xffffffff 32))))
 
 
 ;; Helpers for generating `and_not` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -2573,6 +2847,19 @@
 (rule (neg_reg_sext32 ty x) (unary_rr ty (unaryop_neg_sext32 ty) x))
 
 
+;; Helpers for generating `bswap` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl unaryop_bswap (Type) UnaryOp)
+(rule (unaryop_bswap $I32) (UnaryOp.BSwap32))
+(rule (unaryop_bswap $I64) (UnaryOp.BSwap64))
+
+(decl bswap_reg (Type Reg) Reg)
+(rule (bswap_reg ty x) (unary_rr ty (unaryop_bswap ty) x))
+
+(decl push_bswap_reg (VecMInstBuilder Type WritableReg Reg) Reg)
+(rule (push_bswap_reg ib ty dst src) (push_unary ib (unaryop_bswap ty) dst src))
+
+
 ;; Helpers for generating `rot` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (decl shiftop_rot (Type) ShiftOp)
@@ -2586,6 +2873,14 @@
 (decl rot_imm (Type Reg u8) Reg)
 (rule (rot_imm ty x shift_imm)
       (shift_rr ty (shiftop_rot ty) x shift_imm (zero_reg)))
+
+(decl rot_imm_reg (Type Reg u8 Reg) Reg)
+(rule (rot_imm_reg ty x shift_imm shift_reg)
+      (shift_rr ty (shiftop_rot ty) x shift_imm shift_reg))
+
+(decl push_rot_imm_reg (VecMInstBuilder Type WritableReg Reg u8 Reg) Reg)
+(rule (push_rot_imm_reg ib ty dst src shift_imm shift_reg)
+      (push_shift ib (shiftop_rot ty) dst src shift_imm shift_reg))
 
 
 ;; Helpers for generating `lshl` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -2661,6 +2956,17 @@
 (decl atomic_rmw_add (Type Reg MemArg) Reg)
 (rule (atomic_rmw_add $I32 src mem) (atomic_rmw_impl $I32 (ALUOp.Add32) src mem))
 (rule (atomic_rmw_add $I64 src mem) (atomic_rmw_impl $I64 (ALUOp.Add64) src mem))
+
+
+;; Helpers for generating `atomic_cas` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl atomic_cas_impl (Type Reg Reg MemArg) Reg)
+(rule (atomic_cas_impl $I32 src1 src2 mem) (atomic_cas32 src1 src2 mem))
+(rule (atomic_cas_impl $I64 src1 src2 mem) (atomic_cas64 src1 src2 mem))
+
+(decl push_atomic_cas (VecMInstBuilder Type WritableReg Reg MemArg) Reg)
+(rule (push_atomic_cas ib $I32 src1 src2 mem) (push_atomic_cas32 ib src1 src2 mem))
+(rule (push_atomic_cas ib $I64 src1 src2 mem) (push_atomic_cas64 ib src1 src2 mem))
 
 
 ;; Helpers for generating `fadd` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

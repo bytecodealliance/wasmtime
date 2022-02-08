@@ -1478,6 +1478,24 @@ fn test_s390x_binemit() {
         "B9E1801A",
         "popcnt %r1, %r10, 8",
     ));
+    insns.push((
+        Inst::UnaryRR {
+            op: UnaryOp::BSwap32,
+            rd: writable_gpr(1),
+            rn: gpr(10),
+        },
+        "B91F001A",
+        "lrvr %r1, %r10",
+    ));
+    insns.push((
+        Inst::UnaryRR {
+            op: UnaryOp::BSwap64,
+            rd: writable_gpr(1),
+            rn: gpr(10),
+        },
+        "B90F001A",
+        "lrvgr %r1, %r10",
+    ));
 
     insns.push((
         Inst::CmpRR {
@@ -2408,6 +2426,91 @@ fn test_s390x_binemit() {
         },
         "EB45603F000A",
         "srag %r4, %r5, 63(%r6)",
+    ));
+
+    insns.push((
+        Inst::RxSBG {
+            op: RxSBGOp::Insert,
+            rd: writable_gpr(4),
+            rn: gpr(5),
+            start_bit: 8,
+            end_bit: 32,
+            rotate_amt: -16,
+        },
+        "EC4508203059",
+        "risbgn %r4, %r5, 8, 32, 48",
+    ));
+    insns.push((
+        Inst::RxSBG {
+            op: RxSBGOp::And,
+            rd: writable_gpr(4),
+            rn: gpr(5),
+            start_bit: 8,
+            end_bit: 32,
+            rotate_amt: 63,
+        },
+        "EC4508203F54",
+        "rnsbg %r4, %r5, 8, 32, 63",
+    ));
+    insns.push((
+        Inst::RxSBG {
+            op: RxSBGOp::Or,
+            rd: writable_gpr(4),
+            rn: gpr(5),
+            start_bit: 8,
+            end_bit: 32,
+            rotate_amt: 63,
+        },
+        "EC4508203F56",
+        "rosbg %r4, %r5, 8, 32, 63",
+    ));
+    insns.push((
+        Inst::RxSBG {
+            op: RxSBGOp::Xor,
+            rd: writable_gpr(4),
+            rn: gpr(5),
+            start_bit: 8,
+            end_bit: 32,
+            rotate_amt: 63,
+        },
+        "EC4508203F57",
+        "rxsbg %r4, %r5, 8, 32, 63",
+    ));
+    insns.push((
+        Inst::RxSBGTest {
+            op: RxSBGOp::And,
+            rd: gpr(4),
+            rn: gpr(5),
+            start_bit: 8,
+            end_bit: 32,
+            rotate_amt: 63,
+        },
+        "EC4588203F54",
+        "rnsbg %r4, %r5, 136, 32, 63",
+    ));
+    insns.push((
+        Inst::RxSBGTest {
+            op: RxSBGOp::Or,
+            rd: gpr(4),
+            rn: gpr(5),
+            start_bit: 8,
+            end_bit: 32,
+            rotate_amt: 63,
+        },
+        "EC4588203F56",
+        "rosbg %r4, %r5, 136, 32, 63",
+    ));
+    insns.push((
+        Inst::RxSBGTest {
+            op: RxSBGOp::Xor,
+            rd: gpr(4),
+            rn: gpr(5),
+            start_bit: 8,
+            end_bit: 32,
+            rotate_amt: 63,
+        },
+        "EC4588203F57",
+        "rxsbg %r4, %r5, 136, 32, 63",
     ));
 
     insns.push((
@@ -6697,6 +6800,34 @@ fn test_s390x_binemit() {
         },
         "A7E400030000",
         "jno 6 ; trap",
+    ));
+
+    insns.push((
+        Inst::Loop {
+            body: vec![
+                Inst::CmpRR {
+                    op: CmpOp::CmpS32,
+                    rn: gpr(2),
+                    rm: gpr(3),
+                },
+                Inst::CondBreak {
+                    cond: Cond::from_mask(13),
+                },
+                Inst::AtomicCas32 {
+                    rd: writable_gpr(4),
+                    rn: gpr(5),
+                    mem: MemArg::BXD12 {
+                        base: gpr(6),
+                        index: zero_reg(),
+                        disp: UImm12::maybe_from_u64(0).unwrap(),
+                        flags: MemFlags::trusted(),
+                    },
+                },
+            ],
+            cond: Cond::from_mask(6),
+        },
+        "1923C0D400000008BA456000C064FFFFFFFA",
+        "0: cr %r2, %r3 ; jgnh 1f ; cs %r4, %r5, 0(%r6) ; jglh 0b ; 1:",
     ));
 
     insns.push((

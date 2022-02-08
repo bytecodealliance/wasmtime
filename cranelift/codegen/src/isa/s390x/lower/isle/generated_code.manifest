@@ -1,4 +1,4 @@
 src/clif.isle 9ea75a6f790b5c03
 src/prelude.isle 6aaf8ce0f5a5c2ec
-src/isa/s390x/inst.isle f5af3708848ef1aa
-src/isa/s390x/lower.isle 57dcc39cbab2d1c6
+src/isa/s390x/inst.isle 1ae3c0f9c956affd
+src/isa/s390x/lower.isle d18ee0bff12cad4e

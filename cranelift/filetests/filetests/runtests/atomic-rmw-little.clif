@@ -1,7 +1,4 @@
 test run
-target aarch64
-target aarch64 has_lse
-target x86_64
 target s390x
 
 ; We can't test that these instructions are right regarding atomicity, but we can
@@ -11,12 +8,12 @@ function %atomic_rmw_add_i64(i64, i64) -> i64 {
     ss0 = explicit_slot 8
 
 block0(v0: i64, v1: i64):
-    stack_store.i64 v0, ss0
-
     v2 = stack_addr.i64 ss0
-    v3 = atomic_rmw.i64 add v2, v1
+    store.i64 little v0, v2
 
-    v4 = stack_load.i64 ss0
+    v3 = atomic_rmw.i64 little add v2, v1
+
+    v4 = load.i64 little v2
     return v4
 }
 ; run: %atomic_rmw_add_i64(0, 0) == 0
@@ -29,12 +26,12 @@ function %atomic_rmw_add_i32(i32, i32) -> i32 {
     ss0 = explicit_slot 4
 
 block0(v0: i32, v1: i32):
-    stack_store.i32 v0, ss0
-
     v2 = stack_addr.i32 ss0
-    v3 = atomic_rmw.i32 add v2, v1
+    store.i32 little v0, v2
 
-    v4 = stack_load.i32 ss0
+    v3 = atomic_rmw.i32 little add v2, v1
+
+    v4 = load.i32 little v2
     return v4
 }
 ; run: %atomic_rmw_add_i32(0, 0) == 0
@@ -49,12 +46,12 @@ function %atomic_rmw_sub_i64(i64, i64) -> i64 {
     ss0 = explicit_slot 8
 
 block0(v0: i64, v1: i64):
-    stack_store.i64 v0, ss0
-
     v2 = stack_addr.i64 ss0
-    v3 = atomic_rmw.i64 sub v2, v1
+    store.i64 little v0, v2
 
-    v4 = stack_load.i64 ss0
+    v3 = atomic_rmw.i64 little sub v2, v1
+
+    v4 = load.i64 little v2
     return v4
 }
 ; run: %atomic_rmw_sub_i64(0, 0) == 0
@@ -67,12 +64,12 @@ function %atomic_rmw_sub_i32(i32, i32) -> i32 {
     ss0 = explicit_slot 4
 
 block0(v0: i32, v1: i32):
-    stack_store.i32 v0, ss0
-
     v2 = stack_addr.i32 ss0
-    v3 = atomic_rmw.i32 sub v2, v1
+    store.i32 little v0, v2
 
-    v4 = stack_load.i32 ss0
+    v3 = atomic_rmw.i32 little sub v2, v1
+
+    v4 = load.i32 little v2
     return v4
 }
 ; run: %atomic_rmw_sub_i32(0, 0) == 0
@@ -87,12 +84,12 @@ function %atomic_rmw_and_i64(i64, i64) -> i64 {
     ss0 = explicit_slot 8
 
 block0(v0: i64, v1: i64):
-    stack_store.i64 v0, ss0
-
     v2 = stack_addr.i64 ss0
-    v3 = atomic_rmw.i64 and v2, v1
+    store.i64 little v0, v2
 
-    v4 = stack_load.i64 ss0
+    v3 = atomic_rmw.i64 little and v2, v1
+
+    v4 = load.i64 little v2
     return v4
 }
 ; run: %atomic_rmw_and_i64(0, 0) == 0
@@ -105,12 +102,12 @@ function %atomic_rmw_and_i32(i32, i32) -> i32 {
     ss0 = explicit_slot 4
 
 block0(v0: i32, v1: i32):
-    stack_store.i32 v0, ss0
-
     v2 = stack_addr.i32 ss0
-    v3 = atomic_rmw.i32 and v2, v1
+    store.i32 little v0, v2
 
-    v4 = stack_load.i32 ss0
+    v3 = atomic_rmw.i32 little and v2, v1
+
+    v4 = load.i32 little v2
     return v4
 }
 
@@ -126,12 +123,12 @@ function %atomic_rmw_or_i64(i64, i64) -> i64 {
     ss0 = explicit_slot 8
 
 block0(v0: i64, v1: i64):
-    stack_store.i64 v0, ss0
-
     v2 = stack_addr.i64 ss0
-    v3 = atomic_rmw.i64 or v2, v1
+    store.i64 little v0, v2
 
-    v4 = stack_load.i64 ss0
+    v3 = atomic_rmw.i64 little or v2, v1
+
+    v4 = load.i64 little v2
     return v4
 }
 ; run: %atomic_rmw_or_i64(0, 0) == 0
@@ -144,12 +141,12 @@ function %atomic_rmw_or_i32(i32, i32) -> i32 {
     ss0 = explicit_slot 4
 
 block0(v0: i32, v1: i32):
-    stack_store.i32 v0, ss0
-
     v2 = stack_addr.i32 ss0
-    v3 = atomic_rmw.i32 or v2, v1
+    store.i32 little v0, v2
 
-    v4 = stack_load.i32 ss0
+    v3 = atomic_rmw.i32 little or v2, v1
+
+    v4 = load.i32 little v2
     return v4
 }
 
@@ -165,12 +162,12 @@ function %atomic_rmw_xor_i64(i64, i64) -> i64 {
     ss0 = explicit_slot 8
 
 block0(v0: i64, v1: i64):
-    stack_store.i64 v0, ss0
-
     v2 = stack_addr.i64 ss0
-    v3 = atomic_rmw.i64 xor v2, v1
+    store.i64 little v0, v2
 
-    v4 = stack_load.i64 ss0
+    v3 = atomic_rmw.i64 little xor v2, v1
+
+    v4 = load.i64 little v2
     return v4
 }
 ; run: %atomic_rmw_xor_i64(0, 0) == 0
@@ -183,12 +180,12 @@ function %atomic_rmw_xor_i32(i32, i32) -> i32 {
     ss0 = explicit_slot 4
 
 block0(v0: i32, v1: i32):
-    stack_store.i32 v0, ss0
-
     v2 = stack_addr.i32 ss0
-    v3 = atomic_rmw.i32 xor v2, v1
+    store.i32 little v0, v2
 
-    v4 = stack_load.i32 ss0
+    v3 = atomic_rmw.i32 little xor v2, v1
+
+    v4 = load.i32 little v2
     return v4
 }
 ; run: %atomic_rmw_xor_i32(0, 0) == 0
@@ -203,12 +200,12 @@ function %atomic_rmw_nand_i64(i64, i64) -> i64 {
     ss0 = explicit_slot 8
 
 block0(v0: i64, v1: i64):
-    stack_store.i64 v0, ss0
-
     v2 = stack_addr.i64 ss0
-    v3 = atomic_rmw.i64 nand v2, v1
+    store.i64 little v0, v2
 
-    v4 = stack_load.i64 ss0
+    v3 = atomic_rmw.i64 little nand v2, v1
+
+    v4 = load.i64 little v2
     return v4
 }
 ; run: %atomic_rmw_nand_i64(0, 0) == -1
@@ -221,12 +218,12 @@ function %atomic_rmw_nand_i32(i32, i32) -> i32 {
     ss0 = explicit_slot 4
 
 block0(v0: i32, v1: i32):
-    stack_store.i32 v0, ss0
-
     v2 = stack_addr.i32 ss0
-    v3 = atomic_rmw.i32 nand v2, v1
+    store.i32 little v0, v2
 
-    v4 = stack_load.i32 ss0
+    v3 = atomic_rmw.i32 little nand v2, v1
+
+    v4 = load.i32 little v2
     return v4
 }
 ; run: %atomic_rmw_nand_i32(0, 0) == -1
@@ -241,12 +238,12 @@ function %atomic_rmw_umin_i64(i64, i64) -> i64 {
     ss0 = explicit_slot 8
 
 block0(v0: i64, v1: i64):
-    stack_store.i64 v0, ss0
-
     v2 = stack_addr.i64 ss0
-    v3 = atomic_rmw.i64 umin v2, v1
+    store.i64 little v0, v2
 
-    v4 = stack_load.i64 ss0
+    v3 = atomic_rmw.i64 little umin v2, v1
+
+    v4 = load.i64 little v2
     return v4
 }
 ; run: %atomic_rmw_umin_i64(0, 0) == 0
@@ -260,12 +257,12 @@ function %atomic_rmw_umin_i32(i32, i32) -> i32 {
     ss0 = explicit_slot 4
 
 block0(v0: i32, v1: i32):
-    stack_store.i32 v0, ss0
-
     v2 = stack_addr.i32 ss0
-    v3 = atomic_rmw.i32 umin v2, v1
+    store.i32 little v0, v2
 
-    v4 = stack_load.i32 ss0
+    v3 = atomic_rmw.i32 little umin v2, v1
+
+    v4 = load.i32 little v2
     return v4
 }
 ; run: %atomic_rmw_umin_i32(0, 0) == 0
@@ -281,12 +278,12 @@ function %atomic_rmw_umax_i64(i64, i64) -> i64 {
     ss0 = explicit_slot 8
 
 block0(v0: i64, v1: i64):
-    stack_store.i64 v0, ss0
-
     v2 = stack_addr.i64 ss0
-    v3 = atomic_rmw.i64 umax v2, v1
+    store.i64 little v0, v2
 
-    v4 = stack_load.i64 ss0
+    v3 = atomic_rmw.i64 little umax v2, v1
+
+    v4 = load.i64 little v2
     return v4
 }
 ; run: %atomic_rmw_umax_i64(0, 0) == 0
@@ -300,12 +297,12 @@ function %atomic_rmw_umax_i32(i32, i32) -> i32 {
     ss0 = explicit_slot 4
 
 block0(v0: i32, v1: i32):
-    stack_store.i32 v0, ss0
-
     v2 = stack_addr.i32 ss0
-    v3 = atomic_rmw.i32 umax v2, v1
+    store.i32 little v0, v2
 
-    v4 = stack_load.i32 ss0
+    v3 = atomic_rmw.i32 little umax v2, v1
+
+    v4 = load.i32 little v2
     return v4
 }
 ; run: %atomic_rmw_umax_i32(0, 0) == 0
@@ -321,12 +318,12 @@ function %atomic_rmw_smin_i64(i64, i64) -> i64 {
     ss0 = explicit_slot 8
 
 block0(v0: i64, v1: i64):
-    stack_store.i64 v0, ss0
-
     v2 = stack_addr.i64 ss0
-    v3 = atomic_rmw.i64 smin v2, v1
+    store.i64 little v0, v2
 
-    v4 = stack_load.i64 ss0
+    v3 = atomic_rmw.i64 little smin v2, v1
+
+    v4 = load.i64 little v2
     return v4
 }
 ; run: %atomic_rmw_smin_i64(0, 0) == 0
@@ -340,12 +337,12 @@ function %atomic_rmw_smin_i32(i32, i32) -> i32 {
     ss0 = explicit_slot 4
 
 block0(v0: i32, v1: i32):
-    stack_store.i32 v0, ss0
-
     v2 = stack_addr.i32 ss0
-    v3 = atomic_rmw.i32 smin v2, v1
+    store.i32 little v0, v2
 
-    v4 = stack_load.i32 ss0
+    v3 = atomic_rmw.i32 little smin v2, v1
+
+    v4 = load.i32 little v2
     return v4
 }
 ; run: %atomic_rmw_smin_i32(0, 0) == 0
@@ -361,12 +358,12 @@ function %atomic_rmw_smax_i64(i64, i64) -> i64 {
     ss0 = explicit_slot 8
 
 block0(v0: i64, v1: i64):
-    stack_store.i64 v0, ss0
-
     v2 = stack_addr.i64 ss0
-    v3 = atomic_rmw.i64 smax v2, v1
+    store.i64 little v0, v2
 
-    v4 = stack_load.i64 ss0
+    v3 = atomic_rmw.i64 little smax v2, v1
+
+    v4 = load.i64 little v2
     return v4
 }
 ; run: %atomic_rmw_smax_i64(0, 0) == 0
@@ -380,12 +377,12 @@ function %atomic_rmw_smax_i32(i32, i32) -> i32 {
     ss0 = explicit_slot 4
 
 block0(v0: i32, v1: i32):
-    stack_store.i32 v0, ss0
-
     v2 = stack_addr.i32 ss0
-    v3 = atomic_rmw.i32 smax v2, v1
+    store.i32 little v0, v2
 
-    v4 = stack_load.i32 ss0
+    v3 = atomic_rmw.i32 little smax v2, v1
+
+    v4 = load.i32 little v2
     return v4
 }
 ; run: %atomic_rmw_smax_i32(0, 0) == 0
@@ -401,12 +398,12 @@ function %atomic_rmw_xchg_i64(i64, i64) -> i64 {
     ss0 = explicit_slot 8
 
 block0(v0: i64, v1: i64):
-    stack_store.i64 v0, ss0
-
     v2 = stack_addr.i64 ss0
-    v3 = atomic_rmw.i64 xchg v2, v1
+    store.i64 little v0, v2
 
-    v4 = stack_load.i64 ss0
+    v3 = atomic_rmw.i64 little xchg v2, v1
+
+    v4 = load.i64 little v2
     return v4
 }
 ; run: %atomic_rmw_xchg_i64(0, 0) == 0
@@ -418,12 +415,12 @@ function %atomic_rmw_xchg_i32(i32, i32) -> i32 {
     ss0 = explicit_slot 4
 
 block0(v0: i32, v1: i32):
-    stack_store.i32 v0, ss0
-
     v2 = stack_addr.i32 ss0
-    v3 = atomic_rmw.i32 xchg v2, v1
+    store.i32 little v0, v2
 
-    v4 = stack_load.i32 ss0
+    v3 = atomic_rmw.i32 little xchg v2, v1
+
+    v4 = load.i32 little v2
     return v4
 }
 ; run: %atomic_rmw_xchg_i32(0, 0) == 0

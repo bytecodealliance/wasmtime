@@ -426,6 +426,28 @@ fn enc_rie_d(opcode: u16, r1: Reg, r3: Reg, i2: u16) -> [u8; 6] {
     enc
 }
 
+/// RIEf-type instructions.
+///
+///   47      39 35 31 23 15 7
+///   opcode1 r1 r2 i3 i4 i5 opcode2
+///        40 36 32 24 16  8       0
+///
+fn enc_rie_f(opcode: u16, r1: Reg, r2: Reg, i3: u8, i4: u8, i5: u8) -> [u8; 6] {
+    let mut enc: [u8; 6] = [0; 6];
+    let opcode1 = ((opcode >> 8) & 0xff) as u8;
+    let opcode2 = (opcode & 0xff) as u8;
+    let r1 = machreg_to_gpr(r1) & 0x0f;
+    let r2 = machreg_to_gpr(r2) & 0x0f;
+
+    enc[0] = opcode1;
+    enc[1] = r1 << 4 | r2;
+    enc[2] = i3;
+    enc[3] = i4;
+    enc[4] = i5;
+    enc[5] = opcode2;
+    enc
+}
+
 /// RIEg-type instructions.
 ///
 ///   47      39 35 31 15 7
@@ -1188,6 +1210,60 @@ impl MachInstEmit for Inst {
                 );
             }
 
+            &Inst::RxSBG {
+                op,
+                rd,
+                rn,
+                start_bit,
+                end_bit,
+                rotate_amt,
+            } => {
+                let opcode = match op {
+                    RxSBGOp::Insert => 0xec59, // RISBGN
+                    RxSBGOp::And => 0xec54,    // RNSBG
+                    RxSBGOp::Or => 0xec56,     // ROSBG
+                    RxSBGOp::Xor => 0xec57,    // RXSBG
+                };
+                put(
+                    sink,
+                    &enc_rie_f(
+                        opcode,
+                        rd.to_reg(),
+                        rn,
+                        start_bit,
+                        end_bit,
+                        (rotate_amt as u8) & 63,
+                    ),
+                );
+            }
+
+            &Inst::RxSBGTest {
+                op,
+                rd,
+                rn,
+                start_bit,
+                end_bit,
+                rotate_amt,
+            } => {
+                let opcode = match op {
+                    RxSBGOp::And => 0xec54, // RNSBG
+                    RxSBGOp::Or => 0xec56,  // ROSBG
+                    RxSBGOp::Xor => 0xec57, // RXSBG
+                    _ => unreachable!(),
+                };
+                put(
+                    sink,
+                    &enc_rie_f(
+                        opcode,
+                        rd,
+                        rn,
+                        start_bit | 0x80,
+                        end_bit,
+                        (rotate_amt as u8) & 63,
+                    ),
+                );
+            }
+
             &Inst::UnaryRR { op, rd, rn } => {
                 match op {
                     UnaryOp::Abs32 => {
@@ -1221,6 +1297,14 @@ impl MachInstEmit for Inst {
                     UnaryOp::PopcntReg => {
                         let opcode = 0xb9e1; // POPCNT
                         put(sink, &enc_rrf_cde(opcode, rd.to_reg(), rn, 8, 0));
+                    }
+                    UnaryOp::BSwap32 => {
+                        let opcode = 0xb91f; // LRVR
+                        put(sink, &enc_rre(opcode, rd.to_reg(), rn));
+                    }
+                    UnaryOp::BSwap64 => {
+                        let opcode = 0xb90f; // LRVRG
+                        put(sink, &enc_rre(opcode, rd.to_reg(), rn));
                     }
                 }
             }
@@ -1406,6 +1490,39 @@ impl MachInstEmit for Inst {
                     state,
                 );
             }
+            &Inst::Loop { ref body, cond } => {
+                // This sequence is *one* instruction in the vcode, and is expanded only here at
+                // emission time, because it requires branching to internal labels.
+                let loop_label = sink.get_label();
+                let done_label = sink.get_label();
+
+                // Emit label at the start of the loop.
+                sink.bind_label(loop_label);
+
+                for inst in (&body).into_iter() {
+                    match &inst {
+                        // Replace a CondBreak with a branch to done_label.
+                        &Inst::CondBreak { cond } => {
+                            let inst = Inst::OneWayCondBr {
+                                target: done_label,
+                                cond: *cond,
+                            };
+                            inst.emit(sink, emit_info, state);
+                        }
+                        _ => inst.emit(sink, emit_info, state),
+                    };
+                }
+
+                let inst = Inst::OneWayCondBr {
+                    target: loop_label,
+                    cond,
+                };
+                inst.emit(sink, emit_info, state);
+
+                // Emit label at the end of the loop.
+                sink.bind_label(done_label);
+            }
+            &Inst::CondBreak { .. } => unreachable!(), // Only valid inside a Loop.
             &Inst::AtomicCas32 { rd, rn, ref mem } | &Inst::AtomicCas64 { rd, rn, ref mem } => {
                 let (opcode_rs, opcode_rsy) = match self {
                     &Inst::AtomicCas32 { .. } => (Some(0xba), Some(0xeb14)), // CS(Y)
