@@ -36,6 +36,143 @@ impl OptLevel {
     }
 }
 
+/// Configuration for `wasmtime::PoolingAllocationStrategy`.
+#[derive(Arbitrary, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum PoolingAllocationStrategy {
+    /// Use next available instance slot.
+    NextAvailable,
+    /// Use random instance slot.
+    Random,
+    /// Use an affinity-based strategy.
+    ReuseAffinity,
+}
+
+impl PoolingAllocationStrategy {
+    fn to_wasmtime(&self) -> wasmtime::PoolingAllocationStrategy {
+        match self {
+            PoolingAllocationStrategy::NextAvailable => {
+                wasmtime::PoolingAllocationStrategy::NextAvailable
+            }
+            PoolingAllocationStrategy::Random => wasmtime::PoolingAllocationStrategy::Random,
+            PoolingAllocationStrategy::ReuseAffinity => {
+                wasmtime::PoolingAllocationStrategy::ReuseAffinity
+            }
+        }
+    }
+}
+
+/// Configuration for `wasmtime::ModuleLimits`.
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub struct ModuleLimits {
+    imported_functions: u32,
+    imported_tables: u32,
+    imported_memories: u32,
+    imported_globals: u32,
+    types: u32,
+    functions: u32,
+    tables: u32,
+    memories: u32,
+    globals: u32,
+    table_elements: u32,
+    memory_pages: u64,
+}
+
+impl ModuleLimits {
+    fn to_wasmtime(&self) -> wasmtime::ModuleLimits {
+        wasmtime::ModuleLimits {
+            imported_functions: self.imported_functions,
+            imported_tables: self.imported_tables,
+            imported_memories: self.imported_memories,
+            imported_globals: self.imported_globals,
+            types: self.types,
+            functions: self.functions,
+            tables: self.tables,
+            memories: self.memories,
+            globals: self.globals,
+            table_elements: self.table_elements,
+            memory_pages: self.memory_pages,
+        }
+    }
+}
+
+impl<'a> Arbitrary<'a> for ModuleLimits {
+    fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
+        const MAXIMUM: u32 = 1000;
+        const MAX_TABLES: u32 = 10;
+        const MAX_MEMORIES: u32 = 10;
+        const MAX_MEMORY_PAGES: u64 = 65536;
+
+        Ok(Self {
+            imported_functions: u.int_in_range(0..=MAXIMUM)?,
+            imported_tables: u.int_in_range(0..=MAXIMUM)?,
+            imported_memories: u.int_in_range(0..=MAXIMUM)?,
+            imported_globals: u.int_in_range(0..=MAXIMUM)?,
+            types: u.int_in_range(0..=MAXIMUM)?,
+            functions: u.int_in_range(0..=MAXIMUM)?,
+            tables: u.int_in_range(0..=MAX_TABLES)?,
+            memories: u.int_in_range(0..=MAX_MEMORIES)?,
+            globals: u.int_in_range(0..=MAXIMUM)?,
+            table_elements: u.int_in_range(0..=MAXIMUM)?,
+            memory_pages: u.int_in_range(0..=MAX_MEMORY_PAGES)?,
+        })
+    }
+}
+
+/// Configuration for `wasmtime::PoolingAllocationStrategy`.
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+pub struct InstanceLimits {
+    count: u32,
+}
+
+impl InstanceLimits {
+    fn to_wasmtime(&self) -> wasmtime::InstanceLimits {
+        wasmtime::InstanceLimits { count: self.count }
+    }
+}
+
+impl<'a> Arbitrary<'a> for InstanceLimits {
+    fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
+        const MAXIMUM: u32 = 100;
+
+        Ok(Self {
+            count: u.int_in_range(1..=MAXIMUM)?,
+        })
+    }
+}
+
+/// Configuration for `wasmtime::InstanceAllocationStrategy`.
+#[derive(Arbitrary, Clone, Debug, Eq, PartialEq, Hash)]
+pub enum InstanceAllocationStrategy {
+    /// Use the on-demand instance allocation strategy.
+    OnDemand,
+    /// Use the pooling instance allocation strategy.
+    Pooling {
+        /// The pooling strategy to use.
+        strategy: PoolingAllocationStrategy,
+        /// The module limits.
+        module_limits: ModuleLimits,
+        /// The instance limits.
+        instance_limits: InstanceLimits,
+    },
+}
+
+impl InstanceAllocationStrategy {
+    fn to_wasmtime(&self) -> wasmtime::InstanceAllocationStrategy {
+        match self {
+            InstanceAllocationStrategy::OnDemand => wasmtime::InstanceAllocationStrategy::OnDemand,
+            InstanceAllocationStrategy::Pooling {
+                strategy,
+                module_limits,
+                instance_limits,
+            } => wasmtime::InstanceAllocationStrategy::Pooling {
+                strategy: strategy.to_wasmtime(),
+                module_limits: module_limits.to_wasmtime(),
+                instance_limits: instance_limits.to_wasmtime(),
+            },
+        }
+    }
+}
+
 /// Configuration for `wasmtime::Config` and generated modules for a session of
 /// fuzzing.
 ///
@@ -63,6 +200,7 @@ pub struct WasmtimeConfig {
     force_jump_veneers: bool,
     memfd: bool,
     use_precompiled_cwasm: bool,
+    pub(crate) strategy: InstanceAllocationStrategy,
 }
 
 #[derive(Arbitrary, Clone, Debug, Eq, Hash, PartialEq)]
@@ -102,7 +240,8 @@ impl Config {
             .cranelift_opt_level(self.wasmtime.opt_level.to_wasmtime())
             .interruptable(self.wasmtime.interruptable)
             .consume_fuel(self.wasmtime.consume_fuel)
-            .memfd(self.wasmtime.memfd);
+            .memfd(self.wasmtime.memfd)
+            .allocation_strategy(self.wasmtime.strategy.to_wasmtime());
 
         // If the wasm-smith-generated module use nan canonicalization then we
         // don't need to enable it, but if it doesn't enable it already then we
@@ -125,26 +264,45 @@ impl Config {
             }
         }
 
-        match &self.wasmtime.memory_config {
-            MemoryConfig::Normal {
-                static_memory_maximum_size,
-                static_memory_guard_size,
-                dynamic_memory_guard_size,
-                guard_before_linear_memory,
-            } => {
-                cfg.static_memory_maximum_size(static_memory_maximum_size.unwrap_or(0).into())
-                    .static_memory_guard_size(static_memory_guard_size.unwrap_or(0).into())
-                    .dynamic_memory_guard_size(dynamic_memory_guard_size.unwrap_or(0).into())
-                    .guard_before_linear_memory(*guard_before_linear_memory);
-            }
-            MemoryConfig::CustomUnaligned => {
-                cfg.with_host_memory(Arc::new(UnalignedMemoryCreator))
-                    .static_memory_maximum_size(0)
-                    .dynamic_memory_guard_size(0)
-                    .static_memory_guard_size(0)
-                    .guard_before_linear_memory(false);
-            }
+        match &self.wasmtime.strategy {
+            InstanceAllocationStrategy::OnDemand => match &self.wasmtime.memory_config {
+                MemoryConfig::Normal {
+                    static_memory_maximum_size,
+                    static_memory_guard_size,
+                    dynamic_memory_guard_size,
+                    guard_before_linear_memory,
+                } => {
+                    cfg.static_memory_maximum_size(static_memory_maximum_size.unwrap_or(0).into())
+                        .static_memory_guard_size(static_memory_guard_size.unwrap_or(0).into())
+                        .dynamic_memory_guard_size(dynamic_memory_guard_size.unwrap_or(0).into())
+                        .guard_before_linear_memory(*guard_before_linear_memory);
+                }
+                MemoryConfig::CustomUnaligned => {
+                    cfg.with_host_memory(Arc::new(UnalignedMemoryCreator))
+                        .static_memory_maximum_size(0)
+                        .dynamic_memory_guard_size(0)
+                        .static_memory_guard_size(0)
+                        .guard_before_linear_memory(false);
+                }
+            },
+            InstanceAllocationStrategy::Pooling { .. } => match &self.wasmtime.memory_config {
+                MemoryConfig::Normal {
+                    static_memory_guard_size,
+                    guard_before_linear_memory,
+                    ..
+                } => {
+                    // Just set the guard sizes
+                    cfg.static_memory_guard_size(static_memory_guard_size.unwrap_or(0).into())
+                        .guard_before_linear_memory(*guard_before_linear_memory);
+                }
+                MemoryConfig::CustomUnaligned => {
+                    cfg.dynamic_memory_guard_size(0)
+                        .static_memory_guard_size(0)
+                        .guard_before_linear_memory(false);
+                }
+            },
         }
+
         return cfg;
     }
 

@@ -146,7 +146,20 @@ pub fn instantiate(wasm: &[u8], known_valid: bool, config: &generators::Config, 
     let module = match config.compile(store.engine(), wasm) {
         Ok(module) => module,
         Err(_) if !known_valid => return,
-        Err(e) => panic!("failed to compile module: {:?}", e),
+        Err(e) => {
+            if let generators::InstanceAllocationStrategy::Pooling { .. } =
+                &config.wasmtime.strategy
+            {
+                // When using the pooling allocator, accept failures to compile when arbitrary
+                // limits have been exceeded.
+                let string = e.to_string();
+                if string.contains("exceeds the limit of") {
+                    return;
+                }
+            }
+
+            panic!("failed to compile module: {:?}", e);
+        }
     };
 
     instantiate_with_dummy(&mut store, &module);
