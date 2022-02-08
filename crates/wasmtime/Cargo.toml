@@ -51,7 +51,16 @@ wasi-cap-std-sync = { path = "../wasi-common/cap-std-sync" }
 maintenance = { status = "actively-developed" }
 
 [features]
-default = ['async', 'cache', 'wat', 'jitdump', 'parallel-compilation', 'cranelift', 'pooling-allocator']
+default = [
+  'async',
+  'cache',
+  'wat',
+  'jitdump',
+  'parallel-compilation',
+  'cranelift',
+  'pooling-allocator',
+  'memfd',
+]
 
 # An on-by-default feature enabling runtime compilation of WebAssembly modules
 # with the Cranelift compiler. Cranelift is the default compilation backend of

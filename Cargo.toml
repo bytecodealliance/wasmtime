@@ -96,6 +96,7 @@ default = [
   "wasmtime/parallel-compilation",
   "wasi-nn",
   "pooling-allocator",
+  "memfd",
 ]
 jitdump = ["wasmtime/jitdump"]
 vtune = ["wasmtime/vtune"]

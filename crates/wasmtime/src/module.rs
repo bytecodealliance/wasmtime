@@ -724,6 +724,9 @@ impl Module {
     }
 
     pub(crate) fn memfds(&self) -> Result<Option<&Arc<ModuleMemFds>>> {
+        if !self.engine().config().memfd {
+            return Ok(None);
+        }
         Ok(self
             .inner
             .memfds
