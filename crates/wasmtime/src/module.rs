@@ -1055,6 +1055,10 @@ impl wasmtime_runtime::ModuleRuntimeInfo for ModuleInner {
     fn wasm_data(&self) -> &[u8] {
         self.module.wasm_data()
     }
+
+    fn signature_ids(&self) -> &[VMSharedSignatureIndex] {
+        self.signatures.as_module_map().values().as_slice()
+    }
 }
 
 /// A barebones implementation of ModuleRuntimeInfo that is useful for
@@ -1143,5 +1147,12 @@ impl wasmtime_runtime::ModuleRuntimeInfo for BareModuleInfo {
 
     fn wasm_data(&self) -> &[u8] {
         &[]
+    }
+
+    fn signature_ids(&self) -> &[VMSharedSignatureIndex] {
+        match &self.one_signature {
+            Some((_, id)) => std::slice::from_ref(id),
+            None => &[],
+        }
     }
 }

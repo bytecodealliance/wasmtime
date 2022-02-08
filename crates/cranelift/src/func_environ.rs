@@ -1556,13 +1556,23 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 let sig_id_type = Type::int(u16::from(sig_id_size) * 8).unwrap();
                 let vmctx = self.vmctx(builder.func);
                 let base = builder.ins().global_value(pointer_type, vmctx);
-                let offset =
-                    i32::try_from(self.offsets.vmctx_vmshared_signature_id(ty_index)).unwrap();
 
                 // Load the caller ID.
                 let mut mem_flags = ir::MemFlags::trusted();
                 mem_flags.set_readonly();
-                let caller_sig_id = builder.ins().load(sig_id_type, mem_flags, base, offset);
+                let signatures = builder.ins().load(
+                    pointer_type,
+                    mem_flags,
+                    base,
+                    i32::try_from(self.offsets.vmctx_signature_ids_array()).unwrap(),
+                );
+                let sig_index = self.module.types[ty_index].unwrap_function();
+                let caller_sig_id = builder.ins().load(
+                    sig_id_type,
+                    mem_flags,
+                    signatures,
+                    i32::try_from(sig_index.as_u32() * sig_id_type.bytes()).unwrap(),
+                );
 
                 // Load the callee ID.
                 let mem_flags = ir::MemFlags::trusted();
