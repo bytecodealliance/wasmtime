@@ -259,14 +259,12 @@ pub enum PoolingAllocationStrategy {
 }
 
 impl Default for PoolingAllocationStrategy {
-    #[cfg(feature = "memfd-allocator")]
     fn default() -> Self {
-        Self::ReuseAffinity
-    }
-
-    #[cfg(not(feature = "memfd-allocator"))]
-    fn default() -> Self {
-        Self::NextAvailable
+        if cfg!(memfd) {
+            Self::ReuseAffinity
+        } else {
+            Self::NextAvailable
+        }
     }
 }
 
