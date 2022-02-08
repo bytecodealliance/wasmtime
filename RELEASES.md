@@ -2,6 +2,84 @@
 
 --------------------------------------------------------------------------------
 
+## 0.34.0
+
+Released 2022-02-07.
+
+### Fixed
+
+* The `wasi-common` default implementation of some attributes of files has been
+  updated to ensure that `wasi-libc`'s `isatty` function works as intended.
+  [#3696](https://github.com/bytecodealliance/wasmtime/pull/3696)
+
+* A benign debug assertion related to `externref` and garbage-collection has
+  been fixed.
+  [#3734](https://github.com/bytecodealliance/wasmtime/pull/3734)
+
+### Added
+
+* Function names are now automatically demangled when informing profilers of
+  regions of JIT code to apply Rust-specific demangling rules if applicable.
+  [#3683](https://github.com/bytecodealliance/wasmtime/pull/3683)
+
+* Support for profiling JIT-generated trampolines with VTune has been added.
+  [#3687](https://github.com/bytecodealliance/wasmtime/pull/3687)
+
+* Wasmtime now supports a new method of async preemption dubbed "epoch-based
+  interruption" which is intended to be much more efficient than the current
+  fuel-based method of preemption.
+  [#3699](https://github.com/bytecodealliance/wasmtime/pull/3699)
+
+* On Linux Wasmtime will now by default use copy-on-write mappings to initialize
+  memories of wasm modules where possible, accelerating instantiation by
+  avoiding costly memory copies. When combined with the pooling allocator this
+  can also be used to speed up instance-reuse cases due to fewer syscalls to
+  change memory mappings being necessary.
+  [#3697](https://github.com/bytecodealliance/wasmtime/pull/3697)
+  [#3738](https://github.com/bytecodealliance/wasmtime/pull/3738)
+  [#3760](https://github.com/bytecodealliance/wasmtime/pull/3760)
+
+* Wasmtime now supports the recently-added `sock_accept` WASI function.
+  [#3711](https://github.com/bytecodealliance/wasmtime/pull/3711)
+
+* Cranelift now has support for specifying blocks as cold.
+  [#3698](https://github.com/bytecodealliance/wasmtime/pull/3698)
+
+### Changed
+
+* Many more instructions for the x64 backend have been migrated to ISLE,
+  additionally with refactorings to make incorrect lowerings harder to
+  accidentally write.
+  [#3653](https://github.com/bytecodealliance/wasmtime/pull/3653)
+  [#3659](https://github.com/bytecodealliance/wasmtime/pull/3659)
+  [#3681](https://github.com/bytecodealliance/wasmtime/pull/3681)
+  [#3686](https://github.com/bytecodealliance/wasmtime/pull/3686)
+  [#3688](https://github.com/bytecodealliance/wasmtime/pull/3688)
+  [#3690](https://github.com/bytecodealliance/wasmtime/pull/3690)
+  [#3752](https://github.com/bytecodealliance/wasmtime/pull/3752)
+
+* More instructions in the aarch64 backend are now lowered with ISLE.
+  [#3658](https://github.com/bytecodealliance/wasmtime/pull/3658)
+  [#3662](https://github.com/bytecodealliance/wasmtime/pull/3662)
+
+* The s390x backend's lowering rules are now almost entirely defined with ISLE.
+  [#3702](https://github.com/bytecodealliance/wasmtime/pull/3702)
+  [#3703](https://github.com/bytecodealliance/wasmtime/pull/3703)
+  [#3706](https://github.com/bytecodealliance/wasmtime/pull/3706)
+  [#3717](https://github.com/bytecodealliance/wasmtime/pull/3717)
+  [#3723](https://github.com/bytecodealliance/wasmtime/pull/3723)
+  [#3724](https://github.com/bytecodealliance/wasmtime/pull/3724)
+
+* Instantiation of modules in Wasmtime has been further optimized now that the
+  copy-on-write memory initialization removed the previously most-expensive part
+  of instantiating a module.
+  [#3727](https://github.com/bytecodealliance/wasmtime/pull/3727)
+  [#3739](https://github.com/bytecodealliance/wasmtime/pull/3739)
+  [#3741](https://github.com/bytecodealliance/wasmtime/pull/3741)
+  [#3742](https://github.com/bytecodealliance/wasmtime/pull/3742)
+
+--------------------------------------------------------------------------------
+
 ## 0.33.0
 
 Released 2022-01-05.
