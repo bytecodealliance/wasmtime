@@ -20,8 +20,8 @@ use std::mem;
 use std::sync::Arc;
 use std::sync::Mutex;
 use wasmtime_environ::{
-    HostPtr, MemoryIndex, MemoryStyle, Module, PrimaryMap, Tunables, VMOffsets, VMOffsetsFields,
-    WASM_PAGE_SIZE,
+    DefinedMemoryIndex, HostPtr, MemoryStyle, Module, PrimaryMap, Tunables, VMOffsets,
+    VMOffsetsFields, WASM_PAGE_SIZE,
 };
 
 mod index_allocator;
@@ -339,7 +339,7 @@ impl InstancePool {
     }
 
     unsafe fn instance(&self, index: usize) -> &mut Instance {
-        debug_assert!(index < self.max_instances);
+        assert!(index < self.max_instances);
         &mut *(self.mapping.as_mut_ptr().add(index * self.instance_size) as *mut Instance)
     }
 
@@ -421,11 +421,11 @@ impl InstancePool {
         let addr = handle.instance as usize;
         let base = self.mapping.as_ptr() as usize;
 
-        debug_assert!(addr >= base && addr < base + self.mapping.len());
-        debug_assert!((addr - base) % self.instance_size == 0);
+        assert!(addr >= base && addr < base + self.mapping.len());
+        assert!((addr - base) % self.instance_size == 0);
 
         let index = (addr - base) / self.instance_size;
-        debug_assert!(index < self.max_instances);
+        assert!(index < self.max_instances);
 
         let instance = unsafe { &mut *handle.instance };
 
@@ -434,20 +434,20 @@ impl InstancePool {
             instance.memories.iter_mut().zip(self.memories.get(index))
         {
             let mut memory = mem::take(memory);
-            debug_assert!(memory.is_static());
+            assert!(memory.is_static());
 
             match memory {
                 Memory::Static {
                     memfd_slot: Some(mut memfd_slot),
                     ..
                 } => {
-                    let mem_idx = instance.module.memory_index(def_mem_idx);
                     // If there was any error clearing the memfd, just
                     // drop it here, and let the drop handler for the
                     // MemFdSlot unmap in a way that retains the
                     // address space reservation.
                     if memfd_slot.clear_and_remain_ready().is_ok() {
-                        self.memories.return_memfd_slot(index, mem_idx, memfd_slot);
+                        self.memories
+                            .return_memfd_slot(index, def_mem_idx, memfd_slot);
                     }
                 }
 
@@ -476,7 +476,7 @@ impl InstancePool {
         // Decommit any tables that were used
         for (table, base) in instance.tables.values_mut().zip(self.tables.get(index)) {
             let table = mem::take(table);
-            debug_assert!(table.is_static());
+            assert!(table.is_static());
 
             let size = round_up_to_pow2(
                 table.size() as usize * mem::size_of::<*mut u8>(),
@@ -509,7 +509,7 @@ impl InstancePool {
     ) -> Result<(), InstantiationError> {
         let module = instance.module.as_ref();
 
-        debug_assert!(instance.memories.is_empty());
+        assert!(instance.memories.is_empty());
 
         for (memory_index, plan) in module
             .memory_plans
@@ -522,14 +522,14 @@ impl InstancePool {
 
             let memory = unsafe {
                 std::slice::from_raw_parts_mut(
-                    memories.get_base(instance_idx, memory_index),
+                    memories.get_base(instance_idx, defined_index),
                     (max_pages as usize) * (WASM_PAGE_SIZE as usize),
                 )
             };
 
             if let Some(memfds) = maybe_memfds {
                 let image = memfds.get_memory_image(defined_index);
-                let mut slot = memories.take_memfd_slot(instance_idx, memory_index);
+                let mut slot = memories.take_memfd_slot(instance_idx, defined_index);
                 let initial_size = plan.memory.minimum * WASM_PAGE_SIZE as u64;
 
                 // If instantiation fails, we can propagate the error
@@ -564,7 +564,7 @@ impl InstancePool {
             }
         }
 
-        debug_assert!(instance.dropped_data.is_empty());
+        assert!(instance.dropped_data.is_empty());
 
         Ok(())
     }
@@ -576,7 +576,7 @@ impl InstancePool {
     ) -> Result<(), InstantiationError> {
         let module = instance.module.as_ref();
 
-        debug_assert!(instance.tables.is_empty());
+        assert!(instance.tables.is_empty());
 
         for plan in (&module.table_plans.values().as_slice()[module.num_imported_tables..]).iter() {
             let base = tables.next().unwrap();
@@ -594,7 +594,7 @@ impl InstancePool {
             );
         }
 
-        debug_assert!(instance.dropped_elements.is_empty());
+        assert!(instance.dropped_elements.is_empty());
         instance
             .dropped_elements
             .resize(module.passive_elements.len());
@@ -664,7 +664,7 @@ impl MemoryPool {
             0
         };
 
-        debug_assert!(
+        assert!(
             memory_size % region::page::size() == 0,
             "memory size {} is not a multiple of system page size",
             memory_size
@@ -729,10 +729,10 @@ impl MemoryPool {
         Ok(pool)
     }
 
-    fn get_base(&self, instance_index: usize, memory_index: MemoryIndex) -> *mut u8 {
-        debug_assert!(instance_index < self.max_instances);
+    fn get_base(&self, instance_index: usize, memory_index: DefinedMemoryIndex) -> *mut u8 {
+        assert!(instance_index < self.max_instances);
         let memory_index = memory_index.as_u32() as usize;
-        debug_assert!(memory_index < self.max_memories);
+        assert!(memory_index < self.max_memories);
         let idx = instance_index * self.max_memories + memory_index;
         let offset = self.initial_memory_offset + idx * self.memory_size;
         unsafe { self.mapping.as_mut_ptr().offset(offset as isize) }
@@ -740,12 +740,16 @@ impl MemoryPool {
 
     fn get<'a>(&'a self, instance_index: usize) -> impl Iterator<Item = *mut u8> + 'a {
         (0..self.max_memories)
-            .map(move |i| self.get_base(instance_index, MemoryIndex::from_u32(i as u32)))
+            .map(move |i| self.get_base(instance_index, DefinedMemoryIndex::from_u32(i as u32)))
     }
 
     /// Take ownership of the given memfd slot. Must be returned via
     /// `return_memfd_slot` when the instance is done using it.
-    fn take_memfd_slot(&self, instance_index: usize, memory_index: MemoryIndex) -> MemFdSlot {
+    fn take_memfd_slot(
+        &self,
+        instance_index: usize,
+        memory_index: DefinedMemoryIndex,
+    ) -> MemFdSlot {
         let idx = instance_index * self.max_memories + (memory_index.as_u32() as usize);
         let maybe_slot = self.memfd_slots[idx].lock().unwrap().take();
 
@@ -759,7 +763,12 @@ impl MemoryPool {
     }
 
     /// Return ownership of the given memfd slot.
-    fn return_memfd_slot(&self, instance_index: usize, memory_index: MemoryIndex, slot: MemFdSlot) {
+    fn return_memfd_slot(
+        &self,
+        instance_index: usize,
+        memory_index: DefinedMemoryIndex,
+        slot: MemFdSlot,
+    ) {
         assert!(!slot.is_dirty());
         let idx = instance_index * self.max_memories + (memory_index.as_u32() as usize);
         *self.memfd_slots[idx].lock().unwrap() = Some(slot);
@@ -831,7 +840,7 @@ impl TablePool {
     }
 
     fn get(&self, instance_index: usize) -> impl Iterator<Item = *mut u8> {
-        debug_assert!(instance_index < self.max_instances);
+        assert!(instance_index < self.max_instances);
 
         let base: *mut u8 = unsafe {
             self.mapping
@@ -929,7 +938,7 @@ impl StackPool {
             alloc.alloc(None).index()
         };
 
-        debug_assert!(index < self.max_instances);
+        assert!(index < self.max_instances);
 
         unsafe {
             // Remove the guard page from the size
@@ -964,11 +973,11 @@ impl StackPool {
         let stack_size = self.stack_size - self.page_size;
         let bottom_of_stack = top - stack_size;
         let start_of_stack = bottom_of_stack - self.page_size;
-        debug_assert!(start_of_stack >= base && start_of_stack < (base + len));
-        debug_assert!((start_of_stack - base) % self.stack_size == 0);
+        assert!(start_of_stack >= base && start_of_stack < (base + len));
+        assert!((start_of_stack - base) % self.stack_size == 0);
 
         let index = (start_of_stack - base) / self.stack_size;
-        debug_assert!(index < self.max_instances);
+        assert!(index < self.max_instances);
 
         decommit_stack_pages(bottom_of_stack as _, stack_size).unwrap();
 
