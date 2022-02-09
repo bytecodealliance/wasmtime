@@ -91,3 +91,9 @@ name = "cranelift-fuzzgen-verify"
 path = "fuzz_targets/cranelift-fuzzgen-verify.rs"
 test = false
 doc = false
+
+[[bin]]
+name = "instantiate-many"
+path = "fuzz_targets/instantiate-many.rs"
+test = false
+doc = false

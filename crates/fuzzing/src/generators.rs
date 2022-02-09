@@ -72,7 +72,8 @@ pub struct ModuleLimits {
     functions: u32,
     tables: u32,
     memories: u32,
-    globals: u32,
+    /// The maximum number of globals that can be defined in a module.
+    pub globals: u32,
     table_elements: u32,
     memory_pages: u64,
 }
@@ -104,7 +105,7 @@ impl<'a> Arbitrary<'a> for ModuleLimits {
         const MAX_MEMORIES: u32 = 10;
         const MAX_GLOBALS: u32 = 1000;
         const MAX_ELEMENTS: u32 = 1000;
-        const MAX_MEMORY_PAGES: u64 = 65536;
+        const MAX_MEMORY_PAGES: u64 = 0x10000;
 
         Ok(Self {
             imported_functions: u.int_in_range(0..=MAX_IMPORTS)?,
@@ -125,7 +126,8 @@ impl<'a> Arbitrary<'a> for ModuleLimits {
 /// Configuration for `wasmtime::PoolingAllocationStrategy`.
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct InstanceLimits {
-    count: u32,
+    /// The maximum number of instances that can be instantiated in the pool at a time.
+    pub count: u32,
 }
 
 impl InstanceLimits {
@@ -183,12 +185,69 @@ impl InstanceAllocationStrategy {
 /// This configuration guides what modules are generated, how wasmtime
 /// configuration is generated, and is typically itself generated through a call
 /// to `Arbitrary` which allows for a form of "swarm testing".
-#[derive(Arbitrary, Debug)]
+#[derive(Debug)]
 pub struct Config {
     /// Configuration related to the `wasmtime::Config`.
     pub wasmtime: WasmtimeConfig,
     /// Configuration related to generated modules.
     pub module_config: ModuleConfig,
+}
+
+impl<'a> Arbitrary<'a> for Config {
+    fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
+        let mut config = Self {
+            wasmtime: u.arbitrary()?,
+            module_config: u.arbitrary()?,
+        };
+
+        // If using the pooling allocator, constrain the memory and module configurations
+        // to the module limits.
+        if let InstanceAllocationStrategy::Pooling {
+            module_limits: limits,
+            ..
+        } = &config.wasmtime.strategy
+        {
+            // Force the use of a normal memory config when using the pooling allocator and
+            // limit the static memory maximum to be the same as the pooling allocator's memory
+            // page limit.
+            config.wasmtime.memory_config = MemoryConfig::Normal {
+                static_memory_maximum_size: Some(limits.memory_pages * 0x10000),
+                static_memory_guard_size: u.arbitrary()?,
+                dynamic_memory_guard_size: u.arbitrary()?,
+                guard_before_linear_memory: u.arbitrary()?,
+            };
+
+            let cfg = &mut config.module_config.config;
+            cfg.max_imports = limits.imported_functions.min(
+                limits
+                    .imported_globals
+                    .min(limits.imported_memories.min(limits.imported_tables)),
+            ) as usize;
+            cfg.max_types = limits.types as usize;
+            cfg.max_funcs = limits.functions as usize;
+            cfg.max_globals = limits.globals as usize;
+            cfg.max_memories = limits.memories as usize;
+            cfg.max_tables = limits.tables as usize;
+            cfg.max_memory_pages = limits.memory_pages;
+        }
+
+        // Constrain memory limits to 32-bit values
+        // This is done to avoid blowing the 64-bit address space by requesting
+        // ungodly-large sizes/guards.
+        if let MemoryConfig::Normal {
+            static_memory_maximum_size,
+            static_memory_guard_size,
+            dynamic_memory_guard_size,
+            guard_before_linear_memory: _,
+        } = &mut config.wasmtime.memory_config
+        {
+            *static_memory_maximum_size = (*static_memory_maximum_size).map(|s| s.min(0x100000000));
+            *static_memory_guard_size = (*static_memory_guard_size).map(|s| s.min(0x100000000));
+            *dynamic_memory_guard_size = (*dynamic_memory_guard_size).map(|s| s.min(0x100000000));
+        }
+
+        Ok(config)
+    }
 }
 
 /// Configuration related to `wasmtime::Config` and the various settings which
@@ -204,7 +263,8 @@ pub struct WasmtimeConfig {
     force_jump_veneers: bool,
     memfd: bool,
     use_precompiled_cwasm: bool,
-    pub(crate) strategy: InstanceAllocationStrategy,
+    /// Configuration for the instance allocation strategy to use.
+    pub strategy: InstanceAllocationStrategy,
 }
 
 #[derive(Arbitrary, Clone, Debug, Eq, Hash, PartialEq)]
@@ -212,13 +272,10 @@ enum MemoryConfig {
     /// Configuration for linear memories which correspond to normal
     /// configuration settings in `wasmtime` itself. This will tweak various
     /// parameters about static/dynamic memories.
-    ///
-    /// Note that we use 32-bit values here to avoid blowing the 64-bit address
-    /// space by requesting ungodly-large sizes/guards.
     Normal {
-        static_memory_maximum_size: Option<u32>,
-        static_memory_guard_size: Option<u32>,
-        dynamic_memory_guard_size: Option<u32>,
+        static_memory_maximum_size: Option<u64>,
+        static_memory_guard_size: Option<u64>,
+        dynamic_memory_guard_size: Option<u64>,
         guard_before_linear_memory: bool,
     },
 
@@ -268,43 +325,25 @@ impl Config {
             }
         }
 
-        match &self.wasmtime.strategy {
-            InstanceAllocationStrategy::OnDemand => match &self.wasmtime.memory_config {
-                MemoryConfig::Normal {
-                    static_memory_maximum_size,
-                    static_memory_guard_size,
-                    dynamic_memory_guard_size,
-                    guard_before_linear_memory,
-                } => {
-                    cfg.static_memory_maximum_size(static_memory_maximum_size.unwrap_or(0).into())
-                        .static_memory_guard_size(static_memory_guard_size.unwrap_or(0).into())
-                        .dynamic_memory_guard_size(dynamic_memory_guard_size.unwrap_or(0).into())
-                        .guard_before_linear_memory(*guard_before_linear_memory);
-                }
-                MemoryConfig::CustomUnaligned => {
-                    cfg.with_host_memory(Arc::new(UnalignedMemoryCreator))
-                        .static_memory_maximum_size(0)
-                        .dynamic_memory_guard_size(0)
-                        .static_memory_guard_size(0)
-                        .guard_before_linear_memory(false);
-                }
-            },
-            InstanceAllocationStrategy::Pooling { .. } => match &self.wasmtime.memory_config {
-                MemoryConfig::Normal {
-                    static_memory_guard_size,
-                    guard_before_linear_memory,
-                    ..
-                } => {
-                    // Just set the guard sizes
-                    cfg.static_memory_guard_size(static_memory_guard_size.unwrap_or(0).into())
-                        .guard_before_linear_memory(*guard_before_linear_memory);
-                }
-                MemoryConfig::CustomUnaligned => {
-                    cfg.dynamic_memory_guard_size(0)
-                        .static_memory_guard_size(0)
-                        .guard_before_linear_memory(false);
-                }
-            },
+        match &self.wasmtime.memory_config {
+            MemoryConfig::Normal {
+                static_memory_maximum_size,
+                static_memory_guard_size,
+                dynamic_memory_guard_size,
+                guard_before_linear_memory,
+            } => {
+                cfg.static_memory_maximum_size(static_memory_maximum_size.unwrap_or(0))
+                    .static_memory_guard_size(static_memory_guard_size.unwrap_or(0))
+                    .dynamic_memory_guard_size(dynamic_memory_guard_size.unwrap_or(0))
+                    .guard_before_linear_memory(*guard_before_linear_memory);
+            }
+            MemoryConfig::CustomUnaligned => {
+                cfg.with_host_memory(Arc::new(UnalignedMemoryCreator))
+                    .static_memory_maximum_size(0)
+                    .dynamic_memory_guard_size(0)
+                    .static_memory_guard_size(0)
+                    .guard_before_linear_memory(false);
+            }
         }
 
         return cfg;
@@ -315,11 +354,16 @@ impl Config {
     pub fn to_store(&self) -> Store<StoreLimits> {
         let engine = Engine::new(&self.to_wasmtime()).unwrap();
         let mut store = Store::new(&engine, StoreLimits::new());
+        self.configure_store(&mut store);
+        store
+    }
+
+    /// Configures a store based on this configuration.
+    pub fn configure_store(&self, store: &mut Store<StoreLimits>) {
         store.limiter(|s| s as &mut dyn wasmtime::ResourceLimiter);
         if self.wasmtime.consume_fuel {
             store.add_fuel(u64::max_value()).unwrap();
         }
-        return store;
     }
 
     /// Generates an arbitrary method of timing out an instance, ensuring that
