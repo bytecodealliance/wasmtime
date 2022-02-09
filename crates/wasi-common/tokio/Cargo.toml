@@ -15,7 +15,7 @@ wasi-common = { path = "../", version = "=0.34.0" }
 wasi-cap-std-sync = { path = "../cap-std-sync", version = "=0.34.0" }
 wiggle = { path = "../../wiggle", version = "=0.34.0" }
 tokio = { version = "1.8.0", features = [ "rt", "fs", "time", "io-util", "net", "io-std", "rt-multi-thread"] }
-cap-std = "0.24.0"
+cap-std = "0.24.1"
 anyhow = "1"
 io-lifetimes = { version = "0.5.0", default-features = false }
 
@@ -31,4 +31,4 @@ io-extras = "0.13.0"
 tempfile = "3.1.0"
 tokio = { version = "1.8.0", features = [ "macros" ] }
 anyhow = "1"
-cap-tempfile = "0.24.0"
+cap-tempfile = "0.24.1"

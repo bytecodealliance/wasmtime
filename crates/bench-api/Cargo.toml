@@ -22,7 +22,7 @@ wasmtime-wasi = { path = "../wasi" }
 wasmtime-wasi-crypto = { path = "../wasi-crypto", optional = true }
 wasmtime-wasi-nn = { path = "../wasi-nn", optional = true }
 wasi-cap-std-sync = { path = "../wasi-common/cap-std-sync" }
-cap-std = "0.24.0"
+cap-std = "0.24.1"
 
 [dev-dependencies]
 wat = "1.0"
