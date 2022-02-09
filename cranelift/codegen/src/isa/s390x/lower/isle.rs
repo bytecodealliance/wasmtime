@@ -6,7 +6,7 @@ pub mod generated_code;
 // Types that the generated ISLE code uses via `use super::*`.
 use super::{
     CallIndInfo, CallInfo, Cond, Inst as MInst, MachLabel, MemArg, MemFlags, Opcode, Reg,
-    UImm16Shifted, UImm32Shifted,
+    S390xMachineDeps, UImm16Shifted, UImm32Shifted,
 };
 use crate::isa::s390x::settings::Flags as IsaFlags;
 use crate::machinst::isle::*;
@@ -68,6 +68,40 @@ where
     C: LowerCtx<I = MInst>,
 {
     isle_prelude_methods!();
+
+    fn abi_sig(&mut self, sig_ref: SigRef) -> ABISig {
+        let sig = &self.lower_ctx.dfg().signatures[sig_ref];
+        ABISig::from_func_sig::<S390xMachineDeps>(sig, self.flags).unwrap()
+    }
+
+    fn abi_accumulate_outgoing_args_size(&mut self, abi: &ABISig) -> Unit {
+        let off = abi.stack_arg_space() + abi.stack_ret_space();
+        self.lower_ctx
+            .abi()
+            .accumulate_outgoing_args_size(off as u32);
+    }
+
+    fn abi_call_info(&mut self, abi: &ABISig, name: ExternalName, opcode: &Opcode) -> BoxCallInfo {
+        let (uses, defs, clobbers) = abi.call_uses_defs_clobbers::<S390xMachineDeps>();
+        Box::new(CallInfo {
+            dest: name.clone(),
+            uses,
+            defs,
+            clobbers,
+            opcode: *opcode,
+        })
+    }
+
+    fn abi_call_ind_info(&mut self, abi: &ABISig, target: Reg, opcode: &Opcode) -> BoxCallIndInfo {
+        let (uses, defs, clobbers) = abi.call_uses_defs_clobbers::<S390xMachineDeps>();
+        Box::new(CallIndInfo {
+            rn: target,
+            uses,
+            defs,
+            clobbers,
+            opcode: *opcode,
+        })
+    }
 
     #[inline]
     fn allow_div_traps(&mut self, _: Type) -> Option<()> {
@@ -430,6 +464,11 @@ where
     #[inline]
     fn memarg_reg_plus_off(&mut self, reg: Reg, off: i64, flags: MemFlags) -> MemArg {
         MemArg::reg_plus_off(reg, off, flags)
+    }
+
+    #[inline]
+    fn memarg_stack_off(&mut self, base: i64, off: i64) -> MemArg {
+        MemArg::reg_plus_off(super::stack_reg(), base + off, MemFlags::trusted())
     }
 
     #[inline]
