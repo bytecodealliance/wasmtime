@@ -117,6 +117,7 @@
 (type UnwindInst (primitive UnwindInst))
 (type ExternalName (primitive ExternalName))
 (type BoxExternalName (primitive BoxExternalName))
+(type RelocDistance (primitive RelocDistance))
 
 ;;;; Primitive Type Conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -380,3 +381,22 @@
 
 (decl avoid_div_traps () Type)
 (extern extractor avoid_div_traps avoid_div_traps)
+
+;;;; Helpers for accessing instruction data ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Accessor for `FuncRef`.
+
+(decl func_ref_data (SigRef ExternalName RelocDistance) FuncRef)
+(extern extractor infallible func_ref_data func_ref_data)
+
+;; Accessor for `GobalValue`.
+
+(decl symbol_value_data (ExternalName RelocDistance i64) GlobalValue)
+(extern extractor symbol_value_data symbol_value_data)
+
+;; Accessor for `RelocDistance`.
+
+(decl reloc_distance_near () RelocDistance)
+(extern extractor reloc_distance_near reloc_distance_near)
+
+

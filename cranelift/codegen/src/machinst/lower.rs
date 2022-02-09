@@ -13,8 +13,8 @@ use crate::ir::instructions::BranchInfo;
 use crate::ir::{
     types::{FFLAGS, IFLAGS},
     ArgumentPurpose, Block, Constant, ConstantData, DataFlowGraph, ExternalName, Function,
-    GlobalValueData, Inst, InstructionData, MemFlags, Opcode, Signature, SourceLoc, Type, Value,
-    ValueDef, ValueLabelAssignments, ValueLabelStart,
+    GlobalValue, GlobalValueData, Inst, InstructionData, MemFlags, Opcode, Signature, SourceLoc,
+    Type, Value, ValueDef, ValueLabelAssignments, ValueLabelStart,
 };
 use crate::machinst::{
     non_writable_value_regs, writable_value_regs, ABICallee, BlockIndex, BlockLoweringOrder,
@@ -93,6 +93,11 @@ pub trait LowerCtx {
     /// Get the symbol name, relocation distance estimate, and offset for a
     /// symbol_value instruction.
     fn symbol_value<'b>(&'b self, ir_inst: Inst) -> Option<(&'b ExternalName, RelocDistance, i64)>;
+    /// Likewise, but starting with a GlobalValue identifier.
+    fn symbol_value_data<'b>(
+        &'b self,
+        global_value: GlobalValue,
+    ) -> Option<(&'b ExternalName, RelocDistance, i64)>;
     /// Returns the memory flags of a given memory access.
     fn memflags(&self, ir_inst: Inst) -> Option<MemFlags>;
     /// Get the source location for a given instruction.
@@ -1070,19 +1075,26 @@ impl<'func, I: VCodeInst> LowerCtx for Lower<'func, I> {
     fn symbol_value<'b>(&'b self, ir_inst: Inst) -> Option<(&'b ExternalName, RelocDistance, i64)> {
         match &self.f.dfg[ir_inst] {
             &InstructionData::UnaryGlobalValue { global_value, .. } => {
-                let gvdata = &self.f.global_values[global_value];
-                match gvdata {
-                    &GlobalValueData::Symbol {
-                        ref name,
-                        ref offset,
-                        ..
-                    } => {
-                        let offset = offset.bits();
-                        let dist = gvdata.maybe_reloc_distance().unwrap();
-                        Some((name, dist, offset))
-                    }
-                    _ => None,
-                }
+                self.symbol_value_data(global_value)
+            }
+            _ => None,
+        }
+    }
+
+    fn symbol_value_data<'b>(
+        &'b self,
+        global_value: GlobalValue,
+    ) -> Option<(&'b ExternalName, RelocDistance, i64)> {
+        let gvdata = &self.f.global_values[global_value];
+        match gvdata {
+            &GlobalValueData::Symbol {
+                ref name,
+                ref offset,
+                ..
+            } => {
+                let offset = offset.bits();
+                let dist = gvdata.maybe_reloc_distance().unwrap();
+                Some((name, dist, offset))
             }
             _ => None,
         }

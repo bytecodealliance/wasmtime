@@ -904,19 +904,6 @@
 (extern extractor allow_div_traps allow_div_traps)
 
 
-;; Helpers to access instruction data members ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; Extractor for `symbol_value` instruction data member.
-
-(decl symbol_value_data (BoxExternalName RelocDistance i64) Inst)
-(extern extractor symbol_value_data symbol_value_data)
-
-;; Extractor for `call_target` instruction data members.
-
-(decl call_target_data (BoxExternalName RelocDistance) Inst)
-(extern extractor call_target_data call_target_data)
-
-
 ;; Helpers for register numbers and types ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Hard-coded registers.
@@ -1090,13 +1077,6 @@
 
 ;; Helpers for memory arguments ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; Accessors for `RelocDistance`.
-
-(type RelocDistance extern (enum))
-
-(decl reloc_distance_near () RelocDistance)
-(extern extractor reloc_distance_near reloc_distance_near)
-
 ;; Accessors for `Offset32`.
 
 (decl zero_offset () Offset32)
@@ -1104,6 +1084,11 @@
 
 (decl i64_from_offset (i64) Offset32)
 (extern extractor infallible i64_from_offset i64_from_offset)
+
+;; Accessors for `ExternalName`.
+
+(decl box_external_name (ExternalName) BoxExternalName)
+(extern constructor box_external_name box_external_name)
 
 ;; Accessors for `MemFlags`.
 
@@ -1126,7 +1111,7 @@
 (decl memarg_reg_plus_off (Reg i64 MemFlags) MemArg)
 (extern constructor memarg_reg_plus_off memarg_reg_plus_off)
 
-(decl memarg_symbol (BoxExternalName i32 MemFlags) MemArg)
+(decl memarg_symbol (ExternalName i32 MemFlags) MemArg)
 (extern constructor memarg_symbol memarg_symbol)
 
 ;; Form the sum of two offset values, and check that the result is
@@ -1149,7 +1134,7 @@
       (memarg_reg_plus_reg (put_in_reg x) (put_in_reg y) flags))
 
 (rule (lower_address flags
-        (def_inst (symbol_value_data name (reloc_distance_near) offset))
+        (def_inst (symbol_value (symbol_value_data name (reloc_distance_near) offset)))
         (i64_from_offset (memarg_symbol_offset_sum <offset final_offset)))
       (memarg_symbol name final_offset flags))
 
@@ -1159,13 +1144,13 @@
 (decl load_sym (Inst) Inst)
 (extractor (load_sym inst)
   (and inst
-       (load _ (def_inst (symbol_value_data _ (reloc_distance_near) offset))
+       (load _ (def_inst (symbol_value (symbol_value_data _ (reloc_distance_near) offset)))
                (i64_from_offset (memarg_symbol_offset_sum <offset _)))))
 
 (decl uload16_sym (Inst) Inst)
 (extractor (uload16_sym inst)
   (and inst
-       (uload16 _ (def_inst (symbol_value_data _ (reloc_distance_near) offset))
+       (uload16 _ (def_inst (symbol_value (symbol_value_data _ (reloc_distance_near) offset)))
                   (i64_from_offset (memarg_symbol_offset_sum <offset _)))))
 
 
@@ -1730,10 +1715,11 @@
       (SideEffectNoResult.Inst (MInst.FpuStoreRev64 src addr)))
 
 ;; Helper for emitting `MInst.LoadExtNameFar` instructions.
-(decl load_ext_name_far (BoxExternalName i64) Reg)
+(decl load_ext_name_far (ExternalName i64) Reg)
 (rule (load_ext_name_far name offset)
       (let ((dst WritableReg (temp_writable_reg $I64))
-            (_ Unit (emit (MInst.LoadExtNameFar dst name offset))))
+            (boxed_name BoxExternalName (box_external_name name))
+            (_ Unit (emit (MInst.LoadExtNameFar dst boxed_name offset))))
         (writable_reg_to_reg dst)))
 
 ;; Helper for emitting `MInst.LoadAddr` instructions.
