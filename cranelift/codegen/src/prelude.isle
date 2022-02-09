@@ -38,6 +38,11 @@
 (type ValueList (primitive ValueList))
 (type ValueRegs (primitive ValueRegs))
 
+;; Instruction lowering result: a vector of `ValueRegs`.
+(type InstOutput (primitive InstOutput))
+;; (Mutable) builder to incrementally construct an `InstOutput`.
+(type InstOutputBuilder extern (enum))
+
 (decl u32_add (u32 u32) u32)
 (extern constructor u32_add u32_add)
 
@@ -63,6 +68,38 @@
 ;; Construct an empty `ValueRegs` containing only invalid register sentinels.
 (decl value_regs_invalid () ValueRegs)
 (extern constructor value_regs_invalid value_regs_invalid)
+
+;; Construct an empty `InstOutput`.
+(decl output_none () InstOutput)
+(extern constructor output_none output_none)
+
+;; Construct a single-element `InstOutput`.
+(decl output (ValueRegs) InstOutput)
+(extern constructor output output)
+
+;; Construct a two-element `InstOutput`.
+(decl output_pair (ValueRegs ValueRegs) InstOutput)
+(extern constructor output_pair output_pair)
+
+;; Construct a single-element `InstOutput` from a single register.
+(decl output_reg (Reg) InstOutput)
+(rule (output_reg reg) (output (value_reg reg)))
+
+;; Construct a single-element `InstOutput` from a value.
+(decl output_value (Value) InstOutput)
+(rule (output_value val) (output (put_in_regs val)))
+
+;; Initially empty `InstOutput` builder.
+(decl output_builder_new () InstOutputBuilder)
+(extern constructor output_builder_new output_builder_new)
+
+;; Append a `ValueRegs` to an `InstOutput` under construction.
+(decl output_builder_push (InstOutputBuilder ValueRegs) Unit)
+(extern constructor output_builder_push output_builder_push)
+
+;; Finish building an `InstOutput` incrementally.
+(decl output_builder_finish (InstOutputBuilder) InstOutput)
+(extern constructor output_builder_finish output_builder_finish)
 
 ;; Get a temporary register for writing.
 (decl temp_writable_reg (Type) WritableReg)
@@ -307,18 +344,18 @@
 
 (type SideEffectNoResult (enum (Inst (inst MInst))))
 
-;; Create an empty `ValueRegs`, but do emit the given side-effectful
+;; Create an empty `InstOutput`, but do emit the given side-effectful
 ;; instruction.
-(decl value_regs_none (SideEffectNoResult) ValueRegs)
-(rule (value_regs_none (SideEffectNoResult.Inst inst))
+(decl side_effect (SideEffectNoResult) InstOutput)
+(rule (side_effect (SideEffectNoResult.Inst inst))
       (let ((_ Unit (emit inst)))
-        (value_regs_invalid)))
+        (output_none)))
 
 ;; Similarly, but emit the side-effectful instruction as a safepoint.
-(decl safepoint (SideEffectNoResult) ValueRegs)
+(decl safepoint (SideEffectNoResult) InstOutput)
 (rule (safepoint (SideEffectNoResult.Inst inst))
       (let ((_ Unit (emit_safepoint inst)))
-        (value_regs_invalid)))
+        (output_none)))
 
 ;;;; Helpers for Working with Flags ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -438,3 +475,6 @@
 (convert Value Reg put_in_reg)
 (convert Value ValueRegs put_in_regs)
 (convert WritableReg Reg writable_reg_to_reg)
+(convert ValueRegs InstOutput output)
+(convert Reg InstOutput output_reg)
+(convert Value InstOutput output_value)

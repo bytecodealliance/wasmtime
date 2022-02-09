@@ -1009,20 +1009,20 @@
 (rule (put_in_xmm_mem_imm val)
       (xmm_mem_imm_new (put_in_reg_mem_imm val)))
 
-;; Construct a `ValueRegs` out of a single GPR register.
-(decl value_gpr (Gpr) ValueRegs)
-(rule (value_gpr x)
-      (value_reg (gpr_to_reg x)))
+;; Construct an `InstOutput` out of a single GPR register.
+(decl output_gpr (Gpr) InstOutput)
+(rule (output_gpr x)
+      (output_reg (gpr_to_reg x)))
 
 ;; Construct a `ValueRegs` out of two GPR registers.
 (decl value_gprs (Gpr Gpr) ValueRegs)
 (rule (value_gprs x y)
       (value_regs (gpr_to_reg x) (gpr_to_reg y)))
 
-;; Construct a `ValueRegs` out of a single XMM register.
-(decl value_xmm (Xmm) ValueRegs)
-(rule (value_xmm x)
-      (value_reg (xmm_to_reg x)))
+;; Construct an `InstOutput` out of a single XMM register.
+(decl output_xmm (Xmm) InstOutput)
+(rule (output_xmm x)
+      (output_reg (xmm_to_reg x)))
 
 ;; Get the `n`th reg in a `ValueRegs` and construct a GPR from it.
 ;;
@@ -2223,7 +2223,7 @@
 
 ;;;; Automatic conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(convert Gpr ValueRegs value_gpr)
+(convert Gpr InstOutput output_gpr)
 (convert Value Gpr put_in_gpr)
 (convert Value GprMem put_in_gpr_mem)
 (convert Value GprMemImm put_in_gpr_mem_imm)
@@ -2242,7 +2242,7 @@
 (convert WritableGpr WritableReg writable_gpr_to_reg)
 (convert WritableGpr Reg writable_gpr_to_r_reg)
 
-(convert Xmm ValueRegs value_xmm)
+(convert Xmm InstOutput output_xmm)
 (convert Value Xmm put_in_xmm)
 (convert Value XmmMem put_in_xmm_mem)
 (convert Value XmmMemImm put_in_xmm_mem_imm)
