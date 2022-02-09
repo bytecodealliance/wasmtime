@@ -51,8 +51,10 @@ pub trait Context {
     fn vec128(&mut self, arg0: Type) -> Option<Type>;
     fn not_i64x2(&mut self, arg0: Type) -> Option<()>;
     fn value_list_slice(&mut self, arg0: ValueList) -> ValueSlice;
-    fn unwrap_head_value_list_1(&mut self, arg0: ValueList) -> (Value, ValueSlice);
-    fn unwrap_head_value_list_2(&mut self, arg0: ValueList) -> (Value, Value, ValueSlice);
+    fn value_slice_empty(&mut self, arg0: ValueSlice) -> Option<()>;
+    fn value_slice_unwrap(&mut self, arg0: ValueSlice) -> Option<(Value, ValueSlice)>;
+    fn value_slice_len(&mut self, arg0: ValueSlice) -> usize;
+    fn value_slice_get(&mut self, arg0: ValueSlice, arg1: usize) -> Value;
     fn writable_reg_to_reg(&mut self, arg0: WritableReg) -> Reg;
     fn u8_from_uimm8(&mut self, arg0: Uimm8) -> u8;
     fn u64_from_imm64(&mut self, arg0: Imm64) -> u64;
@@ -142,13 +144,13 @@ pub trait Context {
     fn same_reg(&mut self, arg0: Reg, arg1: WritableReg) -> Option<()>;
 }
 
-/// Internal type SideEffectNoResult: defined at src/prelude.isle line 345.
+/// Internal type SideEffectNoResult: defined at src/prelude.isle line 363.
 #[derive(Clone, Debug)]
 pub enum SideEffectNoResult {
     Inst { inst: MInst },
 }
 
-/// Internal type ProducesFlags: defined at src/prelude.isle line 367.
+/// Internal type ProducesFlags: defined at src/prelude.isle line 385.
 #[derive(Clone, Debug)]
 pub enum ProducesFlags {
     ProducesFlagsSideEffect { inst: MInst },
@@ -156,7 +158,7 @@ pub enum ProducesFlags {
     ProducesFlagsReturnsResultWithConsumer { inst: MInst, result: Reg },
 }
 
-/// Internal type ConsumesFlags: defined at src/prelude.isle line 378.
+/// Internal type ConsumesFlags: defined at src/prelude.isle line 396.
 #[derive(Clone, Debug)]
 pub enum ConsumesFlags {
     ConsumesFlagsReturnsResultWithProducer {
@@ -939,7 +941,7 @@ pub fn constructor_side_effect<C: Context>(
         inst: ref pattern1_0,
     } = pattern0_0
     {
-        // Rule at src/prelude.isle line 350.
+        // Rule at src/prelude.isle line 368.
         let expr0_0 = C::emit(ctx, pattern1_0);
         let expr1_0 = C::output_none(ctx);
         return Some(expr1_0);
@@ -957,7 +959,7 @@ pub fn constructor_safepoint<C: Context>(
         inst: ref pattern1_0,
     } = pattern0_0
     {
-        // Rule at src/prelude.isle line 356.
+        // Rule at src/prelude.isle line 374.
         let expr0_0 = C::emit_safepoint(ctx, pattern1_0);
         let expr1_0 = C::output_none(ctx);
         return Some(expr1_0);
@@ -983,7 +985,7 @@ pub fn constructor_consumes_flags_concat<C: Context>(
             result: pattern3_1,
         } = pattern2_0
         {
-            // Rule at src/prelude.isle line 390.
+            // Rule at src/prelude.isle line 408.
             let expr0_0 = C::value_regs(ctx, pattern1_1, pattern3_1);
             let expr1_0 = ConsumesFlags::ConsumesFlagsTwiceReturnsValueRegs {
                 inst1: pattern1_0.clone(),
@@ -1013,7 +1015,7 @@ pub fn constructor_with_flags<C: Context>(
                     inst: ref pattern3_0,
                     result: pattern3_1,
                 } => {
-                    // Rule at src/prelude.isle line 415.
+                    // Rule at src/prelude.isle line 433.
                     let expr0_0 = C::emit(ctx, pattern1_0);
                     let expr1_0 = C::emit(ctx, pattern3_0);
                     let expr2_0 = C::value_reg(ctx, pattern3_1);
@@ -1024,7 +1026,7 @@ pub fn constructor_with_flags<C: Context>(
                     inst2: ref pattern3_1,
                     result: pattern3_2,
                 } => {
-                    // Rule at src/prelude.isle line 421.
+                    // Rule at src/prelude.isle line 439.
                     let expr0_0 = C::emit(ctx, pattern1_0);
                     let expr1_0 = C::emit(ctx, pattern3_1);
                     let expr2_0 = C::emit(ctx, pattern3_0);
@@ -1043,7 +1045,7 @@ pub fn constructor_with_flags<C: Context>(
                 result: pattern3_1,
             } = pattern2_0
             {
-                // Rule at src/prelude.isle line 409.
+                // Rule at src/prelude.isle line 427.
                 let expr0_0 = C::emit(ctx, pattern1_0);
                 let expr1_0 = C::emit(ctx, pattern3_0);
                 let expr2_0 = C::value_regs(ctx, pattern1_1, pattern3_1);
@@ -1063,7 +1065,7 @@ pub fn constructor_with_flags_reg<C: Context>(
 ) -> Option<Reg> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/prelude.isle line 434.
+    // Rule at src/prelude.isle line 452.
     let expr0_0 = constructor_with_flags(ctx, pattern0_0, pattern1_0)?;
     let expr1_0: usize = 0;
     let expr2_0 = C::value_regs_get(ctx, expr0_0, expr1_0);
@@ -11767,31 +11769,35 @@ pub fn constructor_lower_branch<C: Context>(
         } => {
             match pattern2_0 {
                 &Opcode::Brz => {
-                    let (pattern4_0, pattern4_1) = C::unwrap_head_value_list_1(ctx, pattern2_1);
-                    let pattern5_0 = arg1;
-                    // Rule at src/isa/s390x/lower.isle line 2109.
-                    let expr0_0 = constructor_value_nonzero(ctx, pattern4_0)?;
-                    let expr1_0 = constructor_invert_bool(ctx, &expr0_0)?;
-                    let expr2_0: u8 = 0;
-                    let expr3_0 = C::vec_element(ctx, pattern5_0, expr2_0);
-                    let expr4_0: u8 = 1;
-                    let expr5_0 = C::vec_element(ctx, pattern5_0, expr4_0);
-                    let expr6_0 = constructor_cond_br_bool(ctx, &expr1_0, expr3_0, expr5_0)?;
-                    let expr7_0 = constructor_side_effect(ctx, &expr6_0)?;
-                    return Some(expr7_0);
+                    let pattern4_0 = C::value_list_slice(ctx, pattern2_1);
+                    if let Some((pattern5_0, pattern5_1)) = C::value_slice_unwrap(ctx, pattern4_0) {
+                        let pattern6_0 = arg1;
+                        // Rule at src/isa/s390x/lower.isle line 2109.
+                        let expr0_0 = constructor_value_nonzero(ctx, pattern5_0)?;
+                        let expr1_0 = constructor_invert_bool(ctx, &expr0_0)?;
+                        let expr2_0: u8 = 0;
+                        let expr3_0 = C::vec_element(ctx, pattern6_0, expr2_0);
+                        let expr4_0: u8 = 1;
+                        let expr5_0 = C::vec_element(ctx, pattern6_0, expr4_0);
+                        let expr6_0 = constructor_cond_br_bool(ctx, &expr1_0, expr3_0, expr5_0)?;
+                        let expr7_0 = constructor_side_effect(ctx, &expr6_0)?;
+                        return Some(expr7_0);
+                    }
                 }
                 &Opcode::Brnz => {
-                    let (pattern4_0, pattern4_1) = C::unwrap_head_value_list_1(ctx, pattern2_1);
-                    let pattern5_0 = arg1;
-                    // Rule at src/isa/s390x/lower.isle line 2120.
-                    let expr0_0 = constructor_value_nonzero(ctx, pattern4_0)?;
-                    let expr1_0: u8 = 0;
-                    let expr2_0 = C::vec_element(ctx, pattern5_0, expr1_0);
-                    let expr3_0: u8 = 1;
-                    let expr4_0 = C::vec_element(ctx, pattern5_0, expr3_0);
-                    let expr5_0 = constructor_cond_br_bool(ctx, &expr0_0, expr2_0, expr4_0)?;
-                    let expr6_0 = constructor_side_effect(ctx, &expr5_0)?;
-                    return Some(expr6_0);
+                    let pattern4_0 = C::value_list_slice(ctx, pattern2_1);
+                    if let Some((pattern5_0, pattern5_1)) = C::value_slice_unwrap(ctx, pattern4_0) {
+                        let pattern6_0 = arg1;
+                        // Rule at src/isa/s390x/lower.isle line 2120.
+                        let expr0_0 = constructor_value_nonzero(ctx, pattern5_0)?;
+                        let expr1_0: u8 = 0;
+                        let expr2_0 = C::vec_element(ctx, pattern6_0, expr1_0);
+                        let expr3_0: u8 = 1;
+                        let expr4_0 = C::vec_element(ctx, pattern6_0, expr3_0);
+                        let expr5_0 = constructor_cond_br_bool(ctx, &expr0_0, expr2_0, expr4_0)?;
+                        let expr6_0 = constructor_side_effect(ctx, &expr5_0)?;
+                        return Some(expr6_0);
+                    }
                 }
                 _ => {}
             }
@@ -11819,30 +11825,37 @@ pub fn constructor_lower_branch<C: Context>(
             destination: pattern2_3,
         } => {
             if let &Opcode::Brif = pattern2_0 {
-                let (pattern4_0, pattern4_1) = C::unwrap_head_value_list_1(ctx, pattern2_1);
-                if let Some(pattern5_0) = C::def_inst(ctx, pattern4_0) {
-                    let pattern6_0 = C::inst_data(ctx, pattern5_0);
-                    if let &InstructionData::Binary {
-                        opcode: ref pattern7_0,
-                        args: ref pattern7_1,
-                    } = &pattern6_0
-                    {
-                        if let &Opcode::Ifcmp = pattern7_0 {
-                            let (pattern9_0, pattern9_1) = C::unpack_value_array_2(ctx, pattern7_1);
-                            let pattern10_0 = arg1;
-                            // Rule at src/isa/s390x/lower.isle line 2131.
-                            let expr0_0: bool = false;
-                            let expr1_0 = constructor_icmp_val(
-                                ctx, expr0_0, pattern2_2, pattern9_0, pattern9_1,
-                            )?;
-                            let expr2_0: u8 = 0;
-                            let expr3_0 = C::vec_element(ctx, pattern10_0, expr2_0);
-                            let expr4_0: u8 = 1;
-                            let expr5_0 = C::vec_element(ctx, pattern10_0, expr4_0);
-                            let expr6_0 =
-                                constructor_cond_br_bool(ctx, &expr1_0, expr3_0, expr5_0)?;
-                            let expr7_0 = constructor_side_effect(ctx, &expr6_0)?;
-                            return Some(expr7_0);
+                let pattern4_0 = C::value_list_slice(ctx, pattern2_1);
+                if let Some((pattern5_0, pattern5_1)) = C::value_slice_unwrap(ctx, pattern4_0) {
+                    if let Some(pattern6_0) = C::def_inst(ctx, pattern5_0) {
+                        let pattern7_0 = C::inst_data(ctx, pattern6_0);
+                        if let &InstructionData::Binary {
+                            opcode: ref pattern8_0,
+                            args: ref pattern8_1,
+                        } = &pattern7_0
+                        {
+                            if let &Opcode::Ifcmp = pattern8_0 {
+                                let (pattern10_0, pattern10_1) =
+                                    C::unpack_value_array_2(ctx, pattern8_1);
+                                let pattern11_0 = arg1;
+                                // Rule at src/isa/s390x/lower.isle line 2131.
+                                let expr0_0: bool = false;
+                                let expr1_0 = constructor_icmp_val(
+                                    ctx,
+                                    expr0_0,
+                                    pattern2_2,
+                                    pattern10_0,
+                                    pattern10_1,
+                                )?;
+                                let expr2_0: u8 = 0;
+                                let expr3_0 = C::vec_element(ctx, pattern11_0, expr2_0);
+                                let expr4_0: u8 = 1;
+                                let expr5_0 = C::vec_element(ctx, pattern11_0, expr4_0);
+                                let expr6_0 =
+                                    constructor_cond_br_bool(ctx, &expr1_0, expr3_0, expr5_0)?;
+                                let expr7_0 = constructor_side_effect(ctx, &expr6_0)?;
+                                return Some(expr7_0);
+                            }
                         }
                     }
                 }
