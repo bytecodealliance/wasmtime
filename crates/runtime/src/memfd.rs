@@ -6,10 +6,8 @@ use crate::InstantiationError;
 use crate::MmapVec;
 use anyhow::Result;
 use libc::c_void;
-use memfd::{Memfd, MemfdOptions};
 use rustix::fd::AsRawFd;
 use std::fs::File;
-use std::io::Write;
 use std::sync::Arc;
 use std::{convert::TryFrom, ops::Range};
 use wasmtime_environ::{DefinedMemoryIndex, MemoryInitialization, Module, PrimaryMap};
@@ -64,6 +62,7 @@ pub struct MemoryMemFd {
 #[derive(Debug)]
 enum MemFdSource {
     Mmap(MmapVecFileBacking),
+    #[cfg(target_os = "linux")]
     Memfd(Memfd),
 }
 
@@ -71,6 +70,7 @@ impl MemFdSource {
     fn as_file(&self) -> &File {
         match self {
             MemFdSource::Mmap(mmap) => mmap.original_file(),
+            #[cfg(target_os = "linux")]
             MemFdSource::Memfd(memfd) => memfd.as_file(),
         }
     }
@@ -103,13 +103,6 @@ impl MemoryMemFd {
         // files, but for now this is still a Linux-specific region of Wasmtime.
         // Some work will be needed to get this file compiling for macOS and
         // Windows.
-        //
-        // Otherwise though if the `mmap` didn't come from a file backing then
-        // it's not suitable for a copy-on-write source (as there's no file
-        // descriptor to map from). For non-Linux platforms that means we would
-        // have to fail `MemoryMemFd` construction, but for Linux platforms we
-        // can fall through below and use an anonymous file in memory which we
-        // write to as the backing image source.
         if let Some(mmap) = mmap {
             let start = mmap.as_ptr() as usize;
             let end = start + mmap.len();
@@ -132,41 +125,59 @@ impl MemoryMemFd {
             }
         }
 
-        // Write the nonzero data to the memfd and then use `set_len` to
-        // ensure that the length of the memfd is page-aligned where the gap
-        // at the end, if any, is filled with zeros.
-        let memfd = create_memfd()?;
-        memfd.as_file().write_all(data)?;
+        // If `mmap` doesn't come from a file then platform-specific mechanisms
+        // may be used to place the data in a form that's amenable to an mmap.
 
-        // Seal the memfd's data and length.
-        //
-        // This is a defense-in-depth security mitigation. The
-        // memfd will serve as the starting point for the heap of
-        // every instance of this module. If anything were to
-        // write to this, it could affect every execution. The
-        // memfd object itself is owned by the machinery here and
-        // not exposed elsewhere, but it is still an ambient open
-        // file descriptor at the syscall level, so some other
-        // vulnerability that allowed writes to arbitrary fds
-        // could modify it. Or we could have some issue with the
-        // way that we map it into each instance. To be
-        // extra-super-sure that it never changes, and because
-        // this costs very little, we use the kernel's "seal" API
-        // to make the memfd image permanently read-only.
-        memfd.add_seal(memfd::FileSeal::SealGrow)?;
-        memfd.add_seal(memfd::FileSeal::SealShrink)?;
-        memfd.add_seal(memfd::FileSeal::SealWrite)?;
-        memfd.add_seal(memfd::FileSeal::SealSeal)?;
+        cfg_if::cfg_if! {
+            if #[cfg(target_os = "linux")] {
+                // On Linux `memfd_create` is used to create an anonymous
+                // in-memory file to represent the heap image. This anonymous
+                // file is then used as the basis for further mmaps.
 
-        Ok(Some(MemoryMemFd {
-            fd: MemFdSource::Memfd(memfd),
-            fd_offset: 0,
-            linear_memory_offset,
-            len,
-        }))
+                use std::io::Write;
+
+                let memfd = create_memfd()?;
+                memfd.as_file().write_all(data)?;
+
+                // Seal the memfd's data and length.
+                //
+                // This is a defense-in-depth security mitigation. The
+                // memfd will serve as the starting point for the heap of
+                // every instance of this module. If anything were to
+                // write to this, it could affect every execution. The
+                // memfd object itself is owned by the machinery here and
+                // not exposed elsewhere, but it is still an ambient open
+                // file descriptor at the syscall level, so some other
+                // vulnerability that allowed writes to arbitrary fds
+                // could modify it. Or we could have some issue with the
+                // way that we map it into each instance. To be
+                // extra-super-sure that it never changes, and because
+                // this costs very little, we use the kernel's "seal" API
+                // to make the memfd image permanently read-only.
+                memfd.add_seal(memfd::FileSeal::SealGrow)?;
+                memfd.add_seal(memfd::FileSeal::SealShrink)?;
+                memfd.add_seal(memfd::FileSeal::SealWrite)?;
+                memfd.add_seal(memfd::FileSeal::SealSeal)?;
+
+                Ok(Some(MemoryMemFd {
+                    fd: MemFdSource::Memfd(memfd),
+                    fd_offset: 0,
+                    linear_memory_offset,
+                    len,
+                }))
+            } else {
+                // Other platforms don't have an easily available way of
+                // representing the heap image as an mmap-source right now. We
+                // could theoretically create a file and immediately unlink it
+                // but that means that data may likely be preserved to disk
+                // which isn't what we want here.
+                Ok(None)
+            }
+        }
     }
 }
 
+#[cfg(target_os = "linux")]
 fn create_memfd() -> Result<Memfd> {
     // Create the memfd. It needs a name, but the
     // documentation for `memfd_create()` says that names can
@@ -312,10 +323,7 @@ impl MemFdSlot {
 
     pub(crate) fn set_heap_limit(&mut self, size_bytes: usize) -> Result<()> {
         // mprotect the relevant region.
-        self.set_protection(
-            self.cur_size..size_bytes,
-            rustix::io::MprotectFlags::READ | rustix::io::MprotectFlags::WRITE,
-        )?;
+        self.set_protection(self.cur_size..size_bytes, region::Protection::READ_WRITE)?;
         self.cur_size = size_bytes;
 
         Ok(())
@@ -372,11 +380,8 @@ impl MemFdSlot {
             // heap is made visible with an mprotect.
             self.reset_with_anon_memory()
                 .map_err(|e| InstantiationError::Resource(e.into()))?;
-            self.set_protection(
-                0..initial_size_bytes,
-                rustix::io::MprotectFlags::READ | rustix::io::MprotectFlags::WRITE,
-            )
-            .map_err(|e| InstantiationError::Resource(e.into()))?;
+            self.set_protection(0..initial_size_bytes, region::Protection::READ_WRITE)
+                .map_err(|e| InstantiationError::Resource(e.into()))?;
         } else if initial_size_bytes < self.initial_size {
             // In this case the previous module had now CoW image which means
             // that the memory at `0..self.initial_size` is all zeros and
@@ -397,7 +402,7 @@ impl MemFdSlot {
             // mprotect(NONE) the zone from the first to the second.
             self.set_protection(
                 initial_size_bytes..self.initial_size,
-                rustix::io::MprotectFlags::empty(),
+                region::Protection::NONE,
             )
             .map_err(|e| InstantiationError::Resource(e.into()))?;
         } else if initial_size_bytes > self.initial_size {
@@ -408,7 +413,7 @@ impl MemFdSlot {
             // made visible as zeros.
             self.set_protection(
                 self.initial_size..initial_size_bytes,
-                rustix::io::MprotectFlags::READ | rustix::io::MprotectFlags::WRITE,
+                region::Protection::READ_WRITE,
             )
             .map_err(|e| InstantiationError::Resource(e.into()))?;
         } else {
@@ -455,34 +460,49 @@ impl MemFdSlot {
     #[allow(dead_code)] // ignore warnings as this is only used in some cfgs
     pub(crate) fn clear_and_remain_ready(&mut self) -> Result<()> {
         assert!(self.dirty);
-        // madvise the image range. This will throw away dirty pages,
-        // which are CoW-private pages on top of the initial heap
-        // image memfd.
-        unsafe {
-            rustix::io::madvise(
-                self.base as *mut c_void,
-                self.cur_size,
-                rustix::io::Advice::LinuxDontNeed,
-            )?;
+
+        cfg_if::cfg_if! {
+            if #[cfg(target_os = "linux")] {
+                // On Linux we can use `madvise` to reset the virtual memory
+                // back to its original state. This means back to all zeros for
+                // anonymous-backed pages and back to the original contents for
+                // CoW memory (the initial heap image). This has the precise
+                // semantics we want for reuse between instances, so it's all we
+                // need to do.
+                unsafe {
+                    rustix::io::madvise(
+                        self.base as *mut c_void,
+                        self.cur_size,
+                        rustix::io::Advice::LinuxDontNeed,
+                    )?;
+                }
+            } else {
+                // If we're not on Linux, however, then there's no generic
+                // platform way to reset memory back to its original state, so
+                // instead this is "feigned" by resetting memory back to
+                // entirely zeros with an anonymous backing.
+                //
+                // Additionally the previous image, if any, is dropped here
+                // since it's no longer applicable to this mapping.
+                self.reset_with_anon_memory()?;
+                self.image = None;
+            }
         }
 
         // mprotect the initial heap region beyond the initial heap size back to PROT_NONE.
-        self.set_protection(
-            self.initial_size..self.cur_size,
-            rustix::io::MprotectFlags::empty(),
-        )?;
+        self.set_protection(self.initial_size..self.cur_size, region::Protection::NONE)?;
         self.cur_size = self.initial_size;
         self.dirty = false;
         Ok(())
     }
 
-    fn set_protection(&self, range: Range<usize>, flags: rustix::io::MprotectFlags) -> Result<()> {
+    fn set_protection(&self, range: Range<usize>, flags: region::Protection) -> Result<()> {
         assert!(range.start <= range.end);
         assert!(range.end <= self.static_size);
         let mprotect_start = self.base.checked_add(range.start).unwrap();
         if range.len() > 0 {
             unsafe {
-                rustix::io::mprotect(mprotect_start as *mut _, range.len(), flags)?;
+                region::protect(mprotect_start as *mut _, range.len(), flags)?;
             }
         }
 
@@ -552,7 +572,7 @@ impl Drop for MemFdSlot {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, target_os = "linux"))]
 mod test {
     use std::sync::Arc;
 
