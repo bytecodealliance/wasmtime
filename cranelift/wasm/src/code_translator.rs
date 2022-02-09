@@ -612,7 +612,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             bitcast_arguments(args, &types, builder);
 
             let call = environ.translate_call_indirect(
-                builder.cursor(),
+                builder,
                 TableIndex::from_u32(*table_index),
                 table,
                 TypeIndex::from_u32(*index),

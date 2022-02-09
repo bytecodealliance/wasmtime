@@ -11,7 +11,7 @@ use crate::vmcontext::{
     VMCallerCheckedAnyfunc, VMContext, VMFunctionImport, VMGlobalDefinition, VMGlobalImport,
     VMInterrupts, VMMemoryDefinition, VMMemoryImport, VMTableDefinition, VMTableImport,
 };
-use crate::{CompiledModuleId, ExportFunction, ExportGlobal, ExportMemory, ExportTable, Store};
+use crate::{ExportFunction, ExportGlobal, ExportMemory, ExportTable, ModuleRuntimeInfo, Store};
 use anyhow::Error;
 use memoffset::offset_of;
 use more_asserts::assert_lt;
@@ -24,6 +24,7 @@ use std::ptr::NonNull;
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use std::{mem, ptr, slice};
+use wasmtime_environ::TableInitialization;
 use wasmtime_environ::{
     packed_option::ReservedValue, DataIndex, DefinedGlobalIndex, DefinedMemoryIndex,
     DefinedTableIndex, ElemIndex, EntityIndex, EntityRef, EntitySet, FuncIndex, GlobalIndex,
@@ -51,11 +52,12 @@ pub use allocator::*;
 /// values, whether or not they were created on the host or through a module.
 #[repr(C)] // ensure that the vmctx field is last.
 pub(crate) struct Instance {
-    /// The `Module` this `Instance` was instantiated from.
-    module: Arc<Module>,
-
-    /// The unique ID for the `Module` this `Instance` was instantiated from.
-    unique_id: Option<CompiledModuleId>,
+    /// The runtime info (corresponding to the "compiled module"
+    /// abstraction in higher layers) that is retained and needed for
+    /// lazy initialization. This provides access to the underlying
+    /// Wasm module entities, the compiled JIT code, metadata about
+    /// functions, lazy initialization state, etc.
+    runtime_info: Arc<dyn ModuleRuntimeInfo>,
 
     /// Offsets in the `vmctx` region, precomputed from the `module` above.
     offsets: VMOffsets<HostPtr>,
@@ -80,12 +82,6 @@ pub(crate) struct Instance {
     /// If the index is present in the set, the segment has been dropped.
     dropped_data: EntitySet<DataIndex>,
 
-    /// A slice pointing to all data that is referenced by this instance. This
-    /// data is managed externally so this is effectively an unsafe reference,
-    /// and this does not live for the `'static` lifetime so the API boundaries
-    /// here are careful to never hand out static references.
-    wasm_data: &'static [u8],
-
     /// Hosts can store arbitrary per-instance information here.
     ///
     /// Most of the time from Wasmtime this is `Box::new(())`, a noop
@@ -102,23 +98,23 @@ pub(crate) struct Instance {
 impl Instance {
     /// Helper for allocators; not a public API.
     pub(crate) fn create_raw(
-        module: &Arc<Module>,
-        unique_id: Option<CompiledModuleId>,
-        wasm_data: &'static [u8],
+        runtime_info: Arc<dyn ModuleRuntimeInfo>,
         memories: PrimaryMap<DefinedMemoryIndex, Memory>,
         tables: PrimaryMap<DefinedTableIndex, Table>,
         host_state: Box<dyn Any + Send + Sync>,
     ) -> Instance {
+        let module = runtime_info.module();
+        let offsets = VMOffsets::new(HostPtr, &module);
+        let dropped_elements = EntitySet::with_capacity(module.passive_elements.len());
+        let dropped_data = EntitySet::with_capacity(module.passive_data_map.len());
         Instance {
-            module: module.clone(),
-            unique_id,
-            offsets: VMOffsets::new(HostPtr, &module),
+            runtime_info,
+            offsets,
             memories,
             tables,
-            dropped_elements: EntitySet::with_capacity(module.passive_elements.len()),
-            dropped_data: EntitySet::with_capacity(module.passive_data_map.len()),
+            dropped_elements,
+            dropped_data,
             host_state,
-            wasm_data,
             vmctx: VMContext {
                 _marker: std::marker::PhantomPinned,
             },
@@ -134,7 +130,7 @@ impl Instance {
     }
 
     pub(crate) fn module(&self) -> &Arc<Module> {
-        &self.module
+        self.runtime_info.module()
     }
 
     /// Return the indexed `VMFunctionImport`.
@@ -177,7 +173,7 @@ impl Instance {
 
     /// Get a locally defined or imported memory.
     pub(crate) fn get_memory(&self, index: MemoryIndex) -> VMMemoryDefinition {
-        if let Some(defined_index) = self.module.defined_memory_index(index) {
+        if let Some(defined_index) = self.module().defined_memory_index(index) {
             self.memory(defined_index)
         } else {
             let import = self.imported_memory(index);
@@ -220,7 +216,7 @@ impl Instance {
         &self,
         index: GlobalIndex,
     ) -> *mut VMGlobalDefinition {
-        if let Some(index) = self.module.defined_global_index(index) {
+        if let Some(index) = self.module().defined_global_index(index) {
             self.global_ptr(index)
         } else {
             self.imported_global(index).from
@@ -276,7 +272,7 @@ impl Instance {
     }
 
     /// Lookup an export with the given export declaration.
-    pub fn lookup_by_declaration(&self, export: &EntityIndex) -> Export {
+    pub fn lookup_by_declaration(&mut self, export: &EntityIndex) -> Export {
         match export {
             EntityIndex::Function(index) => {
                 let anyfunc = self.get_caller_checked_anyfunc(*index).unwrap();
@@ -286,7 +282,7 @@ impl Instance {
             }
             EntityIndex::Table(index) => {
                 let (definition, vmctx) =
-                    if let Some(def_index) = self.module.defined_table_index(*index) {
+                    if let Some(def_index) = self.module().defined_table_index(*index) {
                         (self.table_ptr(def_index), self.vmctx_ptr())
                     } else {
                         let import = self.imported_table(*index);
@@ -295,13 +291,13 @@ impl Instance {
                 ExportTable {
                     definition,
                     vmctx,
-                    table: self.module.table_plans[*index].clone(),
+                    table: self.module().table_plans[*index].clone(),
                 }
                 .into()
             }
             EntityIndex::Memory(index) => {
                 let (definition, vmctx) =
-                    if let Some(def_index) = self.module.defined_memory_index(*index) {
+                    if let Some(def_index) = self.module().defined_memory_index(*index) {
                         (self.memory_ptr(def_index), self.vmctx_ptr())
                     } else {
                         let import = self.imported_memory(*index);
@@ -310,18 +306,18 @@ impl Instance {
                 ExportMemory {
                     definition,
                     vmctx,
-                    memory: self.module.memory_plans[*index].clone(),
+                    memory: self.module().memory_plans[*index].clone(),
                 }
                 .into()
             }
             EntityIndex::Global(index) => ExportGlobal {
-                definition: if let Some(def_index) = self.module.defined_global_index(*index) {
+                definition: if let Some(def_index) = self.module().defined_global_index(*index) {
                     self.global_ptr(def_index)
                 } else {
                     self.imported_global(*index).from
                 },
                 vmctx: self.vmctx_ptr(),
-                global: self.module.globals[*index],
+                global: self.module().globals[*index],
             }
             .into(),
 
@@ -337,7 +333,7 @@ impl Instance {
     /// are export names, and the values are export declarations which can be
     /// resolved `lookup_by_declaration`.
     pub fn exports(&self) -> indexmap::map::Iter<String, EntityIndex> {
-        self.module.exports.iter()
+        self.module().exports.iter()
     }
 
     /// Return a reference to the custom state attached to this instance.
@@ -388,7 +384,7 @@ impl Instance {
         index: MemoryIndex,
         delta: u64,
     ) -> Result<Option<usize>, Error> {
-        let (idx, instance) = if let Some(idx) = self.module.defined_memory_index(index) {
+        let (idx, instance) = if let Some(idx) = self.module().defined_memory_index(index) {
             (idx, self)
         } else {
             let import = self.imported_memory(index);
@@ -462,6 +458,42 @@ impl Instance {
         Layout::from_size_align(size, align).unwrap()
     }
 
+    /// Construct a new VMCallerCheckedAnyfunc for the given function
+    /// (imported or defined in this module) and store into the given
+    /// location. Used during lazy initialization.
+    ///
+    /// Note that our current lazy-init scheme actually calls this every
+    /// time the anyfunc pointer is fetched; this turns out to be better
+    /// than tracking state related to whether it's been initialized
+    /// before, because resetting that state on (re)instantiation is
+    /// very expensive if there are many anyfuncs.
+    fn construct_anyfunc(&mut self, index: FuncIndex, into: *mut VMCallerCheckedAnyfunc) {
+        let sig = self.module().functions[index];
+        let type_index = self.runtime_info.signature(sig);
+
+        let (func_ptr, vmctx) = if let Some(def_index) = self.module().defined_func_index(index) {
+            (
+                (self.runtime_info.image_base()
+                    + self.runtime_info.function_info(def_index).start as usize)
+                    as *mut _,
+                self.vmctx_ptr(),
+            )
+        } else {
+            let import = self.imported_function(index);
+            (import.body.as_ptr(), import.vmctx)
+        };
+
+        // Safety: we have a `&mut self`, so we have exclusive access
+        // to this Instance.
+        unsafe {
+            *into = VMCallerCheckedAnyfunc {
+                vmctx,
+                type_index,
+                func_ptr: NonNull::new(func_ptr).expect("Non-null function pointer"),
+            };
+        }
+    }
+
     /// Get a `&VMCallerCheckedAnyfunc` for the given `FuncIndex`.
     ///
     /// Returns `None` if the index is the reserved index value.
@@ -469,18 +501,46 @@ impl Instance {
     /// The returned reference is a stable reference that won't be moved and can
     /// be passed into JIT code.
     pub(crate) fn get_caller_checked_anyfunc(
-        &self,
+        &mut self,
         index: FuncIndex,
-    ) -> Option<&VMCallerCheckedAnyfunc> {
+    ) -> Option<*mut VMCallerCheckedAnyfunc> {
         if index == FuncIndex::reserved_value() {
             return None;
         }
 
-        unsafe { Some(&*self.vmctx_plus_offset(self.offsets.vmctx_anyfunc(index))) }
-    }
+        // Safety: we have a `&mut self`, so we have exclusive access
+        // to this Instance.
+        unsafe {
+            // For now, we eagerly initialize an anyfunc struct in-place
+            // whenever asked for a reference to it. This is mostly
+            // fine, because in practice each anyfunc is unlikely to be
+            // requested more than a few times: once-ish for funcref
+            // tables used for call_indirect (the usual compilation
+            // strategy places each function in the table at most once),
+            // and once or a few times when fetching exports via API.
+            // Note that for any case driven by table accesses, the lazy
+            // table init behaves like a higher-level cache layer that
+            // protects this initialization from happening multiple
+            // times, via that particular table at least.
+            //
+            // When `ref.func` becomes more commonly used or if we
+            // otherwise see a use-case where this becomes a hotpath,
+            // we can reconsider by using some state to track
+            // "uninitialized" explicitly, for example by zeroing the
+            // anyfuncs (perhaps together with other
+            // zeroed-at-instantiate-time state) or using a separate
+            // is-initialized bitmap.
+            //
+            // We arrived at this design because zeroing memory is
+            // expensive, so it's better for instantiation performance
+            // if we don't have to track "is-initialized" state at
+            // all!
+            let anyfunc: *mut VMCallerCheckedAnyfunc =
+                self.vmctx_plus_offset::<VMCallerCheckedAnyfunc>(self.offsets.vmctx_anyfunc(index));
+            self.construct_anyfunc(index, anyfunc);
 
-    unsafe fn anyfunc_base(&self) -> *mut VMCallerCheckedAnyfunc {
-        self.vmctx_plus_offset(self.offsets.vmctx_anyfuncs_begin())
+            Some(anyfunc)
+        }
     }
 
     /// The `table.init` operation: initializes a portion of a table with a
@@ -501,7 +561,7 @@ impl Instance {
         // TODO: this `clone()` shouldn't be necessary but is used for now to
         // inform `rustc` that the lifetime of the elements here are
         // disconnected from the lifetime of `self`.
-        let module = self.module.clone();
+        let module = self.module().clone();
 
         let elements = match module.passive_elements_map.get(&elem_index) {
             Some(index) if !self.dropped_elements.contains(elem_index) => {
@@ -533,20 +593,15 @@ impl Instance {
         };
 
         match table.element_type() {
-            TableElementType::Func => unsafe {
-                let base = self.anyfunc_base();
+            TableElementType::Func => {
                 table.init_funcs(
                     dst,
                     elements.iter().map(|idx| {
-                        if *idx == FuncIndex::reserved_value() {
-                            ptr::null_mut()
-                        } else {
-                            debug_assert!(idx.as_u32() < self.offsets.num_defined_functions);
-                            base.add(usize::try_from(idx.as_u32()).unwrap())
-                        }
+                        self.get_caller_checked_anyfunc(*idx)
+                            .unwrap_or(std::ptr::null_mut())
                     }),
                 )?;
-            },
+            }
 
             TableElementType::Extern => {
                 debug_assert!(elements.iter().all(|e| *e == FuncIndex::reserved_value()));
@@ -657,7 +712,7 @@ impl Instance {
         src: u32,
         len: u32,
     ) -> Result<(), Trap> {
-        let range = match self.module.passive_data_map.get(&data_index).cloned() {
+        let range = match self.module().passive_data_map.get(&data_index).cloned() {
             Some(range) if !self.dropped_data.contains(data_index) => range,
             _ => 0..0,
         };
@@ -665,7 +720,7 @@ impl Instance {
     }
 
     pub(crate) fn wasm_data(&self, range: Range<u32>) -> &[u8] {
-        &self.wasm_data[range.start as usize..range.end as usize]
+        &self.runtime_info.wasm_data()[range.start as usize..range.end as usize]
     }
 
     pub(crate) fn memory_init_segment(
@@ -703,6 +758,74 @@ impl Instance {
         // dropping a non-passive segment is a no-op (not a trap).
     }
 
+    /// Get a table by index regardless of whether it is locally-defined
+    /// or an imported, foreign table. Ensure that the given range of
+    /// elements in the table is lazily initialized.  We define this
+    /// operation all-in-one for safety, to ensure the lazy-init
+    /// happens.
+    ///
+    /// Takes an `Iterator` for the index-range to lazy-initialize,
+    /// for flexibility. This can be a range, single item, or empty
+    /// sequence, for example. The iterator should return indices in
+    /// increasing order, so that the break-at-out-of-bounds behavior
+    /// works correctly.
+    pub(crate) fn get_table_with_lazy_init(
+        &mut self,
+        table_index: TableIndex,
+        range: impl Iterator<Item = u32>,
+    ) -> *mut Table {
+        let (idx, instance) = self.get_defined_table_index_and_instance(table_index);
+        let elt_ty = instance.tables[idx].element_type();
+
+        if elt_ty == TableElementType::Func {
+            for i in range {
+                let value = match instance.tables[idx].get(i) {
+                    Some(value) => value,
+                    None => {
+                        // Out-of-bounds; caller will handle by likely
+                        // throwing a trap. No work to do to lazy-init
+                        // beyond the end.
+                        break;
+                    }
+                };
+                if value.is_uninit() {
+                    let table_init = match &instance.module().table_initialization {
+                        // We unfortunately can't borrow `tables`
+                        // outside the loop because we need to call
+                        // `get_caller_checked_anyfunc` (a `&mut`
+                        // method) below; so unwrap it dynamically
+                        // here.
+                        TableInitialization::FuncTable { tables, .. } => tables,
+                        _ => break,
+                    }
+                    .get(table_index);
+
+                    // The TableInitialization::FuncTable elements table may
+                    // be smaller than the current size of the table: it
+                    // always matches the initial table size, if present. We
+                    // want to iterate up through the end of the accessed
+                    // index range so that we set an "initialized null" even
+                    // if there is no initializer. We do a checked `get()` on
+                    // the initializer table below and unwrap to a null if
+                    // we're past its end.
+                    let func_index =
+                        table_init.and_then(|indices| indices.get(i as usize).cloned());
+                    let anyfunc = func_index
+                        .and_then(|func_index| instance.get_caller_checked_anyfunc(func_index))
+                        .unwrap_or(std::ptr::null_mut());
+
+                    let value = TableElement::FuncRef(anyfunc);
+
+                    instance.tables[idx]
+                        .set(i, value)
+                        .expect("Table type should match and index should be in-bounds");
+                }
+            }
+        }
+
+        ptr::addr_of_mut!(instance.tables[idx])
+    }
+
     /// Get a table by index regardless of whether it is locally-defined or an
     /// imported, foreign table.
     pub(crate) fn get_table(&mut self, table_index: TableIndex) -> *mut Table {
@@ -719,7 +842,7 @@ impl Instance {
         &mut self,
         index: TableIndex,
     ) -> (DefinedTableIndex, &mut Instance) {
-        if let Some(defined_table_index) = self.module.defined_table_index(index) {
+        if let Some(defined_table_index) = self.module().defined_table_index(index) {
             (defined_table_index, self)
         } else {
             let import = self.imported_table(index);
@@ -733,8 +856,8 @@ impl Instance {
     }
 
     fn drop_globals(&mut self) {
-        for (idx, global) in self.module.globals.iter() {
-            let idx = match self.module.defined_global_index(idx) {
+        for (idx, global) in self.module().globals.iter() {
+            let idx = match self.module().defined_global_index(idx) {
                 Some(idx) => idx,
                 None => continue,
             };
@@ -804,8 +927,8 @@ impl InstanceHandle {
     }
 
     /// Lookup an export with the given export declaration.
-    pub fn lookup_by_declaration(&self, export: &EntityIndex) -> Export {
-        self.instance().lookup_by_declaration(export)
+    pub fn lookup_by_declaration(&mut self, export: &EntityIndex) -> Export {
+        self.instance_mut().lookup_by_declaration(export)
     }
 
     /// Return an iterator over the exports of this instance.
@@ -840,6 +963,17 @@ impl InstanceHandle {
     /// Get a table defined locally within this module.
     pub fn get_defined_table(&mut self, index: DefinedTableIndex) -> *mut Table {
         self.instance_mut().get_defined_table(index)
+    }
+
+    /// Get a table defined locally within this module, lazily
+    /// initializing the given range first.
+    pub fn get_defined_table_with_lazy_init(
+        &mut self,
+        index: DefinedTableIndex,
+        range: impl Iterator<Item = u32>,
+    ) -> *mut Table {
+        let index = self.instance().module().table_index(index);
+        self.instance_mut().get_table_with_lazy_init(index, range)
     }
 
     /// Return a reference to the contained `Instance`.

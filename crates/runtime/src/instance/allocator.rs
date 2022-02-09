@@ -6,20 +6,20 @@ use crate::traphandlers::Trap;
 use crate::vmcontext::{
     VMBuiltinFunctionsArray, VMCallerCheckedAnyfunc, VMGlobalDefinition, VMSharedSignatureIndex,
 };
-use crate::ModuleMemFds;
-use crate::{CompiledModuleId, Store};
+use crate::ModuleRuntimeInfo;
+use crate::Store;
 use anyhow::Result;
 use std::alloc;
 use std::any::Any;
 use std::convert::TryFrom;
-use std::ptr::{self, NonNull};
+use std::ptr;
 use std::slice;
 use std::sync::Arc;
 use thiserror::Error;
 use wasmtime_environ::{
-    DefinedFuncIndex, DefinedMemoryIndex, DefinedTableIndex, EntityRef, FunctionInfo, GlobalInit,
-    InitMemory, MemoryInitialization, MemoryInitializer, Module, ModuleType, PrimaryMap,
-    SignatureIndex, TableInitializer, TrapCode, WasmType, WASM_PAGE_SIZE,
+    DefinedMemoryIndex, DefinedTableIndex, EntityRef, GlobalInit, InitMemory, MemoryInitialization,
+    MemoryInitializer, Module, ModuleType, PrimaryMap, TableInitialization, TableInitializer,
+    TrapCode, WasmType, WASM_PAGE_SIZE,
 };
 
 #[cfg(feature = "pooling-allocator")]
@@ -32,27 +32,15 @@ pub use self::pooling::{
 
 /// Represents a request for a new runtime instance.
 pub struct InstanceAllocationRequest<'a> {
-    /// The module being instantiated.
-    pub module: &'a Arc<Module>,
-
-    /// The unique ID of the module being allocated within this engine.
-    pub unique_id: Option<CompiledModuleId>,
-
-    /// The base address of where JIT functions are located.
-    pub image_base: usize,
-
-    /// If using MemFD-based memories, the backing MemFDs.
-    pub memfds: Option<&'a Arc<ModuleMemFds>>,
-
-    /// Descriptors about each compiled function, such as the offset from
-    /// `image_base`.
-    pub functions: &'a PrimaryMap<DefinedFuncIndex, FunctionInfo>,
+    /// The info related to the compiled version of this module,
+    /// needed for instantiation: function metadata, JIT code
+    /// addresses, precomputed images for lazy memory and table
+    /// initialization, and the like. This Arc is cloned and held for
+    /// the lifetime of the instance.
+    pub runtime_info: &'a Arc<dyn ModuleRuntimeInfo>,
 
     /// The imports to use for the instantiation.
     pub imports: Imports<'a>,
-
-    /// Translation from `SignatureIndex` to `VMSharedSignatureIndex`
-    pub shared_signatures: SharedSignatures<'a>,
 
     /// The host state to associate with the instance.
     pub host_state: Box<dyn Any + Send + Sync>,
@@ -72,16 +60,6 @@ pub struct InstanceAllocationRequest<'a> {
     /// We use a number of `PhantomPinned` declarations to indicate this to the
     /// compiler. More info on this in `wasmtime/src/store.rs`
     pub store: StorePtr,
-
-    /// A list of all wasm data that can be referenced by the module that
-    /// will be allocated. The `Module` given here has active/passive data
-    /// segments that are specified as relative indices into this list of bytes.
-    ///
-    /// Note that this is an unsafe pointer. The pointer is expected to live for
-    /// the entire duration of the instance at this time. It's the
-    /// responsibility of the callee when allocating to ensure that this data
-    /// outlives the instance.
-    pub wasm_data: *const [u8],
 }
 
 /// A pointer to a Store. This Option<*mut dyn Store> is wrapped in a struct
@@ -218,46 +196,6 @@ pub unsafe trait InstanceAllocator: Send + Sync {
     unsafe fn deallocate_fiber_stack(&self, stack: &wasmtime_fiber::FiberStack);
 }
 
-pub enum SharedSignatures<'a> {
-    /// Used for instantiating user-defined modules
-    Table(&'a PrimaryMap<SignatureIndex, VMSharedSignatureIndex>),
-    /// Used for instance creation that has only a single function
-    Always(VMSharedSignatureIndex),
-    /// Used for instance creation that has no functions
-    None,
-}
-
-impl SharedSignatures<'_> {
-    fn lookup(&self, index: SignatureIndex) -> VMSharedSignatureIndex {
-        match self {
-            SharedSignatures::Table(table) => table[index],
-            SharedSignatures::Always(index) => *index,
-            SharedSignatures::None => unreachable!(),
-        }
-    }
-}
-
-impl<'a> From<VMSharedSignatureIndex> for SharedSignatures<'a> {
-    fn from(val: VMSharedSignatureIndex) -> SharedSignatures<'a> {
-        SharedSignatures::Always(val)
-    }
-}
-
-impl<'a> From<Option<VMSharedSignatureIndex>> for SharedSignatures<'a> {
-    fn from(val: Option<VMSharedSignatureIndex>) -> SharedSignatures<'a> {
-        match val {
-            Some(idx) => SharedSignatures::Always(idx),
-            None => SharedSignatures::None,
-        }
-    }
-}
-
-impl<'a> From<&'a PrimaryMap<SignatureIndex, VMSharedSignatureIndex>> for SharedSignatures<'a> {
-    fn from(val: &'a PrimaryMap<SignatureIndex, VMSharedSignatureIndex>) -> SharedSignatures<'a> {
-        SharedSignatures::Table(val)
-    }
-}
-
 fn get_table_init_start(
     init: &TableInitializer,
     instance: &Instance,
@@ -265,7 +203,7 @@ fn get_table_init_start(
     match init.base {
         Some(base) => {
             let val = unsafe {
-                if let Some(def_index) = instance.module.defined_global_index(base) {
+                if let Some(def_index) = instance.module().defined_global_index(base) {
                     *instance.global(def_index).as_u32()
                 } else {
                     *(*instance.imported_global(base).from).as_u32()
@@ -286,20 +224,25 @@ fn check_table_init_bounds(
     instance: &mut Instance,
     module: &Module,
 ) -> Result<(), InstantiationError> {
-    for init in &module.table_initializers {
-        let table = unsafe { &*instance.get_table(init.table_index) };
-        let start = get_table_init_start(init, instance)?;
-        let start = usize::try_from(start).unwrap();
-        let end = start.checked_add(init.elements.len());
+    match &module.table_initialization {
+        TableInitialization::FuncTable { segments, .. }
+        | TableInitialization::Segments { segments } => {
+            for segment in segments {
+                let table = unsafe { &*instance.get_table(segment.table_index) };
+                let start = get_table_init_start(segment, instance)?;
+                let start = usize::try_from(start).unwrap();
+                let end = start.checked_add(segment.elements.len());
 
-        match end {
-            Some(end) if end <= table.size() as usize => {
-                // Initializer is in bounds
-            }
-            _ => {
-                return Err(InstantiationError::Link(LinkError(
-                    "table out of bounds: elements segment does not fit".to_owned(),
-                )))
+                match end {
+                    Some(end) if end <= table.size() as usize => {
+                        // Initializer is in bounds
+                    }
+                    _ => {
+                        return Err(InstantiationError::Link(LinkError(
+                            "table out of bounds: elements segment does not fit".to_owned(),
+                        )))
+                    }
+                }
             }
         }
     }
@@ -308,16 +251,28 @@ fn check_table_init_bounds(
 }
 
 fn initialize_tables(instance: &mut Instance, module: &Module) -> Result<(), InstantiationError> {
-    for init in &module.table_initializers {
-        instance
-            .table_init_segment(
-                init.table_index,
-                &init.elements,
-                get_table_init_start(init, instance)?,
-                0,
-                init.elements.len() as u32,
-            )
-            .map_err(InstantiationError::Trap)?;
+    // Note: if the module's table initializer state is in
+    // FuncTable mode, we will lazily initialize tables based on
+    // any statically-precomputed image of FuncIndexes, but there
+    // may still be "leftover segments" that could not be
+    // incorporated. So we have a unified handler here that
+    // iterates over all segments (Segments mode) or leftover
+    // segments (FuncTable mode) to initialize.
+    match &module.table_initialization {
+        TableInitialization::FuncTable { segments, .. }
+        | TableInitialization::Segments { segments } => {
+            for segment in segments {
+                instance
+                    .table_init_segment(
+                        segment.table_index,
+                        &segment.elements,
+                        get_table_init_start(segment, instance)?,
+                        0,
+                        segment.elements.len() as u32,
+                    )
+                    .map_err(InstantiationError::Trap)?;
+            }
+        }
     }
 
     Ok(())
@@ -329,11 +284,11 @@ fn get_memory_init_start(
 ) -> Result<u64, InstantiationError> {
     match init.base {
         Some(base) => {
-            let mem64 = instance.module.memory_plans[init.memory_index]
+            let mem64 = instance.module().memory_plans[init.memory_index]
                 .memory
                 .memory64;
             let val = unsafe {
-                let global = if let Some(def_index) = instance.module.defined_global_index(base) {
+                let global = if let Some(def_index) = instance.module().defined_global_index(base) {
                     instance.global(def_index)
                 } else {
                     &*instance.imported_global(base).from
@@ -386,7 +341,7 @@ fn initialize_memories(instance: &mut Instance, module: &Module) -> Result<(), I
     // Loads the `global` value and returns it as a `u64`, but sign-extends
     // 32-bit globals which can be used as the base for 32-bit memories.
     let get_global_as_u64 = &|global| unsafe {
-        let def = if let Some(def_index) = instance.module.defined_global_index(global) {
+        let def = if let Some(def_index) = instance.module().defined_global_index(global) {
             instance.global(def_index)
         } else {
             &*instance.imported_global(global).from
@@ -441,7 +396,7 @@ fn initialize_memories(instance: &mut Instance, module: &Module) -> Result<(), I
 fn check_init_bounds(instance: &mut Instance, module: &Module) -> Result<(), InstantiationError> {
     check_table_init_bounds(instance, module)?;
 
-    match &instance.module.memory_initialization {
+    match &instance.module().memory_initialization {
         MemoryInitialization::Segmented(initializers) => {
             check_memory_init_bounds(instance, initializers)?;
         }
@@ -474,6 +429,11 @@ fn initialize_instance(
     Ok(())
 }
 
+/// Initialize the VMContext data associated with an Instance.
+///
+/// The `VMContext` memory is assumed to be uninitialized; any field
+/// that we need in a certain state will be explicitly written by this
+/// function.
 unsafe fn initialize_vmcontext(instance: &mut Instance, req: InstanceAllocationRequest) {
     if let Some(store) = req.store.as_raw() {
         *instance.interrupts() = (*store).vminterrupts();
@@ -482,13 +442,13 @@ unsafe fn initialize_vmcontext(instance: &mut Instance, req: InstanceAllocationR
         instance.set_store(store);
     }
 
-    let module = &instance.module;
+    let module = req.runtime_info.module();
 
     // Initialize shared signatures
     let mut ptr = instance.vmctx_plus_offset(instance.offsets.vmctx_signature_ids_begin());
     for sig in module.types.values() {
         *ptr = match sig {
-            ModuleType::Function(sig) => req.shared_signatures.lookup(*sig),
+            ModuleType::Function(sig) => req.runtime_info.signature(*sig),
             _ => VMSharedSignatureIndex::new(u32::max_value()),
         };
         ptr = ptr.add(1);
@@ -524,32 +484,11 @@ unsafe fn initialize_vmcontext(instance: &mut Instance, req: InstanceAllocationR
         req.imports.globals.len(),
     );
 
-    // Initialize the functions
-    let mut base = instance.anyfunc_base();
-    for (index, sig) in instance.module.functions.iter() {
-        let type_index = req.shared_signatures.lookup(*sig);
-
-        let (func_ptr, vmctx) = if let Some(def_index) = instance.module.defined_func_index(index) {
-            (
-                NonNull::new((req.image_base + req.functions[def_index].start as usize) as *mut _)
-                    .unwrap(),
-                instance.vmctx_ptr(),
-            )
-        } else {
-            let import = instance.imported_function(index);
-            (import.body, import.vmctx)
-        };
-
-        ptr::write(
-            base,
-            VMCallerCheckedAnyfunc {
-                func_ptr,
-                type_index,
-                vmctx,
-            },
-        );
-        base = base.add(1);
-    }
+    // N.B.: there is no need to initialize the anyfuncs array because
+    // we eagerly construct each element in it whenever asked for a
+    // reference to that element. In other words, there is no state
+    // needed to track the lazy-init, so we don't need to initialize
+    // any state now.
 
     // Initialize the defined tables
     let mut ptr = instance.vmctx_plus_offset(instance.offsets.vmctx_tables_begin());
@@ -569,11 +508,13 @@ unsafe fn initialize_vmcontext(instance: &mut Instance, req: InstanceAllocationR
     }
 
     // Initialize the defined globals
-    initialize_vmcontext_globals(instance);
+    initialize_vmcontext_globals(instance, module);
 }
 
-unsafe fn initialize_vmcontext_globals(instance: &Instance) {
-    let module = &instance.module;
+unsafe fn initialize_vmcontext_globals(
+    instance: &mut Instance,
+    module: &Arc<wasmtime_environ::Module>,
+) {
     let num_imports = module.num_imported_globals;
     for (index, global) in module.globals.iter().skip(num_imports) {
         let def_index = module.defined_global_index(index).unwrap();
@@ -637,13 +578,14 @@ impl OnDemandInstanceAllocator {
     }
 
     fn create_tables(
-        module: &Module,
         store: &mut StorePtr,
+        runtime_info: &Arc<dyn ModuleRuntimeInfo>,
     ) -> Result<PrimaryMap<DefinedTableIndex, Table>, InstantiationError> {
+        let module = runtime_info.module();
         let num_imports = module.num_imported_tables;
         let mut tables: PrimaryMap<DefinedTableIndex, _> =
             PrimaryMap::with_capacity(module.table_plans.len() - num_imports);
-        for table in &module.table_plans.values().as_slice()[num_imports..] {
+        for (_, table) in module.table_plans.iter().skip(num_imports) {
             tables.push(
                 Table::new_dynamic(table, unsafe {
                     store
@@ -658,10 +600,10 @@ impl OnDemandInstanceAllocator {
 
     fn create_memories(
         &self,
-        module: &Module,
         store: &mut StorePtr,
-        memfds: Option<&Arc<ModuleMemFds>>,
+        runtime_info: &Arc<dyn ModuleRuntimeInfo>,
     ) -> Result<PrimaryMap<DefinedMemoryIndex, Memory>, InstantiationError> {
+        let module = runtime_info.module();
         let creator = self
             .mem_creator
             .as_deref()
@@ -674,7 +616,9 @@ impl OnDemandInstanceAllocator {
             let defined_memory_idx = module
                 .defined_memory_index(memory_idx)
                 .expect("Skipped imports, should never be None");
-            let memfd_image = memfds.and_then(|memfds| memfds.get_memory_image(defined_memory_idx));
+            let memfd_image = runtime_info
+                .memfd_image(defined_memory_idx)
+                .map_err(|err| InstantiationError::Resource(err.into()))?;
 
             memories.push(
                 Memory::new_dynamic(
@@ -709,20 +653,14 @@ unsafe impl InstanceAllocator for OnDemandInstanceAllocator {
         &self,
         mut req: InstanceAllocationRequest,
     ) -> Result<InstanceHandle, InstantiationError> {
-        let memories = self.create_memories(&req.module, &mut req.store, req.memfds)?;
-        let tables = Self::create_tables(&req.module, &mut req.store)?;
+        let memories = self.create_memories(&mut req.store, &req.runtime_info)?;
+        let tables = Self::create_tables(&mut req.store, &req.runtime_info)?;
 
         let host_state = std::mem::replace(&mut req.host_state, Box::new(()));
 
         let mut handle = {
-            let instance = Instance::create_raw(
-                &req.module,
-                req.unique_id,
-                &*req.wasm_data,
-                memories,
-                tables,
-                host_state,
-            );
+            let instance =
+                Instance::create_raw(req.runtime_info.clone(), memories, tables, host_state);
             let layout = instance.alloc_layout();
             let instance_ptr = alloc::alloc(layout) as *mut Instance;
             if instance_ptr.is_null() {

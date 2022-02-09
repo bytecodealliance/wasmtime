@@ -9,7 +9,7 @@ pub fn create_global(store: &mut StoreOpaque, gt: &GlobalType, val: Val) -> Resu
     let mut module = Module::new();
     let mut func_imports = Vec::new();
     let mut externref_init = None;
-    let mut shared_signature_id = None;
+    let mut one_signature = None;
 
     let global = Global {
         wasm_ty: gt.content().to_wasm_type(),
@@ -37,8 +37,8 @@ pub fn create_global(store: &mut StoreOpaque, gt: &GlobalType, val: Val) -> Resu
                 // our global with a `ref.func` to grab that imported function.
                 let f = f.caller_checked_anyfunc(store);
                 let f = unsafe { f.as_ref() };
-                shared_signature_id = Some(f.type_index);
                 let sig_id = SignatureIndex::from_u32(u32::max_value() - 1);
+                one_signature = Some((sig_id, f.type_index));
                 module.types.push(ModuleType::Function(sig_id));
                 let func_index = module.functions.push(sig_id);
                 module.num_imported_funcs = 1;
@@ -64,16 +64,10 @@ pub fn create_global(store: &mut StoreOpaque, gt: &GlobalType, val: Val) -> Resu
     module
         .exports
         .insert(String::new(), EntityIndex::Global(global_id));
-    let id = create_handle(
-        module,
-        store,
-        Box::new(()),
-        &func_imports,
-        shared_signature_id,
-    )?;
+    let id = create_handle(module, store, Box::new(()), &func_imports, one_signature)?;
 
     if let Some(x) = externref_init {
-        let instance = store.instance(id);
+        let instance = store.instance_mut(id);
         match instance.lookup_by_declaration(&EntityIndex::Global(global_id)) {
             wasmtime_runtime::Export::Global(g) => unsafe {
                 *(*g.definition).as_externref_mut() = Some(x.inner);

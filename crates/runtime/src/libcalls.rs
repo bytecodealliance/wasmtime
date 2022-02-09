@@ -64,7 +64,9 @@ use crate::vmcontext::{VMCallerCheckedAnyfunc, VMContext};
 use backtrace::Backtrace;
 use std::mem;
 use std::ptr::{self, NonNull};
-use wasmtime_environ::{DataIndex, ElemIndex, GlobalIndex, MemoryIndex, TableIndex, TrapCode};
+use wasmtime_environ::{
+    DataIndex, ElemIndex, FuncIndex, GlobalIndex, MemoryIndex, TableIndex, TrapCode,
+};
 
 const TOINT_32: f32 = 1.0 / f32::EPSILON;
 const TOINT_64: f64 = 1.0 / f64::EPSILON;
@@ -293,7 +295,9 @@ pub unsafe extern "C" fn table_copy(
         let src_table_index = TableIndex::from_u32(src_table_index);
         let instance = (*vmctx).instance_mut();
         let dst_table = instance.get_table(dst_table_index);
-        let src_table = instance.get_table(src_table_index);
+        // Lazy-initialize the whole range in the source table first.
+        let src_range = src..(src.checked_add(len).unwrap_or(u32::MAX));
+        let src_table = instance.get_table_with_lazy_init(src_table_index, src_range);
         Table::copy(dst_table, src_table, dst, src, len)
     };
     if let Err(trap) = result {
@@ -386,11 +390,36 @@ pub unsafe extern "C" fn memory_init(
     }
 }
 
+/// Implementation of `ref.func`.
+pub unsafe extern "C" fn ref_func(vmctx: *mut VMContext, func_index: u32) -> *mut u8 {
+    let instance = (*vmctx).instance_mut();
+    let anyfunc = instance
+        .get_caller_checked_anyfunc(FuncIndex::from_u32(func_index))
+        .expect("ref_func: caller_checked_anyfunc should always be available for given func index");
+    anyfunc as *mut _
+}
+
 /// Implementation of `data.drop`.
 pub unsafe extern "C" fn data_drop(vmctx: *mut VMContext, data_index: u32) {
     let data_index = DataIndex::from_u32(data_index);
     let instance = (*vmctx).instance_mut();
     instance.data_drop(data_index)
+}
+
+/// Returns a table entry after lazily initializing it.
+pub unsafe extern "C" fn table_get_lazy_init_funcref(
+    vmctx: *mut VMContext,
+    table_index: u32,
+    index: u32,
+) -> *mut u8 {
+    let instance = (*vmctx).instance_mut();
+    let table_index = TableIndex::from_u32(table_index);
+    let table = instance.get_table_with_lazy_init(table_index, std::iter::once(index));
+    let elem = (*table)
+        .get(index)
+        .expect("table access already bounds-checked");
+
+    elem.into_ref_asserting_initialized() as *mut _
 }
 
 /// Drop a `VMExternRef`.

@@ -1,7 +1,7 @@
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::condcodes::*;
-use cranelift_codegen::ir::immediates::{Offset32, Uimm64};
+use cranelift_codegen::ir::immediates::{Imm64, Offset32, Uimm64};
 use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{AbiParam, ArgumentPurpose, Function, InstBuilder, Signature};
 use cranelift_codegen::isa::{self, TargetFrontendConfig, TargetIsa};
@@ -19,6 +19,7 @@ use wasmtime_environ::{
     BuiltinFunctionIndex, MemoryPlan, MemoryStyle, Module, ModuleTranslation, TableStyle, Tunables,
     TypeTables, VMOffsets, INTERRUPTED, WASM_PAGE_SIZE,
 };
+use wasmtime_environ::{FUNCREF_INIT_BIT, FUNCREF_MASK};
 
 /// Compute an `ir::ExternalName` for a given wasm function index.
 pub fn get_func_name(func_index: FuncIndex) -> ir::ExternalName {
@@ -750,6 +751,59 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             pos.ins().uextend(I64, val)
         }
     }
+
+    fn get_or_init_funcref_table_elem(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        table_index: TableIndex,
+        table: ir::Table,
+        index: ir::Value,
+    ) -> ir::Value {
+        let pointer_type = self.pointer_type();
+
+        // To support lazy initialization of table
+        // contents, we check for a null entry here, and
+        // if null, we take a slow-path that invokes a
+        // libcall.
+        let table_entry_addr = builder.ins().table_addr(pointer_type, table, index, 0);
+        let value = builder
+            .ins()
+            .load(pointer_type, ir::MemFlags::trusted(), table_entry_addr, 0);
+        // Mask off the "initialized bit". See documentation on
+        // FUNCREF_INIT_BIT in crates/environ/src/ref_bits.rs for more
+        // details.
+        let value_masked = builder
+            .ins()
+            .band_imm(value, Imm64::from(FUNCREF_MASK as i64));
+
+        let null_block = builder.create_block();
+        let continuation_block = builder.create_block();
+        let result_param = builder.append_block_param(continuation_block, pointer_type);
+        builder.set_cold_block(null_block);
+
+        builder.ins().brz(value, null_block, &[]);
+        builder.ins().jump(continuation_block, &[value_masked]);
+        builder.seal_block(null_block);
+
+        builder.switch_to_block(null_block);
+        let table_index = builder.ins().iconst(I32, table_index.index() as i64);
+        let builtin_idx = BuiltinFunctionIndex::table_get_lazy_init_funcref();
+        let builtin_sig = self
+            .builtin_function_signatures
+            .table_get_lazy_init_funcref(builder.func);
+        let (vmctx, builtin_addr) =
+            self.translate_load_builtin_function_address(&mut builder.cursor(), builtin_idx);
+        let call_inst =
+            builder
+                .ins()
+                .call_indirect(builtin_sig, builtin_addr, &[vmctx, table_index, index]);
+        let returned_entry = builder.func.dfg.inst_results(call_inst)[0];
+        builder.ins().jump(continuation_block, &[returned_entry]);
+        builder.seal_block(continuation_block);
+
+        builder.switch_to_block(continuation_block);
+        result_param
+    }
 }
 
 impl<'module_environment> TargetEnvironment for FuncEnvironment<'module_environment> {
@@ -886,13 +940,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         match plan.table.wasm_ty {
             WasmType::FuncRef => match plan.style {
                 TableStyle::CallerChecksSignature => {
-                    let table_entry_addr = builder.ins().table_addr(pointer_type, table, index, 0);
-                    Ok(builder.ins().load(
-                        pointer_type,
-                        ir::MemFlags::trusted(),
-                        table_entry_addr,
-                        0,
-                    ))
+                    Ok(self.get_or_init_funcref_table_elem(builder, table_index, table, index))
                 }
             },
             WasmType::ExternRef => {
@@ -1033,9 +1081,18 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             WasmType::FuncRef => match plan.style {
                 TableStyle::CallerChecksSignature => {
                     let table_entry_addr = builder.ins().table_addr(pointer_type, table, index, 0);
-                    builder
+                    // Set the "initialized bit". See doc-comment on
+                    // `FUNCREF_INIT_BIT` in
+                    // crates/environ/src/ref_bits.rs for details.
+                    let value_with_init_bit = builder
                         .ins()
-                        .store(ir::MemFlags::trusted(), value, table_entry_addr, 0);
+                        .bor_imm(value, Imm64::from(FUNCREF_INIT_BIT as i64));
+                    builder.ins().store(
+                        ir::MemFlags::trusted(),
+                        value_with_init_bit,
+                        table_entry_addr,
+                        0,
+                    );
                     Ok(())
                 }
             },
@@ -1253,10 +1310,16 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         mut pos: cranelift_codegen::cursor::FuncCursor<'_>,
         func_index: FuncIndex,
     ) -> WasmResult<ir::Value> {
-        let vmctx = self.vmctx(&mut pos.func);
-        let vmctx = pos.ins().global_value(self.pointer_type(), vmctx);
-        let offset = self.offsets.vmctx_anyfunc(func_index);
-        Ok(pos.ins().iadd_imm(vmctx, i64::from(offset)))
+        let func_index = pos.ins().iconst(I32, func_index.as_u32() as i64);
+        let builtin_index = BuiltinFunctionIndex::ref_func();
+        let builtin_sig = self.builtin_function_signatures.ref_func(&mut pos.func);
+        let (vmctx, builtin_addr) =
+            self.translate_load_builtin_function_address(&mut pos, builtin_index);
+
+        let call_inst = pos
+            .ins()
+            .call_indirect(builtin_sig, builtin_addr, &[vmctx, func_index]);
+        Ok(pos.func.dfg.first_result(call_inst))
     }
 
     fn translate_custom_global_get(
@@ -1459,7 +1522,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
     fn translate_call_indirect(
         &mut self,
-        mut pos: FuncCursor<'_>,
+        builder: &mut FunctionBuilder,
         table_index: TableIndex,
         table: ir::Table,
         ty_index: TypeIndex,
@@ -1469,21 +1532,17 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     ) -> WasmResult<ir::Inst> {
         let pointer_type = self.pointer_type();
 
-        let table_entry_addr = pos.ins().table_addr(pointer_type, table, callee, 0);
-
-        // Dereference the table entry to get the pointer to the
-        // `VMCallerCheckedAnyfunc`.
-        let anyfunc_ptr =
-            pos.ins()
-                .load(pointer_type, ir::MemFlags::trusted(), table_entry_addr, 0);
+        // Get the anyfunc pointer (the funcref) from the table.
+        let anyfunc_ptr = self.get_or_init_funcref_table_elem(builder, table_index, table, callee);
 
         // Check for whether the table element is null, and trap if so.
-        pos.ins()
+        builder
+            .ins()
             .trapz(anyfunc_ptr, ir::TrapCode::IndirectCallToNull);
 
         // Dereference anyfunc pointer to get the function address.
         let mem_flags = ir::MemFlags::trusted();
-        let func_addr = pos.ins().load(
+        let func_addr = builder.ins().load(
             pointer_type,
             mem_flags,
             anyfunc_ptr,
@@ -1495,19 +1554,19 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             TableStyle::CallerChecksSignature => {
                 let sig_id_size = self.offsets.size_of_vmshared_signature_index();
                 let sig_id_type = Type::int(u16::from(sig_id_size) * 8).unwrap();
-                let vmctx = self.vmctx(pos.func);
-                let base = pos.ins().global_value(pointer_type, vmctx);
+                let vmctx = self.vmctx(builder.func);
+                let base = builder.ins().global_value(pointer_type, vmctx);
                 let offset =
                     i32::try_from(self.offsets.vmctx_vmshared_signature_id(ty_index)).unwrap();
 
                 // Load the caller ID.
                 let mut mem_flags = ir::MemFlags::trusted();
                 mem_flags.set_readonly();
-                let caller_sig_id = pos.ins().load(sig_id_type, mem_flags, base, offset);
+                let caller_sig_id = builder.ins().load(sig_id_type, mem_flags, base, offset);
 
                 // Load the callee ID.
                 let mem_flags = ir::MemFlags::trusted();
-                let callee_sig_id = pos.ins().load(
+                let callee_sig_id = builder.ins().load(
                     sig_id_type,
                     mem_flags,
                     anyfunc_ptr,
@@ -1515,16 +1574,21 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 );
 
                 // Check that they match.
-                let cmp = pos.ins().icmp(IntCC::Equal, callee_sig_id, caller_sig_id);
-                pos.ins().trapz(cmp, ir::TrapCode::BadSignature);
+                let cmp = builder
+                    .ins()
+                    .icmp(IntCC::Equal, callee_sig_id, caller_sig_id);
+                builder.ins().trapz(cmp, ir::TrapCode::BadSignature);
             }
         }
 
         let mut real_call_args = Vec::with_capacity(call_args.len() + 2);
-        let caller_vmctx = pos.func.special_param(ArgumentPurpose::VMContext).unwrap();
+        let caller_vmctx = builder
+            .func
+            .special_param(ArgumentPurpose::VMContext)
+            .unwrap();
 
         // First append the callee vmctx address.
-        let vmctx = pos.ins().load(
+        let vmctx = builder.ins().load(
             pointer_type,
             mem_flags,
             anyfunc_ptr,
@@ -1536,7 +1600,9 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         // Then append the regular call arguments.
         real_call_args.extend_from_slice(call_args);
 
-        Ok(pos.ins().call_indirect(sig_ref, func_addr, &real_call_args))
+        Ok(builder
+            .ins()
+            .call_indirect(sig_ref, func_addr, &real_call_args))
     }
 
     fn translate_call(

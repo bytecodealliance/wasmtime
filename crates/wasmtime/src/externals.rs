@@ -477,7 +477,7 @@ impl Table {
         let init = init.into_table_element(store, ty.element())?;
         unsafe {
             let table = Table::from_wasmtime_table(wasmtime_export, store);
-            (*table.wasmtime_table(store))
+            (*table.wasmtime_table(store, std::iter::empty()))
                 .fill(0, init, ty.minimum())
                 .map_err(Trap::from_runtime)?;
 
@@ -497,12 +497,16 @@ impl Table {
         TableType::from_wasmtime_table(ty)
     }
 
-    fn wasmtime_table(&self, store: &mut StoreOpaque) -> *mut runtime::Table {
+    fn wasmtime_table(
+        &self,
+        store: &mut StoreOpaque,
+        lazy_init_range: impl Iterator<Item = u32>,
+    ) -> *mut runtime::Table {
         unsafe {
             let export = &store[self.0];
             let mut handle = InstanceHandle::from_vmctx(export.vmctx);
             let idx = handle.table_index(&*export.definition);
-            handle.get_defined_table(idx)
+            handle.get_defined_table_with_lazy_init(idx, lazy_init_range)
         }
     }
 
@@ -515,7 +519,7 @@ impl Table {
     /// Panics if `store` does not own this table.
     pub fn get(&self, mut store: impl AsContextMut, index: u32) -> Option<Val> {
         let store = store.as_context_mut().0;
-        let table = self.wasmtime_table(store);
+        let table = self.wasmtime_table(store, std::iter::once(index));
         unsafe {
             match (*table).get(index)? {
                 runtime::TableElement::FuncRef(f) => {
@@ -525,6 +529,9 @@ impl Table {
                 runtime::TableElement::ExternRef(None) => Some(Val::ExternRef(None)),
                 runtime::TableElement::ExternRef(Some(x)) => {
                     Some(Val::ExternRef(Some(ExternRef { inner: x })))
+                }
+                runtime::TableElement::UninitFunc => {
+                    unreachable!("lazy init above should have converted UninitFunc")
                 }
             }
         }
@@ -545,7 +552,7 @@ impl Table {
         let store = store.as_context_mut().0;
         let ty = self.ty(&store).element().clone();
         let val = val.into_table_element(store, ty)?;
-        let table = self.wasmtime_table(store);
+        let table = self.wasmtime_table(store, std::iter::empty());
         unsafe {
             (*table)
                 .set(index, val)
@@ -591,7 +598,7 @@ impl Table {
         let store = store.as_context_mut().0;
         let ty = self.ty(&store).element().clone();
         let init = init.into_table_element(store, ty)?;
-        let table = self.wasmtime_table(store);
+        let table = self.wasmtime_table(store, std::iter::empty());
         unsafe {
             match (*table).grow(delta, init, store)? {
                 Some(size) => {
@@ -656,10 +663,11 @@ impl Table {
             bail!("tables do not have the same element type");
         }
 
-        let dst = dst_table.wasmtime_table(store);
-        let src = src_table.wasmtime_table(store);
+        let dst_table = dst_table.wasmtime_table(store, std::iter::empty());
+        let src_range = src_index..(src_index.checked_add(len).unwrap_or(u32::MAX));
+        let src_table = src_table.wasmtime_table(store, src_range);
         unsafe {
-            runtime::Table::copy(dst, src, dst_index, src_index, len)
+            runtime::Table::copy(dst_table, src_table, dst_index, src_index, len)
                 .map_err(Trap::from_runtime)?;
         }
         Ok(())
@@ -686,7 +694,7 @@ impl Table {
         let ty = self.ty(&store).element().clone();
         let val = val.into_table_element(store, ty)?;
 
-        let table = self.wasmtime_table(store);
+        let table = self.wasmtime_table(store, std::iter::empty());
         unsafe {
             (*table).fill(dst, val, len).map_err(Trap::from_runtime)?;
         }

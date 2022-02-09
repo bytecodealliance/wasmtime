@@ -22,10 +22,8 @@ pub struct ModuleMemFds {
 const MAX_MEMFD_IMAGE_SIZE: usize = 1024 * 1024 * 1024; // limit to 1GiB.
 
 impl ModuleMemFds {
-    pub(crate) fn get_memory_image(
-        &self,
-        defined_index: DefinedMemoryIndex,
-    ) -> Option<&Arc<MemoryMemFd>> {
+    /// Get the MemoryMemFd for a given memory.
+    pub fn get_memory_image(&self, defined_index: DefinedMemoryIndex) -> Option<&Arc<MemoryMemFd>> {
         self.memories[defined_index].as_ref()
     }
 }
@@ -66,7 +64,7 @@ impl ModuleMemFds {
     /// Create a new `ModuleMemFds` for the given module. This can be
     /// passed in as part of a `InstanceAllocationRequest` to speed up
     /// instantiation and execution by using memfd-backed memories.
-    pub fn new(module: &Module, wasm_data: &[u8]) -> Result<Option<Arc<ModuleMemFds>>> {
+    pub fn new(module: &Module, wasm_data: &[u8]) -> Result<Option<ModuleMemFds>> {
         let page_size = region::page::size() as u64;
         let page_align = |x: u64| x & !(page_size - 1);
         let page_align_up = |x: u64| page_align(x + page_size - 1);
@@ -198,7 +196,7 @@ impl ModuleMemFds {
             assert_eq!(idx, defined_memory);
         }
 
-        Ok(Some(Arc::new(ModuleMemFds { memories })))
+        Ok(Some(ModuleMemFds { memories }))
     }
 }
 
@@ -399,7 +397,7 @@ impl MemFdSlot {
 
         // The initial memory image, if given. If not, we just get a
         // memory filled with zeroes.
-        if let Some(image) = maybe_image {
+        if let Some(image) = maybe_image.as_ref() {
             assert!(image.offset.checked_add(image.len).unwrap() <= initial_size_bytes);
             if image.len > 0 {
                 unsafe {

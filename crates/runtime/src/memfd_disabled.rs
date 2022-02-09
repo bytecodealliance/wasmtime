@@ -19,12 +19,12 @@ impl ModuleMemFds {
     /// Construct a new set of memfd images. This variant is used
     /// when memfd support is not included; it always returns no
     /// images.
-    pub fn new(_: &Module, _: &[u8]) -> Result<Option<Arc<ModuleMemFds>>> {
+    pub fn new(_: &Module, _: &[u8]) -> Result<Option<ModuleMemFds>> {
         Ok(None)
     }
 
     /// Get the memfd image for a particular memory.
-    pub(crate) fn get_memory_image(&self, _: DefinedMemoryIndex) -> Option<&Arc<MemoryMemFd>> {
+    pub fn get_memory_image(&self, _: DefinedMemoryIndex) -> Option<&Arc<MemoryMemFd>> {
         // Should be unreachable because the `Self` type is
         // uninhabitable.
         match *self {}

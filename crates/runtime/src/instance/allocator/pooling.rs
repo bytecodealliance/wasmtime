@@ -11,8 +11,8 @@ use super::{
     initialize_instance, initialize_vmcontext, InstanceAllocationRequest, InstanceAllocator,
     InstanceHandle, InstantiationError,
 };
-use crate::MemFdSlot;
-use crate::{instance::Instance, Memory, Mmap, ModuleMemFds, Table};
+use crate::{instance::Instance, Memory, Mmap, Table};
+use crate::{MemFdSlot, ModuleRuntimeInfo};
 use anyhow::{anyhow, bail, Context, Result};
 use libc::c_void;
 use std::convert::TryFrom;
@@ -350,20 +350,18 @@ impl InstancePool {
     ) -> Result<InstanceHandle, InstantiationError> {
         let host_state = std::mem::replace(&mut req.host_state, Box::new(()));
         let instance_data = Instance::create_raw(
-            &req.module,
-            req.unique_id,
-            &*req.wasm_data,
+            req.runtime_info.clone(),
             PrimaryMap::default(),
             PrimaryMap::default(),
             host_state,
         );
 
+        let instance = self.instance(index);
+
         // Instances are uninitialized memory at first; we need to
         // write an empty but initialized `Instance` struct into the
         // chosen slot before we do anything else with it. (This is
         // paired with a `drop_in_place` in deallocate below.)
-        let instance = self.instance(index);
-
         std::ptr::write(instance as _, instance_data);
 
         // set_instance_memories and _tables will need the store before we can completely
@@ -376,8 +374,8 @@ impl InstancePool {
             index,
             instance,
             &self.memories,
-            req.memfds,
             self.memories.max_wasm_pages,
+            &req.runtime_info,
         )?;
 
         Self::set_instance_tables(
@@ -402,7 +400,7 @@ impl InstancePool {
             if alloc.is_empty() {
                 return Err(InstantiationError::Limit(self.max_instances as u32));
             }
-            alloc.alloc(req.unique_id).index()
+            alloc.alloc(req.runtime_info.unique_id()).index()
         };
 
         unsafe {
@@ -504,10 +502,10 @@ impl InstancePool {
         instance_idx: usize,
         instance: &mut Instance,
         memories: &MemoryPool,
-        maybe_memfds: Option<&Arc<ModuleMemFds>>,
         max_pages: u64,
+        runtime_info: &Arc<dyn ModuleRuntimeInfo>,
     ) -> Result<(), InstantiationError> {
-        let module = instance.module.as_ref();
+        let module = instance.runtime_info.module();
 
         assert!(instance.memories.is_empty());
 
@@ -527,8 +525,10 @@ impl InstancePool {
                 )
             };
 
-            if let Some(memfds) = maybe_memfds {
-                let image = memfds.get_memory_image(defined_index);
+            if let Some(image) = runtime_info
+                .memfd_image(defined_index)
+                .map_err(|err| InstantiationError::Resource(err.into()))?
+            {
                 let mut slot = memories.take_memfd_slot(instance_idx, defined_index);
                 let initial_size = plan.memory.minimum * WASM_PAGE_SIZE as u64;
 
@@ -545,7 +545,7 @@ impl InstancePool {
                 // the process to continue, because we never perform a
                 // mmap that would leave an open space for someone
                 // else to come in and map something.
-                slot.instantiate(initial_size as usize, image)
+                slot.instantiate(initial_size as usize, Some(image))
                     .map_err(|e| InstantiationError::Resource(e.into()))?;
 
                 instance.memories.push(
@@ -574,11 +574,11 @@ impl InstancePool {
         mut tables: impl Iterator<Item = *mut usize>,
         max_elements: u32,
     ) -> Result<(), InstantiationError> {
-        let module = instance.module.as_ref();
+        let module = instance.runtime_info.module();
 
         assert!(instance.tables.is_empty());
 
-        for plan in (&module.table_plans.values().as_slice()[module.num_imported_tables..]).iter() {
+        for (_, plan) in module.table_plans.iter().skip(module.num_imported_tables) {
             let base = tables.next().unwrap();
 
             commit_table_pages(
@@ -1130,10 +1130,10 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{Imports, StorePtr, VMSharedSignatureIndex};
+    use crate::{CompiledModuleId, Imports, MemoryMemFd, StorePtr, VMSharedSignatureIndex};
     use wasmtime_environ::{
-        EntityRef, Global, GlobalInit, Memory, MemoryPlan, ModuleType, SignatureIndex, Table,
-        TablePlan, TableStyle, WasmType,
+        DefinedFuncIndex, DefinedMemoryIndex, EntityRef, FunctionInfo, Global, GlobalInit, Memory,
+        MemoryPlan, ModuleType, SignatureIndex, Table, TablePlan, TableStyle, WasmType,
     };
 
     #[test]
@@ -1422,6 +1422,42 @@ mod test {
         );
     }
 
+    pub(crate) fn empty_runtime_info(
+        module: Arc<wasmtime_environ::Module>,
+    ) -> Arc<dyn ModuleRuntimeInfo> {
+        struct RuntimeInfo(Arc<wasmtime_environ::Module>);
+
+        impl ModuleRuntimeInfo for RuntimeInfo {
+            fn module(&self) -> &Arc<wasmtime_environ::Module> {
+                &self.0
+            }
+            fn image_base(&self) -> usize {
+                0
+            }
+            fn function_info(&self, _: DefinedFuncIndex) -> &FunctionInfo {
+                unimplemented!()
+            }
+            fn signature(&self, _: SignatureIndex) -> VMSharedSignatureIndex {
+                unimplemented!()
+            }
+            fn memfd_image(
+                &self,
+                _: DefinedMemoryIndex,
+            ) -> anyhow::Result<Option<&Arc<MemoryMemFd>>> {
+                Ok(None)
+            }
+
+            fn unique_id(&self) -> Option<CompiledModuleId> {
+                None
+            }
+            fn wasm_data(&self) -> &[u8] {
+                &[]
+            }
+        }
+
+        Arc::new(RuntimeInfo(module))
+    }
+
     #[cfg(target_pointer_width = "64")]
     #[test]
     fn test_instance_pool() -> Result<()> {
@@ -1462,27 +1498,20 @@ mod test {
 
         let mut handles = Vec::new();
         let module = Arc::new(Module::default());
-        let functions = &PrimaryMap::new();
 
         for _ in (0..3).rev() {
             handles.push(
                 instances
                     .allocate(InstanceAllocationRequest {
-                        module: &module,
-                        unique_id: None,
-                        image_base: 0,
-                        functions,
+                        runtime_info: &empty_runtime_info(module.clone()),
                         imports: Imports {
                             functions: &[],
                             tables: &[],
                             memories: &[],
                             globals: &[],
                         },
-                        shared_signatures: VMSharedSignatureIndex::default().into(),
                         host_state: Box::new(()),
                         store: StorePtr::empty(),
-                        wasm_data: &[],
-                        memfds: None,
                     })
                     .expect("allocation should succeed"),
             );
@@ -1494,21 +1523,15 @@ mod test {
         );
 
         match instances.allocate(InstanceAllocationRequest {
-            module: &module,
-            unique_id: None,
-            functions,
-            image_base: 0,
+            runtime_info: &empty_runtime_info(module),
             imports: Imports {
                 functions: &[],
                 tables: &[],
                 memories: &[],
                 globals: &[],
             },
-            shared_signatures: VMSharedSignatureIndex::default().into(),
             host_state: Box::new(()),
             store: StorePtr::empty(),
-            wasm_data: &[],
-            memfds: None,
         }) {
             Err(InstantiationError::Limit(3)) => {}
             _ => panic!("unexpected error"),

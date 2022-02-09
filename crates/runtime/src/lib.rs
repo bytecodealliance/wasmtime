@@ -22,8 +22,13 @@
 #![cfg_attr(not(memfd), allow(unused_variables, unreachable_code))]
 
 use std::sync::atomic::AtomicU64;
+use std::sync::Arc;
 
 use anyhow::Error;
+use wasmtime_environ::DefinedFuncIndex;
+use wasmtime_environ::DefinedMemoryIndex;
+use wasmtime_environ::FunctionInfo;
+use wasmtime_environ::SignatureIndex;
 
 mod export;
 mod externref;
@@ -144,4 +149,43 @@ pub unsafe trait Store {
     /// number. Cannot fail; cooperative epoch-based yielding is
     /// completely semantically transparent. Returns the new deadline.
     fn new_epoch(&mut self) -> Result<u64, Error>;
+}
+
+/// Functionality required by this crate for a particular module. This
+/// is chiefly needed for lazy initialization of various bits of
+/// instance state.
+///
+/// When an instance is created, it holds an Arc<dyn ModuleRuntimeInfo>
+/// so that it can get to signatures, metadata on functions, memfd and
+/// funcref-table images, etc. All of these things are ordinarily known
+/// by the higher-level layers of Wasmtime. Specifically, the main
+/// implementation of this trait is provided by
+/// `wasmtime::module::ModuleInner`.  Since the runtime crate sits at
+/// the bottom of the dependence DAG though, we don't know or care about
+/// that; we just need some implementor of this trait for each
+/// allocation request.
+pub trait ModuleRuntimeInfo: Send + Sync + 'static {
+    /// The underlying Module.
+    fn module(&self) -> &Arc<wasmtime_environ::Module>;
+
+    /// The signatures.
+    fn signature(&self, index: SignatureIndex) -> VMSharedSignatureIndex;
+
+    /// The base address of where JIT functions are located.
+    fn image_base(&self) -> usize;
+
+    /// Descriptors about each compiled function, such as the offset from
+    /// `image_base`.
+    fn function_info(&self, func_index: DefinedFuncIndex) -> &FunctionInfo;
+
+    /// memfd images, if any, for this module.
+    fn memfd_image(&self, memory: DefinedMemoryIndex) -> anyhow::Result<Option<&Arc<MemoryMemFd>>>;
+
+    /// A unique ID for this particular module. This can be used to
+    /// allow for fastpaths to optimize a "re-instantiate the same
+    /// module again" case.
+    fn unique_id(&self) -> Option<CompiledModuleId>;
+
+    /// A slice pointing to all data that is referenced by this instance.
+    fn wasm_data(&self) -> &[u8];
 }
