@@ -2060,7 +2060,7 @@ impl HostFunc {
 
     /// Requires that this function's signature is already registered within
     /// `Engine`. This happens automatically during the above two constructors.
-    fn _new(engine: &Engine, instance: InstanceHandle, trampoline: VMTrampoline) -> Self {
+    fn _new(engine: &Engine, mut instance: InstanceHandle, trampoline: VMTrampoline) -> Self {
         let idx = EntityIndex::Function(FuncIndex::from_u32(0));
         let export = match instance.lookup_by_declaration(&idx) {
             wasmtime_runtime::Export::Function(f) => f,

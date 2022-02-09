@@ -328,13 +328,16 @@ impl Instance {
             // Instantiated instances will lazily fill in exports, so we process
             // all that lazy logic here.
             InstanceData::Instantiated { id, exports, .. } => {
-                let instance = store.instance(*id);
-                let (i, _, index) = instance.module().exports.get_full(name)?;
+                let id = *id;
+                let instance = store.instance(id);
+                let (i, _, &index) = instance.module().exports.get_full(name)?;
                 if let Some(export) = &exports[i] {
                     return Some(export.clone());
                 }
+
+                let instance = store.instance_mut(id); // reborrow the &mut Instancehandle
                 let item = unsafe {
-                    Extern::from_wasmtime_export(instance.lookup_by_declaration(index), store)
+                    Extern::from_wasmtime_export(instance.lookup_by_declaration(&index), store)
                 };
                 let exports = match &mut store[self.0] {
                     InstanceData::Instantiated { exports, .. } => exports,
@@ -690,9 +693,6 @@ impl<'a> Instantiator<'a> {
         // properly referenced while in use by the store.
         store.modules_mut().register(&self.cur.module);
 
-        // Initialize any memfd images now.
-        let memfds = self.cur.module.memfds()?;
-
         unsafe {
             // The first thing we do is issue an instance allocation request
             // to the instance allocator. This, on success, will give us an
@@ -704,21 +704,16 @@ impl<'a> Instantiator<'a> {
             // this instance, so we determine what the ID is and then assert
             // it's the same later when we do actually insert it.
             let instance_to_be = store.store_data().next_id::<InstanceData>();
+
             let mut instance_handle =
                 store
                     .engine()
                     .allocator()
                     .allocate(InstanceAllocationRequest {
-                        module: compiled_module.module(),
-                        unique_id: Some(compiled_module.unique_id()),
-                        memfds,
-                        image_base: compiled_module.code().as_ptr() as usize,
-                        functions: compiled_module.functions(),
+                        runtime_info: &self.cur.module.runtime_info(),
                         imports: self.cur.build(),
-                        shared_signatures: self.cur.module.signatures().as_module_map().into(),
                         host_state: Box::new(Instance(instance_to_be)),
                         store: StorePtr::new(store.traitobj()),
-                        wasm_data: compiled_module.wasm_data(),
                     })?;
 
             // The instance still has lots of setup, for example
@@ -821,7 +816,7 @@ impl<'a> Instantiator<'a> {
         };
         // If a start function is present, invoke it. Make sure we use all the
         // trap-handling configuration in `store` as well.
-        let instance = store.0.instance(id);
+        let instance = store.0.instance_mut(id);
         let f = match instance.lookup_by_declaration(&EntityIndex::Function(start)) {
             wasmtime_runtime::Export::Function(f) => f,
             _ => unreachable!(), // valid modules shouldn't hit this

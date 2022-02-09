@@ -8,7 +8,7 @@ use anyhow::{bail, format_err, Error, Result};
 use std::convert::{TryFrom, TryInto};
 use std::ops::Range;
 use std::ptr;
-use wasmtime_environ::{TablePlan, TrapCode, WasmType};
+use wasmtime_environ::{TablePlan, TrapCode, WasmType, FUNCREF_INIT_BIT, FUNCREF_MASK};
 
 /// An element going into or coming out of a table.
 ///
@@ -19,6 +19,11 @@ pub enum TableElement {
     FuncRef(*mut VMCallerCheckedAnyfunc),
     /// An `exrernref`.
     ExternRef(Option<VMExternRef>),
+    /// An uninitialized funcref value. This should never be exposed
+    /// beyond the `wasmtime` crate boundary; the upper-level code
+    /// (which has access to the info needed for lazy initialization)
+    /// will replace it when fetched.
+    UninitFunc,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -33,41 +38,43 @@ unsafe impl Send for TableElement where VMExternRef: Send {}
 unsafe impl Sync for TableElement where VMExternRef: Sync {}
 
 impl TableElement {
-    /// Consumes the given raw pointer into a table element.
+    /// Consumes the given raw table element value into a table element.
     ///
     /// # Safety
     ///
     /// This is unsafe as it will *not* clone any externref, leaving the reference count unchanged.
     ///
     /// This should only be used if the raw pointer is no longer in use.
-    unsafe fn from_raw(ty: TableElementType, ptr: usize) -> Self {
-        match ty {
-            TableElementType::Func => Self::FuncRef(ptr as _),
-            TableElementType::Extern => Self::ExternRef(if ptr == 0 {
-                None
-            } else {
-                Some(VMExternRef::from_raw(ptr as *mut u8))
-            }),
+    unsafe fn from_table_value(ty: TableElementType, ptr: usize) -> Self {
+        match (ty, ptr) {
+            (TableElementType::Func, 0) => Self::UninitFunc,
+            (TableElementType::Func, ptr) => Self::FuncRef((ptr & FUNCREF_MASK) as _),
+            (TableElementType::Extern, 0) => Self::ExternRef(None),
+            (TableElementType::Extern, ptr) => {
+                Self::ExternRef(Some(VMExternRef::from_raw(ptr as *mut u8)))
+            }
         }
     }
 
-    /// Clones a table element from the underlying raw pointer.
+    /// Clones a table element from the underlying table element.
     ///
     /// # Safety
     ///
     /// This is unsafe as it will clone any externref, incrementing the reference count.
-    unsafe fn clone_from_raw(ty: TableElementType, ptr: usize) -> Self {
-        match ty {
-            TableElementType::Func => Self::FuncRef(ptr as _),
-            TableElementType::Extern => Self::ExternRef(if ptr == 0 {
-                None
-            } else {
-                Some(VMExternRef::clone_from_raw(ptr as *mut u8))
-            }),
+    unsafe fn clone_from_table_value(ty: TableElementType, ptr: usize) -> Self {
+        match (ty, ptr) {
+            (TableElementType::Func, 0) => Self::UninitFunc,
+            (TableElementType::Func, ptr) => Self::FuncRef((ptr & FUNCREF_MASK) as _),
+            (TableElementType::Extern, 0) => Self::ExternRef(None),
+            (TableElementType::Extern, ptr) => {
+                Self::ExternRef(Some(VMExternRef::clone_from_raw(ptr as *mut u8)))
+            }
         }
     }
 
-    /// Consumes a table element into a raw pointer.
+    /// Consumes a table element into a raw table element value. This
+    /// includes any tag bits or other storage details that we
+    /// maintain in the table slot.
     ///
     /// # Safety
     ///
@@ -75,10 +82,39 @@ impl TableElement {
     /// the reference count.
     ///
     /// Use `from_raw` to properly drop any table elements stored as raw pointers.
-    unsafe fn into_raw(self) -> usize {
+    unsafe fn into_table_value(self) -> usize {
         match self {
-            Self::FuncRef(e) => e as _,
+            Self::UninitFunc => 0,
+            Self::FuncRef(e) => (e as usize) | FUNCREF_INIT_BIT,
             Self::ExternRef(e) => e.map_or(0, |e| e.into_raw() as usize),
+        }
+    }
+
+    /// Consumes a table element into a pointer/reference, as it
+    /// exists outside the table itself. This strips off any tag bits
+    /// or other information that only lives inside the table.
+    ///
+    /// Can only be done to an initialized table element; lazy init
+    /// must occur first. (In other words, lazy values do not survive
+    /// beyond the table, as every table read path initializes them.)
+    ///
+    /// # Safety
+    ///
+    /// The same warnings as for `into_table_values()` apply.
+    pub(crate) unsafe fn into_ref_asserting_initialized(self) -> usize {
+        match self {
+            Self::FuncRef(e) => (e as usize),
+            Self::ExternRef(e) => e.map_or(0, |e| e.into_raw() as usize),
+            Self::UninitFunc => panic!("Uninitialized table element value outside of table slot"),
+        }
+    }
+
+    /// Indicates whether this value is the "uninitialized element"
+    /// value.
+    pub(crate) fn is_uninit(&self) -> bool {
+        match self {
+            Self::UninitFunc => true,
+            _ => false,
         }
     }
 }
@@ -334,7 +370,7 @@ impl Table {
     pub fn get(&self, index: u32) -> Option<TableElement> {
         self.elements()
             .get(index as usize)
-            .map(|p| unsafe { TableElement::clone_from_raw(self.element_type(), *p) })
+            .map(|p| unsafe { TableElement::clone_from_table_value(self.element_type(), *p) })
     }
 
     /// Set reference to the specified element.
@@ -436,10 +472,10 @@ impl Table {
     fn set_raw(ty: TableElementType, elem: &mut usize, val: TableElement) {
         unsafe {
             let old = *elem;
-            *elem = val.into_raw();
+            *elem = val.into_table_value();
 
             // Drop the old element
-            let _ = TableElement::from_raw(ty, old);
+            let _ = TableElement::from_table_value(ty, old);
         }
     }
 
@@ -465,7 +501,7 @@ impl Table {
                 let dst = dst_table.elements_mut();
                 let src = src_table.elements();
                 for (s, d) in src_range.zip(dst_range) {
-                    let elem = unsafe { TableElement::clone_from_raw(ty, src[s]) };
+                    let elem = unsafe { TableElement::clone_from_table_value(ty, src[s]) };
                     Self::set_raw(ty, &mut dst[d], elem);
                 }
             }
@@ -485,12 +521,12 @@ impl Table {
                 // ranges
                 if dst_range.start <= src_range.start {
                     for (s, d) in src_range.zip(dst_range) {
-                        let elem = unsafe { TableElement::clone_from_raw(ty, dst[s]) };
+                        let elem = unsafe { TableElement::clone_from_table_value(ty, dst[s]) };
                         Self::set_raw(ty, &mut dst[d], elem);
                     }
                 } else {
                     for (s, d) in src_range.rev().zip(dst_range.rev()) {
-                        let elem = unsafe { TableElement::clone_from_raw(ty, dst[s]) };
+                        let elem = unsafe { TableElement::clone_from_table_value(ty, dst[s]) };
                         Self::set_raw(ty, &mut dst[d], elem);
                     }
                 }
@@ -510,7 +546,7 @@ impl Drop for Table {
 
         // Properly drop any table elements stored in the table
         for element in self.elements() {
-            drop(unsafe { TableElement::from_raw(ty, *element) });
+            drop(unsafe { TableElement::from_table_value(ty, *element) });
         }
     }
 }

@@ -1,11 +1,12 @@
 //! Support for a calling of an imported function.
 
+use crate::module::BareModuleInfo;
 use crate::{Engine, FuncType, Trap, ValRaw};
 use anyhow::Result;
 use std::any::Any;
 use std::panic::{self, AssertUnwindSafe};
 use std::sync::Arc;
-use wasmtime_environ::{EntityIndex, Module, ModuleType, PrimaryMap, SignatureIndex};
+use wasmtime_environ::{EntityIndex, FunctionInfo, Module, ModuleType, SignatureIndex};
 use wasmtime_jit::{CodeMemory, MmapVec, ProfilingAgent};
 use wasmtime_runtime::{
     Imports, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
@@ -148,8 +149,6 @@ pub unsafe fn create_raw_function(
     host_state: Box<dyn Any + Send + Sync>,
 ) -> Result<InstanceHandle> {
     let mut module = Module::new();
-    let mut functions = PrimaryMap::new();
-    functions.push(Default::default());
 
     let sig_id = SignatureIndex::from_u32(u32::max_value() - 1);
     module.types.push(ModuleType::Function(sig_id));
@@ -159,18 +158,21 @@ pub unsafe fn create_raw_function(
         .insert(String::new(), EntityIndex::Function(func_id));
     let module = Arc::new(module);
 
+    let runtime_info = &BareModuleInfo::one_func(
+        module.clone(),
+        (*func).as_ptr() as usize,
+        FunctionInfo::default(),
+        sig_id,
+        sig,
+    )
+    .into_traitobj();
+
     Ok(
         OnDemandInstanceAllocator::default().allocate(InstanceAllocationRequest {
-            module: &module,
-            unique_id: None,
-            memfds: None,
-            functions: &functions,
-            image_base: (*func).as_ptr() as usize,
             imports: Imports::default(),
-            shared_signatures: sig.into(),
             host_state,
             store: StorePtr::empty(),
-            wasm_data: &[],
+            runtime_info,
         })?,
     )
 }

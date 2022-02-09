@@ -219,7 +219,7 @@ pub trait FuncEnvironment: TargetEnvironment {
     #[cfg_attr(feature = "cargo-clippy", allow(clippy::too_many_arguments))]
     fn translate_call_indirect(
         &mut self,
-        pos: FuncCursor,
+        builder: &mut FunctionBuilder,
         table_index: TableIndex,
         table: ir::Table,
         sig_index: TypeIndex,

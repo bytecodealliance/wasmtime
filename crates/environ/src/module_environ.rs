@@ -5,8 +5,8 @@ use crate::module::{
 use crate::{
     DataIndex, DefinedFuncIndex, ElemIndex, EntityIndex, EntityType, FuncIndex, Global,
     GlobalIndex, GlobalInit, InstanceIndex, InstanceTypeIndex, MemoryIndex, ModuleIndex,
-    ModuleTypeIndex, PrimaryMap, SignatureIndex, TableIndex, Tunables, TypeIndex, WasmError,
-    WasmFuncType, WasmResult,
+    ModuleTypeIndex, PrimaryMap, SignatureIndex, TableIndex, TableInitialization, Tunables,
+    TypeIndex, WasmError, WasmFuncType, WasmResult,
 };
 use cranelift_entity::packed_option::ReservedValue;
 use std::borrow::Cow;
@@ -512,9 +512,6 @@ impl<'data> ModuleEnvironment<'data> {
             Payload::ElementSection(elements) => {
                 validator.element_section(&elements)?;
 
-                let cnt = usize::try_from(elements.get_count()).unwrap();
-                self.result.module.table_initializers.reserve_exact(cnt);
-
                 for (index, entry) in elements.into_iter().enumerate() {
                     let wasmparser::Element {
                         kind,
@@ -527,7 +524,7 @@ impl<'data> ModuleEnvironment<'data> {
                     // entries listed in this segment. Note that it's not
                     // possible to create anything other than a `ref.null
                     // extern` for externref segments, so those just get
-                    // translate to the reserved value of `FuncIndex`.
+                    // translated to the reserved value of `FuncIndex`.
                     let items_reader = items.get_items_reader()?;
                     let mut elements =
                         Vec::with_capacity(usize::try_from(items_reader.get_count()).unwrap());
@@ -576,15 +573,18 @@ impl<'data> ModuleEnvironment<'data> {
                                     )));
                                 }
                             };
-                            self.result
-                                .module
-                                .table_initializers
-                                .push(TableInitializer {
-                                    table_index,
-                                    base,
-                                    offset,
-                                    elements: elements.into(),
-                                });
+
+                            let table_segments = match &mut self.result.module.table_initialization
+                            {
+                                TableInitialization::Segments { segments } => segments,
+                                TableInitialization::FuncTable { .. } => unreachable!(),
+                            };
+                            table_segments.push(TableInitializer {
+                                table_index,
+                                base,
+                                offset,
+                                elements: elements.into(),
+                            });
                         }
 
                         ElementKind::Passive => {

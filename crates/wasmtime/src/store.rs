@@ -76,6 +76,7 @@
 //! contents of `StoreOpaque`. This is an invariant that we, as the authors of
 //! `wasmtime`, must uphold for the public interface to be safe.
 
+use crate::module::BareModuleInfo;
 use crate::{module::ModuleRegistry, Engine, Module, Trap, Val, ValRaw};
 use anyhow::{bail, Result};
 use std::cell::UnsafeCell;
@@ -409,7 +410,6 @@ impl<T> Store<T> {
     /// tables created to 10,000. This can be overridden with the
     /// [`Store::limiter`] configuration method.
     pub fn new(engine: &Engine, data: T) -> Self {
-        let functions = &Default::default();
         // Wasmtime uses the callee argument to host functions to learn about
         // the original pointer to the `Store` itself, allowing it to
         // reconstruct a `StoreContextMut<T>`. When we initially call a `Func`,
@@ -419,18 +419,13 @@ impl<T> Store<T> {
         // is never null.
         let default_callee = unsafe {
             let module = Arc::new(wasmtime_environ::Module::default());
+            let shim = BareModuleInfo::empty(module).into_traitobj();
             OnDemandInstanceAllocator::default()
                 .allocate(InstanceAllocationRequest {
                     host_state: Box::new(()),
-                    image_base: 0,
-                    functions,
-                    shared_signatures: None.into(),
                     imports: Default::default(),
-                    module: &module,
-                    unique_id: None,
-                    memfds: None,
                     store: StorePtr::empty(),
-                    wasm_data: &[],
+                    runtime_info: &shim,
                 })
                 .expect("failed to allocate default callee")
         };

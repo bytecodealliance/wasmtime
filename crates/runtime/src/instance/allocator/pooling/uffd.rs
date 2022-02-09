@@ -262,7 +262,9 @@ unsafe fn initialize_wasm_page(
     page_index: usize,
 ) -> Result<()> {
     // Check for paged initialization and copy the page if present in the initialization data
-    if let MemoryInitialization::Paged { map, .. } = &instance.module.memory_initialization {
+    if let MemoryInitialization::Paged { map, .. } =
+        &instance.runtime_info.module().memory_initialization
+    {
         let memory_index = instance.module().memory_index(memory_index);
         let pages = &map[memory_index];
 
@@ -437,11 +439,11 @@ mod test {
     use super::*;
     use crate::{
         Imports, InstanceAllocationRequest, InstanceLimits, ModuleLimits,
-        PoolingAllocationStrategy, Store, StorePtr, VMSharedSignatureIndex,
+        PoolingAllocationStrategy, Store, StorePtr,
     };
     use std::sync::atomic::AtomicU64;
     use std::sync::Arc;
-    use wasmtime_environ::{Memory, MemoryPlan, MemoryStyle, Module, PrimaryMap, Tunables};
+    use wasmtime_environ::{Memory, MemoryPlan, MemoryStyle, Module, Tunables};
 
     #[cfg(target_pointer_width = "64")]
     #[test]
@@ -573,28 +575,21 @@ mod test {
 
             let mut handles = Vec::new();
             let module = Arc::new(module);
-            let functions = &PrimaryMap::new();
 
             // Allocate the maximum number of instances with the maximum number of memories
             for _ in 0..instances.max_instances {
                 handles.push(
                     instances
                         .allocate(InstanceAllocationRequest {
-                            module: &module,
-                            memfds: None,
-                            unique_id: None,
-                            image_base: 0,
-                            functions,
+                            runtime_info: &super::super::test::empty_runtime_info(module.clone()),
                             imports: Imports {
                                 functions: &[],
                                 tables: &[],
                                 memories: &[],
                                 globals: &[],
                             },
-                            shared_signatures: VMSharedSignatureIndex::default().into(),
                             host_state: Box::new(()),
                             store: StorePtr::new(&mut mock_store),
-                            wasm_data: &[],
                         })
                         .expect("instance should allocate"),
                 );
