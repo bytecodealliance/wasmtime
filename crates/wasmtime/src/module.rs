@@ -14,8 +14,10 @@ use wasmtime_environ::{
     DefinedFuncIndex, DefinedMemoryIndex, FunctionInfo, ModuleEnvironment, ModuleIndex, PrimaryMap,
     SignatureIndex,
 };
-use wasmtime_jit::{CompiledModule, CompiledModuleInfo, MmapVec, TypeTables};
-use wasmtime_runtime::{CompiledModuleId, MemoryMemFd, ModuleMemFds, VMSharedSignatureIndex};
+use wasmtime_jit::{CompiledModule, CompiledModuleInfo, TypeTables};
+use wasmtime_runtime::{
+    CompiledModuleId, MemoryMemFd, MmapVec, ModuleMemFds, VMSharedSignatureIndex,
+};
 
 mod registry;
 mod serialization;
@@ -422,6 +424,15 @@ impl Module {
             // instead of the default mode of memory initialization
             if engine.config().paged_memory_initialization {
                 translation.try_paged_init();
+            }
+
+            // If configured attempt to use static memory initialization which
+            // can either at runtime be implemented as a single memcpy to
+            // initialize memory or otherwise enabling virtual-memory-tricks
+            // such as mmap'ing from a file to get copy-on-write.
+            if engine.config().memfd {
+                let align = engine.compiler().page_size_align();
+                translation.try_static_init(align);
             }
 
             // Attempt to convert table initializer segments to
@@ -1013,9 +1024,13 @@ impl wasmtime_runtime::ModuleRuntimeInfo for ModuleInner {
             return Ok(None);
         }
 
-        let memfds = self
-            .memfds
-            .get_or_try_init(|| ModuleMemFds::new(self.module.module(), self.module.wasm_data()))?;
+        let memfds = self.memfds.get_or_try_init(|| {
+            ModuleMemFds::new(
+                self.module.module(),
+                self.module.wasm_data(),
+                Some(self.module.mmap()),
+            )
+        })?;
         Ok(memfds
             .as_ref()
             .and_then(|memfds| memfds.get_memory_image(memory)))

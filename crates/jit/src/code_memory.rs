@@ -1,10 +1,10 @@
 //! Memory management for executable code.
 
 use crate::unwind::UnwindRegistration;
-use crate::MmapVec;
 use anyhow::{bail, Context, Result};
 use object::read::{File, Object, ObjectSection};
 use std::mem::ManuallyDrop;
+use wasmtime_runtime::MmapVec;
 
 /// Management of executable memory within a `MmapVec`
 ///

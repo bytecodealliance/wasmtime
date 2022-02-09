@@ -92,6 +92,14 @@ pub struct ModuleTranslation<'data> {
     /// `MemoryInitializer` type.
     pub data: Vec<Cow<'data, [u8]>>,
 
+    /// The desired alignment of `data` in the final data section of the object
+    /// file that we'll emit.
+    ///
+    /// Note that this is 1 by default but `MemoryInitialization::Static` might
+    /// switch this to a higher alignment to facilitate mmap-ing data from
+    /// an object file into a linear memory.
+    pub data_align: Option<u64>,
+
     /// Total size of all data pushed onto `data` so far.
     total_data: u32,
 

@@ -418,6 +418,11 @@ impl Mmap {
         )?;
         Ok(())
     }
+
+    /// Returns the underlying file that this mmap is mapping, if present.
+    pub fn original_file(&self) -> Option<&File> {
+        self.file.as_ref()
+    }
 }
 
 impl Drop for Mmap {

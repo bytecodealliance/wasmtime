@@ -1,9 +1,9 @@
-use anyhow::{Context, Error, Result};
-use object::write::{Object, WritableBuffer};
+use crate::Mmap;
+use anyhow::{Context, Result};
+use std::fs::File;
 use std::ops::{Deref, DerefMut, Range, RangeTo};
 use std::path::Path;
 use std::sync::Arc;
-use wasmtime_runtime::Mmap;
 
 /// A type akin to `Vec<u8>`, but backed by `mmap` and able to be split.
 ///
@@ -52,26 +52,6 @@ impl MmapVec {
         let mut result = MmapVec::with_capacity(slice.len())?;
         result.copy_from_slice(slice);
         Ok(result)
-    }
-
-    /// Creates a new `MmapVec` from serializing the specified `obj`.
-    ///
-    /// The returned `MmapVec` will contain the serialized version of `obj` and
-    /// is sized appropriately to the exact size of the object serialized.
-    pub fn from_obj(obj: Object) -> Result<MmapVec> {
-        let mut result = ObjectMmap::default();
-        match obj.emit(&mut result) {
-            Ok(()) => {
-                assert!(result.mmap.is_some(), "no reserve");
-                let mmap = result.mmap.expect("reserve not called");
-                assert_eq!(mmap.len(), result.len);
-                Ok(mmap)
-            }
-            Err(e) => match result.err.take() {
-                Some(original) => Err(original.context(e)),
-                None => Err(e.into()),
-            },
-        }
     }
 
     /// Creates a new `MmapVec` which is the `path` specified mmap'd into
@@ -137,6 +117,18 @@ impl MmapVec {
         self.mmap
             .make_executable(range.start + self.range.start..range.end + self.range.start)
     }
+
+    /// Returns the underlying file that this mmap is mapping, if present.
+    pub fn original_file(&self) -> Option<MmapVecFileBacking> {
+        self.mmap.original_file()?;
+        Some(MmapVecFileBacking(self.mmap.clone()))
+    }
+
+    /// Returns the offset within the original mmap that this `MmapVec` is
+    /// created from.
+    pub fn original_offset(&self) -> usize {
+        self.range.start
+    }
 }
 
 impl Deref for MmapVec {
@@ -164,51 +156,23 @@ impl DerefMut for MmapVec {
     }
 }
 
-/// Helper struct to implement the `WritableBuffer` trait from the `object`
-/// crate.
-///
-/// This enables writing an object directly into an mmap'd memory so it's
-/// immediately usable for execution after compilation. This implementation
-/// relies on a call to `reserve` happening once up front with all the needed
-/// data, and the mmap internally does not attempt to grow afterwards.
-#[derive(Default)]
-struct ObjectMmap {
-    mmap: Option<MmapVec>,
-    len: usize,
-    err: Option<Error>,
-}
+/// Owned representation of the backing file for a `MmapVec`
+//
+// As a safety implementation-note this type cannot give access to the
+// underlying `Mmap` itself since that would violate the `DerefMut for MmapVec`
+// implementation. Instead all this gives access to is the file itself which
+// should be safe for working with in syscalls and such.
+#[derive(Debug)]
+pub struct MmapVecFileBacking(Arc<Mmap>);
 
-impl WritableBuffer for ObjectMmap {
-    fn len(&self) -> usize {
-        self.len
-    }
-
-    fn reserve(&mut self, additional: usize) -> Result<(), ()> {
-        assert!(self.mmap.is_none(), "cannot reserve twice");
-        self.mmap = match MmapVec::with_capacity(additional) {
-            Ok(mmap) => Some(mmap),
-            Err(e) => {
-                self.err = Some(e);
-                return Err(());
-            }
-        };
-        Ok(())
-    }
-
-    fn resize(&mut self, new_len: usize) {
-        // Resizing always appends 0 bytes and since new mmaps start out as 0
-        // bytes we don't actually need to do anything as part of this other
-        // than update our own length.
-        if new_len <= self.len {
-            return;
-        }
-        self.len = new_len;
-    }
-
-    fn write_bytes(&mut self, val: &[u8]) {
-        let mmap = self.mmap.as_mut().expect("write before reserve");
-        mmap[self.len..][..val.len()].copy_from_slice(val);
-        self.len += val.len();
+impl MmapVecFileBacking {
+    /// Returns a reference to the original file used to make the backing of
+    /// this mmap.
+    pub fn original_file(&self) -> &File {
+        // Note that this unwrap is guaranteed to succeed given
+        // `MmapVec::original_file` only creates an instance of this type if the
+        // return value here is `Some`.
+        self.0.original_file().unwrap()
     }
 }
 

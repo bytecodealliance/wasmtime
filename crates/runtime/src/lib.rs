@@ -37,6 +37,7 @@ mod instance;
 mod jit_int;
 mod memory;
 mod mmap;
+mod mmap_vec;
 mod table;
 mod traphandlers;
 mod vmcontext;
@@ -58,6 +59,7 @@ pub use crate::instance::{
 pub use crate::jit_int::GdbJitImageRegistration;
 pub use crate::memory::{DefaultMemoryCreator, Memory, RuntimeLinearMemory, RuntimeMemoryCreator};
 pub use crate::mmap::Mmap;
+pub use crate::mmap_vec::MmapVec;
 pub use crate::table::{Table, TableElement};
 pub use crate::traphandlers::{
     catch_traps, init_traps, raise_lib_trap, raise_user_trap, resume_panic, tls_eager_initialize,

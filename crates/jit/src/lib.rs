@@ -25,16 +25,14 @@ mod debug;
 mod demangling;
 mod instantiate;
 mod link;
-mod mmap_vec;
 mod profiling;
 mod unwind;
 
 pub use crate::code_memory::CodeMemory;
 pub use crate::instantiate::{
-    finish_compile, subslice_range, CompiledModule, CompiledModuleInfo, SetupError,
-    SymbolizeContext, TypeTables,
+    finish_compile, mmap_vec_from_obj, subslice_range, CompiledModule, CompiledModuleInfo,
+    SetupError, SymbolizeContext, TypeTables,
 };
-pub use crate::mmap_vec::MmapVec;
 pub use demangling::*;
 pub use profiling::*;
 

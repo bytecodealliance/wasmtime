@@ -2,7 +2,7 @@
 //! included. Enables unconditional use of the type and its methods
 //! throughout higher-level code.
 
-use crate::InstantiationError;
+use crate::{InstantiationError, MmapVec};
 use anyhow::Result;
 use std::sync::Arc;
 use wasmtime_environ::{DefinedMemoryIndex, Module};
@@ -19,7 +19,7 @@ impl ModuleMemFds {
     /// Construct a new set of memfd images. This variant is used
     /// when memfd support is not included; it always returns no
     /// images.
-    pub fn new(_: &Module, _: &[u8]) -> Result<Option<ModuleMemFds>> {
+    pub fn new(_: &Module, _: &[u8], _: Option<&MmapVec>) -> Result<Option<ModuleMemFds>> {
         Ok(None)
     }
 

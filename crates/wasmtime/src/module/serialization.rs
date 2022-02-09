@@ -59,7 +59,8 @@ use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
 use wasmtime_environ::{Compiler, FlagValue, Tunables};
-use wasmtime_jit::{subslice_range, CompiledModule, CompiledModuleInfo, MmapVec, TypeTables};
+use wasmtime_jit::{subslice_range, CompiledModule, CompiledModuleInfo, TypeTables};
+use wasmtime_runtime::MmapVec;
 
 const HEADER: &[u8] = b"\0wasmtime-aot";
 

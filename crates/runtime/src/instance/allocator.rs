@@ -401,7 +401,7 @@ fn check_init_bounds(instance: &mut Instance, module: &Module) -> Result<(), Ins
             check_memory_init_bounds(instance, initializers)?;
         }
         // Statically validated already to have everything in-bounds.
-        MemoryInitialization::Paged { .. } => {}
+        MemoryInitialization::Paged { .. } | MemoryInitialization::Static { .. } => {}
     }
 
     Ok(())
