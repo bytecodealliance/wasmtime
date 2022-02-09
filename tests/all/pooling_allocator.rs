@@ -511,3 +511,40 @@ fn preserve_data_segments() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn multi_memory_with_imported_memories() -> Result<()> {
+    // This test checks that the base address for the defined memory is correct for the instance
+    // despite the presence of an imported memory.
+
+    let mut config = Config::new();
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling {
+        strategy: PoolingAllocationStrategy::NextAvailable,
+        module_limits: ModuleLimits {
+            memory_pages: 1,
+            imported_memories: 1,
+            memories: 1,
+            ..Default::default()
+        },
+        instance_limits: InstanceLimits { count: 1 },
+    });
+    config.wasm_multi_memory(true);
+
+    let engine = Engine::new(&config)?;
+    let module = Module::new(
+        &engine,
+        r#"(module (import "" "m1" (memory 0)) (memory (export "m2") 1))"#,
+    )?;
+
+    let mut store = Store::new(&engine, ());
+
+    let m1 = Memory::new(&mut store, MemoryType::new(0, None))?;
+    let instance = Instance::new(&mut store, &module, &[m1.into()])?;
+
+    let m2 = instance.get_memory(&mut store, "m2").unwrap();
+
+    m2.data_mut(&mut store)[0] = 0x42;
+    assert_eq!(m2.data(&store)[0], 0x42);
+
+    Ok(())
+}

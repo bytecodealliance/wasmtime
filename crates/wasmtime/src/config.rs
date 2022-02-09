@@ -224,14 +224,14 @@ impl Config {
     ///   executing WebAssembly to periodically yield back according to the
     ///   epoch configuration settings. This enables `Future::poll` to take at
     ///   most a certain amount of time according to epoch configuration
-    ///   setttings and when increments happen. The benefit of this approach is
+    ///   settings and when increments happen. The benefit of this approach is
     ///   that the instrumentation in compiled code is quite lightweight, but a
     ///   downside can be that the scheduling is somewhat nondeterministic since
     ///   increments are usually timer-based which are not always deterministic.
     ///
     ///   Note that to prevent infinite execution of wasm it's recommended to
     ///   place a timeout on the entire future representing executing wasm code
-    ///   and the preriodic yields with epochs should ensure that when the
+    ///   and the periodic yields with epochs should ensure that when the
     ///   timeout is reached it's appropriately recognized.
     ///
     /// * Alternatively you can enable the
@@ -250,7 +250,7 @@ impl Config {
     ///
     ///   Note that to prevent infinite execution of wasm it's recommended to
     ///   place a timeout on the entire future representing executing wasm code
-    ///   and the preriodic yields with epochs should ensure that when the
+    ///   and the periodic yields with epochs should ensure that when the
     ///   timeout is reached it's appropriately recognized.
     ///
     /// * Finally you can spawn futures into a thread pool. By doing this in a
@@ -387,7 +387,7 @@ impl Config {
     ///
     /// - Yield to the executor loop, then resume when the future is
     ///   next polled. See
-    ///   [`Store::epoch_dealdine_async_yield_and_update`](crate::Store::epoch_deadline_async_yield_and_update).
+    ///   [`Store::epoch_deadline_async_yield_and_update`](crate::Store::epoch_deadline_async_yield_and_update).
     ///
     /// The first is the default; set the second for the timeslicing
     /// behavior described above.
@@ -1084,7 +1084,7 @@ impl Config {
     /// linear memory.
     ///
     /// Note that this is a currently simple heuristic for optimizing the growth
-    /// of dynamic memories, primarily implemented for the memory64 propsal
+    /// of dynamic memories, primarily implemented for the memory64 proposal
     /// where all memories are currently "dynamic". This is unlikely to be a
     /// one-size-fits-all style approach and if you're an embedder running into
     /// issues with dynamic memories and growth and are interested in having
