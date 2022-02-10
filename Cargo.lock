@@ -3496,6 +3496,7 @@ dependencies = [
  "memchr",
  "more-asserts",
  "num_cpus",
+ "once_cell",
  "pretty_env_logger",
  "rayon",
  "rustix",
