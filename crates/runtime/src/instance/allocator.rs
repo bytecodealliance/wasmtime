@@ -366,7 +366,7 @@ fn initialize_memories(instance: &mut Instance, module: &Module) -> Result<(), I
             memory_size_in_pages,
             get_global_as_u64,
         },
-        &mut |memory_index, offset, data| {
+        &mut |memory_index, init| {
             // If this initializer applies to a defined memory but that memory
             // doesn't need initialization, due to something like uffd or memfd
             // pre-initializing it via mmap magic, then this initializer can be
@@ -379,8 +379,8 @@ fn initialize_memories(instance: &mut Instance, module: &Module) -> Result<(), I
             let memory = instance.get_memory(memory_index);
             let dst_slice =
                 unsafe { slice::from_raw_parts_mut(memory.base, memory.current_length) };
-            let dst = &mut dst_slice[usize::try_from(offset).unwrap()..][..data.len()];
-            dst.copy_from_slice(instance.wasm_data(data.clone()));
+            let dst = &mut dst_slice[usize::try_from(init.offset).unwrap()..][..init.data.len()];
+            dst.copy_from_slice(instance.wasm_data(init.data.clone()));
             true
         },
     );
@@ -401,7 +401,7 @@ fn check_init_bounds(instance: &mut Instance, module: &Module) -> Result<(), Ins
             check_memory_init_bounds(instance, initializers)?;
         }
         // Statically validated already to have everything in-bounds.
-        MemoryInitialization::Paged { .. } => {}
+        MemoryInitialization::Paged { .. } | MemoryInitialization::Static { .. } => {}
     }
 
     Ok(())

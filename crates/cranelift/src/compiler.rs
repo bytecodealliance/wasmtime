@@ -353,6 +353,10 @@ impl wasmtime_environ::Compiler for Compiler {
         self.isa.triple()
     }
 
+    fn page_size_align(&self) -> u64 {
+        self.isa.code_section_alignment()
+    }
+
     fn flags(&self) -> BTreeMap<String, FlagValue> {
         self.isa
             .flags()

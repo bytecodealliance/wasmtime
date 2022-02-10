@@ -14,8 +14,10 @@ use wasmtime_environ::{
     DefinedFuncIndex, DefinedMemoryIndex, FunctionInfo, ModuleEnvironment, ModuleIndex, PrimaryMap,
     SignatureIndex,
 };
-use wasmtime_jit::{CompiledModule, CompiledModuleInfo, MmapVec, TypeTables};
-use wasmtime_runtime::{CompiledModuleId, MemoryMemFd, ModuleMemFds, VMSharedSignatureIndex};
+use wasmtime_jit::{CompiledModule, CompiledModuleInfo, TypeTables};
+use wasmtime_runtime::{
+    CompiledModuleId, MemoryMemFd, MmapVec, ModuleMemFds, VMSharedSignatureIndex,
+};
 
 mod registry;
 mod serialization;
@@ -424,6 +426,15 @@ impl Module {
                 translation.try_paged_init();
             }
 
+            // If configured attempt to use static memory initialization which
+            // can either at runtime be implemented as a single memcpy to
+            // initialize memory or otherwise enabling virtual-memory-tricks
+            // such as mmap'ing from a file to get copy-on-write.
+            if engine.config().memfd {
+                let align = engine.compiler().page_size_align();
+                translation.try_static_init(align);
+            }
+
             // Attempt to convert table initializer segments to
             // FuncTable representation where possible, to enable
             // table lazy init.
@@ -495,14 +506,26 @@ impl Module {
     /// Same as [`deserialize`], except that the contents of `path` are read to
     /// deserialize into a [`Module`].
     ///
-    /// For more information see the documentation of the [`deserialize`]
-    /// method for why this function is `unsafe`.
-    ///
     /// This method is provided because it can be faster than [`deserialize`]
     /// since the data doesn't need to be copied around, but rather the module
     /// can be used directly from an mmap'd view of the file provided.
     ///
     /// [`deserialize`]: Module::deserialize
+    ///
+    /// # Unsafety
+    ///
+    /// All of the reasons that [`deserialize`] is `unsafe` applies to this
+    /// function as well. Arbitrary data loaded from a file may trick Wasmtime
+    /// into arbitrary code execution since the contents of the file are not
+    /// validated to be a valid precompiled module.
+    ///
+    /// Additionally though this function is also `unsafe` because the file
+    /// referenced must remain unchanged and a valid precompiled module for the
+    /// entire lifetime of the [`Module`] returned. Any changes to the file on
+    /// disk may change future instantiations of the module to be incorrect.
+    /// This is because the file is mapped into memory and lazily loaded pages
+    /// reflect the current state of the file, not necessarily the origianl
+    /// state of the file.
     pub unsafe fn deserialize_file(engine: &Engine, path: impl AsRef<Path>) -> Result<Module> {
         let module = SerializedModule::from_file(path.as_ref(), &engine.config().module_version)?;
         module.into_module(engine)
@@ -1013,9 +1036,13 @@ impl wasmtime_runtime::ModuleRuntimeInfo for ModuleInner {
             return Ok(None);
         }
 
-        let memfds = self
-            .memfds
-            .get_or_try_init(|| ModuleMemFds::new(self.module.module(), self.module.wasm_data()))?;
+        let memfds = self.memfds.get_or_try_init(|| {
+            ModuleMemFds::new(
+                self.module.module(),
+                self.module.wasm_data(),
+                Some(self.module.mmap()),
+            )
+        })?;
         Ok(memfds
             .as_ref()
             .and_then(|memfds| memfds.get_memory_image(memory)))

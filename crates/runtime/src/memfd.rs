@@ -2,14 +2,14 @@
 //! to support mapping these backing images into memory.
 
 use crate::InstantiationError;
+use crate::MmapVec;
 use anyhow::Result;
 use libc::c_void;
-use memfd::{Memfd, MemfdOptions};
 use rustix::fd::AsRawFd;
-use std::io::Write;
+use std::fs::File;
 use std::sync::Arc;
 use std::{convert::TryFrom, ops::Range};
-use wasmtime_environ::{DefinedMemoryIndex, InitMemory, Module, PrimaryMap};
+use wasmtime_environ::{DefinedMemoryIndex, MemoryInitialization, Module, PrimaryMap};
 
 /// MemFDs containing backing images for certain memories in a module.
 ///
@@ -18,8 +18,6 @@ use wasmtime_environ::{DefinedMemoryIndex, InitMemory, Module, PrimaryMap};
 pub struct ModuleMemFds {
     memories: PrimaryMap<DefinedMemoryIndex, Option<Arc<MemoryMemFd>>>,
 }
-
-const MAX_MEMFD_IMAGE_SIZE: usize = 1024 * 1024 * 1024; // limit to 1GiB.
 
 impl ModuleMemFds {
     /// Get the MemoryMemFd for a given memory.
@@ -31,30 +29,160 @@ impl ModuleMemFds {
 /// One backing image for one memory.
 #[derive(Debug)]
 pub struct MemoryMemFd {
-    /// The actual memfd image: an anonymous file in memory which we
-    /// use as the backing content for a copy-on-write (CoW) mapping
-    /// in the memory region.
-    pub fd: Memfd,
-    /// Length of image. Note that initial memory size may be larger;
-    /// leading and trailing zeroes are truncated (handled by
-    /// anonymous backing memfd).
+    /// The file descriptor source of this image.
+    ///
+    /// This might be an mmaped `*.cwasm` file or on Linux it could also be a
+    /// `Memfd` as an anonymous file in memory. In either case this is used as
+    /// the backing-source for the CoW image.
+    fd: MemFdSource,
+
+    /// Length of image, in bytes.
+    ///
+    /// Note that initial memory size may be larger; leading and trailing zeroes
+    /// are truncated (handled by backing fd).
     ///
     /// Must be a multiple of the system page size.
-    pub len: usize,
-    /// Image starts this many bytes into heap space. Note that the
-    /// memfd's offsets are always equal to the heap offsets, so we
-    /// map at an offset into the fd as well. (This simplifies
-    /// construction.)
+    len: usize,
+
+    /// Image starts this many bytes into `fd` source.
+    ///
+    /// This is 0 for anonymous-backed memfd files and is the offset of the data
+    /// section in a `*.cwasm` file for `*.cwasm`-backed images.
     ///
     /// Must be a multiple of the system page size.
-    pub offset: usize,
+    fd_offset: u64,
+
+    /// Image starts this many bytes into heap space.
+    ///
+    /// Must be a multiple of the system page size.
+    linear_memory_offset: usize,
 }
 
-fn create_memfd() -> Result<Memfd> {
+#[derive(Debug)]
+enum MemFdSource {
+    Mmap(Arc<File>),
+    #[cfg(target_os = "linux")]
+    Memfd(memfd::Memfd),
+}
+
+impl MemFdSource {
+    fn as_file(&self) -> &File {
+        match self {
+            MemFdSource::Mmap(file) => file,
+            #[cfg(target_os = "linux")]
+            MemFdSource::Memfd(memfd) => memfd.as_file(),
+        }
+    }
+}
+
+impl MemoryMemFd {
+    fn new(
+        page_size: u32,
+        offset: u64,
+        data: &[u8],
+        mmap: Option<&MmapVec>,
+    ) -> Result<Option<MemoryMemFd>> {
+        // Sanity-check that various parameters are page-aligned.
+        let len = data.len();
+        let offset = u32::try_from(offset).unwrap();
+        assert_eq!(offset % page_size, 0);
+        assert_eq!((len as u32) % page_size, 0);
+        let linear_memory_offset = usize::try_from(offset).unwrap();
+
+        // If a backing `mmap` is present then `data` should be a sub-slice of
+        // the `mmap`. The sanity-checks here double-check that. Additionally
+        // compilation should have ensured that the `data` section is
+        // page-aligned within `mmap`, so that's also all double-checked here.
+        //
+        // Finally if the `mmap` itself comes from a backing file on disk, such
+        // as a `*.cwasm` file, then that's a valid source of data for the
+        // memory image so we simply return referencing that.
+        //
+        // Note that this path is platform-agnostic in the sense of all
+        // platforms we support support memory mapping copy-on-write data from
+        // files, but for now this is still a Linux-specific region of Wasmtime.
+        // Some work will be needed to get this file compiling for macOS and
+        // Windows.
+        if let Some(mmap) = mmap {
+            let start = mmap.as_ptr() as usize;
+            let end = start + mmap.len();
+            let data_start = data.as_ptr() as usize;
+            let data_end = data_start + data.len();
+            assert!(start <= data_start && data_end <= end);
+            assert_eq!((start as u32) % page_size, 0);
+            assert_eq!((data_start as u32) % page_size, 0);
+            assert_eq!((data_end as u32) % page_size, 0);
+            assert_eq!((mmap.original_offset() as u32) % page_size, 0);
+
+            if let Some(file) = mmap.original_file() {
+                return Ok(Some(MemoryMemFd {
+                    fd: MemFdSource::Mmap(file.clone()),
+                    fd_offset: u64::try_from(mmap.original_offset() + (data_start - start))
+                        .unwrap(),
+                    linear_memory_offset,
+                    len,
+                }));
+            }
+        }
+
+        // If `mmap` doesn't come from a file then platform-specific mechanisms
+        // may be used to place the data in a form that's amenable to an mmap.
+
+        cfg_if::cfg_if! {
+            if #[cfg(target_os = "linux")] {
+                // On Linux `memfd_create` is used to create an anonymous
+                // in-memory file to represent the heap image. This anonymous
+                // file is then used as the basis for further mmaps.
+
+                use std::io::Write;
+
+                let memfd = create_memfd()?;
+                memfd.as_file().write_all(data)?;
+
+                // Seal the memfd's data and length.
+                //
+                // This is a defense-in-depth security mitigation. The
+                // memfd will serve as the starting point for the heap of
+                // every instance of this module. If anything were to
+                // write to this, it could affect every execution. The
+                // memfd object itself is owned by the machinery here and
+                // not exposed elsewhere, but it is still an ambient open
+                // file descriptor at the syscall level, so some other
+                // vulnerability that allowed writes to arbitrary fds
+                // could modify it. Or we could have some issue with the
+                // way that we map it into each instance. To be
+                // extra-super-sure that it never changes, and because
+                // this costs very little, we use the kernel's "seal" API
+                // to make the memfd image permanently read-only.
+                memfd.add_seal(memfd::FileSeal::SealGrow)?;
+                memfd.add_seal(memfd::FileSeal::SealShrink)?;
+                memfd.add_seal(memfd::FileSeal::SealWrite)?;
+                memfd.add_seal(memfd::FileSeal::SealSeal)?;
+
+                Ok(Some(MemoryMemFd {
+                    fd: MemFdSource::Memfd(memfd),
+                    fd_offset: 0,
+                    linear_memory_offset,
+                    len,
+                }))
+            } else {
+                // Other platforms don't have an easily available way of
+                // representing the heap image as an mmap-source right now. We
+                // could theoretically create a file and immediately unlink it
+                // but that means that data may likely be preserved to disk
+                // which isn't what we want here.
+                Ok(None)
+            }
+        }
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn create_memfd() -> Result<memfd::Memfd> {
     // Create the memfd. It needs a name, but the
     // documentation for `memfd_create()` says that names can
     // be duplicated with no issues.
-    MemfdOptions::new()
+    memfd::MemfdOptions::new()
         .allow_sealing(true)
         .create("wasm-memory-image")
         .map_err(|e| e.into())
@@ -64,135 +192,47 @@ impl ModuleMemFds {
     /// Create a new `ModuleMemFds` for the given module. This can be
     /// passed in as part of a `InstanceAllocationRequest` to speed up
     /// instantiation and execution by using memfd-backed memories.
-    pub fn new(module: &Module, wasm_data: &[u8]) -> Result<Option<ModuleMemFds>> {
-        let page_size = region::page::size() as u64;
-        let page_align = |x: u64| x & !(page_size - 1);
-        let page_align_up = |x: u64| page_align(x + page_size - 1);
+    pub fn new(
+        module: &Module,
+        wasm_data: &[u8],
+        mmap: Option<&MmapVec>,
+    ) -> Result<Option<ModuleMemFds>> {
+        let map = match &module.memory_initialization {
+            MemoryInitialization::Static { map } => map,
+            _ => return Ok(None),
+        };
+        let mut memories = PrimaryMap::with_capacity(map.len());
+        let page_size = region::page::size() as u32;
+        for (memory_index, init) in map {
+            // mmap-based-initialization only works for defined memories with a
+            // known starting point of all zeros, so bail out if the mmeory is
+            // imported.
+            let defined_memory = match module.defined_memory_index(memory_index) {
+                Some(idx) => idx,
+                None => return Ok(None),
+            };
 
-        // First build up an in-memory image for each memory. This in-memory
-        // representation is discarded if the memory initializers aren't "of
-        // the right shape" where the desired shape is:
-        //
-        // * Only initializers for defined memories.
-        // * Only initializers with static offsets (no globals).
-        // * Only in-bound initializers.
-        //
-        // The `init_memory` method of `MemoryInitialization` is used here to
-        // do most of the validation for us, and otherwise the data chunks are
-        // collected into the `images` array here.
-        let mut images: PrimaryMap<DefinedMemoryIndex, Vec<u8>> = PrimaryMap::default();
-        let num_defined_memories = module.memory_plans.len() - module.num_imported_memories;
-        for _ in 0..num_defined_memories {
-            images.push(Vec::new());
-        }
-        let ok = module.memory_initialization.init_memory(
-            InitMemory::CompileTime(module),
-            &mut |memory, offset, data_range| {
-                // Memfd-based initialization of an imported memory isn't
-                // implemented right now, although might perhaps be
-                // theoretically possible for statically-known-in-bounds
-                // segments with page-aligned portions.
-                let memory = match module.defined_memory_index(memory) {
-                    Some(index) => index,
-                    None => return false,
-                };
-
-                // Splat the `data_range` into the `image` for this memory,
-                // updating it as necessary with 0s for holes and such.
-                let image = &mut images[memory];
-                let data = &wasm_data[data_range.start as usize..data_range.end as usize];
-                let offset = offset as usize;
-                let new_image_len = offset + data.len();
-                if image.len() < new_image_len {
-                    if new_image_len > MAX_MEMFD_IMAGE_SIZE {
-                        return false;
-                    }
-                    image.resize(new_image_len, 0);
-                }
-                image[offset..][..data.len()].copy_from_slice(data);
-                true
-            },
-        );
-
-        // If any initializer wasn't applicable then we skip memfds entirely.
-        if !ok {
-            return Ok(None);
-        }
-
-        // With an in-memory representation of all memory images a `memfd` is
-        // now created and the data is pushed into the memfd. Note that the
-        // memfd representation will trim leading and trailing pages of zeros
-        // to store as little data as possible in the memfd. This is not only a
-        // performance improvement in the sense of "copy less data to the
-        // kernel" but it's also more performant to fault in zeros from
-        // anonymous-backed pages instead of memfd-backed pages-of-zeros (as
-        // the kernel knows anonymous mappings are always zero and has a cache
-        // of zero'd pages).
-        let mut memories = PrimaryMap::default();
-        for (defined_memory, image) in images {
-            // Find the first nonzero byte, and if all the bytes are zero then
-            // we can skip the memfd for this memory since there's no
-            // meaningful initialization.
-            let nonzero_start = match image.iter().position(|b| *b != 0) {
-                Some(i) => i as u64,
+            // If there's no initialization for this memory known then we don't
+            // need an image for the memory so push `None` and move on.
+            let init = match init {
+                Some(init) => init,
                 None => {
                     memories.push(None);
                     continue;
                 }
             };
 
-            // Find the last nonzero byte, which must exist at this point since
-            // we found one going forward. Add one to find the index of the
-            // last zero, which may also be the length of the image.
-            let nonzero_end = image.iter().rposition(|b| *b != 0).unwrap() as u64 + 1;
+            // Get the image for this wasm module  as a subslice of `wasm_data`,
+            // and then use that to try to create the `MemoryMemFd`. If this
+            // creation files then we fail creating `ModuleMemFds` since this
+            // memory couldn't be represented.
+            let data = &wasm_data[init.data.start as usize..init.data.end as usize];
+            let memfd = match MemoryMemFd::new(page_size, init.offset, data, mmap)? {
+                Some(memfd) => memfd,
+                None => return Ok(None),
+            };
 
-            // The offset of this image must be OS-page-aligned since we'll be
-            // starting the mmap at an aligned address. Align down the start
-            // index to the first index that's page aligned.
-            let offset = page_align(nonzero_start);
-
-            // The length of the image must also be page aligned and may reach
-            // beyond the end of the `image` array we have already. Take the
-            // length of the nonzero portion and then align it up to the page size.
-            let len = page_align_up(nonzero_end - offset);
-
-            // Write the nonzero data to the memfd and then use `set_len` to
-            // ensure that the length of the memfd is page-aligned where the gap
-            // at the end, if any, is filled with zeros.
-            let memfd = create_memfd()?;
-            memfd
-                .as_file()
-                .write_all(&image[offset as usize..nonzero_end as usize])?;
-            memfd.as_file().set_len(len)?;
-
-            // Seal the memfd's data and length.
-            //
-            // This is a defense-in-depth security mitigation. The
-            // memfd will serve as the starting point for the heap of
-            // every instance of this module. If anything were to
-            // write to this, it could affect every execution. The
-            // memfd object itself is owned by the machinery here and
-            // not exposed elsewhere, but it is still an ambient open
-            // file descriptor at the syscall level, so some other
-            // vulnerability that allowed writes to arbitrary fds
-            // could modify it. Or we could have some issue with the
-            // way that we map it into each instance. To be
-            // extra-super-sure that it never changes, and because
-            // this costs very little, we use the kernel's "seal" API
-            // to make the memfd image permanently read-only.
-            memfd.add_seal(memfd::FileSeal::SealGrow)?;
-            memfd.add_seal(memfd::FileSeal::SealShrink)?;
-            memfd.add_seal(memfd::FileSeal::SealWrite)?;
-            memfd.add_seal(memfd::FileSeal::SealSeal)?;
-
-            assert_eq!(offset % page_size, 0);
-            assert_eq!(len % page_size, 0);
-
-            let idx = memories.push(Some(Arc::new(MemoryMemFd {
-                fd: memfd,
-                offset: usize::try_from(offset).unwrap(),
-                len: usize::try_from(len).unwrap(),
-            })));
+            let idx = memories.push(Some(Arc::new(memfd)));
             assert_eq!(idx, defined_memory);
         }
 
@@ -398,19 +438,21 @@ impl MemFdSlot {
         // The initial memory image, if given. If not, we just get a
         // memory filled with zeroes.
         if let Some(image) = maybe_image.as_ref() {
-            assert!(image.offset.checked_add(image.len).unwrap() <= initial_size_bytes);
+            assert!(
+                image.linear_memory_offset.checked_add(image.len).unwrap() <= initial_size_bytes
+            );
             if image.len > 0 {
                 unsafe {
                     let ptr = rustix::io::mmap(
-                        (self.base + image.offset) as *mut c_void,
+                        (self.base + image.linear_memory_offset) as *mut c_void,
                         image.len,
                         rustix::io::ProtFlags::READ | rustix::io::ProtFlags::WRITE,
                         rustix::io::MapFlags::PRIVATE | rustix::io::MapFlags::FIXED,
                         image.fd.as_file(),
-                        0,
+                        image.fd_offset,
                     )
                     .map_err(|e| InstantiationError::Resource(e.into()))?;
-                    assert_eq!(ptr as usize, self.base + image.offset);
+                    assert_eq!(ptr as usize, self.base + image.linear_memory_offset);
                 }
             }
         }
@@ -424,15 +466,33 @@ impl MemFdSlot {
     #[allow(dead_code)] // ignore warnings as this is only used in some cfgs
     pub(crate) fn clear_and_remain_ready(&mut self) -> Result<()> {
         assert!(self.dirty);
-        // madvise the image range. This will throw away dirty pages,
-        // which are CoW-private pages on top of the initial heap
-        // image memfd.
-        unsafe {
-            rustix::io::madvise(
-                self.base as *mut c_void,
-                self.cur_size,
-                rustix::io::Advice::LinuxDontNeed,
-            )?;
+
+        cfg_if::cfg_if! {
+            if #[cfg(target_os = "linux")] {
+                // On Linux we can use `madvise` to reset the virtual memory
+                // back to its original state. This means back to all zeros for
+                // anonymous-backed pages and back to the original contents for
+                // CoW memory (the initial heap image). This has the precise
+                // semantics we want for reuse between instances, so it's all we
+                // need to do.
+                unsafe {
+                    rustix::io::madvise(
+                        self.base as *mut c_void,
+                        self.cur_size,
+                        rustix::io::Advice::LinuxDontNeed,
+                    )?;
+                }
+            } else {
+                // If we're not on Linux, however, then there's no generic
+                // platform way to reset memory back to its original state, so
+                // instead this is "feigned" by resetting memory back to
+                // entirely zeros with an anonymous backing.
+                //
+                // Additionally the previous image, if any, is dropped here
+                // since it's no longer applicable to this mapping.
+                self.reset_with_anon_memory()?;
+                self.image = None;
+            }
         }
 
         // mprotect the initial heap region beyond the initial heap size back to PROT_NONE.
@@ -521,13 +581,11 @@ impl Drop for MemFdSlot {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, target_os = "linux"))]
 mod test {
     use std::sync::Arc;
 
-    use super::create_memfd;
-    use super::MemFdSlot;
-    use super::MemoryMemFd;
+    use super::{create_memfd, MemFdSlot, MemFdSource, MemoryMemFd};
     use crate::mmap::Mmap;
     use anyhow::Result;
     use std::io::Write;
@@ -544,9 +602,10 @@ mod test {
         memfd.as_file().set_len(image_len as u64)?;
 
         Ok(MemoryMemFd {
-            fd: memfd,
+            fd: MemFdSource::Memfd(memfd),
             len: image_len,
-            offset,
+            fd_offset: 0,
+            linear_memory_offset: offset,
         })
     }
 

@@ -5,9 +5,9 @@
 
 use crate::code_memory::CodeMemory;
 use crate::debug::create_gdbjit_image;
-use crate::{MmapVec, ProfilingAgent};
-use anyhow::{anyhow, bail, Context, Result};
-use object::write::{Object, StandardSegment};
+use crate::ProfilingAgent;
+use anyhow::{anyhow, bail, Context, Error, Result};
+use object::write::{Object, StandardSegment, WritableBuffer};
 use object::{File, Object as _, ObjectSection, SectionKind};
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
@@ -23,7 +23,7 @@ use wasmtime_environ::{
 };
 use wasmtime_runtime::{
     CompiledModuleId, CompiledModuleIdAllocator, GdbJitImageRegistration, InstantiationError,
-    VMFunctionBody, VMTrampoline,
+    MmapVec, VMFunctionBody, VMTrampoline,
 };
 
 /// This is the name of the section in the final ELF image which contains
@@ -167,6 +167,7 @@ pub fn finish_compile(
         debuginfo,
         has_unparsed_debuginfo,
         data,
+        data_align,
         passive_data,
         ..
     } = translation;
@@ -179,8 +180,13 @@ pub fn finish_compile(
         SectionKind::ReadOnlyData,
     );
     let mut total_data_len = 0;
-    for data in data.iter() {
-        obj.append_section_data(data_id, data, 1);
+    for data in data {
+        let offset = obj.append_section_data(data_id, &data, data_align.unwrap_or(1));
+        // All data segments are expected to be adjacent to one another, and
+        // with a higher alignment each data segment needs to be individually
+        // aligned to make this so, so assert that the offset this was placed at
+        // is always against the previous segment.
+        assert_eq!(offset as usize, total_data_len);
         total_data_len += data.len();
     }
     for data in passive_data.iter() {
@@ -266,7 +272,7 @@ pub fn finish_compile(
     bincode::serialize_into(&mut bytes, &info)?;
     obj.append_section_data(info_id, &bytes, 1);
 
-    return Ok((MmapVec::from_obj(obj)?, info));
+    return Ok((mmap_vec_from_obj(obj)?, info));
 
     fn push_debug<'a, T>(obj: &mut Object, section: &T)
     where
@@ -282,6 +288,74 @@ pub fn finish_compile(
             SectionKind::Debug,
         );
         obj.append_section_data(section_id, data, 1);
+    }
+}
+
+/// Creates a new `MmapVec` from serializing the specified `obj`.
+///
+/// The returned `MmapVec` will contain the serialized version of `obj` and
+/// is sized appropriately to the exact size of the object serialized.
+pub fn mmap_vec_from_obj(obj: Object) -> Result<MmapVec> {
+    let mut result = ObjectMmap::default();
+    return match obj.emit(&mut result) {
+        Ok(()) => {
+            assert!(result.mmap.is_some(), "no reserve");
+            let mmap = result.mmap.expect("reserve not called");
+            assert_eq!(mmap.len(), result.len);
+            Ok(mmap)
+        }
+        Err(e) => match result.err.take() {
+            Some(original) => Err(original.context(e)),
+            None => Err(e.into()),
+        },
+    };
+
+    /// Helper struct to implement the `WritableBuffer` trait from the `object`
+    /// crate.
+    ///
+    /// This enables writing an object directly into an mmap'd memory so it's
+    /// immediately usable for execution after compilation. This implementation
+    /// relies on a call to `reserve` happening once up front with all the needed
+    /// data, and the mmap internally does not attempt to grow afterwards.
+    #[derive(Default)]
+    struct ObjectMmap {
+        mmap: Option<MmapVec>,
+        len: usize,
+        err: Option<Error>,
+    }
+
+    impl WritableBuffer for ObjectMmap {
+        fn len(&self) -> usize {
+            self.len
+        }
+
+        fn reserve(&mut self, additional: usize) -> Result<(), ()> {
+            assert!(self.mmap.is_none(), "cannot reserve twice");
+            self.mmap = match MmapVec::with_capacity(additional) {
+                Ok(mmap) => Some(mmap),
+                Err(e) => {
+                    self.err = Some(e);
+                    return Err(());
+                }
+            };
+            Ok(())
+        }
+
+        fn resize(&mut self, new_len: usize) {
+            // Resizing always appends 0 bytes and since new mmaps start out as 0
+            // bytes we don't actually need to do anything as part of this other
+            // than update our own length.
+            if new_len <= self.len {
+                return;
+            }
+            self.len = new_len;
+        }
+
+        fn write_bytes(&mut self, val: &[u8]) {
+            let mmap = self.mmap.as_mut().expect("write before reserve");
+            mmap[self.len..][..val.len()].copy_from_slice(val);
+            self.len += val.len();
+        }
     }
 }
 

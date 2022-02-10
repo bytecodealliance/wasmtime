@@ -268,9 +268,9 @@ unsafe fn initialize_wasm_page(
         let memory_index = instance.module().memory_index(memory_index);
         let pages = &map[memory_index];
 
-        let pos = pages.binary_search_by_key(&(page_index as u64), |k| k.0);
+        let pos = pages.binary_search_by_key(&((page_index * WASM_PAGE_SIZE) as u64), |k| k.offset);
         if let Ok(i) = pos {
-            let data = instance.wasm_data(pages[i].1.clone());
+            let data = instance.wasm_data(pages[i].data.clone());
             debug_assert_eq!(data.len(), WASM_PAGE_SIZE);
 
             log::trace!(

@@ -7,7 +7,7 @@ use std::any::Any;
 use std::panic::{self, AssertUnwindSafe};
 use std::sync::Arc;
 use wasmtime_environ::{EntityIndex, FunctionInfo, Module, ModuleType, SignatureIndex};
-use wasmtime_jit::{CodeMemory, MmapVec, ProfilingAgent};
+use wasmtime_jit::{CodeMemory, ProfilingAgent};
 use wasmtime_runtime::{
     Imports, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
     OnDemandInstanceAllocator, StorePtr, VMContext, VMFunctionBody, VMSharedSignatureIndex,
@@ -115,7 +115,7 @@ where
         stub_fn::<F> as usize,
         &mut obj,
     )?;
-    let obj = MmapVec::from_obj(obj)?;
+    let obj = wasmtime_jit::mmap_vec_from_obj(obj)?;
 
     // Copy the results of JIT compilation into executable memory, and this will
     // also take care of unwind table registration.
