@@ -323,7 +323,10 @@ impl MemFdSlot {
 
     pub(crate) fn set_heap_limit(&mut self, size_bytes: usize) -> Result<()> {
         // mprotect the relevant region.
-        self.set_protection(self.cur_size..size_bytes, region::Protection::READ_WRITE)?;
+        self.set_protection(
+            self.cur_size..size_bytes,
+            rustix::io::MprotectFlags::READ | rustix::io::MprotectFlags::WRITE,
+        )?;
         self.cur_size = size_bytes;
 
         Ok(())
@@ -380,8 +383,11 @@ impl MemFdSlot {
             // heap is made visible with an mprotect.
             self.reset_with_anon_memory()
                 .map_err(|e| InstantiationError::Resource(e.into()))?;
-            self.set_protection(0..initial_size_bytes, region::Protection::READ_WRITE)
-                .map_err(|e| InstantiationError::Resource(e.into()))?;
+            self.set_protection(
+                0..initial_size_bytes,
+                rustix::io::MprotectFlags::READ | rustix::io::MprotectFlags::WRITE,
+            )
+            .map_err(|e| InstantiationError::Resource(e.into()))?;
         } else if initial_size_bytes < self.initial_size {
             // In this case the previous module had now CoW image which means
             // that the memory at `0..self.initial_size` is all zeros and
@@ -402,7 +408,7 @@ impl MemFdSlot {
             // mprotect(NONE) the zone from the first to the second.
             self.set_protection(
                 initial_size_bytes..self.initial_size,
-                region::Protection::NONE,
+                rustix::io::MprotectFlags::empty(),
             )
             .map_err(|e| InstantiationError::Resource(e.into()))?;
         } else if initial_size_bytes > self.initial_size {
@@ -413,7 +419,7 @@ impl MemFdSlot {
             // made visible as zeros.
             self.set_protection(
                 self.initial_size..initial_size_bytes,
-                region::Protection::READ_WRITE,
+                rustix::io::MprotectFlags::READ | rustix::io::MprotectFlags::WRITE,
             )
             .map_err(|e| InstantiationError::Resource(e.into()))?;
         } else {
@@ -490,19 +496,22 @@ impl MemFdSlot {
         }
 
         // mprotect the initial heap region beyond the initial heap size back to PROT_NONE.
-        self.set_protection(self.initial_size..self.cur_size, region::Protection::NONE)?;
+        self.set_protection(
+            self.initial_size..self.cur_size,
+            rustix::io::MprotectFlags::empty(),
+        )?;
         self.cur_size = self.initial_size;
         self.dirty = false;
         Ok(())
     }
 
-    fn set_protection(&self, range: Range<usize>, flags: region::Protection) -> Result<()> {
+    fn set_protection(&self, range: Range<usize>, flags: rustix::io::MprotectFlags) -> Result<()> {
         assert!(range.start <= range.end);
         assert!(range.end <= self.static_size);
         let mprotect_start = self.base.checked_add(range.start).unwrap();
         if range.len() > 0 {
             unsafe {
-                region::protect(mprotect_start as *mut _, range.len(), flags)?;
+                rustix::io::mprotect(mprotect_start as *mut _, range.len(), flags)?;
             }
         }
 
