@@ -196,7 +196,9 @@ pub fn finish_compile(
             ELF_NAME_DATA.as_bytes().to_vec(),
             SectionKind::ReadOnlyData,
         );
-        for (idx, name) in debuginfo.name_section.func_names.iter() {
+        let mut sorted_names = debuginfo.name_section.func_names.iter().collect::<Vec<_>>();
+        sorted_names.sort_by_key(|(idx, _name)| *idx);
+        for (idx, name) in sorted_names {
             let offset = obj.append_section_data(name_id, name.as_bytes(), 1);
             let offset = match u32::try_from(offset) {
                 Ok(offset) => offset,
@@ -209,7 +211,6 @@ pub fn finish_compile(
                 len,
             });
         }
-        func_names.sort_by_key(|n| n.idx);
     }
 
     // Update passive data offsets since they're all located after the other
