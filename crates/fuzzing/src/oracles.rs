@@ -14,6 +14,7 @@ pub mod dummy;
 
 use crate::generators;
 use anyhow::Context;
+use arbitrary::Arbitrary;
 use log::{debug, warn};
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use std::sync::{Arc, Condvar, Mutex};
@@ -142,14 +143,107 @@ pub fn instantiate(wasm: &[u8], known_valid: bool, config: &generators::Config, 
         Timeout::None => {}
     }
 
-    log_wasm(wasm);
-    let module = match config.compile(store.engine(), wasm) {
-        Ok(module) => module,
-        Err(_) if !known_valid => return,
-        Err(e) => panic!("failed to compile module: {:?}", e),
-    };
+    if let Some(module) = compile_module(store.engine(), wasm, known_valid, config) {
+        instantiate_with_dummy(&mut store, &module);
+    }
+}
 
-    instantiate_with_dummy(&mut store, &module);
+/// Represents supported commands to the `instantiate_many` function.
+#[derive(Arbitrary, Debug)]
+pub enum Command {
+    /// Instantiates a module.
+    ///
+    /// The value is the index of the module to instantiate.
+    ///
+    /// The module instantiated will be this value modulo the number of modules provided to `instantiate_many`.
+    Instantiate(usize),
+    /// Terminates a "running" instance.
+    ///
+    /// The value is the index of the instance to terminate.
+    ///
+    /// The instance terminated will be this value modulo the number of currently running
+    /// instances.
+    ///
+    /// If no instances are running, the command will be ignored.
+    Terminate(usize),
+}
+
+/// Instantiates many instances from the given modules.
+///
+/// The engine will be configured using the provided config.
+///
+/// The modules are expected to *not* have start functions as no timeouts are configured.
+pub fn instantiate_many(
+    modules: &[Vec<u8>],
+    known_valid: bool,
+    config: &generators::Config,
+    commands: &[Command],
+) {
+    assert!(!config.module_config.config.allow_start_export);
+
+    let engine = Engine::new(&config.to_wasmtime()).unwrap();
+
+    let modules = modules
+        .iter()
+        .filter_map(|bytes| compile_module(&engine, bytes, known_valid, config))
+        .collect::<Vec<_>>();
+
+    // If no modules were valid, we're done
+    if modules.is_empty() {
+        return;
+    }
+
+    // This stores every `Store` where a successful instantiation takes place
+    let mut stores = Vec::new();
+
+    for command in commands {
+        match command {
+            Command::Instantiate(index) => {
+                let module = &modules[*index % modules.len()];
+                let mut store = Store::new(&engine, StoreLimits::new());
+                config.configure_store(&mut store);
+
+                if instantiate_with_dummy(&mut store, module).is_some() {
+                    stores.push(Some(store));
+                }
+            }
+            Command::Terminate(index) => {
+                if stores.is_empty() {
+                    continue;
+                }
+
+                stores.swap_remove(*index % stores.len());
+            }
+        }
+    }
+}
+
+fn compile_module(
+    engine: &Engine,
+    bytes: &[u8],
+    known_valid: bool,
+    config: &generators::Config,
+) -> Option<Module> {
+    log_wasm(bytes);
+    match config.compile(engine, bytes) {
+        Ok(module) => Some(module),
+        Err(_) if !known_valid => None,
+        Err(e) => {
+            if let generators::InstanceAllocationStrategy::Pooling { .. } =
+                &config.wasmtime.strategy
+            {
+                // When using the pooling allocator, accept failures to compile when arbitrary
+                // table element limits have been exceeded as there is currently no way
+                // to constrain the generated module table types.
+                let string = e.to_string();
+                if string.contains("minimum element size") {
+                    return None;
+                }
+            }
+
+            panic!("failed to compile module: {:?}", e);
+        }
+    }
 }
 
 fn instantiate_with_dummy(store: &mut Store<StoreLimits>, module: &Module) -> Option<Instance> {
@@ -188,8 +282,13 @@ fn instantiate_with_dummy(store: &mut Store<StoreLimits>, module: &Module) -> Op
         return None;
     }
 
+    // Also allow failures to instantiate as a result of hitting instance limits
+    if string.contains("concurrent instances has been reached") {
+        return None;
+    }
+
     // Everything else should be a bug in the fuzzer or a bug in wasmtime
-    panic!("failed to instantiate {:?}", e);
+    panic!("failed to instantiate: {:?}", e);
 }
 
 /// Instantiate the given Wasm module with each `Config` and call all of its

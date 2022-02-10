@@ -36,18 +36,204 @@ impl OptLevel {
     }
 }
 
+/// Configuration for `wasmtime::PoolingAllocationStrategy`.
+#[derive(Arbitrary, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum PoolingAllocationStrategy {
+    /// Use next available instance slot.
+    NextAvailable,
+    /// Use random instance slot.
+    Random,
+    /// Use an affinity-based strategy.
+    ReuseAffinity,
+}
+
+impl PoolingAllocationStrategy {
+    fn to_wasmtime(&self) -> wasmtime::PoolingAllocationStrategy {
+        match self {
+            PoolingAllocationStrategy::NextAvailable => {
+                wasmtime::PoolingAllocationStrategy::NextAvailable
+            }
+            PoolingAllocationStrategy::Random => wasmtime::PoolingAllocationStrategy::Random,
+            PoolingAllocationStrategy::ReuseAffinity => {
+                wasmtime::PoolingAllocationStrategy::ReuseAffinity
+            }
+        }
+    }
+}
+
+/// Configuration for `wasmtime::ModuleLimits`.
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub struct ModuleLimits {
+    imported_functions: u32,
+    imported_tables: u32,
+    imported_memories: u32,
+    imported_globals: u32,
+    types: u32,
+    functions: u32,
+    tables: u32,
+    memories: u32,
+    /// The maximum number of globals that can be defined in a module.
+    pub globals: u32,
+    table_elements: u32,
+    memory_pages: u64,
+}
+
+impl ModuleLimits {
+    fn to_wasmtime(&self) -> wasmtime::ModuleLimits {
+        wasmtime::ModuleLimits {
+            imported_functions: self.imported_functions,
+            imported_tables: self.imported_tables,
+            imported_memories: self.imported_memories,
+            imported_globals: self.imported_globals,
+            types: self.types,
+            functions: self.functions,
+            tables: self.tables,
+            memories: self.memories,
+            globals: self.globals,
+            table_elements: self.table_elements,
+            memory_pages: self.memory_pages,
+        }
+    }
+}
+
+impl<'a> Arbitrary<'a> for ModuleLimits {
+    fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
+        const MAX_IMPORTS: u32 = 1000;
+        const MAX_TYPES: u32 = 1000;
+        const MAX_FUNCTIONS: u32 = 1000;
+        const MAX_TABLES: u32 = 10;
+        const MAX_MEMORIES: u32 = 10;
+        const MAX_GLOBALS: u32 = 1000;
+        const MAX_ELEMENTS: u32 = 1000;
+        const MAX_MEMORY_PAGES: u64 = 0x10000;
+
+        Ok(Self {
+            imported_functions: u.int_in_range(0..=MAX_IMPORTS)?,
+            imported_tables: u.int_in_range(0..=MAX_IMPORTS)?,
+            imported_memories: u.int_in_range(0..=MAX_IMPORTS)?,
+            imported_globals: u.int_in_range(0..=MAX_IMPORTS)?,
+            types: u.int_in_range(0..=MAX_TYPES)?,
+            functions: u.int_in_range(0..=MAX_FUNCTIONS)?,
+            tables: u.int_in_range(0..=MAX_TABLES)?,
+            memories: u.int_in_range(0..=MAX_MEMORIES)?,
+            globals: u.int_in_range(0..=MAX_GLOBALS)?,
+            table_elements: u.int_in_range(0..=MAX_ELEMENTS)?,
+            memory_pages: u.int_in_range(0..=MAX_MEMORY_PAGES)?,
+        })
+    }
+}
+
+/// Configuration for `wasmtime::PoolingAllocationStrategy`.
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+pub struct InstanceLimits {
+    /// The maximum number of instances that can be instantiated in the pool at a time.
+    pub count: u32,
+}
+
+impl InstanceLimits {
+    fn to_wasmtime(&self) -> wasmtime::InstanceLimits {
+        wasmtime::InstanceLimits { count: self.count }
+    }
+}
+
+impl<'a> Arbitrary<'a> for InstanceLimits {
+    fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
+        const MAX_COUNT: u32 = 100;
+
+        Ok(Self {
+            count: u.int_in_range(1..=MAX_COUNT)?,
+        })
+    }
+}
+
+/// Configuration for `wasmtime::InstanceAllocationStrategy`.
+#[derive(Arbitrary, Clone, Debug, Eq, PartialEq, Hash)]
+pub enum InstanceAllocationStrategy {
+    /// Use the on-demand instance allocation strategy.
+    OnDemand,
+    /// Use the pooling instance allocation strategy.
+    Pooling {
+        /// The pooling strategy to use.
+        strategy: PoolingAllocationStrategy,
+        /// The module limits.
+        module_limits: ModuleLimits,
+        /// The instance limits.
+        instance_limits: InstanceLimits,
+    },
+}
+
+impl InstanceAllocationStrategy {
+    fn to_wasmtime(&self) -> wasmtime::InstanceAllocationStrategy {
+        match self {
+            InstanceAllocationStrategy::OnDemand => wasmtime::InstanceAllocationStrategy::OnDemand,
+            InstanceAllocationStrategy::Pooling {
+                strategy,
+                module_limits,
+                instance_limits,
+            } => wasmtime::InstanceAllocationStrategy::Pooling {
+                strategy: strategy.to_wasmtime(),
+                module_limits: module_limits.to_wasmtime(),
+                instance_limits: instance_limits.to_wasmtime(),
+            },
+        }
+    }
+}
+
 /// Configuration for `wasmtime::Config` and generated modules for a session of
 /// fuzzing.
 ///
 /// This configuration guides what modules are generated, how wasmtime
 /// configuration is generated, and is typically itself generated through a call
 /// to `Arbitrary` which allows for a form of "swarm testing".
-#[derive(Arbitrary, Debug)]
+#[derive(Debug)]
 pub struct Config {
     /// Configuration related to the `wasmtime::Config`.
     pub wasmtime: WasmtimeConfig,
     /// Configuration related to generated modules.
     pub module_config: ModuleConfig,
+}
+
+impl<'a> Arbitrary<'a> for Config {
+    fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
+        let mut config = Self {
+            wasmtime: u.arbitrary()?,
+            module_config: u.arbitrary()?,
+        };
+
+        // If using the pooling allocator, constrain the memory and module configurations
+        // to the module limits.
+        if let InstanceAllocationStrategy::Pooling {
+            module_limits: limits,
+            ..
+        } = &config.wasmtime.strategy
+        {
+            // Force the use of a normal memory config when using the pooling allocator and
+            // limit the static memory maximum to be the same as the pooling allocator's memory
+            // page limit.
+            let mut memory_config: NormalMemoryConfig = u.arbitrary()?;
+            memory_config.static_memory_maximum_size = Some(limits.memory_pages * 0x10000);
+            config.wasmtime.memory_config = MemoryConfig::Normal(memory_config);
+
+            let cfg = &mut config.module_config.config;
+            cfg.max_imports = limits.imported_functions.min(
+                limits
+                    .imported_globals
+                    .min(limits.imported_memories.min(limits.imported_tables)),
+            ) as usize;
+            cfg.max_types = limits.types as usize;
+            cfg.max_funcs = limits.functions as usize;
+            cfg.max_globals = limits.globals as usize;
+            cfg.max_memories = limits.memories as usize;
+            cfg.max_tables = limits.tables as usize;
+            cfg.max_memory_pages = limits.memory_pages;
+
+            // Force no aliases in any generated modules as they might count against the
+            // import limits above.
+            cfg.max_aliases = 0;
+        }
+
+        Ok(config)
+    }
 }
 
 /// Configuration related to `wasmtime::Config` and the various settings which
@@ -63,6 +249,8 @@ pub struct WasmtimeConfig {
     force_jump_veneers: bool,
     memfd: bool,
     use_precompiled_cwasm: bool,
+    /// Configuration for the instance allocation strategy to use.
+    pub strategy: InstanceAllocationStrategy,
 }
 
 #[derive(Arbitrary, Clone, Debug, Eq, Hash, PartialEq)]
@@ -70,20 +258,33 @@ enum MemoryConfig {
     /// Configuration for linear memories which correspond to normal
     /// configuration settings in `wasmtime` itself. This will tweak various
     /// parameters about static/dynamic memories.
-    ///
-    /// Note that we use 32-bit values here to avoid blowing the 64-bit address
-    /// space by requesting ungodly-large sizes/guards.
-    Normal {
-        static_memory_maximum_size: Option<u32>,
-        static_memory_guard_size: Option<u32>,
-        dynamic_memory_guard_size: Option<u32>,
-        guard_before_linear_memory: bool,
-    },
+    Normal(NormalMemoryConfig),
 
     /// Configuration to force use of a linear memory that's unaligned at its
     /// base address to force all wasm addresses to be unaligned at the hardware
     /// level, even if the wasm itself correctly aligns everything internally.
     CustomUnaligned,
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+struct NormalMemoryConfig {
+    static_memory_maximum_size: Option<u64>,
+    static_memory_guard_size: Option<u64>,
+    dynamic_memory_guard_size: Option<u64>,
+    guard_before_linear_memory: bool,
+}
+
+impl<'a> Arbitrary<'a> for NormalMemoryConfig {
+    fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
+        // This attempts to limit memory and guard sizes to 32-bit ranges so
+        // we don't exhaust a 64-bit address space easily.
+        Ok(Self {
+            static_memory_maximum_size: <Option<u32> as Arbitrary>::arbitrary(u)?.map(Into::into),
+            static_memory_guard_size: <Option<u32> as Arbitrary>::arbitrary(u)?.map(Into::into),
+            dynamic_memory_guard_size: <Option<u32> as Arbitrary>::arbitrary(u)?.map(Into::into),
+            guard_before_linear_memory: u.arbitrary()?,
+        })
+    }
 }
 
 impl Config {
@@ -102,7 +303,8 @@ impl Config {
             .cranelift_opt_level(self.wasmtime.opt_level.to_wasmtime())
             .interruptable(self.wasmtime.interruptable)
             .consume_fuel(self.wasmtime.consume_fuel)
-            .memfd(self.wasmtime.memfd);
+            .memfd(self.wasmtime.memfd)
+            .allocation_strategy(self.wasmtime.strategy.to_wasmtime());
 
         // If the wasm-smith-generated module use nan canonicalization then we
         // don't need to enable it, but if it doesn't enable it already then we
@@ -126,16 +328,13 @@ impl Config {
         }
 
         match &self.wasmtime.memory_config {
-            MemoryConfig::Normal {
-                static_memory_maximum_size,
-                static_memory_guard_size,
-                dynamic_memory_guard_size,
-                guard_before_linear_memory,
-            } => {
-                cfg.static_memory_maximum_size(static_memory_maximum_size.unwrap_or(0).into())
-                    .static_memory_guard_size(static_memory_guard_size.unwrap_or(0).into())
-                    .dynamic_memory_guard_size(dynamic_memory_guard_size.unwrap_or(0).into())
-                    .guard_before_linear_memory(*guard_before_linear_memory);
+            MemoryConfig::Normal(memory_config) => {
+                cfg.static_memory_maximum_size(
+                    memory_config.static_memory_maximum_size.unwrap_or(0),
+                )
+                .static_memory_guard_size(memory_config.static_memory_guard_size.unwrap_or(0))
+                .dynamic_memory_guard_size(memory_config.dynamic_memory_guard_size.unwrap_or(0))
+                .guard_before_linear_memory(memory_config.guard_before_linear_memory);
             }
             MemoryConfig::CustomUnaligned => {
                 cfg.with_host_memory(Arc::new(UnalignedMemoryCreator))
@@ -145,6 +344,7 @@ impl Config {
                     .guard_before_linear_memory(false);
             }
         }
+
         return cfg;
     }
 
@@ -153,11 +353,16 @@ impl Config {
     pub fn to_store(&self) -> Store<StoreLimits> {
         let engine = Engine::new(&self.to_wasmtime()).unwrap();
         let mut store = Store::new(&engine, StoreLimits::new());
+        self.configure_store(&mut store);
+        store
+    }
+
+    /// Configures a store based on this configuration.
+    pub fn configure_store(&self, store: &mut Store<StoreLimits>) {
         store.limiter(|s| s as &mut dyn wasmtime::ResourceLimiter);
         if self.wasmtime.consume_fuel {
             store.add_fuel(u64::max_value()).unwrap();
         }
-        return store;
     }
 
     /// Generates an arbitrary method of timing out an instance, ensuring that
