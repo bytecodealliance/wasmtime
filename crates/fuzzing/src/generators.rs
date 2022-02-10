@@ -17,7 +17,7 @@ use arbitrary::{Arbitrary, Unstructured};
 use std::sync::Arc;
 use std::time::Duration;
 use wasm_smith::SwarmConfig;
-use wasmtime::{Engine, LinearMemory, MemoryCreator, MemoryType, Store};
+use wasmtime::{Engine, LinearMemory, MemoryCreator, MemoryType, Module, Store};
 
 #[derive(Arbitrary, Clone, Debug, PartialEq, Eq, Hash)]
 enum OptLevel {
@@ -62,6 +62,7 @@ pub struct WasmtimeConfig {
     memory_config: MemoryConfig,
     force_jump_veneers: bool,
     memfd: bool,
+    use_precompiled_cwasm: bool,
 }
 
 #[derive(Arbitrary, Clone, Debug, Eq, Hash, PartialEq)]
@@ -169,6 +170,26 @@ impl Config {
             self.wasmtime.consume_fuel = true;
             Ok(Timeout::Fuel(100_000))
         }
+    }
+
+    /// Compiles the `wasm` within the `engine` provided.
+    ///
+    /// This notably will use `Module::{serialize,deserialize_file}` to
+    /// round-trip if configured in the fuzzer.
+    pub fn compile(&self, engine: &Engine, wasm: &[u8]) -> Result<Module> {
+        // Propagate this error in case the caller wants to handle
+        // valid-vs-invalid wasm.
+        let module = Module::new(engine, wasm)?;
+        if !self.wasmtime.use_precompiled_cwasm {
+            return Ok(module);
+        }
+
+        // Don't propagate these errors to prevent them from accidentally being
+        // interpreted as invalid wasm, these should never fail on a
+        // well-behaved host system.
+        let file = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(file.path(), module.serialize().unwrap()).unwrap();
+        unsafe { Ok(Module::deserialize_file(engine, file.path()).unwrap()) }
     }
 }
 
