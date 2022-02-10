@@ -61,7 +61,7 @@ const ELF_WASMTIME_INFO: &'static str = ".wasmtime.info";
 ///
 /// Note that the goal of this section is to avoid having to decode names at
 /// module-load time if we can. Names are typically only used for debugging or
-/// things like backtraces so there's no need to eagerly load all of the. By
+/// things like backtraces so there's no need to eagerly load all of them. By
 /// storing the data in a separate section the hope is that the data, which is
 /// sometimes quite large (3MB seen for spidermonkey-compiled-to-wasm), can be
 /// paged in lazily from an mmap and is never paged in if we never reference it.
