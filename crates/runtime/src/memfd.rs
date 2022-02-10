@@ -576,9 +576,7 @@ impl Drop for MemFdSlot {
 mod test {
     use std::sync::Arc;
 
-    use super::create_memfd;
-    use super::MemFdSlot;
-    use super::MemoryMemFd;
+    use super::{create_memfd, MemFdSlot, MemFdSource, MemoryMemFd};
     use crate::mmap::Mmap;
     use anyhow::Result;
     use std::io::Write;
@@ -595,9 +593,10 @@ mod test {
         memfd.as_file().set_len(image_len as u64)?;
 
         Ok(MemoryMemFd {
-            fd: memfd,
+            fd: MemFdSource::Memfd(memfd),
             len: image_len,
-            offset,
+            fd_offset: 0,
+            linear_memory_offset: offset,
         })
     }
 
