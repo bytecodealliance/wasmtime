@@ -15,10 +15,10 @@ include = ["src/**/*", "README.md", "LICENSE" ]
 wasi-common = { path = "../", version = "=0.34.0" }
 async-trait = "0.1"
 anyhow = "1.0"
-cap-std = "0.24.0"
-cap-fs-ext = "0.24.0"
-cap-time-ext = "0.24.0"
-cap-rand = "0.24.0"
+cap-std = "0.24.1"
+cap-fs-ext = "0.24.1"
+cap-time-ext = "0.24.1"
+cap-rand = "0.24.1"
 fs-set-times = "0.15.0"
 system-interface = { version = "0.20.0", features = ["cap_std_impls"] }
 tracing = "0.1.19"
