@@ -229,6 +229,10 @@ impl<'a> Arbitrary<'a> for Config {
             cfg.max_memories = limits.memories as usize;
             cfg.max_tables = limits.tables as usize;
             cfg.max_memory_pages = limits.memory_pages;
+
+            // Force no aliases in any generated modules as they might count against the
+            // import limits above.
+            cfg.max_aliases = 0;
         }
 
         // Constrain memory limits to 32-bit values
