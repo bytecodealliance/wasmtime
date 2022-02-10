@@ -506,14 +506,26 @@ impl Module {
     /// Same as [`deserialize`], except that the contents of `path` are read to
     /// deserialize into a [`Module`].
     ///
-    /// For more information see the documentation of the [`deserialize`]
-    /// method for why this function is `unsafe`.
-    ///
     /// This method is provided because it can be faster than [`deserialize`]
     /// since the data doesn't need to be copied around, but rather the module
     /// can be used directly from an mmap'd view of the file provided.
     ///
     /// [`deserialize`]: Module::deserialize
+    ///
+    /// # Unsafety
+    ///
+    /// All of the reasons that [`deserialize`] is `unsafe` applies to this
+    /// function as well. Arbitrary data loaded from a file may trick Wasmtime
+    /// into arbitrary code execution since the contents of the file are not
+    /// validated to be a valid precompiled module.
+    ///
+    /// Additionally though this function is also `unsafe` because the file
+    /// referenced must remain unchanged and a valid precompiled module for the
+    /// entire lifetime of the [`Module`] returned. Any changes to the file on
+    /// disk may change future instantiations of the module to be incorrect.
+    /// This is because the file is mapped into memory and lazily loaded pages
+    /// reflect the current state of the file, not necessarily the origianl
+    /// state of the file.
     pub unsafe fn deserialize_file(engine: &Engine, path: impl AsRef<Path>) -> Result<Module> {
         let module = SerializedModule::from_file(path.as_ref(), &engine.config().module_version)?;
         module.into_module(engine)
