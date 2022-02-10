@@ -210,12 +210,9 @@ impl<'a> Arbitrary<'a> for Config {
             // Force the use of a normal memory config when using the pooling allocator and
             // limit the static memory maximum to be the same as the pooling allocator's memory
             // page limit.
-            config.wasmtime.memory_config = MemoryConfig::Normal {
-                static_memory_maximum_size: Some(limits.memory_pages * 0x10000),
-                static_memory_guard_size: u.arbitrary()?,
-                dynamic_memory_guard_size: u.arbitrary()?,
-                guard_before_linear_memory: u.arbitrary()?,
-            };
+            let mut memory_config: NormalMemoryConfig = u.arbitrary()?;
+            memory_config.static_memory_maximum_size = Some(limits.memory_pages * 0x10000);
+            config.wasmtime.memory_config = MemoryConfig::Normal(memory_config);
 
             let cfg = &mut config.module_config.config;
             cfg.max_imports = limits.imported_functions.min(
@@ -233,21 +230,6 @@ impl<'a> Arbitrary<'a> for Config {
             // Force no aliases in any generated modules as they might count against the
             // import limits above.
             cfg.max_aliases = 0;
-        }
-
-        // Constrain memory limits to 32-bit values
-        // This is done to avoid blowing the 64-bit address space by requesting
-        // ungodly-large sizes/guards.
-        if let MemoryConfig::Normal {
-            static_memory_maximum_size,
-            static_memory_guard_size,
-            dynamic_memory_guard_size,
-            guard_before_linear_memory: _,
-        } = &mut config.wasmtime.memory_config
-        {
-            *static_memory_maximum_size = (*static_memory_maximum_size).map(|s| s.min(0x100000000));
-            *static_memory_guard_size = (*static_memory_guard_size).map(|s| s.min(0x100000000));
-            *dynamic_memory_guard_size = (*dynamic_memory_guard_size).map(|s| s.min(0x100000000));
         }
 
         Ok(config)
@@ -276,17 +258,33 @@ enum MemoryConfig {
     /// Configuration for linear memories which correspond to normal
     /// configuration settings in `wasmtime` itself. This will tweak various
     /// parameters about static/dynamic memories.
-    Normal {
-        static_memory_maximum_size: Option<u64>,
-        static_memory_guard_size: Option<u64>,
-        dynamic_memory_guard_size: Option<u64>,
-        guard_before_linear_memory: bool,
-    },
+    Normal(NormalMemoryConfig),
 
     /// Configuration to force use of a linear memory that's unaligned at its
     /// base address to force all wasm addresses to be unaligned at the hardware
     /// level, even if the wasm itself correctly aligns everything internally.
     CustomUnaligned,
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+struct NormalMemoryConfig {
+    static_memory_maximum_size: Option<u64>,
+    static_memory_guard_size: Option<u64>,
+    dynamic_memory_guard_size: Option<u64>,
+    guard_before_linear_memory: bool,
+}
+
+impl<'a> Arbitrary<'a> for NormalMemoryConfig {
+    fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
+        // This attempts to limit memory and guard sizes to 32-bit ranges so
+        // we don't exhaust a 64-bit address space easily.
+        Ok(Self {
+            static_memory_maximum_size: <Option<u32> as Arbitrary>::arbitrary(u)?.map(Into::into),
+            static_memory_guard_size: <Option<u32> as Arbitrary>::arbitrary(u)?.map(Into::into),
+            dynamic_memory_guard_size: <Option<u32> as Arbitrary>::arbitrary(u)?.map(Into::into),
+            guard_before_linear_memory: u.arbitrary()?,
+        })
+    }
 }
 
 impl Config {
@@ -330,16 +328,13 @@ impl Config {
         }
 
         match &self.wasmtime.memory_config {
-            MemoryConfig::Normal {
-                static_memory_maximum_size,
-                static_memory_guard_size,
-                dynamic_memory_guard_size,
-                guard_before_linear_memory,
-            } => {
-                cfg.static_memory_maximum_size(static_memory_maximum_size.unwrap_or(0))
-                    .static_memory_guard_size(static_memory_guard_size.unwrap_or(0))
-                    .dynamic_memory_guard_size(dynamic_memory_guard_size.unwrap_or(0))
-                    .guard_before_linear_memory(*guard_before_linear_memory);
+            MemoryConfig::Normal(memory_config) => {
+                cfg.static_memory_maximum_size(
+                    memory_config.static_memory_maximum_size.unwrap_or(0),
+                )
+                .static_memory_guard_size(memory_config.static_memory_guard_size.unwrap_or(0))
+                .dynamic_memory_guard_size(memory_config.dynamic_memory_guard_size.unwrap_or(0))
+                .guard_before_linear_memory(memory_config.guard_before_linear_memory);
             }
             MemoryConfig::CustomUnaligned => {
                 cfg.with_host_memory(Arc::new(UnalignedMemoryCreator))
