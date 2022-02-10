@@ -1,7 +1,6 @@
 //! memfd support: creation of backing images for modules, and logic
 //! to support mapping these backing images into memory.
 
-use crate::mmap_vec::MmapVecFileBacking;
 use crate::InstantiationError;
 use crate::MmapVec;
 use anyhow::Result;
@@ -61,7 +60,7 @@ pub struct MemoryMemFd {
 
 #[derive(Debug)]
 enum MemFdSource {
-    Mmap(MmapVecFileBacking),
+    Mmap(Arc<File>),
     #[cfg(target_os = "linux")]
     Memfd(memfd::Memfd),
 }
@@ -69,7 +68,7 @@ enum MemFdSource {
 impl MemFdSource {
     fn as_file(&self) -> &File {
         match self {
-            MemFdSource::Mmap(mmap) => mmap.original_file(),
+            MemFdSource::Mmap(file) => file,
             #[cfg(target_os = "linux")]
             MemFdSource::Memfd(memfd) => memfd.as_file(),
         }
@@ -116,7 +115,7 @@ impl MemoryMemFd {
 
             if let Some(file) = mmap.original_file() {
                 return Ok(Some(MemoryMemFd {
-                    fd: MemFdSource::Mmap(file),
+                    fd: MemFdSource::Mmap(file.clone()),
                     fd_offset: u64::try_from(mmap.original_offset() + (data_start - start))
                         .unwrap(),
                     linear_memory_offset,

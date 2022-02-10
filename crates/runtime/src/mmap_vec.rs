@@ -119,9 +119,8 @@ impl MmapVec {
     }
 
     /// Returns the underlying file that this mmap is mapping, if present.
-    pub fn original_file(&self) -> Option<MmapVecFileBacking> {
-        self.mmap.original_file()?;
-        Some(MmapVecFileBacking(self.mmap.clone()))
+    pub fn original_file(&self) -> Option<&Arc<File>> {
+        self.mmap.original_file()
     }
 
     /// Returns the offset within the original mmap that this `MmapVec` is
@@ -153,26 +152,6 @@ impl DerefMut for MmapVec {
             let slice = std::slice::from_raw_parts_mut(self.mmap.as_mut_ptr(), self.mmap.len());
             &mut slice[self.range.clone()]
         }
-    }
-}
-
-/// Owned representation of the backing file for a `MmapVec`
-//
-// As a safety implementation-note this type cannot give access to the
-// underlying `Mmap` itself since that would violate the `DerefMut for MmapVec`
-// implementation. Instead all this gives access to is the file itself which
-// should be safe for working with in syscalls and such.
-#[derive(Debug)]
-pub struct MmapVecFileBacking(Arc<Mmap>);
-
-impl MmapVecFileBacking {
-    /// Returns a reference to the original file used to make the backing of
-    /// this mmap.
-    pub fn original_file(&self) -> &File {
-        // Note that this unwrap is guaranteed to succeed given
-        // `MmapVec::original_file` only creates an instance of this type if the
-        // return value here is `Some`.
-        self.0.original_file().unwrap()
     }
 }
 
