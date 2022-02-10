@@ -63,7 +63,7 @@ pub struct MemoryMemFd {
 enum MemFdSource {
     Mmap(MmapVecFileBacking),
     #[cfg(target_os = "linux")]
-    Memfd(Memfd),
+    Memfd(memfd::Memfd),
 }
 
 impl MemFdSource {
@@ -178,11 +178,11 @@ impl MemoryMemFd {
 }
 
 #[cfg(target_os = "linux")]
-fn create_memfd() -> Result<Memfd> {
+fn create_memfd() -> Result<memfd::Memfd> {
     // Create the memfd. It needs a name, but the
     // documentation for `memfd_create()` says that names can
     // be duplicated with no issues.
-    MemfdOptions::new()
+    memfd::MemfdOptions::new()
         .allow_sealing(true)
         .create("wasm-memory-image")
         .map_err(|e| e.into())
