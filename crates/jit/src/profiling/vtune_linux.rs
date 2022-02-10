@@ -131,7 +131,7 @@ impl State {
 
         for (idx, func) in module.finished_functions() {
             let (addr, len) = unsafe { ((*func).as_ptr().cast::<u8>(), (*func).len()) };
-            let method_name = super::debug_name(module.module(), idx);
+            let method_name = super::debug_name(module, idx);
             let method_id = self.get_method_id();
             log::trace!(
                 "new function ({}) {:?}::{:?} @ {:?}\n",

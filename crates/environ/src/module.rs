@@ -664,9 +664,6 @@ pub struct Module {
     /// The map from passive data index (data segment index space) to index in `passive_data`.
     pub passive_data_map: BTreeMap<DataIndex, Range<u32>>,
 
-    /// WebAssembly function names.
-    pub func_names: BTreeMap<FuncIndex, String>,
-
     /// Types declared in the wasm module.
     pub types: PrimaryMap<TypeIndex, ModuleType>,
 

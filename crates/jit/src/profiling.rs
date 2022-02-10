@@ -1,5 +1,5 @@
 use crate::{demangling::demangle_function_name_or_index, CompiledModule};
-use wasmtime_environ::{DefinedFuncIndex, EntityRef, Module};
+use wasmtime_environ::{DefinedFuncIndex, EntityRef};
 
 cfg_if::cfg_if! {
     if #[cfg(all(feature = "jitdump", target_os = "linux"))] {
@@ -52,14 +52,10 @@ impl ProfilingAgent for NullProfilerAgent {
 }
 
 #[allow(dead_code)]
-fn debug_name(module: &Module, index: DefinedFuncIndex) -> String {
-    let index = module.func_index(index);
+fn debug_name(module: &CompiledModule, index: DefinedFuncIndex) -> String {
+    let index = module.module().func_index(index);
     let mut debug_name = String::new();
-    demangle_function_name_or_index(
-        &mut debug_name,
-        module.func_names.get(&index).map(|s| s.as_str()),
-        index.index(),
-    )
-    .unwrap();
+    demangle_function_name_or_index(&mut debug_name, module.func_name(index), index.index())
+        .unwrap();
     debug_name
 }

@@ -302,7 +302,7 @@ impl State {
                 }
             } else {
                 let timestamp = self.get_time_stamp();
-                let name = super::debug_name(module.module(), idx);
+                let name = super::debug_name(module, idx);
                 self.dump_code_load_record(&name, addr, len, timestamp, pid, tid);
             }
         }
