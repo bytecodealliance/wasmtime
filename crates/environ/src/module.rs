@@ -114,6 +114,18 @@ pub struct MemoryInitializer {
     pub data: Range<u32>,
 }
 
+/// Similar to the above `MemoryInitializer` but only used when memory
+/// initializers are statically known to be valid.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct StaticMemoryInitializer {
+    /// The 64-bit offset, in bytes, of where this initializer starts.
+    pub offset: u64,
+
+    /// The range of data to write at `offset`, where these indices are indexes
+    /// into the compiled wasm module's data section.
+    pub data: Range<u32>,
+}
+
 /// The type of WebAssembly linear memory initialization to use for a module.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum MemoryInitialization {
@@ -159,7 +171,7 @@ pub enum MemoryInitialization {
         /// indices, like those in `MemoryInitializer`, point within a data
         /// segment that will come as an auxiliary descriptor with other data
         /// such as the compiled code for the wasm module.
-        map: PrimaryMap<MemoryIndex, Vec<(u64, Range<u32>)>>,
+        map: PrimaryMap<MemoryIndex, Vec<StaticMemoryInitializer>>,
     },
 
     /// Memory initialization is statically known and involves a single `memcpy`
@@ -194,7 +206,7 @@ pub enum MemoryInitialization {
         ///
         /// The offset, range base, and range end are all guaranteed to be page
         /// aligned to the page size passed in to `try_static_init`.
-        map: PrimaryMap<MemoryIndex, Option<(u32, Range<u32>)>>,
+        map: PrimaryMap<MemoryIndex, Option<StaticMemoryInitializer>>,
     },
 }
 
@@ -227,9 +239,9 @@ impl ModuleTranslation<'_> {
         let mut data = self.data.iter();
         let ok = self.module.memory_initialization.init_memory(
             InitMemory::CompileTime(&self.module),
-            &mut |memory, offset, data_range| {
+            &mut |memory, init| {
                 let data = data.next().unwrap();
-                assert_eq!(data.len(), data_range.len());
+                assert_eq!(data.len(), init.data.len());
                 // If an initializer references an imported memory then
                 // everything will need to be processed in-order anyway to
                 // handle the dynamic limits of the memory specified.
@@ -238,8 +250,8 @@ impl ModuleTranslation<'_> {
                 };
                 let page_size = u64::from(WASM_PAGE_SIZE);
                 let contents = &mut page_contents[memory];
-                let mut page_index = offset / page_size;
-                let mut page_offset = (offset % page_size) as usize;
+                let mut page_index = init.offset / page_size;
+                let mut page_offset = (init.offset % page_size) as usize;
                 let mut data = &data[..];
 
                 while !data.is_empty() {
@@ -284,9 +296,12 @@ impl ModuleTranslation<'_> {
         let mut offset = 0;
         for (memory, pages) in page_contents {
             let mut page_offsets = Vec::with_capacity(pages.len());
-            for (byte_offset, page) in pages {
+            for (page_index, page) in pages {
                 let end = offset + (page.len() as u32);
-                page_offsets.push((byte_offset, offset..end));
+                page_offsets.push(StaticMemoryInitializer {
+                    offset: page_index * u64::from(WASM_PAGE_SIZE),
+                    data: offset..end,
+                });
                 offset = end;
                 self.data.push(page.into());
             }
@@ -332,9 +347,9 @@ impl ModuleTranslation<'_> {
         let mut data = self.data.iter();
         let ok = self.module.memory_initialization.init_memory(
             InitMemory::CompileTime(&self.module),
-            &mut |memory, offset, data_range| {
+            &mut |memory, init| {
                 let data = data.next().unwrap();
-                assert_eq!(data.len(), data_range.len());
+                assert_eq!(data.len(), init.data.len());
 
                 // Static initialization with only one memcpy is only possible
                 // for defined memories which have a known-starting-as-zero
@@ -348,7 +363,7 @@ impl ModuleTranslation<'_> {
                 // Splat the `data_range` into the `image` for this memory,
                 // updating it as necessary with 0s for holes and such.
                 let image = &mut images[memory];
-                let offset = offset as usize;
+                let offset = usize::try_from(init.offset).unwrap();
                 let new_image_len = offset + data.len();
                 if image.len() < new_image_len {
                     if new_image_len > MAX_IMAGE_SIZE {
@@ -433,7 +448,10 @@ impl ModuleTranslation<'_> {
             let end = offset
                 .checked_add(u32::try_from(image_len).unwrap())
                 .unwrap();
-            let idx = map.push(Some((u32::try_from(image_offset).unwrap(), offset..end)));
+            let idx = map.push(Some(StaticMemoryInitializer {
+                offset: image_offset,
+                data: offset..end,
+            }));
             assert_eq!(idx, defined_memory);
 
             offset = end;
@@ -581,7 +599,7 @@ impl MemoryInitialization {
     pub fn init_memory(
         &self,
         state: InitMemory<'_>,
-        write: &mut dyn FnMut(MemoryIndex, u64, &Range<u32>) -> bool,
+        write: &mut dyn FnMut(MemoryIndex, &StaticMemoryInitializer) -> bool,
     ) -> bool {
         let initializers = match self {
             // Fall through below to the segmented memory one-by-one
@@ -595,9 +613,9 @@ impl MemoryInitialization {
             // indices are in-bounds.
             MemoryInitialization::Paged { map } => {
                 for (index, pages) in map {
-                    for (page_index, page) in pages {
-                        debug_assert_eq!(page.end - page.start, WASM_PAGE_SIZE);
-                        let result = write(index, *page_index * u64::from(WASM_PAGE_SIZE), page);
+                    for init in pages {
+                        debug_assert_eq!(init.data.end - init.data.start, WASM_PAGE_SIZE);
+                        let result = write(index, init);
                         if !result {
                             return result;
                         }
@@ -610,8 +628,8 @@ impl MemoryInitialization {
             // can simply forward through the data.
             MemoryInitialization::Static { map } => {
                 for (index, init) in map {
-                    if let Some((offset, range)) = init {
-                        let result = write(index, u64::from(*offset), range);
+                    if let Some(init) = init {
+                        let result = write(index, init);
                         if !result {
                             return result;
                         }
@@ -680,7 +698,11 @@ impl MemoryInitialization {
             // The limits of the data segment have been validated at this point
             // so the `write` callback is called with the range of data being
             // written. Any erroneous result is propagated upwards.
-            let result = write(memory_index, start, data);
+            let init = StaticMemoryInitializer {
+                offset: start,
+                data: data.clone(),
+            };
+            let result = write(memory_index, &init);
             if !result {
                 return result;
             }

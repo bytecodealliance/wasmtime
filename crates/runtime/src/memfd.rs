@@ -78,12 +78,13 @@ impl MemFdSource {
 impl MemoryMemFd {
     fn new(
         page_size: u32,
-        offset: u32,
+        offset: u64,
         data: &[u8],
         mmap: Option<&MmapVec>,
     ) -> Result<Option<MemoryMemFd>> {
         // Sanity-check that various parameters are page-aligned.
         let len = data.len();
+        let offset = u32::try_from(offset).unwrap();
         assert_eq!(offset % page_size, 0);
         assert_eq!((len as u32) % page_size, 0);
         let linear_memory_offset = usize::try_from(offset).unwrap();
@@ -213,8 +214,8 @@ impl ModuleMemFds {
 
             // If there's no initialization for this memory known then we don't
             // need an image for the memory so push `None` and move on.
-            let (offset, data_range) = match init {
-                Some(pair) => pair,
+            let init = match init {
+                Some(init) => init,
                 None => {
                     memories.push(None);
                     continue;
@@ -225,8 +226,8 @@ impl ModuleMemFds {
             // and then use that to try to create the `MemoryMemFd`. If this
             // creation files then we fail creating `ModuleMemFds` since this
             // memory couldn't be represented.
-            let data = &wasm_data[data_range.start as usize..data_range.end as usize];
-            let memfd = match MemoryMemFd::new(page_size, *offset, data, mmap)? {
+            let data = &wasm_data[init.data.start as usize..init.data.end as usize];
+            let memfd = match MemoryMemFd::new(page_size, init.offset, data, mmap)? {
                 Some(memfd) => memfd,
                 None => return Ok(None),
             };
