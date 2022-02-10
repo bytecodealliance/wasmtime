@@ -143,7 +143,7 @@ pub fn instantiate(wasm: &[u8], known_valid: bool, config: &generators::Config, 
     }
 
     log_wasm(wasm);
-    let module = match Module::new(store.engine(), wasm) {
+    let module = match config.compile(store.engine(), wasm) {
         Ok(module) => module,
         Err(_) if !known_valid => return,
         Err(e) => panic!("failed to compile module: {:?}", e),
@@ -222,7 +222,7 @@ pub fn differential_execution(
         log::debug!("fuzz config: {:?}", fuzz_config);
 
         let mut store = fuzz_config.to_store();
-        let module = Module::new(store.engine(), &wasm).unwrap();
+        let module = fuzz_config.compile(store.engine(), &wasm).unwrap();
 
         // TODO: we should implement tracing versions of these dummy imports
         // that record a trace of the order that imported functions were called
@@ -432,7 +432,7 @@ pub fn table_ops(mut fuzz_config: generators::Config, ops: generators::table_ops
 
         let wasm = ops.to_wasm_binary();
         log_wasm(&wasm);
-        let module = match Module::new(store.engine(), &wasm) {
+        let module = match fuzz_config.compile(store.engine(), &wasm) {
             Ok(m) => m,
             Err(_) => return,
         };
@@ -736,7 +736,9 @@ fn differential_store(
     fuzz_config: &generators::Config,
 ) -> (Module, Store<StoreLimits>) {
     let store = fuzz_config.to_store();
-    let module = Module::new(store.engine(), &wasm).expect("Wasmtime can compile module");
+    let module = fuzz_config
+        .compile(store.engine(), wasm)
+        .expect("Wasmtime can compile module");
     (module, store)
 }
 
