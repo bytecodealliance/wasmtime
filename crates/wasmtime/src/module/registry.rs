@@ -323,7 +323,7 @@ impl GlobalRegisteredModule {
         Some(FrameInfo {
             module_name: module.name.clone(),
             func_index: index.index() as u32,
-            func_name: module.func_names.get(&index).cloned(),
+            func_name: self.module.func_name(index).map(|s| s.to_string()),
             instr,
             func_start: info.start_srcloc,
             symbols,

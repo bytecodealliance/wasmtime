@@ -146,8 +146,8 @@ type Reader<'input> = gimli::EndianSlice<'input, gimli::LittleEndian>;
 #[allow(missing_docs)]
 pub struct NameSection<'a> {
     pub module_name: Option<&'a str>,
-    pub func_names: HashMap<u32, &'a str>,
-    pub locals_names: HashMap<u32, HashMap<u32, &'a str>>,
+    pub func_names: HashMap<FuncIndex, &'a str>,
+    pub locals_names: HashMap<FuncIndex, HashMap<u32, &'a str>>,
 }
 
 #[derive(Debug, Default)]
@@ -1291,18 +1291,17 @@ and for re-adding support for interface types you can see this issue:
                         if (index as usize) >= self.result.module.functions.len() {
                             continue;
                         }
+
+                        // Store the name unconditionally, regardless of
+                        // whether we're parsing debuginfo, since function
+                        // names are almost always present in the
+                        // final compilation artifact.
                         let index = FuncIndex::from_u32(index);
                         self.result
-                            .module
+                            .debuginfo
+                            .name_section
                             .func_names
-                            .insert(index, name.to_string());
-                        if self.tunables.generate_native_debuginfo {
-                            self.result
-                                .debuginfo
-                                .name_section
-                                .func_names
-                                .insert(index.as_u32(), name);
-                        }
+                            .insert(index, name);
                     }
                 }
                 wasmparser::Name::Module(module) => {
@@ -1332,7 +1331,7 @@ and for re-adding support for interface types you can see this issue:
                                 .debuginfo
                                 .name_section
                                 .locals_names
-                                .entry(f.indirect_index)
+                                .entry(FuncIndex::from_u32(f.indirect_index))
                                 .or_insert(HashMap::new())
                                 .insert(index, name);
                         }

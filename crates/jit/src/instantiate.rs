@@ -6,16 +6,18 @@
 use crate::code_memory::CodeMemory;
 use crate::debug::create_gdbjit_image;
 use crate::{MmapVec, ProfilingAgent};
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use object::write::{Object, StandardSegment};
 use object::{File, Object as _, ObjectSection, SectionKind};
 use serde::{Deserialize, Serialize};
+use std::convert::TryFrom;
 use std::ops::Range;
+use std::str;
 use std::sync::Arc;
 use thiserror::Error;
 use wasmtime_environ::{
-    CompileError, DefinedFuncIndex, FunctionInfo, InstanceSignature, InstanceTypeIndex, Module,
-    ModuleSignature, ModuleTranslation, ModuleTypeIndex, PrimaryMap, SignatureIndex,
+    CompileError, DefinedFuncIndex, FuncIndex, FunctionInfo, InstanceSignature, InstanceTypeIndex,
+    Module, ModuleSignature, ModuleTranslation, ModuleTypeIndex, PrimaryMap, SignatureIndex,
     StackMapInformation, Trampoline, Tunables, WasmFuncType, ELF_WASMTIME_ADDRMAP,
     ELF_WASMTIME_TRAPS,
 };
@@ -47,6 +49,23 @@ const ELF_WASM_DATA: &'static str = ".rodata.wasm";
 /// it's available. In cases like `Module::deserialize` this section must be
 /// decoded to get all the relevant information.
 const ELF_WASMTIME_INFO: &'static str = ".wasmtime.info";
+
+/// This is the name of the section in the final ELF image which contains a
+/// concatenated list of all function names.
+///
+/// This section is optionally included in the final artifact depending on
+/// whether the wasm module has any name data at all (or in the future if we add
+/// an option to not preserve name data). This section is a concatenated list of
+/// strings where `CompiledModuleInfo::func_names` stores offsets/lengths into
+/// this section.
+///
+/// Note that the goal of this section is to avoid having to decode names at
+/// module-load time if we can. Names are typically only used for debugging or
+/// things like backtraces so there's no need to eagerly load all of them. By
+/// storing the data in a separate section the hope is that the data, which is
+/// sometimes quite large (3MB seen for spidermonkey-compiled-to-wasm), can be
+/// paged in lazily from an mmap and is never paged in if we never reference it.
+const ELF_NAME_DATA: &'static str = ".name.wasm";
 
 /// An error condition while setting up a wasm instance, be it validation,
 /// compilation, or instantiation.
@@ -82,12 +101,22 @@ pub struct CompiledModuleInfo {
     /// Metadata about each compiled function.
     funcs: PrimaryMap<DefinedFuncIndex, FunctionInfo>,
 
+    /// Sorted list, by function index, of names we have for this module.
+    func_names: Vec<FunctionName>,
+
     /// The trampolines compiled into the text section and their start/length
     /// relative to the start of the text section.
     trampolines: Vec<Trampoline>,
 
     /// General compilation metadata.
     meta: Metadata,
+}
+
+#[derive(Serialize, Deserialize)]
+struct FunctionName {
+    idx: FuncIndex,
+    offset: u32,
+    len: u32,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -158,6 +187,32 @@ pub fn finish_compile(
         obj.append_section_data(data_id, data, 1);
     }
 
+    // If any names are present in the module then the `ELF_NAME_DATA` section
+    // is create and appended.
+    let mut func_names = Vec::new();
+    if debuginfo.name_section.func_names.len() > 0 {
+        let name_id = obj.add_section(
+            obj.segment_name(StandardSegment::Data).to_vec(),
+            ELF_NAME_DATA.as_bytes().to_vec(),
+            SectionKind::ReadOnlyData,
+        );
+        let mut sorted_names = debuginfo.name_section.func_names.iter().collect::<Vec<_>>();
+        sorted_names.sort_by_key(|(idx, _name)| *idx);
+        for (idx, name) in sorted_names {
+            let offset = obj.append_section_data(name_id, name.as_bytes(), 1);
+            let offset = match u32::try_from(offset) {
+                Ok(offset) => offset,
+                Err(_) => bail!("name section too large (> 4gb)"),
+            };
+            let len = u32::try_from(name.len()).unwrap();
+            func_names.push(FunctionName {
+                idx: *idx,
+                offset,
+                len,
+            });
+        }
+    }
+
     // Update passive data offsets since they're all located after the other
     // data in the module.
     for (_, range) in module.passive_data_map.iter_mut() {
@@ -200,6 +255,7 @@ pub fn finish_compile(
         module,
         funcs,
         trampolines,
+        func_names,
         meta: Metadata {
             native_debug_info_present: tunables.generate_native_debuginfo,
             has_unparsed_debuginfo,
@@ -253,6 +309,8 @@ pub struct CompiledModule {
     dbg_jit_registration: Option<GdbJitImageRegistration>,
     /// A unique ID used to register this module with the engine.
     unique_id: CompiledModuleId,
+    func_names: Vec<FunctionName>,
+    func_name_data: Range<usize>,
 }
 
 impl CompiledModule {
@@ -302,6 +360,15 @@ impl CompiledModule {
                 .context("failed to deserialize wasmtime module info")?,
         };
 
+        let func_name_data = match code
+            .obj
+            .section_by_name(ELF_NAME_DATA)
+            .and_then(|s| s.data().ok())
+        {
+            Some(data) => subslice_range(data, code.mmap),
+            None => 0..0,
+        };
+
         let mut ret = Self {
             module: Arc::new(info.module),
             funcs: info.funcs,
@@ -319,6 +386,8 @@ impl CompiledModule {
             code_memory,
             meta: info.meta,
             unique_id: id_allocator.alloc(),
+            func_names: info.func_names,
+            func_name_data,
         };
         ret.register_debug_and_profiling(profiler)?;
 
@@ -389,6 +458,21 @@ impl CompiledModule {
     /// Returns the `FunctionInfo` map for all defined functions.
     pub fn functions(&self) -> &PrimaryMap<DefinedFuncIndex, FunctionInfo> {
         &self.funcs
+    }
+
+    /// Looks up the `name` section name for the function index `idx`, if one
+    /// was specified in the original wasm module.
+    pub fn func_name(&self, idx: FuncIndex) -> Option<&str> {
+        // Find entry for `idx`, if present.
+        let i = self.func_names.binary_search_by_key(&idx, |n| n.idx).ok()?;
+        let name = &self.func_names[i];
+
+        // Here we `unwrap` the `from_utf8` but this can theoretically be a
+        // `from_utf8_unchecked` if we really wanted since this section is
+        // guaranteed to only have valid utf-8 data. Until it's a problem it's
+        // probably best to double-check this though.
+        let data = &self.mmap()[self.func_name_data.clone()];
+        Some(str::from_utf8(&data[name.offset as usize..][..name.len as usize]).unwrap())
     }
 
     /// Return a reference to a mutable module (if possible).
