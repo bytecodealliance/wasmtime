@@ -338,10 +338,9 @@ impl ModuleTranslation<'_> {
         // The `init_memory` method of `MemoryInitialization` is used here to
         // do most of the validation for us, and otherwise the data chunks are
         // collected into the `images` array here.
-        let mut images: PrimaryMap<MemoryIndex, Vec<u8>> = PrimaryMap::default();
-        let num_defined_memories =
-            self.module.memory_plans.len() - self.module.num_imported_memories;
-        for _ in 0..num_defined_memories {
+        let mut images: PrimaryMap<MemoryIndex, Vec<u8>> =
+            PrimaryMap::with_capacity(self.module.memory_plans.len());
+        for _ in 0..self.module.memory_plans.len() {
             images.push(Vec::new());
         }
         let mut data = self.data.iter();
@@ -393,7 +392,7 @@ impl ModuleTranslation<'_> {
         self.data_align = Some(page_size);
         let mut map = PrimaryMap::with_capacity(images.len());
         let mut offset = 0u32;
-        for (defined_memory, mut image) in images {
+        for (memory, mut image) in images {
             // Find the first nonzero byte, and if all the bytes are zero then
             // we can skip initialization of this memory entirely since memories
             // otherwise start with all zero bytes.
@@ -452,7 +451,7 @@ impl ModuleTranslation<'_> {
                 offset: image_offset,
                 data: offset..end,
             }));
-            assert_eq!(idx, defined_memory);
+            assert_eq!(idx, memory);
 
             offset = end;
             assert_eq!(offset % (page_size as u32), 0);
