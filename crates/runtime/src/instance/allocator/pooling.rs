@@ -299,7 +299,6 @@ impl InstancePool {
         // Calculate the maximum size of an Instance structure given the limits
         let offsets = VMOffsets::from(VMOffsetsFields {
             ptr: HostPtr,
-            num_signature_ids: module_limits.types,
             num_imported_functions: module_limits.imported_functions,
             num_imported_tables: module_limits.imported_tables,
             num_imported_memories: module_limits.imported_memories,
@@ -1451,6 +1450,9 @@ mod test {
                 None
             }
             fn wasm_data(&self) -> &[u8] {
+                &[]
+            }
+            fn signature_ids(&self) -> &[VMSharedSignatureIndex] {
                 &[]
             }
         }

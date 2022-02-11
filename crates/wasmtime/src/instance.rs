@@ -902,6 +902,9 @@ impl<'a> ImportsBuilder<'a> {
 pub struct InstancePre<T> {
     module: Module,
     items: Vec<Definition>,
+    /// A count of `Definition::HostFunc` entries in `items` above to
+    /// preallocate space in a `Store` up front for all entries to be inserted.
+    host_funcs: usize,
     _marker: std::marker::PhantomData<fn() -> T>,
 }
 
@@ -911,6 +914,7 @@ impl<T> Clone for InstancePre<T> {
         Self {
             module: self.module.clone(),
             items: self.items.clone(),
+            host_funcs: self.host_funcs,
             _marker: self._marker,
         }
     }
@@ -923,9 +927,17 @@ impl<T> InstancePre<T> {
         items: Vec<Definition>,
     ) -> Result<InstancePre<T>> {
         typecheck_defs(store, module, &items)?;
+        let host_funcs = items
+            .iter()
+            .filter(|i| match i {
+                Definition::HostFunc(_) => true,
+                _ => false,
+            })
+            .count();
         Ok(InstancePre {
             module: module.clone(),
             items,
+            host_funcs,
             _marker: std::marker::PhantomData,
         })
     }
@@ -952,7 +964,7 @@ impl<T> InstancePre<T> {
         // passed in.
         let mut store = store.as_context_mut();
         let mut instantiator = unsafe {
-            self.ensure_comes_from_same_store(&store.0)?;
+            self.verify_store_and_reserve_space(&mut store.0)?;
             Instantiator::new(
                 store.0,
                 &self.module,
@@ -984,7 +996,7 @@ impl<T> InstancePre<T> {
         // For the unsafety here see above
         let mut store = store.as_context_mut();
         let mut i = unsafe {
-            self.ensure_comes_from_same_store(&store.0)?;
+            self.verify_store_and_reserve_space(&mut store.0)?;
             Instantiator::new(
                 store.0,
                 &self.module,
@@ -1002,12 +1014,17 @@ impl<T> InstancePre<T> {
             .await?
     }
 
-    fn ensure_comes_from_same_store(&self, store: &StoreOpaque) -> Result<()> {
+    fn verify_store_and_reserve_space(&self, store: &mut StoreOpaque) -> Result<()> {
         for import in self.items.iter() {
             if !import.comes_from_same_store(store) {
                 bail!("cross-`Store` instantiation is not currently supported");
             }
         }
+        // Any linker-defined function of the `Definition::HostFunc` variant
+        // will insert a function into the store automatically as part of
+        // instantiation, so reserve space here to make insertion more efficient
+        // as it won't have to realloc during the instantiation.
+        store.store_data_mut().reserve_funcs(self.host_funcs);
         Ok(())
     }
 }

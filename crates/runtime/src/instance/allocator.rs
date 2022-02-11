@@ -3,9 +3,7 @@ use crate::instance::{Instance, InstanceHandle, RuntimeMemoryCreator};
 use crate::memory::{DefaultMemoryCreator, Memory};
 use crate::table::Table;
 use crate::traphandlers::Trap;
-use crate::vmcontext::{
-    VMBuiltinFunctionsArray, VMCallerCheckedAnyfunc, VMGlobalDefinition, VMSharedSignatureIndex,
-};
+use crate::vmcontext::{VMBuiltinFunctionsArray, VMCallerCheckedAnyfunc, VMGlobalDefinition};
 use crate::ModuleRuntimeInfo;
 use crate::Store;
 use anyhow::Result;
@@ -18,8 +16,8 @@ use std::sync::Arc;
 use thiserror::Error;
 use wasmtime_environ::{
     DefinedMemoryIndex, DefinedTableIndex, EntityRef, GlobalInit, InitMemory, MemoryInitialization,
-    MemoryInitializer, Module, ModuleType, PrimaryMap, TableInitialization, TableInitializer,
-    TrapCode, WasmType, WASM_PAGE_SIZE,
+    MemoryInitializer, Module, PrimaryMap, TableInitialization, TableInitializer, TrapCode,
+    WasmType, WASM_PAGE_SIZE,
 };
 
 #[cfg(feature = "pooling-allocator")]
@@ -445,14 +443,8 @@ unsafe fn initialize_vmcontext(instance: &mut Instance, req: InstanceAllocationR
     let module = req.runtime_info.module();
 
     // Initialize shared signatures
-    let mut ptr = instance.vmctx_plus_offset(instance.offsets.vmctx_signature_ids_begin());
-    for sig in module.types.values() {
-        *ptr = match sig {
-            ModuleType::Function(sig) => req.runtime_info.signature(*sig),
-            _ => VMSharedSignatureIndex::new(u32::max_value()),
-        };
-        ptr = ptr.add(1);
-    }
+    let signatures = req.runtime_info.signature_ids();
+    *instance.vmctx_plus_offset(instance.offsets.vmctx_signature_ids_array()) = signatures.as_ptr();
 
     // Initialize the built-in functions
     *instance.vmctx_plus_offset(instance.offsets.vmctx_builtin_functions()) =
@@ -460,25 +452,25 @@ unsafe fn initialize_vmcontext(instance: &mut Instance, req: InstanceAllocationR
 
     // Initialize the imports
     debug_assert_eq!(req.imports.functions.len(), module.num_imported_funcs);
-    ptr::copy(
+    ptr::copy_nonoverlapping(
         req.imports.functions.as_ptr(),
         instance.vmctx_plus_offset(instance.offsets.vmctx_imported_functions_begin()),
         req.imports.functions.len(),
     );
     debug_assert_eq!(req.imports.tables.len(), module.num_imported_tables);
-    ptr::copy(
+    ptr::copy_nonoverlapping(
         req.imports.tables.as_ptr(),
         instance.vmctx_plus_offset(instance.offsets.vmctx_imported_tables_begin()),
         req.imports.tables.len(),
     );
     debug_assert_eq!(req.imports.memories.len(), module.num_imported_memories);
-    ptr::copy(
+    ptr::copy_nonoverlapping(
         req.imports.memories.as_ptr(),
         instance.vmctx_plus_offset(instance.offsets.vmctx_imported_memories_begin()),
         req.imports.memories.len(),
     );
     debug_assert_eq!(req.imports.globals.len(), module.num_imported_globals);
-    ptr::copy(
+    ptr::copy_nonoverlapping(
         req.imports.globals.as_ptr(),
         instance.vmctx_plus_offset(instance.offsets.vmctx_imported_globals_begin()),
         req.imports.globals.len(),

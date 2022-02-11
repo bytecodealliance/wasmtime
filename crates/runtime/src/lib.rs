@@ -190,4 +190,8 @@ pub trait ModuleRuntimeInfo: Send + Sync + 'static {
 
     /// A slice pointing to all data that is referenced by this instance.
     fn wasm_data(&self) -> &[u8];
+
+    /// Returns an array, indexed by `SignatureIndex` of all
+    /// `VMSharedSignatureIndex` entries corresponding to the `SignatureIndex`.
+    fn signature_ids(&self) -> &[VMSharedSignatureIndex];
 }
