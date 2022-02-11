@@ -239,8 +239,8 @@ struct CommonOptions {
     consume_fuel: bool,
 
     /// Amount of fuel to be consumed if "consume_fuel" is checked
-    #[structopt(long),  default_value = 0]
-    add_fuel: Option<u64>,
+    #[structopt(long, default_value = "0")]
+    add_fuel: u64,
 
     /// Executing wasm code will yield when a global epoch counter
     /// changes, allowing for async operation without blocking the

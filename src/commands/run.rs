@@ -164,6 +164,10 @@ impl RunCommand {
         let engine = Engine::new(&config)?;
         let mut store = Store::new(&engine, Host::default());
 
+        if self.common.consume_fuel {
+            store.add_fuel(self.common.add_fuel).unwrap();
+        }
+
         let preopen_sockets = self.compute_preopen_sockets()?;
 
         // Make wasi available by default.
