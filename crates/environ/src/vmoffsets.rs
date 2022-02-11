@@ -189,15 +189,29 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
         // LLVM is not able to optimize accesses of ret.size away most of the time.
         let mut next_field_offset = 0;
 
+        // Convenience functions for checked addition and multiplication.
+        // As side effect this reduces binary size by using only a single
+        // `#[track_caller]` location for each function instead of one for
+        // each individual invocation.
+        #[inline]
+        fn cadd(count: u32, size: u32) -> u32 {
+            count.checked_add(size).unwrap()
+        }
+
+        #[inline]
+        fn cmul(count: u32, size: u8) -> u32 {
+            count.checked_mul(u32::from(size)).unwrap()
+        }
+
         macro_rules! field {
             ($field:ident = .; size = $size:expr) => {
                 ret.$field = next_field_offset;
-                next_field_offset = next_field_offset.checked_add($size).unwrap();
+                next_field_offset = cadd(next_field_offset, $size);
             };
             ($field:ident = align(., $align:literal); size = $size:expr) => {
                 ret.$field = align(next_field_offset, $align);
-                next_field_offset = ret.$field.checked_add($size).unwrap();
-            }
+                next_field_offset = cadd(ret.$field, $size);
+            };
         }
 
         field!(interrupts = .; size = u32::from(ret.ptr.size()));
@@ -206,32 +220,23 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
         field!(store = .; size = u32::from(ret.ptr.size() * 2));
         field!(builtin_functions = .; size = u32::from(ret.pointer_size()));
         field!(signature_ids = .; size = u32::from(ret.ptr.size()));
-        field!(imported_functions = .; size = ret.num_imported_functions
-            .checked_mul(u32::from(ret.size_of_vmfunction_import()))
-            .unwrap());
-        field!(imported_tables = .; size = ret.num_imported_tables
-            .checked_mul(u32::from(ret.size_of_vmtable_import()))
-            .unwrap());
-        field!(imported_memories = .; size = ret.num_imported_memories
-            .checked_mul(u32::from(ret.size_of_vmmemory_import()))
-            .unwrap());
-        field!(imported_globals = .; size = ret.num_imported_globals
-            .checked_mul(u32::from(ret.size_of_vmglobal_import()))
-            .unwrap());
-        field!(defined_tables = .; size = ret.num_defined_tables
-            .checked_mul(u32::from(ret.size_of_vmtable_definition()))
-            .unwrap());
-        field!(defined_memories = .; size = ret.num_defined_memories
-            .checked_mul(u32::from(ret.size_of_vmmemory_definition()))
-            .unwrap());
-        field!(defined_globals = align(., 16); size = ret.num_defined_globals
-            .checked_mul(u32::from(ret.size_of_vmglobal_definition()))
-            .unwrap());
-        field!(defined_anyfuncs = .; size = ret.num_imported_functions
-            .checked_add(ret.num_defined_functions)
-            .unwrap()
-            .checked_mul(u32::from(ret.size_of_vmcaller_checked_anyfunc()))
-            .unwrap());
+        field!(imported_functions = .;
+            size = cmul(ret.num_imported_functions, ret.size_of_vmfunction_import()));
+        field!(imported_tables = .;
+            size = cmul(ret.num_imported_tables, ret.size_of_vmtable_import()));
+        field!(imported_memories = .;
+            size = cmul(ret.num_imported_memories, ret.size_of_vmmemory_import()));
+        field!(imported_globals = .;
+            size = cmul(ret.num_imported_globals, ret.size_of_vmglobal_import()));
+        field!(defined_tables = .;
+            size = cmul(ret.num_defined_tables, ret.size_of_vmtable_definition()));
+        field!(defined_memories = .;
+            size = cmul(ret.num_defined_memories, ret.size_of_vmmemory_definition()));
+        field!(defined_globals = align(., 16);
+            size = cmul(ret.num_defined_globals, ret.size_of_vmglobal_definition()));
+        let num_anyfuncs = cadd(ret.num_imported_functions, ret.num_defined_functions);
+        field!(defined_anyfuncs = .;
+            size = cmul(num_anyfuncs, ret.size_of_vmcaller_checked_anyfunc()));
 
         ret.size = next_field_offset;
 
