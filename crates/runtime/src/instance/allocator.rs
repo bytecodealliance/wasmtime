@@ -460,25 +460,25 @@ unsafe fn initialize_vmcontext(instance: &mut Instance, req: InstanceAllocationR
 
     // Initialize the imports
     debug_assert_eq!(req.imports.functions.len(), module.num_imported_funcs);
-    ptr::copy(
+    ptr::copy_nonoverlapping(
         req.imports.functions.as_ptr(),
         instance.vmctx_plus_offset(instance.offsets.vmctx_imported_functions_begin()),
         req.imports.functions.len(),
     );
     debug_assert_eq!(req.imports.tables.len(), module.num_imported_tables);
-    ptr::copy(
+    ptr::copy_nonoverlapping(
         req.imports.tables.as_ptr(),
         instance.vmctx_plus_offset(instance.offsets.vmctx_imported_tables_begin()),
         req.imports.tables.len(),
     );
     debug_assert_eq!(req.imports.memories.len(), module.num_imported_memories);
-    ptr::copy(
+    ptr::copy_nonoverlapping(
         req.imports.memories.as_ptr(),
         instance.vmctx_plus_offset(instance.offsets.vmctx_imported_memories_begin()),
         req.imports.memories.len(),
     );
     debug_assert_eq!(req.imports.globals.len(), module.num_imported_globals);
-    ptr::copy(
+    ptr::copy_nonoverlapping(
         req.imports.globals.as_ptr(),
         instance.vmctx_plus_offset(instance.offsets.vmctx_imported_globals_begin()),
         req.imports.globals.len(),
