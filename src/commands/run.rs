@@ -164,6 +164,8 @@ impl RunCommand {
         let engine = Engine::new(&config)?;
         let mut store = Store::new(&engine, Host::default());
 
+        // if consume fuel has been flagged, we want to instantiate the
+        // store with the set amount of fuel from the 'add_fuel' option
         if self.common.consume_fuel {
             store.add_fuel(self.common.add_fuel).unwrap();
         }
