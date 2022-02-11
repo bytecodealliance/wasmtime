@@ -188,7 +188,10 @@ pub(crate) struct FuncData {
     // optimized use cases (e.g. `TypedFunc`) it's not actually needed or it's
     // only needed rarely. To handle that this is an optionally-contained field
     // which is lazily loaded into as part of `Func::call`.
-    ty: Option<FuncType>,
+    //
+    // Also note that this is intentionally placed behind a poiner to keep it
+    // small as `FuncData` instances are often inserted into a `Store`.
+    ty: Option<Box<FuncType>>,
 }
 
 /// The three ways that a function can be created and referenced from within a
@@ -216,7 +219,12 @@ enum FuncKind {
     /// `Func::new` or similar APIs. The `HostFunc` internally owns the
     /// `InstanceHandle` and that will get dropped when this `HostFunc` itself
     /// is dropped.
-    Host(HostFunc),
+    ///
+    /// Note that this is intentionally placed behind a `Box` to minimize the
+    /// size of this enum since the most common variant for high-peformance
+    /// situations is `SharedHost` and `StoreOwned`, so this ideally isn't
+    /// larger than those two.
+    Host(Box<HostFunc>),
 }
 
 macro_rules! for_each_function_signature {
@@ -711,7 +719,7 @@ impl Func {
         // this time.
         if store.store_data()[self.0].ty.is_none() {
             let ty = self.load_ty(store);
-            store.store_data_mut()[self.0].ty = Some(ty);
+            store.store_data_mut()[self.0].ty = Some(Box::new(ty));
         }
 
         (store.store_data()[self.0].ty.as_ref().unwrap(), store)
@@ -2091,7 +2099,7 @@ impl HostFunc {
     /// Same as [`HostFunc::to_func`], different ownership.
     unsafe fn into_func(self, store: &mut StoreOpaque) -> Func {
         self.validate_store(store);
-        Func::from_func_kind(FuncKind::Host(self), store)
+        Func::from_func_kind(FuncKind::Host(Box::new(self)), store)
     }
 
     fn validate_store(&self, store: &mut StoreOpaque) {
