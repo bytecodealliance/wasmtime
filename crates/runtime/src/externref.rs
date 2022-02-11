@@ -1037,7 +1037,6 @@ mod tests {
 
         let offsets = wasmtime_environ::VMOffsets::from(wasmtime_environ::VMOffsetsFields {
             ptr: 8,
-            num_signature_ids: 0,
             num_imported_functions: 0,
             num_imported_tables: 0,
             num_imported_memories: 0,
@@ -1064,7 +1063,6 @@ mod tests {
 
         let offsets = wasmtime_environ::VMOffsets::from(wasmtime_environ::VMOffsetsFields {
             ptr: 8,
-            num_signature_ids: 0,
             num_imported_functions: 0,
             num_imported_tables: 0,
             num_imported_memories: 0,
@@ -1091,7 +1089,6 @@ mod tests {
 
         let offsets = wasmtime_environ::VMOffsets::from(wasmtime_environ::VMOffsetsFields {
             ptr: 8,
-            num_signature_ids: 0,
             num_imported_functions: 0,
             num_imported_tables: 0,
             num_imported_memories: 0,

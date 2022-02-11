@@ -1452,6 +1452,9 @@ mod test {
             fn wasm_data(&self) -> &[u8] {
                 &[]
             }
+            fn signature_ids(&self) -> &[VMSharedSignatureIndex] {
+                &[]
+            }
         }
 
         Arc::new(RuntimeInfo(module))
