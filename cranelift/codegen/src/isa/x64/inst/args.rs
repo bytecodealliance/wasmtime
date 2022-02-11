@@ -48,8 +48,10 @@ macro_rules! newtype_of_reg {
     (
         $newtype_reg:ident,
         $newtype_writable_reg:ident,
+        $newtype_option_writable_reg:ident,
         $newtype_reg_mem:ident,
         $newtype_reg_mem_imm:ident,
+        $newtype_imm8_reg:ident,
         |$check_reg:ident| $check:expr
     ) => {
         /// A newtype wrapper around `Reg`.
@@ -121,6 +123,9 @@ macro_rules! newtype_of_reg {
         }
 
         pub type $newtype_writable_reg = Writable<$newtype_reg>;
+
+        #[allow(dead_code)] // Used by some newtypes and not others.
+        pub type $newtype_option_writable_reg = Option<Writable<$newtype_reg>>;
 
         impl ToWritableReg for $newtype_writable_reg {
             fn to_writable_reg(&self) -> Writable<Reg> {
@@ -218,6 +223,11 @@ macro_rules! newtype_of_reg {
                     _ => true,
                 });
             }
+
+            #[allow(dead_code)] // Used by some newtypes and not others.
+            pub fn get_regs_as_uses(&self, collector: &mut RegUsageCollector) {
+                self.0.get_regs_as_uses(collector);
+            }
         }
 
         impl PrettyPrint for $newtype_reg_mem {
@@ -290,6 +300,11 @@ macro_rules! newtype_of_reg {
                     _ => true,
                 });
             }
+
+            #[allow(dead_code)] // Used by some newtypes and not others.
+            pub fn get_regs_as_uses(&self, collector: &mut RegUsageCollector) {
+                self.0.get_regs_as_uses(collector);
+            }
         }
 
         impl PrettyPrint for $newtype_reg_mem_imm {
@@ -303,18 +318,60 @@ macro_rules! newtype_of_reg {
                 self.0.show_rru_sized(mb_rru, size)
             }
         }
+
+        /// A newtype wrapper around `Imm8Reg`.
+        #[derive(Clone, Debug)]
+        #[allow(dead_code)] // Used by some newtypes and not others.
+        pub struct $newtype_imm8_reg(Imm8Reg);
+
+        impl From<$newtype_reg> for $newtype_imm8_reg {
+            fn from(r: $newtype_reg) -> Self {
+                Self(Imm8Reg::Reg { reg: r.to_reg() })
+            }
+        }
+
+        impl $newtype_imm8_reg {
+            /// Construct this newtype from the given `Imm8Reg`, or return
+            /// `None` if the `Imm8Reg` is not a valid instance of this newtype.
+            #[allow(dead_code)] // Used by some newtypes and not others.
+            pub fn new(imm8_reg: Imm8Reg) -> Option<Self> {
+                match imm8_reg {
+                    Imm8Reg::Imm8 { .. } => Some(Self(imm8_reg)),
+                    Imm8Reg::Reg { reg: $check_reg } if $check => Some(Self(imm8_reg)),
+                    Imm8Reg::Reg { reg: _ } => None,
+                }
+            }
+
+            /// Convert this newtype into its underlying `Imm8Reg`.
+            #[allow(dead_code)] // Used by some newtypes and not others.
+            pub fn to_imm8_reg(self) -> Imm8Reg {
+                self.0
+            }
+        }
     };
 }
 
 // Define a newtype of `Reg` for general-purpose registers.
-newtype_of_reg!(Gpr, WritableGpr, GprMem, GprMemImm, |reg| {
-    reg.get_class() == RegClass::I64
-});
+newtype_of_reg!(
+    Gpr,
+    WritableGpr,
+    OptionWritableGpr,
+    GprMem,
+    GprMemImm,
+    Imm8Gpr,
+    |reg| reg.get_class() == RegClass::I64
+);
 
 // Define a newtype of `Reg` for XMM registers.
-newtype_of_reg!(Xmm, WritableXmm, XmmMem, XmmMemImm, |reg| {
-    reg.get_class() == RegClass::V128
-});
+newtype_of_reg!(
+    Xmm,
+    WritableXmm,
+    OptionWritableXmm,
+    XmmMem,
+    XmmMemImm,
+    Imm8Xmm,
+    |reg| reg.get_class() == RegClass::V128
+);
 
 /// A possible addressing mode (amode) that can be used in instructions.
 /// These denote a 64-bit value only.

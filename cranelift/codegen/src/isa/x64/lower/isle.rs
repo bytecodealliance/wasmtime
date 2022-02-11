@@ -79,7 +79,7 @@ where
 
         if let Some(c) = inputs.constant {
             if let Some(imm) = to_simm32(c as i64) {
-                return imm;
+                return imm.to_reg_mem_imm();
             }
 
             // Generate constants fresh at each use to minimize long-range
@@ -120,21 +120,23 @@ where
         RegMem::reg(self.put_in_reg(val))
     }
 
-    fn put_masked_in_imm8_reg(&mut self, val: Value, ty: Type) -> Imm8Reg {
+    fn put_masked_in_imm8_gpr(&mut self, val: Value, ty: Type) -> Imm8Gpr {
         let inputs = self.lower_ctx.get_value_as_source_or_const(val);
 
         if let Some(c) = inputs.constant {
             let mask = 1_u64
                 .checked_shl(ty.bits() as u32)
                 .map_or(u64::MAX, |x| x - 1);
-            return Imm8Reg::Imm8 {
+            return Imm8Gpr::new(Imm8Reg::Imm8 {
                 imm: (c & mask) as u8,
-            };
+            })
+            .unwrap();
         }
 
-        Imm8Reg::Reg {
+        Imm8Gpr::new(Imm8Reg::Reg {
             reg: self.put_in_regs(val).regs()[0],
-        }
+        })
+        .unwrap()
     }
 
     #[inline]
@@ -178,17 +180,18 @@ where
     }
 
     #[inline]
-    fn const_to_type_masked_imm8(&mut self, c: u64, ty: Type) -> Imm8Reg {
+    fn const_to_type_masked_imm8(&mut self, c: u64, ty: Type) -> Imm8Gpr {
         let mask = 1_u64
             .checked_shl(ty.bits() as u32)
             .map_or(u64::MAX, |x| x - 1);
-        Imm8Reg::Imm8 {
+        Imm8Gpr::new(Imm8Reg::Imm8 {
             imm: (c & mask) as u8,
-        }
+        })
+        .unwrap()
     }
 
     #[inline]
-    fn simm32_from_value(&mut self, val: Value) -> Option<RegMemImm> {
+    fn simm32_from_value(&mut self, val: Value) -> Option<GprMemImm> {
         let inst = self.lower_ctx.dfg().value_def(val).inst()?;
         let constant: u64 = self.lower_ctx.get_constant(inst)?;
         let constant = constant as i64;
@@ -196,7 +199,7 @@ where
     }
 
     #[inline]
-    fn simm32_from_imm64(&mut self, imm: Imm64) -> Option<RegMemImm> {
+    fn simm32_from_imm64(&mut self, imm: Imm64) -> Option<GprMemImm> {
         to_simm32(imm.bits())
     }
 
@@ -412,6 +415,31 @@ where
     fn reg_to_gpr_mem(&mut self, r: Reg) -> GprMem {
         GprMem::new(RegMem::reg(r)).unwrap()
     }
+
+    #[inline]
+    fn imm8_reg_to_imm8_gpr(&mut self, ir: &Imm8Reg) -> Imm8Gpr {
+        Imm8Gpr::new(ir.clone()).unwrap()
+    }
+
+    #[inline]
+    fn gpr_to_gpr_mem(&mut self, gpr: Gpr) -> GprMem {
+        GprMem::from(gpr)
+    }
+
+    #[inline]
+    fn gpr_to_gpr_mem_imm(&mut self, gpr: Gpr) -> GprMemImm {
+        GprMemImm::from(gpr)
+    }
+
+    #[inline]
+    fn gpr_to_imm8_gpr(&mut self, gpr: Gpr) -> Imm8Gpr {
+        Imm8Gpr::from(gpr)
+    }
+
+    #[inline]
+    fn imm8_to_imm8_gpr(&mut self, imm: u8) -> Imm8Gpr {
+        Imm8Gpr::new(Imm8Reg::Imm8 { imm }).unwrap()
+    }
 }
 
 // Since x64 doesn't have 8x16 shifts and we must use a 16x8 shift instead, we
@@ -446,11 +474,14 @@ const I8X16_USHR_MASKS: [u8; 128] = [
 ];
 
 #[inline]
-fn to_simm32(constant: i64) -> Option<RegMemImm> {
+fn to_simm32(constant: i64) -> Option<GprMemImm> {
     if constant == ((constant << 32) >> 32) {
-        Some(RegMemImm::Imm {
-            simm32: constant as u32,
-        })
+        Some(
+            GprMemImm::new(RegMemImm::Imm {
+                simm32: constant as u32,
+            })
+            .unwrap(),
+        )
     } else {
         None
     }

@@ -133,9 +133,9 @@ impl Inst {
         Self::AluRmiR {
             size,
             op,
-            src1: dst.to_reg(),
-            src2: src,
-            dst,
+            src1: Gpr::new(dst.to_reg()).unwrap(),
+            src2: GprMemImm::new(src).unwrap(),
+            dst: WritableGpr::from_writable_reg(dst).unwrap(),
         }
     }
 
@@ -174,10 +174,10 @@ impl Inst {
         Inst::Div {
             size,
             signed,
-            divisor,
-            dividend: regs::rax(),
-            dst_quotient: Writable::from_reg(regs::rax()),
-            dst_remainder: Writable::from_reg(regs::rdx()),
+            divisor: GprMem::new(divisor).unwrap(),
+            dividend: Gpr::new(regs::rax()).unwrap(),
+            dst_quotient: WritableGpr::from_reg(Gpr::new(regs::rax()).unwrap()),
+            dst_remainder: Writable::from_reg(Gpr::new(regs::rdx()).unwrap()),
         }
     }
 
@@ -191,10 +191,10 @@ impl Inst {
         Inst::MulHi {
             size,
             signed,
-            src1: regs::rax(),
-            src2: rhs,
-            dst_lo: Writable::from_reg(regs::rax()),
-            dst_hi: Writable::from_reg(regs::rdx()),
+            src1: Gpr::new(regs::rax()).unwrap(),
+            src2: GprMem::new(rhs).unwrap(),
+            dst_lo: WritableGpr::from_reg(Gpr::new(regs::rax()).unwrap()),
+            dst_hi: WritableGpr::from_reg(Gpr::new(regs::rdx()).unwrap()),
         }
     }
 
@@ -211,19 +211,19 @@ impl Inst {
         Inst::CheckedDivOrRemSeq {
             kind,
             size,
-            divisor,
-            dividend: regs::rax(),
-            dst_quotient: Writable::from_reg(regs::rax()),
-            dst_remainder: Writable::from_reg(regs::rdx()),
-            tmp,
+            divisor: WritableGpr::from_writable_reg(divisor).unwrap(),
+            dividend: Gpr::new(regs::rax()).unwrap(),
+            dst_quotient: Writable::from_reg(Gpr::new(regs::rax()).unwrap()),
+            dst_remainder: Writable::from_reg(Gpr::new(regs::rdx()).unwrap()),
+            tmp: tmp.map(|tmp| WritableGpr::from_writable_reg(tmp).unwrap()),
         }
     }
 
     pub(crate) fn sign_extend_data(size: OperandSize) -> Inst {
         Inst::SignExtendData {
             size,
-            src: regs::rax(),
-            dst: Writable::from_reg(regs::rdx()),
+            src: Gpr::new(regs::rax()).unwrap(),
+            dst: Writable::from_reg(Gpr::new(regs::rdx()).unwrap()),
         }
     }
 
@@ -239,7 +239,7 @@ impl Inst {
         Inst::Imm {
             dst_size,
             simm64,
-            dst,
+            dst: WritableGpr::from_writable_reg(dst).unwrap(),
         }
     }
 
@@ -247,6 +247,8 @@ impl Inst {
         debug_assert!(size.is_one_of(&[OperandSize::Size32, OperandSize::Size64]));
         debug_assert!(src.get_class() == RegClass::I64);
         debug_assert!(dst.to_reg().get_class() == RegClass::I64);
+        let src = Gpr::new(src).unwrap();
+        let dst = WritableGpr::from_writable_reg(dst).unwrap();
         Inst::MovRR { size, src, dst }
     }
 
@@ -360,7 +362,7 @@ impl Inst {
         debug_assert!(dst.to_reg().get_class() == RegClass::V128);
         Inst::GprToXmm {
             op,
-            src,
+            src: GprMem::new(src).unwrap(),
             dst: WritableXmm::from_writable_reg(dst).unwrap(),
             src_size,
         }
@@ -369,6 +371,8 @@ impl Inst {
     pub(crate) fn xmm_cmp_rm_r(op: SseOpcode, src: RegMem, dst: Reg) -> Inst {
         src.assert_regclass_is(RegClass::V128);
         debug_assert!(dst.get_class() == RegClass::V128);
+        let src = XmmMem::new(src).unwrap();
+        let dst = Xmm::new(dst).unwrap();
         Inst::XmmCmpRmR { op, src, dst }
     }
 
@@ -457,8 +461,8 @@ impl Inst {
         Inst::XmmMinMaxSeq {
             size,
             is_min,
-            lhs,
-            rhs_dst,
+            lhs: Xmm::new(lhs).unwrap(),
+            rhs_dst: WritableXmm::from_writable_reg(rhs_dst).unwrap(),
         }
     }
 
@@ -483,6 +487,8 @@ impl Inst {
     pub(crate) fn movzx_rm_r(ext_mode: ExtMode, src: RegMem, dst: Writable<Reg>) -> Inst {
         src.assert_regclass_is(RegClass::I64);
         debug_assert!(dst.to_reg().get_class() == RegClass::I64);
+        let src = GprMem::new(src).unwrap();
+        let dst = WritableGpr::from_writable_reg(dst).unwrap();
         Inst::MovzxRmR { ext_mode, src, dst }
     }
 
@@ -500,6 +506,8 @@ impl Inst {
     pub(crate) fn movsx_rm_r(ext_mode: ExtMode, src: RegMem, dst: Writable<Reg>) -> Inst {
         src.assert_regclass_is(RegClass::I64);
         debug_assert!(dst.to_reg().get_class() == RegClass::I64);
+        let src = GprMem::new(src).unwrap();
+        let dst = WritableGpr::from_writable_reg(dst).unwrap();
         Inst::MovsxRmR { ext_mode, src, dst }
     }
 
@@ -507,7 +515,7 @@ impl Inst {
         debug_assert!(dst.to_reg().get_class() == RegClass::I64);
         Inst::Mov64MR {
             src: src.into(),
-            dst,
+            dst: WritableGpr::from_writable_reg(dst).unwrap(),
         }
     }
 
@@ -524,7 +532,7 @@ impl Inst {
         debug_assert!(src.get_class() == RegClass::I64);
         Inst::MovRM {
             size,
-            src,
+            src: Gpr::new(src).unwrap(),
             dst: dst.into(),
         }
     }
@@ -552,12 +560,13 @@ impl Inst {
         Inst::ShiftR {
             size,
             kind,
-            src: dst.to_reg(),
-            num_bits: match num_bits {
+            src: Gpr::new(dst.to_reg()).unwrap(),
+            num_bits: Imm8Gpr::new(match num_bits {
                 Some(imm) => Imm8Reg::Imm8 { imm },
                 None => Imm8Reg::Reg { reg: regs::rcx() },
-            },
-            dst,
+            })
+            .unwrap(),
+            dst: WritableGpr::from_writable_reg(dst).unwrap(),
         }
     }
 
@@ -568,8 +577,8 @@ impl Inst {
         debug_assert_eq!(dst.get_class(), RegClass::I64);
         Inst::CmpRmiR {
             size,
-            src,
-            dst,
+            src: GprMemImm::new(src).unwrap(),
+            dst: Gpr::new(dst).unwrap(),
             opcode: CmpOpcode::Cmp,
         }
     }
@@ -580,8 +589,8 @@ impl Inst {
         debug_assert_eq!(dst.get_class(), RegClass::I64);
         Inst::CmpRmiR {
             size,
-            src,
-            dst,
+            src: GprMemImm::new(src).unwrap(),
+            dst: Gpr::new(dst).unwrap(),
             opcode: CmpOpcode::Test,
         }
     }
@@ -594,6 +603,7 @@ impl Inst {
 
     pub(crate) fn setcc(cc: CC, dst: Writable<Reg>) -> Inst {
         debug_assert!(dst.to_reg().get_class() == RegClass::I64);
+        let dst = WritableGpr::from_writable_reg(dst).unwrap();
         Inst::Setcc { cc, dst }
     }
 
@@ -607,9 +617,9 @@ impl Inst {
         Inst::Cmove {
             size,
             cc,
-            consequent: src,
-            alternative: dst.to_reg(),
-            dst,
+            consequent: GprMem::new(src).unwrap(),
+            alternative: Gpr::new(dst.to_reg()).unwrap(),
+            dst: WritableGpr::from_writable_reg(dst).unwrap(),
         }
     }
 
@@ -617,16 +627,20 @@ impl Inst {
         debug_assert!(size.is_one_of(&[OperandSize::Size32, OperandSize::Size64]));
         src.assert_regclass_is(RegClass::V128);
         debug_assert!(dst.to_reg().get_class() == RegClass::V128);
+        let src = XmmMem::new(src).unwrap();
+        let dst = WritableXmm::from_writable_reg(dst).unwrap();
         Inst::XmmCmove { size, cc, src, dst }
     }
 
     pub(crate) fn push64(src: RegMemImm) -> Inst {
         src.assert_regclass_is(RegClass::I64);
+        let src = GprMemImm::new(src).unwrap();
         Inst::Push64 { src }
     }
 
     pub(crate) fn pop64(dst: Writable<Reg>) -> Inst {
         debug_assert!(dst.to_reg().get_class() == RegClass::I64);
+        let dst = WritableGpr::from_writable_reg(dst).unwrap();
         Inst::Pop64 { dst }
     }
 
@@ -780,7 +794,7 @@ impl Inst {
     fn produces_const(&self) -> bool {
         match self {
             Self::AluRmiR { op, src2, dst, .. } => {
-                src2.to_reg() == Some(dst.to_reg())
+                src2.clone().to_reg_mem_imm().to_reg() == Some(dst.to_reg().to_reg())
                     && (*op == AluRmiROpcode::Xor || *op == AluRmiROpcode::Sub)
             }
 
@@ -838,7 +852,11 @@ impl Inst {
             Inst::AluRmiR { src1, dst, .. } => {
                 if *src1 != dst.to_reg() {
                     debug_assert!(src1.is_virtual());
-                    insts.push(Self::gen_move(*dst, *src1, types::I64));
+                    insts.push(Self::gen_move(
+                        dst.to_writable_reg(),
+                        src1.to_reg(),
+                        types::I64,
+                    ));
                     *src1 = dst.to_reg();
                 }
                 insts.push(self);
@@ -883,7 +901,11 @@ impl Inst {
             } => {
                 if *alternative != dst.to_reg() {
                     debug_assert!(alternative.is_virtual());
-                    insts.push(Self::mov_r_r(*size, *alternative, *dst));
+                    insts.push(Self::mov_r_r(
+                        *size,
+                        alternative.to_reg(),
+                        dst.to_writable_reg(),
+                    ));
                     *alternative = dst.to_reg();
                 }
                 insts.push(self);
@@ -916,22 +938,30 @@ impl Inst {
                     debug_assert!(dividend.is_virtual());
                     insts.push(Self::gen_move(
                         Writable::from_reg(regs::rax()),
-                        *dividend,
+                        dividend.to_reg(),
                         types::I64,
                     ));
-                    *dividend = regs::rax();
+                    *dividend = Gpr::new(regs::rax()).unwrap();
                 }
                 let mut quotient_mov = None;
                 if dst_quotient.to_reg() != regs::rax() {
                     debug_assert!(dst_quotient.to_reg().is_virtual());
-                    quotient_mov = Some(Self::gen_move(*dst_quotient, regs::rax(), types::I64));
-                    *dst_quotient = Writable::from_reg(regs::rax());
+                    quotient_mov = Some(Self::gen_move(
+                        dst_quotient.to_writable_reg(),
+                        regs::rax(),
+                        types::I64,
+                    ));
+                    *dst_quotient = Writable::from_reg(Gpr::new(regs::rax()).unwrap());
                 }
                 let mut remainder_mov = None;
                 if dst_remainder.to_reg() != regs::rdx() {
                     debug_assert!(dst_remainder.to_reg().is_virtual());
-                    remainder_mov = Some(Self::gen_move(*dst_remainder, regs::rdx(), types::I64));
-                    *dst_remainder = Writable::from_reg(regs::rdx());
+                    remainder_mov = Some(Self::gen_move(
+                        dst_remainder.to_writable_reg(),
+                        regs::rdx(),
+                        types::I64,
+                    ));
+                    *dst_remainder = Writable::from_reg(Gpr::new(regs::rdx()).unwrap());
                 }
                 insts.push(self);
                 insts.extend(quotient_mov);
@@ -947,22 +977,30 @@ impl Inst {
                     debug_assert!(src1.is_virtual());
                     insts.push(Self::gen_move(
                         Writable::from_reg(regs::rax()),
-                        *src1,
+                        src1.to_reg(),
                         types::I64,
                     ));
-                    *src1 = regs::rax();
+                    *src1 = Gpr::new(regs::rax()).unwrap();
                 }
                 let mut dst_lo_mov = None;
                 if dst_lo.to_reg() != regs::rax() {
                     debug_assert!(dst_lo.to_reg().is_virtual());
-                    dst_lo_mov = Some(Self::gen_move(*dst_lo, regs::rax(), types::I64));
-                    *dst_lo = Writable::from_reg(regs::rax());
+                    dst_lo_mov = Some(Self::gen_move(
+                        dst_lo.to_writable_reg(),
+                        regs::rax(),
+                        types::I64,
+                    ));
+                    *dst_lo = Writable::from_reg(Gpr::new(regs::rax()).unwrap());
                 }
                 let mut dst_hi_mov = None;
                 if dst_hi.to_reg() != regs::rdx() {
                     debug_assert!(dst_hi.to_reg().is_virtual());
-                    dst_hi_mov = Some(Self::gen_move(*dst_hi, regs::rdx(), types::I64));
-                    *dst_hi = Writable::from_reg(regs::rdx());
+                    dst_hi_mov = Some(Self::gen_move(
+                        dst_hi.to_writable_reg(),
+                        regs::rdx(),
+                        types::I64,
+                    ));
+                    *dst_hi = Writable::from_reg(Gpr::new(regs::rdx()).unwrap());
                 }
                 insts.push(self);
                 insts.extend(dst_lo_mov);
@@ -973,16 +1011,20 @@ impl Inst {
                     debug_assert!(src.is_virtual());
                     insts.push(Self::gen_move(
                         Writable::from_reg(regs::rax()),
-                        *src,
+                        src.to_reg(),
                         types::I64,
                     ));
-                    *src = regs::rax();
+                    *src = Gpr::new(regs::rax()).unwrap();
                 }
                 let mut dst_mov = None;
                 if dst.to_reg() != regs::rax() {
                     debug_assert!(dst.to_reg().is_virtual());
-                    dst_mov = Some(Self::gen_move(*dst, dst.to_reg(), types::I64));
-                    *dst = Writable::from_reg(regs::rax());
+                    dst_mov = Some(Self::gen_move(
+                        dst.to_writable_reg(),
+                        dst.to_reg().to_reg(),
+                        types::I64,
+                    ));
+                    *dst = Writable::from_reg(Gpr::new(regs::rax()).unwrap());
                 }
                 insts.push(self);
                 insts.extend(dst_mov);
@@ -992,18 +1034,22 @@ impl Inst {
             } => {
                 if *src != dst.to_reg() {
                     debug_assert!(src.is_virtual());
-                    insts.push(Self::gen_move(*dst, *src, types::I64));
+                    insts.push(Self::gen_move(
+                        dst.to_writable_reg(),
+                        src.to_reg(),
+                        types::I64,
+                    ));
                     *src = dst.to_reg();
                 }
-                if let Imm8Reg::Reg { reg } = num_bits {
-                    if *reg != regs::rcx() {
+                if let Imm8Reg::Reg { reg } = num_bits.clone().to_imm8_reg() {
+                    if reg != regs::rcx() {
                         debug_assert!(reg.is_virtual());
                         insts.push(Self::gen_move(
                             Writable::from_reg(regs::rcx()),
-                            *reg,
+                            reg,
                             types::I64,
                         ));
-                        *reg = regs::rcx();
+                        *num_bits = Imm8Gpr::new(Imm8Reg::Reg { reg: regs::rcx() }).unwrap();
                     }
                 }
                 insts.push(self);
@@ -1146,7 +1192,7 @@ impl PrettyPrint for Inst {
                 "{} {}, {}",
                 ljustify2(op.to_string(), suffix_lqb(*size, op.is_8bit())),
                 src2.show_rru_sized(mb_rru, size_lqb(*size, op.is_8bit())),
-                show_ireg_sized(dst.to_reg(), mb_rru, size_lqb(*size, op.is_8bit())),
+                show_ireg_sized(dst.to_reg().to_reg(), mb_rru, size_lqb(*size, op.is_8bit())),
             ),
 
             Inst::UnaryRmR { src, dst, op, size } => format!(
@@ -1208,7 +1254,7 @@ impl PrettyPrint for Inst {
                     DivOrRemKind::SignedRem => "srem",
                     DivOrRemKind::UnsignedRem => "urem",
                 },
-                show_ireg_sized(divisor.to_reg(), mb_rru, size.to_bytes()),
+                show_ireg_sized(divisor.to_reg().to_reg(), mb_rru, size.to_bytes()),
             ),
 
             Inst::SignExtendData { size, .. } => match size {
@@ -1276,8 +1322,8 @@ impl PrettyPrint for Inst {
                     },
                     format!("f{}", size.to_bits())
                 ),
-                show_ireg_sized(*lhs, mb_rru, 8),
-                show_ireg_sized(rhs_dst.to_reg(), mb_rru, 8),
+                show_ireg_sized(lhs.to_reg(), mb_rru, 8),
+                show_ireg_sized(rhs_dst.to_reg().to_reg(), mb_rru, 8),
             ),
 
             Inst::XmmRmRImm {
@@ -1342,7 +1388,7 @@ impl PrettyPrint for Inst {
                 "{} {}, {}",
                 ljustify(op.to_string()),
                 src.show_rru_sized(mb_rru, 8),
-                show_ireg_sized(*dst, mb_rru, 8),
+                show_ireg_sized(dst.to_reg(), mb_rru, 8),
             ),
 
             Inst::CvtUint64ToFloatSeq {
@@ -1405,14 +1451,14 @@ impl PrettyPrint for Inst {
                         "{} ${}, {}",
                         ljustify("movabsq".to_string()),
                         *simm64 as i64,
-                        show_ireg_sized(dst.to_reg(), mb_rru, 8)
+                        show_ireg_sized(dst.to_reg().to_reg(), mb_rru, 8)
                     )
                 } else {
                     format!(
                         "{} ${}, {}",
                         ljustify("movl".to_string()),
                         (*simm64 as u32) as i32,
-                        show_ireg_sized(dst.to_reg(), mb_rru, 4)
+                        show_ireg_sized(dst.to_reg().to_reg(), mb_rru, 4)
                     )
                 }
             }
@@ -1420,8 +1466,8 @@ impl PrettyPrint for Inst {
             Inst::MovRR { size, src, dst } => format!(
                 "{} {}, {}",
                 ljustify2("mov".to_string(), suffix_lq(*size)),
-                show_ireg_sized(*src, mb_rru, size.to_bytes()),
-                show_ireg_sized(dst.to_reg(), mb_rru, size.to_bytes())
+                show_ireg_sized(src.to_reg(), mb_rru, size.to_bytes()),
+                show_ireg_sized(dst.to_reg().to_reg(), mb_rru, size.to_bytes())
             ),
 
             Inst::MovzxRmR {
@@ -1432,14 +1478,14 @@ impl PrettyPrint for Inst {
                         "{} {}, {}",
                         ljustify("movl".to_string()),
                         src.show_rru_sized(mb_rru, ext_mode.src_size()),
-                        show_ireg_sized(dst.to_reg(), mb_rru, 4)
+                        show_ireg_sized(dst.to_reg().to_reg(), mb_rru, 4)
                     )
                 } else {
                     format!(
                         "{} {}, {}",
                         ljustify2("movz".to_string(), ext_mode.to_string()),
                         src.show_rru_sized(mb_rru, ext_mode.src_size()),
-                        show_ireg_sized(dst.to_reg(), mb_rru, ext_mode.dst_size())
+                        show_ireg_sized(dst.to_reg().to_reg(), mb_rru, ext_mode.dst_size())
                     )
                 }
             }
@@ -1464,13 +1510,13 @@ impl PrettyPrint for Inst {
                 "{} {}, {}",
                 ljustify2("movs".to_string(), ext_mode.to_string()),
                 src.show_rru_sized(mb_rru, ext_mode.src_size()),
-                show_ireg_sized(dst.to_reg(), mb_rru, ext_mode.dst_size())
+                show_ireg_sized(dst.to_reg().to_reg(), mb_rru, ext_mode.dst_size())
             ),
 
             Inst::MovRM { size, src, dst, .. } => format!(
                 "{} {}, {}",
                 ljustify2("mov".to_string(), suffix_bwlq(*size)),
-                show_ireg_sized(*src, mb_rru, size.to_bytes()),
+                show_ireg_sized(src.to_reg(), mb_rru, size.to_bytes()),
                 dst.show_rru(mb_rru)
             ),
 
@@ -1480,19 +1526,19 @@ impl PrettyPrint for Inst {
                 num_bits,
                 dst,
                 ..
-            } => match num_bits {
+            } => match num_bits.clone().to_imm8_reg() {
                 Imm8Reg::Reg { reg } => format!(
                     "{} {}, {}",
                     ljustify2(kind.to_string(), suffix_bwlq(*size)),
-                    show_ireg_sized(*reg, mb_rru, 1),
-                    show_ireg_sized(dst.to_reg(), mb_rru, size.to_bytes())
+                    show_ireg_sized(reg, mb_rru, 1),
+                    show_ireg_sized(dst.to_reg().to_reg(), mb_rru, size.to_bytes())
                 ),
 
                 Imm8Reg::Imm8 { imm: num_bits } => format!(
                     "{} ${}, {}",
                     ljustify2(kind.to_string(), suffix_bwlq(*size)),
                     num_bits,
-                    show_ireg_sized(dst.to_reg(), mb_rru, size.to_bytes())
+                    show_ireg_sized(dst.to_reg().to_reg(), mb_rru, size.to_bytes())
                 ),
             },
 
@@ -1519,14 +1565,14 @@ impl PrettyPrint for Inst {
                     "{} {}, {}",
                     ljustify2(op.to_string(), suffix_bwlq(*size)),
                     src.show_rru_sized(mb_rru, size.to_bytes()),
-                    show_ireg_sized(*dst, mb_rru, size.to_bytes())
+                    show_ireg_sized(dst.to_reg(), mb_rru, size.to_bytes())
                 )
             }
 
             Inst::Setcc { cc, dst } => format!(
                 "{} {}",
                 ljustify2("set".to_string(), cc.to_string()),
-                show_ireg_sized(dst.to_reg(), mb_rru, 1)
+                show_ireg_sized(dst.to_reg().to_reg(), mb_rru, 1)
             ),
 
             Inst::Cmove {
@@ -1539,7 +1585,7 @@ impl PrettyPrint for Inst {
                 "{} {}, {}",
                 ljustify(format!("cmov{}{}", cc.to_string(), suffix_bwlq(*size))),
                 src.show_rru_sized(mb_rru, size.to_bytes()),
-                show_ireg_sized(dst.to_reg(), mb_rru, size.to_bytes())
+                show_ireg_sized(dst.to_reg().to_reg(), mb_rru, size.to_bytes())
             ),
 
             Inst::XmmCmove { size, cc, src, dst } => {
@@ -1552,7 +1598,7 @@ impl PrettyPrint for Inst {
                         "ss"
                     },
                     src.show_rru_sized(mb_rru, size.to_bytes()),
-                    show_ireg_sized(dst.to_reg(), mb_rru, size.to_bytes())
+                    show_ireg_sized(dst.to_reg().to_reg(), mb_rru, size.to_bytes())
                 )
             }
 
@@ -1693,10 +1739,10 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             debug_assert_eq!(*src1, dst.to_reg());
             if inst.produces_const() {
                 // No need to account for src2, since src2 == dst.
-                collector.add_def(*dst);
+                collector.add_def(dst.to_writable_reg());
             } else {
                 src2.get_regs_as_uses(collector);
-                collector.add_mod(*dst);
+                collector.add_mod(dst.to_writable_reg());
             }
         }
         Inst::Not { src, dst, .. } => {
@@ -1760,9 +1806,9 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             // the rdx register *before* the instruction, which is not too bad.
             collector.add_mod(Writable::from_reg(regs::rax()));
             collector.add_mod(Writable::from_reg(regs::rdx()));
-            collector.add_mod(*divisor);
+            collector.add_mod(divisor.to_writable_reg());
             if let Some(tmp) = tmp {
-                collector.add_def(*tmp);
+                collector.add_def(tmp.to_writable_reg());
             }
         }
         Inst::SignExtendData { size, src, dst } => {
@@ -1852,8 +1898,8 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
         Inst::XmmUninitializedValue { dst } => collector.add_def(dst.to_writable_reg()),
         Inst::XmmLoadConst { dst, .. } => collector.add_def(*dst),
         Inst::XmmMinMaxSeq { lhs, rhs_dst, .. } => {
-            collector.add_use(*lhs);
-            collector.add_mod(*rhs_dst);
+            collector.add_use(lhs.to_reg());
+            collector.add_mod(rhs_dst.to_writable_reg());
         }
         Inst::XmmRmiReg {
             src1, src2, dst, ..
@@ -1868,14 +1914,14 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
         }
         Inst::XmmCmpRmR { src, dst, .. } => {
             src.get_regs_as_uses(collector);
-            collector.add_use(*dst);
+            collector.add_use(dst.to_reg());
         }
         Inst::Imm { dst, .. } => {
-            collector.add_def(*dst);
+            collector.add_def(dst.to_writable_reg());
         }
         Inst::MovRR { src, dst, .. } => {
-            collector.add_use(*src);
-            collector.add_def(*dst);
+            collector.add_use(src.to_reg());
+            collector.add_def(dst.to_writable_reg());
         }
         Inst::XmmToGpr { src, dst, .. } => {
             collector.add_use(src.to_reg());
@@ -1918,11 +1964,11 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
         }
         Inst::MovzxRmR { src, dst, .. } => {
             src.get_regs_as_uses(collector);
-            collector.add_def(*dst);
+            collector.add_def(dst.to_writable_reg());
         }
         Inst::Mov64MR { src, dst, .. } => {
             src.get_regs_as_uses(collector);
-            collector.add_def(*dst)
+            collector.add_def(dst.to_writable_reg())
         }
         Inst::LoadEffectiveAddress { addr: src, dst } => {
             src.get_regs_as_uses(collector);
@@ -1930,41 +1976,44 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
         }
         Inst::MovsxRmR { src, dst, .. } => {
             src.get_regs_as_uses(collector);
-            collector.add_def(*dst);
+            collector.add_def(dst.to_writable_reg());
         }
         Inst::MovRM { src, dst, .. } => {
-            collector.add_use(*src);
+            collector.add_use(src.to_reg());
             dst.get_regs_as_uses(collector);
         }
         Inst::ShiftR { num_bits, dst, .. } => {
-            if let Imm8Reg::Reg { reg } = num_bits {
-                debug_assert_eq!(*reg, regs::rcx());
+            if let Imm8Reg::Reg { reg } = num_bits.clone().to_imm8_reg() {
+                debug_assert_eq!(reg, regs::rcx());
                 collector.add_use(regs::rcx());
             }
-            collector.add_mod(*dst);
+            collector.add_mod(dst.to_writable_reg());
         }
         Inst::CmpRmiR { src, dst, .. } => {
             src.get_regs_as_uses(collector);
-            collector.add_use(*dst); // yes, really `add_use`
+            collector.add_use(dst.to_reg()); // yes, really `add_use`
         }
         Inst::Setcc { dst, .. } => {
-            collector.add_def(*dst);
+            collector.add_def(dst.to_writable_reg());
         }
         Inst::Cmove {
             consequent: src,
             dst,
             ..
-        }
-        | Inst::XmmCmove { src, dst, .. } => {
+        } => {
             src.get_regs_as_uses(collector);
-            collector.add_mod(*dst);
+            collector.add_mod(dst.to_writable_reg());
+        }
+        Inst::XmmCmove { src, dst, .. } => {
+            src.get_regs_as_uses(collector);
+            collector.add_mod(dst.to_writable_reg());
         }
         Inst::Push64 { src } => {
             src.get_regs_as_uses(collector);
             collector.add_mod(Writable::from_reg(regs::rsp()));
         }
         Inst::Pop64 { dst } => {
-            collector.add_def(*dst);
+            collector.add_def(dst.to_writable_reg());
         }
 
         Inst::CallKnown {
@@ -2149,11 +2198,11 @@ pub(crate) fn x64_map_regs<RM: RegMapper>(inst: &mut Inst, mapper: &RM) {
             debug_assert_eq!(*src1, dst.to_reg());
             if produces_const {
                 src2.map_as_def(mapper);
-                mapper.map_def(dst);
+                dst.map_def(mapper);
                 *src1 = dst.to_reg();
             } else {
                 src2.map_uses(mapper);
-                mapper.map_mod(dst);
+                dst.map_mod(mapper);
                 *src1 = dst.to_reg();
             }
         }
@@ -2165,9 +2214,9 @@ pub(crate) fn x64_map_regs<RM: RegMapper>(inst: &mut Inst, mapper: &RM) {
         Inst::Div { divisor, .. } => divisor.map_uses(mapper),
         Inst::MulHi { src2, .. } => src2.map_uses(mapper),
         Inst::CheckedDivOrRemSeq { divisor, tmp, .. } => {
-            mapper.map_mod(divisor);
+            divisor.map_mod(mapper);
             if let Some(tmp) = tmp {
-                mapper.map_def(tmp)
+                tmp.map_def(mapper)
             }
         }
         Inst::SignExtendData { .. } => {}
@@ -2275,8 +2324,8 @@ pub(crate) fn x64_map_regs<RM: RegMapper>(inst: &mut Inst, mapper: &RM) {
             ref mut rhs_dst,
             ..
         } => {
-            mapper.map_use(lhs);
-            mapper.map_mod(rhs_dst);
+            lhs.map_use(mapper);
+            rhs_dst.map_mod(mapper);
         }
         Inst::XmmMovRM {
             ref mut src,
@@ -2292,16 +2341,16 @@ pub(crate) fn x64_map_regs<RM: RegMapper>(inst: &mut Inst, mapper: &RM) {
             ..
         } => {
             src.map_uses(mapper);
-            mapper.map_use(dst);
+            dst.map_use(mapper);
         }
-        Inst::Imm { ref mut dst, .. } => mapper.map_def(dst),
+        Inst::Imm { ref mut dst, .. } => dst.map_def(mapper),
         Inst::MovRR {
             ref mut src,
             ref mut dst,
             ..
         } => {
-            mapper.map_use(src);
-            mapper.map_def(dst);
+            src.map_use(mapper);
+            dst.map_def(mapper);
         }
         Inst::XmmToGpr {
             ref mut src,
@@ -2356,11 +2405,11 @@ pub(crate) fn x64_map_regs<RM: RegMapper>(inst: &mut Inst, mapper: &RM) {
             ..
         } => {
             src.map_uses(mapper);
-            mapper.map_def(dst);
+            dst.map_def(mapper);
         }
         Inst::Mov64MR { src, dst, .. } => {
             src.map_uses(mapper);
-            mapper.map_def(dst);
+            dst.map_def(mapper);
         }
         Inst::LoadEffectiveAddress { addr: src, dst } => {
             src.map_uses(mapper);
@@ -2372,14 +2421,14 @@ pub(crate) fn x64_map_regs<RM: RegMapper>(inst: &mut Inst, mapper: &RM) {
             ..
         } => {
             src.map_uses(mapper);
-            mapper.map_def(dst);
+            dst.map_def(mapper);
         }
         Inst::MovRM {
             ref mut src,
             ref mut dst,
             ..
         } => {
-            mapper.map_use(src);
+            src.map_use(mapper);
             dst.map_uses(mapper);
         }
         Inst::ShiftR {
@@ -2388,7 +2437,7 @@ pub(crate) fn x64_map_regs<RM: RegMapper>(inst: &mut Inst, mapper: &RM) {
             ..
         } => {
             debug_assert_eq!(*src, dst.to_reg());
-            mapper.map_mod(dst);
+            dst.map_mod(mapper);
             *src = dst.to_reg();
         }
         Inst::CmpRmiR {
@@ -2397,9 +2446,9 @@ pub(crate) fn x64_map_regs<RM: RegMapper>(inst: &mut Inst, mapper: &RM) {
             ..
         } => {
             src.map_uses(mapper);
-            mapper.map_use(dst);
+            dst.map_use(mapper);
         }
-        Inst::Setcc { ref mut dst, .. } => mapper.map_def(dst),
+        Inst::Setcc { ref mut dst, .. } => dst.map_def(mapper),
         Inst::Cmove {
             consequent: ref mut src,
             ref mut dst,
@@ -2407,7 +2456,7 @@ pub(crate) fn x64_map_regs<RM: RegMapper>(inst: &mut Inst, mapper: &RM) {
             ..
         } => {
             src.map_uses(mapper);
-            mapper.map_mod(dst);
+            dst.map_mod(mapper);
             *alternative = dst.to_reg();
         }
         Inst::XmmCmove {
@@ -2416,11 +2465,11 @@ pub(crate) fn x64_map_regs<RM: RegMapper>(inst: &mut Inst, mapper: &RM) {
             ..
         } => {
             src.map_uses(mapper);
-            mapper.map_mod(dst);
+            dst.map_mod(mapper);
         }
         Inst::Push64 { ref mut src } => src.map_uses(mapper),
         Inst::Pop64 { ref mut dst } => {
-            mapper.map_def(dst);
+            dst.map_def(mapper);
         }
 
         Inst::CallKnown {
@@ -2520,7 +2569,7 @@ impl MachInst for Inst {
             // conceivably use `movl %reg, %reg` to zero out the top 32 bits of
             // %reg.
             Self::MovRR { size, src, dst, .. } if *size == OperandSize::Size64 => {
-                Some((*dst, *src))
+                Some((dst.to_writable_reg(), src.to_reg()))
             }
             // Note as well that MOVS[S|D] when used in the `XmmUnaryRmR` context are pure moves of
             // scalar floating-point values (and annotate `dst` as `def`s to the register allocator)
@@ -2578,12 +2627,15 @@ impl MachInst for Inst {
                 size: OperandSize::Size8,
                 src,
                 dst: SyntheticAmode::NominalSPOffset { simm32 },
-            } => Some(MachInstStackOpInfo::StoreNomSPOff(*src, *simm32 as i64)),
+            } => Some(MachInstStackOpInfo::StoreNomSPOff(
+                src.to_reg(),
+                *simm32 as i64,
+            )),
             Self::Mov64MR {
                 src: SyntheticAmode::NominalSPOffset { simm32 },
                 dst,
             } => Some(MachInstStackOpInfo::LoadNomSPOff(
-                dst.to_reg(),
+                dst.to_reg().to_reg(),
                 *simm32 as i64,
             )),
             _ => None,
