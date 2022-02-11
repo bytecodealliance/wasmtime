@@ -608,6 +608,7 @@ impl<'a> SerializedModule<'a> {
             parse_wasm_debuginfo,
             interruptable,
             consume_fuel,
+            fuel_amount,
             epoch_interruption,
             static_memory_bound_is_maximum,
             guard_before_linear_memory,
@@ -636,6 +637,11 @@ impl<'a> SerializedModule<'a> {
             dynamic_memory_offset_guard_size,
             other.dynamic_memory_offset_guard_size,
             "dynamic memory guard size",
+        )?;
+        Self::check_int(
+            fuel_amount,
+            other.fuel_amount,
+            "fuel amount guard size",
         )?;
         Self::check_bool(
             generate_native_debuginfo,

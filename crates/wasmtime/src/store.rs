@@ -465,6 +465,10 @@ impl<T> Store<T> {
             data: ManuallyDrop::new(data),
         });
 
+        if inner.engine().config().tunables.consume_fuel {
+            inner.add_fuel(engine.config().tunables.fuel_amount).unwrap();
+        }
+
         // Once we've actually allocated the store itself we can configure the
         // trait object pointer of the default callee. Note the erasure of the
         // lifetime here into `'static`, so in general usage of this trait

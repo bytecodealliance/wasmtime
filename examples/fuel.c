@@ -31,6 +31,7 @@ int main() {
   wasm_config_t *config = wasm_config_new();
   assert(config != NULL);
   wasmtime_config_consume_fuel_set(config, true);
+  wasmtime_config_fuel_amount_set(config, 10000);
 
   // Create an *engine*, which is a compilation context, with our configured options.
   wasm_engine_t *engine = wasm_engine_new_with_config(config);
@@ -38,10 +39,6 @@ int main() {
   wasmtime_store_t *store = wasmtime_store_new(engine, NULL, NULL);
   assert(store != NULL);
   wasmtime_context_t *context = wasmtime_store_context(store);
-
-  error = wasmtime_context_add_fuel(context, 10000);
-  if (error != NULL)
-    exit_with_error("failed to add fuel", error, NULL);
 
   // Load our input file to parse it next
   FILE* file = fopen("examples/fuel.wat", "r");

@@ -115,6 +115,13 @@ WASMTIME_CONFIG_PROP(void, interruptable, bool)
 WASMTIME_CONFIG_PROP(void, consume_fuel, bool)
 
 /**
+ * \brief Configures how much "fuel" is allocated for WebAssembly execution.
+ *
+ * This setting is `0` by default.
+ */
+WASMTIME_CONFIG_PROP(void, fuel_amount, uint64_t)
+
+/**
  * \brief Configures the maximum stack size, in bytes, that JIT code can use.
  *
  * This setting is 2MB by default. Configuring this setting will limit the
@@ -271,4 +278,3 @@ WASM_API_EXTERN wasmtime_error_t* wasmtime_config_cache_config_load(wasm_config_
 #endif
 
 #endif // WASMTIME_CONFIG_H
-

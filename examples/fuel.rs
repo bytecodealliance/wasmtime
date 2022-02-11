@@ -8,9 +8,9 @@ use wasmtime::*;
 fn main() -> Result<()> {
     let mut config = Config::new();
     config.consume_fuel(true);
+    config.fuel_amount(10_000);
     let engine = Engine::new(&config)?;
     let mut store = Store::new(&engine, ());
-    store.add_fuel(10_000)?;
     let module = Module::from_file(store.engine(), "examples/fuel.wat")?;
     let instance = Instance::new(&mut store, &module, &[])?;
 

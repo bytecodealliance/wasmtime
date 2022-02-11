@@ -334,13 +334,25 @@ impl Config {
     ///
     /// Note that a [`Store`] starts with no fuel, so if you enable this option
     /// you'll have to be sure to pour some fuel into [`Store`] before
-    /// executing some code.
+    /// executing some code. You can do this by calling [`Config::fuel_amount`].
     ///
     /// By default this option is `false`.
     ///
     /// [`Store`]: crate::Store
     pub fn consume_fuel(&mut self, enable: bool) -> &mut Self {
         self.tunables.consume_fuel = enable;
+        self
+    }
+
+    /// Configures how much "fuel" is placed into a [`Store`] for WebAssembly
+    /// execution.
+    ///
+    /// This option is a counterpart to [`Config::consume_fuel`].
+    ///
+    /// By default this option is `0`.
+    ///
+    pub fn fuel_amount(&mut self, amount: u64) -> &mut Self {
+        self.tunables.fuel_amount = amount;
         self
     }
 

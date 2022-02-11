@@ -238,6 +238,10 @@ struct CommonOptions {
     #[structopt(long)]
     consume_fuel: bool,
 
+    /// How much fuel the wasm code is allowed to consume.
+    #[structopt(long, default_value = "0")]
+    add_fuel: u64,
+
     /// Executing wasm code will yield when a global epoch counter
     /// changes, allowing for async operation without blocking the
     /// executor.
@@ -328,6 +332,7 @@ impl CommonOptions {
             config.dynamic_memory_guard_size(size);
         }
 
+        config.fuel_amount(self.add_fuel);
         config.consume_fuel(self.consume_fuel);
         config.epoch_interruption(self.epoch_interruption);
         config.generate_address_map(!self.disable_address_map);
@@ -741,6 +746,16 @@ mod test {
                 wasi_nn: false,
                 wasi_crypto: false
             }
+        );
+    }
+
+    #[test]
+    fn test_add_fuel() {
+        let options =
+            CommonOptions::from_iter_safe(vec!["foo", "--add-fuel=100"]).unwrap();
+        assert_eq!(
+            options.add_fuel,
+            100
         );
     }
 }
