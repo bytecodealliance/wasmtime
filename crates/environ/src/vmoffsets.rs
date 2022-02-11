@@ -185,99 +185,55 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
             size: 0,
         };
 
-        ret.interrupts = 0;
-        ret.epoch_ptr = ret
-            .interrupts
-            .checked_add(u32::from(ret.ptr.size()))
-            .unwrap();
-        ret.externref_activations_table = ret
-            .epoch_ptr
-            .checked_add(u32::from(ret.ptr.size()))
-            .unwrap();
-        ret.store = ret
-            .externref_activations_table
-            .checked_add(u32::from(ret.ptr.size()))
-            .unwrap();
-        ret.signature_ids = ret
-            .store
-            .checked_add(u32::from(ret.ptr.size() * 2))
-            .unwrap();
-        ret.imported_functions = ret
-            .signature_ids
-            .checked_add(u32::from(ret.ptr.size()))
-            .unwrap();
-        ret.imported_tables = ret
-            .imported_functions
-            .checked_add(
-                ret.num_imported_functions
-                    .checked_mul(u32::from(ret.size_of_vmfunction_import()))
-                    .unwrap(),
-            )
-            .unwrap();
-        ret.imported_memories = ret
-            .imported_tables
-            .checked_add(
-                ret.num_imported_tables
-                    .checked_mul(u32::from(ret.size_of_vmtable_import()))
-                    .unwrap(),
-            )
-            .unwrap();
-        ret.imported_globals = ret
-            .imported_memories
-            .checked_add(
-                ret.num_imported_memories
-                    .checked_mul(u32::from(ret.size_of_vmmemory_import()))
-                    .unwrap(),
-            )
-            .unwrap();
-        ret.defined_tables = ret
-            .imported_globals
-            .checked_add(
-                ret.num_imported_globals
-                    .checked_mul(u32::from(ret.size_of_vmglobal_import()))
-                    .unwrap(),
-            )
-            .unwrap();
-        ret.defined_memories = ret
-            .defined_tables
-            .checked_add(
-                ret.num_defined_tables
-                    .checked_mul(u32::from(ret.size_of_vmtable_definition()))
-                    .unwrap(),
-            )
-            .unwrap();
-        ret.defined_globals = align(
-            ret.defined_memories
-                .checked_add(
-                    ret.num_defined_memories
-                        .checked_mul(u32::from(ret.size_of_vmmemory_definition()))
-                        .unwrap(),
-                )
-                .unwrap(),
-            16,
-        );
-        ret.defined_anyfuncs = ret
-            .defined_globals
-            .checked_add(
-                ret.num_defined_globals
-                    .checked_mul(u32::from(ret.size_of_vmglobal_definition()))
-                    .unwrap(),
-            )
-            .unwrap();
-        ret.builtin_functions = ret
-            .defined_anyfuncs
-            .checked_add(
-                ret.num_imported_functions
-                    .checked_add(ret.num_defined_functions)
-                    .unwrap()
-                    .checked_mul(u32::from(ret.size_of_vmcaller_checked_anyfunc()))
-                    .unwrap(),
-            )
-            .unwrap();
-        ret.size = ret
-            .builtin_functions
-            .checked_add(u32::from(ret.pointer_size()))
-            .unwrap();
+        // Use a local variable instead of ret.size to prevent unnecessary loads and stores.
+        // LLVM is not able to optimize accesses of ret.size away most of the time.
+        let mut next_field_offset = 0;
+
+        macro_rules! field {
+            ($field:ident = .; size = $size:expr) => {
+                ret.$field = next_field_offset;
+                next_field_offset = next_field_offset.checked_add($size).unwrap();
+            };
+            ($field:ident = align(., $align:literal); size = $size:expr) => {
+                ret.$field = align(next_field_offset, $align);
+                next_field_offset = ret.$field.checked_add($size).unwrap();
+            }
+        }
+
+        field!(interrupts = .; size = u32::from(ret.ptr.size()));
+        field!(epoch_ptr = .; size = u32::from(ret.ptr.size()));
+        field!(externref_activations_table = .; size = u32::from(ret.ptr.size()));
+        field!(store = .; size = u32::from(ret.ptr.size() * 2));
+        field!(signature_ids = .; size = u32::from(ret.ptr.size()));
+        field!(imported_functions = .; size = ret.num_imported_functions
+            .checked_mul(u32::from(ret.size_of_vmfunction_import()))
+            .unwrap());
+        field!(imported_tables = .; size = ret.num_imported_tables
+            .checked_mul(u32::from(ret.size_of_vmtable_import()))
+            .unwrap());
+        field!(imported_memories = .; size = ret.num_imported_memories
+            .checked_mul(u32::from(ret.size_of_vmmemory_import()))
+            .unwrap());
+        field!(imported_globals = .; size = ret.num_imported_globals
+            .checked_mul(u32::from(ret.size_of_vmglobal_import()))
+            .unwrap());
+        field!(defined_tables = .; size = ret.num_defined_tables
+            .checked_mul(u32::from(ret.size_of_vmtable_definition()))
+            .unwrap());
+        field!(defined_memories = .; size = ret.num_defined_memories
+            .checked_mul(u32::from(ret.size_of_vmmemory_definition()))
+            .unwrap());
+        field!(defined_globals = align(., 16); size = ret.num_defined_globals
+            .checked_mul(u32::from(ret.size_of_vmglobal_definition()))
+            .unwrap());
+        field!(defined_anyfuncs = .; size = ret.num_imported_functions
+            .checked_add(ret.num_defined_functions)
+            .unwrap()
+            .checked_mul(u32::from(ret.size_of_vmcaller_checked_anyfunc()))
+            .unwrap());
+        field!(builtin_functions = .; size = u32::from(ret.pointer_size()));
+
+        ret.size = next_field_offset;
 
         return ret;
     }
