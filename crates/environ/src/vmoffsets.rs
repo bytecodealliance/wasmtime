@@ -7,6 +7,7 @@
 //      interrupts: *const VMInterrupts,
 //      externref_activations_table: *mut VMExternRefActivationsTable,
 //      store: *mut dyn Store,
+//      builtins: *mut VMBuiltinFunctionsArray,
 //      signature_ids: *const VMSharedSignatureIndex,
 //      imported_functions: [VMFunctionImport; module.num_imported_functions],
 //      imported_tables: [VMTableImport; module.num_imported_tables],
@@ -16,7 +17,6 @@
 //      memories: [VMMemoryDefinition; module.num_defined_memories],
 //      globals: [VMGlobalDefinition; module.num_defined_globals],
 //      anyfuncs: [VMCallerCheckedAnyfunc; module.num_imported_functions + module.num_defined_functions],
-//      builtins: *mut VMBuiltinFunctionsArray,
 // }
 
 use crate::{
@@ -74,6 +74,7 @@ pub struct VMOffsets<P> {
     epoch_ptr: u32,
     externref_activations_table: u32,
     store: u32,
+    builtin_functions: u32,
     signature_ids: u32,
     imported_functions: u32,
     imported_tables: u32,
@@ -83,7 +84,6 @@ pub struct VMOffsets<P> {
     defined_memories: u32,
     defined_globals: u32,
     defined_anyfuncs: u32,
-    builtin_functions: u32,
     size: u32,
 }
 
@@ -172,6 +172,7 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
             epoch_ptr: 0,
             externref_activations_table: 0,
             store: 0,
+            builtin_functions: 0,
             signature_ids: 0,
             imported_functions: 0,
             imported_tables: 0,
@@ -181,7 +182,6 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
             defined_memories: 0,
             defined_globals: 0,
             defined_anyfuncs: 0,
-            builtin_functions: 0,
             size: 0,
         };
 
@@ -204,6 +204,7 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
         field!(epoch_ptr = .; size = u32::from(ret.ptr.size()));
         field!(externref_activations_table = .; size = u32::from(ret.ptr.size()));
         field!(store = .; size = u32::from(ret.ptr.size() * 2));
+        field!(builtin_functions = .; size = u32::from(ret.pointer_size()));
         field!(signature_ids = .; size = u32::from(ret.ptr.size()));
         field!(imported_functions = .; size = ret.num_imported_functions
             .checked_mul(u32::from(ret.size_of_vmfunction_import()))
@@ -231,7 +232,6 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
             .unwrap()
             .checked_mul(u32::from(ret.size_of_vmcaller_checked_anyfunc()))
             .unwrap());
-        field!(builtin_functions = .; size = u32::from(ret.pointer_size()));
 
         ret.size = next_field_offset;
 
