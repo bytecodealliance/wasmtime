@@ -105,7 +105,7 @@ impl<'a> Arbitrary<'a> for ModuleLimits {
         const MAX_MEMORIES: u32 = 10;
         const MAX_GLOBALS: u32 = 1000;
         const MAX_ELEMENTS: u32 = 1000;
-        const MAX_MEMORY_PAGES: u64 = 0x10000;
+        const MAX_MEMORY_PAGES: u64 = 160; // 10 MiB
 
         Ok(Self {
             imported_functions: u.int_in_range(0..=MAX_IMPORTS)?,
