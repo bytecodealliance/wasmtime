@@ -185,8 +185,6 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
             size: 0,
         };
 
-        // Use a local variable instead of ret.size to prevent unnecessary loads and stores.
-        // LLVM is not able to optimize accesses of ret.size away most of the time.
         let mut next_field_offset = 0;
 
         // Convenience functions for checked addition and multiplication.
