@@ -150,11 +150,9 @@ jobs:
     # Check a few builds of the cranelift backend
     # - only x86 backend support,
     # - only arm64 backend support,
-    # - experimental arm32 support,
     # - no debug_assertions.
     - run: cargo check --manifest-path=./cranelift/Cargo.toml --bin clif-util --no-default-features --features=cranelift-codegen/arm64
     - run: cargo check --manifest-path=./cranelift/Cargo.toml --bin clif-util --no-default-features --features=cranelift-codegen/x86
-    - run: cargo check --manifest-path=./cranelift/Cargo.toml --bin clif-util --no-default-features --features=cranelift-codegen/arm32
     - run: cargo check --manifest-path=./cranelift/Cargo.toml --bin clif-util
       env:
         CARGO_PROFILE_DEV_DEBUG_ASSERTIONS: false

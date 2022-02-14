@@ -4,10 +4,6 @@
 use regalloc::{RealReg, Reg, VirtualReg, Writable};
 use std::fmt::Debug;
 
-#[cfg(feature = "arm32")]
-const VALUE_REGS_PARTS: usize = 4;
-
-#[cfg(not(feature = "arm32"))]
 const VALUE_REGS_PARTS: usize = 2;
 
 /// Location at which a `Value` is stored in register(s): the value is located
@@ -90,59 +86,6 @@ impl<R: Clone + Copy + Debug + PartialEq + Eq + InvalidSentinel> ValueRegs<R> {
     }
 }
 
-#[cfg(feature = "arm32")]
-impl<R: Clone + Copy + Debug + PartialEq + Eq + InvalidSentinel> ValueRegs<R> {
-    /// Create a Value-in-R location for a value stored in one register.
-    pub fn one(reg: R) -> Self {
-        ValueRegs {
-            parts: [
-                reg,
-                R::invalid_sentinel(),
-                R::invalid_sentinel(),
-                R::invalid_sentinel(),
-            ],
-        }
-    }
-    /// Create a Value-in-R location for a value stored in two registers.
-    pub fn two(r1: R, r2: R) -> Self {
-        ValueRegs {
-            parts: [r1, r2, R::invalid_sentinel(), R::invalid_sentinel()],
-        }
-    }
-    /// Create a Value-in-R location for a value stored in four registers.
-    pub fn four(r1: R, r2: R, r3: R, r4: R) -> Self {
-        ValueRegs {
-            parts: [r1, r2, r3, r4],
-        }
-    }
-
-    /// Return the number of registers used.
-    pub fn len(self) -> usize {
-        // If rustc/LLVM is smart enough, this might even be vectorized...
-        (self.parts[0] != R::invalid_sentinel()) as usize
-            + (self.parts[1] != R::invalid_sentinel()) as usize
-            + (self.parts[2] != R::invalid_sentinel()) as usize
-            + (self.parts[3] != R::invalid_sentinel()) as usize
-    }
-
-    /// Map individual registers via a map function.
-    pub fn map<NewR, F>(self, f: F) -> ValueRegs<NewR>
-    where
-        NewR: Clone + Copy + Debug + PartialEq + Eq + InvalidSentinel,
-        F: Fn(R) -> NewR,
-    {
-        ValueRegs {
-            parts: [
-                f(self.parts[0]),
-                f(self.parts[1]),
-                f(self.parts[2]),
-                f(self.parts[3]),
-            ],
-        }
-    }
-}
-
-#[cfg(not(feature = "arm32"))]
 impl<R: Clone + Copy + Debug + PartialEq + Eq + InvalidSentinel> ValueRegs<R> {
     /// Create a Value-in-R location for a value stored in one register.
     pub fn one(reg: R) -> Self {

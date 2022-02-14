@@ -25,6 +25,3 @@ num_cpus = "1.8.0"
 target-lexicon = "0.12"
 thiserror = "1.0.15"
 anyhow = "1.0.32"
-
-[features]
-experimental_arm32 = []
