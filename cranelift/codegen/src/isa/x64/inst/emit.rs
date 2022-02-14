@@ -156,15 +156,15 @@ pub(crate) fn emit(
             if *op == AluRmiROpcode::Mul {
                 // We kinda freeloaded Mul into RMI_R_Op, but it doesn't fit the usual pattern, so
                 // we have to special-case it.
-                match src2 {
+                match src2.clone().to_reg_mem_imm() {
                     RegMemImm::Reg { reg: reg_e } => {
                         emit_std_reg_reg(
                             sink,
                             LegacyPrefixes::None,
                             0x0FAF,
                             2,
-                            reg_g.to_reg(),
-                            *reg_e,
+                            reg_g.to_reg().to_reg(),
+                            reg_e,
                             rex,
                         );
                     }
@@ -178,14 +178,14 @@ pub(crate) fn emit(
                             LegacyPrefixes::None,
                             0x0FAF,
                             2,
-                            reg_g.to_reg(),
+                            reg_g.to_reg().to_reg(),
                             &amode,
                             rex,
                         );
                     }
 
                     RegMemImm::Imm { simm32 } => {
-                        let use_imm8 = low8_will_sign_extend_to_32(*simm32);
+                        let use_imm8 = low8_will_sign_extend_to_32(simm32);
                         let opcode = if use_imm8 { 0x6B } else { 0x69 };
                         // Yes, really, reg_g twice.
                         emit_std_reg_reg(
@@ -193,11 +193,11 @@ pub(crate) fn emit(
                             LegacyPrefixes::None,
                             opcode,
                             1,
-                            reg_g.to_reg(),
-                            reg_g.to_reg(),
+                            reg_g.to_reg().to_reg(),
+                            reg_g.to_reg().to_reg(),
                             rex,
                         );
-                        emit_simm(sink, if use_imm8 { 1 } else { 4 }, *simm32);
+                        emit_simm(sink, if use_imm8 { 1 } else { 4 }, simm32);
                     }
                 }
             } else {
@@ -215,11 +215,11 @@ pub(crate) fn emit(
                 };
                 assert!(!(is_8bit && *size == OperandSize::Size64));
 
-                match src2 {
+                match src2.clone().to_reg_mem_imm() {
                     RegMemImm::Reg { reg: reg_e } => {
                         if is_8bit {
-                            rex.always_emit_if_8bit_needed(*reg_e);
-                            rex.always_emit_if_8bit_needed(reg_g.to_reg());
+                            rex.always_emit_if_8bit_needed(reg_e);
+                            rex.always_emit_if_8bit_needed(reg_g.to_reg().to_reg());
                         }
                         // GCC/llvm use the swapped operand encoding (viz., the R/RM vs RM/R
                         // duality). Do this too, so as to be able to compare generated machine
@@ -229,15 +229,15 @@ pub(crate) fn emit(
                             LegacyPrefixes::None,
                             opcode_r,
                             1,
-                            *reg_e,
-                            reg_g.to_reg(),
+                            reg_e,
+                            reg_g.to_reg().to_reg(),
                             rex,
                         );
                     }
 
                     RegMemImm::Mem { addr } => {
                         if is_8bit {
-                            rex.always_emit_if_8bit_needed(reg_g.to_reg());
+                            rex.always_emit_if_8bit_needed(reg_g.to_reg().to_reg());
                         }
                         // Here we revert to the "normal" G-E ordering.
                         let amode = addr.finalize(state, sink);
@@ -248,7 +248,7 @@ pub(crate) fn emit(
                             LegacyPrefixes::None,
                             opcode_m,
                             1,
-                            reg_g.to_reg(),
+                            reg_g.to_reg().to_reg(),
                             &amode,
                             rex,
                         );
@@ -256,10 +256,10 @@ pub(crate) fn emit(
 
                     RegMemImm::Imm { simm32 } => {
                         assert!(!is_8bit);
-                        let use_imm8 = low8_will_sign_extend_to_32(*simm32);
+                        let use_imm8 = low8_will_sign_extend_to_32(simm32);
                         let opcode = if use_imm8 { 0x83 } else { 0x81 };
                         // And also here we use the "normal" G-E ordering.
-                        let enc_g = int_reg_enc(reg_g.to_reg());
+                        let enc_g = int_reg_enc(reg_g.to_reg().to_reg());
                         emit_std_enc_enc(
                             sink,
                             LegacyPrefixes::None,
@@ -269,7 +269,7 @@ pub(crate) fn emit(
                             enc_g,
                             rex,
                         );
-                        emit_simm(sink, if use_imm8 { 1 } else { 4 }, *simm32);
+                        emit_simm(sink, if use_imm8 { 1 } else { 4 }, simm32);
                     }
                 }
             }
@@ -377,9 +377,9 @@ pub(crate) fn emit(
             sink.add_trap(loc, TrapCode::IntegerDivisionByZero);
 
             let subopcode = if *signed { 7 } else { 6 };
-            match divisor {
+            match divisor.clone().to_reg_mem() {
                 RegMem::Reg { reg } => {
-                    let src = int_reg_enc(*reg);
+                    let src = int_reg_enc(reg);
                     emit_std_enc_enc(
                         sink,
                         prefix,
@@ -387,7 +387,7 @@ pub(crate) fn emit(
                         1,
                         subopcode,
                         src,
-                        RexFlags::from((*size, *reg)),
+                        RexFlags::from((*size, reg)),
                     )
                 }
                 RegMem::Mem { addr: src } => {
@@ -428,9 +428,9 @@ pub(crate) fn emit(
             };
 
             let subopcode = if *signed { 5 } else { 4 };
-            match src2 {
+            match src2.clone().to_reg_mem() {
                 RegMem::Reg { reg } => {
-                    let src = int_reg_enc(*reg);
+                    let src = int_reg_enc(reg);
                     emit_std_enc_enc(sink, prefix, 0xF7, 1, subopcode, src, rex_flags)
                 }
                 RegMem::Mem { addr: src } => {
@@ -504,7 +504,7 @@ pub(crate) fn emit(
             // $done:
 
             // Check if the divisor is zero, first.
-            let inst = Inst::cmp_rmi_r(*size, RegMemImm::imm(0), divisor.to_reg());
+            let inst = Inst::cmp_rmi_r(*size, RegMemImm::imm(0), divisor.to_reg().to_reg());
             inst.emit(sink, info, state);
 
             let inst = Inst::trap_if(CC::Z, TrapCode::IntegerDivisionByZero);
@@ -512,7 +512,8 @@ pub(crate) fn emit(
 
             let (do_op, done_label) = if kind.is_signed() {
                 // Now check if the divisor is -1.
-                let inst = Inst::cmp_rmi_r(*size, RegMemImm::imm(0xffffffff), divisor.to_reg());
+                let inst =
+                    Inst::cmp_rmi_r(*size, RegMemImm::imm(0xffffffff), divisor.to_reg().to_reg());
                 inst.emit(sink, info, state);
 
                 let do_op = sink.get_label();
@@ -537,12 +538,16 @@ pub(crate) fn emit(
                     if *size == OperandSize::Size64 {
                         let tmp = tmp.expect("temporary for i64 sdiv");
 
-                        let inst = Inst::imm(OperandSize::Size64, 0x8000000000000000, tmp);
+                        let inst = Inst::imm(
+                            OperandSize::Size64,
+                            0x8000000000000000,
+                            tmp.to_writable_reg(),
+                        );
                         inst.emit(sink, info, state);
 
                         let inst = Inst::cmp_rmi_r(
                             OperandSize::Size64,
-                            RegMemImm::reg(tmp.to_reg()),
+                            RegMemImm::reg(tmp.to_reg().to_reg()),
                             regs::rax(),
                         );
                         inst.emit(sink, info, state);
@@ -576,7 +581,11 @@ pub(crate) fn emit(
                 inst.emit(sink, info, state);
             }
 
-            let inst = Inst::div(*size, kind.is_signed(), RegMem::reg(divisor.to_reg()));
+            let inst = Inst::div(
+                *size,
+                kind.is_signed(),
+                RegMem::reg(divisor.to_reg().to_reg()),
+            );
             inst.emit(sink, info, state);
 
             // Lowering takes care of moving the result back into the right register, see comment
@@ -626,8 +635,8 @@ pub(crate) fn emit(
                 LegacyPrefixes::None,
                 0x89,
                 1,
-                *src,
-                dst.to_reg(),
+                src.to_reg(),
+                dst.to_reg().to_reg(),
                 RexFlags::from(*size),
             );
         }
@@ -664,12 +673,12 @@ pub(crate) fn emit(
                 }
             };
 
-            match src {
+            match src.clone().to_reg_mem() {
                 RegMem::Reg { reg: src } => {
                     match ext_mode {
                         ExtMode::BL | ExtMode::BQ => {
                             // A redundant REX prefix must be emitted for certain register inputs.
-                            rex_flags.always_emit_if_8bit_needed(*src);
+                            rex_flags.always_emit_if_8bit_needed(src);
                         }
                         _ => {}
                     }
@@ -678,8 +687,8 @@ pub(crate) fn emit(
                         LegacyPrefixes::None,
                         opcodes,
                         num_opcodes,
-                        dst.to_reg(),
-                        *src,
+                        dst.to_reg().to_reg(),
+                        src,
                         rex_flags,
                     )
                 }
@@ -694,7 +703,7 @@ pub(crate) fn emit(
                         LegacyPrefixes::None,
                         opcodes,
                         num_opcodes,
-                        dst.to_reg(),
+                        dst.to_reg().to_reg(),
                         src,
                         rex_flags,
                     )
@@ -712,7 +721,7 @@ pub(crate) fn emit(
                 LegacyPrefixes::None,
                 0x8B,
                 1,
-                dst.to_reg(),
+                dst.to_reg().to_reg(),
                 src,
                 RexFlags::set_w(),
             )
@@ -758,12 +767,12 @@ pub(crate) fn emit(
                 }
             };
 
-            match src {
+            match src.clone().to_reg_mem() {
                 RegMem::Reg { reg: src } => {
                     match ext_mode {
                         ExtMode::BL | ExtMode::BQ => {
                             // A redundant REX prefix must be emitted for certain register inputs.
-                            rex_flags.always_emit_if_8bit_needed(*src);
+                            rex_flags.always_emit_if_8bit_needed(src);
                         }
                         _ => {}
                     }
@@ -772,8 +781,8 @@ pub(crate) fn emit(
                         LegacyPrefixes::None,
                         opcodes,
                         num_opcodes,
-                        dst.to_reg(),
-                        *src,
+                        dst.to_reg().to_reg(),
+                        src,
                         rex_flags,
                     )
                 }
@@ -788,7 +797,7 @@ pub(crate) fn emit(
                         LegacyPrefixes::None,
                         opcodes,
                         num_opcodes,
-                        dst.to_reg(),
+                        dst.to_reg().to_reg(),
                         src,
                         rex_flags,
                     )
@@ -812,13 +821,13 @@ pub(crate) fn emit(
             // This is one of the few places where the presence of a
             // redundant REX prefix changes the meaning of the
             // instruction.
-            let rex = RexFlags::from((*size, *src));
+            let rex = RexFlags::from((*size, src.to_reg()));
 
             //  8-bit: MOV r8, r/m8 is (REX.W==0) 88 /r
             // 16-bit: MOV r16, r/m16 is 66 (REX.W==0) 89 /r
             // 32-bit: MOV r32, r/m32 is (REX.W==0) 89 /r
             // 64-bit: MOV r64, r/m64 is (REX.W==1) 89 /r
-            emit_std_reg_mem(sink, state, info, prefix, opcode, 1, *src, dst, rex);
+            emit_std_reg_mem(sink, state, info, prefix, opcode, 1, src.to_reg(), dst, rex);
         }
 
         Inst::ShiftR {
@@ -837,10 +846,10 @@ pub(crate) fn emit(
                 ShiftKind::ShiftRightArithmetic => 7,
             };
             let enc_dst = int_reg_enc(dst.to_reg());
-            let rex_flags = RexFlags::from((*size, dst.to_reg()));
-            match num_bits {
+            let rex_flags = RexFlags::from((*size, dst.to_reg().to_reg()));
+            match num_bits.clone().to_imm8_reg() {
                 Imm8Reg::Reg { reg } => {
-                    debug_assert_eq!(*reg, regs::rcx());
+                    debug_assert_eq!(reg, regs::rcx());
                     let (opcode, prefix) = match size {
                         OperandSize::Size8 => (0xD2, LegacyPrefixes::None),
                         OperandSize::Size16 => (0xD3, LegacyPrefixes::_66),
@@ -870,7 +879,7 @@ pub(crate) fn emit(
                     // When the shift amount is 1, there's an even shorter encoding, but we don't
                     // bother with that nicety here.
                     emit_std_enc_enc(sink, prefix, opcode, 1, subopcode, enc_dst, rex_flags);
-                    sink.put1(*num_bits);
+                    sink.put1(num_bits);
                 }
             }
         }
@@ -963,13 +972,13 @@ pub(crate) fn emit(
                 prefix = LegacyPrefixes::_66;
             }
             // A redundant REX prefix can change the meaning of this instruction.
-            let mut rex = RexFlags::from((*size, *reg_g));
+            let mut rex = RexFlags::from((*size, reg_g.to_reg()));
 
-            match src_e {
+            match src_e.clone().to_reg_mem_imm() {
                 RegMemImm::Reg { reg: reg_e } => {
                     if *size == OperandSize::Size8 {
                         // Check whether the E register forces the use of a redundant REX.
-                        rex.always_emit_if_8bit_needed(*reg_e);
+                        rex.always_emit_if_8bit_needed(reg_e);
                     }
 
                     // Use the swapped operands encoding for CMP, to stay consistent with the output of
@@ -980,7 +989,7 @@ pub(crate) fn emit(
                         (OperandSize::Size8, false) => 0x84,
                         (_, false) => 0x85,
                     };
-                    emit_std_reg_reg(sink, prefix, opcode, 1, *reg_e, *reg_g, rex);
+                    emit_std_reg_reg(sink, prefix, opcode, 1, reg_e, reg_g.to_reg(), rex);
                 }
 
                 RegMemImm::Mem { addr } => {
@@ -992,13 +1001,23 @@ pub(crate) fn emit(
                         (OperandSize::Size8, false) => 0x84,
                         (_, false) => 0x85,
                     };
-                    emit_std_reg_mem(sink, state, info, prefix, opcode, 1, *reg_g, addr, rex);
+                    emit_std_reg_mem(
+                        sink,
+                        state,
+                        info,
+                        prefix,
+                        opcode,
+                        1,
+                        reg_g.to_reg(),
+                        addr,
+                        rex,
+                    );
                 }
 
                 RegMemImm::Imm { simm32 } => {
                     // FIXME JRS 2020Feb11: there are shorter encodings for
                     // cmp $imm, rax/eax/ax/al.
-                    let use_imm8 = is_cmp && low8_will_sign_extend_to_32(*simm32);
+                    let use_imm8 = is_cmp && low8_will_sign_extend_to_32(simm32);
 
                     // And also here we use the "normal" G-E ordering.
                     let opcode = if is_cmp {
@@ -1018,9 +1037,9 @@ pub(crate) fn emit(
                     };
                     let subopcode = if is_cmp { 7 } else { 0 };
 
-                    let enc_g = int_reg_enc(*reg_g);
+                    let enc_g = int_reg_enc(reg_g.to_reg());
                     emit_std_enc_enc(sink, prefix, opcode, 1, subopcode, enc_g, rex);
-                    emit_simm(sink, if use_imm8 { 1 } else { size.to_bytes() }, *simm32);
+                    emit_simm(sink, if use_imm8 { 1 } else { size.to_bytes() }, simm32);
                 }
             }
         }
@@ -1056,9 +1075,17 @@ pub(crate) fn emit(
                 _ => unreachable!("invalid size spec for cmove"),
             };
             let opcode = 0x0F40 + cc.get_enc() as u32;
-            match consequent {
+            match consequent.clone().to_reg_mem() {
                 RegMem::Reg { reg: reg_e } => {
-                    emit_std_reg_reg(sink, prefix, opcode, 2, reg_g.to_reg(), *reg_e, rex_flags);
+                    emit_std_reg_reg(
+                        sink,
+                        prefix,
+                        opcode,
+                        2,
+                        reg_g.to_reg().to_reg(),
+                        reg_e,
+                        rex_flags,
+                    );
                 }
                 RegMem::Mem { addr } => {
                     let addr = &addr.finalize(state, sink);
@@ -1069,7 +1096,7 @@ pub(crate) fn emit(
                         prefix,
                         opcode,
                         2,
-                        reg_g.to_reg(),
+                        reg_g.to_reg().to_reg(),
                         addr,
                         rex_flags,
                     );
@@ -1090,7 +1117,7 @@ pub(crate) fn emit(
             } else {
                 SseOpcode::Movss
             };
-            let inst = Inst::xmm_unary_rm_r(op, src.clone(), *dst);
+            let inst = Inst::xmm_unary_rm_r(op, src.clone().to_reg_mem(), dst.to_writable_reg());
             inst.emit(sink, info, state);
 
             sink.bind_label(next);
@@ -1101,9 +1128,9 @@ pub(crate) fn emit(
                 sink.add_trap(state.cur_srcloc(), TrapCode::StackOverflow);
             }
 
-            match src {
+            match src.clone().to_reg_mem_imm() {
                 RegMemImm::Reg { reg } => {
-                    let enc_reg = int_reg_enc(*reg);
+                    let enc_reg = int_reg_enc(reg);
                     let rex = 0x40 | ((enc_reg >> 3) & 1);
                     if rex != 0x40 {
                         sink.put1(rex);
@@ -1127,12 +1154,12 @@ pub(crate) fn emit(
                 }
 
                 RegMemImm::Imm { simm32 } => {
-                    if low8_will_sign_extend_to_64(*simm32) {
+                    if low8_will_sign_extend_to_64(simm32) {
                         sink.put1(0x6A);
-                        sink.put1(*simm32 as u8);
+                        sink.put1(simm32 as u8);
                     } else {
                         sink.put1(0x68);
-                        sink.put4(*simm32);
+                        sink.put4(simm32);
                     }
                 }
             }
@@ -1711,7 +1738,8 @@ pub(crate) fn emit(
                 _ => unreachable!(),
             };
 
-            let inst = Inst::xmm_cmp_rm_r(cmp_op, RegMem::reg(*lhs), rhs_dst.to_reg());
+            let inst =
+                Inst::xmm_cmp_rm_r(cmp_op, RegMem::reg(lhs.to_reg()), rhs_dst.to_reg().to_reg());
             inst.emit(sink, info, state);
 
             one_way_jmp(sink, CC::NZ, do_min_max);
@@ -1721,7 +1749,7 @@ pub(crate) fn emit(
             // and negative zero. These instructions merge the sign bits in that
             // case, and are no-ops otherwise.
             let op = if *is_min { or_op } else { and_op };
-            let inst = Inst::xmm_rm_r(op, RegMem::reg(*lhs), *rhs_dst);
+            let inst = Inst::xmm_rm_r(op, RegMem::reg(lhs.to_reg()), rhs_dst.to_writable_reg());
             inst.emit(sink, info, state);
 
             let inst = Inst::jmp_known(done);
@@ -1731,13 +1759,17 @@ pub(crate) fn emit(
             // read-only operand: perform an addition between the two operands, which has the
             // desired NaN propagation effects.
             sink.bind_label(propagate_nan);
-            let inst = Inst::xmm_rm_r(add_op, RegMem::reg(*lhs), *rhs_dst);
+            let inst = Inst::xmm_rm_r(add_op, RegMem::reg(lhs.to_reg()), rhs_dst.to_writable_reg());
             inst.emit(sink, info, state);
 
             one_way_jmp(sink, CC::P, done);
 
             sink.bind_label(do_min_max);
-            let inst = Inst::xmm_rm_r(min_max_op, RegMem::reg(*lhs), *rhs_dst);
+            let inst = Inst::xmm_rm_r(
+                min_max_op,
+                RegMem::reg(lhs.to_reg()),
+                rhs_dst.to_writable_reg(),
+            );
             inst.emit(sink, info, state);
 
             sink.bind_label(done);
@@ -1890,17 +1922,9 @@ pub(crate) fn emit(
                 _ => panic!("unexpected opcode {:?}", op),
             };
             let rex = RexFlags::from(*src_size);
-            match src_e {
+            match src_e.clone().to_reg_mem() {
                 RegMem::Reg { reg: reg_e } => {
-                    emit_std_reg_reg(
-                        sink,
-                        prefix,
-                        opcode,
-                        2,
-                        reg_g.to_reg().to_reg(),
-                        *reg_e,
-                        rex,
-                    );
+                    emit_std_reg_reg(sink, prefix, opcode, 2, reg_g.to_reg().to_reg(), reg_e, rex);
                 }
                 RegMem::Mem { addr } => {
                     let addr = &addr.finalize(state, sink);
@@ -1928,13 +1952,23 @@ pub(crate) fn emit(
                 _ => unimplemented!("Emit xmm cmp rm r"),
             };
 
-            match src {
+            match src.clone().to_reg_mem() {
                 RegMem::Reg { reg } => {
-                    emit_std_reg_reg(sink, prefix, opcode, len, *dst, *reg, rex);
+                    emit_std_reg_reg(sink, prefix, opcode, len, dst.to_reg(), reg, rex);
                 }
                 RegMem::Mem { addr } => {
                     let addr = &addr.finalize(state, sink);
-                    emit_std_reg_mem(sink, state, info, prefix, opcode, len, *dst, addr, rex);
+                    emit_std_reg_mem(
+                        sink,
+                        state,
+                        info,
+                        prefix,
+                        opcode,
+                        len,
+                        dst.to_reg(),
+                        addr,
+                        rex,
+                    );
                 }
             }
         }

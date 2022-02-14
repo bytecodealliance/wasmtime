@@ -15,7 +15,6 @@ pub type ValueSlice<'a> = &'a [Value];
 pub type ValueArray2 = [Value; 2];
 pub type ValueArray3 = [Value; 3];
 pub type WritableReg = Writable<Reg>;
-pub type OptionWritableReg = Option<WritableReg>;
 pub type VecReg = Vec<Reg>;
 pub type VecWritableReg = Vec<WritableReg>;
 pub type ValueRegs = crate::machinst::ValueRegs<Reg>;

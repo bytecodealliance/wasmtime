@@ -16,9 +16,9 @@
        ;; Integer arithmetic/bit-twiddling.
        (AluRmiR (size OperandSize) ;; 4 or 8
                 (op AluRmiROpcode)
-                (src1 Reg)
-                (src2 RegMemImm)
-                (dst WritableReg))
+                (src1 Gpr)
+                (src2 GprMemImm)
+                (dst WritableGpr))
 
        ;; Instructions on general-purpose registers that only read src and
        ;; defines dst (dst is not modified). `bsr`, etc.
@@ -40,19 +40,19 @@
        ;; Integer quotient and remainder: (div idiv) $rax $rdx (reg addr)
        (Div (size OperandSize) ;; 1, 2, 4, or 8
             (signed bool)
-            (divisor RegMem)
-            (dividend Reg)
-            (dst_quotient WritableReg)
-            (dst_remainder WritableReg))
+            (divisor GprMem)
+            (dividend Gpr)
+            (dst_quotient WritableGpr)
+            (dst_remainder WritableGpr))
 
        ;; The high (and low) bits of a (un)signed multiply: `RDX:RAX := RAX *
        ;; rhs`.
        (MulHi (size OperandSize)
               (signed bool)
-              (src1 Reg)
-              (src2 RegMem)
-              (dst_lo WritableReg)
-              (dst_hi WritableReg))
+              (src1 Gpr)
+              (src2 GprMem)
+              (dst_lo WritableGpr)
+              (dst_hi WritableGpr))
 
        ;; A synthetic sequence to implement the right inline checks for
        ;; remainder and division, assuming the dividend is in %rax.
@@ -69,32 +69,32 @@
        ;; regalloc failures where %rdx is live before its first def!
        (CheckedDivOrRemSeq (kind DivOrRemKind)
                            (size OperandSize)
-                           (dividend Reg)
+                           (dividend Gpr)
                            ;; The divisor operand. Note it's marked as modified
                            ;; so that it gets assigned a register different from
                            ;; the temporary.
-                           (divisor WritableReg)
-                           (dst_quotient WritableReg)
-                           (dst_remainder WritableReg)
-                           (tmp OptionWritableReg))
+                           (divisor WritableGpr)
+                           (dst_quotient WritableGpr)
+                           (dst_remainder WritableGpr)
+                           (tmp OptionWritableGpr))
 
        ;; Do a sign-extend based on the sign of the value in rax into rdx: (cwd
        ;; cdq cqo) or al into ah: (cbw)
        (SignExtendData (size OperandSize) ;; 1, 2, 4, or 8
-                       (src Reg)
-                       (dst WritableReg))
+                       (src Gpr)
+                       (dst WritableGpr))
 
        ;; Constant materialization: (imm32 imm64) reg.
        ;;
        ;; Either: movl $imm32, %reg32 or movabsq $imm64, %reg32.
        (Imm (dst_size OperandSize) ;; 4 or 8
             (simm64 u64)
-            (dst WritableReg))
+            (dst WritableGpr))
 
        ;; GPR to GPR move: mov (64 32) reg reg.
        (MovRR (size OperandSize) ;; 4 or 8
-              (src Reg)
-              (dst WritableReg))
+              (src Gpr)
+              (dst WritableGpr))
 
        ;; Zero-extended loads, except for 64 bits: movz (bl bq wl wq lq) addr
        ;; reg.
@@ -103,12 +103,12 @@
        ;; zero-extend rule makes it unnecessary. For that case we emit the
        ;; equivalent "movl AM, reg32".
        (MovzxRmR (ext_mode ExtMode)
-                 (src RegMem)
-                 (dst WritableReg))
+                 (src GprMem)
+                 (dst WritableGpr))
 
        ;; A plain 64-bit integer load, since MovZX_RM_R can't represent that.
        (Mov64MR (src SyntheticAmode)
-                (dst WritableReg))
+                (dst WritableGpr))
 
        ;; Loads the memory address of addr into dst.
        (LoadEffectiveAddress (addr SyntheticAmode)
@@ -116,22 +116,22 @@
 
        ;; Sign-extended loads and moves: movs (bl bq wl wq lq) addr reg.
        (MovsxRmR (ext_mode ExtMode)
-                 (src RegMem)
-                 (dst WritableReg))
+                 (src GprMem)
+                 (dst WritableGpr))
 
        ;; Integer stores: mov (b w l q) reg addr.
        (MovRM (size OperandSize) ;; 1, 2, 4, or 8
-              (src Reg)
+              (src Gpr)
               (dst SyntheticAmode))
 
        ;; Arithmetic shifts: (shl shr sar) (b w l q) imm reg.
        (ShiftR (size OperandSize) ;; 1, 2, 4, or 8
                (kind ShiftKind)
-               (src Reg)
-               ;; shift count: `Imm8Reg::Imm8(0 .. #bits-in-type - 1)` or
-               ;; `Imm8Reg::Reg(r)` where `r` get's move mitosis'd into `%cl`.
-               (num_bits Imm8Reg)
-               (dst WritableReg))
+               (src Gpr)
+               ;; shift count: `Imm8Gpr::Imm8(0 .. #bits-in-type - 1)` or
+               ;; `Imm8Reg::Gpr(r)` where `r` get's move mitosis'd into `%cl`.
+               (num_bits Imm8Gpr)
+               (dst WritableGpr))
 
        ;; Arithmetic SIMD shifts.
        (XmmRmiReg (opcode SseOpcode)
@@ -142,30 +142,30 @@
        ;; Integer comparisons/tests: cmp or test (b w l q) (reg addr imm) reg.
        (CmpRmiR (size OperandSize) ;; 1, 2, 4, or 8
                 (opcode CmpOpcode)
-                (src RegMemImm)
-                (dst Reg))
+                (src GprMemImm)
+                (dst Gpr))
 
        ;; Materializes the requested condition code in the destinaton reg.
        (Setcc (cc CC)
-              (dst WritableReg))
+              (dst WritableGpr))
 
        ;; Integer conditional move.
        ;;
        ;; Overwrites the destination register.
        (Cmove (size OperandSize)
               (cc CC)
-              (consequent RegMem)
-              (alternative Reg)
-              (dst WritableReg))
+              (consequent GprMem)
+              (alternative Gpr)
+              (dst WritableGpr))
 
        ;; =========================================
        ;; Stack manipulation.
 
        ;; pushq (reg addr imm)
-       (Push64 (src RegMemImm))
+       (Push64 (src GprMemImm))
 
        ;; popq reg
-       (Pop64 (dst WritableReg))
+       (Pop64 (dst WritableGpr))
 
        ;; =========================================
        ;; Floating-point operations.
@@ -221,7 +221,7 @@
        ;; XMM (scalar) unary op (from integer to float reg): movd, movq,
        ;; cvtsi2s{s,d}
        (GprToXmm (op SseOpcode)
-                 (src RegMem)
+                 (src GprMem)
                  (dst WritableXmm)
                  (src_size OperandSize))
 
@@ -272,21 +272,21 @@
        ;; registers.
        (XmmMinMaxSeq (size OperandSize)
                      (is_min bool)
-                     (lhs Reg)
-                     (rhs_dst WritableReg))
+                     (lhs Xmm)
+                     (rhs_dst WritableXmm))
 
        ;; XMM (scalar) conditional move.
        ;;
        ;; Overwrites the destination register if cc is set.
        (XmmCmove (size OperandSize)
                  (cc CC)
-                 (src RegMem)
-                 (dst WritableReg))
+                 (src XmmMem)
+                 (dst WritableXmm))
 
        ;; Float comparisons/tests: cmp (b w l q) (reg addr imm) reg.
        (XmmCmpRmR (op SseOpcode)
-                  (src RegMem)
-                  (dst Reg))
+                  (src XmmMem)
+                  (dst Xmm))
 
        ;; A binary XMM instruction with an 8-bit immediate: e.g. cmp (ps pd) imm
        ;; (reg addr) reg
@@ -780,8 +780,8 @@
 ;; As a side effect, this marks the value as used.
 ;;
 ;; This is used when lowering various shifts and rotates.
-(decl put_masked_in_imm8_reg (Value Type) Imm8Reg)
-(extern constructor put_masked_in_imm8_reg put_masked_in_imm8_reg)
+(decl put_masked_in_imm8_gpr (Value Type) Imm8Gpr)
+(extern constructor put_masked_in_imm8_gpr put_masked_in_imm8_gpr)
 
 (type CC extern
       (enum O
@@ -825,13 +825,20 @@
 
 (type Gpr (primitive Gpr))
 (type WritableGpr (primitive WritableGpr))
+(type OptionWritableGpr (primitive OptionWritableGpr))
 (type GprMem extern (enum))
 (type GprMemImm extern (enum))
+(type Imm8Gpr extern (enum))
 
 (type Xmm (primitive Xmm))
 (type WritableXmm (primitive WritableXmm))
+(type OptionWritableXmm (primitive OptionWritableXmm))
 (type XmmMem extern (enum))
 (type XmmMemImm extern (enum))
+
+;; Convert an `Imm8Reg` into an `Imm8Gpr`.
+(decl imm8_reg_to_imm8_gpr (Imm8Reg) Imm8Gpr)
+(extern constructor imm8_reg_to_imm8_gpr imm8_reg_to_imm8_gpr)
 
 ;; Convert a `WritableGpr` to a `WritableReg`.
 (decl writable_gpr_to_reg (WritableGpr) WritableReg)
@@ -856,6 +863,14 @@
 ;; Convert an `Gpr` to a `Reg`.
 (decl gpr_to_reg (Gpr) Reg)
 (extern constructor gpr_to_reg gpr_to_reg)
+
+;; Convert an `Gpr` to a `GprMem`.
+(decl gpr_to_gpr_mem (Gpr) GprMem)
+(extern constructor gpr_to_gpr_mem gpr_to_gpr_mem)
+
+;; Convert an `Gpr` to a `GprMemImm`.
+(decl gpr_to_gpr_mem_imm (Gpr) GprMemImm)
+(extern constructor gpr_to_gpr_mem_imm gpr_to_gpr_mem_imm)
 
 ;; Convert an `Xmm` to a `Reg`.
 (decl xmm_to_reg (Xmm) Reg)
@@ -984,6 +999,25 @@
 (rule (value_xmm x)
       (value_reg (xmm_to_reg x)))
 
+;; Get the `n`th reg in a `ValueRegs` and construct a GPR from it.
+;;
+;; Asserts that the register is a GPR.
+(decl value_regs_get_gpr (ValueRegs usize) Gpr)
+(rule (value_regs_get_gpr regs n)
+      (gpr_new (value_regs_get regs n)))
+
+;; Convert a `Gpr` to an `Imm8Gpr`.
+(decl gpr_to_imm8_gpr (Gpr) Imm8Gpr)
+(extern constructor gpr_to_imm8_gpr gpr_to_imm8_gpr)
+
+;; Convert an 8-bit immediate into an `Imm8Gpr`.
+(decl imm8_to_imm8_gpr (u8) Imm8Gpr)
+(extern constructor imm8_to_imm8_gpr imm8_to_imm8_gpr)
+
+;; Get the low half of the given `Value` as a GPR.
+(decl lo_gpr (Value) Gpr)
+(rule (lo_gpr regs) (gpr_new (lo_reg regs)))
+
 ;;;; Helpers for Getting Particular Physical Registers ;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; These should only be used for legalization purposes, when we can't otherwise
@@ -1014,15 +1048,15 @@
 ;; `Imm8Reg.Imm8`. This is used for shifts and rotates, so that we don't try and
 ;; shift/rotate more bits than the type has available, per Cranelift's
 ;; semantics.
-(decl const_to_type_masked_imm8 (u64 Type) Imm8Reg)
+(decl const_to_type_masked_imm8 (u64 Type) Imm8Gpr)
 (extern constructor const_to_type_masked_imm8 const_to_type_masked_imm8)
 
-;; Extract a constant `RegMemImm.Imm` from a value operand.
-(decl simm32_from_value (RegMemImm) Value)
+;; Extract a constant `GprMemImm.Imm` from a value operand.
+(decl simm32_from_value (GprMemImm) Value)
 (extern extractor simm32_from_value simm32_from_value)
 
 ;; Extract a constant `RegMemImm.Imm` from an `Imm64` immediate.
-(decl simm32_from_imm64 (RegMemImm) Imm64)
+(decl simm32_from_imm64 (GprMemImm) Imm64)
 (extern extractor simm32_from_imm64 simm32_from_imm64)
 
 ;; A load that can be sunk into another operation.
@@ -1041,6 +1075,10 @@
 (decl sink_load (SinkableLoad) RegMemImm)
 (extern constructor sink_load sink_load)
 
+(decl sink_load_to_gpr_mem_imm (SinkableLoad) GprMemImm)
+(rule (sink_load_to_gpr_mem_imm load)
+      (gpr_mem_imm_new (sink_load load)))
+
 ;;;; Helpers for Sign/Zero Extending ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (type ExtKind extern
@@ -1057,13 +1095,13 @@
 (extern constructor ext_mode ext_mode)
 
 ;; Put the given value into a register, but extended as the given type.
-(decl extend_to_reg (Value Type ExtendKind) Reg)
+(decl extend_to_gpr (Value Type ExtendKind) Gpr)
 
 ;; If the value is already of the requested type, no extending is necessary.
-(rule (extend_to_reg (and val (value_type ty)) =ty _kind)
-      (put_in_reg val))
+(rule (extend_to_gpr (and val (value_type ty)) =ty _kind)
+      (put_in_gpr val))
 
-(rule (extend_to_reg (and val (value_type from_ty))
+(rule (extend_to_gpr (and val (value_type from_ty))
                      to_ty
                      kind)
       (let ((from_bits u16 (ty_bits_u16 from_ty))
@@ -1073,10 +1111,10 @@
         (extend kind
                 to_ty
                 (ext_mode from_bits to_bits)
-                (put_in_reg_mem val))))
+                (put_in_gpr_mem val))))
 
-;; Do a sign or zero extension of the given `RegMem`.
-(decl extend (ExtendKind Type ExtMode RegMem) Reg)
+;; Do a sign or zero extension of the given `GprMem`.
+(decl extend (ExtendKind Type ExtMode GprMem) Gpr)
 
 ;; Zero extending uses `movzx`.
 (rule (extend (ExtendKind.Zero) ty mode src)
@@ -1166,14 +1204,14 @@
 (decl x64_load (Type SyntheticAmode ExtKind) Reg)
 
 (rule (x64_load (fits_in_32 ty) addr (ExtKind.SignExtend))
-      (movsx ty
-             (ext_mode (ty_bytes ty) 8)
-             (synthetic_amode_to_reg_mem addr)))
+      (gpr_to_reg (movsx ty
+                         (ext_mode (ty_bytes ty) 8)
+                         (reg_mem_to_gpr_mem (synthetic_amode_to_reg_mem addr)))))
 
 (rule (x64_load $I64 addr _ext_kind)
-      (let ((dst WritableReg (temp_writable_reg $I64))
+      (let ((dst WritableGpr (temp_writable_gpr))
             (_ Unit (emit (MInst.Mov64MR addr dst))))
-        (writable_reg_to_reg dst)))
+        (gpr_to_reg (writable_gpr_to_gpr dst))))
 
 (rule (x64_load $F32 addr _ext_kind)
       (xmm_to_reg (xmm_unary_rm_r (SseOpcode.Movss)
@@ -1202,15 +1240,15 @@
 ;; only gets defined the once.
 
 ;; Helper for emitting `MInst.AluRmiR` instructions.
-(decl alu_rmi_r (Type AluRmiROpcode Reg RegMemImm) Reg)
+(decl alu_rmi_r (Type AluRmiROpcode Gpr GprMemImm) Gpr)
 (rule (alu_rmi_r ty opcode src1 src2)
-      (let ((dst WritableReg (temp_writable_reg ty))
+      (let ((dst WritableGpr (temp_writable_gpr))
             (size OperandSize (operand_size_of_type_32_64 ty))
             (_ Unit (emit (MInst.AluRmiR size opcode src1 src2 dst))))
-        (writable_reg_to_reg dst)))
+        (writable_gpr_to_gpr dst)))
 
 ;; Helper for emitting `add` instructions.
-(decl add (Type Reg RegMemImm) Reg)
+(decl add (Type Gpr GprMemImm) Gpr)
 (rule (add ty src1 src2)
       (alu_rmi_r ty
                  (AluRmiROpcode.Add)
@@ -1218,29 +1256,29 @@
                  src2))
 
 ;; Helper for creating `add` instructions whose flags are also used.
-(decl add_with_flags (Type Reg RegMemImm) ProducesFlags)
+(decl add_with_flags (Type Gpr GprMemImm) ProducesFlags)
 (rule (add_with_flags ty src1 src2)
-      (let ((dst WritableReg (temp_writable_reg ty)))
+      (let ((dst WritableGpr (temp_writable_gpr)))
         (ProducesFlags.ProducesFlags (MInst.AluRmiR (operand_size_of_type_32_64 ty)
                                                     (AluRmiROpcode.Add)
                                                     src1
                                                     src2
                                                     dst)
-                                     (writable_reg_to_reg dst))))
+                                     (gpr_to_reg (writable_gpr_to_gpr dst)))))
 
 ;; Helper for creating `adc` instructions.
-(decl adc (Type Reg RegMemImm) ConsumesFlags)
+(decl adc (Type Gpr GprMemImm) ConsumesFlags)
 (rule (adc ty src1 src2)
-      (let ((dst WritableReg (temp_writable_reg ty)))
+      (let ((dst WritableGpr (temp_writable_gpr)))
         (ConsumesFlags.ConsumesFlags (MInst.AluRmiR (operand_size_of_type_32_64 ty)
                                                     (AluRmiROpcode.Adc)
                                                     src1
                                                     src2
                                                     dst)
-                                     (writable_reg_to_reg dst))))
+                                     (gpr_to_reg (writable_gpr_to_gpr dst)))))
 
 ;; Helper for emitting `sub` instructions.
-(decl sub (Type Reg RegMemImm) Reg)
+(decl sub (Type Gpr GprMemImm) Gpr)
 (rule (sub ty src1 src2)
       (alu_rmi_r ty
                  (AluRmiROpcode.Sub)
@@ -1248,29 +1286,29 @@
                  src2))
 
 ;; Helper for creating `sub` instructions whose flags are also used.
-(decl sub_with_flags (Type Reg RegMemImm) ProducesFlags)
+(decl sub_with_flags (Type Gpr GprMemImm) ProducesFlags)
 (rule (sub_with_flags ty src1 src2)
-      (let ((dst WritableReg (temp_writable_reg ty)))
+      (let ((dst WritableGpr (temp_writable_gpr)))
         (ProducesFlags.ProducesFlags (MInst.AluRmiR (operand_size_of_type_32_64 ty)
                                                     (AluRmiROpcode.Sub)
                                                     src1
                                                     src2
                                                     dst)
-                                     (writable_reg_to_reg dst))))
+                                     (gpr_to_reg (writable_gpr_to_gpr dst)))))
 
 ;; Helper for creating `sbb` instructions.
-(decl sbb (Type Reg RegMemImm) ConsumesFlags)
+(decl sbb (Type Gpr GprMemImm) ConsumesFlags)
 (rule (sbb ty src1 src2)
-      (let ((dst WritableReg (temp_writable_reg ty)))
+      (let ((dst WritableGpr (temp_writable_gpr)))
         (ConsumesFlags.ConsumesFlags (MInst.AluRmiR (operand_size_of_type_32_64 ty)
                                                     (AluRmiROpcode.Sbb)
                                                     src1
                                                     src2
                                                     dst)
-                                     (writable_reg_to_reg dst))))
+                                     (gpr_to_reg (writable_gpr_to_gpr dst)))))
 
 ;; Helper for creating `mul` instructions.
-(decl mul (Type Reg RegMemImm) Reg)
+(decl mul (Type Gpr GprMemImm) Gpr)
 (rule (mul ty src1 src2)
       (alu_rmi_r ty
                  (AluRmiROpcode.Mul)
@@ -1278,10 +1316,7 @@
                  src2))
 
 ;; Helper for emitting `and` instructions.
-;;
-;; Use `m_` prefix (short for "mach inst") to disambiguate with the ISLE-builtin
-;; `and` operator.
-(decl x64_and (Type Reg RegMemImm) Reg)
+(decl x64_and (Type Gpr GprMemImm) Gpr)
 (rule (x64_and ty src1 src2)
       (alu_rmi_r ty
                  (AluRmiROpcode.And)
@@ -1289,7 +1324,7 @@
                  src2))
 
 ;; Helper for emitting `or` instructions.
-(decl or (Type Reg RegMemImm) Reg)
+(decl or (Type Gpr GprMemImm) Gpr)
 (rule (or ty src1 src2)
       (alu_rmi_r ty
                  (AluRmiROpcode.Or)
@@ -1297,7 +1332,7 @@
                  src2))
 
 ;; Helper for emitting `xor` instructions.
-(decl xor (Type Reg RegMemImm) Reg)
+(decl xor (Type Gpr GprMemImm) Gpr)
 (rule (xor ty src1 src2)
       (alu_rmi_r ty
                  (AluRmiROpcode.Xor)
@@ -1309,10 +1344,10 @@
 
 ;; Integer immediates.
 (rule (imm (fits_in_64 ty) simm64)
-      (let ((dst WritableReg (temp_writable_reg ty))
+      (let ((dst WritableGpr (temp_writable_gpr))
             (size OperandSize (operand_size_of_type_32_64 ty))
             (_ Unit (emit (MInst.Imm size simm64 dst))))
-        (writable_reg_to_reg dst)))
+        (gpr_to_reg (writable_gpr_to_gpr dst))))
 
 ;; `f32` immediates.
 (rule (imm $F32 bits)
@@ -1332,21 +1367,21 @@
 ;; Special case for when a 64-bit immediate fits into 32-bits. We can use a
 ;; 32-bit move that zero-extends the value, which has a smaller encoding.
 (rule (imm $I64 (nonzero_u64_fits_in_u32 x))
-      (let ((dst WritableReg (temp_writable_reg $I64))
+      (let ((dst WritableGpr (temp_writable_gpr))
             (_ Unit (emit (MInst.Imm (OperandSize.Size32) x dst))))
-        (writable_reg_to_reg dst)))
+        (gpr_to_reg (writable_gpr_to_gpr dst))))
 
 ;; Special case for integer zero immediates: turn them into an `xor r, r`.
 (rule (imm (fits_in_64 ty) 0)
-      (let ((wr WritableReg (temp_writable_reg ty))
-            (r Reg (writable_reg_to_reg wr))
+      (let ((wgpr WritableGpr (temp_writable_gpr))
+            (g Gpr (writable_gpr_to_gpr wgpr))
             (size OperandSize (operand_size_of_type_32_64 ty))
             (_ Unit (emit (MInst.AluRmiR size
                                          (AluRmiROpcode.Xor)
-                                         r
-                                         (RegMemImm.Reg r)
-                                         wr))))
-        r))
+                                         g
+                                         (gpr_to_gpr_mem_imm g)
+                                         wgpr))))
+        (gpr_to_reg g)))
 
 ;; Special case for zero immediates with vector types, they turn into an xor
 ;; specific to the vector type.
@@ -1384,44 +1419,42 @@
 ;; TODO: use cmpeqpd for all 1s
 
 ;; Helper for creating `MInst.ShifR` instructions.
-(decl shift_r (Type ShiftKind Reg Imm8Reg) Reg)
+(decl shift_r (Type ShiftKind Gpr Imm8Gpr) Gpr)
 (rule (shift_r ty kind src1 src2)
-      (let ((dst WritableReg (temp_writable_reg ty))
+      (let ((dst WritableGpr (temp_writable_gpr))
             ;; Use actual 8/16-bit instructions when appropriate: we
             ;; rely on their shift-amount-masking semantics.
             (size OperandSize (raw_operand_size_of_type ty))
             (_ Unit (emit (MInst.ShiftR size kind src1 src2 dst))))
-        (writable_reg_to_reg dst)))
+        (writable_gpr_to_gpr dst)))
 
-;; Helper for creating `rotl` instructions (prefixed with "m_", short for "mach
-;; inst", to disambiguate this from clif's `rotl`).
-(decl x64_rotl (Type Reg Imm8Reg) Reg)
+;; Helper for creating `rotl` instructions.
+(decl x64_rotl (Type Gpr Imm8Gpr) Gpr)
 (rule (x64_rotl ty src1 src2)
       (shift_r ty (ShiftKind.RotateLeft) src1 src2))
 
-;; Helper for creating `rotr` instructions (prefixed with "m_", short for "mach
-;; inst", to disambiguate this from clif's `rotr`).
-(decl x64_rotr (Type Reg Imm8Reg) Reg)
+;; Helper for creating `rotr` instructions.
+(decl x64_rotr (Type Gpr Imm8Gpr) Gpr)
 (rule (x64_rotr ty src1 src2)
       (shift_r ty (ShiftKind.RotateRight) src1 src2))
 
 ;; Helper for creating `shl` instructions.
-(decl shl (Type Reg Imm8Reg) Reg)
+(decl shl (Type Gpr Imm8Gpr) Gpr)
 (rule (shl ty src1 src2)
       (shift_r ty (ShiftKind.ShiftLeft) src1 src2))
 
 ;; Helper for creating logical shift-right instructions.
-(decl shr (Type Reg Imm8Reg) Reg)
+(decl shr (Type Gpr Imm8Gpr) Gpr)
 (rule (shr ty src1 src2)
       (shift_r ty (ShiftKind.ShiftRightLogical) src1 src2))
 
 ;; Helper for creating arithmetic shift-right instructions.
-(decl sar (Type Reg Imm8Reg) Reg)
+(decl sar (Type Gpr Imm8Gpr) Gpr)
 (rule (sar ty src1 src2)
       (shift_r ty (ShiftKind.ShiftRightArithmetic) src1 src2))
 
 ;; Helper for creating `MInst.CmpRmiR` instructions.
-(decl cmp_rmi_r (OperandSize CmpOpcode RegMemImm Reg) ProducesFlags)
+(decl cmp_rmi_r (OperandSize CmpOpcode GprMemImm Gpr) ProducesFlags)
 (rule (cmp_rmi_r size opcode src1 src2)
       (ProducesFlags.ProducesFlags (MInst.CmpRmiR size
                                                   opcode
@@ -1430,36 +1463,36 @@
                                    (invalid_reg)))
 
 ;; Helper for creating `cmp` instructions.
-(decl cmp (OperandSize RegMemImm Reg) ProducesFlags)
+(decl cmp (OperandSize GprMemImm Gpr) ProducesFlags)
 (rule (cmp size src1 src2)
       (cmp_rmi_r size (CmpOpcode.Cmp) src1 src2))
 
 ;; Helper for creating `test` instructions.
-(decl test (OperandSize RegMemImm Reg) ProducesFlags)
+(decl test (OperandSize GprMemImm Gpr) ProducesFlags)
 (rule (test size src1 src2)
       (cmp_rmi_r size (CmpOpcode.Test) src1 src2))
 
 ;; Helper for creating `MInst.Cmove` instructions.
-(decl cmove (Type CC RegMem Reg) ConsumesFlags)
+(decl cmove (Type CC GprMem Gpr) ConsumesFlags)
 (rule (cmove ty cc consequent alternative)
-      (let ((dst WritableReg (temp_writable_reg ty))
+      (let ((dst WritableGpr (temp_writable_gpr))
             (size OperandSize (operand_size_of_type_32_64 ty)))
         (ConsumesFlags.ConsumesFlags (MInst.Cmove size cc consequent alternative dst)
-                                     (writable_reg_to_reg dst))))
+                                     (gpr_to_reg (writable_gpr_to_gpr dst)))))
 
 ;; Helper for creating `MInst.MovzxRmR` instructions.
-(decl movzx (Type ExtMode RegMem) Reg)
+(decl movzx (Type ExtMode GprMem) Gpr)
 (rule (movzx ty mode src)
-      (let ((dst WritableReg (temp_writable_reg ty))
+      (let ((dst WritableGpr (temp_writable_gpr))
             (_ Unit (emit (MInst.MovzxRmR mode src dst))))
-        (writable_reg_to_reg dst)))
+        (writable_gpr_to_gpr dst)))
 
 ;; Helper for creating `MInst.MovsxRmR` instructions.
-(decl movsx (Type ExtMode RegMem) Reg)
+(decl movsx (Type ExtMode GprMem) Gpr)
 (rule (movsx ty mode src)
-      (let ((dst WritableReg (temp_writable_reg ty))
+      (let ((dst WritableGpr (temp_writable_gpr))
             (_ Unit (emit (MInst.MovsxRmR mode src dst))))
-        (writable_reg_to_reg dst)))
+        (writable_gpr_to_gpr dst)))
 
 ;; Helper for creating `MInst.XmmRmR` instructions.
 (decl xmm_rm_r (Type SseOpcode Xmm XmmMem) Xmm)
@@ -1926,10 +1959,10 @@
 ;; Helper for creating `MInst.MulHi` instructions.
 ;;
 ;; Returns the (lo, hi) register halves of the multiplication.
-(decl mul_hi (Type bool Reg RegMem) ValueRegs)
+(decl mul_hi (Type bool Gpr GprMem) ValueRegs)
 (rule (mul_hi ty signed src1 src2)
-      (let ((dst_lo WritableReg (temp_writable_reg ty))
-            (dst_hi WritableReg (temp_writable_reg ty))
+      (let ((dst_lo WritableGpr (temp_writable_gpr))
+            (dst_hi WritableGpr (temp_writable_gpr))
             (size OperandSize (operand_size_of_type_32_64 ty))
             (_ Unit (emit (MInst.MulHi size
                                        signed
@@ -1937,12 +1970,12 @@
                                        src2
                                        dst_lo
                                        dst_hi))))
-        (value_regs (writable_reg_to_reg dst_lo)
-                    (writable_reg_to_reg dst_hi))))
+        (value_gprs (writable_gpr_to_gpr dst_lo)
+                    (writable_gpr_to_gpr dst_hi))))
 
 ;; Helper for creating `mul` instructions that return both the lower and
 ;; (unsigned) higher halves of the result.
-(decl mulhi_u (Type Reg RegMem) ValueRegs)
+(decl mulhi_u (Type Gpr GprMem) ValueRegs)
 (rule (mulhi_u ty src1 src2)
       (mul_hi ty $false src1 src2))
 
@@ -2026,7 +2059,7 @@
 (decl gpr_to_xmm (SseOpcode GprMem OperandSize) Xmm)
 (rule (gpr_to_xmm op src size)
       (let ((dst WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.GprToXmm op (gpr_mem_to_reg_mem src) dst size))))
+            (_ Unit (emit (MInst.GprToXmm op src dst size))))
         (writable_xmm_to_xmm dst)))
 
 ;; Helper for creating `not` instructions.
