@@ -62,7 +62,6 @@ unwind = ["gimli"]
 x86 = []
 arm64 = []
 s390x = []
-arm32 = [] # Work-in-progress codegen backend for ARM.
 
 # Stub feature that does nothing, for Cargo-features compatibility: the new
 # backend is the default now.

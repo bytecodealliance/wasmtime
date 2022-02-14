@@ -9,7 +9,7 @@ use cranelift_codegen::print_errors::pretty_verifier_error;
 use cranelift_codegen::settings::Flags;
 use cranelift_codegen::timing;
 use cranelift_codegen::verify_function;
-use cranelift_reader::{parse_test, Feature, IsaSpec, Location, ParseOptions, TestFile};
+use cranelift_reader::{parse_test, IsaSpec, Location, ParseOptions};
 use log::info;
 use std::borrow::Cow;
 use std::cell::Cell;
@@ -17,31 +17,6 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::str::Lines;
 use std::time;
-
-/// Skip the tests which define features and for which there's a feature mismatch.
-///
-/// When a test must be skipped, returns an Option with a string containing an explanation why;
-/// otherwise, return None.
-fn skip_feature_mismatches(testfile: &TestFile) -> Option<&'static str> {
-    let mut has_experimental_arm32 = false;
-
-    for feature in &testfile.features {
-        if let Feature::With(name) = feature {
-            match *name {
-                "experimental_arm32" => has_experimental_arm32 = true,
-                _ => {}
-            }
-        }
-    }
-
-    // Don't run tests if the experimental support for arm32 is disabled.
-    #[cfg(not(feature = "experimental_arm32"))]
-    if has_experimental_arm32 {
-        return Some("missing support for experimental_arm32");
-    }
-
-    None
-}
 
 /// Load `path` and run the test in it.
 ///
@@ -77,11 +52,6 @@ pub fn run(
                 .into();
         }
     };
-
-    if let Some(msg) = skip_feature_mismatches(&testfile) {
-        println!("skipped {:?}: {}", path, msg);
-        return Ok(started.elapsed());
-    }
 
     if testfile.functions.is_empty() {
         anyhow::bail!("no functions found");

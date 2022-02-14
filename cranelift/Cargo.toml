@@ -47,6 +47,5 @@ structopt = "0.3.17"
 default = ["disas", "wasm", "cranelift-codegen/all-arch", "souper-harvest"]
 disas = ["capstone"]
 wasm = ["wat", "cranelift-wasm"]
-experimental_arm32 = ["cranelift-codegen/arm32", "cranelift-filetests/experimental_arm32"]
 souper-harvest = ["cranelift-codegen/souper-harvest", "rayon"]
 all-arch = ["cranelift-codegen/all-arch"]

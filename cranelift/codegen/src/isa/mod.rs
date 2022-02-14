@@ -63,9 +63,6 @@ use target_lexicon::{triple, Architecture, OperatingSystem, PointerWidth, Triple
 #[cfg(feature = "x86")]
 pub mod x64;
 
-#[cfg(feature = "arm32")]
-mod arm32;
-
 #[cfg(feature = "arm64")]
 pub(crate) mod aarch64;
 
@@ -98,7 +95,6 @@ pub fn lookup(triple: Triple) -> Result<Builder, LookupError> {
         Architecture::X86_64 => {
             isa_builder!(x64, (feature = "x86"), triple)
         }
-        Architecture::Arm { .. } => isa_builder!(arm32, (feature = "arm32"), triple),
         Architecture::Aarch64 { .. } => isa_builder!(aarch64, (feature = "arm64"), triple),
         Architecture::S390x { .. } => isa_builder!(s390x, (feature = "s390x"), triple),
         _ => Err(LookupError::Unsupported),
