@@ -164,6 +164,12 @@ impl RunCommand {
         let engine = Engine::new(&config)?;
         let mut store = Store::new(&engine, Host::default());
 
+        // If fuel has been configured, we want to add the configured
+        // fuel amount to this store.
+        if let Some(fuel) = self.common.fuel {
+            store.add_fuel(fuel)?;
+        }
+
         let preopen_sockets = self.compute_preopen_sockets()?;
 
         // Make wasi available by default.

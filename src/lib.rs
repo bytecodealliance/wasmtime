@@ -234,9 +234,8 @@ struct CommonOptions {
     #[structopt(long)]
     enable_cranelift_nan_canonicalization: bool,
 
-    /// Executing wasm code will consume fuel, limiting its execution.
     #[structopt(long)]
-    consume_fuel: bool,
+    fuel: Option<u64>,
 
     /// Executing wasm code will yield when a global epoch counter
     /// changes, allowing for async operation without blocking the
@@ -328,7 +327,11 @@ impl CommonOptions {
             config.dynamic_memory_guard_size(size);
         }
 
-        config.consume_fuel(self.consume_fuel);
+        // If fuel has been configured, set the `consume fuel` flag on the config.
+        if self.fuel.is_some() {
+            config.consume_fuel(true);
+        }
+
         config.epoch_interruption(self.epoch_interruption);
         config.generate_address_map(!self.disable_address_map);
         config.paged_memory_initialization(self.paged_memory_initialization);
