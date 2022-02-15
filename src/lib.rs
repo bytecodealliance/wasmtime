@@ -327,7 +327,7 @@ impl CommonOptions {
             config.dynamic_memory_guard_size(size);
         }
 
-        // if fuel has been configured, set the `consume fuel` flag on the config
+        // If fuel has been configured, set the `consume fuel` flag on the config.
         if self.fuel.is_some() {
             config.consume_fuel(true);
         }
