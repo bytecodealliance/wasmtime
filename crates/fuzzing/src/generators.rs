@@ -608,7 +608,7 @@ impl<'a> Arbitrary<'a> for CodegenSettings {
         macro_rules! target_features {
             (
                 test:$test:ident,
-                $(std: $std:tt => clif: $clif:tt $(ratio: $a:expr in $b:expr)?,)*
+                $(std: $std:tt => clif: $clif:tt $(ratio: $a:tt in $b:tt)?,)*
             ) => ({
                 let mut flags = Vec::new();
                 $(
