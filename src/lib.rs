@@ -330,7 +330,7 @@ impl CommonOptions {
         // if fuel has been configured, set the `consume fuel` flag on the config
         if self.fuel.is_some() {
             config.consume_fuel(true);
-        }        
+        }
 
         config.epoch_interruption(self.epoch_interruption);
         config.generate_address_map(!self.disable_address_map);
