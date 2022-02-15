@@ -164,18 +164,10 @@ impl RunCommand {
         let engine = Engine::new(&config)?;
         let mut store = Store::new(&engine, Host::default());
 
-        // if consume fuel has been flagged, we want to instantiate the
-        // store with the set amount of fuel from the 'add_fuel' option
-        if self.common.consume_fuel {
-            store.add_fuel(self.common.add_fuel)?;
-        }
-
-        // warn the user if 'add_fuel' is set - is not 0 - and 'consume_fuel' is not
-        if self.common.add_fuel != 0 && !self.common.consume_fuel {
-            eprintln!(
-                "warning: using `--add-fuel` without '--consume-fuel' flag\
-            being set. This currently won't do anything."
-            );
+        // if fuel has been configured, we want to set the fuel amount 
+        // of the store to the amount of fuel configured
+        if let Some(fuel) = self.common.fuel {
+            store.add_fuel(fuel)?;
         }
 
         let preopen_sockets = self.compute_preopen_sockets()?;
