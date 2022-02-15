@@ -20,7 +20,6 @@ jobs:
     - uses: bytecodealliance/labeler@schedule-fork
       with:
         repo-token: "${{ secrets.GITHUB_TOKEN }}"
-      if: ${{ github.event_name == "schedule" }}
 
     # @-mention people who are subscribed to a label when an issue/PR is given
     # that label.
