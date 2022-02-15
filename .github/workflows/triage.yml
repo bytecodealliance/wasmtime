@@ -1,0 +1,34 @@
+name: "Issue / PR Triage"
+
+on:
+  issues:
+    types: ["labeled"]
+  schedule:
+    # Run pull request triage every 5 minutes. Ideally, this would be on
+    # "labeled" types of pull request events, but that doesn't work if the pull
+    # request is from another fork. For example, see
+    # https://github.com/actions/labeler/issues/12
+    - cron: '*/5 * * * *'
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    steps:
+
+    # Automatically label PRs that touch certain directories with certain
+    # labels.
+    - uses: bytecodealliance/labeler@schedule-fork
+      with:
+        repo-token: "${{ secrets.GITHUB_TOKEN }}"
+      if: ${{ github.event_name == "schedule" }}
+
+    # @-mention people who are subscribed to a label when an issue/PR is given
+    # that label.
+    - uses: bytecodealliance/subscribe-to-label-action@v1
+      with:
+        repo-token: "${{ secrets.GITHUB_TOKEN }}"
+
+    # Leave pre-determined comments on issues/PRs that are given a certain label.
+    - uses: bytecodealliance/label-messager-action@v1
+      with:
+        repo-token: "${{ secrets.GITHUB_TOKEN }}"
