@@ -295,11 +295,13 @@ fn instantiate_with_dummy(store: &mut Store<StoreLimits>, module: &Module) -> Op
 /// exports. Modulo OOM, non-canonical NaNs, and usage of Wasm features that are
 /// or aren't enabled for different configs, we should get the same results when
 /// we call the exported functions for all of our different configs.
+///
+/// Returns `None` if a fuzz configuration was rejected (should happen rarely).
 pub fn differential_execution(
     wasm: &[u8],
     module_config: &generators::ModuleConfig,
     configs: &[generators::WasmtimeConfig],
-) {
+) -> Option<()> {
     use std::collections::{HashMap, HashSet};
 
     // We need at least two configs.
@@ -307,7 +309,7 @@ pub fn differential_execution(
         // And all the configs should be unique.
         || configs.iter().collect::<HashSet<_>>().len() != configs.len()
     {
-        return;
+        return None;
     }
 
     let mut export_func_results: HashMap<String, Result<Box<[Val]>, Trap>> = Default::default();
@@ -321,7 +323,7 @@ pub fn differential_execution(
         log::debug!("fuzz config: {:?}", fuzz_config);
 
         let mut store = fuzz_config.to_store();
-        let module = fuzz_config.compile(store.engine(), &wasm).unwrap();
+        let module = compile_module(store.engine(), &wasm, true, &fuzz_config)?;
 
         // TODO: we should implement tracing versions of these dummy imports
         // that record a trace of the order that imported functions were called
@@ -356,6 +358,8 @@ pub fn differential_execution(
             assert_same_export_func_result(&existing_result, &this_result, &name);
         }
     }
+
+    return Some(());
 
     fn assert_same_export_func_result(
         lhs: &Result<Box<[Val]>, Trap>,
@@ -505,7 +509,7 @@ pub fn make_api_calls(api: generators::api::ApiCalls) {
 /// Ensures that spec tests pass regardless of the `Config`.
 pub fn spectest(mut fuzz_config: generators::Config, test: generators::SpecTest) {
     crate::init_fuzzing();
-    fuzz_config.module_config.set_spectest_compliant();
+    fuzz_config.set_spectest_compliant();
     log::debug!("running {:?} with {:?}", test.file, fuzz_config);
     let mut wast_context = WastContext::new(fuzz_config.to_store());
     wast_context.register_spectest().unwrap();
@@ -531,9 +535,9 @@ pub fn table_ops(mut fuzz_config: generators::Config, ops: generators::table_ops
 
         let wasm = ops.to_wasm_binary();
         log_wasm(&wasm);
-        let module = match fuzz_config.compile(store.engine(), &wasm) {
-            Ok(m) => m,
-            Err(_) => return,
+        let module = match compile_module(store.engine(), &wasm, false, &fuzz_config) {
+            Some(m) => m,
+            None => return,
         };
 
         let mut linker = Linker::new(store.engine());
@@ -677,6 +681,7 @@ pub fn differential_wasmi_execution(wasm: &[u8], config: &generators::Config) ->
 
     // If wasmi succeeded then we assert that wasmtime will also succeed.
     let (wasmtime_module, mut wasmtime_store) = differential_store(wasm, config);
+    let wasmtime_module = wasmtime_module?;
     let wasmtime_instance = Instance::new(&mut wasmtime_store, &wasmtime_module, &[])
         .expect("Wasmtime can instantiate module");
 
@@ -790,7 +795,7 @@ pub fn differential_spec_execution(wasm: &[u8], config: &generators::Config) -> 
 
     match (&spec_vals, &wasmtime_vals) {
         // Compare the returned values, failing if they do not match.
-        (Ok(spec_vals), Ok(wasmtime_vals)) => {
+        (Ok(spec_vals), Ok(Some(wasmtime_vals))) => {
             let all_match = spec_vals
                 .iter()
                 .zip(wasmtime_vals)
@@ -801,6 +806,10 @@ pub fn differential_spec_execution(wasm: &[u8], config: &generators::Config) -> 
                     spec_vals, wasmtime_vals
                 );
             }
+        }
+        (_, Ok(None)) => {
+            // `run_in_wasmtime` rejected the config
+            return None;
         }
         // If both sides fail, skip this fuzz execution.
         (Err(spec_error), Err(wasmtime_error)) => {
@@ -833,11 +842,9 @@ pub fn differential_spec_execution(wasm: &[u8], config: &generators::Config) -> 
 fn differential_store(
     wasm: &[u8],
     fuzz_config: &generators::Config,
-) -> (Module, Store<StoreLimits>) {
+) -> (Option<Module>, Store<StoreLimits>) {
     let store = fuzz_config.to_store();
-    let module = fuzz_config
-        .compile(store.engine(), wasm)
-        .expect("Wasmtime can compile module");
+    let module = compile_module(store.engine(), wasm, true, fuzz_config);
     (module, store)
 }
 
@@ -847,9 +854,14 @@ fn run_in_wasmtime(
     wasm: &[u8],
     config: &generators::Config,
     params: &[Val],
-) -> anyhow::Result<Vec<Val>> {
+) -> anyhow::Result<Option<Vec<Val>>> {
     // Instantiate wasmtime module and instance.
     let (wasmtime_module, mut wasmtime_store) = differential_store(wasm, config);
+    let wasmtime_module = match wasmtime_module {
+        Some(m) => m,
+        None => return Ok(None),
+    };
+
     let wasmtime_instance = Instance::new(&mut wasmtime_store, &wasmtime_module, &[])
         .context("Wasmtime cannot instantiate module")?;
 
@@ -864,7 +876,7 @@ fn run_in_wasmtime(
     let mut results = vec![Val::I32(0); ty.results().len()];
     wasmtime_main
         .call(&mut wasmtime_store, params, &mut results)
-        .map(|()| results)
+        .map(|()| Some(results))
 }
 
 // Introspect wasmtime module to find the name of the first exported function.

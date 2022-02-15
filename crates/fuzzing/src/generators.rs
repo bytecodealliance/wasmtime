@@ -185,7 +185,7 @@ impl InstanceAllocationStrategy {
 /// This configuration guides what modules are generated, how wasmtime
 /// configuration is generated, and is typically itself generated through a call
 /// to `Arbitrary` which allows for a form of "swarm testing".
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Config {
     /// Configuration related to the `wasmtime::Config`.
     pub wasmtime: WasmtimeConfig,
@@ -210,9 +210,17 @@ impl<'a> Arbitrary<'a> for Config {
             // Force the use of a normal memory config when using the pooling allocator and
             // limit the static memory maximum to be the same as the pooling allocator's memory
             // page limit.
-            let mut memory_config: NormalMemoryConfig = u.arbitrary()?;
-            memory_config.static_memory_maximum_size = Some(limits.memory_pages * 0x10000);
-            config.wasmtime.memory_config = MemoryConfig::Normal(memory_config);
+            config.wasmtime.memory_config = match config.wasmtime.memory_config {
+                MemoryConfig::Normal(mut config) => {
+                    config.static_memory_maximum_size = Some(limits.memory_pages * 0x10000);
+                    MemoryConfig::Normal(config)
+                }
+                MemoryConfig::CustomUnaligned => {
+                    let mut config: NormalMemoryConfig = u.arbitrary()?;
+                    config.static_memory_maximum_size = Some(limits.memory_pages * 0x10000);
+                    MemoryConfig::Normal(config)
+                }
+            };
 
             let cfg = &mut config.module_config.config;
             cfg.max_imports = limits.imported_functions.min(
@@ -245,7 +253,8 @@ pub struct WasmtimeConfig {
     canonicalize_nans: bool,
     interruptable: bool,
     pub(crate) consume_fuel: bool,
-    memory_config: MemoryConfig,
+    /// The Wasmtime memory configuration to use.
+    pub memory_config: MemoryConfig,
     force_jump_veneers: bool,
     memfd: bool,
     use_precompiled_cwasm: bool,
@@ -254,8 +263,9 @@ pub struct WasmtimeConfig {
     codegen: CodegenSettings,
 }
 
+/// Configuration for linear memories in Wasmtime.
 #[derive(Arbitrary, Clone, Debug, Eq, Hash, PartialEq)]
-enum MemoryConfig {
+pub enum MemoryConfig {
     /// Configuration for linear memories which correspond to normal
     /// configuration settings in `wasmtime` itself. This will tweak various
     /// parameters about static/dynamic memories.
@@ -267,8 +277,10 @@ enum MemoryConfig {
     CustomUnaligned,
 }
 
+/// Represents a normal memory configuration for Wasmtime with the given
+/// static and dynamic memory sizes.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-struct NormalMemoryConfig {
+pub struct NormalMemoryConfig {
     static_memory_maximum_size: Option<u64>,
     static_memory_guard_size: Option<u64>,
     dynamic_memory_guard_size: Option<u64>,
@@ -289,6 +301,117 @@ impl<'a> Arbitrary<'a> for NormalMemoryConfig {
 }
 
 impl Config {
+    /// Indicates that this configuration is being used for differential
+    /// execution so only a single function should be generated since that's all
+    /// that's going to be exercised.
+    pub fn set_differential_config(&mut self) {
+        let config = &mut self.module_config.config;
+
+        config.allow_start_export = false;
+        // Make sure there's a type available for the function.
+        config.min_types = 1;
+        config.max_types = 1;
+
+        // Generate one and only one function
+        config.min_funcs = 1;
+        config.max_funcs = 1;
+
+        // Give the function a memory, but keep it small
+        config.min_memories = 1;
+        config.max_memories = 1;
+        config.max_memory_pages = 1;
+        config.memory_max_size_required = true;
+
+        // Don't allow any imports
+        config.max_imports = 0;
+
+        // Try to get the function and the memory exported
+        config.min_exports = 2;
+        config.max_exports = 4;
+
+        // NaN is canonicalized at the wasm level for differential fuzzing so we
+        // can paper over NaN differences between engines.
+        config.canonicalize_nans = true;
+
+        // When diffing against a non-wasmtime engine then disable wasm
+        // features to get selectively re-enabled against each differential
+        // engine.
+        config.bulk_memory_enabled = false;
+        config.reference_types_enabled = false;
+        config.simd_enabled = false;
+        config.memory64_enabled = false;
+
+        // If using the pooling allocator, update the module limits too
+        if let InstanceAllocationStrategy::Pooling {
+            module_limits: limits,
+            ..
+        } = &mut self.wasmtime.strategy
+        {
+            // No imports
+            limits.imported_functions = 0;
+            limits.imported_tables = 0;
+            limits.imported_memories = 0;
+            limits.imported_globals = 0;
+
+            // One type, one function, and one single-page memory
+            limits.types = 1;
+            limits.functions = 1;
+            limits.memories = 1;
+            limits.memory_pages = 1;
+
+            match &mut self.wasmtime.memory_config {
+                MemoryConfig::Normal(config) => {
+                    config.static_memory_maximum_size = Some(limits.memory_pages * 0x10000);
+                }
+                MemoryConfig::CustomUnaligned => unreachable!(), // Arbitrary impl for `Config` should have prevented this
+            }
+        }
+    }
+
+    /// Uses this configuration and the supplied source of data to generate
+    /// a wasm module.
+    ///
+    /// If a `default_fuel` is provided, the resulting module will be configured
+    /// to ensure termination; as doing so will add an additional global to the module,
+    /// the pooling allocator, if configured, will also have its globals limit updated.
+    pub fn generate(
+        &mut self,
+        input: &mut Unstructured<'_>,
+        default_fuel: Option<u32>,
+    ) -> arbitrary::Result<wasm_smith::Module> {
+        let mut module = wasm_smith::Module::new(self.module_config.config.clone(), input)?;
+
+        if let Some(default_fuel) = default_fuel {
+            module.ensure_termination(default_fuel);
+
+            // Bump the allowed global count by 1
+            if let InstanceAllocationStrategy::Pooling { module_limits, .. } =
+                &mut self.wasmtime.strategy
+            {
+                module_limits.globals += 1;
+            }
+        }
+
+        Ok(module)
+    }
+
+    /// Indicates that this configuration should be spec-test-compliant,
+    /// disabling various features the spec tests assert are disabled.
+    pub fn set_spectest_compliant(&mut self) {
+        let config = &mut self.module_config.config;
+        config.memory64_enabled = false;
+        config.simd_enabled = false;
+        config.bulk_memory_enabled = true;
+        config.reference_types_enabled = true;
+        config.max_memories = 1;
+
+        if let InstanceAllocationStrategy::Pooling { module_limits, .. } =
+            &mut self.wasmtime.strategy
+        {
+            module_limits.memories = 1;
+        }
+    }
+
     /// Converts this to a `wasmtime::Config` object
     pub fn to_wasmtime(&self) -> wasmtime::Config {
         crate::init_fuzzing();
@@ -494,63 +617,6 @@ impl<'a> Arbitrary<'a> for SpecTest {
 pub struct ModuleConfig {
     #[allow(missing_docs)]
     pub config: SwarmConfig,
-}
-
-impl ModuleConfig {
-    /// Uses this configuration and the supplied source of data to generate
-    /// a wasm module.
-    pub fn generate(&self, input: &mut Unstructured<'_>) -> arbitrary::Result<wasm_smith::Module> {
-        wasm_smith::Module::new(self.config.clone(), input)
-    }
-
-    /// Indicates that this configuration should be spec-test-compliant,
-    /// disabling various features the spec tests assert are disabled.
-    pub fn set_spectest_compliant(&mut self) {
-        self.config.memory64_enabled = false;
-        self.config.simd_enabled = false;
-        self.config.bulk_memory_enabled = true;
-        self.config.reference_types_enabled = true;
-        self.config.max_memories = 1;
-    }
-
-    /// Indicates that this configuration is being used for differential
-    /// execution so only a single function should be generated since that's all
-    /// that's going to be exercised.
-    pub fn set_differential_config(&mut self) {
-        self.config.allow_start_export = false;
-        // Make sure there's a type available for the function.
-        self.config.min_types = 1;
-        self.config.max_types = 1;
-
-        // Generate one and only one function
-        self.config.min_funcs = 1;
-        self.config.max_funcs = 1;
-
-        // Give the function a memory, but keep it small
-        self.config.min_memories = 1;
-        self.config.max_memories = 1;
-        self.config.max_memory_pages = 1;
-        self.config.memory_max_size_required = true;
-
-        // Don't allow any imports
-        self.config.max_imports = 0;
-
-        // Try to get the function and the memory exported
-        self.config.min_exports = 2;
-        self.config.max_exports = 4;
-
-        // NaN is canonicalized at the wasm level for differential fuzzing so we
-        // can paper over NaN differences between engines.
-        self.config.canonicalize_nans = true;
-
-        // When diffing against a non-wasmtime engine then disable wasm
-        // features to get selectively re-enabled against each differential
-        // engine.
-        self.config.bulk_memory_enabled = false;
-        self.config.reference_types_enabled = false;
-        self.config.simd_enabled = false;
-        self.config.memory64_enabled = false;
-    }
 }
 
 impl<'a> Arbitrary<'a> for ModuleConfig {

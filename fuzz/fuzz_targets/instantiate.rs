@@ -2,7 +2,6 @@
 
 use libfuzzer_sys::arbitrary::{Result, Unstructured};
 use libfuzzer_sys::fuzz_target;
-use wasmtime_fuzzing::generators::InstanceAllocationStrategy;
 use wasmtime_fuzzing::oracles::Timeout;
 use wasmtime_fuzzing::{generators, oracles};
 
@@ -28,21 +27,15 @@ fn run(data: &[u8]) -> Result<()> {
     // Enable module linking for this fuzz target specifically
     config.module_config.config.module_linking_enabled = u.arbitrary()?;
 
-    // When using the pooling allocator without a timeout, we must
-    // allow at least 1 more global because the `ensure_termination` call below
-    // will define one.
-    if let Timeout::None = timeout {
-        if let InstanceAllocationStrategy::Pooling { module_limits, .. } =
-            &mut config.wasmtime.strategy
-        {
-            module_limits.globals += 1;
-        }
-    }
+    let module = config.generate(
+        &mut u,
+        if let Timeout::None = timeout {
+            Some(1000)
+        } else {
+            None
+        },
+    )?;
 
-    let mut module = config.module_config.generate(&mut u)?;
-    if let Timeout::None = timeout {
-        module.ensure_termination(1000);
-    }
     oracles::instantiate(&module.to_bytes(), true, &config, timeout);
     Ok(())
 }

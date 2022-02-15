@@ -26,7 +26,7 @@ fn run(data: &[u8]) -> Result<()> {
 
     // Create the modules to instantiate
     let modules = (0..u.int_in_range(1..=MAX_MODULES)?)
-        .map(|_| Ok(config.module_config.generate(&mut u)?.to_bytes()))
+        .map(|_| Ok(config.generate(&mut u, None)?.to_bytes()))
         .collect::<Result<Vec<_>>>()?;
 
     let max_instances = match &config.wasmtime.strategy {

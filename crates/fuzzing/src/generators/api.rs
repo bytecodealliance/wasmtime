@@ -14,7 +14,7 @@
 //!
 //! [swarm testing]: https://www.cs.utah.edu/~regehr/papers/swarm12.pdf
 
-use crate::generators::{Config, ModuleConfig};
+use crate::generators::Config;
 use arbitrary::{Arbitrary, Unstructured};
 use std::collections::BTreeSet;
 
@@ -44,7 +44,7 @@ struct Scope {
     id_counter: usize,
     modules: BTreeSet<usize>,
     instances: BTreeSet<usize>,
-    module_config: ModuleConfig,
+    config: Config,
 }
 
 impl Scope {
@@ -70,14 +70,13 @@ impl<'a> Arbitrary<'a> for ApiCalls {
         let mut calls = vec![];
 
         let config = Config::arbitrary(input)?;
-        let module_config = config.module_config.clone();
-        calls.push(StoreNew(config));
+        calls.push(StoreNew(config.clone()));
 
         let mut scope = Scope {
             id_counter: 0,
             modules: BTreeSet::default(),
             instances: BTreeSet::default(),
-            module_config,
+            config,
         };
 
         // Total limit on number of API calls we'll generate. This exists to
@@ -94,8 +93,7 @@ impl<'a> Arbitrary<'a> for ApiCalls {
             if swarm.module_new {
                 choices.push(|input, scope| {
                     let id = scope.next_id();
-                    let mut wasm = scope.module_config.generate(input)?;
-                    wasm.ensure_termination(1000);
+                    let wasm = scope.config.generate(input, Some(1000))?;
                     scope.modules.insert(id);
                     Ok(ModuleNew {
                         id,
