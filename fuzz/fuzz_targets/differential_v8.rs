@@ -13,15 +13,14 @@ fuzz_target!(|data: &[u8]| {
 fn run(data: &[u8]) -> Result<()> {
     let mut u = Unstructured::new(data);
     let mut config: generators::Config = u.arbitrary()?;
-    config.module_config.set_differential_config();
+    config.set_differential_config();
 
     // Enable features that v8 has implemented
     config.module_config.config.simd_enabled = true;
     config.module_config.config.bulk_memory_enabled = true;
     config.module_config.config.reference_types_enabled = true;
 
-    let mut module = config.module_config.generate(&mut u)?;
-    module.ensure_termination(1000);
+    let module = config.generate(&mut u, Some(1000))?;
     oracles::differential_v8_execution(&module.to_bytes(), &config);
     Ok(())
 }

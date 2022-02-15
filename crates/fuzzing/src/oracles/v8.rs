@@ -17,6 +17,7 @@ pub fn differential_v8_execution(wasm: &[u8], config: &crate::generators::Config
     // Wasmtime setup
     log_wasm(wasm);
     let (wasmtime_module, mut wasmtime_store) = super::differential_store(wasm, config);
+    let wasmtime_module = wasmtime_module?;
     log::trace!("compiled module with wasmtime");
 
     // V8 setup
