@@ -251,6 +251,7 @@ pub struct WasmtimeConfig {
     use_precompiled_cwasm: bool,
     /// Configuration for the instance allocation strategy to use.
     pub strategy: InstanceAllocationStrategy,
+    codegen: CodegenSettings,
 }
 
 #[derive(Arbitrary, Clone, Debug, Eq, Hash, PartialEq)]
@@ -305,6 +306,8 @@ impl Config {
             .consume_fuel(self.wasmtime.consume_fuel)
             .memfd(self.wasmtime.memfd)
             .allocation_strategy(self.wasmtime.strategy.to_wasmtime());
+
+        self.wasmtime.codegen.configure(&mut cfg);
 
         // If the wasm-smith-generated module use nan canonicalization then we
         // don't need to enable it, but if it doesn't enable it already then we
@@ -567,5 +570,94 @@ impl<'a> Arbitrary<'a> for ModuleConfig {
         config.memory64_enabled = u.arbitrary()?;
 
         Ok(ModuleConfig { config })
+    }
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+enum CodegenSettings {
+    Native,
+    #[allow(dead_code)]
+    Target {
+        target: String,
+        flags: Vec<(String, String)>,
+    },
+}
+
+impl CodegenSettings {
+    fn configure(&self, config: &mut wasmtime::Config) {
+        match self {
+            CodegenSettings::Native => {}
+            CodegenSettings::Target { target, flags } => {
+                config.target(target).unwrap();
+                for (key, value) in flags {
+                    unsafe {
+                        config.cranelift_flag_set(key, value).unwrap();
+                    }
+                }
+            }
+        }
+    }
+}
+
+impl<'a> Arbitrary<'a> for CodegenSettings {
+    #[allow(unused_macros, unused_variables)]
+    fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
+        // Helper macro to enable clif features based on what the native host
+        // supports. If the input says to enable a feature and the host doesn't
+        // support it then that test case is rejected with a warning.
+        macro_rules! target_features {
+            (
+                test:$test:ident,
+                $(std: $std:tt => clif: $clif:tt $(ratio: $a:tt in $b:tt)?,)*
+            ) => ({
+                let mut flags = Vec::new();
+                $(
+                    let (low, hi) = (1, 2);
+                    $(let (low, hi) = ($a, $b);)?
+                    let enable = u.ratio(low, hi)?;
+                    if enable && !std::$test!($std) {
+                        log::error!("want to enable clif `{}` but host doesn't support it",
+                            $clif);
+                        return Err(arbitrary::Error::EmptyChoose)
+                    }
+                    flags.push((
+                        $clif.to_string(),
+                        enable.to_string(),
+                    ));
+                )*
+                flags
+            })
+        }
+        #[cfg(target_arch = "x86_64")]
+        {
+            if u.ratio(1, 10)? {
+                let flags = target_features! {
+                    test: is_x86_feature_detected,
+                    std:"sse3" => clif:"has_sse3",
+                    std:"ssse3" => clif:"has_ssse3",
+                    std:"sse4.1" => clif:"has_sse41",
+                    std:"sse4.2" => clif:"has_sse42",
+                    std:"popcnt" => clif:"has_popcnt",
+                    std:"avx" => clif:"has_avx",
+                    std:"avx2" => clif:"has_avx2",
+                    std:"bmi1" => clif:"has_bmi1",
+                    std:"bmi2" => clif:"has_bmi2",
+                    std:"lzcnt" => clif:"has_lzcnt",
+
+                    // not a lot of of cpus support avx512 so these are weighted
+                    // to get enabled much less frequently.
+                    std:"avx512bitalg" => clif:"has_avx512bitalg" ratio:1 in 1000,
+                    std:"avx512dq" => clif:"has_avx512dq" ratio: 1 in 1000,
+                    std:"avx512f" => clif:"has_avx512f" ratio: 1 in 1000,
+                    std:"avx512vl" => clif:"has_avx512vl" ratio: 1 in 1000,
+                    std:"avx512vbmi" => clif:"has_avx512vbmi" ratio: 1 in 1000,
+                };
+                return Ok(CodegenSettings::Target {
+                    target: target_lexicon::Triple::host().to_string(),
+                    flags,
+                });
+            }
+        }
+        Ok(CodegenSettings::Native)
     }
 }

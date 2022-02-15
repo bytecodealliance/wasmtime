@@ -9,10 +9,11 @@ license = "Apache-2.0 WITH LLVM-exception"
 
 [dependencies]
 anyhow = "1.0.22"
-arbitrary = { version = "1.0.0", features = ["derive"] }
+arbitrary = { version = "1.1.0", features = ["derive"] }
 env_logger = "0.8.1"
 log = "0.4.8"
 rayon = "1.2.1"
+target-lexicon = "0.12.3"
 tempfile = "3.3.0"
 wasmparser = "0.82"
 wasmprinter = "0.2.32"
