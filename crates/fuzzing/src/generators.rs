@@ -608,13 +608,13 @@ impl<'a> Arbitrary<'a> for CodegenSettings {
         macro_rules! target_features {
             (
                 test:$test:ident,
-                $(std: $std:tt => clif: $clif:tt $(range: $e:expr)?,)*
+                $(std: $std:tt => clif: $clif:tt $(ratio: $a:expr in $b:expr)?,)*
             ) => ({
                 let mut flags = Vec::new();
                 $(
-                    let range = 0..=1;
-                    $(let range = { drop(range); $e };)?
-                    let enable = u.int_in_range(range)? == 1;
+                    let (low, hi) = (1, 2);
+                    $(let (low, hi) = ($a, $b);)?
+                    let enable = u.ratio(low, hi)?;
                     if enable && !std::$test!($std) {
                         log::error!("want to enable clif `{}` but host doesn't support it",
                             $clif);
@@ -630,7 +630,7 @@ impl<'a> Arbitrary<'a> for CodegenSettings {
         }
         #[cfg(target_arch = "x86_64")]
         {
-            if u.int_in_range(0..=9)? == 0 {
+            if u.ratio(1, 10)? {
                 let flags = target_features! {
                     test: is_x86_feature_detected,
                     std:"sse3" => clif:"has_sse3",
@@ -646,11 +646,11 @@ impl<'a> Arbitrary<'a> for CodegenSettings {
 
                     // not a lot of of cpus support avx512 so these are weighted
                     // to get enabled much less frequently.
-                    std:"avx512bitalg" => clif:"has_avx512bitalg" range:0..=1000,
-                    std:"avx512dq" => clif:"has_avx512dq" range: 0..=1000,
-                    std:"avx512f" => clif:"has_avx512f" range: 0..=1000,
-                    std:"avx512vl" => clif:"has_avx512vl" range: 0..=1000,
-                    std:"avx512vbmi" => clif:"has_avx512vbmi" range: 0..=1000,
+                    std:"avx512bitalg" => clif:"has_avx512bitalg" ratio:1 in 1000,
+                    std:"avx512dq" => clif:"has_avx512dq" ratio: 1 in 1000,
+                    std:"avx512f" => clif:"has_avx512f" ratio: 1 in 1000,
+                    std:"avx512vl" => clif:"has_avx512vl" ratio: 1 in 1000,
+                    std:"avx512vbmi" => clif:"has_avx512vbmi" ratio: 1 in 1000,
                 };
                 return Ok(CodegenSettings::Target {
                     target: target_lexicon::Triple::host().to_string(),
