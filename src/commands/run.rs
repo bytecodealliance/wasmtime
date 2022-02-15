@@ -164,8 +164,8 @@ impl RunCommand {
         let engine = Engine::new(&config)?;
         let mut store = Store::new(&engine, Host::default());
 
-        // if fuel has been configured, we want to set the fuel amount
-        // of the store to the amount of fuel configured
+        // If fuel has been configured, we want to add the configured
+        // fuel amount to this store.
         if let Some(fuel) = self.common.fuel {
             store.add_fuel(fuel)?;
         }
