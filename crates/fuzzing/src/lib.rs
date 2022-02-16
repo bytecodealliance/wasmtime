@@ -2,8 +2,10 @@
 
 #![deny(missing_docs)]
 
+pub use wasm_mutate;
 pub use wasm_smith;
 pub mod generators;
+pub mod mutators;
 pub mod oracles;
 
 /// One time start up initialization for fuzzing:
