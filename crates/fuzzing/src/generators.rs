@@ -701,7 +701,7 @@ impl<'a> Arbitrary<'a> for CodegenSettings {
                     test: is_x86_feature_detected,
 
                     // These features are considered to be baseline required by
-                    // Wasmtime. Currently SIMD some simd code generation will
+                    // Wasmtime. Currently some SIMD code generation will
                     // fail if these features are disabled, so unconditionally
                     // enable them as we're not interested in fuzzing without
                     // them.
