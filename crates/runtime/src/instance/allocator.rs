@@ -14,8 +14,9 @@ use std::slice;
 use std::sync::Arc;
 use thiserror::Error;
 use wasmtime_environ::{
-    DefinedMemoryIndex, DefinedTableIndex, InitMemory, MemoryInitialization, MemoryInitializer,
-    Module, PrimaryMap, TableInitialization, TableInitializer, TrapCode, WasmType, WASM_PAGE_SIZE,
+    DefinedMemoryIndex, DefinedTableIndex, HostPtr, InitMemory, MemoryInitialization,
+    MemoryInitializer, Module, PrimaryMap, TableInitialization, TableInitializer, TrapCode,
+    VMOffsets, WasmType, WASM_PAGE_SIZE,
 };
 
 #[cfg(feature = "pooling-allocator")]
@@ -522,26 +523,16 @@ unsafe impl InstanceAllocator for OnDemandInstanceAllocator {
     ) -> Result<InstanceHandle, InstantiationError> {
         let memories = self.create_memories(&mut req.store, &req.runtime_info)?;
         let tables = Self::create_tables(&mut req.store, &req.runtime_info)?;
+        let module = req.runtime_info.module();
+        let offsets = VMOffsets::new(HostPtr, module);
+        let layout = Instance::alloc_layout(&offsets);
+        let instance_ptr = alloc::alloc(layout) as *mut Instance;
 
-        let mut handle = {
-            let instance =
-                Instance::create_raw(req.runtime_info.clone(), memories, tables, req.host_state);
-            let layout = instance.alloc_layout();
-            let instance_ptr = alloc::alloc(layout) as *mut Instance;
-            if instance_ptr.is_null() {
-                alloc::handle_alloc_error(layout);
-            }
-            ptr::write(instance_ptr, instance);
-            InstanceHandle {
-                instance: instance_ptr,
-            }
-        };
+        Instance::new_at(instance_ptr, layout.size(), offsets, req, memories, tables);
 
-        handle
-            .instance_mut()
-            .initialize_vmctx(req.store, req.imports);
-
-        Ok(handle)
+        Ok(InstanceHandle {
+            instance: instance_ptr,
+        })
     }
 
     unsafe fn initialize(
@@ -554,7 +545,7 @@ unsafe impl InstanceAllocator for OnDemandInstanceAllocator {
     }
 
     unsafe fn deallocate(&self, handle: &InstanceHandle) {
-        let layout = handle.instance().alloc_layout();
+        let layout = Instance::alloc_layout(&handle.instance().offsets);
         ptr::drop_in_place(handle.instance);
         alloc::dealloc(handle.instance.cast(), layout);
     }

@@ -367,21 +367,19 @@ impl InstancePool {
             return Err(e);
         }
 
-        let instance = self.instance(instance_index);
+        let instance_ptr = self.instance(instance_index) as _;
 
-        // Instances are uninitialized memory at first; we need to
-        // write an empty but initialized `Instance` struct into the
-        // chosen slot before we do anything else with it. (This is
-        // paired with a `drop_in_place` in deallocate below.)
-        std::ptr::write(
-            instance as _,
-            Instance::create_raw(req.runtime_info.clone(), memories, tables, req.host_state),
+        Instance::new_at(
+            instance_ptr,
+            self.instance_size,
+            VMOffsets::new(HostPtr, module),
+            req,
+            memories,
+            tables,
         );
 
-        instance.initialize_vmctx(req.store, req.imports);
-
         Ok(InstanceHandle {
-            instance: instance as _,
+            instance: instance_ptr,
         })
     }
 
