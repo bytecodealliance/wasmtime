@@ -364,6 +364,7 @@ impl InstancePool {
                     dropped_data: EntitySet::new(),
                     host_state: Box::new(()),
                     wasm_data: &[],
+                    vmctx_initialized: false,
                     vmctx: VMContext {
                         _marker: marker::PhantomPinned,
                     },
@@ -497,6 +498,7 @@ impl InstancePool {
         instance.module = self.empty_module.clone();
         instance.offsets = VMOffsets::new(HostPtr, &self.empty_module);
         instance.wasm_data = &[];
+        instance.vmctx_initialized = false;
 
         self.free_list.lock().unwrap().push(index);
     }

@@ -461,6 +461,8 @@ fn initialize_instance(
 }
 
 unsafe fn initialize_vmcontext(instance: &mut Instance, req: InstanceAllocationRequest) {
+    assert!(!instance.vmctx_initialized);
+
     if let Some(store) = req.store.as_raw() {
         *instance.interrupts() = (*store).vminterrupts();
         *instance.externref_activations_table() = (*store).externref_activations_table().0;
@@ -557,6 +559,9 @@ unsafe fn initialize_vmcontext(instance: &mut Instance, req: InstanceAllocationR
 
     // Initialize the defined globals
     initialize_vmcontext_globals(instance);
+
+    // Mark the vmctx as initialized
+    instance.vmctx_initialized = true;
 }
 
 unsafe fn initialize_vmcontext_globals(instance: &Instance) {
@@ -699,6 +704,7 @@ unsafe impl InstanceAllocator for OnDemandInstanceAllocator {
                 dropped_data: EntitySet::with_capacity(req.module.passive_data_map.len()),
                 host_state,
                 wasm_data: &*req.wasm_data,
+                vmctx_initialized: false,
                 vmctx: VMContext {
                     _marker: marker::PhantomPinned,
                 },
