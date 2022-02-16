@@ -8,10 +8,13 @@ use crate::memory::{Memory, RuntimeMemoryCreator};
 use crate::table::{Table, TableElement, TableElementType};
 use crate::traphandlers::Trap;
 use crate::vmcontext::{
-    VMCallerCheckedAnyfunc, VMContext, VMFunctionImport, VMGlobalDefinition, VMGlobalImport,
-    VMInterrupts, VMMemoryDefinition, VMMemoryImport, VMTableDefinition, VMTableImport,
+    VMBuiltinFunctionsArray, VMCallerCheckedAnyfunc, VMContext, VMFunctionImport,
+    VMGlobalDefinition, VMGlobalImport, VMInterrupts, VMMemoryDefinition, VMMemoryImport,
+    VMTableDefinition, VMTableImport,
 };
-use crate::{ExportFunction, ExportGlobal, ExportMemory, ExportTable, ModuleRuntimeInfo, Store};
+use crate::{
+    ExportFunction, ExportGlobal, ExportMemory, ExportTable, Imports, ModuleRuntimeInfo, Store,
+};
 use anyhow::Error;
 use memoffset::offset_of;
 use more_asserts::assert_lt;
@@ -24,12 +27,12 @@ use std::ptr::NonNull;
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use std::{mem, ptr, slice};
-use wasmtime_environ::TableInitialization;
 use wasmtime_environ::{
     packed_option::ReservedValue, DataIndex, DefinedGlobalIndex, DefinedMemoryIndex,
     DefinedTableIndex, ElemIndex, EntityIndex, EntityRef, EntitySet, FuncIndex, GlobalIndex,
     HostPtr, MemoryIndex, Module, PrimaryMap, TableIndex, TrapCode, VMOffsets, WasmType,
 };
+use wasmtime_environ::{GlobalInit, TableInitialization};
 
 mod allocator;
 
@@ -851,6 +854,125 @@ impl Instance {
                 let foreign_table_def = &*import.from;
                 let foreign_table_index = foreign_instance.table_index(foreign_table_def);
                 (foreign_table_index, foreign_instance)
+            }
+        }
+    }
+
+    /// Initialize the VMContext data associated with this Instance.
+    ///
+    /// The `VMContext` memory is assumed to be uninitialized; any field
+    /// that we need in a certain state will be explicitly written by this
+    /// function.
+    unsafe fn initialize_vmctx(&mut self, store: StorePtr, imports: Imports) {
+        let module = self.module().clone();
+
+        if let Some(store) = store.as_raw() {
+            *self.interrupts() = (*store).vminterrupts();
+            *self.epoch_ptr() = (*store).epoch_ptr();
+            *self.externref_activations_table() = (*store).externref_activations_table().0;
+            self.set_store(store);
+        }
+
+        // Initialize shared signatures
+        let signatures = self.runtime_info.signature_ids();
+        *self.vmctx_plus_offset(self.offsets.vmctx_signature_ids_array()) = signatures.as_ptr();
+
+        // Initialize the built-in functions
+        *self.vmctx_plus_offset(self.offsets.vmctx_builtin_functions()) =
+            &VMBuiltinFunctionsArray::INIT;
+
+        // Initialize the imports
+        debug_assert_eq!(imports.functions.len(), module.num_imported_funcs);
+        ptr::copy_nonoverlapping(
+            imports.functions.as_ptr(),
+            self.vmctx_plus_offset(self.offsets.vmctx_imported_functions_begin()),
+            imports.functions.len(),
+        );
+        debug_assert_eq!(imports.tables.len(), module.num_imported_tables);
+        ptr::copy_nonoverlapping(
+            imports.tables.as_ptr(),
+            self.vmctx_plus_offset(self.offsets.vmctx_imported_tables_begin()),
+            imports.tables.len(),
+        );
+        debug_assert_eq!(imports.memories.len(), module.num_imported_memories);
+        ptr::copy_nonoverlapping(
+            imports.memories.as_ptr(),
+            self.vmctx_plus_offset(self.offsets.vmctx_imported_memories_begin()),
+            imports.memories.len(),
+        );
+        debug_assert_eq!(imports.globals.len(), module.num_imported_globals);
+        ptr::copy_nonoverlapping(
+            imports.globals.as_ptr(),
+            self.vmctx_plus_offset(self.offsets.vmctx_imported_globals_begin()),
+            imports.globals.len(),
+        );
+
+        // N.B.: there is no need to initialize the anyfuncs array because
+        // we eagerly construct each element in it whenever asked for a
+        // reference to that element. In other words, there is no state
+        // needed to track the lazy-init, so we don't need to initialize
+        // any state now.
+
+        // Initialize the defined tables
+        let mut ptr = self.vmctx_plus_offset(self.offsets.vmctx_tables_begin());
+        for i in 0..module.table_plans.len() - module.num_imported_tables {
+            ptr::write(ptr, self.tables[DefinedTableIndex::new(i)].vmtable());
+            ptr = ptr.add(1);
+        }
+
+        // Initialize the defined memories
+        let mut ptr = self.vmctx_plus_offset(self.offsets.vmctx_memories_begin());
+        for i in 0..module.memory_plans.len() - module.num_imported_memories {
+            ptr::write(ptr, self.memories[DefinedMemoryIndex::new(i)].vmmemory());
+            ptr = ptr.add(1);
+        }
+
+        // Initialize the defined globals
+        self.initialize_vmctx_globals(&module);
+    }
+
+    unsafe fn initialize_vmctx_globals(&mut self, module: &Module) {
+        let num_imports = module.num_imported_globals;
+        for (index, global) in module.globals.iter().skip(num_imports) {
+            let def_index = module.defined_global_index(index).unwrap();
+            let to = self.global_ptr(def_index);
+
+            // Initialize the global before writing to it
+            ptr::write(to, VMGlobalDefinition::new());
+
+            match global.initializer {
+                GlobalInit::I32Const(x) => *(*to).as_i32_mut() = x,
+                GlobalInit::I64Const(x) => *(*to).as_i64_mut() = x,
+                GlobalInit::F32Const(x) => *(*to).as_f32_bits_mut() = x,
+                GlobalInit::F64Const(x) => *(*to).as_f64_bits_mut() = x,
+                GlobalInit::V128Const(x) => *(*to).as_u128_mut() = x,
+                GlobalInit::GetGlobal(x) => {
+                    let from = if let Some(def_x) = module.defined_global_index(x) {
+                        self.global(def_x)
+                    } else {
+                        &*self.imported_global(x).from
+                    };
+                    // Globals of type `externref` need to manage the reference
+                    // count as values move between globals, everything else is just
+                    // copy-able bits.
+                    match global.wasm_ty {
+                        WasmType::ExternRef => {
+                            *(*to).as_externref_mut() = from.as_externref().clone()
+                        }
+                        _ => ptr::copy_nonoverlapping(from, to, 1),
+                    }
+                }
+                GlobalInit::RefFunc(f) => {
+                    *(*to).as_anyfunc_mut() = self.get_caller_checked_anyfunc(f).unwrap()
+                        as *const VMCallerCheckedAnyfunc;
+                }
+                GlobalInit::RefNullConst => match global.wasm_ty {
+                    // `VMGlobalDefinition::new()` already zeroed out the bits
+                    WasmType::FuncRef => {}
+                    WasmType::ExternRef => {}
+                    ty => panic!("unsupported reference type for global: {:?}", ty),
+                },
+                GlobalInit::Import => panic!("locally-defined global initialized as import"),
             }
         }
     }

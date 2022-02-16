@@ -2,6 +2,26 @@
 
 --------------------------------------------------------------------------------
 
+## 0.34.1
+
+Released 2022-02-16.
+
+### Security Fixes
+
+* [CVE-2022-23636](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-88xq-w8cq-xfg7):
+  Fixed an invalid drop of a partially-initialized instance in the pooling instance
+  allocator.
+
+## 0.33.1
+
+Released 2022-02-16.
+
+### Security Fixes
+
+* [CVE-2022-23636](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-88xq-w8cq-xfg7):
+  Fixed an invalid drop of a partially-initialized instance in the pooling instance
+  allocator.
+
 ## 0.34.0
 
 Released 2022-02-07.
