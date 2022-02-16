@@ -699,9 +699,16 @@ impl<'a> Arbitrary<'a> for CodegenSettings {
             if u.ratio(1, 10)? {
                 let flags = target_features! {
                     test: is_x86_feature_detected,
-                    std:"sse3" => clif:"has_sse3",
-                    std:"ssse3" => clif:"has_ssse3",
-                    std:"sse4.1" => clif:"has_sse41",
+
+                    // These features are considered to be baseline required by
+                    // Wasmtime. Currently some SIMD code generation will
+                    // fail if these features are disabled, so unconditionally
+                    // enable them as we're not interested in fuzzing without
+                    // them.
+                    std:"sse3" => clif:"has_sse3" ratio: 1 in 1,
+                    std:"ssse3" => clif:"has_ssse3" ratio: 1 in 1,
+                    std:"sse4.1" => clif:"has_sse41" ratio: 1 in 1,
+
                     std:"sse4.2" => clif:"has_sse42",
                     std:"popcnt" => clif:"has_popcnt",
                     std:"avx" => clif:"has_avx",
