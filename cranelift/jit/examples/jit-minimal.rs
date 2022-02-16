@@ -12,7 +12,9 @@ fn main() {
     let isa_builder = cranelift_native::builder().unwrap_or_else(|msg| {
         panic!("host machine is not supported: {}", msg);
     });
-    let isa = isa_builder.finish(settings::Flags::new(flag_builder));
+    let isa = isa_builder
+        .finish(settings::Flags::new(flag_builder))
+        .unwrap();
     let mut module = JITModule::new(JITBuilder::with_isa(isa, default_libcall_names()));
 
     let mut ctx = module.make_context();

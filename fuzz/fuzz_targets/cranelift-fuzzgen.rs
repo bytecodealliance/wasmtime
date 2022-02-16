@@ -60,7 +60,7 @@ fuzz_target!(|testcase: TestCase| {
     };
 
     // Native fn
-    let mut host_compiler = SingleFunctionCompiler::with_default_host_isa();
+    let mut host_compiler = SingleFunctionCompiler::with_default_host_isa().unwrap();
     let compiled_fn = host_compiler.compile(testcase.func.clone()).unwrap();
 
     for args in &testcase.inputs {

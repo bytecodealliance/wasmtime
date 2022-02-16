@@ -42,7 +42,9 @@ impl JITBuilder {
     /// enum to symbols. LibCalls are inserted in the IR as part of the legalization for certain
     /// floating point instructions, and for stack probes. If you don't know what to use for this
     /// argument, use `cranelift_module::default_libcall_names()`.
-    pub fn new(libcall_names: Box<dyn Fn(ir::LibCall) -> String + Send + Sync>) -> Self {
+    pub fn new(
+        libcall_names: Box<dyn Fn(ir::LibCall) -> String + Send + Sync>,
+    ) -> ModuleResult<Self> {
         let mut flag_builder = settings::builder();
         // On at least AArch64, "colocated" calls use shorter-range relocations,
         // which might not reach all definitions; we can't handle that here, so
@@ -52,8 +54,8 @@ impl JITBuilder {
         let isa_builder = cranelift_native::builder().unwrap_or_else(|msg| {
             panic!("host machine is not supported: {}", msg);
         });
-        let isa = isa_builder.finish(settings::Flags::new(flag_builder));
-        Self::with_isa(isa, libcall_names)
+        let isa = isa_builder.finish(settings::Flags::new(flag_builder))?;
+        Ok(Self::with_isa(isa, libcall_names))
     }
 
     /// Create a new `JITBuilder` with an arbitrary target. This is mainly

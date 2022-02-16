@@ -64,7 +64,7 @@ impl Engine {
         Ok(Engine {
             inner: Arc::new(EngineInner {
                 #[cfg(compiler)]
-                compiler: config.compiler.build(),
+                compiler: config.compiler.build()?,
                 config,
                 allocator,
                 signatures: registry,

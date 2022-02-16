@@ -156,7 +156,9 @@ mod tests {
     fn test() {
         if let Ok(isa_builder) = builder() {
             let flag_builder = settings::builder();
-            let isa = isa_builder.finish(settings::Flags::new(flag_builder));
+            let isa = isa_builder
+                .finish(settings::Flags::new(flag_builder))
+                .unwrap();
 
             if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
                 assert_eq!(isa.default_call_conv(), CallConv::AppleAarch64);

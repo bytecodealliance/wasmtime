@@ -1,4 +1,5 @@
 //! Provides functionality for compiling and running CLIF IR for `run` tests.
+use anyhow::Result;
 use core::mem;
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::{condcodes::IntCC, Function, InstBuilder, Signature};
@@ -27,7 +28,7 @@ use thiserror::Error;
 ///
 /// let code = "test run \n function %add(i32, i32) -> i32 {  block0(v0:i32, v1:i32):  v2 = iadd v0, v1  return v2 }".into();
 /// let func = parse_functions(code).unwrap().into_iter().nth(0).unwrap();
-/// let mut compiler = SingleFunctionCompiler::with_default_host_isa();
+/// let mut compiler = SingleFunctionCompiler::with_default_host_isa().unwrap();
 /// let compiled_func = compiler.compile(func).unwrap();
 /// println!("Address of compiled function: {:p}", compiled_func.as_ptr());
 /// ```
@@ -46,16 +47,16 @@ impl SingleFunctionCompiler {
     }
 
     /// Build a [SingleFunctionCompiler] using the host machine's ISA and the passed flags.
-    pub fn with_host_isa(flags: settings::Flags) -> Self {
+    pub fn with_host_isa(flags: settings::Flags) -> Result<Self> {
         let builder =
             builder_with_options(true).expect("Unable to build a TargetIsa for the current host");
-        let isa = builder.finish(flags);
-        Self::new(isa)
+        let isa = builder.finish(flags)?;
+        Ok(Self::new(isa))
     }
 
     /// Build a [SingleFunctionCompiler] using the host machine's ISA and the default flags for this
     /// ISA.
-    pub fn with_default_host_isa() -> Self {
+    pub fn with_default_host_isa() -> Result<Self> {
         let flags = settings::Flags::new(settings::builder());
         Self::with_host_isa(flags)
     }
@@ -135,7 +136,7 @@ impl Trampoline {
 ///
 /// let code = "test run \n function %add(i32, i32) -> i32 {  block0(v0:i32, v1:i32):  v2 = iadd v0, v1  return v2 }".into();
 /// let func = parse_functions(code).unwrap().into_iter().nth(0).unwrap();
-/// let mut compiler = SingleFunctionCompiler::with_default_host_isa();
+/// let mut compiler = SingleFunctionCompiler::with_default_host_isa().unwrap();
 /// let compiled_func = compiler.compile(func).unwrap();
 ///
 /// let returned = compiled_func.call(&vec![DataValue::I32(2), DataValue::I32(40)]);
@@ -377,7 +378,7 @@ mod test {
         let function = test_file.functions[0].0.clone();
 
         // execute function
-        let mut compiler = SingleFunctionCompiler::with_default_host_isa();
+        let mut compiler = SingleFunctionCompiler::with_default_host_isa().unwrap();
         let compiled_function = compiler.compile(function).unwrap();
         let returned = compiled_function.call(&[]);
         assert_eq!(returned, vec![DataValue::B(true)])
@@ -395,7 +396,7 @@ mod test {
             }",
         );
 
-        let compiler = SingleFunctionCompiler::with_default_host_isa();
+        let compiler = SingleFunctionCompiler::with_default_host_isa().unwrap();
         let trampoline = make_trampoline(&function.signature, compiler.isa.as_ref());
         assert!(format!("{}", trampoline).ends_with(
             "sig0 = (f32, i8, i64x2, b1) -> f32x4, b64 fast

@@ -139,7 +139,8 @@ impl fmt::Display for LookupError {
 pub struct Builder {
     triple: Triple,
     setup: settings::Builder,
-    constructor: fn(Triple, settings::Flags, settings::Builder) -> Box<dyn TargetIsa>,
+    constructor:
+        fn(Triple, settings::Flags, settings::Builder) -> CodegenResult<Box<dyn TargetIsa>>,
 }
 
 impl Builder {
@@ -153,9 +154,13 @@ impl Builder {
         self.setup.iter()
     }
 
-    /// Combine the ISA-specific settings with the provided ISA-independent settings and allocate a
-    /// fully configured `TargetIsa` trait object.
-    pub fn finish(self, shared_flags: settings::Flags) -> Box<dyn TargetIsa> {
+    /// Combine the ISA-specific settings with the provided
+    /// ISA-independent settings and allocate a fully configured
+    /// `TargetIsa` trait object. May return an error if some of the
+    /// flags are inconsistent or incompatible: for example, some
+    /// platform-independent features, like general SIMD support, may
+    /// need certain ISA extensions to be enabled.
+    pub fn finish(self, shared_flags: settings::Flags) -> CodegenResult<Box<dyn TargetIsa>> {
         (self.constructor)(self.triple, shared_flags, self.setup)
     }
 }

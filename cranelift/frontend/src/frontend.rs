@@ -1355,7 +1355,8 @@ block0:
         let target = isa::lookup(triple)
             .ok()
             .map(|b| b.finish(shared_flags))
-            .expect("This test requires x86_64 support.");
+            .expect("This test requires x86_64 support.")
+            .expect("Should be able to create backend with default flags");
 
         let mut sig = Signature::new(target.default_call_conv());
         sig.returns.push(AbiParam::new(I32));
@@ -1567,7 +1568,8 @@ block0:
         let target = isa::lookup(triple)
             .ok()
             .map(|b| b.finish(shared_flags))
-            .expect("This test requires x86_64 support.");
+            .expect("This test requires x86_64 support.")
+            .expect("Should be able to create backend with default flags");
 
         let mut sig = Signature::new(target.default_call_conv());
         sig.returns.push(AbiParam::new(B1));

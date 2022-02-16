@@ -104,7 +104,7 @@ pub trait CompilerBuilder: Send + Sync + fmt::Debug {
     fn settings(&self) -> Vec<Setting>;
 
     /// Builds a new [`Compiler`] object from this configuration.
-    fn build(&self) -> Box<dyn Compiler>;
+    fn build(&self) -> Result<Box<dyn Compiler>>;
 }
 
 /// Description of compiler settings returned by [`CompilerBuilder::settings`].

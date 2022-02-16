@@ -110,7 +110,7 @@ fn create_target_isa(isa_spec: &IsaSpec) -> Result<Box<dyn TargetIsa>> {
     if let IsaSpec::None(flags) = isa_spec {
         // build an ISA for the current machine
         let builder = host_isa_builder().map_err(|s| anyhow::anyhow!("{}", s))?;
-        Ok(builder.finish(flags.clone()))
+        Ok(builder.finish(flags.clone())?)
     } else {
         anyhow::bail!(
             "A target ISA was specified in the file but should not have been--only \
