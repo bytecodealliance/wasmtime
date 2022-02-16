@@ -8,20 +8,19 @@
 //! when modules can be constrained based on configurable limits.
 
 use super::{
-    initialize_instance, initialize_vmcontext, InstanceAllocationRequest, InstanceAllocator,
-    InstanceHandle, InstantiationError,
+    initialize_instance, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
+    InstantiationError,
 };
 use crate::{instance::Instance, Memory, Mmap, Table};
-use crate::{MemFdSlot, ModuleRuntimeInfo};
+use crate::{MemFdSlot, ModuleRuntimeInfo, Store};
 use anyhow::{anyhow, bail, Context, Result};
 use libc::c_void;
 use std::convert::TryFrom;
 use std::mem;
-use std::sync::Arc;
 use std::sync::Mutex;
 use wasmtime_environ::{
-    DefinedMemoryIndex, HostPtr, MemoryStyle, Module, PrimaryMap, Tunables, VMOffsets,
-    VMOffsetsFields, WASM_PAGE_SIZE,
+    DefinedMemoryIndex, DefinedTableIndex, HostPtr, MemoryStyle, Module, PrimaryMap, Tunables,
+    VMOffsets, VMOffsetsFields, WASM_PAGE_SIZE,
 };
 
 mod index_allocator;
@@ -342,51 +341,45 @@ impl InstancePool {
         &mut *(self.mapping.as_mut_ptr().add(index * self.instance_size) as *mut Instance)
     }
 
-    unsafe fn setup_instance(
+    unsafe fn initialize_instance(
         &self,
-        index: usize,
-        mut req: InstanceAllocationRequest,
+        instance_index: usize,
+        req: InstanceAllocationRequest,
     ) -> Result<InstanceHandle, InstantiationError> {
-        let host_state = std::mem::replace(&mut req.host_state, Box::new(()));
-        let instance_data = Instance::create_raw(
-            req.runtime_info.clone(),
-            PrimaryMap::default(),
-            PrimaryMap::default(),
-            host_state,
-        );
+        let module = req.runtime_info.module();
 
-        let instance = self.instance(index);
+        let mut memories =
+            PrimaryMap::with_capacity(module.memory_plans.len() - module.num_imported_memories);
+        let mut tables =
+            PrimaryMap::with_capacity(module.table_plans.len() - module.num_imported_tables);
 
-        // Instances are uninitialized memory at first; we need to
-        // write an empty but initialized `Instance` struct into the
-        // chosen slot before we do anything else with it. (This is
-        // paired with a `drop_in_place` in deallocate below.)
-        std::ptr::write(instance as _, instance_data);
-
-        // set_instance_memories and _tables will need the store before we can completely
-        // initialize the vmcontext.
-        if let Some(store) = req.store.as_raw() {
-            instance.set_store(store);
+        // If we fail to allocate the instance's resources, deallocate
+        // what was successfully allocated and return before initializing the instance
+        if let Err(e) = self.allocate_instance_resources(
+            instance_index,
+            req.runtime_info.as_ref(),
+            req.store.as_raw(),
+            &mut memories,
+            &mut tables,
+        ) {
+            self.deallocate_memories(instance_index, &mut memories);
+            self.deallocate_tables(instance_index, &mut tables);
+            return Err(e);
         }
 
-        Self::set_instance_memories(
-            index,
-            instance,
-            &self.memories,
-            self.memories.max_wasm_pages,
-            &req.runtime_info,
-        )?;
+        let instance_ptr = self.instance(instance_index) as _;
 
-        Self::set_instance_tables(
-            instance,
-            self.tables.get(index).map(|x| x as *mut usize),
-            self.tables.max_elements,
-        )?;
-
-        initialize_vmcontext(instance, req);
+        Instance::new_at(
+            instance_ptr,
+            self.instance_size,
+            VMOffsets::new(HostPtr, module),
+            req,
+            memories,
+            tables,
+        );
 
         Ok(InstanceHandle {
-            instance: instance as _,
+            instance: instance_ptr,
         })
     }
 
@@ -402,15 +395,15 @@ impl InstancePool {
             alloc.alloc(req.runtime_info.unique_id()).index()
         };
 
-        unsafe {
-            self.setup_instance(index, req).or_else(|e| {
-                // Deallocate the allocated instance on error
-                let instance = self.instance(index);
-                self.deallocate(&InstanceHandle {
-                    instance: instance as _,
-                });
+        match unsafe { self.initialize_instance(index, req) } {
+            Ok(handle) => Ok(handle),
+            Err(e) => {
+                // If we failed to initialize the instance, there's no need to drop
+                // it as it was never "allocated", but we still need to free the
+                // instance's slot.
+                self.index_allocator.lock().unwrap().free(SlotId(index));
                 Err(e)
-            })
+            }
         }
     }
 
@@ -426,9 +419,112 @@ impl InstancePool {
 
         let instance = unsafe { &mut *handle.instance };
 
+        // Deallocate any resources used by the instance
+        self.deallocate_memories(index, &mut instance.memories);
+        self.deallocate_tables(index, &mut instance.tables);
+
+        // We've now done all of the pooling-allocator-specific
+        // teardown, so we can drop the Instance and let destructors
+        // take care of any other fields (host state, globals, etc.).
+        unsafe {
+            std::ptr::drop_in_place(instance as *mut _);
+        }
+        // The instance is now uninitialized memory and cannot be
+        // touched again until we write a fresh Instance in-place with
+        // std::ptr::write in allocate() above.
+
+        self.index_allocator.lock().unwrap().free(SlotId(index));
+    }
+
+    fn allocate_instance_resources(
+        &self,
+        instance_index: usize,
+        runtime_info: &dyn ModuleRuntimeInfo,
+        store: Option<*mut dyn Store>,
+        memories: &mut PrimaryMap<DefinedMemoryIndex, Memory>,
+        tables: &mut PrimaryMap<DefinedTableIndex, Table>,
+    ) -> Result<(), InstantiationError> {
+        self.allocate_memories(instance_index, runtime_info, store, memories)?;
+        self.allocate_tables(instance_index, runtime_info, store, tables)?;
+
+        Ok(())
+    }
+
+    fn allocate_memories(
+        &self,
+        instance_index: usize,
+        runtime_info: &dyn ModuleRuntimeInfo,
+        store: Option<*mut dyn Store>,
+        memories: &mut PrimaryMap<DefinedMemoryIndex, Memory>,
+    ) -> Result<(), InstantiationError> {
+        let module = runtime_info.module();
+
+        for (memory_index, plan) in module
+            .memory_plans
+            .iter()
+            .skip(module.num_imported_memories)
+        {
+            let defined_index = module
+                .defined_memory_index(memory_index)
+                .expect("should be a defined memory since we skipped imported ones");
+
+            let memory = unsafe {
+                std::slice::from_raw_parts_mut(
+                    self.memories.get_base(instance_index, defined_index),
+                    (self.memories.max_wasm_pages as usize) * (WASM_PAGE_SIZE as usize),
+                )
+            };
+
+            if let Some(image) = runtime_info
+                .memfd_image(defined_index)
+                .map_err(|err| InstantiationError::Resource(err.into()))?
+            {
+                let mut slot = self.memories.take_memfd_slot(instance_index, defined_index);
+                let initial_size = plan.memory.minimum * WASM_PAGE_SIZE as u64;
+
+                // If instantiation fails, we can propagate the error
+                // upward and drop the slot. This will cause the Drop
+                // handler to attempt to map the range with PROT_NONE
+                // memory, to reserve the space while releasing any
+                // stale mappings. The next use of this slot will then
+                // create a new MemFdSlot that will try to map over
+                // this, returning errors as well if the mapping
+                // errors persist. The unmap-on-drop is best effort;
+                // if it fails, then we can still soundly continue
+                // using the rest of the pool and allowing the rest of
+                // the process to continue, because we never perform a
+                // mmap that would leave an open space for someone
+                // else to come in and map something.
+                slot.instantiate(initial_size as usize, Some(image))
+                    .map_err(|e| InstantiationError::Resource(e.into()))?;
+
+                memories.push(
+                    Memory::new_static(plan, memory, None, Some(slot), unsafe {
+                        &mut *store.unwrap()
+                    })
+                    .map_err(InstantiationError::Resource)?,
+                );
+            } else {
+                memories.push(
+                    Memory::new_static(plan, memory, Some(commit_memory_pages), None, unsafe {
+                        &mut *store.unwrap()
+                    })
+                    .map_err(InstantiationError::Resource)?,
+                );
+            }
+        }
+
+        Ok(())
+    }
+
+    fn deallocate_memories(
+        &self,
+        instance_index: usize,
+        memories: &mut PrimaryMap<DefinedMemoryIndex, Memory>,
+    ) {
         // Decommit any linear memories that were used
         for ((def_mem_idx, memory), base) in
-            instance.memories.iter_mut().zip(self.memories.get(index))
+            memories.iter_mut().zip(self.memories.get(instance_index))
         {
             let mut memory = mem::take(memory);
             assert!(memory.is_static());
@@ -444,7 +540,7 @@ impl InstancePool {
                     // address space reservation.
                     if memfd_slot.clear_and_remain_ready().is_ok() {
                         self.memories
-                            .return_memfd_slot(index, def_mem_idx, memfd_slot);
+                            .return_memfd_slot(instance_index, def_mem_idx, memfd_slot);
                     }
                 }
 
@@ -466,12 +562,48 @@ impl InstancePool {
                 }
             }
         }
+    }
 
-        instance.memories.clear();
-        instance.dropped_data.clear();
+    fn allocate_tables(
+        &self,
+        instance_index: usize,
+        runtime_info: &dyn ModuleRuntimeInfo,
+        store: Option<*mut dyn Store>,
+        tables: &mut PrimaryMap<DefinedTableIndex, Table>,
+    ) -> Result<(), InstantiationError> {
+        let module = runtime_info.module();
+        let mut bases = self.tables.get(instance_index);
+        for (_, plan) in module.table_plans.iter().skip(module.num_imported_tables) {
+            let base = bases.next().unwrap() as _;
 
+            commit_table_pages(
+                base as *mut u8,
+                self.tables.max_elements as usize * mem::size_of::<*mut u8>(),
+            )
+            .map_err(InstantiationError::Resource)?;
+
+            tables.push(
+                Table::new_static(
+                    plan,
+                    unsafe {
+                        std::slice::from_raw_parts_mut(base, self.tables.max_elements as usize)
+                    },
+                    unsafe { &mut *store.unwrap() },
+                )
+                .map_err(InstantiationError::Resource)?,
+            );
+        }
+
+        Ok(())
+    }
+
+    fn deallocate_tables(
+        &self,
+        instance_index: usize,
+        tables: &mut PrimaryMap<DefinedTableIndex, Table>,
+    ) {
         // Decommit any tables that were used
-        for (table, base) in instance.tables.values_mut().zip(self.tables.get(index)) {
+        for (table, base) in tables.values_mut().zip(self.tables.get(instance_index)) {
             let table = mem::take(table);
             assert!(table.is_static());
 
@@ -483,122 +615,6 @@ impl InstancePool {
             drop(table);
             decommit_table_pages(base, size).expect("failed to decommit table pages");
         }
-
-        // We've now done all of the pooling-allocator-specific
-        // teardown, so we can drop the Instance and let destructors
-        // take care of any other fields (host state, globals, etc.).
-        unsafe {
-            std::ptr::drop_in_place(instance as *mut _);
-        }
-        // The instance is now uninitialized memory and cannot be
-        // touched again until we write a fresh Instance in-place with
-        // std::ptr::write in allocate() above.
-
-        self.index_allocator.lock().unwrap().free(SlotId(index));
-    }
-
-    fn set_instance_memories(
-        instance_idx: usize,
-        instance: &mut Instance,
-        memories: &MemoryPool,
-        max_pages: u64,
-        runtime_info: &Arc<dyn ModuleRuntimeInfo>,
-    ) -> Result<(), InstantiationError> {
-        let module = instance.runtime_info.module();
-
-        assert!(instance.memories.is_empty());
-
-        for (memory_index, plan) in module
-            .memory_plans
-            .iter()
-            .skip(module.num_imported_memories)
-        {
-            let defined_index = module
-                .defined_memory_index(memory_index)
-                .expect("should be a defined memory since we skipped imported ones");
-
-            let memory = unsafe {
-                std::slice::from_raw_parts_mut(
-                    memories.get_base(instance_idx, defined_index),
-                    (max_pages as usize) * (WASM_PAGE_SIZE as usize),
-                )
-            };
-
-            if let Some(image) = runtime_info
-                .memfd_image(defined_index)
-                .map_err(|err| InstantiationError::Resource(err.into()))?
-            {
-                let mut slot = memories.take_memfd_slot(instance_idx, defined_index);
-                let initial_size = plan.memory.minimum * WASM_PAGE_SIZE as u64;
-
-                // If instantiation fails, we can propagate the error
-                // upward and drop the slot. This will cause the Drop
-                // handler to attempt to map the range with PROT_NONE
-                // memory, to reserve the space while releasing any
-                // stale mappings. The next use of this slot will then
-                // create a new MemFdSlot that will try to map over
-                // this, returning errors as well if the mapping
-                // errors persist. The unmap-on-drop is best effort;
-                // if it fails, then we can still soundly continue
-                // using the rest of the pool and allowing the rest of
-                // the process to continue, because we never perform a
-                // mmap that would leave an open space for someone
-                // else to come in and map something.
-                slot.instantiate(initial_size as usize, Some(image))
-                    .map_err(|e| InstantiationError::Resource(e.into()))?;
-
-                instance.memories.push(
-                    Memory::new_static(plan, memory, None, Some(slot), unsafe {
-                        &mut *instance.store()
-                    })
-                    .map_err(InstantiationError::Resource)?,
-                );
-            } else {
-                instance.memories.push(
-                    Memory::new_static(plan, memory, Some(commit_memory_pages), None, unsafe {
-                        &mut *instance.store()
-                    })
-                    .map_err(InstantiationError::Resource)?,
-                );
-            }
-        }
-
-        assert!(instance.dropped_data.is_empty());
-
-        Ok(())
-    }
-
-    fn set_instance_tables(
-        instance: &mut Instance,
-        mut tables: impl Iterator<Item = *mut usize>,
-        max_elements: u32,
-    ) -> Result<(), InstantiationError> {
-        let module = instance.runtime_info.module();
-
-        assert!(instance.tables.is_empty());
-
-        for (_, plan) in module.table_plans.iter().skip(module.num_imported_tables) {
-            let base = tables.next().unwrap();
-
-            commit_table_pages(
-                base as *mut u8,
-                max_elements as usize * mem::size_of::<*mut u8>(),
-            )
-            .map_err(InstantiationError::Resource)?;
-
-            let table = unsafe { std::slice::from_raw_parts_mut(base, max_elements as usize) };
-            instance.tables.push(
-                Table::new_static(plan, table, unsafe { &mut *instance.store() })
-                    .map_err(InstantiationError::Resource)?,
-            );
-        }
-
-        assert!(instance.dropped_elements.is_empty());
-        instance
-            .dropped_elements
-            .resize(module.passive_elements.len());
-
-        Ok(())
     }
 }
 
@@ -1130,6 +1146,7 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
 mod test {
     use super::*;
     use crate::{CompiledModuleId, Imports, MemoryMemFd, StorePtr, VMSharedSignatureIndex};
+    use std::sync::Arc;
     use wasmtime_environ::{
         DefinedFuncIndex, DefinedMemoryIndex, EntityRef, FunctionInfo, Global, GlobalInit, Memory,
         MemoryPlan, ModuleType, SignatureIndex, Table, TablePlan, TableStyle, WasmType,

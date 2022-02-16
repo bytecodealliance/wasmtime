@@ -3,7 +3,6 @@ use crate::instance::{Instance, InstanceHandle, RuntimeMemoryCreator};
 use crate::memory::{DefaultMemoryCreator, Memory};
 use crate::table::Table;
 use crate::traphandlers::Trap;
-use crate::vmcontext::{VMBuiltinFunctionsArray, VMCallerCheckedAnyfunc, VMGlobalDefinition};
 use crate::ModuleRuntimeInfo;
 use crate::Store;
 use anyhow::Result;
@@ -15,9 +14,9 @@ use std::slice;
 use std::sync::Arc;
 use thiserror::Error;
 use wasmtime_environ::{
-    DefinedMemoryIndex, DefinedTableIndex, EntityRef, GlobalInit, InitMemory, MemoryInitialization,
+    DefinedMemoryIndex, DefinedTableIndex, HostPtr, InitMemory, MemoryInitialization,
     MemoryInitializer, Module, PrimaryMap, TableInitialization, TableInitializer, TrapCode,
-    WasmType, WASM_PAGE_SIZE,
+    VMOffsets, WasmType, WASM_PAGE_SIZE,
 };
 
 #[cfg(feature = "pooling-allocator")]
@@ -427,129 +426,6 @@ fn initialize_instance(
     Ok(())
 }
 
-/// Initialize the VMContext data associated with an Instance.
-///
-/// The `VMContext` memory is assumed to be uninitialized; any field
-/// that we need in a certain state will be explicitly written by this
-/// function.
-unsafe fn initialize_vmcontext(instance: &mut Instance, req: InstanceAllocationRequest) {
-    if let Some(store) = req.store.as_raw() {
-        *instance.interrupts() = (*store).vminterrupts();
-        *instance.epoch_ptr() = (*store).epoch_ptr();
-        *instance.externref_activations_table() = (*store).externref_activations_table().0;
-        instance.set_store(store);
-    }
-
-    let module = req.runtime_info.module();
-
-    // Initialize shared signatures
-    let signatures = req.runtime_info.signature_ids();
-    *instance.vmctx_plus_offset(instance.offsets.vmctx_signature_ids_array()) = signatures.as_ptr();
-
-    // Initialize the built-in functions
-    *instance.vmctx_plus_offset(instance.offsets.vmctx_builtin_functions()) =
-        &VMBuiltinFunctionsArray::INIT;
-
-    // Initialize the imports
-    debug_assert_eq!(req.imports.functions.len(), module.num_imported_funcs);
-    ptr::copy_nonoverlapping(
-        req.imports.functions.as_ptr(),
-        instance.vmctx_plus_offset(instance.offsets.vmctx_imported_functions_begin()),
-        req.imports.functions.len(),
-    );
-    debug_assert_eq!(req.imports.tables.len(), module.num_imported_tables);
-    ptr::copy_nonoverlapping(
-        req.imports.tables.as_ptr(),
-        instance.vmctx_plus_offset(instance.offsets.vmctx_imported_tables_begin()),
-        req.imports.tables.len(),
-    );
-    debug_assert_eq!(req.imports.memories.len(), module.num_imported_memories);
-    ptr::copy_nonoverlapping(
-        req.imports.memories.as_ptr(),
-        instance.vmctx_plus_offset(instance.offsets.vmctx_imported_memories_begin()),
-        req.imports.memories.len(),
-    );
-    debug_assert_eq!(req.imports.globals.len(), module.num_imported_globals);
-    ptr::copy_nonoverlapping(
-        req.imports.globals.as_ptr(),
-        instance.vmctx_plus_offset(instance.offsets.vmctx_imported_globals_begin()),
-        req.imports.globals.len(),
-    );
-
-    // N.B.: there is no need to initialize the anyfuncs array because
-    // we eagerly construct each element in it whenever asked for a
-    // reference to that element. In other words, there is no state
-    // needed to track the lazy-init, so we don't need to initialize
-    // any state now.
-
-    // Initialize the defined tables
-    let mut ptr = instance.vmctx_plus_offset(instance.offsets.vmctx_tables_begin());
-    for i in 0..module.table_plans.len() - module.num_imported_tables {
-        ptr::write(ptr, instance.tables[DefinedTableIndex::new(i)].vmtable());
-        ptr = ptr.add(1);
-    }
-
-    // Initialize the defined memories
-    let mut ptr = instance.vmctx_plus_offset(instance.offsets.vmctx_memories_begin());
-    for i in 0..module.memory_plans.len() - module.num_imported_memories {
-        ptr::write(
-            ptr,
-            instance.memories[DefinedMemoryIndex::new(i)].vmmemory(),
-        );
-        ptr = ptr.add(1);
-    }
-
-    // Initialize the defined globals
-    initialize_vmcontext_globals(instance, module);
-}
-
-unsafe fn initialize_vmcontext_globals(
-    instance: &mut Instance,
-    module: &Arc<wasmtime_environ::Module>,
-) {
-    let num_imports = module.num_imported_globals;
-    for (index, global) in module.globals.iter().skip(num_imports) {
-        let def_index = module.defined_global_index(index).unwrap();
-        let to = instance.global_ptr(def_index);
-
-        // Initialize the global before writing to it
-        ptr::write(to, VMGlobalDefinition::new());
-
-        match global.initializer {
-            GlobalInit::I32Const(x) => *(*to).as_i32_mut() = x,
-            GlobalInit::I64Const(x) => *(*to).as_i64_mut() = x,
-            GlobalInit::F32Const(x) => *(*to).as_f32_bits_mut() = x,
-            GlobalInit::F64Const(x) => *(*to).as_f64_bits_mut() = x,
-            GlobalInit::V128Const(x) => *(*to).as_u128_mut() = x,
-            GlobalInit::GetGlobal(x) => {
-                let from = if let Some(def_x) = module.defined_global_index(x) {
-                    instance.global(def_x)
-                } else {
-                    &*instance.imported_global(x).from
-                };
-                // Globals of type `externref` need to manage the reference
-                // count as values move between globals, everything else is just
-                // copy-able bits.
-                match global.wasm_ty {
-                    WasmType::ExternRef => *(*to).as_externref_mut() = from.as_externref().clone(),
-                    _ => ptr::copy_nonoverlapping(from, to, 1),
-                }
-            }
-            GlobalInit::RefFunc(f) => {
-                *(*to).as_anyfunc_mut() = instance.get_caller_checked_anyfunc(f).unwrap()
-                    as *const VMCallerCheckedAnyfunc;
-            }
-            GlobalInit::RefNullConst => match global.wasm_ty {
-                // `VMGlobalDefinition::new()` already zeroed out the bits
-                WasmType::FuncRef => {}
-                WasmType::ExternRef => {}
-                ty => panic!("unsupported reference type for global: {:?}", ty),
-            },
-            GlobalInit::Import => panic!("locally-defined global initialized as import"),
-        }
-    }
-}
-
 /// Represents the on-demand instance allocator.
 #[derive(Clone)]
 pub struct OnDemandInstanceAllocator {
@@ -647,26 +523,16 @@ unsafe impl InstanceAllocator for OnDemandInstanceAllocator {
     ) -> Result<InstanceHandle, InstantiationError> {
         let memories = self.create_memories(&mut req.store, &req.runtime_info)?;
         let tables = Self::create_tables(&mut req.store, &req.runtime_info)?;
+        let module = req.runtime_info.module();
+        let offsets = VMOffsets::new(HostPtr, module);
+        let layout = Instance::alloc_layout(&offsets);
+        let instance_ptr = alloc::alloc(layout) as *mut Instance;
 
-        let host_state = std::mem::replace(&mut req.host_state, Box::new(()));
+        Instance::new_at(instance_ptr, layout.size(), offsets, req, memories, tables);
 
-        let mut handle = {
-            let instance =
-                Instance::create_raw(req.runtime_info.clone(), memories, tables, host_state);
-            let layout = instance.alloc_layout();
-            let instance_ptr = alloc::alloc(layout) as *mut Instance;
-            if instance_ptr.is_null() {
-                alloc::handle_alloc_error(layout);
-            }
-            ptr::write(instance_ptr, instance);
-            InstanceHandle {
-                instance: instance_ptr,
-            }
-        };
-
-        initialize_vmcontext(handle.instance_mut(), req);
-
-        Ok(handle)
+        Ok(InstanceHandle {
+            instance: instance_ptr,
+        })
     }
 
     unsafe fn initialize(
@@ -679,7 +545,7 @@ unsafe impl InstanceAllocator for OnDemandInstanceAllocator {
     }
 
     unsafe fn deallocate(&self, handle: &InstanceHandle) {
-        let layout = handle.instance().alloc_layout();
+        let layout = Instance::alloc_layout(&handle.instance().offsets);
         ptr::drop_in_place(handle.instance);
         alloc::dealloc(handle.instance.cast(), layout);
     }

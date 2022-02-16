@@ -548,3 +548,61 @@ fn multi_memory_with_imported_memories() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn drop_externref_global_during_module_init() -> Result<()> {
+    struct Limiter;
+
+    impl ResourceLimiter for Limiter {
+        fn memory_growing(&mut self, _: usize, _: usize, _: Option<usize>) -> bool {
+            false
+        }
+
+        fn table_growing(&mut self, _: u32, _: u32, _: Option<u32>) -> bool {
+            false
+        }
+    }
+
+    let mut config = Config::new();
+    config.wasm_reference_types(true);
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling {
+        strategy: PoolingAllocationStrategy::NextAvailable,
+        module_limits: Default::default(),
+        instance_limits: InstanceLimits { count: 1 },
+    });
+
+    let engine = Engine::new(&config)?;
+
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (global i32 (i32.const 1))
+                (global i32 (i32.const 2))
+                (global i32 (i32.const 3))
+                (global i32 (i32.const 4))
+                (global i32 (i32.const 5))
+            )
+        "#,
+    )?;
+
+    let mut store = Store::new(&engine, Limiter);
+    drop(Instance::new(&mut store, &module, &[])?);
+    drop(store);
+
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (memory 1)
+                (global (mut externref) (ref.null extern))
+            )
+        "#,
+    )?;
+
+    let mut store = Store::new(&engine, Limiter);
+    store.limiter(|s| s);
+    assert!(Instance::new(&mut store, &module, &[]).is_err());
+
+    Ok(())
+}
