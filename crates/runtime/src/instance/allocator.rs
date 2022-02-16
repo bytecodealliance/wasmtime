@@ -475,6 +475,8 @@ fn initialize_instance(
 }
 
 unsafe fn initialize_vmcontext(instance: &mut Instance, req: InstanceAllocationRequest) {
+    assert!(!instance.vmctx_initialized);
+
     if let Some(store) = req.store.as_raw() {
         *instance.interrupts() = (*store).vminterrupts();
         *instance.epoch_ptr() = (*store).epoch_ptr();
@@ -570,6 +572,9 @@ unsafe fn initialize_vmcontext(instance: &mut Instance, req: InstanceAllocationR
 
     // Initialize the defined globals
     initialize_vmcontext_globals(instance);
+
+    // Mark the vmctx as initialized
+    instance.vmctx_initialized = true;
 }
 
 unsafe fn initialize_vmcontext_globals(instance: &Instance) {

@@ -92,6 +92,10 @@ pub(crate) struct Instance {
     /// allocation, but some host-defined objects will store their state here.
     host_state: Box<dyn Any + Send + Sync>,
 
+    /// Flag to track when the vmctx has been initialized.
+    /// The pooling allocator may drop an instance before `vmctx` is initialized.
+    vmctx_initialized: bool,
+
     /// Additional context used by compiled wasm code. This field is last, and
     /// represents a dynamically-sized array that extends beyond the nominal
     /// end of the struct (similar to a flexible array member).
@@ -119,6 +123,7 @@ impl Instance {
             dropped_data: EntitySet::with_capacity(module.passive_data_map.len()),
             host_state,
             wasm_data,
+            vmctx_initialized: false,
             vmctx: VMContext {
                 _marker: std::marker::PhantomPinned,
             },
@@ -733,13 +738,18 @@ impl Instance {
     }
 
     fn drop_globals(&mut self) {
+        // Dropping globals requires that the vmctx be fully initialized
+        if !self.vmctx_initialized {
+            return;
+        }
+
         for (idx, global) in self.module.globals.iter() {
             let idx = match self.module.defined_global_index(idx) {
                 Some(idx) => idx,
                 None => continue,
             };
             match global.wasm_ty {
-                // For now only externref gloabls need to get destroyed
+                // For now only externref globals need to get destroyed
                 WasmType::ExternRef => {}
                 _ => continue,
             }
