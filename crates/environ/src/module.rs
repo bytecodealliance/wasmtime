@@ -333,6 +333,13 @@ impl ModuleTranslation<'_> {
             _ => return,
         };
 
+        // Maximum size, in bytes, of an initialization image which is
+        // unconditionally allowed regardless of the input module's size and
+        // properties. This is chosen to be modestly small to allow useful cases
+        // to use an initialization image but not too large that if every module
+        // ran up to the limit here it shouldn't cause a problem.
+        const MAX_IMAGE_SIZE_ALWAYS_ALLOWED: u64 = 1 << 20; // 1 MB
+
         let memory_init_size = |pages: &[StaticMemoryInitializer]| {
             if pages.len() == 0 {
                 return 0;
@@ -346,7 +353,7 @@ impl ModuleTranslation<'_> {
         // compatible with static memory initialization. The main concern here
         // is that construction of the memory image shouldn't consume excessive
         // resources here during compilation. At this point we're already using
-        // paged initialization so we're theortetically using O(data size)
+        // paged initialization so we're theoretically using O(data size)
         // memory already, and we don't want to use excessively more than that
         // during image construction. Some heuristics are applied here to see if
         // they're compatible.
@@ -375,7 +382,7 @@ impl ModuleTranslation<'_> {
             // If the memory initialization image is larger than the size of all
             // data, then we still allow memory initialization if the image will
             // be of a relatively modest size, such as 1MB here.
-            if memory_init_size < (1 << 20) {
+            if memory_init_size < MAX_IMAGE_SIZE_ALWAYS_ALLOWED {
                 continue;
             }
 
