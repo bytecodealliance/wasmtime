@@ -431,4 +431,10 @@
 (decl reloc_distance_near () RelocDistance)
 (extern extractor reloc_distance_near reloc_distance_near)
 
+;;;; Automatic conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(convert Inst Value def_inst)
+(convert Reg ValueRegs value_reg)
+(convert Value Reg put_in_reg)
+(convert Value ValueRegs put_in_regs)
+(convert WritableReg Reg writable_reg_to_reg)
