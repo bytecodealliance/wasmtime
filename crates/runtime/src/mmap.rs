@@ -436,9 +436,10 @@ impl Mmap {
         );
         #[cfg(unix)]
         unsafe {
-            rustix::io::mlock(
+            rustix::io::mlock_with(
                 self.as_ptr().add(range.start) as *mut _,
                 range.end - range.start,
+                rustix::io::MlockFlags::ONFAULT,
             )?;
         }
         Ok(())
