@@ -12,7 +12,7 @@ cfg_if::cfg_if! {
 }
 
 cfg_if::cfg_if! {
-    if #[cfg(all(feature = "vtune", any(target_os = "linux", target_os = "macos", target_os = "windows")))] {
+    if #[cfg(all(feature = "vtune", target_arch = "x86_64"))] {
         #[path = "profiling/vtune.rs"]
         mod vtune;
     } else {
