@@ -35,6 +35,7 @@ winapi = { version = "0.3.8", features = ["winnt", "impl-default"] }
 rustix = "0.33.0"
 
 [features]
+default = ['vtune']
 jitdump = []
 vtune = ['ittapi-rs']
 
