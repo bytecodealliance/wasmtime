@@ -93,7 +93,7 @@ the implementation:
 
 * **[Rust]** - the [`wasmtime` crate]
 * **[C]** - the [`wasm.h`, `wasi.h`, and `wasmtime.h` headers][c-headers] or use [`wasmtime` Conan package]
-* **[C++]** - the [`wasmtime-cpp` repository][wasmtime-cpp] or use [`wasmtime-cpp` Conan package]
+* **C++** - the [`wasmtime-cpp` repository][wasmtime-cpp] or use [`wasmtime-cpp` Conan package]
 * **[Python]** - the [`wasmtime` PyPI package]
 * **[.NET]** - the [`Wasmtime` NuGet package]
 * **[Go]** - the [`wasmtime-go` repository]
