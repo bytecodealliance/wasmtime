@@ -514,7 +514,8 @@ impl ABIMachineSpec for AArch64MachineDeps {
         let mut insts = SmallVec::new();
         if let Some(imm12) = Imm12::maybe_from_u64(imm) {
             insts.push(Inst::AluRRImm12 {
-                alu_op: ALUOp::Add64,
+                alu_op: ALUOp::Add,
+                size: OperandSize::Size64,
                 rd: into_reg,
                 rn: from_reg,
                 imm12,
@@ -524,7 +525,8 @@ impl ABIMachineSpec for AArch64MachineDeps {
             assert_ne!(scratch2.to_reg(), from_reg);
             insts.extend(Inst::load_constant(scratch2, imm.into()));
             insts.push(Inst::AluRRRExtend {
-                alu_op: ALUOp::Add64,
+                alu_op: ALUOp::Add,
+                size: OperandSize::Size64,
                 rd: into_reg,
                 rn: from_reg,
                 rm: scratch2.to_reg(),
@@ -537,7 +539,8 @@ impl ABIMachineSpec for AArch64MachineDeps {
     fn gen_stack_lower_bound_trap(limit_reg: Reg) -> SmallInstVec<Inst> {
         let mut insts = SmallVec::new();
         insts.push(Inst::AluRRRExtend {
-            alu_op: ALUOp::SubS64,
+            alu_op: ALUOp::SubS,
+            size: OperandSize::Size64,
             rd: writable_zero_reg(),
             rn: stack_reg(),
             rm: limit_reg,
@@ -586,12 +589,13 @@ impl ABIMachineSpec for AArch64MachineDeps {
             (-amount as u64, true)
         };
 
-        let alu_op = if is_sub { ALUOp::Sub64 } else { ALUOp::Add64 };
+        let alu_op = if is_sub { ALUOp::Sub } else { ALUOp::Add };
 
         let mut ret = SmallVec::new();
         if let Some(imm12) = Imm12::maybe_from_u64(amount) {
             let adj_inst = Inst::AluRRImm12 {
                 alu_op,
+                size: OperandSize::Size64,
                 rd: writable_stack_reg(),
                 rn: stack_reg(),
                 imm12,
@@ -602,6 +606,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
             let const_inst = Inst::load_constant(tmp, amount);
             let adj_inst = Inst::AluRRRExtend {
                 alu_op,
+                size: OperandSize::Size64,
                 rd: writable_stack_reg(),
                 rn: stack_reg(),
                 rm: tmp.to_reg(),
@@ -659,7 +664,8 @@ impl ABIMachineSpec for AArch64MachineDeps {
         // mov fp (x29), sp. This uses the ADDI rd, rs, 0 form of `MOV` because
         // the usual encoding (`ORR`) does not work with SP.
         insts.push(Inst::AluRRImm12 {
-            alu_op: ALUOp::Add64,
+            alu_op: ALUOp::Add,
+            size: OperandSize::Size64,
             rd: writable_fp_reg(),
             rn: stack_reg(),
             imm12: Imm12 {
