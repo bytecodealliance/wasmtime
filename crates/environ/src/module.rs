@@ -6,6 +6,7 @@ use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::convert::TryFrom;
+use std::mem;
 use std::ops::Range;
 use wasmtime_types::*;
 
@@ -297,6 +298,11 @@ impl ModuleTranslation<'_> {
         for (memory, pages) in page_contents {
             let mut page_offsets = Vec::with_capacity(pages.len());
             for (page_index, page) in pages {
+                // Skip entirely zero pages since they don't need to participate
+                // in initialization.
+                if page.iter().all(|b| *b == 0) {
+                    continue;
+                }
                 let end = offset + (page.len() as u32);
                 page_offsets.push(StaticMemoryInitializer {
                     offset: page_index * u64::from(WASM_PAGE_SIZE),
@@ -317,147 +323,125 @@ impl ModuleTranslation<'_> {
     /// Note that the constraints for `Paged` are the same as those for
     /// `Static`.
     pub fn try_static_init(&mut self, page_size: u64) {
-        const MAX_IMAGE_SIZE: usize = 1024 * 1024 * 1024; // limit to 1GiB.
+        // First try to switch this memory initialization to the `Paged`
+        // variant, if it isn't already. This will perform static bounds checks
+        // and everything and massage it all into a format which is a bit easier
+        // to process here.
+        self.try_paged_init();
+        let map = match &mut self.module.memory_initialization {
+            MemoryInitialization::Paged { map } => map,
+            _ => return,
+        };
 
-        // This method only attempts to transform a a `Segmented` memory init
-        // into a `Static` one, no other state.
-        if !self.module.memory_initialization.is_segmented() {
+        // Maximum size, in bytes, of an initialization image which is
+        // unconditionally allowed regardless of the input module's size and
+        // properties. This is chosen to be modestly small to allow useful cases
+        // to use an initialization image but not too large that if every module
+        // ran up to the limit here it shouldn't cause a problem.
+        const MAX_IMAGE_SIZE_ALWAYS_ALLOWED: u64 = 1 << 20; // 1 MB
+
+        let memory_init_size = |pages: &[StaticMemoryInitializer]| {
+            if pages.len() == 0 {
+                return 0;
+            }
+            let first = &pages[0];
+            let last = &pages[pages.len() - 1];
+            last.offset - first.offset + (last.data.len() as u64)
+        };
+
+        // Perform a check, on all memories, that the memory initialization is
+        // compatible with static memory initialization. The main concern here
+        // is that construction of the memory image shouldn't consume excessive
+        // resources here during compilation. At this point we're already using
+        // paged initialization so we're theoretically using O(data size)
+        // memory already, and we don't want to use excessively more than that
+        // during image construction. Some heuristics are applied here to see if
+        // they're compatible.
+        let mut data = self.data.as_slice();
+        for (_memory_index, pages) in map.iter() {
+            let (memory_data, rest) = data.split_at(pages.len());
+            data = rest;
+
+            // Calculate the total size of data used to initialized this memory
+            // (the sum of all the page sizes), and then also calculate the
+            // actual memory initialization size assuming it's initialized in
+            // one whole chunk in one whole go.
+            let data_size = memory_data.iter().map(|d| d.len()).sum::<usize>() as u64;
+            let memory_init_size = memory_init_size(pages);
+
+            // If the range of memory being initialized is less than twice the
+            // total size of the data itself then it's assumed that static
+            // initialization is ok. This means we'll at most double memory
+            // consumption during the memory image creation process, which is
+            // currently assumed to "probably be ok" but this will likely need
+            // tweaks over time.
+            if memory_init_size < data_size.saturating_mul(2) {
+                continue;
+            }
+
+            // If the memory initialization image is larger than the size of all
+            // data, then we still allow memory initialization if the image will
+            // be of a relatively modest size, such as 1MB here.
+            if memory_init_size < MAX_IMAGE_SIZE_ALWAYS_ALLOWED {
+                continue;
+            }
+
+            // At this point memory initialization is concluded to be too
+            // expensive to do at compile time so it's entirely deferred to
+            // happen at runtime.
             return;
         }
-        let page_align = |x: u64| x & !(page_size - 1);
-        let page_align_up = |x: u64| page_align(x + page_size - 1);
+        assert!(data.is_empty());
 
-        // First build up an in-memory image for each memory. This in-memory
-        // representation is discarded if the memory initializers aren't "of
-        // the right shape" where the desired shape is:
-        //
-        // * Only initializers for defined memories.
-        // * Only initializers with static offsets (no globals).
-        // * Only in-bound initializers.
-        //
-        // The `init_memory` method of `MemoryInitialization` is used here to
-        // do most of the validation for us, and otherwise the data chunks are
-        // collected into the `images` array here.
-        let mut images: PrimaryMap<MemoryIndex, Vec<u8>> =
-            PrimaryMap::with_capacity(self.module.memory_plans.len());
-        for _ in 0..self.module.memory_plans.len() {
-            images.push(Vec::new());
-        }
-        let mut data = self.data.iter();
-        let ok = self.module.memory_initialization.init_memory(
-            InitMemory::CompileTime(&self.module),
-            &mut |memory, init| {
-                let data = data.next().unwrap();
-                assert_eq!(data.len(), init.data.len());
-
-                // Static initialization with only one memcpy is only possible
-                // for defined memories which have a known-starting-as-zero
-                // state to account for holes between data segments. This means
-                // that if this is an imported memory then static memory
-                // initialization isn't possible.
-                if self.module.defined_memory_index(memory).is_none() {
-                    return false;
-                }
-
-                // Splat the `data_range` into the `image` for this memory,
-                // updating it as necessary with 0s for holes and such.
-                let image = &mut images[memory];
-                let offset = usize::try_from(init.offset).unwrap();
-                let new_image_len = offset + data.len();
-                if image.len() < new_image_len {
-                    if new_image_len > MAX_IMAGE_SIZE {
-                        return false;
-                    }
-                    image.resize(new_image_len, 0);
-                }
-                image[offset..][..data.len()].copy_from_slice(data);
-                true
-            },
-        );
-
-        // If any initializer wasn't applicable then we skip static init
-        // entirely.
-        if !ok {
-            return;
-        }
-
-        // At this point all memories in this module are initialized with
-        // in-bounds initializers which are all statically known to be valid.
-        // This means that the memory `images` built up so far are valid for an
-        // instance of this linear memory. These images are trimmed of their
-        // leading and trailing zeros and then `self.data` is re-populated with
-        // new data.
-        self.data.clear();
-        assert!(self.data_align.is_none());
-        self.data_align = Some(page_size);
-        let mut map = PrimaryMap::with_capacity(images.len());
+        // Here's where we've now committed to changing to static memory. The
+        // memory initialization image is built here from the page data and then
+        // it's converted to a single initializer.
+        let data = mem::replace(&mut self.data, Vec::new());
+        let mut data = data.iter();
+        let mut image_map = PrimaryMap::with_capacity(map.len());
         let mut offset = 0u32;
-        for (memory, mut image) in images {
-            // Find the first nonzero byte, and if all the bytes are zero then
-            // we can skip initialization of this memory entirely since memories
-            // otherwise start with all zero bytes.
-            let nonzero_start = match image.iter().position(|b| *b != 0) {
-                Some(i) => i as u64,
-                None => {
-                    map.push(None);
-                    continue;
-                }
+        for (memory_index, pages) in map.iter() {
+            // Allocate the memory image and then fill it in with data. Note
+            // that `pages` should be sorted in increasing order of offsets.
+            let capacity = usize::try_from(memory_init_size(pages)).unwrap();
+            let mut image = Vec::with_capacity(capacity);
+            for page in pages {
+                let image_offset = usize::try_from(page.offset - pages[0].offset).unwrap();
+                assert!(image.len() <= image_offset);
+                image.resize(image_offset, 0u8);
+                image.extend_from_slice(data.next().unwrap());
+            }
+            assert_eq!(image.len(), capacity);
+            assert_eq!(image.capacity(), capacity);
+
+            // Convert the `image` to a single `StaticMemoryInitializer` if it's
+            // not empty.
+            let init = if image.len() > 0 {
+                let data_offset = offset;
+                let len = u32::try_from(image.len()).unwrap();
+                let data_offset_end = data_offset.checked_add(len).unwrap();
+                offset += len;
+
+                // Offset/length should always be page-aligned since our pages
+                // are always wasm pages right now which are 64k and we
+                // otherwise won't work at all on systems larger page sizes.
+                assert!(u64::from(data_offset) % page_size == 0);
+                assert!(u64::from(len) % page_size == 0);
+                self.data.push(image.into());
+
+                Some(StaticMemoryInitializer {
+                    offset: pages[0].offset,
+                    data: data_offset..data_offset_end,
+                })
+            } else {
+                None
             };
-
-            // Find the last nonzero byte, which must exist at this point since
-            // we found one going forward. Add one to find the index of the
-            // last zero, which may also be the length of the image.
-            let nonzero_end = image.iter().rposition(|b| *b != 0).unwrap() as u64 + 1;
-
-            // The offset and length of this image are now page-aligned. This
-            // isn't strictly required for a runtime-compiled module which is
-            // never persisted to disk. The purpose of doing this, however is to
-            // enable the in-memory image, if persisted to disk, possible to
-            // mmap into an address space at a future date to enable efficient
-            // initialization of memory. Mapping a file into the address space
-            // requires a page-aligned offset in the file as well as a
-            // page-aligned length, so the offset/length are aligned here.
-            //
-            // Note that in the future if we can distinguish between modules
-            // only ever used at runtime and those persisted to disk and used
-            // later then it's possible to pass a page size parameter to this
-            // function as "1" which means we won't pad the data with extra
-            // zeros or anything like that.
-            let image_offset = page_align(nonzero_start);
-            let image_len = page_align_up(nonzero_end - image_offset);
-
-            assert_eq!(image_offset % page_size, 0);
-            assert_eq!(image_len % page_size, 0);
-
-            // Drop the leading zero bytes on the image, and then also set the
-            // length of the image to the specified length. Note that this may
-            // truncate trailing zeros from the image or it may extend the image
-            // to be page-aligned with zeros.
-            image.drain(..image_offset as usize);
-            image.resize(image_len as usize, 0);
-            self.data.push(image.into());
-
-            // Record how this image is initialized, where `image_offset` is the
-            // offset from the start of linear memory and the length is added to
-            // the `offset` variable outside of this loop which keeps track of
-            // the current offset in the data section. This is used to build the
-            // range `offset..end` which is the range, in the concatenation of
-            // all memory images of `self.data`, of what memory is located at
-            // `image_offset`.
-            let end = offset
-                .checked_add(u32::try_from(image_len).unwrap())
-                .unwrap();
-            let idx = map.push(Some(StaticMemoryInitializer {
-                offset: image_offset,
-                data: offset..end,
-            }));
-            assert_eq!(idx, memory);
-
-            offset = end;
-            assert_eq!(offset % (page_size as u32), 0);
+            let idx = image_map.push(init);
+            assert_eq!(idx, memory_index);
         }
-
-        self.module.memory_initialization = MemoryInitialization::Static { map };
+        assert!(data.next().is_none());
+        self.data_align = Some(page_size);
+        self.module.memory_initialization = MemoryInitialization::Static { map: image_map };
     }
 
     /// Attempts to convert the module's table initializers to
