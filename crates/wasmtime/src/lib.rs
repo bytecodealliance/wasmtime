@@ -262,8 +262,8 @@
 //!   jitdump runtime profiling format. The profiler can be selected with
 //!   [`Config::profiler`].
 //!
-//! * `vtune` - Not enabled by default, this feature compiles in support for
-//!   supporting VTune profiling of JIT code.
+//! * `vtune` - Enabled by default, this feature compiles in support for VTune
+//!   profiling of JIT code.
 //!
 //! * `uffd` - Not enabled by default. This feature enables `userfaultfd` support
 //!   when using the pooling instance allocator. As handling page faults in user space

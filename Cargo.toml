@@ -95,6 +95,7 @@ default = [
   "jitdump",
   "wasmtime/wat",
   "wasmtime/parallel-compilation",
+  "vtune",
   "wasi-nn",
   "pooling-allocator",
   "memfd",

@@ -30,13 +30,10 @@ For more information on VTune and the analysis tools it provides see its
 
 ### Turn on VTune support
 
-For JIT profiling with VTune, first build with the `vtune` feature enabled:
-
-```sh
-$ cargo build --features=vtune
-```
-
-Then, enable runtime support based on how you use Wasmtime:
+For JIT profiling with VTune, Wasmtime currently builds with the `vtune` feature
+enabled by default. This ensures the compiled binary understands how to inform
+the `ittapi` library of JIT events. But it must still be enabled at
+runtime--enable runtime support based on how you use Wasmtime:
 
 * **Rust API** - call the [`Config::profiler`] method with
   `ProfilingStrategy::VTune` to enable profiling of your wasm modules.
@@ -62,7 +59,7 @@ future.
 With VTune [properly installed][download], if you are using the CLI execute:
 
 ```sh
-$ cargo build --features=vtune
+$ cargo build
 $ vtune -run-pass-thru=--no-altstack -collect hotspots target/debug/wasmtime --vtune foo.wasm
 ```
 
