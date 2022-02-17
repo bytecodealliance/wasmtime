@@ -49,7 +49,7 @@ The `run` command accepts an optional `invoke` argument which is the name of
 an exported function of the module to run.
 
 ```sh
-$ wasmtime foo.wasm --invoke initialize
+$ wasmtime run foo.wasm --invoke initialize
 ```
 
 ## `wast`
