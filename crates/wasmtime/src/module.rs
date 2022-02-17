@@ -334,12 +334,6 @@ impl Module {
             }
         };
 
-        if engine.config().mlock_module_mmaps {
-            for (mmap, _info) in artifacts.iter() {
-                mmap.mlock()?;
-            }
-        }
-
         let modules = engine.run_maybe_parallel(artifacts, |(a, b)| {
             CompiledModule::from_artifacts(
                 a,
@@ -522,10 +516,6 @@ impl Module {
     /// state of the file.
     pub unsafe fn deserialize_file(engine: &Engine, path: impl AsRef<Path>) -> Result<Module> {
         let module = SerializedModule::from_file(path.as_ref(), &engine.config().module_version)?;
-
-        if engine.config().mlock_module_mmaps {
-            module.mlock()?;
-        }
         module.into_module(engine)
     }
 
@@ -548,6 +538,12 @@ impl Module {
                 .iter()
                 .flat_map(|m| m.trampolines().map(|(idx, f, _)| (idx, f))),
         ));
+
+        if engine.config().mlock_module_mmaps {
+            for m in modules.iter() {
+                m.mmap().mlock()?;
+            }
+        }
 
         let module = modules.remove(main_module);
 
