@@ -695,6 +695,16 @@ impl<'a> SerializedModule<'a> {
 
         Ok(())
     }
+
+    pub fn mlock(&self) -> Result<()> {
+        for a in self.artifacts.iter() {
+            match a {
+                MyCow::Owned(a) => a.mlock()?,
+                _ => {}
+            }
+        }
+        Ok(())
+    }
 }
 
 /// Aligns the `val` specified up to `align`, which must be a power of two

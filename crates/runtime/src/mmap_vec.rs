@@ -128,6 +128,11 @@ impl MmapVec {
     pub fn original_offset(&self) -> usize {
         self.range.start
     }
+
+    /// XXX
+    pub fn mlock(&self) -> Result<()> {
+        self.mmap.mlock(&self.range)
+    }
 }
 
 impl Deref for MmapVec {

@@ -424,6 +424,25 @@ impl Mmap {
     pub fn original_file(&self) -> Option<&Arc<File>> {
         self.file.as_ref()
     }
+
+    /// On posix, lock the memory into RAM.
+    pub fn mlock(&self, range: &Range<usize>) -> Result<()> {
+        assert!(range.start <= self.len());
+        assert!(range.end <= self.len());
+        assert!(range.start <= range.end);
+        assert!(
+            range.start % region::page::size() == 0,
+            "changing of protections isn't page-aligned",
+        );
+        #[cfg(unix)]
+        unsafe {
+            rustix::io::mlock(
+                self.as_ptr().add(range.start) as *mut _,
+                range.end - range.start,
+            )?;
+        }
+        Ok(())
+    }
 }
 
 impl Drop for Mmap {
