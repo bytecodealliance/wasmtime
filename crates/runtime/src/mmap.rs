@@ -434,12 +434,19 @@ impl Mmap {
             range.start % region::page::size() == 0,
             "changing of protections isn't page-aligned",
         );
-        #[cfg(unix)]
+        #[cfg(target_os = "linux")]
         unsafe {
             rustix::io::mlock_with(
                 self.as_ptr().add(range.start) as *mut _,
                 range.end - range.start,
                 rustix::io::MlockFlags::ONFAULT,
+            )?;
+        }
+        #[cfg(all(unix, not(target_os = "linux")))]
+        unsafe {
+            rustix::io::mlock(
+                self.as_ptr().add(range.start) as *mut _,
+                range.end - range.start,
             )?;
         }
         Ok(())
