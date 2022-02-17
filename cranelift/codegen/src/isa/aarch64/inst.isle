@@ -10,6 +10,7 @@
     ;; An ALU operation with two register sources and a register destination.
     (AluRRR
       (alu_op ALUOp)
+      (size OperandSize)
       (rd WritableReg)
       (rn Reg)
       (rm Reg))
@@ -26,6 +27,7 @@
     ;; destination.
     (AluRRImm12
       (alu_op ALUOp)
+      (size OperandSize)
       (rd WritableReg)
       (rn Reg)
       (imm12 Imm12))
@@ -33,6 +35,7 @@
     ;; An ALU operation with a register source and an immediate-logic source, and a register destination.
     (AluRRImmLogic
       (alu_op ALUOp)
+      (size OperandSize)
       (rd WritableReg)
       (rn Reg)
       (imml ImmLogic))
@@ -40,6 +43,7 @@
     ;; An ALU operation with a register source and an immediate-shiftamt source, and a register destination.
     (AluRRImmShift
       (alu_op ALUOp)
+      (size OperandSize)
       (rd WritableReg)
       (rn Reg)
       (immshift ImmShift))
@@ -48,6 +52,7 @@
     ;; destination.
     (AluRRRShift
       (alu_op ALUOp)
+      (size OperandSize)
       (rd WritableReg)
       (rn Reg)
       (rm Reg)
@@ -57,6 +62,7 @@
     ;; shifted, and a register destination.
     (AluRRRExtend
       (alu_op ALUOp)
+      (size OperandSize)
       (rd WritableReg)
       (rn Reg)
       (rm Reg)
@@ -788,62 +794,39 @@
 ;; below (see `Inst`) in any combination.
 (type ALUOp
   (enum
-    (Add32)
-    (Add64)
-    (Sub32)
-    (Sub64)
-    (Orr32)
-    (Orr64)
-    (OrrNot32)
-    (OrrNot64)
-    (And32)
-    (And64)
-    (AndS32)
-    (AndS64)
-    (AndNot32)
-    (AndNot64)
+    (Add)
+    (Sub)
+    (Orr)
+    (OrrNot)
+    (And)
+    (AndS)
+    (AndNot)
     ;; XOR (AArch64 calls this "EOR")
-    (Eor32)
-    ;; XOR (AArch64 calls this "EOR")
-    (Eor64)
+    (Eor)
     ;; XNOR (AArch64 calls this "EOR-NOT")
-    (EorNot32)
-    ;; XNOR (AArch64 calls this "EOR-NOT")
-    (EorNot64)
+    (EorNot)
     ;; Add, setting flags
-    (AddS32)
-    ;; Add, setting flags
-    (AddS64)
+    (AddS)
     ;; Sub, setting flags
-    (SubS32)
-    ;; Sub, setting flags
-    (SubS64)
+    (SubS)
     ;; Signed multiply, high-word result
     (SMulH)
     ;; Unsigned multiply, high-word result
     (UMulH)
-    (SDiv64)
-    (UDiv64)
-    (RotR32)
-    (RotR64)
-    (Lsr32)
-    (Lsr64)
-    (Asr32)
-    (Asr64)
-    (Lsl32)
-    (Lsl64)
+    (SDiv)
+    (UDiv)
+    (RotR)
+    (Lsr)
+    (Asr)
+    (Lsl)
     ;; Add with carry
-    (Adc32)
-    (Adc64)
+    (Adc)
     ;; Add with carry, settings flags
-    (AdcS32)
-    (AdcS64)
+    (AdcS)
     ;; Subtract with carry
-    (Sbc32)
-    (Sbc64)
+    (Sbc)
     ;; Subtract with carry, settings flags
-    (SbcS32)
-    (SbcS64)
+    (SbcS)
 ))
 
 ;; An ALU operation with three arguments.
@@ -909,6 +892,11 @@
 (type OperandSize extern
       (enum Size32
             Size64))
+
+;; Helper for calculating the `OperandSize` corresponding to a type
+(decl operand_size (Type) OperandSize)
+(rule (operand_size (fits_in_32 _ty)) (OperandSize.Size32))
+(rule (operand_size (fits_in_64 _ty)) (OperandSize.Size64))
 
 (type ScalarSize extern
       (enum Size8
@@ -1388,24 +1376,24 @@
         (writable_reg_to_reg dst)))
 
 ;; Helper for emitting `MInst.AluRRImmLogic` instructions.
-(decl alu_rr_imm_logic (ALUOp Reg ImmLogic) Reg)
-(rule (alu_rr_imm_logic op src imm)
+(decl alu_rr_imm_logic (ALUOp Type Reg ImmLogic) Reg)
+(rule (alu_rr_imm_logic op ty src imm)
       (let ((dst WritableReg (temp_writable_reg $I64))
-            (_ Unit (emit (MInst.AluRRImmLogic op dst src imm))))
+            (_ Unit (emit (MInst.AluRRImmLogic op (operand_size ty) dst src imm))))
         (writable_reg_to_reg dst)))
 
 ;; Helper for emitting `MInst.AluRRImmShift` instructions.
-(decl alu_rr_imm_shift (ALUOp Reg ImmShift) Reg)
-(rule (alu_rr_imm_shift op src imm)
+(decl alu_rr_imm_shift (ALUOp Type Reg ImmShift) Reg)
+(rule (alu_rr_imm_shift op ty src imm)
       (let ((dst WritableReg (temp_writable_reg $I64))
-            (_ Unit (emit (MInst.AluRRImmShift op dst src imm))))
+            (_ Unit (emit (MInst.AluRRImmShift op (operand_size ty) dst src imm))))
         (writable_reg_to_reg dst)))
 
 ;; Helper for emitting `MInst.AluRRR` instructions.
-(decl alu_rrr (ALUOp Reg Reg) Reg)
-(rule (alu_rrr op src1 src2)
+(decl alu_rrr (ALUOp Type Reg Reg) Reg)
+(rule (alu_rrr op ty src1 src2)
       (let ((dst WritableReg (temp_writable_reg $I64))
-            (_ Unit (emit (MInst.AluRRR op dst src1 src2))))
+            (_ Unit (emit (MInst.AluRRR op (operand_size ty) dst src1 src2))))
         (writable_reg_to_reg dst)))
 
 ;; Helper for emitting `MInst.VecRRR` instructions.
@@ -1430,33 +1418,33 @@
         (writable_reg_to_reg dst)))
 
 ;; Helper for emitting `MInst.AluRRImm12` instructions.
-(decl alu_rr_imm12 (ALUOp Reg Imm12) Reg)
-(rule (alu_rr_imm12 op src imm)
+(decl alu_rr_imm12 (ALUOp Type Reg Imm12) Reg)
+(rule (alu_rr_imm12 op ty src imm)
       (let ((dst WritableReg (temp_writable_reg $I64))
-            (_ Unit (emit (MInst.AluRRImm12 op dst src imm))))
+            (_ Unit (emit (MInst.AluRRImm12 op (operand_size ty) dst src imm))))
         (writable_reg_to_reg dst)))
 
 ;; Helper for emitting `MInst.AluRRRShift` instructions.
-(decl alu_rrr_shift (ALUOp Reg Reg ShiftOpAndAmt) Reg)
-(rule (alu_rrr_shift op src1 src2 shift)
+(decl alu_rrr_shift (ALUOp Type Reg Reg ShiftOpAndAmt) Reg)
+(rule (alu_rrr_shift op ty src1 src2 shift)
       (let ((dst WritableReg (temp_writable_reg $I64))
-            (_ Unit (emit (MInst.AluRRRShift op dst src1 src2 shift))))
+            (_ Unit (emit (MInst.AluRRRShift op (operand_size ty) dst src1 src2 shift))))
         (writable_reg_to_reg dst)))
 
 ;; Helper for emitting `MInst.AluRRRExtend` instructions.
-(decl alu_rrr_extend (ALUOp Reg Reg ExtendOp) Reg)
-(rule (alu_rrr_extend op src1 src2 extend)
+(decl alu_rrr_extend (ALUOp Type Reg Reg ExtendOp) Reg)
+(rule (alu_rrr_extend op ty src1 src2 extend)
       (let ((dst WritableReg (temp_writable_reg $I64))
-            (_ Unit (emit (MInst.AluRRRExtend op dst src1 src2 extend))))
+            (_ Unit (emit (MInst.AluRRRExtend op (operand_size ty) dst src1 src2 extend))))
         (writable_reg_to_reg dst)))
 
 ;; Same as `alu_rrr_extend`, but takes an `ExtendedValue` packed "pair" instead
 ;; of a `Reg` and an `ExtendOp`.
-(decl alu_rr_extend_reg (ALUOp Reg ExtendedValue) Reg)
-(rule (alu_rr_extend_reg op src1 extended_reg)
+(decl alu_rr_extend_reg (ALUOp Type Reg ExtendedValue) Reg)
+(rule (alu_rr_extend_reg op ty src1 extended_reg)
       (let ((src2 Reg (put_extended_in_reg extended_reg))
             (extend ExtendOp (get_extended_op extended_reg)))
-        (alu_rrr_extend op src1 src2 extend)))
+        (alu_rrr_extend op ty src1 src2 extend)))
 
 ;; Helper for emitting `MInst.AluRRRR` instructions.
 (decl alu_rrrr (ALUOp3 Reg Reg Reg) Reg)
@@ -1473,36 +1461,36 @@
         (writable_reg_to_reg dst)))
 
 ;; Helper for emitting `adds` instructions.
-(decl add64_with_flags (Reg Reg) ProducesFlags)
-(rule (add64_with_flags src1 src2)
+(decl add_with_flags (Type Reg Reg) ProducesFlags)
+(rule (add_with_flags ty src1 src2)
       (let ((dst WritableReg (temp_writable_reg $I64)))
-        (ProducesFlags.ProducesFlags (MInst.AluRRR (ALUOp.AddS64) dst src1 src2)
+        (ProducesFlags.ProducesFlags (MInst.AluRRR (ALUOp.AddS) (operand_size ty) dst src1 src2)
                                      (writable_reg_to_reg dst))))
 
 ;; Helper for emitting `adc` instructions.
-(decl adc64 (Reg Reg) ConsumesFlags)
-(rule (adc64 src1 src2)
+(decl adc (Type Reg Reg) ConsumesFlags)
+(rule (adc ty src1 src2)
       (let ((dst WritableReg (temp_writable_reg $I64)))
-        (ConsumesFlags.ConsumesFlags (MInst.AluRRR (ALUOp.Adc64) dst src1 src2)
+        (ConsumesFlags.ConsumesFlags (MInst.AluRRR (ALUOp.Adc) (operand_size ty) dst src1 src2)
                                      (writable_reg_to_reg dst))))
 
 ;; Helper for emitting `subs` instructions.
-(decl sub64_with_flags (Reg Reg) ProducesFlags)
-(rule (sub64_with_flags src1 src2)
+(decl sub_with_flags (Type Reg Reg) ProducesFlags)
+(rule (sub_with_flags ty src1 src2)
       (let ((dst WritableReg (temp_writable_reg $I64)))
-        (ProducesFlags.ProducesFlags (MInst.AluRRR (ALUOp.SubS64) dst src1 src2)
+        (ProducesFlags.ProducesFlags (MInst.AluRRR (ALUOp.SubS) (operand_size ty) dst src1 src2)
                                      (writable_reg_to_reg dst))))
 
 (decl cmp64_imm (Reg Imm12) ProducesFlags)
 (rule (cmp64_imm src1 src2)
-      (ProducesFlags.ProducesFlags (MInst.AluRRImm12 (ALUOp.SubS64) (writable_zero_reg) src1 src2)
+      (ProducesFlags.ProducesFlags (MInst.AluRRImm12 (ALUOp.SubS) (OperandSize.Size64) (writable_zero_reg) src1 src2)
                                    (zero_reg)))
 
 ;; Helper for emitting `sbc` instructions.
-(decl sbc64 (Reg Reg) ConsumesFlags)
-(rule (sbc64 src1 src2)
+(decl sbc (Type Reg Reg) ConsumesFlags)
+(rule (sbc ty src1 src2)
       (let ((dst WritableReg (temp_writable_reg $I64)))
-        (ConsumesFlags.ConsumesFlags (MInst.AluRRR (ALUOp.Sbc64) dst src1 src2)
+        (ConsumesFlags.ConsumesFlags (MInst.AluRRR (ALUOp.Sbc) (operand_size ty) dst src1 src2)
                                      (writable_reg_to_reg dst))))
 
 ;; Helper for emitting `MInst.VecMisc` instructions.
@@ -1591,9 +1579,10 @@
 ;;
 ;; Produces a `ProducesFlags` rather than a register or emitted instruction
 ;; which must be paired with `with_flags*` helpers.
-(decl tst64_imm (Reg ImmLogic) ProducesFlags)
-(rule (tst64_imm reg imm)
-      (ProducesFlags.ProducesFlags (MInst.AluRRImmLogic (ALUOp.AndS64)
+(decl tst_imm (Type Reg ImmLogic) ProducesFlags)
+(rule (tst_imm ty reg imm)
+      (ProducesFlags.ProducesFlags (MInst.AluRRImmLogic (ALUOp.AndS)
+                                                        (operand_size ty)
                                                         (writable_zero_reg)
                                                         reg
                                                         imm)
@@ -1613,44 +1602,16 @@
 ;; Helpers for generating `add` instructions.
 
 (decl add (Type Reg Reg) Reg)
-(rule (add (fits_in_32 _ty) x y) (add32 x y))
-(rule (add $I64 x y) (add64 x y))
-
-(decl add32 (Reg Reg) Reg)
-(rule (add32 x y) (alu_rrr (ALUOp.Add32) x y))
-
-(decl add64 (Reg Reg) Reg)
-(rule (add64 x y) (alu_rrr (ALUOp.Add64) x y))
+(rule (add ty x y) (alu_rrr (ALUOp.Add) ty x y))
 
 (decl add_imm (Type Reg Imm12) Reg)
-(rule (add_imm (fits_in_32 _ty) x y) (add32_imm x y))
-(rule (add_imm $I64 x y) (add64_imm x y))
-
-(decl add32_imm (Reg Imm12) Reg)
-(rule (add32_imm x y) (alu_rr_imm12 (ALUOp.Add32) x y))
-
-(decl add64_imm (Reg Imm12) Reg)
-(rule (add64_imm x y) (alu_rr_imm12 (ALUOp.Add64) x y))
+(rule (add_imm ty x y) (alu_rr_imm12 (ALUOp.Add) ty x y))
 
 (decl add_extend (Type Reg ExtendedValue) Reg)
-(rule (add_extend (fits_in_32 _ty) x y) (add32_extend x y))
-(rule (add_extend $I64 x y) (add64_extend x y))
-
-(decl add32_extend (Reg ExtendedValue) Reg)
-(rule (add32_extend x y) (alu_rr_extend_reg (ALUOp.Add32) x y))
-
-(decl add64_extend (Reg ExtendedValue) Reg)
-(rule (add64_extend x y) (alu_rr_extend_reg (ALUOp.Add64) x y))
+(rule (add_extend ty x y) (alu_rr_extend_reg (ALUOp.Add) ty x y))
 
 (decl add_shift (Type Reg Reg ShiftOpAndAmt) Reg)
-(rule (add_shift (fits_in_32 _ty) x y z) (add32_shift x y z))
-(rule (add_shift $I64 x y z) (add64_shift x y z))
-
-(decl add32_shift (Reg Reg ShiftOpAndAmt) Reg)
-(rule (add32_shift x y z) (alu_rrr_shift (ALUOp.Add32) x y z))
-
-(decl add64_shift (Reg Reg ShiftOpAndAmt) Reg)
-(rule (add64_shift x y z) (alu_rrr_shift (ALUOp.Add64) x y z))
+(rule (add_shift ty x y z) (alu_rrr_shift (ALUOp.Add) ty x y z))
 
 (decl add_vec (Reg Reg VectorSize) Reg)
 (rule (add_vec x y size) (vec_rrr (VecALUOp.Add) x y size))
@@ -1658,44 +1619,16 @@
 ;; Helpers for generating `sub` instructions.
 
 (decl sub (Type Reg Reg) Reg)
-(rule (sub (fits_in_32 _ty) x y) (sub32 x y))
-(rule (sub $I64 x y) (sub64 x y))
-
-(decl sub32 (Reg Reg) Reg)
-(rule (sub32 x y) (alu_rrr (ALUOp.Sub32) x y))
-
-(decl sub64 (Reg Reg) Reg)
-(rule (sub64 x y) (alu_rrr (ALUOp.Sub64) x y))
+(rule (sub ty x y) (alu_rrr (ALUOp.Sub) ty x y))
 
 (decl sub_imm (Type Reg Imm12) Reg)
-(rule (sub_imm (fits_in_32 _ty) x y) (sub32_imm x y))
-(rule (sub_imm $I64 x y) (sub64_imm x y))
-
-(decl sub32_imm (Reg Imm12) Reg)
-(rule (sub32_imm x y) (alu_rr_imm12 (ALUOp.Sub32) x y))
-
-(decl sub64_imm (Reg Imm12) Reg)
-(rule (sub64_imm x y) (alu_rr_imm12 (ALUOp.Sub64) x y))
+(rule (sub_imm ty x y) (alu_rr_imm12 (ALUOp.Sub) ty x y))
 
 (decl sub_extend (Type Reg ExtendedValue) Reg)
-(rule (sub_extend (fits_in_32 _ty) x y) (sub32_extend x y))
-(rule (sub_extend $I64 x y) (sub64_extend x y))
-
-(decl sub32_extend (Reg ExtendedValue) Reg)
-(rule (sub32_extend x y) (alu_rr_extend_reg (ALUOp.Sub32) x y))
-
-(decl sub64_extend (Reg ExtendedValue) Reg)
-(rule (sub64_extend x y) (alu_rr_extend_reg (ALUOp.Sub64) x y))
+(rule (sub_extend ty x y) (alu_rr_extend_reg (ALUOp.Sub) ty x y))
 
 (decl sub_shift (Type Reg Reg ShiftOpAndAmt) Reg)
-(rule (sub_shift (fits_in_32 _ty) x y z) (sub32_shift x y z))
-(rule (sub_shift $I64 x y z) (sub64_shift x y z))
-
-(decl sub32_shift (Reg Reg ShiftOpAndAmt) Reg)
-(rule (sub32_shift x y z) (alu_rrr_shift (ALUOp.Sub32) x y z))
-
-(decl sub64_shift (Reg Reg ShiftOpAndAmt) Reg)
-(rule (sub64_shift x y z) (alu_rrr_shift (ALUOp.Sub64) x y z))
+(rule (sub_shift ty x y z) (alu_rrr_shift (ALUOp.Sub) ty x y z))
 
 (decl sub_vec (Reg Reg VectorSize) Reg)
 (rule (sub_vec x y size) (vec_rrr (VecALUOp.Sub) x y size))
@@ -1734,12 +1667,12 @@
 (rule (sqsub x y size) (vec_rrr (VecALUOp.Sqsub) x y size))
 
 ;; Helper for generating `umulh` instructions.
-(decl umulh (Reg Reg) Reg)
-(rule (umulh x y) (alu_rrr (ALUOp.UMulH) x y))
+(decl umulh (Type Reg Reg) Reg)
+(rule (umulh ty x y) (alu_rrr (ALUOp.UMulH) ty x y))
 
 ;; Helper for generating `smulh` instructions.
-(decl smulh (Reg Reg) Reg)
-(rule (smulh x y) (alu_rrr (ALUOp.SMulH) x y))
+(decl smulh (Type Reg Reg) Reg)
+(rule (smulh ty x y) (alu_rrr (ALUOp.SMulH) ty x y))
 
 ;; Helper for generating `mul` instructions.
 (decl mul (Reg Reg VectorSize) Reg)
@@ -1798,45 +1731,33 @@
 (rule (umull32 x y high_half) (vec_rrr_long (VecRRRLongOp.Umull32) x y high_half))
 
 ;; Helper for generating `asr` instructions.
-(decl asr64 (Reg Reg) Reg)
-(rule (asr64 x y) (alu_rrr (ALUOp.Asr64) x y))
+(decl asr (Type Reg Reg) Reg)
+(rule (asr ty x y) (alu_rrr (ALUOp.Asr) ty x y))
 
-(decl asr64_imm (Reg ImmShift) Reg)
-(rule (asr64_imm x imm) (alu_rr_imm_shift (ALUOp.Asr64) x imm))
+(decl asr_imm (Type Reg ImmShift) Reg)
+(rule (asr_imm ty x imm) (alu_rr_imm_shift (ALUOp.Asr) ty x imm))
 
 ;; Helper for generating `lsr` instructions.
-(decl lsr32 (Reg Reg) Reg)
-(rule (lsr32 x y) (alu_rrr (ALUOp.Lsr32) x y))
+(decl lsr (Type Reg Reg) Reg)
+(rule (lsr ty x y) (alu_rrr (ALUOp.Lsr) ty x y))
 
-(decl lsr32_imm (Reg ImmShift) Reg)
-(rule (lsr32_imm x imm) (alu_rr_imm_shift (ALUOp.Lsr32) x imm))
-
-(decl lsr64 (Reg Reg) Reg)
-(rule (lsr64 x y) (alu_rrr (ALUOp.Lsr64) x y))
-
-(decl lsr64_imm (Reg ImmShift) Reg)
-(rule (lsr64_imm x imm) (alu_rr_imm_shift (ALUOp.Lsr64) x imm))
+(decl lsr_imm (Type Reg ImmShift) Reg)
+(rule (lsr_imm ty x imm) (alu_rr_imm_shift (ALUOp.Lsr) ty x imm))
 
 ;; Helper for generating `lsl` instructions.
-(decl lsl32 (Reg Reg) Reg)
-(rule (lsl32 x y) (alu_rrr (ALUOp.Lsl32) x y))
+(decl lsl (Type Reg Reg) Reg)
+(rule (lsl ty x y) (alu_rrr (ALUOp.Lsl) ty x y))
 
-(decl lsl32_imm (Reg ImmShift) Reg)
-(rule (lsl32_imm x imm) (alu_rr_imm_shift (ALUOp.Lsl32) x imm))
-
-(decl lsl64 (Reg Reg) Reg)
-(rule (lsl64 x y) (alu_rrr (ALUOp.Lsl64) x y))
-
-(decl lsl64_imm (Reg ImmShift) Reg)
-(rule (lsl64_imm x imm) (alu_rr_imm_shift (ALUOp.Lsl64) x imm))
+(decl lsl_imm (Type Reg ImmShift) Reg)
+(rule (lsl_imm ty x imm) (alu_rr_imm_shift (ALUOp.Lsl) ty x imm))
 
 ;; Helper for generating `udiv` instructions.
-(decl udiv64 (Reg Reg) Reg)
-(rule (udiv64 x y) (alu_rrr (ALUOp.UDiv64) x y))
+(decl a64_udiv (Type Reg Reg) Reg)
+(rule (a64_udiv ty x y) (alu_rrr (ALUOp.UDiv) ty x y))
 
 ;; Helper for generating `sdiv` instructions.
-(decl sdiv64 (Reg Reg) Reg)
-(rule (sdiv64 x y) (alu_rrr (ALUOp.SDiv64) x y))
+(decl a64_sdiv (Type Reg Reg) Reg)
+(rule (a64_sdiv ty x y) (alu_rrr (ALUOp.SDiv) ty x y))
 
 ;; Helper for generating `not` instructions.
 (decl not (Reg VectorSize) Reg)
@@ -1845,46 +1766,26 @@
 ;; Helpers for generating `orr_not` instructions.
 
 (decl orr_not (Type Reg Reg) Reg)
-(rule (orr_not (fits_in_32 _ty) x y) (orr_not32 x y))
-(rule (orr_not $I64 x y) (orr_not64 x y))
-
-(decl orr_not32 (Reg Reg) Reg)
-(rule (orr_not32 x y) (alu_rrr (ALUOp.OrrNot32) x y))
-
-(decl orr_not64 (Reg Reg) Reg)
-(rule (orr_not64 x y) (alu_rrr (ALUOp.OrrNot64) x y))
+(rule (orr_not ty x y) (alu_rrr (ALUOp.OrrNot) ty x y))
 
 (decl orr_not_shift (Type Reg Reg ShiftOpAndAmt) Reg)
-(rule (orr_not_shift (fits_in_32 _ty) x y shift) (orr_not_shift32 x y shift))
-(rule (orr_not_shift $I64 x y shift) (orr_not_shift64 x y shift))
-
-(decl orr_not_shift32 (Reg Reg ShiftOpAndAmt) Reg)
-(rule (orr_not_shift32 x y shift) (alu_rrr_shift (ALUOp.OrrNot32) x y shift))
-
-(decl orr_not_shift64 (Reg Reg ShiftOpAndAmt) Reg)
-(rule (orr_not_shift64 x y shift) (alu_rrr_shift (ALUOp.OrrNot64) x y shift))
+(rule (orr_not_shift ty x y shift) (alu_rrr_shift (ALUOp.OrrNot) ty x y shift))
 
 ;; Helpers for generating `orr` instructions.
 
-(decl orr32 (Reg Reg) Reg)
-(rule (orr32 x y) (alu_rrr (ALUOp.Orr32) x y))
+(decl orr (Type Reg Reg) Reg)
+(rule (orr ty x y) (alu_rrr (ALUOp.Orr) ty x y))
 
-(decl orr32_imm (Reg ImmLogic) Reg)
-(rule (orr32_imm x y) (alu_rr_imm_logic (ALUOp.Orr32) x y))
-
-(decl orr64 (Reg Reg) Reg)
-(rule (orr64 x y) (alu_rrr (ALUOp.Orr64) x y))
-
-(decl orr64_imm (Reg ImmLogic) Reg)
-(rule (orr64_imm x y) (alu_rr_imm_logic (ALUOp.Orr64) x y))
+(decl orr_imm (Type Reg ImmLogic) Reg)
+(rule (orr_imm ty x y) (alu_rr_imm_logic (ALUOp.Orr) ty x y))
 
 (decl orr_vec (Reg Reg VectorSize) Reg)
 (rule (orr_vec x y size) (vec_rrr (VecALUOp.Orr) x y size))
 
 ;; Helpers for generating `and` instructions.
 
-(decl and32_imm (Reg ImmLogic) Reg)
-(rule (and32_imm x y) (alu_rr_imm_logic (ALUOp.And32) x y))
+(decl and_imm (Type Reg ImmLogic) Reg)
+(rule (and_imm ty x y) (alu_rr_imm_logic (ALUOp.And) ty x y))
 
 (decl and_vec (Reg Reg VectorSize) Reg)
 (rule (and_vec x y size) (vec_rrr (VecALUOp.And) x y size))
@@ -1907,17 +1808,11 @@
 
 ;; Helpers for generating `rotr` instructions.
 
-(decl rotr32 (Reg Reg) Reg)
-(rule (rotr32 x y) (alu_rrr (ALUOp.RotR32) x y))
+(decl a64_rotr (Type Reg Reg) Reg)
+(rule (a64_rotr ty x y) (alu_rrr (ALUOp.RotR) ty x y))
 
-(decl rotr32_imm (Reg ImmShift) Reg)
-(rule (rotr32_imm x y) (alu_rr_imm_shift (ALUOp.RotR32) x y))
-
-(decl rotr64 (Reg Reg) Reg)
-(rule (rotr64 x y) (alu_rrr (ALUOp.RotR64) x y))
-
-(decl rotr64_imm (Reg ImmShift) Reg)
-(rule (rotr64_imm x y) (alu_rr_imm_shift (ALUOp.RotR64) x y))
+(decl a64_rotr_imm (Type Reg ImmShift) Reg)
+(rule (a64_rotr_imm ty x y) (alu_rr_imm_shift (ALUOp.RotR) ty x y))
 
 ;; Helpers for generating `rbit` instructions.
 
@@ -1945,11 +1840,8 @@
 
 ;; Helpers for generating `eon` instructions.
 
-(decl eon32 (Reg Reg) Reg)
-(rule (eon32 x y) (alu_rrr (ALUOp.EorNot32) x y))
-
-(decl eon64 (Reg Reg) Reg)
-(rule (eon64 x y) (alu_rrr (ALUOp.EorNot64) x y))
+(decl eon (Type Reg Reg) Reg)
+(rule (eon ty x y) (alu_rrr (ALUOp.EorNot) ty x y))
 
 ;; Helpers for generating `cnt` instructions.
 
@@ -1970,7 +1862,7 @@
 
 ;; Weird logical-instruction immediate in ORI using zero register
 (rule (imm (integral_ty _ty) (imm_logic_from_u64 <$I64 n))
-      (orr64_imm (zero_reg) n))
+      (orr_imm $I64 (zero_reg) n))
 
 (decl load_constant64_full (u64) Reg)
 (extern constructor load_constant64_full load_constant64_full)
@@ -2033,7 +1925,7 @@
 (rule (trap_if_div_overflow ty x y)
       (let (
           ;; Check RHS is -1.
-          (_1 Unit (emit (MInst.AluRRImm12 (adds_op ty) (writable_zero_reg) y (u8_into_imm12 1))))
+          (_1 Unit (emit (MInst.AluRRImm12 (ALUOp.AddS) (operand_size ty) (writable_zero_reg) y (u8_into_imm12 1))))
 
           ;; Check LHS is min_value, by subtracting 1 and branching if
           ;; there is overflow.
@@ -2046,11 +1938,6 @@
                                       (trap_code_integer_overflow))))
         )
         x))
-
-;; Helper to use either a 32 or 64-bit adds depending on the input type.
-(decl adds_op (Type) ALUOp)
-(rule (adds_op (fits_in_32 _ty)) (ALUOp.AddS32))
-(rule (adds_op $I64) (ALUOp.AddS64))
 
 ;; An atomic load that can be sunk into another operation.
 (type SinkableAtomicLoad extern (enum))
@@ -2075,36 +1962,36 @@
 
 ;; Base case of operating on registers.
 (rule (alu_rs_imm_logic_commutative op ty x y)
-      (alu_rrr op (put_in_reg x) (put_in_reg y)))
+      (alu_rrr op ty (put_in_reg x) (put_in_reg y)))
 
 ;; Special cases for when one operand is a constant.
 (rule (alu_rs_imm_logic_commutative op ty x (def_inst (iconst (imm_logic_from_imm64 <ty imm))))
-      (alu_rr_imm_logic op (put_in_reg x) imm))
+      (alu_rr_imm_logic op ty (put_in_reg x) imm))
 (rule (alu_rs_imm_logic_commutative op ty (def_inst (iconst (imm_logic_from_imm64 <ty imm))) x)
-      (alu_rr_imm_logic op (put_in_reg x) imm))
+      (alu_rr_imm_logic op ty (put_in_reg x) imm))
 
 ;; Special cases for when one operand is shifted left by a constant.
 (rule (alu_rs_imm_logic_commutative op ty x (def_inst (ishl y (def_inst (iconst (lshl_from_imm64 <ty amt))))))
-      (alu_rrr_shift op (put_in_reg x) (put_in_reg y) amt))
+      (alu_rrr_shift op ty (put_in_reg x) (put_in_reg y) amt))
 (rule (alu_rs_imm_logic_commutative op ty (def_inst (ishl x (def_inst (iconst (lshl_from_imm64 <ty amt))))) y)
-      (alu_rrr_shift op (put_in_reg y) (put_in_reg x) amt))
+      (alu_rrr_shift op ty (put_in_reg y) (put_in_reg x) amt))
 
 ;; Same as `alu_rs_imm_logic_commutative` above, except that it doesn't require
 ;; that the operation is commutative.
 (decl alu_rs_imm_logic (ALUOp Type Value Value) Reg)
 (rule (alu_rs_imm_logic op ty x y)
-      (alu_rrr op (put_in_reg x) (put_in_reg y)))
+      (alu_rrr op ty (put_in_reg x) (put_in_reg y)))
 (rule (alu_rs_imm_logic op ty x (def_inst (iconst (imm_logic_from_imm64 <ty imm))))
-      (alu_rr_imm_logic op (put_in_reg x) imm))
+      (alu_rr_imm_logic op ty (put_in_reg x) imm))
 (rule (alu_rs_imm_logic op ty x (def_inst (ishl y (def_inst (iconst (lshl_from_imm64 <ty amt))))))
-      (alu_rrr_shift op (put_in_reg x) (put_in_reg y) amt))
+      (alu_rrr_shift op ty (put_in_reg x) (put_in_reg y) amt))
 
 ;; Helper for generating i128 bitops which simply do the same operation to the
 ;; hi/lo registers.
 ;;
 ;; TODO: Support immlogic here
-(decl i128_alu_bitop (ALUOp Value Value) ValueRegs)
-(rule (i128_alu_bitop op x y)
+(decl i128_alu_bitop (ALUOp Type Value Value) ValueRegs)
+(rule (i128_alu_bitop op ty x y)
       (let (
           (x_regs ValueRegs (put_in_regs x))
           (x_lo Reg (value_regs_get x_regs 0))
@@ -2114,5 +2001,5 @@
           (y_hi Reg (value_regs_get y_regs 1))
         )
         (value_regs
-          (alu_rrr op x_lo y_lo)
-          (alu_rrr op x_hi y_hi))))
+          (alu_rrr op ty x_lo y_lo)
+          (alu_rrr op ty x_hi y_hi))))

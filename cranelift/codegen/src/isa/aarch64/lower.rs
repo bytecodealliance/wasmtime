@@ -454,22 +454,32 @@ pub(crate) fn put_input_in_rse_imm12<C: LowerCtx<I = Inst>>(
 //============================================================================
 // ALU instruction constructors.
 
-pub(crate) fn alu_inst_imm12(op: ALUOp, rd: Writable<Reg>, rn: Reg, rm: ResultRSEImm12) -> Inst {
+pub(crate) fn alu_inst_imm12(
+    op: ALUOp,
+    ty: Type,
+    rd: Writable<Reg>,
+    rn: Reg,
+    rm: ResultRSEImm12,
+) -> Inst {
+    let size = OperandSize::from_ty(ty);
     match rm {
         ResultRSEImm12::Imm12(imm12) => Inst::AluRRImm12 {
             alu_op: op,
+            size,
             rd,
             rn,
             imm12,
         },
         ResultRSEImm12::Reg(rm) => Inst::AluRRR {
             alu_op: op,
+            size,
             rd,
             rn,
             rm,
         },
         ResultRSEImm12::RegShift(rm, shiftop) => Inst::AluRRRShift {
             alu_op: op,
+            size,
             rd,
             rn,
             rm,
@@ -477,6 +487,7 @@ pub(crate) fn alu_inst_imm12(op: ALUOp, rd: Writable<Reg>, rn: Reg, rm: ResultRS
         },
         ResultRSEImm12::RegExtend(rm, extendop) => Inst::AluRRRExtend {
             alu_op: op,
+            size,
             rd,
             rn,
             rm,
@@ -772,7 +783,8 @@ fn lower_add_addends<C: LowerCtx<I = Inst>>(
             reg
         };
         ctx.emit(Inst::AluRRR {
-            alu_op: ALUOp::Add64,
+            alu_op: ALUOp::Add,
+            size: OperandSize::Size64,
             rd,
             rn: rd.to_reg(),
             rm: reg,
@@ -781,7 +793,8 @@ fn lower_add_addends<C: LowerCtx<I = Inst>>(
     for (reg, extendop) in addends32 {
         assert!(reg != stack_reg());
         ctx.emit(Inst::AluRRRExtend {
-            alu_op: ALUOp::Add64,
+            alu_op: ALUOp::Add,
+            size: OperandSize::Size64,
             rd,
             rn: rd.to_reg(),
             rm: reg,
@@ -797,14 +810,16 @@ fn lower_add_immediate<C: LowerCtx<I = Inst>>(ctx: &mut C, dst: Writable<Reg>, s
     // Otherwise, lower the constant first then add.
     if let Some(imm12) = Imm12::maybe_from_u64(imm as u64) {
         ctx.emit(Inst::AluRRImm12 {
-            alu_op: ALUOp::Add64,
+            alu_op: ALUOp::Add,
+            size: OperandSize::Size64,
             rd: dst,
             rn: src,
             imm12,
         });
     } else if let Some(imm12) = Imm12::maybe_from_u64(imm.wrapping_neg() as u64) {
         ctx.emit(Inst::AluRRImm12 {
-            alu_op: ALUOp::Sub64,
+            alu_op: ALUOp::Sub,
+            size: OperandSize::Size64,
             rd: dst,
             rn: src,
             imm12,
@@ -812,7 +827,8 @@ fn lower_add_immediate<C: LowerCtx<I = Inst>>(ctx: &mut C, dst: Writable<Reg>, s
     } else {
         lower_constant_u64(ctx, dst, imm as u64);
         ctx.emit(Inst::AluRRR {
-            alu_op: ALUOp::Add64,
+            alu_op: ALUOp::Add,
+            size: OperandSize::Size64,
             rd: dst,
             rn: dst.to_reg(),
             rm: src,
@@ -1250,19 +1266,22 @@ pub(crate) fn lower_icmp<C: LowerCtx<I = Inst>>(
                 // cset    dst, {eq, ne}
 
                 ctx.emit(Inst::AluRRR {
-                    alu_op: ALUOp::Eor64,
+                    alu_op: ALUOp::Eor,
+                    size: OperandSize::Size64,
                     rd: tmp1,
                     rn: lhs.regs()[0],
                     rm: rhs.regs()[0],
                 });
                 ctx.emit(Inst::AluRRR {
-                    alu_op: ALUOp::Eor64,
+                    alu_op: ALUOp::Eor,
+                    size: OperandSize::Size64,
                     rd: tmp2,
                     rn: lhs.regs()[1],
                     rm: rhs.regs()[1],
                 });
                 ctx.emit(Inst::AluRRR {
-                    alu_op: ALUOp::AddS64,
+                    alu_op: ALUOp::AddS,
+                    size: OperandSize::Size64,
                     rd: writable_zero_reg(),
                     rn: tmp1.to_reg(),
                     rm: tmp2.to_reg(),
@@ -1277,13 +1296,15 @@ pub(crate) fn lower_icmp<C: LowerCtx<I = Inst>>(
                 // cset    dst, {vs, vc}
 
                 ctx.emit(Inst::AluRRR {
-                    alu_op: ALUOp::AddS64,
+                    alu_op: ALUOp::AddS,
+                    size: OperandSize::Size64,
                     rd: writable_zero_reg(),
                     rn: lhs.regs()[0],
                     rm: rhs.regs()[0],
                 });
                 ctx.emit(Inst::AluRRR {
-                    alu_op: ALUOp::AdcS64,
+                    alu_op: ALUOp::AdcS,
+                    size: OperandSize::Size64,
                     rd: writable_zero_reg(),
                     rn: lhs.regs()[1],
                     rm: rhs.regs()[1],
@@ -1300,14 +1321,16 @@ pub(crate) fn lower_icmp<C: LowerCtx<I = Inst>>(
                 let unsigned_cond = lower_condcode(condcode.unsigned());
 
                 ctx.emit(Inst::AluRRR {
-                    alu_op: ALUOp::SubS64,
+                    alu_op: ALUOp::SubS,
+                    size: OperandSize::Size64,
                     rd: writable_zero_reg(),
                     rn: lhs.regs()[0],
                     rm: rhs.regs()[0],
                 });
                 materialize_bool_result(ctx, insn, tmp1, unsigned_cond);
                 ctx.emit(Inst::AluRRR {
-                    alu_op: ALUOp::SubS64,
+                    alu_op: ALUOp::SubS,
+                    size: OperandSize::Size64,
                     rd: writable_zero_reg(),
                     rn: lhs.regs()[1],
                     rm: rhs.regs()[1],
@@ -1345,7 +1368,8 @@ pub(crate) fn lower_icmp<C: LowerCtx<I = Inst>>(
                     };
 
                     ctx.emit(Inst::AluRRR {
-                        alu_op: ALUOp::SubS64,
+                        alu_op: ALUOp::SubS,
+                        size: OperandSize::Size64,
                         rd: writable_zero_reg(),
                         rn,
                         rm,
@@ -1391,7 +1415,7 @@ pub(crate) fn lower_icmp<C: LowerCtx<I = Inst>>(
                 ExtendOp::SXTH
             };
             let tmp1 = ctx.alloc_tmp(I32).only_reg().unwrap();
-            ctx.emit(alu_inst_imm12(ALUOp::Sub32, tmp1, rn, rm));
+            ctx.emit(alu_inst_imm12(ALUOp::Sub, I32, tmp1, rn, rm));
 
             let out_cond = match condcode {
                 IntCC::Overflow => Cond::Ne,
@@ -1407,8 +1431,7 @@ pub(crate) fn lower_icmp<C: LowerCtx<I = Inst>>(
             (cond, rn, rm)
         };
 
-        let alu_op = choose_32_64(ty, ALUOp::SubS32, ALUOp::SubS64);
-        ctx.emit(alu_inst_imm12(alu_op, writable_zero_reg(), rn, rm));
+        ctx.emit(alu_inst_imm12(ALUOp::SubS, ty, writable_zero_reg(), rn, rm));
         cond
     };
 

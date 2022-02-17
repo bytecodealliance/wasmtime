@@ -410,16 +410,17 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 lower_fcmp_or_ffcmp_to_flags(ctx, fcmp_insn);
                 cond
             } else {
-                let (cmp_op, narrow_mode) = if ty_bits(ctx.input_ty(insn, 0)) > 32 {
-                    (ALUOp::SubS64, NarrowValueMode::ZeroExtend64)
+                let (size, narrow_mode) = if ty_bits(ctx.input_ty(insn, 0)) > 32 {
+                    (OperandSize::Size64, NarrowValueMode::ZeroExtend64)
                 } else {
-                    (ALUOp::SubS32, NarrowValueMode::ZeroExtend32)
+                    (OperandSize::Size32, NarrowValueMode::ZeroExtend32)
                 };
 
                 let rcond = put_input_in_reg(ctx, inputs[0], narrow_mode);
                 // cmp rcond, #0
                 ctx.emit(Inst::AluRRR {
-                    alu_op: cmp_op,
+                    alu_op: ALUOp::SubS,
+                    size,
                     rd: writable_zero_reg(),
                     rn: rcond,
                     rm: zero_reg(),
@@ -507,21 +508,24 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 let rm = put_input_in_reg(ctx, inputs[2], NarrowValueMode::None);
                 // AND rTmp, rn, rcond
                 ctx.emit(Inst::AluRRR {
-                    alu_op: ALUOp::And64,
+                    alu_op: ALUOp::And,
+                    size: OperandSize::Size64,
                     rd: tmp,
                     rn,
                     rm: rcond,
                 });
                 // BIC rd, rm, rcond
                 ctx.emit(Inst::AluRRR {
-                    alu_op: ALUOp::AndNot64,
+                    alu_op: ALUOp::AndNot,
+                    size: OperandSize::Size64,
                     rd,
                     rn: rm,
                     rm: rcond,
                 });
                 // ORR rd, rd, rTmp
                 ctx.emit(Inst::AluRRR {
-                    alu_op: ALUOp::Orr64,
+                    alu_op: ALUOp::Orr,
+                    size: OperandSize::Size64,
                     rd,
                     rn: rd.to_reg(),
                     rm: tmp.to_reg(),
@@ -571,16 +575,22 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let (alu_op, const_value) = match op {
                 Opcode::IsNull => {
                     // cmp rn, #0
-                    (choose_32_64(ty, ALUOp::SubS32, ALUOp::SubS64), 0)
+                    (ALUOp::SubS, 0)
                 }
                 Opcode::IsInvalid => {
                     // cmn rn, #1
-                    (choose_32_64(ty, ALUOp::AddS32, ALUOp::AddS64), 1)
+                    (ALUOp::AddS, 1)
                 }
                 _ => unreachable!(),
             };
             let const_value = ResultRSEImm12::Imm12(Imm12::maybe_from_u64(const_value).unwrap());
-            ctx.emit(alu_inst_imm12(alu_op, writable_zero_reg(), rn, const_value));
+            ctx.emit(alu_inst_imm12(
+                alu_op,
+                ty,
+                writable_zero_reg(),
+                rn,
+                const_value,
+            ));
             materialize_bool_result(ctx, insn, rd, Cond::Eq);
         }
 
@@ -655,7 +665,8 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let output = get_output_reg(ctx, outputs[0]);
 
             ctx.emit(Inst::AluRRImmLogic {
-                alu_op: ALUOp::And32,
+                alu_op: ALUOp::And,
+                size: OperandSize::Size32,
                 rd: output.regs()[0],
                 rn: input.regs()[0],
                 imml: ImmLogic::maybe_from_u64(1, I32).unwrap(),
@@ -1164,7 +1175,8 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             });
 
             ctx.emit(Inst::AluRRImm12 {
-                alu_op: ALUOp::SubS64,
+                alu_op: ALUOp::SubS,
+                size: OperandSize::Size64,
                 rd: writable_zero_reg(),
                 rn: rd.to_reg(),
                 imm12: Imm12::zero(),
@@ -1267,7 +1279,8 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         size: VectorSize::Size64x2,
                     });
                     ctx.emit(Inst::AluRRImmShift {
-                        alu_op: ALUOp::Lsl64,
+                        alu_op: ALUOp::Lsl,
+                        size: OperandSize::Size64,
                         rd: tmp_r0,
                         rn: tmp_r0.to_reg(),
                         immshift: ImmShift { imm: 4 },
@@ -1322,7 +1335,8 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         size: VectorSize::Size64x2,
                     });
                     ctx.emit(Inst::AluRRImmShift {
-                        alu_op: ALUOp::Lsl64,
+                        alu_op: ALUOp::Lsl,
+                        size: OperandSize::Size64,
                         rd: tmp_r0,
                         rn: tmp_r0.to_reg(),
                         immshift: ImmShift { imm: 2 },
@@ -1372,19 +1386,22 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         size: VectorSize::Size64x2,
                     });
                     ctx.emit(Inst::AluRRImmShift {
-                        alu_op: ALUOp::Lsr64,
+                        alu_op: ALUOp::Lsr,
+                        size: OperandSize::Size64,
                         rd: dst_r,
                         rn: dst_r.to_reg(),
                         immshift: ImmShift::maybe_from_u64(63).unwrap(),
                     });
                     ctx.emit(Inst::AluRRImmShift {
-                        alu_op: ALUOp::Lsr64,
+                        alu_op: ALUOp::Lsr,
+                        size: OperandSize::Size64,
                         rd: tmp_r0,
                         rn: tmp_r0.to_reg(),
                         immshift: ImmShift::maybe_from_u64(63).unwrap(),
                     });
                     ctx.emit(Inst::AluRRRShift {
-                        alu_op: ALUOp::Add32,
+                        alu_op: ALUOp::Add,
+                        size: OperandSize::Size32,
                         rd: dst_r,
                         rn: dst_r.to_reg(),
                         rm: tmp_r0.to_reg(),
@@ -2255,8 +2272,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
             let rm = put_input_in_rse_imm12(ctx, inputs[1], NarrowValueMode::None);
             let ty = ty.unwrap();
-            let alu_op = choose_32_64(ty, ALUOp::AddS32, ALUOp::AddS64);
-            ctx.emit(alu_inst_imm12(alu_op, rd, rn, rm));
+            ctx.emit(alu_inst_imm12(ALUOp::AddS, ty, rd, rn, rm));
         }
 
         Opcode::IaddImm
@@ -2572,7 +2588,8 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
                         let tmp = ctx.alloc_tmp(I64).only_reg().unwrap();
                         let input = put_input_in_regs(ctx, flag_input);
                         ctx.emit(Inst::AluRRR {
-                            alu_op: ALUOp::Orr64,
+                            alu_op: ALUOp::Orr,
+                            size: OperandSize::Size64,
                             rd: tmp,
                             rn: input.regs()[0],
                             rm: input.regs()[1],
@@ -2710,7 +2727,8 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
                 // branch to default target below.
                 if let Some(imm12) = Imm12::maybe_from_u64(jt_size as u64) {
                     ctx.emit(Inst::AluRRImm12 {
-                        alu_op: ALUOp::SubS32,
+                        alu_op: ALUOp::SubS,
+                        size: OperandSize::Size32,
                         rd: writable_zero_reg(),
                         rn: ridx,
                         imm12,
@@ -2718,7 +2736,8 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
                 } else {
                     lower_constant_u64(ctx, rtmp1, jt_size as u64);
                     ctx.emit(Inst::AluRRR {
-                        alu_op: ALUOp::SubS32,
+                        alu_op: ALUOp::SubS,
+                        size: OperandSize::Size32,
                         rd: writable_zero_reg(),
                         rn: ridx,
                         rm: rtmp1.to_reg(),
