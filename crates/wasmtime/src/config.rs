@@ -131,7 +131,7 @@ impl Config {
             parallel_compilation: true,
             // Default to paged memory initialization when using uffd on linux
             paged_memory_initialization: cfg!(all(target_os = "linux", feature = "uffd")),
-            memfd: false,
+            memfd: true,
             memfd_guaranteed_dense_image_size: 16 << 20,
         };
         #[cfg(compiler)]
@@ -1178,26 +1178,45 @@ impl Config {
         self
     }
 
-    /// Configures whether `memfd`, if supported, will be used to initialize
-    /// applicable module memories.
+    /// Configures whether copy-on-write memory-mapped data is used to
+    /// initialize a linear memory.
     ///
-    /// This is a Linux-specific feature since `memfd` is only supported on
-    /// Linux. Support for this is also enabled by default at compile time but
-    /// is otherwise disabled at runtime by default. This feature needs to be
-    /// enabled to `true` for support to be used.
+    /// Initializing linear memory via a copy-on-write mapping can drastically
+    /// improve instantiation costs of a WebAssembly module because copying
+    /// memory is deferred. Additionally if a page of memory is only ever read
+    /// from WebAssembly and never written too then the same underlying page of
+    /// data will be reused between all instantiations of a module meaning that
+    /// if a module is instantiated many times this can lower the overall memory
+    /// required needed to run that module.
     ///
-    /// Also note that even if this feature is enabled it may not be applicable
-    /// to all memories in all wasm modules. At this time memories must meet
-    /// specific criteria to be memfd-initialized:
+    /// This feature is only applicable when a WebAssembly module meets specific
+    /// criteria to be initialized in this fashion, such as:
     ///
     /// * Only memories defined in the module can be initialized this way.
     /// * Data segments for memory must use statically known offsets.
     /// * Data segments for memory must all be in-bounds.
     ///
-    /// If all of the above applies, this setting is enabled, and the current
-    /// platform is Linux the `memfd` will be used to efficiently initialize
-    /// linear memories with `mmap` to avoid copying data from initializers into
-    /// linear memory.
+    /// Modules which do not meet these criteria will fall back to
+    /// initialization of linear memory based on copying memory.
+    ///
+    /// This feature of Wasmtime is also platform-specific:
+    ///
+    /// * Unix - this feature is only supported when loading modules from a
+    ///   precompiled file via [`Module::deserialize_file`] where there is a
+    ///   file descriptor to use to map data into the process. Note that the
+    ///   module must have been compiled with this setting enabled as well.
+    /// * Linux - in addition to supporting [`Module::deserialize_file`] the
+    ///   `memfd_create` syscall can be used on Linux to support
+    ///   mapped-memory-initialization of all wasm modules, not just those
+    ///   loaded from a precompiled file on disk. A `memfd` is created when the
+    ///   [`Module`] is created for the contents of the initial heap.
+    /// * Windows - there is no support for this feature at this time. Memory
+    ///   initialization will always copy bytes.
+    ///
+    /// By default memfd is enabled.
+    ///
+    /// [`Module::deserialize_file`]: crate::Module::deserialize_file
+    /// [`Module`]: crate::Module
     #[cfg(feature = "memfd")]
     #[cfg_attr(nightlydoc, doc(cfg(feature = "memfd")))]
     pub fn memfd(&mut self, memfd: bool) -> &mut Self {
