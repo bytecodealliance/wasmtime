@@ -671,33 +671,62 @@ impl<'a> Arbitrary<'a> for CodegenSettings {
         // Helper macro to enable clif features based on what the native host
         // supports. If the input says to enable a feature and the host doesn't
         // support it then that test case is rejected with a warning.
+        //
+        // Note that this specifically consumes bytes from the fuzz input for
+        // features for all targets, discarding anything which isn't applicable
+        // to the current target. The theory behind this is that most fuzz bugs
+        // won't be related to this feature selection so by consistently
+        // consuming input irrespective of the current platform reproducing fuzz
+        // bugs should be easier between different architectures.
         macro_rules! target_features {
             (
-                test:$test:ident,
-                $(std: $std:tt => clif: $clif:tt $(ratio: $a:tt in $b:tt)?,)*
+                $(
+                    $arch:tt => {
+                        test:$test:ident,
+                        $(std: $std:tt => clif: $clif:tt $(ratio: $a:tt in $b:tt)?,)*
+                    },
+                )*
             ) => ({
                 let mut flags = Vec::new();
-                $(
-                    let (low, hi) = (1, 2);
-                    $(let (low, hi) = ($a, $b);)?
-                    let enable = u.ratio(low, hi)?;
-                    if enable && !std::$test!($std) {
-                        log::error!("want to enable clif `{}` but host doesn't support it",
-                            $clif);
-                        return Err(arbitrary::Error::EmptyChoose)
-                    }
-                    flags.push((
-                        $clif.to_string(),
-                        enable.to_string(),
-                    ));
+                $( // for each `$arch`
+                    $( // for each `$std`/`$clif` pair
+                        // Use the input to generate whether `$clif` will be
+                        // enabled. By default this is a 1 in 2 chance but each
+                        // feature supports a custom ratio as well which shadows
+                        // the (low, hi)
+                        let (low, hi) = (1, 2);
+                        $(let (low, hi) = ($a, $b);)?
+                        let enable = u.ratio(low, hi)?;
+
+                        // If we're actually on the relevant platform and the
+                        // feature is enabled be sure to check that this host
+                        // supports it. If the host doesn't support it then
+                        // print a warning and return an error because this fuzz
+                        // input must be discarded.
+                        #[cfg(target_arch = $arch)]
+                        if enable && !std::$test!($std) {
+                            log::error!("want to enable clif `{}` but host doesn't support it",
+                                $clif);
+                            return Err(arbitrary::Error::EmptyChoose)
+                        }
+
+                        // And finally actually push the feature into the set of
+                        // flags to enable, but only if we're on the right
+                        // architecture.
+                        if cfg!(target_arch = $arch) {
+                            flags.push((
+                                $clif.to_string(),
+                                enable.to_string(),
+                            ));
+                        }
+                    )*
                 )*
                 flags
             })
         }
-        #[cfg(target_arch = "x86_64")]
-        {
-            if u.ratio(1, 10)? {
-                let flags = target_features! {
+        if u.ratio(1, 10)? {
+            let flags = target_features! {
+                "x86_64" => {
                     test: is_x86_feature_detected,
 
                     // These features are considered to be baseline required by
@@ -724,12 +753,12 @@ impl<'a> Arbitrary<'a> for CodegenSettings {
                     std:"avx512f" => clif:"has_avx512f" ratio: 1 in 1000,
                     std:"avx512vl" => clif:"has_avx512vl" ratio: 1 in 1000,
                     std:"avx512vbmi" => clif:"has_avx512vbmi" ratio: 1 in 1000,
-                };
-                return Ok(CodegenSettings::Target {
-                    target: target_lexicon::Triple::host().to_string(),
-                    flags,
-                });
-            }
+                },
+            };
+            return Ok(CodegenSettings::Target {
+                target: target_lexicon::Triple::host().to_string(),
+                flags,
+            });
         }
         Ok(CodegenSettings::Native)
     }
