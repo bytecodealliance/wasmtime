@@ -11,7 +11,7 @@ use crate::isa::Builder as IsaBuilder;
 use crate::machinst::{
     compile, MachCompileResult, MachTextSectionBuilder, TextSectionBuilder, VCode,
 };
-use crate::result::CodegenResult;
+use crate::result::{CodegenError, CodegenResult};
 use crate::settings::{self as shared_settings, Flags};
 use alloc::{boxed::Box, vec::Vec};
 use core::fmt;
@@ -174,10 +174,21 @@ fn isa_constructor(
     triple: Triple,
     shared_flags: Flags,
     builder: shared_settings::Builder,
-) -> Box<dyn TargetIsa> {
+) -> CodegenResult<Box<dyn TargetIsa>> {
     let isa_flags = x64_settings::Flags::new(&shared_flags, builder);
+
+    // Check for compatibility between flags and ISA level
+    // requested. In particular, SIMD support requires SSE4.1.
+    if shared_flags.enable_simd() {
+        if !isa_flags.has_sse3() || !isa_flags.has_ssse3() || !isa_flags.has_sse41() {
+            return Err(CodegenError::Unsupported(
+                "SIMD support requires SSE3, SSSE3, and SSE4.1 on x86_64.".into(),
+            ));
+        }
+    }
+
     let backend = X64Backend::new_with_flags(triple, shared_flags, isa_flags);
-    Box::new(backend)
+    Ok(Box::new(backend))
 }
 
 #[cfg(test)]
@@ -331,5 +342,21 @@ mod test {
         ];
 
         assert_eq!(code, &golden[..]);
+    }
+
+    // Check that feature tests for SIMD work correctly.
+    #[test]
+    fn simd_required_features() {
+        let mut shared_flags_builder = settings::builder();
+        shared_flags_builder.set("enable_simd", "true").unwrap();
+        let shared_flags = settings::Flags::new(shared_flags_builder);
+        let mut isa_builder = crate::isa::lookup_by_name("x86_64").unwrap();
+        isa_builder.set("has_sse3", "false").unwrap();
+        isa_builder.set("has_ssse3", "false").unwrap();
+        isa_builder.set("has_sse41", "false").unwrap();
+        assert!(matches!(
+            isa_builder.finish(shared_flags),
+            Err(CodegenError::Unsupported(_)),
+        ));
     }
 }

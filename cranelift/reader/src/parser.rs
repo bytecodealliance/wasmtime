@@ -1053,7 +1053,15 @@ impl<'a> Parser<'a> {
             specified_target = true;
 
             // Construct a trait object with the aggregate settings.
-            targets.push(isa_builder.finish(settings::Flags::new(flag_builder.clone())));
+            targets.push(
+                isa_builder
+                    .finish(settings::Flags::new(flag_builder.clone()))
+                    .map_err(|e| ParseError {
+                        location: loc,
+                        message: format!("invalid ISA flags for '{}': {:?}", targ, e),
+                        is_warning: false,
+                    })?,
+            );
         }
 
         if !specified_target {
@@ -1122,7 +1130,18 @@ impl<'a> Parser<'a> {
                     isaspec::parse_options(words, &mut isa_builder, self.loc)?;
 
                     // Construct a trait object with the aggregate settings.
-                    targets.push(isa_builder.finish(settings::Flags::new(flag_builder.clone())));
+                    targets.push(
+                        isa_builder
+                            .finish(settings::Flags::new(flag_builder.clone()))
+                            .map_err(|e| ParseError {
+                                location: loc,
+                                message: format!(
+                                    "invalid ISA flags for '{}': {:?}",
+                                    target_name, e
+                                ),
+                                is_warning: false,
+                            })?,
+                    );
                 }
                 _ => break,
             }

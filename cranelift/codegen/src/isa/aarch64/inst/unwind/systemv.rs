@@ -85,7 +85,8 @@ mod tests {
     fn test_simple_func() {
         let isa = lookup(triple!("aarch64"))
             .expect("expect aarch64 ISA")
-            .finish(Flags::new(builder()));
+            .finish(Flags::new(builder()))
+            .expect("Creating compiler backend");
 
         let mut context = Context::for_function(create_function(
             CallConv::SystemV,
@@ -127,7 +128,8 @@ mod tests {
     fn test_multi_return_func() {
         let isa = lookup(triple!("aarch64"))
             .expect("expect aarch64 ISA")
-            .finish(Flags::new(builder()));
+            .finish(Flags::new(builder()))
+            .expect("Creating compiler backend");
 
         let mut context = Context::for_function(create_multi_return_function(CallConv::SystemV));
 

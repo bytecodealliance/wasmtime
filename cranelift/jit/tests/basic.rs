@@ -16,7 +16,9 @@ fn error_on_incompatible_sig_in_declare_function() {
     let isa_builder = cranelift_native::builder().unwrap_or_else(|msg| {
         panic!("host machine is not supported: {}", msg);
     });
-    let isa = isa_builder.finish(settings::Flags::new(flag_builder));
+    let isa = isa_builder
+        .finish(settings::Flags::new(flag_builder))
+        .unwrap();
     let mut module = JITModule::new(JITBuilder::with_isa(isa, default_libcall_names()));
 
     let mut sig = Signature {
@@ -70,7 +72,9 @@ fn panic_on_define_after_finalize() {
     let isa_builder = cranelift_native::builder().unwrap_or_else(|msg| {
         panic!("host machine is not supported: {}", msg);
     });
-    let isa = isa_builder.finish(settings::Flags::new(flag_builder));
+    let isa = isa_builder
+        .finish(settings::Flags::new(flag_builder))
+        .unwrap();
     let mut module = JITModule::new(JITBuilder::with_isa(isa, default_libcall_names()));
 
     define_simple_function(&mut module);
@@ -159,7 +163,9 @@ fn libcall_function() {
     let isa_builder = cranelift_native::builder().unwrap_or_else(|msg| {
         panic!("host machine is not supported: {}", msg);
     });
-    let isa = isa_builder.finish(settings::Flags::new(flag_builder));
+    let isa = isa_builder
+        .finish(settings::Flags::new(flag_builder))
+        .unwrap();
     let mut module = JITModule::new(JITBuilder::with_isa(isa, default_libcall_names()));
 
     let sig = Signature {

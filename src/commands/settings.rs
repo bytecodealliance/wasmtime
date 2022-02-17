@@ -62,7 +62,7 @@ impl SettingsCommand {
         }
 
         if self.target.is_none() {
-            let compiler = builder.build();
+            let compiler = builder.build()?;
             println!();
             println!("Settings inferred for the current host:");
 

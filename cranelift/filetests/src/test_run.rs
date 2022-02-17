@@ -51,7 +51,7 @@ impl SubTest for TestRun {
 
         let test_env = RuntestEnvironment::parse(&context.details.comments[..])?;
 
-        let mut compiler = SingleFunctionCompiler::with_host_isa(context.flags.clone());
+        let mut compiler = SingleFunctionCompiler::with_host_isa(context.flags.clone())?;
         for comment in context.details.comments.iter() {
             if let Some(command) = parse_run_command(comment.text, &func.signature)? {
                 trace!("Parsed run command: {}", command);

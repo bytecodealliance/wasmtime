@@ -101,12 +101,15 @@ impl CompilerBuilder for Builder {
         Ok(())
     }
 
-    fn build(&self) -> Box<dyn wasmtime_environ::Compiler> {
+    fn build(&self) -> Result<Box<dyn wasmtime_environ::Compiler>> {
         let isa = self
             .isa_flags
             .clone()
-            .finish(settings::Flags::new(self.flags.clone()));
-        Box::new(crate::compiler::Compiler::new(isa, self.linkopts.clone()))
+            .finish(settings::Flags::new(self.flags.clone()))?;
+        Ok(Box::new(crate::compiler::Compiler::new(
+            isa,
+            self.linkopts.clone(),
+        )))
     }
 
     fn settings(&self) -> Vec<Setting> {
