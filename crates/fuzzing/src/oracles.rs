@@ -16,6 +16,8 @@ use crate::generators;
 use anyhow::Context;
 use arbitrary::Arbitrary;
 use log::{debug, warn};
+use std::cell::Cell;
+use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
@@ -54,32 +56,35 @@ pub fn log_wasm(wasm: &[u8]) {
 
 /// The `T` in `Store<T>` for fuzzing stores, used to limit resource
 /// consumption during fuzzing.
-pub struct StoreLimits {
+#[derive(Clone)]
+pub struct StoreLimits(Rc<LimitsState>);
+
+struct LimitsState {
     /// Remaining memory, in bytes, left to allocate
-    remaining_memory: usize,
+    remaining_memory: Cell<usize>,
     /// Whether or not an allocation request has been denied
-    oom: bool,
+    oom: Cell<bool>,
 }
 
 impl StoreLimits {
     /// Creates the default set of limits for all fuzzing stores.
     pub fn new() -> StoreLimits {
-        StoreLimits {
+        StoreLimits(Rc::new(LimitsState {
             // Limits tables/memories within a store to at most 1gb for now to
             // exercise some larger address but not overflow various limits.
-            remaining_memory: 1 << 30,
-            oom: false,
-        }
+            remaining_memory: Cell::new(1 << 30),
+            oom: Cell::new(false),
+        }))
     }
 
     fn alloc(&mut self, amt: usize) -> bool {
-        match self.remaining_memory.checked_sub(amt) {
+        match self.0.remaining_memory.get().checked_sub(amt) {
             Some(mem) => {
-                self.remaining_memory = mem;
+                self.0.remaining_memory.set(mem);
                 true
             }
             None => {
-                self.oom = true;
+                self.0.oom.set(true);
                 false
             }
         }
@@ -195,24 +200,31 @@ pub fn instantiate_many(
 
     // This stores every `Store` where a successful instantiation takes place
     let mut stores = Vec::new();
+    let limits = StoreLimits::new();
 
     for command in commands {
         match command {
             Command::Instantiate(index) => {
-                let module = &modules[*index % modules.len()];
-                let mut store = Store::new(&engine, StoreLimits::new());
+                let index = *index % modules.len();
+                log::info!("instantiating {}", index);
+                let module = &modules[index];
+                let mut store = Store::new(&engine, limits.clone());
                 config.configure_store(&mut store);
 
                 if instantiate_with_dummy(&mut store, module).is_some() {
                     stores.push(Some(store));
+                } else {
+                    log::warn!("instantiation failed");
                 }
             }
             Command::Terminate(index) => {
                 if stores.is_empty() {
                     continue;
                 }
+                let index = *index % stores.len();
 
-                stores.swap_remove(*index % stores.len());
+                log::info!("dropping {}", index);
+                stores.swap_remove(index);
             }
         }
     }
@@ -261,7 +273,7 @@ fn instantiate_with_dummy(store: &mut Store<StoreLimits>, module: &Module) -> Op
     // If the instantiation hit OOM for some reason then that's ok, it's
     // expected that fuzz-generated programs try to allocate lots of
     // stuff.
-    if store.data().oom {
+    if store.data().0.oom.get() {
         return None;
     }
 
