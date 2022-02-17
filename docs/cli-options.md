@@ -45,6 +45,13 @@ as well as the text format for WebAssembly (`*.wat`):
 $ wasmtime foo.wat
 ```
 
+The `run` command accepts an optional `invoke` argument which is the name of
+an exported function of the module to run.
+
+```sh
+$ wasmtime run foo.wasm --invoke initialize
+```
+
 ## `wast`
 
 The `wast` command executes a `*.wast` file which is the test format for the
