@@ -405,10 +405,22 @@ impl Config {
         config.reference_types_enabled = true;
         config.max_memories = 1;
 
-        if let InstanceAllocationStrategy::Pooling { module_limits, .. } =
-            &mut self.wasmtime.strategy
+        if let InstanceAllocationStrategy::Pooling {
+            module_limits: limits,
+            ..
+        } = &mut self.wasmtime.strategy
         {
-            module_limits.memories = 1;
+            limits.memories = 1;
+            // Set a lower bound of 10 pages as the spec tests define memories with at
+            // least a few pages and some tests do memory grow operations.
+            limits.memory_pages = std::cmp::max(limits.memory_pages, 10);
+
+            match &mut self.wasmtime.memory_config {
+                MemoryConfig::Normal(config) => {
+                    config.static_memory_maximum_size = Some(limits.memory_pages * 0x10000);
+                }
+                MemoryConfig::CustomUnaligned => unreachable!(), // Arbitrary impl for `Config` should have prevented this
+            }
         }
     }
 
