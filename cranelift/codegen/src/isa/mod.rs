@@ -46,13 +46,13 @@
 pub use crate::isa::call_conv::CallConv;
 
 use crate::flowgraph;
-use crate::ir;
+use crate::ir::{self, Function};
 #[cfg(feature = "unwind")]
 use crate::isa::unwind::systemv::RegisterMappingError;
-use crate::machinst::{MachBackend, UnwindInfoKind};
-use crate::result::CodegenResult;
+use crate::machinst::{MachCompileResult, TextSectionBuilder, UnwindInfoKind};
 use crate::settings;
 use crate::settings::SetResult;
+use crate::CodegenResult;
 use alloc::{boxed::Box, vec::Vec};
 use core::fmt;
 use core::fmt::{Debug, Formatter};
@@ -63,9 +63,6 @@ use target_lexicon::{triple, Architecture, OperatingSystem, PointerWidth, Triple
 #[cfg(feature = "x86")]
 pub mod x64;
 
-#[cfg(feature = "arm32")]
-mod arm32;
-
 #[cfg(feature = "arm64")]
 pub(crate) mod aarch64;
 
@@ -75,9 +72,6 @@ mod s390x;
 pub mod unwind;
 
 mod call_conv;
-
-#[cfg(test)]
-mod test_utils;
 
 /// Returns a builder that can create a corresponding `TargetIsa`
 /// or `Err(LookupError::SupportDisabled)` if not enabled.
@@ -101,7 +95,6 @@ pub fn lookup(triple: Triple) -> Result<Builder, LookupError> {
         Architecture::X86_64 => {
             isa_builder!(x64, (feature = "x86"), triple)
         }
-        Architecture::Arm { .. } => isa_builder!(arm32, (feature = "arm32"), triple),
         Architecture::Aarch64 { .. } => isa_builder!(aarch64, (feature = "arm64"), triple),
         Architecture::S390x { .. } => isa_builder!(s390x, (feature = "s390x"), triple),
         _ => Err(LookupError::Unsupported),
@@ -146,7 +139,8 @@ impl fmt::Display for LookupError {
 pub struct Builder {
     triple: Triple,
     setup: settings::Builder,
-    constructor: fn(Triple, settings::Flags, settings::Builder) -> Box<dyn TargetIsa>,
+    constructor:
+        fn(Triple, settings::Flags, settings::Builder) -> CodegenResult<Box<dyn TargetIsa>>,
 }
 
 impl Builder {
@@ -160,9 +154,13 @@ impl Builder {
         self.setup.iter()
     }
 
-    /// Combine the ISA-specific settings with the provided ISA-independent settings and allocate a
-    /// fully configured `TargetIsa` trait object.
-    pub fn finish(self, shared_flags: settings::Flags) -> Box<dyn TargetIsa> {
+    /// Combine the ISA-specific settings with the provided
+    /// ISA-independent settings and allocate a fully configured
+    /// `TargetIsa` trait object. May return an error if some of the
+    /// flags are inconsistent or incompatible: for example, some
+    /// platform-independent features, like general SIMD support, may
+    /// need certain ISA extensions to be enabled.
+    pub fn finish(self, shared_flags: settings::Flags) -> CodegenResult<Box<dyn TargetIsa>> {
         (self.constructor)(self.triple, shared_flags, self.setup)
     }
 }
@@ -228,6 +226,13 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
     /// Get the ISA-dependent flag values that were used to make this trait object.
     fn isa_flags(&self) -> Vec<settings::Value>;
 
+    /// Compile the given function.
+    fn compile_function(
+        &self,
+        func: &Function,
+        want_disasm: bool,
+    ) -> CodegenResult<MachCompileResult>;
+
     #[cfg(feature = "unwind")]
     /// Map a regalloc::Reg to its corresponding DWARF register.
     fn map_regalloc_reg_to_dwarf(&self, _: ::regalloc::Reg) -> Result<u16, RegisterMappingError> {
@@ -241,13 +246,11 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
     ///
     /// Returns `None` if there is no unwind information for the function.
     #[cfg(feature = "unwind")]
-    fn create_unwind_info(
+    fn emit_unwind_info(
         &self,
-        _func: &ir::Function,
-    ) -> CodegenResult<Option<unwind::UnwindInfo>> {
-        // By default, an ISA has no unwind information
-        Ok(None)
-    }
+        result: &MachCompileResult,
+        kind: UnwindInfoKind,
+    ) -> CodegenResult<Option<crate::isa::unwind::UnwindInfo>>;
 
     /// Creates a new System V Common Information Entry for the ISA.
     ///
@@ -258,10 +261,16 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
         None
     }
 
-    /// Get the new-style MachBackend, if this is an adapter around one.
-    fn get_mach_backend(&self) -> Option<&dyn MachBackend> {
-        None
-    }
+    /// Returns an object that can be used to build the text section of an
+    /// executable.
+    ///
+    /// This object will internally attempt to handle as many relocations as
+    /// possible using relative calls/jumps/etc between functions.
+    ///
+    /// The `num_labeled_funcs` argument here is the number of functions which
+    /// will be "labeled" or might have calls between them, typically the number
+    /// of defined functions in the object file.
+    fn text_section_builder(&self, num_labeled_funcs: u32) -> Box<dyn TextSectionBuilder>;
 }
 
 /// Methods implemented for free for target ISA!

@@ -17,19 +17,22 @@ fn define_settings(shared: &SettingGroup) -> SettingGroup {
         "has_sse3",
         "Has support for SSE3.",
         "SSE3: CPUID.01H:ECX.SSE3[bit 0]",
-        false,
+        // Needed for default `enable_simd` setting.
+        true,
     );
     let has_ssse3 = settings.add_bool(
         "has_ssse3",
         "Has support for SSSE3.",
         "SSSE3: CPUID.01H:ECX.SSSE3[bit 9]",
-        false,
+        // Needed for default `enable_simd` setting.
+        true,
     );
     let has_sse41 = settings.add_bool(
         "has_sse41",
         "Has support for SSE4.1.",
         "SSE4.1: CPUID.01H:ECX.SSE4_1[bit 19]",
-        false,
+        // Needed for default `enable_simd` setting.
+        true,
     );
     let has_sse42 = settings.add_bool(
         "has_sse42",

@@ -404,7 +404,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
 
     fn translate_call_indirect(
         &mut self,
-        mut pos: FuncCursor,
+        builder: &mut FunctionBuilder,
         _table_index: TableIndex,
         _table: ir::Table,
         _sig_index: TypeIndex,
@@ -413,7 +413,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         call_args: &[ir::Value],
     ) -> WasmResult<ir::Inst> {
         // Pass the current function's vmctx parameter on to the callee.
-        let vmctx = pos
+        let vmctx = builder
             .func
             .special_param(ir::ArgumentPurpose::VMContext)
             .expect("Missing vmctx parameter");
@@ -423,22 +423,22 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         // TODO: Generate bounds checking code.
         let ptr = self.pointer_type();
         let callee_offset = if ptr == I32 {
-            pos.ins().imul_imm(callee, 4)
+            builder.ins().imul_imm(callee, 4)
         } else {
-            let ext = pos.ins().uextend(I64, callee);
-            pos.ins().imul_imm(ext, 4)
+            let ext = builder.ins().uextend(I64, callee);
+            builder.ins().imul_imm(ext, 4)
         };
         let mflags = ir::MemFlags::trusted();
-        let func_ptr = pos.ins().load(ptr, mflags, callee_offset, 0);
+        let func_ptr = builder.ins().load(ptr, mflags, callee_offset, 0);
 
         // Build a value list for the indirect call instruction containing the callee, call_args,
         // and the vmctx parameter.
         let mut args = ir::ValueList::default();
-        args.push(func_ptr, &mut pos.func.dfg.value_lists);
-        args.extend(call_args.iter().cloned(), &mut pos.func.dfg.value_lists);
-        args.push(vmctx, &mut pos.func.dfg.value_lists);
+        args.push(func_ptr, &mut builder.func.dfg.value_lists);
+        args.extend(call_args.iter().cloned(), &mut builder.func.dfg.value_lists);
+        args.push(vmctx, &mut builder.func.dfg.value_lists);
 
-        Ok(pos
+        Ok(builder
             .ins()
             .CallIndirect(ir::Opcode::CallIndirect, INVALID, sig_ref, args)
             .0)

@@ -203,8 +203,11 @@ impl ProfilingAgent for JitDumpAgent {
     fn module_load(&self, module: &CompiledModule, dbg_image: Option<&[u8]>) {
         self.state.lock().unwrap().module_load(module, dbg_image);
     }
-    fn trampoline_load(&self, file: &object::File<'_>) {
-        self.state.lock().unwrap().trampoline_load(file)
+    fn load_single_trampoline(&self, name: &str, addr: *const u8, size: usize, pid: u32, tid: u32) {
+        self.state
+            .lock()
+            .unwrap()
+            .load_single_trampoline(name, addr, size, pid, tid);
     }
 }
 
@@ -289,7 +292,7 @@ impl State {
         let tid = pid; // ThreadId does appear to track underlying thread. Using PID.
 
         for (idx, func) in module.finished_functions() {
-            let (addr, len) = unsafe { ((*func).as_ptr() as *const u8, (*func).len()) };
+            let (addr, len) = unsafe { ((*func).as_ptr().cast::<u8>(), (*func).len()) };
             if let Some(img) = &dbg_image {
                 if let Err(err) = self.dump_from_debug_image(img, "wasm", addr, len, pid, tid) {
                     println!(
@@ -299,10 +302,12 @@ impl State {
                 }
             } else {
                 let timestamp = self.get_time_stamp();
-                let name = super::debug_name(module.module(), idx);
+                let name = super::debug_name(module, idx);
                 self.dump_code_load_record(&name, addr, len, timestamp, pid, tid);
             }
         }
+
+        // Note: these are the trampolines into exported functions.
         for (idx, func, len) in module.trampolines() {
             let (addr, len) = (func as usize as *const u8, len);
             let timestamp = self.get_time_stamp();
@@ -311,44 +316,16 @@ impl State {
         }
     }
 
-    fn trampoline_load(&mut self, image: &object::File<'_>) {
-        use object::{ObjectSection, ObjectSymbol, SectionKind, SymbolKind};
-        let pid = process::id();
-        let tid = pid;
-
-        let text_base = match image.sections().find(|s| s.kind() == SectionKind::Text) {
-            Some(section) => match section.data() {
-                Ok(data) => data.as_ptr() as usize,
-                Err(_) => return,
-            },
-            None => return,
-        };
-
-        for sym in image.symbols() {
-            if !sym.is_definition() {
-                continue;
-            }
-            if sym.kind() != SymbolKind::Text {
-                continue;
-            }
-            let address = sym.address();
-            let size = sym.size();
-            if address == 0 || size == 0 {
-                continue;
-            }
-            if let Ok(name) = sym.name() {
-                let addr = text_base + address as usize;
-                let timestamp = self.get_time_stamp();
-                self.dump_code_load_record(
-                    &name,
-                    addr as *const u8,
-                    size as usize,
-                    timestamp,
-                    pid,
-                    tid,
-                );
-            }
-        }
+    fn load_single_trampoline(
+        &mut self,
+        name: &str,
+        addr: *const u8,
+        size: usize,
+        pid: u32,
+        tid: u32,
+    ) {
+        let timestamp = self.get_time_stamp();
+        self.dump_code_load_record(name, addr, size, timestamp, pid, tid);
     }
 
     fn dump_code_load_record(

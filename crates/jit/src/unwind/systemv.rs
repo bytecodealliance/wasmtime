@@ -21,8 +21,8 @@ impl UnwindRegistration {
     /// describe an in-memory representation of a `.eh_frame` section. This is
     /// typically arranged for by the `wasmtime-obj` crate.
     pub unsafe fn new(
-        _base_address: *mut u8,
-        unwind_info: *mut u8,
+        _base_address: *const u8,
+        unwind_info: *const u8,
         unwind_len: usize,
     ) -> Result<UnwindRegistration> {
         debug_assert_eq!(

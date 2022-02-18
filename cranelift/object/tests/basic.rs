@@ -1,9 +1,6 @@
 use cranelift_codegen::ir::*;
 use cranelift_codegen::isa::CallConv;
-use cranelift_codegen::{
-    binemit::{NullStackMapSink, NullTrapSink},
-    settings,
-};
+use cranelift_codegen::settings;
 use cranelift_codegen::{ir::types::I16, Context};
 use cranelift_entity::EntityRef;
 use cranelift_frontend::*;
@@ -14,7 +11,9 @@ use cranelift_object::*;
 fn error_on_incompatible_sig_in_declare_function() {
     let flag_builder = settings::builder();
     let isa_builder = cranelift_codegen::isa::lookup_by_name("x86_64-unknown-linux-gnu").unwrap();
-    let isa = isa_builder.finish(settings::Flags::new(flag_builder));
+    let isa = isa_builder
+        .finish(settings::Flags::new(flag_builder))
+        .unwrap();
     let mut module =
         ObjectModule::new(ObjectBuilder::new(isa, "foo", default_libcall_names()).unwrap());
     let mut sig = Signature {
@@ -53,11 +52,7 @@ fn define_simple_function(module: &mut ObjectModule) -> FuncId {
         bcx.ins().return_(&[]);
     }
 
-    let mut trap_sink = NullTrapSink {};
-    let mut stack_map_sink = NullStackMapSink {};
-    module
-        .define_function(func_id, &mut ctx, &mut trap_sink, &mut stack_map_sink)
-        .unwrap();
+    module.define_function(func_id, &mut ctx).unwrap();
 
     func_id
 }
@@ -67,7 +62,9 @@ fn define_simple_function(module: &mut ObjectModule) -> FuncId {
 fn panic_on_define_after_finalize() {
     let flag_builder = settings::builder();
     let isa_builder = cranelift_codegen::isa::lookup_by_name("x86_64-unknown-linux-gnu").unwrap();
-    let isa = isa_builder.finish(settings::Flags::new(flag_builder));
+    let isa = isa_builder
+        .finish(settings::Flags::new(flag_builder))
+        .unwrap();
     let mut module =
         ObjectModule::new(ObjectBuilder::new(isa, "foo", default_libcall_names()).unwrap());
 
@@ -152,7 +149,9 @@ fn switch_error() {
 fn libcall_function() {
     let flag_builder = settings::builder();
     let isa_builder = cranelift_codegen::isa::lookup_by_name("x86_64-unknown-linux-gnu").unwrap();
-    let isa = isa_builder.finish(settings::Flags::new(flag_builder));
+    let isa = isa_builder
+        .finish(settings::Flags::new(flag_builder))
+        .unwrap();
     let mut module =
         ObjectModule::new(ObjectBuilder::new(isa, "foo", default_libcall_names()).unwrap());
 
@@ -194,11 +193,7 @@ fn libcall_function() {
         bcx.ins().return_(&[]);
     }
 
-    let mut trap_sink = NullTrapSink {};
-    let mut stack_map_sink = NullStackMapSink {};
-    module
-        .define_function(func_id, &mut ctx, &mut trap_sink, &mut stack_map_sink)
-        .unwrap();
+    module.define_function(func_id, &mut ctx).unwrap();
 
     module.finish();
 }
@@ -210,7 +205,9 @@ fn libcall_function() {
 fn reject_nul_byte_symbol_for_func() {
     let flag_builder = settings::builder();
     let isa_builder = cranelift_codegen::isa::lookup_by_name("x86_64-unknown-linux-gnu").unwrap();
-    let isa = isa_builder.finish(settings::Flags::new(flag_builder));
+    let isa = isa_builder
+        .finish(settings::Flags::new(flag_builder))
+        .unwrap();
     let mut module =
         ObjectModule::new(ObjectBuilder::new(isa, "foo", default_libcall_names()).unwrap());
 
@@ -232,7 +229,9 @@ fn reject_nul_byte_symbol_for_func() {
 fn reject_nul_byte_symbol_for_data() {
     let flag_builder = settings::builder();
     let isa_builder = cranelift_codegen::isa::lookup_by_name("x86_64-unknown-linux-gnu").unwrap();
-    let isa = isa_builder.finish(settings::Flags::new(flag_builder));
+    let isa = isa_builder
+        .finish(settings::Flags::new(flag_builder))
+        .unwrap();
     let mut module =
         ObjectModule::new(ObjectBuilder::new(isa, "foo", default_libcall_names()).unwrap());
 

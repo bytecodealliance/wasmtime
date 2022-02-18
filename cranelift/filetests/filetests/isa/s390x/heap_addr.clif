@@ -13,8 +13,8 @@ block0(v0: i64, v1: i32):
 
 ; check: Block 0:
 ; check:  llgfr %r3, %r3
-; nextln: lg %r4, 0(%r2)
-; nextln: aghi %r4, 0
+; nextln: lghi %r4, 0
+; nextln: ag %r4, 0(%r2)
 ; nextln: clgr %r3, %r4
 ; nextln: jgnh label1 ; jg label2
 ; check: Block 1:

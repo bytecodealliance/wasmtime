@@ -216,12 +216,18 @@ pub fn write_block_header(
     block: Block,
     indent: usize,
 ) -> fmt::Result {
+    let cold = if func.layout.is_cold(block) {
+        " cold"
+    } else {
+        ""
+    };
+
     // The `indent` is the instruction indentation. block headers are 4 spaces out from that.
     write!(w, "{1:0$}{2}", indent - 4, "", block)?;
 
     let mut args = func.dfg.block_params(block).iter().cloned();
     match args.next() {
-        None => return writeln!(w, ":"),
+        None => return writeln!(w, "{}:", cold),
         Some(arg) => {
             write!(w, "(")?;
             write_arg(w, func, arg)?;
@@ -232,7 +238,7 @@ pub fn write_block_header(
         write!(w, ", ")?;
         write_arg(w, func, arg)?;
     }
-    writeln!(w, "):")
+    writeln!(w, "){}:", cold)
 }
 
 fn decorate_block<FW: FuncWriter>(
@@ -664,6 +670,28 @@ mod tests {
         assert_eq!(
             func.to_string(),
             "function u0:0() fast {\nblock0(v3: i32):\n    v0 -> v3\n    v2 -> v0\n    v4 = iconst.i32 42\n    v5 = iadd v0, v0\n    v1 -> v5\n    v6 = iconst.i32 23\n    v7 = iadd v1, v1\n}\n"
+        );
+    }
+
+    #[test]
+    fn cold_blocks() {
+        let mut func = Function::new();
+        {
+            let mut pos = FuncCursor::new(&mut func);
+
+            let block0 = pos.func.dfg.make_block();
+            pos.insert_block(block0);
+            pos.func.layout.set_cold(block0);
+
+            let block1 = pos.func.dfg.make_block();
+            pos.insert_block(block1);
+            pos.func.dfg.append_block_param(block1, types::I32);
+            pos.func.layout.set_cold(block1);
+        }
+
+        assert_eq!(
+            func.to_string(),
+            "function u0:0() fast {\nblock0 cold:\n\nblock1(v0: i32) cold:\n}\n"
         );
     }
 }

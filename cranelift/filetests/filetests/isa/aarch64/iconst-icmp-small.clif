@@ -1,7 +1,7 @@
 ; Test that `put_input_in_rse` doesn't try to put the input of the `iconst` into a register, which
 ; would result in an out-of-bounds panic. (#2147)
 
-test compile
+test compile precise-output
 set unwind_info=false
 target aarch64
 
@@ -14,16 +14,17 @@ block0:
     return v2
 }
 
-; check: VCode_ShowWithRRU {{
-; nextln: Entry block: 0
-; nextln: Block 0:
-; nextln:   (original IR block: block0)
-; nextln:   (instruction range: 0 .. 7)
-; nextln:   Inst 0:   movz x0, #56780
-; nextln:   Inst 1:   uxth w0, w0
-; nextln:   Inst 2:   movz x1, #56780
-; nextln:   Inst 3:   subs wzr, w0, w1, UXTH
-; nextln:   Inst 4:   cset x0, ne
-; nextln:   Inst 5:   and w0, w0, #1
-; nextln:   Inst 6:   ret
-; nextln: }}
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 7)
+;   Inst 0:   movz x0, #56780
+;   Inst 1:   uxth w0, w0
+;   Inst 2:   movz x1, #56780
+;   Inst 3:   subs wzr, w0, w1, UXTH
+;   Inst 4:   cset x0, ne
+;   Inst 5:   and w0, w0, #1
+;   Inst 6:   ret
+; }}
+

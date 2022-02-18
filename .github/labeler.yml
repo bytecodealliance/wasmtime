@@ -66,6 +66,10 @@
 "wasmtime:c-api":
   - "crates/c-api/**"
 
+"wasmtime:config":
+  - "crates/wasmtime/src/config.rs"
+  - "crates/wasmtime/src/config/**"
+
 "wasmtime:docs":
   - "*.md"
   - "docs/**"

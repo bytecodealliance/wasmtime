@@ -1,5 +1,6 @@
 //! `SubTest` trait.
 
+use crate::runone::FileUpdate;
 use anyhow::Context as _;
 use cranelift_codegen::ir::Function;
 use cranelift_codegen::isa::TargetIsa;
@@ -28,6 +29,10 @@ pub struct Context<'a> {
 
     /// Full path to the file containing the test.
     pub file_path: &'a str,
+
+    /// Context used to update the original `file_path` in-place with its test
+    /// expectations if so configured in the environment.
+    pub file_update: &'a FileUpdate,
 }
 
 impl<'a> Context<'a> {

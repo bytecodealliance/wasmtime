@@ -1,6 +1,7 @@
 //! Compilation backend pipeline: optimized IR to VCode / binemit.
 
 use crate::ir::Function;
+use crate::isa::TargetIsa;
 use crate::log::DeferredDisplay;
 use crate::machinst::*;
 use crate::settings;
@@ -10,10 +11,11 @@ use regalloc::{allocate_registers_with_opts, Algorithm, Options, PrettyPrint};
 
 /// Compile the given function down to VCode with allocated registers, ready
 /// for binary emission.
-pub fn compile<B: LowerBackend + MachBackend>(
+pub fn compile<B: LowerBackend + TargetIsa>(
     f: &Function,
     b: &B,
     abi: Box<dyn ABICallee<I = B::MInst>>,
+    reg_universe: &RealRegUniverse,
     emit_info: <B::MInst as MachInstEmit>::Info,
 ) -> CodegenResult<VCode<B::MInst>>
 where
@@ -33,7 +35,7 @@ where
     // rendering.
     log::trace!(
         "vcode from lowering: \n{}",
-        DeferredDisplay::new(|| vcode.show_rru(Some(b.reg_universe())))
+        DeferredDisplay::new(|| vcode.show_rru(Some(reg_universe)))
     );
 
     // Perform register allocation.
@@ -55,7 +57,7 @@ where
         use std::fs;
         use std::path::Path;
         if let Some(path) = std::env::var("SERIALIZE_REGALLOC").ok() {
-            let snapshot = regalloc::IRSnapshot::from_function(&vcode, b.reg_universe());
+            let snapshot = regalloc::IRSnapshot::from_function(&vcode, reg_universe);
             let serialized = bincode::serialize(&snapshot).expect("couldn't serialize snapshot");
 
             let file_path = Path::new(&path).join(Path::new(&format!("ir{}.bin", f.name)));
@@ -78,7 +80,7 @@ where
         let _tt = timing::regalloc();
         allocate_registers_with_opts(
             &mut vcode,
-            b.reg_universe(),
+            reg_universe,
             sri,
             Options {
                 run_checker,
@@ -88,7 +90,7 @@ where
         .map_err(|err| {
             log::error!(
                 "Register allocation error for vcode\n{}\nError: {:?}",
-                vcode.show_rru(Some(b.reg_universe())),
+                vcode.show_rru(Some(reg_universe)),
                 err
             );
             err
@@ -105,7 +107,7 @@ where
 
     log::trace!(
         "vcode after regalloc: final version:\n{}",
-        DeferredDisplay::new(|| vcode.show_rru(Some(b.reg_universe())))
+        DeferredDisplay::new(|| vcode.show_rru(Some(reg_universe)))
     );
 
     Ok(vcode)

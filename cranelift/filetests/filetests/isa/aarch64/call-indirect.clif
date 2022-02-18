@@ -1,4 +1,4 @@
-test compile
+test compile precise-output
 set unwind_info=false
 target aarch64
 
@@ -9,8 +9,15 @@ block0(v0: i64, v1: i64):
     return v2
 }
 
-; check:  stp fp, lr, [sp, #-16]!
-; nextln:  mov fp, sp
-; nextln:  blr x1
-; nextln:  ldp fp, lr, [sp], #16
-; nextln:  ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 5)
+;   Inst 0:   stp fp, lr, [sp, #-16]!
+;   Inst 1:   mov fp, sp
+;   Inst 2:   blr x1
+;   Inst 3:   ldp fp, lr, [sp], #16
+;   Inst 4:   ret
+; }}
+

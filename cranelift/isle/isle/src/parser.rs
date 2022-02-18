@@ -197,15 +197,29 @@ impl<'a> Parser<'a> {
     fn parse_type(&mut self) -> Result<Type> {
         let pos = self.pos();
         let name = self.parse_ident()?;
+
         let mut is_extern = false;
-        if self.is_sym_str("extern") {
-            self.symbol()?;
-            is_extern = true;
+        let mut is_nodebug = false;
+
+        while self.lexer.peek().map_or(false, |(_pos, tok)| tok.is_sym()) {
+            let sym = self.symbol()?;
+            if sym == "extern" {
+                is_extern = true;
+            } else if sym == "nodebug" {
+                is_nodebug = true;
+            } else {
+                return Err(self.error(
+                    self.pos(),
+                    format!("unknown type declaration modifier: {}", sym),
+                ));
+            }
         }
+
         let ty = self.parse_typevalue()?;
         Ok(Type {
             name,
             is_extern,
+            is_nodebug,
             ty,
             pos,
         })

@@ -99,7 +99,7 @@ pub fn parse_sets_and_triple(
             .map_err(ParseError::from)?;
 
         Ok(OwnedFlagsOrIsa::Isa(
-            isa_builder.finish(settings::Flags::new(flag_builder)),
+            isa_builder.finish(settings::Flags::new(flag_builder))?,
         ))
     } else {
         if !unknown_settings.is_empty() {

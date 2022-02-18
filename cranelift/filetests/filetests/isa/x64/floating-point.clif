@@ -1,4 +1,4 @@
-test compile
+test compile precise-output
 target x86_64
 
 function %f(f64) -> f64 {
@@ -6,11 +6,22 @@ block0(v0: f64):
     v1 = fabs.f64 v0
     return v1
 }
-; check:  movabsq $$9223372036854775807, %rsi
-; nextln: movq    %rsi, %xmm1
-; nextln: andpd   %xmm0, %xmm1
-; nextln: movaps  %xmm1, %xmm0
 
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 9)
+;   Inst 0:   pushq   %rbp
+;   Inst 1:   movq    %rsp, %rbp
+;   Inst 2:   movabsq $9223372036854775807, %rsi
+;   Inst 3:   movq    %rsi, %xmm1
+;   Inst 4:   andpd   %xmm0, %xmm1
+;   Inst 5:   movaps  %xmm1, %xmm0
+;   Inst 6:   movq    %rbp, %rsp
+;   Inst 7:   popq    %rbp
+;   Inst 8:   ret
+; }}
 
 function %f(i64) -> f64 {
 block0(v0: i64):
@@ -18,8 +29,21 @@ block0(v0: i64):
     v2 = fabs.f64 v1
     return v2
 }
-; check:  movsd   0(%rdi), %xmm0
-; nextln: movabsq $$9223372036854775807, %rsi
-; nextln: movq    %rsi, %xmm1
-; nextln: andpd   %xmm0, %xmm1
-; nextln: movaps  %xmm1, %xmm0
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 10)
+;   Inst 0:   pushq   %rbp
+;   Inst 1:   movq    %rsp, %rbp
+;   Inst 2:   movsd   0(%rdi), %xmm0
+;   Inst 3:   movabsq $9223372036854775807, %rsi
+;   Inst 4:   movq    %rsi, %xmm1
+;   Inst 5:   andpd   %xmm0, %xmm1
+;   Inst 6:   movaps  %xmm1, %xmm0
+;   Inst 7:   movq    %rbp, %rsp
+;   Inst 8:   popq    %rbp
+;   Inst 9:   ret
+; }}
+

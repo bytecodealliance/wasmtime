@@ -13,7 +13,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use wasmparser::Type as WasmType;
 use wasmtime_environ::{
-    DebugInfoData, DefinedFuncIndex, EntityRef, FunctionMetadata, WasmFileInfo,
+    DebugInfoData, DefinedFuncIndex, EntityRef, FuncIndex, FunctionMetadata, WasmFileInfo,
 };
 
 const PRODUCER_NAME: &str = "wasmtime";
@@ -369,7 +369,7 @@ pub fn generate_simulated_dwarf(
 
         let func_index = imported_func_count + (index as u32);
         let id = match func_names
-            .get(&func_index)
+            .get(&FuncIndex::from_u32(func_index))
             .and_then(|s| check_invalid_chars_in_name(s))
         {
             Some(n) => out_strings.add(assert_dwarf_str!(n)),
@@ -400,7 +400,7 @@ pub fn generate_simulated_dwarf(
                 &[(source_range.0, source_range.1)],
                 &wasm_types,
                 &di.wasm_file.funcs[index],
-                locals_names.get(&(index as u32)),
+                locals_names.get(&FuncIndex::from_u32(index as u32)),
                 out_strings,
                 isa,
             )?;

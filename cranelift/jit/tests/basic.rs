@@ -1,4 +1,3 @@
-use cranelift_codegen::binemit::{NullStackMapSink, NullTrapSink};
 use cranelift_codegen::ir::*;
 use cranelift_codegen::isa::CallConv;
 use cranelift_codegen::settings::{self, Configurable};
@@ -17,7 +16,9 @@ fn error_on_incompatible_sig_in_declare_function() {
     let isa_builder = cranelift_native::builder().unwrap_or_else(|msg| {
         panic!("host machine is not supported: {}", msg);
     });
-    let isa = isa_builder.finish(settings::Flags::new(flag_builder));
+    let isa = isa_builder
+        .finish(settings::Flags::new(flag_builder))
+        .unwrap();
     let mut module = JITModule::new(JITBuilder::with_isa(isa, default_libcall_names()));
 
     let mut sig = Signature {
@@ -56,11 +57,7 @@ fn define_simple_function(module: &mut JITModule) -> FuncId {
         bcx.ins().return_(&[]);
     }
 
-    let mut trap_sink = NullTrapSink {};
-    let mut stack_map_sink = NullStackMapSink {};
-    module
-        .define_function(func_id, &mut ctx, &mut trap_sink, &mut stack_map_sink)
-        .unwrap();
+    module.define_function(func_id, &mut ctx).unwrap();
 
     func_id
 }
@@ -75,7 +72,9 @@ fn panic_on_define_after_finalize() {
     let isa_builder = cranelift_native::builder().unwrap_or_else(|msg| {
         panic!("host machine is not supported: {}", msg);
     });
-    let isa = isa_builder.finish(settings::Flags::new(flag_builder));
+    let isa = isa_builder
+        .finish(settings::Flags::new(flag_builder))
+        .unwrap();
     let mut module = JITModule::new(JITBuilder::with_isa(isa, default_libcall_names()));
 
     define_simple_function(&mut module);
@@ -164,7 +163,9 @@ fn libcall_function() {
     let isa_builder = cranelift_native::builder().unwrap_or_else(|msg| {
         panic!("host machine is not supported: {}", msg);
     });
-    let isa = isa_builder.finish(settings::Flags::new(flag_builder));
+    let isa = isa_builder
+        .finish(settings::Flags::new(flag_builder))
+        .unwrap();
     let mut module = JITModule::new(JITBuilder::with_isa(isa, default_libcall_names()));
 
     let sig = Signature {
@@ -205,11 +206,7 @@ fn libcall_function() {
         bcx.ins().return_(&[]);
     }
 
-    let mut trap_sink = NullTrapSink {};
-    let mut stack_map_sink = NullStackMapSink {};
-    module
-        .define_function(func_id, &mut ctx, &mut trap_sink, &mut stack_map_sink)
-        .unwrap();
+    module.define_function(func_id, &mut ctx).unwrap();
 
     module.finalize_definitions();
 }

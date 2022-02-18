@@ -150,11 +150,9 @@ jobs:
     # Check a few builds of the cranelift backend
     # - only x86 backend support,
     # - only arm64 backend support,
-    # - experimental arm32 support,
     # - no debug_assertions.
     - run: cargo check --manifest-path=./cranelift/Cargo.toml --bin clif-util --no-default-features --features=cranelift-codegen/arm64
     - run: cargo check --manifest-path=./cranelift/Cargo.toml --bin clif-util --no-default-features --features=cranelift-codegen/x86
-    - run: cargo check --manifest-path=./cranelift/Cargo.toml --bin clif-util --no-default-features --features=cranelift-codegen/arm32
     - run: cargo check --manifest-path=./cranelift/Cargo.toml --bin clif-util
       env:
         CARGO_PROFILE_DEV_DEBUG_ASSERTIONS: false
@@ -253,7 +251,7 @@ jobs:
     - uses: actions/cache@v2
       with:
         path: ${{ runner.tool_cache }}/qemu
-        key: qemu-${{ matrix.target }}-${{ env.QEMU_BUILD_VERSION }}
+        key: qemu-${{ matrix.target }}-${{ env.QEMU_BUILD_VERSION }}-patchmadvise2
       if: matrix.target != '' && matrix.os == 'ubuntu-latest'
     - name: Install cross-compilation tools
       run: |
@@ -286,6 +284,7 @@ jobs:
         # quickly.
         curl https://download.qemu.org/qemu-$QEMU_BUILD_VERSION.tar.xz | tar xJf -
         cd qemu-$QEMU_BUILD_VERSION
+        patch -p1 < $GITHUB_WORKSPACE/ci/qemu-madvise.patch
         ./configure --target-list=${{ matrix.qemu_target }} --prefix=${{ runner.tool_cache}}/qemu --disable-tools --disable-slirp --disable-fdt --disable-capstone --disable-docs
         ninja -C build install
         touch ${{ runner.tool_cache }}/qemu/built
@@ -310,7 +309,7 @@ jobs:
       env:
         RUST_BACKTRACE: 1
 
-    # Test uffd functionality on Linux
+    # Test Linux-specific functionality
     - run: |
         cargo test --features uffd -p wasmtime-runtime instance::allocator::pooling
         cargo test --features uffd -p wasmtime-cli pooling_allocator

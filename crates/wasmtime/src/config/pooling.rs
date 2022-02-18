@@ -249,6 +249,10 @@ pub enum PoolingAllocationStrategy {
     NextAvailable,
     /// Allocate from a random available instance.
     Random,
+    /// Try to allocate an instance slot that was previously used for
+    /// the same module, potentially enabling faster instantiation by
+    /// reusing e.g. memory mappings.
+    ReuseAffinity,
 }
 
 impl Default for PoolingAllocationStrategy {
@@ -256,6 +260,7 @@ impl Default for PoolingAllocationStrategy {
         match wasmtime_runtime::PoolingAllocationStrategy::default() {
             wasmtime_runtime::PoolingAllocationStrategy::NextAvailable => Self::NextAvailable,
             wasmtime_runtime::PoolingAllocationStrategy::Random => Self::Random,
+            wasmtime_runtime::PoolingAllocationStrategy::ReuseAffinity => Self::ReuseAffinity,
         }
     }
 }
@@ -268,6 +273,7 @@ impl Into<wasmtime_runtime::PoolingAllocationStrategy> for PoolingAllocationStra
         match self {
             Self::NextAvailable => wasmtime_runtime::PoolingAllocationStrategy::NextAvailable,
             Self::Random => wasmtime_runtime::PoolingAllocationStrategy::Random,
+            Self::ReuseAffinity => wasmtime_runtime::PoolingAllocationStrategy::ReuseAffinity,
         }
     }
 }

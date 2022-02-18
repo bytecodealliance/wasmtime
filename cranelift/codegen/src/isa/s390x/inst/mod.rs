@@ -4,8 +4,7 @@
 #![allow(dead_code)]
 
 use crate::binemit::{Addend, CodeOffset, Reloc};
-use crate::ir::{types, ExternalName, Opcode, TrapCode, Type, ValueLabel};
-use crate::isa::unwind::UnwindInst;
+use crate::ir::{types, ExternalName, Opcode, Type, ValueLabel};
 use crate::machinst::*;
 use crate::{settings, CodegenError, CodegenResult};
 
@@ -34,199 +33,10 @@ mod emit_tests;
 //=============================================================================
 // Instructions (top level): definition
 
-/// Supported instruction sets
-#[allow(non_camel_case_types)]
-#[derive(Debug)]
-pub(crate) enum InstructionSet {
-    /// Baseline ISA for cranelift is z14.
-    Base,
-    /// Miscellaneous-Instruction-Extensions Facility 2 (z15)
-    MIE2,
-    /// Vector-Enhancements Facility 2 (z15)
-    VXRS_EXT2,
-}
-
-/// An ALU operation. This can be paired with several instruction formats
-/// below (see `Inst`) in any combination.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub enum ALUOp {
-    Add32,
-    Add32Ext16,
-    Add64,
-    Add64Ext16,
-    Add64Ext32,
-    AddLogical32,
-    AddLogical64,
-    AddLogical64Ext32,
-    Sub32,
-    Sub32Ext16,
-    Sub64,
-    Sub64Ext16,
-    Sub64Ext32,
-    SubLogical32,
-    SubLogical64,
-    SubLogical64Ext32,
-    Mul32,
-    Mul32Ext16,
-    Mul64,
-    Mul64Ext16,
-    Mul64Ext32,
-    And32,
-    And64,
-    Orr32,
-    Orr64,
-    Xor32,
-    Xor64,
-    /// NAND
-    AndNot32,
-    AndNot64,
-    /// NOR
-    OrrNot32,
-    OrrNot64,
-    /// XNOR
-    XorNot32,
-    XorNot64,
-}
-
-impl ALUOp {
-    pub(crate) fn available_from(&self) -> InstructionSet {
-        match self {
-            ALUOp::AndNot32 | ALUOp::AndNot64 => InstructionSet::MIE2,
-            ALUOp::OrrNot32 | ALUOp::OrrNot64 => InstructionSet::MIE2,
-            ALUOp::XorNot32 | ALUOp::XorNot64 => InstructionSet::MIE2,
-            _ => InstructionSet::Base,
-        }
-    }
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub enum UnaryOp {
-    Abs32,
-    Abs64,
-    Abs64Ext32,
-    Neg32,
-    Neg64,
-    Neg64Ext32,
-    PopcntByte,
-    PopcntReg,
-}
-
-impl UnaryOp {
-    pub(crate) fn available_from(&self) -> InstructionSet {
-        match self {
-            UnaryOp::PopcntReg => InstructionSet::MIE2,
-            _ => InstructionSet::Base,
-        }
-    }
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub enum ShiftOp {
-    RotL32,
-    RotL64,
-    LShL32,
-    LShL64,
-    LShR32,
-    LShR64,
-    AShR32,
-    AShR64,
-}
-
-/// An integer comparison operation.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub enum CmpOp {
-    CmpS32,
-    CmpS32Ext16,
-    CmpS64,
-    CmpS64Ext16,
-    CmpS64Ext32,
-    CmpL32,
-    CmpL32Ext16,
-    CmpL64,
-    CmpL64Ext16,
-    CmpL64Ext32,
-}
-
-/// A floating-point unit (FPU) operation with one arg.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub enum FPUOp1 {
-    Abs32,
-    Abs64,
-    Neg32,
-    Neg64,
-    NegAbs32,
-    NegAbs64,
-    Sqrt32,
-    Sqrt64,
-    Cvt32To64,
-    Cvt64To32,
-}
-
-/// A floating-point unit (FPU) operation with two args.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub enum FPUOp2 {
-    Add32,
-    Add64,
-    Sub32,
-    Sub64,
-    Mul32,
-    Mul64,
-    Div32,
-    Div64,
-    Max32,
-    Max64,
-    Min32,
-    Min64,
-}
-
-/// A floating-point unit (FPU) operation with three args.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub enum FPUOp3 {
-    MAdd32,
-    MAdd64,
-    MSub32,
-    MSub64,
-}
-
-/// A conversion from an FP to an integer value.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub enum FpuToIntOp {
-    F32ToU32,
-    F32ToI32,
-    F32ToU64,
-    F32ToI64,
-    F64ToU32,
-    F64ToI32,
-    F64ToU64,
-    F64ToI64,
-}
-
-/// A conversion from an integer to an FP value.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub enum IntToFpuOp {
-    U32ToF32,
-    I32ToF32,
-    U32ToF64,
-    I32ToF64,
-    U64ToF32,
-    I64ToF32,
-    U64ToF64,
-    I64ToF64,
-}
-
-/// Modes for FP rounding ops: round down (floor) or up (ceil), or toward zero (trunc), or to
-/// nearest, and for 32- or 64-bit FP values.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub enum FpuRoundMode {
-    Minus32,
-    Minus64,
-    Plus32,
-    Plus64,
-    Zero32,
-    Zero64,
-    Nearest32,
-    Nearest64,
-}
+pub use crate::isa::s390x::lower::isle::generated_code::{
+    ALUOp, CmpOp, FPUOp1, FPUOp2, FPUOp3, FpuRoundMode, FpuToIntOp, IntToFpuOp, MInst as Inst,
+    RxSBGOp, ShiftOp, UnaryOp,
+};
 
 /// Additional information for (direct) Call instructions, left out of line to lower the size of
 /// the Inst enum.
@@ -248,742 +58,23 @@ pub struct CallIndInfo {
     pub opcode: Opcode,
 }
 
-/// Additional information for JTSequence instructions, left out of line to lower the size of the Inst
-/// enum.
-#[derive(Clone, Debug)]
-pub struct JTSequenceInfo {
-    pub default_target: BranchTarget,
-    pub targets: Vec<BranchTarget>,
-    pub targets_for_term: Vec<MachLabel>, // needed for MachTerminator.
-}
-
-/// Instruction formats.
-#[derive(Clone, Debug)]
-pub enum Inst {
-    /// A no-op of zero size.
-    Nop0,
-
-    /// A no-op of size two bytes.
-    Nop2,
-
-    /// An ALU operation with two register sources and a register destination.
-    AluRRR {
-        alu_op: ALUOp,
-        rd: Writable<Reg>,
-        rn: Reg,
-        rm: Reg,
-    },
-    /// An ALU operation with a register source and a signed 16-bit
-    /// immediate source, and a separate register destination.
-    AluRRSImm16 {
-        alu_op: ALUOp,
-        rd: Writable<Reg>,
-        rn: Reg,
-        imm: i16,
-    },
-    /// An ALU operation with a register in-/out operand and
-    /// a second register source.
-    AluRR {
-        alu_op: ALUOp,
-        rd: Writable<Reg>,
-        rm: Reg,
-    },
-    /// An ALU operation with a register in-/out operand and
-    /// a memory source.
-    AluRX {
-        alu_op: ALUOp,
-        rd: Writable<Reg>,
-        mem: MemArg,
-    },
-    /// An ALU operation with a register in-/out operand and a signed 16-bit
-    /// immediate source.
-    AluRSImm16 {
-        alu_op: ALUOp,
-        rd: Writable<Reg>,
-        imm: i16,
-    },
-    /// An ALU operation with a register in-/out operand and a signed 32-bit
-    /// immediate source.
-    AluRSImm32 {
-        alu_op: ALUOp,
-        rd: Writable<Reg>,
-        imm: i32,
-    },
-    /// An ALU operation with a register in-/out operand and an unsigned 32-bit
-    /// immediate source.
-    AluRUImm32 {
-        alu_op: ALUOp,
-        rd: Writable<Reg>,
-        imm: u32,
-    },
-    /// An ALU operation with a register in-/out operand and a shifted 16-bit
-    /// immediate source.
-    AluRUImm16Shifted {
-        alu_op: ALUOp,
-        rd: Writable<Reg>,
-        imm: UImm16Shifted,
-    },
-    /// An ALU operation with a register in-/out operand and a shifted 32-bit
-    /// immediate source.
-    AluRUImm32Shifted {
-        alu_op: ALUOp,
-        rd: Writable<Reg>,
-        imm: UImm32Shifted,
-    },
-    /// A multiply operation with two register sources and a register pair destination.
-    /// FIXME: The pair is hard-coded as %r0/%r1 because regalloc cannot handle pairs.
-    SMulWide {
-        rn: Reg,
-        rm: Reg,
-    },
-    /// A multiply operation with an in/out register pair, and an extra register source.
-    /// Only the lower half of the register pair is used as input.
-    /// FIXME: The pair is hard-coded as %r0/%r1 because regalloc cannot handle pairs.
-    UMulWide {
-        rn: Reg,
-    },
-    /// A divide operation with an in/out register pair, and an extra register source.
-    /// Only the lower half of the register pair is used as input.
-    /// FIXME: The pair is hard-coded as %r0/%r1 because regalloc cannot handle pairs.
-    SDivMod32 {
-        rn: Reg,
-    },
-    SDivMod64 {
-        rn: Reg,
-    },
-    /// A divide operation with an in/out register pair, and an extra register source.
-    /// FIXME: The pair is hard-coded as %r0/%r1 because regalloc cannot handle pairs.
-    UDivMod32 {
-        rn: Reg,
-    },
-    UDivMod64 {
-        rn: Reg,
-    },
-    /// A FLOGR operation with a register source and a register pair destination.
-    /// FIXME: The pair is hard-coded as %r0/%r1 because regalloc cannot handle pairs.
-    Flogr {
-        rn: Reg,
-    },
-
-    /// A shift instruction with a register source, a register destination,
-    /// and an immediate plus an optional register as shift count.
-    ShiftRR {
-        shift_op: ShiftOp,
-        rd: Writable<Reg>,
-        rn: Reg,
-        shift_imm: SImm20,
-        shift_reg: Option<Reg>,
-    },
-
-    /// An unary operation with a register source and a register destination.
-    UnaryRR {
-        op: UnaryOp,
-        rd: Writable<Reg>,
-        rn: Reg,
-    },
-
-    /// A compare operation with two register sources.
-    CmpRR {
-        op: CmpOp,
-        rn: Reg,
-        rm: Reg,
-    },
-    /// A compare operation with a register source and a memory source.
-    CmpRX {
-        op: CmpOp,
-        rn: Reg,
-        mem: MemArg,
-    },
-    /// A compare operation with a register source and a signed 16-bit
-    /// immediate source.
-    CmpRSImm16 {
-        op: CmpOp,
-        rn: Reg,
-        imm: i16,
-    },
-    /// A compare operation with a register source and a signed 32-bit
-    /// immediate source.
-    CmpRSImm32 {
-        op: CmpOp,
-        rn: Reg,
-        imm: i32,
-    },
-    /// A compare operation with a register source and a unsigned 32-bit
-    /// immediate source.
-    CmpRUImm32 {
-        op: CmpOp,
-        rn: Reg,
-        imm: u32,
-    },
-    /// A compare-and-trap instruction with two register sources.
-    CmpTrapRR {
-        op: CmpOp,
-        rn: Reg,
-        rm: Reg,
-        cond: Cond,
-        trap_code: TrapCode,
-    },
-    /// A compare-and-trap operation with a register source and a signed 16-bit
-    /// immediate source.
-    CmpTrapRSImm16 {
-        op: CmpOp,
-        rn: Reg,
-        imm: i16,
-        cond: Cond,
-        trap_code: TrapCode,
-    },
-    /// A compare-and-trap operation with a register source and an unsigned 16-bit
-    /// immediate source.
-    CmpTrapRUImm16 {
-        op: CmpOp,
-        rn: Reg,
-        imm: u16,
-        cond: Cond,
-        trap_code: TrapCode,
-    },
-
-    /// An atomic read-modify-write operation with a memory in-/out operand,
-    /// a register destination, and a register source.
-    /// a memory source.
-    AtomicRmw {
-        alu_op: ALUOp,
-        rd: Writable<Reg>,
-        rn: Reg,
-        mem: MemArg,
-    },
-    /// A 32-bit atomic compare-and-swap operation.
-    AtomicCas32 {
-        rd: Writable<Reg>,
-        rn: Reg,
-        mem: MemArg,
-    },
-    /// A 64-bit atomic compare-and-swap operation.
-    AtomicCas64 {
-        rd: Writable<Reg>,
-        rn: Reg,
-        mem: MemArg,
-    },
-    /// A memory fence operation.
-    Fence,
-
-    /// A 32-bit load.
-    Load32 {
-        rd: Writable<Reg>,
-        mem: MemArg,
-    },
-    /// An unsigned (zero-extending) 8-bit to 32-bit load.
-    Load32ZExt8 {
-        rd: Writable<Reg>,
-        mem: MemArg,
-    },
-    /// A signed (sign-extending) 8-bit to 32-bit load.
-    Load32SExt8 {
-        rd: Writable<Reg>,
-        mem: MemArg,
-    },
-    /// An unsigned (zero-extending) 16-bit to 32-bit load.
-    Load32ZExt16 {
-        rd: Writable<Reg>,
-        mem: MemArg,
-    },
-    /// A signed (sign-extending) 16-bit to 32-bit load.
-    Load32SExt16 {
-        rd: Writable<Reg>,
-        mem: MemArg,
-    },
-    /// A 64-bit load.
-    Load64 {
-        rd: Writable<Reg>,
-        mem: MemArg,
-    },
-    /// An unsigned (zero-extending) 8-bit to 64-bit load.
-    Load64ZExt8 {
-        rd: Writable<Reg>,
-        mem: MemArg,
-    },
-    /// A signed (sign-extending) 8-bit to 64-bit load.
-    Load64SExt8 {
-        rd: Writable<Reg>,
-        mem: MemArg,
-    },
-    /// An unsigned (zero-extending) 16-bit to 64-bit load.
-    Load64ZExt16 {
-        rd: Writable<Reg>,
-        mem: MemArg,
-    },
-    /// A signed (sign-extending) 16-bit to 64-bit load.
-    Load64SExt16 {
-        rd: Writable<Reg>,
-        mem: MemArg,
-    },
-    /// An unsigned (zero-extending) 32-bit to 64-bit load.
-    Load64ZExt32 {
-        rd: Writable<Reg>,
-        mem: MemArg,
-    },
-    /// A signed (sign-extending) 32-bit to 64-bit load.
-    Load64SExt32 {
-        rd: Writable<Reg>,
-        mem: MemArg,
-    },
-
-    /// A 16-bit byte-reversed load.
-    LoadRev16 {
-        rd: Writable<Reg>,
-        mem: MemArg,
-    },
-    /// A 32-bit byte-reversed load.
-    LoadRev32 {
-        rd: Writable<Reg>,
-        mem: MemArg,
-    },
-    /// A 64-bit byte-reversed load.
-    LoadRev64 {
-        rd: Writable<Reg>,
-        mem: MemArg,
-    },
-
-    /// An 8-bit store.
-    Store8 {
-        rd: Reg,
-        mem: MemArg,
-    },
-    /// A 16-bit store.
-    Store16 {
-        rd: Reg,
-        mem: MemArg,
-    },
-    /// A 32-bit store.
-    Store32 {
-        rd: Reg,
-        mem: MemArg,
-    },
-    /// A 64-bit store.
-    Store64 {
-        rd: Reg,
-        mem: MemArg,
-    },
-    /// An 8-bit store of an immediate.
-    StoreImm8 {
-        imm: u8,
-        mem: MemArg,
-    },
-    /// A 16-bit store of an immediate.
-    StoreImm16 {
-        imm: i16,
-        mem: MemArg,
-    },
-    /// A 32-bit store of a sign-extended 16-bit immediate.
-    StoreImm32SExt16 {
-        imm: i16,
-        mem: MemArg,
-    },
-    /// A 64-bit store of a sign-extended 16-bit immediate.
-    StoreImm64SExt16 {
-        imm: i16,
-        mem: MemArg,
-    },
-
-    /// A 16-bit byte-reversed store.
-    StoreRev16 {
-        rd: Reg,
-        mem: MemArg,
-    },
-    /// A 32-bit byte-reversed store.
-    StoreRev32 {
-        rd: Reg,
-        mem: MemArg,
-    },
-    /// A 64-bit byte-reversed store.
-    StoreRev64 {
-        rd: Reg,
-        mem: MemArg,
-    },
-
-    /// A load-multiple instruction.
-    LoadMultiple64 {
-        rt: Writable<Reg>,
-        rt2: Writable<Reg>,
-        addr_reg: Reg,
-        addr_off: SImm20,
-    },
-    /// A store-multiple instruction.
-    StoreMultiple64 {
-        rt: Reg,
-        rt2: Reg,
-        addr_reg: Reg,
-        addr_off: SImm20,
-    },
-
-    /// A 32-bit move instruction.
-    Mov32 {
-        rd: Writable<Reg>,
-        rm: Reg,
-    },
-    /// A 64-bit move instruction.
-    Mov64 {
-        rd: Writable<Reg>,
-        rm: Reg,
-    },
-    /// A 32-bit move instruction with a full 32-bit immediate.
-    Mov32Imm {
-        rd: Writable<Reg>,
-        imm: u32,
-    },
-    /// A 32-bit move instruction with a 16-bit signed immediate.
-    Mov32SImm16 {
-        rd: Writable<Reg>,
-        imm: i16,
-    },
-    /// A 64-bit move instruction with a 16-bit signed immediate.
-    Mov64SImm16 {
-        rd: Writable<Reg>,
-        imm: i16,
-    },
-    /// A 64-bit move instruction with a 32-bit signed immediate.
-    Mov64SImm32 {
-        rd: Writable<Reg>,
-        imm: i32,
-    },
-    /// A 64-bit move instruction with a shifted 16-bit immediate.
-    Mov64UImm16Shifted {
-        rd: Writable<Reg>,
-        imm: UImm16Shifted,
-    },
-    /// A 64-bit move instruction with a shifted 32-bit immediate.
-    Mov64UImm32Shifted {
-        rd: Writable<Reg>,
-        imm: UImm32Shifted,
-    },
-
-    /// A 64-bit insert instruction with a shifted 16-bit immediate.
-    Insert64UImm16Shifted {
-        rd: Writable<Reg>,
-        imm: UImm16Shifted,
-    },
-    /// A 64-bit insert instruction with a shifted 32-bit immediate.
-    Insert64UImm32Shifted {
-        rd: Writable<Reg>,
-        imm: UImm32Shifted,
-    },
-
-    /// A sign- or zero-extend operation.
-    Extend {
-        rd: Writable<Reg>,
-        rn: Reg,
-        signed: bool,
-        from_bits: u8,
-        to_bits: u8,
-    },
-
-    /// A 32-bit conditional move instruction.
-    CMov32 {
-        rd: Writable<Reg>,
-        cond: Cond,
-        rm: Reg,
-    },
-    /// A 64-bit conditional move instruction.
-    CMov64 {
-        rd: Writable<Reg>,
-        cond: Cond,
-        rm: Reg,
-    },
-    /// A 32-bit conditional move instruction with a 16-bit signed immediate.
-    CMov32SImm16 {
-        rd: Writable<Reg>,
-        cond: Cond,
-        imm: i16,
-    },
-    /// A 64-bit conditional move instruction with a 16-bit signed immediate.
-    CMov64SImm16 {
-        rd: Writable<Reg>,
-        cond: Cond,
-        imm: i16,
-    },
-
-    /// 32-bit FPU move.
-    FpuMove32 {
-        rd: Writable<Reg>,
-        rn: Reg,
-    },
-    /// 64-bit FPU move.
-    FpuMove64 {
-        rd: Writable<Reg>,
-        rn: Reg,
-    },
-
-    /// A 32-bit conditional move FPU instruction.
-    FpuCMov32 {
-        rd: Writable<Reg>,
-        cond: Cond,
-        rm: Reg,
-    },
-    /// A 64-bit conditional move FPU instruction.
-    FpuCMov64 {
-        rd: Writable<Reg>,
-        cond: Cond,
-        rm: Reg,
-    },
-
-    /// A 64-bit move instruction from GPR to FPR.
-    MovToFpr {
-        rd: Writable<Reg>,
-        rn: Reg,
-    },
-    /// A 64-bit move instruction from FPR to GPR.
-    MovFromFpr {
-        rd: Writable<Reg>,
-        rn: Reg,
-    },
-
-    /// 1-op FPU instruction.
-    FpuRR {
-        fpu_op: FPUOp1,
-        rd: Writable<Reg>,
-        rn: Reg,
-    },
-
-    /// 2-op FPU instruction.
-    FpuRRR {
-        fpu_op: FPUOp2,
-        rd: Writable<Reg>,
-        rm: Reg,
-    },
-
-    /// 3-op FPU instruction.
-    FpuRRRR {
-        fpu_op: FPUOp3,
-        rd: Writable<Reg>,
-        rn: Reg,
-        rm: Reg,
-    },
-
-    /// FPU copy sign instruction.
-    FpuCopysign {
-        rd: Writable<Reg>,
-        rn: Reg,
-        rm: Reg,
-    },
-
-    /// FPU comparison, single-precision (32 bit).
-    FpuCmp32 {
-        rn: Reg,
-        rm: Reg,
-    },
-
-    /// FPU comparison, double-precision (64 bit).
-    FpuCmp64 {
-        rn: Reg,
-        rm: Reg,
-    },
-
-    /// Floating-point load, single-precision (32 bit).
-    FpuLoad32 {
-        rd: Writable<Reg>,
-        mem: MemArg,
-    },
-    /// Floating-point store, single-precision (32 bit).
-    FpuStore32 {
-        rd: Reg,
-        mem: MemArg,
-    },
-    /// Floating-point load, double-precision (64 bit).
-    FpuLoad64 {
-        rd: Writable<Reg>,
-        mem: MemArg,
-    },
-    /// Floating-point store, double-precision (64 bit).
-    FpuStore64 {
-        rd: Reg,
-        mem: MemArg,
-    },
-    /// Floating-point byte-reversed load, single-precision (32 bit).
-    FpuLoadRev32 {
-        rd: Writable<Reg>,
-        mem: MemArg,
-    },
-    /// Floating-point byte-reversed store, single-precision (32 bit).
-    FpuStoreRev32 {
-        rd: Reg,
-        mem: MemArg,
-    },
-    /// Floating-point byte-reversed load, double-precision (64 bit).
-    FpuLoadRev64 {
-        rd: Writable<Reg>,
-        mem: MemArg,
-    },
-    /// Floating-point byte-reversed store, double-precision (64 bit).
-    FpuStoreRev64 {
-        rd: Reg,
-        mem: MemArg,
-    },
-
-    LoadFpuConst32 {
-        rd: Writable<Reg>,
-        const_data: f32,
-    },
-
-    LoadFpuConst64 {
-        rd: Writable<Reg>,
-        const_data: f64,
-    },
-
-    /// Conversion: FP -> integer.
-    FpuToInt {
-        op: FpuToIntOp,
-        rd: Writable<Reg>,
-        rn: Reg,
-    },
-
-    /// Conversion: integer -> FP.
-    IntToFpu {
-        op: IntToFpuOp,
-        rd: Writable<Reg>,
-        rn: Reg,
-    },
-
-    /// Round to integer.
-    FpuRound {
-        op: FpuRoundMode,
-        rd: Writable<Reg>,
-        rn: Reg,
-    },
-
-    /// 2-op FPU instruction implemented as vector instruction with the W bit.
-    FpuVecRRR {
-        fpu_op: FPUOp2,
-        rd: Writable<Reg>,
-        rn: Reg,
-        rm: Reg,
-    },
-
-    /// A machine call instruction.
-    Call {
-        link: Writable<Reg>,
-        info: Box<CallInfo>,
-    },
-    /// A machine indirect-call instruction.
-    CallInd {
-        link: Writable<Reg>,
-        info: Box<CallIndInfo>,
-    },
-
-    // ---- branches (exactly one must appear at end of BB) ----
-    /// A machine return instruction.
-    Ret {
-        link: Reg,
-    },
-
-    /// A placeholder instruction, generating no code, meaning that a function epilogue must be
-    /// inserted there.
-    EpiloguePlaceholder,
-
-    /// An unconditional branch.
-    Jump {
-        dest: BranchTarget,
-    },
-
-    /// A conditional branch. Contains two targets; at emission time, both are emitted, but
-    /// the MachBuffer knows to truncate the trailing branch if fallthrough. We optimize the
-    /// choice of taken/not_taken (inverting the branch polarity as needed) based on the
-    /// fallthrough at the time of lowering.
-    CondBr {
-        taken: BranchTarget,
-        not_taken: BranchTarget,
-        cond: Cond,
-    },
-
-    /// A conditional trap: execute a `Trap` if the condition is true. This is
-    /// one VCode instruction because it uses embedded control flow; it is
-    /// logically a single-in, single-out region, but needs to appear as one
-    /// unit to the register allocator.
-    ///
-    /// The `Cond` gives the conditional-branch condition that will
-    /// *execute* the embedded `Trap`. (In the emitted code, we use the inverse
-    /// of this condition in a branch that skips the trap instruction.)
-    TrapIf {
-        cond: Cond,
-        trap_code: TrapCode,
-    },
-
-    /// A one-way conditional branch, invisible to the CFG processing; used *only* as part of
-    /// straight-line sequences in code to be emitted.
-    ///
-    /// In more detail:
-    /// - This branch is lowered to a branch at the machine-code level, but does not end a basic
-    ///   block, and does not create edges in the CFG seen by regalloc.
-    /// - Thus, it is *only* valid to use as part of a single-in, single-out sequence that is
-    ///   lowered from a single CLIF instruction. For example, certain arithmetic operations may
-    ///   use these branches to handle certain conditions, such as overflows, traps, etc.
-    ///
-    /// See, e.g., the lowering of `trapif` (conditional trap) for an example.
-    OneWayCondBr {
-        target: BranchTarget,
-        cond: Cond,
-    },
-
-    /// An indirect branch through a register, augmented with set of all
-    /// possible successors.
-    IndirectBr {
-        rn: Reg,
-        targets: Vec<MachLabel>,
-    },
-
-    /// A "debugtrap" instruction, used for e.g. traps and debug breakpoints.
-    Debugtrap,
-
-    /// An instruction guaranteed to always be undefined and to trigger an illegal instruction at
-    /// runtime.
-    Trap {
-        trap_code: TrapCode,
-    },
-
-    /// Jump-table sequence, as one compound instruction (see note in lower.rs
-    /// for rationale).
-    JTSequence {
-        info: Box<JTSequenceInfo>,
-        ridx: Reg,
-        rtmp1: Writable<Reg>,
-        rtmp2: Writable<Reg>,
-    },
-
-    /// Load an inline symbol reference with RelocDistance::Far.
-    LoadExtNameFar {
-        rd: Writable<Reg>,
-        name: Box<ExternalName>,
-        offset: i64,
-    },
-
-    /// Load address referenced by `mem` into `rd`.
-    LoadAddr {
-        rd: Writable<Reg>,
-        mem: MemArg,
-    },
-
-    /// Marker, no-op in generated code: SP "virtual offset" is adjusted. This
-    /// controls how MemArg::NominalSPOffset args are lowered.
-    VirtualSPOffsetAdj {
-        offset: i64,
-    },
-
-    /// A definition of a value label.
-    ValueLabelMarker {
-        reg: Reg,
-        label: ValueLabel,
-    },
-
-    /// An unwind pseudoinstruction describing the state of the
-    /// machine at this program point.
-    Unwind {
-        inst: UnwindInst,
-    },
-}
-
 #[test]
 fn inst_size_test() {
     // This test will help with unintentionally growing the size
     // of the Inst enum.
     assert_eq!(32, std::mem::size_of::<Inst>());
+}
+
+/// Supported instruction sets
+#[allow(non_camel_case_types)]
+#[derive(Debug)]
+pub(crate) enum InstructionSet {
+    /// Baseline ISA for cranelift is z14.
+    Base,
+    /// Miscellaneous-Instruction-Extensions Facility 2 (z15)
+    MIE2,
+    /// Vector-Enhancements Facility 2 (z15)
+    VXRS_EXT2,
 }
 
 impl Inst {
@@ -1002,6 +93,8 @@ impl Inst {
             | Inst::AluRUImm16Shifted { .. }
             | Inst::AluRUImm32Shifted { .. }
             | Inst::ShiftRR { .. }
+            | Inst::RxSBG { .. }
+            | Inst::RxSBGTest { .. }
             | Inst::SMulWide { .. }
             | Inst::UMulWide { .. }
             | Inst::SDivMod32 { .. }
@@ -1100,13 +193,23 @@ impl Inst {
             | Inst::JTSequence { .. }
             | Inst::LoadExtNameFar { .. }
             | Inst::LoadAddr { .. }
+            | Inst::Loop { .. }
+            | Inst::CondBreak { .. }
             | Inst::VirtualSPOffsetAdj { .. }
             | Inst::ValueLabelMarker { .. }
             | Inst::Unwind { .. } => InstructionSet::Base,
 
             // These depend on the opcode
-            Inst::AluRRR { alu_op, .. } => alu_op.available_from(),
-            Inst::UnaryRR { op, .. } => op.available_from(),
+            Inst::AluRRR { alu_op, .. } => match alu_op {
+                ALUOp::AndNot32 | ALUOp::AndNot64 => InstructionSet::MIE2,
+                ALUOp::OrrNot32 | ALUOp::OrrNot64 => InstructionSet::MIE2,
+                ALUOp::XorNot32 | ALUOp::XorNot64 => InstructionSet::MIE2,
+                _ => InstructionSet::Base,
+            },
+            Inst::UnaryRR { op, .. } => match op {
+                UnaryOp::PopcntReg => InstructionSet::MIE2,
+                _ => InstructionSet::Base,
+            },
 
             // These are all part of VXRS_EXT2
             Inst::FpuLoadRev32 { .. }
@@ -1206,7 +309,7 @@ impl Inst {
         // TODO: use LZER to load 0.0
         Inst::LoadFpuConst32 {
             rd,
-            const_data: value,
+            const_data: value.to_bits(),
         }
     }
 
@@ -1215,7 +318,7 @@ impl Inst {
         // TODO: use LZDR to load 0.0
         Inst::LoadFpuConst64 {
             rd,
-            const_data: value,
+            const_data: value.to_bits(),
         }
     }
 
@@ -1334,9 +437,17 @@ fn s390x_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
         } => {
             collector.add_def(rd);
             collector.add_use(rn);
-            if let Some(reg) = shift_reg {
-                collector.add_use(reg);
+            if shift_reg != zero_reg() {
+                collector.add_use(shift_reg);
             }
+        }
+        &Inst::RxSBG { rd, rn, .. } => {
+            collector.add_mod(rd);
+            collector.add_use(rn);
+        }
+        &Inst::RxSBGTest { rd, rn, .. } => {
+            collector.add_use(rd);
+            collector.add_use(rn);
         }
         &Inst::UnaryRR { rd, rn, .. } => {
             collector.add_def(rd);
@@ -1422,24 +533,24 @@ fn s390x_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             memarg_regs(mem, collector);
         }
         &Inst::LoadMultiple64 {
-            rt, rt2, addr_reg, ..
+            rt, rt2, ref mem, ..
         } => {
             let first_regnum = rt.to_reg().get_hw_encoding();
             let last_regnum = rt2.to_reg().get_hw_encoding();
             for regnum in first_regnum..last_regnum + 1 {
                 collector.add_def(writable_gpr(regnum));
             }
-            collector.add_use(addr_reg);
+            memarg_regs(mem, collector);
         }
         &Inst::StoreMultiple64 {
-            rt, rt2, addr_reg, ..
+            rt, rt2, ref mem, ..
         } => {
             let first_regnum = rt.get_hw_encoding();
             let last_regnum = rt2.get_hw_encoding();
             for regnum in first_regnum..last_regnum + 1 {
                 collector.add_use(gpr(regnum));
             }
-            collector.add_use(addr_reg);
+            memarg_regs(mem, collector);
         }
         &Inst::Mov64 { rd, rm } => {
             collector.add_def(rd);
@@ -1578,12 +689,8 @@ fn s390x_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
         &Inst::Debugtrap => {}
         &Inst::Trap { .. } => {}
         &Inst::TrapIf { .. } => {}
-        &Inst::JTSequence {
-            ridx, rtmp1, rtmp2, ..
-        } => {
+        &Inst::JTSequence { ridx, .. } => {
             collector.add_use(ridx);
-            collector.add_def(rtmp1);
-            collector.add_def(rtmp2);
         }
         &Inst::LoadExtNameFar { rd, .. } => {
             collector.add_def(rd);
@@ -1592,6 +699,12 @@ fn s390x_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             collector.add_def(rd);
             memarg_regs(mem, collector);
         }
+        &Inst::Loop { ref body, .. } => {
+            for inst in body.iter() {
+                s390x_get_regs(inst, collector);
+            }
+        }
+        &Inst::CondBreak { .. } => {}
         &Inst::VirtualSPOffsetAdj { .. } => {}
         &Inst::ValueLabelMarker { reg, .. } => {
             collector.add_use(reg);
@@ -1603,29 +716,8 @@ fn s390x_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
 //=============================================================================
 // Instructions: map_regs
 
-fn s390x_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
-    fn map_use<RUM: RegUsageMapper>(m: &RUM, r: &mut Reg) {
-        if r.is_virtual() {
-            let new = m.get_use(r.to_virtual_reg()).unwrap().to_reg();
-            *r = new;
-        }
-    }
-
-    fn map_def<RUM: RegUsageMapper>(m: &RUM, r: &mut Writable<Reg>) {
-        if r.to_reg().is_virtual() {
-            let new = m.get_def(r.to_reg().to_virtual_reg()).unwrap().to_reg();
-            *r = Writable::from_reg(new);
-        }
-    }
-
-    fn map_mod<RUM: RegUsageMapper>(m: &RUM, r: &mut Writable<Reg>) {
-        if r.to_reg().is_virtual() {
-            let new = m.get_mod(r.to_reg().to_virtual_reg()).unwrap().to_reg();
-            *r = Writable::from_reg(new);
-        }
-    }
-
-    fn map_mem<RUM: RegUsageMapper>(m: &RUM, mem: &mut MemArg) {
+pub fn s390x_map_regs<RM: RegMapper>(inst: &mut Inst, mapper: &RM) {
+    fn map_mem<RM: RegMapper>(m: &RM, mem: &mut MemArg) {
         match mem {
             &mut MemArg::BXD12 {
                 ref mut base,
@@ -1638,14 +730,14 @@ fn s390x_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
                 ..
             } => {
                 if *base != zero_reg() {
-                    map_use(m, base);
+                    m.map_use(base);
                 }
                 if *index != zero_reg() {
-                    map_use(m, index);
+                    m.map_use(index);
                 }
             }
             &mut MemArg::Label { .. } | &mut MemArg::Symbol { .. } => {}
-            &mut MemArg::RegOffset { ref mut reg, .. } => map_use(m, reg),
+            &mut MemArg::RegOffset { ref mut reg, .. } => m.map_use(reg),
             &mut MemArg::InitialSPOffset { .. } | &mut MemArg::NominalSPOffset { .. } => {}
         };
     }
@@ -1657,24 +749,24 @@ fn s390x_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             ref mut rm,
             ..
         } => {
-            map_def(mapper, rd);
-            map_use(mapper, rn);
-            map_use(mapper, rm);
+            mapper.map_def(rd);
+            mapper.map_use(rn);
+            mapper.map_use(rm);
         }
         &mut Inst::AluRRSImm16 {
             ref mut rd,
             ref mut rn,
             ..
         } => {
-            map_def(mapper, rd);
-            map_use(mapper, rn);
+            mapper.map_def(rd);
+            mapper.map_use(rn);
         }
         &mut Inst::AluRX {
             ref mut rd,
             ref mut mem,
             ..
         } => {
-            map_mod(mapper, rd);
+            mapper.map_mod(rd);
             map_mem(mapper, mem);
         }
         &mut Inst::AluRR {
@@ -1682,49 +774,49 @@ fn s390x_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             ref mut rm,
             ..
         } => {
-            map_mod(mapper, rd);
-            map_use(mapper, rm);
+            mapper.map_mod(rd);
+            mapper.map_use(rm);
         }
         &mut Inst::AluRSImm16 { ref mut rd, .. } => {
-            map_mod(mapper, rd);
+            mapper.map_mod(rd);
         }
         &mut Inst::AluRSImm32 { ref mut rd, .. } => {
-            map_mod(mapper, rd);
+            mapper.map_mod(rd);
         }
         &mut Inst::AluRUImm32 { ref mut rd, .. } => {
-            map_mod(mapper, rd);
+            mapper.map_mod(rd);
         }
         &mut Inst::AluRUImm16Shifted { ref mut rd, .. } => {
-            map_mod(mapper, rd);
+            mapper.map_mod(rd);
         }
         &mut Inst::AluRUImm32Shifted { ref mut rd, .. } => {
-            map_mod(mapper, rd);
+            mapper.map_mod(rd);
         }
         &mut Inst::SMulWide {
             ref mut rn,
             ref mut rm,
             ..
         } => {
-            map_use(mapper, rn);
-            map_use(mapper, rm);
+            mapper.map_use(rn);
+            mapper.map_use(rm);
         }
         &mut Inst::UMulWide { ref mut rn, .. } => {
-            map_use(mapper, rn);
+            mapper.map_use(rn);
         }
         &mut Inst::SDivMod32 { ref mut rn, .. } => {
-            map_use(mapper, rn);
+            mapper.map_use(rn);
         }
         &mut Inst::SDivMod64 { ref mut rn, .. } => {
-            map_use(mapper, rn);
+            mapper.map_use(rn);
         }
         &mut Inst::UDivMod32 { ref mut rn, .. } => {
-            map_use(mapper, rn);
+            mapper.map_use(rn);
         }
         &mut Inst::UDivMod64 { ref mut rn, .. } => {
-            map_use(mapper, rn);
+            mapper.map_use(rn);
         }
         &mut Inst::Flogr { ref mut rn, .. } => {
-            map_use(mapper, rn);
+            mapper.map_use(rn);
         }
         &mut Inst::ShiftRR {
             ref mut rd,
@@ -1732,58 +824,74 @@ fn s390x_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             ref mut shift_reg,
             ..
         } => {
-            map_def(mapper, rd);
-            map_use(mapper, rn);
-            if let Some(reg) = shift_reg {
-                map_use(mapper, reg);
+            mapper.map_def(rd);
+            mapper.map_use(rn);
+            if *shift_reg != zero_reg() {
+                mapper.map_use(shift_reg);
             }
+        }
+        &mut Inst::RxSBG {
+            ref mut rd,
+            ref mut rn,
+            ..
+        } => {
+            mapper.map_mod(rd);
+            mapper.map_use(rn);
+        }
+        &mut Inst::RxSBGTest {
+            ref mut rd,
+            ref mut rn,
+            ..
+        } => {
+            mapper.map_use(rd);
+            mapper.map_use(rn);
         }
         &mut Inst::UnaryRR {
             ref mut rd,
             ref mut rn,
             ..
         } => {
-            map_def(mapper, rd);
-            map_use(mapper, rn);
+            mapper.map_def(rd);
+            mapper.map_use(rn);
         }
         &mut Inst::CmpRR {
             ref mut rn,
             ref mut rm,
             ..
         } => {
-            map_use(mapper, rn);
-            map_use(mapper, rm);
+            mapper.map_use(rn);
+            mapper.map_use(rm);
         }
         &mut Inst::CmpRX {
             ref mut rn,
             ref mut mem,
             ..
         } => {
-            map_use(mapper, rn);
+            mapper.map_use(rn);
             map_mem(mapper, mem);
         }
         &mut Inst::CmpRSImm16 { ref mut rn, .. } => {
-            map_use(mapper, rn);
+            mapper.map_use(rn);
         }
         &mut Inst::CmpRSImm32 { ref mut rn, .. } => {
-            map_use(mapper, rn);
+            mapper.map_use(rn);
         }
         &mut Inst::CmpRUImm32 { ref mut rn, .. } => {
-            map_use(mapper, rn);
+            mapper.map_use(rn);
         }
         &mut Inst::CmpTrapRR {
             ref mut rn,
             ref mut rm,
             ..
         } => {
-            map_use(mapper, rn);
-            map_use(mapper, rm);
+            mapper.map_use(rn);
+            mapper.map_use(rm);
         }
         &mut Inst::CmpTrapRSImm16 { ref mut rn, .. } => {
-            map_use(mapper, rn);
+            mapper.map_use(rn);
         }
         &mut Inst::CmpTrapRUImm16 { ref mut rn, .. } => {
-            map_use(mapper, rn);
+            mapper.map_use(rn);
         }
 
         &mut Inst::AtomicRmw {
@@ -1792,8 +900,8 @@ fn s390x_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             ref mut mem,
             ..
         } => {
-            map_def(mapper, rd);
-            map_use(mapper, rn);
+            mapper.map_def(rd);
+            mapper.map_use(rn);
             map_mem(mapper, mem);
         }
         &mut Inst::AtomicCas32 {
@@ -1802,8 +910,8 @@ fn s390x_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             ref mut mem,
             ..
         } => {
-            map_mod(mapper, rd);
-            map_use(mapper, rn);
+            mapper.map_mod(rd);
+            mapper.map_use(rn);
             map_mem(mapper, mem);
         }
         &mut Inst::AtomicCas64 {
@@ -1812,8 +920,8 @@ fn s390x_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             ref mut mem,
             ..
         } => {
-            map_mod(mapper, rd);
-            map_use(mapper, rn);
+            mapper.map_mod(rd);
+            mapper.map_use(rn);
             map_mem(mapper, mem);
         }
         &mut Inst::Fence => {}
@@ -1823,7 +931,7 @@ fn s390x_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             ref mut mem,
             ..
         } => {
-            map_def(mapper, rd);
+            mapper.map_def(rd);
             map_mem(mapper, mem);
         }
         &mut Inst::Load32ZExt8 {
@@ -1831,7 +939,7 @@ fn s390x_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             ref mut mem,
             ..
         } => {
-            map_def(mapper, rd);
+            mapper.map_def(rd);
             map_mem(mapper, mem);
         }
         &mut Inst::Load32SExt8 {
@@ -1839,7 +947,7 @@ fn s390x_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             ref mut mem,
             ..
         } => {
-            map_def(mapper, rd);
+            mapper.map_def(rd);
             map_mem(mapper, mem);
         }
         &mut Inst::Load32ZExt16 {
@@ -1847,7 +955,7 @@ fn s390x_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             ref mut mem,
             ..
         } => {
-            map_def(mapper, rd);
+            mapper.map_def(rd);
             map_mem(mapper, mem);
         }
         &mut Inst::Load32SExt16 {
@@ -1855,7 +963,7 @@ fn s390x_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             ref mut mem,
             ..
         } => {
-            map_def(mapper, rd);
+            mapper.map_def(rd);
             map_mem(mapper, mem);
         }
         &mut Inst::Load64 {
@@ -1863,7 +971,7 @@ fn s390x_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             ref mut mem,
             ..
         } => {
-            map_def(mapper, rd);
+            mapper.map_def(rd);
             map_mem(mapper, mem);
         }
         &mut Inst::Load64ZExt8 {
@@ -1871,7 +979,7 @@ fn s390x_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             ref mut mem,
             ..
         } => {
-            map_def(mapper, rd);
+            mapper.map_def(rd);
             map_mem(mapper, mem);
         }
         &mut Inst::Load64SExt8 {
@@ -1879,7 +987,7 @@ fn s390x_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             ref mut mem,
             ..
         } => {
-            map_def(mapper, rd);
+            mapper.map_def(rd);
             map_mem(mapper, mem);
         }
         &mut Inst::Load64ZExt16 {
@@ -1887,7 +995,7 @@ fn s390x_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             ref mut mem,
             ..
         } => {
-            map_def(mapper, rd);
+            mapper.map_def(rd);
             map_mem(mapper, mem);
         }
         &mut Inst::Load64SExt16 {
@@ -1895,7 +1003,7 @@ fn s390x_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             ref mut mem,
             ..
         } => {
-            map_def(mapper, rd);
+            mapper.map_def(rd);
             map_mem(mapper, mem);
         }
         &mut Inst::Load64ZExt32 {
@@ -1903,7 +1011,7 @@ fn s390x_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             ref mut mem,
             ..
         } => {
-            map_def(mapper, rd);
+            mapper.map_def(rd);
             map_mem(mapper, mem);
         }
         &mut Inst::Load64SExt32 {
@@ -1911,7 +1019,7 @@ fn s390x_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             ref mut mem,
             ..
         } => {
-            map_def(mapper, rd);
+            mapper.map_def(rd);
             map_mem(mapper, mem);
         }
         &mut Inst::LoadRev16 {
@@ -1919,7 +1027,7 @@ fn s390x_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             ref mut mem,
             ..
         } => {
-            map_def(mapper, rd);
+            mapper.map_def(rd);
             map_mem(mapper, mem);
         }
         &mut Inst::LoadRev32 {
@@ -1927,7 +1035,7 @@ fn s390x_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             ref mut mem,
             ..
         } => {
-            map_def(mapper, rd);
+            mapper.map_def(rd);
             map_mem(mapper, mem);
         }
         &mut Inst::LoadRev64 {
@@ -1935,7 +1043,7 @@ fn s390x_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             ref mut mem,
             ..
         } => {
-            map_def(mapper, rd);
+            mapper.map_def(rd);
             map_mem(mapper, mem);
         }
 
@@ -1944,7 +1052,7 @@ fn s390x_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             ref mut mem,
             ..
         } => {
-            map_use(mapper, rd);
+            mapper.map_use(rd);
             map_mem(mapper, mem);
         }
         &mut Inst::Store16 {
@@ -1952,7 +1060,7 @@ fn s390x_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             ref mut mem,
             ..
         } => {
-            map_use(mapper, rd);
+            mapper.map_use(rd);
             map_mem(mapper, mem);
         }
         &mut Inst::Store32 {
@@ -1960,7 +1068,7 @@ fn s390x_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             ref mut mem,
             ..
         } => {
-            map_use(mapper, rd);
+            mapper.map_use(rd);
             map_mem(mapper, mem);
         }
         &mut Inst::Store64 {
@@ -1968,7 +1076,7 @@ fn s390x_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             ref mut mem,
             ..
         } => {
-            map_use(mapper, rd);
+            mapper.map_use(rd);
             map_mem(mapper, mem);
         }
         &mut Inst::StoreImm8 { ref mut mem, .. } => {
@@ -1988,7 +1096,7 @@ fn s390x_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             ref mut mem,
             ..
         } => {
-            map_use(mapper, rd);
+            mapper.map_use(rd);
             map_mem(mapper, mem);
         }
         &mut Inst::StoreRev32 {
@@ -1996,7 +1104,7 @@ fn s390x_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             ref mut mem,
             ..
         } => {
-            map_use(mapper, rd);
+            mapper.map_use(rd);
             map_mem(mapper, mem);
         }
         &mut Inst::StoreRev64 {
@@ -2004,7 +1112,7 @@ fn s390x_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             ref mut mem,
             ..
         } => {
-            map_use(mapper, rd);
+            mapper.map_use(rd);
             map_mem(mapper, mem);
         }
         &mut Inst::LoadMultiple64 { .. } => {
@@ -2024,121 +1132,121 @@ fn s390x_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             ref mut rd,
             ref mut rm,
         } => {
-            map_def(mapper, rd);
-            map_use(mapper, rm);
+            mapper.map_def(rd);
+            mapper.map_use(rm);
         }
         &mut Inst::Mov32 {
             ref mut rd,
             ref mut rm,
         } => {
-            map_def(mapper, rd);
-            map_use(mapper, rm);
+            mapper.map_def(rd);
+            mapper.map_use(rm);
         }
         &mut Inst::Mov32Imm { ref mut rd, .. } => {
-            map_def(mapper, rd);
+            mapper.map_def(rd);
         }
         &mut Inst::Mov32SImm16 { ref mut rd, .. } => {
-            map_def(mapper, rd);
+            mapper.map_def(rd);
         }
         &mut Inst::Mov64SImm16 { ref mut rd, .. } => {
-            map_def(mapper, rd);
+            mapper.map_def(rd);
         }
         &mut Inst::Mov64SImm32 { ref mut rd, .. } => {
-            map_def(mapper, rd);
+            mapper.map_def(rd);
         }
         &mut Inst::Mov64UImm16Shifted { ref mut rd, .. } => {
-            map_def(mapper, rd);
+            mapper.map_def(rd);
         }
         &mut Inst::Mov64UImm32Shifted { ref mut rd, .. } => {
-            map_def(mapper, rd);
+            mapper.map_def(rd);
         }
         &mut Inst::Insert64UImm16Shifted { ref mut rd, .. } => {
-            map_mod(mapper, rd);
+            mapper.map_mod(rd);
         }
         &mut Inst::Insert64UImm32Shifted { ref mut rd, .. } => {
-            map_mod(mapper, rd);
+            mapper.map_mod(rd);
         }
         &mut Inst::CMov64 {
             ref mut rd,
             ref mut rm,
             ..
         } => {
-            map_mod(mapper, rd);
-            map_use(mapper, rm);
+            mapper.map_mod(rd);
+            mapper.map_use(rm);
         }
         &mut Inst::CMov32 {
             ref mut rd,
             ref mut rm,
             ..
         } => {
-            map_mod(mapper, rd);
-            map_use(mapper, rm);
+            mapper.map_mod(rd);
+            mapper.map_use(rm);
         }
         &mut Inst::CMov32SImm16 { ref mut rd, .. } => {
-            map_mod(mapper, rd);
+            mapper.map_mod(rd);
         }
         &mut Inst::CMov64SImm16 { ref mut rd, .. } => {
-            map_mod(mapper, rd);
+            mapper.map_mod(rd);
         }
         &mut Inst::FpuMove32 {
             ref mut rd,
             ref mut rn,
         } => {
-            map_def(mapper, rd);
-            map_use(mapper, rn);
+            mapper.map_def(rd);
+            mapper.map_use(rn);
         }
         &mut Inst::FpuMove64 {
             ref mut rd,
             ref mut rn,
         } => {
-            map_def(mapper, rd);
-            map_use(mapper, rn);
+            mapper.map_def(rd);
+            mapper.map_use(rn);
         }
         &mut Inst::FpuCMov64 {
             ref mut rd,
             ref mut rm,
             ..
         } => {
-            map_mod(mapper, rd);
-            map_use(mapper, rm);
+            mapper.map_mod(rd);
+            mapper.map_use(rm);
         }
         &mut Inst::FpuCMov32 {
             ref mut rd,
             ref mut rm,
             ..
         } => {
-            map_mod(mapper, rd);
-            map_use(mapper, rm);
+            mapper.map_mod(rd);
+            mapper.map_use(rm);
         }
         &mut Inst::MovToFpr {
             ref mut rd,
             ref mut rn,
         } => {
-            map_def(mapper, rd);
-            map_use(mapper, rn);
+            mapper.map_def(rd);
+            mapper.map_use(rn);
         }
         &mut Inst::MovFromFpr {
             ref mut rd,
             ref mut rn,
         } => {
-            map_def(mapper, rd);
-            map_use(mapper, rn);
+            mapper.map_def(rd);
+            mapper.map_use(rn);
         }
         &mut Inst::FpuRR {
             ref mut rd,
             ref mut rn,
             ..
         } => {
-            map_def(mapper, rd);
-            map_use(mapper, rn);
+            mapper.map_def(rd);
+            mapper.map_use(rn);
         }
         &mut Inst::FpuRRR {
             ref mut rd,
             ref mut rm,
             ..
         } => {
-            map_mod(mapper, rd);
-            map_use(mapper, rm);
+            mapper.map_mod(rd);
+            mapper.map_use(rm);
         }
         &mut Inst::FpuRRRR {
             ref mut rd,
@@ -2146,9 +1254,9 @@ fn s390x_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             ref mut rm,
             ..
         } => {
-            map_mod(mapper, rd);
-            map_use(mapper, rn);
-            map_use(mapper, rm);
+            mapper.map_mod(rd);
+            mapper.map_use(rn);
+            mapper.map_use(rm);
         }
         &mut Inst::FpuCopysign {
             ref mut rd,
@@ -2156,30 +1264,30 @@ fn s390x_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             ref mut rm,
             ..
         } => {
-            map_def(mapper, rd);
-            map_use(mapper, rn);
-            map_use(mapper, rm);
+            mapper.map_def(rd);
+            mapper.map_use(rn);
+            mapper.map_use(rm);
         }
         &mut Inst::FpuCmp32 {
             ref mut rn,
             ref mut rm,
         } => {
-            map_use(mapper, rn);
-            map_use(mapper, rm);
+            mapper.map_use(rn);
+            mapper.map_use(rm);
         }
         &mut Inst::FpuCmp64 {
             ref mut rn,
             ref mut rm,
         } => {
-            map_use(mapper, rn);
-            map_use(mapper, rm);
+            mapper.map_use(rn);
+            mapper.map_use(rm);
         }
         &mut Inst::FpuLoad32 {
             ref mut rd,
             ref mut mem,
             ..
         } => {
-            map_def(mapper, rd);
+            mapper.map_def(rd);
             map_mem(mapper, mem);
         }
         &mut Inst::FpuLoad64 {
@@ -2187,7 +1295,7 @@ fn s390x_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             ref mut mem,
             ..
         } => {
-            map_def(mapper, rd);
+            mapper.map_def(rd);
             map_mem(mapper, mem);
         }
         &mut Inst::FpuStore32 {
@@ -2195,7 +1303,7 @@ fn s390x_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             ref mut mem,
             ..
         } => {
-            map_use(mapper, rd);
+            mapper.map_use(rd);
             map_mem(mapper, mem);
         }
         &mut Inst::FpuStore64 {
@@ -2203,7 +1311,7 @@ fn s390x_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             ref mut mem,
             ..
         } => {
-            map_use(mapper, rd);
+            mapper.map_use(rd);
             map_mem(mapper, mem);
         }
         &mut Inst::FpuLoadRev32 {
@@ -2211,7 +1319,7 @@ fn s390x_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             ref mut mem,
             ..
         } => {
-            map_def(mapper, rd);
+            mapper.map_def(rd);
             map_mem(mapper, mem);
         }
         &mut Inst::FpuLoadRev64 {
@@ -2219,7 +1327,7 @@ fn s390x_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             ref mut mem,
             ..
         } => {
-            map_def(mapper, rd);
+            mapper.map_def(rd);
             map_mem(mapper, mem);
         }
         &mut Inst::FpuStoreRev32 {
@@ -2227,7 +1335,7 @@ fn s390x_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             ref mut mem,
             ..
         } => {
-            map_use(mapper, rd);
+            mapper.map_use(rd);
             map_mem(mapper, mem);
         }
         &mut Inst::FpuStoreRev64 {
@@ -2235,38 +1343,38 @@ fn s390x_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             ref mut mem,
             ..
         } => {
-            map_use(mapper, rd);
+            mapper.map_use(rd);
             map_mem(mapper, mem);
         }
         &mut Inst::LoadFpuConst32 { ref mut rd, .. } => {
-            map_def(mapper, rd);
+            mapper.map_def(rd);
         }
         &mut Inst::LoadFpuConst64 { ref mut rd, .. } => {
-            map_def(mapper, rd);
+            mapper.map_def(rd);
         }
         &mut Inst::FpuToInt {
             ref mut rd,
             ref mut rn,
             ..
         } => {
-            map_def(mapper, rd);
-            map_use(mapper, rn);
+            mapper.map_def(rd);
+            mapper.map_use(rn);
         }
         &mut Inst::IntToFpu {
             ref mut rd,
             ref mut rn,
             ..
         } => {
-            map_def(mapper, rd);
-            map_use(mapper, rn);
+            mapper.map_def(rd);
+            mapper.map_use(rn);
         }
         &mut Inst::FpuRound {
             ref mut rd,
             ref mut rn,
             ..
         } => {
-            map_def(mapper, rd);
-            map_use(mapper, rn);
+            mapper.map_def(rd);
+            mapper.map_use(rn);
         }
         &mut Inst::FpuVecRRR {
             ref mut rd,
@@ -2274,28 +1382,28 @@ fn s390x_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             ref mut rm,
             ..
         } => {
-            map_def(mapper, rd);
-            map_use(mapper, rn);
-            map_use(mapper, rm);
+            mapper.map_def(rd);
+            mapper.map_use(rn);
+            mapper.map_use(rm);
         }
         &mut Inst::Extend {
             ref mut rd,
             ref mut rn,
             ..
         } => {
-            map_def(mapper, rd);
-            map_use(mapper, rn);
+            mapper.map_def(rd);
+            mapper.map_use(rn);
         }
         &mut Inst::Call {
             ref mut link,
             ref mut info,
         } => {
-            map_def(mapper, link);
+            mapper.map_def(link);
             for r in info.uses.iter_mut() {
-                map_use(mapper, r);
+                mapper.map_use(r);
             }
             for r in info.defs.iter_mut() {
-                map_def(mapper, r);
+                mapper.map_def(r);
             }
         }
         &mut Inst::CallInd {
@@ -2303,47 +1411,46 @@ fn s390x_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             ref mut info,
             ..
         } => {
-            map_def(mapper, link);
+            mapper.map_def(link);
             for r in info.uses.iter_mut() {
-                map_use(mapper, r);
+                mapper.map_use(r);
             }
             for r in info.defs.iter_mut() {
-                map_def(mapper, r);
+                mapper.map_def(r);
             }
-            map_use(mapper, &mut info.rn);
+            mapper.map_use(&mut info.rn);
         }
         &mut Inst::Ret { .. } => {}
         &mut Inst::EpiloguePlaceholder => {}
         &mut Inst::Jump { .. } => {}
         &mut Inst::IndirectBr { ref mut rn, .. } => {
-            map_use(mapper, rn);
+            mapper.map_use(rn);
         }
         &mut Inst::CondBr { .. } | &mut Inst::OneWayCondBr { .. } => {}
         &mut Inst::Debugtrap | &mut Inst::Trap { .. } | &mut Inst::TrapIf { .. } => {}
         &mut Inst::Nop0 | &mut Inst::Nop2 => {}
-        &mut Inst::JTSequence {
-            ref mut ridx,
-            ref mut rtmp1,
-            ref mut rtmp2,
-            ..
-        } => {
-            map_use(mapper, ridx);
-            map_def(mapper, rtmp1);
-            map_def(mapper, rtmp2);
+        &mut Inst::JTSequence { ref mut ridx, .. } => {
+            mapper.map_use(ridx);
         }
         &mut Inst::LoadExtNameFar { ref mut rd, .. } => {
-            map_def(mapper, rd);
+            mapper.map_def(rd);
         }
         &mut Inst::LoadAddr {
             ref mut rd,
             ref mut mem,
         } => {
-            map_def(mapper, rd);
+            mapper.map_def(rd);
             map_mem(mapper, mem);
         }
+        &mut Inst::Loop { ref mut body, .. } => {
+            for inst in body.iter_mut() {
+                s390x_map_regs(inst, mapper);
+            }
+        }
+        &mut Inst::CondBreak { .. } => {}
         &mut Inst::VirtualSPOffsetAdj { .. } => {}
         &mut Inst::ValueLabelMarker { ref mut reg, .. } => {
-            map_use(mapper, reg);
+            mapper.map_use(reg);
         }
         &mut Inst::Unwind { .. } => {}
     }
@@ -2384,18 +1491,16 @@ impl MachInst for Inst {
     fn is_term<'a>(&'a self) -> MachTerminator<'a> {
         match self {
             &Inst::Ret { .. } | &Inst::EpiloguePlaceholder => MachTerminator::Ret,
-            &Inst::Jump { dest } => MachTerminator::Uncond(dest.as_label().unwrap()),
+            &Inst::Jump { dest } => MachTerminator::Uncond(dest),
             &Inst::CondBr {
                 taken, not_taken, ..
-            } => MachTerminator::Cond(taken.as_label().unwrap(), not_taken.as_label().unwrap()),
+            } => MachTerminator::Cond(taken, not_taken),
             &Inst::OneWayCondBr { .. } => {
                 // Explicitly invisible to CFG processing.
                 MachTerminator::None
             }
             &Inst::IndirectBr { ref targets, .. } => MachTerminator::Indirect(&targets[..]),
-            &Inst::JTSequence { ref info, .. } => {
-                MachTerminator::Indirect(&info.targets_for_term[..])
-            }
+            &Inst::JTSequence { ref targets, .. } => MachTerminator::Indirect(&targets[..]),
             _ => MachTerminator::None,
         }
     }
@@ -2502,13 +1607,7 @@ impl MachInst for Inst {
     }
 
     fn gen_jump(target: MachLabel) -> Inst {
-        Inst::Jump {
-            dest: BranchTarget::Label(target),
-        }
-    }
-
-    fn reg_universe(flags: &settings::Flags) -> RealRegUniverse {
-        create_reg_universe(flags)
+        Inst::Jump { dest: target }
     }
 
     fn worst_case_size() -> CodeOffset {
@@ -2829,7 +1928,7 @@ impl Inst {
                 rd,
                 rn,
                 shift_imm,
-                ref shift_reg,
+                shift_reg,
             } => {
                 let op = match shift_op {
                     ShiftOp::RotL32 => "rll",
@@ -2843,12 +1942,64 @@ impl Inst {
                 };
                 let rd = rd.to_reg().show_rru(mb_rru);
                 let rn = rn.show_rru(mb_rru);
-                let shift_imm = shift_imm.show_rru(mb_rru);
-                let shift_reg = match shift_reg {
-                    Some(reg) => format!("({})", reg.show_rru(mb_rru)),
-                    None => "".to_string(),
+                let shift_reg = if shift_reg != zero_reg() {
+                    format!("({})", shift_reg.show_rru(mb_rru))
+                } else {
+                    "".to_string()
                 };
                 format!("{} {}, {}, {}{}", op, rd, rn, shift_imm, shift_reg)
+            }
+            &Inst::RxSBG {
+                op,
+                rd,
+                rn,
+                start_bit,
+                end_bit,
+                rotate_amt,
+            } => {
+                let op = match op {
+                    RxSBGOp::Insert => "risbgn",
+                    RxSBGOp::And => "rnsbg",
+                    RxSBGOp::Or => "rosbg",
+                    RxSBGOp::Xor => "rxsbg",
+                };
+                let rd = rd.to_reg().show_rru(mb_rru);
+                let rn = rn.show_rru(mb_rru);
+                format!(
+                    "{} {}, {}, {}, {}, {}",
+                    op,
+                    rd,
+                    rn,
+                    start_bit,
+                    end_bit,
+                    (rotate_amt as u8) & 63
+                )
+            }
+            &Inst::RxSBGTest {
+                op,
+                rd,
+                rn,
+                start_bit,
+                end_bit,
+                rotate_amt,
+            } => {
+                let op = match op {
+                    RxSBGOp::And => "rnsbg",
+                    RxSBGOp::Or => "rosbg",
+                    RxSBGOp::Xor => "rxsbg",
+                    _ => unreachable!(),
+                };
+                let rd = rd.show_rru(mb_rru);
+                let rn = rn.show_rru(mb_rru);
+                format!(
+                    "{} {}, {}, {}, {}, {}",
+                    op,
+                    rd,
+                    rn,
+                    start_bit | 0x80,
+                    end_bit,
+                    (rotate_amt as u8) & 63
+                )
             }
             &Inst::UnaryRR { op, rd, rn } => {
                 let (op, extra) = match op {
@@ -2860,6 +2011,8 @@ impl Inst {
                     UnaryOp::Neg64Ext32 => ("lcgfr", ""),
                     UnaryOp::PopcntByte => ("popcnt", ""),
                     UnaryOp::PopcntReg => ("popcnt", ", 8"),
+                    UnaryOp::BSwap32 => ("lrvr", ""),
+                    UnaryOp::BSwap64 => ("lrvgr", ""),
                 };
                 let rd = rd.to_reg().show_rru(mb_rru);
                 let rn = rn.show_rru(mb_rru);
@@ -3192,29 +2345,21 @@ impl Inst {
                 let mem = mem.show_rru(mb_rru);
                 format!("{}{} {}, {}, 0", mem_str, op, rd, mem)
             }
-            &Inst::LoadMultiple64 {
-                rt,
-                rt2,
-                addr_reg,
-                addr_off,
-            } => {
+            &Inst::LoadMultiple64 { rt, rt2, ref mem } => {
+                let (mem_str, mem) =
+                    mem_finalize_for_show(mem, mb_rru, state, false, true, false, false);
                 let rt = rt.show_rru(mb_rru);
                 let rt2 = rt2.show_rru(mb_rru);
-                let addr_reg = addr_reg.show_rru(mb_rru);
-                let addr_off = addr_off.show_rru(mb_rru);
-                format!("lmg {}, {}, {}({})", rt, rt2, addr_off, addr_reg)
+                let mem = mem.show_rru(mb_rru);
+                format!("{}lmg {}, {}, {}", mem_str, rt, rt2, mem)
             }
-            &Inst::StoreMultiple64 {
-                rt,
-                rt2,
-                addr_reg,
-                addr_off,
-            } => {
+            &Inst::StoreMultiple64 { rt, rt2, ref mem } => {
+                let (mem_str, mem) =
+                    mem_finalize_for_show(mem, mb_rru, state, false, true, false, false);
                 let rt = rt.show_rru(mb_rru);
                 let rt2 = rt2.show_rru(mb_rru);
-                let addr_reg = addr_reg.show_rru(mb_rru);
-                let addr_off = addr_off.show_rru(mb_rru);
-                format!("stmg {}, {}, {}({})", rt, rt2, addr_off, addr_reg)
+                let mem = mem.show_rru(mb_rru);
+                format!("{}stmg {}, {}, {}", mem_str, rt, rt2, mem)
             }
             &Inst::Mov64 { rd, rm } => {
                 let rd = rd.to_reg().show_rru(mb_rru);
@@ -3402,7 +2547,10 @@ impl Inst {
                 let tmp = writable_spilltmp_reg().to_reg().show_rru(mb_rru);
                 format!(
                     "bras {}, 8 ; data.f32 {} ; le {}, 0({})",
-                    tmp, const_data, rd, tmp
+                    tmp,
+                    f32::from_bits(const_data),
+                    rd,
+                    tmp
                 )
             }
             &Inst::LoadFpuConst64 { rd, const_data } => {
@@ -3410,7 +2558,10 @@ impl Inst {
                 let tmp = writable_spilltmp_reg().to_reg().show_rru(mb_rru);
                 format!(
                     "bras {}, 12 ; data.f64 {} ; ld {}, 0({})",
-                    tmp, const_data, rd, tmp
+                    tmp,
+                    f64::from_bits(const_data),
+                    rd,
+                    tmp
                 )
             }
             &Inst::FpuToInt { op, rd, rn } => {
@@ -3511,8 +2662,8 @@ impl Inst {
                 format!("br {}", link)
             }
             &Inst::EpiloguePlaceholder => "epilogue placeholder".to_string(),
-            &Inst::Jump { ref dest } => {
-                let dest = dest.show_rru(mb_rru);
+            &Inst::Jump { dest } => {
+                let dest = dest.to_string();
                 format!("jg {}", dest)
             }
             &Inst::IndirectBr { rn, .. } => {
@@ -3520,17 +2671,17 @@ impl Inst {
                 format!("br {}", rn)
             }
             &Inst::CondBr {
-                ref taken,
-                ref not_taken,
+                taken,
+                not_taken,
                 cond,
             } => {
-                let taken = taken.show_rru(mb_rru);
-                let not_taken = not_taken.show_rru(mb_rru);
+                let taken = taken.to_string();
+                let not_taken = not_taken.to_string();
                 let cond = cond.show_rru(mb_rru);
                 format!("jg{} {} ; jg {}", cond, taken, not_taken)
             }
-            &Inst::OneWayCondBr { ref target, cond } => {
-                let target = target.show_rru(mb_rru);
+            &Inst::OneWayCondBr { target, cond } => {
+                let target = target.to_string();
                 let cond = cond.show_rru(mb_rru);
                 format!("jg{} {}", cond, target)
             }
@@ -3540,42 +2691,25 @@ impl Inst {
                 let cond = cond.invert().show_rru(mb_rru);
                 format!("j{} 6 ; trap", cond)
             }
-            &Inst::JTSequence {
-                ref info,
-                ridx,
-                rtmp1,
-                rtmp2,
-                ..
-            } => {
+            &Inst::JTSequence { ridx, ref targets } => {
                 let ridx = ridx.show_rru(mb_rru);
-                let rtmp1 = rtmp1.show_rru(mb_rru);
-                let rtmp2 = rtmp2.show_rru(mb_rru);
-                let default_target = info.default_target.show_rru(mb_rru);
+                let rtmp = writable_spilltmp_reg().to_reg().show_rru(mb_rru);
+                // The first entry is the default target, which is not emitted
+                // into the jump table, so we skip it here.  It is only in the
+                // list so MachTerminator will see the potential target.
+                let jt_entries: String = targets
+                    .iter()
+                    .skip(1)
+                    .map(|label| format!(" {}", label.to_string()))
+                    .collect();
                 format!(
                     concat!(
-                        "clgfi {}, {} ; ",
-                        "jghe {} ; ",
-                        "sllg {}, {}, 2 ; ",
-                        "larl {}, 18 ; ",
-                        "lgf {}, 0({}, {}) ; ",
-                        "agrk {}, {}, {} ; ",
+                        "larl {}, 14 ; ",
+                        "agf {}, 0({}, {}) ; ",
                         "br {} ; ",
-                        "jt_entries {:?}"
+                        "jt_entries{}"
                     ),
-                    ridx,
-                    info.targets.len(),
-                    default_target,
-                    rtmp2,
-                    ridx,
-                    rtmp1,
-                    rtmp2,
-                    rtmp2,
-                    rtmp1,
-                    rtmp1,
-                    rtmp1,
-                    rtmp2,
-                    rtmp1,
-                    info.targets
+                    rtmp, rtmp, rtmp, ridx, rtmp, jt_entries,
                 )
             }
             &Inst::LoadExtNameFar {
@@ -3603,6 +2737,19 @@ impl Inst {
                 let rd = rd.show_rru(mb_rru);
                 let mem = mem.show_rru(mb_rru);
                 format!("{}{} {}, {}", mem_str, op, rd, mem)
+            }
+            &Inst::Loop { ref body, cond } => {
+                let body = body
+                    .into_iter()
+                    .map(|inst| inst.show_rru(mb_rru))
+                    .collect::<Vec<_>>()
+                    .join(" ; ");
+                let cond = cond.show_rru(mb_rru);
+                format!("0: {} ; jg{} 0b ; 1:", body, cond)
+            }
+            &Inst::CondBreak { cond } => {
+                let cond = cond.show_rru(mb_rru);
+                format!("jg{} 1f", cond)
             }
             &Inst::VirtualSPOffsetAdj { offset } => {
                 state.virtual_sp_offset += offset;

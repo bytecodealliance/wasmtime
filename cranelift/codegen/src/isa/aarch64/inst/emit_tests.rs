@@ -1,7 +1,6 @@
 use crate::ir::types::*;
 use crate::ir::TrapCode;
 use crate::isa::aarch64::inst::*;
-use crate::isa::test_utils;
 use crate::isa::CallConv;
 use crate::settings;
 
@@ -33,7 +32,8 @@ fn test_aarch64_binemit() {
     insns.push((Inst::Nop4, "1F2003D5", "nop"));
     insns.push((
         Inst::AluRRR {
-            alu_op: ALUOp::Add32,
+            alu_op: ALUOp::Add,
+            size: OperandSize::Size32,
             rd: writable_xreg(1),
             rn: xreg(2),
             rm: xreg(3),
@@ -43,7 +43,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRR {
-            alu_op: ALUOp::Add64,
+            alu_op: ALUOp::Add,
+            size: OperandSize::Size64,
             rd: writable_xreg(4),
             rn: xreg(5),
             rm: xreg(6),
@@ -53,7 +54,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRR {
-            alu_op: ALUOp::Adc32,
+            alu_op: ALUOp::Adc,
+            size: OperandSize::Size32,
             rd: writable_xreg(1),
             rn: xreg(2),
             rm: xreg(3),
@@ -63,7 +65,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRR {
-            alu_op: ALUOp::Adc64,
+            alu_op: ALUOp::Adc,
+            size: OperandSize::Size64,
             rd: writable_xreg(4),
             rn: xreg(5),
             rm: xreg(6),
@@ -73,7 +76,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRR {
-            alu_op: ALUOp::AdcS32,
+            alu_op: ALUOp::AdcS,
+            size: OperandSize::Size32,
             rd: writable_xreg(1),
             rn: xreg(2),
             rm: xreg(3),
@@ -83,7 +87,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRR {
-            alu_op: ALUOp::AdcS64,
+            alu_op: ALUOp::AdcS,
+            size: OperandSize::Size64,
             rd: writable_xreg(4),
             rn: xreg(5),
             rm: xreg(6),
@@ -93,7 +98,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRR {
-            alu_op: ALUOp::Sub32,
+            alu_op: ALUOp::Sub,
+            size: OperandSize::Size32,
             rd: writable_xreg(1),
             rn: xreg(2),
             rm: xreg(3),
@@ -103,7 +109,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRR {
-            alu_op: ALUOp::Sub64,
+            alu_op: ALUOp::Sub,
+            size: OperandSize::Size64,
             rd: writable_xreg(4),
             rn: xreg(5),
             rm: xreg(6),
@@ -113,7 +120,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRR {
-            alu_op: ALUOp::Sbc32,
+            alu_op: ALUOp::Sbc,
+            size: OperandSize::Size32,
             rd: writable_xreg(1),
             rn: xreg(2),
             rm: xreg(3),
@@ -123,7 +131,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRR {
-            alu_op: ALUOp::Sbc64,
+            alu_op: ALUOp::Sbc,
+            size: OperandSize::Size64,
             rd: writable_xreg(4),
             rn: xreg(5),
             rm: xreg(6),
@@ -133,7 +142,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRR {
-            alu_op: ALUOp::SbcS32,
+            alu_op: ALUOp::SbcS,
+            size: OperandSize::Size32,
             rd: writable_xreg(1),
             rn: xreg(2),
             rm: xreg(3),
@@ -143,7 +153,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRR {
-            alu_op: ALUOp::SbcS64,
+            alu_op: ALUOp::SbcS,
+            size: OperandSize::Size64,
             rd: writable_xreg(4),
             rn: xreg(5),
             rm: xreg(6),
@@ -154,7 +165,8 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::AluRRR {
-            alu_op: ALUOp::Orr32,
+            alu_op: ALUOp::Orr,
+            size: OperandSize::Size32,
             rd: writable_xreg(1),
             rn: xreg(2),
             rm: xreg(3),
@@ -164,7 +176,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRR {
-            alu_op: ALUOp::Orr64,
+            alu_op: ALUOp::Orr,
+            size: OperandSize::Size64,
             rd: writable_xreg(4),
             rn: xreg(5),
             rm: xreg(6),
@@ -174,7 +187,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRR {
-            alu_op: ALUOp::And32,
+            alu_op: ALUOp::And,
+            size: OperandSize::Size32,
             rd: writable_xreg(1),
             rn: xreg(2),
             rm: xreg(3),
@@ -184,7 +198,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRR {
-            alu_op: ALUOp::And64,
+            alu_op: ALUOp::And,
+            size: OperandSize::Size64,
             rd: writable_xreg(4),
             rn: xreg(5),
             rm: xreg(6),
@@ -194,7 +209,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRR {
-            alu_op: ALUOp::AndS32,
+            alu_op: ALUOp::AndS,
+            size: OperandSize::Size32,
             rd: writable_xreg(1),
             rn: xreg(2),
             rm: xreg(3),
@@ -204,7 +220,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRR {
-            alu_op: ALUOp::AndS64,
+            alu_op: ALUOp::AndS,
+            size: OperandSize::Size64,
             rd: writable_xreg(4),
             rn: xreg(5),
             rm: xreg(6),
@@ -214,7 +231,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRR {
-            alu_op: ALUOp::SubS32,
+            alu_op: ALUOp::SubS,
+            size: OperandSize::Size32,
             rd: writable_zero_reg(),
             rn: xreg(2),
             rm: xreg(3),
@@ -225,7 +243,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRR {
-            alu_op: ALUOp::SubS32,
+            alu_op: ALUOp::SubS,
+            size: OperandSize::Size32,
             rd: writable_xreg(1),
             rn: xreg(2),
             rm: xreg(3),
@@ -235,7 +254,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRR {
-            alu_op: ALUOp::SubS64,
+            alu_op: ALUOp::SubS,
+            size: OperandSize::Size64,
             rd: writable_xreg(4),
             rn: xreg(5),
             rm: xreg(6),
@@ -245,7 +265,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRR {
-            alu_op: ALUOp::AddS32,
+            alu_op: ALUOp::AddS,
+            size: OperandSize::Size32,
             rd: writable_xreg(1),
             rn: xreg(2),
             rm: xreg(3),
@@ -255,7 +276,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRR {
-            alu_op: ALUOp::AddS64,
+            alu_op: ALUOp::AddS,
+            size: OperandSize::Size64,
             rd: writable_xreg(4),
             rn: xreg(5),
             rm: xreg(6),
@@ -265,7 +287,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRImm12 {
-            alu_op: ALUOp::AddS64,
+            alu_op: ALUOp::AddS,
+            size: OperandSize::Size64,
             rd: writable_zero_reg(),
             rn: xreg(5),
             imm12: Imm12::maybe_from_u64(1).unwrap(),
@@ -276,7 +299,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRR {
-            alu_op: ALUOp::SDiv64,
+            alu_op: ALUOp::SDiv,
+            size: OperandSize::Size64,
             rd: writable_xreg(4),
             rn: xreg(5),
             rm: xreg(6),
@@ -286,7 +310,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRR {
-            alu_op: ALUOp::UDiv64,
+            alu_op: ALUOp::UDiv,
+            size: OperandSize::Size64,
             rd: writable_xreg(4),
             rn: xreg(5),
             rm: xreg(6),
@@ -297,7 +322,8 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::AluRRR {
-            alu_op: ALUOp::Eor32,
+            alu_op: ALUOp::Eor,
+            size: OperandSize::Size32,
             rd: writable_xreg(4),
             rn: xreg(5),
             rm: xreg(6),
@@ -307,7 +333,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRR {
-            alu_op: ALUOp::Eor64,
+            alu_op: ALUOp::Eor,
+            size: OperandSize::Size64,
             rd: writable_xreg(4),
             rn: xreg(5),
             rm: xreg(6),
@@ -317,7 +344,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRR {
-            alu_op: ALUOp::AndNot32,
+            alu_op: ALUOp::AndNot,
+            size: OperandSize::Size32,
             rd: writable_xreg(4),
             rn: xreg(5),
             rm: xreg(6),
@@ -327,7 +355,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRR {
-            alu_op: ALUOp::AndNot64,
+            alu_op: ALUOp::AndNot,
+            size: OperandSize::Size64,
             rd: writable_xreg(4),
             rn: xreg(5),
             rm: xreg(6),
@@ -337,7 +366,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRR {
-            alu_op: ALUOp::OrrNot32,
+            alu_op: ALUOp::OrrNot,
+            size: OperandSize::Size32,
             rd: writable_xreg(4),
             rn: xreg(5),
             rm: xreg(6),
@@ -347,7 +377,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRR {
-            alu_op: ALUOp::OrrNot64,
+            alu_op: ALUOp::OrrNot,
+            size: OperandSize::Size64,
             rd: writable_xreg(4),
             rn: xreg(5),
             rm: xreg(6),
@@ -357,7 +388,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRR {
-            alu_op: ALUOp::EorNot32,
+            alu_op: ALUOp::EorNot,
+            size: OperandSize::Size32,
             rd: writable_xreg(4),
             rn: xreg(5),
             rm: xreg(6),
@@ -367,7 +399,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRR {
-            alu_op: ALUOp::EorNot64,
+            alu_op: ALUOp::EorNot,
+            size: OperandSize::Size64,
             rd: writable_xreg(4),
             rn: xreg(5),
             rm: xreg(6),
@@ -378,7 +411,8 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::AluRRR {
-            alu_op: ALUOp::RotR32,
+            alu_op: ALUOp::RotR,
+            size: OperandSize::Size32,
             rd: writable_xreg(4),
             rn: xreg(5),
             rm: xreg(6),
@@ -388,7 +422,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRR {
-            alu_op: ALUOp::RotR64,
+            alu_op: ALUOp::RotR,
+            size: OperandSize::Size64,
             rd: writable_xreg(4),
             rn: xreg(5),
             rm: xreg(6),
@@ -398,7 +433,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRR {
-            alu_op: ALUOp::Lsr32,
+            alu_op: ALUOp::Lsr,
+            size: OperandSize::Size32,
             rd: writable_xreg(4),
             rn: xreg(5),
             rm: xreg(6),
@@ -408,7 +444,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRR {
-            alu_op: ALUOp::Lsr64,
+            alu_op: ALUOp::Lsr,
+            size: OperandSize::Size64,
             rd: writable_xreg(4),
             rn: xreg(5),
             rm: xreg(6),
@@ -418,7 +455,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRR {
-            alu_op: ALUOp::Asr32,
+            alu_op: ALUOp::Asr,
+            size: OperandSize::Size32,
             rd: writable_xreg(4),
             rn: xreg(5),
             rm: xreg(6),
@@ -428,7 +466,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRR {
-            alu_op: ALUOp::Asr64,
+            alu_op: ALUOp::Asr,
+            size: OperandSize::Size64,
             rd: writable_xreg(4),
             rn: xreg(5),
             rm: xreg(6),
@@ -438,7 +477,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRR {
-            alu_op: ALUOp::Lsl32,
+            alu_op: ALUOp::Lsl,
+            size: OperandSize::Size32,
             rd: writable_xreg(4),
             rn: xreg(5),
             rm: xreg(6),
@@ -448,7 +488,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRR {
-            alu_op: ALUOp::Lsl64,
+            alu_op: ALUOp::Lsl,
+            size: OperandSize::Size64,
             rd: writable_xreg(4),
             rn: xreg(5),
             rm: xreg(6),
@@ -459,7 +500,8 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::AluRRImm12 {
-            alu_op: ALUOp::Add32,
+            alu_op: ALUOp::Add,
+            size: OperandSize::Size32,
             rd: writable_xreg(7),
             rn: xreg(8),
             imm12: Imm12 {
@@ -472,7 +514,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRImm12 {
-            alu_op: ALUOp::Add32,
+            alu_op: ALUOp::Add,
+            size: OperandSize::Size32,
             rd: writable_xreg(7),
             rn: xreg(8),
             imm12: Imm12 {
@@ -485,7 +528,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRImm12 {
-            alu_op: ALUOp::Add64,
+            alu_op: ALUOp::Add,
+            size: OperandSize::Size64,
             rd: writable_xreg(7),
             rn: xreg(8),
             imm12: Imm12 {
@@ -498,7 +542,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRImm12 {
-            alu_op: ALUOp::Sub32,
+            alu_op: ALUOp::Sub,
+            size: OperandSize::Size32,
             rd: writable_xreg(7),
             rn: xreg(8),
             imm12: Imm12 {
@@ -511,7 +556,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRImm12 {
-            alu_op: ALUOp::Sub64,
+            alu_op: ALUOp::Sub,
+            size: OperandSize::Size64,
             rd: writable_xreg(7),
             rn: xreg(8),
             imm12: Imm12 {
@@ -524,7 +570,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRImm12 {
-            alu_op: ALUOp::SubS32,
+            alu_op: ALUOp::SubS,
+            size: OperandSize::Size32,
             rd: writable_xreg(7),
             rn: xreg(8),
             imm12: Imm12 {
@@ -537,7 +584,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRImm12 {
-            alu_op: ALUOp::SubS64,
+            alu_op: ALUOp::SubS,
+            size: OperandSize::Size64,
             rd: writable_xreg(7),
             rn: xreg(8),
             imm12: Imm12 {
@@ -551,7 +599,8 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::AluRRRExtend {
-            alu_op: ALUOp::Add32,
+            alu_op: ALUOp::Add,
+            size: OperandSize::Size32,
             rd: writable_xreg(7),
             rn: xreg(8),
             rm: xreg(9),
@@ -563,7 +612,8 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::AluRRRExtend {
-            alu_op: ALUOp::Add64,
+            alu_op: ALUOp::Add,
+            size: OperandSize::Size64,
             rd: writable_xreg(15),
             rn: xreg(16),
             rm: xreg(17),
@@ -575,7 +625,8 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::AluRRRExtend {
-            alu_op: ALUOp::Sub32,
+            alu_op: ALUOp::Sub,
+            size: OperandSize::Size32,
             rd: writable_xreg(1),
             rn: xreg(2),
             rm: xreg(3),
@@ -587,7 +638,8 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::AluRRRExtend {
-            alu_op: ALUOp::Sub64,
+            alu_op: ALUOp::Sub,
+            size: OperandSize::Size64,
             rd: writable_xreg(20),
             rn: xreg(21),
             rm: xreg(22),
@@ -599,7 +651,8 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::AluRRRShift {
-            alu_op: ALUOp::Add32,
+            alu_op: ALUOp::Add,
+            size: OperandSize::Size32,
             rd: writable_xreg(10),
             rn: xreg(11),
             rm: xreg(12),
@@ -613,7 +666,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRRShift {
-            alu_op: ALUOp::Add64,
+            alu_op: ALUOp::Add,
+            size: OperandSize::Size64,
             rd: writable_xreg(10),
             rn: xreg(11),
             rm: xreg(12),
@@ -627,7 +681,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRRShift {
-            alu_op: ALUOp::Sub32,
+            alu_op: ALUOp::Sub,
+            size: OperandSize::Size32,
             rd: writable_xreg(10),
             rn: xreg(11),
             rm: xreg(12),
@@ -641,7 +696,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRRShift {
-            alu_op: ALUOp::Sub64,
+            alu_op: ALUOp::Sub,
+            size: OperandSize::Size64,
             rd: writable_xreg(10),
             rn: xreg(11),
             rm: xreg(12),
@@ -655,7 +711,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRRShift {
-            alu_op: ALUOp::Orr32,
+            alu_op: ALUOp::Orr,
+            size: OperandSize::Size32,
             rd: writable_xreg(10),
             rn: xreg(11),
             rm: xreg(12),
@@ -669,7 +726,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRRShift {
-            alu_op: ALUOp::Orr64,
+            alu_op: ALUOp::Orr,
+            size: OperandSize::Size64,
             rd: writable_xreg(10),
             rn: xreg(11),
             rm: xreg(12),
@@ -683,7 +741,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRRShift {
-            alu_op: ALUOp::And32,
+            alu_op: ALUOp::And,
+            size: OperandSize::Size32,
             rd: writable_xreg(10),
             rn: xreg(11),
             rm: xreg(12),
@@ -697,7 +756,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRRShift {
-            alu_op: ALUOp::And64,
+            alu_op: ALUOp::And,
+            size: OperandSize::Size64,
             rd: writable_xreg(10),
             rn: xreg(11),
             rm: xreg(12),
@@ -711,7 +771,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRRShift {
-            alu_op: ALUOp::AndS32,
+            alu_op: ALUOp::AndS,
+            size: OperandSize::Size32,
             rd: writable_xreg(10),
             rn: xreg(11),
             rm: xreg(12),
@@ -725,7 +786,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRRShift {
-            alu_op: ALUOp::AndS64,
+            alu_op: ALUOp::AndS,
+            size: OperandSize::Size64,
             rd: writable_xreg(10),
             rn: xreg(11),
             rm: xreg(12),
@@ -739,7 +801,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRRShift {
-            alu_op: ALUOp::Eor32,
+            alu_op: ALUOp::Eor,
+            size: OperandSize::Size32,
             rd: writable_xreg(10),
             rn: xreg(11),
             rm: xreg(12),
@@ -753,7 +816,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRRShift {
-            alu_op: ALUOp::Eor64,
+            alu_op: ALUOp::Eor,
+            size: OperandSize::Size64,
             rd: writable_xreg(10),
             rn: xreg(11),
             rm: xreg(12),
@@ -767,7 +831,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRRShift {
-            alu_op: ALUOp::OrrNot32,
+            alu_op: ALUOp::OrrNot,
+            size: OperandSize::Size32,
             rd: writable_xreg(10),
             rn: xreg(11),
             rm: xreg(12),
@@ -781,7 +846,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRRShift {
-            alu_op: ALUOp::OrrNot64,
+            alu_op: ALUOp::OrrNot,
+            size: OperandSize::Size64,
             rd: writable_xreg(10),
             rn: xreg(11),
             rm: xreg(12),
@@ -795,7 +861,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRRShift {
-            alu_op: ALUOp::AndNot32,
+            alu_op: ALUOp::AndNot,
+            size: OperandSize::Size32,
             rd: writable_xreg(10),
             rn: xreg(11),
             rm: xreg(12),
@@ -809,7 +876,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRRShift {
-            alu_op: ALUOp::AndNot64,
+            alu_op: ALUOp::AndNot,
+            size: OperandSize::Size64,
             rd: writable_xreg(10),
             rn: xreg(11),
             rm: xreg(12),
@@ -823,7 +891,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRRShift {
-            alu_op: ALUOp::EorNot32,
+            alu_op: ALUOp::EorNot,
+            size: OperandSize::Size32,
             rd: writable_xreg(10),
             rn: xreg(11),
             rm: xreg(12),
@@ -837,7 +906,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRRShift {
-            alu_op: ALUOp::EorNot64,
+            alu_op: ALUOp::EorNot,
+            size: OperandSize::Size64,
             rd: writable_xreg(10),
             rn: xreg(11),
             rm: xreg(12),
@@ -851,7 +921,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRRShift {
-            alu_op: ALUOp::AddS32,
+            alu_op: ALUOp::AddS,
+            size: OperandSize::Size32,
             rd: writable_xreg(10),
             rn: xreg(11),
             rm: xreg(12),
@@ -865,7 +936,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRRShift {
-            alu_op: ALUOp::AddS64,
+            alu_op: ALUOp::AddS,
+            size: OperandSize::Size64,
             rd: writable_xreg(10),
             rn: xreg(11),
             rm: xreg(12),
@@ -879,7 +951,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRRShift {
-            alu_op: ALUOp::SubS32,
+            alu_op: ALUOp::SubS,
+            size: OperandSize::Size32,
             rd: writable_xreg(10),
             rn: xreg(11),
             rm: xreg(12),
@@ -893,7 +966,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRRShift {
-            alu_op: ALUOp::SubS64,
+            alu_op: ALUOp::SubS,
+            size: OperandSize::Size64,
             rd: writable_xreg(10),
             rn: xreg(11),
             rm: xreg(12),
@@ -908,7 +982,8 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::AluRRRExtend {
-            alu_op: ALUOp::SubS64,
+            alu_op: ALUOp::SubS,
+            size: OperandSize::Size64,
             rd: writable_zero_reg(),
             rn: stack_reg(),
             rm: xreg(12),
@@ -965,6 +1040,7 @@ fn test_aarch64_binemit() {
     insns.push((
         Inst::AluRRR {
             alu_op: ALUOp::SMulH,
+            size: OperandSize::Size64,
             rd: writable_xreg(1),
             rn: xreg(2),
             rm: xreg(3),
@@ -975,6 +1051,7 @@ fn test_aarch64_binemit() {
     insns.push((
         Inst::AluRRR {
             alu_op: ALUOp::UMulH,
+            size: OperandSize::Size64,
             rd: writable_xreg(1),
             rn: xreg(2),
             rm: xreg(3),
@@ -985,7 +1062,8 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::AluRRImmShift {
-            alu_op: ALUOp::RotR32,
+            alu_op: ALUOp::RotR,
+            size: OperandSize::Size32,
             rd: writable_xreg(20),
             rn: xreg(21),
             immshift: ImmShift::maybe_from_u64(19).unwrap(),
@@ -995,7 +1073,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRImmShift {
-            alu_op: ALUOp::RotR64,
+            alu_op: ALUOp::RotR,
+            size: OperandSize::Size64,
             rd: writable_xreg(20),
             rn: xreg(21),
             immshift: ImmShift::maybe_from_u64(42).unwrap(),
@@ -1005,7 +1084,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRImmShift {
-            alu_op: ALUOp::Lsr32,
+            alu_op: ALUOp::Lsr,
+            size: OperandSize::Size32,
             rd: writable_xreg(10),
             rn: xreg(11),
             immshift: ImmShift::maybe_from_u64(13).unwrap(),
@@ -1015,7 +1095,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRImmShift {
-            alu_op: ALUOp::Lsr64,
+            alu_op: ALUOp::Lsr,
+            size: OperandSize::Size64,
             rd: writable_xreg(10),
             rn: xreg(11),
             immshift: ImmShift::maybe_from_u64(57).unwrap(),
@@ -1025,7 +1106,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRImmShift {
-            alu_op: ALUOp::Asr32,
+            alu_op: ALUOp::Asr,
+            size: OperandSize::Size32,
             rd: writable_xreg(4),
             rn: xreg(5),
             immshift: ImmShift::maybe_from_u64(7).unwrap(),
@@ -1035,7 +1117,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRImmShift {
-            alu_op: ALUOp::Asr64,
+            alu_op: ALUOp::Asr,
+            size: OperandSize::Size64,
             rd: writable_xreg(4),
             rn: xreg(5),
             immshift: ImmShift::maybe_from_u64(35).unwrap(),
@@ -1045,7 +1128,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRImmShift {
-            alu_op: ALUOp::Lsl32,
+            alu_op: ALUOp::Lsl,
+            size: OperandSize::Size32,
             rd: writable_xreg(8),
             rn: xreg(9),
             immshift: ImmShift::maybe_from_u64(24).unwrap(),
@@ -1055,7 +1139,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRImmShift {
-            alu_op: ALUOp::Lsl64,
+            alu_op: ALUOp::Lsl,
+            size: OperandSize::Size64,
             rd: writable_xreg(8),
             rn: xreg(9),
             immshift: ImmShift::maybe_from_u64(63).unwrap(),
@@ -1065,7 +1150,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRImmShift {
-            alu_op: ALUOp::Lsl32,
+            alu_op: ALUOp::Lsl,
+            size: OperandSize::Size32,
             rd: writable_xreg(10),
             rn: xreg(11),
             immshift: ImmShift::maybe_from_u64(0).unwrap(),
@@ -1075,7 +1161,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRImmShift {
-            alu_op: ALUOp::Lsl64,
+            alu_op: ALUOp::Lsl,
+            size: OperandSize::Size64,
             rd: writable_xreg(10),
             rn: xreg(11),
             immshift: ImmShift::maybe_from_u64(0).unwrap(),
@@ -1086,7 +1173,8 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::AluRRImmLogic {
-            alu_op: ALUOp::And32,
+            alu_op: ALUOp::And,
+            size: OperandSize::Size32,
             rd: writable_xreg(21),
             rn: xreg(27),
             imml: ImmLogic::maybe_from_u64(0x80003fff, I32).unwrap(),
@@ -1096,7 +1184,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRImmLogic {
-            alu_op: ALUOp::And64,
+            alu_op: ALUOp::And,
+            size: OperandSize::Size64,
             rd: writable_xreg(7),
             rn: xreg(6),
             imml: ImmLogic::maybe_from_u64(0x3fff80003fff800, I64).unwrap(),
@@ -1106,7 +1195,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRImmLogic {
-            alu_op: ALUOp::AndS32,
+            alu_op: ALUOp::AndS,
+            size: OperandSize::Size32,
             rd: writable_xreg(21),
             rn: xreg(27),
             imml: ImmLogic::maybe_from_u64(0x80003fff, I32).unwrap(),
@@ -1116,7 +1206,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRImmLogic {
-            alu_op: ALUOp::AndS64,
+            alu_op: ALUOp::AndS,
+            size: OperandSize::Size64,
             rd: writable_xreg(7),
             rn: xreg(6),
             imml: ImmLogic::maybe_from_u64(0x3fff80003fff800, I64).unwrap(),
@@ -1126,7 +1217,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRImmLogic {
-            alu_op: ALUOp::Orr32,
+            alu_op: ALUOp::Orr,
+            size: OperandSize::Size32,
             rd: writable_xreg(1),
             rn: xreg(5),
             imml: ImmLogic::maybe_from_u64(0x100000, I32).unwrap(),
@@ -1136,7 +1228,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRImmLogic {
-            alu_op: ALUOp::Orr64,
+            alu_op: ALUOp::Orr,
+            size: OperandSize::Size64,
             rd: writable_xreg(4),
             rn: xreg(5),
             imml: ImmLogic::maybe_from_u64(0x8181818181818181, I64).unwrap(),
@@ -1146,7 +1239,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRImmLogic {
-            alu_op: ALUOp::Eor32,
+            alu_op: ALUOp::Eor,
+            size: OperandSize::Size32,
             rd: writable_xreg(1),
             rn: xreg(5),
             imml: ImmLogic::maybe_from_u64(0x00007fff, I32).unwrap(),
@@ -1156,7 +1250,8 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRImmLogic {
-            alu_op: ALUOp::Eor64,
+            alu_op: ALUOp::Eor,
+            size: OperandSize::Size64,
             rd: writable_xreg(10),
             rn: xreg(8),
             imml: ImmLogic::maybe_from_u64(0x8181818181818181, I64).unwrap(),
@@ -2051,6 +2146,25 @@ fn test_aarch64_binemit() {
         },
         "8103271E",
         "fmov s1, w28",
+    ));
+    insns.push((
+        Inst::FpuMoveFPImm {
+            rd: writable_vreg(31),
+            imm: ASIMDFPModImm::maybe_from_u64(f64::to_bits(1.0), ScalarSize::Size64).unwrap(),
+            size: ScalarSize::Size64,
+        },
+        "1F106E1E",
+        "fmov d31, #1",
+    ));
+    insns.push((
+        Inst::FpuMoveFPImm {
+            rd: writable_vreg(1),
+            imm: ASIMDFPModImm::maybe_from_u64(f32::to_bits(31.0).into(), ScalarSize::Size32)
+                .unwrap(),
+            size: ScalarSize::Size32,
+        },
+        "01F0271E",
+        "fmov s1, #31",
     ));
     insns.push((
         Inst::MovToVec {
@@ -6523,12 +6637,10 @@ fn test_aarch64_binemit() {
         let actual_printing = insn.show_rru(Some(&rru));
         assert_eq!(expected_printing, actual_printing);
 
-        let mut sink = test_utils::TestCodeSink::new();
         let mut buffer = MachBuffer::new();
         insn.emit(&mut buffer, &emit_info, &mut Default::default());
         let buffer = buffer.finish();
-        buffer.emit(&mut sink);
-        let actual_encoding = &sink.stringify();
+        let actual_encoding = &buffer.stringify_code_bytes();
         assert_eq!(expected_encoding, actual_encoding);
     }
 }

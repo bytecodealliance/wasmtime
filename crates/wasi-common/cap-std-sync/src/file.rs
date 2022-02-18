@@ -1,5 +1,6 @@
 use cap_fs_ext::MetadataExt;
 use fs_set_times::{SetTimes, SystemTimeSpec};
+use is_terminal::IsTerminal;
 use std::any::Any;
 use std::convert::TryInto;
 use std::io;
@@ -24,6 +25,9 @@ impl File {
 impl WasiFile for File {
     fn as_any(&self) -> &dyn Any {
         self
+    }
+    async fn sock_accept(&mut self, _fdflags: FdFlags) -> Result<Box<dyn WasiFile>, Error> {
+        Err(Error::badf())
     }
     async fn datasync(&self) -> Result<(), Error> {
         self.0.sync_data()?;
@@ -121,6 +125,9 @@ impl WasiFile for File {
     async fn num_ready_bytes(&self) -> Result<u64, Error> {
         Ok(self.0.num_ready_bytes()?)
     }
+    fn isatty(&self) -> bool {
+        self.0.is_terminal()
+    }
     async fn readable(&self) -> Result<(), Error> {
         Err(Error::badf())
     }
@@ -161,8 +168,19 @@ impl AsHandle for File {
     }
 }
 
+#[cfg(windows)]
+use io_extras::os::windows::{AsRawHandleOrSocket, RawHandleOrSocket};
+#[cfg(windows)]
+impl AsRawHandleOrSocket for File {
+    #[inline]
+    fn as_raw_handle_or_socket(&self) -> RawHandleOrSocket {
+        self.0.as_raw_handle_or_socket()
+    }
+}
+
 #[cfg(unix)]
 use io_lifetimes::{AsFd, BorrowedFd};
+
 #[cfg(unix)]
 impl AsFd for File {
     fn as_fd(&self) -> BorrowedFd<'_> {

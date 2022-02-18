@@ -1,7 +1,7 @@
 //! Lowering rules for X64.
 
 // ISLE integration glue.
-mod isle;
+pub(super) mod isle;
 
 use crate::data_value::DataValue;
 use crate::ir::{
@@ -877,316 +877,6 @@ fn emit_bitrev<C: LowerCtx<I = Inst>>(ctx: &mut C, src: Reg, dst: Writable<Reg>,
     ctx.emit(Inst::gen_move(dst, tmp0.to_reg(), types::I64));
 }
 
-fn emit_shl_i128<C: LowerCtx<I = Inst>>(
-    ctx: &mut C,
-    src: ValueRegs<Reg>,
-    dst: ValueRegs<Writable<Reg>>,
-    amt_src: Reg,
-) {
-    let src_lo = src.regs()[0];
-    let src_hi = src.regs()[1];
-    let dst_lo = dst.regs()[0];
-    let dst_hi = dst.regs()[1];
-
-    // mov tmp1, src_lo
-    // shl tmp1, amt_src
-    // mov tmp2, src_hi
-    // shl tmp2, amt_src
-    // mov amt, 64
-    // sub amt, amt_src
-    // mov tmp3, src_lo
-    // shr tmp3, amt
-    // xor dst_lo, dst_lo
-    // test amt_src, 127
-    // cmovz tmp3, dst_lo
-    // or tmp3, tmp2
-    // mov amt, amt_src
-    // and amt, 64
-    // cmovz dst_hi, tmp3
-    // cmovz dst_lo, tmp1
-    // cmovnz dst_hi, tmp1
-
-    let tmp1 = ctx.alloc_tmp(types::I64).only_reg().unwrap();
-    let tmp2 = ctx.alloc_tmp(types::I64).only_reg().unwrap();
-    let tmp3 = ctx.alloc_tmp(types::I64).only_reg().unwrap();
-    let amt = ctx.alloc_tmp(types::I64).only_reg().unwrap();
-
-    ctx.emit(Inst::gen_move(tmp1, src_lo, types::I64));
-    ctx.emit(Inst::gen_move(
-        Writable::from_reg(regs::rcx()),
-        amt_src,
-        types::I64,
-    ));
-    ctx.emit(Inst::shift_r(
-        OperandSize::Size64,
-        ShiftKind::ShiftLeft,
-        None,
-        tmp1,
-    ));
-
-    ctx.emit(Inst::gen_move(tmp2, src_hi, types::I64));
-    ctx.emit(Inst::gen_move(
-        Writable::from_reg(regs::rcx()),
-        amt_src,
-        types::I64,
-    ));
-    ctx.emit(Inst::shift_r(
-        OperandSize::Size64,
-        ShiftKind::ShiftLeft,
-        None,
-        tmp2,
-    ));
-
-    ctx.emit(Inst::imm(OperandSize::Size64, 64, amt));
-    ctx.emit(Inst::alu_rmi_r(
-        OperandSize::Size64,
-        AluRmiROpcode::Sub,
-        RegMemImm::reg(amt_src),
-        amt,
-    ));
-
-    ctx.emit(Inst::gen_move(tmp3, src_lo, types::I64));
-    ctx.emit(Inst::gen_move(
-        Writable::from_reg(regs::rcx()),
-        amt.to_reg(),
-        types::I64,
-    ));
-    ctx.emit(Inst::shift_r(
-        OperandSize::Size64,
-        ShiftKind::ShiftRightLogical,
-        None,
-        tmp3,
-    ));
-    ctx.emit(Inst::alu_rmi_r(
-        OperandSize::Size64,
-        AluRmiROpcode::Xor,
-        RegMemImm::reg(dst_lo.to_reg()),
-        dst_lo,
-    ));
-
-    ctx.emit(Inst::test_rmi_r(
-        OperandSize::Size64,
-        RegMemImm::imm(127),
-        amt_src,
-    ));
-    ctx.emit(Inst::cmove(
-        OperandSize::Size64,
-        CC::Z,
-        RegMem::reg(dst_lo.to_reg()),
-        tmp3,
-    ));
-
-    ctx.emit(Inst::alu_rmi_r(
-        OperandSize::Size64,
-        AluRmiROpcode::Or,
-        RegMemImm::reg(tmp2.to_reg()),
-        tmp3,
-    ));
-
-    // This isn't semantically necessary, but it keeps the
-    // register allocator happy, because it cannot otherwise
-    // infer that cmovz + cmovnz always defines dst_hi.
-    ctx.emit(Inst::alu_rmi_r(
-        OperandSize::Size64,
-        AluRmiROpcode::Xor,
-        RegMemImm::reg(dst_hi.to_reg()),
-        dst_hi,
-    ));
-
-    ctx.emit(Inst::gen_move(amt, amt_src, types::I64));
-    ctx.emit(Inst::alu_rmi_r(
-        OperandSize::Size64,
-        AluRmiROpcode::And,
-        RegMemImm::imm(64),
-        amt,
-    ));
-    ctx.emit(Inst::cmove(
-        OperandSize::Size64,
-        CC::Z,
-        RegMem::reg(tmp3.to_reg()),
-        dst_hi,
-    ));
-    ctx.emit(Inst::cmove(
-        OperandSize::Size64,
-        CC::Z,
-        RegMem::reg(tmp1.to_reg()),
-        dst_lo,
-    ));
-    ctx.emit(Inst::cmove(
-        OperandSize::Size64,
-        CC::NZ,
-        RegMem::reg(tmp1.to_reg()),
-        dst_hi,
-    ));
-}
-
-fn emit_shr_i128<C: LowerCtx<I = Inst>>(
-    ctx: &mut C,
-    src: ValueRegs<Reg>,
-    dst: ValueRegs<Writable<Reg>>,
-    amt_src: Reg,
-    is_signed: bool,
-) {
-    let src_lo = src.regs()[0];
-    let src_hi = src.regs()[1];
-    let dst_lo = dst.regs()[0];
-    let dst_hi = dst.regs()[1];
-
-    // mov tmp1, src_hi
-    // {u,s}shr tmp1, amt_src
-    // mov tmp2, src_lo
-    // ushr tmp2, amt_src
-    // mov amt, 64
-    // sub amt, amt_src
-    // mov tmp3, src_hi
-    // shl tmp3, amt
-    // xor dst_lo, dst_lo
-    // test amt_src, 127
-    // cmovz tmp3, dst_lo
-    // or tmp3, tmp2
-    // if is_signed:
-    //   mov dst_hi, src_hi
-    //   sshr dst_hi, 63  // get the sign bit
-    // else:
-    //   xor dst_hi, dst_hi
-    // mov amt, amt_src
-    // and amt, 64
-    // cmovz dst_hi, tmp1
-    // cmovz dst_lo, tmp3
-    // cmovnz dst_lo, tmp1
-
-    let tmp1 = ctx.alloc_tmp(types::I64).only_reg().unwrap();
-    let tmp2 = ctx.alloc_tmp(types::I64).only_reg().unwrap();
-    let tmp3 = ctx.alloc_tmp(types::I64).only_reg().unwrap();
-    let amt = ctx.alloc_tmp(types::I64).only_reg().unwrap();
-
-    let shift_kind = if is_signed {
-        ShiftKind::ShiftRightArithmetic
-    } else {
-        ShiftKind::ShiftRightLogical
-    };
-
-    ctx.emit(Inst::gen_move(tmp1, src_hi, types::I64));
-    ctx.emit(Inst::gen_move(
-        Writable::from_reg(regs::rcx()),
-        amt_src,
-        types::I64,
-    ));
-    ctx.emit(Inst::shift_r(OperandSize::Size64, shift_kind, None, tmp1));
-
-    ctx.emit(Inst::gen_move(tmp2, src_lo, types::I64));
-    ctx.emit(Inst::gen_move(
-        Writable::from_reg(regs::rcx()),
-        amt_src,
-        types::I64,
-    ));
-    // N.B.: right-shift of *lower* half is *always* unsigned (its MSB is not a sign bit).
-    ctx.emit(Inst::shift_r(
-        OperandSize::Size64,
-        ShiftKind::ShiftRightLogical,
-        None,
-        tmp2,
-    ));
-
-    ctx.emit(Inst::imm(OperandSize::Size64, 64, amt));
-    ctx.emit(Inst::alu_rmi_r(
-        OperandSize::Size64,
-        AluRmiROpcode::Sub,
-        RegMemImm::reg(amt_src),
-        amt,
-    ));
-
-    ctx.emit(Inst::gen_move(tmp3, src_hi, types::I64));
-    ctx.emit(Inst::gen_move(
-        Writable::from_reg(regs::rcx()),
-        amt.to_reg(),
-        types::I64,
-    ));
-    ctx.emit(Inst::shift_r(
-        OperandSize::Size64,
-        ShiftKind::ShiftLeft,
-        None,
-        tmp3,
-    ));
-
-    ctx.emit(Inst::alu_rmi_r(
-        OperandSize::Size64,
-        AluRmiROpcode::Xor,
-        RegMemImm::reg(dst_lo.to_reg()),
-        dst_lo,
-    ));
-    ctx.emit(Inst::test_rmi_r(
-        OperandSize::Size64,
-        RegMemImm::imm(127),
-        amt_src,
-    ));
-    ctx.emit(Inst::cmove(
-        OperandSize::Size64,
-        CC::Z,
-        RegMem::reg(dst_lo.to_reg()),
-        tmp3,
-    ));
-
-    ctx.emit(Inst::alu_rmi_r(
-        OperandSize::Size64,
-        AluRmiROpcode::Or,
-        RegMemImm::reg(tmp2.to_reg()),
-        tmp3,
-    ));
-
-    if is_signed {
-        ctx.emit(Inst::gen_move(dst_hi, src_hi, types::I64));
-        ctx.emit(Inst::shift_r(
-            OperandSize::Size64,
-            ShiftKind::ShiftRightArithmetic,
-            Some(63),
-            dst_hi,
-        ));
-    } else {
-        ctx.emit(Inst::alu_rmi_r(
-            OperandSize::Size64,
-            AluRmiROpcode::Xor,
-            RegMemImm::reg(dst_hi.to_reg()),
-            dst_hi,
-        ));
-    }
-    // This isn't semantically necessary, but it keeps the
-    // register allocator happy, because it cannot otherwise
-    // infer that cmovz + cmovnz always defines dst_lo.
-    ctx.emit(Inst::alu_rmi_r(
-        OperandSize::Size64,
-        AluRmiROpcode::Xor,
-        RegMemImm::reg(dst_lo.to_reg()),
-        dst_lo,
-    ));
-
-    ctx.emit(Inst::gen_move(amt, amt_src, types::I64));
-    ctx.emit(Inst::alu_rmi_r(
-        OperandSize::Size64,
-        AluRmiROpcode::And,
-        RegMemImm::imm(64),
-        amt,
-    ));
-    ctx.emit(Inst::cmove(
-        OperandSize::Size64,
-        CC::Z,
-        RegMem::reg(tmp1.to_reg()),
-        dst_hi,
-    ));
-    ctx.emit(Inst::cmove(
-        OperandSize::Size64,
-        CC::Z,
-        RegMem::reg(tmp3.to_reg()),
-        dst_lo,
-    ));
-    ctx.emit(Inst::cmove(
-        OperandSize::Size64,
-        CC::NZ,
-        RegMem::reg(tmp1.to_reg()),
-        dst_lo,
-    ));
-}
-
 fn make_libcall_sig<C: LowerCtx<I = Inst>>(
     ctx: &mut C,
     insn: IRInst,
@@ -1367,7 +1057,13 @@ fn lower_to_amode<C: LowerCtx<I = Inst>>(ctx: &mut C, spec: InsnInput, offset: i
             )
         };
 
-        return Amode::imm_reg_reg_shift(offset as u32, base, index, shift).with_flags(flags);
+        return Amode::imm_reg_reg_shift(
+            offset as u32,
+            Gpr::new(base).unwrap(),
+            Gpr::new(index).unwrap(),
+            shift,
+        )
+        .with_flags(flags);
     }
 
     let input = put_input_in_reg(ctx, spec);
@@ -1500,7 +1196,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         None
     };
 
-    if let Ok(()) = isle::lower(ctx, isa_flags, &outputs, insn) {
+    if let Ok(()) = isle::lower(ctx, flags, isa_flags, &outputs, insn) {
         return Ok(());
     }
 
@@ -1515,6 +1211,8 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
     match op {
         Opcode::Iconst
         | Opcode::Bconst
+        | Opcode::F32const
+        | Opcode::F64const
         | Opcode::Null
         | Opcode::Iadd
         | Opcode::IaddIfcout
@@ -1534,552 +1232,17 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::Umax
         | Opcode::Imin
         | Opcode::Umin
-        | Opcode::Bnot => implemented_in_isle(ctx),
-
-        Opcode::Bitselect => {
-            let ty = ty.unwrap();
-            let condition = put_input_in_reg(ctx, inputs[0]);
-            let if_true = put_input_in_reg(ctx, inputs[1]);
-            let if_false = input_to_reg_mem(ctx, inputs[2]);
-            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-
-            if ty.is_vector() {
-                let tmp1 = ctx.alloc_tmp(ty).only_reg().unwrap();
-                ctx.emit(Inst::gen_move(tmp1, if_true, ty));
-                ctx.emit(Inst::and(ty, RegMem::reg(condition.clone()), tmp1));
-
-                let tmp2 = ctx.alloc_tmp(ty).only_reg().unwrap();
-                ctx.emit(Inst::gen_move(tmp2, condition, ty));
-                ctx.emit(Inst::and_not(ty, if_false, tmp2));
-
-                ctx.emit(Inst::gen_move(dst, tmp2.to_reg(), ty));
-                ctx.emit(Inst::or(ty, RegMem::from(tmp1), dst));
-            } else {
-                unimplemented!("no lowering for scalar bitselect instruction")
-            }
-        }
-
-        Opcode::Vselect => {
-            let ty = ty.unwrap();
-            let condition = put_input_in_reg(ctx, inputs[0]);
-            let condition_ty = ctx.input_ty(insn, 0);
-            let if_true = input_to_reg_mem(ctx, inputs[1]);
-            let if_false = put_input_in_reg(ctx, inputs[2]);
-            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-
-            if ty.is_vector() {
-                // `vselect` relies on the bit representation of the condition:
-                // vector boolean types are defined in Cranelift to be all 1s or
-                // all 0s. This lowering relies on that fact to use x86's
-                // variable blend instructions, which look at the _high_bit_ of
-                // the condition mask. All the bits of vector booleans will
-                // match (all 1s or all 0s), so we can just use the high bit.
-                assert!(condition_ty.lane_type().is_bool());
-
-                // Variable blend instructions expect the condition mask to be
-                // in XMM0.
-                let xmm0 = Writable::from_reg(regs::xmm0());
-                ctx.emit(Inst::gen_move(xmm0, condition, ty));
-
-                // Match up the source and destination registers for regalloc.
-                ctx.emit(Inst::gen_move(dst, if_false, ty));
-
-                // Technically PBLENDVB would work in all cases (since the bytes
-                // inside the mask will be all 1s or 0s we can blend
-                // byte-by-byte instead of word-by-word, e.g.) but
-                // type-specialized versions are included here for clarity when
-                // troubleshooting and due to slight improvements in
-                // latency/throughput on certain processor families.
-                let opcode = match condition_ty {
-                    types::B64X2 => SseOpcode::Blendvpd,
-                    types::B32X4 => SseOpcode::Blendvps,
-                    types::B16X8 | types::B8X16 => SseOpcode::Pblendvb,
-                    _ => unimplemented!("unable lower vselect for type: {}", condition_ty),
-                };
-                ctx.emit(Inst::xmm_rm_r(opcode, if_true, dst));
-            } else {
-                unimplemented!("no lowering for scalar vselect instruction")
-            }
-        }
-
-        Opcode::Ishl | Opcode::Ushr | Opcode::Sshr | Opcode::Rotl | Opcode::Rotr => {
-            let dst_ty = ctx.output_ty(insn, 0);
-            debug_assert_eq!(ctx.input_ty(insn, 0), dst_ty);
-
-            if !dst_ty.is_vector() && dst_ty.bits() <= 64 {
-                // Scalar shifts on x86 have various encodings:
-                // - shift by one bit, e.g. `SAL r/m8, 1` (not used here)
-                // - shift by an immediate amount, e.g. `SAL r/m8, imm8`
-                // - shift by a dynamic amount but only from the CL register, e.g. `SAL r/m8, CL`.
-                // This implementation uses the last two encoding methods.
-                let (size, lhs) = match dst_ty {
-                    types::I8 | types::I16 => match op {
-                        Opcode::Ishl => (OperandSize::Size32, put_input_in_reg(ctx, inputs[0])),
-                        Opcode::Ushr => (
-                            OperandSize::Size32,
-                            extend_input_to_reg(ctx, inputs[0], ExtSpec::ZeroExtendTo32),
-                        ),
-                        Opcode::Sshr => (
-                            OperandSize::Size32,
-                            extend_input_to_reg(ctx, inputs[0], ExtSpec::SignExtendTo32),
-                        ),
-                        Opcode::Rotl | Opcode::Rotr => (
-                            OperandSize::from_ty(dst_ty),
-                            put_input_in_reg(ctx, inputs[0]),
-                        ),
-                        _ => unreachable!(),
-                    },
-                    types::I32 | types::I64 => (
-                        OperandSize::from_ty(dst_ty),
-                        put_input_in_reg(ctx, inputs[0]),
-                    ),
-                    _ => unreachable!("unhandled output type for shift/rotates: {}", dst_ty),
-                };
-
-                let (count, rhs) =
-                    if let Some(cst) = ctx.get_input_as_source_or_const(insn, 1).constant {
-                        // Mask count, according to Cranelift's semantics.
-                        let cst = (cst as u8) & (dst_ty.bits() as u8 - 1);
-                        (Some(cst), None)
-                    } else {
-                        // We can ignore upper registers if shift amount is multi-reg, because we
-                        // are taking the shift amount mod 2^(lhs_width) anyway.
-                        (None, Some(put_input_in_regs(ctx, inputs[1]).regs()[0]))
-                    };
-
-                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-
-                let shift_kind = match op {
-                    Opcode::Ishl => ShiftKind::ShiftLeft,
-                    Opcode::Ushr => ShiftKind::ShiftRightLogical,
-                    Opcode::Sshr => ShiftKind::ShiftRightArithmetic,
-                    Opcode::Rotl => ShiftKind::RotateLeft,
-                    Opcode::Rotr => ShiftKind::RotateRight,
-                    _ => unreachable!(),
-                };
-
-                let w_rcx = Writable::from_reg(regs::rcx());
-                ctx.emit(Inst::mov_r_r(OperandSize::Size64, lhs, dst));
-                if count.is_none() {
-                    ctx.emit(Inst::mov_r_r(OperandSize::Size64, rhs.unwrap(), w_rcx));
-                }
-                ctx.emit(Inst::shift_r(size, shift_kind, count, dst));
-            } else if dst_ty == types::I128 {
-                let amt_src = put_input_in_regs(ctx, inputs[1]).regs()[0];
-                let src = put_input_in_regs(ctx, inputs[0]);
-                let dst = get_output_reg(ctx, outputs[0]);
-
-                match op {
-                    Opcode::Ishl => {
-                        emit_shl_i128(ctx, src, dst, amt_src);
-                    }
-                    Opcode::Ushr => {
-                        emit_shr_i128(ctx, src, dst, amt_src, /* is_signed = */ false);
-                    }
-                    Opcode::Sshr => {
-                        emit_shr_i128(ctx, src, dst, amt_src, /* is_signed = */ true);
-                    }
-                    Opcode::Rotl => {
-                        // (mov tmp, src)
-                        // (shl.i128 tmp, amt)
-                        // (mov dst, src)
-                        // (ushr.i128 dst, 128-amt)
-                        // (or dst, tmp)
-                        let tmp = ctx.alloc_tmp(types::I128);
-                        emit_shl_i128(ctx, src, tmp, amt_src);
-                        let inv_amt = ctx.alloc_tmp(types::I64).only_reg().unwrap();
-                        ctx.emit(Inst::imm(OperandSize::Size64, 128, inv_amt));
-                        ctx.emit(Inst::alu_rmi_r(
-                            OperandSize::Size64,
-                            AluRmiROpcode::Sub,
-                            RegMemImm::reg(amt_src),
-                            inv_amt,
-                        ));
-                        emit_shr_i128(
-                            ctx,
-                            src,
-                            dst,
-                            inv_amt.to_reg(),
-                            /* is_signed = */ false,
-                        );
-                        ctx.emit(Inst::alu_rmi_r(
-                            OperandSize::Size64,
-                            AluRmiROpcode::Or,
-                            RegMemImm::reg(tmp.regs()[0].to_reg()),
-                            dst.regs()[0],
-                        ));
-                        ctx.emit(Inst::alu_rmi_r(
-                            OperandSize::Size64,
-                            AluRmiROpcode::Or,
-                            RegMemImm::reg(tmp.regs()[1].to_reg()),
-                            dst.regs()[1],
-                        ));
-                    }
-                    Opcode::Rotr => {
-                        // (mov tmp, src)
-                        // (ushr.i128 tmp, amt)
-                        // (mov dst, src)
-                        // (shl.i128 dst, 128-amt)
-                        // (or dst, tmp)
-                        let tmp = ctx.alloc_tmp(types::I128);
-                        emit_shr_i128(ctx, src, tmp, amt_src, /* is_signed = */ false);
-                        let inv_amt = ctx.alloc_tmp(types::I64).only_reg().unwrap();
-                        ctx.emit(Inst::imm(OperandSize::Size64, 128, inv_amt));
-                        ctx.emit(Inst::alu_rmi_r(
-                            OperandSize::Size64,
-                            AluRmiROpcode::Sub,
-                            RegMemImm::reg(amt_src),
-                            inv_amt,
-                        ));
-                        emit_shl_i128(ctx, src, dst, inv_amt.to_reg());
-                        ctx.emit(Inst::alu_rmi_r(
-                            OperandSize::Size64,
-                            AluRmiROpcode::Or,
-                            RegMemImm::reg(tmp.regs()[0].to_reg()),
-                            dst.regs()[0],
-                        ));
-                        ctx.emit(Inst::alu_rmi_r(
-                            OperandSize::Size64,
-                            AluRmiROpcode::Or,
-                            RegMemImm::reg(tmp.regs()[1].to_reg()),
-                            dst.regs()[1],
-                        ));
-                    }
-                    _ => unreachable!(),
-                }
-            } else if dst_ty == types::I8X16 && (op == Opcode::Ishl || op == Opcode::Ushr) {
-                // Since the x86 instruction set does not have any 8x16 shift instructions (even in higher feature sets
-                // like AVX), we lower the `ishl.i8x16` and `ushr.i8x16` to a sequence of instructions. The basic idea,
-                // whether the `shift_by` amount is an immediate or not, is to use a 16x8 shift and then mask off the
-                // incorrect bits to 0s (see below for handling signs in `sshr.i8x16`).
-                let src = put_input_in_reg(ctx, inputs[0]);
-                let shift_by = input_to_reg_mem_imm(ctx, inputs[1]);
-                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-
-                // If necessary, move the shift index into the lowest bits of a vector register.
-                let shift_by_moved = match &shift_by {
-                    RegMemImm::Imm { .. } => shift_by.clone(),
-                    RegMemImm::Reg { reg } => {
-                        let tmp_shift_by = ctx.alloc_tmp(dst_ty).only_reg().unwrap();
-                        ctx.emit(Inst::gpr_to_xmm(
-                            SseOpcode::Movd,
-                            RegMem::reg(*reg),
-                            OperandSize::Size32,
-                            tmp_shift_by,
-                        ));
-                        RegMemImm::reg(tmp_shift_by.to_reg())
-                    }
-                    RegMemImm::Mem { .. } => unimplemented!("load shift amount to XMM register"),
-                };
-
-                // Shift `src` using 16x8. Unfortunately, a 16x8 shift will only be correct for half of the lanes;
-                // the others must be fixed up with the mask below.
-                let shift_opcode = match op {
-                    Opcode::Ishl => SseOpcode::Psllw,
-                    Opcode::Ushr => SseOpcode::Psrlw,
-                    _ => unimplemented!("{} is not implemented for type {}", op, dst_ty),
-                };
-                ctx.emit(Inst::gen_move(dst, src, dst_ty));
-                ctx.emit(Inst::xmm_rmi_reg(shift_opcode, shift_by_moved, dst));
-
-                // Choose which mask to use to fixup the shifted lanes. Since we must use a 16x8 shift, we need to fix
-                // up the bits that migrate from one half of the lane to the other. Each 16-byte mask (which rustfmt
-                // forces to multiple lines) is indexed by the shift amount: e.g. if we shift right by 0 (no movement),
-                // we want to retain all the bits so we mask with `0xff`; if we shift right by 1, we want to retain all
-                // bits except the MSB so we mask with `0x7f`; etc.
-                const USHR_MASKS: [u8; 128] = [
-                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                    0xff, 0xff, 0xff, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f,
-                    0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x3f, 0x3f, 0x3f, 0x3f, 0x3f, 0x3f, 0x3f,
-                    0x3f, 0x3f, 0x3f, 0x3f, 0x3f, 0x3f, 0x3f, 0x3f, 0x3f, 0x1f, 0x1f, 0x1f, 0x1f,
-                    0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0x0f,
-                    0x0f, 0x0f, 0x0f, 0x0f, 0x0f, 0x0f, 0x0f, 0x0f, 0x0f, 0x0f, 0x0f, 0x0f, 0x0f,
-                    0x0f, 0x0f, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07,
-                    0x07, 0x07, 0x07, 0x07, 0x07, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03,
-                    0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x01, 0x01, 0x01, 0x01, 0x01,
-                    0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
-                ];
-                const SHL_MASKS: [u8; 128] = [
-                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                    0xff, 0xff, 0xff, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe,
-                    0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfc, 0xfc, 0xfc, 0xfc, 0xfc, 0xfc, 0xfc,
-                    0xfc, 0xfc, 0xfc, 0xfc, 0xfc, 0xfc, 0xfc, 0xfc, 0xfc, 0xf8, 0xf8, 0xf8, 0xf8,
-                    0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf0,
-                    0xf0, 0xf0, 0xf0, 0xf0, 0xf0, 0xf0, 0xf0, 0xf0, 0xf0, 0xf0, 0xf0, 0xf0, 0xf0,
-                    0xf0, 0xf0, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0,
-                    0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xc0, 0xc0, 0xc0, 0xc0, 0xc0, 0xc0, 0xc0, 0xc0,
-                    0xc0, 0xc0, 0xc0, 0xc0, 0xc0, 0xc0, 0xc0, 0xc0, 0x80, 0x80, 0x80, 0x80, 0x80,
-                    0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80,
-                ];
-                let mask = match op {
-                    Opcode::Ishl => &SHL_MASKS,
-                    Opcode::Ushr => &USHR_MASKS,
-                    _ => unimplemented!("{} is not implemented for type {}", op, dst_ty),
-                };
-
-                // Figure out the address of the shift mask.
-                let mask_address = match shift_by {
-                    RegMemImm::Imm { simm32 } => {
-                        // When the shift amount is known, we can statically (i.e. at compile time) determine the mask to
-                        // use and only emit that.
-                        debug_assert!(simm32 < 8);
-                        let mask_offset = simm32 as usize * 16;
-                        let mask_constant = ctx.use_constant(VCodeConstantData::WellKnown(
-                            &mask[mask_offset..mask_offset + 16],
-                        ));
-                        SyntheticAmode::ConstantOffset(mask_constant)
-                    }
-                    RegMemImm::Reg { reg } => {
-                        // Otherwise, we must emit the entire mask table and dynamically (i.e. at run time) find the correct
-                        // mask offset in the table. We do this use LEA to find the base address of the mask table and then
-                        // complex addressing to offset to the right mask: `base_address + shift_by * 4`
-                        let base_mask_address = ctx.alloc_tmp(types::I64).only_reg().unwrap();
-                        let mask_offset = ctx.alloc_tmp(types::I64).only_reg().unwrap();
-                        let mask_constant = ctx.use_constant(VCodeConstantData::WellKnown(mask));
-                        ctx.emit(Inst::lea(
-                            SyntheticAmode::ConstantOffset(mask_constant),
-                            base_mask_address,
-                        ));
-                        ctx.emit(Inst::gen_move(mask_offset, reg, types::I64));
-                        ctx.emit(Inst::shift_r(
-                            OperandSize::Size64,
-                            ShiftKind::ShiftLeft,
-                            Some(4),
-                            mask_offset,
-                        ));
-                        Amode::imm_reg_reg_shift(
-                            0,
-                            base_mask_address.to_reg(),
-                            mask_offset.to_reg(),
-                            0,
-                        )
-                        .into()
-                    }
-                    RegMemImm::Mem { addr: _ } => unimplemented!("load mask address"),
-                };
-
-                // Load the mask into a temporary register, `mask_value`.
-                let mask_value = ctx.alloc_tmp(dst_ty).only_reg().unwrap();
-                ctx.emit(Inst::load(dst_ty, mask_address, mask_value, ExtKind::None));
-
-                // Remove the bits that would have disappeared in a true 8x16 shift. TODO in the future,
-                // this AND instruction could be coalesced with the load above.
-                let sse_op = match dst_ty {
-                    types::F32X4 => SseOpcode::Andps,
-                    types::F64X2 => SseOpcode::Andpd,
-                    _ => SseOpcode::Pand,
-                };
-                ctx.emit(Inst::xmm_rm_r(sse_op, RegMem::from(mask_value), dst));
-            } else if dst_ty == types::I8X16 && op == Opcode::Sshr {
-                // Since the x86 instruction set does not have an 8x16 shift instruction and the approach used for
-                // `ishl` and `ushr` cannot be easily used (the masks do not preserve the sign), we use a different
-                // approach here: separate the low and high lanes, shift them separately, and merge them into the final
-                // result. Visually, this looks like the following, where `src.i8x16 = [s0, s1, ..., s15]:
-                //   low.i16x8 = [(s0, s0), (s1, s1), ..., (s7, s7)]
-                //   shifted_low.i16x8 = shift each lane of `low`
-                //   high.i16x8 = [(s8, s8), (s9, s9), ..., (s15, s15)]
-                //   shifted_high.i16x8 = shift each lane of `high`
-                //   dst.i8x16 = [s0'', s1'', ..., s15'']
-                let src = put_input_in_reg(ctx, inputs[0]);
-                let shift_by = input_to_reg_mem_imm(ctx, inputs[1]);
-                let shift_by_ty = ctx.input_ty(insn, 1);
-                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-
-                // In order for PACKSSWB later to only use the high byte of each 16x8 lane, we shift right an extra 8
-                // bits, relying on PSRAW to fill in the upper bits appropriately.
-                let bigger_shift_by = match shift_by {
-                    // When we know the shift amount at compile time, we add the extra shift amount statically.
-                    RegMemImm::Imm { simm32 } => RegMemImm::imm(simm32 + 8),
-                    // Otherwise we add instructions to add the extra shift amount and move the value into an XMM
-                    // register.
-                    RegMemImm::Reg { reg } => {
-                        let bigger_shift_by_gpr = ctx.alloc_tmp(shift_by_ty).only_reg().unwrap();
-                        ctx.emit(Inst::mov_r_r(OperandSize::Size64, reg, bigger_shift_by_gpr));
-
-                        let size = if shift_by_ty == types::I64 {
-                            OperandSize::Size64
-                        } else {
-                            OperandSize::Size32
-                        };
-                        let imm = RegMemImm::imm(8);
-                        ctx.emit(Inst::alu_rmi_r(
-                            size,
-                            AluRmiROpcode::Add,
-                            imm,
-                            bigger_shift_by_gpr,
-                        ));
-
-                        let bigger_shift_by_xmm = ctx.alloc_tmp(dst_ty).only_reg().unwrap();
-                        ctx.emit(Inst::gpr_to_xmm(
-                            SseOpcode::Movd,
-                            RegMem::from(bigger_shift_by_gpr),
-                            OperandSize::Size32,
-                            bigger_shift_by_xmm,
-                        ));
-                        RegMemImm::reg(bigger_shift_by_xmm.to_reg())
-                    }
-                    RegMemImm::Mem { .. } => unimplemented!("load shift amount to XMM register"),
-                };
-
-                // Unpack and shift the lower lanes of `src` into the `dst` register.
-                ctx.emit(Inst::gen_move(dst, src, dst_ty));
-                ctx.emit(Inst::xmm_rm_r(SseOpcode::Punpcklbw, RegMem::from(dst), dst));
-                ctx.emit(Inst::xmm_rmi_reg(
-                    SseOpcode::Psraw,
-                    bigger_shift_by.clone(),
-                    dst,
-                ));
-
-                // Unpack and shift the upper lanes of `src` into a temporary register, `upper_lanes`.
-                let upper_lanes = ctx.alloc_tmp(dst_ty).only_reg().unwrap();
-                ctx.emit(Inst::gen_move(upper_lanes, src, dst_ty));
-                ctx.emit(Inst::xmm_rm_r(
-                    SseOpcode::Punpckhbw,
-                    RegMem::from(upper_lanes),
-                    upper_lanes,
-                ));
-                ctx.emit(Inst::xmm_rmi_reg(
-                    SseOpcode::Psraw,
-                    bigger_shift_by,
-                    upper_lanes,
-                ));
-
-                // Merge the upper and lower shifted lanes into `dst`.
-                ctx.emit(Inst::xmm_rm_r(
-                    SseOpcode::Packsswb,
-                    RegMem::from(upper_lanes),
-                    dst,
-                ));
-            } else if dst_ty == types::I64X2 && op == Opcode::Sshr {
-                // The `sshr.i8x16` CLIF instruction has no single x86 instruction in the older feature sets; newer ones
-                // like AVX512VL + AVX512F include VPSRAQ, a 128-bit instruction that would fit here, but this backend
-                // does not currently have support for EVEX encodings (TODO when EVEX support is available, add an
-                // alternate lowering here). To remedy this, we extract each 64-bit lane to a GPR, shift each using a
-                // scalar instruction, and insert the shifted values back in the `dst` XMM register.
-                let src = put_input_in_reg(ctx, inputs[0]);
-                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-                ctx.emit(Inst::gen_move(dst, src, dst_ty));
-
-                // Extract the upper and lower lanes into temporary GPRs.
-                let lower_lane = ctx.alloc_tmp(types::I64).only_reg().unwrap();
-                emit_extract_lane(ctx, src, lower_lane, 0, types::I64);
-                let upper_lane = ctx.alloc_tmp(types::I64).only_reg().unwrap();
-                emit_extract_lane(ctx, src, upper_lane, 1, types::I64);
-
-                // Shift each value.
-                let mut shift = |reg: Writable<Reg>| {
-                    let kind = ShiftKind::ShiftRightArithmetic;
-                    if let Some(shift_by) = ctx.get_input_as_source_or_const(insn, 1).constant {
-                        // Mask the shift amount according to Cranelift's semantics.
-                        let shift_by = (shift_by as u8) & (types::I64.bits() as u8 - 1);
-                        ctx.emit(Inst::shift_r(
-                            OperandSize::Size64,
-                            kind,
-                            Some(shift_by),
-                            reg,
-                        ));
-                    } else {
-                        let dynamic_shift_by = put_input_in_reg(ctx, inputs[1]);
-                        let w_rcx = Writable::from_reg(regs::rcx());
-                        ctx.emit(Inst::mov_r_r(OperandSize::Size64, dynamic_shift_by, w_rcx));
-                        ctx.emit(Inst::shift_r(OperandSize::Size64, kind, None, reg));
-                    };
-                };
-                shift(lower_lane);
-                shift(upper_lane);
-
-                // Insert the scalar values back into the `dst` vector.
-                emit_insert_lane(ctx, RegMem::from(lower_lane), dst, 0, types::I64);
-                emit_insert_lane(ctx, RegMem::from(upper_lane), dst, 1, types::I64);
-            } else {
-                // For the remaining packed shifts not covered above, x86 has implementations that can either:
-                // - shift using an immediate
-                // - shift using a dynamic value given in the lower bits of another XMM register.
-                let src = put_input_in_reg(ctx, inputs[0]);
-                let shift_by = input_to_reg_mem_imm(ctx, inputs[1]);
-                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-                let sse_op = match dst_ty {
-                    types::I16X8 => match op {
-                        Opcode::Ishl => SseOpcode::Psllw,
-                        Opcode::Ushr => SseOpcode::Psrlw,
-                        Opcode::Sshr => SseOpcode::Psraw,
-                        _ => unimplemented!("{} is not implemented for type {}", op, dst_ty),
-                    },
-                    types::I32X4 => match op {
-                        Opcode::Ishl => SseOpcode::Pslld,
-                        Opcode::Ushr => SseOpcode::Psrld,
-                        Opcode::Sshr => SseOpcode::Psrad,
-                        _ => unimplemented!("{} is not implemented for type {}", op, dst_ty),
-                    },
-                    types::I64X2 => match op {
-                        Opcode::Ishl => SseOpcode::Psllq,
-                        Opcode::Ushr => SseOpcode::Psrlq,
-                        _ => unimplemented!("{} is not implemented for type {}", op, dst_ty),
-                    },
-                    _ => unreachable!(),
-                };
-
-                // If necessary, move the shift index into the lowest bits of a vector register.
-                let shift_by = match shift_by {
-                    RegMemImm::Imm { .. } => shift_by,
-                    RegMemImm::Reg { reg } => {
-                        let tmp_shift_by = ctx.alloc_tmp(dst_ty).only_reg().unwrap();
-                        ctx.emit(Inst::gpr_to_xmm(
-                            SseOpcode::Movd,
-                            RegMem::reg(reg),
-                            OperandSize::Size32,
-                            tmp_shift_by,
-                        ));
-                        RegMemImm::reg(tmp_shift_by.to_reg())
-                    }
-                    RegMemImm::Mem { .. } => unimplemented!("load shift amount to XMM register"),
-                };
-
-                // Move the `src` to the same register as `dst`.
-                ctx.emit(Inst::gen_move(dst, src, dst_ty));
-
-                ctx.emit(Inst::xmm_rmi_reg(sse_op, shift_by, dst));
-            }
-        }
-
-        Opcode::Ineg => {
-            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let ty = ty.unwrap();
-
-            if ty.is_vector() {
-                // Zero's out a register and then does a packed subtraction
-                // of the input from the register.
-
-                let src = input_to_reg_mem(ctx, inputs[0]);
-                let tmp = ctx.alloc_tmp(types::I32X4).only_reg().unwrap();
-
-                let subtract_opcode = match ty {
-                    types::I8X16 => SseOpcode::Psubb,
-                    types::I16X8 => SseOpcode::Psubw,
-                    types::I32X4 => SseOpcode::Psubd,
-                    types::I64X2 => SseOpcode::Psubq,
-                    _ => panic!("Unsupported type for Ineg instruction, found {}", ty),
-                };
-
-                // Note we must zero out a tmp instead of using the destination register since
-                // the desitnation could be an alias for the source input register
-                ctx.emit(Inst::xmm_rm_r(
-                    SseOpcode::Pxor,
-                    RegMem::reg(tmp.to_reg()),
-                    tmp,
-                ));
-                ctx.emit(Inst::xmm_rm_r(subtract_opcode, src, tmp));
-                ctx.emit(Inst::xmm_unary_rm_r(
-                    SseOpcode::Movapd,
-                    RegMem::reg(tmp.to_reg()),
-                    dst,
-                ));
-            } else {
-                let src = put_input_in_reg(ctx, inputs[0]);
-                ctx.emit(Inst::gen_move(dst, src, ty));
-                ctx.emit(Inst::neg(OperandSize::from_ty(ty), dst));
-            }
-        }
+        | Opcode::Bnot
+        | Opcode::Bitselect
+        | Opcode::Vselect
+        | Opcode::Ushr
+        | Opcode::Sshr
+        | Opcode::Ishl
+        | Opcode::Rotl
+        | Opcode::Rotr
+        | Opcode::Ineg
+        | Opcode::Trap
+        | Opcode::ResumableTrap => implemented_in_isle(ctx),
 
         Opcode::Clz => {
             let orig_ty = ty.unwrap();
@@ -3214,11 +2377,6 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             ctx.emit(Inst::Hlt);
         }
 
-        Opcode::Trap | Opcode::ResumableTrap => {
-            let trap_code = ctx.data(insn).trap_code().unwrap();
-            ctx.emit_safepoint(Inst::Ud2 { trap_code });
-        }
-
         Opcode::Trapif | Opcode::Trapff => {
             let trap_code = ctx.data(insn).trap_code().unwrap();
 
@@ -3274,22 +2432,6 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     FcmpCondResult::InvertedEqualOrConditions(_, _) => unreachable!(),
                 };
             };
-        }
-
-        Opcode::F64const => {
-            unreachable!(
-                "implemented in ISLE: inst = `{}`, type = `{:?}`",
-                ctx.dfg().display_inst(insn),
-                ty
-            );
-        }
-
-        Opcode::F32const => {
-            unreachable!(
-                "implemented in ISLE: inst = `{}`, type = `{:?}`",
-                ctx.dfg().display_inst(insn),
-                ty
-            );
         }
 
         Opcode::WideningPairwiseDotProductS => {
@@ -4814,7 +3956,13 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     let index = put_input_in_reg(ctx, inputs[1]);
                     let shift = 0;
                     let flags = ctx.memflags(insn).expect("load should have memflags");
-                    Amode::imm_reg_reg_shift(offset as u32, base, index, shift).with_flags(flags)
+                    Amode::imm_reg_reg_shift(
+                        offset as u32,
+                        Gpr::new(base).unwrap(),
+                        Gpr::new(index).unwrap(),
+                        shift,
+                    )
+                    .with_flags(flags)
                 }
                 _ => unreachable!(),
             };
@@ -4918,7 +4066,13 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     let index = put_input_in_reg(ctx, inputs[2]);
                     let shift = 0;
                     let flags = ctx.memflags(insn).expect("store should have memflags");
-                    Amode::imm_reg_reg_shift(offset as u32, base, index, shift).with_flags(flags)
+                    Amode::imm_reg_reg_shift(
+                        offset as u32,
+                        Gpr::new(base).unwrap(),
+                        Gpr::new(index).unwrap(),
+                        shift,
+                    )
+                    .with_flags(flags)
                 }
 
                 _ => unreachable!(),
@@ -5949,6 +5103,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 println!("Did not match fcvt input!");
             }
         }
+
         // Unimplemented opcodes below. These are not currently used by Wasm
         // lowering or other known embeddings, but should be either supported or
         // removed eventually.

@@ -5,8 +5,8 @@ use crate::module::{
 use crate::{
     DataIndex, DefinedFuncIndex, ElemIndex, EntityIndex, EntityType, FuncIndex, Global,
     GlobalIndex, GlobalInit, InstanceIndex, InstanceTypeIndex, MemoryIndex, ModuleIndex,
-    ModuleTypeIndex, PrimaryMap, SignatureIndex, TableIndex, Tunables, TypeIndex, WasmError,
-    WasmFuncType, WasmResult,
+    ModuleTypeIndex, PrimaryMap, SignatureIndex, TableIndex, TableInitialization, Tunables,
+    TypeIndex, WasmError, WasmFuncType, WasmResult,
 };
 use cranelift_entity::packed_option::ReservedValue;
 use std::borrow::Cow;
@@ -92,6 +92,14 @@ pub struct ModuleTranslation<'data> {
     /// `MemoryInitializer` type.
     pub data: Vec<Cow<'data, [u8]>>,
 
+    /// The desired alignment of `data` in the final data section of the object
+    /// file that we'll emit.
+    ///
+    /// Note that this is 1 by default but `MemoryInitialization::Static` might
+    /// switch this to a higher alignment to facilitate mmap-ing data from
+    /// an object file into a linear memory.
+    pub data_align: Option<u64>,
+
     /// Total size of all data pushed onto `data` so far.
     total_data: u32,
 
@@ -146,8 +154,8 @@ type Reader<'input> = gimli::EndianSlice<'input, gimli::LittleEndian>;
 #[allow(missing_docs)]
 pub struct NameSection<'a> {
     pub module_name: Option<&'a str>,
-    pub func_names: HashMap<u32, &'a str>,
-    pub locals_names: HashMap<u32, HashMap<u32, &'a str>>,
+    pub func_names: HashMap<FuncIndex, &'a str>,
+    pub locals_names: HashMap<FuncIndex, HashMap<u32, &'a str>>,
 }
 
 #[derive(Debug, Default)]
@@ -512,17 +520,19 @@ impl<'data> ModuleEnvironment<'data> {
             Payload::ElementSection(elements) => {
                 validator.element_section(&elements)?;
 
-                let cnt = usize::try_from(elements.get_count()).unwrap();
-                self.result.module.table_initializers.reserve_exact(cnt);
-
                 for (index, entry) in elements.into_iter().enumerate() {
-                    let wasmparser::Element { kind, items, ty: _ } = entry?;
+                    let wasmparser::Element {
+                        kind,
+                        items,
+                        ty: _,
+                        range: _,
+                    } = entry?;
 
                     // Build up a list of `FuncIndex` corresponding to all the
                     // entries listed in this segment. Note that it's not
                     // possible to create anything other than a `ref.null
                     // extern` for externref segments, so those just get
-                    // translate to the reserved value of `FuncIndex`.
+                    // translated to the reserved value of `FuncIndex`.
                     let items_reader = items.get_items_reader()?;
                     let mut elements =
                         Vec::with_capacity(usize::try_from(items_reader.get_count()).unwrap());
@@ -571,15 +581,18 @@ impl<'data> ModuleEnvironment<'data> {
                                     )));
                                 }
                             };
-                            self.result
-                                .module
-                                .table_initializers
-                                .push(TableInitializer {
-                                    table_index,
-                                    base,
-                                    offset,
-                                    elements: elements.into(),
-                                });
+
+                            let table_segments = match &mut self.result.module.table_initialization
+                            {
+                                TableInitialization::Segments { segments } => segments,
+                                TableInitialization::FuncTable { .. } => unreachable!(),
+                            };
+                            table_segments.push(TableInitializer {
+                                table_index,
+                                base,
+                                offset,
+                                elements: elements.into(),
+                            });
                         }
 
                         ElementKind::Passive => {
@@ -646,7 +659,11 @@ impl<'data> ModuleEnvironment<'data> {
                 self.result.data.reserve_exact(cnt);
 
                 for (index, entry) in data.into_iter().enumerate() {
-                    let wasmparser::Data { kind, data } = entry?;
+                    let wasmparser::Data {
+                        kind,
+                        data,
+                        range: _,
+                    } = entry?;
                     let mk_range = |total: &mut u32| -> Result<_, WasmError> {
                         let range = u32::try_from(data.len())
                             .ok()
@@ -1282,18 +1299,17 @@ and for re-adding support for interface types you can see this issue:
                         if (index as usize) >= self.result.module.functions.len() {
                             continue;
                         }
+
+                        // Store the name unconditionally, regardless of
+                        // whether we're parsing debuginfo, since function
+                        // names are almost always present in the
+                        // final compilation artifact.
                         let index = FuncIndex::from_u32(index);
                         self.result
-                            .module
+                            .debuginfo
+                            .name_section
                             .func_names
-                            .insert(index, name.to_string());
-                        if self.tunables.generate_native_debuginfo {
-                            self.result
-                                .debuginfo
-                                .name_section
-                                .func_names
-                                .insert(index.as_u32(), name);
-                        }
+                            .insert(index, name);
                     }
                 }
                 wasmparser::Name::Module(module) => {
@@ -1323,7 +1339,7 @@ and for re-adding support for interface types you can see this issue:
                                 .debuginfo
                                 .name_section
                                 .locals_names
-                                .entry(f.indirect_index)
+                                .entry(FuncIndex::from_u32(f.indirect_index))
                                 .or_insert(HashMap::new())
                                 .insert(index, name);
                         }

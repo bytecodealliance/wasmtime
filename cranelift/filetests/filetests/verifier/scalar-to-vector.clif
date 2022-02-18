@@ -1,7 +1,7 @@
 test verifier
 set enable_simd=true
 target aarch64
-target x86_64
+target x86_64 has_sse3 has_ssse3 has_sse41
 
 function %scalar_to_vector() {
 block0:

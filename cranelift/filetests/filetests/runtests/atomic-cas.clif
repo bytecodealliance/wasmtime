@@ -1,0 +1,43 @@
+test run
+target aarch64
+target aarch64 has_lse
+target x86_64
+target s390x
+
+; We can't test that these instructions are right regarding atomicity, but we can
+; test if they perform their operation correctly
+
+function %atomic_cas_i64(i64, i64, i64) -> i64 {
+    ss0 = explicit_slot 8
+
+block0(v0: i64, v1: i64, v2: i64):
+    stack_store.i64 v0, ss0
+
+    v3 = stack_addr.i64 ss0
+    v4 = atomic_cas.i64 v3, v1, v2
+
+    v5 = stack_load.i64 ss0
+    return v5
+}
+; run: %atomic_cas_i64(0, 0, 2) == 2
+; run: %atomic_cas_i64(1, 0, 2) == 1
+; run: %atomic_cas_i64(0, 1, 2) == 0
+; run: %atomic_cas_i64(0, 0, 0xC0FFEEEE_DECAFFFF) == 0xC0FFEEEE_DECAFFFF
+
+function %atomic_cas_i32(i32, i32, i32) -> i32 {
+    ss0 = explicit_slot 4
+
+block0(v0: i32, v1: i32, v2: i32):
+    stack_store.i32 v0, ss0
+
+    v3 = stack_addr.i32 ss0
+    v4 = atomic_cas.i32 v3, v1, v2
+
+    v5 = stack_load.i32 ss0
+    return v5
+}
+; run: %atomic_cas_i32(0, 0, 2) == 2
+; run: %atomic_cas_i32(1, 0, 2) == 1
+; run: %atomic_cas_i32(0, 1, 2) == 0
+; run: %atomic_cas_i32(0, 0, 0xC0FFEEEE) == 0xC0FFEEEE
+

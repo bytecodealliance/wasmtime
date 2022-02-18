@@ -100,6 +100,8 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use structopt::StructOpt;
 use wasmtime::{Config, ProfilingStrategy};
+#[cfg(feature = "pooling-allocator")]
+use wasmtime::{InstanceLimits, ModuleLimits, PoolingAllocationStrategy};
 
 fn pick_profiling_strategy(jitdump: bool, vtune: bool) -> Result<ProfilingStrategy> {
     Ok(match (jitdump, vtune) {
@@ -232,9 +234,14 @@ struct CommonOptions {
     #[structopt(long)]
     enable_cranelift_nan_canonicalization: bool,
 
-    /// Executing wasm code will consume fuel, limiting its execution.
     #[structopt(long)]
-    consume_fuel: bool,
+    fuel: Option<u64>,
+
+    /// Executing wasm code will yield when a global epoch counter
+    /// changes, allowing for async operation without blocking the
+    /// executor.
+    #[structopt(long)]
+    epoch_interruption: bool,
 
     /// Disables the on-by-default address map from native code to wasm code.
     #[structopt(long)]
@@ -244,6 +251,12 @@ struct CommonOptions {
     /// the data segments specified in the original wasm module.
     #[structopt(long)]
     paged_memory_initialization: bool,
+
+    /// Enables the pooling allocator, in place of the on-demand
+    /// allocator.
+    #[cfg(feature = "pooling-allocator")]
+    #[structopt(long)]
+    pooling_allocator: bool,
 }
 
 impl CommonOptions {
@@ -314,9 +327,31 @@ impl CommonOptions {
             config.dynamic_memory_guard_size(size);
         }
 
-        config.consume_fuel(self.consume_fuel);
+        // If fuel has been configured, set the `consume fuel` flag on the config.
+        if self.fuel.is_some() {
+            config.consume_fuel(true);
+        }
+
+        config.epoch_interruption(self.epoch_interruption);
         config.generate_address_map(!self.disable_address_map);
         config.paged_memory_initialization(self.paged_memory_initialization);
+
+        #[cfg(feature = "pooling-allocator")]
+        {
+            if self.pooling_allocator {
+                let mut module_limits = ModuleLimits::default();
+                module_limits.functions = 50000;
+                module_limits.types = 10000;
+                module_limits.globals = 1000;
+                module_limits.memory_pages = 2048;
+                let instance_limits = InstanceLimits::default();
+                config.allocation_strategy(wasmtime::InstanceAllocationStrategy::Pooling {
+                    strategy: PoolingAllocationStrategy::NextAvailable,
+                    module_limits,
+                    instance_limits,
+                });
+            }
+        }
 
         Ok(config)
     }

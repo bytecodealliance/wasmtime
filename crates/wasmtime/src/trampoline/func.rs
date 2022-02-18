@@ -1,12 +1,13 @@
 //! Support for a calling of an imported function.
 
+use crate::module::BareModuleInfo;
 use crate::{Engine, FuncType, Trap, ValRaw};
 use anyhow::Result;
 use std::any::Any;
 use std::panic::{self, AssertUnwindSafe};
 use std::sync::Arc;
-use wasmtime_environ::{EntityIndex, Module, ModuleType, PrimaryMap, SignatureIndex};
-use wasmtime_jit::{CodeMemory, MmapVec};
+use wasmtime_environ::{EntityIndex, FunctionInfo, Module, ModuleType, SignatureIndex};
+use wasmtime_jit::{CodeMemory, ProfilingAgent};
 use wasmtime_runtime::{
     Imports, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
     OnDemandInstanceAllocator, StorePtr, VMContext, VMFunctionBody, VMSharedSignatureIndex,
@@ -67,6 +68,39 @@ unsafe extern "C" fn stub_fn<F>(
 }
 
 #[cfg(compiler)]
+fn register_trampolines(profiler: &dyn ProfilingAgent, image: &object::File<'_>) {
+    use object::{Object as _, ObjectSection, ObjectSymbol, SectionKind, SymbolKind};
+    let pid = std::process::id();
+    let tid = pid;
+
+    let text_base = match image.sections().find(|s| s.kind() == SectionKind::Text) {
+        Some(section) => match section.data() {
+            Ok(data) => data.as_ptr() as usize,
+            Err(_) => return,
+        },
+        None => return,
+    };
+
+    for sym in image.symbols() {
+        if !sym.is_definition() {
+            continue;
+        }
+        if sym.kind() != SymbolKind::Text {
+            continue;
+        }
+        let address = sym.address();
+        let size = sym.size();
+        if address == 0 || size == 0 {
+            continue;
+        }
+        if let Ok(name) = sym.name() {
+            let addr = text_base + address as usize;
+            profiler.load_single_trampoline(name, addr as *const u8, size as usize, pid, tid);
+        }
+    }
+}
+
+#[cfg(compiler)]
 pub fn create_function<F>(
     ft: &FuncType,
     func: F,
@@ -81,13 +115,14 @@ where
         stub_fn::<F> as usize,
         &mut obj,
     )?;
-    let obj = MmapVec::from_obj(obj)?;
+    let obj = wasmtime_jit::mmap_vec_from_obj(obj)?;
 
     // Copy the results of JIT compilation into executable memory, and this will
     // also take care of unwind table registration.
     let mut code_memory = CodeMemory::new(obj);
     let code = code_memory.publish()?;
-    engine.config().profiler.trampoline_load(&code.obj);
+
+    register_trampolines(engine.config().profiler.as_ref(), &code.obj);
 
     // Extract the host/wasm trampolines from the results of compilation since
     // we know their start/length.
@@ -114,8 +149,6 @@ pub unsafe fn create_raw_function(
     host_state: Box<dyn Any + Send + Sync>,
 ) -> Result<InstanceHandle> {
     let mut module = Module::new();
-    let mut functions = PrimaryMap::new();
-    functions.push(Default::default());
 
     let sig_id = SignatureIndex::from_u32(u32::max_value() - 1);
     module.types.push(ModuleType::Function(sig_id));
@@ -123,17 +156,23 @@ pub unsafe fn create_raw_function(
     module
         .exports
         .insert(String::new(), EntityIndex::Function(func_id));
+    let module = Arc::new(module);
+
+    let runtime_info = &BareModuleInfo::one_func(
+        module.clone(),
+        (*func).as_ptr() as usize,
+        FunctionInfo::default(),
+        sig_id,
+        sig,
+    )
+    .into_traitobj();
 
     Ok(
         OnDemandInstanceAllocator::default().allocate(InstanceAllocationRequest {
-            module: Arc::new(module),
-            functions: &functions,
-            image_base: (*func).as_ptr() as usize,
             imports: Imports::default(),
-            shared_signatures: sig.into(),
             host_state,
             store: StorePtr::empty(),
-            wasm_data: &[],
+            runtime_info,
         })?,
     )
 }

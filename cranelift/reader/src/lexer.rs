@@ -34,6 +34,7 @@ pub enum Token<'a> {
     Type(types::Type),    // i32, f32, b32x4, ...
     Value(Value),         // v12, v7
     Block(Block),         // block3
+    Cold,                 // cold (flag on block)
     StackSlot(u32),       // ss3
     GlobalValue(u32),     // gv3
     Heap(u32),            // heap2
@@ -326,6 +327,7 @@ impl<'a> Lexer<'a> {
                 .unwrap_or_else(|| match text {
                     "iflags" => Token::Type(types::IFLAGS),
                     "fflags" => Token::Type(types::FFLAGS),
+                    "cold" => Token::Cold,
                     _ => Token::Identifier(text),
                 }),
             loc,

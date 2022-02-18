@@ -1,4 +1,4 @@
-test compile
+test compile precise-output
 target aarch64
 
 function %atomic_store_i64(i64, i64) {
@@ -7,8 +7,14 @@ block0(v0: i64, v1: i64):
   return
 }
 
-; check: stlr x0, [x1]
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   stlr x0, [x1]
+;   Inst 1:   ret
+; }}
 
 function %atomic_store_i32(i32, i64) {
 block0(v0: i32, v1: i64):
@@ -16,8 +22,14 @@ block0(v0: i32, v1: i64):
   return
 }
 
-; check: stlr w0, [x1]
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   stlr w0, [x1]
+;   Inst 1:   ret
+; }}
 
 function %atomic_store_i16(i16, i64) {
 block0(v0: i16, v1: i64):
@@ -25,8 +37,14 @@ block0(v0: i16, v1: i64):
   return
 }
 
-; check: stlrh w0, [x1]
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   stlrh w0, [x1]
+;   Inst 1:   ret
+; }}
 
 function %atomic_store_i8(i8, i64) {
 block0(v0: i8, v1: i64):
@@ -34,8 +52,14 @@ block0(v0: i8, v1: i64):
   return
 }
 
-; check: stlrb w0, [x1]
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   stlrb w0, [x1]
+;   Inst 1:   ret
+; }}
 
 function %atomic_store_i64_i32(i64, i64) {
 block0(v0: i64, v1: i64):
@@ -44,9 +68,14 @@ block0(v0: i64, v1: i64):
   return
 }
 
-; check-not: uxt
-; check: stlr w0, [x1]
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   stlr w0, [x1]
+;   Inst 1:   ret
+; }}
 
 function %atomic_store_i64_i16(i64, i64) {
 block0(v0: i64, v1: i64):
@@ -55,9 +84,14 @@ block0(v0: i64, v1: i64):
   return
 }
 
-; check-not: uxt
-; check: stlrh w0, [x1]
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   stlrh w0, [x1]
+;   Inst 1:   ret
+; }}
 
 function %atomic_store_i64_i8(i64, i64) {
 block0(v0: i64, v1: i64):
@@ -66,9 +100,14 @@ block0(v0: i64, v1: i64):
   return
 }
 
-; check-not: uxt
-; check: stlrb w0, [x1]
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   stlrb w0, [x1]
+;   Inst 1:   ret
+; }}
 
 function %atomic_store_i32_i16(i32, i64) {
 block0(v0: i32, v1: i64):
@@ -77,9 +116,14 @@ block0(v0: i32, v1: i64):
   return
 }
 
-; check-not: uxt
-; check: stlrh w0, [x1]
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   stlrh w0, [x1]
+;   Inst 1:   ret
+; }}
 
 function %atomic_store_i32_i8(i32, i64) {
 block0(v0: i32, v1: i64):
@@ -88,6 +132,12 @@ block0(v0: i32, v1: i64):
   return
 }
 
-; check-not: uxt
-; check: stlrb w0, [x1]
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   stlrb w0, [x1]
+;   Inst 1:   ret
+; }}
+

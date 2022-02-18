@@ -9,7 +9,7 @@
 //! contexts concurrently. Typically, you would have one context per compilation thread and only a
 //! single ISA instance.
 
-use crate::binemit::{CodeInfo, MemoryCodeSink, RelocSink, StackMapSink, TrapSink};
+use crate::binemit::CodeInfo;
 use crate::dce::do_dce;
 use crate::dominator_tree::DominatorTree;
 use crate::flowgraph::ControlFlowGraph;
@@ -18,7 +18,7 @@ use crate::isa::TargetIsa;
 use crate::legalizer::simple_legalize;
 use crate::licm::do_licm;
 use crate::loop_analysis::LoopAnalysis;
-use crate::machinst::{MachCompileResult, MachStackMap};
+use crate::machinst::MachCompileResult;
 use crate::nan_canonicalization::do_nan_canonicalization;
 use crate::remove_constant_phis::do_remove_constant_phis;
 use crate::result::CodegenResult;
@@ -111,18 +111,13 @@ impl Context {
         &mut self,
         isa: &dyn TargetIsa,
         mem: &mut Vec<u8>,
-        relocs: &mut dyn RelocSink,
-        traps: &mut dyn TrapSink,
-        stack_maps: &mut dyn StackMapSink,
-    ) -> CodegenResult<CodeInfo> {
+    ) -> CodegenResult<()> {
         let info = self.compile(isa)?;
         let old_len = mem.len();
         mem.resize(old_len + info.total_size as usize, 0);
-        let new_info = unsafe {
-            self.emit_to_memory(mem.as_mut_ptr().add(old_len), relocs, traps, stack_maps)
-        };
+        let new_info = unsafe { self.emit_to_memory(mem.as_mut_ptr().add(old_len)) };
         debug_assert!(new_info == info);
-        Ok(info)
+        Ok(())
     }
 
     /// Compile the function.
@@ -167,9 +162,7 @@ impl Context {
 
         self.remove_constant_phis(isa)?;
 
-        // FIXME: make this non optional
-        let backend = isa.get_mach_backend().expect("only mach backends nowadays");
-        let result = backend.compile_function(&self.func, self.want_disasm)?;
+        let result = isa.compile_function(&self.func, self.want_disasm)?;
         let info = result.code_info();
         self.mach_compile_result = Some(result);
         Ok(info)
@@ -188,32 +181,18 @@ impl Context {
     /// and it can't guarantee that the `mem` pointer is valid.
     ///
     /// Returns information about the emitted code and data.
-    pub unsafe fn emit_to_memory(
-        &self,
-        mem: *mut u8,
-        relocs: &mut dyn RelocSink,
-        traps: &mut dyn TrapSink,
-        stack_maps: &mut dyn StackMapSink,
-    ) -> CodeInfo {
+    #[deny(unsafe_op_in_unsafe_fn)]
+    pub unsafe fn emit_to_memory(&self, mem: *mut u8) -> CodeInfo {
         let _tt = timing::binemit();
-        let mut sink = MemoryCodeSink::new(mem, relocs, traps);
         let result = self
             .mach_compile_result
             .as_ref()
             .expect("only using mach backend now");
-        result.buffer.emit(&mut sink);
-        let info = sink.info;
-        // New backends do not emit StackMaps through the `CodeSink` because its interface
-        // requires `Value`s; instead, the `StackMap` objects are directly accessible via
-        // `result.buffer.stack_maps()`.
-        for &MachStackMap {
-            offset_end,
-            ref stack_map,
-            ..
-        } in result.buffer.stack_maps()
-        {
-            stack_maps.add_stack_map(offset_end, stack_map.clone());
-        }
+        let info = result.code_info();
+
+        let mem = unsafe { std::slice::from_raw_parts_mut(mem, info.total_size as usize) };
+        mem.copy_from_slice(result.buffer.data());
+
         info
     }
 
@@ -243,12 +222,9 @@ impl Context {
         &self,
         isa: &dyn TargetIsa,
     ) -> CodegenResult<Option<crate::isa::unwind::UnwindInfo>> {
-        if let Some(backend) = isa.get_mach_backend() {
-            let unwind_info_kind = isa.unwind_info_kind();
-            let result = self.mach_compile_result.as_ref().unwrap();
-            return backend.emit_unwind_info(result, unwind_info_kind);
-        }
-        isa.create_unwind_info(&self.func)
+        let unwind_info_kind = isa.unwind_info_kind();
+        let result = self.mach_compile_result.as_ref().unwrap();
+        isa.emit_unwind_info(result, unwind_info_kind)
     }
 
     /// Run the verifier on the function.

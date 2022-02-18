@@ -8,20 +8,23 @@
 //! when modules can be constrained based on configurable limits.
 
 use super::{
-    initialize_instance, initialize_vmcontext, InstanceAllocationRequest, InstanceAllocator,
-    InstanceHandle, InstantiationError,
+    initialize_instance, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
+    InstantiationError,
 };
-use crate::{instance::Instance, Memory, Mmap, Table, VMContext};
+use crate::{instance::Instance, Memory, Mmap, Table};
+use crate::{MemFdSlot, ModuleRuntimeInfo, Store};
 use anyhow::{anyhow, bail, Context, Result};
-use rand::Rng;
+use libc::c_void;
 use std::convert::TryFrom;
-use std::marker;
 use std::mem;
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 use wasmtime_environ::{
-    EntitySet, HostPtr, MemoryStyle, Module, PrimaryMap, Tunables, VMOffsets, VMOffsetsFields,
-    WASM_PAGE_SIZE,
+    DefinedMemoryIndex, DefinedTableIndex, HostPtr, MemoryStyle, Module, PrimaryMap, Tunables,
+    VMOffsets, VMOffsetsFields, WASM_PAGE_SIZE,
 };
+
+mod index_allocator;
+use index_allocator::{PoolingAllocationState, SlotId};
 
 cfg_if::cfg_if! {
     if #[cfg(windows)] {
@@ -248,22 +251,19 @@ pub enum PoolingAllocationStrategy {
     NextAvailable,
     /// Allocate from a random available instance.
     Random,
-}
-
-impl PoolingAllocationStrategy {
-    fn next(&self, free_count: usize) -> usize {
-        debug_assert!(free_count > 0);
-
-        match self {
-            Self::NextAvailable => free_count - 1,
-            Self::Random => rand::thread_rng().gen_range(0..free_count),
-        }
-    }
+    /// Try to allocate an instance slot that was previously used for
+    /// the same module, potentially enabling faster instantiation by
+    /// reusing e.g. memory mappings.
+    ReuseAffinity,
 }
 
 impl Default for PoolingAllocationStrategy {
     fn default() -> Self {
-        Self::NextAvailable
+        if cfg!(memfd) {
+            Self::ReuseAffinity
+        } else {
+            Self::NextAvailable
+        }
     }
 }
 
@@ -281,14 +281,14 @@ struct InstancePool {
     mapping: Mmap,
     instance_size: usize,
     max_instances: usize,
-    free_list: Mutex<Vec<usize>>,
+    index_allocator: Mutex<PoolingAllocationState>,
     memories: MemoryPool,
     tables: TablePool,
-    empty_module: Arc<Module>,
 }
 
 impl InstancePool {
     fn new(
+        strategy: PoolingAllocationStrategy,
         module_limits: &ModuleLimits,
         instance_limits: &InstanceLimits,
         tunables: &Tunables,
@@ -298,7 +298,6 @@ impl InstancePool {
         // Calculate the maximum size of an Instance structure given the limits
         let offsets = VMOffsets::from(VMOffsetsFields {
             ptr: HostPtr,
-            num_signature_ids: module_limits.types,
             num_imported_functions: module_limits.imported_functions,
             num_imported_tables: module_limits.imported_tables,
             num_imported_memories: module_limits.imported_memories,
@@ -329,109 +328,82 @@ impl InstancePool {
             mapping,
             instance_size,
             max_instances,
-            free_list: Mutex::new((0..max_instances).collect()),
+            index_allocator: Mutex::new(PoolingAllocationState::new(strategy, max_instances)),
             memories: MemoryPool::new(module_limits, instance_limits, tunables)?,
             tables: TablePool::new(module_limits, instance_limits)?,
-            empty_module: Arc::new(Module::default()),
         };
-
-        // Use a default module to initialize the instances to start
-        for i in 0..instance_limits.count as usize {
-            pool.initialize(module_limits, i);
-        }
 
         Ok(pool)
     }
 
     unsafe fn instance(&self, index: usize) -> &mut Instance {
-        debug_assert!(index < self.max_instances);
+        assert!(index < self.max_instances);
         &mut *(self.mapping.as_mut_ptr().add(index * self.instance_size) as *mut Instance)
     }
 
-    fn initialize(&self, limits: &ModuleLimits, index: usize) {
-        unsafe {
-            let instance = self.instance(index);
-
-            // Write a default instance with preallocated memory/table map storage to the ptr
-            std::ptr::write(
-                instance as _,
-                Instance {
-                    module: self.empty_module.clone(),
-                    offsets: VMOffsets::new(HostPtr, &self.empty_module),
-                    memories: PrimaryMap::with_capacity(limits.memories as usize),
-                    tables: PrimaryMap::with_capacity(limits.tables as usize),
-                    dropped_elements: EntitySet::new(),
-                    dropped_data: EntitySet::new(),
-                    host_state: Box::new(()),
-                    wasm_data: &[],
-                    vmctx: VMContext {
-                        _marker: marker::PhantomPinned,
-                    },
-                },
-            );
-        }
-    }
-
-    unsafe fn setup_instance(
+    unsafe fn initialize_instance(
         &self,
-        index: usize,
-        mut req: InstanceAllocationRequest,
+        instance_index: usize,
+        req: InstanceAllocationRequest,
     ) -> Result<InstanceHandle, InstantiationError> {
-        let instance = self.instance(index);
+        let module = req.runtime_info.module();
 
-        instance.module = req.module.clone();
-        instance.offsets = VMOffsets::new(HostPtr, instance.module.as_ref());
-        instance.host_state = std::mem::replace(&mut req.host_state, Box::new(()));
-        instance.wasm_data = &*req.wasm_data;
+        let mut memories =
+            PrimaryMap::with_capacity(module.memory_plans.len() - module.num_imported_memories);
+        let mut tables =
+            PrimaryMap::with_capacity(module.table_plans.len() - module.num_imported_tables);
 
-        // set_instance_memories and _tables will need the store before we can completely
-        // initialize the vmcontext.
-        if let Some(store) = req.store.as_raw() {
-            instance.set_store(store);
+        // If we fail to allocate the instance's resources, deallocate
+        // what was successfully allocated and return before initializing the instance
+        if let Err(e) = self.allocate_instance_resources(
+            instance_index,
+            req.runtime_info.as_ref(),
+            req.store.as_raw(),
+            &mut memories,
+            &mut tables,
+        ) {
+            self.deallocate_memories(instance_index, &mut memories);
+            self.deallocate_tables(instance_index, &mut tables);
+            return Err(e);
         }
 
-        Self::set_instance_memories(
-            instance,
-            self.memories.get(index),
-            self.memories.max_wasm_pages,
-        )?;
+        let instance_ptr = self.instance(instance_index) as _;
 
-        Self::set_instance_tables(
-            instance,
-            self.tables.get(index).map(|x| x as *mut usize),
-            self.tables.max_elements,
-        )?;
-
-        initialize_vmcontext(instance, req);
+        Instance::new_at(
+            instance_ptr,
+            self.instance_size,
+            VMOffsets::new(HostPtr, module),
+            req,
+            memories,
+            tables,
+        );
 
         Ok(InstanceHandle {
-            instance: instance as _,
+            instance: instance_ptr,
         })
     }
 
     fn allocate(
         &self,
-        strategy: PoolingAllocationStrategy,
         req: InstanceAllocationRequest,
     ) -> Result<InstanceHandle, InstantiationError> {
         let index = {
-            let mut free_list = self.free_list.lock().unwrap();
-            if free_list.is_empty() {
+            let mut alloc = self.index_allocator.lock().unwrap();
+            if alloc.is_empty() {
                 return Err(InstantiationError::Limit(self.max_instances as u32));
             }
-            let free_index = strategy.next(free_list.len());
-            free_list.swap_remove(free_index)
+            alloc.alloc(req.runtime_info.unique_id()).index()
         };
 
-        unsafe {
-            self.setup_instance(index, req).or_else(|e| {
-                // Deallocate the allocated instance on error
-                let instance = self.instance(index);
-                self.deallocate(&InstanceHandle {
-                    instance: instance as _,
-                });
+        match unsafe { self.initialize_instance(index, req) } {
+            Ok(handle) => Ok(handle),
+            Err(e) => {
+                // If we failed to initialize the instance, there's no need to drop
+                // it as it was never "allocated", but we still need to free the
+                // instance's slot.
+                self.index_allocator.lock().unwrap().free(SlotId(index));
                 Err(e)
-            })
+            }
         }
     }
 
@@ -439,38 +411,201 @@ impl InstancePool {
         let addr = handle.instance as usize;
         let base = self.mapping.as_ptr() as usize;
 
-        debug_assert!(addr >= base && addr < base + self.mapping.len());
-        debug_assert!((addr - base) % self.instance_size == 0);
+        assert!(addr >= base && addr < base + self.mapping.len());
+        assert!((addr - base) % self.instance_size == 0);
 
         let index = (addr - base) / self.instance_size;
-        debug_assert!(index < self.max_instances);
+        assert!(index < self.max_instances);
 
         let instance = unsafe { &mut *handle.instance };
 
-        // Decommit any linear memories that were used
-        for (memory, base) in instance.memories.values_mut().zip(self.memories.get(index)) {
-            let mut memory = mem::take(memory);
-            debug_assert!(memory.is_static());
+        // Deallocate any resources used by the instance
+        self.deallocate_memories(index, &mut instance.memories);
+        self.deallocate_tables(index, &mut instance.tables);
 
-            // Reset any faulted guard pages as the physical memory may be reused for another instance in the future
-            #[cfg(all(feature = "uffd", target_os = "linux"))]
-            memory
-                .reset_guard_pages()
-                .expect("failed to reset guard pages");
-            drop(&mut memory); // require mutable on all platforms, not just uffd
+        // We've now done all of the pooling-allocator-specific
+        // teardown, so we can drop the Instance and let destructors
+        // take care of any other fields (host state, globals, etc.).
+        unsafe {
+            std::ptr::drop_in_place(instance as *mut _);
+        }
+        // The instance is now uninitialized memory and cannot be
+        // touched again until we write a fresh Instance in-place with
+        // std::ptr::write in allocate() above.
 
-            let size = memory.byte_size();
-            drop(memory);
-            decommit_memory_pages(base, size).expect("failed to decommit linear memory pages");
+        self.index_allocator.lock().unwrap().free(SlotId(index));
+    }
+
+    fn allocate_instance_resources(
+        &self,
+        instance_index: usize,
+        runtime_info: &dyn ModuleRuntimeInfo,
+        store: Option<*mut dyn Store>,
+        memories: &mut PrimaryMap<DefinedMemoryIndex, Memory>,
+        tables: &mut PrimaryMap<DefinedTableIndex, Table>,
+    ) -> Result<(), InstantiationError> {
+        self.allocate_memories(instance_index, runtime_info, store, memories)?;
+        self.allocate_tables(instance_index, runtime_info, store, tables)?;
+
+        Ok(())
+    }
+
+    fn allocate_memories(
+        &self,
+        instance_index: usize,
+        runtime_info: &dyn ModuleRuntimeInfo,
+        store: Option<*mut dyn Store>,
+        memories: &mut PrimaryMap<DefinedMemoryIndex, Memory>,
+    ) -> Result<(), InstantiationError> {
+        let module = runtime_info.module();
+
+        for (memory_index, plan) in module
+            .memory_plans
+            .iter()
+            .skip(module.num_imported_memories)
+        {
+            let defined_index = module
+                .defined_memory_index(memory_index)
+                .expect("should be a defined memory since we skipped imported ones");
+
+            let memory = unsafe {
+                std::slice::from_raw_parts_mut(
+                    self.memories.get_base(instance_index, defined_index),
+                    (self.memories.max_wasm_pages as usize) * (WASM_PAGE_SIZE as usize),
+                )
+            };
+
+            if let Some(image) = runtime_info
+                .memfd_image(defined_index)
+                .map_err(|err| InstantiationError::Resource(err.into()))?
+            {
+                let mut slot = self.memories.take_memfd_slot(instance_index, defined_index);
+                let initial_size = plan.memory.minimum * WASM_PAGE_SIZE as u64;
+
+                // If instantiation fails, we can propagate the error
+                // upward and drop the slot. This will cause the Drop
+                // handler to attempt to map the range with PROT_NONE
+                // memory, to reserve the space while releasing any
+                // stale mappings. The next use of this slot will then
+                // create a new MemFdSlot that will try to map over
+                // this, returning errors as well if the mapping
+                // errors persist. The unmap-on-drop is best effort;
+                // if it fails, then we can still soundly continue
+                // using the rest of the pool and allowing the rest of
+                // the process to continue, because we never perform a
+                // mmap that would leave an open space for someone
+                // else to come in and map something.
+                slot.instantiate(initial_size as usize, Some(image))
+                    .map_err(|e| InstantiationError::Resource(e.into()))?;
+
+                memories.push(
+                    Memory::new_static(plan, memory, None, Some(slot), unsafe {
+                        &mut *store.unwrap()
+                    })
+                    .map_err(InstantiationError::Resource)?,
+                );
+            } else {
+                memories.push(
+                    Memory::new_static(plan, memory, Some(commit_memory_pages), None, unsafe {
+                        &mut *store.unwrap()
+                    })
+                    .map_err(InstantiationError::Resource)?,
+                );
+            }
         }
 
-        instance.memories.clear();
-        instance.dropped_data.clear();
+        Ok(())
+    }
 
+    fn deallocate_memories(
+        &self,
+        instance_index: usize,
+        memories: &mut PrimaryMap<DefinedMemoryIndex, Memory>,
+    ) {
+        // Decommit any linear memories that were used
+        for ((def_mem_idx, memory), base) in
+            memories.iter_mut().zip(self.memories.get(instance_index))
+        {
+            let mut memory = mem::take(memory);
+            assert!(memory.is_static());
+
+            match memory {
+                Memory::Static {
+                    memfd_slot: Some(mut memfd_slot),
+                    ..
+                } => {
+                    // If there was any error clearing the memfd, just
+                    // drop it here, and let the drop handler for the
+                    // MemFdSlot unmap in a way that retains the
+                    // address space reservation.
+                    if memfd_slot.clear_and_remain_ready().is_ok() {
+                        self.memories
+                            .return_memfd_slot(instance_index, def_mem_idx, memfd_slot);
+                    }
+                }
+
+                _ => {
+                    // Reset any faulted guard pages as the physical
+                    // memory may be reused for another instance in
+                    // the future.
+                    #[cfg(all(feature = "uffd", target_os = "linux"))]
+                    memory
+                        .reset_guard_pages()
+                        .expect("failed to reset guard pages");
+                    // require mutable on all platforms, not just uffd
+                    drop(&mut memory);
+
+                    let size = memory.byte_size();
+                    drop(memory);
+                    decommit_memory_pages(base, size)
+                        .expect("failed to decommit linear memory pages");
+                }
+            }
+        }
+    }
+
+    fn allocate_tables(
+        &self,
+        instance_index: usize,
+        runtime_info: &dyn ModuleRuntimeInfo,
+        store: Option<*mut dyn Store>,
+        tables: &mut PrimaryMap<DefinedTableIndex, Table>,
+    ) -> Result<(), InstantiationError> {
+        let module = runtime_info.module();
+        let mut bases = self.tables.get(instance_index);
+        for (_, plan) in module.table_plans.iter().skip(module.num_imported_tables) {
+            let base = bases.next().unwrap() as _;
+
+            commit_table_pages(
+                base as *mut u8,
+                self.tables.max_elements as usize * mem::size_of::<*mut u8>(),
+            )
+            .map_err(InstantiationError::Resource)?;
+
+            tables.push(
+                Table::new_static(
+                    plan,
+                    unsafe {
+                        std::slice::from_raw_parts_mut(base, self.tables.max_elements as usize)
+                    },
+                    unsafe { &mut *store.unwrap() },
+                )
+                .map_err(InstantiationError::Resource)?,
+            );
+        }
+
+        Ok(())
+    }
+
+    fn deallocate_tables(
+        &self,
+        instance_index: usize,
+        tables: &mut PrimaryMap<DefinedTableIndex, Table>,
+    ) {
         // Decommit any tables that were used
-        for (table, base) in instance.tables.values_mut().zip(self.tables.get(index)) {
+        for (table, base) in tables.values_mut().zip(self.tables.get(instance_index)) {
             let table = mem::take(table);
-            debug_assert!(table.is_static());
+            assert!(table.is_static());
 
             let size = round_up_to_pow2(
                 table.size() as usize * mem::size_of::<*mut u8>(),
@@ -479,100 +614,6 @@ impl InstancePool {
 
             drop(table);
             decommit_table_pages(base, size).expect("failed to decommit table pages");
-        }
-
-        instance.tables.clear();
-        instance.dropped_elements.clear();
-
-        // Drop all `global` values which need a destructor, such as externref
-        // values which now need their reference count dropped.
-        instance.drop_globals();
-
-        // Drop any host state
-        instance.host_state = Box::new(());
-
-        // And finally reset the module/offsets back to their original. This
-        // should put everything back in a relatively pristine state for each
-        // fresh allocation later on.
-        instance.module = self.empty_module.clone();
-        instance.offsets = VMOffsets::new(HostPtr, &self.empty_module);
-        instance.wasm_data = &[];
-
-        self.free_list.lock().unwrap().push(index);
-    }
-
-    fn set_instance_memories(
-        instance: &mut Instance,
-        mut memories: impl Iterator<Item = *mut u8>,
-        max_pages: u64,
-    ) -> Result<(), InstantiationError> {
-        let module = instance.module.as_ref();
-
-        debug_assert!(instance.memories.is_empty());
-
-        for plan in
-            (&module.memory_plans.values().as_slice()[module.num_imported_memories..]).iter()
-        {
-            let memory = unsafe {
-                std::slice::from_raw_parts_mut(
-                    memories.next().unwrap(),
-                    (max_pages as usize) * (WASM_PAGE_SIZE as usize),
-                )
-            };
-            instance.memories.push(
-                Memory::new_static(plan, memory, commit_memory_pages, unsafe {
-                    &mut *instance.store()
-                })
-                .map_err(InstantiationError::Resource)?,
-            );
-        }
-
-        debug_assert!(instance.dropped_data.is_empty());
-
-        Ok(())
-    }
-
-    fn set_instance_tables(
-        instance: &mut Instance,
-        mut tables: impl Iterator<Item = *mut usize>,
-        max_elements: u32,
-    ) -> Result<(), InstantiationError> {
-        let module = instance.module.as_ref();
-
-        debug_assert!(instance.tables.is_empty());
-
-        for plan in (&module.table_plans.values().as_slice()[module.num_imported_tables..]).iter() {
-            let base = tables.next().unwrap();
-
-            commit_table_pages(
-                base as *mut u8,
-                max_elements as usize * mem::size_of::<*mut u8>(),
-            )
-            .map_err(InstantiationError::Resource)?;
-
-            let table = unsafe { std::slice::from_raw_parts_mut(base, max_elements as usize) };
-            instance.tables.push(
-                Table::new_static(plan, table, unsafe { &mut *instance.store() })
-                    .map_err(InstantiationError::Resource)?,
-            );
-        }
-
-        debug_assert!(instance.dropped_elements.is_empty());
-        instance
-            .dropped_elements
-            .resize(module.passive_elements.len());
-
-        Ok(())
-    }
-}
-
-impl Drop for InstancePool {
-    fn drop(&mut self) {
-        unsafe {
-            for i in 0..self.max_instances {
-                let ptr = self.mapping.as_mut_ptr().add(i * self.instance_size) as *mut Instance;
-                std::ptr::drop_in_place(ptr);
-            }
         }
     }
 }
@@ -589,6 +630,10 @@ impl Drop for InstancePool {
 #[derive(Debug)]
 struct MemoryPool {
     mapping: Mmap,
+    // If using the memfd allocation scheme, the MemFd slots. We
+    // dynamically transfer ownership of a slot to a Memory when in
+    // use.
+    memfd_slots: Vec<Mutex<Option<MemFdSlot>>>,
     // The size, in bytes, of each linear memory's reservation plus the guard
     // region allocated for it.
     memory_size: usize,
@@ -634,7 +679,7 @@ impl MemoryPool {
             0
         };
 
-        debug_assert!(
+        assert!(
             memory_size % region::page::size() == 0,
             "memory size {} is not a multiple of system page size",
             memory_size
@@ -673,8 +718,18 @@ impl MemoryPool {
         let mapping = Mmap::accessible_reserved(0, allocation_size)
             .context("failed to create memory pool mapping")?;
 
+        let num_memfd_slots = if cfg!(memfd) {
+            max_instances * max_memories
+        } else {
+            0
+        };
+        let memfd_slots: Vec<_> = std::iter::repeat_with(|| Mutex::new(None))
+            .take(num_memfd_slots)
+            .collect();
+
         let pool = Self {
             mapping,
+            memfd_slots,
             memory_size,
             initial_memory_offset,
             max_memories,
@@ -689,17 +744,63 @@ impl MemoryPool {
         Ok(pool)
     }
 
-    fn get(&self, instance_index: usize) -> impl Iterator<Item = *mut u8> {
-        debug_assert!(instance_index < self.max_instances);
+    fn get_base(&self, instance_index: usize, memory_index: DefinedMemoryIndex) -> *mut u8 {
+        assert!(instance_index < self.max_instances);
+        let memory_index = memory_index.as_u32() as usize;
+        assert!(memory_index < self.max_memories);
+        let idx = instance_index * self.max_memories + memory_index;
+        let offset = self.initial_memory_offset + idx * self.memory_size;
+        unsafe { self.mapping.as_mut_ptr().offset(offset as isize) }
+    }
 
-        let base: *mut u8 = unsafe {
-            self.mapping.as_mut_ptr().add(
-                self.initial_memory_offset + instance_index * self.memory_size * self.max_memories,
-            ) as _
-        };
+    fn get<'a>(&'a self, instance_index: usize) -> impl Iterator<Item = *mut u8> + 'a {
+        (0..self.max_memories)
+            .map(move |i| self.get_base(instance_index, DefinedMemoryIndex::from_u32(i as u32)))
+    }
 
-        let size = self.memory_size;
-        (0..self.max_memories).map(move |i| unsafe { base.add(i * size) })
+    /// Take ownership of the given memfd slot. Must be returned via
+    /// `return_memfd_slot` when the instance is done using it.
+    fn take_memfd_slot(
+        &self,
+        instance_index: usize,
+        memory_index: DefinedMemoryIndex,
+    ) -> MemFdSlot {
+        let idx = instance_index * self.max_memories + (memory_index.as_u32() as usize);
+        let maybe_slot = self.memfd_slots[idx].lock().unwrap().take();
+
+        maybe_slot.unwrap_or_else(|| {
+            MemFdSlot::create(
+                self.get_base(instance_index, memory_index) as *mut c_void,
+                0,
+                self.memory_size,
+            )
+        })
+    }
+
+    /// Return ownership of the given memfd slot.
+    fn return_memfd_slot(
+        &self,
+        instance_index: usize,
+        memory_index: DefinedMemoryIndex,
+        slot: MemFdSlot,
+    ) {
+        assert!(!slot.is_dirty());
+        let idx = instance_index * self.max_memories + (memory_index.as_u32() as usize);
+        *self.memfd_slots[idx].lock().unwrap() = Some(slot);
+    }
+}
+
+impl Drop for MemoryPool {
+    fn drop(&mut self) {
+        // Clear the `clear_no_drop` flag (i.e., ask to *not* clear on
+        // drop) for all MemFdSlots, and then drop them here. This is
+        // valid because the one `Mmap` that covers the whole region
+        // can just do its one munmap.
+        for mut memfd in std::mem::take(&mut self.memfd_slots) {
+            if let Some(memfd_slot) = memfd.get_mut().unwrap() {
+                memfd_slot.no_clear_on_drop();
+            }
+        }
     }
 }
 
@@ -754,7 +855,7 @@ impl TablePool {
     }
 
     fn get(&self, instance_index: usize) -> impl Iterator<Item = *mut u8> {
-        debug_assert!(instance_index < self.max_instances);
+        assert!(instance_index < self.max_instances);
 
         let base: *mut u8 = unsafe {
             self.mapping
@@ -784,7 +885,7 @@ struct StackPool {
     stack_size: usize,
     max_instances: usize,
     page_size: usize,
-    free_list: Mutex<Vec<usize>>,
+    index_allocator: Mutex<PoolingAllocationState>,
 }
 
 #[cfg(all(feature = "async", unix))]
@@ -827,28 +928,32 @@ impl StackPool {
             stack_size,
             max_instances,
             page_size,
-            free_list: Mutex::new((0..max_instances).collect()),
+            // We always use a `NextAvailable` strategy for stack
+            // allocation. We don't want or need an affinity policy
+            // here: stacks do not benefit from being allocated to the
+            // same compiled module with the same image (they always
+            // start zeroed just the same for everyone).
+            index_allocator: Mutex::new(PoolingAllocationState::new(
+                PoolingAllocationStrategy::NextAvailable,
+                max_instances,
+            )),
         })
     }
 
-    fn allocate(
-        &self,
-        strategy: PoolingAllocationStrategy,
-    ) -> Result<wasmtime_fiber::FiberStack, FiberStackError> {
+    fn allocate(&self) -> Result<wasmtime_fiber::FiberStack, FiberStackError> {
         if self.stack_size == 0 {
             return Err(FiberStackError::NotSupported);
         }
 
         let index = {
-            let mut free_list = self.free_list.lock().unwrap();
-            if free_list.is_empty() {
+            let mut alloc = self.index_allocator.lock().unwrap();
+            if alloc.is_empty() {
                 return Err(FiberStackError::Limit(self.max_instances as u32));
             }
-            let free_index = strategy.next(free_list.len());
-            free_list.swap_remove(free_index)
+            alloc.alloc(None).index()
         };
 
-        debug_assert!(index < self.max_instances);
+        assert!(index < self.max_instances);
 
         unsafe {
             // Remove the guard page from the size
@@ -883,15 +988,15 @@ impl StackPool {
         let stack_size = self.stack_size - self.page_size;
         let bottom_of_stack = top - stack_size;
         let start_of_stack = bottom_of_stack - self.page_size;
-        debug_assert!(start_of_stack >= base && start_of_stack < (base + len));
-        debug_assert!((start_of_stack - base) % self.stack_size == 0);
+        assert!(start_of_stack >= base && start_of_stack < (base + len));
+        assert!((start_of_stack - base) % self.stack_size == 0);
 
         let index = (start_of_stack - base) / self.stack_size;
-        debug_assert!(index < self.max_instances);
+        assert!(index < self.max_instances);
 
         decommit_stack_pages(bottom_of_stack as _, stack_size).unwrap();
 
-        self.free_list.lock().unwrap().push(index);
+        self.index_allocator.lock().unwrap().free(SlotId(index));
     }
 }
 
@@ -902,7 +1007,6 @@ impl StackPool {
 /// Note: the resource pools are manually dropped so that the fault handler terminates correctly.
 #[derive(Debug)]
 pub struct PoolingInstanceAllocator {
-    strategy: PoolingAllocationStrategy,
     module_limits: ModuleLimits,
     // This is manually drop so that the pools unmap their memory before the page fault handler drops.
     instances: mem::ManuallyDrop<InstancePool>,
@@ -927,7 +1031,7 @@ impl PoolingInstanceAllocator {
             bail!("the instance count limit cannot be zero");
         }
 
-        let instances = InstancePool::new(&module_limits, &instance_limits, tunables)?;
+        let instances = InstancePool::new(strategy, &module_limits, &instance_limits, tunables)?;
 
         #[cfg(all(feature = "uffd", target_os = "linux"))]
         let _fault_handler = imp::PageFaultHandler::new(&instances)?;
@@ -935,7 +1039,6 @@ impl PoolingInstanceAllocator {
         drop(stack_size); // suppress unused warnings w/o async feature
 
         Ok(Self {
-            strategy,
             module_limits,
             instances: mem::ManuallyDrop::new(instances),
             #[cfg(all(feature = "async", unix))]
@@ -974,7 +1077,7 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
         &self,
         req: InstanceAllocationRequest,
     ) -> Result<InstanceHandle, InstantiationError> {
-        self.instances.allocate(self.strategy, req)
+        self.instances.allocate(req)
     }
 
     unsafe fn initialize(
@@ -988,7 +1091,7 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
         cfg_if::cfg_if! {
             if #[cfg(all(feature = "uffd", target_os = "linux"))] {
                 match &module.memory_initialization {
-                    wasmtime_environ::MemoryInitialization::Paged{ out_of_bounds, .. } => {
+                    wasmtime_environ::MemoryInitialization::Paged { .. } => {
                         if !is_bulk_memory {
                             super::check_init_bounds(instance, module)?;
                         }
@@ -997,13 +1100,6 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
                         super::initialize_tables(instance, module)?;
 
                         // Don't initialize the memory; the fault handler will back the pages when accessed
-
-                        // If there was an out of bounds access observed in initialization, return a trap
-                        if *out_of_bounds {
-                            return Err(InstantiationError::Trap(crate::traphandlers::Trap::wasm(
-                                wasmtime_environ::TrapCode::HeapOutOfBounds,
-                            )));
-                        }
 
                         Ok(())
                     },
@@ -1021,7 +1117,7 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
 
     #[cfg(all(feature = "async", unix))]
     fn allocate_fiber_stack(&self) -> Result<wasmtime_fiber::FiberStack, FiberStackError> {
-        self.stacks.allocate(self.strategy)
+        self.stacks.allocate()
     }
 
     #[cfg(all(feature = "async", unix))]
@@ -1049,10 +1145,11 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{Imports, StorePtr, VMSharedSignatureIndex};
+    use crate::{CompiledModuleId, Imports, MemoryMemFd, StorePtr, VMSharedSignatureIndex};
+    use std::sync::Arc;
     use wasmtime_environ::{
-        EntityRef, Global, GlobalInit, Memory, MemoryPlan, ModuleType, SignatureIndex, Table,
-        TablePlan, TableStyle, WasmType,
+        DefinedFuncIndex, DefinedMemoryIndex, EntityRef, FunctionInfo, Global, GlobalInit, Memory,
+        MemoryPlan, ModuleType, SignatureIndex, Table, TablePlan, TableStyle, WasmType,
     };
 
     #[test]
@@ -1341,19 +1438,43 @@ mod test {
         );
     }
 
-    #[test]
-    fn test_next_available_allocation_strategy() {
-        let strat = PoolingAllocationStrategy::NextAvailable;
-        assert_eq!(strat.next(10), 9);
-        assert_eq!(strat.next(5), 4);
-        assert_eq!(strat.next(1), 0);
-    }
+    pub(crate) fn empty_runtime_info(
+        module: Arc<wasmtime_environ::Module>,
+    ) -> Arc<dyn ModuleRuntimeInfo> {
+        struct RuntimeInfo(Arc<wasmtime_environ::Module>);
 
-    #[test]
-    fn test_random_allocation_strategy() {
-        let strat = PoolingAllocationStrategy::Random;
-        assert!(strat.next(100) < 100);
-        assert_eq!(strat.next(1), 0);
+        impl ModuleRuntimeInfo for RuntimeInfo {
+            fn module(&self) -> &Arc<wasmtime_environ::Module> {
+                &self.0
+            }
+            fn image_base(&self) -> usize {
+                0
+            }
+            fn function_info(&self, _: DefinedFuncIndex) -> &FunctionInfo {
+                unimplemented!()
+            }
+            fn signature(&self, _: SignatureIndex) -> VMSharedSignatureIndex {
+                unimplemented!()
+            }
+            fn memfd_image(
+                &self,
+                _: DefinedMemoryIndex,
+            ) -> anyhow::Result<Option<&Arc<MemoryMemFd>>> {
+                Ok(None)
+            }
+
+            fn unique_id(&self) -> Option<CompiledModuleId> {
+                None
+            }
+            fn wasm_data(&self) -> &[u8] {
+                &[]
+            }
+            fn signature_ids(&self) -> &[VMSharedSignatureIndex] {
+                &[]
+            }
+        }
+
+        Arc::new(RuntimeInfo(module))
     }
 
     #[cfg(target_pointer_width = "64")]
@@ -1375,6 +1496,7 @@ mod test {
         let instance_limits = InstanceLimits { count: 3 };
 
         let instances = InstancePool::new(
+            PoolingAllocationStrategy::NextAvailable,
             &module_limits,
             &instance_limits,
             &Tunables {
@@ -1388,57 +1510,48 @@ mod test {
         assert_eq!(instances.instance_size, region::page::size());
         assert_eq!(instances.max_instances, 3);
 
-        assert_eq!(&*instances.free_list.lock().unwrap(), &[0, 1, 2]);
+        assert_eq!(
+            instances.index_allocator.lock().unwrap().testing_freelist(),
+            &[SlotId(0), SlotId(1), SlotId(2)]
+        );
 
         let mut handles = Vec::new();
         let module = Arc::new(Module::default());
-        let functions = &PrimaryMap::new();
 
         for _ in (0..3).rev() {
             handles.push(
                 instances
-                    .allocate(
-                        PoolingAllocationStrategy::NextAvailable,
-                        InstanceAllocationRequest {
-                            module: module.clone(),
-                            image_base: 0,
-                            functions,
-                            imports: Imports {
-                                functions: &[],
-                                tables: &[],
-                                memories: &[],
-                                globals: &[],
-                            },
-                            shared_signatures: VMSharedSignatureIndex::default().into(),
-                            host_state: Box::new(()),
-                            store: StorePtr::empty(),
-                            wasm_data: &[],
+                    .allocate(InstanceAllocationRequest {
+                        runtime_info: &empty_runtime_info(module.clone()),
+                        imports: Imports {
+                            functions: &[],
+                            tables: &[],
+                            memories: &[],
+                            globals: &[],
                         },
-                    )
+                        host_state: Box::new(()),
+                        store: StorePtr::empty(),
+                    })
                     .expect("allocation should succeed"),
             );
         }
 
-        assert_eq!(&*instances.free_list.lock().unwrap(), &[]);
+        assert_eq!(
+            instances.index_allocator.lock().unwrap().testing_freelist(),
+            &[]
+        );
 
-        match instances.allocate(
-            PoolingAllocationStrategy::NextAvailable,
-            InstanceAllocationRequest {
-                module: module.clone(),
-                functions,
-                image_base: 0,
-                imports: Imports {
-                    functions: &[],
-                    tables: &[],
-                    memories: &[],
-                    globals: &[],
-                },
-                shared_signatures: VMSharedSignatureIndex::default().into(),
-                host_state: Box::new(()),
-                store: StorePtr::empty(),
-                wasm_data: &[],
+        match instances.allocate(InstanceAllocationRequest {
+            runtime_info: &empty_runtime_info(module),
+            imports: Imports {
+                functions: &[],
+                tables: &[],
+                memories: &[],
+                globals: &[],
             },
-        ) {
+            host_state: Box::new(()),
+            store: StorePtr::empty(),
+        }) {
             Err(InstantiationError::Limit(3)) => {}
             _ => panic!("unexpected error"),
         };
@@ -1447,7 +1560,10 @@ mod test {
             instances.deallocate(&handle);
         }
 
-        assert_eq!(&*instances.free_list.lock().unwrap(), &[2, 1, 0]);
+        assert_eq!(
+            instances.index_allocator.lock().unwrap().testing_freelist(),
+            &[SlotId(2), SlotId(1), SlotId(0)]
+        );
 
         Ok(())
     }
@@ -1557,17 +1673,26 @@ mod test {
         assert_eq!(pool.page_size, native_page_size);
 
         assert_eq!(
-            &*pool.free_list.lock().unwrap(),
-            &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+            pool.index_allocator.lock().unwrap().testing_freelist(),
+            &[
+                SlotId(0),
+                SlotId(1),
+                SlotId(2),
+                SlotId(3),
+                SlotId(4),
+                SlotId(5),
+                SlotId(6),
+                SlotId(7),
+                SlotId(8),
+                SlotId(9)
+            ],
         );
 
         let base = pool.mapping.as_ptr() as usize;
 
         let mut stacks = Vec::new();
         for i in (0..10).rev() {
-            let stack = pool
-                .allocate(PoolingAllocationStrategy::NextAvailable)
-                .expect("allocation should succeed");
+            let stack = pool.allocate().expect("allocation should succeed");
             assert_eq!(
                 ((stack.top().unwrap() as usize - base) / pool.stack_size) - 1,
                 i
@@ -1575,12 +1700,9 @@ mod test {
             stacks.push(stack);
         }
 
-        assert_eq!(&*pool.free_list.lock().unwrap(), &[]);
+        assert_eq!(pool.index_allocator.lock().unwrap().testing_freelist(), &[]);
 
-        match pool
-            .allocate(PoolingAllocationStrategy::NextAvailable)
-            .unwrap_err()
-        {
+        match pool.allocate().unwrap_err() {
             FiberStackError::Limit(10) => {}
             _ => panic!("unexpected error"),
         };
@@ -1590,8 +1712,19 @@ mod test {
         }
 
         assert_eq!(
-            &*pool.free_list.lock().unwrap(),
-            &[9, 8, 7, 6, 5, 4, 3, 2, 1, 0],
+            pool.index_allocator.lock().unwrap().testing_freelist(),
+            &[
+                SlotId(9),
+                SlotId(8),
+                SlotId(7),
+                SlotId(6),
+                SlotId(5),
+                SlotId(4),
+                SlotId(3),
+                SlotId(2),
+                SlotId(1),
+                SlotId(0)
+            ],
         );
 
         Ok(())
@@ -1664,11 +1797,6 @@ mod test {
     #[cfg(all(unix, target_pointer_width = "64", feature = "async"))]
     #[test]
     fn test_stack_zeroed() -> Result<()> {
-        // https://github.com/bytecodealliance/wasmtime/pull/2518#issuecomment-747280133
-        if std::env::var("WASMTIME_TEST_NO_HOG_MEMORY").is_ok() {
-            return Ok(());
-        }
-
         let allocator = PoolingInstanceAllocator::new(
             PoolingAllocationStrategy::NextAvailable,
             ModuleLimits {

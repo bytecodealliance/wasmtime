@@ -1,6 +1,5 @@
 //! CLI tool to reduce Cranelift IR files crashing during compilation.
 
-use crate::disasm::{PrintRelocs, PrintStackMaps, PrintTraps};
 use crate::utils::{parse_sets_and_triple, read_to_string};
 use anyhow::{Context as _, Result};
 use cranelift_codegen::cursor::{Cursor, FuncCursor};
@@ -1029,17 +1028,9 @@ impl<'a> CrashCheckContext<'a> {
         std::panic::set_hook(Box::new(|_| {})); // silence panics
 
         let res = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            let mut relocs = PrintRelocs::new(false);
-            let mut traps = PrintTraps::new(false);
-            let mut stack_maps = PrintStackMaps::new(false);
-
-            let _ = self.context.compile_and_emit(
-                self.isa,
-                &mut self.code_memory,
-                &mut relocs,
-                &mut traps,
-                &mut stack_maps,
-            );
+            let _ = self
+                .context
+                .compile_and_emit(self.isa, &mut self.code_memory);
         })) {
             Ok(()) => CheckResult::Succeed,
             Err(err) => CheckResult::Crash(get_panic_string(err)),

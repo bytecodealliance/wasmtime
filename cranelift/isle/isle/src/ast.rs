@@ -32,6 +32,7 @@ pub struct Ident(pub String, pub Pos);
 pub struct Type {
     pub name: Ident,
     pub is_extern: bool,
+    pub is_nodebug: bool,
     pub ty: TypeValue,
     pub pos: Pos,
 }

@@ -1,4 +1,4 @@
-test compile
+test compile precise-output
 set unwind_info=false
 target aarch64
 
@@ -7,7 +7,13 @@ block0(v0: r64):
   return v0
 }
 
-; check: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 1)
+;   Inst 0:   ret
+; }}
 
 function %f1(r64) -> b1 {
 block0(v0: r64):
@@ -15,9 +21,15 @@ block0(v0: r64):
   return v1
 }
 
-; check: subs xzr, x0, #0
-; nextln: cset x0, eq
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 3)
+;   Inst 0:   subs xzr, x0, #0
+;   Inst 1:   cset x0, eq
+;   Inst 2:   ret
+; }}
 
 function %f2(r64) -> b1 {
 block0(v0: r64):
@@ -25,9 +37,15 @@ block0(v0: r64):
   return v1
 }
 
-; check: adds xzr, x0, #1
-; nextln: cset x0, eq
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 3)
+;   Inst 0:   adds xzr, x0, #1
+;   Inst 1:   cset x0, eq
+;   Inst 2:   ret
+; }}
 
 function %f3() -> r64 {
 block0:
@@ -35,8 +53,14 @@ block0:
   return v0
 }
 
-; check: movz x0, #0
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   movz x0, #0
+;   Inst 1:   ret
+; }}
 
 function %f4(r64, r64) -> r64, r64, r64 {
     fn0 = %f(r64) -> b1
@@ -59,43 +83,63 @@ block3(v7: r64, v8: r64):
     return v7, v8, v9
 }
 
-; check: Block 0:
-; check: stp fp, lr, [sp, #-16]!
-; nextln: mov fp, sp
-; nextln: stp x19, x20, [sp, #-16]!
-; nextln: sub sp, sp, #32
-; nextln: mov x19, x0
-; nextln: mov x20, x1
-; nextln: mov x0, x19
-; nextln: ldr x1, 8 ; b 12 ; data
-; nextln: stur x0, [sp, #8]
-; nextln: stur x19, [sp, #16]
-; nextln: stur x20, [sp, #24]
-; nextln: (safepoint: slots [S0, S1, S2]
-; nextln: blr x1
-; nextln: ldur x19, [sp, #16]
-; nextln: ldur x20, [sp, #24]
-; nextln: mov x1, sp
-; nextln: str x19, [x1]
-; nextln: and w0, w0, #1
-; nextln: cbz x0, label1 ; b label3
-; check: Block 1:
-; check:  b label2
-; check: Block 2:
-; check: mov x0, x20
-; nextln: b label5
-; check: Block 3:
-; check: b label4
-; check: Block 4:
-; check: mov x0, x19
-; nextln: mov x19, x20
-; nextln: b label5
-; check: Block 5:
-; check: mov x1, sp
-; nextln: ldr x1, [x1]
-; nextln: mov x2, x1
-; nextln: mov x1, x19
-; nextln: add sp, sp, #32
-; nextln: ldp x19, x20, [sp], #16
-; nextln: ldp fp, lr, [sp], #16
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (successor: Block 1)
+;   (successor: Block 3)
+;   (instruction range: 0 .. 18)
+;   Inst 0:   stp fp, lr, [sp, #-16]!
+;   Inst 1:   mov fp, sp
+;   Inst 2:   stp x19, x20, [sp, #-16]!
+;   Inst 3:   sub sp, sp, #32
+;   Inst 4:   mov x19, x0
+;   Inst 5:   mov x20, x1
+;   Inst 6:   mov x0, x19
+;   Inst 7:   ldr x1, 8 ; b 12 ; data TestCase { length: 1, ascii: [102, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   Inst 8:   stur x0, [sp, #8]
+;   Inst 9:   stur x19, [sp, #16]
+;   Inst 10:   stur x20, [sp, #24]
+;       (safepoint: slots [S0, S1, S2] with EmitState EmitState { virtual_sp_offset: 0, nominal_sp_to_fp: 0, stack_map: None, cur_srcloc: SourceLoc(4294967295) })
+;   Inst 11:   blr x1
+;   Inst 12:   ldur x19, [sp, #16]
+;   Inst 13:   ldur x20, [sp, #24]
+;   Inst 14:   mov x1, sp
+;   Inst 15:   str x19, [x1]
+;   Inst 16:   and w0, w0, #1
+;   Inst 17:   cbz x0, label1 ; b label3
+; Block 1:
+;   (original IR block: block1)
+;   (successor: Block 2)
+;   (instruction range: 18 .. 19)
+;   Inst 18:   b label2
+; Block 2:
+;   (successor: Block 5)
+;   (instruction range: 19 .. 21)
+;   Inst 19:   mov x0, x20
+;   Inst 20:   b label5
+; Block 3:
+;   (original IR block: block2)
+;   (successor: Block 4)
+;   (instruction range: 21 .. 22)
+;   Inst 21:   b label4
+; Block 4:
+;   (successor: Block 5)
+;   (instruction range: 22 .. 25)
+;   Inst 22:   mov x0, x19
+;   Inst 23:   mov x19, x20
+;   Inst 24:   b label5
+; Block 5:
+;   (original IR block: block3)
+;   (instruction range: 25 .. 33)
+;   Inst 25:   mov x1, sp
+;   Inst 26:   ldr x1, [x1]
+;   Inst 27:   mov x2, x1
+;   Inst 28:   mov x1, x19
+;   Inst 29:   add sp, sp, #32
+;   Inst 30:   ldp x19, x20, [sp], #16
+;   Inst 31:   ldp fp, lr, [sp], #16
+;   Inst 32:   ret
+; }}
+

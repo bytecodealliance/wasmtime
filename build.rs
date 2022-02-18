@@ -173,8 +173,6 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             // No simd support yet for s390x.
             ("simd", _) if platform_is_s390x() => return true,
             ("memory64", "simd") if platform_is_s390x() => return true,
-            // No full atomics support yet for s390x.
-            ("memory64", "threads") if platform_is_s390x() => return true,
             _ => {}
         },
         _ => panic!("unrecognized strategy"),
