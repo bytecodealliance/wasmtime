@@ -204,7 +204,7 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
         macro_rules! fields {
             (size($field:ident) = $size:expr, $($rest:tt)*) => {
                 ret.$field = next_field_offset;
-                next_field_offset = cadd(next_field_offset, $size);
+                next_field_offset = cadd(next_field_offset, u32::from($size));
                 fields!($($rest)*);
             };
             (align($align:literal), $($rest:tt)*) => {
@@ -215,12 +215,12 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
         }
 
         fields! {
-            size(interrupts) = u32::from(ret.ptr.size()),
-            size(epoch_ptr) = u32::from(ret.ptr.size()),
-            size(externref_activations_table) = u32::from(ret.ptr.size()),
-            size(store) = u32::from(ret.ptr.size() * 2),
-            size(builtin_functions) = u32::from(ret.pointer_size()),
-            size(signature_ids) = u32::from(ret.ptr.size()),
+            size(interrupts) = ret.ptr.size(),
+            size(epoch_ptr) = ret.ptr.size(),
+            size(externref_activations_table) = ret.ptr.size(),
+            size(store) = ret.ptr.size() * 2,
+            size(builtin_functions) = ret.pointer_size(),
+            size(signature_ids) = ret.ptr.size(),
             size(imported_functions)
                 = cmul(ret.num_imported_functions, ret.size_of_vmfunction_import()),
             size(imported_tables)
