@@ -7,7 +7,7 @@
     allow(clippy::too_many_arguments, clippy::cognitive_complexity)
 )]
 
-use crate::disasm::{print_all, PrintRelocs, PrintStackMaps, PrintTraps};
+use crate::disasm::print_all;
 use crate::utils::parse_sets_and_triple;
 use anyhow::{Context as _, Result};
 use cranelift_codegen::ir::DisplayFunctionAnnotations;
@@ -255,20 +255,20 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
     for (def_index, func) in dummy_environ.info.function_bodies.iter() {
         context.func = func.clone();
 
-        let mut saved_sizes = None;
+        let mut saved_size = None;
         let func_index = num_func_imports + def_index.index();
         let mut mem = vec![];
-        let mut relocs = PrintRelocs::new(options.print);
-        let mut traps = PrintTraps::new(options.print);
-        let mut stack_maps = PrintStackMaps::new(options.print);
-        if options.check_translation {
+        let (relocs, traps, stack_maps) = if options.check_translation {
             if let Err(errors) = context.verify(fisa) {
                 anyhow::bail!("{}", pretty_verifier_error(&context.func, None, errors));
             }
+            (vec![], vec![], vec![])
         } else {
-            let code_info = context
-                .compile_and_emit(isa, &mut mem, &mut relocs, &mut traps, &mut stack_maps)
+            context
+                .compile_and_emit(isa, &mut mem)
                 .map_err(|err| anyhow::anyhow!("{}", pretty_error(&context.func, err)))?;
+            let result = context.mach_compile_result.as_ref().unwrap();
+            let code_info = result.code_info();
 
             if options.print_size {
                 println!(
@@ -284,12 +284,14 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
             }
 
             if options.disasm {
-                saved_sizes = Some((
-                    code_info.code_size,
-                    code_info.jumptables_size + code_info.rodata_size,
-                ));
+                saved_size = Some(code_info.total_size);
             }
-        }
+            (
+                result.buffer.relocs().to_vec(),
+                result.buffer.traps().to_vec(),
+                result.buffer.stack_maps().to_vec(),
+            )
+        };
 
         if options.print {
             vprintln!(options.verbose, "");
@@ -324,12 +326,12 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
             vprintln!(options.verbose, "");
         }
 
-        if let Some((code_size, rodata_size)) = saved_sizes {
+        if let Some(total_size) = saved_size {
             print_all(
                 isa,
                 &mem,
-                code_size,
-                rodata_size,
+                total_size,
+                options.print,
                 &relocs,
                 &traps,
                 &stack_maps,

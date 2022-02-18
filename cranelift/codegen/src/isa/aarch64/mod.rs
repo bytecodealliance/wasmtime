@@ -3,14 +3,14 @@
 use crate::ir::condcodes::IntCC;
 use crate::ir::Function;
 use crate::isa::aarch64::settings as aarch64_settings;
-use crate::isa::Builder as IsaBuilder;
+use crate::isa::{Builder as IsaBuilder, TargetIsa};
 use crate::machinst::{
-    compile, MachBackend, MachCompileResult, MachTextSectionBuilder, TargetIsaAdapter,
-    TextSectionBuilder, VCode,
+    compile, MachCompileResult, MachTextSectionBuilder, TextSectionBuilder, VCode,
 };
 use crate::result::CodegenResult;
 use crate::settings as shared_settings;
 use alloc::{boxed::Box, vec::Vec};
+use core::fmt;
 use regalloc::{PrettyPrint, RealRegUniverse};
 use target_lexicon::{Aarch64Architecture, Architecture, Triple};
 
@@ -57,12 +57,12 @@ impl AArch64Backend {
         flags: shared_settings::Flags,
     ) -> CodegenResult<VCode<inst::Inst>> {
         let emit_info = EmitInfo::new(flags.clone());
-        let abi = Box::new(abi::AArch64ABICallee::new(func, flags)?);
-        compile::compile::<AArch64Backend>(func, self, abi, emit_info)
+        let abi = Box::new(abi::AArch64ABICallee::new(func, flags, self.isa_flags())?);
+        compile::compile::<AArch64Backend>(func, self, abi, &self.reg_universe, emit_info)
     }
 }
 
-impl MachBackend for AArch64Backend {
+impl TargetIsa for AArch64Backend {
     fn compile_function(
         &self,
         func: &Function,
@@ -98,8 +98,8 @@ impl MachBackend for AArch64Backend {
         "aarch64"
     }
 
-    fn triple(&self) -> Triple {
-        self.triple.clone()
+    fn triple(&self) -> &Triple {
+        &self.triple
     }
 
     fn flags(&self) -> &shared_settings::Flags {
@@ -108,10 +108,6 @@ impl MachBackend for AArch64Backend {
 
     fn isa_flags(&self) -> Vec<shared_settings::Value> {
         self.isa_flags.iter().collect()
-    }
-
-    fn reg_universe(&self) -> &RealRegUniverse {
-        &self.reg_universe
     }
 
     fn unsigned_add_overflow_condition(&self) -> IntCC {
@@ -134,7 +130,7 @@ impl MachBackend for AArch64Backend {
                 Some(UnwindInfo::SystemV(
                     crate::isa::unwind::systemv::create_unwind_info_from_insts(
                         &result.buffer.unwind_info[..],
-                        result.buffer.data.len(),
+                        result.buffer.data().len(),
                         &mapper,
                     )?,
                 ))
@@ -157,6 +153,16 @@ impl MachBackend for AArch64Backend {
     }
 }
 
+impl fmt::Display for AArch64Backend {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("MachBackend")
+            .field("name", &self.name())
+            .field("triple", &self.triple())
+            .field("flags", &format!("{}", self.flags()))
+            .finish()
+    }
+}
+
 /// Create a new `isa::Builder`.
 pub fn isa_builder(triple: Triple) -> IsaBuilder {
     assert!(triple.architecture == Architecture::Aarch64(Aarch64Architecture::Aarch64));
@@ -166,7 +172,7 @@ pub fn isa_builder(triple: Triple) -> IsaBuilder {
         constructor: |triple, shared_flags, builder| {
             let isa_flags = aarch64_settings::Flags::new(&shared_flags, builder);
             let backend = AArch64Backend::new_with_flags(triple, shared_flags, isa_flags);
-            Box::new(TargetIsaAdapter::new(backend))
+            Ok(Box::new(backend))
         },
     }
 }
@@ -210,7 +216,7 @@ mod test {
             isa_flags,
         );
         let buffer = backend.compile_function(&mut func, false).unwrap().buffer;
-        let code = &buffer.data[..];
+        let code = buffer.data();
 
         // mov x1, #0x1234
         // add w0, w0, w1
@@ -265,7 +271,7 @@ mod test {
         let result = backend
             .compile_function(&mut func, /* want_disasm = */ false)
             .unwrap();
-        let code = &result.buffer.data[..];
+        let code = result.buffer.data();
 
         // mov	x1, #0x1234                	// #4660
         // add	w0, w0, w1

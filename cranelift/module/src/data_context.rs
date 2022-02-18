@@ -2,13 +2,12 @@
 
 use cranelift_codegen::binemit::{Addend, CodeOffset, Reloc};
 use cranelift_codegen::entity::PrimaryMap;
-use cranelift_codegen::ir;
+use cranelift_codegen::ir::{self, SourceLoc};
+use cranelift_codegen::MachReloc;
 use std::borrow::ToOwned;
 use std::boxed::Box;
 use std::string::String;
 use std::vec::Vec;
-
-use crate::RelocRecord;
 
 /// This specifies how data is to be initialized.
 #[derive(PartialEq, Eq, Debug)]
@@ -59,25 +58,24 @@ pub struct DataDescription {
 
 impl DataDescription {
     /// An iterator over all relocations of the data object.
-    pub fn all_relocs<'a>(
-        &'a self,
-        pointer_reloc: Reloc,
-    ) -> impl Iterator<Item = RelocRecord> + 'a {
+    pub fn all_relocs<'a>(&'a self, pointer_reloc: Reloc) -> impl Iterator<Item = MachReloc> + 'a {
         let func_relocs = self
             .function_relocs
             .iter()
-            .map(move |&(offset, id)| RelocRecord {
-                reloc: pointer_reloc,
+            .map(move |&(offset, id)| MachReloc {
+                kind: pointer_reloc,
                 offset,
+                srcloc: SourceLoc::default(),
                 name: self.function_decls[id].clone(),
                 addend: 0,
             });
         let data_relocs = self
             .data_relocs
             .iter()
-            .map(move |&(offset, id, addend)| RelocRecord {
-                reloc: pointer_reloc,
+            .map(move |&(offset, id, addend)| MachReloc {
+                kind: pointer_reloc,
                 offset,
+                srcloc: SourceLoc::default(),
                 name: self.data_decls[id].clone(),
                 addend,
             });

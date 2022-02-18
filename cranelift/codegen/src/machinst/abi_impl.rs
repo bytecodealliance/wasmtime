@@ -419,7 +419,10 @@ pub trait ABIMachineSpec {
 
     /// Generates extra unwind instructions for a new frame  for this
     /// architecture, whether the frame has a prologue sequence or not.
-    fn gen_debug_frame_info(_flags: &settings::Flags) -> SmallInstVec<Self::I> {
+    fn gen_debug_frame_info(
+        _flags: &settings::Flags,
+        _isa_flags: &Vec<settings::Value>,
+    ) -> SmallInstVec<Self::I> {
         // By default, generates nothing.
         smallvec![]
     }
@@ -619,6 +622,8 @@ pub struct ABICalleeImpl<M: ABIMachineSpec> {
     call_conv: isa::CallConv,
     /// The settings controlling this function's compilation.
     flags: settings::Flags,
+    /// The ISA-specific flag values controlling this function's compilation.
+    isa_flags: Vec<settings::Value>,
     /// Whether or not this function is a "leaf", meaning it calls no other
     /// functions
     is_leaf: bool,
@@ -670,7 +675,11 @@ fn ty_from_class(class: RegClass) -> Type {
 
 impl<M: ABIMachineSpec> ABICalleeImpl<M> {
     /// Create a new body ABI instance.
-    pub fn new(f: &ir::Function, flags: settings::Flags) -> CodegenResult<Self> {
+    pub fn new(
+        f: &ir::Function,
+        flags: settings::Flags,
+        isa_flags: Vec<settings::Value>,
+    ) -> CodegenResult<Self> {
         log::trace!("ABI: func signature {:?}", f.signature);
 
         let ir_sig = ensure_struct_return_ptr_is_returned(&f.signature);
@@ -737,6 +746,7 @@ impl<M: ABIMachineSpec> ABICalleeImpl<M> {
             ret_area_ptr: None,
             call_conv,
             flags,
+            isa_flags,
             is_leaf: f.is_leaf(),
             stack_limit,
             probestack_min_frame,
@@ -1266,7 +1276,7 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
                 self.fixed_frame_storage_size,
             );
 
-            insts.extend(M::gen_debug_frame_info(&self.flags).into_iter());
+            insts.extend(M::gen_debug_frame_info(&self.flags, &self.isa_flags).into_iter());
 
             if self.setup_frame {
                 // set up frame

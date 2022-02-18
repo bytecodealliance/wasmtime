@@ -28,14 +28,20 @@ block5(v5: i64):
   return v6
 }
 
-; check:  clgfi %r2, 3 ; jghe label1 ; sllg %r4, %r2, 2 ; larl %r3, 18 ; lgf %r4, 0(%r4, %r3) ; agrk %r3, %r3, %r4 ; br %r3 ; jt_entries 
+; check:  clgfi %r2, 3
+; nextln: jghe label1
+; nextln: sllg %r3, %r2, 2
+; nextln: larl %r1, 14 ; agf %r1, 0(%r1, %r3) ; br %r1 ; jt_entries label3 label5 label7
 
+; check:  Block 3
 ; check:  lghi %r3, 1
 ; nextln: jg
 
+; check:  Block 5
 ; check:  lghi %r3, 2
 ; nextln: jg
 
+; check:  Block 7
 ; check:  lghi %r3, 3
 ; nextln: jg
 

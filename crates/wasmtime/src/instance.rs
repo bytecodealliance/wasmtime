@@ -328,13 +328,16 @@ impl Instance {
             // Instantiated instances will lazily fill in exports, so we process
             // all that lazy logic here.
             InstanceData::Instantiated { id, exports, .. } => {
-                let instance = store.instance(*id);
-                let (i, _, index) = instance.module().exports.get_full(name)?;
+                let id = *id;
+                let instance = store.instance(id);
+                let (i, _, &index) = instance.module().exports.get_full(name)?;
                 if let Some(export) = &exports[i] {
                     return Some(export.clone());
                 }
+
+                let instance = store.instance_mut(id); // reborrow the &mut Instancehandle
                 let item = unsafe {
-                    Extern::from_wasmtime_export(instance.lookup_by_declaration(index), store)
+                    Extern::from_wasmtime_export(instance.lookup_by_declaration(&index), store)
                 };
                 let exports = match &mut store[self.0] {
                     InstanceData::Instantiated { exports, .. } => exports,
@@ -651,7 +654,7 @@ impl<'a> Instantiator<'a> {
                     artifacts,
                     modules,
                     &self.cur.modules,
-                );
+                )?;
                 self.cur.modules.push(submodule);
             }
 
@@ -701,19 +704,16 @@ impl<'a> Instantiator<'a> {
             // this instance, so we determine what the ID is and then assert
             // it's the same later when we do actually insert it.
             let instance_to_be = store.store_data().next_id::<InstanceData>();
+
             let mut instance_handle =
                 store
                     .engine()
                     .allocator()
                     .allocate(InstanceAllocationRequest {
-                        module: compiled_module.module().clone(),
-                        image_base: compiled_module.code().as_ptr() as usize,
-                        functions: compiled_module.functions(),
+                        runtime_info: &self.cur.module.runtime_info(),
                         imports: self.cur.build(),
-                        shared_signatures: self.cur.module.signatures().as_module_map().into(),
                         host_state: Box::new(Instance(instance_to_be)),
                         store: StorePtr::new(store.traitobj()),
-                        wasm_data: compiled_module.wasm_data(),
                     })?;
 
             // The instance still has lots of setup, for example
@@ -816,7 +816,7 @@ impl<'a> Instantiator<'a> {
         };
         // If a start function is present, invoke it. Make sure we use all the
         // trap-handling configuration in `store` as well.
-        let instance = store.0.instance(id);
+        let instance = store.0.instance_mut(id);
         let f = match instance.lookup_by_declaration(&EntityIndex::Function(start)) {
             wasmtime_runtime::Export::Function(f) => f,
             _ => unreachable!(), // valid modules shouldn't hit this
@@ -902,6 +902,9 @@ impl<'a> ImportsBuilder<'a> {
 pub struct InstancePre<T> {
     module: Module,
     items: Vec<Definition>,
+    /// A count of `Definition::HostFunc` entries in `items` above to
+    /// preallocate space in a `Store` up front for all entries to be inserted.
+    host_funcs: usize,
     _marker: std::marker::PhantomData<fn() -> T>,
 }
 
@@ -911,6 +914,7 @@ impl<T> Clone for InstancePre<T> {
         Self {
             module: self.module.clone(),
             items: self.items.clone(),
+            host_funcs: self.host_funcs,
             _marker: self._marker,
         }
     }
@@ -923,9 +927,17 @@ impl<T> InstancePre<T> {
         items: Vec<Definition>,
     ) -> Result<InstancePre<T>> {
         typecheck_defs(store, module, &items)?;
+        let host_funcs = items
+            .iter()
+            .filter(|i| match i {
+                Definition::HostFunc(_) => true,
+                _ => false,
+            })
+            .count();
         Ok(InstancePre {
             module: module.clone(),
             items,
+            host_funcs,
             _marker: std::marker::PhantomData,
         })
     }
@@ -952,7 +964,7 @@ impl<T> InstancePre<T> {
         // passed in.
         let mut store = store.as_context_mut();
         let mut instantiator = unsafe {
-            self.ensure_comes_from_same_store(&store.0)?;
+            self.verify_store_and_reserve_space(&mut store.0)?;
             Instantiator::new(
                 store.0,
                 &self.module,
@@ -984,7 +996,7 @@ impl<T> InstancePre<T> {
         // For the unsafety here see above
         let mut store = store.as_context_mut();
         let mut i = unsafe {
-            self.ensure_comes_from_same_store(&store.0)?;
+            self.verify_store_and_reserve_space(&mut store.0)?;
             Instantiator::new(
                 store.0,
                 &self.module,
@@ -1002,12 +1014,17 @@ impl<T> InstancePre<T> {
             .await?
     }
 
-    fn ensure_comes_from_same_store(&self, store: &StoreOpaque) -> Result<()> {
+    fn verify_store_and_reserve_space(&self, store: &mut StoreOpaque) -> Result<()> {
         for import in self.items.iter() {
             if !import.comes_from_same_store(store) {
                 bail!("cross-`Store` instantiation is not currently supported");
             }
         }
+        // Any linker-defined function of the `Definition::HostFunc` variant
+        // will insert a function into the store automatically as part of
+        // instantiation, so reserve space here to make insertion more efficient
+        // as it won't have to realloc during the instantiation.
+        store.store_data_mut().reserve_funcs(self.host_funcs);
         Ok(())
     }
 }

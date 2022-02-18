@@ -11,8 +11,8 @@ pub struct UnwindRegistration {
 
 impl UnwindRegistration {
     pub unsafe fn new(
-        base_address: *mut u8,
-        unwind_info: *mut u8,
+        base_address: *const u8,
+        unwind_info: *const u8,
         unwind_len: usize,
     ) -> Result<UnwindRegistration> {
         assert!(unwind_info as usize % 4 == 0);

@@ -104,7 +104,7 @@ pub trait CompilerBuilder: Send + Sync + fmt::Debug {
     fn settings(&self) -> Vec<Setting>;
 
     /// Builds a new [`Compiler`] object from this configuration.
-    fn build(&self) -> Box<dyn Compiler>;
+    fn build(&self) -> Result<Box<dyn Compiler>>;
 }
 
 /// Description of compiler settings returned by [`CompilerBuilder::settings`].
@@ -220,6 +220,12 @@ pub trait Compiler: Send + Sync {
 
     /// Returns the target triple that this compiler is compiling for.
     fn triple(&self) -> &target_lexicon::Triple;
+
+    /// Returns the alignment necessary to align values to the page size of the
+    /// compilation target. Note that this may be an upper-bound where the
+    /// alignment is larger than necessary for some platforms since it may
+    /// depend on the platform's runtime configuration.
+    fn page_size_align(&self) -> u64;
 
     /// Returns a list of configured settings for this compiler.
     fn flags(&self) -> BTreeMap<String, FlagValue>;

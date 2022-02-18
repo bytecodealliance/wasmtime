@@ -275,6 +275,21 @@
 //!   all architectures for both the JIT compiler and the `wasmtime compile` CLI
 //!   command.
 //!
+//! * `pooling-allocator` - Enabled by default, this feature adds support for
+//!   the pooling allocation strategy enabled via
+//!   [`Config::allocation_strategy`]. The pooling allocator can enable more
+//!   efficient reuse of resources for high-concurrency and
+//!   high-instantiation-count scenarios.
+//!
+//! * `memfd` - Enabled by default, this feature builds in support for a
+//!   Linux-specific feature of creating a `memfd` where applicable for a
+//!   [`Module`]'s initial memory. This makes instantiation much faster by
+//!   `mmap`-ing the initial memory image into place instead of copying memory
+//!   into place, allowing sharing pages that end up only getting read and
+//!   otherwise using copy-on-write for efficient initialization of memory. Note
+//!   that this is simply compile-time support and this must also be enabled at
+//!   run-time via [`Config::memfd`].
+//!
 //! ## Examples
 //!
 //! In addition to the examples below be sure to check out the [online embedding

@@ -1,7 +1,6 @@
-use crate::ir::MemFlags;
+use crate::ir::{MemFlags, TrapCode};
 use crate::isa::s390x::inst::*;
 use crate::isa::s390x::settings as s390x_settings;
-use crate::isa::test_utils;
 use crate::settings;
 use alloc::vec::Vec;
 
@@ -1479,6 +1478,24 @@ fn test_s390x_binemit() {
         "B9E1801A",
         "popcnt %r1, %r10, 8",
     ));
+    insns.push((
+        Inst::UnaryRR {
+            op: UnaryOp::BSwap32,
+            rd: writable_gpr(1),
+            rn: gpr(10),
+        },
+        "B91F001A",
+        "lrvr %r1, %r10",
+    ));
+    insns.push((
+        Inst::UnaryRR {
+            op: UnaryOp::BSwap64,
+            rd: writable_gpr(1),
+            rn: gpr(10),
+        },
+        "B90F001A",
+        "lrvgr %r1, %r10",
+    ));
 
     insns.push((
         Inst::CmpRR {
@@ -1568,11 +1585,11 @@ fn test_s390x_binemit() {
             op: CmpOp::CmpS32,
             rn: gpr(1),
             mem: MemArg::Label {
-                target: BranchTarget::ResolvedOffset(64),
+                target: MachLabel::from_block(1),
             },
         },
-        "C61D00000020",
-        "crl %r1, 64",
+        "C61D00000003",
+        "crl %r1, label1",
     ));
     insns.push((
         Inst::CmpRX {
@@ -1607,11 +1624,11 @@ fn test_s390x_binemit() {
             op: CmpOp::CmpS32Ext16,
             rn: gpr(1),
             mem: MemArg::Label {
-                target: BranchTarget::ResolvedOffset(64),
+                target: MachLabel::from_block(1),
             },
         },
-        "C61500000020",
-        "chrl %r1, 64",
+        "C61500000003",
+        "chrl %r1, label1",
     ));
     insns.push((
         Inst::CmpRX {
@@ -1632,11 +1649,11 @@ fn test_s390x_binemit() {
             op: CmpOp::CmpS64,
             rn: gpr(1),
             mem: MemArg::Label {
-                target: BranchTarget::ResolvedOffset(64),
+                target: MachLabel::from_block(1),
             },
         },
-        "C61800000020",
-        "cgrl %r1, 64",
+        "C61800000003",
+        "cgrl %r1, label1",
     ));
     insns.push((
         Inst::CmpRX {
@@ -1657,11 +1674,11 @@ fn test_s390x_binemit() {
             op: CmpOp::CmpS64Ext16,
             rn: gpr(1),
             mem: MemArg::Label {
-                target: BranchTarget::ResolvedOffset(64),
+                target: MachLabel::from_block(1),
             },
         },
-        "C61400000020",
-        "cghrl %r1, 64",
+        "C61400000003",
+        "cghrl %r1, label1",
     ));
     insns.push((
         Inst::CmpRX {
@@ -1682,11 +1699,11 @@ fn test_s390x_binemit() {
             op: CmpOp::CmpS64Ext32,
             rn: gpr(1),
             mem: MemArg::Label {
-                target: BranchTarget::ResolvedOffset(64),
+                target: MachLabel::from_block(1),
             },
         },
-        "C61C00000020",
-        "cgfrl %r1, 64",
+        "C61C00000003",
+        "cgfrl %r1, label1",
     ));
     insns.push((
         Inst::CmpRX {
@@ -1721,22 +1738,22 @@ fn test_s390x_binemit() {
             op: CmpOp::CmpL32,
             rn: gpr(1),
             mem: MemArg::Label {
-                target: BranchTarget::ResolvedOffset(64),
+                target: MachLabel::from_block(1),
             },
         },
-        "C61F00000020",
-        "clrl %r1, 64",
+        "C61F00000003",
+        "clrl %r1, label1",
     ));
     insns.push((
         Inst::CmpRX {
             op: CmpOp::CmpL32Ext16,
             rn: gpr(1),
             mem: MemArg::Label {
-                target: BranchTarget::ResolvedOffset(64),
+                target: MachLabel::from_block(1),
             },
         },
-        "C61700000020",
-        "clhrl %r1, 64",
+        "C61700000003",
+        "clhrl %r1, label1",
     ));
     insns.push((
         Inst::CmpRX {
@@ -1757,22 +1774,22 @@ fn test_s390x_binemit() {
             op: CmpOp::CmpL64,
             rn: gpr(1),
             mem: MemArg::Label {
-                target: BranchTarget::ResolvedOffset(64),
+                target: MachLabel::from_block(1),
             },
         },
-        "C61A00000020",
-        "clgrl %r1, 64",
+        "C61A00000003",
+        "clgrl %r1, label1",
     ));
     insns.push((
         Inst::CmpRX {
             op: CmpOp::CmpL64Ext16,
             rn: gpr(1),
             mem: MemArg::Label {
-                target: BranchTarget::ResolvedOffset(64),
+                target: MachLabel::from_block(1),
             },
         },
-        "C61600000020",
-        "clghrl %r1, 64",
+        "C61600000003",
+        "clghrl %r1, label1",
     ));
     insns.push((
         Inst::CmpRX {
@@ -1793,11 +1810,11 @@ fn test_s390x_binemit() {
             op: CmpOp::CmpL64Ext32,
             rn: gpr(1),
             mem: MemArg::Label {
-                target: BranchTarget::ResolvedOffset(64),
+                target: MachLabel::from_block(1),
             },
         },
-        "C61E00000020",
-        "clgfrl %r1, 64",
+        "C61E00000003",
+        "clgfrl %r1, label1",
     ));
 
     insns.push((
@@ -2063,352 +2080,437 @@ fn test_s390x_binemit() {
             shift_op: ShiftOp::RotL32,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(-524288).unwrap(),
-            shift_reg: None,
+            shift_imm: 0,
+            shift_reg: zero_reg(),
         },
-        "EB450000801D",
-        "rll %r4, %r5, -524288",
+        "EB450000001D",
+        "rll %r4, %r5, 0",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::RotL32,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(524287).unwrap(),
-            shift_reg: None,
+            shift_imm: 63,
+            shift_reg: zero_reg(),
         },
-        "EB450FFF7F1D",
-        "rll %r4, %r5, 524287",
+        "EB45003F001D",
+        "rll %r4, %r5, 63",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::RotL32,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(-524288).unwrap(),
-            shift_reg: Some(gpr(6)),
+            shift_imm: 0,
+            shift_reg: gpr(6),
         },
-        "EB456000801D",
-        "rll %r4, %r5, -524288(%r6)",
+        "EB456000001D",
+        "rll %r4, %r5, 0(%r6)",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::RotL32,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(524287).unwrap(),
-            shift_reg: Some(gpr(6)),
+            shift_imm: 63,
+            shift_reg: gpr(6),
         },
-        "EB456FFF7F1D",
-        "rll %r4, %r5, 524287(%r6)",
+        "EB45603F001D",
+        "rll %r4, %r5, 63(%r6)",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::RotL64,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(-524288).unwrap(),
-            shift_reg: None,
+            shift_imm: 0,
+            shift_reg: zero_reg(),
         },
-        "EB450000801C",
-        "rllg %r4, %r5, -524288",
+        "EB450000001C",
+        "rllg %r4, %r5, 0",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::RotL64,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(524287).unwrap(),
-            shift_reg: None,
+            shift_imm: 63,
+            shift_reg: zero_reg(),
         },
-        "EB450FFF7F1C",
-        "rllg %r4, %r5, 524287",
+        "EB45003F001C",
+        "rllg %r4, %r5, 63",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::RotL64,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(-524288).unwrap(),
-            shift_reg: Some(gpr(6)),
+            shift_imm: 0,
+            shift_reg: gpr(6),
         },
-        "EB456000801C",
-        "rllg %r4, %r5, -524288(%r6)",
+        "EB456000001C",
+        "rllg %r4, %r5, 0(%r6)",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::RotL64,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(524287).unwrap(),
-            shift_reg: Some(gpr(6)),
+            shift_imm: 63,
+            shift_reg: gpr(6),
         },
-        "EB456FFF7F1C",
-        "rllg %r4, %r5, 524287(%r6)",
+        "EB45603F001C",
+        "rllg %r4, %r5, 63(%r6)",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::LShL32,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(-524288).unwrap(),
-            shift_reg: None,
+            shift_imm: 0,
+            shift_reg: zero_reg(),
         },
-        "EB45000080DF",
-        "sllk %r4, %r5, -524288",
+        "EB45000000DF",
+        "sllk %r4, %r5, 0",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::LShL32,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(524287).unwrap(),
-            shift_reg: None,
+            shift_imm: 63,
+            shift_reg: zero_reg(),
         },
-        "EB450FFF7FDF",
-        "sllk %r4, %r5, 524287",
+        "EB45003F00DF",
+        "sllk %r4, %r5, 63",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::LShL32,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(-524288).unwrap(),
-            shift_reg: Some(gpr(6)),
+            shift_imm: 0,
+            shift_reg: gpr(6),
         },
-        "EB45600080DF",
-        "sllk %r4, %r5, -524288(%r6)",
+        "EB45600000DF",
+        "sllk %r4, %r5, 0(%r6)",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::LShL32,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(524287).unwrap(),
-            shift_reg: Some(gpr(6)),
+            shift_imm: 63,
+            shift_reg: gpr(6),
         },
-        "EB456FFF7FDF",
-        "sllk %r4, %r5, 524287(%r6)",
+        "EB45603F00DF",
+        "sllk %r4, %r5, 63(%r6)",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::LShL64,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(-524288).unwrap(),
-            shift_reg: None,
+            shift_imm: 0,
+            shift_reg: zero_reg(),
         },
-        "EB450000800D",
-        "sllg %r4, %r5, -524288",
+        "EB450000000D",
+        "sllg %r4, %r5, 0",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::LShL64,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(524287).unwrap(),
-            shift_reg: None,
+            shift_imm: 63,
+            shift_reg: zero_reg(),
         },
-        "EB450FFF7F0D",
-        "sllg %r4, %r5, 524287",
+        "EB45003F000D",
+        "sllg %r4, %r5, 63",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::LShL64,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(-524288).unwrap(),
-            shift_reg: Some(gpr(6)),
+            shift_imm: 0,
+            shift_reg: gpr(6),
         },
-        "EB456000800D",
-        "sllg %r4, %r5, -524288(%r6)",
+        "EB456000000D",
+        "sllg %r4, %r5, 0(%r6)",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::LShL64,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(524287).unwrap(),
-            shift_reg: Some(gpr(6)),
+            shift_imm: 63,
+            shift_reg: gpr(6),
         },
-        "EB456FFF7F0D",
-        "sllg %r4, %r5, 524287(%r6)",
+        "EB45603F000D",
+        "sllg %r4, %r5, 63(%r6)",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::LShR32,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(-524288).unwrap(),
-            shift_reg: None,
+            shift_imm: 0,
+            shift_reg: zero_reg(),
         },
-        "EB45000080DE",
-        "srlk %r4, %r5, -524288",
+        "EB45000000DE",
+        "srlk %r4, %r5, 0",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::LShR32,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(524287).unwrap(),
-            shift_reg: None,
+            shift_imm: 63,
+            shift_reg: zero_reg(),
         },
-        "EB450FFF7FDE",
-        "srlk %r4, %r5, 524287",
+        "EB45003F00DE",
+        "srlk %r4, %r5, 63",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::LShR32,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(-524288).unwrap(),
-            shift_reg: Some(gpr(6)),
+            shift_imm: 0,
+            shift_reg: gpr(6),
         },
-        "EB45600080DE",
-        "srlk %r4, %r5, -524288(%r6)",
+        "EB45600000DE",
+        "srlk %r4, %r5, 0(%r6)",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::LShR32,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(524287).unwrap(),
-            shift_reg: Some(gpr(6)),
+            shift_imm: 63,
+            shift_reg: gpr(6),
         },
-        "EB456FFF7FDE",
-        "srlk %r4, %r5, 524287(%r6)",
+        "EB45603F00DE",
+        "srlk %r4, %r5, 63(%r6)",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::LShR64,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(-524288).unwrap(),
-            shift_reg: None,
+            shift_imm: 0,
+            shift_reg: zero_reg(),
         },
-        "EB450000800C",
-        "srlg %r4, %r5, -524288",
+        "EB450000000C",
+        "srlg %r4, %r5, 0",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::LShR64,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(524287).unwrap(),
-            shift_reg: None,
+            shift_imm: 63,
+            shift_reg: zero_reg(),
         },
-        "EB450FFF7F0C",
-        "srlg %r4, %r5, 524287",
+        "EB45003F000C",
+        "srlg %r4, %r5, 63",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::LShR64,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(-524288).unwrap(),
-            shift_reg: Some(gpr(6)),
+            shift_imm: 0,
+            shift_reg: gpr(6),
         },
-        "EB456000800C",
-        "srlg %r4, %r5, -524288(%r6)",
+        "EB456000000C",
+        "srlg %r4, %r5, 0(%r6)",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::LShR64,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(524287).unwrap(),
-            shift_reg: Some(gpr(6)),
+            shift_imm: 63,
+            shift_reg: gpr(6),
         },
-        "EB456FFF7F0C",
-        "srlg %r4, %r5, 524287(%r6)",
+        "EB45603F000C",
+        "srlg %r4, %r5, 63(%r6)",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::AShR32,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(-524288).unwrap(),
-            shift_reg: None,
+            shift_imm: 0,
+            shift_reg: zero_reg(),
         },
-        "EB45000080DC",
-        "srak %r4, %r5, -524288",
+        "EB45000000DC",
+        "srak %r4, %r5, 0",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::AShR32,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(524287).unwrap(),
-            shift_reg: None,
+            shift_imm: 63,
+            shift_reg: zero_reg(),
         },
-        "EB450FFF7FDC",
-        "srak %r4, %r5, 524287",
+        "EB45003F00DC",
+        "srak %r4, %r5, 63",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::AShR32,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(-524288).unwrap(),
-            shift_reg: Some(gpr(6)),
+            shift_imm: 0,
+            shift_reg: gpr(6),
         },
-        "EB45600080DC",
-        "srak %r4, %r5, -524288(%r6)",
+        "EB45600000DC",
+        "srak %r4, %r5, 0(%r6)",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::AShR32,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(524287).unwrap(),
-            shift_reg: Some(gpr(6)),
+            shift_imm: 63,
+            shift_reg: gpr(6),
         },
-        "EB456FFF7FDC",
-        "srak %r4, %r5, 524287(%r6)",
+        "EB45603F00DC",
+        "srak %r4, %r5, 63(%r6)",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::AShR64,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(-524288).unwrap(),
-            shift_reg: None,
+            shift_imm: 0,
+            shift_reg: zero_reg(),
         },
-        "EB450000800A",
-        "srag %r4, %r5, -524288",
+        "EB450000000A",
+        "srag %r4, %r5, 0",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::AShR64,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(524287).unwrap(),
-            shift_reg: None,
+            shift_imm: 63,
+            shift_reg: zero_reg(),
         },
-        "EB450FFF7F0A",
-        "srag %r4, %r5, 524287",
+        "EB45003F000A",
+        "srag %r4, %r5, 63",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::AShR64,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(-524288).unwrap(),
-            shift_reg: Some(gpr(6)),
+            shift_imm: 0,
+            shift_reg: gpr(6),
         },
-        "EB456000800A",
-        "srag %r4, %r5, -524288(%r6)",
+        "EB456000000A",
+        "srag %r4, %r5, 0(%r6)",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::AShR64,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(524287).unwrap(),
-            shift_reg: Some(gpr(6)),
+            shift_imm: 63,
+            shift_reg: gpr(6),
         },
-        "EB456FFF7F0A",
-        "srag %r4, %r5, 524287(%r6)",
+        "EB45603F000A",
+        "srag %r4, %r5, 63(%r6)",
+    ));
+
+    insns.push((
+        Inst::RxSBG {
+            op: RxSBGOp::Insert,
+            rd: writable_gpr(4),
+            rn: gpr(5),
+            start_bit: 8,
+            end_bit: 32,
+            rotate_amt: -16,
+        },
+        "EC4508203059",
+        "risbgn %r4, %r5, 8, 32, 48",
+    ));
+    insns.push((
+        Inst::RxSBG {
+            op: RxSBGOp::And,
+            rd: writable_gpr(4),
+            rn: gpr(5),
+            start_bit: 8,
+            end_bit: 32,
+            rotate_amt: 63,
+        },
+        "EC4508203F54",
+        "rnsbg %r4, %r5, 8, 32, 63",
+    ));
+    insns.push((
+        Inst::RxSBG {
+            op: RxSBGOp::Or,
+            rd: writable_gpr(4),
+            rn: gpr(5),
+            start_bit: 8,
+            end_bit: 32,
+            rotate_amt: 63,
+        },
+        "EC4508203F56",
+        "rosbg %r4, %r5, 8, 32, 63",
+    ));
+    insns.push((
+        Inst::RxSBG {
+            op: RxSBGOp::Xor,
+            rd: writable_gpr(4),
+            rn: gpr(5),
+            start_bit: 8,
+            end_bit: 32,
+            rotate_amt: 63,
+        },
+        "EC4508203F57",
+        "rxsbg %r4, %r5, 8, 32, 63",
+    ));
+    insns.push((
+        Inst::RxSBGTest {
+            op: RxSBGOp::And,
+            rd: gpr(4),
+            rn: gpr(5),
+            start_bit: 8,
+            end_bit: 32,
+            rotate_amt: 63,
+        },
+        "EC4588203F54",
+        "rnsbg %r4, %r5, 136, 32, 63",
+    ));
+    insns.push((
+        Inst::RxSBGTest {
+            op: RxSBGOp::Or,
+            rd: gpr(4),
+            rn: gpr(5),
+            start_bit: 8,
+            end_bit: 32,
+            rotate_amt: 63,
+        },
+        "EC4588203F56",
+        "rosbg %r4, %r5, 136, 32, 63",
+    ));
+    insns.push((
+        Inst::RxSBGTest {
+            op: RxSBGOp::Xor,
+            rd: gpr(4),
+            rn: gpr(5),
+            start_bit: 8,
+            end_bit: 32,
+            rotate_amt: 63,
+        },
+        "EC4588203F57",
+        "rxsbg %r4, %r5, 136, 32, 63",
     ));
 
     insns.push((
@@ -4434,81 +4536,81 @@ fn test_s390x_binemit() {
         Inst::Load32 {
             rd: writable_gpr(1),
             mem: MemArg::Label {
-                target: BranchTarget::ResolvedOffset(64),
+                target: MachLabel::from_block(1),
             },
         },
-        "C41D00000020",
-        "lrl %r1, 64",
+        "C41D00000003",
+        "lrl %r1, label1",
     ));
     insns.push((
         Inst::Load32SExt16 {
             rd: writable_gpr(1),
             mem: MemArg::Label {
-                target: BranchTarget::ResolvedOffset(64),
+                target: MachLabel::from_block(1),
             },
         },
-        "C41500000020",
-        "lhrl %r1, 64",
+        "C41500000003",
+        "lhrl %r1, label1",
     ));
     insns.push((
         Inst::Load32ZExt16 {
             rd: writable_gpr(1),
             mem: MemArg::Label {
-                target: BranchTarget::ResolvedOffset(64),
+                target: MachLabel::from_block(1),
             },
         },
-        "C41200000020",
-        "llhrl %r1, 64",
+        "C41200000003",
+        "llhrl %r1, label1",
     ));
     insns.push((
         Inst::Load64 {
             rd: writable_gpr(1),
             mem: MemArg::Label {
-                target: BranchTarget::ResolvedOffset(64),
+                target: MachLabel::from_block(1),
             },
         },
-        "C41800000020",
-        "lgrl %r1, 64",
+        "C41800000003",
+        "lgrl %r1, label1",
     ));
     insns.push((
         Inst::Load64SExt16 {
             rd: writable_gpr(1),
             mem: MemArg::Label {
-                target: BranchTarget::ResolvedOffset(64),
+                target: MachLabel::from_block(1),
             },
         },
-        "C41400000020",
-        "lghrl %r1, 64",
+        "C41400000003",
+        "lghrl %r1, label1",
     ));
     insns.push((
         Inst::Load64ZExt16 {
             rd: writable_gpr(1),
             mem: MemArg::Label {
-                target: BranchTarget::ResolvedOffset(64),
+                target: MachLabel::from_block(1),
             },
         },
-        "C41600000020",
-        "llghrl %r1, 64",
+        "C41600000003",
+        "llghrl %r1, label1",
     ));
     insns.push((
         Inst::Load64SExt32 {
             rd: writable_gpr(1),
             mem: MemArg::Label {
-                target: BranchTarget::ResolvedOffset(64),
+                target: MachLabel::from_block(1),
             },
         },
-        "C41C00000020",
-        "lgfrl %r1, 64",
+        "C41C00000003",
+        "lgfrl %r1, label1",
     ));
     insns.push((
         Inst::Load64ZExt32 {
             rd: writable_gpr(1),
             mem: MemArg::Label {
-                target: BranchTarget::ResolvedOffset(64),
+                target: MachLabel::from_block(1),
             },
         },
-        "C41E00000020",
-        "llgfrl %r1, 64",
+        "C41E00000003",
+        "llgfrl %r1, label1",
     ));
     insns.push((
         Inst::LoadRev16 {
@@ -5688,39 +5790,43 @@ fn test_s390x_binemit() {
         Inst::Store16 {
             rd: gpr(1),
             mem: MemArg::Label {
-                target: BranchTarget::ResolvedOffset(64),
+                target: MachLabel::from_block(1),
             },
         },
-        "C41700000020",
-        "sthrl %r1, 64",
+        "C41700000003",
+        "sthrl %r1, label1",
     ));
     insns.push((
         Inst::Store32 {
             rd: gpr(1),
             mem: MemArg::Label {
-                target: BranchTarget::ResolvedOffset(64),
+                target: MachLabel::from_block(1),
             },
         },
-        "C41F00000020",
-        "strl %r1, 64",
+        "C41F00000003",
+        "strl %r1, label1",
     ));
     insns.push((
         Inst::Store64 {
             rd: gpr(1),
             mem: MemArg::Label {
-                target: BranchTarget::ResolvedOffset(64),
+                target: MachLabel::from_block(1),
             },
         },
-        "C41B00000020",
-        "stgrl %r1, 64",
+        "C41B00000003",
+        "stgrl %r1, label1",
     ));
 
     insns.push((
         Inst::LoadMultiple64 {
             rt: writable_gpr(8),
             rt2: writable_gpr(12),
-            addr_reg: gpr(15),
-            addr_off: SImm20::maybe_from_i64(-524288).unwrap(),
+            mem: MemArg::BXD20 {
+                base: gpr(15),
+                index: zero_reg(),
+                disp: SImm20::maybe_from_i64(-524288).unwrap(),
+                flags: MemFlags::trusted(),
+            },
         },
         "EB8CF0008004",
         "lmg %r8, %r12, -524288(%r15)",
@@ -5729,8 +5835,12 @@ fn test_s390x_binemit() {
         Inst::LoadMultiple64 {
             rt: writable_gpr(8),
             rt2: writable_gpr(12),
-            addr_reg: gpr(15),
-            addr_off: SImm20::maybe_from_i64(524287).unwrap(),
+            mem: MemArg::BXD20 {
+                base: gpr(15),
+                index: zero_reg(),
+                disp: SImm20::maybe_from_i64(524287).unwrap(),
+                flags: MemFlags::trusted(),
+            },
         },
         "EB8CFFFF7F04",
         "lmg %r8, %r12, 524287(%r15)",
@@ -5740,8 +5850,12 @@ fn test_s390x_binemit() {
         Inst::StoreMultiple64 {
             rt: gpr(8),
             rt2: gpr(12),
-            addr_reg: gpr(15),
-            addr_off: SImm20::maybe_from_i64(-524288).unwrap(),
+            mem: MemArg::BXD20 {
+                base: gpr(15),
+                index: zero_reg(),
+                disp: SImm20::maybe_from_i64(-524288).unwrap(),
+                flags: MemFlags::trusted(),
+            },
         },
         "EB8CF0008024",
         "stmg %r8, %r12, -524288(%r15)",
@@ -5750,8 +5864,12 @@ fn test_s390x_binemit() {
         Inst::StoreMultiple64 {
             rt: gpr(8),
             rt2: gpr(12),
-            addr_reg: gpr(15),
-            addr_off: SImm20::maybe_from_i64(524287).unwrap(),
+            mem: MemArg::BXD20 {
+                base: gpr(15),
+                index: zero_reg(),
+                disp: SImm20::maybe_from_i64(524287).unwrap(),
+                flags: MemFlags::trusted(),
+            },
         },
         "EB8CFFFF7F24",
         "stmg %r8, %r12, 524287(%r15)",
@@ -5917,11 +6035,11 @@ fn test_s390x_binemit() {
         Inst::LoadAddr {
             rd: writable_gpr(1),
             mem: MemArg::Label {
-                target: BranchTarget::ResolvedOffset(64),
+                target: MachLabel::from_block(1),
             },
         },
-        "C01000000020",
-        "larl %r1, 64",
+        "C01000000003",
+        "larl %r1, label1",
     ));
     insns.push((
         Inst::LoadAddr {
@@ -6381,250 +6499,250 @@ fn test_s390x_binemit() {
 
     insns.push((
         Inst::Jump {
-            dest: BranchTarget::ResolvedOffset(64),
+            dest: MachLabel::from_block(0),
         },
-        "C0F400000020",
-        "jg 64",
+        "C0F400000000",
+        "jg label0",
     ));
 
     insns.push((
         Inst::OneWayCondBr {
-            target: BranchTarget::ResolvedOffset(64),
+            target: MachLabel::from_block(0),
             cond: Cond::from_mask(1),
         },
-        "C01400000020",
-        "jgo 64",
+        "C01400000000",
+        "jgo label0",
     ));
     insns.push((
         Inst::OneWayCondBr {
-            target: BranchTarget::ResolvedOffset(64),
+            target: MachLabel::from_block(0),
             cond: Cond::from_mask(2),
         },
-        "C02400000020",
-        "jgh 64",
+        "C02400000000",
+        "jgh label0",
     ));
     insns.push((
         Inst::OneWayCondBr {
-            target: BranchTarget::ResolvedOffset(64),
+            target: MachLabel::from_block(0),
             cond: Cond::from_mask(3),
         },
-        "C03400000020",
-        "jgnle 64",
+        "C03400000000",
+        "jgnle label0",
     ));
     insns.push((
         Inst::OneWayCondBr {
-            target: BranchTarget::ResolvedOffset(64),
+            target: MachLabel::from_block(0),
             cond: Cond::from_mask(4),
         },
-        "C04400000020",
-        "jgl 64",
+        "C04400000000",
+        "jgl label0",
     ));
     insns.push((
         Inst::OneWayCondBr {
-            target: BranchTarget::ResolvedOffset(64),
+            target: MachLabel::from_block(0),
             cond: Cond::from_mask(5),
         },
-        "C05400000020",
-        "jgnhe 64",
+        "C05400000000",
+        "jgnhe label0",
     ));
     insns.push((
         Inst::OneWayCondBr {
-            target: BranchTarget::ResolvedOffset(64),
+            target: MachLabel::from_block(0),
             cond: Cond::from_mask(6),
         },
-        "C06400000020",
-        "jglh 64",
+        "C06400000000",
+        "jglh label0",
     ));
     insns.push((
         Inst::OneWayCondBr {
-            target: BranchTarget::ResolvedOffset(64),
+            target: MachLabel::from_block(0),
             cond: Cond::from_mask(7),
         },
-        "C07400000020",
-        "jgne 64",
+        "C07400000000",
+        "jgne label0",
     ));
     insns.push((
         Inst::OneWayCondBr {
-            target: BranchTarget::ResolvedOffset(64),
+            target: MachLabel::from_block(0),
             cond: Cond::from_mask(8),
         },
-        "C08400000020",
-        "jge 64",
+        "C08400000000",
+        "jge label0",
     ));
     insns.push((
         Inst::OneWayCondBr {
-            target: BranchTarget::ResolvedOffset(64),
+            target: MachLabel::from_block(0),
             cond: Cond::from_mask(9),
         },
-        "C09400000020",
-        "jgnlh 64",
+        "C09400000000",
+        "jgnlh label0",
     ));
     insns.push((
         Inst::OneWayCondBr {
-            target: BranchTarget::ResolvedOffset(64),
+            target: MachLabel::from_block(0),
             cond: Cond::from_mask(10),
         },
-        "C0A400000020",
-        "jghe 64",
+        "C0A400000000",
+        "jghe label0",
     ));
     insns.push((
         Inst::OneWayCondBr {
-            target: BranchTarget::ResolvedOffset(64),
+            target: MachLabel::from_block(0),
             cond: Cond::from_mask(11),
         },
-        "C0B400000020",
-        "jgnl 64",
+        "C0B400000000",
+        "jgnl label0",
     ));
     insns.push((
         Inst::OneWayCondBr {
-            target: BranchTarget::ResolvedOffset(64),
+            target: MachLabel::from_block(0),
             cond: Cond::from_mask(12),
         },
-        "C0C400000020",
-        "jgle 64",
+        "C0C400000000",
+        "jgle label0",
     ));
     insns.push((
         Inst::OneWayCondBr {
-            target: BranchTarget::ResolvedOffset(64),
+            target: MachLabel::from_block(0),
             cond: Cond::from_mask(13),
         },
-        "C0D400000020",
-        "jgnh 64",
+        "C0D400000000",
+        "jgnh label0",
     ));
     insns.push((
         Inst::OneWayCondBr {
-            target: BranchTarget::ResolvedOffset(64),
+            target: MachLabel::from_block(0),
             cond: Cond::from_mask(14),
         },
-        "C0E400000020",
-        "jgno 64",
+        "C0E400000000",
+        "jgno label0",
     ));
 
     insns.push((
         Inst::CondBr {
-            taken: BranchTarget::ResolvedOffset(64),
-            not_taken: BranchTarget::ResolvedOffset(128),
+            taken: MachLabel::from_block(0),
+            not_taken: MachLabel::from_block(0),
             cond: Cond::from_mask(1),
         },
-        "C01400000020C0F400000040",
-        "jgo 64 ; jg 128",
+        "C01400000000C0F4FFFFFFFD",
+        "jgo label0 ; jg label0",
     ));
     insns.push((
         Inst::CondBr {
-            taken: BranchTarget::ResolvedOffset(64),
-            not_taken: BranchTarget::ResolvedOffset(128),
+            taken: MachLabel::from_block(0),
+            not_taken: MachLabel::from_block(0),
             cond: Cond::from_mask(2),
         },
-        "C02400000020C0F400000040",
-        "jgh 64 ; jg 128",
+        "C02400000000C0F4FFFFFFFD",
+        "jgh label0 ; jg label0",
     ));
     insns.push((
         Inst::CondBr {
-            taken: BranchTarget::ResolvedOffset(64),
-            not_taken: BranchTarget::ResolvedOffset(128),
+            taken: MachLabel::from_block(0),
+            not_taken: MachLabel::from_block(0),
             cond: Cond::from_mask(3),
         },
-        "C03400000020C0F400000040",
-        "jgnle 64 ; jg 128",
+        "C03400000000C0F4FFFFFFFD",
+        "jgnle label0 ; jg label0",
     ));
     insns.push((
         Inst::CondBr {
-            taken: BranchTarget::ResolvedOffset(64),
-            not_taken: BranchTarget::ResolvedOffset(128),
+            taken: MachLabel::from_block(0),
+            not_taken: MachLabel::from_block(0),
             cond: Cond::from_mask(4),
         },
-        "C04400000020C0F400000040",
-        "jgl 64 ; jg 128",
+        "C04400000000C0F4FFFFFFFD",
+        "jgl label0 ; jg label0",
     ));
     insns.push((
         Inst::CondBr {
-            taken: BranchTarget::ResolvedOffset(64),
-            not_taken: BranchTarget::ResolvedOffset(128),
+            taken: MachLabel::from_block(0),
+            not_taken: MachLabel::from_block(0),
             cond: Cond::from_mask(5),
         },
-        "C05400000020C0F400000040",
-        "jgnhe 64 ; jg 128",
+        "C05400000000C0F4FFFFFFFD",
+        "jgnhe label0 ; jg label0",
     ));
     insns.push((
         Inst::CondBr {
-            taken: BranchTarget::ResolvedOffset(64),
-            not_taken: BranchTarget::ResolvedOffset(128),
+            taken: MachLabel::from_block(0),
+            not_taken: MachLabel::from_block(0),
             cond: Cond::from_mask(6),
         },
-        "C06400000020C0F400000040",
-        "jglh 64 ; jg 128",
+        "C06400000000C0F4FFFFFFFD",
+        "jglh label0 ; jg label0",
     ));
     insns.push((
         Inst::CondBr {
-            taken: BranchTarget::ResolvedOffset(64),
-            not_taken: BranchTarget::ResolvedOffset(128),
+            taken: MachLabel::from_block(0),
+            not_taken: MachLabel::from_block(0),
             cond: Cond::from_mask(7),
         },
-        "C07400000020C0F400000040",
-        "jgne 64 ; jg 128",
+        "C07400000000C0F4FFFFFFFD",
+        "jgne label0 ; jg label0",
     ));
     insns.push((
         Inst::CondBr {
-            taken: BranchTarget::ResolvedOffset(64),
-            not_taken: BranchTarget::ResolvedOffset(128),
+            taken: MachLabel::from_block(0),
+            not_taken: MachLabel::from_block(0),
             cond: Cond::from_mask(8),
         },
-        "C08400000020C0F400000040",
-        "jge 64 ; jg 128",
+        "C08400000000C0F4FFFFFFFD",
+        "jge label0 ; jg label0",
     ));
     insns.push((
         Inst::CondBr {
-            taken: BranchTarget::ResolvedOffset(64),
-            not_taken: BranchTarget::ResolvedOffset(128),
+            taken: MachLabel::from_block(0),
+            not_taken: MachLabel::from_block(0),
             cond: Cond::from_mask(9),
         },
-        "C09400000020C0F400000040",
-        "jgnlh 64 ; jg 128",
+        "C09400000000C0F4FFFFFFFD",
+        "jgnlh label0 ; jg label0",
     ));
     insns.push((
         Inst::CondBr {
-            taken: BranchTarget::ResolvedOffset(64),
-            not_taken: BranchTarget::ResolvedOffset(128),
+            taken: MachLabel::from_block(0),
+            not_taken: MachLabel::from_block(0),
             cond: Cond::from_mask(10),
         },
-        "C0A400000020C0F400000040",
-        "jghe 64 ; jg 128",
+        "C0A400000000C0F4FFFFFFFD",
+        "jghe label0 ; jg label0",
     ));
     insns.push((
         Inst::CondBr {
-            taken: BranchTarget::ResolvedOffset(64),
-            not_taken: BranchTarget::ResolvedOffset(128),
+            taken: MachLabel::from_block(0),
+            not_taken: MachLabel::from_block(0),
             cond: Cond::from_mask(11),
         },
-        "C0B400000020C0F400000040",
-        "jgnl 64 ; jg 128",
+        "C0B400000000C0F4FFFFFFFD",
+        "jgnl label0 ; jg label0",
     ));
     insns.push((
         Inst::CondBr {
-            taken: BranchTarget::ResolvedOffset(64),
-            not_taken: BranchTarget::ResolvedOffset(128),
+            taken: MachLabel::from_block(0),
+            not_taken: MachLabel::from_block(0),
             cond: Cond::from_mask(12),
         },
-        "C0C400000020C0F400000040",
-        "jgle 64 ; jg 128",
+        "C0C400000000C0F4FFFFFFFD",
+        "jgle label0 ; jg label0",
     ));
     insns.push((
         Inst::CondBr {
-            taken: BranchTarget::ResolvedOffset(64),
-            not_taken: BranchTarget::ResolvedOffset(128),
+            taken: MachLabel::from_block(0),
+            not_taken: MachLabel::from_block(0),
             cond: Cond::from_mask(13),
         },
-        "C0D400000020C0F400000040",
-        "jgnh 64 ; jg 128",
+        "C0D400000000C0F4FFFFFFFD",
+        "jgnh label0 ; jg label0",
     ));
     insns.push((
         Inst::CondBr {
-            taken: BranchTarget::ResolvedOffset(64),
-            not_taken: BranchTarget::ResolvedOffset(128),
+            taken: MachLabel::from_block(0),
+            not_taken: MachLabel::from_block(0),
             cond: Cond::from_mask(14),
         },
-        "C0E400000020C0F400000040",
-        "jgno 64 ; jg 128",
+        "C0E400000000C0F4FFFFFFFD",
+        "jgno label0 ; jg label0",
     ));
 
     insns.push((
@@ -6682,6 +6800,34 @@ fn test_s390x_binemit() {
         },
         "A7E400030000",
         "jno 6 ; trap",
+    ));
+
+    insns.push((
+        Inst::Loop {
+            body: vec![
+                Inst::CmpRR {
+                    op: CmpOp::CmpS32,
+                    rn: gpr(2),
+                    rm: gpr(3),
+                },
+                Inst::CondBreak {
+                    cond: Cond::from_mask(13),
+                },
+                Inst::AtomicCas32 {
+                    rd: writable_gpr(4),
+                    rn: gpr(5),
+                    mem: MemArg::BXD12 {
+                        base: gpr(6),
+                        index: zero_reg(),
+                        disp: UImm12::maybe_from_u64(0).unwrap(),
+                        flags: MemFlags::trusted(),
+                    },
+                },
+            ],
+            cond: Cond::from_mask(6),
+        },
+        "1923C0D400000008BA456000C064FFFFFFFA",
+        "0: cr %r2, %r3 ; jgnh 1f ; cs %r4, %r5, 0(%r6) ; jglh 0b ; 1:",
     ));
 
     insns.push((
@@ -7965,7 +8111,7 @@ fn test_s390x_binemit() {
     insns.push((
         Inst::LoadFpuConst32 {
             rd: writable_fpr(8),
-            const_data: 1.0,
+            const_data: 1.0_f32.to_bits(),
         },
         "A71500043F80000078801000",
         "bras %r1, 8 ; data.f32 1 ; le %f8, 0(%r1)",
@@ -7973,7 +8119,7 @@ fn test_s390x_binemit() {
     insns.push((
         Inst::LoadFpuConst64 {
             rd: writable_fpr(8),
-            const_data: 1.0,
+            const_data: 1.0_f64.to_bits(),
         },
         "A71500063FF000000000000068801000",
         "bras %r1, 12 ; data.f64 1 ; ld %f8, 0(%r1)",
@@ -8112,12 +8258,21 @@ fn test_s390x_binemit() {
         let actual_printing = insn.show_rru(Some(&rru));
         assert_eq!(expected_printing, actual_printing);
 
-        let mut sink = test_utils::TestCodeSink::new();
         let mut buffer = MachBuffer::new();
+
+        // Label 0 before the instruction.
+        let label0 = buffer.get_label();
+        buffer.bind_label(label0);
+
+        // Emit the instruction.
         insn.emit(&mut buffer, &emit_info, &mut Default::default());
+
+        // Label 1 after the instruction.
+        let label1 = buffer.get_label();
+        buffer.bind_label(label1);
+
         let buffer = buffer.finish();
-        buffer.emit(&mut sink);
-        let actual_encoding = &sink.stringify();
+        let actual_encoding = &buffer.stringify_code_bytes();
         assert_eq!(expected_encoding, actual_encoding);
     }
 }

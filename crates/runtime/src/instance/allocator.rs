@@ -3,24 +3,20 @@ use crate::instance::{Instance, InstanceHandle, RuntimeMemoryCreator};
 use crate::memory::{DefaultMemoryCreator, Memory};
 use crate::table::Table;
 use crate::traphandlers::Trap;
-use crate::vmcontext::{
-    VMBuiltinFunctionsArray, VMCallerCheckedAnyfunc, VMContext, VMGlobalDefinition,
-    VMSharedSignatureIndex,
-};
+use crate::ModuleRuntimeInfo;
 use crate::Store;
 use anyhow::Result;
 use std::alloc;
 use std::any::Any;
 use std::convert::TryFrom;
-use std::marker;
-use std::ptr::{self, NonNull};
+use std::ptr;
 use std::slice;
 use std::sync::Arc;
 use thiserror::Error;
 use wasmtime_environ::{
-    DefinedFuncIndex, DefinedMemoryIndex, DefinedTableIndex, EntityRef, EntitySet, FunctionInfo,
-    GlobalInit, HostPtr, MemoryInitialization, MemoryInitializer, Module, ModuleType, PrimaryMap,
-    SignatureIndex, TableInitializer, TrapCode, VMOffsets, WasmType, WASM_PAGE_SIZE,
+    DefinedMemoryIndex, DefinedTableIndex, HostPtr, InitMemory, MemoryInitialization,
+    MemoryInitializer, Module, PrimaryMap, TableInitialization, TableInitializer, TrapCode,
+    VMOffsets, WasmType, WASM_PAGE_SIZE,
 };
 
 #[cfg(feature = "pooling-allocator")]
@@ -33,21 +29,15 @@ pub use self::pooling::{
 
 /// Represents a request for a new runtime instance.
 pub struct InstanceAllocationRequest<'a> {
-    /// The module being instantiated.
-    pub module: Arc<Module>,
-
-    /// The base address of where JIT functions are located.
-    pub image_base: usize,
-
-    /// Descriptors about each compiled function, such as the offset from
-    /// `image_base`.
-    pub functions: &'a PrimaryMap<DefinedFuncIndex, FunctionInfo>,
+    /// The info related to the compiled version of this module,
+    /// needed for instantiation: function metadata, JIT code
+    /// addresses, precomputed images for lazy memory and table
+    /// initialization, and the like. This Arc is cloned and held for
+    /// the lifetime of the instance.
+    pub runtime_info: &'a Arc<dyn ModuleRuntimeInfo>,
 
     /// The imports to use for the instantiation.
     pub imports: Imports<'a>,
-
-    /// Translation from `SignatureIndex` to `VMSharedSignatureIndex`
-    pub shared_signatures: SharedSignatures<'a>,
 
     /// The host state to associate with the instance.
     pub host_state: Box<dyn Any + Send + Sync>,
@@ -67,16 +57,6 @@ pub struct InstanceAllocationRequest<'a> {
     /// We use a number of `PhantomPinned` declarations to indicate this to the
     /// compiler. More info on this in `wasmtime/src/store.rs`
     pub store: StorePtr,
-
-    /// A list of all wasm data that can be referenced by the module that
-    /// will be allocated. The `Module` given here has active/passive data
-    /// segments that are specified as relative indices into this list of bytes.
-    ///
-    /// Note that this is an unsafe pointer. The pointer is expected to live for
-    /// the entire duration of the instance at this time. It's the
-    /// responsibility of the callee when allocating to ensure that this data
-    /// outlives the instance.
-    pub wasm_data: *const [u8],
 }
 
 /// A pointer to a Store. This Option<*mut dyn Store> is wrapped in a struct
@@ -213,46 +193,6 @@ pub unsafe trait InstanceAllocator: Send + Sync {
     unsafe fn deallocate_fiber_stack(&self, stack: &wasmtime_fiber::FiberStack);
 }
 
-pub enum SharedSignatures<'a> {
-    /// Used for instantiating user-defined modules
-    Table(&'a PrimaryMap<SignatureIndex, VMSharedSignatureIndex>),
-    /// Used for instance creation that has only a single function
-    Always(VMSharedSignatureIndex),
-    /// Used for instance creation that has no functions
-    None,
-}
-
-impl SharedSignatures<'_> {
-    fn lookup(&self, index: SignatureIndex) -> VMSharedSignatureIndex {
-        match self {
-            SharedSignatures::Table(table) => table[index],
-            SharedSignatures::Always(index) => *index,
-            SharedSignatures::None => unreachable!(),
-        }
-    }
-}
-
-impl<'a> From<VMSharedSignatureIndex> for SharedSignatures<'a> {
-    fn from(val: VMSharedSignatureIndex) -> SharedSignatures<'a> {
-        SharedSignatures::Always(val)
-    }
-}
-
-impl<'a> From<Option<VMSharedSignatureIndex>> for SharedSignatures<'a> {
-    fn from(val: Option<VMSharedSignatureIndex>) -> SharedSignatures<'a> {
-        match val {
-            Some(idx) => SharedSignatures::Always(idx),
-            None => SharedSignatures::None,
-        }
-    }
-}
-
-impl<'a> From<&'a PrimaryMap<SignatureIndex, VMSharedSignatureIndex>> for SharedSignatures<'a> {
-    fn from(val: &'a PrimaryMap<SignatureIndex, VMSharedSignatureIndex>) -> SharedSignatures<'a> {
-        SharedSignatures::Table(val)
-    }
-}
-
 fn get_table_init_start(
     init: &TableInitializer,
     instance: &Instance,
@@ -260,7 +200,7 @@ fn get_table_init_start(
     match init.base {
         Some(base) => {
             let val = unsafe {
-                if let Some(def_index) = instance.module.defined_global_index(base) {
+                if let Some(def_index) = instance.module().defined_global_index(base) {
                     *instance.global(def_index).as_u32()
                 } else {
                     *(*instance.imported_global(base).from).as_u32()
@@ -281,20 +221,25 @@ fn check_table_init_bounds(
     instance: &mut Instance,
     module: &Module,
 ) -> Result<(), InstantiationError> {
-    for init in &module.table_initializers {
-        let table = unsafe { &*instance.get_table(init.table_index) };
-        let start = get_table_init_start(init, instance)?;
-        let start = usize::try_from(start).unwrap();
-        let end = start.checked_add(init.elements.len());
+    match &module.table_initialization {
+        TableInitialization::FuncTable { segments, .. }
+        | TableInitialization::Segments { segments } => {
+            for segment in segments {
+                let table = unsafe { &*instance.get_table(segment.table_index) };
+                let start = get_table_init_start(segment, instance)?;
+                let start = usize::try_from(start).unwrap();
+                let end = start.checked_add(segment.elements.len());
 
-        match end {
-            Some(end) if end <= table.size() as usize => {
-                // Initializer is in bounds
-            }
-            _ => {
-                return Err(InstantiationError::Link(LinkError(
-                    "table out of bounds: elements segment does not fit".to_owned(),
-                )))
+                match end {
+                    Some(end) if end <= table.size() as usize => {
+                        // Initializer is in bounds
+                    }
+                    _ => {
+                        return Err(InstantiationError::Link(LinkError(
+                            "table out of bounds: elements segment does not fit".to_owned(),
+                        )))
+                    }
+                }
             }
         }
     }
@@ -303,16 +248,28 @@ fn check_table_init_bounds(
 }
 
 fn initialize_tables(instance: &mut Instance, module: &Module) -> Result<(), InstantiationError> {
-    for init in &module.table_initializers {
-        instance
-            .table_init_segment(
-                init.table_index,
-                &init.elements,
-                get_table_init_start(init, instance)?,
-                0,
-                init.elements.len() as u32,
-            )
-            .map_err(InstantiationError::Trap)?;
+    // Note: if the module's table initializer state is in
+    // FuncTable mode, we will lazily initialize tables based on
+    // any statically-precomputed image of FuncIndexes, but there
+    // may still be "leftover segments" that could not be
+    // incorporated. So we have a unified handler here that
+    // iterates over all segments (Segments mode) or leftover
+    // segments (FuncTable mode) to initialize.
+    match &module.table_initialization {
+        TableInitialization::FuncTable { segments, .. }
+        | TableInitialization::Segments { segments } => {
+            for segment in segments {
+                instance
+                    .table_init_segment(
+                        segment.table_index,
+                        &segment.elements,
+                        get_table_init_start(segment, instance)?,
+                        0,
+                        segment.elements.len() as u32,
+                    )
+                    .map_err(InstantiationError::Trap)?;
+            }
+        }
     }
 
     Ok(())
@@ -324,11 +281,11 @@ fn get_memory_init_start(
 ) -> Result<u64, InstantiationError> {
     match init.base {
         Some(base) => {
-            let mem64 = instance.module.memory_plans[init.memory_index]
+            let mem64 = instance.module().memory_plans[init.memory_index]
                 .memory
                 .memory64;
             let val = unsafe {
-                let global = if let Some(def_index) = instance.module.defined_global_index(base) {
+                let global = if let Some(def_index) = instance.module().defined_global_index(base) {
                     instance.global(def_index)
                 } else {
                     &*instance.imported_global(base).from
@@ -374,20 +331,60 @@ fn check_memory_init_bounds(
     Ok(())
 }
 
-fn initialize_memories(
-    instance: &mut Instance,
-    initializers: &[MemoryInitializer],
-) -> Result<(), InstantiationError> {
-    for init in initializers {
-        instance
-            .memory_init_segment(
-                init.memory_index,
-                init.data.clone(),
-                get_memory_init_start(init, instance)?,
-                0,
-                init.data.end - init.data.start,
-            )
-            .map_err(InstantiationError::Trap)?;
+fn initialize_memories(instance: &mut Instance, module: &Module) -> Result<(), InstantiationError> {
+    let memory_size_in_pages =
+        &|memory| (instance.get_memory(memory).current_length as u64) / u64::from(WASM_PAGE_SIZE);
+
+    // Loads the `global` value and returns it as a `u64`, but sign-extends
+    // 32-bit globals which can be used as the base for 32-bit memories.
+    let get_global_as_u64 = &|global| unsafe {
+        let def = if let Some(def_index) = instance.module().defined_global_index(global) {
+            instance.global(def_index)
+        } else {
+            &*instance.imported_global(global).from
+        };
+        if module.globals[global].wasm_ty == WasmType::I64 {
+            *def.as_u64()
+        } else {
+            u64::from(*def.as_u32())
+        }
+    };
+
+    // Delegates to the `init_memory` method which is sort of a duplicate of
+    // `instance.memory_init_segment` but is used at compile-time in other
+    // contexts so is shared here to have only one method of memory
+    // initialization.
+    //
+    // This call to `init_memory` notably implements all the bells and whistles
+    // so errors only happen if an out-of-bounds segment is found, in which case
+    // a trap is returned.
+    let ok = module.memory_initialization.init_memory(
+        InitMemory::Runtime {
+            memory_size_in_pages,
+            get_global_as_u64,
+        },
+        &mut |memory_index, init| {
+            // If this initializer applies to a defined memory but that memory
+            // doesn't need initialization, due to something like uffd or memfd
+            // pre-initializing it via mmap magic, then this initializer can be
+            // skipped entirely.
+            if let Some(memory_index) = module.defined_memory_index(memory_index) {
+                if !instance.memories[memory_index].needs_init() {
+                    return true;
+                }
+            }
+            let memory = instance.get_memory(memory_index);
+            let dst_slice =
+                unsafe { slice::from_raw_parts_mut(memory.base, memory.current_length) };
+            let dst = &mut dst_slice[usize::try_from(init.offset).unwrap()..][..init.data.len()];
+            dst.copy_from_slice(instance.wasm_data(init.data.clone()));
+            true
+        },
+    );
+    if !ok {
+        return Err(InstantiationError::Trap(Trap::wasm(
+            TrapCode::HeapOutOfBounds,
+        )));
     }
 
     Ok(())
@@ -396,17 +393,12 @@ fn initialize_memories(
 fn check_init_bounds(instance: &mut Instance, module: &Module) -> Result<(), InstantiationError> {
     check_table_init_bounds(instance, module)?;
 
-    match &instance.module.memory_initialization {
-        MemoryInitialization::Paged { out_of_bounds, .. } => {
-            if *out_of_bounds {
-                return Err(InstantiationError::Link(LinkError(
-                    "memory out of bounds: data segment does not fit".into(),
-                )));
-            }
-        }
+    match &instance.module().memory_initialization {
         MemoryInitialization::Segmented(initializers) => {
             check_memory_init_bounds(instance, initializers)?;
         }
+        // Statically validated already to have everything in-bounds.
+        MemoryInitialization::Paged { .. } | MemoryInitialization::Static { .. } => {}
     }
 
     Ok(())
@@ -429,179 +421,9 @@ fn initialize_instance(
     initialize_tables(instance, module)?;
 
     // Initialize the memories
-    match &module.memory_initialization {
-        MemoryInitialization::Paged { map, out_of_bounds } => {
-            for (index, pages) in map {
-                let memory = instance.memory(index);
-                let slice =
-                    unsafe { slice::from_raw_parts_mut(memory.base, memory.current_length) };
-
-                for (page_index, page) in pages {
-                    debug_assert_eq!(page.end - page.start, WASM_PAGE_SIZE);
-                    let start = (*page_index * u64::from(WASM_PAGE_SIZE)) as usize;
-                    let end = start + WASM_PAGE_SIZE as usize;
-                    slice[start..end].copy_from_slice(instance.wasm_data(page.clone()));
-                }
-            }
-
-            // Check for out of bound access after initializing the pages to maintain
-            // the expected behavior of the bulk memory spec.
-            if *out_of_bounds {
-                return Err(InstantiationError::Trap(Trap::wasm(
-                    TrapCode::HeapOutOfBounds,
-                )));
-            }
-        }
-        MemoryInitialization::Segmented(initializers) => {
-            initialize_memories(instance, initializers)?;
-        }
-    }
+    initialize_memories(instance, &module)?;
 
     Ok(())
-}
-
-unsafe fn initialize_vmcontext(instance: &mut Instance, req: InstanceAllocationRequest) {
-    if let Some(store) = req.store.as_raw() {
-        *instance.interrupts() = (*store).vminterrupts();
-        *instance.externref_activations_table() = (*store).externref_activations_table().0;
-        instance.set_store(store);
-    }
-
-    let module = &instance.module;
-
-    // Initialize shared signatures
-    let mut ptr = instance.vmctx_plus_offset(instance.offsets.vmctx_signature_ids_begin());
-    for sig in module.types.values() {
-        *ptr = match sig {
-            ModuleType::Function(sig) => req.shared_signatures.lookup(*sig),
-            _ => VMSharedSignatureIndex::new(u32::max_value()),
-        };
-        ptr = ptr.add(1);
-    }
-
-    // Initialize the built-in functions
-    ptr::write(
-        instance.vmctx_plus_offset(instance.offsets.vmctx_builtin_functions_begin()),
-        VMBuiltinFunctionsArray::initialized(),
-    );
-
-    // Initialize the imports
-    debug_assert_eq!(req.imports.functions.len(), module.num_imported_funcs);
-    ptr::copy(
-        req.imports.functions.as_ptr(),
-        instance.vmctx_plus_offset(instance.offsets.vmctx_imported_functions_begin()),
-        req.imports.functions.len(),
-    );
-    debug_assert_eq!(req.imports.tables.len(), module.num_imported_tables);
-    ptr::copy(
-        req.imports.tables.as_ptr(),
-        instance.vmctx_plus_offset(instance.offsets.vmctx_imported_tables_begin()),
-        req.imports.tables.len(),
-    );
-    debug_assert_eq!(req.imports.memories.len(), module.num_imported_memories);
-    ptr::copy(
-        req.imports.memories.as_ptr(),
-        instance.vmctx_plus_offset(instance.offsets.vmctx_imported_memories_begin()),
-        req.imports.memories.len(),
-    );
-    debug_assert_eq!(req.imports.globals.len(), module.num_imported_globals);
-    ptr::copy(
-        req.imports.globals.as_ptr(),
-        instance.vmctx_plus_offset(instance.offsets.vmctx_imported_globals_begin()),
-        req.imports.globals.len(),
-    );
-
-    // Initialize the functions
-    let mut base = instance.anyfunc_base();
-    for (index, sig) in instance.module.functions.iter() {
-        let type_index = req.shared_signatures.lookup(*sig);
-
-        let (func_ptr, vmctx) = if let Some(def_index) = instance.module.defined_func_index(index) {
-            (
-                NonNull::new((req.image_base + req.functions[def_index].start as usize) as *mut _)
-                    .unwrap(),
-                instance.vmctx_ptr(),
-            )
-        } else {
-            let import = instance.imported_function(index);
-            (import.body, import.vmctx)
-        };
-
-        ptr::write(
-            base,
-            VMCallerCheckedAnyfunc {
-                func_ptr,
-                type_index,
-                vmctx,
-            },
-        );
-        base = base.add(1);
-    }
-
-    // Initialize the defined tables
-    let mut ptr = instance.vmctx_plus_offset(instance.offsets.vmctx_tables_begin());
-    for i in 0..module.table_plans.len() - module.num_imported_tables {
-        ptr::write(ptr, instance.tables[DefinedTableIndex::new(i)].vmtable());
-        ptr = ptr.add(1);
-    }
-
-    // Initialize the defined memories
-    let mut ptr = instance.vmctx_plus_offset(instance.offsets.vmctx_memories_begin());
-    for i in 0..module.memory_plans.len() - module.num_imported_memories {
-        ptr::write(
-            ptr,
-            instance.memories[DefinedMemoryIndex::new(i)].vmmemory(),
-        );
-        ptr = ptr.add(1);
-    }
-
-    // Initialize the defined globals
-    initialize_vmcontext_globals(instance);
-}
-
-unsafe fn initialize_vmcontext_globals(instance: &Instance) {
-    let module = &instance.module;
-    let num_imports = module.num_imported_globals;
-    for (index, global) in module.globals.iter().skip(num_imports) {
-        let def_index = module.defined_global_index(index).unwrap();
-        let to = instance.global_ptr(def_index);
-
-        // Initialize the global before writing to it
-        ptr::write(to, VMGlobalDefinition::new());
-
-        match global.initializer {
-            GlobalInit::I32Const(x) => *(*to).as_i32_mut() = x,
-            GlobalInit::I64Const(x) => *(*to).as_i64_mut() = x,
-            GlobalInit::F32Const(x) => *(*to).as_f32_bits_mut() = x,
-            GlobalInit::F64Const(x) => *(*to).as_f64_bits_mut() = x,
-            GlobalInit::V128Const(x) => *(*to).as_u128_mut() = x,
-            GlobalInit::GetGlobal(x) => {
-                let from = if let Some(def_x) = module.defined_global_index(x) {
-                    instance.global(def_x)
-                } else {
-                    &*instance.imported_global(x).from
-                };
-                // Globals of type `externref` need to manage the reference
-                // count as values move between globals, everything else is just
-                // copy-able bits.
-                match global.wasm_ty {
-                    WasmType::ExternRef => *(*to).as_externref_mut() = from.as_externref().clone(),
-                    _ => ptr::copy_nonoverlapping(from, to, 1),
-                }
-            }
-            GlobalInit::RefFunc(f) => {
-                *(*to).as_anyfunc_mut() = instance.get_caller_checked_anyfunc(f).unwrap()
-                    as *const VMCallerCheckedAnyfunc;
-            }
-            GlobalInit::RefNullConst => match global.wasm_ty {
-                // `VMGlobalDefinition::new()` already zeroed out the bits
-                WasmType::FuncRef => {}
-                WasmType::ExternRef => {}
-                ty => panic!("unsupported reference type for global: {:?}", ty),
-            },
-            GlobalInit::Import => panic!("locally-defined global initialized as import"),
-        }
-    }
 }
 
 /// Represents the on-demand instance allocator.
@@ -624,13 +446,14 @@ impl OnDemandInstanceAllocator {
     }
 
     fn create_tables(
-        module: &Module,
         store: &mut StorePtr,
+        runtime_info: &Arc<dyn ModuleRuntimeInfo>,
     ) -> Result<PrimaryMap<DefinedTableIndex, Table>, InstantiationError> {
+        let module = runtime_info.module();
         let num_imports = module.num_imported_tables;
         let mut tables: PrimaryMap<DefinedTableIndex, _> =
             PrimaryMap::with_capacity(module.table_plans.len() - num_imports);
-        for table in &module.table_plans.values().as_slice()[num_imports..] {
+        for (_, table) in module.table_plans.iter().skip(num_imports) {
             tables.push(
                 Table::new_dynamic(table, unsafe {
                     store
@@ -645,9 +468,10 @@ impl OnDemandInstanceAllocator {
 
     fn create_memories(
         &self,
-        module: &Module,
         store: &mut StorePtr,
+        runtime_info: &Arc<dyn ModuleRuntimeInfo>,
     ) -> Result<PrimaryMap<DefinedMemoryIndex, Memory>, InstantiationError> {
+        let module = runtime_info.module();
         let creator = self
             .mem_creator
             .as_deref()
@@ -655,13 +479,26 @@ impl OnDemandInstanceAllocator {
         let num_imports = module.num_imported_memories;
         let mut memories: PrimaryMap<DefinedMemoryIndex, _> =
             PrimaryMap::with_capacity(module.memory_plans.len() - num_imports);
-        for plan in &module.memory_plans.values().as_slice()[num_imports..] {
+        for (memory_idx, plan) in module.memory_plans.iter().skip(num_imports) {
+            // Create a MemFdSlot if there is an image for this memory.
+            let defined_memory_idx = module
+                .defined_memory_index(memory_idx)
+                .expect("Skipped imports, should never be None");
+            let memfd_image = runtime_info
+                .memfd_image(defined_memory_idx)
+                .map_err(|err| InstantiationError::Resource(err.into()))?;
+
             memories.push(
-                Memory::new_dynamic(plan, creator, unsafe {
-                    store
-                        .get()
-                        .expect("if module has memory plans, store is not empty")
-                })
+                Memory::new_dynamic(
+                    plan,
+                    creator,
+                    unsafe {
+                        store
+                            .get()
+                            .expect("if module has memory plans, store is not empty")
+                    },
+                    memfd_image,
+                )
                 .map_err(InstantiationError::Resource)?,
             );
         }
@@ -684,39 +521,18 @@ unsafe impl InstanceAllocator for OnDemandInstanceAllocator {
         &self,
         mut req: InstanceAllocationRequest,
     ) -> Result<InstanceHandle, InstantiationError> {
-        let memories = self.create_memories(&req.module, &mut req.store)?;
-        let tables = Self::create_tables(&req.module, &mut req.store)?;
+        let memories = self.create_memories(&mut req.store, &req.runtime_info)?;
+        let tables = Self::create_tables(&mut req.store, &req.runtime_info)?;
+        let module = req.runtime_info.module();
+        let offsets = VMOffsets::new(HostPtr, module);
+        let layout = Instance::alloc_layout(&offsets);
+        let instance_ptr = alloc::alloc(layout) as *mut Instance;
 
-        let host_state = std::mem::replace(&mut req.host_state, Box::new(()));
+        Instance::new_at(instance_ptr, layout.size(), offsets, req, memories, tables);
 
-        let mut handle = {
-            let instance = Instance {
-                module: req.module.clone(),
-                offsets: VMOffsets::new(HostPtr, &req.module),
-                memories,
-                tables,
-                dropped_elements: EntitySet::with_capacity(req.module.passive_elements.len()),
-                dropped_data: EntitySet::with_capacity(req.module.passive_data_map.len()),
-                host_state,
-                wasm_data: &*req.wasm_data,
-                vmctx: VMContext {
-                    _marker: marker::PhantomPinned,
-                },
-            };
-            let layout = instance.alloc_layout();
-            let instance_ptr = alloc::alloc(layout) as *mut Instance;
-            if instance_ptr.is_null() {
-                alloc::handle_alloc_error(layout);
-            }
-            ptr::write(instance_ptr, instance);
-            InstanceHandle {
-                instance: instance_ptr,
-            }
-        };
-
-        initialize_vmcontext(handle.instance_mut(), req);
-
-        Ok(handle)
+        Ok(InstanceHandle {
+            instance: instance_ptr,
+        })
     }
 
     unsafe fn initialize(
@@ -729,7 +545,7 @@ unsafe impl InstanceAllocator for OnDemandInstanceAllocator {
     }
 
     unsafe fn deallocate(&self, handle: &InstanceHandle) {
-        let layout = handle.instance().alloc_layout();
+        let layout = Instance::alloc_layout(&handle.instance().offsets);
         ptr::drop_in_place(handle.instance);
         alloc::dealloc(handle.instance.cast(), layout);
     }

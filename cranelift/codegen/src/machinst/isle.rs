@@ -1,14 +1,25 @@
 use crate::ir::{Inst, Value};
 use crate::machinst::{get_output_reg, InsnOutput, LowerCtx, MachInst, RegRenamer};
+use alloc::boxed::Box;
+use alloc::vec::Vec;
 use regalloc::{Reg, Writable};
 use smallvec::SmallVec;
+
+pub use super::MachLabel;
+pub use crate::ir::{ExternalName, FuncRef, GlobalValue, SigRef};
+pub use crate::isa::unwind::UnwindInst;
+pub use crate::machinst::RelocDistance;
 
 pub type Unit = ();
 pub type ValueSlice<'a> = &'a [Value];
 pub type ValueArray2 = [Value; 2];
 pub type ValueArray3 = [Value; 3];
 pub type WritableReg = Writable<Reg>;
+pub type VecReg = Vec<Reg>;
+pub type VecWritableReg = Vec<WritableReg>;
 pub type ValueRegs = crate::machinst::ValueRegs<Reg>;
+pub type VecMachLabel = Vec<MachLabel>;
+pub type BoxExternalName = Box<ExternalName>;
 
 /// Helper macro to define methods in `prelude.isle` within `impl Context for
 /// ...` for each backend. These methods are shared amongst all backends.
@@ -46,6 +57,11 @@ macro_rules! isle_prelude_methods {
         #[inline]
         fn value_regs(&mut self, r1: Reg, r2: Reg) -> ValueRegs {
             ValueRegs::two(r1, r2)
+        }
+
+        #[inline]
+        fn value_regs_invalid(&mut self) -> ValueRegs {
+            ValueRegs::invalid()
         }
 
         #[inline]
@@ -96,13 +112,13 @@ macro_rules! isle_prelude_methods {
         }
 
         #[inline]
-        fn ty_bits_mask(&mut self, ty: Type) -> u64 {
-            (1 << (self.ty_bits(ty) as u64)) - 1
+        fn ty_bits_u16(&mut self, ty: Type) -> u16 {
+            ty.bits()
         }
 
         #[inline]
-        fn ty_bits_u16(&mut self, ty: Type) -> u16 {
-            ty.bits()
+        fn ty_bytes(&mut self, ty: Type) -> u16 {
+            u16::try_from(ty.bytes()).unwrap()
         }
 
         fn fits_in_16(&mut self, ty: Type) -> Option<Type> {
@@ -254,24 +270,80 @@ macro_rules! isle_prelude_methods {
             TrapCode::IntegerOverflow
         }
 
+        fn trap_code_bad_conversion_to_integer(&mut self) -> TrapCode {
+            TrapCode::BadConversionToInteger
+        }
+
+        fn avoid_div_traps(&mut self, _: Type) -> Option<()> {
+            if self.flags.avoid_div_traps() {
+                Some(())
+            } else {
+                None
+            }
+        }
+
+        #[inline]
+        fn func_ref_data(&mut self, func_ref: FuncRef) -> (SigRef, ExternalName, RelocDistance) {
+            let funcdata = &self.lower_ctx.dfg().ext_funcs[func_ref];
+            (
+                funcdata.signature,
+                funcdata.name.clone(),
+                funcdata.reloc_distance(),
+            )
+        }
+
+        #[inline]
+        fn symbol_value_data(
+            &mut self,
+            global_value: GlobalValue,
+        ) -> Option<(ExternalName, RelocDistance, i64)> {
+            let (name, reloc, offset) = self.lower_ctx.symbol_value_data(global_value)?;
+            Some((name.clone(), reloc, offset))
+        }
+
+        #[inline]
+        fn reloc_distance_near(&mut self, dist: RelocDistance) -> Option<()> {
+            if dist == RelocDistance::Near {
+                Some(())
+            } else {
+                None
+            }
+        }
+
         fn nonzero_u64_from_imm64(&mut self, val: Imm64) -> Option<u64> {
             match val.bits() {
                 0 => None,
                 n => Some(n as u64),
             }
         }
+
+        #[inline]
+        fn u32_add(&mut self, a: u32, b: u32) -> u32 {
+            a.wrapping_add(b)
+        }
+
+        #[inline]
+        fn u8_and(&mut self, a: u8, b: u8) -> u8 {
+            a & b
+        }
+
+        #[inline]
+        fn lane_type(&mut self, ty: Type) -> Type {
+            ty.lane_type()
+        }
     };
 }
 
 /// This structure is used to implement the ISLE-generated `Context` trait and
 /// internally has a temporary reference to a machinst `LowerCtx`.
-pub(crate) struct IsleContext<'a, C: LowerCtx, F, const N: usize>
+pub(crate) struct IsleContext<'a, C: LowerCtx, F, I, const N: usize>
 where
-    [C::I; N]: smallvec::Array,
+    [(C::I, bool); N]: smallvec::Array,
 {
     pub lower_ctx: &'a mut C,
-    pub isa_flags: &'a F,
-    pub emitted_insts: SmallVec<[C::I; N]>,
+    pub flags: &'a F,
+    pub isa_flags: &'a I,
+    pub emitted_insts: SmallVec<[(C::I, bool); N]>,
 }
 
 /// Shared lowering code amongst all backends for doing ISLE-based lowering.
@@ -279,22 +351,25 @@ where
 /// The `isle_lower` argument here is an ISLE-generated function for `lower` and
 /// then this function otherwise handles register mapping and such around the
 /// lowering.
-pub(crate) fn lower_common<C, F, const N: usize>(
+pub(crate) fn lower_common<C, F, I, IF, const N: usize>(
     lower_ctx: &mut C,
-    isa_flags: &F,
+    flags: &F,
+    isa_flags: &I,
     outputs: &[InsnOutput],
     inst: Inst,
-    isle_lower: fn(&mut IsleContext<'_, C, F, N>, Inst) -> Option<ValueRegs>,
+    isle_lower: IF,
     map_regs: fn(&mut C::I, &RegRenamer),
 ) -> Result<(), ()>
 where
     C: LowerCtx,
-    [C::I; N]: smallvec::Array<Item = C::I>,
+    [(C::I, bool); N]: smallvec::Array<Item = (C::I, bool)>,
+    IF: Fn(&mut IsleContext<'_, C, F, I, N>, Inst) -> Option<ValueRegs>,
 {
     // TODO: reuse the ISLE context across lowerings so we can reuse its
     // internal heap allocations.
     let mut isle_ctx = IsleContext {
         lower_ctx,
+        flags,
         isa_flags,
         emitted_insts: SmallVec::new(),
     };
@@ -332,7 +407,7 @@ where
             renamer.add_rename(*temp, dst.to_reg(), *ty);
         }
     }
-    for inst in isle_ctx.emitted_insts.iter_mut() {
+    for (inst, _) in isle_ctx.emitted_insts.iter_mut() {
         map_regs(inst, &renamer);
     }
 
@@ -352,8 +427,12 @@ where
     // Once everything is remapped we forward all emitted instructions to the
     // `lower_ctx`. Note that this happens after the synthetic mov's above in
     // case any of these instruction use those movs.
-    for inst in isle_ctx.emitted_insts {
-        lower_ctx.emit(inst);
+    for (inst, is_safepoint) in isle_ctx.emitted_insts {
+        if is_safepoint {
+            lower_ctx.emit_safepoint(inst);
+        } else {
+            lower_ctx.emit(inst);
+        }
     }
 
     Ok(())

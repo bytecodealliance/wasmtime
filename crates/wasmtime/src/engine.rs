@@ -3,10 +3,11 @@ use crate::{Config, Trap};
 use anyhow::Result;
 #[cfg(feature = "parallel-compilation")]
 use rayon::prelude::*;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 #[cfg(feature = "cache")]
 use wasmtime_cache::CacheConfig;
-use wasmtime_runtime::{debug_builtins, InstanceAllocator};
+use wasmtime_runtime::{debug_builtins, CompiledModuleIdAllocator, InstanceAllocator};
 
 /// An `Engine` which is a global context for compilation and management of wasm
 /// modules.
@@ -41,6 +42,8 @@ struct EngineInner {
     compiler: Box<dyn wasmtime_environ::Compiler>,
     allocator: Box<dyn InstanceAllocator>,
     signatures: SignatureRegistry,
+    epoch: AtomicU64,
+    unique_id_allocator: CompiledModuleIdAllocator,
 }
 
 impl Engine {
@@ -61,10 +64,12 @@ impl Engine {
         Ok(Engine {
             inner: Arc::new(EngineInner {
                 #[cfg(compiler)]
-                compiler: config.compiler.build(),
+                compiler: config.compiler.build()?,
                 config,
                 allocator,
                 signatures: registry,
+                epoch: AtomicU64::new(0),
+                unique_id_allocator: CompiledModuleIdAllocator::new(),
             }),
         })
     }
@@ -117,6 +122,41 @@ impl Engine {
 
     pub(crate) fn signatures(&self) -> &SignatureRegistry {
         &self.inner.signatures
+    }
+
+    pub(crate) fn epoch_counter(&self) -> &AtomicU64 {
+        &self.inner.epoch
+    }
+
+    pub(crate) fn current_epoch(&self) -> u64 {
+        self.epoch_counter().load(Ordering::Relaxed)
+    }
+
+    /// Increments the epoch.
+    ///
+    /// When using epoch-based interruption, currently-executing Wasm
+    /// code within this engine will trap or yield "soon" when the
+    /// epoch deadline is reached or exceeded. (The configuration, and
+    /// the deadline, are set on the `Store`.) The intent of the
+    /// design is for this method to be called by the embedder at some
+    /// regular cadence, for example by a thread that wakes up at some
+    /// interval, or by a signal handler.
+    ///
+    /// See [`Config::epoch_interruption`](crate::Config::epoch_interruption)
+    /// for an introduction to epoch-based interruption and pointers
+    /// to the other relevant methods.
+    ///
+    /// ## Signal Safety
+    ///
+    /// This method is signal-safe: it does not make any syscalls, and
+    /// performs only an atomic increment to the epoch value in
+    /// memory.
+    pub fn increment_epoch(&self) {
+        self.inner.epoch.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub(crate) fn unique_id_allocator(&self) -> &CompiledModuleIdAllocator {
+        &self.inner.unique_id_allocator
     }
 
     /// Ahead-of-time (AOT) compiles a WebAssembly module.

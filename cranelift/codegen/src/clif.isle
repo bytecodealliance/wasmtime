@@ -349,7 +349,7 @@
         (BranchIcmp (opcode Opcode) (args ValueList) (cond IntCC) (destination Block))
         (BranchInt (opcode Opcode) (args ValueList) (cond IntCC) (destination Block))
         (BranchTable (opcode Opcode) (arg Value) (destination Block) (table JumpTable))
-        (Call (opcode Opcode) (func_ref FuncRef))
+        (Call (opcode Opcode) (args ValueList) (func_ref FuncRef))
         (CallIndirect (opcode Opcode) (args ValueList) (sig_ref SigRef))
         (CondTrap (opcode Opcode) (arg Value) (code TrapCode))
         (FloatCompare (opcode Opcode) (args ValueArray2) (cond FloatCC))
@@ -362,11 +362,11 @@
         (IntCond (opcode Opcode) (arg Value) (cond IntCC))
         (IntCondTrap (opcode Opcode) (arg Value) (cond IntCC) (code TrapCode))
         (IntSelect (opcode Opcode) (args ValueArray3) (cond IntCC))
-        (Jump (opcode Opcode) (destination Block))
+        (Jump (opcode Opcode) (args ValueList) (destination Block))
         (Load (opcode Opcode) (arg Value) (flags MemFlags) (offset Offset32))
-        (LoadComplex (opcode Opcode) (flags MemFlags) (offset Offset32))
+        (LoadComplex (opcode Opcode) (args ValueList) (flags MemFlags) (offset Offset32))
         (LoadNoOffset (opcode Opcode) (arg Value) (flags MemFlags))
-        (MultiAry (opcode Opcode))
+        (MultiAry (opcode Opcode) (args ValueList))
         (NullAry (opcode Opcode))
         (Shuffle (opcode Opcode) (args ValueArray2) (imm Immediate))
         (StackLoad (opcode Opcode) (stack_slot StackSlot) (offset Offset32))
@@ -393,7 +393,7 @@
 (decl jump (Block ValueSlice) Inst)
 (extractor
     (jump block args)
-    (inst_data (InstructionData.Jump (Opcode.Jump) block))
+    (inst_data (InstructionData.Jump (Opcode.Jump) (value_list_slice args) block))
 )
 
 (decl brz (Value Block ValueSlice) Inst)
@@ -483,19 +483,19 @@
 (decl return (ValueSlice) Inst)
 (extractor
     (return rvals)
-    (inst_data (InstructionData.MultiAry (Opcode.Return)))
+    (inst_data (InstructionData.MultiAry (Opcode.Return) (value_list_slice rvals)))
 )
 
 (decl fallthrough_return (ValueSlice) Inst)
 (extractor
     (fallthrough_return rvals)
-    (inst_data (InstructionData.MultiAry (Opcode.FallthroughReturn)))
+    (inst_data (InstructionData.MultiAry (Opcode.FallthroughReturn) (value_list_slice rvals)))
 )
 
 (decl call (FuncRef ValueSlice) Inst)
 (extractor
     (call FN args)
-    (inst_data (InstructionData.Call (Opcode.Call) FN))
+    (inst_data (InstructionData.Call (Opcode.Call) (value_list_slice args) FN))
 )
 
 (decl call_indirect (SigRef Value ValueSlice) Inst)
@@ -597,7 +597,7 @@
 (decl load_complex (MemFlags ValueSlice Offset32) Inst)
 (extractor
     (load_complex MemFlags args Offset)
-    (inst_data (InstructionData.LoadComplex (Opcode.LoadComplex) MemFlags Offset))
+    (inst_data (InstructionData.LoadComplex (Opcode.LoadComplex) (value_list_slice args) MemFlags Offset))
 )
 
 (decl store (MemFlags Value Value Offset32) Inst)
@@ -621,7 +621,7 @@
 (decl uload8_complex (MemFlags ValueSlice Offset32) Inst)
 (extractor
     (uload8_complex MemFlags args Offset)
-    (inst_data (InstructionData.LoadComplex (Opcode.Uload8Complex) MemFlags Offset))
+    (inst_data (InstructionData.LoadComplex (Opcode.Uload8Complex) (value_list_slice args) MemFlags Offset))
 )
 
 (decl sload8 (MemFlags Value Offset32) Inst)
@@ -633,7 +633,7 @@
 (decl sload8_complex (MemFlags ValueSlice Offset32) Inst)
 (extractor
     (sload8_complex MemFlags args Offset)
-    (inst_data (InstructionData.LoadComplex (Opcode.Sload8Complex) MemFlags Offset))
+    (inst_data (InstructionData.LoadComplex (Opcode.Sload8Complex) (value_list_slice args) MemFlags Offset))
 )
 
 (decl istore8 (MemFlags Value Value Offset32) Inst)
@@ -657,7 +657,7 @@
 (decl uload16_complex (MemFlags ValueSlice Offset32) Inst)
 (extractor
     (uload16_complex MemFlags args Offset)
-    (inst_data (InstructionData.LoadComplex (Opcode.Uload16Complex) MemFlags Offset))
+    (inst_data (InstructionData.LoadComplex (Opcode.Uload16Complex) (value_list_slice args) MemFlags Offset))
 )
 
 (decl sload16 (MemFlags Value Offset32) Inst)
@@ -669,7 +669,7 @@
 (decl sload16_complex (MemFlags ValueSlice Offset32) Inst)
 (extractor
     (sload16_complex MemFlags args Offset)
-    (inst_data (InstructionData.LoadComplex (Opcode.Sload16Complex) MemFlags Offset))
+    (inst_data (InstructionData.LoadComplex (Opcode.Sload16Complex) (value_list_slice args) MemFlags Offset))
 )
 
 (decl istore16 (MemFlags Value Value Offset32) Inst)
@@ -693,7 +693,7 @@
 (decl uload32_complex (MemFlags ValueSlice Offset32) Inst)
 (extractor
     (uload32_complex MemFlags args Offset)
-    (inst_data (InstructionData.LoadComplex (Opcode.Uload32Complex) MemFlags Offset))
+    (inst_data (InstructionData.LoadComplex (Opcode.Uload32Complex) (value_list_slice args) MemFlags Offset))
 )
 
 (decl sload32 (MemFlags Value Offset32) Inst)
@@ -705,7 +705,7 @@
 (decl sload32_complex (MemFlags ValueSlice Offset32) Inst)
 (extractor
     (sload32_complex MemFlags args Offset)
-    (inst_data (InstructionData.LoadComplex (Opcode.Sload32Complex) MemFlags Offset))
+    (inst_data (InstructionData.LoadComplex (Opcode.Sload32Complex) (value_list_slice args) MemFlags Offset))
 )
 
 (decl istore32 (MemFlags Value Value Offset32) Inst)
@@ -729,7 +729,7 @@
 (decl uload8x8_complex (MemFlags ValueSlice Offset32) Inst)
 (extractor
     (uload8x8_complex MemFlags args Offset)
-    (inst_data (InstructionData.LoadComplex (Opcode.Uload8x8Complex) MemFlags Offset))
+    (inst_data (InstructionData.LoadComplex (Opcode.Uload8x8Complex) (value_list_slice args) MemFlags Offset))
 )
 
 (decl sload8x8 (MemFlags Value Offset32) Inst)
@@ -741,7 +741,7 @@
 (decl sload8x8_complex (MemFlags ValueSlice Offset32) Inst)
 (extractor
     (sload8x8_complex MemFlags args Offset)
-    (inst_data (InstructionData.LoadComplex (Opcode.Sload8x8Complex) MemFlags Offset))
+    (inst_data (InstructionData.LoadComplex (Opcode.Sload8x8Complex) (value_list_slice args) MemFlags Offset))
 )
 
 (decl uload16x4 (MemFlags Value Offset32) Inst)
@@ -753,7 +753,7 @@
 (decl uload16x4_complex (MemFlags ValueSlice Offset32) Inst)
 (extractor
     (uload16x4_complex MemFlags args Offset)
-    (inst_data (InstructionData.LoadComplex (Opcode.Uload16x4Complex) MemFlags Offset))
+    (inst_data (InstructionData.LoadComplex (Opcode.Uload16x4Complex) (value_list_slice args) MemFlags Offset))
 )
 
 (decl sload16x4 (MemFlags Value Offset32) Inst)
@@ -765,7 +765,7 @@
 (decl sload16x4_complex (MemFlags ValueSlice Offset32) Inst)
 (extractor
     (sload16x4_complex MemFlags args Offset)
-    (inst_data (InstructionData.LoadComplex (Opcode.Sload16x4Complex) MemFlags Offset))
+    (inst_data (InstructionData.LoadComplex (Opcode.Sload16x4Complex) (value_list_slice args) MemFlags Offset))
 )
 
 (decl uload32x2 (MemFlags Value Offset32) Inst)
@@ -777,7 +777,7 @@
 (decl uload32x2_complex (MemFlags ValueSlice Offset32) Inst)
 (extractor
     (uload32x2_complex MemFlags args Offset)
-    (inst_data (InstructionData.LoadComplex (Opcode.Uload32x2Complex) MemFlags Offset))
+    (inst_data (InstructionData.LoadComplex (Opcode.Uload32x2Complex) (value_list_slice args) MemFlags Offset))
 )
 
 (decl sload32x2 (MemFlags Value Offset32) Inst)
@@ -789,7 +789,7 @@
 (decl sload32x2_complex (MemFlags ValueSlice Offset32) Inst)
 (extractor
     (sload32x2_complex MemFlags args Offset)
-    (inst_data (InstructionData.LoadComplex (Opcode.Sload32x2Complex) MemFlags Offset))
+    (inst_data (InstructionData.LoadComplex (Opcode.Sload32x2Complex) (value_list_slice args) MemFlags Offset))
 )
 
 (decl stack_load (StackSlot Offset32) Inst)

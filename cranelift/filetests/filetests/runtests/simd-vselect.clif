@@ -3,7 +3,7 @@ test run
 ; target s390x TODO: Not yet implemented on s390x
 target aarch64
 set enable_simd
-target x86_64
+target x86_64 has_sse3 has_ssse3 has_sse41
 
 function %vselect_i8x16() -> i8x16 {
 block0:

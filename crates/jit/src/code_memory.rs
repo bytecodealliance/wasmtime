@@ -1,10 +1,10 @@
 //! Memory management for executable code.
 
 use crate::unwind::UnwindRegistration;
-use crate::MmapVec;
 use anyhow::{bail, Context, Result};
 use object::read::{File, Object, ObjectSection};
 use std::mem::ManuallyDrop;
+use wasmtime_runtime::MmapVec;
 
 /// Management of executable memory within a `MmapVec`
 ///
@@ -200,11 +200,7 @@ unsafe fn register_unwind_info(obj: &File, text: &[u8]) -> Result<Option<UnwindR
         return Ok(None);
     }
     Ok(Some(
-        UnwindRegistration::new(
-            text.as_ptr() as *mut _,
-            unwind_info.as_ptr() as *mut _,
-            unwind_info.len(),
-        )
-        .context("failed to create unwind info registration")?,
+        UnwindRegistration::new(text.as_ptr(), unwind_info.as_ptr(), unwind_info.len())
+            .context("failed to create unwind info registration")?,
     ))
 }

@@ -362,7 +362,12 @@ pub fn parse_element_section<'data>(
     environ.reserve_table_elements(elements.get_count())?;
 
     for (index, entry) in elements.into_iter().enumerate() {
-        let Element { kind, items, ty: _ } = entry?;
+        let Element {
+            kind,
+            items,
+            ty: _,
+            range: _,
+        } = entry?;
         let segments = read_elems(&items)?;
         match kind {
             ElementKind::Active {
@@ -409,7 +414,11 @@ pub fn parse_data_section<'data>(
     environ.reserve_data_initializers(data.get_count())?;
 
     for (index, entry) in data.into_iter().enumerate() {
-        let Data { kind, data } = entry?;
+        let Data {
+            kind,
+            data,
+            range: _,
+        } = entry?;
         match kind {
             DataKind::Active {
                 memory_index,

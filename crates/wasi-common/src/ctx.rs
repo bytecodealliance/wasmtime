@@ -71,15 +71,31 @@ impl WasiCtx {
     }
 
     pub fn set_stdin(&mut self, f: Box<dyn WasiFile>) {
-        self.insert_file(0, f, FileCaps::all());
+        let rights = Self::stdio_rights(&*f);
+        self.insert_file(0, f, rights);
     }
 
     pub fn set_stdout(&mut self, f: Box<dyn WasiFile>) {
-        self.insert_file(1, f, FileCaps::all());
+        let rights = Self::stdio_rights(&*f);
+        self.insert_file(1, f, rights);
     }
 
     pub fn set_stderr(&mut self, f: Box<dyn WasiFile>) {
-        self.insert_file(2, f, FileCaps::all());
+        let rights = Self::stdio_rights(&*f);
+        self.insert_file(2, f, rights);
+    }
+
+    fn stdio_rights(f: &dyn WasiFile) -> FileCaps {
+        let mut rights = FileCaps::all();
+
+        // If `f` is a tty, restrict the `tell` and `seek` capabilities, so
+        // that wasi-libc's `isatty` correctly detects the file descriptor
+        // as a tty.
+        if f.isatty() {
+            rights &= !(FileCaps::TELL | FileCaps::SEEK);
+        }
+
+        rights
     }
 
     pub fn push_preopened_dir(

@@ -422,7 +422,7 @@ impl VMExternRef {
     /// or `PartialEq` implementation of the pointed-to values.
     #[inline]
     pub fn eq(a: &Self, b: &Self) -> bool {
-        ptr::eq(a.0.as_ptr() as *const _, b.0.as_ptr() as *const _)
+        ptr::eq(a.0.as_ptr(), b.0.as_ptr())
     }
 
     /// Hash a given `VMExternRef`.
@@ -434,7 +434,7 @@ impl VMExternRef {
     where
         H: Hasher,
     {
-        ptr::hash(externref.0.as_ptr() as *const _, hasher);
+        ptr::hash(externref.0.as_ptr(), hasher);
     }
 
     /// Compare two `VMExternRef`s.
@@ -463,7 +463,7 @@ impl Deref for VMExternRef {
 ///
 /// We use this so that we can morally put `VMExternRef`s inside of `HashSet`s
 /// even though they don't implement `Eq` and `Hash` to avoid foot guns.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct VMExternRefWithTraits(VMExternRef);
 
 impl Hash for VMExternRefWithTraits {
@@ -566,8 +566,13 @@ impl VMExternRefActivationsTable {
 
     /// Create a new `VMExternRefActivationsTable`.
     pub fn new() -> Self {
-        let chunk = Self::new_chunk(Self::CHUNK_SIZE);
-        let next = chunk.as_ptr() as *mut TableElem;
+        // Start with an empty chunk in case this activations table isn't used.
+        // This means that there's no space in the bump-allocation area which
+        // will force any path trying to use this to the slow gc path. The first
+        // time this happens, though, the slow gc path will allocate a new chunk
+        // for actual fast-bumping.
+        let mut chunk: Box<[TableElem]> = Box::new([]);
+        let next = chunk.as_mut_ptr();
         let end = unsafe { next.add(chunk.len()) };
 
         VMExternRefActivationsTable {
@@ -576,8 +581,8 @@ impl VMExternRefActivationsTable {
                 end: NonNull::new(end).unwrap(),
                 chunk,
             },
-            over_approximated_stack_roots: HashSet::with_capacity(Self::CHUNK_SIZE),
-            precise_stack_roots: HashSet::with_capacity(Self::CHUNK_SIZE),
+            over_approximated_stack_roots: HashSet::new(),
+            precise_stack_roots: HashSet::new(),
             stack_canary: None,
             #[cfg(debug_assertions)]
             gc_okay: true,
@@ -703,7 +708,7 @@ impl VMExternRefActivationsTable {
         precise_stack_roots: &mut HashSet<VMExternRefWithTraits>,
         root: NonNull<VMExternData>,
     ) {
-        let root = unsafe { VMExternRef::clone_from_raw(root.as_ptr() as *mut _) };
+        let root = unsafe { VMExternRef::clone_from_raw(root.as_ptr().cast()) };
         precise_stack_roots.insert(VMExternRefWithTraits(root));
     }
 
@@ -728,9 +733,18 @@ impl VMExternRefActivationsTable {
             "after sweeping the bump chunk, all slots should be `None`"
         );
 
+        // If this is the first instance of gc then the initial chunk is empty,
+        // so we lazily allocate space for fast bump-allocation in the future.
+        if self.alloc.chunk.is_empty() {
+            self.alloc.chunk = Self::new_chunk(Self::CHUNK_SIZE);
+            self.alloc.end =
+                NonNull::new(unsafe { self.alloc.chunk.as_mut_ptr().add(self.alloc.chunk.len()) })
+                    .unwrap();
+        }
+
         // Reset our `next` finger to the start of the bump allocation chunk.
         unsafe {
-            let next = self.alloc.chunk.as_ptr() as *mut TableElem;
+            let next = self.alloc.chunk.as_mut_ptr();
             debug_assert!(!next.is_null());
             *self.alloc.next.get() = NonNull::new_unchecked(next);
         }
@@ -940,7 +954,9 @@ pub unsafe fn gc(
                         debug_assert!(
                             r.is_null() || activations_table_set.contains(&r),
                             "every on-stack externref inside a Wasm frame should \
-                            have an entry in the VMExternRefActivationsTable"
+                            have an entry in the VMExternRefActivationsTable; \
+                            {:?} is not in the table",
+                            r
                         );
                         if let Some(r) = NonNull::new(r) {
                             VMExternRefActivationsTable::insert_precise_stack_root(
@@ -1021,7 +1037,6 @@ mod tests {
 
         let offsets = wasmtime_environ::VMOffsets::from(wasmtime_environ::VMOffsetsFields {
             ptr: 8,
-            num_signature_ids: 0,
             num_imported_functions: 0,
             num_imported_tables: 0,
             num_imported_memories: 0,
@@ -1048,7 +1063,6 @@ mod tests {
 
         let offsets = wasmtime_environ::VMOffsets::from(wasmtime_environ::VMOffsetsFields {
             ptr: 8,
-            num_signature_ids: 0,
             num_imported_functions: 0,
             num_imported_tables: 0,
             num_imported_memories: 0,
@@ -1075,7 +1089,6 @@ mod tests {
 
         let offsets = wasmtime_environ::VMOffsets::from(wasmtime_environ::VMOffsetsFields {
             ptr: 8,
-            num_signature_ids: 0,
             num_imported_functions: 0,
             num_imported_tables: 0,
             num_imported_memories: 0,

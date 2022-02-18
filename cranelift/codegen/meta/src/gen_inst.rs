@@ -1200,14 +1200,12 @@ fn gen_isle(formats: &[&InstructionFormat], instructions: &AllInstructions, fmt:
         fmt.indent(|fmt| {
             for format in formats {
                 let mut s = format!("({} (opcode Opcode)", format.name);
-                if format.typevar_operand.is_some() {
-                    if format.has_value_list {
-                        s.push_str(" (args ValueList)");
-                    } else if format.num_value_operands == 1 {
-                        s.push_str(" (arg Value)");
-                    } else {
-                        write!(&mut s, " (args ValueArray{})", format.num_value_operands).unwrap();
-                    }
+                if format.has_value_list {
+                    s.push_str(" (args ValueList)");
+                } else if format.num_value_operands == 1 {
+                    s.push_str(" (arg Value)");
+                } else if format.num_value_operands > 1 {
+                    write!(&mut s, " (args ValueArray{})", format.num_value_operands).unwrap();
                 }
                 for field in &format.imm_fields {
                     write!(
@@ -1269,60 +1267,58 @@ fn gen_isle(formats: &[&InstructionFormat], instructions: &AllInstructions, fmt:
             );
 
             // Value and varargs operands.
-            if inst.format.typevar_operand.is_some() {
-                if inst.format.has_value_list {
-                    // The instruction format uses a value list, but the
-                    // instruction itself might have not only a `&[Value]`
-                    // varargs operand, but also one or more `Value` operands as
-                    // well. If this is the case, then we need to read them off
-                    // the front of the `ValueList`.
-                    let values: Vec<_> = inst
-                        .operands_in
-                        .iter()
-                        .filter(|o| o.is_value())
-                        .map(|o| o.name)
-                        .collect();
-                    let varargs = inst
-                        .operands_in
-                        .iter()
-                        .find(|o| o.is_varargs())
-                        .unwrap()
-                        .name;
-                    if values.is_empty() {
-                        write!(&mut s, " (value_list_slice {})", varargs).unwrap();
-                    } else {
-                        write!(
-                            &mut s,
-                            " (unwrap_head_value_list_{} {} {})",
-                            values.len(),
-                            values.join(" "),
-                            varargs
-                        )
-                        .unwrap();
-                    }
-                } else if inst.format.num_value_operands == 1 {
-                    write!(
-                        &mut s,
-                        " {}",
-                        inst.operands_in.iter().find(|o| o.is_value()).unwrap().name
-                    )
-                    .unwrap();
+            if inst.format.has_value_list {
+                // The instruction format uses a value list, but the
+                // instruction itself might have not only a `&[Value]`
+                // varargs operand, but also one or more `Value` operands as
+                // well. If this is the case, then we need to read them off
+                // the front of the `ValueList`.
+                let values: Vec<_> = inst
+                    .operands_in
+                    .iter()
+                    .filter(|o| o.is_value())
+                    .map(|o| o.name)
+                    .collect();
+                let varargs = inst
+                    .operands_in
+                    .iter()
+                    .find(|o| o.is_varargs())
+                    .unwrap()
+                    .name;
+                if values.is_empty() {
+                    write!(&mut s, " (value_list_slice {})", varargs).unwrap();
                 } else {
-                    let values = inst
-                        .operands_in
-                        .iter()
-                        .filter(|o| o.is_value())
-                        .map(|o| o.name)
-                        .collect::<Vec<_>>();
-                    assert_eq!(values.len(), inst.format.num_value_operands);
-                    let values = values.join(" ");
                     write!(
                         &mut s,
-                        " (value_array_{} {})",
-                        inst.format.num_value_operands, values,
+                        " (unwrap_head_value_list_{} {} {})",
+                        values.len(),
+                        values.join(" "),
+                        varargs
                     )
                     .unwrap();
                 }
+            } else if inst.format.num_value_operands == 1 {
+                write!(
+                    &mut s,
+                    " {}",
+                    inst.operands_in.iter().find(|o| o.is_value()).unwrap().name
+                )
+                .unwrap();
+            } else if inst.format.num_value_operands > 1 {
+                let values = inst
+                    .operands_in
+                    .iter()
+                    .filter(|o| o.is_value())
+                    .map(|o| o.name)
+                    .collect::<Vec<_>>();
+                assert_eq!(values.len(), inst.format.num_value_operands);
+                let values = values.join(" ");
+                write!(
+                    &mut s,
+                    " (value_array_{} {})",
+                    inst.format.num_value_operands, values,
+                )
+                .unwrap();
             }
 
             // Immediates.

@@ -1,4 +1,4 @@
-test compile
+test compile precise-output
 target x86_64
 
 ;; From: https://github.com/bytecodealliance/wasmtime/issues/2670
@@ -13,8 +13,15 @@ block1:
     trap unreachable
 }
 
-; check:  pushq   %rbp
-; nextln: movq    %rsp, %rbp
-; nextln: movq    %rbp, %rsp
-; nextln: popq    %rbp
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 5)
+;   Inst 0:   pushq   %rbp
+;   Inst 1:   movq    %rsp, %rbp
+;   Inst 2:   movq    %rbp, %rsp
+;   Inst 3:   popq    %rbp
+;   Inst 4:   ret
+; }}
+

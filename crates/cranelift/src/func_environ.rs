@@ -1,7 +1,7 @@
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::condcodes::*;
-use cranelift_codegen::ir::immediates::{Offset32, Uimm64};
+use cranelift_codegen::ir::immediates::{Imm64, Offset32, Uimm64};
 use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{AbiParam, ArgumentPurpose, Function, InstBuilder, Signature};
 use cranelift_codegen::isa::{self, TargetFrontendConfig, TargetIsa};
@@ -19,6 +19,7 @@ use wasmtime_environ::{
     BuiltinFunctionIndex, MemoryPlan, MemoryStyle, Module, ModuleTranslation, TableStyle, Tunables,
     TypeTables, VMOffsets, INTERRUPTED, WASM_PAGE_SIZE,
 };
+use wasmtime_environ::{FUNCREF_INIT_BIT, FUNCREF_MASK};
 
 /// Compute an `ir::ExternalName` for a given wasm function index.
 pub fn get_func_name(func_index: FuncIndex) -> ir::ExternalName {
@@ -137,6 +138,19 @@ pub struct FuncEnvironment<'module_environment> {
     /// so if we load it up front we can continue to use it throughout.
     vminterrupts_ptr: cranelift_frontend::Variable,
 
+    /// A cached epoch deadline value, when performing epoch-based
+    /// interruption. Loaded from `VMInterrupts` and reloaded after
+    /// any yield.
+    epoch_deadline_var: cranelift_frontend::Variable,
+
+    /// A cached pointer to the per-Engine epoch counter, when
+    /// performing epoch-based interruption. Initialized in the
+    /// function prologue. We prefer to use a variable here rather
+    /// than reload on each check because it's better to let the
+    /// regalloc keep it in a register if able; if not, it can always
+    /// spill, and this isn't any worse than reloading each time.
+    epoch_ptr_var: cranelift_frontend::Variable,
+
     fuel_consumed: i64,
 }
 
@@ -166,6 +180,8 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             offsets: VMOffsets::new(isa.pointer_bytes(), &translation.module),
             tunables,
             fuel_var: Variable::new(0),
+            epoch_deadline_var: Variable::new(0),
+            epoch_ptr_var: Variable::new(0),
             vminterrupts_ptr: Variable::new(0),
 
             // Start with at least one fuel being consumed because even empty
@@ -266,10 +282,15 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         let mut mem_flags = ir::MemFlags::trusted();
         mem_flags.set_readonly();
 
+        // Load the base of the array of builtin functions
+        let array_offset = i32::try_from(self.offsets.vmctx_builtin_functions()).unwrap();
+        let array_addr = pos.ins().load(pointer_type, mem_flags, base, array_offset);
+
         // Load the callee address.
-        let body_offset =
-            i32::try_from(self.offsets.vmctx_builtin_function(callee_func_idx)).unwrap();
-        let func_addr = pos.ins().load(pointer_type, mem_flags, base, body_offset);
+        let body_offset = i32::try_from(callee_func_idx.index() * pointer_type.bytes()).unwrap();
+        let func_addr = pos
+            .ins()
+            .load(pointer_type, mem_flags, array_addr, body_offset);
 
         (base, func_addr)
     }
@@ -558,6 +579,125 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         builder.switch_to_block(continuation_block);
     }
 
+    fn epoch_function_entry(&mut self, builder: &mut FunctionBuilder<'_>) {
+        builder.declare_var(self.epoch_deadline_var, ir::types::I64);
+        self.epoch_load_deadline_into_var(builder);
+        builder.declare_var(self.epoch_ptr_var, self.pointer_type());
+        let epoch_ptr = self.epoch_ptr(builder);
+        builder.def_var(self.epoch_ptr_var, epoch_ptr);
+
+        // We must check for an epoch change when entering a
+        // function. Why? Why aren't checks at loops sufficient to
+        // bound runtime to O(|static program size|)?
+        //
+        // The reason is that one can construct a "zip-bomb-like"
+        // program with exponential-in-program-size runtime, with no
+        // backedges (loops), by building a tree of function calls: f0
+        // calls f1 ten tims, f1 calls f2 ten times, etc. E.g., nine
+        // levels of this yields a billion function calls with no
+        // backedges. So we can't do checks only at backedges.
+        //
+        // In this "call-tree" scenario, and in fact in any program
+        // that uses calls as a sort of control flow to try to evade
+        // backedge checks, a check at every function entry is
+        // sufficient. Then, combined with checks at every backedge
+        // (loop) the longest runtime between checks is bounded by the
+        // straightline length of any function body.
+        self.epoch_check(builder);
+    }
+
+    fn epoch_ptr(&mut self, builder: &mut FunctionBuilder<'_>) -> ir::Value {
+        let vmctx = self.vmctx(builder.func);
+        let pointer_type = self.pointer_type();
+        let base = builder.ins().global_value(pointer_type, vmctx);
+        let offset = i32::try_from(self.offsets.vmctx_epoch_ptr()).unwrap();
+        let epoch_ptr = builder
+            .ins()
+            .load(pointer_type, ir::MemFlags::trusted(), base, offset);
+        epoch_ptr
+    }
+
+    fn epoch_load_current(&mut self, builder: &mut FunctionBuilder<'_>) -> ir::Value {
+        let addr = builder.use_var(self.epoch_ptr_var);
+        builder.ins().load(
+            ir::types::I64,
+            ir::MemFlags::trusted(),
+            addr,
+            ir::immediates::Offset32::new(0),
+        )
+    }
+
+    fn epoch_load_deadline_into_var(&mut self, builder: &mut FunctionBuilder<'_>) {
+        let interrupts = builder.use_var(self.vminterrupts_ptr);
+        let deadline = builder.ins().load(
+            ir::types::I64,
+            ir::MemFlags::trusted(),
+            interrupts,
+            ir::immediates::Offset32::new(self.offsets.vminterupts_epoch_deadline() as i32),
+        );
+        builder.def_var(self.epoch_deadline_var, deadline);
+    }
+
+    fn epoch_check(&mut self, builder: &mut FunctionBuilder<'_>) {
+        let new_epoch_block = builder.create_block();
+        let new_epoch_doublecheck_block = builder.create_block();
+        let continuation_block = builder.create_block();
+        builder.set_cold_block(new_epoch_block);
+        builder.set_cold_block(new_epoch_doublecheck_block);
+
+        let epoch_deadline = builder.use_var(self.epoch_deadline_var);
+        // Load new epoch and check against cached deadline. The
+        // deadline may be out of date if it was updated (within
+        // another yield) during some function that we called; this is
+        // fine, as we'll reload it and check again before yielding in
+        // the cold path.
+        let cur_epoch_value = self.epoch_load_current(builder);
+        let cmp = builder.ins().ifcmp(cur_epoch_value, epoch_deadline);
+        builder
+            .ins()
+            .brif(IntCC::UnsignedGreaterThanOrEqual, cmp, new_epoch_block, &[]);
+        builder.ins().jump(continuation_block, &[]);
+        builder.seal_block(new_epoch_block);
+
+        // In the "new epoch block", we've noticed that the epoch has
+        // exceeded our cached deadline. However the real deadline may
+        // have been moved in the meantime. We keep the cached value
+        // in a register to speed the checks in the common case
+        // (between epoch ticks) but we want to do a precise check
+        // here, on the cold path, by reloading the latest value
+        // first.
+        builder.switch_to_block(new_epoch_block);
+        self.epoch_load_deadline_into_var(builder);
+        let fresh_epoch_deadline = builder.use_var(self.epoch_deadline_var);
+        let fresh_cmp = builder.ins().ifcmp(cur_epoch_value, fresh_epoch_deadline);
+        builder.ins().brif(
+            IntCC::UnsignedGreaterThanOrEqual,
+            fresh_cmp,
+            new_epoch_doublecheck_block,
+            &[],
+        );
+        builder.ins().jump(continuation_block, &[]);
+        builder.seal_block(new_epoch_doublecheck_block);
+
+        builder.switch_to_block(new_epoch_doublecheck_block);
+        let new_epoch_sig = self.builtin_function_signatures.new_epoch(builder.func);
+        let (vmctx, new_epoch) = self.translate_load_builtin_function_address(
+            &mut builder.cursor(),
+            BuiltinFunctionIndex::new_epoch(),
+        );
+        // new_epoch() returns the new deadline, so we don't have to
+        // reload it.
+        let call = builder
+            .ins()
+            .call_indirect(new_epoch_sig, new_epoch, &[vmctx]);
+        let new_deadline = *builder.func.dfg.inst_results(call).first().unwrap();
+        builder.def_var(self.epoch_deadline_var, new_deadline);
+        builder.ins().jump(continuation_block, &[]);
+        builder.seal_block(continuation_block);
+
+        builder.switch_to_block(continuation_block);
+    }
+
     fn memory_index_type(&self, index: MemoryIndex) -> ir::Type {
         if self.module.memory_plans[index].memory.memory64 {
             I64
@@ -611,6 +751,59 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             pos.ins().uextend(I64, val)
         }
     }
+
+    fn get_or_init_funcref_table_elem(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        table_index: TableIndex,
+        table: ir::Table,
+        index: ir::Value,
+    ) -> ir::Value {
+        let pointer_type = self.pointer_type();
+
+        // To support lazy initialization of table
+        // contents, we check for a null entry here, and
+        // if null, we take a slow-path that invokes a
+        // libcall.
+        let table_entry_addr = builder.ins().table_addr(pointer_type, table, index, 0);
+        let value = builder
+            .ins()
+            .load(pointer_type, ir::MemFlags::trusted(), table_entry_addr, 0);
+        // Mask off the "initialized bit". See documentation on
+        // FUNCREF_INIT_BIT in crates/environ/src/ref_bits.rs for more
+        // details.
+        let value_masked = builder
+            .ins()
+            .band_imm(value, Imm64::from(FUNCREF_MASK as i64));
+
+        let null_block = builder.create_block();
+        let continuation_block = builder.create_block();
+        let result_param = builder.append_block_param(continuation_block, pointer_type);
+        builder.set_cold_block(null_block);
+
+        builder.ins().brz(value, null_block, &[]);
+        builder.ins().jump(continuation_block, &[value_masked]);
+        builder.seal_block(null_block);
+
+        builder.switch_to_block(null_block);
+        let table_index = builder.ins().iconst(I32, table_index.index() as i64);
+        let builtin_idx = BuiltinFunctionIndex::table_get_lazy_init_funcref();
+        let builtin_sig = self
+            .builtin_function_signatures
+            .table_get_lazy_init_funcref(builder.func);
+        let (vmctx, builtin_addr) =
+            self.translate_load_builtin_function_address(&mut builder.cursor(), builtin_idx);
+        let call_inst =
+            builder
+                .ins()
+                .call_indirect(builtin_sig, builtin_addr, &[vmctx, table_index, index]);
+        let returned_entry = builder.func.dfg.inst_results(call_inst)[0];
+        builder.ins().jump(continuation_block, &[returned_entry]);
+        builder.seal_block(continuation_block);
+
+        builder.switch_to_block(continuation_block);
+        result_param
+    }
 }
 
 impl<'module_environment> TargetEnvironment for FuncEnvironment<'module_environment> {
@@ -633,6 +826,8 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     fn after_locals(&mut self, num_locals: usize) {
         self.vminterrupts_ptr = Variable::new(num_locals);
         self.fuel_var = Variable::new(num_locals + 1);
+        self.epoch_deadline_var = Variable::new(num_locals + 2);
+        self.epoch_ptr_var = Variable::new(num_locals + 3);
     }
 
     fn make_table(&mut self, func: &mut ir::Function, index: TableIndex) -> WasmResult<ir::Table> {
@@ -745,13 +940,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         match plan.table.wasm_ty {
             WasmType::FuncRef => match plan.style {
                 TableStyle::CallerChecksSignature => {
-                    let table_entry_addr = builder.ins().table_addr(pointer_type, table, index, 0);
-                    Ok(builder.ins().load(
-                        pointer_type,
-                        ir::MemFlags::trusted(),
-                        table_entry_addr,
-                        0,
-                    ))
+                    Ok(self.get_or_init_funcref_table_elem(builder, table_index, table, index))
                 }
             },
             WasmType::ExternRef => {
@@ -892,9 +1081,18 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             WasmType::FuncRef => match plan.style {
                 TableStyle::CallerChecksSignature => {
                     let table_entry_addr = builder.ins().table_addr(pointer_type, table, index, 0);
-                    builder
+                    // Set the "initialized bit". See doc-comment on
+                    // `FUNCREF_INIT_BIT` in
+                    // crates/environ/src/ref_bits.rs for details.
+                    let value_with_init_bit = builder
                         .ins()
-                        .store(ir::MemFlags::trusted(), value, table_entry_addr, 0);
+                        .bor_imm(value, Imm64::from(FUNCREF_INIT_BIT as i64));
+                    builder.ins().store(
+                        ir::MemFlags::trusted(),
+                        value_with_init_bit,
+                        table_entry_addr,
+                        0,
+                    );
                     Ok(())
                 }
             },
@@ -1112,10 +1310,16 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         mut pos: cranelift_codegen::cursor::FuncCursor<'_>,
         func_index: FuncIndex,
     ) -> WasmResult<ir::Value> {
-        let vmctx = self.vmctx(&mut pos.func);
-        let vmctx = pos.ins().global_value(self.pointer_type(), vmctx);
-        let offset = self.offsets.vmctx_anyfunc(func_index);
-        Ok(pos.ins().iadd_imm(vmctx, i64::from(offset)))
+        let func_index = pos.ins().iconst(I32, func_index.as_u32() as i64);
+        let builtin_index = BuiltinFunctionIndex::ref_func();
+        let builtin_sig = self.builtin_function_signatures.ref_func(&mut pos.func);
+        let (vmctx, builtin_addr) =
+            self.translate_load_builtin_function_address(&mut pos, builtin_index);
+
+        let call_inst = pos
+            .ins()
+            .call_indirect(builtin_sig, builtin_addr, &[vmctx, func_index]);
+        Ok(pos.func.dfg.first_result(call_inst))
     }
 
     fn translate_custom_global_get(
@@ -1318,7 +1522,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
     fn translate_call_indirect(
         &mut self,
-        mut pos: FuncCursor<'_>,
+        builder: &mut FunctionBuilder,
         table_index: TableIndex,
         table: ir::Table,
         ty_index: TypeIndex,
@@ -1328,21 +1532,17 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     ) -> WasmResult<ir::Inst> {
         let pointer_type = self.pointer_type();
 
-        let table_entry_addr = pos.ins().table_addr(pointer_type, table, callee, 0);
-
-        // Dereference the table entry to get the pointer to the
-        // `VMCallerCheckedAnyfunc`.
-        let anyfunc_ptr =
-            pos.ins()
-                .load(pointer_type, ir::MemFlags::trusted(), table_entry_addr, 0);
+        // Get the anyfunc pointer (the funcref) from the table.
+        let anyfunc_ptr = self.get_or_init_funcref_table_elem(builder, table_index, table, callee);
 
         // Check for whether the table element is null, and trap if so.
-        pos.ins()
+        builder
+            .ins()
             .trapz(anyfunc_ptr, ir::TrapCode::IndirectCallToNull);
 
         // Dereference anyfunc pointer to get the function address.
         let mem_flags = ir::MemFlags::trusted();
-        let func_addr = pos.ins().load(
+        let func_addr = builder.ins().load(
             pointer_type,
             mem_flags,
             anyfunc_ptr,
@@ -1354,19 +1554,32 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             TableStyle::CallerChecksSignature => {
                 let sig_id_size = self.offsets.size_of_vmshared_signature_index();
                 let sig_id_type = Type::int(u16::from(sig_id_size) * 8).unwrap();
-                let vmctx = self.vmctx(pos.func);
-                let base = pos.ins().global_value(pointer_type, vmctx);
-                let offset =
-                    i32::try_from(self.offsets.vmctx_vmshared_signature_id(ty_index)).unwrap();
+                let vmctx = self.vmctx(builder.func);
+                let base = builder.ins().global_value(pointer_type, vmctx);
 
-                // Load the caller ID.
+                // Load the caller ID. This requires loading the
+                // `*mut VMCallerCheckedAnyfunc` base pointer from `VMContext`
+                // and then loading, based on `SignatureIndex`, the
+                // corresponding entry.
                 let mut mem_flags = ir::MemFlags::trusted();
                 mem_flags.set_readonly();
-                let caller_sig_id = pos.ins().load(sig_id_type, mem_flags, base, offset);
+                let signatures = builder.ins().load(
+                    pointer_type,
+                    mem_flags,
+                    base,
+                    i32::try_from(self.offsets.vmctx_signature_ids_array()).unwrap(),
+                );
+                let sig_index = self.module.types[ty_index].unwrap_function();
+                let offset =
+                    i32::try_from(sig_index.as_u32().checked_mul(sig_id_type.bytes()).unwrap())
+                        .unwrap();
+                let caller_sig_id = builder
+                    .ins()
+                    .load(sig_id_type, mem_flags, signatures, offset);
 
                 // Load the callee ID.
                 let mem_flags = ir::MemFlags::trusted();
-                let callee_sig_id = pos.ins().load(
+                let callee_sig_id = builder.ins().load(
                     sig_id_type,
                     mem_flags,
                     anyfunc_ptr,
@@ -1374,16 +1587,21 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 );
 
                 // Check that they match.
-                let cmp = pos.ins().icmp(IntCC::Equal, callee_sig_id, caller_sig_id);
-                pos.ins().trapz(cmp, ir::TrapCode::BadSignature);
+                let cmp = builder
+                    .ins()
+                    .icmp(IntCC::Equal, callee_sig_id, caller_sig_id);
+                builder.ins().trapz(cmp, ir::TrapCode::BadSignature);
             }
         }
 
         let mut real_call_args = Vec::with_capacity(call_args.len() + 2);
-        let caller_vmctx = pos.func.special_param(ArgumentPurpose::VMContext).unwrap();
+        let caller_vmctx = builder
+            .func
+            .special_param(ArgumentPurpose::VMContext)
+            .unwrap();
 
         // First append the callee vmctx address.
-        let vmctx = pos.ins().load(
+        let vmctx = builder.ins().load(
             pointer_type,
             mem_flags,
             anyfunc_ptr,
@@ -1395,7 +1613,9 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         // Then append the regular call arguments.
         real_call_args.extend_from_slice(call_args);
 
-        Ok(pos.ins().call_indirect(sig_ref, func_addr, &real_call_args))
+        Ok(builder
+            .ins()
+            .call_indirect(sig_ref, func_addr, &real_call_args))
     }
 
     fn translate_call(
@@ -1787,6 +2007,12 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             self.fuel_check(builder);
         }
 
+        // If we are performing epoch-based interruption, check to see
+        // if the epoch counter has changed.
+        if self.tunables.epoch_interruption {
+            self.epoch_check(builder);
+        }
+
         Ok(())
     }
 
@@ -1821,12 +2047,19 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     ) -> WasmResult<()> {
         // If the `vminterrupts_ptr` variable will get used then we initialize
         // it here.
-        if self.tunables.consume_fuel || self.tunables.interruptable {
+        if self.tunables.consume_fuel
+            || self.tunables.interruptable
+            || self.tunables.epoch_interruption
+        {
             self.declare_vminterrupts_ptr(builder);
         }
         // Additionally we initialize `fuel_var` if it will get used.
         if self.tunables.consume_fuel {
             self.fuel_function_entry(builder);
+        }
+        // Initialize `epoch_var` with the current epoch.
+        if self.tunables.epoch_interruption {
+            self.epoch_function_entry(builder);
         }
         Ok(())
     }

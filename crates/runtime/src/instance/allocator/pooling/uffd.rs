@@ -262,12 +262,15 @@ unsafe fn initialize_wasm_page(
     page_index: usize,
 ) -> Result<()> {
     // Check for paged initialization and copy the page if present in the initialization data
-    if let MemoryInitialization::Paged { map, .. } = &instance.module.memory_initialization {
+    if let MemoryInitialization::Paged { map, .. } =
+        &instance.runtime_info.module().memory_initialization
+    {
+        let memory_index = instance.module().memory_index(memory_index);
         let pages = &map[memory_index];
 
-        let pos = pages.binary_search_by_key(&(page_index as u64), |k| k.0);
+        let pos = pages.binary_search_by_key(&((page_index * WASM_PAGE_SIZE) as u64), |k| k.offset);
         if let Ok(i) = pos {
-            let data = instance.wasm_data(pages[i].1.clone());
+            let data = instance.wasm_data(pages[i].data.clone());
             debug_assert_eq!(data.len(), WASM_PAGE_SIZE);
 
             log::trace!(
@@ -436,10 +439,11 @@ mod test {
     use super::*;
     use crate::{
         Imports, InstanceAllocationRequest, InstanceLimits, ModuleLimits,
-        PoolingAllocationStrategy, Store, StorePtr, VMSharedSignatureIndex,
+        PoolingAllocationStrategy, Store, StorePtr,
     };
+    use std::sync::atomic::AtomicU64;
     use std::sync::Arc;
-    use wasmtime_environ::{Memory, MemoryPlan, MemoryStyle, Module, PrimaryMap, Tunables};
+    use wasmtime_environ::{Memory, MemoryPlan, MemoryStyle, Module, Tunables};
 
     #[cfg(target_pointer_width = "64")]
     #[test]
@@ -465,8 +469,13 @@ mod test {
             ..Tunables::default()
         };
 
-        let instances = InstancePool::new(&module_limits, &instance_limits, &tunables)
-            .expect("should allocate");
+        let instances = InstancePool::new(
+            PoolingAllocationStrategy::Random,
+            &module_limits,
+            &instance_limits,
+            &tunables,
+        )
+        .expect("should allocate");
 
         let locator = FaultLocator::new(&instances);
 
@@ -546,6 +555,12 @@ mod test {
                 fn out_of_gas(&mut self) -> Result<(), anyhow::Error> {
                     Ok(())
                 }
+                fn epoch_ptr(&self) -> *const AtomicU64 {
+                    std::ptr::null()
+                }
+                fn new_epoch(&mut self) -> Result<u64, anyhow::Error> {
+                    Ok(0)
+                }
             }
             struct MockModuleInfo;
             impl crate::ModuleInfoLookup for MockModuleInfo {
@@ -560,30 +575,22 @@ mod test {
 
             let mut handles = Vec::new();
             let module = Arc::new(module);
-            let functions = &PrimaryMap::new();
 
             // Allocate the maximum number of instances with the maximum number of memories
             for _ in 0..instances.max_instances {
                 handles.push(
                     instances
-                        .allocate(
-                            PoolingAllocationStrategy::Random,
-                            InstanceAllocationRequest {
-                                module: module.clone(),
-                                image_base: 0,
-                                functions,
-                                imports: Imports {
-                                    functions: &[],
-                                    tables: &[],
-                                    memories: &[],
-                                    globals: &[],
-                                },
-                                shared_signatures: VMSharedSignatureIndex::default().into(),
-                                host_state: Box::new(()),
-                                store: StorePtr::new(&mut mock_store),
-                                wasm_data: &[],
+                        .allocate(InstanceAllocationRequest {
+                            runtime_info: &super::super::test::empty_runtime_info(module.clone()),
+                            imports: Imports {
+                                functions: &[],
+                                tables: &[],
+                                memories: &[],
+                                globals: &[],
                             },
-                        )
+                            host_state: Box::new(()),
+                            store: StorePtr::new(&mut mock_store),
+                        })
                         .expect("instance should allocate"),
                 );
             }

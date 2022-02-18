@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime"
-version = "0.32.0"
+version = "0.34.0"
 authors = ["The Wasmtime Project Developers"]
 description = "High-level API to expose the Wasmtime runtime"
 documentation = "https://docs.rs/wasmtime"
@@ -13,21 +13,19 @@ edition = "2018"
 rustdoc-args = ["--cfg", "nightlydoc"]
 
 [dependencies]
-wasmtime-runtime = { path = "../runtime", version = "=0.32.0" }
-wasmtime-environ = { path = "../environ", version = "=0.32.0" }
-wasmtime-jit = { path = "../jit", version = "=0.32.0" }
-wasmtime-cache = { path = "../cache", version = "=0.32.0", optional = true }
-wasmtime-fiber = { path = "../fiber", version = "=0.32.0", optional = true }
-wasmtime-cranelift = { path = "../cranelift", version = "=0.32.0", optional = true }
+wasmtime-runtime = { path = "../runtime", version = "=0.34.0" }
+wasmtime-environ = { path = "../environ", version = "=0.34.0" }
+wasmtime-jit = { path = "../jit", version = "=0.34.0" }
+wasmtime-cache = { path = "../cache", version = "=0.34.0", optional = true }
+wasmtime-fiber = { path = "../fiber", version = "=0.34.0", optional = true }
+wasmtime-cranelift = { path = "../cranelift", version = "=0.34.0", optional = true }
 target-lexicon = { version = "0.12.0", default-features = false }
-wasmparser = "0.81"
+wasmparser = "0.82"
 anyhow = "1.0.19"
 region = "2.2.0"
 libc = "0.2"
 cfg-if = "1.0"
 backtrace = "0.3.61"
-rustc-demangle = "0.1.16"
-cpp_demangle = "0.3.2"
 log = "0.4.8"
 wat = { version = "1.0.36", optional = true }
 serde = { version = "1.0.94", features = ["derive"] }
@@ -39,6 +37,7 @@ lazy_static = "1.4"
 rayon = { version = "1.0", optional = true }
 object = { version = "0.27", default-features = false, features = ['read_core', 'elf'] }
 async-trait = { version = "0.1.51", optional = true }
+once_cell = "1.9"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 winapi = "0.3.7"
@@ -52,7 +51,16 @@ wasi-cap-std-sync = { path = "../wasi-common/cap-std-sync" }
 maintenance = { status = "actively-developed" }
 
 [features]
-default = ['async', 'cache', 'wat', 'jitdump', 'parallel-compilation', 'cranelift', 'pooling-allocator']
+default = [
+  'async',
+  'cache',
+  'wat',
+  'jitdump',
+  'parallel-compilation',
+  'cranelift',
+  'pooling-allocator',
+  'memfd',
+]
 
 # An on-by-default feature enabling runtime compilation of WebAssembly modules
 # with the Cranelift compiler. Cranelift is the default compilation backend of
@@ -91,3 +99,11 @@ all-arch = ["wasmtime-cranelift/all-arch"]
 # It is useful for applications that do not bind their own exception ports and
 # need portable signal handling.
 posix-signals-on-macos = ["wasmtime-runtime/posix-signals-on-macos"]
+
+# Enables, on Linux, the usage of memfd mappings to enable instantiation to use
+# copy-on-write to initialize linear memory for wasm modules which have
+# compatible linear memories.
+#
+# Enabling this feature has no effect on non-Linux platforms or when the `uffd`
+# feature is enabled.
+memfd = ["wasmtime-runtime/memfd"]

@@ -1,4 +1,4 @@
-test compile
+test compile precise-output
 target x86_64 has_lzcnt
 
 function %clz(i64) -> i64 {
@@ -7,13 +7,19 @@ block0(v0: i64):
     return v1
 }
 
-; check: pushq   %rbp
-; check: movq    %rsp, %rbp
-; check: lzcntq  %rdi, %rsi
-; check: movq    %rsi, %rax
-; check: movq    %rbp, %rsp
-; check: popq    %rbp
-; check: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 7)
+;   Inst 0:   pushq   %rbp
+;   Inst 1:   movq    %rsp, %rbp
+;   Inst 2:   lzcntq  %rdi, %rsi
+;   Inst 3:   movq    %rsi, %rax
+;   Inst 4:   movq    %rbp, %rsp
+;   Inst 5:   popq    %rbp
+;   Inst 6:   ret
+; }}
 
 function %clz(i32) -> i32 {
 block0(v0: i32):
@@ -21,10 +27,17 @@ block0(v0: i32):
     return v1
 }
 
-; check: pushq   %rbp
-; check: movq    %rsp, %rbp
-; check: lzcntl  %edi, %esi
-; check: movq    %rsi, %rax
-; check: movq    %rbp, %rsp
-; check: popq    %rbp
-; check: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 7)
+;   Inst 0:   pushq   %rbp
+;   Inst 1:   movq    %rsp, %rbp
+;   Inst 2:   lzcntl  %edi, %esi
+;   Inst 3:   movq    %rsi, %rax
+;   Inst 4:   movq    %rbp, %rsp
+;   Inst 5:   popq    %rbp
+;   Inst 6:   ret
+; }}
+

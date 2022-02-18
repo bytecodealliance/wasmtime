@@ -1,0 +1,40 @@
+test run
+target s390x
+
+; We can't test that these instructions are right regarding atomicity, but we can
+; test if they perform their operation correctly
+
+function %atomic_cas_i64(i64, i64, i64) -> i64 {
+    ss0 = explicit_slot 8
+
+block0(v0: i64, v1: i64, v2: i64):
+    v3 = stack_addr.i64 ss0
+    store.i64 little v0, v3
+
+    v4 = atomic_cas.i64 little v3, v1, v2
+
+    v5 = load.i64 little v3
+    return v5
+}
+; run: %atomic_cas_i64(0, 0, 2) == 2
+; run: %atomic_cas_i64(1, 0, 2) == 1
+; run: %atomic_cas_i64(0, 1, 2) == 0
+; run: %atomic_cas_i64(0, 0, 0xC0FFEEEE_DECAFFFF) == 0xC0FFEEEE_DECAFFFF
+
+function %atomic_cas_i32(i32, i32, i32) -> i32 {
+    ss0 = explicit_slot 4
+
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = stack_addr.i32 ss0
+    store.i32 little v0, v3
+
+    v4 = atomic_cas.i32 little v3, v1, v2
+
+    v5 = load.i32 little v3
+    return v5
+}
+; run: %atomic_cas_i32(0, 0, 2) == 2
+; run: %atomic_cas_i32(1, 0, 2) == 1
+; run: %atomic_cas_i32(0, 1, 2) == 0
+; run: %atomic_cas_i32(0, 0, 0xC0FFEEEE) == 0xC0FFEEEE
+

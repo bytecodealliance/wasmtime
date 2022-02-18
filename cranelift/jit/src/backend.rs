@@ -3,15 +3,15 @@
 use crate::{compiled_blob::CompiledBlob, memory::Memory};
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::settings::Configurable;
-use cranelift_codegen::{self, ir, settings};
+use cranelift_codegen::{self, ir, settings, MachReloc};
 use cranelift_codegen::{
-    binemit::{Addend, CodeInfo, CodeOffset, Reloc, RelocSink, StackMapSink, TrapSink},
+    binemit::{CodeInfo, Reloc},
     CodegenError,
 };
 use cranelift_entity::SecondaryMap;
 use cranelift_module::{
     DataContext, DataDescription, DataId, FuncId, Init, Linkage, Module, ModuleCompiledFunction,
-    ModuleDeclarations, ModuleError, ModuleResult, RelocRecord,
+    ModuleDeclarations, ModuleError, ModuleResult,
 };
 use log::info;
 use std::collections::HashMap;
@@ -42,7 +42,9 @@ impl JITBuilder {
     /// enum to symbols. LibCalls are inserted in the IR as part of the legalization for certain
     /// floating point instructions, and for stack probes. If you don't know what to use for this
     /// argument, use `cranelift_module::default_libcall_names()`.
-    pub fn new(libcall_names: Box<dyn Fn(ir::LibCall) -> String + Send + Sync>) -> Self {
+    pub fn new(
+        libcall_names: Box<dyn Fn(ir::LibCall) -> String + Send + Sync>,
+    ) -> ModuleResult<Self> {
         let mut flag_builder = settings::builder();
         // On at least AArch64, "colocated" calls use shorter-range relocations,
         // which might not reach all definitions; we can't handle that here, so
@@ -52,8 +54,8 @@ impl JITBuilder {
         let isa_builder = cranelift_native::builder().unwrap_or_else(|msg| {
             panic!("host machine is not supported: {}", msg);
         });
-        let isa = isa_builder.finish(settings::Flags::new(flag_builder));
-        Self::with_isa(isa, libcall_names)
+        let isa = isa_builder.finish(settings::Flags::new(flag_builder))?;
+        Ok(Self::with_isa(isa, libcall_names))
     }
 
     /// Create a new `JITBuilder` with an arbitrary target. This is mainly
@@ -648,15 +650,8 @@ impl Module for JITModule {
         &mut self,
         id: FuncId,
         ctx: &mut cranelift_codegen::Context,
-        trap_sink: &mut dyn TrapSink,
-        stack_map_sink: &mut dyn StackMapSink,
     ) -> ModuleResult<ModuleCompiledFunction> {
         info!("defining function {}: {}", id, ctx.func.display());
-        let CodeInfo {
-            total_size: code_size,
-            ..
-        } = ctx.compile(self.isa())?;
-
         let decl = self.declarations.get_function_decl(id);
         if !decl.linkage.is_definable() {
             return Err(ModuleError::InvalidImportDefinition(decl.name.clone()));
@@ -666,6 +661,11 @@ impl Module for JITModule {
             return Err(ModuleError::DuplicateDefinition(decl.name.to_owned()));
         }
 
+        let CodeInfo {
+            total_size: code_size,
+            ..
+        } = ctx.compile(self.isa())?;
+
         let size = code_size as usize;
         let ptr = self
             .memory
@@ -673,15 +673,17 @@ impl Module for JITModule {
             .allocate(size, EXECUTABLE_DATA_ALIGNMENT)
             .expect("TODO: handle OOM etc.");
 
-        let mut reloc_sink = JITRelocSink::default();
-        unsafe { ctx.emit_to_memory(ptr, &mut reloc_sink, trap_sink, stack_map_sink) };
+        unsafe { ctx.emit_to_memory(ptr) };
+        let relocs = ctx
+            .mach_compile_result
+            .as_ref()
+            .unwrap()
+            .buffer
+            .relocs()
+            .to_vec();
 
         self.record_function_for_perf(ptr, size, &decl.name);
-        self.compiled_functions[id] = Some(CompiledBlob {
-            ptr,
-            size,
-            relocs: reloc_sink.relocs,
-        });
+        self.compiled_functions[id] = Some(CompiledBlob { ptr, size, relocs });
 
         if self.isa.flags().is_pic() {
             self.pending_got_updates.push(GotUpdate {
@@ -721,7 +723,7 @@ impl Module for JITModule {
         &mut self,
         id: FuncId,
         bytes: &[u8],
-        relocs: &[RelocRecord],
+        relocs: &[MachReloc],
     ) -> ModuleResult<ModuleCompiledFunction> {
         info!("defining function {} with bytes", id);
         let total_size: u32 = match bytes.len().try_into() {
@@ -874,7 +876,7 @@ fn lookup_with_dlsym(name: &str) -> Option<*const u8> {
             // try to find the searched symbol in the currently running executable
             ptr::null_mut(),
             // try to find the searched symbol in local c runtime
-            winapi::um::libloaderapi::GetModuleHandleA(MSVCRT_DLL.as_ptr() as *const i8),
+            winapi::um::libloaderapi::GetModuleHandleA(MSVCRT_DLL.as_ptr().cast::<i8>()),
         ];
 
         for handle in &handles {
@@ -886,28 +888,5 @@ fn lookup_with_dlsym(name: &str) -> Option<*const u8> {
         }
 
         None
-    }
-}
-
-#[derive(Default)]
-struct JITRelocSink {
-    relocs: Vec<RelocRecord>,
-}
-
-impl RelocSink for JITRelocSink {
-    fn reloc_external(
-        &mut self,
-        offset: CodeOffset,
-        _srcloc: ir::SourceLoc,
-        reloc: Reloc,
-        name: &ir::ExternalName,
-        addend: Addend,
-    ) {
-        self.relocs.push(RelocRecord {
-            offset,
-            reloc,
-            name: name.clone(),
-            addend,
-        });
     }
 }

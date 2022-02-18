@@ -4,6 +4,7 @@ use backtrace::Backtrace;
 use std::fmt;
 use std::sync::Arc;
 use wasmtime_environ::TrapCode as EnvTrapCode;
+use wasmtime_jit::{demangle_function_name, demangle_function_name_or_index};
 
 /// A struct representing an aborted instruction execution, with a message
 /// indicating the cause.
@@ -327,17 +328,8 @@ impl fmt::Display for Trap {
                 write!(f, "{:#6x} - ", offset)?;
             }
 
-            let demangle =
-                |f: &mut fmt::Formatter<'_>, name: &str| match rustc_demangle::try_demangle(name) {
-                    Ok(name) => write!(f, "{}", name),
-                    Err(_) => match cpp_demangle::Symbol::new(name) {
-                        Ok(name) => write!(f, "{}", name),
-                        Err(_) => write!(f, "{}", name),
-                    },
-                };
-            let write_raw_func_name = |f: &mut fmt::Formatter<'_>| match frame.func_name() {
-                Some(name) => demangle(f, name),
-                None => write!(f, "<wasm function {}>", frame.func_index()),
+            let write_raw_func_name = |f: &mut fmt::Formatter<'_>| {
+                demangle_function_name_or_index(f, frame.func_name(), frame.func_index() as usize)
             };
             if frame.symbols().is_empty() {
                 write!(f, "{}!", name)?;
@@ -351,7 +343,7 @@ impl fmt::Display for Trap {
                         // ...
                     }
                     match symbol.name() {
-                        Some(name) => demangle(f, name)?,
+                        Some(name) => demangle_function_name(f, name)?,
                         None if i == 0 => write_raw_func_name(f)?,
                         None => write!(f, "<inlined function>")?,
                     }

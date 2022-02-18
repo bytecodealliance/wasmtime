@@ -104,6 +104,7 @@ pub struct Config {
     pub(crate) module_version: ModuleVersionStrategy,
     pub(crate) parallel_compilation: bool,
     pub(crate) paged_memory_initialization: bool,
+    pub(crate) memfd: bool,
 }
 
 impl Config {
@@ -129,6 +130,7 @@ impl Config {
             parallel_compilation: true,
             // Default to paged memory initialization when using uffd on linux
             paged_memory_initialization: cfg!(all(target_os = "linux", feature = "uffd")),
+            memfd: false,
         };
         #[cfg(compiler)]
         {
@@ -213,14 +215,24 @@ impl Config {
     /// arbitrarily long in the worst case, likely blocking all other
     /// asynchronous tasks.
     ///
-    /// To remedy this situation you have a two possible ways to solve this:
+    /// To remedy this situation you have a a few possible ways to solve this:
     ///
-    /// * First you can spawn futures into a thread pool. By doing this in a
-    ///   thread pool you are relaxing the requirement that `Future::poll` must
-    ///   be fast because your future is executing on a separate thread. This
-    ///   strategy, however, would likely still require some form of
-    ///   cancellation via [`crate::Store::interrupt_handle`] to ensure wasm
-    ///   doesn't take *too* long to execute.
+    /// * The most efficient solution is to enable
+    ///   [`Config::epoch_interruption`] in conjunction with
+    ///   [`crate::Store::epoch_deadline_async_yield_and_update`]. Coupled with
+    ///   periodic calls to [`crate::Engine::increment_epoch`] this will cause
+    ///   executing WebAssembly to periodically yield back according to the
+    ///   epoch configuration settings. This enables `Future::poll` to take at
+    ///   most a certain amount of time according to epoch configuration
+    ///   settings and when increments happen. The benefit of this approach is
+    ///   that the instrumentation in compiled code is quite lightweight, but a
+    ///   downside can be that the scheduling is somewhat nondeterministic since
+    ///   increments are usually timer-based which are not always deterministic.
+    ///
+    ///   Note that to prevent infinite execution of wasm it's recommended to
+    ///   place a timeout on the entire future representing executing wasm code
+    ///   and the periodic yields with epochs should ensure that when the
+    ///   timeout is reached it's appropriately recognized.
     ///
     /// * Alternatively you can enable the
     ///   [`Config::consume_fuel`](crate::Config::consume_fuel) method as well
@@ -230,12 +242,28 @@ impl Config {
     ///   fuel wasm futures will return `Poll::Pending` from their `poll`
     ///   method, and will get automatically re-polled later. This enables the
     ///   `Future::poll` method to take roughly a fixed amount of time since
-    ///   fuel is guaranteed to get consumed while wasm is executing. Note that
-    ///   to prevent infinite execution of wasm you'll need to use either
-    ///   [`crate::Store::interrupt_handle`] or a normal timeout on futures
-    ///   (which will get triggered due to periodic `poll`s).
+    ///   fuel is guaranteed to get consumed while wasm is executing. Unlike
+    ///   epoch-based preemption this is deterministic since wasm always
+    ///   consumes a fixed amount of fuel per-operation. The downside of this
+    ///   approach, however, is that the compiled code instrumentation is
+    ///   significantly more expensive than epoch checks.
     ///
-    /// In either case special care needs to be taken when integrating
+    ///   Note that to prevent infinite execution of wasm it's recommended to
+    ///   place a timeout on the entire future representing executing wasm code
+    ///   and the periodic yields with epochs should ensure that when the
+    ///   timeout is reached it's appropriately recognized.
+    ///
+    /// * Finally you can spawn futures into a thread pool. By doing this in a
+    ///   thread pool you are relaxing the requirement that `Future::poll` must
+    ///   be fast because your future is executing on a separate thread. This
+    ///   strategy, however, would likely still require some form of
+    ///   cancellation via [`Config::epoch_interruption`] or
+    ///   [`crate::Store::interrupt_handle`] to ensure wasm doesn't take *too*
+    ///   long to execute. This solution is generally not recommended for its
+    ///   complexity and instead one of the previous solutions should likely be
+    ///   used.
+    ///
+    /// In all cases special care needs to be taken when integrating
     /// asynchronous wasm into your application. You should carefully plan where
     /// WebAssembly will execute and what compute resources will be allotted to
     /// it. If Wasmtime doesn't support exactly what you'd like just yet, please
@@ -313,6 +341,91 @@ impl Config {
     /// [`Store`]: crate::Store
     pub fn consume_fuel(&mut self, enable: bool) -> &mut Self {
         self.tunables.consume_fuel = enable;
+        self
+    }
+
+    /// Enables epoch-based interruption.
+    ///
+    /// When executing code in async mode, we sometimes want to
+    /// implement a form of cooperative timeslicing: long-running Wasm
+    /// guest code should periodically yield to the executor
+    /// loop. This yielding could be implemented by using "fuel" (see
+    /// [`consume_fuel`](Config::consume_fuel)). However, fuel
+    /// instrumentation is somewhat expensive: it modifies the
+    /// compiled form of the Wasm code so that it maintains a precise
+    /// instruction count, frequently checking this count against the
+    /// remaining fuel. If one does not need this precise count or
+    /// deterministic interruptions, and only needs a periodic
+    /// interrupt of some form, then It would be better to have a more
+    /// lightweight mechanism.
+    ///
+    /// Epoch-based interruption is that mechanism. There is a global
+    /// "epoch", which is a counter that divides time into arbitrary
+    /// periods (or epochs). This counter lives on the
+    /// [`Engine`](crate::Engine) and can be incremented by calling
+    /// [`Engine::increment_epoch`](crate::Engine::increment_epoch).
+    /// Epoch-based instrumentation works by setting a "deadline
+    /// epoch". The compiled code knows the deadline, and at certain
+    /// points, checks the current epoch against that deadline. It
+    /// will yield if the deadline has been reached.
+    ///
+    /// The idea is that checking an infrequently-changing counter is
+    /// cheaper than counting and frequently storing a precise metric
+    /// (instructions executed) locally. The interruptions are not
+    /// deterministic, but if the embedder increments the epoch in a
+    /// periodic way (say, every regular timer tick by a thread or
+    /// signal handler), then we can ensure that all async code will
+    /// yield to the executor within a bounded time.
+    ///
+    /// The [`Store`](crate::Store) tracks the deadline, and controls
+    /// what happens when the deadline is reached during
+    /// execution. Two behaviors are possible:
+    ///
+    /// - Trap if code is executing when the epoch deadline is
+    ///   met. See
+    ///   [`Store::epoch_deadline_trap`](crate::Store::epoch_deadline_trap).
+    ///
+    /// - Yield to the executor loop, then resume when the future is
+    ///   next polled. See
+    ///   [`Store::epoch_deadline_async_yield_and_update`](crate::Store::epoch_deadline_async_yield_and_update).
+    ///
+    /// The first is the default; set the second for the timeslicing
+    /// behavior described above.
+    ///
+    /// This feature is available with or without async
+    /// support. However, without async support, only the trapping
+    /// behavior is available. In this mode, epoch-based interruption
+    /// can serve as a simple external-interruption mechanism.
+    ///
+    /// An initial deadline can be set before executing code by
+    /// calling
+    /// [`Store::set_epoch_deadline`](crate::Store::set_epoch_deadline).
+    ///
+    /// ## When to use fuel vs. epochs
+    ///
+    /// In general, epoch-based interruption results in faster
+    /// execution. This difference is sometimes significant: in some
+    /// measurements, up to 2-3x. This is because epoch-based
+    /// interruption does less work: it only watches for a global
+    /// rarely-changing counter to increment, rather than keeping a
+    /// local frequently-changing counter and comparing it to a
+    /// deadline.
+    ///
+    /// Fuel, in contrast, should be used when *deterministic*
+    /// yielding or trapping is needed. For example, if it is required
+    /// that the same function call with the same starting state will
+    /// always either complete or trap with an out-of-fuel error,
+    /// deterministically, then fuel with a fixed bound should be
+    /// used.
+    ///
+    /// # See Also
+    ///
+    /// - [`Engine::increment_epoch`](crate::Engine::increment_epoch)
+    /// - [`Store::set_epoch_deadline`](crate::Store::set_epoch_deadline)
+    /// - [`Store::epoch_deadline_trap`](crate::Store::epoch_deadline_trap)
+    /// - [`Store::epoch_deadline_async_yield_and_update`](crate::Store::epoch_deadline_async_yield_and_update)
+    pub fn epoch_interruption(&mut self, enable: bool) -> &mut Self {
+        self.tunables.epoch_interruption = enable;
         self
     }
 
@@ -971,7 +1084,7 @@ impl Config {
     /// linear memory.
     ///
     /// Note that this is a currently simple heuristic for optimizing the growth
-    /// of dynamic memories, primarily implemented for the memory64 propsal
+    /// of dynamic memories, primarily implemented for the memory64 proposal
     /// where all memories are currently "dynamic". This is unlikely to be a
     /// one-size-fits-all style approach and if you're an embedder running into
     /// issues with dynamic memories and growth and are interested in having
@@ -1059,6 +1172,33 @@ impl Config {
         self
     }
 
+    /// Configures whether `memfd`, if supported, will be used to initialize
+    /// applicable module memories.
+    ///
+    /// This is a Linux-specific feature since `memfd` is only supported on
+    /// Linux. Support for this is also enabled by default at compile time but
+    /// is otherwise disabled at runtime by default. This feature needs to be
+    /// enabled to `true` for support to be used.
+    ///
+    /// Also note that even if this feature is enabled it may not be applicable
+    /// to all memories in all wasm modules. At this time memories must meet
+    /// specific criteria to be memfd-initialized:
+    ///
+    /// * Only memories defined in the module can be initialized this way.
+    /// * Data segments for memory must use statically known offsets.
+    /// * Data segments for memory must all be in-bounds.
+    ///
+    /// If all of the above applies, this setting is enabled, and the current
+    /// platform is Linux the `memfd` will be used to efficiently initialize
+    /// linear memories with `mmap` to avoid copying data from initializers into
+    /// linear memory.
+    #[cfg(feature = "memfd")]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "memfd")))]
+    pub fn memfd(&mut self, memfd: bool) -> &mut Self {
+        self.memfd = memfd;
+        self
+    }
+
     pub(crate) fn build_allocator(&self) -> Result<Box<dyn InstanceAllocator>> {
         #[cfg(feature = "async")]
         let stack_size = self.async_stack_size;
@@ -1128,6 +1268,7 @@ impl Clone for Config {
             module_version: self.module_version.clone(),
             parallel_compilation: self.parallel_compilation,
             paged_memory_initialization: self.paged_memory_initialization,
+            memfd: self.memfd,
         }
     }
 }

@@ -23,3 +23,32 @@ block0(v0: i32, v1: i32, v2: i64):
 ; check:  cs %r2, %r3, 0(%r4)
 ; nextln: br %r14
 
+function %atomic_cas_i16(i64, i16, i16, i64) -> i16 {
+block0(v0: i64, v1: i16, v2: i16, v3: i64):
+  v4 = atomic_cas.i16 v3, v1, v2
+  return v4
+}
+
+; check:  sllk %r2, %r5, 3
+; nextln: nill %r5, 65532
+; nextln: l %r0, 0(%r5)
+; nextln: 0: rll %r1, %r0, 0(%r2) ; rxsbg %r1, %r3, 160, 48, 16 ; jglh 1f ; risbgn %r1, %r4, 32, 48, 16 ; rll %r1, %r1, 0(%r2) ; cs %r0, %r1, 0(%r5) ; jglh 0b ; 1:
+; nextln: rll %r2, %r0, 16(%r2)
+; nextln: br %r14
+
+function %atomic_cas_i8(i64, i8, i8, i64) -> i8 {
+block0(v0: i64, v1: i8, v2: i8, v3: i64):
+  v4 = atomic_cas.i8 v3, v1, v2
+  return v4
+}
+
+; check:  stmg %r14, %r15, 112(%r15)
+; nextln: sllk %r2, %r5, 3
+; nextln: nill %r5, 65532
+; nextln: lcr %r14, %r2
+; nextln: l %r0, 0(%r5)
+; nextln: 0: rll %r1, %r0, 0(%r2) ; rxsbg %r1, %r3, 160, 40, 24 ; jglh 1f ; risbgn %r1, %r4, 32, 40, 24 ; rll %r1, %r1, 0(%r14) ; cs %r0, %r1, 0(%r5) ; jglh 0b
+; nextln: rll %r2, %r0, 8(%r2)
+; nextln: lmg %r14, %r15, 112(%r15)
+; nextln: br %r14
+

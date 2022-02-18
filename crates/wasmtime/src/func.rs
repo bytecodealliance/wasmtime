@@ -183,7 +183,15 @@ pub struct Func(Stored<FuncData>);
 
 pub(crate) struct FuncData {
     kind: FuncKind,
-    ty: FuncType,
+
+    // This is somewhat expensive to load from the `Engine` and in most
+    // optimized use cases (e.g. `TypedFunc`) it's not actually needed or it's
+    // only needed rarely. To handle that this is an optionally-contained field
+    // which is lazily loaded into as part of `Func::call`.
+    //
+    // Also note that this is intentionally placed behind a poiner to keep it
+    // small as `FuncData` instances are often inserted into a `Store`.
+    ty: Option<Box<FuncType>>,
 }
 
 /// The three ways that a function can be created and referenced from within a
@@ -211,7 +219,12 @@ enum FuncKind {
     /// `Func::new` or similar APIs. The `HostFunc` internally owns the
     /// `InstanceHandle` and that will get dropped when this `HostFunc` itself
     /// is dropped.
-    Host(HostFunc),
+    ///
+    /// Note that this is intentionally placed behind a `Box` to minimize the
+    /// size of this enum since the most common variant for high-peformance
+    /// situations is `SharedHost` and `StoreOwned`, so this ideally isn't
+    /// larger than those two.
+    Host(Box<HostFunc>),
 }
 
 macro_rules! for_each_function_signature {
@@ -677,11 +690,43 @@ impl Func {
     ///
     /// Panics if `store` does not own this function.
     pub fn ty(&self, store: impl AsContext) -> FuncType {
-        store.as_context()[self.0].ty.clone()
+        self.load_ty(&store.as_context().0)
+    }
+
+    /// Forcibly loads the type of this function from the `Engine`.
+    ///
+    /// Note that this is a somewhat expensive method since it requires taking a
+    /// lock as well as cloning a type.
+    fn load_ty(&self, store: &StoreOpaque) -> FuncType {
+        FuncType::from_wasm_func_type(
+            store
+                .engine()
+                .signatures()
+                .lookup_type(self.sig_index(store.store_data()))
+                .expect("signature should be registered"),
+        )
+    }
+
+    /// Gets a reference to the `FuncType` for this function.
+    ///
+    /// Note that this returns both a reference to the type of this function as
+    /// well as a reference back to the store itself. This enables using the
+    /// `StoreOpaque` while the `FuncType` is also being used (from the
+    /// perspective of the borrow-checker) because otherwise the signature would
+    /// consider `StoreOpaque` borrowed mutable while `FuncType` is in use.
+    fn ty_ref<'a>(&self, store: &'a mut StoreOpaque) -> (&'a FuncType, &'a StoreOpaque) {
+        // If we haven't loaded our type into the store yet then do so lazily at
+        // this time.
+        if store.store_data()[self.0].ty.is_none() {
+            let ty = self.load_ty(store);
+            store.store_data_mut()[self.0].ty = Some(Box::new(ty));
+        }
+
+        (store.store_data()[self.0].ty.as_ref().unwrap(), store)
     }
 
     pub(crate) fn sig_index(&self, data: &StoreData) -> VMSharedSignatureIndex {
-        unsafe { data[self.0].export().anyfunc.as_ref().type_index }
+        data[self.0].sig_index()
     }
 
     /// Invokes this function with the `params` given and writes returned values
@@ -843,7 +888,7 @@ impl Func {
         // this function. This involves checking to make sure we have the right
         // number and types of arguments as well as making sure everything is
         // from the same `Store`.
-        let ty = &store[self.0].ty;
+        let (ty, opaque) = self.ty_ref(store.0);
         if ty.params().len() != params.len() {
             bail!(
                 "expected {} arguments, got {}",
@@ -866,7 +911,7 @@ impl Func {
                     ty
                 );
             }
-            if !arg.comes_from_same_store(store.0) {
+            if !arg.comes_from_same_store(opaque) {
                 bail!("cross-`Store` values are not currently supported");
             }
         }
@@ -904,7 +949,7 @@ impl Func {
         }
 
         for ((i, slot), val) in results.iter_mut().enumerate().zip(&values_vec) {
-            let ty = store[self.0].ty.results().nth(i).unwrap();
+            let ty = self.ty_ref(store.0).0.results().nth(i).unwrap();
             *slot = unsafe { Val::from_raw(&mut *store, *val, ty) };
         }
         values_vec.truncate(0);
@@ -930,17 +975,7 @@ impl Func {
     }
 
     fn from_func_kind(kind: FuncKind, store: &mut StoreOpaque) -> Self {
-        // Signatures should always be registered in the engine's registry of
-        // shared signatures, so we should be able to unwrap safely here.
-        let ty = unsafe { kind.export().anyfunc.as_ref().type_index };
-        let ty = FuncType::from_wasm_func_type(
-            store
-                .engine()
-                .signatures()
-                .lookup_type(ty)
-                .expect("signature should be registered"),
-        );
-        Func(store.store_data_mut().insert(FuncData { kind, ty }))
+        Func(store.store_data_mut().insert(FuncData { kind, ty: None }))
     }
 
     pub(crate) fn vmimport(&self, store: &mut StoreOpaque) -> VMFunctionImport {
@@ -1459,7 +1494,7 @@ macro_rules! impl_wasm_host_results {
             fn func_type(params: impl Iterator<Item = ValType>) -> FuncType {
                 FuncType::new(
                     params,
-                    std::array::IntoIter::new([$($t::valtype(),)*]),
+                    IntoIterator::into_iter([$($t::valtype(),)*]),
                 )
             }
 
@@ -2033,7 +2068,7 @@ impl HostFunc {
 
     /// Requires that this function's signature is already registered within
     /// `Engine`. This happens automatically during the above two constructors.
-    fn _new(engine: &Engine, instance: InstanceHandle, trampoline: VMTrampoline) -> Self {
+    fn _new(engine: &Engine, mut instance: InstanceHandle, trampoline: VMTrampoline) -> Self {
         let idx = EntityIndex::Function(FuncIndex::from_u32(0));
         let export = match instance.lookup_by_declaration(&idx) {
             wasmtime_runtime::Export::Function(f) => f,
@@ -2056,18 +2091,18 @@ impl HostFunc {
     /// Can only be inserted into stores with a matching `T` relative to when
     /// this `HostFunc` was first created.
     pub unsafe fn to_func(self: &Arc<Self>, store: &mut StoreOpaque) -> Func {
-        self.register_trampoline(store);
+        self.validate_store(store);
         let me = self.clone();
         Func::from_func_kind(FuncKind::SharedHost(me), store)
     }
 
     /// Same as [`HostFunc::to_func`], different ownership.
     unsafe fn into_func(self, store: &mut StoreOpaque) -> Func {
-        self.register_trampoline(store);
-        Func::from_func_kind(FuncKind::Host(self), store)
+        self.validate_store(store);
+        Func::from_func_kind(FuncKind::Host(Box::new(self)), store)
     }
 
-    unsafe fn register_trampoline(&self, store: &mut StoreOpaque) {
+    fn validate_store(&self, store: &mut StoreOpaque) {
         // This assert is required to ensure that we can indeed safely insert
         // `self` into the `store` provided, otherwise the type information we
         // have listed won't be correct. This is possible to hit with the public
@@ -2076,8 +2111,6 @@ impl HostFunc {
             Engine::same(&self.engine, store.engine()),
             "cannot use a store with a different engine than a linker was created with",
         );
-        let idx = self.export.anyfunc.as_ref().type_index;
-        store.register_host_trampoline(idx, self.trampoline);
     }
 
     pub(crate) fn sig_index(&self) -> VMSharedSignatureIndex {
@@ -2101,7 +2134,7 @@ impl Drop for HostFunc {
 
 impl FuncData {
     #[inline]
-    fn trampoline(&self) -> VMTrampoline {
+    pub(crate) fn trampoline(&self) -> VMTrampoline {
         match &self.kind {
             FuncKind::StoreOwned { trampoline, .. } => *trampoline,
             FuncKind::SharedHost(host) => host.trampoline,
@@ -2112,6 +2145,10 @@ impl FuncData {
     #[inline]
     fn export(&self) -> &ExportFunction {
         self.kind.export()
+    }
+
+    pub(crate) fn sig_index(&self) -> VMSharedSignatureIndex {
+        unsafe { self.export().anyfunc.as_ref().type_index }
     }
 }
 

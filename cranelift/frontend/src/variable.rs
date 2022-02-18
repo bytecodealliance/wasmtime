@@ -11,7 +11,7 @@
 use core::u32;
 use cranelift_codegen::entity::EntityRef;
 
-///! An opaque reference to a variable.
+/// An opaque reference to a variable.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub struct Variable(u32);
 

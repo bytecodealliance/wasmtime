@@ -4,13 +4,20 @@ use crate::{
 };
 use crate::{Engine, ModuleType};
 use anyhow::{bail, Context, Result};
+use once_cell::sync::OnceCell;
 use std::fs;
 use std::mem;
 use std::path::Path;
 use std::sync::Arc;
 use wasmparser::{Parser, ValidPayload, Validator};
-use wasmtime_environ::{ModuleEnvironment, ModuleIndex, PrimaryMap};
-use wasmtime_jit::{CompiledModule, CompiledModuleInfo, MmapVec, TypeTables};
+use wasmtime_environ::{
+    DefinedFuncIndex, DefinedMemoryIndex, FunctionInfo, ModuleEnvironment, ModuleIndex, PrimaryMap,
+    SignatureIndex,
+};
+use wasmtime_jit::{CompiledModule, CompiledModuleInfo, TypeTables};
+use wasmtime_runtime::{
+    CompiledModuleId, MemoryMemFd, MmapVec, ModuleMemFds, VMSharedSignatureIndex,
+};
 
 mod registry;
 mod serialization;
@@ -107,6 +114,11 @@ struct ModuleInner {
     types: Arc<TypeTables>,
     /// Registered shared signature for the module.
     signatures: Arc<SignatureCollection>,
+    /// A set of memfd images for memories, if any. Note that module
+    /// instantiation (hence the need for lazy init) may happen for
+    /// the same module concurrently in multiple Stores, so we use a
+    /// OnceCell.
+    memfds: OnceCell<Option<ModuleMemFds>>,
 }
 
 impl Module {
@@ -336,7 +348,12 @@ impl Module {
         };
 
         let modules = engine.run_maybe_parallel(artifacts, |(a, b)| {
-            CompiledModule::from_artifacts(a, b, &*engine.config().profiler)
+            CompiledModule::from_artifacts(
+                a,
+                b,
+                &*engine.config().profiler,
+                engine.unique_id_allocator(),
+            )
         })?;
 
         Self::from_parts(engine, modules, main_module, Arc::new(types), &[])
@@ -409,6 +426,20 @@ impl Module {
                 translation.try_paged_init();
             }
 
+            // If configured attempt to use static memory initialization which
+            // can either at runtime be implemented as a single memcpy to
+            // initialize memory or otherwise enabling virtual-memory-tricks
+            // such as mmap'ing from a file to get copy-on-write.
+            if engine.config().memfd {
+                let align = engine.compiler().page_size_align();
+                translation.try_static_init(align);
+            }
+
+            // Attempt to convert table initializer segments to
+            // FuncTable representation where possible, to enable
+            // table lazy init.
+            translation.try_func_table_init();
+
             let (mmap, info) =
                 wasmtime_jit::finish_compile(translation, obj, funcs, trampolines, tunables)?;
             Ok((mmap, Some(info)))
@@ -475,14 +506,26 @@ impl Module {
     /// Same as [`deserialize`], except that the contents of `path` are read to
     /// deserialize into a [`Module`].
     ///
-    /// For more information see the documentation of the [`deserialize`]
-    /// method for why this function is `unsafe`.
-    ///
     /// This method is provided because it can be faster than [`deserialize`]
     /// since the data doesn't need to be copied around, but rather the module
     /// can be used directly from an mmap'd view of the file provided.
     ///
     /// [`deserialize`]: Module::deserialize
+    ///
+    /// # Unsafety
+    ///
+    /// All of the reasons that [`deserialize`] is `unsafe` applies to this
+    /// function as well. Arbitrary data loaded from a file may trick Wasmtime
+    /// into arbitrary code execution since the contents of the file are not
+    /// validated to be a valid precompiled module.
+    ///
+    /// Additionally though this function is also `unsafe` because the file
+    /// referenced must remain unchanged and a valid precompiled module for the
+    /// entire lifetime of the [`Module`] returned. Any changes to the file on
+    /// disk may change future instantiations of the module to be incorrect.
+    /// This is because the file is mapped into memory and lazily loaded pages
+    /// reflect the current state of the file, not necessarily the origianl
+    /// state of the file.
     pub unsafe fn deserialize_file(engine: &Engine, path: impl AsRef<Path>) -> Result<Module> {
         let module = SerializedModule::from_file(path.as_ref(), &engine.config().module_version)?;
         module.into_module(engine)
@@ -531,6 +574,7 @@ impl Module {
                 artifact_upvars: modules,
                 module_upvars,
                 signatures,
+                memfds: OnceCell::new(),
             }),
         });
 
@@ -543,11 +587,13 @@ impl Module {
             module_upvars: &[serialization::SerializedModuleUpvar],
             signatures: &Arc<SignatureCollection>,
         ) -> Result<Module> {
+            let module = artifacts[module_index].clone();
             Ok(Module {
                 inner: Arc::new(ModuleInner {
                     engine: engine.clone(),
                     types: types.clone(),
-                    module: artifacts[module_index].clone(),
+                    module,
+                    memfds: OnceCell::new(),
                     artifact_upvars: artifact_upvars
                         .iter()
                         .map(|i| artifacts[*i].clone())
@@ -666,12 +712,14 @@ impl Module {
         artifact_upvars: &[usize],
         module_upvars: &[wasmtime_environ::ModuleUpvar],
         modules: &PrimaryMap<ModuleIndex, Module>,
-    ) -> Module {
-        Module {
+    ) -> Result<Module> {
+        let module = self.inner.artifact_upvars[artifact_index].clone();
+        Ok(Module {
             inner: Arc::new(ModuleInner {
                 types: self.inner.types.clone(),
                 engine: self.inner.engine.clone(),
-                module: self.inner.artifact_upvars[artifact_index].clone(),
+                module,
+                memfds: OnceCell::new(),
                 artifact_upvars: artifact_upvars
                     .iter()
                     .map(|i| self.inner.artifact_upvars[*i].clone())
@@ -687,7 +735,7 @@ impl Module {
                     .collect(),
                 signatures: self.inner.signatures.clone(),
             }),
-        }
+        })
     }
 
     pub(crate) fn compiled_module(&self) -> &Arc<CompiledModule> {
@@ -923,6 +971,14 @@ impl Module {
     pub fn engine(&self) -> &Engine {
         &self.inner.engine
     }
+
+    /// Returns the `ModuleInner` cast as `ModuleRuntimeInfo` for use
+    /// by the runtime.
+    pub(crate) fn runtime_info(&self) -> Arc<dyn wasmtime_runtime::ModuleRuntimeInfo> {
+        // N.B.: this needs to return a clone because we cannot
+        // statically cast the &Arc<ModuleInner> to &Arc<dyn Trait...>.
+        self.inner.clone()
+    }
 }
 
 fn _assert_send_sync() {
@@ -942,21 +998,11 @@ struct HashedEngineCompileEnv<'a>(&'a Engine);
 #[cfg(all(feature = "cache", compiler))]
 impl std::hash::Hash for HashedEngineCompileEnv<'_> {
     fn hash<H: std::hash::Hasher>(&self, hasher: &mut H) {
-        use std::collections::BTreeMap;
-
         // Hash the compiler's state based on its target and configuration.
         let compiler = self.0.compiler();
         compiler.triple().hash(hasher);
-        compiler
-            .flags()
-            .into_iter()
-            .collect::<BTreeMap<_, _>>()
-            .hash(hasher);
-        compiler
-            .isa_flags()
-            .into_iter()
-            .collect::<BTreeMap<_, _>>()
-            .hash(hasher);
+        compiler.flags().hash(hasher);
+        compiler.isa_flags().hash(hasher);
 
         // Hash configuration state read for compilation
         let config = self.0.config();
@@ -965,5 +1011,148 @@ impl std::hash::Hash for HashedEngineCompileEnv<'_> {
 
         // Catch accidental bugs of reusing across crate versions.
         env!("CARGO_PKG_VERSION").hash(hasher);
+    }
+}
+
+impl wasmtime_runtime::ModuleRuntimeInfo for ModuleInner {
+    fn module(&self) -> &Arc<wasmtime_environ::Module> {
+        self.module.module()
+    }
+
+    fn signature(&self, index: SignatureIndex) -> VMSharedSignatureIndex {
+        self.signatures.as_module_map()[index]
+    }
+
+    fn image_base(&self) -> usize {
+        self.module.code().as_ptr() as usize
+    }
+
+    fn function_info(&self, index: DefinedFuncIndex) -> &FunctionInfo {
+        self.module.func_info(index)
+    }
+
+    fn memfd_image(&self, memory: DefinedMemoryIndex) -> Result<Option<&Arc<MemoryMemFd>>> {
+        if !self.engine.config().memfd {
+            return Ok(None);
+        }
+
+        let memfds = self.memfds.get_or_try_init(|| {
+            ModuleMemFds::new(
+                self.module.module(),
+                self.module.wasm_data(),
+                Some(self.module.mmap()),
+            )
+        })?;
+        Ok(memfds
+            .as_ref()
+            .and_then(|memfds| memfds.get_memory_image(memory)))
+    }
+
+    fn unique_id(&self) -> Option<CompiledModuleId> {
+        Some(self.module.unique_id())
+    }
+
+    fn wasm_data(&self) -> &[u8] {
+        self.module.wasm_data()
+    }
+
+    fn signature_ids(&self) -> &[VMSharedSignatureIndex] {
+        self.signatures.as_module_map().values().as_slice()
+    }
+}
+
+/// A barebones implementation of ModuleRuntimeInfo that is useful for
+/// cases where a purpose-built environ::Module is used and a full
+/// CompiledModule does not exist (for example, for tests or for the
+/// default-callee instance).
+pub(crate) struct BareModuleInfo {
+    module: Arc<wasmtime_environ::Module>,
+    image_base: usize,
+    one_signature: Option<(SignatureIndex, VMSharedSignatureIndex)>,
+    function_info: PrimaryMap<DefinedFuncIndex, FunctionInfo>,
+}
+
+impl BareModuleInfo {
+    pub(crate) fn empty(module: Arc<wasmtime_environ::Module>) -> Self {
+        BareModuleInfo {
+            module,
+            image_base: 0,
+            one_signature: None,
+            function_info: PrimaryMap::default(),
+        }
+    }
+
+    pub(crate) fn maybe_imported_func(
+        module: Arc<wasmtime_environ::Module>,
+        one_signature: Option<(SignatureIndex, VMSharedSignatureIndex)>,
+    ) -> Self {
+        BareModuleInfo {
+            module,
+            image_base: 0,
+            one_signature,
+            function_info: PrimaryMap::default(),
+        }
+    }
+
+    pub(crate) fn one_func(
+        module: Arc<wasmtime_environ::Module>,
+        image_base: usize,
+        info: FunctionInfo,
+        signature_id: SignatureIndex,
+        signature: VMSharedSignatureIndex,
+    ) -> Self {
+        let mut function_info = PrimaryMap::with_capacity(1);
+        function_info.push(info);
+        BareModuleInfo {
+            module,
+            image_base,
+            function_info,
+            one_signature: Some((signature_id, signature)),
+        }
+    }
+
+    pub(crate) fn into_traitobj(self) -> Arc<dyn wasmtime_runtime::ModuleRuntimeInfo> {
+        Arc::new(self)
+    }
+}
+
+impl wasmtime_runtime::ModuleRuntimeInfo for BareModuleInfo {
+    fn module(&self) -> &Arc<wasmtime_environ::Module> {
+        &self.module
+    }
+
+    fn signature(&self, index: SignatureIndex) -> VMSharedSignatureIndex {
+        let (signature_id, signature) = self
+            .one_signature
+            .expect("Signature for one function should be present if queried");
+        assert_eq!(index, signature_id);
+        signature
+    }
+
+    fn image_base(&self) -> usize {
+        self.image_base
+    }
+
+    fn function_info(&self, index: DefinedFuncIndex) -> &FunctionInfo {
+        &self.function_info[index]
+    }
+
+    fn memfd_image(&self, _memory: DefinedMemoryIndex) -> Result<Option<&Arc<MemoryMemFd>>> {
+        Ok(None)
+    }
+
+    fn unique_id(&self) -> Option<CompiledModuleId> {
+        None
+    }
+
+    fn wasm_data(&self) -> &[u8] {
+        &[]
+    }
+
+    fn signature_ids(&self) -> &[VMSharedSignatureIndex] {
+        match &self.one_signature {
+            Some((_, id)) => std::slice::from_ref(id),
+            None => &[],
+        }
     }
 }

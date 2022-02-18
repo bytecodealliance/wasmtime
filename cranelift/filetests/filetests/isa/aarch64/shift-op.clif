@@ -1,4 +1,4 @@
-test compile
+test compile precise-output
 set unwind_info=false
 target aarch64
 
@@ -10,8 +10,14 @@ block0(v0: i64):
   return v3
 }
 
-; check: add x0, x0, x0, LSL 3
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   add x0, x0, x0, LSL 3
+;   Inst 1:   ret
+; }}
 
 function %f(i32) -> i32 {
 block0(v0: i32):
@@ -20,5 +26,12 @@ block0(v0: i32):
   return v2
 }
 
-; check: lsl w0, w0, #21
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   lsl w0, w0, #21
+;   Inst 1:   ret
+; }}
+

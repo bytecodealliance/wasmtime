@@ -1,7 +1,8 @@
 //! Fuzzing infrastructure for Wasmtime.
 
-#![deny(missing_docs, missing_debug_implementations)]
+#![deny(missing_docs)]
 
+pub use wasm_smith;
 pub mod generators;
 pub mod oracles;
 
@@ -28,20 +29,4 @@ pub(crate) fn init_fuzzing() {
             .num_threads(1)
             .build_global();
     })
-}
-
-/// Create default fuzzing config with given strategy
-pub fn fuzz_default_config(strategy: wasmtime::Strategy) -> anyhow::Result<wasmtime::Config> {
-    init_fuzzing();
-    let mut config = wasmtime::Config::new();
-    config
-        .cranelift_nan_canonicalization(true)
-        .wasm_bulk_memory(true)
-        .wasm_reference_types(true)
-        .wasm_module_linking(true)
-        .wasm_multi_memory(true)
-        .wasm_simd(true)
-        .wasm_memory64(true)
-        .strategy(strategy)?;
-    Ok(config)
 }

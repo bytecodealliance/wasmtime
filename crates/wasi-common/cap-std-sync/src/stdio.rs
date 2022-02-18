@@ -1,6 +1,7 @@
 use crate::file::convert_systimespec;
 use fs_set_times::SetTimes;
 use io_lifetimes::AsFilelike;
+use is_terminal::IsTerminal;
 use std::any::Any;
 use std::convert::TryInto;
 use std::fs::File;
@@ -8,6 +9,8 @@ use std::io;
 use std::io::{Read, Write};
 use system_interface::io::ReadReady;
 
+#[cfg(windows)]
+use io_extras::os::windows::{AsRawHandleOrSocket, RawHandleOrSocket};
 #[cfg(unix)]
 use io_lifetimes::{AsFd, BorrowedFd};
 #[cfg(windows)]
@@ -35,7 +38,11 @@ impl WasiFile for Stdin {
         Ok(())
     }
     async fn get_filetype(&self) -> Result<FileType, Error> {
-        Ok(FileType::Unknown)
+        if self.isatty() {
+            Ok(FileType::CharacterDevice)
+        } else {
+            Ok(FileType::Unknown)
+        }
     }
     async fn get_fdflags(&self) -> Result<FdFlags, Error> {
         Ok(FdFlags::empty())
@@ -104,10 +111,17 @@ impl WasiFile for Stdin {
     async fn num_ready_bytes(&self) -> Result<u64, Error> {
         Ok(self.0.num_ready_bytes()?)
     }
+    fn isatty(&self) -> bool {
+        self.0.is_terminal()
+    }
     async fn readable(&self) -> Result<(), Error> {
         Err(Error::badf())
     }
     async fn writable(&self) -> Result<(), Error> {
+        Err(Error::badf())
+    }
+
+    async fn sock_accept(&mut self, _fdflags: FdFlags) -> Result<Box<dyn WasiFile>, Error> {
         Err(Error::badf())
     }
 }
@@ -115,6 +129,13 @@ impl WasiFile for Stdin {
 impl AsHandle for Stdin {
     fn as_handle(&self) -> BorrowedHandle<'_> {
         self.0.as_handle()
+    }
+}
+#[cfg(windows)]
+impl AsRawHandleOrSocket for Stdin {
+    #[inline]
+    fn as_raw_handle_or_socket(&self) -> RawHandleOrSocket {
+        self.0.as_raw_handle_or_socket()
     }
 }
 #[cfg(unix)]
@@ -125,7 +146,7 @@ impl AsFd for Stdin {
 }
 
 macro_rules! wasi_file_write_impl {
-    ($ty:ty) => {
+    ($ty:ty, $ident:ident) => {
         #[async_trait::async_trait]
         impl WasiFile for $ty {
             fn as_any(&self) -> &dyn Any {
@@ -138,7 +159,11 @@ macro_rules! wasi_file_write_impl {
                 Ok(())
             }
             async fn get_filetype(&self) -> Result<FileType, Error> {
-                Ok(FileType::Unknown)
+                if self.isatty() {
+                    Ok(FileType::CharacterDevice)
+                } else {
+                    Ok(FileType::Unknown)
+                }
             }
             async fn get_fdflags(&self) -> Result<FdFlags, Error> {
                 Ok(FdFlags::APPEND)
@@ -210,10 +235,16 @@ macro_rules! wasi_file_write_impl {
             async fn num_ready_bytes(&self) -> Result<u64, Error> {
                 Ok(0)
             }
+            fn isatty(&self) -> bool {
+                self.0.is_terminal()
+            }
             async fn readable(&self) -> Result<(), Error> {
                 Err(Error::badf())
             }
             async fn writable(&self) -> Result<(), Error> {
+                Err(Error::badf())
+            }
+            async fn sock_accept(&mut self, _fdflags: FdFlags) -> Result<Box<dyn WasiFile>, Error> {
                 Err(Error::badf())
             }
         }
@@ -229,6 +260,13 @@ macro_rules! wasi_file_write_impl {
                 self.0.as_fd()
             }
         }
+        #[cfg(windows)]
+        impl AsRawHandleOrSocket for $ty {
+            #[inline]
+            fn as_raw_handle_or_socket(&self) -> RawHandleOrSocket {
+                self.0.as_raw_handle_or_socket()
+            }
+        }
     };
 }
 
@@ -237,11 +275,11 @@ pub struct Stdout(std::io::Stdout);
 pub fn stdout() -> Stdout {
     Stdout(std::io::stdout())
 }
-wasi_file_write_impl!(Stdout);
+wasi_file_write_impl!(Stdout, Stdout);
 
 pub struct Stderr(std::io::Stderr);
 
 pub fn stderr() -> Stderr {
     Stderr(std::io::stderr())
 }
-wasi_file_write_impl!(Stderr);
+wasi_file_write_impl!(Stderr, Stderr);

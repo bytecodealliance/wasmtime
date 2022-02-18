@@ -168,7 +168,8 @@ impl Inst {
         } else if let Some(imml) = ImmLogic::maybe_from_u64(value, I64) {
             // Weird logical-instruction immediate in ORI using zero register
             smallvec![Inst::AluRRImmLogic {
-                alu_op: ALUOp::Orr64,
+                alu_op: ALUOp::Orr,
+                size: OperandSize::Size64,
                 rd,
                 rn: zero_reg(),
                 imml,
@@ -239,29 +240,35 @@ impl Inst {
     /// Create instructions that load a 32-bit floating-point constant.
     pub fn load_fp_constant32<F: FnMut(Type) -> Writable<Reg>>(
         rd: Writable<Reg>,
-        value: u32,
+        const_data: u32,
         mut alloc_tmp: F,
     ) -> SmallVec<[Inst; 4]> {
         // Note that we must make sure that all bits outside the lowest 32 are set to 0
         // because this function is also used to load wider constants (that have zeros
         // in their most significant bits).
-        if value == 0 {
+        if const_data == 0 {
             smallvec![Inst::VecDupImm {
                 rd,
                 imm: ASIMDMovModImm::zero(ScalarSize::Size32),
                 invert: false,
-                size: VectorSize::Size32x2
+                size: VectorSize::Size32x2,
+            }]
+        } else if let Some(imm) =
+            ASIMDFPModImm::maybe_from_u64(const_data.into(), ScalarSize::Size32)
+        {
+            smallvec![Inst::FpuMoveFPImm {
+                rd,
+                imm,
+                size: ScalarSize::Size32,
             }]
         } else {
-            // TODO: use FMOV immediate form when `value` has sufficiently few mantissa/exponent
-            // bits.
             let tmp = alloc_tmp(I32);
-            let mut insts = Inst::load_constant(tmp, value as u64);
+            let mut insts = Inst::load_constant(tmp, const_data as u64);
 
             insts.push(Inst::MovToFpu {
                 rd,
                 rn: tmp.to_reg(),
-                size: ScalarSize::Size64,
+                size: ScalarSize::Size32,
             });
 
             insts
@@ -277,11 +284,23 @@ impl Inst {
         // Note that we must make sure that all bits outside the lowest 64 are set to 0
         // because this function is also used to load wider constants (that have zeros
         // in their most significant bits).
-        if let Ok(const_data) = u32::try_from(const_data) {
+        // TODO: Treat as half of a 128 bit vector and consider replicated patterns.
+        // Scalar MOVI might also be an option.
+        if const_data == 0 {
+            smallvec![Inst::VecDupImm {
+                rd,
+                imm: ASIMDMovModImm::zero(ScalarSize::Size32),
+                invert: false,
+                size: VectorSize::Size32x2,
+            }]
+        } else if let Some(imm) = ASIMDFPModImm::maybe_from_u64(const_data, ScalarSize::Size64) {
+            smallvec![Inst::FpuMoveFPImm {
+                rd,
+                imm,
+                size: ScalarSize::Size64,
+            }]
+        } else if let Ok(const_data) = u32::try_from(const_data) {
             Inst::load_fp_constant32(rd, const_data, alloc_tmp)
-        // TODO: use FMOV immediate form when `const_data` has sufficiently few mantissa/exponent
-        // bits.  Also, treat it as half of a 128-bit vector and consider replicated
-        // patterns. Scalar MOVI might also be an option.
         } else if const_data & (u32::MAX as u64) == 0 {
             let tmp = alloc_tmp(I64);
             let mut insts = Inst::load_constant(tmp, const_data);
@@ -878,6 +897,9 @@ fn aarch64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
         &Inst::MovToFpu { rd, rn, .. } => {
             collector.add_def(rd);
             collector.add_use(rn);
+        }
+        &Inst::FpuMoveFPImm { rd, .. } => {
+            collector.add_def(rd);
         }
         &Inst::MovToVec { rd, rn, .. } => {
             collector.add_mod(rd);
@@ -1654,6 +1676,9 @@ pub fn aarch64_map_regs<RM: RegMapper>(inst: &mut Inst, mapper: &RM) {
             mapper.map_def(rd);
             mapper.map_use(rn);
         }
+        &mut Inst::FpuMoveFPImm { ref mut rd, .. } => {
+            mapper.map_def(rd);
+        }
         &mut Inst::MovToVec {
             ref mut rd,
             ref mut rn,
@@ -2017,10 +2042,6 @@ impl MachInst for Inst {
         }
     }
 
-    fn reg_universe(flags: &settings::Flags) -> RealRegUniverse {
-        create_reg_universe(flags)
-    }
-
     fn worst_case_size() -> CodeOffset {
         // The maximum size, in bytes, of any `Inst`'s emitted code. We have at least one case of
         // an 8-instruction sequence (saturating int-to-float conversions) with three embedded
@@ -2077,58 +2098,45 @@ impl PrettyPrint for Inst {
 
 impl Inst {
     fn print_with_state(&self, mb_rru: Option<&RealRegUniverse>, state: &mut EmitState) -> String {
-        fn op_name_size(alu_op: ALUOp) -> (&'static str, OperandSize) {
+        fn op_name(alu_op: ALUOp) -> &'static str {
             match alu_op {
-                ALUOp::Add32 => ("add", OperandSize::Size32),
-                ALUOp::Add64 => ("add", OperandSize::Size64),
-                ALUOp::Sub32 => ("sub", OperandSize::Size32),
-                ALUOp::Sub64 => ("sub", OperandSize::Size64),
-                ALUOp::Orr32 => ("orr", OperandSize::Size32),
-                ALUOp::Orr64 => ("orr", OperandSize::Size64),
-                ALUOp::And32 => ("and", OperandSize::Size32),
-                ALUOp::And64 => ("and", OperandSize::Size64),
-                ALUOp::AndS32 => ("ands", OperandSize::Size32),
-                ALUOp::AndS64 => ("ands", OperandSize::Size64),
-                ALUOp::Eor32 => ("eor", OperandSize::Size32),
-                ALUOp::Eor64 => ("eor", OperandSize::Size64),
-                ALUOp::AddS32 => ("adds", OperandSize::Size32),
-                ALUOp::AddS64 => ("adds", OperandSize::Size64),
-                ALUOp::SubS32 => ("subs", OperandSize::Size32),
-                ALUOp::SubS64 => ("subs", OperandSize::Size64),
-                ALUOp::SMulH => ("smulh", OperandSize::Size64),
-                ALUOp::UMulH => ("umulh", OperandSize::Size64),
-                ALUOp::SDiv64 => ("sdiv", OperandSize::Size64),
-                ALUOp::UDiv64 => ("udiv", OperandSize::Size64),
-                ALUOp::AndNot32 => ("bic", OperandSize::Size32),
-                ALUOp::AndNot64 => ("bic", OperandSize::Size64),
-                ALUOp::OrrNot32 => ("orn", OperandSize::Size32),
-                ALUOp::OrrNot64 => ("orn", OperandSize::Size64),
-                ALUOp::EorNot32 => ("eon", OperandSize::Size32),
-                ALUOp::EorNot64 => ("eon", OperandSize::Size64),
-                ALUOp::RotR32 => ("ror", OperandSize::Size32),
-                ALUOp::RotR64 => ("ror", OperandSize::Size64),
-                ALUOp::Lsr32 => ("lsr", OperandSize::Size32),
-                ALUOp::Lsr64 => ("lsr", OperandSize::Size64),
-                ALUOp::Asr32 => ("asr", OperandSize::Size32),
-                ALUOp::Asr64 => ("asr", OperandSize::Size64),
-                ALUOp::Lsl32 => ("lsl", OperandSize::Size32),
-                ALUOp::Lsl64 => ("lsl", OperandSize::Size64),
-                ALUOp::Adc32 => ("adc", OperandSize::Size32),
-                ALUOp::Adc64 => ("adc", OperandSize::Size64),
-                ALUOp::AdcS32 => ("adcs", OperandSize::Size32),
-                ALUOp::AdcS64 => ("adcs", OperandSize::Size64),
-                ALUOp::Sbc32 => ("sbc", OperandSize::Size32),
-                ALUOp::Sbc64 => ("sbc", OperandSize::Size64),
-                ALUOp::SbcS32 => ("sbcs", OperandSize::Size32),
-                ALUOp::SbcS64 => ("sbcs", OperandSize::Size64),
+                ALUOp::Add => "add",
+                ALUOp::Sub => "sub",
+                ALUOp::Orr => "orr",
+                ALUOp::And => "and",
+                ALUOp::AndS => "ands",
+                ALUOp::Eor => "eor",
+                ALUOp::AddS => "adds",
+                ALUOp::SubS => "subs",
+                ALUOp::SMulH => "smulh",
+                ALUOp::UMulH => "umulh",
+                ALUOp::SDiv => "sdiv",
+                ALUOp::UDiv => "udiv",
+                ALUOp::AndNot => "bic",
+                ALUOp::OrrNot => "orn",
+                ALUOp::EorNot => "eon",
+                ALUOp::RotR => "ror",
+                ALUOp::Lsr => "lsr",
+                ALUOp::Asr => "asr",
+                ALUOp::Lsl => "lsl",
+                ALUOp::Adc => "adc",
+                ALUOp::AdcS => "adcs",
+                ALUOp::Sbc => "sbc",
+                ALUOp::SbcS => "sbcs",
             }
         }
 
         match self {
             &Inst::Nop0 => "nop-zero-len".to_string(),
             &Inst::Nop4 => "nop".to_string(),
-            &Inst::AluRRR { alu_op, rd, rn, rm } => {
-                let (op, size) = op_name_size(alu_op);
+            &Inst::AluRRR {
+                alu_op,
+                size,
+                rd,
+                rn,
+                rm,
+            } => {
+                let op = op_name(alu_op);
                 let rd = show_ireg_sized(rd.to_reg(), mb_rru, size);
                 let rn = show_ireg_sized(rn, mb_rru, size);
                 let rm = show_ireg_sized(rm, mb_rru, size);
@@ -2156,15 +2164,16 @@ impl Inst {
             }
             &Inst::AluRRImm12 {
                 alu_op,
+                size,
                 rd,
                 rn,
                 ref imm12,
             } => {
-                let (op, size) = op_name_size(alu_op);
+                let op = op_name(alu_op);
                 let rd = show_ireg_sized(rd.to_reg(), mb_rru, size);
                 let rn = show_ireg_sized(rn, mb_rru, size);
 
-                if imm12.bits == 0 && alu_op == ALUOp::Add64 {
+                if imm12.bits == 0 && alu_op == ALUOp::Add && size.is64() {
                     // special-case MOV (used for moving into SP).
                     format!("mov {}, {}", rd, rn)
                 } else {
@@ -2174,11 +2183,12 @@ impl Inst {
             }
             &Inst::AluRRImmLogic {
                 alu_op,
+                size,
                 rd,
                 rn,
                 ref imml,
             } => {
-                let (op, size) = op_name_size(alu_op);
+                let op = op_name(alu_op);
                 let rd = show_ireg_sized(rd.to_reg(), mb_rru, size);
                 let rn = show_ireg_sized(rn, mb_rru, size);
                 let imml = imml.show_rru(mb_rru);
@@ -2186,11 +2196,12 @@ impl Inst {
             }
             &Inst::AluRRImmShift {
                 alu_op,
+                size,
                 rd,
                 rn,
                 ref immshift,
             } => {
-                let (op, size) = op_name_size(alu_op);
+                let op = op_name(alu_op);
                 let rd = show_ireg_sized(rd.to_reg(), mb_rru, size);
                 let rn = show_ireg_sized(rn, mb_rru, size);
                 let immshift = immshift.show_rru(mb_rru);
@@ -2198,12 +2209,13 @@ impl Inst {
             }
             &Inst::AluRRRShift {
                 alu_op,
+                size,
                 rd,
                 rn,
                 rm,
                 ref shiftop,
             } => {
-                let (op, size) = op_name_size(alu_op);
+                let op = op_name(alu_op);
                 let rd = show_ireg_sized(rd.to_reg(), mb_rru, size);
                 let rn = show_ireg_sized(rn, mb_rru, size);
                 let rm = show_ireg_sized(rm, mb_rru, size);
@@ -2212,12 +2224,13 @@ impl Inst {
             }
             &Inst::AluRRRExtend {
                 alu_op,
+                size,
                 rd,
                 rn,
                 rm,
                 ref extendop,
             } => {
-                let (op, size) = op_name_size(alu_op);
+                let op = op_name(alu_op);
                 let rd = show_ireg_sized(rd.to_reg(), mb_rru, size);
                 let rn = show_ireg_sized(rn, mb_rru, size);
                 let rm = show_ireg_sized(rm, mb_rru, size);
@@ -2696,6 +2709,12 @@ impl Inst {
                 let rd = show_vreg_scalar(rd.to_reg(), mb_rru, size);
                 let rn = show_ireg_sized(rn, mb_rru, operand_size);
                 format!("fmov {}, {}", rd, rn)
+            }
+            &Inst::FpuMoveFPImm { rd, imm, size } => {
+                let imm = imm.show_rru(mb_rru);
+                let rd = show_vreg_scalar(rd.to_reg(), mb_rru, size);
+
+                format!("fmov {}, {}", rd, imm)
             }
             &Inst::MovToVec { rd, rn, idx, size } => {
                 let rd = show_vreg_element(rd.to_reg(), mb_rru, idx, size);
@@ -3393,15 +3412,12 @@ impl Inst {
                 } else {
                     offset as u64
                 };
-                let alu_op = if offset < 0 {
-                    ALUOp::Sub64
-                } else {
-                    ALUOp::Add64
-                };
+                let alu_op = if offset < 0 { ALUOp::Sub } else { ALUOp::Add };
 
                 if let Some((idx, extendop)) = index_reg {
                     let add = Inst::AluRRRExtend {
-                        alu_op: ALUOp::Add64,
+                        alu_op: ALUOp::Add,
+                        size: OperandSize::Size64,
                         rd,
                         rn: reg,
                         rm: idx,
@@ -3415,6 +3431,7 @@ impl Inst {
                 } else if let Some(imm12) = Imm12::maybe_from_u64(abs_offset) {
                     let add = Inst::AluRRImm12 {
                         alu_op,
+                        size: OperandSize::Size64,
                         rd,
                         rn: reg,
                         imm12,
@@ -3427,6 +3444,7 @@ impl Inst {
                     }
                     let add = Inst::AluRRR {
                         alu_op,
+                        size: OperandSize::Size64,
                         rd,
                         rn: reg,
                         rm: tmp.to_reg(),

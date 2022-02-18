@@ -14,7 +14,7 @@ use crate::{
         args::{Amode, OperandSize},
         regs, EmitInfo, EmitState, Inst, LabelUse,
     },
-    machinst::{MachBuffer, MachInstEmitInfo},
+    machinst::MachBuffer,
 };
 use regalloc::{Reg, RegClass};
 
@@ -47,7 +47,8 @@ pub(crate) fn encode_sib(shift: u8, enc_index: u8, enc_base: u8) -> u8 {
 
 /// Get the encoding number of a GPR.
 #[inline(always)]
-pub(crate) fn int_reg_enc(reg: Reg) -> u8 {
+pub(crate) fn int_reg_enc(reg: impl Into<Reg>) -> u8 {
+    let reg = reg.into();
     debug_assert!(reg.is_real());
     debug_assert_eq!(reg.get_class(), RegClass::I64);
     reg.get_hw_encoding()
@@ -55,7 +56,8 @@ pub(crate) fn int_reg_enc(reg: Reg) -> u8 {
 
 /// Get the encoding number of any register.
 #[inline(always)]
-pub(crate) fn reg_enc(reg: Reg) -> u8 {
+pub(crate) fn reg_enc(reg: impl Into<Reg>) -> u8 {
+    let reg = reg.into();
     debug_assert!(reg.is_real());
     reg.get_hw_encoding()
 }
@@ -299,7 +301,7 @@ pub(crate) fn emit_std_enc_mem(
         Amode::ImmReg { simm32, base, .. } => {
             // If this is an access based off of RSP, it may trap with a stack overflow if it's the
             // first touch of a new stack page.
-            if *base == regs::rsp() && !can_trap && info.flags().enable_probestack() {
+            if *base == regs::rsp() && !can_trap && info.flags.enable_probestack() {
                 sink.add_trap(srcloc, TrapCode::StackOverflow);
             }
 
@@ -365,7 +367,7 @@ pub(crate) fn emit_std_enc_mem(
         } => {
             // If this is an access based off of RSP, it may trap with a stack overflow if it's the
             // first touch of a new stack page.
-            if *reg_base == regs::rsp() && !can_trap && info.flags().enable_probestack() {
+            if *reg_base == regs::rsp() && !can_trap && info.flags.enable_probestack() {
                 sink.add_trap(srcloc, TrapCode::StackOverflow);
             }
 

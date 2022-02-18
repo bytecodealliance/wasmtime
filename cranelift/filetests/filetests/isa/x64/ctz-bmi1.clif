@@ -1,4 +1,4 @@
-test compile
+test compile precise-output
 target x86_64 has_bmi1
 
 function %ctz(i64) -> i64 {
@@ -7,13 +7,19 @@ block0(v0: i64):
     return v1
 }
 
-; check: pushq   %rbp
-; check: movq    %rsp, %rbp
-; check: tzcntq  %rdi, %rsi
-; check: movq    %rsi, %rax
-; check: movq    %rbp, %rsp
-; check: popq    %rbp
-; check: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 7)
+;   Inst 0:   pushq   %rbp
+;   Inst 1:   movq    %rsp, %rbp
+;   Inst 2:   tzcntq  %rdi, %rsi
+;   Inst 3:   movq    %rsi, %rax
+;   Inst 4:   movq    %rbp, %rsp
+;   Inst 5:   popq    %rbp
+;   Inst 6:   ret
+; }}
 
 function %ctz(i32) -> i32 {
 block0(v0: i32):
@@ -21,10 +27,17 @@ block0(v0: i32):
     return v1
 }
 
-; check: pushq   %rbp
-; check: movq    %rsp, %rbp
-; check: tzcntl  %edi, %esi
-; check: movq    %rsi, %rax
-; check: movq    %rbp, %rsp
-; check: popq    %rbp
-; check: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 7)
+;   Inst 0:   pushq   %rbp
+;   Inst 1:   movq    %rsp, %rbp
+;   Inst 2:   tzcntl  %edi, %esi
+;   Inst 3:   movq    %rsi, %rax
+;   Inst 4:   movq    %rbp, %rsp
+;   Inst 5:   popq    %rbp
+;   Inst 6:   ret
+; }}
+

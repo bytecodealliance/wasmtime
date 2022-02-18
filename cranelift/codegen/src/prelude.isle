@@ -38,10 +38,19 @@
 (type ValueList (primitive ValueList))
 (type ValueRegs (primitive ValueRegs))
 
+(decl u32_add (u32 u32) u32)
+(extern constructor u32_add u32_add)
+
+(decl u8_and (u8 u8) u8)
+(extern constructor u8_and u8_and)
+
 ;;;; Registers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (type Reg (primitive Reg))
 (type WritableReg (primitive WritableReg))
+(type OptionWritableReg (primitive OptionWritableReg))
+(type VecReg extern (enum))
+(type VecWritableReg extern (enum))
 
 ;; Construct a `ValueRegs` of one register.
 (decl value_reg (Reg) ValueRegs)
@@ -50,6 +59,10 @@
 ;; Construct a `ValueRegs` of two registers.
 (decl value_regs (Reg Reg) ValueRegs)
 (extern constructor value_regs value_regs)
+
+;; Construct an empty `ValueRegs` containing only invalid register sentinels.
+(decl value_regs_invalid () ValueRegs)
+(extern constructor value_regs_invalid value_regs_invalid)
 
 ;; Get a temporary register for writing.
 (decl temp_writable_reg (Type) WritableReg)
@@ -96,6 +109,16 @@
       (let ((regs ValueRegs (put_in_regs val)))
         (value_regs_get regs 0)))
 
+;;;; Common Mach Types ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(type MachLabel (primitive MachLabel))
+(type VecMachLabel extern (enum))
+(type ValueLabel (primitive ValueLabel))
+(type UnwindInst (primitive UnwindInst))
+(type ExternalName (primitive ExternalName))
+(type BoxExternalName (primitive BoxExternalName))
+(type RelocDistance (primitive RelocDistance))
+
 ;;;; Primitive Type Conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (decl u8_as_u64 (u8) u64)
@@ -122,6 +145,9 @@
 (extern const $I64 Type)
 (extern const $I128 Type)
 
+(extern const $R32 Type)
+(extern const $R64 Type)
+
 (extern const $F32 Type)
 (extern const $F64 Type)
 
@@ -145,6 +171,14 @@
 ;; Get the bit width of a given type.
 (decl ty_bits_u16 (Type) u16)
 (extern constructor ty_bits_u16 ty_bits_u16)
+
+;; Get the byte width of a given type.
+(decl ty_bytes (Type) u16)
+(extern constructor ty_bytes ty_bytes)
+
+;; Get the type of each lane in the given type.
+(decl lane_type (Type) Type)
+(extern constructor lane_type lane_type)
 
 ;;;; Helper Clif Extractors ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -242,11 +276,6 @@
            (and (result_type ty)
                 inst))
 
-;; Return a bitmask that will mask off a count to be within `ty`'s
-;; bit-width. Used for shifts/rotates.
-(decl ty_bits_mask (Type) u64)
-(extern constructor ty_bits_mask ty_bits_mask)
-
 ;; Match a multi-lane type, extracting (# bits per lane, # lanes) from the given
 ;; type. Will only match when there is more than one lane.
 (decl multi_lane (u8 u16) Type)
@@ -255,6 +284,41 @@
 ;; Match the instruction that defines the given value, if any.
 (decl def_inst (Inst) Value)
 (extern extractor def_inst def_inst)
+
+;; Extract a constant `u64` from a value defined by an `iconst`.
+(decl u64_from_iconst (u64) Value)
+(extractor (u64_from_iconst x)
+           (def_inst (iconst (u64_from_imm64 x))))
+
+;; Instruction creation helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Emit an instruction.
+;;
+;; This is low-level and side-effectful; it should only be used as an
+;; implementation detail by helpers that preserve the SSA facade themselves.
+
+(decl emit (MInst) Unit)
+(extern constructor emit emit)
+
+(decl emit_safepoint (MInst) Unit)
+(extern constructor emit_safepoint emit_safepoint)
+
+;;;; Helpers for Side-Effectful Instructions Without Results ;;;;;;;;;;;;;;;;;;;
+
+(type SideEffectNoResult (enum (Inst (inst MInst))))
+
+;; Create an empty `ValueRegs`, but do emit the given side-effectful
+;; instruction.
+(decl value_regs_none (SideEffectNoResult) ValueRegs)
+(rule (value_regs_none (SideEffectNoResult.Inst inst))
+      (let ((_ Unit (emit inst)))
+        (value_regs_invalid)))
+
+;; Similarly, but emit the side-effectful instruction as a safepoint.
+(decl safepoint (SideEffectNoResult) ValueRegs)
+(rule (safepoint (SideEffectNoResult.Inst inst))
+      (let ((_ Unit (emit_safepoint inst)))
+        (value_regs_invalid)))
 
 ;;;; Helpers for Working with Flags ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -309,3 +373,30 @@
 
 (decl trap_code_integer_overflow () TrapCode)
 (extern constructor trap_code_integer_overflow trap_code_integer_overflow)
+
+(decl trap_code_bad_conversion_to_integer () TrapCode)
+(extern constructor trap_code_bad_conversion_to_integer trap_code_bad_conversion_to_integer)
+
+;;;; Helpers for accessing compilation flags ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl avoid_div_traps () Type)
+(extern extractor avoid_div_traps avoid_div_traps)
+
+;;;; Helpers for accessing instruction data ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Accessor for `FuncRef`.
+
+(decl func_ref_data (SigRef ExternalName RelocDistance) FuncRef)
+(extern extractor infallible func_ref_data func_ref_data)
+
+;; Accessor for `GobalValue`.
+
+(decl symbol_value_data (ExternalName RelocDistance i64) GlobalValue)
+(extern extractor symbol_value_data symbol_value_data)
+
+;; Accessor for `RelocDistance`.
+
+(decl reloc_distance_near () RelocDistance)
+(extern extractor reloc_distance_near reloc_distance_near)
+
+

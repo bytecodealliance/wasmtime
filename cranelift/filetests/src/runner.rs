@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use std::time;
 
 /// Timeout in seconds when we're not making progress.
-const TIMEOUT_PANIC: usize = 10;
+const TIMEOUT_PANIC: usize = 60;
 
 /// Timeout for reporting slow tests without panicking.
 const TIMEOUT_SLOW: usize = 3;

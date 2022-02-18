@@ -7,7 +7,7 @@
 //      interrupts: *const VMInterrupts,
 //      externref_activations_table: *mut VMExternRefActivationsTable,
 //      store: *mut dyn Store,
-//      signature_ids: [VMSharedSignatureIndex; module.num_signature_ids],
+//      signature_ids: *const VMSharedSignatureIndex,
 //      imported_functions: [VMFunctionImport; module.num_imported_functions],
 //      imported_tables: [VMTableImport; module.num_imported_tables],
 //      imported_memories: [VMMemoryImport; module.num_imported_memories],
@@ -16,12 +16,12 @@
 //      memories: [VMMemoryDefinition; module.num_defined_memories],
 //      globals: [VMGlobalDefinition; module.num_defined_globals],
 //      anyfuncs: [VMCallerCheckedAnyfunc; module.num_imported_functions + module.num_defined_functions],
-//      builtins: VMBuiltinFunctionsArray,
+//      builtins: *mut VMBuiltinFunctionsArray,
 // }
 
 use crate::{
-    BuiltinFunctionIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex,
-    GlobalIndex, MemoryIndex, Module, TableIndex, TypeIndex,
+    DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex, GlobalIndex, MemoryIndex,
+    Module, TableIndex,
 };
 use more_asserts::assert_lt;
 use std::convert::TryFrom;
@@ -52,8 +52,6 @@ fn align(offset: u32, width: u32) -> u32 {
 pub struct VMOffsets<P> {
     /// The size in bytes of a pointer on the target.
     pub ptr: P,
-    /// The number of signature declarations in the module.
-    pub num_signature_ids: u32,
     /// The number of imported functions in the module.
     pub num_imported_functions: u32,
     /// The number of imported tables in the module.
@@ -73,6 +71,7 @@ pub struct VMOffsets<P> {
 
     // precalculated offsets of various member fields
     interrupts: u32,
+    epoch_ptr: u32,
     externref_activations_table: u32,
     store: u32,
     signature_ids: u32,
@@ -116,8 +115,6 @@ impl PtrSize for u8 {
 pub struct VMOffsetsFields<P> {
     /// The size in bytes of a pointer on the target.
     pub ptr: P,
-    /// The number of signature declarations in the module.
-    pub num_signature_ids: u32,
     /// The number of imported functions in the module.
     pub num_imported_functions: u32,
     /// The number of imported tables in the module.
@@ -141,7 +138,6 @@ impl<P: PtrSize> VMOffsets<P> {
     pub fn new(ptr: P, module: &Module) -> Self {
         VMOffsets::from(VMOffsetsFields {
             ptr,
-            num_signature_ids: cast_to_u32(module.types.len()),
             num_imported_functions: cast_to_u32(module.num_imported_funcs),
             num_imported_tables: cast_to_u32(module.num_imported_tables),
             num_imported_memories: cast_to_u32(module.num_imported_memories),
@@ -164,7 +160,6 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
     fn from(fields: VMOffsetsFields<P>) -> VMOffsets<P> {
         let mut ret = Self {
             ptr: fields.ptr,
-            num_signature_ids: fields.num_signature_ids,
             num_imported_functions: fields.num_imported_functions,
             num_imported_tables: fields.num_imported_tables,
             num_imported_memories: fields.num_imported_memories,
@@ -174,6 +169,7 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
             num_defined_memories: fields.num_defined_memories,
             num_defined_globals: fields.num_defined_globals,
             interrupts: 0,
+            epoch_ptr: 0,
             externref_activations_table: 0,
             store: 0,
             signature_ids: 0,
@@ -190,8 +186,12 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
         };
 
         ret.interrupts = 0;
-        ret.externref_activations_table = ret
+        ret.epoch_ptr = ret
             .interrupts
+            .checked_add(u32::from(ret.ptr.size()))
+            .unwrap();
+        ret.externref_activations_table = ret
+            .epoch_ptr
             .checked_add(u32::from(ret.ptr.size()))
             .unwrap();
         ret.store = ret
@@ -204,12 +204,7 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
             .unwrap();
         ret.imported_functions = ret
             .signature_ids
-            .checked_add(
-                fields
-                    .num_signature_ids
-                    .checked_mul(u32::from(ret.size_of_vmshared_signature_index()))
-                    .unwrap(),
-            )
+            .checked_add(u32::from(ret.ptr.size()))
             .unwrap();
         ret.imported_tables = ret
             .imported_functions
@@ -281,11 +276,7 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
             .unwrap();
         ret.size = ret
             .builtin_functions
-            .checked_add(
-                BuiltinFunctionIndex::builtin_functions_total_number()
-                    .checked_mul(u32::from(ret.pointer_size()))
-                    .unwrap(),
-            )
+            .checked_add(u32::from(ret.pointer_size()))
             .unwrap();
 
         return ret;
@@ -469,6 +460,12 @@ impl<P: PtrSize> VMOffsets<P> {
     pub fn vminterrupts_fuel_consumed(&self) -> u8 {
         self.pointer_size()
     }
+
+    /// Return the offset of the `epoch_deadline` field of `VMInterrupts`
+    #[inline]
+    pub fn vminterupts_epoch_deadline(&self) -> u8 {
+        self.pointer_size() + 8 // `stack_limit` is a pointer; `fuel_consumed` is an `i64`
+    }
 }
 
 /// Offsets for `VMCallerCheckedAnyfunc`.
@@ -508,6 +505,13 @@ impl<P: PtrSize> VMOffsets<P> {
         self.interrupts
     }
 
+    /// Return the offset to the `*const AtomicU64` epoch-counter
+    /// pointer.
+    #[inline]
+    pub fn vmctx_epoch_ptr(&self) -> u32 {
+        self.epoch_ptr
+    }
+
     /// The offset of the `*mut VMExternRefActivationsTable` member.
     #[inline]
     pub fn vmctx_externref_activations_table(&self) -> u32 {
@@ -520,9 +524,9 @@ impl<P: PtrSize> VMOffsets<P> {
         self.store
     }
 
-    /// The offset of the `signature_ids` array.
+    /// The offset of the `signature_ids` array pointer.
     #[inline]
-    pub fn vmctx_signature_ids_begin(&self) -> u32 {
+    pub fn vmctx_signature_ids_array(&self) -> u32 {
         self.signature_ids
     }
 
@@ -578,7 +582,7 @@ impl<P: PtrSize> VMOffsets<P> {
 
     /// The offset of the builtin functions array.
     #[inline]
-    pub fn vmctx_builtin_functions_begin(&self) -> u32 {
+    pub fn vmctx_builtin_functions(&self) -> u32 {
         self.builtin_functions
     }
 
@@ -586,14 +590,6 @@ impl<P: PtrSize> VMOffsets<P> {
     #[inline]
     pub fn size_of_vmctx(&self) -> u32 {
         self.size
-    }
-
-    /// Return the offset to `VMSharedSignatureId` index `index`.
-    #[inline]
-    pub fn vmctx_vmshared_signature_id(&self, index: TypeIndex) -> u32 {
-        assert_lt!(index.as_u32(), self.num_signature_ids);
-        self.vmctx_signature_ids_begin()
-            + index.as_u32() * u32::from(self.size_of_vmshared_signature_index())
     }
 
     /// Return the offset to `VMFunctionImport` index `index`.
@@ -719,12 +715,6 @@ impl<P: PtrSize> VMOffsets<P> {
     #[inline]
     pub fn vmctx_vmglobal_import_from(&self, index: GlobalIndex) -> u32 {
         self.vmctx_vmglobal_import(index) + u32::from(self.vmglobal_import_from())
-    }
-
-    /// Return the offset to builtin function in `VMBuiltinFunctionsArray` index `index`.
-    #[inline]
-    pub fn vmctx_builtin_function(&self, index: BuiltinFunctionIndex) -> u32 {
-        self.vmctx_builtin_functions_begin() + index.index() * u32::from(self.pointer_size())
     }
 }
 

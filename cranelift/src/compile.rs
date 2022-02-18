@@ -1,6 +1,6 @@
 //! CLI tool to read Cranelift IR files and compile them into native code.
 
-use crate::disasm::{print_all, PrintRelocs, PrintStackMaps, PrintTraps};
+use crate::disasm::print_all;
 use crate::utils::{parse_sets_and_triple, read_to_string};
 use anyhow::{Context as _, Result};
 use cranelift_codegen::print_errors::pretty_error;
@@ -68,19 +68,17 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
     };
 
     for (func, _) in test_file.functions {
-        let mut relocs = PrintRelocs::new(options.print);
-        let mut traps = PrintTraps::new(options.print);
-        let mut stack_maps = PrintStackMaps::new(options.print);
-
         if let Some(isa) = isa {
             let mut context = Context::new();
             context.func = func;
             let mut mem = vec![];
 
             // Compile and encode the result to machine code.
-            let code_info = context
-                .compile_and_emit(isa, &mut mem, &mut relocs, &mut traps, &mut stack_maps)
+            context
+                .compile_and_emit(isa, &mut mem)
                 .map_err(|err| anyhow::anyhow!("{}", pretty_error(&context.func, err)))?;
+            let result = context.mach_compile_result.as_ref().unwrap();
+            let code_info = result.code_info();
 
             if options.print {
                 println!("{}", context.func.display());
@@ -90,11 +88,11 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
                 print_all(
                     isa,
                     &mem,
-                    code_info.code_size,
-                    code_info.jumptables_size + code_info.rodata_size,
-                    &relocs,
-                    &traps,
-                    &stack_maps,
+                    code_info.total_size,
+                    options.print,
+                    result.buffer.relocs(),
+                    result.buffer.traps(),
+                    result.buffer.stack_maps(),
                 )?;
             }
         }

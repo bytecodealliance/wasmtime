@@ -10,6 +10,7 @@ use std::ops::Range;
 use std::path::Path;
 use std::ptr;
 use std::slice;
+use std::sync::Arc;
 
 /// A simple struct consisting of a page-aligned pointer to page-aligned
 /// and initially-zeroed memory and a length.
@@ -21,7 +22,7 @@ pub struct Mmap {
     // the coordination all happens at the OS layer.
     ptr: usize,
     len: usize,
-    file: Option<File>,
+    file: Option<Arc<File>>,
 }
 
 impl Mmap {
@@ -77,7 +78,7 @@ impl Mmap {
             Ok(Self {
                 ptr: ptr as usize,
                 len,
-                file: Some(file),
+                file: Some(Arc::new(file)),
             })
         }
 
@@ -135,7 +136,7 @@ impl Mmap {
                 let ret = Self {
                     ptr: ptr as usize,
                     len,
-                    file: Some(file),
+                    file: Some(Arc::new(file)),
                 };
 
                 // Protect the entire file as PAGE_READONLY to start (i.e.
@@ -417,6 +418,11 @@ impl Mmap {
             region::Protection::READ_EXECUTE,
         )?;
         Ok(())
+    }
+
+    /// Returns the underlying file that this mmap is mapping, if present.
+    pub fn original_file(&self) -> Option<&Arc<File>> {
+        self.file.as_ref()
     }
 }
 

@@ -59,7 +59,8 @@ use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
 use wasmtime_environ::{Compiler, FlagValue, Tunables};
-use wasmtime_jit::{subslice_range, CompiledModule, CompiledModuleInfo, MmapVec, TypeTables};
+use wasmtime_jit::{subslice_range, CompiledModule, CompiledModuleInfo, TypeTables};
+use wasmtime_runtime::MmapVec;
 
 const HEADER: &[u8] = b"\0wasmtime-aot";
 
@@ -77,6 +78,8 @@ struct WasmFeatures {
     pub multi_memory: bool,
     pub exceptions: bool,
     pub memory64: bool,
+    pub relaxed_simd: bool,
+    pub extended_const: bool,
 }
 
 impl From<&wasmparser::WasmFeatures> for WasmFeatures {
@@ -93,20 +96,24 @@ impl From<&wasmparser::WasmFeatures> for WasmFeatures {
             multi_memory,
             exceptions,
             memory64,
-        } = other;
+            relaxed_simd,
+            extended_const,
+        } = *other;
 
         Self {
-            reference_types: *reference_types,
-            multi_value: *multi_value,
-            bulk_memory: *bulk_memory,
-            module_linking: *module_linking,
-            simd: *simd,
-            threads: *threads,
-            tail_call: *tail_call,
-            deterministic_only: *deterministic_only,
-            multi_memory: *multi_memory,
-            exceptions: *exceptions,
-            memory64: *memory64,
+            reference_types,
+            multi_value,
+            bulk_memory,
+            module_linking,
+            simd,
+            threads,
+            tail_call,
+            deterministic_only,
+            multi_memory,
+            exceptions,
+            memory64,
+            relaxed_simd,
+            extended_const,
         }
     }
 }
@@ -274,7 +281,12 @@ impl<'a> SerializedModule<'a> {
     pub fn into_module(self, engine: &Engine) -> Result<Module> {
         let (main_module, modules, types, upvars) = self.into_parts(engine)?;
         let modules = engine.run_maybe_parallel(modules, |(i, m)| {
-            CompiledModule::from_artifacts(i, m, &*engine.config().profiler)
+            CompiledModule::from_artifacts(
+                i,
+                m,
+                &*engine.config().profiler,
+                engine.unique_id_allocator(),
+            )
         })?;
 
         Module::from_parts(engine, modules, main_module, Arc::new(types), &upvars)
@@ -596,6 +608,7 @@ impl<'a> SerializedModule<'a> {
             parse_wasm_debuginfo,
             interruptable,
             consume_fuel,
+            epoch_interruption,
             static_memory_bound_is_maximum,
             guard_before_linear_memory,
 
@@ -637,6 +650,11 @@ impl<'a> SerializedModule<'a> {
         Self::check_bool(interruptable, other.interruptable, "interruption support")?;
         Self::check_bool(consume_fuel, other.consume_fuel, "fuel support")?;
         Self::check_bool(
+            epoch_interruption,
+            other.epoch_interruption,
+            "epoch interruption",
+        )?;
+        Self::check_bool(
             static_memory_bound_is_maximum,
             other.static_memory_bound_is_maximum,
             "pooling allocation support",
@@ -663,6 +681,8 @@ impl<'a> SerializedModule<'a> {
             multi_memory,
             exceptions,
             memory64,
+            relaxed_simd,
+            extended_const,
         } = self.metadata.features;
 
         Self::check_bool(
@@ -707,6 +727,16 @@ impl<'a> SerializedModule<'a> {
             memory64,
             other.memory64,
             "WebAssembly 64-bit memory support",
+        )?;
+        Self::check_bool(
+            extended_const,
+            other.extended_const,
+            "WebAssembly extended-const support",
+        )?;
+        Self::check_bool(
+            relaxed_simd,
+            other.relaxed_simd,
+            "WebAssembly relaxed-simd support",
         )?;
 
         Ok(())

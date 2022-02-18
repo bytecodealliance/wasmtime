@@ -38,7 +38,7 @@ pub enum MemArg {
     },
 
     /// PC-relative Reference to a label.
-    Label { target: BranchTarget },
+    Label { target: MachLabel },
 
     /// PC-relative Reference to a near symbol.
     Symbol {
@@ -182,47 +182,6 @@ impl Cond {
     }
 }
 
-/// A branch target. Either unresolved (basic-block index) or resolved (offset
-/// from end of current instruction).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum BranchTarget {
-    /// An unresolved reference to a Label, as passed into
-    /// `lower_branch_group()`.
-    Label(MachLabel),
-    /// A fixed PC offset.
-    ResolvedOffset(i32),
-}
-
-impl BranchTarget {
-    /// Return the target's label, if it is a label-based target.
-    pub fn as_label(self) -> Option<MachLabel> {
-        match self {
-            BranchTarget::Label(l) => Some(l),
-            _ => None,
-        }
-    }
-
-    /// Return the target's offset, if specified, or zero if label-based.
-    pub fn as_ri_offset_or_zero(self) -> u16 {
-        let off = match self {
-            BranchTarget::ResolvedOffset(off) => off >> 1,
-            _ => 0,
-        };
-        assert!(off <= 0x7fff);
-        assert!(off >= -0x8000);
-        off as u16
-    }
-
-    /// Return the target's offset, if specified, or zero if label-based.
-    pub fn as_ril_offset_or_zero(self) -> u32 {
-        let off = match self {
-            BranchTarget::ResolvedOffset(off) => off >> 1,
-            _ => 0,
-        };
-        off as u32
-    }
-}
-
 impl PrettyPrint for MemArg {
     fn show_rru(&self, mb_rru: Option<&RealRegUniverse>) -> String {
         match self {
@@ -270,7 +229,7 @@ impl PrettyPrint for MemArg {
                     }
                 }
             }
-            &MemArg::Label { ref target } => target.show_rru(mb_rru),
+            &MemArg::Label { target } => target.to_string(),
             &MemArg::Symbol {
                 ref name, offset, ..
             } => format!("{} + {}", name, offset),
@@ -304,14 +263,5 @@ impl PrettyPrint for Cond {
             _ => unreachable!(),
         };
         s.to_string()
-    }
-}
-
-impl PrettyPrint for BranchTarget {
-    fn show_rru(&self, _mb_rru: Option<&RealRegUniverse>) -> String {
-        match self {
-            &BranchTarget::Label(label) => format!("label{:?}", label.get()),
-            &BranchTarget::ResolvedOffset(off) => format!("{}", off),
-        }
     }
 }

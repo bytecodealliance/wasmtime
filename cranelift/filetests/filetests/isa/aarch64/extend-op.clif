@@ -1,4 +1,4 @@
-test compile
+test compile precise-output
 set unwind_info=false
 target aarch64
 
@@ -10,10 +10,15 @@ block0(v0: i8):
   return v3
 }
 
-; check:  sxtb x0, w0
-; nextln:  add x0, x0, #42
-; nextln:  ret
-
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 3)
+;   Inst 0:   sxtb x0, w0
+;   Inst 1:   add x0, x0, #42
+;   Inst 2:   ret
+; }}
 
 function %f2(i8, i64) -> i64 {
 block0(v0: i8, v1: i64):
@@ -22,9 +27,14 @@ block0(v0: i8, v1: i64):
   return v3
 }
 
-; check:  add x0, x1, x0, SXTB
-; nextln:  ret
-
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   add x0, x1, x0, SXTB
+;   Inst 1:   ret
+; }}
 
 function %i128_uextend_i64(i64) -> i128 {
 block0(v0: i64):
@@ -32,8 +42,14 @@ block0(v0: i64):
     return v1
 }
 
-; check: movz x1, #0
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   movz x1, #0
+;   Inst 1:   ret
+; }}
 
 function %i128_sextend_i64(i64) -> i128 {
 block0(v0: i64):
@@ -41,9 +57,14 @@ block0(v0: i64):
     return v1
 }
 
-; check: asr x1, x0, #63
-; nextln: ret
-
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   asr x1, x0, #63
+;   Inst 1:   ret
+; }}
 
 function %i128_uextend_i32(i32) -> i128 {
 block0(v0: i32):
@@ -51,9 +72,15 @@ block0(v0: i32):
     return v1
 }
 
-; check: mov w0, w0
-; nextln: movz x1, #0
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 3)
+;   Inst 0:   mov w0, w0
+;   Inst 1:   movz x1, #0
+;   Inst 2:   ret
+; }}
 
 function %i128_sextend_i32(i32) -> i128 {
 block0(v0: i32):
@@ -61,10 +88,15 @@ block0(v0: i32):
     return v1
 }
 
-; check: sxtw x0, w0
-; nextln: asr x1, x0, #63
-; nextln: ret
-
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 3)
+;   Inst 0:   sxtw x0, w0
+;   Inst 1:   asr x1, x0, #63
+;   Inst 2:   ret
+; }}
 
 function %i128_uextend_i16(i16) -> i128 {
 block0(v0: i16):
@@ -72,9 +104,15 @@ block0(v0: i16):
     return v1
 }
 
-; check: uxth w0, w0
-; nextln: movz x1, #0
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 3)
+;   Inst 0:   uxth w0, w0
+;   Inst 1:   movz x1, #0
+;   Inst 2:   ret
+; }}
 
 function %i128_sextend_i16(i16) -> i128 {
 block0(v0: i16):
@@ -82,10 +120,15 @@ block0(v0: i16):
     return v1
 }
 
-; check: sxth x0, w0
-; nextln: asr x1, x0, #63
-; nextln: ret
-
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 3)
+;   Inst 0:   sxth x0, w0
+;   Inst 1:   asr x1, x0, #63
+;   Inst 2:   ret
+; }}
 
 function %i128_uextend_i8(i8) -> i128 {
 block0(v0: i8):
@@ -93,9 +136,15 @@ block0(v0: i8):
     return v1
 }
 
-; check: uxtb w0, w0
-; nextln: movz x1, #0
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 3)
+;   Inst 0:   uxtb w0, w0
+;   Inst 1:   movz x1, #0
+;   Inst 2:   ret
+; }}
 
 function %i128_sextend_i8(i8) -> i128 {
 block0(v0: i8):
@@ -103,9 +152,15 @@ block0(v0: i8):
     return v1
 }
 
-; check: sxtb x0, w0
-; nextln: asr x1, x0, #63
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 3)
+;   Inst 0:   sxtb x0, w0
+;   Inst 1:   asr x1, x0, #63
+;   Inst 2:   ret
+; }}
 
 function %i8x16_uextend_i16(i8x16) -> i16 {
 block0(v0: i8x16):
@@ -114,8 +169,14 @@ block0(v0: i8x16):
     return v2
 }
 
-; check:  umov w0, v0.b[1]
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   umov w0, v0.b[1]
+;   Inst 1:   ret
+; }}
 
 function %i8x16_uextend_i32(i8x16) -> i32 {
 block0(v0: i8x16):
@@ -124,8 +185,14 @@ block0(v0: i8x16):
     return v2
 }
 
-; check:  umov w0, v0.b[1]
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   umov w0, v0.b[1]
+;   Inst 1:   ret
+; }}
 
 function %i8x16_uextend_i64(i8x16) -> i64 {
 block0(v0: i8x16):
@@ -134,8 +201,14 @@ block0(v0: i8x16):
     return v2
 }
 
-; check:  umov w0, v0.b[1]
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   umov w0, v0.b[1]
+;   Inst 1:   ret
+; }}
 
 function %i8x16_uextend_i128(i8x16) -> i128 {
 block0(v0: i8x16):
@@ -144,9 +217,15 @@ block0(v0: i8x16):
     return v2
 }
 
-; check:  umov w0, v0.b[1]
-; nextln: movz x1, #0
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 3)
+;   Inst 0:   umov w0, v0.b[1]
+;   Inst 1:   movz x1, #0
+;   Inst 2:   ret
+; }}
 
 function %i8x16_sextend_i16(i8x16) -> i16 {
 block0(v0: i8x16):
@@ -155,8 +234,14 @@ block0(v0: i8x16):
     return v2
 }
 
-; check:  smov w0, v0.b[1]
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   smov w0, v0.b[1]
+;   Inst 1:   ret
+; }}
 
 function %i8x16_sextend_i32(i8x16) -> i32 {
 block0(v0: i8x16):
@@ -165,8 +250,14 @@ block0(v0: i8x16):
     return v2
 }
 
-; check:  smov w0, v0.b[1]
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   smov w0, v0.b[1]
+;   Inst 1:   ret
+; }}
 
 function %i8x16_sextend_i64(i8x16) -> i64 {
 block0(v0: i8x16):
@@ -175,8 +266,14 @@ block0(v0: i8x16):
     return v2
 }
 
-; check:  smov x0, v0.b[1]
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   smov x0, v0.b[1]
+;   Inst 1:   ret
+; }}
 
 function %i8x16_sextend_i128(i8x16) -> i128 {
 block0(v0: i8x16):
@@ -185,9 +282,15 @@ block0(v0: i8x16):
     return v2
 }
 
-; check:  smov x0, v0.b[1]
-; nextln: asr x1, x0, #63
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 3)
+;   Inst 0:   smov x0, v0.b[1]
+;   Inst 1:   asr x1, x0, #63
+;   Inst 2:   ret
+; }}
 
 function %i16x8_uextend_i32(i16x8) -> i32 {
 block0(v0: i16x8):
@@ -196,8 +299,14 @@ block0(v0: i16x8):
     return v2
 }
 
-; check:  umov w0, v0.h[1]
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   umov w0, v0.h[1]
+;   Inst 1:   ret
+; }}
 
 function %i16x8_uextend_i64(i16x8) -> i64 {
 block0(v0: i16x8):
@@ -206,8 +315,14 @@ block0(v0: i16x8):
     return v2
 }
 
-; check:  umov w0, v0.h[1]
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   umov w0, v0.h[1]
+;   Inst 1:   ret
+; }}
 
 function %i16x8_uextend_i128(i16x8) -> i128 {
 block0(v0: i16x8):
@@ -216,9 +331,15 @@ block0(v0: i16x8):
     return v2
 }
 
-; check:  umov w0, v0.h[1]
-; nextln: movz x1, #0
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 3)
+;   Inst 0:   umov w0, v0.h[1]
+;   Inst 1:   movz x1, #0
+;   Inst 2:   ret
+; }}
 
 function %i16x8_sextend_i32(i16x8) -> i32 {
 block0(v0: i16x8):
@@ -227,8 +348,14 @@ block0(v0: i16x8):
     return v2
 }
 
-; check:  smov w0, v0.h[1]
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   smov w0, v0.h[1]
+;   Inst 1:   ret
+; }}
 
 function %i16x8_sextend_i64(i16x8) -> i64 {
 block0(v0: i16x8):
@@ -237,8 +364,14 @@ block0(v0: i16x8):
     return v2
 }
 
-; check:  smov x0, v0.h[1]
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   smov x0, v0.h[1]
+;   Inst 1:   ret
+; }}
 
 function %i16x8_sextend_i128(i16x8) -> i128 {
 block0(v0: i16x8):
@@ -247,9 +380,15 @@ block0(v0: i16x8):
     return v2
 }
 
-; check:  smov x0, v0.h[1]
-; nextln: asr x1, x0, #63
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 3)
+;   Inst 0:   smov x0, v0.h[1]
+;   Inst 1:   asr x1, x0, #63
+;   Inst 2:   ret
+; }}
 
 function %i32x4_uextend_i64(i32x4) -> i64 {
 block0(v0: i32x4):
@@ -258,8 +397,14 @@ block0(v0: i32x4):
     return v2
 }
 
-; check:  mov w0, v0.s[1]
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   mov w0, v0.s[1]
+;   Inst 1:   ret
+; }}
 
 function %i32x4_uextend_i128(i32x4) -> i128 {
 block0(v0: i32x4):
@@ -268,9 +413,15 @@ block0(v0: i32x4):
     return v2
 }
 
-; check:  mov w0, v0.s[1]
-; nextln: movz x1, #0
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 3)
+;   Inst 0:   mov w0, v0.s[1]
+;   Inst 1:   movz x1, #0
+;   Inst 2:   ret
+; }}
 
 function %i32x4_sextend_i64(i32x4) -> i64 {
 block0(v0: i32x4):
@@ -279,8 +430,14 @@ block0(v0: i32x4):
     return v2
 }
 
-; check:  smov x0, v0.s[1]
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   smov x0, v0.s[1]
+;   Inst 1:   ret
+; }}
 
 function %i32x4_sextend_i128(i32x4) -> i128 {
 block0(v0: i32x4):
@@ -289,9 +446,15 @@ block0(v0: i32x4):
     return v2
 }
 
-; check:  smov x0, v0.s[1]
-; nextln: asr x1, x0, #63
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 3)
+;   Inst 0:   smov x0, v0.s[1]
+;   Inst 1:   asr x1, x0, #63
+;   Inst 2:   ret
+; }}
 
 function %i64x2_uextend_i128(i64x2) -> i128 {
 block0(v0: i64x2):
@@ -300,9 +463,15 @@ block0(v0: i64x2):
     return v2
 }
 
-; check:  mov x0, v0.d[1]
-; nextln: movz x1, #0
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 3)
+;   Inst 0:   mov x0, v0.d[1]
+;   Inst 1:   movz x1, #0
+;   Inst 2:   ret
+; }}
 
 function %i64x2_sextend_i128(i64x2) -> i128 {
 block0(v0: i64x2):
@@ -311,6 +480,13 @@ block0(v0: i64x2):
     return v2
 }
 
-; check:  mov x0, v0.d[1]
-; nextln: asr x1, x0, #63
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 3)
+;   Inst 0:   mov x0, v0.d[1]
+;   Inst 1:   asr x1, x0, #63
+;   Inst 2:   ret
+; }}
+

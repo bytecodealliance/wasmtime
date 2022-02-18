@@ -8,10 +8,10 @@
 #define platform_longjmp(buf, arg) longjmp(buf, arg)
 typedef jmp_buf platform_jmp_buf;
 
-#elif defined(__clang__) && defined(__aarch64__)
+#elif defined(__clang__) && (defined(__aarch64__) || defined(__s390x__))
 
-// Clang on aarch64 doesn't support `__builtin_setjmp`, so use `sigsetjmp`
-// from libc.
+// Clang on aarch64 and s390x doesn't support `__builtin_setjmp`, so use
+//`sigsetjmp` from libc.
 //
 // Note that `sigsetjmp` and `siglongjmp` are used here where possible to
 // explicitly pass a 0 argument to `sigsetjmp` that we don't need to preserve

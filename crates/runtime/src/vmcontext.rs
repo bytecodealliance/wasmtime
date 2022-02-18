@@ -9,7 +9,6 @@ use std::marker;
 use std::ptr::NonNull;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use std::u32;
-use wasmtime_environ::BuiltinFunctionIndex;
 
 /// An imported function.
 #[derive(Debug, Copy, Clone)]
@@ -340,145 +339,157 @@ impl VMGlobalDefinition {
     /// Return a reference to the value as an i32.
     #[allow(clippy::cast_ptr_alignment)]
     pub unsafe fn as_i32(&self) -> &i32 {
-        &*(self.storage.as_ref().as_ptr() as *const i32)
+        &*(self.storage.as_ref().as_ptr().cast::<i32>())
     }
 
     /// Return a mutable reference to the value as an i32.
     #[allow(clippy::cast_ptr_alignment)]
     pub unsafe fn as_i32_mut(&mut self) -> &mut i32 {
-        &mut *(self.storage.as_mut().as_mut_ptr() as *mut i32)
+        &mut *(self.storage.as_mut().as_mut_ptr().cast::<i32>())
     }
 
     /// Return a reference to the value as a u32.
     #[allow(clippy::cast_ptr_alignment)]
     pub unsafe fn as_u32(&self) -> &u32 {
-        &*(self.storage.as_ref().as_ptr() as *const u32)
+        &*(self.storage.as_ref().as_ptr().cast::<u32>())
     }
 
     /// Return a mutable reference to the value as an u32.
     #[allow(clippy::cast_ptr_alignment)]
     pub unsafe fn as_u32_mut(&mut self) -> &mut u32 {
-        &mut *(self.storage.as_mut().as_mut_ptr() as *mut u32)
+        &mut *(self.storage.as_mut().as_mut_ptr().cast::<u32>())
     }
 
     /// Return a reference to the value as an i64.
     #[allow(clippy::cast_ptr_alignment)]
     pub unsafe fn as_i64(&self) -> &i64 {
-        &*(self.storage.as_ref().as_ptr() as *const i64)
+        &*(self.storage.as_ref().as_ptr().cast::<i64>())
     }
 
     /// Return a mutable reference to the value as an i64.
     #[allow(clippy::cast_ptr_alignment)]
     pub unsafe fn as_i64_mut(&mut self) -> &mut i64 {
-        &mut *(self.storage.as_mut().as_mut_ptr() as *mut i64)
+        &mut *(self.storage.as_mut().as_mut_ptr().cast::<i64>())
     }
 
     /// Return a reference to the value as an u64.
     #[allow(clippy::cast_ptr_alignment)]
     pub unsafe fn as_u64(&self) -> &u64 {
-        &*(self.storage.as_ref().as_ptr() as *const u64)
+        &*(self.storage.as_ref().as_ptr().cast::<u64>())
     }
 
     /// Return a mutable reference to the value as an u64.
     #[allow(clippy::cast_ptr_alignment)]
     pub unsafe fn as_u64_mut(&mut self) -> &mut u64 {
-        &mut *(self.storage.as_mut().as_mut_ptr() as *mut u64)
+        &mut *(self.storage.as_mut().as_mut_ptr().cast::<u64>())
     }
 
     /// Return a reference to the value as an f32.
     #[allow(clippy::cast_ptr_alignment)]
     pub unsafe fn as_f32(&self) -> &f32 {
-        &*(self.storage.as_ref().as_ptr() as *const f32)
+        &*(self.storage.as_ref().as_ptr().cast::<f32>())
     }
 
     /// Return a mutable reference to the value as an f32.
     #[allow(clippy::cast_ptr_alignment)]
     pub unsafe fn as_f32_mut(&mut self) -> &mut f32 {
-        &mut *(self.storage.as_mut().as_mut_ptr() as *mut f32)
+        &mut *(self.storage.as_mut().as_mut_ptr().cast::<f32>())
     }
 
     /// Return a reference to the value as f32 bits.
     #[allow(clippy::cast_ptr_alignment)]
     pub unsafe fn as_f32_bits(&self) -> &u32 {
-        &*(self.storage.as_ref().as_ptr() as *const u32)
+        &*(self.storage.as_ref().as_ptr().cast::<u32>())
     }
 
     /// Return a mutable reference to the value as f32 bits.
     #[allow(clippy::cast_ptr_alignment)]
     pub unsafe fn as_f32_bits_mut(&mut self) -> &mut u32 {
-        &mut *(self.storage.as_mut().as_mut_ptr() as *mut u32)
+        &mut *(self.storage.as_mut().as_mut_ptr().cast::<u32>())
     }
 
     /// Return a reference to the value as an f64.
     #[allow(clippy::cast_ptr_alignment)]
     pub unsafe fn as_f64(&self) -> &f64 {
-        &*(self.storage.as_ref().as_ptr() as *const f64)
+        &*(self.storage.as_ref().as_ptr().cast::<f64>())
     }
 
     /// Return a mutable reference to the value as an f64.
     #[allow(clippy::cast_ptr_alignment)]
     pub unsafe fn as_f64_mut(&mut self) -> &mut f64 {
-        &mut *(self.storage.as_mut().as_mut_ptr() as *mut f64)
+        &mut *(self.storage.as_mut().as_mut_ptr().cast::<f64>())
     }
 
     /// Return a reference to the value as f64 bits.
     #[allow(clippy::cast_ptr_alignment)]
     pub unsafe fn as_f64_bits(&self) -> &u64 {
-        &*(self.storage.as_ref().as_ptr() as *const u64)
+        &*(self.storage.as_ref().as_ptr().cast::<u64>())
     }
 
     /// Return a mutable reference to the value as f64 bits.
     #[allow(clippy::cast_ptr_alignment)]
     pub unsafe fn as_f64_bits_mut(&mut self) -> &mut u64 {
-        &mut *(self.storage.as_mut().as_mut_ptr() as *mut u64)
+        &mut *(self.storage.as_mut().as_mut_ptr().cast::<u64>())
     }
 
     /// Return a reference to the value as an u128.
     #[allow(clippy::cast_ptr_alignment)]
     pub unsafe fn as_u128(&self) -> &u128 {
-        &*(self.storage.as_ref().as_ptr() as *const u128)
+        &*(self.storage.as_ref().as_ptr().cast::<u128>())
     }
 
     /// Return a mutable reference to the value as an u128.
     #[allow(clippy::cast_ptr_alignment)]
     pub unsafe fn as_u128_mut(&mut self) -> &mut u128 {
-        &mut *(self.storage.as_mut().as_mut_ptr() as *mut u128)
+        &mut *(self.storage.as_mut().as_mut_ptr().cast::<u128>())
     }
 
     /// Return a reference to the value as u128 bits.
     #[allow(clippy::cast_ptr_alignment)]
     pub unsafe fn as_u128_bits(&self) -> &[u8; 16] {
-        &*(self.storage.as_ref().as_ptr() as *const [u8; 16])
+        &*(self.storage.as_ref().as_ptr().cast::<[u8; 16]>())
     }
 
     /// Return a mutable reference to the value as u128 bits.
     #[allow(clippy::cast_ptr_alignment)]
     pub unsafe fn as_u128_bits_mut(&mut self) -> &mut [u8; 16] {
-        &mut *(self.storage.as_mut().as_mut_ptr() as *mut [u8; 16])
+        &mut *(self.storage.as_mut().as_mut_ptr().cast::<[u8; 16]>())
     }
 
     /// Return a reference to the value as an externref.
     #[allow(clippy::cast_ptr_alignment)]
     pub unsafe fn as_externref(&self) -> &Option<VMExternRef> {
-        &*(self.storage.as_ref().as_ptr() as *const Option<VMExternRef>)
+        &*(self.storage.as_ref().as_ptr().cast::<Option<VMExternRef>>())
     }
 
     /// Return a mutable reference to the value as an externref.
     #[allow(clippy::cast_ptr_alignment)]
     pub unsafe fn as_externref_mut(&mut self) -> &mut Option<VMExternRef> {
-        &mut *(self.storage.as_mut().as_mut_ptr() as *mut Option<VMExternRef>)
+        &mut *(self
+            .storage
+            .as_mut()
+            .as_mut_ptr()
+            .cast::<Option<VMExternRef>>())
     }
 
     /// Return a reference to the value as an anyfunc.
     #[allow(clippy::cast_ptr_alignment)]
     pub unsafe fn as_anyfunc(&self) -> *const VMCallerCheckedAnyfunc {
-        *(self.storage.as_ref().as_ptr() as *const *const VMCallerCheckedAnyfunc)
+        *(self
+            .storage
+            .as_ref()
+            .as_ptr()
+            .cast::<*const VMCallerCheckedAnyfunc>())
     }
 
     /// Return a mutable reference to the value as an anyfunc.
     #[allow(clippy::cast_ptr_alignment)]
     pub unsafe fn as_anyfunc_mut(&mut self) -> &mut *const VMCallerCheckedAnyfunc {
-        &mut *(self.storage.as_mut().as_mut_ptr() as *mut *const VMCallerCheckedAnyfunc)
+        &mut *(self
+            .storage
+            .as_mut()
+            .as_mut_ptr()
+            .cast::<*const VMCallerCheckedAnyfunc>())
     }
 }
 
@@ -582,64 +593,42 @@ mod test_vmcaller_checked_anyfunc {
     }
 }
 
-/// An array that stores addresses of builtin functions. We translate code
-/// to use indirect calls. This way, we don't have to patch the code.
-#[repr(C)]
-pub struct VMBuiltinFunctionsArray {
-    ptrs: [usize; Self::len()],
-}
-
-impl VMBuiltinFunctionsArray {
-    pub const fn len() -> usize {
-        BuiltinFunctionIndex::builtin_functions_total_number() as usize
-    }
-
-    pub fn initialized() -> Self {
-        use crate::libcalls::*;
-
-        let mut ptrs = [0; Self::len()];
-
-        ptrs[BuiltinFunctionIndex::memory32_grow().index() as usize] =
-            wasmtime_memory32_grow as usize;
-        ptrs[BuiltinFunctionIndex::table_copy().index() as usize] = wasmtime_table_copy as usize;
-        ptrs[BuiltinFunctionIndex::table_grow_funcref().index() as usize] =
-            wasmtime_table_grow as usize;
-        ptrs[BuiltinFunctionIndex::table_grow_externref().index() as usize] =
-            wasmtime_table_grow as usize;
-        ptrs[BuiltinFunctionIndex::table_init().index() as usize] = wasmtime_table_init as usize;
-        ptrs[BuiltinFunctionIndex::elem_drop().index() as usize] = wasmtime_elem_drop as usize;
-        ptrs[BuiltinFunctionIndex::memory_copy().index() as usize] = wasmtime_memory_copy as usize;
-        ptrs[BuiltinFunctionIndex::memory_fill().index() as usize] = wasmtime_memory_fill as usize;
-        ptrs[BuiltinFunctionIndex::memory_init().index() as usize] = wasmtime_memory_init as usize;
-        ptrs[BuiltinFunctionIndex::data_drop().index() as usize] = wasmtime_data_drop as usize;
-        ptrs[BuiltinFunctionIndex::drop_externref().index() as usize] =
-            wasmtime_drop_externref as usize;
-        ptrs[BuiltinFunctionIndex::activations_table_insert_with_gc().index() as usize] =
-            wasmtime_activations_table_insert_with_gc as usize;
-        ptrs[BuiltinFunctionIndex::externref_global_get().index() as usize] =
-            wasmtime_externref_global_get as usize;
-        ptrs[BuiltinFunctionIndex::externref_global_set().index() as usize] =
-            wasmtime_externref_global_set as usize;
-        ptrs[BuiltinFunctionIndex::table_fill_externref().index() as usize] =
-            wasmtime_table_fill as usize;
-        ptrs[BuiltinFunctionIndex::table_fill_funcref().index() as usize] =
-            wasmtime_table_fill as usize;
-        ptrs[BuiltinFunctionIndex::memory_atomic_notify().index() as usize] =
-            wasmtime_memory_atomic_notify as usize;
-        ptrs[BuiltinFunctionIndex::memory_atomic_wait32().index() as usize] =
-            wasmtime_memory_atomic_wait32 as usize;
-        ptrs[BuiltinFunctionIndex::memory_atomic_wait64().index() as usize] =
-            wasmtime_memory_atomic_wait64 as usize;
-        ptrs[BuiltinFunctionIndex::out_of_gas().index() as usize] = wasmtime_out_of_gas as usize;
-
-        if cfg!(debug_assertions) {
-            for i in 0..ptrs.len() {
-                debug_assert!(ptrs[i] != 0, "index {} is not initialized", i);
-            }
+macro_rules! define_builtin_array {
+    (
+        $(
+            $( #[$attr:meta] )*
+            $name:ident( $( $param:ident ),* ) -> ( $( $result:ident ),* );
+        )*
+    ) => {
+        /// An array that stores addresses of builtin functions. We translate code
+        /// to use indirect calls. This way, we don't have to patch the code.
+        #[repr(C)]
+        #[allow(unused_parens)]
+        pub struct VMBuiltinFunctionsArray {
+            $(
+                $name: unsafe extern "C" fn(
+                    $(define_builtin_array!(@ty $param)),*
+                ) -> (
+                    $(define_builtin_array!(@ty $result)),*
+                ),
+            )*
         }
-        Self { ptrs }
-    }
+
+        impl VMBuiltinFunctionsArray {
+            pub const INIT: VMBuiltinFunctionsArray = VMBuiltinFunctionsArray {
+                $($name: crate::libcalls::$name,)*
+            };
+        }
+    };
+
+    (@ty i32) => (u32);
+    (@ty i64) => (u64);
+    (@ty reference) => (*mut u8);
+    (@ty pointer) => (*mut u8);
+    (@ty vmctx) => (*mut VMContext);
 }
+
+wasmtime_environ::foreach_builtin_function!(define_builtin_array);
 
 /// The storage for a WebAssembly invocation argument
 ///
@@ -694,12 +683,18 @@ pub struct VMInterrupts {
     /// turning positive a wasm trap will be generated. This field is only
     /// modified if wasm is configured to consume fuel.
     pub fuel_consumed: UnsafeCell<i64>,
+
+    /// Deadline epoch for interruption: if epoch-based interruption
+    /// is enabled and the global (per engine) epoch counter is
+    /// observed to reach or exceed this value, the guest code will
+    /// yield if running asynchronously.
+    pub epoch_deadline: UnsafeCell<u64>,
 }
 
-// The `VMInterrupts` type is a pod-type with no destructor, and we only access
-// `stack_limit` from other threads, so add in these trait impls which are
-// otherwise not available due to the `fuel_consumed` variable in
-// `VMInterrupts`.
+// The `VMInterrupts` type is a pod-type with no destructor, and we
+// only access `stack_limit` from other threads, so add in these trait
+// impls which are otherwise not available due to the `fuel_consumed`
+// and `epoch_deadline` variables in `VMInterrupts`.
 //
 // Note that users of `fuel_consumed` understand that the unsafety encompasses
 // ensuring that it's only mutated/accessed from one thread dynamically.
@@ -719,6 +714,7 @@ impl Default for VMInterrupts {
         VMInterrupts {
             stack_limit: AtomicUsize::new(usize::max_value()),
             fuel_consumed: UnsafeCell::new(0),
+            epoch_deadline: UnsafeCell::new(0),
         }
     }
 }
