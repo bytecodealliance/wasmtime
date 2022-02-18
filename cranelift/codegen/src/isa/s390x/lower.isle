@@ -1102,9 +1102,9 @@
             ;; result expected by Cranelift semantics.  The only exception
             ;; it the case where the input was a NaN.  We explicitly check
             ;; for that and force the output to 0 in that case.
-            (sat Reg (with_flags_1 (fcmp_reg src_ty src src)
-                                   (cmov_imm dst_ty
-                                     (floatcc_as_cond (FloatCC.Unordered)) 0 dst))))
+            (sat Reg (with_flags_reg (fcmp_reg src_ty src src)
+                                     (cmov_imm dst_ty
+                                               (floatcc_as_cond (FloatCC.Unordered)) 0 dst))))
         (value_reg sat)))
 
 
@@ -1119,9 +1119,9 @@
             ;; result expected by Cranelift semantics.  The only exception
             ;; it the case where the input was a NaN.  We explicitly check
             ;; for that and force the output to 0 in that case.
-            (sat Reg (with_flags_1 (fcmp_reg src_ty src src)
-                                   (cmov_imm dst_ty
-                                     (floatcc_as_cond (FloatCC.Unordered)) 0 dst))))
+            (sat Reg (with_flags_reg (fcmp_reg src_ty src src)
+                                     (cmov_imm dst_ty
+                                               (floatcc_as_cond (FloatCC.Unordered)) 0 dst))))
         (value_reg sat)))
 
 

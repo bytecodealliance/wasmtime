@@ -6,11 +6,11 @@ use generated_code::MInst;
 use regalloc::Writable;
 
 // Types that the generated ISLE code uses via `use super::*`.
-use super::{is_mergeable_load, lower_to_amode, Reg};
+use super::{is_int_or_ref_ty, is_mergeable_load, lower_to_amode, Reg};
 use crate::{
     ir::{
-        immediates::*, types::*, Inst, InstructionData, Opcode, TrapCode, Value, ValueLabel,
-        ValueList,
+        condcodes::FloatCC, immediates::*, types::*, Inst, InstructionData, Opcode, TrapCode,
+        Value, ValueLabel, ValueList,
     },
     isa::{
         settings::Flags,
@@ -439,6 +439,32 @@ where
     #[inline]
     fn imm8_to_imm8_gpr(&mut self, imm: u8) -> Imm8Gpr {
         Imm8Gpr::new(Imm8Reg::Imm8 { imm }).unwrap()
+    }
+
+    fn is_gpr_type(&mut self, ty: Type) -> Option<Type> {
+        if is_int_or_ref_ty(ty) || ty == I128 || ty == B128 {
+            Some(ty)
+        } else {
+            None
+        }
+    }
+
+    #[inline]
+    fn is_xmm_type(&mut self, ty: Type) -> Option<Type> {
+        if ty == F32 || ty == F64 || (ty.is_vector() && ty.bits() == 128) {
+            Some(ty)
+        } else {
+            None
+        }
+    }
+
+    #[inline]
+    fn is_single_register_type(&mut self, ty: Type) -> Option<Type> {
+        if ty != I128 {
+            Some(ty)
+        } else {
+            None
+        }
     }
 }
 

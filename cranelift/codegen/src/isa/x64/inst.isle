@@ -149,14 +149,40 @@
        (Setcc (cc CC)
               (dst WritableGpr))
 
-       ;; Integer conditional move.
-       ;;
-       ;; Overwrites the destination register.
+       ;; =========================================
+       ;; Conditional moves.
+
+       ;; GPR conditional move; overwrites the destination register.
        (Cmove (size OperandSize)
               (cc CC)
               (consequent GprMem)
               (alternative Gpr)
               (dst WritableGpr))
+
+       ;; GPR conditional move with the `OR` of two conditions; overwrites
+       ;; the destination register.
+       (CmoveOr (size OperandSize)
+              (cc1 CC)
+              (cc2 CC)
+              (consequent GprMem)
+              (alternative Gpr)
+              (dst WritableGpr))
+
+       ;; XMM conditional move; overwrites the destination register.
+       (XmmCmove (size OperandSize)
+              (cc CC)
+              (consequent XmmMem)
+              (alternative Xmm)
+              (dst WritableXmm))
+
+       ;; XMM conditional move with the `OR` of two conditions; overwrites
+       ;; the destination register.
+       (XmmCmoveOr (size OperandSize)
+              (cc1 CC)
+              (cc2 CC)
+              (consequent XmmMem)
+              (alternative Xmm)
+              (dst WritableXmm))
 
        ;; =========================================
        ;; Stack manipulation.
@@ -274,14 +300,6 @@
                      (is_min bool)
                      (lhs Xmm)
                      (rhs_dst WritableXmm))
-
-       ;; XMM (scalar) conditional move.
-       ;;
-       ;; Overwrites the destination register if cc is set.
-       (XmmCmove (size OperandSize)
-                 (cc CC)
-                 (src XmmMem)
-                 (dst WritableXmm))
 
        ;; Float comparisons/tests: cmp (b w l q) (reg addr imm) reg.
        (XmmCmpRmR (op SseOpcode)
@@ -1027,6 +1045,17 @@
 (decl xmm0 () WritableXmm)
 (extern constructor xmm0 xmm0)
 
+;;;; Helpers for determining the register class of a value type ;;;;;;;;;;;;;;;;
+
+(decl is_xmm_type (Type) Type)
+(extern extractor is_xmm_type is_xmm_type)
+
+(decl is_gpr_type (Type) Type)
+(extern extractor is_gpr_type is_gpr_type)
+
+(decl is_single_register_type (Type) Type)
+(extern extractor is_single_register_type is_single_register_type)
+
 ;;;; Helpers for Querying Enabled ISA Extensions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (decl avx512vl_enabled () Type)
@@ -1256,26 +1285,28 @@
                  src2))
 
 ;; Helper for creating `add` instructions whose flags are also used.
-(decl add_with_flags (Type Gpr GprMemImm) ProducesFlags)
-(rule (add_with_flags ty src1 src2)
+(decl add_with_flags_paired (Type Gpr GprMemImm) ProducesFlags)
+(rule (add_with_flags_paired ty src1 src2)
       (let ((dst WritableGpr (temp_writable_gpr)))
-        (ProducesFlags.ProducesFlags (MInst.AluRmiR (operand_size_of_type_32_64 ty)
-                                                    (AluRmiROpcode.Add)
-                                                    src1
-                                                    src2
-                                                    dst)
-                                     (gpr_to_reg (writable_gpr_to_gpr dst)))))
+        (ProducesFlags.ProducesFlagsReturnsResultWithConsumer
+         (MInst.AluRmiR (operand_size_of_type_32_64 ty)
+                        (AluRmiROpcode.Add)
+                        src1
+                        src2
+                        dst)
+         (gpr_to_reg (writable_gpr_to_gpr dst)))))
 
 ;; Helper for creating `adc` instructions.
-(decl adc (Type Gpr GprMemImm) ConsumesFlags)
-(rule (adc ty src1 src2)
+(decl adc_paired (Type Gpr GprMemImm) ConsumesFlags)
+(rule (adc_paired ty src1 src2)
       (let ((dst WritableGpr (temp_writable_gpr)))
-        (ConsumesFlags.ConsumesFlags (MInst.AluRmiR (operand_size_of_type_32_64 ty)
-                                                    (AluRmiROpcode.Adc)
-                                                    src1
-                                                    src2
-                                                    dst)
-                                     (gpr_to_reg (writable_gpr_to_gpr dst)))))
+        (ConsumesFlags.ConsumesFlagsReturnsResultWithProducer
+         (MInst.AluRmiR (operand_size_of_type_32_64 ty)
+                        (AluRmiROpcode.Adc)
+                        src1
+                        src2
+                        dst)
+         (gpr_to_reg (writable_gpr_to_gpr dst)))))
 
 ;; Helper for emitting `sub` instructions.
 (decl sub (Type Gpr GprMemImm) Gpr)
@@ -1286,26 +1317,28 @@
                  src2))
 
 ;; Helper for creating `sub` instructions whose flags are also used.
-(decl sub_with_flags (Type Gpr GprMemImm) ProducesFlags)
-(rule (sub_with_flags ty src1 src2)
+(decl sub_with_flags_paired (Type Gpr GprMemImm) ProducesFlags)
+(rule (sub_with_flags_paired ty src1 src2)
       (let ((dst WritableGpr (temp_writable_gpr)))
-        (ProducesFlags.ProducesFlags (MInst.AluRmiR (operand_size_of_type_32_64 ty)
-                                                    (AluRmiROpcode.Sub)
-                                                    src1
-                                                    src2
-                                                    dst)
-                                     (gpr_to_reg (writable_gpr_to_gpr dst)))))
+        (ProducesFlags.ProducesFlagsReturnsResultWithConsumer
+         (MInst.AluRmiR (operand_size_of_type_32_64 ty)
+                        (AluRmiROpcode.Sub)
+                        src1
+                        src2
+                        dst)
+         (gpr_to_reg (writable_gpr_to_gpr dst)))))
 
 ;; Helper for creating `sbb` instructions.
-(decl sbb (Type Gpr GprMemImm) ConsumesFlags)
-(rule (sbb ty src1 src2)
+(decl sbb_paired (Type Gpr GprMemImm) ConsumesFlags)
+(rule (sbb_paired ty src1 src2)
       (let ((dst WritableGpr (temp_writable_gpr)))
-        (ConsumesFlags.ConsumesFlags (MInst.AluRmiR (operand_size_of_type_32_64 ty)
-                                                    (AluRmiROpcode.Sbb)
-                                                    src1
-                                                    src2
-                                                    dst)
-                                     (gpr_to_reg (writable_gpr_to_gpr dst)))))
+        (ConsumesFlags.ConsumesFlagsReturnsResultWithProducer
+         (MInst.AluRmiR (operand_size_of_type_32_64 ty)
+                        (AluRmiROpcode.Sbb)
+                        src1
+                        src2
+                        dst)
+         (gpr_to_reg (writable_gpr_to_gpr dst)))))
 
 ;; Helper for creating `mul` instructions.
 (decl mul (Type Gpr GprMemImm) Gpr)
@@ -1456,29 +1489,128 @@
 ;; Helper for creating `MInst.CmpRmiR` instructions.
 (decl cmp_rmi_r (OperandSize CmpOpcode GprMemImm Gpr) ProducesFlags)
 (rule (cmp_rmi_r size opcode src1 src2)
-      (ProducesFlags.ProducesFlags (MInst.CmpRmiR size
-                                                  opcode
-                                                  src1
-                                                  src2)
-                                   (invalid_reg)))
+      (ProducesFlags.ProducesFlagsSideEffect
+       (MInst.CmpRmiR size
+                      opcode
+                      src1
+                      src2)))
 
 ;; Helper for creating `cmp` instructions.
 (decl cmp (OperandSize GprMemImm Gpr) ProducesFlags)
 (rule (cmp size src1 src2)
       (cmp_rmi_r size (CmpOpcode.Cmp) src1 src2))
 
+;; Helper for creating `MInst.XmmCmpRmR` instructions.
+(decl xmm_cmp_rm_r (SseOpcode XmmMem Xmm) ProducesFlags)
+(rule (xmm_cmp_rm_r opcode src1 src2)
+      (ProducesFlags.ProducesFlagsSideEffect
+       (MInst.XmmCmpRmR opcode src1 src2)))
+
+;; Helper for creating `fpcmp` instructions (cannot use `fcmp` as it is taken by
+;; `clif.isle`).
+(decl fpcmp (Value Value) ProducesFlags)
+(rule (fpcmp src1 @ (value_type $F32) src2)
+      (xmm_cmp_rm_r (SseOpcode.Ucomiss) (put_in_xmm_mem src1) (put_in_xmm src2)))
+(rule (fpcmp src1 @ (value_type $F64) src2)
+      (xmm_cmp_rm_r (SseOpcode.Ucomisd) (put_in_xmm_mem src1) (put_in_xmm src2)))
+
 ;; Helper for creating `test` instructions.
 (decl test (OperandSize GprMemImm Gpr) ProducesFlags)
 (rule (test size src1 src2)
       (cmp_rmi_r size (CmpOpcode.Test) src1 src2))
 
-;; Helper for creating `MInst.Cmove` instructions.
+;; Helper for creating `cmove` instructions. Note that these instructions do not
+;; always result in a single emitted x86 instruction; e.g., XmmCmove uses jumps
+;; to conditionally move the selected value into an XMM register.
 (decl cmove (Type CC GprMem Gpr) ConsumesFlags)
 (rule (cmove ty cc consequent alternative)
       (let ((dst WritableGpr (temp_writable_gpr))
             (size OperandSize (operand_size_of_type_32_64 ty)))
-        (ConsumesFlags.ConsumesFlags (MInst.Cmove size cc consequent alternative dst)
-                                     (gpr_to_reg (writable_gpr_to_gpr dst)))))
+        (ConsumesFlags.ConsumesFlagsReturnsReg
+         (MInst.Cmove size cc consequent alternative dst)
+         (gpr_to_reg (writable_gpr_to_gpr dst)))))
+
+(decl cmove_xmm (Type CC XmmMem Xmm) ConsumesFlags)
+(rule (cmove_xmm ty cc consequent alternative)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (size OperandSize (operand_size_of_type_32_64 ty)))
+        (ConsumesFlags.ConsumesFlagsReturnsReg
+         (MInst.XmmCmove size cc consequent alternative dst)
+         (xmm_to_reg (writable_xmm_to_xmm dst)))))
+
+;; Helper for creating `cmove` instructions directly from values. This allows us
+;; to special-case the `I128` types and default to the `cmove` helper otherwise.
+;; It also eliminates some `put_in_reg*` boilerplate in the lowering ISLE code.
+(decl cmove_from_values (Type CC Value Value) ConsumesFlags)
+(rule (cmove_from_values $I128 cc consequent alternative)
+      (let ((cons ValueRegs (put_in_regs consequent))
+            (alt ValueRegs (put_in_regs alternative))
+            (dst1 WritableGpr (temp_writable_gpr))
+            (dst2 WritableGpr (temp_writable_gpr))
+            (size OperandSize (OperandSize.Size64))
+            (lower_cmove MInst (MInst.Cmove
+                                size cc
+                                (gpr_to_gpr_mem (value_regs_get_gpr cons 0))
+                                (value_regs_get_gpr alt 0) dst1))
+            (upper_cmove MInst (MInst.Cmove
+                                size cc
+                                (gpr_to_gpr_mem (value_regs_get_gpr cons 1))
+                                (value_regs_get_gpr alt 1) dst2)))
+        (ConsumesFlags.ConsumesFlagsTwiceReturnsValueRegs
+         lower_cmove
+         upper_cmove
+         (value_regs
+          (gpr_to_reg (writable_gpr_to_gpr dst1))
+          (gpr_to_reg (writable_gpr_to_gpr dst2))))))
+
+(rule (cmove_from_values (is_gpr_type (is_single_register_type ty)) cc consequent alternative)
+      (cmove ty cc (put_in_gpr_mem consequent) (put_in_gpr alternative)))
+
+(rule (cmove_from_values (is_xmm_type (is_single_register_type ty)) cc consequent alternative)
+      (cmove_xmm ty cc (put_in_xmm_mem consequent) (put_in_xmm alternative)))
+
+;; Helper for creating `cmove` instructions with the logical OR of multiple
+;; flags. Note that these instructions will always result in more than one
+;; emitted x86 instruction.
+(decl cmove_or (Type CC CC GprMem Gpr) ConsumesFlags)
+(rule (cmove_or ty cc1 cc2 consequent alternative)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (size OperandSize (operand_size_of_type_32_64 ty)))
+        (ConsumesFlags.ConsumesFlagsReturnsReg
+         (MInst.CmoveOr size cc1 cc2 consequent alternative dst)
+         (gpr_to_reg (writable_gpr_to_gpr dst)))))
+
+(decl cmove_or_xmm (Type CC CC XmmMem Xmm) ConsumesFlags)
+(rule (cmove_or_xmm ty cc1 cc2 consequent alternative)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (size OperandSize (operand_size_of_type_32_64 ty)))
+        (ConsumesFlags.ConsumesFlagsReturnsReg
+         (MInst.XmmCmoveOr size cc1 cc2 consequent alternative dst)
+         (xmm_to_reg (writable_xmm_to_xmm dst)))))
+
+;; Helper for creating `cmove_or` instructions directly from values. This allows
+;; us to special-case the `I128` types and default to the `cmove_or` helper
+;; otherwise.
+(decl cmove_or_from_values (Type CC CC Value Value) ConsumesFlags)
+(rule (cmove_or_from_values $I128 cc1 cc2 consequent alternative)
+      (let ((cons ValueRegs (put_in_regs consequent))
+            (alt ValueRegs (put_in_regs alternative))
+            (dst1 WritableGpr (temp_writable_gpr))
+            (dst2 WritableGpr (temp_writable_gpr))
+            (size OperandSize (OperandSize.Size64))
+            (lower_cmove MInst (MInst.CmoveOr size cc1 cc2 (gpr_to_gpr_mem (value_regs_get_gpr cons 0)) (value_regs_get_gpr alt 0) dst1))
+            (upper_cmove MInst (MInst.CmoveOr size cc1 cc2 (gpr_to_gpr_mem (value_regs_get_gpr cons 1)) (value_regs_get_gpr alt 1) dst2)))
+        (ConsumesFlags.ConsumesFlagsTwiceReturnsValueRegs
+         lower_cmove
+         upper_cmove
+         (value_regs (gpr_to_reg (writable_gpr_to_gpr dst1))
+                     (gpr_to_reg (writable_gpr_to_gpr dst2))))))
+
+(rule (cmove_or_from_values (is_gpr_type (is_single_register_type ty)) cc1 cc2 consequent alternative)
+      (cmove_or ty cc1 cc2 (put_in_gpr_mem consequent) (put_in_gpr alternative)))
+
+(rule (cmove_or_from_values (is_xmm_type (is_single_register_type ty)) cc1 cc2 consequent alternative)
+      (cmove_or_xmm ty cc1 cc2 (put_in_xmm_mem consequent) (put_in_xmm alternative)))
 
 ;; Helper for creating `MInst.MovzxRmR` instructions.
 (decl movzx (Type ExtMode GprMem) Gpr)
