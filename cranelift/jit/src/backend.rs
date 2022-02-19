@@ -95,7 +95,7 @@ impl JITBuilder {
     /// back to a platform-specific search (this typically involves searching
     /// the current process for public symbols, followed by searching the
     /// platform's C runtime).
-    pub fn symbol<K>(&mut self, name: K, ptr: *const u8) -> &Self
+    pub fn symbol<K>(&mut self, name: K, ptr: *const u8) -> &mut Self
     where
         K: Into<String>,
     {
@@ -106,7 +106,7 @@ impl JITBuilder {
     /// Define multiple symbols in the internal symbol table.
     ///
     /// Using this is equivalent to calling `symbol` on each element.
-    pub fn symbols<It, K>(&mut self, symbols: It) -> &Self
+    pub fn symbols<It, K>(&mut self, symbols: It) -> &mut Self
     where
         It: IntoIterator<Item = (K, *const u8)>,
         K: Into<String>,
@@ -277,7 +277,7 @@ impl JITModule {
                         }
                     }
                 };
-                if let Some(ptr) = self.lookup_symbol(&name) {
+                if let Some(ptr) = self.lookup_symbol(name) {
                     ptr
                 } else if linkage == Linkage::Preemptible {
                     0 as *const u8
@@ -483,12 +483,7 @@ impl JITModule {
         };
         for &libcall in all_libcalls {
             let sym = (module.libcall_names)(libcall);
-            let addr = if let Some(addr) = module
-                .symbols
-                .get(&sym)
-                .copied()
-                .or_else(|| lookup_with_dlsym(&sym))
-            {
+            let addr = if let Some(addr) = module.lookup_symbol(&sym) {
                 addr
             } else {
                 continue;
