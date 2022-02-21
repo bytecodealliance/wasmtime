@@ -58,35 +58,12 @@ pub enum FPUOpRI {
 }
 
 impl BitOp {
-    /// What is the opcode's native width?
-    pub fn operand_size(&self) -> OperandSize {
-        match self {
-            BitOp::RBit32 | BitOp::Clz32 | BitOp::Cls32 => OperandSize::Size32,
-            _ => OperandSize::Size64,
-        }
-    }
-
     /// Get the assembly mnemonic for this opcode.
     pub fn op_str(&self) -> &'static str {
         match self {
-            BitOp::RBit32 | BitOp::RBit64 => "rbit",
-            BitOp::Clz32 | BitOp::Clz64 => "clz",
-            BitOp::Cls32 | BitOp::Cls64 => "cls",
-        }
-    }
-}
-
-impl From<(Opcode, Type)> for BitOp {
-    /// Get the BitOp from the IR opcode.
-    fn from(op_ty: (Opcode, Type)) -> BitOp {
-        match op_ty {
-            (Opcode::Bitrev, I32) => BitOp::RBit32,
-            (Opcode::Bitrev, I64) => BitOp::RBit64,
-            (Opcode::Clz, I32) => BitOp::Clz32,
-            (Opcode::Clz, I64) => BitOp::Clz64,
-            (Opcode::Cls, I32) => BitOp::Cls32,
-            (Opcode::Cls, I64) => BitOp::Cls64,
-            _ => unreachable!("Called with non-bit op!: {:?}", op_ty),
+            BitOp::RBit => "rbit",
+            BitOp::Clz => "clz",
+            BitOp::Cls => "cls",
         }
     }
 }
@@ -2239,8 +2216,7 @@ impl Inst {
                 let extendop = extendop.show_rru(mb_rru);
                 format!("{} {}, {}, {}, {}", op, rd, rn, rm, extendop)
             }
-            &Inst::BitRR { op, rd, rn } => {
-                let size = op.operand_size();
+            &Inst::BitRR { op, size, rd, rn } => {
                 let op = op.op_str();
                 let rd = show_ireg_sized(rd.to_reg(), mb_rru, size);
                 let rn = show_ireg_sized(rn, mb_rru, size);

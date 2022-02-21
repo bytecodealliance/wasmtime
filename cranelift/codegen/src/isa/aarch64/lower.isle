@@ -1014,44 +1014,39 @@
 ;; the reversed result in the highest 8 bits, so we need to shift them down into
 ;; place.
 (rule (lower (has_type $I8 (bitrev x)))
-      (value_reg (lsr_imm $I32 (rbit32 (put_in_reg x)) (imm_shift_from_u8 24))))
+      (value_reg (lsr_imm $I32 (rbit $I32 (put_in_reg x)) (imm_shift_from_u8 24))))
 
 ;; Reversing an 16-bit value with a 32-bit bitrev instruction will place
 ;; the reversed result in the highest 16 bits, so we need to shift them down into
 ;; place.
 (rule (lower (has_type $I16 (bitrev x)))
-      (value_reg (lsr_imm $I32 (rbit32 (put_in_reg x)) (imm_shift_from_u8 16))))
-
-(rule (lower (has_type $I32 (bitrev x)))
-      (value_reg (rbit32 (put_in_reg x))))
-
-(rule (lower (has_type $I64 (bitrev x)))
-      (value_reg (rbit64 (put_in_reg x))))
+      (value_reg (lsr_imm $I32 (rbit $I32 (put_in_reg x)) (imm_shift_from_u8 16))))
 
 (rule (lower (has_type $I128 (bitrev x)))
       (let (
           (val ValueRegs (put_in_regs x))
-          (lo_rev Reg (rbit64 (value_regs_get val 0)))
-          (hi_rev Reg (rbit64 (value_regs_get val 1)))
+          (lo_rev Reg (rbit $I64 (value_regs_get val 0)))
+          (hi_rev Reg (rbit $I64 (value_regs_get val 1)))
         )
         (value_regs hi_rev lo_rev)))
+
+(rule (lower (has_type ty (bitrev x)))
+      (value_reg (rbit ty (put_in_reg x))))
+
 
 ;;;; Rules for `clz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type $I8 (clz x)))
-      (value_reg (sub_imm $I32 (clz32 (put_in_reg_zext32 x)) (u8_into_imm12 24))))
+      (value_reg (sub_imm $I32 (a64_clz $I32 (put_in_reg_zext32 x)) (u8_into_imm12 24))))
 
 (rule (lower (has_type $I16 (clz x)))
-      (value_reg (sub_imm $I32 (clz32 (put_in_reg_zext32 x)) (u8_into_imm12 16))))
-
-(rule (lower (has_type $I32 (clz x)))
-      (value_reg (clz32 (put_in_reg x))))
-
-(rule (lower (has_type $I64 (clz x)))
-      (value_reg (clz64 (put_in_reg x))))
+      (value_reg (sub_imm $I32 (a64_clz $I32 (put_in_reg_zext32 x)) (u8_into_imm12 16))))
 
 (rule (lower (has_type $I128 (clz x)))
       (lower_clz128 (put_in_regs x)))
+
+(rule (lower (has_type ty (clz x)))
+      (value_reg (a64_clz ty (put_in_reg x))))
 
 ;; clz hi_clz, hi
 ;; clz lo_clz, lo
@@ -1061,8 +1056,8 @@
 (decl lower_clz128 (ValueRegs) ValueRegs)
 (rule (lower_clz128 val)
       (let (
-        (hi_clz Reg (clz64 (value_regs_get val 1)))
-        (lo_clz Reg (clz64 (value_regs_get val 0)))
+        (hi_clz Reg (a64_clz $I64 (value_regs_get val 1)))
+        (lo_clz Reg (a64_clz $I64 (value_regs_get val 0)))
         (tmp Reg (lsr_imm $I64 hi_clz (imm_shift_from_u8 6)))
       )
       (value_regs (madd64 lo_clz tmp hi_clz) (imm $I64 0))))
@@ -1074,38 +1069,29 @@
 ;; leading zeros of the reversed value.
 
 (rule (lower (has_type $I8 (ctz x)))
-      (value_reg (clz32 (orr_imm $I32 (rbit32 (put_in_reg x)) (u64_into_imm_logic $I32 0x800000)))))
+      (value_reg (a64_clz $I32 (orr_imm $I32 (rbit $I32 (put_in_reg x)) (u64_into_imm_logic $I32 0x800000)))))
 
 (rule (lower (has_type $I16 (ctz x)))
-      (value_reg (clz32 (orr_imm $I32 (rbit32 (put_in_reg x)) (u64_into_imm_logic $I32 0x8000)))))
-
-(rule (lower (has_type $I32 (ctz x)))
-      (value_reg (clz32 (rbit32 (put_in_reg x)))))
-
-(rule (lower (has_type $I64 (ctz x)))
-      (value_reg (clz64 (rbit64 (put_in_reg x)))))
+      (value_reg (a64_clz $I32 (orr_imm $I32 (rbit $I32 (put_in_reg x)) (u64_into_imm_logic $I32 0x8000)))))
 
 (rule (lower (has_type $I128 (ctz x)))
       (let (
         (val ValueRegs (put_in_regs x))
-        (lo Reg (rbit64 (value_regs_get val 0)))
-        (hi Reg (rbit64 (value_regs_get val 1)))
+        (lo Reg (rbit $I64 (value_regs_get val 0)))
+        (hi Reg (rbit $I64 (value_regs_get val 1)))
       )
       (lower_clz128 (value_regs hi lo))))
+
+(rule (lower (has_type ty (ctz x)))
+      (value_reg (a64_clz ty (rbit ty (put_in_reg x)))))
 
 ;;;; Rules for `cls` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type $I8 (cls x)))
-      (value_reg (sub_imm $I32 (cls32 (put_in_reg_zext32 x)) (u8_into_imm12 24))))
+      (value_reg (sub_imm $I32 (a64_cls $I32 (put_in_reg_zext32 x)) (u8_into_imm12 24))))
 
 (rule (lower (has_type $I16 (cls x)))
-      (value_reg (sub_imm $I32 (cls32 (put_in_reg_zext32 x)) (u8_into_imm12 16))))
-
-(rule (lower (has_type $I32 (cls x)))
-      (value_reg (cls32 (put_in_reg x))))
-
-(rule (lower (has_type $I64 (cls x)))
-      (value_reg (cls64 (put_in_reg x))))
+      (value_reg (sub_imm $I32 (a64_cls $I32 (put_in_reg_zext32 x)) (u8_into_imm12 16))))
 
 ;; cls lo_cls, lo
 ;; cls hi_cls, hi
@@ -1121,8 +1107,8 @@
           (val ValueRegs (put_in_regs x))
           (lo Reg (value_regs_get val 0))
           (hi Reg (value_regs_get val 1))
-          (lo_cls Reg (cls64 lo))
-          (hi_cls Reg (cls64 hi))
+          (lo_cls Reg (a64_cls $I64 lo))
+          (hi_cls Reg (a64_cls $I64 hi))
           (sign_eq_eon Reg (eon $I64 hi lo))
           (sign_eq Reg (lsr_imm $I64 sign_eq_eon (imm_shift_from_u8 63)))
           (lo_sign_bits Reg (madd64 lo_cls sign_eq sign_eq))
@@ -1132,6 +1118,9 @@
           ))
         )
         (value_regs (add $I64 maybe_lo hi_cls) (imm $I64 0))))
+
+(rule (lower (has_type ty (cls x)))
+      (value_reg (a64_cls ty (put_in_reg x))))
 
 ;;;; Rules for `popcnt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

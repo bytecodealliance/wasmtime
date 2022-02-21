@@ -879,14 +879,15 @@ impl MachInstEmit for Inst {
                 sink.put4(enc_arith_rrr(top11, bits_15_10, rd, rn, rm));
             }
 
-            &Inst::BitRR { op, rd, rn, .. } => {
-                let size = if op.operand_size().is32() { 0b0 } else { 0b1 };
+            &Inst::BitRR {
+                op, size, rd, rn, ..
+            } => {
                 let (op1, op2) = match op {
-                    BitOp::RBit32 | BitOp::RBit64 => (0b00000, 0b000000),
-                    BitOp::Clz32 | BitOp::Clz64 => (0b00000, 0b000100),
-                    BitOp::Cls32 | BitOp::Cls64 => (0b00000, 0b000101),
+                    BitOp::RBit => (0b00000, 0b000000),
+                    BitOp::Clz => (0b00000, 0b000100),
+                    BitOp::Cls => (0b00000, 0b000101),
                 };
-                sink.put4(enc_bit_rr(size, op1, op2, rn, rd))
+                sink.put4(enc_bit_rr(size.sf_bit(), op1, op2, rn, rd))
             }
 
             &Inst::ULoad8 { rd, ref mem, flags }
