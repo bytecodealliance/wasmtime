@@ -34,7 +34,6 @@ mod export;
 mod externref;
 mod imports;
 mod instance;
-mod jit_int;
 mod memory;
 mod mmap;
 mod mmap_vec;
@@ -44,6 +43,8 @@ mod vmcontext;
 
 pub mod debug_builtins;
 pub mod libcalls;
+
+pub use wasmtime_jit_debug::gdb_jit_int::GdbJitImageRegistration;
 
 pub use crate::export::*;
 pub use crate::externref::*;
@@ -56,7 +57,6 @@ pub use crate::instance::{
 pub use crate::instance::{
     InstanceLimits, ModuleLimits, PoolingAllocationStrategy, PoolingInstanceAllocator,
 };
-pub use crate::jit_int::GdbJitImageRegistration;
 pub use crate::memory::{DefaultMemoryCreator, Memory, RuntimeLinearMemory, RuntimeMemoryCreator};
 pub use crate::mmap::Mmap;
 pub use crate::mmap_vec::MmapVec;

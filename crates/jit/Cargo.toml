@@ -12,6 +12,7 @@ edition = "2018"
 
 [dependencies]
 wasmtime-environ = { path = "../environ", version = "=0.34.0" }
+wasmtime-jit-debug = { path = "../jit-debug", version = "=0.34.0", features = ["perf_jitdump"], optional = true }
 wasmtime-runtime = { path = "../runtime", version = "=0.34.0" }
 region = "2.2.0"
 thiserror = "1.0.4"
@@ -35,7 +36,7 @@ winapi = { version = "0.3.8", features = ["winnt", "impl-default"] }
 rustix = "0.33.0"
 
 [features]
-jitdump = []
+jitdump = ['wasmtime-jit-debug']
 vtune = ['ittapi-rs']
 
 [badges]

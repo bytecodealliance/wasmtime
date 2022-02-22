@@ -3628,8 +3628,18 @@ dependencies = [
  "target-lexicon",
  "thiserror",
  "wasmtime-environ",
+ "wasmtime-jit-debug",
  "wasmtime-runtime",
  "winapi",
+]
+
+[[package]]
+name = "wasmtime-jit-debug"
+version = "0.34.0"
+dependencies = [
+ "lazy_static",
+ "object",
+ "rustix",
 ]
 
 [[package]]
@@ -3641,7 +3651,6 @@ dependencies = [
  "cc",
  "cfg-if 1.0.0",
  "indexmap",
- "lazy_static",
  "libc",
  "log",
  "mach",
@@ -3655,6 +3664,7 @@ dependencies = [
  "userfaultfd",
  "wasmtime-environ",
  "wasmtime-fiber",
+ "wasmtime-jit-debug",
  "winapi",
 ]
 
