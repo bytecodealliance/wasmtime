@@ -756,8 +756,8 @@ impl<'a> Arbitrary<'a> for CodegenSettings {
                     std:"sse3" => clif:"has_sse3" ratio: 1 in 1,
                     std:"ssse3" => clif:"has_ssse3" ratio: 1 in 1,
                     std:"sse4.1" => clif:"has_sse41" ratio: 1 in 1,
+                    std:"sse4.2" => clif:"has_sse42" ratio: 1 in 1,
 
-                    std:"sse4.2" => clif:"has_sse42",
                     std:"popcnt" => clif:"has_popcnt",
                     std:"avx" => clif:"has_avx",
                     std:"avx2" => clif:"has_avx2",

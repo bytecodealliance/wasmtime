@@ -554,6 +554,10 @@ impl Config {
     /// this does not enable the [relaxed simd proposal] as that is not
     /// implemented in Wasmtime at this time.
     ///
+    /// On x86_64 platforms note that enabling this feature requires SSE 4.2 and
+    /// below to be available on the target platform. Compilation will fail if
+    /// the compile target does not include SSE 4.2.
+    ///
     /// This is `true` by default.
     ///
     /// [proposal]: https://github.com/webassembly/simd

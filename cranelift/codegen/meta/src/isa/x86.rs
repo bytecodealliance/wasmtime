@@ -38,7 +38,7 @@ fn define_settings(shared: &SettingGroup) -> SettingGroup {
         "has_sse42",
         "Has support for SSE4.2.",
         "SSE4.2: CPUID.01H:ECX.SSE4_2[bit 20]",
-        false,
+        true,
     );
     let has_avx = settings.add_bool(
         "has_avx",
