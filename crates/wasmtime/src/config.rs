@@ -105,7 +105,7 @@ pub struct Config {
     pub(crate) parallel_compilation: bool,
     pub(crate) paged_memory_initialization: bool,
     pub(crate) memory_init_cow: bool,
-    pub(crate) memfd_guaranteed_dense_image_size: u64,
+    pub(crate) memory_guaranteed_dense_image_size: u64,
 }
 
 impl Config {
@@ -132,7 +132,7 @@ impl Config {
             // Default to paged memory initialization when using uffd on linux
             paged_memory_initialization: cfg!(all(target_os = "linux", feature = "uffd")),
             memory_init_cow: true,
-            memfd_guaranteed_dense_image_size: 16 << 20,
+            memory_guaranteed_dense_image_size: 16 << 20,
         };
         #[cfg(compiler)]
         {
@@ -1224,44 +1224,45 @@ impl Config {
         self
     }
 
-    /// Configures the "guaranteed dense image size" for memfd.
+    /// Configures the "guaranteed dense image size" for copy-on-write
+    /// initialized memories.
     ///
-    /// When using the memfd feature to initialize memory efficiently,
-    /// compiled modules contain an image of the module's initial
-    /// heap. If the module has a fairly sparse initial heap, with
-    /// just a few data segments at very different offsets, this could
-    /// result in a large region of zero bytes in the image. In other
-    /// words, it's not very memory-efficient.
+    /// When using the [`Config::memory_init_cow`] feature to initialize memory
+    /// efficiently (which is enabled by default), compiled modules contain an
+    /// image of the module's initial heap. If the module has a fairly sparse
+    /// initial heap, with just a few data segments at very different offsets,
+    /// this could result in a large region of zero bytes in the image. In
+    /// other words, it's not very memory-efficient.
     ///
     /// We normally use a heuristic to avoid this: if less than half
     /// of the initialized range (first non-zero to last non-zero
     /// byte) of any memory in the module has pages with nonzero
-    /// bytes, then we avoid memfd for the entire module.
+    /// bytes, then we avoid creating a memory image for the entire module.
     ///
-    /// However, if the embedder always needs the instantiation-time
-    /// efficiency of memfd, and is otherwise carefully controlling
-    /// parameters of the modules (for example, by limiting the
-    /// maximum heap size of the modules), then it may be desirable to
-    /// ensure memfd is used even if this could go against the
-    /// heuristic above. Thus, we add another condition: there is a
-    /// size of initialized data region up to which we *always* allow
-    /// memfd. The embedder can set this to a known maximum heap size
-    /// if they desire to always get the benefits of memfd.
+    /// However, if the embedder always needs the instantiation-time efficiency
+    /// of copy-on-write initialization, and is otherwise carefully controlling
+    /// parameters of the modules (for example, by limiting the maximum heap
+    /// size of the modules), then it may be desirable to ensure a memory image
+    /// is created even if this could go against the heuristic above. Thus, we
+    /// add another condition: there is a size of initialized data region up to
+    /// which we *always* allow a memory image. The embedder can set this to a
+    /// known maximum heap size if they desire to always get the benefits of
+    /// copy-on-write images.
     ///
     /// In the future we may implement a "best of both worlds"
     /// solution where we have a dense image up to some limit, and
     /// then support a sparse list of initializers beyond that; this
-    /// would get most of the benefit of memfd and pay the incremental
+    /// would get most of the benefit of copy-on-write and pay the incremental
     /// cost of eager initialization only for those bits of memory
     /// that are out-of-bounds. However, for now, an embedder desiring
     /// fast instantiation should ensure that this setting is as large
     /// as the maximum module initial memory content size.
     ///
     /// By default this value is 16 MiB.
-    #[cfg(feature = "memfd")]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "memfd")))]
-    pub fn memfd_guaranteed_dense_image_size(&mut self, size_in_bytes: u64) -> &mut Self {
-        self.memfd_guaranteed_dense_image_size = size_in_bytes;
+    #[cfg(feature = "memory-init-cow")]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "memory-init-cow")))]
+    pub fn memory_guaranteed_dense_image_size(&mut self, size_in_bytes: u64) -> &mut Self {
+        self.memory_guaranteed_dense_image_size = size_in_bytes;
         self
     }
 
@@ -1335,7 +1336,7 @@ impl Clone for Config {
             parallel_compilation: self.parallel_compilation,
             paged_memory_initialization: self.paged_memory_initialization,
             memory_init_cow: self.memory_init_cow,
-            memfd_guaranteed_dense_image_size: self.memfd_guaranteed_dense_image_size,
+            memory_guaranteed_dense_image_size: self.memory_guaranteed_dense_image_size,
         }
     }
 }

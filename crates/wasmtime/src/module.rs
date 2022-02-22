@@ -431,7 +431,7 @@ impl Module {
             // such as mmap'ing from a file to get copy-on-write.
             if engine.config().memory_init_cow {
                 let align = engine.compiler().page_size_align();
-                let max_always_allowed = engine.config().memfd_guaranteed_dense_image_size;
+                let max_always_allowed = engine.config().memory_guaranteed_dense_image_size;
                 translation.try_static_init(align, max_always_allowed);
             }
 
