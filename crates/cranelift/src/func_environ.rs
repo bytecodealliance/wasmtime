@@ -299,7 +299,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     /// reference count.
     ///
     /// The new reference count is returned.
-    fn mutate_extenref_ref_count(
+    fn mutate_externref_ref_count(
         &mut self,
         builder: &mut FunctionBuilder,
         externref: ir::Value,
@@ -1036,7 +1036,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 // * store the reference into the bump table at `*next`,
                 // * and finally increment the `next` bump finger.
                 builder.switch_to_block(no_gc_block);
-                self.mutate_extenref_ref_count(builder, elem, 1);
+                self.mutate_externref_ref_count(builder, elem, 1);
                 builder.ins().store(ir::MemFlags::trusted(), elem, next, 0);
 
                 let new_next = builder
@@ -1159,7 +1159,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                     .brnz(value_is_null, check_current_elem_block, &[]);
                 builder.ins().jump(inc_ref_count_block, &[]);
                 builder.switch_to_block(inc_ref_count_block);
-                self.mutate_extenref_ref_count(builder, value, 1);
+                self.mutate_externref_ref_count(builder, value, 1);
                 builder.ins().jump(check_current_elem_block, &[]);
 
                 // Grab the current element from the table, and store the new
@@ -1193,7 +1193,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 builder.ins().jump(continue_block, &[]);
 
                 builder.switch_to_block(dec_ref_count_block);
-                let prev_ref_count = self.mutate_extenref_ref_count(builder, current_elem, -1);
+                let prev_ref_count = self.mutate_externref_ref_count(builder, current_elem, -1);
                 let one = builder.ins().iconst(pointer_type, 1);
                 builder
                     .ins()
