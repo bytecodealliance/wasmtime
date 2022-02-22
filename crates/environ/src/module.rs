@@ -322,7 +322,31 @@ impl ModuleTranslation<'_> {
     ///
     /// Note that the constraints for `Paged` are the same as those for
     /// `Static`.
-    pub fn try_static_init(&mut self, page_size: u64) {
+    ///
+    /// Takes a `page_size` argument in order to ensure that all
+    /// initialization is page-aligned for mmap-ability, and
+    /// `max_image_size_always_allowed` to control how we decide
+    /// whether to use static init.
+    ///
+    /// We will try to avoid generating very sparse images, which are
+    /// possible if e.g. a module has an initializer at offset 0 and a
+    /// very high offset (say, 1 GiB). To avoid this, we use a dual
+    /// condition: we always allow images less than
+    /// `max_image_size_always_allowed`, and the embedder of Wasmtime
+    /// can set this if desired to ensure that static init should
+    /// always be done if the size of the module or its heaps is
+    /// otherwise bounded by the system. We also allow images with
+    /// static init data bigger than that, but only if it is "dense",
+    /// defined as having at least half (50%) of its pages with some
+    /// data.
+    ///
+    /// We could do something slightly better by building a dense part
+    /// and keeping a sparse list of outlier/leftover segments (see
+    /// issue #3820). This would also allow mostly-static init of
+    /// modules that have some dynamically-placed data segments. But,
+    /// for now, this is sufficient to allow a system that "knows what
+    /// it's doing" to always get static init.
+    pub fn try_static_init(&mut self, page_size: u64, max_image_size_always_allowed: u64) {
         // First try to switch this memory initialization to the `Paged`
         // variant, if it isn't already. This will perform static bounds checks
         // and everything and massage it all into a format which is a bit easier
@@ -332,13 +356,6 @@ impl ModuleTranslation<'_> {
             MemoryInitialization::Paged { map } => map,
             _ => return,
         };
-
-        // Maximum size, in bytes, of an initialization image which is
-        // unconditionally allowed regardless of the input module's size and
-        // properties. This is chosen to be modestly small to allow useful cases
-        // to use an initialization image but not too large that if every module
-        // ran up to the limit here it shouldn't cause a problem.
-        const MAX_IMAGE_SIZE_ALWAYS_ALLOWED: u64 = 1 << 20; // 1 MB
 
         let memory_init_size = |pages: &[StaticMemoryInitializer]| {
             if pages.len() == 0 {
@@ -382,7 +399,7 @@ impl ModuleTranslation<'_> {
             // If the memory initialization image is larger than the size of all
             // data, then we still allow memory initialization if the image will
             // be of a relatively modest size, such as 1MB here.
-            if memory_init_size < MAX_IMAGE_SIZE_ALWAYS_ALLOWED {
+            if memory_init_size < max_image_size_always_allowed {
                 continue;
             }
 

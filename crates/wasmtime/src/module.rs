@@ -432,7 +432,8 @@ impl Module {
             // such as mmap'ing from a file to get copy-on-write.
             if engine.config().memfd {
                 let align = engine.compiler().page_size_align();
-                translation.try_static_init(align);
+                let max_always_allowed = engine.config().memfd_guaranteed_dense_image_size;
+                translation.try_static_init(align, max_always_allowed);
             }
 
             // Attempt to convert table initializer segments to
