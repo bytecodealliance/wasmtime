@@ -439,7 +439,8 @@ jobs:
 
     # ... and if this was an actual push (tag or `main`) then we publish a
     # new release. This'll automatically publish a tag release or update `dev`
-    # with this `sha`
+    # with this `sha`. Note that `continue-on-error` is set here so if this hits
+    # a bug we can go back and fetch and upload the release ourselves.
     - run: cd .github/actions/github-release && npm install --production
     - name: Publish Release
       uses: ./.github/actions/github-release
@@ -447,6 +448,7 @@ jobs:
       with:
         files: "dist/*"
         token: ${{ secrets.GITHUB_TOKEN }}
+      continue-on-error: true
 
   verify-publish:
     runs-on: ubuntu-latest
