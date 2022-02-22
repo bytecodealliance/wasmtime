@@ -178,7 +178,7 @@ fn isa_constructor(
     let isa_flags = x64_settings::Flags::new(&shared_flags, builder);
 
     // Check for compatibility between flags and ISA level
-    // requested. In particular, SIMD support requires SSE4.1.
+    // requested. In particular, SIMD support requires SSE4.2.
     if shared_flags.enable_simd() {
         if !isa_flags.has_sse3()
             || !isa_flags.has_ssse3()
