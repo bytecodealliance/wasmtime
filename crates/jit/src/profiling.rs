@@ -12,8 +12,8 @@ cfg_if::cfg_if! {
 }
 
 cfg_if::cfg_if! {
-    if #[cfg(all(feature = "vtune", target_os = "linux"))] {
-        #[path = "profiling/vtune_linux.rs"]
+    if #[cfg(all(feature = "vtune", target_arch = "x86_64"))] {
+        #[path = "profiling/vtune.rs"]
         mod vtune;
     } else {
         #[path = "profiling/vtune_disabled.rs"]

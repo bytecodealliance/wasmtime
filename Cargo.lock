@@ -1497,9 +1497,9 @@ checksum = "1aab8fc367588b89dcee83ab0fd66b72b50b72fa1904d7095045ace2b0c81c35"
 
 [[package]]
 name = "ittapi-rs"
-version = "0.1.6"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "265ed25cd5b53e9b02bf97a1f66ab7af1af7ab61f5d9ce1e05aeaed098723658"
+checksum = "f712648a1ad72fbfb7adc2772c331e8d90f022f8cf30cbabefba2878dd3172b0"
 dependencies = [
  "cc",
 ]

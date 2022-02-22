@@ -1,10 +1,6 @@
-//! Adds support for profiling JIT-ed code using VTune.
-//!
-//! ### Build
-//!
-//! ```ignore
-//! cargo build --features=vtune
-//! ```
+//! Adds support for profiling JIT-ed code using VTune. By default, VTune
+//! support is built in to Wasmtime (configure with the `vtune` feature flag).
+//! To enable it at runtime, use the `--vtune` CLI flag.
 //!
 //! ### Profile
 //!

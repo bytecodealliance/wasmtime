@@ -60,6 +60,7 @@ default = [
   'cranelift',
   'pooling-allocator',
   'memfd',
+  'vtune',
 ]
 
 # An on-by-default feature enabling runtime compilation of WebAssembly modules
