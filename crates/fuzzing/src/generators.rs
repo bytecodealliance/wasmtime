@@ -433,6 +433,7 @@ impl Config {
         cfg.wasm_bulk_memory(true)
             .wasm_reference_types(true)
             .wasm_module_linking(self.module_config.config.module_linking_enabled)
+            .wasm_multi_value(self.module_config.config.multi_value_enabled)
             .wasm_multi_memory(self.module_config.config.max_memories > 1)
             .wasm_simd(self.module_config.config.simd_enabled)
             .wasm_memory64(self.module_config.config.memory64_enabled)
@@ -648,10 +649,9 @@ impl<'a> Arbitrary<'a> for ModuleConfig {
         // Allow multi-table by default.
         config.max_tables = config.max_tables.max(4);
 
-        // Allow enabling some various wasm proposals by default.
-        config.bulk_memory_enabled = u.arbitrary()?;
-        config.reference_types_enabled = u.arbitrary()?;
-        config.simd_enabled = u.arbitrary()?;
+        // Allow enabling some various wasm proposals by default. Note that
+        // these are all unconditionally turned off even with
+        // `SwarmConfig::arbitrary`.
         config.memory64_enabled = u.arbitrary()?;
 
         Ok(ModuleConfig { config })

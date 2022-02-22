@@ -1187,6 +1187,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "flagset"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cda653ca797810c02f7ca4b804b40b8b95ae046eb989d356bce17919a8c25499"
+
+[[package]]
 name = "fnv"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3315,20 +3321,21 @@ checksum = "d7cff876b8f18eed75a66cf49b65e7f967cb354a7aa16003fb55dbfd25b44b4f"
 
 [[package]]
 name = "wasm-encoder"
-version = "0.6.0"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2caacc74c68c74f0008c4055cdf509c43e623775eaf73323bb818dcf666ed9bd"
+checksum = "aa9d9bf45fc46f71c407837c9b30b1e874197f2dc357588430b21e5017d290ab"
 dependencies = [
  "leb128",
 ]
 
 [[package]]
 name = "wasm-smith"
-version = "0.7.1"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab0a268c3562548522a7f98e057715fa37d1a39349354220886de6796b8a8ad4"
+checksum = "1bf1f1ae7d995f2d82326fda2c92deb2444fd3e59bf885fe9a4bbe9bde3b6c93"
 dependencies = [
  "arbitrary",
+ "flagset",
  "indexmap",
  "leb128",
  "wasm-encoder",
