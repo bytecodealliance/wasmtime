@@ -195,6 +195,14 @@ impl Table {
         Self::limit_new(plan, store)?;
         let size = plan.table.minimum;
         let ty = wasm_to_table_type(plan.table.wasm_ty)?;
+        if data.len() < (plan.table.minimum as usize) {
+            bail!(
+                "table allocation of {} elements does not meet this module's \
+                 minimum requirement of {} elements",
+                data.len(),
+                plan.table.minimum
+            );
+        }
         let data = match plan.table.maximum {
             Some(max) if (max as usize) < data.len() => &mut data[..max as usize],
             _ => data,

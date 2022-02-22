@@ -7,12 +7,12 @@ fn successful_instantiation() -> Result<()> {
     let mut config = Config::new();
     config.allocation_strategy(InstanceAllocationStrategy::Pooling {
         strategy: PoolingAllocationStrategy::NextAvailable,
-        module_limits: ModuleLimits {
+        instance_limits: InstanceLimits {
+            count: 1,
             memory_pages: 1,
             table_elements: 10,
             ..Default::default()
         },
-        instance_limits: InstanceLimits { count: 1 },
     });
     config.dynamic_memory_guard_size(0);
     config.static_memory_guard_size(0);
@@ -33,12 +33,12 @@ fn memory_limit() -> Result<()> {
     let mut config = Config::new();
     config.allocation_strategy(InstanceAllocationStrategy::Pooling {
         strategy: PoolingAllocationStrategy::NextAvailable,
-        module_limits: ModuleLimits {
+        instance_limits: InstanceLimits {
+            count: 1,
             memory_pages: 3,
             table_elements: 10,
             ..Default::default()
         },
-        instance_limits: InstanceLimits { count: 1 },
     });
     config.dynamic_memory_guard_size(0);
     config.static_memory_guard_size(65536);
@@ -46,13 +46,19 @@ fn memory_limit() -> Result<()> {
 
     let engine = Engine::new(&config)?;
 
-    // Module should fail to validate because the minimum is greater than the configured limit
-    match Module::new(&engine, r#"(module (memory 4))"#) {
-        Ok(_) => panic!("module compilation should fail"),
-        Err(e) => assert_eq!(
-            e.to_string(),
-            "memory index 0 has a minimum page size of 4 which exceeds the limit of 3"
-        ),
+    // Module should fail to instantiate because the minimum is greater than
+    // the configured limit
+    {
+        let mut store = Store::new(&engine, ());
+        let module = Module::new(&engine, r#"(module (memory 4))"#)?;
+        match Instance::new(&mut store, &module, &[]) {
+            Ok(_) => panic!("module instantiation should fail"),
+            Err(e) => assert_eq!(
+                e.to_string(),
+                "Insufficient resources: memory allocation of 196608 bytes \
+                 does not meet this module's minimum requirement of 262144 bytes",
+            ),
+        }
     }
 
     let module = Module::new(
@@ -101,13 +107,10 @@ fn memory_init() -> Result<()> {
     let mut config = Config::new();
     config.allocation_strategy(InstanceAllocationStrategy::Pooling {
         strategy: PoolingAllocationStrategy::NextAvailable,
-        module_limits: ModuleLimits {
-            memory_pages: 2,
-            table_elements: 0,
-            ..Default::default()
-        },
         instance_limits: InstanceLimits {
             count: 1,
+            memory_pages: 2,
+            table_elements: 0,
             ..Default::default()
         },
     });
@@ -137,13 +140,10 @@ fn memory_guard_page_trap() -> Result<()> {
     let mut config = Config::new();
     config.allocation_strategy(InstanceAllocationStrategy::Pooling {
         strategy: PoolingAllocationStrategy::NextAvailable,
-        module_limits: ModuleLimits {
-            memory_pages: 2,
-            table_elements: 0,
-            ..Default::default()
-        },
         instance_limits: InstanceLimits {
             count: 1,
+            memory_pages: 2,
+            table_elements: 0,
             ..Default::default()
         },
     });
@@ -196,12 +196,12 @@ fn memory_zeroed() -> Result<()> {
     let mut config = Config::new();
     config.allocation_strategy(InstanceAllocationStrategy::Pooling {
         strategy: PoolingAllocationStrategy::NextAvailable,
-        module_limits: ModuleLimits {
+        instance_limits: InstanceLimits {
+            count: 1,
             memory_pages: 1,
             table_elements: 0,
             ..Default::default()
         },
-        instance_limits: InstanceLimits { count: 1 },
     });
     config.dynamic_memory_guard_size(0);
     config.static_memory_guard_size(0);
@@ -239,12 +239,12 @@ fn table_limit() -> Result<()> {
     let mut config = Config::new();
     config.allocation_strategy(InstanceAllocationStrategy::Pooling {
         strategy: PoolingAllocationStrategy::NextAvailable,
-        module_limits: ModuleLimits {
+        instance_limits: InstanceLimits {
+            count: 1,
             memory_pages: 1,
             table_elements: TABLE_ELEMENTS,
             ..Default::default()
         },
-        instance_limits: InstanceLimits { count: 1 },
     });
     config.dynamic_memory_guard_size(0);
     config.static_memory_guard_size(0);
@@ -252,13 +252,19 @@ fn table_limit() -> Result<()> {
 
     let engine = Engine::new(&config)?;
 
-    // Module should fail to validate because the minimum is greater than the configured limit
-    match Module::new(&engine, r#"(module (table 31 funcref))"#) {
-        Ok(_) => panic!("module compilation should fail"),
-        Err(e) => assert_eq!(
-            e.to_string(),
-            "table index 0 has a minimum element size of 31 which exceeds the limit of 10"
-        ),
+    // Module should fail to instantiate because the minimum is greater than
+    // the configured limit
+    {
+        let mut store = Store::new(&engine, ());
+        let module = Module::new(&engine, r#"(module (table 31 funcref))"#)?;
+        match Instance::new(&mut store, &module, &[]) {
+            Ok(_) => panic!("module instantiation should fail"),
+            Err(e) => assert_eq!(
+                e.to_string(),
+                "Insufficient resources: table allocation of 10 elements does \
+                 not meet this module's minimum requirement of 31 elements",
+            ),
+        }
     }
 
     let module = Module::new(
@@ -316,13 +322,10 @@ fn table_init() -> Result<()> {
     let mut config = Config::new();
     config.allocation_strategy(InstanceAllocationStrategy::Pooling {
         strategy: PoolingAllocationStrategy::NextAvailable,
-        module_limits: ModuleLimits {
-            memory_pages: 0,
-            table_elements: 6,
-            ..Default::default()
-        },
         instance_limits: InstanceLimits {
             count: 1,
+            memory_pages: 0,
+            table_elements: 6,
             ..Default::default()
         },
     });
@@ -369,12 +372,12 @@ fn table_zeroed() -> Result<()> {
     let mut config = Config::new();
     config.allocation_strategy(InstanceAllocationStrategy::Pooling {
         strategy: PoolingAllocationStrategy::NextAvailable,
-        module_limits: ModuleLimits {
+        instance_limits: InstanceLimits {
+            count: 1,
             memory_pages: 1,
             table_elements: 10,
             ..Default::default()
         },
-        instance_limits: InstanceLimits { count: 1 },
     });
     config.dynamic_memory_guard_size(0);
     config.static_memory_guard_size(0);
@@ -413,13 +416,11 @@ fn instantiation_limit() -> Result<()> {
     let mut config = Config::new();
     config.allocation_strategy(InstanceAllocationStrategy::Pooling {
         strategy: PoolingAllocationStrategy::NextAvailable,
-        module_limits: ModuleLimits {
+        instance_limits: InstanceLimits {
+            count: INSTANCE_LIMIT,
             memory_pages: 1,
             table_elements: 10,
             ..Default::default()
-        },
-        instance_limits: InstanceLimits {
-            count: INSTANCE_LIMIT,
         },
     });
     config.dynamic_memory_guard_size(0);
@@ -465,12 +466,12 @@ fn preserve_data_segments() -> Result<()> {
     let mut config = Config::new();
     config.allocation_strategy(InstanceAllocationStrategy::Pooling {
         strategy: PoolingAllocationStrategy::NextAvailable,
-        module_limits: ModuleLimits {
+        instance_limits: InstanceLimits {
+            count: 2,
             memory_pages: 1,
             table_elements: 10,
             ..Default::default()
         },
-        instance_limits: InstanceLimits { count: 2 },
     });
     let engine = Engine::new(&config)?;
     let m = Module::new(
@@ -520,13 +521,12 @@ fn multi_memory_with_imported_memories() -> Result<()> {
     let mut config = Config::new();
     config.allocation_strategy(InstanceAllocationStrategy::Pooling {
         strategy: PoolingAllocationStrategy::NextAvailable,
-        module_limits: ModuleLimits {
+        instance_limits: InstanceLimits {
+            count: 1,
+            memories: 2,
             memory_pages: 1,
-            imported_memories: 1,
-            memories: 1,
             ..Default::default()
         },
-        instance_limits: InstanceLimits { count: 1 },
     });
     config.wasm_multi_memory(true);
 
@@ -567,8 +567,10 @@ fn drop_externref_global_during_module_init() -> Result<()> {
     config.wasm_reference_types(true);
     config.allocation_strategy(InstanceAllocationStrategy::Pooling {
         strategy: PoolingAllocationStrategy::NextAvailable,
-        module_limits: Default::default(),
-        instance_limits: InstanceLimits { count: 1 },
+        instance_limits: InstanceLimits {
+            count: 1,
+            ..Default::default()
+        },
     });
 
     let engine = Engine::new(&config)?;

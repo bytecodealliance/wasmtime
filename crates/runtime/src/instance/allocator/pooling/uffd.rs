@@ -96,7 +96,7 @@ pub fn decommit_stack_pages(addr: *mut u8, len: usize) -> Result<()> {
 /// the page fault handler will detect an out of bounds access and treat the page, temporarily,
 /// as a guard page.
 pub(super) fn initialize_memory_pool(pool: &MemoryPool) -> Result<()> {
-    if pool.memory_size == 0 || pool.max_wasm_pages == 0 {
+    if pool.memory_reservation_size == 0 || pool.max_memory_size == 0 {
         return Ok(());
     }
 
@@ -105,7 +105,7 @@ pub(super) fn initialize_memory_pool(pool: &MemoryPool) -> Result<()> {
             unsafe {
                 region::protect(
                     base as _,
-                    pool.max_wasm_pages as usize * WASM_PAGE_SIZE,
+                    pool.max_memory_size,
                     region::Protection::READ_WRITE,
                 )
                 .context("failed to initialize memory pool for uffd")?;
@@ -177,7 +177,7 @@ impl FaultLocator {
             max_instances: instances.max_instances,
             memories_start,
             memories_end,
-            memory_size: instances.memories.memory_size,
+            memory_size: instances.memories.memory_reservation_size,
             max_memories: instances.memories.max_memories,
         }
     }
@@ -438,8 +438,8 @@ impl Drop for PageFaultHandler {
 mod test {
     use super::*;
     use crate::{
-        Imports, InstanceAllocationRequest, InstanceLimits, ModuleLimits,
-        PoolingAllocationStrategy, Store, StorePtr,
+        Imports, InstanceAllocationRequest, InstanceLimits, PoolingAllocationStrategy, Store,
+        StorePtr,
     };
     use std::sync::atomic::AtomicU64;
     use std::sync::Arc;
@@ -448,20 +448,15 @@ mod test {
     #[cfg(target_pointer_width = "64")]
     #[test]
     fn test_address_locator() {
-        let module_limits = ModuleLimits {
-            imported_functions: 0,
-            imported_tables: 0,
-            imported_memories: 0,
-            imported_globals: 0,
-            types: 0,
-            functions: 0,
+        let instance_limits = InstanceLimits {
+            count: 3,
             tables: 0,
             memories: 2,
-            globals: 0,
             table_elements: 0,
             memory_pages: 2,
+            size: 1000,
+            ..Default::default()
         };
-        let instance_limits = InstanceLimits { count: 3 };
         let tunables = Tunables {
             static_memory_bound: 10,
             static_memory_offset_guard_size: 0,
@@ -471,7 +466,6 @@ mod test {
 
         let instances = InstancePool::new(
             PoolingAllocationStrategy::Random,
-            &module_limits,
             &instance_limits,
             &tunables,
         )
@@ -480,7 +474,7 @@ mod test {
         let locator = FaultLocator::new(&instances);
 
         assert_eq!(locator.instances_start, instances.mapping.as_ptr() as usize);
-        assert_eq!(locator.instance_size, 4096);
+        assert_eq!(locator.instance_size, 1008);
         assert_eq!(locator.max_instances, 3);
         assert_eq!(
             locator.memories_start,
@@ -499,7 +493,7 @@ mod test {
 
             let mut module = Module::new();
 
-            for _ in 0..module_limits.memories {
+            for _ in 0..instance_limits.memories {
                 module.memory_plans.push(MemoryPlan {
                     memory: Memory {
                         minimum: 2,
@@ -512,8 +506,6 @@ mod test {
                     pre_guard_size: 0,
                 });
             }
-
-            module_limits.validate(&module).expect("should validate");
 
             // An InstanceAllocationRequest with a module must also have
             // a non-null StorePtr. Here we mock just enough of a store

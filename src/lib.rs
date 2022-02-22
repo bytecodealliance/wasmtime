@@ -101,7 +101,7 @@ use std::path::PathBuf;
 use structopt::StructOpt;
 use wasmtime::{Config, ProfilingStrategy};
 #[cfg(feature = "pooling-allocator")]
-use wasmtime::{InstanceLimits, ModuleLimits, PoolingAllocationStrategy};
+use wasmtime::{InstanceLimits, PoolingAllocationStrategy};
 
 fn pick_profiling_strategy(jitdump: bool, vtune: bool) -> Result<ProfilingStrategy> {
     Ok(match (jitdump, vtune) {
@@ -347,15 +347,9 @@ impl CommonOptions {
         #[cfg(feature = "pooling-allocator")]
         {
             if self.pooling_allocator {
-                let mut module_limits = ModuleLimits::default();
-                module_limits.functions = 50000;
-                module_limits.types = 10000;
-                module_limits.globals = 1000;
-                module_limits.memory_pages = 2048;
                 let instance_limits = InstanceLimits::default();
                 config.allocation_strategy(wasmtime::InstanceAllocationStrategy::Pooling {
                     strategy: PoolingAllocationStrategy::NextAvailable,
-                    module_limits,
                     instance_limits,
                 });
             }

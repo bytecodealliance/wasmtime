@@ -289,7 +289,13 @@ impl<'a> SerializedModule<'a> {
             )
         })?;
 
-        Module::from_parts(engine, modules, main_module, Arc::new(types), &upvars)
+        Ok(Module::from_parts(
+            engine,
+            modules,
+            main_module,
+            Arc::new(types),
+            &upvars,
+        ))
     }
 
     pub fn into_parts(

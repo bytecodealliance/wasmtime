@@ -355,7 +355,13 @@ impl Module {
             )
         })?;
 
-        Self::from_parts(engine, modules, main_module, Arc::new(types), &[])
+        Ok(Self::from_parts(
+            engine,
+            modules,
+            main_module,
+            Arc::new(types),
+            &[],
+        ))
     }
 
     /// Converts an input binary-encoded WebAssembly module to compilation
@@ -537,10 +543,7 @@ impl Module {
         main_module: usize,
         types: Arc<TypeTables>,
         module_upvars: &[serialization::SerializedModuleUpvar],
-    ) -> Result<Self> {
-        // Validate the module can be used with the current allocator
-        engine.allocator().validate(modules[main_module].module())?;
-
+    ) -> Self {
         let signatures = Arc::new(SignatureCollection::new_for_module(
             engine.signatures(),
             &types.wasm_signatures,
@@ -564,9 +567,9 @@ impl Module {
                     &signatures,
                 )
             })
-            .collect::<Result<Vec<_>>>()?;
+            .collect();
 
-        return Ok(Self {
+        return Self {
             inner: Arc::new(ModuleInner {
                 engine: engine.clone(),
                 types,
@@ -576,7 +579,7 @@ impl Module {
                 signatures,
                 memory_images: OnceCell::new(),
             }),
-        });
+        };
 
         fn mk(
             engine: &Engine,
@@ -586,9 +589,9 @@ impl Module {
             artifact_upvars: &[usize],
             module_upvars: &[serialization::SerializedModuleUpvar],
             signatures: &Arc<SignatureCollection>,
-        ) -> Result<Module> {
+        ) -> Module {
             let module = artifacts[module_index].clone();
-            Ok(Module {
+            Module {
                 inner: Arc::new(ModuleInner {
                     engine: engine.clone(),
                     types: types.clone(),
@@ -611,10 +614,10 @@ impl Module {
                                 signatures,
                             )
                         })
-                        .collect::<Result<Vec<_>>>()?,
+                        .collect(),
                     signatures: signatures.clone(),
                 }),
-            })
+            }
         }
     }
 

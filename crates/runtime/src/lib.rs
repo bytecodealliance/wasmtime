@@ -54,9 +54,7 @@ pub use crate::instance::{
     OnDemandInstanceAllocator, StorePtr,
 };
 #[cfg(feature = "pooling-allocator")]
-pub use crate::instance::{
-    InstanceLimits, ModuleLimits, PoolingAllocationStrategy, PoolingInstanceAllocator,
-};
+pub use crate::instance::{InstanceLimits, PoolingAllocationStrategy, PoolingInstanceAllocator};
 pub use crate::memory::{DefaultMemoryCreator, Memory, RuntimeLinearMemory, RuntimeMemoryCreator};
 pub use crate::mmap::Mmap;
 pub use crate::mmap_vec::MmapVec;

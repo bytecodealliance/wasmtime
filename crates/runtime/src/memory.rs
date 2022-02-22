@@ -315,6 +315,15 @@ impl Memory {
     ) -> Result<Self> {
         let (minimum, maximum) = Self::limit_new(plan, store)?;
 
+        if base.len() < minimum {
+            bail!(
+                "memory allocation of {} bytes does not meet this module's \
+                 minimum requirement of {} bytes",
+                base.len(),
+                minimum,
+            );
+        }
+
         let base = match maximum {
             Some(max) if max < base.len() => &mut base[..max],
             _ => base,
