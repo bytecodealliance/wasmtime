@@ -10,6 +10,10 @@ on:
     # https://github.com/actions/labeler/issues/12
     - cron: '*/5 * * * *'
 
+concurrency:
+  group: issue-triage
+  cancel-in-progress: true
+
 jobs:
   triage:
     runs-on: ubuntu-latest
