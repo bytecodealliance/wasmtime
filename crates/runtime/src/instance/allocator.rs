@@ -365,9 +365,9 @@ fn initialize_memories(instance: &mut Instance, module: &Module) -> Result<(), I
         },
         &mut |memory_index, init| {
             // If this initializer applies to a defined memory but that memory
-            // doesn't need initialization, due to something like uffd or memfd
-            // pre-initializing it via mmap magic, then this initializer can be
-            // skipped entirely.
+            // doesn't need initialization, due to something like uffd or
+            // copy-on-write pre-initializing it via mmap magic, then this
+            // initializer can be skipped entirely.
             if let Some(memory_index) = module.defined_memory_index(memory_index) {
                 if !instance.memories[memory_index].needs_init() {
                     return true;
@@ -480,12 +480,11 @@ impl OnDemandInstanceAllocator {
         let mut memories: PrimaryMap<DefinedMemoryIndex, _> =
             PrimaryMap::with_capacity(module.memory_plans.len() - num_imports);
         for (memory_idx, plan) in module.memory_plans.iter().skip(num_imports) {
-            // Create a MemFdSlot if there is an image for this memory.
             let defined_memory_idx = module
                 .defined_memory_index(memory_idx)
                 .expect("Skipped imports, should never be None");
-            let memfd_image = runtime_info
-                .memfd_image(defined_memory_idx)
+            let image = runtime_info
+                .memory_image(defined_memory_idx)
                 .map_err(|err| InstantiationError::Resource(err.into()))?;
 
             memories.push(
@@ -497,7 +496,7 @@ impl OnDemandInstanceAllocator {
                             .get()
                             .expect("if module has memory plans, store is not empty")
                     },
-                    memfd_image,
+                    image,
                 )
                 .map_err(InstantiationError::Resource)?,
             );

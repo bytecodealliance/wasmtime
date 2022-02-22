@@ -256,7 +256,7 @@ pub struct WasmtimeConfig {
     /// The Wasmtime memory configuration to use.
     pub memory_config: MemoryConfig,
     force_jump_veneers: bool,
-    memfd: bool,
+    memory_init_cow: bool,
     memfd_guaranteed_dense_image_size: u64,
     use_precompiled_cwasm: bool,
     /// Configuration for the instance allocation strategy to use.
@@ -440,7 +440,7 @@ impl Config {
             .cranelift_opt_level(self.wasmtime.opt_level.to_wasmtime())
             .interruptable(self.wasmtime.interruptable)
             .consume_fuel(self.wasmtime.consume_fuel)
-            .memfd(self.wasmtime.memfd)
+            .memory_init_cow(self.wasmtime.memory_init_cow)
             .memfd_guaranteed_dense_image_size(std::cmp::min(
                 // Clamp this at 16MiB so we don't get huge in-memory
                 // images during fuzzing.

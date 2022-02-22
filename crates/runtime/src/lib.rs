@@ -19,7 +19,7 @@
         clippy::use_self
     )
 )]
-#![cfg_attr(not(memfd), allow(unused_variables, unreachable_code))]
+#![cfg_attr(not(memory_init_cow), allow(unused_variables, unreachable_code))]
 
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
@@ -74,15 +74,15 @@ pub use crate::vmcontext::{
 mod module_id;
 pub use module_id::{CompiledModuleId, CompiledModuleIdAllocator};
 
-#[cfg(memfd)]
-mod memfd;
-#[cfg(memfd)]
-pub use crate::memfd::{MemFdSlot, MemoryMemFd, ModuleMemFds};
+#[cfg(memory_init_cow)]
+mod cow;
+#[cfg(memory_init_cow)]
+pub use crate::cow::{MemoryImage, MemoryImageSlot, ModuleMemoryImages};
 
-#[cfg(not(memfd))]
-mod memfd_disabled;
-#[cfg(not(memfd))]
-pub use crate::memfd_disabled::{MemFdSlot, MemoryMemFd, ModuleMemFds};
+#[cfg(not(memory_init_cow))]
+mod cow_disabled;
+#[cfg(not(memory_init_cow))]
+pub use crate::cow_disabled::{MemoryImage, MemoryImageSlot, ModuleMemoryImages};
 
 /// Version number of this crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -158,7 +158,7 @@ pub unsafe trait Store {
 /// instance state.
 ///
 /// When an instance is created, it holds an Arc<dyn ModuleRuntimeInfo>
-/// so that it can get to signatures, metadata on functions, memfd and
+/// so that it can get to signatures, metadata on functions, memory and
 /// funcref-table images, etc. All of these things are ordinarily known
 /// by the higher-level layers of Wasmtime. Specifically, the main
 /// implementation of this trait is provided by
@@ -180,8 +180,10 @@ pub trait ModuleRuntimeInfo: Send + Sync + 'static {
     /// `image_base`.
     fn function_info(&self, func_index: DefinedFuncIndex) -> &FunctionInfo;
 
-    /// memfd images, if any, for this module.
-    fn memfd_image(&self, memory: DefinedMemoryIndex) -> anyhow::Result<Option<&Arc<MemoryMemFd>>>;
+    /// Returns the `MemoryImage` structure used for copy-on-write
+    /// initialization of the memory, if it's applicable.
+    fn memory_image(&self, memory: DefinedMemoryIndex)
+        -> anyhow::Result<Option<&Arc<MemoryImage>>>;
 
     /// A unique ID for this particular module. This can be used to
     /// allow for fastpaths to optimize a "re-instantiate the same

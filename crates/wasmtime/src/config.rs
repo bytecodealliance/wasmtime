@@ -104,7 +104,7 @@ pub struct Config {
     pub(crate) module_version: ModuleVersionStrategy,
     pub(crate) parallel_compilation: bool,
     pub(crate) paged_memory_initialization: bool,
-    pub(crate) memfd: bool,
+    pub(crate) memory_init_cow: bool,
     pub(crate) memfd_guaranteed_dense_image_size: u64,
 }
 
@@ -131,7 +131,7 @@ impl Config {
             parallel_compilation: true,
             // Default to paged memory initialization when using uffd on linux
             paged_memory_initialization: cfg!(all(target_os = "linux", feature = "uffd")),
-            memfd: true,
+            memory_init_cow: true,
             memfd_guaranteed_dense_image_size: 16 << 20,
         };
         #[cfg(compiler)]
@@ -1201,26 +1201,26 @@ impl Config {
     ///
     /// This feature of Wasmtime is also platform-specific:
     ///
-    /// * Unix - this feature is only supported when loading modules from a
-    ///   precompiled file via [`Module::deserialize_file`] where there is a
-    ///   file descriptor to use to map data into the process. Note that the
-    ///   module must have been compiled with this setting enabled as well.
-    /// * Linux - in addition to supporting [`Module::deserialize_file`] the
-    ///   `memfd_create` syscall can be used on Linux to support
-    ///   mapped-memory-initialization of all wasm modules, not just those
-    ///   loaded from a precompiled file on disk. A `memfd` is created when the
-    ///   [`Module`] is created for the contents of the initial heap.
+    /// * Linux - this feature is supported for all instances of [`Module`].
+    ///   Modules backed by an existing mmap (such as those created by
+    ///   [`Module::deserialize_file`]) will reuse that mmap to cow-initialize
+    ///   memory. Other instance of [`Module`] may use the `memfd_create`
+    ///   syscall to create an initialization image to `mmap`.
+    /// * Unix (not Linux) - this feature is only supported when loading modules
+    ///   from a precompiled file via [`Module::deserialize_file`] where there
+    ///   is a file descriptor to use to map data into the process. Note that
+    ///   the module must have been compiled with this setting enabled as well.
     /// * Windows - there is no support for this feature at this time. Memory
     ///   initialization will always copy bytes.
     ///
-    /// By default memfd is enabled.
+    /// By default this option is enabled.
     ///
     /// [`Module::deserialize_file`]: crate::Module::deserialize_file
     /// [`Module`]: crate::Module
-    #[cfg(feature = "memfd")]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "memfd")))]
-    pub fn memfd(&mut self, memfd: bool) -> &mut Self {
-        self.memfd = memfd;
+    #[cfg(feature = "memory-init-cow")]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "memory-init-cow")))]
+    pub fn memory_init_cow(&mut self, enable: bool) -> &mut Self {
+        self.memory_init_cow = enable;
         self
     }
 
@@ -1334,7 +1334,7 @@ impl Clone for Config {
             module_version: self.module_version.clone(),
             parallel_compilation: self.parallel_compilation,
             paged_memory_initialization: self.paged_memory_initialization,
-            memfd: self.memfd,
+            memory_init_cow: self.memory_init_cow,
             memfd_guaranteed_dense_image_size: self.memfd_guaranteed_dense_image_size,
         }
     }

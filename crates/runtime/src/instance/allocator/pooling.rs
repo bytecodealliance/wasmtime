@@ -12,7 +12,7 @@ use super::{
     InstantiationError,
 };
 use crate::{instance::Instance, Memory, Mmap, Table};
-use crate::{MemFdSlot, ModuleRuntimeInfo, Store};
+use crate::{MemoryImageSlot, ModuleRuntimeInfo, Store};
 use anyhow::{anyhow, bail, Context, Result};
 use libc::c_void;
 use std::convert::TryFrom;
@@ -259,7 +259,7 @@ pub enum PoolingAllocationStrategy {
 
 impl Default for PoolingAllocationStrategy {
     fn default() -> Self {
-        if cfg!(memfd) {
+        if cfg!(memory_init_cow) {
             Self::ReuseAffinity
         } else {
             Self::NextAvailable
@@ -476,10 +476,12 @@ impl InstancePool {
             };
 
             if let Some(image) = runtime_info
-                .memfd_image(defined_index)
+                .memory_image(defined_index)
                 .map_err(|err| InstantiationError::Resource(err.into()))?
             {
-                let mut slot = self.memories.take_memfd_slot(instance_index, defined_index);
+                let mut slot = self
+                    .memories
+                    .take_memory_image_slot(instance_index, defined_index);
                 let initial_size = plan.memory.minimum * WASM_PAGE_SIZE as u64;
 
                 // If instantiation fails, we can propagate the error
@@ -487,7 +489,7 @@ impl InstancePool {
                 // handler to attempt to map the range with PROT_NONE
                 // memory, to reserve the space while releasing any
                 // stale mappings. The next use of this slot will then
-                // create a new MemFdSlot that will try to map over
+                // create a new slot that will try to map over
                 // this, returning errors as well if the mapping
                 // errors persist. The unmap-on-drop is best effort;
                 // if it fails, then we can still soundly continue
@@ -531,16 +533,16 @@ impl InstancePool {
 
             match memory {
                 Memory::Static {
-                    memfd_slot: Some(mut memfd_slot),
+                    memory_image: Some(mut image),
                     ..
                 } => {
-                    // If there was any error clearing the memfd, just
+                    // If there was any error clearing the image, just
                     // drop it here, and let the drop handler for the
-                    // MemFdSlot unmap in a way that retains the
+                    // slot unmap in a way that retains the
                     // address space reservation.
-                    if memfd_slot.clear_and_remain_ready().is_ok() {
+                    if image.clear_and_remain_ready().is_ok() {
                         self.memories
-                            .return_memfd_slot(instance_index, def_mem_idx, memfd_slot);
+                            .return_memory_image_slot(instance_index, def_mem_idx, image);
                     }
                 }
 
@@ -630,10 +632,10 @@ impl InstancePool {
 #[derive(Debug)]
 struct MemoryPool {
     mapping: Mmap,
-    // If using the memfd allocation scheme, the MemFd slots. We
+    // If using a copy-on-write allocation scheme, the slot management. We
     // dynamically transfer ownership of a slot to a Memory when in
     // use.
-    memfd_slots: Vec<Mutex<Option<MemFdSlot>>>,
+    image_slots: Vec<Mutex<Option<MemoryImageSlot>>>,
     // The size, in bytes, of each linear memory's reservation plus the guard
     // region allocated for it.
     memory_size: usize,
@@ -718,18 +720,18 @@ impl MemoryPool {
         let mapping = Mmap::accessible_reserved(0, allocation_size)
             .context("failed to create memory pool mapping")?;
 
-        let num_memfd_slots = if cfg!(memfd) {
+        let num_image_slots = if cfg!(memory_init_cow) {
             max_instances * max_memories
         } else {
             0
         };
-        let memfd_slots: Vec<_> = std::iter::repeat_with(|| Mutex::new(None))
-            .take(num_memfd_slots)
+        let image_slots: Vec<_> = std::iter::repeat_with(|| Mutex::new(None))
+            .take(num_image_slots)
             .collect();
 
         let pool = Self {
             mapping,
-            memfd_slots,
+            image_slots,
             memory_size,
             initial_memory_offset,
             max_memories,
@@ -758,18 +760,18 @@ impl MemoryPool {
             .map(move |i| self.get_base(instance_index, DefinedMemoryIndex::from_u32(i as u32)))
     }
 
-    /// Take ownership of the given memfd slot. Must be returned via
-    /// `return_memfd_slot` when the instance is done using it.
-    fn take_memfd_slot(
+    /// Take ownership of the given image slot. Must be returned via
+    /// `return_memory_image_slot` when the instance is done using it.
+    fn take_memory_image_slot(
         &self,
         instance_index: usize,
         memory_index: DefinedMemoryIndex,
-    ) -> MemFdSlot {
+    ) -> MemoryImageSlot {
         let idx = instance_index * self.max_memories + (memory_index.as_u32() as usize);
-        let maybe_slot = self.memfd_slots[idx].lock().unwrap().take();
+        let maybe_slot = self.image_slots[idx].lock().unwrap().take();
 
         maybe_slot.unwrap_or_else(|| {
-            MemFdSlot::create(
+            MemoryImageSlot::create(
                 self.get_base(instance_index, memory_index) as *mut c_void,
                 0,
                 self.memory_size,
@@ -777,28 +779,28 @@ impl MemoryPool {
         })
     }
 
-    /// Return ownership of the given memfd slot.
-    fn return_memfd_slot(
+    /// Return ownership of the given image slot.
+    fn return_memory_image_slot(
         &self,
         instance_index: usize,
         memory_index: DefinedMemoryIndex,
-        slot: MemFdSlot,
+        slot: MemoryImageSlot,
     ) {
         assert!(!slot.is_dirty());
         let idx = instance_index * self.max_memories + (memory_index.as_u32() as usize);
-        *self.memfd_slots[idx].lock().unwrap() = Some(slot);
+        *self.image_slots[idx].lock().unwrap() = Some(slot);
     }
 }
 
 impl Drop for MemoryPool {
     fn drop(&mut self) {
         // Clear the `clear_no_drop` flag (i.e., ask to *not* clear on
-        // drop) for all MemFdSlots, and then drop them here. This is
+        // drop) for all slots, and then drop them here. This is
         // valid because the one `Mmap` that covers the whole region
         // can just do its one munmap.
-        for mut memfd in std::mem::take(&mut self.memfd_slots) {
-            if let Some(memfd_slot) = memfd.get_mut().unwrap() {
-                memfd_slot.no_clear_on_drop();
+        for mut slot in std::mem::take(&mut self.image_slots) {
+            if let Some(slot) = slot.get_mut().unwrap() {
+                slot.no_clear_on_drop();
             }
         }
     }
@@ -1145,7 +1147,7 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{CompiledModuleId, Imports, MemoryMemFd, StorePtr, VMSharedSignatureIndex};
+    use crate::{CompiledModuleId, Imports, MemoryImage, StorePtr, VMSharedSignatureIndex};
     use std::sync::Arc;
     use wasmtime_environ::{
         DefinedFuncIndex, DefinedMemoryIndex, EntityRef, FunctionInfo, Global, GlobalInit, Memory,
@@ -1456,10 +1458,10 @@ mod test {
             fn signature(&self, _: SignatureIndex) -> VMSharedSignatureIndex {
                 unimplemented!()
             }
-            fn memfd_image(
+            fn memory_image(
                 &self,
                 _: DefinedMemoryIndex,
-            ) -> anyhow::Result<Option<&Arc<MemoryMemFd>>> {
+            ) -> anyhow::Result<Option<&Arc<MemoryImage>>> {
                 Ok(None)
             }
 
