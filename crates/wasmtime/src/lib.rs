@@ -281,14 +281,14 @@
 //!   efficient reuse of resources for high-concurrency and
 //!   high-instantiation-count scenarios.
 //!
-//! * `memfd` - Enabled by default, this feature builds in support for a
-//!   Linux-specific feature of creating a `memfd` where applicable for a
-//!   [`Module`]'s initial memory. This makes instantiation much faster by
+//! * `memory-init-cow` - Enabled by default, this feature builds in support
+//!   for, on supported platforms, initializing wasm linear memories with
+//!   copy-on-write heap mappings. This makes instantiation much faster by
 //!   `mmap`-ing the initial memory image into place instead of copying memory
-//!   into place, allowing sharing pages that end up only getting read and
-//!   otherwise using copy-on-write for efficient initialization of memory. Note
+//!   into place, allowing sharing pages that end up only getting read. Note
 //!   that this is simply compile-time support and this must also be enabled at
-//!   run-time via [`Config::memfd`].
+//!   run-time via [`Config::memory_init_cow`] (which is also enabled by
+//!   default).
 //!
 //! ## Examples
 //!

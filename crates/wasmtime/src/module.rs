@@ -16,7 +16,7 @@ use wasmtime_environ::{
 };
 use wasmtime_jit::{CompiledModule, CompiledModuleInfo, TypeTables};
 use wasmtime_runtime::{
-    CompiledModuleId, MemoryMemFd, MmapVec, ModuleMemFds, VMSharedSignatureIndex,
+    CompiledModuleId, MemoryImage, MmapVec, ModuleMemoryImages, VMSharedSignatureIndex,
 };
 
 mod registry;
@@ -114,11 +114,10 @@ struct ModuleInner {
     types: Arc<TypeTables>,
     /// Registered shared signature for the module.
     signatures: Arc<SignatureCollection>,
-    /// A set of memfd images for memories, if any. Note that module
-    /// instantiation (hence the need for lazy init) may happen for
-    /// the same module concurrently in multiple Stores, so we use a
-    /// OnceCell.
-    memfds: OnceCell<Option<ModuleMemFds>>,
+    /// A set of initialization images for memories, if any. Note that module
+    /// instantiation (hence the need for lazy init) may happen for the same
+    /// module concurrently in multiple Stores, so we use a OnceCell.
+    memory_images: OnceCell<Option<ModuleMemoryImages>>,
 }
 
 impl Module {
@@ -430,9 +429,9 @@ impl Module {
             // can either at runtime be implemented as a single memcpy to
             // initialize memory or otherwise enabling virtual-memory-tricks
             // such as mmap'ing from a file to get copy-on-write.
-            if engine.config().memfd {
+            if engine.config().memory_init_cow {
                 let align = engine.compiler().page_size_align();
-                let max_always_allowed = engine.config().memfd_guaranteed_dense_image_size;
+                let max_always_allowed = engine.config().memory_guaranteed_dense_image_size;
                 translation.try_static_init(align, max_always_allowed);
             }
 
@@ -575,7 +574,7 @@ impl Module {
                 artifact_upvars: modules,
                 module_upvars,
                 signatures,
-                memfds: OnceCell::new(),
+                memory_images: OnceCell::new(),
             }),
         });
 
@@ -594,7 +593,7 @@ impl Module {
                     engine: engine.clone(),
                     types: types.clone(),
                     module,
-                    memfds: OnceCell::new(),
+                    memory_images: OnceCell::new(),
                     artifact_upvars: artifact_upvars
                         .iter()
                         .map(|i| artifacts[*i].clone())
@@ -720,7 +719,7 @@ impl Module {
                 types: self.inner.types.clone(),
                 engine: self.inner.engine.clone(),
                 module,
-                memfds: OnceCell::new(),
+                memory_images: OnceCell::new(),
                 artifact_upvars: artifact_upvars
                     .iter()
                     .map(|i| self.inner.artifact_upvars[*i].clone())
@@ -1032,21 +1031,21 @@ impl wasmtime_runtime::ModuleRuntimeInfo for ModuleInner {
         self.module.func_info(index)
     }
 
-    fn memfd_image(&self, memory: DefinedMemoryIndex) -> Result<Option<&Arc<MemoryMemFd>>> {
-        if !self.engine.config().memfd {
+    fn memory_image(&self, memory: DefinedMemoryIndex) -> Result<Option<&Arc<MemoryImage>>> {
+        if !self.engine.config().memory_init_cow {
             return Ok(None);
         }
 
-        let memfds = self.memfds.get_or_try_init(|| {
-            ModuleMemFds::new(
+        let images = self.memory_images.get_or_try_init(|| {
+            ModuleMemoryImages::new(
                 self.module.module(),
                 self.module.wasm_data(),
                 Some(self.module.mmap()),
             )
         })?;
-        Ok(memfds
+        Ok(images
             .as_ref()
-            .and_then(|memfds| memfds.get_memory_image(memory)))
+            .and_then(|images| images.get_memory_image(memory)))
     }
 
     fn unique_id(&self) -> Option<CompiledModuleId> {
@@ -1138,7 +1137,7 @@ impl wasmtime_runtime::ModuleRuntimeInfo for BareModuleInfo {
         &self.function_info[index]
     }
 
-    fn memfd_image(&self, _memory: DefinedMemoryIndex) -> Result<Option<&Arc<MemoryMemFd>>> {
+    fn memory_image(&self, _memory: DefinedMemoryIndex) -> Result<Option<&Arc<MemoryImage>>> {
         Ok(None)
     }
 

@@ -11,17 +11,13 @@ fn main() {
         .file("src/helpers.c")
         .compile("wasmtime-helpers");
 
-    // Check to see if we are on Unix and the `memfd` feature is
-    // active. If so, enable the `memfd` rustc cfg so `#[cfg(memfd)]`
-    // will work.
-    //
-    // Note that while this is called memfd it only actually uses the `memfd`
-    // crate on Linux and on other Unix platforms this tries to reuse mmap'd
-    // `*.cwasm` files.
+    // Check to see if we are on Unix and the `memory-init-cow` feature is
+    // active. If so, enable the `memory_init_cow` rustc cfg so
+    // `#[cfg(memory_init_cow)]` will work.
     let family = env::var("CARGO_CFG_TARGET_FAMILY").unwrap();
-    let is_memfd = env::var("CARGO_FEATURE_MEMFD").is_ok();
+    let memory_init_cow = env::var("CARGO_FEATURE_MEMORY_INIT_COW").is_ok();
     let is_uffd = env::var("CARGO_FEATURE_UFFD").is_ok();
-    if &family == "unix" && is_memfd && !is_uffd {
-        println!("cargo:rustc-cfg=memfd");
+    if &family == "unix" && memory_init_cow && !is_uffd {
+        println!("cargo:rustc-cfg=memory_init_cow");
     }
 }

@@ -252,6 +252,12 @@ struct CommonOptions {
     #[structopt(long)]
     paged_memory_initialization: bool,
 
+    /// Disables the default of attempting to initialize linear memory via a
+    /// copy-on-write mapping.
+    #[cfg(feature = "memory-init-cow")]
+    #[structopt(long)]
+    disable_memory_init_cow: bool,
+
     /// Enables the pooling allocator, in place of the on-demand
     /// allocator.
     #[cfg(feature = "pooling-allocator")]
@@ -335,6 +341,8 @@ impl CommonOptions {
         config.epoch_interruption(self.epoch_interruption);
         config.generate_address_map(!self.disable_address_map);
         config.paged_memory_initialization(self.paged_memory_initialization);
+        #[cfg(feature = "memory-init-cow")]
+        config.memory_init_cow(!self.disable_memory_init_cow);
 
         #[cfg(feature = "pooling-allocator")]
         {

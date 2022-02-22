@@ -1,5 +1,5 @@
-//! memfd support: creation of backing images for modules, and logic
-//! to support mapping these backing images into memory.
+//! Copy-on-write initialization support: creation of backing images for
+//! modules, and logic to support mapping these backing images into memory.
 
 use crate::InstantiationError;
 use crate::MmapVec;
@@ -11,30 +11,30 @@ use std::sync::Arc;
 use std::{convert::TryFrom, ops::Range};
 use wasmtime_environ::{DefinedMemoryIndex, MemoryInitialization, Module, PrimaryMap};
 
-/// MemFDs containing backing images for certain memories in a module.
+/// Backing images for memories in a module.
 ///
-/// This is meant to be built once, when a module is first
-/// loaded/constructed, and then used many times for instantiation.
-pub struct ModuleMemFds {
-    memories: PrimaryMap<DefinedMemoryIndex, Option<Arc<MemoryMemFd>>>,
+/// This is meant to be built once, when a module is first loaded/constructed,
+/// and then used many times for instantiation.
+pub struct ModuleMemoryImages {
+    memories: PrimaryMap<DefinedMemoryIndex, Option<Arc<MemoryImage>>>,
 }
 
-impl ModuleMemFds {
-    /// Get the MemoryMemFd for a given memory.
-    pub fn get_memory_image(&self, defined_index: DefinedMemoryIndex) -> Option<&Arc<MemoryMemFd>> {
+impl ModuleMemoryImages {
+    /// Get the MemoryImage for a given memory.
+    pub fn get_memory_image(&self, defined_index: DefinedMemoryIndex) -> Option<&Arc<MemoryImage>> {
         self.memories[defined_index].as_ref()
     }
 }
 
 /// One backing image for one memory.
 #[derive(Debug)]
-pub struct MemoryMemFd {
+pub struct MemoryImage {
     /// The file descriptor source of this image.
     ///
     /// This might be an mmaped `*.cwasm` file or on Linux it could also be a
     /// `Memfd` as an anonymous file in memory. In either case this is used as
     /// the backing-source for the CoW image.
-    fd: MemFdSource,
+    fd: FdSource,
 
     /// Length of image, in bytes.
     ///
@@ -59,29 +59,29 @@ pub struct MemoryMemFd {
 }
 
 #[derive(Debug)]
-enum MemFdSource {
+enum FdSource {
     Mmap(Arc<File>),
     #[cfg(target_os = "linux")]
     Memfd(memfd::Memfd),
 }
 
-impl MemFdSource {
+impl FdSource {
     fn as_file(&self) -> &File {
         match self {
-            MemFdSource::Mmap(file) => file,
+            FdSource::Mmap(file) => file,
             #[cfg(target_os = "linux")]
-            MemFdSource::Memfd(memfd) => memfd.as_file(),
+            FdSource::Memfd(memfd) => memfd.as_file(),
         }
     }
 }
 
-impl MemoryMemFd {
+impl MemoryImage {
     fn new(
         page_size: u32,
         offset: u64,
         data: &[u8],
         mmap: Option<&MmapVec>,
-    ) -> Result<Option<MemoryMemFd>> {
+    ) -> Result<Option<MemoryImage>> {
         // Sanity-check that various parameters are page-aligned.
         let len = data.len();
         let offset = u32::try_from(offset).unwrap();
@@ -115,8 +115,8 @@ impl MemoryMemFd {
             assert_eq!((mmap.original_offset() as u32) % page_size, 0);
 
             if let Some(file) = mmap.original_file() {
-                return Ok(Some(MemoryMemFd {
-                    fd: MemFdSource::Mmap(file.clone()),
+                return Ok(Some(MemoryImage {
+                    fd: FdSource::Mmap(file.clone()),
                     fd_offset: u64::try_from(mmap.original_offset() + (data_start - start))
                         .unwrap(),
                     linear_memory_offset,
@@ -159,8 +159,8 @@ impl MemoryMemFd {
                 memfd.add_seal(memfd::FileSeal::SealWrite)?;
                 memfd.add_seal(memfd::FileSeal::SealSeal)?;
 
-                Ok(Some(MemoryMemFd {
-                    fd: MemFdSource::Memfd(memfd),
+                Ok(Some(MemoryImage {
+                    fd: FdSource::Memfd(memfd),
                     fd_offset: 0,
                     linear_memory_offset,
                     len,
@@ -188,15 +188,15 @@ fn create_memfd() -> Result<memfd::Memfd> {
         .map_err(|e| e.into())
 }
 
-impl ModuleMemFds {
-    /// Create a new `ModuleMemFds` for the given module. This can be
+impl ModuleMemoryImages {
+    /// Create a new `ModuleMemoryImages` for the given module. This can be
     /// passed in as part of a `InstanceAllocationRequest` to speed up
-    /// instantiation and execution by using memfd-backed memories.
+    /// instantiation and execution by using copy-on-write-backed memories.
     pub fn new(
         module: &Module,
         wasm_data: &[u8],
         mmap: Option<&MmapVec>,
-    ) -> Result<Option<ModuleMemFds>> {
+    ) -> Result<Option<ModuleMemoryImages>> {
         let map = match &module.memory_initialization {
             MemoryInitialization::Static { map } => map,
             _ => return Ok(None),
@@ -223,30 +223,30 @@ impl ModuleMemFds {
             };
 
             // Get the image for this wasm module  as a subslice of `wasm_data`,
-            // and then use that to try to create the `MemoryMemFd`. If this
-            // creation files then we fail creating `ModuleMemFds` since this
+            // and then use that to try to create the `MemoryImage`. If this
+            // creation files then we fail creating `ModuleMemoryImages` since this
             // memory couldn't be represented.
             let data = &wasm_data[init.data.start as usize..init.data.end as usize];
-            let memfd = match MemoryMemFd::new(page_size, init.offset, data, mmap)? {
-                Some(memfd) => memfd,
+            let image = match MemoryImage::new(page_size, init.offset, data, mmap)? {
+                Some(image) => image,
                 None => return Ok(None),
             };
 
-            let idx = memories.push(Some(Arc::new(memfd)));
+            let idx = memories.push(Some(Arc::new(image)));
             assert_eq!(idx, defined_memory);
         }
 
-        Ok(Some(ModuleMemFds { memories }))
+        Ok(Some(ModuleMemoryImages { memories }))
     }
 }
 
-/// A single slot handled by the memfd instance-heap mechanism.
+/// A single slot handled by the copy-on-write memory initialization mechanism.
 ///
 /// The mmap scheme is:
 ///
 /// base ==> (points here)
 /// - (image.offset bytes)   anonymous zero memory, pre-image
-/// - (image.len bytes)      CoW mapping of memfd heap image
+/// - (image.len bytes)      CoW mapping of memory image
 /// - (up to static_size)    anonymous zero memory, post-image
 ///
 /// The ordering of mmaps to set this up is:
@@ -257,7 +257,7 @@ impl ModuleMemFds {
 /// - per instantiation of new image in a slot:
 ///   - mmap of anonymous zero memory, from 0 to max heap size
 ///     (static_size)
-///   - mmap of CoW'd memfd image, from `image.offset` to
+///   - mmap of CoW'd image, from `image.offset` to
 ///     `image.offset + image.len`. This overwrites part of the
 ///     anonymous zero memory, potentially splitting it into a pre-
 ///     and post-region.
@@ -265,15 +265,15 @@ impl ModuleMemFds {
 ///     heap size; we re-mprotect it with R+W bits when the heap is
 ///     grown.
 #[derive(Debug)]
-pub struct MemFdSlot {
+pub struct MemoryImageSlot {
     /// The base of the actual heap memory. Bytes at this address are
     /// what is seen by the Wasm guest code.
     base: usize,
     /// The maximum static memory size, plus post-guard.
     static_size: usize,
-    /// The memfd image that backs this memory. May be `None`, in
+    /// The image that backs this memory. May be `None`, in
     /// which case the memory is all zeroes.
-    pub(crate) image: Option<Arc<MemoryMemFd>>,
+    pub(crate) image: Option<Arc<MemoryImage>>,
     /// The initial heap size.
     initial_size: usize,
     /// The current heap size. All memory above `base + cur_size`
@@ -290,19 +290,19 @@ pub struct MemFdSlot {
     /// from offset 0 to `initial_size` are accessible R+W and the
     /// rest of the slot is inaccessible.
     dirty: bool,
-    /// Whether this MemFdSlot is responsible for mapping anonymous
+    /// Whether this MemoryImageSlot is responsible for mapping anonymous
     /// memory (to hold the reservation while overwriting mappings
     /// specific to this slot) in place when it is dropped. Default
     /// on, unless the caller knows what they are doing.
     clear_on_drop: bool,
 }
 
-impl MemFdSlot {
-    /// Create a new MemFdSlot. Assumes that there is an anonymous
+impl MemoryImageSlot {
+    /// Create a new MemoryImageSlot. Assumes that there is an anonymous
     /// mmap backing in the given range to start.
     pub(crate) fn create(base_addr: *mut c_void, initial_size: usize, static_size: usize) -> Self {
         let base = base_addr as usize;
-        MemFdSlot {
+        MemoryImageSlot {
             base,
             static_size,
             initial_size,
@@ -313,7 +313,7 @@ impl MemFdSlot {
         }
     }
 
-    /// Inform the MemFdSlot that it should *not* clear the underlying
+    /// Inform the MemoryImageSlot that it should *not* clear the underlying
     /// address space when dropped. This should be used only when the
     /// caller will clear or reuse the address space in some other
     /// way.
@@ -335,7 +335,7 @@ impl MemFdSlot {
     pub(crate) fn instantiate(
         &mut self,
         initial_size_bytes: usize,
-        maybe_image: Option<&Arc<MemoryMemFd>>,
+        maybe_image: Option<&Arc<MemoryImage>>,
     ) -> Result<(), InstantiationError> {
         assert!(!self.dirty);
         assert_eq!(self.cur_size, self.initial_size);
@@ -543,17 +543,17 @@ impl MemFdSlot {
     }
 }
 
-impl Drop for MemFdSlot {
+impl Drop for MemoryImageSlot {
     fn drop(&mut self) {
-        // The MemFdSlot may be dropped if there is an error during
+        // The MemoryImageSlot may be dropped if there is an error during
         // instantiation: for example, if a memory-growth limiter
         // disallows a guest from having a memory of a certain size,
-        // after we've already initialized the MemFdSlot.
+        // after we've already initialized the MemoryImageSlot.
         //
         // We need to return this region of the large pool mmap to a
         // safe state (with no module-specific mappings). The
-        // MemFdSlot will not be returned to the MemoryPool, so a new
-        // MemFdSlot will be created and overwrite the mappings anyway
+        // MemoryImageSlot will not be returned to the MemoryPool, so a new
+        // MemoryImageSlot will be created and overwrite the mappings anyway
         // on the slot's next use; but for safety and to avoid
         // resource leaks it's better not to have stale mappings to a
         // possibly-otherwise-dead module's image.
@@ -563,17 +563,17 @@ impl Drop for MemFdSlot {
         // *can't* simply munmap, because that leaves a hole in the
         // middle of the pooling allocator's big memory area that some
         // other random mmap may swoop in and take, to be trampled
-        // over by the next MemFdSlot later.
+        // over by the next MemoryImageSlot later.
         //
         // Since we're in drop(), we can't sanely return an error if
         // this mmap fails. Let's ignore the failure if so; the next
-        // MemFdSlot to be created for this slot will try to overwrite
+        // MemoryImageSlot to be created for this slot will try to overwrite
         // the existing stale mappings, and return a failure properly
         // if we still cannot map new memory.
         //
         // The exception to all of this is if the `unmap_on_drop` flag
         // (which is set by default) is false. If so, the owner of
-        // this MemFdSlot has indicated that it will clean up in some
+        // this MemoryImageSlot has indicated that it will clean up in some
         // other way.
         if self.clear_on_drop {
             let _ = self.reset_with_anon_memory();
@@ -585,12 +585,12 @@ impl Drop for MemFdSlot {
 mod test {
     use std::sync::Arc;
 
-    use super::{create_memfd, MemFdSlot, MemFdSource, MemoryMemFd};
+    use super::{create_memfd, FdSource, MemoryImage, MemoryImageSlot};
     use crate::mmap::Mmap;
     use anyhow::Result;
     use std::io::Write;
 
-    fn create_memfd_with_data(offset: usize, data: &[u8]) -> Result<MemoryMemFd> {
+    fn create_memfd_with_data(offset: usize, data: &[u8]) -> Result<MemoryImage> {
         // Offset must be page-aligned.
         let page_size = region::page::size();
         assert_eq!(offset & (page_size - 1), 0);
@@ -601,8 +601,8 @@ mod test {
         let image_len = (data.len() + page_size - 1) & !(page_size - 1);
         memfd.as_file().set_len(image_len as u64)?;
 
-        Ok(MemoryMemFd {
-            fd: MemFdSource::Memfd(memfd),
+        Ok(MemoryImage {
+            fd: FdSource::Memfd(memfd),
             len: image_len,
             fd_offset: 0,
             linear_memory_offset: offset,
@@ -613,8 +613,8 @@ mod test {
     fn instantiate_no_image() {
         // 4 MiB mmap'd area, not accessible
         let mut mmap = Mmap::accessible_reserved(0, 4 << 20).unwrap();
-        // Create a MemFdSlot on top of it
-        let mut memfd = MemFdSlot::create(mmap.as_mut_ptr() as *mut _, 0, 4 << 20);
+        // Create a MemoryImageSlot on top of it
+        let mut memfd = MemoryImageSlot::create(mmap.as_mut_ptr() as *mut _, 0, 4 << 20);
         memfd.no_clear_on_drop();
         assert!(!memfd.is_dirty());
         // instantiate with 64 KiB initial size
@@ -645,8 +645,8 @@ mod test {
     fn instantiate_image() {
         // 4 MiB mmap'd area, not accessible
         let mut mmap = Mmap::accessible_reserved(0, 4 << 20).unwrap();
-        // Create a MemFdSlot on top of it
-        let mut memfd = MemFdSlot::create(mmap.as_mut_ptr() as *mut _, 0, 4 << 20);
+        // Create a MemoryImageSlot on top of it
+        let mut memfd = MemoryImageSlot::create(mmap.as_mut_ptr() as *mut _, 0, 4 << 20);
         memfd.no_clear_on_drop();
         // Create an image with some data.
         let image = Arc::new(create_memfd_with_data(4096, &[1, 2, 3, 4]).unwrap());

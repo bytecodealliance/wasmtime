@@ -98,14 +98,14 @@ default = [
   "vtune",
   "wasi-nn",
   "pooling-allocator",
-  "memfd",
+  "memory-init-cow",
 ]
 jitdump = ["wasmtime/jitdump"]
 vtune = ["wasmtime/vtune"]
 wasi-crypto = ["wasmtime-wasi-crypto"]
 wasi-nn = ["wasmtime-wasi-nn"]
 uffd = ["wasmtime/uffd"]
-memfd = ["wasmtime/memfd"]
+memory-init-cow = ["wasmtime/memory-init-cow"]
 pooling-allocator = ["wasmtime/pooling-allocator"]
 all-arch = ["wasmtime/all-arch"]
 posix-signals-on-macos = ["wasmtime/posix-signals-on-macos"]

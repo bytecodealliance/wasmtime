@@ -104,8 +104,8 @@ pub struct Config {
     pub(crate) module_version: ModuleVersionStrategy,
     pub(crate) parallel_compilation: bool,
     pub(crate) paged_memory_initialization: bool,
-    pub(crate) memfd: bool,
-    pub(crate) memfd_guaranteed_dense_image_size: u64,
+    pub(crate) memory_init_cow: bool,
+    pub(crate) memory_guaranteed_dense_image_size: u64,
 }
 
 impl Config {
@@ -131,8 +131,8 @@ impl Config {
             parallel_compilation: true,
             // Default to paged memory initialization when using uffd on linux
             paged_memory_initialization: cfg!(all(target_os = "linux", feature = "uffd")),
-            memfd: false,
-            memfd_guaranteed_dense_image_size: 16 << 20,
+            memory_init_cow: true,
+            memory_guaranteed_dense_image_size: 16 << 20,
         };
         #[cfg(compiler)]
         {
@@ -1178,71 +1178,91 @@ impl Config {
         self
     }
 
-    /// Configures whether `memfd`, if supported, will be used to initialize
-    /// applicable module memories.
+    /// Configures whether copy-on-write memory-mapped data is used to
+    /// initialize a linear memory.
     ///
-    /// This is a Linux-specific feature since `memfd` is only supported on
-    /// Linux. Support for this is also enabled by default at compile time but
-    /// is otherwise disabled at runtime by default. This feature needs to be
-    /// enabled to `true` for support to be used.
+    /// Initializing linear memory via a copy-on-write mapping can drastically
+    /// improve instantiation costs of a WebAssembly module because copying
+    /// memory is deferred. Additionally if a page of memory is only ever read
+    /// from WebAssembly and never written too then the same underlying page of
+    /// data will be reused between all instantiations of a module meaning that
+    /// if a module is instantiated many times this can lower the overall memory
+    /// required needed to run that module.
     ///
-    /// Also note that even if this feature is enabled it may not be applicable
-    /// to all memories in all wasm modules. At this time memories must meet
-    /// specific criteria to be memfd-initialized:
+    /// This feature is only applicable when a WebAssembly module meets specific
+    /// criteria to be initialized in this fashion, such as:
     ///
     /// * Only memories defined in the module can be initialized this way.
     /// * Data segments for memory must use statically known offsets.
     /// * Data segments for memory must all be in-bounds.
     ///
-    /// If all of the above applies, this setting is enabled, and the current
-    /// platform is Linux the `memfd` will be used to efficiently initialize
-    /// linear memories with `mmap` to avoid copying data from initializers into
-    /// linear memory.
-    #[cfg(feature = "memfd")]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "memfd")))]
-    pub fn memfd(&mut self, memfd: bool) -> &mut Self {
-        self.memfd = memfd;
+    /// Modules which do not meet these criteria will fall back to
+    /// initialization of linear memory based on copying memory.
+    ///
+    /// This feature of Wasmtime is also platform-specific:
+    ///
+    /// * Linux - this feature is supported for all instances of [`Module`].
+    ///   Modules backed by an existing mmap (such as those created by
+    ///   [`Module::deserialize_file`]) will reuse that mmap to cow-initialize
+    ///   memory. Other instance of [`Module`] may use the `memfd_create`
+    ///   syscall to create an initialization image to `mmap`.
+    /// * Unix (not Linux) - this feature is only supported when loading modules
+    ///   from a precompiled file via [`Module::deserialize_file`] where there
+    ///   is a file descriptor to use to map data into the process. Note that
+    ///   the module must have been compiled with this setting enabled as well.
+    /// * Windows - there is no support for this feature at this time. Memory
+    ///   initialization will always copy bytes.
+    ///
+    /// By default this option is enabled.
+    ///
+    /// [`Module::deserialize_file`]: crate::Module::deserialize_file
+    /// [`Module`]: crate::Module
+    #[cfg(feature = "memory-init-cow")]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "memory-init-cow")))]
+    pub fn memory_init_cow(&mut self, enable: bool) -> &mut Self {
+        self.memory_init_cow = enable;
         self
     }
 
-    /// Configures the "guaranteed dense image size" for memfd.
+    /// Configures the "guaranteed dense image size" for copy-on-write
+    /// initialized memories.
     ///
-    /// When using the memfd feature to initialize memory efficiently,
-    /// compiled modules contain an image of the module's initial
-    /// heap. If the module has a fairly sparse initial heap, with
-    /// just a few data segments at very different offsets, this could
-    /// result in a large region of zero bytes in the image. In other
-    /// words, it's not very memory-efficient.
+    /// When using the [`Config::memory_init_cow`] feature to initialize memory
+    /// efficiently (which is enabled by default), compiled modules contain an
+    /// image of the module's initial heap. If the module has a fairly sparse
+    /// initial heap, with just a few data segments at very different offsets,
+    /// this could result in a large region of zero bytes in the image. In
+    /// other words, it's not very memory-efficient.
     ///
     /// We normally use a heuristic to avoid this: if less than half
     /// of the initialized range (first non-zero to last non-zero
     /// byte) of any memory in the module has pages with nonzero
-    /// bytes, then we avoid memfd for the entire module.
+    /// bytes, then we avoid creating a memory image for the entire module.
     ///
-    /// However, if the embedder always needs the instantiation-time
-    /// efficiency of memfd, and is otherwise carefully controlling
-    /// parameters of the modules (for example, by limiting the
-    /// maximum heap size of the modules), then it may be desirable to
-    /// ensure memfd is used even if this could go against the
-    /// heuristic above. Thus, we add another condition: there is a
-    /// size of initialized data region up to which we *always* allow
-    /// memfd. The embedder can set this to a known maximum heap size
-    /// if they desire to always get the benefits of memfd.
+    /// However, if the embedder always needs the instantiation-time efficiency
+    /// of copy-on-write initialization, and is otherwise carefully controlling
+    /// parameters of the modules (for example, by limiting the maximum heap
+    /// size of the modules), then it may be desirable to ensure a memory image
+    /// is created even if this could go against the heuristic above. Thus, we
+    /// add another condition: there is a size of initialized data region up to
+    /// which we *always* allow a memory image. The embedder can set this to a
+    /// known maximum heap size if they desire to always get the benefits of
+    /// copy-on-write images.
     ///
     /// In the future we may implement a "best of both worlds"
     /// solution where we have a dense image up to some limit, and
     /// then support a sparse list of initializers beyond that; this
-    /// would get most of the benefit of memfd and pay the incremental
+    /// would get most of the benefit of copy-on-write and pay the incremental
     /// cost of eager initialization only for those bits of memory
     /// that are out-of-bounds. However, for now, an embedder desiring
     /// fast instantiation should ensure that this setting is as large
     /// as the maximum module initial memory content size.
     ///
     /// By default this value is 16 MiB.
-    #[cfg(feature = "memfd")]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "memfd")))]
-    pub fn memfd_guaranteed_dense_image_size(&mut self, size_in_bytes: u64) -> &mut Self {
-        self.memfd_guaranteed_dense_image_size = size_in_bytes;
+    #[cfg(feature = "memory-init-cow")]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "memory-init-cow")))]
+    pub fn memory_guaranteed_dense_image_size(&mut self, size_in_bytes: u64) -> &mut Self {
+        self.memory_guaranteed_dense_image_size = size_in_bytes;
         self
     }
 
@@ -1315,8 +1335,8 @@ impl Clone for Config {
             module_version: self.module_version.clone(),
             parallel_compilation: self.parallel_compilation,
             paged_memory_initialization: self.paged_memory_initialization,
-            memfd: self.memfd,
-            memfd_guaranteed_dense_image_size: self.memfd_guaranteed_dense_image_size,
+            memory_init_cow: self.memory_init_cow,
+            memory_guaranteed_dense_image_size: self.memory_guaranteed_dense_image_size,
         }
     }
 }

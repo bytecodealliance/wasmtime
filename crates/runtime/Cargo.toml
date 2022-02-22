@@ -47,6 +47,7 @@ maintenance = { status = "actively-developed" }
 
 [features]
 default = []
+memory-init-cow = ['memfd']
 
 async = ["wasmtime-fiber"]
 
