@@ -1,5 +1,6 @@
 #![no_main]
 
+use libfuzzer_sys::arbitrary::{Result, Unstructured};
 use libfuzzer_sys::fuzz_target;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use wasmtime_fuzzing::{generators, oracles};
@@ -9,14 +10,38 @@ use wasmtime_fuzzing::{generators, oracles};
 static TRIED: AtomicUsize = AtomicUsize::new(0);
 static EXECUTED: AtomicUsize = AtomicUsize::new(0);
 
-fuzz_target!(|data: (
-    generators::Config,
-    wasm_smith::ConfiguredModule<oracles::SingleFunctionModuleConfig<false, false>>
-)| {
-    let (config, mut wasm) = data;
-    wasm.module.ensure_termination(1000);
+fuzz_target!(|data: &[u8]| {
+    // errors in `run` have to do with not enough input in `data`, which we
+    // ignore here since it doesn't affect how we'd like to fuzz.
+    drop(run(data));
+});
+
+fn run(data: &[u8]) -> Result<()> {
+    let mut u = Unstructured::new(data);
+    let mut config: generators::Config = u.arbitrary()?;
+    config.module_config.set_differential_config();
+
+    // Enable features that the spec interpreter has implemented
+    config.module_config.config.bulk_memory_enabled = false;
+    config.module_config.config.reference_types_enabled = false;
+    config.module_config.config.simd_enabled = false;
+    config.module_config.config.relaxed_simd_enabled = false;
+    config.module_config.config.exceptions_enabled = false;
+    config.module_config.config.module_linking_enabled = false;
+    config.module_config.config.multi_value_enabled = false;
+
+    // TODO: seems like this should be implied by reference_types_enabled = false
+    config.module_config.config.max_tables = 1;
+
+    // TODO: this is a best-effort attempt to avoid errors caused by the
+    //       generated module exporting no functions.
+    config.module_config.config.min_exports = 5;
+    config.module_config.config.max_exports = 5;
+
+    let mut module = config.module_config.generate(&mut u)?;
+    module.ensure_termination(1000);
     let tried = TRIED.fetch_add(1, SeqCst);
-    let executed = match oracles::differential_spec_execution(&wasm.module.to_bytes(), &config) {
+    let executed = match oracles::differential_spec_execution(&module.to_bytes(), &config) {
         Some(_) => EXECUTED.fetch_add(1, SeqCst),
         None => EXECUTED.load(SeqCst),
     };
@@ -28,4 +53,5 @@ fuzz_target!(|data: (
             executed as f64 / tried as f64 * 100f64
         )
     }
-});
+    Ok(())
+}
