@@ -805,7 +805,6 @@ impl TermEnv {
         for def in &defs.defs {
             match def {
                 &ast::Def::Decl(ref decl) => {
-                    let tid = TermId(self.terms.len());
                     let name = tyenv.intern_mut(&decl.term);
                     if let Some(tid) = self.term_map.get(&name) {
                         tyenv.report_error(
@@ -817,7 +816,6 @@ impl TermEnv {
                             format!("Duplicate decl for '{}'", decl.term.0),
                         );
                     }
-                    self.term_map.insert(name, tid);
 
                     let arg_tys = decl
                         .arg_tys
@@ -850,6 +848,8 @@ impl TermEnv {
                         }
                     };
 
+                    let tid = TermId(self.terms.len());
+                    self.term_map.insert(name, tid);
                     self.terms.push(Term {
                         id: tid,
                         decl_pos: decl.pos,

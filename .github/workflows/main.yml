@@ -185,6 +185,8 @@ jobs:
     - run: cargo fetch
       working-directory: ./fuzz
     - run: cargo fuzz build --dev
+    # Check that the ISLE fuzz targets build too.
+    - run: cargo fuzz build --dev --fuzz-dir ./cranelift/isle/fuzz
 
   rebuild_isle:
     name: Rebuild ISLE
