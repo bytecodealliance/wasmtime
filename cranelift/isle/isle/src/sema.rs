@@ -1108,19 +1108,25 @@ impl TermEnv {
                     pos,
                 }) => {
                     let inner_ty_sym = tyenv.intern_mut(inner_ty);
-                    let inner_ty = match tyenv.type_map.get(&inner_ty_sym) {
+                    let inner_ty_id = match tyenv.type_map.get(&inner_ty_sym) {
                         Some(ty) => *ty,
                         None => {
-                            tyenv.report_error(inner_ty.1, "Unknown inner type for converter");
+                            tyenv.report_error(
+                                inner_ty.1,
+                                format!("Unknown inner type for converter: '{}'", inner_ty.0),
+                            );
                             continue;
                         }
                     };
 
                     let outer_ty_sym = tyenv.intern_mut(outer_ty);
-                    let outer_ty = match tyenv.type_map.get(&outer_ty_sym) {
+                    let outer_ty_id = match tyenv.type_map.get(&outer_ty_sym) {
                         Some(ty) => *ty,
                         None => {
-                            tyenv.report_error(outer_ty.1, "Unknown outer type for converter");
+                            tyenv.report_error(
+                                outer_ty.1,
+                                format!("Unknown outer type for converter: '{}'", outer_ty.0),
+                            );
                             continue;
                         }
                     };
@@ -1129,17 +1135,26 @@ impl TermEnv {
                     let term_id = match self.term_map.get(&term_sym) {
                         Some(term_id) => *term_id,
                         None => {
-                            tyenv.report_error(term.1, "Unknown term for converter");
+                            tyenv.report_error(
+                                term.1,
+                                format!("Unknown term for converter: '{}'", term.0),
+                            );
                             continue;
                         }
                     };
 
-                    match self.converters.entry((inner_ty, outer_ty)) {
+                    match self.converters.entry((inner_ty_id, outer_ty_id)) {
                         Entry::Vacant(v) => {
                             v.insert(term_id);
                         }
                         Entry::Occupied(_) => {
-                            tyenv.report_error(pos, "Converter already exists for this type pair");
+                            tyenv.report_error(
+                                pos,
+                                format!(
+                                    "Converter already exists for this type pair: '{}', '{}'",
+                                    inner_ty.0, outer_ty.0
+                                ),
+                            );
                             continue;
                         }
                     }
