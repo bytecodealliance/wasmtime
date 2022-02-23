@@ -566,17 +566,18 @@ impl Drop for MemoryImageSlot {
         // over by the next MemoryImageSlot later.
         //
         // Since we're in drop(), we can't sanely return an error if
-        // this mmap fails. Let's ignore the failure if so; the next
-        // MemoryImageSlot to be created for this slot will try to overwrite
-        // the existing stale mappings, and return a failure properly
-        // if we still cannot map new memory.
+        // this mmap fails. Instead though the result is unwrapped here to
+        // trigger a panic if something goes wrong. Otherwise if this
+        // reset-the-mapping fails then on reuse it might be possible, depending
+        // on precisely where errors happened, that stale memory could get
+        // leaked through.
         //
-        // The exception to all of this is if the `unmap_on_drop` flag
+        // The exception to all of this is if the `clear_on_drop` flag
         // (which is set by default) is false. If so, the owner of
         // this MemoryImageSlot has indicated that it will clean up in some
         // other way.
         if self.clear_on_drop {
-            let _ = self.reset_with_anon_memory();
+            self.reset_with_anon_memory().unwrap();
         }
     }
 }
