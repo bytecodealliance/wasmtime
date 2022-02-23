@@ -15,7 +15,7 @@ log = "0.4.8"
 rayon = "1.2.1"
 target-lexicon = "0.12.3"
 tempfile = "3.3.0"
-wasmparser = "0.82"
+wasmparser = "0.83.0"
 wasmprinter = "0.2.32"
 wasmtime = { path = "../wasmtime" }
 wasmtime-wast = { path = "../wast" }

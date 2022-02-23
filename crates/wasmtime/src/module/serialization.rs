@@ -98,6 +98,11 @@ impl From<&wasmparser::WasmFeatures> for WasmFeatures {
             memory64,
             relaxed_simd,
             extended_const,
+
+            // Always on; we don't currently have knobs for these.
+            mutable_global: _,
+            saturating_float_to_int: _,
+            sign_extension: _,
         } = *other;
 
         Self {
