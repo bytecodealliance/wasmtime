@@ -242,10 +242,12 @@ impl Module {
     #[cfg(compiler)]
     #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
     pub fn from_file(engine: &Engine, file: impl AsRef<Path>) -> Result<Module> {
-        match Self::new(
-            engine,
-            &fs::read(&file).with_context(|| "failed to read input file")?,
-        ) {
+        let bytes = fs::read(&file).with_context(|| "failed to read input file")?;
+        #[cfg(feature = "digital-signatures")]
+        if let Some(public_key_set) = &engine.config().public_keys {
+            public_key_set.verify(&mut std::io::Cursor::new(&bytes), None)?;
+        }
+        match Self::new(engine, &bytes) {
             Ok(m) => Ok(m),
             Err(e) => {
                 cfg_if::cfg_if! {

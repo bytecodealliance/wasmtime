@@ -40,6 +40,7 @@ humantime = "2.0.0"
 wasmparser = "0.82.0"
 lazy_static = "1.4.0"
 listenfd = "0.3.5"
+wasmsign2 = { version = "0.1.13", optional = true }
 
 [target.'cfg(unix)'.dependencies]
 rustix = "0.33.0"
@@ -109,6 +110,7 @@ memory-init-cow = ["wasmtime/memory-init-cow"]
 pooling-allocator = ["wasmtime/pooling-allocator"]
 all-arch = ["wasmtime/all-arch"]
 posix-signals-on-macos = ["wasmtime/posix-signals-on-macos"]
+digital-signatures = ["wasmsign2", "wasmtime/digital-signatures"]
 
 # Stub feature that does nothing, for Cargo-features compatibility: the new
 # backend is the default now.

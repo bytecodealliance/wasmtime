@@ -106,6 +106,8 @@ pub struct Config {
     pub(crate) paged_memory_initialization: bool,
     pub(crate) memory_init_cow: bool,
     pub(crate) memory_guaranteed_dense_image_size: u64,
+    #[cfg(feature = "digital-signatures")]
+    pub(crate) public_keys: Option<Arc<wasmsign2::PublicKeySet>>,
 }
 
 impl Config {
@@ -133,6 +135,8 @@ impl Config {
             paged_memory_initialization: cfg!(all(target_os = "linux", feature = "uffd")),
             memory_init_cow: true,
             memory_guaranteed_dense_image_size: 16 << 20,
+            #[cfg(feature = "digital-signatures")]
+            public_keys: None,
         };
         #[cfg(compiler)]
         {
@@ -1069,6 +1073,13 @@ impl Config {
         self
     }
 
+    /// Configure the set of public keys used for digital signatures verification.
+    #[cfg(feature = "digital-signatures")]
+    pub fn public_keys(&mut self, public_keys: wasmsign2::PublicKeySet) -> &mut Self {
+        self.public_keys = Some(Arc::new(public_keys));
+        self
+    }
+
     /// Configures the size, in bytes, of the extra virtual memory space
     /// reserved after a "dynamic" memory for growing into.
     ///
@@ -1337,6 +1348,8 @@ impl Clone for Config {
             paged_memory_initialization: self.paged_memory_initialization,
             memory_init_cow: self.memory_init_cow,
             memory_guaranteed_dense_image_size: self.memory_guaranteed_dense_image_size,
+            #[cfg(feature = "digital-signatures")]
+            public_keys: self.public_keys.clone(),
         }
     }
 }

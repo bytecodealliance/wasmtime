@@ -103,6 +103,11 @@ use wasmtime::{Config, ProfilingStrategy};
 #[cfg(feature = "pooling-allocator")]
 use wasmtime::{InstanceLimits, ModuleLimits, PoolingAllocationStrategy};
 
+#[cfg(feature = "digital-signatures")]
+use wasmsign2::PublicKeySet;
+#[cfg(not(feature = "digital-signatures"))]
+struct PublicKeySet;
+
 fn pick_profiling_strategy(jitdump: bool, vtune: bool) -> Result<ProfilingStrategy> {
     Ok(match (jitdump, vtune) {
         (true, false) => ProfilingStrategy::JitDump,
@@ -263,6 +268,12 @@ struct CommonOptions {
     #[cfg(feature = "pooling-allocator")]
     #[structopt(long)]
     pooling_allocator: bool,
+
+    /// Require modules to have an embedded signature that can be verified with the given set of public keys.
+    /// The signature format should be considered experimental and is documented at https://github.com/WebAssembly/tool-conventions/blob/main/Signatures.md
+    #[structopt(long, value_name = "FILE,FILE,...", parse(try_from_str = parse_public_keys))]
+    #[allow(dead_code)]
+    experimental_public_keys: Option<PublicKeySet>,
 }
 
 impl CommonOptions {
@@ -359,6 +370,11 @@ impl CommonOptions {
                     instance_limits,
                 });
             }
+        }
+
+        #[cfg(feature = "digital-signatures")]
+        if let Some(public_keys) = &self.experimental_public_keys {
+            config.public_keys(public_keys.clone());
         }
 
         Ok(config)
@@ -516,6 +532,21 @@ fn parse_wasi_modules(modules: &str) -> Result<WasiModules> {
             Ok(wasi_modules)
         }
     }
+}
+
+#[cfg(feature = "digital-signatures")]
+fn parse_public_keys(pk_files: &str) -> Result<PublicKeySet> {
+    let mut public_key_set = PublicKeySet::empty();
+    for pk_file in pk_files.split(',') {
+        let pk_file = pk_file.trim();
+        public_key_set.insert_any_file(pk_file)?;
+    }
+    Ok(public_key_set)
+}
+
+#[cfg(not(feature = "digital-signatures"))]
+fn parse_public_keys(_pk_files: &str) -> Result<PublicKeySet> {
+    bail!("Digital signatures support is not enabled");
 }
 
 /// Select which WASI modules are available at runtime for use by Wasm programs.

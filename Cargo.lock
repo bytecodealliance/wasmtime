@@ -93,9 +93,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.40"
+version = "1.0.53"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "28b2cd92db5cbd74e8e5028f7e27dd7aa3090e89e4f2a197cc7c8dfb69c7063b"
+checksum = "94a45b455c14666b85fc40a019e8ab9eb75e3a124e05494f5397122bc9eb06e0"
 
 [[package]]
 name = "arbitrary"
@@ -153,6 +153,16 @@ dependencies = [
  "miniz_oxide",
  "object",
  "rustc-demangle",
+]
+
+[[package]]
+name = "base64"
+version = "0.9.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "489d6c0ed21b11d038c31b6ceccca973e65d73ba3bd8ecb9a2babf5546164643"
+dependencies = [
+ "byteorder",
+ "safemem",
 ]
 
 [[package]]
@@ -893,6 +903,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "ct-codecs"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f3b7eb4404b8195a9abb6356f4ac07d8ba267045c8d6d220ac4dc992e6cc75df"
+
+[[package]]
 name = "ctr"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1017,6 +1033,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8d0860415b12243916284c67a9be413e044ee6668247b99ba26d94b2bc06c8f6"
 dependencies = [
  "signature",
+]
+
+[[package]]
+name = "ed25519-compact"
+version = "1.0.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "24e1f30f0312ac83726c1197abeacd91c9557f8a623e904a009ae6bc529ae8d8"
+dependencies = [
+ "ct-codecs",
+ "getrandom 0.2.4",
 ]
 
 [[package]]
@@ -1254,13 +1280,15 @@ dependencies = [
 
 [[package]]
 name = "getrandom"
-version = "0.2.3"
+version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7fcd999463524c52659517fe2cea98493cfe485d10565e7b0fb07dbba7ad2753"
+checksum = "418d37c8b1d42553c93648be529cb70f920d3baf8ef469b74b9638df426e0b4c"
 dependencies = [
  "cfg-if 1.0.0",
+ "js-sys",
  "libc",
  "wasi 0.10.2+wasi-snapshot-preview1",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -1362,6 +1390,12 @@ dependencies = [
  "crypto-mac",
  "digest",
 ]
+
+[[package]]
+name = "hmac-sha256"
+version = "1.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b45e85b74de4f2610b0c832e3a532f3b64cddb5d8923923bc00d70206fb035f7"
 
 [[package]]
 name = "humantime"
@@ -2143,7 +2177,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c5397335b92875d36fb30f91557c3769517c9cfbc212568a5b8ceafd304eca84"
 dependencies = [
  "cc",
- "getrandom 0.2.3",
+ "getrandom 0.2.4",
  "libc",
 ]
 
@@ -2325,7 +2359,7 @@ version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d34f1408f55294453790c48b2f1ebbb1c5b4b7563eb1f418bcfcfdbb06ebb4e7"
 dependencies = [
- "getrandom 0.2.3",
+ "getrandom 0.2.4",
 ]
 
 [[package]]
@@ -2401,7 +2435,7 @@ version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "528532f3d801c87aec9def2add9ca802fe569e44a544afe633765267840abe64"
 dependencies = [
- "getrandom 0.2.3",
+ "getrandom 0.2.4",
  "redox_syscall",
 ]
 
@@ -2544,6 +2578,12 @@ name = "ryu"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "71d301d4193d031abdd79ff7e3dd721168a9572ef3fe51a1517aba235bd8f86e"
+
+[[package]]
+name = "safemem"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ef703b7cb59335eae2eb93ceb664c0eb7ea6bf567079d843e09420219668e072"
 
 [[package]]
 name = "same-file"
@@ -2700,6 +2740,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5c01a0c15da1b0b0e1494112e7af814a678fec9bd157881b49beac661e9b6f32"
 dependencies = [
  "der",
+]
+
+[[package]]
+name = "ssh-keys"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2555f9858fe3b961c98100b8be77cbd6a81527bf20d40e7a11dafb8810298e95"
+dependencies = [
+ "base64 0.9.3",
+ "byteorder",
+ "quick-error 1.2.3",
 ]
 
 [[package]]
@@ -3119,7 +3170,7 @@ version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bc5cf98d8186244414c848017f0e2676b3fcb46807f6668a97dfe67359a3c4b7"
 dependencies = [
- "getrandom 0.2.3",
+ "getrandom 0.2.4",
 ]
 
 [[package]]
@@ -3391,6 +3442,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "wasmsign2"
+version = "0.1.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "77e82503d0a044f810c4e29d3e59a4b00a7985fa9e6c11dd0cf8878616e325e9"
+dependencies = [
+ "anyhow",
+ "ct-codecs",
+ "ed25519-compact",
+ "getrandom 0.2.4",
+ "hmac-sha256",
+ "log",
+ "regex",
+ "ssh-keys",
+ "thiserror",
+]
+
+[[package]]
 name = "wasmtime"
 version = "0.34.0"
 dependencies = [
@@ -3414,6 +3482,7 @@ dependencies = [
  "tempfile",
  "wasi-cap-std-sync",
  "wasmparser",
+ "wasmsign2",
  "wasmtime-cache",
  "wasmtime-cranelift",
  "wasmtime-environ",
@@ -3468,7 +3537,7 @@ name = "wasmtime-cache"
 version = "0.34.0"
 dependencies = [
  "anyhow",
- "base64",
+ "base64 0.13.0",
  "bincode",
  "directories-next",
  "file-per-thread-logger",
@@ -3514,6 +3583,7 @@ dependencies = [
  "tokio",
  "tracing-subscriber",
  "wasmparser",
+ "wasmsign2",
  "wasmtime",
  "wasmtime-cache",
  "wasmtime-cranelift",
