@@ -189,7 +189,7 @@ pub(crate) struct FuncData {
     // only needed rarely. To handle that this is an optionally-contained field
     // which is lazily loaded into as part of `Func::call`.
     //
-    // Also note that this is intentionally placed behind a poiner to keep it
+    // Also note that this is intentionally placed behind a pointer to keep it
     // small as `FuncData` instances are often inserted into a `Store`.
     ty: Option<Box<FuncType>>,
 }
