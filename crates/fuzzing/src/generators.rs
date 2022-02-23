@@ -724,7 +724,7 @@ impl<'a> Arbitrary<'a> for CodegenSettings {
                         // input must be discarded.
                         #[cfg(target_arch = $arch)]
                         if enable && !std::$test!($std) {
-                            log::error!("want to enable clif `{}` but host doesn't support it",
+                            log::warn!("want to enable clif `{}` but host doesn't support it",
                                 $clif);
                             return Err(arbitrary::Error::EmptyChoose)
                         }
