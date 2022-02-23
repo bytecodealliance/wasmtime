@@ -290,7 +290,7 @@ impl Config {
         config.simd_enabled = false;
         config.memory64_enabled = false;
 
-        // If using the pooling allocator, update the module limits too
+        // If using the pooling allocator, update the instance limits too
         if let InstanceAllocationStrategy::Pooling {
             instance_limits: limits,
             ..

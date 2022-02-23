@@ -56,7 +56,7 @@ fn memory_limit() -> Result<()> {
             Err(e) => assert_eq!(
                 e.to_string(),
                 "Insufficient resources: instantiation requires 2 memories to be \
-                 created which exceeds the maximum of 1 configured",
+                 created which exceeds the configured maximum of 1",
             ),
         }
     }
@@ -70,8 +70,8 @@ fn memory_limit() -> Result<()> {
             Ok(_) => panic!("module instantiation should fail"),
             Err(e) => assert_eq!(
                 e.to_string(),
-                "Insufficient resources: memory allocation of 196608 bytes \
-                 does not meet this module's minimum requirement of 262144 bytes",
+                "Insufficient resources: initial memory size of 262144 exceeds the \
+                 pooling allocator's configured maximum memory size of 196608 bytes",
             ),
         }
     }
@@ -276,7 +276,7 @@ fn table_limit() -> Result<()> {
             Err(e) => assert_eq!(
                 e.to_string(),
                 "Insufficient resources: instantiation requires 2 tables to be \
-                 created which exceeds the maximum of 1 configured",
+                 created which exceeds the configured maximum of 1",
             ),
         }
     }
@@ -290,8 +290,8 @@ fn table_limit() -> Result<()> {
             Ok(_) => panic!("module instantiation should fail"),
             Err(e) => assert_eq!(
                 e.to_string(),
-                "Insufficient resources: table allocation of 10 elements does \
-                 not meet this module's minimum requirement of 31 elements",
+                "Insufficient resources: initial table size of 31 exceeds the \
+                 pooling allocator's configured maximum table size of 10 elements",
             ),
         }
     }

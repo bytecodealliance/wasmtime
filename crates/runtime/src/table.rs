@@ -197,10 +197,10 @@ impl Table {
         let ty = wasm_to_table_type(plan.table.wasm_ty)?;
         if data.len() < (plan.table.minimum as usize) {
             bail!(
-                "table allocation of {} elements does not meet this module's \
-                 minimum requirement of {} elements",
+                "initial table size of {} exceeds the pooling allocator's \
+                 configured maximum table size of {} elements",
+                plan.table.minimum,
                 data.len(),
-                plan.table.minimum
             );
         }
         let data = match plan.table.maximum {

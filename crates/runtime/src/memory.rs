@@ -317,10 +317,10 @@ impl Memory {
 
         if base.len() < minimum {
             bail!(
-                "memory allocation of {} bytes does not meet this module's \
-                 minimum requirement of {} bytes",
-                base.len(),
+                "initial memory size of {} exceeds the pooling allocator's \
+                 configured maximum memory size of {} bytes",
                 minimum,
+                base.len(),
             );
         }
 

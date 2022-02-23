@@ -396,7 +396,7 @@ impl InstancePool {
         if nmemories > self.memories.max_memories {
             return Err(InstantiationError::Resource(anyhow!(
                 "instantiation requires {} memories to be created which \
-                 exceeds the maximum of {} configured",
+                 exceeds the configured maximum of {}",
                 nmemories,
                 self.memories.max_memories
             )));
@@ -522,7 +522,7 @@ impl InstancePool {
         if ntables > self.tables.max_tables {
             return Err(InstantiationError::Resource(anyhow!(
                 "instantiation requires {} tables to be created which \
-                 exceeds the maximum of {} configured",
+                 exceeds the configured maximum of {}",
                 ntables,
                 self.tables.max_tables
             )));
