@@ -68,14 +68,13 @@ pub struct InstanceLimits {
     /// The pooling instance allocator allocates three memory pools with sizes depending on this value:
     ///
     /// * An instance pool, where each entry in the pool can store the runtime representation
-    ///   of an instance, including a maximal `VMContext` structure (see [`ModuleLimits`](ModuleLimits)
-    ///   for the various settings that control the size of each instance's `VMContext` structure).
+    ///   of an instance, including a maximal `VMContext` structure.
     ///
     /// * A memory pool, where each entry in the pool contains the reserved address space for each
     ///   linear memory supported by an instance.
     ///
     /// * A table pool, where each entry in the pool contains the space needed for each WebAssembly table
-    ///   supported by an instance (see `[ModuleLimits::table_elements`] to control the size of each table).
+    ///   supported by an instance (see `table_elements` to control the size of each table).
     ///
     /// Additionally, this value will also control the maximum number of execution stacks allowed for
     /// asynchronous execution (one per instance), when enabled.
