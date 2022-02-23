@@ -103,7 +103,7 @@ impl ResourceLimiter for StoreLimits {
 }
 
 /// Methods of timing out execution of a WebAssembly module
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum Timeout {
     /// No timeout is used, it should be guaranteed via some other means that
     /// the input does not infinite loop.
@@ -114,6 +114,9 @@ pub enum Timeout {
     /// Fuel-based timeouts are used where the specified fuel is all that the
     /// provided wasm module is allowed to consume.
     Fuel(u64),
+    /// An epoch-interruption-based timeout is used with a sleeping
+    /// thread bumping the epoch counter after the specified duration.
+    Epoch(Duration),
 }
 
 /// Instantiate the Wasm buffer, and implicitly fail if we have an unexpected
@@ -144,6 +147,12 @@ pub fn instantiate(wasm: &[u8], known_valid: bool, config: &generators::Config, 
         Timeout::Time(timeout) => {
             let handle = store.interrupt_handle().unwrap();
             timeout_state.spawn_timeout(timeout, move || handle.interrupt());
+        }
+        // Similar to above, but we bump the epoch rather than set the
+        // interrupt flag.
+        Timeout::Epoch(timeout) => {
+            let engine = store.engine().clone();
+            timeout_state.spawn_timeout(timeout, move || engine.increment_epoch());
         }
         Timeout::None => {}
     }

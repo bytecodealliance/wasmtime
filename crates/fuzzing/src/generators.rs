@@ -253,6 +253,7 @@ pub struct WasmtimeConfig {
     canonicalize_nans: bool,
     interruptable: bool,
     pub(crate) consume_fuel: bool,
+    epoch_interruption: bool,
     /// The Wasmtime memory configuration to use.
     pub memory_config: MemoryConfig,
     force_jump_veneers: bool,
@@ -441,6 +442,7 @@ impl Config {
             .cranelift_opt_level(self.wasmtime.opt_level.to_wasmtime())
             .interruptable(self.wasmtime.interruptable)
             .consume_fuel(self.wasmtime.consume_fuel)
+            .epoch_interruption(self.wasmtime.epoch_interruption)
             .memory_init_cow(self.wasmtime.memory_init_cow)
             .memory_guaranteed_dense_image_size(std::cmp::min(
                 // Clamp this at 16MiB so we don't get huge in-memory
@@ -509,18 +511,44 @@ impl Config {
         if self.wasmtime.consume_fuel {
             store.add_fuel(u64::max_value()).unwrap();
         }
+        if self.wasmtime.epoch_interruption {
+            // Without fuzzing of async execution, we can't test the
+            // "update deadline and continue" behavior, but we can at
+            // least test the codegen paths and checks with the
+            // trapping behavior, which works synchronously too. We'll
+            // set the deadline one epoch tick in the future; then
+            // this works exactly like an interrupt flag. We expect no
+            // traps/interrupts unless we bump the epoch, which we do
+            // as one particular Timeout mode (`Timeout::Epoch`).
+            store.epoch_deadline_trap();
+            store.set_epoch_deadline(1);
+        }
     }
 
     /// Generates an arbitrary method of timing out an instance, ensuring that
     /// this configuration supports the returned timeout.
     pub fn generate_timeout(&mut self, u: &mut Unstructured<'_>) -> arbitrary::Result<Timeout> {
-        if u.arbitrary()? {
-            self.wasmtime.interruptable = true;
-            Ok(Timeout::Time(Duration::from_secs(20)))
-        } else {
-            self.wasmtime.consume_fuel = true;
-            Ok(Timeout::Fuel(100_000))
+        let time_duration = Duration::from_secs(20);
+        let timeout = u
+            .choose(&[
+                Timeout::Time(time_duration),
+                Timeout::Fuel(100_000),
+                Timeout::Epoch(time_duration),
+            ])?
+            .clone();
+        match &timeout {
+            &Timeout::Time(..) => {
+                self.wasmtime.interruptable = true;
+            }
+            &Timeout::Fuel(..) => {
+                self.wasmtime.consume_fuel = true;
+            }
+            &Timeout::Epoch(..) => {
+                self.wasmtime.epoch_interruption = true;
+            }
+            &Timeout::None => unreachable!("Not an option given to choose()"),
         }
+        Ok(timeout)
     }
 
     /// Compiles the `wasm` within the `engine` provided.
