@@ -242,7 +242,8 @@ where possible to simplify the lowering rules. For example, we have
 the latter denotes the register or registers that hold that value in
 lowered code. Prior to introduction of implicit type conversions, we
 had many occurrences of expressions like `(value_regs r1 r2)` or
-`(value_reg r)`. Now we can define a conversion such as
+`(value_reg r)`. Given that we have already defined a term
+`value_reg`, we can define a conversion such as
 
 ```lisp
     (convert Reg ValueRegs value_reg)

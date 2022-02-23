@@ -887,6 +887,8 @@ its argument but `t` has type `T`. However, if we define
 ```lisp
     (convert T U t_to_u)
     
+    ;; For the above to be valid, `t_to_u` should be declared with the
+    ;; signature:
     (decl t_to_u (T) U)
     (rule ...)
 ```
