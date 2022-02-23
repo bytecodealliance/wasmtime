@@ -688,12 +688,14 @@ fn aarch64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
         &Inst::CCmpImm { rn, .. } => {
             collector.add_use(rn);
         }
-        &Inst::AtomicRMWLoop { .. } => {
+        &Inst::AtomicRMWLoop { op, .. } => {
             collector.add_use(xreg(25));
             collector.add_use(xreg(26));
             collector.add_def(writable_xreg(24));
             collector.add_def(writable_xreg(27));
-            collector.add_def(writable_xreg(28));
+            if op != AtomicRmwOp::Xchg {
+                collector.add_def(writable_xreg(28));
+            }
         }
         &Inst::AtomicRMW { rs, rt, rn, .. } => {
             collector.add_use(rs);
@@ -2399,9 +2401,60 @@ impl Inst {
                 format!("{}{} {}, {}, [{}]", op, ty_suffix, rs, rt, rn)
             }
             &Inst::AtomicRMWLoop { ty, op, .. } => {
-                format!(
-                    "atomically {{ {}_bits_at_[x25]) {:?}= x26 ; x27 = old_value_at_[x25]; x24,x28 = trash }}",
-                    ty.bits(), op)
+                let ty_suffix = match ty {
+                    I8 => "b",
+                    I16 => "h",
+                    _ => "",
+                };
+                let size = OperandSize::from_ty(ty);
+                let r_status = show_ireg_sized(xreg(24), mb_rru, OperandSize::Size32);
+                let r_arg2 = show_ireg_sized(xreg(26), mb_rru, size);
+                let r_tmp = show_ireg_sized(xreg(27), mb_rru, size);
+                let mut r_dst = show_ireg_sized(xreg(28), mb_rru, size);
+
+                let mut loop_str: String = "1: ".to_string();
+                loop_str.push_str(&format!("ldaxr{} {}, [x25]; ", ty_suffix, r_tmp));
+
+                let op_str = match op {
+                    inst_common::AtomicRmwOp::Add => "add",
+                    inst_common::AtomicRmwOp::Sub => "sub",
+                    inst_common::AtomicRmwOp::Xor => "eor",
+                    inst_common::AtomicRmwOp::Or => "orr",
+                    inst_common::AtomicRmwOp::And => "and",
+                    _ => "",
+                };
+
+                if op_str.is_empty() {
+                    match op {
+                        inst_common::AtomicRmwOp::Xchg => r_dst = r_arg2,
+                        inst_common::AtomicRmwOp::Nand => {
+                            loop_str.push_str(&format!("and {}, {}, {}; ", r_dst, r_tmp, r_arg2));
+                            loop_str.push_str(&format!("mvn {}, {}; ", r_dst, r_dst));
+                        }
+                        _ => {
+                            loop_str.push_str(&format!("cmp {}, {}; ", r_tmp, r_arg2));
+                            let cond = match op {
+                                inst_common::AtomicRmwOp::Smin => "lt",
+                                inst_common::AtomicRmwOp::Smax => "gt",
+                                inst_common::AtomicRmwOp::Umin => "lo",
+                                inst_common::AtomicRmwOp::Umax => "hi",
+                                _ => unreachable!(),
+                            };
+                            loop_str.push_str(&format!(
+                                "csel {}, {}, {}, {}; ",
+                                r_dst, r_tmp, r_arg2, cond
+                            ));
+                        }
+                    };
+                } else {
+                    loop_str.push_str(&format!("{} {}, {}, {}; ", op_str, r_dst, r_tmp, r_arg2));
+                }
+                loop_str.push_str(&format!(
+                    "stlxr{} {}, {}, [x25]; ",
+                    ty_suffix, r_status, r_dst
+                ));
+                loop_str.push_str(&format!("cbnz {}, 1b", r_status));
+                loop_str
             }
             &Inst::AtomicCAS { rs, rt, rn, ty } => {
                 let op = match ty {

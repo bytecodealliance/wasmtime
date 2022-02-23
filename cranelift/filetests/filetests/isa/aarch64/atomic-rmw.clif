@@ -1,0 +1,939 @@
+test compile precise-output
+target aarch64
+
+function %atomic_rmw_add_i64(i64, i64) {
+block0(v0: i64, v1: i64):
+    v2 = atomic_rmw.i64 add v0, v1
+    return
+}
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 13)
+;   Inst 0:   stp fp, lr, [sp, #-16]!
+;   Inst 1:   mov fp, sp
+;   Inst 2:   str x28, [sp, #-16]!
+;   Inst 3:   stp x26, x27, [sp, #-16]!
+;   Inst 4:   stp x24, x25, [sp, #-16]!
+;   Inst 5:   mov x25, x0
+;   Inst 6:   mov x26, x1
+;   Inst 7:   1: ldaxr x27, [x25]; add x28, x27, x26; stlxr w24, x28, [x25]; cbnz w24, 1b
+;   Inst 8:   ldp x24, x25, [sp], #16
+;   Inst 9:   ldp x26, x27, [sp], #16
+;   Inst 10:   ldr x28, [sp], #16
+;   Inst 11:   ldp fp, lr, [sp], #16
+;   Inst 12:   ret
+; }}
+
+function %atomic_rmw_add_i32(i64, i32) {
+block0(v0: i64, v1: i32):
+    v2 = atomic_rmw.i32 add v0, v1
+    return
+}
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 13)
+;   Inst 0:   stp fp, lr, [sp, #-16]!
+;   Inst 1:   mov fp, sp
+;   Inst 2:   str x28, [sp, #-16]!
+;   Inst 3:   stp x26, x27, [sp, #-16]!
+;   Inst 4:   stp x24, x25, [sp, #-16]!
+;   Inst 5:   mov x25, x0
+;   Inst 6:   mov x26, x1
+;   Inst 7:   1: ldaxr w27, [x25]; add w28, w27, w26; stlxr w24, w28, [x25]; cbnz w24, 1b
+;   Inst 8:   ldp x24, x25, [sp], #16
+;   Inst 9:   ldp x26, x27, [sp], #16
+;   Inst 10:   ldr x28, [sp], #16
+;   Inst 11:   ldp fp, lr, [sp], #16
+;   Inst 12:   ret
+; }}
+
+function %atomic_rmw_add_i16(i64, i16) {
+block0(v0: i64, v1: i16):
+    v2 = atomic_rmw.i16 add v0, v1
+    return
+}
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 13)
+;   Inst 0:   stp fp, lr, [sp, #-16]!
+;   Inst 1:   mov fp, sp
+;   Inst 2:   str x28, [sp, #-16]!
+;   Inst 3:   stp x26, x27, [sp, #-16]!
+;   Inst 4:   stp x24, x25, [sp, #-16]!
+;   Inst 5:   mov x25, x0
+;   Inst 6:   mov x26, x1
+;   Inst 7:   1: ldaxrh w27, [x25]; add w28, w27, w26; stlxrh w24, w28, [x25]; cbnz w24, 1b
+;   Inst 8:   ldp x24, x25, [sp], #16
+;   Inst 9:   ldp x26, x27, [sp], #16
+;   Inst 10:   ldr x28, [sp], #16
+;   Inst 11:   ldp fp, lr, [sp], #16
+;   Inst 12:   ret
+; }}
+
+function %atomic_rmw_add_i8(i64, i8) {
+block0(v0: i64, v1: i8):
+    v2 = atomic_rmw.i8 add v0, v1
+    return
+}
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 13)
+;   Inst 0:   stp fp, lr, [sp, #-16]!
+;   Inst 1:   mov fp, sp
+;   Inst 2:   str x28, [sp, #-16]!
+;   Inst 3:   stp x26, x27, [sp, #-16]!
+;   Inst 4:   stp x24, x25, [sp, #-16]!
+;   Inst 5:   mov x25, x0
+;   Inst 6:   mov x26, x1
+;   Inst 7:   1: ldaxrb w27, [x25]; add w28, w27, w26; stlxrb w24, w28, [x25]; cbnz w24, 1b
+;   Inst 8:   ldp x24, x25, [sp], #16
+;   Inst 9:   ldp x26, x27, [sp], #16
+;   Inst 10:   ldr x28, [sp], #16
+;   Inst 11:   ldp fp, lr, [sp], #16
+;   Inst 12:   ret
+; }}
+
+function %atomic_rmw_and_i64(i64, i64) {
+block0(v0: i64, v1: i64):
+    v2 = atomic_rmw.i64 and v0, v1
+    return
+}
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 13)
+;   Inst 0:   stp fp, lr, [sp, #-16]!
+;   Inst 1:   mov fp, sp
+;   Inst 2:   str x28, [sp, #-16]!
+;   Inst 3:   stp x26, x27, [sp, #-16]!
+;   Inst 4:   stp x24, x25, [sp, #-16]!
+;   Inst 5:   mov x25, x0
+;   Inst 6:   mov x26, x1
+;   Inst 7:   1: ldaxr x27, [x25]; and x28, x27, x26; stlxr w24, x28, [x25]; cbnz w24, 1b
+;   Inst 8:   ldp x24, x25, [sp], #16
+;   Inst 9:   ldp x26, x27, [sp], #16
+;   Inst 10:   ldr x28, [sp], #16
+;   Inst 11:   ldp fp, lr, [sp], #16
+;   Inst 12:   ret
+; }}
+
+function %atomic_rmw_and_i32(i64, i32) {
+block0(v0: i64, v1: i32):
+    v2 = atomic_rmw.i32 and v0, v1
+    return
+}
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 13)
+;   Inst 0:   stp fp, lr, [sp, #-16]!
+;   Inst 1:   mov fp, sp
+;   Inst 2:   str x28, [sp, #-16]!
+;   Inst 3:   stp x26, x27, [sp, #-16]!
+;   Inst 4:   stp x24, x25, [sp, #-16]!
+;   Inst 5:   mov x25, x0
+;   Inst 6:   mov x26, x1
+;   Inst 7:   1: ldaxr w27, [x25]; and w28, w27, w26; stlxr w24, w28, [x25]; cbnz w24, 1b
+;   Inst 8:   ldp x24, x25, [sp], #16
+;   Inst 9:   ldp x26, x27, [sp], #16
+;   Inst 10:   ldr x28, [sp], #16
+;   Inst 11:   ldp fp, lr, [sp], #16
+;   Inst 12:   ret
+; }}
+
+function %atomic_rmw_and_i16(i64, i16) {
+block0(v0: i64, v1: i16):
+    v2 = atomic_rmw.i16 and v0, v1
+    return
+}
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 13)
+;   Inst 0:   stp fp, lr, [sp, #-16]!
+;   Inst 1:   mov fp, sp
+;   Inst 2:   str x28, [sp, #-16]!
+;   Inst 3:   stp x26, x27, [sp, #-16]!
+;   Inst 4:   stp x24, x25, [sp, #-16]!
+;   Inst 5:   mov x25, x0
+;   Inst 6:   mov x26, x1
+;   Inst 7:   1: ldaxrh w27, [x25]; and w28, w27, w26; stlxrh w24, w28, [x25]; cbnz w24, 1b
+;   Inst 8:   ldp x24, x25, [sp], #16
+;   Inst 9:   ldp x26, x27, [sp], #16
+;   Inst 10:   ldr x28, [sp], #16
+;   Inst 11:   ldp fp, lr, [sp], #16
+;   Inst 12:   ret
+; }}
+
+function %atomic_rmw_and_i8(i64, i8) {
+block0(v0: i64, v1: i8):
+    v2 = atomic_rmw.i8 and v0, v1
+    return
+}
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 13)
+;   Inst 0:   stp fp, lr, [sp, #-16]!
+;   Inst 1:   mov fp, sp
+;   Inst 2:   str x28, [sp, #-16]!
+;   Inst 3:   stp x26, x27, [sp, #-16]!
+;   Inst 4:   stp x24, x25, [sp, #-16]!
+;   Inst 5:   mov x25, x0
+;   Inst 6:   mov x26, x1
+;   Inst 7:   1: ldaxrb w27, [x25]; and w28, w27, w26; stlxrb w24, w28, [x25]; cbnz w24, 1b
+;   Inst 8:   ldp x24, x25, [sp], #16
+;   Inst 9:   ldp x26, x27, [sp], #16
+;   Inst 10:   ldr x28, [sp], #16
+;   Inst 11:   ldp fp, lr, [sp], #16
+;   Inst 12:   ret
+; }}
+
+function %atomic_rmw_nand_i64(i64, i64) {
+block0(v0: i64, v1: i64):
+    v2 = atomic_rmw.i64 nand v0, v1
+    return
+}
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 13)
+;   Inst 0:   stp fp, lr, [sp, #-16]!
+;   Inst 1:   mov fp, sp
+;   Inst 2:   str x28, [sp, #-16]!
+;   Inst 3:   stp x26, x27, [sp, #-16]!
+;   Inst 4:   stp x24, x25, [sp, #-16]!
+;   Inst 5:   mov x25, x0
+;   Inst 6:   mov x26, x1
+;   Inst 7:   1: ldaxr x27, [x25]; and x28, x27, x26; mvn x28, x28; stlxr w24, x28, [x25]; cbnz w24, 1b
+;   Inst 8:   ldp x24, x25, [sp], #16
+;   Inst 9:   ldp x26, x27, [sp], #16
+;   Inst 10:   ldr x28, [sp], #16
+;   Inst 11:   ldp fp, lr, [sp], #16
+;   Inst 12:   ret
+; }}
+
+function %atomic_rmw_nand_i32(i64, i32) {
+block0(v0: i64, v1: i32):
+    v2 = atomic_rmw.i32 nand v0, v1
+    return
+}
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 13)
+;   Inst 0:   stp fp, lr, [sp, #-16]!
+;   Inst 1:   mov fp, sp
+;   Inst 2:   str x28, [sp, #-16]!
+;   Inst 3:   stp x26, x27, [sp, #-16]!
+;   Inst 4:   stp x24, x25, [sp, #-16]!
+;   Inst 5:   mov x25, x0
+;   Inst 6:   mov x26, x1
+;   Inst 7:   1: ldaxr w27, [x25]; and w28, w27, w26; mvn w28, w28; stlxr w24, w28, [x25]; cbnz w24, 1b
+;   Inst 8:   ldp x24, x25, [sp], #16
+;   Inst 9:   ldp x26, x27, [sp], #16
+;   Inst 10:   ldr x28, [sp], #16
+;   Inst 11:   ldp fp, lr, [sp], #16
+;   Inst 12:   ret
+; }}
+
+function %atomic_rmw_nand_i16(i64, i16) {
+block0(v0: i64, v1: i16):
+    v2 = atomic_rmw.i16 nand v0, v1
+    return
+}
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 13)
+;   Inst 0:   stp fp, lr, [sp, #-16]!
+;   Inst 1:   mov fp, sp
+;   Inst 2:   str x28, [sp, #-16]!
+;   Inst 3:   stp x26, x27, [sp, #-16]!
+;   Inst 4:   stp x24, x25, [sp, #-16]!
+;   Inst 5:   mov x25, x0
+;   Inst 6:   mov x26, x1
+;   Inst 7:   1: ldaxrh w27, [x25]; and w28, w27, w26; mvn w28, w28; stlxrh w24, w28, [x25]; cbnz w24, 1b
+;   Inst 8:   ldp x24, x25, [sp], #16
+;   Inst 9:   ldp x26, x27, [sp], #16
+;   Inst 10:   ldr x28, [sp], #16
+;   Inst 11:   ldp fp, lr, [sp], #16
+;   Inst 12:   ret
+; }}
+
+function %atomic_rmw_nand_i8(i64, i8) {
+block0(v0: i64, v1: i8):
+    v2 = atomic_rmw.i8 nand v0, v1
+    return
+}
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 13)
+;   Inst 0:   stp fp, lr, [sp, #-16]!
+;   Inst 1:   mov fp, sp
+;   Inst 2:   str x28, [sp, #-16]!
+;   Inst 3:   stp x26, x27, [sp, #-16]!
+;   Inst 4:   stp x24, x25, [sp, #-16]!
+;   Inst 5:   mov x25, x0
+;   Inst 6:   mov x26, x1
+;   Inst 7:   1: ldaxrb w27, [x25]; and w28, w27, w26; mvn w28, w28; stlxrb w24, w28, [x25]; cbnz w24, 1b
+;   Inst 8:   ldp x24, x25, [sp], #16
+;   Inst 9:   ldp x26, x27, [sp], #16
+;   Inst 10:   ldr x28, [sp], #16
+;   Inst 11:   ldp fp, lr, [sp], #16
+;   Inst 12:   ret
+; }}
+
+function %atomic_rmw_or_i64(i64, i64) {
+block0(v0: i64, v1: i64):
+    v2 = atomic_rmw.i64 or v0, v1
+    return
+}
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 13)
+;   Inst 0:   stp fp, lr, [sp, #-16]!
+;   Inst 1:   mov fp, sp
+;   Inst 2:   str x28, [sp, #-16]!
+;   Inst 3:   stp x26, x27, [sp, #-16]!
+;   Inst 4:   stp x24, x25, [sp, #-16]!
+;   Inst 5:   mov x25, x0
+;   Inst 6:   mov x26, x1
+;   Inst 7:   1: ldaxr x27, [x25]; orr x28, x27, x26; stlxr w24, x28, [x25]; cbnz w24, 1b
+;   Inst 8:   ldp x24, x25, [sp], #16
+;   Inst 9:   ldp x26, x27, [sp], #16
+;   Inst 10:   ldr x28, [sp], #16
+;   Inst 11:   ldp fp, lr, [sp], #16
+;   Inst 12:   ret
+; }}
+
+function %atomic_rmw_or_i32(i64, i32) {
+block0(v0: i64, v1: i32):
+    v2 = atomic_rmw.i32 or v0, v1
+    return
+}
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 13)
+;   Inst 0:   stp fp, lr, [sp, #-16]!
+;   Inst 1:   mov fp, sp
+;   Inst 2:   str x28, [sp, #-16]!
+;   Inst 3:   stp x26, x27, [sp, #-16]!
+;   Inst 4:   stp x24, x25, [sp, #-16]!
+;   Inst 5:   mov x25, x0
+;   Inst 6:   mov x26, x1
+;   Inst 7:   1: ldaxr w27, [x25]; orr w28, w27, w26; stlxr w24, w28, [x25]; cbnz w24, 1b
+;   Inst 8:   ldp x24, x25, [sp], #16
+;   Inst 9:   ldp x26, x27, [sp], #16
+;   Inst 10:   ldr x28, [sp], #16
+;   Inst 11:   ldp fp, lr, [sp], #16
+;   Inst 12:   ret
+; }}
+
+function %atomic_rmw_or_i16(i64, i16) {
+block0(v0: i64, v1: i16):
+    v2 = atomic_rmw.i16 or v0, v1
+    return
+}
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 13)
+;   Inst 0:   stp fp, lr, [sp, #-16]!
+;   Inst 1:   mov fp, sp
+;   Inst 2:   str x28, [sp, #-16]!
+;   Inst 3:   stp x26, x27, [sp, #-16]!
+;   Inst 4:   stp x24, x25, [sp, #-16]!
+;   Inst 5:   mov x25, x0
+;   Inst 6:   mov x26, x1
+;   Inst 7:   1: ldaxrh w27, [x25]; orr w28, w27, w26; stlxrh w24, w28, [x25]; cbnz w24, 1b
+;   Inst 8:   ldp x24, x25, [sp], #16
+;   Inst 9:   ldp x26, x27, [sp], #16
+;   Inst 10:   ldr x28, [sp], #16
+;   Inst 11:   ldp fp, lr, [sp], #16
+;   Inst 12:   ret
+; }}
+
+function %atomic_rmw_or_i8(i64, i8) {
+block0(v0: i64, v1: i8):
+    v2 = atomic_rmw.i8 or v0, v1
+    return
+}
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 13)
+;   Inst 0:   stp fp, lr, [sp, #-16]!
+;   Inst 1:   mov fp, sp
+;   Inst 2:   str x28, [sp, #-16]!
+;   Inst 3:   stp x26, x27, [sp, #-16]!
+;   Inst 4:   stp x24, x25, [sp, #-16]!
+;   Inst 5:   mov x25, x0
+;   Inst 6:   mov x26, x1
+;   Inst 7:   1: ldaxrb w27, [x25]; orr w28, w27, w26; stlxrb w24, w28, [x25]; cbnz w24, 1b
+;   Inst 8:   ldp x24, x25, [sp], #16
+;   Inst 9:   ldp x26, x27, [sp], #16
+;   Inst 10:   ldr x28, [sp], #16
+;   Inst 11:   ldp fp, lr, [sp], #16
+;   Inst 12:   ret
+; }}
+
+function %atomic_rmw_xor_i64(i64, i64) {
+block0(v0: i64, v1: i64):
+    v2 = atomic_rmw.i64 xor v0, v1
+    return
+}
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 13)
+;   Inst 0:   stp fp, lr, [sp, #-16]!
+;   Inst 1:   mov fp, sp
+;   Inst 2:   str x28, [sp, #-16]!
+;   Inst 3:   stp x26, x27, [sp, #-16]!
+;   Inst 4:   stp x24, x25, [sp, #-16]!
+;   Inst 5:   mov x25, x0
+;   Inst 6:   mov x26, x1
+;   Inst 7:   1: ldaxr x27, [x25]; eor x28, x27, x26; stlxr w24, x28, [x25]; cbnz w24, 1b
+;   Inst 8:   ldp x24, x25, [sp], #16
+;   Inst 9:   ldp x26, x27, [sp], #16
+;   Inst 10:   ldr x28, [sp], #16
+;   Inst 11:   ldp fp, lr, [sp], #16
+;   Inst 12:   ret
+; }}
+
+function %atomic_rmw_xor_i32(i64, i32) {
+block0(v0: i64, v1: i32):
+    v2 = atomic_rmw.i32 xor v0, v1
+    return
+}
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 13)
+;   Inst 0:   stp fp, lr, [sp, #-16]!
+;   Inst 1:   mov fp, sp
+;   Inst 2:   str x28, [sp, #-16]!
+;   Inst 3:   stp x26, x27, [sp, #-16]!
+;   Inst 4:   stp x24, x25, [sp, #-16]!
+;   Inst 5:   mov x25, x0
+;   Inst 6:   mov x26, x1
+;   Inst 7:   1: ldaxr w27, [x25]; eor w28, w27, w26; stlxr w24, w28, [x25]; cbnz w24, 1b
+;   Inst 8:   ldp x24, x25, [sp], #16
+;   Inst 9:   ldp x26, x27, [sp], #16
+;   Inst 10:   ldr x28, [sp], #16
+;   Inst 11:   ldp fp, lr, [sp], #16
+;   Inst 12:   ret
+; }}
+
+function %atomic_rmw_xor_i16(i64, i16) {
+block0(v0: i64, v1: i16):
+    v2 = atomic_rmw.i16 xor v0, v1
+    return
+}
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 13)
+;   Inst 0:   stp fp, lr, [sp, #-16]!
+;   Inst 1:   mov fp, sp
+;   Inst 2:   str x28, [sp, #-16]!
+;   Inst 3:   stp x26, x27, [sp, #-16]!
+;   Inst 4:   stp x24, x25, [sp, #-16]!
+;   Inst 5:   mov x25, x0
+;   Inst 6:   mov x26, x1
+;   Inst 7:   1: ldaxrh w27, [x25]; eor w28, w27, w26; stlxrh w24, w28, [x25]; cbnz w24, 1b
+;   Inst 8:   ldp x24, x25, [sp], #16
+;   Inst 9:   ldp x26, x27, [sp], #16
+;   Inst 10:   ldr x28, [sp], #16
+;   Inst 11:   ldp fp, lr, [sp], #16
+;   Inst 12:   ret
+; }}
+
+function %atomic_rmw_xor_i8(i64, i8) {
+block0(v0: i64, v1: i8):
+    v2 = atomic_rmw.i8 xor v0, v1
+    return
+}
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 13)
+;   Inst 0:   stp fp, lr, [sp, #-16]!
+;   Inst 1:   mov fp, sp
+;   Inst 2:   str x28, [sp, #-16]!
+;   Inst 3:   stp x26, x27, [sp, #-16]!
+;   Inst 4:   stp x24, x25, [sp, #-16]!
+;   Inst 5:   mov x25, x0
+;   Inst 6:   mov x26, x1
+;   Inst 7:   1: ldaxrb w27, [x25]; eor w28, w27, w26; stlxrb w24, w28, [x25]; cbnz w24, 1b
+;   Inst 8:   ldp x24, x25, [sp], #16
+;   Inst 9:   ldp x26, x27, [sp], #16
+;   Inst 10:   ldr x28, [sp], #16
+;   Inst 11:   ldp fp, lr, [sp], #16
+;   Inst 12:   ret
+; }}
+
+function %atomic_rmw_smax_i64(i64, i64) {
+block0(v0: i64, v1: i64):
+    v2 = atomic_rmw.i64 smax v0, v1
+    return
+}
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 13)
+;   Inst 0:   stp fp, lr, [sp, #-16]!
+;   Inst 1:   mov fp, sp
+;   Inst 2:   str x28, [sp, #-16]!
+;   Inst 3:   stp x26, x27, [sp, #-16]!
+;   Inst 4:   stp x24, x25, [sp, #-16]!
+;   Inst 5:   mov x25, x0
+;   Inst 6:   mov x26, x1
+;   Inst 7:   1: ldaxr x27, [x25]; cmp x27, x26; csel x28, x27, x26, gt; stlxr w24, x28, [x25]; cbnz w24, 1b
+;   Inst 8:   ldp x24, x25, [sp], #16
+;   Inst 9:   ldp x26, x27, [sp], #16
+;   Inst 10:   ldr x28, [sp], #16
+;   Inst 11:   ldp fp, lr, [sp], #16
+;   Inst 12:   ret
+; }}
+
+function %atomic_rmw_smax_i32(i64, i32) {
+block0(v0: i64, v1: i32):
+    v2 = atomic_rmw.i32 smax v0, v1
+    return
+}
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 13)
+;   Inst 0:   stp fp, lr, [sp, #-16]!
+;   Inst 1:   mov fp, sp
+;   Inst 2:   str x28, [sp, #-16]!
+;   Inst 3:   stp x26, x27, [sp, #-16]!
+;   Inst 4:   stp x24, x25, [sp, #-16]!
+;   Inst 5:   mov x25, x0
+;   Inst 6:   mov x26, x1
+;   Inst 7:   1: ldaxr w27, [x25]; cmp w27, w26; csel w28, w27, w26, gt; stlxr w24, w28, [x25]; cbnz w24, 1b
+;   Inst 8:   ldp x24, x25, [sp], #16
+;   Inst 9:   ldp x26, x27, [sp], #16
+;   Inst 10:   ldr x28, [sp], #16
+;   Inst 11:   ldp fp, lr, [sp], #16
+;   Inst 12:   ret
+; }}
+
+function %atomic_rmw_smax_i16(i64, i16) {
+block0(v0: i64, v1: i16):
+    v2 = atomic_rmw.i16 smax v0, v1
+    return
+}
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 13)
+;   Inst 0:   stp fp, lr, [sp, #-16]!
+;   Inst 1:   mov fp, sp
+;   Inst 2:   str x28, [sp, #-16]!
+;   Inst 3:   stp x26, x27, [sp, #-16]!
+;   Inst 4:   stp x24, x25, [sp, #-16]!
+;   Inst 5:   mov x25, x0
+;   Inst 6:   mov x26, x1
+;   Inst 7:   1: ldaxrh w27, [x25]; cmp w27, w26; csel w28, w27, w26, gt; stlxrh w24, w28, [x25]; cbnz w24, 1b
+;   Inst 8:   ldp x24, x25, [sp], #16
+;   Inst 9:   ldp x26, x27, [sp], #16
+;   Inst 10:   ldr x28, [sp], #16
+;   Inst 11:   ldp fp, lr, [sp], #16
+;   Inst 12:   ret
+; }}
+
+function %atomic_rmw_smax_i8(i64, i8) {
+block0(v0: i64, v1: i8):
+    v2 = atomic_rmw.i8 smax v0, v1
+    return
+}
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 13)
+;   Inst 0:   stp fp, lr, [sp, #-16]!
+;   Inst 1:   mov fp, sp
+;   Inst 2:   str x28, [sp, #-16]!
+;   Inst 3:   stp x26, x27, [sp, #-16]!
+;   Inst 4:   stp x24, x25, [sp, #-16]!
+;   Inst 5:   mov x25, x0
+;   Inst 6:   mov x26, x1
+;   Inst 7:   1: ldaxrb w27, [x25]; cmp w27, w26; csel w28, w27, w26, gt; stlxrb w24, w28, [x25]; cbnz w24, 1b
+;   Inst 8:   ldp x24, x25, [sp], #16
+;   Inst 9:   ldp x26, x27, [sp], #16
+;   Inst 10:   ldr x28, [sp], #16
+;   Inst 11:   ldp fp, lr, [sp], #16
+;   Inst 12:   ret
+; }}
+
+function %atomic_rmw_umax_i64(i64, i64) {
+block0(v0: i64, v1: i64):
+    v2 = atomic_rmw.i64 umax v0, v1
+    return
+}
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 13)
+;   Inst 0:   stp fp, lr, [sp, #-16]!
+;   Inst 1:   mov fp, sp
+;   Inst 2:   str x28, [sp, #-16]!
+;   Inst 3:   stp x26, x27, [sp, #-16]!
+;   Inst 4:   stp x24, x25, [sp, #-16]!
+;   Inst 5:   mov x25, x0
+;   Inst 6:   mov x26, x1
+;   Inst 7:   1: ldaxr x27, [x25]; cmp x27, x26; csel x28, x27, x26, hi; stlxr w24, x28, [x25]; cbnz w24, 1b
+;   Inst 8:   ldp x24, x25, [sp], #16
+;   Inst 9:   ldp x26, x27, [sp], #16
+;   Inst 10:   ldr x28, [sp], #16
+;   Inst 11:   ldp fp, lr, [sp], #16
+;   Inst 12:   ret
+; }}
+
+function %atomic_rmw_umax_i32(i64, i32) {
+block0(v0: i64, v1: i32):
+    v2 = atomic_rmw.i32 umax v0, v1
+    return
+}
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 13)
+;   Inst 0:   stp fp, lr, [sp, #-16]!
+;   Inst 1:   mov fp, sp
+;   Inst 2:   str x28, [sp, #-16]!
+;   Inst 3:   stp x26, x27, [sp, #-16]!
+;   Inst 4:   stp x24, x25, [sp, #-16]!
+;   Inst 5:   mov x25, x0
+;   Inst 6:   mov x26, x1
+;   Inst 7:   1: ldaxr w27, [x25]; cmp w27, w26; csel w28, w27, w26, hi; stlxr w24, w28, [x25]; cbnz w24, 1b
+;   Inst 8:   ldp x24, x25, [sp], #16
+;   Inst 9:   ldp x26, x27, [sp], #16
+;   Inst 10:   ldr x28, [sp], #16
+;   Inst 11:   ldp fp, lr, [sp], #16
+;   Inst 12:   ret
+; }}
+
+function %atomic_rmw_umax_i16(i64, i16) {
+block0(v0: i64, v1: i16):
+    v2 = atomic_rmw.i16 umax v0, v1
+    return
+}
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 13)
+;   Inst 0:   stp fp, lr, [sp, #-16]!
+;   Inst 1:   mov fp, sp
+;   Inst 2:   str x28, [sp, #-16]!
+;   Inst 3:   stp x26, x27, [sp, #-16]!
+;   Inst 4:   stp x24, x25, [sp, #-16]!
+;   Inst 5:   mov x25, x0
+;   Inst 6:   mov x26, x1
+;   Inst 7:   1: ldaxrh w27, [x25]; cmp w27, w26; csel w28, w27, w26, hi; stlxrh w24, w28, [x25]; cbnz w24, 1b
+;   Inst 8:   ldp x24, x25, [sp], #16
+;   Inst 9:   ldp x26, x27, [sp], #16
+;   Inst 10:   ldr x28, [sp], #16
+;   Inst 11:   ldp fp, lr, [sp], #16
+;   Inst 12:   ret
+; }}
+
+function %atomic_rmw_umax_i8(i64, i8) {
+block0(v0: i64, v1: i8):
+    v2 = atomic_rmw.i8 umax v0, v1
+    return
+}
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 13)
+;   Inst 0:   stp fp, lr, [sp, #-16]!
+;   Inst 1:   mov fp, sp
+;   Inst 2:   str x28, [sp, #-16]!
+;   Inst 3:   stp x26, x27, [sp, #-16]!
+;   Inst 4:   stp x24, x25, [sp, #-16]!
+;   Inst 5:   mov x25, x0
+;   Inst 6:   mov x26, x1
+;   Inst 7:   1: ldaxrb w27, [x25]; cmp w27, w26; csel w28, w27, w26, hi; stlxrb w24, w28, [x25]; cbnz w24, 1b
+;   Inst 8:   ldp x24, x25, [sp], #16
+;   Inst 9:   ldp x26, x27, [sp], #16
+;   Inst 10:   ldr x28, [sp], #16
+;   Inst 11:   ldp fp, lr, [sp], #16
+;   Inst 12:   ret
+; }}
+
+function %atomic_rmw_smin_i64(i64, i64) {
+block0(v0: i64, v1: i64):
+    v2 = atomic_rmw.i64 smin v0, v1
+    return
+}
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 13)
+;   Inst 0:   stp fp, lr, [sp, #-16]!
+;   Inst 1:   mov fp, sp
+;   Inst 2:   str x28, [sp, #-16]!
+;   Inst 3:   stp x26, x27, [sp, #-16]!
+;   Inst 4:   stp x24, x25, [sp, #-16]!
+;   Inst 5:   mov x25, x0
+;   Inst 6:   mov x26, x1
+;   Inst 7:   1: ldaxr x27, [x25]; cmp x27, x26; csel x28, x27, x26, lt; stlxr w24, x28, [x25]; cbnz w24, 1b
+;   Inst 8:   ldp x24, x25, [sp], #16
+;   Inst 9:   ldp x26, x27, [sp], #16
+;   Inst 10:   ldr x28, [sp], #16
+;   Inst 11:   ldp fp, lr, [sp], #16
+;   Inst 12:   ret
+; }}
+
+function %atomic_rmw_smin_i32(i64, i32) {
+block0(v0: i64, v1: i32):
+    v2 = atomic_rmw.i32 smin v0, v1
+    return
+}
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 13)
+;   Inst 0:   stp fp, lr, [sp, #-16]!
+;   Inst 1:   mov fp, sp
+;   Inst 2:   str x28, [sp, #-16]!
+;   Inst 3:   stp x26, x27, [sp, #-16]!
+;   Inst 4:   stp x24, x25, [sp, #-16]!
+;   Inst 5:   mov x25, x0
+;   Inst 6:   mov x26, x1
+;   Inst 7:   1: ldaxr w27, [x25]; cmp w27, w26; csel w28, w27, w26, lt; stlxr w24, w28, [x25]; cbnz w24, 1b
+;   Inst 8:   ldp x24, x25, [sp], #16
+;   Inst 9:   ldp x26, x27, [sp], #16
+;   Inst 10:   ldr x28, [sp], #16
+;   Inst 11:   ldp fp, lr, [sp], #16
+;   Inst 12:   ret
+; }}
+
+function %atomic_rmw_smin_i16(i64, i16) {
+block0(v0: i64, v1: i16):
+    v2 = atomic_rmw.i16 smin v0, v1
+    return
+}
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 13)
+;   Inst 0:   stp fp, lr, [sp, #-16]!
+;   Inst 1:   mov fp, sp
+;   Inst 2:   str x28, [sp, #-16]!
+;   Inst 3:   stp x26, x27, [sp, #-16]!
+;   Inst 4:   stp x24, x25, [sp, #-16]!
+;   Inst 5:   mov x25, x0
+;   Inst 6:   mov x26, x1
+;   Inst 7:   1: ldaxrh w27, [x25]; cmp w27, w26; csel w28, w27, w26, lt; stlxrh w24, w28, [x25]; cbnz w24, 1b
+;   Inst 8:   ldp x24, x25, [sp], #16
+;   Inst 9:   ldp x26, x27, [sp], #16
+;   Inst 10:   ldr x28, [sp], #16
+;   Inst 11:   ldp fp, lr, [sp], #16
+;   Inst 12:   ret
+; }}
+
+function %atomic_rmw_smin_i8(i64, i8) {
+block0(v0: i64, v1: i8):
+    v2 = atomic_rmw.i8 smin v0, v1
+    return
+}
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 13)
+;   Inst 0:   stp fp, lr, [sp, #-16]!
+;   Inst 1:   mov fp, sp
+;   Inst 2:   str x28, [sp, #-16]!
+;   Inst 3:   stp x26, x27, [sp, #-16]!
+;   Inst 4:   stp x24, x25, [sp, #-16]!
+;   Inst 5:   mov x25, x0
+;   Inst 6:   mov x26, x1
+;   Inst 7:   1: ldaxrb w27, [x25]; cmp w27, w26; csel w28, w27, w26, lt; stlxrb w24, w28, [x25]; cbnz w24, 1b
+;   Inst 8:   ldp x24, x25, [sp], #16
+;   Inst 9:   ldp x26, x27, [sp], #16
+;   Inst 10:   ldr x28, [sp], #16
+;   Inst 11:   ldp fp, lr, [sp], #16
+;   Inst 12:   ret
+; }}
+
+function %atomic_rmw_umin_i64(i64, i64) {
+block0(v0: i64, v1: i64):
+    v2 = atomic_rmw.i64 umin v0, v1
+    return
+}
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 13)
+;   Inst 0:   stp fp, lr, [sp, #-16]!
+;   Inst 1:   mov fp, sp
+;   Inst 2:   str x28, [sp, #-16]!
+;   Inst 3:   stp x26, x27, [sp, #-16]!
+;   Inst 4:   stp x24, x25, [sp, #-16]!
+;   Inst 5:   mov x25, x0
+;   Inst 6:   mov x26, x1
+;   Inst 7:   1: ldaxr x27, [x25]; cmp x27, x26; csel x28, x27, x26, lo; stlxr w24, x28, [x25]; cbnz w24, 1b
+;   Inst 8:   ldp x24, x25, [sp], #16
+;   Inst 9:   ldp x26, x27, [sp], #16
+;   Inst 10:   ldr x28, [sp], #16
+;   Inst 11:   ldp fp, lr, [sp], #16
+;   Inst 12:   ret
+; }}
+
+function %atomic_rmw_umin_i32(i64, i32) {
+block0(v0: i64, v1: i32):
+    v2 = atomic_rmw.i32 umin v0, v1
+    return
+}
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 13)
+;   Inst 0:   stp fp, lr, [sp, #-16]!
+;   Inst 1:   mov fp, sp
+;   Inst 2:   str x28, [sp, #-16]!
+;   Inst 3:   stp x26, x27, [sp, #-16]!
+;   Inst 4:   stp x24, x25, [sp, #-16]!
+;   Inst 5:   mov x25, x0
+;   Inst 6:   mov x26, x1
+;   Inst 7:   1: ldaxr w27, [x25]; cmp w27, w26; csel w28, w27, w26, lo; stlxr w24, w28, [x25]; cbnz w24, 1b
+;   Inst 8:   ldp x24, x25, [sp], #16
+;   Inst 9:   ldp x26, x27, [sp], #16
+;   Inst 10:   ldr x28, [sp], #16
+;   Inst 11:   ldp fp, lr, [sp], #16
+;   Inst 12:   ret
+; }}
+
+function %atomic_rmw_umin_i16(i64, i16) {
+block0(v0: i64, v1: i16):
+    v2 = atomic_rmw.i16 umin v0, v1
+    return
+}
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 13)
+;   Inst 0:   stp fp, lr, [sp, #-16]!
+;   Inst 1:   mov fp, sp
+;   Inst 2:   str x28, [sp, #-16]!
+;   Inst 3:   stp x26, x27, [sp, #-16]!
+;   Inst 4:   stp x24, x25, [sp, #-16]!
+;   Inst 5:   mov x25, x0
+;   Inst 6:   mov x26, x1
+;   Inst 7:   1: ldaxrh w27, [x25]; cmp w27, w26; csel w28, w27, w26, lo; stlxrh w24, w28, [x25]; cbnz w24, 1b
+;   Inst 8:   ldp x24, x25, [sp], #16
+;   Inst 9:   ldp x26, x27, [sp], #16
+;   Inst 10:   ldr x28, [sp], #16
+;   Inst 11:   ldp fp, lr, [sp], #16
+;   Inst 12:   ret
+; }}
+
+function %atomic_rmw_umin_i8(i64, i8) {
+block0(v0: i64, v1: i8):
+    v2 = atomic_rmw.i8 umin v0, v1
+    return
+}
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 13)
+;   Inst 0:   stp fp, lr, [sp, #-16]!
+;   Inst 1:   mov fp, sp
+;   Inst 2:   str x28, [sp, #-16]!
+;   Inst 3:   stp x26, x27, [sp, #-16]!
+;   Inst 4:   stp x24, x25, [sp, #-16]!
+;   Inst 5:   mov x25, x0
+;   Inst 6:   mov x26, x1
+;   Inst 7:   1: ldaxrb w27, [x25]; cmp w27, w26; csel w28, w27, w26, lo; stlxrb w24, w28, [x25]; cbnz w24, 1b
+;   Inst 8:   ldp x24, x25, [sp], #16
+;   Inst 9:   ldp x26, x27, [sp], #16
+;   Inst 10:   ldr x28, [sp], #16
+;   Inst 11:   ldp fp, lr, [sp], #16
+;   Inst 12:   ret
+; }}
+
