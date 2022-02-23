@@ -71,6 +71,7 @@
     ;; A bit op instruction with a single register source.
     (BitRR
       (op BitOp)
+      (size OperandSize)
       (rd WritableReg)
       (rn Reg))
 
@@ -876,13 +877,9 @@
 (type BitOp
   (enum
     ;; Bit reverse
-    (RBit32)
-    ;; Bit reverse
-    (RBit64)
-    (Clz32)
-    (Clz64)
-    (Cls32)
-    (Cls64)
+    (RBit)
+    (Clz)
+    (Cls)
 ))
 
 (type AMode extern (enum))
@@ -1454,10 +1451,10 @@
         (writable_reg_to_reg dst)))
 
 ;; Helper for emitting `MInst.BitRR` instructions.
-(decl bit_rr (BitOp Reg) Reg)
-(rule (bit_rr op src)
+(decl bit_rr (BitOp Type Reg) Reg)
+(rule (bit_rr op ty src)
       (let ((dst WritableReg (temp_writable_reg $I64))
-            (_ Unit (emit (MInst.BitRR op dst src))))
+            (_ Unit (emit (MInst.BitRR op (operand_size ty) dst src))))
         (writable_reg_to_reg dst)))
 
 ;; Helper for emitting `adds` instructions.
@@ -1822,27 +1819,18 @@
 
 ;; Helpers for generating `rbit` instructions.
 
-(decl rbit32 (Reg) Reg)
-(rule (rbit32 x) (bit_rr (BitOp.RBit32) x))
-
-(decl rbit64 (Reg) Reg)
-(rule (rbit64 x) (bit_rr (BitOp.RBit64) x))
+(decl rbit (Type Reg) Reg)
+(rule (rbit ty x) (bit_rr (BitOp.RBit) ty x))
 
 ;; Helpers for generating `clz` instructions.
 
-(decl clz32 (Reg) Reg)
-(rule (clz32 x) (bit_rr (BitOp.Clz32) x))
-
-(decl clz64 (Reg) Reg)
-(rule (clz64 x) (bit_rr (BitOp.Clz64) x))
+(decl a64_clz (Type Reg) Reg)
+(rule (a64_clz ty x) (bit_rr (BitOp.Clz) ty x))
 
 ;; Helpers for generating `cls` instructions.
 
-(decl cls32 (Reg) Reg)
-(rule (cls32 x) (bit_rr (BitOp.Cls32) x))
-
-(decl cls64 (Reg) Reg)
-(rule (cls64 x) (bit_rr (BitOp.Cls64) x))
+(decl a64_cls (Type Reg) Reg)
+(rule (a64_cls ty x) (bit_rr (BitOp.Cls) ty x))
 
 ;; Helpers for generating `eon` instructions.
 

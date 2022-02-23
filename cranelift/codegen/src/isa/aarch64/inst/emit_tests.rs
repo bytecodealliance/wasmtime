@@ -1262,7 +1262,8 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::BitRR {
-            op: BitOp::RBit32,
+            op: BitOp::RBit,
+            size: OperandSize::Size32,
             rd: writable_xreg(1),
             rn: xreg(10),
         },
@@ -1272,7 +1273,8 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::BitRR {
-            op: BitOp::RBit64,
+            op: BitOp::RBit,
+            size: OperandSize::Size64,
             rd: writable_xreg(1),
             rn: xreg(10),
         },
@@ -1282,7 +1284,8 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::BitRR {
-            op: BitOp::Clz32,
+            op: BitOp::Clz,
+            size: OperandSize::Size32,
             rd: writable_xreg(15),
             rn: xreg(3),
         },
@@ -1292,7 +1295,8 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::BitRR {
-            op: BitOp::Clz64,
+            op: BitOp::Clz,
+            size: OperandSize::Size64,
             rd: writable_xreg(15),
             rn: xreg(3),
         },
@@ -1302,7 +1306,8 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::BitRR {
-            op: BitOp::Cls32,
+            op: BitOp::Cls,
+            size: OperandSize::Size32,
             rd: writable_xreg(21),
             rn: xreg(16),
         },
@@ -1312,7 +1317,8 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::BitRR {
-            op: BitOp::Cls64,
+            op: BitOp::Cls,
+            size: OperandSize::Size64,
             rd: writable_xreg(21),
             rn: xreg(16),
         },
