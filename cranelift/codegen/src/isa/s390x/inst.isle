@@ -1826,10 +1826,10 @@
 
 ;; Push instructions to break out of the loop if condition is met.
 (decl push_break_if (VecMInstBuilder ProducesFlags Cond) Reg)
-(rule (push_break_if ib (ProducesFlags.ProducesFlagsReturnsReg inst result) cond)
+(rule (push_break_if ib (ProducesFlags.ProducesFlagsSideEffect inst) cond)
       (let ((_1 Unit (inst_builder_push ib inst))
             (_2 Unit (inst_builder_push ib (MInst.CondBreak cond))))
-        result))
+        (invalid_reg)))
 
 ;; Emit a `MInst.Loop` instruction holding a loop body instruction sequence.
 (decl emit_loop (VecMInstBuilder Cond) Unit)
@@ -2266,6 +2266,10 @@
       (let ((_1 Unit (emit inst))
             (_2 Unit (emit (MInst.TrapIf cond trap_code))))
         result))
+(rule (trap_if (ProducesFlags.ProducesFlagsSideEffect inst) cond trap_code)
+      (let ((_1 Unit (emit inst))
+            (_2 Unit (emit (MInst.TrapIf cond trap_code))))
+        (invalid_reg)))
 
 (decl icmps_reg_and_trap (Type Reg Reg Cond TrapCode) Reg)
 (rule (icmps_reg_and_trap ty src1 src2 cond trap_code)
