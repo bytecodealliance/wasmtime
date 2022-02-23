@@ -864,10 +864,7 @@ fn differential_store(
 
 /// Helper for instantiating and running a Wasm module in Wasmtime and returning
 /// its `Val` results.
-fn run_in_wasmtime(
-    wasm: &[u8],
-    config: &generators::Config,
-) -> anyhow::Result<Option<Vec<Val>>> {
+fn run_in_wasmtime(wasm: &[u8], config: &generators::Config) -> anyhow::Result<Option<Vec<Val>>> {
     // Instantiate wasmtime module and instance.
     let (wasmtime_module, mut wasmtime_store) = differential_store(wasm, config);
     let wasmtime_module = match wasmtime_module {
