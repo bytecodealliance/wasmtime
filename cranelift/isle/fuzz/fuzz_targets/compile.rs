@@ -5,21 +5,21 @@ use libfuzzer_sys::fuzz_target;
 fuzz_target!(|s: &str| {
     let _ = env_logger::try_init();
 
-    let lexer = isle::lexer::Lexer::from_str(s, "fuzz-input.isle");
+    let lexer = cranelift_isle::lexer::Lexer::from_str(s, "fuzz-input.isle");
     log::debug!("lexer = {:?}", lexer);
     let lexer = match lexer {
         Ok(l) => l,
         Err(_) => return,
     };
 
-    let defs = isle::parser::parse(lexer);
+    let defs = cranelift_isle::parser::parse(lexer);
     log::debug!("defs = {:?}", defs);
     let defs = match defs {
         Ok(d) => d,
         Err(_) => return,
     };
 
-    let code = isle::compile::compile(&defs);
+    let code = cranelift_isle::compile::compile(&defs);
     log::debug!("code = {:?}", code);
     let code = match code {
         Ok(c) => c,
