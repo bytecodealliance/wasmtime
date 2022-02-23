@@ -1338,10 +1338,6 @@ impl MachInstEmit for Inst {
                    both the store-data and success-flag operands of stlxr.  This causes the
                    instruction's behaviour to be "CONSTRAINED UNPREDICTABLE", so we use x24
                    instead for the success-flag.
-
-                   In the case where the operation is 'xchg', the second insn is instead
-                     mov          x28, x26
-                   so that we simply write in the destination, the "2nd arg for op".
                 */
                 // TODO: We should not hardcode registers here, a better idea would be to
                 // pass some scratch registers in the AtomicRMWLoop pseudo-instruction, and use those
@@ -1363,19 +1359,17 @@ impl MachInstEmit for Inst {
                     sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
                 }
                 sink.put4(enc_ldaxr(ty, x27wr, x25)); // ldaxr x27, [x25]
+                let size = OperandSize::from_ty(ty);
 
                 match op {
-                    AtomicRmwOp::Xchg => {
-                        // mov x28, x26
-                        Inst::Mov64 { rd: x28wr, rm: x26 }.emit(sink, emit_info, state);
-                    }
+                    AtomicRmwOp::Xchg => {} // do nothing
                     AtomicRmwOp::Nand => {
                         // and x28, x27, x26
                         // mvn x28, x28
 
                         Inst::AluRRR {
                             alu_op: ALUOp::And,
-                            size: OperandSize::Size64,
+                            size,
                             rd: x28wr,
                             rn: x27,
                             rm: x26,
@@ -1384,7 +1378,7 @@ impl MachInstEmit for Inst {
 
                         Inst::AluRRR {
                             alu_op: ALUOp::OrrNot,
-                            size: OperandSize::Size64,
+                            size,
                             rd: x28wr,
                             rn: xzr,
                             rm: x28,
@@ -1408,7 +1402,7 @@ impl MachInstEmit for Inst {
 
                         Inst::AluRRR {
                             alu_op: ALUOp::SubS,
-                            size: OperandSize::from_ty(ty),
+                            size,
                             rd: writable_zero_reg(),
                             rn: x27,
                             rm: x26,
@@ -1441,7 +1435,7 @@ impl MachInstEmit for Inst {
 
                         Inst::AluRRR {
                             alu_op,
-                            size: OperandSize::Size64,
+                            size,
                             rd: x28wr,
                             rn: x27,
                             rm: x26,
@@ -1454,7 +1448,11 @@ impl MachInstEmit for Inst {
                 if srcloc != SourceLoc::default() {
                     sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
                 }
-                sink.put4(enc_stlxr(ty, x24wr, x28, x25)); // stlxr w24, x28, [x25]
+                if op == AtomicRmwOp::Xchg {
+                    sink.put4(enc_stlxr(ty, x24wr, x26, x25)); // stlxr w24, x26, [x25]
+                } else {
+                    sink.put4(enc_stlxr(ty, x24wr, x28, x25)); // stlxr w24, x28, [x25]
+                }
 
                 // cbnz w24, again
                 // Note, we're actually testing x24, and relying on the default zero-high-half
