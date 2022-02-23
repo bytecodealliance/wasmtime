@@ -43,8 +43,23 @@ fn memory_limit() -> Result<()> {
     config.dynamic_memory_guard_size(0);
     config.static_memory_guard_size(65536);
     config.static_memory_maximum_size(3 * 65536);
+    config.wasm_multi_memory(true);
 
     let engine = Engine::new(&config)?;
+
+    // Module should fail to instantiate because it has too many memories
+    {
+        let mut store = Store::new(&engine, ());
+        let module = Module::new(&engine, r#"(module (memory 1) (memory 1))"#)?;
+        match Instance::new(&mut store, &module, &[]) {
+            Ok(_) => panic!("module instantiation should fail"),
+            Err(e) => assert_eq!(
+                e.to_string(),
+                "Insufficient resources: instantiation requires 2 memories to be \
+                 created which exceeds the maximum of 1 configured",
+            ),
+        }
+    }
 
     // Module should fail to instantiate because the minimum is greater than
     // the configured limit
@@ -251,6 +266,20 @@ fn table_limit() -> Result<()> {
     config.static_memory_maximum_size(65536);
 
     let engine = Engine::new(&config)?;
+
+    // Module should fail to instantiate because it has too many tables
+    {
+        let mut store = Store::new(&engine, ());
+        let module = Module::new(&engine, r#"(module (table 1 funcref) (table 1 funcref))"#)?;
+        match Instance::new(&mut store, &module, &[]) {
+            Ok(_) => panic!("module instantiation should fail"),
+            Err(e) => assert_eq!(
+                e.to_string(),
+                "Insufficient resources: instantiation requires 2 tables to be \
+                 created which exceeds the maximum of 1 configured",
+            ),
+        }
+    }
 
     // Module should fail to instantiate because the minimum is greater than
     // the configured limit

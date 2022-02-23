@@ -392,6 +392,16 @@ impl InstancePool {
     ) -> Result<(), InstantiationError> {
         let module = runtime_info.module();
 
+        let nmemories = module.memory_plans.len() - module.num_imported_memories;
+        if nmemories > self.memories.max_memories {
+            return Err(InstantiationError::Resource(anyhow!(
+                "instantiation requires {} memories to be created which \
+                 exceeds the maximum of {} configured",
+                nmemories,
+                self.memories.max_memories
+            )));
+        }
+
         for (memory_index, plan) in module
             .memory_plans
             .iter()
@@ -507,6 +517,17 @@ impl InstancePool {
         tables: &mut PrimaryMap<DefinedTableIndex, Table>,
     ) -> Result<(), InstantiationError> {
         let module = runtime_info.module();
+
+        let ntables = module.table_plans.len() - module.num_imported_tables;
+        if ntables > self.tables.max_tables {
+            return Err(InstantiationError::Resource(anyhow!(
+                "instantiation requires {} tables to be created which \
+                 exceeds the maximum of {} configured",
+                ntables,
+                self.tables.max_tables
+            )));
+        }
+
         let mut bases = self.tables.get(instance_index);
         for (_, plan) in module.table_plans.iter().skip(module.num_imported_tables) {
             let base = bases.next().unwrap() as _;
