@@ -43,7 +43,7 @@ block0(v0: f64, v1: i64):
 ;   Entry block: 0
 ; Block 0:
 ;   (original IR block: block0)
-;   (instruction range: 0 .. 17)
+;   (instruction range: 0 .. 16)
 ;   Inst 0:   pushq   %rbp
 ;   Inst 1:   movq    %rsp, %rbp
 ;   Inst 2:   movsd   0(%rdi), %xmm1
@@ -52,14 +52,12 @@ block0(v0: f64, v1: i64):
 ;   Inst 5:   setz    %sil
 ;   Inst 6:   andl    %edi, %esi
 ;   Inst 7:   andq    $1, %rsi
-;   Inst 8:   ucomisd %xmm1, %xmm0
+;   Inst 8:   ucomisd %xmm0, %xmm1
 ;   Inst 9:   movaps  %xmm0, %xmm1
-;   Inst 10:   jnp $next; movsd %xmm0, %xmm1; $next: 
-;   Inst 11:   jz $next; movsd %xmm0, %xmm1; $next: 
-;   Inst 12:   movq    %rsi, %rax
-;   Inst 13:   movaps  %xmm1, %xmm0
-;   Inst 14:   movq    %rbp, %rsp
-;   Inst 15:   popq    %rbp
-;   Inst 16:   ret
+;   Inst 10:   jz $check; movsd %xmm0, %xmm1; $check: jnp $next; movsd %xmm0, %xmm1; $next
+;   Inst 11:   movq    %rsi, %rax
+;   Inst 12:   movaps  %xmm1, %xmm0
+;   Inst 13:   movq    %rbp, %rsp
+;   Inst 14:   popq    %rbp
+;   Inst 15:   ret
 ; }}
-

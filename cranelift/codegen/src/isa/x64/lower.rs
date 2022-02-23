@@ -530,6 +530,7 @@ enum FcmpSpec {
     /// This is useful in contexts where it is hard/inefficient to produce a single instruction (or
     /// sequence of instructions) that check for an "AND" combination of condition codes; see for
     /// instance lowering of Select.
+    #[allow(dead_code)]
     InvertEqual,
 }
 
@@ -4252,80 +4253,8 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::Select => {
             let flag_input = inputs[0];
-            if let Some(fcmp) = matches_input(ctx, flag_input, Opcode::Fcmp) {
-                let cond_code = ctx.data(fcmp).fp_cond_code().unwrap();
-
-                // For equal, we flip the operands, because we can't test a conjunction of
-                // CPU flags with a single cmove; see InvertedEqualOrConditions doc comment.
-                let (lhs_input, rhs_input) = match cond_code {
-                    FloatCC::Equal => (inputs[2], inputs[1]),
-                    _ => (inputs[1], inputs[2]),
-                };
-
-                let ty = ctx.output_ty(insn, 0);
-                let rhs = put_input_in_regs(ctx, rhs_input);
-                let dst = get_output_reg(ctx, outputs[0]);
-                let lhs = put_input_in_regs(ctx, lhs_input);
-
-                // We request inversion of Equal to NotEqual here: taking LHS if equal would mean
-                // take it if both CC::NP and CC::Z are set, the conjunction of which can't be
-                // modeled with a single cmov instruction. Instead, we'll swap LHS and RHS in the
-                // select operation, and invert the equal to a not-equal here.
-                let fcmp_results = emit_fcmp(ctx, fcmp, cond_code, FcmpSpec::InvertEqual);
-
-                if let FcmpCondResult::InvertedEqualOrConditions(_, _) = &fcmp_results {
-                    // Keep this sync'd with the lowering of the select inputs above.
-                    assert_eq!(cond_code, FloatCC::Equal);
-                }
-
-                emit_moves(ctx, dst, rhs, ty);
-
-                let operand_size = if ty == types::F64 {
-                    OperandSize::Size64
-                } else {
-                    OperandSize::Size32
-                };
-                match fcmp_results {
-                    FcmpCondResult::Condition(cc) => {
-                        if is_int_or_ref_ty(ty) || ty == types::I128 || ty == types::B128 {
-                            let size = ty.bytes() as u8;
-                            emit_cmoves(ctx, size, cc, lhs, dst);
-                        } else {
-                            ctx.emit(Inst::xmm_cmove(
-                                operand_size,
-                                cc,
-                                RegMem::reg(lhs.only_reg().unwrap()),
-                                dst.only_reg().unwrap(),
-                            ));
-                        }
-                    }
-                    FcmpCondResult::AndConditions(_, _) => {
-                        unreachable!(
-                            "can't AND with select; see above comment about inverting equal"
-                        );
-                    }
-                    FcmpCondResult::InvertedEqualOrConditions(cc1, cc2)
-                    | FcmpCondResult::OrConditions(cc1, cc2) => {
-                        if is_int_or_ref_ty(ty) || ty == types::I128 {
-                            let size = ty.bytes() as u8;
-                            emit_cmoves(ctx, size, cc1, lhs.clone(), dst);
-                            emit_cmoves(ctx, size, cc2, lhs, dst);
-                        } else {
-                            ctx.emit(Inst::xmm_cmove(
-                                operand_size,
-                                cc1,
-                                RegMem::reg(lhs.only_reg().unwrap()),
-                                dst.only_reg().unwrap(),
-                            ));
-                            ctx.emit(Inst::xmm_cmove(
-                                operand_size,
-                                cc2,
-                                RegMem::reg(lhs.only_reg().unwrap()),
-                                dst.only_reg().unwrap(),
-                            ));
-                        }
-                    }
-                }
+            if let Some(_) = matches_input(ctx, flag_input, Opcode::Fcmp) {
+                implemented_in_isle(ctx);
             } else {
                 let ty = ty.unwrap();
 

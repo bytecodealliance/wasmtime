@@ -1,0 +1,80 @@
+test interpret
+test run
+target x86_64
+
+function %select_eq_f32(f32, f32) -> i32 {
+block0(v0: f32, v1: f32):
+    v2 = fcmp eq v0, v1
+    v3 = iconst.i32 1
+    v4 = iconst.i32 0
+    v5 = select v2, v3, v4
+    return v5
+}
+; run: %select_eq_f32(0x42.42, 0x42.42) == 1
+; run: %select_eq_f32(0x42.42, 0.0) == 0
+; run: %select_eq_f32(0x42.42, NaN) == 0
+
+function %select_ne_f64(f64, f64) -> i32 {
+block0(v0: f64, v1: f64):
+    v2 = fcmp ne v0, v1
+    v3 = iconst.i32 1
+    v4 = iconst.i32 0
+    v5 = select v2, v3, v4
+    return v5
+}
+; run: %select_ne_f64(0x42.42, 0x42.42) == 0
+; run: %select_ne_f64(0x42.42, 0.0) == 1
+; run: %select_ne_f64(NaN, NaN) == 1
+
+function %select_gt_f64(f64, f64) -> b1 {
+block0(v0: f64, v1: f64):
+    v2 = fcmp gt v0, v1
+    v3 = bconst.b1 true
+    v4 = bconst.b1 false
+    v5 = select v2, v3, v4
+    return v5
+}
+; run: %select_gt_f64(0x42.42, 0.0) == true
+; run: %select_gt_f64(0.0, 0.0) == false
+; run: %select_gt_f64(0x0.0, 0x42.42) == false
+; run: %select_gt_f64(NaN, 0x42.42) == false
+
+function %select_ge_f64(f64, f64) -> i64 {
+block0(v0: f64, v1: f64):
+    v2 = fcmp ge v0, v1
+    v3 = iconst.i64 1
+    v4 = iconst.i64 0
+    v5 = select v2, v3, v4
+    return v5
+}
+; run: %select_ge_f64(0x42.42, 0.0) == 1
+; run: %select_ge_f64(0.0, 0.0) == 1
+; run: %select_ge_f64(0x0.0, 0x42.42) == 0
+; run: %select_ge_f64(0x0.0, NaN) == 0
+
+function %select_le_f32(f32, f32) -> f32 {
+block0(v0: f32, v1: f32):
+    v2 = fcmp le v0, v1
+    v3 = f32const 0x1.0
+    v4 = f32const 0x0.0
+    v5 = select v2, v3, v4
+    return v5
+}
+; runx: %select_le_f32(0x42.42, 0.0) == 0x0.0
+; run: %select_le_f32(0.0, 0.0) == 0x1.0
+; run: %select_le_f32(0x0.0, 0x42.42) == 0x1.0
+; run: %select_le_f32(0x0.0, NaN) == 0x0.0
+
+function %select_uno_f32(f32, f32) -> i8 {
+block0(v0: f32, v1: f32):
+    v2 = fcmp uno v0, v1
+    v3 = iconst.i8 1
+    v4 = iconst.i8 0
+    v5 = select v2, v3, v4
+    return v5
+}
+; run: %select_uno_f32(0x42.42, 0.0) == 0
+; run: %select_uno_f32(0.0, 0.0) == 0
+; run: %select_uno_f32(0x0.0, 0x42.42) == 0
+; run: %select_uno_f32(0x0.0, NaN) == 1
+; run: %select_uno_f32(-NaN, 0x42.42) == 1

@@ -108,16 +108,30 @@ pub enum SideEffectNoResult {
     Inst { inst: MInst },
 }
 
-/// Internal type ProducesFlags: defined at src/prelude.isle line 327.
+/// Internal type ProducesFlags: defined at src/prelude.isle line 330.
 #[derive(Clone, Debug)]
 pub enum ProducesFlags {
-    ProducesFlags { inst: MInst, result: Reg },
+    ProducesFlagsSideEffect { inst: MInst },
+    ProducesFlagsReturnsReg { inst: MInst, result: Reg },
+    ProducesFlagsReturnsResultWithConsumer { inst: MInst, result: Reg },
 }
 
-/// Internal type ConsumesFlags: defined at src/prelude.isle line 330.
+/// Internal type ConsumesFlags: defined at src/prelude.isle line 341.
 #[derive(Clone, Debug)]
 pub enum ConsumesFlags {
-    ConsumesFlags { inst: MInst, result: Reg },
+    ConsumesFlagsReturnsResultWithProducer {
+        inst: MInst,
+        result: Reg,
+    },
+    ConsumesFlagsReturnsReg {
+        inst: MInst,
+        result: Reg,
+    },
+    ConsumesFlagsTwiceReturnsValueRegs {
+        inst1: MInst,
+        inst2: MInst,
+        result: ValueRegs,
+    },
 }
 
 /// Internal type MInst: defined at src/isa/aarch64/inst.isle line 2.
@@ -1013,7 +1027,7 @@ pub fn constructor_value_regs_none<C: Context>(
     } = pattern0_0
     {
         // Rule at src/prelude.isle line 313.
-        let expr0_0 = C::emit(ctx, &pattern1_0);
+        let expr0_0 = C::emit(ctx, pattern1_0);
         let expr1_0 = C::value_regs_invalid(ctx);
         return Some(expr1_0);
     }
@@ -1031,9 +1045,40 @@ pub fn constructor_safepoint<C: Context>(
     } = pattern0_0
     {
         // Rule at src/prelude.isle line 319.
-        let expr0_0 = C::emit_safepoint(ctx, &pattern1_0);
+        let expr0_0 = C::emit_safepoint(ctx, pattern1_0);
         let expr1_0 = C::value_regs_invalid(ctx);
         return Some(expr1_0);
+    }
+    return None;
+}
+
+// Generated as internal constructor for term consumes_flags_concat.
+pub fn constructor_consumes_flags_concat<C: Context>(
+    ctx: &mut C,
+    arg0: &ConsumesFlags,
+    arg1: &ConsumesFlags,
+) -> Option<ConsumesFlags> {
+    let pattern0_0 = arg0;
+    if let &ConsumesFlags::ConsumesFlagsReturnsReg {
+        inst: ref pattern1_0,
+        result: pattern1_1,
+    } = pattern0_0
+    {
+        let pattern2_0 = arg1;
+        if let &ConsumesFlags::ConsumesFlagsReturnsReg {
+            inst: ref pattern3_0,
+            result: pattern3_1,
+        } = pattern2_0
+        {
+            // Rule at src/prelude.isle line 353.
+            let expr0_0 = C::value_regs(ctx, pattern1_1, pattern3_1);
+            let expr1_0 = ConsumesFlags::ConsumesFlagsTwiceReturnsValueRegs {
+                inst1: pattern1_0.clone(),
+                inst2: pattern3_0.clone(),
+                result: expr0_0,
+            };
+            return Some(expr1_0);
+        }
     }
     return None;
 }
@@ -1045,89 +1090,71 @@ pub fn constructor_with_flags<C: Context>(
     arg1: &ConsumesFlags,
 ) -> Option<ValueRegs> {
     let pattern0_0 = arg0;
-    if let &ProducesFlags::ProducesFlags {
-        inst: ref pattern1_0,
-        result: pattern1_1,
-    } = pattern0_0
-    {
-        let pattern2_0 = arg1;
-        if let &ConsumesFlags::ConsumesFlags {
-            inst: ref pattern3_0,
-            result: pattern3_1,
-        } = pattern2_0
-        {
-            // Rule at src/prelude.isle line 340.
-            let expr0_0 = C::emit(ctx, &pattern1_0);
-            let expr1_0 = C::emit(ctx, &pattern3_0);
-            let expr2_0 = C::value_regs(ctx, pattern1_1, pattern3_1);
-            return Some(expr2_0);
+    match pattern0_0 {
+        &ProducesFlags::ProducesFlagsSideEffect {
+            inst: ref pattern1_0,
+        } => {
+            let pattern2_0 = arg1;
+            match pattern2_0 {
+                &ConsumesFlags::ConsumesFlagsReturnsReg {
+                    inst: ref pattern3_0,
+                    result: pattern3_1,
+                } => {
+                    // Rule at src/prelude.isle line 378.
+                    let expr0_0 = C::emit(ctx, pattern1_0);
+                    let expr1_0 = C::emit(ctx, pattern3_0);
+                    let expr2_0 = C::value_reg(ctx, pattern3_1);
+                    return Some(expr2_0);
+                }
+                &ConsumesFlags::ConsumesFlagsTwiceReturnsValueRegs {
+                    inst1: ref pattern3_0,
+                    inst2: ref pattern3_1,
+                    result: pattern3_2,
+                } => {
+                    // Rule at src/prelude.isle line 384.
+                    let expr0_0 = C::emit(ctx, pattern1_0);
+                    let expr1_0 = C::emit(ctx, pattern3_1);
+                    let expr2_0 = C::emit(ctx, pattern3_0);
+                    return Some(pattern3_2);
+                }
+                _ => {}
+            }
         }
+        &ProducesFlags::ProducesFlagsReturnsResultWithConsumer {
+            inst: ref pattern1_0,
+            result: pattern1_1,
+        } => {
+            let pattern2_0 = arg1;
+            if let &ConsumesFlags::ConsumesFlagsReturnsResultWithProducer {
+                inst: ref pattern3_0,
+                result: pattern3_1,
+            } = pattern2_0
+            {
+                // Rule at src/prelude.isle line 372.
+                let expr0_0 = C::emit(ctx, pattern1_0);
+                let expr1_0 = C::emit(ctx, pattern3_0);
+                let expr2_0 = C::value_regs(ctx, pattern1_1, pattern3_1);
+                return Some(expr2_0);
+            }
+        }
+        _ => {}
     }
     return None;
 }
 
-// Generated as internal constructor for term with_flags_1.
-pub fn constructor_with_flags_1<C: Context>(
+// Generated as internal constructor for term with_flags_reg.
+pub fn constructor_with_flags_reg<C: Context>(
     ctx: &mut C,
     arg0: &ProducesFlags,
     arg1: &ConsumesFlags,
 ) -> Option<Reg> {
     let pattern0_0 = arg0;
-    if let &ProducesFlags::ProducesFlags {
-        inst: ref pattern1_0,
-        result: pattern1_1,
-    } = pattern0_0
-    {
-        let pattern2_0 = arg1;
-        if let &ConsumesFlags::ConsumesFlags {
-            inst: ref pattern3_0,
-            result: pattern3_1,
-        } = pattern2_0
-        {
-            // Rule at src/prelude.isle line 348.
-            let expr0_0 = C::emit(ctx, &pattern1_0);
-            let expr1_0 = C::emit(ctx, &pattern3_0);
-            return Some(pattern3_1);
-        }
-    }
-    return None;
-}
-
-// Generated as internal constructor for term with_flags_2.
-pub fn constructor_with_flags_2<C: Context>(
-    ctx: &mut C,
-    arg0: &ProducesFlags,
-    arg1: &ConsumesFlags,
-    arg2: &ConsumesFlags,
-) -> Option<ValueRegs> {
-    let pattern0_0 = arg0;
-    if let &ProducesFlags::ProducesFlags {
-        inst: ref pattern1_0,
-        result: pattern1_1,
-    } = pattern0_0
-    {
-        let pattern2_0 = arg1;
-        if let &ConsumesFlags::ConsumesFlags {
-            inst: ref pattern3_0,
-            result: pattern3_1,
-        } = pattern2_0
-        {
-            let pattern4_0 = arg2;
-            if let &ConsumesFlags::ConsumesFlags {
-                inst: ref pattern5_0,
-                result: pattern5_1,
-            } = pattern4_0
-            {
-                // Rule at src/prelude.isle line 358.
-                let expr0_0 = C::emit(ctx, &pattern1_0);
-                let expr1_0 = C::emit(ctx, &pattern5_0);
-                let expr2_0 = C::emit(ctx, &pattern3_0);
-                let expr3_0 = C::value_regs(ctx, pattern3_1, pattern5_1);
-                return Some(expr3_0);
-            }
-        }
-    }
-    return None;
+    let pattern1_0 = arg1;
+    // Rule at src/prelude.isle line 397.
+    let expr0_0 = constructor_with_flags(ctx, pattern0_0, pattern1_0)?;
+    let expr1_0: usize = 0;
+    let expr2_0 = C::value_regs_get(ctx, expr0_0, expr1_0);
+    return Some(expr2_0);
 }
 
 // Generated as internal constructor for term operand_size.
@@ -1530,8 +1557,8 @@ pub fn constructor_bit_rr<C: Context>(ctx: &mut C, arg0: &BitOp, arg1: Reg) -> O
     return Some(expr4_0);
 }
 
-// Generated as internal constructor for term add_with_flags.
-pub fn constructor_add_with_flags<C: Context>(
+// Generated as internal constructor for term add_with_flags_paired.
+pub fn constructor_add_with_flags_paired<C: Context>(
     ctx: &mut C,
     arg0: Type,
     arg1: Reg,
@@ -1553,15 +1580,15 @@ pub fn constructor_add_with_flags<C: Context>(
         rm: pattern2_0,
     };
     let expr5_0 = C::writable_reg_to_reg(ctx, expr1_0);
-    let expr6_0 = ProducesFlags::ProducesFlags {
+    let expr6_0 = ProducesFlags::ProducesFlagsReturnsResultWithConsumer {
         inst: expr4_0,
         result: expr5_0,
     };
     return Some(expr6_0);
 }
 
-// Generated as internal constructor for term adc.
-pub fn constructor_adc<C: Context>(
+// Generated as internal constructor for term adc_paired.
+pub fn constructor_adc_paired<C: Context>(
     ctx: &mut C,
     arg0: Type,
     arg1: Reg,
@@ -1570,7 +1597,7 @@ pub fn constructor_adc<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/aarch64/inst.isle line 1472.
+    // Rule at src/isa/aarch64/inst.isle line 1473.
     let expr0_0: Type = I64;
     let expr1_0 = C::temp_writable_reg(ctx, expr0_0);
     let expr2_0 = ALUOp::Adc;
@@ -1583,15 +1610,15 @@ pub fn constructor_adc<C: Context>(
         rm: pattern2_0,
     };
     let expr5_0 = C::writable_reg_to_reg(ctx, expr1_0);
-    let expr6_0 = ConsumesFlags::ConsumesFlags {
+    let expr6_0 = ConsumesFlags::ConsumesFlagsReturnsResultWithProducer {
         inst: expr4_0,
         result: expr5_0,
     };
     return Some(expr6_0);
 }
 
-// Generated as internal constructor for term sub_with_flags.
-pub fn constructor_sub_with_flags<C: Context>(
+// Generated as internal constructor for term sub_with_flags_paired.
+pub fn constructor_sub_with_flags_paired<C: Context>(
     ctx: &mut C,
     arg0: Type,
     arg1: Reg,
@@ -1600,7 +1627,7 @@ pub fn constructor_sub_with_flags<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/aarch64/inst.isle line 1479.
+    // Rule at src/isa/aarch64/inst.isle line 1481.
     let expr0_0: Type = I64;
     let expr1_0 = C::temp_writable_reg(ctx, expr0_0);
     let expr2_0 = ALUOp::SubS;
@@ -1613,7 +1640,7 @@ pub fn constructor_sub_with_flags<C: Context>(
         rm: pattern2_0,
     };
     let expr5_0 = C::writable_reg_to_reg(ctx, expr1_0);
-    let expr6_0 = ProducesFlags::ProducesFlags {
+    let expr6_0 = ProducesFlags::ProducesFlagsReturnsResultWithConsumer {
         inst: expr4_0,
         result: expr5_0,
     };
@@ -1628,7 +1655,7 @@ pub fn constructor_cmp64_imm<C: Context>(
 ) -> Option<ProducesFlags> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/aarch64/inst.isle line 1485.
+    // Rule at src/isa/aarch64/inst.isle line 1488.
     let expr0_0 = ALUOp::SubS;
     let expr1_0 = OperandSize::Size64;
     let expr2_0 = C::writable_zero_reg(ctx);
@@ -1639,16 +1666,12 @@ pub fn constructor_cmp64_imm<C: Context>(
         rn: pattern0_0,
         imm12: pattern1_0,
     };
-    let expr4_0 = C::zero_reg(ctx);
-    let expr5_0 = ProducesFlags::ProducesFlags {
-        inst: expr3_0,
-        result: expr4_0,
-    };
-    return Some(expr5_0);
+    let expr4_0 = ProducesFlags::ProducesFlagsSideEffect { inst: expr3_0 };
+    return Some(expr4_0);
 }
 
-// Generated as internal constructor for term sbc.
-pub fn constructor_sbc<C: Context>(
+// Generated as internal constructor for term sbc_paired.
+pub fn constructor_sbc_paired<C: Context>(
     ctx: &mut C,
     arg0: Type,
     arg1: Reg,
@@ -1657,7 +1680,7 @@ pub fn constructor_sbc<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/aarch64/inst.isle line 1491.
+    // Rule at src/isa/aarch64/inst.isle line 1495.
     let expr0_0: Type = I64;
     let expr1_0 = C::temp_writable_reg(ctx, expr0_0);
     let expr2_0 = ALUOp::Sbc;
@@ -1670,7 +1693,7 @@ pub fn constructor_sbc<C: Context>(
         rm: pattern2_0,
     };
     let expr5_0 = C::writable_reg_to_reg(ctx, expr1_0);
-    let expr6_0 = ConsumesFlags::ConsumesFlags {
+    let expr6_0 = ConsumesFlags::ConsumesFlagsReturnsResultWithProducer {
         inst: expr4_0,
         result: expr5_0,
     };
@@ -1687,7 +1710,7 @@ pub fn constructor_vec_misc<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/aarch64/inst.isle line 1498.
+    // Rule at src/isa/aarch64/inst.isle line 1503.
     let expr0_0: Type = I8X16;
     let expr1_0 = C::temp_writable_reg(ctx, expr0_0);
     let expr2_0 = MInst::VecMisc {
@@ -1713,7 +1736,7 @@ pub fn constructor_vec_rrr_long<C: Context>(
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
     let pattern3_0 = arg3;
-    // Rule at src/isa/aarch64/inst.isle line 1505.
+    // Rule at src/isa/aarch64/inst.isle line 1510.
     let expr0_0: Type = I8X16;
     let expr1_0 = C::temp_writable_reg(ctx, expr0_0);
     let expr2_0 = MInst::VecRRRLong {
@@ -1742,7 +1765,7 @@ pub fn constructor_vec_rrrr_long<C: Context>(
     let pattern2_0 = arg2;
     let pattern3_0 = arg3;
     let pattern4_0 = arg4;
-    // Rule at src/isa/aarch64/inst.isle line 1515.
+    // Rule at src/isa/aarch64/inst.isle line 1520.
     let expr0_0: Type = I8X16;
     let expr1_0 = C::temp_writable_reg(ctx, expr0_0);
     let expr2_0 = MInst::FpuMove128 {
@@ -1772,7 +1795,7 @@ pub fn constructor_vec_rr_narrow<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/aarch64/inst.isle line 1523.
+    // Rule at src/isa/aarch64/inst.isle line 1528.
     let expr0_0: Type = I8X16;
     let expr1_0 = C::temp_writable_reg(ctx, expr0_0);
     let expr2_0 = MInst::VecRRNarrow {
@@ -1796,7 +1819,7 @@ pub fn constructor_vec_rr_long<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/aarch64/inst.isle line 1530.
+    // Rule at src/isa/aarch64/inst.isle line 1535.
     let expr0_0: Type = I8X16;
     let expr1_0 = C::temp_writable_reg(ctx, expr0_0);
     let expr2_0 = MInst::VecRRLong {
@@ -1818,7 +1841,7 @@ pub fn constructor_mov_to_fpu<C: Context>(
 ) -> Option<Reg> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/aarch64/inst.isle line 1537.
+    // Rule at src/isa/aarch64/inst.isle line 1542.
     let expr0_0: Type = I8X16;
     let expr1_0 = C::temp_writable_reg(ctx, expr0_0);
     let expr2_0 = MInst::MovToFpu {
@@ -1843,7 +1866,7 @@ pub fn constructor_mov_to_vec<C: Context>(
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
     let pattern3_0 = arg3;
-    // Rule at src/isa/aarch64/inst.isle line 1544.
+    // Rule at src/isa/aarch64/inst.isle line 1549.
     let expr0_0: Type = I8X16;
     let expr1_0 = C::temp_writable_reg(ctx, expr0_0);
     let expr2_0 = MInst::FpuMove128 {
@@ -1872,7 +1895,7 @@ pub fn constructor_mov_from_vec<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/aarch64/inst.isle line 1552.
+    // Rule at src/isa/aarch64/inst.isle line 1557.
     let expr0_0: Type = I64;
     let expr1_0 = C::temp_writable_reg(ctx, expr0_0);
     let expr2_0 = MInst::MovFromVec {
@@ -1898,7 +1921,7 @@ pub fn constructor_mov_from_vec_signed<C: Context>(
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
     let pattern3_0 = arg3;
-    // Rule at src/isa/aarch64/inst.isle line 1559.
+    // Rule at src/isa/aarch64/inst.isle line 1564.
     let expr0_0: Type = I64;
     let expr1_0 = C::temp_writable_reg(ctx, expr0_0);
     let expr2_0 = MInst::MovFromVecSigned {
@@ -1925,7 +1948,7 @@ pub fn constructor_extend<C: Context>(
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
     let pattern3_0 = arg3;
-    // Rule at src/isa/aarch64/inst.isle line 1566.
+    // Rule at src/isa/aarch64/inst.isle line 1571.
     let expr0_0: Type = I64;
     let expr1_0 = C::temp_writable_reg(ctx, expr0_0);
     let expr2_0 = MInst::Extend {
@@ -1944,7 +1967,7 @@ pub fn constructor_extend<C: Context>(
 pub fn constructor_load_acquire<C: Context>(ctx: &mut C, arg0: Type, arg1: Reg) -> Option<Reg> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/aarch64/inst.isle line 1573.
+    // Rule at src/isa/aarch64/inst.isle line 1578.
     let expr0_0: Type = I64;
     let expr1_0 = C::temp_writable_reg(ctx, expr0_0);
     let expr2_0 = MInst::LoadAcquire {
@@ -1967,7 +1990,7 @@ pub fn constructor_tst_imm<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/aarch64/inst.isle line 1583.
+    // Rule at src/isa/aarch64/inst.isle line 1588.
     let expr0_0 = ALUOp::AndS;
     let expr1_0 = constructor_operand_size(ctx, pattern0_0)?;
     let expr2_0 = C::writable_zero_reg(ctx);
@@ -1978,12 +2001,8 @@ pub fn constructor_tst_imm<C: Context>(
         rn: pattern1_0,
         imml: pattern2_0,
     };
-    let expr4_0 = C::invalid_reg(ctx);
-    let expr5_0 = ProducesFlags::ProducesFlags {
-        inst: expr3_0,
-        result: expr4_0,
-    };
-    return Some(expr5_0);
+    let expr4_0 = ProducesFlags::ProducesFlagsSideEffect { inst: expr3_0 };
+    return Some(expr4_0);
 }
 
 // Generated as internal constructor for term csel.
@@ -1996,7 +2015,7 @@ pub fn constructor_csel<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/aarch64/inst.isle line 1597.
+    // Rule at src/isa/aarch64/inst.isle line 1602.
     let expr0_0: Type = I64;
     let expr1_0 = C::temp_writable_reg(ctx, expr0_0);
     let expr2_0 = MInst::CSel {
@@ -2006,7 +2025,7 @@ pub fn constructor_csel<C: Context>(
         rm: pattern2_0,
     };
     let expr3_0 = C::writable_reg_to_reg(ctx, expr1_0);
-    let expr4_0 = ConsumesFlags::ConsumesFlags {
+    let expr4_0 = ConsumesFlags::ConsumesFlagsReturnsReg {
         inst: expr2_0,
         result: expr3_0,
     };
@@ -2018,7 +2037,7 @@ pub fn constructor_add<C: Context>(ctx: &mut C, arg0: Type, arg1: Reg, arg2: Reg
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/aarch64/inst.isle line 1605.
+    // Rule at src/isa/aarch64/inst.isle line 1611.
     let expr0_0 = ALUOp::Add;
     let expr1_0 = constructor_alu_rrr(ctx, &expr0_0, pattern0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -2034,7 +2053,7 @@ pub fn constructor_add_imm<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/aarch64/inst.isle line 1608.
+    // Rule at src/isa/aarch64/inst.isle line 1614.
     let expr0_0 = ALUOp::Add;
     let expr1_0 = constructor_alu_rr_imm12(ctx, &expr0_0, pattern0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -2050,7 +2069,7 @@ pub fn constructor_add_extend<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/aarch64/inst.isle line 1611.
+    // Rule at src/isa/aarch64/inst.isle line 1617.
     let expr0_0 = ALUOp::Add;
     let expr1_0 = constructor_alu_rr_extend_reg(ctx, &expr0_0, pattern0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -2068,7 +2087,7 @@ pub fn constructor_add_shift<C: Context>(
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
     let pattern3_0 = arg3;
-    // Rule at src/isa/aarch64/inst.isle line 1614.
+    // Rule at src/isa/aarch64/inst.isle line 1620.
     let expr0_0 = ALUOp::Add;
     let expr1_0 = constructor_alu_rrr_shift(
         ctx, &expr0_0, pattern0_0, pattern1_0, pattern2_0, pattern3_0,
@@ -2086,7 +2105,7 @@ pub fn constructor_add_vec<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/aarch64/inst.isle line 1617.
+    // Rule at src/isa/aarch64/inst.isle line 1623.
     let expr0_0 = VecALUOp::Add;
     let expr1_0 = constructor_vec_rrr(ctx, &expr0_0, pattern0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -2097,7 +2116,7 @@ pub fn constructor_sub<C: Context>(ctx: &mut C, arg0: Type, arg1: Reg, arg2: Reg
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/aarch64/inst.isle line 1622.
+    // Rule at src/isa/aarch64/inst.isle line 1628.
     let expr0_0 = ALUOp::Sub;
     let expr1_0 = constructor_alu_rrr(ctx, &expr0_0, pattern0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -2113,7 +2132,7 @@ pub fn constructor_sub_imm<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/aarch64/inst.isle line 1625.
+    // Rule at src/isa/aarch64/inst.isle line 1631.
     let expr0_0 = ALUOp::Sub;
     let expr1_0 = constructor_alu_rr_imm12(ctx, &expr0_0, pattern0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -2129,7 +2148,7 @@ pub fn constructor_sub_extend<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/aarch64/inst.isle line 1628.
+    // Rule at src/isa/aarch64/inst.isle line 1634.
     let expr0_0 = ALUOp::Sub;
     let expr1_0 = constructor_alu_rr_extend_reg(ctx, &expr0_0, pattern0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -2147,7 +2166,7 @@ pub fn constructor_sub_shift<C: Context>(
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
     let pattern3_0 = arg3;
-    // Rule at src/isa/aarch64/inst.isle line 1631.
+    // Rule at src/isa/aarch64/inst.isle line 1637.
     let expr0_0 = ALUOp::Sub;
     let expr1_0 = constructor_alu_rrr_shift(
         ctx, &expr0_0, pattern0_0, pattern1_0, pattern2_0, pattern3_0,
@@ -2165,7 +2184,7 @@ pub fn constructor_sub_vec<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/aarch64/inst.isle line 1634.
+    // Rule at src/isa/aarch64/inst.isle line 1640.
     let expr0_0 = VecALUOp::Sub;
     let expr1_0 = constructor_vec_rrr(ctx, &expr0_0, pattern0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -2184,7 +2203,7 @@ pub fn constructor_madd<C: Context>(
         let pattern2_0 = arg1;
         let pattern3_0 = arg2;
         let pattern4_0 = arg3;
-        // Rule at src/isa/aarch64/inst.isle line 1640.
+        // Rule at src/isa/aarch64/inst.isle line 1646.
         let expr0_0 = constructor_madd64(ctx, pattern2_0, pattern3_0, pattern4_0)?;
         return Some(expr0_0);
     }
@@ -2192,7 +2211,7 @@ pub fn constructor_madd<C: Context>(
         let pattern2_0 = arg1;
         let pattern3_0 = arg2;
         let pattern4_0 = arg3;
-        // Rule at src/isa/aarch64/inst.isle line 1639.
+        // Rule at src/isa/aarch64/inst.isle line 1645.
         let expr0_0 = constructor_madd32(ctx, pattern2_0, pattern3_0, pattern4_0)?;
         return Some(expr0_0);
     }
@@ -2204,7 +2223,7 @@ pub fn constructor_madd32<C: Context>(ctx: &mut C, arg0: Reg, arg1: Reg, arg2: R
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/aarch64/inst.isle line 1643.
+    // Rule at src/isa/aarch64/inst.isle line 1649.
     let expr0_0 = ALUOp3::MAdd32;
     let expr1_0 = constructor_alu_rrrr(ctx, &expr0_0, pattern0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -2215,7 +2234,7 @@ pub fn constructor_madd64<C: Context>(ctx: &mut C, arg0: Reg, arg1: Reg, arg2: R
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/aarch64/inst.isle line 1646.
+    // Rule at src/isa/aarch64/inst.isle line 1652.
     let expr0_0 = ALUOp3::MAdd64;
     let expr1_0 = constructor_alu_rrrr(ctx, &expr0_0, pattern0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -2226,7 +2245,7 @@ pub fn constructor_msub64<C: Context>(ctx: &mut C, arg0: Reg, arg1: Reg, arg2: R
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/aarch64/inst.isle line 1651.
+    // Rule at src/isa/aarch64/inst.isle line 1657.
     let expr0_0 = ALUOp3::MSub64;
     let expr1_0 = constructor_alu_rrrr(ctx, &expr0_0, pattern0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -2242,7 +2261,7 @@ pub fn constructor_uqadd<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/aarch64/inst.isle line 1655.
+    // Rule at src/isa/aarch64/inst.isle line 1661.
     let expr0_0 = VecALUOp::Uqadd;
     let expr1_0 = constructor_vec_rrr(ctx, &expr0_0, pattern0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -2258,7 +2277,7 @@ pub fn constructor_sqadd<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/aarch64/inst.isle line 1659.
+    // Rule at src/isa/aarch64/inst.isle line 1665.
     let expr0_0 = VecALUOp::Sqadd;
     let expr1_0 = constructor_vec_rrr(ctx, &expr0_0, pattern0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -2274,7 +2293,7 @@ pub fn constructor_uqsub<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/aarch64/inst.isle line 1663.
+    // Rule at src/isa/aarch64/inst.isle line 1669.
     let expr0_0 = VecALUOp::Uqsub;
     let expr1_0 = constructor_vec_rrr(ctx, &expr0_0, pattern0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -2290,7 +2309,7 @@ pub fn constructor_sqsub<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/aarch64/inst.isle line 1667.
+    // Rule at src/isa/aarch64/inst.isle line 1673.
     let expr0_0 = VecALUOp::Sqsub;
     let expr1_0 = constructor_vec_rrr(ctx, &expr0_0, pattern0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -2301,7 +2320,7 @@ pub fn constructor_umulh<C: Context>(ctx: &mut C, arg0: Type, arg1: Reg, arg2: R
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/aarch64/inst.isle line 1671.
+    // Rule at src/isa/aarch64/inst.isle line 1677.
     let expr0_0 = ALUOp::UMulH;
     let expr1_0 = constructor_alu_rrr(ctx, &expr0_0, pattern0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -2312,7 +2331,7 @@ pub fn constructor_smulh<C: Context>(ctx: &mut C, arg0: Type, arg1: Reg, arg2: R
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/aarch64/inst.isle line 1675.
+    // Rule at src/isa/aarch64/inst.isle line 1681.
     let expr0_0 = ALUOp::SMulH;
     let expr1_0 = constructor_alu_rrr(ctx, &expr0_0, pattern0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -2328,7 +2347,7 @@ pub fn constructor_mul<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/aarch64/inst.isle line 1679.
+    // Rule at src/isa/aarch64/inst.isle line 1685.
     let expr0_0 = VecALUOp::Mul;
     let expr1_0 = constructor_vec_rrr(ctx, &expr0_0, pattern0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -2338,7 +2357,7 @@ pub fn constructor_mul<C: Context>(
 pub fn constructor_neg<C: Context>(ctx: &mut C, arg0: Reg, arg1: &VectorSize) -> Option<Reg> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/aarch64/inst.isle line 1683.
+    // Rule at src/isa/aarch64/inst.isle line 1689.
     let expr0_0 = VecMisc2::Neg;
     let expr1_0 = constructor_vec_misc(ctx, &expr0_0, pattern0_0, pattern1_0)?;
     return Some(expr1_0);
@@ -2348,7 +2367,7 @@ pub fn constructor_neg<C: Context>(ctx: &mut C, arg0: Reg, arg1: &VectorSize) ->
 pub fn constructor_rev64<C: Context>(ctx: &mut C, arg0: Reg, arg1: &VectorSize) -> Option<Reg> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/aarch64/inst.isle line 1687.
+    // Rule at src/isa/aarch64/inst.isle line 1693.
     let expr0_0 = VecMisc2::Rev64;
     let expr1_0 = constructor_vec_misc(ctx, &expr0_0, pattern0_0, pattern1_0)?;
     return Some(expr1_0);
@@ -2358,7 +2377,7 @@ pub fn constructor_rev64<C: Context>(ctx: &mut C, arg0: Reg, arg1: &VectorSize) 
 pub fn constructor_xtn64<C: Context>(ctx: &mut C, arg0: Reg, arg1: bool) -> Option<Reg> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/aarch64/inst.isle line 1691.
+    // Rule at src/isa/aarch64/inst.isle line 1697.
     let expr0_0 = VecRRNarrowOp::Xtn64;
     let expr1_0 = constructor_vec_rr_narrow(ctx, &expr0_0, pattern0_0, pattern1_0)?;
     return Some(expr1_0);
@@ -2374,7 +2393,7 @@ pub fn constructor_addp<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/aarch64/inst.isle line 1695.
+    // Rule at src/isa/aarch64/inst.isle line 1701.
     let expr0_0 = VecALUOp::Addp;
     let expr1_0 = constructor_vec_rrr(ctx, &expr0_0, pattern0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -2384,7 +2403,7 @@ pub fn constructor_addp<C: Context>(
 pub fn constructor_addv<C: Context>(ctx: &mut C, arg0: Reg, arg1: &VectorSize) -> Option<Reg> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/aarch64/inst.isle line 1699.
+    // Rule at src/isa/aarch64/inst.isle line 1705.
     let expr0_0 = VecLanesOp::Addv;
     let expr1_0 = constructor_vec_lanes(ctx, &expr0_0, pattern0_0, pattern1_0)?;
     return Some(expr1_0);
@@ -2394,7 +2413,7 @@ pub fn constructor_addv<C: Context>(ctx: &mut C, arg0: Reg, arg1: &VectorSize) -
 pub fn constructor_shll32<C: Context>(ctx: &mut C, arg0: Reg, arg1: bool) -> Option<Reg> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/aarch64/inst.isle line 1703.
+    // Rule at src/isa/aarch64/inst.isle line 1709.
     let expr0_0 = VecRRLongOp::Shll32;
     let expr1_0 = constructor_vec_rr_long(ctx, &expr0_0, pattern0_0, pattern1_0)?;
     return Some(expr1_0);
@@ -2412,7 +2431,7 @@ pub fn constructor_umlal32<C: Context>(
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
     let pattern3_0 = arg3;
-    // Rule at src/isa/aarch64/inst.isle line 1707.
+    // Rule at src/isa/aarch64/inst.isle line 1713.
     let expr0_0 = VecRRRLongOp::Umlal32;
     let expr1_0 = constructor_vec_rrrr_long(
         ctx, &expr0_0, pattern0_0, pattern1_0, pattern2_0, pattern3_0,
@@ -2430,7 +2449,7 @@ pub fn constructor_smull8<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/aarch64/inst.isle line 1711.
+    // Rule at src/isa/aarch64/inst.isle line 1717.
     let expr0_0 = VecRRRLongOp::Smull8;
     let expr1_0 = constructor_vec_rrr_long(ctx, &expr0_0, pattern0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -2446,7 +2465,7 @@ pub fn constructor_umull8<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/aarch64/inst.isle line 1715.
+    // Rule at src/isa/aarch64/inst.isle line 1721.
     let expr0_0 = VecRRRLongOp::Umull8;
     let expr1_0 = constructor_vec_rrr_long(ctx, &expr0_0, pattern0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -2462,7 +2481,7 @@ pub fn constructor_smull16<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/aarch64/inst.isle line 1719.
+    // Rule at src/isa/aarch64/inst.isle line 1725.
     let expr0_0 = VecRRRLongOp::Smull16;
     let expr1_0 = constructor_vec_rrr_long(ctx, &expr0_0, pattern0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -2478,7 +2497,7 @@ pub fn constructor_umull16<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/aarch64/inst.isle line 1723.
+    // Rule at src/isa/aarch64/inst.isle line 1729.
     let expr0_0 = VecRRRLongOp::Umull16;
     let expr1_0 = constructor_vec_rrr_long(ctx, &expr0_0, pattern0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -2494,7 +2513,7 @@ pub fn constructor_smull32<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/aarch64/inst.isle line 1727.
+    // Rule at src/isa/aarch64/inst.isle line 1733.
     let expr0_0 = VecRRRLongOp::Smull32;
     let expr1_0 = constructor_vec_rrr_long(ctx, &expr0_0, pattern0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -2510,7 +2529,7 @@ pub fn constructor_umull32<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/aarch64/inst.isle line 1731.
+    // Rule at src/isa/aarch64/inst.isle line 1737.
     let expr0_0 = VecRRRLongOp::Umull32;
     let expr1_0 = constructor_vec_rrr_long(ctx, &expr0_0, pattern0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -2521,7 +2540,7 @@ pub fn constructor_asr<C: Context>(ctx: &mut C, arg0: Type, arg1: Reg, arg2: Reg
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/aarch64/inst.isle line 1735.
+    // Rule at src/isa/aarch64/inst.isle line 1741.
     let expr0_0 = ALUOp::Asr;
     let expr1_0 = constructor_alu_rrr(ctx, &expr0_0, pattern0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -2537,7 +2556,7 @@ pub fn constructor_asr_imm<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/aarch64/inst.isle line 1738.
+    // Rule at src/isa/aarch64/inst.isle line 1744.
     let expr0_0 = ALUOp::Asr;
     let expr1_0 = constructor_alu_rr_imm_shift(ctx, &expr0_0, pattern0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -2548,7 +2567,7 @@ pub fn constructor_lsr<C: Context>(ctx: &mut C, arg0: Type, arg1: Reg, arg2: Reg
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/aarch64/inst.isle line 1742.
+    // Rule at src/isa/aarch64/inst.isle line 1748.
     let expr0_0 = ALUOp::Lsr;
     let expr1_0 = constructor_alu_rrr(ctx, &expr0_0, pattern0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -2564,7 +2583,7 @@ pub fn constructor_lsr_imm<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/aarch64/inst.isle line 1745.
+    // Rule at src/isa/aarch64/inst.isle line 1751.
     let expr0_0 = ALUOp::Lsr;
     let expr1_0 = constructor_alu_rr_imm_shift(ctx, &expr0_0, pattern0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -2575,7 +2594,7 @@ pub fn constructor_lsl<C: Context>(ctx: &mut C, arg0: Type, arg1: Reg, arg2: Reg
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/aarch64/inst.isle line 1749.
+    // Rule at src/isa/aarch64/inst.isle line 1755.
     let expr0_0 = ALUOp::Lsl;
     let expr1_0 = constructor_alu_rrr(ctx, &expr0_0, pattern0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -2591,7 +2610,7 @@ pub fn constructor_lsl_imm<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/aarch64/inst.isle line 1752.
+    // Rule at src/isa/aarch64/inst.isle line 1758.
     let expr0_0 = ALUOp::Lsl;
     let expr1_0 = constructor_alu_rr_imm_shift(ctx, &expr0_0, pattern0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -2607,7 +2626,7 @@ pub fn constructor_a64_udiv<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/aarch64/inst.isle line 1756.
+    // Rule at src/isa/aarch64/inst.isle line 1762.
     let expr0_0 = ALUOp::UDiv;
     let expr1_0 = constructor_alu_rrr(ctx, &expr0_0, pattern0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -2623,7 +2642,7 @@ pub fn constructor_a64_sdiv<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/aarch64/inst.isle line 1760.
+    // Rule at src/isa/aarch64/inst.isle line 1766.
     let expr0_0 = ALUOp::SDiv;
     let expr1_0 = constructor_alu_rrr(ctx, &expr0_0, pattern0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -2633,7 +2652,7 @@ pub fn constructor_a64_sdiv<C: Context>(
 pub fn constructor_not<C: Context>(ctx: &mut C, arg0: Reg, arg1: &VectorSize) -> Option<Reg> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/aarch64/inst.isle line 1764.
+    // Rule at src/isa/aarch64/inst.isle line 1770.
     let expr0_0 = VecMisc2::Not;
     let expr1_0 = constructor_vec_misc(ctx, &expr0_0, pattern0_0, pattern1_0)?;
     return Some(expr1_0);
@@ -2649,7 +2668,7 @@ pub fn constructor_orr_not<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/aarch64/inst.isle line 1769.
+    // Rule at src/isa/aarch64/inst.isle line 1775.
     let expr0_0 = ALUOp::OrrNot;
     let expr1_0 = constructor_alu_rrr(ctx, &expr0_0, pattern0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -2667,7 +2686,7 @@ pub fn constructor_orr_not_shift<C: Context>(
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
     let pattern3_0 = arg3;
-    // Rule at src/isa/aarch64/inst.isle line 1772.
+    // Rule at src/isa/aarch64/inst.isle line 1778.
     let expr0_0 = ALUOp::OrrNot;
     let expr1_0 = constructor_alu_rrr_shift(
         ctx, &expr0_0, pattern0_0, pattern1_0, pattern2_0, pattern3_0,
@@ -2680,7 +2699,7 @@ pub fn constructor_orr<C: Context>(ctx: &mut C, arg0: Type, arg1: Reg, arg2: Reg
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/aarch64/inst.isle line 1777.
+    // Rule at src/isa/aarch64/inst.isle line 1783.
     let expr0_0 = ALUOp::Orr;
     let expr1_0 = constructor_alu_rrr(ctx, &expr0_0, pattern0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -2696,7 +2715,7 @@ pub fn constructor_orr_imm<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/aarch64/inst.isle line 1780.
+    // Rule at src/isa/aarch64/inst.isle line 1786.
     let expr0_0 = ALUOp::Orr;
     let expr1_0 = constructor_alu_rr_imm_logic(ctx, &expr0_0, pattern0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -2712,7 +2731,7 @@ pub fn constructor_orr_vec<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/aarch64/inst.isle line 1783.
+    // Rule at src/isa/aarch64/inst.isle line 1789.
     let expr0_0 = VecALUOp::Orr;
     let expr1_0 = constructor_vec_rrr(ctx, &expr0_0, pattern0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -2728,7 +2747,7 @@ pub fn constructor_and_imm<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/aarch64/inst.isle line 1788.
+    // Rule at src/isa/aarch64/inst.isle line 1794.
     let expr0_0 = ALUOp::And;
     let expr1_0 = constructor_alu_rr_imm_logic(ctx, &expr0_0, pattern0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -2744,7 +2763,7 @@ pub fn constructor_and_vec<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/aarch64/inst.isle line 1791.
+    // Rule at src/isa/aarch64/inst.isle line 1797.
     let expr0_0 = VecALUOp::And;
     let expr1_0 = constructor_vec_rrr(ctx, &expr0_0, pattern0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -2760,7 +2779,7 @@ pub fn constructor_eor_vec<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/aarch64/inst.isle line 1795.
+    // Rule at src/isa/aarch64/inst.isle line 1801.
     let expr0_0 = VecALUOp::Eor;
     let expr1_0 = constructor_vec_rrr(ctx, &expr0_0, pattern0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -2776,7 +2795,7 @@ pub fn constructor_bic_vec<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/aarch64/inst.isle line 1799.
+    // Rule at src/isa/aarch64/inst.isle line 1805.
     let expr0_0 = VecALUOp::Bic;
     let expr1_0 = constructor_vec_rrr(ctx, &expr0_0, pattern0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -2792,7 +2811,7 @@ pub fn constructor_sshl<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/aarch64/inst.isle line 1803.
+    // Rule at src/isa/aarch64/inst.isle line 1809.
     let expr0_0 = VecALUOp::Sshl;
     let expr1_0 = constructor_vec_rrr(ctx, &expr0_0, pattern0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -2808,7 +2827,7 @@ pub fn constructor_ushl<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/aarch64/inst.isle line 1807.
+    // Rule at src/isa/aarch64/inst.isle line 1813.
     let expr0_0 = VecALUOp::Ushl;
     let expr1_0 = constructor_vec_rrr(ctx, &expr0_0, pattern0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -2824,7 +2843,7 @@ pub fn constructor_a64_rotr<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/aarch64/inst.isle line 1812.
+    // Rule at src/isa/aarch64/inst.isle line 1818.
     let expr0_0 = ALUOp::RotR;
     let expr1_0 = constructor_alu_rrr(ctx, &expr0_0, pattern0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -2840,7 +2859,7 @@ pub fn constructor_a64_rotr_imm<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/aarch64/inst.isle line 1815.
+    // Rule at src/isa/aarch64/inst.isle line 1821.
     let expr0_0 = ALUOp::RotR;
     let expr1_0 = constructor_alu_rr_imm_shift(ctx, &expr0_0, pattern0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -2849,7 +2868,7 @@ pub fn constructor_a64_rotr_imm<C: Context>(
 // Generated as internal constructor for term rbit32.
 pub fn constructor_rbit32<C: Context>(ctx: &mut C, arg0: Reg) -> Option<Reg> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/aarch64/inst.isle line 1820.
+    // Rule at src/isa/aarch64/inst.isle line 1826.
     let expr0_0 = BitOp::RBit32;
     let expr1_0 = constructor_bit_rr(ctx, &expr0_0, pattern0_0)?;
     return Some(expr1_0);
@@ -2858,7 +2877,7 @@ pub fn constructor_rbit32<C: Context>(ctx: &mut C, arg0: Reg) -> Option<Reg> {
 // Generated as internal constructor for term rbit64.
 pub fn constructor_rbit64<C: Context>(ctx: &mut C, arg0: Reg) -> Option<Reg> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/aarch64/inst.isle line 1823.
+    // Rule at src/isa/aarch64/inst.isle line 1829.
     let expr0_0 = BitOp::RBit64;
     let expr1_0 = constructor_bit_rr(ctx, &expr0_0, pattern0_0)?;
     return Some(expr1_0);
@@ -2867,7 +2886,7 @@ pub fn constructor_rbit64<C: Context>(ctx: &mut C, arg0: Reg) -> Option<Reg> {
 // Generated as internal constructor for term clz32.
 pub fn constructor_clz32<C: Context>(ctx: &mut C, arg0: Reg) -> Option<Reg> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/aarch64/inst.isle line 1828.
+    // Rule at src/isa/aarch64/inst.isle line 1834.
     let expr0_0 = BitOp::Clz32;
     let expr1_0 = constructor_bit_rr(ctx, &expr0_0, pattern0_0)?;
     return Some(expr1_0);
@@ -2876,7 +2895,7 @@ pub fn constructor_clz32<C: Context>(ctx: &mut C, arg0: Reg) -> Option<Reg> {
 // Generated as internal constructor for term clz64.
 pub fn constructor_clz64<C: Context>(ctx: &mut C, arg0: Reg) -> Option<Reg> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/aarch64/inst.isle line 1831.
+    // Rule at src/isa/aarch64/inst.isle line 1837.
     let expr0_0 = BitOp::Clz64;
     let expr1_0 = constructor_bit_rr(ctx, &expr0_0, pattern0_0)?;
     return Some(expr1_0);
@@ -2885,7 +2904,7 @@ pub fn constructor_clz64<C: Context>(ctx: &mut C, arg0: Reg) -> Option<Reg> {
 // Generated as internal constructor for term cls32.
 pub fn constructor_cls32<C: Context>(ctx: &mut C, arg0: Reg) -> Option<Reg> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/aarch64/inst.isle line 1836.
+    // Rule at src/isa/aarch64/inst.isle line 1842.
     let expr0_0 = BitOp::Cls32;
     let expr1_0 = constructor_bit_rr(ctx, &expr0_0, pattern0_0)?;
     return Some(expr1_0);
@@ -2894,7 +2913,7 @@ pub fn constructor_cls32<C: Context>(ctx: &mut C, arg0: Reg) -> Option<Reg> {
 // Generated as internal constructor for term cls64.
 pub fn constructor_cls64<C: Context>(ctx: &mut C, arg0: Reg) -> Option<Reg> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/aarch64/inst.isle line 1839.
+    // Rule at src/isa/aarch64/inst.isle line 1845.
     let expr0_0 = BitOp::Cls64;
     let expr1_0 = constructor_bit_rr(ctx, &expr0_0, pattern0_0)?;
     return Some(expr1_0);
@@ -2905,7 +2924,7 @@ pub fn constructor_eon<C: Context>(ctx: &mut C, arg0: Type, arg1: Reg, arg2: Reg
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/aarch64/inst.isle line 1844.
+    // Rule at src/isa/aarch64/inst.isle line 1850.
     let expr0_0 = ALUOp::EorNot;
     let expr1_0 = constructor_alu_rrr(ctx, &expr0_0, pattern0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -2915,7 +2934,7 @@ pub fn constructor_eon<C: Context>(ctx: &mut C, arg0: Type, arg1: Reg, arg2: Reg
 pub fn constructor_vec_cnt<C: Context>(ctx: &mut C, arg0: Reg, arg1: &VectorSize) -> Option<Reg> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/aarch64/inst.isle line 1849.
+    // Rule at src/isa/aarch64/inst.isle line 1855.
     let expr0_0 = VecMisc2::Cnt;
     let expr1_0 = constructor_vec_misc(ctx, &expr0_0, pattern0_0, pattern1_0)?;
     return Some(expr1_0);
@@ -2932,7 +2951,7 @@ pub fn constructor_imm<C: Context>(ctx: &mut C, arg0: Type, arg1: u64) -> Option
         };
         if let Some(pattern3_0) = closure3() {
             if let Some(pattern4_0) = C::imm_logic_from_u64(ctx, pattern2_0, pattern3_0) {
-                // Rule at src/isa/aarch64/inst.isle line 1864.
+                // Rule at src/isa/aarch64/inst.isle line 1870.
                 let expr0_0: Type = I64;
                 let expr1_0 = C::zero_reg(ctx);
                 let expr2_0 = constructor_orr_imm(ctx, expr0_0, expr1_0, pattern4_0)?;
@@ -2940,18 +2959,18 @@ pub fn constructor_imm<C: Context>(ctx: &mut C, arg0: Type, arg1: u64) -> Option
             }
         }
         if let Some(pattern3_0) = C::move_wide_const_from_u64(ctx, pattern2_0) {
-            // Rule at src/isa/aarch64/inst.isle line 1856.
+            // Rule at src/isa/aarch64/inst.isle line 1862.
             let expr0_0 = OperandSize::Size64;
             let expr1_0 = constructor_movz(ctx, pattern3_0, &expr0_0)?;
             return Some(expr1_0);
         }
         if let Some(pattern3_0) = C::move_wide_const_from_negated_u64(ctx, pattern2_0) {
-            // Rule at src/isa/aarch64/inst.isle line 1860.
+            // Rule at src/isa/aarch64/inst.isle line 1866.
             let expr0_0 = OperandSize::Size64;
             let expr1_0 = constructor_movn(ctx, pattern3_0, &expr0_0)?;
             return Some(expr1_0);
         }
-        // Rule at src/isa/aarch64/inst.isle line 1871.
+        // Rule at src/isa/aarch64/inst.isle line 1877.
         let expr0_0 = C::load_constant64_full(ctx, pattern2_0);
         return Some(expr0_0);
     }
@@ -2963,17 +2982,17 @@ pub fn constructor_put_in_reg_sext32<C: Context>(ctx: &mut C, arg0: Value) -> Op
     let pattern0_0 = arg0;
     let pattern1_0 = C::value_type(ctx, pattern0_0);
     if pattern1_0 == I32 {
-        // Rule at src/isa/aarch64/inst.isle line 1882.
+        // Rule at src/isa/aarch64/inst.isle line 1888.
         let expr0_0 = C::put_in_reg(ctx, pattern0_0);
         return Some(expr0_0);
     }
     if pattern1_0 == I64 {
-        // Rule at src/isa/aarch64/inst.isle line 1883.
+        // Rule at src/isa/aarch64/inst.isle line 1889.
         let expr0_0 = C::put_in_reg(ctx, pattern0_0);
         return Some(expr0_0);
     }
     if let Some(pattern2_0) = C::fits_in_32(ctx, pattern1_0) {
-        // Rule at src/isa/aarch64/inst.isle line 1878.
+        // Rule at src/isa/aarch64/inst.isle line 1884.
         let expr0_0 = C::put_in_reg(ctx, pattern0_0);
         let expr1_0: bool = true;
         let expr2_0 = C::ty_bits(ctx, pattern2_0);
@@ -2989,17 +3008,17 @@ pub fn constructor_put_in_reg_zext32<C: Context>(ctx: &mut C, arg0: Value) -> Op
     let pattern0_0 = arg0;
     let pattern1_0 = C::value_type(ctx, pattern0_0);
     if pattern1_0 == I32 {
-        // Rule at src/isa/aarch64/inst.isle line 1891.
+        // Rule at src/isa/aarch64/inst.isle line 1897.
         let expr0_0 = C::put_in_reg(ctx, pattern0_0);
         return Some(expr0_0);
     }
     if pattern1_0 == I64 {
-        // Rule at src/isa/aarch64/inst.isle line 1892.
+        // Rule at src/isa/aarch64/inst.isle line 1898.
         let expr0_0 = C::put_in_reg(ctx, pattern0_0);
         return Some(expr0_0);
     }
     if let Some(pattern2_0) = C::fits_in_32(ctx, pattern1_0) {
-        // Rule at src/isa/aarch64/inst.isle line 1887.
+        // Rule at src/isa/aarch64/inst.isle line 1893.
         let expr0_0 = C::put_in_reg(ctx, pattern0_0);
         let expr1_0: bool = false;
         let expr2_0 = C::ty_bits(ctx, pattern2_0);
@@ -3015,12 +3034,12 @@ pub fn constructor_put_in_reg_sext64<C: Context>(ctx: &mut C, arg0: Value) -> Op
     let pattern0_0 = arg0;
     let pattern1_0 = C::value_type(ctx, pattern0_0);
     if pattern1_0 == I64 {
-        // Rule at src/isa/aarch64/inst.isle line 1900.
+        // Rule at src/isa/aarch64/inst.isle line 1906.
         let expr0_0 = C::put_in_reg(ctx, pattern0_0);
         return Some(expr0_0);
     }
     if let Some(pattern2_0) = C::fits_in_32(ctx, pattern1_0) {
-        // Rule at src/isa/aarch64/inst.isle line 1896.
+        // Rule at src/isa/aarch64/inst.isle line 1902.
         let expr0_0 = C::put_in_reg(ctx, pattern0_0);
         let expr1_0: bool = true;
         let expr2_0 = C::ty_bits(ctx, pattern2_0);
@@ -3036,12 +3055,12 @@ pub fn constructor_put_in_reg_zext64<C: Context>(ctx: &mut C, arg0: Value) -> Op
     let pattern0_0 = arg0;
     let pattern1_0 = C::value_type(ctx, pattern0_0);
     if pattern1_0 == I64 {
-        // Rule at src/isa/aarch64/inst.isle line 1908.
+        // Rule at src/isa/aarch64/inst.isle line 1914.
         let expr0_0 = C::put_in_reg(ctx, pattern0_0);
         return Some(expr0_0);
     }
     if let Some(pattern2_0) = C::fits_in_32(ctx, pattern1_0) {
-        // Rule at src/isa/aarch64/inst.isle line 1904.
+        // Rule at src/isa/aarch64/inst.isle line 1910.
         let expr0_0 = C::put_in_reg(ctx, pattern0_0);
         let expr1_0: bool = false;
         let expr2_0 = C::ty_bits(ctx, pattern2_0);
@@ -3055,7 +3074,7 @@ pub fn constructor_put_in_reg_zext64<C: Context>(ctx: &mut C, arg0: Value) -> Op
 // Generated as internal constructor for term trap_if_zero_divisor.
 pub fn constructor_trap_if_zero_divisor<C: Context>(ctx: &mut C, arg0: Reg) -> Option<Reg> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/aarch64/inst.isle line 1913.
+    // Rule at src/isa/aarch64/inst.isle line 1919.
     let expr0_0 = C::cond_br_zero(ctx, pattern0_0);
     let expr1_0 = C::trap_code_division_by_zero(ctx);
     let expr2_0 = MInst::TrapIf {
@@ -3070,12 +3089,12 @@ pub fn constructor_trap_if_zero_divisor<C: Context>(ctx: &mut C, arg0: Reg) -> O
 pub fn constructor_size_from_ty<C: Context>(ctx: &mut C, arg0: Type) -> Option<OperandSize> {
     let pattern0_0 = arg0;
     if pattern0_0 == I64 {
-        // Rule at src/isa/aarch64/inst.isle line 1919.
+        // Rule at src/isa/aarch64/inst.isle line 1925.
         let expr0_0 = OperandSize::Size64;
         return Some(expr0_0);
     }
     if let Some(pattern1_0) = C::fits_in_32(ctx, pattern0_0) {
-        // Rule at src/isa/aarch64/inst.isle line 1918.
+        // Rule at src/isa/aarch64/inst.isle line 1924.
         let expr0_0 = OperandSize::Size32;
         return Some(expr0_0);
     }
@@ -3092,7 +3111,7 @@ pub fn constructor_trap_if_div_overflow<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/aarch64/inst.isle line 1925.
+    // Rule at src/isa/aarch64/inst.isle line 1931.
     let expr0_0 = ALUOp::AddS;
     let expr1_0 = constructor_operand_size(ctx, pattern0_0)?;
     let expr2_0 = C::writable_zero_reg(ctx);
@@ -3152,7 +3171,7 @@ pub fn constructor_alu_rs_imm_logic_commutative<C: Context>(
                 opcode: ref pattern5_0,
                 imm: pattern5_1,
             } => {
-                if let &Opcode::Iconst = &pattern5_0 {
+                if let &Opcode::Iconst = pattern5_0 {
                     let closure7 = || {
                         return Some(pattern1_0);
                     };
@@ -3161,7 +3180,7 @@ pub fn constructor_alu_rs_imm_logic_commutative<C: Context>(
                             C::imm_logic_from_imm64(ctx, pattern5_1, pattern7_0)
                         {
                             let pattern9_0 = arg3;
-                            // Rule at src/isa/aarch64/inst.isle line 1970.
+                            // Rule at src/isa/aarch64/inst.isle line 1976.
                             let expr0_0 = C::put_in_reg(ctx, pattern9_0);
                             let expr1_0 = constructor_alu_rr_imm_logic(
                                 ctx, pattern0_0, pattern1_0, expr0_0, pattern8_0,
@@ -3175,8 +3194,8 @@ pub fn constructor_alu_rs_imm_logic_commutative<C: Context>(
                 opcode: ref pattern5_0,
                 args: ref pattern5_1,
             } => {
-                if let &Opcode::Ishl = &pattern5_0 {
-                    let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, &pattern5_1);
+                if let &Opcode::Ishl = pattern5_0 {
+                    let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
                     if let Some(pattern8_0) = C::def_inst(ctx, pattern7_1) {
                         let pattern9_0 = C::inst_data(ctx, pattern8_0);
                         if let &InstructionData::UnaryImm {
@@ -3184,7 +3203,7 @@ pub fn constructor_alu_rs_imm_logic_commutative<C: Context>(
                             imm: pattern10_1,
                         } = &pattern9_0
                         {
-                            if let &Opcode::Iconst = &pattern10_0 {
+                            if let &Opcode::Iconst = pattern10_0 {
                                 let closure12 = || {
                                     return Some(pattern1_0);
                                 };
@@ -3193,7 +3212,7 @@ pub fn constructor_alu_rs_imm_logic_commutative<C: Context>(
                                         C::lshl_from_imm64(ctx, pattern10_1, pattern12_0)
                                     {
                                         let pattern14_0 = arg3;
-                                        // Rule at src/isa/aarch64/inst.isle line 1976.
+                                        // Rule at src/isa/aarch64/inst.isle line 1982.
                                         let expr0_0 = C::put_in_reg(ctx, pattern14_0);
                                         let expr1_0 = C::put_in_reg(ctx, pattern7_0);
                                         let expr2_0 = constructor_alu_rrr_shift(
@@ -3223,7 +3242,7 @@ pub fn constructor_alu_rs_imm_logic_commutative<C: Context>(
                 opcode: ref pattern6_0,
                 imm: pattern6_1,
             } => {
-                if let &Opcode::Iconst = &pattern6_0 {
+                if let &Opcode::Iconst = pattern6_0 {
                     let closure8 = || {
                         return Some(pattern1_0);
                     };
@@ -3231,7 +3250,7 @@ pub fn constructor_alu_rs_imm_logic_commutative<C: Context>(
                         if let Some(pattern9_0) =
                             C::imm_logic_from_imm64(ctx, pattern6_1, pattern8_0)
                         {
-                            // Rule at src/isa/aarch64/inst.isle line 1968.
+                            // Rule at src/isa/aarch64/inst.isle line 1974.
                             let expr0_0 = C::put_in_reg(ctx, pattern2_0);
                             let expr1_0 = constructor_alu_rr_imm_logic(
                                 ctx, pattern0_0, pattern1_0, expr0_0, pattern9_0,
@@ -3245,8 +3264,8 @@ pub fn constructor_alu_rs_imm_logic_commutative<C: Context>(
                 opcode: ref pattern6_0,
                 args: ref pattern6_1,
             } => {
-                if let &Opcode::Ishl = &pattern6_0 {
-                    let (pattern8_0, pattern8_1) = C::unpack_value_array_2(ctx, &pattern6_1);
+                if let &Opcode::Ishl = pattern6_0 {
+                    let (pattern8_0, pattern8_1) = C::unpack_value_array_2(ctx, pattern6_1);
                     if let Some(pattern9_0) = C::def_inst(ctx, pattern8_1) {
                         let pattern10_0 = C::inst_data(ctx, pattern9_0);
                         if let &InstructionData::UnaryImm {
@@ -3254,7 +3273,7 @@ pub fn constructor_alu_rs_imm_logic_commutative<C: Context>(
                             imm: pattern11_1,
                         } = &pattern10_0
                         {
-                            if let &Opcode::Iconst = &pattern11_0 {
+                            if let &Opcode::Iconst = pattern11_0 {
                                 let closure13 = || {
                                     return Some(pattern1_0);
                                 };
@@ -3262,7 +3281,7 @@ pub fn constructor_alu_rs_imm_logic_commutative<C: Context>(
                                     if let Some(pattern14_0) =
                                         C::lshl_from_imm64(ctx, pattern11_1, pattern13_0)
                                     {
-                                        // Rule at src/isa/aarch64/inst.isle line 1974.
+                                        // Rule at src/isa/aarch64/inst.isle line 1980.
                                         let expr0_0 = C::put_in_reg(ctx, pattern2_0);
                                         let expr1_0 = C::put_in_reg(ctx, pattern8_0);
                                         let expr2_0 = constructor_alu_rrr_shift(
@@ -3284,7 +3303,7 @@ pub fn constructor_alu_rs_imm_logic_commutative<C: Context>(
             _ => {}
         }
     }
-    // Rule at src/isa/aarch64/inst.isle line 1964.
+    // Rule at src/isa/aarch64/inst.isle line 1970.
     let expr0_0 = C::put_in_reg(ctx, pattern2_0);
     let expr1_0 = C::put_in_reg(ctx, pattern3_0);
     let expr2_0 = constructor_alu_rrr(ctx, pattern0_0, pattern1_0, expr0_0, expr1_0)?;
@@ -3310,7 +3329,7 @@ pub fn constructor_alu_rs_imm_logic<C: Context>(
                 opcode: ref pattern6_0,
                 imm: pattern6_1,
             } => {
-                if let &Opcode::Iconst = &pattern6_0 {
+                if let &Opcode::Iconst = pattern6_0 {
                     let closure8 = || {
                         return Some(pattern1_0);
                     };
@@ -3318,7 +3337,7 @@ pub fn constructor_alu_rs_imm_logic<C: Context>(
                         if let Some(pattern9_0) =
                             C::imm_logic_from_imm64(ctx, pattern6_1, pattern8_0)
                         {
-                            // Rule at src/isa/aarch64/inst.isle line 1984.
+                            // Rule at src/isa/aarch64/inst.isle line 1990.
                             let expr0_0 = C::put_in_reg(ctx, pattern2_0);
                             let expr1_0 = constructor_alu_rr_imm_logic(
                                 ctx, pattern0_0, pattern1_0, expr0_0, pattern9_0,
@@ -3332,8 +3351,8 @@ pub fn constructor_alu_rs_imm_logic<C: Context>(
                 opcode: ref pattern6_0,
                 args: ref pattern6_1,
             } => {
-                if let &Opcode::Ishl = &pattern6_0 {
-                    let (pattern8_0, pattern8_1) = C::unpack_value_array_2(ctx, &pattern6_1);
+                if let &Opcode::Ishl = pattern6_0 {
+                    let (pattern8_0, pattern8_1) = C::unpack_value_array_2(ctx, pattern6_1);
                     if let Some(pattern9_0) = C::def_inst(ctx, pattern8_1) {
                         let pattern10_0 = C::inst_data(ctx, pattern9_0);
                         if let &InstructionData::UnaryImm {
@@ -3341,7 +3360,7 @@ pub fn constructor_alu_rs_imm_logic<C: Context>(
                             imm: pattern11_1,
                         } = &pattern10_0
                         {
-                            if let &Opcode::Iconst = &pattern11_0 {
+                            if let &Opcode::Iconst = pattern11_0 {
                                 let closure13 = || {
                                     return Some(pattern1_0);
                                 };
@@ -3349,7 +3368,7 @@ pub fn constructor_alu_rs_imm_logic<C: Context>(
                                     if let Some(pattern14_0) =
                                         C::lshl_from_imm64(ctx, pattern11_1, pattern13_0)
                                     {
-                                        // Rule at src/isa/aarch64/inst.isle line 1986.
+                                        // Rule at src/isa/aarch64/inst.isle line 1992.
                                         let expr0_0 = C::put_in_reg(ctx, pattern2_0);
                                         let expr1_0 = C::put_in_reg(ctx, pattern8_0);
                                         let expr2_0 = constructor_alu_rrr_shift(
@@ -3371,7 +3390,7 @@ pub fn constructor_alu_rs_imm_logic<C: Context>(
             _ => {}
         }
     }
-    // Rule at src/isa/aarch64/inst.isle line 1982.
+    // Rule at src/isa/aarch64/inst.isle line 1988.
     let expr0_0 = C::put_in_reg(ctx, pattern2_0);
     let expr1_0 = C::put_in_reg(ctx, pattern3_0);
     let expr2_0 = constructor_alu_rrr(ctx, pattern0_0, pattern1_0, expr0_0, expr1_0)?;
@@ -3390,7 +3409,7 @@ pub fn constructor_i128_alu_bitop<C: Context>(
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
     let pattern3_0 = arg3;
-    // Rule at src/isa/aarch64/inst.isle line 1994.
+    // Rule at src/isa/aarch64/inst.isle line 2000.
     let expr0_0 = C::put_in_regs(ctx, pattern2_0);
     let expr1_0: usize = 0;
     let expr2_0 = C::value_regs_get(ctx, expr0_0, expr1_0);
@@ -3419,9 +3438,9 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                 arg: pattern5_1,
             } = &pattern4_0
             {
-                match &pattern5_0 {
+                match pattern5_0 {
                     &Opcode::Bitrev => {
-                        // Rule at src/isa/aarch64/lower.isle line 1013.
+                        // Rule at src/isa/aarch64/lower.isle line 1016.
                         let expr0_0: Type = I32;
                         let expr1_0 = C::put_in_reg(ctx, pattern5_1);
                         let expr2_0 = constructor_rbit32(ctx, expr1_0)?;
@@ -3432,7 +3451,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                         return Some(expr6_0);
                     }
                     &Opcode::Clz => {
-                        // Rule at src/isa/aarch64/lower.isle line 1038.
+                        // Rule at src/isa/aarch64/lower.isle line 1041.
                         let expr0_0: Type = I32;
                         let expr1_0 = constructor_put_in_reg_zext32(ctx, pattern5_1)?;
                         let expr2_0 = constructor_clz32(ctx, expr1_0)?;
@@ -3443,7 +3462,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                         return Some(expr6_0);
                     }
                     &Opcode::Cls => {
-                        // Rule at src/isa/aarch64/lower.isle line 1095.
+                        // Rule at src/isa/aarch64/lower.isle line 1098.
                         let expr0_0: Type = I32;
                         let expr1_0 = constructor_put_in_reg_zext32(ctx, pattern5_1)?;
                         let expr2_0 = constructor_cls32(ctx, expr1_0)?;
@@ -3454,7 +3473,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                         return Some(expr6_0);
                     }
                     &Opcode::Ctz => {
-                        // Rule at src/isa/aarch64/lower.isle line 1073.
+                        // Rule at src/isa/aarch64/lower.isle line 1076.
                         let expr0_0: Type = I32;
                         let expr1_0 = C::put_in_reg(ctx, pattern5_1);
                         let expr2_0 = constructor_rbit32(ctx, expr1_0)?;
@@ -3467,7 +3486,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                         return Some(expr8_0);
                     }
                     &Opcode::Popcnt => {
-                        // Rule at src/isa/aarch64/lower.isle line 1152.
+                        // Rule at src/isa/aarch64/lower.isle line 1155.
                         let expr0_0 = C::put_in_reg(ctx, pattern5_1);
                         let expr1_0 = ScalarSize::Size32;
                         let expr2_0 = constructor_mov_to_fpu(ctx, expr0_0, &expr1_0)?;
@@ -3490,9 +3509,9 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                 arg: pattern5_1,
             } = &pattern4_0
             {
-                match &pattern5_0 {
+                match pattern5_0 {
                     &Opcode::Bitrev => {
-                        // Rule at src/isa/aarch64/lower.isle line 1019.
+                        // Rule at src/isa/aarch64/lower.isle line 1022.
                         let expr0_0: Type = I32;
                         let expr1_0 = C::put_in_reg(ctx, pattern5_1);
                         let expr2_0 = constructor_rbit32(ctx, expr1_0)?;
@@ -3503,7 +3522,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                         return Some(expr6_0);
                     }
                     &Opcode::Clz => {
-                        // Rule at src/isa/aarch64/lower.isle line 1041.
+                        // Rule at src/isa/aarch64/lower.isle line 1044.
                         let expr0_0: Type = I32;
                         let expr1_0 = constructor_put_in_reg_zext32(ctx, pattern5_1)?;
                         let expr2_0 = constructor_clz32(ctx, expr1_0)?;
@@ -3514,7 +3533,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                         return Some(expr6_0);
                     }
                     &Opcode::Cls => {
-                        // Rule at src/isa/aarch64/lower.isle line 1098.
+                        // Rule at src/isa/aarch64/lower.isle line 1101.
                         let expr0_0: Type = I32;
                         let expr1_0 = constructor_put_in_reg_zext32(ctx, pattern5_1)?;
                         let expr2_0 = constructor_cls32(ctx, expr1_0)?;
@@ -3525,7 +3544,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                         return Some(expr6_0);
                     }
                     &Opcode::Ctz => {
-                        // Rule at src/isa/aarch64/lower.isle line 1076.
+                        // Rule at src/isa/aarch64/lower.isle line 1079.
                         let expr0_0: Type = I32;
                         let expr1_0 = C::put_in_reg(ctx, pattern5_1);
                         let expr2_0 = constructor_rbit32(ctx, expr1_0)?;
@@ -3538,7 +3557,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                         return Some(expr8_0);
                     }
                     &Opcode::Popcnt => {
-                        // Rule at src/isa/aarch64/lower.isle line 1160.
+                        // Rule at src/isa/aarch64/lower.isle line 1163.
                         let expr0_0 = C::put_in_reg(ctx, pattern5_1);
                         let expr1_0 = ScalarSize::Size32;
                         let expr2_0 = constructor_mov_to_fpu(ctx, expr0_0, &expr1_0)?;
@@ -3563,10 +3582,9 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                     opcode: ref pattern5_0,
                     args: ref pattern5_1,
                 } => {
-                    match &pattern5_0 {
+                    match pattern5_0 {
                         &Opcode::Rotl => {
-                            let (pattern7_0, pattern7_1) =
-                                C::unpack_value_array_2(ctx, &pattern5_1);
+                            let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
                             if let Some(pattern8_0) = C::def_inst(ctx, pattern7_1) {
                                 let pattern9_0 = C::inst_data(ctx, pattern8_0);
                                 if let &InstructionData::UnaryImm {
@@ -3574,7 +3592,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                                     imm: pattern10_1,
                                 } = &pattern9_0
                                 {
-                                    if let &Opcode::Iconst = &pattern10_0 {
+                                    if let &Opcode::Iconst = pattern10_0 {
                                         let closure12 = || {
                                             let expr0_0: Type = I32;
                                             return Some(expr0_0);
@@ -3585,7 +3603,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                                                 pattern10_1,
                                                 pattern12_0,
                                             ) {
-                                                // Rule at src/isa/aarch64/lower.isle line 896.
+                                                // Rule at src/isa/aarch64/lower.isle line 899.
                                                 let expr0_0: Type = I32;
                                                 let expr1_0 = C::put_in_reg(ctx, pattern7_0);
                                                 let expr2_0: Type = I32;
@@ -3601,7 +3619,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                                     }
                                 }
                             }
-                            // Rule at src/isa/aarch64/lower.isle line 886.
+                            // Rule at src/isa/aarch64/lower.isle line 889.
                             let expr0_0: Type = I32;
                             let expr1_0 = C::zero_reg(ctx);
                             let expr2_0 = C::put_in_reg(ctx, pattern7_1);
@@ -3613,8 +3631,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                             return Some(expr7_0);
                         }
                         &Opcode::Rotr => {
-                            let (pattern7_0, pattern7_1) =
-                                C::unpack_value_array_2(ctx, &pattern5_1);
+                            let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
                             if let Some(pattern8_0) = C::def_inst(ctx, pattern7_1) {
                                 let pattern9_0 = C::inst_data(ctx, pattern8_0);
                                 if let &InstructionData::UnaryImm {
@@ -3622,7 +3639,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                                     imm: pattern10_1,
                                 } = &pattern9_0
                                 {
-                                    if let &Opcode::Iconst = &pattern10_0 {
+                                    if let &Opcode::Iconst = pattern10_0 {
                                         let closure12 = || {
                                             let expr0_0: Type = I32;
                                             return Some(expr0_0);
@@ -3633,7 +3650,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                                                 pattern10_1,
                                                 pattern12_0,
                                             ) {
-                                                // Rule at src/isa/aarch64/lower.isle line 940.
+                                                // Rule at src/isa/aarch64/lower.isle line 943.
                                                 let expr0_0: Type = I32;
                                                 let expr1_0 = C::put_in_reg(ctx, pattern7_0);
                                                 let expr2_0 = constructor_a64_rotr_imm(
@@ -3649,7 +3666,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                                     }
                                 }
                             }
-                            // Rule at src/isa/aarch64/lower.isle line 928.
+                            // Rule at src/isa/aarch64/lower.isle line 931.
                             let expr0_0: Type = I32;
                             let expr1_0 = C::put_in_reg(ctx, pattern7_0);
                             let expr2_0 = C::put_in_reg(ctx, pattern7_1);
@@ -3664,30 +3681,30 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                     opcode: ref pattern5_0,
                     arg: pattern5_1,
                 } => {
-                    match &pattern5_0 {
+                    match pattern5_0 {
                         &Opcode::Bitrev => {
-                            // Rule at src/isa/aarch64/lower.isle line 1022.
+                            // Rule at src/isa/aarch64/lower.isle line 1025.
                             let expr0_0 = C::put_in_reg(ctx, pattern5_1);
                             let expr1_0 = constructor_rbit32(ctx, expr0_0)?;
                             let expr2_0 = C::value_reg(ctx, expr1_0);
                             return Some(expr2_0);
                         }
                         &Opcode::Clz => {
-                            // Rule at src/isa/aarch64/lower.isle line 1044.
+                            // Rule at src/isa/aarch64/lower.isle line 1047.
                             let expr0_0 = C::put_in_reg(ctx, pattern5_1);
                             let expr1_0 = constructor_clz32(ctx, expr0_0)?;
                             let expr2_0 = C::value_reg(ctx, expr1_0);
                             return Some(expr2_0);
                         }
                         &Opcode::Cls => {
-                            // Rule at src/isa/aarch64/lower.isle line 1101.
+                            // Rule at src/isa/aarch64/lower.isle line 1104.
                             let expr0_0 = C::put_in_reg(ctx, pattern5_1);
                             let expr1_0 = constructor_cls32(ctx, expr0_0)?;
                             let expr2_0 = C::value_reg(ctx, expr1_0);
                             return Some(expr2_0);
                         }
                         &Opcode::Ctz => {
-                            // Rule at src/isa/aarch64/lower.isle line 1079.
+                            // Rule at src/isa/aarch64/lower.isle line 1082.
                             let expr0_0 = C::put_in_reg(ctx, pattern5_1);
                             let expr1_0 = constructor_rbit32(ctx, expr0_0)?;
                             let expr2_0 = constructor_clz32(ctx, expr1_0)?;
@@ -3695,7 +3712,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                             return Some(expr3_0);
                         }
                         &Opcode::Popcnt => {
-                            // Rule at src/isa/aarch64/lower.isle line 1168.
+                            // Rule at src/isa/aarch64/lower.isle line 1171.
                             let expr0_0 = C::put_in_reg(ctx, pattern5_1);
                             let expr1_0 = ScalarSize::Size32;
                             let expr2_0 = constructor_mov_to_fpu(ctx, expr0_0, &expr1_0)?;
@@ -3723,10 +3740,9 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                     opcode: ref pattern5_0,
                     args: ref pattern5_1,
                 } => {
-                    match &pattern5_0 {
+                    match pattern5_0 {
                         &Opcode::Umulhi => {
-                            let (pattern7_0, pattern7_1) =
-                                C::unpack_value_array_2(ctx, &pattern5_1);
+                            let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
                             // Rule at src/isa/aarch64/lower.isle line 374.
                             let expr0_0: Type = I64;
                             let expr1_0 = C::put_in_reg(ctx, pattern7_0);
@@ -3736,8 +3752,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                             return Some(expr4_0);
                         }
                         &Opcode::Smulhi => {
-                            let (pattern7_0, pattern7_1) =
-                                C::unpack_value_array_2(ctx, &pattern5_1);
+                            let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
                             // Rule at src/isa/aarch64/lower.isle line 360.
                             let expr0_0: Type = I64;
                             let expr1_0 = C::put_in_reg(ctx, pattern7_0);
@@ -3747,8 +3762,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                             return Some(expr4_0);
                         }
                         &Opcode::Band => {
-                            let (pattern7_0, pattern7_1) =
-                                C::unpack_value_array_2(ctx, &pattern5_1);
+                            let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
                             // Rule at src/isa/aarch64/lower.isle line 609.
                             let expr0_0 = ALUOp::And;
                             let expr1_0: Type = I64;
@@ -3759,8 +3773,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                             return Some(expr3_0);
                         }
                         &Opcode::Bor => {
-                            let (pattern7_0, pattern7_1) =
-                                C::unpack_value_array_2(ctx, &pattern5_1);
+                            let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
                             // Rule at src/isa/aarch64/lower.isle line 622.
                             let expr0_0 = ALUOp::Orr;
                             let expr1_0: Type = I64;
@@ -3771,8 +3784,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                             return Some(expr3_0);
                         }
                         &Opcode::Bxor => {
-                            let (pattern7_0, pattern7_1) =
-                                C::unpack_value_array_2(ctx, &pattern5_1);
+                            let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
                             // Rule at src/isa/aarch64/lower.isle line 635.
                             let expr0_0 = ALUOp::Eor;
                             let expr1_0: Type = I64;
@@ -3783,8 +3795,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                             return Some(expr3_0);
                         }
                         &Opcode::BandNot => {
-                            let (pattern7_0, pattern7_1) =
-                                C::unpack_value_array_2(ctx, &pattern5_1);
+                            let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
                             // Rule at src/isa/aarch64/lower.isle line 648.
                             let expr0_0 = ALUOp::AndNot;
                             let expr1_0: Type = I64;
@@ -3795,8 +3806,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                             return Some(expr3_0);
                         }
                         &Opcode::BorNot => {
-                            let (pattern7_0, pattern7_1) =
-                                C::unpack_value_array_2(ctx, &pattern5_1);
+                            let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
                             // Rule at src/isa/aarch64/lower.isle line 661.
                             let expr0_0 = ALUOp::OrrNot;
                             let expr1_0: Type = I64;
@@ -3807,8 +3817,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                             return Some(expr3_0);
                         }
                         &Opcode::BxorNot => {
-                            let (pattern7_0, pattern7_1) =
-                                C::unpack_value_array_2(ctx, &pattern5_1);
+                            let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
                             // Rule at src/isa/aarch64/lower.isle line 671.
                             let expr0_0 = ALUOp::EorNot;
                             let expr1_0: Type = I64;
@@ -3819,8 +3828,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                             return Some(expr3_0);
                         }
                         &Opcode::Rotl => {
-                            let (pattern7_0, pattern7_1) =
-                                C::unpack_value_array_2(ctx, &pattern5_1);
+                            let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
                             if let Some(pattern8_0) = C::def_inst(ctx, pattern7_1) {
                                 let pattern9_0 = C::inst_data(ctx, pattern8_0);
                                 if let &InstructionData::UnaryImm {
@@ -3828,7 +3836,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                                     imm: pattern10_1,
                                 } = &pattern9_0
                                 {
-                                    if let &Opcode::Iconst = &pattern10_0 {
+                                    if let &Opcode::Iconst = pattern10_0 {
                                         let closure12 = || {
                                             let expr0_0: Type = I64;
                                             return Some(expr0_0);
@@ -3839,7 +3847,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                                                 pattern10_1,
                                                 pattern12_0,
                                             ) {
-                                                // Rule at src/isa/aarch64/lower.isle line 900.
+                                                // Rule at src/isa/aarch64/lower.isle line 903.
                                                 let expr0_0: Type = I64;
                                                 let expr1_0 = C::put_in_reg(ctx, pattern7_0);
                                                 let expr2_0: Type = I64;
@@ -3855,7 +3863,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                                     }
                                 }
                             }
-                            // Rule at src/isa/aarch64/lower.isle line 891.
+                            // Rule at src/isa/aarch64/lower.isle line 894.
                             let expr0_0: Type = I64;
                             let expr1_0 = C::zero_reg(ctx);
                             let expr2_0 = C::put_in_reg(ctx, pattern7_1);
@@ -3867,8 +3875,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                             return Some(expr7_0);
                         }
                         &Opcode::Rotr => {
-                            let (pattern7_0, pattern7_1) =
-                                C::unpack_value_array_2(ctx, &pattern5_1);
+                            let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
                             if let Some(pattern8_0) = C::def_inst(ctx, pattern7_1) {
                                 let pattern9_0 = C::inst_data(ctx, pattern8_0);
                                 if let &InstructionData::UnaryImm {
@@ -3876,7 +3883,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                                     imm: pattern10_1,
                                 } = &pattern9_0
                                 {
-                                    if let &Opcode::Iconst = &pattern10_0 {
+                                    if let &Opcode::Iconst = pattern10_0 {
                                         let closure12 = || {
                                             let expr0_0: Type = I64;
                                             return Some(expr0_0);
@@ -3887,7 +3894,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                                                 pattern10_1,
                                                 pattern12_0,
                                             ) {
-                                                // Rule at src/isa/aarch64/lower.isle line 944.
+                                                // Rule at src/isa/aarch64/lower.isle line 947.
                                                 let expr0_0: Type = I64;
                                                 let expr1_0 = C::put_in_reg(ctx, pattern7_0);
                                                 let expr2_0 = constructor_a64_rotr_imm(
@@ -3903,7 +3910,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                                     }
                                 }
                             }
-                            // Rule at src/isa/aarch64/lower.isle line 932.
+                            // Rule at src/isa/aarch64/lower.isle line 935.
                             let expr0_0: Type = I64;
                             let expr1_0 = C::put_in_reg(ctx, pattern7_0);
                             let expr2_0 = C::put_in_reg(ctx, pattern7_1);
@@ -3912,8 +3919,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                             return Some(expr4_0);
                         }
                         &Opcode::Ishl => {
-                            let (pattern7_0, pattern7_1) =
-                                C::unpack_value_array_2(ctx, &pattern5_1);
+                            let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
                             // Rule at src/isa/aarch64/lower.isle line 683.
                             let expr0_0 = ALUOp::Lsl;
                             let expr1_0: Type = I64;
@@ -3924,9 +3930,8 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                             return Some(expr4_0);
                         }
                         &Opcode::Ushr => {
-                            let (pattern7_0, pattern7_1) =
-                                C::unpack_value_array_2(ctx, &pattern5_1);
-                            // Rule at src/isa/aarch64/lower.isle line 771.
+                            let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
+                            // Rule at src/isa/aarch64/lower.isle line 772.
                             let expr0_0 = ALUOp::Lsr;
                             let expr1_0: Type = I64;
                             let expr2_0 = constructor_put_in_reg_zext64(ctx, pattern7_0)?;
@@ -3936,9 +3941,8 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                             return Some(expr4_0);
                         }
                         &Opcode::Sshr => {
-                            let (pattern7_0, pattern7_1) =
-                                C::unpack_value_array_2(ctx, &pattern5_1);
-                            // Rule at src/isa/aarch64/lower.isle line 820.
+                            let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
+                            // Rule at src/isa/aarch64/lower.isle line 822.
                             let expr0_0 = ALUOp::Asr;
                             let expr1_0: Type = I64;
                             let expr2_0 = constructor_put_in_reg_sext64(ctx, pattern7_0)?;
@@ -3954,30 +3958,30 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                     opcode: ref pattern5_0,
                     arg: pattern5_1,
                 } => {
-                    match &pattern5_0 {
+                    match pattern5_0 {
                         &Opcode::Bitrev => {
-                            // Rule at src/isa/aarch64/lower.isle line 1025.
+                            // Rule at src/isa/aarch64/lower.isle line 1028.
                             let expr0_0 = C::put_in_reg(ctx, pattern5_1);
                             let expr1_0 = constructor_rbit64(ctx, expr0_0)?;
                             let expr2_0 = C::value_reg(ctx, expr1_0);
                             return Some(expr2_0);
                         }
                         &Opcode::Clz => {
-                            // Rule at src/isa/aarch64/lower.isle line 1047.
+                            // Rule at src/isa/aarch64/lower.isle line 1050.
                             let expr0_0 = C::put_in_reg(ctx, pattern5_1);
                             let expr1_0 = constructor_clz64(ctx, expr0_0)?;
                             let expr2_0 = C::value_reg(ctx, expr1_0);
                             return Some(expr2_0);
                         }
                         &Opcode::Cls => {
-                            // Rule at src/isa/aarch64/lower.isle line 1104.
+                            // Rule at src/isa/aarch64/lower.isle line 1107.
                             let expr0_0 = C::put_in_reg(ctx, pattern5_1);
                             let expr1_0 = constructor_cls64(ctx, expr0_0)?;
                             let expr2_0 = C::value_reg(ctx, expr1_0);
                             return Some(expr2_0);
                         }
                         &Opcode::Ctz => {
-                            // Rule at src/isa/aarch64/lower.isle line 1082.
+                            // Rule at src/isa/aarch64/lower.isle line 1085.
                             let expr0_0 = C::put_in_reg(ctx, pattern5_1);
                             let expr1_0 = constructor_rbit64(ctx, expr0_0)?;
                             let expr2_0 = constructor_clz64(ctx, expr1_0)?;
@@ -3985,7 +3989,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                             return Some(expr3_0);
                         }
                         &Opcode::Popcnt => {
-                            // Rule at src/isa/aarch64/lower.isle line 1176.
+                            // Rule at src/isa/aarch64/lower.isle line 1179.
                             let expr0_0 = C::put_in_reg(ctx, pattern5_1);
                             let expr1_0 = ScalarSize::Size64;
                             let expr2_0 = constructor_mov_to_fpu(ctx, expr0_0, &expr1_0)?;
@@ -4013,10 +4017,9 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                     opcode: ref pattern5_0,
                     args: ref pattern5_1,
                 } => {
-                    match &pattern5_0 {
+                    match pattern5_0 {
                         &Opcode::Iadd => {
-                            let (pattern7_0, pattern7_1) =
-                                C::unpack_value_array_2(ctx, &pattern5_1);
+                            let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
                             // Rule at src/isa/aarch64/lower.isle line 79.
                             let expr0_0 = C::put_in_regs(ctx, pattern7_0);
                             let expr1_0: usize = 0;
@@ -4030,15 +4033,14 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                             let expr9_0 = C::value_regs_get(ctx, expr5_0, expr8_0);
                             let expr10_0: Type = I64;
                             let expr11_0 =
-                                constructor_add_with_flags(ctx, expr10_0, expr2_0, expr7_0)?;
+                                constructor_add_with_flags_paired(ctx, expr10_0, expr2_0, expr7_0)?;
                             let expr12_0: Type = I64;
-                            let expr13_0 = constructor_adc(ctx, expr12_0, expr4_0, expr9_0)?;
+                            let expr13_0 = constructor_adc_paired(ctx, expr12_0, expr4_0, expr9_0)?;
                             let expr14_0 = constructor_with_flags(ctx, &expr11_0, &expr13_0)?;
                             return Some(expr14_0);
                         }
                         &Opcode::Isub => {
-                            let (pattern7_0, pattern7_1) =
-                                C::unpack_value_array_2(ctx, &pattern5_1);
+                            let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
                             // Rule at src/isa/aarch64/lower.isle line 130.
                             let expr0_0 = C::put_in_regs(ctx, pattern7_0);
                             let expr1_0: usize = 0;
@@ -4052,15 +4054,14 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                             let expr9_0 = C::value_regs_get(ctx, expr5_0, expr8_0);
                             let expr10_0: Type = I64;
                             let expr11_0 =
-                                constructor_sub_with_flags(ctx, expr10_0, expr2_0, expr7_0)?;
+                                constructor_sub_with_flags_paired(ctx, expr10_0, expr2_0, expr7_0)?;
                             let expr12_0: Type = I64;
-                            let expr13_0 = constructor_sbc(ctx, expr12_0, expr4_0, expr9_0)?;
+                            let expr13_0 = constructor_sbc_paired(ctx, expr12_0, expr4_0, expr9_0)?;
                             let expr14_0 = constructor_with_flags(ctx, &expr11_0, &expr13_0)?;
                             return Some(expr14_0);
                         }
                         &Opcode::Imul => {
-                            let (pattern7_0, pattern7_1) =
-                                C::unpack_value_array_2(ctx, &pattern5_1);
+                            let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
                             // Rule at src/isa/aarch64/lower.isle line 185.
                             let expr0_0 = C::put_in_regs(ctx, pattern7_0);
                             let expr1_0: usize = 0;
@@ -4082,8 +4083,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                             return Some(expr16_0);
                         }
                         &Opcode::Band => {
-                            let (pattern7_0, pattern7_1) =
-                                C::unpack_value_array_2(ctx, &pattern5_1);
+                            let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
                             // Rule at src/isa/aarch64/lower.isle line 612.
                             let expr0_0 = ALUOp::And;
                             let expr1_0: Type = I64;
@@ -4093,8 +4093,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                             return Some(expr2_0);
                         }
                         &Opcode::Bor => {
-                            let (pattern7_0, pattern7_1) =
-                                C::unpack_value_array_2(ctx, &pattern5_1);
+                            let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
                             // Rule at src/isa/aarch64/lower.isle line 625.
                             let expr0_0 = ALUOp::Orr;
                             let expr1_0: Type = I64;
@@ -4104,8 +4103,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                             return Some(expr2_0);
                         }
                         &Opcode::Bxor => {
-                            let (pattern7_0, pattern7_1) =
-                                C::unpack_value_array_2(ctx, &pattern5_1);
+                            let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
                             // Rule at src/isa/aarch64/lower.isle line 638.
                             let expr0_0 = ALUOp::Eor;
                             let expr1_0: Type = I64;
@@ -4115,8 +4113,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                             return Some(expr2_0);
                         }
                         &Opcode::BandNot => {
-                            let (pattern7_0, pattern7_1) =
-                                C::unpack_value_array_2(ctx, &pattern5_1);
+                            let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
                             // Rule at src/isa/aarch64/lower.isle line 651.
                             let expr0_0 = ALUOp::AndNot;
                             let expr1_0: Type = I64;
@@ -4126,8 +4123,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                             return Some(expr2_0);
                         }
                         &Opcode::BorNot => {
-                            let (pattern7_0, pattern7_1) =
-                                C::unpack_value_array_2(ctx, &pattern5_1);
+                            let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
                             // Rule at src/isa/aarch64/lower.isle line 664.
                             let expr0_0 = ALUOp::OrrNot;
                             let expr1_0: Type = I64;
@@ -4137,8 +4133,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                             return Some(expr2_0);
                         }
                         &Opcode::BxorNot => {
-                            let (pattern7_0, pattern7_1) =
-                                C::unpack_value_array_2(ctx, &pattern5_1);
+                            let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
                             // Rule at src/isa/aarch64/lower.isle line 674.
                             let expr0_0 = ALUOp::EorNot;
                             let expr1_0: Type = I64;
@@ -4148,9 +4143,8 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                             return Some(expr2_0);
                         }
                         &Opcode::Rotl => {
-                            let (pattern7_0, pattern7_1) =
-                                C::unpack_value_array_2(ctx, &pattern5_1);
-                            // Rule at src/isa/aarch64/lower.isle line 909.
+                            let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
+                            // Rule at src/isa/aarch64/lower.isle line 912.
                             let expr0_0 = C::put_in_regs(ctx, pattern7_0);
                             let expr1_0 = C::put_in_regs(ctx, pattern7_1);
                             let expr2_0: usize = 0;
@@ -4178,9 +4172,8 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                             return Some(expr23_0);
                         }
                         &Opcode::Rotr => {
-                            let (pattern7_0, pattern7_1) =
-                                C::unpack_value_array_2(ctx, &pattern5_1);
-                            // Rule at src/isa/aarch64/lower.isle line 996.
+                            let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
+                            // Rule at src/isa/aarch64/lower.isle line 999.
                             let expr0_0 = C::put_in_regs(ctx, pattern7_0);
                             let expr1_0 = C::put_in_regs(ctx, pattern7_1);
                             let expr2_0: usize = 0;
@@ -4208,8 +4201,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                             return Some(expr23_0);
                         }
                         &Opcode::Ishl => {
-                            let (pattern7_0, pattern7_1) =
-                                C::unpack_value_array_2(ctx, &pattern5_1);
+                            let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
                             // Rule at src/isa/aarch64/lower.isle line 687.
                             let expr0_0 = C::put_in_regs(ctx, pattern7_0);
                             let expr1_0 = C::put_in_regs(ctx, pattern7_1);
@@ -4219,9 +4211,8 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                             return Some(expr4_0);
                         }
                         &Opcode::Ushr => {
-                            let (pattern7_0, pattern7_1) =
-                                C::unpack_value_array_2(ctx, &pattern5_1);
-                            // Rule at src/isa/aarch64/lower.isle line 775.
+                            let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
+                            // Rule at src/isa/aarch64/lower.isle line 776.
                             let expr0_0 = C::put_in_regs(ctx, pattern7_0);
                             let expr1_0 = C::put_in_regs(ctx, pattern7_1);
                             let expr2_0: usize = 0;
@@ -4230,9 +4221,8 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                             return Some(expr4_0);
                         }
                         &Opcode::Sshr => {
-                            let (pattern7_0, pattern7_1) =
-                                C::unpack_value_array_2(ctx, &pattern5_1);
-                            // Rule at src/isa/aarch64/lower.isle line 824.
+                            let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
+                            // Rule at src/isa/aarch64/lower.isle line 826.
                             let expr0_0 = C::put_in_regs(ctx, pattern7_0);
                             let expr1_0 = C::put_in_regs(ctx, pattern7_1);
                             let expr2_0: usize = 0;
@@ -4247,7 +4237,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                     opcode: ref pattern5_0,
                     arg: pattern5_1,
                 } => {
-                    match &pattern5_0 {
+                    match pattern5_0 {
                         &Opcode::Bnot => {
                             // Rule at src/isa/aarch64/lower.isle line 590.
                             let expr0_0 = C::put_in_regs(ctx, pattern5_1);
@@ -4265,7 +4255,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                             return Some(expr11_0);
                         }
                         &Opcode::Bitrev => {
-                            // Rule at src/isa/aarch64/lower.isle line 1028.
+                            // Rule at src/isa/aarch64/lower.isle line 1031.
                             let expr0_0 = C::put_in_regs(ctx, pattern5_1);
                             let expr1_0: usize = 0;
                             let expr2_0 = C::value_regs_get(ctx, expr0_0, expr1_0);
@@ -4277,13 +4267,13 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                             return Some(expr7_0);
                         }
                         &Opcode::Clz => {
-                            // Rule at src/isa/aarch64/lower.isle line 1050.
+                            // Rule at src/isa/aarch64/lower.isle line 1053.
                             let expr0_0 = C::put_in_regs(ctx, pattern5_1);
                             let expr1_0 = constructor_lower_clz128(ctx, expr0_0)?;
                             return Some(expr1_0);
                         }
                         &Opcode::Cls => {
-                            // Rule at src/isa/aarch64/lower.isle line 1116.
+                            // Rule at src/isa/aarch64/lower.isle line 1119.
                             let expr0_0 = C::put_in_regs(ctx, pattern5_1);
                             let expr1_0: usize = 0;
                             let expr2_0 = C::value_regs_get(ctx, expr0_0, expr1_0);
@@ -4304,7 +4294,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                             let expr17_0 = Cond::Eq;
                             let expr18_0 = C::zero_reg(ctx);
                             let expr19_0 = constructor_csel(ctx, &expr17_0, expr13_0, expr18_0)?;
-                            let expr20_0 = constructor_with_flags_1(ctx, &expr16_0, &expr19_0)?;
+                            let expr20_0 = constructor_with_flags_reg(ctx, &expr16_0, &expr19_0)?;
                             let expr21_0: Type = I64;
                             let expr22_0 = constructor_add(ctx, expr21_0, expr20_0, expr6_0)?;
                             let expr23_0: Type = I64;
@@ -4314,7 +4304,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                             return Some(expr26_0);
                         }
                         &Opcode::Ctz => {
-                            // Rule at src/isa/aarch64/lower.isle line 1085.
+                            // Rule at src/isa/aarch64/lower.isle line 1088.
                             let expr0_0 = C::put_in_regs(ctx, pattern5_1);
                             let expr1_0: usize = 0;
                             let expr2_0 = C::value_regs_get(ctx, expr0_0, expr1_0);
@@ -4327,7 +4317,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                             return Some(expr8_0);
                         }
                         &Opcode::Popcnt => {
-                            // Rule at src/isa/aarch64/lower.isle line 1184.
+                            // Rule at src/isa/aarch64/lower.isle line 1187.
                             let expr0_0 = C::put_in_regs(ctx, pattern5_1);
                             let expr1_0: usize = 0;
                             let expr2_0 = C::value_regs_get(ctx, expr0_0, expr1_0);
@@ -4362,7 +4352,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                                     imm: pattern9_2,
                                 } = &pattern8_0
                                 {
-                                    if let &Opcode::Extractlane = &pattern9_0 {
+                                    if let &Opcode::Extractlane = pattern9_0 {
                                         let pattern11_0 = C::value_type(ctx, pattern9_1);
                                         let pattern12_0 = C::u8_from_uimm8(ctx, pattern9_2);
                                         // Rule at src/isa/aarch64/lower.isle line 514.
@@ -4399,7 +4389,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                                     imm: pattern9_2,
                                 } = &pattern8_0
                                 {
-                                    if let &Opcode::Extractlane = &pattern9_0 {
+                                    if let &Opcode::Extractlane = pattern9_0 {
                                         let pattern11_0 = C::value_type(ctx, pattern9_1);
                                         if pattern11_0 == I64X2 {
                                             let pattern13_0 = C::u8_from_uimm8(ctx, pattern9_2);
@@ -4470,8 +4460,8 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                 arg: pattern5_1,
             } = &pattern4_0
             {
-                if let &Opcode::Popcnt = &pattern5_0 {
-                    // Rule at src/isa/aarch64/lower.isle line 1194.
+                if let &Opcode::Popcnt = pattern5_0 {
+                    // Rule at src/isa/aarch64/lower.isle line 1197.
                     let expr0_0 = C::put_in_reg(ctx, pattern5_1);
                     let expr1_0 = VectorSize::Size8x16;
                     let expr2_0 = constructor_vec_cnt(ctx, expr0_0, &expr1_0)?;
@@ -4487,8 +4477,8 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                 args: ref pattern5_1,
             } = &pattern4_0
             {
-                if let &Opcode::Imul = &pattern5_0 {
-                    let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, &pattern5_1);
+                if let &Opcode::Imul = pattern5_0 {
+                    let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
                     if let Some(pattern8_0) = C::def_inst(ctx, pattern7_0) {
                         let pattern9_0 = C::inst_data(ctx, pattern8_0);
                         if let &InstructionData::Unary {
@@ -4496,7 +4486,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                             arg: pattern10_1,
                         } = &pattern9_0
                         {
-                            match &pattern10_0 {
+                            match pattern10_0 {
                                 &Opcode::SwidenLow => {
                                     let pattern12_0 = C::value_type(ctx, pattern10_1);
                                     if pattern12_0 == I8X16 {
@@ -4507,7 +4497,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                                                 arg: pattern16_1,
                                             } = &pattern15_0
                                             {
-                                                if let &Opcode::SwidenLow = &pattern16_0 {
+                                                if let &Opcode::SwidenLow = pattern16_0 {
                                                     let pattern18_0 =
                                                         C::value_type(ctx, pattern16_1);
                                                     if pattern18_0 == I8X16 {
@@ -4538,7 +4528,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                                                 arg: pattern16_1,
                                             } = &pattern15_0
                                             {
-                                                if let &Opcode::SwidenHigh = &pattern16_0 {
+                                                if let &Opcode::SwidenHigh = pattern16_0 {
                                                     let pattern18_0 =
                                                         C::value_type(ctx, pattern16_1);
                                                     if pattern18_0 == I8X16 {
@@ -4569,7 +4559,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                                                 arg: pattern16_1,
                                             } = &pattern15_0
                                             {
-                                                if let &Opcode::UwidenLow = &pattern16_0 {
+                                                if let &Opcode::UwidenLow = pattern16_0 {
                                                     let pattern18_0 =
                                                         C::value_type(ctx, pattern16_1);
                                                     if pattern18_0 == I8X16 {
@@ -4600,7 +4590,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                                                 arg: pattern16_1,
                                             } = &pattern15_0
                                             {
-                                                if let &Opcode::UwidenHigh = &pattern16_0 {
+                                                if let &Opcode::UwidenHigh = pattern16_0 {
                                                     let pattern18_0 =
                                                         C::value_type(ctx, pattern16_1);
                                                     if pattern18_0 == I8X16 {
@@ -4635,8 +4625,8 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                 args: ref pattern5_1,
             } = &pattern4_0
             {
-                if let &Opcode::Imul = &pattern5_0 {
-                    let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, &pattern5_1);
+                if let &Opcode::Imul = pattern5_0 {
+                    let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
                     if let Some(pattern8_0) = C::def_inst(ctx, pattern7_0) {
                         let pattern9_0 = C::inst_data(ctx, pattern8_0);
                         if let &InstructionData::Unary {
@@ -4644,7 +4634,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                             arg: pattern10_1,
                         } = &pattern9_0
                         {
-                            match &pattern10_0 {
+                            match pattern10_0 {
                                 &Opcode::SwidenLow => {
                                     let pattern12_0 = C::value_type(ctx, pattern10_1);
                                     if pattern12_0 == I16X8 {
@@ -4655,7 +4645,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                                                 arg: pattern16_1,
                                             } = &pattern15_0
                                             {
-                                                if let &Opcode::SwidenLow = &pattern16_0 {
+                                                if let &Opcode::SwidenLow = pattern16_0 {
                                                     let pattern18_0 =
                                                         C::value_type(ctx, pattern16_1);
                                                     if pattern18_0 == I16X8 {
@@ -4686,7 +4676,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                                                 arg: pattern16_1,
                                             } = &pattern15_0
                                             {
-                                                if let &Opcode::SwidenHigh = &pattern16_0 {
+                                                if let &Opcode::SwidenHigh = pattern16_0 {
                                                     let pattern18_0 =
                                                         C::value_type(ctx, pattern16_1);
                                                     if pattern18_0 == I16X8 {
@@ -4717,7 +4707,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                                                 arg: pattern16_1,
                                             } = &pattern15_0
                                             {
-                                                if let &Opcode::UwidenLow = &pattern16_0 {
+                                                if let &Opcode::UwidenLow = pattern16_0 {
                                                     let pattern18_0 =
                                                         C::value_type(ctx, pattern16_1);
                                                     if pattern18_0 == I16X8 {
@@ -4748,7 +4738,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                                                 arg: pattern16_1,
                                             } = &pattern15_0
                                             {
-                                                if let &Opcode::UwidenHigh = &pattern16_0 {
+                                                if let &Opcode::UwidenHigh = pattern16_0 {
                                                     let pattern18_0 =
                                                         C::value_type(ctx, pattern16_1);
                                                     if pattern18_0 == I16X8 {
@@ -4783,8 +4773,8 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                 args: ref pattern5_1,
             } = &pattern4_0
             {
-                if let &Opcode::Imul = &pattern5_0 {
-                    let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, &pattern5_1);
+                if let &Opcode::Imul = pattern5_0 {
+                    let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
                     if let Some(pattern8_0) = C::def_inst(ctx, pattern7_0) {
                         let pattern9_0 = C::inst_data(ctx, pattern8_0);
                         if let &InstructionData::Unary {
@@ -4792,7 +4782,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                             arg: pattern10_1,
                         } = &pattern9_0
                         {
-                            match &pattern10_0 {
+                            match pattern10_0 {
                                 &Opcode::SwidenLow => {
                                     let pattern12_0 = C::value_type(ctx, pattern10_1);
                                     if pattern12_0 == I32X4 {
@@ -4803,7 +4793,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                                                 arg: pattern16_1,
                                             } = &pattern15_0
                                             {
-                                                if let &Opcode::SwidenLow = &pattern16_0 {
+                                                if let &Opcode::SwidenLow = pattern16_0 {
                                                     let pattern18_0 =
                                                         C::value_type(ctx, pattern16_1);
                                                     if pattern18_0 == I32X4 {
@@ -4834,7 +4824,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                                                 arg: pattern16_1,
                                             } = &pattern15_0
                                             {
-                                                if let &Opcode::SwidenHigh = &pattern16_0 {
+                                                if let &Opcode::SwidenHigh = pattern16_0 {
                                                     let pattern18_0 =
                                                         C::value_type(ctx, pattern16_1);
                                                     if pattern18_0 == I32X4 {
@@ -4865,7 +4855,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                                                 arg: pattern16_1,
                                             } = &pattern15_0
                                             {
-                                                if let &Opcode::UwidenLow = &pattern16_0 {
+                                                if let &Opcode::UwidenLow = pattern16_0 {
                                                     let pattern18_0 =
                                                         C::value_type(ctx, pattern16_1);
                                                     if pattern18_0 == I32X4 {
@@ -4896,7 +4886,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                                                 arg: pattern16_1,
                                             } = &pattern15_0
                                             {
-                                                if let &Opcode::UwidenHigh = &pattern16_0 {
+                                                if let &Opcode::UwidenHigh = pattern16_0 {
                                                     let pattern18_0 =
                                                         C::value_type(ctx, pattern16_1);
                                                     if pattern18_0 == I32X4 {
@@ -4948,7 +4938,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
             &InstructionData::NullAry {
                 opcode: ref pattern4_0,
             } => {
-                if let &Opcode::Null = &pattern4_0 {
+                if let &Opcode::Null = pattern4_0 {
                     // Rule at src/isa/aarch64/lower.isle line 22.
                     let expr0_0: u64 = 0;
                     let expr1_0 = constructor_imm(ctx, pattern2_0, expr0_0)?;
@@ -4960,7 +4950,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                 opcode: ref pattern4_0,
                 imm: pattern4_1,
             } => {
-                if let &Opcode::Iconst = &pattern4_0 {
+                if let &Opcode::Iconst = pattern4_0 {
                     let pattern6_0 = C::u64_from_imm64(ctx, pattern4_1);
                     // Rule at src/isa/aarch64/lower.isle line 9.
                     let expr0_0 = constructor_imm(ctx, pattern2_0, pattern6_0)?;
@@ -4972,7 +4962,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                 opcode: ref pattern4_0,
                 imm: pattern4_1,
             } => {
-                if let &Opcode::Bconst = &pattern4_0 {
+                if let &Opcode::Bconst = pattern4_0 {
                     if pattern4_1 == true {
                         // Rule at src/isa/aarch64/lower.isle line 17.
                         let expr0_0: u64 = 1;
@@ -4998,9 +4988,9 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                 args: ref pattern5_1,
             } = &pattern4_0
             {
-                match &pattern5_0 {
+                match pattern5_0 {
                     &Opcode::Iadd => {
-                        let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, &pattern5_1);
+                        let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
                         // Rule at src/isa/aarch64/lower.isle line 75.
                         let expr0_0 = C::put_in_reg(ctx, pattern7_0);
                         let expr1_0 = C::put_in_reg(ctx, pattern7_1);
@@ -5010,7 +5000,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                         return Some(expr4_0);
                     }
                     &Opcode::Isub => {
-                        let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, &pattern5_1);
+                        let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
                         // Rule at src/isa/aarch64/lower.isle line 126.
                         let expr0_0 = C::put_in_reg(ctx, pattern7_0);
                         let expr1_0 = C::put_in_reg(ctx, pattern7_1);
@@ -5030,9 +5020,9 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                 args: ref pattern5_1,
             } = &pattern4_0
             {
-                match &pattern5_0 {
+                match pattern5_0 {
                     &Opcode::Rotl => {
-                        let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, &pattern5_1);
+                        let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
                         if let Some(pattern8_0) = C::def_inst(ctx, pattern7_1) {
                             let pattern9_0 = C::inst_data(ctx, pattern8_0);
                             if let &InstructionData::UnaryImm {
@@ -5040,7 +5030,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                                 imm: pattern10_1,
                             } = &pattern9_0
                             {
-                                if let &Opcode::Iconst = &pattern10_0 {
+                                if let &Opcode::Iconst = pattern10_0 {
                                     let closure12 = || {
                                         return Some(pattern3_0);
                                     };
@@ -5048,7 +5038,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                                         if let Some(pattern13_0) =
                                             C::imm_shift_from_imm64(ctx, pattern10_1, pattern12_0)
                                         {
-                                            // Rule at src/isa/aarch64/lower.isle line 874.
+                                            // Rule at src/isa/aarch64/lower.isle line 877.
                                             let expr0_0 =
                                                 constructor_put_in_reg_zext32(ctx, pattern7_0)?;
                                             let expr1_0 =
@@ -5063,7 +5053,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                                 }
                             }
                         }
-                        // Rule at src/isa/aarch64/lower.isle line 869.
+                        // Rule at src/isa/aarch64/lower.isle line 872.
                         let expr0_0: Type = I32;
                         let expr1_0 = C::zero_reg(ctx);
                         let expr2_0 = C::put_in_reg(ctx, pattern7_1);
@@ -5074,7 +5064,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                         return Some(expr6_0);
                     }
                     &Opcode::Rotr => {
-                        let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, &pattern5_1);
+                        let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
                         if let Some(pattern8_0) = C::def_inst(ctx, pattern7_1) {
                             let pattern9_0 = C::inst_data(ctx, pattern8_0);
                             if let &InstructionData::UnaryImm {
@@ -5082,7 +5072,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                                 imm: pattern10_1,
                             } = &pattern9_0
                             {
-                                if let &Opcode::Iconst = &pattern10_0 {
+                                if let &Opcode::Iconst = pattern10_0 {
                                     let closure12 = || {
                                         return Some(pattern3_0);
                                     };
@@ -5090,7 +5080,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                                         if let Some(pattern13_0) =
                                             C::imm_shift_from_imm64(ctx, pattern10_1, pattern12_0)
                                         {
-                                            // Rule at src/isa/aarch64/lower.isle line 936.
+                                            // Rule at src/isa/aarch64/lower.isle line 939.
                                             let expr0_0 =
                                                 constructor_put_in_reg_zext32(ctx, pattern7_0)?;
                                             let expr1_0 = constructor_small_rotr_imm(
@@ -5106,7 +5096,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                                 }
                             }
                         }
-                        // Rule at src/isa/aarch64/lower.isle line 924.
+                        // Rule at src/isa/aarch64/lower.isle line 927.
                         let expr0_0 = constructor_put_in_reg_zext32(ctx, pattern7_0)?;
                         let expr1_0 = C::put_in_reg(ctx, pattern7_1);
                         let expr2_0 = constructor_small_rotr(ctx, pattern3_0, expr0_0, expr1_0)?;
@@ -5124,9 +5114,9 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                 args: ref pattern5_1,
             } = &pattern4_0
             {
-                match &pattern5_0 {
+                match pattern5_0 {
                     &Opcode::Umulhi => {
-                        let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, &pattern5_1);
+                        let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
                         // Rule at src/isa/aarch64/lower.isle line 377.
                         let expr0_0 = constructor_put_in_reg_zext64(ctx, pattern7_0)?;
                         let expr1_0 = constructor_put_in_reg_zext64(ctx, pattern7_1)?;
@@ -5140,7 +5130,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                         return Some(expr8_0);
                     }
                     &Opcode::Smulhi => {
-                        let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, &pattern5_1);
+                        let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
                         // Rule at src/isa/aarch64/lower.isle line 363.
                         let expr0_0 = constructor_put_in_reg_sext64(ctx, pattern7_0)?;
                         let expr1_0 = constructor_put_in_reg_sext64(ctx, pattern7_1)?;
@@ -5154,7 +5144,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                         return Some(expr8_0);
                     }
                     &Opcode::Band => {
-                        let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, &pattern5_1);
+                        let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
                         // Rule at src/isa/aarch64/lower.isle line 606.
                         let expr0_0 = ALUOp::And;
                         let expr1_0 = constructor_alu_rs_imm_logic_commutative(
@@ -5164,7 +5154,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                         return Some(expr2_0);
                     }
                     &Opcode::Bor => {
-                        let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, &pattern5_1);
+                        let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
                         // Rule at src/isa/aarch64/lower.isle line 619.
                         let expr0_0 = ALUOp::Orr;
                         let expr1_0 = constructor_alu_rs_imm_logic_commutative(
@@ -5174,7 +5164,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                         return Some(expr2_0);
                     }
                     &Opcode::Bxor => {
-                        let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, &pattern5_1);
+                        let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
                         // Rule at src/isa/aarch64/lower.isle line 632.
                         let expr0_0 = ALUOp::Eor;
                         let expr1_0 = constructor_alu_rs_imm_logic_commutative(
@@ -5184,7 +5174,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                         return Some(expr2_0);
                     }
                     &Opcode::BandNot => {
-                        let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, &pattern5_1);
+                        let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
                         // Rule at src/isa/aarch64/lower.isle line 645.
                         let expr0_0 = ALUOp::AndNot;
                         let expr1_0 = constructor_alu_rs_imm_logic(
@@ -5194,7 +5184,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                         return Some(expr2_0);
                     }
                     &Opcode::BorNot => {
-                        let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, &pattern5_1);
+                        let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
                         // Rule at src/isa/aarch64/lower.isle line 658.
                         let expr0_0 = ALUOp::OrrNot;
                         let expr1_0 = constructor_alu_rs_imm_logic(
@@ -5204,7 +5194,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                         return Some(expr2_0);
                     }
                     &Opcode::BxorNot => {
-                        let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, &pattern5_1);
+                        let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
                         // Rule at src/isa/aarch64/lower.isle line 668.
                         let expr0_0 = ALUOp::EorNot;
                         let expr1_0: Type = I32;
@@ -5215,7 +5205,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                         return Some(expr3_0);
                     }
                     &Opcode::Ishl => {
-                        let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, &pattern5_1);
+                        let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
                         // Rule at src/isa/aarch64/lower.isle line 679.
                         let expr0_0 = ALUOp::Lsl;
                         let expr1_0 = C::put_in_reg(ctx, pattern7_0);
@@ -5225,8 +5215,8 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                         return Some(expr3_0);
                     }
                     &Opcode::Ushr => {
-                        let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, &pattern5_1);
-                        // Rule at src/isa/aarch64/lower.isle line 767.
+                        let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
+                        // Rule at src/isa/aarch64/lower.isle line 768.
                         let expr0_0 = ALUOp::Lsr;
                         let expr1_0 = constructor_put_in_reg_zext32(ctx, pattern7_0)?;
                         let expr2_0 =
@@ -5235,8 +5225,8 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                         return Some(expr3_0);
                     }
                     &Opcode::Sshr => {
-                        let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, &pattern5_1);
-                        // Rule at src/isa/aarch64/lower.isle line 816.
+                        let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
+                        // Rule at src/isa/aarch64/lower.isle line 818.
                         let expr0_0 = ALUOp::Asr;
                         let expr1_0 = constructor_put_in_reg_sext32(ctx, pattern7_0)?;
                         let expr2_0 =
@@ -5255,10 +5245,9 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                     opcode: ref pattern5_0,
                     args: ref pattern5_1,
                 } => {
-                    match &pattern5_0 {
+                    match pattern5_0 {
                         &Opcode::Iadd => {
-                            let (pattern7_0, pattern7_1) =
-                                C::unpack_value_array_2(ctx, &pattern5_1);
+                            let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
                             if let Some(pattern8_0) = C::def_inst(ctx, pattern7_0) {
                                 let pattern9_0 = C::inst_data(ctx, pattern8_0);
                                 match &pattern9_0 {
@@ -5266,7 +5255,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                                         opcode: ref pattern10_0,
                                         imm: pattern10_1,
                                     } => {
-                                        if let &Opcode::Iconst = &pattern10_0 {
+                                        if let &Opcode::Iconst = pattern10_0 {
                                             let pattern12_0 = C::u64_from_imm64(ctx, pattern10_1);
                                             if let Some(pattern13_0) =
                                                 C::imm12_from_u64(ctx, pattern12_0)
@@ -5302,10 +5291,10 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                                         opcode: ref pattern10_0,
                                         args: ref pattern10_1,
                                     } => {
-                                        match &pattern10_0 {
+                                        match pattern10_0 {
                                             &Opcode::Imul => {
                                                 let (pattern12_0, pattern12_1) =
-                                                    C::unpack_value_array_2(ctx, &pattern10_1);
+                                                    C::unpack_value_array_2(ctx, pattern10_1);
                                                 // Rule at src/isa/aarch64/lower.isle line 70.
                                                 let expr0_0 = C::put_in_reg(ctx, pattern12_0);
                                                 let expr1_0 = C::put_in_reg(ctx, pattern12_1);
@@ -5318,7 +5307,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                                             }
                                             &Opcode::Ishl => {
                                                 let (pattern12_0, pattern12_1) =
-                                                    C::unpack_value_array_2(ctx, &pattern10_1);
+                                                    C::unpack_value_array_2(ctx, pattern10_1);
                                                 if let Some(pattern13_0) =
                                                     C::def_inst(ctx, pattern12_1)
                                                 {
@@ -5329,7 +5318,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                                                         imm: pattern15_1,
                                                     } = &pattern14_0
                                                     {
-                                                        if let &Opcode::Iconst = &pattern15_0 {
+                                                        if let &Opcode::Iconst = pattern15_0 {
                                                             let closure17 = || {
                                                                 return Some(pattern3_0);
                                                             };
@@ -5388,7 +5377,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                                         opcode: ref pattern10_0,
                                         imm: pattern10_1,
                                     } => {
-                                        if let &Opcode::Iconst = &pattern10_0 {
+                                        if let &Opcode::Iconst = pattern10_0 {
                                             let pattern12_0 = C::u64_from_imm64(ctx, pattern10_1);
                                             if let Some(pattern13_0) =
                                                 C::imm12_from_u64(ctx, pattern12_0)
@@ -5424,10 +5413,10 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                                         opcode: ref pattern10_0,
                                         args: ref pattern10_1,
                                     } => {
-                                        match &pattern10_0 {
+                                        match pattern10_0 {
                                             &Opcode::Imul => {
                                                 let (pattern12_0, pattern12_1) =
-                                                    C::unpack_value_array_2(ctx, &pattern10_1);
+                                                    C::unpack_value_array_2(ctx, pattern10_1);
                                                 // Rule at src/isa/aarch64/lower.isle line 67.
                                                 let expr0_0 = C::put_in_reg(ctx, pattern12_0);
                                                 let expr1_0 = C::put_in_reg(ctx, pattern12_1);
@@ -5440,7 +5429,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                                             }
                                             &Opcode::Ishl => {
                                                 let (pattern12_0, pattern12_1) =
-                                                    C::unpack_value_array_2(ctx, &pattern10_1);
+                                                    C::unpack_value_array_2(ctx, pattern10_1);
                                                 if let Some(pattern13_0) =
                                                     C::def_inst(ctx, pattern12_1)
                                                 {
@@ -5451,7 +5440,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                                                         imm: pattern15_1,
                                                     } = &pattern14_0
                                                     {
-                                                        if let &Opcode::Iconst = &pattern15_0 {
+                                                        if let &Opcode::Iconst = pattern15_0 {
                                                             let closure17 = || {
                                                                 return Some(pattern3_0);
                                                             };
@@ -5511,8 +5500,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                             return Some(expr3_0);
                         }
                         &Opcode::Isub => {
-                            let (pattern7_0, pattern7_1) =
-                                C::unpack_value_array_2(ctx, &pattern5_1);
+                            let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
                             if let Some(pattern8_0) = C::def_inst(ctx, pattern7_1) {
                                 let pattern9_0 = C::inst_data(ctx, pattern8_0);
                                 match &pattern9_0 {
@@ -5520,7 +5508,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                                         opcode: ref pattern10_0,
                                         imm: pattern10_1,
                                     } => {
-                                        if let &Opcode::Iconst = &pattern10_0 {
+                                        if let &Opcode::Iconst = pattern10_0 {
                                             let pattern12_0 = C::u64_from_imm64(ctx, pattern10_1);
                                             if let Some(pattern13_0) =
                                                 C::imm12_from_u64(ctx, pattern12_0)
@@ -5556,9 +5544,9 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                                         opcode: ref pattern10_0,
                                         args: ref pattern10_1,
                                     } => {
-                                        if let &Opcode::Ishl = &pattern10_0 {
+                                        if let &Opcode::Ishl = pattern10_0 {
                                             let (pattern12_0, pattern12_1) =
-                                                C::unpack_value_array_2(ctx, &pattern10_1);
+                                                C::unpack_value_array_2(ctx, pattern10_1);
                                             if let Some(pattern13_0) = C::def_inst(ctx, pattern12_1)
                                             {
                                                 let pattern14_0 = C::inst_data(ctx, pattern13_0);
@@ -5567,7 +5555,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                                                     imm: pattern15_1,
                                                 } = &pattern14_0
                                                 {
-                                                    if let &Opcode::Iconst = &pattern15_0 {
+                                                    if let &Opcode::Iconst = pattern15_0 {
                                                         let closure17 = || {
                                                             return Some(pattern3_0);
                                                         };
@@ -5622,8 +5610,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                             return Some(expr3_0);
                         }
                         &Opcode::Imul => {
-                            let (pattern7_0, pattern7_1) =
-                                C::unpack_value_array_2(ctx, &pattern5_1);
+                            let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
                             // Rule at src/isa/aarch64/lower.isle line 181.
                             let expr0_0 = C::put_in_reg(ctx, pattern7_0);
                             let expr1_0 = C::put_in_reg(ctx, pattern7_1);
@@ -5634,8 +5621,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                             return Some(expr4_0);
                         }
                         &Opcode::Udiv => {
-                            let (pattern7_0, pattern7_1) =
-                                C::unpack_value_array_2(ctx, &pattern5_1);
+                            let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
                             // Rule at src/isa/aarch64/lower.isle line 393.
                             let expr0_0: Type = I64;
                             let expr1_0 = constructor_put_in_reg_zext64(ctx, pattern7_0)?;
@@ -5645,8 +5631,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                             return Some(expr4_0);
                         }
                         &Opcode::Sdiv => {
-                            let (pattern7_0, pattern7_1) =
-                                C::unpack_value_array_2(ctx, &pattern5_1);
+                            let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
                             if let Some(pattern8_0) = C::def_inst(ctx, pattern7_1) {
                                 let pattern9_0 = C::inst_data(ctx, pattern8_0);
                                 if let &InstructionData::UnaryImm {
@@ -5654,7 +5639,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                                     imm: pattern10_1,
                                 } = &pattern9_0
                                 {
-                                    if let &Opcode::Iconst = &pattern10_0 {
+                                    if let &Opcode::Iconst = pattern10_0 {
                                         if let Some(pattern12_0) =
                                             C::safe_divisor_from_imm64(ctx, pattern10_1)
                                         {
@@ -5685,8 +5670,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                             return Some(expr5_0);
                         }
                         &Opcode::Urem => {
-                            let (pattern7_0, pattern7_1) =
-                                C::unpack_value_array_2(ctx, &pattern5_1);
+                            let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
                             // Rule at src/isa/aarch64/lower.isle line 469.
                             let expr0_0 = constructor_put_in_reg_zext64(ctx, pattern7_0)?;
                             let expr1_0 = constructor_put_nonzero_in_reg_zext64(ctx, pattern7_1)?;
@@ -5697,8 +5681,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                             return Some(expr5_0);
                         }
                         &Opcode::Srem => {
-                            let (pattern7_0, pattern7_1) =
-                                C::unpack_value_array_2(ctx, &pattern5_1);
+                            let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
                             // Rule at src/isa/aarch64/lower.isle line 478.
                             let expr0_0 = constructor_put_in_reg_sext64(ctx, pattern7_0)?;
                             let expr1_0 = constructor_put_nonzero_in_reg_sext64(ctx, pattern7_1)?;
@@ -5715,7 +5698,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                     opcode: ref pattern5_0,
                     arg: pattern5_1,
                 } => {
-                    match &pattern5_0 {
+                    match pattern5_0 {
                         &Opcode::Ineg => {
                             // Rule at src/isa/aarch64/lower.isle line 171.
                             let expr0_0 = C::zero_reg(ctx);
@@ -5732,9 +5715,9 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                                     args: ref pattern9_1,
                                 } = &pattern8_0
                                 {
-                                    if let &Opcode::Ishl = &pattern9_0 {
+                                    if let &Opcode::Ishl = pattern9_0 {
                                         let (pattern11_0, pattern11_1) =
-                                            C::unpack_value_array_2(ctx, &pattern9_1);
+                                            C::unpack_value_array_2(ctx, pattern9_1);
                                         if let Some(pattern12_0) = C::def_inst(ctx, pattern11_1) {
                                             let pattern13_0 = C::inst_data(ctx, pattern12_0);
                                             if let &InstructionData::UnaryImm {
@@ -5742,7 +5725,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                                                 imm: pattern14_1,
                                             } = &pattern13_0
                                             {
-                                                if let &Opcode::Iconst = &pattern14_0 {
+                                                if let &Opcode::Iconst = pattern14_0 {
                                                     let closure16 = || {
                                                         return Some(pattern3_0);
                                                     };
@@ -5793,7 +5776,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                                     imm: pattern9_2,
                                 } = &pattern8_0
                                 {
-                                    if let &Opcode::Extractlane = &pattern9_0 {
+                                    if let &Opcode::Extractlane = pattern9_0 {
                                         let pattern11_0 = C::value_type(ctx, pattern9_1);
                                         let pattern12_0 = C::u8_from_uimm8(ctx, pattern9_2);
                                         // Rule at src/isa/aarch64/lower.isle line 496.
@@ -5837,7 +5820,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                                     imm: pattern9_2,
                                 } = &pattern8_0
                                 {
-                                    if let &Opcode::Extractlane = &pattern9_0 {
+                                    if let &Opcode::Extractlane = pattern9_0 {
                                         let pattern11_0 = C::value_type(ctx, pattern9_1);
                                         let pattern12_0 = C::u8_from_uimm8(ctx, pattern9_2);
                                         // Rule at src/isa/aarch64/lower.isle line 528.
@@ -5880,10 +5863,9 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                     opcode: ref pattern5_0,
                     args: ref pattern5_1,
                 } => {
-                    match &pattern5_0 {
+                    match pattern5_0 {
                         &Opcode::UaddSat => {
-                            let (pattern7_0, pattern7_1) =
-                                C::unpack_value_array_2(ctx, &pattern5_1);
+                            let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
                             // Rule at src/isa/aarch64/lower.isle line 150.
                             let expr0_0 = C::put_in_reg(ctx, pattern7_0);
                             let expr1_0 = C::put_in_reg(ctx, pattern7_1);
@@ -5893,8 +5875,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                             return Some(expr4_0);
                         }
                         &Opcode::SaddSat => {
-                            let (pattern7_0, pattern7_1) =
-                                C::unpack_value_array_2(ctx, &pattern5_1);
+                            let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
                             // Rule at src/isa/aarch64/lower.isle line 155.
                             let expr0_0 = C::put_in_reg(ctx, pattern7_0);
                             let expr1_0 = C::put_in_reg(ctx, pattern7_1);
@@ -5904,8 +5885,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                             return Some(expr4_0);
                         }
                         &Opcode::UsubSat => {
-                            let (pattern7_0, pattern7_1) =
-                                C::unpack_value_array_2(ctx, &pattern5_1);
+                            let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
                             // Rule at src/isa/aarch64/lower.isle line 160.
                             let expr0_0 = C::put_in_reg(ctx, pattern7_0);
                             let expr1_0 = C::put_in_reg(ctx, pattern7_1);
@@ -5915,8 +5895,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                             return Some(expr4_0);
                         }
                         &Opcode::SsubSat => {
-                            let (pattern7_0, pattern7_1) =
-                                C::unpack_value_array_2(ctx, &pattern5_1);
+                            let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
                             // Rule at src/isa/aarch64/lower.isle line 165.
                             let expr0_0 = C::put_in_reg(ctx, pattern7_0);
                             let expr1_0 = C::put_in_reg(ctx, pattern7_1);
@@ -5926,8 +5905,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                             return Some(expr4_0);
                         }
                         &Opcode::Band => {
-                            let (pattern7_0, pattern7_1) =
-                                C::unpack_value_array_2(ctx, &pattern5_1);
+                            let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
                             // Rule at src/isa/aarch64/lower.isle line 614.
                             let expr0_0 = C::put_in_reg(ctx, pattern7_0);
                             let expr1_0 = C::put_in_reg(ctx, pattern7_1);
@@ -5937,8 +5915,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                             return Some(expr4_0);
                         }
                         &Opcode::Bor => {
-                            let (pattern7_0, pattern7_1) =
-                                C::unpack_value_array_2(ctx, &pattern5_1);
+                            let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
                             // Rule at src/isa/aarch64/lower.isle line 627.
                             let expr0_0 = C::put_in_reg(ctx, pattern7_0);
                             let expr1_0 = C::put_in_reg(ctx, pattern7_1);
@@ -5948,8 +5925,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                             return Some(expr4_0);
                         }
                         &Opcode::Bxor => {
-                            let (pattern7_0, pattern7_1) =
-                                C::unpack_value_array_2(ctx, &pattern5_1);
+                            let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
                             // Rule at src/isa/aarch64/lower.isle line 640.
                             let expr0_0 = C::put_in_reg(ctx, pattern7_0);
                             let expr1_0 = C::put_in_reg(ctx, pattern7_1);
@@ -5959,8 +5935,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                             return Some(expr4_0);
                         }
                         &Opcode::BandNot => {
-                            let (pattern7_0, pattern7_1) =
-                                C::unpack_value_array_2(ctx, &pattern5_1);
+                            let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
                             // Rule at src/isa/aarch64/lower.isle line 653.
                             let expr0_0 = C::put_in_reg(ctx, pattern7_0);
                             let expr1_0 = C::put_in_reg(ctx, pattern7_1);
@@ -5970,9 +5945,8 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                             return Some(expr4_0);
                         }
                         &Opcode::Ishl => {
-                            let (pattern7_0, pattern7_1) =
-                                C::unpack_value_array_2(ctx, &pattern5_1);
-                            // Rule at src/isa/aarch64/lower.isle line 717.
+                            let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
+                            // Rule at src/isa/aarch64/lower.isle line 718.
                             let expr0_0 = constructor_vector_size(ctx, pattern3_0)?;
                             let expr1_0 = C::put_in_reg(ctx, pattern7_1);
                             let expr2_0 = constructor_vec_dup(ctx, expr1_0, &expr0_0)?;
@@ -5982,9 +5956,8 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                             return Some(expr5_0);
                         }
                         &Opcode::Ushr => {
-                            let (pattern7_0, pattern7_1) =
-                                C::unpack_value_array_2(ctx, &pattern5_1);
-                            // Rule at src/isa/aarch64/lower.isle line 779.
+                            let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
+                            // Rule at src/isa/aarch64/lower.isle line 780.
                             let expr0_0 = constructor_vector_size(ctx, pattern3_0)?;
                             let expr1_0: Type = I32;
                             let expr2_0 = C::zero_reg(ctx);
@@ -5997,9 +5970,8 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                             return Some(expr8_0);
                         }
                         &Opcode::Sshr => {
-                            let (pattern7_0, pattern7_1) =
-                                C::unpack_value_array_2(ctx, &pattern5_1);
-                            // Rule at src/isa/aarch64/lower.isle line 830.
+                            let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
+                            // Rule at src/isa/aarch64/lower.isle line 832.
                             let expr0_0 = constructor_vector_size(ctx, pattern3_0)?;
                             let expr1_0: Type = I32;
                             let expr2_0 = C::zero_reg(ctx);
@@ -6018,7 +5990,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                     opcode: ref pattern5_0,
                     arg: pattern5_1,
                 } => {
-                    match &pattern5_0 {
+                    match pattern5_0 {
                         &Opcode::Ineg => {
                             // Rule at src/isa/aarch64/lower.isle line 175.
                             let expr0_0 = C::put_in_reg(ctx, pattern5_1);
@@ -6047,8 +6019,8 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                     args: ref pattern6_1,
                 } = &pattern5_0
                 {
-                    if let &Opcode::Imul = &pattern6_0 {
-                        let (pattern8_0, pattern8_1) = C::unpack_value_array_2(ctx, &pattern6_1);
+                    if let &Opcode::Imul = pattern6_0 {
+                        let (pattern8_0, pattern8_1) = C::unpack_value_array_2(ctx, pattern6_1);
                         // Rule at src/isa/aarch64/lower.isle line 214.
                         let expr0_0 = C::put_in_reg(ctx, pattern8_0);
                         let expr1_0 = C::put_in_reg(ctx, pattern8_1);
@@ -6075,7 +6047,7 @@ pub fn constructor_put_nonzero_in_reg_zext64<C: Context>(ctx: &mut C, arg0: Valu
             imm: pattern4_1,
         } = &pattern3_0
         {
-            if let &Opcode::Iconst = &pattern4_0 {
+            if let &Opcode::Iconst = pattern4_0 {
                 if let Some(pattern6_0) = C::nonzero_u64_from_imm64(ctx, pattern4_1) {
                     // Rule at src/isa/aarch64/lower.isle line 403.
                     let expr0_0 = constructor_imm(ctx, pattern1_0, pattern6_0)?;
@@ -6101,7 +6073,7 @@ pub fn constructor_put_nonzero_in_reg_sext64<C: Context>(ctx: &mut C, arg0: Valu
             imm: pattern4_1,
         } = &pattern3_0
         {
-            if let &Opcode::Iconst = &pattern4_0 {
+            if let &Opcode::Iconst = pattern4_0 {
                 if let Some(pattern6_0) = C::nonzero_u64_from_imm64(ctx, pattern4_1) {
                     // Rule at src/isa/aarch64/lower.isle line 451.
                     let expr0_0 = constructor_imm(ctx, pattern1_0, pattern6_0)?;
@@ -6154,8 +6126,9 @@ pub fn constructor_lower_shl128<C: Context>(
     let expr26_0 = constructor_csel(ctx, &expr24_0, expr25_0, expr5_0)?;
     let expr27_0 = Cond::Ne;
     let expr28_0 = constructor_csel(ctx, &expr27_0, expr5_0, expr18_0)?;
-    let expr29_0 = constructor_with_flags_2(ctx, &expr23_0, &expr26_0, &expr28_0)?;
-    return Some(expr29_0);
+    let expr29_0 = constructor_consumes_flags_concat(ctx, &expr26_0, &expr28_0)?;
+    let expr30_0 = constructor_with_flags(ctx, &expr23_0, &expr29_0)?;
+    return Some(expr30_0);
 }
 
 // Generated as internal constructor for term do_shift.
@@ -6177,13 +6150,13 @@ pub fn constructor_do_shift<C: Context>(
             imm: pattern6_1,
         } = &pattern5_0
         {
-            if let &Opcode::Iconst = &pattern6_0 {
+            if let &Opcode::Iconst = pattern6_0 {
                 let closure8 = || {
                     return Some(pattern1_0);
                 };
                 if let Some(pattern8_0) = closure8() {
                     if let Some(pattern9_0) = C::imm_shift_from_imm64(ctx, pattern6_1, pattern8_0) {
-                        // Rule at src/isa/aarch64/lower.isle line 761.
+                        // Rule at src/isa/aarch64/lower.isle line 762.
                         let expr0_0 = constructor_alu_rr_imm_shift(
                             ctx, pattern0_0, pattern1_0, pattern2_0, pattern9_0,
                         )?;
@@ -6198,7 +6171,7 @@ pub fn constructor_do_shift<C: Context>(
     if pattern1_0 == I32 {
         let pattern3_0 = arg2;
         let pattern4_0 = arg3;
-        // Rule at src/isa/aarch64/lower.isle line 752.
+        // Rule at src/isa/aarch64/lower.isle line 753.
         let expr0_0: Type = I32;
         let expr1_0 = C::put_in_regs(ctx, pattern4_0);
         let expr2_0: usize = 0;
@@ -6209,7 +6182,7 @@ pub fn constructor_do_shift<C: Context>(
     if pattern1_0 == I64 {
         let pattern3_0 = arg2;
         let pattern4_0 = arg3;
-        // Rule at src/isa/aarch64/lower.isle line 753.
+        // Rule at src/isa/aarch64/lower.isle line 754.
         let expr0_0: Type = I64;
         let expr1_0 = C::put_in_regs(ctx, pattern4_0);
         let expr2_0: usize = 0;
@@ -6220,7 +6193,7 @@ pub fn constructor_do_shift<C: Context>(
     if let Some(pattern2_0) = C::fits_in_16(ctx, pattern1_0) {
         let pattern3_0 = arg2;
         let pattern4_0 = arg3;
-        // Rule at src/isa/aarch64/lower.isle line 741.
+        // Rule at src/isa/aarch64/lower.isle line 742.
         let expr0_0 = C::put_in_regs(ctx, pattern4_0);
         let expr1_0: usize = 0;
         let expr2_0 = C::value_regs_get(ctx, expr0_0, expr1_0);
@@ -6242,7 +6215,7 @@ pub fn constructor_lower_ushr128<C: Context>(
 ) -> Option<ValueRegs> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/aarch64/lower.isle line 796.
+    // Rule at src/isa/aarch64/lower.isle line 797.
     let expr0_0: usize = 0;
     let expr1_0 = C::value_regs_get(ctx, pattern0_0, expr0_0);
     let expr2_0: usize = 1;
@@ -6272,8 +6245,9 @@ pub fn constructor_lower_ushr128<C: Context>(
     let expr26_0 = Cond::Ne;
     let expr27_0 = C::zero_reg(ctx);
     let expr28_0 = constructor_csel(ctx, &expr26_0, expr27_0, expr7_0)?;
-    let expr29_0 = constructor_with_flags_2(ctx, &expr23_0, &expr25_0, &expr28_0)?;
-    return Some(expr29_0);
+    let expr29_0 = constructor_consumes_flags_concat(ctx, &expr25_0, &expr28_0)?;
+    let expr30_0 = constructor_with_flags(ctx, &expr23_0, &expr29_0)?;
+    return Some(expr30_0);
 }
 
 // Generated as internal constructor for term lower_sshr128.
@@ -6284,7 +6258,7 @@ pub fn constructor_lower_sshr128<C: Context>(
 ) -> Option<ValueRegs> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/aarch64/lower.isle line 848.
+    // Rule at src/isa/aarch64/lower.isle line 850.
     let expr0_0: usize = 0;
     let expr1_0 = C::value_regs_get(ctx, pattern0_0, expr0_0);
     let expr2_0: usize = 1;
@@ -6317,8 +6291,9 @@ pub fn constructor_lower_sshr128<C: Context>(
     let expr29_0 = constructor_csel(ctx, &expr28_0, expr7_0, expr22_0)?;
     let expr30_0 = Cond::Ne;
     let expr31_0 = constructor_csel(ctx, &expr30_0, expr20_0, expr7_0)?;
-    let expr32_0 = constructor_with_flags_2(ctx, &expr27_0, &expr29_0, &expr31_0)?;
-    return Some(expr32_0);
+    let expr32_0 = constructor_consumes_flags_concat(ctx, &expr29_0, &expr31_0)?;
+    let expr33_0 = constructor_with_flags(ctx, &expr27_0, &expr32_0)?;
+    return Some(expr33_0);
 }
 
 // Generated as internal constructor for term small_rotr.
@@ -6331,7 +6306,7 @@ pub fn constructor_small_rotr<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/aarch64/lower.isle line 960.
+    // Rule at src/isa/aarch64/lower.isle line 963.
     let expr0_0: Type = I32;
     let expr1_0 = C::rotr_mask(ctx, pattern0_0);
     let expr2_0 = constructor_and_imm(ctx, expr0_0, pattern2_0, expr1_0)?;
@@ -6361,7 +6336,7 @@ pub fn constructor_small_rotr_imm<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/aarch64/lower.isle line 983.
+    // Rule at src/isa/aarch64/lower.isle line 986.
     let expr0_0: Type = I32;
     let expr1_0 = constructor_lsr_imm(ctx, expr0_0, pattern1_0, pattern2_0)?;
     let expr2_0: Type = I32;
@@ -6375,7 +6350,7 @@ pub fn constructor_small_rotr_imm<C: Context>(
 // Generated as internal constructor for term lower_clz128.
 pub fn constructor_lower_clz128<C: Context>(ctx: &mut C, arg0: ValueRegs) -> Option<ValueRegs> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/aarch64/lower.isle line 1059.
+    // Rule at src/isa/aarch64/lower.isle line 1062.
     let expr0_0: usize = 1;
     let expr1_0 = C::value_regs_get(ctx, pattern0_0, expr0_0);
     let expr2_0 = constructor_clz64(ctx, expr1_0)?;

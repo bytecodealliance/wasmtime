@@ -124,8 +124,8 @@
               (y_lo Gpr (value_regs_get_gpr y_regs 0))
               (y_hi Gpr (value_regs_get_gpr y_regs 1)))
           ;; Do an add followed by an add-with-carry.
-          (with_flags (add_with_flags $I64 x_lo (gpr_to_gpr_mem_imm y_lo))
-                      (adc $I64 x_hi (gpr_to_gpr_mem_imm y_hi))))))
+          (with_flags (add_with_flags_paired $I64 x_lo (gpr_to_gpr_mem_imm y_lo))
+                      (adc_paired $I64 x_hi (gpr_to_gpr_mem_imm y_hi))))))
 
 ;;;; Rules for `sadd_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -225,8 +225,8 @@
       (let ((y_regs ValueRegs (put_in_regs y))
             (y_lo Gpr (value_regs_get_gpr y_regs 0))
             (y_hi Gpr (value_regs_get_gpr y_regs 1)))
-        (with_flags (add_with_flags $I64 y_lo x)
-                    (adc $I64 y_hi (gpr_mem_imm_new (RegMemImm.Imm 0))))))
+        (with_flags (add_with_flags_paired $I64 y_lo x)
+                    (adc_paired $I64 y_hi (gpr_mem_imm_new (RegMemImm.Imm 0))))))
 
 ;; Otherwise, put the immediate into a register.
 (rule (lower (has_type $I128 (iadd_imm y (u64_from_imm64 x))))
@@ -234,8 +234,8 @@
             (y_lo Gpr (value_regs_get_gpr y_regs 0))
             (y_hi Gpr (value_regs_get_gpr y_regs 1))
             (x_lo Gpr (gpr_new (imm $I64 x))))
-        (with_flags (add_with_flags $I64 y_lo (gpr_to_gpr_mem_imm x_lo))
-                    (adc $I64 y_hi (gpr_mem_imm_new (RegMemImm.Imm 0))))))
+        (with_flags (add_with_flags_paired $I64 y_lo (gpr_to_gpr_mem_imm x_lo))
+                    (adc_paired $I64 y_hi (gpr_mem_imm_new (RegMemImm.Imm 0))))))
 
 ;;;; Rules for `isub` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -293,8 +293,8 @@
               (y_lo Gpr (value_regs_get_gpr y_regs 0))
               (y_hi Gpr (value_regs_get_gpr y_regs 1)))
           ;; Do a sub followed by an sub-with-borrow.
-          (with_flags (sub_with_flags $I64 x_lo (gpr_to_gpr_mem_imm y_lo))
-                      (sbb $I64 x_hi (gpr_to_gpr_mem_imm y_hi))))))
+          (with_flags (sub_with_flags_paired $I64 x_lo (gpr_to_gpr_mem_imm y_lo))
+                      (sbb_paired $I64 x_hi (gpr_to_gpr_mem_imm y_hi))))))
 
 ;;;; Rules for `ssub_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -562,7 +562,7 @@
                                                   (gpr_to_gpr_mem_imm amt)))))
             (zero Gpr (gpr_new (imm $I64 0)))
             ;; Nullify the carry if we are shifting in by a multiple of 128.
-            (carry_ Gpr (gpr_new (with_flags_1 (test (OperandSize.Size64)
+            (carry_ Gpr (gpr_new (with_flags_reg (test (OperandSize.Size64)
                                                      (gpr_mem_imm_new (RegMemImm.Imm 127))
                                                      amt)
                                                (cmove $I64
@@ -574,11 +574,10 @@
         ;; Combine the two shifted halves. However, if we are shifting by >= 64
         ;; (modulo 128), then the low bits are zero and the high bits are our
         ;; low bits.
-        (with_flags_2 (test (OperandSize.Size64)
-                            (gpr_mem_imm_new (RegMemImm.Imm 64))
-                            amt)
-                      (cmove $I64 (CC.Z) (gpr_to_gpr_mem lo_shifted) zero)
-                      (cmove $I64 (CC.Z) (gpr_to_gpr_mem hi_shifted_) lo_shifted))))
+        (with_flags (test (OperandSize.Size64) (gpr_mem_imm_new (RegMemImm.Imm 64)) amt)
+                    (consumes_flags_concat
+                     (cmove $I64 (CC.Z) (gpr_to_gpr_mem lo_shifted) zero)
+                     (cmove $I64 (CC.Z) (gpr_to_gpr_mem hi_shifted_) lo_shifted)))))
 
 (rule (lower (has_type $I128 (ishl src amt)))
       ;; NB: Only the low bits of `amt` matter since we logically mask the shift
@@ -674,23 +673,17 @@
                                                   (gpr_new (imm $I64 64))
                                                   (gpr_to_gpr_mem_imm amt)))))
             ;; Nullify the carry if we are shifting by a multiple of 128.
-            (carry_ Gpr (gpr_new (with_flags_1 (test (OperandSize.Size64)
-                                                     (gpr_mem_imm_new (RegMemImm.Imm 127))
-                                                     amt)
-                                               (cmove $I64
-                                                      (CC.Z)
-                                                      (gpr_to_gpr_mem (gpr_new (imm $I64 0)))
-                                                      carry))))
+            (carry_ Gpr (gpr_new (with_flags_reg (test (OperandSize.Size64) (gpr_mem_imm_new (RegMemImm.Imm 127)) amt)
+                                        (cmove $I64 (CC.Z) (gpr_to_gpr_mem (gpr_new (imm $I64 0))) carry))))
             ;; Add the carry bits into the lo.
             (lo_shifted_ Gpr (or $I64 carry_ (gpr_to_gpr_mem_imm lo_shifted))))
         ;; Combine the two shifted halves. However, if we are shifting by >= 64
         ;; (modulo 128), then the hi bits are zero and the lo bits are what
         ;; would otherwise be our hi bits.
-        (with_flags_2 (test (OperandSize.Size64)
-                            (gpr_mem_imm_new (RegMemImm.Imm 64))
-                            amt)
-                      (cmove $I64 (CC.Z) (gpr_to_gpr_mem lo_shifted_) hi_shifted)
-                      (cmove $I64 (CC.Z) (gpr_to_gpr_mem hi_shifted) (gpr_new (imm $I64 0))))))
+        (with_flags (test (OperandSize.Size64) (gpr_mem_imm_new (RegMemImm.Imm 64)) amt)
+                    (consumes_flags_concat
+                     (cmove $I64 (CC.Z) (gpr_to_gpr_mem lo_shifted_) hi_shifted)
+                     (cmove $I64 (CC.Z) (gpr_to_gpr_mem hi_shifted) (gpr_new (imm $I64 0)))))))
 
 (rule (lower (has_type $I128 (ushr src amt)))
       ;; NB: Only the low bits of `amt` matter since we logically mask the shift
@@ -787,13 +780,8 @@
                                                   (gpr_new (imm $I64 64))
                                                   (gpr_to_gpr_mem_imm amt)))))
             ;; Nullify the carry if we are shifting by a multiple of 128.
-            (carry_ Gpr (gpr_new (with_flags_1 (test (OperandSize.Size64)
-                                                     (gpr_mem_imm_new (RegMemImm.Imm 127))
-                                                     amt)
-                                               (cmove $I64
-                                                      (CC.Z)
-                                                      (gpr_to_gpr_mem (gpr_new (imm $I64 0)))
-                                                      carry))))
+            (carry_ Gpr (gpr_new (with_flags_reg (test (OperandSize.Size64) (gpr_mem_imm_new (RegMemImm.Imm 127)) amt)
+                                    (cmove $I64 (CC.Z) (gpr_to_gpr_mem (gpr_new (imm $I64 0))) carry))))
             ;; Add the carry into the low half.
             (lo_shifted_ Gpr (or $I64 lo_shifted (gpr_to_gpr_mem_imm carry_)))
             ;; Get all sign bits.
@@ -801,11 +789,10 @@
         ;; Combine the two shifted halves. However, if we are shifting by >= 64
         ;; (modulo 128), then the hi bits are all sign bits and the lo bits are
         ;; what would otherwise be our hi bits.
-        (with_flags_2 (test (OperandSize.Size64)
-                            (gpr_mem_imm_new (RegMemImm.Imm 64))
-                            amt)
-                      (cmove $I64 (CC.Z) (gpr_to_gpr_mem lo_shifted_) hi_shifted)
-                      (cmove $I64 (CC.Z) (gpr_to_gpr_mem hi_shifted) sign_bits))))
+        (with_flags (test (OperandSize.Size64) (gpr_mem_imm_new (RegMemImm.Imm 64)) amt)
+                    (consumes_flags_concat
+                     (cmove $I64 (CC.Z) (gpr_to_gpr_mem lo_shifted_) hi_shifted)
+                     (cmove $I64 (CC.Z) (gpr_to_gpr_mem hi_shifted) sign_bits)))))
 
 (rule (lower (has_type $I128 (sshr src amt)))
       ;; NB: Only the low bits of `amt` matter since we logically mask the shift
@@ -1468,7 +1455,7 @@
       (let ((x_reg Gpr (put_in_gpr x))
             (y_reg Gpr (put_in_gpr y))
             (size OperandSize (raw_operand_size_of_type ty)))
-           (value_reg (with_flags_1 (cmp size (gpr_to_gpr_mem_imm x_reg) y_reg)
+           (value_reg (with_flags_reg (cmp size (gpr_to_gpr_mem_imm x_reg) y_reg)
                                     (cmove ty cc (gpr_to_gpr_mem y_reg) x_reg)))))
 
 (rule (lower (has_type (fits_in_64 ty) (umin x y)))
@@ -1536,3 +1523,90 @@
 
 (rule (lower (resumable_trap code))
       (safepoint (ud2 code)))
+
+;;;; Rules for `select` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; CLIF `select` instructions receive a testable argument (i.e. boolean or
+;; integer) that determines which of the other two arguments is selected as
+;; output. Since Cranelift booleans are typically generated by a comparison, the
+;; lowerings in this section "look upwards in the tree" to emit the proper
+;; sequence of "selection" instructions.
+;;
+;; The following rules--for selecting on a floating-point comparison--emit a
+;; `UCOMIS*` instruction and then a conditional move, `cmove`. Note that for
+;; values contained in XMM registers, `cmove` and `cmove_or` may in fact emit a
+;; jump sequence, not `CMOV`. The `cmove` instruction operates on the flags set
+;; by `UCOMIS*`; the key to understanding these is the UCOMIS* documentation
+;; (see Intel's Software Developer's Manual, volume 2, chapter 4):
+;;  - unordered assigns    Z = 1, P = 1, C = 1
+;;  - greater than assigns Z = 0, P = 0, C = 0
+;;  - less than assigns    Z = 0, P = 0, C = 1
+;;  - equal assigns        Z = 1, P = 0, C = 0
+;;
+;; Note that prefixing the flag with `N` means "not," so that `CC.P -> P = 1`
+;; and `CC.NP -> P = 0`. Also, x86 uses mnemonics for certain combinations of
+;; flags; e.g.:
+;;  - `CC.B -> C = 1` (below)
+;;  - `CC.NB -> C = 0` (not below)
+;;  - `CC.BE -> C = 1 OR Z = 1` (below or equal)
+;;  - `CC.NBE -> C = 0 AND Z = 0` (not below or equal)
+
+(rule (lower (has_type ty (select (def_inst (fcmp (FloatCC.Ordered) a b)) x y)))
+      (with_flags (fpcmp b a) (cmove_from_values ty (CC.NP) x y)))
+
+(rule (lower (has_type ty (select (def_inst (fcmp (FloatCC.Unordered) a b)) x y)))
+      (with_flags (fpcmp b a) (cmove_from_values ty (CC.P) x y)))
+
+(rule (lower (has_type ty (select (def_inst (fcmp (FloatCC.GreaterThan) a b)) x y)))
+      (with_flags (fpcmp b a) (cmove_from_values ty (CC.NBE) x y)))
+
+(rule (lower (has_type ty (select (def_inst (fcmp (FloatCC.GreaterThanOrEqual) a b)) x y)))
+      (with_flags (fpcmp b a) (cmove_from_values ty (CC.NB) x y)))
+
+(rule (lower (has_type ty (select (def_inst (fcmp (FloatCC.UnorderedOrLessThan) a b)) x y)))
+      (with_flags (fpcmp b a) (cmove_from_values ty (CC.B) x y)))
+
+(rule (lower (has_type ty (select (def_inst (fcmp (FloatCC.UnorderedOrLessThanOrEqual) a b)) x y)))
+      (with_flags (fpcmp b a) (cmove_from_values ty (CC.BE) x y)))
+
+;; Certain FloatCC variants are implemented by flipping the operands of the
+;; comparison (e.g., "greater than" is lowered the same as "less than" but the
+;; comparison is reversed). This allows us to use a single flag for the `cmove`,
+;; which involves fewer instructions than `cmove_or`.
+;;
+;; But why flip at all, you may ask? Can't we just use `CC.B` (i.e., below) for
+;; `FloatCC.LessThan`? Recall that in these floating-point lowerings, values may
+;; be unordered and we must we want to express that `FloatCC.LessThan` is `LT`,
+;; not `LT | UNO`. By flipping the operands AND inverting the comparison (e.g.,
+;; to `CC.NBE`), we also avoid these unordered cases.
+
+(rule (lower (has_type ty (select (def_inst (fcmp (FloatCC.LessThan) a b)) x y)))
+      (with_flags (fpcmp a b) (cmove_from_values ty (CC.NBE) x y)))
+
+(rule (lower (has_type ty (select (def_inst (fcmp (FloatCC.LessThanOrEqual) a b)) x y)))
+      (with_flags (fpcmp a b) (cmove_from_values ty (CC.NB) x y)))
+
+(rule (lower (has_type ty (select (def_inst (fcmp (FloatCC.UnorderedOrGreaterThan) a b)) x y)))
+      (with_flags (fpcmp a b) (cmove_from_values ty (CC.B) x y)))
+
+(rule (lower (has_type ty (select (def_inst (fcmp (FloatCC.UnorderedOrGreaterThanOrEqual) a b)) x y)))
+      (with_flags (fpcmp a b) (cmove_from_values ty (CC.BE) x y)))
+
+;; `FloatCC.Equal` and `FloatCC.NotEqual` can only be implemented with multiple
+;; flag checks. Recall from the flag assignment chart above that equality, e.g.,
+;; will assign `Z = 1`. But so does an unordered comparison: `Z = 1, P = 1, C =
+;; 1`. In order to avoid semantics like `EQ | UNO` for equality, we must ensure
+;; that the values are actually ordered, checking that `P = 0` (note that the
+;; `C` flag is irrelevant here). Since we cannot find a single instruction that
+;; implements a `Z = 1 AND P = 0` check, we invert the flag checks (i.e., `Z = 1
+;; AND P = 0` becomes `Z = 0 OR P = 1`) and also flip the select operands, `x`
+;; and `y`. The same argument applies to `FloatCC.NotEqual`.
+;;
+;; More details about the CLIF semantics for `fcmp` are available at
+;; https://docs.rs/cranelift-codegen/latest/cranelift_codegen/ir/trait.InstBuilder.html#method.fcmp.
+
+(rule (lower (has_type ty (select (def_inst (fcmp (FloatCC.Equal) a b)) x y)))
+      (with_flags (fpcmp a b) (cmove_or_from_values ty (CC.NZ) (CC.P) y x)))
+
+(rule (lower (has_type ty (select (def_inst (fcmp (FloatCC.NotEqual) a b)) x y)))
+      (with_flags (fpcmp a b) (cmove_or_from_values ty (CC.NZ) (CC.P) x y)))

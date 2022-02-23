@@ -1064,9 +1064,9 @@ pub(crate) fn emit(
             cc,
             consequent,
             alternative,
-            dst: reg_g,
+            dst,
         } => {
-            debug_assert_eq!(*alternative, reg_g.to_reg());
+            debug_assert_eq!(*alternative, dst.to_reg());
             let rex_flags = RexFlags::from(*size);
             let prefix = match size {
                 OperandSize::Size16 => LegacyPrefixes::_66,
@@ -1076,14 +1076,14 @@ pub(crate) fn emit(
             };
             let opcode = 0x0F40 + cc.get_enc() as u32;
             match consequent.clone().to_reg_mem() {
-                RegMem::Reg { reg: reg_e } => {
+                RegMem::Reg { reg } => {
                     emit_std_reg_reg(
                         sink,
                         prefix,
                         opcode,
                         2,
-                        reg_g.to_reg().to_reg(),
-                        reg_e,
+                        dst.to_reg().to_reg(),
+                        reg,
                         rex_flags,
                     );
                 }
@@ -1096,7 +1096,7 @@ pub(crate) fn emit(
                         prefix,
                         opcode,
                         2,
-                        reg_g.to_reg().to_reg(),
+                        dst.to_reg().to_reg(),
                         addr,
                         rex_flags,
                     );
@@ -1104,7 +1104,42 @@ pub(crate) fn emit(
             }
         }
 
-        Inst::XmmCmove { size, cc, src, dst } => {
+        Inst::CmoveOr {
+            size,
+            cc1,
+            cc2,
+            consequent,
+            alternative,
+            dst,
+        } => {
+            let first_cmove = Inst::Cmove {
+                cc: *cc1,
+                size: *size,
+                consequent: consequent.clone(),
+                alternative: alternative.clone(),
+                dst: dst.clone(),
+            };
+            first_cmove.emit(sink, info, state);
+
+            let second_cmove = Inst::Cmove {
+                cc: *cc2,
+                size: *size,
+                consequent: consequent.clone(),
+                alternative: alternative.clone(),
+                dst: dst.clone(),
+            };
+            second_cmove.emit(sink, info, state);
+        }
+
+        Inst::XmmCmove {
+            size,
+            cc,
+            consequent,
+            alternative,
+            dst,
+        } => {
+            debug_assert_eq!(*alternative, dst.to_reg());
+
             // Lowering of the Select IR opcode when the input is an fcmp relies on the fact that
             // this doesn't clobber flags. Make sure to not do so here.
             let next = sink.get_label();
@@ -1117,10 +1152,44 @@ pub(crate) fn emit(
             } else {
                 SseOpcode::Movss
             };
-            let inst = Inst::xmm_unary_rm_r(op, src.clone().to_reg_mem(), dst.to_writable_reg());
+            let inst =
+                Inst::xmm_unary_rm_r(op, consequent.clone().to_reg_mem(), dst.to_writable_reg());
             inst.emit(sink, info, state);
 
             sink.bind_label(next);
+        }
+
+        Inst::XmmCmoveOr {
+            size,
+            cc1,
+            cc2,
+            consequent,
+            alternative,
+            dst,
+        } => {
+            debug_assert_eq!(*alternative, dst.to_reg());
+
+            let op = if *size == OperandSize::Size64 {
+                SseOpcode::Movsd
+            } else {
+                SseOpcode::Movss
+            };
+            let second_test = sink.get_label();
+            let next_instruction = sink.get_label();
+
+            // Jump to second test if `cc1` is *not* set.
+            one_way_jmp(sink, cc1.invert(), next_instruction);
+            let inst =
+                Inst::xmm_unary_rm_r(op, consequent.clone().to_reg_mem(), dst.to_writable_reg());
+            inst.emit(sink, info, state);
+            sink.bind_label(second_test);
+
+            // Jump to next instruction if `cc2` is *not* set.
+            one_way_jmp(sink, cc2.invert(), next_instruction);
+            let inst =
+                Inst::xmm_unary_rm_r(op, consequent.clone().to_reg_mem(), dst.to_writable_reg());
+            inst.emit(sink, info, state);
+            sink.bind_label(next_instruction);
         }
 
         Inst::Push64 { src } => {

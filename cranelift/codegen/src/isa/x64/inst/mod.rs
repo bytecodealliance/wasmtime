@@ -52,6 +52,7 @@ impl Inst {
             | Inst::CallUnknown { .. }
             | Inst::CheckedDivOrRemSeq { .. }
             | Inst::Cmove { .. }
+            | Inst::CmoveOr { .. }
             | Inst::CmpRmiR { .. }
             | Inst::CvtFloatToSintSeq { .. }
             | Inst::CvtFloatToUintSeq { .. }
@@ -88,6 +89,7 @@ impl Inst {
             | Inst::Ud2 { .. }
             | Inst::VirtualSPOffsetAdj { .. }
             | Inst::XmmCmove { .. }
+            | Inst::XmmCmoveOr { .. }
             | Inst::XmmCmpRmR { .. }
             | Inst::XmmLoadConst { .. }
             | Inst::XmmMinMaxSeq { .. }
@@ -629,7 +631,13 @@ impl Inst {
         debug_assert!(dst.to_reg().get_class() == RegClass::V128);
         let src = XmmMem::new(src).unwrap();
         let dst = WritableXmm::from_writable_reg(dst).unwrap();
-        Inst::XmmCmove { size, cc, src, dst }
+        Inst::XmmCmove {
+            size,
+            cc,
+            consequent: src,
+            alternative: dst.to_reg(),
+            dst,
+        }
     }
 
     pub(crate) fn push64(src: RegMemImm) -> Inst {
@@ -898,6 +906,12 @@ impl Inst {
                 alternative,
                 dst,
                 ..
+            }
+            | Inst::CmoveOr {
+                size,
+                alternative,
+                dst,
+                ..
             } => {
                 if *alternative != dst.to_reg() {
                     debug_assert!(alternative.is_virtual());
@@ -905,6 +919,23 @@ impl Inst {
                         *size,
                         alternative.to_reg(),
                         dst.to_writable_reg(),
+                    ));
+                    *alternative = dst.to_reg();
+                }
+                insts.push(self);
+            }
+            Inst::XmmCmove {
+                alternative, dst, ..
+            }
+            | Inst::XmmCmoveOr {
+                alternative, dst, ..
+            } => {
+                if *alternative != dst.to_reg() {
+                    debug_assert!(alternative.is_virtual());
+                    insts.push(Self::gen_move(
+                        dst.to_writable_reg(),
+                        alternative.to_reg(),
+                        types::F32X4,
                     ));
                     *alternative = dst.to_reg();
                 }
@@ -1588,7 +1619,34 @@ impl PrettyPrint for Inst {
                 show_ireg_sized(dst.to_reg().to_reg(), mb_rru, size.to_bytes())
             ),
 
-            Inst::XmmCmove { size, cc, src, dst } => {
+            Inst::CmoveOr {
+                size,
+                cc1,
+                cc2,
+                consequent: src,
+                alternative: _,
+                dst,
+            } => {
+                let src = src.show_rru_sized(mb_rru, size.to_bytes());
+                let dst = show_ireg_sized(dst.to_reg().to_reg(), mb_rru, size.to_bytes());
+                format!(
+                    "{} {}, {}; {} {}, {}",
+                    ljustify(format!("cmov{}{}", cc1.to_string(), suffix_bwlq(*size))),
+                    src,
+                    dst,
+                    ljustify(format!("cmov{}{}", cc2.to_string(), suffix_bwlq(*size))),
+                    src,
+                    dst,
+                )
+            }
+
+            Inst::XmmCmove {
+                size,
+                cc,
+                consequent: src,
+                dst,
+                ..
+            } => {
                 format!(
                     "j{} $next; mov{} {}, {}; $next: ",
                     cc.invert().to_string(),
@@ -1599,6 +1657,34 @@ impl PrettyPrint for Inst {
                     },
                     src.show_rru_sized(mb_rru, size.to_bytes()),
                     show_ireg_sized(dst.to_reg().to_reg(), mb_rru, size.to_bytes())
+                )
+            }
+
+            Inst::XmmCmoveOr {
+                size,
+                cc1,
+                cc2,
+                consequent: src,
+                dst,
+                ..
+            } => {
+                let suffix = if *size == OperandSize::Size64 {
+                    "sd"
+                } else {
+                    "ss"
+                };
+                let src = src.show_rru_sized(mb_rru, size.to_bytes());
+                let dst = show_ireg_sized(dst.to_reg().to_reg(), mb_rru, size.to_bytes());
+                format!(
+                    "j{} $check; mov{} {}, {}; $check: j{} $next; mov{} {}, {}; $next",
+                    cc1.invert().to_string(),
+                    suffix,
+                    src,
+                    dst,
+                    cc2.invert().to_string(),
+                    suffix,
+                    src,
+                    dst,
                 )
             }
 
@@ -2000,11 +2086,25 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             consequent: src,
             dst,
             ..
+        }
+        | Inst::CmoveOr {
+            consequent: src,
+            dst,
+            ..
         } => {
             src.get_regs_as_uses(collector);
             collector.add_mod(dst.to_writable_reg());
         }
-        Inst::XmmCmove { src, dst, .. } => {
+        Inst::XmmCmove {
+            consequent: src,
+            dst,
+            ..
+        }
+        | Inst::XmmCmoveOr {
+            consequent: src,
+            dst,
+            ..
+        } => {
             src.get_regs_as_uses(collector);
             collector.add_mod(dst.to_writable_reg());
         }
@@ -2454,18 +2554,32 @@ pub(crate) fn x64_map_regs<RM: RegMapper>(inst: &mut Inst, mapper: &RM) {
             ref mut dst,
             ref mut alternative,
             ..
+        }
+        | Inst::CmoveOr {
+            consequent: ref mut src,
+            ref mut dst,
+            ref mut alternative,
+            ..
         } => {
             src.map_uses(mapper);
             dst.map_mod(mapper);
             *alternative = dst.to_reg();
         }
         Inst::XmmCmove {
-            ref mut src,
+            consequent: ref mut src,
             ref mut dst,
+            ref mut alternative,
+            ..
+        }
+        | Inst::XmmCmoveOr {
+            consequent: ref mut src,
+            ref mut dst,
+            ref mut alternative,
             ..
         } => {
             src.map_uses(mapper);
             dst.map_mod(mapper);
+            *alternative = dst.to_reg();
         }
         Inst::Push64 { ref mut src } => src.map_uses(mapper),
         Inst::Pop64 { ref mut dst } => {

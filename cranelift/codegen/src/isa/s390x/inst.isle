@@ -1427,9 +1427,8 @@
 ;; Helper for emitting `MInst.RxSBGTest` instructions.
 (decl rxsbg_test (RxSBGOp Reg Reg u8 u8 i8) ProducesFlags)
 (rule (rxsbg_test op src1 src2 start_bit end_bit rotate_amt)
-      (ProducesFlags.ProducesFlags (MInst.RxSBGTest op src1 src2
-                                    start_bit end_bit rotate_amt)
-                                   (invalid_reg)))
+      (ProducesFlags.ProducesFlagsSideEffect
+            (MInst.RxSBGTest op src1 src2 start_bit end_bit rotate_amt)))
 
 ;; Helper for emitting `MInst.UnaryRR` instructions.
 (decl unary_rr (Type UnaryOp Reg) Reg)
@@ -1441,32 +1440,27 @@
 ;; Helper for emitting `MInst.CmpRR` instructions.
 (decl cmp_rr (CmpOp Reg Reg) ProducesFlags)
 (rule (cmp_rr op src1 src2)
-      (ProducesFlags.ProducesFlags (MInst.CmpRR op src1 src2)
-                                   (invalid_reg)))
+      (ProducesFlags.ProducesFlagsSideEffect (MInst.CmpRR op src1 src2)))
 
 ;; Helper for emitting `MInst.CmpRX` instructions.
 (decl cmp_rx (CmpOp Reg MemArg) ProducesFlags)
 (rule (cmp_rx op src mem)
-      (ProducesFlags.ProducesFlags (MInst.CmpRX op src mem)
-                                   (invalid_reg)))
+      (ProducesFlags.ProducesFlagsSideEffect (MInst.CmpRX op src mem)))
 
 ;; Helper for emitting `MInst.CmpRSImm16` instructions.
 (decl cmp_rsimm16 (CmpOp Reg i16) ProducesFlags)
 (rule (cmp_rsimm16 op src imm)
-      (ProducesFlags.ProducesFlags (MInst.CmpRSImm16 op src imm)
-                                   (invalid_reg)))
+      (ProducesFlags.ProducesFlagsSideEffect (MInst.CmpRSImm16 op src imm)))
 
 ;; Helper for emitting `MInst.CmpRSImm32` instructions.
 (decl cmp_rsimm32 (CmpOp Reg i32) ProducesFlags)
 (rule (cmp_rsimm32 op src imm)
-      (ProducesFlags.ProducesFlags (MInst.CmpRSImm32 op src imm)
-                                   (invalid_reg)))
+      (ProducesFlags.ProducesFlagsSideEffect (MInst.CmpRSImm32 op src imm)))
 
 ;; Helper for emitting `MInst.CmpRUImm32` instructions.
 (decl cmp_ruimm32 (CmpOp Reg u32) ProducesFlags)
 (rule (cmp_ruimm32 op src imm)
-      (ProducesFlags.ProducesFlags (MInst.CmpRUImm32 op src imm)
-                                   (invalid_reg)))
+      (ProducesFlags.ProducesFlagsSideEffect (MInst.CmpRUImm32 op src imm)))
 
 ;; Helper for emitting `MInst.AtomicRmw` instructions.
 (decl atomic_rmw_impl (Type ALUOp Reg MemArg) Reg)
@@ -1615,21 +1609,19 @@
 ;; Helper for emitting `MInst.FpuCmp32` instructions.
 (decl fpu_cmp32 (Reg Reg) ProducesFlags)
 (rule (fpu_cmp32 src1 src2)
-      (ProducesFlags.ProducesFlags (MInst.FpuCmp32 src1 src2)
-                                   (invalid_reg)))
+      (ProducesFlags.ProducesFlagsSideEffect (MInst.FpuCmp32 src1 src2)))
 
 ;; Helper for emitting `MInst.FpuCmp64` instructions.
 (decl fpu_cmp64 (Reg Reg) ProducesFlags)
 (rule (fpu_cmp64 src1 src2)
-      (ProducesFlags.ProducesFlags (MInst.FpuCmp64 src1 src2)
-                                   (invalid_reg)))
+      (ProducesFlags.ProducesFlagsSideEffect (MInst.FpuCmp64 src1 src2)))
 
 ;; Helper for emitting `MInst.FpuToInt` instructions.
 (decl fpu_to_int (Type FpuToIntOp Reg) ProducesFlags)
 (rule (fpu_to_int ty op src)
       (let ((dst WritableReg (temp_writable_reg ty)))
-        (ProducesFlags.ProducesFlags (MInst.FpuToInt op dst src)
-                                     (writable_reg_to_reg dst))))
+        (ProducesFlags.ProducesFlagsReturnsReg (MInst.FpuToInt op dst src)
+                                               (writable_reg_to_reg dst))))
 
 ;; Helper for emitting `MInst.IntToFpu` instructions.
 (decl int_to_fpu (Type IntToFpuOp Reg) Reg)
@@ -1751,7 +1743,7 @@
 
 ;; Emit a `ProducesFlags` instruction when the flags are not actually needed.
 (decl drop_flags (ProducesFlags) Reg)
-(rule (drop_flags (ProducesFlags.ProducesFlags inst result))
+(rule (drop_flags (ProducesFlags.ProducesFlagsReturnsReg inst result))
       (let ((_ Unit (emit inst)))
         result))
 
@@ -1834,10 +1826,10 @@
 
 ;; Push instructions to break out of the loop if condition is met.
 (decl push_break_if (VecMInstBuilder ProducesFlags Cond) Reg)
-(rule (push_break_if ib (ProducesFlags.ProducesFlags inst result) cond)
+(rule (push_break_if ib (ProducesFlags.ProducesFlagsSideEffect inst) cond)
       (let ((_1 Unit (inst_builder_push ib inst))
             (_2 Unit (inst_builder_push ib (MInst.CondBreak cond))))
-        result))
+        (invalid_reg)))
 
 ;; Emit a `MInst.Loop` instruction holding a loop body instruction sequence.
 (decl emit_loop (VecMInstBuilder Cond) Unit)
@@ -2215,11 +2207,11 @@
 ;; Conditionally move immediate value into destination register.  (Non-SSA form.)
 (decl emit_cmov_imm (Type WritableReg Cond i16) ConsumesFlags)
 (rule (emit_cmov_imm (gpr32_ty _ty) dst cond imm)
-      (ConsumesFlags.ConsumesFlags (MInst.CMov32SImm16 dst cond imm)
-                                   (writable_reg_to_reg dst)))
+      (ConsumesFlags.ConsumesFlagsReturnsReg (MInst.CMov32SImm16 dst cond imm)
+                                             (writable_reg_to_reg dst)))
 (rule (emit_cmov_imm (gpr64_ty _ty) dst cond imm)
-      (ConsumesFlags.ConsumesFlags (MInst.CMov64SImm16 dst cond imm)
-                                   (writable_reg_to_reg dst)))
+      (ConsumesFlags.ConsumesFlagsReturnsReg (MInst.CMov64SImm16 dst cond imm)
+                                             (writable_reg_to_reg dst)))
 
 ;; Conditionally select between immediate and source register.
 (decl cmov_imm (Type Cond i16 Reg) ConsumesFlags)
@@ -2233,7 +2225,7 @@
 (rule (cmov_imm_regpair_lo ty producer cond imm src)
       (let ((dst WritableRegPair (copy_writable_regpair src))
             (consumer ConsumesFlags (emit_cmov_imm ty (writable_regpair_lo dst) cond imm))
-            (_ Reg (with_flags_1 producer consumer)))
+            (_ Reg (with_flags_reg producer consumer)))
         (writable_regpair_to_regpair dst)))
 
 ;; Conditionally modify the high word of a register pair.
@@ -2242,23 +2234,23 @@
 (rule (cmov_imm_regpair_hi ty producer cond imm src)
       (let ((dst WritableRegPair (copy_writable_regpair src))
             (consumer ConsumesFlags (emit_cmov_imm ty (writable_regpair_hi dst) cond imm))
-            (_ Reg (with_flags_1 producer consumer)))
+            (_ Reg (with_flags_reg producer consumer)))
         (writable_regpair_to_regpair dst)))
 
 ;; Conditionally select between two source registers.  (Non-SSA form.)
 (decl emit_cmov_reg (Type WritableReg Cond Reg) ConsumesFlags)
 (rule (emit_cmov_reg (gpr32_ty _ty) dst cond src)
-      (ConsumesFlags.ConsumesFlags (MInst.CMov32 dst cond src)
-                                   (writable_reg_to_reg dst)))
+      (ConsumesFlags.ConsumesFlagsReturnsReg (MInst.CMov32 dst cond src)
+                                             (writable_reg_to_reg dst)))
 (rule (emit_cmov_reg (gpr64_ty _ty) dst cond src)
-      (ConsumesFlags.ConsumesFlags (MInst.CMov64 dst cond src)
-                                   (writable_reg_to_reg dst)))
+      (ConsumesFlags.ConsumesFlagsReturnsReg (MInst.CMov64 dst cond src)
+                                             (writable_reg_to_reg dst)))
 (rule (emit_cmov_reg $F32 dst cond src)
-      (ConsumesFlags.ConsumesFlags (MInst.FpuCMov32 dst cond src)
-                                   (writable_reg_to_reg dst)))
+      (ConsumesFlags.ConsumesFlagsReturnsReg (MInst.FpuCMov32 dst cond src)
+                                             (writable_reg_to_reg dst)))
 (rule (emit_cmov_reg $F64 dst cond src)
-      (ConsumesFlags.ConsumesFlags (MInst.FpuCMov64 dst cond src)
-                                   (writable_reg_to_reg dst)))
+      (ConsumesFlags.ConsumesFlagsReturnsReg (MInst.FpuCMov64 dst cond src)
+                                             (writable_reg_to_reg dst)))
 
 ;; Conditionally select between two source registers.
 (decl cmov_reg (Type Cond Reg Reg) ConsumesFlags)
@@ -2270,10 +2262,14 @@
 ;; Helpers for generating conditional traps ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (decl trap_if (ProducesFlags Cond TrapCode) Reg)
-(rule (trap_if (ProducesFlags.ProducesFlags inst result) cond trap_code)
+(rule (trap_if (ProducesFlags.ProducesFlagsReturnsReg inst result) cond trap_code)
       (let ((_1 Unit (emit inst))
             (_2 Unit (emit (MInst.TrapIf cond trap_code))))
         result))
+(rule (trap_if (ProducesFlags.ProducesFlagsSideEffect inst) cond trap_code)
+      (let ((_1 Unit (emit inst))
+            (_2 Unit (emit (MInst.TrapIf cond trap_code))))
+        (invalid_reg)))
 
 (decl icmps_reg_and_trap (Type Reg Reg Cond TrapCode) Reg)
 (rule (icmps_reg_and_trap ty src1 src2 cond trap_code)
@@ -2332,9 +2328,9 @@
 ;; instruction in between the producer and consumer.  (This use is only valid
 ;; if that unrelated instruction does not modify the condition code.)
 (decl emit_producer (ProducesFlags) Unit)
-(rule (emit_producer (ProducesFlags.ProducesFlags insn _)) (emit insn))
+(rule (emit_producer (ProducesFlags.ProducesFlagsSideEffect insn)) (emit insn))
 (decl emit_consumer (ConsumesFlags) Unit)
-(rule (emit_consumer (ConsumesFlags.ConsumesFlags insn _)) (emit insn))
+(rule (emit_consumer (ConsumesFlags.ConsumesFlagsReturnsReg insn _)) (emit insn))
 
 ;; Use a boolean condition to select between two registers.
 (decl select_bool_reg (Type ProducesBool Reg Reg) Reg)
