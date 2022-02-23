@@ -572,7 +572,7 @@ impl Drop for MemoryImageSlot {
         // on precisely where errors happened, that stale memory could get
         // leaked through.
         //
-        // The exception to all of this is if the `unmap_on_drop` flag
+        // The exception to all of this is if the `clear_on_drop` flag
         // (which is set by default) is false. If so, the owner of
         // this MemoryImageSlot has indicated that it will clean up in some
         // other way.
