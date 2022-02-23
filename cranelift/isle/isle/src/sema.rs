@@ -14,8 +14,10 @@
 //! the opposite).
 
 use crate::ast;
+use crate::ast::Ident;
 use crate::error::*;
 use crate::lexer::Pos;
+use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::sync::Arc;
@@ -191,6 +193,11 @@ pub struct TermEnv {
     ///
     /// This is indexed by `RuleId`.
     pub rules: Vec<Rule>,
+
+    /// Map from (inner_ty, outer_ty) pairs to term IDs, giving the
+    /// defined implicit type-converter terms we can try to use to fit
+    /// types together.
+    pub converters: BTreeMap<(TypeId, TypeId), TermId>,
 }
 
 /// A term.
@@ -775,6 +782,7 @@ impl TermEnv {
             terms: vec![],
             term_map: BTreeMap::new(),
             rules: vec![],
+            converters: BTreeMap::new(),
         };
 
         env.collect_term_sigs(tyenv, defs);
@@ -782,6 +790,8 @@ impl TermEnv {
         tyenv.return_errors()?;
         env.collect_constructors(tyenv, defs);
         env.collect_extractor_templates(tyenv, defs);
+        tyenv.return_errors()?;
+        env.collect_converters(tyenv, defs);
         tyenv.return_errors()?;
         env.collect_rules(tyenv, defs);
         env.check_for_undefined_decls(tyenv, defs);
@@ -1088,6 +1098,72 @@ impl TermEnv {
         }
     }
 
+    fn collect_converters(&mut self, tyenv: &mut TypeEnv, defs: &ast::Defs) {
+        for def in &defs.defs {
+            match def {
+                &ast::Def::Converter(ast::Converter {
+                    ref term,
+                    ref inner_ty,
+                    ref outer_ty,
+                    pos,
+                }) => {
+                    let inner_ty_sym = tyenv.intern_mut(inner_ty);
+                    let inner_ty_id = match tyenv.type_map.get(&inner_ty_sym) {
+                        Some(ty) => *ty,
+                        None => {
+                            tyenv.report_error(
+                                inner_ty.1,
+                                format!("Unknown inner type for converter: '{}'", inner_ty.0),
+                            );
+                            continue;
+                        }
+                    };
+
+                    let outer_ty_sym = tyenv.intern_mut(outer_ty);
+                    let outer_ty_id = match tyenv.type_map.get(&outer_ty_sym) {
+                        Some(ty) => *ty,
+                        None => {
+                            tyenv.report_error(
+                                outer_ty.1,
+                                format!("Unknown outer type for converter: '{}'", outer_ty.0),
+                            );
+                            continue;
+                        }
+                    };
+
+                    let term_sym = tyenv.intern_mut(term);
+                    let term_id = match self.term_map.get(&term_sym) {
+                        Some(term_id) => *term_id,
+                        None => {
+                            tyenv.report_error(
+                                term.1,
+                                format!("Unknown term for converter: '{}'", term.0),
+                            );
+                            continue;
+                        }
+                    };
+
+                    match self.converters.entry((inner_ty_id, outer_ty_id)) {
+                        Entry::Vacant(v) => {
+                            v.insert(term_id);
+                        }
+                        Entry::Occupied(_) => {
+                            tyenv.report_error(
+                                pos,
+                                format!(
+                                    "Converter already exists for this type pair: '{}', '{}'",
+                                    inner_ty.0, outer_ty.0
+                                ),
+                            );
+                            continue;
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
     fn collect_rules(&mut self, tyenv: &mut TypeEnv, defs: &ast::Defs) {
         for def in &defs.defs {
             match def {
@@ -1327,6 +1403,36 @@ impl TermEnv {
         }
     }
 
+    fn maybe_implicit_convert_pattern(
+        &self,
+        tyenv: &mut TypeEnv,
+        pattern: &ast::Pattern,
+        inner_ty: TypeId,
+        outer_ty: TypeId,
+    ) -> Option<ast::Pattern> {
+        if let Some(converter_term) = self.converters.get(&(inner_ty, outer_ty)) {
+            if self.terms[converter_term.index()].has_extractor() {
+                // This is a little awkward: we have to
+                // convert back to an Ident, to be
+                // re-resolved. The pos doesn't matter
+                // as it shouldn't result in a lookup
+                // failure.
+                let converter_term_ident = Ident(
+                    tyenv.syms[self.terms[converter_term.index()].name.index()].clone(),
+                    pattern.pos(),
+                );
+                let expanded_pattern = ast::Pattern::Term {
+                    sym: converter_term_ident,
+                    pos: pattern.pos(),
+                    args: vec![ast::TermArgPattern::Pattern(pattern.clone())],
+                };
+
+                return Some(expanded_pattern);
+            }
+        }
+        None
+    }
+
     fn translate_pattern(
         &self,
         tyenv: &mut TypeEnv,
@@ -1485,12 +1591,31 @@ impl TermEnv {
 
                 // Get the return type and arg types. Verify the
                 // expected type of this pattern, if any, against the
-                // return type of the term.
+                // return type of the term. Insert an implicit
+                // converter if needed.
                 let ret_ty = self.terms[tid.index()].ret_ty;
                 let ty = match expected_ty {
                     None => ret_ty,
                     Some(expected_ty) if expected_ty == ret_ty => ret_ty,
                     Some(expected_ty) => {
+                        // Can we do an implicit type conversion? Look
+                        // up the converter term, if any. If one has
+                        // been registered, and the term has an
+                        // extractor, then build an expanded AST node
+                        // right here and recurse on it.
+                        if let Some(expanded_pattern) =
+                            self.maybe_implicit_convert_pattern(tyenv, pat, ret_ty, expected_ty)
+                        {
+                            return self.translate_pattern(
+                                tyenv,
+                                rule_term,
+                                &expanded_pattern,
+                                Some(expected_ty),
+                                bindings,
+                                /* is_root = */ false,
+                            );
+                        }
+
                         tyenv.report_error(
                             pos,
                             format!(
@@ -1685,6 +1810,30 @@ impl TermEnv {
         }
     }
 
+    fn maybe_implicit_convert_expr(
+        &self,
+        tyenv: &mut TypeEnv,
+        expr: &ast::Expr,
+        inner_ty: TypeId,
+        outer_ty: TypeId,
+    ) -> Option<ast::Expr> {
+        // Is there a converter for this type mismatch?
+        if let Some(converter_term) = self.converters.get(&(inner_ty, outer_ty)) {
+            if self.terms[converter_term.index()].has_constructor() {
+                let converter_ident = ast::Ident(
+                    tyenv.syms[self.terms[converter_term.index()].name.index()].clone(),
+                    expr.pos(),
+                );
+                return Some(ast::Expr::Term {
+                    sym: converter_ident,
+                    pos: expr.pos(),
+                    args: vec![expr.clone()],
+                });
+            }
+        }
+        None
+    }
+
     fn translate_expr(
         &self,
         tyenv: &mut TypeEnv,
@@ -1712,11 +1861,29 @@ impl TermEnv {
 
                 // Get the return type and arg types. Verify the
                 // expected type of this pattern, if any, against the
-                // return type of the term.
+                // return type of the term, and determine whether we
+                // are doing an implicit conversion. Report an error
+                // if types don't match and no conversion is possible.
                 let ret_ty = self.terms[tid.index()].ret_ty;
-                if ret_ty != ty {
-                    tyenv.report_error(pos, format!("Mismatched types: expression expects type '{}' but term has return type '{}'", tyenv.types[ty.index()].name(tyenv), tyenv.types[ret_ty.index()].name(tyenv)));
-                }
+                let ty = if ret_ty != ty {
+                    // Is there a converter for this type mismatch?
+                    if let Some(expanded_expr) =
+                        self.maybe_implicit_convert_expr(tyenv, expr, ret_ty, ty)
+                    {
+                        return self.translate_expr(tyenv, &expanded_expr, ty, bindings);
+                    }
+
+                    tyenv.report_error(
+                        pos,
+                        format!("Mismatched types: expression expects type '{}' but term has return type '{}'",
+                                tyenv.types[ty.index()].name(tyenv),
+                                tyenv.types[ret_ty.index()].name(tyenv)));
+
+                    // Keep going, to discover more errors.
+                    ret_ty
+                } else {
+                    ty
+                };
 
                 // Check that we have the correct argument count.
                 if self.terms[tid.index()].arg_tys.len() != args.len() {
@@ -1754,8 +1921,15 @@ impl TermEnv {
                     Some(bv) => bv,
                 };
 
-                // Verify type.
+                // Verify type. Maybe do an implicit conversion.
                 if bv.ty != ty {
+                    // Is there a converter for this type mismatch?
+                    if let Some(expanded_expr) =
+                        self.maybe_implicit_convert_expr(tyenv, expr, bv.ty, ty)
+                    {
+                        return self.translate_expr(tyenv, &expanded_expr, ty, bindings);
+                    }
+
                     tyenv.report_error(
                         pos,
                         format!(

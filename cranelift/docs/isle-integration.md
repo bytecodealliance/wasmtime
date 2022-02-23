@@ -233,3 +233,59 @@ instructions with flags-consuming instructions, ensuring that no errant
 instructions are ever inserted between our flags-using instructions, clobbering
 their flags. See `with_flags`, `ProducesFlags`, and `ConsumesFlags` inside
 `cranelift/codegen/src/prelude.isle` for details.
+
+## Implicit type conversions
+
+ISLE supports implicit type conversions, and we will make use of these
+where possible to simplify the lowering rules. For example, we have
+`Value` and `ValueRegs`; the former denotes SSA values in CLIF, and
+the latter denotes the register or registers that hold that value in
+lowered code. Prior to introduction of implicit type conversions, we
+had many occurrences of expressions like `(value_regs r1 r2)` or
+`(value_reg r)`. Given that we have already defined a term
+`value_reg`, we can define a conversion such as
+
+```lisp
+    (convert Reg ValueRegs value_reg)
+```
+
+and the ISLE compiler will automatically insert it where the types
+imply that it is necessary. When properly defined, converters allow us
+to write rules like
+
+```lisp
+    (rule (lower (has_type (fits_in_64 ty)
+                           (iadd x y)))
+          (add ty x y))
+```
+
+### Implicit type conversions and side-effects
+
+While implicit conversions are very convenient, we take care to manage
+how they introduce invisible side-effects.
+
+Particularly important here is the fact that implicit conversions can
+occur more than once. For example, if we define `(convert Value Reg
+put_value_in_reg)`, and we emit an instruction `(add a a)` (say, to
+double the value of `a`) where `a` is a `Value`, then we will invoke
+`put_value_in_reg` twice.
+
+If this were an external constructor that performed some unique action
+per invocation, for example allocating a fresh register, then this
+would not be desirable. So we follow a convention when defining
+implicit type conversions: the conversion must be *idempotent*, i.e.,
+must return the same value if invoked more than
+once. `put_value_in_reg` in particular already has this property, so
+we are safe to use it as an implicit converter.
+
+Note that this condition is *not* the same as saying that the
+converter cannot have side-effects. It is perfectly fine for this to
+be the case, and can add significant convenience, even. The small loss
+in efficiency from invoking the converter twice is tolerable, and we
+could optimize it later if we needed to do so.
+
+Even given this, there may be times where it is still clearer to be
+explicit. For example, sinking a load is an explicit and important
+detail of some lowering patterns; while we could define an implicit
+conversion from `SinkableLoad` to `Reg`, it is probably better for now
+to retain the `(sink_load ...)` form for clarity.

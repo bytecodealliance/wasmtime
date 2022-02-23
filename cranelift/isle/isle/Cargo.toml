@@ -12,3 +12,6 @@ version = "0.81.0"
 log = "0.4"
 miette = "3.0.0"
 thiserror = "1.0.29"
+
+[dev-dependencies]
+tempfile = "3"

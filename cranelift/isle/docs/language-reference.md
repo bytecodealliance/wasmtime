@@ -862,6 +862,66 @@ which will, for example, expand a pattern `(A (subterm ...) _)` into
 the arguments to `A` are substituted into the extractor body and then
 this body is inlined.
 
+#### Implicit Type Conversions
+
+For convenience, ISLE allows the program to associate terms with pairs
+of types, so that type mismatches are *automatically resolved* by
+inserting that term.
+
+For example, if one is writing a rule such as
+
+```lisp
+    (decl u_to_v (U) V)
+    (rule ...)
+    
+    (decl MyTerm (T) V)
+    (rule (MyTerm t)
+          (u_to_v t))
+```
+
+the `(u_to_v t)` term would not typecheck given the ISLE language
+functionality that we have seen so far, because it expects a `U` for
+its argument but `t` has type `T`. However, if we define
+
+
+```lisp
+    (convert T U t_to_u)
+    
+    ;; For the above to be valid, `t_to_u` should be declared with the
+    ;; signature:
+    (decl t_to_u (T) U)
+    (rule ...)
+```
+
+then the DSL compiler will implicitly understand the above `MyTerm` rule as:
+
+```lisp
+    (rule (MyTerm t)
+          (u_to_v (t_to_u t)))
+```
+
+This also works in the extractor position: for example, if one writes
+
+```lisp
+    (decl defining_instruction (Inst) Value)
+    (extern extractor definining_instruction ...)
+    
+    (decl iadd (Value Value) Inst)
+    
+    (rule (lower (iadd (iadd a b) c))
+          ...))
+          
+    (convert Inst Value defining_instruction)
+```
+
+then the `(iadd (iadd a b) c)` form will be implicitly handled like
+`(iadd (defining_instruction (iadd a b)) c)`. Note that the conversion
+insertion needs to have local type context in order to find the right
+converter: so, for example, it cannot infer a target type from a
+pattern where just a variable binding occurs, even if the variable is
+used in some typed context on the right-hand side. Instead, the
+"inner" and "outer" types have to come from explicitly typed terms.
+
 #### Summary: Terms, Constructors, and Extractors
 
 We start with a `term`, which is just a schema for data:
