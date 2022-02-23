@@ -1666,12 +1666,8 @@ pub fn constructor_cmp64_imm<C: Context>(
         rn: pattern0_0,
         imm12: pattern1_0,
     };
-    let expr4_0 = C::zero_reg(ctx);
-    let expr5_0 = ProducesFlags::ProducesFlagsReturnsResultWithConsumer {
-        inst: expr3_0,
-        result: expr4_0,
-    };
-    return Some(expr5_0);
+    let expr4_0 = ProducesFlags::ProducesFlagsSideEffect { inst: expr3_0 };
+    return Some(expr4_0);
 }
 
 // Generated as internal constructor for term sbc_paired.

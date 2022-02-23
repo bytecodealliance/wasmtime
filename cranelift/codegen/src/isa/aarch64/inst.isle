@@ -1486,9 +1486,9 @@
 
 (decl cmp64_imm (Reg Imm12) ProducesFlags)
 (rule (cmp64_imm src1 src2)
-      (ProducesFlags.ProducesFlagsReturnsResultWithConsumer
+      (ProducesFlags.ProducesFlagsSideEffect
        (MInst.AluRRImm12 (ALUOp.SubS) (OperandSize.Size64) (writable_zero_reg)
-        src1 src2) (zero_reg)))
+        src1 src2)))
 
 ;; Helper for emitting `sbc` instructions.
 (decl sbc_paired (Type Reg Reg) ConsumesFlags)
