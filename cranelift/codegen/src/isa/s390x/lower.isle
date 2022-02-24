@@ -2,12 +2,12 @@
 
 ;; The main lowering constructor term: takes a clif `Inst` and returns the
 ;; register(s) within which the lowered instruction's result values live.
-(decl lower (Inst) ValueRegs)
+(decl lower (Inst) InstOutput)
 
 ;; A variant of the main lowering constructor term, used for branches.
 ;; The only difference is that it gets an extra argument holding a vector
 ;; of branch targets to be used.
-(decl lower_branch (Inst VecMachLabel) ValueRegs)
+(decl lower_branch (Inst VecMachLabel) InstOutput)
 
 
 ;;;; Rules for `iconst` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -148,39 +148,39 @@
 ;; containing the carry result, but we do not support the `iflags` mechanism.
 ;; However, the only actual use case is where `iadd_ifcout` feeds into `trapif`,
 ;; which is implemented by explicitly matching on the flags producer.  So we can
-;; get away with just allocating a second temp so that the reg-renaming code
+;; get away with just using an invalid second output, and the reg-renaming code
 ;; does the right thing, for now.
-(decl value_regs_ifcout (Reg) ValueRegs)
-(rule (value_regs_ifcout reg)
-      (value_regs reg (writable_reg_to_reg (temp_writable_reg $I64))))
+(decl output_ifcout (Reg) InstOutput)
+(rule (output_ifcout reg)
+      (output_pair reg (value_regs_invalid)))
 
 ;; Add two registers.
 (rule (lower (has_type (fits_in_64 ty) (iadd_ifcout x y)))
-      (value_regs_ifcout (add_logical_reg ty x y)))
+      (output_ifcout (add_logical_reg ty x y)))
 
 ;; Add a register and a zero-extended register.
 (rule (lower (has_type (fits_in_64 ty) (iadd_ifcout x (zext32_value y))))
-      (value_regs_ifcout (add_logical_reg_zext32 ty x y)))
+      (output_ifcout (add_logical_reg_zext32 ty x y)))
 (rule (lower (has_type (fits_in_64 ty) (iadd_ifcout (zext32_value x) y)))
-      (value_regs_ifcout (add_logical_reg_zext32 ty y x)))
+      (output_ifcout (add_logical_reg_zext32 ty y x)))
 
 ;; Add a register and an immediate.
 (rule (lower (has_type (fits_in_64 ty) (iadd_ifcout x (u32_from_value y))))
-      (value_regs_ifcout (add_logical_zimm32 ty x y)))
+      (output_ifcout (add_logical_zimm32 ty x y)))
 (rule (lower (has_type (fits_in_64 ty) (iadd_ifcout (u32_from_value x) y)))
-      (value_regs_ifcout (add_logical_zimm32 ty y x)))
+      (output_ifcout (add_logical_zimm32 ty y x)))
 
 ;; Add a register and memory (32/64-bit types).
 (rule (lower (has_type (fits_in_64 ty) (iadd_ifcout x (sinkable_load_32_64 y))))
-      (value_regs_ifcout (add_logical_mem ty x (sink_load y))))
+      (output_ifcout (add_logical_mem ty x (sink_load y))))
 (rule (lower (has_type (fits_in_64 ty) (iadd_ifcout (sinkable_load_32_64 x) y)))
-      (value_regs_ifcout (add_logical_mem ty y (sink_load x))))
+      (output_ifcout (add_logical_mem ty y (sink_load x))))
 
 ;; Add a register and zero-extended memory.
 (rule (lower (has_type (fits_in_64 ty) (iadd_ifcout x (sinkable_uload32 y))))
-      (value_regs_ifcout (add_logical_mem_zext32 ty x (sink_uload32 y))))
+      (output_ifcout (add_logical_mem_zext32 ty x (sink_uload32 y))))
 (rule (lower (has_type (fits_in_64 ty) (iadd_ifcout (sinkable_uload32 x) y)))
-      (value_regs_ifcout (add_logical_mem_zext32 ty y (sink_uload32 x))))
+      (output_ifcout (add_logical_mem_zext32 ty y (sink_uload32 x))))
 
 
 ;;;; Rules for `ineg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1352,66 +1352,66 @@
 
 ;; Store 8-bit integer type, main lowering entry point.
 (rule (lower (store flags val @ (value_type $I8) addr offset))
-      (value_regs_none (istore8_impl flags val addr offset)))
+      (side_effect (istore8_impl flags val addr offset)))
 
 ;; Store 16-bit integer type, main lowering entry point.
 (rule (lower (store flags val @ (value_type $I16) addr offset))
-      (value_regs_none (istore16_impl flags val addr offset)))
+      (side_effect (istore16_impl flags val addr offset)))
 
 ;; Store 32-bit integer type, main lowering entry point.
 (rule (lower (store flags val @ (value_type $I32) addr offset))
-      (value_regs_none (istore32_impl flags val addr offset)))
+      (side_effect (istore32_impl flags val addr offset)))
 
 ;; Store 64-bit integer type, main lowering entry point.
 (rule (lower (store flags val @ (value_type $I64) addr offset))
-      (value_regs_none (istore64_impl flags val addr offset)))
+      (side_effect (istore64_impl flags val addr offset)))
 
 ;; Store 64-bit reference type, main lowering entry point.
 (rule (lower (store flags val @ (value_type $R64) addr offset))
-      (value_regs_none (istore64_impl flags val addr offset)))
+      (side_effect (istore64_impl flags val addr offset)))
 
 ;; Store 32-bit big-endian floating-point type.
 (rule (lower (store flags @ (bigendian)
                     val @ (value_type $F32) addr offset))
-      (value_regs_none (fpu_store32 (put_in_reg val)
-                                    (lower_address flags addr offset))))
+      (side_effect (fpu_store32 (put_in_reg val)
+                                (lower_address flags addr offset))))
 
 ;; Store 32-bit little-endian floating-point type (z15 instruction).
 (rule (lower (store flags @ (littleendian)
                     val @ (value_type (and $F32 (vxrs_ext2_enabled))) addr offset))
-      (value_regs_none (fpu_storerev32 (put_in_reg val)
-                                       (lower_address flags addr offset))))
+      (side_effect (fpu_storerev32 (put_in_reg val)
+                                   (lower_address flags addr offset))))
 
 ;; Store 32-bit little-endian floating-point type (via GPR on z14).
 (rule (lower (store flags @ (littleendian)
                     val @ (value_type (and $F32 (vxrs_ext2_disabled))) addr offset))
       (let ((gpr Reg (lshr_imm $I64 (mov_from_fpr (put_in_reg val)) 32)))
-        (value_regs_none (storerev32 gpr (lower_address flags addr offset)))))
+        (side_effect (storerev32 gpr (lower_address flags addr offset)))))
 
 ;; Store 64-bit big-endian floating-point type.
 (rule (lower (store flags @ (bigendian)
                     val @ (value_type $F64) addr offset))
-      (value_regs_none (fpu_store64 (put_in_reg val)
-                                    (lower_address flags addr offset))))
+      (side_effect (fpu_store64 (put_in_reg val)
+                                (lower_address flags addr offset))))
 
 ;; Store 64-bit little-endian floating-point type (z15 instruction).
 (rule (lower (store flags @ (littleendian)
                     val @ (value_type (and $F64 (vxrs_ext2_enabled))) addr offset))
-      (value_regs_none (fpu_storerev64 (put_in_reg val)
-                                       (lower_address flags addr offset))))
+      (side_effect (fpu_storerev64 (put_in_reg val)
+                                   (lower_address flags addr offset))))
 
 ;; Store 64-bit little-endian floating-point type (via GPR on z14).
 (rule (lower (store flags @ (littleendian)
                     val @ (value_type (and $F64 (vxrs_ext2_disabled))) addr offset))
       (let ((gpr Reg (mov_from_fpr (put_in_reg val))))
-        (value_regs_none (storerev64 gpr (lower_address flags addr offset)))))
+        (side_effect (storerev64 gpr (lower_address flags addr offset)))))
 
 
 ;;;; Rules for 8-bit integer stores ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Main `istore8` lowering entry point, dispatching to the helper.
 (rule (lower (istore8 flags val addr offset))
-      (value_regs_none (istore8_impl flags val addr offset)))
+      (side_effect (istore8_impl flags val addr offset)))
 
 ;; Helper to store 8-bit integer types.
 (decl istore8_impl (MemFlags Value Value Offset32) SideEffectNoResult)
@@ -1429,7 +1429,7 @@
 
 ;; Main `istore16` lowering entry point, dispatching to the helper.
 (rule (lower (istore16 flags val addr offset))
-      (value_regs_none (istore16_impl flags val addr offset)))
+      (side_effect (istore16_impl flags val addr offset)))
 
 ;; Helper to store 16-bit integer types.
 (decl istore16_impl (MemFlags Value Value Offset32) SideEffectNoResult)
@@ -1455,7 +1455,7 @@
 
 ;; Main `istore32` lowering entry point, dispatching to the helper.
 (rule (lower (istore32 flags val addr offset))
-      (value_regs_none (istore32_impl flags val addr offset)))
+      (side_effect (istore32_impl flags val addr offset)))
 
 ;; Helper to store 32-bit integer types.
 (decl istore32_impl (MemFlags Value Value Offset32) SideEffectNoResult)
@@ -1854,10 +1854,10 @@
 ;;;; Rules for `atomic_store` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Atomic stores can be implemented via regular stores followed by a fence.
-(decl atomic_store_impl (SideEffectNoResult) ValueRegs)
+(decl atomic_store_impl (SideEffectNoResult) InstOutput)
 (rule (atomic_store_impl store)
-      (let ((_ ValueRegs (value_regs_none store)))
-         (value_regs_none (fence_impl))))
+      (let ((_ InstOutput (side_effect store)))
+         (side_effect (fence_impl))))
 
 ;; 8-bit atomic store.
 (rule (lower (atomic_store flags val @ (value_type $I8) addr))
@@ -1880,7 +1880,7 @@
 
 ;; Fence to ensure sequential consistency.
 (rule (lower (fence))
-      (value_regs_none (fence_impl)))
+      (side_effect (fence_impl)))
 
 
 ;;;; Rules for `icmp` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -2066,7 +2066,7 @@
 ;; Unconditional branch.  The target is found as first (and only) element in
 ;; the list of the current block's branch targets passed as `targets`.
 (rule (lower_branch (jump _ _) targets)
-      (value_regs_none (jump_impl (vec_element targets 0))))
+      (side_effect (jump_impl (vec_element targets 0))))
 
 
 ;;;; Rules for `br_table` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -2082,8 +2082,8 @@
             (cond ProducesBool
               (bool (icmpu_uimm32 $I64 idx (vec_length_minus1 targets))
                     (intcc_as_cond (IntCC.UnsignedGreaterThanOrEqual))))
-            (_ ValueRegs (value_regs_none (oneway_cond_br_bool cond
-                                            (vec_element targets 0)))))
+            (_ InstOutput (side_effect (oneway_cond_br_bool cond
+                                         (vec_element targets 0)))))
         ;; Scale the index by the element size, and then emit the
         ;; compound instruction that does:
         ;;
@@ -2098,7 +2098,7 @@
         ;; PC-rel offset to the jumptable would be incorrect.
         ;; (The alternative is to introduce a relocation pass
         ;; for inlined jumptables, which is much worse, IMHO.)
-        (value_regs_none (jt_sequence (lshl_imm $I64 idx 2) targets))))
+        (side_effect (jt_sequence (lshl_imm $I64 idx 2) targets))))
 
 
 ;;;; Rules for `brz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -2107,9 +2107,9 @@
 ;; - element 0: target if the condition is true (i.e. value is zero)
 ;; - element 1: target if the condition is false (i.e. value is nonzero)
 (rule (lower_branch (brz val_cond _ _) targets)
-      (value_regs_none (cond_br_bool (invert_bool (value_nonzero val_cond))
-                                     (vec_element targets 0)
-                                     (vec_element targets 1))))
+      (side_effect (cond_br_bool (invert_bool (value_nonzero val_cond))
+                                 (vec_element targets 0)
+                                 (vec_element targets 1))))
 
 
 ;;;; Rules for `brnz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -2118,9 +2118,9 @@
 ;; - element 0: target if the condition is true (i.e. value is nonzero)
 ;; - element 1: target if the condition is false (i.e. value is zero)
 (rule (lower_branch (brnz val_cond _ _) targets)
-      (value_regs_none (cond_br_bool (value_nonzero val_cond)
-                                     (vec_element targets 0)
-                                     (vec_element targets 1))))
+      (side_effect (cond_br_bool (value_nonzero val_cond)
+                                 (vec_element targets 0)
+                                 (vec_element targets 1))))
 
 
 ;;;; Rules for `brif` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -2129,9 +2129,9 @@
 ;; generated by common code here.  Others will fail to lower.
 
 (rule (lower_branch (brif int_cc (ifcmp x y) _ _) targets)
-      (value_regs_none (cond_br_bool (icmp_val $false int_cc x y)
-                                     (vec_element targets 0)
-                                     (vec_element targets 1))))
+      (side_effect (cond_br_bool (icmp_val $false int_cc x y)
+                                 (vec_element targets 0)
+                                 (vec_element targets 1))))
 
 
 ;;;; Rules for `trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -2167,7 +2167,7 @@
 ;;;; Rules for `debugtrap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (debugtrap))
-      (value_regs_none (debugtrap_impl)))
+      (side_effect (debugtrap_impl)))
 
 
 ;;;; Rules for `trapif` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -2205,6 +2205,6 @@
 
 (rule (lower (trapif (IntCC.UnsignedGreaterThan)
                      (iadd_ifcout x y) trap_code))
-      (value_regs_none (trap_if_impl (mask_as_cond 3) trap_code)))
+      (side_effect (trap_if_impl (mask_as_cond 3) trap_code)))
 
 

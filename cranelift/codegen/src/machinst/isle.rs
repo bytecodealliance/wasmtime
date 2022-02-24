@@ -1,9 +1,10 @@
-use crate::ir::{Inst, Value};
+use crate::ir::{types, Inst, Value};
 use crate::machinst::{get_output_reg, InsnOutput, LowerCtx, MachInst, RegRenamer};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use regalloc::{Reg, Writable};
 use smallvec::SmallVec;
+use std::cell::Cell;
 
 pub use super::MachLabel;
 pub use crate::ir::{ExternalName, FuncRef, GlobalValue, SigRef};
@@ -18,6 +19,8 @@ pub type WritableReg = Writable<Reg>;
 pub type VecReg = Vec<Reg>;
 pub type VecWritableReg = Vec<WritableReg>;
 pub type ValueRegs = crate::machinst::ValueRegs<Reg>;
+pub type InstOutput = SmallVec<[ValueRegs; 2]>;
+pub type InstOutputBuilder = Cell<InstOutput>;
 pub type VecMachLabel = Vec<MachLabel>;
 pub type BoxExternalName = Box<ExternalName>;
 
@@ -62,6 +65,38 @@ macro_rules! isle_prelude_methods {
         #[inline]
         fn value_regs_invalid(&mut self) -> ValueRegs {
             ValueRegs::invalid()
+        }
+
+        #[inline]
+        fn output_none(&mut self) -> InstOutput {
+            smallvec::smallvec![]
+        }
+
+        #[inline]
+        fn output(&mut self, regs: ValueRegs) -> InstOutput {
+            smallvec::smallvec![regs]
+        }
+
+        #[inline]
+        fn output_pair(&mut self, r1: ValueRegs, r2: ValueRegs) -> InstOutput {
+            smallvec::smallvec![r1, r2]
+        }
+
+        #[inline]
+        fn output_builder_new(&mut self) -> InstOutputBuilder {
+            std::cell::Cell::new(InstOutput::new())
+        }
+
+        #[inline]
+        fn output_builder_push(&mut self, builder: &InstOutputBuilder, regs: ValueRegs) -> Unit {
+            let mut vec = builder.take();
+            vec.push(regs);
+            builder.set(vec);
+        }
+
+        #[inline]
+        fn output_builder_finish(&mut self, builder: &InstOutputBuilder) -> InstOutput {
+            builder.take()
         }
 
         #[inline]
@@ -363,7 +398,7 @@ pub(crate) fn lower_common<C, F, I, IF, const N: usize>(
 where
     C: LowerCtx,
     [(C::I, bool); N]: smallvec::Array<Item = (C::I, bool)>,
-    IF: Fn(&mut IsleContext<'_, C, F, I, N>, Inst) -> Option<ValueRegs>,
+    IF: Fn(&mut IsleContext<'_, C, F, I, N>, Inst) -> Option<InstOutput>,
 {
     // TODO: reuse the ISLE context across lowerings so we can reuse its
     // internal heap allocations.
@@ -375,22 +410,17 @@ where
     };
 
     let temp_regs = isle_lower(&mut isle_ctx, inst).ok_or(())?;
-    let mut temp_regs = temp_regs.regs().iter();
 
     #[cfg(debug_assertions)]
     {
-        let all_dsts_len = outputs
-            .iter()
-            .map(|out| get_output_reg(isle_ctx.lower_ctx, *out).len())
-            .sum();
         debug_assert_eq!(
             temp_regs.len(),
-            all_dsts_len,
-            "the number of temporary registers and destination registers do \
+            outputs.len(),
+            "the number of temporary values and destination values do \
          not match ({} != {}); ensure the correct registers are being \
          returned.",
             temp_regs.len(),
-            all_dsts_len,
+            outputs.len(),
         );
     }
 
@@ -399,12 +429,22 @@ where
     // registers they were assigned when their value was used as an operand in
     // earlier lowerings.
     let mut renamer = RegRenamer::default();
-    for output in outputs {
-        let dsts = get_output_reg(isle_ctx.lower_ctx, *output);
-        let ty = isle_ctx.lower_ctx.output_ty(output.insn, output.output);
-        let (_, tys) = <C::I>::rc_for_type(ty).unwrap();
-        for ((temp, dst), ty) in temp_regs.by_ref().zip(dsts.regs()).zip(tys) {
-            renamer.add_rename(*temp, dst.to_reg(), *ty);
+    for i in 0..outputs.len() {
+        let regs = temp_regs[i];
+        let dsts = get_output_reg(isle_ctx.lower_ctx, outputs[i]);
+        let ty = isle_ctx
+            .lower_ctx
+            .output_ty(outputs[i].insn, outputs[i].output);
+        if ty == types::IFLAGS || ty == types::FFLAGS {
+            // Flags values do not occupy any registers.
+            assert!(regs.len() == 0);
+        } else {
+            let (_, tys) = <C::I>::rc_for_type(ty).unwrap();
+            assert!(regs.len() == tys.len());
+            assert!(regs.len() == dsts.len());
+            for ((dst, temp), ty) in dsts.regs().iter().zip(regs.regs().iter()).zip(tys) {
+                renamer.add_rename(*temp, dst.to_reg(), *ty);
+            }
         }
     }
     for (inst, _) in isle_ctx.emitted_insts.iter_mut() {
