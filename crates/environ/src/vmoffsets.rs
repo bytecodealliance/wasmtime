@@ -154,6 +154,67 @@ impl<P: PtrSize> VMOffsets<P> {
     pub fn pointer_size(&self) -> u8 {
         self.ptr.size()
     }
+
+    /// Returns an iterator which provides a human readable description and a
+    /// byte size. The iterator returned will iterate over the bytes allocated
+    /// to the entire `VMOffsets` structure to explain where each byte size is
+    /// coming from.
+    pub fn region_sizes(&self) -> impl Iterator<Item = (&str, u32)> {
+        macro_rules! calculate_sizes {
+            ($($name:ident: $desc:tt,)*) => {{
+                let VMOffsets {
+                    // These fields are metadata not talking about specific
+                    // offsets of specific fields.
+                    ptr: _,
+                    num_imported_functions: _,
+                    num_imported_tables: _,
+                    num_imported_memories: _,
+                    num_imported_globals: _,
+                    num_defined_tables: _,
+                    num_defined_globals: _,
+                    num_defined_memories: _,
+                    num_defined_functions: _,
+
+                    // used as the initial size below
+                    size,
+
+                    // exhaustively match teh rest of the fields with input from
+                    // the macro
+                    $($name,)*
+                } = *self;
+
+                // calculate the size of each field by relying on the inputs to
+                // the macro being in reverse order and determining the size of
+                // the field as the offset from the field to the last field.
+                let mut last = size;
+                $(
+                    assert!($name <= last);
+                    let tmp = $name;
+                    let $name = last - $name;
+                    last = tmp;
+                )*
+                assert_eq!(last, 0);
+                IntoIterator::into_iter([$(($desc, $name),)*])
+            }};
+        }
+
+        calculate_sizes! {
+            defined_anyfuncs: "module functions",
+            defined_globals: "defined globals",
+            defined_memories: "defined memories",
+            defined_tables: "defined tables",
+            imported_globals: "imported globals",
+            imported_memories: "imported memories",
+            imported_tables: "imported tables",
+            imported_functions: "imported functions",
+            signature_ids: "module types",
+            builtin_functions: "jit builtin functions state",
+            store: "jit store state",
+            externref_activations_table: "jit host externref state",
+            epoch_ptr: "jit current epoch state",
+            interrupts: "jit interrupt state",
+        }
+    }
 }
 
 impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {

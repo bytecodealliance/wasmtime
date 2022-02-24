@@ -269,17 +269,9 @@ impl InstancePool {
         // If this fails then it's a configuration error at the `Engine` level
         // from when this pooling allocator was created and that needs updating
         // if this is to succeed.
-        let offsets = VMOffsets::new(HostPtr, module);
-        let layout = Instance::alloc_layout(&offsets);
-        if self.instance_size < layout.size() {
-            return Err(InstantiationError::Resource(anyhow!(
-                "instance requires {} bytes of storage to allocate but the \
-                 pooling allocator was configured with a maximum size of {} \
-                 bytes",
-                layout.size(),
-                self.instance_size,
-            )));
-        }
+        let offsets = self
+            .validate_instance_size(module)
+            .map_err(InstantiationError::Resource)?;
 
         let mut memories =
             PrimaryMap::with_capacity(module.memory_plans.len() - module.num_imported_memories);
@@ -392,15 +384,8 @@ impl InstancePool {
     ) -> Result<(), InstantiationError> {
         let module = runtime_info.module();
 
-        let nmemories = module.memory_plans.len() - module.num_imported_memories;
-        if nmemories > self.memories.max_memories {
-            return Err(InstantiationError::Resource(anyhow!(
-                "instantiation requires {} memories to be created which \
-                 exceeds the configured maximum of {}",
-                nmemories,
-                self.memories.max_memories
-            )));
-        }
+        self.validate_memory_plans(module)
+            .map_err(InstantiationError::Resource)?;
 
         for (memory_index, plan) in module
             .memory_plans
@@ -518,15 +503,8 @@ impl InstancePool {
     ) -> Result<(), InstantiationError> {
         let module = runtime_info.module();
 
-        let ntables = module.table_plans.len() - module.num_imported_tables;
-        if ntables > self.tables.max_tables {
-            return Err(InstantiationError::Resource(anyhow!(
-                "instantiation requires {} tables to be created which \
-                 exceeds the configured maximum of {}",
-                ntables,
-                self.tables.max_tables
-            )));
-        }
+        self.validate_table_plans(module)
+            .map_err(InstantiationError::Resource)?;
 
         let mut bases = self.tables.get(instance_index);
         for (_, plan) in module.table_plans.iter().skip(module.num_imported_tables) {
@@ -571,6 +549,115 @@ impl InstancePool {
             drop(table);
             decommit_table_pages(base, size).expect("failed to decommit table pages");
         }
+    }
+
+    fn validate_table_plans(&self, module: &Module) -> Result<()> {
+        let tables = module.table_plans.len() - module.num_imported_tables;
+        if tables > self.tables.max_tables {
+            bail!(
+                "defined tables count of {} exceeds the limit of {}",
+                tables,
+                self.tables.max_tables,
+            );
+        }
+
+        for (i, plan) in module.table_plans.iter().skip(module.num_imported_tables) {
+            if plan.table.minimum > self.tables.max_elements {
+                bail!(
+                    "table index {} has a minimum element size of {} which exceeds the limit of {}",
+                    i.as_u32(),
+                    plan.table.minimum,
+                    self.tables.max_elements,
+                );
+            }
+        }
+        Ok(())
+    }
+
+    fn validate_memory_plans(&self, module: &Module) -> Result<()> {
+        let memories = module.memory_plans.len() - module.num_imported_memories;
+        if memories > self.memories.max_memories {
+            bail!(
+                "defined memories count of {} exceeds the limit of {}",
+                memories,
+                self.memories.max_memories,
+            );
+        }
+
+        for (i, plan) in module
+            .memory_plans
+            .iter()
+            .skip(module.num_imported_memories)
+        {
+            let max = self.memories.max_memory_size / (WASM_PAGE_SIZE as usize);
+            if plan.memory.minimum > (max as u64) {
+                bail!(
+                    "memory index {} has a minimum page size of {} which exceeds the limit of {}",
+                    i.as_u32(),
+                    plan.memory.minimum,
+                    max,
+                );
+            }
+        }
+        Ok(())
+    }
+
+    fn validate_instance_size(&self, module: &Module) -> Result<VMOffsets<HostPtr>> {
+        let offsets = VMOffsets::new(HostPtr, module);
+        let layout = Instance::alloc_layout(&offsets);
+        if layout.size() <= self.instance_size {
+            return Ok(offsets);
+        }
+
+        // If this `module` exceeds the allocation size allotted to it then an
+        // error will be reported here. The error of "required N bytes but
+        // cannot allocate that" is pretty opaque, however, because it's not
+        // clear what the breakdown of the N bytes are and what to optimize
+        // next. To help provide a better error message here some fancy-ish
+        // logic is done here to report the breakdown of the byte request into
+        // the largest portions and where it's coming from.
+        let mut message = format!(
+            "instance allocation for this module \
+             requires {} bytes which exceeds the configured maximum \
+             of {} bytes; breakdown of allocation requirement:\n\n",
+            layout.size(),
+            self.instance_size,
+        );
+
+        let mut remaining = layout.size();
+        let mut push = |name: &str, bytes: usize| {
+            assert!(remaining >= bytes);
+            remaining -= bytes;
+
+            // If the `name` region is more than 5% of the allocation request
+            // then report it here, otherwise ignore it. We have less than 20
+            // fields so we're guaranteed that something should be reported, and
+            // otherwise it's not particularly interesting to learn about 5
+            // different fields that are all 8 or 0 bytes. Only try to report
+            // the "major" sources of bytes here.
+            if bytes > layout.size() / 20 {
+                message.push_str(&format!(
+                    " * {:.02}% - {} bytes - {}\n",
+                    ((bytes as f32) / (layout.size() as f32)) * 100.0,
+                    bytes,
+                    name,
+                ));
+            }
+        };
+
+        // The `Instance` itself requires some size allocated to it.
+        push("instance state management", mem::size_of::<Instance>());
+
+        // Afterwards the `VMContext`'s regions are why we're requesting bytes,
+        // so ask it for descriptions on each region's byte size.
+        for (desc, size) in offsets.region_sizes() {
+            push(desc, size as usize);
+        }
+
+        // double-check we accounted for all the bytes
+        assert_eq!(remaining, 0);
+
+        bail!("{}", message)
     }
 }
 
@@ -1010,50 +1097,8 @@ impl Drop for PoolingInstanceAllocator {
 
 unsafe impl InstanceAllocator for PoolingInstanceAllocator {
     fn validate(&self, module: &Module) -> Result<()> {
-        let tables = module.table_plans.len() - module.num_imported_tables;
-        if tables > self.instances.tables.max_tables {
-            bail!(
-                "defined tables count of {} exceeds the limit of {}",
-                tables,
-                self.instances.tables.max_tables,
-            );
-        }
-
-        for (i, plan) in module.table_plans.iter().skip(module.num_imported_tables) {
-            if plan.table.minimum > self.instances.tables.max_elements {
-                bail!(
-                    "table index {} has a minimum element size of {} which exceeds the limit of {}",
-                    i.as_u32(),
-                    plan.table.minimum,
-                    self.instances.tables.max_elements,
-                );
-            }
-        }
-
-        let memories = module.memory_plans.len() - module.num_imported_memories;
-        if memories > self.instances.memories.max_memories {
-            bail!(
-                "defined memories count of {} exceeds the limit of {}",
-                memories,
-                self.instances.memories.max_memories,
-            );
-        }
-
-        for (i, plan) in module
-            .memory_plans
-            .iter()
-            .skip(module.num_imported_memories)
-        {
-            let max = self.instances.memories.max_memory_size / (WASM_PAGE_SIZE as usize);
-            if plan.memory.minimum > (max as u64) {
-                bail!(
-                    "memory index {} has a minimum page size of {} which exceeds the limit of {}",
-                    i.as_u32(),
-                    plan.memory.minimum,
-                    max,
-                );
-            }
-        }
+        self.instances.validate_memory_plans(module)?;
+        self.instances.validate_table_plans(module)?;
 
         // Note that this check is not 100% accurate for cross-compiled systems
         // where the pointer size may change since this check is often performed
@@ -1061,16 +1106,7 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
         // always on a 64-bit platform though this is generally ok, and
         // otherwise this check also happens during instantiation to
         // double-check at that point.
-        let offsets = VMOffsets::new(HostPtr, module);
-        let layout = Instance::alloc_layout(&offsets);
-        if self.instances.instance_size < layout.size() {
-            bail!(
-                "instance allocation for this module requires {} bytes which \
-                 exceeds the configured maximum of {} bytes",
-                layout.size(),
-                self.instances.instance_size,
-            );
-        }
+        self.instances.validate_instance_size(module)?;
 
         Ok(())
     }
