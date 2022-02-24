@@ -48,32 +48,22 @@ fn memory_limit() -> Result<()> {
     let engine = Engine::new(&config)?;
 
     // Module should fail to instantiate because it has too many memories
-    {
-        let mut store = Store::new(&engine, ());
-        let module = Module::new(&engine, r#"(module (memory 1) (memory 1))"#)?;
-        match Instance::new(&mut store, &module, &[]) {
-            Ok(_) => panic!("module instantiation should fail"),
-            Err(e) => assert_eq!(
-                e.to_string(),
-                "Insufficient resources: instantiation requires 2 memories to be \
-                 created which exceeds the configured maximum of 1",
-            ),
-        }
+    match Module::new(&engine, r#"(module (memory 1) (memory 1))"#) {
+        Ok(_) => panic!("module instantiation should fail"),
+        Err(e) => assert_eq!(
+            e.to_string(),
+            "defined memories count of 2 exceeds the limit of 1",
+        ),
     }
 
     // Module should fail to instantiate because the minimum is greater than
     // the configured limit
-    {
-        let mut store = Store::new(&engine, ());
-        let module = Module::new(&engine, r#"(module (memory 4))"#)?;
-        match Instance::new(&mut store, &module, &[]) {
-            Ok(_) => panic!("module instantiation should fail"),
-            Err(e) => assert_eq!(
-                e.to_string(),
-                "Insufficient resources: initial memory size of 262144 exceeds the \
-                 pooling allocator's configured maximum memory size of 196608 bytes",
-            ),
-        }
+    match Module::new(&engine, r#"(module (memory 4))"#) {
+        Ok(_) => panic!("module instantiation should fail"),
+        Err(e) => assert_eq!(
+            e.to_string(),
+            "memory index 0 has a minimum page size of 4 which exceeds the limit of 3",
+        ),
     }
 
     let module = Module::new(
@@ -268,32 +258,22 @@ fn table_limit() -> Result<()> {
     let engine = Engine::new(&config)?;
 
     // Module should fail to instantiate because it has too many tables
-    {
-        let mut store = Store::new(&engine, ());
-        let module = Module::new(&engine, r#"(module (table 1 funcref) (table 1 funcref))"#)?;
-        match Instance::new(&mut store, &module, &[]) {
-            Ok(_) => panic!("module instantiation should fail"),
-            Err(e) => assert_eq!(
-                e.to_string(),
-                "Insufficient resources: instantiation requires 2 tables to be \
-                 created which exceeds the configured maximum of 1",
-            ),
-        }
+    match Module::new(&engine, r#"(module (table 1 funcref) (table 1 funcref))"#) {
+        Ok(_) => panic!("module compilation should fail"),
+        Err(e) => assert_eq!(
+            e.to_string(),
+            "defined tables count of 2 exceeds the limit of 1",
+        ),
     }
 
     // Module should fail to instantiate because the minimum is greater than
     // the configured limit
-    {
-        let mut store = Store::new(&engine, ());
-        let module = Module::new(&engine, r#"(module (table 31 funcref))"#)?;
-        match Instance::new(&mut store, &module, &[]) {
-            Ok(_) => panic!("module instantiation should fail"),
-            Err(e) => assert_eq!(
-                e.to_string(),
-                "Insufficient resources: initial table size of 31 exceeds the \
-                 pooling allocator's configured maximum table size of 10 elements",
-            ),
-        }
+    match Module::new(&engine, r#"(module (table 31 funcref))"#) {
+        Ok(_) => panic!("module compilation should fail"),
+        Err(e) => assert_eq!(
+            e.to_string(),
+            "table index 0 has a minimum element size of 31 which exceeds the limit of 10",
+        ),
     }
 
     let module = Module::new(
@@ -634,6 +614,30 @@ fn drop_externref_global_during_module_init() -> Result<()> {
     let mut store = Store::new(&engine, Limiter);
     store.limiter(|s| s);
     assert!(Instance::new(&mut store, &module, &[]).is_err());
+
+    Ok(())
+}
+
+#[test]
+fn instance_too_large() -> Result<()> {
+    let mut config = Config::new();
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling {
+        strategy: PoolingAllocationStrategy::NextAvailable,
+        instance_limits: InstanceLimits {
+            size: 16,
+            ..Default::default()
+        },
+    });
+
+    let engine = Engine::new(&config)?;
+    match Module::new(&engine, "(module)") {
+        Ok(_) => panic!("should have failed to compile"),
+        Err(e) => assert_eq!(
+            e.to_string(),
+            "instance allocation for this module requires 304 bytes \
+             which exceeds the configured maximum of 16 bytes"
+        ),
+    }
 
     Ok(())
 }

@@ -1009,6 +1009,72 @@ impl Drop for PoolingInstanceAllocator {
 }
 
 unsafe impl InstanceAllocator for PoolingInstanceAllocator {
+    fn validate(&self, module: &Module) -> Result<()> {
+        let tables = module.table_plans.len() - module.num_imported_tables;
+        if tables > self.instances.tables.max_tables {
+            bail!(
+                "defined tables count of {} exceeds the limit of {}",
+                tables,
+                self.instances.tables.max_tables,
+            );
+        }
+
+        for (i, plan) in module.table_plans.iter().skip(module.num_imported_tables) {
+            if plan.table.minimum > self.instances.tables.max_elements {
+                bail!(
+                    "table index {} has a minimum element size of {} which exceeds the limit of {}",
+                    i.as_u32(),
+                    plan.table.minimum,
+                    self.instances.tables.max_elements,
+                );
+            }
+        }
+
+        let memories = module.memory_plans.len() - module.num_imported_memories;
+        if memories > self.instances.memories.max_memories {
+            bail!(
+                "defined memories count of {} exceeds the limit of {}",
+                memories,
+                self.instances.memories.max_memories,
+            );
+        }
+
+        for (i, plan) in module
+            .memory_plans
+            .iter()
+            .skip(module.num_imported_memories)
+        {
+            let max = self.instances.memories.max_memory_size / (WASM_PAGE_SIZE as usize);
+            if plan.memory.minimum > (max as u64) {
+                bail!(
+                    "memory index {} has a minimum page size of {} which exceeds the limit of {}",
+                    i.as_u32(),
+                    plan.memory.minimum,
+                    max,
+                );
+            }
+        }
+
+        // Note that this check is not 100% accurate for cross-compiled systems
+        // where the pointer size may change since this check is often performed
+        // at compile time instead of runtime. Given that Wasmtime is almost
+        // always on a 64-bit platform though this is generally ok, and
+        // otherwise this check also happens during instantiation to
+        // double-check at that point.
+        let offsets = VMOffsets::new(HostPtr, module);
+        let layout = Instance::alloc_layout(&offsets);
+        if self.instances.instance_size < layout.size() {
+            bail!(
+                "instance allocation for this module requires {} bytes which \
+                 exceeds the configured maximum of {} bytes",
+                layout.size(),
+                self.instances.instance_size,
+            );
+        }
+
+        Ok(())
+    }
+
     fn adjust_tunables(&self, tunables: &mut Tunables) {
         // Treat the static memory bound as the maximum for unbounded Wasm memories
         // Because we guarantee a module cannot compile unless it fits in the limits of

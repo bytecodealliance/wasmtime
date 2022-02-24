@@ -132,6 +132,12 @@ pub enum FiberStackError {
 ///
 /// This trait is unsafe as it requires knowledge of Wasmtime's runtime internals to implement correctly.
 pub unsafe trait InstanceAllocator: Send + Sync {
+    /// Validates that a module is supported by the allocator.
+    fn validate(&self, module: &Module) -> Result<()> {
+        drop(module);
+        Ok(())
+    }
+
     /// Adjusts the tunables prior to creation of any JIT compiler.
     ///
     /// This method allows the instance allocator control over tunables passed to a `wasmtime_jit::Compiler`.

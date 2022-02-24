@@ -355,13 +355,7 @@ impl Module {
             )
         })?;
 
-        Ok(Self::from_parts(
-            engine,
-            modules,
-            main_module,
-            Arc::new(types),
-            &[],
-        ))
+        Self::from_parts(engine, modules, main_module, Arc::new(types), &[])
     }
 
     /// Converts an input binary-encoded WebAssembly module to compilation
@@ -543,7 +537,12 @@ impl Module {
         main_module: usize,
         types: Arc<TypeTables>,
         module_upvars: &[serialization::SerializedModuleUpvar],
-    ) -> Self {
+    ) -> Result<Self> {
+        // Validate all modules can be used with the current allocator
+        for module in modules.iter() {
+            engine.allocator().validate(module.module())?;
+        }
+
         let signatures = Arc::new(SignatureCollection::new_for_module(
             engine.signatures(),
             &types.wasm_signatures,
@@ -569,7 +568,7 @@ impl Module {
             })
             .collect();
 
-        return Self {
+        return Ok(Self {
             inner: Arc::new(ModuleInner {
                 engine: engine.clone(),
                 types,
@@ -579,7 +578,7 @@ impl Module {
                 signatures,
                 memory_images: OnceCell::new(),
             }),
-        };
+        });
 
         fn mk(
             engine: &Engine,
