@@ -619,6 +619,7 @@ fn drop_externref_global_during_module_init() -> Result<()> {
 }
 
 #[test]
+#[cfg(target_pointer_width = "64")]
 fn instance_too_large() -> Result<()> {
     let mut config = Config::new();
     config.allocation_strategy(InstanceAllocationStrategy::Pooling {
