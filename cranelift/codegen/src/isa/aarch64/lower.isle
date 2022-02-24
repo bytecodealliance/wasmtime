@@ -7,20 +7,20 @@
 ;;;; Rules for `iconst` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type ty (iconst (u64_from_imm64 n))))
-      (value_reg (imm ty n)))
+      (imm ty n))
 
 ;;;; Rules for `bconst` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type ty (bconst $false)))
-      (value_reg (imm ty 0)))
+      (imm ty 0))
 
 (rule (lower (has_type ty (bconst $true)))
-      (value_reg (imm ty 1)))
+      (imm ty 1))
 
 ;;;; Rules for `null` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type ty (null)))
-      (value_reg (imm ty 0)))
+      (imm ty 0))
 
 ;;;; Rules for `iadd` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -28,66 +28,65 @@
 
 ;; Base case, simply adding things in registers.
 (rule (lower (has_type (fits_in_64 ty) (iadd x y)))
-      (value_reg (add ty (put_in_reg x) (put_in_reg y))))
+      (add ty  x y))
 
 ;; Special cases for when one operand is an immediate that fits in 12 bits.
 (rule (lower (has_type (fits_in_64 ty) (iadd x (imm12_from_value y))))
-      (value_reg (add_imm ty (put_in_reg x) y)))
+      (add_imm ty x y))
 
 (rule (lower (has_type (fits_in_64 ty) (iadd (imm12_from_value x) y)))
-      (value_reg (add_imm ty (put_in_reg y) x)))
+      (add_imm ty y x))
 
 ;; Same as the previous special cases, except we can switch the addition to a
 ;; subtraction if the negated immediate fits in 12 bits.
 (rule (lower (has_type (fits_in_64 ty) (iadd x (imm12_from_negated_value y))))
-      (value_reg (sub_imm ty (put_in_reg x) y)))
+      (sub_imm ty x y))
 
 (rule (lower (has_type (fits_in_64 ty) (iadd (imm12_from_negated_value x) y)))
-      (value_reg (sub_imm ty (put_in_reg y) x)))
+      (sub_imm ty y x))
 
 ;; Special cases for when we're adding an extended register where the extending
 ;; operation can get folded into the add itself.
 (rule (lower (has_type (fits_in_64 ty) (iadd x (extended_value_from_value y))))
-      (value_reg (add_extend ty (put_in_reg x) y)))
+      (add_extend ty x y))
 
 (rule (lower (has_type (fits_in_64 ty) (iadd (extended_value_from_value x) y)))
-      (value_reg (add_extend ty (put_in_reg y) x)))
+      (add_extend ty y x))
 
 ;; Special cases for when we're adding the shift of a different
 ;; register by a constant amount and the shift can get folded into the add.
 (rule (lower (has_type (fits_in_64 ty)
-                       (iadd x (def_inst (ishl y (def_inst (iconst (lshl_from_imm64 <ty amt))))))))
-      (value_reg (add_shift ty (put_in_reg x) (put_in_reg y) amt)))
+                       (iadd x (ishl y (iconst (lshl_from_imm64 <ty amt))))))
+      (add_shift ty x y amt))
 
 (rule (lower (has_type (fits_in_64 ty)
-                       (iadd (def_inst (ishl x (def_inst (iconst (lshl_from_imm64 <ty amt))))) y)))
-      (value_reg (add_shift ty (put_in_reg y) (put_in_reg x) amt)))
+                       (iadd (ishl x (iconst (lshl_from_imm64 <ty amt))) y)))
+      (add_shift ty y x amt))
 
 ;; Fold an `iadd` and `imul` combination into a `madd` instruction.
-(rule (lower (has_type (fits_in_64 ty) (iadd x (def_inst (imul y z)))))
-      (value_reg (madd ty (put_in_reg y) (put_in_reg z) (put_in_reg x))))
+(rule (lower (has_type (fits_in_64 ty) (iadd x (imul y z))))
+      (madd ty y z x))
 
-(rule (lower (has_type (fits_in_64 ty) (iadd (def_inst (imul x y)) z)))
-      (value_reg (madd ty (put_in_reg x) (put_in_reg y) (put_in_reg z))))
+(rule (lower (has_type (fits_in_64 ty) (iadd (imul x y) z)))
+      (madd ty x y z))
 
 ;; vectors
 
 (rule (lower (has_type ty @ (multi_lane _ _) (iadd x y)))
-      (value_reg (add_vec (put_in_reg x) (put_in_reg y) (vector_size ty))))
+      (add_vec x y (vector_size ty)))
 
 ;; `i128`
 (rule (lower (has_type $I128 (iadd x y)))
-      (let (
+      (let
           ;; Get the high/low registers for `x`.
-          (x_regs ValueRegs (put_in_regs x))
-          (x_lo Reg (value_regs_get x_regs 0))
-          (x_hi Reg (value_regs_get x_regs 1))
+          ((x_regs ValueRegs x)
+           (x_lo Reg (value_regs_get x_regs 0))
+           (x_hi Reg (value_regs_get x_regs 1))
 
-          ;; Get the high/low registers for `y`.
-          (y_regs ValueRegs (put_in_regs y))
-          (y_lo Reg (value_regs_get y_regs 0))
-          (y_hi Reg (value_regs_get y_regs 1))
-        )
+           ;; Get the high/low registers for `y`.
+           (y_regs ValueRegs y)
+           (y_lo Reg (value_regs_get y_regs 0))
+           (y_hi Reg (value_regs_get y_regs 1)))
         ;; the actual addition is `adds` followed by `adc` which comprises the
         ;; low/high bits of the result
         (with_flags
@@ -100,45 +99,44 @@
 
 ;; Base case, simply subtracting things in registers.
 (rule (lower (has_type (fits_in_64 ty) (isub x y)))
-      (value_reg (sub ty (put_in_reg x) (put_in_reg y))))
+      (sub ty x y))
 
 ;; Special case for when one operand is an immediate that fits in 12 bits.
 (rule (lower (has_type (fits_in_64 ty) (isub x (imm12_from_value y))))
-      (value_reg (sub_imm ty (put_in_reg x) y)))
+      (sub_imm ty x y))
 
 ;; Same as the previous special case, except we can switch the subtraction to an
 ;; addition if the negated immediate fits in 12 bits.
 (rule (lower (has_type (fits_in_64 ty) (isub x (imm12_from_negated_value y))))
-      (value_reg (add_imm ty (put_in_reg x) y)))
+      (add_imm ty x y))
 
 ;; Special cases for when we're subtracting an extended register where the
 ;; extending operation can get folded into the sub itself.
 (rule (lower (has_type (fits_in_64 ty) (isub x (extended_value_from_value y))))
-      (value_reg (sub_extend ty (put_in_reg x) y)))
+      (sub_extend ty x y))
 
 ;; Finally a special case for when we're subtracting the shift of a different
 ;; register by a constant amount and the shift can get folded into the sub.
 (rule (lower (has_type (fits_in_64 ty)
-                       (isub x (def_inst (ishl y (def_inst (iconst (lshl_from_imm64 <ty amt))))))))
-      (value_reg (sub_shift ty (put_in_reg x) (put_in_reg y) amt)))
+                       (isub x (ishl y (iconst (lshl_from_imm64 <ty amt))))))
+      (sub_shift ty x y amt))
 
 ;; vectors
 (rule (lower (has_type ty @ (multi_lane _ _) (isub x y)))
-      (value_reg (sub_vec (put_in_reg x) (put_in_reg y) (vector_size ty))))
+      (sub_vec x y (vector_size ty)))
 
 ;; `i128`
 (rule (lower (has_type $I128 (isub x y)))
-      (let (
+      (let
           ;; Get the high/low registers for `x`.
-          (x_regs ValueRegs (put_in_regs x))
-          (x_lo Reg (value_regs_get x_regs 0))
-          (x_hi Reg (value_regs_get x_regs 1))
+          ((x_regs ValueRegs x)
+           (x_lo Reg (value_regs_get x_regs 0))
+           (x_hi Reg (value_regs_get x_regs 1))
 
-          ;; Get the high/low registers for `y`.
-          (y_regs ValueRegs (put_in_regs y))
-          (y_lo Reg (value_regs_get y_regs 0))
-          (y_hi Reg (value_regs_get y_regs 1))
-        )
+           ;; Get the high/low registers for `y`.
+           (y_regs ValueRegs y)
+           (y_lo Reg (value_regs_get y_regs 0))
+           (y_hi Reg (value_regs_get y_regs 1)))
         ;; the actual subtraction is `subs` followed by `sbc` which comprises
         ;; the low/high bits of the result
         (with_flags
@@ -148,71 +146,70 @@
 ;;;; Rules for `uadd_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type (vec128 ty) (uadd_sat x y)))
-      (value_reg (uqadd (put_in_reg x) (put_in_reg y) (vector_size ty))))
+      (uqadd x y (vector_size ty)))
 
 ;;;; Rules for `sadd_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type (vec128 ty) (sadd_sat x y)))
-      (value_reg (sqadd (put_in_reg x) (put_in_reg y) (vector_size ty))))
+      (sqadd x y (vector_size ty)))
 
 ;;;; Rules for `usub_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type (vec128 ty) (usub_sat x y)))
-      (value_reg (uqsub (put_in_reg x) (put_in_reg y) (vector_size ty))))
+      (uqsub x y (vector_size ty)))
 
 ;;;; Rules for `ssub_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type (vec128 ty) (ssub_sat x y)))
-      (value_reg (sqsub (put_in_reg x) (put_in_reg y) (vector_size ty))))
+      (sqsub x y (vector_size ty)))
 
 ;;;; Rules for `ineg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; `i64` and smaller.
 (rule (lower (has_type (fits_in_64 ty) (ineg x)))
-      (value_reg (sub ty (zero_reg) (put_in_reg x))))
+      (sub ty (zero_reg) x))
 
 ;; vectors.
 (rule (lower (has_type (vec128 ty) (ineg x)))
-      (value_reg (neg (put_in_reg x) (vector_size ty))))
+      (neg x (vector_size ty)))
 
 ;;;; Rules for `imul` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; `i64` and smaller.
 (rule (lower (has_type (fits_in_64 ty) (imul x y)))
-      (value_reg (madd ty (put_in_reg x) (put_in_reg y) (zero_reg))))
+      (madd ty x y (zero_reg)))
 
 ;; `i128`.
 (rule (lower (has_type $I128 (imul x y)))
-      (let (
+      (let
           ;; Get the high/low registers for `x`.
-          (x_regs ValueRegs (put_in_regs x))
-          (x_lo Reg (value_regs_get x_regs 0))
-          (x_hi Reg (value_regs_get x_regs 1))
+          ((x_regs ValueRegs x)
+           (x_lo Reg (value_regs_get x_regs 0))
+           (x_hi Reg (value_regs_get x_regs 1))
 
-          ;; Get the high/low registers for `y`.
-          (y_regs ValueRegs (put_in_regs y))
-          (y_lo Reg (value_regs_get y_regs 0))
-          (y_hi Reg (value_regs_get y_regs 1))
+           ;; Get the high/low registers for `y`.
+           (y_regs ValueRegs y)
+           (y_lo Reg (value_regs_get y_regs 0))
+           (y_hi Reg (value_regs_get y_regs 1))
 
-          ;; 128bit mul formula:
-          ;;   dst_lo = x_lo * y_lo
-          ;;   dst_hi = umulhi(x_lo, y_lo) + (x_lo * y_hi) + (x_hi * y_lo)
-          ;;
-          ;; We can convert the above formula into the following
-          ;; umulh   dst_hi, x_lo, y_lo
-          ;; madd    dst_hi, x_lo, y_hi, dst_hi
-          ;; madd    dst_hi, x_hi, y_lo, dst_hi
-          ;; madd    dst_lo, x_lo, y_lo, zero
-          (dst_hi1 Reg (umulh $I64 x_lo y_lo))
-          (dst_hi2 Reg (madd64 x_lo y_hi dst_hi1))
-          (dst_hi Reg (madd64 x_hi y_lo dst_hi2))
-          (dst_lo Reg (madd64 x_lo y_lo (zero_reg)))
-        )
+           ;; 128bit mul formula:
+           ;;   dst_lo = x_lo * y_lo
+           ;;   dst_hi = umulhi(x_lo, y_lo) + (x_lo * y_hi) + (x_hi * y_lo)
+           ;;
+           ;; We can convert the above formula into the following
+           ;; umulh   dst_hi, x_lo, y_lo
+           ;; madd    dst_hi, x_lo, y_hi, dst_hi
+           ;; madd    dst_hi, x_hi, y_lo, dst_hi
+           ;; madd    dst_lo, x_lo, y_lo, zero
+           (dst_hi1 Reg (umulh $I64 x_lo y_lo))
+           (dst_hi2 Reg (madd64 x_lo y_hi dst_hi1))
+           (dst_hi Reg (madd64 x_hi y_lo dst_hi2))
+           (dst_lo Reg (madd64 x_lo y_lo (zero_reg))))
         (value_regs dst_lo dst_hi)))
 
 ;; Case for i8x16, i16x8, and i32x4.
 (rule (lower (has_type (vec128 ty @ (not_i64x2)) (imul x y)))
-      (value_reg (mul (put_in_reg x) (put_in_reg y) (vector_size ty))))
+      (mul x y (vector_size ty)))
 
 ;; Special lowering for i64x2.
 ;;
@@ -244,144 +241,138 @@
 ;;  shll rd.2d, rd.2s, #32
 ;;  umlal rd.2d, tmp2.2s, tmp1.2s
 (rule (lower (has_type $I64X2 (imul x y)))
-      (let (
-          (rn Reg (put_in_reg x))
-          (rm Reg (put_in_reg y))
-          ;; Reverse the 32-bit elements in the 64-bit words.
-          ;;   rd = |g|h|e|f|
-          (rev Reg (rev64 rm (VectorSize.Size32x4)))
+      (let ((rn Reg x)
+            (rm Reg y)
+            ;; Reverse the 32-bit elements in the 64-bit words.
+            ;;   rd = |g|h|e|f|
+            (rev Reg (rev64 rm (VectorSize.Size32x4)))
 
-          ;; Calculate the high half components.
-          ;;   rd = |dg|ch|be|af|
-          ;;
-          ;; Note that this 32-bit multiply of the high half
-          ;; discards the bits that would overflow, same as
-          ;; if 64-bit operations were used. Also the Shll
-          ;; below would shift out the overflow bits anyway.
-          (mul Reg (mul rev rn (VectorSize.Size32x4)))
+            ;; Calculate the high half components.
+            ;;   rd = |dg|ch|be|af|
+            ;;
+            ;; Note that this 32-bit multiply of the high half
+            ;; discards the bits that would overflow, same as
+            ;; if 64-bit operations were used. Also the Shll
+            ;; below would shift out the overflow bits anyway.
+            (mul Reg (mul rev rn (VectorSize.Size32x4)))
 
-          ;; Extract the low half components of rn.
-          ;;   tmp1 = |c|a|
-          (tmp1 Reg (xtn64 rn $false))
+            ;; Extract the low half components of rn.
+            ;;   tmp1 = |c|a|
+            (tmp1 Reg (xtn64 rn $false))
 
-          ;; Sum the respective high half components.
-          ;;   rd = |dg+ch|be+af||dg+ch|be+af|
-          (sum Reg (addp mul mul (VectorSize.Size32x4)))
+            ;; Sum the respective high half components.
+            ;;   rd = |dg+ch|be+af||dg+ch|be+af|
+            (sum Reg (addp mul mul (VectorSize.Size32x4)))
 
-          ;; Extract the low half components of rm.
-          ;;   tmp2 = |g|e|
-          (tmp2 Reg (xtn64 rm $false))
+            ;; Extract the low half components of rm.
+            ;;   tmp2 = |g|e|
+            (tmp2 Reg (xtn64 rm $false))
 
-          ;; Shift the high half components, into the high half.
-          ;;   rd = |dg+ch << 32|be+af << 32|
-          (shift Reg (shll32 sum $false))
+            ;; Shift the high half components, into the high half.
+            ;;   rd = |dg+ch << 32|be+af << 32|
+            (shift Reg (shll32 sum $false))
 
-          ;; Multiply the low components together, and accumulate with the high
-          ;; half.
-          ;;   rd = |rd[1] + cg|rd[0] + ae|
-          (result Reg (umlal32 shift tmp2 tmp1 $false))
-        )
-        (value_reg result)))
+            ;; Multiply the low components together, and accumulate with the high
+            ;; half.
+            ;;   rd = |rd[1] + cg|rd[0] + ae|
+            (result Reg (umlal32 shift tmp2 tmp1 $false)))
+        result))
 
 ;; Special case for `i16x8.extmul_low_i8x16_s`.
 (rule (lower (has_type $I16X8
-                       (imul (def_inst (swiden_low x @ (value_type $I8X16)))
-                             (def_inst (swiden_low y @ (value_type $I8X16))))))
-      (value_reg (smull8 (put_in_reg x) (put_in_reg y) $false)))
+                       (imul (swiden_low x @ (value_type $I8X16))
+                             (swiden_low y @ (value_type $I8X16)))))
+      (smull8 x y $false))
 
 ;; Special case for `i16x8.extmul_high_i8x16_s`.
 (rule (lower (has_type $I16X8
-                       (imul (def_inst (swiden_high x @ (value_type $I8X16)))
-                             (def_inst (swiden_high y @ (value_type $I8X16))))))
-      (value_reg (smull8 (put_in_reg x) (put_in_reg y) $true)))
+                       (imul (swiden_high x @ (value_type $I8X16))
+                             (swiden_high y @ (value_type $I8X16)))))
+      (smull8 x y $true))
 
 ;; Special case for `i16x8.extmul_low_i8x16_u`.
 (rule (lower (has_type $I16X8
-                       (imul (def_inst (uwiden_low x @ (value_type $I8X16)))
-                             (def_inst (uwiden_low y @ (value_type $I8X16))))))
-      (value_reg (umull8 (put_in_reg x) (put_in_reg y) $false)))
+                       (imul (uwiden_low x @ (value_type $I8X16))
+                             (uwiden_low y @ (value_type $I8X16)))))
+      (umull8 x y $false))
 
 ;; Special case for `i16x8.extmul_high_i8x16_u`.
 (rule (lower (has_type $I16X8
-                       (imul (def_inst (uwiden_high x @ (value_type $I8X16)))
-                             (def_inst (uwiden_high y @ (value_type $I8X16))))))
-      (value_reg (umull8 (put_in_reg x) (put_in_reg y) $true)))
+                       (imul (uwiden_high x @ (value_type $I8X16))
+                             (uwiden_high y @ (value_type $I8X16)))))
+      (umull8 x y $true))
 
 ;; Special case for `i32x4.extmul_low_i16x8_s`.
 (rule (lower (has_type $I32X4
-                       (imul (def_inst (swiden_low x @ (value_type $I16X8)))
-                             (def_inst (swiden_low y @ (value_type $I16X8))))))
-      (value_reg (smull16 (put_in_reg x) (put_in_reg y) $false)))
+                       (imul (swiden_low x @ (value_type $I16X8))
+                             (swiden_low y @ (value_type $I16X8)))))
+      (smull16 x y $false))
 
 ;; Special case for `i32x4.extmul_high_i16x8_s`.
 (rule (lower (has_type $I32X4
-                       (imul (def_inst (swiden_high x @ (value_type $I16X8)))
-                             (def_inst (swiden_high y @ (value_type $I16X8))))))
-      (value_reg (smull16 (put_in_reg x) (put_in_reg y) $true)))
+                       (imul (swiden_high x @ (value_type $I16X8))
+                             (swiden_high y @ (value_type $I16X8)))))
+      (smull16 x y $true))
 
 ;; Special case for `i32x4.extmul_low_i16x8_u`.
 (rule (lower (has_type $I32X4
-                       (imul (def_inst (uwiden_low x @ (value_type $I16X8)))
-                             (def_inst (uwiden_low y @ (value_type $I16X8))))))
-      (value_reg (umull16 (put_in_reg x) (put_in_reg y) $false)))
+                       (imul (uwiden_low x @ (value_type $I16X8))
+                             (uwiden_low y @ (value_type $I16X8)))))
+      (umull16 x y $false))
 
 ;; Special case for `i32x4.extmul_high_i16x8_u`.
 (rule (lower (has_type $I32X4
-                       (imul (def_inst (uwiden_high x @ (value_type $I16X8)))
-                             (def_inst (uwiden_high y @ (value_type $I16X8))))))
-      (value_reg (umull16 (put_in_reg x) (put_in_reg y) $true)))
+                       (imul (uwiden_high x @ (value_type $I16X8))
+                             (uwiden_high y @ (value_type $I16X8)))))
+      (umull16 x y $true))
 
 ;; Special case for `i64x2.extmul_low_i32x4_s`.
 (rule (lower (has_type $I64X2
-                       (imul (def_inst (swiden_low x @ (value_type $I32X4)))
-                             (def_inst (swiden_low y @ (value_type $I32X4))))))
-      (value_reg (smull32 (put_in_reg x) (put_in_reg y) $false)))
+                       (imul (swiden_low x @ (value_type $I32X4))
+                             (swiden_low y @ (value_type $I32X4)))))
+      (smull32 x y $false))
 
 ;; Special case for `i64x2.extmul_high_i32x4_s`.
 (rule (lower (has_type $I64X2
-                       (imul (def_inst (swiden_high x @ (value_type $I32X4)))
-                             (def_inst (swiden_high y @ (value_type $I32X4))))))
-      (value_reg (smull32 (put_in_reg x) (put_in_reg y) $true)))
+                       (imul (swiden_high x @ (value_type $I32X4))
+                             (swiden_high y @ (value_type $I32X4)))))
+      (smull32 x y $true))
 
 ;; Special case for `i64x2.extmul_low_i32x4_u`.
 (rule (lower (has_type $I64X2
-                       (imul (def_inst (uwiden_low x @ (value_type $I32X4)))
-                             (def_inst (uwiden_low y @ (value_type $I32X4))))))
-      (value_reg (umull32 (put_in_reg x) (put_in_reg y) $false)))
+                       (imul (uwiden_low x @ (value_type $I32X4))
+                             (uwiden_low y @ (value_type $I32X4)))))
+      (umull32 x y $false))
 
 ;; Special case for `i64x2.extmul_high_i32x4_u`.
 (rule (lower (has_type $I64X2
-                       (imul (def_inst (uwiden_high x @ (value_type $I32X4)))
-                             (def_inst (uwiden_high y @ (value_type $I32X4))))))
-      (value_reg (umull32 (put_in_reg x) (put_in_reg y) $true)))
+                       (imul (uwiden_high x @ (value_type $I32X4))
+                             (uwiden_high y @ (value_type $I32X4)))))
+      (umull32 x y $true))
 
 ;;;; Rules for `smulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type $I64 (smulhi x y)))
-      (value_reg (smulh $I64 (put_in_reg x) (put_in_reg y))))
+      (smulh $I64 x y))
 
 (rule (lower (has_type (fits_in_32 ty) (smulhi x y)))
-      (let (
-          (x64 Reg (put_in_reg_sext64 x))
-          (y64 Reg (put_in_reg_sext64 y))
-          (mul Reg (madd64 x64 y64 (zero_reg)))
-          (result Reg (asr_imm $I64 mul (imm_shift_from_u8 (ty_bits ty))))
-        )
-        (value_reg result)))
+      (let ((x64 Reg (put_in_reg_sext64 x))
+            (y64 Reg (put_in_reg_sext64 y))
+            (mul Reg (madd64 x64 y64 (zero_reg)))
+            (result Reg (asr_imm $I64 mul (imm_shift_from_u8 (ty_bits ty)))))
+        result))
 
 ;;;; Rules for `umulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type $I64 (umulhi x y)))
-      (value_reg (umulh $I64 (put_in_reg x) (put_in_reg y))))
+      (umulh $I64 x y))
 
 (rule (lower (has_type (fits_in_32 ty) (umulhi x y)))
-      (let (
-          (x64 Reg (put_in_reg_zext64 x))
-          (y64 Reg (put_in_reg_zext64 y))
-          (mul Reg (madd64 x64 y64 (zero_reg)))
-          (result Reg (lsr_imm $I64 mul (imm_shift_from_u8 (ty_bits ty))))
-        )
-        (value_reg result)))
+      (let ((x64 Reg (put_in_reg_zext64 x))
+            (y64 Reg (put_in_reg_zext64 y))
+            (mul Reg (madd64 x64 y64 (zero_reg)))
+            (result Reg (lsr_imm $I64 mul (imm_shift_from_u8 (ty_bits ty)))))
+        result))
 
 ;;;; Rules for `udiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -391,7 +382,7 @@
 ;; Note that aarch64's `udiv` doesn't trap so to respect the semantics of
 ;; CLIF's `udiv` the check for zero needs to be manually performed.
 (rule (lower (has_type (fits_in_64 ty) (udiv x y)))
-      (value_reg (a64_udiv $I64 (put_in_reg_zext64 x) (put_nonzero_in_reg_zext64 y))))
+      (a64_udiv $I64 (put_in_reg_zext64 x) (put_nonzero_in_reg_zext64 y)))
 
 ;; Helper for placing a `Value` into a `Reg` and validating that it's nonzero.
 (decl put_nonzero_in_reg_zext64 (Value) Reg)
@@ -401,7 +392,7 @@
 ;; Special case where if a `Value` is known to be nonzero we can trivially
 ;; move it into a register.
 (rule (put_nonzero_in_reg_zext64 (and (value_type ty)
-                                      (def_inst (iconst (nonzero_u64_from_imm64 n)))))
+                                      (iconst (nonzero_u64_from_imm64 n))))
       (imm ty n))
 
 ;;;; Rules for `sdiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -424,13 +415,11 @@
 ;; TODO: if `y` is -1 then a check that `x` is not INT_MIN is all that's
 ;; necessary, but right now `y` is checked to not be -1 as well.
 (rule (lower (has_type (fits_in_64 ty) (sdiv x y)))
-      (let (
-          (x64 Reg (put_in_reg_sext64 x))
-          (y64 Reg (put_nonzero_in_reg_sext64 y))
-          (valid_x64 Reg (trap_if_div_overflow ty x64 y64))
-          (result Reg (a64_sdiv $I64 valid_x64 y64))
-        )
-        (value_reg result)))
+      (let ((x64 Reg (put_in_reg_sext64 x))
+            (y64 Reg (put_nonzero_in_reg_sext64 y))
+            (valid_x64 Reg (trap_if_div_overflow ty x64 y64))
+            (result Reg (a64_sdiv $I64 valid_x64 y64)))
+        result))
 
 ;; Helper for extracting an immediate that's not 0 and not -1 from an imm64.
 (decl safe_divisor_from_imm64 (u64) Imm64)
@@ -438,8 +427,8 @@
 
 ;; Special case for `sdiv` where no checks are needed due to division by a
 ;; constant meaning the checks are always passed.
-(rule (lower (has_type (fits_in_64 ty) (sdiv x (def_inst (iconst (safe_divisor_from_imm64 y))))))
-      (value_reg (a64_sdiv $I64 (put_in_reg_sext64 x) (imm ty y))))
+(rule (lower (has_type (fits_in_64 ty) (sdiv x (iconst (safe_divisor_from_imm64 y)))))
+      (a64_sdiv $I64 (put_in_reg_sext64 x) (imm ty y)))
 
 ;; Helper for placing a `Value` into a `Reg` and validating that it's nonzero.
 (decl put_nonzero_in_reg_sext64 (Value) Reg)
@@ -449,7 +438,7 @@
 ;; Note that this has a special case where if the `Value` is a constant that's
 ;; not zero we can skip the zero check.
 (rule (put_nonzero_in_reg_sext64 (and (value_type ty)
-                                      (def_inst (iconst (nonzero_u64_from_imm64 n)))))
+                                      (iconst (nonzero_u64_from_imm64 n))))
       (imm ty n))
 
 ;;;; Rules for `urem` and `srem` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -467,42 +456,38 @@
 ;;   msub rd, rd, y, x  ; rd = x - rd * y
 
 (rule (lower (has_type (fits_in_64 ty) (urem x y)))
-      (let (
-          (x64 Reg (put_in_reg_zext64 x))
-          (y64 Reg (put_nonzero_in_reg_zext64 y))
-          (div Reg (a64_udiv $I64 x64 y64))
-          (result Reg (msub64 div y64 x64))
-        )
-        (value_reg result)))
+      (let ((x64 Reg (put_in_reg_zext64 x))
+            (y64 Reg (put_nonzero_in_reg_zext64 y))
+            (div Reg (a64_udiv $I64 x64 y64))
+            (result Reg (msub64 div y64 x64)))
+        result))
 
 (rule (lower (has_type (fits_in_64 ty) (srem x y)))
-      (let (
-          (x64 Reg (put_in_reg_sext64 x))
-          (y64 Reg (put_nonzero_in_reg_sext64 y))
-          (div Reg (a64_sdiv $I64 x64 y64))
-          (result Reg (msub64 div y64 x64))
-        )
-        (value_reg result)))
+      (let ((x64 Reg (put_in_reg_sext64 x))
+            (y64 Reg (put_nonzero_in_reg_sext64 y))
+            (div Reg (a64_sdiv $I64 x64 y64))
+            (result Reg (msub64 div y64 x64)))
+        result))
 
 ;;;; Rules for `uextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; General rule for extending input to an output which fits in a single
 ;; register.
 (rule (lower (has_type (fits_in_64 out) (uextend x @ (value_type in))))
-      (value_reg (extend (put_in_reg x) $false (ty_bits in) (ty_bits out))))
+      (extend x $false (ty_bits in) (ty_bits out)))
 
 ;; Extraction of a vector lane automatically extends as necessary, so we can
 ;; skip an explicit extending instruction.
 (rule (lower (has_type (fits_in_64 out)
-                       (uextend (def_inst (extractlane vec @ (value_type in)
-                                                       (u8_from_uimm8 lane))))))
-      (value_reg (mov_from_vec (put_in_reg vec) lane (vector_size in))))
+                       (uextend (extractlane vec @ (value_type in)
+                                             (u8_from_uimm8 lane)))))
+      (mov_from_vec (put_in_reg vec) lane (vector_size in)))
 
 ;; Atomic loads will also automatically zero their upper bits so the `uextend`
 ;; instruction can effectively get skipped here.
 (rule (lower (has_type (fits_in_64 out)
                        (uextend (and (value_type in) (sinkable_atomic_load addr)))))
-      (value_reg (load_acquire in (sink_atomic_load addr))))
+      (load_acquire in (sink_atomic_load addr)))
 
 ;; Conversion to 128-bit needs a zero-extension of the lower bits and the upper
 ;; bits are all zero.
@@ -512,8 +497,8 @@
 ;; Like above where vector extraction automatically zero-extends extending to
 ;; i128 only requires generating a 0 constant for the upper bits.
 (rule (lower (has_type $I128
-                       (uextend (def_inst (extractlane vec @ (value_type in)
-                                                       (u8_from_uimm8 lane))))))
+                       (uextend (extractlane vec @ (value_type in)
+                                             (u8_from_uimm8 lane)))))
       (value_regs (mov_from_vec (put_in_reg vec) lane (vector_size in)) (imm $I64 0)))
 
 ;;;; Rules for `sextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -521,24 +506,22 @@
 ;; General rule for extending input to an output which fits in a single
 ;; register.
 (rule (lower (has_type (fits_in_64 out) (sextend x @ (value_type in))))
-      (value_reg (extend (put_in_reg x) $true (ty_bits in) (ty_bits out))))
+      (extend x $true (ty_bits in) (ty_bits out)))
 
 ;; Extraction of a vector lane automatically extends as necessary, so we can
 ;; skip an explicit extending instruction.
 (rule (lower (has_type (fits_in_64 out)
-                       (sextend (def_inst (extractlane vec @ (value_type in)
-                                                       (u8_from_uimm8 lane))))))
-      (value_reg (mov_from_vec_signed (put_in_reg vec)
-                                      lane
-                                      (vector_size in)
-                                      (size_from_ty out))))
+                       (sextend (extractlane vec @ (value_type in)
+                                             (u8_from_uimm8 lane)))))
+      (mov_from_vec_signed (put_in_reg vec)
+                           lane
+                           (vector_size in)
+                           (size_from_ty out)))
 
 ;; 64-bit to 128-bit only needs to sign-extend the input to the upper bits.
 (rule (lower (has_type $I128 (sextend x)))
-      (let (
-          (lo Reg (put_in_reg_sext64 x))
-          (hi Reg (asr_imm $I64 lo (imm_shift_from_u8 63)))
-        )
+      (let ((lo Reg (put_in_reg_sext64 x))
+            (hi Reg (asr_imm $I64 lo (imm_shift_from_u8 63))))
         (value_regs lo hi)))
 
 ;; Like above where vector extraction automatically zero-extends extending to
@@ -547,27 +530,23 @@
 ;; Note that `mov_from_vec_signed` doesn't exist for i64x2, so that's
 ;; specifically excluded here.
 (rule (lower (has_type $I128
-                       (sextend (def_inst (extractlane vec @ (value_type in @ (not_i64x2))
-                                                       (u8_from_uimm8 lane))))))
-      (let (
-          (lo Reg (mov_from_vec_signed (put_in_reg vec)
-                                       lane
-                                       (vector_size in)
-                                       (size_from_ty $I64)))
-          (hi Reg (asr_imm $I64 lo (imm_shift_from_u8 63)))
-        )
+                       (sextend (extractlane vec @ (value_type in @ (not_i64x2))
+                                             (u8_from_uimm8 lane)))))
+      (let ((lo Reg (mov_from_vec_signed (put_in_reg vec)
+                                         lane
+                                         (vector_size in)
+                                         (size_from_ty $I64)))
+            (hi Reg (asr_imm $I64 lo (imm_shift_from_u8 63))))
         (value_regs lo hi)))
 
 ;; Extension from an extraction of i64x2 into i128.
 (rule (lower (has_type $I128
-                       (sextend (def_inst (extractlane vec @ (value_type $I64X2)
-                                                       (u8_from_uimm8 lane))))))
-      (let (
-          (lo Reg (mov_from_vec (put_in_reg vec)
-                                lane
-                                (VectorSize.Size64x2)))
-          (hi Reg (asr_imm $I64 lo (imm_shift_from_u8 63)))
-        )
+                       (sextend (extractlane vec @ (value_type $I64X2)
+                                             (u8_from_uimm8 lane)))))
+      (let ((lo Reg (mov_from_vec (put_in_reg vec)
+                                  lane
+                                  (VectorSize.Size64x2)))
+            (hi Reg (asr_imm $I64 lo (imm_shift_from_u8 63))))
         (value_regs lo hi)))
 
 ;;;; Rules for `bnot` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -578,98 +557,96 @@
 ;;
 ;;      NOT rd, rm ==> ORR_NOT rd, zero, rm
 (rule (lower (has_type (fits_in_64 ty) (bnot x)))
-      (value_reg (orr_not ty (zero_reg) (put_in_reg x))))
+      (orr_not ty (zero_reg) x))
 
 ;; Special case to use `orr_not_shift` if it's a `bnot` of a const-left-shifted
 ;; value.
 (rule (lower (has_type (fits_in_64 ty)
-                       (bnot (def_inst (ishl x (def_inst (iconst (lshl_from_imm64 <ty amt))))))))
-      (value_reg (orr_not_shift ty (zero_reg) (put_in_reg x) amt)))
+                       (bnot (ishl x (iconst (lshl_from_imm64 <ty amt))))))
+      (orr_not_shift ty (zero_reg) x amt))
 
 ;; Implementation of `bnot` for `i128`.
 (rule (lower (has_type $I128 (bnot x)))
-      (let (
-          (x_regs ValueRegs (put_in_regs x))
-          (x_lo Reg (value_regs_get x_regs 0))
-          (x_hi Reg (value_regs_get x_regs 1))
-          (new_lo Reg (orr_not $I64 (zero_reg) x_lo))
-          (new_hi Reg (orr_not $I64 (zero_reg) x_hi))
-        )
+      (let ((x_regs ValueRegs x)
+            (x_lo Reg (value_regs_get x_regs 0))
+            (x_hi Reg (value_regs_get x_regs 1))
+            (new_lo Reg (orr_not $I64 (zero_reg) x_lo))
+            (new_hi Reg (orr_not $I64 (zero_reg) x_hi)))
         (value_regs new_lo new_hi)))
 
 ;; Implementation of `bnot` for vector types.
 (rule (lower (has_type (vec128 ty) (bnot x)))
-      (value_reg (not (put_in_reg x) (vector_size ty))))
+      (not x (vector_size ty)))
 
 ;;;; Rules for `band` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type (fits_in_32 ty) (band x y)))
-      (value_reg (alu_rs_imm_logic_commutative (ALUOp.And) ty x y)))
+      (alu_rs_imm_logic_commutative (ALUOp.And) ty x y))
 
 (rule (lower (has_type $I64 (band x y)))
-      (value_reg (alu_rs_imm_logic_commutative (ALUOp.And) $I64 x y)))
+      (alu_rs_imm_logic_commutative (ALUOp.And) $I64 x y))
 
 (rule (lower (has_type $I128 (band x y))) (i128_alu_bitop (ALUOp.And) $I64 x y))
 
 (rule (lower (has_type (vec128 ty) (band x y)))
-      (value_reg (and_vec (put_in_reg x) (put_in_reg y) (vector_size ty))))
+      (and_vec x y (vector_size ty)))
 
 ;;;; Rules for `bor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type (fits_in_32 ty) (bor x y)))
-      (value_reg (alu_rs_imm_logic_commutative (ALUOp.Orr) ty x y)))
+      (alu_rs_imm_logic_commutative (ALUOp.Orr) ty x y))
 
 (rule (lower (has_type $I64 (bor x y)))
-      (value_reg (alu_rs_imm_logic_commutative (ALUOp.Orr) $I64 x y)))
+      (alu_rs_imm_logic_commutative (ALUOp.Orr) $I64 x y))
 
 (rule (lower (has_type $I128 (bor x y))) (i128_alu_bitop (ALUOp.Orr) $I64 x y))
 
 (rule (lower (has_type (vec128 ty) (bor x y)))
-      (value_reg (orr_vec (put_in_reg x) (put_in_reg y) (vector_size ty))))
+      (orr_vec x y (vector_size ty)))
 
 ;;;; Rules for `bxor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type (fits_in_32 ty) (bxor x y)))
-      (value_reg (alu_rs_imm_logic_commutative (ALUOp.Eor) ty x y)))
+      (alu_rs_imm_logic_commutative (ALUOp.Eor) ty x y))
 
 (rule (lower (has_type $I64 (bxor x y)))
-      (value_reg (alu_rs_imm_logic_commutative (ALUOp.Eor) $I64 x y)))
+      (alu_rs_imm_logic_commutative (ALUOp.Eor) $I64 x y))
 
 (rule (lower (has_type $I128 (bxor x y))) (i128_alu_bitop (ALUOp.Eor) $I64 x y))
 
 (rule (lower (has_type (vec128 ty) (bxor x y)))
-      (value_reg (eor_vec (put_in_reg x) (put_in_reg y) (vector_size ty))))
+      (eor_vec x y (vector_size ty)))
 
 ;;;; Rules for `band_not` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type (fits_in_32 ty) (band_not x y)))
-      (value_reg (alu_rs_imm_logic (ALUOp.AndNot) ty x y)))
+      (alu_rs_imm_logic (ALUOp.AndNot) ty x y))
 
 (rule (lower (has_type $I64 (band_not x y)))
-      (value_reg (alu_rs_imm_logic (ALUOp.AndNot) $I64 x y)))
+      (alu_rs_imm_logic (ALUOp.AndNot) $I64 x y))
 
 (rule (lower (has_type $I128 (band_not x y))) (i128_alu_bitop (ALUOp.AndNot) $I64 x y))
 
 (rule (lower (has_type (vec128 ty) (band_not x y)))
-      (value_reg (bic_vec (put_in_reg x) (put_in_reg y) (vector_size ty))))
+      (bic_vec x y (vector_size ty)))
 
 ;;;; Rules for `bor_not` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type (fits_in_32 ty) (bor_not x y)))
-      (value_reg (alu_rs_imm_logic (ALUOp.OrrNot) ty x y)))
+      (alu_rs_imm_logic (ALUOp.OrrNot) ty x y))
 
 (rule (lower (has_type $I64 (bor_not x y)))
-      (value_reg (alu_rs_imm_logic (ALUOp.OrrNot) $I64 x y)))
+      (alu_rs_imm_logic (ALUOp.OrrNot) $I64 x y))
 
 (rule (lower (has_type $I128 (bor_not x y))) (i128_alu_bitop (ALUOp.OrrNot) $I64 x y))
 
 ;;;; Rules for `bxor_not` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type (fits_in_32 ty) (bxor_not x y)))
-      (value_reg (alu_rs_imm_logic (ALUOp.EorNot) $I32 x y)))
+      (alu_rs_imm_logic (ALUOp.EorNot) $I32 x y))
 
 (rule (lower (has_type $I64 (bxor_not x y)))
-      (value_reg (alu_rs_imm_logic (ALUOp.EorNot) $I64 x y)))
+      (alu_rs_imm_logic (ALUOp.EorNot) $I64 x y))
 
 (rule (lower (has_type $I128 (bxor_not x y))) (i128_alu_bitop (ALUOp.EorNot) $I64 x y))
 
@@ -677,15 +654,15 @@
 
 ;; Shift for i8/i16/i32.
 (rule (lower (has_type (fits_in_32 ty) (ishl x y)))
-      (value_reg (do_shift (ALUOp.Lsl) ty (put_in_reg x) y)))
+      (do_shift (ALUOp.Lsl) ty x y))
 
 ;; Shift for i64.
 (rule (lower (has_type $I64 (ishl x y)))
-      (value_reg (do_shift (ALUOp.Lsl) $I64 (put_in_reg x) y)))
+      (do_shift (ALUOp.Lsl) $I64 x y))
 
 ;; Shift for i128.
 (rule (lower (has_type $I128 (ishl x y)))
-      (lower_shl128 (put_in_regs x) (value_regs_get (put_in_regs y) 0)))
+      (lower_shl128 x (value_regs_get y 0)))
 
 ;;     lsl     lo_lshift, src_lo, amt
 ;;     lsl     hi_lshift, src_hi, amt
@@ -698,13 +675,12 @@
 ;;     csel    dst_lo, xzr, lo_lshift, ne
 (decl lower_shl128 (ValueRegs Reg) ValueRegs)
 (rule (lower_shl128 src amt)
-      (let (
-          (src_lo Reg (value_regs_get src 0))
-          (src_hi Reg (value_regs_get src 1))
-          (lo_lshift Reg (lsl $I64 src_lo amt))
-          (hi_lshift Reg (lsl $I64 src_hi amt))
-          (inv_amt Reg (orr_not $I32 (zero_reg) amt))
-          (lo_rshift Reg (lsr $I64 (lsr_imm $I64 src_lo (imm_shift_from_u8 1))
+      (let ((src_lo Reg (value_regs_get src 0))
+            (src_hi Reg (value_regs_get src 1))
+            (lo_lshift Reg (lsl $I64 src_lo amt))
+            (hi_lshift Reg (lsl $I64 src_hi amt))
+            (inv_amt Reg (orr_not $I32 (zero_reg) amt))
+            (lo_rshift Reg (lsr $I64 (lsr_imm $I64 src_lo (imm_shift_from_u8 1))
                                 inv_amt))
           (maybe_hi Reg (orr $I64 hi_lshift lo_rshift))
         )
@@ -716,11 +692,9 @@
 
 ;; Shift for vector types.
 (rule (lower (has_type (vec128 ty) (ishl x y)))
-      (let (
-          (size VectorSize (vector_size ty))
-          (shift Reg (vec_dup (put_in_reg y) size))
-        )
-        (value_reg (sshl (put_in_reg x) shift size))))
+      (let ((size VectorSize (vector_size ty))
+            (shift Reg (vec_dup y size)))
+        (sshl x shift size)))
 
 ;; Helper function to emit a shift operation with the opcode specified and
 ;; the output type specified. The `Reg` provided is shifted by the `Value`
@@ -740,18 +714,16 @@
 ;; types (i16, i8) we need to do this manually, so we wrap the shift amount
 ;; with an AND instruction
 (rule (do_shift op (fits_in_16 ty) x y)
-      (let (
-          (shift_amt Reg (value_regs_get (put_in_regs y) 0))
-          (masked_shift_amt Reg (and_imm $I32 shift_amt (shift_mask ty)))
-        )
+      (let ((shift_amt Reg (value_regs_get y 0))
+            (masked_shift_amt Reg (and_imm $I32 shift_amt (shift_mask ty))))
         (alu_rrr op $I32 x masked_shift_amt)))
 
 (decl shift_mask (Type) ImmLogic)
 (extern constructor shift_mask shift_mask)
 
 ;; 32/64-bit shift base cases.
-(rule (do_shift op $I32 x y) (alu_rrr op $I32 x (value_regs_get (put_in_regs y) 0)))
-(rule (do_shift op $I64 x y) (alu_rrr op $I64 x (value_regs_get (put_in_regs y) 0)))
+(rule (do_shift op $I32 x y) (alu_rrr op $I32 x (value_regs_get y 0)))
+(rule (do_shift op $I64 x y) (alu_rrr op $I64 x (value_regs_get y 0)))
 
 ;; Special case for shifting by a constant value where the value can fit into an
 ;; `ImmShift`.
@@ -759,30 +731,28 @@
 ;; Note that this rule explicitly has a higher priority than the others
 ;; to ensure it's attempted first, otherwise the type-based filters on the
 ;; previous rules seem to take priority over this rule.
-(rule 1 (do_shift op ty x (def_inst (iconst (imm_shift_from_imm64 <ty shift))))
+(rule 1 (do_shift op ty x (iconst (imm_shift_from_imm64 <ty shift)))
       (alu_rr_imm_shift op ty x shift))
 
 ;;;; Rules for `ushr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Shift for i8/i16/i32.
 (rule (lower (has_type (fits_in_32 ty) (ushr x y)))
-      (value_reg (do_shift (ALUOp.Lsr) ty (put_in_reg_zext32 x) y)))
+      (do_shift (ALUOp.Lsr) ty (put_in_reg_zext32 x) y))
 
 ;; Shift for i64.
 (rule (lower (has_type $I64 (ushr x y)))
-      (value_reg (do_shift (ALUOp.Lsr) $I64 (put_in_reg_zext64 x) y)))
+      (do_shift (ALUOp.Lsr) $I64 (put_in_reg_zext64 x) y))
 
 ;; Shift for i128.
 (rule (lower (has_type $I128 (ushr x y)))
-      (lower_ushr128 (put_in_regs x) (value_regs_get (put_in_regs y) 0)))
+      (lower_ushr128 x (value_regs_get y 0)))
 
 ;; Vector shifts.
 (rule (lower (has_type (vec128 ty) (ushr x y)))
-      (let (
-          (size VectorSize (vector_size ty))
-          (shift Reg (vec_dup (sub $I32 (zero_reg) (put_in_reg y)) size))
-        )
-        (value_reg (ushl (put_in_reg x) shift size))))
+      (let ((size VectorSize (vector_size ty))
+            (shift Reg (vec_dup (sub $I32 (zero_reg) y) size)))
+        (ushl x shift size)))
 
 ;;     lsr       lo_rshift, src_lo, amt
 ;;     lsr       hi_rshift, src_hi, amt
@@ -795,14 +765,13 @@
 ;;     csel      dst_lo, hi_rshift, maybe_lo, ne
 (decl lower_ushr128 (ValueRegs Reg) ValueRegs)
 (rule (lower_ushr128 src amt)
-      (let (
-          (src_lo Reg (value_regs_get src 0))
-          (src_hi Reg (value_regs_get src 1))
-          (lo_rshift Reg (lsr $I64 src_lo amt))
-          (hi_rshift Reg (lsr $I64 src_hi amt))
-
-          (inv_amt Reg (orr_not $I32 (zero_reg) amt))
-          (hi_lshift Reg (lsl $I64 (lsl_imm $I64 src_hi (imm_shift_from_u8 1))
+      (let ((src_lo Reg (value_regs_get src 0))
+            (src_hi Reg (value_regs_get src 1))
+            (lo_rshift Reg (lsr $I64 src_lo amt))
+            (hi_rshift Reg (lsr $I64 src_hi amt))
+            
+            (inv_amt Reg (orr_not $I32 (zero_reg) amt))
+            (hi_lshift Reg (lsl $I64 (lsl_imm $I64 src_hi (imm_shift_from_u8 1))
                                 inv_amt))
           (maybe_lo Reg (orr $I64 lo_rshift hi_lshift))
         )
@@ -816,25 +785,23 @@
 
 ;; Shift for i8/i16/i32.
 (rule (lower (has_type (fits_in_32 ty) (sshr x y)))
-      (value_reg (do_shift (ALUOp.Asr) ty (put_in_reg_sext32 x) y)))
+      (do_shift (ALUOp.Asr) ty (put_in_reg_sext32 x) y))
 
 ;; Shift for i64.
 (rule (lower (has_type $I64 (sshr x y)))
-      (value_reg (do_shift (ALUOp.Asr) $I64 (put_in_reg_sext64 x) y)))
+      (do_shift (ALUOp.Asr) $I64 (put_in_reg_sext64 x) y))
 
 ;; Shift for i128.
 (rule (lower (has_type $I128 (sshr x y)))
-      (lower_sshr128 (put_in_regs x) (value_regs_get (put_in_regs y) 0)))
+      (lower_sshr128 x (value_regs_get y 0)))
 
 ;; Vector shifts.
 ;;
 ;; Note that right shifts are implemented with a negative left shift.
 (rule (lower (has_type (vec128 ty) (sshr x y)))
-      (let (
-          (size VectorSize (vector_size ty))
-          (shift Reg (vec_dup (sub $I32 (zero_reg) (put_in_reg y)) size))
-        )
-        (value_reg (sshl (put_in_reg x) shift size))))
+      (let ((size VectorSize (vector_size ty))
+            (shift Reg (vec_dup (sub $I32 (zero_reg) y) size)))
+        (sshl x shift size)))
 
 ;;     lsr       lo_rshift, src_lo, amt
 ;;     asr       hi_rshift, src_hi, amt
@@ -848,14 +815,13 @@
 ;;     csel      dst_lo, hi_rshift, maybe_lo, ne
 (decl lower_sshr128 (ValueRegs Reg) ValueRegs)
 (rule (lower_sshr128 src amt)
-      (let (
-          (src_lo Reg (value_regs_get src 0))
-          (src_hi Reg (value_regs_get src 1))
-          (lo_rshift Reg (lsr $I64 src_lo amt))
-          (hi_rshift Reg (asr $I64 src_hi amt))
+      (let ((src_lo Reg (value_regs_get src 0))
+            (src_hi Reg (value_regs_get src 1))
+            (lo_rshift Reg (lsr $I64 src_lo amt))
+            (hi_rshift Reg (asr $I64 src_hi amt))
 
-          (inv_amt Reg (orr_not $I32 (zero_reg) amt))
-          (hi_lshift Reg (lsl $I64 (lsl_imm $I64 src_hi (imm_shift_from_u8 1))
+            (inv_amt Reg (orr_not $I32 (zero_reg) amt))
+            (hi_lshift Reg (lsl $I64 (lsl_imm $I64 src_hi (imm_shift_from_u8 1))
                                 inv_amt))
           (hi_sign Reg (asr_imm $I64 src_hi (imm_shift_from_u8 63)))
           (maybe_lo Reg (orr $I64 lo_rshift hi_lshift))
@@ -870,12 +836,12 @@
 
 ;; General 8/16-bit case.
 (rule (lower (has_type (fits_in_16 ty) (rotl x y)))
-      (let ((neg_shift Reg (sub $I32 (zero_reg) (put_in_reg y))))
-        (value_reg (small_rotr ty (put_in_reg_zext32 x) neg_shift))))
+      (let ((neg_shift Reg (sub $I32 (zero_reg) y)))
+        (small_rotr ty (put_in_reg_zext32 x) neg_shift)))
 
 ;; Specialization for the 8/16-bit case when the rotation amount is an immediate.
-(rule (lower (has_type (fits_in_16 ty) (rotl x (def_inst (iconst (imm_shift_from_imm64 <ty n))))))
-      (value_reg (small_rotr_imm ty (put_in_reg_zext32 x) (negate_imm_shift ty n))))
+(rule (lower (has_type (fits_in_16 ty) (rotl x (iconst (imm_shift_from_imm64 <ty n)))))
+      (small_rotr_imm ty (put_in_reg_zext32 x) (negate_imm_shift ty n)))
 
 ;; aarch64 doesn't have a left-rotate instruction, but a left rotation of K
 ;; places is effectively a right rotation of N - K places, if N is the integer's
@@ -887,21 +853,21 @@
 
 ;; General 32-bit case.
 (rule (lower (has_type $I32 (rotl x y)))
-      (let ((neg_shift Reg (sub $I32 (zero_reg) (put_in_reg y))))
-        (value_reg (a64_rotr $I32 (put_in_reg x) neg_shift))))
+      (let ((neg_shift Reg (sub $I32 (zero_reg) y)))
+        (a64_rotr $I32 x neg_shift)))
 
 ;; General 64-bit case.
 (rule (lower (has_type $I64 (rotl x y)))
-      (let ((neg_shift Reg (sub $I64 (zero_reg) (put_in_reg y))))
-        (value_reg (a64_rotr $I64 (put_in_reg x) neg_shift))))
+      (let ((neg_shift Reg (sub $I64 (zero_reg) y)))
+        (a64_rotr $I64 x neg_shift)))
 
 ;; Specialization for the 32-bit case when the rotation amount is an immediate.
-(rule (lower (has_type $I32 (rotl x (def_inst (iconst (imm_shift_from_imm64 <$I32 n))))))
-      (value_reg (a64_rotr_imm $I32 (put_in_reg x) (negate_imm_shift $I32 n))))
+(rule (lower (has_type $I32 (rotl x (iconst (imm_shift_from_imm64 <$I32 n)))))
+      (a64_rotr_imm $I32 x (negate_imm_shift $I32 n)))
 
 ;; Specialization for the 64-bit case when the rotation amount is an immediate.
-(rule (lower (has_type $I64 (rotl x (def_inst (iconst (imm_shift_from_imm64 <$I64 n))))))
-      (value_reg (a64_rotr_imm $I64 (put_in_reg x) (negate_imm_shift $I64 n))))
+(rule (lower (has_type $I64 (rotl x (iconst (imm_shift_from_imm64 <$I64 n)))))
+      (a64_rotr_imm $I64 x (negate_imm_shift $I64 n)))
 
 (decl negate_imm_shift (Type ImmShift) ImmShift)
 (extern constructor negate_imm_shift negate_imm_shift)
@@ -910,13 +876,11 @@
 ;;
 ;; TODO: much better codegen is possible with a constant amount.
 (rule (lower (has_type $I128 (rotl x y)))
-      (let (
-          (val ValueRegs (put_in_regs x))
-          (amt Reg (value_regs_get (put_in_regs y) 0))
-          (neg_amt Reg (sub $I64 (imm $I64 128) amt))
-          (lshift ValueRegs (lower_shl128 val amt))
-          (rshift ValueRegs (lower_ushr128 val neg_amt))
-        )
+      (let ((val ValueRegs x)
+            (amt Reg (value_regs_get y 0))
+            (neg_amt Reg (sub $I64 (imm $I64 128) amt))
+            (lshift ValueRegs (lower_shl128 val amt))
+            (rshift ValueRegs (lower_ushr128 val neg_amt)))
         (value_regs
           (orr $I64 (value_regs_get lshift 0) (value_regs_get rshift 0))
           (orr $I64 (value_regs_get lshift 1) (value_regs_get rshift 1)))))
@@ -925,27 +889,27 @@
 
 ;; General 8/16-bit case.
 (rule (lower (has_type (fits_in_16 ty) (rotr x y)))
-      (value_reg (small_rotr ty (put_in_reg_zext32 x) (put_in_reg y))))
+      (small_rotr ty (put_in_reg_zext32 x) y))
 
 ;; General 32-bit case.
 (rule (lower (has_type $I32 (rotr x y)))
-      (value_reg (a64_rotr $I32 (put_in_reg x) (put_in_reg y))))
+      (a64_rotr $I32 x y))
 
 ;; General 64-bit case.
 (rule (lower (has_type $I64 (rotr x y)))
-      (value_reg (a64_rotr $I64 (put_in_reg x) (put_in_reg y))))
+      (a64_rotr $I64 x y))
 
 ;; Specialization for the 8/16-bit case when the rotation amount is an immediate.
-(rule (lower (has_type (fits_in_16 ty) (rotr x (def_inst (iconst (imm_shift_from_imm64 <ty n))))))
-      (value_reg (small_rotr_imm ty (put_in_reg_zext32 x) n)))
+(rule (lower (has_type (fits_in_16 ty) (rotr x (iconst (imm_shift_from_imm64 <ty n)))))
+      (small_rotr_imm ty (put_in_reg_zext32 x) n))
 
 ;; Specialization for the 32-bit case when the rotation amount is an immediate.
-(rule (lower (has_type $I32 (rotr x (def_inst (iconst (imm_shift_from_imm64 <$I32 n))))))
-      (value_reg (a64_rotr_imm $I32 (put_in_reg x) n)))
+(rule (lower (has_type $I32 (rotr x (iconst (imm_shift_from_imm64 <$I32 n)))))
+      (a64_rotr_imm $I32 x n))
 
 ;; Specialization for the 64-bit case when the rotation amount is an immediate.
-(rule (lower (has_type $I64 (rotr x (def_inst (iconst (imm_shift_from_imm64 <$I64 n))))))
-      (value_reg (a64_rotr_imm $I64 (put_in_reg x) n)))
+(rule (lower (has_type $I64 (rotr x (iconst (imm_shift_from_imm64 <$I64 n)))))
+      (a64_rotr_imm $I64 x n))
 
 ;; For a < 32-bit rotate-right, we synthesize this as:
 ;;
@@ -961,13 +925,11 @@
 ;;    orr rd, val_lshift val_rshift
 (decl small_rotr (Type Reg Reg) Reg)
 (rule (small_rotr ty val amt)
-      (let (
-          (masked_amt Reg (and_imm $I32 amt (rotr_mask ty)))
-          (tmp_sub Reg (sub_imm $I32 masked_amt (u8_into_imm12 (ty_bits ty))))
-          (neg_amt Reg (sub $I32 (zero_reg) tmp_sub))
-          (val_rshift Reg (lsr $I32 val masked_amt))
-          (val_lshift Reg (lsl $I32 val neg_amt))
-        )
+      (let ((masked_amt Reg (and_imm $I32 amt (rotr_mask ty)))
+            (tmp_sub Reg (sub_imm $I32 masked_amt (u8_into_imm12 (ty_bits ty))))
+            (neg_amt Reg (sub $I32 (zero_reg) tmp_sub))
+            (val_rshift Reg (lsr $I32 val masked_amt))
+            (val_lshift Reg (lsl $I32 val neg_amt)))
         (orr $I32 val_lshift val_rshift)))
 
 (decl rotr_mask (Type) ImmLogic)
@@ -984,10 +946,8 @@
 ;;    orr rd, val_lshift, val_rshift
 (decl small_rotr_imm (Type Reg ImmShift) Reg)
 (rule (small_rotr_imm ty val amt)
-      (let (
-          (val_rshift Reg (lsr_imm $I32 val amt))
-          (val_lshift Reg (lsl_imm $I32 val (rotr_opposite_amount ty amt)))
-        )
+      (let ((val_rshift Reg (lsr_imm $I32 val amt))
+            (val_lshift Reg (lsl_imm $I32 val (rotr_opposite_amount ty amt))))
         (orr $I32 val_lshift val_rshift)))
 
 (decl rotr_opposite_amount (Type ImmShift) ImmShift)
@@ -997,15 +957,13 @@
 ;;
 ;; TODO: much better codegen is possible with a constant amount.
 (rule (lower (has_type $I128 (rotr x y)))
-      (let (
-          (val ValueRegs (put_in_regs x))
-          (amt Reg (value_regs_get (put_in_regs y) 0))
-          (neg_amt Reg (sub $I64 (imm $I64 128) amt))
-          (rshift ValueRegs (lower_ushr128 val amt))
-          (lshift ValueRegs (lower_shl128 val neg_amt))
-          (hi Reg (orr $I64 (value_regs_get rshift 1) (value_regs_get lshift 1)))
-          (lo Reg (orr $I64 (value_regs_get rshift 0) (value_regs_get lshift 0)))
-        )
+      (let ((val ValueRegs x)
+            (amt Reg (value_regs_get y 0))
+            (neg_amt Reg (sub $I64 (imm $I64 128) amt))
+            (rshift ValueRegs (lower_ushr128 val amt))
+            (lshift ValueRegs (lower_shl128 val neg_amt))
+            (hi Reg (orr $I64 (value_regs_get rshift 1) (value_regs_get lshift 1)))
+            (lo Reg (orr $I64 (value_regs_get rshift 0) (value_regs_get lshift 0))))
         (value_regs lo hi)))
 
 ;;;; Rules for `bitrev` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1014,39 +972,37 @@
 ;; the reversed result in the highest 8 bits, so we need to shift them down into
 ;; place.
 (rule (lower (has_type $I8 (bitrev x)))
-      (value_reg (lsr_imm $I32 (rbit $I32 (put_in_reg x)) (imm_shift_from_u8 24))))
+      (lsr_imm $I32 (rbit $I32 x) (imm_shift_from_u8 24)))
 
 ;; Reversing an 16-bit value with a 32-bit bitrev instruction will place
 ;; the reversed result in the highest 16 bits, so we need to shift them down into
 ;; place.
 (rule (lower (has_type $I16 (bitrev x)))
-      (value_reg (lsr_imm $I32 (rbit $I32 (put_in_reg x)) (imm_shift_from_u8 16))))
+      (lsr_imm $I32 (rbit $I32 x) (imm_shift_from_u8 16)))
 
 (rule (lower (has_type $I128 (bitrev x)))
-      (let (
-          (val ValueRegs (put_in_regs x))
-          (lo_rev Reg (rbit $I64 (value_regs_get val 0)))
-          (hi_rev Reg (rbit $I64 (value_regs_get val 1)))
-        )
+      (let ((val ValueRegs x)
+            (lo_rev Reg (rbit $I64 (value_regs_get val 0)))
+            (hi_rev Reg (rbit $I64 (value_regs_get val 1))))
         (value_regs hi_rev lo_rev)))
 
 (rule (lower (has_type ty (bitrev x)))
-      (value_reg (rbit ty (put_in_reg x))))
+      (rbit ty x))
 
 
 ;;;; Rules for `clz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type $I8 (clz x)))
-      (value_reg (sub_imm $I32 (a64_clz $I32 (put_in_reg_zext32 x)) (u8_into_imm12 24))))
+      (sub_imm $I32 (a64_clz $I32 (put_in_reg_zext32 x)) (u8_into_imm12 24)))
 
 (rule (lower (has_type $I16 (clz x)))
-      (value_reg (sub_imm $I32 (a64_clz $I32 (put_in_reg_zext32 x)) (u8_into_imm12 16))))
+      (sub_imm $I32 (a64_clz $I32 (put_in_reg_zext32 x)) (u8_into_imm12 16)))
 
 (rule (lower (has_type $I128 (clz x)))
-      (lower_clz128 (put_in_regs x)))
+      (lower_clz128 x))
 
 (rule (lower (has_type ty (clz x)))
-      (value_reg (a64_clz ty (put_in_reg x))))
+      (a64_clz ty x))
 
 ;; clz hi_clz, hi
 ;; clz lo_clz, lo
@@ -1055,12 +1011,10 @@
 ;; mov  dst_hi, 0
 (decl lower_clz128 (ValueRegs) ValueRegs)
 (rule (lower_clz128 val)
-      (let (
-        (hi_clz Reg (a64_clz $I64 (value_regs_get val 1)))
-        (lo_clz Reg (a64_clz $I64 (value_regs_get val 0)))
-        (tmp Reg (lsr_imm $I64 hi_clz (imm_shift_from_u8 6)))
-      )
-      (value_regs (madd64 lo_clz tmp hi_clz) (imm $I64 0))))
+      (let ((hi_clz Reg (a64_clz $I64 (value_regs_get val 1)))
+            (lo_clz Reg (a64_clz $I64 (value_regs_get val 0)))
+            (tmp Reg (lsr_imm $I64 hi_clz (imm_shift_from_u8 6))))
+        (value_regs (madd64 lo_clz tmp hi_clz) (imm $I64 0))))
 
 ;;;; Rules for `ctz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1069,29 +1023,27 @@
 ;; leading zeros of the reversed value.
 
 (rule (lower (has_type $I8 (ctz x)))
-      (value_reg (a64_clz $I32 (orr_imm $I32 (rbit $I32 (put_in_reg x)) (u64_into_imm_logic $I32 0x800000)))))
+      (a64_clz $I32 (orr_imm $I32 (rbit $I32 x) (u64_into_imm_logic $I32 0x800000))))
 
 (rule (lower (has_type $I16 (ctz x)))
-      (value_reg (a64_clz $I32 (orr_imm $I32 (rbit $I32 (put_in_reg x)) (u64_into_imm_logic $I32 0x8000)))))
+      (a64_clz $I32 (orr_imm $I32 (rbit $I32 x) (u64_into_imm_logic $I32 0x8000))))
 
 (rule (lower (has_type $I128 (ctz x)))
-      (let (
-        (val ValueRegs (put_in_regs x))
-        (lo Reg (rbit $I64 (value_regs_get val 0)))
-        (hi Reg (rbit $I64 (value_regs_get val 1)))
-      )
-      (lower_clz128 (value_regs hi lo))))
+      (let ((val ValueRegs x)
+            (lo Reg (rbit $I64 (value_regs_get val 0)))
+            (hi Reg (rbit $I64 (value_regs_get val 1))))
+        (lower_clz128 (value_regs hi lo))))
 
 (rule (lower (has_type ty (ctz x)))
-      (value_reg (a64_clz ty (rbit ty (put_in_reg x)))))
+      (a64_clz ty (rbit ty x)))
 
 ;;;; Rules for `cls` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type $I8 (cls x)))
-      (value_reg (sub_imm $I32 (a64_cls $I32 (put_in_reg_zext32 x)) (u8_into_imm12 24))))
+      (sub_imm $I32 (a64_cls $I32 (put_in_reg_zext32 x)) (u8_into_imm12 24)))
 
 (rule (lower (has_type $I16 (cls x)))
-      (value_reg (sub_imm $I32 (a64_cls $I32 (put_in_reg_zext32 x)) (u8_into_imm12 16))))
+      (sub_imm $I32 (a64_cls $I32 (put_in_reg_zext32 x)) (u8_into_imm12 16)))
 
 ;; cls lo_cls, lo
 ;; cls hi_cls, hi
@@ -1103,24 +1055,21 @@
 ;; add  out_lo, maybe_lo, hi_cls
 ;; mov  out_hi, 0
 (rule (lower (has_type $I128 (cls x)))
-      (let (
-          (val ValueRegs (put_in_regs x))
-          (lo Reg (value_regs_get val 0))
-          (hi Reg (value_regs_get val 1))
-          (lo_cls Reg (a64_cls $I64 lo))
-          (hi_cls Reg (a64_cls $I64 hi))
-          (sign_eq_eon Reg (eon $I64 hi lo))
-          (sign_eq Reg (lsr_imm $I64 sign_eq_eon (imm_shift_from_u8 63)))
-          (lo_sign_bits Reg (madd64 lo_cls sign_eq sign_eq))
-          (maybe_lo Reg (with_flags_reg
-                         (cmp64_imm hi_cls (u8_into_imm12 63))
-                         (csel (Cond.Eq) lo_sign_bits (zero_reg))
-          ))
-        )
+      (let ((val ValueRegs x)
+            (lo Reg (value_regs_get val 0))
+            (hi Reg (value_regs_get val 1))
+            (lo_cls Reg (a64_cls $I64 lo))
+            (hi_cls Reg (a64_cls $I64 hi))
+            (sign_eq_eon Reg (eon $I64 hi lo))
+            (sign_eq Reg (lsr_imm $I64 sign_eq_eon (imm_shift_from_u8 63)))
+            (lo_sign_bits Reg (madd64 lo_cls sign_eq sign_eq))
+            (maybe_lo Reg (with_flags_reg
+                           (cmp64_imm hi_cls (u8_into_imm12 63))
+                           (csel (Cond.Eq) lo_sign_bits (zero_reg)))))
         (value_regs (add $I64 maybe_lo hi_cls) (imm $I64 0))))
 
 (rule (lower (has_type ty (cls x)))
-      (value_reg (a64_cls ty (put_in_reg x))))
+      (a64_cls ty x))
 
 ;;;; Rules for `popcnt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1142,46 +1091,36 @@
 ;;         mov out_hi, 0
 
 (rule (lower (has_type $I8 (popcnt x)))
-      (let (
-          (tmp Reg (mov_to_fpu (put_in_reg x) (ScalarSize.Size32)))
-          (nbits Reg (vec_cnt tmp (VectorSize.Size8x8)))
-        )
-        (value_reg (mov_from_vec nbits 0 (VectorSize.Size8x16)))))
+      (let ((tmp Reg (mov_to_fpu x (ScalarSize.Size32)))
+            (nbits Reg (vec_cnt tmp (VectorSize.Size8x8))))
+        (mov_from_vec nbits 0 (VectorSize.Size8x16))))
 
 ;; Note that this uses `addp` instead of `addv` as it's usually cheaper.
 (rule (lower (has_type $I16 (popcnt x)))
-      (let (
-          (tmp Reg (mov_to_fpu (put_in_reg x) (ScalarSize.Size32)))
-          (nbits Reg (vec_cnt tmp (VectorSize.Size8x8)))
-          (added Reg (addp nbits nbits (VectorSize.Size8x8)))
-        )
-        (value_reg (mov_from_vec added 0 (VectorSize.Size8x16)))))
+      (let ((tmp Reg (mov_to_fpu x (ScalarSize.Size32)))
+            (nbits Reg (vec_cnt tmp (VectorSize.Size8x8)))
+            (added Reg (addp nbits nbits (VectorSize.Size8x8))))
+        (mov_from_vec added 0 (VectorSize.Size8x16))))
 
 (rule (lower (has_type $I32 (popcnt x)))
-      (let (
-          (tmp Reg (mov_to_fpu (put_in_reg x) (ScalarSize.Size32)))
-          (nbits Reg (vec_cnt tmp (VectorSize.Size8x8)))
-          (added Reg (addv nbits (VectorSize.Size8x8)))
-        )
-        (value_reg (mov_from_vec added 0 (VectorSize.Size8x16)))))
+      (let ((tmp Reg (mov_to_fpu x (ScalarSize.Size32)))
+            (nbits Reg (vec_cnt tmp (VectorSize.Size8x8)))
+            (added Reg (addv nbits (VectorSize.Size8x8))))
+        (mov_from_vec added 0 (VectorSize.Size8x16))))
 
 (rule (lower (has_type $I64 (popcnt x)))
-      (let (
-          (tmp Reg (mov_to_fpu (put_in_reg x) (ScalarSize.Size64)))
-          (nbits Reg (vec_cnt tmp (VectorSize.Size8x8)))
-          (added Reg (addv nbits (VectorSize.Size8x8)))
-        )
-        (value_reg (mov_from_vec added 0 (VectorSize.Size8x16)))))
+      (let ((tmp Reg (mov_to_fpu x (ScalarSize.Size64)))
+            (nbits Reg (vec_cnt tmp (VectorSize.Size8x8)))
+            (added Reg (addv nbits (VectorSize.Size8x8))))
+        (mov_from_vec added 0 (VectorSize.Size8x16))))
 
 (rule (lower (has_type $I128 (popcnt x)))
-      (let (
-          (val ValueRegs (put_in_regs x))
-          (tmp_half Reg (mov_to_fpu (value_regs_get val 0) (ScalarSize.Size64)))
-          (tmp Reg (mov_to_vec tmp_half (value_regs_get val 1) 1 (VectorSize.Size64x2)))
-          (nbits Reg (vec_cnt tmp (VectorSize.Size8x16)))
-          (added Reg (addv nbits (VectorSize.Size8x16)))
-        )
+      (let ((val ValueRegs x)
+            (tmp_half Reg (mov_to_fpu (value_regs_get val 0) (ScalarSize.Size64)))
+            (tmp Reg (mov_to_vec tmp_half (value_regs_get val 1) 1 (VectorSize.Size64x2)))
+            (nbits Reg (vec_cnt tmp (VectorSize.Size8x16)))
+            (added Reg (addv nbits (VectorSize.Size8x16))))
         (value_regs (mov_from_vec added 0 (VectorSize.Size8x16)) (imm $I64 0))))
 
 (rule (lower (has_type $I8X16 (popcnt x)))
-      (value_reg (vec_cnt (put_in_reg x) (VectorSize.Size8x16))))
+      (vec_cnt x (VectorSize.Size8x16)))

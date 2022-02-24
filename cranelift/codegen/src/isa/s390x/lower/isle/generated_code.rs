@@ -8210,21 +8210,18 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
             match pattern2_0 {
                 &Opcode::Copy => {
                     // Rule at src/isa/s390x/lower.isle line 53.
-                    let expr0_0 = C::put_in_reg(ctx, pattern2_1);
-                    let expr1_0 = C::value_reg(ctx, expr0_0);
-                    return Some(expr1_0);
+                    let expr0_0 = C::put_in_regs(ctx, pattern2_1);
+                    return Some(expr0_0);
                 }
                 &Opcode::Breduce => {
                     // Rule at src/isa/s390x/lower.isle line 752.
-                    let expr0_0 = C::put_in_reg(ctx, pattern2_1);
-                    let expr1_0 = C::value_reg(ctx, expr0_0);
-                    return Some(expr1_0);
+                    let expr0_0 = C::put_in_regs(ctx, pattern2_1);
+                    return Some(expr0_0);
                 }
                 &Opcode::Ireduce => {
                     // Rule at src/isa/s390x/lower.isle line 596.
-                    let expr0_0 = C::put_in_reg(ctx, pattern2_1);
-                    let expr1_0 = C::value_reg(ctx, expr0_0);
-                    return Some(expr1_0);
+                    let expr0_0 = C::put_in_regs(ctx, pattern2_1);
+                    return Some(expr0_0);
                 }
                 _ => {}
             }

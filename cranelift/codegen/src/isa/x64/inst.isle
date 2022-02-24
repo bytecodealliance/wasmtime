@@ -162,27 +162,27 @@
        ;; GPR conditional move with the `OR` of two conditions; overwrites
        ;; the destination register.
        (CmoveOr (size OperandSize)
-              (cc1 CC)
-              (cc2 CC)
-              (consequent GprMem)
-              (alternative Gpr)
-              (dst WritableGpr))
+                (cc1 CC)
+                (cc2 CC)
+                (consequent GprMem)
+                (alternative Gpr)
+                (dst WritableGpr))
 
        ;; XMM conditional move; overwrites the destination register.
        (XmmCmove (size OperandSize)
-              (cc CC)
-              (consequent XmmMem)
-              (alternative Xmm)
-              (dst WritableXmm))
+                 (cc CC)
+                 (consequent XmmMem)
+                 (alternative Xmm)
+                 (dst WritableXmm))
 
        ;; XMM conditional move with the `OR` of two conditions; overwrites
        ;; the destination register.
        (XmmCmoveOr (size OperandSize)
-              (cc1 CC)
-              (cc2 CC)
-              (consequent XmmMem)
-              (alternative Xmm)
-              (dst WritableXmm))
+                   (cc1 CC)
+                   (cc2 CC)
+                   (consequent XmmMem)
+                   (alternative Xmm)
+                   (dst WritableXmm))
 
        ;; =========================================
        ;; Stack manipulation.
@@ -960,6 +960,13 @@
 (decl reg_to_gpr_mem (Reg) GprMem)
 (extern constructor reg_to_gpr_mem reg_to_gpr_mem)
 
+;; Construct a `GprMemImm` from a `Reg`.
+;;
+;; Asserts that the `Reg` is a GPR.
+(decl reg_to_gpr_mem_imm (Reg) GprMemImm)
+(rule (reg_to_gpr_mem_imm r)
+      (gpr_to_gpr_mem_imm (gpr_new r)))
+
 ;; Put a value into a GPR.
 ;;
 ;; Asserts that the value goes into a GPR.
@@ -1188,44 +1195,41 @@
 ;; that everything is equal to itself.
 (decl vector_all_ones (Type) Xmm)
 (rule (vector_all_ones ty)
-      (let ((wr WritableXmm (temp_writable_xmm))
-            (r Xmm (writable_xmm_to_xmm wr))
+      (let ((r WritableXmm (temp_writable_xmm))
             (_ Unit (emit (MInst.XmmRmR (sse_cmp_op $I32X4)
                                         r
-                                        (xmm_to_xmm_mem r)
-                                        wr))))
+                                        r
+                                        r))))
         r))
 
 ;; Helper for creating an SSE register holding an `i64x2` from two `i64` values.
 (decl make_i64x2_from_lanes (GprMem GprMem) Xmm)
 (rule (make_i64x2_from_lanes lo hi)
-      (let ((dst_xmm_w WritableXmm (temp_writable_xmm))
-            (dst_reg_w WritableReg (writable_xmm_to_reg dst_xmm_w))
-            (dst_xmm_r Xmm (writable_xmm_to_xmm dst_xmm_w))
-            (dst_reg_r Reg (xmm_to_reg dst_xmm_r))
-            (_0 Unit (emit (MInst.XmmUninitializedValue dst_xmm_w)))
+      (let ((dst_xmm WritableXmm (temp_writable_xmm))
+            (dst_reg WritableReg dst_xmm)
+            (_0 Unit (emit (MInst.XmmUninitializedValue dst_xmm)))
             (_1 Unit (emit (MInst.XmmRmRImm (SseOpcode.Pinsrd)
-                                            dst_reg_r
-                                            (gpr_mem_to_reg_mem lo)
-                                            dst_reg_w
+                                            dst_reg
+                                            lo
+                                            dst_reg
                                             0
                                             (OperandSize.Size64))))
             (_2 Unit (emit (MInst.XmmRmRImm (SseOpcode.Pinsrd)
-                                            dst_reg_r
-                                            (gpr_mem_to_reg_mem hi)
-                                            dst_reg_w
+                                            dst_reg
+                                            hi
+                                            dst_reg
                                             1
                                             (OperandSize.Size64)))))
-        dst_xmm_r))
+        dst_xmm))
 
 ;; Move a `RegMemImm.Reg` operand to an XMM register, if necessary.
 (decl mov_rmi_to_xmm (RegMemImm) XmmMemImm)
 (rule (mov_rmi_to_xmm rmi @ (RegMemImm.Mem _)) (xmm_mem_imm_new rmi))
 (rule (mov_rmi_to_xmm rmi @ (RegMemImm.Imm _)) (xmm_mem_imm_new rmi))
 (rule (mov_rmi_to_xmm (RegMemImm.Reg r))
-      (xmm_to_xmm_mem_imm (gpr_to_xmm (SseOpcode.Movd)
-                                      (reg_to_gpr_mem r)
-                                      (OperandSize.Size32))))
+      (gpr_to_xmm (SseOpcode.Movd)
+                  r
+                  (OperandSize.Size32)))
 
 ;;;; Helpers for Emitting Loads ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1233,34 +1237,34 @@
 (decl x64_load (Type SyntheticAmode ExtKind) Reg)
 
 (rule (x64_load (fits_in_32 ty) addr (ExtKind.SignExtend))
-      (gpr_to_reg (movsx ty
-                         (ext_mode (ty_bytes ty) 8)
-                         (reg_mem_to_gpr_mem (synthetic_amode_to_reg_mem addr)))))
+      (movsx ty
+             (ext_mode (ty_bytes ty) 8)
+             addr))
 
 (rule (x64_load $I64 addr _ext_kind)
       (let ((dst WritableGpr (temp_writable_gpr))
             (_ Unit (emit (MInst.Mov64MR addr dst))))
-        (gpr_to_reg (writable_gpr_to_gpr dst))))
+        dst))
 
 (rule (x64_load $F32 addr _ext_kind)
-      (xmm_to_reg (xmm_unary_rm_r (SseOpcode.Movss)
-                                  (reg_mem_to_xmm_mem (synthetic_amode_to_reg_mem addr)))))
+      (xmm_unary_rm_r (SseOpcode.Movss)
+                      addr))
 
 (rule (x64_load $F64 addr _ext_kind)
-      (xmm_to_reg (xmm_unary_rm_r (SseOpcode.Movsd)
-                                  (reg_mem_to_xmm_mem (synthetic_amode_to_reg_mem addr)))))
+      (xmm_unary_rm_r (SseOpcode.Movsd)
+                      addr))
 
 (rule (x64_load $F32X4 addr _ext_kind)
-      (xmm_to_reg (xmm_unary_rm_r (SseOpcode.Movups)
-                                  (reg_mem_to_xmm_mem (synthetic_amode_to_reg_mem addr)))))
+      (xmm_unary_rm_r (SseOpcode.Movups)
+                      addr))
 
 (rule (x64_load $F64X2 addr _ext_kind)
-      (xmm_to_reg (xmm_unary_rm_r (SseOpcode.Movupd)
-                                  (reg_mem_to_xmm_mem (synthetic_amode_to_reg_mem addr)))))
+      (xmm_unary_rm_r (SseOpcode.Movupd)
+                      addr))
 
 (rule (x64_load (multi_lane _bits _lanes) addr _ext_kind)
-      (xmm_to_reg (xmm_unary_rm_r (SseOpcode.Movdqu)
-                                  (reg_mem_to_xmm_mem (synthetic_amode_to_reg_mem addr)))))
+      (xmm_unary_rm_r (SseOpcode.Movdqu)
+                      addr))
 
 ;;;; Instruction Constructors ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1274,7 +1278,7 @@
       (let ((dst WritableGpr (temp_writable_gpr))
             (size OperandSize (operand_size_of_type_32_64 ty))
             (_ Unit (emit (MInst.AluRmiR size opcode src1 src2 dst))))
-        (writable_gpr_to_gpr dst)))
+        dst))
 
 ;; Helper for emitting `add` instructions.
 (decl add (Type Gpr GprMemImm) Gpr)
@@ -1294,7 +1298,7 @@
                         src1
                         src2
                         dst)
-         (gpr_to_reg (writable_gpr_to_gpr dst)))))
+         dst)))
 
 ;; Helper for creating `adc` instructions.
 (decl adc_paired (Type Gpr GprMemImm) ConsumesFlags)
@@ -1306,7 +1310,7 @@
                         src1
                         src2
                         dst)
-         (gpr_to_reg (writable_gpr_to_gpr dst)))))
+         dst)))
 
 ;; Helper for emitting `sub` instructions.
 (decl sub (Type Gpr GprMemImm) Gpr)
@@ -1326,7 +1330,7 @@
                         src1
                         src2
                         dst)
-         (gpr_to_reg (writable_gpr_to_gpr dst)))))
+         dst)))
 
 ;; Helper for creating `sbb` instructions.
 (decl sbb_paired (Type Gpr GprMemImm) ConsumesFlags)
@@ -1338,7 +1342,7 @@
                         src1
                         src2
                         dst)
-         (gpr_to_reg (writable_gpr_to_gpr dst)))))
+         dst)))
 
 ;; Helper for creating `mul` instructions.
 (decl mul (Type Gpr GprMemImm) Gpr)
@@ -1380,19 +1384,19 @@
       (let ((dst WritableGpr (temp_writable_gpr))
             (size OperandSize (operand_size_of_type_32_64 ty))
             (_ Unit (emit (MInst.Imm size simm64 dst))))
-        (gpr_to_reg (writable_gpr_to_gpr dst))))
+        dst))
 
 ;; `f32` immediates.
 (rule (imm $F32 bits)
-      (xmm_to_reg (gpr_to_xmm (SseOpcode.Movd)
-                              (reg_mem_to_gpr_mem (RegMem.Reg (imm $I32 bits)))
-                              (OperandSize.Size32))))
+      (gpr_to_xmm (SseOpcode.Movd)
+                  (imm $I32 bits)
+                  (OperandSize.Size32)))
 
 ;; `f64` immediates.
 (rule (imm $F64 bits)
-      (xmm_to_reg (gpr_to_xmm (SseOpcode.Movq)
-                              (reg_mem_to_gpr_mem (RegMem.Reg (imm $I64 bits)))
-                              (OperandSize.Size64))))
+      (gpr_to_xmm (SseOpcode.Movq)
+                  (imm $I64 bits)
+                  (OperandSize.Size64)))
 
 (decl nonzero_u64_fits_in_u32 (u64) u64)
 (extern extractor nonzero_u64_fits_in_u32 nonzero_u64_fits_in_u32)
@@ -1402,17 +1406,17 @@
 (rule (imm $I64 (nonzero_u64_fits_in_u32 x))
       (let ((dst WritableGpr (temp_writable_gpr))
             (_ Unit (emit (MInst.Imm (OperandSize.Size32) x dst))))
-        (gpr_to_reg (writable_gpr_to_gpr dst))))
+        dst))
 
 ;; Special case for integer zero immediates: turn them into an `xor r, r`.
 (rule (imm (fits_in_64 ty) 0)
       (let ((wgpr WritableGpr (temp_writable_gpr))
-            (g Gpr (writable_gpr_to_gpr wgpr))
+            (g Gpr wgpr)
             (size OperandSize (operand_size_of_type_32_64 ty))
             (_ Unit (emit (MInst.AluRmiR size
                                          (AluRmiROpcode.Xor)
                                          g
-                                         (gpr_to_gpr_mem_imm g)
+                                         g
                                          wgpr))))
         (gpr_to_reg g)))
 
@@ -1420,20 +1424,20 @@
 ;; specific to the vector type.
 (rule (imm ty @ (multi_lane _bits _lanes) 0)
       (let ((wr WritableXmm (temp_writable_xmm))
-            (r Xmm (writable_xmm_to_xmm wr))
+            (r Xmm wr)
             (_ Unit (emit (MInst.XmmRmR (sse_xor_op ty)
                                         r
-                                        (xmm_to_xmm_mem r)
+                                        r
                                         wr))))
         (xmm_to_reg r)))
 
 ;; Special case for `f32` zero immediates to use `xorps`.
 (rule (imm $F32 0)
       (let ((wr WritableXmm (temp_writable_xmm))
-            (r Xmm (writable_xmm_to_xmm wr))
+            (r Xmm wr)
             (_ Unit (emit (MInst.XmmRmR (SseOpcode.Xorps)
                                         r
-                                        (xmm_to_xmm_mem r)
+                                        r
                                         wr))))
         (xmm_to_reg r)))
 
@@ -1442,10 +1446,10 @@
 ;; Special case for `f64` zero immediates to use `xorpd`.
 (rule (imm $F64 0)
       (let ((wr WritableXmm (temp_writable_xmm))
-            (r Xmm (writable_xmm_to_xmm wr))
+            (r Xmm wr)
             (_ Unit (emit (MInst.XmmRmR (SseOpcode.Xorpd)
                                         r
-                                        (xmm_to_xmm_mem r)
+                                        r
                                         wr))))
         (xmm_to_reg r)))
 
@@ -1459,7 +1463,7 @@
             ;; rely on their shift-amount-masking semantics.
             (size OperandSize (raw_operand_size_of_type ty))
             (_ Unit (emit (MInst.ShiftR size kind src1 src2 dst))))
-        (writable_gpr_to_gpr dst)))
+        dst))
 
 ;; Helper for creating `rotl` instructions.
 (decl x64_rotl (Type Gpr Imm8Gpr) Gpr)
@@ -1528,7 +1532,7 @@
             (size OperandSize (operand_size_of_type_32_64 ty)))
         (ConsumesFlags.ConsumesFlagsReturnsReg
          (MInst.Cmove size cc consequent alternative dst)
-         (gpr_to_reg (writable_gpr_to_gpr dst)))))
+         dst)))
 
 (decl cmove_xmm (Type CC XmmMem Xmm) ConsumesFlags)
 (rule (cmove_xmm ty cc consequent alternative)
@@ -1536,38 +1540,38 @@
             (size OperandSize (operand_size_of_type_32_64 ty)))
         (ConsumesFlags.ConsumesFlagsReturnsReg
          (MInst.XmmCmove size cc consequent alternative dst)
-         (xmm_to_reg (writable_xmm_to_xmm dst)))))
+         dst)))
 
 ;; Helper for creating `cmove` instructions directly from values. This allows us
 ;; to special-case the `I128` types and default to the `cmove` helper otherwise.
 ;; It also eliminates some `put_in_reg*` boilerplate in the lowering ISLE code.
 (decl cmove_from_values (Type CC Value Value) ConsumesFlags)
 (rule (cmove_from_values $I128 cc consequent alternative)
-      (let ((cons ValueRegs (put_in_regs consequent))
-            (alt ValueRegs (put_in_regs alternative))
+      (let ((cons ValueRegs consequent)
+            (alt ValueRegs alternative)
             (dst1 WritableGpr (temp_writable_gpr))
             (dst2 WritableGpr (temp_writable_gpr))
             (size OperandSize (OperandSize.Size64))
             (lower_cmove MInst (MInst.Cmove
                                 size cc
-                                (gpr_to_gpr_mem (value_regs_get_gpr cons 0))
-                                (value_regs_get_gpr alt 0) dst1))
+                                (value_regs_get_gpr cons 0)
+                                (value_regs_get_gpr alt 0)
+                                dst1))
             (upper_cmove MInst (MInst.Cmove
                                 size cc
-                                (gpr_to_gpr_mem (value_regs_get_gpr cons 1))
-                                (value_regs_get_gpr alt 1) dst2)))
+                                (value_regs_get_gpr cons 1)
+                                (value_regs_get_gpr alt 1)
+                                dst2)))
         (ConsumesFlags.ConsumesFlagsTwiceReturnsValueRegs
          lower_cmove
          upper_cmove
-         (value_regs
-          (gpr_to_reg (writable_gpr_to_gpr dst1))
-          (gpr_to_reg (writable_gpr_to_gpr dst2))))))
+         (value_regs dst1 dst2))))
 
 (rule (cmove_from_values (is_gpr_type (is_single_register_type ty)) cc consequent alternative)
-      (cmove ty cc (put_in_gpr_mem consequent) (put_in_gpr alternative)))
+      (cmove ty cc consequent alternative))
 
 (rule (cmove_from_values (is_xmm_type (is_single_register_type ty)) cc consequent alternative)
-      (cmove_xmm ty cc (put_in_xmm_mem consequent) (put_in_xmm alternative)))
+      (cmove_xmm ty cc consequent alternative))
 
 ;; Helper for creating `cmove` instructions with the logical OR of multiple
 ;; flags. Note that these instructions will always result in more than one
@@ -1578,7 +1582,7 @@
             (size OperandSize (operand_size_of_type_32_64 ty)))
         (ConsumesFlags.ConsumesFlagsReturnsReg
          (MInst.CmoveOr size cc1 cc2 consequent alternative dst)
-         (gpr_to_reg (writable_gpr_to_gpr dst)))))
+         dst)))
 
 (decl cmove_or_xmm (Type CC CC XmmMem Xmm) ConsumesFlags)
 (rule (cmove_or_xmm ty cc1 cc2 consequent alternative)
@@ -1586,52 +1590,51 @@
             (size OperandSize (operand_size_of_type_32_64 ty)))
         (ConsumesFlags.ConsumesFlagsReturnsReg
          (MInst.XmmCmoveOr size cc1 cc2 consequent alternative dst)
-         (xmm_to_reg (writable_xmm_to_xmm dst)))))
+         dst)))
 
 ;; Helper for creating `cmove_or` instructions directly from values. This allows
 ;; us to special-case the `I128` types and default to the `cmove_or` helper
 ;; otherwise.
 (decl cmove_or_from_values (Type CC CC Value Value) ConsumesFlags)
 (rule (cmove_or_from_values $I128 cc1 cc2 consequent alternative)
-      (let ((cons ValueRegs (put_in_regs consequent))
-            (alt ValueRegs (put_in_regs alternative))
+      (let ((cons ValueRegs consequent)
+            (alt ValueRegs alternative)
             (dst1 WritableGpr (temp_writable_gpr))
             (dst2 WritableGpr (temp_writable_gpr))
             (size OperandSize (OperandSize.Size64))
-            (lower_cmove MInst (MInst.CmoveOr size cc1 cc2 (gpr_to_gpr_mem (value_regs_get_gpr cons 0)) (value_regs_get_gpr alt 0) dst1))
-            (upper_cmove MInst (MInst.CmoveOr size cc1 cc2 (gpr_to_gpr_mem (value_regs_get_gpr cons 1)) (value_regs_get_gpr alt 1) dst2)))
+            (lower_cmove MInst (MInst.CmoveOr size cc1 cc2 (value_regs_get_gpr cons 0) (value_regs_get_gpr alt 0) dst1))
+            (upper_cmove MInst (MInst.CmoveOr size cc1 cc2 (value_regs_get_gpr cons 1) (value_regs_get_gpr alt 1) dst2)))
         (ConsumesFlags.ConsumesFlagsTwiceReturnsValueRegs
          lower_cmove
          upper_cmove
-         (value_regs (gpr_to_reg (writable_gpr_to_gpr dst1))
-                     (gpr_to_reg (writable_gpr_to_gpr dst2))))))
+         (value_regs dst1 dst2))))
 
 (rule (cmove_or_from_values (is_gpr_type (is_single_register_type ty)) cc1 cc2 consequent alternative)
-      (cmove_or ty cc1 cc2 (put_in_gpr_mem consequent) (put_in_gpr alternative)))
+      (cmove_or ty cc1 cc2 consequent alternative))
 
 (rule (cmove_or_from_values (is_xmm_type (is_single_register_type ty)) cc1 cc2 consequent alternative)
-      (cmove_or_xmm ty cc1 cc2 (put_in_xmm_mem consequent) (put_in_xmm alternative)))
+      (cmove_or_xmm ty cc1 cc2 consequent alternative))
 
 ;; Helper for creating `MInst.MovzxRmR` instructions.
 (decl movzx (Type ExtMode GprMem) Gpr)
 (rule (movzx ty mode src)
       (let ((dst WritableGpr (temp_writable_gpr))
             (_ Unit (emit (MInst.MovzxRmR mode src dst))))
-        (writable_gpr_to_gpr dst)))
+        dst))
 
 ;; Helper for creating `MInst.MovsxRmR` instructions.
 (decl movsx (Type ExtMode GprMem) Gpr)
 (rule (movsx ty mode src)
       (let ((dst WritableGpr (temp_writable_gpr))
             (_ Unit (emit (MInst.MovsxRmR mode src dst))))
-        (writable_gpr_to_gpr dst)))
+        dst))
 
 ;; Helper for creating `MInst.XmmRmR` instructions.
 (decl xmm_rm_r (Type SseOpcode Xmm XmmMem) Xmm)
 (rule (xmm_rm_r ty op src1 src2)
       (let ((dst WritableXmm (temp_writable_xmm))
             (_ Unit (emit (MInst.XmmRmR op src1 src2 dst))))
-        (writable_xmm_to_xmm dst)))
+        dst))
 
 ;; Helper for creating `paddb` instructions.
 (decl paddb (Xmm XmmMem) Xmm)
@@ -1857,7 +1860,7 @@
       ;; `Inst` itself.)
       (let ((mask2 WritableXmm (xmm0))
             (_ Unit (emit (MInst.XmmUnaryRmR (SseOpcode.Movapd)
-                                             (xmm_to_xmm_mem mask)
+                                             mask
                                              mask2))))
         (xmm_rm_r $F64X2 (SseOpcode.Blendvpd) src1 src2)))
 
@@ -1953,17 +1956,17 @@
             (_ Unit (emit (MInst.XmmRmRImm op
                                            src1
                                            src2
-                                           (writable_xmm_to_reg dst)
+                                           dst
                                            imm
                                            size))))
-        (writable_xmm_to_xmm dst)))
+        dst))
 
 ;; Helper for creating `palignr` instructions.
 (decl palignr (Xmm XmmMem u8 OperandSize) Xmm)
 (rule (palignr src1 src2 imm size)
       (xmm_rm_r_imm (SseOpcode.Palignr)
-                    (xmm_to_reg src1)
-                    (xmm_mem_to_reg_mem src2)
+                    src1
+                    src2
                     imm
                     size))
 
@@ -1971,8 +1974,8 @@
 (decl cmpps (Xmm XmmMem FcmpImm) Xmm)
 (rule (cmpps src1 src2 imm)
       (xmm_rm_r_imm (SseOpcode.Cmpps)
-                    (xmm_to_reg src1)
-                    (xmm_mem_to_reg_mem src2)
+                    src1
+                    src2
                     (encode_fcmp_imm imm)
                     (OperandSize.Size32)))
 
@@ -1980,8 +1983,8 @@
 (decl pinsrb (Xmm GprMem u8) Xmm)
 (rule (pinsrb src1 src2 lane)
       (xmm_rm_r_imm (SseOpcode.Pinsrb)
-                    (xmm_to_reg src1)
-                    (gpr_mem_to_reg_mem src2)
+                    src1
+                    src2
                     lane
                     (OperandSize.Size32)))
 
@@ -1989,8 +1992,8 @@
 (decl pinsrw (Xmm GprMem u8) Xmm)
 (rule (pinsrw src1 src2 lane)
       (xmm_rm_r_imm (SseOpcode.Pinsrw)
-                    (xmm_to_reg src1)
-                    (gpr_mem_to_reg_mem src2)
+                    src1
+                    src2
                     lane
                     (OperandSize.Size32)))
 
@@ -1998,8 +2001,8 @@
 (decl pinsrd (Xmm GprMem u8 OperandSize) Xmm)
 (rule (pinsrd src1 src2 lane size)
       (xmm_rm_r_imm (SseOpcode.Pinsrd)
-                    (xmm_to_reg src1)
-                    (gpr_mem_to_reg_mem src2)
+                    src1
+                    src2
                     lane
                     size))
 
@@ -2007,20 +2010,19 @@
 (decl insertps (Xmm XmmMem u8) Xmm)
 (rule (insertps src1 src2 lane)
       (xmm_rm_r_imm (SseOpcode.Insertps)
-                    (xmm_to_reg src1)
-                    (xmm_mem_to_reg_mem src2)
+                    src1
+                    src2
                     lane
                     (OperandSize.Size32)))
 
 ;; Helper for creating `pshufd` instructions.
 (decl pshufd (XmmMem u8 OperandSize) Xmm)
 (rule (pshufd src imm size)
-      (let ((w_dst WritableXmm (temp_writable_xmm))
-            (dst Xmm (writable_xmm_to_xmm w_dst))
+      (let ((dst WritableXmm (temp_writable_xmm))
             (_ Unit (emit (MInst.XmmRmRImm (SseOpcode.Pshufd)
-                                           (xmm_to_reg dst)
-                                           (xmm_mem_to_reg_mem src)
-                                           (writable_xmm_to_reg w_dst)
+                                           dst
+                                           src
+                                           dst
                                            imm
                                            size))))
         dst))
@@ -2030,7 +2032,7 @@
 (rule (xmm_unary_rm_r op src)
       (let ((dst WritableXmm (temp_writable_xmm))
             (_ Unit (emit (MInst.XmmUnaryRmR op src dst))))
-        (writable_xmm_to_xmm dst)))
+        dst))
 
 ;; Helper for creating `pmovsxbw` instructions.
 (decl pmovsxbw (XmmMem) Xmm)
@@ -2062,7 +2064,7 @@
 (rule (xmm_unary_rm_r_evex op src)
       (let ((dst WritableXmm (temp_writable_xmm))
             (_ Unit (emit (MInst.XmmUnaryRmREvex op src dst))))
-        (writable_xmm_to_xmm dst)))
+        dst))
 
 ;; Helper for creating `vpabsq` instructions.
 (decl vpabsq (XmmMem) Xmm)
@@ -2077,7 +2079,7 @@
                                             src1
                                             src2
                                             dst))))
-        (writable_xmm_to_xmm dst)))
+        dst))
 
 ;; Helper for creating `vpmullq` instructions.
 ;;
@@ -2102,8 +2104,7 @@
                                        src2
                                        dst_lo
                                        dst_hi))))
-        (value_gprs (writable_gpr_to_gpr dst_lo)
-                    (writable_gpr_to_gpr dst_hi))))
+        (value_gprs dst_lo dst_hi)))
 
 ;; Helper for creating `mul` instructions that return both the lower and
 ;; (unsigned) higher halves of the result.
@@ -2119,7 +2120,7 @@
                                            src1
                                            src2
                                            dst))))
-        (writable_xmm_to_xmm dst)))
+        dst))
 
 ;; Helper for creating `psllw` instructions.
 (decl psllw (Xmm XmmMemImm) Xmm)
@@ -2164,15 +2165,14 @@
 ;; Helper for creating `pextrd` instructions.
 (decl pextrd (Type Xmm u8) Gpr)
 (rule (pextrd ty src lane)
-      (let ((w_dst WritableGpr (temp_writable_gpr))
-            (r_dst Gpr (writable_gpr_to_gpr w_dst))
+      (let ((dst WritableGpr (temp_writable_gpr))
             (_ Unit (emit (MInst.XmmRmRImm (SseOpcode.Pextrd)
-                                           (gpr_to_reg r_dst)
-                                           (RegMem.Reg (xmm_to_reg src))
-                                           (writable_gpr_to_reg w_dst)
+                                           dst
+                                           src
+                                           dst
                                            lane
                                            (operand_size_of_type_32_64 (lane_type ty))))))
-        r_dst))
+        dst))
 
 ;; Helper for creating `cmppd` instructions.
 ;;
@@ -2182,8 +2182,8 @@
 (decl cmppd (Xmm XmmMem FcmpImm) Xmm)
 (rule (cmppd src1 src2 imm)
       (xmm_rm_r_imm (SseOpcode.Cmppd)
-                    (xmm_to_reg src1)
-                    (xmm_mem_to_reg_mem src2)
+                    src1
+                    src2
                     (encode_fcmp_imm imm)
                     (OperandSize.Size32)))
 
@@ -2192,7 +2192,7 @@
 (rule (gpr_to_xmm op src size)
       (let ((dst WritableXmm (temp_writable_xmm))
             (_ Unit (emit (MInst.GprToXmm op src dst size))))
-        (writable_xmm_to_xmm dst)))
+        dst))
 
 ;; Helper for creating `not` instructions.
 (decl not (Type Gpr) Gpr)
@@ -2200,7 +2200,7 @@
       (let ((dst WritableGpr (temp_writable_gpr))
             (size OperandSize (operand_size_of_type_32_64 ty))
             (_ Unit (emit (MInst.Not size src dst))))
-        (writable_gpr_to_gpr dst)))
+        dst))
 
 ;; Helper for creating `neg` instructions.
 (decl neg (Type Gpr) Gpr)
@@ -2208,15 +2208,84 @@
       (let ((dst WritableGpr (temp_writable_gpr))
             (size OperandSize (operand_size_of_type_32_64 ty))
             (_ Unit (emit (MInst.Neg size src dst))))
-        (writable_gpr_to_gpr dst)))
+        dst))
 
 (decl lea (SyntheticAmode) Gpr)
 (rule (lea addr)
       (let ((dst WritableGpr (temp_writable_gpr))
             (_ Unit (emit (MInst.LoadEffectiveAddress addr dst))))
-        (writable_gpr_to_gpr dst)))
+        dst))
 
 ;; Helper for creating `ud2` instructions.
 (decl ud2 (TrapCode) SideEffectNoResult)
 (rule (ud2 code)
       (SideEffectNoResult.Inst (MInst.Ud2 code)))
+
+;;;; Automatic conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(convert Gpr ValueRegs value_gpr)
+(convert Value Gpr put_in_gpr)
+(convert Value GprMem put_in_gpr_mem)
+(convert Value GprMemImm put_in_gpr_mem_imm)
+(convert Value RegMem put_in_reg_mem)
+(convert Value RegMemImm put_in_reg_mem_imm)
+(convert Gpr GprMemImm gpr_to_gpr_mem_imm)
+(convert Gpr GprMem gpr_to_gpr_mem)
+(convert Gpr Reg gpr_to_reg)
+(convert GprMem RegMem gpr_mem_to_reg_mem)
+(convert Reg Gpr gpr_new)
+(convert WritableGpr Gpr writable_gpr_to_gpr)
+(convert RegMemImm GprMemImm gpr_mem_imm_new)
+(convert RegMem GprMem reg_mem_to_gpr_mem)
+(convert Reg GprMem reg_to_gpr_mem)
+(convert Reg GprMemImm reg_to_gpr_mem_imm)
+(convert WritableGpr WritableReg writable_gpr_to_reg)
+(convert WritableGpr Reg writable_gpr_to_r_reg)
+
+(convert Xmm ValueRegs value_xmm)
+(convert Value Xmm put_in_xmm)
+(convert Value XmmMem put_in_xmm_mem)
+(convert Value XmmMemImm put_in_xmm_mem_imm)
+(convert Xmm Reg xmm_to_reg)
+(convert Xmm RegMem xmm_to_reg_mem)
+(convert Reg Xmm xmm_new)
+(convert Reg XmmMem reg_to_xmm_mem)
+(convert RegMem XmmMem reg_mem_to_xmm_mem)
+(convert RegMemImm XmmMemImm mov_rmi_to_xmm)
+(convert Xmm XmmMem xmm_to_xmm_mem)
+(convert Xmm XmmMemImm xmm_to_xmm_mem_imm)
+(convert XmmMem RegMem xmm_mem_to_reg_mem)
+(convert WritableXmm Xmm writable_xmm_to_xmm)
+(convert WritableXmm WritableReg writable_xmm_to_reg)
+(convert WritableXmm Reg writable_xmm_to_r_reg)
+(convert WritableXmm XmmMem writable_xmm_to_xmm_mem)
+
+(convert Gpr Imm8Gpr gpr_to_imm8_gpr)
+
+(convert Amode SyntheticAmode amode_to_synthetic_amode)
+(convert SyntheticAmode GprMem synthetic_amode_to_gpr_mem)
+(convert SyntheticAmode XmmMem synthetic_amode_to_xmm_mem)
+
+(decl reg_to_xmm_mem (Reg) XmmMem)
+(rule (reg_to_xmm_mem r)
+      (xmm_to_xmm_mem (xmm_new r)))
+(decl xmm_to_reg_mem (Reg) XmmMem)
+(rule (xmm_to_reg_mem r)
+      (RegMem.Reg (xmm_to_reg r)))
+
+(decl writable_gpr_to_r_reg (WritableGpr) Reg)
+(rule (writable_gpr_to_r_reg w_gpr)
+      (writable_reg_to_reg (writable_gpr_to_reg w_gpr)))
+(decl writable_xmm_to_r_reg (WritableXmm) Reg)
+(rule (writable_xmm_to_r_reg w_xmm)
+      (writable_reg_to_reg (writable_xmm_to_reg w_xmm)))
+(decl writable_xmm_to_xmm_mem (WritableXmm) XmmMem)
+(rule (writable_xmm_to_xmm_mem w_xmm)
+      (xmm_to_xmm_mem (writable_xmm_to_xmm w_xmm)))
+
+(decl synthetic_amode_to_gpr_mem (SyntheticAmode) GprMem)
+(rule (synthetic_amode_to_gpr_mem amode)
+      (synthetic_amode_to_reg_mem amode))
+(decl synthetic_amode_to_xmm_mem (SyntheticAmode) XmmMem)
+(rule (synthetic_amode_to_xmm_mem amode)
+      (synthetic_amode_to_reg_mem amode))
