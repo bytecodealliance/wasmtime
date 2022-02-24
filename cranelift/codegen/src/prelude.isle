@@ -251,15 +251,33 @@
 (decl value_list_slice (ValueSlice) ValueList)
 (extern extractor infallible value_list_slice value_list_slice)
 
+;; Extractor to test whether a `ValueSlice` is empty.
+(decl value_slice_empty () ValueSlice)
+(extern extractor value_slice_empty value_slice_empty)
+
+;; Extractor to split a `ValueSlice` into its first element plus a tail.
+(decl value_slice_unwrap (Value ValueSlice) ValueSlice)
+(extern extractor value_slice_unwrap value_slice_unwrap)
+
+;; Return the length of a `ValueSlice`.
+(decl value_slice_len (ValueSlice) usize)
+(extern constructor value_slice_len value_slice_len)
+
+;; Return any element of a `ValueSlice`.
+(decl value_slice_get (ValueSlice usize) Value)
+(extern constructor value_slice_get value_slice_get)
+
 ;; Extractor to get the first element from a value list, along with its tail as
 ;; a `ValueSlice`.
 (decl unwrap_head_value_list_1 (Value ValueSlice) ValueList)
-(extern extractor infallible unwrap_head_value_list_1 unwrap_head_value_list_1)
+(extractor (unwrap_head_value_list_1 head tail)
+           (value_list_slice (value_slice_unwrap head tail)))
 
 ;; Extractor to get the first two elements from a value list, along with its
 ;; tail as a `ValueSlice`.
 (decl unwrap_head_value_list_2 (Value Value ValueSlice) ValueList)
-(extern extractor infallible unwrap_head_value_list_2 unwrap_head_value_list_2)
+(extractor (unwrap_head_value_list_2 head1 head2 tail)
+           (value_list_slice (value_slice_unwrap head1 (value_slice_unwrap head2 tail))))
 
 ;; Turn a `Writable<Reg>` into a `Reg` via `Writable::to_reg`.
 (decl writable_reg_to_reg (WritableReg) Reg)

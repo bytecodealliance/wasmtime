@@ -1,4 +1,4 @@
-use crate::ir::{types, Inst, Value};
+use crate::ir::{types, Inst, Value, ValueList};
 use crate::machinst::{get_output_reg, InsnOutput, LowerCtx, MachInst, RegRenamer};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
@@ -12,7 +12,7 @@ pub use crate::isa::unwind::UnwindInst;
 pub use crate::machinst::RelocDistance;
 
 pub type Unit = ();
-pub type ValueSlice<'a> = &'a [Value];
+pub type ValueSlice = (ValueList, usize);
 pub type ValueArray2 = [Value; 2];
 pub type ValueArray3 = [Value; 3];
 pub type WritableReg = Writable<Reg>;
@@ -210,27 +210,40 @@ macro_rules! isle_prelude_methods {
 
         #[inline]
         fn value_list_slice(&mut self, list: ValueList) -> ValueSlice {
-            list.as_slice(&self.lower_ctx.dfg().value_lists)
+            (list, 0)
         }
 
         #[inline]
-        fn unwrap_head_value_list_1(&mut self, list: ValueList) -> (Value, ValueSlice) {
-            match self.value_list_slice(list) {
-                [head, tail @ ..] => (*head, tail),
-                _ => crate::machinst::isle::out_of_line_panic(
-                    "`unwrap_head_value_list_1` on empty `ValueList`",
-                ),
+        fn value_slice_empty(&mut self, slice: ValueSlice) -> Option<()> {
+            let (list, off) = slice;
+            if off >= list.len(&self.lower_ctx.dfg().value_lists) {
+                Some(())
+            } else {
+                None
             }
         }
 
         #[inline]
-        fn unwrap_head_value_list_2(&mut self, list: ValueList) -> (Value, Value, ValueSlice) {
-            match self.value_list_slice(list) {
-                [head1, head2, tail @ ..] => (*head1, *head2, tail),
-                _ => crate::machinst::isle::out_of_line_panic(
-                    "`unwrap_head_value_list_2` on list without at least two elements",
-                ),
+        fn value_slice_unwrap(&mut self, slice: ValueSlice) -> Option<(Value, ValueSlice)> {
+            let (list, off) = slice;
+            if let Some(val) = list.get(off, &self.lower_ctx.dfg().value_lists) {
+                Some((val, (list, off + 1)))
+            } else {
+                None
             }
+        }
+
+        #[inline]
+        fn value_slice_len(&mut self, slice: ValueSlice) -> usize {
+            let (list, off) = slice;
+            list.len(&self.lower_ctx.dfg().value_lists) - off
+        }
+
+        #[inline]
+        fn value_slice_get(&mut self, slice: ValueSlice, idx: usize) -> Value {
+            let (list, off) = slice;
+            list.get(off + idx, &self.lower_ctx.dfg().value_lists)
+                .unwrap()
         }
 
         #[inline]
@@ -245,7 +258,7 @@ macro_rules! isle_prelude_methods {
 
         #[inline]
         fn inst_results(&mut self, inst: Inst) -> ValueSlice {
-            self.lower_ctx.dfg().inst_results(inst)
+            (self.lower_ctx.dfg().inst_results_list(inst), 0)
         }
 
         #[inline]
@@ -476,10 +489,4 @@ where
     }
 
     Ok(())
-}
-
-#[inline(never)]
-#[cold]
-pub fn out_of_line_panic(msg: &str) -> ! {
-    panic!("{}", msg);
 }
