@@ -28,6 +28,7 @@ mod builtin;
 mod compilation;
 mod module;
 mod module_environ;
+mod module_types;
 pub mod obj;
 mod ref_bits;
 mod stack_map;
@@ -40,12 +41,16 @@ pub use crate::builtin::*;
 pub use crate::compilation::*;
 pub use crate::module::*;
 pub use crate::module_environ::*;
+pub use crate::module_types::*;
 pub use crate::ref_bits::*;
 pub use crate::stack_map::StackMap;
 pub use crate::trap_encoding::*;
 pub use crate::tunables::Tunables;
 pub use crate::vmoffsets::*;
 pub use object;
+
+#[cfg(feature = "component-model")]
+pub mod component;
 
 // Reexport all of these type-level since they're quite commonly used and it's
 // much easier to refer to everything through one crate rather than importing

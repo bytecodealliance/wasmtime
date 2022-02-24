@@ -28,8 +28,8 @@ use std::mem;
 use std::sync::Mutex;
 use wasmtime_environ::{
     AddressMapSection, CompileError, FilePos, FlagValue, FunctionBodyData, FunctionInfo,
-    InstructionAddressMap, Module, ModuleTranslation, StackMapInformation, Trampoline, TrapCode,
-    TrapEncodingBuilder, TrapInformation, Tunables, TypeTables, VMOffsets,
+    InstructionAddressMap, Module, ModuleTranslation, ModuleTypes, StackMapInformation, Trampoline,
+    TrapCode, TrapEncodingBuilder, TrapInformation, Tunables, VMOffsets,
 };
 
 /// A compiler that compiles a WebAssembly module with Compiler, translating
@@ -109,7 +109,7 @@ impl wasmtime_environ::Compiler for Compiler {
         func_index: DefinedFuncIndex,
         mut input: FunctionBodyData<'_>,
         tunables: &Tunables,
-        types: &TypeTables,
+        types: &ModuleTypes,
     ) -> Result<Box<dyn Any + Send>, CompileError> {
         let isa = &*self.isa;
         let module = &translation.module;
@@ -237,7 +237,7 @@ impl wasmtime_environ::Compiler for Compiler {
     fn emit_obj(
         &self,
         translation: &ModuleTranslation,
-        types: &TypeTables,
+        types: &ModuleTypes,
         funcs: PrimaryMap<DefinedFuncIndex, Box<dyn Any + Send>>,
         tunables: &Tunables,
         obj: &mut Object<'static>,

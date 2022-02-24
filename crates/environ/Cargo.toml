@@ -26,3 +26,6 @@ target-lexicon = "0.12"
 
 [badges]
 maintenance = { status = "actively-developed" }
+
+[features]
+component-model = []

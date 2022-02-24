@@ -20,6 +20,8 @@ pub struct StoreData {
     globals: Vec<wasmtime_runtime::ExportGlobal>,
     instances: Vec<crate::instance::InstanceData>,
     memories: Vec<wasmtime_runtime::ExportMemory>,
+    #[cfg(feature = "component-model")]
+    pub(crate) components: crate::component::ComponentStoreData,
 }
 
 pub trait StoredData: Sized {
@@ -65,6 +67,8 @@ impl StoreData {
             globals: Vec::new(),
             instances: Vec::new(),
             memories: Vec::new(),
+            #[cfg(feature = "component-model")]
+            components: Default::default(),
         }
     }
 

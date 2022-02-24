@@ -222,6 +222,30 @@ pub enum EntityIndex {
     Global(GlobalIndex),
 }
 
+impl From<FuncIndex> for EntityIndex {
+    fn from(idx: FuncIndex) -> EntityIndex {
+        EntityIndex::Function(idx)
+    }
+}
+
+impl From<TableIndex> for EntityIndex {
+    fn from(idx: TableIndex) -> EntityIndex {
+        EntityIndex::Table(idx)
+    }
+}
+
+impl From<MemoryIndex> for EntityIndex {
+    fn from(idx: MemoryIndex) -> EntityIndex {
+        EntityIndex::Memory(idx)
+    }
+}
+
+impl From<GlobalIndex> for EntityIndex {
+    fn from(idx: GlobalIndex) -> EntityIndex {
+        EntityIndex::Global(idx)
+    }
+}
+
 /// A type of an item in a wasm module where an item is typically something that
 /// can be exported.
 #[allow(missing_docs)]

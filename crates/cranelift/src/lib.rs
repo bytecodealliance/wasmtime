@@ -51,7 +51,7 @@ use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{DefinedFuncIndex, FuncIndex, WasmFuncType, WasmType};
 use target_lexicon::CallingConvention;
 use wasmtime_environ::{
-    FilePos, FunctionInfo, InstructionAddressMap, ModuleTranslation, TrapInformation, TypeTables,
+    FilePos, FunctionInfo, InstructionAddressMap, ModuleTranslation, ModuleTypes, TrapInformation,
 };
 
 pub use builder::builder;
@@ -208,7 +208,7 @@ fn indirect_signature(isa: &dyn TargetIsa, wasm: &WasmFuncType) -> ir::Signature
 fn func_signature(
     isa: &dyn TargetIsa,
     translation: &ModuleTranslation,
-    types: &TypeTables,
+    types: &ModuleTypes,
     index: FuncIndex,
 ) -> ir::Signature {
     let func = &translation.module.functions[index];

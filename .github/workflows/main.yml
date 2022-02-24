@@ -137,7 +137,9 @@ jobs:
     - run: cargo check -p wasmtime --no-default-features --features pooling-allocator
     - run: cargo check -p wasmtime --no-default-features --features cranelift
     - run: cargo check -p wasmtime --no-default-features --features wasm-backtrace
+    - run: cargo check -p wasmtime --no-default-features --features component-model
     - run: cargo check -p wasmtime --no-default-features --features cranelift,wat,async,cache,wasm-backtrace
+    - run: cargo check --features component-model
 
     # Check that benchmarks of the cranelift project build
     - run: cargo check --benches -p cranelift-codegen

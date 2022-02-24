@@ -16,8 +16,8 @@ use std::convert::TryFrom;
 use std::mem;
 use wasmparser::Operator;
 use wasmtime_environ::{
-    BuiltinFunctionIndex, MemoryPlan, MemoryStyle, Module, ModuleTranslation, TableStyle, Tunables,
-    TypeTables, VMOffsets, WASM_PAGE_SIZE,
+    BuiltinFunctionIndex, MemoryPlan, MemoryStyle, Module, ModuleTranslation, ModuleTypes,
+    TableStyle, Tunables, VMOffsets, WASM_PAGE_SIZE,
 };
 use wasmtime_environ::{FUNCREF_INIT_BIT, FUNCREF_MASK};
 
@@ -113,7 +113,7 @@ pub struct FuncEnvironment<'module_environment> {
     isa: &'module_environment (dyn TargetIsa + 'module_environment),
     module: &'module_environment Module,
     translation: &'module_environment ModuleTranslation<'module_environment>,
-    types: &'module_environment TypeTables,
+    types: &'module_environment ModuleTypes,
 
     /// The Cranelift global holding the vmctx address.
     vmctx: Option<ir::GlobalValue>,
@@ -158,7 +158,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     pub fn new(
         isa: &'module_environment (dyn TargetIsa + 'module_environment),
         translation: &'module_environment ModuleTranslation<'module_environment>,
-        types: &'module_environment TypeTables,
+        types: &'module_environment ModuleTypes,
         tunables: &'module_environment Tunables,
     ) -> Self {
         let builtin_function_signatures = BuiltinFunctionSignatures::new(

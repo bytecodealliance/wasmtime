@@ -813,13 +813,22 @@ impl Func {
     ) -> Result<(), Trap> {
         let mut store = store.as_context_mut();
         let data = &store.0.store_data()[self.0];
-        let trampoline = data.trampoline();
         let anyfunc = data.export().anyfunc;
-        invoke_wasm_and_catch_traps(&mut store, |callee| {
+        let trampoline = data.trampoline();
+        Self::call_unchecked_raw(&mut store, anyfunc, trampoline, params_and_returns)
+    }
+
+    pub(crate) unsafe fn call_unchecked_raw<T>(
+        store: &mut StoreContextMut<'_, T>,
+        anyfunc: NonNull<VMCallerCheckedAnyfunc>,
+        trampoline: VMTrampoline,
+        params_and_returns: *mut ValRaw,
+    ) -> Result<(), Trap> {
+        invoke_wasm_and_catch_traps(store, |callee| {
             trampoline(
-                (*anyfunc.as_ptr()).vmctx,
+                anyfunc.as_ref().vmctx,
                 callee,
-                (*anyfunc.as_ptr()).func_ptr.as_ptr(),
+                anyfunc.as_ref().func_ptr.as_ptr(),
                 params_and_returns,
             )
         })
@@ -2063,7 +2072,6 @@ impl HostFunc {
     /// `Engine`. This happens automatically during the above two constructors.
     fn _new(engine: &Engine, mut instance: InstanceHandle, trampoline: VMTrampoline) -> Self {
         let export = instance.get_exported_func(FuncIndex::from_u32(0));
-
         HostFunc {
             instance,
             trampoline,

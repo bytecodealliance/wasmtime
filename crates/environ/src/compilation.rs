@@ -2,8 +2,8 @@
 //! module.
 
 use crate::{
-    DefinedFuncIndex, FilePos, FunctionBodyData, ModuleTranslation, PrimaryMap, SignatureIndex,
-    StackMap, Tunables, TypeTables, WasmError, WasmFuncType,
+    DefinedFuncIndex, FilePos, FunctionBodyData, ModuleTranslation, ModuleTypes, PrimaryMap,
+    SignatureIndex, StackMap, Tunables, WasmError, WasmFuncType,
 };
 use anyhow::Result;
 use object::write::Object;
@@ -148,7 +148,7 @@ pub trait Compiler: Send + Sync {
         index: DefinedFuncIndex,
         data: FunctionBodyData<'_>,
         tunables: &Tunables,
-        types: &TypeTables,
+        types: &ModuleTypes,
     ) -> Result<Box<dyn Any + Send>, CompileError>;
 
     /// Collects the results of compilation into an in-memory object.
@@ -169,7 +169,7 @@ pub trait Compiler: Send + Sync {
     fn emit_obj(
         &self,
         module: &ModuleTranslation,
-        types: &TypeTables,
+        types: &ModuleTypes,
         funcs: PrimaryMap<DefinedFuncIndex, Box<dyn Any + Send>>,
         tunables: &Tunables,
         obj: &mut Object<'static>,

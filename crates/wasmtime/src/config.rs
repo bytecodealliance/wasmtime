@@ -619,6 +619,20 @@ impl Config {
         self
     }
 
+    /// Configures whether the WebAssembly component-model [proposal] will
+    /// be enabled for compilation.
+    ///
+    /// Note that this feature is a work-in-progress and is incomplete.
+    ///
+    /// This is `false` by default.
+    ///
+    /// [proposal]: https://github.com/webassembly/component-model
+    #[cfg(feature = "component-model")]
+    pub fn wasm_component_model(&mut self, enable: bool) -> &mut Self {
+        self.features.component_model = enable;
+        self
+    }
+
     /// Configures which compilation strategy will be used for wasm modules.
     ///
     /// This method can be used to configure which compiler is used for wasm

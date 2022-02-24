@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::mem;
-use std::ops::{Index, Range};
+use std::ops::Range;
 use wasmtime_types::*;
 
 /// Implemenation styles for WebAssembly linear memory.
@@ -987,32 +987,6 @@ impl Module {
         anyfunc: AnyfuncIndex,
     ) -> FuncIndex {
         self.functions.push(FunctionType { signature, anyfunc })
-    }
-}
-
-/// All types which are recorded for the entirety of a translation.
-///
-/// Note that this is shared amongst all modules coming out of a translation
-/// in the case of nested modules and the module linking proposal.
-#[derive(Default, Debug, Serialize, Deserialize)]
-#[allow(missing_docs)]
-pub struct TypeTables {
-    pub(crate) wasm_signatures: PrimaryMap<SignatureIndex, WasmFuncType>,
-}
-
-impl TypeTables {
-    /// Returns an iterator of all of the core wasm function signatures
-    /// registered in this instance.
-    pub fn wasm_signatures(&self) -> impl Iterator<Item = (SignatureIndex, &WasmFuncType)> {
-        self.wasm_signatures.iter()
-    }
-}
-
-impl Index<SignatureIndex> for TypeTables {
-    type Output = WasmFuncType;
-
-    fn index(&self, idx: SignatureIndex) -> &WasmFuncType {
-        &self.wasm_signatures[idx]
     }
 }
 
