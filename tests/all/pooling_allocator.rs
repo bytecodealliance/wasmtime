@@ -625,6 +625,7 @@ fn instance_too_large() -> Result<()> {
         strategy: PoolingAllocationStrategy::NextAvailable,
         instance_limits: InstanceLimits {
             size: 16,
+            count: 1,
             ..Default::default()
         },
     });
