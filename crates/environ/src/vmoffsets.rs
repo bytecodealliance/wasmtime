@@ -16,13 +16,14 @@
 //      tables: [VMTableDefinition; module.num_defined_tables],
 //      memories: [VMMemoryDefinition; module.num_defined_memories],
 //      globals: [VMGlobalDefinition; module.num_defined_globals],
-//      anyfuncs: [VMCallerCheckedAnyfunc; module.num_imported_functions + module.num_defined_functions],
+//      anyfuncs: [VMCallerCheckedAnyfunc; module.num_escaped_funcs],
 // }
 
 use crate::{
-    DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex, GlobalIndex, MemoryIndex,
-    Module, TableIndex,
+    AnyfuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex,
+    GlobalIndex, MemoryIndex, Module, TableIndex,
 };
+use cranelift_entity::packed_option::ReservedValue;
 use more_asserts::assert_lt;
 use std::convert::TryFrom;
 
@@ -68,6 +69,9 @@ pub struct VMOffsets<P> {
     pub num_defined_memories: u32,
     /// The number of defined globals in the module.
     pub num_defined_globals: u32,
+    /// The number of escaped functions in the module, the size of the anyfuncs
+    /// array.
+    pub num_escaped_funcs: u32,
 
     // precalculated offsets of various member fields
     interrupts: u32,
@@ -131,6 +135,9 @@ pub struct VMOffsetsFields<P> {
     pub num_defined_memories: u32,
     /// The number of defined globals in the module.
     pub num_defined_globals: u32,
+    /// The numbe of escaped functions in the module, the size of the anyfunc
+    /// array.
+    pub num_escaped_funcs: u32,
 }
 
 impl<P: PtrSize> VMOffsets<P> {
@@ -146,6 +153,7 @@ impl<P: PtrSize> VMOffsets<P> {
             num_defined_tables: cast_to_u32(module.table_plans.len()),
             num_defined_memories: cast_to_u32(module.memory_plans.len()),
             num_defined_globals: cast_to_u32(module.globals.len()),
+            num_escaped_funcs: cast_to_u32(module.num_escaped_funcs),
         })
     }
 
@@ -174,6 +182,7 @@ impl<P: PtrSize> VMOffsets<P> {
                     num_defined_globals: _,
                     num_defined_memories: _,
                     num_defined_functions: _,
+                    num_escaped_funcs: _,
 
                     // used as the initial size below
                     size,
@@ -229,6 +238,7 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
             num_defined_tables: fields.num_defined_tables,
             num_defined_memories: fields.num_defined_memories,
             num_defined_globals: fields.num_defined_globals,
+            num_escaped_funcs: fields.num_escaped_funcs,
             interrupts: 0,
             epoch_ptr: 0,
             externref_activations_table: 0,
@@ -298,7 +308,7 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
             size(defined_globals)
                 = cmul(ret.num_defined_globals, ret.size_of_vmglobal_definition()),
             size(defined_anyfuncs) = cmul(
-                cadd(ret.num_imported_functions, ret.num_defined_functions),
+                ret.num_escaped_funcs,
                 ret.size_of_vmcaller_checked_anyfunc(),
             ),
         }
@@ -674,11 +684,9 @@ impl<P: PtrSize> VMOffsets<P> {
     /// Return the offset to the `VMCallerCheckedAnyfunc` for the given function
     /// index (either imported or defined).
     #[inline]
-    pub fn vmctx_anyfunc(&self, index: FuncIndex) -> u32 {
-        assert_lt!(
-            index.as_u32(),
-            self.num_imported_functions + self.num_defined_functions
-        );
+    pub fn vmctx_anyfunc(&self, index: AnyfuncIndex) -> u32 {
+        assert!(!index.is_reserved_value());
+        assert_lt!(index.as_u32(), self.num_escaped_funcs);
         self.vmctx_anyfuncs_begin()
             + index.as_u32() * u32::from(self.size_of_vmcaller_checked_anyfunc())
     }

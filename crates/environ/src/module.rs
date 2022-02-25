@@ -897,8 +897,15 @@ pub struct Module {
     /// Number of imported or aliased globals in the module.
     pub num_imported_globals: usize,
 
+    /// Number of functions that "escape" from this module may need to have a
+    /// `VMCallerCheckedAnyfunc` constructed for them.
+    ///
+    /// This is also the number of functions in the `functions` array below with
+    /// an `anyfunc` index (and is the maximum anyfunc index).
+    pub num_escaped_funcs: usize,
+
     /// Types of functions, imported and local.
-    pub functions: PrimaryMap<FuncIndex, SignatureIndex>,
+    pub functions: PrimaryMap<FuncIndex, FunctionType>,
 
     /// WebAssembly tables.
     pub table_plans: PrimaryMap<TableIndex, TablePlan>,
@@ -1108,7 +1115,7 @@ impl Module {
             EntityIndex::Global(i) => EntityType::Global(self.globals[i]),
             EntityIndex::Table(i) => EntityType::Table(self.table_plans[i].table),
             EntityIndex::Memory(i) => EntityType::Memory(self.memory_plans[i].memory),
-            EntityIndex::Function(i) => EntityType::Function(self.functions[i]),
+            EntityIndex::Function(i) => EntityType::Function(self.functions[i].signature),
             EntityIndex::Instance(i) => EntityType::Instance(self.instances[i]),
             EntityIndex::Module(i) => EntityType::Module(self.modules[i]),
         }
@@ -1144,3 +1151,19 @@ pub struct InstanceSignature {
     /// The name of what's being exported as well as its type signature.
     pub exports: IndexMap<String, EntityType>,
 }
+
+/// Type information about functions in a wasm module.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FunctionType {
+    /// The type of this function, indexed into the global type tables for
+    /// a module compilation.
+    pub signature: SignatureIndex,
+    /// The index into the anyfunc table, if present. Note that this is
+    /// `reserved_value()` if the function does not escape from a module.
+    pub anyfunc: AnyfuncIndex,
+}
+
+/// Index into the anyfunc table within a VMContext for a function.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
+pub struct AnyfuncIndex(u32);
+cranelift_entity::entity_impl!(AnyfuncIndex);
