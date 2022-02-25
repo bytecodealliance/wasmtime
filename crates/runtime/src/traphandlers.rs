@@ -317,7 +317,9 @@ impl CallThreadState {
     }
 
     fn capture_backtrace(&self, pc: *const u8) {
+        eprintln!("starting capture of the backtrace");
         let backtrace = Backtrace::new_unresolved();
+        eprintln!("the backtrace has been captured");
         unsafe {
             (*self.unwind.get())
                 .as_mut_ptr()
