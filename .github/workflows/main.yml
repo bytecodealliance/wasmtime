@@ -292,33 +292,37 @@ jobs:
         touch ${{ runner.tool_cache }}/qemu/built
       if: matrix.gcc != ''
 
-    # Ensure all our examples build and execute
-    - run: cargo run -p run-examples
+    # # Ensure all our examples build and execute
+    # - run: cargo run -p run-examples
+    #   env:
+    #     RUST_BACKTRACE: 1
+    #   if: matrix.target == ''
+    - run: cargo test --test all -- stack_overflow --nocapture --test-threads 1
       env:
         RUST_BACKTRACE: 1
       if: matrix.target == ''
 
-    # Build and test all features
-    - run: ./ci/run-tests.sh --locked -- --nocapture --test-threads 1
-      env:
-        RUST_BACKTRACE: 1
+    # # Build and test all features
+    # - run: ./ci/run-tests.sh --locked -- --nocapture --test-threads 1
+    #   env:
+    #     RUST_BACKTRACE: 1
 
-    # Test debug (DWARF) related functionality.
-    - run: |
-        sudo apt-get update && sudo apt-get install -y gdb lldb llvm
-        cargo test test_debug_dwarf -- --ignored --test-threads 1
-      if: matrix.os == 'ubuntu-latest' && matrix.target == ''
-      env:
-        RUST_BACKTRACE: 1
+    # # Test debug (DWARF) related functionality.
+    # - run: |
+    #     sudo apt-get update && sudo apt-get install -y gdb lldb llvm
+    #     cargo test test_debug_dwarf -- --ignored --test-threads 1
+    #   if: matrix.os == 'ubuntu-latest' && matrix.target == ''
+    #   env:
+    #     RUST_BACKTRACE: 1
 
-    # Test Linux-specific functionality
-    - run: |
-        cargo test --features uffd -p wasmtime-runtime instance::allocator::pooling
-        cargo test --features uffd -p wasmtime-cli pooling_allocator
-        cargo test --features uffd -p wasmtime-cli wast::Cranelift
-      if: matrix.os == 'ubuntu-latest' && matrix.target == ''
-      env:
-        RUST_BACKTRACE: 1
+    # # Test Linux-specific functionality
+    # - run: |
+    #     cargo test --features uffd -p wasmtime-runtime instance::allocator::pooling
+    #     cargo test --features uffd -p wasmtime-cli pooling_allocator
+    #     cargo test --features uffd -p wasmtime-cli wast::Cranelift
+    #   if: matrix.os == 'ubuntu-latest' && matrix.target == ''
+    #   env:
+    #     RUST_BACKTRACE: 1
 
   # # Build and test the wasi-nn module.
   # test_wasi_nn:
