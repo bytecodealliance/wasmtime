@@ -43,6 +43,6 @@ jobs:
     # Install targets in order to build various tests throughout the repo
     - run: rustup target add wasm32-wasi wasm32-unknown-unknown ${{ matrix.target }}
 
-    - run: cargo test --test all -- stack_overflow --nocapture --test-threads 1
+    - run: cargo test --test all -- wast::Cranelift::misc::stack_overflow --nocapture --test-threads 1
       env:
         RUST_BACKTRACE: 1
