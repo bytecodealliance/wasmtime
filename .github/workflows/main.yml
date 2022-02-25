@@ -299,7 +299,7 @@ jobs:
       if: matrix.target == ''
 
     # Build and test all features
-    - run: ./ci/run-tests.sh --locked
+    - run: ./ci/run-tests.sh --locked -- --nocapture --test-threads 1
       env:
         RUST_BACKTRACE: 1
 
