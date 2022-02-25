@@ -11,7 +11,7 @@ use crate::{
 };
 use cranelift_entity::packed_option::ReservedValue;
 use std::borrow::Cow;
-use std::collections::{hash_map::Entry, HashMap, HashSet};
+use std::collections::{hash_map::Entry, HashMap};
 use std::convert::{TryFrom, TryInto};
 use std::mem;
 use std::path::PathBuf;
@@ -112,11 +112,6 @@ pub struct ModuleTranslation<'data> {
 
     /// Same as `creation_artifacts`, but for modules instead of artifacts.
     creation_modules: Vec<ModuleUpvar>,
-
-    /// Functions already flagged with an `AnyfuncIndex` index within
-    /// `module.functions`. This is used in `flag_func_escaped` to ensure that
-    /// an anyfunc index is given only once to a function.
-    escaped_funcs: HashSet<FuncIndex>,
 }
 
 /// Contains function data: byte code and its offset in the module.
@@ -1185,14 +1180,13 @@ and for re-adding support for interface types you can see this issue:
     }
 
     fn flag_func_escaped(&mut self, func: FuncIndex) {
-        if !self.result.escaped_funcs.insert(func) {
+        let anyfunc = &mut self.result.module.functions[func].anyfunc;
+        // If this was already assigned an anyfunc index no need to re-assign it.
+        if !anyfunc.is_reserved_value() {
             return;
         }
-        debug_assert!(self.result.module.functions[func]
-            .anyfunc
-            .is_reserved_value());
-        let index = (self.result.escaped_funcs.len() - 1) as u32;
-        self.result.module.functions[func].anyfunc = AnyfuncIndex::from_u32(index);
+        let index = self.result.module.num_escaped_funcs as u32;
+        *anyfunc = AnyfuncIndex::from_u32(index);
         self.result.module.num_escaped_funcs += 1;
     }
 
