@@ -425,12 +425,12 @@ fn async_with_pooling_stacks() {
     config.async_support(true);
     config.allocation_strategy(InstanceAllocationStrategy::Pooling {
         strategy: PoolingAllocationStrategy::NextAvailable,
-        module_limits: ModuleLimits {
+        instance_limits: InstanceLimits {
+            count: 1,
             memory_pages: 1,
             table_elements: 0,
             ..Default::default()
         },
-        instance_limits: InstanceLimits { count: 1 },
     });
     config.dynamic_memory_guard_size(0);
     config.static_memory_guard_size(0);
@@ -454,12 +454,12 @@ fn async_host_func_with_pooling_stacks() -> Result<()> {
     config.async_support(true);
     config.allocation_strategy(InstanceAllocationStrategy::Pooling {
         strategy: PoolingAllocationStrategy::NextAvailable,
-        module_limits: ModuleLimits {
+        instance_limits: InstanceLimits {
+            count: 1,
             memory_pages: 1,
             table_elements: 0,
             ..Default::default()
         },
-        instance_limits: InstanceLimits { count: 1 },
     });
     config.dynamic_memory_guard_size(0);
     config.static_memory_guard_size(0);

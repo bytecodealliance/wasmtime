@@ -60,79 +60,28 @@ impl PoolingAllocationStrategy {
         }
     }
 }
-
-/// Configuration for `wasmtime::ModuleLimits`.
-#[derive(Clone, Debug, Eq, PartialEq, Hash)]
-pub struct ModuleLimits {
-    imported_functions: u32,
-    imported_tables: u32,
-    imported_memories: u32,
-    imported_globals: u32,
-    types: u32,
-    functions: u32,
-    tables: u32,
-    memories: u32,
-    /// The maximum number of globals that can be defined in a module.
-    pub globals: u32,
-    table_elements: u32,
-    memory_pages: u64,
-}
-
-impl ModuleLimits {
-    fn to_wasmtime(&self) -> wasmtime::ModuleLimits {
-        wasmtime::ModuleLimits {
-            imported_functions: self.imported_functions,
-            imported_tables: self.imported_tables,
-            imported_memories: self.imported_memories,
-            imported_globals: self.imported_globals,
-            types: self.types,
-            functions: self.functions,
-            tables: self.tables,
-            memories: self.memories,
-            globals: self.globals,
-            table_elements: self.table_elements,
-            memory_pages: self.memory_pages,
-        }
-    }
-}
-
-impl<'a> Arbitrary<'a> for ModuleLimits {
-    fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
-        const MAX_IMPORTS: u32 = 1000;
-        const MAX_TYPES: u32 = 1000;
-        const MAX_FUNCTIONS: u32 = 1000;
-        const MAX_TABLES: u32 = 10;
-        const MAX_MEMORIES: u32 = 10;
-        const MAX_GLOBALS: u32 = 1000;
-        const MAX_ELEMENTS: u32 = 1000;
-        const MAX_MEMORY_PAGES: u64 = 160; // 10 MiB
-
-        Ok(Self {
-            imported_functions: u.int_in_range(0..=MAX_IMPORTS)?,
-            imported_tables: u.int_in_range(0..=MAX_IMPORTS)?,
-            imported_memories: u.int_in_range(0..=MAX_IMPORTS)?,
-            imported_globals: u.int_in_range(0..=MAX_IMPORTS)?,
-            types: u.int_in_range(0..=MAX_TYPES)?,
-            functions: u.int_in_range(0..=MAX_FUNCTIONS)?,
-            tables: u.int_in_range(0..=MAX_TABLES)?,
-            memories: u.int_in_range(0..=MAX_MEMORIES)?,
-            globals: u.int_in_range(0..=MAX_GLOBALS)?,
-            table_elements: u.int_in_range(0..=MAX_ELEMENTS)?,
-            memory_pages: u.int_in_range(0..=MAX_MEMORY_PAGES)?,
-        })
-    }
-}
-
 /// Configuration for `wasmtime::PoolingAllocationStrategy`.
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[allow(missing_docs)]
 pub struct InstanceLimits {
-    /// The maximum number of instances that can be instantiated in the pool at a time.
     pub count: u32,
+    pub memories: u32,
+    pub tables: u32,
+    pub memory_pages: u64,
+    pub table_elements: u32,
+    pub size: usize,
 }
 
 impl InstanceLimits {
     fn to_wasmtime(&self) -> wasmtime::InstanceLimits {
-        wasmtime::InstanceLimits { count: self.count }
+        wasmtime::InstanceLimits {
+            count: self.count,
+            memories: self.memories,
+            tables: self.tables,
+            memory_pages: self.memory_pages,
+            table_elements: self.table_elements,
+            size: self.size,
+        }
     }
 }
 
@@ -140,8 +89,19 @@ impl<'a> Arbitrary<'a> for InstanceLimits {
     fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
         const MAX_COUNT: u32 = 100;
 
+        const MAX_TABLES: u32 = 10;
+        const MAX_MEMORIES: u32 = 10;
+        const MAX_ELEMENTS: u32 = 1000;
+        const MAX_MEMORY_PAGES: u64 = 160; // 10 MiB
+        const MAX_SIZE: usize = 1 << 20; // 1 MiB
+
         Ok(Self {
+            tables: u.int_in_range(0..=MAX_TABLES)?,
+            memories: u.int_in_range(0..=MAX_MEMORIES)?,
+            table_elements: u.int_in_range(0..=MAX_ELEMENTS)?,
+            memory_pages: u.int_in_range(0..=MAX_MEMORY_PAGES)?,
             count: u.int_in_range(1..=MAX_COUNT)?,
+            size: u.int_in_range(0..=MAX_SIZE)?,
         })
     }
 }
@@ -155,8 +115,6 @@ pub enum InstanceAllocationStrategy {
     Pooling {
         /// The pooling strategy to use.
         strategy: PoolingAllocationStrategy,
-        /// The module limits.
-        module_limits: ModuleLimits,
         /// The instance limits.
         instance_limits: InstanceLimits,
     },
@@ -168,11 +126,9 @@ impl InstanceAllocationStrategy {
             InstanceAllocationStrategy::OnDemand => wasmtime::InstanceAllocationStrategy::OnDemand,
             InstanceAllocationStrategy::Pooling {
                 strategy,
-                module_limits,
                 instance_limits,
             } => wasmtime::InstanceAllocationStrategy::Pooling {
                 strategy: strategy.to_wasmtime(),
-                module_limits: module_limits.to_wasmtime(),
                 instance_limits: instance_limits.to_wasmtime(),
             },
         }
@@ -203,7 +159,7 @@ impl<'a> Arbitrary<'a> for Config {
         // If using the pooling allocator, constrain the memory and module configurations
         // to the module limits.
         if let InstanceAllocationStrategy::Pooling {
-            module_limits: limits,
+            instance_limits: limits,
             ..
         } = &config.wasmtime.strategy
         {
@@ -223,14 +179,6 @@ impl<'a> Arbitrary<'a> for Config {
             };
 
             let cfg = &mut config.module_config.config;
-            cfg.max_imports = limits.imported_functions.min(
-                limits
-                    .imported_globals
-                    .min(limits.imported_memories.min(limits.imported_tables)),
-            ) as usize;
-            cfg.max_types = limits.types as usize;
-            cfg.max_funcs = limits.functions as usize;
-            cfg.max_globals = limits.globals as usize;
             cfg.max_memories = limits.memories as usize;
             cfg.max_tables = limits.tables as usize;
             cfg.max_memory_pages = limits.memory_pages;
@@ -343,21 +291,13 @@ impl Config {
         config.simd_enabled = false;
         config.memory64_enabled = false;
 
-        // If using the pooling allocator, update the module limits too
+        // If using the pooling allocator, update the instance limits too
         if let InstanceAllocationStrategy::Pooling {
-            module_limits: limits,
+            instance_limits: limits,
             ..
         } = &mut self.wasmtime.strategy
         {
-            // No imports
-            limits.imported_functions = 0;
-            limits.imported_tables = 0;
-            limits.imported_memories = 0;
-            limits.imported_globals = 0;
-
-            // One type, one function, and one single-page memory
-            limits.types = 1;
-            limits.functions = 1;
+            // One single-page memory
             limits.memories = 1;
             limits.memory_pages = 1;
 
@@ -385,13 +325,6 @@ impl Config {
 
         if let Some(default_fuel) = default_fuel {
             module.ensure_termination(default_fuel);
-
-            // Bump the allowed global count by 1
-            if let InstanceAllocationStrategy::Pooling { module_limits, .. } =
-                &mut self.wasmtime.strategy
-            {
-                module_limits.globals += 1;
-            }
         }
 
         Ok(module)
@@ -408,7 +341,7 @@ impl Config {
         config.max_memories = 1;
 
         if let InstanceAllocationStrategy::Pooling {
-            module_limits: limits,
+            instance_limits: limits,
             ..
         } = &mut self.wasmtime.strategy
         {

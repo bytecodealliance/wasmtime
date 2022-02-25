@@ -1,8 +1,8 @@
 use std::path::Path;
 use std::sync::{Condvar, Mutex};
 use wasmtime::{
-    Config, Engine, InstanceAllocationStrategy, InstanceLimits, ModuleLimits,
-    PoolingAllocationStrategy, Store, Strategy,
+    Config, Engine, InstanceAllocationStrategy, InstanceLimits, PoolingAllocationStrategy, Store,
+    Strategy,
 };
 use wasmtime_wast::WastContext;
 
@@ -77,18 +77,11 @@ fn run_wast(wast: &str, strategy: Strategy, pooling: bool) -> anyhow::Result<()>
         // fails to grow, the values here will need to be adjusted.
         cfg.allocation_strategy(InstanceAllocationStrategy::Pooling {
             strategy: PoolingAllocationStrategy::NextAvailable,
-            module_limits: ModuleLimits {
-                imported_memories: 2,
-                imported_tables: 2,
-                imported_globals: 11,
-                memories: 2,
-                tables: 4,
-                globals: 13,
-                memory_pages: 805,
-                ..Default::default()
-            },
             instance_limits: InstanceLimits {
                 count: 450,
+                memories: 2,
+                tables: 4,
+                memory_pages: 805,
                 ..Default::default()
             },
         });

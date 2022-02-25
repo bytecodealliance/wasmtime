@@ -315,6 +315,15 @@ impl Memory {
     ) -> Result<Self> {
         let (minimum, maximum) = Self::limit_new(plan, store)?;
 
+        if base.len() < minimum {
+            bail!(
+                "initial memory size of {} exceeds the pooling allocator's \
+                 configured maximum memory size of {} bytes",
+                minimum,
+                base.len(),
+            );
+        }
+
         let base = match maximum {
             Some(max) if max < base.len() => &mut base[..max],
             _ => base,

@@ -15,10 +15,7 @@ use wasmtime_jit::{JitDumpAgent, NullProfilerAgent, ProfilingAgent, VTuneAgent};
 use wasmtime_runtime::{InstanceAllocator, OnDemandInstanceAllocator, RuntimeMemoryCreator};
 
 #[cfg(feature = "pooling-allocator")]
-mod pooling;
-
-#[cfg(feature = "pooling-allocator")]
-pub use self::pooling::*;
+pub use wasmtime_runtime::{InstanceLimits, PoolingAllocationStrategy};
 
 /// Represents the module instance allocation strategy to use.
 #[derive(Clone)]
@@ -39,8 +36,6 @@ pub enum InstanceAllocationStrategy {
     Pooling {
         /// The allocation strategy to use.
         strategy: PoolingAllocationStrategy,
-        /// The module limits to use.
-        module_limits: ModuleLimits,
         /// The instance limits to use.
         instance_limits: InstanceLimits,
     },
@@ -52,7 +47,6 @@ impl InstanceAllocationStrategy {
     pub fn pooling() -> Self {
         Self::Pooling {
             strategy: PoolingAllocationStrategy::default(),
-            module_limits: ModuleLimits::default(),
             instance_limits: InstanceLimits::default(),
         }
     }
@@ -1281,12 +1275,10 @@ impl Config {
             #[cfg(feature = "pooling-allocator")]
             InstanceAllocationStrategy::Pooling {
                 strategy,
-                module_limits,
                 instance_limits,
             } => Ok(Box::new(wasmtime_runtime::PoolingInstanceAllocator::new(
-                strategy.into(),
-                module_limits.into(),
-                instance_limits.into(),
+                strategy,
+                instance_limits,
                 stack_size,
                 &self.tunables,
             )?)),

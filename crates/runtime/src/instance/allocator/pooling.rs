@@ -19,8 +19,8 @@ use std::convert::TryFrom;
 use std::mem;
 use std::sync::Mutex;
 use wasmtime_environ::{
-    DefinedMemoryIndex, DefinedTableIndex, HostPtr, MemoryStyle, Module, PrimaryMap, Tunables,
-    VMOffsets, VMOffsetsFields, WASM_PAGE_SIZE,
+    DefinedMemoryIndex, DefinedTableIndex, HostPtr, Module, PrimaryMap, Tunables, VMOffsets,
+    WASM_PAGE_SIZE,
 };
 
 mod index_allocator;
@@ -57,190 +57,122 @@ fn round_up_to_pow2(n: usize, to: usize) -> usize {
     (n + to - 1) & !(to - 1)
 }
 
-/// Represents the limits placed on a module for compiling with the pooling instance allocator.
-#[derive(Debug, Copy, Clone)]
-pub struct ModuleLimits {
-    /// The maximum number of imported functions for a module.
-    pub imported_functions: u32,
-
-    /// The maximum number of imported tables for a module.
-    pub imported_tables: u32,
-
-    /// The maximum number of imported linear memories for a module.
-    pub imported_memories: u32,
-
-    /// The maximum number of imported globals for a module.
-    pub imported_globals: u32,
-
-    /// The maximum number of defined types for a module.
-    pub types: u32,
-
-    /// The maximum number of defined functions for a module.
-    pub functions: u32,
-
-    /// The maximum number of defined tables for a module.
-    pub tables: u32,
-
-    /// The maximum number of defined linear memories for a module.
-    pub memories: u32,
-
-    /// The maximum number of defined globals for a module.
-    pub globals: u32,
-
-    /// The maximum table elements for any table defined in a module.
-    pub table_elements: u32,
-
-    /// The maximum number of pages for any linear memory defined in a module.
-    pub memory_pages: u64,
-}
-
-impl ModuleLimits {
-    fn validate(&self, module: &Module) -> Result<()> {
-        if module.num_imported_funcs > self.imported_functions as usize {
-            bail!(
-                "imported function count of {} exceeds the limit of {}",
-                module.num_imported_funcs,
-                self.imported_functions
-            );
-        }
-
-        if module.num_imported_tables > self.imported_tables as usize {
-            bail!(
-                "imported tables count of {} exceeds the limit of {}",
-                module.num_imported_tables,
-                self.imported_tables
-            );
-        }
-
-        if module.num_imported_memories > self.imported_memories as usize {
-            bail!(
-                "imported memories count of {} exceeds the limit of {}",
-                module.num_imported_memories,
-                self.imported_memories
-            );
-        }
-
-        if module.num_imported_globals > self.imported_globals as usize {
-            bail!(
-                "imported globals count of {} exceeds the limit of {}",
-                module.num_imported_globals,
-                self.imported_globals
-            );
-        }
-
-        if module.types.len() > self.types as usize {
-            bail!(
-                "defined types count of {} exceeds the limit of {}",
-                module.types.len(),
-                self.types
-            );
-        }
-
-        let functions = module.functions.len() - module.num_imported_funcs;
-        if functions > self.functions as usize {
-            bail!(
-                "defined functions count of {} exceeds the limit of {}",
-                functions,
-                self.functions
-            );
-        }
-
-        let tables = module.table_plans.len() - module.num_imported_tables;
-        if tables > self.tables as usize {
-            bail!(
-                "defined tables count of {} exceeds the limit of {}",
-                tables,
-                self.tables
-            );
-        }
-
-        let memories = module.memory_plans.len() - module.num_imported_memories;
-        if memories > self.memories as usize {
-            bail!(
-                "defined memories count of {} exceeds the limit of {}",
-                memories,
-                self.memories
-            );
-        }
-
-        let globals = module.globals.len() - module.num_imported_globals;
-        if globals > self.globals as usize {
-            bail!(
-                "defined globals count of {} exceeds the limit of {}",
-                globals,
-                self.globals
-            );
-        }
-
-        for (i, plan) in module.table_plans.values().as_slice()[module.num_imported_tables..]
-            .iter()
-            .enumerate()
-        {
-            if plan.table.minimum > self.table_elements {
-                bail!(
-                    "table index {} has a minimum element size of {} which exceeds the limit of {}",
-                    i,
-                    plan.table.minimum,
-                    self.table_elements
-                );
-            }
-        }
-
-        for (i, plan) in module.memory_plans.values().as_slice()[module.num_imported_memories..]
-            .iter()
-            .enumerate()
-        {
-            if plan.memory.minimum > self.memory_pages {
-                bail!(
-                    "memory index {} has a minimum page size of {} which exceeds the limit of {}",
-                    i,
-                    plan.memory.minimum,
-                    self.memory_pages
-                );
-            }
-
-            if let MemoryStyle::Dynamic { .. } = plan.style {
-                bail!(
-                    "memory index {} has an unsupported dynamic memory plan style",
-                    i,
-                );
-            }
-        }
-
-        Ok(())
-    }
-}
-
-impl Default for ModuleLimits {
-    fn default() -> Self {
-        // See doc comments for `wasmtime::ModuleLimits` for these default values
-        Self {
-            imported_functions: 1000,
-            imported_tables: 0,
-            imported_memories: 0,
-            imported_globals: 0,
-            types: 100,
-            functions: 10000,
-            tables: 1,
-            memories: 1,
-            globals: 10,
-            table_elements: 10000,
-            memory_pages: 160,
-        }
-    }
-}
-
 /// Represents the limits placed on instances by the pooling instance allocator.
 #[derive(Debug, Copy, Clone)]
 pub struct InstanceLimits {
-    /// The maximum number of concurrent instances supported.
+    /// The maximum number of concurrent instances supported (default is 1000).
+    ///
+    /// This value has a direct impact on the amount of memory allocated by the pooling
+    /// instance allocator.
+    ///
+    /// The pooling instance allocator allocates three memory pools with sizes depending on this value:
+    ///
+    /// * An instance pool, where each entry in the pool can store the runtime representation
+    ///   of an instance, including a maximal `VMContext` structure.
+    ///
+    /// * A memory pool, where each entry in the pool contains the reserved address space for each
+    ///   linear memory supported by an instance.
+    ///
+    /// * A table pool, where each entry in the pool contains the space needed for each WebAssembly table
+    ///   supported by an instance (see `table_elements` to control the size of each table).
+    ///
+    /// Additionally, this value will also control the maximum number of execution stacks allowed for
+    /// asynchronous execution (one per instance), when enabled.
+    ///
+    /// The memory pool will reserve a large quantity of host process address space to elide the bounds
+    /// checks required for correct WebAssembly memory semantics. Even for 64-bit address spaces, the
+    /// address space is limited when dealing with a large number of supported instances.
+    ///
+    /// For example, on Linux x86_64, the userland address space limit is 128 TiB. That might seem like a lot,
+    /// but each linear memory will *reserve* 6 GiB of space by default. Multiply that by the number of linear
+    /// memories each instance supports and then by the number of supported instances and it becomes apparent
+    /// that address space can be exhausted depending on the number of supported instances.
     pub count: u32,
+
+    /// The maximum size, in bytes, allocated for an instance and its
+    /// `VMContext`.
+    ///
+    /// This amount of space is pre-allocated for `count` number of instances
+    /// and is used to store the runtime `wasmtime_runtime::Instance` structure
+    /// along with its adjacent `VMContext` structure. The `Instance` type has a
+    /// static size but `VMContext` is dynamically sized depending on the module
+    /// being instantiated. This size limit loosely correlates to the size of
+    /// the wasm module, taking into account factors such as:
+    ///
+    /// * number of functions
+    /// * number of globals
+    /// * number of memories
+    /// * number of tables
+    /// * number of function types
+    ///
+    /// If the allocated size per instance is too small then instantiation of a
+    /// module will fail at runtime with an error indicating how many bytes were
+    /// needed. This amount of bytes are committed to memory per-instance when
+    /// a pooling allocator is created.
+    ///
+    /// The default value for this is 1MB.
+    pub size: usize,
+
+    /// The maximum number of defined tables for a module (default is 1).
+    ///
+    /// This value controls the capacity of the `VMTableDefinition` table in each instance's
+    /// `VMContext` structure.
+    ///
+    /// The allocated size of the table will be `tables * sizeof(VMTableDefinition)` for each
+    /// instance regardless of how many tables are defined by an instance's module.
+    pub tables: u32,
+
+    /// The maximum table elements for any table defined in a module (default is 10000).
+    ///
+    /// If a table's minimum element limit is greater than this value, the module will
+    /// fail to instantiate.
+    ///
+    /// If a table's maximum element limit is unbounded or greater than this value,
+    /// the maximum will be `table_elements` for the purpose of any `table.grow` instruction.
+    ///
+    /// This value is used to reserve the maximum space for each supported table; table elements
+    /// are pointer-sized in the Wasmtime runtime.  Therefore, the space reserved for each instance
+    /// is `tables * table_elements * sizeof::<*const ()>`.
+    pub table_elements: u32,
+
+    /// The maximum number of defined linear memories for a module (default is 1).
+    ///
+    /// This value controls the capacity of the `VMMemoryDefinition` table in each instance's
+    /// `VMContext` structure.
+    ///
+    /// The allocated size of the table will be `memories * sizeof(VMMemoryDefinition)` for each
+    /// instance regardless of how many memories are defined by an instance's module.
+    pub memories: u32,
+
+    /// The maximum number of pages for any linear memory defined in a module (default is 160).
+    ///
+    /// The default of 160 means at most 10 MiB of host memory may be committed for each instance.
+    ///
+    /// If a memory's minimum page limit is greater than this value, the module will
+    /// fail to instantiate.
+    ///
+    /// If a memory's maximum page limit is unbounded or greater than this value,
+    /// the maximum will be `memory_pages` for the purpose of any `memory.grow` instruction.
+    ///
+    /// This value is used to control the maximum accessible space for each linear memory of an instance.
+    ///
+    /// The reservation size of each linear memory is controlled by the
+    /// `static_memory_maximum_size` setting and this value cannot
+    /// exceed the configured static memory maximum size.
+    pub memory_pages: u64,
 }
 
 impl Default for InstanceLimits {
     fn default() -> Self {
         // See doc comments for `wasmtime::InstanceLimits` for these default values
-        Self { count: 1000 }
+        Self {
+            count: 1000,
+            size: 1 << 20, // 1 MB
+            tables: 1,
+            table_elements: 10_000,
+            memories: 1,
+            memory_pages: 160,
+        }
     }
 }
 
@@ -289,37 +221,21 @@ struct InstancePool {
 impl InstancePool {
     fn new(
         strategy: PoolingAllocationStrategy,
-        module_limits: &ModuleLimits,
         instance_limits: &InstanceLimits,
         tunables: &Tunables,
     ) -> Result<Self> {
         let page_size = region::page::size();
 
-        // Calculate the maximum size of an Instance structure given the limits
-        let offsets = VMOffsets::from(VMOffsetsFields {
-            ptr: HostPtr,
-            num_imported_functions: module_limits.imported_functions,
-            num_imported_tables: module_limits.imported_tables,
-            num_imported_memories: module_limits.imported_memories,
-            num_imported_globals: module_limits.imported_globals,
-            num_defined_functions: module_limits.functions,
-            num_defined_tables: module_limits.tables,
-            num_defined_memories: module_limits.memories,
-            num_defined_globals: module_limits.globals,
-        });
-
-        let instance_size = round_up_to_pow2(
-            mem::size_of::<Instance>()
-                .checked_add(offsets.size_of_vmctx() as usize)
-                .ok_or_else(|| anyhow!("instance size exceeds addressable memory"))?,
-            page_size,
-        );
+        let instance_size = round_up_to_pow2(instance_limits.size, mem::align_of::<Instance>());
 
         let max_instances = instance_limits.count as usize;
 
-        let allocation_size = instance_size
-            .checked_mul(max_instances)
-            .ok_or_else(|| anyhow!("total size of instance data exceeds addressable memory"))?;
+        let allocation_size = round_up_to_pow2(
+            instance_size
+                .checked_mul(max_instances)
+                .ok_or_else(|| anyhow!("total size of instance data exceeds addressable memory"))?,
+            page_size,
+        );
 
         let mapping = Mmap::accessible_reserved(allocation_size, allocation_size)
             .context("failed to create instance pool mapping")?;
@@ -329,8 +245,8 @@ impl InstancePool {
             instance_size,
             max_instances,
             index_allocator: Mutex::new(PoolingAllocationState::new(strategy, max_instances)),
-            memories: MemoryPool::new(module_limits, instance_limits, tunables)?,
-            tables: TablePool::new(module_limits, instance_limits)?,
+            memories: MemoryPool::new(instance_limits, tunables)?,
+            tables: TablePool::new(instance_limits)?,
         };
 
         Ok(pool)
@@ -347,6 +263,15 @@ impl InstancePool {
         req: InstanceAllocationRequest,
     ) -> Result<InstanceHandle, InstantiationError> {
         let module = req.runtime_info.module();
+
+        // Before doing anything else ensure that our instance slot is actually
+        // big enough to hold the `Instance` and `VMContext` for this instance.
+        // If this fails then it's a configuration error at the `Engine` level
+        // from when this pooling allocator was created and that needs updating
+        // if this is to succeed.
+        let offsets = self
+            .validate_instance_size(module)
+            .map_err(InstantiationError::Resource)?;
 
         let mut memories =
             PrimaryMap::with_capacity(module.memory_plans.len() - module.num_imported_memories);
@@ -372,7 +297,7 @@ impl InstancePool {
         Instance::new_at(
             instance_ptr,
             self.instance_size,
-            VMOffsets::new(HostPtr, module),
+            offsets,
             req,
             memories,
             tables,
@@ -459,6 +384,9 @@ impl InstancePool {
     ) -> Result<(), InstantiationError> {
         let module = runtime_info.module();
 
+        self.validate_memory_plans(module)
+            .map_err(InstantiationError::Resource)?;
+
         for (memory_index, plan) in module
             .memory_plans
             .iter()
@@ -471,7 +399,7 @@ impl InstancePool {
             let memory = unsafe {
                 std::slice::from_raw_parts_mut(
                     self.memories.get_base(instance_index, defined_index),
-                    (self.memories.max_wasm_pages as usize) * (WASM_PAGE_SIZE as usize),
+                    self.memories.max_memory_size,
                 )
             };
 
@@ -574,6 +502,10 @@ impl InstancePool {
         tables: &mut PrimaryMap<DefinedTableIndex, Table>,
     ) -> Result<(), InstantiationError> {
         let module = runtime_info.module();
+
+        self.validate_table_plans(module)
+            .map_err(InstantiationError::Resource)?;
+
         let mut bases = self.tables.get(instance_index);
         for (_, plan) in module.table_plans.iter().skip(module.num_imported_tables) {
             let base = bases.next().unwrap() as _;
@@ -618,6 +550,115 @@ impl InstancePool {
             decommit_table_pages(base, size).expect("failed to decommit table pages");
         }
     }
+
+    fn validate_table_plans(&self, module: &Module) -> Result<()> {
+        let tables = module.table_plans.len() - module.num_imported_tables;
+        if tables > self.tables.max_tables {
+            bail!(
+                "defined tables count of {} exceeds the limit of {}",
+                tables,
+                self.tables.max_tables,
+            );
+        }
+
+        for (i, plan) in module.table_plans.iter().skip(module.num_imported_tables) {
+            if plan.table.minimum > self.tables.max_elements {
+                bail!(
+                    "table index {} has a minimum element size of {} which exceeds the limit of {}",
+                    i.as_u32(),
+                    plan.table.minimum,
+                    self.tables.max_elements,
+                );
+            }
+        }
+        Ok(())
+    }
+
+    fn validate_memory_plans(&self, module: &Module) -> Result<()> {
+        let memories = module.memory_plans.len() - module.num_imported_memories;
+        if memories > self.memories.max_memories {
+            bail!(
+                "defined memories count of {} exceeds the limit of {}",
+                memories,
+                self.memories.max_memories,
+            );
+        }
+
+        for (i, plan) in module
+            .memory_plans
+            .iter()
+            .skip(module.num_imported_memories)
+        {
+            let max = self.memories.max_memory_size / (WASM_PAGE_SIZE as usize);
+            if plan.memory.minimum > (max as u64) {
+                bail!(
+                    "memory index {} has a minimum page size of {} which exceeds the limit of {}",
+                    i.as_u32(),
+                    plan.memory.minimum,
+                    max,
+                );
+            }
+        }
+        Ok(())
+    }
+
+    fn validate_instance_size(&self, module: &Module) -> Result<VMOffsets<HostPtr>> {
+        let offsets = VMOffsets::new(HostPtr, module);
+        let layout = Instance::alloc_layout(&offsets);
+        if layout.size() <= self.instance_size {
+            return Ok(offsets);
+        }
+
+        // If this `module` exceeds the allocation size allotted to it then an
+        // error will be reported here. The error of "required N bytes but
+        // cannot allocate that" is pretty opaque, however, because it's not
+        // clear what the breakdown of the N bytes are and what to optimize
+        // next. To help provide a better error message here some fancy-ish
+        // logic is done here to report the breakdown of the byte request into
+        // the largest portions and where it's coming from.
+        let mut message = format!(
+            "instance allocation for this module \
+             requires {} bytes which exceeds the configured maximum \
+             of {} bytes; breakdown of allocation requirement:\n\n",
+            layout.size(),
+            self.instance_size,
+        );
+
+        let mut remaining = layout.size();
+        let mut push = |name: &str, bytes: usize| {
+            assert!(remaining >= bytes);
+            remaining -= bytes;
+
+            // If the `name` region is more than 5% of the allocation request
+            // then report it here, otherwise ignore it. We have less than 20
+            // fields so we're guaranteed that something should be reported, and
+            // otherwise it's not particularly interesting to learn about 5
+            // different fields that are all 8 or 0 bytes. Only try to report
+            // the "major" sources of bytes here.
+            if bytes > layout.size() / 20 {
+                message.push_str(&format!(
+                    " * {:.02}% - {} bytes - {}\n",
+                    ((bytes as f32) / (layout.size() as f32)) * 100.0,
+                    bytes,
+                    name,
+                ));
+            }
+        };
+
+        // The `Instance` itself requires some size allocated to it.
+        push("instance state management", mem::size_of::<Instance>());
+
+        // Afterwards the `VMContext`'s regions are why we're requesting bytes,
+        // so ask it for descriptions on each region's byte size.
+        for (desc, size) in offsets.region_sizes() {
+            push(desc, size as usize);
+        }
+
+        // double-check we accounted for all the bytes
+        assert_eq!(remaining, 0);
+
+        bail!("{}", message)
+    }
 }
 
 /// Represents a pool of WebAssembly linear memories.
@@ -638,40 +679,38 @@ struct MemoryPool {
     image_slots: Vec<Mutex<Option<MemoryImageSlot>>>,
     // The size, in bytes, of each linear memory's reservation plus the guard
     // region allocated for it.
-    memory_size: usize,
+    memory_reservation_size: usize,
+    // The maximum size, in bytes, of each linear memory. Guaranteed to be a
+    // whole number of wasm pages.
+    max_memory_size: usize,
     // The size, in bytes, of the offset to the first linear memory in this
     // pool. This is here to help account for the first region of guard pages,
     // if desired, before the first linear memory.
     initial_memory_offset: usize,
     max_memories: usize,
     max_instances: usize,
-    max_wasm_pages: u64,
 }
 
 impl MemoryPool {
-    fn new(
-        module_limits: &ModuleLimits,
-        instance_limits: &InstanceLimits,
-        tunables: &Tunables,
-    ) -> Result<Self> {
+    fn new(instance_limits: &InstanceLimits, tunables: &Tunables) -> Result<Self> {
         // The maximum module memory page count cannot exceed 65536 pages
-        if module_limits.memory_pages > 0x10000 {
+        if instance_limits.memory_pages > 0x10000 {
             bail!(
                 "module memory page limit of {} exceeds the maximum of 65536",
-                module_limits.memory_pages
+                instance_limits.memory_pages
             );
         }
 
         // The maximum module memory page count cannot exceed the memory reservation size
-        if module_limits.memory_pages > tunables.static_memory_bound {
+        if u64::from(instance_limits.memory_pages) > tunables.static_memory_bound {
             bail!(
                 "module memory page limit of {} pages exceeds maximum static memory limit of {} pages",
-                module_limits.memory_pages,
+                instance_limits.memory_pages,
                 tunables.static_memory_bound,
             );
         }
 
-        let memory_size = if module_limits.memory_pages > 0 {
+        let memory_size = if instance_limits.memory_pages > 0 {
             usize::try_from(
                 u64::from(tunables.static_memory_bound) * u64::from(WASM_PAGE_SIZE)
                     + tunables.static_memory_offset_guard_size,
@@ -688,7 +727,7 @@ impl MemoryPool {
         );
 
         let max_instances = instance_limits.count as usize;
-        let max_memories = module_limits.memories as usize;
+        let max_memories = instance_limits.memories as usize;
         let initial_memory_offset = if tunables.guard_before_linear_memory {
             usize::try_from(tunables.static_memory_offset_guard_size).unwrap()
         } else {
@@ -732,11 +771,11 @@ impl MemoryPool {
         let pool = Self {
             mapping,
             image_slots,
-            memory_size,
+            memory_reservation_size: memory_size,
             initial_memory_offset,
             max_memories,
             max_instances,
-            max_wasm_pages: module_limits.memory_pages,
+            max_memory_size: (instance_limits.memory_pages as usize) * (WASM_PAGE_SIZE as usize),
         };
 
         // uffd support requires some special setup for the memory pool
@@ -751,7 +790,7 @@ impl MemoryPool {
         let memory_index = memory_index.as_u32() as usize;
         assert!(memory_index < self.max_memories);
         let idx = instance_index * self.max_memories + memory_index;
-        let offset = self.initial_memory_offset + idx * self.memory_size;
+        let offset = self.initial_memory_offset + idx * self.memory_reservation_size;
         unsafe { self.mapping.as_mut_ptr().offset(offset as isize) }
     }
 
@@ -774,7 +813,7 @@ impl MemoryPool {
             MemoryImageSlot::create(
                 self.get_base(instance_index, memory_index) as *mut c_void,
                 0,
-                self.memory_size,
+                self.max_memory_size,
             )
         })
     }
@@ -821,22 +860,18 @@ struct TablePool {
 }
 
 impl TablePool {
-    fn new(module_limits: &ModuleLimits, instance_limits: &InstanceLimits) -> Result<Self> {
+    fn new(instance_limits: &InstanceLimits) -> Result<Self> {
         let page_size = region::page::size();
 
-        let table_size = if module_limits.table_elements > 0 {
-            round_up_to_pow2(
-                mem::size_of::<*mut u8>()
-                    .checked_mul(module_limits.table_elements as usize)
-                    .ok_or_else(|| anyhow!("table size exceeds addressable memory"))?,
-                page_size,
-            )
-        } else {
-            0
-        };
+        let table_size = round_up_to_pow2(
+            mem::size_of::<*mut u8>()
+                .checked_mul(instance_limits.table_elements as usize)
+                .ok_or_else(|| anyhow!("table size exceeds addressable memory"))?,
+            page_size,
+        );
 
         let max_instances = instance_limits.count as usize;
-        let max_tables = module_limits.tables as usize;
+        let max_tables = instance_limits.tables as usize;
 
         let allocation_size = table_size
             .checked_mul(max_tables)
@@ -852,7 +887,7 @@ impl TablePool {
             max_tables,
             max_instances,
             page_size,
-            max_elements: module_limits.table_elements,
+            max_elements: instance_limits.table_elements,
         })
     }
 
@@ -1009,7 +1044,6 @@ impl StackPool {
 /// Note: the resource pools are manually dropped so that the fault handler terminates correctly.
 #[derive(Debug)]
 pub struct PoolingInstanceAllocator {
-    module_limits: ModuleLimits,
     // This is manually drop so that the pools unmap their memory before the page fault handler drops.
     instances: mem::ManuallyDrop<InstancePool>,
     #[cfg(all(feature = "async", unix))]
@@ -1024,7 +1058,6 @@ impl PoolingInstanceAllocator {
     /// Creates a new pooling instance allocator with the given strategy and limits.
     pub fn new(
         strategy: PoolingAllocationStrategy,
-        module_limits: ModuleLimits,
         instance_limits: InstanceLimits,
         stack_size: usize,
         tunables: &Tunables,
@@ -1033,7 +1066,7 @@ impl PoolingInstanceAllocator {
             bail!("the instance count limit cannot be zero");
         }
 
-        let instances = InstancePool::new(strategy, &module_limits, &instance_limits, tunables)?;
+        let instances = InstancePool::new(strategy, &instance_limits, tunables)?;
 
         #[cfg(all(feature = "uffd", target_os = "linux"))]
         let _fault_handler = imp::PageFaultHandler::new(&instances)?;
@@ -1041,7 +1074,6 @@ impl PoolingInstanceAllocator {
         drop(stack_size); // suppress unused warnings w/o async feature
 
         Ok(Self {
-            module_limits,
             instances: mem::ManuallyDrop::new(instances),
             #[cfg(all(feature = "async", unix))]
             stacks: StackPool::new(&instance_limits, stack_size)?,
@@ -1065,7 +1097,18 @@ impl Drop for PoolingInstanceAllocator {
 
 unsafe impl InstanceAllocator for PoolingInstanceAllocator {
     fn validate(&self, module: &Module) -> Result<()> {
-        self.module_limits.validate(module)
+        self.instances.validate_memory_plans(module)?;
+        self.instances.validate_table_plans(module)?;
+
+        // Note that this check is not 100% accurate for cross-compiled systems
+        // where the pointer size may change since this check is often performed
+        // at compile time instead of runtime. Given that Wasmtime is almost
+        // always on a 64-bit platform though this is generally ok, and
+        // otherwise this check also happens during instantiation to
+        // double-check at that point.
+        self.instances.validate_instance_size(module)?;
+
+        Ok(())
     }
 
     fn adjust_tunables(&self, tunables: &mut Tunables) {
@@ -1149,296 +1192,7 @@ mod test {
     use super::*;
     use crate::{CompiledModuleId, Imports, MemoryImage, StorePtr, VMSharedSignatureIndex};
     use std::sync::Arc;
-    use wasmtime_environ::{
-        DefinedFuncIndex, DefinedMemoryIndex, EntityRef, FunctionInfo, Global, GlobalInit, Memory,
-        MemoryPlan, ModuleType, SignatureIndex, Table, TablePlan, TableStyle, WasmType,
-    };
-
-    #[test]
-    fn test_module_imported_functions_limit() {
-        let limits = ModuleLimits {
-            imported_functions: 0,
-            ..Default::default()
-        };
-
-        let mut module = Module::default();
-
-        module.functions.push(SignatureIndex::new(0));
-        assert!(limits.validate(&module).is_ok());
-
-        module.num_imported_funcs = 1;
-        assert_eq!(
-            limits.validate(&module).map_err(|e| e.to_string()),
-            Err("imported function count of 1 exceeds the limit of 0".into())
-        );
-    }
-
-    #[test]
-    fn test_module_imported_tables_limit() {
-        let limits = ModuleLimits {
-            imported_tables: 0,
-            ..Default::default()
-        };
-
-        let mut module = Module::default();
-
-        module.table_plans.push(TablePlan {
-            style: TableStyle::CallerChecksSignature,
-            table: Table {
-                wasm_ty: WasmType::FuncRef,
-                minimum: 0,
-                maximum: None,
-            },
-        });
-
-        assert!(limits.validate(&module).is_ok());
-
-        module.num_imported_tables = 1;
-        assert_eq!(
-            limits.validate(&module).map_err(|e| e.to_string()),
-            Err("imported tables count of 1 exceeds the limit of 0".into())
-        );
-    }
-
-    #[test]
-    fn test_module_imported_memories_limit() {
-        let limits = ModuleLimits {
-            imported_memories: 0,
-            ..Default::default()
-        };
-
-        let mut module = Module::default();
-
-        module.memory_plans.push(MemoryPlan {
-            style: MemoryStyle::Static { bound: 0 },
-            memory: Memory {
-                minimum: 0,
-                maximum: None,
-                shared: false,
-                memory64: false,
-            },
-            pre_guard_size: 0,
-            offset_guard_size: 0,
-        });
-
-        assert!(limits.validate(&module).is_ok());
-
-        module.num_imported_memories = 1;
-        assert_eq!(
-            limits.validate(&module).map_err(|e| e.to_string()),
-            Err("imported memories count of 1 exceeds the limit of 0".into())
-        );
-    }
-
-    #[test]
-    fn test_module_imported_globals_limit() {
-        let limits = ModuleLimits {
-            imported_globals: 0,
-            ..Default::default()
-        };
-
-        let mut module = Module::default();
-
-        module.globals.push(Global {
-            wasm_ty: WasmType::I32,
-            mutability: false,
-            initializer: GlobalInit::I32Const(0),
-        });
-
-        assert!(limits.validate(&module).is_ok());
-
-        module.num_imported_globals = 1;
-        assert_eq!(
-            limits.validate(&module).map_err(|e| e.to_string()),
-            Err("imported globals count of 1 exceeds the limit of 0".into())
-        );
-    }
-
-    #[test]
-    fn test_module_defined_types_limit() {
-        let limits = ModuleLimits {
-            types: 0,
-            ..Default::default()
-        };
-
-        let mut module = Module::default();
-        assert!(limits.validate(&module).is_ok());
-
-        module
-            .types
-            .push(ModuleType::Function(SignatureIndex::new(0)));
-        assert_eq!(
-            limits.validate(&module).map_err(|e| e.to_string()),
-            Err("defined types count of 1 exceeds the limit of 0".into())
-        );
-    }
-
-    #[test]
-    fn test_module_defined_functions_limit() {
-        let limits = ModuleLimits {
-            functions: 0,
-            ..Default::default()
-        };
-
-        let mut module = Module::default();
-        assert!(limits.validate(&module).is_ok());
-
-        module.functions.push(SignatureIndex::new(0));
-        assert_eq!(
-            limits.validate(&module).map_err(|e| e.to_string()),
-            Err("defined functions count of 1 exceeds the limit of 0".into())
-        );
-    }
-
-    #[test]
-    fn test_module_defined_tables_limit() {
-        let limits = ModuleLimits {
-            tables: 0,
-            ..Default::default()
-        };
-
-        let mut module = Module::default();
-        assert!(limits.validate(&module).is_ok());
-
-        module.table_plans.push(TablePlan {
-            style: TableStyle::CallerChecksSignature,
-            table: Table {
-                wasm_ty: WasmType::FuncRef,
-                minimum: 0,
-                maximum: None,
-            },
-        });
-        assert_eq!(
-            limits.validate(&module).map_err(|e| e.to_string()),
-            Err("defined tables count of 1 exceeds the limit of 0".into())
-        );
-    }
-
-    #[test]
-    fn test_module_defined_memories_limit() {
-        let limits = ModuleLimits {
-            memories: 0,
-            ..Default::default()
-        };
-
-        let mut module = Module::default();
-        assert!(limits.validate(&module).is_ok());
-
-        module.memory_plans.push(MemoryPlan {
-            style: MemoryStyle::Static { bound: 0 },
-            memory: Memory {
-                minimum: 0,
-                maximum: None,
-                shared: false,
-                memory64: false,
-            },
-            pre_guard_size: 0,
-            offset_guard_size: 0,
-        });
-        assert_eq!(
-            limits.validate(&module).map_err(|e| e.to_string()),
-            Err("defined memories count of 1 exceeds the limit of 0".into())
-        );
-    }
-
-    #[test]
-    fn test_module_defined_globals_limit() {
-        let limits = ModuleLimits {
-            globals: 0,
-            ..Default::default()
-        };
-
-        let mut module = Module::default();
-        assert!(limits.validate(&module).is_ok());
-
-        module.globals.push(Global {
-            wasm_ty: WasmType::I32,
-            mutability: false,
-            initializer: GlobalInit::I32Const(0),
-        });
-        assert_eq!(
-            limits.validate(&module).map_err(|e| e.to_string()),
-            Err("defined globals count of 1 exceeds the limit of 0".into())
-        );
-    }
-
-    #[test]
-    fn test_module_table_minimum_elements_limit() {
-        let limits = ModuleLimits {
-            tables: 1,
-            table_elements: 10,
-            ..Default::default()
-        };
-
-        let mut module = Module::default();
-        module.table_plans.push(TablePlan {
-            style: TableStyle::CallerChecksSignature,
-            table: Table {
-                wasm_ty: WasmType::FuncRef,
-                minimum: 11,
-                maximum: None,
-            },
-        });
-        assert_eq!(
-            limits.validate(&module).map_err(|e| e.to_string()),
-            Err(
-                "table index 0 has a minimum element size of 11 which exceeds the limit of 10"
-                    .into()
-            )
-        );
-    }
-
-    #[test]
-    fn test_module_memory_minimum_size_limit() {
-        let limits = ModuleLimits {
-            memories: 1,
-            memory_pages: 5,
-            ..Default::default()
-        };
-
-        let mut module = Module::default();
-        module.memory_plans.push(MemoryPlan {
-            style: MemoryStyle::Static { bound: 0 },
-            memory: Memory {
-                minimum: 6,
-                maximum: None,
-                shared: false,
-                memory64: false,
-            },
-            pre_guard_size: 0,
-            offset_guard_size: 0,
-        });
-        assert_eq!(
-            limits.validate(&module).map_err(|e| e.to_string()),
-            Err("memory index 0 has a minimum page size of 6 which exceeds the limit of 5".into())
-        );
-    }
-
-    #[test]
-    fn test_module_with_dynamic_memory_style() {
-        let limits = ModuleLimits {
-            memories: 1,
-            memory_pages: 5,
-            ..Default::default()
-        };
-
-        let mut module = Module::default();
-        module.memory_plans.push(MemoryPlan {
-            style: MemoryStyle::Dynamic { reserve: 0 },
-            memory: Memory {
-                minimum: 1,
-                maximum: None,
-                shared: false,
-                memory64: false,
-            },
-            offset_guard_size: 0,
-            pre_guard_size: 0,
-        });
-        assert_eq!(
-            limits.validate(&module).map_err(|e| e.to_string()),
-            Err("memory index 0 has an unsupported dynamic memory plan style".into())
-        );
-    }
+    use wasmtime_environ::{DefinedFuncIndex, DefinedMemoryIndex, FunctionInfo, SignatureIndex};
 
     pub(crate) fn empty_runtime_info(
         module: Arc<wasmtime_environ::Module>,
@@ -1482,24 +1236,18 @@ mod test {
     #[cfg(target_pointer_width = "64")]
     #[test]
     fn test_instance_pool() -> Result<()> {
-        let module_limits = ModuleLimits {
-            imported_functions: 0,
-            imported_tables: 0,
-            imported_memories: 0,
-            imported_globals: 0,
-            types: 0,
-            functions: 0,
+        let instance_limits = InstanceLimits {
+            count: 3,
             tables: 1,
             memories: 1,
-            globals: 0,
             table_elements: 10,
+            size: 1000,
             memory_pages: 1,
+            ..Default::default()
         };
-        let instance_limits = InstanceLimits { count: 3 };
 
         let instances = InstancePool::new(
             PoolingAllocationStrategy::NextAvailable,
-            &module_limits,
             &instance_limits,
             &Tunables {
                 static_memory_bound: 1,
@@ -1507,9 +1255,7 @@ mod test {
             },
         )?;
 
-        // As of April 2021, the instance struct's size is largely below the size of a single page,
-        // so it's safe to assume it's been rounded to the size of a single memory page here.
-        assert_eq!(instances.instance_size, region::page::size());
+        assert_eq!(instances.instance_size, 1008); // round 1000 up to alignment
         assert_eq!(instances.max_instances, 3);
 
         assert_eq!(
@@ -1574,20 +1320,14 @@ mod test {
     #[test]
     fn test_memory_pool() -> Result<()> {
         let pool = MemoryPool::new(
-            &ModuleLimits {
-                imported_functions: 0,
-                imported_tables: 0,
-                imported_memories: 0,
-                imported_globals: 0,
-                types: 0,
-                functions: 0,
+            &InstanceLimits {
+                count: 5,
                 tables: 0,
                 memories: 3,
-                globals: 0,
                 table_elements: 0,
                 memory_pages: 1,
+                ..Default::default()
             },
-            &InstanceLimits { count: 5 },
             &Tunables {
                 static_memory_bound: 1,
                 static_memory_offset_guard_size: 0,
@@ -1595,10 +1335,10 @@ mod test {
             },
         )?;
 
-        assert_eq!(pool.memory_size, WASM_PAGE_SIZE as usize);
+        assert_eq!(pool.memory_reservation_size, WASM_PAGE_SIZE as usize);
         assert_eq!(pool.max_memories, 3);
         assert_eq!(pool.max_instances, 5);
-        assert_eq!(pool.max_wasm_pages, 1);
+        assert_eq!(pool.max_memory_size, WASM_PAGE_SIZE as usize);
 
         let base = pool.mapping.as_ptr() as usize;
 
@@ -1608,7 +1348,7 @@ mod test {
             for j in 0..3 {
                 assert_eq!(
                     iter.next().unwrap() as usize - base,
-                    ((i * 3) + j) * pool.memory_size
+                    ((i * 3) + j) * pool.memory_reservation_size
                 );
             }
 
@@ -1621,22 +1361,14 @@ mod test {
     #[cfg(target_pointer_width = "64")]
     #[test]
     fn test_table_pool() -> Result<()> {
-        let pool = TablePool::new(
-            &ModuleLimits {
-                imported_functions: 0,
-                imported_tables: 0,
-                imported_memories: 0,
-                imported_globals: 0,
-                types: 0,
-                functions: 0,
-                tables: 4,
-                memories: 0,
-                globals: 0,
-                table_elements: 100,
-                memory_pages: 0,
-            },
-            &InstanceLimits { count: 7 },
-        )?;
+        let pool = TablePool::new(&InstanceLimits {
+            count: 7,
+            table_elements: 100,
+            memory_pages: 0,
+            tables: 4,
+            memories: 0,
+            ..Default::default()
+        })?;
 
         let host_page_size = region::page::size();
 
@@ -1667,7 +1399,13 @@ mod test {
     #[cfg(all(unix, target_pointer_width = "64", feature = "async"))]
     #[test]
     fn test_stack_pool() -> Result<()> {
-        let pool = StackPool::new(&InstanceLimits { count: 10 }, 1)?;
+        let pool = StackPool::new(
+            &InstanceLimits {
+                count: 10,
+                ..Default::default()
+            },
+            1,
+        )?;
 
         let native_page_size = region::page::size();
         assert_eq!(pool.stack_size, 2 * native_page_size);
@@ -1737,7 +1475,6 @@ mod test {
         assert_eq!(
             PoolingInstanceAllocator::new(
                 PoolingAllocationStrategy::Random,
-                ModuleLimits::default(),
                 InstanceLimits {
                     count: 0,
                     ..Default::default()
@@ -1756,11 +1493,11 @@ mod test {
         assert_eq!(
             PoolingInstanceAllocator::new(
                 PoolingAllocationStrategy::Random,
-                ModuleLimits {
+                InstanceLimits {
+                    count: 1,
                     memory_pages: 0x10001,
                     ..Default::default()
                 },
-                InstanceLimits { count: 1 },
                 4096,
                 &Tunables {
                     static_memory_bound: 1,
@@ -1778,11 +1515,11 @@ mod test {
         assert_eq!(
             PoolingInstanceAllocator::new(
                 PoolingAllocationStrategy::Random,
-                ModuleLimits {
+                InstanceLimits {
+                    count: 1,
                     memory_pages: 2,
                     ..Default::default()
                 },
-                InstanceLimits { count: 1 },
                 4096,
                 &Tunables {
                     static_memory_bound: 1,
@@ -1801,18 +1538,14 @@ mod test {
     fn test_stack_zeroed() -> Result<()> {
         let allocator = PoolingInstanceAllocator::new(
             PoolingAllocationStrategy::NextAvailable,
-            ModuleLimits {
-                imported_functions: 0,
-                types: 0,
-                functions: 0,
-                tables: 0,
-                memories: 0,
-                globals: 0,
+            InstanceLimits {
+                count: 1,
                 table_elements: 0,
                 memory_pages: 0,
+                tables: 0,
+                memories: 0,
                 ..Default::default()
             },
-            InstanceLimits { count: 1 },
             4096,
             &Tunables::default(),
         )?;

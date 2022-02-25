@@ -193,11 +193,11 @@ fn guards_present_pooling() -> Result<()> {
     config.guard_before_linear_memory(true);
     config.allocation_strategy(InstanceAllocationStrategy::Pooling {
         strategy: PoolingAllocationStrategy::default(),
-        module_limits: ModuleLimits {
+        instance_limits: InstanceLimits {
+            count: 2,
             memory_pages: 10,
-            ..ModuleLimits::default()
+            ..Default::default()
         },
-        instance_limits: InstanceLimits { count: 2 },
     });
     let engine = Engine::new(&config)?;
 

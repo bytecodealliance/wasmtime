@@ -94,11 +94,11 @@ fn test_setup() -> (Engine, Module) {
     let mut config = Config::new();
     config.allocation_strategy(InstanceAllocationStrategy::Pooling {
         strategy: PoolingAllocationStrategy::NextAvailable,
-        module_limits: ModuleLimits {
+        instance_limits: InstanceLimits {
+            count: pool_count,
             memory_pages: 1,
             ..Default::default()
         },
-        instance_limits: InstanceLimits { count: pool_count },
     });
     let engine = Engine::new(&config).unwrap();
 
