@@ -1859,3 +1859,130 @@
        (cmp_imm (OperandSize.Size64) 0xffffffff src)  ;; simm32 0xffff_ffff is sign-extended to -1.
        (setcc (CC.Z))))
 
+
+;; Rules for `uextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; T -> T is a no-op.
+(rule (lower (has_type ty (uextend src @ (value_type =ty))))
+      src)
+
+;; I64 -> I128.
+(rule (lower (has_type $I128 (uextend src @ (value_type $I64))))
+      (value_regs src (imm $I64 0)))
+
+;; I{8,16,32} -> I128.
+(rule (lower (has_type $I128 (uextend src @ (value_type (fits_in_32 src_ty)))))
+      (value_regs (extend_to_gpr src $I64 (ExtendKind.Zero)) (imm $I64 0)))
+
+;; I{8,16,32} -> I64.
+(rule (lower (has_type $I64 (uextend src @ (value_type (fits_in_32 src_ty)))))
+      (extend_to_gpr src $I64 (ExtendKind.Zero)))
+
+;; I8 -> I{16,32}, I16 -> I32.
+(rule (lower (has_type (fits_in_32 dst_ty) (uextend src @ (value_type (fits_in_32 src_ty)))))
+      (extend_to_gpr src $I32 (ExtendKind.Zero)))
+
+;; I32 -> I64 with op that produces a zero-extended value in a register.
+;;
+;; As a particular x64 extra-pattern matching opportunity, all the ALU
+;; opcodes on 32-bits will zero-extend the upper 32-bits, so we can
+;; even not generate a zero-extended move in this case.
+;;
+;; (Note that we unfortunately can't factor out the
+;; insts-that-zero-upper-32 pattern into a separate extractor until we
+;; can write internal extractors with multiple rules; and we'd rather
+;; keep these here than write an external extractor containing bits of
+;; the instruction pattern.s)
+(rule (lower (has_type $I64
+                       (uextend src @ (iadd _ _))))
+      src)
+(rule (lower (has_type $I64
+                       (uextend src @ (iadd_ifcout _ _))))
+      src)
+(rule (lower (has_type $I64
+                       (uextend src @ (isub _ _))))
+      src)
+(rule (lower (has_type $I64
+                       (uextend src @ (imul _ _))))
+      src)
+(rule (lower (has_type $I64
+                       (uextend src @ (band _ _))))
+      src)
+(rule (lower (has_type $I64
+                       (uextend src @ (bor _ _))))
+      src)
+(rule (lower (has_type $I64
+                       (uextend src @ (bxor _ _))))
+      src)
+(rule (lower (has_type $I64
+                       (uextend src @ (ishl _ _))))
+      src)
+(rule (lower (has_type $I64
+                       (uextend src @ (ushr _ _))))
+      src)
+(rule (lower (has_type $I64
+                       (uextend src @ (uload32 _ _ _))))
+      src)
+
+;; Rules for `sextend` / `bextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl generic_sextend (Value Type Type) InstOutput)
+
+;; T -> T is a no-op.
+(rule (generic_sextend src ty =ty)
+      src)
+
+;; Produce upper 64 bits sign-extended from lower 64: shift right by
+;; 63 bits to spread the sign bit across the result.
+(decl spread_sign_bit (Gpr) Gpr)
+(rule (spread_sign_bit src)
+      (sar $I64 src (Imm8Reg.Imm8 63)))
+
+;; I64 -> I128.
+(rule (generic_sextend src (ty_int_bool_64 _) (ty_int_bool_128 _))
+      (value_regs src (spread_sign_bit src)))
+
+;; I{8,16,32} -> I128.
+(rule (generic_sextend src (fits_in_32 src_ty) (ty_int_bool_128 _))
+      (let ((lo Gpr (extend_to_gpr src $I64 (ExtendKind.Sign)))
+            (hi Gpr (spread_sign_bit lo)))
+      (value_regs lo hi)))
+
+;; I{8,16,32} -> I64.
+(rule (generic_sextend src (fits_in_32 src_ty) (ty_int_bool_64 _))
+      (extend_to_gpr src $I64 (ExtendKind.Sign)))
+
+;; I8 -> I{16,32}, I16 -> I32.
+(rule (generic_sextend src (fits_in_32 src_ty) (fits_in_32 dst_ty))
+      (extend_to_gpr src $I32 (ExtendKind.Sign)))
+
+(rule (lower
+       (has_type dst_ty
+                 (sextend src @ (value_type src_ty))))
+      (generic_sextend src src_ty dst_ty))
+
+;; Bools are stored as 0/-1 so extends must sign-extend as well.
+(rule (lower
+       (has_type dst_ty
+                 (bextend src @ (value_type src_ty))))
+      (generic_sextend src src_ty dst_ty))
+
+;; Rules for `ireduce` / `breduce` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; T -> T is always a no-op, even I128 -> I128.
+(rule (lower (has_type ty (ireduce src @ (value_type =ty))))
+      src)
+
+;; T -> I{64,32,16,8}: We can simply pass through the value: values
+;; are always stored with high bits undefined, so we can just leave
+;; them be.
+(rule (lower (has_type (fits_in_64 ty) (ireduce src)))
+      (value_regs_get_gpr src 0))
+
+;; Likewise for breduce.
+
+(rule (lower (has_type ty (breduce src @ (value_type =ty))))
+      src)
+
+(rule (lower (has_type (fits_in_64 ty) (breduce src)))
+      (value_regs_get_gpr src 0))

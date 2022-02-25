@@ -71,25 +71,6 @@ fn matches_input<C: LowerCtx<I = Inst>>(
     })
 }
 
-/// Returns whether the given specified `input` is a result produced by an instruction with any of
-/// the opcodes specified in `ops`.
-fn matches_input_any<C: LowerCtx<I = Inst>>(
-    ctx: &mut C,
-    input: InsnInput,
-    ops: &[Opcode],
-) -> Option<IRInst> {
-    let inputs = ctx.get_input_as_source_or_const(input.insn, input.input);
-    inputs.inst.and_then(|(src_inst, _)| {
-        let data = ctx.data(src_inst);
-        for &op in ops {
-            if data.opcode() == op {
-                return Some(src_inst);
-            }
-        }
-        None
-    })
-}
-
 /// Emits instruction(s) to generate the given 64-bit constant value into a newly-allocated
 /// temporary register, returning that register.
 fn generate_constant<C: LowerCtx<I = Inst>>(ctx: &mut C, ty: Type, c: u64) -> ValueRegs<Reg> {
@@ -917,122 +898,12 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::Popcnt
         | Opcode::Bitrev
         | Opcode::IsNull
-        | Opcode::IsInvalid => implemented_in_isle(ctx),
-
-        Opcode::Uextend | Opcode::Sextend | Opcode::Breduce | Opcode::Bextend | Opcode::Ireduce => {
-            let src_ty = ctx.input_ty(insn, 0);
-            let dst_ty = ctx.output_ty(insn, 0);
-
-            if src_ty == types::I128 {
-                assert!(dst_ty.bits() <= 64);
-                assert!(op == Opcode::Ireduce);
-                let src = put_input_in_regs(ctx, inputs[0]);
-                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-                ctx.emit(Inst::gen_move(dst, src.regs()[0], types::I64));
-            } else if dst_ty == types::I128 {
-                assert!(src_ty.bits() <= 64);
-                let src = put_input_in_reg(ctx, inputs[0]);
-                let dst = get_output_reg(ctx, outputs[0]);
-                assert!(op == Opcode::Uextend || op == Opcode::Sextend);
-                // Extend to 64 bits first.
-
-                let ext_mode = ExtMode::new(src_ty.bits(), /* dst bits = */ 64);
-                if let Some(ext_mode) = ext_mode {
-                    if op == Opcode::Sextend {
-                        ctx.emit(Inst::movsx_rm_r(ext_mode, RegMem::reg(src), dst.regs()[0]));
-                    } else {
-                        ctx.emit(Inst::movzx_rm_r(ext_mode, RegMem::reg(src), dst.regs()[0]));
-                    }
-                } else {
-                    ctx.emit(Inst::mov64_rm_r(RegMem::reg(src), dst.regs()[0]));
-                }
-
-                // Now generate the top 64 bits.
-                if op == Opcode::Sextend {
-                    // Sign-extend: move dst[0] into dst[1] and arithmetic-shift right by 63 bits
-                    // to spread the sign bit across all bits.
-                    ctx.emit(Inst::gen_move(
-                        dst.regs()[1],
-                        dst.regs()[0].to_reg(),
-                        types::I64,
-                    ));
-                    ctx.emit(Inst::shift_r(
-                        OperandSize::Size64,
-                        ShiftKind::ShiftRightArithmetic,
-                        Some(63),
-                        dst.regs()[1],
-                    ));
-                } else {
-                    // Zero-extend: just zero the top word.
-                    ctx.emit(Inst::alu_rmi_r(
-                        OperandSize::Size64,
-                        AluRmiROpcode::Xor,
-                        RegMemImm::reg(dst.regs()[1].to_reg()),
-                        dst.regs()[1],
-                    ));
-                }
-            } else {
-                // Sextend requires a sign-extended move, but all the other opcodes are simply a move
-                // from a zero-extended source. Here is why this works, in each case:
-                //
-                // - Breduce, Bextend: changing width of a boolean. We
-                //   represent a bool as a 0 or -1, so Breduce can mask, while
-                //   Bextend must sign-extend.
-                //
-                // - Ireduce: changing width of an integer. Smaller ints are stored with undefined
-                // high-order bits, so we can simply do a copy.
-                let is_sextend = match op {
-                    Opcode::Sextend | Opcode::Bextend => true,
-                    _ => false,
-                };
-                if src_ty == types::I32 && dst_ty == types::I64 && !is_sextend {
-                    // As a particular x64 extra-pattern matching opportunity, all the ALU opcodes on
-                    // 32-bits will zero-extend the upper 32-bits, so we can even not generate a
-                    // zero-extended move in this case.
-                    // TODO add loads and shifts here.
-                    if let Some(_) = matches_input_any(
-                        ctx,
-                        inputs[0],
-                        &[
-                            Opcode::Iadd,
-                            Opcode::IaddIfcout,
-                            Opcode::Isub,
-                            Opcode::Imul,
-                            Opcode::Band,
-                            Opcode::Bor,
-                            Opcode::Bxor,
-                        ],
-                    ) {
-                        let src = put_input_in_reg(ctx, inputs[0]);
-                        let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-                        ctx.emit(Inst::gen_move(dst, src, types::I64));
-                        return Ok(());
-                    }
-                }
-
-                let src = input_to_reg_mem(ctx, inputs[0]);
-                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-
-                let ext_mode = ExtMode::new(src_ty.bits(), dst_ty.bits());
-                assert_eq!(
-                    src_ty.bits() < dst_ty.bits(),
-                    ext_mode.is_some(),
-                    "unexpected extension: {} -> {}",
-                    src_ty,
-                    dst_ty
-                );
-
-                if let Some(ext_mode) = ext_mode {
-                    if is_sextend {
-                        ctx.emit(Inst::movsx_rm_r(ext_mode, src, dst));
-                    } else {
-                        ctx.emit(Inst::movzx_rm_r(ext_mode, src, dst));
-                    }
-                } else {
-                    ctx.emit(Inst::mov64_rm_r(src, dst));
-                }
-            }
-        }
+        | Opcode::IsInvalid
+        | Opcode::Uextend
+        | Opcode::Sextend
+        | Opcode::Breduce
+        | Opcode::Bextend
+        | Opcode::Ireduce => implemented_in_isle(ctx),
 
         Opcode::Bint => {
             // Booleans are stored as all-zeroes (0) or all-ones (-1). We AND
