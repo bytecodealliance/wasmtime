@@ -320,6 +320,7 @@ impl CallThreadState {
         eprintln!("starting capture of the backtrace");
         let mut n = 0;
         backtrace::trace(|frame| {
+            eprintln!("{}: ip={:p} sp={:p}", n, frame.ip(), frame.sp());
             n += 1;
             true
         });
