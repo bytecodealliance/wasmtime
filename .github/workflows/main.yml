@@ -46,4 +46,3 @@ jobs:
     - run: cargo test --test all -- stack_overflow --nocapture --test-threads 1
       env:
         RUST_BACKTRACE: 1
-      if: matrix.target == ''
