@@ -52,7 +52,6 @@ impl Inst {
             | Inst::CallUnknown { .. }
             | Inst::CheckedDivOrRemSeq { .. }
             | Inst::Cmove { .. }
-            | Inst::CmoveOr { .. }
             | Inst::CmpRmiR { .. }
             | Inst::CvtFloatToSintSeq { .. }
             | Inst::CvtFloatToUintSeq { .. }
@@ -89,7 +88,6 @@ impl Inst {
             | Inst::Ud2 { .. }
             | Inst::VirtualSPOffsetAdj { .. }
             | Inst::XmmCmove { .. }
-            | Inst::XmmCmoveOr { .. }
             | Inst::XmmCmpRmR { .. }
             | Inst::XmmLoadConst { .. }
             | Inst::XmmMinMaxSeq { .. }
@@ -141,6 +139,7 @@ impl Inst {
         }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn unary_rm_r(
         size: OperandSize,
         op: UnaryRmROpcode,
@@ -906,12 +905,6 @@ impl Inst {
                 alternative,
                 dst,
                 ..
-            }
-            | Inst::CmoveOr {
-                size,
-                alternative,
-                dst,
-                ..
             } => {
                 if *alternative != dst.to_reg() {
                     debug_assert!(alternative.is_virtual());
@@ -925,9 +918,6 @@ impl Inst {
                 insts.push(self);
             }
             Inst::XmmCmove {
-                alternative, dst, ..
-            }
-            | Inst::XmmCmoveOr {
                 alternative, dst, ..
             } => {
                 if *alternative != dst.to_reg() {
@@ -1619,27 +1609,6 @@ impl PrettyPrint for Inst {
                 show_ireg_sized(dst.to_reg().to_reg(), mb_rru, size.to_bytes())
             ),
 
-            Inst::CmoveOr {
-                size,
-                cc1,
-                cc2,
-                consequent: src,
-                alternative: _,
-                dst,
-            } => {
-                let src = src.show_rru_sized(mb_rru, size.to_bytes());
-                let dst = show_ireg_sized(dst.to_reg().to_reg(), mb_rru, size.to_bytes());
-                format!(
-                    "{} {}, {}; {} {}, {}",
-                    ljustify(format!("cmov{}{}", cc1.to_string(), suffix_bwlq(*size))),
-                    src,
-                    dst,
-                    ljustify(format!("cmov{}{}", cc2.to_string(), suffix_bwlq(*size))),
-                    src,
-                    dst,
-                )
-            }
-
             Inst::XmmCmove {
                 size,
                 cc,
@@ -1657,34 +1626,6 @@ impl PrettyPrint for Inst {
                     },
                     src.show_rru_sized(mb_rru, size.to_bytes()),
                     show_ireg_sized(dst.to_reg().to_reg(), mb_rru, size.to_bytes())
-                )
-            }
-
-            Inst::XmmCmoveOr {
-                size,
-                cc1,
-                cc2,
-                consequent: src,
-                dst,
-                ..
-            } => {
-                let suffix = if *size == OperandSize::Size64 {
-                    "sd"
-                } else {
-                    "ss"
-                };
-                let src = src.show_rru_sized(mb_rru, size.to_bytes());
-                let dst = show_ireg_sized(dst.to_reg().to_reg(), mb_rru, size.to_bytes());
-                format!(
-                    "j{} $check; mov{} {}, {}; $check: j{} $next; mov{} {}, {}; $next",
-                    cc1.invert().to_string(),
-                    suffix,
-                    src,
-                    dst,
-                    cc2.invert().to_string(),
-                    suffix,
-                    src,
-                    dst,
                 )
             }
 
@@ -2086,21 +2027,11 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             consequent: src,
             dst,
             ..
-        }
-        | Inst::CmoveOr {
-            consequent: src,
-            dst,
-            ..
         } => {
             src.get_regs_as_uses(collector);
             collector.add_mod(dst.to_writable_reg());
         }
         Inst::XmmCmove {
-            consequent: src,
-            dst,
-            ..
-        }
-        | Inst::XmmCmoveOr {
             consequent: src,
             dst,
             ..
@@ -2554,24 +2485,12 @@ pub(crate) fn x64_map_regs<RM: RegMapper>(inst: &mut Inst, mapper: &RM) {
             ref mut dst,
             ref mut alternative,
             ..
-        }
-        | Inst::CmoveOr {
-            consequent: ref mut src,
-            ref mut dst,
-            ref mut alternative,
-            ..
         } => {
             src.map_uses(mapper);
             dst.map_mod(mapper);
             *alternative = dst.to_reg();
         }
         Inst::XmmCmove {
-            consequent: ref mut src,
-            ref mut dst,
-            ref mut alternative,
-            ..
-        }
-        | Inst::XmmCmoveOr {
             consequent: ref mut src,
             ref mut dst,
             ref mut alternative,

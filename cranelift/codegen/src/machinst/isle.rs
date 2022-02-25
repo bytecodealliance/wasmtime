@@ -141,6 +141,26 @@ macro_rules! isle_prelude_methods {
         }
 
         #[inline]
+        fn i64_as_u64(&mut self, x: i64) -> u64 {
+            x as u64
+        }
+
+        #[inline]
+        fn u64_add(&mut self, x: u64, y: u64) -> u64 {
+            x.wrapping_add(y)
+        }
+
+        #[inline]
+        fn u64_sub(&mut self, x: u64, y: u64) -> u64 {
+            x.wrapping_sub(y)
+        }
+
+        #[inline]
+        fn u64_and(&mut self, x: u64, y: u64) -> u64 {
+            x & y
+        }
+
+        #[inline]
         fn ty_bits(&mut self, ty: Type) -> u8 {
             use std::convert::TryInto;
             ty.bits().try_into().unwrap()
@@ -152,8 +172,25 @@ macro_rules! isle_prelude_methods {
         }
 
         #[inline]
+        fn ty_bits_u64(&mut self, ty: Type) -> u64 {
+            ty.bits() as u64
+        }
+
+        #[inline]
         fn ty_bytes(&mut self, ty: Type) -> u16 {
             u16::try_from(ty.bytes()).unwrap()
+        }
+
+        #[inline]
+        fn ty_mask(&mut self, ty: Type) -> u64 {
+            match ty.bits() {
+                1 => 1,
+                8 => 0xff,
+                16 => 0xffff,
+                32 => 0xffff_ffff,
+                64 => 0xffff_ffff_ffff_ffff,
+                _ => unimplemented!(),
+            }
         }
 
         fn fits_in_16(&mut self, ty: Type) -> Option<Type> {

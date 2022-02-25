@@ -1467,22 +1467,22 @@
 ;;  - `CC.BE -> C = 1 OR Z = 1` (below or equal)
 ;;  - `CC.NBE -> C = 0 AND Z = 0` (not below or equal)
 
-(rule (lower (has_type ty (select (def_inst (fcmp (FloatCC.Ordered) a b)) x y)))
+(rule (lower (has_type ty (select (fcmp (FloatCC.Ordered) a b) x y)))
       (with_flags (fpcmp b a) (cmove_from_values ty (CC.NP) x y)))
 
-(rule (lower (has_type ty (select (def_inst (fcmp (FloatCC.Unordered) a b)) x y)))
+(rule (lower (has_type ty (select (fcmp (FloatCC.Unordered) a b) x y)))
       (with_flags (fpcmp b a) (cmove_from_values ty (CC.P) x y)))
 
-(rule (lower (has_type ty (select (def_inst (fcmp (FloatCC.GreaterThan) a b)) x y)))
+(rule (lower (has_type ty (select (fcmp (FloatCC.GreaterThan) a b) x y)))
       (with_flags (fpcmp b a) (cmove_from_values ty (CC.NBE) x y)))
 
-(rule (lower (has_type ty (select (def_inst (fcmp (FloatCC.GreaterThanOrEqual) a b)) x y)))
+(rule (lower (has_type ty (select (fcmp (FloatCC.GreaterThanOrEqual) a b) x y)))
       (with_flags (fpcmp b a) (cmove_from_values ty (CC.NB) x y)))
 
-(rule (lower (has_type ty (select (def_inst (fcmp (FloatCC.UnorderedOrLessThan) a b)) x y)))
+(rule (lower (has_type ty (select (fcmp (FloatCC.UnorderedOrLessThan) a b) x y)))
       (with_flags (fpcmp b a) (cmove_from_values ty (CC.B) x y)))
 
-(rule (lower (has_type ty (select (def_inst (fcmp (FloatCC.UnorderedOrLessThanOrEqual) a b)) x y)))
+(rule (lower (has_type ty (select (fcmp (FloatCC.UnorderedOrLessThanOrEqual) a b) x y)))
       (with_flags (fpcmp b a) (cmove_from_values ty (CC.BE) x y)))
 
 ;; Certain FloatCC variants are implemented by flipping the operands of the
@@ -1496,16 +1496,16 @@
 ;; not `LT | UNO`. By flipping the operands AND inverting the comparison (e.g.,
 ;; to `CC.NBE`), we also avoid these unordered cases.
 
-(rule (lower (has_type ty (select (def_inst (fcmp (FloatCC.LessThan) a b)) x y)))
+(rule (lower (has_type ty (select (fcmp (FloatCC.LessThan) a b) x y)))
       (with_flags (fpcmp a b) (cmove_from_values ty (CC.NBE) x y)))
 
-(rule (lower (has_type ty (select (def_inst (fcmp (FloatCC.LessThanOrEqual) a b)) x y)))
+(rule (lower (has_type ty (select (fcmp (FloatCC.LessThanOrEqual) a b) x y)))
       (with_flags (fpcmp a b) (cmove_from_values ty (CC.NB) x y)))
 
-(rule (lower (has_type ty (select (def_inst (fcmp (FloatCC.UnorderedOrGreaterThan) a b)) x y)))
+(rule (lower (has_type ty (select (fcmp (FloatCC.UnorderedOrGreaterThan) a b) x y)))
       (with_flags (fpcmp a b) (cmove_from_values ty (CC.B) x y)))
 
-(rule (lower (has_type ty (select (def_inst (fcmp (FloatCC.UnorderedOrGreaterThanOrEqual) a b)) x y)))
+(rule (lower (has_type ty (select (fcmp (FloatCC.UnorderedOrGreaterThanOrEqual) a b) x y)))
       (with_flags (fpcmp a b) (cmove_from_values ty (CC.BE) x y)))
 
 ;; `FloatCC.Equal` and `FloatCC.NotEqual` can only be implemented with multiple
@@ -1521,8 +1521,341 @@
 ;; More details about the CLIF semantics for `fcmp` are available at
 ;; https://docs.rs/cranelift-codegen/latest/cranelift_codegen/ir/trait.InstBuilder.html#method.fcmp.
 
-(rule (lower (has_type ty (select (def_inst (fcmp (FloatCC.Equal) a b)) x y)))
+(rule (lower (has_type ty (select (fcmp (FloatCC.Equal) a b) x y)))
       (with_flags (fpcmp a b) (cmove_or_from_values ty (CC.NZ) (CC.P) y x)))
 
-(rule (lower (has_type ty (select (def_inst (fcmp (FloatCC.NotEqual) a b)) x y)))
+(rule (lower (has_type ty (select (fcmp (FloatCC.NotEqual) a b) x y)))
       (with_flags (fpcmp a b) (cmove_or_from_values ty (CC.NZ) (CC.P) x y)))
+
+;; Rules for `clz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; If available, we can use a plain lzcnt instruction here. Note no
+;; special handling is required for zero inputs, because the machine
+;; instruction does what the CLIF expects for zero, i.e. it returns
+;; zero.
+(rule 1 (lower
+         (has_type (and
+                    (ty_32_or_64 ty)
+                    (use_lzcnt))
+                   (clz src)))
+      (lzcnt ty src))
+
+(rule (lower
+       (has_type (ty_32_or_64 ty)
+                 (clz src)))
+      (do_clz ty ty src))
+
+(rule (lower
+       (has_type (ty_8_or_16 ty)
+                 (clz src)))
+      (do_clz $I32 ty (extend_to_gpr src $I32 (ExtendKind.Zero))))
+
+(rule (lower
+       (has_type $I128
+                 (clz src)))
+      (let ((upper Gpr (do_clz $I64 $I64 (value_regs_get_gpr src 1)))
+            (lower Gpr (add $I64
+                            (do_clz $I64 $I64 (value_regs_get_gpr src 0))
+                            (RegMemImm.Imm 64)))
+            (result_lo Gpr
+              (with_flags_reg
+               (cmp_imm (OperandSize.Size64) 64 upper)
+               (cmove $I64 (CC.NZ) upper lower))))
+        (value_regs result_lo (imm $I64 0))))
+
+;; Implementation helper for clz; operates on 32 or 64-bit units.
+(decl do_clz (Type Type Gpr) Gpr)
+(rule (do_clz ty orig_ty src)
+      (let ((highest_bit_index Reg (bsr_or_else ty src (imm_i64 $I64 -1)))
+            (bits_minus_1 Reg (imm ty (u64_sub (ty_bits_u64 orig_ty) 1))))
+        (sub ty bits_minus_1 highest_bit_index)))
+
+;; Rules for `ctz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Analogous to `clz` cases above, but using mirror instructions
+;; (tzcnt vs lzcnt, bsf vs bsr).
+
+(rule 1 (lower
+         (has_type (and
+                    (ty_32_or_64 ty)
+                    (use_bmi1))
+                   (ctz src)))
+      (tzcnt ty src))
+
+(rule (lower
+       (has_type (ty_32_or_64 ty)
+                 (ctz src)))
+      (do_ctz ty ty src))
+
+(rule (lower
+       (has_type (ty_8_or_16 ty)
+                 (ctz src)))
+      (do_ctz $I32 ty (extend_to_gpr src $I32 (ExtendKind.Zero))))
+
+(rule (lower
+       (has_type $I128
+                 (ctz src)))
+      (let ((lower Gpr (do_ctz $I64 $I64 (value_regs_get_gpr src 0)))
+            (upper Gpr (add $I64
+                            (do_ctz $I64 $I64 (value_regs_get_gpr src 1))
+                            (RegMemImm.Imm 64)))
+            (result_lo Gpr
+              (with_flags_reg
+               (cmp_imm (OperandSize.Size64) 64 lower)
+               (cmove $I64 (CC.Z) upper lower))))
+        (value_regs result_lo (imm $I64 0))))
+
+(decl do_ctz (Type Type Gpr) Gpr)
+(rule (do_ctz ty orig_ty src)
+      (bsf_or_else ty src (imm $I64 (ty_bits_u64 orig_ty))))
+
+;; Rules for `popcnt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule 1 (lower
+         (has_type (and
+                    (ty_32_or_64 ty)
+                    (use_popcnt))
+                   (popcnt src)))
+      (x64_popcnt ty src))
+
+(rule 1 (lower
+         (has_type (and
+                    (ty_8_or_16 ty)
+                    (use_popcnt))
+                   (popcnt src)))
+      (x64_popcnt $I32 (extend_to_gpr src $I32 (ExtendKind.Zero))))
+
+(rule 1 (lower
+         (has_type (and
+                    $I128
+                    (use_popcnt))
+                   (popcnt src)))
+      (let ((lo_count Gpr (x64_popcnt $I64 (value_regs_get_gpr src 0)))
+            (hi_count Gpr (x64_popcnt $I64 (value_regs_get_gpr src 1))))
+        (value_regs (add $I64 lo_count hi_count) (imm $I64 0))))
+
+(rule (lower
+       (has_type (ty_32_or_64 ty)
+                 (popcnt src)))
+      (do_popcnt ty src))
+
+(rule (lower
+       (has_type (ty_8_or_16 ty)
+                 (popcnt src)))
+      (do_popcnt $I32 (extend_to_gpr src $I32 (ExtendKind.Zero))))
+
+(rule (lower
+       (has_type $I128
+                 (popcnt src)))
+      (let ((lo_count Gpr (do_popcnt $I64 (value_regs_get_gpr src 0)))
+            (hi_count Gpr (do_popcnt $I64 (value_regs_get_gpr src 1))))
+        (value_regs (add $I64 lo_count hi_count) (imm $I64 0))))
+
+;; Implementation of popcount when we don't nave a native popcount
+;; instruction.
+(decl do_popcnt (Type Gpr) Gpr)
+(rule (do_popcnt $I64 src)
+      (let ((shifted1 Gpr (shr $I64 src (Imm8Reg.Imm8 1)))
+            (sevens Gpr (imm $I64 0x7777777777777777))
+            (masked1 Gpr (x64_and $I64 shifted1 sevens))
+            ;; diff1 := src - ((src >> 1) & 0b0111_0111_0111...)
+            (diff1 Gpr (sub $I64 src masked1))
+            (shifted2 Gpr (shr $I64 masked1 (Imm8Reg.Imm8 1)))
+            (masked2 Gpr (x64_and $I64 shifted2 sevens))
+            ;; diff2 := diff1 - ((diff1 >> 1) & 0b0111_0111_0111...)
+            (diff2 Gpr (sub $I64 diff1 masked2))
+            (shifted3 Gpr (shr $I64 masked2 (Imm8Reg.Imm8 1)))
+            (masked3 Gpr (x64_and $I64 shifted3 sevens))
+            ;; diff3 := diff2 - ((diff2 >> 1) & 0b0111_0111_0111...)
+            ;;
+            ;; At this point, each nibble of diff3 is the popcount of
+            ;; that nibble. This works because at each step above, we
+            ;; are basically subtracting floor(value / 2) from the
+            ;; running value; the leftover remainder is 1 if the LSB
+            ;; was 1. After three steps, we have (nibble / 8) -- 0 or
+            ;; 1 for the MSB of the nibble -- plus three possible
+            ;; additions for the three other bits.
+            (diff3 Gpr (sub $I64 diff2 masked3))
+            ;; Add the two nibbles of each byte together.
+            (sum1 Gpr (add $I64
+                           (shr $I64 diff3 (Imm8Reg.Imm8 4))
+                           diff3))
+            ;; Mask the above sum to have the popcount for each byte
+            ;; in the lower nibble of that byte.
+            (ofof Gpr (imm $I64 0x0f0f0f0f0f0f0f0f))
+            (masked4 Gpr (x64_and $I64 sum1 ofof))
+            (ones Gpr (imm $I64 0x0101010101010101))
+            ;; Use a multiply to sum all of the bytes' popcounts into
+            ;; the top byte. Consider the binomial expansion for the
+            ;; top byte: it is the sum of the bytes (masked4 >> 56) *
+            ;; 0x01 + (masked4 >> 48) * 0x01 + (masked4 >> 40) * 0x01
+            ;; + ... + (masked4 >> 0).
+            (mul Gpr (mul $I64 masked4 ones))
+            ;; Now take that top byte and return it as the popcount.
+            (final Gpr (shr $I64 mul (Imm8Reg.Imm8 56))))
+        final))
+
+;; This is the 32-bit version of the above; the steps for each nibble
+;; are the same, we just use constants half as wide.
+(rule (do_popcnt $I32 src)
+      (let ((shifted1 Gpr (shr $I32 src (Imm8Reg.Imm8 1)))
+            (sevens Gpr (imm $I32 0x77777777))
+            (masked1 Gpr (x64_and $I32 shifted1 sevens))
+            (diff1 Gpr (sub $I32 src masked1))
+            (shifted2 Gpr (shr $I32 masked1 (Imm8Reg.Imm8 1)))
+            (masked2 Gpr (x64_and $I32 shifted2 sevens))
+            (diff2 Gpr (sub $I32 diff1 masked2))
+            (shifted3 Gpr (shr $I32 masked2 (Imm8Reg.Imm8 1)))
+            (masked3 Gpr (x64_and $I32 shifted3 sevens))
+            (diff3 Gpr (sub $I32 diff2 masked3))
+            (sum1 Gpr (add $I32
+                           (shr $I32 diff3 (Imm8Reg.Imm8 4))
+                           diff3))
+            (masked4 Gpr (x64_and $I32 sum1 (RegMemImm.Imm 0x0f0f0f0f)))
+            (mul Gpr (mul $I32 masked4 (RegMemImm.Imm 0x01010101)))
+            (final Gpr (shr $I32 mul (Imm8Reg.Imm8 24))))
+        final))
+                       
+            
+(rule 1 (lower (has_type (and
+                          $I8X16
+                          (avx512vl_enabled)
+                          (avx512bitalg_enabled))
+                         (popcnt src)))
+      (vpopcntb src))
+
+
+      
+;; For SSE 4.2 we use Mula's algorithm (https://arxiv.org/pdf/1611.07612.pdf):
+;;
+;; __m128i count_bytes ( __m128i v) {
+;;     __m128i lookup = _mm_setr_epi8(0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4);
+;;     __m128i low_mask = _mm_set1_epi8 (0x0f);
+;;     __m128i lo = _mm_and_si128 (v, low_mask);
+;;     __m128i hi = _mm_and_si128 (_mm_srli_epi16 (v, 4), low_mask);
+;;     __m128i cnt1 = _mm_shuffle_epi8 (lookup, lo);
+;;     __m128i cnt2 = _mm_shuffle_epi8 (lookup, hi);
+;;     return _mm_add_epi8 (cnt1, cnt2);
+;; }
+;;
+;; Details of the above algorithm can be found in the reference noted above, but the basics
+;; are to create a lookup table that pre populates the popcnt values for each number [0,15].
+;; The algorithm uses shifts to isolate 4 bit sections of the vector, pshufb as part of the
+;; lookup process, and adds together the results.
+;;
+;; __m128i lookup = _mm_setr_epi8(0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4);
+
+(decl popcount_4bit_table () VCodeConstant)  ;; bits-per-nibble table `lookup` above
+(extern constructor popcount_4bit_table popcount_4bit_table)
+
+(decl popcount_low_mask () VCodeConstant)    ;; mask for low nibbles: 0x0f * 16
+(extern constructor popcount_low_mask popcount_low_mask)
+
+(rule (lower (has_type $I8X16
+                       (popcnt src)))
+      (let ((nibble_table_const VCodeConstant (popcount_4bit_table))
+            (low_mask Xmm (xmm_load_const $I8X16 (popcount_low_mask)))
+            (low_nibbles Xmm (sse_and $I8X16 src low_mask))
+            ;; Note that this is a 16x8 shift, but that's OK; we mask
+            ;; off anything that traverses from one byte to the next
+            ;; with the low_mask below.
+            (shifted_src Xmm (psrlw src (RegMemImm.Imm 4)))
+            (high_nibbles Xmm (sse_and $I8X16 shifted_src low_mask))
+            (lookup Xmm (xmm_load_const $I8X16 (popcount_4bit_table)))
+            (bit_counts_low Xmm (pshufb lookup low_nibbles))
+            (bit_counts_high Xmm (pshufb lookup high_nibbles)))
+        (paddb bit_counts_low bit_counts_high)))
+
+;; Rules for `bitrev` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I8 (bitrev src)))
+      (do_bitrev8 $I32 src))
+
+(rule (lower (has_type $I16 (bitrev src)))
+      (do_bitrev16 $I32 src))
+
+(rule (lower (has_type $I32 (bitrev src)))
+      (do_bitrev32 $I32 src))
+
+(rule (lower (has_type $I64 (bitrev src)))
+      (do_bitrev64 $I64 src))
+
+(rule (lower (has_type $I128 (bitrev src)))
+      (value_regs
+       (do_bitrev64 $I64 (value_regs_get_gpr src 1))
+       (do_bitrev64 $I64 (value_regs_get_gpr src 0))))
+
+(decl do_bitrev8 (Type Gpr) Gpr)
+(rule (do_bitrev8 ty src)
+      (let ((tymask u64 (ty_mask ty))
+            (mask1 Gpr (imm ty (u64_and tymask 0x5555555555555555)))
+            (lo1 Gpr (x64_and ty src mask1))
+            (hi1 Gpr (x64_and ty (shr ty src (Imm8Reg.Imm8 1)) mask1))
+            (swap1 Gpr (or ty
+                           (shl ty lo1 (Imm8Reg.Imm8 1))
+                           hi1))
+            (mask2 Gpr (imm ty (u64_and tymask 0x3333333333333333)))
+            (lo2 Gpr (x64_and ty swap1 mask2))
+            (hi2 Gpr (x64_and ty (shr ty swap1 (Imm8Reg.Imm8 2)) mask2))
+            (swap2 Gpr (or ty
+                           (shl ty lo2 (Imm8Reg.Imm8 2))
+                           hi2))
+            (mask4 Gpr (imm ty (u64_and tymask 0x0f0f0f0f0f0f0f0f)))
+            (lo4 Gpr (x64_and ty swap2 mask4))
+            (hi4 Gpr (x64_and ty (shr ty swap2 (Imm8Reg.Imm8 4)) mask4))
+            (swap4 Gpr (or ty
+                           (shl ty lo4 (Imm8Reg.Imm8 4))
+                           hi4)))
+        swap4))
+                       
+(decl do_bitrev16 (Type Gpr) Gpr)
+(rule (do_bitrev16 ty src)
+      (let ((src_ Gpr (do_bitrev8 ty src))
+            (tymask u64 (ty_mask ty))
+            (mask8 Gpr (imm ty (u64_and tymask 0x00ff00ff00ff00ff)))
+            (lo8 Gpr (x64_and ty src_ mask8))
+            (hi8 Gpr (x64_and ty (shr ty src_ (Imm8Reg.Imm8 8)) mask8))
+            (swap8 Gpr (or ty
+                           (shl ty lo8 (Imm8Reg.Imm8 8))
+                           hi8)))
+        swap8))
+      
+(decl do_bitrev32 (Type Gpr) Gpr)
+(rule (do_bitrev32 ty src)
+      (let ((src_ Gpr (do_bitrev16 ty src))
+            (tymask u64 (ty_mask ty))
+            (mask16 Gpr (imm ty (u64_and tymask 0x0000ffff0000ffff)))
+            (lo16 Gpr (x64_and ty src_ mask16))
+            (hi16 Gpr (x64_and ty (shr ty src_ (Imm8Reg.Imm8 16)) mask16))
+            (swap16 Gpr (or ty
+                            (shl ty lo16 (Imm8Reg.Imm8 16))
+                            hi16)))
+        swap16))
+
+(decl do_bitrev64 (Type Gpr) Gpr)
+(rule (do_bitrev64 ty @ $I64 src)
+      (let ((src_ Gpr (do_bitrev32 ty src))
+            (mask32 Gpr (imm ty 0xffffffff))
+            (lo32 Gpr (x64_and ty src_ mask32))
+            (hi32 Gpr (shr ty src_ (Imm8Reg.Imm8 32)))
+            (swap32 Gpr (or ty
+                            (shl ty lo32 (Imm8Reg.Imm8 32))
+                            hi32)))
+        swap32))
+
+;; Rules for `is_null` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Null references are represented by the constant value `0`.
+(rule (lower (is_null src @ (value_type $R64)))
+      (with_flags
+       (cmp_imm (OperandSize.Size64) 0 src)
+       (setcc (CC.Z))))
+
+;; Rules for `is_invalid` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Null references are represented by the constant value `-1`.
+(rule (lower (is_invalid src @ (value_type $R64)))
+      (with_flags
+       (cmp_imm (OperandSize.Size64) 0xffffffff src)  ;; simm32 0xffff_ffff is sign-extended to -1.
+       (setcc (CC.Z))))
+

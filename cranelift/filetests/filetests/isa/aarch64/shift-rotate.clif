@@ -16,19 +16,19 @@ block0(v0: i128, v1: i128):
 ;   Entry block: 0
 ; Block 0:
 ;   (original IR block: block0)
-;   (instruction range: 0 .. 24)
+;   (instruction range: 0 .. 25)
 ;   Inst 0:   mov x4, x1
 ;   Inst 1:   orr x1, xzr, #128
 ;   Inst 2:   sub x1, x1, x2
-;   Inst 3:   lsr x3, x0, x2
-;   Inst 4:   lsr x5, x4, x2
+;   Inst 3:   lsr x5, x0, x2
+;   Inst 4:   lsr x3, x4, x2
 ;   Inst 5:   orn w6, wzr, w2
 ;   Inst 6:   lsl x7, x4, #1
 ;   Inst 7:   lsl x6, x7, x6
-;   Inst 8:   orr x6, x3, x6
+;   Inst 8:   orr x5, x5, x6
 ;   Inst 9:   ands xzr, x2, #64
-;   Inst 10:   csel x3, xzr, x5, ne
-;   Inst 11:   csel x2, x5, x6, ne
+;   Inst 10:   csel x2, x3, x5, ne
+;   Inst 11:   csel x3, xzr, x3, ne
 ;   Inst 12:   lsl x5, x0, x1
 ;   Inst 13:   lsl x4, x4, x1
 ;   Inst 14:   orn w6, wzr, w1
@@ -36,11 +36,12 @@ block0(v0: i128, v1: i128):
 ;   Inst 16:   lsr x0, x0, x6
 ;   Inst 17:   orr x0, x4, x0
 ;   Inst 18:   ands xzr, x1, #64
-;   Inst 19:   csel x1, x5, x0, ne
-;   Inst 20:   csel x0, xzr, x5, ne
-;   Inst 21:   orr x1, x3, x1
-;   Inst 22:   orr x0, x2, x0
-;   Inst 23:   ret
+;   Inst 19:   csel x1, xzr, x5, ne
+;   Inst 20:   csel x0, x5, x0, ne
+;   Inst 21:   orr x3, x3, x0
+;   Inst 22:   orr x0, x2, x1
+;   Inst 23:   mov x1, x3
+;   Inst 24:   ret
 ; }}
 
 function %f0(i64, i64) -> i64 {
@@ -125,7 +126,7 @@ block0(v0: i128, v1: i128):
 ;   Entry block: 0
 ; Block 0:
 ;   (original IR block: block0)
-;   (instruction range: 0 .. 27)
+;   (instruction range: 0 .. 24)
 ;   Inst 0:   mov x4, x0
 ;   Inst 1:   orr x0, xzr, #128
 ;   Inst 2:   sub x0, x0, x2
@@ -136,8 +137,8 @@ block0(v0: i128, v1: i128):
 ;   Inst 7:   lsr x6, x7, x6
 ;   Inst 8:   orr x5, x5, x6
 ;   Inst 9:   ands xzr, x2, #64
-;   Inst 10:   csel x2, x3, x5, ne
-;   Inst 11:   csel x3, xzr, x3, ne
+;   Inst 10:   csel x2, xzr, x3, ne
+;   Inst 11:   csel x3, x3, x5, ne
 ;   Inst 12:   lsr x5, x4, x0
 ;   Inst 13:   lsr x4, x1, x0
 ;   Inst 14:   orn w6, wzr, w0
@@ -145,14 +146,11 @@ block0(v0: i128, v1: i128):
 ;   Inst 16:   lsl x1, x1, x6
 ;   Inst 17:   orr x1, x5, x1
 ;   Inst 18:   ands xzr, x0, #64
-;   Inst 19:   csel x0, xzr, x4, ne
-;   Inst 20:   csel x1, x4, x1, ne
-;   Inst 21:   orr x1, x3, x1
-;   Inst 22:   orr x0, x2, x0
-;   Inst 23:   mov x2, x0
-;   Inst 24:   mov x0, x1
-;   Inst 25:   mov x1, x2
-;   Inst 26:   ret
+;   Inst 19:   csel x0, x4, x1, ne
+;   Inst 20:   csel x1, xzr, x4, ne
+;   Inst 21:   orr x0, x2, x0
+;   Inst 22:   orr x1, x3, x1
+;   Inst 23:   ret
 ; }}
 
 function %f4(i64, i64) -> i64 {
