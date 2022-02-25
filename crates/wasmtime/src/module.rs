@@ -538,10 +538,8 @@ impl Module {
         types: Arc<TypeTables>,
         module_upvars: &[serialization::SerializedModuleUpvar],
     ) -> Result<Self> {
-        // Validate all modules can be used with the current allocator
-        for module in modules.iter() {
-            engine.allocator().validate(module.module())?;
-        }
+        // Validate the module can be used with the current allocator
+        engine.allocator().validate(modules[main_module].module())?;
 
         let signatures = Arc::new(SignatureCollection::new_for_module(
             engine.signatures(),
@@ -566,7 +564,7 @@ impl Module {
                     &signatures,
                 )
             })
-            .collect();
+            .collect::<Result<Vec<_>>>()?;
 
         return Ok(Self {
             inner: Arc::new(ModuleInner {
@@ -588,9 +586,9 @@ impl Module {
             artifact_upvars: &[usize],
             module_upvars: &[serialization::SerializedModuleUpvar],
             signatures: &Arc<SignatureCollection>,
-        ) -> Module {
+        ) -> Result<Module> {
             let module = artifacts[module_index].clone();
-            Module {
+            Ok(Module {
                 inner: Arc::new(ModuleInner {
                     engine: engine.clone(),
                     types: types.clone(),
@@ -613,10 +611,10 @@ impl Module {
                                 signatures,
                             )
                         })
-                        .collect(),
+                        .collect::<Result<Vec<_>>>()?,
                     signatures: signatures.clone(),
                 }),
-            }
+            })
         }
     }
 

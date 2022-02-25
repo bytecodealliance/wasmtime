@@ -66,10 +66,11 @@ fn linear_memory_limits() -> Result<()> {
     test(&Engine::new(Config::new().allocation_strategy(
         InstanceAllocationStrategy::Pooling {
             strategy: PoolingAllocationStrategy::NextAvailable,
-            instance_limits: InstanceLimits {
+            module_limits: ModuleLimits {
                 memory_pages: 65536,
-                ..Default::default()
+                ..ModuleLimits::default()
             },
+            instance_limits: InstanceLimits::default(),
         },
     ))?)?;
     return Ok(());
