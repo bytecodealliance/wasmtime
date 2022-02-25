@@ -318,6 +318,12 @@ impl CallThreadState {
 
     fn capture_backtrace(&self, pc: *const u8) {
         eprintln!("starting capture of the backtrace");
+        let mut n = 0;
+        backtrace::trace(|frame| {
+            n += 1;
+            true
+        });
+        eprintln!("capturing {} frames", n);
         let backtrace = Backtrace::new_unresolved();
         eprintln!("the backtrace has been captured");
         unsafe {
