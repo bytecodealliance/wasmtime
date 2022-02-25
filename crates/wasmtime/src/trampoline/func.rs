@@ -7,7 +7,7 @@ use std::any::Any;
 use std::panic::{self, AssertUnwindSafe};
 use std::sync::Arc;
 use wasmtime_environ::{
-    AnyfuncIndex, EntityIndex, FunctionInfo, FunctionType, Module, ModuleType, SignatureIndex,
+    AnyfuncIndex, EntityIndex, FunctionInfo, Module, ModuleType, SignatureIndex,
 };
 use wasmtime_jit::{CodeMemory, ProfilingAgent};
 use wasmtime_runtime::{
@@ -154,10 +154,7 @@ pub unsafe fn create_raw_function(
 
     let sig_id = SignatureIndex::from_u32(u32::max_value() - 1);
     module.types.push(ModuleType::Function(sig_id));
-    let func_id = module.functions.push(FunctionType {
-        signature: sig_id,
-        anyfunc: AnyfuncIndex::from_u32(0),
-    });
+    let func_id = module.push_escaped_function(sig_id, AnyfuncIndex::from_u32(0));
     module.num_escaped_funcs = 1;
     module
         .exports

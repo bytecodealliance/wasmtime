@@ -1,7 +1,7 @@
 use crate::module::{
-    AnyfuncIndex, FunctionType, Initializer, InstanceSignature, MemoryInitialization,
-    MemoryInitializer, MemoryPlan, Module, ModuleSignature, ModuleType, ModuleUpvar,
-    TableInitializer, TablePlan, TypeTables,
+    AnyfuncIndex, Initializer, InstanceSignature, MemoryInitialization, MemoryInitializer,
+    MemoryPlan, Module, ModuleSignature, ModuleType, ModuleUpvar, TableInitializer, TablePlan,
+    TypeTables,
 };
 use crate::{
     DataIndex, DefinedFuncIndex, ElemIndex, EntityIndex, EntityType, FuncIndex, Global,
@@ -390,10 +390,7 @@ impl<'data> ModuleEnvironment<'data> {
                     let sigindex = entry?;
                     let ty = TypeIndex::from_u32(sigindex);
                     let sig_index = self.result.module.types[ty].unwrap_function();
-                    self.result.module.functions.push(FunctionType {
-                        signature: sig_index,
-                        anyfunc: AnyfuncIndex::reserved_value(),
-                    });
+                    self.result.module.push_function(sig_index);
                 }
             }
 
@@ -877,10 +874,7 @@ impl<'data> ModuleEnvironment<'data> {
                                     self.result.module.num_imported_tables += 1;
                                 }
                                 EntityType::Function(sig) => {
-                                    self.result.module.functions.push(FunctionType {
-                                        signature: *sig,
-                                        anyfunc: AnyfuncIndex::reserved_value(),
-                                    });
+                                    self.result.module.push_function(*sig);
                                     self.result.module.num_imported_funcs += 1;
                                     self.result.debuginfo.wasm_file.imported_func_count += 1;
                                 }
@@ -1131,12 +1125,7 @@ and for re-adding support for interface types you can see this issue:
 
     fn push_type(&mut self, ty: EntityType) -> EntityIndex {
         match ty {
-            EntityType::Function(ty) => {
-                EntityIndex::Function(self.result.module.functions.push(FunctionType {
-                    signature: ty,
-                    anyfunc: AnyfuncIndex::reserved_value(),
-                }))
-            }
+            EntityType::Function(ty) => EntityIndex::Function(self.result.module.push_function(ty)),
             EntityType::Table(ty) => {
                 let plan = TablePlan::for_table(ty, &self.tunables);
                 EntityIndex::Table(self.result.module.table_plans.push(plan))

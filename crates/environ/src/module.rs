@@ -1120,6 +1120,25 @@ impl Module {
             EntityIndex::Module(i) => EntityType::Module(self.modules[i]),
         }
     }
+
+    /// Appends a new function to this module with the given type information,
+    /// used for functions that either don't escape or aren't certain whether
+    /// they escape yet.
+    pub fn push_function(&mut self, signature: SignatureIndex) -> FuncIndex {
+        self.functions.push(FunctionType {
+            signature,
+            anyfunc: AnyfuncIndex::reserved_value(),
+        })
+    }
+
+    /// Appends a new function to this module with the given type information.
+    pub fn push_escaped_function(
+        &mut self,
+        signature: SignatureIndex,
+        anyfunc: AnyfuncIndex,
+    ) -> FuncIndex {
+        self.functions.push(FunctionType { signature, anyfunc })
+    }
 }
 
 /// All types which are recorded for the entirety of a translation.
