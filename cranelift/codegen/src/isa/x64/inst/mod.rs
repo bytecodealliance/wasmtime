@@ -450,20 +450,24 @@ impl Inst {
         }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn xmm_min_max_seq(
         size: OperandSize,
         is_min: bool,
         lhs: Reg,
-        rhs_dst: Writable<Reg>,
+        rhs: Reg,
+        dst: Writable<Reg>,
     ) -> Inst {
         debug_assert!(size.is_one_of(&[OperandSize::Size32, OperandSize::Size64]));
         debug_assert_eq!(lhs.get_class(), RegClass::V128);
-        debug_assert_eq!(rhs_dst.to_reg().get_class(), RegClass::V128);
+        debug_assert_eq!(rhs.get_class(), RegClass::V128);
+        debug_assert_eq!(dst.to_reg().get_class(), RegClass::V128);
         Inst::XmmMinMaxSeq {
             size,
             is_min,
             lhs: Xmm::new(lhs).unwrap(),
-            rhs_dst: WritableXmm::from_writable_reg(rhs_dst).unwrap(),
+            rhs: Xmm::new(rhs).unwrap(),
+            dst: WritableXmm::from_writable_reg(dst).unwrap(),
         }
     }
 
@@ -900,6 +904,18 @@ impl Inst {
                 }
                 insts.push(self);
             }
+            Inst::XmmMinMaxSeq { rhs, dst, .. } => {
+                if *rhs != dst.to_reg() {
+                    debug_assert!(rhs.is_virtual());
+                    insts.push(Self::gen_move(
+                        dst.to_writable_reg(),
+                        rhs.to_reg(),
+                        types::I8X16,
+                    ));
+                    *rhs = dst.to_reg();
+                }
+                insts.push(self);
+            }
             Inst::Cmove {
                 size,
                 alternative,
@@ -1330,11 +1346,12 @@ impl PrettyPrint for Inst {
 
             Inst::XmmMinMaxSeq {
                 lhs,
-                rhs_dst,
+                rhs,
+                dst,
                 is_min,
                 size,
             } => format!(
-                "{} {}, {}",
+                "{} {}, {}, {}",
                 ljustify2(
                     if *is_min {
                         "xmm min seq ".to_string()
@@ -1344,7 +1361,8 @@ impl PrettyPrint for Inst {
                     format!("f{}", size.to_bits())
                 ),
                 show_ireg_sized(lhs.to_reg(), mb_rru, 8),
-                show_ireg_sized(rhs_dst.to_reg().to_reg(), mb_rru, 8),
+                show_ireg_sized(rhs.to_reg(), mb_rru, 8),
+                show_ireg_sized(dst.to_reg().to_reg(), mb_rru, 8),
             ),
 
             Inst::XmmRmRImm {
@@ -1924,9 +1942,10 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
         }
         Inst::XmmUninitializedValue { dst } => collector.add_def(dst.to_writable_reg()),
         Inst::XmmLoadConst { dst, .. } => collector.add_def(*dst),
-        Inst::XmmMinMaxSeq { lhs, rhs_dst, .. } => {
+        Inst::XmmMinMaxSeq { lhs, rhs, dst, .. } => {
+            debug_assert_eq!(*rhs, dst.to_reg());
             collector.add_use(lhs.to_reg());
-            collector.add_mod(rhs_dst.to_writable_reg());
+            collector.add_mod(dst.to_writable_reg());
         }
         Inst::XmmRmiReg {
             src1, src2, dst, ..
@@ -2352,11 +2371,14 @@ pub(crate) fn x64_map_regs<RM: RegMapper>(inst: &mut Inst, mapper: &RM) {
         }
         Inst::XmmMinMaxSeq {
             ref mut lhs,
-            ref mut rhs_dst,
+            ref mut rhs,
+            ref mut dst,
             ..
         } => {
+            debug_assert_eq!(*rhs, dst.to_reg());
             lhs.map_use(mapper);
-            rhs_dst.map_mod(mapper);
+            dst.map_mod(mapper);
+            *rhs = dst.to_reg();
         }
         Inst::XmmMovRM {
             ref mut src,
