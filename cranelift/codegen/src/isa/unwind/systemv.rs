@@ -203,18 +203,21 @@ pub(crate) fn create_unwind_info_from_insts<MR: RegisterMapper<Reg>>(
                     ));
                 }
             }
-            &UnwindInst::DefineNewFrame {
-                offset_upward_to_caller_sp,
-                offset_downward_to_clobbers,
-            } => {
+            &UnwindInst::SetFrameReg => {
                 // Define CFA in terms of FP. Note that we assume it was already
                 // defined correctly in terms of the current SP, and FP has just
                 // been set to the current SP, so we do not need to change the
                 // offset, only the register.  (This is done only if the target
                 // defines a frame pointer register.)
-                if let Some(fp) = mr.fp() {
-                    instructions.push((instruction_offset, CallFrameInstruction::CfaRegister(fp)));
-                }
+                instructions.push((
+                    instruction_offset,
+                    CallFrameInstruction::CfaRegister(mr.fp().unwrap()),
+                ));
+            }
+            &UnwindInst::DefineNewFrame {
+                offset_upward_to_caller_sp,
+                offset_downward_to_clobbers,
+            } => {
                 // Record initial CFA offset.  This will be used with later
                 // StackAlloc calls if we do not have a frame pointer.
                 cfa_offset = offset_upward_to_caller_sp;

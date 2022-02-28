@@ -463,6 +463,13 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         // `mov %rsp, %rbp`
         // RSP is now 0 % 16
         insts.push(Inst::mov_r_r(OperandSize::Size64, r_rsp, w_rbp));
+
+        if flags.unwind_info() {
+            insts.push(Inst::Unwind {
+                inst: UnwindInst::SetFrameReg,
+            });
+        }
+
         insts
     }
 

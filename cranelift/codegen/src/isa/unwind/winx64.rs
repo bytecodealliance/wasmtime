@@ -277,12 +277,14 @@ pub(crate) fn create_unwind_info_from_insts<MR: RegisterMapper<crate::machinst::
                     reg: UNWIND_RBP_REG,
                 });
             }
+            &UnwindInst::SetFrameReg => {
+                unwind_codes.push(UnwindCode::SetFPReg { instruction_offset });
+            }
             &UnwindInst::DefineNewFrame {
                 offset_downward_to_clobbers,
                 ..
             } => {
                 frame_register_offset = ensure_unwind_offset(offset_downward_to_clobbers)?;
-                unwind_codes.push(UnwindCode::SetFPReg { instruction_offset });
             }
             &UnwindInst::StackAlloc { size } => {
                 unwind_codes.push(UnwindCode::StackAlloc {

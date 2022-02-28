@@ -118,8 +118,8 @@ pub enum UnwindInfo {
 /// push rbp
 /// unwind UnwindInst::PushFrameRegs { offset_upward_to_caller_sp: 16 }
 /// mov rbp, rsp
-/// unwind UnwindInst::DefineNewFrame { offset_upward_to_caller_sp: 16,
-///                                     offset_downward_to_clobbers: 16 }
+/// unwind UnwindInst::SetFrameReg { offset_upward_to_caller_sp: 16 }
+/// unwind UnwindInst::DefineNewFrame { offset_downward_to_clobbers: 16 }
 /// sub rsp, 32
 /// mov [rsp+16], r12
 /// unwind UnwindInst::SaveReg { reg: R12, clobber_offset: 0 }
@@ -143,15 +143,20 @@ pub enum UnwindInst {
     },
     /// The frame-pointer register for this architecture has just been
     /// set to the current stack location. We wish to define a new
-    /// frame that is anchored on this new FP value. Offsets are provided
-    /// upward to the caller's stack frame and downward toward the clobber
-    /// area. We expect this pseudo-op to come after `PushFrameRegs`.
+    /// frame that is anchored on this new FP value. We expect this
+    /// pseudo-op to come after `PushFrameRegs`.
+    SetFrameReg,
+    /// We now know the size of clobbers, if any, and can define a
+    /// frame in which we will give their offsets. Offsets are
+    /// provided upward to the caller's stack frame and downward
+    /// toward the clobber area. We expect this pseudo op to come
+    /// after `SetFrameReg`.
     DefineNewFrame {
-        /// The offset from the current SP and FP value upward to the value of
-        /// SP at the callsite that invoked us.
+        /// The offset from the current SP and FP value upward to the
+        /// value of SP at the callsite that invoked us.
         offset_upward_to_caller_sp: u32,
-        /// The offset from the current SP and FP value downward to the start of
-        /// the clobber area.
+        /// The offset from the current SP and FP value downward to
+        /// the start of the clobber area.
         offset_downward_to_clobbers: u32,
     },
     /// The stack pointer was adjusted to allocate the stack.

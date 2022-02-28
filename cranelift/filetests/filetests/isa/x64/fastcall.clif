@@ -11,6 +11,7 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64):
 ;   pushq   %rbp
 ;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
 ;   movq    %rsp, %rbp
+;   unwind SetFrameReg
 ;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ; block0:
 ;   movq    %rcx, %rax
@@ -26,6 +27,7 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64):
 ;   pushq   %rbp
 ;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
 ;   movq    %rsp, %rbp
+;   unwind SetFrameReg
 ;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ; block0:
 ;   movq    %rdx, %rax
@@ -41,6 +43,7 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64):
 ;   pushq   %rbp
 ;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
 ;   movq    %rsp, %rbp
+;   unwind SetFrameReg
 ;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ; block0:
 ;   movq    %r8, %rax
@@ -56,6 +59,7 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64):
 ;   pushq   %rbp
 ;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
 ;   movq    %rsp, %rbp
+;   unwind SetFrameReg
 ;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ; block0:
 ;   movq    %r9, %rax
@@ -71,6 +75,7 @@ block0(v0: i64, v1: i64, v2: f64, v3: i64):
 ;   pushq   %rbp
 ;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
 ;   movq    %rsp, %rbp
+;   unwind SetFrameReg
 ;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ; block0:
 ;   movdqa  %xmm2, %xmm0
@@ -86,6 +91,7 @@ block0(v0: i64, v1: i64, v2: f64, v3: i64):
 ;   pushq   %rbp
 ;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
 ;   movq    %rsp, %rbp
+;   unwind SetFrameReg
 ;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ; block0:
 ;   movq    %r9, %rax
@@ -111,6 +117,7 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64):
 ;   pushq   %rbp
 ;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
 ;   movq    %rsp, %rbp
+;   unwind SetFrameReg
 ;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ; block0:
 ;   movq    48(%rbp), %r11
@@ -127,6 +134,7 @@ block0(v0: i128, v1: i64, v2: i128, v3: i128):
 ;   pushq   %rbp
 ;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
 ;   movq    %rsp, %rbp
+;   unwind SetFrameReg
 ;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ; block0:
 ;   movq    48(%rbp), %r11
@@ -149,6 +157,7 @@ block0(v0: i64):
 ;   pushq   %rbp
 ;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
 ;   movq    %rsp, %rbp
+;   unwind SetFrameReg
 ;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ; block0:
 ;   cvtsi2sd %rcx, %xmm2
@@ -220,6 +229,7 @@ block0(v0: i64):
 ;   pushq   %rbp
 ;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
 ;   movq    %rsp, %rbp
+;   unwind SetFrameReg
 ;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 144 }
 ;   subq    %rsp, $240, %rsp
 ;   movdqu  %xmm6, 96(%rsp)

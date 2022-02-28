@@ -671,6 +671,13 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 shift12: false,
             },
         });
+
+        if flags.unwind_info() {
+            insts.push(Inst::Unwind {
+                inst: UnwindInst::SetFrameReg,
+            });
+        }
+
         insts
     }
 
