@@ -115,7 +115,15 @@ impl Config {
             profiler: Arc::new(NullProfilerAgent),
             mem_creator: None,
             allocation_strategy: InstanceAllocationStrategy::OnDemand,
-            max_wasm_stack: 1 << 20,
+            // 512k of stack -- note that this is chosen currently to not be too
+            // big, not be too small, and be a good default for most platforms.
+            // One platform of particular note is Windows where the stack size
+            // of the main thread seems to, by default, be smaller than that of
+            // Linux and macOS. This 512k value at least lets our current test
+            // suite pass on the main thread of Windows (using `--test-threads
+            // 1` forces this), or at least it passed when this change was
+            // committed.
+            max_wasm_stack: 512 * 1024,
             wasm_backtrace_details_env_used: false,
             features: WasmFeatures::default(),
             #[cfg(feature = "async")]
@@ -444,7 +452,7 @@ impl Config {
     /// on stack overflow, a host function that overflows the stack will
     /// abort the process.
     ///
-    /// By default this option is 1 MiB.
+    /// By default this option is 512 KiB.
     pub fn max_wasm_stack(&mut self, size: usize) -> Result<&mut Self> {
         #[cfg(feature = "async")]
         if size > self.async_stack_size {
