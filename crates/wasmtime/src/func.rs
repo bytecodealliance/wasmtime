@@ -2049,7 +2049,7 @@ impl HostFunc {
         ty: FuncType,
         func: impl Fn(Caller<'_, T>, *mut ValRaw) -> Result<(), Trap> + Send + Sync + 'static,
     ) -> Self {
-        let func = move |caller_vmctx, values: *mut ValRaw| unsafe {
+        let func = move |caller_vmctx, values: *mut ValRaw| {
             Caller::<T>::with(caller_vmctx, |caller| func(caller, values))
         };
         let (instance, trampoline) = crate::trampoline::create_function(&ty, func, engine)
