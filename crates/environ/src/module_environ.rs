@@ -244,10 +244,10 @@ impl<'data> ModuleEnvironment<'data> {
                     .functions
                     .iter()
                     .filter_map(|(_, func)| {
-                        if func.anyfunc.is_reserved_value() {
-                            None
-                        } else {
+                        if func.is_escaping() {
                             Some(func.signature)
+                        } else {
+                            None
                         }
                     })
                     .collect();
@@ -1169,13 +1169,13 @@ and for re-adding support for interface types you can see this issue:
     }
 
     fn flag_func_escaped(&mut self, func: FuncIndex) {
-        let anyfunc = &mut self.result.module.functions[func].anyfunc;
+        let ty = &mut self.result.module.functions[func];
         // If this was already assigned an anyfunc index no need to re-assign it.
-        if !anyfunc.is_reserved_value() {
+        if ty.is_escaping() {
             return;
         }
         let index = self.result.module.num_escaped_funcs as u32;
-        *anyfunc = AnyfuncIndex::from_u32(index);
+        ty.anyfunc = AnyfuncIndex::from_u32(index);
         self.result.module.num_escaped_funcs += 1;
     }
 

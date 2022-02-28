@@ -1182,6 +1182,15 @@ pub struct FunctionType {
     pub anyfunc: AnyfuncIndex,
 }
 
+impl FunctionType {
+    /// Returns whether this function's type is one that "escapes" the current
+    /// module, meaning that the function is exported, used in `ref.func`, used
+    /// in a table, etc.
+    pub fn is_escaping(&self) -> bool {
+        self.anyfunc.is_reserved_value()
+    }
+}
+
 /// Index into the anyfunc table within a VMContext for a function.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub struct AnyfuncIndex(u32);

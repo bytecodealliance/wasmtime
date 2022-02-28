@@ -95,8 +95,7 @@ use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{DefinedFuncIndex, FuncIndex, WasmFuncType, WasmType};
 use target_lexicon::CallingConvention;
 use wasmtime_environ::{
-    packed_option::ReservedValue, FilePos, FunctionInfo, InstructionAddressMap, ModuleTranslation,
-    TrapInformation, TypeTables,
+    FilePos, FunctionInfo, InstructionAddressMap, ModuleTranslation, TrapInformation, TypeTables,
 };
 
 pub use builder::builder;
@@ -259,11 +258,11 @@ fn func_signature(
 ) -> ir::Signature {
     let func = &translation.module.functions[index];
     let call_conv = match translation.module.defined_func_index(index) {
-        // If this is a defined function in the module and it's never possibly
-        // exported, then we can optimize this function to use the fastest
-        // calling convention since it's purely an internal implementation
-        // detail of the module itself.
-        Some(_idx) if func.anyfunc.is_reserved_value() => CallConv::Fast,
+        // If this is a defined function in the module and it doesn't escape
+        // then we can optimize this function to use the fastest calling
+        // convention since it's purely an internal implementation detail of
+        // the module itself.
+        Some(_idx) if !func.is_escaping() => CallConv::Fast,
 
         // ... otherwise if it's an imported function or if it's a possibly
         // exported function then we use the default ABI wasmtime would
