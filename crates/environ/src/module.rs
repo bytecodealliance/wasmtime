@@ -1187,7 +1187,7 @@ impl FunctionType {
     /// module, meaning that the function is exported, used in `ref.func`, used
     /// in a table, etc.
     pub fn is_escaping(&self) -> bool {
-        self.anyfunc.is_reserved_value()
+        !self.anyfunc.is_reserved_value()
     }
 }
 
