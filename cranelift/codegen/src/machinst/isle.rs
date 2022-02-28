@@ -237,6 +237,22 @@ macro_rules! isle_prelude_methods {
             }
         }
 
+        #[inline]
+        fn ty_int_bool_64(&mut self, ty: Type) -> Option<Type> {
+            match ty {
+                I64 | B64 => Some(ty),
+                _ => None,
+            }
+        }
+
+        #[inline]
+        fn ty_int_bool_128(&mut self, ty: Type) -> Option<Type> {
+            match ty {
+                I128 | B128 => Some(ty),
+                _ => None,
+            }
+        }
+
         fn vec128(&mut self, ty: Type) -> Option<Type> {
             if ty.is_vector() && ty.bits() == 128 {
                 Some(ty)
