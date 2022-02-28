@@ -1174,7 +1174,7 @@ pub struct InstanceSignature {
 /// Type information about functions in a wasm module.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FunctionType {
-    /// The type of this function, indexed into the global type tables for
+    /// The type of this function, indexed into the module-wide type tables for
     /// a module compilation.
     pub signature: SignatureIndex,
     /// The index into the anyfunc table, if present. Note that this is
