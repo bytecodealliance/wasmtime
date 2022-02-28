@@ -1184,7 +1184,7 @@ block0(v0: i128, v1: i8):
 ;   Entry block: 0
 ; Block 0:
 ;   (original IR block: block0)
-;   (instruction range: 0 .. 10)
+;   (instruction range: 0 .. 13)
 ;   Inst 0:   lsl x4, x0, x2
 ;   Inst 1:   lsl x3, x1, x2
 ;   Inst 2:   orn w1, wzr, w2
@@ -1192,9 +1192,12 @@ block0(v0: i128, v1: i8):
 ;   Inst 4:   lsr x0, x0, x1
 ;   Inst 5:   orr x0, x3, x0
 ;   Inst 6:   ands xzr, x2, #64
-;   Inst 7:   csel x1, x4, x0, ne
-;   Inst 8:   csel x0, xzr, x4, ne
-;   Inst 9:   ret
+;   Inst 7:   csel x1, xzr, x4, ne
+;   Inst 8:   csel x0, x4, x0, ne
+;   Inst 9:   mov x2, x0
+;   Inst 10:   mov x0, x1
+;   Inst 11:   mov x1, x2
+;   Inst 12:   ret
 ; }}
 
 function %ishl_i128_i128(i128, i128) -> i128 {
@@ -1207,7 +1210,7 @@ block0(v0: i128, v1: i128):
 ;   Entry block: 0
 ; Block 0:
 ;   (original IR block: block0)
-;   (instruction range: 0 .. 10)
+;   (instruction range: 0 .. 13)
 ;   Inst 0:   lsl x3, x0, x2
 ;   Inst 1:   lsl x1, x1, x2
 ;   Inst 2:   orn w4, wzr, w2
@@ -1215,9 +1218,12 @@ block0(v0: i128, v1: i128):
 ;   Inst 4:   lsr x0, x0, x4
 ;   Inst 5:   orr x0, x1, x0
 ;   Inst 6:   ands xzr, x2, #64
-;   Inst 7:   csel x1, x3, x0, ne
-;   Inst 8:   csel x0, xzr, x3, ne
-;   Inst 9:   ret
+;   Inst 7:   csel x1, xzr, x3, ne
+;   Inst 8:   csel x0, x3, x0, ne
+;   Inst 9:   mov x2, x0
+;   Inst 10:   mov x0, x1
+;   Inst 11:   mov x1, x2
+;   Inst 12:   ret
 ; }}
 
 function %ushr_i128_i8(i128, i8) -> i128 {
@@ -1230,17 +1236,20 @@ block0(v0: i128, v1: i8):
 ;   Entry block: 0
 ; Block 0:
 ;   (original IR block: block0)
-;   (instruction range: 0 .. 10)
+;   (instruction range: 0 .. 13)
 ;   Inst 0:   lsr x3, x0, x2
 ;   Inst 1:   lsr x0, x1, x2
 ;   Inst 2:   orn w4, wzr, w2
 ;   Inst 3:   lsl x1, x1, #1
 ;   Inst 4:   lsl x1, x1, x4
-;   Inst 5:   orr x3, x3, x1
+;   Inst 5:   orr x1, x3, x1
 ;   Inst 6:   ands xzr, x2, #64
-;   Inst 7:   csel x1, xzr, x0, ne
-;   Inst 8:   csel x0, x0, x3, ne
-;   Inst 9:   ret
+;   Inst 7:   csel x1, x0, x1, ne
+;   Inst 8:   csel x0, xzr, x0, ne
+;   Inst 9:   mov x2, x0
+;   Inst 10:   mov x0, x1
+;   Inst 11:   mov x1, x2
+;   Inst 12:   ret
 ; }}
 
 function %ushr_i128_i128(i128, i128) -> i128 {
@@ -1253,17 +1262,20 @@ block0(v0: i128, v1: i128):
 ;   Entry block: 0
 ; Block 0:
 ;   (original IR block: block0)
-;   (instruction range: 0 .. 10)
+;   (instruction range: 0 .. 13)
 ;   Inst 0:   lsr x3, x0, x2
 ;   Inst 1:   lsr x0, x1, x2
 ;   Inst 2:   orn w4, wzr, w2
 ;   Inst 3:   lsl x1, x1, #1
 ;   Inst 4:   lsl x1, x1, x4
-;   Inst 5:   orr x3, x3, x1
+;   Inst 5:   orr x1, x3, x1
 ;   Inst 6:   ands xzr, x2, #64
-;   Inst 7:   csel x1, xzr, x0, ne
-;   Inst 8:   csel x0, x0, x3, ne
-;   Inst 9:   ret
+;   Inst 7:   csel x1, x0, x1, ne
+;   Inst 8:   csel x0, xzr, x0, ne
+;   Inst 9:   mov x2, x0
+;   Inst 10:   mov x0, x1
+;   Inst 11:   mov x1, x2
+;   Inst 12:   ret
 ; }}
 
 function %sshr_i128_i8(i128, i8) -> i128 {
@@ -1276,7 +1288,7 @@ block0(v0: i128, v1: i8):
 ;   Entry block: 0
 ; Block 0:
 ;   (original IR block: block0)
-;   (instruction range: 0 .. 11)
+;   (instruction range: 0 .. 13)
 ;   Inst 0:   lsr x3, x0, x2
 ;   Inst 1:   asr x0, x1, x2
 ;   Inst 2:   orn w4, wzr, w2
@@ -1285,9 +1297,11 @@ block0(v0: i128, v1: i8):
 ;   Inst 5:   asr x1, x1, #63
 ;   Inst 6:   orr x3, x3, x4
 ;   Inst 7:   ands xzr, x2, #64
-;   Inst 8:   csel x1, x1, x0, ne
-;   Inst 9:   csel x0, x0, x3, ne
-;   Inst 10:   ret
+;   Inst 8:   csel x2, x0, x3, ne
+;   Inst 9:   csel x0, x1, x0, ne
+;   Inst 10:   mov x1, x0
+;   Inst 11:   mov x0, x2
+;   Inst 12:   ret
 ; }}
 
 function %sshr_i128_i128(i128, i128) -> i128 {
@@ -1300,7 +1314,7 @@ block0(v0: i128, v1: i128):
 ;   Entry block: 0
 ; Block 0:
 ;   (original IR block: block0)
-;   (instruction range: 0 .. 11)
+;   (instruction range: 0 .. 13)
 ;   Inst 0:   lsr x3, x0, x2
 ;   Inst 1:   asr x0, x1, x2
 ;   Inst 2:   orn w4, wzr, w2
@@ -1309,8 +1323,10 @@ block0(v0: i128, v1: i128):
 ;   Inst 5:   asr x1, x1, #63
 ;   Inst 6:   orr x3, x3, x4
 ;   Inst 7:   ands xzr, x2, #64
-;   Inst 8:   csel x1, x1, x0, ne
-;   Inst 9:   csel x0, x0, x3, ne
-;   Inst 10:   ret
+;   Inst 8:   csel x2, x0, x3, ne
+;   Inst 9:   csel x0, x1, x0, ne
+;   Inst 10:   mov x1, x0
+;   Inst 11:   mov x0, x2
+;   Inst 12:   ret
 ; }}
 

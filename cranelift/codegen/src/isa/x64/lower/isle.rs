@@ -172,6 +172,42 @@ where
     }
 
     #[inline]
+    fn avx512bitalg_enabled(&mut self, _: Type) -> Option<()> {
+        if self.isa_flags.use_avx512bitalg_simd() {
+            Some(())
+        } else {
+            None
+        }
+    }
+
+    #[inline]
+    fn use_lzcnt(&mut self, _: Type) -> Option<()> {
+        if self.isa_flags.use_lzcnt() {
+            Some(())
+        } else {
+            None
+        }
+    }
+
+    #[inline]
+    fn use_bmi1(&mut self, _: Type) -> Option<()> {
+        if self.isa_flags.use_bmi1() {
+            Some(())
+        } else {
+            None
+        }
+    }
+
+    #[inline]
+    fn use_popcnt(&mut self, _: Type) -> Option<()> {
+        if self.isa_flags.use_popcnt() {
+            Some(())
+        } else {
+            None
+        }
+    }
+
+    #[inline]
     fn imm8_from_value(&mut self, val: Value) -> Option<Imm8Reg> {
         let inst = self.lower_ctx.dfg().value_def(val).inst()?;
         let constant = self.lower_ctx.get_constant(inst)?;
@@ -324,6 +360,16 @@ where
             .lower_ctx
             .use_constant(VCodeConstantData::WellKnown(&I8X16_USHR_MASKS));
         SyntheticAmode::ConstantOffset(mask_table)
+    }
+
+    fn popcount_4bit_table(&mut self) -> VCodeConstant {
+        self.lower_ctx
+            .use_constant(VCodeConstantData::WellKnown(&POPCOUNT_4BIT_TABLE))
+    }
+
+    fn popcount_low_mask(&mut self) -> VCodeConstant {
+        self.lower_ctx
+            .use_constant(VCodeConstantData::WellKnown(&POPCOUNT_LOW_MASK))
     }
 
     #[inline]
@@ -498,6 +544,18 @@ const I8X16_USHR_MASKS: [u8; 128] = [
     0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03,
     0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
 ];
+
+/// Number of bits set in a given nibble (4-bit value). Used in the
+/// vector implementation of popcount.
+#[rustfmt::skip] // Preserve 4x4 layout.
+const POPCOUNT_4BIT_TABLE: [u8; 16] = [
+    0x00, 0x01, 0x01, 0x02,
+    0x01, 0x02, 0x02, 0x03,
+    0x01, 0x02, 0x02, 0x03,
+    0x02, 0x03, 0x03, 0x04,
+];
+
+const POPCOUNT_LOW_MASK: [u8; 16] = [0x0f; 16];
 
 #[inline]
 fn to_simm32(constant: i64) -> Option<GprMemImm> {

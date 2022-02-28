@@ -167,6 +167,20 @@
 (decl u32_as_u64 (u32) u64)
 (extern constructor u32_as_u64 u32_as_u64)
 
+(decl i64_as_u64 (i64) u64)
+(extern constructor i64_as_u64 i64_as_u64)
+
+;;;; Primitive Arithmetic ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl u64_add (u64 u64) u64)
+(extern constructor u64_add u64_add)
+
+(decl u64_sub (u64 u64) u64)
+(extern constructor u64_sub u64_sub)
+
+(decl u64_and (u64 u64) u64)
+(extern constructor u64_and u64_and)
+
 ;;;; `cranelift_codegen::ir::Type` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (extern const $B1 Type)
@@ -208,6 +222,14 @@
 ;; Get the bit width of a given type.
 (decl ty_bits_u16 (Type) u16)
 (extern constructor ty_bits_u16 ty_bits_u16)
+
+;; Get the bit width of a given type.
+(decl ty_bits_u64 (Type) u64)
+(extern constructor ty_bits_u64 ty_bits_u64)
+
+;; Get a mask for the width of a given type.
+(decl ty_mask (Type) u64)
+(extern constructor ty_mask ty_mask)
 
 ;; Get the byte width of a given type.
 (decl ty_bytes (Type) u16)
@@ -398,8 +420,26 @@
                      (ConsumesFlagsReturnsReg (inst MInst) (result Reg))
                      (ConsumesFlagsTwiceReturnsValueRegs (inst1 MInst)
                                                          (inst2 MInst)
-                                                         (result ValueRegs))))
+                                                         (result ValueRegs))
+                     (ConsumesFlagsFourTimesReturnsValueRegs (inst1 MInst)
+                                                             (inst2 MInst)
+                                                             (inst3 MInst)
+                                                             (inst4 MInst)
+                                                             (result ValueRegs))))
 
+
+
+;; Get the produced register out of a ProducesFlags.
+(decl produces_flags_get_reg (ProducesFlags) Reg)
+(rule (produces_flags_get_reg (ProducesFlags.ProducesFlagsReturnsReg _ reg)) reg)
+
+;; Modify a ProducesFlags to use it only for its side-effect, ignoring
+;; its result.
+(decl produces_flags_ignore (ProducesFlags) ProducesFlags)
+(rule (produces_flags_ignore (ProducesFlags.ProducesFlagsReturnsReg inst _))
+                             (ProducesFlags.ProducesFlagsSideEffect inst))
+(rule (produces_flags_ignore (ProducesFlags.ProducesFlagsReturnsResultWithConsumer inst _))
+                             (ProducesFlags.ProducesFlagsSideEffect inst))
 
 ;; Helper for combining two flags-consumer instructions that return a
 ;; single Reg, giving a ConsumesFlags that returns both values in a
@@ -440,12 +480,28 @@
                   (ConsumesFlags.ConsumesFlagsTwiceReturnsValueRegs consumer_inst_1
                                                                     consumer_inst_2
                                                                     consumer_result))
+      ;; We must emit these instructions in order as the creator of
+      ;; the ConsumesFlags may be relying on dataflow dependencies
+      ;; amongst them.
       (let ((_x Unit (emit producer_inst))
-            ;; Note that the order of emission here is swapped, as this seems
-            ;; to generate better register allocation for now with fewer
-            ;; `mov` instructions.
-            (_y Unit (emit consumer_inst_2))
-            (_z Unit (emit consumer_inst_1)))
+            (_y Unit (emit consumer_inst_1))
+            (_z Unit (emit consumer_inst_2)))
+        consumer_result))
+
+(rule (with_flags (ProducesFlags.ProducesFlagsSideEffect producer_inst)
+                  (ConsumesFlags.ConsumesFlagsFourTimesReturnsValueRegs consumer_inst_1
+                                                                        consumer_inst_2
+                                                                        consumer_inst_3
+                                                                        consumer_inst_4
+                                                                        consumer_result))
+      ;; We must emit these instructions in order as the creator of
+      ;; the ConsumesFlags may be relying on dataflow dependencies
+      ;; amongst them.
+      (let ((_x Unit (emit producer_inst))
+            (_y Unit (emit consumer_inst_1))
+            (_z Unit (emit consumer_inst_2))
+            (_w Unit (emit consumer_inst_3))
+            (_v Unit (emit consumer_inst_4)))
         consumer_result))
 
 (decl with_flags_reg (ProducesFlags ConsumesFlags) Reg)

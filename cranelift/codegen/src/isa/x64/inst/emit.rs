@@ -1104,33 +1104,6 @@ pub(crate) fn emit(
             }
         }
 
-        Inst::CmoveOr {
-            size,
-            cc1,
-            cc2,
-            consequent,
-            alternative,
-            dst,
-        } => {
-            let first_cmove = Inst::Cmove {
-                cc: *cc1,
-                size: *size,
-                consequent: consequent.clone(),
-                alternative: alternative.clone(),
-                dst: dst.clone(),
-            };
-            first_cmove.emit(sink, info, state);
-
-            let second_cmove = Inst::Cmove {
-                cc: *cc2,
-                size: *size,
-                consequent: consequent.clone(),
-                alternative: alternative.clone(),
-                dst: dst.clone(),
-            };
-            second_cmove.emit(sink, info, state);
-        }
-
         Inst::XmmCmove {
             size,
             cc,
@@ -1157,39 +1130,6 @@ pub(crate) fn emit(
             inst.emit(sink, info, state);
 
             sink.bind_label(next);
-        }
-
-        Inst::XmmCmoveOr {
-            size,
-            cc1,
-            cc2,
-            consequent,
-            alternative,
-            dst,
-        } => {
-            debug_assert_eq!(*alternative, dst.to_reg());
-
-            let op = if *size == OperandSize::Size64 {
-                SseOpcode::Movsd
-            } else {
-                SseOpcode::Movss
-            };
-            let second_test = sink.get_label();
-            let next_instruction = sink.get_label();
-
-            // Jump to second test if `cc1` is *not* set.
-            one_way_jmp(sink, cc1.invert(), next_instruction);
-            let inst =
-                Inst::xmm_unary_rm_r(op, consequent.clone().to_reg_mem(), dst.to_writable_reg());
-            inst.emit(sink, info, state);
-            sink.bind_label(second_test);
-
-            // Jump to next instruction if `cc2` is *not* set.
-            one_way_jmp(sink, cc2.invert(), next_instruction);
-            let inst =
-                Inst::xmm_unary_rm_r(op, consequent.clone().to_reg_mem(), dst.to_writable_reg());
-            inst.emit(sink, info, state);
-            sink.bind_label(next_instruction);
         }
 
         Inst::Push64 { src } => {
