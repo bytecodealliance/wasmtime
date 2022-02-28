@@ -1696,8 +1696,11 @@ pub(crate) fn emit(
             size,
             is_min,
             lhs,
-            rhs_dst,
+            rhs,
+            dst,
         } => {
+            debug_assert_eq!(*rhs, dst.to_reg());
+
             // Generates the following sequence:
             // cmpss/cmpsd %lhs, %rhs_dst
             // jnz do_min_max
@@ -1747,8 +1750,7 @@ pub(crate) fn emit(
                 _ => unreachable!(),
             };
 
-            let inst =
-                Inst::xmm_cmp_rm_r(cmp_op, RegMem::reg(lhs.to_reg()), rhs_dst.to_reg().to_reg());
+            let inst = Inst::xmm_cmp_rm_r(cmp_op, RegMem::reg(lhs.to_reg()), dst.to_reg().to_reg());
             inst.emit(sink, info, state);
 
             one_way_jmp(sink, CC::NZ, do_min_max);
@@ -1758,7 +1760,7 @@ pub(crate) fn emit(
             // and negative zero. These instructions merge the sign bits in that
             // case, and are no-ops otherwise.
             let op = if *is_min { or_op } else { and_op };
-            let inst = Inst::xmm_rm_r(op, RegMem::reg(lhs.to_reg()), rhs_dst.to_writable_reg());
+            let inst = Inst::xmm_rm_r(op, RegMem::reg(lhs.to_reg()), dst.to_writable_reg());
             inst.emit(sink, info, state);
 
             let inst = Inst::jmp_known(done);
@@ -1768,17 +1770,13 @@ pub(crate) fn emit(
             // read-only operand: perform an addition between the two operands, which has the
             // desired NaN propagation effects.
             sink.bind_label(propagate_nan);
-            let inst = Inst::xmm_rm_r(add_op, RegMem::reg(lhs.to_reg()), rhs_dst.to_writable_reg());
+            let inst = Inst::xmm_rm_r(add_op, RegMem::reg(lhs.to_reg()), dst.to_writable_reg());
             inst.emit(sink, info, state);
 
             one_way_jmp(sink, CC::P, done);
 
             sink.bind_label(do_min_max);
-            let inst = Inst::xmm_rm_r(
-                min_max_op,
-                RegMem::reg(lhs.to_reg()),
-                rhs_dst.to_writable_reg(),
-            );
+            let inst = Inst::xmm_rm_r(min_max_op, RegMem::reg(lhs.to_reg()), dst.to_writable_reg());
             inst.emit(sink, info, state);
 
             sink.bind_label(done);

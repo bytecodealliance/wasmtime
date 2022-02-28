@@ -281,7 +281,8 @@
        (XmmMinMaxSeq (size OperandSize)
                      (is_min bool)
                      (lhs Xmm)
-                     (rhs_dst WritableXmm))
+                     (rhs Xmm)
+                     (dst WritableXmm))
 
        ;; Float comparisons/tests: cmp (b w l q) (reg addr imm) reg.
        (XmmCmpRmR (op SseOpcode)
@@ -2428,6 +2429,71 @@
       (let ((dst WritableGpr (temp_writable_gpr))
             (size OperandSize (operand_size_of_type_32_64 ty))
             (_ Unit (emit (MInst.UnaryRmR size (UnaryRmROpcode.Popcnt) src dst))))
+        dst))
+
+;; Helper for creating `xmm_min_max_seq` psuedo-instructions.
+(decl xmm_min_max_seq (Type bool Xmm Xmm) Xmm)
+(rule (xmm_min_max_seq ty is_min lhs rhs)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (size OperandSize (operand_size_of_type_32_64 ty))
+            (_ Unit (emit (MInst.XmmMinMaxSeq size is_min lhs rhs dst))))
+        dst))
+
+;; Helper for creating `minss` instructions.
+(decl minss (Xmm Xmm) Xmm)
+(rule (minss x y)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (_ Unit (emit (MInst.XmmRmR (SseOpcode.Minss) x y dst))))
+        dst))
+
+;; Helper for creating `minsd` instructions.
+(decl minsd (Xmm Xmm) Xmm)
+(rule (minsd x y)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (_ Unit (emit (MInst.XmmRmR (SseOpcode.Minsd) x y dst))))
+        dst))
+
+
+;; Helper for creating `minps` instructions.
+(decl minps (Xmm Xmm) Xmm)
+(rule (minps x y)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (_ Unit (emit (MInst.XmmRmR (SseOpcode.Minps) x y dst))))
+        dst))
+
+;; Helper for creating `minpd` instructions.
+(decl minpd (Xmm Xmm) Xmm)
+(rule (minpd x y)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (_ Unit (emit (MInst.XmmRmR (SseOpcode.Minpd) x y dst))))
+        dst))
+
+;; Helper for creating `maxss` instructions.
+(decl maxss (Xmm Xmm) Xmm)
+(rule (maxss x y)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (_ Unit (emit (MInst.XmmRmR (SseOpcode.Maxss) x y dst))))
+        dst))
+
+;; Helper for creating `maxsd` instructions.
+(decl maxsd (Xmm Xmm) Xmm)
+(rule (maxsd x y)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (_ Unit (emit (MInst.XmmRmR (SseOpcode.Maxsd) x y dst))))
+        dst))
+
+;; Helper for creating `maxps` instructions.
+(decl maxps (Xmm Xmm) Xmm)
+(rule (maxps x y)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (_ Unit (emit (MInst.XmmRmR (SseOpcode.Maxps) x y dst))))
+        dst))
+
+;; Helper for creating `maxpd` instructions.
+(decl maxpd (Xmm Xmm) Xmm)
+(rule (maxpd x y)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (_ Unit (emit (MInst.XmmRmR (SseOpcode.Maxpd) x y dst))))
         dst))
 
 ;;;; Automatic conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

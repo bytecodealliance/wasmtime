@@ -2059,3 +2059,194 @@
       (divps x y))
 (rule (lower (has_type $F64X2 (fdiv x y)))
       (divpd x y))
+
+;; Rules for `fmin` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $F32 (fmin x y)))
+      (xmm_min_max_seq $F32 $true x y))
+(rule (lower (has_type $F64 (fmin x y)))
+      (xmm_min_max_seq $F64 $true x y))
+
+;; Vector-typed version. We don't use single pseudoinstructions as
+;; above, because we don't need to generate a mini-CFG. Instead, we
+;; perform a branchless series of operations.
+;;
+;; We cannot simply use native min instructions (minps, minpd) because
+;; NaN handling is different per CLIF semantics than on
+;; x86. Specifically, if an argument is NaN, or the arguments are both
+;; zero but of opposite signs, then the x86 instruction always
+;; produces the second argument. However, per CLIF semantics, we
+;; require that fmin(NaN, _) = fmin(_, NaN) = NaN, and fmin(+0, -0) =
+;; fmin(-0, +0) = -0.
+
+(rule (lower (has_type $F32X4 (fmin x y)))
+      ;; Compute min(x, y) and min(y, x) with native
+      ;; instructions. These will differ in one of the edge cases
+      ;; above that we have to handle properly. (Conversely, if they
+      ;; don't differ, then the native instruction's answer is the
+      ;; right one per CLIF semantics.)
+      (let ((min1 Xmm (minps x y))
+            (min2 Xmm (minps y x))
+            ;; Compute the OR of the two. Note that NaNs have an
+            ;; exponent field of all-ones (0xFF for F32), so if either
+            ;; result is a NaN, this OR will be. And if either is a
+            ;; zero (which has an exponent of 0 and mantissa of 0),
+            ;; this captures a sign-bit of 1 (negative) if either
+            ;; input is negative.
+            ;;
+            ;; In the case where we don't have a +/-0 mismatch or
+            ;; NaNs, then `min1` and `min2` are equal and `min_or` is
+            ;; the correct minimum.
+            (min_or Xmm (orps min1 min2))
+            ;; "compare unordered" produces a true mask (all ones) in
+            ;; a given lane if the min is a NaN. We use this to
+            ;; generate a mask to ensure quiet NaNs.
+            (is_nan_mask Xmm (cmpps min_or min2 (FcmpImm.Unordered)))
+            ;; OR in the NaN mask.
+            (min_or_2 Xmm (orps min_or is_nan_mask))
+            ;; Shift the NaN mask down so that it covers just the
+            ;; fraction below the NaN signalling bit; we'll use this
+            ;; to mask off non-canonical NaN payloads.
+            ;;
+            ;; All-ones for NaN, shifted down to leave 10 top bits (1
+            ;; sign, 8 exponent, 1 QNaN bit that must remain set)
+            ;; cleared.
+            (nan_fraction_mask Xmm (psrld is_nan_mask (RegMemImm.Imm 10)))
+            ;; Do a NAND, so that we retain every bit not set in
+            ;; `nan_fraction_mask`. This mask will be all zeroes (so
+            ;; we retain every bit) in non-NaN cases, and will have
+            ;; ones (so we clear those bits) in NaN-payload bits
+            ;; otherwise.
+            (final Xmm (andnps nan_fraction_mask min_or_2)))
+        final))
+
+;; Likewise for F64 lanes, except that the right-shift is by 13 bits
+;; (1 sign, 11 exponent, 1 QNaN bit).
+(rule (lower (has_type $F64X2 (fmin x y)))
+      (let ((min1 Xmm (minpd x y))
+            (min2 Xmm (minpd y x))
+            (min_or Xmm (orpd min1 min2))
+            (is_nan_mask Xmm (cmppd min1 min2 (FcmpImm.Unordered)))
+            (min_or_2 Xmm (orpd min_or is_nan_mask))
+            (nan_fraction_mask Xmm (psrlq is_nan_mask (RegMemImm.Imm 13)))
+            (final Xmm (andnpd nan_fraction_mask min_or_2)))
+        final))
+
+;; Rules for `fmax` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $F32 (fmax x y)))
+      (xmm_min_max_seq $F32 $false x y))
+(rule (lower (has_type $F64 (fmax x y)))
+      (xmm_min_max_seq $F64 $false x y))
+
+;; The vector version of fmax here is a dual to the fmin sequence
+;; above, almost, with a few differences.
+
+(rule (lower (has_type $F32X4 (fmax x y)))
+      ;; Compute max(x, y) and max(y, x) with native
+      ;; instructions. These will differ in one of the edge cases
+      ;; above that we have to handle properly. (Conversely, if they
+      ;; don't differ, then the native instruction's answer is the
+      ;; right one per CLIF semantics.)
+      (let ((max1 Xmm (maxps x y))
+            (max2 Xmm (maxps y x))
+            ;; Compute the XOR of the two maxima. In the case
+            ;; where we don't have a +/-0 mismatch or NaNs, then
+            ;; `min1` and `min2` are equal and this XOR is zero.
+            (max_xor Xmm (xorps max1 max2))
+            ;; OR the XOR into one of the original maxima. If they are
+            ;; equal, this does nothing. If max2 was NaN, its exponent
+            ;; bits were all-ones, so the xor's exponent bits were the
+            ;; complement of max1, and the OR of max1 and max_xor has
+            ;; an all-ones exponent (is a NaN). If max1 was NaN, then
+            ;; its exponent bits were already all-ones, so the OR will
+            ;; be a NaN as well.
+            (max_blended_nan Xmm (orps max1 max_xor))
+            ;; Subtract the XOR. This ensures that if we had +0 and
+            ;; -0, we end up with +0.
+            (max_blended_nan_positive Xmm (subps max_blended_nan max_xor))
+            ;; "compare unordered" produces a true mask (all ones) in
+            ;; a given lane if the min is a NaN. We use this to
+            ;; generate a mask to ensure quiet NaNs.
+            (is_nan_mask Xmm (cmpps max_blended_nan max_blended_nan (FcmpImm.Unordered)))
+            ;; Shift the NaN mask down so that it covers just the
+            ;; fraction below the NaN signalling bit; we'll use this
+            ;; to mask off non-canonical NaN payloads.
+            ;;
+            ;; All-ones for NaN, shifted down to leave 10 top bits (1
+            ;; sign, 8 exponent, 1 QNaN bit that must remain set)
+            ;; cleared.
+            (nan_fraction_mask Xmm (psrld is_nan_mask (RegMemImm.Imm 10)))
+            ;; Do a NAND, so that we retain every bit not set in
+            ;; `nan_fraction_mask`. This mask will be all zeroes (so
+            ;; we retain every bit) in non-NaN cases, and will have
+            ;; ones (so we clear those bits) in NaN-payload bits
+            ;; otherwise.
+            (final Xmm (andnps nan_fraction_mask max_blended_nan_positive)))
+        final))
+
+(rule (lower (has_type $F64X2 (fmax x y)))
+      ;; Compute max(x, y) and max(y, x) with native
+      ;; instructions. These will differ in one of the edge cases
+      ;; above that we have to handle properly. (Conversely, if they
+      ;; don't differ, then the native instruction's answer is the
+      ;; right one per CLIF semantics.)
+      (let ((max1 Xmm (maxpd x y))
+            (max2 Xmm (maxpd y x))
+            ;; Compute the XOR of the two maxima. In the case
+            ;; where we don't have a +/-0 mismatch or NaNs, then
+            ;; `min1` and `min2` are equal and this XOR is zero.
+            (max_xor Xmm (xorpd max1 max2))
+            ;; OR the XOR into one of the original maxima. If they are
+            ;; equal, this does nothing. If max2 was NaN, its exponent
+            ;; bits were all-ones, so the xor's exponent bits were the
+            ;; complement of max1, and the OR of max1 and max_xor has
+            ;; an all-ones exponent (is a NaN). If max1 was NaN, then
+            ;; its exponent bits were already all-ones, so the OR will
+            ;; be a NaN as well.
+            (max_blended_nan Xmm (orpd max1 max_xor))
+            ;; Subtract the XOR. This ensures that if we had +0 and
+            ;; -0, we end up with +0.
+            (max_blended_nan_positive Xmm (subpd max_blended_nan max_xor))
+            ;; `cmpps` with predicate index `3` is `cmpunordps`, or
+            ;; "compare unordered": it produces a true mask (all ones)
+            ;; in a given lane if the min is a NaN. We use this to
+            ;; generate a mask to ensure quiet NaNs.
+            (is_nan_mask Xmm (cmppd max_blended_nan max_blended_nan (FcmpImm.Unordered)))
+            ;; Shift the NaN mask down so that it covers just the
+            ;; fraction below the NaN signalling bit; we'll use this
+            ;; to mask off non-canonical NaN payloads.
+            ;;
+            ;; All-ones for NaN, shifted down to leave 13 top bits (1
+            ;; sign, 11 exponent, 1 QNaN bit that must remain set)
+            ;; cleared.
+            (nan_fraction_mask Xmm (psrlq is_nan_mask (RegMemImm.Imm 13)))
+            ;; Do a NAND, so that we retain every bit not set in
+            ;; `nan_fraction_mask`. This mask will be all zeroes (so
+            ;; we retain every bit) in non-NaN cases, and will have
+            ;; ones (so we clear those bits) in NaN-payload bits
+            ;; otherwise.
+            (final Xmm (andnpd nan_fraction_mask max_blended_nan_positive)))
+        final))
+
+;; Rules for `fmin_pseudo` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $F32 (fmin_pseudo x y)))
+      (minss y x))
+(rule (lower (has_type $F64 (fmin_pseudo x y)))
+      (minsd y x))
+(rule (lower (has_type $F32X4 (fmin_pseudo x y)))
+      (minps y x))
+(rule (lower (has_type $F64X2 (fmin_pseudo x y)))
+      (minpd y x))
+
+;; Rules for `fmax_pseudo` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $F32 (fmax_pseudo x y)))
+      (maxss y x))
+(rule (lower (has_type $F64 (fmax_pseudo x y)))
+      (maxsd y x))
+(rule (lower (has_type $F32X4 (fmax_pseudo x y)))
+      (maxps y x))
+(rule (lower (has_type $F64X2 (fmax_pseudo x y)))
+      (maxpd y x))
