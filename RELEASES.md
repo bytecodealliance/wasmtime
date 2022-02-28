@@ -2,6 +2,55 @@
 
 --------------------------------------------------------------------------------
 
+## 0.35.0
+
+Unreleased.
+
+### Changed
+
+* WebAssembly tables of `funcref` values are now lazily initialized which can,
+  in some cases, greatly speed up instantiation of a module.
+  [#3733](https://github.com/bytecodealliance/wasmtime/pull/3733)
+
+* The `memfd` feature in 0.34.0, now renamed to `memory-init-cow`, has been
+  enabled by default. This means that, where applicable, WebAssembly linear
+  memories are now initialized with copy-on-write mappings. Support from this
+  has been expanded from Linux-only to include macOS and other Unix systems when
+  modules are loaded from precompiled `*.cwasm` files on disk.
+  [#3777](https://github.com/bytecodealliance/wasmtime/pull/3777)
+  [#3778](https://github.com/bytecodealliance/wasmtime/pull/3778)
+  [#3787](https://github.com/bytecodealliance/wasmtime/pull/3787)
+  [#3819](https://github.com/bytecodealliance/wasmtime/pull/3819)
+  [#3831](https://github.com/bytecodealliance/wasmtime/pull/3831)
+
+* Clarify that SSE 4.2 (and prior) is required for running WebAssembly code with
+  simd support enabled on x86\_64.
+  [#3816](https://github.com/bytecodealliance/wasmtime/pull/3816)
+  [#3817](https://github.com/bytecodealliance/wasmtime/pull/3817)
+  [#3833](https://github.com/bytecodealliance/wasmtime/pull/3833)
+  [#3825](https://github.com/bytecodealliance/wasmtime/pull/3825)
+
+* Support for profiling with VTune is now enabled at compile time by default,
+  but it remains disabled at runtime by default.
+  [#3821](https://github.com/bytecodealliance/wasmtime/pull/3821)
+
+* The `ModuleLimits` type has been removed from the configuration of the pooling
+  allocator in favor of configuring the total size of an instance allocation
+  rather than each individual field.
+  [#3837](https://github.com/bytecodealliance/wasmtime/pull/3837)
+
+* The native stack size allowed for WebAssembly has been decreased from 1 MiB to
+  512 KiB on all platforms to better accomodate running wasm on the main thread
+  on Windows.
+  [#3861](https://github.com/bytecodealliance/wasmtime/pull/3861)
+
+### Removed
+
+* The incomplete and unmaintained ARM32 backend has been removed from Cranelift.
+  [#3799](https://github.com/bytecodealliance/wasmtime/pull/3799)
+
+--------------------------------------------------------------------------------
+
 ## 0.34.1
 
 Released 2022-02-16.
