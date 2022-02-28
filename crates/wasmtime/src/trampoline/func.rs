@@ -6,7 +6,9 @@ use anyhow::Result;
 use std::any::Any;
 use std::panic::{self, AssertUnwindSafe};
 use std::sync::Arc;
-use wasmtime_environ::{EntityIndex, FunctionInfo, Module, ModuleType, SignatureIndex};
+use wasmtime_environ::{
+    AnyfuncIndex, EntityIndex, FunctionInfo, Module, ModuleType, SignatureIndex,
+};
 use wasmtime_jit::{CodeMemory, ProfilingAgent};
 use wasmtime_runtime::{
     Imports, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
@@ -152,7 +154,8 @@ pub unsafe fn create_raw_function(
 
     let sig_id = SignatureIndex::from_u32(u32::max_value() - 1);
     module.types.push(ModuleType::Function(sig_id));
-    let func_id = module.functions.push(sig_id);
+    let func_id = module.push_escaped_function(sig_id, AnyfuncIndex::from_u32(0));
+    module.num_escaped_funcs = 1;
     module
         .exports
         .insert(String::new(), EntityIndex::Function(func_id));

@@ -256,12 +256,13 @@ fn func_signature(
     types: &TypeTables,
     index: FuncIndex,
 ) -> ir::Signature {
+    let func = &translation.module.functions[index];
     let call_conv = match translation.module.defined_func_index(index) {
-        // If this is a defined function in the module and it's never possibly
-        // exported, then we can optimize this function to use the fastest
-        // calling convention since it's purely an internal implementation
-        // detail of the module itself.
-        Some(idx) if !translation.escaped_funcs.contains(&idx) => CallConv::Fast,
+        // If this is a defined function in the module and it doesn't escape
+        // then we can optimize this function to use the fastest calling
+        // convention since it's purely an internal implementation detail of
+        // the module itself.
+        Some(_idx) if !func.is_escaping() => CallConv::Fast,
 
         // ... otherwise if it's an imported function or if it's a possibly
         // exported function then we use the default ABI wasmtime would
@@ -269,11 +270,7 @@ fn func_signature(
         _ => wasmtime_call_conv(isa),
     };
     let mut sig = blank_sig(isa, call_conv);
-    push_types(
-        isa,
-        &mut sig,
-        &types.wasm_signatures[translation.module.functions[index]],
-    );
+    push_types(isa, &mut sig, &types.wasm_signatures[func.signature]);
     return sig;
 }
 

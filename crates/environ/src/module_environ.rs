@@ -1,6 +1,7 @@
 use crate::module::{
-    Initializer, InstanceSignature, MemoryInitialization, MemoryInitializer, MemoryPlan, Module,
-    ModuleSignature, ModuleType, ModuleUpvar, TableInitializer, TablePlan, TypeTables,
+    AnyfuncIndex, Initializer, InstanceSignature, MemoryInitialization, MemoryInitializer,
+    MemoryPlan, Module, ModuleSignature, ModuleType, ModuleUpvar, TableInitializer, TablePlan,
+    TypeTables,
 };
 use crate::{
     DataIndex, DefinedFuncIndex, ElemIndex, EntityIndex, EntityType, FuncIndex, Global,
@@ -10,7 +11,7 @@ use crate::{
 };
 use cranelift_entity::packed_option::ReservedValue;
 use std::borrow::Cow;
-use std::collections::{hash_map::Entry, HashMap, HashSet};
+use std::collections::{hash_map::Entry, HashMap};
 use std::convert::{TryFrom, TryInto};
 use std::mem;
 use std::path::PathBuf;
@@ -60,18 +61,6 @@ pub struct ModuleTranslation<'data> {
 
     /// References to the function bodies.
     pub function_body_inputs: PrimaryMap<DefinedFuncIndex, FunctionBodyData<'data>>,
-
-    /// The set of defined functions within this module which are "possibly
-    /// exported" which means that the host can possibly call them. This
-    /// includes functions such as:
-    ///
-    /// * Exported functions
-    /// * Functions in element segments
-    /// * Functions via `ref.func` instructions
-    ///
-    /// This set is used to determine the set of type signatures that need
-    /// trampolines for the host to call into.
-    pub escaped_funcs: HashSet<DefinedFuncIndex>,
 
     /// A list of type signatures which are considered exported from this
     /// module, or those that can possibly be called. This list is sorted, and
@@ -254,9 +243,12 @@ impl<'data> ModuleEnvironment<'data> {
                     .module
                     .functions
                     .iter()
-                    .filter_map(|(i, sig)| match self.result.module.defined_func_index(i) {
-                        Some(i) if !self.result.escaped_funcs.contains(&i) => None,
-                        _ => Some(*sig),
+                    .filter_map(|(_, func)| {
+                        if func.is_escaping() {
+                            Some(func.signature)
+                        } else {
+                            None
+                        }
                     })
                     .collect();
                 self.result.exported_signatures.sort_unstable();
@@ -398,7 +390,7 @@ impl<'data> ModuleEnvironment<'data> {
                     let sigindex = entry?;
                     let ty = TypeIndex::from_u32(sigindex);
                     let sig_index = self.result.module.types[ty].unwrap_function();
-                    self.result.module.functions.push(sig_index);
+                    self.result.module.push_function(sig_index);
                 }
             }
 
@@ -624,7 +616,7 @@ impl<'data> ModuleEnvironment<'data> {
                 let func_index = FuncIndex::from_u32(func_index);
 
                 if self.tunables.generate_native_debuginfo {
-                    let sig_index = self.result.module.functions[func_index];
+                    let sig_index = self.result.module.functions[func_index].signature;
                     let sig = &self.types.wasm_signatures[sig_index];
                     let mut locals = Vec::new();
                     for pair in body.get_locals_reader()? {
@@ -882,7 +874,7 @@ impl<'data> ModuleEnvironment<'data> {
                                     self.result.module.num_imported_tables += 1;
                                 }
                                 EntityType::Function(sig) => {
-                                    self.result.module.functions.push(*sig);
+                                    self.result.module.push_function(*sig);
                                     self.result.module.num_imported_funcs += 1;
                                     self.result.debuginfo.wasm_file.imported_func_count += 1;
                                 }
@@ -1133,9 +1125,7 @@ and for re-adding support for interface types you can see this issue:
 
     fn push_type(&mut self, ty: EntityType) -> EntityIndex {
         match ty {
-            EntityType::Function(ty) => {
-                EntityIndex::Function(self.result.module.functions.push(ty))
-            }
+            EntityType::Function(ty) => EntityIndex::Function(self.result.module.push_function(ty)),
             EntityType::Table(ty) => {
                 let plan = TablePlan::for_table(ty, &self.tunables);
                 EntityIndex::Table(self.result.module.table_plans.push(plan))
@@ -1179,9 +1169,14 @@ and for re-adding support for interface types you can see this issue:
     }
 
     fn flag_func_escaped(&mut self, func: FuncIndex) {
-        if let Some(idx) = self.result.module.defined_func_index(func) {
-            self.result.escaped_funcs.insert(idx);
+        let ty = &mut self.result.module.functions[func];
+        // If this was already assigned an anyfunc index no need to re-assign it.
+        if ty.is_escaping() {
+            return;
         }
+        let index = self.result.module.num_escaped_funcs as u32;
+        ty.anyfunc = AnyfuncIndex::from_u32(index);
+        self.result.module.num_escaped_funcs += 1;
     }
 
     fn declare_type_func(&mut self, wasm: WasmFuncType) -> WasmResult<()> {

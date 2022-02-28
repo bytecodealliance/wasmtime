@@ -2,7 +2,9 @@ use crate::store::{InstanceId, StoreOpaque};
 use crate::trampoline::create_handle;
 use crate::{GlobalType, Mutability, Val};
 use anyhow::Result;
-use wasmtime_environ::{EntityIndex, Global, GlobalInit, Module, ModuleType, SignatureIndex};
+use wasmtime_environ::{
+    AnyfuncIndex, EntityIndex, Global, GlobalInit, Module, ModuleType, SignatureIndex,
+};
 use wasmtime_runtime::VMFunctionImport;
 
 pub fn create_global(store: &mut StoreOpaque, gt: &GlobalType, val: Val) -> Result<InstanceId> {
@@ -40,8 +42,9 @@ pub fn create_global(store: &mut StoreOpaque, gt: &GlobalType, val: Val) -> Resu
                 let sig_id = SignatureIndex::from_u32(u32::max_value() - 1);
                 one_signature = Some((sig_id, f.type_index));
                 module.types.push(ModuleType::Function(sig_id));
-                let func_index = module.functions.push(sig_id);
+                let func_index = module.push_escaped_function(sig_id, AnyfuncIndex::from_u32(0));
                 module.num_imported_funcs = 1;
+                module.num_escaped_funcs = 1;
                 module
                     .initializers
                     .push(wasmtime_environ::Initializer::Import {

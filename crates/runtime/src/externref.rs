@@ -1045,6 +1045,7 @@ mod tests {
             num_defined_tables: 0,
             num_defined_memories: 0,
             num_defined_globals: 0,
+            num_escaped_funcs: 0,
         });
         assert_eq!(
             offsets.vm_extern_data_ref_count(),
@@ -1071,6 +1072,7 @@ mod tests {
             num_defined_tables: 0,
             num_defined_memories: 0,
             num_defined_globals: 0,
+            num_escaped_funcs: 0,
         });
         assert_eq!(
             offsets.vm_extern_ref_activation_table_next() as usize,
@@ -1097,6 +1099,7 @@ mod tests {
             num_defined_tables: 0,
             num_defined_memories: 0,
             num_defined_globals: 0,
+            num_escaped_funcs: 0,
         });
         assert_eq!(
             offsets.vm_extern_ref_activation_table_end() as usize,
