@@ -1297,7 +1297,7 @@ fn enter_wasm<T>(store: &mut StoreContextMut<'_, T>) -> Result<Option<usize>, Tr
             return Err(Trap::new_wasm(
                 None,
                 wasmtime_environ::TrapCode::Interrupt,
-                backtrace::Backtrace::new_unresolved(),
+                wasmtime_runtime::capture_backtrace(),
             ));
         }
         n => n,

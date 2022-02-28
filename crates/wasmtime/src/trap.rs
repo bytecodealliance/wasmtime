@@ -148,7 +148,7 @@ impl Trap {
     #[cold] // traps are exceptional, this helps move handling off the main path
     pub fn new<I: Into<String>>(message: I) -> Self {
         let reason = TrapReason::Message(message.into());
-        Trap::new_with_trace(None, reason, Backtrace::new_unresolved())
+        Trap::new_with_trace(None, reason, wasmtime_runtime::capture_backtrace())
     }
 
     /// Creates a new `Trap` representing an explicit program exit with a classic `i32`
@@ -158,7 +158,7 @@ impl Trap {
         Trap::new_with_trace(
             None,
             TrapReason::I32Exit(status),
-            Backtrace::new_unresolved(),
+            wasmtime_runtime::capture_backtrace(),
         )
     }
 
@@ -395,7 +395,7 @@ impl From<Box<dyn std::error::Error + Send + Sync>> for Trap {
             trap.clone()
         } else {
             let reason = TrapReason::Error(e.into());
-            Trap::new_with_trace(None, reason, Backtrace::new_unresolved())
+            Trap::new_with_trace(None, reason, wasmtime_runtime::capture_backtrace())
         }
     }
 }

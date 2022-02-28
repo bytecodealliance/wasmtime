@@ -148,7 +148,7 @@ impl Trap {
     ///
     /// Internally saves a backtrace when constructed.
     pub fn wasm(trap_code: TrapCode) -> Self {
-        let backtrace = Backtrace::new_unresolved();
+        let backtrace = capture_backtrace();
         Trap::Wasm {
             trap_code,
             backtrace,
@@ -159,7 +159,7 @@ impl Trap {
     ///
     /// Internally saves a backtrace when constructed.
     pub fn oom() -> Self {
-        let backtrace = Backtrace::new_unresolved();
+        let backtrace = capture_backtrace();
         Trap::OOM { backtrace }
     }
 }
@@ -317,7 +317,7 @@ impl CallThreadState {
     }
 
     fn capture_backtrace(&self, pc: *const u8) {
-        let backtrace = Backtrace::new_unresolved();
+        let backtrace = capture_backtrace();
         unsafe {
             (*self.unwind.get())
                 .as_mut_ptr()
@@ -336,6 +336,28 @@ impl<T: Copy> Drop for ResetCell<'_, T> {
     fn drop(&mut self) {
         self.0.set(self.1);
     }
+}
+
+/// Captures the current backtrace of the calling thread, ensuring that no more
+/// than a fixed number of frames are captured.
+#[inline(never)] // try to get this removed from stack traces
+pub fn capture_backtrace() -> Backtrace {
+    const MAX_FRAMES: usize = 100;
+
+    let mut frames = Vec::new();
+    backtrace::trace(|frame| {
+        // If we found this function itself then we can discard this frame and
+        // all previous frames because we're largely only interested in the
+        // caller of this function.
+        if frame.symbol_address() as usize == capture_backtrace as usize {
+            frames.truncate(0);
+        } else {
+            frames.push(backtrace::BacktraceFrame::from(frame.clone()));
+        }
+        // Keep going so long as the local list of `frames` isn't too large.
+        frames.len() < MAX_FRAMES
+    });
+    Backtrace::from(frames)
 }
 
 // A private inner module for managing the TLS state that we require across

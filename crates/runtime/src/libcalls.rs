@@ -61,7 +61,6 @@ use crate::instance::Instance;
 use crate::table::{Table, TableElementType};
 use crate::traphandlers::{raise_lib_trap, resume_panic, Trap};
 use crate::vmcontext::{VMCallerCheckedAnyfunc, VMContext};
-use backtrace::Backtrace;
 use std::mem;
 use std::ptr::{self, NonNull};
 use wasmtime_environ::{
@@ -590,7 +589,7 @@ unsafe fn validate_atomic_addr(
     if addr > instance.get_memory(memory).current_length {
         return Err(Trap::Wasm {
             trap_code: TrapCode::HeapOutOfBounds,
-            backtrace: Backtrace::new_unresolved(),
+            backtrace: crate::capture_backtrace(),
         });
     }
     Ok(())
