@@ -1861,6 +1861,86 @@
 (rule (pandn src1 src2)
       (xmm_rm_r $F64X2 (SseOpcode.Pandn) src1 src2))
 
+;; Helper for creating `addss` instructions.
+(decl addss (Xmm XmmMem) Xmm)
+(rule (addss src1 src2)
+      (xmm_rm_r $F32 (SseOpcode.Addss) src1 src2))
+
+;; Helper for creating `addsd` instructions.
+(decl addsd (Xmm XmmMem) Xmm)
+(rule (addsd src1 src2)
+      (xmm_rm_r $F64 (SseOpcode.Addsd) src1 src2))
+
+;; Helper for creating `addps` instructions.
+(decl addps (Xmm XmmMem) Xmm)
+(rule (addps src1 src2)
+      (xmm_rm_r $F32 (SseOpcode.Addps) src1 src2))
+
+;; Helper for creating `addpd` instructions.
+(decl addpd (Xmm XmmMem) Xmm)
+(rule (addpd src1 src2)
+      (xmm_rm_r $F32 (SseOpcode.Addpd) src1 src2))
+
+;; Helper for creating `subss` instructions.
+(decl subss (Xmm XmmMem) Xmm)
+(rule (subss src1 src2)
+      (xmm_rm_r $F32 (SseOpcode.Subss) src1 src2))
+
+;; Helper for creating `subsd` instructions.
+(decl subsd (Xmm XmmMem) Xmm)
+(rule (subsd src1 src2)
+      (xmm_rm_r $F64 (SseOpcode.Subsd) src1 src2))
+
+;; Helper for creating `subps` instructions.
+(decl subps (Xmm XmmMem) Xmm)
+(rule (subps src1 src2)
+      (xmm_rm_r $F32 (SseOpcode.Subps) src1 src2))
+
+;; Helper for creating `subpd` instructions.
+(decl subpd (Xmm XmmMem) Xmm)
+(rule (subpd src1 src2)
+      (xmm_rm_r $F32 (SseOpcode.Subpd) src1 src2))
+
+;; Helper for creating `mulss` instructions.
+(decl mulss (Xmm XmmMem) Xmm)
+(rule (mulss src1 src2)
+      (xmm_rm_r $F32 (SseOpcode.Mulss) src1 src2))
+
+;; Helper for creating `mulsd` instructions.
+(decl mulsd (Xmm XmmMem) Xmm)
+(rule (mulsd src1 src2)
+      (xmm_rm_r $F64 (SseOpcode.Mulsd) src1 src2))
+
+;; Helper for creating `mulps` instructions.
+(decl mulps (Xmm XmmMem) Xmm)
+(rule (mulps src1 src2)
+      (xmm_rm_r $F32 (SseOpcode.Mulps) src1 src2))
+
+;; Helper for creating `mulpd` instructions.
+(decl mulpd (Xmm XmmMem) Xmm)
+(rule (mulpd src1 src2)
+      (xmm_rm_r $F32 (SseOpcode.Mulpd) src1 src2))
+
+;; Helper for creating `divss` instructions.
+(decl divss (Xmm XmmMem) Xmm)
+(rule (divss src1 src2)
+      (xmm_rm_r $F32 (SseOpcode.Divss) src1 src2))
+
+;; Helper for creating `divsd` instructions.
+(decl divsd (Xmm XmmMem) Xmm)
+(rule (divsd src1 src2)
+      (xmm_rm_r $F64 (SseOpcode.Divsd) src1 src2))
+
+;; Helper for creating `divps` instructions.
+(decl divps (Xmm XmmMem) Xmm)
+(rule (divps src1 src2)
+      (xmm_rm_r $F32 (SseOpcode.Divps) src1 src2))
+
+;; Helper for creating `divpd` instructions.
+(decl divpd (Xmm XmmMem) Xmm)
+(rule (divpd src1 src2)
+      (xmm_rm_r $F32 (SseOpcode.Divpd) src1 src2))
+
 (decl sse_blend_op (Type) SseOpcode)
 (rule (sse_blend_op $F32X4) (SseOpcode.Blendvps))
 (rule (sse_blend_op $F64X2) (SseOpcode.Blendvpd))
@@ -2040,6 +2120,16 @@
                     src2
                     lane
                     size))
+
+;; Helper for creating `pmaddwd` instructions.
+(decl pmaddwd (Xmm XmmMem) Xmm)
+(rule (pmaddwd src1 src2)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (_ Unit (emit (MInst.XmmRmR (SseOpcode.Pmaddwd)
+                                        src1
+                                        src2
+                                        dst))))
+        dst))
 
 ;; Helper for creating `insertps` instructions.
 (decl insertps (Xmm XmmMem u8) Xmm)
@@ -2270,6 +2360,11 @@
 (decl ud2 (TrapCode) SideEffectNoResult)
 (rule (ud2 code)
       (SideEffectNoResult.Inst (MInst.Ud2 code)))
+
+;; Helper for creating `hlt` instructions.
+(decl hlt () SideEffectNoResult)
+(rule (hlt)
+      (SideEffectNoResult.Inst (MInst.Hlt)))
 
 ;; Helper for creating `lzcnt` instructions.
 (decl lzcnt (Type Gpr) Gpr)

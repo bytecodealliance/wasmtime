@@ -903,33 +903,14 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::Sextend
         | Opcode::Breduce
         | Opcode::Bextend
-        | Opcode::Ireduce => implemented_in_isle(ctx),
-
-        Opcode::Bint => {
-            // Booleans are stored as all-zeroes (0) or all-ones (-1). We AND
-            // out the LSB to give a 0 / 1-valued integer result.
-            let rn = put_input_in_reg(ctx, inputs[0]);
-            let rd = get_output_reg(ctx, outputs[0]);
-            let ty = ctx.output_ty(insn, 0);
-
-            ctx.emit(Inst::gen_move(rd.regs()[0], rn, types::I64));
-            ctx.emit(Inst::alu_rmi_r(
-                OperandSize::Size64,
-                AluRmiROpcode::And,
-                RegMemImm::imm(1),
-                rd.regs()[0],
-            ));
-
-            if ty == types::I128 {
-                let upper = rd.regs()[1];
-                ctx.emit(Inst::alu_rmi_r(
-                    OperandSize::Size64,
-                    AluRmiROpcode::Xor,
-                    RegMemImm::reg(upper.to_reg()),
-                    upper,
-                ));
-            }
-        }
+        | Opcode::Ireduce
+        | Opcode::Bint
+        | Opcode::Debugtrap
+        | Opcode::WideningPairwiseDotProductS
+        | Opcode::Fadd
+        | Opcode::Fsub
+        | Opcode::Fmul
+        | Opcode::Fdiv => implemented_in_isle(ctx),
 
         Opcode::Icmp => {
             let condcode = ctx.data(insn).cond_code().unwrap();
@@ -1240,10 +1221,6 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             abi.emit_stack_post_adjust(ctx);
         }
 
-        Opcode::Debugtrap => {
-            ctx.emit(Inst::Hlt);
-        }
-
         Opcode::Trapif | Opcode::Trapff => {
             let trap_code = ctx.data(insn).trap_code().unwrap();
 
@@ -1299,77 +1276,6 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     FcmpCondResult::InvertedEqualOrConditions(_, _) => unreachable!(),
                 };
             };
-        }
-
-        Opcode::WideningPairwiseDotProductS => {
-            let lhs = put_input_in_reg(ctx, inputs[0]);
-            let rhs = input_to_reg_mem(ctx, inputs[1]);
-            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let ty = ty.unwrap();
-
-            ctx.emit(Inst::gen_move(dst, lhs, ty));
-
-            if ty == types::I32X4 {
-                ctx.emit(Inst::xmm_rm_r(SseOpcode::Pmaddwd, rhs, dst));
-            } else {
-                panic!(
-                    "Opcode::WideningPairwiseDotProductS: unsupported laneage: {:?}",
-                    ty
-                );
-            }
-        }
-
-        Opcode::Fadd | Opcode::Fsub | Opcode::Fmul | Opcode::Fdiv => {
-            let lhs = put_input_in_reg(ctx, inputs[0]);
-            // We can't guarantee the RHS (if a load) is 128-bit aligned, so we
-            // must avoid merging a load here.
-            let rhs = RegMem::reg(put_input_in_reg(ctx, inputs[1]));
-            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let ty = ty.unwrap();
-
-            // Move the `lhs` to the same register as `dst`; this may not emit an actual move
-            // but ensures that the registers are the same to match x86's read-write operand
-            // encoding.
-            ctx.emit(Inst::gen_move(dst, lhs, ty));
-
-            // Note: min and max can't be handled here, because of the way Cranelift defines them:
-            // if any operand is a NaN, they must return the NaN operand, while the x86 machine
-            // instruction will return the second operand if either operand is a NaN.
-            let sse_op = match ty {
-                types::F32 => match op {
-                    Opcode::Fadd => SseOpcode::Addss,
-                    Opcode::Fsub => SseOpcode::Subss,
-                    Opcode::Fmul => SseOpcode::Mulss,
-                    Opcode::Fdiv => SseOpcode::Divss,
-                    _ => unreachable!(),
-                },
-                types::F64 => match op {
-                    Opcode::Fadd => SseOpcode::Addsd,
-                    Opcode::Fsub => SseOpcode::Subsd,
-                    Opcode::Fmul => SseOpcode::Mulsd,
-                    Opcode::Fdiv => SseOpcode::Divsd,
-                    _ => unreachable!(),
-                },
-                types::F32X4 => match op {
-                    Opcode::Fadd => SseOpcode::Addps,
-                    Opcode::Fsub => SseOpcode::Subps,
-                    Opcode::Fmul => SseOpcode::Mulps,
-                    Opcode::Fdiv => SseOpcode::Divps,
-                    _ => unreachable!(),
-                },
-                types::F64X2 => match op {
-                    Opcode::Fadd => SseOpcode::Addpd,
-                    Opcode::Fsub => SseOpcode::Subpd,
-                    Opcode::Fmul => SseOpcode::Mulpd,
-                    Opcode::Fdiv => SseOpcode::Divpd,
-                    _ => unreachable!(),
-                },
-                _ => panic!(
-                    "invalid type: expected one of [F32, F64, F32X4, F64X2], found {}",
-                    ty
-                ),
-            };
-            ctx.emit(Inst::xmm_rm_r(sse_op, rhs, dst));
         }
 
         Opcode::Fmin | Opcode::Fmax => {

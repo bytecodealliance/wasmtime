@@ -1986,3 +1986,76 @@
 
 (rule (lower (has_type (fits_in_64 ty) (breduce src)))
       (value_regs_get_gpr src 0))
+
+;; Rules for `bint` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Booleans are stored as all-zeroes (0) or all-ones (-1). We AND out
+;; the LSB to give a 0 / 1-valued integer result.
+
+(rule (lower (has_type (fits_in_64 ty)
+                       (bint src)))
+      (x64_and ty src (RegMemImm.Imm 1)))
+(rule (lower (has_type $I128
+                       (bint src)))
+      (value_regs
+       (x64_and $I64 src (RegMemImm.Imm 1))
+       (imm $I64 0)))
+
+;; Rules for `debugtrap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (debugtrap))
+      (side_effect (hlt)))
+
+;; Rules for `widening_pairwise_dot_product_s` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I32X4
+                       (widening_pairwise_dot_product_s x y)))
+      (pmaddwd x y))
+
+;; Rules for `fadd` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; N.B.: there are no load-op merging rules here. We can't guarantee
+;; the RHS (if a load) is 128-bit aligned, so we must avoid merging a
+;; load. Likewise for other ops below.
+
+(rule (lower (has_type $F32 (fadd x y)))
+      (addss x y))
+(rule (lower (has_type $F64 (fadd x y)))
+      (addsd x y))
+(rule (lower (has_type $F32X4 (fadd x y)))
+      (addps x y))
+(rule (lower (has_type $F64X2 (fadd x y)))
+      (addpd x y))
+
+;; Rules for `fsub` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $F32 (fsub x y)))
+      (subss x y))
+(rule (lower (has_type $F64 (fsub x y)))
+      (subsd x y))
+(rule (lower (has_type $F32X4 (fsub x y)))
+      (subps x y))
+(rule (lower (has_type $F64X2 (fsub x y)))
+      (subpd x y))
+
+;; Rules for `fmul` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $F32 (fmul x y)))
+      (mulss x y))
+(rule (lower (has_type $F64 (fmul x y)))
+      (mulsd x y))
+(rule (lower (has_type $F32X4 (fmul x y)))
+      (mulps x y))
+(rule (lower (has_type $F64X2 (fmul x y)))
+      (mulpd x y))
+
+;; Rules for `fdiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $F32 (fdiv x y)))
+      (divss x y))
+(rule (lower (has_type $F64 (fdiv x y)))
+      (divsd x y))
+(rule (lower (has_type $F32X4 (fdiv x y)))
+      (divps x y))
+(rule (lower (has_type $F64X2 (fdiv x y)))
+      (divpd x y))
