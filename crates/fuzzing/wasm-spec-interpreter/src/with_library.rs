@@ -89,7 +89,7 @@ mod tests {
         assert_eq!(results1, results2);
 
         let parameters3 = Some(vec![Value::I32(20), Value::I32(23)]);
-        let results3 = interpret(&module, parameters3).unwrap();
+        let results3 = interpret(&module, parameters3.clone()).unwrap();
 
         assert_eq!(results2, results3);
     }
@@ -100,7 +100,7 @@ mod tests {
         let results = interpret(&module, None);
         assert_eq!(
             results,
-            Err("Error(_, \"out of bounds memory access\")".to_string())
+            Err("Error(_, \"(Isabelle) trap: load\")".to_string())
         );
     }
 }
