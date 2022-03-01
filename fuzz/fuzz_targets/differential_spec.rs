@@ -22,16 +22,7 @@ fn run(data: &[u8]) -> Result<()> {
     config.module_config.set_differential_config();
 
     // Enable features that the spec interpreter has implemented
-    config.module_config.config.bulk_memory_enabled = false;
-    config.module_config.config.reference_types_enabled = false;
-    config.module_config.config.simd_enabled = false;
-    config.module_config.config.relaxed_simd_enabled = false;
-    config.module_config.config.exceptions_enabled = false;
-    config.module_config.config.module_linking_enabled = false;
     config.module_config.config.multi_value_enabled = false;
-
-    // TODO: seems like this should be implied by reference_types_enabled = false
-    config.module_config.config.max_tables = 1;
 
     // TODO: this is a best-effort attempt to avoid errors caused by the
     //       generated module exporting no functions.

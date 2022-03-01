@@ -55,7 +55,9 @@ let interpret_exn module_bytes opt_params =
   let opt_params_ = Option.map (List.map convert_to_wasm) opt_params in
   let module_ = parse module_bytes in
   let m_isa = Ast_convert.convert_module (module_.it) in
-  (match run_fuzz (nat_of_integer (Z.of_string "4611686018427387904")) (nat_of_integer (Z.of_int 300)) (make_empty_store_m ()) m_isa [] opt_params_ () with
+  let fuel = Z.of_string "4611686018427387904" in
+  let max_call_depth = Z.of_string "300" in
+  (match run_fuzz (nat_of_integer fuel) (nat_of_integer max_call_depth) (make_empty_store_m ()) m_isa [] opt_params_ () with
   | (s', RValue vs_isa') -> List.map convert_from_wasm (List.rev vs_isa')
   | (s', RTrap str) -> raise (Eval.Trap (Source.no_region, "(Isabelle) trap: " ^ str))
   | (s', (RCrash (Error_exhaustion str))) -> raise (Eval.Exhaustion (Source.no_region, "(Isabelle) call stack exhausted"))
