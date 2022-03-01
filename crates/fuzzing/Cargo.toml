@@ -35,8 +35,7 @@ v8 = "0.33"
 [dev-dependencies]
 wat = "1.0.37"
 
-# FIXME(#3251) should re-enable once spec interpreter won't time out
 # We only build the library containing the OCaml spec interpreter if the OCaml
 # toolchain is available--which is assumed here to be the case when fuzzing.
-# [target.'cfg(fuzzing)'.dependencies]
-# wasm-spec-interpreter = { path = "./wasm-spec-interpreter", features = ["build-libinterpret"] }
+[target.'cfg(fuzzing)'.dependencies]
+wasm-spec-interpreter = { path = "./wasm-spec-interpreter", features = ["build-libinterpret"] }

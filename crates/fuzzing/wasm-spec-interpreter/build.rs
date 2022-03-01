@@ -10,8 +10,8 @@ use std::{env, path::PathBuf, process::Command};
 const LIB_NAME: &'static str = "interpret";
 const OCAML_DIR: &'static str = "ocaml";
 const SPEC_DIR: &'static str = "ocaml/spec";
-const SPEC_REPOSITORY: &'static str = "https://github.com/bytecodealliance/wasm-spec-mirror";
-const SPEC_REPOSITORY_BRANCH: &'static str = "fuzzing";
+const SPEC_REPOSITORY: &'static str = "https://github.com/conrad-watt/spec";
+const SPEC_REPOSITORY_BRANCH: &'static str = "wasmtime_fuzzing";
 
 fn main() {
     if cfg!(feature = "build-libinterpret") {

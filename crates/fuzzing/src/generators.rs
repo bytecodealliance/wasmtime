@@ -272,6 +272,9 @@ impl Config {
         config.max_memory_pages = 1;
         config.memory_max_size_required = true;
 
+        // While reference types are disabled below, only allow one table
+        config.max_tables = 1;
+
         // Don't allow any imports
         config.max_imports = 0;
 

@@ -181,7 +181,7 @@ jobs:
         toolchain: nightly-2021-12-15
     - run: cargo install cargo-fuzz --vers "^0.11"
     # Install OCaml packages necessary for 'differential_spec' fuzz target.
-    - run: sudo apt install -y ocaml-nox ocamlbuild
+    - run: sudo apt install -y ocaml-nox ocamlbuild ocaml-findlib libzarith-ocaml-dev
     - run: cargo fetch
       working-directory: ./fuzz
     - run: cargo fuzz build --dev

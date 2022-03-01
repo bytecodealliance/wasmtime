@@ -793,9 +793,11 @@ pub fn differential_spec_execution(wasm: &[u8], config: &generators::Config) -> 
     // interfere, observable as an uncaught `SIGSEGV`--not even caught by
     // libFuzzer. By running Wasmtime second, its signal handlers are registered
     // most recently and they catch failures appropriately.
-    let spec_vals = wasm_spec_interpreter::interpret(wasm, vec![]);
+    //
+    // For now, execute with dummy (zeroed) function arguments.
+    let spec_vals = wasm_spec_interpreter::interpret(wasm, None);
     debug!("spec interpreter returned: {:?}", &spec_vals);
-    let wasmtime_vals = run_in_wasmtime(wasm, config, &[]);
+    let wasmtime_vals = run_in_wasmtime(wasm, config);
     debug!("Wasmtime returned: {:?}", wasmtime_vals);
 
     // Match a spec interpreter value against a Wasmtime value. Eventually this
@@ -871,11 +873,7 @@ fn differential_store(
 
 /// Helper for instantiating and running a Wasm module in Wasmtime and returning
 /// its `Val` results.
-fn run_in_wasmtime(
-    wasm: &[u8],
-    config: &generators::Config,
-    params: &[Val],
-) -> anyhow::Result<Option<Vec<Val>>> {
+fn run_in_wasmtime(wasm: &[u8], config: &generators::Config) -> anyhow::Result<Option<Vec<Val>>> {
     // Instantiate wasmtime module and instance.
     let (wasmtime_module, mut wasmtime_store) = differential_store(wasm, config);
     let wasmtime_module = match wasmtime_module {
@@ -893,10 +891,12 @@ fn run_in_wasmtime(
         .get_func(&mut wasmtime_store, &func_name[..])
         .expect("function export is present");
 
+    let dummy_params = dummy::dummy_values(ty.params());
+
     // Execute the function and return the values.
     let mut results = vec![Val::I32(0); ty.results().len()];
     wasmtime_main
-        .call(&mut wasmtime_store, params, &mut results)
+        .call(&mut wasmtime_store, &dummy_params, &mut results)
         .map(|()| Some(results))
 }
 
