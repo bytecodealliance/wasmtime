@@ -19,7 +19,7 @@ fuzz_target!(|data: &[u8]| {
 fn run(data: &[u8]) -> Result<()> {
     let mut u = Unstructured::new(data);
     let mut config: generators::Config = u.arbitrary()?;
-    config.module_config.set_differential_config();
+    config.set_differential_config();
 
     // Enable features that the spec interpreter has implemented
     config.module_config.config.multi_value_enabled = false;
@@ -29,8 +29,7 @@ fn run(data: &[u8]) -> Result<()> {
     config.module_config.config.min_exports = 5;
     config.module_config.config.max_exports = 5;
 
-    let mut module = config.module_config.generate(&mut u)?;
-    module.ensure_termination(1000);
+    let module = config.generate(&mut u, Some(1000))?;
     let tried = TRIED.fetch_add(1, SeqCst);
     let executed = match oracles::differential_spec_execution(&module.to_bytes(), &config) {
         Some(_) => EXECUTED.fetch_add(1, SeqCst),
