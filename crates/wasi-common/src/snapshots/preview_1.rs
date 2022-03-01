@@ -12,7 +12,6 @@ use crate::{
 };
 use anyhow::Context;
 use cap_std::time::{Duration, SystemClock};
-use std::collections::HashSet;
 use std::convert::{TryFrom, TryInto};
 use std::io::{IoSlice, IoSliceMut};
 use std::ops::{Deref, DerefMut};
@@ -973,7 +972,6 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         }
 
         let table = &mut self.table;
-        let mut sub_fds: HashSet<types::Fd> = HashSet::new();
         // We need these refmuts to outlive Poll, which will hold the &mut dyn WasiFile inside
         let mut read_refs: Vec<(&dyn WasiFile, Userdata)> = Vec::new();
         let mut write_refs: Vec<(&dyn WasiFile, Userdata)> = Vec::new();
@@ -1015,12 +1013,6 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
                 },
                 types::SubscriptionU::FdRead(readsub) => {
                     let fd = readsub.file_descriptor;
-                    if sub_fds.contains(&fd) {
-                        return Err(Error::invalid_argument()
-                            .context("Fd can be subscribed to at most once per poll"));
-                    } else {
-                        sub_fds.insert(fd);
-                    }
                     let file_ref = table
                         .get_file(u32::from(fd))?
                         .get_cap(FileCaps::POLL_READWRITE)?;
@@ -1028,12 +1020,6 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
                 }
                 types::SubscriptionU::FdWrite(writesub) => {
                     let fd = writesub.file_descriptor;
-                    if sub_fds.contains(&fd) {
-                        return Err(Error::invalid_argument()
-                            .context("Fd can be subscribed to at most once per poll"));
-                    } else {
-                        sub_fds.insert(fd);
-                    }
                     let file_ref = table
                         .get_file(u32::from(fd))?
                         .get_cap(FileCaps::POLL_READWRITE)?;
