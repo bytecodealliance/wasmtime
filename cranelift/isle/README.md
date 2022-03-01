@@ -1,6 +1,6 @@
 # ISLE: Instruction Selection/Lowering Expressions DSL
 
-See also: [Language Reference](../docs/isle.md)
+See also: [Language Reference](./docs/language-reference.md)
 
 ## Table of Contents
 
