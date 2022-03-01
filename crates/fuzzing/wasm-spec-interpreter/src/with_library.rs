@@ -3,7 +3,7 @@
 //! # use wasm_spec_interpreter::{Value, interpret};
 //! let module = wat::parse_file("tests/add.wat").unwrap();
 //! let parameters = vec![Value::I32(42), Value::I32(1)];
-//! let results = interpret(&module, parameters).unwrap();
+//! let results = interpret(&module, Some(parameters)).unwrap();
 //! assert_eq!(results, &[Value::I32(43)]);
 //! ```
 use crate::Value;

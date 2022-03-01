@@ -3,7 +3,7 @@
 //!
 //! ```should_panic
 //! # use wasm_spec_interpreter::interpret;
-//! let _ = interpret(&[], vec![]);
+//! let _ = interpret(&[], Some(vec![]));
 //! ```
 
 use crate::Value;
