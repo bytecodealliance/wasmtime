@@ -260,6 +260,15 @@ fn compile_module(
                 if string.contains("minimum element size") {
                     return None;
                 }
+
+                // Allow modules-failing-to-compile which exceed the requested
+                // size for each instance. This is something that is difficult
+                // to control and ensure it always suceeds, so we simply have a
+                // "random" instance size limit and if a module doesn't fit we
+                // move on to the next fuzz input.
+                if string.contains("instance allocation for this module requires") {
+                    return None;
+                }
             }
 
             panic!("failed to compile module: {:?}", e);
