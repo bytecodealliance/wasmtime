@@ -1607,6 +1607,14 @@ impl AsyncCx {
                 let poll_cx = *self.current_poll_cx;
                 let _reset = Reset(self.current_poll_cx, poll_cx);
                 *self.current_poll_cx = ptr::null_mut();
+                if poll_cx.is_null() {
+                    // This happens in the case that we are currently cleaning up
+                    // this fiber; we need to just stop anything on here from
+                    // resuming.
+                    return Err(anyhow::format_err!(
+                        "opting out of resuming on a dying fiber"
+                    ))?;
+                }
                 assert!(!poll_cx.is_null());
                 future.as_mut().poll(&mut *poll_cx)
             };
