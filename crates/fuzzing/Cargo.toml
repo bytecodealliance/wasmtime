@@ -35,5 +35,11 @@ v8 = "0.33"
 [dev-dependencies]
 wat = "1.0.37"
 
+# Only enable the `build-libinterpret` feature when fuzzing is enabled, enabling
+# commands like `cargo test --workspace` or similar to not need an ocaml
+# installation and only fuzzers need it by default.
+[target.'cfg(fuzzing)'.dependencies]
+wasm-spec-interpreter = { path = "./wasm-spec-interpreter", optional = true, features = ['build-libinterpret'] }
+
 [features]
-fuzz-spec-interpreter = ['wasm-spec-interpreter/build-libinterpret']
+fuzz-spec-interpreter = ['wasm-spec-interpreter']
