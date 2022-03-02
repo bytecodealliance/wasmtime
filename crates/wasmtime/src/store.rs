@@ -200,7 +200,7 @@ pub struct StoreInner<T> {
     inner: StoreOpaque,
 
     limiter: Option<ResourceLimiterInner<T>>,
-    call_hook: Option<Box<dyn FnMut(&mut T, CallHook) -> Result<(), crate::Trap> + Send + Sync>>,
+    call_hook: Option<CallHookInner<T>>,
     // for comments about `ManuallyDrop`, see `Store::into_data`
     data: ManuallyDrop<T>,
 }
@@ -209,6 +209,21 @@ enum ResourceLimiterInner<T> {
     Sync(Box<dyn FnMut(&mut T) -> &mut (dyn crate::ResourceLimiter) + Send + Sync>),
     #[cfg(feature = "async")]
     Async(Box<dyn FnMut(&mut T) -> &mut (dyn crate::ResourceLimiterAsync) + Send + Sync>),
+}
+
+/// An object that can take callbacks when the runtime enters or exits hostcalls.
+#[cfg(feature = "async")]
+#[async_trait::async_trait]
+pub trait CallHookHandler<T>: Send {
+    /// A callback to run when wasmtime is about to enter a host call, or when about to
+    /// exit the hostcall.
+    async fn handle_call_event(&self, t: &mut T, ch: CallHook) -> Result<(), crate::Trap>;
+}
+
+enum CallHookInner<T> {
+    Sync(Box<dyn FnMut(&mut T, CallHook) -> Result<(), crate::Trap> + Send + Sync>),
+    #[cfg(feature = "async")]
+    Async(Box<dyn CallHookHandler<T> + Send + Sync>),
 }
 
 // Forward methods on `StoreOpaque` to also being on `StoreInner<T>`
@@ -603,6 +618,27 @@ impl<T> Store<T> {
         inner.limiter = Some(ResourceLimiterInner::Async(Box::new(limiter)));
     }
 
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
+    /// Configures an async function that runs on calls and returns between
+    /// WebAssembly and host code. For the non-async equivalent of this method,
+    /// see [`call_hook`].
+    ///
+    /// The function is passed a [`CallHook`] argument, which indicates which
+    /// state transition the VM is making.
+    ///
+    /// This function's future may return a [`Trap`]. If a trap is returned
+    /// when an import was called, it is immediately raised as-if the host
+    /// import had returned the trap. If a trap is returned after wasm returns
+    /// to the host then the wasm function's result is ignored and this trap is
+    /// returned instead.
+    ///
+    /// After this function returns a trap, it may be called for subsequent
+    /// returns to host or wasm code as the trap propagates to the root call.
+    #[cfg(feature = "async")]
+    pub fn call_hook_async(&mut self, hook: impl CallHookHandler<T> + Send + Sync + 'static) {
+        self.inner.call_hook = Some(CallHookInner::Async(Box::new(hook)));
+    }
+
     /// Configure a function that runs on calls and returns between WebAssembly
     /// and host code.
     ///
@@ -616,12 +652,12 @@ impl<T> Store<T> {
     /// instead.
     ///
     /// After this function returns a trap, it may be called for subsequent returns
-    /// to host or wasm code as the trap propogates to the root call.
+    /// to host or wasm code as the trap propagates to the root call.
     pub fn call_hook(
         &mut self,
         hook: impl FnMut(&mut T, CallHook) -> Result<(), Trap> + Send + Sync + 'static,
     ) {
-        self.inner.call_hook = Some(Box::new(hook));
+        self.inner.call_hook = Some(CallHookInner::Sync(Box::new(hook)));
     }
 
     /// Returns the [`Engine`] that this store is associated with.
@@ -956,10 +992,33 @@ impl<T> StoreInner<T> {
     }
 
     pub fn call_hook(&mut self, s: CallHook) -> Result<(), Trap> {
-        if let Some(hook) = &mut self.call_hook {
-            hook(&mut self.data, s)
+        // Need to borrow async_cx before the mut borrow of the limiter.
+        // self.async_cx() panicks when used with a non-async store, so
+        // wrap this in an option.
+        #[cfg(feature = "async")]
+        let async_cx = if self.inner.async_support() {
+            Some(self.inner.async_cx())
         } else {
-            Ok(())
+            None
+        };
+
+        match self.call_hook {
+            Some(CallHookInner::Sync(ref mut hook)) => hook(&mut self.data, s),
+
+            #[cfg(feature = "async")]
+            Some(CallHookInner::Async(ref mut handler)) => {
+                match async_cx.expect("CallHookInner requires async Store") {
+                    None => Err(Trap::new(
+                        "ignoring attempt to resume during fiber shutdown",
+                    )),
+                    Some(context) => unsafe {
+                        Ok(context
+                            .block_on(handler.handle_call_event(&mut self.data, s).as_mut())??)
+                    },
+                }
+            }
+
+            None => Ok(()),
         }
     }
 }
