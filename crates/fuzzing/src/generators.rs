@@ -341,6 +341,7 @@ impl Config {
         config.simd_enabled = false;
         config.bulk_memory_enabled = true;
         config.reference_types_enabled = true;
+        config.multi_value_enabled = true;
         config.max_memories = 1;
 
         if let InstanceAllocationStrategy::Pooling {
