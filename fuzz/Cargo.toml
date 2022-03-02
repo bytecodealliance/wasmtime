@@ -21,10 +21,8 @@ wasmtime = { path = "../crates/wasmtime" }
 wasmtime-fuzzing = { path = "../crates/fuzzing" }
 
 [features]
-# Leave a stub feature with no side-effects in place for now: the OSS-Fuzz
-# config builds fuzz targets with this feature enabled and we don't want to
-# break the build.
-experimental_x64 = []
+default = ['fuzz-spec-interpreter']
+fuzz-spec-interpreter = ['wasmtime-fuzzing/fuzz-spec-interpreter']
 
 [[bin]]
 name = "compile"
@@ -61,6 +59,7 @@ name = "differential_spec"
 path = "fuzz_targets/differential_spec.rs"
 test = false
 doc = false
+required-features = ['fuzz-spec-interpreter']
 
 [[bin]]
 name = "differential_wasmi"
