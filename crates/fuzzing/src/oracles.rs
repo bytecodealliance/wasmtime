@@ -13,9 +13,8 @@
 pub mod dummy;
 
 use crate::generators;
-use anyhow::Context;
 use arbitrary::Arbitrary;
-use log::{debug, warn};
+use log::debug;
 use std::cell::Cell;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
@@ -790,7 +789,10 @@ pub fn differential_wasmi_execution(wasm: &[u8], config: &generators::Config) ->
 /// specification interpreter.
 ///
 /// May return `None` if we early-out due to a rejected fuzz config.
+#[cfg(feature = "fuzz-spec-interpreter")]
 pub fn differential_spec_execution(wasm: &[u8], config: &generators::Config) -> Option<()> {
+    use anyhow::Context;
+
     crate::init_fuzzing();
     debug!("config: {:#?}", config);
     log_wasm(wasm);
@@ -806,8 +808,30 @@ pub fn differential_spec_execution(wasm: &[u8], config: &generators::Config) -> 
     // For now, execute with dummy (zeroed) function arguments.
     let spec_vals = wasm_spec_interpreter::interpret(wasm, None);
     debug!("spec interpreter returned: {:?}", &spec_vals);
-    let wasmtime_vals = run_in_wasmtime(wasm, config);
-    debug!("Wasmtime returned: {:?}", wasmtime_vals);
+
+    let (wasmtime_module, mut wasmtime_store) = differential_store(wasm, config);
+    let wasmtime_module = match wasmtime_module {
+        Some(m) => m,
+        None => return None,
+    };
+
+    let wasmtime_vals =
+        Instance::new(&mut wasmtime_store, &wasmtime_module, &[]).and_then(|wasmtime_instance| {
+            // Find the first exported function.
+            let (func_name, ty) = first_exported_function(&wasmtime_module)
+                .context("Cannot find exported function")?;
+            let wasmtime_main = wasmtime_instance
+                .get_func(&mut wasmtime_store, &func_name[..])
+                .expect("function export is present");
+
+            let dummy_params = dummy::dummy_values(ty.params());
+
+            // Execute the function and return the values.
+            let mut results = vec![Val::I32(0); ty.results().len()];
+            wasmtime_main
+                .call(&mut wasmtime_store, &dummy_params, &mut results)
+                .map(|()| Some(results))
+        });
 
     // Match a spec interpreter value against a Wasmtime value. Eventually this
     // should support references and `v128` (TODO).
@@ -851,9 +875,10 @@ pub fn differential_spec_execution(wasm: &[u8], config: &generators::Config) -> 
             // beneficial to compare the error messages from both sides (TODO).
             // It would also be good to keep track of statistics about the
             // ratios of the kinds of errors the fuzzer sees (TODO).
-            warn!(
+            log::warn!(
                 "Both sides failed: spec returned '{}'; wasmtime returned {:?}",
-                spec_error, wasmtime_error
+                spec_error,
+                wasmtime_error
             );
             return None;
         }
@@ -878,35 +903,6 @@ fn differential_store(
     let store = fuzz_config.to_store();
     let module = compile_module(store.engine(), wasm, true, fuzz_config);
     (module, store)
-}
-
-/// Helper for instantiating and running a Wasm module in Wasmtime and returning
-/// its `Val` results.
-fn run_in_wasmtime(wasm: &[u8], config: &generators::Config) -> anyhow::Result<Option<Vec<Val>>> {
-    // Instantiate wasmtime module and instance.
-    let (wasmtime_module, mut wasmtime_store) = differential_store(wasm, config);
-    let wasmtime_module = match wasmtime_module {
-        Some(m) => m,
-        None => return Ok(None),
-    };
-
-    let wasmtime_instance = Instance::new(&mut wasmtime_store, &wasmtime_module, &[])
-        .context("Wasmtime cannot instantiate module")?;
-
-    // Find the first exported function.
-    let (func_name, ty) =
-        first_exported_function(&wasmtime_module).context("Cannot find exported function")?;
-    let wasmtime_main = wasmtime_instance
-        .get_func(&mut wasmtime_store, &func_name[..])
-        .expect("function export is present");
-
-    let dummy_params = dummy::dummy_values(ty.params());
-
-    // Execute the function and return the values.
-    let mut results = vec![Val::I32(0); ty.results().len()];
-    wasmtime_main
-        .call(&mut wasmtime_store, &dummy_params, &mut results)
-        .map(|()| Some(results))
 }
 
 // Introspect wasmtime module to find the name of the first exported function.
