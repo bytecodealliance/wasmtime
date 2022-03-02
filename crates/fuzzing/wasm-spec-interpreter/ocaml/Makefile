@@ -13,7 +13,7 @@ SPEC_LIB := $(SPEC_BUILD_DIR)/wasm.cmxa
 
 # A space-separated list of paths that the linker will use to search for libgmp.
 # Override with `make LIBGMP_PATHS=...`.
-LIBGMP_PATHS := /usr/lib /usr/lib/x86_64-linux-gnu
+LIBGMP_PATHS ?= /usr/lib /usr/lib/x86_64-linux-gnu
 
 PKGS = zarith
 
