@@ -90,10 +90,12 @@ impl MemoryImage {
     ) -> Result<Option<MemoryImage>> {
         // Sanity-check that various parameters are page-aligned.
         let len = data.len();
-        let offset = u32::try_from(offset).unwrap();
-        assert_eq!(offset % page_size, 0);
+        assert_eq!(offset % u64::from(page_size), 0);
         assert_eq!((len as u32) % page_size, 0);
-        let linear_memory_offset = usize::try_from(offset).unwrap();
+        let linear_memory_offset = match usize::try_from(offset) {
+            Ok(offset) => offset,
+            Err(_) => return Ok(None),
+        };
 
         // If a backing `mmap` is present then `data` should be a sub-slice of
         // the `mmap`. The sanity-checks here double-check that. Additionally
