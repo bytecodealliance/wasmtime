@@ -304,6 +304,8 @@ impl Config {
             limits.memories = 1;
             limits.memory_pages = 1;
 
+            limits.tables = 1;
+
             match &mut self.wasmtime.memory_config {
                 MemoryConfig::Normal(config) => {
                     config.static_memory_maximum_size = Some(limits.memory_pages * 0x10000);
