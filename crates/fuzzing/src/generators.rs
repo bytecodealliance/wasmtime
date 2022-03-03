@@ -343,6 +343,7 @@ impl Config {
         config.reference_types_enabled = true;
         config.multi_value_enabled = true;
         config.max_memories = 1;
+        config.max_tables = 5;
 
         if let InstanceAllocationStrategy::Pooling {
             instance_limits: limits,
@@ -350,6 +351,7 @@ impl Config {
         } = &mut self.wasmtime.strategy
         {
             limits.memories = 1;
+            limits.tables = 5;
             // Set a lower bound of 10 pages as the spec tests define memories with at
             // least a few pages and some tests do memory grow operations.
             limits.memory_pages = std::cmp::max(limits.memory_pages, 10);
