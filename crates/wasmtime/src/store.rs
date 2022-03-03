@@ -621,7 +621,7 @@ impl<T> Store<T> {
     #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
     /// Configures an async function that runs on calls and returns between
     /// WebAssembly and host code. For the non-async equivalent of this method,
-    /// see [`call_hook`].
+    /// see [`Store::call_hook`].
     ///
     /// The function is passed a [`CallHook`] argument, which indicates which
     /// state transition the VM is making.
