@@ -135,3 +135,7 @@ harness = false
 [[bench]]
 name = "thread_eager_init"
 harness = false
+
+[[bench]]
+name = "call"
+harness = false
