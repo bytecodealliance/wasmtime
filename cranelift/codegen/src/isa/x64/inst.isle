@@ -784,6 +784,7 @@
 (decl put_masked_in_imm8_gpr (Value Type) Imm8Gpr)
 (extern constructor put_masked_in_imm8_gpr put_masked_in_imm8_gpr)
 
+;; Condition codes
 (type CC extern
       (enum O
             NO
@@ -801,6 +802,8 @@
             NLE
             P
             NP))
+(decl from_intcc (IntCC) CC)
+(extern constructor from_intcc from_intcc)
 
 (type Avx512Opcode extern
       (enum Vcvtudq2ps
@@ -2546,6 +2549,8 @@
 (convert Amode SyntheticAmode amode_to_synthetic_amode)
 (convert SyntheticAmode GprMem synthetic_amode_to_gpr_mem)
 (convert SyntheticAmode XmmMem synthetic_amode_to_xmm_mem)
+
+(convert IntCC CC from_intcc)
 
 (decl reg_to_xmm_mem (Reg) XmmMem)
 (rule (reg_to_xmm_mem r)

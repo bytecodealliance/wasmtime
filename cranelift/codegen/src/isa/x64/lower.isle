@@ -1440,6 +1440,14 @@
 (rule (lower (resumable_trap code))
       (safepoint (ud2 code)))
 
+;;;; Rules for `icmp` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; For GPR-held values we only need to emit `CMP + SETCC`. We rely here on
+;; Cranelift's verification that `a` and `b` are of the same type.
+(rule (lower (icmp cc a @ (value_type (fits_in_64 ty)) b))
+      (let ((size OperandSize (raw_operand_size_of_type ty)))
+           (with_flags (cmp size b a) (setcc cc))))
+
 ;;;; Rules for `select` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; CLIF `select` instructions receive a testable argument (i.e. boolean or
@@ -1715,8 +1723,8 @@
             (mul Gpr (mul $I32 masked4 (RegMemImm.Imm 0x01010101)))
             (final Gpr (shr $I32 mul (Imm8Reg.Imm8 24))))
         final))
-                       
-            
+
+
 (rule 1 (lower (has_type (and
                           $I8X16
                           (avx512vl_enabled)
@@ -1725,7 +1733,7 @@
       (vpopcntb src))
 
 
-      
+
 ;; For SSE 4.2 we use Mula's algorithm (https://arxiv.org/pdf/1611.07612.pdf):
 ;;
 ;; __m128i count_bytes ( __m128i v) {
@@ -1807,7 +1815,7 @@
                            (shl ty lo4 (Imm8Reg.Imm8 4))
                            hi4)))
         swap4))
-                       
+
 (decl do_bitrev16 (Type Gpr) Gpr)
 (rule (do_bitrev16 ty src)
       (let ((src_ Gpr (do_bitrev8 ty src))
@@ -1819,7 +1827,7 @@
                            (shl ty lo8 (Imm8Reg.Imm8 8))
                            hi8)))
         swap8))
-      
+
 (decl do_bitrev32 (Type Gpr) Gpr)
 (rule (do_bitrev32 ty src)
       (let ((src_ Gpr (do_bitrev16 ty src))
