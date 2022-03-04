@@ -92,7 +92,7 @@ impl StoreData {
         if id.store_id() != self.id {
             return false;
         }
-        // this should be true as an invariant of our API, but double-check with
+        // This should be true as an invariant of our API, but double-check with
         // debug assertions enabled.
         if cfg!(debug_assertions) {
             assert!(id.index() < T::list(self).len());
