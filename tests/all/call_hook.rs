@@ -6,47 +6,98 @@ use wasmtime::*;
 fn call_wrapped_func() -> Result<(), Error> {
     let mut store = Store::<State>::default();
     store.call_hook(State::call_hook);
-    let f = Func::wrap(
+
+    fn verify(state: &State) {
+        // Calling this func will switch context into wasm, then back to host:
+        assert_eq!(state.context, vec![Context::Wasm, Context::Host]);
+
+        assert_eq!(state.calls_into_host, state.returns_from_host + 1);
+        assert_eq!(state.calls_into_wasm, state.returns_from_wasm + 1);
+    }
+
+    let mut funcs = Vec::new();
+    funcs.push(Func::wrap(
         &mut store,
         |caller: Caller<State>, a: i32, b: i64, c: f32, d: f64| {
-            // Calling this func will switch context into wasm, then back to host:
-            assert_eq!(caller.data().context, vec![Context::Wasm, Context::Host]);
-
-            assert_eq!(
-                caller.data().calls_into_host,
-                caller.data().returns_from_host + 1
-            );
-            assert_eq!(
-                caller.data().calls_into_wasm,
-                caller.data().returns_from_wasm + 1
-            );
+            verify(caller.data());
 
             assert_eq!(a, 1);
             assert_eq!(b, 2);
             assert_eq!(c, 3.0);
             assert_eq!(d, 4.0);
         },
-    );
-
-    f.call(
+    ));
+    funcs.push(Func::new(
         &mut store,
-        &[Val::I32(1), Val::I64(2), 3.0f32.into(), 4.0f64.into()],
-        &mut [],
-    )?;
+        FuncType::new([ValType::I32, ValType::I64, ValType::F32, ValType::F64], []),
+        |caller: Caller<State>, params, results| {
+            verify(caller.data());
 
-    // One switch from vm to host to call f, another in return from f.
-    assert_eq!(store.data().calls_into_host, 1);
-    assert_eq!(store.data().returns_from_host, 1);
-    assert_eq!(store.data().calls_into_wasm, 1);
-    assert_eq!(store.data().returns_from_wasm, 1);
+            assert_eq!(params.len(), 4);
+            assert_eq!(params[0].i32().unwrap(), 1);
+            assert_eq!(params[1].i64().unwrap(), 2);
+            assert_eq!(params[2].f32().unwrap(), 3.0);
+            assert_eq!(params[3].f64().unwrap(), 4.0);
+            assert_eq!(results.len(), 0);
+            Ok(())
+        },
+    ));
+    funcs.push(unsafe {
+        Func::new_unchecked(
+            &mut store,
+            FuncType::new([ValType::I32, ValType::I64, ValType::F32, ValType::F64], []),
+            |caller: Caller<State>, space| {
+                verify(caller.data());
 
-    f.typed::<(i32, i64, f32, f64), (), _>(&store)?
-        .call(&mut store, (1, 2, 3.0, 4.0))?;
+                assert_eq!((*space.add(0)).i32, 1);
+                assert_eq!((*space.add(1)).i64, 2);
+                assert_eq!((*space.add(2)).f32, 3.0f32.to_bits());
+                assert_eq!((*space.add(3)).f64, 4.0f64.to_bits());
+                Ok(())
+            },
+        )
+    });
 
-    assert_eq!(store.data().calls_into_host, 2);
-    assert_eq!(store.data().returns_from_host, 2);
-    assert_eq!(store.data().calls_into_wasm, 2);
-    assert_eq!(store.data().returns_from_wasm, 2);
+    let mut n = 0;
+    for f in funcs.iter() {
+        f.call(
+            &mut store,
+            &[Val::I32(1), Val::I64(2), 3.0f32.into(), 4.0f64.into()],
+            &mut [],
+        )?;
+        n += 1;
+
+        // One switch from vm to host to call f, another in return from f.
+        assert_eq!(store.data().calls_into_host, n);
+        assert_eq!(store.data().returns_from_host, n);
+        assert_eq!(store.data().calls_into_wasm, n);
+        assert_eq!(store.data().returns_from_wasm, n);
+
+        f.typed::<(i32, i64, f32, f64), (), _>(&store)?
+            .call(&mut store, (1, 2, 3.0, 4.0))?;
+        n += 1;
+
+        assert_eq!(store.data().calls_into_host, n);
+        assert_eq!(store.data().returns_from_host, n);
+        assert_eq!(store.data().calls_into_wasm, n);
+        assert_eq!(store.data().returns_from_wasm, n);
+
+        unsafe {
+            let mut args = [
+                Val::I32(1).to_raw(&mut store),
+                Val::I64(2).to_raw(&mut store),
+                Val::F32(3.0f32.to_bits()).to_raw(&mut store),
+                Val::F64(4.0f64.to_bits()).to_raw(&mut store),
+            ];
+            f.call_unchecked(&mut store, args.as_mut_ptr())?;
+        }
+        n += 1;
+
+        assert_eq!(store.data().calls_into_host, n);
+        assert_eq!(store.data().returns_from_host, n);
+        assert_eq!(store.data().calls_into_wasm, n);
+        assert_eq!(store.data().returns_from_wasm, n);
+    }
 
     Ok(())
 }

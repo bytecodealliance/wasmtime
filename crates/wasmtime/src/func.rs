@@ -998,8 +998,6 @@ impl Func {
         values_vec: *mut ValRaw,
         func: &dyn Fn(Caller<'_, T>, &[Val], &mut [Val]) -> Result<(), Trap>,
     ) -> Result<(), Trap> {
-        caller.store.0.call_hook(CallHook::CallingHost)?;
-
         // Translate the raw JIT arguments in `values_vec` into a `Val` which
         // we'll be passing as a slice. The storage for our slice-of-`Val` we'll
         // be taking from the `Store`. We preserve our slice back into the
@@ -1056,7 +1054,6 @@ impl Func {
         // hostcall to reuse our own storage.
         val_vec.truncate(0);
         caller.store.0.save_hostcall_val_storage(val_vec);
-        caller.store.0.call_hook(CallHook::ReturningFromHost)?;
         Ok(())
     }
 
@@ -2050,7 +2047,12 @@ impl HostFunc {
         func: impl Fn(Caller<'_, T>, *mut ValRaw) -> Result<(), Trap> + Send + Sync + 'static,
     ) -> Self {
         let func = move |caller_vmctx, values: *mut ValRaw| {
-            Caller::<T>::with(caller_vmctx, |caller| func(caller, values))
+            Caller::<T>::with(caller_vmctx, |mut caller| {
+                caller.store.0.call_hook(CallHook::CallingHost)?;
+                let result = func(caller.sub_caller(), values)?;
+                caller.store.0.call_hook(CallHook::ReturningFromHost)?;
+                Ok(result)
+            })
         };
         let (instance, trampoline) = crate::trampoline::create_function(&ty, func, engine)
             .expect("failed to create function");
