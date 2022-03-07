@@ -1188,6 +1188,10 @@ impl StoreOpaque {
         panic!("trampoline missing")
     }
 
+    /// Yields the async context, assuming that we are executing on a fiber and
+    /// that fiber is not in the process of dying. This function will return
+    /// None in the latter case (the fiber is dying), and panic if
+    /// `async_support()` is false.
     #[cfg(feature = "async")]
     #[inline]
     pub fn async_cx(&self) -> Option<AsyncCx> {
