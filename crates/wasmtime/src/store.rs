@@ -992,31 +992,17 @@ impl<T> StoreInner<T> {
     }
 
     pub fn call_hook(&mut self, s: CallHook) -> Result<(), Trap> {
-        // Need to borrow async_cx before the mut borrow of the limiter.
-        // self.async_cx() panicks when used with a non-async store, so
-        // wrap this in an option.
-        #[cfg(feature = "async")]
-        let async_cx = if self.inner.async_support() {
-            Some(self.inner.async_cx())
-        } else {
-            None
-        };
-
         match self.call_hook {
             Some(CallHookInner::Sync(ref mut hook)) => hook(&mut self.data, s),
 
             #[cfg(feature = "async")]
-            Some(CallHookInner::Async(ref mut handler)) => {
-                match async_cx.expect("CallHookInner requires async Store") {
-                    None => Err(Trap::new(
-                        "ignoring attempt to resume during fiber shutdown",
-                    )),
-                    Some(context) => unsafe {
-                        Ok(context
-                            .block_on(handler.handle_call_event(&mut self.data, s).as_mut())??)
-                    },
-                }
-            }
+            Some(CallHookInner::Async(ref mut handler)) => unsafe {
+                Ok(self
+                    .inner
+                    .async_cx()
+                    .expect("CallHookInner requires async Store")
+                    .block_on(handler.handle_call_event(&mut self.data, s).as_mut())??)
+            },
 
             None => Ok(()),
         }
@@ -1724,22 +1710,15 @@ unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
         desired: usize,
         maximum: Option<usize>,
     ) -> Result<bool, anyhow::Error> {
-        // Need to borrow async_cx before the mut borrow of the limiter.
-        // self.async_cx() panicks when used with a non-async store, so
-        // wrap this in an option.
-        #[cfg(feature = "async")]
-        let async_cx = if self.async_support() {
-            Some(self.async_cx().unwrap())
-        } else {
-            None
-        };
         match self.limiter {
             Some(ResourceLimiterInner::Sync(ref mut limiter)) => {
                 Ok(limiter(&mut self.data).memory_growing(current, desired, maximum))
             }
             #[cfg(feature = "async")]
             Some(ResourceLimiterInner::Async(ref mut limiter)) => unsafe {
-                Ok(async_cx
+                Ok(self
+                    .inner
+                    .async_cx()
                     .expect("ResourceLimiterAsync requires async Store")
                     .block_on(
                         limiter(&mut self.data)
