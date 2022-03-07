@@ -4,7 +4,7 @@
 
 ## 0.35.0
 
-Unreleased.
+Released 2022-03-07.
 
 ### Changed
 
@@ -43,6 +43,16 @@ Unreleased.
   512 KiB on all platforms to better accomodate running wasm on the main thread
   on Windows.
   [#3861](https://github.com/bytecodealliance/wasmtime/pull/3861)
+
+* The `wasi-common` crate now supports doing polls for both read and write
+  interest on a file descriptor at the same time.
+  [#3866](https://github.com/bytecodealliance/wasmtime/pull/3866)
+
+### Fixed
+
+* The `Store::call_hook` callback is now invoked when entering host functions
+  defined with `*_unchecked` variants.
+  [#3881](https://github.com/bytecodealliance/wasmtime/pull/3881)
 
 ### Removed
 
