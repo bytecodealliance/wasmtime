@@ -404,6 +404,13 @@ pub fn differential_execution(
         };
 
         match (lhs, rhs) {
+            // Different compilation settings can lead to different amounts
+            // of stack space being consumed, so if either the lhs or the rhs
+            // hit a stack overflow then we discard the result of the other side
+            // since if it ran successfully or trapped that's ok in both
+            // situations.
+            (Err(e), _) | (_, Err(e)) if e.trap_code() == Some(TrapCode::StackOverflow) => {}
+
             (Err(a), Err(b)) => {
                 if a.trap_code() != b.trap_code() {
                     fail();
