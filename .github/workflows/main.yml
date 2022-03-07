@@ -360,8 +360,8 @@ jobs:
     - run: rustup target add wasm32-wasi
     - name: Install Rust
       run: rustup update stable && rustup default stable
-    - run: cargo bench
-    - run: cargo bench --features uffd
+    - run: cargo test --benches --release
+    - run: cargo test --benches --release --features uffd
 
   # Verify that cranelift's code generation is deterministic
   meta_determinist_check:
