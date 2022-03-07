@@ -539,7 +539,7 @@ pub fn make_api_calls(api: generators::api::ApiCalls) {
 pub fn spectest(mut fuzz_config: generators::Config, test: generators::SpecTest) {
     crate::init_fuzzing();
     fuzz_config.set_spectest_compliant();
-    log::debug!("running {:?} with {:?}", test.file, fuzz_config);
+    log::debug!("running {:?}", test.file);
     let mut wast_context = WastContext::new(fuzz_config.to_store());
     wast_context.register_spectest().unwrap();
     wast_context

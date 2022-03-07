@@ -354,6 +354,7 @@ impl Config {
         {
             limits.memories = 1;
             limits.tables = 5;
+            limits.table_elements = 1_000;
             // Set a lower bound of 10 pages as the spec tests define memories with at
             // least a few pages and some tests do memory grow operations.
             limits.memory_pages = std::cmp::max(limits.memory_pages, 10);
@@ -370,6 +371,7 @@ impl Config {
     /// Converts this to a `wasmtime::Config` object
     pub fn to_wasmtime(&self) -> wasmtime::Config {
         crate::init_fuzzing();
+        log::debug!("creating wasmtime config with {:#?}", self.wasmtime);
 
         let mut cfg = wasmtime::Config::new();
         cfg.wasm_bulk_memory(true)
