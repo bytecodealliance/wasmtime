@@ -146,15 +146,11 @@ macro_rules! generate_wrap_async_func {
                 ),
             );
             self.func_wrap(module, name, move |mut caller: Caller<'_, T>, $($args: $args),*| {
-                match caller.store.as_context_mut().0.async_cx() {
-                    None => R::fallible_from_trap(Trap::from(anyhow::format_err!("Attempt to start async function on dying fiber"))),
-                    Some(async_cx) => {
-                        let mut future = Pin::from(func(caller, $($args),*));
-                        match unsafe { async_cx.block_on(future.as_mut()) } {
-                            Ok(ret) => ret.into_fallible(),
-                            Err(e) => R::fallible_from_trap(e),
-                        }
-                    }
+                let async_cx = caller.store.as_context_mut().0.async_cx().expect("Attempt to start async function on dying fiber");
+                let mut future = Pin::from(func(caller, $($args),*));
+                match unsafe { async_cx.block_on(future.as_mut()) } {
+                    Ok(ret) => ret.into_fallible(),
+                    Err(e) => R::fallible_from_trap(e),
                 }
             })
         }
@@ -364,15 +360,12 @@ impl<T> Linker<T> {
             "cannot use `func_new_async` without enabling async support in the config"
         );
         self.func_new(module, name, ty, move |mut caller, params, results| {
-            let async_cx =
-                caller
-                    .store
-                    .as_context_mut()
-                    .0
-                    .async_cx()
-                    .ok_or(anyhow::format_err!(
-                        "Attempt to spawn new function on dying fiber"
-                    ))?;
+            let async_cx = caller
+                .store
+                .as_context_mut()
+                .0
+                .async_cx()
+                .expect("Attempt to spawn new function on dying fiber");
             let mut future = Pin::from(func(caller, params, results));
             match unsafe { async_cx.block_on(future.as_mut()) } {
                 Ok(Ok(())) => Ok(()),

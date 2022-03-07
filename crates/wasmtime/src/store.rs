@@ -1278,10 +1278,9 @@ impl StoreOpaque {
         // abort all wasm and get caught on the other side to clean
         // things up.
         unsafe {
-            match self.async_cx() {
-                None => Err(Trap::new("attempted to pull async context during shutdown")),
-                Some(cx) => cx.block_on(Pin::new_unchecked(&mut future)),
-            }
+            self.async_cx()
+                .expect("attempted to pull async context during shutdown")
+                .block_on(Pin::new_unchecked(&mut future))
         }
     }
 
@@ -1729,8 +1728,8 @@ unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
         // self.async_cx() panicks when used with a non-async store, so
         // wrap this in an option.
         #[cfg(feature = "async")]
-        let opt_async_cx = if self.async_support() {
-            Some(self.async_cx())
+        let async_cx = if self.async_support() {
+            Some(self.async_cx().unwrap())
         } else {
             None
         };
@@ -1739,20 +1738,15 @@ unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
                 Ok(limiter(&mut self.data).memory_growing(current, desired, maximum))
             }
             #[cfg(feature = "async")]
-            Some(ResourceLimiterInner::Async(ref mut limiter)) => {
-                match opt_async_cx.expect("ResourceLimiterAsync requires async Store") {
-                    None => Err(anyhow::format_err!(
-                        "attempt to grow memory during shutdown"
-                    )),
-                    Some(async_cx) => unsafe {
-                        Ok(async_cx.block_on(
-                            limiter(&mut self.data)
-                                .memory_growing(current, desired, maximum)
-                                .as_mut(),
-                        )?)
-                    },
-                }
-            }
+            Some(ResourceLimiterInner::Async(ref mut limiter)) => unsafe {
+                Ok(async_cx
+                    .expect("ResourceLimiterAsync requires async Store")
+                    .block_on(
+                        limiter(&mut self.data)
+                            .memory_growing(current, desired, maximum)
+                            .as_mut(),
+                    )?)
+            },
             None => Ok(true),
         }
     }
@@ -1780,8 +1774,8 @@ unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
         // self.async_cx() panicks when used with a non-async store, so
         // wrap this in an option.
         #[cfg(feature = "async")]
-        let opt_async_cx = if self.async_support() {
-            Some(self.async_cx())
+        let async_cx = if self.async_support() {
+            Some(self.async_cx().unwrap())
         } else {
             None
         };
@@ -1791,20 +1785,15 @@ unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
                 Ok(limiter(&mut self.data).table_growing(current, desired, maximum))
             }
             #[cfg(feature = "async")]
-            Some(ResourceLimiterInner::Async(ref mut limiter)) => {
-                match opt_async_cx.expect("ResourceLimiterAsync requires async Store") {
-                    None => Err(anyhow::format_err!(
-                        "attempt to grow memory during shutdown"
-                    )),
-                    Some(async_cx) => unsafe {
-                        Ok(async_cx.block_on(
-                            limiter(&mut self.data)
-                                .table_growing(current, desired, maximum)
-                                .as_mut(),
-                        )?)
-                    },
-                }
-            }
+            Some(ResourceLimiterInner::Async(ref mut limiter)) => unsafe {
+                Ok(async_cx
+                    .expect("ResourceLimiterAsync requires async Store")
+                    .block_on(
+                        limiter(&mut self.data)
+                            .table_growing(current, desired, maximum)
+                            .as_mut(),
+                    )?)
+            },
             None => Ok(true),
         }
     }
