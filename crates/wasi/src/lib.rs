@@ -42,11 +42,16 @@ macro_rules! define_wasi {
 
 use wasmtime::Linker;
 
-pub fn add_to_linker<T>(
+pub fn add_to_linker<T, U>(
     linker: &mut Linker<T>,
-    get_cx: impl Fn(&mut T) -> &mut crate::WasiCtx + Send + Sync + Copy + 'static,
+    get_cx: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
 ) -> anyhow::Result<()>
-    where $($bounds)*
+    where U: Send
+            + wasi_common::snapshots::preview_0::wasi_unstable::WasiUnstable
+            + wasi_common::snapshots::preview_0::types::UserErrorConversion
+            + wasi_common::snapshots::preview_1::wasi_snapshot_preview1::WasiSnapshotPreview1
+            + wasi_common::snapshots::preview_1::types::UserErrorConversion,
+        $($bounds)*
 {
     snapshots::preview_1::add_wasi_snapshot_preview1_to_linker(linker, get_cx)?;
     snapshots::preview_0::add_wasi_unstable_to_linker(linker, get_cx)?;
