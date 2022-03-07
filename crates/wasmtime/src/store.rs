@@ -992,11 +992,11 @@ impl<T> StoreInner<T> {
     }
 
     pub fn call_hook(&mut self, s: CallHook) -> Result<(), Trap> {
-        match self.call_hook {
-            Some(CallHookInner::Sync(ref mut hook)) => hook(&mut self.data, s),
+        match &mut self.call_hook {
+            Some(CallHookInner::Sync(hook)) => hook(&mut self.data, s),
 
             #[cfg(feature = "async")]
-            Some(CallHookInner::Async(ref mut handler)) => unsafe {
+            Some(CallHookInner::Async(handler)) => unsafe {
                 Ok(self
                     .inner
                     .async_cx()
