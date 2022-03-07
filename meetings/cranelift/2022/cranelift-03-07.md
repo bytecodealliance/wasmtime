@@ -45,7 +45,7 @@
     - fitzgen: Re not repeating ourselves: I think it makes sense to infer types from ISLE parameter types
     - cfallin: I would refine that and say: 1 place and not 0 places. There should be a declaration somewhere
     - fitzgen: Right, I think on the type declarations
-    - bjorne3: It would be nice if this was in ISLE instead of comments
+    - bjorn3: It would be nice if this was in ISLE instead of comments
     - avanhatt: At what point do we merge this prototype? Maybe it makes sense then to transition from special comments to real ISLE syntax
     - cfallin: Feel free to hack up our parser in your branch, and we could take a change for general annotation syntax out of it too.
     - fitzgen: I dunno how much we want to really copy that, I find it a bit over-engineered. But we could have arbitrary S-expression tags
