@@ -234,7 +234,14 @@ struct CommonOptions {
     #[structopt(long)]
     enable_cranelift_nan_canonicalization: bool,
 
-    #[structopt(long)]
+    /// Enable execution fuel with N units fuel, where execution will trap after
+    /// running out of fuel.
+    ///
+    /// Most WebAssembly instructions consume 1 unit of fuel. Some instructions,
+    /// such as `nop`, `drop`, `block`, and `loop`, consume 0 units, as any
+    /// execution cost associated with them involves other instructions which do
+    /// consume fuel.
+    #[structopt(long, value_name = "N")]
     fuel: Option<u64>,
 
     /// Executing wasm code will yield when a global epoch counter
