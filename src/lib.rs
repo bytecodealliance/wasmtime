@@ -2724,17 +2724,16 @@ impl State {
         let (arg_preopens, env_preopens) = self.get_preopens();
 
         // Subtract 3 or the stdio indices to compute the preopen index.
-        let index = fd.checked_sub(3)? as usize;
+        let mut index = fd.checked_sub(3)? as usize;
 
         // Index into the conceptually concatenated preopen slices.
         if let Some(arg_preopens) = arg_preopens {
             if let Some(preopen) = arg_preopens.get(index) {
                 return Some(preopen);
             }
-            env_preopens.get(index - arg_preopens.len())
-        } else {
-            env_preopens.get(index)
+            index -= arg_preopens.len();
         }
+        env_preopens.get(index)
     }
 
     fn process_preopens(&self, preopens: &[Preopen]) {
