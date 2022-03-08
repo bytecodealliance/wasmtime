@@ -409,11 +409,16 @@ impl Engine {
                 // host.
                 _ => None,
             };
-            if let Some(false) = enabled {
-                bail!(
-                    "compilation setting {:?} is enabled but not available on the host",
-                    flag
-                );
+            match enabled {
+                Some(true) => return Ok(()),
+                Some(false) => {
+                    bail!(
+                        "compilation setting {:?} is enabled but not available on the host",
+                        flag
+                    )
+                }
+                // fall through
+                None => {}
             }
         }
         bail!(
