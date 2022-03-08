@@ -1,9 +1,10 @@
 use crate::signatures::SignatureRegistry;
 use crate::{Config, Trap};
-use anyhow::{bail, Result};
+use anyhow::Result;
+use once_cell::sync::OnceCell;
 #[cfg(feature = "parallel-compilation")]
 use rayon::prelude::*;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 #[cfg(feature = "cache")]
 use wasmtime_cache::CacheConfig;
@@ -45,7 +46,10 @@ struct EngineInner {
     signatures: SignatureRegistry,
     epoch: AtomicU64,
     unique_id_allocator: CompiledModuleIdAllocator,
-    compatible_with_native_host: AtomicBool,
+
+    // One-time check of whether the compiler's settings, if present, are
+    // compatible with the native host.
+    compatible_with_native_host: OnceCell<Result<(), String>>,
 }
 
 impl Engine {
@@ -72,7 +76,7 @@ impl Engine {
                 signatures: registry,
                 epoch: AtomicU64::new(0),
                 unique_id_allocator: CompiledModuleIdAllocator::new(),
-                compatible_with_native_host: AtomicBool::new(false),
+                compatible_with_native_host: OnceCell::new(),
             }),
         })
     }
@@ -241,23 +245,24 @@ impl Engine {
     /// Note that if cranelift is disabled this trivially returns `Ok` because
     /// loaded serialized modules are checked separately.
     pub(crate) fn check_compatible_with_native_host(&self) -> Result<()> {
+        self.inner
+            .compatible_with_native_host
+            .get_or_init(|| self._check_compatible_with_native_host())
+            .clone()
+            .map_err(anyhow::Error::msg)
+    }
+    fn _check_compatible_with_native_host(&self) -> Result<(), String> {
         #[cfg(compiler)]
         {
-            // Check if we've already performed this check
-            let flag = &self.inner.compatible_with_native_host;
-            if flag.load(Ordering::SeqCst) {
-                return Ok(());
-            }
-
             let compiler = self.compiler();
 
             // Check to see that the config's target matches the host
             let target = compiler.triple();
             if *target != target_lexicon::Triple::host() {
-                bail!(
+                return Err(format!(
                     "target '{}' specified in the configuration does not match the host",
                     target
-                );
+                ));
             }
 
             // Also double-check all compiler settings
@@ -267,8 +272,6 @@ impl Engine {
             for (key, value) in compiler.isa_flags().iter() {
                 self.check_compatible_with_isa_flag(key, value)?;
             }
-
-            flag.store(true, Ordering::SeqCst);
         }
         Ok(())
     }
@@ -295,7 +298,7 @@ impl Engine {
         &self,
         flag: &str,
         value: &FlagValue,
-    ) -> Result<()> {
+    ) -> Result<(), String> {
         let ok = match flag {
             // These settings must all have be enabled, since their value
             // can affect the way the generated code performs or behaves at
@@ -346,16 +349,15 @@ impl Engine {
             // Everything else is unknown and needs to be added somewhere to
             // this list if encountered.
             _ => {
-                bail!("unknown shared setting {:?} configured to {:?}", flag, value)
+                return Err(format!("unknown shared setting {:?} configured to {:?}", flag, value))
             }
         };
 
         if !ok {
-            bail!(
+            return Err(format!(
                 "setting {:?} is configured to {:?} which is not supported",
-                flag,
-                value,
-            );
+                flag, value,
+            ));
         }
         Ok(())
     }
@@ -367,7 +369,7 @@ impl Engine {
         &self,
         flag: &str,
         value: &FlagValue,
-    ) -> Result<()> {
+    ) -> Result<(), String> {
         match value {
             // ISA flags are used for things like CPU features, so if they're
             // disabled then it's compatible with the native host.
@@ -379,11 +381,12 @@ impl Engine {
 
             // Only `bool` values are supported right now, other settings would
             // need more support here.
-            _ => bail!(
-                "isa-specific feature {:?} configured to unknown value {:?}",
-                flag,
-                value
-            ),
+            _ => {
+                return Err(format!(
+                    "isa-specific feature {:?} configured to unknown value {:?}",
+                    flag, value
+                ))
+            }
         }
         #[cfg(target_arch = "x86_64")]
         {
@@ -412,19 +415,19 @@ impl Engine {
             match enabled {
                 Some(true) => return Ok(()),
                 Some(false) => {
-                    bail!(
+                    return Err(format!(
                         "compilation setting {:?} is enabled but not available on the host",
                         flag
-                    )
+                    ))
                 }
                 // fall through
                 None => {}
             }
         }
-        bail!(
+        Err(format!(
             "cannot test if target-specific flag {:?} is available at runtime",
             flag
-        );
+        ))
     }
 }
 
