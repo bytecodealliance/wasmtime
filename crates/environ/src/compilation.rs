@@ -235,7 +235,7 @@ pub trait Compiler: Send + Sync {
 }
 
 /// Value of a configured setting for a [`Compiler`]
-#[derive(Serialize, Deserialize, Hash, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Hash, Eq, PartialEq, Debug)]
 pub enum FlagValue {
     /// Name of the value that has been configured for this setting.
     Enum(Cow<'static, str>),
