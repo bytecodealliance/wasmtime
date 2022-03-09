@@ -547,36 +547,22 @@ impl Compiler {
         isa: &dyn TargetIsa,
     ) -> Result<CompiledFunction, CompileError> {
         let mut code_buf = Vec::new();
-        let mut relocs = Vec::new();
         context
             .compile_and_emit(isa, &mut code_buf)
             .map_err(|error| CompileError::Codegen(pretty_error(&context.func, error)))?;
 
-        for &MachReloc {
-            offset,
-            srcloc: _,
-            kind,
-            ref name,
-            addend,
-        } in context
+        // Processing relocations isn't the hardest thing in the world here but
+        // no trampoline should currently generate a relocation, so assert that
+        // they're all empty and if this ever trips in the future then handling
+        // will need to be added here to ensure they make their way into the
+        // `CompiledFunction` below.
+        assert!(context
             .mach_compile_result
             .as_ref()
             .unwrap()
             .buffer
             .relocs()
-        {
-            let reloc_target = if let ir::ExternalName::LibCall(libcall) = *name {
-                RelocationTarget::LibCall(libcall)
-            } else {
-                panic!("unrecognized external name")
-            };
-            relocs.push(Relocation {
-                reloc: kind,
-                reloc_target,
-                offset,
-                addend,
-            });
-        }
+            .is_empty());
 
         let unwind_info = context
             .create_unwind_info(isa)
@@ -585,7 +571,7 @@ impl Compiler {
         Ok(CompiledFunction {
             body: code_buf,
             unwind_info,
-            relocations: relocs,
+            relocations: Vec::new(),
             stack_slots: Default::default(),
             value_labels_ranges: Default::default(),
             info: Default::default(),

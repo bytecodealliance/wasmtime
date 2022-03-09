@@ -211,6 +211,8 @@ pub struct WasmtimeConfig {
     /// Configuration for the instance allocation strategy to use.
     pub strategy: InstanceAllocationStrategy,
     codegen: CodegenSettings,
+    padding_between_functions: Option<u16>,
+    generate_address_map: bool,
 }
 
 /// Configuration for linear memories in Wasmtime.
@@ -393,7 +395,8 @@ impl Config {
                 16 << 20,
                 self.wasmtime.memory_guaranteed_dense_image_size,
             ))
-            .allocation_strategy(self.wasmtime.strategy.to_wasmtime());
+            .allocation_strategy(self.wasmtime.strategy.to_wasmtime())
+            .generate_address_map(self.wasmtime.generate_address_map);
 
         self.wasmtime.codegen.configure(&mut cfg);
 
@@ -415,6 +418,16 @@ impl Config {
             unsafe {
                 cfg.cranelift_flag_set("wasmtime_linkopt_force_jump_veneer", "true")
                     .unwrap();
+            }
+        }
+
+        if let Some(pad) = self.wasmtime.padding_between_functions {
+            unsafe {
+                cfg.cranelift_flag_set(
+                    "wasmtime_linkopt_padding_between_functions",
+                    &pad.to_string(),
+                )
+                .unwrap();
             }
         }
 
