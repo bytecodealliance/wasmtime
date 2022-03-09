@@ -26,19 +26,19 @@ impl WasiFile for File {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    async fn datasync(&self) -> Result<(), Error> {
+    async fn datasync(&mut self) -> Result<(), Error> {
         self.0.sync_data()?;
         Ok(())
     }
-    async fn sync(&self) -> Result<(), Error> {
+    async fn sync(&mut self) -> Result<(), Error> {
         self.0.sync_all()?;
         Ok(())
     }
-    async fn get_filetype(&self) -> Result<FileType, Error> {
+    async fn get_filetype(&mut self) -> Result<FileType, Error> {
         let meta = self.0.metadata()?;
         Ok(filetype_from(&meta.file_type()))
     }
-    async fn get_fdflags(&self) -> Result<FdFlags, Error> {
+    async fn get_fdflags(&mut self) -> Result<FdFlags, Error> {
         let fdflags = self.0.get_fd_flags()?;
         Ok(from_sysif_fdflags(fdflags))
     }
@@ -54,7 +54,7 @@ impl WasiFile for File {
         self.0.set_fd_flags(set_fd_flags)?;
         Ok(())
     }
-    async fn get_filestat(&self) -> Result<Filestat, Error> {
+    async fn get_filestat(&mut self) -> Result<Filestat, Error> {
         let meta = self.0.metadata()?;
         Ok(Filestat {
             device_id: meta.dev(),
@@ -67,20 +67,20 @@ impl WasiFile for File {
             ctim: meta.created().map(|t| Some(t.into_std())).unwrap_or(None),
         })
     }
-    async fn set_filestat_size(&self, size: u64) -> Result<(), Error> {
+    async fn set_filestat_size(&mut self, size: u64) -> Result<(), Error> {
         self.0.set_len(size)?;
         Ok(())
     }
-    async fn advise(&self, offset: u64, len: u64, advice: Advice) -> Result<(), Error> {
+    async fn advise(&mut self, offset: u64, len: u64, advice: Advice) -> Result<(), Error> {
         self.0.advise(offset, len, convert_advice(advice))?;
         Ok(())
     }
-    async fn allocate(&self, offset: u64, len: u64) -> Result<(), Error> {
+    async fn allocate(&mut self, offset: u64, len: u64) -> Result<(), Error> {
         self.0.allocate(offset, len)?;
         Ok(())
     }
     async fn set_times(
-        &self,
+        &mut self,
         atime: Option<wasi_common::SystemTimeSpec>,
         mtime: Option<wasi_common::SystemTimeSpec>,
     ) -> Result<(), Error> {
@@ -88,41 +88,41 @@ impl WasiFile for File {
             .set_times(convert_systimespec(atime), convert_systimespec(mtime))?;
         Ok(())
     }
-    async fn read_vectored<'a>(&self, bufs: &mut [io::IoSliceMut<'a>]) -> Result<u64, Error> {
+    async fn read_vectored<'a>(&mut self, bufs: &mut [io::IoSliceMut<'a>]) -> Result<u64, Error> {
         let n = self.0.read_vectored(bufs)?;
         Ok(n.try_into()?)
     }
     async fn read_vectored_at<'a>(
-        &self,
+        &mut self,
         bufs: &mut [io::IoSliceMut<'a>],
         offset: u64,
     ) -> Result<u64, Error> {
         let n = self.0.read_vectored_at(bufs, offset)?;
         Ok(n.try_into()?)
     }
-    async fn write_vectored<'a>(&self, bufs: &[io::IoSlice<'a>]) -> Result<u64, Error> {
+    async fn write_vectored<'a>(&mut self, bufs: &[io::IoSlice<'a>]) -> Result<u64, Error> {
         let n = self.0.write_vectored(bufs)?;
         Ok(n.try_into()?)
     }
     async fn write_vectored_at<'a>(
-        &self,
+        &mut self,
         bufs: &[io::IoSlice<'a>],
         offset: u64,
     ) -> Result<u64, Error> {
         let n = self.0.write_vectored_at(bufs, offset)?;
         Ok(n.try_into()?)
     }
-    async fn seek(&self, pos: std::io::SeekFrom) -> Result<u64, Error> {
+    async fn seek(&mut self, pos: std::io::SeekFrom) -> Result<u64, Error> {
         Ok(self.0.seek(pos)?)
     }
-    async fn peek(&self, buf: &mut [u8]) -> Result<u64, Error> {
+    async fn peek(&mut self, buf: &mut [u8]) -> Result<u64, Error> {
         let n = self.0.peek(buf)?;
         Ok(n.try_into()?)
     }
     async fn num_ready_bytes(&self) -> Result<u64, Error> {
         Ok(self.0.num_ready_bytes()?)
     }
-    fn isatty(&self) -> bool {
+    fn isatty(&mut self) -> bool {
         self.0.is_terminal()
     }
 }

@@ -105,10 +105,10 @@ impl<R: Read + Any + Send + Sync> WasiFile for ReadPipe<R> {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    async fn get_filetype(&self) -> Result<FileType, Error> {
+    async fn get_filetype(&mut self) -> Result<FileType, Error> {
         Ok(FileType::Pipe)
     }
-    async fn read_vectored<'a>(&self, bufs: &mut [io::IoSliceMut<'a>]) -> Result<u64, Error> {
+    async fn read_vectored<'a>(&mut self, bufs: &mut [io::IoSliceMut<'a>]) -> Result<u64, Error> {
         let n = self.borrow().read_vectored(bufs)?;
         Ok(n.try_into()?)
     }
@@ -189,13 +189,13 @@ impl<W: Write + Any + Send + Sync> WasiFile for WritePipe<W> {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    async fn get_filetype(&self) -> Result<FileType, Error> {
+    async fn get_filetype(&mut self) -> Result<FileType, Error> {
         Ok(FileType::Pipe)
     }
-    async fn get_fdflags(&self) -> Result<FdFlags, Error> {
+    async fn get_fdflags(&mut self) -> Result<FdFlags, Error> {
         Ok(FdFlags::APPEND)
     }
-    async fn write_vectored<'a>(&self, bufs: &[io::IoSlice<'a>]) -> Result<u64, Error> {
+    async fn write_vectored<'a>(&mut self, bufs: &[io::IoSlice<'a>]) -> Result<u64, Error> {
         let n = self.borrow().write_vectored(bufs)?;
         Ok(n.try_into()?)
     }
