@@ -211,6 +211,7 @@ pub struct WasmtimeConfig {
     /// Configuration for the instance allocation strategy to use.
     pub strategy: InstanceAllocationStrategy,
     codegen: CodegenSettings,
+    padding_between_functions: Option<u16>,
 }
 
 /// Configuration for linear memories in Wasmtime.
@@ -415,6 +416,16 @@ impl Config {
             unsafe {
                 cfg.cranelift_flag_set("wasmtime_linkopt_force_jump_veneer", "true")
                     .unwrap();
+            }
+        }
+
+        if let Some(pad) = self.wasmtime.padding_between_functions {
+            unsafe {
+                cfg.cranelift_flag_set(
+                    "wasmtime_linkopt_padding_between_functions",
+                    &pad.to_string(),
+                )
+                .unwrap();
             }
         }
 
