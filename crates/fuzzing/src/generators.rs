@@ -355,9 +355,9 @@ impl Config {
             limits.memories = 1;
             limits.tables = 5;
             limits.table_elements = 1_000;
-            // Set a lower bound of 10 pages as the spec tests define memories with at
+            // Set a lower bound of as the spec tests define memories with at
             // least a few pages and some tests do memory grow operations.
-            limits.memory_pages = std::cmp::max(limits.memory_pages, 10);
+            limits.memory_pages = std::cmp::max(limits.memory_pages, 900);
 
             match &mut self.wasmtime.memory_config {
                 MemoryConfig::Normal(config) => {
