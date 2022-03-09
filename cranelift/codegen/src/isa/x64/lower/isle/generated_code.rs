@@ -4665,101 +4665,107 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<InstOutp
                     }
                     &Opcode::Uextend => {
                         if let Some(pattern7_0) = C::def_inst(ctx, pattern5_1) {
-                            let pattern8_0 = C::inst_data(ctx, pattern7_0);
-                            match &pattern8_0 {
-                                &InstructionData::Binary {
-                                    opcode: ref pattern9_0,
-                                    args: ref pattern9_1,
-                                } => {
-                                    match pattern9_0 {
-                                        &Opcode::Iadd => {
-                                            let (pattern11_0, pattern11_1) =
-                                                C::unpack_value_array_2(ctx, pattern9_1);
-                                            // Rule at src/isa/x64/lower.isle line 1896.
-                                            let expr0_0 =
-                                                constructor_output_value(ctx, pattern5_1)?;
-                                            return Some(expr0_0);
+                            if let Some(pattern8_0) = C::first_result(ctx, pattern7_0) {
+                                let pattern9_0 = C::value_type(ctx, pattern8_0);
+                                if pattern9_0 == I32 {
+                                    let pattern11_0 = C::inst_data(ctx, pattern7_0);
+                                    match &pattern11_0 {
+                                        &InstructionData::Binary {
+                                            opcode: ref pattern12_0,
+                                            args: ref pattern12_1,
+                                        } => {
+                                            match pattern12_0 {
+                                                &Opcode::Iadd => {
+                                                    let (pattern14_0, pattern14_1) =
+                                                        C::unpack_value_array_2(ctx, pattern12_1);
+                                                    // Rule at src/isa/x64/lower.isle line 1896.
+                                                    let expr0_0 =
+                                                        constructor_output_value(ctx, pattern5_1)?;
+                                                    return Some(expr0_0);
+                                                }
+                                                &Opcode::Isub => {
+                                                    let (pattern14_0, pattern14_1) =
+                                                        C::unpack_value_array_2(ctx, pattern12_1);
+                                                    // Rule at src/isa/x64/lower.isle line 1902.
+                                                    let expr0_0 =
+                                                        constructor_output_value(ctx, pattern5_1)?;
+                                                    return Some(expr0_0);
+                                                }
+                                                &Opcode::Imul => {
+                                                    let (pattern14_0, pattern14_1) =
+                                                        C::unpack_value_array_2(ctx, pattern12_1);
+                                                    // Rule at src/isa/x64/lower.isle line 1905.
+                                                    let expr0_0 =
+                                                        constructor_output_value(ctx, pattern5_1)?;
+                                                    return Some(expr0_0);
+                                                }
+                                                &Opcode::IaddIfcout => {
+                                                    let (pattern14_0, pattern14_1) =
+                                                        C::unpack_value_array_2(ctx, pattern12_1);
+                                                    // Rule at src/isa/x64/lower.isle line 1899.
+                                                    let expr0_0 =
+                                                        constructor_output_value(ctx, pattern5_1)?;
+                                                    return Some(expr0_0);
+                                                }
+                                                &Opcode::Band => {
+                                                    let (pattern14_0, pattern14_1) =
+                                                        C::unpack_value_array_2(ctx, pattern12_1);
+                                                    // Rule at src/isa/x64/lower.isle line 1908.
+                                                    let expr0_0 =
+                                                        constructor_output_value(ctx, pattern5_1)?;
+                                                    return Some(expr0_0);
+                                                }
+                                                &Opcode::Bor => {
+                                                    let (pattern14_0, pattern14_1) =
+                                                        C::unpack_value_array_2(ctx, pattern12_1);
+                                                    // Rule at src/isa/x64/lower.isle line 1911.
+                                                    let expr0_0 =
+                                                        constructor_output_value(ctx, pattern5_1)?;
+                                                    return Some(expr0_0);
+                                                }
+                                                &Opcode::Bxor => {
+                                                    let (pattern14_0, pattern14_1) =
+                                                        C::unpack_value_array_2(ctx, pattern12_1);
+                                                    // Rule at src/isa/x64/lower.isle line 1914.
+                                                    let expr0_0 =
+                                                        constructor_output_value(ctx, pattern5_1)?;
+                                                    return Some(expr0_0);
+                                                }
+                                                &Opcode::Ishl => {
+                                                    let (pattern14_0, pattern14_1) =
+                                                        C::unpack_value_array_2(ctx, pattern12_1);
+                                                    // Rule at src/isa/x64/lower.isle line 1917.
+                                                    let expr0_0 =
+                                                        constructor_output_value(ctx, pattern5_1)?;
+                                                    return Some(expr0_0);
+                                                }
+                                                &Opcode::Ushr => {
+                                                    let (pattern14_0, pattern14_1) =
+                                                        C::unpack_value_array_2(ctx, pattern12_1);
+                                                    // Rule at src/isa/x64/lower.isle line 1920.
+                                                    let expr0_0 =
+                                                        constructor_output_value(ctx, pattern5_1)?;
+                                                    return Some(expr0_0);
+                                                }
+                                                _ => {}
+                                            }
                                         }
-                                        &Opcode::Isub => {
-                                            let (pattern11_0, pattern11_1) =
-                                                C::unpack_value_array_2(ctx, pattern9_1);
-                                            // Rule at src/isa/x64/lower.isle line 1902.
-                                            let expr0_0 =
-                                                constructor_output_value(ctx, pattern5_1)?;
-                                            return Some(expr0_0);
-                                        }
-                                        &Opcode::Imul => {
-                                            let (pattern11_0, pattern11_1) =
-                                                C::unpack_value_array_2(ctx, pattern9_1);
-                                            // Rule at src/isa/x64/lower.isle line 1905.
-                                            let expr0_0 =
-                                                constructor_output_value(ctx, pattern5_1)?;
-                                            return Some(expr0_0);
-                                        }
-                                        &Opcode::IaddIfcout => {
-                                            let (pattern11_0, pattern11_1) =
-                                                C::unpack_value_array_2(ctx, pattern9_1);
-                                            // Rule at src/isa/x64/lower.isle line 1899.
-                                            let expr0_0 =
-                                                constructor_output_value(ctx, pattern5_1)?;
-                                            return Some(expr0_0);
-                                        }
-                                        &Opcode::Band => {
-                                            let (pattern11_0, pattern11_1) =
-                                                C::unpack_value_array_2(ctx, pattern9_1);
-                                            // Rule at src/isa/x64/lower.isle line 1908.
-                                            let expr0_0 =
-                                                constructor_output_value(ctx, pattern5_1)?;
-                                            return Some(expr0_0);
-                                        }
-                                        &Opcode::Bor => {
-                                            let (pattern11_0, pattern11_1) =
-                                                C::unpack_value_array_2(ctx, pattern9_1);
-                                            // Rule at src/isa/x64/lower.isle line 1911.
-                                            let expr0_0 =
-                                                constructor_output_value(ctx, pattern5_1)?;
-                                            return Some(expr0_0);
-                                        }
-                                        &Opcode::Bxor => {
-                                            let (pattern11_0, pattern11_1) =
-                                                C::unpack_value_array_2(ctx, pattern9_1);
-                                            // Rule at src/isa/x64/lower.isle line 1914.
-                                            let expr0_0 =
-                                                constructor_output_value(ctx, pattern5_1)?;
-                                            return Some(expr0_0);
-                                        }
-                                        &Opcode::Ishl => {
-                                            let (pattern11_0, pattern11_1) =
-                                                C::unpack_value_array_2(ctx, pattern9_1);
-                                            // Rule at src/isa/x64/lower.isle line 1917.
-                                            let expr0_0 =
-                                                constructor_output_value(ctx, pattern5_1)?;
-                                            return Some(expr0_0);
-                                        }
-                                        &Opcode::Ushr => {
-                                            let (pattern11_0, pattern11_1) =
-                                                C::unpack_value_array_2(ctx, pattern9_1);
-                                            // Rule at src/isa/x64/lower.isle line 1920.
-                                            let expr0_0 =
-                                                constructor_output_value(ctx, pattern5_1)?;
-                                            return Some(expr0_0);
+                                        &InstructionData::Load {
+                                            opcode: ref pattern12_0,
+                                            arg: pattern12_1,
+                                            flags: pattern12_2,
+                                            offset: pattern12_3,
+                                        } => {
+                                            if let &Opcode::Uload32 = pattern12_0 {
+                                                // Rule at src/isa/x64/lower.isle line 1923.
+                                                let expr0_0 =
+                                                    constructor_output_value(ctx, pattern5_1)?;
+                                                return Some(expr0_0);
+                                            }
                                         }
                                         _ => {}
                                     }
                                 }
-                                &InstructionData::Load {
-                                    opcode: ref pattern9_0,
-                                    arg: pattern9_1,
-                                    flags: pattern9_2,
-                                    offset: pattern9_3,
-                                } => {
-                                    if let &Opcode::Uload32 = pattern9_0 {
-                                        // Rule at src/isa/x64/lower.isle line 1923.
-                                        let expr0_0 = constructor_output_value(ctx, pattern5_1)?;
-                                        return Some(expr0_0);
-                                    }
-                                }
-                                _ => {}
                             }
                         }
                         let pattern7_0 = C::value_type(ctx, pattern5_1);
