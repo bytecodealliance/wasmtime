@@ -184,12 +184,12 @@ impl<'a> ObjectBuilder<'a> {
     /// that the function resides within the text section.
     fn append_func(
         &mut self,
-        wat: bool,
+        labeled: bool,
         name: Vec<u8>,
         func: &'a CompiledFunction,
     ) -> (SymbolId, Range<u64>) {
         let body_len = func.body.len() as u64;
-        let off = self.text.append(wat, &func.body, 1);
+        let off = self.text.append(labeled, &func.body, None);
 
         let symbol_id = self.obj.add_symbol(Symbol {
             name,
@@ -215,7 +215,7 @@ impl<'a> ObjectBuilder<'a> {
                 let unwind_size = info.emit_size();
                 let mut unwind_info = vec![0; unwind_size];
                 info.emit(&mut unwind_info);
-                let unwind_off = self.text.append(false, &unwind_info, 4);
+                let unwind_off = self.text.append(false, &unwind_info, Some(4));
                 self.windows_unwind_info.push(RUNTIME_FUNCTION {
                     begin: u32::try_from(off).unwrap(),
                     end: u32::try_from(off + body_len).unwrap(),
