@@ -1,12 +1,14 @@
 use crate::signatures::SignatureRegistry;
 use crate::{Config, Trap};
 use anyhow::Result;
+use once_cell::sync::OnceCell;
 #[cfg(feature = "parallel-compilation")]
 use rayon::prelude::*;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 #[cfg(feature = "cache")]
 use wasmtime_cache::CacheConfig;
+use wasmtime_environ::FlagValue;
 use wasmtime_runtime::{debug_builtins, CompiledModuleIdAllocator, InstanceAllocator};
 
 /// An `Engine` which is a global context for compilation and management of wasm
@@ -44,6 +46,10 @@ struct EngineInner {
     signatures: SignatureRegistry,
     epoch: AtomicU64,
     unique_id_allocator: CompiledModuleIdAllocator,
+
+    // One-time check of whether the compiler's settings, if present, are
+    // compatible with the native host.
+    compatible_with_native_host: OnceCell<Result<(), String>>,
 }
 
 impl Engine {
@@ -70,6 +76,7 @@ impl Engine {
                 signatures: registry,
                 epoch: AtomicU64::new(0),
                 unique_id_allocator: CompiledModuleIdAllocator::new(),
+                compatible_with_native_host: OnceCell::new(),
             }),
         })
     }
@@ -216,6 +223,211 @@ impl Engine {
             .into_iter()
             .map(|a| f(a))
             .collect::<Result<Vec<B>, E>>()
+    }
+
+    /// Returns the target triple which this engine is compiling code for
+    /// and/or running code for.
+    pub(crate) fn target(&self) -> target_lexicon::Triple {
+        // If a compiler is configured, use that target.
+        #[cfg(compiler)]
+        return self.compiler().triple().clone();
+
+        // ... otherwise it's the native target
+        #[cfg(not(compiler))]
+        return target_lexicon::Triple::host();
+    }
+
+    /// Verify that this engine's configuration is compatible with loading
+    /// modules onto the native host platform.
+    ///
+    /// This method is used as part of `Module::new` to ensure that this
+    /// engine can indeed load modules for the configured compiler (if any).
+    /// Note that if cranelift is disabled this trivially returns `Ok` because
+    /// loaded serialized modules are checked separately.
+    pub(crate) fn check_compatible_with_native_host(&self) -> Result<()> {
+        self.inner
+            .compatible_with_native_host
+            .get_or_init(|| self._check_compatible_with_native_host())
+            .clone()
+            .map_err(anyhow::Error::msg)
+    }
+    fn _check_compatible_with_native_host(&self) -> Result<(), String> {
+        #[cfg(compiler)]
+        {
+            let compiler = self.compiler();
+
+            // Check to see that the config's target matches the host
+            let target = compiler.triple();
+            if *target != target_lexicon::Triple::host() {
+                return Err(format!(
+                    "target '{}' specified in the configuration does not match the host",
+                    target
+                ));
+            }
+
+            // Also double-check all compiler settings
+            for (key, value) in compiler.flags().iter() {
+                self.check_compatible_with_shared_flag(key, value)?;
+            }
+            for (key, value) in compiler.isa_flags().iter() {
+                self.check_compatible_with_isa_flag(key, value)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Checks to see whether the "shared flag", something enabled for
+    /// individual compilers, is compatible with the native host platform.
+    ///
+    /// This is used both when validating an engine's compilation settings are
+    /// compatible with the host as well as when deserializing modules from
+    /// disk to ensure they're compatible with the current host.
+    ///
+    /// Note that most of the settings here are not configured by users that
+    /// often. While theoretically possible via `Config` methods the more
+    /// interesting flags are the ISA ones below. Typically the values here
+    /// represent global configuration for wasm features. Settings here
+    /// currently rely on the compiler informing us of all settings, including
+    /// those disabled. Settings then fall in a few buckets:
+    ///
+    /// * Some settings must be enabled, such as `avoid_div_traps`.
+    /// * Some settings must have a particular value, such as
+    ///   `libcall_call_conv`.
+    /// * Some settings do not matter as to their value, such as `opt_level`.
+    pub(crate) fn check_compatible_with_shared_flag(
+        &self,
+        flag: &str,
+        value: &FlagValue,
+    ) -> Result<(), String> {
+        let ok = match flag {
+            // These settings must all have be enabled, since their value
+            // can affect the way the generated code performs or behaves at
+            // runtime.
+            "avoid_div_traps" => *value == FlagValue::Bool(true),
+            "unwind_info" => *value == FlagValue::Bool(true),
+            "libcall_call_conv" => *value == FlagValue::Enum("isa_default".into()),
+
+            // Features wasmtime doesn't use should all be disabled, since
+            // otherwise if they are enabled it could change the behavior of
+            // generated code.
+            "baldrdash_prologue_words" => *value == FlagValue::Num(0),
+            "enable_llvm_abi_extensions" => *value == FlagValue::Bool(false),
+            "emit_all_ones_funcaddrs" => *value == FlagValue::Bool(false),
+            "enable_pinned_reg" => *value == FlagValue::Bool(false),
+            "enable_probestack" => *value == FlagValue::Bool(false),
+            "use_colocated_libcalls" => *value == FlagValue::Bool(false),
+            "use_pinned_reg_as_heap_base" => *value == FlagValue::Bool(false),
+
+            // If reference types are enabled this must be enabled, otherwise
+            // this setting can have any value.
+            "enable_safepoints" => {
+                if self.config().features.reference_types {
+                    *value == FlagValue::Bool(true)
+                } else {
+                    return Ok(())
+                }
+            }
+
+            // These settings don't affect the interface or functionality of
+            // the module itself, so their configuration values shouldn't
+            // matter.
+            "enable_heap_access_spectre_mitigation"
+            | "enable_nan_canonicalization"
+            | "enable_jump_tables"
+            | "enable_float"
+            | "enable_simd"
+            | "enable_verifier"
+            | "is_pic"
+            | "machine_code_cfg_info"
+            | "tls_model" // wasmtime doesn't use tls right now
+            | "opt_level" // opt level doesn't change semantics
+            | "probestack_func_adjusts_sp" // probestack above asserted disabled
+            | "probestack_size_log2" // probestack above asserted disabled
+            | "regalloc" // shouldn't change semantics
+            | "enable_atomics" => return Ok(()),
+
+            // Everything else is unknown and needs to be added somewhere to
+            // this list if encountered.
+            _ => {
+                return Err(format!("unknown shared setting {:?} configured to {:?}", flag, value))
+            }
+        };
+
+        if !ok {
+            return Err(format!(
+                "setting {:?} is configured to {:?} which is not supported",
+                flag, value,
+            ));
+        }
+        Ok(())
+    }
+
+    /// Same as `check_compatible_with_native_host` except used for ISA-specific
+    /// flags. This is used to test whether a configured ISA flag is indeed
+    /// available on the host platform itself.
+    pub(crate) fn check_compatible_with_isa_flag(
+        &self,
+        flag: &str,
+        value: &FlagValue,
+    ) -> Result<(), String> {
+        match value {
+            // ISA flags are used for things like CPU features, so if they're
+            // disabled then it's compatible with the native host.
+            FlagValue::Bool(false) => return Ok(()),
+
+            // Fall through below where we test at runtime that features are
+            // available.
+            FlagValue::Bool(true) => {}
+
+            // Only `bool` values are supported right now, other settings would
+            // need more support here.
+            _ => {
+                return Err(format!(
+                    "isa-specific feature {:?} configured to unknown value {:?}",
+                    flag, value
+                ))
+            }
+        }
+        #[cfg(target_arch = "x86_64")]
+        {
+            let enabled = match flag {
+                "has_sse3" => Some(std::is_x86_feature_detected!("sse3")),
+                "has_ssse3" => Some(std::is_x86_feature_detected!("ssse3")),
+                "has_sse41" => Some(std::is_x86_feature_detected!("sse4.1")),
+                "has_sse42" => Some(std::is_x86_feature_detected!("sse4.2")),
+                "has_popcnt" => Some(std::is_x86_feature_detected!("popcnt")),
+                "has_avx" => Some(std::is_x86_feature_detected!("avx")),
+                "has_avx2" => Some(std::is_x86_feature_detected!("avx2")),
+                "has_bmi1" => Some(std::is_x86_feature_detected!("bmi1")),
+                "has_bmi2" => Some(std::is_x86_feature_detected!("bmi2")),
+                "has_avx512bitalg" => Some(std::is_x86_feature_detected!("avx512bitalg")),
+                "has_avx512dq" => Some(std::is_x86_feature_detected!("avx512dq")),
+                "has_avx512f" => Some(std::is_x86_feature_detected!("avx512f")),
+                "has_avx512vl" => Some(std::is_x86_feature_detected!("avx512vl")),
+                "has_avx512vbmi" => Some(std::is_x86_feature_detected!("avx512vbmi")),
+                "has_lzcnt" => Some(std::is_x86_feature_detected!("lzcnt")),
+
+                // fall through to the very bottom to indicate that support is
+                // not enabled to test whether this feature is enabled on the
+                // host.
+                _ => None,
+            };
+            match enabled {
+                Some(true) => return Ok(()),
+                Some(false) => {
+                    return Err(format!(
+                        "compilation setting {:?} is enabled but not available on the host",
+                        flag
+                    ))
+                }
+                // fall through
+                None => {}
+            }
+        }
+        Err(format!(
+            "cannot test if target-specific flag {:?} is available at runtime",
+            flag
+        ))
     }
 }
 

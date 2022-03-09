@@ -12,6 +12,10 @@ include!(concat!(env!("OUT_DIR"), "/wast_testsuite_tests.rs"));
 // function which actually executes the `wast` test suite given the `strategy`
 // to compile it.
 fn run_wast(wast: &str, strategy: Strategy, pooling: bool) -> anyhow::Result<()> {
+    match strategy {
+        Strategy::Cranelift => {}
+        _ => unimplemented!(),
+    }
     let wast = Path::new(wast);
 
     let simd = feature_found(wast, "simd");
@@ -26,7 +30,6 @@ fn run_wast(wast: &str, strategy: Strategy, pooling: bool) -> anyhow::Result<()>
         .wasm_module_linking(module_linking)
         .wasm_threads(threads)
         .wasm_memory64(memory64)
-        .strategy(strategy)?
         .cranelift_debug_verifier(true);
 
     if feature_found(wast, "canonicalize-nan") {

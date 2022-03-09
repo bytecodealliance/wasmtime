@@ -66,7 +66,7 @@ fn test_module_serialize_fail() -> Result<()> {
     )?;
 
     let mut config = Config::new();
-    config.cranelift_opt_level(OptLevel::None);
+    config.static_memory_maximum_size(0);
     let mut store = Store::new(&Engine::new(&config)?, ());
     match unsafe { deserialize_and_instantiate(&mut store, &buffer) } {
         Ok(_) => bail!("expected failure at deserialization"),

@@ -295,18 +295,9 @@ impl Module {
     #[cfg(compiler)]
     #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
     pub fn from_binary(engine: &Engine, binary: &[u8]) -> Result<Module> {
-        // Check to see that the config's target matches the host
-        let target = engine.compiler().triple();
-        if *target != target_lexicon::Triple::host() {
-            bail!(
-                "target '{}' specified in the configuration does not match the host",
-                target
-            );
-        }
-
-        // FIXME: we may want to validate that the ISA flags in the config match those that
-        // would be inferred for the host, otherwise the JIT might produce unrunnable code
-        // for the features the host's CPU actually has.
+        engine
+            .check_compatible_with_native_host()
+            .context("compilation settings are not compatible with the native host")?;
 
         cfg_if::cfg_if! {
             if #[cfg(feature = "cache")] {

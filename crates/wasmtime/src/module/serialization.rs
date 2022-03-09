@@ -58,7 +58,7 @@ use std::convert::TryFrom;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
-use wasmtime_environ::{Compiler, FlagValue, Tunables};
+use wasmtime_environ::{FlagValue, Tunables};
 use wasmtime_jit::{subslice_range, CompiledModule, CompiledModuleInfo, TypeTables};
 use wasmtime_runtime::MmapVec;
 
@@ -306,25 +306,11 @@ impl<'a> SerializedModule<'a> {
         TypeTables,
         Vec<SerializedModuleUpvar>,
     )> {
-        // Verify that the module we're loading matches the triple that `engine`
-        // is configured for. If compilation is disabled within engine then the
-        // assumed triple is the host itself.
-        #[cfg(compiler)]
-        let engine_triple = engine.compiler().triple();
-        #[cfg(not(compiler))]
-        let engine_triple = &target_lexicon::Triple::host();
-        self.check_triple(engine_triple)?;
-
-        // FIXME: Similar to `Module::from_binary` it should likely be validated
-        // here that when `cfg(not(compiler))` is true the isa/shared flags
-        // enabled for this precompiled module are compatible with the host
-        // itself, which `engine` is assumed to be running code for.
-        #[cfg(compiler)]
-        {
-            let compiler = engine.compiler();
-            self.check_shared_flags(compiler)?;
-            self.check_isa_flags(compiler)?;
-        }
+        // Verify that the compilation settings in the engine match the
+        // compilation settings of the module that's being loaded.
+        self.check_triple(engine)?;
+        self.check_shared_flags(engine)?;
+        self.check_isa_flags(engine)?;
 
         self.check_tunables(&engine.config().tunables)?;
         self.check_features(&engine.config().features)?;
@@ -501,80 +487,45 @@ impl<'a> SerializedModule<'a> {
         }
     }
 
-    fn check_triple(&self, other: &target_lexicon::Triple) -> Result<()> {
-        let triple =
+    fn check_triple(&self, engine: &Engine) -> Result<()> {
+        let engine_target = engine.target();
+        let module_target =
             target_lexicon::Triple::from_str(&self.metadata.target).map_err(|e| anyhow!(e))?;
 
-        if triple.architecture != other.architecture {
+        if module_target.architecture != engine_target.architecture {
             bail!(
                 "Module was compiled for architecture '{}'",
-                triple.architecture
+                module_target.architecture
             );
         }
 
-        if triple.operating_system != other.operating_system {
+        if module_target.operating_system != engine_target.operating_system {
             bail!(
                 "Module was compiled for operating system '{}'",
-                triple.operating_system
+                module_target.operating_system
             );
         }
 
         Ok(())
     }
 
-    fn check_shared_flags(&mut self, compiler: &dyn Compiler) -> Result<()> {
-        let mut shared_flags = std::mem::take(&mut self.metadata.shared_flags);
-        for (name, host) in compiler.flags() {
-            match shared_flags.remove(&name) {
-                Some(v) => {
-                    if v != host {
-                        bail!("Module was compiled with a different '{}' setting: expected '{}' but host has '{}'", name, v, host);
-                    }
-                }
-                None => bail!("Module was compiled without setting '{}'", name),
-            }
+    fn check_shared_flags(&mut self, engine: &Engine) -> Result<()> {
+        for (name, val) in self.metadata.shared_flags.iter() {
+            engine
+                .check_compatible_with_shared_flag(name, val)
+                .map_err(|s| anyhow::Error::msg(s))
+                .context("compilation settings of module incompatible with native host")?;
         }
-
-        for (name, _) in shared_flags {
-            bail!(
-                "Module was compiled with setting '{}' but it is not present for the host",
-                name
-            );
-        }
-
         Ok(())
     }
 
-    fn check_isa_flags(&mut self, compiler: &dyn Compiler) -> Result<()> {
-        let mut isa_flags = std::mem::take(&mut self.metadata.isa_flags);
-        for (name, host) in compiler.isa_flags() {
-            match isa_flags.remove(&name) {
-                Some(v) => match (&v, &host) {
-                    (FlagValue::Bool(v), FlagValue::Bool(host)) => {
-                        // ISA flags represent CPU features; for boolean values, only
-                        // treat it as an error if the module was compiled with the setting enabled
-                        // but the host does not have it enabled.
-                        if *v && !*host {
-                            bail!("Module was compiled with setting '{}' enabled but the host does not support it", name);
-                        }
-                    }
-                    _ => {
-                        if v != host {
-                            bail!("Module was compiled with a different '{}' setting: expected '{}' but host has '{}'", name, v, host);
-                        }
-                    }
-                },
-                None => bail!("Module was compiled without setting '{}'", name),
-            }
+    fn check_isa_flags(&mut self, engine: &Engine) -> Result<()> {
+        for (name, val) in self.metadata.isa_flags.iter() {
+            engine
+                .check_compatible_with_isa_flag(name, val)
+                .map_err(|s| anyhow::Error::msg(s))
+                .context("compilation settings of module incompatible with native host")?;
         }
-
-        for (name, _) in isa_flags {
-            bail!(
-                "Module was compiled with setting '{}' but it is not present for the host",
-                name
-            );
-        }
-
         Ok(())
     }
 
@@ -758,7 +709,6 @@ fn align_to(val: usize, align: usize) -> usize {
 mod test {
     use super::*;
     use crate::Config;
-    use std::borrow::Cow;
 
     #[test]
     fn test_architecture_mismatch() -> Result<()> {
@@ -807,16 +757,20 @@ mod test {
         let module = Module::new(&engine, "(module)")?;
 
         let mut serialized = SerializedModule::new(&module);
-        serialized.metadata.shared_flags.insert(
-            "opt_level".to_string(),
-            FlagValue::Enum(Cow::Borrowed("none")),
-        );
+        serialized
+            .metadata
+            .shared_flags
+            .insert("avoid_div_traps".to_string(), FlagValue::Bool(false));
 
         match serialized.into_module(&engine) {
             Ok(_) => unreachable!(),
             Err(e) => assert_eq!(
-                e.to_string(),
-                "Module was compiled with a different 'opt_level' setting: expected 'none' but host has 'speed'"
+                format!("{:?}", e),
+                "\
+compilation settings of module incompatible with native host
+
+Caused by:
+    setting \"avoid_div_traps\" is configured to Bool(false) which is not supported"
             ),
         }
 
@@ -838,8 +792,12 @@ mod test {
         match serialized.into_module(&engine) {
             Ok(_) => unreachable!(),
             Err(e) => assert_eq!(
-                e.to_string(),
-                "Module was compiled with setting 'not_a_flag' but it is not present for the host",
+                format!("{:?}", e),
+                "\
+compilation settings of module incompatible with native host
+
+Caused by:
+    cannot test if target-specific flag \"not_a_flag\" is available at runtime",
             ),
         }
 
