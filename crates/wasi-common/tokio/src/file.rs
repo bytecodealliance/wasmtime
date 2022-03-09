@@ -187,12 +187,6 @@ macro_rules! wasi_file_impl {
                     Err(e) => Err(e.into()),
                 }
             }
-            #[cfg(windows)]
-            async fn readable(&self) -> Result<(), Error> {
-                // Windows uses a rawfd based scheduler :(
-                use wasi_common::ErrorExt;
-                Err(Error::badf())
-            }
 
             #[cfg(not(windows))]
             async fn writable(&self) -> Result<(), Error> {
@@ -216,12 +210,6 @@ macro_rules! wasi_file_impl {
                     }
                     Err(e) => Err(e.into()),
                 }
-            }
-            #[cfg(windows)]
-            async fn writable(&self) -> Result<(), Error> {
-                // Windows uses a rawfd based scheduler :(
-                use wasi_common::ErrorExt;
-                Err(Error::badf())
             }
 
             async fn sock_accept(&mut self, fdflags: FdFlags) -> Result<Box<dyn WasiFile>, Error> {

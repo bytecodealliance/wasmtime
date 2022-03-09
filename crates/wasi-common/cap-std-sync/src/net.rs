@@ -17,7 +17,7 @@ use system_interface::fs::GetSetFdFlags;
 use system_interface::io::IsReadWrite;
 use system_interface::io::ReadReady;
 use wasi_common::{
-    file::{Advice, FdFlags, FileType, Filestat, WasiFile},
+    file::{FdFlags, FileType, WasiFile},
     Error, ErrorExt,
 };
 
@@ -91,12 +91,6 @@ macro_rules! wasi_listen_write_impl {
                 stream.set_fdflags(fdflags).await?;
                 Ok(Box::new(stream))
             }
-            async fn datasync(&self) -> Result<(), Error> {
-                Err(Error::badf())
-            }
-            async fn sync(&self) -> Result<(), Error> {
-                Err(Error::badf())
-            }
             async fn get_filetype(&self) -> Result<FileType, Error> {
                 Ok(FileType::SocketStream)
             }
@@ -104,13 +98,6 @@ macro_rules! wasi_listen_write_impl {
             async fn get_fdflags(&self) -> Result<FdFlags, Error> {
                 let fdflags = self.0.as_filelike().get_fd_flags()?;
                 Ok(from_sysif_fdflags(fdflags))
-            }
-            #[cfg(windows)]
-            async fn get_fdflags(&self) -> Result<FdFlags, Error> {
-                // There does not seem to be a way for windows to call s.th. like `fcntl()`
-                // `rustix::fs::fcntl` is only available for Unix
-                // `rustix::io::ioctl_fionbio` only sets the flags, but does not read
-                Ok(FdFlags::empty())
             }
             async fn set_fdflags(&mut self, fdflags: FdFlags) -> Result<(), Error> {
                 if fdflags == wasi_common::file::FdFlags::NONBLOCK {
@@ -124,65 +111,8 @@ macro_rules! wasi_listen_write_impl {
                 }
                 Ok(())
             }
-            async fn get_filestat(&self) -> Result<Filestat, Error> {
-                Err(Error::badf())
-            }
-            async fn set_filestat_size(&self, _size: u64) -> Result<(), Error> {
-                Err(Error::badf())
-            }
-            async fn advise(&self, _offset: u64, _len: u64, _advice: Advice) -> Result<(), Error> {
-                Err(Error::badf())
-            }
-            async fn allocate(&self, _offset: u64, _len: u64) -> Result<(), Error> {
-                Err(Error::badf())
-            }
-            async fn set_times(
-                &self,
-                _atime: Option<wasi_common::SystemTimeSpec>,
-                _mtime: Option<wasi_common::SystemTimeSpec>,
-            ) -> Result<(), Error> {
-                Err(Error::badf())
-            }
-            async fn read_vectored<'a>(
-                &self,
-                _bufs: &mut [io::IoSliceMut<'a>],
-            ) -> Result<u64, Error> {
-                Err(Error::badf())
-            }
-            async fn read_vectored_at<'a>(
-                &self,
-                _bufs: &mut [io::IoSliceMut<'a>],
-                _offset: u64,
-            ) -> Result<u64, Error> {
-                Err(Error::badf())
-            }
-            async fn write_vectored<'a>(&self, _bufs: &[io::IoSlice<'a>]) -> Result<u64, Error> {
-                Err(Error::badf())
-            }
-            async fn write_vectored_at<'a>(
-                &self,
-                _bufs: &[io::IoSlice<'a>],
-                _offset: u64,
-            ) -> Result<u64, Error> {
-                Err(Error::badf())
-            }
-            async fn seek(&self, _pos: std::io::SeekFrom) -> Result<u64, Error> {
-                Err(Error::badf())
-            }
-            async fn peek(&self, _buf: &mut [u8]) -> Result<u64, Error> {
-                Err(Error::badf())
-            }
             async fn num_ready_bytes(&self) -> Result<u64, Error> {
                 Ok(1)
-            }
-            fn isatty(&self) -> bool {
-                false
-            }
-            async fn readable(&self) -> Result<(), Error> {
-                Err(Error::badf())
-            }
-            async fn writable(&self) -> Result<(), Error> {
-                Err(Error::badf())
             }
         }
 
@@ -240,15 +170,6 @@ macro_rules! wasi_stream_write_impl {
             fn as_any(&self) -> &dyn Any {
                 self
             }
-            async fn sock_accept(&mut self, _fdflags: FdFlags) -> Result<Box<dyn WasiFile>, Error> {
-                Err(Error::badf())
-            }
-            async fn datasync(&self) -> Result<(), Error> {
-                Err(Error::badf())
-            }
-            async fn sync(&self) -> Result<(), Error> {
-                Err(Error::badf())
-            }
             async fn get_filetype(&self) -> Result<FileType, Error> {
                 Ok(FileType::SocketStream)
             }
@@ -256,14 +177,6 @@ macro_rules! wasi_stream_write_impl {
             async fn get_fdflags(&self) -> Result<FdFlags, Error> {
                 let fdflags = self.0.as_filelike().get_fd_flags()?;
                 Ok(from_sysif_fdflags(fdflags))
-            }
-            #[cfg(windows)]
-            async fn get_fdflags(&self) -> Result<FdFlags, Error> {
-                // There does not seem to be a way for windows to call s.th. like `fcntl(fd, F_GETFL, 0)`
-                // on a socket.
-                // `rustix::fs::fcntl` is only available for Unix.
-                // `rustix::io::ioctl_fionbio` only sets the flags, but does not read.
-                Ok(FdFlags::empty())
             }
             async fn set_fdflags(&mut self, fdflags: FdFlags) -> Result<(), Error> {
                 if fdflags == wasi_common::file::FdFlags::NONBLOCK {
@@ -277,25 +190,6 @@ macro_rules! wasi_stream_write_impl {
                 }
                 Ok(())
             }
-            async fn get_filestat(&self) -> Result<Filestat, Error> {
-                Err(Error::badf())
-            }
-            async fn set_filestat_size(&self, _size: u64) -> Result<(), Error> {
-                Err(Error::badf())
-            }
-            async fn advise(&self, _offset: u64, _len: u64, _advice: Advice) -> Result<(), Error> {
-                Err(Error::badf())
-            }
-            async fn allocate(&self, _offset: u64, _len: u64) -> Result<(), Error> {
-                Err(Error::badf())
-            }
-            async fn set_times(
-                &self,
-                _atime: Option<wasi_common::SystemTimeSpec>,
-                _mtime: Option<wasi_common::SystemTimeSpec>,
-            ) -> Result<(), Error> {
-                Err(Error::badf())
-            }
             async fn read_vectored<'a>(
                 &self,
                 bufs: &mut [io::IoSliceMut<'a>],
@@ -304,27 +198,10 @@ macro_rules! wasi_stream_write_impl {
                 let n = Read::read_vectored(&mut *self.as_socketlike_view::<$std_ty>(), bufs)?;
                 Ok(n.try_into()?)
             }
-            async fn read_vectored_at<'a>(
-                &self,
-                _bufs: &mut [io::IoSliceMut<'a>],
-                _offset: u64,
-            ) -> Result<u64, Error> {
-                Err(Error::badf())
-            }
             async fn write_vectored<'a>(&self, bufs: &[io::IoSlice<'a>]) -> Result<u64, Error> {
                 use std::io::Write;
                 let n = Write::write_vectored(&mut *self.as_socketlike_view::<$std_ty>(), bufs)?;
                 Ok(n.try_into()?)
-            }
-            async fn write_vectored_at<'a>(
-                &self,
-                _bufs: &[io::IoSlice<'a>],
-                _offset: u64,
-            ) -> Result<u64, Error> {
-                Err(Error::badf())
-            }
-            async fn seek(&self, _pos: std::io::SeekFrom) -> Result<u64, Error> {
-                Err(Error::badf())
             }
             async fn peek(&self, buf: &mut [u8]) -> Result<u64, Error> {
                 let n = self.0.peek(buf)?;
@@ -333,9 +210,6 @@ macro_rules! wasi_stream_write_impl {
             async fn num_ready_bytes(&self) -> Result<u64, Error> {
                 let val = self.as_socketlike_view::<$std_ty>().num_ready_bytes()?;
                 Ok(val)
-            }
-            fn isatty(&self) -> bool {
-                false
             }
             async fn readable(&self) -> Result<(), Error> {
                 let (readable, _writeable) = self.0.is_read_write()?;
