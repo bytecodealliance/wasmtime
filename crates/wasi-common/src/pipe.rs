@@ -9,10 +9,8 @@
 //! Some convenience constructors are included for common backing types like `Vec<u8>` and `String`,
 //! but the virtual pipes can be instantiated with any `Read` or `Write` type.
 //!
-use crate::{
-    file::{Advice, FdFlags, FileType, Filestat, WasiFile},
-    Error, ErrorExt, SystemTimeSpec,
-};
+use crate::file::{FdFlags, FileType, WasiFile};
+use crate::Error;
 use std::any::Any;
 use std::convert::TryInto;
 use std::io::{self, Read, Write};
@@ -107,91 +105,12 @@ impl<R: Read + Any + Send + Sync> WasiFile for ReadPipe<R> {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    async fn datasync(&self) -> Result<(), Error> {
-        Ok(()) // trivial: no implementation needed
-    }
-    async fn sync(&self) -> Result<(), Error> {
-        Ok(()) // trivial
-    }
     async fn get_filetype(&self) -> Result<FileType, Error> {
         Ok(FileType::Pipe)
-    }
-    async fn get_fdflags(&self) -> Result<FdFlags, Error> {
-        Ok(FdFlags::empty())
-    }
-    async fn set_fdflags(&mut self, _fdflags: FdFlags) -> Result<(), Error> {
-        Err(Error::badf())
-    }
-    async fn get_filestat(&self) -> Result<Filestat, Error> {
-        Ok(Filestat {
-            device_id: 0,
-            inode: 0,
-            filetype: self.get_filetype().await?,
-            nlink: 0,
-            size: 0, // XXX no way to get a size out of a Read :(
-            atim: None,
-            mtim: None,
-            ctim: None,
-        })
-    }
-    async fn set_filestat_size(&self, _size: u64) -> Result<(), Error> {
-        Err(Error::badf())
-    }
-    async fn advise(&self, offset: u64, len: u64, advice: Advice) -> Result<(), Error> {
-        Err(Error::badf())
-    }
-    async fn allocate(&self, offset: u64, len: u64) -> Result<(), Error> {
-        Err(Error::badf())
     }
     async fn read_vectored<'a>(&self, bufs: &mut [io::IoSliceMut<'a>]) -> Result<u64, Error> {
         let n = self.borrow().read_vectored(bufs)?;
         Ok(n.try_into()?)
-    }
-    async fn read_vectored_at<'a>(
-        &self,
-        bufs: &mut [io::IoSliceMut<'a>],
-        offset: u64,
-    ) -> Result<u64, Error> {
-        Err(Error::badf())
-    }
-    async fn write_vectored<'a>(&self, bufs: &[io::IoSlice<'a>]) -> Result<u64, Error> {
-        Err(Error::badf())
-    }
-    async fn write_vectored_at<'a>(
-        &self,
-        bufs: &[io::IoSlice<'a>],
-        offset: u64,
-    ) -> Result<u64, Error> {
-        Err(Error::badf())
-    }
-    async fn seek(&self, pos: std::io::SeekFrom) -> Result<u64, Error> {
-        Err(Error::badf())
-    }
-    async fn peek(&self, buf: &mut [u8]) -> Result<u64, Error> {
-        Err(Error::badf())
-    }
-    async fn set_times(
-        &self,
-        atime: Option<SystemTimeSpec>,
-        mtime: Option<SystemTimeSpec>,
-    ) -> Result<(), Error> {
-        Err(Error::badf())
-    }
-    async fn num_ready_bytes(&self) -> Result<u64, Error> {
-        Ok(0)
-    }
-    fn isatty(&self) -> bool {
-        false
-    }
-    async fn readable(&self) -> Result<(), Error> {
-        Err(Error::badf())
-    }
-    async fn writable(&self) -> Result<(), Error> {
-        Err(Error::badf())
-    }
-
-    async fn sock_accept(&mut self, fdflags: FdFlags) -> Result<Box<dyn WasiFile>, Error> {
-        Err(Error::badf())
     }
 }
 
@@ -270,90 +189,14 @@ impl<W: Write + Any + Send + Sync> WasiFile for WritePipe<W> {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    async fn datasync(&self) -> Result<(), Error> {
-        Ok(())
-    }
-    async fn sync(&self) -> Result<(), Error> {
-        Ok(())
-    }
     async fn get_filetype(&self) -> Result<FileType, Error> {
         Ok(FileType::Pipe)
     }
     async fn get_fdflags(&self) -> Result<FdFlags, Error> {
         Ok(FdFlags::APPEND)
     }
-    async fn set_fdflags(&mut self, _fdflags: FdFlags) -> Result<(), Error> {
-        Err(Error::badf())
-    }
-    async fn get_filestat(&self) -> Result<Filestat, Error> {
-        Ok(Filestat {
-            device_id: 0,
-            inode: 0,
-            filetype: self.get_filetype().await?,
-            nlink: 0,
-            size: 0, // XXX no way to get a size out of a Write :(
-            atim: None,
-            mtim: None,
-            ctim: None,
-        })
-    }
-    async fn set_filestat_size(&self, _size: u64) -> Result<(), Error> {
-        Err(Error::badf())
-    }
-    async fn advise(&self, offset: u64, len: u64, advice: Advice) -> Result<(), Error> {
-        Err(Error::badf())
-    }
-    async fn allocate(&self, offset: u64, len: u64) -> Result<(), Error> {
-        Err(Error::badf())
-    }
-    async fn read_vectored<'a>(&self, bufs: &mut [io::IoSliceMut<'a>]) -> Result<u64, Error> {
-        Err(Error::badf())
-    }
-    async fn read_vectored_at<'a>(
-        &self,
-        bufs: &mut [io::IoSliceMut<'a>],
-        offset: u64,
-    ) -> Result<u64, Error> {
-        Err(Error::badf())
-    }
     async fn write_vectored<'a>(&self, bufs: &[io::IoSlice<'a>]) -> Result<u64, Error> {
         let n = self.borrow().write_vectored(bufs)?;
         Ok(n.try_into()?)
-    }
-    async fn write_vectored_at<'a>(
-        &self,
-        bufs: &[io::IoSlice<'a>],
-        offset: u64,
-    ) -> Result<u64, Error> {
-        Err(Error::badf())
-    }
-    async fn seek(&self, pos: std::io::SeekFrom) -> Result<u64, Error> {
-        Err(Error::badf())
-    }
-    async fn peek(&self, buf: &mut [u8]) -> Result<u64, Error> {
-        Err(Error::badf())
-    }
-    async fn set_times(
-        &self,
-        atime: Option<SystemTimeSpec>,
-        mtime: Option<SystemTimeSpec>,
-    ) -> Result<(), Error> {
-        Err(Error::badf())
-    }
-    async fn num_ready_bytes(&self) -> Result<u64, Error> {
-        Ok(0)
-    }
-    fn isatty(&self) -> bool {
-        false
-    }
-    async fn readable(&self) -> Result<(), Error> {
-        Err(Error::badf())
-    }
-    async fn writable(&self) -> Result<(), Error> {
-        Err(Error::badf())
-    }
-
-    async fn sock_accept(&mut self, fdflags: FdFlags) -> Result<Box<dyn WasiFile>, Error> {
-        Err(Error::badf())
     }
 }

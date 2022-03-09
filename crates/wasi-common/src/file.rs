@@ -5,40 +5,108 @@ use std::any::Any;
 #[wiggle::async_trait]
 pub trait WasiFile: Send + Sync {
     fn as_any(&self) -> &dyn Any;
-    async fn sock_accept(&mut self, fdflags: FdFlags) -> Result<Box<dyn WasiFile>, Error>;
-    async fn datasync(&self) -> Result<(), Error>; // write op
-    async fn sync(&self) -> Result<(), Error>; // file op
-    async fn get_filetype(&self) -> Result<FileType, Error>; // file op
-    async fn get_fdflags(&self) -> Result<FdFlags, Error>; // file op
-    async fn set_fdflags(&mut self, flags: FdFlags) -> Result<(), Error>; // file op
-    async fn get_filestat(&self) -> Result<Filestat, Error>; // split out get_length as a read & write op, rest is a file op
-    async fn set_filestat_size(&self, _size: u64) -> Result<(), Error>; // write op
-    async fn advise(&self, offset: u64, len: u64, advice: Advice) -> Result<(), Error>; // file op
-    async fn allocate(&self, offset: u64, len: u64) -> Result<(), Error>; // write op
+    async fn get_filetype(&self) -> Result<FileType, Error>;
+
+    fn isatty(&self) -> bool {
+        false
+    }
+
+    async fn sock_accept(&mut self, _fdflags: FdFlags) -> Result<Box<dyn WasiFile>, Error> {
+        Err(Error::badf())
+    }
+
+    async fn datasync(&self) -> Result<(), Error> {
+        Ok(())
+    }
+
+    async fn sync(&self) -> Result<(), Error> {
+        Ok(())
+    }
+
+    async fn get_fdflags(&self) -> Result<FdFlags, Error> {
+        Ok(FdFlags::empty())
+    }
+
+    async fn set_fdflags(&mut self, _flags: FdFlags) -> Result<(), Error> {
+        Err(Error::badf())
+    }
+
+    async fn get_filestat(&self) -> Result<Filestat, Error> {
+        Ok(Filestat {
+            device_id: 0,
+            inode: 0,
+            filetype: self.get_filetype().await?,
+            nlink: 0,
+            size: 0, // XXX no way to get a size out of a Read :(
+            atim: None,
+            mtim: None,
+            ctim: None,
+        })
+    }
+
+    async fn set_filestat_size(&self, _size: u64) -> Result<(), Error> {
+        Err(Error::badf())
+    }
+
+    async fn advise(&self, _offset: u64, _len: u64, _advice: Advice) -> Result<(), Error> {
+        Err(Error::badf())
+    }
+
+    async fn allocate(&self, _offset: u64, _len: u64) -> Result<(), Error> {
+        Err(Error::badf())
+    }
+
     async fn set_times(
         &self,
-        atime: Option<SystemTimeSpec>,
-        mtime: Option<SystemTimeSpec>,
-    ) -> Result<(), Error>;
-    async fn read_vectored<'a>(&self, bufs: &mut [std::io::IoSliceMut<'a>]) -> Result<u64, Error>; // read op
+        _atime: Option<SystemTimeSpec>,
+        _mtime: Option<SystemTimeSpec>,
+    ) -> Result<(), Error> {
+        Err(Error::badf())
+    }
+
+    async fn read_vectored<'a>(&self, _bufs: &mut [std::io::IoSliceMut<'a>]) -> Result<u64, Error> {
+        Err(Error::badf())
+    }
+
     async fn read_vectored_at<'a>(
         &self,
-        bufs: &mut [std::io::IoSliceMut<'a>],
-        offset: u64,
-    ) -> Result<u64, Error>; // file op
-    async fn write_vectored<'a>(&self, bufs: &[std::io::IoSlice<'a>]) -> Result<u64, Error>; // write op
+        _bufs: &mut [std::io::IoSliceMut<'a>],
+        _offset: u64,
+    ) -> Result<u64, Error> {
+        Err(Error::badf())
+    }
+
+    async fn write_vectored<'a>(&self, _bufs: &[std::io::IoSlice<'a>]) -> Result<u64, Error> {
+        Err(Error::badf())
+    }
+
     async fn write_vectored_at<'a>(
         &self,
-        bufs: &[std::io::IoSlice<'a>],
-        offset: u64,
-    ) -> Result<u64, Error>; // file op
-    async fn seek(&self, pos: std::io::SeekFrom) -> Result<u64, Error>; // file op that generates a new stream from a file will supercede this
-    async fn peek(&self, buf: &mut [u8]) -> Result<u64, Error>; // read op
-    async fn num_ready_bytes(&self) -> Result<u64, Error>; // read op
-    fn isatty(&self) -> bool;
+        _bufs: &[std::io::IoSlice<'a>],
+        _offset: u64,
+    ) -> Result<u64, Error> {
+        Err(Error::badf())
+    }
 
-    async fn readable(&self) -> Result<(), Error>;
-    async fn writable(&self) -> Result<(), Error>;
+    async fn seek(&self, _pos: std::io::SeekFrom) -> Result<u64, Error> {
+        Err(Error::badf())
+    }
+
+    async fn peek(&self, _buf: &mut [u8]) -> Result<u64, Error> {
+        Err(Error::badf())
+    }
+
+    async fn num_ready_bytes(&self) -> Result<u64, Error> {
+        Ok(0)
+    }
+
+    async fn readable(&self) -> Result<(), Error> {
+        Err(Error::badf())
+    }
+
+    async fn writable(&self) -> Result<(), Error> {
+        Err(Error::badf())
+    }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]

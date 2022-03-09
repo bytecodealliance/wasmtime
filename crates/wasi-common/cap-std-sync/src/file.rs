@@ -26,9 +26,6 @@ impl WasiFile for File {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    async fn sock_accept(&mut self, _fdflags: FdFlags) -> Result<Box<dyn WasiFile>, Error> {
-        Err(Error::badf())
-    }
     async fn datasync(&self) -> Result<(), Error> {
         self.0.sync_data()?;
         Ok(())
@@ -127,12 +124,6 @@ impl WasiFile for File {
     }
     fn isatty(&self) -> bool {
         self.0.is_terminal()
-    }
-    async fn readable(&self) -> Result<(), Error> {
-        Err(Error::badf())
-    }
-    async fn writable(&self) -> Result<(), Error> {
-        Err(Error::badf())
     }
 }
 
