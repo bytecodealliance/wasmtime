@@ -8,7 +8,7 @@ repository = "https://github.com/bytecodealliance/wasmtime"
 documentation = "https://docs.rs/wasmtime-cranelift/"
 categories = ["wasm"]
 keywords = ["webassembly", "wasm"]
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 anyhow = "1.0"

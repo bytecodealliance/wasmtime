@@ -24,7 +24,6 @@ mod code_memory;
 mod debug;
 mod demangling;
 mod instantiate;
-mod link;
 mod profiling;
 mod unwind;
 

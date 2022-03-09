@@ -17,7 +17,6 @@ use crate::debug::{DwarfSection, DwarfSectionRelocTarget};
 use crate::{CompiledFunction, Relocation, RelocationTarget};
 use anyhow::Result;
 use cranelift_codegen::binemit::Reloc;
-use cranelift_codegen::ir::LibCall;
 use cranelift_codegen::isa::{
     unwind::{systemv, UnwindInfo},
     TargetIsa,
@@ -69,30 +68,6 @@ macro_rules! for_each_libcall {
     };
 }
 
-fn write_libcall_symbols(obj: &mut Object) -> HashMap<LibCall, SymbolId> {
-    let mut libcalls = HashMap::new();
-    macro_rules! add_libcall_symbol {
-        [$(($libcall:ident, $export:ident)),*] => {{
-            $(
-                let symbol_id = obj.add_symbol(Symbol {
-                    name: stringify!($export).as_bytes().to_vec(),
-                    value: 0,
-                    size: 0,
-                    kind: SymbolKind::Text,
-                    scope: SymbolScope::Linkage,
-                    weak: true,
-                    section: SymbolSection::Undefined,
-                    flags: SymbolFlags::None,
-                });
-                libcalls.insert(LibCall::$libcall, symbol_id);
-            )+
-        }};
-    }
-    for_each_libcall!(add_libcall_symbol);
-
-    libcalls
-}
-
 /// A helper structure used to assemble the final text section of an exectuable,
 /// plus unwinding information and other related details.
 ///
@@ -109,10 +84,6 @@ pub struct ObjectBuilder<'a> {
 
     /// The WebAssembly module we're generating code for.
     module: &'a Module,
-
-    /// Map of injected symbols for all possible libcalls, used whenever there's
-    /// a relocation against a libcall.
-    libcalls: HashMap<LibCall, SymbolId>,
 
     windows_unwind_info_id: Option<SectionId>,
 
@@ -190,15 +161,12 @@ impl<'a> ObjectBuilder<'a> {
             func_symbols.push(symbol_id);
         }
 
-        let libcalls = write_libcall_symbols(obj);
-
         Self {
             isa,
             obj,
             module,
             text_section,
             func_symbols,
-            libcalls,
             windows_unwind_info_id: None,
             windows_unwind_info: Vec::new(),
             systemv_unwind_info_id: None,
@@ -266,7 +234,7 @@ impl<'a> ObjectBuilder<'a> {
         }
 
         for r in func.relocations.iter() {
-            let (symbol, symbol_offset) = match r.reloc_target {
+            match r.reloc_target {
                 // Relocations against user-defined functions means that this is
                 // a relocation against a module-local function, typically a
                 // call between functions. The `text` field is given priority to
@@ -284,43 +252,27 @@ impl<'a> ObjectBuilder<'a> {
                         continue;
                     }
 
-                    // FIXME(#3009) once the old backend is removed all
-                    // inter-function relocations should be handled by
-                    // `self.text`. This can become `unreachable!()` in that
-                    // case.
-                    self.relocations.push((r, off));
-                    continue;
+                    // At this time it's expected that all relocations are
+                    // handled by `text.resolve_reloc`, and anything that isn't
+                    // handled is a bug in `text.resolve_reloc` or something
+                    // transitively there. If truly necessary, though, then this
+                    // loop could also be updated to forward the relocation to
+                    // the final object file as well.
+                    panic!(
+                        "unresolved relocation could not be procesed against \
+                         {index:?}: {r:?}"
+                    );
                 }
 
-                // These relocations, unlike against user funcs above, typically
-                // involve absolute addresses and need to get resolved at load
-                // time. These are persisted immediately into the object file.
-                //
-                // FIXME: these, like user-defined-functions, should probably
-                // use relative jumps and avoid absolute relocations. They don't
-                // seem too common though so aren't necessarily that important
-                // to optimize.
-                RelocationTarget::LibCall(call) => (self.libcalls[&call], 0),
+                // At this time it's not expected that any libcall relocations
+                // are generated. Ideally we don't want relocations against
+                // libcalls anyway as libcalls should go through indirect
+                // `VMContext` tables to avoid needing to apply relocations at
+                // module-load time as well.
+                RelocationTarget::LibCall(call) => {
+                    unimplemented!("cannot generate relocation against libcall {call:?}");
+                }
             };
-            let (kind, encoding, size) = match r.reloc {
-                Reloc::Abs4 => (RelocationKind::Absolute, RelocationEncoding::Generic, 32),
-                Reloc::Abs8 => (RelocationKind::Absolute, RelocationEncoding::Generic, 64),
-
-                other => unimplemented!("Unimplemented relocation {:?}", other),
-            };
-            self.obj
-                .add_relocation(
-                    self.text_section,
-                    ObjectRelocation {
-                        offset: off + r.offset as u64,
-                        size,
-                        kind,
-                        encoding,
-                        symbol,
-                        addend: r.addend.wrapping_add(symbol_offset as i64),
-                    },
-                )
-                .unwrap();
         }
         (symbol_id, off..off + body_len)
     }

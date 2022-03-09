@@ -148,18 +148,12 @@ impl CodeMemory {
                 std::slice::from_raw_parts_mut(ret.text.as_ptr() as *mut u8, ret.text.len());
             let text_offset = ret.text.as_ptr() as usize - ret.mmap.as_ptr() as usize;
             let text_range = text_offset..text_offset + text_mut.len();
-            let mut text_section_readwrite = false;
-            for (offset, r) in text.relocations() {
-                // If the text section was mapped at readonly we need to make it
-                // briefly read/write here as we apply relocations.
-                if !text_section_readwrite && self.mmap.is_readonly() {
-                    self.mmap
-                        .make_writable(text_range.clone())
-                        .expect("unable to make memory writable");
-                    text_section_readwrite = true;
-                }
-                crate::link::apply_reloc(&ret.obj, text_mut, offset, r);
-            }
+
+            // Double-check there are no relocations in the text section. At
+            // this time relocations are not expected at all from loaded code
+            // since everything should be resolved at compile time. Handling
+            // must be added here, though, if relocations pop up.
+            assert!(text.relocations().count() == 0);
 
             // Switch the executable portion from read/write to
             // read/execute, notably not using read/write/execute to prevent
