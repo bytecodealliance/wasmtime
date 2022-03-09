@@ -31,32 +31,32 @@ impl WasiFile for Stdin {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    async fn get_filetype(&self) -> Result<FileType, Error> {
+    async fn get_filetype(&mut self) -> Result<FileType, Error> {
         if self.isatty() {
             Ok(FileType::CharacterDevice)
         } else {
             Ok(FileType::Unknown)
         }
     }
-    async fn read_vectored<'a>(&self, bufs: &mut [io::IoSliceMut<'a>]) -> Result<u64, Error> {
+    async fn read_vectored<'a>(&mut self, bufs: &mut [io::IoSliceMut<'a>]) -> Result<u64, Error> {
         let n = self.0.as_filelike_view::<File>().read_vectored(bufs)?;
         Ok(n.try_into().map_err(|_| Error::range())?)
     }
     async fn read_vectored_at<'a>(
-        &self,
+        &mut self,
         _bufs: &mut [io::IoSliceMut<'a>],
         _offset: u64,
     ) -> Result<u64, Error> {
         Err(Error::seek_pipe())
     }
-    async fn seek(&self, _pos: std::io::SeekFrom) -> Result<u64, Error> {
+    async fn seek(&mut self, _pos: std::io::SeekFrom) -> Result<u64, Error> {
         Err(Error::seek_pipe())
     }
-    async fn peek(&self, _buf: &mut [u8]) -> Result<u64, Error> {
+    async fn peek(&mut self, _buf: &mut [u8]) -> Result<u64, Error> {
         Err(Error::seek_pipe())
     }
     async fn set_times(
-        &self,
+        &mut self,
         atime: Option<wasi_common::SystemTimeSpec>,
         mtime: Option<wasi_common::SystemTimeSpec>,
     ) -> Result<(), Error> {
@@ -67,7 +67,7 @@ impl WasiFile for Stdin {
     async fn num_ready_bytes(&self) -> Result<u64, Error> {
         Ok(self.0.num_ready_bytes()?)
     }
-    fn isatty(&self) -> bool {
+    fn isatty(&mut self) -> bool {
         self.0.is_terminal()
     }
 }
@@ -98,17 +98,17 @@ macro_rules! wasi_file_write_impl {
             fn as_any(&self) -> &dyn Any {
                 self
             }
-            async fn get_filetype(&self) -> Result<FileType, Error> {
+            async fn get_filetype(&mut self) -> Result<FileType, Error> {
                 if self.isatty() {
                     Ok(FileType::CharacterDevice)
                 } else {
                     Ok(FileType::Unknown)
                 }
             }
-            async fn get_fdflags(&self) -> Result<FdFlags, Error> {
+            async fn get_fdflags(&mut self) -> Result<FdFlags, Error> {
                 Ok(FdFlags::APPEND)
             }
-            async fn get_filestat(&self) -> Result<Filestat, Error> {
+            async fn get_filestat(&mut self) -> Result<Filestat, Error> {
                 let meta = self.0.as_filelike_view::<File>().metadata()?;
                 Ok(Filestat {
                     device_id: 0,
@@ -121,22 +121,22 @@ macro_rules! wasi_file_write_impl {
                     ctim: meta.created().ok(),
                 })
             }
-            async fn write_vectored<'a>(&self, bufs: &[io::IoSlice<'a>]) -> Result<u64, Error> {
+            async fn write_vectored<'a>(&mut self, bufs: &[io::IoSlice<'a>]) -> Result<u64, Error> {
                 let n = self.0.as_filelike_view::<File>().write_vectored(bufs)?;
                 Ok(n.try_into().map_err(|c| Error::range().context(c))?)
             }
             async fn write_vectored_at<'a>(
-                &self,
+                &mut self,
                 _bufs: &[io::IoSlice<'a>],
                 _offset: u64,
             ) -> Result<u64, Error> {
                 Err(Error::seek_pipe())
             }
-            async fn seek(&self, _pos: std::io::SeekFrom) -> Result<u64, Error> {
+            async fn seek(&mut self, _pos: std::io::SeekFrom) -> Result<u64, Error> {
                 Err(Error::seek_pipe())
             }
             async fn set_times(
-                &self,
+                &mut self,
                 atime: Option<wasi_common::SystemTimeSpec>,
                 mtime: Option<wasi_common::SystemTimeSpec>,
             ) -> Result<(), Error> {
@@ -144,7 +144,7 @@ macro_rules! wasi_file_write_impl {
                     .set_times(convert_systimespec(atime), convert_systimespec(mtime))?;
                 Ok(())
             }
-            fn isatty(&self) -> bool {
+            fn isatty(&mut self) -> bool {
                 self.0.is_terminal()
             }
         }

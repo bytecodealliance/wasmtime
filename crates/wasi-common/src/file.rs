@@ -5,9 +5,9 @@ use std::any::Any;
 #[wiggle::async_trait]
 pub trait WasiFile: Send + Sync {
     fn as_any(&self) -> &dyn Any;
-    async fn get_filetype(&self) -> Result<FileType, Error>;
+    async fn get_filetype(&mut self) -> Result<FileType, Error>;
 
-    fn isatty(&self) -> bool {
+    fn isatty(&mut self) -> bool {
         false
     }
 
@@ -15,15 +15,15 @@ pub trait WasiFile: Send + Sync {
         Err(Error::badf())
     }
 
-    async fn datasync(&self) -> Result<(), Error> {
+    async fn datasync(&mut self) -> Result<(), Error> {
         Ok(())
     }
 
-    async fn sync(&self) -> Result<(), Error> {
+    async fn sync(&mut self) -> Result<(), Error> {
         Ok(())
     }
 
-    async fn get_fdflags(&self) -> Result<FdFlags, Error> {
+    async fn get_fdflags(&mut self) -> Result<FdFlags, Error> {
         Ok(FdFlags::empty())
     }
 
@@ -31,7 +31,7 @@ pub trait WasiFile: Send + Sync {
         Err(Error::badf())
     }
 
-    async fn get_filestat(&self) -> Result<Filestat, Error> {
+    async fn get_filestat(&mut self) -> Result<Filestat, Error> {
         Ok(Filestat {
             device_id: 0,
             inode: 0,
@@ -44,55 +44,58 @@ pub trait WasiFile: Send + Sync {
         })
     }
 
-    async fn set_filestat_size(&self, _size: u64) -> Result<(), Error> {
+    async fn set_filestat_size(&mut self, _size: u64) -> Result<(), Error> {
         Err(Error::badf())
     }
 
-    async fn advise(&self, _offset: u64, _len: u64, _advice: Advice) -> Result<(), Error> {
+    async fn advise(&mut self, _offset: u64, _len: u64, _advice: Advice) -> Result<(), Error> {
         Err(Error::badf())
     }
 
-    async fn allocate(&self, _offset: u64, _len: u64) -> Result<(), Error> {
+    async fn allocate(&mut self, _offset: u64, _len: u64) -> Result<(), Error> {
         Err(Error::badf())
     }
 
     async fn set_times(
-        &self,
+        &mut self,
         _atime: Option<SystemTimeSpec>,
         _mtime: Option<SystemTimeSpec>,
     ) -> Result<(), Error> {
         Err(Error::badf())
     }
 
-    async fn read_vectored<'a>(&self, _bufs: &mut [std::io::IoSliceMut<'a>]) -> Result<u64, Error> {
+    async fn read_vectored<'a>(
+        &mut self,
+        _bufs: &mut [std::io::IoSliceMut<'a>],
+    ) -> Result<u64, Error> {
         Err(Error::badf())
     }
 
     async fn read_vectored_at<'a>(
-        &self,
+        &mut self,
         _bufs: &mut [std::io::IoSliceMut<'a>],
         _offset: u64,
     ) -> Result<u64, Error> {
         Err(Error::badf())
     }
 
-    async fn write_vectored<'a>(&self, _bufs: &[std::io::IoSlice<'a>]) -> Result<u64, Error> {
+    async fn write_vectored<'a>(&mut self, _bufs: &[std::io::IoSlice<'a>]) -> Result<u64, Error> {
         Err(Error::badf())
     }
 
     async fn write_vectored_at<'a>(
-        &self,
+        &mut self,
         _bufs: &[std::io::IoSlice<'a>],
         _offset: u64,
     ) -> Result<u64, Error> {
         Err(Error::badf())
     }
 
-    async fn seek(&self, _pos: std::io::SeekFrom) -> Result<u64, Error> {
+    async fn seek(&mut self, _pos: std::io::SeekFrom) -> Result<u64, Error> {
         Err(Error::badf())
     }
 
-    async fn peek(&self, _buf: &mut [u8]) -> Result<u64, Error> {
+    async fn peek(&mut self, _buf: &mut [u8]) -> Result<u64, Error> {
         Err(Error::badf())
     }
 
@@ -190,7 +193,7 @@ impl FileEntry {
         Ok(())
     }
 
-    pub async fn get_fdstat(&self) -> Result<FdStat, Error> {
+    pub async fn get_fdstat(&mut self) -> Result<FdStat, Error> {
         Ok(FdStat {
             filetype: self.file.get_filetype().await?,
             caps: self.caps,

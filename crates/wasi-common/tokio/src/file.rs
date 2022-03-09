@@ -94,64 +94,64 @@ macro_rules! wasi_file_impl {
             fn as_any(&self) -> &dyn Any {
                 self
             }
-            async fn datasync(&self) -> Result<(), Error> {
+            async fn datasync(&mut self) -> Result<(), Error> {
                 block_on_dummy_executor(|| self.0.datasync())
             }
-            async fn sync(&self) -> Result<(), Error> {
+            async fn sync(&mut self) -> Result<(), Error> {
                 block_on_dummy_executor(|| self.0.sync())
             }
-            async fn get_filetype(&self) -> Result<FileType, Error> {
+            async fn get_filetype(&mut self) -> Result<FileType, Error> {
                 block_on_dummy_executor(|| self.0.get_filetype())
             }
-            async fn get_fdflags(&self) -> Result<FdFlags, Error> {
+            async fn get_fdflags(&mut self) -> Result<FdFlags, Error> {
                 block_on_dummy_executor(|| self.0.get_fdflags())
             }
             async fn set_fdflags(&mut self, fdflags: FdFlags) -> Result<(), Error> {
                 block_on_dummy_executor(|| self.0.set_fdflags(fdflags))
             }
-            async fn get_filestat(&self) -> Result<Filestat, Error> {
+            async fn get_filestat(&mut self) -> Result<Filestat, Error> {
                 block_on_dummy_executor(|| self.0.get_filestat())
             }
-            async fn set_filestat_size(&self, size: u64) -> Result<(), Error> {
+            async fn set_filestat_size(&mut self, size: u64) -> Result<(), Error> {
                 block_on_dummy_executor(move || self.0.set_filestat_size(size))
             }
-            async fn advise(&self, offset: u64, len: u64, advice: Advice) -> Result<(), Error> {
+            async fn advise(&mut self, offset: u64, len: u64, advice: Advice) -> Result<(), Error> {
                 block_on_dummy_executor(move || self.0.advise(offset, len, advice))
             }
-            async fn allocate(&self, offset: u64, len: u64) -> Result<(), Error> {
+            async fn allocate(&mut self, offset: u64, len: u64) -> Result<(), Error> {
                 block_on_dummy_executor(move || self.0.allocate(offset, len))
             }
             async fn read_vectored<'a>(
-                &self,
+                &mut self,
                 bufs: &mut [io::IoSliceMut<'a>],
             ) -> Result<u64, Error> {
                 block_on_dummy_executor(move || self.0.read_vectored(bufs))
             }
             async fn read_vectored_at<'a>(
-                &self,
+                &mut self,
                 bufs: &mut [io::IoSliceMut<'a>],
                 offset: u64,
             ) -> Result<u64, Error> {
                 block_on_dummy_executor(move || self.0.read_vectored_at(bufs, offset))
             }
-            async fn write_vectored<'a>(&self, bufs: &[io::IoSlice<'a>]) -> Result<u64, Error> {
+            async fn write_vectored<'a>(&mut self, bufs: &[io::IoSlice<'a>]) -> Result<u64, Error> {
                 block_on_dummy_executor(move || self.0.write_vectored(bufs))
             }
             async fn write_vectored_at<'a>(
-                &self,
+                &mut self,
                 bufs: &[io::IoSlice<'a>],
                 offset: u64,
             ) -> Result<u64, Error> {
                 block_on_dummy_executor(move || self.0.write_vectored_at(bufs, offset))
             }
-            async fn seek(&self, pos: std::io::SeekFrom) -> Result<u64, Error> {
+            async fn seek(&mut self, pos: std::io::SeekFrom) -> Result<u64, Error> {
                 block_on_dummy_executor(move || self.0.seek(pos))
             }
-            async fn peek(&self, buf: &mut [u8]) -> Result<u64, Error> {
+            async fn peek(&mut self, buf: &mut [u8]) -> Result<u64, Error> {
                 block_on_dummy_executor(move || self.0.peek(buf))
             }
             async fn set_times(
-                &self,
+                &mut self,
                 atime: Option<wasi_common::SystemTimeSpec>,
                 mtime: Option<wasi_common::SystemTimeSpec>,
             ) -> Result<(), Error> {
@@ -160,7 +160,7 @@ macro_rules! wasi_file_impl {
             async fn num_ready_bytes(&self) -> Result<u64, Error> {
                 block_on_dummy_executor(|| self.0.num_ready_bytes())
             }
-            fn isatty(&self) -> bool {
+            fn isatty(&mut self) -> bool {
                 self.0.isatty()
             }
 

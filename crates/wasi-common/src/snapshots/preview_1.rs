@@ -260,8 +260,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         advice: types::Advice,
     ) -> Result<(), Error> {
         self.table()
-            .get_file(u32::from(fd))?
-            .get_cap(FileCaps::ADVISE)?
+            .get_file_mut(u32::from(fd))?
+            .get_cap_mut(FileCaps::ADVISE)?
             .advise(offset, len, advice.into())
             .await?;
         Ok(())
@@ -274,8 +274,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         len: types::Filesize,
     ) -> Result<(), Error> {
         self.table()
-            .get_file(u32::from(fd))?
-            .get_cap(FileCaps::ALLOCATE)?
+            .get_file_mut(u32::from(fd))?
+            .get_cap_mut(FileCaps::ALLOCATE)?
             .allocate(offset, len)
             .await?;
         Ok(())
@@ -309,8 +309,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
 
     async fn fd_datasync(&mut self, fd: types::Fd) -> Result<(), Error> {
         self.table()
-            .get_file(u32::from(fd))?
-            .get_cap(FileCaps::DATASYNC)?
+            .get_file_mut(u32::from(fd))?
+            .get_cap_mut(FileCaps::DATASYNC)?
             .datasync()
             .await?;
         Ok(())
@@ -320,7 +320,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         let table = self.table();
         let fd = u32::from(fd);
         if table.is::<FileEntry>(fd) {
-            let file_entry: &FileEntry = table.get(fd)?;
+            let file_entry: &mut FileEntry = table.get_mut(fd)?;
             let fdstat = file_entry.get_fdstat().await?;
             Ok(types::Fdstat::from(&fdstat))
         } else if table.is::<DirEntry>(fd) {
@@ -371,8 +371,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         let fd = u32::from(fd);
         if table.is::<FileEntry>(fd) {
             let filestat = table
-                .get_file(fd)?
-                .get_cap(FileCaps::FILESTAT_GET)?
+                .get_file_mut(fd)?
+                .get_cap_mut(FileCaps::FILESTAT_GET)?
                 .get_filestat()
                 .await?;
             Ok(filestat.into())
@@ -394,8 +394,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         size: types::Filesize,
     ) -> Result<(), Error> {
         self.table()
-            .get_file(u32::from(fd))?
-            .get_cap(FileCaps::FILESTAT_SET_SIZE)?
+            .get_file_mut(u32::from(fd))?
+            .get_cap_mut(FileCaps::FILESTAT_SET_SIZE)?
             .set_filestat_size(size)
             .await?;
         Ok(())
@@ -421,9 +421,9 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
 
         if table.is::<FileEntry>(fd) {
             table
-                .get_file(fd)
+                .get_file_mut(fd)
                 .expect("checked that entry is file")
-                .get_cap(FileCaps::FILESTAT_SET_TIMES)?
+                .get_cap_mut(FileCaps::FILESTAT_SET_TIMES)?
                 .set_times(atim, mtim)
                 .await
         } else if table.is::<DirEntry>(fd) {
@@ -443,8 +443,10 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         fd: types::Fd,
         iovs: &types::IovecArray<'a>,
     ) -> Result<types::Size, Error> {
-        let table = self.table();
-        let f = table.get_file(u32::from(fd))?.get_cap(FileCaps::READ)?;
+        let f = self
+            .table()
+            .get_file_mut(u32::from(fd))?
+            .get_cap_mut(FileCaps::READ)?;
 
         let mut guest_slices: Vec<wiggle::GuestSliceMut<u8>> = iovs
             .iter()
@@ -470,10 +472,10 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         iovs: &types::IovecArray<'a>,
         offset: types::Filesize,
     ) -> Result<types::Size, Error> {
-        let table = self.table();
-        let f = table
-            .get_file(u32::from(fd))?
-            .get_cap(FileCaps::READ | FileCaps::SEEK)?;
+        let f = self
+            .table()
+            .get_file_mut(u32::from(fd))?
+            .get_cap_mut(FileCaps::READ | FileCaps::SEEK)?;
 
         let mut guest_slices: Vec<wiggle::GuestSliceMut<u8>> = iovs
             .iter()
@@ -498,8 +500,10 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         fd: types::Fd,
         ciovs: &types::CiovecArray<'a>,
     ) -> Result<types::Size, Error> {
-        let table = self.table();
-        let f = table.get_file(u32::from(fd))?.get_cap(FileCaps::WRITE)?;
+        let f = self
+            .table()
+            .get_file_mut(u32::from(fd))?
+            .get_cap_mut(FileCaps::WRITE)?;
 
         let guest_slices: Vec<wiggle::GuestSlice<u8>> = ciovs
             .iter()
@@ -525,10 +529,10 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         ciovs: &types::CiovecArray<'a>,
         offset: types::Filesize,
     ) -> Result<types::Size, Error> {
-        let table = self.table();
-        let f = table
-            .get_file(u32::from(fd))?
-            .get_cap(FileCaps::WRITE | FileCaps::SEEK)?;
+        let f = self
+            .table()
+            .get_file_mut(u32::from(fd))?
+            .get_cap_mut(FileCaps::WRITE | FileCaps::SEEK)?;
 
         let guest_slices: Vec<wiggle::GuestSlice<u8>> = ciovs
             .iter()
@@ -622,8 +626,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         };
         let newoffset = self
             .table()
-            .get_file(u32::from(fd))?
-            .get_cap(required_caps)?
+            .get_file_mut(u32::from(fd))?
+            .get_cap_mut(required_caps)?
             .seek(whence)
             .await?;
         Ok(newoffset)
@@ -631,8 +635,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
 
     async fn fd_sync(&mut self, fd: types::Fd) -> Result<(), Error> {
         self.table()
-            .get_file(u32::from(fd))?
-            .get_cap(FileCaps::SYNC)?
+            .get_file_mut(u32::from(fd))?
+            .get_cap_mut(FileCaps::SYNC)?
             .sync()
             .await?;
         Ok(())
@@ -642,8 +646,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         // XXX should this be stream_position?
         let offset = self
             .table()
-            .get_file(u32::from(fd))?
-            .get_cap(FileCaps::TELL)?
+            .get_file_mut(u32::from(fd))?
+            .get_cap_mut(FileCaps::TELL)?
             .seek(std::io::SeekFrom::Current(0))
             .await?;
         Ok(offset)

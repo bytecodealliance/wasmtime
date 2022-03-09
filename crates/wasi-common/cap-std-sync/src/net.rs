@@ -91,11 +91,11 @@ macro_rules! wasi_listen_write_impl {
                 stream.set_fdflags(fdflags).await?;
                 Ok(Box::new(stream))
             }
-            async fn get_filetype(&self) -> Result<FileType, Error> {
+            async fn get_filetype(&mut self) -> Result<FileType, Error> {
                 Ok(FileType::SocketStream)
             }
             #[cfg(unix)]
-            async fn get_fdflags(&self) -> Result<FdFlags, Error> {
+            async fn get_fdflags(&mut self) -> Result<FdFlags, Error> {
                 let fdflags = self.0.as_filelike().get_fd_flags()?;
                 Ok(from_sysif_fdflags(fdflags))
             }
@@ -170,11 +170,11 @@ macro_rules! wasi_stream_write_impl {
             fn as_any(&self) -> &dyn Any {
                 self
             }
-            async fn get_filetype(&self) -> Result<FileType, Error> {
+            async fn get_filetype(&mut self) -> Result<FileType, Error> {
                 Ok(FileType::SocketStream)
             }
             #[cfg(unix)]
-            async fn get_fdflags(&self) -> Result<FdFlags, Error> {
+            async fn get_fdflags(&mut self) -> Result<FdFlags, Error> {
                 let fdflags = self.0.as_filelike().get_fd_flags()?;
                 Ok(from_sysif_fdflags(fdflags))
             }
@@ -191,19 +191,19 @@ macro_rules! wasi_stream_write_impl {
                 Ok(())
             }
             async fn read_vectored<'a>(
-                &self,
+                &mut self,
                 bufs: &mut [io::IoSliceMut<'a>],
             ) -> Result<u64, Error> {
                 use std::io::Read;
                 let n = Read::read_vectored(&mut *self.as_socketlike_view::<$std_ty>(), bufs)?;
                 Ok(n.try_into()?)
             }
-            async fn write_vectored<'a>(&self, bufs: &[io::IoSlice<'a>]) -> Result<u64, Error> {
+            async fn write_vectored<'a>(&mut self, bufs: &[io::IoSlice<'a>]) -> Result<u64, Error> {
                 use std::io::Write;
                 let n = Write::write_vectored(&mut *self.as_socketlike_view::<$std_ty>(), bufs)?;
                 Ok(n.try_into()?)
             }
-            async fn peek(&self, buf: &mut [u8]) -> Result<u64, Error> {
+            async fn peek(&mut self, buf: &mut [u8]) -> Result<u64, Error> {
                 let n = self.0.peek(buf)?;
                 Ok(n.try_into()?)
             }
