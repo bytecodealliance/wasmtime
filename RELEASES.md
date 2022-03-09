@@ -2,6 +2,17 @@
 
 --------------------------------------------------------------------------------
 
+## 0.35.1
+
+Released 2022-03-09.
+
+### Fixed
+
+* Fixed a bug in the x86-64 lowering of the `uextend` opcode for narrow (`i8`,
+  `i16`) integer sources when the value is produced by one of several
+  arithmetic instructions.
+  [#3906](https://github.com/bytecodealliance/wasmtime/pull/3906)
+
 ## 0.35.0
 
 Released 2022-03-07.
