@@ -1894,34 +1894,34 @@
 ;; keep these here than write an external extractor containing bits of
 ;; the instruction pattern.s)
 (rule (lower (has_type $I64
-                       (uextend src @ (iadd _ _))))
+                       (uextend src @ (has_type $I32 (iadd _ _)))))
       src)
 (rule (lower (has_type $I64
-                       (uextend src @ (iadd_ifcout _ _))))
+                       (uextend src @ (has_type $I32 (iadd_ifcout _ _)))))
       src)
 (rule (lower (has_type $I64
-                       (uextend src @ (isub _ _))))
+                       (uextend src @ (has_type $I32 (isub _ _)))))
       src)
 (rule (lower (has_type $I64
-                       (uextend src @ (imul _ _))))
+                       (uextend src @ (has_type $I32 (imul _ _)))))
       src)
 (rule (lower (has_type $I64
-                       (uextend src @ (band _ _))))
+                       (uextend src @ (has_type $I32 (band _ _)))))
       src)
 (rule (lower (has_type $I64
-                       (uextend src @ (bor _ _))))
+                       (uextend src @ (has_type $I32 (bor _ _)))))
       src)
 (rule (lower (has_type $I64
-                       (uextend src @ (bxor _ _))))
+                       (uextend src @ (has_type $I32 (bxor _ _)))))
       src)
 (rule (lower (has_type $I64
-                       (uextend src @ (ishl _ _))))
+                       (uextend src @ (has_type $I32 (ishl _ _)))))
       src)
 (rule (lower (has_type $I64
-                       (uextend src @ (ushr _ _))))
+                       (uextend src @ (has_type $I32 (ushr _ _)))))
       src)
 (rule (lower (has_type $I64
-                       (uextend src @ (uload32 _ _ _))))
+                       (uextend src @ (has_type $I32 (uload32 _ _ _)))))
       src)
 
 ;; Rules for `sextend` / `bextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
