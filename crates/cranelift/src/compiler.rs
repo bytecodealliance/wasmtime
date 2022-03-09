@@ -264,9 +264,11 @@ impl wasmtime_environ::Compiler for Compiler {
             traps.push(range.clone(), &func.traps);
             func_starts.push(range.start);
             if self.linkopts.padding_between_functions > 0 {
-                builder
-                    .text
-                    .append(false, &vec![0; self.linkopts.padding_between_functions], 1);
+                builder.text.append(
+                    false,
+                    &vec![0; self.linkopts.padding_between_functions],
+                    Some(1),
+                );
             }
         }
 
