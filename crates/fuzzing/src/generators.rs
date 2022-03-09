@@ -212,6 +212,7 @@ pub struct WasmtimeConfig {
     pub strategy: InstanceAllocationStrategy,
     codegen: CodegenSettings,
     padding_between_functions: Option<u16>,
+    generate_address_map: bool,
 }
 
 /// Configuration for linear memories in Wasmtime.
@@ -394,7 +395,8 @@ impl Config {
                 16 << 20,
                 self.wasmtime.memory_guaranteed_dense_image_size,
             ))
-            .allocation_strategy(self.wasmtime.strategy.to_wasmtime());
+            .allocation_strategy(self.wasmtime.strategy.to_wasmtime())
+            .generate_address_map(self.wasmtime.generate_address_map);
 
         self.wasmtime.codegen.configure(&mut cfg);
 
