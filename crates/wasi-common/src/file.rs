@@ -4,6 +4,16 @@ use std::any::Any;
 
 #[wiggle::async_trait]
 pub trait WasiFile: Send + Sync {
+    #[cfg(unix)]
+    fn pollable(&self) -> Option<rustix::fd::BorrowedFd> {
+        None
+    }
+
+    #[cfg(windows)]
+    fn pollable(&self) -> Option<io_extras::os::windows::RawHandleOrSocket> {
+        None
+    }
+
     fn as_any(&self) -> &dyn Any;
     async fn sock_accept(&mut self, fdflags: FdFlags) -> Result<Box<dyn WasiFile>, Error>;
     async fn datasync(&self) -> Result<(), Error>; // write op

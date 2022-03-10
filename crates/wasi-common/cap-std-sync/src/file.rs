@@ -29,6 +29,15 @@ impl WasiFile for File {
     async fn sock_accept(&mut self, _fdflags: FdFlags) -> Result<Box<dyn WasiFile>, Error> {
         Err(Error::badf())
     }
+    #[cfg(unix)]
+    fn pollable(&self) -> Option<rustix::fd::BorrowedFd> {
+        Some(self.0.as_fd())
+    }
+
+    #[cfg(windows)]
+    fn pollable(&self) -> Option<io_extras::os::windows::RawHandleOrSocket> {
+        Some(self.0.as_raw_handle_or_socket())
+    }
     async fn datasync(&self) -> Result<(), Error> {
         self.0.sync_data()?;
         Ok(())

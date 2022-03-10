@@ -3204,6 +3204,7 @@ dependencies = [
  "bitflags",
  "cap-rand",
  "cap-std",
+ "io-extras",
  "rustix",
  "thiserror",
  "tracing",

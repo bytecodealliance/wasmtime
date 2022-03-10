@@ -85,6 +85,15 @@ macro_rules! wasi_listen_write_impl {
             fn as_any(&self) -> &dyn Any {
                 self
             }
+            #[cfg(unix)]
+            fn pollable(&self) -> Option<rustix::fd::BorrowedFd> {
+                Some(self.0.as_fd())
+            }
+
+            #[cfg(windows)]
+            fn pollable(&self) -> Option<io_extras::os::windows::RawHandleOrSocket> {
+                Some(self.0.as_raw_handle_or_socket())
+            }
             async fn sock_accept(&mut self, fdflags: FdFlags) -> Result<Box<dyn WasiFile>, Error> {
                 let (stream, _) = self.0.accept()?;
                 let mut stream = <$stream>::from_cap_std(stream);
@@ -248,6 +257,15 @@ macro_rules! wasi_stream_write_impl {
             }
             async fn sync(&self) -> Result<(), Error> {
                 Err(Error::badf())
+            }
+            #[cfg(unix)]
+            fn pollable(&self) -> Option<rustix::fd::BorrowedFd> {
+                Some(self.0.as_fd())
+            }
+
+            #[cfg(windows)]
+            fn pollable(&self) -> Option<io_extras::os::windows::RawHandleOrSocket> {
+                Some(self.0.as_raw_handle_or_socket())
             }
             async fn get_filetype(&self) -> Result<FileType, Error> {
                 Ok(FileType::SocketStream)
