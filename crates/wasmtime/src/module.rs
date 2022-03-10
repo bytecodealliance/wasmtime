@@ -4,7 +4,6 @@ use crate::{
 };
 use crate::{Engine, ModuleType};
 use anyhow::{bail, Context, Result};
-use once_cell::sync::OnceCell;
 use std::fs;
 use std::mem;
 use std::path::Path;
@@ -114,10 +113,8 @@ struct ModuleInner {
     types: Arc<TypeTables>,
     /// Registered shared signature for the module.
     signatures: Arc<SignatureCollection>,
-    /// A set of initialization images for memories, if any. Note that module
-    /// instantiation (hence the need for lazy init) may happen for the same
-    /// module concurrently in multiple Stores, so we use a OnceCell.
-    memory_images: OnceCell<Option<ModuleMemoryImages>>,
+    /// A set of initialization images for memories, if any.
+    memory_images: Option<ModuleMemoryImages>,
 }
 
 impl Module {
@@ -557,17 +554,17 @@ impl Module {
                     &signatures,
                 )
             })
-            .collect();
+            .collect::<Result<Vec<_>>>()?;
 
         return Ok(Self {
             inner: Arc::new(ModuleInner {
                 engine: engine.clone(),
                 types,
-                module,
                 artifact_upvars: modules,
                 module_upvars,
                 signatures,
-                memory_images: OnceCell::new(),
+                memory_images: memory_images(engine, &module)?,
+                module,
             }),
         });
 
@@ -579,14 +576,14 @@ impl Module {
             artifact_upvars: &[usize],
             module_upvars: &[serialization::SerializedModuleUpvar],
             signatures: &Arc<SignatureCollection>,
-        ) -> Module {
+        ) -> Result<Module> {
             let module = artifacts[module_index].clone();
-            Module {
+            Ok(Module {
                 inner: Arc::new(ModuleInner {
                     engine: engine.clone(),
                     types: types.clone(),
+                    memory_images: memory_images(engine, &module)?,
                     module,
-                    memory_images: OnceCell::new(),
                     artifact_upvars: artifact_upvars
                         .iter()
                         .map(|i| artifacts[*i].clone())
@@ -604,10 +601,10 @@ impl Module {
                                 signatures,
                             )
                         })
-                        .collect(),
+                        .collect::<Result<Vec<_>>>()?,
                     signatures: signatures.clone(),
                 }),
-            }
+            })
         }
     }
 
@@ -711,8 +708,8 @@ impl Module {
             inner: Arc::new(ModuleInner {
                 types: self.inner.types.clone(),
                 engine: self.inner.engine.clone(),
+                memory_images: memory_images(&self.inner.engine, &module)?,
                 module,
-                memory_images: OnceCell::new(),
                 artifact_upvars: artifact_upvars
                     .iter()
                     .map(|i| self.inner.artifact_upvars[*i].clone())
@@ -1025,18 +1022,8 @@ impl wasmtime_runtime::ModuleRuntimeInfo for ModuleInner {
     }
 
     fn memory_image(&self, memory: DefinedMemoryIndex) -> Result<Option<&Arc<MemoryImage>>> {
-        if !self.engine.config().memory_init_cow {
-            return Ok(None);
-        }
-
-        let images = self.memory_images.get_or_try_init(|| {
-            ModuleMemoryImages::new(
-                self.module.module(),
-                self.module.wasm_data(),
-                Some(self.module.mmap()),
-            )
-        })?;
-        Ok(images
+        Ok(self
+            .memory_images
             .as_ref()
             .and_then(|images| images.get_memory_image(memory)))
     }
@@ -1148,4 +1135,17 @@ impl wasmtime_runtime::ModuleRuntimeInfo for BareModuleInfo {
             None => &[],
         }
     }
+}
+
+/// Helper method to construct a `ModuleMemoryImages` for an associated
+/// `CompiledModule`.
+fn memory_images(engine: &Engine, module: &CompiledModule) -> Result<Option<ModuleMemoryImages>> {
+    // If initialization via copy-on-write is explicitly disabled in
+    // configuration then this path is skipped entirely.
+    if !engine.config().memory_init_cow {
+        return Ok(None);
+    }
+
+    // ... otherwise logic is delegated to the `ModuleMemoryImages::new` constructor
+    ModuleMemoryImages::new(module.module(), module.wasm_data(), Some(module.mmap()))
 }
