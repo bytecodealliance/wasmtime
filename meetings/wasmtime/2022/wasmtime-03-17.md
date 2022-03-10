@@ -11,6 +11,9 @@
 1. Announcements
     1. _Submit a PR to add your announcement here_
 1. Other agenda items
+    1. Release policy discussion
+       - Policy around "when should we do a point release" is underspecified;
+         clarify and establish guidelines one way or another
     1. _Submit a PR to add your item here_
 
 ## Notes
