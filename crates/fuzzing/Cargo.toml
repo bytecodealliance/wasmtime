@@ -34,6 +34,7 @@ v8 = "0.41"
 
 [dev-dependencies]
 wat = "1.0.37"
+rand = { version = "0.8.0", features = ["small_rng"] }
 
 # Only enable the `build-libinterpret` feature when fuzzing is enabled, enabling
 # commands like `cargo test --workspace` or similar to not need an ocaml

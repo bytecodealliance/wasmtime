@@ -1,7 +1,7 @@
 //! Generating series of `table.get` and `table.set` operations.
 
-use arbitrary::Arbitrary;
-use std::ops::Range;
+use arbitrary::{Arbitrary, Result, Unstructured};
+use std::ops::RangeInclusive;
 use wasm_encoder::{
     CodeSection, EntityType, Export, ExportSection, Function, FunctionSection, GlobalSection,
     ImportSection, Instruction, Module, TableSection, TableType, TypeSection, ValType,
@@ -9,41 +9,20 @@ use wasm_encoder::{
 
 /// A description of a Wasm module that makes a series of `externref` table
 /// operations.
-#[derive(Arbitrary, Debug)]
+#[derive(Debug)]
 pub struct TableOps {
-    num_params: u8,
-    num_globals: u8,
-    table_size: u32,
+    pub(crate) num_params: u8,
+    pub(crate) num_globals: u8,
+    pub(crate) table_size: u32,
     ops: Vec<TableOp>,
 }
 
-const NUM_PARAMS_RANGE: Range<u8> = 1..10;
-const NUM_GLOBALS_RANGE: Range<u8> = 1..10;
-const TABLE_SIZE_RANGE: Range<u32> = 1..100;
+const NUM_PARAMS_RANGE: RangeInclusive<u8> = 1..=10;
+const NUM_GLOBALS_RANGE: RangeInclusive<u8> = 1..=10;
+const TABLE_SIZE_RANGE: RangeInclusive<u32> = 1..=100;
 const MAX_OPS: usize = 100;
 
 impl TableOps {
-    /// Get the number of parameters this module's "run" function takes.
-    pub fn num_params(&self) -> u8 {
-        let num_params = std::cmp::max(self.num_params, NUM_PARAMS_RANGE.start);
-        let num_params = std::cmp::min(num_params, NUM_PARAMS_RANGE.end);
-        num_params
-    }
-
-    /// Get the number of globals this module has.
-    pub fn num_globals(&self) -> u8 {
-        let num_globals = std::cmp::max(self.num_globals, NUM_GLOBALS_RANGE.start);
-        let num_globals = std::cmp::min(num_globals, NUM_GLOBALS_RANGE.end);
-        num_globals
-    }
-
-    /// Get the size of the table that this module uses.
-    pub fn table_size(&self) -> u32 {
-        let table_size = std::cmp::max(self.table_size, TABLE_SIZE_RANGE.start);
-        let table_size = std::cmp::min(table_size, TABLE_SIZE_RANGE.end);
-        table_size
-    }
-
     /// Serialize this module into a Wasm binary.
     ///
     /// The module requires a single import: `(import "" "gc" (func))`. This
@@ -74,8 +53,8 @@ impl TableOps {
         );
 
         // 1: "run"
-        let mut params: Vec<ValType> = Vec::with_capacity(self.num_params() as usize);
-        for _i in 0..self.num_params() {
+        let mut params: Vec<ValType> = Vec::with_capacity(self.num_params as usize);
+        for _i in 0..self.num_params {
             params.push(ValType::ExternRef);
         }
         let results = vec![];
@@ -103,13 +82,13 @@ impl TableOps {
         let mut tables = TableSection::new();
         tables.table(TableType {
             element_type: ValType::ExternRef,
-            minimum: self.table_size(),
+            minimum: self.table_size,
             maximum: None,
         });
 
         // Define our globals.
         let mut globals = GlobalSection::new();
-        for _ in 0..self.num_globals() {
+        for _ in 0..self.num_globals {
             globals.global(
                 wasm_encoder::GlobalType {
                     val_type: wasm_encoder::ValType::ExternRef,
@@ -131,12 +110,12 @@ impl TableOps {
         let mut func = Function::new(vec![(1, ValType::ExternRef)]);
 
         func.instruction(&Instruction::Loop(wasm_encoder::BlockType::Empty));
-        for op in self.ops.iter().take(MAX_OPS) {
+        for op in &self.ops {
             op.insert(
                 &mut func,
-                self.num_params() as u32,
-                self.table_size(),
-                self.num_globals() as u32,
+                self.num_params as u32,
+                self.table_size,
+                self.num_globals as u32,
             );
         }
         func.instruction(&Instruction::Br(0));
@@ -159,52 +138,96 @@ impl TableOps {
     }
 }
 
-#[derive(Arbitrary, Copy, Clone, Debug)]
-pub(crate) enum TableOp {
-    // `call $gc; drop; drop; drop;`
-    Gc,
+impl<'a> Arbitrary<'a> for TableOps {
+    fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self> {
+        let num_params = u.int_in_range(NUM_PARAMS_RANGE)?;
+        let num_globals = u.int_in_range(NUM_GLOBALS_RANGE)?;
+        let table_size = u.int_in_range(TABLE_SIZE_RANGE)?;
 
-    // `(drop (table.get x))`
-    Get(i32),
+        let mut stack = 0;
+        let mut ops = vec![];
+        let mut choices = vec![];
+        loop {
+            let keep_going = ops.len() < MAX_OPS && u.arbitrary().unwrap_or(false);
+            if !keep_going {
+                break;
+            }
 
-    // `(drop (global.get i))`
-    GetGlobal(u32),
+            ops.push(TableOp::arbitrary(u, &mut stack, &mut choices)?);
+        }
 
-    // `(table.set x (local.get y))`
-    SetFromParam(i32, u32),
+        // Drop any extant refs on the stack.
+        for _ in 0..stack {
+            ops.push(TableOp::Drop);
+        }
 
-    // `(table.set x (table.get y))`
-    SetFromGet(i32, i32),
+        Ok(TableOps {
+            num_params,
+            num_globals,
+            table_size,
+            ops,
+        })
+    }
+}
 
-    // `call $make_refs; table.set x; table.set y; table.set z`
-    SetFromMake(i32, i32, i32),
+macro_rules! define_table_ops {
+	(
+        $(
+            $op:ident $( ( $($imm:ty),* $(,)* ) )? : $params:expr => $results:expr ,
+        )*
+    ) => {
+        #[derive(Copy, Clone, Debug)]
+        pub(crate) enum TableOp {
+            $(
+                $op $( ( $($imm),* ) )? ,
+            )*
+        }
 
-    // `(global.set x (local.get y))`
-    SetGlobalFromParam(u32, u32),
+        impl TableOp {
+            fn arbitrary(
+                u: &mut Unstructured,
+                stack: &mut u32,
+                choices: &mut Vec<fn(&mut Unstructured, &mut u32) -> Result<TableOp>>,
+            ) -> Result<TableOp> {
+                choices.clear();
 
-    // `(global.set x (table.get y))`
-    SetGlobalFromGet(u32, i32),
+                // Add all the choices of valid `TableOp`s we could generate.
+                $(
+                    #[allow(unused_comparisons)]
+                    if *stack >= $params {
+                        choices.push(|_u, stack| {
+                            *stack = *stack - $params + $results;
+                            Ok(TableOp::$op $( ( $( <$imm>::arbitrary(_u)? ),* ) )? )
+                        });
+                    }
+                )*
 
-    // `call $make_refs; global.set x; global.set y; global.set z`
-    SetGlobalFromMake(u32, u32, u32),
+                // Choose a table op to insert.
+                let f = u.choose(&choices)?;
+                f(u, stack)
+            }
+        }
+	};
+}
 
-    // `call $make_refs; drop; drop; drop;`
-    Make,
+define_table_ops! {
+    Gc : 0 => 3,
 
-    // `local.get x; local.get y; local.get z; call $take_refs`
-    TakeFromParams(u32, u32, u32),
+    MakeRefs : 0 => 3,
+    TakeRefs : 3 => 0,
 
-    // `table.get x; table.get y; table.get z; call $take_refs`
-    TakeFromGet(i32, i32, i32),
+    TableGet(i32) : 0 => 1,
+    TableSet(i32) : 1 => 0,
 
-    // `global.get x; global.get y; global.get z; call $take_refs`
-    TakeFromGlobalGet(u32, u32, u32),
+    GlobalGet(u32) : 0 => 1,
+    GlobalSet(u32) : 1 => 0,
 
-    // `call $make_refs; call $take_refs`
-    TakeFromMake,
+    LocalGet(u32) : 0 => 1,
+    LocalSet(u32) : 1 => 0,
 
-    // `call $gc; call $take_refs`
-    TakeFromGc,
+    Drop : 1 => 0,
+
+    Null : 0 => 1,
 }
 
 impl TableOp {
@@ -220,103 +243,45 @@ impl TableOp {
         let take_refs_func_idx = 1;
         let make_refs_func_idx = 2;
 
+        let scratch_local = num_params;
+
         match self {
             Self::Gc => {
                 func.instruction(&Instruction::Call(gc_func_idx));
-                func.instruction(&Instruction::Drop);
-                func.instruction(&Instruction::Drop);
-                func.instruction(&Instruction::Drop);
             }
-            Self::Get(x) => {
-                func.instruction(&Instruction::I32Const(x % table_mod));
-                func.instruction(&Instruction::TableGet { table: 0 });
-                func.instruction(&Instruction::Drop);
-            }
-            Self::SetFromParam(x, y) => {
-                func.instruction(&Instruction::I32Const(x % table_mod));
-                func.instruction(&Instruction::LocalGet(y % num_params));
-                func.instruction(&Instruction::TableSet { table: 0 });
-            }
-            Self::SetFromGet(x, y) => {
-                func.instruction(&Instruction::I32Const(x % table_mod));
-                func.instruction(&Instruction::I32Const(y % table_mod));
-                func.instruction(&Instruction::TableGet { table: 0 });
-                func.instruction(&Instruction::TableSet { table: 0 });
-            }
-            Self::SetFromMake(x, y, z) => {
+            Self::MakeRefs => {
                 func.instruction(&Instruction::Call(make_refs_func_idx));
-
-                func.instruction(&Instruction::LocalSet(num_params));
-                func.instruction(&Instruction::I32Const(x % table_mod));
-                func.instruction(&Instruction::LocalGet(num_params));
-                func.instruction(&Instruction::TableSet { table: 0 });
-
-                func.instruction(&Instruction::LocalSet(num_params));
-                func.instruction(&Instruction::I32Const(y % table_mod));
-                func.instruction(&Instruction::LocalGet(num_params));
-                func.instruction(&Instruction::TableSet { table: 0 });
-
-                func.instruction(&Instruction::LocalSet(num_params));
-                func.instruction(&Instruction::I32Const(z % table_mod));
-                func.instruction(&Instruction::LocalGet(num_params));
-                func.instruction(&Instruction::TableSet { table: 0 });
             }
-            TableOp::Make => {
-                func.instruction(&Instruction::Call(make_refs_func_idx));
-                func.instruction(&Instruction::Drop);
-                func.instruction(&Instruction::Drop);
-                func.instruction(&Instruction::Drop);
-            }
-            TableOp::TakeFromParams(x, y, z) => {
-                func.instruction(&Instruction::LocalGet(x % num_params));
-                func.instruction(&Instruction::LocalGet(y % num_params));
-                func.instruction(&Instruction::LocalGet(z % num_params));
+            Self::TakeRefs => {
                 func.instruction(&Instruction::Call(take_refs_func_idx));
             }
-            TableOp::TakeFromGet(x, y, z) => {
+            Self::TableGet(x) => {
                 func.instruction(&Instruction::I32Const(x % table_mod));
                 func.instruction(&Instruction::TableGet { table: 0 });
-
-                func.instruction(&Instruction::I32Const(y % table_mod));
-                func.instruction(&Instruction::TableGet { table: 0 });
-
-                func.instruction(&Instruction::I32Const(z % table_mod));
-                func.instruction(&Instruction::TableGet { table: 0 });
-
-                func.instruction(&Instruction::Call(take_refs_func_idx));
             }
-            TableOp::TakeFromMake => {
-                func.instruction(&Instruction::Call(make_refs_func_idx));
-                func.instruction(&Instruction::Call(take_refs_func_idx));
+            Self::TableSet(x) => {
+                func.instruction(&Instruction::LocalSet(scratch_local));
+                func.instruction(&Instruction::I32Const(x % table_mod));
+                func.instruction(&Instruction::LocalGet(scratch_local));
+                func.instruction(&Instruction::TableSet { table: 0 });
             }
-            Self::TakeFromGc => {
-                func.instruction(&Instruction::Call(gc_func_idx));
-                func.instruction(&Instruction::Call(take_refs_func_idx));
-            }
-            TableOp::GetGlobal(x) => {
+            Self::GlobalGet(x) => {
                 func.instruction(&Instruction::GlobalGet(x % num_globals));
-                func.instruction(&Instruction::Drop);
             }
-            TableOp::SetGlobalFromParam(global, param) => {
-                func.instruction(&Instruction::LocalGet(param % num_params));
-                func.instruction(&Instruction::GlobalSet(global % num_globals));
-            }
-            TableOp::SetGlobalFromGet(global, x) => {
-                func.instruction(&Instruction::I32Const(x));
-                func.instruction(&Instruction::TableGet { table: 0 });
-                func.instruction(&Instruction::GlobalSet(global % num_globals));
-            }
-            TableOp::SetGlobalFromMake(x, y, z) => {
-                func.instruction(&Instruction::Call(make_refs_func_idx));
+            Self::GlobalSet(x) => {
                 func.instruction(&Instruction::GlobalSet(x % num_globals));
-                func.instruction(&Instruction::GlobalSet(y % num_globals));
-                func.instruction(&Instruction::GlobalSet(z % num_globals));
             }
-            TableOp::TakeFromGlobalGet(x, y, z) => {
-                func.instruction(&Instruction::GlobalGet(x % num_globals));
-                func.instruction(&Instruction::GlobalGet(y % num_globals));
-                func.instruction(&Instruction::GlobalGet(z % num_globals));
-                func.instruction(&Instruction::Call(take_refs_func_idx));
+            Self::LocalGet(x) => {
+                func.instruction(&Instruction::LocalGet(x % num_params));
+            }
+            Self::LocalSet(x) => {
+                func.instruction(&Instruction::LocalSet(x % num_params));
+            }
+            Self::Drop => {
+                func.instruction(&Instruction::Drop);
+            }
+            Self::Null => {
+                func.instruction(&Instruction::RefNull(wasm_encoder::ValType::ExternRef));
             }
         }
     }
@@ -325,107 +290,91 @@ impl TableOp {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rand::rngs::SmallRng;
+    use rand::{RngCore, SeedableRng};
+
+    #[test]
+    fn test_valid() {
+        let mut rng = SmallRng::seed_from_u64(0);
+        let mut buf = vec![0; 2048];
+        for _ in 0..1024 {
+            rng.fill_bytes(&mut buf);
+            let u = Unstructured::new(&buf);
+            if let Ok(ops) = TableOps::arbitrary_take_rest(u) {
+                let wasm = ops.to_wasm_binary();
+                let mut validator =
+                    wasmparser::Validator::new_with_features(wasmparser::WasmFeatures {
+                        reference_types: true,
+                        ..Default::default()
+                    });
+                let result = validator.validate_all(&wasm);
+                assert!(result.is_ok());
+            }
+        }
+    }
 
     #[test]
     fn test_wat_string() {
         let ops = TableOps {
-            num_params: 5,
-            num_globals: 1,
+            num_params: 10,
+            num_globals: 10,
             table_size: 20,
             ops: vec![
                 TableOp::Gc,
-                TableOp::Get(0),
-                TableOp::SetFromParam(1, 2),
-                TableOp::SetFromGet(3, 4),
-                TableOp::SetFromMake(5, 6, 7),
-                TableOp::Make,
-                TableOp::TakeFromParams(8, 9, 10),
-                TableOp::TakeFromGet(11, 12, 13),
-                TableOp::TakeFromMake,
-                TableOp::GetGlobal(14),
-                TableOp::SetGlobalFromParam(15, 16),
-                TableOp::SetGlobalFromGet(17, 18),
-                TableOp::SetGlobalFromMake(19, 20, 21),
-                TableOp::TakeFromGlobalGet(22, 23, 24),
+                TableOp::MakeRefs,
+                TableOp::TakeRefs,
+                TableOp::TableGet(0),
+                TableOp::TableSet(1),
+                TableOp::GlobalGet(2),
+                TableOp::GlobalSet(3),
+                TableOp::LocalGet(4),
+                TableOp::LocalSet(5),
+                TableOp::Drop,
+                TableOp::Null,
             ],
         };
 
         let expected = r#"
 (module
   (type (;0;) (func (result externref externref externref)))
-  (type (;1;) (func (param externref externref externref externref externref)))
+  (type (;1;) (func (param externref externref externref externref externref externref externref externref externref externref)))
   (type (;2;) (func (param externref externref externref)))
   (type (;3;) (func (result externref externref externref)))
   (import "" "gc" (func (;0;) (type 0)))
   (import "" "take_refs" (func (;1;) (type 2)))
   (import "" "make_refs" (func (;2;) (type 3)))
-  (func (;3;) (type 1) (param externref externref externref externref externref)
+  (func (;3;) (type 1) (param externref externref externref externref externref externref externref externref externref externref)
     (local externref)
     loop  ;; label = @1
       call 0
-      drop
-      drop
-      drop
+      call 2
+      call 1
       i32.const 0
       table.get 0
-      drop
+      local.set 10
       i32.const 1
-      local.get 2
+      local.get 10
       table.set 0
-      i32.const 3
-      i32.const 4
-      table.get 0
-      table.set 0
-      call 2
-      local.set 5
-      i32.const 5
-      local.get 5
-      table.set 0
-      local.set 5
-      i32.const 6
-      local.get 5
-      table.set 0
-      local.set 5
-      i32.const 7
-      local.get 5
-      table.set 0
-      call 2
-      drop
-      drop
-      drop
-      local.get 3
+      global.get 2
+      global.set 3
       local.get 4
-      local.get 0
-      call 1
-      i32.const 11
-      table.get 0
-      i32.const 12
-      table.get 0
-      i32.const 13
-      table.get 0
-      call 1
-      call 2
-      call 1
-      global.get 0
+      local.set 5
       drop
-      local.get 1
-      global.set 0
-      i32.const 18
-      table.get 0
-      global.set 0
-      call 2
-      global.set 0
-      global.set 0
-      global.set 0
-      global.get 0
-      global.get 0
-      global.get 0
-      call 1
+      ref.null extern
       br 0 (;@1;)
     end
   )
   (table (;0;) 20 externref)
   (global (;0;) (mut externref) ref.null extern)
+  (global (;1;) (mut externref) ref.null extern)
+  (global (;2;) (mut externref) ref.null extern)
+  (global (;3;) (mut externref) ref.null extern)
+  (global (;4;) (mut externref) ref.null extern)
+  (global (;5;) (mut externref) ref.null extern)
+  (global (;6;) (mut externref) ref.null extern)
+  (global (;7;) (mut externref) ref.null extern)
+  (global (;8;) (mut externref) ref.null extern)
+  (global (;9;) (mut externref) ref.null extern)
   (export "run" (func 3))
 )
 "#;
