@@ -9,30 +9,21 @@
 // taken the time to improve it. See bug #2880.
 
 use anyhow::Context;
-use io_extras::os::windows::{AsRawHandleOrSocket, RawHandleOrSocket};
 use std::ops::Deref;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender, TryRecvError};
 use std::sync::Mutex;
 use std::thread;
 use std::time::Duration;
-use wasi_common::{
-    file::WasiFile,
-    sched::{
-        subscription::{RwEventFlags, Subscription},
-        Poll,
-    },
-    Error, ErrorExt,
-};
+use wasi_common::sched::subscription::{RwEventFlags, Subscription};
+use wasi_common::{file::WasiFile, sched::Poll, Error, ErrorExt};
 
 pub async fn poll_oneoff<'a>(poll: &mut Poll<'a>) -> Result<(), Error> {
-    poll_oneoff_(poll, wasi_file_is_stdin, wasi_file_raw_handle).await
+    poll_oneoff_(poll, wasi_file_is_stdin).await
 }
 
-// For reuse by wasi-tokio, which has a different WasiFile -> RawHandle translator.
 pub async fn poll_oneoff_<'a>(
     poll: &mut Poll<'a>,
     file_is_stdin: impl Fn(&dyn WasiFile) -> bool,
-    file_to_handle: impl Fn(&dyn WasiFile) -> Option<RawHandleOrSocket>,
 ) -> Result<(), Error> {
     if poll.is_empty() {
         return Ok(());
@@ -61,21 +52,17 @@ pub async fn poll_oneoff_<'a>(
             Subscription::Read(r) => {
                 if file_is_stdin(r.file.deref()) {
                     stdin_read_subs.push(r);
-                } else if file_to_handle(r.file.deref()).is_some() {
+                } else if r.file.pollable().is_some() {
                     immediate_reads.push(r);
                 } else {
-                    return Err(
-                        Error::invalid_argument().context("read subscription fd downcast failed")
-                    );
+                    return Err(Error::invalid_argument().context("file is not pollable"));
                 }
             }
             Subscription::Write(w) => {
-                if file_to_handle(w.file.deref()).is_some() {
+                if w.file.pollable().is_some() {
                     immediate_writes.push(w);
                 } else {
-                    return Err(
-                        Error::invalid_argument().context("write subscription fd downcast failed")
-                    );
+                    return Err(Error::invalid_argument().context("file is not pollable"));
                 }
             }
             Subscription::MonotonicClock { .. } => unreachable!(),
@@ -137,49 +124,6 @@ pub async fn poll_oneoff_<'a>(
 
 pub fn wasi_file_is_stdin(f: &dyn WasiFile) -> bool {
     f.as_any().is::<crate::stdio::Stdin>()
-}
-
-pub fn wasi_file_raw_handle(f: &dyn WasiFile) -> Option<RawHandleOrSocket> {
-    let a = f.as_any();
-    if a.is::<crate::file::File>() {
-        Some(
-            a.downcast_ref::<crate::file::File>()
-                .unwrap()
-                .as_raw_handle_or_socket(),
-        )
-    } else if a.is::<crate::net::TcpStream>() {
-        Some(
-            a.downcast_ref::<crate::net::TcpStream>()
-                .unwrap()
-                .as_raw_handle_or_socket(),
-        )
-    } else if a.is::<crate::net::TcpListener>() {
-        Some(
-            a.downcast_ref::<crate::net::TcpListener>()
-                .unwrap()
-                .as_raw_handle_or_socket(),
-        )
-    } else if a.is::<crate::stdio::Stdin>() {
-        Some(
-            a.downcast_ref::<crate::stdio::Stdin>()
-                .unwrap()
-                .as_raw_handle_or_socket(),
-        )
-    } else if a.is::<crate::stdio::Stdout>() {
-        Some(
-            a.downcast_ref::<crate::stdio::Stdout>()
-                .unwrap()
-                .as_raw_handle_or_socket(),
-        )
-    } else if a.is::<crate::stdio::Stderr>() {
-        Some(
-            a.downcast_ref::<crate::stdio::Stderr>()
-                .unwrap()
-                .as_raw_handle_or_socket(),
-        )
-    } else {
-        None
-    }
 }
 
 enum PollState {
