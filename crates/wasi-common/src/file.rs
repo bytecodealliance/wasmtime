@@ -7,6 +7,16 @@ pub trait WasiFile: Send + Sync {
     fn as_any(&self) -> &dyn Any;
     async fn get_filetype(&mut self) -> Result<FileType, Error>;
 
+    #[cfg(unix)]
+    fn pollable(&self) -> Option<rustix::fd::BorrowedFd> {
+        None
+    }
+
+    #[cfg(windows)]
+    fn pollable(&self) -> Option<io_extras::os::windows::RawHandleOrSocket> {
+        None
+    }
+
     fn isatty(&mut self) -> bool {
         false
     }

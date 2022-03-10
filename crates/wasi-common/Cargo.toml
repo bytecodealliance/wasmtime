@@ -30,6 +30,7 @@ bitflags = "1.2"
 rustix = "0.33.0"
 
 [target.'cfg(windows)'.dependencies]
+io-extras = "0.13.2"
 winapi = "0.3"
 
 [badges]
