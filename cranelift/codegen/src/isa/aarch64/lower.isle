@@ -1124,3 +1124,69 @@
 
 (rule (lower (has_type $I8X16 (popcnt x)))
       (vec_cnt x (VectorSize.Size8x16)))
+
+;;;; Rules for `fcmp` 32 bit ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type ty @ (multi_lane _ _) (fcmp (fcmp_zero_cond_not_eq cond) x (splat (f32const (zero_value_f32 y))))))
+      (let ((rn Reg x)
+            (vec_size VectorSize (vector_size ty)))
+          (value_reg (not (fcmeq0 rn vec_size) vec_size))))
+
+(rule (lower (has_type ty @ (multi_lane _ _) (fcmp (fcmp_zero_cond cond) x (splat (f32const (zero_value_f32 y))))))
+      (let ((rn Reg x)
+            (vec_size VectorSize (vector_size ty)))
+          (value_reg (float_cmp_zero cond rn vec_size))))
+
+(rule (lower (has_type ty @ (multi_lane _ _) (fcmp (fcmp_zero_cond_not_eq cond) (splat (f32const (zero_value_f32 x))) y)))
+      (let ((rn Reg y)
+            (vec_size VectorSize (vector_size ty)))
+          (value_reg (not (fcmeq0 rn vec_size) vec_size))))
+
+(rule (lower (has_type ty @ (multi_lane _ _) (fcmp (fcmp_zero_cond cond) (splat (f32const (zero_value_f32 x))) y)))
+      (let ((rn Reg y)
+            (vec_size VectorSize (vector_size ty)))
+          (value_reg (float_cmp_zero_swap cond rn vec_size))))
+
+;;;; Rules for `fcmp` 64 bit ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type ty @ (multi_lane _ _) (fcmp (fcmp_zero_cond_not_eq cond) x (splat (f64const (zero_value_f64 y))))))
+      (let ((rn Reg x)
+            (vec_size VectorSize (vector_size ty)))
+          (value_reg (not (fcmeq0 rn vec_size) vec_size))))
+
+(rule (lower (has_type ty @ (multi_lane _ _) (fcmp (fcmp_zero_cond cond) x (splat (f64const (zero_value_f64 y))))))
+      (let ((rn Reg x)
+            (vec_size VectorSize (vector_size ty)))
+          (value_reg (float_cmp_zero cond rn vec_size))))
+
+(rule (lower (has_type ty @ (multi_lane _ _) (fcmp (fcmp_zero_cond_not_eq cond) (splat (f64const (zero_value_f64 x))) y)))
+      (let ((rn Reg y)
+            (vec_size VectorSize (vector_size ty)))
+          (value_reg (not (fcmeq0 rn vec_size) vec_size))))
+
+(rule (lower (has_type ty @ (multi_lane _ _) (fcmp (fcmp_zero_cond cond) (splat (f64const (zero_value_f64 x))) y)))
+      (let ((rn Reg y)
+            (vec_size VectorSize (vector_size ty)))
+          (value_reg (float_cmp_zero_swap cond rn vec_size))))
+
+;;;; Rules for `icmp` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type ty @ (multi_lane _ _) (icmp (icmp_zero_cond_not_eq cond) x (splat (iconst (zero_value y))))))
+      (let ((rn Reg x)
+            (vec_size VectorSize (vector_size ty)))
+          (value_reg (not (cmeq0 rn vec_size) vec_size))))
+
+(rule (lower (has_type ty @ (multi_lane _ _) (icmp (icmp_zero_cond cond) x (splat (iconst (zero_value y))))))
+      (let ((rn Reg x)
+            (vec_size VectorSize (vector_size ty)))
+          (value_reg (int_cmp_zero cond rn vec_size))))
+
+(rule (lower (has_type ty @ (multi_lane _ _) (icmp (icmp_zero_cond_not_eq cond) (splat (iconst (zero_value x))) y)))
+      (let ((rn Reg y)
+            (vec_size VectorSize (vector_size ty)))
+          (value_reg (not (cmeq0 rn vec_size) vec_size))))
+
+(rule (lower (has_type ty @ (multi_lane _ _) (icmp (icmp_zero_cond cond) (splat (iconst (zero_value x))) y)))
+      (let ((rn Reg y)
+            (vec_size VectorSize (vector_size ty)))
+          (value_reg (int_cmp_zero_swap cond rn vec_size))))
