@@ -354,13 +354,16 @@ mod tls {
     // thread local variable and has functions to access the variable.
     //
     // Note that this is specially done to fully encapsulate that the accessors
-    // for tls must not be inlined. Wasmtime's async support employs stack
+    // for tls may or may not be inlined. Wasmtime's async support employs stack
     // switching which can resume execution on different OS threads. This means
     // that borrows of our TLS pointer must never live across accesses because
     // otherwise the access may be split across two threads and cause unsafety.
     //
     // This also means that extra care is taken by the runtime to save/restore
     // these TLS values when the runtime may have crossed threads.
+    //
+    // Note, though, that if async support is disabled at compile time then
+    // these functions are free to be inlined.
     mod raw {
         use super::CallThreadState;
         use crate::Trap;
@@ -374,9 +377,10 @@ mod tls {
         // allows the runtime to perform per-thread initialization if necessary
         // for handling traps (e.g. setting up ports on macOS and sigaltstack on
         // Unix).
-        thread_local!(static PTR: Cell<(Ptr, bool)> = Cell::new((ptr::null(), false)));
+        thread_local!(static PTR: Cell<(Ptr, bool)> = const { Cell::new((ptr::null(), false)) });
 
-        #[inline(never)] // see module docs for why this is here
+        #[cfg_attr(feature = "async", inline(never))] // see module docs
+        #[cfg_attr(not(feature = "async"), inline)]
         pub fn replace(val: Ptr) -> Result<Ptr, Box<Trap>> {
             PTR.with(|p| {
                 // When a new value is configured that means that we may be
@@ -391,9 +395,10 @@ mod tls {
             })
         }
 
-        #[inline(never)]
         /// Eagerly initialize thread-local runtime functionality. This will be performed
         /// lazily by the runtime if users do not perform it eagerly.
+        #[cfg_attr(feature = "async", inline(never))] // see module docs
+        #[cfg_attr(not(feature = "async"), inline)]
         pub fn initialize() -> Result<(), Box<Trap>> {
             PTR.with(|p| {
                 let (state, initialized) = p.get();
@@ -406,7 +411,8 @@ mod tls {
             })
         }
 
-        #[inline(never)] // see module docs for why this is here
+        #[cfg_attr(feature = "async", inline(never))] // see module docs
+        #[cfg_attr(not(feature = "async"), inline)]
         pub fn get() -> Ptr {
             PTR.with(|p| p.get().0)
         }
