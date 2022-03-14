@@ -154,7 +154,7 @@ WASM_API_EXTERN bool wasmtime_context_fuel_consumed(const wasmtime_context_t *co
 WASM_API_EXTERN wasmtime_error_t *wasmtime_context_consume_fuel(wasmtime_context_t *context, uint64_t fuel, uint64_t *remaining);
 
 /**
- * \brief Configues WASI state within the specified store.
+ * \brief Configures WASI state within the specified store.
  *
  * This function is required if #wasmtime_linker_define_wasi is called. This
  * will configure the WASI state for instances defined within this store to the
