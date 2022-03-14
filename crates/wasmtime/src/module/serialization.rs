@@ -562,7 +562,6 @@ impl<'a> SerializedModule<'a> {
             dynamic_memory_offset_guard_size,
             generate_native_debuginfo,
             parse_wasm_debuginfo,
-            interruptable,
             consume_fuel,
             epoch_interruption,
             static_memory_bound_is_maximum,
@@ -603,7 +602,6 @@ impl<'a> SerializedModule<'a> {
             other.parse_wasm_debuginfo,
             "WebAssembly backtrace support",
         )?;
-        Self::check_bool(interruptable, other.interruptable, "interruption support")?;
         Self::check_bool(consume_fuel, other.consume_fuel, "fuel support")?;
         Self::check_bool(
             epoch_interruption,
@@ -823,36 +821,36 @@ Caused by:
     #[test]
     fn test_tunables_bool_mismatch() -> Result<()> {
         let mut config = Config::new();
-        config.interruptable(true);
+        config.epoch_interruption(true);
 
         let engine = Engine::new(&config)?;
         let module = Module::new(&engine, "(module)")?;
 
         let mut serialized = SerializedModule::new(&module);
-        serialized.metadata.tunables.interruptable = false;
+        serialized.metadata.tunables.epoch_interruption = false;
 
         match serialized.into_module(&engine) {
             Ok(_) => unreachable!(),
             Err(e) => assert_eq!(
                 e.to_string(),
-                "Module was compiled without interruption support but it is enabled for the host"
+                "Module was compiled without epoch interruption but it is enabled for the host"
             ),
         }
 
         let mut config = Config::new();
-        config.interruptable(false);
+        config.epoch_interruption(false);
 
         let engine = Engine::new(&config)?;
         let module = Module::new(&engine, "(module)")?;
 
         let mut serialized = SerializedModule::new(&module);
-        serialized.metadata.tunables.interruptable = true;
+        serialized.metadata.tunables.epoch_interruption = true;
 
         match serialized.into_module(&engine) {
             Ok(_) => unreachable!(),
             Err(e) => assert_eq!(
                 e.to_string(),
-                "Module was compiled with interruption support but it is not enabled for the host"
+                "Module was compiled with epoch interruption but it is not enabled for the host"
             ),
         }
 

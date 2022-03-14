@@ -257,16 +257,6 @@ impl Config {
     ///   and the periodic yields with epochs should ensure that when the
     ///   timeout is reached it's appropriately recognized.
     ///
-    /// * Finally you can spawn futures into a thread pool. By doing this in a
-    ///   thread pool you are relaxing the requirement that `Future::poll` must
-    ///   be fast because your future is executing on a separate thread. This
-    ///   strategy, however, would likely still require some form of
-    ///   cancellation via [`Config::epoch_interruption`] or
-    ///   [`crate::Store::interrupt_handle`] to ensure wasm doesn't take *too*
-    ///   long to execute. This solution is generally not recommended for its
-    ///   complexity and instead one of the previous solutions should likely be
-    ///   used.
-    ///
     /// In all cases special care needs to be taken when integrating
     /// asynchronous wasm into your application. You should carefully plan where
     /// WebAssembly will execute and what compute resources will be allotted to
@@ -314,27 +304,13 @@ impl Config {
         self
     }
 
-    /// Configures whether functions and loops will be interruptable via the
-    /// [`Store::interrupt_handle`](crate::Store::interrupt_handle) method.
-    ///
-    /// For more information see the documentation on
-    /// [`Store::interrupt_handle`](crate::Store::interrupt_handle).
-    ///
-    /// By default this option is `false`.
-    pub fn interruptable(&mut self, enable: bool) -> &mut Self {
-        self.tunables.interruptable = enable;
-        self
-    }
-
     /// Configures whether execution of WebAssembly will "consume fuel" to
     /// either halt or yield execution as desired.
     ///
-    /// This option is similar in purpose to [`Config::interruptable`] where
-    /// you can prevent infinitely-executing WebAssembly code. The difference
-    /// is that this option allows deterministic execution of WebAssembly code
-    /// by instrumenting generated code consume fuel as it executes. When fuel
-    /// runs out the behavior is defined by configuration within a [`Store`],
-    /// and by default a trap is raised.
+    /// This can be used to deterministically prevent infinitely-executing
+    /// WebAssembly code by instrumenting generated code to consume fuel as it
+    /// executes. When fuel runs out the behavior is defined by configuration
+    /// within a [`Store`], and by default a trap is raised.
     ///
     /// Note that a [`Store`] starts with no fuel, so if you enable this option
     /// you'll have to be sure to pour some fuel into [`Store`] before

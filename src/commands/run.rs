@@ -159,7 +159,7 @@ impl RunCommand {
 
         let mut config = self.common.config(None)?;
         if self.wasm_timeout.is_some() {
-            config.interruptable(true);
+            config.epoch_interruption(true);
         }
         let engine = Engine::new(&config)?;
         let mut store = Store::new(&engine, Host::default());
@@ -305,10 +305,11 @@ impl RunCommand {
 
     fn load_main_module(&self, store: &mut Store<Host>, linker: &mut Linker<Host>) -> Result<()> {
         if let Some(timeout) = self.wasm_timeout {
-            let handle = store.interrupt_handle()?;
+            store.set_epoch_deadline(1);
+            let engine = store.engine().clone();
             thread::spawn(move || {
                 thread::sleep(timeout);
-                handle.interrupt();
+                engine.increment_epoch();
             });
         }
 

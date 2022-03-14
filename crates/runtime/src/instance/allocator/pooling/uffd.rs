@@ -515,7 +515,7 @@ mod test {
                 info: MockModuleInfo,
             }
             unsafe impl Store for MockStore {
-                fn vminterrupts(&self) -> *mut crate::VMInterrupts {
+                fn vmruntime_limits(&self) -> *mut crate::VMRuntimeLimits {
                     std::ptr::null_mut()
                 }
                 fn externref_activations_table(

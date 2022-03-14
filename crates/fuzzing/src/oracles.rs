@@ -107,9 +107,6 @@ pub enum Timeout {
     /// No timeout is used, it should be guaranteed via some other means that
     /// the input does not infinite loop.
     None,
-    /// A time-based timeout is used with a sleeping thread sending a signal
-    /// after the specified duration.
-    Time(Duration),
     /// Fuel-based timeouts are used where the specified fuel is all that the
     /// provided wasm module is allowed to consume.
     Fuel(u64),
@@ -143,12 +140,6 @@ pub fn instantiate(wasm: &[u8], known_valid: bool, config: &generators::Config, 
         // This prevents us from creating a huge number of sleeping threads if
         // this function is executed in a loop, like it does on nightly fuzzing
         // infrastructure.
-        Timeout::Time(timeout) => {
-            let handle = store.interrupt_handle().unwrap();
-            timeout_state.spawn_timeout(timeout, move || handle.interrupt());
-        }
-        // Similar to above, but we bump the epoch rather than set the
-        // interrupt flag.
         Timeout::Epoch(timeout) => {
             let engine = store.engine().clone();
             timeout_state.spawn_timeout(timeout, move || engine.increment_epoch());

@@ -65,7 +65,7 @@ pub use crate::traphandlers::{
 };
 pub use crate::vmcontext::{
     VMCallerCheckedAnyfunc, VMContext, VMFunctionBody, VMFunctionImport, VMGlobalDefinition,
-    VMGlobalImport, VMInterrupts, VMInvokeArgument, VMMemoryDefinition, VMMemoryImport,
+    VMGlobalImport, VMInvokeArgument, VMMemoryDefinition, VMMemoryImport, VMRuntimeLimits,
     VMSharedSignatureIndex, VMTableDefinition, VMTableImport, VMTrampoline, ValRaw,
 };
 
@@ -99,11 +99,11 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// is that `wasmtime::Store` handles all this correctly.
 pub unsafe trait Store {
     /// Returns the raw pointer in memory where this store's shared
-    /// `VMInterrupts` structure is located.
+    /// `VMRuntimeLimits` structure is located.
     ///
     /// Used to configure `VMContext` initialization and store the right pointer
     /// in the `VMContext`.
-    fn vminterrupts(&self) -> *mut VMInterrupts;
+    fn vmruntime_limits(&self) -> *mut VMRuntimeLimits;
 
     /// Returns a pointer to the global epoch counter.
     ///

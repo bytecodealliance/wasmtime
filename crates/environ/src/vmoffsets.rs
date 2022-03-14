@@ -4,7 +4,7 @@
 // Currently the `VMContext` allocation by field looks like this:
 //
 // struct VMContext {
-//      interrupts: *const VMInterrupts,
+//      runtime_limits: *const VMRuntimeLimits,
 //      externref_activations_table: *mut VMExternRefActivationsTable,
 //      store: *mut dyn Store,
 //      builtins: *mut VMBuiltinFunctionsArray,
@@ -74,7 +74,7 @@ pub struct VMOffsets<P> {
     pub num_escaped_funcs: u32,
 
     // precalculated offsets of various member fields
-    interrupts: u32,
+    runtime_limits: u32,
     epoch_ptr: u32,
     externref_activations_table: u32,
     store: u32,
@@ -221,7 +221,7 @@ impl<P: PtrSize> VMOffsets<P> {
             store: "jit store state",
             externref_activations_table: "jit host externref state",
             epoch_ptr: "jit current epoch state",
-            interrupts: "jit interrupt state",
+            runtime_limits: "jit runtime limits state",
         }
     }
 }
@@ -239,7 +239,7 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
             num_defined_memories: fields.num_defined_memories,
             num_defined_globals: fields.num_defined_globals,
             num_escaped_funcs: fields.num_escaped_funcs,
-            interrupts: 0,
+            runtime_limits: 0,
             epoch_ptr: 0,
             externref_activations_table: 0,
             store: 0,
@@ -286,7 +286,7 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
         }
 
         fields! {
-            size(interrupts) = ret.ptr.size(),
+            size(runtime_limits) = ret.ptr.size(),
             size(epoch_ptr) = ret.ptr.size(),
             size(externref_activations_table) = ret.ptr.size(),
             size(store) = ret.ptr.size() * 2,
@@ -483,23 +483,23 @@ impl<P: PtrSize> VMOffsets<P> {
     }
 }
 
-/// Offsets for `VMInterrupts`.
+/// Offsets for `VMRuntimeLimits`.
 impl<P: PtrSize> VMOffsets<P> {
-    /// Return the offset of the `stack_limit` field of `VMInterrupts`
+    /// Return the offset of the `stack_limit` field of `VMRuntimeLimits`
     #[inline]
-    pub fn vminterrupts_stack_limit(&self) -> u8 {
+    pub fn vmruntime_limits_stack_limit(&self) -> u8 {
         0
     }
 
-    /// Return the offset of the `fuel_consumed` field of `VMInterrupts`
+    /// Return the offset of the `fuel_consumed` field of `VMRuntimeLimits`
     #[inline]
-    pub fn vminterrupts_fuel_consumed(&self) -> u8 {
+    pub fn vmruntime_limits_fuel_consumed(&self) -> u8 {
         self.pointer_size()
     }
 
-    /// Return the offset of the `epoch_deadline` field of `VMInterrupts`
+    /// Return the offset of the `epoch_deadline` field of `VMRuntimeLimits`
     #[inline]
-    pub fn vminterupts_epoch_deadline(&self) -> u8 {
+    pub fn vmruntime_limits_epoch_deadline(&self) -> u8 {
         self.pointer_size() + 8 // `stack_limit` is a pointer; `fuel_consumed` is an `i64`
     }
 }
@@ -535,10 +535,10 @@ impl<P: PtrSize> VMOffsets<P> {
 
 /// Offsets for `VMContext`.
 impl<P: PtrSize> VMOffsets<P> {
-    /// Return the offset to the `VMInterrupts` structure
+    /// Return the offset to the `VMRuntimeLimits` structure
     #[inline]
-    pub fn vmctx_interrupts(&self) -> u32 {
-        self.interrupts
+    pub fn vmctx_runtime_limits(&self) -> u32 {
+        self.runtime_limits
     }
 
     /// Return the offset to the `*const AtomicU64` epoch-counter

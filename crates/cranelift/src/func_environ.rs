@@ -17,7 +17,7 @@ use std::mem;
 use wasmparser::Operator;
 use wasmtime_environ::{
     BuiltinFunctionIndex, MemoryPlan, MemoryStyle, Module, ModuleTranslation, TableStyle, Tunables,
-    TypeTables, VMOffsets, INTERRUPTED, WASM_PAGE_SIZE,
+    TypeTables, VMOffsets, WASM_PAGE_SIZE,
 };
 use wasmtime_environ::{FUNCREF_INIT_BIT, FUNCREF_MASK};
 
@@ -129,17 +129,17 @@ pub struct FuncEnvironment<'module_environment> {
     /// A function-local variable which stores the cached value of the amount of
     /// fuel remaining to execute. If used this is modified frequently so it's
     /// stored locally as a variable instead of always referenced from the field
-    /// in `*const VMInterrupts`
+    /// in `*const VMRuntimeLimits`
     fuel_var: cranelift_frontend::Variable,
 
     /// A function-local variable which caches the value of `*const
-    /// VMInterrupts` for this function's vmctx argument. This pointer is stored
+    /// VMRuntimeLimits` for this function's vmctx argument. This pointer is stored
     /// in the vmctx itself, but never changes for the lifetime of the function,
     /// so if we load it up front we can continue to use it throughout.
-    vminterrupts_ptr: cranelift_frontend::Variable,
+    vmruntime_limits_ptr: cranelift_frontend::Variable,
 
     /// A cached epoch deadline value, when performing epoch-based
-    /// interruption. Loaded from `VMInterrupts` and reloaded after
+    /// interruption. Loaded from `VMRuntimeLimits` and reloaded after
     /// any yield.
     epoch_deadline_var: cranelift_frontend::Variable,
 
@@ -182,7 +182,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             fuel_var: Variable::new(0),
             epoch_deadline_var: Variable::new(0),
             epoch_ptr_var: Variable::new(0),
-            vminterrupts_ptr: Variable::new(0),
+            vmruntime_limits_ptr: Variable::new(0),
 
             // Start with at least one fuel being consumed because even empty
             // functions should consume at least some fuel.
@@ -344,27 +344,27 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         }
     }
 
-    fn declare_vminterrupts_ptr(&mut self, builder: &mut FunctionBuilder<'_>) {
-        // We load the `*const VMInterrupts` value stored within vmctx at the
+    fn declare_vmruntime_limits_ptr(&mut self, builder: &mut FunctionBuilder<'_>) {
+        // We load the `*const VMRuntimeLimits` value stored within vmctx at the
         // head of the function and reuse the same value across the entire
         // function. This is possible since we know that the pointer never
         // changes for the lifetime of the function.
         let pointer_type = self.pointer_type();
-        builder.declare_var(self.vminterrupts_ptr, pointer_type);
+        builder.declare_var(self.vmruntime_limits_ptr, pointer_type);
         let vmctx = self.vmctx(builder.func);
         let base = builder.ins().global_value(pointer_type, vmctx);
-        let offset = i32::try_from(self.offsets.vmctx_interrupts()).unwrap();
+        let offset = i32::try_from(self.offsets.vmctx_runtime_limits()).unwrap();
         let interrupt_ptr = builder
             .ins()
             .load(pointer_type, ir::MemFlags::trusted(), base, offset);
-        builder.def_var(self.vminterrupts_ptr, interrupt_ptr);
+        builder.def_var(self.vmruntime_limits_ptr, interrupt_ptr);
     }
 
     fn fuel_function_entry(&mut self, builder: &mut FunctionBuilder<'_>) {
         // On function entry we load the amount of fuel into a function-local
         // `self.fuel_var` to make fuel modifications fast locally. This cache
         // is then periodically flushed to the Store-defined location in
-        // `VMInterrupts` later.
+        // `VMRuntimeLimits` later.
         builder.declare_var(self.fuel_var, ir::types::I64);
         self.fuel_load_into_var(builder);
         self.fuel_check(builder);
@@ -412,13 +412,13 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         match op {
             // Exiting a function (via a return or unreachable) or otherwise
             // entering a different function (via a call) means that we need to
-            // update the fuel consumption in `VMInterrupts` because we're
+            // update the fuel consumption in `VMRuntimeLimits` because we're
             // about to move control out of this function itself and the fuel
             // may need to be read.
             //
             // Before this we need to update the fuel counter from our own cost
             // leading up to this function call, and then we can store
-            // `self.fuel_var` into `VMInterrupts`.
+            // `self.fuel_var` into `VMRuntimeLimits`.
             Operator::Unreachable
             | Operator::Return
             | Operator::CallIndirect { .. }
@@ -502,7 +502,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         builder.def_var(self.fuel_var, fuel);
     }
 
-    /// Loads the fuel consumption value from `VMInterrupts` into `self.fuel_var`
+    /// Loads the fuel consumption value from `VMRuntimeLimits` into `self.fuel_var`
     fn fuel_load_into_var(&mut self, builder: &mut FunctionBuilder<'_>) {
         let (addr, offset) = self.fuel_addr_offset(builder);
         let fuel = builder
@@ -512,7 +512,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     }
 
     /// Stores the fuel consumption value from `self.fuel_var` into
-    /// `VMInterrupts`.
+    /// `VMRuntimeLimits`.
     fn fuel_save_from_var(&mut self, builder: &mut FunctionBuilder<'_>) {
         let (addr, offset) = self.fuel_addr_offset(builder);
         let fuel_consumed = builder.use_var(self.fuel_var);
@@ -522,14 +522,14 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     }
 
     /// Returns the `(address, offset)` of the fuel consumption within
-    /// `VMInterrupts`, used to perform loads/stores later.
+    /// `VMRuntimeLimits`, used to perform loads/stores later.
     fn fuel_addr_offset(
         &mut self,
         builder: &mut FunctionBuilder<'_>,
     ) -> (ir::Value, ir::immediates::Offset32) {
         (
-            builder.use_var(self.vminterrupts_ptr),
-            i32::from(self.offsets.vminterrupts_fuel_consumed()).into(),
+            builder.use_var(self.vmruntime_limits_ptr),
+            i32::from(self.offsets.vmruntime_limits_fuel_consumed()).into(),
         )
     }
 
@@ -628,12 +628,12 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     }
 
     fn epoch_load_deadline_into_var(&mut self, builder: &mut FunctionBuilder<'_>) {
-        let interrupts = builder.use_var(self.vminterrupts_ptr);
+        let interrupts = builder.use_var(self.vmruntime_limits_ptr);
         let deadline = builder.ins().load(
             ir::types::I64,
             ir::MemFlags::trusted(),
             interrupts,
-            ir::immediates::Offset32::new(self.offsets.vminterupts_epoch_deadline() as i32),
+            ir::immediates::Offset32::new(self.offsets.vmruntime_limits_epoch_deadline() as i32),
         );
         builder.def_var(self.epoch_deadline_var, deadline);
     }
@@ -824,7 +824,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     }
 
     fn after_locals(&mut self, num_locals: usize) {
-        self.vminterrupts_ptr = Variable::new(num_locals);
+        self.vmruntime_limits_ptr = Variable::new(num_locals);
         self.fuel_var = Variable::new(num_locals + 1);
         self.epoch_deadline_var = Variable::new(num_locals + 2);
         self.epoch_ptr_var = Variable::new(num_locals + 3);
@@ -1976,31 +1976,6 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     }
 
     fn translate_loop_header(&mut self, builder: &mut FunctionBuilder) -> WasmResult<()> {
-        // If enabled check the interrupt flag to prevent long or infinite
-        // loops.
-        //
-        // For more information about this see comments in
-        // `crates/environ/src/cranelift.rs`
-        if self.tunables.interruptable {
-            let pointer_type = self.pointer_type();
-            let interrupt_ptr = builder.use_var(self.vminterrupts_ptr);
-            let interrupt = builder.ins().load(
-                pointer_type,
-                ir::MemFlags::trusted(),
-                interrupt_ptr,
-                i32::from(self.offsets.vminterrupts_stack_limit()),
-            );
-            // Note that the cast to `isize` happens first to allow sign-extension,
-            // if necessary, to `i64`.
-            let interrupted_sentinel = builder
-                .ins()
-                .iconst(pointer_type, INTERRUPTED as isize as i64);
-            let cmp = builder
-                .ins()
-                .icmp(IntCC::Equal, interrupt, interrupted_sentinel);
-            builder.ins().trapnz(cmp, ir::TrapCode::Interrupt);
-        }
-
         // Additionally if enabled check how much fuel we have remaining to see
         // if we've run out by this point.
         if self.tunables.consume_fuel {
@@ -2045,13 +2020,10 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         builder: &mut FunctionBuilder,
         _state: &FuncTranslationState,
     ) -> WasmResult<()> {
-        // If the `vminterrupts_ptr` variable will get used then we initialize
+        // If the `vmruntime_limits_ptr` variable will get used then we initialize
         // it here.
-        if self.tunables.consume_fuel
-            || self.tunables.interruptable
-            || self.tunables.epoch_interruption
-        {
-            self.declare_vminterrupts_ptr(builder);
+        if self.tunables.consume_fuel || self.tunables.epoch_interruption {
+            self.declare_vmruntime_limits_ptr(builder);
         }
         // Additionally we initialize `fuel_var` if it will get used.
         if self.tunables.consume_fuel {

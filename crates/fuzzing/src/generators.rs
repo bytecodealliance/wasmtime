@@ -389,7 +389,6 @@ impl Config {
             .wasm_memory64(self.module_config.config.memory64_enabled)
             .cranelift_nan_canonicalization(self.wasmtime.canonicalize_nans)
             .cranelift_opt_level(self.wasmtime.opt_level.to_wasmtime())
-            .interruptable(self.wasmtime.interruptable)
             .consume_fuel(self.wasmtime.consume_fuel)
             .epoch_interruption(self.wasmtime.epoch_interruption)
             .memory_init_cow(self.wasmtime.memory_init_cow)
@@ -490,23 +489,16 @@ impl Config {
     pub fn generate_timeout(&mut self, u: &mut Unstructured<'_>) -> arbitrary::Result<Timeout> {
         let time_duration = Duration::from_secs(20);
         let timeout = u
-            .choose(&[
-                Timeout::Time(time_duration),
-                Timeout::Fuel(100_000),
-                Timeout::Epoch(time_duration),
-            ])?
+            .choose(&[Timeout::Fuel(100_000), Timeout::Epoch(time_duration)])?
             .clone();
         match &timeout {
-            &Timeout::Time(..) => {
-                self.wasmtime.interruptable = true;
-            }
-            &Timeout::Fuel(..) => {
+            Timeout::Fuel(..) => {
                 self.wasmtime.consume_fuel = true;
             }
-            &Timeout::Epoch(..) => {
+            Timeout::Epoch(..) => {
                 self.wasmtime.epoch_interruption = true;
             }
-            &Timeout::None => unreachable!("Not an option given to choose()"),
+            Timeout::None => unreachable!("Not an option given to choose()"),
         }
         Ok(timeout)
     }

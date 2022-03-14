@@ -1,14 +1,13 @@
 //! WebAssembly trap handling, which is built on top of the lower-level
 //! signalhandling mechanisms.
 
-use crate::{VMContext, VMInterrupts};
+use crate::VMContext;
 use anyhow::Error;
 use backtrace::Backtrace;
 use std::any::Any;
 use std::cell::{Cell, UnsafeCell};
 use std::mem::MaybeUninit;
 use std::ptr;
-use std::sync::atomic::Ordering::SeqCst;
 use std::sync::Once;
 use wasmtime_environ::TrapCode;
 
@@ -122,10 +121,6 @@ pub enum Trap {
         pc: usize,
         /// Native stack backtrace at the time the trap occurred
         backtrace: Backtrace,
-        /// An indicator for whether this may have been a trap generated from an
-        /// interrupt, used for switching what would otherwise be a stack
-        /// overflow trap to be an interrupt trap.
-        maybe_interrupted: bool,
     },
 
     /// A trap raised from a wasm libcall
@@ -169,7 +164,6 @@ impl Trap {
 ///
 /// Highly unsafe since `closure` won't have any dtors run.
 pub unsafe fn catch_traps<'a, F>(
-    vminterrupts: *mut VMInterrupts,
     signal_handler: Option<*const SignalHandler<'static>>,
     callee: *mut VMContext,
     mut closure: F,
@@ -177,7 +171,7 @@ pub unsafe fn catch_traps<'a, F>(
 where
     F: FnMut(*mut VMContext),
 {
-    return CallThreadState::new(signal_handler).with(vminterrupts, |cx| {
+    return CallThreadState::new(signal_handler).with(|cx| {
         wasmtime_setjmp(
             cx.jmp_buf.as_ptr(),
             call_closure::<F>,
@@ -223,33 +217,21 @@ impl CallThreadState {
         }
     }
 
-    fn with(
-        self,
-        interrupts: *mut VMInterrupts,
-        closure: impl FnOnce(&CallThreadState) -> i32,
-    ) -> Result<(), Box<Trap>> {
+    fn with(self, closure: impl FnOnce(&CallThreadState) -> i32) -> Result<(), Box<Trap>> {
         let ret = tls::set(&self, || closure(&self))?;
         if ret != 0 {
             Ok(())
         } else {
-            Err(unsafe { self.read_trap(interrupts) })
+            Err(unsafe { self.read_trap() })
         }
     }
 
     #[cold]
-    unsafe fn read_trap(&self, interrupts: *mut VMInterrupts) -> Box<Trap> {
+    unsafe fn read_trap(&self) -> Box<Trap> {
         Box::new(match (*self.unwind.get()).as_ptr().read() {
             UnwindReason::UserTrap(data) => Trap::User(data),
             UnwindReason::LibTrap(trap) => trap,
-            UnwindReason::JitTrap { backtrace, pc } => {
-                let maybe_interrupted =
-                    (*interrupts).stack_limit.load(SeqCst) == wasmtime_environ::INTERRUPTED;
-                Trap::Jit {
-                    pc,
-                    backtrace,
-                    maybe_interrupted,
-                }
-            }
+            UnwindReason::JitTrap { backtrace, pc } => Trap::Jit { pc, backtrace },
             UnwindReason::Panic(panic) => std::panic::resume_unwind(panic),
         })
     }

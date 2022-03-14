@@ -129,7 +129,7 @@ impl wasmtime_environ::Compiler for Compiler {
         // needed by `ir::Function`.
         //
         // Otherwise our stack limit is specially calculated from the vmctx
-        // argument, where we need to load the `*const VMInterrupts`
+        // argument, where we need to load the `*const VMRuntimeLimits`
         // pointer, and then from that pointer we need to load the stack
         // limit itself. Note that manual register allocation is needed here
         // too due to how late in the process this codegen happens.
@@ -141,7 +141,7 @@ impl wasmtime_environ::Compiler for Compiler {
             .create_global_value(ir::GlobalValueData::VMContext);
         let interrupts_ptr = context.func.create_global_value(ir::GlobalValueData::Load {
             base: vmctx,
-            offset: i32::try_from(func_env.offsets.vmctx_interrupts())
+            offset: i32::try_from(func_env.offsets.vmctx_runtime_limits())
                 .unwrap()
                 .into(),
             global_type: isa.pointer_type(),
@@ -149,7 +149,7 @@ impl wasmtime_environ::Compiler for Compiler {
         });
         let stack_limit = context.func.create_global_value(ir::GlobalValueData::Load {
             base: interrupts_ptr,
-            offset: i32::try_from(func_env.offsets.vminterrupts_stack_limit())
+            offset: i32::try_from(func_env.offsets.vmruntime_limits_stack_limit())
                 .unwrap()
                 .into(),
             global_type: isa.pointer_type(),

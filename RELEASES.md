@@ -2,6 +2,24 @@
 
 --------------------------------------------------------------------------------
 
+## 0.36.0
+
+Unreleased.
+
+### Added
+
+* Support for epoch-based interruption has been added to the C API.
+  [#3925](https://github.com/bytecodealliance/wasmtime/pull/3925)
+
+### Removed
+
+* Support for `Config::interruptable` and `InterruptHandle` has been removed
+  from the `wasmtime` crate. Users should migrate to using epoch-based
+  interruption instead.
+  [#3925](https://github.com/bytecodealliance/wasmtime/pull/3925)
+
+--------------------------------------------------------------------------------
+
 ## 0.35.1
 
 Released 2022-03-09.

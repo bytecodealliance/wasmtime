@@ -415,9 +415,7 @@ pub use crate::linker::*;
 pub use crate::memory::*;
 pub use crate::module::{FrameInfo, FrameSymbol, Module};
 pub use crate::r#ref::ExternRef;
-pub use crate::store::{
-    AsContext, AsContextMut, CallHook, InterruptHandle, Store, StoreContext, StoreContextMut,
-};
+pub use crate::store::{AsContext, AsContextMut, CallHook, Store, StoreContext, StoreContextMut};
 pub use crate::trap::*;
 pub use crate::types::*;
 pub use crate::values::*;
@@ -439,7 +437,6 @@ fn _assert_send_sync() {
     fn _assert_send<T: Send>(_t: T) {}
     _assert::<Engine>();
     _assert::<Config>();
-    _assert::<InterruptHandle>();
     _assert::<(Func, TypedFunc<(), ()>, Global, Table, Memory)>();
     _assert::<Instance>();
     _assert::<Module>();

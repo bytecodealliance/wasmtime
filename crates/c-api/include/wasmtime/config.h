@@ -97,15 +97,6 @@ enum wasmtime_profiling_strategy_enum { // ProfilingStrategy
 WASMTIME_CONFIG_PROP(void, debug_info, bool)
 
 /**
- * \brief Enables WebAssembly code to be interrupted.
- *
- * This setting is `false` by default. When enabled it will enable getting an
- * interrupt handle via #wasmtime_interrupt_handle_new which can be used to
- * interrupt currently-executing WebAssembly code.
- */
-WASMTIME_CONFIG_PROP(void, interruptable, bool)
-
-/**
  * \brief Whether or not fuel is enabled for generated code.
  *
  * This setting is `false` by default. When enabled it will enable fuel counting
@@ -113,6 +104,22 @@ WASMTIME_CONFIG_PROP(void, interruptable, bool)
  * and trap when reaching zero.
  */
 WASMTIME_CONFIG_PROP(void, consume_fuel, bool)
+
+/**
+ * \brief Whether or not epoch-based interruption is enabled for generated code.
+ *
+ * This setting is `false` by default. When enabled wasm code will check the
+ * current epoch periodically and abort if the current epoch is beyond a
+ * store-configured limit.
+ *
+ * Note that when this setting is enabled all stores will immediately trap and
+ * need to have their epoch deadline otherwise configured with
+ * #wasmtime_context_set_epoch_deadline.
+ *
+ * Note that the current epoch is engine-local and can be incremented with
+ * #wasmtime_engine_increment_epoch.
+ */
+WASMTIME_CONFIG_PROP(void, epoch_interruption, bool)
 
 /**
  * \brief Configures the maximum stack size, in bytes, that JIT code can use.
