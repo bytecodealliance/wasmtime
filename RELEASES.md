@@ -9,14 +9,14 @@ Unreleased.
 ### Added
 
 * Support for epoch-based interruption has been added to the C API.
-  [#TODO](https://github.com/bytecodealliance/wasmtime/pull/TODO)
+  [#3925](https://github.com/bytecodealliance/wasmtime/pull/3925)
 
 ### Removed
 
 * Support for `Config::interruptable` and `InterruptHandle` has been removed
   from the `wasmtime` crate. Users should migrate to using epoch-based
   interruption instead.
-  [#TODO](https://github.com/bytecodealliance/wasmtime/pull/TODO)
+  [#3925](https://github.com/bytecodealliance/wasmtime/pull/3925)
 
 --------------------------------------------------------------------------------
 
