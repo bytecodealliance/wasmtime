@@ -1806,7 +1806,7 @@ impl<T> StoreInner<T> {
         // Set a new deadline based on the "epoch deadline delta".
         //
         // Safety: this is safe because the epoch deadline in the
-        // `VMInterrupts` is accessed only here and by Wasm guest code
+        // `VMRuntimeLimits` is accessed only here and by Wasm guest code
         // running in this store, and we have a `&mut self` here.
         //
         // Also, note that when this update is performed while Wasm is

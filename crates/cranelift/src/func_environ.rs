@@ -129,17 +129,17 @@ pub struct FuncEnvironment<'module_environment> {
     /// A function-local variable which stores the cached value of the amount of
     /// fuel remaining to execute. If used this is modified frequently so it's
     /// stored locally as a variable instead of always referenced from the field
-    /// in `*const VMInterrupts`
+    /// in `*const VMRuntimeLimits`
     fuel_var: cranelift_frontend::Variable,
 
     /// A function-local variable which caches the value of `*const
-    /// VMInterrupts` for this function's vmctx argument. This pointer is stored
+    /// VMRuntimeLimits` for this function's vmctx argument. This pointer is stored
     /// in the vmctx itself, but never changes for the lifetime of the function,
     /// so if we load it up front we can continue to use it throughout.
     vmruntime_limits_ptr: cranelift_frontend::Variable,
 
     /// A cached epoch deadline value, when performing epoch-based
-    /// interruption. Loaded from `VMInterrupts` and reloaded after
+    /// interruption. Loaded from `VMRuntimeLimits` and reloaded after
     /// any yield.
     epoch_deadline_var: cranelift_frontend::Variable,
 
@@ -345,7 +345,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     }
 
     fn declare_vmruntime_limits_ptr(&mut self, builder: &mut FunctionBuilder<'_>) {
-        // We load the `*const VMInterrupts` value stored within vmctx at the
+        // We load the `*const VMRuntimeLimits` value stored within vmctx at the
         // head of the function and reuse the same value across the entire
         // function. This is possible since we know that the pointer never
         // changes for the lifetime of the function.
@@ -364,7 +364,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         // On function entry we load the amount of fuel into a function-local
         // `self.fuel_var` to make fuel modifications fast locally. This cache
         // is then periodically flushed to the Store-defined location in
-        // `VMInterrupts` later.
+        // `VMRuntimeLimits` later.
         builder.declare_var(self.fuel_var, ir::types::I64);
         self.fuel_load_into_var(builder);
         self.fuel_check(builder);
@@ -412,13 +412,13 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         match op {
             // Exiting a function (via a return or unreachable) or otherwise
             // entering a different function (via a call) means that we need to
-            // update the fuel consumption in `VMInterrupts` because we're
+            // update the fuel consumption in `VMRuntimeLimits` because we're
             // about to move control out of this function itself and the fuel
             // may need to be read.
             //
             // Before this we need to update the fuel counter from our own cost
             // leading up to this function call, and then we can store
-            // `self.fuel_var` into `VMInterrupts`.
+            // `self.fuel_var` into `VMRuntimeLimits`.
             Operator::Unreachable
             | Operator::Return
             | Operator::CallIndirect { .. }
@@ -502,7 +502,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         builder.def_var(self.fuel_var, fuel);
     }
 
-    /// Loads the fuel consumption value from `VMInterrupts` into `self.fuel_var`
+    /// Loads the fuel consumption value from `VMRuntimeLimits` into `self.fuel_var`
     fn fuel_load_into_var(&mut self, builder: &mut FunctionBuilder<'_>) {
         let (addr, offset) = self.fuel_addr_offset(builder);
         let fuel = builder
@@ -512,7 +512,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     }
 
     /// Stores the fuel consumption value from `self.fuel_var` into
-    /// `VMInterrupts`.
+    /// `VMRuntimeLimits`.
     fn fuel_save_from_var(&mut self, builder: &mut FunctionBuilder<'_>) {
         let (addr, offset) = self.fuel_addr_offset(builder);
         let fuel_consumed = builder.use_var(self.fuel_var);
@@ -522,7 +522,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     }
 
     /// Returns the `(address, offset)` of the fuel consumption within
-    /// `VMInterrupts`, used to perform loads/stores later.
+    /// `VMRuntimeLimits`, used to perform loads/stores later.
     fn fuel_addr_offset(
         &mut self,
         builder: &mut FunctionBuilder<'_>,

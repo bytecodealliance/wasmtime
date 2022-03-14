@@ -129,7 +129,7 @@ impl wasmtime_environ::Compiler for Compiler {
         // needed by `ir::Function`.
         //
         // Otherwise our stack limit is specially calculated from the vmctx
-        // argument, where we need to load the `*const VMInterrupts`
+        // argument, where we need to load the `*const VMRuntimeLimits`
         // pointer, and then from that pointer we need to load the stack
         // limit itself. Note that manual register allocation is needed here
         // too due to how late in the process this codegen happens.

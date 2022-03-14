@@ -99,7 +99,7 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// is that `wasmtime::Store` handles all this correctly.
 pub unsafe trait Store {
     /// Returns the raw pointer in memory where this store's shared
-    /// `VMInterrupts` structure is located.
+    /// `VMRuntimeLimits` structure is located.
     ///
     /// Used to configure `VMContext` initialization and store the right pointer
     /// in the `VMContext`.
