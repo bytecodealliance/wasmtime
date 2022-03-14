@@ -354,12 +354,16 @@ impl Config {
             ..
         } = &mut self.wasmtime.strategy
         {
-            limits.memories = 1;
-            limits.tables = 5;
-            limits.table_elements = 1_000;
-            // Set a lower bound of as the spec tests define memories with at
-            // least a few pages and some tests do memory grow operations.
-            limits.memory_pages = std::cmp::max(limits.memory_pages, 900);
+            // Configure the lower bound of a number of limits to what's
+            // required to actually run the spec tests. Fuzz-generated inputs
+            // may have limits less than these thresholds which would cause the
+            // spec tests to fail which isn't particularly interesting.
+            limits.memories = limits.memories.max(1);
+            limits.tables = limits.memories.max(5);
+            limits.table_elements = limits.memories.max(1_000);
+            limits.memory_pages = limits.memory_pages.max(900);
+            limits.count = limits.count.max(40);
+            limits.size = limits.size.max(4096);
 
             match &mut self.wasmtime.memory_config {
                 MemoryConfig::Normal(config) => {
