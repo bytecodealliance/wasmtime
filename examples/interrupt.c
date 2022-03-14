@@ -25,29 +25,27 @@ to tweak the `-lpthread` and such annotations as well as the name of the
 #include <wasmtime.h>
 
 #ifdef _WIN32
-static void spawn_interrupt(wasmtime_interrupt_handle_t *handle) {
-  wasmtime_interrupt_handle_interrupt(handle);
-  wasmtime_interrupt_handle_delete(handle);
+static void spawn_interrupt(wasm_engine_t *engine) {
+  wasmtime_engine_increment_epoch(engine);
 }
 #else
 #include <pthread.h>
 #include <time.h>
 
-static void* helper(void *_handle) {
-  wasmtime_interrupt_handle_t *handle = _handle;
+static void* helper(void *_engine) {
+  wasm_engine_t *engine = _engine;
   struct timespec sleep_dur;
   sleep_dur.tv_sec = 1;
   sleep_dur.tv_nsec = 0;
   nanosleep(&sleep_dur, NULL);
   printf("Sending an interrupt\n");
-  wasmtime_interrupt_handle_interrupt(handle);
-  wasmtime_interrupt_handle_delete(handle);
+  wasmtime_engine_increment_epoch(engine);
   return 0;
 }
 
-static void spawn_interrupt(wasmtime_interrupt_handle_t *handle) {
+static void spawn_interrupt(wasm_engine_t *engine) {
   pthread_t child;
-  int rc = pthread_create(&child, NULL, helper, handle);
+  int rc = pthread_create(&child, NULL, helper, engine);
   assert(rc == 0);
 }
 #endif
@@ -58,16 +56,15 @@ int main() {
   // Create a `wasm_store_t` with interrupts enabled
   wasm_config_t *config = wasm_config_new();
   assert(config != NULL);
-  wasmtime_config_interruptable_set(config, true);
+  wasmtime_config_epoch_interruption_set(config, true);
   wasm_engine_t *engine = wasm_engine_new_with_config(config);
   assert(engine != NULL);
   wasmtime_store_t *store = wasmtime_store_new(engine, NULL, NULL);
   assert(store != NULL);
   wasmtime_context_t *context = wasmtime_store_context(store);
 
-  // Create our interrupt handle we'll use later
-  wasmtime_interrupt_handle_t *handle = wasmtime_interrupt_handle_new(context);
-  assert(handle != NULL);
+  // Configure the epoch deadline after which WebAssembly code will trap.
+  wasmtime_context_set_epoch_deadline(context, 1);
 
   // Read our input file, which in this case is a wasm text file.
   FILE* file = fopen("examples/interrupt.wat", "r");
@@ -108,7 +105,7 @@ int main() {
   assert(run.kind == WASMTIME_EXTERN_FUNC);
 
   // Spawn a thread to send us an interrupt after a period of time.
-  spawn_interrupt(handle);
+  spawn_interrupt(engine);
 
   // And call it!
   printf("Entering infinite loop...\n");
@@ -116,13 +113,6 @@ int main() {
   assert(error == NULL);
   assert(trap != NULL);
   printf("Got a trap!...\n");
-
-  // `trap` can be inspected here to see the trap message has an interrupt in it
-  wasmtime_trap_code_t code;
-  ok = wasmtime_trap_code(trap, &code);
-  assert(ok);
-  assert(code == WASMTIME_TRAP_CODE_INTERRUPT);
-  wasm_trap_delete(trap);
 
   wasmtime_store_delete(store);
   wasm_engine_delete(engine);

@@ -171,19 +171,12 @@ impl Trap {
     pub(crate) fn from_runtime(runtime_trap: wasmtime_runtime::Trap) -> Self {
         match runtime_trap {
             wasmtime_runtime::Trap::User(error) => Trap::from(error),
-            wasmtime_runtime::Trap::Jit {
-                pc,
-                backtrace,
-                maybe_interrupted,
-            } => {
-                let mut code = GlobalModuleRegistry::with(|modules| {
+            wasmtime_runtime::Trap::Jit { pc, backtrace } => {
+                let code = GlobalModuleRegistry::with(|modules| {
                     modules
                         .lookup_trap_code(pc)
                         .unwrap_or(EnvTrapCode::StackOverflow)
                 });
-                if maybe_interrupted && code == EnvTrapCode::StackOverflow {
-                    code = EnvTrapCode::Interrupt;
-                }
                 Trap::new_wasm(Some(pc), code, backtrace)
             }
             wasmtime_runtime::Trap::Wasm {

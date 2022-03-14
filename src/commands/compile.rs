@@ -45,10 +45,6 @@ pub struct CompileCommand {
     #[structopt(flatten)]
     common: CommonOptions,
 
-    /// Enable support for interrupting WebAssembly code.
-    #[structopt(long)]
-    interruptable: bool,
-
     /// The target triple; default is the host triple
     #[structopt(long, value_name = "TARGET")]
     target: Option<String>,
@@ -72,8 +68,7 @@ impl CompileCommand {
             .take()
             .unwrap_or_else(|| Triple::host().to_string());
 
-        let mut config = self.common.config(Some(&target))?;
-        config.interruptable(self.interruptable);
+        let config = self.common.config(Some(&target))?;
 
         let engine = Engine::new(&config)?;
 

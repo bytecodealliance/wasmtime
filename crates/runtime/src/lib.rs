@@ -65,7 +65,7 @@ pub use crate::traphandlers::{
 };
 pub use crate::vmcontext::{
     VMCallerCheckedAnyfunc, VMContext, VMFunctionBody, VMFunctionImport, VMGlobalDefinition,
-    VMGlobalImport, VMInterrupts, VMInvokeArgument, VMMemoryDefinition, VMMemoryImport,
+    VMGlobalImport, VMInvokeArgument, VMMemoryDefinition, VMMemoryImport, VMRuntimeLimits,
     VMSharedSignatureIndex, VMTableDefinition, VMTableImport, VMTrampoline, ValRaw,
 };
 
@@ -103,7 +103,7 @@ pub unsafe trait Store {
     ///
     /// Used to configure `VMContext` initialization and store the right pointer
     /// in the `VMContext`.
-    fn vminterrupts(&self) -> *mut VMInterrupts;
+    fn vmruntime_limits(&self) -> *mut VMRuntimeLimits;
 
     /// Returns a pointer to the global epoch counter.
     ///

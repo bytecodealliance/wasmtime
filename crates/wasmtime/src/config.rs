@@ -314,18 +314,6 @@ impl Config {
         self
     }
 
-    /// Configures whether functions and loops will be interruptable via the
-    /// [`Store::interrupt_handle`](crate::Store::interrupt_handle) method.
-    ///
-    /// For more information see the documentation on
-    /// [`Store::interrupt_handle`](crate::Store::interrupt_handle).
-    ///
-    /// By default this option is `false`.
-    pub fn interruptable(&mut self, enable: bool) -> &mut Self {
-        self.tunables.interruptable = enable;
-        self
-    }
-
     /// Configures whether execution of WebAssembly will "consume fuel" to
     /// either halt or yield execution as desired.
     ///

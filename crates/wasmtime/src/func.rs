@@ -1,7 +1,7 @@
 use crate::store::{StoreData, StoreOpaque, Stored};
 use crate::{
-    AsContext, AsContextMut, CallHook, Engine, Extern, FuncType, Instance, InterruptHandle,
-    StoreContext, StoreContextMut, Trap, Val, ValRaw, ValType,
+    AsContext, AsContextMut, CallHook, Engine, Extern, FuncType, Instance, StoreContext,
+    StoreContextMut, Trap, Val, ValRaw, ValType,
 };
 use anyhow::{bail, Context as _, Result};
 use std::future::Future;
@@ -9,7 +9,6 @@ use std::mem;
 use std::panic::{self, AssertUnwindSafe};
 use std::pin::Pin;
 use std::ptr::NonNull;
-use std::sync::atomic::Ordering::Relaxed;
 use std::sync::Arc;
 use wasmtime_environ::{EntityIndex, FuncIndex};
 use wasmtime_runtime::{
@@ -1198,14 +1197,13 @@ pub(crate) fn invoke_wasm_and_catch_traps<T>(
     closure: impl FnMut(*mut VMContext),
 ) -> Result<(), Trap> {
     unsafe {
-        let exit = enter_wasm(store)?;
+        let exit = enter_wasm(store);
 
         if let Err(trap) = store.0.call_hook(CallHook::CallingWasm) {
             exit_wasm(store, exit);
             return Err(trap);
         }
         let result = wasmtime_runtime::catch_traps(
-            store.0.vminterrupts(),
             store.0.signal_handler(),
             store.0.default_callee(),
             closure,
@@ -1232,7 +1230,7 @@ pub(crate) fn invoke_wasm_and_catch_traps<T>(
 ///
 /// This function may fail if the the stack limit can't be set because an
 /// interrupt already happened.
-fn enter_wasm<T>(store: &mut StoreContextMut<'_, T>) -> Result<Option<usize>, Trap> {
+fn enter_wasm<T>(store: &mut StoreContextMut<'_, T>) -> Option<usize> {
     // If this is a recursive call, e.g. our stack canary is already set, then
     // we may be able to skip this function.
     //
@@ -1252,7 +1250,7 @@ fn enter_wasm<T>(store: &mut StoreContextMut<'_, T>) -> Result<Option<usize>, Tr
         .is_some()
         && !store.0.async_support()
     {
-        return Ok(None);
+        return None;
     }
 
     let stack_pointer = psm::stack_pointer() as usize;
@@ -1270,34 +1268,13 @@ fn enter_wasm<T>(store: &mut StoreContextMut<'_, T>) -> Result<Option<usize>, Tr
     // (a million bytes) the slop shouldn't matter too much.
     //
     // After we've got the stack limit then we store it into the `stack_limit`
-    // variable. Note that the store is an atomic swap to ensure that we can
-    // consume any previously-sent interrupt requests. If we found that wasm was
-    // previously interrupted then we immediately return a trap (after resetting
-    // the stack limit). Otherwise we're good to keep on going.
-    //
-    // Note the usage of `Relaxed` memory orderings here. This is specifically
-    // an optimization in the `Drop` below where a `Relaxed` store is speedier
-    // than a `SeqCst` store. The rationale for `Relaxed` here is that the
-    // atomic orderings here aren't actually protecting any memory, we're just
-    // trying to be atomic with respect to this one location in memory (for when
-    // `InterruptHandle` sends us a signal). Due to the lack of needing to
-    // synchronize with any other memory it's hoped that the choice of `Relaxed`
-    // here should be correct for our use case.
+    // variable.
     let wasm_stack_limit = stack_pointer - store.engine().config().max_wasm_stack;
-    let interrupts = store.0.interrupts();
-    let prev_stack = match interrupts.stack_limit.swap(wasm_stack_limit, Relaxed) {
-        wasmtime_environ::INTERRUPTED => {
-            // This means that an interrupt happened before we actually
-            // called this function, which means that we're now
-            // considered interrupted.
-            interrupts.stack_limit.store(usize::max_value(), Relaxed);
-            return Err(Trap::new_wasm(
-                None,
-                wasmtime_environ::TrapCode::Interrupt,
-                backtrace::Backtrace::new_unresolved(),
-            ));
-        }
-        n => n,
+    let prev_stack = unsafe {
+        mem::replace(
+            &mut *store.0.runtime_limits().stack_limit.get(),
+            wasm_stack_limit,
+        )
     };
 
     // The `usize::max_value()` sentinel is present on recursive calls to
@@ -1315,7 +1292,7 @@ fn enter_wasm<T>(store: &mut StoreContextMut<'_, T>) -> Result<Option<usize>, Tr
             .set_stack_canary(Some(stack_pointer));
     }
 
-    Ok(Some(prev_stack))
+    Some(prev_stack)
 }
 
 fn exit_wasm<T>(store: &mut StoreContextMut<'_, T>, prev_stack: Option<usize>) {
@@ -1333,8 +1310,9 @@ fn exit_wasm<T>(store: &mut StoreContextMut<'_, T>, prev_stack: Option<usize>) {
         store.0.externref_activations_table().set_stack_canary(None);
     }
 
-    // see docs above for why this uses `Relaxed`
-    store.0.interrupts().stack_limit.store(prev_stack, Relaxed);
+    unsafe {
+        *store.0.runtime_limits().stack_limit.get() = prev_stack;
+    }
 }
 
 /// A trait implemented for types which can be returned from closures passed to
@@ -1744,14 +1722,6 @@ impl<T> Caller<'_, T> {
     /// Returns the underlying [`Engine`] this store is connected to.
     pub fn engine(&self) -> &Engine {
         self.store.engine()
-    }
-
-    /// Returns an [`InterruptHandle`] to interrupt wasm execution.
-    ///
-    /// See [`Store::interrupt_handle`](crate::Store::interrupt_handle) for more
-    /// information.
-    pub fn interrupt_handle(&self) -> Result<InterruptHandle> {
-        self.store.interrupt_handle()
     }
 
     /// Perform garbage collection of `ExternRef`s.

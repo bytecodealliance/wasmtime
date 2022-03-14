@@ -7,7 +7,6 @@ use std::any::Any;
 use std::cell::UnsafeCell;
 use std::marker;
 use std::ptr::NonNull;
-use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use std::u32;
 
 /// An imported function.
@@ -669,12 +668,11 @@ impl VMInvokeArgument {
 /// Structure used to control interrupting wasm code.
 #[derive(Debug)]
 #[repr(C)]
-pub struct VMInterrupts {
+pub struct VMRuntimeLimits {
     /// Current stack limit of the wasm module.
     ///
-    /// This is used to control both stack overflow as well as interrupting wasm
-    /// modules. For more information see `crates/environ/src/cranelift.rs`.
-    pub stack_limit: AtomicUsize,
+    /// For more information see `crates/cranelift/src/lib.rs`.
+    pub stack_limit: UnsafeCell<usize>,
 
     /// Indicator of how much fuel has been consumed and is remaining to
     /// WebAssembly.
@@ -691,28 +689,17 @@ pub struct VMInterrupts {
     pub epoch_deadline: UnsafeCell<u64>,
 }
 
-// The `VMInterrupts` type is a pod-type with no destructor, and we
-// only access `stack_limit` from other threads, so add in these trait
-// impls which are otherwise not available due to the `fuel_consumed`
-// and `epoch_deadline` variables in `VMInterrupts`.
-//
-// Note that users of `fuel_consumed` understand that the unsafety encompasses
-// ensuring that it's only mutated/accessed from one thread dynamically.
-unsafe impl Send for VMInterrupts {}
-unsafe impl Sync for VMInterrupts {}
+// The `VMRuntimeLimits` type is a pod-type with no destructor, and we don't
+// access any fields from other threads, so add in these trait impls which are
+// otherwise not available due to the `fuel_consumed` and `epoch_deadline`
+// variables in `VMRuntimeLimits`.
+unsafe impl Send for VMRuntimeLimits {}
+unsafe impl Sync for VMRuntimeLimits {}
 
-impl VMInterrupts {
-    /// Flag that an interrupt should occur
-    pub fn interrupt(&self) {
-        self.stack_limit
-            .store(wasmtime_environ::INTERRUPTED, SeqCst);
-    }
-}
-
-impl Default for VMInterrupts {
-    fn default() -> VMInterrupts {
-        VMInterrupts {
-            stack_limit: AtomicUsize::new(usize::max_value()),
+impl Default for VMRuntimeLimits {
+    fn default() -> VMRuntimeLimits {
+        VMRuntimeLimits {
+            stack_limit: UnsafeCell::new(usize::max_value()),
             fuel_consumed: UnsafeCell::new(0),
             epoch_deadline: UnsafeCell::new(0),
         }
@@ -720,19 +707,27 @@ impl Default for VMInterrupts {
 }
 
 #[cfg(test)]
-mod test_vminterrupts {
-    use super::VMInterrupts;
+mod test_vmruntime_limits {
+    use super::VMRuntimeLimits;
     use memoffset::offset_of;
     use std::mem::size_of;
     use wasmtime_environ::{Module, VMOffsets};
 
     #[test]
-    fn check_vminterrupts_interrupted_offset() {
+    fn field_offsets() {
         let module = Module::new();
         let offsets = VMOffsets::new(size_of::<*mut u8>() as u8, &module);
         assert_eq!(
-            offset_of!(VMInterrupts, stack_limit),
-            usize::from(offsets.vminterrupts_stack_limit())
+            offset_of!(VMRuntimeLimits, stack_limit),
+            usize::from(offsets.vmruntime_limits_stack_limit())
+        );
+        assert_eq!(
+            offset_of!(VMRuntimeLimits, fuel_consumed),
+            usize::from(offsets.vmruntime_limits_fuel_consumed())
+        );
+        assert_eq!(
+            offset_of!(VMRuntimeLimits, epoch_deadline),
+            usize::from(offsets.vmruntime_limits_epoch_deadline())
         );
     }
 }

@@ -33,3 +33,8 @@ pub extern "C" fn wasm_engine_new_with_config(c: Box<wasm_config_t>) -> Box<wasm
         engine: Engine::new(&config).unwrap(),
     })
 }
+
+#[no_mangle]
+pub extern "C" fn wasmtime_engine_increment_epoch(engine: &wasm_engine_t) {
+    engine.engine.increment_epoch();
+}

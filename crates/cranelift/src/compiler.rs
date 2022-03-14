@@ -141,7 +141,7 @@ impl wasmtime_environ::Compiler for Compiler {
             .create_global_value(ir::GlobalValueData::VMContext);
         let interrupts_ptr = context.func.create_global_value(ir::GlobalValueData::Load {
             base: vmctx,
-            offset: i32::try_from(func_env.offsets.vmctx_interrupts())
+            offset: i32::try_from(func_env.offsets.vmctx_runtime_limits())
                 .unwrap()
                 .into(),
             global_type: isa.pointer_type(),
@@ -149,7 +149,7 @@ impl wasmtime_environ::Compiler for Compiler {
         });
         let stack_limit = context.func.create_global_value(ir::GlobalValueData::Load {
             base: interrupts_ptr,
-            offset: i32::try_from(func_env.offsets.vminterrupts_stack_limit())
+            offset: i32::try_from(func_env.offsets.vmruntime_limits_stack_limit())
                 .unwrap()
                 .into(),
             global_type: isa.pointer_type(),

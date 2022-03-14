@@ -9,7 +9,7 @@ use crate::table::{Table, TableElement, TableElementType};
 use crate::traphandlers::Trap;
 use crate::vmcontext::{
     VMBuiltinFunctionsArray, VMCallerCheckedAnyfunc, VMContext, VMFunctionImport,
-    VMGlobalDefinition, VMGlobalImport, VMInterrupts, VMMemoryDefinition, VMMemoryImport,
+    VMGlobalDefinition, VMGlobalImport, VMMemoryDefinition, VMMemoryImport, VMRuntimeLimits,
     VMTableDefinition, VMTableImport,
 };
 use crate::{
@@ -240,8 +240,8 @@ impl Instance {
     }
 
     /// Return a pointer to the interrupts structure
-    pub fn interrupts(&self) -> *mut *const VMInterrupts {
-        unsafe { self.vmctx_plus_offset(self.offsets.vmctx_interrupts()) }
+    pub fn runtime_limits(&self) -> *mut *const VMRuntimeLimits {
+        unsafe { self.vmctx_plus_offset(self.offsets.vmctx_runtime_limits()) }
     }
 
     /// Return a pointer to the global epoch counter used by this instance.
@@ -888,7 +888,7 @@ impl Instance {
         assert!(std::ptr::eq(module, self.module().as_ref()));
 
         if let Some(store) = store.as_raw() {
-            *self.interrupts() = (*store).vminterrupts();
+            *self.runtime_limits() = (*store).vmruntime_limits();
             *self.epoch_ptr() = (*store).epoch_ptr();
             *self.externref_activations_table() = (*store).externref_activations_table().0;
             self.set_store(store);

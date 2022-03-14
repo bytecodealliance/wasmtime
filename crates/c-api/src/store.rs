@@ -2,9 +2,7 @@ use crate::{wasm_engine_t, wasmtime_error_t, wasmtime_val_t, ForeignData};
 use std::cell::UnsafeCell;
 use std::ffi::c_void;
 use std::sync::Arc;
-use wasmtime::{
-    AsContext, AsContextMut, InterruptHandle, Store, StoreContext, StoreContextMut, Val,
-};
+use wasmtime::{AsContext, AsContextMut, Store, StoreContext, StoreContextMut, Val};
 
 /// This representation of a `Store` is used to implement the `wasm.h` API.
 ///
@@ -163,24 +161,10 @@ pub extern "C" fn wasmtime_context_consume_fuel(
     })
 }
 
-#[repr(C)]
-pub struct wasmtime_interrupt_handle_t {
-    handle: InterruptHandle,
-}
-
 #[no_mangle]
-pub extern "C" fn wasmtime_interrupt_handle_new(
-    store: CStoreContext<'_>,
-) -> Option<Box<wasmtime_interrupt_handle_t>> {
-    Some(Box::new(wasmtime_interrupt_handle_t {
-        handle: store.interrupt_handle().ok()?,
-    }))
+pub extern "C" fn wasmtime_context_set_epoch_deadline(
+    mut store: CStoreContextMut<'_>,
+    ticks_beyond_current: u64,
+) {
+    store.set_epoch_deadline(ticks_beyond_current);
 }
-
-#[no_mangle]
-pub extern "C" fn wasmtime_interrupt_handle_interrupt(handle: &wasmtime_interrupt_handle_t) {
-    handle.handle.interrupt();
-}
-
-#[no_mangle]
-pub extern "C" fn wasmtime_interrupt_handle_delete(_: Box<wasmtime_interrupt_handle_t>) {}
