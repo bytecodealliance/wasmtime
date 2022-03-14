@@ -17,6 +17,14 @@ Released 2022-03-09.
 
 Released 2022-03-07.
 
+### Added
+
+* The `wasmtime_wasi::add_to_linker` function now allows providing
+  a context object of a custom type instead of `wasmtime_wasi::WasiCtx`,
+  as long as that type implements the required WASI snapshot traits.
+  This allows, for example, wrapping `WasiCtx` into a struct and providing
+  custom implementations for those traits to override the default behaviour.
+
 ### Changed
 
 * WebAssembly tables of `funcref` values are now lazily initialized which can,
