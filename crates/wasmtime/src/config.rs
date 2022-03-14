@@ -307,8 +307,8 @@ impl Config {
     /// Configures whether execution of WebAssembly will "consume fuel" to
     /// either halt or yield execution as desired.
     ///
-    /// This can be used to deterministicially prevent infinitely-executing
-    /// WebAssembly code by instrumenting generated code consume fuel as it
+    /// This can be used to deterministically prevent infinitely-executing
+    /// WebAssembly code by instrumenting generated code to consume fuel as it
     /// executes. When fuel runs out the behavior is defined by configuration
     /// within a [`Store`], and by default a trap is raised.
     ///
