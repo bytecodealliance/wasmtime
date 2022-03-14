@@ -20,7 +20,8 @@ extern "C" {
  * force WebAssembly code to trap if the current epoch goes beyond the
  * #wasmtime_store_t configured epoch deadline.
  *
- * This method is safe to call from any thread.
+ * This function is safe to call from any thread, and it is also
+ * async-signal-safe.
  *
  * See also #wasmtime_config_epoch_interruption_set.
  */
