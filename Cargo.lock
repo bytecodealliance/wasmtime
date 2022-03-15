@@ -3112,9 +3112,9 @@ dependencies = [
 
 [[package]]
 name = "v8"
-version = "0.33.0"
+version = "0.41.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b3adb16fd1af3e28d6fda8348a6d96b5363a128dc5a0216b137b64ecbae6641"
+checksum = "a9c3d267007e1f137d79b4da64267139a86034a4d85df4964334979c1c7a708a"
 dependencies = [
  "bitflags",
  "fslock",
