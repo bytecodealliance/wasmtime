@@ -704,6 +704,7 @@ impl VMExternRefActivationsTable {
         }
     }
 
+    #[cfg_attr(not(feature = "wasm-backtrace"), allow(dead_code))]
     fn insert_precise_stack_root(
         precise_stack_roots: &mut HashSet<VMExternRefWithTraits>,
         root: NonNull<VMExternData>,
@@ -866,6 +867,7 @@ impl<T> std::ops::DerefMut for DebugOnly<T> {
 ///
 /// Additionally, you must have registered the stack maps for every Wasm module
 /// that has frames on the stack with the given `stack_maps_registry`.
+#[cfg_attr(not(feature = "wasm-backtrace"), allow(unused_mut, unused_variables))]
 pub unsafe fn gc(
     module_info_lookup: &dyn ModuleInfoLookup,
     externref_activations_table: &mut VMExternRefActivationsTable,
@@ -893,6 +895,7 @@ pub unsafe fn gc(
         None => {
             if cfg!(debug_assertions) {
                 // Assert that there aren't any Wasm frames on the stack.
+                #[cfg(feature = "wasm-backtrace")]
                 backtrace::trace(|frame| {
                     assert!(module_info_lookup.lookup(frame.ip() as usize).is_none());
                     true
@@ -917,7 +920,7 @@ pub unsafe fn gc(
     //   newly-discovered precise set.
 
     // The SP of the previous (younger) frame we processed.
-    let mut last_sp = None;
+    let mut last_sp: Option<usize> = None;
 
     // Whether we have found our stack canary or not yet.
     let mut found_canary = false;
@@ -934,6 +937,7 @@ pub unsafe fn gc(
         });
     }
 
+    #[cfg(feature = "wasm-backtrace")]
     backtrace::trace(|frame| {
         let pc = frame.ip() as usize;
         let sp = frame.sp() as usize;

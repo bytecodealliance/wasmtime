@@ -384,7 +384,9 @@ impl CommonOptions {
             config.wasm_bulk_memory(enable);
         }
         if let Some(enable) = reference_types {
+            #[cfg(feature = "wasm-backtrace")]
             config.wasm_reference_types(enable);
+            drop(enable); // suppress unused warnings
         }
         if let Some(enable) = multi_value {
             config.wasm_multi_value(enable);

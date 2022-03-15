@@ -25,7 +25,7 @@ anyhow = "1.0.19"
 region = "2.2.0"
 libc = "0.2"
 cfg-if = "1.0"
-backtrace = "0.3.61"
+backtrace = { version = "0.3.61", optional = true }
 log = "0.4.8"
 wat = { version = "1.0.36", optional = true }
 serde = { version = "1.0.94", features = ["derive"] }
@@ -61,6 +61,7 @@ default = [
   'pooling-allocator',
   'memory-init-cow',
   'vtune',
+  'wasm-backtrace',
 ]
 
 # An on-by-default feature enabling runtime compilation of WebAssembly modules
@@ -108,3 +109,9 @@ posix-signals-on-macos = ["wasmtime-runtime/posix-signals-on-macos"]
 # Enabling this feature has no effect on unsupported platforms or when the
 # `uffd` feature is enabled.
 memory-init-cow = ["wasmtime-runtime/memory-init-cow"]
+
+# Enables runtime support necessary to capture backtraces of WebAssembly code
+# that is running.
+#
+# This is enabled by default.
+wasm-backtrace = ["wasmtime-runtime/wasm-backtrace", "backtrace"]

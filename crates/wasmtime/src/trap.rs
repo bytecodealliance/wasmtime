@@ -1,10 +1,10 @@
 use crate::module::GlobalModuleRegistry;
 use crate::FrameInfo;
-use backtrace::Backtrace;
 use std::fmt;
 use std::sync::Arc;
 use wasmtime_environ::TrapCode as EnvTrapCode;
 use wasmtime_jit::{demangle_function_name, demangle_function_name_or_index};
+use wasmtime_runtime::Backtrace;
 
 /// A struct representing an aborted instruction execution, with a message
 /// indicating the cause.
@@ -129,8 +129,10 @@ impl fmt::Display for TrapCode {
 
 struct TrapInner {
     reason: TrapReason,
+    #[cfg(feature = "wasm-backtrace")]
     wasm_trace: Vec<FrameInfo>,
     native_trace: Backtrace,
+    #[cfg(feature = "wasm-backtrace")]
     hint_wasm_backtrace_details_env: bool,
 }
 
@@ -148,18 +150,14 @@ impl Trap {
     #[cold] // traps are exceptional, this helps move handling off the main path
     pub fn new<I: Into<String>>(message: I) -> Self {
         let reason = TrapReason::Message(message.into());
-        Trap::new_with_trace(None, reason, Backtrace::new_unresolved())
+        Trap::new_with_trace(None, reason, Backtrace::new())
     }
 
     /// Creates a new `Trap` representing an explicit program exit with a classic `i32`
     /// exit status value.
     #[cold] // see Trap::new
     pub fn i32_exit(status: i32) -> Self {
-        Trap::new_with_trace(
-            None,
-            TrapReason::I32Exit(status),
-            Backtrace::new_unresolved(),
-        )
+        Trap::new_with_trace(None, TrapReason::I32Exit(status), Backtrace::new())
     }
 
     #[cold] // see Trap::new
@@ -212,10 +210,12 @@ impl Trap {
     /// * `native_trace` - this is a captured backtrace from when the trap
     ///   occurred, and this will iterate over the frames to find frames that
     ///   lie in wasm jit code.
+    #[cfg_attr(not(feature = "wasm-backtrace"), allow(unused_mut, unused_variables))]
     fn new_with_trace(trap_pc: Option<usize>, reason: TrapReason, native_trace: Backtrace) -> Self {
-        let mut wasm_trace = Vec::new();
+        let mut wasm_trace = Vec::<FrameInfo>::new();
         let mut hint_wasm_backtrace_details_env = false;
 
+        #[cfg(feature = "wasm-backtrace")]
         GlobalModuleRegistry::with(|registry| {
             for frame in native_trace.frames() {
                 let pc = frame.ip() as usize;
@@ -253,8 +253,10 @@ impl Trap {
         Trap {
             inner: Arc::new(TrapInner {
                 reason,
-                wasm_trace,
                 native_trace,
+                #[cfg(feature = "wasm-backtrace")]
+                wasm_trace,
+                #[cfg(feature = "wasm-backtrace")]
                 hint_wasm_backtrace_details_env,
             }),
         }
@@ -281,6 +283,8 @@ impl Trap {
 
     /// Returns a list of function frames in WebAssembly code that led to this
     /// trap happening.
+    #[cfg(feature = "wasm-backtrace")]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "wasm-backtrace")))]
     pub fn trace(&self) -> &[FrameInfo] {
         &self.inner.wasm_trace
     }
@@ -297,65 +301,77 @@ impl Trap {
 
 impl fmt::Debug for Trap {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Trap")
-            .field("reason", &self.inner.reason)
-            .field("wasm_trace", &self.inner.wasm_trace)
-            .field("native_trace", &self.inner.native_trace)
-            .finish()
+        let mut f = f.debug_struct("Trap");
+        f.field("reason", &self.inner.reason);
+        #[cfg(feature = "wasm-backtrace")]
+        {
+            f.field("wasm_trace", &self.inner.wasm_trace)
+                .field("native_trace", &self.inner.native_trace);
+        }
+        f.finish()
     }
 }
 
 impl fmt::Display for Trap {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.inner.reason)?;
-        let trace = self.trace();
-        if trace.is_empty() {
-            return Ok(());
-        }
-        writeln!(f, "\nwasm backtrace:")?;
-        for (i, frame) in self.trace().iter().enumerate() {
-            let name = frame.module_name().unwrap_or("<unknown>");
-            write!(f, "  {:>3}: ", i)?;
 
-            if let Some(offset) = frame.module_offset() {
-                write!(f, "{:#6x} - ", offset)?;
+        #[cfg(feature = "wasm-backtrace")]
+        {
+            let trace = self.trace();
+            if trace.is_empty() {
+                return Ok(());
             }
+            writeln!(f, "\nwasm backtrace:")?;
 
-            let write_raw_func_name = |f: &mut fmt::Formatter<'_>| {
-                demangle_function_name_or_index(f, frame.func_name(), frame.func_index() as usize)
-            };
-            if frame.symbols().is_empty() {
-                write!(f, "{}!", name)?;
-                write_raw_func_name(f)?;
-                writeln!(f, "")?;
-            } else {
-                for (i, symbol) in frame.symbols().iter().enumerate() {
-                    if i > 0 {
-                        write!(f, "              - ")?;
-                    } else {
-                        // ...
-                    }
-                    match symbol.name() {
-                        Some(name) => demangle_function_name(f, name)?,
-                        None if i == 0 => write_raw_func_name(f)?,
-                        None => write!(f, "<inlined function>")?,
-                    }
+            for (i, frame) in self.trace().iter().enumerate() {
+                let name = frame.module_name().unwrap_or("<unknown>");
+                write!(f, "  {:>3}: ", i)?;
+
+                if let Some(offset) = frame.module_offset() {
+                    write!(f, "{:#6x} - ", offset)?;
+                }
+
+                let write_raw_func_name = |f: &mut fmt::Formatter<'_>| {
+                    demangle_function_name_or_index(
+                        f,
+                        frame.func_name(),
+                        frame.func_index() as usize,
+                    )
+                };
+                if frame.symbols().is_empty() {
+                    write!(f, "{}!", name)?;
+                    write_raw_func_name(f)?;
                     writeln!(f, "")?;
-                    if let Some(file) = symbol.file() {
-                        write!(f, "                    at {}", file)?;
-                        if let Some(line) = symbol.line() {
-                            write!(f, ":{}", line)?;
-                            if let Some(col) = symbol.column() {
-                                write!(f, ":{}", col)?;
+                } else {
+                    for (i, symbol) in frame.symbols().iter().enumerate() {
+                        if i > 0 {
+                            write!(f, "              - ")?;
+                        } else {
+                            // ...
+                        }
+                        match symbol.name() {
+                            Some(name) => demangle_function_name(f, name)?,
+                            None if i == 0 => write_raw_func_name(f)?,
+                            None => write!(f, "<inlined function>")?,
+                        }
+                        writeln!(f, "")?;
+                        if let Some(file) = symbol.file() {
+                            write!(f, "                    at {}", file)?;
+                            if let Some(line) = symbol.line() {
+                                write!(f, ":{}", line)?;
+                                if let Some(col) = symbol.column() {
+                                    write!(f, ":{}", col)?;
+                                }
                             }
                         }
+                        writeln!(f, "")?;
                     }
-                    writeln!(f, "")?;
                 }
             }
-        }
-        if self.inner.hint_wasm_backtrace_details_env {
-            writeln!(f, "note: using the `WASMTIME_BACKTRACE_DETAILS=1` environment variable to may show more debugging information")?;
+            if self.inner.hint_wasm_backtrace_details_env {
+                writeln!(f, "note: using the `WASMTIME_BACKTRACE_DETAILS=1` environment variable to may show more debugging information")?;
+            }
         }
         Ok(())
     }
@@ -388,7 +404,7 @@ impl From<Box<dyn std::error::Error + Send + Sync>> for Trap {
             trap.clone()
         } else {
             let reason = TrapReason::Error(e.into());
-            Trap::new_with_trace(None, reason, Backtrace::new_unresolved())
+            Trap::new_with_trace(None, reason, Backtrace::new())
         }
     }
 }

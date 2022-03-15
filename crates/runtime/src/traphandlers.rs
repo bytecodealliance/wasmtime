@@ -3,7 +3,6 @@
 
 use crate::VMContext;
 use anyhow::Error;
-use backtrace::Backtrace;
 use std::any::Any;
 use std::cell::{Cell, UnsafeCell};
 use std::mem::MaybeUninit;
@@ -143,10 +142,9 @@ impl Trap {
     ///
     /// Internally saves a backtrace when constructed.
     pub fn wasm(trap_code: TrapCode) -> Self {
-        let backtrace = Backtrace::new_unresolved();
         Trap::Wasm {
             trap_code,
-            backtrace,
+            backtrace: Backtrace::new(),
         }
     }
 
@@ -154,8 +152,38 @@ impl Trap {
     ///
     /// Internally saves a backtrace when constructed.
     pub fn oom() -> Self {
-        let backtrace = Backtrace::new_unresolved();
-        Trap::OOM { backtrace }
+        Trap::OOM {
+            backtrace: Backtrace::new(),
+        }
+    }
+}
+
+/// A crate-local backtrace type which conditionally, at compile time, actually
+/// contains a backtrace from the `backtrace` crate or nothing.
+#[derive(Debug)]
+pub struct Backtrace {
+    #[cfg(feature = "wasm-backtrace")]
+    trace: backtrace::Backtrace,
+}
+
+impl Backtrace {
+    /// Captures a new backtrace
+    ///
+    /// Note that this function does nothing if the `wasm-backtrace` feature is
+    /// disabled.
+    pub fn new() -> Backtrace {
+        Backtrace {
+            #[cfg(feature = "wasm-backtrace")]
+            trace: backtrace::Backtrace::new_unresolved(),
+        }
+    }
+
+    /// Returns the backtrace frames associated with this backtrace. Note that
+    /// this is conditionally defined and not present when `wasm-backtrace` is
+    /// not present.
+    #[cfg(feature = "wasm-backtrace")]
+    pub fn frames(&self) -> &[backtrace::BacktraceFrame] {
+        self.trace.frames()
     }
 }
 
@@ -299,7 +327,7 @@ impl CallThreadState {
     }
 
     fn capture_backtrace(&self, pc: *const u8) {
-        let backtrace = Backtrace::new_unresolved();
+        let backtrace = Backtrace::new();
         unsafe {
             (*self.unwind.get())
                 .as_mut_ptr()

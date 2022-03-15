@@ -304,7 +304,7 @@ impl Engine {
             // can affect the way the generated code performs or behaves at
             // runtime.
             "avoid_div_traps" => *value == FlagValue::Bool(true),
-            "unwind_info" => *value == FlagValue::Bool(true),
+            "unwind_info" => *value == FlagValue::Bool(cfg!(feature = "wasm-backtrace")),
             "libcall_call_conv" => *value == FlagValue::Enum("isa_default".into()),
 
             // Features wasmtime doesn't use should all be disabled, since
