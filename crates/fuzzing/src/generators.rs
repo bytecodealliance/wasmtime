@@ -362,7 +362,7 @@ impl Config {
             limits.tables = limits.memories.max(5);
             limits.table_elements = limits.memories.max(1_000);
             limits.memory_pages = limits.memory_pages.max(900);
-            limits.count = limits.count.max(40);
+            limits.count = limits.count.max(500);
             limits.size = limits.size.max(4096);
 
             match &mut self.wasmtime.memory_config {
