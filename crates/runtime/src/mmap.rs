@@ -425,8 +425,13 @@ impl Mmap {
         self.file.as_ref()
     }
 
-    /// On posix, lock the memory into RAM.
-    pub fn mlock(&self, range: &Range<usize>) -> Result<()> {
+    /// Applies the `MLOCK_ONFAULT` flag to the `range` specified in this
+    /// mapping.
+    ///
+    /// This method, while available on all platforms, will unconditionally
+    /// return an error on non-Linux platforms since `MLOCK_ONFAULT` is
+    /// Linux-specific.
+    pub fn linux_mlock_onfault(&self, range: &Range<usize>) -> Result<()> {
         assert!(range.start <= self.len());
         assert!(range.end <= self.len());
         assert!(range.start <= range.end);
@@ -441,15 +446,10 @@ impl Mmap {
                 range.end - range.start,
                 rustix::io::MlockFlags::ONFAULT,
             )?;
+            Ok(())
         }
-        #[cfg(all(unix, not(target_os = "linux")))]
-        unsafe {
-            rustix::io::mlock(
-                self.as_ptr().add(range.start) as *mut _,
-                range.end - range.start,
-            )?;
-        }
-        Ok(())
+        #[cfg(not(target_os = "linux"))]
+        bail!("mlock on fault not supported on this platform");
     }
 }
 

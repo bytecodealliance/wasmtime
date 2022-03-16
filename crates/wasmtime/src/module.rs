@@ -539,9 +539,11 @@ impl Module {
                 .flat_map(|m| m.trampolines().map(|(idx, f, _)| (idx, f))),
         ));
 
-        if engine.config().mlock_module_mmaps {
+        if engine.config().linux_mlock_modules_onfault {
             for m in modules.iter() {
-                m.mmap().mlock()?;
+                m.mmap()
+                    .linux_mlock_onfault()
+                    .context("failed to mlock module's memory")?;
             }
         }
 
@@ -1152,6 +1154,18 @@ fn memory_images(engine: &Engine, module: &CompiledModule) -> Result<Option<Modu
         return Ok(None);
     }
 
-    // ... otherwise logic is delegated to the `ModuleMemoryImages::new` constructor
-    ModuleMemoryImages::new(module.module(), module.wasm_data(), Some(module.mmap()))
+    // ... otherwise logic is delegated to the `ModuleMemoryImages::new`
+    // constructor. Note that we explicitly pass `None` as the backing mmap if
+    // mlocking is enabled. Enabling mlocking means that we're trying to avoid
+    // page faults hitting disk, and if the module's mmap originally came from
+    // disk then it means that the mmap for the initialization image might miss
+    // in the kernel's page cache and hit the disk anyway. To avoid this we
+    // force a memfd to be used which means that everything should stay in
+    // memory.
+    let mmap = if engine.config().linux_mlock_modules_onfault {
+        None
+    } else {
+        Some(module.mmap())
+    };
+    ModuleMemoryImages::new(module.module(), module.wasm_data(), mmap)
 }

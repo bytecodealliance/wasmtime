@@ -100,7 +100,7 @@ pub struct Config {
     pub(crate) paged_memory_initialization: bool,
     pub(crate) memory_init_cow: bool,
     pub(crate) memory_guaranteed_dense_image_size: u64,
-    pub(crate) mlock_module_mmaps: bool,
+    pub(crate) linux_mlock_modules_onfault: bool,
 }
 
 impl Config {
@@ -136,7 +136,7 @@ impl Config {
             paged_memory_initialization: cfg!(all(target_os = "linux", feature = "uffd")),
             memory_init_cow: true,
             memory_guaranteed_dense_image_size: 16 << 20,
-            mlock_module_mmaps: false,
+            linux_mlock_modules_onfault: true,
         };
         #[cfg(compiler)]
         {
@@ -1252,9 +1252,32 @@ impl Config {
         self
     }
 
-    /// XXX experiment
-    pub fn mlock_module_mmaps(&mut self, mlock_module_mmaps: bool) -> &mut Self {
-        self.mlock_module_mmaps = mlock_module_mmaps;
+    /// Enables loaded modules to be `mlock`'d into memory with the
+    /// `MLOCK_ONFAULT` flag.
+    ///
+    /// This configuration option is intended to indicate to the kernel that
+    /// once a module has been paged in (such as its text section) then it must
+    /// remain in memory, never being paged out. When modules are loaded from
+    /// precompiled images on disk then the kernel might otherwise discard the
+    /// pages for the text section or other parts of the module under memory
+    /// pressure. This means that repeated executions of a module might
+    /// sometimes take longer as the contents of the text section need to be
+    /// paged back in. By using this configuration option after the first fault
+    /// happens then the module will stick around in memory forevermore.
+    ///
+    /// Note that enabling this feature also affects how memory initialization
+    /// with copy-on-write work as well (the [`Config::memory_init_cow`]
+    /// configuration option). When loading a precompiled module from disk
+    /// typically the initialization image for memory can be reused from the
+    /// file on disk, but when this configuration option is enabled then a fresh
+    /// file descriptor from `memfd_create` is always used as the memory
+    /// initialization image to force contents to always be in memory no matter
+    /// what.
+    ///
+    /// This feature is a Linux-specific configuration option. Enabling this on
+    /// non-Linux platforms will prevent all [`Module`]s from being created.
+    pub fn linux_mlock_modules_onfault(&mut self, enable: bool) -> &mut Self {
+        self.linux_mlock_modules_onfault = enable;
         self
     }
 
@@ -1338,7 +1361,7 @@ impl Clone for Config {
             paged_memory_initialization: self.paged_memory_initialization,
             memory_init_cow: self.memory_init_cow,
             memory_guaranteed_dense_image_size: self.memory_guaranteed_dense_image_size,
-            mlock_module_mmaps: self.mlock_module_mmaps,
+            linux_mlock_modules_onfault: self.linux_mlock_modules_onfault,
         }
     }
 }
@@ -1376,8 +1399,11 @@ impl fmt::Debug for Config {
                 "paged_memory_initialization",
                 &self.paged_memory_initialization,
             )
-            .field("memfd", &self.memfd)
-            .field("mlock_module_mmaps", &self.mlock_module_mmaps);
+            .field("memory_init_cow", &self.memory_init_cow)
+            .field(
+                "linux_mlock_modules_onfault",
+                &self.linux_mlock_modules_onfault,
+            );
         #[cfg(compiler)]
         {
             f.field("compiler", &self.compiler);

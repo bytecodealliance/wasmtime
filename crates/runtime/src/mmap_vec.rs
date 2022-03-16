@@ -129,9 +129,11 @@ impl MmapVec {
         self.range.start
     }
 
-    /// XXX
-    pub fn mlock(&self) -> Result<()> {
-        self.mmap.mlock(&self.range)
+    /// Applies `MLOCK_ONFAULT` for this entire mapping.
+    ///
+    /// See [`Mmap::linux_mlock_onfault`] for more information.
+    pub fn linux_mlock_onfault(&self) -> Result<()> {
+        self.mmap.linux_mlock_onfault(&self.range)
     }
 }
 
