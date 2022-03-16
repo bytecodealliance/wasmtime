@@ -188,9 +188,13 @@ impl wasmtime_environ::Compiler for Compiler {
 
         let stack_maps = mach_stack_maps_to_stack_maps(result.buffer.stack_maps());
 
-        let unwind_info = context
-            .create_unwind_info(isa)
-            .map_err(|error| CompileError::Codegen(pretty_error(&context.func, error)))?;
+        let unwind_info = if isa.flags().unwind_info() {
+            context
+                .create_unwind_info(isa)
+                .map_err(|error| CompileError::Codegen(pretty_error(&context.func, error)))?
+        } else {
+            None
+        };
 
         let address_transform =
             self.get_function_address_map(&context, &input, code_buf.len() as u32, tunables);
@@ -566,9 +570,13 @@ impl Compiler {
             .relocs()
             .is_empty());
 
-        let unwind_info = context
-            .create_unwind_info(isa)
-            .map_err(|error| CompileError::Codegen(pretty_error(&context.func, error)))?;
+        let unwind_info = if isa.flags().unwind_info() {
+            context
+                .create_unwind_info(isa)
+                .map_err(|error| CompileError::Codegen(pretty_error(&context.func, error)))?
+        } else {
+            None
+        };
 
         Ok(CompiledFunction {
             body: code_buf,

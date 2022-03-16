@@ -141,7 +141,9 @@ impl Config {
             ret.cranelift_debug_verifier(false);
             ret.cranelift_opt_level(OptLevel::Speed);
         }
+        #[cfg(feature = "wasm-backtrace")]
         ret.wasm_reference_types(true);
+        ret.features.reference_types = cfg!(feature = "wasm-backtrace");
         ret.wasm_multi_value(true);
         ret.wasm_bulk_memory(true);
         ret.wasm_simd(true);
@@ -502,10 +504,14 @@ impl Config {
     /// Note that enabling the reference types feature will also enable the bulk
     /// memory feature.
     ///
-    /// This is `true` by default on x86-64, and `false` by default on other
-    /// architectures.
+    /// This feature is `true` by default. If the `wasm-backtrace` feature is
+    /// disabled at compile time, however, then this is `false` by default and
+    /// it cannot be turned on since GC currently requires backtraces to work.
+    /// Note that the `wasm-backtrace` feature is on by default, however.
     ///
     /// [proposal]: https://github.com/webassembly/reference-types
+    #[cfg(feature = "wasm-backtrace")]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "wasm-backtrace")))]
     pub fn wasm_reference_types(&mut self, enable: bool) -> &mut Self {
         self.features.reference_types = enable;
 
@@ -1272,9 +1278,20 @@ impl Config {
 
 #[cfg(compiler)]
 fn compiler_builder(strategy: Strategy) -> Result<Box<dyn CompilerBuilder>> {
-    match strategy {
-        Strategy::Auto | Strategy::Cranelift => Ok(wasmtime_cranelift::builder()),
-    }
+    let mut builder = match strategy {
+        Strategy::Auto | Strategy::Cranelift => wasmtime_cranelift::builder(),
+    };
+    builder
+        .set(
+            "unwind_info",
+            if cfg!(feature = "wasm-backtrace") {
+                "true"
+            } else {
+                "false"
+            },
+        )
+        .unwrap();
+    Ok(builder)
 }
 
 fn round_up_to_pages(val: u64) -> u64 {
