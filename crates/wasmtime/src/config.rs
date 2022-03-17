@@ -136,7 +136,7 @@ impl Config {
             paged_memory_initialization: cfg!(all(target_os = "linux", feature = "uffd")),
             memory_init_cow: true,
             memory_guaranteed_dense_image_size: 16 << 20,
-            linux_mlock_modules_onfault: true,
+            linux_mlock_modules_onfault: false,
         };
         #[cfg(compiler)]
         {
