@@ -449,7 +449,7 @@ impl Mmap {
             Ok(())
         }
         #[cfg(not(target_os = "linux"))]
-        bail!("mlock on fault not supported on this platform");
+        anyhow::bail!("mlock on fault not supported on this platform");
     }
 }
 
