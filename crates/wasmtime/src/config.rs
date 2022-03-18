@@ -100,6 +100,7 @@ pub struct Config {
     pub(crate) paged_memory_initialization: bool,
     pub(crate) memory_init_cow: bool,
     pub(crate) memory_guaranteed_dense_image_size: u64,
+    pub(crate) force_memory_init_memfd: bool,
 }
 
 impl Config {
@@ -135,6 +136,7 @@ impl Config {
             paged_memory_initialization: cfg!(all(target_os = "linux", feature = "uffd")),
             memory_init_cow: true,
             memory_guaranteed_dense_image_size: 16 << 20,
+            force_memory_init_memfd: false,
         };
         #[cfg(compiler)]
         {
@@ -1208,6 +1210,33 @@ impl Config {
         self
     }
 
+    /// A configuration option to force the usage of `memfd_create` on Linux to
+    /// be used as the backing source for a module's initial memory image.
+    ///
+    /// When [`Config::memory_init_cow`] is enabled, which is enabled by
+    /// default, module memory initialization images are taken from a module's
+    /// original mmap if possible. If a precompiled module was loaded from disk
+    /// this means that the disk's file is used as an mmap source for the
+    /// initial linear memory contents. This option can be used to force, on
+    /// Linux, that instead of using the original file on disk a new in-memory
+    /// file is created with `memfd_create` to hold the contents of the initial
+    /// image.
+    ///
+    /// This option can be used to avoid possibly loading the contents of memory
+    /// from disk through a page fault. Instead with `memfd_create` the contents
+    /// of memory are always in RAM, meaning that even page faults which
+    /// initially populate a wasm linear memory will only work with RAM instead
+    /// of ever hitting the disk that the original precompiled module is stored
+    /// on.
+    ///
+    /// This option is disabled by default.
+    #[cfg(feature = "memory-init-cow")]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "memory-init-cow")))]
+    pub fn force_memory_init_memfd(&mut self, enable: bool) -> &mut Self {
+        self.force_memory_init_memfd = enable;
+        self
+    }
+
     /// Configures the "guaranteed dense image size" for copy-on-write
     /// initialized memories.
     ///
@@ -1330,6 +1359,7 @@ impl Clone for Config {
             paged_memory_initialization: self.paged_memory_initialization,
             memory_init_cow: self.memory_init_cow,
             memory_guaranteed_dense_image_size: self.memory_guaranteed_dense_image_size,
+            force_memory_init_memfd: self.force_memory_init_memfd,
         }
     }
 }

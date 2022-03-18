@@ -4,8 +4,10 @@ use crate::{
 };
 use crate::{Engine, ModuleType};
 use anyhow::{bail, Context, Result};
+use once_cell::sync::OnceCell;
 use std::fs;
 use std::mem;
+use std::ops::Range;
 use std::path::Path;
 use std::sync::Arc;
 use wasmparser::{Parser, ValidPayload, Validator};
@@ -114,7 +116,13 @@ struct ModuleInner {
     /// Registered shared signature for the module.
     signatures: Arc<SignatureCollection>,
     /// A set of initialization images for memories, if any.
-    memory_images: Option<ModuleMemoryImages>,
+    ///
+    /// Note that this is behind a `OnceCell` to lazily create this image. On
+    /// Linux where `memfd_create` may be used to create the backing memory
+    /// image this is a pretty expensive operation, so by deferring it this
+    /// improves memory usage for modules that are created but may not ever be
+    /// instantiated.
+    memory_images: OnceCell<Option<ModuleMemoryImages>>,
 }
 
 impl Module {
@@ -554,7 +562,7 @@ impl Module {
                     &signatures,
                 )
             })
-            .collect::<Result<Vec<_>>>()?;
+            .collect();
 
         return Ok(Self {
             inner: Arc::new(ModuleInner {
@@ -563,7 +571,7 @@ impl Module {
                 artifact_upvars: modules,
                 module_upvars,
                 signatures,
-                memory_images: memory_images(engine, &module)?,
+                memory_images: OnceCell::new(),
                 module,
             }),
         });
@@ -576,13 +584,13 @@ impl Module {
             artifact_upvars: &[usize],
             module_upvars: &[serialization::SerializedModuleUpvar],
             signatures: &Arc<SignatureCollection>,
-        ) -> Result<Module> {
+        ) -> Module {
             let module = artifacts[module_index].clone();
-            Ok(Module {
+            Module {
                 inner: Arc::new(ModuleInner {
                     engine: engine.clone(),
                     types: types.clone(),
-                    memory_images: memory_images(engine, &module)?,
+                    memory_images: OnceCell::new(),
                     module,
                     artifact_upvars: artifact_upvars
                         .iter()
@@ -601,10 +609,10 @@ impl Module {
                                 signatures,
                             )
                         })
-                        .collect::<Result<Vec<_>>>()?,
+                        .collect(),
                     signatures: signatures.clone(),
                 }),
-            })
+            }
         }
     }
 
@@ -708,7 +716,7 @@ impl Module {
             inner: Arc::new(ModuleInner {
                 types: self.inner.types.clone(),
                 engine: self.inner.engine.clone(),
-                memory_images: memory_images(&self.inner.engine, &module)?,
+                memory_images: OnceCell::new(),
                 module,
                 artifact_upvars: artifact_upvars
                     .iter()
@@ -969,6 +977,24 @@ impl Module {
         // statically cast the &Arc<ModuleInner> to &Arc<dyn Trait...>.
         self.inner.clone()
     }
+
+    /// Returns the range of bytes in memory where this module's compilation
+    /// image resides.
+    ///
+    /// The compilation image for a module contains executable code, data, debug
+    /// information, etc. This is roughly the same as the `Module::serialize`
+    /// but not the exact same.
+    ///
+    /// The range of memory reported here is exposed to allow low-level
+    /// manipulation of the memory in platform-specific manners such as using
+    /// `mlock` to force the contents to be paged in immediately or keep them
+    /// paged in after they're loaded.
+    ///
+    /// It is not safe to modify the memory in this range, nor is it safe to
+    /// modify the protections of memory in this range.
+    pub fn image_range(&self) -> Range<usize> {
+        self.compiled_module().image_range()
+    }
 }
 
 fn _assert_send_sync() {
@@ -1022,8 +1048,10 @@ impl wasmtime_runtime::ModuleRuntimeInfo for ModuleInner {
     }
 
     fn memory_image(&self, memory: DefinedMemoryIndex) -> Result<Option<&Arc<MemoryImage>>> {
-        Ok(self
+        let images = self
             .memory_images
+            .get_or_try_init(|| memory_images(&self.engine, &self.module))?;
+        Ok(images
             .as_ref()
             .and_then(|images| images.get_memory_image(memory)))
     }
@@ -1146,6 +1174,12 @@ fn memory_images(engine: &Engine, module: &CompiledModule) -> Result<Option<Modu
         return Ok(None);
     }
 
-    // ... otherwise logic is delegated to the `ModuleMemoryImages::new` constructor
-    ModuleMemoryImages::new(module.module(), module.wasm_data(), Some(module.mmap()))
+    // ... otherwise logic is delegated to the `ModuleMemoryImages::new`
+    // constructor.
+    let mmap = if engine.config().force_memory_init_memfd {
+        None
+    } else {
+        Some(module.mmap())
+    };
+    ModuleMemoryImages::new(module.module(), module.wasm_data(), mmap)
 }
