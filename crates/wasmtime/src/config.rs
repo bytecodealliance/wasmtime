@@ -1275,7 +1275,8 @@ impl Config {
     /// what.
     ///
     /// This feature is a Linux-specific configuration option. Enabling this on
-    /// non-Linux platforms will prevent all [`Module`]s from being created.
+    /// non-Linux platforms will prevent all [`Module`](crate::Module)s from
+    /// being created.
     pub fn linux_mlock_modules_onfault(&mut self, enable: bool) -> &mut Self {
         self.linux_mlock_modules_onfault = enable;
         self
