@@ -1521,14 +1521,15 @@
             (cmp_hi Reg (with_flags_reg (cmp (OperandSize.Size64) b_hi a_hi) (setcc (CC.Z))))
             ;; At this point, `cmp_lo` and `cmp_hi` contain either 0 or 1 in the
             ;; lowest 8 bits--`SETcc` guarantees this. The upper bits may be
-            ;; unchanged so we must compare against 1; this instruction combines
-            ;; `cmp_lo` and `cmp_hi` for that final comparison.
+            ;; unchanged so we must compare against 1 below; this instruction
+            ;; combines `cmp_lo` and `cmp_hi` for that final comparison.
             (cmp Reg (x64_and $I64 cmp_lo cmp_hi)))
-           ;; We can use the flag-setting behavior of `AND` to set the final
-           ;; bits. If the result of `AND` is zero, then the `ZF` will be set;
-           ;; if either of the halves `AND`s to 0, they were not equal,
-           ;; therefore we `SETcc` with `NZ`.
-           (with_flags (x64_and_with_flags_paired $I64 cmp (RegMemImm.Imm 1)) (setcc (CC.NZ)))))
+           ;; We must compare one more time against the immediate value 1 to
+           ;; check if both `cmp_lo` and `cmp_hi` are true. If `cmp AND 1 == 0`
+           ;; then the `ZF` will be set (see `TEST` definition); if either of
+           ;; the halves `AND`s to 0, they were not equal, therefore we `SETcc`
+           ;; with `NZ`.
+           (with_flags (test (OperandSize.Size64) (RegMemImm.Imm 1) cmp) (setcc (CC.NZ)))))
 
 (rule (lower (icmp (IntCC.NotEqual) a @ (value_type $I128) b))
       (let ((a_lo Gpr (value_regs_get_gpr a 0))
@@ -1539,7 +1540,7 @@
             (cmp_hi Reg (with_flags_reg (cmp (OperandSize.Size64) b_hi a_hi) (setcc (CC.NZ))))
             ;; See comments for `IntCC.Equal`.
             (cmp Reg (or $I64 cmp_lo cmp_hi)))
-           (with_flags (x64_and_with_flags_paired $I64 cmp (RegMemImm.Imm 1)) (setcc (CC.NZ)))))
+           (with_flags (test (OperandSize.Size64) (RegMemImm.Imm 1) cmp) (setcc (CC.NZ)))))
 
 ;;;; Rules for `select` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
