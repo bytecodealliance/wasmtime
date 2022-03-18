@@ -1152,11 +1152,11 @@
 
 ;; Zero extending uses `movzx`.
 (rule (extend (ExtendKind.Zero) ty mode src)
-      (movzx ty mode src))
+      (x64_movzx ty mode src))
 
 ;; Sign extending uses `movsx`.
 (rule (extend (ExtendKind.Sign) ty mode src)
-      (movsx ty mode src))
+      (x64_movsx ty mode src))
 
 ;;;; Helpers for Working SSE tidbits ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1235,7 +1235,7 @@
 (decl x64_load (Type SyntheticAmode ExtKind) Reg)
 
 (rule (x64_load (fits_in_32 ty) addr (ExtKind.SignExtend))
-      (movsx ty
+      (x64_movsx ty
              (ext_mode (ty_bytes ty) 8)
              addr))
 
@@ -1265,8 +1265,8 @@
                       addr))
 
 ;; Load a constant into an XMM register.
-(decl xmm_load_const (Type VCodeConstant) Xmm)
-(rule (xmm_load_const ty const)
+(decl x64_xmm_load_const (Type VCodeConstant) Xmm)
+(rule (x64_xmm_load_const ty const)
       (let ((dst WritableXmm (temp_writable_xmm))
             (_ Unit (emit (MInst.XmmLoadConst const dst ty))))
         dst))
@@ -1286,16 +1286,16 @@
         dst))
 
 ;; Helper for emitting `add` instructions.
-(decl add (Type Gpr GprMemImm) Gpr)
-(rule (add ty src1 src2)
+(decl x64_add (Type Gpr GprMemImm) Gpr)
+(rule (x64_add ty src1 src2)
       (alu_rmi_r ty
                  (AluRmiROpcode.Add)
                  src1
                  src2))
 
 ;; Helper for creating `add` instructions whose flags are also used.
-(decl add_with_flags_paired (Type Gpr GprMemImm) ProducesFlags)
-(rule (add_with_flags_paired ty src1 src2)
+(decl x64_add_with_flags_paired (Type Gpr GprMemImm) ProducesFlags)
+(rule (x64_add_with_flags_paired ty src1 src2)
       (let ((dst WritableGpr (temp_writable_gpr)))
         (ProducesFlags.ProducesFlagsReturnsResultWithConsumer
          (MInst.AluRmiR (operand_size_of_type_32_64 ty)
@@ -1306,8 +1306,8 @@
          dst)))
 
 ;; Helper for creating `adc` instructions.
-(decl adc_paired (Type Gpr GprMemImm) ConsumesFlags)
-(rule (adc_paired ty src1 src2)
+(decl x64_adc_paired (Type Gpr GprMemImm) ConsumesFlags)
+(rule (x64_adc_paired ty src1 src2)
       (let ((dst WritableGpr (temp_writable_gpr)))
         (ConsumesFlags.ConsumesFlagsReturnsResultWithProducer
          (MInst.AluRmiR (operand_size_of_type_32_64 ty)
@@ -1318,16 +1318,16 @@
          dst)))
 
 ;; Helper for emitting `sub` instructions.
-(decl sub (Type Gpr GprMemImm) Gpr)
-(rule (sub ty src1 src2)
+(decl x64_sub (Type Gpr GprMemImm) Gpr)
+(rule (x64_sub ty src1 src2)
       (alu_rmi_r ty
                  (AluRmiROpcode.Sub)
                  src1
                  src2))
 
 ;; Helper for creating `sub` instructions whose flags are also used.
-(decl sub_with_flags_paired (Type Gpr GprMemImm) ProducesFlags)
-(rule (sub_with_flags_paired ty src1 src2)
+(decl x64_sub_with_flags_paired (Type Gpr GprMemImm) ProducesFlags)
+(rule (x64_sub_with_flags_paired ty src1 src2)
       (let ((dst WritableGpr (temp_writable_gpr)))
         (ProducesFlags.ProducesFlagsReturnsResultWithConsumer
          (MInst.AluRmiR (operand_size_of_type_32_64 ty)
@@ -1338,8 +1338,8 @@
          dst)))
 
 ;; Helper for creating `sbb` instructions.
-(decl sbb_paired (Type Gpr GprMemImm) ConsumesFlags)
-(rule (sbb_paired ty src1 src2)
+(decl x64_sbb_paired (Type Gpr GprMemImm) ConsumesFlags)
+(rule (x64_sbb_paired ty src1 src2)
       (let ((dst WritableGpr (temp_writable_gpr)))
         (ConsumesFlags.ConsumesFlagsReturnsResultWithProducer
          (MInst.AluRmiR (operand_size_of_type_32_64 ty)
@@ -1350,8 +1350,8 @@
          dst)))
 
 ;; Helper for creating `mul` instructions.
-(decl mul (Type Gpr GprMemImm) Gpr)
-(rule (mul ty src1 src2)
+(decl x64_mul (Type Gpr GprMemImm) Gpr)
+(rule (x64_mul ty src1 src2)
       (alu_rmi_r ty
                  (AluRmiROpcode.Mul)
                  src1
@@ -1376,16 +1376,16 @@
                         dst))))
 
 ;; Helper for emitting `or` instructions.
-(decl or (Type Gpr GprMemImm) Gpr)
-(rule (or ty src1 src2)
+(decl x64_or (Type Gpr GprMemImm) Gpr)
+(rule (x64_or ty src1 src2)
       (alu_rmi_r ty
                  (AluRmiROpcode.Or)
                  src1
                  src2))
 
 ;; Helper for emitting `xor` instructions.
-(decl xor (Type Gpr GprMemImm) Gpr)
-(rule (xor ty src1 src2)
+(decl x64_xor (Type Gpr GprMemImm) Gpr)
+(rule (x64_xor ty src1 src2)
       (alu_rmi_r ty
                  (AluRmiROpcode.Xor)
                  src1
@@ -1477,7 +1477,7 @@
 
 ;; TODO: use cmpeqpd for all 1s
 
-;; Helper for creating `MInst.ShifR` instructions.
+;; Helper for creating `MInst.ShiftR` instructions.
 (decl shift_r (Type ShiftKind Gpr Imm8Gpr) Gpr)
 (rule (shift_r ty kind src1 src2)
       (let ((dst WritableGpr (temp_writable_gpr))
@@ -1498,18 +1498,18 @@
       (shift_r ty (ShiftKind.RotateRight) src1 src2))
 
 ;; Helper for creating `shl` instructions.
-(decl shl (Type Gpr Imm8Gpr) Gpr)
-(rule (shl ty src1 src2)
+(decl x64_shl (Type Gpr Imm8Gpr) Gpr)
+(rule (x64_shl ty src1 src2)
       (shift_r ty (ShiftKind.ShiftLeft) src1 src2))
 
 ;; Helper for creating logical shift-right instructions.
-(decl shr (Type Gpr Imm8Gpr) Gpr)
-(rule (shr ty src1 src2)
+(decl x64_shr (Type Gpr Imm8Gpr) Gpr)
+(rule (x64_shr ty src1 src2)
       (shift_r ty (ShiftKind.ShiftRightLogical) src1 src2))
 
 ;; Helper for creating arithmetic shift-right instructions.
-(decl sar (Type Gpr Imm8Gpr) Gpr)
-(rule (sar ty src1 src2)
+(decl x64_sar (Type Gpr Imm8Gpr) Gpr)
+(rule (x64_sar ty src1 src2)
       (shift_r ty (ShiftKind.ShiftRightArithmetic) src1 src2))
 
 ;; Helper for creating `MInst.CmpRmiR` instructions.
@@ -1522,13 +1522,13 @@
                       src2)))
 
 ;; Helper for creating `cmp` instructions.
-(decl cmp (OperandSize GprMemImm Gpr) ProducesFlags)
-(rule (cmp size src1 src2)
+(decl x64_cmp (OperandSize GprMemImm Gpr) ProducesFlags)
+(rule (x64_cmp size src1 src2)
       (cmp_rmi_r size (CmpOpcode.Cmp) src1 src2))
 
 ;; Helper for creating `cmp` instructions with an immediate.
-(decl cmp_imm (OperandSize u32 Gpr) ProducesFlags)
-(rule (cmp_imm size src1 src2)
+(decl x64_cmp_imm (OperandSize u32 Gpr) ProducesFlags)
+(rule (x64_cmp_imm size src1 src2)
       (cmp_rmi_r size (CmpOpcode.Cmp) (RegMemImm.Imm src1) src2))
 
 ;; Helper for creating `MInst.XmmCmpRmR` instructions.
@@ -1537,19 +1537,18 @@
       (ProducesFlags.ProducesFlagsSideEffect
        (MInst.XmmCmpRmR opcode src1 src2)))
 
-;; Helper for creating `fpcmp` instructions (cannot use `fcmp` as it is taken by
-;; `clif.isle`).
-(decl fpcmp (Value Value) ProducesFlags)
-(rule (fpcmp src1 @ (value_type $F32) src2)
+;; Helper for creating floating-point comparison instructions (`UCOMIS[S|D]`).
+(decl x64_ucomis (Value Value) ProducesFlags)
+(rule (x64_ucomis src1 @ (value_type $F32) src2)
       ;; N.B.: cmp can be generated more than once, so cannot do a
       ;; load-op merge. So `put_in_xmm` for src1, not `put_in_xmm_mem`.
       (xmm_cmp_rm_r (SseOpcode.Ucomiss) (put_in_xmm src1) (put_in_xmm src2)))
-(rule (fpcmp src1 @ (value_type $F64) src2)
+(rule (x64_ucomis src1 @ (value_type $F64) src2)
       (xmm_cmp_rm_r (SseOpcode.Ucomisd) (put_in_xmm src1) (put_in_xmm src2)))
 
 ;; Helper for creating `test` instructions.
-(decl test (OperandSize GprMemImm Gpr) ProducesFlags)
-(rule (test size src1 src2)
+(decl x64_test (OperandSize GprMemImm Gpr) ProducesFlags)
+(rule (x64_test size src1 src2)
       (cmp_rmi_r size (CmpOpcode.Test) src1 src2))
 
 ;; Helper for creating `cmove` instructions. Note that these instructions do not
@@ -1659,23 +1658,23 @@
       (cmove_or_xmm ty cc1 cc2 consequent alternative))
 
 ;; Helper for creating `MInst.Setcc` instructions.
-(decl setcc (CC) ConsumesFlags)
-(rule (setcc cc)
+(decl x64_setcc (CC) ConsumesFlags)
+(rule (x64_setcc cc)
       (let ((dst WritableGpr (temp_writable_gpr)))
         (ConsumesFlags.ConsumesFlagsReturnsReg
          (MInst.Setcc cc dst)
          dst)))
 
 ;; Helper for creating `MInst.MovzxRmR` instructions.
-(decl movzx (Type ExtMode GprMem) Gpr)
-(rule (movzx ty mode src)
+(decl x64_movzx (Type ExtMode GprMem) Gpr)
+(rule (x64_movzx ty mode src)
       (let ((dst WritableGpr (temp_writable_gpr))
             (_ Unit (emit (MInst.MovzxRmR mode src dst))))
         dst))
 
 ;; Helper for creating `MInst.MovsxRmR` instructions.
-(decl movsx (Type ExtMode GprMem) Gpr)
-(rule (movsx ty mode src)
+(decl x64_movsx (Type ExtMode GprMem) Gpr)
+(rule (x64_movsx ty mode src)
       (let ((dst WritableGpr (temp_writable_gpr))
             (_ Unit (emit (MInst.MovsxRmR mode src dst))))
         dst))
@@ -1688,273 +1687,273 @@
         dst))
 
 ;; Helper for creating `paddb` instructions.
-(decl paddb (Xmm XmmMem) Xmm)
-(rule (paddb src1 src2)
+(decl x64_paddb (Xmm XmmMem) Xmm)
+(rule (x64_paddb src1 src2)
       (xmm_rm_r $I8X16 (SseOpcode.Paddb) src1 src2))
 
 ;; Helper for creating `paddw` instructions.
-(decl paddw (Xmm XmmMem) Xmm)
-(rule (paddw src1 src2)
+(decl x64_paddw (Xmm XmmMem) Xmm)
+(rule (x64_paddw src1 src2)
       (xmm_rm_r $I16X8 (SseOpcode.Paddw) src1 src2))
 
 ;; Helper for creating `paddd` instructions.
-(decl paddd (Xmm XmmMem) Xmm)
-(rule (paddd src1 src2)
+(decl x64_paddd (Xmm XmmMem) Xmm)
+(rule (x64_paddd src1 src2)
       (xmm_rm_r $I32X4 (SseOpcode.Paddd) src1 src2))
 
 ;; Helper for creating `paddq` instructions.
-(decl paddq (Xmm XmmMem) Xmm)
-(rule (paddq src1 src2)
+(decl x64_paddq (Xmm XmmMem) Xmm)
+(rule (x64_paddq src1 src2)
       (xmm_rm_r $I64X2 (SseOpcode.Paddq) src1 src2))
 
 ;; Helper for creating `paddsb` instructions.
-(decl paddsb (Xmm XmmMem) Xmm)
-(rule (paddsb src1 src2)
+(decl x64_paddsb (Xmm XmmMem) Xmm)
+(rule (x64_paddsb src1 src2)
       (xmm_rm_r $I8X16 (SseOpcode.Paddsb) src1 src2))
 
 ;; Helper for creating `paddsw` instructions.
-(decl paddsw (Xmm XmmMem) Xmm)
-(rule (paddsw src1 src2)
+(decl x64_paddsw (Xmm XmmMem) Xmm)
+(rule (x64_paddsw src1 src2)
       (xmm_rm_r $I16X8 (SseOpcode.Paddsw) src1 src2))
 
 ;; Helper for creating `paddusb` instructions.
-(decl paddusb (Xmm XmmMem) Xmm)
-(rule (paddusb src1 src2)
+(decl x64_paddusb (Xmm XmmMem) Xmm)
+(rule (x64_paddusb src1 src2)
       (xmm_rm_r $I8X16 (SseOpcode.Paddusb) src1 src2))
 
 ;; Helper for creating `paddusw` instructions.
-(decl paddusw (Xmm XmmMem) Xmm)
-(rule (paddusw src1 src2)
+(decl x64_paddusw (Xmm XmmMem) Xmm)
+(rule (x64_paddusw src1 src2)
       (xmm_rm_r $I16X8 (SseOpcode.Paddusw) src1 src2))
 
 ;; Helper for creating `psubb` instructions.
-(decl psubb (Xmm XmmMem) Xmm)
-(rule (psubb src1 src2)
+(decl x64_psubb (Xmm XmmMem) Xmm)
+(rule (x64_psubb src1 src2)
       (xmm_rm_r $I8X16 (SseOpcode.Psubb) src1 src2))
 
 ;; Helper for creating `psubw` instructions.
-(decl psubw (Xmm XmmMem) Xmm)
-(rule (psubw src1 src2)
+(decl x64_psubw (Xmm XmmMem) Xmm)
+(rule (x64_psubw src1 src2)
       (xmm_rm_r $I16X8 (SseOpcode.Psubw) src1 src2))
 
 ;; Helper for creating `psubd` instructions.
-(decl psubd (Xmm XmmMem) Xmm)
-(rule (psubd src1 src2)
+(decl x64_psubd (Xmm XmmMem) Xmm)
+(rule (x64_psubd src1 src2)
       (xmm_rm_r $I32X4 (SseOpcode.Psubd) src1 src2))
 
 ;; Helper for creating `psubq` instructions.
-(decl psubq (Xmm XmmMem) Xmm)
-(rule (psubq src1 src2)
+(decl x64_psubq (Xmm XmmMem) Xmm)
+(rule (x64_psubq src1 src2)
       (xmm_rm_r $I64X2 (SseOpcode.Psubq) src1 src2))
 
 ;; Helper for creating `psubsb` instructions.
-(decl psubsb (Xmm XmmMem) Xmm)
-(rule (psubsb src1 src2)
+(decl x64_psubsb (Xmm XmmMem) Xmm)
+(rule (x64_psubsb src1 src2)
       (xmm_rm_r $I8X16 (SseOpcode.Psubsb) src1 src2))
 
 ;; Helper for creating `psubsw` instructions.
-(decl psubsw (Xmm XmmMem) Xmm)
-(rule (psubsw src1 src2)
+(decl x64_psubsw (Xmm XmmMem) Xmm)
+(rule (x64_psubsw src1 src2)
       (xmm_rm_r $I16X8 (SseOpcode.Psubsw) src1 src2))
 
 ;; Helper for creating `psubusb` instructions.
-(decl psubusb (Xmm XmmMem) Xmm)
-(rule (psubusb src1 src2)
+(decl x64_psubusb (Xmm XmmMem) Xmm)
+(rule (x64_psubusb src1 src2)
       (xmm_rm_r $I8X16 (SseOpcode.Psubusb) src1 src2))
 
 ;; Helper for creating `psubusw` instructions.
-(decl psubusw (Xmm XmmMem) Xmm)
-(rule (psubusw src1 src2)
+(decl x64_psubusw (Xmm XmmMem) Xmm)
+(rule (x64_psubusw src1 src2)
       (xmm_rm_r $I16X8 (SseOpcode.Psubusw) src1 src2))
 
 ;; Helper for creating `pavgb` instructions.
-(decl pavgb (Xmm XmmMem) Xmm)
-(rule (pavgb src1 src2)
+(decl x64_pavgb (Xmm XmmMem) Xmm)
+(rule (x64_pavgb src1 src2)
       (xmm_rm_r $I8X16 (SseOpcode.Pavgb) src1 src2))
 
 ;; Helper for creating `pavgw` instructions.
-(decl pavgw (Xmm XmmMem) Xmm)
-(rule (pavgw src1 src2)
+(decl x64_pavgw (Xmm XmmMem) Xmm)
+(rule (x64_pavgw src1 src2)
       (xmm_rm_r $I16X8 (SseOpcode.Pavgw) src1 src2))
 
 ;; Helper for creating `pand` instructions.
-(decl pand (Xmm XmmMem) Xmm)
-(rule (pand src1 src2)
+(decl x64_pand (Xmm XmmMem) Xmm)
+(rule (x64_pand src1 src2)
       (xmm_rm_r $F32X4 (SseOpcode.Pand) src1 src2))
 
 ;; Helper for creating `andps` instructions.
-(decl andps (Xmm XmmMem) Xmm)
-(rule (andps src1 src2)
+(decl x64_andps (Xmm XmmMem) Xmm)
+(rule (x64_andps src1 src2)
       (xmm_rm_r $F32X4 (SseOpcode.Andps) src1 src2))
 
 ;; Helper for creating `andpd` instructions.
-(decl andpd (Xmm XmmMem) Xmm)
-(rule (andpd src1 src2)
+(decl x64_andpd (Xmm XmmMem) Xmm)
+(rule (x64_andpd src1 src2)
       (xmm_rm_r $F64X2 (SseOpcode.Andpd) src1 src2))
 
 ;; Helper for creating `por` instructions.
-(decl por (Xmm XmmMem) Xmm)
-(rule (por src1 src2)
+(decl x64_por (Xmm XmmMem) Xmm)
+(rule (x64_por src1 src2)
       (xmm_rm_r $F32X4 (SseOpcode.Por) src1 src2))
 
 ;; Helper for creating `orps` instructions.
-(decl orps (Xmm XmmMem) Xmm)
-(rule (orps src1 src2)
+(decl x64_orps (Xmm XmmMem) Xmm)
+(rule (x64_orps src1 src2)
       (xmm_rm_r $F32X4 (SseOpcode.Orps) src1 src2))
 
 ;; Helper for creating `orpd` instructions.
-(decl orpd (Xmm XmmMem) Xmm)
-(rule (orpd src1 src2)
+(decl x64_orpd (Xmm XmmMem) Xmm)
+(rule (x64_orpd src1 src2)
       (xmm_rm_r $F64X2 (SseOpcode.Orpd) src1 src2))
 
 ;; Helper for creating `pxor` instructions.
-(decl pxor (Xmm XmmMem) Xmm)
-(rule (pxor src1 src2)
+(decl x64_pxor (Xmm XmmMem) Xmm)
+(rule (x64_pxor src1 src2)
       (xmm_rm_r $I8X16 (SseOpcode.Pxor) src1 src2))
 
 ;; Helper for creating `xorps` instructions.
-(decl xorps (Xmm XmmMem) Xmm)
-(rule (xorps src1 src2)
+(decl x64_xorps (Xmm XmmMem) Xmm)
+(rule (x64_xorps src1 src2)
       (xmm_rm_r $F32X4 (SseOpcode.Xorps) src1 src2))
 
 ;; Helper for creating `xorpd` instructions.
-(decl xorpd (Xmm XmmMem) Xmm)
-(rule (xorpd src1 src2)
+(decl x64_xorpd (Xmm XmmMem) Xmm)
+(rule (x64_xorpd src1 src2)
       (xmm_rm_r $F64X2 (SseOpcode.Xorpd) src1 src2))
 
 ;; Helper for creating `pmullw` instructions.
-(decl pmullw (Xmm XmmMem) Xmm)
-(rule (pmullw src1 src2)
+(decl x64_pmullw (Xmm XmmMem) Xmm)
+(rule (x64_pmullw src1 src2)
       (xmm_rm_r $I16X8 (SseOpcode.Pmullw) src1 src2))
 
 ;; Helper for creating `pmulld` instructions.
-(decl pmulld (Xmm XmmMem) Xmm)
-(rule (pmulld src1 src2)
+(decl x64_pmulld (Xmm XmmMem) Xmm)
+(rule (x64_pmulld src1 src2)
       (xmm_rm_r $I16X8 (SseOpcode.Pmulld) src1 src2))
 
 ;; Helper for creating `pmulhw` instructions.
-(decl pmulhw (Xmm XmmMem) Xmm)
-(rule (pmulhw src1 src2)
+(decl x64_pmulhw (Xmm XmmMem) Xmm)
+(rule (x64_pmulhw src1 src2)
       (xmm_rm_r $I16X8 (SseOpcode.Pmulhw) src1 src2))
 
 ;; Helper for creating `pmulhuw` instructions.
-(decl pmulhuw (Xmm XmmMem) Xmm)
-(rule (pmulhuw src1 src2)
+(decl x64_pmulhuw (Xmm XmmMem) Xmm)
+(rule (x64_pmulhuw src1 src2)
       (xmm_rm_r $I16X8 (SseOpcode.Pmulhuw) src1 src2))
 
 ;; Helper for creating `pmuldq` instructions.
-(decl pmuldq (Xmm XmmMem) Xmm)
-(rule (pmuldq src1 src2)
+(decl x64_pmuldq (Xmm XmmMem) Xmm)
+(rule (x64_pmuldq src1 src2)
       (xmm_rm_r $I16X8 (SseOpcode.Pmuldq) src1 src2))
 
 ;; Helper for creating `pmuludq` instructions.
-(decl pmuludq (Xmm XmmMem) Xmm)
-(rule (pmuludq src1 src2)
+(decl x64_pmuludq (Xmm XmmMem) Xmm)
+(rule (x64_pmuludq src1 src2)
       (xmm_rm_r $I64X2 (SseOpcode.Pmuludq) src1 src2))
 
 ;; Helper for creating `punpckhwd` instructions.
-(decl punpckhwd (Xmm XmmMem) Xmm)
-(rule (punpckhwd src1 src2)
+(decl x64_punpckhwd (Xmm XmmMem) Xmm)
+(rule (x64_punpckhwd src1 src2)
       (xmm_rm_r $I16X8 (SseOpcode.Punpckhwd) src1 src2))
 
 ;; Helper for creating `punpcklwd` instructions.
-(decl punpcklwd (Xmm XmmMem) Xmm)
-(rule (punpcklwd src1 src2)
+(decl x64_punpcklwd (Xmm XmmMem) Xmm)
+(rule (x64_punpcklwd src1 src2)
       (xmm_rm_r $I16X8 (SseOpcode.Punpcklwd) src1 src2))
 
 ;; Helper for creating `andnps` instructions.
-(decl andnps (Xmm XmmMem) Xmm)
-(rule (andnps src1 src2)
+(decl x64_andnps (Xmm XmmMem) Xmm)
+(rule (x64_andnps src1 src2)
       (xmm_rm_r $F32X4 (SseOpcode.Andnps) src1 src2))
 
 ;; Helper for creating `andnpd` instructions.
-(decl andnpd (Xmm XmmMem) Xmm)
-(rule (andnpd src1 src2)
+(decl x64_andnpd (Xmm XmmMem) Xmm)
+(rule (x64_andnpd src1 src2)
       (xmm_rm_r $F64X2 (SseOpcode.Andnpd) src1 src2))
 
 ;; Helper for creating `pandn` instructions.
-(decl pandn (Xmm XmmMem) Xmm)
-(rule (pandn src1 src2)
+(decl x64_pandn (Xmm XmmMem) Xmm)
+(rule (x64_pandn src1 src2)
       (xmm_rm_r $F64X2 (SseOpcode.Pandn) src1 src2))
 
 ;; Helper for creating `addss` instructions.
-(decl addss (Xmm XmmMem) Xmm)
-(rule (addss src1 src2)
+(decl x64_addss (Xmm XmmMem) Xmm)
+(rule (x64_addss src1 src2)
       (xmm_rm_r $F32 (SseOpcode.Addss) src1 src2))
 
 ;; Helper for creating `addsd` instructions.
-(decl addsd (Xmm XmmMem) Xmm)
-(rule (addsd src1 src2)
+(decl x64_addsd (Xmm XmmMem) Xmm)
+(rule (x64_addsd src1 src2)
       (xmm_rm_r $F64 (SseOpcode.Addsd) src1 src2))
 
 ;; Helper for creating `addps` instructions.
-(decl addps (Xmm XmmMem) Xmm)
-(rule (addps src1 src2)
+(decl x64_addps (Xmm XmmMem) Xmm)
+(rule (x64_addps src1 src2)
       (xmm_rm_r $F32 (SseOpcode.Addps) src1 src2))
 
 ;; Helper for creating `addpd` instructions.
-(decl addpd (Xmm XmmMem) Xmm)
-(rule (addpd src1 src2)
+(decl x64_addpd (Xmm XmmMem) Xmm)
+(rule (x64_addpd src1 src2)
       (xmm_rm_r $F32 (SseOpcode.Addpd) src1 src2))
 
 ;; Helper for creating `subss` instructions.
-(decl subss (Xmm XmmMem) Xmm)
-(rule (subss src1 src2)
+(decl x64_subss (Xmm XmmMem) Xmm)
+(rule (x64_subss src1 src2)
       (xmm_rm_r $F32 (SseOpcode.Subss) src1 src2))
 
 ;; Helper for creating `subsd` instructions.
-(decl subsd (Xmm XmmMem) Xmm)
-(rule (subsd src1 src2)
+(decl x64_subsd (Xmm XmmMem) Xmm)
+(rule (x64_subsd src1 src2)
       (xmm_rm_r $F64 (SseOpcode.Subsd) src1 src2))
 
 ;; Helper for creating `subps` instructions.
-(decl subps (Xmm XmmMem) Xmm)
-(rule (subps src1 src2)
+(decl x64_subps (Xmm XmmMem) Xmm)
+(rule (x64_subps src1 src2)
       (xmm_rm_r $F32 (SseOpcode.Subps) src1 src2))
 
 ;; Helper for creating `subpd` instructions.
-(decl subpd (Xmm XmmMem) Xmm)
-(rule (subpd src1 src2)
+(decl x64_subpd (Xmm XmmMem) Xmm)
+(rule (x64_subpd src1 src2)
       (xmm_rm_r $F32 (SseOpcode.Subpd) src1 src2))
 
 ;; Helper for creating `mulss` instructions.
-(decl mulss (Xmm XmmMem) Xmm)
-(rule (mulss src1 src2)
+(decl x64_mulss (Xmm XmmMem) Xmm)
+(rule (x64_mulss src1 src2)
       (xmm_rm_r $F32 (SseOpcode.Mulss) src1 src2))
 
 ;; Helper for creating `mulsd` instructions.
-(decl mulsd (Xmm XmmMem) Xmm)
-(rule (mulsd src1 src2)
+(decl x64_mulsd (Xmm XmmMem) Xmm)
+(rule (x64_mulsd src1 src2)
       (xmm_rm_r $F64 (SseOpcode.Mulsd) src1 src2))
 
 ;; Helper for creating `mulps` instructions.
-(decl mulps (Xmm XmmMem) Xmm)
-(rule (mulps src1 src2)
+(decl x64_mulps (Xmm XmmMem) Xmm)
+(rule (x64_mulps src1 src2)
       (xmm_rm_r $F32 (SseOpcode.Mulps) src1 src2))
 
 ;; Helper for creating `mulpd` instructions.
-(decl mulpd (Xmm XmmMem) Xmm)
-(rule (mulpd src1 src2)
+(decl x64_mulpd (Xmm XmmMem) Xmm)
+(rule (x64_mulpd src1 src2)
       (xmm_rm_r $F32 (SseOpcode.Mulpd) src1 src2))
 
 ;; Helper for creating `divss` instructions.
-(decl divss (Xmm XmmMem) Xmm)
-(rule (divss src1 src2)
+(decl x64_divss (Xmm XmmMem) Xmm)
+(rule (x64_divss src1 src2)
       (xmm_rm_r $F32 (SseOpcode.Divss) src1 src2))
 
 ;; Helper for creating `divsd` instructions.
-(decl divsd (Xmm XmmMem) Xmm)
-(rule (divsd src1 src2)
+(decl x64_divsd (Xmm XmmMem) Xmm)
+(rule (x64_divsd src1 src2)
       (xmm_rm_r $F64 (SseOpcode.Divsd) src1 src2))
 
 ;; Helper for creating `divps` instructions.
-(decl divps (Xmm XmmMem) Xmm)
-(rule (divps src1 src2)
+(decl x64_divps (Xmm XmmMem) Xmm)
+(rule (x64_divps src1 src2)
       (xmm_rm_r $F32 (SseOpcode.Divps) src1 src2))
 
 ;; Helper for creating `divpd` instructions.
-(decl divpd (Xmm XmmMem) Xmm)
-(rule (divpd src1 src2)
+(decl x64_divpd (Xmm XmmMem) Xmm)
+(rule (x64_divpd src1 src2)
       (xmm_rm_r $F32 (SseOpcode.Divpd) src1 src2))
 
 (decl sse_blend_op (Type) SseOpcode)
@@ -1968,8 +1967,8 @@
 (rule (sse_mov_op (multi_lane _bits _lanes)) (SseOpcode.Movdqa))
 
 ;; Helper for creating `blendvp{d,s}` and `pblendvb` instructions.
-(decl sse_blend (Type XmmMem XmmMem Xmm) Xmm)
-(rule (sse_blend ty mask src1 src2)
+(decl x64_blend (Type XmmMem XmmMem Xmm) Xmm)
+(rule (x64_blend ty mask src1 src2)
       ;; Move the mask into `xmm0`, as blend instructions implicitly operate on
       ;; that register. (This kind of thing would normally happen inside of
       ;; `Inst::mov_mitosis`, but has to happen here, where we still have the
@@ -1982,8 +1981,8 @@
         (xmm_rm_r ty (sse_blend_op ty) src2 src1)))
 
 ;; Helper for creating `blendvpd` instructions.
-(decl blendvpd (Xmm XmmMem Xmm) Xmm)
-(rule (blendvpd src1 src2 mask)
+(decl x64_blendvpd (Xmm XmmMem Xmm) Xmm)
+(rule (x64_blendvpd src1 src2 mask)
       ;; Move the mask into `xmm0`, as `blendvpd` implicitly operates on that
       ;; register. (This kind of thing would normally happen inside of
       ;; `Inst::mov_mitosis`, but has to happen here, where we still have the
@@ -1996,80 +1995,80 @@
         (xmm_rm_r $F64X2 (SseOpcode.Blendvpd) src1 src2)))
 
 ;; Helper for creating `movsd` instructions.
-(decl movsd (Xmm XmmMem) Xmm)
-(rule (movsd src1 src2)
+(decl x64_movsd (Xmm XmmMem) Xmm)
+(rule (x64_movsd src1 src2)
       (xmm_rm_r $I8X16 (SseOpcode.Movsd) src1 src2))
 
 ;; Helper for creating `movlhps` instructions.
-(decl movlhps (Xmm XmmMem) Xmm)
-(rule (movlhps src1 src2)
+(decl x64_movlhps (Xmm XmmMem) Xmm)
+(rule (x64_movlhps src1 src2)
       (xmm_rm_r $I8X16 (SseOpcode.Movlhps) src1 src2))
 
 ;; Helpers for creating `pmaxs*` instructions.
-(decl pmaxs (Type Xmm XmmMem) Xmm)
-(rule (pmaxs $I8X16 x y) (pmaxsb x y))
-(rule (pmaxs $I16X8 x y) (pmaxsw x y))
-(rule (pmaxs $I32X4 x y) (pmaxsd x y))
+(decl x64_pmaxs (Type Xmm XmmMem) Xmm)
+(rule (x64_pmaxs $I8X16 x y) (x64_pmaxsb x y))
+(rule (x64_pmaxs $I16X8 x y) (x64_pmaxsw x y))
+(rule (x64_pmaxs $I32X4 x y) (x64_pmaxsd x y))
 ;; No $I64X2 version (PMAXSQ) in SSE4.1.
-(decl pmaxsb (Xmm XmmMem) Xmm)
-(rule (pmaxsb src1 src2) (xmm_rm_r $I8X16 (SseOpcode.Pmaxsb) src1 src2))
-(decl pmaxsw (Xmm XmmMem) Xmm)
-(rule (pmaxsw src1 src2) (xmm_rm_r $I8X16 (SseOpcode.Pmaxsw) src1 src2))
-(decl pmaxsd (Xmm XmmMem) Xmm)
-(rule (pmaxsd src1 src2) (xmm_rm_r $I8X16 (SseOpcode.Pmaxsd) src1 src2))
+(decl x64_pmaxsb (Xmm XmmMem) Xmm)
+(rule (x64_pmaxsb src1 src2) (xmm_rm_r $I8X16 (SseOpcode.Pmaxsb) src1 src2))
+(decl x64_pmaxsw (Xmm XmmMem) Xmm)
+(rule (x64_pmaxsw src1 src2) (xmm_rm_r $I8X16 (SseOpcode.Pmaxsw) src1 src2))
+(decl x64_pmaxsd (Xmm XmmMem) Xmm)
+(rule (x64_pmaxsd src1 src2) (xmm_rm_r $I8X16 (SseOpcode.Pmaxsd) src1 src2))
 
 ;; Helpers for creating `pmins*` instructions.
-(decl pmins (Type Xmm XmmMem) Xmm)
-(rule (pmins $I8X16 x y) (pminsb x y))
-(rule (pmins $I16X8 x y) (pminsw x y))
-(rule (pmins $I32X4 x y) (pminsd x y))
+(decl x64_pmins (Type Xmm XmmMem) Xmm)
+(rule (x64_pmins $I8X16 x y) (x64_pminsb x y))
+(rule (x64_pmins $I16X8 x y) (x64_pminsw x y))
+(rule (x64_pmins $I32X4 x y) (x64_pminsd x y))
 ;; No $I64X2 version (PMINSQ) in SSE4.1.
-(decl pminsb (Xmm XmmMem) Xmm)
-(rule (pminsb src1 src2) (xmm_rm_r $I8X16 (SseOpcode.Pminsb) src1 src2))
-(decl pminsw (Xmm XmmMem) Xmm)
-(rule (pminsw src1 src2) (xmm_rm_r $I16X8 (SseOpcode.Pminsw) src1 src2))
-(decl pminsd (Xmm XmmMem) Xmm)
-(rule (pminsd src1 src2) (xmm_rm_r $I32X4 (SseOpcode.Pminsd) src1 src2))
+(decl x64_pminsb (Xmm XmmMem) Xmm)
+(rule (x64_pminsb src1 src2) (xmm_rm_r $I8X16 (SseOpcode.Pminsb) src1 src2))
+(decl x64_pminsw (Xmm XmmMem) Xmm)
+(rule (x64_pminsw src1 src2) (xmm_rm_r $I16X8 (SseOpcode.Pminsw) src1 src2))
+(decl x64_pminsd (Xmm XmmMem) Xmm)
+(rule (x64_pminsd src1 src2) (xmm_rm_r $I32X4 (SseOpcode.Pminsd) src1 src2))
 
 ;; Helpers for creating `pmaxu*` instructions.
-(decl pmaxu (Type Xmm XmmMem) Xmm)
-(rule (pmaxu $I8X16 x y) (pmaxub x y))
-(rule (pmaxu $I16X8 x y) (pmaxuw x y))
-(rule (pmaxu $I32X4 x y) (pmaxud x y))
+(decl x64_pmaxu (Type Xmm XmmMem) Xmm)
+(rule (x64_pmaxu $I8X16 x y) (x64_pmaxub x y))
+(rule (x64_pmaxu $I16X8 x y) (x64_pmaxuw x y))
+(rule (x64_pmaxu $I32X4 x y) (x64_pmaxud x y))
 ;; No $I64X2 version (PMAXUQ) in SSE4.1.
-(decl pmaxub (Xmm XmmMem) Xmm)
-(rule (pmaxub src1 src2) (xmm_rm_r $I8X16 (SseOpcode.Pmaxub) src1 src2))
-(decl pmaxuw (Xmm XmmMem) Xmm)
-(rule (pmaxuw src1 src2) (xmm_rm_r $I8X16 (SseOpcode.Pmaxuw) src1 src2))
-(decl pmaxud (Xmm XmmMem) Xmm)
-(rule (pmaxud src1 src2) (xmm_rm_r $I8X16 (SseOpcode.Pmaxud) src1 src2))
+(decl x64_pmaxub (Xmm XmmMem) Xmm)
+(rule (x64_pmaxub src1 src2) (xmm_rm_r $I8X16 (SseOpcode.Pmaxub) src1 src2))
+(decl x64_pmaxuw (Xmm XmmMem) Xmm)
+(rule (x64_pmaxuw src1 src2) (xmm_rm_r $I8X16 (SseOpcode.Pmaxuw) src1 src2))
+(decl x64_pmaxud (Xmm XmmMem) Xmm)
+(rule (x64_pmaxud src1 src2) (xmm_rm_r $I8X16 (SseOpcode.Pmaxud) src1 src2))
 
 ;; Helper for creating `pminu*` instructions.
-(decl pminu (Type Xmm XmmMem) Xmm)
-(rule (pminu $I8X16 x y) (pminub x y))
-(rule (pminu $I16X8 x y) (pminuw x y))
-(rule (pminu $I32X4 x y) (pminud x y))
+(decl x64_pminu (Type Xmm XmmMem) Xmm)
+(rule (x64_pminu $I8X16 x y) (x64_pminub x y))
+(rule (x64_pminu $I16X8 x y) (x64_pminuw x y))
+(rule (x64_pminu $I32X4 x y) (x64_pminud x y))
 ;; No $I64X2 version (PMINUQ) in SSE4.1.
-(decl pminub (Xmm XmmMem) Xmm)
-(rule (pminub src1 src2) (xmm_rm_r $I8X16 (SseOpcode.Pminub) src1 src2))
-(decl pminuw (Xmm XmmMem) Xmm)
-(rule (pminuw src1 src2) (xmm_rm_r $I8X16 (SseOpcode.Pminuw) src1 src2))
-(decl pminud (Xmm XmmMem) Xmm)
-(rule (pminud src1 src2) (xmm_rm_r $I8X16 (SseOpcode.Pminud) src1 src2))
+(decl x64_pminub (Xmm XmmMem) Xmm)
+(rule (x64_pminub src1 src2) (xmm_rm_r $I8X16 (SseOpcode.Pminub) src1 src2))
+(decl x64_pminuw (Xmm XmmMem) Xmm)
+(rule (x64_pminuw src1 src2) (xmm_rm_r $I8X16 (SseOpcode.Pminuw) src1 src2))
+(decl x64_pminud (Xmm XmmMem) Xmm)
+(rule (x64_pminud src1 src2) (xmm_rm_r $I8X16 (SseOpcode.Pminud) src1 src2))
 
 ;; Helper for creating `punpcklbw` instructions.
-(decl punpcklbw (Xmm XmmMem) Xmm)
-(rule (punpcklbw src1 src2)
+(decl x64_punpcklbw (Xmm XmmMem) Xmm)
+(rule (x64_punpcklbw src1 src2)
       (xmm_rm_r $I8X16 (SseOpcode.Punpcklbw) src1 src2))
 
 ;; Helper for creating `punpckhbw` instructions.
-(decl punpckhbw (Xmm XmmMem) Xmm)
-(rule (punpckhbw src1 src2)
+(decl x64_punpckhbw (Xmm XmmMem) Xmm)
+(rule (x64_punpckhbw src1 src2)
       (xmm_rm_r $I8X16 (SseOpcode.Punpckhbw) src1 src2))
 
 ;; Helper for creating `packsswb` instructions.
-(decl packsswb (Xmm XmmMem) Xmm)
-(rule (packsswb src1 src2)
+(decl x64_packsswb (Xmm XmmMem) Xmm)
+(rule (x64_packsswb src1 src2)
       (xmm_rm_r $I8X16 (SseOpcode.Packsswb) src1 src2))
 
 ;; Helper for creating `MInst.XmmRmRImm` instructions.
@@ -2085,8 +2084,8 @@
         dst))
 
 ;; Helper for creating `palignr` instructions.
-(decl palignr (Xmm XmmMem u8 OperandSize) Xmm)
-(rule (palignr src1 src2 imm size)
+(decl x64_palignr (Xmm XmmMem u8 OperandSize) Xmm)
+(rule (x64_palignr src1 src2 imm size)
       (xmm_rm_r_imm (SseOpcode.Palignr)
                     src1
                     src2
@@ -2094,8 +2093,8 @@
                     size))
 
 ;; Helper for creating `cmpps` instructions.
-(decl cmpps (Xmm XmmMem FcmpImm) Xmm)
-(rule (cmpps src1 src2 imm)
+(decl x64_cmpps (Xmm XmmMem FcmpImm) Xmm)
+(rule (x64_cmpps src1 src2 imm)
       (xmm_rm_r_imm (SseOpcode.Cmpps)
                     src1
                     src2
@@ -2103,8 +2102,8 @@
                     (OperandSize.Size32)))
 
 ;; Helper for creating `pinsrb` instructions.
-(decl pinsrb (Xmm GprMem u8) Xmm)
-(rule (pinsrb src1 src2 lane)
+(decl x64_pinsrb (Xmm GprMem u8) Xmm)
+(rule (x64_pinsrb src1 src2 lane)
       (xmm_rm_r_imm (SseOpcode.Pinsrb)
                     src1
                     src2
@@ -2112,8 +2111,8 @@
                     (OperandSize.Size32)))
 
 ;; Helper for creating `pinsrw` instructions.
-(decl pinsrw (Xmm GprMem u8) Xmm)
-(rule (pinsrw src1 src2 lane)
+(decl x64_pinsrw (Xmm GprMem u8) Xmm)
+(rule (x64_pinsrw src1 src2 lane)
       (xmm_rm_r_imm (SseOpcode.Pinsrw)
                     src1
                     src2
@@ -2121,8 +2120,8 @@
                     (OperandSize.Size32)))
 
 ;; Helper for creating `pinsrd` instructions.
-(decl pinsrd (Xmm GprMem u8 OperandSize) Xmm)
-(rule (pinsrd src1 src2 lane size)
+(decl x64_pinsrd (Xmm GprMem u8 OperandSize) Xmm)
+(rule (x64_pinsrd src1 src2 lane size)
       (xmm_rm_r_imm (SseOpcode.Pinsrd)
                     src1
                     src2
@@ -2130,8 +2129,8 @@
                     size))
 
 ;; Helper for creating `pmaddwd` instructions.
-(decl pmaddwd (Xmm XmmMem) Xmm)
-(rule (pmaddwd src1 src2)
+(decl x64_pmaddwd (Xmm XmmMem) Xmm)
+(rule (x64_pmaddwd src1 src2)
       (let ((dst WritableXmm (temp_writable_xmm))
             (_ Unit (emit (MInst.XmmRmR (SseOpcode.Pmaddwd)
                                         src1
@@ -2140,8 +2139,8 @@
         dst))
 
 ;; Helper for creating `insertps` instructions.
-(decl insertps (Xmm XmmMem u8) Xmm)
-(rule (insertps src1 src2 lane)
+(decl x64_insertps (Xmm XmmMem u8) Xmm)
+(rule (x64_insertps src1 src2 lane)
       (xmm_rm_r_imm (SseOpcode.Insertps)
                     src1
                     src2
@@ -2149,8 +2148,8 @@
                     (OperandSize.Size32)))
 
 ;; Helper for creating `pshufd` instructions.
-(decl pshufd (XmmMem u8 OperandSize) Xmm)
-(rule (pshufd src imm size)
+(decl x64_pshufd (XmmMem u8 OperandSize) Xmm)
+(rule (x64_pshufd src imm size)
       (let ((dst WritableXmm (temp_writable_xmm))
             (_ Unit (emit (MInst.XmmRmRImm (SseOpcode.Pshufd)
                                            dst
@@ -2161,8 +2160,8 @@
         dst))
 
 ;; Helper for creating `pshufb` instructions.
-(decl pshufb (Xmm XmmMem) Xmm)
-(rule (pshufb src1 src2)
+(decl x64_pshufb (Xmm XmmMem) Xmm)
+(rule (x64_pshufb src1 src2)
       (let ((dst WritableXmm (temp_writable_xmm))
             (_ Unit (emit (MInst.XmmRmR (SseOpcode.Pshufb)
                                         src1
@@ -2178,28 +2177,28 @@
         dst))
 
 ;; Helper for creating `pmovsxbw` instructions.
-(decl pmovsxbw (XmmMem) Xmm)
-(rule (pmovsxbw src)
+(decl x64_pmovsxbw (XmmMem) Xmm)
+(rule (x64_pmovsxbw src)
       (xmm_unary_rm_r (SseOpcode.Pmovsxbw) src))
 
 ;; Helper for creating `pmovzxbw` instructions.
-(decl pmovzxbw (XmmMem) Xmm)
-(rule (pmovzxbw src)
+(decl x64_pmovzxbw (XmmMem) Xmm)
+(rule (x64_pmovzxbw src)
       (xmm_unary_rm_r (SseOpcode.Pmovzxbw) src))
 
 ;; Helper for creating `pabsb` instructions.
-(decl pabsb (XmmMem) Xmm)
-(rule (pabsb src)
+(decl x64_pabsb (XmmMem) Xmm)
+(rule (x64_pabsb src)
       (xmm_unary_rm_r (SseOpcode.Pabsb) src))
 
 ;; Helper for creating `pabsw` instructions.
-(decl pabsw (XmmMem) Xmm)
-(rule (pabsw src)
+(decl x64_pabsw (XmmMem) Xmm)
+(rule (x64_pabsw src)
       (xmm_unary_rm_r (SseOpcode.Pabsw) src))
 
 ;; Helper for creating `pabsd` instructions.
-(decl pabsd (XmmMem) Xmm)
-(rule (pabsd src)
+(decl x64_pabsd (XmmMem) Xmm)
+(rule (x64_pabsd src)
       (xmm_unary_rm_r (SseOpcode.Pabsd) src))
 
 ;; Helper for creating `MInst.XmmUnaryRmREvex` instructions.
@@ -2210,13 +2209,13 @@
         dst))
 
 ;; Helper for creating `vpabsq` instructions.
-(decl vpabsq (XmmMem) Xmm)
-(rule (vpabsq src)
+(decl x64_vpabsq (XmmMem) Xmm)
+(rule (x64_vpabsq src)
       (xmm_unary_rm_r_evex (Avx512Opcode.Vpabsq) src))
 
 ;; Helper for creating `vpopcntb` instructions.
-(decl vpopcntb (XmmMem) Xmm)
-(rule (vpopcntb src)
+(decl x64_vpopcntb (XmmMem) Xmm)
+(rule (x64_vpopcntb src)
       (xmm_unary_rm_r_evex (Avx512Opcode.Vpopcntb) src))
 
 ;; Helper for creating `MInst.XmmRmREvex` instructions.
@@ -2232,8 +2231,8 @@
 ;; Helper for creating `vpmullq` instructions.
 ;;
 ;; Requires AVX-512 vl and dq.
-(decl vpmullq (XmmMem Xmm) Xmm)
-(rule (vpmullq src1 src2)
+(decl x64_vpmullq (XmmMem Xmm) Xmm)
+(rule (x64_vpmullq src1 src2)
       (xmm_rm_r_evex (Avx512Opcode.Vpmullq)
                      src1
                      src2))
@@ -2271,48 +2270,48 @@
         dst))
 
 ;; Helper for creating `psllw` instructions.
-(decl psllw (Xmm XmmMemImm) Xmm)
-(rule (psllw src1 src2)
+(decl x64_psllw (Xmm XmmMemImm) Xmm)
+(rule (x64_psllw src1 src2)
       (xmm_rmi_xmm (SseOpcode.Psllw) src1 src2))
 
 ;; Helper for creating `pslld` instructions.
-(decl pslld (Xmm XmmMemImm) Xmm)
-(rule (pslld src1 src2)
+(decl x64_pslld (Xmm XmmMemImm) Xmm)
+(rule (x64_pslld src1 src2)
       (xmm_rmi_xmm (SseOpcode.Pslld) src1 src2))
 
 ;; Helper for creating `psllq` instructions.
-(decl psllq (Xmm XmmMemImm) Xmm)
-(rule (psllq src1 src2)
+(decl x64_psllq (Xmm XmmMemImm) Xmm)
+(rule (x64_psllq src1 src2)
       (xmm_rmi_xmm (SseOpcode.Psllq) src1 src2))
 
 ;; Helper for creating `psrlw` instructions.
-(decl psrlw (Xmm XmmMemImm) Xmm)
-(rule (psrlw src1 src2)
+(decl x64_psrlw (Xmm XmmMemImm) Xmm)
+(rule (x64_psrlw src1 src2)
       (xmm_rmi_xmm (SseOpcode.Psrlw) src1 src2))
 
 ;; Helper for creating `psrld` instructions.
-(decl psrld (Xmm XmmMemImm) Xmm)
-(rule (psrld src1 src2)
+(decl x64_psrld (Xmm XmmMemImm) Xmm)
+(rule (x64_psrld src1 src2)
       (xmm_rmi_xmm (SseOpcode.Psrld) src1 src2))
 
 ;; Helper for creating `psrlq` instructions.
-(decl psrlq (Xmm XmmMemImm) Xmm)
-(rule (psrlq src1 src2)
+(decl x64_psrlq (Xmm XmmMemImm) Xmm)
+(rule (x64_psrlq src1 src2)
       (xmm_rmi_xmm (SseOpcode.Psrlq) src1 src2))
 
 ;; Helper for creating `psraw` instructions.
-(decl psraw (Xmm XmmMemImm) Xmm)
-(rule (psraw src1 src2)
+(decl x64_psraw (Xmm XmmMemImm) Xmm)
+(rule (x64_psraw src1 src2)
       (xmm_rmi_xmm (SseOpcode.Psraw) src1 src2))
 
 ;; Helper for creating `psrad` instructions.
-(decl psrad (Xmm XmmMemImm) Xmm)
-(rule (psrad src1 src2)
+(decl x64_psrad (Xmm XmmMemImm) Xmm)
+(rule (x64_psrad src1 src2)
       (xmm_rmi_xmm (SseOpcode.Psrad) src1 src2))
 
 ;; Helper for creating `pextrd` instructions.
-(decl pextrd (Type Xmm u8) Gpr)
-(rule (pextrd ty src lane)
+(decl x64_pextrd (Type Xmm u8) Gpr)
+(rule (x64_pextrd ty src lane)
       (let ((dst WritableGpr (temp_writable_gpr))
             (_ Unit (emit (MInst.XmmRmRImm (SseOpcode.Pextrd)
                                            dst
@@ -2327,8 +2326,8 @@
 ;; Note that `Size32` is intentional despite this being used for 64-bit
 ;; operations, since this presumably induces the correct encoding of the
 ;; instruction.
-(decl cmppd (Xmm XmmMem FcmpImm) Xmm)
-(rule (cmppd src1 src2 imm)
+(decl x64_cmppd (Xmm XmmMem FcmpImm) Xmm)
+(rule (x64_cmppd src1 src2 imm)
       (xmm_rm_r_imm (SseOpcode.Cmppd)
                     src1
                     src2
@@ -2343,56 +2342,56 @@
         dst))
 
 ;; Helper for creating `not` instructions.
-(decl not (Type Gpr) Gpr)
-(rule (not ty src)
+(decl x64_not (Type Gpr) Gpr)
+(rule (x64_not ty src)
       (let ((dst WritableGpr (temp_writable_gpr))
             (size OperandSize (operand_size_of_type_32_64 ty))
             (_ Unit (emit (MInst.Not size src dst))))
         dst))
 
 ;; Helper for creating `neg` instructions.
-(decl neg (Type Gpr) Gpr)
-(rule (neg ty src)
+(decl x64_neg (Type Gpr) Gpr)
+(rule (x64_neg ty src)
       (let ((dst WritableGpr (temp_writable_gpr))
             (size OperandSize (operand_size_of_type_32_64 ty))
             (_ Unit (emit (MInst.Neg size src dst))))
         dst))
 
-(decl lea (SyntheticAmode) Gpr)
-(rule (lea addr)
+(decl x64_lea (SyntheticAmode) Gpr)
+(rule (x64_lea addr)
       (let ((dst WritableGpr (temp_writable_gpr))
             (_ Unit (emit (MInst.LoadEffectiveAddress addr dst))))
         dst))
 
 ;; Helper for creating `ud2` instructions.
-(decl ud2 (TrapCode) SideEffectNoResult)
-(rule (ud2 code)
+(decl x64_ud2 (TrapCode) SideEffectNoResult)
+(rule (x64_ud2 code)
       (SideEffectNoResult.Inst (MInst.Ud2 code)))
 
 ;; Helper for creating `hlt` instructions.
-(decl hlt () SideEffectNoResult)
-(rule (hlt)
+(decl x64_hlt () SideEffectNoResult)
+(rule (x64_hlt)
       (SideEffectNoResult.Inst (MInst.Hlt)))
 
 ;; Helper for creating `lzcnt` instructions.
-(decl lzcnt (Type Gpr) Gpr)
-(rule (lzcnt ty src)
+(decl x64_lzcnt (Type Gpr) Gpr)
+(rule (x64_lzcnt ty src)
       (let ((dst WritableGpr (temp_writable_gpr))
             (size OperandSize (operand_size_of_type_32_64 ty))
             (_ Unit (emit (MInst.UnaryRmR size (UnaryRmROpcode.Lzcnt) src dst))))
         dst))
 
 ;; Helper for creating `tzcnt` instructions.
-(decl tzcnt (Type Gpr) Gpr)
-(rule (tzcnt ty src)
+(decl x64_tzcnt (Type Gpr) Gpr)
+(rule (x64_tzcnt ty src)
       (let ((dst WritableGpr (temp_writable_gpr))
             (size OperandSize (operand_size_of_type_32_64 ty))
             (_ Unit (emit (MInst.UnaryRmR size (UnaryRmROpcode.Tzcnt) src dst))))
         dst))
 
 ;; Helper for creating `bsr` instructions.
-(decl bsr (Type Gpr) ProducesFlags)
-(rule (bsr ty src)
+(decl x64_bsr (Type Gpr) ProducesFlags)
+(rule (x64_bsr ty src)
       (let ((dst WritableGpr (temp_writable_gpr))
             (size OperandSize (operand_size_of_type_32_64 ty))
             (inst MInst (MInst.UnaryRmR size (UnaryRmROpcode.Bsr) src dst)))
@@ -2402,7 +2401,7 @@
 ;; result of the `bsr`, or `alt` if the input was zero.
 (decl bsr_or_else (Type Gpr Gpr) Gpr)
 (rule (bsr_or_else ty src alt)
-      (let ((bsr ProducesFlags (bsr ty src))
+      (let ((bsr ProducesFlags (x64_bsr ty src))
             ;; Manually extract the result from the bsr, then ignore
             ;; it below, since we need to thread it into the cmove
             ;; before we pass the cmove to with_flags_reg.
@@ -2411,8 +2410,8 @@
         (with_flags_reg (produces_flags_ignore bsr) cmove)))
 
 ;; Helper for creating `bsf` instructions.
-(decl bsf (Type Gpr) ProducesFlags)
-(rule (bsf ty src)
+(decl x64_bsf (Type Gpr) ProducesFlags)
+(rule (x64_bsf ty src)
       (let ((dst WritableGpr (temp_writable_gpr))
             (size OperandSize (operand_size_of_type_32_64 ty))
             (inst MInst (MInst.UnaryRmR size (UnaryRmROpcode.Bsf) src dst)))
@@ -2422,7 +2421,7 @@
 ;; result of the `bsf`, or `alt` if the input was zero.
 (decl bsf_or_else (Type Gpr Gpr) Gpr)
 (rule (bsf_or_else ty src alt)
-      (let ((bsf ProducesFlags (bsf ty src))
+      (let ((bsf ProducesFlags (x64_bsf ty src))
             ;; Manually extract the result from the bsf, then ignore
             ;; it below, since we need to thread it into the cmove
             ;; before we pass the cmove to with_flags_reg.
@@ -2447,93 +2446,93 @@
         dst))
 
 ;; Helper for creating `minss` instructions.
-(decl minss (Xmm Xmm) Xmm)
-(rule (minss x y)
+(decl x64_minss (Xmm Xmm) Xmm)
+(rule (x64_minss x y)
       (let ((dst WritableXmm (temp_writable_xmm))
             (_ Unit (emit (MInst.XmmRmR (SseOpcode.Minss) x y dst))))
         dst))
 
 ;; Helper for creating `minsd` instructions.
-(decl minsd (Xmm Xmm) Xmm)
-(rule (minsd x y)
+(decl x64_minsd (Xmm Xmm) Xmm)
+(rule (x64_minsd x y)
       (let ((dst WritableXmm (temp_writable_xmm))
             (_ Unit (emit (MInst.XmmRmR (SseOpcode.Minsd) x y dst))))
         dst))
 
 
 ;; Helper for creating `minps` instructions.
-(decl minps (Xmm Xmm) Xmm)
-(rule (minps x y)
+(decl x64_minps (Xmm Xmm) Xmm)
+(rule (x64_minps x y)
       (let ((dst WritableXmm (temp_writable_xmm))
             (_ Unit (emit (MInst.XmmRmR (SseOpcode.Minps) x y dst))))
         dst))
 
 ;; Helper for creating `minpd` instructions.
-(decl minpd (Xmm Xmm) Xmm)
-(rule (minpd x y)
+(decl x64_minpd (Xmm Xmm) Xmm)
+(rule (x64_minpd x y)
       (let ((dst WritableXmm (temp_writable_xmm))
             (_ Unit (emit (MInst.XmmRmR (SseOpcode.Minpd) x y dst))))
         dst))
 
 ;; Helper for creating `maxss` instructions.
-(decl maxss (Xmm Xmm) Xmm)
-(rule (maxss x y)
+(decl x64_maxss (Xmm Xmm) Xmm)
+(rule (x64_maxss x y)
       (let ((dst WritableXmm (temp_writable_xmm))
             (_ Unit (emit (MInst.XmmRmR (SseOpcode.Maxss) x y dst))))
         dst))
 
 ;; Helper for creating `maxsd` instructions.
-(decl maxsd (Xmm Xmm) Xmm)
-(rule (maxsd x y)
+(decl x64_maxsd (Xmm Xmm) Xmm)
+(rule (x64_maxsd x y)
       (let ((dst WritableXmm (temp_writable_xmm))
             (_ Unit (emit (MInst.XmmRmR (SseOpcode.Maxsd) x y dst))))
         dst))
 
 ;; Helper for creating `maxps` instructions.
-(decl maxps (Xmm Xmm) Xmm)
-(rule (maxps x y)
+(decl x64_maxps (Xmm Xmm) Xmm)
+(rule (x64_maxps x y)
       (let ((dst WritableXmm (temp_writable_xmm))
             (_ Unit (emit (MInst.XmmRmR (SseOpcode.Maxps) x y dst))))
         dst))
 
 ;; Helper for creating `maxpd` instructions.
-(decl maxpd (Xmm Xmm) Xmm)
-(rule (maxpd x y)
+(decl x64_maxpd (Xmm Xmm) Xmm)
+(rule (x64_maxpd x y)
       (let ((dst WritableXmm (temp_writable_xmm))
             (_ Unit (emit (MInst.XmmRmR (SseOpcode.Maxpd) x y dst))))
         dst))
 
 ;; Helpers for creating `pcmpeq*` instructions.
-(decl pcmpeq (Type Xmm XmmMem) Xmm)
-(rule (pcmpeq $I8X16 x y) (pcmpeqb x y))
-(rule (pcmpeq $I16X8 x y) (pcmpeqw x y))
-(rule (pcmpeq $I32X4 x y) (pcmpeqd x y))
-(rule (pcmpeq $I64X2 x y) (pcmpeqq x y))
+(decl x64_pcmpeq (Type Xmm XmmMem) Xmm)
+(rule (x64_pcmpeq $I8X16 x y) (x64_pcmpeqb x y))
+(rule (x64_pcmpeq $I16X8 x y) (x64_pcmpeqw x y))
+(rule (x64_pcmpeq $I32X4 x y) (x64_pcmpeqd x y))
+(rule (x64_pcmpeq $I64X2 x y) (x64_pcmpeqq x y))
 
-(decl pcmpeqb (Xmm XmmMem) Xmm)
-(rule (pcmpeqb x y) (xmm_rm_r $I8X16 (SseOpcode.Pcmpeqb) x y))
-(decl pcmpeqw (Xmm XmmMem) Xmm)
-(rule (pcmpeqw x y) (xmm_rm_r $I16X8 (SseOpcode.Pcmpeqw) x y))
-(decl pcmpeqd (Xmm XmmMem) Xmm)
-(rule (pcmpeqd x y) (xmm_rm_r $I32X4 (SseOpcode.Pcmpeqd) x y))
-(decl pcmpeqq (Xmm XmmMem) Xmm)
-(rule (pcmpeqq x y) (xmm_rm_r $I64X2 (SseOpcode.Pcmpeqq) x y))
+(decl x64_pcmpeqb (Xmm XmmMem) Xmm)
+(rule (x64_pcmpeqb x y) (xmm_rm_r $I8X16 (SseOpcode.Pcmpeqb) x y))
+(decl x64_pcmpeqw (Xmm XmmMem) Xmm)
+(rule (x64_pcmpeqw x y) (xmm_rm_r $I16X8 (SseOpcode.Pcmpeqw) x y))
+(decl x64_pcmpeqd (Xmm XmmMem) Xmm)
+(rule (x64_pcmpeqd x y) (xmm_rm_r $I32X4 (SseOpcode.Pcmpeqd) x y))
+(decl x64_pcmpeqq (Xmm XmmMem) Xmm)
+(rule (x64_pcmpeqq x y) (xmm_rm_r $I64X2 (SseOpcode.Pcmpeqq) x y))
 
 ;; Helpers for creating `pcmpgt*` instructions.
-(decl pcmpgt (Type Xmm XmmMem) Xmm)
-(rule (pcmpgt $I8X16 x y) (pcmpgtb x y))
-(rule (pcmpgt $I16X8 x y) (pcmpgtw x y))
-(rule (pcmpgt $I32X4 x y) (pcmpgtd x y))
-(rule (pcmpgt $I64X2 x y) (pcmpgtq x y))
+(decl x64_pcmpgt (Type Xmm XmmMem) Xmm)
+(rule (x64_pcmpgt $I8X16 x y) (x64_pcmpgtb x y))
+(rule (x64_pcmpgt $I16X8 x y) (x64_pcmpgtw x y))
+(rule (x64_pcmpgt $I32X4 x y) (x64_pcmpgtd x y))
+(rule (x64_pcmpgt $I64X2 x y) (x64_pcmpgtq x y))
 
-(decl pcmpgtb (Xmm XmmMem) Xmm)
-(rule (pcmpgtb x y) (xmm_rm_r $I8X16 (SseOpcode.Pcmpgtb) x y))
-(decl pcmpgtw (Xmm XmmMem) Xmm)
-(rule (pcmpgtw x y) (xmm_rm_r $I16X8 (SseOpcode.Pcmpgtw) x y))
-(decl pcmpgtd (Xmm XmmMem) Xmm)
-(rule (pcmpgtd x y) (xmm_rm_r $I32X4 (SseOpcode.Pcmpgtd) x y))
-(decl pcmpgtq (Xmm XmmMem) Xmm)
-(rule (pcmpgtq x y) (xmm_rm_r $I64X2 (SseOpcode.Pcmpgtq) x y))
+(decl x64_pcmpgtb (Xmm XmmMem) Xmm)
+(rule (x64_pcmpgtb x y) (xmm_rm_r $I8X16 (SseOpcode.Pcmpgtb) x y))
+(decl x64_pcmpgtw (Xmm XmmMem) Xmm)
+(rule (x64_pcmpgtw x y) (xmm_rm_r $I16X8 (SseOpcode.Pcmpgtw) x y))
+(decl x64_pcmpgtd (Xmm XmmMem) Xmm)
+(rule (x64_pcmpgtd x y) (xmm_rm_r $I32X4 (SseOpcode.Pcmpgtd) x y))
+(decl x64_pcmpgtq (Xmm XmmMem) Xmm)
+(rule (x64_pcmpgtq x y) (xmm_rm_r $I64X2 (SseOpcode.Pcmpgtq) x y))
 
 ;;;; Automatic conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
