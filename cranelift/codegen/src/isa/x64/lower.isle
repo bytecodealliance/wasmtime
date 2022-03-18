@@ -1449,6 +1449,67 @@
       (let ((size OperandSize (raw_operand_size_of_type ty)))
            (with_flags (cmp size b a) (setcc cc))))
 
+;; For XMM-held values, we lower to `PCMP*` instructions, sometimes more than
+;; one. To note: what is different here about the output values is that each
+;; lane will be filled with all 1s or all 0s according to the comparison,
+;; whereas for GPR-held values, the result will be simply 0 or 1 (upper bits
+;; unset).
+(rule (lower (icmp (IntCC.Equal) a @ (value_type (vec128 ty)) b))
+      (pcmpeq ty a b))
+;; To lower a not-equals comparison, we perform an equality comparison
+;; (PCMPEQ*) and then invert the bits (PXOR with all 1s).
+(rule (lower (icmp (IntCC.NotEqual) a @ (value_type (vec128 ty)) b))
+      (let ((checked Xmm (pcmpeq ty a b))
+            (all_ones Xmm (vector_all_ones ty)))
+           (pxor checked all_ones)))
+;; Signed comparisons have a single-instruction lowering, unlike their unsigned
+;; counterparts. These latter instructions use the unsigned min/max
+;; (PMINU*/PMAXU*) and negate the result (PXOR with all 1s).
+(rule (lower (icmp (IntCC.SignedGreaterThan) a @ (value_type (vec128 ty)) b))
+      (pcmpgt ty a b))
+(rule (lower (icmp (IntCC.SignedLessThan) a @ (value_type (vec128 ty)) b))
+      (pcmpgt ty b a))
+(rule (lower (icmp (IntCC.UnsignedGreaterThan) a @ (value_type (vec128 ty)) b))
+      (let ((max Xmm (pmaxu ty a b))
+            (eq Xmm (pcmpeq ty max b))
+            (all_ones Xmm (vector_all_ones ty)))
+           (pxor eq all_ones)))
+(rule (lower (icmp (IntCC.UnsignedLessThan) a @ (value_type (vec128 ty)) b))
+      (let ((min Xmm (pminu ty a b))
+            (eq Xmm (pcmpeq ty min b))
+            (all_ones Xmm (vector_all_ones ty)))
+           (pxor eq all_ones)))
+;; To lower signed and unsigned *-or-equals comparisons, we find the minimum
+;; number (PMIN[U|S]*) and compare that to one of the terms (PCMPEQ*). Note that
+;; there is no 64x2 version of this lowering (see below).
+(rule (lower (icmp (IntCC.SignedGreaterThanOrEqual) a @ (value_type (vec128 ty)) b))
+      (let ((max Xmm (pmaxs ty a b)))
+           (pcmpeq ty a max)))
+(rule (lower (icmp (IntCC.SignedLessThanOrEqual) a @ (value_type (vec128 ty)) b))
+      (let ((min Xmm (pmins ty a b)))
+           (pcmpeq ty a min)))
+(rule (lower (icmp (IntCC.UnsignedGreaterThanOrEqual) a @ (value_type (vec128 ty)) b))
+      (let ((max Xmm (pmaxu ty a b)))
+           (pcmpeq ty a max)))
+(rule (lower (icmp (IntCC.UnsignedLessThanOrEqual) a @ (value_type (vec128 ty)) b))
+      (let ((min Xmm (pminu ty a b)))
+           (pcmpeq ty a min)))
+;; The PMIN[S|U]Q instruction is only available in AVX512VL/F so we must instead
+;; compare with flipped operands (PCMPGT*) and negate the result (PXOR with all
+;; 1s), emitting one more instruction than the smaller-lane versions.
+(rule (lower (icmp (IntCC.SignedGreaterThanOrEqual) a @ (value_type $I64X2) b))
+      (let ((checked Xmm (pcmpgt $I64X2 b a))
+            (all_ones Xmm (vector_all_ones $I64X2)))
+           (pxor checked all_ones)))
+(rule (lower (icmp (IntCC.SignedLessThanOrEqual) a @ (value_type $I64X2) b))
+      (let ((checked Xmm (pcmpgt $I64X2 a b))
+            (all_ones Xmm (vector_all_ones $I64X2)))
+           (pxor checked all_ones)))
+;; TODO: not used by WebAssembly translation
+;; (rule (lower (icmp (IntCC.UnsignedGreaterThanOrEqual) a @ (value_type $I64X2) b))
+;; TODO: not used by WebAssembly translation
+;; (rule (lower (icmp (IntCC.UnsignedLessThanOrEqual) a @ (value_type $I64X2) b))
+
 ;; For I128 values (held in two GPRs), the instruction sequences depend on what
 ;; kind of condition is tested.
 (rule (lower (icmp (IntCC.Equal) a @ (value_type $I128) b))
