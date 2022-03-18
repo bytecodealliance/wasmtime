@@ -363,7 +363,7 @@ impl Config {
             limits.table_elements = limits.memories.max(1_000);
             limits.memory_pages = limits.memory_pages.max(900);
             limits.count = limits.count.max(500);
-            limits.size = limits.size.max(4096);
+            limits.size = limits.size.max(64 * 1024);
 
             match &mut self.wasmtime.memory_config {
                 MemoryConfig::Normal(config) => {
