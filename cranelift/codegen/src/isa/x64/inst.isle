@@ -802,8 +802,8 @@
             NLE
             P
             NP))
-(decl from_intcc (IntCC) CC)
-(extern constructor from_intcc from_intcc)
+(decl intcc_to_cc (IntCC) CC)
+(extern constructor intcc_to_cc intcc_to_cc)
 
 (type Avx512Opcode extern
       (enum Vcvtudq2ps
@@ -2584,7 +2584,7 @@
 (convert SyntheticAmode GprMem synthetic_amode_to_gpr_mem)
 (convert SyntheticAmode XmmMem synthetic_amode_to_xmm_mem)
 
-(convert IntCC CC from_intcc)
+(convert IntCC CC intcc_to_cc)
 
 (decl reg_to_xmm_mem (Reg) XmmMem)
 (rule (reg_to_xmm_mem r)

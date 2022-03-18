@@ -516,7 +516,7 @@ where
     }
 
     #[inline]
-    fn from_intcc(&mut self, intcc: &IntCC) -> CC {
+    fn intcc_to_cc(&mut self, intcc: &IntCC) -> CC {
         CC::from_intcc(*intcc)
     }
 }

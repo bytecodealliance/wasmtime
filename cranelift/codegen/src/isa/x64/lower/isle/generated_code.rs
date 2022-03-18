@@ -95,7 +95,7 @@ pub trait Context {
     fn amode_imm_reg_reg_shift(&mut self, arg0: u32, arg1: Gpr, arg2: Gpr, arg3: u8) -> Amode;
     fn amode_to_synthetic_amode(&mut self, arg0: &Amode) -> SyntheticAmode;
     fn put_masked_in_imm8_gpr(&mut self, arg0: Value, arg1: Type) -> Imm8Gpr;
-    fn from_intcc(&mut self, arg0: &IntCC) -> CC;
+    fn intcc_to_cc(&mut self, arg0: &IntCC) -> CC;
     fn encode_fcmp_imm(&mut self, arg0: &FcmpImm) -> u8;
     fn imm8_reg_to_imm8_gpr(&mut self, arg0: &Imm8Reg) -> Imm8Gpr;
     fn writable_gpr_to_reg(&mut self, arg0: WritableGpr) -> WritableReg;
@@ -4912,7 +4912,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<InstOutp
                     let expr1_0 = constructor_put_in_gpr_mem_imm(ctx, pattern4_1)?;
                     let expr2_0 = constructor_put_in_gpr(ctx, pattern4_0)?;
                     let expr3_0 = constructor_cmp(ctx, &expr0_0, &expr1_0, expr2_0)?;
-                    let expr4_0 = C::from_intcc(ctx, pattern2_2);
+                    let expr4_0 = C::intcc_to_cc(ctx, pattern2_2);
                     let expr5_0 = constructor_setcc(ctx, &expr4_0)?;
                     let expr6_0 = constructor_with_flags(ctx, &expr3_0, &expr5_0)?;
                     let expr7_0 = C::output(ctx, expr6_0);
