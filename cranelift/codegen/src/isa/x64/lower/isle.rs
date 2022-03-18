@@ -9,8 +9,10 @@ use regalloc::Writable;
 use super::{is_int_or_ref_ty, is_mergeable_load, lower_to_amode, Reg};
 use crate::{
     ir::{
-        condcodes::FloatCC, immediates::*, types::*, Inst, InstructionData, Opcode, TrapCode,
-        Value, ValueLabel, ValueList,
+        condcodes::{FloatCC, IntCC},
+        immediates::*,
+        types::*,
+        Inst, InstructionData, Opcode, TrapCode, Value, ValueLabel, ValueList,
     },
     isa::{
         settings::Flags,
@@ -511,6 +513,11 @@ where
         } else {
             None
         }
+    }
+
+    #[inline]
+    fn intcc_to_cc(&mut self, intcc: &IntCC) -> CC {
+        CC::from_intcc(*intcc)
     }
 }
 

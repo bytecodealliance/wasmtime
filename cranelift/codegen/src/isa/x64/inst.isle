@@ -784,6 +784,7 @@
 (decl put_masked_in_imm8_gpr (Value Type) Imm8Gpr)
 (extern constructor put_masked_in_imm8_gpr put_masked_in_imm8_gpr)
 
+;; Condition codes
 (type CC extern
       (enum O
             NO
@@ -801,6 +802,8 @@
             NLE
             P
             NP))
+(decl intcc_to_cc (IntCC) CC)
+(extern constructor intcc_to_cc intcc_to_cc)
 
 (type Avx512Opcode extern
       (enum Vcvtudq2ps
@@ -1361,6 +1364,16 @@
                  (AluRmiROpcode.And)
                  src1
                  src2))
+
+(decl x64_and_with_flags_paired (Type Gpr GprMemImm) ProducesFlags)
+(rule (x64_and_with_flags_paired ty src1 src2)
+      (let ((dst WritableGpr (temp_writable_gpr)))
+            (ProducesFlags.ProducesFlagsSideEffect
+                  (MInst.AluRmiR (operand_size_of_type_32_64 ty)
+                        (AluRmiROpcode.And)
+                        src1
+                        src2
+                        dst))))
 
 ;; Helper for emitting `or` instructions.
 (decl or (Type Gpr GprMemImm) Gpr)
@@ -1992,65 +2005,57 @@
 (rule (movlhps src1 src2)
       (xmm_rm_r $I8X16 (SseOpcode.Movlhps) src1 src2))
 
-;; Helper for creating `pmaxsb` instructions.
+;; Helpers for creating `pmaxs*` instructions.
+(decl pmaxs (Type Xmm XmmMem) Xmm)
+(rule (pmaxs $I8X16 x y) (pmaxsb x y))
+(rule (pmaxs $I16X8 x y) (pmaxsw x y))
+(rule (pmaxs $I32X4 x y) (pmaxsd x y))
+;; No $I64X2 version (PMAXSQ) in SSE4.1.
 (decl pmaxsb (Xmm XmmMem) Xmm)
-(rule (pmaxsb src1 src2)
-      (xmm_rm_r $I8X16 (SseOpcode.Pmaxsb) src1 src2))
-
-;; Helper for creating `pmaxsw` instructions.
+(rule (pmaxsb src1 src2) (xmm_rm_r $I8X16 (SseOpcode.Pmaxsb) src1 src2))
 (decl pmaxsw (Xmm XmmMem) Xmm)
-(rule (pmaxsw src1 src2)
-      (xmm_rm_r $I8X16 (SseOpcode.Pmaxsw) src1 src2))
-
-;; Helper for creating `pmaxsd` instructions.
+(rule (pmaxsw src1 src2) (xmm_rm_r $I8X16 (SseOpcode.Pmaxsw) src1 src2))
 (decl pmaxsd (Xmm XmmMem) Xmm)
-(rule (pmaxsd src1 src2)
-      (xmm_rm_r $I8X16 (SseOpcode.Pmaxsd) src1 src2))
+(rule (pmaxsd src1 src2) (xmm_rm_r $I8X16 (SseOpcode.Pmaxsd) src1 src2))
 
-;; Helper for creating `pminsb` instructions.
+;; Helpers for creating `pmins*` instructions.
+(decl pmins (Type Xmm XmmMem) Xmm)
+(rule (pmins $I8X16 x y) (pminsb x y))
+(rule (pmins $I16X8 x y) (pminsw x y))
+(rule (pmins $I32X4 x y) (pminsd x y))
+;; No $I64X2 version (PMINSQ) in SSE4.1.
 (decl pminsb (Xmm XmmMem) Xmm)
-(rule (pminsb src1 src2)
-      (xmm_rm_r $I8X16 (SseOpcode.Pminsb) src1 src2))
-
-;; Helper for creating `pminsw` instructions.
+(rule (pminsb src1 src2) (xmm_rm_r $I8X16 (SseOpcode.Pminsb) src1 src2))
 (decl pminsw (Xmm XmmMem) Xmm)
-(rule (pminsw src1 src2)
-      (xmm_rm_r $I8X16 (SseOpcode.Pminsw) src1 src2))
-
-;; Helper for creating `pminsd` instructions.
+(rule (pminsw src1 src2) (xmm_rm_r $I16X8 (SseOpcode.Pminsw) src1 src2))
 (decl pminsd (Xmm XmmMem) Xmm)
-(rule (pminsd src1 src2)
-      (xmm_rm_r $I8X16 (SseOpcode.Pminsd) src1 src2))
+(rule (pminsd src1 src2) (xmm_rm_r $I32X4 (SseOpcode.Pminsd) src1 src2))
 
-;; Helper for creating `pmaxub` instructions.
+;; Helpers for creating `pmaxu*` instructions.
+(decl pmaxu (Type Xmm XmmMem) Xmm)
+(rule (pmaxu $I8X16 x y) (pmaxub x y))
+(rule (pmaxu $I16X8 x y) (pmaxuw x y))
+(rule (pmaxu $I32X4 x y) (pmaxud x y))
+;; No $I64X2 version (PMAXUQ) in SSE4.1.
 (decl pmaxub (Xmm XmmMem) Xmm)
-(rule (pmaxub src1 src2)
-      (xmm_rm_r $I8X16 (SseOpcode.Pmaxub) src1 src2))
-
-;; Helper for creating `pmaxuw` instructions.
+(rule (pmaxub src1 src2) (xmm_rm_r $I8X16 (SseOpcode.Pmaxub) src1 src2))
 (decl pmaxuw (Xmm XmmMem) Xmm)
-(rule (pmaxuw src1 src2)
-      (xmm_rm_r $I8X16 (SseOpcode.Pmaxuw) src1 src2))
-
-;; Helper for creating `pmaxud` instructions.
+(rule (pmaxuw src1 src2) (xmm_rm_r $I8X16 (SseOpcode.Pmaxuw) src1 src2))
 (decl pmaxud (Xmm XmmMem) Xmm)
-(rule (pmaxud src1 src2)
-      (xmm_rm_r $I8X16 (SseOpcode.Pmaxud) src1 src2))
+(rule (pmaxud src1 src2) (xmm_rm_r $I8X16 (SseOpcode.Pmaxud) src1 src2))
 
-;; Helper for creating `pminub` instructions.
+;; Helper for creating `pminu*` instructions.
+(decl pminu (Type Xmm XmmMem) Xmm)
+(rule (pminu $I8X16 x y) (pminub x y))
+(rule (pminu $I16X8 x y) (pminuw x y))
+(rule (pminu $I32X4 x y) (pminud x y))
+;; No $I64X2 version (PMINUQ) in SSE4.1.
 (decl pminub (Xmm XmmMem) Xmm)
-(rule (pminub src1 src2)
-      (xmm_rm_r $I8X16 (SseOpcode.Pminub) src1 src2))
-
-;; Helper for creating `pminuw` instructions.
+(rule (pminub src1 src2) (xmm_rm_r $I8X16 (SseOpcode.Pminub) src1 src2))
 (decl pminuw (Xmm XmmMem) Xmm)
-(rule (pminuw src1 src2)
-      (xmm_rm_r $I8X16 (SseOpcode.Pminuw) src1 src2))
-
-;; Helper for creating `pminud` instructions.
+(rule (pminuw src1 src2) (xmm_rm_r $I8X16 (SseOpcode.Pminuw) src1 src2))
 (decl pminud (Xmm XmmMem) Xmm)
-(rule (pminud src1 src2)
-      (xmm_rm_r $I8X16 (SseOpcode.Pminud) src1 src2))
+(rule (pminud src1 src2) (xmm_rm_r $I8X16 (SseOpcode.Pminud) src1 src2))
 
 ;; Helper for creating `punpcklbw` instructions.
 (decl punpcklbw (Xmm XmmMem) Xmm)
@@ -2498,6 +2503,38 @@
             (_ Unit (emit (MInst.XmmRmR (SseOpcode.Maxpd) x y dst))))
         dst))
 
+;; Helpers for creating `pcmpeq*` instructions.
+(decl pcmpeq (Type Xmm XmmMem) Xmm)
+(rule (pcmpeq $I8X16 x y) (pcmpeqb x y))
+(rule (pcmpeq $I16X8 x y) (pcmpeqw x y))
+(rule (pcmpeq $I32X4 x y) (pcmpeqd x y))
+(rule (pcmpeq $I64X2 x y) (pcmpeqq x y))
+
+(decl pcmpeqb (Xmm XmmMem) Xmm)
+(rule (pcmpeqb x y) (xmm_rm_r $I8X16 (SseOpcode.Pcmpeqb) x y))
+(decl pcmpeqw (Xmm XmmMem) Xmm)
+(rule (pcmpeqw x y) (xmm_rm_r $I16X8 (SseOpcode.Pcmpeqw) x y))
+(decl pcmpeqd (Xmm XmmMem) Xmm)
+(rule (pcmpeqd x y) (xmm_rm_r $I32X4 (SseOpcode.Pcmpeqd) x y))
+(decl pcmpeqq (Xmm XmmMem) Xmm)
+(rule (pcmpeqq x y) (xmm_rm_r $I64X2 (SseOpcode.Pcmpeqq) x y))
+
+;; Helpers for creating `pcmpgt*` instructions.
+(decl pcmpgt (Type Xmm XmmMem) Xmm)
+(rule (pcmpgt $I8X16 x y) (pcmpgtb x y))
+(rule (pcmpgt $I16X8 x y) (pcmpgtw x y))
+(rule (pcmpgt $I32X4 x y) (pcmpgtd x y))
+(rule (pcmpgt $I64X2 x y) (pcmpgtq x y))
+
+(decl pcmpgtb (Xmm XmmMem) Xmm)
+(rule (pcmpgtb x y) (xmm_rm_r $I8X16 (SseOpcode.Pcmpgtb) x y))
+(decl pcmpgtw (Xmm XmmMem) Xmm)
+(rule (pcmpgtw x y) (xmm_rm_r $I16X8 (SseOpcode.Pcmpgtw) x y))
+(decl pcmpgtd (Xmm XmmMem) Xmm)
+(rule (pcmpgtd x y) (xmm_rm_r $I32X4 (SseOpcode.Pcmpgtd) x y))
+(decl pcmpgtq (Xmm XmmMem) Xmm)
+(rule (pcmpgtq x y) (xmm_rm_r $I64X2 (SseOpcode.Pcmpgtq) x y))
+
 ;;;; Automatic conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (convert Gpr InstOutput output_gpr)
@@ -2546,6 +2583,8 @@
 (convert Amode SyntheticAmode amode_to_synthetic_amode)
 (convert SyntheticAmode GprMem synthetic_amode_to_gpr_mem)
 (convert SyntheticAmode XmmMem synthetic_amode_to_xmm_mem)
+
+(convert IntCC CC intcc_to_cc)
 
 (decl reg_to_xmm_mem (Reg) XmmMem)
 (rule (reg_to_xmm_mem r)

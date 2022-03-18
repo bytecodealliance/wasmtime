@@ -55,14 +55,16 @@ block0(v0: i16x8, v1: i16x8):
 ;   Entry block: 0
 ; Block 0:
 ;   (original IR block: block0)
-;   (instruction range: 0 .. 7)
+;   (instruction range: 0 .. 9)
 ;   Inst 0:   pushq   %rbp
 ;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   pminsw  %xmm1, %xmm0
-;   Inst 3:   pcmpeqw %xmm1, %xmm0
-;   Inst 4:   movq    %rbp, %rsp
-;   Inst 5:   popq    %rbp
-;   Inst 6:   ret
+;   Inst 2:   movdqa  %xmm1, %xmm2
+;   Inst 3:   movdqa  %xmm0, %xmm1
+;   Inst 4:   pmaxsw  %xmm2, %xmm1
+;   Inst 5:   pcmpeqw %xmm1, %xmm0
+;   Inst 6:   movq    %rbp, %rsp
+;   Inst 7:   popq    %rbp
+;   Inst 8:   ret
 ; }}
 
 function %icmp_uge_i8x16(i8x16, i8x16) -> b8x16 {
@@ -75,13 +77,15 @@ block0(v0: i8x16, v1: i8x16):
 ;   Entry block: 0
 ; Block 0:
 ;   (original IR block: block0)
-;   (instruction range: 0 .. 7)
+;   (instruction range: 0 .. 9)
 ;   Inst 0:   pushq   %rbp
 ;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   pminub  %xmm1, %xmm0
-;   Inst 3:   pcmpeqb %xmm1, %xmm0
-;   Inst 4:   movq    %rbp, %rsp
-;   Inst 5:   popq    %rbp
-;   Inst 6:   ret
+;   Inst 2:   movdqa  %xmm1, %xmm2
+;   Inst 3:   movdqa  %xmm0, %xmm1
+;   Inst 4:   pmaxub  %xmm2, %xmm1
+;   Inst 5:   pcmpeqb %xmm1, %xmm0
+;   Inst 6:   movq    %rbp, %rsp
+;   Inst 7:   popq    %rbp
+;   Inst 8:   ret
 ; }}
 

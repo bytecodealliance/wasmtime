@@ -241,20 +241,20 @@ block0(v0: i128, v1: i128):
 ;   Inst 5:   movq    %r14, 32(%rsp)
 ;   Inst 6:   movq    %rbx, 40(%rsp)
 ;   Inst 7:   movq    %r15, 48(%rsp)
-;   Inst 8:   cmpq    %rcx, %rsi
+;   Inst 8:   cmpq    %rdx, %rdi
 ;   Inst 9:   setz    %al
-;   Inst 10:   cmpq    %rdx, %rdi
+;   Inst 10:   cmpq    %rcx, %rsi
 ;   Inst 11:   setz    %r8b
-;   Inst 12:   andq    %rax, %r8
-;   Inst 13:   andq    $1, %r8
+;   Inst 12:   andq    %r8, %rax
+;   Inst 13:   andq    $1, %rax
 ;   Inst 14:   setnz   %al
 ;   Inst 15:   movq    %rax, rsp(0 + virtual offset)
-;   Inst 16:   cmpq    %rcx, %rsi
+;   Inst 16:   cmpq    %rdx, %rdi
 ;   Inst 17:   setnz   %al
-;   Inst 18:   cmpq    %rdx, %rdi
+;   Inst 18:   cmpq    %rcx, %rsi
 ;   Inst 19:   setnz   %r8b
-;   Inst 20:   orq     %rax, %r8
-;   Inst 21:   andq    $1, %r8
+;   Inst 20:   orq     %r8, %rax
+;   Inst 21:   andq    $1, %rax
 ;   Inst 22:   setnz   %r8b
 ;   Inst 23:   cmpq    %rcx, %rsi
 ;   Inst 24:   setl    %r9b
