@@ -1,0 +1,231 @@
+# The purpose of this workflow is to, once a month, trigger Wasmtime's release
+# process. All that actually happens here is that whenever this is triggered it
+# will send a PR to the main repository with the version numbers automatically
+# bumped. The next stage of the process is to simply merge the PR, and the
+# `push-tag.yml` process takes over from there.
+#
+# Note that this creates a commit and a PR with a personal access token to
+# ensure that the PR gets CI triggered on it. Additionally the commit message
+# is specifically worded to get recognized by `push-tag.yml`.
+
+name: "Automated Release Process"
+on:
+  schedule:
+    # “At 00:00 on day-of-month 5.”
+    #
+    # https://crontab.guru/#0_0_5_*_*
+    - cron: '0 0 5 * *'
+    - cron: '0 0 20 * *'
+
+  # Allow manually triggering this request via the button at
+  # https://github.com/bytecodealliance/wasmtime/actions/workflows/bump-version.yml
+  # TODO
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Publish script argument: "cut", "release-latest", or "release-patch"'
+        required: false
+        default: 'cut'
+
+jobs:
+  release_process:
+    name: Run the release process
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: true
+      - name: Setup
+        run: |
+          rustc scripts/publish.rs
+          git config user.name 'Wasmtime Publish'
+          git config user.email 'wasmtime-publish@users.noreply.github.com'
+          git remote set-url origin https://git:${{ secrets.PERSONAL_ACCESS_TOKEN }}@github.com/${{ github.repository }}
+
+      - name: Bump major version number
+        run: |
+          # Push the current contents of `main` to a new release branch
+          cur=$(./ci/print-current-version.sh)
+          git push origin HEAD:release-$cur
+
+          # Update version numbers and make a commit indicating that. Note that
+          # on merge this will not trigger a publish.
+          ./publish bump
+          num=$(./ci/print-current-version.sh)
+
+          # Add a new section to the release notes for the new version.
+          cp RELEASES.md backup-releases
+          sed "s/VERSION/$num/" ci/RELEASES-template.md > RELEASES.md
+          cat backup-releases >> RELEASES.md
+          rm backup-releases
+
+          # Commit all of the above changes.
+          git commit -am "Bump Wasmtime to $num"
+
+          # Push the result to a branch and setup metadata for the step below
+          # that creates a PR
+          git push origin HEAD:ci/bump-to-$num
+          echo "PR_HEAD=ci/bump-to-$num" >> $GITHUB_ENV
+          echo "PR_TITLE=Bump Wasmtime to $num" >> $GITHUB_ENV
+          echo "PR_BASE=main" >> $GITHUB_ENV
+          cat > pr-body <<-EOF
+          This is an [automated pull request][process] from CI which indicates
+          that the next [\`release-$cur\` branch][branch] has been created and
+          the \`main\` branch is getting its version number bumped from $cur to
+          $num.
+
+          Maintainers should take a moment to review the [release
+          notes][RELEASES.md] for $cur, and if any changes are necessary send
+          PRs to the \`main\` branch to update [RELEASES.md] and then backport
+          these PRs to the [release branch][branch].
+
+          Another automated PR will be made in roughly 2 weeks time when for
+          the actual release itself.
+
+          If any issues arise on the \`main\` branch before the release is made
+          then the issue should first be fixed on \`main\` and then backported
+          to the \`release-$cur\` branch.
+
+          [RELEASES.md]: https://github.com/${{ github.repository }}/blob/main/RELEASES.md
+          [branch]: https://github.com/${{ github.repository }}/tree/release-$cur
+          [process]: https://docs.wasmtime.dev/contributing-release-process.html
+          EOF
+        if: >-
+          github.event.schedule == '0 0 5 * *' ||
+          github.event.inputs.action == 'cut'
+
+      - name: Perform latest release
+        run: |
+          git fetch origin
+          cur=$(git for-each-ref --sort=-committerdate refs/remotes/origin --format '%(refname)' | grep release | head -n 1 | sed 's/.*release-//')
+
+          # Update the release date for $cur on the `main` branch. Note that the
+          # sed here is a little complicated because we will have two entries in
+          # `RELEASES.md`, one for $cur+1 which `main` is at plus one for $cur
+          # which we're about to release. We only want to update the release
+          # date of the second one.
+          sed -i "/^##.*$cur/,+3 s/^Unreleased/Released $(date +'%Y-%m-%d')/" RELEASES.md
+          git commit -a -F-<<EOF
+          Update release date of Wasmtime $cur
+
+          [skip ci]
+          EOF
+          git push origin HEAD:ci/release-date-for-$cur
+
+          # In addition to the PR we'll make below to perform the actual release
+          # make a second PR to the `main` branch to note the release date in
+          # the release notes.
+          cat > pr-body <<-EOF
+          This is an [automated pull request][process] from CI which is updating
+          the release date of Wasmtime $cur to today. This PR's base branch
+          is \`main\` and a second PR will be coming to perform the actual
+          release which will be targeted at \`release-$cur\`.
+
+          [process]: https://docs.wasmtime.dev/contributing-release-process.html
+          EOF
+          body=$(jq -sR < ./pr-body)
+          curl --include --request POST \
+            https://api.github.com/repos/${{ github.repository }}/pulls \
+            --header "Authorization: token ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
+            --data @- << EOF
+          {
+            "head": "ci/release-date-for-$cur",
+            "base": "main",
+            "title": "Update release date of Wasmtime $cur",
+            "body": $body,
+            "maintainer_can_modify": true
+          }
+          EOF
+
+          # Move to the most recent release branch, update the release date and
+          # commit it, indicating that the commit is what will get tagged and
+          # released
+          git reset --hard origin/release-$cur
+          sed -i "s/^Unreleased/Released $(date +'%Y-%m-%d')/" RELEASES.md
+          git commit -a -F-<<EOF
+          Release Wasmtime $cur
+
+          [automatically-tag-and-release-this-commit]
+          EOF
+
+          # Push the result to a branch and setup metadata for the step below
+          # that creates a PR
+          git push origin HEAD:ci/release-$cur
+          echo "PR_HEAD=ci/release-$cur" >> $GITHUB_ENV
+          echo "PR_TITLE=Release Wasmtime $cur" >> $GITHUB_ENV
+          echo "PR_BASE=release-$cur" >> $GITHUB_ENV
+          cat > pr-body <<-EOF
+          This is an [automated pull request][process] from CI which is
+          intended to notify maintainers that it's time to release Wasmtime
+          $cur. The [release branch][branch] was created roughly two weeks ago
+          and it's now time for it to be published and released.
+
+          It's recommended that maintainers double-check that [RELEASES.md]
+          is up-to-date and that there are no known issues before merging this
+          PR. When this PR is merged a release tag will automatically be
+          created, crates will be published, and CI artifacts will be produced.
+
+          [RELEASES.md]: https://github.com/${{ github.repository }}/blob/main/RELEASES.md
+          [process]: https://docs.wasmtime.dev/contributing-release-process.html
+          [branch]: https://github.com/${{ github.repository }}/tree/release-$cur
+          EOF
+        if: >-
+          github.event.schedule == '0 0 20 * *' ||
+          github.event.inputs.action == 'release-latest'
+
+      - name: Bump and release patch version number
+        run: |
+          # Update version numbers on a patch basis and update RELEASES.md if a
+          # patch release marker is already in there. Note that this commit
+          # message indicates that on-merge a release will be made.
+          ./publish bump-patch
+          sed -i "s/^Unreleased/Released $(date +'%Y-%m-%d')/" RELEASES.md
+          num=$(./ci/print-current-version.sh)
+          git commit -a -F-<<EOF
+          Release Wasmtime $num
+
+          [automatically-tag-and-release-this-commit]
+          EOF
+
+          # Push the result to a branch and setup metadata for the step below
+          # that creates a PR
+          git push origin HEAD:ci/bump-to-$num
+          echo "PR_HEAD=ci/bump-to-$num" >> $GITHUB_ENV
+          echo "PR_TITLE=Release Wasmtime $num" >> $GITHUB_ENV
+          echo "PR_BASE=${{ github.ref_name }}" >> $GITHUB_ENV
+          cat > pr-body <<-EOF
+          This is an [automated pull request][process] from CI to create a patch
+          release for Wasmtime $num, requested by @${{ github.actor }}.
+
+          It's recommended that maintainers double-check that [RELEASES.md]
+          is up-to-date and that there are no known issues before merging this
+          PR. When this PR is merged a release tag will automatically be
+          created, crates will be published, and CI artifacts will be produced.
+
+          [RELEASES.md]: https://github.com/${{ github.repository }}/blob/main/RELEASES.md
+          [process]: https://docs.wasmtime.dev/contributing-release-process.html
+          EOF
+
+        if: github.event.inputs.action == 'release-patch'
+
+      - name: Make a PR
+        # Note that the syntax here is kinda funky, and the general gist is that
+        # I couldn't figure out a good way to have a multiline string-literal
+        # become a json-encoded string literal to send to GitHub. This
+        # represents my best attempt.
+        run: |
+          body=$(jq -sR < ./pr-body)
+
+          curl --include --request POST \
+            https://api.github.com/repos/${{ github.repository }}/pulls \
+            --header "Authorization: token ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
+            --data @- << EOF
+          {
+            "head": "$PR_HEAD",
+            "base": "$PR_BASE",
+            "title": "$PR_TITLE",
+            "body": $body,
+            "maintainer_can_modify": true
+
+          }
+          EOF

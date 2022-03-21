@@ -7,61 +7,113 @@ others might be curious in this as well!
 ## Releasing a major version
 
 Major versions of Wasmtime are relased once-a-month. Most of this is automatic
-and **all that needs to be done is to merge the GitHub PR that CI will
-generate** on the second Monday of each month.
+and all that needs to be done is to merge GitHub PRs that CI will
+generate. At a high-level the structure of Wasmtime's release process is:
 
-Specifically what happens for a major version release is:
+* On the 5th of every month a new `release-X.Y.Z` branch is created with the
+  current contents of `main`.
+* On the 20th of every month this release branch is published to crates.io and
+  release artifacts are built.
 
-1. One day a month (configured via `.github/workflows/bump-version.yml`) a CI job
-   will run. This CI job will:
+This means that Wasmtime release are always at least two weeks behind
+development on `main` and additionally happen once a month. The lag time behind
+`main` is intended to give time to fuzz changes on `main` as well as allow
+testing for any users using `main`. It's expected, though, that most consumers
+will likely use the release branches of wasmtime.
+
+A detailed list of all the steps in the release automation process are below.
+The steps requiring interactions are **bolded**, otherwise everything else is
+automatic and this is documenting what automation does.
+
+1. On the 5th of every month, (configured via
+   `.github/workflows/release-process.yml`) a CI job
+   will run and do these steps:
   * Download the current `main` branch
+  * Push the `main` branch to `release-X.Y.Z`
   * Run `./scripts/publish.rs` with the `bump` argument
-  * Commit the changes with a special marker in the commit message
-  * Push these changes to a branch
+  * Commit the changes
+  * Push these changes to a temporary `ci/*` branch
   * Open a PR with this branch against `main`
-2. A maintainer of Wasmtime signs off on the PR and merges it.
-  * Most likely someone will need to push updates to `RELEASES.md` beforehand.
-  * A maintainer should double-check there are [no open security issues][rustsec-issues].
-3. The `.github/workflow/push-tag.yml` workflow is triggered on all commits to
-   `main`, including the one just created with a PR merge. This workflow will:
+  * This step can also be [triggered manually][ci-trigger] with the `main`
+    branch and the `cut` argument.
+2. **A maintainer of Wasmtime merges this PR**
+  * It's intended that this PR can be immediately merged as the release branch
+    has been created and all it's doing is bumping the version.
+3. **Time passes and the `release-X.Y.Z` branch is maintained**
+  * All changes land on `main` first, then are backported to `release-X.Y.Z` as
+    necessary.
+  * Even changes to `RELEASES.md` are pushed to `main` first.
+4. On the 20th of every month (same CI job as before) another CI job will run
+   performing:
+  * Download the current `main` branch.
+  * Update the release date of `X.Y.Z` to today in `RELEASES.md`
+  * Open a PR against `main` for this change
+  * Reset to `release-X.Y.Z`
+  * Update the release date of `X.Y.Z` to today in `RELEASES.md`
+  * Add a special marker to the commit message to indicate a tag should be made.
+  * Open a PR against `release-X.Y.Z` for this change
+  * This step can also be [triggered manually][ci-trigger] with the `main`
+    branch and the `release-latest` argument.
+5. **A maintainer of Wasmtime merges these two PRs**
+  * The PR against `main` is a small update to the release notes and should be
+    mergeable immediately.
+  * The PR against `release-X.Y.Z`, when merged, will trigger the next steps due
+    to the marker in the commit message. A maintainer should double-check there
+    are [no open security issues][rustsec-issues], but otherwise it's expected
+    that all other release issues are resolved by this point.
+6. The `.github/workflow/push-tag.yml` workflow is triggered on all commits
+   including the one just created with a PR merge. This workflow will:
    * Scan the git logs of pushed changes for the special marker added by
-     `bump-version.yml`.
+     `release-process.yml`.
    * If found, tags the current `main` commit and pushes that to the main
      repository.
-4. Once a tag is created CI runs in full on the tag itself. CI for tags will
+7. Once a tag is created CI runs in full on the tag itself. CI for tags will
    create a GitHub release with release artifacts and it will also publish
    crates to crates.io. This is orchestrated by `.github/workflows/main.yml`.
 
 If all goes well you won't have to read up much on this and after hitting the
-Big Green Button for the automatically created PR everything will merrily carry
-on its way.
+Big Green Button for the automatically created PRs everything will merrily
+carry on its way.
 
 [rustsec-issues]: https://github.com/bytecodealliance/wasmtime/issues?q=RUSTSEC+is%3Aissue+is%3Aopen+
+[ci-trigger]: https://github.com/bytecodealliance/wasmtime/actions/workflows/release-process.yml
 
-## Releasing a patch release
+## Releasing a patch version
 
-Making a patch release is somewhat more manual than a major version. At this
-time the process for making a patch release of `2.0.1` the process is:
+Making a patch release is somewhat more manual than a major version, but like
+before there's automation to help guide the process as well and take care of
+more mundane bits.
 
-1. All patch release development should be happening on a branch
-   `release-2.0.1`.
-  * Maintainers need to double-check that the `PUBLIC_CRATES` listed in
-    `scripts/publish.rs` do not have semver-API-breaking changes (in the
-    strictest sense). All security fixes must be done in such a way that the API
-    doesn't break between the patch version and the original version.
-2. Visit [this patch][bump-version] and manually trigger the `bump-version.yml`
-   workflow for the `release-2.0.1` branch with the `bump-patch` argument. This
-   will simulate step (1) of the above release process.
-3. Review the generated PR, probably updating `RLEASES.md` as well.
-  * Note that if historical branches may need updates to source code or CI to
-    pass itself since the CI likely hasn't been run in a month or so. When in
-    doubt don't be afraid to pin the Rust version in use to the rustc version
-    that was stable at the time of the branch's release.
-4. Merge the generated PR, and that's the whole patch release.
+This is a list of steps taken to perform a patch release for 2.0.1 for example.
+Like above human interaction is indicated with **bold** text in these steps.
 
-From this point automated processes should take care of the rest of the steps,
-basically resuming from step 3 above for major releases where `push-tag.yml`
-will recognize the commit message and push an appropriate tag. This new tag will
-then trigger full CI and building of release artifacts.
+1. **Necessary changes are backported to the `release-2.0.0` branch from
+   `main`**
+  * All changes must land on `main` first (if applicable) and then get
+    backported to an older branch. Release branches should already exist from
+    the above major release steps.
+  * CI may not have been run in some time for release branches so it may be
+    necessary to backport CI fixes and updates from `main` as well.
+  * When merging backports maintainers need to double-check that the
+    `PUBLIC_CRATES` listed in `scripts/publish.rs` do not have
+    semver-API-breaking changes (in the strictest sense). All security fixes
+    must be done in such a way that the API doesn't break between the patch
+    version and the original version.
+  * Don't forget to write patch notes in `RELEASES.md` for backported changes.
+2. **The patch release process is [triggered manually][ci-trigger] with
+   the `release-2.0.0` branch and the `release-patch` argument**
+  * This will run the `release-process.yml` workflow. The `scripts/publish.rs`
+    script will be run with the `bump-patch` argument.
+  * The changes will be committed with a special marker indicating a release
+    needs to be made.
+  * A PR will be created from a temporary `ci/*` branch to the `release-2.0.0`
+    branch which, when merged, will trigger the release process.
+3. **Review the generated PR and merge it**
+  * This will resume from step 6 above in the major release process where the
+    special marker in the commit message generated by CI will trigger a tag to
+    get pushed which will further trigger the rest of the release process.
+
+After a patch release has been made you'll also want to double-check that the
+release notes on the patch branch are in sync with the `main` branch.
 
 [bump-version]: https://github.com/bytecodealliance/wasmtime/actions/workflows/bump-version.yml
