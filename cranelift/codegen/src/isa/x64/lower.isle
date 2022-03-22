@@ -1470,13 +1470,21 @@
 (rule (lower (icmp (IntCC.SignedLessThan) a @ (value_type (vec128 ty)) b))
       (x64_pcmpgt ty b a))
 (rule (lower (icmp (IntCC.UnsignedGreaterThan) a @ (value_type (vec128 ty)) b))
-      (let ((max Xmm (x64_pmaxu ty a b))
-            (eq Xmm (x64_pcmpeq ty max b))
+      ;; N.B.: we must manually prevent load coalescing of these operands; the
+      ;; register allocator gets confused otherwise. TODO:
+      ;; https://github.com/bytecodealliance/wasmtime/issues/3953.
+      (let ((xmm_a Xmm (put_in_xmm a))
+            (xmm_b Xmm (put_in_xmm b))
+            (max Xmm (x64_pmaxu ty xmm_a xmm_b))
+            (eq Xmm (x64_pcmpeq ty max xmm_b))
             (all_ones Xmm (vector_all_ones ty)))
            (x64_pxor eq all_ones)))
 (rule (lower (icmp (IntCC.UnsignedLessThan) a @ (value_type (vec128 ty)) b))
-      (let ((min Xmm (x64_pminu ty a b))
-            (eq Xmm (x64_pcmpeq ty min b))
+      ;; N.B.: see note above.
+      (let ((xmm_a Xmm (put_in_xmm a))
+            (xmm_b Xmm (put_in_xmm b))
+            (min Xmm (x64_pminu ty xmm_a xmm_b))
+            (eq Xmm (x64_pcmpeq ty min xmm_b))
             (all_ones Xmm (vector_all_ones ty)))
            (x64_pxor eq all_ones)))
 ;; To lower signed and unsigned *-or-equals comparisons, we find the minimum
