@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-cache"
-version = "0.35.0"
+version = "0.36.0"
 authors = ["The Wasmtime Project Developers"]
 description = "Support for automatic module caching with Wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"
