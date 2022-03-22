@@ -40,7 +40,10 @@ impl Backend for OpenvinoBackend {
             .0
             .as_mut()
             .expect("openvino::Core was previously constructed");
-        let cnn_network = core.read_network_from_buffer(&xml, &weights)?;
+        let mut cnn_network = core.read_network_from_buffer(&xml, &weights)?;
+
+        cnn_network.init_inputs_layout(Layout::NHWC)?;
+
         let exec_network =
             core.load_network(&cnn_network, map_execution_target_to_string(target))?;
 
