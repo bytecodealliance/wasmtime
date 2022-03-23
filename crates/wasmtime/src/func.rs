@@ -272,8 +272,9 @@ macro_rules! generate_wrap_async_func {
         {
             assert!(store.as_context().async_support(), concat!("cannot use `wrap", $num, "_async` without enabling async support on the config"));
             Func::wrap(store, move |mut caller: Caller<'_, T>, $($args: $args),*| {
-                let async_cx = caller.store.as_context_mut().0.async_cx();
+                let async_cx = caller.store.as_context_mut().0.async_cx().expect("Attempt to start async function on dying fiber");
                 let mut future = Pin::from(func(caller, $($args),*));
+
                 match unsafe { async_cx.block_on(future.as_mut()) } {
                     Ok(ret) => ret.into_fallible(),
                     Err(e) => R::fallible_from_trap(e),
@@ -439,7 +440,12 @@ impl Func {
             "cannot use `new_async` without enabling async support in the config"
         );
         Func::new(store, ty, move |mut caller, params, results| {
-            let async_cx = caller.store.as_context_mut().0.async_cx();
+            let async_cx = caller
+                .store
+                .as_context_mut()
+                .0
+                .async_cx()
+                .expect("Attempt to spawn new action on dying fiber");
             let mut future = Pin::from(func(caller, params, results));
             match unsafe { async_cx.block_on(future.as_mut()) } {
                 Ok(Ok(())) => Ok(()),
