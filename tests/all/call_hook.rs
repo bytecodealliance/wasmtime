@@ -553,11 +553,15 @@ fn trapping() -> Result<(), Error> {
 
 #[tokio::test]
 async fn basic_async_hook() -> Result<(), Error> {
-    struct HandlerR {}
+    struct HandlerR;
 
     #[async_trait::async_trait]
     impl CallHookHandler<State> for HandlerR {
-        async fn handle_call_event(&self, obj: &mut State, ch: CallHook)-> Result<(), wasmtime::Trap> {
+        async fn handle_call_event(
+            &self,
+            obj: &mut State,
+            ch: CallHook,
+        ) -> Result<(), wasmtime::Trap> {
             State::call_hook(obj, ch)
         }
     }
@@ -565,7 +569,7 @@ async fn basic_async_hook() -> Result<(), Error> {
     config.async_support(true);
     let engine = Engine::new(&config)?;
     let mut store = Store::new(&engine, State::default());
-    store.call_hook_async(HandlerR{});
+    store.call_hook_async(HandlerR {});
 
     assert_eq!(store.data().calls_into_host, 0);
     assert_eq!(store.data().returns_from_host, 0);
@@ -627,20 +631,16 @@ async fn basic_async_hook() -> Result<(), Error> {
 
 #[tokio::test]
 async fn timeout_async_hook() -> Result<(), Error> {
-    use tokio::time;
-
-    struct HandlerR { target: time::Instant }
-
-    async fn capture_the_moment() -> time::Instant {
-        time::Instant::now()
-    }
+    struct HandlerR;
 
     #[async_trait::async_trait]
     impl CallHookHandler<State> for HandlerR {
-        async fn handle_call_event(&self, obj: &mut State, ch: CallHook)-> Result<(), wasmtime::Trap> {
-            let current_time = capture_the_moment().await;
-
-            if current_time > self.target {
+        async fn handle_call_event(
+            &self,
+            obj: &mut State,
+            ch: CallHook,
+        ) -> Result<(), wasmtime::Trap> {
+            if obj.calls_into_host > 200 {
                 return Err(wasmtime::Trap::new("timeout"));
             }
 
@@ -659,9 +659,7 @@ async fn timeout_async_hook() -> Result<(), Error> {
     config.async_support(true);
     let engine = Engine::new(&config)?;
     let mut store = Store::new(&engine, State::default());
-    store.call_hook_async(HandlerR{
-        target: time::Instant::now() + time::Duration::from_secs(2),
-    });
+    store.call_hook_async(HandlerR {});
 
     assert_eq!(store.data().calls_into_host, 0);
     assert_eq!(store.data().returns_from_host, 0);
@@ -695,14 +693,12 @@ async fn timeout_async_hook() -> Result<(), Error> {
 
     let inst = linker.instantiate(&mut store, &module)?;
     let export = inst
-        .get_export(&mut store, "export")
-        .expect("get export")
-        .into_func()
+        .get_typed_func::<(), (), _>(&mut store, "export")
         .expect("export is func");
 
     store.set_epoch_deadline(1);
     store.epoch_deadline_async_yield_and_update(1);
-    assert!(export.call_async(&mut store, &[], &mut []).await.is_err());
+    assert!(export.call_async(&mut store, ()).await.is_err());
 
     // One switch from vm to host to call f, another in return from f.
     assert!(store.data().calls_into_host > 1);
@@ -712,7 +708,6 @@ async fn timeout_async_hook() -> Result<(), Error> {
 
     Ok(())
 }
-
 
 #[derive(Debug, PartialEq, Eq)]
 enum Context {
