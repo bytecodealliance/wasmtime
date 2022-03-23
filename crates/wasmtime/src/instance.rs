@@ -397,12 +397,6 @@ impl<'a> Instantiator<'a> {
         // initializer pointer as well.
         let num_imports = self.module.env_module().initializers.len();
         match &self.imports {
-            // If imports are coming from the runtime-provided list
-            // (e.g. the root module being instantiated) then we
-            // need to typecheck each item here before recording it.
-            //
-            // Note the `unwrap` here should be ok given the validation
-            // above in `Instantiation::new`.
             ImportSource::Externs(list) => {
                 assert_eq!(list.len(), num_imports);
                 for item in list.iter() {
@@ -420,15 +414,10 @@ impl<'a> Instantiator<'a> {
         }
 
         // All initializers have been processed, which means we're ready to
-        // perform the actual raw instantiation with the raw import values.
-        // Once that's done if there's an in-progress module we record the
-        // instance in the index space. Otherwise this is the final module
-        // and we return the items out.
-        //
-        // Note that in all cases we return the raw instance handle to get
-        // the start function executed by the outer context.
-        let (instance, start) = self.instantiate_raw(store)?;
-        return Ok((instance, start));
+        // perform the actual raw instantiation with the raw import values. This
+        // will register everything except the start function's completion and
+        // the finished instance will be returned.
+        self.instantiate_raw(store)
     }
 
     fn instantiate_raw(
