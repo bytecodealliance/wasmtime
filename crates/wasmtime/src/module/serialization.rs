@@ -6,36 +6,22 @@
 //!
 //! There are two main pieces of data associated with a binary artifact:
 //!
-//! 1. A list of compiled modules. The reason this is a list as opposed to one
-//!    singular module is that a module-linking module may encompass a number
-//!    of other modules.
-//! 2. Compilation metadata shared by all modules, including the global
-//!    `TypeTables` information. This metadata is validated for compilation
-//!    settings and also has information shared by all modules (such as the
-//!    shared `TypeTables`).
+//! 1. The compiled module image, currently an ELF file.
+//! 2. Compilation metadata for the module, including the `TypeTables`
+//!    information. This metadata is validated for compilation settings.
 //!
 //! Compiled modules are, at this time, represented as an ELF file. This ELF
-//! file contains all the necessary data needed to decode each individual
-//! module, and conveniently also handles things like alignment so we can
-//! actually directly `mmap` compilation artifacts from disk.
+//! file contains all the necessary data needed to decode a module, and
+//! conveniently also handles things like alignment so we can actually directly
+//! `mmap` compilation artifacts from disk.
 //!
-//! With all this in mind, the current serialization format is as follows:
+//! With this in mind, the current serialization format is as follows:
 //!
-//! * The first, primary, module starts the final artifact. This means that the
-//!   final artifact is actually, and conveniently, a valid ELF file. ELF files
-//!   don't place any restrictions on data coming after the ELF file itself,
-//!   so that's where everything else will go. Another reason for using this
-//!   format is that our compilation artifacts are then consumable by standard
-//!   debugging tools like `objdump` to poke around and see what's what.
+//! * First the ELF image for the compiled module starts the artifact. This
+//!   helps developers use standard ELF-reading utilities like `objdump` to poke
+//!   around and see what's inside the compiled image.
 //!
-//! * Next, all other modules are encoded. Each module has its own alignment,
-//!   though, so modules aren't simply concatenated. Instead directly after an
-//!   ELF file there is a 64-bit little-endian integer which is the offset,
-//!   from the end of the previous ELF file, to the next ELF file.
-//!
-//! * Finally, once all modules have been encoded (there's always at least
-//!   one), the 8-byte value `u64::MAX` is encoded. Following this is a
-//!   number of fields:
+//! * After the ELF file is a number of fields:
 //!
 //!   1. The `HEADER` value
 //!   2. A byte indicating how long the next field is
@@ -46,15 +32,19 @@
 //!   other random ELF files, as well as provide better error messages for
 //!   using wasmtime artifacts across versions.
 //!
+//! Note that the structure of the ELF format is what enables this
+//! representation. We can have trailing data after an ELF file which isn't read
+//! by any parsing of the ELF itself, which provides a convenient location for
+//! the metadata information to go.
+//!
 //! This format is implemented by the `to_bytes` and `from_mmap` function.
 
 use crate::{Engine, Module, ModuleVersionStrategy};
 use anyhow::{anyhow, bail, Context, Result};
 use object::read::elf::FileHeader;
-use object::{Bytes, File, Object, ObjectSection};
+use object::Bytes;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-use std::convert::TryFrom;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -165,50 +155,8 @@ impl<'a, 'b, T: Deserialize<'a>> Deserialize<'a> for MyCow<'b, T> {
     }
 }
 
-/// A small helper struct for serialized module upvars.
-#[derive(Serialize, Deserialize)]
-pub struct SerializedModuleUpvar {
-    /// The module's index into the compilation artifact.
-    pub index: usize,
-    /// Indexes into the list of all compilation artifacts for this module.
-    pub artifact_upvars: Vec<usize>,
-    /// Closed-over module values that are also needed for this module.
-    pub module_upvars: Vec<SerializedModuleUpvar>,
-}
-
-impl SerializedModuleUpvar {
-    pub fn new(module: &Module, artifacts: &[Arc<CompiledModule>]) -> Self {
-        // TODO: improve upon the linear searches in the artifact list
-        let index = artifacts
-            .iter()
-            .position(|a| Arc::as_ptr(a) == Arc::as_ptr(&module.inner.module))
-            .expect("module should be in artifacts list");
-
-        SerializedModuleUpvar {
-            index,
-            artifact_upvars: module
-                .inner
-                .artifact_upvars
-                .iter()
-                .map(|m| {
-                    artifacts
-                        .iter()
-                        .position(|a| Arc::as_ptr(a) == Arc::as_ptr(m))
-                        .expect("artifact should be in artifacts list")
-                })
-                .collect(),
-            module_upvars: module
-                .inner
-                .module_upvars
-                .iter()
-                .map(|m| SerializedModuleUpvar::new(m, artifacts))
-                .collect(),
-        }
-    }
-}
-
 pub struct SerializedModule<'a> {
-    artifacts: Vec<MyCow<'a, MmapVec>>,
+    artifacts: MyCow<'a, MmapVec>,
     metadata: Metadata<'a>,
 }
 
@@ -219,54 +167,28 @@ struct Metadata<'a> {
     isa_flags: BTreeMap<String, FlagValue>,
     tunables: Tunables,
     features: WasmFeatures,
-    module_upvars: Vec<SerializedModuleUpvar>,
     types: MyCow<'a, TypeTables>,
 }
 
 impl<'a> SerializedModule<'a> {
     #[cfg(compiler)]
     pub fn new(module: &'a Module) -> Self {
-        let artifacts = module
-            .inner
-            .artifact_upvars
-            .iter()
-            .map(|m| MyCow::Borrowed(m.mmap()))
-            .chain(Some(MyCow::Borrowed(module.inner.module.mmap())))
-            .collect::<Vec<_>>();
-        let module_upvars = module
-            .inner
-            .module_upvars
-            .iter()
-            .map(|m| SerializedModuleUpvar::new(m, &module.inner.artifact_upvars))
-            .collect::<Vec<_>>();
-
         Self::with_data(
             module.engine(),
-            artifacts,
-            module_upvars,
+            MyCow::Borrowed(module.compiled_module().mmap()),
             MyCow::Borrowed(module.types()),
         )
     }
 
     #[cfg(compiler)]
-    pub fn from_artifacts(
-        engine: &Engine,
-        artifacts: impl IntoIterator<Item = &'a MmapVec>,
-        types: &'a TypeTables,
-    ) -> Self {
-        Self::with_data(
-            engine,
-            artifacts.into_iter().map(MyCow::Borrowed).collect(),
-            Vec::new(),
-            MyCow::Borrowed(types),
-        )
+    pub fn from_artifacts(engine: &Engine, artifacts: &'a MmapVec, types: &'a TypeTables) -> Self {
+        Self::with_data(engine, MyCow::Borrowed(artifacts), MyCow::Borrowed(types))
     }
 
     #[cfg(compiler)]
     fn with_data(
         engine: &Engine,
-        artifacts: Vec<MyCow<'a, MmapVec>>,
-        module_upvars: Vec<SerializedModuleUpvar>,
+        artifacts: MyCow<'a, MmapVec>,
         types: MyCow<'a, TypeTables>,
     ) -> Self {
         Self {
@@ -277,35 +199,27 @@ impl<'a> SerializedModule<'a> {
                 isa_flags: engine.compiler().isa_flags(),
                 tunables: engine.config().tunables.clone(),
                 features: (&engine.config().features).into(),
-                module_upvars,
                 types,
             },
         }
     }
 
     pub fn into_module(self, engine: &Engine) -> Result<Module> {
-        let (main_module, modules, types, upvars) = self.into_parts(engine)?;
-        let modules = engine.run_maybe_parallel(modules, |(i, m)| {
-            CompiledModule::from_artifacts(
-                i,
-                m,
-                &*engine.config().profiler,
-                engine.unique_id_allocator(),
-            )
-        })?;
+        let (mmap, info, types) = self.into_parts(engine)?;
+        let module = CompiledModule::from_artifacts(
+            mmap,
+            info,
+            &*engine.config().profiler,
+            engine.unique_id_allocator(),
+        )?;
 
-        Module::from_parts(engine, modules, main_module, Arc::new(types), &upvars)
+        Module::from_parts(engine, module, Arc::new(types))
     }
 
     pub fn into_parts(
         mut self,
         engine: &Engine,
-    ) -> Result<(
-        usize,
-        Vec<(MmapVec, Option<CompiledModuleInfo>)>,
-        TypeTables,
-        Vec<SerializedModuleUpvar>,
-    )> {
+    ) -> Result<(MmapVec, Option<CompiledModuleInfo>, TypeTables)> {
         // Verify that the compilation settings in the engine match the
         // compilation settings of the module that's being loaded.
         self.check_triple(engine)?;
@@ -315,45 +229,18 @@ impl<'a> SerializedModule<'a> {
         self.check_tunables(&engine.config().tunables)?;
         self.check_features(&engine.config().features)?;
 
-        assert!(!self.artifacts.is_empty());
-        let modules = self.artifacts.into_iter().map(|i| (i.unwrap_owned(), None));
+        let module = self.artifacts.unwrap_owned();
 
-        let main_module = modules.len() - 1;
-
-        Ok((
-            main_module,
-            modules.collect(),
-            self.metadata.types.unwrap_owned(),
-            self.metadata.module_upvars,
-        ))
+        Ok((module, None, self.metadata.types.unwrap_owned()))
     }
 
     pub fn to_bytes(&self, version_strat: &ModuleVersionStrategy) -> Result<Vec<u8>> {
-        // First up, create a linked-ish list of ELF files. For more
-        // information on this format, see the doc comment on this module.
-        // The only semi-tricky bit here is that we leave an
-        // offset-to-the-next-file between each set of ELF files. The list
-        // is then terminated with `u64::MAX`.
-        let mut ret = Vec::new();
-        for (i, obj) in self.artifacts.iter().enumerate() {
-            // Anything after the first object needs to respect the alignment of
-            // the object's sections, so insert padding as necessary. Note that
-            // the +8 to the length here is to accomodate the size we'll write
-            // to get to the next object.
-            if i > 0 {
-                let obj = File::parse(&obj.as_ref()[..])?;
-                let align = obj.sections().map(|s| s.align()).max().unwrap_or(0).max(1);
-                let align = usize::try_from(align).unwrap();
-                let new_size = align_to(ret.len() + 8, align);
-                ret.extend_from_slice(&(new_size as u64).to_le_bytes());
-                ret.resize(new_size, 0);
-            }
-            ret.extend_from_slice(obj.as_ref());
-        }
-        ret.extend_from_slice(&[0xff; 8]);
+        // Start off with a copy of the ELF image.
+        let mut ret = self.artifacts.as_ref().to_vec();
 
-        // The last part of our artifact is the bincode-encoded `Metadata`
-        // section with a few other guards to help give better error messages.
+        // Append the bincode-encoded `Metadata` section with a few other guards
+        // to help give better error messages during deserialization if
+        // something goes wrong.
         ret.extend_from_slice(HEADER);
         let version = match version_strat {
             ModuleVersionStrategy::WasmtimeVersion => env!("CARGO_PKG_VERSION"),
@@ -385,37 +272,14 @@ impl<'a> SerializedModule<'a> {
         )
     }
 
-    pub fn from_mmap(mut mmap: MmapVec, version_strat: &ModuleVersionStrategy) -> Result<Self> {
-        // Artifacts always start with an ELF file, so read that first.
-        // Afterwards we continually read ELF files until we see the `u64::MAX`
-        // marker, meaning we've reached the end.
-        let first_module = read_file(&mut mmap)?;
-        let mut pos = first_module.len();
-        let mut artifacts = vec![MyCow::Owned(first_module)];
+    pub fn from_mmap(mmap: MmapVec, version_strat: &ModuleVersionStrategy) -> Result<Self> {
+        // First validate that this is at least somewhat an elf file within
+        // `mmap` and additionally skip to the end of the elf file to find our
+        // metadata.
+        let metadata = data_after_elf(&mmap)?;
 
-        let metadata = loop {
-            if mmap.len() < 8 {
-                bail!("invalid serialized data");
-            }
-            let next_file_start = u64::from_le_bytes([
-                mmap[0], mmap[1], mmap[2], mmap[3], mmap[4], mmap[5], mmap[6], mmap[7],
-            ]);
-            if next_file_start == u64::MAX {
-                mmap.drain(..8);
-                break mmap;
-            }
-
-            // Remove padding leading up to the next file
-            let next_file_start = usize::try_from(next_file_start).unwrap();
-            let _padding = mmap.drain(..next_file_start - pos);
-            let data = read_file(&mut mmap)?;
-            pos = next_file_start + data.len();
-            artifacts.push(MyCow::Owned(data));
-        };
-
-        // Once we've reached the end we parse a `Metadata` object. This has a
-        // few guards up front which we process first, and eventually this
-        // bottoms out in a `bincode::deserialize` call.
+        // The metadata has a few guards up front which we process first, and
+        // eventually this bottoms out in a `bincode::deserialize` call.
         let metadata = metadata
             .strip_prefix(HEADER)
             .ok_or_else(|| anyhow!("bytes are not a compatible serialized wasmtime module"))?;
@@ -453,18 +317,13 @@ impl<'a> SerializedModule<'a> {
             .context("deserialize compilation artifacts")?;
 
         return Ok(SerializedModule {
-            artifacts,
+            artifacts: MyCow::Owned(mmap),
             metadata,
         });
 
-        /// This function will drain the beginning contents of `mmap` which
-        /// correspond to an ELF object file. The ELF file is only very lightly
-        /// validated.
-        ///
-        /// The `mmap` passed in will be reset to just after the ELF file, and
-        /// the `MmapVec` returned represents the extend of the ELF file
-        /// itself.
-        fn read_file(mmap: &mut MmapVec) -> Result<MmapVec> {
+        /// This function will return the trailing data behind the ELF file
+        /// parsed from `data` which is where we find our metadata section.
+        fn data_after_elf(data: &[u8]) -> Result<&[u8]> {
             use object::NativeEndian as NE;
             // There's not actually a great utility for figuring out where
             // the end of an ELF file is in the `object` crate. In lieu of that
@@ -472,7 +331,7 @@ impl<'a> SerializedModule<'a> {
             // is that the header comes first, that tells us where the section
             // headers are, and for our ELF files the end of the file is the
             // end of the section headers.
-            let mut bytes = Bytes(mmap);
+            let mut bytes = Bytes(data);
             let header = bytes
                 .read::<object::elf::FileHeader64<NE>>()
                 .map_err(|()| anyhow!("artifact truncated, can't read header"))?;
@@ -480,10 +339,10 @@ impl<'a> SerializedModule<'a> {
                 bail!("invalid elf header");
             }
             let sections = header
-                .section_headers(NE, &mmap[..])
+                .section_headers(NE, data)
                 .context("failed to read section headers")?;
-            let range = subslice_range(object::bytes_of_slice(sections), mmap);
-            Ok(mmap.drain(..range.end))
+            let range = subslice_range(object::bytes_of_slice(sections), data);
+            Ok(&data[range.end..])
         }
     }
 
@@ -695,12 +554,6 @@ impl<'a> SerializedModule<'a> {
 
         Ok(())
     }
-}
-
-/// Aligns the `val` specified up to `align`, which must be a power of two
-fn align_to(val: usize, align: usize) -> usize {
-    debug_assert!(align.is_power_of_two());
-    (val + (align - 1)) & (!(align - 1))
 }
 
 #[cfg(test)]

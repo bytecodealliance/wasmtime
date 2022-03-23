@@ -1,19 +1,16 @@
 use crate::linker::Definition;
-use crate::signatures::SignatureCollection;
-use crate::store::{InstanceId, StoreData, StoreOpaque, Stored};
+use crate::store::{InstanceId, StoreOpaque, Stored};
 use crate::types::matching;
 use crate::{
-    AsContext, AsContextMut, Engine, Export, Extern, ExternType, Func, Global, InstanceType,
-    Memory, Module, StoreContextMut, Table, Trap, TypedFunc,
+    AsContextMut, Engine, Export, Extern, Func, Global, Memory, Module, StoreContextMut, Table,
+    Trap, TypedFunc,
 };
 use anyhow::{anyhow, bail, Context, Error, Result};
 use std::mem;
 use std::sync::Arc;
 use wasmtime_environ::{
-    EntityIndex, EntityType, FuncIndex, GlobalIndex, Initializer, InstanceIndex, MemoryIndex,
-    ModuleIndex, PrimaryMap, TableIndex,
+    EntityIndex, EntityType, FuncIndex, GlobalIndex, MemoryIndex, PrimaryMap, TableIndex,
 };
-use wasmtime_jit::TypeTables;
 use wasmtime_runtime::{
     Imports, InstanceAllocationRequest, InstantiationError, StorePtr, VMContext, VMFunctionBody,
     VMFunctionImport, VMGlobalImport, VMMemoryImport, VMTableImport,
@@ -36,25 +33,14 @@ use wasmtime_runtime::{
 #[repr(transparent)]
 pub struct Instance(Stored<InstanceData>);
 
-pub(crate) enum InstanceData {
-    /// This variant is used for instances created through instantiation of a
-    /// module, e.g. `Instance::new` or various linker methods.
-    Instantiated {
-        /// The id of the instance within the store, used to find the original
-        /// `InstanceHandle`.
-        id: InstanceId,
-        /// A lazily-populated list of exports of this instance. The order of
-        /// exports here matches the order of the exports in the the original
-        /// module.
-        exports: Vec<Option<Extern>>,
-        /// The type information of the module that this was instantiated with.
-        types: Arc<TypeTables>,
-        signatures: Arc<SignatureCollection>,
-    },
-
-    /// This variant is used for synthetically created instances via `Linker`
-    /// APIs. This is only used for the module linking proposal at this time.
-    Synthetic(Arc<indexmap::IndexMap<String, Extern>>),
+pub(crate) struct InstanceData {
+    /// The id of the instance within the store, used to find the original
+    /// `InstanceHandle`.
+    id: InstanceId,
+    /// A lazily-populated list of exports of this instance. The order of
+    /// exports here matches the order of the exports in the the original
+    /// module.
+    exports: Vec<Option<Extern>>,
 }
 
 impl Instance {
@@ -181,39 +167,6 @@ impl Instance {
         Instance(store.store_data_mut().insert(handle))
     }
 
-    /// Returns the type signature of this instance.
-    ///
-    /// # Panics
-    ///
-    /// Panics if `store` does not own this instance.
-    pub fn ty(&self, store: impl AsContext) -> InstanceType {
-        let store = store.as_context();
-        let mut ty = InstanceType::new();
-        match &store[self.0] {
-            InstanceData::Synthetic(items) => {
-                for (name, item) in items.iter() {
-                    ty.add_named_export(name, item.ty(&store));
-                }
-            }
-            InstanceData::Instantiated { id, types, .. } => {
-                let module = store.0.instance(*id).module();
-                for (name, idx) in module.exports.iter() {
-                    let export_ty = module.type_of(*idx);
-                    ty.add_named_export(name, ExternType::from_wasmtime(types, &export_ty));
-                }
-            }
-        }
-        ty
-    }
-
-    pub(crate) fn data<'a>(&self, store: &'a StoreData) -> &'a InstanceData {
-        &store[self.0]
-    }
-
-    pub(crate) fn comes_from_same_store(&self, store: &StoreOpaque) -> bool {
-        store.store_data().contains(self.0)
-    }
-
     /// Returns the list of exported items from this [`Instance`].
     ///
     /// # Panics
@@ -232,70 +185,21 @@ impl Instance {
     ) -> impl ExactSizeIterator<Item = Export<'a>> + 'a {
         // If this is an `Instantiated` instance then all the `exports` may not
         // be filled in. Fill them all in now if that's the case.
-        if let InstanceData::Instantiated { exports, id, .. } = &store[self.0] {
-            if exports.iter().any(|e| e.is_none()) {
-                let module = Arc::clone(store.instance(*id).module());
-                for name in module.exports.keys() {
-                    self._get_export(store, name);
-                }
+        let InstanceData { exports, id, .. } = &store[self.0];
+        if exports.iter().any(|e| e.is_none()) {
+            let module = Arc::clone(store.instance(*id).module());
+            for name in module.exports.keys() {
+                self._get_export(store, name);
             }
         }
 
-        return match &store.store_data()[self.0] {
-            InstanceData::Synthetic(names) => {
-                Either::A(names.iter().map(|(k, v)| Export::new(k, v.clone())))
-            }
-            InstanceData::Instantiated { exports, id, .. } => {
-                let module = store.instance(*id).module();
-                Either::B(
-                    module
-                        .exports
-                        .iter()
-                        .zip(exports)
-                        .map(|((name, _), export)| Export::new(name, export.clone().unwrap())),
-                )
-            }
-        };
-
-        enum Either<A, B> {
-            A(A),
-            B(B),
-        }
-
-        impl<A, B> Iterator for Either<A, B>
-        where
-            A: Iterator,
-            B: Iterator<Item = A::Item>,
-        {
-            type Item = A::Item;
-
-            fn next(&mut self) -> Option<A::Item> {
-                match self {
-                    Either::A(a) => a.next(),
-                    Either::B(b) => b.next(),
-                }
-            }
-
-            fn size_hint(&self) -> (usize, Option<usize>) {
-                match self {
-                    Either::A(a) => a.size_hint(),
-                    Either::B(b) => b.size_hint(),
-                }
-            }
-        }
-
-        impl<A, B> ExactSizeIterator for Either<A, B>
-        where
-            A: ExactSizeIterator,
-            B: ExactSizeIterator<Item = A::Item>,
-        {
-            fn len(&self) -> usize {
-                match self {
-                    Either::A(a) => a.len(),
-                    Either::B(b) => b.len(),
-                }
-            }
-        }
+        let data = &store.store_data()[self.0];
+        let module = store.instance(data.id).module();
+        module
+            .exports
+            .iter()
+            .zip(&data.exports)
+            .map(|((name, _), export)| Export::new(name, export.clone().unwrap()))
     }
 
     /// Looks up an exported [`Extern`] value by name.
@@ -320,33 +224,23 @@ impl Instance {
     }
 
     fn _get_export(&self, store: &mut StoreOpaque, name: &str) -> Option<Extern> {
-        match &store[self.0] {
-            // Synthetic instances always have their entire list of exports
-            // already specified.
-            InstanceData::Synthetic(names) => names.get(name).cloned(),
+        // Instantiated instances will lazily fill in exports, so we process
+        // all that lazy logic here.
+        let data = &store[self.0];
 
-            // Instantiated instances will lazily fill in exports, so we process
-            // all that lazy logic here.
-            InstanceData::Instantiated { id, exports, .. } => {
-                let id = *id;
-                let instance = store.instance(id);
-                let (i, _, &index) = instance.module().exports.get_full(name)?;
-                if let Some(export) = &exports[i] {
-                    return Some(export.clone());
-                }
-
-                let instance = store.instance_mut(id); // reborrow the &mut Instancehandle
-                let item = unsafe {
-                    Extern::from_wasmtime_export(instance.lookup_by_declaration(&index), store)
-                };
-                let exports = match &mut store[self.0] {
-                    InstanceData::Instantiated { exports, .. } => exports,
-                    _ => unreachable!(),
-                };
-                exports[i] = Some(item.clone());
-                Some(item)
-            }
+        let instance = store.instance(data.id);
+        let (i, _, &index) = instance.module().exports.get_full(name)?;
+        if let Some(export) = &data.exports[i] {
+            return Some(export.clone());
         }
+
+        let id = data.id;
+        let instance = store.instance_mut(id); // reborrow the &mut Instancehandle
+        let item =
+            unsafe { Extern::from_wasmtime_export(instance.lookup_by_declaration(&index), store) };
+        let data = &mut store[self.0];
+        data.exports[i] = Some(item.clone());
+        Some(item)
     }
 
     /// Looks up an exported [`Func`] value by name.
@@ -428,26 +322,17 @@ impl Instance {
 }
 
 struct Instantiator<'a> {
-    in_progress: Vec<ImportsBuilder<'a>>,
-    cur: ImportsBuilder<'a>,
-}
-
-struct ImportsBuilder<'a> {
-    src: ImportSource<'a>,
+    imports: ImportSource<'a>,
     functions: PrimaryMap<FuncIndex, VMFunctionImport>,
     tables: PrimaryMap<TableIndex, VMTableImport>,
     memories: PrimaryMap<MemoryIndex, VMMemoryImport>,
     globals: PrimaryMap<GlobalIndex, VMGlobalImport>,
-    instances: PrimaryMap<InstanceIndex, Instance>,
-    modules: PrimaryMap<ModuleIndex, Module>,
-    initializer: usize,
-    module: Module,
+    module: &'a Module,
 }
 
 enum ImportSource<'a> {
     Externs(&'a [Extern]),
     Definitions(&'a [Definition]),
-    Outer { initializer: usize },
 }
 
 impl<'a> Instantiator<'a> {
@@ -473,225 +358,77 @@ impl<'a> Instantiator<'a> {
     /// * The `imports` must all come from the `store` specified.
     unsafe fn new(
         store: &StoreOpaque,
-        module: &Module,
+        module: &'a Module,
         imports: ImportSource<'a>,
     ) -> Result<Instantiator<'a>> {
         if !Engine::same(store.engine(), module.engine()) {
             bail!("cross-`Engine` instantiation is not currently supported");
         }
 
+        let raw = module.compiled_module().module();
         Ok(Instantiator {
-            in_progress: Vec::new(),
-            cur: ImportsBuilder::new(module, imports),
+            imports,
+            functions: PrimaryMap::with_capacity(raw.num_imported_funcs),
+            tables: PrimaryMap::with_capacity(raw.num_imported_tables),
+            memories: PrimaryMap::with_capacity(raw.num_imported_memories),
+            globals: PrimaryMap::with_capacity(raw.num_imported_globals),
+            module,
         })
     }
 
     fn run<T>(&mut self, store: &mut StoreContextMut<'_, T>) -> Result<Instance, Error> {
-        loop {
-            if let Some((instance, start, toplevel)) = self.step(store.0)? {
-                if let Some(start) = start {
-                    Instantiator::start_raw(store, instance, start)?;
-                }
-                if toplevel {
-                    break Ok(instance);
-                }
-            }
+        let (instance, start) = self.resolve_imports(store.0)?;
+        if let Some(start) = start {
+            Instantiator::start_raw(store, instance, start)?;
         }
+        Ok(instance)
     }
 
-    /// Processes the next initializer for the next instance being created
-    /// without running any wasm code.
-    ///
-    /// This function will process module initializers, handling recursive
-    /// instantiations of modules for module linking if necessary as well. This
-    /// does not actually execute any WebAssembly code, which means that it
-    /// will return whenever an instance is created (because its `start`
-    /// function may need to be executed).
-    ///
-    /// If this function returns `None`, then it simply needs to be called
-    /// again to execute the next initializer. Otherwise this function has two
-    /// return values:
-    ///
-    /// * The first is the raw handle to the instance that was just created.
-    ///   This instance must have its start function executed by the caller.
-    /// * The second is an optional list of items to get wrapped up in an
-    ///   `Instance`. This is only `Some` for the outermost instance that was
-    ///   created. If this is `None` callers need to keep calling this function
-    ///   since the instance created was simply for a recursive instance
-    ///   defined here.
-    fn step(
+    /// Resolve all the imports for the module being instantiated, extracting
+    /// the raw representations and building up the `PrimaryMap` instance for
+    /// each set of exports.
+    fn resolve_imports(
         &mut self,
         store: &mut StoreOpaque,
-    ) -> Result<Option<(Instance, Option<FuncIndex>, bool)>> {
-        if self.cur.initializer == 0 {
-            store.bump_resource_counts(&self.cur.module)?;
-        }
+    ) -> Result<(Instance, Option<FuncIndex>)> {
+        store.bump_resource_counts(&self.module)?;
 
         // Read the current module's initializer and move forward the
         // initializer pointer as well.
-        self.cur.initializer += 1;
-        match self
-            .cur
-            .module
-            .env_module()
-            .initializers
-            .get(self.cur.initializer - 1)
-        {
-            Some(Initializer::Import { name, field, .. }) => {
-                match &mut self.cur.src {
-                    // If imports are coming from the runtime-provided list
-                    // (e.g. the root module being instantiated) then we
-                    // need to typecheck each item here before recording it.
-                    //
-                    // Note the `unwrap` here should be ok given the validation
-                    // above in `Instantiation::new`.
-                    ImportSource::Externs(list) => {
-                        let (head, remaining) = list.split_first().unwrap();
-                        *list = remaining;
-                        self.cur.push(head.clone(), store);
-                    }
-                    ImportSource::Definitions(list) => {
-                        let (head, remaining) = list.split_first().unwrap();
-                        *list = remaining;
-                        // This unsafety is encapsulated with
-                        // `Instantiator::new`, documented above.
-                        self.cur.push(unsafe { head.to_extern(store) }, store);
-                    }
-
-                    // Otherwise if arguments are coming from our outer
-                    // instance due to a recursive instantiation then we
-                    // look in the previous initializer's mapping of
-                    // arguments to figure out where to load the item from.
-                    // Note that no typechecking is necessary here due to
-                    // validation.
-                    ImportSource::Outer { initializer } => {
-                        debug_assert!(field.is_none());
-                        let outer = self.in_progress.last().unwrap();
-                        let args = match &outer.module.env_module().initializers[*initializer] {
-                            Initializer::Instantiate { args, .. } => args,
-                            _ => unreachable!(),
-                        };
-                        let index = args.get(name).expect("should be present after validation");
-                        match *index {
-                            EntityIndex::Global(i) => {
-                                self.cur.globals.push(outer.globals[i]);
-                            }
-                            EntityIndex::Function(i) => {
-                                self.cur.functions.push(outer.functions[i]);
-                            }
-                            EntityIndex::Table(i) => {
-                                self.cur.tables.push(outer.tables[i]);
-                            }
-                            EntityIndex::Memory(i) => {
-                                self.cur.memories.push(outer.memories[i]);
-                            }
-                            EntityIndex::Module(i) => {
-                                self.cur.modules.push(outer.modules[i].clone());
-                            }
-                            EntityIndex::Instance(i) => {
-                                self.cur.instances.push(outer.instances[i].clone());
-                            }
-                        }
-                    }
+        let num_imports = self.module.env_module().initializers.len();
+        match &self.imports {
+            ImportSource::Externs(list) => {
+                assert_eq!(list.len(), num_imports);
+                for item in list.iter() {
+                    self.push(item.clone(), store);
                 }
             }
-
-            // Here we lookup our instance handle, find the right export,
-            // and then push that item into our own index space. We eschew
-            // type-checking since only valid modules should reach this point.
-            Some(Initializer::AliasInstanceExport { instance, export }) => {
-                let instance = self.cur.instances[*instance];
-                let export = instance._get_export(store, export).unwrap();
-                self.cur.push(export, store);
-            }
-
-            // A recursive instantiation of an instance.
-            //
-            // The `module` argument is used to create an import builder
-            // object, and we specify that the source of imports for the builder is
-            // this initializer's position so we can look at the `args` payload
-            // later.
-            //
-            // Once that's set up we save off `self.cur` into
-            // `self.in_progress` and start the instantiation of the child
-            // instance on the next execution of this function.
-            Some(Initializer::Instantiate { module, args: _ }) => {
-                let module = &self.cur.modules[*module];
-                let imports = ImportsBuilder::new(
-                    module,
-                    ImportSource::Outer {
-                        initializer: self.cur.initializer - 1,
-                    },
-                );
-                let prev = mem::replace(&mut self.cur, imports);
-                self.in_progress.push(prev);
-            }
-
-            // A new module is being defined, and the source of this module is
-            // our module's list of closed-over-modules.
-            //
-            // This is used for outer aliases.
-            Some(Initializer::DefineModule(upvar_index)) => {
-                self.cur
-                    .modules
-                    .push(self.cur.module.module_upvar(*upvar_index).clone());
-            }
-
-            // A new module is defined, created from a set of compiled
-            // artifacts. The new module value will be created with the
-            // specified artifacts being closed over as well as the specified
-            // set of module values in our index/upvar index spaces being closed
-            // over.
-            //
-            // This is used for defining submodules.
-            Some(Initializer::CreateModule {
-                artifact_index,
-                artifacts,
-                modules,
-            }) => {
-                let submodule = self.cur.module.create_submodule(
-                    *artifact_index,
-                    artifacts,
-                    modules,
-                    &self.cur.modules,
-                )?;
-                self.cur.modules.push(submodule);
-            }
-
-            // All initializers have been processed, which means we're ready to
-            // perform the actual raw instantiation with the raw import values.
-            // Once that's done if there's an in-progress module we record the
-            // instance in the index space. Otherwise this is the final module
-            // and we return the items out.
-            //
-            // Note that in all cases we return the raw instance handle to get
-            // the start function executed by the outer context.
-            None => {
-                let (instance, start) = self.instantiate_raw(store)?;
-                let toplevel = match self.in_progress.pop() {
-                    Some(imports) => {
-                        self.cur = imports;
-                        self.cur.instances.push(instance);
-                        false
-                    }
-                    None => true,
-                };
-                return Ok(Some((instance, start, toplevel)));
+            ImportSource::Definitions(list) => {
+                assert_eq!(list.len(), num_imports);
+                for item in list.iter() {
+                    // This unsafety is encapsulated with
+                    // `Instantiator::new`, documented above.
+                    self.push(unsafe { item.to_extern(store) }, store);
+                }
             }
         }
 
-        Ok(None)
+        // All initializers have been processed, which means we're ready to
+        // perform the actual raw instantiation with the raw import values. This
+        // will register everything except the start function's completion and
+        // the finished instance will be returned.
+        self.instantiate_raw(store)
     }
 
     fn instantiate_raw(
         &mut self,
         store: &mut StoreOpaque,
     ) -> Result<(Instance, Option<FuncIndex>)> {
-        let compiled_module = self.cur.module.compiled_module();
+        let compiled_module = self.module.compiled_module();
 
         // Register the module just before instantiation to ensure we keep the module
         // properly referenced while in use by the store.
-        store.modules_mut().register(&self.cur.module);
+        store.modules_mut().register(&self.module);
 
         unsafe {
             // The first thing we do is issue an instance allocation request
@@ -710,8 +447,8 @@ impl<'a> Instantiator<'a> {
                     .engine()
                     .allocator()
                     .allocate(InstanceAllocationRequest {
-                        runtime_info: &self.cur.module.runtime_info(),
-                        imports: self.cur.build(),
+                        runtime_info: &self.module.runtime_info(),
+                        imports: self.build(),
                         host_state: Box::new(Instance(instance_to_be)),
                         store: StorePtr::new(store.traitobj()),
                     })?;
@@ -747,28 +484,9 @@ impl<'a> Instantiator<'a> {
                     .module()
                     .exports
                     .values()
-                    .map(|index| {
-                        // Note that instances and modules are not handled by
-                        // `wasmtime_runtime`, they're handled by us in this crate. That
-                        // means we need to handle that here, otherwise we defer to the
-                        // instance to load the values.
-                        match *index {
-                            EntityIndex::Instance(i) => {
-                                Some(Extern::Instance(self.cur.instances[i].clone()))
-                            }
-                            EntityIndex::Module(i) => {
-                                Some(Extern::Module(self.cur.modules[i].clone()))
-                            }
-                            _ => None,
-                        }
-                    })
+                    .map(|_index| None)
                     .collect();
-                let data = InstanceData::Instantiated {
-                    id,
-                    exports,
-                    types: Arc::clone(self.cur.module.types()),
-                    signatures: Arc::clone(self.cur.module.signatures()),
-                };
+                let data = InstanceData { id, exports };
                 Instance::from_wasmtime(data, store)
             };
 
@@ -810,10 +528,7 @@ impl<'a> Instantiator<'a> {
         instance: Instance,
         start: FuncIndex,
     ) -> Result<()> {
-        let id = match &store.0.store_data()[instance.0] {
-            InstanceData::Instantiated { id, .. } => *id,
-            InstanceData::Synthetic(_) => return Ok(()),
-        };
+        let id = store.0.store_data()[instance.0].id;
         // If a start function is present, invoke it. Make sure we use all the
         // trap-handling configuration in `store` as well.
         let instance = store.0.instance_mut(id);
@@ -834,23 +549,6 @@ impl<'a> Instantiator<'a> {
         }
         Ok(())
     }
-}
-
-impl<'a> ImportsBuilder<'a> {
-    fn new(module: &Module, src: ImportSource<'a>) -> ImportsBuilder<'a> {
-        let raw = module.compiled_module().module();
-        ImportsBuilder {
-            src,
-            functions: PrimaryMap::with_capacity(raw.num_imported_funcs),
-            tables: PrimaryMap::with_capacity(raw.num_imported_tables),
-            memories: PrimaryMap::with_capacity(raw.num_imported_memories),
-            globals: PrimaryMap::with_capacity(raw.num_imported_globals),
-            instances: PrimaryMap::with_capacity(raw.instances.len()),
-            modules: PrimaryMap::with_capacity(raw.modules.len()),
-            module: module.clone(),
-            initializer: 0,
-        }
-    }
 
     fn push(&mut self, item: Extern, store: &mut StoreOpaque) {
         match item {
@@ -865,12 +563,6 @@ impl<'a> ImportsBuilder<'a> {
             }
             Extern::Memory(i) => {
                 self.memories.push(i.vmimport(store));
-            }
-            Extern::Instance(i) => {
-                self.instances.push(i);
-            }
-            Extern::Module(m) => {
-                self.modules.push(m);
             }
         }
     }
@@ -1067,13 +759,8 @@ fn typecheck<I>(
         engine: store.engine(),
     };
     for ((name, field, expected_ty), actual) in env_module.imports().zip(imports) {
-        check(&cx, &expected_ty, actual).with_context(|| {
-            let extra = match field {
-                Some(name) => format!("::{}", name),
-                None => String::new(),
-            };
-            format!("incompatible import type for `{}{}`", name, extra)
-        })?;
+        check(&cx, &expected_ty, actual)
+            .with_context(|| format!("incompatible import type for `{name}::{field}`"))?;
     }
     Ok(())
 }

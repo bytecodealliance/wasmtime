@@ -213,30 +213,10 @@ entity_impl!(ElemIndex);
 pub struct TypeIndex(u32);
 entity_impl!(TypeIndex);
 
-/// Index type of a module inside the WebAssembly module.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
-pub struct ModuleIndex(u32);
-entity_impl!(ModuleIndex);
-
-/// Index type of an instance inside the WebAssembly module.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
-pub struct InstanceIndex(u32);
-entity_impl!(InstanceIndex);
-
 /// Index type of an event inside the WebAssembly module.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub struct TagIndex(u32);
 entity_impl!(TagIndex);
-
-/// Specialized index for just module types.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
-pub struct ModuleTypeIndex(u32);
-entity_impl!(ModuleTypeIndex);
-
-/// Specialized index for just instance types.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
-pub struct InstanceTypeIndex(u32);
-entity_impl!(InstanceTypeIndex);
 
 /// An index of an entity.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
@@ -249,10 +229,6 @@ pub enum EntityIndex {
     Memory(MemoryIndex),
     /// Global index.
     Global(GlobalIndex),
-    /// Module index.
-    Module(ModuleIndex),
-    /// Instance index.
-    Instance(InstanceIndex),
 }
 
 /// A type of an item in a wasm module where an item is typically something that
@@ -271,12 +247,6 @@ pub enum EntityType {
     /// A function type where the index points to the type section and records a
     /// function signature.
     Function(SignatureIndex),
-    /// An instance where the index points to the type section and records a
-    /// instance's exports.
-    Instance(InstanceTypeIndex),
-    /// A module where the index points to the type section and records a
-    /// module's imports and exports.
-    Module(ModuleTypeIndex),
 }
 
 /// A WebAssembly global.

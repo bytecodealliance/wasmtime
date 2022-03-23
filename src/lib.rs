@@ -30,10 +30,6 @@ const SUPPORTED_WASM_FEATURES: &[(&str, &str)] = &[
         "enables support for bulk memory instructions",
     ),
     (
-        "module-linking",
-        "enables support for the module-linking proposal",
-    ),
-    (
         "multi-memory",
         "enables support for the multi-memory proposal",
     ),
@@ -374,7 +370,6 @@ impl CommonOptions {
             threads,
             multi_memory,
             memory64,
-            module_linking,
         } = self.wasm_features.unwrap_or_default();
 
         if let Some(enable) = simd {
@@ -399,9 +394,6 @@ impl CommonOptions {
         }
         if let Some(enable) = memory64 {
             config.wasm_memory64(enable);
-        }
-        if let Some(enable) = module_linking {
-            config.wasm_module_linking(enable);
         }
     }
 
@@ -432,7 +424,6 @@ struct WasmFeatures {
     multi_value: Option<bool>,
     bulk_memory: Option<bool>,
     simd: Option<bool>,
-    module_linking: Option<bool>,
     threads: Option<bool>,
     multi_memory: Option<bool>,
     memory64: Option<bool>,
@@ -480,7 +471,6 @@ fn parse_wasm_features(features: &str) -> Result<WasmFeatures> {
         reference_types: all.or(values["reference-types"]),
         multi_value: all.or(values["multi-value"]),
         bulk_memory: all.or(values["bulk-memory"]),
-        module_linking: all.or(values["module-linking"]),
         simd: all.or(values["simd"]),
         threads: all.or(values["threads"]),
         multi_memory: all.or(values["multi-memory"]),
@@ -583,7 +573,6 @@ mod test {
             reference_types,
             multi_value,
             bulk_memory,
-            module_linking,
             simd,
             threads,
             multi_memory,
@@ -593,7 +582,6 @@ mod test {
         assert_eq!(reference_types, Some(true));
         assert_eq!(multi_value, Some(true));
         assert_eq!(bulk_memory, Some(true));
-        assert_eq!(module_linking, Some(true));
         assert_eq!(simd, Some(true));
         assert_eq!(threads, Some(true));
         assert_eq!(multi_memory, Some(true));
@@ -610,7 +598,6 @@ mod test {
             reference_types,
             multi_value,
             bulk_memory,
-            module_linking,
             simd,
             threads,
             multi_memory,
@@ -620,7 +607,6 @@ mod test {
         assert_eq!(reference_types, Some(false));
         assert_eq!(multi_value, Some(false));
         assert_eq!(bulk_memory, Some(false));
-        assert_eq!(module_linking, Some(false));
         assert_eq!(simd, Some(false));
         assert_eq!(threads, Some(false));
         assert_eq!(multi_memory, Some(false));
@@ -640,7 +626,6 @@ mod test {
             reference_types,
             multi_value,
             bulk_memory,
-            module_linking,
             simd,
             threads,
             multi_memory,
@@ -650,7 +635,6 @@ mod test {
         assert_eq!(reference_types, Some(false));
         assert_eq!(multi_value, None);
         assert_eq!(bulk_memory, None);
-        assert_eq!(module_linking, None);
         assert_eq!(simd, Some(true));
         assert_eq!(threads, None);
         assert_eq!(multi_memory, Some(true));
@@ -691,11 +675,6 @@ mod test {
     );
     feature_test!(test_multi_value_feature, multi_value, "multi-value");
     feature_test!(test_bulk_memory_feature, bulk_memory, "bulk-memory");
-    feature_test!(
-        test_module_linking_feature,
-        module_linking,
-        "module-linking"
-    );
     feature_test!(test_simd_feature, simd, "simd");
     feature_test!(test_threads_feature, threads, "threads");
     feature_test!(test_multi_memory_feature, multi_memory, "multi-memory");

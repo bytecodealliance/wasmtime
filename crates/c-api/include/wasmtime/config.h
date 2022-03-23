@@ -186,14 +186,6 @@ WASMTIME_CONFIG_PROP(void, wasm_multi_value, bool)
 WASMTIME_CONFIG_PROP(void, wasm_multi_memory, bool)
 
 /**
- * \brief Configures whether the WebAssembly module linking proposal is
- * enabled.
- *
- * This setting is `false` by default.
- */
-WASMTIME_CONFIG_PROP(void, wasm_module_linking, bool)
-
-/**
  * \brief Configures whether the WebAssembly memory64 proposal is
  * enabled.
  *

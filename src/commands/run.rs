@@ -336,7 +336,7 @@ impl RunCommand {
         name: &str,
     ) -> Result<()> {
         let func = match linker
-            .get(&mut *store, "", Some(name))
+            .get(&mut *store, "", name)
             .ok_or_else(|| anyhow!("no export named `{}` found", name))?
             .into_func()
         {

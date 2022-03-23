@@ -1,9 +1,9 @@
 use crate::func::HostFunc;
-use crate::instance::{InstanceData, InstancePre};
+use crate::instance::InstancePre;
 use crate::store::StoreOpaque;
 use crate::{
-    AsContextMut, Caller, Engine, Extern, ExternType, Func, FuncType, ImportType, Instance,
-    IntoFunc, Module, StoreContextMut, Trap, Val, ValRaw,
+    AsContextMut, Caller, Engine, Extern, Func, FuncType, ImportType, Instance, IntoFunc, Module,
+    StoreContextMut, Trap, Val, ValRaw,
 };
 use anyhow::{anyhow, bail, Context, Result};
 use log::warn;
@@ -115,7 +115,6 @@ struct ImportKey {
 pub(crate) enum Definition {
     Extern(Extern),
     HostFunc(Arc<HostFunc>),
-    Instance(Arc<indexmap::IndexMap<String, Definition>>),
 }
 
 macro_rules! generate_wrap_async_func {
@@ -622,7 +621,7 @@ impl<T> Linker<T> {
     /// "#;
     /// let module = Module::new(&engine, wat)?;
     /// linker.module(&mut store, "", &module)?;
-    /// let run = linker.get(&mut store, "", Some("run")).unwrap().into_func().unwrap();
+    /// let run = linker.get(&mut store, "", "run").unwrap().into_func().unwrap();
     /// let count = run.typed::<(), i32, _>(&store)?.call(&mut store, ())?;
     /// assert_eq!(count, 0, "a Command should get a fresh instance on each invocation");
     ///
@@ -1093,20 +1092,17 @@ impl<T> Linker<T> {
         &self,
         mut store: impl AsContextMut<Data = T>,
         module: &str,
-        name: Option<&str>,
+        name: &str,
     ) -> Option<Extern> {
         let store = store.as_context_mut().0;
         // Should be safe since `T` is connecting the linker and store
         Some(unsafe { self._get(module, name)?.to_extern(store) })
     }
 
-    fn _get(&self, module: &str, name: Option<&str>) -> Option<&Definition> {
+    fn _get(&self, module: &str, name: &str) -> Option<&Definition> {
         let key = ImportKey {
             module: *self.string2idx.get(module)?,
-            name: match name {
-                Some(name) => *self.string2idx.get(name)?,
-                None => usize::max_value(),
-            },
+            name: *self.string2idx.get(name)?,
         };
         self.map.get(&key)
     }
@@ -1139,37 +1135,11 @@ impl<T> Linker<T> {
             return Ok(item.clone());
         }
 
-        if let Some(name) = import.name() {
-            return Err(undef_err(&format!("{}::{}", import.module(), name)));
-        }
-
-        if let ExternType::Instance(t) = import.ty() {
-            // This is a key location where the module linking proposal is
-            // implemented. This logic allows single-level imports of an instance to
-            // get satisfied by multiple definitions of items within this `Linker`.
-            //
-            // The instance being import is iterated over to load the names from
-            // this `Linker` (recursively calling `get`). If anything isn't defined
-            // we return `None` since the entire value isn't defined. Otherwise when
-            // all values are loaded it's assembled into an `Instance` and
-            // returned`.
-            //
-            // Note that this isn't exactly the speediest implementation in the
-            // world. Ideally we would pre-create the `Instance` instead of creating
-            // it each time a module is instantiated. For now though while the
-            // module linking proposal is under development this should hopefully
-            // suffice.
-            let mut map = indexmap::IndexMap::new();
-            for export in t.exports() {
-                let item = self
-                    ._get(import.module(), Some(export.name()))
-                    .ok_or_else(|| undef_err(&format!("{}::{}", import.module(), export.name())))?;
-                map.insert(export.name().to_string(), item.clone());
-            }
-            return Ok(Definition::Instance(Arc::new(map)));
-        }
-
-        Err(undef_err(&import.module()))
+        Err(undef_err(&format!(
+            "{}::{}",
+            import.module(),
+            import.name()
+        )))
     }
 
     /// Returns the "default export" of a module.
@@ -1187,7 +1157,7 @@ impl<T> Linker<T> {
         mut store: impl AsContextMut<Data = T>,
         module: &str,
     ) -> Result<Func> {
-        if let Some(external) = self.get(&mut store, module, Some("")) {
+        if let Some(external) = self.get(&mut store, module, "") {
             if let Extern::Func(func) = external {
                 return Ok(func.clone());
             }
@@ -1195,7 +1165,7 @@ impl<T> Linker<T> {
         }
 
         // For compatibility, also recognize "_start".
-        if let Some(external) = self.get(&mut store, module, Some("_start")) {
+        if let Some(external) = self.get(&mut store, module, "_start") {
             if let Extern::Func(func) = external {
                 return Ok(func.clone());
             }
@@ -1221,14 +1191,6 @@ impl Definition {
         match self {
             Definition::Extern(e) => e.clone(),
             Definition::HostFunc(func) => func.to_func(store).into(),
-            Definition::Instance(i) => {
-                let items = Arc::new(
-                    i.iter()
-                        .map(|(name, item)| (name.clone(), item.to_extern(store)))
-                        .collect(),
-                );
-                Instance::from_wasmtime(InstanceData::Synthetic(items), store).into()
-            }
         }
     }
 
@@ -1236,7 +1198,6 @@ impl Definition {
         match self {
             Definition::Extern(e) => e.comes_from_same_store(store),
             Definition::HostFunc(_func) => true,
-            Definition::Instance(i) => i.values().all(|e| e.comes_from_same_store(store)),
         }
     }
 }

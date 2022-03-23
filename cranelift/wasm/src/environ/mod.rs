@@ -6,5 +6,5 @@ mod spec;
 
 pub use crate::environ::dummy::DummyEnvironment;
 pub use crate::environ::spec::{
-    Alias, FuncEnvironment, GlobalVariable, ModuleEnvironment, ReturnMode, TargetEnvironment,
+    FuncEnvironment, GlobalVariable, ModuleEnvironment, ReturnMode, TargetEnvironment,
 };
