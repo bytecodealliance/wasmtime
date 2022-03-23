@@ -21,13 +21,11 @@ fn run_wast(wast: &str, strategy: Strategy, pooling: bool) -> anyhow::Result<()>
     let simd = feature_found(wast, "simd");
     let memory64 = feature_found(wast, "memory64");
     let multi_memory = feature_found(wast, "multi-memory");
-    let module_linking = feature_found(wast, "module-linking");
     let threads = feature_found(wast, "threads");
 
     let mut cfg = Config::new();
     cfg.wasm_simd(simd)
-        .wasm_multi_memory(multi_memory || module_linking)
-        .wasm_module_linking(module_linking)
+        .wasm_multi_memory(multi_memory)
         .wasm_threads(threads)
         .wasm_memory64(memory64)
         .cranelift_debug_verifier(true);

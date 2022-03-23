@@ -602,20 +602,6 @@ impl Config {
         self
     }
 
-    /// Configures whether the WebAssembly module linking [proposal] will
-    /// be enabled for compilation.
-    ///
-    /// Note that development of this feature is still underway, so enabling
-    /// this is likely to be full of bugs.
-    ///
-    /// This is `false` by default.
-    ///
-    /// [proposal]: https://github.com/webassembly/module-linking
-    pub fn wasm_module_linking(&mut self, enable: bool) -> &mut Self {
-        self.features.module_linking = enable;
-        self
-    }
-
     /// Configures whether the WebAssembly memory64 [proposal] will
     /// be enabled for compilation.
     ///
@@ -1374,7 +1360,6 @@ impl fmt::Debug for Config {
             .field("wasm_bulk_memory", &self.features.bulk_memory)
             .field("wasm_simd", &self.features.simd)
             .field("wasm_multi_value", &self.features.multi_value)
-            .field("wasm_module_linking", &self.features.module_linking)
             .field(
                 "static_memory_maximum_size",
                 &(u64::from(self.tunables.static_memory_bound)

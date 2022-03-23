@@ -8,9 +8,9 @@
 
 use crate::state::FuncTranslationState;
 use crate::{
-    DataIndex, ElemIndex, EntityIndex, EntityType, FuncIndex, Global, GlobalIndex, InstanceIndex,
-    InstanceTypeIndex, Memory, MemoryIndex, ModuleIndex, ModuleTypeIndex, SignatureIndex, Table,
-    TableIndex, Tag, TagIndex, TypeIndex, WasmError, WasmFuncType, WasmResult, WasmType,
+    DataIndex, ElemIndex, EntityType, FuncIndex, Global, GlobalIndex, Memory, MemoryIndex,
+    SignatureIndex, Table, TableIndex, Tag, TagIndex, TypeIndex, WasmError, WasmFuncType,
+    WasmResult, WasmType,
 };
 use core::convert::From;
 use cranelift_codegen::cursor::FuncCursor;
@@ -20,7 +20,6 @@ use cranelift_codegen::isa::TargetFrontendConfig;
 use cranelift_frontend::FunctionBuilder;
 use std::boxed::Box;
 use std::string::ToString;
-use std::vec::Vec;
 use wasmparser::{FuncValidator, FunctionBody, Operator, ValidatorResources, WasmFeatures};
 
 /// The value of a WebAssembly global variable.
@@ -50,39 +49,6 @@ pub enum ReturnMode {
     NormalReturns,
     /// Use a single fallthrough return at the end of the function.
     FallthroughReturn,
-}
-
-/// An entry in the alias section of a wasm module (from the module linking
-/// proposal)
-pub enum Alias<'a> {
-    /// An outer module's module is being aliased into our own index space.
-    OuterModule {
-        /// The number of modules above us that we're referencing.
-        relative_depth: u32,
-        /// The module index in the outer module's index space we're referencing.
-        index: ModuleIndex,
-    },
-
-    /// An outer module's type is being aliased into our own index space
-    ///
-    /// Note that the index here is in the outer module's index space, not our
-    /// own.
-    OuterType {
-        /// The number of modules above us that we're referencing.
-        relative_depth: u32,
-        /// The type index in the outer module's index space we're referencing.
-        index: TypeIndex,
-    },
-
-    /// A previously created instance is having one of its exports aliased into
-    /// our index space.
-    InstanceExport {
-        /// The index we're aliasing.
-        instance: InstanceIndex,
-        /// The nth export that we're inserting into our own index space
-        /// locally.
-        export: &'a str,
-    },
 }
 
 /// Environment affecting the translation of a WebAssembly.
@@ -588,20 +554,6 @@ pub trait ModuleEnvironment<'data> {
         Err(WasmError::Unsupported("module linking".to_string()))
     }
 
-    /// Translates a type index to its module type index, only called for type
-    /// indices which point to modules.
-    fn type_to_module_type(&self, index: TypeIndex) -> WasmResult<ModuleTypeIndex> {
-        drop(index);
-        Err(WasmError::Unsupported("module linking".to_string()))
-    }
-
-    /// Translates a type index to its instance type index, only called for type
-    /// indices which point to instances.
-    fn type_to_instance_type(&self, index: TypeIndex) -> WasmResult<InstanceTypeIndex> {
-        drop(index);
-        Err(WasmError::Unsupported("module linking".to_string()))
-    }
-
     /// Provides the number of imports up front. By default this does nothing, but
     /// implementations can use this to preallocate memory if desired.
     fn reserve_imports(&mut self, _num: u32) -> WasmResult<()> {
@@ -653,17 +605,6 @@ pub trait ModuleEnvironment<'data> {
 
     /// Declares a module import to the environment.
     fn declare_module_import(
-        &mut self,
-        ty_index: TypeIndex,
-        module: &'data str,
-        field: Option<&'data str>,
-    ) -> WasmResult<()> {
-        drop((ty_index, module, field));
-        Err(WasmError::Unsupported("module linking".to_string()))
-    }
-
-    /// Declares an instance import to the environment.
-    fn declare_instance_import(
         &mut self,
         ty_index: TypeIndex,
         module: &'data str,
@@ -758,22 +699,6 @@ pub trait ModuleEnvironment<'data> {
         global_index: GlobalIndex,
         name: &'data str,
     ) -> WasmResult<()>;
-
-    /// Declares an instance export to the environment.
-    fn declare_instance_export(
-        &mut self,
-        index: InstanceIndex,
-        name: &'data str,
-    ) -> WasmResult<()> {
-        drop((index, name));
-        Err(WasmError::Unsupported("module linking".to_string()))
-    }
-
-    /// Declares an instance export to the environment.
-    fn declare_module_export(&mut self, index: ModuleIndex, name: &'data str) -> WasmResult<()> {
-        drop((index, name));
-        Err(WasmError::Unsupported("module linking".to_string()))
-    }
 
     /// Notifies the implementation that all exports have been declared.
     fn finish_exports(&mut self) -> WasmResult<()> {
@@ -879,49 +804,5 @@ pub trait ModuleEnvironment<'data> {
     /// Returns the list of enabled wasm features this translation will be using.
     fn wasm_features(&self) -> WasmFeatures {
         WasmFeatures::default()
-    }
-
-    /// Indicates that this module will have `amount` submodules.
-    ///
-    /// Note that this is just child modules of this module, and each child
-    /// module may have yet more submodules.
-    fn reserve_modules(&mut self, amount: u32) {
-        drop(amount);
-    }
-
-    /// Called at the beginning of translating a module.
-    ///
-    /// Note that for nested modules this may be called multiple times.
-    fn module_start(&mut self) {}
-
-    /// Called at the end of translating a module.
-    ///
-    /// Note that for nested modules this may be called multiple times.
-    fn module_end(&mut self) {}
-
-    /// Indicates that this module will have `amount` instances.
-    fn reserve_instances(&mut self, amount: u32) {
-        drop(amount);
-    }
-
-    /// Declares a new instance which this module will instantiate before it's
-    /// instantiated.
-    fn declare_instance(
-        &mut self,
-        module: ModuleIndex,
-        args: Vec<(&'data str, EntityIndex)>,
-    ) -> WasmResult<()> {
-        drop((module, args));
-        Err(WasmError::Unsupported("wasm instance".to_string()))
-    }
-
-    /// Declares a new alias being added to this module.
-    ///
-    /// The alias comes from the `instance` specified (or the parent if `None`
-    /// is supplied) and the index is either in the module's own index spaces
-    /// for the parent or an index into the exports for nested instances.
-    fn declare_alias(&mut self, alias: Alias<'data>) -> WasmResult<()> {
-        drop(alias);
-        Err(WasmError::Unsupported("wasm alias".to_string()))
     }
 }

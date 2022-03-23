@@ -1,6 +1,5 @@
 use crate::{wasm_functype_t, wasm_globaltype_t, wasm_memorytype_t, wasm_tabletype_t};
-use crate::{wasmtime_instancetype_t, wasmtime_moduletype_t};
-use crate::{CFuncType, CGlobalType, CInstanceType, CMemoryType, CModuleType, CTableType};
+use crate::{CFuncType, CGlobalType, CMemoryType, CTableType};
 use wasmtime::ExternType;
 
 #[repr(C)]
@@ -17,8 +16,6 @@ pub(crate) enum CExternType {
     Global(CGlobalType),
     Memory(CMemoryType),
     Table(CTableType),
-    Instance(CInstanceType),
-    Module(CModuleType),
 }
 
 pub type wasm_externkind_t = u8;
@@ -27,8 +24,6 @@ pub const WASM_EXTERN_FUNC: wasm_externkind_t = 0;
 pub const WASM_EXTERN_GLOBAL: wasm_externkind_t = 1;
 pub const WASM_EXTERN_TABLE: wasm_externkind_t = 2;
 pub const WASM_EXTERN_MEMORY: wasm_externkind_t = 3;
-pub const WASM_EXTERN_MODULE: wasm_externkind_t = 4;
-pub const WASM_EXTERN_INSTANCE: wasm_externkind_t = 5;
 
 impl wasm_externtype_t {
     pub(crate) fn new(ty: ExternType) -> wasm_externtype_t {
@@ -38,8 +33,6 @@ impl wasm_externtype_t {
                 ExternType::Global(f) => CExternType::Global(CGlobalType::new(f)),
                 ExternType::Memory(f) => CExternType::Memory(CMemoryType::new(f)),
                 ExternType::Table(f) => CExternType::Table(CTableType::new(f)),
-                ExternType::Instance(f) => CExternType::Instance(CInstanceType::new(f)),
-                ExternType::Module(f) => CExternType::Module(CModuleType::new(f)),
             },
         }
     }
@@ -50,8 +43,6 @@ impl wasm_externtype_t {
             CExternType::Table(f) => ExternType::Table(f.ty.clone()),
             CExternType::Global(f) => ExternType::Global(f.ty.clone()),
             CExternType::Memory(f) => ExternType::Memory(f.ty.clone()),
-            CExternType::Instance(f) => ExternType::Instance(f.ty.clone()),
-            CExternType::Module(f) => ExternType::Module(f.ty.clone()),
         }
     }
 }
@@ -63,8 +54,6 @@ pub extern "C" fn wasm_externtype_kind(et: &wasm_externtype_t) -> wasm_externkin
         CExternType::Table(_) => WASM_EXTERN_TABLE,
         CExternType::Global(_) => WASM_EXTERN_GLOBAL,
         CExternType::Memory(_) => WASM_EXTERN_MEMORY,
-        CExternType::Instance(_) => WASM_EXTERN_INSTANCE,
-        CExternType::Module(_) => WASM_EXTERN_MODULE,
     }
 }
 
@@ -120,18 +109,4 @@ pub extern "C" fn wasm_externtype_as_memorytype_const(
     et: &wasm_externtype_t,
 ) -> Option<&wasm_memorytype_t> {
     wasm_memorytype_t::try_from(et)
-}
-
-#[no_mangle]
-pub extern "C" fn wasmtime_externtype_as_moduletype(
-    et: &wasm_externtype_t,
-) -> Option<&wasmtime_moduletype_t> {
-    wasmtime_moduletype_t::try_from(et)
-}
-
-#[no_mangle]
-pub extern "C" fn wasmtime_externtype_as_instancetype(
-    et: &wasm_externtype_t,
-) -> Option<&wasmtime_instancetype_t> {
-    wasmtime_instancetype_t::try_from(et)
 }

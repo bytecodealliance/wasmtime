@@ -16,39 +16,19 @@
 extern "C" {
 #endif
 
-/**
- * \brief An opaque object representing the type of an instance.
- */
-typedef struct wasmtime_instancetype wasmtime_instancetype_t;
-
-/// \brief Deletes an instance type
-WASM_API_EXTERN void wasmtime_instancetype_delete(wasmtime_instancetype_t *ty);
-
-/**
- * \brief Returns the list of exports that this instance type provides.
- *
- * This function does not take ownership of the provided instance type but
- * ownership of `out` is passed to the caller. Note that `out` is treated as
- * uninitialized when passed to this function.
- */
-WASM_API_EXTERN void wasmtime_instancetype_exports(const wasmtime_instancetype_t*, wasm_exporttype_vec_t* out);
-
-/**
- * \brief Converts a #wasmtime_instancetype_t to a #wasm_externtype_t
- *
- * The returned value is owned by the #wasmtime_instancetype_t argument and should not
- * be deleted.
- */
-WASM_API_EXTERN wasm_externtype_t* wasmtime_instancetype_as_externtype(wasmtime_instancetype_t*);
-
-/**
- * \brief Attempts to convert a #wasm_externtype_t to a #wasmtime_instancetype_t
- *
- * The returned value is owned by the #wasmtime_instancetype_t argument and should not
- * be deleted. Returns `NULL` if the provided argument is not a
- * #wasmtime_instancetype_t.
- */
-WASM_API_EXTERN wasmtime_instancetype_t* wasmtime_externtype_as_instancetype(wasm_externtype_t*);
+/// \brief Representation of a instance in Wasmtime.
+///
+/// Instances are represented with a 64-bit identifying integer in Wasmtime.
+/// They do not have any destructor associated with them. Instances cannot
+/// interoperate between #wasmtime_store_t instances and if the wrong instance
+/// is passed to the wrong store then it may trigger an assertion to abort the
+/// process.
+typedef struct wasmtime_instance {
+  /// Internal identifier of what store this belongs to, never zero.
+  uint64_t store_id;
+  /// Internal index within the store.
+  size_t index;
+} wasmtime_instance_t;
 
 /**
  * \brief Instantiate a wasm module.
@@ -89,16 +69,6 @@ WASM_API_EXTERN wasmtime_error_t *wasmtime_instance_new(
     size_t nimports,
     wasmtime_instance_t *instance,
     wasm_trap_t **trap
-);
-
-/**
- * \brief Returns the type of the specified instance.
- *
- * The returned type is owned by the caller.
- */
-WASM_API_EXTERN wasmtime_instancetype_t *wasmtime_instance_type(
-    const wasmtime_context_t *store,
-    const wasmtime_instance_t *instance
 );
 
 /**

@@ -382,7 +382,6 @@ impl Config {
         let mut cfg = wasmtime::Config::new();
         cfg.wasm_bulk_memory(true)
             .wasm_reference_types(true)
-            .wasm_module_linking(self.module_config.config.module_linking_enabled)
             .wasm_multi_value(self.module_config.config.multi_value_enabled)
             .wasm_multi_memory(self.module_config.config.max_memories > 1)
             .wasm_simd(self.module_config.config.simd_enabled)
