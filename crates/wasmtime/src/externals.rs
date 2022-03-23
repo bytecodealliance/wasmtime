@@ -161,9 +161,10 @@ impl From<Table> for Extern {
 /// can either be imported or exported from wasm modules.
 ///
 /// A [`Global`] "belongs" to the store that it was originally created within
-/// (either via [`Global::new`] or via instantiating a [`Module`]). Operations
-/// on a [`Global`] only work with the store it belongs to, and if another store
-/// is passed in by accident then methods will panic.
+/// (either via [`Global::new`] or via instantiating a
+/// [`Module`](crate::Module)). Operations on a [`Global`] only work with the
+/// store it belongs to, and if another store is passed in by accident then
+/// methods will panic.
 #[derive(Copy, Clone, Debug)]
 #[repr(transparent)] // here for the C API
 pub struct Global(Stored<wasmtime_runtime::ExportGlobal>);
@@ -341,9 +342,10 @@ impl Global {
 /// `funcref` table), where each element has the `ValType::FuncRef` type.
 ///
 /// A [`Table`] "belongs" to the store that it was originally created within
-/// (either via [`Table::new`] or via instantiating a [`Module`]). Operations
-/// on a [`Table`] only work with the store it belongs to, and if another store
-/// is passed in by accident then methods will panic.
+/// (either via [`Table::new`] or via instantiating a
+/// [`Module`](crate::Module)). Operations on a [`Table`] only work with the
+/// store it belongs to, and if another store is passed in by accident then
+/// methods will panic.
 #[derive(Copy, Clone, Debug)]
 #[repr(transparent)] // here for the C API
 pub struct Table(Stored<wasmtime_runtime::ExportTable>);
