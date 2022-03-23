@@ -1000,7 +1000,7 @@ impl<T> StoreInner<T> {
                 Ok(self
                     .inner
                     .async_cx()
-                    .expect("CallHookInner requires async Store")
+                    .ok_or(Trap::new("couldn't grab async_cx for call hook"))?
                     .block_on(handler.handle_call_event(&mut self.data, s).as_mut())??)
             },
 
@@ -1196,14 +1196,21 @@ impl StoreOpaque {
     #[inline]
     pub fn async_cx(&self) -> Option<AsyncCx> {
         debug_assert!(self.async_support());
-        if self.async_state.current_poll_cx.get().is_null() {
-            None
-        } else {
-            Some(AsyncCx {
-                current_suspend: self.async_state.current_suspend.get(),
-                current_poll_cx: self.async_state.current_poll_cx.get(),
-            })
+
+        let poll_cx_box_ptr = self.async_state.current_poll_cx.get();
+        if poll_cx_box_ptr.is_null() {
+            return None;
         }
+
+        let poll_cx_inner_ptr = unsafe { *poll_cx_box_ptr };
+        if poll_cx_inner_ptr.is_null() {
+            return None;
+        }
+
+        Some(AsyncCx {
+            current_suspend: self.async_state.current_suspend.get(),
+            current_poll_cx: poll_cx_box_ptr,
+        })
     }
 
     pub fn fuel_consumed(&self) -> Option<u64> {
@@ -1664,14 +1671,6 @@ impl AsyncCx {
                 let poll_cx = *self.current_poll_cx;
                 let _reset = Reset(self.current_poll_cx, poll_cx);
                 *self.current_poll_cx = ptr::null_mut();
-                if poll_cx.is_null() {
-                    // This happens in the case that we are currently cleaning up
-                    // this fiber; we need to just stop anything on here from
-                    // resuming.
-                    return Err(anyhow::format_err!(
-                        "opting out of resuming on a dying fiber"
-                    ))?;
-                }
                 assert!(!poll_cx.is_null());
                 future.as_mut().poll(&mut *poll_cx)
             };
