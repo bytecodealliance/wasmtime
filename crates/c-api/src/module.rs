@@ -47,10 +47,8 @@ pub unsafe extern "C" fn wasm_module_validate(
     Module::validate(store.store.context().engine(), binary.as_slice()).is_ok()
 }
 
-#[no_mangle]
-pub extern "C" fn wasm_module_exports(module: &wasm_module_t, out: &mut wasm_exporttype_vec_t) {
+fn fill_exports(module: &Module, out: &mut wasm_exporttype_vec_t) {
     let exports = module
-        .module
         .exports()
         .map(|e| {
             Some(Box::new(wasm_exporttype_t::new(
@@ -62,10 +60,8 @@ pub extern "C" fn wasm_module_exports(module: &wasm_module_t, out: &mut wasm_exp
     out.set_buffer(exports);
 }
 
-#[no_mangle]
-pub extern "C" fn wasm_module_imports(module: &wasm_module_t, out: &mut wasm_importtype_vec_t) {
+fn fill_imports(module: &Module, out: &mut wasm_importtype_vec_t) {
     let imports = module
-        .module
         .imports()
         .map(|i| {
             Some(Box::new(wasm_importtype_t::new(
@@ -76,6 +72,16 @@ pub extern "C" fn wasm_module_imports(module: &wasm_module_t, out: &mut wasm_imp
         })
         .collect::<Vec<_>>();
     out.set_buffer(imports);
+}
+
+#[no_mangle]
+pub extern "C" fn wasm_module_exports(module: &wasm_module_t, out: &mut wasm_exporttype_vec_t) {
+    fill_exports(&module.module, out);
+}
+
+#[no_mangle]
+pub extern "C" fn wasm_module_imports(module: &wasm_module_t, out: &mut wasm_importtype_vec_t) {
+    fill_imports(&module.module, out);
 }
 
 #[no_mangle]
@@ -142,6 +148,22 @@ pub extern "C" fn wasmtime_module_delete(_module: Box<wasmtime_module_t>) {}
 #[no_mangle]
 pub extern "C" fn wasmtime_module_clone(module: &wasmtime_module_t) -> Box<wasmtime_module_t> {
     Box::new(module.clone())
+}
+
+#[no_mangle]
+pub extern "C" fn wasmtime_module_exports(
+    module: &wasmtime_module_t,
+    out: &mut wasm_exporttype_vec_t,
+) {
+    fill_exports(&module.module, out);
+}
+
+#[no_mangle]
+pub extern "C" fn wasmtime_module_imports(
+    module: &wasmtime_module_t,
+    out: &mut wasm_importtype_vec_t,
+) {
+    fill_imports(&module.module, out);
 }
 
 #[no_mangle]
