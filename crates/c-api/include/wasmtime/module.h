@@ -60,6 +60,22 @@ WASM_API_EXTERN void wasmtime_module_delete(wasmtime_module_t *m);
 WASM_API_EXTERN wasmtime_module_t *wasmtime_module_clone(wasmtime_module_t *m);
 
 /**
+ * \brief Same as #wasm_module_imports, but for #wasmtime_module_t.
+ */
+WASM_API_EXTERN void wasmtime_module_imports(
+    const wasmtime_module_t *module,
+    wasm_importtype_vec_t *out
+);
+
+/**
+ * \brief Same as #wasm_module_exports, but for #wasmtime_module_t.
+ */
+WASM_API_EXTERN void wasmtime_module_exports(
+    const wasmtime_module_t *module,
+    wasm_exporttype_vec_t *out
+);
+
+/**
  * \brief Validate a WebAssembly binary.
  *
  * This function will validate the provided byte sequence to determine if it is
