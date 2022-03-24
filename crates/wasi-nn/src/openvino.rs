@@ -40,7 +40,15 @@ impl Backend for OpenvinoBackend {
             .0
             .as_mut()
             .expect("openvino::Core was previously constructed");
-        let cnn_network = core.read_network_from_buffer(&xml, &weights)?;
+        let mut cnn_network = core.read_network_from_buffer(&xml, &weights)?;
+
+        // TODO this is a temporary workaround. We need a more eligant way to specify the layout in the long run.
+        // However, without this newer versions of OpenVINO will fail due to parameter mismatch.
+        for i in 0..cnn_network.get_inputs_len()? {
+            let name = cnn_network.get_input_name(i)?;
+            cnn_network.set_input_layout(&name, Layout::NHWC)?;
+        }
+
         let exec_network =
             core.load_network(&cnn_network, map_execution_target_to_string(target))?;
 
