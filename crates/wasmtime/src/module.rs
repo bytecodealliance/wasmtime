@@ -1,8 +1,8 @@
+use crate::Engine;
 use crate::{
     signatures::SignatureCollection,
     types::{ExportType, ExternType, ImportType},
 };
-use crate::{Engine, ModuleType};
 use anyhow::{bail, Context, Result};
 use once_cell::sync::OnceCell;
 use std::fs;
@@ -12,7 +12,7 @@ use std::path::Path;
 use std::sync::Arc;
 use wasmparser::{Parser, ValidPayload, Validator};
 use wasmtime_environ::{
-    DefinedFuncIndex, DefinedMemoryIndex, FunctionInfo, ModuleEnvironment, ModuleIndex, PrimaryMap,
+    DefinedFuncIndex, DefinedMemoryIndex, FunctionInfo, ModuleEnvironment, PrimaryMap,
     SignatureIndex,
 };
 use wasmtime_jit::{CompiledModule, CompiledModuleInfo, TypeTables};
@@ -104,14 +104,7 @@ struct ModuleInner {
     /// The compiled artifacts for this module that will be instantiated and
     /// executed.
     module: Arc<CompiledModule>,
-    /// Closed-over compilation artifacts used to create submodules when this
-    /// module is instantiated.
-    artifact_upvars: Vec<Arc<CompiledModule>>,
-    /// Closed-over module values which are used when this module is
-    /// instantiated.
-    module_upvars: Vec<Module>,
-    /// Type information of this module and all `artifact_upvars` compiled
-    /// modules.
+    /// Type information of this module.
     types: Arc<TypeTables>,
     /// Registered shared signature for the module.
     signatures: Arc<SignatureCollection>,
@@ -307,7 +300,7 @@ impl Module {
         cfg_if::cfg_if! {
             if #[cfg(feature = "cache")] {
                 let state = (HashedEngineCompileEnv(engine), binary);
-                let (main_module, artifacts, types) = wasmtime_cache::ModuleCacheEntry::new(
+                let (mmap, info, types) = wasmtime_cache::ModuleCacheEntry::new(
                     "wasmtime",
                     engine.cache_config(),
                 )
@@ -318,40 +311,35 @@ impl Module {
                     |(engine, wasm)| Module::build_artifacts(engine.0, wasm),
 
                     // Implementation of how to serialize artifacts
-                    |(engine, _wasm), (_, artifacts, types)| {
+                    |(engine, _wasm), (mmap, _info, types)| {
                         SerializedModule::from_artifacts(
                             engine.0,
-                            artifacts.iter().map(|p| &p.0),
+                            mmap,
                             types,
                         ).to_bytes(&engine.0.config().module_version).ok()
                     },
 
                     // Cache hit, deserialize the provided artifacts
                     |(engine, _wasm), serialized_bytes| {
-                        let (i, m, t, upvars) = SerializedModule::from_bytes(&serialized_bytes, &engine.0.config().module_version)
+                        SerializedModule::from_bytes(&serialized_bytes, &engine.0.config().module_version)
                             .ok()?
                             .into_parts(engine.0)
-                            .ok()?;
-                        // This upvars list is always empty for top-level modules
-                        assert!(upvars.is_empty());
-                        Some((i, m, t))
+                            .ok()
                     },
                 )?;
             } else {
-                let (main_module, artifacts, types) = Module::build_artifacts(engine, binary)?;
+                let (mmap, info, types) = Module::build_artifacts(engine, binary)?;
             }
         };
 
-        let modules = engine.run_maybe_parallel(artifacts, |(a, b)| {
-            CompiledModule::from_artifacts(
-                a,
-                b,
-                &*engine.config().profiler,
-                engine.unique_id_allocator(),
-            )
-        })?;
+        let module = CompiledModule::from_artifacts(
+            mmap,
+            info,
+            &*engine.config().profiler,
+            engine.unique_id_allocator(),
+        )?;
 
-        Self::from_parts(engine, modules, main_module, Arc::new(types), &[])
+        Self::from_parts(engine, module, Arc::new(types))
     }
 
     /// Converts an input binary-encoded WebAssembly module to compilation
@@ -375,79 +363,66 @@ impl Module {
     pub(crate) fn build_artifacts(
         engine: &Engine,
         wasm: &[u8],
-    ) -> Result<(
-        usize,
-        Vec<(MmapVec, Option<CompiledModuleInfo>)>,
-        TypeTables,
-    )> {
+    ) -> Result<(MmapVec, Option<CompiledModuleInfo>, TypeTables)> {
         let tunables = &engine.config().tunables;
 
         // First a `ModuleEnvironment` is created which records type information
         // about the wasm module. This is where the WebAssembly is parsed and
         // validated. Afterwards `types` will have all the type information for
         // this module.
-        let (main_module, translations, types) =
-            ModuleEnvironment::new(tunables, &engine.config().features)
-                .translate(wasm)
-                .context("failed to parse WebAssembly module")?;
+        let (mut translation, types) = ModuleEnvironment::new(tunables, &engine.config().features)
+            .translate(wasm)
+            .context("failed to parse WebAssembly module")?;
 
-        // Perform a two-level map/reduce here to get the final list of
-        // compilation artifacts. The first level of map/reduce maps over all
-        // modules found and reduces to collection into a vector. The second
-        // level of map/reduce here maps over all functions within each wasm
-        // module found and collects into an ELF image via `emit_obj`.
-        let list = engine.run_maybe_parallel(translations, |mut translation| -> Result<_> {
-            let functions = mem::take(&mut translation.function_body_inputs);
-            let functions = functions.into_iter().collect::<Vec<_>>();
-
-            let funcs = engine
-                .run_maybe_parallel(functions, |(index, func)| {
-                    engine
-                        .compiler()
-                        .compile_function(&translation, index, func, tunables, &types)
-                })?
-                .into_iter()
-                .collect();
-
-            let mut obj = engine.compiler().object()?;
-            let (funcs, trampolines) =
+        // Next compile all functions in parallel using rayon. This will perform
+        // the actual validation of all the function bodies.
+        let functions = mem::take(&mut translation.function_body_inputs);
+        let functions = functions.into_iter().collect::<Vec<_>>();
+        let funcs = engine
+            .run_maybe_parallel(functions, |(index, func)| {
                 engine
                     .compiler()
-                    .emit_obj(&translation, &types, funcs, tunables, &mut obj)?;
+                    .compile_function(&translation, index, func, tunables, &types)
+            })?
+            .into_iter()
+            .collect();
 
-            // If configured, attempt to use paged memory initialization
-            // instead of the default mode of memory initialization
-            if engine.config().paged_memory_initialization {
-                translation.try_paged_init();
-            }
+        // Collect all the function results into a final ELF object.
+        let mut obj = engine.compiler().object()?;
+        let (funcs, trampolines) =
+            engine
+                .compiler()
+                .emit_obj(&translation, &types, funcs, tunables, &mut obj)?;
 
-            // If configured attempt to use static memory initialization which
-            // can either at runtime be implemented as a single memcpy to
-            // initialize memory or otherwise enabling virtual-memory-tricks
-            // such as mmap'ing from a file to get copy-on-write.
-            if engine.config().memory_init_cow {
-                let align = engine.compiler().page_size_align();
-                let max_always_allowed = engine.config().memory_guaranteed_dense_image_size;
-                translation.try_static_init(align, max_always_allowed);
-            }
+        // If configured, attempt to use paged memory initialization
+        // instead of the default mode of memory initialization
+        if engine.config().paged_memory_initialization {
+            translation.try_paged_init();
+        }
 
-            // Attempt to convert table initializer segments to
-            // FuncTable representation where possible, to enable
-            // table lazy init.
-            translation.try_func_table_init();
+        // If configured attempt to use static memory initialization which
+        // can either at runtime be implemented as a single memcpy to
+        // initialize memory or otherwise enabling virtual-memory-tricks
+        // such as mmap'ing from a file to get copy-on-write.
+        if engine.config().memory_init_cow {
+            let align = engine.compiler().page_size_align();
+            let max_always_allowed = engine.config().memory_guaranteed_dense_image_size;
+            translation.try_static_init(align, max_always_allowed);
+        }
 
-            let (mmap, info) =
-                wasmtime_jit::finish_compile(translation, obj, funcs, trampolines, tunables)?;
-            Ok((mmap, Some(info)))
-        })?;
+        // Attempt to convert table initializer segments to
+        // FuncTable representation where possible, to enable
+        // table lazy init.
+        translation.try_func_table_init();
+
+        let (mmap, info) =
+            wasmtime_jit::finish_compile(translation, obj, funcs, trampolines, tunables)?;
 
         Ok((
-            main_module,
-            list,
+            mmap,
+            Some(info),
             TypeTables {
                 wasm_signatures: types.wasm_signatures,
-                module_signatures: types.module_signatures,
-                instance_signatures: types.instance_signatures,
             },
         ))
     }
@@ -529,91 +504,27 @@ impl Module {
 
     fn from_parts(
         engine: &Engine,
-        mut modules: Vec<Arc<CompiledModule>>,
-        main_module: usize,
+        module: Arc<CompiledModule>,
         types: Arc<TypeTables>,
-        module_upvars: &[serialization::SerializedModuleUpvar],
     ) -> Result<Self> {
-        // Validate all modules can be used with the current allocator
-        for module in modules.iter() {
-            engine.allocator().validate(module.module())?;
-        }
+        // Validate the module can be used with the current allocator
+        engine.allocator().validate(module.module())?;
 
         let signatures = Arc::new(SignatureCollection::new_for_module(
             engine.signatures(),
             &types.wasm_signatures,
-            modules
-                .iter()
-                .flat_map(|m| m.trampolines().map(|(idx, f, _)| (idx, f))),
+            module.trampolines().map(|(idx, f, _)| (idx, f)),
         ));
 
-        let module = modules.remove(main_module);
-
-        let module_upvars = module_upvars
-            .iter()
-            .map(|m| {
-                mk(
-                    engine,
-                    &modules,
-                    &types,
-                    m.index,
-                    &m.artifact_upvars,
-                    &m.module_upvars,
-                    &signatures,
-                )
-            })
-            .collect();
-
-        return Ok(Self {
+        Ok(Self {
             inner: Arc::new(ModuleInner {
                 engine: engine.clone(),
                 types,
-                artifact_upvars: modules,
-                module_upvars,
                 signatures,
                 memory_images: OnceCell::new(),
                 module,
             }),
-        });
-
-        fn mk(
-            engine: &Engine,
-            artifacts: &[Arc<CompiledModule>],
-            types: &Arc<TypeTables>,
-            module_index: usize,
-            artifact_upvars: &[usize],
-            module_upvars: &[serialization::SerializedModuleUpvar],
-            signatures: &Arc<SignatureCollection>,
-        ) -> Module {
-            let module = artifacts[module_index].clone();
-            Module {
-                inner: Arc::new(ModuleInner {
-                    engine: engine.clone(),
-                    types: types.clone(),
-                    memory_images: OnceCell::new(),
-                    module,
-                    artifact_upvars: artifact_upvars
-                        .iter()
-                        .map(|i| artifacts[*i].clone())
-                        .collect(),
-                    module_upvars: module_upvars
-                        .into_iter()
-                        .map(|m| {
-                            mk(
-                                engine,
-                                artifacts,
-                                types,
-                                m.index,
-                                &m.artifact_upvars,
-                                &m.module_upvars,
-                                signatures,
-                            )
-                        })
-                        .collect(),
-                    signatures: signatures.clone(),
-                }),
-            }
-        }
+        })
     }
 
     /// Validates `binary` input data as a WebAssembly binary given the
@@ -650,23 +561,6 @@ impl Module {
         Ok(())
     }
 
-    /// Returns the type signature of this module.
-    pub fn ty(&self) -> ModuleType {
-        let mut sig = ModuleType::new();
-        let env_module = self.compiled_module().module();
-        let types = self.types();
-        for (module, field, ty) in env_module.imports() {
-            sig.add_named_import(module, field, ExternType::from_wasmtime(types, &ty));
-        }
-        for (name, index) in env_module.exports.iter() {
-            sig.add_named_export(
-                name,
-                ExternType::from_wasmtime(types, &env_module.type_of(*index)),
-            );
-        }
-        sig
-    }
-
     /// Serializes this module to a vector of bytes.
     ///
     /// This function is similar to the [`Engine::precompile_module`] method
@@ -680,60 +574,6 @@ impl Module {
     #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
     pub fn serialize(&self) -> Result<Vec<u8>> {
         SerializedModule::new(self).to_bytes(&self.inner.engine.config().module_version)
-    }
-
-    /// Creates a submodule `Module` value from the specified parameters.
-    ///
-    /// This is used for creating submodules as part of module instantiation.
-    ///
-    /// * `artifact_index` - the index in `artifact_upvars` that we're creating
-    ///   a module for
-    /// * `artifact_upvars` - the mapping of indices of what artifact upvars are
-    ///   needed for the submodule. The length of this array is the length of
-    ///   the upvars array in the submodule to be created, and each element of
-    ///   this array is an index into this module's upvar array.
-    /// * `module_upvars` - similar to `artifact_upvars` this is a mapping of
-    ///   how to create the `module_upvars` of the submodule being created.
-    ///   Each entry in this array is either an index into this module's own
-    ///   module upvars array or it's an index into `modules`, the list of
-    ///   modules so far for the instance where this submodule is being
-    ///   created.
-    /// * `modules` - array indexed by `module_upvars`.
-    ///
-    /// Note that the real meat of this happens in `ModuleEnvironment`
-    /// translation inside of `wasmtime_environ`. This just does the easy thing
-    /// of handling all the indices, over there is where the indices are
-    /// actually calculated and such.
-    pub(crate) fn create_submodule(
-        &self,
-        artifact_index: usize,
-        artifact_upvars: &[usize],
-        module_upvars: &[wasmtime_environ::ModuleUpvar],
-        modules: &PrimaryMap<ModuleIndex, Module>,
-    ) -> Result<Module> {
-        let module = self.inner.artifact_upvars[artifact_index].clone();
-        Ok(Module {
-            inner: Arc::new(ModuleInner {
-                types: self.inner.types.clone(),
-                engine: self.inner.engine.clone(),
-                memory_images: OnceCell::new(),
-                module,
-                artifact_upvars: artifact_upvars
-                    .iter()
-                    .map(|i| self.inner.artifact_upvars[*i].clone())
-                    .collect(),
-                module_upvars: module_upvars
-                    .iter()
-                    .map(|i| match *i {
-                        wasmtime_environ::ModuleUpvar::Inherit(i) => {
-                            self.inner.module_upvars[i].clone()
-                        }
-                        wasmtime_environ::ModuleUpvar::Local(i) => modules[i].clone(),
-                    })
-                    .collect(),
-                signatures: self.inner.signatures.clone(),
-            }),
-        })
     }
 
     pub(crate) fn compiled_module(&self) -> &Arc<CompiledModule> {
@@ -750,14 +590,6 @@ impl Module {
 
     pub(crate) fn signatures(&self) -> &Arc<SignatureCollection> {
         &self.inner.signatures
-    }
-
-    /// Looks up the module upvar value at the `index` specified.
-    ///
-    /// Note that this panics if `index` is out of bounds since this should
-    /// only be called for valid indices as part of instantiation.
-    pub(crate) fn module_upvar(&self, index: usize) -> &Module {
-        &self.inner.module_upvars[index]
     }
 
     /// Returns identifier/name that this [`Module`] has. This name
@@ -829,7 +661,7 @@ impl Module {
     /// assert_eq!(module.imports().len(), 1);
     /// let import = module.imports().next().unwrap();
     /// assert_eq!(import.module(), "host");
-    /// assert_eq!(import.name(), Some("foo"));
+    /// assert_eq!(import.name(), "foo");
     /// match import.ty() {
     ///     ExternType::Func(_) => { /* ... */ }
     ///     _ => panic!("unexpected import type!"),

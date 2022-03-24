@@ -836,8 +836,6 @@ impl Default for TableInitialization {
 #[allow(missing_docs)]
 pub enum ModuleType {
     Function(SignatureIndex),
-    Module(ModuleTypeIndex),
-    Instance(InstanceTypeIndex),
 }
 
 impl ModuleType {
@@ -846,7 +844,6 @@ impl ModuleType {
     pub fn unwrap_function(&self) -> SignatureIndex {
         match self {
             ModuleType::Function(f) => *f,
-            _ => panic!("not a function type"),
         }
     }
 }
@@ -915,12 +912,6 @@ pub struct Module {
 
     /// WebAssembly global variables.
     pub globals: PrimaryMap<GlobalIndex, Global>,
-
-    /// The type of each wasm instance this module defines.
-    pub instances: PrimaryMap<InstanceIndex, InstanceTypeIndex>,
-
-    /// The type of each nested wasm module this module contains.
-    pub modules: PrimaryMap<ModuleIndex, ModuleTypeIndex>,
 }
 
 /// Initialization routines for creating an instance, encompassing imports,
@@ -931,59 +922,12 @@ pub enum Initializer {
     Import {
         /// Name of this import
         name: String,
-        /// The field name projection of this import. When module-linking is
-        /// enabled this is always `None`. Otherwise this is always `Some`.
-        field: Option<String>,
+        /// The field name projection of this import
+        field: String,
         /// Where this import will be placed, which also has type information
         /// about the import.
         index: EntityIndex,
     },
-
-    /// An export from a previously defined instance is being inserted into our
-    /// index space.
-    ///
-    /// Note that when the module linking proposal is enabled two-level imports
-    /// will implicitly desugar to this initializer.
-    AliasInstanceExport {
-        /// The instance that we're referencing.
-        instance: InstanceIndex,
-        /// Which export is being inserted into our index space.
-        export: String,
-    },
-
-    /// A module is being instantiated with previously configured initializers
-    /// as arguments.
-    Instantiate {
-        /// The module that this instance is instantiating.
-        module: ModuleIndex,
-        /// The arguments provided to instantiation, along with their name in
-        /// the instance being instantiated.
-        args: IndexMap<String, EntityIndex>,
-    },
-
-    /// A module is being created from a set of compiled artifacts.
-    CreateModule {
-        /// The index of the artifact that's being converted into a module.
-        artifact_index: usize,
-        /// The list of artifacts that this module value will be inheriting.
-        artifacts: Vec<usize>,
-        /// The list of modules that this module value will inherit.
-        modules: Vec<ModuleUpvar>,
-    },
-
-    /// A module is created from a closed-over-module value, defined when this
-    /// module was created.
-    DefineModule(usize),
-}
-
-/// Where module values can come from when creating a new module from a compiled
-/// artifact.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum ModuleUpvar {
-    /// A module value is inherited from the module creating the new module.
-    Inherit(usize),
-    /// A module value comes from the instance-to-be-created module index space.
-    Local(ModuleIndex),
 }
 
 impl Module {
@@ -1100,12 +1044,11 @@ impl Module {
 
     /// Returns an iterator of all the imports in this module, along with their
     /// module name, field name, and type that's being imported.
-    pub fn imports(&self) -> impl Iterator<Item = (&str, Option<&str>, EntityType)> {
-        self.initializers.iter().filter_map(move |i| match i {
+    pub fn imports(&self) -> impl Iterator<Item = (&str, &str, EntityType)> {
+        self.initializers.iter().map(move |i| match i {
             Initializer::Import { name, field, index } => {
-                Some((name.as_str(), field.as_deref(), self.type_of(*index)))
+                (name.as_str(), field.as_str(), self.type_of(*index))
             }
-            _ => None,
         })
     }
 
@@ -1116,8 +1059,6 @@ impl Module {
             EntityIndex::Table(i) => EntityType::Table(self.table_plans[i].table),
             EntityIndex::Memory(i) => EntityType::Memory(self.memory_plans[i].memory),
             EntityIndex::Function(i) => EntityType::Function(self.functions[i].signature),
-            EntityIndex::Instance(i) => EntityType::Instance(self.instances[i]),
-            EntityIndex::Module(i) => EntityType::Module(self.modules[i]),
         }
     }
 
@@ -1149,26 +1090,6 @@ impl Module {
 #[allow(missing_docs)]
 pub struct TypeTables {
     pub wasm_signatures: PrimaryMap<SignatureIndex, WasmFuncType>,
-    pub module_signatures: PrimaryMap<ModuleTypeIndex, ModuleSignature>,
-    pub instance_signatures: PrimaryMap<InstanceTypeIndex, InstanceSignature>,
-}
-
-/// The type signature of known modules.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ModuleSignature {
-    /// All imports in this module, listed in order with their name and
-    /// what type they're importing.
-    pub imports: IndexMap<String, EntityType>,
-    /// Exports are what an instance type conveys, so we go through an
-    /// indirection over there.
-    pub exports: InstanceTypeIndex,
-}
-
-/// The type signature of known instances.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct InstanceSignature {
-    /// The name of what's being exported as well as its type signature.
-    pub exports: IndexMap<String, EntityType>,
 }
 
 /// Type information about functions in a wasm module.

@@ -2,10 +2,9 @@
 //! to deal with each part of it.
 use crate::environ::ModuleEnvironment;
 use crate::sections_translator::{
-    parse_alias_section, parse_data_section, parse_element_section, parse_export_section,
-    parse_function_section, parse_global_section, parse_import_section, parse_instance_section,
-    parse_memory_section, parse_name_section, parse_start_section, parse_table_section,
-    parse_tag_section, parse_type_section,
+    parse_data_section, parse_element_section, parse_export_section, parse_function_section,
+    parse_global_section, parse_import_section, parse_memory_section, parse_name_section,
+    parse_start_section, parse_table_section, parse_tag_section, parse_type_section,
 };
 use crate::state::ModuleTranslationState;
 use crate::WasmResult;
@@ -28,11 +27,9 @@ pub fn translate_module<'data>(
         match payload? {
             Payload::Version { num, range } => {
                 validator.version(num, &range)?;
-                environ.module_start();
             }
             Payload::End => {
                 validator.end()?;
-                environ.module_end();
             }
 
             Payload::TypeSection(types) => {
@@ -109,11 +106,11 @@ pub fn translate_module<'data>(
 
             Payload::InstanceSection(s) => {
                 validator.instance_section(&s)?;
-                parse_instance_section(s, environ)?;
+                unimplemented!();
             }
             Payload::AliasSection(s) => {
                 validator.alias_section(&s)?;
-                parse_alias_section(s, environ)?;
+                unimplemented!();
             }
             Payload::ModuleSectionStart {
                 count,
@@ -121,11 +118,12 @@ pub fn translate_module<'data>(
                 size: _,
             } => {
                 validator.module_section_start(count, &range)?;
-                environ.reserve_modules(count);
+                unimplemented!();
             }
 
             Payload::ModuleSectionEntry { .. } => {
                 validator.module_section_entry();
+                unimplemented!();
             }
 
             Payload::CustomSection {

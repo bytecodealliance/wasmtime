@@ -336,10 +336,6 @@ impl Instance {
                 global: self.module().globals[*index],
             }
             .into(),
-
-            EntityIndex::Instance(_) | EntityIndex::Module(_) => {
-                panic!("can't use this api for modules/instances")
-            }
         }
     }
 

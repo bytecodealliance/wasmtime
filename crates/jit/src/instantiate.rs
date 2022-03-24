@@ -16,9 +16,8 @@ use std::str;
 use std::sync::Arc;
 use thiserror::Error;
 use wasmtime_environ::{
-    CompileError, DefinedFuncIndex, FuncIndex, FunctionInfo, InstanceSignature, InstanceTypeIndex,
-    Module, ModuleSignature, ModuleTranslation, ModuleTypeIndex, PrimaryMap, SignatureIndex,
-    StackMapInformation, Trampoline, Tunables, WasmFuncType, ELF_WASMTIME_ADDRMAP,
+    CompileError, DefinedFuncIndex, FuncIndex, FunctionInfo, Module, ModuleTranslation, PrimaryMap,
+    SignatureIndex, StackMapInformation, Trampoline, Tunables, WasmFuncType, ELF_WASMTIME_ADDRMAP,
     ELF_WASMTIME_TRAPS,
 };
 use wasmtime_runtime::{
@@ -365,8 +364,6 @@ pub fn mmap_vec_from_obj(obj: Object) -> Result<MmapVec> {
 #[allow(missing_docs)]
 pub struct TypeTables {
     pub wasm_signatures: PrimaryMap<SignatureIndex, WasmFuncType>,
-    pub module_signatures: PrimaryMap<ModuleTypeIndex, ModuleSignature>,
-    pub instance_signatures: PrimaryMap<InstanceTypeIndex, InstanceSignature>,
 }
 
 /// A compiled wasm module, ready to be instantiated.

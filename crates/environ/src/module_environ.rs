@@ -1,24 +1,21 @@
 use crate::module::{
-    AnyfuncIndex, Initializer, InstanceSignature, MemoryInitialization, MemoryInitializer,
-    MemoryPlan, Module, ModuleSignature, ModuleType, ModuleUpvar, TableInitializer, TablePlan,
-    TypeTables,
+    AnyfuncIndex, Initializer, MemoryInitialization, MemoryInitializer, MemoryPlan, Module,
+    ModuleType, TableInitializer, TablePlan, TypeTables,
 };
 use crate::{
     DataIndex, DefinedFuncIndex, ElemIndex, EntityIndex, EntityType, FuncIndex, Global,
-    GlobalIndex, GlobalInit, InstanceIndex, InstanceTypeIndex, MemoryIndex, ModuleIndex,
-    ModuleTypeIndex, PrimaryMap, SignatureIndex, TableIndex, TableInitialization, Tunables,
-    TypeIndex, WasmError, WasmFuncType, WasmResult,
+    GlobalIndex, GlobalInit, MemoryIndex, PrimaryMap, SignatureIndex, TableIndex,
+    TableInitialization, Tunables, TypeIndex, WasmError, WasmFuncType, WasmResult,
 };
 use cranelift_entity::packed_option::ReservedValue;
 use std::borrow::Cow;
-use std::collections::{hash_map::Entry, HashMap};
+use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
-use std::mem;
 use std::path::PathBuf;
 use std::sync::Arc;
 use wasmparser::Type as WasmType;
 use wasmparser::{
-    Alias, DataKind, ElementItem, ElementKind, ExternalKind, FuncValidator, FunctionBody,
+    DataKind, ElementItem, ElementKind, ExternalKind, FuncValidator, FunctionBody,
     ImportSectionEntryType, NameSectionReader, Naming, Operator, Parser, Payload, TypeDef,
     Validator, ValidatorResources, WasmFeatures,
 };
@@ -28,18 +25,6 @@ pub struct ModuleEnvironment<'data> {
     /// The current module being translated
     result: ModuleTranslation<'data>,
 
-    /// Modules which have finished translation. This only really applies for
-    /// the module linking proposal.
-    results: Vec<ModuleTranslation<'data>>,
-
-    /// Modules which are in-progress being translated, or otherwise also known
-    /// as the outer modules of the current module being processed.
-    in_progress: Vec<ModuleTranslation<'data>>,
-
-    /// How many modules that have not yet made their way into `results` which
-    /// are coming at some point.
-    modules_to_be: usize,
-
     /// Intern'd types for this entire translation, shared by all modules.
     types: TypeTables,
 
@@ -48,7 +33,6 @@ pub struct ModuleEnvironment<'data> {
     // Various bits and pieces of configuration
     features: WasmFeatures,
     tunables: Tunables,
-    first_module: bool,
 }
 
 /// The result of translating via `ModuleEnvironment`. Function bodies are not
@@ -102,16 +86,6 @@ pub struct ModuleTranslation<'data> {
     /// When we're parsing the code section this will be incremented so we know
     /// which function is currently being defined.
     code_index: u32,
-
-    implicit_instances: HashMap<&'data str, InstanceIndex>,
-
-    /// The artifacts which are needed from the parent module when this module
-    /// is created. This is used to insert into `Initializer::CreateModule` when
-    /// this module is defined in the parent.
-    creation_artifacts: Vec<usize>,
-
-    /// Same as `creation_artifacts`, but for modules instead of artifacts.
-    creation_modules: Vec<ModuleUpvar>,
 }
 
 /// Contains function data: byte code and its offset in the module.
@@ -168,13 +142,9 @@ impl<'data> ModuleEnvironment<'data> {
     pub fn new(tunables: &Tunables, features: &WasmFeatures) -> Self {
         Self {
             result: ModuleTranslation::default(),
-            results: Vec::with_capacity(1),
-            in_progress: Vec::new(),
-            modules_to_be: 1,
             types: Default::default(),
             tunables: tunables.clone(),
             features: *features,
-            first_module: true,
             interned_func_types: Default::default(),
         }
     }
@@ -198,7 +168,7 @@ impl<'data> ModuleEnvironment<'data> {
     pub fn translate(
         mut self,
         data: &'data [u8],
-    ) -> WasmResult<(usize, Vec<ModuleTranslation<'data>>, TypeTables)> {
+    ) -> WasmResult<(ModuleTranslation<'data>, TypeTables)> {
         let mut validator = Validator::new();
         validator.wasm_features(self.features);
 
@@ -206,8 +176,7 @@ impl<'data> ModuleEnvironment<'data> {
             self.translate_payload(&mut validator, payload?)?;
         }
 
-        assert!(self.results.len() > 0);
-        Ok((self.results.len() - 1, self.results, self.types))
+        Ok((self.result, self.types))
     }
 
     fn translate_payload(
@@ -218,18 +187,6 @@ impl<'data> ModuleEnvironment<'data> {
         match payload {
             Payload::Version { num, range } => {
                 validator.version(num, &range)?;
-
-                // If this is the first time this method is called, nothing to
-                // do.
-                if self.first_module {
-                    self.first_module = false;
-                } else {
-                    // Reset our internal state for a new module by saving the
-                    // current module in `results`.
-                    let in_progress = mem::replace(&mut self.result, ModuleTranslation::default());
-                    self.in_progress.push(in_progress);
-                    self.modules_to_be -= 1;
-                }
             }
 
             Payload::End => {
@@ -253,46 +210,6 @@ impl<'data> ModuleEnvironment<'data> {
                     .collect();
                 self.result.exported_signatures.sort_unstable();
                 self.result.exported_signatures.dedup();
-
-                self.result.creation_artifacts.shrink_to_fit();
-                self.result.creation_modules.shrink_to_fit();
-
-                let (record_initializer, mut done) = match self.in_progress.pop() {
-                    Some(m) => (true, mem::replace(&mut self.result, m)),
-                    None => (false, mem::take(&mut self.result)),
-                };
-
-                if record_initializer {
-                    // Record the type of the module we just finished in our own
-                    // module's list of modules.
-                    let sig = self.gen_type_of_module(&done.module);
-                    self.result.module.modules.push(sig);
-
-                    // The root module will store the artifacts for this
-                    // finished module at `artifact_index`. This then needs to
-                    // be inherited by all later modules coming down to our
-                    // now-current `self.result`...
-                    let mut artifact_index = self.results.len();
-                    for result in self.in_progress.iter_mut().chain(Some(&mut self.result)) {
-                        result.creation_artifacts.push(artifact_index);
-                        artifact_index = result.creation_artifacts.len() - 1;
-                    }
-                    // ... and then `self.result` needs to create a new module
-                    // with whatever was record to save off as its own
-                    // artifacts/modules.
-                    self.result
-                        .module
-                        .initializers
-                        .push(Initializer::CreateModule {
-                            artifact_index,
-                            artifacts: mem::take(&mut done.creation_artifacts),
-                            modules: mem::take(&mut done.creation_modules),
-                        });
-                }
-
-                // And the final step is to insert the module into the list of
-                // finished modules to get returned at the end.
-                self.results.push(done);
             }
 
             Payload::TypeSection(types) => {
@@ -306,26 +223,10 @@ impl<'data> ModuleEnvironment<'data> {
                         TypeDef::Func(wasm_func_ty) => {
                             self.declare_type_func(wasm_func_ty.try_into()?)?;
                         }
-                        TypeDef::Module(t) => {
-                            let imports = t
-                                .imports
-                                .iter()
-                                .map(|i| Ok((i.module, i.field, self.entity_type(i.ty)?)))
-                                .collect::<WasmResult<Vec<_>>>()?;
-                            let exports = t
-                                .exports
-                                .iter()
-                                .map(|e| Ok((e.name, self.entity_type(e.ty)?)))
-                                .collect::<WasmResult<Vec<_>>>()?;
-                            self.declare_type_module(&imports, &exports)?;
-                        }
-                        TypeDef::Instance(t) => {
-                            let exports = t
-                                .exports
-                                .iter()
-                                .map(|e| Ok((e.name, self.entity_type(e.ty)?)))
-                                .collect::<WasmResult<Vec<_>>>()?;
-                            self.declare_type_instance(&exports)?;
+
+                        // doesn't get past validation
+                        TypeDef::Module(_) | TypeDef::Instance(_) => {
+                            unreachable!();
                         }
                     }
                 }
@@ -347,16 +248,6 @@ impl<'data> ModuleEnvironment<'data> {
                             self.result.debuginfo.wasm_file.imported_func_count += 1;
                             EntityType::Function(sig_index)
                         }
-                        ImportSectionEntryType::Module(index) => {
-                            let index = TypeIndex::from_u32(index);
-                            let signature = self.type_to_module_type(index)?;
-                            EntityType::Module(signature)
-                        }
-                        ImportSectionEntryType::Instance(index) => {
-                            let index = TypeIndex::from_u32(index);
-                            let signature = self.type_to_instance_type(index)?;
-                            EntityType::Instance(signature)
-                        }
                         ImportSectionEntryType::Memory(ty) => {
                             if ty.shared {
                                 return Err(WasmError::Unsupported("shared memories".to_owned()));
@@ -374,9 +265,11 @@ impl<'data> ModuleEnvironment<'data> {
                         }
 
                         // doesn't get past validation
-                        ImportSectionEntryType::Tag(_) => unreachable!(),
+                        ImportSectionEntryType::Module(_)
+                        | ImportSectionEntryType::Instance(_)
+                        | ImportSectionEntryType::Tag(_) => unreachable!(),
                     };
-                    self.declare_import(import.module, import.field, ty);
+                    self.declare_import(import.module, import.field.unwrap(), ty);
                 }
             }
 
@@ -485,13 +378,12 @@ impl<'data> ModuleEnvironment<'data> {
                         ExternalKind::Table => EntityIndex::Table(TableIndex::from_u32(index)),
                         ExternalKind::Memory => EntityIndex::Memory(MemoryIndex::from_u32(index)),
                         ExternalKind::Global => EntityIndex::Global(GlobalIndex::from_u32(index)),
-                        ExternalKind::Module => EntityIndex::Module(ModuleIndex::from_u32(index)),
-                        ExternalKind::Instance => {
-                            EntityIndex::Instance(InstanceIndex::from_u32(index))
-                        }
 
                         // this never gets past validation
-                        ExternalKind::Tag | ExternalKind::Type => unreachable!(),
+                        ExternalKind::Module
+                        | ExternalKind::Instance
+                        | ExternalKind::Tag
+                        | ExternalKind::Type => unreachable!(),
                     };
                     self.result
                         .module
@@ -725,177 +617,14 @@ impl<'data> ModuleEnvironment<'data> {
                 // the passive count, do not reserve anything here.
             }
 
-            Payload::InstanceSection(s) => {
-                validator.instance_section(&s)?;
-
-                let cnt = usize::try_from(s.get_count()).unwrap();
-                self.result.module.instances.reserve(cnt);
-                self.result.module.initializers.reserve(cnt);
-
-                for instance in s {
-                    let instance = instance?;
-                    let module = ModuleIndex::from_u32(instance.module());
-                    let args = instance
-                        .args()?
-                        .into_iter()
-                        .map(|arg| {
-                            let arg = arg?;
-                            let index = match arg.kind {
-                                ExternalKind::Function => {
-                                    EntityIndex::Function(FuncIndex::from_u32(arg.index))
-                                }
-                                ExternalKind::Table => {
-                                    EntityIndex::Table(TableIndex::from_u32(arg.index))
-                                }
-                                ExternalKind::Memory => {
-                                    EntityIndex::Memory(MemoryIndex::from_u32(arg.index))
-                                }
-                                ExternalKind::Global => {
-                                    EntityIndex::Global(GlobalIndex::from_u32(arg.index))
-                                }
-                                ExternalKind::Module => {
-                                    EntityIndex::Module(ModuleIndex::from_u32(arg.index))
-                                }
-                                ExternalKind::Instance => {
-                                    EntityIndex::Instance(InstanceIndex::from_u32(arg.index))
-                                }
-
-                                // this won't pass validation
-                                ExternalKind::Tag | ExternalKind::Type => unreachable!(),
-                            };
-                            Ok((arg.name.to_string(), index))
-                        })
-                        .collect::<WasmResult<_>>()?;
-
-                    // Record the type of this instance with the type signature of the
-                    // module we're instantiating and then also add an initializer which
-                    // records that we'll be adding to the instance index space here.
-                    let module_ty = self.result.module.modules[module];
-                    let instance_ty = self.types.module_signatures[module_ty].exports;
-                    self.result.module.instances.push(instance_ty);
-                    self.result
-                        .module
-                        .initializers
-                        .push(Initializer::Instantiate { module, args });
-                }
-            }
             Payload::AliasSection(s) => {
                 validator.alias_section(&s)?;
+                unreachable!() // should never get past validation
+            }
 
-                for alias in s {
-                    match alias? {
-                        // Types are easy, we statically know everything so
-                        // we're just copying some pointers from our parent
-                        // module to our own module.
-                        //
-                        // Note that we don't add an initializer for this alias
-                        // because we statically know where all types point to.
-                        Alias::OuterType {
-                            relative_depth,
-                            index,
-                        } => {
-                            let index = TypeIndex::from_u32(index);
-                            let module_idx = self.in_progress.len() - 1 - (relative_depth as usize);
-                            let ty = self.in_progress[module_idx].module.types[index];
-                            self.result.module.types.push(ty);
-                        }
-
-                        // Modules are a bit trickier since we need to record
-                        // how to track the state from the original module down
-                        // to our own.
-                        Alias::OuterModule {
-                            relative_depth,
-                            index,
-                        } => {
-                            let index = ModuleIndex::from_u32(index);
-
-                            // First we can copy the type from the parent module
-                            // into our own module to record what type our
-                            // module definition will have.
-                            let module_idx = self.in_progress.len() - 1 - (relative_depth as usize);
-                            let module_ty = self.in_progress[module_idx].module.modules[index];
-                            self.result.module.modules.push(module_ty);
-
-                            // Next we'll be injecting a module value that is
-                            // closed over, and that will be used to define the
-                            // module into the index space. Record an
-                            // initializer about where our module is sourced
-                            // from (which will be stored within each module
-                            // value itself).
-                            let module_index = self.result.creation_modules.len();
-                            self.result
-                                .module
-                                .initializers
-                                .push(Initializer::DefineModule(module_index));
-
-                            // And finally we need to record a breadcrumb trail
-                            // of how to get the module value into
-                            // `module_index`. The module just after our
-                            // destination module will use a `ModuleIndex` to
-                            // fetch the module value, and everything else
-                            // inbetween will inherit that module's closed-over
-                            // value.
-                            let mut upvar = ModuleUpvar::Local(index);
-                            for outer in self.in_progress[module_idx + 1..].iter_mut() {
-                                let upvar = mem::replace(
-                                    &mut upvar,
-                                    ModuleUpvar::Inherit(outer.creation_modules.len()),
-                                );
-                                outer.creation_modules.push(upvar);
-                            }
-                            self.result.creation_modules.push(upvar);
-                        }
-
-                        // This case is slightly more involved, we'll be
-                        // recording all the type information for each kind of
-                        // entity, and then we also need to record an
-                        // initialization step to get the export from the
-                        // instance.
-                        Alias::InstanceExport {
-                            instance,
-                            export,
-                            kind: _,
-                        } => {
-                            let instance = InstanceIndex::from_u32(instance);
-                            let ty = self.result.module.instances[instance];
-                            match &self.types.instance_signatures[ty].exports[export] {
-                                EntityType::Global(g) => {
-                                    self.result.module.globals.push(g.clone());
-                                    self.result.module.num_imported_globals += 1;
-                                }
-                                EntityType::Memory(mem) => {
-                                    let plan = MemoryPlan::for_memory(*mem, &self.tunables);
-                                    self.result.module.memory_plans.push(plan);
-                                    self.result.module.num_imported_memories += 1;
-                                }
-                                EntityType::Table(t) => {
-                                    let plan = TablePlan::for_table(*t, &self.tunables);
-                                    self.result.module.table_plans.push(plan);
-                                    self.result.module.num_imported_tables += 1;
-                                }
-                                EntityType::Function(sig) => {
-                                    self.result.module.push_function(*sig);
-                                    self.result.module.num_imported_funcs += 1;
-                                    self.result.debuginfo.wasm_file.imported_func_count += 1;
-                                }
-                                EntityType::Instance(sig) => {
-                                    self.result.module.instances.push(*sig);
-                                }
-                                EntityType::Module(sig) => {
-                                    self.result.module.modules.push(*sig);
-                                }
-                                EntityType::Tag(_) => unimplemented!(),
-                            }
-                            self.result
-                                .module
-                                .initializers
-                                .push(Initializer::AliasInstanceExport {
-                                    instance,
-                                    export: export.to_string(),
-                                })
-                        }
-                    }
-                }
+            Payload::InstanceSection(s) => {
+                validator.instance_section(&s)?;
+                unreachable!() // should never get past validation
             }
 
             Payload::ModuleSectionStart {
@@ -904,22 +633,12 @@ impl<'data> ModuleEnvironment<'data> {
                 size: _,
             } => {
                 validator.module_section_start(count, &range)?;
-
-                // Go ahead and reserve space in the final `results` array for `amount`
-                // more modules.
-                self.modules_to_be += count as usize;
-                self.results.reserve(self.modules_to_be);
-
-                // Then also reserve space in our own local module's metadata fields
-                // we'll be adding to.
-                self.result.module.modules.reserve(count as usize);
-                self.result.module.initializers.reserve(count as usize);
+                unreachable!() // should never get past validation
             }
 
             Payload::ModuleSectionEntry { .. } => {
                 validator.module_section_entry();
-                // note that nothing else happens here since we rely on the next
-                // `Version` payload to recurse in the parsed modules.
+                unreachable!() // should never get past validation
             }
 
             Payload::CustomSection {
@@ -1032,95 +751,13 @@ and for re-adding support for interface types you can see this issue:
     /// When the module linking proposal is disabled, however, disregard this
     /// logic and instead work directly with two-level imports since no
     /// instances are defined.
-    fn declare_import(&mut self, module: &'data str, field: Option<&'data str>, ty: EntityType) {
-        if !self.features.module_linking {
-            assert!(field.is_some());
-            let index = self.push_type(ty);
-            self.result.module.initializers.push(Initializer::Import {
-                name: module.to_owned(),
-                field: field.map(|s| s.to_string()),
-                index,
-            });
-            return;
-        }
-
-        match field {
-            Some(field) => {
-                // If this is a two-level import then this is actually an
-                // implicit import of an instance, where each two-level import
-                // is an alias directive from the original instance. The first
-                // thing we do here is lookup our implicit instance, creating a
-                // blank one if it wasn't already created.
-                let instance = match self.result.implicit_instances.entry(module) {
-                    Entry::Occupied(e) => *e.get(),
-                    Entry::Vacant(v) => {
-                        let ty = self
-                            .types
-                            .instance_signatures
-                            .push(InstanceSignature::default());
-                        let idx = self.result.module.instances.push(ty);
-                        self.result.module.initializers.push(Initializer::Import {
-                            name: module.to_owned(),
-                            field: None,
-                            index: EntityIndex::Instance(idx),
-                        });
-                        *v.insert(idx)
-                    }
-                };
-
-                // Update the implicit instance's type signature with this new
-                // field and its type.
-                self.types.instance_signatures[self.result.module.instances[instance]]
-                    .exports
-                    .insert(field.to_string(), ty.clone());
-
-                // Record our implicit alias annotation which corresponds to
-                // this import that we're processing.
-                self.result
-                    .module
-                    .initializers
-                    .push(Initializer::AliasInstanceExport {
-                        instance,
-                        export: field.to_string(),
-                    });
-
-                // And then record the type information for the item that we're
-                // processing.
-                self.push_type(ty);
-            }
-            None => {
-                // Without a field then this is a single-level import (a feature
-                // of module linking) which means we're simply importing that
-                // name with the specified type. Record the type information and
-                // then the name that we're importing.
-                let index = self.push_type(ty);
-                self.result.module.initializers.push(Initializer::Import {
-                    name: module.to_owned(),
-                    field: None,
-                    index,
-                });
-            }
-        }
-    }
-
-    fn entity_type(&self, ty: ImportSectionEntryType) -> WasmResult<EntityType> {
-        Ok(match ty {
-            ImportSectionEntryType::Function(sig) => {
-                EntityType::Function(self.type_to_signature(TypeIndex::from_u32(sig))?)
-            }
-            ImportSectionEntryType::Module(sig) => {
-                EntityType::Module(self.type_to_module_type(TypeIndex::from_u32(sig))?)
-            }
-            ImportSectionEntryType::Instance(sig) => {
-                EntityType::Instance(self.type_to_instance_type(TypeIndex::from_u32(sig))?)
-            }
-            ImportSectionEntryType::Memory(ty) => EntityType::Memory(ty.into()),
-            ImportSectionEntryType::Tag(t) => EntityType::Tag(t.into()),
-            ImportSectionEntryType::Global(ty) => {
-                EntityType::Global(Global::new(ty, GlobalInit::Import)?)
-            }
-            ImportSectionEntryType::Table(ty) => EntityType::Table(ty.try_into()?),
-        })
+    fn declare_import(&mut self, module: &'data str, field: &'data str, ty: EntityType) {
+        let index = self.push_type(ty);
+        self.result.module.initializers.push(Initializer::Import {
+            name: module.to_owned(),
+            field: field.to_owned(),
+            index,
+        });
     }
 
     fn push_type(&mut self, ty: EntityType) -> EntityIndex {
@@ -1135,37 +772,8 @@ and for re-adding support for interface types you can see this issue:
                 EntityIndex::Memory(self.result.module.memory_plans.push(plan))
             }
             EntityType::Global(ty) => EntityIndex::Global(self.result.module.globals.push(ty)),
-            EntityType::Instance(ty) => {
-                EntityIndex::Instance(self.result.module.instances.push(ty))
-            }
-            EntityType::Module(ty) => EntityIndex::Module(self.result.module.modules.push(ty)),
             EntityType::Tag(_) => unimplemented!(),
         }
-    }
-
-    fn gen_type_of_module(&mut self, module: &Module) -> ModuleTypeIndex {
-        let imports = module
-            .imports()
-            .map(|(s, field, ty)| {
-                assert!(field.is_none());
-                (s.to_string(), ty)
-            })
-            .collect();
-        let exports = module
-            .exports
-            .iter()
-            .map(|(name, idx)| (name.clone(), module.type_of(*idx)))
-            .collect();
-
-        // FIXME(#2469): this instance/module signature insertion should likely
-        // be deduplicated.
-        let exports = self
-            .types
-            .instance_signatures
-            .push(InstanceSignature { exports });
-        self.types
-            .module_signatures
-            .push(ModuleSignature { imports, exports })
     }
 
     fn flag_func_escaped(&mut self, func: FuncIndex) {
@@ -1195,90 +803,6 @@ and for re-adding support for interface types you can see this issue:
             .types
             .push(ModuleType::Function(sig_index));
         Ok(())
-    }
-
-    fn declare_type_module(
-        &mut self,
-        declared_imports: &[(&'data str, Option<&'data str>, EntityType)],
-        exports: &[(&'data str, EntityType)],
-    ) -> WasmResult<()> {
-        let mut imports = indexmap::IndexMap::new();
-        let mut instance_types = HashMap::new();
-        for (module, field, ty) in declared_imports {
-            match field {
-                Some(field) => {
-                    let idx = *instance_types
-                        .entry(module)
-                        .or_insert_with(|| self.types.instance_signatures.push(Default::default()));
-                    self.types.instance_signatures[idx]
-                        .exports
-                        .insert(field.to_string(), ty.clone());
-                    if !imports.contains_key(*module) {
-                        imports.insert(module.to_string(), EntityType::Instance(idx));
-                    }
-                }
-                None => {
-                    imports.insert(module.to_string(), ty.clone());
-                }
-            }
-        }
-        let exports = exports
-            .iter()
-            .map(|e| (e.0.to_string(), e.1.clone()))
-            .collect();
-
-        // FIXME(#2469): Like signatures above we should probably deduplicate
-        // the listings of module types since with module linking it's possible
-        // you'll need to write down the module type in multiple locations.
-        let exports = self
-            .types
-            .instance_signatures
-            .push(InstanceSignature { exports });
-        let idx = self
-            .types
-            .module_signatures
-            .push(ModuleSignature { imports, exports });
-        self.result.module.types.push(ModuleType::Module(idx));
-        Ok(())
-    }
-
-    fn declare_type_instance(&mut self, exports: &[(&'data str, EntityType)]) -> WasmResult<()> {
-        let exports = exports
-            .iter()
-            .map(|e| (e.0.to_string(), e.1.clone()))
-            .collect();
-
-        // FIXME(#2469): Like signatures above we should probably deduplicate
-        // the listings of instance types since with module linking it's
-        // possible you'll need to write down the module type in multiple
-        // locations.
-        let idx = self
-            .types
-            .instance_signatures
-            .push(InstanceSignature { exports });
-        self.result.module.types.push(ModuleType::Instance(idx));
-        Ok(())
-    }
-
-    fn type_to_signature(&self, index: TypeIndex) -> WasmResult<SignatureIndex> {
-        match self.result.module.types[index] {
-            ModuleType::Function(sig) => Ok(sig),
-            _ => unreachable!(),
-        }
-    }
-
-    fn type_to_module_type(&self, index: TypeIndex) -> WasmResult<ModuleTypeIndex> {
-        match self.result.module.types[index] {
-            ModuleType::Module(sig) => Ok(sig),
-            _ => unreachable!(),
-        }
-    }
-
-    fn type_to_instance_type(&self, index: TypeIndex) -> WasmResult<InstanceTypeIndex> {
-        match self.result.module.types[index] {
-            ModuleType::Instance(sig) => Ok(sig),
-            _ => unreachable!(),
-        }
     }
 
     /// Parses the Name section of the wasm module.

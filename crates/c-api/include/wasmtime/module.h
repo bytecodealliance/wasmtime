@@ -15,51 +15,6 @@ extern "C" {
 #endif
 
 /**
- * \brief An opaque object representing the type of a module.
- */
-typedef struct wasmtime_moduletype wasmtime_moduletype_t;
-
-/**
- * \brief Deletes a module type.
- */
-WASM_API_EXTERN void wasmtime_moduletype_delete(wasmtime_moduletype_t *ty);
-
-/**
- * \brief Returns the list of imports that this module type requires.
- *
- * This function does not take ownership of the provided module type but
- * ownership of `out` is passed to the caller. Note that `out` is treated as
- * uninitialized when passed to this function.
- */
-WASM_API_EXTERN void wasmtime_moduletype_imports(const wasmtime_moduletype_t*, wasm_importtype_vec_t* out);
-
-/**
- * \brief Returns the list of exports that this module type provides.
- *
- * This function does not take ownership of the provided module type but
- * ownership of `out` is passed to the caller. Note that `out` is treated as
- * uninitialized when passed to this function.
- */
-WASM_API_EXTERN void wasmtime_moduletype_exports(const wasmtime_moduletype_t*, wasm_exporttype_vec_t* out);
-
-/**
- * \brief Converts a #wasmtime_moduletype_t to a #wasm_externtype_t
- *
- * The returned value is owned by the #wasmtime_moduletype_t argument and should not
- * be deleted.
- */
-WASM_API_EXTERN wasm_externtype_t* wasmtime_moduletype_as_externtype(wasmtime_moduletype_t*);
-
-/**
- * \brief Attempts to convert a #wasm_externtype_t to a #wasmtime_moduletype_t
- *
- * The returned value is owned by the #wasmtime_moduletype_t argument and
- * should not be deleted. Returns `NULL` if the provided argument is not a
- * #wasmtime_moduletype_t.
- */
-WASM_API_EXTERN wasmtime_moduletype_t* wasmtime_externtype_as_moduletype(wasm_externtype_t*);
-
-/**
  * \typedef wasmtime_module_t
  * \brief Convenience alias for #wasmtime_module
  *
@@ -121,14 +76,6 @@ WASM_API_EXTERN wasmtime_error_t *wasmtime_module_validate(
     const uint8_t *wasm,
     size_t wasm_len
 );
-
-/**
- * \brief Returns the type of this module.
- *
- * The returned #wasmtime_moduletype_t is expected to be deallocated by the
- * caller.
- */
-WASM_API_EXTERN wasmtime_moduletype_t* wasmtime_module_type(const wasmtime_module_t*);
 
 /**
  * \brief This function serializes compiled module artifacts as blob data.

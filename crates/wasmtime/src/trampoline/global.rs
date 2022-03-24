@@ -49,7 +49,7 @@ pub fn create_global(store: &mut StoreOpaque, gt: &GlobalType, val: Val) -> Resu
                     .initializers
                     .push(wasmtime_environ::Initializer::Import {
                         name: "".into(),
-                        field: None,
+                        field: "".into(),
                         index: EntityIndex::Function(func_index),
                     });
 

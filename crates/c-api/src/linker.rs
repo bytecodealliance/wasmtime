@@ -173,13 +173,9 @@ pub unsafe extern "C" fn wasmtime_linker_get(
         Ok(s) => s,
         Err(_) => return false,
     };
-    let name = if name.is_null() {
-        None
-    } else {
-        match str::from_utf8(crate::slice_from_raw_parts(name, name_len)) {
-            Ok(s) => Some(s),
-            Err(_) => return false,
-        }
+    let name = match str::from_utf8(crate::slice_from_raw_parts(name, name_len)) {
+        Ok(s) => s,
+        Err(_) => return false,
     };
     match linker.get(store, module, name) {
         Some(which) => {

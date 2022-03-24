@@ -359,6 +359,8 @@
  * \brief Creates a new function type with the provided parameter and result
  * types.
  *
+ * This function takes ownership of the `params` and `results` arguments.
+ *
  * The caller is responsible for deleting the returned value.
  *
  * \fn const wasm_valtype_vec_t* wasm_functype_params(const wasm_functype_t *);

@@ -50,7 +50,7 @@ fn smoke_host_func() -> Result<()> {
     linker.func_wrap0_async("", "second", move |_caller| Box::new(async { Ok(()) }))?;
 
     let func = linker
-        .get(&mut store, "", Some("first"))
+        .get(&mut store, "", "first")
         .unwrap()
         .into_func()
         .unwrap();
@@ -58,7 +58,7 @@ fn smoke_host_func() -> Result<()> {
     run_smoke_typed_test(&mut store, func);
 
     let func = linker
-        .get(&mut store, "", Some("second"))
+        .get(&mut store, "", "second")
         .unwrap()
         .into_func()
         .unwrap();
@@ -119,7 +119,7 @@ fn smoke_host_func_with_suspension() -> Result<()> {
     })?;
 
     let func = linker
-        .get(&mut store, "", Some("first"))
+        .get(&mut store, "", "first")
         .unwrap()
         .into_func()
         .unwrap();
@@ -127,7 +127,7 @@ fn smoke_host_func_with_suspension() -> Result<()> {
     run_smoke_typed_test(&mut store, func);
 
     let func = linker
-        .get(&mut store, "", Some("second"))
+        .get(&mut store, "", "second")
         .unwrap()
         .into_func()
         .unwrap();
@@ -474,11 +474,7 @@ fn async_host_func_with_pooling_stacks() -> Result<()> {
         move |_caller, _params, _results| Box::new(async { Ok(()) }),
     )?;
 
-    let func = linker
-        .get(&mut store, "", Some(""))
-        .unwrap()
-        .into_func()
-        .unwrap();
+    let func = linker.get(&mut store, "", "").unwrap().into_func().unwrap();
     run_smoke_test(&mut store, func);
     run_smoke_typed_test(&mut store, func);
     Ok(())

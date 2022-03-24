@@ -74,7 +74,7 @@ impl<T> WastContext<T> {
         match module {
             Some(module) => self
                 .linker
-                .get(&mut self.store, module, Some(name))
+                .get(&mut self.store, module, name)
                 .ok_or_else(|| anyhow!("no item named `{}::{}` found", module, name)),
             None => self
                 .current
