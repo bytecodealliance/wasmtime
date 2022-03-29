@@ -57,7 +57,7 @@ pub trait Context {
     fn ty_int_bool_64(&mut self, arg0: Type) -> Option<Type>;
     fn ty_int_bool_128(&mut self, arg0: Type) -> Option<Type>;
     fn ty_scalar_float(&mut self, arg0: Type) -> Option<Type>;
-    fn vec128(&mut self, arg0: Type) -> Option<Type>;
+    fn ty_vec128(&mut self, arg0: Type) -> Option<Type>;
     fn not_i64x2(&mut self, arg0: Type) -> Option<()>;
     fn value_list_slice(&mut self, arg0: ValueList) -> ValueSlice;
     fn value_slice_empty(&mut self, arg0: ValueSlice) -> Option<()>;
@@ -5093,7 +5093,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<InstOutp
                     let expr7_0 = C::output(ctx, expr6_0);
                     return Some(expr7_0);
                 }
-                if let Some(pattern6_0) = C::vec128(ctx, pattern5_0) {
+                if let Some(pattern6_0) = C::ty_vec128(ctx, pattern5_0) {
                     match pattern2_2 {
                         &IntCC::Equal => {
                             // Rule at src/isa/x64/lower.isle line 1457.

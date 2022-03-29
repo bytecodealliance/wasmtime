@@ -57,7 +57,7 @@ pub trait Context {
     fn ty_int_bool_64(&mut self, arg0: Type) -> Option<Type>;
     fn ty_int_bool_128(&mut self, arg0: Type) -> Option<Type>;
     fn ty_scalar_float(&mut self, arg0: Type) -> Option<Type>;
-    fn vec128(&mut self, arg0: Type) -> Option<Type>;
+    fn ty_vec128(&mut self, arg0: Type) -> Option<Type>;
     fn not_i64x2(&mut self, arg0: Type) -> Option<()>;
     fn value_list_slice(&mut self, arg0: ValueList) -> ValueSlice;
     fn value_slice_empty(&mut self, arg0: ValueSlice) -> Option<()>;

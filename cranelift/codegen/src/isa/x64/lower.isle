@@ -1454,22 +1454,22 @@
 ;; lane will be filled with all 1s or all 0s according to the comparison,
 ;; whereas for GPR-held values, the result will be simply 0 or 1 (upper bits
 ;; unset).
-(rule (lower (icmp (IntCC.Equal) a @ (value_type (vec128 ty)) b))
+(rule (lower (icmp (IntCC.Equal) a @ (value_type (ty_vec128 ty)) b))
       (x64_pcmpeq ty a b))
 ;; To lower a not-equals comparison, we perform an equality comparison
 ;; (PCMPEQ*) and then invert the bits (PXOR with all 1s).
-(rule (lower (icmp (IntCC.NotEqual) a @ (value_type (vec128 ty)) b))
+(rule (lower (icmp (IntCC.NotEqual) a @ (value_type (ty_vec128 ty)) b))
       (let ((checked Xmm (x64_pcmpeq ty a b))
             (all_ones Xmm (vector_all_ones ty)))
            (x64_pxor checked all_ones)))
 ;; Signed comparisons have a single-instruction lowering, unlike their unsigned
 ;; counterparts. These latter instructions use the unsigned min/max
 ;; (PMINU*/PMAXU*) and negate the result (PXOR with all 1s).
-(rule (lower (icmp (IntCC.SignedGreaterThan) a @ (value_type (vec128 ty)) b))
+(rule (lower (icmp (IntCC.SignedGreaterThan) a @ (value_type (ty_vec128 ty)) b))
       (x64_pcmpgt ty a b))
-(rule (lower (icmp (IntCC.SignedLessThan) a @ (value_type (vec128 ty)) b))
+(rule (lower (icmp (IntCC.SignedLessThan) a @ (value_type (ty_vec128 ty)) b))
       (x64_pcmpgt ty b a))
-(rule (lower (icmp (IntCC.UnsignedGreaterThan) a @ (value_type (vec128 ty)) b))
+(rule (lower (icmp (IntCC.UnsignedGreaterThan) a @ (value_type (ty_vec128 ty)) b))
       ;; N.B.: we must manually prevent load coalescing of these operands; the
       ;; register allocator gets confused otherwise. TODO:
       ;; https://github.com/bytecodealliance/wasmtime/issues/3953.
@@ -1479,7 +1479,7 @@
             (eq Xmm (x64_pcmpeq ty max xmm_b))
             (all_ones Xmm (vector_all_ones ty)))
            (x64_pxor eq all_ones)))
-(rule (lower (icmp (IntCC.UnsignedLessThan) a @ (value_type (vec128 ty)) b))
+(rule (lower (icmp (IntCC.UnsignedLessThan) a @ (value_type (ty_vec128 ty)) b))
       ;; N.B.: see note above.
       (let ((xmm_a Xmm (put_in_xmm a))
             (xmm_b Xmm (put_in_xmm b))
@@ -1490,16 +1490,16 @@
 ;; To lower signed and unsigned *-or-equals comparisons, we find the minimum
 ;; number (PMIN[U|S]*) and compare that to one of the terms (PCMPEQ*). Note that
 ;; there is no 64x2 version of this lowering (see below).
-(rule (lower (icmp (IntCC.SignedGreaterThanOrEqual) a @ (value_type (vec128 ty)) b))
+(rule (lower (icmp (IntCC.SignedGreaterThanOrEqual) a @ (value_type (ty_vec128 ty)) b))
       (let ((max Xmm (x64_pmaxs ty a b)))
            (x64_pcmpeq ty a max)))
-(rule (lower (icmp (IntCC.SignedLessThanOrEqual) a @ (value_type (vec128 ty)) b))
+(rule (lower (icmp (IntCC.SignedLessThanOrEqual) a @ (value_type (ty_vec128 ty)) b))
       (let ((min Xmm (x64_pmins ty a b)))
            (x64_pcmpeq ty a min)))
-(rule (lower (icmp (IntCC.UnsignedGreaterThanOrEqual) a @ (value_type (vec128 ty)) b))
+(rule (lower (icmp (IntCC.UnsignedGreaterThanOrEqual) a @ (value_type (ty_vec128 ty)) b))
       (let ((max Xmm (x64_pmaxu ty a b)))
            (x64_pcmpeq ty a max)))
-(rule (lower (icmp (IntCC.UnsignedLessThanOrEqual) a @ (value_type (vec128 ty)) b))
+(rule (lower (icmp (IntCC.UnsignedLessThanOrEqual) a @ (value_type (ty_vec128 ty)) b))
       (let ((min Xmm (x64_pminu ty a b)))
            (x64_pcmpeq ty a min)))
 ;; The PMIN[S|U]Q instruction is only available in AVX512VL/F so we must instead
