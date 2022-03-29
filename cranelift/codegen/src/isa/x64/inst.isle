@@ -2092,10 +2092,25 @@
                     imm
                     size))
 
-;; Helper for creating `cmpps` instructions.
+;; Helpers for creating `cmpp*` instructions.
+(decl x64_cmpp (Type Xmm XmmMem FcmpImm) Xmm)
+(rule (x64_cmpp $F32X4 x y imm) (x64_cmpps x y imm))
+(rule (x64_cmpp $F64X2 x y imm) (x64_cmppd x y imm))
+
 (decl x64_cmpps (Xmm XmmMem FcmpImm) Xmm)
 (rule (x64_cmpps src1 src2 imm)
       (xmm_rm_r_imm (SseOpcode.Cmpps)
+                    src1
+                    src2
+                    (encode_fcmp_imm imm)
+                    (OperandSize.Size32)))
+
+;; Note that `Size32` is intentional despite this being used for 64-bit
+;; operations, since this presumably induces the correct encoding of the
+;; instruction.
+(decl x64_cmppd (Xmm XmmMem FcmpImm) Xmm)
+(rule (x64_cmppd src1 src2 imm)
+      (xmm_rm_r_imm (SseOpcode.Cmppd)
                     src1
                     src2
                     (encode_fcmp_imm imm)
@@ -2320,19 +2335,6 @@
                                            lane
                                            (operand_size_of_type_32_64 (lane_type ty))))))
         dst))
-
-;; Helper for creating `cmppd` instructions.
-;;
-;; Note that `Size32` is intentional despite this being used for 64-bit
-;; operations, since this presumably induces the correct encoding of the
-;; instruction.
-(decl x64_cmppd (Xmm XmmMem FcmpImm) Xmm)
-(rule (x64_cmppd src1 src2 imm)
-      (xmm_rm_r_imm (SseOpcode.Cmppd)
-                    src1
-                    src2
-                    (encode_fcmp_imm imm)
-                    (OperandSize.Size32)))
 
 ;; Helper for creating `MInst.GprToXmm` instructions.
 (decl gpr_to_xmm (SseOpcode GprMem OperandSize) Xmm)

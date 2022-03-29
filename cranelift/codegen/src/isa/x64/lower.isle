@@ -1622,6 +1622,43 @@
       ;; Same flags as `UnorderedOrLessThanOrEqual`.
       (with_flags (x64_ucomis a b) (x64_setcc (CC.BE))))
 
+;; For vector lowerings, we use `CMPP*` instructions with a 3-bit operand that
+;; determines the comparison to make. Note that comparisons that succeed will
+;; fill the lane with 1s; comparisons that do not will fill the lane with 0s.
+
+(rule (lower (fcmp (FloatCC.Equal) a @ (value_type (ty_vec128 ty)) b))
+      (x64_cmpp ty a b (FcmpImm.Equal)))
+(rule (lower (fcmp (FloatCC.NotEqual) a @ (value_type (ty_vec128 ty)) b))
+      (x64_cmpp ty a b (FcmpImm.NotEqual)))
+(rule (lower (fcmp (FloatCC.LessThan) a @ (value_type (ty_vec128 ty)) b))
+      (x64_cmpp ty a b (FcmpImm.LessThan)))
+(rule (lower (fcmp (FloatCC.LessThanOrEqual) a @ (value_type (ty_vec128 ty)) b))
+      (x64_cmpp ty a b (FcmpImm.LessThanOrEqual)))
+(rule (lower (fcmp (FloatCC.Ordered) a @ (value_type (ty_vec128 ty)) b))
+      (x64_cmpp ty a b (FcmpImm.Ordered)))
+(rule (lower (fcmp (FloatCC.Unordered) a @ (value_type (ty_vec128 ty)) b))
+      (x64_cmpp ty a b (FcmpImm.Unordered)))
+(rule (lower (fcmp (FloatCC.UnorderedOrGreaterThan) a @ (value_type (ty_vec128 ty)) b))
+      (x64_cmpp ty a b (FcmpImm.UnorderedOrGreaterThan)))
+(rule (lower (fcmp (FloatCC.UnorderedOrGreaterThanOrEqual) a @ (value_type (ty_vec128 ty)) b))
+      (x64_cmpp ty a b (FcmpImm.UnorderedOrGreaterThanOrEqual)))
+
+;; Some vector lowerings rely on flipping the operands and using a reversed
+;; comparison code.
+
+(rule (lower (fcmp (FloatCC.GreaterThan) a @ (value_type (ty_vec128 ty)) b))
+      (x64_cmpp ty b a (FcmpImm.LessThan)))
+(rule (lower (fcmp (FloatCC.GreaterThanOrEqual) a @ (value_type (ty_vec128 ty)) b))
+      (x64_cmpp ty b a (FcmpImm.LessThanOrEqual)))
+(rule (lower (fcmp (FloatCC.UnorderedOrLessThan) a @ (value_type (ty_vec128 ty)) b))
+      (x64_cmpp ty b a (FcmpImm.UnorderedOrGreaterThan)))
+(rule (lower (fcmp (FloatCC.UnorderedOrLessThanOrEqual) a @ (value_type (ty_vec128 ty)) b))
+      (x64_cmpp ty b a (FcmpImm.UnorderedOrGreaterThanOrEqual)))
+
+;; Some vector lowerings are simply not supported for certain codes:
+;; - FloatCC::OrderedNotEqual
+;; - FloatCC::UnorderedOrEqual
+
 ;;;; Rules for `select` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; CLIF `select` instructions receive a testable argument (i.e. boolean or

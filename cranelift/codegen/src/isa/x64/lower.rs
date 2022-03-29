@@ -930,60 +930,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Fcmp => {
-            let cond_code = ctx.data(insn).fp_cond_code().unwrap();
-            let input_ty = ctx.input_ty(insn, 0);
-            if !input_ty.is_vector() {
-                implemented_in_isle(ctx);
-            } else {
-                let op = match input_ty {
-                    types::F32X4 => SseOpcode::Cmpps,
-                    types::F64X2 => SseOpcode::Cmppd,
-                    _ => panic!("Bad input type to fcmp: {}", input_ty),
-                };
-
-                // Since some packed comparisons are not available, some of the condition codes
-                // must be inverted, with a corresponding `flip` of the operands.
-                let (imm, flip) = match cond_code {
-                    FloatCC::GreaterThan => (FcmpImm::LessThan, true),
-                    FloatCC::GreaterThanOrEqual => (FcmpImm::LessThanOrEqual, true),
-                    FloatCC::UnorderedOrLessThan => (FcmpImm::UnorderedOrGreaterThan, true),
-                    FloatCC::UnorderedOrLessThanOrEqual => {
-                        (FcmpImm::UnorderedOrGreaterThanOrEqual, true)
-                    }
-                    FloatCC::OrderedNotEqual | FloatCC::UnorderedOrEqual => {
-                        panic!("unsupported float condition code: {}", cond_code)
-                    }
-                    _ => (FcmpImm::from(cond_code), false),
-                };
-
-                // Determine the operands of the comparison, possibly by flipping them.
-                let (lhs, rhs) = if flip {
-                    (
-                        put_input_in_reg(ctx, inputs[1]),
-                        input_to_reg_mem(ctx, inputs[0]),
-                    )
-                } else {
-                    (
-                        put_input_in_reg(ctx, inputs[0]),
-                        input_to_reg_mem(ctx, inputs[1]),
-                    )
-                };
-
-                // Move the `lhs` to the same register as `dst`; this may not emit an actual move
-                // but ensures that the registers are the same to match x86's read-write operand
-                // encoding.
-                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-                ctx.emit(Inst::gen_move(dst, lhs, input_ty));
-
-                // Emit the comparison.
-                ctx.emit(Inst::xmm_rm_r_imm(
-                    op,
-                    rhs,
-                    dst,
-                    imm.encode(),
-                    OperandSize::Size32,
-                ));
-            }
+            implemented_in_isle(ctx);
         }
 
         Opcode::FallthroughReturn | Opcode::Return => {
