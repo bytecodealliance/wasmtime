@@ -269,9 +269,13 @@
 (decl ty_int_bool_128 (Type) Type)
 (extern extractor ty_int_bool_128 ty_int_bool_128)
 
+;; An extractor that only matches scalar floating-point types--F32 or F64.
+(decl ty_scalar_float (Type) Type)
+(extern extractor ty_scalar_float ty_scalar_float)
+
 ;; An extractor that only matches 128-bit vector types.
-(decl vec128 (Type) Type)
-(extern extractor vec128 vec128)
+(decl ty_vec128 (Type) Type)
+(extern extractor ty_vec128 ty_vec128)
 
 ;; An extractor that matches everything except i64x2
 (decl not_i64x2 () Type)

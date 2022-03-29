@@ -1454,22 +1454,22 @@
 ;; lane will be filled with all 1s or all 0s according to the comparison,
 ;; whereas for GPR-held values, the result will be simply 0 or 1 (upper bits
 ;; unset).
-(rule (lower (icmp (IntCC.Equal) a @ (value_type (vec128 ty)) b))
+(rule (lower (icmp (IntCC.Equal) a @ (value_type (ty_vec128 ty)) b))
       (x64_pcmpeq ty a b))
 ;; To lower a not-equals comparison, we perform an equality comparison
 ;; (PCMPEQ*) and then invert the bits (PXOR with all 1s).
-(rule (lower (icmp (IntCC.NotEqual) a @ (value_type (vec128 ty)) b))
+(rule (lower (icmp (IntCC.NotEqual) a @ (value_type (ty_vec128 ty)) b))
       (let ((checked Xmm (x64_pcmpeq ty a b))
             (all_ones Xmm (vector_all_ones ty)))
            (x64_pxor checked all_ones)))
 ;; Signed comparisons have a single-instruction lowering, unlike their unsigned
 ;; counterparts. These latter instructions use the unsigned min/max
 ;; (PMINU*/PMAXU*) and negate the result (PXOR with all 1s).
-(rule (lower (icmp (IntCC.SignedGreaterThan) a @ (value_type (vec128 ty)) b))
+(rule (lower (icmp (IntCC.SignedGreaterThan) a @ (value_type (ty_vec128 ty)) b))
       (x64_pcmpgt ty a b))
-(rule (lower (icmp (IntCC.SignedLessThan) a @ (value_type (vec128 ty)) b))
+(rule (lower (icmp (IntCC.SignedLessThan) a @ (value_type (ty_vec128 ty)) b))
       (x64_pcmpgt ty b a))
-(rule (lower (icmp (IntCC.UnsignedGreaterThan) a @ (value_type (vec128 ty)) b))
+(rule (lower (icmp (IntCC.UnsignedGreaterThan) a @ (value_type (ty_vec128 ty)) b))
       ;; N.B.: we must manually prevent load coalescing of these operands; the
       ;; register allocator gets confused otherwise. TODO:
       ;; https://github.com/bytecodealliance/wasmtime/issues/3953.
@@ -1479,7 +1479,7 @@
             (eq Xmm (x64_pcmpeq ty max xmm_b))
             (all_ones Xmm (vector_all_ones ty)))
            (x64_pxor eq all_ones)))
-(rule (lower (icmp (IntCC.UnsignedLessThan) a @ (value_type (vec128 ty)) b))
+(rule (lower (icmp (IntCC.UnsignedLessThan) a @ (value_type (ty_vec128 ty)) b))
       ;; N.B.: see note above.
       (let ((xmm_a Xmm (put_in_xmm a))
             (xmm_b Xmm (put_in_xmm b))
@@ -1490,16 +1490,16 @@
 ;; To lower signed and unsigned *-or-equals comparisons, we find the minimum
 ;; number (PMIN[U|S]*) and compare that to one of the terms (PCMPEQ*). Note that
 ;; there is no 64x2 version of this lowering (see below).
-(rule (lower (icmp (IntCC.SignedGreaterThanOrEqual) a @ (value_type (vec128 ty)) b))
+(rule (lower (icmp (IntCC.SignedGreaterThanOrEqual) a @ (value_type (ty_vec128 ty)) b))
       (let ((max Xmm (x64_pmaxs ty a b)))
            (x64_pcmpeq ty a max)))
-(rule (lower (icmp (IntCC.SignedLessThanOrEqual) a @ (value_type (vec128 ty)) b))
+(rule (lower (icmp (IntCC.SignedLessThanOrEqual) a @ (value_type (ty_vec128 ty)) b))
       (let ((min Xmm (x64_pmins ty a b)))
            (x64_pcmpeq ty a min)))
-(rule (lower (icmp (IntCC.UnsignedGreaterThanOrEqual) a @ (value_type (vec128 ty)) b))
+(rule (lower (icmp (IntCC.UnsignedGreaterThanOrEqual) a @ (value_type (ty_vec128 ty)) b))
       (let ((max Xmm (x64_pmaxu ty a b)))
            (x64_pcmpeq ty a max)))
-(rule (lower (icmp (IntCC.UnsignedLessThanOrEqual) a @ (value_type (vec128 ty)) b))
+(rule (lower (icmp (IntCC.UnsignedLessThanOrEqual) a @ (value_type (ty_vec128 ty)) b))
       (let ((min Xmm (x64_pminu ty a b)))
            (x64_pcmpeq ty a min)))
 ;; The PMIN[S|U]Q instruction is only available in AVX512VL/F so we must instead
@@ -1549,6 +1549,115 @@
             ;; See comments for `IntCC.Equal`.
             (cmp Reg (x64_or $I64 cmp_lo cmp_hi)))
            (with_flags (x64_test (OperandSize.Size64) (RegMemImm.Imm 1) cmp) (x64_setcc (CC.NZ)))))
+
+;;;; Rules for `fcmp` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; CLIF's `fcmp` instruction always operates on XMM registers--both scalar and
+;; vector. For the scalar versions, we use the flag-setting behavior of the
+;; `UCOMIS*` instruction to `SETcc` a 0 or 1 in a GPR register. Note that CLIF's
+;; `select` uses the same kind of flag-setting behavior but chooses values other
+;; than 0 or 1.
+;;
+;; Checking the result of `UCOMIS*` is unfortunately difficult in some cases
+;; because we do not have `SETcc` instructions that explicitly check
+;; simultaneously for the condition (i.e., `eq`, `le`, `gt`, etc.) *and*
+;; orderedness. Instead, we must check the flags multiple times. The UCOMIS*
+;; documentation (see Intel's Software Developer's Manual, volume 2, chapter 4)
+;; is helpful:
+;;  - unordered assigns    Z = 1, P = 1, C = 1
+;;  - greater than assigns Z = 0, P = 0, C = 0
+;;  - less than assigns    Z = 0, P = 0, C = 1
+;;  - equal assigns        Z = 1, P = 0, C = 0
+
+(rule (lower (fcmp (FloatCC.Equal) a @ (value_type (ty_scalar_float ty)) b))
+      (let ((maybe ValueRegs (with_flags (x64_ucomis b a)
+                  (consumes_flags_concat
+                        (x64_setcc (CC.NP))
+                        (x64_setcc (CC.Z)))))
+            (maybe_np Gpr (value_regs_get_gpr maybe 0))
+            (maybe_z Gpr (value_regs_get_gpr maybe 1)))
+           (x64_and $I32 maybe_np maybe_z)))
+
+(rule (lower (fcmp (FloatCC.NotEqual) a @ (value_type (ty_scalar_float ty)) b))
+      (let ((maybe ValueRegs (with_flags (x64_ucomis b a)
+                  (consumes_flags_concat
+                        (x64_setcc (CC.P))
+                        (x64_setcc (CC.NZ)))))
+            (maybe_p Gpr (value_regs_get_gpr maybe 0))
+            (maybe_nz Gpr (value_regs_get_gpr maybe 1)))
+           (x64_or $I32 maybe_p maybe_nz)))
+
+;; Some scalar lowerings correspond to one condition code.
+
+(rule (lower (fcmp (FloatCC.Ordered) a @ (value_type (ty_scalar_float ty)) b))
+      (with_flags (x64_ucomis b a) (x64_setcc (CC.NP))))
+(rule (lower (fcmp (FloatCC.Unordered) a @ (value_type (ty_scalar_float ty)) b))
+      (with_flags (x64_ucomis b a) (x64_setcc (CC.P))))
+(rule (lower (fcmp (FloatCC.OrderedNotEqual) a @ (value_type (ty_scalar_float ty)) b))
+      (with_flags (x64_ucomis b a) (x64_setcc (CC.NZ))))
+(rule (lower (fcmp (FloatCC.UnorderedOrEqual) a @ (value_type (ty_scalar_float ty)) b))
+      (with_flags (x64_ucomis b a) (x64_setcc (CC.Z))))
+(rule (lower (fcmp (FloatCC.GreaterThan) a @ (value_type (ty_scalar_float ty)) b))
+      (with_flags (x64_ucomis b a) (x64_setcc (CC.NBE))))
+(rule (lower (fcmp (FloatCC.GreaterThanOrEqual) a @ (value_type (ty_scalar_float ty)) b))
+      (with_flags (x64_ucomis b a) (x64_setcc (CC.NB))))
+(rule (lower (fcmp (FloatCC.UnorderedOrLessThan) a @ (value_type (ty_scalar_float ty)) b))
+      (with_flags (x64_ucomis b a) (x64_setcc (CC.B))))
+(rule (lower (fcmp (FloatCC.UnorderedOrLessThanOrEqual) a @ (value_type (ty_scalar_float ty)) b))
+      (with_flags (x64_ucomis b a) (x64_setcc (CC.BE))))
+
+;; Other scalar lowerings are made possible by flipping the operands and
+;; reversing the condition code.
+
+(rule (lower (fcmp (FloatCC.LessThan) a @ (value_type (ty_scalar_float ty)) b))
+      ;; Same flags as `GreaterThan`.
+      (with_flags (x64_ucomis a b) (x64_setcc (CC.NBE))))
+(rule (lower (fcmp (FloatCC.LessThanOrEqual) a @ (value_type (ty_scalar_float ty)) b))
+      ;; Same flags as `GreaterThanOrEqual`.
+      (with_flags (x64_ucomis a b) (x64_setcc (CC.NB))))
+(rule (lower (fcmp (FloatCC.UnorderedOrGreaterThan) a @ (value_type (ty_scalar_float ty)) b))
+      ;; Same flags as `UnorderedOrLessThan`.
+      (with_flags (x64_ucomis a b) (x64_setcc (CC.B))))
+(rule (lower (fcmp (FloatCC.UnorderedOrGreaterThanOrEqual) a @ (value_type (ty_scalar_float ty)) b))
+      ;; Same flags as `UnorderedOrLessThanOrEqual`.
+      (with_flags (x64_ucomis a b) (x64_setcc (CC.BE))))
+
+;; For vector lowerings, we use `CMPP*` instructions with a 3-bit operand that
+;; determines the comparison to make. Note that comparisons that succeed will
+;; fill the lane with 1s; comparisons that do not will fill the lane with 0s.
+
+(rule (lower (fcmp (FloatCC.Equal) a @ (value_type (ty_vec128 ty)) b))
+      (x64_cmpp ty a b (FcmpImm.Equal)))
+(rule (lower (fcmp (FloatCC.NotEqual) a @ (value_type (ty_vec128 ty)) b))
+      (x64_cmpp ty a b (FcmpImm.NotEqual)))
+(rule (lower (fcmp (FloatCC.LessThan) a @ (value_type (ty_vec128 ty)) b))
+      (x64_cmpp ty a b (FcmpImm.LessThan)))
+(rule (lower (fcmp (FloatCC.LessThanOrEqual) a @ (value_type (ty_vec128 ty)) b))
+      (x64_cmpp ty a b (FcmpImm.LessThanOrEqual)))
+(rule (lower (fcmp (FloatCC.Ordered) a @ (value_type (ty_vec128 ty)) b))
+      (x64_cmpp ty a b (FcmpImm.Ordered)))
+(rule (lower (fcmp (FloatCC.Unordered) a @ (value_type (ty_vec128 ty)) b))
+      (x64_cmpp ty a b (FcmpImm.Unordered)))
+(rule (lower (fcmp (FloatCC.UnorderedOrGreaterThan) a @ (value_type (ty_vec128 ty)) b))
+      (x64_cmpp ty a b (FcmpImm.UnorderedOrGreaterThan)))
+(rule (lower (fcmp (FloatCC.UnorderedOrGreaterThanOrEqual) a @ (value_type (ty_vec128 ty)) b))
+      (x64_cmpp ty a b (FcmpImm.UnorderedOrGreaterThanOrEqual)))
+
+;; Some vector lowerings rely on flipping the operands and using a reversed
+;; comparison code.
+
+(rule (lower (fcmp (FloatCC.GreaterThan) a @ (value_type (ty_vec128 ty)) b))
+      (x64_cmpp ty b a (FcmpImm.LessThan)))
+(rule (lower (fcmp (FloatCC.GreaterThanOrEqual) a @ (value_type (ty_vec128 ty)) b))
+      (x64_cmpp ty b a (FcmpImm.LessThanOrEqual)))
+(rule (lower (fcmp (FloatCC.UnorderedOrLessThan) a @ (value_type (ty_vec128 ty)) b))
+      (x64_cmpp ty b a (FcmpImm.UnorderedOrGreaterThan)))
+(rule (lower (fcmp (FloatCC.UnorderedOrLessThanOrEqual) a @ (value_type (ty_vec128 ty)) b))
+      (x64_cmpp ty b a (FcmpImm.UnorderedOrGreaterThanOrEqual)))
+
+;; Some vector lowerings are simply not supported for certain codes:
+;; - FloatCC::OrderedNotEqual
+;; - FloatCC::UnorderedOrEqual
 
 ;;;; Rules for `select` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

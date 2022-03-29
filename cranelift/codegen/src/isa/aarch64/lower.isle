@@ -145,22 +145,22 @@
 
 ;;;; Rules for `uadd_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type (vec128 ty) (uadd_sat x y)))
+(rule (lower (has_type (ty_vec128 ty) (uadd_sat x y)))
       (uqadd x y (vector_size ty)))
 
 ;;;; Rules for `sadd_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type (vec128 ty) (sadd_sat x y)))
+(rule (lower (has_type (ty_vec128 ty) (sadd_sat x y)))
       (sqadd x y (vector_size ty)))
 
 ;;;; Rules for `usub_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type (vec128 ty) (usub_sat x y)))
+(rule (lower (has_type (ty_vec128 ty) (usub_sat x y)))
       (uqsub x y (vector_size ty)))
 
 ;;;; Rules for `ssub_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type (vec128 ty) (ssub_sat x y)))
+(rule (lower (has_type (ty_vec128 ty) (ssub_sat x y)))
       (sqsub x y (vector_size ty)))
 
 ;;;; Rules for `ineg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -170,7 +170,7 @@
       (sub ty (zero_reg) x))
 
 ;; vectors.
-(rule (lower (has_type (vec128 ty) (ineg x)))
+(rule (lower (has_type (ty_vec128 ty) (ineg x)))
       (neg x (vector_size ty)))
 
 ;;;; Rules for `imul` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -208,7 +208,7 @@
         (value_regs dst_lo dst_hi)))
 
 ;; Case for i8x16, i16x8, and i32x4.
-(rule (lower (has_type (vec128 ty @ (not_i64x2)) (imul x y)))
+(rule (lower (has_type (ty_vec128 ty @ (not_i64x2)) (imul x y)))
       (mul x y (vector_size ty)))
 
 ;; Special lowering for i64x2.
@@ -575,7 +575,7 @@
         (value_regs new_lo new_hi)))
 
 ;; Implementation of `bnot` for vector types.
-(rule (lower (has_type (vec128 ty) (bnot x)))
+(rule (lower (has_type (ty_vec128 ty) (bnot x)))
       (not x (vector_size ty)))
 
 ;;;; Rules for `band` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -588,7 +588,7 @@
 
 (rule (lower (has_type $I128 (band x y))) (i128_alu_bitop (ALUOp.And) $I64 x y))
 
-(rule (lower (has_type (vec128 ty) (band x y)))
+(rule (lower (has_type (ty_vec128 ty) (band x y)))
       (and_vec x y (vector_size ty)))
 
 ;;;; Rules for `bor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -601,7 +601,7 @@
 
 (rule (lower (has_type $I128 (bor x y))) (i128_alu_bitop (ALUOp.Orr) $I64 x y))
 
-(rule (lower (has_type (vec128 ty) (bor x y)))
+(rule (lower (has_type (ty_vec128 ty) (bor x y)))
       (orr_vec x y (vector_size ty)))
 
 ;;;; Rules for `bxor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -614,7 +614,7 @@
 
 (rule (lower (has_type $I128 (bxor x y))) (i128_alu_bitop (ALUOp.Eor) $I64 x y))
 
-(rule (lower (has_type (vec128 ty) (bxor x y)))
+(rule (lower (has_type (ty_vec128 ty) (bxor x y)))
       (eor_vec x y (vector_size ty)))
 
 ;;;; Rules for `band_not` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -627,7 +627,7 @@
 
 (rule (lower (has_type $I128 (band_not x y))) (i128_alu_bitop (ALUOp.AndNot) $I64 x y))
 
-(rule (lower (has_type (vec128 ty) (band_not x y)))
+(rule (lower (has_type (ty_vec128 ty) (band_not x y)))
       (bic_vec x y (vector_size ty)))
 
 ;;;; Rules for `bor_not` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -691,7 +691,7 @@
           (csel (Cond.Ne) lo_lshift maybe_hi)))))
 
 ;; Shift for vector types.
-(rule (lower (has_type (vec128 ty) (ishl x y)))
+(rule (lower (has_type (ty_vec128 ty) (ishl x y)))
       (let ((size VectorSize (vector_size ty))
             (shift Reg (vec_dup y size)))
         (sshl x shift size)))
@@ -749,7 +749,7 @@
       (lower_ushr128 x (value_regs_get y 0)))
 
 ;; Vector shifts.
-(rule (lower (has_type (vec128 ty) (ushr x y)))
+(rule (lower (has_type (ty_vec128 ty) (ushr x y)))
       (let ((size VectorSize (vector_size ty))
             (shift Reg (vec_dup (sub $I32 (zero_reg) y) size)))
         (ushl x shift size)))
@@ -769,7 +769,7 @@
             (src_hi Reg (value_regs_get src 1))
             (lo_rshift Reg (lsr $I64 src_lo amt))
             (hi_rshift Reg (lsr $I64 src_hi amt))
-            
+
             (inv_amt Reg (orr_not $I32 (zero_reg) amt))
             (hi_lshift Reg (lsl $I64 (lsl_imm $I64 src_hi (imm_shift_from_u8 1))
                                 inv_amt))
@@ -798,7 +798,7 @@
 ;; Vector shifts.
 ;;
 ;; Note that right shifts are implemented with a negative left shift.
-(rule (lower (has_type (vec128 ty) (sshr x y)))
+(rule (lower (has_type (ty_vec128 ty) (sshr x y)))
       (let ((size VectorSize (vector_size ty))
             (shift Reg (vec_dup (sub $I32 (zero_reg) y) size)))
         (sshl x shift size)))
