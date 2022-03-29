@@ -253,6 +253,14 @@ macro_rules! isle_prelude_methods {
             }
         }
 
+        #[inline]
+        fn ty_scalar_float(&mut self, ty: Type) -> Option<Type> {
+            match ty {
+                F32 | F64 => Some(ty),
+                _ => None,
+            }
+        }
+
         fn vec128(&mut self, ty: Type) -> Option<Type> {
             if ty.is_vector() && ty.bits() == 128 {
                 Some(ty)

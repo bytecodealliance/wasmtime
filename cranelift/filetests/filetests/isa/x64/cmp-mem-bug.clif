@@ -48,8 +48,8 @@ block0(v0: f64, v1: i64):
 ;   Inst 1:   movq    %rsp, %rbp
 ;   Inst 2:   movsd   0(%rdi), %xmm1
 ;   Inst 3:   ucomisd %xmm1, %xmm0
-;   Inst 4:   setnp   %dil
-;   Inst 5:   setz    %sil
+;   Inst 4:   setnp   %sil
+;   Inst 5:   setz    %dil
 ;   Inst 6:   andl    %edi, %esi
 ;   Inst 7:   andq    $1, %rsi
 ;   Inst 8:   ucomisd %xmm0, %xmm1

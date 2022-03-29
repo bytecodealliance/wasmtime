@@ -933,51 +933,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let cond_code = ctx.data(insn).fp_cond_code().unwrap();
             let input_ty = ctx.input_ty(insn, 0);
             if !input_ty.is_vector() {
-                // Unordered is returned by setting ZF, PF, CF <- 111
-                // Greater than by ZF, PF, CF <- 000
-                // Less than by ZF, PF, CF <- 001
-                // Equal by ZF, PF, CF <- 100
-                //
-                // Checking the result of comiss is somewhat annoying because you don't have setcc
-                // instructions that explicitly check simultaneously for the condition (i.e. eq, le,
-                // gt, etc) *and* orderedness.
-                //
-                // So that might mean we need more than one setcc check and then a logical "and" or
-                // "or" to determine both, in some cases.  However knowing that if the parity bit is
-                // set, then the result was considered unordered and knowing that if the parity bit is
-                // set, then both the ZF and CF flag bits must also be set we can get away with using
-                // one setcc for most condition codes.
-
-                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-
-                match emit_fcmp(ctx, insn, cond_code, FcmpSpec::Normal) {
-                    FcmpCondResult::Condition(cc) => {
-                        ctx.emit(Inst::setcc(cc, dst));
-                    }
-                    FcmpCondResult::AndConditions(cc1, cc2) => {
-                        let tmp = ctx.alloc_tmp(types::I32).only_reg().unwrap();
-                        ctx.emit(Inst::setcc(cc1, tmp));
-                        ctx.emit(Inst::setcc(cc2, dst));
-                        ctx.emit(Inst::alu_rmi_r(
-                            OperandSize::Size32,
-                            AluRmiROpcode::And,
-                            RegMemImm::reg(tmp.to_reg()),
-                            dst,
-                        ));
-                    }
-                    FcmpCondResult::OrConditions(cc1, cc2) => {
-                        let tmp = ctx.alloc_tmp(types::I32).only_reg().unwrap();
-                        ctx.emit(Inst::setcc(cc1, tmp));
-                        ctx.emit(Inst::setcc(cc2, dst));
-                        ctx.emit(Inst::alu_rmi_r(
-                            OperandSize::Size32,
-                            AluRmiROpcode::Or,
-                            RegMemImm::reg(tmp.to_reg()),
-                            dst,
-                        ));
-                    }
-                    FcmpCondResult::InvertedEqualOrConditions(_, _) => unreachable!(),
-                }
+                implemented_in_isle(ctx);
             } else {
                 let op = match input_ty {
                     types::F32X4 => SseOpcode::Cmpps,
