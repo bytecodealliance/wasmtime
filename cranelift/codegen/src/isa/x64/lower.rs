@@ -2569,67 +2569,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Select => {
-            let flag_input = inputs[0];
-            if let Some(_) = matches_input(ctx, flag_input, Opcode::Fcmp) {
-                implemented_in_isle(ctx);
-            } else {
-                let ty = ty.unwrap();
-
-                let size = ty.bytes() as u8;
-                let lhs = put_input_in_regs(ctx, inputs[1]);
-                let rhs = put_input_in_regs(ctx, inputs[2]);
-                let dst = get_output_reg(ctx, outputs[0]);
-
-                let cc = if let Some(icmp) = matches_input(ctx, flag_input, Opcode::Icmp) {
-                    let cond_code = ctx.data(icmp).cond_code().unwrap();
-                    let cond_code = emit_cmp(ctx, icmp, cond_code);
-                    CC::from_intcc(cond_code)
-                } else {
-                    let sel_ty = ctx.input_ty(insn, 0);
-                    let size = OperandSize::from_ty(ctx.input_ty(insn, 0));
-                    let test = put_input_in_reg(ctx, flag_input);
-                    let test_input = if sel_ty == types::B1 {
-                        // The input is a boolean value; test the LSB for nonzero with:
-                        //     test reg, 1
-                        RegMemImm::imm(1)
-                    } else {
-                        // The input is an integer; test the whole value for
-                        // nonzero with:
-                        //     test reg, reg
-                        //
-                        // (It doesn't make sense to have a boolean wider than
-                        // one bit here -- which bit would cause us to select an
-                        // input?)
-                        assert!(!is_bool_ty(sel_ty));
-                        RegMemImm::reg(test)
-                    };
-                    ctx.emit(Inst::test_rmi_r(size, test_input, test));
-                    CC::NZ
-                };
-
-                // This doesn't affect the flags.
-                emit_moves(ctx, dst, rhs, ty);
-
-                if is_int_or_ref_ty(ty) || ty == types::I128 {
-                    emit_cmoves(ctx, size, cc, lhs, dst);
-                } else {
-                    debug_assert!(
-                        ty == types::F32
-                            || ty == types::F64
-                            || (ty.is_vector() && ty.bits() == 128)
-                    );
-                    ctx.emit(Inst::xmm_cmove(
-                        if ty == types::F64 {
-                            OperandSize::Size64
-                        } else {
-                            OperandSize::Size32
-                        },
-                        cc,
-                        RegMem::reg(lhs.only_reg().unwrap()),
-                        dst.only_reg().unwrap(),
-                    ));
-                }
-            }
+            implemented_in_isle(ctx);
         }
 
         Opcode::Selectif | Opcode::SelectifSpectreGuard => {

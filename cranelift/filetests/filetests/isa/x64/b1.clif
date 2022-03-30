@@ -11,15 +11,16 @@ block0(v0: b1, v1: i32, v2: i32):
 ;   Entry block: 0
 ; Block 0:
 ;   (original IR block: block0)
-;   (instruction range: 0 .. 8)
+;   (instruction range: 0 .. 9)
 ;   Inst 0:   pushq   %rbp
 ;   Inst 1:   movq    %rsp, %rbp
 ;   Inst 2:   testb   $1, %dil
-;   Inst 3:   cmovnzl %esi, %edx
-;   Inst 4:   movq    %rdx, %rax
-;   Inst 5:   movq    %rbp, %rsp
-;   Inst 6:   popq    %rbp
-;   Inst 7:   ret
+;   Inst 3:   movl    %edx, %edi
+;   Inst 4:   cmovnzl %esi, %edi
+;   Inst 5:   movq    %rdi, %rax
+;   Inst 6:   movq    %rbp, %rsp
+;   Inst 7:   popq    %rbp
+;   Inst 8:   ret
 ; }}
 
 function %f1(b1) -> i32 {
