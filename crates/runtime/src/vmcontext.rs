@@ -502,7 +502,7 @@ pub struct VMSharedSignatureIndex(u32);
 mod test_vmshared_signature_index {
     use super::VMSharedSignatureIndex;
     use std::mem::size_of;
-    use wasmtime_environ::{Module, TargetSharedSignatureIndex, VMOffsets};
+    use wasmtime_environ::{Module, VMOffsets};
 
     #[test]
     fn check_vmshared_signature_index() {
@@ -511,14 +511,6 @@ mod test_vmshared_signature_index {
         assert_eq!(
             size_of::<VMSharedSignatureIndex>(),
             usize::from(offsets.size_of_vmshared_signature_index())
-        );
-    }
-
-    #[test]
-    fn check_target_shared_signature_index() {
-        assert_eq!(
-            size_of::<VMSharedSignatureIndex>(),
-            size_of::<TargetSharedSignatureIndex>()
         );
     }
 }

@@ -17,7 +17,7 @@ use thiserror::Error;
 
 /// Information about a function, such as trap information, address map,
 /// and stack maps.
-#[derive(Serialize, Deserialize, Clone, Default)]
+#[derive(Serialize, Deserialize, Default)]
 #[allow(missing_docs)]
 pub struct FunctionInfo {
     pub start_srcloc: FilePos,
@@ -31,7 +31,7 @@ pub struct FunctionInfo {
 
 /// Information about a compiled trampoline which the host can call to enter
 /// wasm.
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize)]
 #[allow(missing_docs)]
 pub struct Trampoline {
     /// The signature this trampoline is for
@@ -45,7 +45,7 @@ pub struct Trampoline {
 
 /// The offset within a function of a GC safepoint, and its associated stack
 /// map.
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct StackMapInformation {
     /// The offset of the GC safepoint within the function's native code. It is
     /// relative to the beginning of the function.
