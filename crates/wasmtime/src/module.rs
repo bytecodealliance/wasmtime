@@ -13,9 +13,9 @@ use std::sync::Arc;
 use wasmparser::{Parser, ValidPayload, Validator};
 use wasmtime_environ::{
     DefinedFuncIndex, DefinedMemoryIndex, FunctionInfo, ModuleEnvironment, PrimaryMap,
-    SignatureIndex,
+    SignatureIndex, TypeTables,
 };
-use wasmtime_jit::{CompiledModule, CompiledModuleInfo, TypeTables};
+use wasmtime_jit::{CompiledModule, CompiledModuleInfo};
 use wasmtime_runtime::{
     CompiledModuleId, MemoryImage, MmapVec, ModuleMemoryImages, VMSharedSignatureIndex,
 };

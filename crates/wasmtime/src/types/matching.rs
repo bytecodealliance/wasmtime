@@ -2,8 +2,9 @@ use crate::linker::Definition;
 use crate::store::StoreOpaque;
 use crate::{signatures::SignatureCollection, Engine, Extern};
 use anyhow::{bail, Result};
-use wasmtime_environ::{EntityType, Global, Memory, SignatureIndex, Table, WasmFuncType, WasmType};
-use wasmtime_jit::TypeTables;
+use wasmtime_environ::{
+    EntityType, Global, Memory, SignatureIndex, Table, TypeTables, WasmFuncType, WasmType,
+};
 use wasmtime_runtime::VMSharedSignatureIndex;
 
 pub struct MatchCx<'a> {

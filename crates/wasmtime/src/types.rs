@@ -1,6 +1,5 @@
 use std::fmt;
-use wasmtime_environ::{EntityType, Global, Memory, Table, WasmFuncType, WasmType};
-use wasmtime_jit::TypeTables;
+use wasmtime_environ::{EntityType, Global, Memory, Table, TypeTables, WasmFuncType, WasmType};
 
 pub(crate) mod matching;
 

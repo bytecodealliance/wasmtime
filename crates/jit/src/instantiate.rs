@@ -17,7 +17,7 @@ use std::sync::Arc;
 use thiserror::Error;
 use wasmtime_environ::{
     CompileError, DefinedFuncIndex, FuncIndex, FunctionInfo, Module, ModuleTranslation, PrimaryMap,
-    SignatureIndex, StackMapInformation, Trampoline, Tunables, WasmFuncType, ELF_WASMTIME_ADDRMAP,
+    SignatureIndex, StackMapInformation, Trampoline, Tunables, ELF_WASMTIME_ADDRMAP,
     ELF_WASMTIME_TRAPS,
 };
 use wasmtime_runtime::{
@@ -356,14 +356,6 @@ pub fn mmap_vec_from_obj(obj: Object) -> Result<MmapVec> {
             self.len += val.len();
         }
     }
-}
-
-/// This is intended to mirror the type tables in `wasmtime_environ`, except that
-/// it doesn't store the native signatures which are no longer needed past compilation.
-#[derive(Serialize, Deserialize)]
-#[allow(missing_docs)]
-pub struct TypeTables {
-    pub wasm_signatures: PrimaryMap<SignatureIndex, WasmFuncType>,
 }
 
 /// A compiled wasm module, ready to be instantiated.
