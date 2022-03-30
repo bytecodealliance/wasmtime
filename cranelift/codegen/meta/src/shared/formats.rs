@@ -28,7 +28,6 @@ pub(crate) struct Formats {
     pub(crate) int_select: Rc<InstructionFormat>,
     pub(crate) jump: Rc<InstructionFormat>,
     pub(crate) load: Rc<InstructionFormat>,
-    pub(crate) load_complex: Rc<InstructionFormat>,
     pub(crate) load_no_offset: Rc<InstructionFormat>,
     pub(crate) multiary: Rc<InstructionFormat>,
     pub(crate) nullary: Rc<InstructionFormat>,
@@ -36,7 +35,6 @@ pub(crate) struct Formats {
     pub(crate) stack_load: Rc<InstructionFormat>,
     pub(crate) stack_store: Rc<InstructionFormat>,
     pub(crate) store: Rc<InstructionFormat>,
-    pub(crate) store_complex: Rc<InstructionFormat>,
     pub(crate) store_no_offset: Rc<InstructionFormat>,
     pub(crate) table_addr: Rc<InstructionFormat>,
     pub(crate) ternary: Rc<InstructionFormat>,
@@ -203,12 +201,6 @@ impl Formats {
                 .imm(&imm.offset32)
                 .build(),
 
-            load_complex: Builder::new("LoadComplex")
-                .imm(&imm.memflags)
-                .varargs()
-                .imm(&imm.offset32)
-                .build(),
-
             load_no_offset: Builder::new("LoadNoOffset")
                 .imm(&imm.memflags)
                 .value()
@@ -218,13 +210,6 @@ impl Formats {
                 .imm(&imm.memflags)
                 .value()
                 .value()
-                .imm(&imm.offset32)
-                .build(),
-
-            store_complex: Builder::new("StoreComplex")
-                .imm(&imm.memflags)
-                .value()
-                .varargs()
                 .imm(&imm.offset32)
                 .build(),
 

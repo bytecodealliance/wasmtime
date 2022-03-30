@@ -291,17 +291,11 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::FminPseudo
         | Opcode::FmaxPseudo
         | Opcode::Uload8x8
-        | Opcode::Uload8x8Complex
         | Opcode::Sload8x8
-        | Opcode::Sload8x8Complex
         | Opcode::Uload16x4
-        | Opcode::Uload16x4Complex
         | Opcode::Sload16x4
-        | Opcode::Sload16x4Complex
         | Opcode::Uload32x2
-        | Opcode::Uload32x2Complex
         | Opcode::Sload32x2
-        | Opcode::Sload32x2Complex
         | Opcode::Vconst
         | Opcode::Shuffle
         | Opcode::Vsplit
@@ -331,20 +325,6 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::IfcmpSp => {
             panic!("Unused opcode should not be encountered.");
-        }
-
-        Opcode::LoadComplex
-        | Opcode::Uload8Complex
-        | Opcode::Sload8Complex
-        | Opcode::Uload16Complex
-        | Opcode::Sload16Complex
-        | Opcode::Uload32Complex
-        | Opcode::Sload32Complex
-        | Opcode::StoreComplex
-        | Opcode::Istore8Complex
-        | Opcode::Istore16Complex
-        | Opcode::Istore32Complex => {
-            panic!("Load/store complex opcode should not be encountered.");
         }
 
         Opcode::Ifcmp

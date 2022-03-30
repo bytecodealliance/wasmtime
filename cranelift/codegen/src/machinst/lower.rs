@@ -1101,10 +1101,8 @@ impl<'func, I: VCodeInst> LowerCtx for Lower<'func, I> {
             &InstructionData::AtomicCas { flags, .. } => Some(flags),
             &InstructionData::AtomicRmw { flags, .. } => Some(flags),
             &InstructionData::Load { flags, .. }
-            | &InstructionData::LoadComplex { flags, .. }
             | &InstructionData::LoadNoOffset { flags, .. }
-            | &InstructionData::Store { flags, .. }
-            | &InstructionData::StoreComplex { flags, .. } => Some(flags),
+            | &InstructionData::Store { flags, .. } => Some(flags),
             &InstructionData::StoreNoOffset { flags, .. } => Some(flags),
             _ => None,
         }
