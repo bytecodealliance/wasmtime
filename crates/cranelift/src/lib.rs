@@ -226,7 +226,7 @@ fn func_signature(
         _ => wasmtime_call_conv(isa),
     };
     let mut sig = blank_sig(isa, call_conv);
-    push_types(isa, &mut sig, &types.wasm_signatures[func.signature]);
+    push_types(isa, &mut sig, &types[func.signature]);
     return sig;
 }
 

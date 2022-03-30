@@ -256,7 +256,7 @@ impl wasmtime_environ::Compiler for Compiler {
         let compiled_trampolines = translation
             .exported_signatures
             .iter()
-            .map(|i| self.host_to_wasm_trampoline(&types.wasm_signatures[*i]))
+            .map(|i| self.host_to_wasm_trampoline(&types[*i]))
             .collect::<Result<Vec<_>, _>>()?;
 
         let mut func_starts = Vec::with_capacity(funcs.len());

@@ -1,6 +1,5 @@
 use std::fmt;
-use wasmtime_environ::{EntityType, Global, Memory, Table, WasmFuncType, WasmType};
-use wasmtime_jit::TypeTables;
+use wasmtime_environ::{EntityType, Global, Memory, Table, TypeTables, WasmFuncType, WasmType};
 
 pub(crate) mod matching;
 
@@ -151,9 +150,7 @@ impl ExternType {
 
     pub(crate) fn from_wasmtime(types: &TypeTables, ty: &EntityType) -> ExternType {
         match ty {
-            EntityType::Function(idx) => {
-                FuncType::from_wasm_func_type(types.wasm_signatures[*idx].clone()).into()
-            }
+            EntityType::Function(idx) => FuncType::from_wasm_func_type(types[*idx].clone()).into(),
             EntityType::Global(ty) => GlobalType::from_wasmtime_global(ty).into(),
             EntityType::Memory(ty) => MemoryType::from_wasmtime_memory(ty).into(),
             EntityType::Table(ty) => TableType::from_wasmtime_table(ty).into(),
