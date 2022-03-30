@@ -1,30 +1,7 @@
-use std::future::Future;
+use crate::async_functions::{CountPending, PollOnce};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 use wasmtime::*;
-
-fn dummy_waker() -> Waker {
-    return unsafe { Waker::from_raw(clone(5 as *const _)) };
-
-    unsafe fn clone(ptr: *const ()) -> RawWaker {
-        assert_eq!(ptr as usize, 5);
-        const VTABLE: RawWakerVTable = RawWakerVTable::new(clone, wake, wake_by_ref, drop);
-        RawWaker::new(ptr, &VTABLE)
-    }
-
-    unsafe fn wake(ptr: *const ()) {
-        assert_eq!(ptr as usize, 5);
-    }
-
-    unsafe fn wake_by_ref(ptr: *const ()) {
-        assert_eq!(ptr as usize, 5);
-    }
-
-    unsafe fn drop(ptr: *const ()) {
-        assert_eq!(ptr as usize, 5);
-    }
-}
 
 fn build_engine() -> Arc<Engine> {
     let mut config = Config::new();
@@ -59,7 +36,7 @@ fn make_env(engine: &Engine) -> Linker<()> {
 ///
 /// Returns `Some(yields)` if function completed normally, giving the
 /// number of yields that occured, or `None` if a trap occurred.
-fn run_and_count_yields_or_trap<F: Fn(Arc<Engine>)>(
+async fn run_and_count_yields_or_trap<F: Fn(Arc<Engine>)>(
     wasm: &str,
     initial: u64,
     delta: Option<u64>,
@@ -82,39 +59,15 @@ fn run_and_count_yields_or_trap<F: Fn(Arc<Engine>)>(
     let engine_clone = engine.clone();
     setup_func(engine_clone);
 
-    let mut future = Box::pin(async {
-        let instance = linker.instantiate_async(&mut store, &module).await.unwrap();
-        let f = instance.get_func(&mut store, "run").unwrap();
-        f.call_async(&mut store, &[], &mut []).await
-    });
-    let mut yields = 0;
-    loop {
-        match future
-            .as_mut()
-            .poll(&mut Context::from_waker(&dummy_waker()))
-        {
-            Poll::Pending => {
-                yields += 1;
-            }
-            Poll::Ready(Ok(..)) => {
-                break;
-            }
-            Poll::Ready(Err(e)) => match e.downcast::<wasmtime::Trap>() {
-                Ok(_) => {
-                    return None;
-                }
-                e => {
-                    e.unwrap();
-                }
-            },
-        }
-    }
-
-    Some(yields)
+    let instance = linker.instantiate_async(&mut store, &module).await.unwrap();
+    let f = instance.get_func(&mut store, "run").unwrap();
+    let (result, yields) =
+        CountPending::new(Box::pin(f.call_async(&mut store, &[], &mut []))).await;
+    return result.ok().map(|_| yields);
 }
 
-#[test]
-fn epoch_yield_at_func_entry() {
+#[tokio::test]
+async fn epoch_yield_at_func_entry() {
     // Should yield at start of call to func $subfunc.
     assert_eq!(
         Some(1),
@@ -131,11 +84,12 @@ fn epoch_yield_at_func_entry() {
             Some(1),
             |_| {},
         )
+        .await
     );
 }
 
-#[test]
-fn epoch_yield_at_loop_header() {
+#[tokio::test]
+async fn epoch_yield_at_loop_header() {
     // Should yield at top of loop, once per five iters.
     assert_eq!(
         Some(2),
@@ -154,11 +108,12 @@ fn epoch_yield_at_loop_header() {
             Some(5),
             |_| {},
         )
+        .await
     );
 }
 
-#[test]
-fn epoch_yield_immediate() {
+#[tokio::test]
+async fn epoch_yield_immediate() {
     // We should see one yield immediately when the initial deadline
     // is zero.
     assert_eq!(
@@ -173,11 +128,12 @@ fn epoch_yield_immediate() {
             Some(1),
             |_| {},
         )
+        .await
     );
 }
 
-#[test]
-fn epoch_yield_only_once() {
+#[tokio::test]
+async fn epoch_yield_only_once() {
     // We should yield from the subfunction, and then when we return
     // to the outer function and hit another loop header, we should
     // not yield again (the double-check block will reload the correct
@@ -202,11 +158,12 @@ fn epoch_yield_only_once() {
             Some(1),
             |_| {},
         )
+        .await
     );
 }
 
-#[test]
-fn epoch_interrupt_infinite_loop() {
+#[tokio::test]
+async fn epoch_interrupt_infinite_loop() {
     assert_eq!(
         None,
         run_and_count_yields_or_trap(
@@ -226,11 +183,12 @@ fn epoch_interrupt_infinite_loop() {
                 });
             },
         )
+        .await
     );
 }
 
-#[test]
-fn epoch_interrupt_function_entries() {
+#[tokio::test]
+async fn epoch_interrupt_function_entries() {
     assert_eq!(
         None,
         run_and_count_yields_or_trap(
@@ -347,11 +305,12 @@ fn epoch_interrupt_function_entries() {
                 });
             },
         )
+        .await
     );
 }
 
-#[test]
-fn drop_future_on_epoch_yield() {
+#[tokio::test]
+async fn drop_future_on_epoch_yield() {
     let wasm = "
     (module
       (import \"\" \"bump_epoch\" (func $bump))
@@ -399,26 +358,9 @@ fn drop_future_on_epoch_yield() {
     store.set_epoch_deadline(1);
     store.epoch_deadline_async_yield_and_update(1);
 
-    let mut future = Box::pin(async {
-        let instance = linker.instantiate_async(&mut store, &module).await.unwrap();
-        let f = instance.get_func(&mut store, "run").unwrap();
-        f.call_async(&mut store, &[], &mut []).await
-    });
-    match future
-        .as_mut()
-        .poll(&mut Context::from_waker(&dummy_waker()))
-    {
-        Poll::Pending => {
-            // OK: expected yield.
-        }
-        Poll::Ready(Ok(..)) => {
-            panic!("Shoulud not have returned");
-        }
-        Poll::Ready(e) => {
-            e.unwrap();
-        }
-    }
+    let instance = linker.instantiate_async(&mut store, &module).await.unwrap();
+    let f = instance.get_func(&mut store, "run").unwrap();
+    PollOnce::new(Box::pin(f.call_async(&mut store, &[], &mut []))).await;
 
-    drop(future);
     assert_eq!(true, alive_flag.load(Ordering::Acquire));
 }
