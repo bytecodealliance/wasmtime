@@ -121,7 +121,7 @@ impl MatchCx<'_> {
             return Ok(());
         }
         let msg = "function types incompatible";
-        let expected = &self.types.wasm_signatures[expected];
+        let expected = &self.types[expected];
         let actual = match self.engine.signatures().lookup_type(actual) {
             Some(ty) => ty,
             None => {

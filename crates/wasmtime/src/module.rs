@@ -418,13 +418,7 @@ impl Module {
         let (mmap, info) =
             wasmtime_jit::finish_compile(translation, obj, funcs, trampolines, tunables)?;
 
-        Ok((
-            mmap,
-            Some(info),
-            TypeTables {
-                wasm_signatures: types.wasm_signatures,
-            },
-        ))
+        Ok((mmap, Some(info), types))
     }
 
     /// Deserializes an in-memory compiled module previously created with
@@ -512,7 +506,7 @@ impl Module {
 
         let signatures = Arc::new(SignatureCollection::new_for_module(
             engine.signatures(),
-            &types.wasm_signatures,
+            &types,
             module.trampolines().map(|(idx, f, _)| (idx, f)),
         ));
 

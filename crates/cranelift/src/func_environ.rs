@@ -1486,7 +1486,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         index: TypeIndex,
     ) -> WasmResult<ir::SigRef> {
         let index = self.module.types[index].unwrap_function();
-        let sig = crate::indirect_signature(self.isa, &self.types.wasm_signatures[index]);
+        let sig = crate::indirect_signature(self.isa, &self.types[index]);
         Ok(func.import_signature(sig))
     }
 

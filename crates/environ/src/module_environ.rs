@@ -509,7 +509,7 @@ impl<'data> ModuleEnvironment<'data> {
 
                 if self.tunables.generate_native_debuginfo {
                     let sig_index = self.result.module.functions[func_index].signature;
-                    let sig = &self.types.wasm_signatures[sig_index];
+                    let sig = &self.types[sig_index];
                     let mut locals = Vec::new();
                     for pair in body.get_locals_reader()? {
                         locals.push(pair?);
