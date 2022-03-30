@@ -1746,6 +1746,43 @@
 (rule (lower (has_type ty (select (fcmp (FloatCC.NotEqual) a b) x y)))
       (with_flags (x64_ucomis a b) (cmove_or_from_values ty (CC.NZ) (CC.P) x y)))
 
+;; We also can lower `select`s that depend on an `icmp` test, but more simply
+;; than the `fcmp` variants above. In these cases, we lower to a `CMP`
+;; instruction plus a `CMOV`; recall that `cmove_from_values` here may emit more
+;; than one instruction for certain types (e.g., XMM-held, I128).
+
+(rule (lower (has_type ty (select (icmp cc a @ (value_type (fits_in_64 a_ty)) b) x y)))
+      ;; N.B.: we force the comparison operators into registers, and disallow
+      ;; load-op fusion, because we do not have a transitive guarantee that this
+      ;; cmp-site will be the sole user of the value. Consider: the `icmp` might
+      ;; be the only user of a load, but there may be multiple users of the
+      ;; `icmp` (e.g., `select` or `bint` instructions) that each invoke emit a
+      ;; comparison. If we were to allow a load to sink to the *latest* one, but
+      ;; other sites did not permit sinking, then we would be missing the load
+      ;; for other cmp-sites. TODO:
+      ;; https://github.com/bytecodealliance/wasmtime/issues/3953.
+      (let ((gpr_a Gpr (put_in_gpr a))
+            (gpr_b Gpr (put_in_gpr b))
+            (size OperandSize (raw_operand_size_of_type a_ty)))
+           (with_flags (x64_cmp size gpr_b gpr_a) (cmove_from_values ty cc x y))))
+
+;; Finally, we lower `select` from a condition value `c`. These rules are meant
+;; to be the final, default lowerings if no other patterns matched above.
+
+(rule (lower (has_type ty (select c @ (value_type $B1) x y)))
+      (let ((size OperandSize (raw_operand_size_of_type $B1))
+            ;; N.B.: disallow load-op fusion, see above. TODO:
+            ;; https://github.com/bytecodealliance/wasmtime/issues/3953.
+            (gpr_c Gpr (put_in_gpr c)))
+           (with_flags (x64_test size (RegMemImm.Imm 1) gpr_c) (cmove_from_values ty (CC.NZ) x y))))
+
+(rule (lower (has_type ty (select c @ (value_type (fits_in_64 a_ty)) x y)))
+      (let ((size OperandSize (raw_operand_size_of_type a_ty))
+            ;; N.B.: disallow load-op fusion, see above. TODO:
+            ;; https://github.com/bytecodealliance/wasmtime/issues/3953.
+            (gpr_c Gpr (put_in_gpr c)))
+           (with_flags (x64_test size gpr_c gpr_c) (cmove_from_values ty (CC.NZ) x y))))
+
 ;; Rules for `clz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; If available, we can use a plain lzcnt instruction here. Note no
