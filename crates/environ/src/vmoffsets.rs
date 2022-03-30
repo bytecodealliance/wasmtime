@@ -776,22 +776,6 @@ impl<P: PtrSize> VMOffsets<P> {
     }
 }
 
-/// Target specific type for shared signature index.
-#[derive(Debug, Copy, Clone)]
-pub struct TargetSharedSignatureIndex(u32);
-
-impl TargetSharedSignatureIndex {
-    /// Constructs `TargetSharedSignatureIndex`.
-    pub fn new(value: u32) -> Self {
-        Self(value)
-    }
-
-    /// Returns index value.
-    pub fn index(self) -> u32 {
-        self.0
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use crate::vmoffsets::align;

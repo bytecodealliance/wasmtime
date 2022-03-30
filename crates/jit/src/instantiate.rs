@@ -518,11 +518,6 @@ impl CompiledModule {
         &self.module
     }
 
-    /// Returns the `FunctionInfo` map for all defined functions.
-    pub fn functions(&self) -> &PrimaryMap<DefinedFuncIndex, FunctionInfo> {
-        &self.funcs
-    }
-
     /// Looks up the `name` section name for the function index `idx`, if one
     /// was specified in the original wasm module.
     pub fn func_name(&self, idx: FuncIndex) -> Option<&str> {

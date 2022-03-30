@@ -128,7 +128,7 @@ pub struct StaticMemoryInitializer {
 }
 
 /// The type of WebAssembly linear memory initialization to use for a module.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum MemoryInitialization {
     /// Memory initialization is segmented.
     ///
@@ -779,7 +779,7 @@ pub struct TableInitializer {
 }
 
 /// Table initialization data for all tables in the module.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum TableInitialization {
     /// "Segment" mode: table initializer segments, possibly with
     /// dynamic bases, possibly applying to an imported memory.
@@ -850,7 +850,7 @@ impl ModuleType {
 
 /// A translated WebAssembly module, excluding the function bodies and
 /// memory initializers.
-#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[derive(Default, Debug, Serialize, Deserialize)]
 pub struct Module {
     /// The name of this wasm module, often found in the wasm file.
     pub name: Option<String>,
@@ -916,7 +916,7 @@ pub struct Module {
 
 /// Initialization routines for creating an instance, encompassing imports,
 /// modules, instances, aliases, etc.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum Initializer {
     /// An imported item is required to be provided.
     Import {
@@ -934,12 +934,6 @@ impl Module {
     /// Allocates the module data structures.
     pub fn new() -> Self {
         Module::default()
-    }
-
-    /// Get the given passive element, if it exists.
-    pub fn get_passive_element(&self, index: ElemIndex) -> Option<&[FuncIndex]> {
-        let index = *self.passive_elements_map.get(&index)?;
-        Some(self.passive_elements[index].as_ref())
     }
 
     /// Convert a `DefinedFuncIndex` into a `FuncIndex`.
@@ -1086,7 +1080,7 @@ impl Module {
 ///
 /// Note that this is shared amongst all modules coming out of a translation
 /// in the case of nested modules and the module linking proposal.
-#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[derive(Default, Debug, Serialize, Deserialize)]
 #[allow(missing_docs)]
 pub struct TypeTables {
     pub(crate) wasm_signatures: PrimaryMap<SignatureIndex, WasmFuncType>,
@@ -1109,7 +1103,7 @@ impl Index<SignatureIndex> for TypeTables {
 }
 
 /// Type information about functions in a wasm module.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct FunctionType {
     /// The type of this function, indexed into the module-wide type tables for
     /// a module compilation.
