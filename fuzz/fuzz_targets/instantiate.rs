@@ -24,9 +24,6 @@ fn run(data: &[u8]) -> Result<()> {
         Timeout::None
     };
 
-    // Enable module linking for this fuzz target specifically
-    config.module_config.config.module_linking_enabled = u.arbitrary()?;
-
     let module = config.generate(
         &mut u,
         if let Timeout::None = timeout {
