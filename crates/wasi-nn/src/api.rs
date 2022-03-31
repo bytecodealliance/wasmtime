@@ -13,6 +13,7 @@ pub(crate) trait Backend {
         &mut self,
         builders: &GraphBuilderArray<'_>,
         target: ExecutionTarget,
+        map_dir: &Option<Vec<(String, String)>>,
     ) -> Result<Box<dyn BackendGraph>, BackendError>;
 }
 
@@ -42,4 +43,8 @@ pub enum BackendError {
     InvalidNumberOfBuilders(u32, u32),
     #[error("Not enough memory to copy tensor data of size: {0}")]
     NotEnoughMemory(usize),
+    #[error(
+        "A mapped directory is required for this backend, but none was provided or it wasn't found"
+    )]
+    MissingMapDir(),
 }
