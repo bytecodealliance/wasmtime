@@ -332,14 +332,7 @@ impl Module {
             }
         };
 
-        let module = CompiledModule::from_artifacts(
-            mmap,
-            info,
-            &*engine.config().profiler,
-            engine.unique_id_allocator(),
-        )?;
-
-        Self::from_parts(engine, module, Arc::new(types))
+        Self::from_parts(engine, mmap, info, Arc::new(types))
     }
 
     /// Converts an input binary-encoded WebAssembly module to compilation
@@ -498,9 +491,17 @@ impl Module {
 
     fn from_parts(
         engine: &Engine,
-        module: Arc<CompiledModule>,
+        mmap: MmapVec,
+        info: Option<CompiledModuleInfo>,
         types: Arc<TypeTables>,
     ) -> Result<Self> {
+        let module = CompiledModule::from_artifacts(
+            mmap,
+            info,
+            &*engine.config().profiler,
+            engine.unique_id_allocator(),
+        )?;
+
         // Validate the module can be used with the current allocator
         engine.allocator().validate(module.module())?;
 
