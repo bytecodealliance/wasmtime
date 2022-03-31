@@ -17,7 +17,8 @@ anyhow = "1.0"
 wiggle = { path = "../wiggle", version = "=0.35.0" }
 
 # These dependencies are necessary for the wasi-nn implementation:
-openvino = { version = "0.3.3", features = ["runtime-linking"] }
+openvino = { version = "0.3.1", features = ["runtime-linking"] }
+wasi-nn-tf-runtime = { git = "https://github.com/brianjjones/tensorflow-rl.git"}
 thiserror = "1.0"
 
 [build-dependencies]

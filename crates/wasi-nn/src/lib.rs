@@ -2,6 +2,7 @@ mod api;
 mod ctx;
 mod r#impl;
 mod openvino;
+mod tf;
 mod witx;
 
 pub use ctx::WasiNnCtx;

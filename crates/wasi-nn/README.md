@@ -1,12 +1,13 @@
 # wasmtime-wasi-nn
 
-This crate enables support for the [wasi-nn] API in Wasmtime. Currently it contains an implementation of [wasi-nn] using
-OpenVINO™ but in the future it could support multiple machine learning backends. Since the [wasi-nn] API is expected
+This crate enables support for the [wasi-nn] API in Wasmtime. Currently it contains an implementation of [wasi-nn] for both
+OpenVINO™ and TensorFlow, but in the future it could support additional machine learning backends. Since the [wasi-nn] API is expected
 to be an optional feature of WASI, this crate is currently separate from the [wasi-common] crate. This crate is
 experimental and its API, functionality, and location could quickly change.
 
 [examples]: examples
 [openvino]: https://crates.io/crates/openvino
+[tensorflow]: https://crates.io/crates/tensorflow
 [wasi-nn]: https://github.com/WebAssembly/wasi-nn
 [wasi-common]: ../wasi-common
 
@@ -21,8 +22,8 @@ wasi_nn.add_to_linker(&mut linker)?;
 
 ### Build
 
-This crate should build as usual (i.e. `cargo build`) but note that using an existing installation of OpenVINO™, rather
-than building from source, will drastically improve the build times. See the [openvino] crate for more information
+This crate should build as usual (i.e. `cargo build`) but note that using an existing installation of OpenVINO™ or TensorFlow, rather
+than building from source, will drastically improve the build times. See the [openvino] and [tensorflow] crates for more information
 
 ### Example
 
@@ -36,3 +37,11 @@ Run the example from the Wasmtime project directory:
 ```
 ci/run-wasi-nn-example.sh
 ```
+
+### Additional Examples
+
+You can find more in depth examples using both the OpenVINO™ and TensorFlow backends in the [wasi-nn bindings] git repository. There's one for [Rust] as well as [AssemblyScript].
+
+[wasi-nn bindings]: https://github.com/bytecodealliance/wasi-nn
+[Rust]: https://github.com/bytecodealliance/wasi-nn/tree/main/rust/examples/classification-example
+[AssemblyScript]: https://github.com/bytecodealliance/wasi-nn/tree/main/assemblyscript

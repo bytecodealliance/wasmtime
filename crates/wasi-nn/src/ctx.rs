@@ -3,6 +3,7 @@
 use crate::api::{Backend, BackendError, BackendExecutionContext, BackendGraph};
 use crate::openvino::OpenvinoBackend;
 use crate::r#impl::UsageError;
+use crate::tf::TensorflowBackend;
 use crate::witx::types::{Graph, GraphEncoding, GraphExecutionContext};
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -29,6 +30,12 @@ impl Ctx {
             GraphEncoding::Openvino.into(),
             Box::new(OpenvinoBackend::default()) as Box<dyn Backend>,
         );
+        // Insert Tensorflow backend
+        backends.insert(
+            GraphEncoding::Tensorflow.into(),
+            Box::new(TensorflowBackend::default()) as Box<dyn Backend>,
+        );
+
         Ok(Self {
             backends,
             graphs: Table::default(),
