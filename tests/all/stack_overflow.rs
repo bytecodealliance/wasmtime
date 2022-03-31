@@ -3,6 +3,13 @@ use wasmtime::*;
 
 #[test]
 fn host_always_has_some_stack() -> anyhow::Result<()> {
+    // XXX: This test is disabled on Windows because we determined it is too
+    // risky to back port https://github.com/bytecodealliance/wasmtime/pull/3861
+    // to the 0.34.x release branch.
+    if cfg!(target_os = "windows") {
+        return Ok(());
+    }
+
     static HITS: AtomicUsize = AtomicUsize::new(0);
     // assume hosts always have at least 512k of stack
     const HOST_STACK: usize = 512 * 1024;
