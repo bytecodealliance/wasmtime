@@ -2,6 +2,17 @@
 
 --------------------------------------------------------------------------------
 
+## 0.34.2
+
+Released 2022-03-31.
+
+### Security Fixes
+
+* [CVE-2022-24791](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-gwc9-348x-qwv2):
+  Fixed a use after free with `externref`s and epoch interruption.
+
+--------------------------------------------------------------------------------
+
 ## 0.34.1
 
 Released 2022-02-16.
@@ -11,6 +22,8 @@ Released 2022-02-16.
 * [CVE-2022-23636](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-88xq-w8cq-xfg7):
   Fixed an invalid drop of a partially-initialized instance in the pooling instance
   allocator.
+
+--------------------------------------------------------------------------------
 
 ## 0.34.0
 
