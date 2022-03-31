@@ -5,9 +5,9 @@ use std::ops::Deref;
 use std::path::Path;
 use std::str;
 use std::sync::Arc;
-use tensorflow::Tensor as TFTensor;
-use tensorflow::DEFAULT_SERVING_SIGNATURE_DEF_KEY;
-use tensorflow::{
+use wasi_nn_tf_runtime::Tensor as TFTensor;
+use wasi_nn_tf_runtime::DEFAULT_SERVING_SIGNATURE_DEF_KEY;
+use wasi_nn_tf_runtime::{
     FetchToken, Graph, Operation, SavedModelBundle, SessionOptions, SessionRunArgs, Status,
 };
 
