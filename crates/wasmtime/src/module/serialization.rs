@@ -49,7 +49,7 @@ use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
 use wasmtime_environ::{FlagValue, Tunables, TypeTables};
-use wasmtime_jit::{subslice_range, CompiledModule, CompiledModuleInfo};
+use wasmtime_jit::{subslice_range, CompiledModuleInfo};
 use wasmtime_runtime::MmapVec;
 
 const HEADER: &[u8] = b"\0wasmtime-aot";
@@ -206,14 +206,7 @@ impl<'a> SerializedModule<'a> {
 
     pub fn into_module(self, engine: &Engine) -> Result<Module> {
         let (mmap, info, types) = self.into_parts(engine)?;
-        let module = CompiledModule::from_artifacts(
-            mmap,
-            info,
-            &*engine.config().profiler,
-            engine.unique_id_allocator(),
-        )?;
-
-        Module::from_parts(engine, module, Arc::new(types))
+        Module::from_parts(engine, mmap, info, Arc::new(types))
     }
 
     pub fn into_parts(
