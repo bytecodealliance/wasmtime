@@ -2,6 +2,17 @@
 
 --------------------------------------------------------------------------------
 
+## 0.35.2
+
+Released 2022-03-31.
+
+### Security Fixes
+
+* [CVE-2022-24791](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-gwc9-348x-qwv2):
+  Fixed a use after free with `externref`s and epoch interruption.
+
+--------------------------------------------------------------------------------
+
 ## 0.35.1
 
 Released 2022-03-09.
