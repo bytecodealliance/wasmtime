@@ -16,6 +16,7 @@ use crate::generators;
 use arbitrary::Arbitrary;
 use log::debug;
 use std::cell::Cell;
+use std::convert::TryInto;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use std::sync::{Arc, Condvar, Mutex};
@@ -843,7 +844,14 @@ pub fn differential_spec_execution(wasm: &[u8], config: &generators::Config) -> 
             (wasm_spec_interpreter::Value::F64(a), wasmtime::Val::F64(b)) => {
                 f64_equal(*a as u64, *b)
             }
-            (_, _) => unreachable!("fuzzing non-scalar value types is still TODO"),
+            (wasm_spec_interpreter::Value::V128(a), wasmtime::Val::V128(b)) => {
+                assert_eq!(a.len(), 16);
+                let a_num = u128::from_le_bytes(a.as_slice().try_into().unwrap());
+                a_num == *b
+            }
+            (_, _) => {
+                unreachable!("TODO: only fuzzing of scalar and vector value types is supported")
+            }
         }
     }
 

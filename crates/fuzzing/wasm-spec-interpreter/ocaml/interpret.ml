@@ -16,20 +16,23 @@ type ffi_value =
   | I64 of int64
   | F32 of int32
   | F64 of int64
+  | V128 of Bytes.t
 
 (** Helper for converting the FFI values to their spec interpreter type. *)
 let convert_to_wasm (v: ffi_value) : v = match v with
-| I32 n -> ConstInt32 (I32_impl_abs n)
-| I64 n -> ConstInt64 (I64_impl_abs n)
-| F32 n -> ConstFloat32 (F32.of_bits n)
-| F64 n -> ConstFloat64 (F64.of_bits n)
+| I32 n -> V_num (ConstInt32 (I32_impl_abs n))
+| I64 n -> V_num (ConstInt64 (I64_impl_abs n))
+| F32 n -> V_num (ConstFloat32 (F32.of_bits n))
+| F64 n -> V_num (ConstFloat64 (F64.of_bits n))
+| V128 n -> V_vec (ConstVec128 (V128.of_bits (Bytes.to_string n)))
 
 (** Helper for converting the spec interpreter values to their FFI type. *)
 let convert_from_wasm (v: v) : ffi_value = match v with
-| (ConstInt32 (I32_impl_abs n)) -> I32 n
-| (ConstInt64 (I64_impl_abs n)) -> I64 n
-| (ConstFloat32 n) -> F32 (F32.to_bits n)
-| (ConstFloat64 n) -> F64 (F64.to_bits n)
+| V_num ((ConstInt32 (I32_impl_abs n))) -> I32 n
+| V_num ((ConstInt64 (I64_impl_abs n))) -> I64 n
+| V_num ((ConstFloat32 n)) -> F32 (F32.to_bits n)
+| V_num ((ConstFloat64 n)) -> F64 (F64.to_bits n)
+| V_vec ((ConstVec128 n)) -> V128 (Bytes.of_string (V128.to_bits n))
 | _ -> failwith "Unknown type"
 
 (** Parse the given WebAssembly module binary into an Ast.module_. At some point in the future this
