@@ -663,8 +663,7 @@ pub(crate) fn lower_address<C: LowerCtx<I = Inst>>(
     offset: i32,
 ) -> AMode {
     // TODO: support base_reg + scale * index_reg. For this, we would need to
-    // pattern-match shl or mul instructions (the legacy Load/StoreComplex did
-    // not include scale factors).
+    // pattern-match shl or mul instructions.
 
     // Collect addends through an arbitrary tree of 32-to-64-bit sign/zero
     // extends and addition ops. We update these as we consume address
