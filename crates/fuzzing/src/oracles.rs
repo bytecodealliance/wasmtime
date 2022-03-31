@@ -849,7 +849,9 @@ pub fn differential_spec_execution(wasm: &[u8], config: &generators::Config) -> 
                 let a_num = u128::from_le_bytes(a.as_slice().try_into().unwrap());
                 a_num == *b
             }
-            (_, _) => unreachable!("TODO: only fuzzing of scalar and vector value types is supported"),
+            (_, _) => {
+                unreachable!("TODO: only fuzzing of scalar and vector value types is supported")
+            }
         }
     }
 
