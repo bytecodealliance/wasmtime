@@ -10,7 +10,7 @@ use std::panic::{self, AssertUnwindSafe};
 use std::pin::Pin;
 use std::ptr::NonNull;
 use std::sync::Arc;
-use wasmtime_environ::{EntityIndex, FuncIndex};
+use wasmtime_environ::FuncIndex;
 use wasmtime_runtime::{
     raise_user_trap, ExportFunction, InstanceAllocator, InstanceHandle, OnDemandInstanceAllocator,
     VMCallerCheckedAnyfunc, VMContext, VMFunctionBody, VMFunctionImport, VMSharedSignatureIndex,
@@ -2047,11 +2047,7 @@ impl HostFunc {
     /// Requires that this function's signature is already registered within
     /// `Engine`. This happens automatically during the above two constructors.
     fn _new(engine: &Engine, mut instance: InstanceHandle, trampoline: VMTrampoline) -> Self {
-        let idx = EntityIndex::Function(FuncIndex::from_u32(0));
-        let export = match instance.lookup_by_declaration(&idx) {
-            wasmtime_runtime::Export::Function(f) => f,
-            _ => unreachable!(),
-        };
+        let export = instance.get_exported_func(FuncIndex::from_u32(0));
 
         HostFunc {
             instance,
