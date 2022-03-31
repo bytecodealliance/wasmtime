@@ -8,9 +8,7 @@ use crate::{
 use anyhow::{anyhow, bail, Context, Error, Result};
 use std::mem;
 use std::sync::Arc;
-use wasmtime_environ::{
-    EntityIndex, EntityType, FuncIndex, GlobalIndex, MemoryIndex, PrimaryMap, TableIndex,
-};
+use wasmtime_environ::{EntityType, FuncIndex, GlobalIndex, MemoryIndex, PrimaryMap, TableIndex};
 use wasmtime_runtime::{
     Imports, InstanceAllocationRequest, InstantiationError, StorePtr, VMContext, VMFunctionBody,
     VMFunctionImport, VMGlobalImport, VMMemoryImport, VMTableImport,
@@ -237,7 +235,7 @@ impl Instance {
         let id = data.id;
         let instance = store.instance_mut(id); // reborrow the &mut Instancehandle
         let item =
-            unsafe { Extern::from_wasmtime_export(instance.lookup_by_declaration(&index), store) };
+            unsafe { Extern::from_wasmtime_export(instance.get_export_by_index(index), store) };
         let data = &mut store[self.0];
         data.exports[i] = Some(item.clone());
         Some(item)
@@ -532,10 +530,7 @@ impl<'a> Instantiator<'a> {
         // If a start function is present, invoke it. Make sure we use all the
         // trap-handling configuration in `store` as well.
         let instance = store.0.instance_mut(id);
-        let f = match instance.lookup_by_declaration(&EntityIndex::Function(start)) {
-            wasmtime_runtime::Export::Function(f) => f,
-            _ => unreachable!(), // valid modules shouldn't hit this
-        };
+        let f = instance.get_exported_func(start);
         let vmctx = instance.vmctx_ptr();
         unsafe {
             super::func::invoke_wasm_and_catch_traps(store, |_default_callee| {
