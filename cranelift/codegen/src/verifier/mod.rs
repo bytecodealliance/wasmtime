@@ -690,13 +690,6 @@ impl<'a> Verifier<'a> {
             TableAddr { table, .. } => {
                 self.verify_table(inst, table, errors)?;
             }
-            LoadComplex { ref args, .. } => {
-                self.verify_value_list(inst, args, errors)?;
-            }
-            StoreComplex { ref args, .. } => {
-                self.verify_value_list(inst, args, errors)?;
-            }
-
             NullAry {
                 opcode: Opcode::GetPinnedReg,
             }
@@ -1627,8 +1620,7 @@ impl<'a> Verifier<'a> {
         let inst_data = &self.func.dfg[inst];
 
         match *inst_data {
-            ir::InstructionData::Store { flags, .. }
-            | ir::InstructionData::StoreComplex { flags, .. } => {
+            ir::InstructionData::Store { flags, .. } => {
                 if flags.readonly() {
                     errors.fatal((
                         inst,

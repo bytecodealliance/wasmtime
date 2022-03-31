@@ -662,8 +662,8 @@ pub(crate) fn lower_address<C: LowerCtx<I = Inst>>(
     roots: &[InsnInput],
     offset: i32,
 ) -> AMode {
-    // TODO: support base_reg + scale * index_reg. For this, we would need to pattern-match shl or
-    // mul instructions (Load/StoreComplex don't include scale factors).
+    // TODO: support base_reg + scale * index_reg. For this, we would need to
+    // pattern-match shl or mul instructions.
 
     // Collect addends through an arbitrary tree of 32-to-64-bit sign/zero
     // extends and addition ops. We update these as we consume address
@@ -1510,25 +1510,13 @@ pub(crate) fn emit_atomic_load<C: LowerCtx<I = Inst>>(
 
 fn load_op_to_ty(op: Opcode) -> Option<Type> {
     match op {
-        Opcode::Sload8 | Opcode::Uload8 | Opcode::Sload8Complex | Opcode::Uload8Complex => Some(I8),
-        Opcode::Sload16 | Opcode::Uload16 | Opcode::Sload16Complex | Opcode::Uload16Complex => {
-            Some(I16)
-        }
-        Opcode::Sload32 | Opcode::Uload32 | Opcode::Sload32Complex | Opcode::Uload32Complex => {
-            Some(I32)
-        }
-        Opcode::Load | Opcode::LoadComplex => None,
-        Opcode::Sload8x8 | Opcode::Uload8x8 | Opcode::Sload8x8Complex | Opcode::Uload8x8Complex => {
-            Some(I8X8)
-        }
-        Opcode::Sload16x4
-        | Opcode::Uload16x4
-        | Opcode::Sload16x4Complex
-        | Opcode::Uload16x4Complex => Some(I16X4),
-        Opcode::Sload32x2
-        | Opcode::Uload32x2
-        | Opcode::Sload32x2Complex
-        | Opcode::Uload32x2Complex => Some(I32X2),
+        Opcode::Sload8 | Opcode::Uload8 => Some(I8),
+        Opcode::Sload16 | Opcode::Uload16 => Some(I16),
+        Opcode::Sload32 | Opcode::Uload32 => Some(I32),
+        Opcode::Load => None,
+        Opcode::Sload8x8 | Opcode::Uload8x8 => Some(I8X8),
+        Opcode::Sload16x4 | Opcode::Uload16x4 => Some(I16X4),
+        Opcode::Sload32x2 | Opcode::Uload32x2 => Some(I32X2),
         _ => None,
     }
 }

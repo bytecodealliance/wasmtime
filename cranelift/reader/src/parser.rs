@@ -2246,23 +2246,6 @@ impl<'a> Parser<'a> {
         Ok(args)
     }
 
-    fn parse_value_sequence(&mut self) -> ParseResult<VariableArgs> {
-        let mut args = VariableArgs::new();
-
-        if let Some(Token::Value(v)) = self.token() {
-            args.push(v);
-            self.consume();
-        } else {
-            return Ok(args);
-        }
-
-        while self.optional(Token::Plus) {
-            args.push(self.match_value("expected value in argument list")?);
-        }
-
-        Ok(args)
-    }
-
     // Parse an optional value list enclosed in parentheses.
     fn parse_opt_value_list(&mut self) -> ParseResult<VariableArgs> {
         if !self.optional(Token::LPar) {
@@ -2880,17 +2863,6 @@ impl<'a> Parser<'a> {
                     offset,
                 }
             }
-            InstructionFormat::LoadComplex => {
-                let flags = self.optional_memflags();
-                let args = self.parse_value_sequence()?;
-                let offset = self.optional_offset32()?;
-                InstructionData::LoadComplex {
-                    opcode,
-                    flags,
-                    args: args.into_value_list(&[], &mut ctx.function.dfg.value_lists),
-                    offset,
-                }
-            }
             InstructionFormat::Store => {
                 let flags = self.optional_memflags();
                 let arg = self.match_value("expected SSA value operand")?;
@@ -2901,20 +2873,6 @@ impl<'a> Parser<'a> {
                     opcode,
                     flags,
                     args: [arg, addr],
-                    offset,
-                }
-            }
-
-            InstructionFormat::StoreComplex => {
-                let flags = self.optional_memflags();
-                let src = self.match_value("expected SSA value operand")?;
-                self.match_token(Token::Comma, "expected ',' between operands")?;
-                let args = self.parse_value_sequence()?;
-                let offset = self.optional_offset32()?;
-                InstructionData::StoreComplex {
-                    opcode,
-                    flags,
-                    args: args.into_value_list(&[src], &mut ctx.function.dfg.value_lists),
                     offset,
                 }
             }

@@ -98,32 +98,14 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::Sload16
         | Opcode::Uload32
         | Opcode::Sload32
-        | Opcode::LoadComplex
-        | Opcode::Uload8Complex
-        | Opcode::Sload8Complex
-        | Opcode::Uload16Complex
-        | Opcode::Sload16Complex
-        | Opcode::Uload32Complex
-        | Opcode::Sload32Complex
         | Opcode::Sload8x8
         | Opcode::Uload8x8
         | Opcode::Sload16x4
         | Opcode::Uload16x4
         | Opcode::Sload32x2
-        | Opcode::Uload32x2
-        | Opcode::Uload8x8Complex
-        | Opcode::Sload8x8Complex
-        | Opcode::Uload16x4Complex
-        | Opcode::Sload16x4Complex
-        | Opcode::Uload32x2Complex
-        | Opcode::Sload32x2Complex => {
+        | Opcode::Uload32x2 => {
             let sign_extend = match op {
-                Opcode::Sload8
-                | Opcode::Sload8Complex
-                | Opcode::Sload16
-                | Opcode::Sload16Complex
-                | Opcode::Sload32
-                | Opcode::Sload32Complex => true,
+                Opcode::Sload8 | Opcode::Sload16 | Opcode::Sload32 => true,
                 _ => false,
             };
             let flags = ctx
@@ -174,17 +156,11 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
                         let vec_extend = match op {
                             Opcode::Sload8x8 => Some(VecExtendOp::Sxtl8),
-                            Opcode::Sload8x8Complex => Some(VecExtendOp::Sxtl8),
                             Opcode::Uload8x8 => Some(VecExtendOp::Uxtl8),
-                            Opcode::Uload8x8Complex => Some(VecExtendOp::Uxtl8),
                             Opcode::Sload16x4 => Some(VecExtendOp::Sxtl16),
-                            Opcode::Sload16x4Complex => Some(VecExtendOp::Sxtl16),
                             Opcode::Uload16x4 => Some(VecExtendOp::Uxtl16),
-                            Opcode::Uload16x4Complex => Some(VecExtendOp::Uxtl16),
                             Opcode::Sload32x2 => Some(VecExtendOp::Sxtl32),
-                            Opcode::Sload32x2Complex => Some(VecExtendOp::Sxtl32),
                             Opcode::Uload32x2 => Some(VecExtendOp::Uxtl32),
-                            Opcode::Uload32x2Complex => Some(VecExtendOp::Uxtl32),
                             _ => None,
                         };
 
@@ -204,20 +180,13 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             }
         }
 
-        Opcode::Store
-        | Opcode::Istore8
-        | Opcode::Istore16
-        | Opcode::Istore32
-        | Opcode::StoreComplex
-        | Opcode::Istore8Complex
-        | Opcode::Istore16Complex
-        | Opcode::Istore32Complex => {
+        Opcode::Store | Opcode::Istore8 | Opcode::Istore16 | Opcode::Istore32 => {
             let off = ctx.data(insn).load_store_offset().unwrap();
             let elem_ty = match op {
-                Opcode::Istore8 | Opcode::Istore8Complex => I8,
-                Opcode::Istore16 | Opcode::Istore16Complex => I16,
-                Opcode::Istore32 | Opcode::Istore32Complex => I32,
-                Opcode::Store | Opcode::StoreComplex => ctx.input_ty(insn, 0),
+                Opcode::Istore8 => I8,
+                Opcode::Istore16 => I16,
+                Opcode::Istore32 => I32,
+                Opcode::Store => ctx.input_ty(insn, 0),
                 _ => unreachable!(),
             };
             let is_float = ty_has_float_or_vec_representation(elem_ty);

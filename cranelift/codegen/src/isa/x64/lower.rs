@@ -2173,13 +2173,6 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::Sload16
         | Opcode::Uload32
         | Opcode::Sload32
-        | Opcode::LoadComplex
-        | Opcode::Uload8Complex
-        | Opcode::Sload8Complex
-        | Opcode::Uload16Complex
-        | Opcode::Sload16Complex
-        | Opcode::Uload32Complex
-        | Opcode::Sload32Complex
         | Opcode::Sload8x8
         | Opcode::Uload8x8
         | Opcode::Sload16x4
@@ -2189,30 +2182,13 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let offset = ctx.data(insn).load_store_offset().unwrap();
 
             let elem_ty = match op {
-                Opcode::Sload8 | Opcode::Uload8 | Opcode::Sload8Complex | Opcode::Uload8Complex => {
-                    types::I8
-                }
-                Opcode::Sload16
-                | Opcode::Uload16
-                | Opcode::Sload16Complex
-                | Opcode::Uload16Complex => types::I16,
-                Opcode::Sload32
-                | Opcode::Uload32
-                | Opcode::Sload32Complex
-                | Opcode::Uload32Complex => types::I32,
-                Opcode::Sload8x8
-                | Opcode::Uload8x8
-                | Opcode::Sload8x8Complex
-                | Opcode::Uload8x8Complex => types::I8X8,
-                Opcode::Sload16x4
-                | Opcode::Uload16x4
-                | Opcode::Sload16x4Complex
-                | Opcode::Uload16x4Complex => types::I16X4,
-                Opcode::Sload32x2
-                | Opcode::Uload32x2
-                | Opcode::Sload32x2Complex
-                | Opcode::Uload32x2Complex => types::I32X2,
-                Opcode::Load | Opcode::LoadComplex => ctx.output_ty(insn, 0),
+                Opcode::Sload8 | Opcode::Uload8 => types::I8,
+                Opcode::Sload16 | Opcode::Uload16 => types::I16,
+                Opcode::Sload32 | Opcode::Uload32 => types::I32,
+                Opcode::Sload8x8 | Opcode::Uload8x8 => types::I8X8,
+                Opcode::Sload16x4 | Opcode::Uload16x4 => types::I16X4,
+                Opcode::Sload32x2 | Opcode::Uload32x2 => types::I32X2,
+                Opcode::Load => ctx.output_ty(insn, 0),
                 _ => unimplemented!(),
             };
 
@@ -2220,17 +2196,11 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
             let sign_extend = match op {
                 Opcode::Sload8
-                | Opcode::Sload8Complex
                 | Opcode::Sload16
-                | Opcode::Sload16Complex
                 | Opcode::Sload32
-                | Opcode::Sload32Complex
                 | Opcode::Sload8x8
-                | Opcode::Sload8x8Complex
                 | Opcode::Sload16x4
-                | Opcode::Sload16x4Complex
-                | Opcode::Sload32x2
-                | Opcode::Sload32x2Complex => true,
+                | Opcode::Sload32x2 => true,
                 _ => false,
             };
 
@@ -2250,37 +2220,6 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 | Opcode::Uload32x2 => {
                     assert_eq!(inputs.len(), 1, "only one input for load operands");
                     lower_to_amode(ctx, inputs[0], offset)
-                }
-
-                Opcode::LoadComplex
-                | Opcode::Uload8Complex
-                | Opcode::Sload8Complex
-                | Opcode::Uload16Complex
-                | Opcode::Sload16Complex
-                | Opcode::Uload32Complex
-                | Opcode::Sload32Complex
-                | Opcode::Sload8x8Complex
-                | Opcode::Uload8x8Complex
-                | Opcode::Sload16x4Complex
-                | Opcode::Uload16x4Complex
-                | Opcode::Sload32x2Complex
-                | Opcode::Uload32x2Complex => {
-                    assert_eq!(
-                        inputs.len(),
-                        2,
-                        "can't handle more than two inputs in complex load"
-                    );
-                    let base = put_input_in_reg(ctx, inputs[0]);
-                    let index = put_input_in_reg(ctx, inputs[1]);
-                    let shift = 0;
-                    let flags = ctx.memflags(insn).expect("load should have memflags");
-                    Amode::imm_reg_reg_shift(
-                        offset as u32,
-                        Gpr::new(base).unwrap(),
-                        Gpr::new(index).unwrap(),
-                        shift,
-                    )
-                    .with_flags(flags)
                 }
                 _ => unreachable!(),
             };
@@ -2347,21 +2286,14 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             }
         }
 
-        Opcode::Store
-        | Opcode::Istore8
-        | Opcode::Istore16
-        | Opcode::Istore32
-        | Opcode::StoreComplex
-        | Opcode::Istore8Complex
-        | Opcode::Istore16Complex
-        | Opcode::Istore32Complex => {
+        Opcode::Store | Opcode::Istore8 | Opcode::Istore16 | Opcode::Istore32 => {
             let offset = ctx.data(insn).load_store_offset().unwrap();
 
             let elem_ty = match op {
-                Opcode::Istore8 | Opcode::Istore8Complex => types::I8,
-                Opcode::Istore16 | Opcode::Istore16Complex => types::I16,
-                Opcode::Istore32 | Opcode::Istore32Complex => types::I32,
-                Opcode::Store | Opcode::StoreComplex => ctx.input_ty(insn, 0),
+                Opcode::Istore8 => types::I8,
+                Opcode::Istore16 => types::I16,
+                Opcode::Istore32 => types::I32,
+                Opcode::Store => ctx.input_ty(insn, 0),
                 _ => unreachable!(),
             };
 
@@ -2370,29 +2302,6 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     assert_eq!(inputs.len(), 2, "only one input for store memory operands");
                     lower_to_amode(ctx, inputs[1], offset)
                 }
-
-                Opcode::StoreComplex
-                | Opcode::Istore8Complex
-                | Opcode::Istore16Complex
-                | Opcode::Istore32Complex => {
-                    assert_eq!(
-                        inputs.len(),
-                        3,
-                        "can't handle more than two inputs in complex store"
-                    );
-                    let base = put_input_in_reg(ctx, inputs[1]);
-                    let index = put_input_in_reg(ctx, inputs[2]);
-                    let shift = 0;
-                    let flags = ctx.memflags(insn).expect("store should have memflags");
-                    Amode::imm_reg_reg_shift(
-                        offset as u32,
-                        Gpr::new(base).unwrap(),
-                        Gpr::new(index).unwrap(),
-                        shift,
-                    )
-                    .with_flags(flags)
-                }
-
                 _ => unreachable!(),
             };
 
@@ -3293,15 +3202,6 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         // Unimplemented opcodes below. These are not currently used by Wasm
         // lowering or other known embeddings, but should be either supported or
         // removed eventually.
-        Opcode::Uload8x8Complex
-        | Opcode::Sload8x8Complex
-        | Opcode::Uload16x4Complex
-        | Opcode::Sload16x4Complex
-        | Opcode::Uload32x2Complex
-        | Opcode::Sload32x2Complex => {
-            unimplemented!("Vector load {:?} not implemented", op);
-        }
-
         Opcode::Cls => unimplemented!("Cls not supported"),
 
         Opcode::Fma => unimplemented!("Fma not supported"),
