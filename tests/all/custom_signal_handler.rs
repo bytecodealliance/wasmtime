@@ -106,7 +106,7 @@ mod tests {
         module
             .imports()
             .map(|import| {
-                assert_eq!(Some("hostcall_read"), import.name());
+                assert_eq!("hostcall_read", import.name());
                 let func = Func::wrap(&mut *store, {
                     move |mut caller: Caller<'_, _>| {
                         let mem = caller.get_export("memory").unwrap().into_memory().unwrap();

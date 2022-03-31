@@ -30,10 +30,6 @@ const SUPPORTED_WASM_FEATURES: &[(&str, &str)] = &[
         "enables support for bulk memory instructions",
     ),
     (
-        "module-linking",
-        "enables support for the module-linking proposal",
-    ),
-    (
         "multi-memory",
         "enables support for the multi-memory proposal",
     ),
@@ -101,7 +97,7 @@ use std::path::PathBuf;
 use structopt::StructOpt;
 use wasmtime::{Config, ProfilingStrategy};
 #[cfg(feature = "pooling-allocator")]
-use wasmtime::{InstanceLimits, ModuleLimits, PoolingAllocationStrategy};
+use wasmtime::{InstanceLimits, PoolingAllocationStrategy};
 
 fn pick_profiling_strategy(jitdump: bool, vtune: bool) -> Result<ProfilingStrategy> {
     Ok(match (jitdump, vtune) {
@@ -234,7 +230,14 @@ struct CommonOptions {
     #[structopt(long)]
     enable_cranelift_nan_canonicalization: bool,
 
-    #[structopt(long)]
+    /// Enable execution fuel with N units fuel, where execution will trap after
+    /// running out of fuel.
+    ///
+    /// Most WebAssembly instructions consume 1 unit of fuel. Some instructions,
+    /// such as `nop`, `drop`, `block`, and `loop`, consume 0 units, as any
+    /// execution cost associated with them involves other instructions which do
+    /// consume fuel.
+    #[structopt(long, value_name = "N")]
     fuel: Option<u64>,
 
     /// Executing wasm code will yield when a global epoch counter
@@ -251,6 +254,12 @@ struct CommonOptions {
     /// the data segments specified in the original wasm module.
     #[structopt(long)]
     paged_memory_initialization: bool,
+
+    /// Disables the default of attempting to initialize linear memory via a
+    /// copy-on-write mapping.
+    #[cfg(feature = "memory-init-cow")]
+    #[structopt(long)]
+    disable_memory_init_cow: bool,
 
     /// Enables the pooling allocator, in place of the on-demand
     /// allocator.
@@ -335,19 +344,15 @@ impl CommonOptions {
         config.epoch_interruption(self.epoch_interruption);
         config.generate_address_map(!self.disable_address_map);
         config.paged_memory_initialization(self.paged_memory_initialization);
+        #[cfg(feature = "memory-init-cow")]
+        config.memory_init_cow(!self.disable_memory_init_cow);
 
         #[cfg(feature = "pooling-allocator")]
         {
             if self.pooling_allocator {
-                let mut module_limits = ModuleLimits::default();
-                module_limits.functions = 50000;
-                module_limits.types = 10000;
-                module_limits.globals = 1000;
-                module_limits.memory_pages = 2048;
                 let instance_limits = InstanceLimits::default();
                 config.allocation_strategy(wasmtime::InstanceAllocationStrategy::Pooling {
                     strategy: PoolingAllocationStrategy::NextAvailable,
-                    module_limits,
                     instance_limits,
                 });
             }
@@ -365,7 +370,6 @@ impl CommonOptions {
             threads,
             multi_memory,
             memory64,
-            module_linking,
         } = self.wasm_features.unwrap_or_default();
 
         if let Some(enable) = simd {
@@ -375,7 +379,9 @@ impl CommonOptions {
             config.wasm_bulk_memory(enable);
         }
         if let Some(enable) = reference_types {
+            #[cfg(feature = "wasm-backtrace")]
             config.wasm_reference_types(enable);
+            drop(enable); // suppress unused warnings
         }
         if let Some(enable) = multi_value {
             config.wasm_multi_value(enable);
@@ -388,9 +394,6 @@ impl CommonOptions {
         }
         if let Some(enable) = memory64 {
             config.wasm_memory64(enable);
-        }
-        if let Some(enable) = module_linking {
-            config.wasm_module_linking(enable);
         }
     }
 
@@ -421,7 +424,6 @@ struct WasmFeatures {
     multi_value: Option<bool>,
     bulk_memory: Option<bool>,
     simd: Option<bool>,
-    module_linking: Option<bool>,
     threads: Option<bool>,
     multi_memory: Option<bool>,
     memory64: Option<bool>,
@@ -469,7 +471,6 @@ fn parse_wasm_features(features: &str) -> Result<WasmFeatures> {
         reference_types: all.or(values["reference-types"]),
         multi_value: all.or(values["multi-value"]),
         bulk_memory: all.or(values["bulk-memory"]),
-        module_linking: all.or(values["module-linking"]),
         simd: all.or(values["simd"]),
         threads: all.or(values["threads"]),
         multi_memory: all.or(values["multi-memory"]),
@@ -572,7 +573,6 @@ mod test {
             reference_types,
             multi_value,
             bulk_memory,
-            module_linking,
             simd,
             threads,
             multi_memory,
@@ -582,7 +582,6 @@ mod test {
         assert_eq!(reference_types, Some(true));
         assert_eq!(multi_value, Some(true));
         assert_eq!(bulk_memory, Some(true));
-        assert_eq!(module_linking, Some(true));
         assert_eq!(simd, Some(true));
         assert_eq!(threads, Some(true));
         assert_eq!(multi_memory, Some(true));
@@ -599,7 +598,6 @@ mod test {
             reference_types,
             multi_value,
             bulk_memory,
-            module_linking,
             simd,
             threads,
             multi_memory,
@@ -609,7 +607,6 @@ mod test {
         assert_eq!(reference_types, Some(false));
         assert_eq!(multi_value, Some(false));
         assert_eq!(bulk_memory, Some(false));
-        assert_eq!(module_linking, Some(false));
         assert_eq!(simd, Some(false));
         assert_eq!(threads, Some(false));
         assert_eq!(multi_memory, Some(false));
@@ -629,7 +626,6 @@ mod test {
             reference_types,
             multi_value,
             bulk_memory,
-            module_linking,
             simd,
             threads,
             multi_memory,
@@ -639,7 +635,6 @@ mod test {
         assert_eq!(reference_types, Some(false));
         assert_eq!(multi_value, None);
         assert_eq!(bulk_memory, None);
-        assert_eq!(module_linking, None);
         assert_eq!(simd, Some(true));
         assert_eq!(threads, None);
         assert_eq!(multi_memory, Some(true));
@@ -680,11 +675,6 @@ mod test {
     );
     feature_test!(test_multi_value_feature, multi_value, "multi-value");
     feature_test!(test_bulk_memory_feature, bulk_memory, "bulk-memory");
-    feature_test!(
-        test_module_linking_feature,
-        module_linking,
-        "module-linking"
-    );
     feature_test!(test_simd_feature, simd, "simd");
     feature_test!(test_threads_feature, threads, "threads");
     feature_test!(test_multi_memory_feature, multi_memory, "multi-memory");

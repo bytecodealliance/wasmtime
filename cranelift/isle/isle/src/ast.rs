@@ -21,6 +21,7 @@ pub enum Def {
     Extractor(Extractor),
     Decl(Decl),
     Extern(Extern),
+    Converter(Converter),
 }
 
 /// An identifier -- a variable, term symbol, or type.
@@ -418,4 +419,24 @@ pub enum ArgPolarity {
     /// An arg that must be given a regular pattern (not Expr) and receives data
     /// *from* the extractor op.
     Output,
+}
+
+/// An implicit converter: the given term, which must have type
+/// (inner_ty) -> outer_ty, is used either in extractor or constructor
+/// position as appropriate when a type mismatch with the given pair
+/// of types would otherwise occur.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Converter {
+    /// The term name.
+    pub term: Ident,
+    /// The "inner type": the type to convert *from*, on the
+    /// right-hand side, or *to*, on the left-hand side. Must match
+    /// the singular argument type of the term.
+    pub inner_ty: Ident,
+    /// The "outer type": the type to convert *to*, on the right-hand
+    /// side, or *from*, on the left-hand side. Must match the ret_ty
+    /// of the term.
+    pub outer_ty: Ident,
+    /// The position of this converter decl.
+    pub pos: Pos,
 }

@@ -3,7 +3,7 @@
 //! # use wasm_spec_interpreter::{Value, interpret};
 //! let module = wat::parse_file("tests/add.wat").unwrap();
 //! let parameters = vec![Value::I32(42), Value::I32(1)];
-//! let results = interpret(&module, parameters).unwrap();
+//! let results = interpret(&module, Some(parameters)).unwrap();
 //! assert_eq!(results, &[Value::I32(43)]);
 //! ```
 use crate::Value;
@@ -16,8 +16,9 @@ lazy_static! {
 }
 
 /// Interpret the first function in the passed WebAssembly module (in Wasm form,
-/// currently, not WAT) with the given parameters.
-pub fn interpret(module: &[u8], parameters: Vec<Value>) -> Result<Vec<Value>, String> {
+/// currently, not WAT), optionally with the given parameters. If no parameters
+/// are provided, the function is invoked with zeroed parameters.
+pub fn interpret(module: &[u8], opt_parameters: Option<Vec<Value>>) -> Result<Vec<Value>, String> {
     // The OCaml runtime is not re-entrant
     // (https://ocaml.org/manual/intfc.html#ss:parallel-execution-long-running-c-code).
     // We need  to make sure that only one Rust thread is executing at a time
@@ -35,8 +36,9 @@ pub fn interpret(module: &[u8], parameters: Vec<Value>) -> Result<Vec<Value>, St
     let ocaml_runtime = unsafe { OCamlRuntime::recover_handle() };
     // Parse and execute, returning results converted to Rust.
     let module = module.to_boxroot(ocaml_runtime);
-    let parameters = parameters.to_boxroot(ocaml_runtime);
-    let results = ocaml_bindings::interpret(ocaml_runtime, &module, &parameters);
+
+    let opt_parameters = opt_parameters.to_boxroot(ocaml_runtime);
+    let results = ocaml_bindings::interpret(ocaml_runtime, &module, &opt_parameters);
     results.to_rust(ocaml_runtime)
 }
 
@@ -66,7 +68,7 @@ mod ocaml_bindings {
     // In Rust, this function becomes:
     //   `pub fn interpret(_: &mut OCamlRuntime, ...: OCamlRef<...>) -> BoxRoot<...>;`
     ocaml! {
-        pub fn interpret(module: OCamlBytes, params: OCamlList<Value>) -> Result<OCamlList<Value>, String>;
+        pub fn interpret(module: OCamlBytes, params: Option<OCamlList<Value>>) -> Result<OCamlList<Value>, String>;
     }
 }
 
@@ -77,22 +79,28 @@ mod tests {
     #[test]
     fn multiple() {
         let module = wat::parse_file("tests/add.wat").unwrap();
-        let parameters = vec![Value::I32(42), Value::I32(1)];
-        let results1 = interpret(&module, parameters.clone()).unwrap();
-        let results2 = interpret(&module, parameters.clone()).unwrap();
+
+        let parameters1 = Some(vec![Value::I32(42), Value::I32(1)]);
+        let results1 = interpret(&module, parameters1.clone()).unwrap();
+
+        let parameters2 = Some(vec![Value::I32(1), Value::I32(42)]);
+        let results2 = interpret(&module, parameters2.clone()).unwrap();
+
         assert_eq!(results1, results2);
-        let results3 = interpret(&module, parameters).unwrap();
+
+        let parameters3 = Some(vec![Value::I32(20), Value::I32(23)]);
+        let results3 = interpret(&module, parameters3.clone()).unwrap();
+
         assert_eq!(results2, results3);
     }
 
     #[test]
     fn oob() {
         let module = wat::parse_file("tests/oob.wat").unwrap();
-        let parameters = vec![];
-        let results = interpret(&module, parameters);
+        let results = interpret(&module, None);
         assert_eq!(
             results,
-            Err("Error(_, \"out of bounds memory access\")".to_string())
+            Err("Error(_, \"(Isabelle) trap: load\")".to_string())
         );
     }
 }

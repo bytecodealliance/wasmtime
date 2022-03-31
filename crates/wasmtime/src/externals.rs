@@ -1,8 +1,8 @@
 use crate::store::{StoreData, StoreOpaque, Stored};
 use crate::trampoline::{generate_global_export, generate_table_export};
 use crate::{
-    AsContext, AsContextMut, ExternRef, ExternType, Func, GlobalType, Instance, Memory, Module,
-    Mutability, TableType, Trap, Val, ValType,
+    AsContext, AsContextMut, ExternRef, ExternType, Func, GlobalType, Memory, Mutability,
+    TableType, Trap, Val, ValType,
 };
 use anyhow::{anyhow, bail, Result};
 use std::mem;
@@ -29,10 +29,6 @@ pub enum Extern {
     Table(Table),
     /// A WebAssembly linear memory.
     Memory(Memory),
-    /// A WebAssembly instance.
-    Instance(Instance),
-    /// A WebAssembly module.
-    Module(Module),
 }
 
 impl Extern {
@@ -76,26 +72,6 @@ impl Extern {
         }
     }
 
-    /// Returns the underlying `Instance`, if this external is a instance.
-    ///
-    /// Returns `None` if this is not a instance.
-    pub fn into_instance(self) -> Option<Instance> {
-        match self {
-            Extern::Instance(instance) => Some(instance),
-            _ => None,
-        }
-    }
-
-    /// Returns the underlying `Module`, if this external is a module.
-    ///
-    /// Returns `None` if this is not a module.
-    pub fn into_module(self) -> Option<Module> {
-        match self {
-            Extern::Module(module) => Some(module),
-            _ => None,
-        }
-    }
-
     /// Returns the type associated with this `Extern`.
     ///
     /// The `store` argument provided must own this `Extern` and is used to look
@@ -111,8 +87,6 @@ impl Extern {
             Extern::Memory(ft) => ExternType::Memory(ft.ty(store)),
             Extern::Table(tt) => ExternType::Table(tt.ty(store)),
             Extern::Global(gt) => ExternType::Global(gt.ty(store)),
-            Extern::Instance(i) => ExternType::Instance(i.ty(store)),
-            Extern::Module(m) => ExternType::Module(m.ty()),
         }
     }
 
@@ -142,10 +116,6 @@ impl Extern {
             Extern::Global(g) => store.store_data().contains(g.0),
             Extern::Memory(m) => m.comes_from_same_store(store),
             Extern::Table(t) => store.store_data().contains(t.0),
-            Extern::Instance(i) => i.comes_from_same_store(store),
-            // Modules don't live in stores right now, so they're compatible
-            // with all stores.
-            Extern::Module(_) => true,
         }
     }
 
@@ -155,8 +125,6 @@ impl Extern {
             Extern::Table(_) => "table",
             Extern::Memory(_) => "memory",
             Extern::Global(_) => "global",
-            Extern::Instance(_) => "instance",
-            Extern::Module(_) => "module",
         }
     }
 }
@@ -185,18 +153,6 @@ impl From<Table> for Extern {
     }
 }
 
-impl From<Instance> for Extern {
-    fn from(r: Instance) -> Self {
-        Extern::Instance(r)
-    }
-}
-
-impl From<Module> for Extern {
-    fn from(r: Module) -> Self {
-        Extern::Module(r)
-    }
-}
-
 /// A WebAssembly `global` value which can be read and written to.
 ///
 /// A `global` in WebAssembly is sort of like a global variable within an
@@ -205,9 +161,10 @@ impl From<Module> for Extern {
 /// can either be imported or exported from wasm modules.
 ///
 /// A [`Global`] "belongs" to the store that it was originally created within
-/// (either via [`Global::new`] or via instantiating a [`Module`]). Operations
-/// on a [`Global`] only work with the store it belongs to, and if another store
-/// is passed in by accident then methods will panic.
+/// (either via [`Global::new`] or via instantiating a
+/// [`Module`](crate::Module)). Operations on a [`Global`] only work with the
+/// store it belongs to, and if another store is passed in by accident then
+/// methods will panic.
 #[derive(Copy, Clone, Debug)]
 #[repr(transparent)] // here for the C API
 pub struct Global(Stored<wasmtime_runtime::ExportGlobal>);
@@ -385,9 +342,10 @@ impl Global {
 /// `funcref` table), where each element has the `ValType::FuncRef` type.
 ///
 /// A [`Table`] "belongs" to the store that it was originally created within
-/// (either via [`Table::new`] or via instantiating a [`Module`]). Operations
-/// on a [`Table`] only work with the store it belongs to, and if another store
-/// is passed in by accident then methods will panic.
+/// (either via [`Table::new`] or via instantiating a
+/// [`Module`](crate::Module)). Operations on a [`Table`] only work with the
+/// store it belongs to, and if another store is passed in by accident then
+/// methods will panic.
 #[derive(Copy, Clone, Debug)]
 #[repr(transparent)] // here for the C API
 pub struct Table(Stored<wasmtime_runtime::ExportTable>);
@@ -786,17 +744,5 @@ impl<'instance> Export<'instance> {
     /// or `None` otherwise.
     pub fn into_global(self) -> Option<Global> {
         self.definition.into_global()
-    }
-
-    /// Consume this `Export` and return the contained `Instance`, if it's a
-    /// instance, or `None` otherwise.
-    pub fn into_instance(self) -> Option<Instance> {
-        self.definition.into_instance()
-    }
-
-    /// Consume this `Export` and return the contained `Module`, if it's a
-    /// module, or `None` otherwise.
-    pub fn into_module(self) -> Option<Module> {
-        self.definition.into_module()
     }
 }

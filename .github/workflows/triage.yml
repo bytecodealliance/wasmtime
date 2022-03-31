@@ -10,8 +10,13 @@ on:
     # https://github.com/actions/labeler/issues/12
     - cron: '*/5 * * * *'
 
+concurrency:
+  group: issue-triage
+  cancel-in-progress: true
+
 jobs:
   triage:
+    if: github.repository == 'bytecodealliance/wasmtime'
     runs-on: ubuntu-latest
     steps:
 

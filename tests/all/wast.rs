@@ -1,8 +1,8 @@
 use std::path::Path;
 use std::sync::{Condvar, Mutex};
 use wasmtime::{
-    Config, Engine, InstanceAllocationStrategy, InstanceLimits, ModuleLimits,
-    PoolingAllocationStrategy, Store, Strategy,
+    Config, Engine, InstanceAllocationStrategy, InstanceLimits, PoolingAllocationStrategy, Store,
+    Strategy,
 };
 use wasmtime_wast::WastContext;
 
@@ -12,21 +12,22 @@ include!(concat!(env!("OUT_DIR"), "/wast_testsuite_tests.rs"));
 // function which actually executes the `wast` test suite given the `strategy`
 // to compile it.
 fn run_wast(wast: &str, strategy: Strategy, pooling: bool) -> anyhow::Result<()> {
+    match strategy {
+        Strategy::Cranelift => {}
+        _ => unimplemented!(),
+    }
     let wast = Path::new(wast);
 
     let simd = feature_found(wast, "simd");
     let memory64 = feature_found(wast, "memory64");
     let multi_memory = feature_found(wast, "multi-memory");
-    let module_linking = feature_found(wast, "module-linking");
     let threads = feature_found(wast, "threads");
 
     let mut cfg = Config::new();
     cfg.wasm_simd(simd)
-        .wasm_multi_memory(multi_memory || module_linking)
-        .wasm_module_linking(module_linking)
+        .wasm_multi_memory(multi_memory)
         .wasm_threads(threads)
         .wasm_memory64(memory64)
-        .strategy(strategy)?
         .cranelift_debug_verifier(true);
 
     if feature_found(wast, "canonicalize-nan") {
@@ -77,18 +78,11 @@ fn run_wast(wast: &str, strategy: Strategy, pooling: bool) -> anyhow::Result<()>
         // fails to grow, the values here will need to be adjusted.
         cfg.allocation_strategy(InstanceAllocationStrategy::Pooling {
             strategy: PoolingAllocationStrategy::NextAvailable,
-            module_limits: ModuleLimits {
-                imported_memories: 2,
-                imported_tables: 2,
-                imported_globals: 11,
-                memories: 2,
-                tables: 4,
-                globals: 13,
-                memory_pages: 805,
-                ..Default::default()
-            },
             instance_limits: InstanceLimits {
                 count: 450,
+                memories: 2,
+                tables: 4,
+                memory_pages: 805,
                 ..Default::default()
             },
         });

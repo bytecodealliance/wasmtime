@@ -176,7 +176,7 @@ mod details {
 
     // Information about passes in a single thread.
     thread_local! {
-        static CURRENT_PASS: Cell<Pass> = Cell::new(Pass::None);
+        static CURRENT_PASS: Cell<Pass> = const { Cell::new(Pass::None) };
         static PASS_TIME: RefCell<PassTimes> = RefCell::new(Default::default());
     }
 

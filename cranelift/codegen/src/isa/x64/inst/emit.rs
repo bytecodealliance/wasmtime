@@ -1064,9 +1064,9 @@ pub(crate) fn emit(
             cc,
             consequent,
             alternative,
-            dst: reg_g,
+            dst,
         } => {
-            debug_assert_eq!(*alternative, reg_g.to_reg());
+            debug_assert_eq!(*alternative, dst.to_reg());
             let rex_flags = RexFlags::from(*size);
             let prefix = match size {
                 OperandSize::Size16 => LegacyPrefixes::_66,
@@ -1076,14 +1076,14 @@ pub(crate) fn emit(
             };
             let opcode = 0x0F40 + cc.get_enc() as u32;
             match consequent.clone().to_reg_mem() {
-                RegMem::Reg { reg: reg_e } => {
+                RegMem::Reg { reg } => {
                     emit_std_reg_reg(
                         sink,
                         prefix,
                         opcode,
                         2,
-                        reg_g.to_reg().to_reg(),
-                        reg_e,
+                        dst.to_reg().to_reg(),
+                        reg,
                         rex_flags,
                     );
                 }
@@ -1096,7 +1096,7 @@ pub(crate) fn emit(
                         prefix,
                         opcode,
                         2,
-                        reg_g.to_reg().to_reg(),
+                        dst.to_reg().to_reg(),
                         addr,
                         rex_flags,
                     );
@@ -1104,7 +1104,15 @@ pub(crate) fn emit(
             }
         }
 
-        Inst::XmmCmove { size, cc, src, dst } => {
+        Inst::XmmCmove {
+            size,
+            cc,
+            consequent,
+            alternative,
+            dst,
+        } => {
+            debug_assert_eq!(*alternative, dst.to_reg());
+
             // Lowering of the Select IR opcode when the input is an fcmp relies on the fact that
             // this doesn't clobber flags. Make sure to not do so here.
             let next = sink.get_label();
@@ -1117,7 +1125,8 @@ pub(crate) fn emit(
             } else {
                 SseOpcode::Movss
             };
-            let inst = Inst::xmm_unary_rm_r(op, src.clone().to_reg_mem(), dst.to_writable_reg());
+            let inst =
+                Inst::xmm_unary_rm_r(op, consequent.clone().to_reg_mem(), dst.to_writable_reg());
             inst.emit(sink, info, state);
 
             sink.bind_label(next);
@@ -1687,8 +1696,11 @@ pub(crate) fn emit(
             size,
             is_min,
             lhs,
-            rhs_dst,
+            rhs,
+            dst,
         } => {
+            debug_assert_eq!(*rhs, dst.to_reg());
+
             // Generates the following sequence:
             // cmpss/cmpsd %lhs, %rhs_dst
             // jnz do_min_max
@@ -1738,8 +1750,7 @@ pub(crate) fn emit(
                 _ => unreachable!(),
             };
 
-            let inst =
-                Inst::xmm_cmp_rm_r(cmp_op, RegMem::reg(lhs.to_reg()), rhs_dst.to_reg().to_reg());
+            let inst = Inst::xmm_cmp_rm_r(cmp_op, RegMem::reg(lhs.to_reg()), dst.to_reg().to_reg());
             inst.emit(sink, info, state);
 
             one_way_jmp(sink, CC::NZ, do_min_max);
@@ -1749,7 +1760,7 @@ pub(crate) fn emit(
             // and negative zero. These instructions merge the sign bits in that
             // case, and are no-ops otherwise.
             let op = if *is_min { or_op } else { and_op };
-            let inst = Inst::xmm_rm_r(op, RegMem::reg(lhs.to_reg()), rhs_dst.to_writable_reg());
+            let inst = Inst::xmm_rm_r(op, RegMem::reg(lhs.to_reg()), dst.to_writable_reg());
             inst.emit(sink, info, state);
 
             let inst = Inst::jmp_known(done);
@@ -1759,17 +1770,13 @@ pub(crate) fn emit(
             // read-only operand: perform an addition between the two operands, which has the
             // desired NaN propagation effects.
             sink.bind_label(propagate_nan);
-            let inst = Inst::xmm_rm_r(add_op, RegMem::reg(lhs.to_reg()), rhs_dst.to_writable_reg());
+            let inst = Inst::xmm_rm_r(add_op, RegMem::reg(lhs.to_reg()), dst.to_writable_reg());
             inst.emit(sink, info, state);
 
             one_way_jmp(sink, CC::P, done);
 
             sink.bind_label(do_min_max);
-            let inst = Inst::xmm_rm_r(
-                min_max_op,
-                RegMem::reg(lhs.to_reg()),
-                rhs_dst.to_writable_reg(),
-            );
+            let inst = Inst::xmm_rm_r(min_max_op, RegMem::reg(lhs.to_reg()), dst.to_writable_reg());
             inst.emit(sink, info, state);
 
             sink.bind_label(done);

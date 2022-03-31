@@ -4,9 +4,10 @@
 // Currently the `VMContext` allocation by field looks like this:
 //
 // struct VMContext {
-//      interrupts: *const VMInterrupts,
+//      runtime_limits: *const VMRuntimeLimits,
 //      externref_activations_table: *mut VMExternRefActivationsTable,
 //      store: *mut dyn Store,
+//      builtins: *mut VMBuiltinFunctionsArray,
 //      signature_ids: *const VMSharedSignatureIndex,
 //      imported_functions: [VMFunctionImport; module.num_imported_functions],
 //      imported_tables: [VMTableImport; module.num_imported_tables],
@@ -15,14 +16,14 @@
 //      tables: [VMTableDefinition; module.num_defined_tables],
 //      memories: [VMMemoryDefinition; module.num_defined_memories],
 //      globals: [VMGlobalDefinition; module.num_defined_globals],
-//      anyfuncs: [VMCallerCheckedAnyfunc; module.num_imported_functions + module.num_defined_functions],
-//      builtins: *mut VMBuiltinFunctionsArray,
+//      anyfuncs: [VMCallerCheckedAnyfunc; module.num_escaped_funcs],
 // }
 
 use crate::{
-    DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex, GlobalIndex, MemoryIndex,
-    Module, TableIndex,
+    AnyfuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex,
+    GlobalIndex, MemoryIndex, Module, TableIndex,
 };
+use cranelift_entity::packed_option::ReservedValue;
 use more_asserts::assert_lt;
 use std::convert::TryFrom;
 
@@ -68,12 +69,16 @@ pub struct VMOffsets<P> {
     pub num_defined_memories: u32,
     /// The number of defined globals in the module.
     pub num_defined_globals: u32,
+    /// The number of escaped functions in the module, the size of the anyfuncs
+    /// array.
+    pub num_escaped_funcs: u32,
 
     // precalculated offsets of various member fields
-    interrupts: u32,
+    runtime_limits: u32,
     epoch_ptr: u32,
     externref_activations_table: u32,
     store: u32,
+    builtin_functions: u32,
     signature_ids: u32,
     imported_functions: u32,
     imported_tables: u32,
@@ -83,7 +88,6 @@ pub struct VMOffsets<P> {
     defined_memories: u32,
     defined_globals: u32,
     defined_anyfuncs: u32,
-    builtin_functions: u32,
     size: u32,
 }
 
@@ -131,6 +135,9 @@ pub struct VMOffsetsFields<P> {
     pub num_defined_memories: u32,
     /// The number of defined globals in the module.
     pub num_defined_globals: u32,
+    /// The numbe of escaped functions in the module, the size of the anyfunc
+    /// array.
+    pub num_escaped_funcs: u32,
 }
 
 impl<P: PtrSize> VMOffsets<P> {
@@ -146,6 +153,7 @@ impl<P: PtrSize> VMOffsets<P> {
             num_defined_tables: cast_to_u32(module.table_plans.len()),
             num_defined_memories: cast_to_u32(module.memory_plans.len()),
             num_defined_globals: cast_to_u32(module.globals.len()),
+            num_escaped_funcs: cast_to_u32(module.num_escaped_funcs),
         })
     }
 
@@ -153,6 +161,68 @@ impl<P: PtrSize> VMOffsets<P> {
     #[inline]
     pub fn pointer_size(&self) -> u8 {
         self.ptr.size()
+    }
+
+    /// Returns an iterator which provides a human readable description and a
+    /// byte size. The iterator returned will iterate over the bytes allocated
+    /// to the entire `VMOffsets` structure to explain where each byte size is
+    /// coming from.
+    pub fn region_sizes(&self) -> impl Iterator<Item = (&str, u32)> {
+        macro_rules! calculate_sizes {
+            ($($name:ident: $desc:tt,)*) => {{
+                let VMOffsets {
+                    // These fields are metadata not talking about specific
+                    // offsets of specific fields.
+                    ptr: _,
+                    num_imported_functions: _,
+                    num_imported_tables: _,
+                    num_imported_memories: _,
+                    num_imported_globals: _,
+                    num_defined_tables: _,
+                    num_defined_globals: _,
+                    num_defined_memories: _,
+                    num_defined_functions: _,
+                    num_escaped_funcs: _,
+
+                    // used as the initial size below
+                    size,
+
+                    // exhaustively match teh rest of the fields with input from
+                    // the macro
+                    $($name,)*
+                } = *self;
+
+                // calculate the size of each field by relying on the inputs to
+                // the macro being in reverse order and determining the size of
+                // the field as the offset from the field to the last field.
+                let mut last = size;
+                $(
+                    assert!($name <= last);
+                    let tmp = $name;
+                    let $name = last - $name;
+                    last = tmp;
+                )*
+                assert_eq!(last, 0);
+                IntoIterator::into_iter([$(($desc, $name),)*])
+            }};
+        }
+
+        calculate_sizes! {
+            defined_anyfuncs: "module functions",
+            defined_globals: "defined globals",
+            defined_memories: "defined memories",
+            defined_tables: "defined tables",
+            imported_globals: "imported globals",
+            imported_memories: "imported memories",
+            imported_tables: "imported tables",
+            imported_functions: "imported functions",
+            signature_ids: "module types",
+            builtin_functions: "jit builtin functions state",
+            store: "jit store state",
+            externref_activations_table: "jit host externref state",
+            epoch_ptr: "jit current epoch state",
+            runtime_limits: "jit runtime limits state",
+        }
     }
 }
 
@@ -168,10 +238,12 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
             num_defined_tables: fields.num_defined_tables,
             num_defined_memories: fields.num_defined_memories,
             num_defined_globals: fields.num_defined_globals,
-            interrupts: 0,
+            num_escaped_funcs: fields.num_escaped_funcs,
+            runtime_limits: 0,
             epoch_ptr: 0,
             externref_activations_table: 0,
             store: 0,
+            builtin_functions: 0,
             signature_ids: 0,
             imported_functions: 0,
             imported_tables: 0,
@@ -181,103 +253,67 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
             defined_memories: 0,
             defined_globals: 0,
             defined_anyfuncs: 0,
-            builtin_functions: 0,
             size: 0,
         };
 
-        ret.interrupts = 0;
-        ret.epoch_ptr = ret
-            .interrupts
-            .checked_add(u32::from(ret.ptr.size()))
-            .unwrap();
-        ret.externref_activations_table = ret
-            .epoch_ptr
-            .checked_add(u32::from(ret.ptr.size()))
-            .unwrap();
-        ret.store = ret
-            .externref_activations_table
-            .checked_add(u32::from(ret.ptr.size()))
-            .unwrap();
-        ret.signature_ids = ret
-            .store
-            .checked_add(u32::from(ret.ptr.size() * 2))
-            .unwrap();
-        ret.imported_functions = ret
-            .signature_ids
-            .checked_add(u32::from(ret.ptr.size()))
-            .unwrap();
-        ret.imported_tables = ret
-            .imported_functions
-            .checked_add(
-                ret.num_imported_functions
-                    .checked_mul(u32::from(ret.size_of_vmfunction_import()))
-                    .unwrap(),
-            )
-            .unwrap();
-        ret.imported_memories = ret
-            .imported_tables
-            .checked_add(
-                ret.num_imported_tables
-                    .checked_mul(u32::from(ret.size_of_vmtable_import()))
-                    .unwrap(),
-            )
-            .unwrap();
-        ret.imported_globals = ret
-            .imported_memories
-            .checked_add(
-                ret.num_imported_memories
-                    .checked_mul(u32::from(ret.size_of_vmmemory_import()))
-                    .unwrap(),
-            )
-            .unwrap();
-        ret.defined_tables = ret
-            .imported_globals
-            .checked_add(
-                ret.num_imported_globals
-                    .checked_mul(u32::from(ret.size_of_vmglobal_import()))
-                    .unwrap(),
-            )
-            .unwrap();
-        ret.defined_memories = ret
-            .defined_tables
-            .checked_add(
-                ret.num_defined_tables
-                    .checked_mul(u32::from(ret.size_of_vmtable_definition()))
-                    .unwrap(),
-            )
-            .unwrap();
-        ret.defined_globals = align(
-            ret.defined_memories
-                .checked_add(
-                    ret.num_defined_memories
-                        .checked_mul(u32::from(ret.size_of_vmmemory_definition()))
-                        .unwrap(),
-                )
-                .unwrap(),
-            16,
-        );
-        ret.defined_anyfuncs = ret
-            .defined_globals
-            .checked_add(
-                ret.num_defined_globals
-                    .checked_mul(u32::from(ret.size_of_vmglobal_definition()))
-                    .unwrap(),
-            )
-            .unwrap();
-        ret.builtin_functions = ret
-            .defined_anyfuncs
-            .checked_add(
-                ret.num_imported_functions
-                    .checked_add(ret.num_defined_functions)
-                    .unwrap()
-                    .checked_mul(u32::from(ret.size_of_vmcaller_checked_anyfunc()))
-                    .unwrap(),
-            )
-            .unwrap();
-        ret.size = ret
-            .builtin_functions
-            .checked_add(u32::from(ret.pointer_size()))
-            .unwrap();
+        // Convenience functions for checked addition and multiplication.
+        // As side effect this reduces binary size by using only a single
+        // `#[track_caller]` location for each function instead of one for
+        // each individual invocation.
+        #[inline]
+        fn cadd(count: u32, size: u32) -> u32 {
+            count.checked_add(size).unwrap()
+        }
+
+        #[inline]
+        fn cmul(count: u32, size: u8) -> u32 {
+            count.checked_mul(u32::from(size)).unwrap()
+        }
+
+        let mut next_field_offset = 0;
+
+        macro_rules! fields {
+            (size($field:ident) = $size:expr, $($rest:tt)*) => {
+                ret.$field = next_field_offset;
+                next_field_offset = cadd(next_field_offset, u32::from($size));
+                fields!($($rest)*);
+            };
+            (align($align:literal), $($rest:tt)*) => {
+                next_field_offset = align(next_field_offset, $align);
+                fields!($($rest)*);
+            };
+            () => {};
+        }
+
+        fields! {
+            size(runtime_limits) = ret.ptr.size(),
+            size(epoch_ptr) = ret.ptr.size(),
+            size(externref_activations_table) = ret.ptr.size(),
+            size(store) = ret.ptr.size() * 2,
+            size(builtin_functions) = ret.pointer_size(),
+            size(signature_ids) = ret.ptr.size(),
+            size(imported_functions)
+                = cmul(ret.num_imported_functions, ret.size_of_vmfunction_import()),
+            size(imported_tables)
+                = cmul(ret.num_imported_tables, ret.size_of_vmtable_import()),
+            size(imported_memories)
+                = cmul(ret.num_imported_memories, ret.size_of_vmmemory_import()),
+            size(imported_globals)
+                = cmul(ret.num_imported_globals, ret.size_of_vmglobal_import()),
+            size(defined_tables)
+                = cmul(ret.num_defined_tables, ret.size_of_vmtable_definition()),
+            size(defined_memories)
+                = cmul(ret.num_defined_memories, ret.size_of_vmmemory_definition()),
+            align(16),
+            size(defined_globals)
+                = cmul(ret.num_defined_globals, ret.size_of_vmglobal_definition()),
+            size(defined_anyfuncs) = cmul(
+                ret.num_escaped_funcs,
+                ret.size_of_vmcaller_checked_anyfunc(),
+            ),
+        }
+
+        ret.size = next_field_offset;
 
         return ret;
     }
@@ -447,23 +483,23 @@ impl<P: PtrSize> VMOffsets<P> {
     }
 }
 
-/// Offsets for `VMInterrupts`.
+/// Offsets for `VMRuntimeLimits`.
 impl<P: PtrSize> VMOffsets<P> {
-    /// Return the offset of the `stack_limit` field of `VMInterrupts`
+    /// Return the offset of the `stack_limit` field of `VMRuntimeLimits`
     #[inline]
-    pub fn vminterrupts_stack_limit(&self) -> u8 {
+    pub fn vmruntime_limits_stack_limit(&self) -> u8 {
         0
     }
 
-    /// Return the offset of the `fuel_consumed` field of `VMInterrupts`
+    /// Return the offset of the `fuel_consumed` field of `VMRuntimeLimits`
     #[inline]
-    pub fn vminterrupts_fuel_consumed(&self) -> u8 {
+    pub fn vmruntime_limits_fuel_consumed(&self) -> u8 {
         self.pointer_size()
     }
 
-    /// Return the offset of the `epoch_deadline` field of `VMInterrupts`
+    /// Return the offset of the `epoch_deadline` field of `VMRuntimeLimits`
     #[inline]
-    pub fn vminterupts_epoch_deadline(&self) -> u8 {
+    pub fn vmruntime_limits_epoch_deadline(&self) -> u8 {
         self.pointer_size() + 8 // `stack_limit` is a pointer; `fuel_consumed` is an `i64`
     }
 }
@@ -499,10 +535,10 @@ impl<P: PtrSize> VMOffsets<P> {
 
 /// Offsets for `VMContext`.
 impl<P: PtrSize> VMOffsets<P> {
-    /// Return the offset to the `VMInterrupts` structure
+    /// Return the offset to the `VMRuntimeLimits` structure
     #[inline]
-    pub fn vmctx_interrupts(&self) -> u32 {
-        self.interrupts
+    pub fn vmctx_runtime_limits(&self) -> u32 {
+        self.runtime_limits
     }
 
     /// Return the offset to the `*const AtomicU64` epoch-counter
@@ -648,11 +684,9 @@ impl<P: PtrSize> VMOffsets<P> {
     /// Return the offset to the `VMCallerCheckedAnyfunc` for the given function
     /// index (either imported or defined).
     #[inline]
-    pub fn vmctx_anyfunc(&self, index: FuncIndex) -> u32 {
-        assert_lt!(
-            index.as_u32(),
-            self.num_imported_functions + self.num_defined_functions
-        );
+    pub fn vmctx_anyfunc(&self, index: AnyfuncIndex) -> u32 {
+        assert!(!index.is_reserved_value());
+        assert_lt!(index.as_u32(), self.num_escaped_funcs);
         self.vmctx_anyfuncs_begin()
             + index.as_u32() * u32::from(self.size_of_vmcaller_checked_anyfunc())
     }
@@ -739,22 +773,6 @@ impl<P: PtrSize> VMOffsets<P> {
     #[inline]
     pub fn vm_extern_ref_activation_table_end(&self) -> u32 {
         self.pointer_size().into()
-    }
-}
-
-/// Target specific type for shared signature index.
-#[derive(Debug, Copy, Clone)]
-pub struct TargetSharedSignatureIndex(u32);
-
-impl TargetSharedSignatureIndex {
-    /// Constructs `TargetSharedSignatureIndex`.
-    pub fn new(value: u32) -> Self {
-        Self(value)
-    }
-
-    /// Returns index value.
-    pub fn index(self) -> u32 {
-        self.0
     }
 }
 

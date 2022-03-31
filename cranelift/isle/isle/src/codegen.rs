@@ -460,7 +460,7 @@ impl<'a> Codegen<'a> {
                 };
                 let valuename = self.value_binder(&value, /* is_ref = */ true, ty);
                 let fieldname = &self.typeenv.syms[field.name.index()];
-                self.define_val(&value, ctx, /* is_ref = */ false, field.ty);
+                self.define_val(&value, ctx, /* is_ref = */ true, field.ty);
                 format!("{}: {}", fieldname, valuename)
             })
             .collect::<Vec<_>>()

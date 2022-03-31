@@ -1,23 +1,213 @@
 test run
 target aarch64
-target arm
 target s390x
 target x86_64
 
-function %uextend() -> b1 {
-block0:
-    v0 = iconst.i32 0xffff_ee00
-    v1 = uextend.i64 v0
-    v2 = icmp_imm eq v1, 0xffff_ee00
-    return v2
-}
-; run
+;;;; basic uextend
 
-function %sextend() -> b1 {
-block0:
-    v0 = iconst.i32 0xffff_ee00
-    v1 = sextend.i64 v0
-    v2 = icmp_imm eq v1, 0xffff_ffff_ffff_ee00
-    return v2
+function %uextend8_16(i8) -> i16 {
+block0(v0: i8):
+    v1 = uextend.i16 v0
+    return v1
 }
-; run
+; run: %uextend8_16(0xfe) == 0xfe
+; run: %uextend8_16(0x7e) == 0x7e
+
+function %uextend8_32(i8) -> i32 {
+block0(v0: i8):
+    v1 = uextend.i32 v0
+    return v1
+}
+; run: %uextend8_32(0xfe) == 0xfe
+; run: %uextend8_32(0x7e) == 0x7e
+
+function %uextend16_32(i16) -> i32 {
+block0(v0: i16):
+    v1 = uextend.i32 v0
+    return v1
+}
+; run: %uextend16_32(0xfe00) == 0xfe00
+; run: %uextend16_32(0x7e00) == 0x7e00
+
+function %uextend8_64(i8) -> i64 {
+block0(v0: i8):
+    v1 = uextend.i64 v0
+    return v1
+}
+; run: %uextend8_64(0xfe) == 0xfe
+; run: %uextend8_64(0x7e) == 0x7e
+
+function %uextend16_64(i16) -> i64 {
+block0(v0: i16):
+    v1 = uextend.i64 v0
+    return v1
+}
+; run: %uextend16_64(0xfe00) == 0xfe00
+; run: %uextend16_64(0x7e00) == 0x7e00
+
+function %uextend32_64(i32) -> i64 {
+block0(v0: i32):
+    v1 = uextend.i64 v0
+    return v1
+}
+; run: %uextend32_64(0xffff_ee00) == 0xffff_ee00
+; run: %uextend32_64(0x7fff_ee00) == 0x7fff_ee00
+
+;;;; basic sextend
+
+function %sextend8_16(i8) -> i16 {
+block0(v0: i8):
+    v1 = sextend.i16 v0
+    return v1
+}
+; run: %sextend8_16(0xff) == 0xffff
+; run: %sextend8_16(0x7f) == 0x7f
+
+function %sextend8_32(i8) -> i32 {
+block0(v0: i8):
+    v1 = sextend.i32 v0
+    return v1
+}
+; run: %sextend8_32(0xff) == 0xffff_ffff
+; run: %sextend8_32(0x7f) == 0x7f
+
+function %sextend16_32(i16) -> i32 {
+block0(v0: i16):
+    v1 = sextend.i32 v0
+    return v1
+}
+; run: %sextend16_32(0xfe00) == 0xffff_fe00
+; run: %sextend16_32(0x7e00) == 0x7e00
+
+function %sextend8_64(i8) -> i64 {
+block0(v0: i8):
+    v1 = sextend.i64 v0
+    return v1
+}
+; run: %sextend8_64(0xff) == 0xffff_ffff_ffff_ffff
+; run: %sextend8_64(0x7f) == 0x7f
+
+function %sextend16_64(i16) -> i64 {
+block0(v0: i16):
+    v1 = sextend.i64 v0
+    return v1
+}
+; run: %sextend16_64(0xfe00) == 0xffff_ffff_ffff_fe00
+; run: %sextend16_64(0x7e00) == 0x7e00
+
+function %sextend32_64(i32) -> i64 {
+block0(v0: i32):
+    v1 = sextend.i64 v0
+    return v1
+}
+; run: %sextend32_64(0xffff_ee00) == 0xffff_ffff_ffff_ee00
+; run: %sextend32_64(0x7fff_ee00) == 0x7fff_ee00
+
+;; uextend of an `add` that we know is likely to set undefined bits
+;; above the narrow value
+
+function %add_uextend8_16(i8, i8) -> i16 {
+block0(v0: i8, v1: i8):
+    v2 = iadd.i8 v0, v1
+    v3 = uextend.i16 v2
+    return v3
+}
+; run: %add_uextend8_16(0xfe, 0x03) == 0x0001
+
+function %add_uextend8_32(i8, i8) -> i32 {
+block0(v0: i8, v1: i8):
+    v2 = iadd.i8 v0, v1
+    v3 = uextend.i32 v2
+    return v3
+}
+; run: %add_uextend8_32(0xfe, 0x03) == 0x0000_0001
+
+function %add_uextend16_32(i16, i16) -> i32 {
+block0(v0: i16, v1: i16):
+    v2 = iadd.i16 v0, v1
+    v3 = uextend.i32 v2
+    return v3
+}
+; run: %add_uextend16_32(0xfe00, 0x302) == 0x0000_0102
+
+function %add_uextend8_64(i8, i8) -> i64 {
+block0(v0: i8, v1: i8):
+    v2 = iadd.i8 v0, v1
+    v3 = uextend.i64 v2
+    return v3
+}
+; run: %add_uextend8_64(0xfe, 0x03) == 0x0000_0000_0000_0001
+
+function %add_uextend16_64(i16, i16) -> i64 {
+block0(v0: i16, v1: i16):
+    v2 = iadd.i16 v0, v1
+    v3 = uextend.i64 v2
+    return v3
+}
+; run: %add_uextend16_64(0xfe00, 0x302) == 0x0000_0000_0000_0102
+
+function %add_uextend32_64(i32, i32) -> i64 {
+block0(v0: i32, v1: i32):
+    v2 = iadd.i32 v0, v1
+    v3 = uextend.i64 v2
+    return v3
+}
+; run: %add_uextend32_64(0xffff_ee00, 0x1000_0001) == 0x0000_0000_0fff_ee01
+
+;; sextend of an `add` that we know is likely to set undefined bits
+;; above the narrow value
+
+function %add_sextend8_16(i8, i8) -> i16 {
+block0(v0: i8, v1: i8):
+    v2 = iadd.i8 v0, v1
+    v3 = sextend.i16 v2
+    return v3
+}
+; run: %add_sextend8_16(0xfe, 0x03) == 0x0001
+; run: %add_sextend8_16(0xfe, 0x83) == 0xff81
+
+function %add_sextend8_32(i8, i8) -> i32 {
+block0(v0: i8, v1: i8):
+    v2 = iadd.i8 v0, v1
+    v3 = sextend.i32 v2
+    return v3
+}
+; run: %add_sextend8_32(0xfe, 0x03) == 0x0000_0001
+; run: %add_sextend8_32(0xfe, 0x83) == 0xffff_ff81
+
+function %add_sextend16_32(i16, i16) -> i32 {
+block0(v0: i16, v1: i16):
+    v2 = iadd.i16 v0, v1
+    v3 = sextend.i32 v2
+    return v3
+}
+; run: %add_sextend16_32(0xfe00, 0x302) == 0x0000_0102
+; run: %add_sextend16_32(0xfe00, 0x8302) == 0xffff_8102
+
+function %add_sextend8_64(i8, i8) -> i64 {
+block0(v0: i8, v1: i8):
+    v2 = iadd.i8 v0, v1
+    v3 = sextend.i64 v2
+    return v3
+}
+; run: %add_sextend8_64(0xfe, 0x03) == 0x0000_0000_0000_0001
+; run: %add_sextend8_64(0xfe, 0x83) == 0xffff_ffff_ffff_ff81
+
+function %add_sextend16_64(i16, i16) -> i64 {
+block0(v0: i16, v1: i16):
+    v2 = iadd.i16 v0, v1
+    v3 = sextend.i64 v2
+    return v3
+}
+; run: %add_sextend16_64(0xfe00, 0x302) == 0x0000_0000_0000_0102
+; run: %add_sextend16_64(0xfe00, 0x8302) == 0xffff_ffff_ffff_8102
+
+function %add_sextend32_64(i32, i32) -> i64 {
+block0(v0: i32, v1: i32):
+    v2 = iadd.i32 v0, v1
+    v3 = sextend.i64 v2
+    return v3
+}
+; run: %add_sextend32_64(0xffff_ee00, 0x1000_0001) == 0x0000_0000_0fff_ee01
+; run: %add_sextend32_64(0xffff_ee00, 0x9000_0001) == 0xffff_ffff_8fff_ee01
+

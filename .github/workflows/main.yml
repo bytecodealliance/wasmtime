@@ -137,7 +137,8 @@ jobs:
     - run: cargo check -p wasmtime --no-default-features --features uffd
     - run: cargo check -p wasmtime --no-default-features --features pooling-allocator
     - run: cargo check -p wasmtime --no-default-features --features cranelift
-    - run: cargo check -p wasmtime --no-default-features --features cranelift,wat,async,cache
+    - run: cargo check -p wasmtime --no-default-features --features wasm-backtrace
+    - run: cargo check -p wasmtime --no-default-features --features cranelift,wat,async,cache,wasm-backtrace
 
     # Check that benchmarks of the cranelift project build
     - run: cargo check --benches -p cranelift-codegen
@@ -181,10 +182,12 @@ jobs:
         toolchain: nightly-2021-12-15
     - run: cargo install cargo-fuzz --vers "^0.11"
     # Install OCaml packages necessary for 'differential_spec' fuzz target.
-    - run: sudo apt install -y ocaml-nox ocamlbuild
+    - run: sudo apt install -y ocaml-nox ocamlbuild ocaml-findlib libzarith-ocaml-dev
     - run: cargo fetch
       working-directory: ./fuzz
     - run: cargo fuzz build --dev
+    # Check that the ISLE fuzz targets build too.
+    - run: cargo fuzz build --dev --fuzz-dir ./cranelift/isle/fuzz
 
   rebuild_isle:
     name: Rebuild ISLE
@@ -213,8 +216,8 @@ jobs:
         include:
           - os: ubuntu-latest
           - os: macos-latest
-          - os: windows-latest
-          - os: windows-latest
+          - os: windows-2019
+          - os: windows-2019
             target: x86_64-pc-windows-gnu
           - os: ubuntu-latest
             target: aarch64-unknown-linux-gnu
@@ -358,8 +361,8 @@ jobs:
     - run: rustup target add wasm32-wasi
     - name: Install Rust
       run: rustup update stable && rustup default stable
-    - run: cargo bench
-    - run: cargo bench --features uffd
+    - run: cargo test --benches --release
+    - run: cargo test --benches --release --features uffd
 
   # Verify that cranelift's code generation is deterministic
   meta_determinist_check:
@@ -439,7 +442,8 @@ jobs:
 
     # ... and if this was an actual push (tag or `main`) then we publish a
     # new release. This'll automatically publish a tag release or update `dev`
-    # with this `sha`
+    # with this `sha`. Note that `continue-on-error` is set here so if this hits
+    # a bug we can go back and fetch and upload the release ourselves.
     - run: cd .github/actions/github-release && npm install --production
     - name: Publish Release
       uses: ./.github/actions/github-release
@@ -447,6 +451,7 @@ jobs:
       with:
         files: "dist/*"
         token: ${{ secrets.GITHUB_TOKEN }}
+      continue-on-error: true
 
   verify-publish:
     runs-on: ubuntu-latest

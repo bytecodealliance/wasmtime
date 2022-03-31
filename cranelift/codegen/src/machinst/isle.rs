@@ -1,9 +1,10 @@
-use crate::ir::{Inst, Value};
+use crate::ir::{types, Inst, Value, ValueList};
 use crate::machinst::{get_output_reg, InsnOutput, LowerCtx, MachInst, RegRenamer};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use regalloc::{Reg, Writable};
 use smallvec::SmallVec;
+use std::cell::Cell;
 
 pub use super::MachLabel;
 pub use crate::ir::{ExternalName, FuncRef, GlobalValue, SigRef};
@@ -11,13 +12,15 @@ pub use crate::isa::unwind::UnwindInst;
 pub use crate::machinst::RelocDistance;
 
 pub type Unit = ();
-pub type ValueSlice<'a> = &'a [Value];
+pub type ValueSlice = (ValueList, usize);
 pub type ValueArray2 = [Value; 2];
 pub type ValueArray3 = [Value; 3];
 pub type WritableReg = Writable<Reg>;
 pub type VecReg = Vec<Reg>;
 pub type VecWritableReg = Vec<WritableReg>;
 pub type ValueRegs = crate::machinst::ValueRegs<Reg>;
+pub type InstOutput = SmallVec<[ValueRegs; 2]>;
+pub type InstOutputBuilder = Cell<InstOutput>;
 pub type VecMachLabel = Vec<MachLabel>;
 pub type BoxExternalName = Box<ExternalName>;
 
@@ -65,6 +68,38 @@ macro_rules! isle_prelude_methods {
         }
 
         #[inline]
+        fn output_none(&mut self) -> InstOutput {
+            smallvec::smallvec![]
+        }
+
+        #[inline]
+        fn output(&mut self, regs: ValueRegs) -> InstOutput {
+            smallvec::smallvec![regs]
+        }
+
+        #[inline]
+        fn output_pair(&mut self, r1: ValueRegs, r2: ValueRegs) -> InstOutput {
+            smallvec::smallvec![r1, r2]
+        }
+
+        #[inline]
+        fn output_builder_new(&mut self) -> InstOutputBuilder {
+            std::cell::Cell::new(InstOutput::new())
+        }
+
+        #[inline]
+        fn output_builder_push(&mut self, builder: &InstOutputBuilder, regs: ValueRegs) -> Unit {
+            let mut vec = builder.take();
+            vec.push(regs);
+            builder.set(vec);
+        }
+
+        #[inline]
+        fn output_builder_finish(&mut self, builder: &InstOutputBuilder) -> InstOutput {
+            builder.take()
+        }
+
+        #[inline]
         fn temp_writable_reg(&mut self, ty: Type) -> WritableReg {
             let value_regs = self.lower_ctx.alloc_tmp(ty);
             value_regs.only_reg().unwrap()
@@ -106,6 +141,26 @@ macro_rules! isle_prelude_methods {
         }
 
         #[inline]
+        fn i64_as_u64(&mut self, x: i64) -> u64 {
+            x as u64
+        }
+
+        #[inline]
+        fn u64_add(&mut self, x: u64, y: u64) -> u64 {
+            x.wrapping_add(y)
+        }
+
+        #[inline]
+        fn u64_sub(&mut self, x: u64, y: u64) -> u64 {
+            x.wrapping_sub(y)
+        }
+
+        #[inline]
+        fn u64_and(&mut self, x: u64, y: u64) -> u64 {
+            x & y
+        }
+
+        #[inline]
         fn ty_bits(&mut self, ty: Type) -> u8 {
             use std::convert::TryInto;
             ty.bits().try_into().unwrap()
@@ -117,8 +172,25 @@ macro_rules! isle_prelude_methods {
         }
 
         #[inline]
+        fn ty_bits_u64(&mut self, ty: Type) -> u64 {
+            ty.bits() as u64
+        }
+
+        #[inline]
         fn ty_bytes(&mut self, ty: Type) -> u16 {
             u16::try_from(ty.bytes()).unwrap()
+        }
+
+        #[inline]
+        fn ty_mask(&mut self, ty: Type) -> u64 {
+            match ty.bits() {
+                1 => 1,
+                8 => 0xff,
+                16 => 0xffff,
+                32 => 0xffff_ffff,
+                64 => 0xffff_ffff_ffff_ffff,
+                _ => unimplemented!(),
+            }
         }
 
         fn fits_in_16(&mut self, ty: Type) -> Option<Type> {
@@ -165,7 +237,32 @@ macro_rules! isle_prelude_methods {
             }
         }
 
-        fn vec128(&mut self, ty: Type) -> Option<Type> {
+        #[inline]
+        fn ty_int_bool_64(&mut self, ty: Type) -> Option<Type> {
+            match ty {
+                I64 | B64 => Some(ty),
+                _ => None,
+            }
+        }
+
+        #[inline]
+        fn ty_int_bool_128(&mut self, ty: Type) -> Option<Type> {
+            match ty {
+                I128 | B128 => Some(ty),
+                _ => None,
+            }
+        }
+
+        #[inline]
+        fn ty_scalar_float(&mut self, ty: Type) -> Option<Type> {
+            match ty {
+                F32 | F64 => Some(ty),
+                _ => None,
+            }
+        }
+
+        #[inline]
+        fn ty_vec128(&mut self, ty: Type) -> Option<Type> {
             if ty.is_vector() && ty.bits() == 128 {
                 Some(ty)
             } else {
@@ -175,27 +272,40 @@ macro_rules! isle_prelude_methods {
 
         #[inline]
         fn value_list_slice(&mut self, list: ValueList) -> ValueSlice {
-            list.as_slice(&self.lower_ctx.dfg().value_lists)
+            (list, 0)
         }
 
         #[inline]
-        fn unwrap_head_value_list_1(&mut self, list: ValueList) -> (Value, ValueSlice) {
-            match self.value_list_slice(list) {
-                [head, tail @ ..] => (*head, tail),
-                _ => crate::machinst::isle::out_of_line_panic(
-                    "`unwrap_head_value_list_1` on empty `ValueList`",
-                ),
+        fn value_slice_empty(&mut self, slice: ValueSlice) -> Option<()> {
+            let (list, off) = slice;
+            if off >= list.len(&self.lower_ctx.dfg().value_lists) {
+                Some(())
+            } else {
+                None
             }
         }
 
         #[inline]
-        fn unwrap_head_value_list_2(&mut self, list: ValueList) -> (Value, Value, ValueSlice) {
-            match self.value_list_slice(list) {
-                [head1, head2, tail @ ..] => (*head1, *head2, tail),
-                _ => crate::machinst::isle::out_of_line_panic(
-                    "`unwrap_head_value_list_2` on list without at least two elements",
-                ),
+        fn value_slice_unwrap(&mut self, slice: ValueSlice) -> Option<(Value, ValueSlice)> {
+            let (list, off) = slice;
+            if let Some(val) = list.get(off, &self.lower_ctx.dfg().value_lists) {
+                Some((val, (list, off + 1)))
+            } else {
+                None
             }
+        }
+
+        #[inline]
+        fn value_slice_len(&mut self, slice: ValueSlice) -> usize {
+            let (list, off) = slice;
+            list.len(&self.lower_ctx.dfg().value_lists) - off
+        }
+
+        #[inline]
+        fn value_slice_get(&mut self, slice: ValueSlice, idx: usize) -> Value {
+            let (list, off) = slice;
+            list.get(off + idx, &self.lower_ctx.dfg().value_lists)
+                .unwrap()
         }
 
         #[inline]
@@ -210,7 +320,7 @@ macro_rules! isle_prelude_methods {
 
         #[inline]
         fn inst_results(&mut self, inst: Inst) -> ValueSlice {
-            self.lower_ctx.dfg().inst_results(inst)
+            (self.lower_ctx.dfg().inst_results_list(inst), 0)
         }
 
         #[inline]
@@ -363,7 +473,7 @@ pub(crate) fn lower_common<C, F, I, IF, const N: usize>(
 where
     C: LowerCtx,
     [(C::I, bool); N]: smallvec::Array<Item = (C::I, bool)>,
-    IF: Fn(&mut IsleContext<'_, C, F, I, N>, Inst) -> Option<ValueRegs>,
+    IF: Fn(&mut IsleContext<'_, C, F, I, N>, Inst) -> Option<InstOutput>,
 {
     // TODO: reuse the ISLE context across lowerings so we can reuse its
     // internal heap allocations.
@@ -375,22 +485,17 @@ where
     };
 
     let temp_regs = isle_lower(&mut isle_ctx, inst).ok_or(())?;
-    let mut temp_regs = temp_regs.regs().iter();
 
     #[cfg(debug_assertions)]
     {
-        let all_dsts_len = outputs
-            .iter()
-            .map(|out| get_output_reg(isle_ctx.lower_ctx, *out).len())
-            .sum();
         debug_assert_eq!(
             temp_regs.len(),
-            all_dsts_len,
-            "the number of temporary registers and destination registers do \
+            outputs.len(),
+            "the number of temporary values and destination values do \
          not match ({} != {}); ensure the correct registers are being \
          returned.",
             temp_regs.len(),
-            all_dsts_len,
+            outputs.len(),
         );
     }
 
@@ -399,12 +504,22 @@ where
     // registers they were assigned when their value was used as an operand in
     // earlier lowerings.
     let mut renamer = RegRenamer::default();
-    for output in outputs {
-        let dsts = get_output_reg(isle_ctx.lower_ctx, *output);
-        let ty = isle_ctx.lower_ctx.output_ty(output.insn, output.output);
-        let (_, tys) = <C::I>::rc_for_type(ty).unwrap();
-        for ((temp, dst), ty) in temp_regs.by_ref().zip(dsts.regs()).zip(tys) {
-            renamer.add_rename(*temp, dst.to_reg(), *ty);
+    for i in 0..outputs.len() {
+        let regs = temp_regs[i];
+        let dsts = get_output_reg(isle_ctx.lower_ctx, outputs[i]);
+        let ty = isle_ctx
+            .lower_ctx
+            .output_ty(outputs[i].insn, outputs[i].output);
+        if ty == types::IFLAGS || ty == types::FFLAGS {
+            // Flags values do not occupy any registers.
+            assert!(regs.len() == 0);
+        } else {
+            let (_, tys) = <C::I>::rc_for_type(ty).unwrap();
+            assert!(regs.len() == tys.len());
+            assert!(regs.len() == dsts.len());
+            for ((dst, temp), ty) in dsts.regs().iter().zip(regs.regs().iter()).zip(tys) {
+                renamer.add_rename(*temp, dst.to_reg(), *ty);
+            }
         }
     }
     for (inst, _) in isle_ctx.emitted_insts.iter_mut() {
@@ -436,10 +551,4 @@ where
     }
 
     Ok(())
-}
-
-#[inline(never)]
-#[cold]
-pub fn out_of_line_panic(msg: &str) -> ! {
-    panic!("{}", msg);
 }

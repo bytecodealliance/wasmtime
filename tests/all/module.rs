@@ -10,9 +10,11 @@ fn checks_incompatible_target() -> Result<()> {
         "(module)",
     ) {
         Ok(_) => unreachable!(),
-        Err(e) => assert!(e
-            .to_string()
-            .contains("configuration does not match the host")),
+        Err(e) => assert!(
+            format!("{:?}", e).contains("configuration does not match the host"),
+            "bad error: {:?}",
+            e
+        ),
     }
 
     Ok(())
@@ -31,33 +33,20 @@ fn caches_across_engines() {
         let res = Module::deserialize(&Engine::default(), &bytes);
         assert!(res.is_ok());
 
-        // differ in shared cranelift flags
+        // differ in runtime settings
         let res = Module::deserialize(
-            &Engine::new(Config::new().cranelift_nan_canonicalization(true)).unwrap(),
+            &Engine::new(Config::new().static_memory_maximum_size(0)).unwrap(),
             &bytes,
         );
         assert!(res.is_err());
 
-        // differ in cranelift settings
+        // differ in wasm features enabled (which can affect
+        // runtime/compilation settings)
         let res = Module::deserialize(
-            &Engine::new(Config::new().cranelift_opt_level(OptLevel::None)).unwrap(),
+            &Engine::new(Config::new().wasm_simd(false)).unwrap(),
             &bytes,
         );
         assert!(res.is_err());
-
-        // Missing required cpu flags
-        if cfg!(target_arch = "x86_64") {
-            let res = Module::deserialize(
-                &Engine::new(
-                    Config::new()
-                        .target(&target_lexicon::Triple::host().to_string())
-                        .unwrap(),
-                )
-                .unwrap(),
-                &bytes,
-            );
-            assert!(res.is_err());
-        }
     }
 }
 

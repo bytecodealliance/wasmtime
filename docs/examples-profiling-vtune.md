@@ -1,4 +1,4 @@
-# Using `VTune` on Linux
+# Using `VTune`
 
 [VTune][help] is a popular performance profiling tool that targets both 32-bit
 and 64-bit x86 architectures. The tool collects profiling data during runtime
@@ -6,9 +6,7 @@ and then, either through the command line or GUI, provides a variety of options
 for viewing and analyzing that data. VTune Profiler is available in both
 commerical and free options. The free, downloadable version is available
 [here][download] and is backed by a community forum for support. This version is
-appropriate for detailed analysis of your Wasm program. Note that for JIT
-support, Wasmtime only supports VTune profiling on Linux platforms but other
-platforms are expected to be enabled in the future.
+appropriate for detailed analysis of your Wasm program.
 
 VTune support in Wasmtime is provided through the JIT profiling APIs from the
 [`ittapi`] library. This library provides code generators (or the runtimes that
@@ -24,19 +22,16 @@ For more information on VTune and the analysis tools it provides see its
 
 [help]: https://software.intel.com/en-us/vtune-help
 [download]: https://software.intel.com/en-us/vtune/choose-download#standalone
-[documentations]: https://software.intel.com/en-us/vtune-help
+[documentation]: https://software.intel.com/en-us/vtune-help
 [`ittapi`]: https://github.com/intel/ittapi
 [`ittapi-rs`]: https://crates.io/crates/ittapi-rs
 
 ### Turn on VTune support
 
-For JIT profiling with VTune, first build with the `vtune` feature enabled:
-
-```sh
-$ cargo build --features=vtune
-```
-
-Then, enable runtime support based on how you use Wasmtime:
+For JIT profiling with VTune, Wasmtime currently builds with the `vtune` feature
+enabled by default. This ensures the compiled binary understands how to inform
+the `ittapi` library of JIT events. But it must still be enabled at
+runtime--enable runtime support based on how you use Wasmtime:
 
 * **Rust API** - call the [`Config::profiler`] method with
   `ProfilingStrategy::VTune` to enable profiling of your wasm modules.
@@ -62,7 +57,7 @@ future.
 With VTune [properly installed][download], if you are using the CLI execute:
 
 ```sh
-$ cargo build --features=vtune
+$ cargo build
 $ vtune -run-pass-thru=--no-altstack -collect hotspots target/debug/wasmtime --vtune foo.wasm
 ```
 

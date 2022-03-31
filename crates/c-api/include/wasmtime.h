@@ -167,6 +167,7 @@
 #include <wasi.h>
 #include <wasmtime/config.h>
 #include <wasmtime/error.h>
+#include <wasmtime/engine.h>
 #include <wasmtime/extern.h>
 #include <wasmtime/func.h>
 #include <wasmtime/global.h>

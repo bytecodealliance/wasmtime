@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::mem;
-use std::ops::Range;
+use std::ops::{Index, Range};
 use wasmtime_types::*;
 
 /// Implemenation styles for WebAssembly linear memory.
@@ -128,7 +128,7 @@ pub struct StaticMemoryInitializer {
 }
 
 /// The type of WebAssembly linear memory initialization to use for a module.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum MemoryInitialization {
     /// Memory initialization is segmented.
     ///
@@ -322,7 +322,31 @@ impl ModuleTranslation<'_> {
     ///
     /// Note that the constraints for `Paged` are the same as those for
     /// `Static`.
-    pub fn try_static_init(&mut self, page_size: u64) {
+    ///
+    /// Takes a `page_size` argument in order to ensure that all
+    /// initialization is page-aligned for mmap-ability, and
+    /// `max_image_size_always_allowed` to control how we decide
+    /// whether to use static init.
+    ///
+    /// We will try to avoid generating very sparse images, which are
+    /// possible if e.g. a module has an initializer at offset 0 and a
+    /// very high offset (say, 1 GiB). To avoid this, we use a dual
+    /// condition: we always allow images less than
+    /// `max_image_size_always_allowed`, and the embedder of Wasmtime
+    /// can set this if desired to ensure that static init should
+    /// always be done if the size of the module or its heaps is
+    /// otherwise bounded by the system. We also allow images with
+    /// static init data bigger than that, but only if it is "dense",
+    /// defined as having at least half (50%) of its pages with some
+    /// data.
+    ///
+    /// We could do something slightly better by building a dense part
+    /// and keeping a sparse list of outlier/leftover segments (see
+    /// issue #3820). This would also allow mostly-static init of
+    /// modules that have some dynamically-placed data segments. But,
+    /// for now, this is sufficient to allow a system that "knows what
+    /// it's doing" to always get static init.
+    pub fn try_static_init(&mut self, page_size: u64, max_image_size_always_allowed: u64) {
         // First try to switch this memory initialization to the `Paged`
         // variant, if it isn't already. This will perform static bounds checks
         // and everything and massage it all into a format which is a bit easier
@@ -332,13 +356,6 @@ impl ModuleTranslation<'_> {
             MemoryInitialization::Paged { map } => map,
             _ => return,
         };
-
-        // Maximum size, in bytes, of an initialization image which is
-        // unconditionally allowed regardless of the input module's size and
-        // properties. This is chosen to be modestly small to allow useful cases
-        // to use an initialization image but not too large that if every module
-        // ran up to the limit here it shouldn't cause a problem.
-        const MAX_IMAGE_SIZE_ALWAYS_ALLOWED: u64 = 1 << 20; // 1 MB
 
         let memory_init_size = |pages: &[StaticMemoryInitializer]| {
             if pages.len() == 0 {
@@ -382,7 +399,7 @@ impl ModuleTranslation<'_> {
             // If the memory initialization image is larger than the size of all
             // data, then we still allow memory initialization if the image will
             // be of a relatively modest size, such as 1MB here.
-            if memory_init_size < MAX_IMAGE_SIZE_ALWAYS_ALLOWED {
+            if memory_init_size < max_image_size_always_allowed {
                 continue;
             }
 
@@ -762,7 +779,7 @@ pub struct TableInitializer {
 }
 
 /// Table initialization data for all tables in the module.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum TableInitialization {
     /// "Segment" mode: table initializer segments, possibly with
     /// dynamic bases, possibly applying to an imported memory.
@@ -819,8 +836,6 @@ impl Default for TableInitialization {
 #[allow(missing_docs)]
 pub enum ModuleType {
     Function(SignatureIndex),
-    Module(ModuleTypeIndex),
-    Instance(InstanceTypeIndex),
 }
 
 impl ModuleType {
@@ -829,14 +844,13 @@ impl ModuleType {
     pub fn unwrap_function(&self) -> SignatureIndex {
         match self {
             ModuleType::Function(f) => *f,
-            _ => panic!("not a function type"),
         }
     }
 }
 
 /// A translated WebAssembly module, excluding the function bodies and
 /// memory initializers.
-#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[derive(Default, Debug, Serialize, Deserialize)]
 pub struct Module {
     /// The name of this wasm module, often found in the wasm file.
     pub name: Option<String>,
@@ -880,8 +894,15 @@ pub struct Module {
     /// Number of imported or aliased globals in the module.
     pub num_imported_globals: usize,
 
+    /// Number of functions that "escape" from this module may need to have a
+    /// `VMCallerCheckedAnyfunc` constructed for them.
+    ///
+    /// This is also the number of functions in the `functions` array below with
+    /// an `anyfunc` index (and is the maximum anyfunc index).
+    pub num_escaped_funcs: usize,
+
     /// Types of functions, imported and local.
-    pub functions: PrimaryMap<FuncIndex, SignatureIndex>,
+    pub functions: PrimaryMap<FuncIndex, FunctionType>,
 
     /// WebAssembly tables.
     pub table_plans: PrimaryMap<TableIndex, TablePlan>,
@@ -891,87 +912,28 @@ pub struct Module {
 
     /// WebAssembly global variables.
     pub globals: PrimaryMap<GlobalIndex, Global>,
-
-    /// The type of each wasm instance this module defines.
-    pub instances: PrimaryMap<InstanceIndex, InstanceTypeIndex>,
-
-    /// The type of each nested wasm module this module contains.
-    pub modules: PrimaryMap<ModuleIndex, ModuleTypeIndex>,
 }
 
 /// Initialization routines for creating an instance, encompassing imports,
 /// modules, instances, aliases, etc.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum Initializer {
     /// An imported item is required to be provided.
     Import {
         /// Name of this import
         name: String,
-        /// The field name projection of this import. When module-linking is
-        /// enabled this is always `None`. Otherwise this is always `Some`.
-        field: Option<String>,
+        /// The field name projection of this import
+        field: String,
         /// Where this import will be placed, which also has type information
         /// about the import.
         index: EntityIndex,
     },
-
-    /// An export from a previously defined instance is being inserted into our
-    /// index space.
-    ///
-    /// Note that when the module linking proposal is enabled two-level imports
-    /// will implicitly desugar to this initializer.
-    AliasInstanceExport {
-        /// The instance that we're referencing.
-        instance: InstanceIndex,
-        /// Which export is being inserted into our index space.
-        export: String,
-    },
-
-    /// A module is being instantiated with previously configured initializers
-    /// as arguments.
-    Instantiate {
-        /// The module that this instance is instantiating.
-        module: ModuleIndex,
-        /// The arguments provided to instantiation, along with their name in
-        /// the instance being instantiated.
-        args: IndexMap<String, EntityIndex>,
-    },
-
-    /// A module is being created from a set of compiled artifacts.
-    CreateModule {
-        /// The index of the artifact that's being converted into a module.
-        artifact_index: usize,
-        /// The list of artifacts that this module value will be inheriting.
-        artifacts: Vec<usize>,
-        /// The list of modules that this module value will inherit.
-        modules: Vec<ModuleUpvar>,
-    },
-
-    /// A module is created from a closed-over-module value, defined when this
-    /// module was created.
-    DefineModule(usize),
-}
-
-/// Where module values can come from when creating a new module from a compiled
-/// artifact.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum ModuleUpvar {
-    /// A module value is inherited from the module creating the new module.
-    Inherit(usize),
-    /// A module value comes from the instance-to-be-created module index space.
-    Local(ModuleIndex),
 }
 
 impl Module {
     /// Allocates the module data structures.
     pub fn new() -> Self {
         Module::default()
-    }
-
-    /// Get the given passive element, if it exists.
-    pub fn get_passive_element(&self, index: ElemIndex) -> Option<&[FuncIndex]> {
-        let index = *self.passive_elements_map.get(&index)?;
-        Some(self.passive_elements[index].as_ref())
     }
 
     /// Convert a `DefinedFuncIndex` into a `FuncIndex`.
@@ -1076,12 +1038,11 @@ impl Module {
 
     /// Returns an iterator of all the imports in this module, along with their
     /// module name, field name, and type that's being imported.
-    pub fn imports(&self) -> impl Iterator<Item = (&str, Option<&str>, EntityType)> {
-        self.initializers.iter().filter_map(move |i| match i {
+    pub fn imports(&self) -> impl Iterator<Item = (&str, &str, EntityType)> {
+        self.initializers.iter().map(move |i| match i {
             Initializer::Import { name, field, index } => {
-                Some((name.as_str(), field.as_deref(), self.type_of(*index)))
+                (name.as_str(), field.as_str(), self.type_of(*index))
             }
-            _ => None,
         })
     }
 
@@ -1091,10 +1052,27 @@ impl Module {
             EntityIndex::Global(i) => EntityType::Global(self.globals[i]),
             EntityIndex::Table(i) => EntityType::Table(self.table_plans[i].table),
             EntityIndex::Memory(i) => EntityType::Memory(self.memory_plans[i].memory),
-            EntityIndex::Function(i) => EntityType::Function(self.functions[i]),
-            EntityIndex::Instance(i) => EntityType::Instance(self.instances[i]),
-            EntityIndex::Module(i) => EntityType::Module(self.modules[i]),
+            EntityIndex::Function(i) => EntityType::Function(self.functions[i].signature),
         }
+    }
+
+    /// Appends a new function to this module with the given type information,
+    /// used for functions that either don't escape or aren't certain whether
+    /// they escape yet.
+    pub fn push_function(&mut self, signature: SignatureIndex) -> FuncIndex {
+        self.functions.push(FunctionType {
+            signature,
+            anyfunc: AnyfuncIndex::reserved_value(),
+        })
+    }
+
+    /// Appends a new function to this module with the given type information.
+    pub fn push_escaped_function(
+        &mut self,
+        signature: SignatureIndex,
+        anyfunc: AnyfuncIndex,
+    ) -> FuncIndex {
+        self.functions.push(FunctionType { signature, anyfunc })
     }
 }
 
@@ -1102,28 +1080,49 @@ impl Module {
 ///
 /// Note that this is shared amongst all modules coming out of a translation
 /// in the case of nested modules and the module linking proposal.
-#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[derive(Default, Debug, Serialize, Deserialize)]
 #[allow(missing_docs)]
 pub struct TypeTables {
-    pub wasm_signatures: PrimaryMap<SignatureIndex, WasmFuncType>,
-    pub module_signatures: PrimaryMap<ModuleTypeIndex, ModuleSignature>,
-    pub instance_signatures: PrimaryMap<InstanceTypeIndex, InstanceSignature>,
+    pub(crate) wasm_signatures: PrimaryMap<SignatureIndex, WasmFuncType>,
 }
 
-/// The type signature of known modules.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ModuleSignature {
-    /// All imports in this module, listed in order with their name and
-    /// what type they're importing.
-    pub imports: IndexMap<String, EntityType>,
-    /// Exports are what an instance type conveys, so we go through an
-    /// indirection over there.
-    pub exports: InstanceTypeIndex,
+impl TypeTables {
+    /// Returns an iterator of all of the core wasm function signatures
+    /// registered in this instance.
+    pub fn wasm_signatures(&self) -> impl Iterator<Item = (SignatureIndex, &WasmFuncType)> {
+        self.wasm_signatures.iter()
+    }
 }
 
-/// The type signature of known instances.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct InstanceSignature {
-    /// The name of what's being exported as well as its type signature.
-    pub exports: IndexMap<String, EntityType>,
+impl Index<SignatureIndex> for TypeTables {
+    type Output = WasmFuncType;
+
+    fn index(&self, idx: SignatureIndex) -> &WasmFuncType {
+        &self.wasm_signatures[idx]
+    }
 }
+
+/// Type information about functions in a wasm module.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct FunctionType {
+    /// The type of this function, indexed into the module-wide type tables for
+    /// a module compilation.
+    pub signature: SignatureIndex,
+    /// The index into the anyfunc table, if present. Note that this is
+    /// `reserved_value()` if the function does not escape from a module.
+    pub anyfunc: AnyfuncIndex,
+}
+
+impl FunctionType {
+    /// Returns whether this function's type is one that "escapes" the current
+    /// module, meaning that the function is exported, used in `ref.func`, used
+    /// in a table, etc.
+    pub fn is_escaping(&self) -> bool {
+        !self.anyfunc.is_reserved_value()
+    }
+}
+
+/// Index into the anyfunc table within a VMContext for a function.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
+pub struct AnyfuncIndex(u32);
+cranelift_entity::entity_impl!(AnyfuncIndex);

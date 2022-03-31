@@ -699,6 +699,11 @@ impl DataFlowGraph {
         self.results[inst].as_slice(&self.value_lists)
     }
 
+    /// Return all the results of an instruction as ValueList.
+    pub fn inst_results_list(&self, inst: Inst) -> ValueList {
+        self.results[inst]
+    }
+
     /// Get the call signature of a direct or indirect call instruction.
     /// Returns `None` if `inst` is not a call instruction.
     pub fn call_signature(&self, inst: Inst) -> Option<SigRef> {

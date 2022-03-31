@@ -546,26 +546,18 @@ where
         Opcode::Iabs => {
             let (min_val, _) = ctrl_ty.lane_type().bounds(true);
             let min_val: V = Value::int(min_val as i128, ctrl_ty.lane_type())?;
-            if ctrl_ty.is_vector() {
-                let arg0 = extractlanes(&arg(0)?, ctrl_ty.lane_type())?;
-                let new_vec = arg0
-                    .into_iter()
-                    .map(|lane| {
-                        if Value::eq(&lane, &min_val)? {
-                            Ok(min_val.clone())
-                        } else {
-                            Value::int(lane.into_int()?.abs(), ctrl_ty.lane_type())
-                        }
-                    })
-                    .collect::<ValueResult<SimdVec<V>>>()?;
-                assign(vectorizelanes(&new_vec, ctrl_ty)?)
-            } else {
-                assign(if Value::eq(&arg(0)?, &min_val)? {
-                    min_val.clone()
-                } else {
-                    Value::int(arg(0)?.into_int()?.abs(), ctrl_ty.lane_type())?
+            let arg0 = extractlanes(&arg(0)?, ctrl_ty.lane_type())?;
+            let new_vec = arg0
+                .into_iter()
+                .map(|lane| {
+                    if Value::eq(&lane, &min_val)? {
+                        Ok(min_val.clone())
+                    } else {
+                        Value::int(lane.into_int()?.abs(), ctrl_ty.lane_type())
+                    }
                 })
-            }
+                .collect::<ValueResult<SimdVec<V>>>()?;
+            assign(vectorizelanes(&new_vec, ctrl_ty)?)
         }
         Opcode::Imul => binary(Value::mul, arg(0)?, arg(1)?)?,
         Opcode::Umulhi | Opcode::Smulhi => {
@@ -581,29 +573,22 @@ where
             } else {
                 ValueConversionKind::SignExtend(double_length)
             };
-            if ctrl_ty.is_vector() {
-                let arg0 = extractlanes(&arg(0)?, ctrl_ty.lane_type())?;
-                let arg1 = extractlanes(&arg(1)?, ctrl_ty.lane_type())?;
+            let arg0 = extractlanes(&arg(0)?, ctrl_ty.lane_type())?;
+            let arg1 = extractlanes(&arg(1)?, ctrl_ty.lane_type())?;
 
-                let res = arg0
-                    .into_iter()
-                    .zip(arg1)
-                    .map(|(x, y)| {
-                        let x = x.convert(conv_type.clone())?;
-                        let y = y.convert(conv_type.clone())?;
+            let res = arg0
+                .into_iter()
+                .zip(arg1)
+                .map(|(x, y)| {
+                    let x = x.convert(conv_type.clone())?;
+                    let y = y.convert(conv_type.clone())?;
 
-                        Ok(Value::mul(x, y)?
-                            .convert(ValueConversionKind::ExtractUpper(ctrl_ty.lane_type()))?)
-                    })
-                    .collect::<ValueResult<SimdVec<V>>>()?;
+                    Ok(Value::mul(x, y)?
+                        .convert(ValueConversionKind::ExtractUpper(ctrl_ty.lane_type()))?)
+                })
+                .collect::<ValueResult<SimdVec<V>>>()?;
 
-                assign(vectorizelanes(&res, ctrl_ty)?)
-            } else {
-                let x: V = arg(0)?.convert(conv_type.clone())?;
-                let y: V = arg(1)?.convert(conv_type.clone())?;
-                let z = Value::mul(x, y)?.convert(ValueConversionKind::ExtractUpper(ctrl_ty))?;
-                assign(z)
-            }
+            assign(vectorizelanes(&res, ctrl_ty)?)
         }
         Opcode::Udiv => binary_unsigned_can_trap(Value::div, arg(0)?, arg(1)?)?,
         Opcode::Sdiv => binary_can_trap(Value::div, arg(0)?, arg(1)?)?,
@@ -813,15 +798,11 @@ where
         Opcode::Bmask => assign({
             let bool = arg(0)?;
             let bool_ty = ctrl_ty.as_bool_pedantic();
-            if ctrl_ty.is_vector() {
-                let lanes = extractlanes(&bool, bool_ty.lane_type())?
-                    .into_iter()
-                    .map(|lane| lane.convert(ValueConversionKind::Exact(ctrl_ty.lane_type())))
-                    .collect::<ValueResult<SimdVec<V>>>()?;
-                vectorizelanes(&lanes, ctrl_ty)?
-            } else {
-                bool.convert(ValueConversionKind::Exact(ctrl_ty))?
-            }
+            let lanes = extractlanes(&bool, bool_ty.lane_type())?
+                .into_iter()
+                .map(|lane| lane.convert(ValueConversionKind::Exact(ctrl_ty.lane_type())))
+                .collect::<ValueResult<SimdVec<V>>>()?;
+            vectorizelanes(&lanes, ctrl_ty)?
         }),
         Opcode::Sextend => assign(Value::convert(
             arg(0)?,
@@ -1126,21 +1107,17 @@ where
     };
 
     let dst_ty = ctrl_ty.as_bool();
-    Ok(if ctrl_ty.is_vector() {
-        let lane_type = ctrl_ty.lane_type();
-        let left = extractlanes(left, lane_type)?;
-        let right = extractlanes(right, lane_type)?;
+    let lane_type = ctrl_ty.lane_type();
+    let left = extractlanes(left, lane_type)?;
+    let right = extractlanes(right, lane_type)?;
 
-        let res = left
-            .into_iter()
-            .zip(right.into_iter())
-            .map(|(l, r)| cmp(dst_ty.lane_type(), code, &l, &r))
-            .collect::<ValueResult<SimdVec<V>>>()?;
+    let res = left
+        .into_iter()
+        .zip(right.into_iter())
+        .map(|(l, r)| cmp(dst_ty.lane_type(), code, &l, &r))
+        .collect::<ValueResult<SimdVec<V>>>()?;
 
-        vectorizelanes(&res, dst_ty)?
-    } else {
-        cmp(dst_ty, code, left, right)?
-    })
+    Ok(vectorizelanes(&res, dst_ty)?)
 }
 
 /// Compare two values using the given floating point condition `code`.
@@ -1177,10 +1154,18 @@ where
 type SimdVec<V> = SmallVec<[V; 4]>;
 
 /// Converts a SIMD vector value into a Rust array of [Value] for processing.
+/// If `x` is a scalar, it will be returned as a single-element array.
 fn extractlanes<V>(x: &V, lane_type: types::Type) -> ValueResult<SimdVec<V>>
 where
     V: Value,
 {
+    let mut lanes = SimdVec::new();
+    // Wrap scalar values as a single-element vector and return.
+    if !x.ty().is_vector() {
+        lanes.push(x.clone());
+        return Ok(lanes);
+    }
+
     let iterations = match lane_type {
         types::I8 | types::B1 | types::B8 => 1,
         types::I16 | types::B16 => 2,
@@ -1190,7 +1175,6 @@ where
     };
 
     let x = x.into_array()?;
-    let mut lanes = SimdVec::new();
     for (i, _) in x.iter().enumerate() {
         let mut lane: i128 = 0;
         if i % iterations != 0 {
@@ -1210,11 +1194,17 @@ where
     return Ok(lanes);
 }
 
-/// Convert a Rust array of i128s back into a `Value::vector`.
+/// Convert a Rust array of [Value] back into a `Value::vector`.
+/// Supplying a single-element array will simply return its contained value.
 fn vectorizelanes<V>(x: &[V], vector_type: types::Type) -> ValueResult<V>
 where
     V: Value,
 {
+    // If the array is only one element, return it as a scalar.
+    if x.len() == 1 {
+        return Ok(x[0].clone());
+    }
+
     let lane_type = vector_type.lane_type();
     let iterations = match lane_type {
         types::I8 | types::B1 | types::B8 => 1,

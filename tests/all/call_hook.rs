@@ -1,4 +1,7 @@
 use anyhow::Error;
+use std::future::Future;
+use std::pin::Pin;
+use std::task::{self, Poll};
 use wasmtime::*;
 
 // Crate a synchronous Func, call it directly:
@@ -6,47 +9,98 @@ use wasmtime::*;
 fn call_wrapped_func() -> Result<(), Error> {
     let mut store = Store::<State>::default();
     store.call_hook(State::call_hook);
-    let f = Func::wrap(
+
+    fn verify(state: &State) {
+        // Calling this func will switch context into wasm, then back to host:
+        assert_eq!(state.context, vec![Context::Wasm, Context::Host]);
+
+        assert_eq!(state.calls_into_host, state.returns_from_host + 1);
+        assert_eq!(state.calls_into_wasm, state.returns_from_wasm + 1);
+    }
+
+    let mut funcs = Vec::new();
+    funcs.push(Func::wrap(
         &mut store,
         |caller: Caller<State>, a: i32, b: i64, c: f32, d: f64| {
-            // Calling this func will switch context into wasm, then back to host:
-            assert_eq!(caller.data().context, vec![Context::Wasm, Context::Host]);
-
-            assert_eq!(
-                caller.data().calls_into_host,
-                caller.data().returns_from_host + 1
-            );
-            assert_eq!(
-                caller.data().calls_into_wasm,
-                caller.data().returns_from_wasm + 1
-            );
+            verify(caller.data());
 
             assert_eq!(a, 1);
             assert_eq!(b, 2);
             assert_eq!(c, 3.0);
             assert_eq!(d, 4.0);
         },
-    );
-
-    f.call(
+    ));
+    funcs.push(Func::new(
         &mut store,
-        &[Val::I32(1), Val::I64(2), 3.0f32.into(), 4.0f64.into()],
-        &mut [],
-    )?;
+        FuncType::new([ValType::I32, ValType::I64, ValType::F32, ValType::F64], []),
+        |caller: Caller<State>, params, results| {
+            verify(caller.data());
 
-    // One switch from vm to host to call f, another in return from f.
-    assert_eq!(store.data().calls_into_host, 1);
-    assert_eq!(store.data().returns_from_host, 1);
-    assert_eq!(store.data().calls_into_wasm, 1);
-    assert_eq!(store.data().returns_from_wasm, 1);
+            assert_eq!(params.len(), 4);
+            assert_eq!(params[0].i32().unwrap(), 1);
+            assert_eq!(params[1].i64().unwrap(), 2);
+            assert_eq!(params[2].f32().unwrap(), 3.0);
+            assert_eq!(params[3].f64().unwrap(), 4.0);
+            assert_eq!(results.len(), 0);
+            Ok(())
+        },
+    ));
+    funcs.push(unsafe {
+        Func::new_unchecked(
+            &mut store,
+            FuncType::new([ValType::I32, ValType::I64, ValType::F32, ValType::F64], []),
+            |caller: Caller<State>, space| {
+                verify(caller.data());
 
-    f.typed::<(i32, i64, f32, f64), (), _>(&store)?
-        .call(&mut store, (1, 2, 3.0, 4.0))?;
+                assert_eq!((*space.add(0)).i32, 1);
+                assert_eq!((*space.add(1)).i64, 2);
+                assert_eq!((*space.add(2)).f32, 3.0f32.to_bits());
+                assert_eq!((*space.add(3)).f64, 4.0f64.to_bits());
+                Ok(())
+            },
+        )
+    });
 
-    assert_eq!(store.data().calls_into_host, 2);
-    assert_eq!(store.data().returns_from_host, 2);
-    assert_eq!(store.data().calls_into_wasm, 2);
-    assert_eq!(store.data().returns_from_wasm, 2);
+    let mut n = 0;
+    for f in funcs.iter() {
+        f.call(
+            &mut store,
+            &[Val::I32(1), Val::I64(2), 3.0f32.into(), 4.0f64.into()],
+            &mut [],
+        )?;
+        n += 1;
+
+        // One switch from vm to host to call f, another in return from f.
+        assert_eq!(store.data().calls_into_host, n);
+        assert_eq!(store.data().returns_from_host, n);
+        assert_eq!(store.data().calls_into_wasm, n);
+        assert_eq!(store.data().returns_from_wasm, n);
+
+        f.typed::<(i32, i64, f32, f64), (), _>(&store)?
+            .call(&mut store, (1, 2, 3.0, 4.0))?;
+        n += 1;
+
+        assert_eq!(store.data().calls_into_host, n);
+        assert_eq!(store.data().returns_from_host, n);
+        assert_eq!(store.data().calls_into_wasm, n);
+        assert_eq!(store.data().returns_from_wasm, n);
+
+        unsafe {
+            let mut args = [
+                Val::I32(1).to_raw(&mut store),
+                Val::I64(2).to_raw(&mut store),
+                Val::F32(3.0f32.to_bits()).to_raw(&mut store),
+                Val::F64(4.0f64.to_bits()).to_raw(&mut store),
+            ];
+            f.call_unchecked(&mut store, args.as_mut_ptr())?;
+        }
+        n += 1;
+
+        assert_eq!(store.data().calls_into_host, n);
+        assert_eq!(store.data().returns_from_host, n);
+        assert_eq!(store.data().calls_into_wasm, n);
+        assert_eq!(store.data().returns_from_wasm, n);
+    }
 
     Ok(())
 }
@@ -498,6 +552,275 @@ fn trapping() -> Result<(), Error> {
     assert_eq!(s.returns_from_wasm, 1);
 
     Ok(())
+}
+
+#[tokio::test]
+async fn basic_async_hook() -> Result<(), Error> {
+    struct HandlerR;
+
+    #[async_trait::async_trait]
+    impl CallHookHandler<State> for HandlerR {
+        async fn handle_call_event(
+            &self,
+            obj: &mut State,
+            ch: CallHook,
+        ) -> Result<(), wasmtime::Trap> {
+            State::call_hook(obj, ch)
+        }
+    }
+    let mut config = Config::new();
+    config.async_support(true);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, State::default());
+    store.call_hook_async(HandlerR {});
+
+    assert_eq!(store.data().calls_into_host, 0);
+    assert_eq!(store.data().returns_from_host, 0);
+    assert_eq!(store.data().calls_into_wasm, 0);
+    assert_eq!(store.data().returns_from_wasm, 0);
+
+    let mut linker = Linker::new(&engine);
+
+    linker.func_wrap(
+        "host",
+        "f",
+        |caller: Caller<State>, a: i32, b: i64, c: f32, d: f64| {
+            // Calling this func will switch context into wasm, then back to host:
+            assert_eq!(caller.data().context, vec![Context::Wasm, Context::Host]);
+
+            assert_eq!(
+                caller.data().calls_into_host,
+                caller.data().returns_from_host + 1
+            );
+            assert_eq!(
+                caller.data().calls_into_wasm,
+                caller.data().returns_from_wasm + 1
+            );
+
+            assert_eq!(a, 1);
+            assert_eq!(b, 2);
+            assert_eq!(c, 3.0);
+            assert_eq!(d, 4.0);
+        },
+    )?;
+
+    let wat = r#"
+        (module
+            (import "host" "f"
+                (func $f (param i32) (param i64) (param f32) (param f64)))
+            (func (export "export")
+                (call $f (i32.const 1) (i64.const 2) (f32.const 3.0) (f64.const 4.0)))
+        )
+    "#;
+    let module = Module::new(&engine, wat)?;
+
+    let inst = linker.instantiate(&mut store, &module)?;
+    let export = inst
+        .get_export(&mut store, "export")
+        .expect("get export")
+        .into_func()
+        .expect("export is func");
+
+    export.call_async(&mut store, &[], &mut []).await?;
+
+    // One switch from vm to host to call f, another in return from f.
+    assert_eq!(store.data().calls_into_host, 1);
+    assert_eq!(store.data().returns_from_host, 1);
+    assert_eq!(store.data().calls_into_wasm, 1);
+    assert_eq!(store.data().returns_from_wasm, 1);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn timeout_async_hook() -> Result<(), Error> {
+    struct HandlerR;
+
+    #[async_trait::async_trait]
+    impl CallHookHandler<State> for HandlerR {
+        async fn handle_call_event(
+            &self,
+            obj: &mut State,
+            ch: CallHook,
+        ) -> Result<(), wasmtime::Trap> {
+            if obj.calls_into_host > 200 {
+                return Err(wasmtime::Trap::new("timeout"));
+            }
+
+            match ch {
+                CallHook::CallingHost => obj.calls_into_host += 1,
+                CallHook::CallingWasm => obj.calls_into_wasm += 1,
+                CallHook::ReturningFromHost => obj.returns_from_host += 1,
+                CallHook::ReturningFromWasm => obj.returns_from_wasm += 1,
+            }
+
+            Ok(())
+        }
+    }
+
+    let mut config = Config::new();
+    config.async_support(true);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, State::default());
+    store.call_hook_async(HandlerR {});
+
+    assert_eq!(store.data().calls_into_host, 0);
+    assert_eq!(store.data().returns_from_host, 0);
+    assert_eq!(store.data().calls_into_wasm, 0);
+    assert_eq!(store.data().returns_from_wasm, 0);
+
+    let mut linker = Linker::new(&engine);
+
+    linker.func_wrap(
+        "host",
+        "f",
+        |_caller: Caller<State>, a: i32, b: i64, c: f32, d: f64| {
+            assert_eq!(a, 1);
+            assert_eq!(b, 2);
+            assert_eq!(c, 3.0);
+            assert_eq!(d, 4.0);
+        },
+    )?;
+
+    let wat = r#"
+        (module
+            (import "host" "f"
+                (func $f (param i32) (param i64) (param f32) (param f64)))
+            (func (export "export")
+                (loop $start
+                    (call $f (i32.const 1) (i64.const 2) (f32.const 3.0) (f64.const 4.0))
+                    (br $start)))
+        )
+    "#;
+    let module = Module::new(&engine, wat)?;
+
+    let inst = linker.instantiate(&mut store, &module)?;
+    let export = inst
+        .get_typed_func::<(), (), _>(&mut store, "export")
+        .expect("export is func");
+
+    store.set_epoch_deadline(1);
+    store.epoch_deadline_async_yield_and_update(1);
+    assert!(export.call_async(&mut store, ()).await.is_err());
+
+    // One switch from vm to host to call f, another in return from f.
+    assert!(store.data().calls_into_host > 1);
+    assert!(store.data().returns_from_host > 1);
+    assert_eq!(store.data().calls_into_wasm, 1);
+    assert_eq!(store.data().returns_from_wasm, 0);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn drop_suspended_async_hook() -> Result<(), Error> {
+    struct Handler;
+
+    #[async_trait::async_trait]
+    impl CallHookHandler<u32> for Handler {
+        async fn handle_call_event(
+            &self,
+            state: &mut u32,
+            _ch: CallHook,
+        ) -> Result<(), wasmtime::Trap> {
+            assert_eq!(*state, 0);
+            *state += 1;
+            let _dec = Decrement(state);
+
+            // Simulate some sort of event which takes a number of yields
+            for _ in 0..500 {
+                tokio::task::yield_now().await;
+            }
+            Ok(())
+        }
+    }
+
+    let mut config = Config::new();
+    config.async_support(true);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, 0);
+    store.call_hook_async(Handler);
+
+    let mut linker = Linker::new(&engine);
+
+    // Simulate a host function that has lots of yields with an infinite loop.
+    linker.func_wrap0_async("host", "f", |mut cx| {
+        Box::new(async move {
+            let state = cx.data_mut();
+            assert_eq!(*state, 0);
+            *state += 1;
+            let _dec = Decrement(state);
+            loop {
+                tokio::task::yield_now().await;
+            }
+        })
+    })?;
+
+    let wat = r#"
+        (module
+            (import "host" "f" (func $f))
+            (func (export "") call $f)
+        )
+    "#;
+    let module = Module::new(&engine, wat)?;
+
+    let inst = linker.instantiate(&mut store, &module)?;
+    assert_eq!(*store.data(), 0);
+    let export = inst
+        .get_typed_func::<(), (), _>(&mut store, "")
+        .expect("export is func");
+
+    // First test that if we drop in the middle of an async hook that everything
+    // is alright.
+    PollNTimes {
+        future: Box::pin(export.call_async(&mut store, ())),
+        times: 200,
+    }
+    .await;
+    assert_eq!(*store.data(), 0); // double-check user dtors ran
+
+    // Next test that if we drop while in a host async function that everything
+    // is also alright.
+    PollNTimes {
+        future: Box::pin(export.call_async(&mut store, ())),
+        times: 1_000,
+    }
+    .await;
+    assert_eq!(*store.data(), 0); // double-check user dtors ran
+
+    return Ok(());
+
+    // A helper struct to poll an inner `future` N `times` and then resolve.
+    // This is used above to test that when futures are dropped while they're
+    // pending everything works and is cleaned up on the Wasmtime side of
+    // things.
+    struct PollNTimes<F> {
+        future: F,
+        times: u32,
+    }
+
+    impl<F: Future + Unpin> Future for PollNTimes<F> {
+        type Output = ();
+        fn poll(mut self: Pin<&mut Self>, task: &mut task::Context<'_>) -> Poll<()> {
+            for _ in 0..self.times {
+                match Pin::new(&mut self.future).poll(task) {
+                    Poll::Ready(_) => panic!("future should not be ready"),
+                    Poll::Pending => {}
+                }
+            }
+
+            Poll::Ready(())
+        }
+    }
+
+    // helper struct to decrement a counter on drop
+    struct Decrement<'a>(&'a mut u32);
+
+    impl Drop for Decrement<'_> {
+        fn drop(&mut self) {
+            *self.0 -= 1;
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]

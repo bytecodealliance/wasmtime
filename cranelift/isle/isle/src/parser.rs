@@ -140,6 +140,7 @@ impl<'a> Parser<'a> {
             "rule" => Def::Rule(self.parse_rule()?),
             "extractor" => Def::Extractor(self.parse_etor()?),
             "extern" => Def::Extern(self.parse_extern()?),
+            "convert" => Def::Converter(self.parse_converter()?),
             s => {
                 return Err(self.error(pos, format!("Unexpected identifier: {}", s)));
             }
@@ -514,5 +515,18 @@ impl<'a> Parser<'a> {
         let val = Box::new(self.parse_expr()?);
         self.rparen()?;
         Ok(LetDef { var, ty, val, pos })
+    }
+
+    fn parse_converter(&mut self) -> Result<Converter> {
+        let pos = self.pos();
+        let inner_ty = self.parse_ident()?;
+        let outer_ty = self.parse_ident()?;
+        let term = self.parse_ident()?;
+        Ok(Converter {
+            term,
+            inner_ty,
+            outer_ty,
+            pos,
+        })
     }
 }

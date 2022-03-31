@@ -13,9 +13,8 @@
 pub mod dummy;
 
 use crate::generators;
-use anyhow::Context;
 use arbitrary::Arbitrary;
-use log::{debug, warn};
+use log::debug;
 use std::cell::Cell;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
@@ -103,17 +102,17 @@ impl ResourceLimiter for StoreLimits {
 }
 
 /// Methods of timing out execution of a WebAssembly module
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum Timeout {
     /// No timeout is used, it should be guaranteed via some other means that
     /// the input does not infinite loop.
     None,
-    /// A time-based timeout is used with a sleeping thread sending a signal
-    /// after the specified duration.
-    Time(Duration),
     /// Fuel-based timeouts are used where the specified fuel is all that the
     /// provided wasm module is allowed to consume.
     Fuel(u64),
+    /// An epoch-interruption-based timeout is used with a sleeping
+    /// thread bumping the epoch counter after the specified duration.
+    Epoch(Duration),
 }
 
 /// Instantiate the Wasm buffer, and implicitly fail if we have an unexpected
@@ -141,9 +140,9 @@ pub fn instantiate(wasm: &[u8], known_valid: bool, config: &generators::Config, 
         // This prevents us from creating a huge number of sleeping threads if
         // this function is executed in a loop, like it does on nightly fuzzing
         // infrastructure.
-        Timeout::Time(timeout) => {
-            let handle = store.interrupt_handle().unwrap();
-            timeout_state.spawn_timeout(timeout, move || handle.interrupt());
+        Timeout::Epoch(timeout) => {
+            let engine = store.engine().clone();
+            timeout_state.spawn_timeout(timeout, move || engine.increment_epoch());
         }
         Timeout::None => {}
     }
@@ -249,6 +248,15 @@ fn compile_module(
                 // to constrain the generated module table types.
                 let string = e.to_string();
                 if string.contains("minimum element size") {
+                    return None;
+                }
+
+                // Allow modules-failing-to-compile which exceed the requested
+                // size for each instance. This is something that is difficult
+                // to control and ensure it always suceeds, so we simply have a
+                // "random" instance size limit and if a module doesn't fit we
+                // move on to the next fuzz input.
+                if string.contains("instance allocation for this module requires") {
                     return None;
                 }
             }
@@ -387,6 +395,13 @@ pub fn differential_execution(
         };
 
         match (lhs, rhs) {
+            // Different compilation settings can lead to different amounts
+            // of stack space being consumed, so if either the lhs or the rhs
+            // hit a stack overflow then we discard the result of the other side
+            // since if it ran successfully or trapped that's ok in both
+            // situations.
+            (Err(e), _) | (_, Err(e)) if e.trap_code() == Some(TrapCode::StackOverflow) => {}
+
             (Err(a), Err(b)) => {
                 if a.trap_code() != b.trap_code() {
                     fail();
@@ -522,7 +537,7 @@ pub fn make_api_calls(api: generators::api::ApiCalls) {
 pub fn spectest(mut fuzz_config: generators::Config, test: generators::SpecTest) {
     crate::init_fuzzing();
     fuzz_config.set_spectest_compliant();
-    log::debug!("running {:?} with {:?}", test.file, fuzz_config);
+    log::debug!("running {:?}", test.file);
     let mut wast_context = WastContext::new(fuzz_config.to_store());
     wast_context.register_spectest().unwrap();
     wast_context
@@ -772,7 +787,10 @@ pub fn differential_wasmi_execution(wasm: &[u8], config: &generators::Config) ->
 /// specification interpreter.
 ///
 /// May return `None` if we early-out due to a rejected fuzz config.
+#[cfg(feature = "fuzz-spec-interpreter")]
 pub fn differential_spec_execution(wasm: &[u8], config: &generators::Config) -> Option<()> {
+    use anyhow::Context;
+
     crate::init_fuzzing();
     debug!("config: {:#?}", config);
     log_wasm(wasm);
@@ -784,10 +802,34 @@ pub fn differential_spec_execution(wasm: &[u8], config: &generators::Config) -> 
     // interfere, observable as an uncaught `SIGSEGV`--not even caught by
     // libFuzzer. By running Wasmtime second, its signal handlers are registered
     // most recently and they catch failures appropriately.
-    let spec_vals = wasm_spec_interpreter::interpret(wasm, vec![]);
+    //
+    // For now, execute with dummy (zeroed) function arguments.
+    let spec_vals = wasm_spec_interpreter::interpret(wasm, None);
     debug!("spec interpreter returned: {:?}", &spec_vals);
-    let wasmtime_vals = run_in_wasmtime(wasm, config, &[]);
-    debug!("Wasmtime returned: {:?}", wasmtime_vals);
+
+    let (wasmtime_module, mut wasmtime_store) = differential_store(wasm, config);
+    let wasmtime_module = match wasmtime_module {
+        Some(m) => m,
+        None => return None,
+    };
+
+    let wasmtime_vals =
+        Instance::new(&mut wasmtime_store, &wasmtime_module, &[]).and_then(|wasmtime_instance| {
+            // Find the first exported function.
+            let (func_name, ty) = first_exported_function(&wasmtime_module)
+                .context("Cannot find exported function")?;
+            let wasmtime_main = wasmtime_instance
+                .get_func(&mut wasmtime_store, &func_name[..])
+                .expect("function export is present");
+
+            let dummy_params = dummy::dummy_values(ty.params());
+
+            // Execute the function and return the values.
+            let mut results = vec![Val::I32(0); ty.results().len()];
+            wasmtime_main
+                .call(&mut wasmtime_store, &dummy_params, &mut results)
+                .map(|()| Some(results))
+        });
 
     // Match a spec interpreter value against a Wasmtime value. Eventually this
     // should support references and `v128` (TODO).
@@ -831,9 +873,10 @@ pub fn differential_spec_execution(wasm: &[u8], config: &generators::Config) -> 
             // beneficial to compare the error messages from both sides (TODO).
             // It would also be good to keep track of statistics about the
             // ratios of the kinds of errors the fuzzer sees (TODO).
-            warn!(
+            log::warn!(
                 "Both sides failed: spec returned '{}'; wasmtime returned {:?}",
-                spec_error, wasmtime_error
+                spec_error,
+                wasmtime_error
             );
             return None;
         }
@@ -858,37 +901,6 @@ fn differential_store(
     let store = fuzz_config.to_store();
     let module = compile_module(store.engine(), wasm, true, fuzz_config);
     (module, store)
-}
-
-/// Helper for instantiating and running a Wasm module in Wasmtime and returning
-/// its `Val` results.
-fn run_in_wasmtime(
-    wasm: &[u8],
-    config: &generators::Config,
-    params: &[Val],
-) -> anyhow::Result<Option<Vec<Val>>> {
-    // Instantiate wasmtime module and instance.
-    let (wasmtime_module, mut wasmtime_store) = differential_store(wasm, config);
-    let wasmtime_module = match wasmtime_module {
-        Some(m) => m,
-        None => return Ok(None),
-    };
-
-    let wasmtime_instance = Instance::new(&mut wasmtime_store, &wasmtime_module, &[])
-        .context("Wasmtime cannot instantiate module")?;
-
-    // Find the first exported function.
-    let (func_name, ty) =
-        first_exported_function(&wasmtime_module).context("Cannot find exported function")?;
-    let wasmtime_main = wasmtime_instance
-        .get_func(&mut wasmtime_store, &func_name[..])
-        .expect("function export is present");
-
-    // Execute the function and return the values.
-    let mut results = vec![Val::I32(0); ty.results().len()];
-    wasmtime_main
-        .call(&mut wasmtime_store, params, &mut results)
-        .map(|()| Some(results))
 }
 
 // Introspect wasmtime module to find the name of the first exported function.

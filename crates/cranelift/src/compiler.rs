@@ -129,7 +129,7 @@ impl wasmtime_environ::Compiler for Compiler {
         // needed by `ir::Function`.
         //
         // Otherwise our stack limit is specially calculated from the vmctx
-        // argument, where we need to load the `*const VMInterrupts`
+        // argument, where we need to load the `*const VMRuntimeLimits`
         // pointer, and then from that pointer we need to load the stack
         // limit itself. Note that manual register allocation is needed here
         // too due to how late in the process this codegen happens.
@@ -141,7 +141,7 @@ impl wasmtime_environ::Compiler for Compiler {
             .create_global_value(ir::GlobalValueData::VMContext);
         let interrupts_ptr = context.func.create_global_value(ir::GlobalValueData::Load {
             base: vmctx,
-            offset: i32::try_from(func_env.offsets.vmctx_interrupts())
+            offset: i32::try_from(func_env.offsets.vmctx_runtime_limits())
                 .unwrap()
                 .into(),
             global_type: isa.pointer_type(),
@@ -149,7 +149,7 @@ impl wasmtime_environ::Compiler for Compiler {
         });
         let stack_limit = context.func.create_global_value(ir::GlobalValueData::Load {
             base: interrupts_ptr,
-            offset: i32::try_from(func_env.offsets.vminterrupts_stack_limit())
+            offset: i32::try_from(func_env.offsets.vmruntime_limits_stack_limit())
                 .unwrap()
                 .into(),
             global_type: isa.pointer_type(),
@@ -188,9 +188,13 @@ impl wasmtime_environ::Compiler for Compiler {
 
         let stack_maps = mach_stack_maps_to_stack_maps(result.buffer.stack_maps());
 
-        let unwind_info = context
-            .create_unwind_info(isa)
-            .map_err(|error| CompileError::Codegen(pretty_error(&context.func, error)))?;
+        let unwind_info = if isa.flags().unwind_info() {
+            context
+                .create_unwind_info(isa)
+                .map_err(|error| CompileError::Codegen(pretty_error(&context.func, error)))?
+        } else {
+            None
+        };
 
         let address_transform =
             self.get_function_address_map(&context, &input, code_buf.len() as u32, tunables);
@@ -252,7 +256,7 @@ impl wasmtime_environ::Compiler for Compiler {
         let compiled_trampolines = translation
             .exported_signatures
             .iter()
-            .map(|i| self.host_to_wasm_trampoline(&types.wasm_signatures[*i]))
+            .map(|i| self.host_to_wasm_trampoline(&types[*i]))
             .collect::<Result<Vec<_>, _>>()?;
 
         let mut func_starts = Vec::with_capacity(funcs.len());
@@ -264,9 +268,11 @@ impl wasmtime_environ::Compiler for Compiler {
             traps.push(range.clone(), &func.traps);
             func_starts.push(range.start);
             if self.linkopts.padding_between_functions > 0 {
-                builder
-                    .text
-                    .append(false, &vec![0; self.linkopts.padding_between_functions], 1);
+                builder.text.append(
+                    false,
+                    &vec![0; self.linkopts.padding_between_functions],
+                    Some(1),
+                );
             }
         }
 
@@ -547,45 +553,35 @@ impl Compiler {
         isa: &dyn TargetIsa,
     ) -> Result<CompiledFunction, CompileError> {
         let mut code_buf = Vec::new();
-        let mut relocs = Vec::new();
         context
             .compile_and_emit(isa, &mut code_buf)
             .map_err(|error| CompileError::Codegen(pretty_error(&context.func, error)))?;
 
-        for &MachReloc {
-            offset,
-            srcloc: _,
-            kind,
-            ref name,
-            addend,
-        } in context
+        // Processing relocations isn't the hardest thing in the world here but
+        // no trampoline should currently generate a relocation, so assert that
+        // they're all empty and if this ever trips in the future then handling
+        // will need to be added here to ensure they make their way into the
+        // `CompiledFunction` below.
+        assert!(context
             .mach_compile_result
             .as_ref()
             .unwrap()
             .buffer
             .relocs()
-        {
-            let reloc_target = if let ir::ExternalName::LibCall(libcall) = *name {
-                RelocationTarget::LibCall(libcall)
-            } else {
-                panic!("unrecognized external name")
-            };
-            relocs.push(Relocation {
-                reloc: kind,
-                reloc_target,
-                offset,
-                addend,
-            });
-        }
+            .is_empty());
 
-        let unwind_info = context
-            .create_unwind_info(isa)
-            .map_err(|error| CompileError::Codegen(pretty_error(&context.func, error)))?;
+        let unwind_info = if isa.flags().unwind_info() {
+            context
+                .create_unwind_info(isa)
+                .map_err(|error| CompileError::Codegen(pretty_error(&context.func, error)))?
+        } else {
+            None
+        };
 
         Ok(CompiledFunction {
             body: code_buf,
             unwind_info,
-            relocations: relocs,
+            relocations: Vec::new(),
             stack_slots: Default::default(),
             value_labels_ranges: Default::default(),
             info: Default::default(),

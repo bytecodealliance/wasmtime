@@ -262,8 +262,8 @@
 //!   jitdump runtime profiling format. The profiler can be selected with
 //!   [`Config::profiler`].
 //!
-//! * `vtune` - Not enabled by default, this feature compiles in support for
-//!   supporting VTune profiling of JIT code.
+//! * `vtune` - Enabled by default, this feature compiles in support for VTune
+//!   profiling of JIT code.
 //!
 //! * `uffd` - Not enabled by default. This feature enables `userfaultfd` support
 //!   when using the pooling instance allocator. As handling page faults in user space
@@ -281,14 +281,22 @@
 //!   efficient reuse of resources for high-concurrency and
 //!   high-instantiation-count scenarios.
 //!
-//! * `memfd` - Enabled by default, this feature builds in support for a
-//!   Linux-specific feature of creating a `memfd` where applicable for a
-//!   [`Module`]'s initial memory. This makes instantiation much faster by
+//! * `memory-init-cow` - Enabled by default, this feature builds in support
+//!   for, on supported platforms, initializing wasm linear memories with
+//!   copy-on-write heap mappings. This makes instantiation much faster by
 //!   `mmap`-ing the initial memory image into place instead of copying memory
-//!   into place, allowing sharing pages that end up only getting read and
-//!   otherwise using copy-on-write for efficient initialization of memory. Note
+//!   into place, allowing sharing pages that end up only getting read. Note
 //!   that this is simply compile-time support and this must also be enabled at
-//!   run-time via [`Config::memfd`].
+//!   run-time via [`Config::memory_init_cow`] (which is also enabled by
+//!   default).
+//!
+//! * `wasm-backtrace` - Enabled by default, this feature builds in support to
+//!   generate backtraces at runtime for WebAssembly modules. This means that
+//!   unwinding information is compiled into wasm modules and necessary runtime
+//!   dependencies are enabled as well. If this is turned off then some methods
+//!   to look at trap frames will not be available. Additionally at this time
+//!   disabling this feature means that the reference types feature is always
+//!   disabled as well.
 //!
 //! ## Examples
 //!
@@ -415,9 +423,9 @@ pub use crate::linker::*;
 pub use crate::memory::*;
 pub use crate::module::{FrameInfo, FrameSymbol, Module};
 pub use crate::r#ref::ExternRef;
-pub use crate::store::{
-    AsContext, AsContextMut, CallHook, InterruptHandle, Store, StoreContext, StoreContextMut,
-};
+#[cfg(feature = "async")]
+pub use crate::store::CallHookHandler;
+pub use crate::store::{AsContext, AsContextMut, CallHook, Store, StoreContext, StoreContextMut};
 pub use crate::trap::*;
 pub use crate::types::*;
 pub use crate::values::*;
@@ -439,7 +447,6 @@ fn _assert_send_sync() {
     fn _assert_send<T: Send>(_t: T) {}
     _assert::<Engine>();
     _assert::<Config>();
-    _assert::<InterruptHandle>();
     _assert::<(Func, TypedFunc<(), ()>, Global, Table, Memory)>();
     _assert::<Instance>();
     _assert::<Module>();

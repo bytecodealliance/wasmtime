@@ -19,7 +19,7 @@
         clippy::use_self
     )
 )]
-#![cfg_attr(not(memfd), allow(unused_variables, unreachable_code))]
+#![cfg_attr(not(memory_init_cow), allow(unused_variables, unreachable_code))]
 
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
@@ -34,7 +34,6 @@ mod export;
 mod externref;
 mod imports;
 mod instance;
-mod jit_int;
 mod memory;
 mod mmap;
 mod mmap_vec;
@@ -45,6 +44,8 @@ mod vmcontext;
 pub mod debug_builtins;
 pub mod libcalls;
 
+pub use wasmtime_jit_debug::gdb_jit_int::GdbJitImageRegistration;
+
 pub use crate::export::*;
 pub use crate::externref::*;
 pub use crate::imports::Imports;
@@ -53,36 +54,33 @@ pub use crate::instance::{
     OnDemandInstanceAllocator, StorePtr,
 };
 #[cfg(feature = "pooling-allocator")]
-pub use crate::instance::{
-    InstanceLimits, ModuleLimits, PoolingAllocationStrategy, PoolingInstanceAllocator,
-};
-pub use crate::jit_int::GdbJitImageRegistration;
+pub use crate::instance::{InstanceLimits, PoolingAllocationStrategy, PoolingInstanceAllocator};
 pub use crate::memory::{DefaultMemoryCreator, Memory, RuntimeLinearMemory, RuntimeMemoryCreator};
 pub use crate::mmap::Mmap;
 pub use crate::mmap_vec::MmapVec;
 pub use crate::table::{Table, TableElement};
 pub use crate::traphandlers::{
     catch_traps, init_traps, raise_lib_trap, raise_user_trap, resume_panic, tls_eager_initialize,
-    SignalHandler, TlsRestore, Trap,
+    Backtrace, SignalHandler, TlsRestore, Trap,
 };
 pub use crate::vmcontext::{
     VMCallerCheckedAnyfunc, VMContext, VMFunctionBody, VMFunctionImport, VMGlobalDefinition,
-    VMGlobalImport, VMInterrupts, VMInvokeArgument, VMMemoryDefinition, VMMemoryImport,
+    VMGlobalImport, VMInvokeArgument, VMMemoryDefinition, VMMemoryImport, VMRuntimeLimits,
     VMSharedSignatureIndex, VMTableDefinition, VMTableImport, VMTrampoline, ValRaw,
 };
 
 mod module_id;
 pub use module_id::{CompiledModuleId, CompiledModuleIdAllocator};
 
-#[cfg(memfd)]
-mod memfd;
-#[cfg(memfd)]
-pub use crate::memfd::{MemFdSlot, MemoryMemFd, ModuleMemFds};
+#[cfg(memory_init_cow)]
+mod cow;
+#[cfg(memory_init_cow)]
+pub use crate::cow::{MemoryImage, MemoryImageSlot, ModuleMemoryImages};
 
-#[cfg(not(memfd))]
-mod memfd_disabled;
-#[cfg(not(memfd))]
-pub use crate::memfd_disabled::{MemFdSlot, MemoryMemFd, ModuleMemFds};
+#[cfg(not(memory_init_cow))]
+mod cow_disabled;
+#[cfg(not(memory_init_cow))]
+pub use crate::cow_disabled::{MemoryImage, MemoryImageSlot, ModuleMemoryImages};
 
 /// Version number of this crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -101,11 +99,11 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// is that `wasmtime::Store` handles all this correctly.
 pub unsafe trait Store {
     /// Returns the raw pointer in memory where this store's shared
-    /// `VMInterrupts` structure is located.
+    /// `VMRuntimeLimits` structure is located.
     ///
     /// Used to configure `VMContext` initialization and store the right pointer
     /// in the `VMContext`.
-    fn vminterrupts(&self) -> *mut VMInterrupts;
+    fn vmruntime_limits(&self) -> *mut VMRuntimeLimits;
 
     /// Returns a pointer to the global epoch counter.
     ///
@@ -158,7 +156,7 @@ pub unsafe trait Store {
 /// instance state.
 ///
 /// When an instance is created, it holds an Arc<dyn ModuleRuntimeInfo>
-/// so that it can get to signatures, metadata on functions, memfd and
+/// so that it can get to signatures, metadata on functions, memory and
 /// funcref-table images, etc. All of these things are ordinarily known
 /// by the higher-level layers of Wasmtime. Specifically, the main
 /// implementation of this trait is provided by
@@ -180,8 +178,10 @@ pub trait ModuleRuntimeInfo: Send + Sync + 'static {
     /// `image_base`.
     fn function_info(&self, func_index: DefinedFuncIndex) -> &FunctionInfo;
 
-    /// memfd images, if any, for this module.
-    fn memfd_image(&self, memory: DefinedMemoryIndex) -> anyhow::Result<Option<&Arc<MemoryMemFd>>>;
+    /// Returns the `MemoryImage` structure used for copy-on-write
+    /// initialization of the memory, if it's applicable.
+    fn memory_image(&self, memory: DefinedMemoryIndex)
+        -> anyhow::Result<Option<&Arc<MemoryImage>>>;
 
     /// A unique ID for this particular module. This can be used to
     /// allow for fastpaths to optimize a "re-instantiate the same

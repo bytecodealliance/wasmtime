@@ -7,7 +7,7 @@ use std::convert::TryFrom;
 use std::sync::Arc;
 use wasmtime_environ::{EntityIndex, MemoryPlan, MemoryStyle, Module, WASM_PAGE_SIZE};
 use wasmtime_runtime::{
-    MemoryMemFd, RuntimeLinearMemory, RuntimeMemoryCreator, VMMemoryDefinition,
+    MemoryImage, RuntimeLinearMemory, RuntimeMemoryCreator, VMMemoryDefinition,
 };
 
 pub fn create_memory(store: &mut StoreOpaque, memory: &MemoryType) -> Result<InstanceId> {
@@ -63,7 +63,7 @@ impl RuntimeMemoryCreator for MemoryCreatorProxy {
         plan: &MemoryPlan,
         minimum: usize,
         maximum: Option<usize>,
-        _: Option<&Arc<MemoryMemFd>>,
+        _: Option<&Arc<MemoryImage>>,
     ) -> Result<Box<dyn RuntimeLinearMemory>> {
         let ty = MemoryType::from_wasmtime_memory(&plan.memory);
         let reserved_size_in_bytes = match plan.style {

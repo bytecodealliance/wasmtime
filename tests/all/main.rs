@@ -21,7 +21,6 @@ mod linker;
 mod memory;
 mod memory_creator;
 mod module;
-mod module_linking;
 mod module_serialize;
 mod name;
 mod pooling_allocator;

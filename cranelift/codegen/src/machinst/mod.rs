@@ -370,7 +370,7 @@ pub trait TextSectionBuilder {
     ///
     /// This function returns the offset at which the data was placed in the
     /// text section.
-    fn append(&mut self, labeled: bool, data: &[u8], align: u32) -> u64;
+    fn append(&mut self, labeled: bool, data: &[u8], align: Option<u32>) -> u64;
 
     /// Attempts to resolve a relocation for this function.
     ///

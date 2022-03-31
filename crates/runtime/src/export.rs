@@ -69,7 +69,7 @@ pub struct ExportMemory {
     pub definition: *mut VMMemoryDefinition,
     /// Pointer to the containing `VMContext`.
     pub vmctx: *mut VMContext,
-    /// The memory declaration, used for compatibilty checking.
+    /// The memory declaration, used for compatibility checking.
     pub memory: MemoryPlan,
 }
 

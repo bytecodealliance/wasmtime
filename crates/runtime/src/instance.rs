@@ -9,7 +9,7 @@ use crate::table::{Table, TableElement, TableElementType};
 use crate::traphandlers::Trap;
 use crate::vmcontext::{
     VMBuiltinFunctionsArray, VMCallerCheckedAnyfunc, VMContext, VMFunctionImport,
-    VMGlobalDefinition, VMGlobalImport, VMInterrupts, VMMemoryDefinition, VMMemoryImport,
+    VMGlobalDefinition, VMGlobalImport, VMMemoryDefinition, VMMemoryImport, VMRuntimeLimits,
     VMTableDefinition, VMTableImport,
 };
 use crate::{
@@ -30,9 +30,9 @@ use std::{mem, ptr, slice};
 use wasmtime_environ::{
     packed_option::ReservedValue, DataIndex, DefinedGlobalIndex, DefinedMemoryIndex,
     DefinedTableIndex, ElemIndex, EntityIndex, EntityRef, EntitySet, FuncIndex, GlobalIndex,
-    HostPtr, MemoryIndex, Module, PrimaryMap, TableIndex, TrapCode, VMOffsets, WasmType,
+    GlobalInit, HostPtr, MemoryIndex, Module, PrimaryMap, SignatureIndex, TableIndex,
+    TableInitialization, TrapCode, VMOffsets, WasmType,
 };
-use wasmtime_environ::{GlobalInit, TableInitialization};
 
 mod allocator;
 
@@ -240,8 +240,8 @@ impl Instance {
     }
 
     /// Return a pointer to the interrupts structure
-    pub fn interrupts(&self) -> *mut *const VMInterrupts {
-        unsafe { self.vmctx_plus_offset(self.offsets.vmctx_interrupts()) }
+    pub fn runtime_limits(&self) -> *mut *const VMRuntimeLimits {
+        unsafe { self.vmctx_plus_offset(self.offsets.vmctx_runtime_limits()) }
     }
 
     /// Return a pointer to the global epoch counter used by this instance.
@@ -336,10 +336,6 @@ impl Instance {
                 global: self.module().globals[*index],
             }
             .into(),
-
-            EntityIndex::Instance(_) | EntityIndex::Module(_) => {
-                panic!("can't use this api for modules/instances")
-            }
         }
     }
 
@@ -483,8 +479,12 @@ impl Instance {
     /// than tracking state related to whether it's been initialized
     /// before, because resetting that state on (re)instantiation is
     /// very expensive if there are many anyfuncs.
-    fn construct_anyfunc(&mut self, index: FuncIndex, into: *mut VMCallerCheckedAnyfunc) {
-        let sig = self.module().functions[index];
+    fn construct_anyfunc(
+        &mut self,
+        index: FuncIndex,
+        sig: SignatureIndex,
+        into: *mut VMCallerCheckedAnyfunc,
+    ) {
         let type_index = self.runtime_info.signature(sig);
 
         let (func_ptr, vmctx) = if let Some(def_index) = self.module().defined_func_index(index) {
@@ -551,9 +551,13 @@ impl Instance {
             // expensive, so it's better for instantiation performance
             // if we don't have to track "is-initialized" state at
             // all!
-            let anyfunc: *mut VMCallerCheckedAnyfunc =
-                self.vmctx_plus_offset::<VMCallerCheckedAnyfunc>(self.offsets.vmctx_anyfunc(index));
-            self.construct_anyfunc(index, anyfunc);
+            let func = &self.module().functions[index];
+            let sig = func.signature;
+            let anyfunc: *mut VMCallerCheckedAnyfunc = self
+                .vmctx_plus_offset::<VMCallerCheckedAnyfunc>(
+                    self.offsets.vmctx_anyfunc(func.anyfunc),
+                );
+            self.construct_anyfunc(index, sig, anyfunc);
 
             Some(anyfunc)
         }
@@ -880,7 +884,7 @@ impl Instance {
         assert!(std::ptr::eq(module, self.module().as_ref()));
 
         if let Some(store) = store.as_raw() {
-            *self.interrupts() = (*store).vminterrupts();
+            *self.runtime_limits() = (*store).vmruntime_limits();
             *self.epoch_ptr() = (*store).epoch_ptr();
             *self.externref_activations_table() = (*store).externref_activations_table().0;
             self.set_store(store);

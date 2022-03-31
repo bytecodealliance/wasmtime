@@ -15,7 +15,7 @@ struct Opts {
     output: Option<PathBuf>,
 
     /// The input ISLE DSL source files.
-    #[structopt(parse(from_os_str))]
+    #[structopt(parse(from_os_str), required(true))]
     inputs: Vec<PathBuf>,
 }
 

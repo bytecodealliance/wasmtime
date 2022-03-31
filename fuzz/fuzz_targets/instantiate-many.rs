@@ -24,6 +24,16 @@ fn run(data: &[u8]) -> Result<()> {
     // use timeouts or ensure that the generated wasm code will terminate.
     config.module_config.config.allow_start_export = false;
 
+    // Wasm linear memories take roughly ~8gb of virtual address space. Down
+    // below we could instantiate up to 300 modules. Conservatively estimating
+    // that we have 46 bits of address space to work with (technically 48 on
+    // x86_64, but take some out for kernel stuff and some for asan stuff) that
+    // gives us a budget of ~27 memories per instance. Reduce that a bit further
+    // and make sure that no instance has more than 10 linear memories to ensure
+    // that even if the maximum were created it should still fit in the linear
+    // address space.
+    config.module_config.config.max_memories = config.module_config.config.max_memories.min(10);
+
     // Create the modules to instantiate
     let modules = (0..u.int_in_range(1..=MAX_MODULES)?)
         .map(|_| Ok(config.generate(&mut u, None)?.to_bytes()))

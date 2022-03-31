@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-cache"
-version = "0.34.0"
+version = "0.35.0"
 authors = ["The Wasmtime Project Developers"]
 description = "Support for automatic module caching with Wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"
@@ -18,13 +18,13 @@ log = { version = "0.4.8", default-features = false }
 serde = { version = "1.0.94", features = ["derive"] }
 sha2 = "0.9.0"
 toml = "0.5.5"
-zstd = { version = "0.10.0", default-features = false }
+zstd = { version = "0.11.1", default-features = false }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 winapi = "0.3.7"
 
 [target.'cfg(not(target_os = "windows"))'.dependencies]
-rustix = "0.33.0"
+rustix = "0.33.5"
 
 [dev-dependencies]
 filetime = "0.2.7"

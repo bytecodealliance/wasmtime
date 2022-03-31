@@ -115,7 +115,7 @@ impl TableOps {
                     val_type: wasm_encoder::ValType::ExternRef,
                     mutable: true,
                 },
-                Instruction::RefNull(wasm_encoder::ValType::ExternRef),
+                &Instruction::RefNull(wasm_encoder::ValType::ExternRef),
             );
         }
 
@@ -130,7 +130,7 @@ impl TableOps {
         // implementations.
         let mut func = Function::new(vec![(1, ValType::ExternRef)]);
 
-        func.instruction(Instruction::Loop(wasm_encoder::BlockType::Empty));
+        func.instruction(&Instruction::Loop(wasm_encoder::BlockType::Empty));
         for op in self.ops.iter().take(MAX_OPS) {
             op.insert(
                 &mut func,
@@ -139,9 +139,9 @@ impl TableOps {
                 self.num_globals() as u32,
             );
         }
-        func.instruction(Instruction::Br(0));
-        func.instruction(Instruction::End);
-        func.instruction(Instruction::End);
+        func.instruction(&Instruction::Br(0));
+        func.instruction(&Instruction::End);
+        func.instruction(&Instruction::End);
 
         let mut code = CodeSection::new();
         code.function(&func);
@@ -222,101 +222,101 @@ impl TableOp {
 
         match self {
             Self::Gc => {
-                func.instruction(Instruction::Call(gc_func_idx));
-                func.instruction(Instruction::Drop);
-                func.instruction(Instruction::Drop);
-                func.instruction(Instruction::Drop);
+                func.instruction(&Instruction::Call(gc_func_idx));
+                func.instruction(&Instruction::Drop);
+                func.instruction(&Instruction::Drop);
+                func.instruction(&Instruction::Drop);
             }
             Self::Get(x) => {
-                func.instruction(Instruction::I32Const(x % table_mod));
-                func.instruction(Instruction::TableGet { table: 0 });
-                func.instruction(Instruction::Drop);
+                func.instruction(&Instruction::I32Const(x % table_mod));
+                func.instruction(&Instruction::TableGet { table: 0 });
+                func.instruction(&Instruction::Drop);
             }
             Self::SetFromParam(x, y) => {
-                func.instruction(Instruction::I32Const(x % table_mod));
-                func.instruction(Instruction::LocalGet(y % num_params));
-                func.instruction(Instruction::TableSet { table: 0 });
+                func.instruction(&Instruction::I32Const(x % table_mod));
+                func.instruction(&Instruction::LocalGet(y % num_params));
+                func.instruction(&Instruction::TableSet { table: 0 });
             }
             Self::SetFromGet(x, y) => {
-                func.instruction(Instruction::I32Const(x % table_mod));
-                func.instruction(Instruction::I32Const(y % table_mod));
-                func.instruction(Instruction::TableGet { table: 0 });
-                func.instruction(Instruction::TableSet { table: 0 });
+                func.instruction(&Instruction::I32Const(x % table_mod));
+                func.instruction(&Instruction::I32Const(y % table_mod));
+                func.instruction(&Instruction::TableGet { table: 0 });
+                func.instruction(&Instruction::TableSet { table: 0 });
             }
             Self::SetFromMake(x, y, z) => {
-                func.instruction(Instruction::Call(make_refs_func_idx));
+                func.instruction(&Instruction::Call(make_refs_func_idx));
 
-                func.instruction(Instruction::LocalSet(num_params));
-                func.instruction(Instruction::I32Const(x % table_mod));
-                func.instruction(Instruction::LocalGet(num_params));
-                func.instruction(Instruction::TableSet { table: 0 });
+                func.instruction(&Instruction::LocalSet(num_params));
+                func.instruction(&Instruction::I32Const(x % table_mod));
+                func.instruction(&Instruction::LocalGet(num_params));
+                func.instruction(&Instruction::TableSet { table: 0 });
 
-                func.instruction(Instruction::LocalSet(num_params));
-                func.instruction(Instruction::I32Const(y % table_mod));
-                func.instruction(Instruction::LocalGet(num_params));
-                func.instruction(Instruction::TableSet { table: 0 });
+                func.instruction(&Instruction::LocalSet(num_params));
+                func.instruction(&Instruction::I32Const(y % table_mod));
+                func.instruction(&Instruction::LocalGet(num_params));
+                func.instruction(&Instruction::TableSet { table: 0 });
 
-                func.instruction(Instruction::LocalSet(num_params));
-                func.instruction(Instruction::I32Const(z % table_mod));
-                func.instruction(Instruction::LocalGet(num_params));
-                func.instruction(Instruction::TableSet { table: 0 });
+                func.instruction(&Instruction::LocalSet(num_params));
+                func.instruction(&Instruction::I32Const(z % table_mod));
+                func.instruction(&Instruction::LocalGet(num_params));
+                func.instruction(&Instruction::TableSet { table: 0 });
             }
             TableOp::Make => {
-                func.instruction(Instruction::Call(make_refs_func_idx));
-                func.instruction(Instruction::Drop);
-                func.instruction(Instruction::Drop);
-                func.instruction(Instruction::Drop);
+                func.instruction(&Instruction::Call(make_refs_func_idx));
+                func.instruction(&Instruction::Drop);
+                func.instruction(&Instruction::Drop);
+                func.instruction(&Instruction::Drop);
             }
             TableOp::TakeFromParams(x, y, z) => {
-                func.instruction(Instruction::LocalGet(x % num_params));
-                func.instruction(Instruction::LocalGet(y % num_params));
-                func.instruction(Instruction::LocalGet(z % num_params));
-                func.instruction(Instruction::Call(take_refs_func_idx));
+                func.instruction(&Instruction::LocalGet(x % num_params));
+                func.instruction(&Instruction::LocalGet(y % num_params));
+                func.instruction(&Instruction::LocalGet(z % num_params));
+                func.instruction(&Instruction::Call(take_refs_func_idx));
             }
             TableOp::TakeFromGet(x, y, z) => {
-                func.instruction(Instruction::I32Const(x % table_mod));
-                func.instruction(Instruction::TableGet { table: 0 });
+                func.instruction(&Instruction::I32Const(x % table_mod));
+                func.instruction(&Instruction::TableGet { table: 0 });
 
-                func.instruction(Instruction::I32Const(y % table_mod));
-                func.instruction(Instruction::TableGet { table: 0 });
+                func.instruction(&Instruction::I32Const(y % table_mod));
+                func.instruction(&Instruction::TableGet { table: 0 });
 
-                func.instruction(Instruction::I32Const(z % table_mod));
-                func.instruction(Instruction::TableGet { table: 0 });
+                func.instruction(&Instruction::I32Const(z % table_mod));
+                func.instruction(&Instruction::TableGet { table: 0 });
 
-                func.instruction(Instruction::Call(take_refs_func_idx));
+                func.instruction(&Instruction::Call(take_refs_func_idx));
             }
             TableOp::TakeFromMake => {
-                func.instruction(Instruction::Call(make_refs_func_idx));
-                func.instruction(Instruction::Call(take_refs_func_idx));
+                func.instruction(&Instruction::Call(make_refs_func_idx));
+                func.instruction(&Instruction::Call(take_refs_func_idx));
             }
             Self::TakeFromGc => {
-                func.instruction(Instruction::Call(gc_func_idx));
-                func.instruction(Instruction::Call(take_refs_func_idx));
+                func.instruction(&Instruction::Call(gc_func_idx));
+                func.instruction(&Instruction::Call(take_refs_func_idx));
             }
             TableOp::GetGlobal(x) => {
-                func.instruction(Instruction::GlobalGet(x % num_globals));
-                func.instruction(Instruction::Drop);
+                func.instruction(&Instruction::GlobalGet(x % num_globals));
+                func.instruction(&Instruction::Drop);
             }
             TableOp::SetGlobalFromParam(global, param) => {
-                func.instruction(Instruction::LocalGet(param % num_params));
-                func.instruction(Instruction::GlobalSet(global % num_globals));
+                func.instruction(&Instruction::LocalGet(param % num_params));
+                func.instruction(&Instruction::GlobalSet(global % num_globals));
             }
             TableOp::SetGlobalFromGet(global, x) => {
-                func.instruction(Instruction::I32Const(x));
-                func.instruction(Instruction::TableGet { table: 0 });
-                func.instruction(Instruction::GlobalSet(global % num_globals));
+                func.instruction(&Instruction::I32Const(x));
+                func.instruction(&Instruction::TableGet { table: 0 });
+                func.instruction(&Instruction::GlobalSet(global % num_globals));
             }
             TableOp::SetGlobalFromMake(x, y, z) => {
-                func.instruction(Instruction::Call(make_refs_func_idx));
-                func.instruction(Instruction::GlobalSet(x % num_globals));
-                func.instruction(Instruction::GlobalSet(y % num_globals));
-                func.instruction(Instruction::GlobalSet(z % num_globals));
+                func.instruction(&Instruction::Call(make_refs_func_idx));
+                func.instruction(&Instruction::GlobalSet(x % num_globals));
+                func.instruction(&Instruction::GlobalSet(y % num_globals));
+                func.instruction(&Instruction::GlobalSet(z % num_globals));
             }
             TableOp::TakeFromGlobalGet(x, y, z) => {
-                func.instruction(Instruction::GlobalGet(x % num_globals));
-                func.instruction(Instruction::GlobalGet(y % num_globals));
-                func.instruction(Instruction::GlobalGet(z % num_globals));
-                func.instruction(Instruction::Call(take_refs_func_idx));
+                func.instruction(&Instruction::GlobalGet(x % num_globals));
+                func.instruction(&Instruction::GlobalGet(y % num_globals));
+                func.instruction(&Instruction::GlobalGet(z % num_globals));
+                func.instruction(&Instruction::Call(take_refs_func_idx));
             }
         }
     }

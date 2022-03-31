@@ -16,9 +16,8 @@ use std::str;
 use std::sync::Arc;
 use thiserror::Error;
 use wasmtime_environ::{
-    CompileError, DefinedFuncIndex, FuncIndex, FunctionInfo, InstanceSignature, InstanceTypeIndex,
-    Module, ModuleSignature, ModuleTranslation, ModuleTypeIndex, PrimaryMap, SignatureIndex,
-    StackMapInformation, Trampoline, Tunables, WasmFuncType, ELF_WASMTIME_ADDRMAP,
+    CompileError, DefinedFuncIndex, FuncIndex, FunctionInfo, Module, ModuleTranslation, PrimaryMap,
+    SignatureIndex, StackMapInformation, Trampoline, Tunables, ELF_WASMTIME_ADDRMAP,
     ELF_WASMTIME_TRAPS,
 };
 use wasmtime_runtime::{
@@ -359,16 +358,6 @@ pub fn mmap_vec_from_obj(obj: Object) -> Result<MmapVec> {
     }
 }
 
-/// This is intended to mirror the type tables in `wasmtime_environ`, except that
-/// it doesn't store the native signatures which are no longer needed past compilation.
-#[derive(Serialize, Deserialize)]
-#[allow(missing_docs)]
-pub struct TypeTables {
-    pub wasm_signatures: PrimaryMap<SignatureIndex, WasmFuncType>,
-    pub module_signatures: PrimaryMap<ModuleTypeIndex, ModuleSignature>,
-    pub instance_signatures: PrimaryMap<InstanceTypeIndex, InstanceSignature>,
-}
-
 /// A compiled wasm module, ready to be instantiated.
 pub struct CompiledModule {
     wasm_data: Range<usize>,
@@ -529,11 +518,6 @@ impl CompiledModule {
         &self.module
     }
 
-    /// Returns the `FunctionInfo` map for all defined functions.
-    pub fn functions(&self) -> &PrimaryMap<DefinedFuncIndex, FunctionInfo> {
-        &self.funcs
-    }
-
     /// Looks up the `name` section name for the function index `idx`, if one
     /// was specified in the original wasm module.
     pub fn func_name(&self, idx: FuncIndex) -> Option<&str> {
@@ -681,6 +665,14 @@ impl CompiledModule {
     /// return `None`.
     pub fn has_address_map(&self) -> bool {
         !self.address_map_data().is_empty()
+    }
+
+    /// Returns the bounds, in host memory, of where this module's compiled
+    /// image resides.
+    pub fn image_range(&self) -> Range<usize> {
+        let base = self.mmap().as_ptr() as usize;
+        let len = self.mmap().len();
+        base..base + len
     }
 }
 

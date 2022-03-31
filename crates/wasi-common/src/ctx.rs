@@ -70,22 +70,22 @@ impl WasiCtx {
         Ok(())
     }
 
-    pub fn set_stdin(&mut self, f: Box<dyn WasiFile>) {
-        let rights = Self::stdio_rights(&*f);
+    pub fn set_stdin(&mut self, mut f: Box<dyn WasiFile>) {
+        let rights = Self::stdio_rights(&mut *f);
         self.insert_file(0, f, rights);
     }
 
-    pub fn set_stdout(&mut self, f: Box<dyn WasiFile>) {
-        let rights = Self::stdio_rights(&*f);
+    pub fn set_stdout(&mut self, mut f: Box<dyn WasiFile>) {
+        let rights = Self::stdio_rights(&mut *f);
         self.insert_file(1, f, rights);
     }
 
-    pub fn set_stderr(&mut self, f: Box<dyn WasiFile>) {
-        let rights = Self::stdio_rights(&*f);
+    pub fn set_stderr(&mut self, mut f: Box<dyn WasiFile>) {
+        let rights = Self::stdio_rights(&mut *f);
         self.insert_file(2, f, rights);
     }
 
-    fn stdio_rights(f: &dyn WasiFile) -> FileCaps {
+    fn stdio_rights(f: &mut dyn WasiFile) -> FileCaps {
         let mut rights = FileCaps::all();
 
         // If `f` is a tty, restrict the `tell` and `seek` capabilities, so

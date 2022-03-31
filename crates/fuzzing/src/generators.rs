@@ -60,79 +60,28 @@ impl PoolingAllocationStrategy {
         }
     }
 }
-
-/// Configuration for `wasmtime::ModuleLimits`.
-#[derive(Clone, Debug, Eq, PartialEq, Hash)]
-pub struct ModuleLimits {
-    imported_functions: u32,
-    imported_tables: u32,
-    imported_memories: u32,
-    imported_globals: u32,
-    types: u32,
-    functions: u32,
-    tables: u32,
-    memories: u32,
-    /// The maximum number of globals that can be defined in a module.
-    pub globals: u32,
-    table_elements: u32,
-    memory_pages: u64,
-}
-
-impl ModuleLimits {
-    fn to_wasmtime(&self) -> wasmtime::ModuleLimits {
-        wasmtime::ModuleLimits {
-            imported_functions: self.imported_functions,
-            imported_tables: self.imported_tables,
-            imported_memories: self.imported_memories,
-            imported_globals: self.imported_globals,
-            types: self.types,
-            functions: self.functions,
-            tables: self.tables,
-            memories: self.memories,
-            globals: self.globals,
-            table_elements: self.table_elements,
-            memory_pages: self.memory_pages,
-        }
-    }
-}
-
-impl<'a> Arbitrary<'a> for ModuleLimits {
-    fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
-        const MAX_IMPORTS: u32 = 1000;
-        const MAX_TYPES: u32 = 1000;
-        const MAX_FUNCTIONS: u32 = 1000;
-        const MAX_TABLES: u32 = 10;
-        const MAX_MEMORIES: u32 = 10;
-        const MAX_GLOBALS: u32 = 1000;
-        const MAX_ELEMENTS: u32 = 1000;
-        const MAX_MEMORY_PAGES: u64 = 160; // 10 MiB
-
-        Ok(Self {
-            imported_functions: u.int_in_range(0..=MAX_IMPORTS)?,
-            imported_tables: u.int_in_range(0..=MAX_IMPORTS)?,
-            imported_memories: u.int_in_range(0..=MAX_IMPORTS)?,
-            imported_globals: u.int_in_range(0..=MAX_IMPORTS)?,
-            types: u.int_in_range(0..=MAX_TYPES)?,
-            functions: u.int_in_range(0..=MAX_FUNCTIONS)?,
-            tables: u.int_in_range(0..=MAX_TABLES)?,
-            memories: u.int_in_range(0..=MAX_MEMORIES)?,
-            globals: u.int_in_range(0..=MAX_GLOBALS)?,
-            table_elements: u.int_in_range(0..=MAX_ELEMENTS)?,
-            memory_pages: u.int_in_range(0..=MAX_MEMORY_PAGES)?,
-        })
-    }
-}
-
 /// Configuration for `wasmtime::PoolingAllocationStrategy`.
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[allow(missing_docs)]
 pub struct InstanceLimits {
-    /// The maximum number of instances that can be instantiated in the pool at a time.
     pub count: u32,
+    pub memories: u32,
+    pub tables: u32,
+    pub memory_pages: u64,
+    pub table_elements: u32,
+    pub size: usize,
 }
 
 impl InstanceLimits {
     fn to_wasmtime(&self) -> wasmtime::InstanceLimits {
-        wasmtime::InstanceLimits { count: self.count }
+        wasmtime::InstanceLimits {
+            count: self.count,
+            memories: self.memories,
+            tables: self.tables,
+            memory_pages: self.memory_pages,
+            table_elements: self.table_elements,
+            size: self.size,
+        }
     }
 }
 
@@ -140,8 +89,19 @@ impl<'a> Arbitrary<'a> for InstanceLimits {
     fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
         const MAX_COUNT: u32 = 100;
 
+        const MAX_TABLES: u32 = 10;
+        const MAX_MEMORIES: u32 = 10;
+        const MAX_ELEMENTS: u32 = 1000;
+        const MAX_MEMORY_PAGES: u64 = 160; // 10 MiB
+        const MAX_SIZE: usize = 1 << 20; // 1 MiB
+
         Ok(Self {
+            tables: u.int_in_range(0..=MAX_TABLES)?,
+            memories: u.int_in_range(0..=MAX_MEMORIES)?,
+            table_elements: u.int_in_range(0..=MAX_ELEMENTS)?,
+            memory_pages: u.int_in_range(0..=MAX_MEMORY_PAGES)?,
             count: u.int_in_range(1..=MAX_COUNT)?,
+            size: u.int_in_range(0..=MAX_SIZE)?,
         })
     }
 }
@@ -155,8 +115,6 @@ pub enum InstanceAllocationStrategy {
     Pooling {
         /// The pooling strategy to use.
         strategy: PoolingAllocationStrategy,
-        /// The module limits.
-        module_limits: ModuleLimits,
         /// The instance limits.
         instance_limits: InstanceLimits,
     },
@@ -168,11 +126,9 @@ impl InstanceAllocationStrategy {
             InstanceAllocationStrategy::OnDemand => wasmtime::InstanceAllocationStrategy::OnDemand,
             InstanceAllocationStrategy::Pooling {
                 strategy,
-                module_limits,
                 instance_limits,
             } => wasmtime::InstanceAllocationStrategy::Pooling {
                 strategy: strategy.to_wasmtime(),
-                module_limits: module_limits.to_wasmtime(),
                 instance_limits: instance_limits.to_wasmtime(),
             },
         }
@@ -203,7 +159,7 @@ impl<'a> Arbitrary<'a> for Config {
         // If using the pooling allocator, constrain the memory and module configurations
         // to the module limits.
         if let InstanceAllocationStrategy::Pooling {
-            module_limits: limits,
+            instance_limits: limits,
             ..
         } = &config.wasmtime.strategy
         {
@@ -223,14 +179,6 @@ impl<'a> Arbitrary<'a> for Config {
             };
 
             let cfg = &mut config.module_config.config;
-            cfg.max_imports = limits.imported_functions.min(
-                limits
-                    .imported_globals
-                    .min(limits.imported_memories.min(limits.imported_tables)),
-            ) as usize;
-            cfg.max_types = limits.types as usize;
-            cfg.max_funcs = limits.functions as usize;
-            cfg.max_globals = limits.globals as usize;
             cfg.max_memories = limits.memories as usize;
             cfg.max_tables = limits.tables as usize;
             cfg.max_memory_pages = limits.memory_pages;
@@ -253,14 +201,18 @@ pub struct WasmtimeConfig {
     canonicalize_nans: bool,
     interruptable: bool,
     pub(crate) consume_fuel: bool,
+    epoch_interruption: bool,
     /// The Wasmtime memory configuration to use.
     pub memory_config: MemoryConfig,
     force_jump_veneers: bool,
-    memfd: bool,
+    memory_init_cow: bool,
+    memory_guaranteed_dense_image_size: u64,
     use_precompiled_cwasm: bool,
     /// Configuration for the instance allocation strategy to use.
     pub strategy: InstanceAllocationStrategy,
     codegen: CodegenSettings,
+    padding_between_functions: Option<u16>,
+    generate_address_map: bool,
 }
 
 /// Configuration for linear memories in Wasmtime.
@@ -322,6 +274,9 @@ impl Config {
         config.max_memory_pages = 1;
         config.memory_max_size_required = true;
 
+        // While reference types are disabled below, only allow one table
+        config.max_tables = 1;
+
         // Don't allow any imports
         config.max_imports = 0;
 
@@ -341,23 +296,17 @@ impl Config {
         config.simd_enabled = false;
         config.memory64_enabled = false;
 
-        // If using the pooling allocator, update the module limits too
+        // If using the pooling allocator, update the instance limits too
         if let InstanceAllocationStrategy::Pooling {
-            module_limits: limits,
+            instance_limits: limits,
             ..
         } = &mut self.wasmtime.strategy
         {
-            // No imports
-            limits.imported_functions = 0;
-            limits.imported_tables = 0;
-            limits.imported_memories = 0;
-            limits.imported_globals = 0;
-
-            // One type, one function, and one single-page memory
-            limits.types = 1;
-            limits.functions = 1;
+            // One single-page memory
             limits.memories = 1;
             limits.memory_pages = 1;
+
+            limits.tables = 1;
 
             match &mut self.wasmtime.memory_config {
                 MemoryConfig::Normal(config) => {
@@ -383,13 +332,6 @@ impl Config {
 
         if let Some(default_fuel) = default_fuel {
             module.ensure_termination(default_fuel);
-
-            // Bump the allowed global count by 1
-            if let InstanceAllocationStrategy::Pooling { module_limits, .. } =
-                &mut self.wasmtime.strategy
-            {
-                module_limits.globals += 1;
-            }
         }
 
         Ok(module)
@@ -403,32 +345,60 @@ impl Config {
         config.simd_enabled = false;
         config.bulk_memory_enabled = true;
         config.reference_types_enabled = true;
+        config.multi_value_enabled = true;
         config.max_memories = 1;
+        config.max_tables = 5;
 
-        if let InstanceAllocationStrategy::Pooling { module_limits, .. } =
-            &mut self.wasmtime.strategy
+        if let InstanceAllocationStrategy::Pooling {
+            instance_limits: limits,
+            ..
+        } = &mut self.wasmtime.strategy
         {
-            module_limits.memories = 1;
+            // Configure the lower bound of a number of limits to what's
+            // required to actually run the spec tests. Fuzz-generated inputs
+            // may have limits less than these thresholds which would cause the
+            // spec tests to fail which isn't particularly interesting.
+            limits.memories = limits.memories.max(1);
+            limits.tables = limits.memories.max(5);
+            limits.table_elements = limits.memories.max(1_000);
+            limits.memory_pages = limits.memory_pages.max(900);
+            limits.count = limits.count.max(500);
+            limits.size = limits.size.max(64 * 1024);
+
+            match &mut self.wasmtime.memory_config {
+                MemoryConfig::Normal(config) => {
+                    config.static_memory_maximum_size = Some(limits.memory_pages * 0x10000);
+                }
+                MemoryConfig::CustomUnaligned => unreachable!(), // Arbitrary impl for `Config` should have prevented this
+            }
         }
     }
 
     /// Converts this to a `wasmtime::Config` object
     pub fn to_wasmtime(&self) -> wasmtime::Config {
         crate::init_fuzzing();
+        log::debug!("creating wasmtime config with {:#?}", self.wasmtime);
 
         let mut cfg = wasmtime::Config::new();
         cfg.wasm_bulk_memory(true)
             .wasm_reference_types(true)
-            .wasm_module_linking(self.module_config.config.module_linking_enabled)
+            .wasm_multi_value(self.module_config.config.multi_value_enabled)
             .wasm_multi_memory(self.module_config.config.max_memories > 1)
             .wasm_simd(self.module_config.config.simd_enabled)
             .wasm_memory64(self.module_config.config.memory64_enabled)
             .cranelift_nan_canonicalization(self.wasmtime.canonicalize_nans)
             .cranelift_opt_level(self.wasmtime.opt_level.to_wasmtime())
-            .interruptable(self.wasmtime.interruptable)
             .consume_fuel(self.wasmtime.consume_fuel)
-            .memfd(self.wasmtime.memfd)
-            .allocation_strategy(self.wasmtime.strategy.to_wasmtime());
+            .epoch_interruption(self.wasmtime.epoch_interruption)
+            .memory_init_cow(self.wasmtime.memory_init_cow)
+            .memory_guaranteed_dense_image_size(std::cmp::min(
+                // Clamp this at 16MiB so we don't get huge in-memory
+                // images during fuzzing.
+                16 << 20,
+                self.wasmtime.memory_guaranteed_dense_image_size,
+            ))
+            .allocation_strategy(self.wasmtime.strategy.to_wasmtime())
+            .generate_address_map(self.wasmtime.generate_address_map);
 
         self.wasmtime.codegen.configure(&mut cfg);
 
@@ -450,6 +420,16 @@ impl Config {
             unsafe {
                 cfg.cranelift_flag_set("wasmtime_linkopt_force_jump_veneer", "true")
                     .unwrap();
+            }
+        }
+
+        if let Some(pad) = self.wasmtime.padding_between_functions {
+            unsafe {
+                cfg.cranelift_flag_set(
+                    "wasmtime_linkopt_padding_between_functions",
+                    &pad.to_string(),
+                )
+                .unwrap();
             }
         }
 
@@ -489,18 +469,37 @@ impl Config {
         if self.wasmtime.consume_fuel {
             store.add_fuel(u64::max_value()).unwrap();
         }
+        if self.wasmtime.epoch_interruption {
+            // Without fuzzing of async execution, we can't test the
+            // "update deadline and continue" behavior, but we can at
+            // least test the codegen paths and checks with the
+            // trapping behavior, which works synchronously too. We'll
+            // set the deadline one epoch tick in the future; then
+            // this works exactly like an interrupt flag. We expect no
+            // traps/interrupts unless we bump the epoch, which we do
+            // as one particular Timeout mode (`Timeout::Epoch`).
+            store.epoch_deadline_trap();
+            store.set_epoch_deadline(1);
+        }
     }
 
     /// Generates an arbitrary method of timing out an instance, ensuring that
     /// this configuration supports the returned timeout.
     pub fn generate_timeout(&mut self, u: &mut Unstructured<'_>) -> arbitrary::Result<Timeout> {
-        if u.arbitrary()? {
-            self.wasmtime.interruptable = true;
-            Ok(Timeout::Time(Duration::from_secs(20)))
-        } else {
-            self.wasmtime.consume_fuel = true;
-            Ok(Timeout::Fuel(100_000))
+        let time_duration = Duration::from_secs(20);
+        let timeout = u
+            .choose(&[Timeout::Fuel(100_000), Timeout::Epoch(time_duration)])?
+            .clone();
+        match &timeout {
+            Timeout::Fuel(..) => {
+                self.wasmtime.consume_fuel = true;
+            }
+            Timeout::Epoch(..) => {
+                self.wasmtime.epoch_interruption = true;
+            }
+            Timeout::None => unreachable!("Not an option given to choose()"),
         }
+        Ok(timeout)
     }
 
     /// Compiles the `wasm` within the `engine` provided.
@@ -629,10 +628,9 @@ impl<'a> Arbitrary<'a> for ModuleConfig {
         // Allow multi-table by default.
         config.max_tables = config.max_tables.max(4);
 
-        // Allow enabling some various wasm proposals by default.
-        config.bulk_memory_enabled = u.arbitrary()?;
-        config.reference_types_enabled = u.arbitrary()?;
-        config.simd_enabled = u.arbitrary()?;
+        // Allow enabling some various wasm proposals by default. Note that
+        // these are all unconditionally turned off even with
+        // `SwarmConfig::arbitrary`.
         config.memory64_enabled = u.arbitrary()?;
 
         Ok(ModuleConfig { config })
@@ -705,7 +703,7 @@ impl<'a> Arbitrary<'a> for CodegenSettings {
                         // input must be discarded.
                         #[cfg(target_arch = $arch)]
                         if enable && !std::$test!($std) {
-                            log::error!("want to enable clif `{}` but host doesn't support it",
+                            log::warn!("want to enable clif `{}` but host doesn't support it",
                                 $clif);
                             return Err(arbitrary::Error::EmptyChoose)
                         }
@@ -737,8 +735,8 @@ impl<'a> Arbitrary<'a> for CodegenSettings {
                     std:"sse3" => clif:"has_sse3" ratio: 1 in 1,
                     std:"ssse3" => clif:"has_ssse3" ratio: 1 in 1,
                     std:"sse4.1" => clif:"has_sse41" ratio: 1 in 1,
+                    std:"sse4.2" => clif:"has_sse42" ratio: 1 in 1,
 
-                    std:"sse4.2" => clif:"has_sse42",
                     std:"popcnt" => clif:"has_popcnt",
                     std:"avx" => clif:"has_avx",
                     std:"avx2" => clif:"has_avx2",

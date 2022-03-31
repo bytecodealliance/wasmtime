@@ -86,7 +86,7 @@ fn bench_parallel(c: &mut Criterion, path: &Path) {
             (engine, pre)
         });
 
-        for threads in 1..=num_cpus::get_physical() {
+        for threads in 1..=num_cpus::get_physical().min(16) {
             let name = format!(
                 "{}: with {} thread{}",
                 path.file_name().unwrap().to_str().unwrap(),
@@ -209,13 +209,10 @@ fn strategies() -> impl Iterator<Item = InstanceAllocationStrategy> {
         InstanceAllocationStrategy::OnDemand,
         InstanceAllocationStrategy::Pooling {
             strategy: Default::default(),
-            module_limits: ModuleLimits {
-                functions: 40_000,
-                memory_pages: 1_000,
-                types: 200,
-                ..ModuleLimits::default()
+            instance_limits: InstanceLimits {
+                memory_pages: 10_000,
+                ..Default::default()
             },
-            instance_limits: InstanceLimits::default(),
         },
     ])
 }

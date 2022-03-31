@@ -337,7 +337,7 @@ fn table_drops_externref() -> anyhow::Result<()> {
 fn gee_i_sure_hope_refcounting_is_atomic() -> anyhow::Result<()> {
     let mut config = Config::new();
     config.wasm_reference_types(true);
-    config.interruptable(true);
+    config.epoch_interruption(true);
     let engine = Engine::new(&config)?;
     let mut store = Store::new(&engine, ());
     let module = Module::new(
@@ -380,14 +380,13 @@ fn gee_i_sure_hope_refcounting_is_atomic() -> anyhow::Result<()> {
     let flag = Arc::new(AtomicBool::new(false));
     let externref = ExternRef::new(SetFlagOnDrop(flag.clone()));
     let externref2 = externref.clone();
-    let handle = store.interrupt_handle()?;
 
     let child = std::thread::spawn(move || run.call(&mut store, Some(externref2)));
 
     for _ in 0..10000 {
         drop(externref.clone());
     }
-    handle.interrupt();
+    engine.increment_epoch();
 
     assert!(child.join().unwrap().is_err());
     assert!(!flag.load(SeqCst));

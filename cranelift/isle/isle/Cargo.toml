@@ -6,9 +6,12 @@ license = "Apache-2.0 WITH LLVM-exception"
 name = "cranelift-isle"
 readme = "../README.md"
 repository = "https://github.com/bytecodealliance/wasmtime/tree/main/cranelift/isle"
-version = "0.81.0"
+version = "0.82.0"
 
 [dependencies]
 log = "0.4"
 miette = "3.0.0"
 thiserror = "1.0.29"
+
+[dev-dependencies]
+tempfile = "3"

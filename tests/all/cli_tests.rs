@@ -175,7 +175,7 @@ fn timeout_in_start() -> Result<()> {
     assert_eq!(output.stdout, b"");
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("wasm trap: interrupt"),
+        stderr.contains("epoch deadline reached during execution"),
         "bad stderr: {}",
         stderr
     );
@@ -196,7 +196,7 @@ fn timeout_in_invoke() -> Result<()> {
     assert_eq!(output.stdout, b"");
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("wasm trap: interrupt"),
+        stderr.contains("epoch deadline reached during execution"),
         "bad stderr: {}",
         stderr
     );

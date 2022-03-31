@@ -2,6 +2,102 @@
 
 --------------------------------------------------------------------------------
 
+## 0.36.0
+
+Unreleased.
+
+### Added
+
+* Support for epoch-based interruption has been added to the C API.
+  [#3925](https://github.com/bytecodealliance/wasmtime/pull/3925)
+
+### Removed
+
+* Support for `Config::interruptable` and `InterruptHandle` has been removed
+  from the `wasmtime` crate. Users should migrate to using epoch-based
+  interruption instead.
+  [#3925](https://github.com/bytecodealliance/wasmtime/pull/3925)
+
+--------------------------------------------------------------------------------
+
+## 0.35.1
+
+Released 2022-03-09.
+
+### Fixed
+
+* Fixed a bug in the x86-64 lowering of the `uextend` opcode for narrow (`i8`,
+  `i16`) integer sources when the value is produced by one of several
+  arithmetic instructions.
+  [#3906](https://github.com/bytecodealliance/wasmtime/pull/3906)
+
+## 0.35.0
+
+Released 2022-03-07.
+
+### Added
+
+* The `wasmtime_wasi::add_to_linker` function now allows providing
+  a context object of a custom type instead of `wasmtime_wasi::WasiCtx`,
+  as long as that type implements the required WASI snapshot traits.
+  This allows, for example, wrapping `WasiCtx` into a struct and providing
+  custom implementations for those traits to override the default behaviour.
+
+### Changed
+
+* WebAssembly tables of `funcref` values are now lazily initialized which can,
+  in some cases, greatly speed up instantiation of a module.
+  [#3733](https://github.com/bytecodealliance/wasmtime/pull/3733)
+
+* The `memfd` feature in 0.34.0, now renamed to `memory-init-cow`, has been
+  enabled by default. This means that, where applicable, WebAssembly linear
+  memories are now initialized with copy-on-write mappings. Support from this
+  has been expanded from Linux-only to include macOS and other Unix systems when
+  modules are loaded from precompiled `*.cwasm` files on disk.
+  [#3777](https://github.com/bytecodealliance/wasmtime/pull/3777)
+  [#3778](https://github.com/bytecodealliance/wasmtime/pull/3778)
+  [#3787](https://github.com/bytecodealliance/wasmtime/pull/3787)
+  [#3819](https://github.com/bytecodealliance/wasmtime/pull/3819)
+  [#3831](https://github.com/bytecodealliance/wasmtime/pull/3831)
+
+* Clarify that SSE 4.2 (and prior) is required for running WebAssembly code with
+  simd support enabled on x86\_64.
+  [#3816](https://github.com/bytecodealliance/wasmtime/pull/3816)
+  [#3817](https://github.com/bytecodealliance/wasmtime/pull/3817)
+  [#3833](https://github.com/bytecodealliance/wasmtime/pull/3833)
+  [#3825](https://github.com/bytecodealliance/wasmtime/pull/3825)
+
+* Support for profiling with VTune is now enabled at compile time by default,
+  but it remains disabled at runtime by default.
+  [#3821](https://github.com/bytecodealliance/wasmtime/pull/3821)
+
+* The `ModuleLimits` type has been removed from the configuration of the pooling
+  allocator in favor of configuring the total size of an instance allocation
+  rather than each individual field.
+  [#3837](https://github.com/bytecodealliance/wasmtime/pull/3837)
+
+* The native stack size allowed for WebAssembly has been decreased from 1 MiB to
+  512 KiB on all platforms to better accomodate running wasm on the main thread
+  on Windows.
+  [#3861](https://github.com/bytecodealliance/wasmtime/pull/3861)
+
+* The `wasi-common` crate now supports doing polls for both read and write
+  interest on a file descriptor at the same time.
+  [#3866](https://github.com/bytecodealliance/wasmtime/pull/3866)
+
+### Fixed
+
+* The `Store::call_hook` callback is now invoked when entering host functions
+  defined with `*_unchecked` variants.
+  [#3881](https://github.com/bytecodealliance/wasmtime/pull/3881)
+
+### Removed
+
+* The incomplete and unmaintained ARM32 backend has been removed from Cranelift.
+  [#3799](https://github.com/bytecodealliance/wasmtime/pull/3799)
+
+--------------------------------------------------------------------------------
+
 ## 0.34.1
 
 Released 2022-02-16.

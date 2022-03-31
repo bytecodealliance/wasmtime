@@ -4,8 +4,8 @@ use wasmtime::*;
 #[test]
 fn host_always_has_some_stack() -> anyhow::Result<()> {
     static HITS: AtomicUsize = AtomicUsize::new(0);
-    // assume hosts always have at least 512k of stack
-    const HOST_STACK: usize = 512 * 1024;
+    // assume hosts always have at least 128k of stack
+    const HOST_STACK: usize = 128 * 1024;
 
     let mut store = Store::<()>::default();
 

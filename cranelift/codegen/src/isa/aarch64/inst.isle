@@ -71,6 +71,7 @@
     ;; A bit op instruction with a single register source.
     (BitRR
       (op BitOp)
+      (size OperandSize)
       (rd WritableReg)
       (rn Reg))
 
@@ -876,13 +877,9 @@
 (type BitOp
   (enum
     ;; Bit reverse
-    (RBit32)
-    ;; Bit reverse
-    (RBit64)
-    (Clz32)
-    (Clz64)
-    (Cls32)
-    (Cls64)
+    (RBit)
+    (Clz)
+    (Cls)
 ))
 
 (type AMode extern (enum))
@@ -1161,6 +1158,24 @@
     (Cnt)
     ;; Compare bitwise equal to 0
     (Cmeq0)
+    ;; Compare signed greater than or equal to 0
+    (Cmge0)
+    ;; Compare signed greater than 0
+    (Cmgt0)
+    ;; Compare signed less than or equal to 0
+    (Cmle0)
+    ;; Compare signed less than 0
+    (Cmlt0)
+    ;; Floating point compare equal to 0
+    (Fcmeq0)
+    ;; Floating point compare greater than or equal to 0
+    (Fcmge0)
+    ;; Floating point compare greater than 0
+    (Fcmgt0)
+    ;; Floating point compare less than or equal to 0
+    (Fcmle0)
+    ;; Floating point compare less than 0
+    (Fcmlt0)
 ))
 
 ;; A vector widening operation with one argument.
@@ -1366,77 +1381,77 @@
 (rule (movz imm size)
       (let ((dst WritableReg (temp_writable_reg $I64))
             (_ Unit (emit (MInst.MovZ dst imm size))))
-        (writable_reg_to_reg dst)))
+        dst))
 
 ;; Helper for emitting `MInst.MovN` instructions.
 (decl movn (MoveWideConst OperandSize) Reg)
 (rule (movn imm size)
       (let ((dst WritableReg (temp_writable_reg $I64))
             (_ Unit (emit (MInst.MovN dst imm size))))
-        (writable_reg_to_reg dst)))
+        dst))
 
 ;; Helper for emitting `MInst.AluRRImmLogic` instructions.
 (decl alu_rr_imm_logic (ALUOp Type Reg ImmLogic) Reg)
 (rule (alu_rr_imm_logic op ty src imm)
       (let ((dst WritableReg (temp_writable_reg $I64))
             (_ Unit (emit (MInst.AluRRImmLogic op (operand_size ty) dst src imm))))
-        (writable_reg_to_reg dst)))
+        dst))
 
 ;; Helper for emitting `MInst.AluRRImmShift` instructions.
 (decl alu_rr_imm_shift (ALUOp Type Reg ImmShift) Reg)
 (rule (alu_rr_imm_shift op ty src imm)
       (let ((dst WritableReg (temp_writable_reg $I64))
             (_ Unit (emit (MInst.AluRRImmShift op (operand_size ty) dst src imm))))
-        (writable_reg_to_reg dst)))
+        dst))
 
 ;; Helper for emitting `MInst.AluRRR` instructions.
 (decl alu_rrr (ALUOp Type Reg Reg) Reg)
 (rule (alu_rrr op ty src1 src2)
       (let ((dst WritableReg (temp_writable_reg $I64))
             (_ Unit (emit (MInst.AluRRR op (operand_size ty) dst src1 src2))))
-        (writable_reg_to_reg dst)))
+        dst))
 
 ;; Helper for emitting `MInst.VecRRR` instructions.
 (decl vec_rrr (VecALUOp Reg Reg VectorSize) Reg)
 (rule (vec_rrr op src1 src2 size)
       (let ((dst WritableReg (temp_writable_reg $I8X16))
             (_ Unit (emit (MInst.VecRRR op dst src1 src2 size))))
-        (writable_reg_to_reg dst)))
+        dst))
 
 ;; Helper for emitting `MInst.VecLanes` instructions.
 (decl vec_lanes (VecLanesOp Reg VectorSize) Reg)
 (rule (vec_lanes op src size)
       (let ((dst WritableReg (temp_writable_reg $I8X16))
             (_ Unit (emit (MInst.VecLanes op dst src size))))
-        (writable_reg_to_reg dst)))
+        dst))
 
 ;; Helper for emitting `MInst.VecDup` instructions.
 (decl vec_dup (Reg VectorSize) Reg)
 (rule (vec_dup src size)
       (let ((dst WritableReg (temp_writable_reg $I8X16))
             (_ Unit (emit (MInst.VecDup dst src size))))
-        (writable_reg_to_reg dst)))
+        dst))
 
 ;; Helper for emitting `MInst.AluRRImm12` instructions.
 (decl alu_rr_imm12 (ALUOp Type Reg Imm12) Reg)
 (rule (alu_rr_imm12 op ty src imm)
       (let ((dst WritableReg (temp_writable_reg $I64))
             (_ Unit (emit (MInst.AluRRImm12 op (operand_size ty) dst src imm))))
-        (writable_reg_to_reg dst)))
+        dst))
 
 ;; Helper for emitting `MInst.AluRRRShift` instructions.
 (decl alu_rrr_shift (ALUOp Type Reg Reg ShiftOpAndAmt) Reg)
 (rule (alu_rrr_shift op ty src1 src2 shift)
       (let ((dst WritableReg (temp_writable_reg $I64))
             (_ Unit (emit (MInst.AluRRRShift op (operand_size ty) dst src1 src2 shift))))
-        (writable_reg_to_reg dst)))
+        dst))
 
 ;; Helper for emitting `MInst.AluRRRExtend` instructions.
 (decl alu_rrr_extend (ALUOp Type Reg Reg ExtendOp) Reg)
 (rule (alu_rrr_extend op ty src1 src2 extend)
       (let ((dst WritableReg (temp_writable_reg $I64))
             (_ Unit (emit (MInst.AluRRRExtend op (operand_size ty) dst src1 src2 extend))))
-        (writable_reg_to_reg dst)))
+        dst))
 
 ;; Same as `alu_rrr_extend`, but takes an `ExtendedValue` packed "pair" instead
 ;; of a `Reg` and an `ExtendOp`.
@@ -1451,61 +1466,66 @@
 (rule (alu_rrrr op src1 src2 src3)
       (let ((dst WritableReg (temp_writable_reg $I64))
             (_ Unit (emit (MInst.AluRRRR op dst src1 src2 src3))))
-        (writable_reg_to_reg dst)))
+        dst))
 
 ;; Helper for emitting `MInst.BitRR` instructions.
-(decl bit_rr (BitOp Reg) Reg)
-(rule (bit_rr op src)
+(decl bit_rr (BitOp Type Reg) Reg)
+(rule (bit_rr op ty src)
       (let ((dst WritableReg (temp_writable_reg $I64))
-            (_ Unit (emit (MInst.BitRR op dst src))))
-        (writable_reg_to_reg dst)))
+            (_ Unit (emit (MInst.BitRR op (operand_size ty) dst src))))
+        dst))
 
 ;; Helper for emitting `adds` instructions.
-(decl add_with_flags (Type Reg Reg) ProducesFlags)
-(rule (add_with_flags ty src1 src2)
+(decl add_with_flags_paired (Type Reg Reg) ProducesFlags)
+(rule (add_with_flags_paired ty src1 src2)
       (let ((dst WritableReg (temp_writable_reg $I64)))
-        (ProducesFlags.ProducesFlags (MInst.AluRRR (ALUOp.AddS) (operand_size ty) dst src1 src2)
-                                     (writable_reg_to_reg dst))))
+        (ProducesFlags.ProducesFlagsReturnsResultWithConsumer
+         (MInst.AluRRR (ALUOp.AddS) (operand_size ty) dst src1 src2)
+         dst)))
 
 ;; Helper for emitting `adc` instructions.
-(decl adc (Type Reg Reg) ConsumesFlags)
-(rule (adc ty src1 src2)
+(decl adc_paired (Type Reg Reg) ConsumesFlags)
+(rule (adc_paired ty src1 src2)
       (let ((dst WritableReg (temp_writable_reg $I64)))
-        (ConsumesFlags.ConsumesFlags (MInst.AluRRR (ALUOp.Adc) (operand_size ty) dst src1 src2)
-                                     (writable_reg_to_reg dst))))
+        (ConsumesFlags.ConsumesFlagsReturnsResultWithProducer
+         (MInst.AluRRR (ALUOp.Adc) (operand_size ty) dst src1 src2)
+         dst)))
 
 ;; Helper for emitting `subs` instructions.
-(decl sub_with_flags (Type Reg Reg) ProducesFlags)
-(rule (sub_with_flags ty src1 src2)
+(decl sub_with_flags_paired (Type Reg Reg) ProducesFlags)
+(rule (sub_with_flags_paired ty src1 src2)
       (let ((dst WritableReg (temp_writable_reg $I64)))
-        (ProducesFlags.ProducesFlags (MInst.AluRRR (ALUOp.SubS) (operand_size ty) dst src1 src2)
-                                     (writable_reg_to_reg dst))))
+        (ProducesFlags.ProducesFlagsReturnsResultWithConsumer
+         (MInst.AluRRR (ALUOp.SubS) (operand_size ty) dst src1 src2)
+         dst)))
 
 (decl cmp64_imm (Reg Imm12) ProducesFlags)
 (rule (cmp64_imm src1 src2)
-      (ProducesFlags.ProducesFlags (MInst.AluRRImm12 (ALUOp.SubS) (OperandSize.Size64) (writable_zero_reg) src1 src2)
-                                   (zero_reg)))
+      (ProducesFlags.ProducesFlagsSideEffect
+       (MInst.AluRRImm12 (ALUOp.SubS) (OperandSize.Size64) (writable_zero_reg)
+        src1 src2)))
 
 ;; Helper for emitting `sbc` instructions.
-(decl sbc (Type Reg Reg) ConsumesFlags)
-(rule (sbc ty src1 src2)
+(decl sbc_paired (Type Reg Reg) ConsumesFlags)
+(rule (sbc_paired ty src1 src2)
       (let ((dst WritableReg (temp_writable_reg $I64)))
-        (ConsumesFlags.ConsumesFlags (MInst.AluRRR (ALUOp.Sbc) (operand_size ty) dst src1 src2)
-                                     (writable_reg_to_reg dst))))
+        (ConsumesFlags.ConsumesFlagsReturnsResultWithProducer
+         (MInst.AluRRR (ALUOp.Sbc) (operand_size ty) dst src1 src2)
+         dst)))
 
 ;; Helper for emitting `MInst.VecMisc` instructions.
 (decl vec_misc (VecMisc2 Reg VectorSize) Reg)
 (rule (vec_misc op src size)
       (let ((dst WritableReg (temp_writable_reg $I8X16))
             (_ Unit (emit (MInst.VecMisc op dst src size))))
-        (writable_reg_to_reg dst)))
+        dst))
 
 ;; Helper for emitting `MInst.VecRRRLong` instructions.
 (decl vec_rrr_long (VecRRRLongOp Reg Reg bool) Reg)
 (rule (vec_rrr_long op src1 src2 high_half)
       (let ((dst WritableReg (temp_writable_reg $I8X16))
             (_ Unit (emit (MInst.VecRRRLong op dst src1 src2 high_half))))
-        (writable_reg_to_reg dst)))
+        dst))
 
 ;; Helper for emitting `MInst.VecRRRLong` instructions, but for variants
 ;; where the operation both reads and modifies the destination register.
@@ -1516,28 +1536,28 @@
       (let ((dst WritableReg (temp_writable_reg $I8X16))
             (_1 Unit (emit (MInst.FpuMove128 dst src1)))
             (_2 Unit (emit (MInst.VecRRRLong op dst src2 src3 high_half))))
-        (writable_reg_to_reg dst)))
+        dst))
 
 ;; Helper for emitting `MInst.VecRRNarrow` instructions.
 (decl vec_rr_narrow (VecRRNarrowOp Reg bool) Reg)
 (rule (vec_rr_narrow op src high_half)
       (let ((dst WritableReg (temp_writable_reg $I8X16))
             (_ Unit (emit (MInst.VecRRNarrow op dst src high_half))))
-        (writable_reg_to_reg dst)))
+        dst))
 
 ;; Helper for emitting `MInst.VecRRLong` instructions.
 (decl vec_rr_long (VecRRLongOp Reg bool) Reg)
 (rule (vec_rr_long op src high_half)
       (let ((dst WritableReg (temp_writable_reg $I8X16))
             (_ Unit (emit (MInst.VecRRLong op dst src high_half))))
-        (writable_reg_to_reg dst)))
+        dst))
 
 ;; Helper for emitting `MInst.MovToFpu` instructions.
 (decl mov_to_fpu (Reg ScalarSize) Reg)
 (rule (mov_to_fpu x size)
       (let ((dst WritableReg (temp_writable_reg $I8X16))
             (_ Unit (emit (MInst.MovToFpu dst x size))))
-        (writable_reg_to_reg dst)))
+        dst))
 
 ;; Helper for emitting `MInst.MovToVec` instructions.
 (decl mov_to_vec (Reg Reg u8 VectorSize) Reg)
@@ -1545,35 +1565,35 @@
       (let ((dst WritableReg (temp_writable_reg $I8X16))
             (_1 Unit (emit (MInst.FpuMove128 dst src1)))
             (_2 Unit (emit (MInst.MovToVec dst src2 lane size))))
-        (writable_reg_to_reg dst)))
+        dst))
 
 ;; Helper for emitting `MInst.MovFromVec` instructions.
 (decl mov_from_vec (Reg u8 VectorSize) Reg)
 (rule (mov_from_vec rn idx size)
       (let ((dst WritableReg (temp_writable_reg $I64))
             (_ Unit (emit (MInst.MovFromVec dst rn idx size))))
-        (writable_reg_to_reg dst)))
+        dst))
 
 ;; Helper for emitting `MInst.MovFromVecSigned` instructions.
 (decl mov_from_vec_signed (Reg u8 VectorSize OperandSize) Reg)
 (rule (mov_from_vec_signed rn idx size scalar_size)
       (let ((dst WritableReg (temp_writable_reg $I64))
             (_ Unit (emit (MInst.MovFromVecSigned dst rn idx size scalar_size))))
-        (writable_reg_to_reg dst)))
+        dst))
 
 ;; Helper for emitting `MInst.Extend` instructions.
 (decl extend (Reg bool u8 u8) Reg)
 (rule (extend rn signed from_bits to_bits)
       (let ((dst WritableReg (temp_writable_reg $I64))
             (_ Unit (emit (MInst.Extend dst rn signed from_bits to_bits))))
-        (writable_reg_to_reg dst)))
+        dst))
 
 ;; Helper for emitting `MInst.LoadAcquire` instructions.
 (decl load_acquire (Type Reg) Reg)
 (rule (load_acquire ty addr)
       (let ((dst WritableReg (temp_writable_reg $I64))
             (_ Unit (emit (MInst.LoadAcquire ty dst addr))))
-        (writable_reg_to_reg dst)))
+        dst))
 
 ;; Helper for generating a `tst` instruction.
 ;;
@@ -1581,12 +1601,12 @@
 ;; which must be paired with `with_flags*` helpers.
 (decl tst_imm (Type Reg ImmLogic) ProducesFlags)
 (rule (tst_imm ty reg imm)
-      (ProducesFlags.ProducesFlags (MInst.AluRRImmLogic (ALUOp.AndS)
-                                                        (operand_size ty)
-                                                        (writable_zero_reg)
-                                                        reg
-                                                        imm)
-                                   (invalid_reg)))
+      (ProducesFlags.ProducesFlagsSideEffect
+       (MInst.AluRRImmLogic (ALUOp.AndS)
+                            (operand_size ty)
+                            (writable_zero_reg)
+                            reg
+                            imm)))
 
 ;; Helper for generating a `CSel` instruction.
 ;;
@@ -1596,8 +1616,9 @@
 (decl csel (Cond Reg Reg) ConsumesFlags)
 (rule (csel cond if_true if_false)
       (let ((dst WritableReg (temp_writable_reg $I64)))
-        (ConsumesFlags.ConsumesFlags (MInst.CSel dst cond if_true if_false)
-                                     (writable_reg_to_reg dst))))
+        (ConsumesFlags.ConsumesFlagsReturnsReg
+         (MInst.CSel dst cond if_true if_false)
+         dst)))
 
 ;; Helpers for generating `add` instructions.
 
@@ -1816,27 +1837,18 @@
 
 ;; Helpers for generating `rbit` instructions.
 
-(decl rbit32 (Reg) Reg)
-(rule (rbit32 x) (bit_rr (BitOp.RBit32) x))
-
-(decl rbit64 (Reg) Reg)
-(rule (rbit64 x) (bit_rr (BitOp.RBit64) x))
+(decl rbit (Type Reg) Reg)
+(rule (rbit ty x) (bit_rr (BitOp.RBit) ty x))
 
 ;; Helpers for generating `clz` instructions.
 
-(decl clz32 (Reg) Reg)
-(rule (clz32 x) (bit_rr (BitOp.Clz32) x))
-
-(decl clz64 (Reg) Reg)
-(rule (clz64 x) (bit_rr (BitOp.Clz64) x))
+(decl a64_clz (Type Reg) Reg)
+(rule (a64_clz ty x) (bit_rr (BitOp.Clz) ty x))
 
 ;; Helpers for generating `cls` instructions.
 
-(decl cls32 (Reg) Reg)
-(rule (cls32 x) (bit_rr (BitOp.Cls32) x))
-
-(decl cls64 (Reg) Reg)
-(rule (cls64 x) (bit_rr (BitOp.Cls64) x))
+(decl a64_cls (Type Reg) Reg)
+(rule (a64_cls ty x) (bit_rr (BitOp.Cls) ty x))
 
 ;; Helpers for generating `eon` instructions.
 
@@ -1876,36 +1888,36 @@
 ;; Place a `Value` into a register, sign extending it to 32-bits
 (decl put_in_reg_sext32 (Value) Reg)
 (rule (put_in_reg_sext32 val @ (value_type (fits_in_32 ty)))
-      (extend (put_in_reg val) $true (ty_bits ty) 32))
+      (extend val $true (ty_bits ty) 32))
 
 ;; 32/64-bit passthrough.
-(rule (put_in_reg_sext32 val @ (value_type $I32)) (put_in_reg val))
-(rule (put_in_reg_sext32 val @ (value_type $I64)) (put_in_reg val))
+(rule (put_in_reg_sext32 val @ (value_type $I32)) val)
+(rule (put_in_reg_sext32 val @ (value_type $I64)) val)
 
 ;; Place a `Value` into a register, zero extending it to 32-bits
 (decl put_in_reg_zext32 (Value) Reg)
 (rule (put_in_reg_zext32 val @ (value_type (fits_in_32 ty)))
-      (extend (put_in_reg val) $false (ty_bits ty) 32))
+      (extend val $false (ty_bits ty) 32))
 
 ;; 32/64-bit passthrough.
-(rule (put_in_reg_zext32 val @ (value_type $I32)) (put_in_reg val))
-(rule (put_in_reg_zext32 val @ (value_type $I64)) (put_in_reg val))
+(rule (put_in_reg_zext32 val @ (value_type $I32)) val)
+(rule (put_in_reg_zext32 val @ (value_type $I64)) val)
 
 ;; Place a `Value` into a register, sign extending it to 64-bits
 (decl put_in_reg_sext64 (Value) Reg)
 (rule (put_in_reg_sext64 val @ (value_type (fits_in_32 ty)))
-      (extend (put_in_reg val) $true (ty_bits ty) 64))
+      (extend val $true (ty_bits ty) 64))
 
 ;; 64-bit passthrough.
-(rule (put_in_reg_sext64 val @ (value_type $I64)) (put_in_reg val))
+(rule (put_in_reg_sext64 val @ (value_type $I64)) val)
 
 ;; Place a `Value` into a register, zero extending it to 64-bits
 (decl put_in_reg_zext64 (Value) Reg)
 (rule (put_in_reg_zext64 val @ (value_type (fits_in_32 ty)))
-      (extend (put_in_reg val) $false (ty_bits ty) 64))
+      (extend val $false (ty_bits ty) 64))
 
 ;; 64-bit passthrough.
-(rule (put_in_reg_zext64 val @ (value_type $I64)) (put_in_reg val))
+(rule (put_in_reg_zext64 val @ (value_type $I64)) val)
 
 ;; Misc instruction helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -2003,3 +2015,79 @@
         (value_regs
           (alu_rrr op ty x_lo y_lo)
           (alu_rrr op ty x_hi y_hi))))
+
+;; Float vector compare helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Match 32 bit float 0 value
+(decl zero_value_f32 (Ieee32) Ieee32)
+(extern extractor zero_value_f32 zero_value_f32)
+
+;; Match 64 bit float 0 value
+(decl zero_value_f64 (Ieee64) Ieee64)
+(extern extractor zero_value_f64 zero_value_f64)
+
+;; Generate comparison to zero operator from input condition code
+(decl float_cc_cmp_zero_to_vec_misc_op (FloatCC) VecMisc2)
+(extern constructor float_cc_cmp_zero_to_vec_misc_op float_cc_cmp_zero_to_vec_misc_op)
+
+(decl float_cc_cmp_zero_to_vec_misc_op_swap (FloatCC) VecMisc2)
+(extern constructor float_cc_cmp_zero_to_vec_misc_op_swap float_cc_cmp_zero_to_vec_misc_op_swap)
+
+;; Match valid generic compare to zero cases
+(decl fcmp_zero_cond (FloatCC) FloatCC)
+(extern extractor fcmp_zero_cond fcmp_zero_cond)
+
+;; Match not equal compare to zero separately as it requires two output instructions
+(decl fcmp_zero_cond_not_eq (FloatCC) FloatCC)
+(extern extractor fcmp_zero_cond_not_eq fcmp_zero_cond_not_eq)
+
+;; Helper for generating float compare to zero instructions where 2nd argument is zero
+(decl float_cmp_zero (FloatCC Reg VectorSize) Reg)
+(rule (float_cmp_zero cond rn size)
+      (vec_misc (float_cc_cmp_zero_to_vec_misc_op cond) rn size))
+
+;; Helper for generating float compare to zero instructions in case where 1st argument is zero
+(decl float_cmp_zero_swap (FloatCC Reg VectorSize) Reg)
+(rule (float_cmp_zero_swap cond rn size)
+      (vec_misc (float_cc_cmp_zero_to_vec_misc_op_swap cond) rn size))
+
+;; Helper for generating float compare equal to zero instruction
+(decl fcmeq0 (Reg VectorSize) Reg)
+(rule (fcmeq0 rn size)
+      (vec_misc (VecMisc2.Fcmeq0) rn size))
+
+;; Int vector compare helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Match integer 0 value
+(decl zero_value (Imm64) Imm64)
+(extern extractor zero_value zero_value)
+
+;; Generate comparison to zero operator from input condition code
+(decl int_cc_cmp_zero_to_vec_misc_op (IntCC) VecMisc2)
+(extern constructor int_cc_cmp_zero_to_vec_misc_op int_cc_cmp_zero_to_vec_misc_op)
+
+(decl int_cc_cmp_zero_to_vec_misc_op_swap (IntCC) VecMisc2)
+(extern constructor int_cc_cmp_zero_to_vec_misc_op_swap int_cc_cmp_zero_to_vec_misc_op_swap)
+
+;; Match valid generic compare to zero cases
+(decl icmp_zero_cond (IntCC) IntCC)
+(extern extractor icmp_zero_cond icmp_zero_cond)
+
+;; Match not equal compare to zero separately as it requires two output instructions
+(decl icmp_zero_cond_not_eq (IntCC) IntCC)
+(extern extractor icmp_zero_cond_not_eq icmp_zero_cond_not_eq)
+
+;; Helper for generating int compare to zero instructions where 2nd argument is zero
+(decl int_cmp_zero (IntCC Reg VectorSize) Reg)
+(rule (int_cmp_zero cond rn size)
+      (vec_misc (int_cc_cmp_zero_to_vec_misc_op cond) rn size))
+
+;; Helper for generating int compare to zero instructions in case where 1st argument is zero
+(decl int_cmp_zero_swap (IntCC Reg VectorSize) Reg)
+(rule (int_cmp_zero_swap cond rn size)
+      (vec_misc (int_cc_cmp_zero_to_vec_misc_op_swap cond) rn size))
+
+;; Helper for generating int compare equal to zero instruction
+(decl cmeq0 (Reg VectorSize) Reg)
+(rule (cmeq0 rn size)
+      (vec_misc (VecMisc2.Cmeq0) rn size))

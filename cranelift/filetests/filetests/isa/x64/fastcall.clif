@@ -288,7 +288,7 @@ block0(v0: i64):
 ;   Entry block: 0
 ; Block 0:
 ;   (original IR block: block0)
-;   (instruction range: 0 .. 87)
+;   (instruction range: 0 .. 85)
 ;   Inst 0:   pushq   %rbp
 ;   Inst 1:   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
 ;   Inst 2:   movq    %rsp, %rbp
@@ -314,13 +314,13 @@ block0(v0: i64):
 ;   Inst 22:   unwind SaveReg { clobber_offset: 128, reg: r14V }
 ;   Inst 23:   movdqu  %xmm15, 208(%rsp)
 ;   Inst 24:   unwind SaveReg { clobber_offset: 144, reg: r15V }
-;   Inst 25:   movsd   0(%rcx), %xmm4
-;   Inst 26:   movsd   8(%rcx), %xmm1
-;   Inst 27:   movsd   16(%rcx), %xmm0
-;   Inst 28:   movdqu  %xmm0, rsp(32 + virtual offset)
-;   Inst 29:   movsd   24(%rcx), %xmm3
-;   Inst 30:   movsd   32(%rcx), %xmm0
-;   Inst 31:   movdqu  %xmm0, rsp(48 + virtual offset)
+;   Inst 25:   movsd   0(%rcx), %xmm0
+;   Inst 26:   movdqu  %xmm0, rsp(48 + virtual offset)
+;   Inst 27:   movsd   8(%rcx), %xmm1
+;   Inst 28:   movsd   16(%rcx), %xmm0
+;   Inst 29:   movdqu  %xmm0, rsp(32 + virtual offset)
+;   Inst 30:   movsd   24(%rcx), %xmm3
+;   Inst 31:   movsd   32(%rcx), %xmm4
 ;   Inst 32:   movsd   40(%rcx), %xmm5
 ;   Inst 33:   movsd   48(%rcx), %xmm6
 ;   Inst 34:   movsd   56(%rcx), %xmm7
@@ -332,49 +332,47 @@ block0(v0: i64):
 ;   Inst 40:   movsd   104(%rcx), %xmm13
 ;   Inst 41:   movsd   112(%rcx), %xmm14
 ;   Inst 42:   movsd   120(%rcx), %xmm15
-;   Inst 43:   movsd   128(%rcx), %xmm0
-;   Inst 44:   movdqu  %xmm0, rsp(0 + virtual offset)
-;   Inst 45:   movsd   136(%rcx), %xmm0
-;   Inst 46:   movsd   144(%rcx), %xmm2
-;   Inst 47:   movdqu  %xmm2, rsp(16 + virtual offset)
-;   Inst 48:   movsd   152(%rcx), %xmm2
-;   Inst 49:   addsd   %xmm1, %xmm4
+;   Inst 43:   movsd   128(%rcx), %xmm2
+;   Inst 44:   movdqu  %xmm2, rsp(0 + virtual offset)
+;   Inst 45:   movsd   136(%rcx), %xmm2
+;   Inst 46:   movsd   144(%rcx), %xmm0
+;   Inst 47:   movdqu  %xmm0, rsp(16 + virtual offset)
+;   Inst 48:   movdqu  rsp(48 + virtual offset), %xmm0
+;   Inst 49:   addsd   %xmm1, %xmm0
 ;   Inst 50:   movdqu  rsp(32 + virtual offset), %xmm1
 ;   Inst 51:   addsd   %xmm3, %xmm1
-;   Inst 52:   movdqu  rsp(48 + virtual offset), %xmm3
-;   Inst 53:   addsd   %xmm5, %xmm3
-;   Inst 54:   addsd   %xmm7, %xmm6
-;   Inst 55:   addsd   %xmm9, %xmm8
-;   Inst 56:   addsd   %xmm11, %xmm10
-;   Inst 57:   addsd   %xmm13, %xmm12
-;   Inst 58:   addsd   %xmm15, %xmm14
-;   Inst 59:   movdqu  rsp(0 + virtual offset), %xmm5
-;   Inst 60:   addsd   %xmm0, %xmm5
-;   Inst 61:   movdqu  rsp(16 + virtual offset), %xmm0
-;   Inst 62:   addsd   %xmm2, %xmm0
-;   Inst 63:   addsd   %xmm1, %xmm4
-;   Inst 64:   addsd   %xmm6, %xmm3
-;   Inst 65:   addsd   %xmm10, %xmm8
-;   Inst 66:   addsd   %xmm14, %xmm12
-;   Inst 67:   addsd   %xmm0, %xmm5
-;   Inst 68:   addsd   %xmm3, %xmm4
-;   Inst 69:   addsd   %xmm12, %xmm8
-;   Inst 70:   addsd   %xmm8, %xmm4
-;   Inst 71:   addsd   %xmm5, %xmm4
-;   Inst 72:   movaps  %xmm4, %xmm0
-;   Inst 73:   movdqu  64(%rsp), %xmm6
-;   Inst 74:   movdqu  80(%rsp), %xmm7
-;   Inst 75:   movdqu  96(%rsp), %xmm8
-;   Inst 76:   movdqu  112(%rsp), %xmm9
-;   Inst 77:   movdqu  128(%rsp), %xmm10
-;   Inst 78:   movdqu  144(%rsp), %xmm11
-;   Inst 79:   movdqu  160(%rsp), %xmm12
-;   Inst 80:   movdqu  176(%rsp), %xmm13
-;   Inst 81:   movdqu  192(%rsp), %xmm14
-;   Inst 82:   movdqu  208(%rsp), %xmm15
-;   Inst 83:   addq    $224, %rsp
-;   Inst 84:   movq    %rbp, %rsp
-;   Inst 85:   popq    %rbp
-;   Inst 86:   ret
+;   Inst 52:   addsd   %xmm5, %xmm4
+;   Inst 53:   addsd   %xmm7, %xmm6
+;   Inst 54:   addsd   %xmm9, %xmm8
+;   Inst 55:   addsd   %xmm11, %xmm10
+;   Inst 56:   addsd   %xmm13, %xmm12
+;   Inst 57:   addsd   %xmm15, %xmm14
+;   Inst 58:   movdqu  rsp(0 + virtual offset), %xmm3
+;   Inst 59:   addsd   %xmm2, %xmm3
+;   Inst 60:   movdqu  rsp(16 + virtual offset), %xmm2
+;   Inst 61:   addsd   152(%rcx), %xmm2
+;   Inst 62:   addsd   %xmm1, %xmm0
+;   Inst 63:   addsd   %xmm6, %xmm4
+;   Inst 64:   addsd   %xmm10, %xmm8
+;   Inst 65:   addsd   %xmm14, %xmm12
+;   Inst 66:   addsd   %xmm2, %xmm3
+;   Inst 67:   addsd   %xmm4, %xmm0
+;   Inst 68:   addsd   %xmm12, %xmm8
+;   Inst 69:   addsd   %xmm8, %xmm0
+;   Inst 70:   addsd   %xmm3, %xmm0
+;   Inst 71:   movdqu  64(%rsp), %xmm6
+;   Inst 72:   movdqu  80(%rsp), %xmm7
+;   Inst 73:   movdqu  96(%rsp), %xmm8
+;   Inst 74:   movdqu  112(%rsp), %xmm9
+;   Inst 75:   movdqu  128(%rsp), %xmm10
+;   Inst 76:   movdqu  144(%rsp), %xmm11
+;   Inst 77:   movdqu  160(%rsp), %xmm12
+;   Inst 78:   movdqu  176(%rsp), %xmm13
+;   Inst 79:   movdqu  192(%rsp), %xmm14
+;   Inst 80:   movdqu  208(%rsp), %xmm15
+;   Inst 81:   addq    $224, %rsp
+;   Inst 82:   movq    %rbp, %rsp
+;   Inst 83:   popq    %rbp
+;   Inst 84:   ret
 ; }}
 

@@ -6,9 +6,9 @@ pub mod generated_code;
 // Types that the generated ISLE code uses via `use super::*`.
 use super::{
     writable_zero_reg, zero_reg, AMode, ASIMDFPModImm, ASIMDMovModImm, AtomicRmwOp, BranchTarget,
-    CallIndInfo, CallInfo, Cond, CondBrKind, ExtendOp, FPUOpRI, Imm12, ImmLogic, ImmShift,
-    Inst as MInst, JTSequenceInfo, MachLabel, MoveWideConst, NarrowValueMode, Opcode, OperandSize,
-    PairAMode, Reg, ScalarSize, ShiftOpAndAmt, UImm5, VectorSize, NZCV,
+    CallIndInfo, CallInfo, Cond, CondBrKind, ExtendOp, FPUOpRI, FloatCC, Imm12, ImmLogic, ImmShift,
+    Inst as MInst, IntCC, JTSequenceInfo, MachLabel, MoveWideConst, NarrowValueMode, Opcode,
+    OperandSize, PairAMode, Reg, ScalarSize, ShiftOpAndAmt, UImm5, VecMisc2, VectorSize, NZCV,
 };
 use crate::isa::aarch64::settings::Flags as IsaFlags;
 use crate::machinst::isle::*;
@@ -285,5 +285,106 @@ where
     fn rotr_opposite_amount(&mut self, ty: Type, val: ImmShift) -> ImmShift {
         let amount = val.value() & u8::try_from(ty.bits() - 1).unwrap();
         ImmShift::maybe_from_u64(u64::from(ty.bits()) - u64::from(amount)).unwrap()
+    }
+
+    fn icmp_zero_cond(&mut self, cond: &IntCC) -> Option<IntCC> {
+        match cond {
+            &IntCC::Equal
+            | &IntCC::SignedGreaterThanOrEqual
+            | &IntCC::SignedGreaterThan
+            | &IntCC::SignedLessThanOrEqual
+            | &IntCC::SignedLessThan => Some(*cond),
+            _ => None,
+        }
+    }
+
+    fn fcmp_zero_cond(&mut self, cond: &FloatCC) -> Option<FloatCC> {
+        match cond {
+            &FloatCC::Equal
+            | &FloatCC::GreaterThanOrEqual
+            | &FloatCC::GreaterThan
+            | &FloatCC::LessThanOrEqual
+            | &FloatCC::LessThan => Some(*cond),
+            _ => None,
+        }
+    }
+
+    fn fcmp_zero_cond_not_eq(&mut self, cond: &FloatCC) -> Option<FloatCC> {
+        match cond {
+            &FloatCC::NotEqual => Some(FloatCC::NotEqual),
+            _ => None,
+        }
+    }
+
+    fn icmp_zero_cond_not_eq(&mut self, cond: &IntCC) -> Option<IntCC> {
+        match cond {
+            &IntCC::NotEqual => Some(IntCC::NotEqual),
+            _ => None,
+        }
+    }
+
+    fn float_cc_cmp_zero_to_vec_misc_op(&mut self, cond: &FloatCC) -> VecMisc2 {
+        match cond {
+            &FloatCC::Equal => VecMisc2::Fcmeq0,
+            &FloatCC::GreaterThanOrEqual => VecMisc2::Fcmge0,
+            &FloatCC::LessThanOrEqual => VecMisc2::Fcmle0,
+            &FloatCC::GreaterThan => VecMisc2::Fcmgt0,
+            &FloatCC::LessThan => VecMisc2::Fcmlt0,
+            _ => panic!(),
+        }
+    }
+
+    fn int_cc_cmp_zero_to_vec_misc_op(&mut self, cond: &IntCC) -> VecMisc2 {
+        match cond {
+            &IntCC::Equal => VecMisc2::Cmeq0,
+            &IntCC::SignedGreaterThanOrEqual => VecMisc2::Cmge0,
+            &IntCC::SignedLessThanOrEqual => VecMisc2::Cmle0,
+            &IntCC::SignedGreaterThan => VecMisc2::Cmgt0,
+            &IntCC::SignedLessThan => VecMisc2::Cmlt0,
+            _ => panic!(),
+        }
+    }
+
+    fn float_cc_cmp_zero_to_vec_misc_op_swap(&mut self, cond: &FloatCC) -> VecMisc2 {
+        match cond {
+            &FloatCC::Equal => VecMisc2::Fcmeq0,
+            &FloatCC::GreaterThanOrEqual => VecMisc2::Fcmle0,
+            &FloatCC::LessThanOrEqual => VecMisc2::Fcmge0,
+            &FloatCC::GreaterThan => VecMisc2::Fcmlt0,
+            &FloatCC::LessThan => VecMisc2::Fcmgt0,
+            _ => panic!(),
+        }
+    }
+
+    fn int_cc_cmp_zero_to_vec_misc_op_swap(&mut self, cond: &IntCC) -> VecMisc2 {
+        match cond {
+            &IntCC::Equal => VecMisc2::Cmeq0,
+            &IntCC::SignedGreaterThanOrEqual => VecMisc2::Cmle0,
+            &IntCC::SignedLessThanOrEqual => VecMisc2::Cmge0,
+            &IntCC::SignedGreaterThan => VecMisc2::Cmlt0,
+            &IntCC::SignedLessThan => VecMisc2::Cmgt0,
+            _ => panic!(),
+        }
+    }
+
+    fn zero_value(&mut self, value: Imm64) -> Option<Imm64> {
+        if value.bits() == 0 {
+            return Some(value);
+        }
+        None
+    }
+
+    fn zero_value_f32(&mut self, value: Ieee32) -> Option<Ieee32> {
+        if value.bits() == 0 {
+            return Some(value);
+        }
+        None
+    }
+
+    fn zero_value_f64(&mut self, value: Ieee64) -> Option<Ieee64> {
+        if value.bits() == 0 {
+            return Some(value);
+        }
+        None
     }
 }

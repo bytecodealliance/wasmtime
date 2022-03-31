@@ -1,6 +1,6 @@
 [package]
 name = "wasi-cap-std-sync"
-version = "0.34.0"
+version = "0.35.0"
 authors = ["The Wasmtime Project Developers"]
 description = "WASI implementation in Rust"
 license = "Apache-2.0 WITH LLVM-exception"
@@ -12,7 +12,7 @@ edition = "2018"
 include = ["src/**/*", "README.md", "LICENSE" ]
 
 [dependencies]
-wasi-common = { path = "../", version = "=0.34.0" }
+wasi-common = { path = "../", version = "=0.35.0" }
 async-trait = "0.1"
 anyhow = "1.0"
 cap-std = "0.24.1"
@@ -26,7 +26,7 @@ io-lifetimes = { version = "0.5.0", default-features = false }
 is-terminal = "0.1.0"
 
 [target.'cfg(unix)'.dependencies]
-rustix = "0.33.0"
+rustix = "0.33.5"
 
 [target.'cfg(windows)'.dependencies]
 winapi = "0.3"

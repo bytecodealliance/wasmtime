@@ -354,12 +354,9 @@ fn test_pooling_allocator_initial_limits_exceeded() -> Result<()> {
     config.wasm_multi_memory(true);
     config.allocation_strategy(InstanceAllocationStrategy::Pooling {
         strategy: PoolingAllocationStrategy::NextAvailable,
-        module_limits: ModuleLimits {
-            memories: 2,
-            ..Default::default()
-        },
         instance_limits: InstanceLimits {
             count: 1,
+            memories: 2,
             ..Default::default()
         },
     });
@@ -727,12 +724,9 @@ fn custom_limiter_detect_grow_failure() -> Result<()> {
     let mut config = Config::new();
     config.allocation_strategy(InstanceAllocationStrategy::Pooling {
         strategy: PoolingAllocationStrategy::NextAvailable,
-        module_limits: ModuleLimits {
+        instance_limits: InstanceLimits {
             memory_pages: 10,
             table_elements: 10,
-            ..Default::default()
-        },
-        instance_limits: InstanceLimits {
             ..Default::default()
         },
     });
@@ -839,12 +833,9 @@ async fn custom_limiter_async_detect_grow_failure() -> Result<()> {
     config.async_support(true);
     config.allocation_strategy(InstanceAllocationStrategy::Pooling {
         strategy: PoolingAllocationStrategy::NextAvailable,
-        module_limits: ModuleLimits {
+        instance_limits: InstanceLimits {
             memory_pages: 10,
             table_elements: 10,
-            ..Default::default()
-        },
-        instance_limits: InstanceLimits {
             ..Default::default()
         },
     });

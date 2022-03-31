@@ -1262,7 +1262,8 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::BitRR {
-            op: BitOp::RBit32,
+            op: BitOp::RBit,
+            size: OperandSize::Size32,
             rd: writable_xreg(1),
             rn: xreg(10),
         },
@@ -1272,7 +1273,8 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::BitRR {
-            op: BitOp::RBit64,
+            op: BitOp::RBit,
+            size: OperandSize::Size64,
             rd: writable_xreg(1),
             rn: xreg(10),
         },
@@ -1282,7 +1284,8 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::BitRR {
-            op: BitOp::Clz32,
+            op: BitOp::Clz,
+            size: OperandSize::Size32,
             rd: writable_xreg(15),
             rn: xreg(3),
         },
@@ -1292,7 +1295,8 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::BitRR {
-            op: BitOp::Clz64,
+            op: BitOp::Clz,
+            size: OperandSize::Size64,
             rd: writable_xreg(15),
             rn: xreg(3),
         },
@@ -1302,7 +1306,8 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::BitRR {
-            op: BitOp::Cls32,
+            op: BitOp::Cls,
+            size: OperandSize::Size32,
             rd: writable_xreg(21),
             rn: xreg(16),
         },
@@ -1312,7 +1317,8 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::BitRR {
-            op: BitOp::Cls64,
+            op: BitOp::Cls,
+            size: OperandSize::Size64,
             rd: writable_xreg(21),
             rn: xreg(16),
         },
@@ -4514,13 +4520,112 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::VecMisc {
+            op: VecMisc2::Fcmeq0,
+            rd: writable_vreg(5),
+            rn: vreg(2),
+            size: VectorSize::Size32x4,
+        },
+        "45D8A04E",
+        "fcmeq v5.4s, v2.4s, #0.0",
+    ));
+
+    insns.push((
+        Inst::VecMisc {
+            op: VecMisc2::Fcmge0,
+            rd: writable_vreg(3),
+            rn: vreg(1),
+            size: VectorSize::Size64x2,
+        },
+        "23C8E06E",
+        "fcmge v3.2d, v1.2d, #0.0",
+    ));
+
+    insns.push((
+        Inst::VecMisc {
+            op: VecMisc2::Fcmgt0,
+            rd: writable_vreg(5),
+            rn: vreg(7),
+            size: VectorSize::Size32x4,
+        },
+        "E5C8A04E",
+        "fcmgt v5.4s, v7.4s, #0.0",
+    ));
+
+    insns.push((
+        Inst::VecMisc {
+            op: VecMisc2::Fcmle0,
+            rd: writable_vreg(10),
+            rn: vreg(2),
+            size: VectorSize::Size32x4,
+        },
+        "4AD8A06E",
+        "fcmle v10.4s, v2.4s, #0.0",
+    ));
+
+    insns.push((
+        Inst::VecMisc {
+            op: VecMisc2::Fcmlt0,
+            rd: writable_vreg(12),
+            rn: vreg(12),
+            size: VectorSize::Size64x2,
+        },
+        "8CE9E04E",
+        "fcmlt v12.2d, v12.2d, #0.0",
+    ));
+
+    insns.push((
+        Inst::VecMisc {
             op: VecMisc2::Cmeq0,
+            rd: writable_vreg(22),
+            rn: vreg(27),
+            size: VectorSize::Size16x8,
+        },
+        "769B604E",
+        "cmeq v22.8h, v27.8h, #0",
+    ));
+
+    insns.push((
+        Inst::VecMisc {
+            op: VecMisc2::Cmge0,
             rd: writable_vreg(12),
             rn: vreg(27),
             size: VectorSize::Size16x8,
         },
-        "6C9B604E",
-        "cmeq v12.8h, v27.8h, #0",
+        "6C8B606E",
+        "cmge v12.8h, v27.8h, #0",
+    ));
+
+    insns.push((
+        Inst::VecMisc {
+            op: VecMisc2::Cmgt0,
+            rd: writable_vreg(12),
+            rn: vreg(27),
+            size: VectorSize::Size8x16,
+        },
+        "6C8B204E",
+        "cmgt v12.16b, v27.16b, #0",
+    ));
+
+    insns.push((
+        Inst::VecMisc {
+            op: VecMisc2::Cmle0,
+            rd: writable_vreg(1),
+            rn: vreg(27),
+            size: VectorSize::Size32x4,
+        },
+        "619BA06E",
+        "cmle v1.4s, v27.4s, #0",
+    ));
+
+    insns.push((
+        Inst::VecMisc {
+            op: VecMisc2::Cmlt0,
+            rd: writable_vreg(0),
+            rn: vreg(7),
+            size: VectorSize::Size64x2,
+        },
+        "E0A8E04E",
+        "cmlt v0.2d, v7.2d, #0",
     ));
 
     insns.push((
@@ -6105,8 +6210,80 @@ fn test_aarch64_binemit() {
             ty: I16,
             op: inst_common::AtomicRmwOp::Xor,
         },
-        "3BFF5F487C031ACA3CFF1848B8FFFFB5",
-        "atomically { 16_bits_at_[x25]) Xor= x26 ; x27 = old_value_at_[x25]; x24,x28 = trash }",
+        "3BFF5F487C031A4A3CFF1848B8FFFFB5",
+        "1: ldaxrh w27, [x25]; eor w28, w27, w26; stlxrh w24, w28, [x25]; cbnz w24, 1b",
+    ));
+    insns.push((
+        Inst::AtomicRMWLoop {
+            ty: I8,
+            op: inst_common::AtomicRmwOp::Add,
+        },
+        "3BFF5F087C031A0B3CFF1808B8FFFFB5",
+        "1: ldaxrb w27, [x25]; add w28, w27, w26; stlxrb w24, w28, [x25]; cbnz w24, 1b",
+    ));
+    insns.push((
+        Inst::AtomicRMWLoop {
+            ty: I32,
+            op: inst_common::AtomicRmwOp::Or,
+        },
+        "3BFF5F887C031A2A3CFF1888B8FFFFB5",
+        "1: ldaxr w27, [x25]; orr w28, w27, w26; stlxr w24, w28, [x25]; cbnz w24, 1b",
+    ));
+    insns.push((
+        Inst::AtomicRMWLoop {
+            ty: I64,
+            op: inst_common::AtomicRmwOp::And,
+        },
+        "3BFF5FC87C031A8A3CFF18C8B8FFFFB5",
+        "1: ldaxr x27, [x25]; and x28, x27, x26; stlxr w24, x28, [x25]; cbnz w24, 1b",
+    ));
+    insns.push((
+        Inst::AtomicRMWLoop {
+            ty: I8,
+            op: inst_common::AtomicRmwOp::Xchg,
+        },
+        "3BFF5F083AFF1808D8FFFFB5",
+        "1: ldaxrb w27, [x25]; stlxrb w24, w26, [x25]; cbnz w24, 1b",
+    ));
+    insns.push((
+        Inst::AtomicRMWLoop {
+            ty: I16,
+            op: inst_common::AtomicRmwOp::Nand,
+        },
+        "3BFF5F487C031A0AFC033C2A3CFF184898FFFFB5",
+        "1: ldaxrh w27, [x25]; and w28, w27, w26; mvn w28, w28; stlxrh w24, w28, [x25]; cbnz w24, 1b",
+    ));
+    insns.push((
+        Inst::AtomicRMWLoop {
+            ty: I32,
+            op: inst_common::AtomicRmwOp::Smin,
+        },
+        "3BFF5F887F031A6B7CB39A9A3CFF188898FFFFB5",
+        "1: ldaxr w27, [x25]; cmp w27, w26; csel w28, w27, w26, lt; stlxr w24, w28, [x25]; cbnz w24, 1b",
+    ));
+    insns.push((
+        Inst::AtomicRMWLoop {
+            ty: I64,
+            op: inst_common::AtomicRmwOp::Smax,
+        },
+        "3BFF5FC87F031AEB7CC39A9A3CFF18C898FFFFB5",
+        "1: ldaxr x27, [x25]; cmp x27, x26; csel x28, x27, x26, gt; stlxr w24, x28, [x25]; cbnz w24, 1b",
+    ));
+    insns.push((
+        Inst::AtomicRMWLoop {
+            ty: I8,
+            op: inst_common::AtomicRmwOp::Umin,
+        },
+        "3BFF5F087F031A6B7C339A9A3CFF180898FFFFB5",
+        "1: ldaxrb w27, [x25]; cmp w27, w26; csel w28, w27, w26, lo; stlxrb w24, w28, [x25]; cbnz w24, 1b",
+    ));
+    insns.push((
+        Inst::AtomicRMWLoop {
+            ty: I16,
+            op: inst_common::AtomicRmwOp::Umax,
+        },
+        "3BFF5F487F031A6B7C839A9A3CFF184898FFFFB5",
+        "1: ldaxrh w27, [x25]; cmp w27, w26; csel w28, w27, w26, hi; stlxrh w24, w28, [x25]; cbnz w24, 1b",
     ));
 
     insns.push((
@@ -6462,14 +6639,6 @@ fn test_aarch64_binemit() {
         "lduminal x25, x26, [x27]",
     ));
 
-    insns.push((
-        Inst::AtomicRMWLoop {
-            ty: I32,
-            op: inst_common::AtomicRmwOp::Xchg,
-        },
-        "3BFF5F88FC031AAA3CFF1888B8FFFFB5",
-        "atomically { 32_bits_at_[x25]) Xchg= x26 ; x27 = old_value_at_[x25]; x24,x28 = trash }",
-    ));
     insns.push((
         Inst::AtomicCAS {
             rs: writable_xreg(28),

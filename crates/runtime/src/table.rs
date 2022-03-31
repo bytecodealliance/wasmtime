@@ -195,6 +195,14 @@ impl Table {
         Self::limit_new(plan, store)?;
         let size = plan.table.minimum;
         let ty = wasm_to_table_type(plan.table.wasm_ty)?;
+        if data.len() < (plan.table.minimum as usize) {
+            bail!(
+                "initial table size of {} exceeds the pooling allocator's \
+                 configured maximum table size of {} elements",
+                plan.table.minimum,
+                data.len(),
+            );
+        }
         let data = match plan.table.maximum {
             Some(max) if (max as usize) < data.len() => &mut data[..max as usize],
             _ => data,
