@@ -33,6 +33,7 @@ mod wast;
 
 /// A helper to compile a module in a new store with reference types enabled.
 pub(crate) fn ref_types_module(
+    use_epochs: bool,
     source: &str,
 ) -> anyhow::Result<(wasmtime::Store<()>, wasmtime::Module)> {
     use wasmtime::*;
@@ -41,9 +42,15 @@ pub(crate) fn ref_types_module(
 
     let mut config = Config::new();
     config.wasm_reference_types(true);
+    if use_epochs {
+        config.epoch_interruption(true);
+    }
 
     let engine = Engine::new(&config)?;
-    let store = Store::new(&engine, ());
+    let mut store = Store::new(&engine, ());
+    if use_epochs {
+        store.set_epoch_deadline(1);
+    }
 
     let module = Module::new(&engine, source)?;
 

@@ -17,6 +17,7 @@
 //! See the main module comment in `mod.rs` for more details on the VCode-based
 //! backend pipeline.
 
+use crate::fx::FxHashMap;
 use crate::ir::{self, types, Constant, ConstantData, SourceLoc};
 use crate::machinst::*;
 use crate::settings;
@@ -478,6 +479,19 @@ impl<I: VCodeInst> VCode<I> {
         let mut inst_end_offsets = vec![0; self.insts.len()];
         let mut label_inst_indices = vec![0; self.num_blocks()];
 
+        // Map from instruction index to index in
+        // `safepoint_slots`. We need this because we emit
+        // instructions out-of-order, while the safepoint_insns /
+        // safepoint_slots data structures are sorted in instruction
+        // order.
+        let mut safepoint_indices: FxHashMap<u32, usize> = FxHashMap::default();
+        for (safepoint_idx, iix) in self.safepoint_insns.iter().enumerate() {
+            // Disregard safepoints that ended up having no live refs.
+            if self.safepoint_slots[safepoint_idx].len() > 0 {
+                safepoint_indices.insert(*iix, safepoint_idx);
+            }
+        }
+
         // Construct the final order we emit code in: cold blocks at the end.
         let mut final_order: SmallVec<[BlockIndex; 16]> = smallvec![];
         let mut cold_blocks: SmallVec<[BlockIndex; 16]> = smallvec![];
@@ -493,7 +507,6 @@ impl<I: VCodeInst> VCode<I> {
         final_order.extend(cold_blocks.clone());
 
         // Emit blocks.
-        let mut safepoint_idx = 0;
         let mut cur_srcloc = None;
         let mut last_offset = None;
         let mut start_of_cold_code = None;
@@ -541,17 +554,11 @@ impl<I: VCodeInst> VCode<I> {
                 }
                 state.pre_sourceloc(cur_srcloc.unwrap_or(SourceLoc::default()));
 
-                if safepoint_idx < self.safepoint_insns.len()
-                    && self.safepoint_insns[safepoint_idx] == iix
-                {
-                    if self.safepoint_slots[safepoint_idx].len() > 0 {
-                        let stack_map = self.abi.spillslots_to_stack_map(
-                            &self.safepoint_slots[safepoint_idx][..],
-                            &state,
-                        );
-                        state.pre_safepoint(stack_map);
-                    }
-                    safepoint_idx += 1;
+                if let Some(safepoint_idx) = safepoint_indices.get(&iix) {
+                    let stack_map = self
+                        .abi
+                        .spillslots_to_stack_map(&self.safepoint_slots[*safepoint_idx][..], &state);
+                    state.pre_safepoint(stack_map);
                 }
 
                 self.insts[iix as usize].emit(&mut buffer, &self.emit_info, &mut state);
