@@ -117,3 +117,45 @@ After a patch release has been made you'll also want to double-check that the
 release notes on the patch branch are in sync with the `main` branch.
 
 [bump-version]: https://github.com/bytecodealliance/wasmtime/actions/workflows/bump-version.yml
+
+## Releasing a security patch
+
+When making a patch release that has a security-related fix the contents of the
+patch are often kept private until the day of the patch release which means that
+the process here is slightly different from the patch release process above. In
+addition the precise [runbook is currently under discussion in an
+RFC](https://github.com/bytecodealliance/rfcs/pull/20) for security patches, so
+this intends to document what we've been doing so far and it'll get updated when
+the runbook is merged.
+
+1. **The fix for the security issue is developed in a GitHub Security
+   Advisory**
+  * This will not have any CI run, it's recommended to run `./ci/run-tests.sh`
+    locally at least.
+  * This will also only be the patch for the `main` branch. You'll need to
+    locally maintain and develop patches for any older releases being backported
+    to. Note that from the major release process there should already be a
+    branch for all older releases.
+2. **Send a PR for the version bump when an email goes out announcing there will
+   be a security release**
+  * An email is sent to the bytecodealliance security mailing list ahead of a
+    patch release to announce that a patch release will happen. At this time you
+    should [trigger the version bump][ci-trigger] against the appropriate
+    `release-x.y.z` branch with the `release-patch` argument.
+  * This will send a PR, but you should not merge it. Instead use this PR and
+    the time ahead of the security release to fix any issues with CI. Older
+    `release-x.y.z` branches haven't run CI in awhile so they may need to
+    backport fixes of one variety or another.
+3. **Make the patches public**
+  * For the `main` branch this will involve simply publishing the GitHub
+    Security Advisory. Note that CI will run after the advisory's changes are
+    merged in on `main`.
+  * For the backported release branches you should either create a PR targeting
+    these branches or push the changes to the previous version-bump PRs.
+3. **Merge the version-bump PR**
+  * Like the patch release process this will kick everything else into motion.
+    Note that the actual security fixes should be merged either before or as
+    part of this PR.
+
+After a security release has been made you'll also want to double-check that
+the release notes on the branch are in sync with the `main` branch.
