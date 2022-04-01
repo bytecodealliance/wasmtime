@@ -145,7 +145,8 @@ the runbook is merged.
   * This will send a PR, but you should not merge it. Instead use this PR and
     the time ahead of the security release to fix any issues with CI. Older
     `release-x.y.z` branches haven't run CI in awhile so they may need to
-    backport fixes of one variety or another.
+    backport fixes of one variety or another. DO NOT include the actual fix for
+    the security issue into the PR, that comes in the next step.
 3. **Make the patches public**
   * For the `main` branch this will involve simply publishing the GitHub
     Security Advisory. Note that CI will run after the advisory's changes are
