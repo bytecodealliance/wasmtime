@@ -2553,17 +2553,17 @@
 
 ;; We also include widening vector loads; these sign- or zero-extend each lane
 ;; to the next wider width (e.g., 16x4 -> 32x4).
-(rule (lower (has_type $I8X8 (sload8x8 flags address offset)))
+(rule (lower (has_type $I16X8 (sload8x8 flags address offset)))
       (x64_pmovsxbw (to_amode flags address offset)))
-(rule (lower (has_type $I8X8 (uload8x8 flags address offset)))
+(rule (lower (has_type $I16X8 (uload8x8 flags address offset)))
       (x64_pmovzxbw (to_amode flags address offset)))
-(rule (lower (has_type $I16X4 (sload16x4 flags address offset)))
+(rule (lower (has_type $I32X4 (sload16x4 flags address offset)))
       (x64_pmovsxwd (to_amode flags address offset)))
-(rule (lower (has_type $I16X4 (uload16x4 flags address offset)))
+(rule (lower (has_type $I32X4 (uload16x4 flags address offset)))
       (x64_pmovzxwd (to_amode flags address offset)))
-(rule (lower (has_type $I32X2 (sload32x2 flags address offset)))
+(rule (lower (has_type $I64X2 (sload32x2 flags address offset)))
       (x64_pmovsxdq (to_amode flags address offset)))
-(rule (lower (has_type $I32X2 (uload32x2 flags address offset)))
+(rule (lower (has_type $I64X2 (uload32x2 flags address offset)))
       (x64_pmovzxdq (to_amode flags address offset)))
 
 ;; TODO: Multi-register loads (I128)

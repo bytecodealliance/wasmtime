@@ -215,10 +215,6 @@
 (extern const $F32X4 Type)
 (extern const $F64X2 Type)
 
-(extern const $I8X8 Type)
-(extern const $I16X4 Type)
-(extern const $I32X2 Type)
-
 ;; Get the bit width of a given type.
 (decl ty_bits (Type) u8)
 (extern constructor ty_bits ty_bits)
