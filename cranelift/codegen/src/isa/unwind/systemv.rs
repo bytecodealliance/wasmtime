@@ -1,8 +1,9 @@
 //! System V ABI unwind information.
 
-use crate::binemit::CodeOffset;
 use crate::isa::unwind::UnwindInst;
-use crate::result::{CodegenError, CodegenResult};
+use crate::machinst::Reg;
+use crate::result::CodegenResult;
+use crate::{binemit::CodeOffset, CodegenError};
 use alloc::vec::Vec;
 use gimli::write::{Address, FrameDescriptionEntry};
 
@@ -160,7 +161,7 @@ pub struct UnwindInfo {
     len: u32,
 }
 
-pub(crate) fn create_unwind_info_from_insts<MR: RegisterMapper<regalloc::Reg>>(
+pub(crate) fn create_unwind_info_from_insts<MR: RegisterMapper<Reg>>(
     insts: &[(CodeOffset, UnwindInst)],
     code_len: usize,
     mr: &MR,

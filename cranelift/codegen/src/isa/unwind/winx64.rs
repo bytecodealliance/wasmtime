@@ -262,7 +262,7 @@ impl UnwindInfo {
 
 const UNWIND_RBP_REG: u8 = 5;
 
-pub(crate) fn create_unwind_info_from_insts<MR: RegisterMapper<regalloc::Reg>>(
+pub(crate) fn create_unwind_info_from_insts<MR: RegisterMapper<crate::machinst::Reg>>(
     insts: &[(CodeOffset, UnwindInst)],
 ) -> CodegenResult<UnwindInfo> {
     let mut unwind_codes = vec![];

@@ -1,9 +1,6 @@
 //! Represents information relating to function unwinding.
 
-use regalloc::RealReg;
-
-#[cfg(feature = "enable-serde")]
-use serde::{Deserialize, Serialize};
+use crate::machinst::RealReg;
 
 #[cfg(feature = "unwind")]
 pub mod systemv;
@@ -13,7 +10,6 @@ pub mod winx64;
 
 /// Represents unwind information for a single function.
 #[derive(Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 #[non_exhaustive]
 pub enum UnwindInfo {
     /// Windows x64 ABI unwind information.
@@ -128,7 +124,6 @@ pub enum UnwindInfo {
 /// ...
 /// ```
 #[derive(Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub enum UnwindInst {
     /// The frame-pointer register for this architecture has just been pushed to
     /// the stack (and on architectures where return-addresses are not pushed by
