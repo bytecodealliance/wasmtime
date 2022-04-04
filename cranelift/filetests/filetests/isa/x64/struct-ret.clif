@@ -8,18 +8,13 @@ block0(v0: i64):
     return
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 8)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   movq    %rdi, %rax
-;   Inst 3:   movl    $42, %esi
-;   Inst 4:   movq    %rsi, 0(%rdi)
-;   Inst 5:   movq    %rbp, %rsp
-;   Inst 6:   popq    %rbp
-;   Inst 7:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %rax
+;   movl    $42, %edx
+;   movq    %rdx, 0(%rdi)
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 

@@ -9,15 +9,10 @@ block0(v0: i64, v1: i64):
     return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 5)
-;   Inst 0:   stp fp, lr, [sp, #-16]!
-;   Inst 1:   mov fp, sp
-;   Inst 2:   blr x1
-;   Inst 3:   ldp fp, lr, [sp], #16
-;   Inst 4:   ret
-; }}
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+; block0:
+;   blr x1
+;   ldp fp, lr, [sp], #16
+;   ret
 

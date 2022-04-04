@@ -1,4 +1,4 @@
-test compile
+test compile precise-output
 target s390x
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -11,7 +11,7 @@ block0:
   return
 }
 
-; check:  bcr 14, 0
-; nextln: br %r14
-
+; block0:
+;   bcr 14, 0
+;   br %r14
 

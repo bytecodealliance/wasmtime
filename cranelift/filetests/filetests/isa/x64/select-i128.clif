@@ -10,21 +10,18 @@ block0(v0: i32, v1: i128, v2: i128):
     return v5
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 11)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   movl    $42, %eax
-;   Inst 3:   cmpl    %eax, %edi
-;   Inst 4:   cmovzq  %rsi, %rcx
-;   Inst 5:   cmovzq  %rdx, %r8
-;   Inst 6:   movq    %rcx, %rax
-;   Inst 7:   movq    %r8, %rdx
-;   Inst 8:   movq    %rbp, %rsp
-;   Inst 9:   popq    %rbp
-;   Inst 10:   ret
-; }}
+;   v135 := v140
+;   v136 := v141
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movl    $42, %r9d
+;   cmpl    %r9d, %edi
+;   cmovzq  %rsi, %rcx, %rcx
+;   cmovzq  %rdx, %r8, %r8
+;   movq    %rcx, %rax
+;   movq    %r8, %rdx
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
