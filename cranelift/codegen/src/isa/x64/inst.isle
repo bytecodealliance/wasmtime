@@ -800,9 +800,9 @@
 ;;   if either a or b:
 ;;     matches (ishl c with shift amount <= 3):
 ;;       amode(base + offset + (c << amount))
-;;     matches (iconst c where c + offset will sign-extend to 64 bits):
+;;     matches (iconst c where c + offset will fit in 32 bits):
 ;;       amode(base + eval(c + offset))
-;;     matches (uextend (iconst c) where c + offset will sign-extend to 64 bits):
+;;     matches (uextend (iconst c) where c + offset will fit in 32 bits):
 ;;       amode(base + eval(c + offset))
 ;;   else:
 ;;     amode(a + offset + (b << 0))
