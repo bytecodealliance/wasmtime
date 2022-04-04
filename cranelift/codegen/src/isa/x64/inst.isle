@@ -318,7 +318,7 @@
                     (opcode Opcode))
 
        ;; Return.
-       (Ret)
+       (Ret (rets VecReg))
 
        ;; A placeholder instruction, generating no code, meaning that a function
        ;; epilogue must be inserted there.
@@ -476,13 +476,12 @@
        ;; `rax`.
        (MachOTlsGetAddr (symbol ExternalName))
 
-       ;; A definition of a value label.
-       (ValueLabelMarker (reg Reg)
-                         (label ValueLabel))
-
        ;; An unwind pseudoinstruction describing the state of the machine at
        ;; this program point.
-       (Unwind (inst UnwindInst))))
+       (Unwind (inst UnwindInst))
+
+       ;; A pseudoinstruction that just keeps a value alive.
+       (DummyUse (reg Reg))))
 
 (type OperandSize extern
       (enum Size8

@@ -17,9 +17,8 @@ use crate::{
     binemit::CodeOffset,
     ir::{
         immediates::*, types::*, ExternalName, Inst, InstructionData, MemFlags, TrapCode, Value,
-        ValueLabel, ValueList,
+        ValueList,
     },
-    isa::aarch64::inst::aarch64_map_regs,
     isa::aarch64::inst::args::{ShiftOp, ShiftOpShiftImm},
     isa::unwind::UnwindInst,
     machinst::{ty_bits, InsnOutput, LowerCtx},
@@ -45,15 +44,9 @@ pub(crate) fn lower<C>(
 where
     C: LowerCtx<I = MInst>,
 {
-    lower_common(
-        lower_ctx,
-        flags,
-        isa_flags,
-        outputs,
-        inst,
-        |cx, insn| generated_code::constructor_lower(cx, insn),
-        aarch64_map_regs,
-    )
+    lower_common(lower_ctx, flags, isa_flags, outputs, inst, |cx, insn| {
+        generated_code::constructor_lower(cx, insn)
+    })
 }
 
 pub struct ExtendedValue {
@@ -200,11 +193,7 @@ where
     }
 
     fn emit(&mut self, inst: &MInst) -> Unit {
-        self.emitted_insts.push((inst.clone(), false));
-    }
-
-    fn emit_safepoint(&mut self, inst: &MInst) -> Unit {
-        self.emitted_insts.push((inst.clone(), true));
+        self.lower_ctx.emit(inst.clone());
     }
 
     fn cond_br_zero(&mut self, reg: Reg) -> CondBrKind {
