@@ -330,7 +330,7 @@ where
     }
 
     #[inline]
-    fn small_const_shift(&mut self, shift_amount: Value) -> Option<u8> {
+    fn const_shift_lt_eq_3(&mut self, shift_amount: Value) -> Option<u8> {
         let input = self.lower_ctx.get_value_as_source_or_const(shift_amount);
         match input.constant {
             Some(shift_amount) if shift_amount <= 3 => Some(shift_amount as u8),

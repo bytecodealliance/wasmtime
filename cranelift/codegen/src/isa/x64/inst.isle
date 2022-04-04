@@ -780,8 +780,8 @@
 ;; A helper to check if a shift amount (the `Value`) is both constant and
 ;; less-than or equal to 3; this is needed since x64 can only shift addresses
 ;; using two bits.
-(decl small_const_shift (u8) Value)
-(extern extractor small_const_shift small_const_shift)
+(decl const_shift_lt_eq_3  (u8) Value)
+(extern extractor const_shift_lt_eq_3  const_shift_lt_eq_3 )
 
 ;; A helper to check if a constant offset value will fit into the 32-bit maximum
 ;; allowed by the x64 SIB encoding. (TODO re-document, this might not be the
@@ -792,25 +792,30 @@
 ;; To generate an address for a memory access, we can pattern-match various CLIF
 ;; sub-trees to x64's complex addressing modes (`Amode`). In pseudo-code:
 ;;
-;; if address matches iadd(a, b): if either a or b: matches (ishl c with shift
-;;   amount <= 3): amode(base + offset + c >> amount) matches (iconst c where c
-;;     will sign-extend to 64 bits): amode(base + (c + offset)) matches (uextend
-;;       (iconst c) where c will sign-extend to 64 bits): amode(base + (c +
-;;     offset)) else: amode(a + b + offset >> 0) else: amode(base + offset)
+;; if address matches iadd(a, b):
+;;   if either a or b:
+;;     matches (ishl c with shift amount <= 3):
+;;       amode(base + offset + (c << amount))
+;;     matches (iconst c where c + offset will sign-extend to 64 bits):
+;;       amode(base + eval(c + offset))
+;;     matches (uextend (iconst c) where c + offset will sign-extend to 64 bits):
+;;       amode(base + eval(c + offset))
+;;   else:
+;;     amode(a + offset + (b << 0))
+;; else:
+;;   amode(base + offset)
 ;;
 ;; The rules for `to_amode` correspond to a subset of the possible addressing
 ;; modes available by tweaking the SIB byte, the MOD bits, and the size of the
 ;; displacement (i.e., offset). More information is available in Intel's
 ;; Software Developer's Manual, volume 2, section 2.1.5, "Addressing-Mode
 ;; Encoding of ModR/M and SIB Bytes."
-;;
-;; TODO should this also handle `ishl_imm`?
 (decl to_amode (MemFlags Value Offset32) Amode)
 
 ;; ...matches (ishl c ...)
-(rule (to_amode flags (iadd (ishl src (small_const_shift amt)) base) offset)
+(rule (to_amode flags (iadd (ishl src (const_shift_lt_eq_3 amt)) base) offset)
       (amode_imm_reg_reg_shift_flags offset (put_in_gpr base) (put_in_gpr src) amt flags))
-(rule (to_amode flags (iadd base (ishl src (small_const_shift amt))) offset)
+(rule (to_amode flags (iadd base (ishl src (const_shift_lt_eq_3 amt))) offset)
       (amode_imm_reg_reg_shift_flags offset (put_in_gpr base) (put_in_gpr src) amt flags))
 ;; ...matches (iconst c ...)
 (rule (to_amode flags (iadd (iconst (low32_will_sign_extend_to_64 c)) base) offset)
