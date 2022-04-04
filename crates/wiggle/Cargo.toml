@@ -2,7 +2,7 @@
 name = "wiggle"
 version = "0.36.0"
 authors = ["Pat Hickey <phickey@fastly.com>", "Jakub Konka <kubkonk@jakubkonka.com>", "Alex Crichton <alex@alexcrichton.com>"]
-edition = "2018"
+edition = "2021"
 license = "Apache-2.0 WITH LLVM-exception"
 description = "Runtime components of wiggle code generator"
 categories = ["wasm"]

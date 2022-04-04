@@ -7,7 +7,7 @@ license = "Apache-2.0 WITH LLVM-exception"
 documentation = "https://docs.rs/cranelift-filetests"
 repository = "https://github.com/bytecodealliance/wasmtime"
 publish = false
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 cranelift-codegen = { path = "../codegen", version = "0.83.0", features = ["testing_hooks"] }

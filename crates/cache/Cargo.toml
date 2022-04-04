@@ -6,7 +6,7 @@ description = "Support for automatic module caching with Wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"
 repository = "https://github.com/bytecodealliance/wasmtime"
 documentation = "https://docs.rs/wasmtime-cache/"
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 anyhow = "1.0"

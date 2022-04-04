@@ -7,7 +7,7 @@ repository = "https://github.com/bytecodealliance/wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"
 readme = "README.md"
 keywords = ["webassembly", "serde"]
-edition = "2018"
+edition = "2021"
 
 [[bin]]
 name = "clif-json"

@@ -6,7 +6,7 @@ description = "Metaprogram for cranelift-codegen code generator library"
 license = "Apache-2.0 WITH LLVM-exception"
 repository = "https://github.com/bytecodealliance/wasmtime"
 readme = "README.md"
-edition = "2018"
+edition = "2021"
 
 # FIXME(rust-lang/cargo#9300): uncomment once that lands
 # [package.metadata.docs.rs]

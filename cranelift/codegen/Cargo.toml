@@ -10,7 +10,7 @@ categories = ["no-std"]
 readme = "README.md"
 keywords = ["compile", "compiler", "jit"]
 build = "build.rs"
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 cranelift-codegen-shared = { path = "./shared", version = "0.83.0" }

@@ -8,7 +8,7 @@ documentation = "https://docs.rs/cranelift-module"
 categories = ["no-std"]
 license = "Apache-2.0 WITH LLVM-exception"
 readme = "README.md"
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 cranelift-codegen = { path = "../codegen", version = "0.83.0", default-features = false }

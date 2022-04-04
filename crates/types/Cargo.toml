@@ -6,7 +6,7 @@ description = "WebAssembly type definitions for Cranelift"
 license = "Apache-2.0 WITH LLVM-exception"
 repository = "https://github.com/bytecodealliance/wasmtime"
 documentation = "https://docs.rs/wasmtime-types"
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 cranelift-entity = { path = "../../cranelift/entity", version = "0.83.0", features = ['enable-serde'] }

@@ -7,7 +7,7 @@ license = "Apache-2.0 WITH LLVM-exception"
 categories = ["wasm"]
 keywords = ["webassembly", "wasm"]
 repository = "https://github.com/bytecodealliance/wasmtime"
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 anyhow = "1.0.19"
