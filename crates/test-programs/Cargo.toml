@@ -3,7 +3,7 @@ name = "test-programs"
 version = "0.19.0"
 authors = ["The Wasmtime Project Developers"]
 readme = "README.md"
-edition = "2018"
+edition = "2021"
 publish = false
 license = "Apache-2.0 WITH LLVM-exception"
 

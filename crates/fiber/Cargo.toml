@@ -5,7 +5,7 @@ authors = ["The Wasmtime Project Developers"]
 description = "Fiber support for Wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"
 repository = "https://github.com/bytecodealliance/wasmtime"
-edition = "2018"
+edition = "2021"
 
 # We link to some native code with symbols that don't change often, so let Cargo
 # know that we can't show up multiple times in a crate graph. If this is an

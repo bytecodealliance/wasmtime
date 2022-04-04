@@ -9,7 +9,7 @@ categories = ["wasm", "computer-vision"]
 keywords = ["webassembly", "wasm", "neural-network"]
 repository = "https://github.com/bytecodealliance/wasmtime"
 readme = "README.md"
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 # These dependencies are necessary for the witx-generation macros to work:

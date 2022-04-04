@@ -7,7 +7,7 @@ license = "Apache-2.0 WITH LLVM-exception"
 documentation = "https://github.com/bytecodealliance/wasmtime/blob/main/cranelift/docs/index.md"
 repository = "https://github.com/bytecodealliance/wasmtime"
 publish = false
-edition = "2018"
+edition = "2021"
 
 [[bin]]
 name = "clif-util"

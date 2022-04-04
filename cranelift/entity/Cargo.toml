@@ -9,7 +9,7 @@ repository = "https://github.com/bytecodealliance/wasmtime"
 categories = ["no-std"]
 readme = "README.md"
 keywords = ["entity", "set", "map"]
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 serde = { version = "1.0.94", features = ["derive"], optional = true }

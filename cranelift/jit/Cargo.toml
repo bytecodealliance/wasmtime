@@ -7,7 +7,7 @@ repository = "https://github.com/bytecodealliance/wasmtime"
 documentation = "https://docs.rs/cranelift-jit"
 license = "Apache-2.0 WITH LLVM-exception"
 readme = "README.md"
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 cranelift-module = { path = "../module", version = "0.83.0" }
