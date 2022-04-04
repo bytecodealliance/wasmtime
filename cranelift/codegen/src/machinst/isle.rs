@@ -246,6 +246,14 @@ macro_rules! isle_prelude_methods {
         }
 
         #[inline]
+        fn ty_int_bool_ref_64(&mut self, ty: Type) -> Option<Type> {
+            match ty {
+                I64 | B64 | R64 => Some(ty),
+                _ => None,
+            }
+        }
+
+        #[inline]
         fn ty_int_bool_128(&mut self, ty: Type) -> Option<Type> {
             match ty {
                 I128 | B128 => Some(ty),
@@ -440,6 +448,12 @@ macro_rules! isle_prelude_methods {
         #[inline]
         fn lane_type(&mut self, ty: Type) -> Type {
             ty.lane_type()
+        }
+
+        #[inline]
+        fn offset32_to_u32(&mut self, offset: Offset32) -> u32 {
+            let offset: i32 = offset.into();
+            offset as u32
         }
     };
 }

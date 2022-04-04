@@ -12,7 +12,7 @@ use crate::{
         condcodes::{FloatCC, IntCC},
         immediates::*,
         types::*,
-        Inst, InstructionData, Opcode, TrapCode, Value, ValueLabel, ValueList,
+        Inst, InstructionData, MemFlags, Opcode, TrapCode, Value, ValueLabel, ValueList,
     },
     isa::{
         settings::Flags,
@@ -26,6 +26,7 @@ use crate::{
         isle::*, AtomicRmwOp, InsnInput, InsnOutput, LowerCtx, VCodeConstant, VCodeConstantData,
     },
 };
+use core::convert::TryInto;
 use std::convert::TryFrom;
 
 pub struct SinkableLoad {
@@ -314,8 +315,28 @@ where
     }
 
     #[inline]
+    fn amode_imm_reg(&mut self, simm32: u32, base: Gpr) -> Amode {
+        Amode::imm_reg(simm32, base.to_reg())
+    }
+
+    #[inline]
     fn amode_to_synthetic_amode(&mut self, amode: &Amode) -> SyntheticAmode {
         amode.clone().into()
+    }
+
+    #[inline]
+    fn small_const_shift(&mut self, shift_amount: Value) -> Option<u8> {
+        let input = self.lower_ctx.get_value_as_source_or_const(shift_amount);
+        match input.constant {
+            Some(shift_amount) if shift_amount <= 3 => Some(shift_amount as u8),
+            _ => None,
+        }
+    }
+
+    #[inline]
+    fn low32_will_sign_extend_to_64(&mut self, imm: Imm64) -> Option<u32> {
+        let xs: i64 = imm.into();
+        xs.try_into().ok()
     }
 
     #[inline]
