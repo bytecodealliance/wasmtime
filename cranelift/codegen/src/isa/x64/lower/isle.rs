@@ -339,12 +339,6 @@ where
     }
 
     #[inline]
-    fn low32_will_sign_extend_to_64(&mut self, imm: Imm64) -> Option<u32> {
-        let xs: i64 = imm.into();
-        xs.try_into().ok()
-    }
-
-    #[inline]
     fn writable_gpr_to_reg(&mut self, r: WritableGpr) -> WritableReg {
         r.to_writable_reg()
     }
@@ -544,6 +538,29 @@ where
     #[inline]
     fn intcc_to_cc(&mut self, intcc: &IntCC) -> CC {
         CC::from_intcc(*intcc)
+    }
+
+    #[inline]
+    fn sum_fits_in_32_bits(&mut self, offset: Offset32, constant_value: Imm64) -> Option<u32> {
+        let offset: i64 = offset.into();
+        let constant_value: i64 = constant_value.into();
+        let sum = offset.wrapping_add(constant_value);
+        sum.try_into().ok()
+    }
+
+    #[inline]
+    fn sum_extend_fits_in_32_bits(
+        &mut self,
+        offset: Offset32,
+        ty: Type,
+        constant_value: Imm64,
+    ) -> Option<u32> {
+        let offset: i64 = offset.into();
+        let constant_value: u64 = constant_value.bits().try_into().unwrap();
+        let shift = 64 - ty.bits();
+        let zero_extended_constant_value = (constant_value << shift) >> shift;
+        let sum = offset.wrapping_add(zero_extended_constant_value as i64);
+        sum.try_into().ok()
     }
 }
 
