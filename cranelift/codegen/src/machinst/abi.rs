@@ -5,7 +5,6 @@ use crate::ir::{Signature, StackSlot};
 use crate::isa::CallConv;
 use crate::machinst::*;
 use crate::settings;
-use regalloc::{Reg, Set, SpillSlot, Writable};
 use smallvec::SmallVec;
 
 /// A small vector of instructions (with some reasonable size); appropriate for
@@ -41,12 +40,6 @@ pub trait ABICallee {
 
     /// Get the calling convention implemented by this ABI object.
     fn call_conv(&self) -> CallConv;
-
-    /// Get the liveins of the function.
-    fn liveins(&self) -> Set<RealReg>;
-
-    /// Get the liveouts of the function.
-    fn liveouts(&self) -> Set<RealReg>;
 
     /// Number of arguments.
     fn num_args(&self) -> usize;
@@ -106,7 +99,7 @@ pub trait ABICallee {
     fn set_num_spillslots(&mut self, slots: usize);
 
     /// Update with the clobbered registers, post-regalloc.
-    fn set_clobbered(&mut self, clobbered: Set<Writable<RealReg>>);
+    fn set_clobbered(&mut self, clobbered: Vec<Writable<RealReg>>);
 
     /// Get the address of a stackslot.
     fn stackslot_addr(&self, slot: StackSlot, offset: u32, into_reg: Writable<Reg>) -> Self::I;

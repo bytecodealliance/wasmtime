@@ -125,6 +125,7 @@
 
 use super::abi::*;
 use crate::binemit::StackMap;
+use crate::fx::FxHashSet;
 use crate::ir::types::*;
 use crate::ir::{ArgumentExtension, ArgumentPurpose, StackSlot};
 use crate::machinst::*;
@@ -132,7 +133,6 @@ use crate::settings;
 use crate::CodegenResult;
 use crate::{ir, isa};
 use alloc::vec::Vec;
-use regalloc::{RealReg, Reg, RegClass, Set, SpillSlot, Writable};
 use smallvec::{smallvec, SmallVec};
 use std::convert::TryFrom;
 use std::marker::PhantomData;
@@ -257,16 +257,6 @@ pub enum ArgsOrRets {
     Rets,
 }
 
-/// Is an instruction returned by an ABI machine-specific backend a safepoint,
-/// or not?
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum InstIsSafepoint {
-    /// The instruction is a safepoint.
-    Yes,
-    /// The instruction is not a safepoint.
-    No,
-}
-
 /// Abstract location for a machine-specific ABI impl to translate into the
 /// appropriate addressing mode.
 #[derive(Clone, Copy, Debug)]
@@ -319,11 +309,7 @@ pub trait ABIMachineSpec {
 
     /// Returns word register class.
     fn word_reg_class() -> RegClass {
-        match Self::word_bits() {
-            32 => RegClass::I32,
-            64 => RegClass::I64,
-            _ => unreachable!(),
-        }
+        RegClass::Int
     }
 
     /// Returns required stack alignment in bytes.
@@ -366,7 +352,7 @@ pub trait ABIMachineSpec {
     ) -> Self::I;
 
     /// Generate a return instruction.
-    fn gen_ret() -> Self::I;
+    fn gen_ret(rets: Vec<Reg>) -> Self::I;
 
     /// Generate an "epilogue placeholder" instruction, recognized by lowering
     /// when using the Baldrdash ABI.
@@ -442,7 +428,7 @@ pub trait ABIMachineSpec {
     /// contains the registers in a sorted order.
     fn get_clobbered_callee_saves(
         call_conv: isa::CallConv,
-        regs: &Set<Writable<RealReg>>,
+        regs: &Vec<Writable<RealReg>>,
     ) -> Vec<Writable<RealReg>>;
 
     /// Determine whether it is necessary to generate the usual frame-setup
@@ -478,7 +464,7 @@ pub trait ABIMachineSpec {
     fn gen_clobber_restore(
         call_conv: isa::CallConv,
         flags: &settings::Flags,
-        clobbers: &Set<Writable<RealReg>>,
+        clobbers: &Vec<Writable<RealReg>>,
         fixed_frame_storage_size: u32,
         outgoing_args_size: u32,
     ) -> SmallVec<[Self::I; 16]>;
@@ -493,7 +479,7 @@ pub trait ABIMachineSpec {
         tmp: Writable<Reg>,
         callee_conv: isa::CallConv,
         callee_conv: isa::CallConv,
-    ) -> SmallVec<[(InstIsSafepoint, Self::I); 2]>;
+    ) -> SmallVec<[Self::I; 2]>;
 
     /// Generate a memcpy invocation. Used to set up struct args. May clobber
     /// caller-save registers; we only memcpy before we start to set up args for
@@ -530,6 +516,7 @@ pub trait ABIMachineSpec {
 }
 
 /// ABI information shared between body (callee) and caller.
+#[derive(Clone)]
 struct ABISig {
     /// Argument locations (regs or stack slots). Stack offsets are relative to
     /// SP on entry to function.
@@ -604,7 +591,7 @@ pub struct ABICalleeImpl<M: ABIMachineSpec> {
     /// Stack size to be reserved for outgoing arguments.
     outgoing_args_size: u32,
     /// Clobbered registers, from regalloc.
-    clobbered: Set<Writable<RealReg>>,
+    clobbered: Vec<Writable<RealReg>>,
     /// Total number of spillslots, from regalloc.
     spillslots: Option<usize>,
     /// Storage allocated for the fixed part of the stack frame.  This is
@@ -659,17 +646,6 @@ fn get_special_purpose_param_register(
             _ => None,
         },
         _ => None,
-    }
-}
-
-fn ty_from_class(class: RegClass) -> Type {
-    match class {
-        RegClass::I32 => I32,
-        RegClass::I64 => I64,
-        RegClass::F32 => F32,
-        RegClass::F64 => F64,
-        RegClass::V128 => I8X16,
-        _ => panic!("Unknown regclass: {:?}", class),
     }
 }
 
@@ -739,7 +715,7 @@ impl<M: ABIMachineSpec> ABICalleeImpl<M> {
             stackslots,
             stackslots_size: stack_offset,
             outgoing_args_size: 0,
-            clobbered: Set::empty(),
+            clobbered: vec![],
             spillslots: None,
             fixed_frame_storage_size: 0,
             total_frame_size: None,
@@ -961,34 +937,6 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         self.sig.call_conv
     }
 
-    fn liveins(&self) -> Set<RealReg> {
-        let mut set: Set<RealReg> = Set::empty();
-        for arg in &self.sig.args {
-            if let &ABIArg::Slots { ref slots, .. } = arg {
-                for slot in slots {
-                    if let ABIArgSlot::Reg { reg, .. } = slot {
-                        set.insert(*reg);
-                    }
-                }
-            }
-        }
-        set
-    }
-
-    fn liveouts(&self) -> Set<RealReg> {
-        let mut set: Set<RealReg> = Set::empty();
-        for ret in &self.sig.rets {
-            if let &ABIArg::Slots { ref slots, .. } = ret {
-                for slot in slots {
-                    if let ABIArgSlot::Reg { reg, .. } = slot {
-                        set.insert(*reg);
-                    }
-                }
-            }
-        }
-        set
-    }
-
     fn num_args(&self) -> usize {
         self.sig.args.len()
     }
@@ -1118,7 +1066,7 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
                                 (ArgumentExtension::Uext, n) | (ArgumentExtension::Sext, n)
                                     if n < word_bits =>
                                 {
-                                    assert_eq!(M::word_reg_class(), from_reg.to_reg().get_class());
+                                    assert_eq!(M::word_reg_class(), from_reg.to_reg().class());
                                     let signed = ext == ArgumentExtension::Sext;
                                     ret.push(M::gen_extend(
                                         Writable::from_reg(from_reg.to_reg()),
@@ -1166,7 +1114,22 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
     }
 
     fn gen_ret(&self) -> Self::I {
-        M::gen_ret()
+        let mut rets = vec![];
+        for ret in &self.sig.rets {
+            match ret {
+                ABIArg::Slots { slots, .. } => {
+                    for slot in slots {
+                        match slot {
+                            ABIArgSlot::Reg { reg, .. } => rets.push(reg.to_reg()),
+                            _ => {}
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        M::gen_ret(rets)
     }
 
     fn gen_epilogue_placeholder(&self) -> Self::I {
@@ -1177,7 +1140,7 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         self.spillslots = Some(slots);
     }
 
-    fn set_clobbered(&mut self, clobbered: Set<Writable<RealReg>>) {
+    fn set_clobbered(&mut self, clobbered: Vec<Writable<RealReg>>) {
         self.clobbered = clobbered;
     }
 
@@ -1198,7 +1161,7 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         into_regs: ValueRegs<Writable<Reg>>,
     ) -> SmallInstVec<Self::I> {
         // Offset from beginning of spillslot area, which is at nominal SP + stackslots_size.
-        let islot = slot.get() as i64;
+        let islot = slot.index() as i64;
         let spill_off = islot * M::word_bytes() as i64;
         let sp_off = self.stackslots_size as i64 + spill_off;
         log::trace!("load_spillslot: slot {:?} -> sp_off {}", slot, sp_off);
@@ -1214,7 +1177,7 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         from_regs: ValueRegs<Reg>,
     ) -> SmallInstVec<Self::I> {
         // Offset from beginning of spillslot area, which is at nominal SP + stackslots_size.
-        let islot = slot.get() as i64;
+        let islot = slot.index() as i64;
         let spill_off = islot * M::word_bytes() as i64;
         let sp_off = self.stackslots_size as i64 + spill_off;
         log::trace!("store_spillslot: slot {:?} -> sp_off {}", slot, sp_off);
@@ -1245,7 +1208,7 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         let first_spillslot_word =
             ((self.stackslots_size + virtual_sp_offset as u32) / bytes) as usize;
         for &slot in slots {
-            let slot = slot.get() as usize;
+            let slot = slot.index();
             bits[first_spillslot_word + slot] = true;
         }
 
@@ -1347,7 +1310,10 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
                 insts.extend(M::gen_epilogue_frame_restore(&self.flags));
             }
 
-            insts.push(M::gen_ret());
+            // This `ret` doesn't need any return registers attached
+            // because we are post-regalloc and don't need to
+            // represent the implicit uses anymore.
+            insts.push(M::gen_ret(vec![]));
         }
 
         log::trace!("Epilogue: {:?}", insts);
@@ -1368,7 +1334,7 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
     }
 
     fn gen_spill(&self, to_slot: SpillSlot, from_reg: RealReg) -> Self::I {
-        let ty = ty_from_class(from_reg.to_reg().get_class());
+        let ty = Self::I::type_for_rc(from_reg.to_reg().class());
         self.store_spillslot(to_slot, ty, ValueRegs::one(from_reg.to_reg()))
             .into_iter()
             .next()
@@ -1376,7 +1342,7 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
     }
 
     fn gen_reload(&self, to_reg: Writable<RealReg>, from_slot: SpillSlot) -> Self::I {
-        let ty = ty_from_class(to_reg.to_reg().get_class());
+        let ty = Self::I::type_for_rc(to_reg.to_reg().class());
         self.load_spillslot(
             from_slot,
             ty,
@@ -1390,13 +1356,13 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
 
 fn abisig_to_uses_and_defs<M: ABIMachineSpec>(sig: &ABISig) -> (Vec<Reg>, Vec<Writable<Reg>>) {
     // Compute uses: all arg regs.
-    let mut uses = Vec::new();
+    let mut uses = FxHashSet::default();
     for arg in &sig.args {
         if let &ABIArg::Slots { ref slots, .. } = arg {
             for slot in slots {
                 match slot {
                     &ABIArgSlot::Reg { reg, .. } => {
-                        uses.push(reg.to_reg());
+                        uses.insert(reg.to_reg());
                     }
                     _ => {}
                 }
@@ -1405,19 +1371,26 @@ fn abisig_to_uses_and_defs<M: ABIMachineSpec>(sig: &ABISig) -> (Vec<Reg>, Vec<Wr
     }
 
     // Compute defs: all retval regs, and all caller-save (clobbered) regs.
-    let mut defs = M::get_regs_clobbered_by_call(sig.call_conv);
+    let mut defs: FxHashSet<_> = M::get_regs_clobbered_by_call(sig.call_conv)
+        .into_iter()
+        .collect();
     for ret in &sig.rets {
         if let &ABIArg::Slots { ref slots, .. } = ret {
             for slot in slots {
                 match slot {
                     &ABIArgSlot::Reg { reg, .. } => {
-                        defs.push(Writable::from_reg(reg.to_reg()));
+                        defs.insert(Writable::from_reg(reg.to_reg()));
                     }
                     _ => {}
                 }
             }
         }
     }
+
+    let mut uses = uses.into_iter().collect::<Vec<_>>();
+    let mut defs = defs.into_iter().collect::<Vec<_>>();
+    uses.sort_unstable();
+    defs.sort_unstable();
 
     (uses, defs)
 }
@@ -1567,7 +1540,7 @@ impl<M: ABIMachineSpec> ABICaller for ABICallerImpl<M> {
                         } => {
                             let ext = M::get_ext_mode(self.sig.call_conv, extension);
                             if ext != ir::ArgumentExtension::None && ty_bits(ty) < word_bits {
-                                assert_eq!(word_rc, reg.get_class());
+                                assert_eq!(word_rc, reg.class());
                                 let signed = match ext {
                                     ir::ArgumentExtension::Uext => false,
                                     ir::ArgumentExtension::Sext => true,
@@ -1597,7 +1570,7 @@ impl<M: ABIMachineSpec> ABICaller for ABICallerImpl<M> {
                             let mut ty = ty;
                             let ext = M::get_ext_mode(self.sig.call_conv, extension);
                             if ext != ir::ArgumentExtension::None && ty_bits(ty) < word_bits {
-                                assert_eq!(word_rc, from_reg.get_class());
+                                assert_eq!(word_rc, from_reg.class());
                                 let signed = match ext {
                                     ir::ArgumentExtension::Uext => false,
                                     ir::ArgumentExtension::Sext => true,
@@ -1716,7 +1689,7 @@ impl<M: ABIMachineSpec> ABICaller for ABICallerImpl<M> {
             self.emit_copy_regs_to_arg(ctx, i, ValueRegs::one(rd.to_reg()));
         }
         let tmp = ctx.alloc_tmp(word_type).only_reg().unwrap();
-        for (is_safepoint, inst) in M::gen_call(
+        for inst in M::gen_call(
             &self.dest,
             uses,
             defs,
@@ -1727,10 +1700,7 @@ impl<M: ABIMachineSpec> ABICaller for ABICallerImpl<M> {
         )
         .into_iter()
         {
-            match is_safepoint {
-                InstIsSafepoint::Yes => ctx.emit_safepoint(inst),
-                InstIsSafepoint::No => ctx.emit(inst),
-            }
+            ctx.emit(inst);
         }
     }
 }
