@@ -127,6 +127,9 @@ pub enum LoweredBlock {
         /// to the next, i.e., corresponding to the included edge-block. This
         /// will be an instruction in `block`.
         edge_inst: Inst,
+        /// The successor index in this edge, to distinguish multiple
+        /// edges between the same block pair.
+        succ_idx: usize,
         /// The successor CLIF block.
         succ: Block,
     },
@@ -138,6 +141,9 @@ pub enum LoweredBlock {
         /// The edge (jump) instruction corresponding to the included
         /// edge-block. This will be an instruction in `pred`.
         edge_inst: Inst,
+        /// The successor index in this edge, to distinguish multiple
+        /// edges between the same block pair.
+        succ_idx: usize,
         /// The original CLIF block included in this lowered block.
         block: Block,
     },
@@ -150,6 +156,9 @@ pub enum LoweredBlock {
         /// The edge (jump) instruction corresponding to this edge's transition.
         /// This will be an instruction in `pred`.
         edge_inst: Inst,
+        /// The successor index in this edge, to distinguish multiple
+        /// edges between the same block pair.
+        succ_idx: usize,
         /// The successor CLIF block.
         succ: Block,
     },
@@ -168,29 +177,34 @@ impl LoweredBlock {
     }
 
     /// The associated in-edge, if any.
+    #[cfg(test)]
     pub fn in_edge(self) -> Option<(Block, Inst, Block)> {
         match self {
             LoweredBlock::EdgeAndOrig {
                 pred,
                 edge_inst,
                 block,
+                ..
             } => Some((pred, edge_inst, block)),
             _ => None,
         }
     }
 
     /// the associated out-edge, if any. Also includes edge-only blocks.
+    #[cfg(test)]
     pub fn out_edge(self) -> Option<(Block, Inst, Block)> {
         match self {
             LoweredBlock::OrigAndEdge {
                 block,
                 edge_inst,
                 succ,
+                ..
             } => Some((block, edge_inst, succ)),
             LoweredBlock::Edge {
                 pred,
                 edge_inst,
                 succ,
+                ..
             } => Some((pred, edge_inst, succ)),
             _ => None,
         }
@@ -207,15 +221,17 @@ impl BlockLoweringOrder {
         let mut block_out_count = SecondaryMap::with_default(0);
 
         // Cache the block successors to avoid re-examining branches below.
-        let mut block_succs: SmallVec<[(Inst, Block); 128]> = SmallVec::new();
+        let mut block_succs: SmallVec<[(Inst, usize, Block); 128]> = SmallVec::new();
         let mut block_succ_range = SecondaryMap::with_default((0, 0));
         let mut fallthrough_return_block = None;
         for block in f.layout.blocks() {
             let block_succ_start = block_succs.len();
+            let mut succ_idx = 0;
             visit_block_succs(f, block, |inst, succ| {
                 block_out_count[block] += 1;
                 block_in_count[succ] += 1;
-                block_succs.push((inst, succ));
+                block_succs.push((inst, succ_idx, succ));
+                succ_idx += 1;
             });
             let block_succ_end = block_succs.len();
             block_succ_range[block] = (block_succ_start, block_succ_end);
@@ -262,13 +278,14 @@ impl BlockLoweringOrder {
                     // At an orig block; successors are always edge blocks,
                     // possibly with orig blocks following.
                     let range = block_succ_range[block];
-                    for &(edge_inst, succ) in &block_succs[range.0..range.1] {
+                    for &(edge_inst, succ_idx, succ) in &block_succs[range.0..range.1] {
                         if block_in_count[succ] == 1 {
                             ret.push((
                                 edge_inst,
                                 LoweredBlock::EdgeAndOrig {
                                     pred: block,
                                     edge_inst,
+                                    succ_idx,
                                     block: succ,
                                 },
                             ));
@@ -278,6 +295,7 @@ impl BlockLoweringOrder {
                                 LoweredBlock::Edge {
                                     pred: block,
                                     edge_inst,
+                                    succ_idx,
                                     succ,
                                 },
                             ));
@@ -298,12 +316,13 @@ impl BlockLoweringOrder {
                         // implicit return succ).
                         if range.1 - range.0 > 0 {
                             debug_assert!(range.1 - range.0 == 1);
-                            let (succ_edge_inst, succ_succ) = block_succs[range.0];
+                            let (succ_edge_inst, succ_succ_idx, succ_succ) = block_succs[range.0];
                             ret.push((
                                 edge_inst,
                                 LoweredBlock::OrigAndEdge {
                                     block: succ,
                                     edge_inst: succ_edge_inst,
+                                    succ_idx: succ_succ_idx,
                                     succ: succ_succ,
                                 },
                             ));
@@ -395,7 +414,7 @@ impl BlockLoweringOrder {
         let mut lowered_succ_ranges = vec![];
         let mut lb_to_bindex = FxHashMap::default();
         for (block, succ_range) in rpo.into_iter() {
-            let index = lowered_order.len() as BlockIndex;
+            let index = BlockIndex::new(lowered_order.len());
             lb_to_bindex.insert(block, index);
             lowered_order.push(block);
             lowered_succ_ranges.push(succ_range);
@@ -416,7 +435,7 @@ impl BlockLoweringOrder {
 
         let mut orig_map = SecondaryMap::with_default(None);
         for (i, lb) in lowered_order.iter().enumerate() {
-            let i = i as BlockIndex;
+            let i = BlockIndex::new(i);
             if let Some(b) = lb.orig_block() {
                 orig_map[b] = Some(i);
             }
@@ -441,7 +460,7 @@ impl BlockLoweringOrder {
 
     /// Get the successor indices for a lowered block.
     pub fn succ_indices(&self, block: BlockIndex) -> &[(Inst, BlockIndex)] {
-        let range = self.lowered_succ_ranges[block as usize];
+        let range = self.lowered_succ_ranges[block.index()];
         &self.lowered_succ_indices[range.0..range.1]
     }
 
