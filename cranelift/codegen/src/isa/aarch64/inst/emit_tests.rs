@@ -27,7 +27,7 @@ fn test_aarch64_binemit() {
     // Then:
     //
     //      $ echo "mov x1, x2" | aarch64inst.sh
-    insns.push((Inst::Ret, "C0035FD6", "ret"));
+    insns.push((Inst::Ret { rets: vec![] }, "C0035FD6", "ret"));
     insns.push((Inst::Nop0, "", "nop-zero-len"));
     insns.push((Inst::Nop4, "1F2003D5", "nop"));
     insns.push((
@@ -1631,7 +1631,7 @@ fn test_aarch64_binemit() {
             flags: MemFlags::trusted(),
         },
         "E18040F8",
-        "ldur x1, [x7, #8]",
+        "ldr x1, [x7, #8]",
     ));
 
     insns.push((
@@ -6794,7 +6794,6 @@ fn test_aarch64_binemit() {
     insns.push((Inst::Fence {}, "BF3B03D5", "dmb ish"));
 
     let flags = settings::Flags::new(settings::builder());
-    let rru = create_reg_universe(&flags);
     let emit_info = EmitInfo::new(flags);
     for (insn, expected_encoding, expected_printing) in insns {
         println!(
@@ -6803,11 +6802,12 @@ fn test_aarch64_binemit() {
         );
 
         // Check the printed text is as expected.
-        let actual_printing = insn.show_rru(Some(&rru));
+        let actual_printing =
+            insn.print_with_state(&mut EmitState::default(), &mut AllocationConsumer::new(&[]));
         assert_eq!(expected_printing, actual_printing);
 
         let mut buffer = MachBuffer::new();
-        insn.emit(&mut buffer, &emit_info, &mut Default::default());
+        insn.emit(&[], &mut buffer, &emit_info, &mut Default::default());
         let buffer = buffer.finish();
         let actual_encoding = &buffer.stringify_code_bytes();
         assert_eq!(expected_encoding, actual_encoding);

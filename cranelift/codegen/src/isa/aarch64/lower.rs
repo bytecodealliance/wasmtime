@@ -7,21 +7,18 @@
 //!
 //! - Floating-point immediates (FIMM instruction).
 
+use super::lower_inst;
+use crate::data_value::DataValue;
 use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::ir::types::*;
 use crate::ir::Inst as IRInst;
 use crate::ir::{Opcode, Type, Value};
-use crate::machinst::lower::*;
-use crate::machinst::*;
-use crate::{CodegenError, CodegenResult};
-
 use crate::isa::aarch64::inst::*;
 use crate::isa::aarch64::AArch64Backend;
-
-use super::lower_inst;
-
-use crate::data_value::DataValue;
-use regalloc::{Reg, Writable};
+use crate::machinst::lower::*;
+use crate::machinst::*;
+use crate::machinst::{Reg, Writable};
+use crate::{CodegenError, CodegenResult};
 use smallvec::SmallVec;
 use std::cmp;
 

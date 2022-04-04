@@ -1,26 +1,21 @@
 //! Lower a single Cranelift instruction into vcode.
 
+use super::lower::*;
 use crate::binemit::CodeOffset;
 use crate::ir::condcodes::FloatCC;
 use crate::ir::types::*;
 use crate::ir::Inst as IRInst;
 use crate::ir::{InstructionData, Opcode, TrapCode};
+use crate::isa::aarch64::abi::*;
+use crate::isa::aarch64::inst::*;
 use crate::isa::aarch64::settings as aarch64_settings;
 use crate::machinst::lower::*;
 use crate::machinst::*;
 use crate::settings::{Flags, TlsModel};
 use crate::{CodegenError, CodegenResult};
-
-use crate::isa::aarch64::abi::*;
-use crate::isa::aarch64::inst::*;
-
-use regalloc::Writable;
-
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::convert::TryFrom;
-
-use super::lower::*;
 
 /// Actually codegen an instruction's results into registers.
 pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
@@ -766,7 +761,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::Trap | Opcode::ResumableTrap => {
             let trap_code = ctx.data(insn).trap_code().unwrap();
-            ctx.emit_safepoint(Inst::Udf { trap_code });
+            ctx.emit(Inst::Udf { trap_code });
         }
 
         Opcode::Trapif | Opcode::Trapff => {
@@ -797,7 +792,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 cond
             };
 
-            ctx.emit_safepoint(Inst::TrapIf {
+            ctx.emit(Inst::TrapIf {
                 trap_code,
                 kind: CondBrKind::Cond(cond),
             });
@@ -1507,35 +1502,34 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let lane_type = ty.lane_type();
             let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
 
-            let mut match_long_pair =
-                |ext_low_op, ext_high_op| -> Option<(VecRRPairLongOp, regalloc::Reg)> {
-                    if let Some(lhs) = maybe_input_insn(ctx, inputs[0], ext_low_op) {
-                        if let Some(rhs) = maybe_input_insn(ctx, inputs[1], ext_high_op) {
-                            let lhs_inputs = insn_inputs(ctx, lhs);
-                            let rhs_inputs = insn_inputs(ctx, rhs);
-                            let low = put_input_in_reg(ctx, lhs_inputs[0], NarrowValueMode::None);
-                            let high = put_input_in_reg(ctx, rhs_inputs[0], NarrowValueMode::None);
-                            if low == high {
-                                match (lane_type, ext_low_op) {
-                                    (I16, Opcode::SwidenLow) => {
-                                        return Some((VecRRPairLongOp::Saddlp8, low))
-                                    }
-                                    (I32, Opcode::SwidenLow) => {
-                                        return Some((VecRRPairLongOp::Saddlp16, low))
-                                    }
-                                    (I16, Opcode::UwidenLow) => {
-                                        return Some((VecRRPairLongOp::Uaddlp8, low))
-                                    }
-                                    (I32, Opcode::UwidenLow) => {
-                                        return Some((VecRRPairLongOp::Uaddlp16, low))
-                                    }
-                                    _ => (),
-                                };
-                            }
+            let mut match_long_pair = |ext_low_op, ext_high_op| -> Option<(VecRRPairLongOp, Reg)> {
+                if let Some(lhs) = maybe_input_insn(ctx, inputs[0], ext_low_op) {
+                    if let Some(rhs) = maybe_input_insn(ctx, inputs[1], ext_high_op) {
+                        let lhs_inputs = insn_inputs(ctx, lhs);
+                        let rhs_inputs = insn_inputs(ctx, rhs);
+                        let low = put_input_in_reg(ctx, lhs_inputs[0], NarrowValueMode::None);
+                        let high = put_input_in_reg(ctx, rhs_inputs[0], NarrowValueMode::None);
+                        if low == high {
+                            match (lane_type, ext_low_op) {
+                                (I16, Opcode::SwidenLow) => {
+                                    return Some((VecRRPairLongOp::Saddlp8, low))
+                                }
+                                (I32, Opcode::SwidenLow) => {
+                                    return Some((VecRRPairLongOp::Saddlp16, low))
+                                }
+                                (I16, Opcode::UwidenLow) => {
+                                    return Some((VecRRPairLongOp::Uaddlp8, low))
+                                }
+                                (I32, Opcode::UwidenLow) => {
+                                    return Some((VecRRPairLongOp::Uaddlp16, low))
+                                }
+                                _ => (),
+                            };
                         }
                     }
-                    None
-                };
+                }
+                None
+            };
 
             if let Some((op, rn)) = match_long_pair(Opcode::SwidenLow, Opcode::SwidenHigh) {
                 ctx.emit(Inst::VecRRPairLong { op, rd, rn });
