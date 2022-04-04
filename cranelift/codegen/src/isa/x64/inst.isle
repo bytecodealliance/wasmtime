@@ -760,11 +760,22 @@
 
 (type Amode extern (enum))
 
+(decl amode_with_flags (Amode MemFlags) Amode)
+(extern constructor amode_with_flags amode_with_flags)
+
 (decl amode_imm_reg (u32 Gpr) Amode)
 (extern constructor amode_imm_reg amode_imm_reg)
 
+(decl amode_imm_reg_flags (u32 Gpr MemFlags) Amode)
+(rule (amode_imm_reg_flags offset base flags)
+      (amode_with_flags (amode_imm_reg offset base) flags))
+
 (decl amode_imm_reg_reg_shift (u32 Gpr Gpr u8) Amode)
 (extern constructor amode_imm_reg_reg_shift amode_imm_reg_reg_shift)
+
+(decl amode_imm_reg_reg_shift_flags (u32 Gpr Gpr u8 MemFlags) Amode)
+(rule (amode_imm_reg_reg_shift_flags offset base index shift flags)
+      (amode_with_flags (amode_imm_reg_reg_shift offset base index shift) flags))
 
 ;; A helper to check if a shift amount (the `Value`) is both constant and
 ;; less-than or equal to 3; this is needed since x64 can only shift addresses
@@ -798,25 +809,25 @@
 
 ;; ...matches (ishl c ...)
 (rule (to_amode flags (iadd (ishl src (small_const_shift amt)) base) offset)
-      (amode_imm_reg_reg_shift offset (put_in_gpr base) (put_in_gpr src) amt))
+      (amode_imm_reg_reg_shift_flags offset (put_in_gpr base) (put_in_gpr src) amt flags))
 (rule (to_amode flags (iadd base (ishl src (small_const_shift amt))) offset)
-      (amode_imm_reg_reg_shift offset (put_in_gpr base) (put_in_gpr src) amt))
+      (amode_imm_reg_reg_shift_flags offset (put_in_gpr base) (put_in_gpr src) amt flags))
 ;; ...matches (iconst c ...)
 (rule (to_amode flags (iadd (iconst (low32_will_sign_extend_to_64 c)) base) offset)
-      (amode_imm_reg (u32_add offset c) (put_in_gpr base)))
+      (amode_imm_reg_flags (u32_add offset c) (put_in_gpr base) flags))
 (rule (to_amode flags (iadd base (iconst (low32_will_sign_extend_to_64 c))) offset)
-      (amode_imm_reg (u32_add offset c) (put_in_gpr base)))
+      (amode_imm_reg_flags (u32_add offset c) (put_in_gpr base) flags))
 ;; ...matches (uextend(iconst c) ...)
 (rule (to_amode flags (iadd (uextend (iconst (low32_will_sign_extend_to_64 c))) base) offset)
-      (amode_imm_reg (u32_add offset c) (put_in_gpr base)))
+      (amode_imm_reg_flags (u32_add offset c) (put_in_gpr base) flags))
 (rule (to_amode flags (iadd base (uextend (iconst (low32_will_sign_extend_to_64 c)))) offset)
-      (amode_imm_reg (u32_add offset c) (put_in_gpr base)))
+      (amode_imm_reg_flags (u32_add offset c) (put_in_gpr base) flags))
 ;; ...else only matches (iadd(a b))
 (rule (to_amode flags (iadd base index) offset)
-      (amode_imm_reg_reg_shift offset (put_in_gpr base) (put_in_gpr index) 0))
+      (amode_imm_reg_reg_shift_flags offset (put_in_gpr base) (put_in_gpr index) 0 flags))
 ;; ...else
 (rule (to_amode flags base offset)
-      (amode_imm_reg offset (put_in_gpr base)))
+      (amode_imm_reg_flags offset (put_in_gpr base) flags))
 
 ;; Shift kinds.
 

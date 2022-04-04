@@ -320,6 +320,11 @@ where
     }
 
     #[inline]
+    fn amode_with_flags(&mut self, amode: &Amode, flags: MemFlags) -> Amode {
+        amode.with_flags(flags)
+    }
+
+    #[inline]
     fn amode_to_synthetic_amode(&mut self, amode: &Amode) -> SyntheticAmode {
         amode.clone().into()
     }
