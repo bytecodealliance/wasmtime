@@ -1,6 +1,6 @@
 [package]
 name = "wasi-common"
-version = "0.36.0"
+version = "0.37.0"
 authors = ["The Wasmtime Project Developers"]
 description = "WASI implementation in Rust"
 license = "Apache-2.0 WITH LLVM-exception"
@@ -20,7 +20,7 @@ links = "wasi-common-19"
 [dependencies]
 anyhow = "1.0"
 thiserror = "1.0"
-wiggle = { path = "../wiggle", default-features = false, version = "=0.36.0" }
+wiggle = { path = "../wiggle", default-features = false, version = "=0.37.0" }
 tracing = "0.1.19"
 cap-std = "0.24.1"
 cap-rand = "0.24.1"
