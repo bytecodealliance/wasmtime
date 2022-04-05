@@ -9,6 +9,21 @@ Unreleased.
 * Support for epoch-based interruption has been added to the C API.
   [#3925](https://github.com/bytecodealliance/wasmtime/pull/3925)
 
+* Support for disabling libunwind-based backtraces of WebAssembly code at
+  compile time has been added.
+  [#3932](https://github.com/bytecodealliance/wasmtime/pull/3932)
+
+* Async support for call hooks has been added to optionally execute "blocking"
+  work whenever a wasm module is entered or exited relative to the host.
+  [#3876](https://github.com/bytecodealliance/wasmtime/pull/3876)
+
+### Fixed
+
+* Loading a `Module` will now check, at runtime, that the compilation settings
+  enabled in a `Config` are compatible with the native host. For example this
+  ensures that if avx2 is enabled that the host actually has avx2 support.
+  [#3899](https://github.com/bytecodealliance/wasmtime/pull/3899)
+
 ### Removed
 
 * Support for `Config::interruptable` and `InterruptHandle` has been removed
@@ -16,7 +31,20 @@ Unreleased.
   interruption instead.
   [#3925](https://github.com/bytecodealliance/wasmtime/pull/3925)
 
+* The module linking implementation of Wasmtime has been removed to make room
+  for the upcoming support for the component model.
+  [#3958](https://github.com/bytecodealliance/wasmtime/pull/3958)
+
 --------------------------------------------------------------------------------
+
+## 0.35.2
+
+Released 2022-03-31.
+
+### Security Fixes
+
+* [CVE-2022-24791](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-gwc9-348x-qwv2):
+  Fixed a use after free with `externref`s and epoch interruption.
 
 ## 0.35.1
 
@@ -95,6 +123,15 @@ Released 2022-03-07.
   [#3799](https://github.com/bytecodealliance/wasmtime/pull/3799)
 
 --------------------------------------------------------------------------------
+
+## 0.34.2
+
+Released 2022-03-31.
+
+### Security Fixes
+
+* [CVE-2022-24791](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-gwc9-348x-qwv2):
+  Fixed a use after free with `externref`s and epoch interruption.
 
 ## 0.34.1
 
