@@ -1,12 +1,18 @@
-# The purpose of this workflow is to, once a month, trigger Wasmtime's release
-# process. All that actually happens here is that whenever this is triggered it
-# will send a PR to the main repository with the version numbers automatically
-# bumped. The next stage of the process is to simply merge the PR, and the
-# `push-tag.yml` process takes over from there.
+# The purpose of this workflow is to orchestrate Wasmtime's release process as
+# much as possible. This specific workflow is responsible for a few timed parts
+# of the process:
 #
-# Note that this creates a commit and a PR with a personal access token to
-# ensure that the PR gets CI triggered on it. Additionally the commit message
-# is specifically worded to get recognized by `push-tag.yml`.
+# * On the 5th of every month a new release branch is automatically created and
+#   the version number of the `main` branch is increased
+# * On the 20th of every month the previous release branch is published.
+#
+# This automation is all done through PRs except for the creation of the release
+# branch itself which is an write-action performed by this script. Otherwise
+# humans are ideally reviewing and rubber-stamping the output of the script all
+# other steps of the way.
+#
+# Note that this script also helps manage patch releases by sending a PR to the
+# release branch with a bumped version number for all crates with a patch-bump.
 
 name: "Automated Release Process"
 on:
@@ -18,8 +24,7 @@ on:
     - cron: '0 0 20 * *'
 
   # Allow manually triggering this request via the button at
-  # https://github.com/bytecodealliance/wasmtime/actions/workflows/bump-version.yml
-  # TODO
+  # https://github.com/bytecodealliance/wasmtime/actions/workflows/release-process.yml
   workflow_dispatch:
     inputs:
       action:
