@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-wasi-nn"
-version = "0.36.0"
+version = "0.37.0"
 authors = ["The Wasmtime Project Developers"]
 description = "Wasmtime implementation of the wasi-nn API"
 documentation = "https://docs.rs/wasmtime-wasi-nn"
@@ -14,7 +14,7 @@ edition = "2021"
 [dependencies]
 # These dependencies are necessary for the witx-generation macros to work:
 anyhow = "1.0"
-wiggle = { path = "../wiggle", version = "=0.36.0" }
+wiggle = { path = "../wiggle", version = "=0.37.0" }
 
 # These dependencies are necessary for the wasi-nn implementation:
 openvino = { version = "0.3.3", features = ["runtime-linking"] }
