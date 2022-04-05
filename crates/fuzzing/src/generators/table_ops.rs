@@ -95,9 +95,9 @@ impl TableOps {
 
         // Import the GC function.
         let mut imports = ImportSection::new();
-        imports.import("", Some("gc"), EntityType::Function(0));
-        imports.import("", Some("take_refs"), EntityType::Function(2));
-        imports.import("", Some("make_refs"), EntityType::Function(3));
+        imports.import("", "gc", EntityType::Function(0));
+        imports.import("", "take_refs", EntityType::Function(2));
+        imports.import("", "make_refs", EntityType::Function(3));
 
         // Define our table.
         let mut tables = TableSection::new();
@@ -422,10 +422,12 @@ mod tests {
       global.get 0
       call 1
       br 0 (;@1;)
-    end)
+    end
+  )
   (table (;0;) 20 externref)
   (global (;0;) (mut externref) ref.null extern)
-  (export "run" (func 3)))
+  (export "run" (func 3))
+)
 "#;
         eprintln!("expected WAT = {}", expected);
 

@@ -542,8 +542,7 @@ impl Module {
     ///
     /// [binary]: https://webassembly.github.io/spec/core/binary/index.html
     pub fn validate(engine: &Engine, binary: &[u8]) -> Result<()> {
-        let mut validator = Validator::new();
-        validator.wasm_features(engine.config().features);
+        let mut validator = Validator::new_with_features(engine.config().features);
 
         let mut functions = Vec::new();
         for payload in Parser::new(0).parse_all(binary) {

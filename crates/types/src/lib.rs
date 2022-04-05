@@ -29,8 +29,6 @@ pub enum WasmType {
     FuncRef,
     /// ExternRef type
     ExternRef,
-    /// ExnRef type
-    ExnRef,
 }
 
 impl TryFrom<wasmparser::Type> for WasmType {
@@ -45,11 +43,6 @@ impl TryFrom<wasmparser::Type> for WasmType {
             V128 => Ok(WasmType::V128),
             FuncRef => Ok(WasmType::FuncRef),
             ExternRef => Ok(WasmType::ExternRef),
-            ExnRef => Ok(WasmType::ExnRef),
-            EmptyBlockType | Func => Err(WasmError::InvalidWebAssembly {
-                message: "unexpected value type".to_string(),
-                offset: 0,
-            }),
         }
     }
 }
@@ -64,7 +57,6 @@ impl From<WasmType> for wasmparser::Type {
             WasmType::V128 => wasmparser::Type::V128,
             WasmType::FuncRef => wasmparser::Type::FuncRef,
             WasmType::ExternRef => wasmparser::Type::ExternRef,
-            WasmType::ExnRef => wasmparser::Type::ExnRef,
         }
     }
 }
@@ -79,7 +71,6 @@ impl fmt::Display for WasmType {
             WasmType::V128 => write!(f, "v128"),
             WasmType::ExternRef => write!(f, "externref"),
             WasmType::FuncRef => write!(f, "funcref"),
-            WasmType::ExnRef => write!(f, "exnref"),
         }
     }
 }
@@ -356,8 +347,10 @@ pub struct Tag {
 
 impl From<wasmparser::TagType> for Tag {
     fn from(ty: wasmparser::TagType) -> Tag {
-        Tag {
-            ty: TypeIndex::from_u32(ty.type_index),
+        match ty.kind {
+            wasmparser::TagKind::Exception => Tag {
+                ty: TypeIndex::from_u32(ty.func_type_idx),
+            },
         }
     }
 }

@@ -8,9 +8,8 @@
 
 use crate::state::FuncTranslationState;
 use crate::{
-    DataIndex, ElemIndex, EntityType, FuncIndex, Global, GlobalIndex, Memory, MemoryIndex,
-    SignatureIndex, Table, TableIndex, Tag, TagIndex, TypeIndex, WasmError, WasmFuncType,
-    WasmResult, WasmType,
+    DataIndex, ElemIndex, FuncIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex,
+    Table, TableIndex, Tag, TagIndex, TypeIndex, WasmError, WasmFuncType, WasmResult, WasmType,
 };
 use core::convert::From;
 use cranelift_codegen::cursor::FuncCursor;
@@ -531,22 +530,6 @@ pub trait ModuleEnvironment<'data> {
     /// Declares a function signature to the environment.
     fn declare_type_func(&mut self, wasm_func_type: WasmFuncType) -> WasmResult<()>;
 
-    /// Declares a module type signature to the environment.
-    fn declare_type_module(
-        &mut self,
-        imports: &[(&'data str, Option<&'data str>, EntityType)],
-        exports: &[(&'data str, EntityType)],
-    ) -> WasmResult<()> {
-        drop((imports, exports));
-        Err(WasmError::Unsupported("module linking".to_string()))
-    }
-
-    /// Declares an instance type signature to the environment.
-    fn declare_type_instance(&mut self, exports: &[(&'data str, EntityType)]) -> WasmResult<()> {
-        drop(exports);
-        Err(WasmError::Unsupported("module linking".to_string()))
-    }
-
     /// Translates a type index to its signature index, only called for type
     /// indices which point to functions.
     fn type_to_signature(&self, index: TypeIndex) -> WasmResult<SignatureIndex> {
@@ -565,7 +548,7 @@ pub trait ModuleEnvironment<'data> {
         &mut self,
         index: TypeIndex,
         module: &'data str,
-        field: Option<&'data str>,
+        field: &'data str,
     ) -> WasmResult<()>;
 
     /// Declares a table import to the environment.
@@ -573,7 +556,7 @@ pub trait ModuleEnvironment<'data> {
         &mut self,
         table: Table,
         module: &'data str,
-        field: Option<&'data str>,
+        field: &'data str,
     ) -> WasmResult<()>;
 
     /// Declares a memory import to the environment.
@@ -581,7 +564,7 @@ pub trait ModuleEnvironment<'data> {
         &mut self,
         memory: Memory,
         module: &'data str,
-        field: Option<&'data str>,
+        field: &'data str,
     ) -> WasmResult<()>;
 
     /// Declares an tag import to the environment.
@@ -589,7 +572,7 @@ pub trait ModuleEnvironment<'data> {
         &mut self,
         tag: Tag,
         module: &'data str,
-        field: Option<&'data str>,
+        field: &'data str,
     ) -> WasmResult<()> {
         drop((tag, module, field));
         Err(WasmError::Unsupported("wasm tags".to_string()))
@@ -600,19 +583,8 @@ pub trait ModuleEnvironment<'data> {
         &mut self,
         global: Global,
         module: &'data str,
-        field: Option<&'data str>,
+        field: &'data str,
     ) -> WasmResult<()>;
-
-    /// Declares a module import to the environment.
-    fn declare_module_import(
-        &mut self,
-        ty_index: TypeIndex,
-        module: &'data str,
-        field: Option<&'data str>,
-    ) -> WasmResult<()> {
-        drop((ty_index, module, field));
-        Err(WasmError::Unsupported("module linking".to_string()))
-    }
 
     /// Notifies the implementation that all imports have been declared.
     fn finish_imports(&mut self) -> WasmResult<()> {
