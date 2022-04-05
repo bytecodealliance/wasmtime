@@ -24,7 +24,7 @@ wasmtime = { path = "../wasmtime", default-features = false, features = ['cranel
 wasmtime-c-api-macros = { path = "macros" }
 
 # Optional dependency for the `wat2wasm` API
-wat = { version = "1.0.36", optional = true }
+wat = { version = "1.0.42", optional = true }
 
 # Optional dependencies for the `wasi` feature
 wasi-cap-std-sync = { path = "../wasi-common/cap-std-sync", optional = true }

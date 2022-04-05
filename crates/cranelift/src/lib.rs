@@ -184,7 +184,6 @@ fn value_type(isa: &dyn TargetIsa, ty: WasmType) -> ir::types::Type {
         WasmType::F64 => ir::types::F64,
         WasmType::V128 => ir::types::I8X16,
         WasmType::FuncRef | WasmType::ExternRef => reference_type(ty, isa.pointer_type()),
-        WasmType::ExnRef => unimplemented!(),
     }
 }
 

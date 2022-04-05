@@ -289,7 +289,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
                 WasmType::F32 => ir::types::F32,
                 WasmType::F64 => ir::types::F64,
                 WasmType::V128 => ir::types::I8X16,
-                WasmType::ExnRef | WasmType::FuncRef | WasmType::ExternRef => ir::types::R64,
+                WasmType::FuncRef | WasmType::ExternRef => ir::types::R64,
             },
         })
     }
@@ -685,7 +685,7 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
                 WasmType::F32 => ir::types::F32,
                 WasmType::F64 => ir::types::F64,
                 WasmType::V128 => ir::types::I8X16,
-                WasmType::FuncRef | WasmType::ExternRef | WasmType::ExnRef => reference_type,
+                WasmType::FuncRef | WasmType::ExternRef => reference_type,
             })
         };
         sig.params.extend(wasm.params().iter().map(&mut cvt));
@@ -698,7 +698,7 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
         &mut self,
         index: TypeIndex,
         module: &'data str,
-        field: Option<&'data str>,
+        field: &'data str,
     ) -> WasmResult<()> {
         assert_eq!(
             self.info.functions.len(),
@@ -708,7 +708,7 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
         self.info.functions.push(Exportable::new(index));
         self.info
             .imported_funcs
-            .push((String::from(module), String::from(field.unwrap())));
+            .push((String::from(module), String::from(field)));
         Ok(())
     }
 
@@ -726,12 +726,12 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
         &mut self,
         global: Global,
         module: &'data str,
-        field: Option<&'data str>,
+        field: &'data str,
     ) -> WasmResult<()> {
         self.info.globals.push(Exportable::new(global));
         self.info
             .imported_globals
-            .push((String::from(module), String::from(field.unwrap())));
+            .push((String::from(module), String::from(field)));
         Ok(())
     }
 
@@ -744,12 +744,12 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
         &mut self,
         table: Table,
         module: &'data str,
-        field: Option<&'data str>,
+        field: &'data str,
     ) -> WasmResult<()> {
         self.info.tables.push(Exportable::new(table));
         self.info
             .imported_tables
-            .push((String::from(module), String::from(field.unwrap())));
+            .push((String::from(module), String::from(field)));
         Ok(())
     }
 
@@ -789,12 +789,12 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
         &mut self,
         memory: Memory,
         module: &'data str,
-        field: Option<&'data str>,
+        field: &'data str,
     ) -> WasmResult<()> {
         self.info.memories.push(Exportable::new(memory));
         self.info
             .imported_memories
-            .push((String::from(module), String::from(field.unwrap())));
+            .push((String::from(module), String::from(field)));
         Ok(())
     }
 

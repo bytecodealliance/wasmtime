@@ -95,9 +95,9 @@ impl TableOps {
 
         // Import the GC function.
         let mut imports = ImportSection::new();
-        imports.import("", Some("gc"), EntityType::Function(0));
-        imports.import("", Some("take_refs"), EntityType::Function(2));
-        imports.import("", Some("make_refs"), EntityType::Function(3));
+        imports.import("", "gc", EntityType::Function(0));
+        imports.import("", "take_refs", EntityType::Function(2));
+        imports.import("", "make_refs", EntityType::Function(3));
 
         // Define our table.
         let mut tables = TableSection::new();

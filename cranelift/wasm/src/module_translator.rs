@@ -20,16 +20,19 @@ pub fn translate_module<'data>(
 ) -> WasmResult<ModuleTranslationState> {
     let _tt = timing::wasm_translate_module();
     let mut module_translation_state = ModuleTranslationState::new();
-    let mut validator = Validator::new();
-    validator.wasm_features(environ.wasm_features());
+    let mut validator = Validator::new_with_features(environ.wasm_features());
 
     for payload in Parser::new(0).parse_all(data) {
         match payload? {
-            Payload::Version { num, range } => {
-                validator.version(num, &range)?;
+            Payload::Version {
+                num,
+                encoding,
+                range,
+            } => {
+                validator.version(num, encoding, &range)?;
             }
-            Payload::End => {
-                validator.end()?;
+            Payload::End(offset) => {
+                validator.end(offset)?;
             }
 
             Payload::TypeSection(types) => {
@@ -88,7 +91,7 @@ pub fn translate_module<'data>(
             }
 
             Payload::CodeSectionEntry(body) => {
-                let func_validator = validator.code_section_entry()?;
+                let func_validator = validator.code_section_entry(&body)?;
                 environ.define_function_body(func_validator, body)?;
             }
 
@@ -102,28 +105,6 @@ pub fn translate_module<'data>(
 
                 // NOTE: the count here is the total segment count, not the passive segment count
                 environ.reserve_passive_data(count)?;
-            }
-
-            Payload::InstanceSection(s) => {
-                validator.instance_section(&s)?;
-                unimplemented!();
-            }
-            Payload::AliasSection(s) => {
-                validator.alias_section(&s)?;
-                unimplemented!();
-            }
-            Payload::ModuleSectionStart {
-                count,
-                range,
-                size: _,
-            } => {
-                validator.module_section_start(count, &range)?;
-                unimplemented!();
-            }
-
-            Payload::ModuleSectionEntry { .. } => {
-                validator.module_section_entry();
-                unimplemented!();
             }
 
             Payload::CustomSection {
@@ -142,9 +123,9 @@ pub fn translate_module<'data>(
 
             Payload::CustomSection { name, data, .. } => environ.custom_section(name, data)?,
 
-            Payload::UnknownSection { id, range, .. } => {
-                validator.unknown_section(id, &range)?;
-                unreachable!();
+            other => {
+                validator.payload(&other)?;
+                panic!("unimplemented section {:?}", other);
             }
         }
     }
