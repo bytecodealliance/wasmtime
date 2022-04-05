@@ -172,7 +172,7 @@ impl Instance {
     ) -> Result<Instance> {
         assert!(
             !store.0.async_support(),
-            "must use sync instantiation when async support is disabled",
+            "must use async instantiation when async support is enabled",
         );
 
         let (instance, start) = Instance::new_raw(store.0, module, imports)?;
@@ -199,7 +199,7 @@ impl Instance {
         // here are small enough to be ok duplicating.
         assert!(
             store.0.async_support(),
-            "must use async instantiation when async support is enabled",
+            "must use sync instantiation when async support is disabled",
         );
 
         store
@@ -293,12 +293,7 @@ impl Instance {
         // stored in the instance handle so we need to immediately handle
         // those here.
         let instance = {
-            let exports = compiled_module
-                .module()
-                .exports
-                .values()
-                .map(|_index| None)
-                .collect();
+            let exports = vec![None; compiled_module.module().exports.len()];
             let data = InstanceData { id, exports };
             Instance::from_wasmtime(data, store)
         };
