@@ -422,10 +422,12 @@ mod tests {
       global.get 0
       call 1
       br 0 (;@1;)
-    end)
+    end
+  )
   (table (;0;) 20 externref)
   (global (;0;) (mut externref) ref.null extern)
-  (export "run" (func 3)))
+  (export "run" (func 3))
+)
 "#;
         eprintln!("expected WAT = {}", expected);
 
