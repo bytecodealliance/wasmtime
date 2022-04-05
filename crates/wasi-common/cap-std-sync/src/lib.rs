@@ -135,6 +135,18 @@ impl WasiCtxBuilder {
         self.0.insert_file(fd, file, caps);
         Ok(self)
     }
+    pub fn push_preopened_socket(mut self, socket: impl Into<Socket>) -> Result<Self, Error> {
+        let socket: Socket = socket.into();
+        let file: Box<dyn WasiFile> = socket.into();
+
+        let caps = FileCaps::FDSTAT_SET_FLAGS
+            | FileCaps::FILESTAT_GET
+            | FileCaps::READ
+            | FileCaps::POLL_READWRITE;
+
+        self.0.push_file(file, caps)?;
+        Ok(self)
+    }
     pub fn build(self) -> WasiCtx {
         self.0
     }

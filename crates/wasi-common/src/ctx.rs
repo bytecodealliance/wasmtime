@@ -43,6 +43,10 @@ impl WasiCtx {
             .insert_at(fd, Box::new(FileEntry::new(caps, file)));
     }
 
+    pub fn push_file(&mut self, file: Box<dyn WasiFile>, caps: FileCaps) -> Result<u32, Error> {
+        self.table().push(Box::new(FileEntry::new(caps, file)))
+    }
+
     pub fn insert_dir(
         &mut self,
         fd: u32,

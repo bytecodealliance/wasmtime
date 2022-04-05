@@ -462,21 +462,16 @@ fn populate_with_wasi(
         let mut builder = WasiCtxBuilder::new();
         builder = builder.inherit_stdio().args(argv)?.envs(vars)?;
 
-        let mut num_fd: usize = 3;
+        for (name, dir) in preopen_dirs.into_iter() {
+            builder = builder.preopened_dir(dir, name)?;
+        }
 
         if listenfd {
-            let (n, b) = ctx_set_listenfd(num_fd, builder)?;
-            num_fd = n;
-            builder = b;
+            builder = ctx_set_listenfd(builder)?;
         }
 
         for listener in tcplisten.drain(..) {
-            builder = builder.preopened_socket(num_fd as _, listener)?;
-            num_fd += 1;
-        }
-
-        for (name, dir) in preopen_dirs.into_iter() {
-            builder = builder.preopened_dir(dir, name)?;
+            builder = builder.push_preopened_socket(listener)?;
         }
 
         store.data_mut().wasi = Some(builder.build());
@@ -510,16 +505,15 @@ fn populate_with_wasi(
 }
 
 #[cfg(not(unix))]
-fn ctx_set_listenfd(num_fd: usize, builder: WasiCtxBuilder) -> Result<(usize, WasiCtxBuilder)> {
-    Ok((num_fd, builder))
+fn ctx_set_listenfd(builder: WasiCtxBuilder) -> Result<WasiCtxBuilder> {
+    Ok(builder)
 }
 
 #[cfg(unix)]
-fn ctx_set_listenfd(num_fd: usize, builder: WasiCtxBuilder) -> Result<(usize, WasiCtxBuilder)> {
+fn ctx_set_listenfd(builder: WasiCtxBuilder) -> Result<WasiCtxBuilder> {
     use listenfd::ListenFd;
 
     let mut builder = builder;
-    let mut num_fd = num_fd;
 
     for env in ["LISTEN_FDS", "LISTEN_FDNAMES"] {
         if let Ok(val) = std::env::var(env) {
@@ -533,10 +527,9 @@ fn ctx_set_listenfd(num_fd: usize, builder: WasiCtxBuilder) -> Result<(usize, Wa
         if let Some(stdlistener) = listenfd.take_tcp_listener(i)? {
             let _ = stdlistener.set_nonblocking(true)?;
             let listener = TcpListener::from_std(stdlistener);
-            builder = builder.preopened_socket((3 + i) as _, listener)?;
-            num_fd = 3 + i;
+            builder = builder.push_preopened_socket(listener)?;
         }
     }
 
-    Ok((num_fd, builder))
+    Ok(builder)
 }
