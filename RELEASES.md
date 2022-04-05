@@ -19,6 +19,12 @@ Unreleased.
 * Support for epoch-based interruption has been added to the C API.
   [#3925](https://github.com/bytecodealliance/wasmtime/pull/3925)
 
+### Fixed
+
+* Using `InstancePre::instantiate` or `Linker::instantiate` will now panic as
+  intended when used with an async-configured `Store`.
+  [#TODO](https://github.com/bytecodealliance/wasmtime/pull/TODO)
+
 ### Removed
 
 * Support for `Config::interruptable` and `InterruptHandle` has been removed

@@ -103,19 +103,12 @@ impl Instance {
         module: &Module,
         imports: &[Extern],
     ) -> Result<Instance, Error> {
-        // This unsafety comes from `Instantiator::new` where we must typecheck
-        // first, which we are sure to do here.
         let mut store = store.as_context_mut();
-        let mut i = unsafe {
-            typecheck_externs(store.0, module, imports)?;
-            Instantiator::new(store.0, module, ImportSource::Externs(imports))?
-        };
-        assert!(
-            !store.0.async_support(),
-            "cannot use `new` when async support is enabled on the config"
-        );
-
-        i.run(&mut store)
+        let imports = Instance::typecheck_externs(store.0, module, imports)?;
+        // Note that the unsafety here should be satisfied by the call to
+        // `typecheck_externs` above which satisfies the condition that all
+        // the imports are valid for this module.
+        unsafe { Instance::new_started(&mut store, module, imports.as_ref()) }
     }
 
     /// Same as [`Instance::new`], except for usage in [asynchronous stores].
@@ -145,24 +138,220 @@ impl Instance {
     where
         T: Send,
     {
-        // See `new` for unsafety comments
         let mut store = store.as_context_mut();
-        let mut i = unsafe {
-            typecheck_externs(store.0, module, imports)?;
-            Instantiator::new(store.0, module, ImportSource::Externs(imports))?
-        };
-        let mut store = store.as_context_mut();
+        let imports = Instance::typecheck_externs(store.0, module, imports)?;
+        // See `new` for notes on this unsafety
+        unsafe { Instance::new_started_async(&mut store, module, imports.as_ref()).await }
+    }
+
+    fn typecheck_externs(
+        store: &mut StoreOpaque,
+        module: &Module,
+        imports: &[Extern],
+    ) -> Result<OwnedImports> {
+        for import in imports {
+            if !import.comes_from_same_store(store) {
+                bail!("cross-`Store` instantiation is not currently supported");
+            }
+        }
+        typecheck(store, module, imports, |cx, ty, item| cx.extern_(ty, item))?;
+        let mut owned_imports = OwnedImports::new(module);
+        for import in imports {
+            owned_imports.push(import, store);
+        }
+        Ok(owned_imports)
+    }
+
+    /// Internal function to create an instance and run the start function.
+    ///
+    /// This function's unsafety is the same as `Instance::new_raw`.
+    unsafe fn new_started<T>(
+        store: &mut StoreContextMut<'_, T>,
+        module: &Module,
+        imports: Imports<'_>,
+    ) -> Result<Instance> {
+        assert!(
+            !store.0.async_support(),
+            "must use async instantiation when async support is enabled",
+        );
+
+        let (instance, start) = Instance::new_raw(store.0, module, imports)?;
+        if let Some(start) = start {
+            instance.start_raw(store, start)?;
+        }
+        Ok(instance)
+    }
+
+    /// Internal function to create an instance and run the start function.
+    ///
+    /// This function's unsafety is the same as `Instance::new_raw`.
+    #[cfg(feature = "async")]
+    async unsafe fn new_started_async<T>(
+        store: &mut StoreContextMut<'_, T>,
+        module: &Module,
+        imports: Imports<'_>,
+    ) -> Result<Instance>
+    where
+        T: Send,
+    {
+        // Note that the body of this function is intentionally quite similar
+        // to the `new_started` function, and it's intended that the two bodies
+        // here are small enough to be ok duplicating.
         assert!(
             store.0.async_support(),
-            "cannot use `new_async` without enabling async support on the config"
+            "must use sync instantiation when async support is disabled",
         );
+
         store
-            .on_fiber(|store| i.run(&mut store.as_context_mut()))
+            .on_fiber(|store| {
+                let (instance, start) = Instance::new_raw(store.0, module, imports)?;
+                if let Some(start) = start {
+                    instance.start_raw(store, start)?;
+                }
+                Ok(instance)
+            })
             .await?
+    }
+
+    /// Internal function to create an instance which doesn't have its `start`
+    /// function run yet.
+    ///
+    /// This is not intended to be exposed from Wasmtime, it's intended to
+    /// refactor out common code from `new_started` and `new_started_async`.
+    ///
+    /// Note that this step needs to be run on a fiber in async mode even
+    /// though it doesn't do any blocking work because an async resource
+    /// limiter may need to yield.
+    ///
+    /// # Unsafety
+    ///
+    /// This method is unsafe because it does not type-check the `imports`
+    /// provided. The `imports` provided must be suitable for the module
+    /// provided as well.
+    unsafe fn new_raw(
+        store: &mut StoreOpaque,
+        module: &Module,
+        imports: Imports<'_>,
+    ) -> Result<(Instance, Option<FuncIndex>)> {
+        if !Engine::same(store.engine(), module.engine()) {
+            bail!("cross-`Engine` instantiation is not currently supported");
+        }
+        store.bump_resource_counts(module)?;
+
+        let compiled_module = module.compiled_module();
+
+        // Register the module just before instantiation to ensure we keep the module
+        // properly referenced while in use by the store.
+        store.modules_mut().register(module);
+
+        // The first thing we do is issue an instance allocation request
+        // to the instance allocator. This, on success, will give us an
+        // instance handle.
+        //
+        // Note that the `host_state` here is a pointer back to the
+        // `Instance` we'll be returning from this function. This is a
+        // circular reference so we can't construct it before we construct
+        // this instance, so we determine what the ID is and then assert
+        // it's the same later when we do actually insert it.
+        let instance_to_be = store.store_data().next_id::<InstanceData>();
+
+        let mut instance_handle =
+            store
+                .engine()
+                .allocator()
+                .allocate(InstanceAllocationRequest {
+                    runtime_info: &module.runtime_info(),
+                    imports,
+                    host_state: Box::new(Instance(instance_to_be)),
+                    store: StorePtr::new(store.traitobj()),
+                })?;
+
+        // The instance still has lots of setup, for example
+        // data/elements/start/etc. This can all fail, but even on failure
+        // the instance may persist some state via previous successful
+        // initialization. For this reason once we have an instance handle
+        // we immediately insert it into the store to keep it alive.
+        //
+        // Note that we `clone` the instance handle just to make easier
+        // working the the borrow checker here easier. Technically the `&mut
+        // instance` has somewhat of a borrow on `store` (which
+        // conflicts with the borrow on `store.engine`) but this doesn't
+        // matter in practice since initialization isn't even running any
+        // code here anyway.
+        let id = store.add_instance(instance_handle.clone(), false);
+
+        // Additionally, before we start doing fallible instantiation, we
+        // do one more step which is to insert an `InstanceData`
+        // corresponding to this instance. This `InstanceData` can be used
+        // via `Caller::get_export` if our instance's state "leaks" into
+        // other instances, even if we don't return successfully from this
+        // function.
+        //
+        // We don't actually load all exports from the instance at this
+        // time, instead preferring to lazily load them as they're demanded.
+        // For module/instance exports, though, those aren't actually
+        // stored in the instance handle so we need to immediately handle
+        // those here.
+        let instance = {
+            let exports = vec![None; compiled_module.module().exports.len()];
+            let data = InstanceData { id, exports };
+            Instance::from_wasmtime(data, store)
+        };
+
+        // double-check our guess of what the new instance's ID would be
+        // was actually correct.
+        assert_eq!(instance.0, instance_to_be);
+
+        // Now that we've recorded all information we need to about this
+        // instance within a `Store` we can start performing fallible
+        // initialization. Note that we still defer the `start` function to
+        // later since that may need to run asynchronously.
+        //
+        // If this returns an error (or if the start function traps) then
+        // any other initialization which may have succeeded which placed
+        // items from this instance into other instances should be ok when
+        // those items are loaded and run we'll have all the metadata to
+        // look at them.
+        store
+            .engine()
+            .allocator()
+            .initialize(
+                &mut instance_handle,
+                compiled_module.module(),
+                store.engine().config().features.bulk_memory,
+            )
+            .map_err(|e| -> Error {
+                match e {
+                    InstantiationError::Trap(trap) => Trap::from_runtime(trap).into(),
+                    other => other.into(),
+                }
+            })?;
+
+        Ok((instance, compiled_module.module().start_func))
     }
 
     pub(crate) fn from_wasmtime(handle: InstanceData, store: &mut StoreOpaque) -> Instance {
         Instance(store.store_data_mut().insert(handle))
+    }
+
+    fn start_raw<T>(&self, store: &mut StoreContextMut<'_, T>, start: FuncIndex) -> Result<()> {
+        let id = store.0.store_data()[self.0].id;
+        // If a start function is present, invoke it. Make sure we use all the
+        // trap-handling configuration in `store` as well.
+        let instance = store.0.instance_mut(id);
+        let f = instance.get_exported_func(start);
+        let vmctx = instance.vmctx_ptr();
+        unsafe {
+            super::func::invoke_wasm_and_catch_traps(store, |_default_callee| {
+                mem::transmute::<
+                    *const VMFunctionBody,
+                    unsafe extern "C" fn(*mut VMContext, *mut VMContext),
+                >(f.anyfunc.as_ref().func_ptr.as_ptr())(
+                    f.anyfunc.as_ref().vmctx, vmctx
+                )
+            })?;
+        }
+        Ok(())
     }
 
     /// Returns the list of exported items from this [`Instance`].
@@ -319,233 +508,25 @@ impl Instance {
     }
 }
 
-struct Instantiator<'a> {
-    imports: ImportSource<'a>,
+struct OwnedImports {
     functions: PrimaryMap<FuncIndex, VMFunctionImport>,
     tables: PrimaryMap<TableIndex, VMTableImport>,
     memories: PrimaryMap<MemoryIndex, VMMemoryImport>,
     globals: PrimaryMap<GlobalIndex, VMGlobalImport>,
-    module: &'a Module,
 }
 
-enum ImportSource<'a> {
-    Externs(&'a [Extern]),
-    Definitions(&'a [Definition]),
-}
-
-impl<'a> Instantiator<'a> {
-    /// Creates a new instantiation context used to process all the initializer
-    /// directives of a module.
-    ///
-    /// This doesn't do much work itself beyond setting things up.
-    ///
-    /// # Unsafety
-    ///
-    /// This function is unsafe for a few reasons:
-    ///
-    /// * This assumes that `imports` has already been typechecked and is of the
-    ///   appropriate length. It is memory unsafe if the types of `imports` are
-    ///   not what `module` expects.
-    ///
-    /// * The `imports` must be safely able to get inserted into `store`. This
-    ///   only applies if `ImportSource::Definitions` is used because this will
-    ///   internally call `Definition::to_extern` which requires that any
-    ///   host functions in the list were created with an original `T` as the
-    ///   store that's being inserted into.
-    ///
-    /// * The `imports` must all come from the `store` specified.
-    unsafe fn new(
-        store: &StoreOpaque,
-        module: &'a Module,
-        imports: ImportSource<'a>,
-    ) -> Result<Instantiator<'a>> {
-        if !Engine::same(store.engine(), module.engine()) {
-            bail!("cross-`Engine` instantiation is not currently supported");
-        }
-
+impl OwnedImports {
+    fn new(module: &Module) -> OwnedImports {
         let raw = module.compiled_module().module();
-        Ok(Instantiator {
-            imports,
+        OwnedImports {
             functions: PrimaryMap::with_capacity(raw.num_imported_funcs),
             tables: PrimaryMap::with_capacity(raw.num_imported_tables),
             memories: PrimaryMap::with_capacity(raw.num_imported_memories),
             globals: PrimaryMap::with_capacity(raw.num_imported_globals),
-            module,
-        })
-    }
-
-    fn run<T>(&mut self, store: &mut StoreContextMut<'_, T>) -> Result<Instance, Error> {
-        let (instance, start) = self.resolve_imports(store.0)?;
-        if let Some(start) = start {
-            Instantiator::start_raw(store, instance, start)?;
-        }
-        Ok(instance)
-    }
-
-    /// Resolve all the imports for the module being instantiated, extracting
-    /// the raw representations and building up the `PrimaryMap` instance for
-    /// each set of exports.
-    fn resolve_imports(
-        &mut self,
-        store: &mut StoreOpaque,
-    ) -> Result<(Instance, Option<FuncIndex>)> {
-        store.bump_resource_counts(&self.module)?;
-
-        // Read the current module's initializer and move forward the
-        // initializer pointer as well.
-        let num_imports = self.module.env_module().initializers.len();
-        match &self.imports {
-            ImportSource::Externs(list) => {
-                assert_eq!(list.len(), num_imports);
-                for item in list.iter() {
-                    self.push(item.clone(), store);
-                }
-            }
-            ImportSource::Definitions(list) => {
-                assert_eq!(list.len(), num_imports);
-                for item in list.iter() {
-                    // This unsafety is encapsulated with
-                    // `Instantiator::new`, documented above.
-                    self.push(unsafe { item.to_extern(store) }, store);
-                }
-            }
-        }
-
-        // All initializers have been processed, which means we're ready to
-        // perform the actual raw instantiation with the raw import values. This
-        // will register everything except the start function's completion and
-        // the finished instance will be returned.
-        self.instantiate_raw(store)
-    }
-
-    fn instantiate_raw(
-        &mut self,
-        store: &mut StoreOpaque,
-    ) -> Result<(Instance, Option<FuncIndex>)> {
-        let compiled_module = self.module.compiled_module();
-
-        // Register the module just before instantiation to ensure we keep the module
-        // properly referenced while in use by the store.
-        store.modules_mut().register(&self.module);
-
-        unsafe {
-            // The first thing we do is issue an instance allocation request
-            // to the instance allocator. This, on success, will give us an
-            // instance handle.
-            //
-            // Note that the `host_state` here is a pointer back to the
-            // `Instance` we'll be returning from this function. This is a
-            // circular reference so we can't construct it before we construct
-            // this instance, so we determine what the ID is and then assert
-            // it's the same later when we do actually insert it.
-            let instance_to_be = store.store_data().next_id::<InstanceData>();
-
-            let mut instance_handle =
-                store
-                    .engine()
-                    .allocator()
-                    .allocate(InstanceAllocationRequest {
-                        runtime_info: &self.module.runtime_info(),
-                        imports: self.build(),
-                        host_state: Box::new(Instance(instance_to_be)),
-                        store: StorePtr::new(store.traitobj()),
-                    })?;
-
-            // The instance still has lots of setup, for example
-            // data/elements/start/etc. This can all fail, but even on failure
-            // the instance may persist some state via previous successful
-            // initialization. For this reason once we have an instance handle
-            // we immediately insert it into the store to keep it alive.
-            //
-            // Note that we `clone` the instance handle just to make easier
-            // working the the borrow checker here easier. Technically the `&mut
-            // instance` has somewhat of a borrow on `store` (which
-            // conflicts with the borrow on `store.engine`) but this doesn't
-            // matter in practice since initialization isn't even running any
-            // code here anyway.
-            let id = store.add_instance(instance_handle.clone(), false);
-
-            // Additionally, before we start doing fallible instantiation, we
-            // do one more step which is to insert an `InstanceData`
-            // corresponding to this instance. This `InstanceData` can be used
-            // via `Caller::get_export` if our instance's state "leaks" into
-            // other instances, even if we don't return successfully from this
-            // function.
-            //
-            // We don't actually load all exports from the instance at this
-            // time, instead preferring to lazily load them as they're demanded.
-            // For module/instance exports, though, those aren't actually
-            // stored in the instance handle so we need to immediately handle
-            // those here.
-            let instance = {
-                let exports = compiled_module
-                    .module()
-                    .exports
-                    .values()
-                    .map(|_index| None)
-                    .collect();
-                let data = InstanceData { id, exports };
-                Instance::from_wasmtime(data, store)
-            };
-
-            // double-check our guess of what the new instance's ID would be
-            // was actually correct.
-            assert_eq!(instance.0, instance_to_be);
-
-            // Now that we've recorded all information we need to about this
-            // instance within a `Store` we can start performing fallible
-            // initialization. Note that we still defer the `start` function to
-            // later since that may need to run asynchronously.
-            //
-            // If this returns an error (or if the start function traps) then
-            // any other initialization which may have succeeded which placed
-            // items from this instance into other instances should be ok when
-            // those items are loaded and run we'll have all the metadata to
-            // look at them.
-            store
-                .engine()
-                .allocator()
-                .initialize(
-                    &mut instance_handle,
-                    compiled_module.module(),
-                    store.engine().config().features.bulk_memory,
-                )
-                .map_err(|e| -> Error {
-                    match e {
-                        InstantiationError::Trap(trap) => Trap::from_runtime(trap).into(),
-                        other => other.into(),
-                    }
-                })?;
-
-            Ok((instance, compiled_module.module().start_func))
         }
     }
 
-    fn start_raw<T>(
-        store: &mut StoreContextMut<'_, T>,
-        instance: Instance,
-        start: FuncIndex,
-    ) -> Result<()> {
-        let id = store.0.store_data()[instance.0].id;
-        // If a start function is present, invoke it. Make sure we use all the
-        // trap-handling configuration in `store` as well.
-        let instance = store.0.instance_mut(id);
-        let f = instance.get_exported_func(start);
-        let vmctx = instance.vmctx_ptr();
-        unsafe {
-            super::func::invoke_wasm_and_catch_traps(store, |_default_callee| {
-                mem::transmute::<
-                    *const VMFunctionBody,
-                    unsafe extern "C" fn(*mut VMContext, *mut VMContext),
-                >(f.anyfunc.as_ref().func_ptr.as_ptr())(
-                    f.anyfunc.as_ref().vmctx, vmctx
-                )
-            })?;
-        }
-        Ok(())
-    }
-
-    fn push(&mut self, item: Extern, store: &mut StoreOpaque) {
+    fn push(&mut self, item: &Extern, store: &mut StoreOpaque) {
         match item {
             Extern::Func(i) => {
                 self.functions.push(i.vmimport(store));
@@ -562,7 +543,7 @@ impl<'a> Instantiator<'a> {
         }
     }
 
-    fn build(&self) -> Imports<'_> {
+    fn as_ref(&self) -> Imports<'_> {
         Imports {
             tables: self.tables.values().as_slice(),
             globals: self.globals.values().as_slice(),
@@ -613,7 +594,15 @@ impl<T> InstancePre<T> {
         module: &Module,
         items: Vec<Definition>,
     ) -> Result<InstancePre<T>> {
-        typecheck_defs(store, module, &items)?;
+        for import in items.iter() {
+            if !import.comes_from_same_store(store) {
+                bail!("cross-`Store` instantiation is not currently supported");
+            }
+        }
+        typecheck(store, module, &items, |cx, ty, item| {
+            cx.definition(ty, item)
+        })?;
+
         let host_funcs = items
             .iter()
             .filter(|i| match i {
@@ -645,20 +634,14 @@ impl<T> InstancePre<T> {
     /// function will panic if the `store` provided comes from a different
     /// [`Engine`] than the [`InstancePre`] originally came from.
     pub fn instantiate(&self, mut store: impl AsContextMut<Data = T>) -> Result<Instance> {
-        // For the unsafety here the typecheck happened at creation time of this
-        // structure and then othrewise the `T` of `InstancePre<T>` connects any
-        // host functions we have in our definition list to the `store` that was
-        // passed in.
         let mut store = store.as_context_mut();
-        let mut instantiator = unsafe {
-            self.verify_store_and_reserve_space(&mut store.0)?;
-            Instantiator::new(
-                store.0,
-                &self.module,
-                ImportSource::Definitions(&self.items),
-            )?
-        };
-        instantiator.run(&mut store)
+        let imports =
+            pre_instantiate_raw(&mut store.0, &self.module, &self.items, self.host_funcs)?;
+
+        // This unsafety should be handled by the type-checking performed by the
+        // constructor of `InstancePre` to assert that all the imports we're passing
+        // in match the module we're instantiating.
+        unsafe { Instance::new_started(&mut store, &self.module, imports.as_ref()) }
     }
 
     /// Creates a new instance, running the start function asynchronously
@@ -680,60 +663,48 @@ impl<T> InstancePre<T> {
     where
         T: Send,
     {
-        // For the unsafety here see above
         let mut store = store.as_context_mut();
-        let mut i = unsafe {
-            self.verify_store_and_reserve_space(&mut store.0)?;
-            Instantiator::new(
-                store.0,
-                &self.module,
-                ImportSource::Definitions(&self.items),
-            )?
-        };
+        let imports =
+            pre_instantiate_raw(&mut store.0, &self.module, &self.items, self.host_funcs)?;
 
-        let mut store = store.as_context_mut();
-        assert!(
-            store.0.async_support(),
-            "cannot use `new_async` without enabling async support on the config"
-        );
-        store
-            .on_fiber(|store| i.run(&mut store.as_context_mut()))
-            .await?
-    }
-
-    fn verify_store_and_reserve_space(&self, store: &mut StoreOpaque) -> Result<()> {
-        for import in self.items.iter() {
-            if !import.comes_from_same_store(store) {
-                bail!("cross-`Store` instantiation is not currently supported");
-            }
-        }
-        // Any linker-defined function of the `Definition::HostFunc` variant
-        // will insert a function into the store automatically as part of
-        // instantiation, so reserve space here to make insertion more efficient
-        // as it won't have to realloc during the instantiation.
-        store.store_data_mut().reserve_funcs(self.host_funcs);
-        Ok(())
+        // This unsafety should be handled by the type-checking performed by the
+        // constructor of `InstancePre` to assert that all the imports we're passing
+        // in match the module we're instantiating.
+        unsafe { Instance::new_started_async(&mut store, &self.module, imports.as_ref()).await }
     }
 }
 
-fn typecheck_externs(store: &mut StoreOpaque, module: &Module, imports: &[Extern]) -> Result<()> {
-    for import in imports {
-        if !import.comes_from_same_store(store) {
-            bail!("cross-`Store` instantiation is not currently supported");
-        }
-    }
-    typecheck(store, module, imports, |cx, ty, item| cx.extern_(ty, item))
-}
+/// Helper function shared between
+/// `InstancePre::{instantiate,instantiate_async}`
+///
+/// This is an out-of-line function to avoid the generic on `InstancePre` and
+/// get this compiled into the `wasmtime` crate to avoid having it monomorphized
+/// elsewhere.
+fn pre_instantiate_raw(
+    store: &mut StoreOpaque,
+    module: &Module,
+    items: &[Definition],
+    host_funcs: usize,
+) -> Result<OwnedImports> {
+    // Any linker-defined function of the `Definition::HostFunc` variant
+    // will insert a function into the store automatically as part of
+    // instantiation, so reserve space here to make insertion more efficient
+    // as it won't have to realloc during the instantiation.
+    store.store_data_mut().reserve_funcs(host_funcs);
 
-fn typecheck_defs(store: &mut StoreOpaque, module: &Module, imports: &[Definition]) -> Result<()> {
-    for import in imports {
+    let mut imports = OwnedImports::new(module);
+    for import in items {
         if !import.comes_from_same_store(store) {
             bail!("cross-`Store` instantiation is not currently supported");
         }
+        // This unsafety should be encapsulated in the constructor of
+        // `InstancePre` where the `T` of the original item should match the
+        // `T` of the store.
+        let item = unsafe { import.to_extern(store) };
+        imports.push(&item, store);
     }
-    typecheck(store, module, imports, |cx, ty, item| {
-        cx.definition(ty, item)
-    })
+
+    Ok(imports)
 }
 
 fn typecheck<I>(

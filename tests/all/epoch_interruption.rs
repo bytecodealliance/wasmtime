@@ -69,9 +69,6 @@ fn run_and_count_yields_or_trap<F: Fn(Arc<Engine>)>(
     let linker = make_env(&engine);
     let module = Module::new(&engine, wasm).unwrap();
     let mut store = Store::new(&engine, ());
-    let instance = linker.instantiate(&mut store, &module).unwrap();
-    let f = instance.get_func(&mut store, "run").unwrap();
-
     store.set_epoch_deadline(initial);
     match delta {
         Some(delta) => {
@@ -85,7 +82,11 @@ fn run_and_count_yields_or_trap<F: Fn(Arc<Engine>)>(
     let engine_clone = engine.clone();
     setup_func(engine_clone);
 
-    let mut future = Box::pin(f.call_async(&mut store, &[], &mut []));
+    let mut future = Box::pin(async {
+        let instance = linker.instantiate_async(&mut store, &module).await.unwrap();
+        let f = instance.get_func(&mut store, "run").unwrap();
+        f.call_async(&mut store, &[], &mut []).await
+    });
     let mut yields = 0;
     loop {
         match future
@@ -394,13 +395,15 @@ fn drop_future_on_epoch_yield() {
 
     let module = Module::new(&engine, wasm).unwrap();
     let mut store = Store::new(&engine, ());
-    let instance = linker.instantiate(&mut store, &module).unwrap();
-    let f = instance.get_func(&mut store, "run").unwrap();
 
     store.set_epoch_deadline(1);
     store.epoch_deadline_async_yield_and_update(1);
 
-    let mut future = Box::pin(f.call_async(&mut store, &[], &mut []));
+    let mut future = Box::pin(async {
+        let instance = linker.instantiate_async(&mut store, &module).await.unwrap();
+        let f = instance.get_func(&mut store, "run").unwrap();
+        f.call_async(&mut store, &[], &mut []).await
+    });
     match future
         .as_mut()
         .poll(&mut Context::from_waker(&dummy_waker()))
