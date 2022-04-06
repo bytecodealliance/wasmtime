@@ -544,23 +544,36 @@ where
     fn sum_fits_in_32_bits(&mut self, offset: Offset32, constant_value: Imm64) -> Option<u32> {
         let offset: i64 = offset.into();
         let constant_value: i64 = constant_value.into();
+        // Sum up the two operands.
         let sum = offset.wrapping_add(constant_value);
-        sum.try_into().ok()
+        // Check that the sum will fit in 32-bits (and also is not negative).
+        if sum == ((sum << 32) >> 32) {
+            Some(sum as u32)
+        } else {
+            None
+        }
     }
 
     #[inline]
     fn sum_extend_fits_in_32_bits(
         &mut self,
         offset: Offset32,
-        ty: Type,
+        extend_from_ty: Type,
         constant_value: Imm64,
     ) -> Option<u32> {
         let offset: i64 = offset.into();
         let constant_value: u64 = constant_value.bits().try_into().unwrap();
-        let shift = 64 - ty.bits();
+        // If necessary, zero extend `constant_value` up to 64 bits.
+        let shift = 64 - extend_from_ty.bits();
         let zero_extended_constant_value = (constant_value << shift) >> shift;
+        // Sum up the two operands.
         let sum = offset.wrapping_add(zero_extended_constant_value as i64);
-        sum.try_into().ok()
+        // Check that the sum will fit in 32-bits (and also is not negative).
+        if sum == ((sum << 32) >> 32) {
+            Some(sum as u32)
+        } else {
+            None
+        }
     }
 }
 
