@@ -26,7 +26,6 @@ use crate::{
         isle::*, AtomicRmwOp, InsnInput, InsnOutput, LowerCtx, VCodeConstant, VCodeConstantData,
     },
 };
-use core::convert::TryInto;
 use std::convert::TryFrom;
 
 pub struct SinkableLoad {
@@ -541,20 +540,6 @@ where
     }
 
     #[inline]
-    fn sum_fits_in_32_bits(&mut self, offset: Offset32, constant_value: Imm64) -> Option<u32> {
-        let offset: i64 = offset.into();
-        let constant_value: i64 = constant_value.into();
-        // Sum up the two operands.
-        let sum = offset.wrapping_add(constant_value);
-        // Check that the sum will fit in 32-bits (and also is not negative).
-        if sum == ((sum << 32) >> 32) {
-            Some(sum as u32)
-        } else {
-            None
-        }
-    }
-
-    #[inline]
     fn sum_extend_fits_in_32_bits(
         &mut self,
         offset: Offset32,
@@ -562,13 +547,13 @@ where
         constant_value: Imm64,
     ) -> Option<u32> {
         let offset: i64 = offset.into();
-        let constant_value: u64 = constant_value.bits().try_into().unwrap();
+        let constant_value: u64 = constant_value.bits() as u64;
         // If necessary, zero extend `constant_value` up to 64 bits.
         let shift = 64 - extend_from_ty.bits();
         let zero_extended_constant_value = (constant_value << shift) >> shift;
         // Sum up the two operands.
         let sum = offset.wrapping_add(zero_extended_constant_value as i64);
-        // Check that the sum will fit in 32-bits (and also is not negative).
+        // Check that the sum will fit in 32-bits.
         if sum == ((sum << 32) >> 32) {
             Some(sum as u32)
         } else {
