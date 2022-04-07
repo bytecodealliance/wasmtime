@@ -215,6 +215,7 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
+          # defaults to x86_64-apple-darwin
           - os: macos-latest
           - os: windows-2019
           - os: windows-2019
@@ -390,6 +391,9 @@ jobs:
           os: ubuntu-latest
         - build: x86_64-macos
           os: macos-latest
+        - build: aarch64-macos
+          os: macos-latest
+          target: aarch64-apple-darwin
         - build: x86_64-windows
           os: windows-latest
         - build: x86_64-mingw

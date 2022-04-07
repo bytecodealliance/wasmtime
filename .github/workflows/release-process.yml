@@ -84,6 +84,9 @@ jobs:
           PRs to the \`main\` branch to update [RELEASES.md] and then backport
           these PRs to the [release branch][branch].
 
+          Maintainers should also review that aarch64-apple-darwin builds
+          are passing via [embark's CI](https://buildkite.com/embark-studios/wasmtime-aarch64-apple-darwin).
+
           Another automated PR will be made in roughly 2 weeks time when for
           the actual release itself.
 
