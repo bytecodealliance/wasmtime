@@ -748,18 +748,96 @@
 (decl put_in_reg_mem (Value) RegMem)
 (extern constructor put_in_reg_mem put_in_reg_mem)
 
+;; Addressing modes.
+
 (type SyntheticAmode extern (enum))
 
 (decl synthetic_amode_to_reg_mem (SyntheticAmode) RegMem)
 (extern constructor synthetic_amode_to_reg_mem synthetic_amode_to_reg_mem)
 
+(decl amode_to_synthetic_amode (Amode) SyntheticAmode)
+(extern constructor amode_to_synthetic_amode amode_to_synthetic_amode)
+
 (type Amode extern (enum))
+
+(decl amode_with_flags (Amode MemFlags) Amode)
+(extern constructor amode_with_flags amode_with_flags)
+
+(decl amode_imm_reg (u32 Gpr) Amode)
+(extern constructor amode_imm_reg amode_imm_reg)
+
+(decl amode_imm_reg_flags (u32 Gpr MemFlags) Amode)
+(rule (amode_imm_reg_flags offset base flags)
+      (amode_with_flags (amode_imm_reg offset base) flags))
 
 (decl amode_imm_reg_reg_shift (u32 Gpr Gpr u8) Amode)
 (extern constructor amode_imm_reg_reg_shift amode_imm_reg_reg_shift)
 
-(decl amode_to_synthetic_amode (Amode) SyntheticAmode)
-(extern constructor amode_to_synthetic_amode amode_to_synthetic_amode)
+(decl amode_imm_reg_reg_shift_flags (u32 Gpr Gpr u8 MemFlags) Amode)
+(rule (amode_imm_reg_reg_shift_flags offset base index shift flags)
+      (amode_with_flags (amode_imm_reg_reg_shift offset base index shift) flags))
+
+;; A helper to check if a shift amount (the `Value`) is both constant and
+;; less-than or equal to 3; this is needed since x64 can only shift addresses
+;; using two bits.
+(decl const_shift_lt_eq_3  (u8) Value)
+(extern extractor const_shift_lt_eq_3  const_shift_lt_eq_3 )
+
+;; A helper to both check that the `Imm64` and `Offset32` values sum to less
+;; than 32-bits AND return this summed `u32` value. Also, the `Imm64` will be
+;; zero-extended from `Type` up to 64 bits. This is useful for `to_amode`.
+(decl sum_extend_fits_in_32_bits (Type Imm64 u32) Offset32)
+(extern extractor sum_extend_fits_in_32_bits sum_extend_fits_in_32_bits (in in out))
+
+;; To generate an address for a memory access, we can pattern-match various CLIF
+;; sub-trees to x64's complex addressing modes (`Amode`). In pseudo-code:
+;;
+;; if address matches iadd(a, b):
+;;   if either a or b:
+;;     matches (ishl c with shift amount <= 3):
+;;       amode(base + offset + (c << amount))
+;;     matches (iconst c where c + offset will fit in 32 bits):
+;;       amode(base + eval(c + offset))
+;;     matches (uextend (iconst c) where c + offset will fit in 32 bits):
+;;       amode(base + eval(c + offset))
+;;   else:
+;;     amode(a + offset + (b << 0))
+;; else:
+;;   amode(base + offset)
+;;
+;; The rules for `to_amode` correspond to a subset of the possible addressing
+;; modes available by tweaking the SIB byte, the MOD bits, and the size of the
+;; displacement (i.e., offset). More information is available in Intel's
+;; Software Developer's Manual, volume 2, section 2.1.5, "Addressing-Mode
+;; Encoding of ModR/M and SIB Bytes."
+(decl to_amode (MemFlags Value Offset32) Amode)
+
+;; ...matches (ishl c ...)
+(rule (to_amode flags (iadd (ishl src (const_shift_lt_eq_3 amt)) base) offset)
+      (amode_imm_reg_reg_shift_flags offset (put_in_gpr base) (put_in_gpr src) amt flags))
+(rule (to_amode flags (iadd base (ishl src (const_shift_lt_eq_3 amt))) offset)
+      (amode_imm_reg_reg_shift_flags offset (put_in_gpr base) (put_in_gpr src) amt flags))
+;; ...matches (iconst c ...); note how this matching pattern uses an in-out
+;; extractor to check that the offset and constant value (`c`, the in
+;; parameter), when summed will fit into x64's 32-bit displacement, returned as
+;; `sum` (the out parameter). The syntax for this could be improved (TODO).
+(rule (to_amode flags (iadd (iconst c) base) _offset @ (sum_extend_fits_in_32_bits <$I64 <c sum))
+      (amode_imm_reg_flags sum (put_in_gpr base) flags))
+(rule (to_amode flags (iadd base (iconst c)) _offset @ (sum_extend_fits_in_32_bits <$I64 <c sum))
+      (amode_imm_reg_flags sum (put_in_gpr base) flags))
+;; ...matches (uextend(iconst c) ...); see notes above.
+(rule (to_amode flags (iadd (has_type ty (uextend (iconst c))) base) _offset @ (sum_extend_fits_in_32_bits <ty <c sum))
+      (amode_imm_reg_flags sum (put_in_gpr base) flags))
+(rule (to_amode flags (iadd base (has_type ty (uextend (iconst c)))) _offset @ (sum_extend_fits_in_32_bits <ty <c sum))
+      (amode_imm_reg_flags sum (put_in_gpr base) flags))
+;; ...else only matches (iadd(a b))
+(rule (to_amode flags (iadd base index) offset)
+      (amode_imm_reg_reg_shift_flags offset (put_in_gpr base) (put_in_gpr index) 0 flags))
+;; ...else
+(rule (to_amode flags base offset)
+      (amode_imm_reg_flags offset (put_in_gpr base) flags))
+
+;; Shift kinds.
 
 (type ShiftKind extern
       (enum ShiftLeft
@@ -1152,11 +1230,11 @@
 
 ;; Zero extending uses `movzx`.
 (rule (extend (ExtendKind.Zero) ty mode src)
-      (x64_movzx ty mode src))
+      (x64_movzx mode src))
 
 ;; Sign extending uses `movsx`.
 (rule (extend (ExtendKind.Sign) ty mode src)
-      (x64_movsx ty mode src))
+      (x64_movsx mode src))
 
 ;;;; Helpers for Working SSE tidbits ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1235,8 +1313,7 @@
 (decl x64_load (Type SyntheticAmode ExtKind) Reg)
 
 (rule (x64_load (fits_in_32 ty) addr (ExtKind.SignExtend))
-      (x64_movsx ty
-             (ext_mode (ty_bytes ty) 8)
+      (x64_movsx (ext_mode (ty_bytes ty) 8)
              addr))
 
 (rule (x64_load $I64 addr _ext_kind)
@@ -1263,6 +1340,68 @@
 (rule (x64_load (multi_lane _bits _lanes) addr _ext_kind)
       (xmm_unary_rm_r (SseOpcode.Movdqu)
                       addr))
+
+(decl x64_mov (Amode) Reg)
+(rule (x64_mov addr)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (MInst.Mov64MR addr dst))))
+        dst))
+
+(decl x64_movzx (ExtMode GprMem) Gpr)
+(rule (x64_movzx mode src)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (MInst.MovzxRmR mode src dst))))
+        dst))
+
+(decl x64_movsx (ExtMode GprMem) Gpr)
+(rule (x64_movsx mode src)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (MInst.MovsxRmR mode src dst))))
+        dst))
+
+(decl x64_movss_load (XmmMem) Xmm)
+(rule (x64_movss_load from)
+      (xmm_unary_rm_r (SseOpcode.Movss) from))
+
+(decl x64_movsd_load (XmmMem) Xmm)
+(rule (x64_movsd_load from)
+      (xmm_unary_rm_r (SseOpcode.Movsd) from))
+
+(decl x64_movups (XmmMem) Xmm)
+(rule (x64_movups from)
+      (xmm_unary_rm_r (SseOpcode.Movups) from))
+
+(decl x64_movupd (XmmMem) Xmm)
+(rule (x64_movupd from)
+      (xmm_unary_rm_r (SseOpcode.Movupd) from))
+
+(decl x64_movdqu (XmmMem) Xmm)
+(rule (x64_movdqu from)
+      (xmm_unary_rm_r (SseOpcode.Movdqu) from))
+
+(decl x64_pmovsxbw (XmmMem) Xmm)
+(rule (x64_pmovsxbw from)
+      (xmm_unary_rm_r (SseOpcode.Pmovsxbw) from))
+
+(decl x64_pmovzxbw (XmmMem) Xmm)
+(rule (x64_pmovzxbw from)
+      (xmm_unary_rm_r (SseOpcode.Pmovzxbw) from))
+
+(decl x64_pmovsxwd (XmmMem) Xmm)
+(rule (x64_pmovsxwd from)
+      (xmm_unary_rm_r (SseOpcode.Pmovsxwd) from))
+
+(decl x64_pmovzxwd (XmmMem) Xmm)
+(rule (x64_pmovzxwd from)
+      (xmm_unary_rm_r (SseOpcode.Pmovzxwd) from))
+
+(decl x64_pmovsxdq (XmmMem) Xmm)
+(rule (x64_pmovsxdq from)
+      (xmm_unary_rm_r (SseOpcode.Pmovsxdq) from))
+
+(decl x64_pmovzxdq (XmmMem) Xmm)
+(rule (x64_pmovzxdq from)
+      (xmm_unary_rm_r (SseOpcode.Pmovzxdq) from))
 
 ;; Load a constant into an XMM register.
 (decl x64_xmm_load_const (Type VCodeConstant) Xmm)
@@ -1665,20 +1804,6 @@
          (MInst.Setcc cc dst)
          dst)))
 
-;; Helper for creating `MInst.MovzxRmR` instructions.
-(decl x64_movzx (Type ExtMode GprMem) Gpr)
-(rule (x64_movzx ty mode src)
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.MovzxRmR mode src dst))))
-        dst))
-
-;; Helper for creating `MInst.MovsxRmR` instructions.
-(decl x64_movsx (Type ExtMode GprMem) Gpr)
-(rule (x64_movsx ty mode src)
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.MovsxRmR mode src dst))))
-        dst))
-
 ;; Helper for creating `MInst.XmmRmR` instructions.
 (decl xmm_rm_r (Type SseOpcode Xmm XmmMem) Xmm)
 (rule (xmm_rm_r ty op src1 src2)
@@ -1995,8 +2120,8 @@
         (xmm_rm_r $F64X2 (SseOpcode.Blendvpd) src1 src2)))
 
 ;; Helper for creating `movsd` instructions.
-(decl x64_movsd (Xmm XmmMem) Xmm)
-(rule (x64_movsd src1 src2)
+(decl x64_movsd_regmove (Xmm XmmMem) Xmm)
+(rule (x64_movsd_regmove src1 src2)
       (xmm_rm_r $I8X16 (SseOpcode.Movsd) src1 src2))
 
 ;; Helper for creating `movlhps` instructions.
@@ -2190,16 +2315,6 @@
       (let ((dst WritableXmm (temp_writable_xmm))
             (_ Unit (emit (MInst.XmmUnaryRmR op src dst))))
         dst))
-
-;; Helper for creating `pmovsxbw` instructions.
-(decl x64_pmovsxbw (XmmMem) Xmm)
-(rule (x64_pmovsxbw src)
-      (xmm_unary_rm_r (SseOpcode.Pmovsxbw) src))
-
-;; Helper for creating `pmovzxbw` instructions.
-(decl x64_pmovzxbw (XmmMem) Xmm)
-(rule (x64_pmovzxbw src)
-      (xmm_unary_rm_r (SseOpcode.Pmovzxbw) src))
 
 ;; Helper for creating `pabsb` instructions.
 (decl x64_pabsb (XmmMem) Xmm)
@@ -2582,7 +2697,9 @@
 (convert Imm8Reg Imm8Gpr imm8_reg_to_imm8_gpr)
 
 (convert Amode SyntheticAmode amode_to_synthetic_amode)
+(convert Amode GprMem amode_to_gpr_mem)
 (convert SyntheticAmode GprMem synthetic_amode_to_gpr_mem)
+(convert Amode XmmMem amode_to_xmm_mem)
 (convert SyntheticAmode XmmMem synthetic_amode_to_xmm_mem)
 
 (convert IntCC CC intcc_to_cc)
@@ -2614,8 +2731,14 @@
       (value_reg w_xmm))
 
 (decl synthetic_amode_to_gpr_mem (SyntheticAmode) GprMem)
+(decl amode_to_gpr_mem (Amode) GprMem)
+(rule (amode_to_gpr_mem amode)
+      (amode_to_synthetic_amode amode))
 (rule (synthetic_amode_to_gpr_mem amode)
       (synthetic_amode_to_reg_mem amode))
+(decl amode_to_xmm_mem (Amode) XmmMem)
+(rule (amode_to_xmm_mem amode)
+      (amode_to_synthetic_amode amode))
 (decl synthetic_amode_to_xmm_mem (SyntheticAmode) XmmMem)
 (rule (synthetic_amode_to_xmm_mem amode)
       (synthetic_amode_to_reg_mem amode))

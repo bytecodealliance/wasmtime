@@ -265,6 +265,10 @@
 (decl ty_int_bool_64 (Type) Type)
 (extern extractor ty_int_bool_64 ty_int_bool_64)
 
+;; An extractor that matches I64 or B64 or R64.
+(decl ty_int_bool_ref_64 (Type) Type)
+(extern extractor ty_int_bool_ref_64 ty_int_bool_ref_64)
+
 ;; An extractor that matches I128 or B128.
 (decl ty_int_bool_128 (Type) Type)
 (extern extractor ty_int_bool_128 ty_int_bool_128)
@@ -378,6 +382,10 @@
 (decl u64_from_iconst (u64) Value)
 (extractor (u64_from_iconst x)
            (def_inst (iconst (u64_from_imm64 x))))
+
+;; Convert an `Offset32` to a primitive number.
+(decl offset32_to_u32 (Offset32) u32)
+(extern constructor offset32_to_u32 offset32_to_u32)
 
 ;; Instruction creation helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -564,3 +572,4 @@
 (convert ValueRegs InstOutput output)
 (convert Reg InstOutput output_reg)
 (convert Value InstOutput output_value)
+(convert Offset32 u32 offset32_to_u32)

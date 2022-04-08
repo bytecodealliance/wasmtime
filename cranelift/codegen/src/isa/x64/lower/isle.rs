@@ -12,7 +12,7 @@ use crate::{
         condcodes::{FloatCC, IntCC},
         immediates::*,
         types::*,
-        Inst, InstructionData, Opcode, TrapCode, Value, ValueLabel, ValueList,
+        Inst, InstructionData, MemFlags, Opcode, TrapCode, Value, ValueLabel, ValueList,
     },
     isa::{
         settings::Flags,
@@ -314,8 +314,27 @@ where
     }
 
     #[inline]
+    fn amode_imm_reg(&mut self, simm32: u32, base: Gpr) -> Amode {
+        Amode::imm_reg(simm32, base.to_reg())
+    }
+
+    #[inline]
+    fn amode_with_flags(&mut self, amode: &Amode, flags: MemFlags) -> Amode {
+        amode.with_flags(flags)
+    }
+
+    #[inline]
     fn amode_to_synthetic_amode(&mut self, amode: &Amode) -> SyntheticAmode {
         amode.clone().into()
+    }
+
+    #[inline]
+    fn const_shift_lt_eq_3(&mut self, shift_amount: Value) -> Option<u8> {
+        let input = self.lower_ctx.get_value_as_source_or_const(shift_amount);
+        match input.constant {
+            Some(shift_amount) if shift_amount <= 3 => Some(shift_amount as u8),
+            _ => None,
+        }
     }
 
     #[inline]
@@ -518,6 +537,28 @@ where
     #[inline]
     fn intcc_to_cc(&mut self, intcc: &IntCC) -> CC {
         CC::from_intcc(*intcc)
+    }
+
+    #[inline]
+    fn sum_extend_fits_in_32_bits(
+        &mut self,
+        offset: Offset32,
+        extend_from_ty: Type,
+        constant_value: Imm64,
+    ) -> Option<u32> {
+        let offset: i64 = offset.into();
+        let constant_value: u64 = constant_value.bits() as u64;
+        // If necessary, zero extend `constant_value` up to 64 bits.
+        let shift = 64 - extend_from_ty.bits();
+        let zero_extended_constant_value = (constant_value << shift) >> shift;
+        // Sum up the two operands.
+        let sum = offset.wrapping_add(zero_extended_constant_value as i64);
+        // Check that the sum will fit in 32-bits.
+        if sum == ((sum << 32) >> 32) {
+            Some(sum as u32)
+        } else {
+            None
+        }
     }
 }
 

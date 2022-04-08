@@ -1349,10 +1349,9 @@
 ;; internally as `xmm_rm_r` will merge the temp register into our `vec`
 ;; register.
 (rule (vec_insert_lane $F64X2 vec (RegMem.Reg val) 0)
-      (x64_movsd vec val))
+      (x64_movsd_regmove vec val))
 (rule (vec_insert_lane $F64X2 vec mem 0)
-      (x64_movsd vec (xmm_unary_rm_r (SseOpcode.Movsd)
-                                 mem)))
+      (x64_movsd_regmove vec (x64_movsd_load mem)))
 
 ;; f64x2.replace_lane 1
 ;;
@@ -2506,3 +2505,65 @@
       (x64_maxps y x))
 (rule (lower (has_type $F64X2 (fmax_pseudo x y)))
       (x64_maxpd y x))
+
+;; Rules for `load*` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; In order to load a value from memory to a GPR register, we may need to extend
+;; the loaded value from 8-, 16-, or 32-bits to this backend's expected GPR
+;; width: 64 bits. Note that `ext_mode` will load 1-bit types (booleans) as
+;; 8-bit loads.
+;;
+;; By default, we zero-extend all sub-64-bit loads to a GPR.
+(rule (lower (has_type (and (fits_in_32 ty) (is_gpr_type _)) (load flags address offset)))
+      (x64_movzx (ext_mode (ty_bits_u16 ty) 64) (to_amode flags address offset)))
+;; But if we know that both the `from` and `to` are 64 bits, we simply load with
+;; no extension.
+(rule (lower (has_type (ty_int_bool_ref_64 ty) (load flags address offset)))
+      (x64_mov (to_amode flags address offset)))
+;; Also, certain scalar loads have a specific `from` width and extension kind
+;; (signed -> `sx`, zeroed -> `zx`). We overwrite the high bits of the 64-bit
+;; GPR even if the `to` type is smaller (e.g., 16-bits).
+(rule (lower (has_type (is_gpr_type ty) (uload8 flags address offset)))
+      (x64_movzx (ExtMode.BQ) (to_amode flags address offset)))
+(rule (lower (has_type (is_gpr_type ty) (sload8 flags address offset)))
+      (x64_movsx (ExtMode.BQ) (to_amode flags address offset)))
+(rule (lower (has_type (is_gpr_type ty) (uload16 flags address offset)))
+      (x64_movzx (ExtMode.WQ) (to_amode flags address offset)))
+(rule (lower (has_type (is_gpr_type ty) (sload16 flags address offset)))
+      (x64_movsx (ExtMode.WQ) (to_amode flags address offset)))
+(rule (lower (has_type (is_gpr_type ty) (uload32 flags address offset)))
+      (x64_movzx (ExtMode.LQ) (to_amode flags address offset)))
+(rule (lower (has_type (is_gpr_type ty) (sload32 flags address offset)))
+      (x64_movsx (ExtMode.LQ) (to_amode flags address offset)))
+
+;; To load to XMM registers, we use the x64-specific instructions for each type.
+;; For `$F32` and `$F64` this is important--we only want to load 32 or 64 bits.
+;; But for the 128-bit types, this is not strictly necessary for performance but
+;; might help with clarity during disassembly.
+(rule (lower (has_type $F32 (load flags address offset)))
+      (x64_movss_load (to_amode flags address offset)))
+(rule (lower (has_type $F64 (load flags address offset)))
+      (x64_movsd_load (to_amode flags address offset)))
+(rule (lower (has_type $F32X4 (load flags address offset)))
+      (x64_movups (to_amode flags address offset)))
+(rule (lower (has_type $F64X2 (load flags address offset)))
+      (x64_movupd (to_amode flags address offset)))
+(rule (lower (has_type (ty_vec128 ty) (load flags address offset)))
+      (x64_movdqu (to_amode flags address offset)))
+
+;; We also include widening vector loads; these sign- or zero-extend each lane
+;; to the next wider width (e.g., 16x4 -> 32x4).
+(rule (lower (has_type $I16X8 (sload8x8 flags address offset)))
+      (x64_pmovsxbw (to_amode flags address offset)))
+(rule (lower (has_type $I16X8 (uload8x8 flags address offset)))
+      (x64_pmovzxbw (to_amode flags address offset)))
+(rule (lower (has_type $I32X4 (sload16x4 flags address offset)))
+      (x64_pmovsxwd (to_amode flags address offset)))
+(rule (lower (has_type $I32X4 (uload16x4 flags address offset)))
+      (x64_pmovzxwd (to_amode flags address offset)))
+(rule (lower (has_type $I64X2 (sload32x2 flags address offset)))
+      (x64_pmovsxdq (to_amode flags address offset)))
+(rule (lower (has_type $I64X2 (uload32x2 flags address offset)))
+      (x64_pmovzxdq (to_amode flags address offset)))
+
+;; TODO: Multi-register loads (I128)

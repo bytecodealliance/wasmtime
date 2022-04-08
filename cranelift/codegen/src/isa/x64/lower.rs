@@ -2192,18 +2192,6 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 _ => unimplemented!(),
             };
 
-            let ext_mode = ExtMode::new(elem_ty.bits(), 64);
-
-            let sign_extend = match op {
-                Opcode::Sload8
-                | Opcode::Sload16
-                | Opcode::Sload32
-                | Opcode::Sload8x8
-                | Opcode::Sload16x4
-                | Opcode::Sload32x2 => true,
-                _ => false,
-            };
-
             let amode = match op {
                 Opcode::Load
                 | Opcode::Uload8
@@ -2229,60 +2217,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 ctx.emit(Inst::mov64_m_r(amode.clone(), dsts.regs()[0]));
                 ctx.emit(Inst::mov64_m_r(amode.offset(8), dsts.regs()[1]));
             } else {
-                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-                let is_xmm = elem_ty.is_float() || elem_ty.is_vector();
-                match (sign_extend, is_xmm) {
-                    (true, false) => {
-                        // The load is sign-extended only when the output size is lower than 64 bits,
-                        // so ext-mode is defined in this case.
-                        ctx.emit(Inst::movsx_rm_r(ext_mode.unwrap(), RegMem::mem(amode), dst));
-                    }
-                    (false, false) => {
-                        if elem_ty.bytes() == 8 {
-                            // Use a plain load.
-                            ctx.emit(Inst::mov64_m_r(amode, dst))
-                        } else {
-                            // Use a zero-extended load.
-                            ctx.emit(Inst::movzx_rm_r(ext_mode.unwrap(), RegMem::mem(amode), dst))
-                        }
-                    }
-                    (_, true) => {
-                        ctx.emit(match elem_ty {
-                            types::F32 => Inst::xmm_mov(SseOpcode::Movss, RegMem::mem(amode), dst),
-                            types::F64 => Inst::xmm_mov(SseOpcode::Movsd, RegMem::mem(amode), dst),
-                            types::I8X8 => {
-                                if sign_extend == true {
-                                    Inst::xmm_mov(SseOpcode::Pmovsxbw, RegMem::mem(amode), dst)
-                                } else {
-                                    Inst::xmm_mov(SseOpcode::Pmovzxbw, RegMem::mem(amode), dst)
-                                }
-                            }
-                            types::I16X4 => {
-                                if sign_extend == true {
-                                    Inst::xmm_mov(SseOpcode::Pmovsxwd, RegMem::mem(amode), dst)
-                                } else {
-                                    Inst::xmm_mov(SseOpcode::Pmovzxwd, RegMem::mem(amode), dst)
-                                }
-                            }
-                            types::I32X2 => {
-                                if sign_extend == true {
-                                    Inst::xmm_mov(SseOpcode::Pmovsxdq, RegMem::mem(amode), dst)
-                                } else {
-                                    Inst::xmm_mov(SseOpcode::Pmovzxdq, RegMem::mem(amode), dst)
-                                }
-                            }
-                            _ if elem_ty.is_vector() && elem_ty.bits() == 128 => {
-                                Inst::xmm_mov(SseOpcode::Movups, RegMem::mem(amode), dst)
-                            }
-                            // TODO Specialize for different types: MOVUPD, MOVDQU
-                            _ => unreachable!(
-                                "unexpected type for load: {:?} - {:?}",
-                                elem_ty,
-                                elem_ty.bits()
-                            ),
-                        });
-                    }
-                }
+                implemented_in_isle(ctx);
             }
         }
 
