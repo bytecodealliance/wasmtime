@@ -20,37 +20,37 @@ register allocator may have inserted `spill`, `fill`, and
 
 The phases of the SSA-based register allocator are:
 
-Liveness analysis
-    For each SSA value, determine exactly where it is live.
+**Liveness analysis:**
+For each SSA value, determine exactly where it is live.
 
-Coalescing
-    Form *virtual registers* which are sets of SSA values that should be
-    assigned to the same location. Split live ranges such that values that
-    belong to the same virtual register don't have interfering live ranges.
+**Coalescing:**
+Form *virtual registers* which are sets of SSA values that should be
+assigned to the same location. Split live ranges such that values that
+belong to the same virtual register don't have interfering live ranges.
 
-Spilling
-    The process of deciding which SSA values go in a stack slot and which
-    values go in a register. The spilling phase can also split live ranges by
-    inserting `copy` instructions, or transform the code in other ways to
-    reduce the number of values kept in registers.
+**Spilling:**
+The process of deciding which SSA values go in a stack slot and which
+values go in a register. The spilling phase can also split live ranges by
+inserting `copy` instructions, or transform the code in other ways to
+reduce the number of values kept in registers.
 
-    After spilling, the number of live register values never exceeds the number
-    of available registers.
+After spilling, the number of live register values never exceeds the number
+of available registers.
 
-Reload
-    Insert `spill` and `fill` instructions as necessary such that
-    instructions that expect their operands in registers won't see values that
-    live on the stack and vice versa.
+**Reload:**
+Insert `spill` and `fill` instructions as necessary such that
+instructions that expect their operands in registers won't see values that
+live on the stack and vice versa.
 
-    Reuse registers containing values loaded from the stack as much as possible
-    without exceeding the maximum allowed register pressure.
+Reuse registers containing values loaded from the stack as much as possible
+without exceeding the maximum allowed register pressure.
 
-Coloring
-    The process of assigning specific registers to the live values. It's a
-    property of SSA form that this can be done in a linear scan of the
-    dominator tree without causing any additional spills.
+**Coloring:**
+The process of assigning specific registers to the live values. It's a
+property of SSA form that this can be done in a linear scan of the
+dominator tree without causing any additional spills.
 
-    Make sure that specific register operand constraints are satisfied.
+Make sure that specific register operand constraints are satisfied.
 
 The contract between the spilling and coloring phases is that the number of
 values in registers never exceeds the number of available registers. This
@@ -62,56 +62,56 @@ In practice, instruction set architectures don't have "K interchangeable
 registers", and register pressure can't be measured with a single number. There
 are complications:
 
-Different register banks
-    Most ISAs separate integer registers from floating point registers, and
-    instructions require their operands to come from a specific bank. This is a
-    fairly simple problem to deal with since the register banks are completely
-    disjoint. We simply count the number of integer and floating-point values
-    that are live independently, and make sure that each number does not exceed
-    the size of their respective register banks.
+**Different register banks:**
+Most ISAs separate integer registers from floating point registers, and
+instructions require their operands to come from a specific bank. This is a
+fairly simple problem to deal with since the register banks are completely
+disjoint. We simply count the number of integer and floating-point values
+that are live independently, and make sure that each number does not exceed
+the size of their respective register banks.
 
-Instructions with fixed operands
-    Some instructions use a fixed register for an operand. This happens on the
-    x86 ISAs:
+**Instructions with fixed operands:**
+Some instructions use a fixed register for an operand. This happens on the
+x86 ISAs:
 
-    - Dynamic shift and rotate instructions take the shift amount in CL.
-    - Division instructions use RAX and RDX for both input and output operands.
-    - Wide multiply instructions use fixed RAX and RDX registers for input and
-      output operands.
-    - A few SSE variable blend instructions use a hardwired XMM0 input operand.
+- Dynamic shift and rotate instructions take the shift amount in CL.
+- Division instructions use RAX and RDX for both input and output operands.
+- Wide multiply instructions use fixed RAX and RDX registers for input and
+output operands.
+- A few SSE variable blend instructions use a hardwired XMM0 input operand.
 
-Operands constrained to register subclasses
-    Some instructions can only use a subset of the registers for some operands.
-    For example, the ARM NEON vmla (scalar) instruction requires the scalar
-    operand to be located in D0-15 or even D0-7, depending on the data type.
-    The other operands can be from the full D0-31 register set.
+**Operands constrained to register subclasses:**
+Some instructions can only use a subset of the registers for some operands.
+For example, the ARM NEON vmla (scalar) instruction requires the scalar
+operand to be located in D0-15 or even D0-7, depending on the data type.
+The other operands can be from the full D0-31 register set.
 
-ABI boundaries
-    Before making a function call, arguments must be placed in specific
-    registers and stack locations determined by the ABI, and return values
-    appear in fixed registers.
+**ABI boundaries:**
+Before making a function call, arguments must be placed in specific
+registers and stack locations determined by the ABI, and return values
+appear in fixed registers.
 
-    Some registers can be clobbered by the call and some are saved by the
-    callee. In some cases, only the low bits of a register are saved by the
-    callee. For example, ARM64 callees save only the low 64 bits of v8-15, and
-    Win64 callees only save the low 128 bits of AVX registers.
+Some registers can be clobbered by the call and some are saved by the
+callee. In some cases, only the low bits of a register are saved by the
+callee. For example, ARM64 callees save only the low 64 bits of v8-15, and
+Win64 callees only save the low 128 bits of AVX registers.
 
-    ABI boundaries also affect the location of arguments to the entry block and
-    return values passed to the `return` instruction.
+ABI boundaries also affect the location of arguments to the entry block and
+return values passed to the `return` instruction.
 
-Aliasing registers
-    Different registers sometimes share the same bits in the register bank.
-    This can make it difficult to measure register pressure. For example, the
-    x86 registers RAX, EAX, AX, AL, and AH overlap.
+**Aliasing registers:**
+Different registers sometimes share the same bits in the register bank.
+This can make it difficult to measure register pressure. For example, the
+x86 registers RAX, EAX, AX, AL, and AH overlap.
 
-    If only one of the aliasing registers can be used at a time, the aliasing
-    doesn't cause problems since the registers can simply be counted as one
-    unit.
+If only one of the aliasing registers can be used at a time, the aliasing
+doesn't cause problems since the registers can simply be counted as one
+unit.
 
-Early clobbers
-    Sometimes an instruction requires that the register used for an output
-    operand does not alias any of the input operands. This happens for inline
-    assembly and in some other special cases.
+**Early clobbers:**
+Sometimes an instruction requires that the register used for an output
+operand does not alias any of the input operands. This happens for inline
+assembly and in some other special cases.
 
 
 ## Liveness Analysis
@@ -188,15 +188,15 @@ Unconstrained SSA form is not well suited to register allocation because of the 
 that can arise around EBB parameters and arguments. Consider this simple example:
 
 ```
-    function %interference(i32, i32) -> i32 {
-    ebb0(v0: i32, v1: i32):
-        brz v0, ebb1(v1)
-        jump ebb1(v0)
+function %interference(i32, i32) -> i32 {
+ebb0(v0: i32, v1: i32):
+    brz v0, ebb1(v1)
+    jump ebb1(v0)
 
-    ebb1(v2: i32):
-        v3 = iadd v1, v2
-        return v3
-    }
+ebb1(v2: i32):
+    v3 = iadd v1, v2
+    return v3
+}
 ```
 
 Here, the value `v1` is both passed as an argument to `ebb1` *and* it is
@@ -208,17 +208,17 @@ between `v1` and `v2` in the `ebb1` block.
 The interference can be resolved by isolating the SSA values passed as EBB arguments:
 
 ```
-    function %coalesced(i32, i32) -> i32 {
-    ebb0(v0: i32, v1: i32):
-        v5 = copy v1
-        brz v0, ebb1(v5)
-        v6 = copy v0
-        jump ebb1(v6)
+function %coalesced(i32, i32) -> i32 {
+ebb0(v0: i32, v1: i32):
+  v5 = copy v1
+  brz v0, ebb1(v5)
+  v6 = copy v0
+  jump ebb1(v6)
 
-    ebb1(v2: i32):
-        v3 = iadd.i32 v1, v2
-        return v3
-    }
+ebb1(v2: i32):
+  v3 = iadd.i32 v1, v2
+  return v3
+}
 ```
 
 Now the EBB argument is `v5` which is *not* itself live into `ebb1`,
