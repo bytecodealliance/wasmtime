@@ -821,6 +821,38 @@ impl Module {
     pub fn image_range(&self) -> Range<usize> {
         self.compiled_module().image_range()
     }
+
+    /// Force initialization of copy-on-write images to happen here-and-now
+    /// instead of when they're requested during first instantiation.
+    ///
+    /// When [copy-on-write memory
+    /// initialization](crate::Config::memory_init_cow) is enabled then Wasmtime
+    /// will lazily create the initialization image for a module. This method
+    /// can be used to explicitly dictate when this initialization happens.
+    ///
+    /// Note that this largely only matters on Linux when memfd is used.
+    /// Otherwise the copy-on-write image typically comes from disk and in that
+    /// situation the creation of the image is trivial as the image is always
+    /// sourced from disk. On Linux, though, when memfd is used a memfd is
+    /// created and the initialization image is written to it.
+    ///
+    /// Also note that this method is not required to be called, it's available
+    /// as a performance optimization if required but is otherwise handled
+    /// automatically.
+    pub fn initialize_copy_on_write_image(&self) -> Result<()> {
+        self.inner.memory_images()?;
+        Ok(())
+    }
+}
+
+impl ModuleInner {
+    fn memory_images(&self) -> Result<Option<&ModuleMemoryImages>> {
+        let images = self
+            .memory_images
+            .get_or_try_init(|| memory_images(&self.engine, &self.module))?
+            .as_ref();
+        Ok(images)
+    }
 }
 
 fn _assert_send_sync() {
@@ -874,12 +906,8 @@ impl wasmtime_runtime::ModuleRuntimeInfo for ModuleInner {
     }
 
     fn memory_image(&self, memory: DefinedMemoryIndex) -> Result<Option<&Arc<MemoryImage>>> {
-        let images = self
-            .memory_images
-            .get_or_try_init(|| memory_images(&self.engine, &self.module))?;
-        Ok(images
-            .as_ref()
-            .and_then(|images| images.get_memory_image(memory)))
+        let images = self.memory_images()?;
+        Ok(images.and_then(|images| images.get_memory_image(memory)))
     }
 
     fn unique_id(&self) -> Option<CompiledModuleId> {

@@ -618,6 +618,12 @@ impl<T> InstancePre<T> {
         })
     }
 
+    /// Returns a reference to the module that this [`InstancePre`] will be
+    /// instantiating.
+    pub fn module(&self) -> &Module {
+        &self.module
+    }
+
     /// Instantiates this instance, creating a new instance within the provided
     /// `store`.
     ///
