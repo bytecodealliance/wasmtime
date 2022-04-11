@@ -1780,9 +1780,9 @@
             (tmp2 WritableGpr (temp_writable_gpr))
             (size OperandSize (OperandSize.Size64))
             (cmove1 MInst (MInst.Cmove size cc1 (value_regs_get_gpr cons 0) (value_regs_get_gpr alt 0) tmp1))
-            (cmove2 MInst (MInst.Cmove size cc1 (value_regs_get_gpr cons 0) tmp1 dst1))
+            (cmove2 MInst (MInst.Cmove size cc2 (value_regs_get_gpr cons 0) tmp1 dst1))
             (cmove3 MInst (MInst.Cmove size cc1 (value_regs_get_gpr cons 1) (value_regs_get_gpr alt 1) tmp2))
-            (cmove4 MInst (MInst.Cmove size cc1 (value_regs_get_gpr cons 1) tmp2 dst2)))
+            (cmove4 MInst (MInst.Cmove size cc2 (value_regs_get_gpr cons 1) tmp2 dst2)))
         (ConsumesFlags.ConsumesFlagsFourTimesReturnsValueRegs
          cmove1
          cmove2
