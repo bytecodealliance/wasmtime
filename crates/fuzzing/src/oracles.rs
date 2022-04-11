@@ -16,7 +16,6 @@ use crate::generators;
 use arbitrary::Arbitrary;
 use log::debug;
 use std::cell::Cell;
-use std::convert::TryInto;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use std::sync::{Arc, Condvar, Mutex};
@@ -548,7 +547,7 @@ pub fn spectest(mut fuzz_config: generators::Config, test: generators::SpecTest)
 
 /// Execute a series of `table.get` and `table.set` operations.
 pub fn table_ops(mut fuzz_config: generators::Config, ops: generators::table_ops::TableOps) {
-    let expected_drops = Arc::new(AtomicUsize::new(ops.num_params() as usize));
+    let expected_drops = Arc::new(AtomicUsize::new(ops.num_params as usize));
     let num_dropped = Arc::new(AtomicUsize::new(0));
 
     {
@@ -592,6 +591,7 @@ pub fn table_ops(mut fuzz_config: generators::Config, ops: generators::table_ops
                         let num_dropped = num_dropped.clone();
                         let expected_drops = expected_drops.clone();
                         move |mut caller: Caller<'_, StoreLimits>, _params, results| {
+                            log::info!("table_ops: GC");
                             if num_gcs.fetch_add(1, SeqCst) < MAX_GCS {
                                 caller.gc();
                             }
@@ -614,6 +614,7 @@ pub fn table_ops(mut fuzz_config: generators::Config, ops: generators::table_ops
             .func_wrap("", "take_refs", {
                 let expected_drops = expected_drops.clone();
                 move |a: Option<ExternRef>, b: Option<ExternRef>, c: Option<ExternRef>| {
+                    log::info!("table_ops: take_refs");
                     // Do the assertion on each ref's inner data, even though it
                     // all points to the same atomic, so that if we happen to
                     // run into a use-after-free bug with one of these refs we
@@ -651,6 +652,7 @@ pub fn table_ops(mut fuzz_config: generators::Config, ops: generators::table_ops
                         let num_dropped = num_dropped.clone();
                         let expected_drops = expected_drops.clone();
                         move |_caller, _params, results| {
+                            log::info!("table_ops: make_refs");
                             expected_drops.fetch_add(3, SeqCst);
                             results[0] =
                                 Some(ExternRef::new(CountDrops(num_dropped.clone()))).into();
@@ -668,7 +670,7 @@ pub fn table_ops(mut fuzz_config: generators::Config, ops: generators::table_ops
         let instance = linker.instantiate(&mut store, &module).unwrap();
         let run = instance.get_func(&mut store, "run").unwrap();
 
-        let args: Vec<_> = (0..ops.num_params())
+        let args: Vec<_> = (0..ops.num_params)
             .map(|_| Val::ExternRef(Some(ExternRef::new(CountDrops(num_dropped.clone())))))
             .collect();
         let _ = run.call(&mut store, &args, &mut []);
