@@ -1,0 +1,774 @@
+test compile
+target x86_64
+
+function u0:11335(i64 vmctx, i64, i32, i32, i32, i32, i32, i32, i32, i32) fast {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned readonly gv0
+    gv2 = load.i64 notrap aligned gv1
+    gv3 = vmctx
+    gv4 = load.i64 notrap aligned readonly gv3+504
+    heap0 = static gv4, min 0, bound 0x0001_0000_0000, offset_guard 0x8000_0000, index_type i32
+    sig0 = (i64 vmctx, i64, i32, i32, i32) -> i32 fast
+    sig1 = (i64 vmctx, i64, i32, i32, i32) -> i32 fast
+    sig2 = (i64 vmctx, i64, i32, i32, i32, i32, i32, i32, i32, i32) fast
+    fn0 = colocated u0:11337 sig0
+    fn1 = colocated u0:54216 sig1
+    fn2 = colocated u0:11335 sig2
+    stack_limit = gv2
+
+                                block0(v0: i64, v1: i64, v2: i32, v3: i32, v4: i32, v5: i32, v6: i32, v7: i32, v8: i32, v9: i32):
+                                    v236 -> v5
+                                    v241 -> v5
+                                    v237 -> v241
+                                    v238 -> v241
+                                    v239 -> v241
+                                    v240 -> v241
+                                    v242 -> v241
+                                    v243 -> v241
+                                    v244 -> v241
+                                    v245 -> v241
+                                    v246 -> v8
+                                    v251 -> v8
+                                    v247 -> v251
+                                    v248 -> v251
+                                    v249 -> v251
+                                    v250 -> v251
+                                    v252 -> v251
+                                    v253 -> v251
+                                    v254 -> v251
+                                    v255 -> v251
+                                    v282 -> v251
+                                    v329 -> v251
+                                    v337 -> v251
+                                    v15 -> v9
+                                    v256 -> v9
+                                    v257 -> v15
+                                    v258 -> v15
+                                    v259 -> v15
+                                    v260 -> v15
+                                    v261 -> v15
+                                    v262 -> v15
+                                    v263 -> v15
+                                    v264 -> v15
+@4b6655                             v10 = iconst.i32 0
+                                    v26 -> v10
+                                    v49 -> v10
+                                    v142 -> v10
+                                    v220 -> v10
+                                    v281 -> v10
+                                    v336 -> v10
+                                    v353 -> v10
+                                    v407 -> v10
+                                    v433 -> v10
+                                    v434 -> v10
+                                    v435 -> v10
+                                    v436 -> v10
+                                    v445 -> v10
+                                    v448 -> v10
+                                    v452 -> v10
+                                    v470 -> v10
+                                    v486 -> v10
+                                    v500 -> v10
+                                    v506 -> v10
+                                    v526 -> v10
+                                    v527 -> v10
+                                    v537 -> v10
+                                    v559 -> v10
+@4b665e                             brz v7, block2
+@4b665e                             jump block3
+
+                                block3:
+@4b6684                             v438 = load.i64 notrap aligned readonly v0+504
+                                    v440 -> v438
+                                    v442 -> v438
+                                    v444 -> v438
+                                    v455 -> v438
+                                    v457 -> v438
+                                    v462 -> v438
+                                    v464 -> v438
+                                    v473 -> v438
+                                    v475 -> v438
+                                    v480 -> v438
+                                    v482 -> v438
+                                    v491 -> v438
+                                    v494 -> v438
+                                    v497 -> v438
+                                    v499 -> v438
+                                    v502 -> v438
+                                    v504 -> v438
+                                    v510 -> v438
+                                    v513 -> v438
+                                    v515 -> v438
+                                    v517 -> v438
+                                    v519 -> v438
+                                    v522 -> v438
+                                    v524 -> v438
+                                    v529 -> v438
+                                    v531 -> v438
+                                    v533 -> v438
+                                    v535 -> v438
+                                    v539 -> v438
+                                    v542 -> v438
+                                    v546 -> v438
+                                    v548 -> v438
+                                    v550 -> v438
+                                    v552 -> v438
+                                    v555 -> v438
+                                    v557 -> v438
+@4b6731                             v90 = iconst.i32 -1
+                                    v86 -> v90
+                                    v126 -> v90
+                                    v465 -> v90
+                                    v466 -> v90
+                                    v483 -> v90
+@4b673a                             v93 = iconst.i32 2
+                                    v55 -> v93
+                                    v57 -> v93
+                                    v63 -> v93
+                                    v73 -> v93
+                                    v95 -> v93
+                                    v103 -> v93
+                                    v113 -> v93
+                                    v134 -> v93
+                                    v140 -> v93
+                                    v170 -> v93
+                                    v177 -> v93
+                                    v451 -> v93
+                                    v453 -> v93
+                                    v459 -> v93
+                                    v469 -> v93
+                                    v471 -> v93
+                                    v477 -> v93
+                                    v484 -> v93
+                                    v485 -> v93
+                                    v489 -> v93
+                                    v492 -> v93
+                                    v467 = iconst.i32 31
+                                    v449 -> v467
+                                    v468 = iconst.i32 1
+                                    v46 -> v468
+                                    v71 -> v468
+                                    v111 -> v468
+                                    v370 -> v468
+                                    v447 -> v468
+                                    v450 -> v468
+                                    v458 -> v468
+                                    v476 -> v468
+                                    v536 -> v468
+@4b6775                             v116 = iconst.i32 4
+                                    v43 -> v116
+                                    v76 -> v116
+                                    v160 -> v116
+                                    v164 -> v116
+                                    v291 -> v116
+                                    v346 -> v116
+                                    v376 -> v116
+                                    v379 -> v116
+                                    v382 -> v116
+                                    v446 -> v116
+                                    v460 -> v116
+                                    v478 -> v116
+                                    v487 -> v116
+                                    v488 -> v116
+                                    v505 -> v116
+                                    v525 -> v116
+                                    v540 -> v116
+                                    v543 -> v116
+                                    v544 -> v116
+@4b6843                             v182 = iconst.i32 -4
+                                    v298 -> v182
+                                    v306 -> v182
+                                    v311 -> v182
+                                    v326 -> v182
+                                    v404 -> v182
+                                    v417 -> v182
+                                    v495 -> v182
+                                    v507 -> v182
+                                    v508 -> v182
+                                    v511 -> v182
+                                    v520 -> v182
+                                    v553 -> v182
+                                    v558 -> v182
+@4b6666                             jump block7(v7, v6, v3, v2, v4)
+
+                                block7(v14: i32, v18: i32, v28: i32, v48: i32, v99: i32):
+                                    v51 -> v14
+                                    v193 -> v14
+                                    v194 -> v14
+                                    v195 -> v14
+                                    v196 -> v14
+                                    v197 -> v14
+                                    v198 -> v14
+                                    v199 -> v14
+                                    v54 -> v28
+                                    v137 -> v28
+                                    v138 -> v28
+                                    v148 -> v28
+                                    v149 -> v28
+                                    v285 -> v28
+                                    v392 -> v28
+                                    v301 -> v48
+                                    v332 -> v48
+                                    v340 -> v48
+                                    v98 -> v99
+                                    v269 -> v99
+                                    v270 -> v99
+                                    v271 -> v99
+                                    v272 -> v99
+                                    v273 -> v99
+                                    v274 -> v99
+                                    v275 -> v99
+                                    v297 -> v99
+                                    v356 -> v99
+                                    v394 -> v99
+                                    v395 -> v356
+@4b666c                             v16 = icmp sle v14, v15
+@4b666c                             v17 = bint.i32 v16
+@4b6671                             v19 = icmp sle v18, v15
+@4b6671                             v20 = bint.i32 v19
+@4b6672                             v21 = bor v17, v20
+@4b6674                             brnz v21, block9
+@4b6674                             jump block10
+
+                                block10:
+@4b6679                             brz.i32 v18, block2
+@4b6679                             jump block11
+
+                                block11:
+@4b667f                             v27 = isub.i32 v10, v18
+@4b6684                             v437 = uextend.i64 v28
+                                    v547 -> v437
+                                    v551 -> v437
+@4b6684                             v29 = iadd.i64 v438, v437
+                                    v398 -> v29
+                                    v401 -> v29
+@4b6684                             v30 = load.i32 little v29
+@4b6687                             v439 = uextend.i64 v30
+@4b6687                             v31 = iadd.i64 v438, v439
+@4b6687                             v32 = load.f32 little v31+68
+                                    v33 -> v32
+@4b668c                             jump block12(v48, v27)
+
+                                block12(v34: i32, v45: i32):
+                                    v131 -> v34
+                                    v132 -> v34
+                                    v229 -> v34
+                                    v230 -> v34
+                                    v208 -> v45
+                                    v209 -> v45
+                                    v210 -> v45
+                                    v211 -> v45
+                                    v212 -> v45
+                                    v213 -> v45
+                                    v214 -> v45
+@4b6692                             v441 = uextend.i64 v34
+                                    v545 -> v441
+                                    v549 -> v441
+@4b6692                             v35 = iadd.i64 v438, v441
+                                    v396 -> v35
+                                    v400 -> v35
+@4b6692                             v36 = load.i32 little v35
+@4b6695                             v443 = uextend.i64 v36
+@4b6695                             v37 = iadd.i64 v438, v443
+@4b6695                             v38 = load.f32 little v37+68
+@4b6698                             v39 = fcmp.f32 gt v32, v38
+@4b6698                             v40 = bint.i32 v39
+@4b669a                             brnz v40, block14
+@4b669a                             jump block15
+
+                                block15:
+@4b66a0                             v44 = iadd.i32 v34, v116
+@4b66a7                             v47 = iadd.i32 v45, v468
+@4b66aa                             brnz v47, block12(v44, v47)
+@4b66aa                             jump block16
+
+                                block16:
+@4b66ac                             jump block2
+
+                                block14:
+@4b66af                             jump block13
+
+                                block13:
+@4b66be                             v50 = isub.i32 v10, v45
+@4b66c3                             v52 = icmp slt v50, v14
+@4b66c4                             brz v52, block22
+@4b66c4                             jump block23
+
+                                block23:
+                                    v427 = ushr.i32 v14, v467
+                                    v428 = iadd.i32 v14, v427
+                                    v429 = sshr v428, v468
+                                    v56 -> v429
+                                    v202 -> v56
+                                    v203 -> v56
+@4b66d1                             v58 = ishl v429, v93
+@4b66d2                             v59 = iadd.i32 v28, v58
+                                    v156 -> v59
+                                    v157 -> v59
+@4b66d9                             v60 = isub.i32 v28, v34
+@4b66dd                             brz v60, block21
+@4b66dd                             jump block24
+
+                                block24:
+@4b66e3                             v64 = sshr.i32 v60, v93
+@4b66e8                             v454 = uextend.i64 v59
+@4b66e8                             v65 = iadd.i64 v438, v454
+@4b66e8                             v66 = load.i32 little v65
+@4b66eb                             v456 = uextend.i64 v66
+@4b66eb                             v67 = iadd.i64 v438, v456
+@4b66eb                             v68 = load.f32 little v67+68
+                                    v78 -> v68
+@4b66f4                             jump block25(v34, v64)
+
+                                block25(v69: i32, v70: i32):
+@4b66fe                             v72 = ushr v70, v468
+@4b6703                             v74 = ishl v72, v93
+@4b6704                             v75 = iadd v69, v74
+@4b6709                             v77 = iadd v75, v116
+@4b670e                             v461 = uextend.i64 v75
+@4b670e                             v79 = iadd.i64 v438, v461
+@4b670e                             v80 = load.i32 little v79
+@4b6711                             v463 = uextend.i64 v80
+@4b6711                             v81 = iadd.i64 v438, v463
+@4b6711                             v82 = load.f32 little v81+68
+@4b6714                             v83 = fcmp.f32 gt v68, v82
+@4b6717                             v85 = select v83, v69, v77
+@4b6722                             v87 = bxor v72, v90
+@4b6723                             v88 = iadd v70, v87
+@4b6726                             v89 = select v83, v72, v88
+@4b6729                             brnz v89, block25(v85, v89)
+@4b6729                             jump block27
+
+                                block27:
+@4b672b                             jump block26
+
+                                block26:
+@4b672c                             jump block20(v85)
+
+                                block22:
+@4b6733                             v91 = icmp.i32 eq v45, v90
+@4b6734                             brnz v91, block6
+@4b6734                             jump block28
+
+                                block28:
+                                    v430 = ushr.i32 v50, v467
+                                    v431 = iadd.i32 v50, v430
+                                    v432 = sshr v431, v468
+                                    v94 -> v432
+                                    v144 -> v94
+                                    v145 -> v94
+@4b6741                             v96 = ishl v432, v93
+@4b6742                             v97 = iadd.i32 v34, v96
+                                    v151 -> v97
+                                    v152 -> v97
+@4b6749                             v100 = isub.i32 v99, v28
+@4b674d                             brz v100, block19
+@4b674d                             jump block29
+
+                                block29:
+@4b6753                             v104 = sshr.i32 v100, v93
+@4b6758                             v472 = uextend.i64 v97
+@4b6758                             v105 = iadd.i64 v438, v472
+@4b6758                             v106 = load.i32 little v105
+@4b675b                             v474 = uextend.i64 v106
+@4b675b                             v107 = iadd.i64 v438, v474
+@4b675b                             v108 = load.f32 little v107+68
+                                    v122 -> v108
+@4b6764                             jump block30(v28, v104)
+
+                                block30(v109: i32, v110: i32):
+@4b676c                             v112 = ushr v110, v468
+@4b6771                             v114 = ishl v112, v93
+@4b6772                             v115 = iadd v109, v114
+@4b6777                             v117 = iadd v115, v116
+@4b677c                             v479 = uextend.i64 v115
+@4b677c                             v118 = iadd.i64 v438, v479
+@4b677c                             v119 = load.i32 little v118
+@4b677f                             v481 = uextend.i64 v119
+@4b677f                             v120 = iadd.i64 v438, v481
+@4b677f                             v121 = load.f32 little v120+68
+@4b6784                             v123 = fcmp gt v121, v108
+@4b6787                             v125 = select v123, v117, v109
+@4b6790                             v127 = bxor v112, v90
+@4b6791                             v128 = iadd v110, v127
+@4b6796                             v129 = select v123, v128, v112
+@4b6799                             brnz v129, block30(v125, v129)
+@4b6799                             jump block32
+
+                                block32:
+@4b679b                             jump block31
+
+                                block31:
+@4b679c                             jump block18(v125)
+
+                                block21:
+@4b67a3                             jump block20(v34)
+
+                                block20(v130: i32):
+@4b67a8                             v133 = isub v130, v34
+@4b67ab                             v135 = sshr v133, v93
+@4b67ae                             jump block17(v135, v28, v130, v59, v429, v34)
+
+                                block19:
+@4b67b5                             jump block18(v28)
+
+                                block18(v136: i32):
+@4b67ba                             v139 = isub v136, v28
+@4b67bd                             v141 = sshr v139, v93
+@4b67c0                             jump block17(v432, v28, v97, v136, v141, v34)
+
+                                block17(v143: i32, v147: i32, v150: i32, v155: i32, v201: i32, v228: i32):
+                                    v216 -> v143
+                                    v217 -> v143
+                                    v218 -> v143
+                                    v175 -> v150
+                                    v189 -> v150
+                                    v265 -> v155
+                                    v266 -> v155
+                                    v267 -> v155
+                                    v200 -> v201
+                                    v204 -> v201
+                                    v205 -> v201
+                                    v227 -> v228
+                                    v231 -> v228
+                                    v232 -> v228
+@4b67c5                             v146 = isub.i32 v10, v143
+@4b67d2                             v153 = icmp ne v147, v150
+@4b67d3                             brz v153, block37
+@4b67d3                             jump block38
+
+                                block38:
+@4b67d9                             v158 = icmp.i32 eq v147, v155
+@4b67da                             brnz v158, block36
+@4b67da                             jump block39
+
+                                block39:
+@4b67e0                             v161 = iadd.i32 v150, v116
+@4b67e3                             v162 = icmp eq v161, v147
+@4b67e4                             brnz v162, block35
+@4b67e4                             jump block40
+
+                                block40:
+@4b67ea                             v165 = iadd.i32 v147, v116
+@4b67ed                             v166 = icmp eq v165, v155
+@4b67ee                             brnz v166, block34
+@4b67ee                             jump block41
+
+                                block41:
+@4b67f6                             v168 = call fn0(v0, v0, v150, v147, v155)
+@4b67fb                             jump block33(v14, v45, v150, v168, v99)
+
+                                block37:
+@4b6802                             jump block33(v14, v45, v150, v155, v99)
+
+                                block36:
+@4b6809                             jump block33(v14, v45, v150, v150, v99)
+
+                                block35:
+@4b6810                             v169 = isub.i32 v155, v147
+@4b6815                             v171 = sshr v169, v93
+                                    v176 -> v171
+@4b681a                             v490 = uextend.i64 v150
+@4b681a                             v172 = iadd.i64 v438, v490
+@4b681a                             v173 = load.i32 little v172
+                                    v180 -> v173
+@4b6821                             brz v169, block42
+@4b6821                             jump block43
+
+                                block43:
+@4b6829                             v174 = call fn1(v0, v0, v150, v147, v169)
+@4b682e                             jump block42
+
+                                block42:
+@4b6835                             v178 = ishl.i32 v171, v93
+@4b6836                             v179 = iadd.i32 v150, v178
+@4b683b                             v493 = uextend.i64 v179
+@4b683b                             v181 = iadd.i64 v438, v493
+@4b683b                             store.i32 little v173, v181
+@4b683e                             jump block33(v14, v45, v150, v179, v99)
+
+                                block34:
+@4b6845                             v183 = iadd.i32 v155, v182
+@4b6848                             v496 = uextend.i64 v183
+@4b6848                             v184 = iadd.i64 v438, v496
+@4b6848                             v185 = load.i32 little v184
+                                    v190 -> v185
+@4b6853                             v186 = isub v183, v150
+@4b6856                             brz v186, block45
+@4b6856                             jump block46
+
+                                block46:
+@4b685c                             v187 = isub.i32 v155, v186
+@4b6863                             v188 = call fn1(v0, v0, v187, v150, v186)
+@4b6868                             jump block44(v187)
+
+                                block45:
+@4b686f                             jump block44(v155)
+
+                                block44(v235: i32):
+@4b6874                             v498 = uextend.i64 v150
+@4b6874                             v191 = iadd.i64 v438, v498
+@4b6874                             store.i32 little v185, v191
+@4b6877                             jump block33(v14, v45, v150, v235, v99)
+
+                                block33(v192: i32, v207: i32, v233: i32, v234: i32, v268: i32):
+@4b687c                             v206 = isub v192, v201
+@4b6881                             v215 = isub.i32 v146, v207
+@4b6888                             v219 = iadd.i32 v201, v143
+@4b688f                             v221 = isub.i32 v10, v201
+@4b6892                             v222 = isub v221, v143
+@4b6893                             v223 = iadd v192, v222
+@4b6896                             v224 = isub v223, v207
+@4b6897                             v225 = icmp slt v219, v224
+@4b6898                             brz v225, block47
+@4b6898                             jump block48
+
+                                block48:
+@4b68aa                             call fn2(v0, v0, v228, v233, v234, v236, v143, v201, v246, v256)
+@4b68b9                             brnz.i32 v206, block7(v206, v215, v155, v234, v268)
+@4b68b9                             jump block49
+
+                                block49:
+@4b68bb                             jump block2
+
+                                block47:
+@4b68ce                             call fn2(v0, v0, v234, v155, v268, v236, v215, v206, v246, v256)
+@4b68e1                             brnz.i32 v201, block7(v201, v143, v233, v228, v234)
+@4b68e1                             jump block50
+
+                                block50:
+@4b68e3                             jump block2
+
+                                block9:
+@4b68e6                             jump block8
+
+                                block8:
+@4b68eb                             v276 = icmp.i32 sgt v18, v14
+@4b68ec                             brz v276, block51
+@4b68ec                             jump block52
+
+                                block52:
+@4b68f2                             v278 = icmp.i32 eq v28, v99
+@4b68f3                             brnz v278, block2
+@4b68f3                             jump block53
+
+                                block53:
+@4b68f9                             v280 = isub.i32 v99, v28
+                                    v290 -> v280
+@4b6900                             jump block54(v10)
+
+                                block54(v283: i32):
+@4b6906                             v284 = iadd.i32 v251, v283
+@4b690b                             v286 = iadd.i32 v28, v283
+@4b690c                             v501 = uextend.i64 v286
+@4b690c                             v287 = iadd.i64 v438, v501
+@4b690c                             v288 = load.i32 little v287
+@4b690f                             v503 = uextend.i64 v284
+@4b690f                             v289 = iadd.i64 v438, v503
+@4b690f                             store little v288, v289
+@4b6918                             v292 = iadd v283, v116
+@4b691b                             v293 = icmp.i32 ne v280, v292
+@4b691c                             brnz v293, block54(v292)
+@4b691c                             jump block56
+
+                                block56:
+@4b691e                             jump block55
+
+                                block55:
+@4b6922                             brz.i32 v292, block2
+@4b6922                             jump block57
+
+                                block57:
+@4b6928                             v299 = iadd.i32 v99, v182
+@4b692f                             v300 = iadd.i32 v251, v292
+@4b6934                             jump block58(v28, v299, v300, v300)
+
+                                block58(v302: i32, v305: i32, v310: i32, v324: i32):
+                                    v409 -> v305
+@4b693a                             v303 = icmp.i32 eq v48, v302
+@4b693b                             brnz v303, block5
+@4b693b                             jump block60
+
+                                block60:
+@4b6943                             v307 = iadd.i32 v302, v182
+@4b6946                             v509 = uextend.i64 v307
+@4b6946                             v308 = iadd.i64 v438, v509
+@4b6946                             v309 = load.i32 little v308
+@4b694f                             v312 = iadd.i32 v310, v182
+@4b6952                             v512 = uextend.i64 v312
+@4b6952                             v313 = iadd.i64 v438, v512
+@4b6952                             v314 = load.i32 little v313
+@4b6959                             v514 = uextend.i64 v314
+@4b6959                             v315 = iadd.i64 v438, v514
+@4b6959                             v316 = load.f32 little v315+68
+@4b695e                             v516 = uextend.i64 v309
+@4b695e                             v317 = iadd.i64 v438, v516
+@4b695e                             v318 = load.f32 little v317+68
+@4b6961                             v319 = fcmp gt v316, v318
+@4b6964                             v321 = select v319, v309, v314
+@4b6965                             v518 = uextend.i64 v305
+@4b6965                             v322 = iadd.i64 v438, v518
+@4b6965                             store little v321, v322
+@4b696e                             v323 = select v319, v307, v302
+@4b6977                             v325 = select.i32 v319, v324, v312
+@4b697e                             v327 = iadd.i32 v305, v182
+@4b6987                             v328 = select.i32 v319, v310, v312
+@4b698c                             v330 = icmp ne v328, v251
+@4b698d                             brnz v330, block58(v323, v327, v328, v325)
+@4b698d                             jump block61
+
+                                block61:
+@4b698f                             jump block59
+
+                                block59:
+@4b6990                             jump block2
+
+                                block51:
+@4b6997                             v333 = icmp.i32 eq v48, v28
+@4b6998                             brnz v333, block2
+@4b6998                             jump block62
+
+                                block62:
+@4b699e                             v335 = isub.i32 v28, v48
+                                    v345 -> v335
+@4b69a5                             jump block63(v10)
+
+                                block63(v338: i32):
+@4b69ab                             v339 = iadd.i32 v251, v338
+@4b69b0                             v341 = iadd.i32 v48, v338
+@4b69b1                             v521 = uextend.i64 v341
+@4b69b1                             v342 = iadd.i64 v438, v521
+@4b69b1                             v343 = load.i32 little v342
+@4b69b4                             v523 = uextend.i64 v339
+@4b69b4                             v344 = iadd.i64 v438, v523
+@4b69b4                             store little v343, v344
+@4b69bd                             v347 = iadd v338, v116
+                                    v389 -> v347
+                                    v388 -> v389
+@4b69c0                             v348 = icmp.i32 ne v335, v347
+@4b69c1                             brnz v348, block63(v347)
+@4b69c1                             jump block65
+
+                                block65:
+@4b69c3                             jump block64
+
+                                block64:
+@4b69c7                             brz.i32 v347, block2
+@4b69c7                             jump block66
+
+                                block66:
+@4b69cd                             v352 = iadd.i32 v251, v347
+                                    v421 -> v352
+                                    v422 -> v421
+@4b69d4                             v354 = isub.i32 v10, v251
+                                    v385 -> v354
+                                    v384 -> v385
+@4b69d7                             jump block67(v28, v251, v48)
+
+                                block67(v355: i32, v363: i32, v374: i32):
+                                    v381 -> v374
+@4b69dd                             v357 = icmp eq v355, v99
+@4b69de                             brnz v357, block4
+@4b69de                             jump block69
+
+                                block69:
+@4b69e4                             v528 = uextend.i64 v355
+@4b69e4                             v359 = iadd.i64 v438, v528
+@4b69e4                             v360 = load.i32 little v359
+@4b69e9                             v530 = uextend.i64 v360
+@4b69e9                             v361 = iadd.i64 v438, v530
+@4b69e9                             v362 = load.f32 little v361+68
+@4b69ee                             v532 = uextend.i64 v363
+@4b69ee                             v364 = iadd.i64 v438, v532
+@4b69ee                             v365 = load.i32 little v364
+@4b69f3                             v534 = uextend.i64 v365
+@4b69f3                             v366 = iadd.i64 v438, v534
+@4b69f3                             v367 = load.f32 little v366+68
+@4b69f6                             v368 = fcmp gt v362, v367
+@4b69f6                             v369 = bint.i32 v368
+@4b69f9                             v371 = bxor v369, v468
+@4b69fb                             brnz v371, block71
+@4b69fb                             jump block72
+
+                                block72:
+@4b6a01                             v538 = uextend.i64 v374
+@4b6a01                             v375 = iadd.i64 v438, v538
+@4b6a01                             store.i32 little v360, v375
+@4b6a08                             v377 = iadd.i32 v355, v116
+@4b6a0b                             jump block70(v363, v377)
+
+                                block71:
+@4b6a12                             v541 = uextend.i64 v374
+@4b6a12                             v378 = iadd.i64 v438, v541
+@4b6a12                             store.i32 little v365, v378
+@4b6a19                             v380 = iadd.i32 v363, v116
+@4b6a1c                             jump block70(v380, v355)
+
+                                block70(v386: i32, v393: i32):
+@4b6a21                             v383 = iadd.i32 v374, v116
+@4b6a28                             v387 = iadd.i32 v385, v386
+@4b6a2b                             v390 = icmp ne v387, v389
+@4b6a2c                             brnz v390, block67(v393, v386, v383)
+@4b6a2c                             jump block73
+
+                                block73:
+@4b6a2e                             jump block68
+
+                                block68:
+@4b6a2f                             jump block2
+
+                                block6:
+@4b6a34                             v397 = load.i32 little v35
+@4b6a3d                             v399 = load.i32 little v29
+@4b6a40                             store little v399, v35
+@4b6a47                             store little v397, v29
+@4b6a4a                             return
+
+                                block5:
+@4b6a50                             v402 = icmp.i32 eq v251, v324
+@4b6a51                             brnz v402, block2
+@4b6a51                             jump block74
+
+                                block74:
+@4b6a57                             v405 = iadd.i32 v324, v182
+                                    v411 -> v405
+@4b6a5e                             v406 = isub.i32 v251, v324
+                                    v416 -> v406
+@4b6a65                             jump block75(v10)
+
+                                block75(v408: i32):
+@4b6a6b                             v410 = iadd v408, v305
+@4b6a70                             v412 = iadd v408, v405
+@4b6a71                             v554 = uextend.i64 v412
+@4b6a71                             v413 = iadd.i64 v438, v554
+@4b6a71                             v414 = load.i32 little v413
+@4b6a74                             v556 = uextend.i64 v410
+@4b6a74                             v415 = iadd.i64 v438, v556
+@4b6a74                             store little v414, v415
+@4b6a7d                             v418 = iadd v408, v182
+@4b6a80                             v419 = icmp.i32 ne v406, v418
+@4b6a81                             brnz v419, block75(v418)
+@4b6a81                             jump block77
+
+                                block77:
+@4b6a83                             jump block76
+
+                                block76:
+@4b6a84                             jump block2
+
+                                block4:
+@4b6a8b                             v423 = isub.i32 v352, v363
+@4b6a8f                             brz v423, block2
+@4b6a8f                             jump block78
+
+                                block78:
+@4b6a97                             v426 = call fn1(v0, v0, v374, v363, v423)
+@4b6a9c                             jump block2
+
+                                block2:
+@4b6a9d                             jump block1
+
+                                block1:
+@4b6a9d                             return
+}
+
