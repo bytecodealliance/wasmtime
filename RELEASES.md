@@ -55,6 +55,19 @@ Unreleased.
 
 --------------------------------------------------------------------------------
 
+## 0.35.3
+
+Released 2022-04-11.
+
+### Fixed
+
+* Backported a bugfix for an instruction lowering issue that could cause a
+  regalloc panic due to an undefined register in some cases. No miscompilation
+  was ever possible, but panics would result in a compilation failure.
+  [#4012](https://github.com/bytecodealliance/wasmtime/pull/4012)
+
+--------------------------------------------------------------------------------
+
 ## 0.35.2
 
 Released 2022-03-31.
