@@ -4,11 +4,17 @@
 
 Unreleased.
 
+### Added
+
+* Pre-built binaries for macOS M1 machines are now available as release
+  artifacts.
+  [#3983](https://github.com/bytecodealliance/wasmtime/pull/3983)
+
 ### Fixed
 
 * Using `InstancePre::instantiate` or `Linker::instantiate` will now panic as
   intended when used with an async-configured `Store`.
-  [#TODO](https://github.com/bytecodealliance/wasmtime/pull/TODO)
+  [#3972](https://github.com/bytecodealliance/wasmtime/pull/3972)
 
 --------------------------------------------------------------------------------
 
@@ -35,7 +41,6 @@ Unreleased.
   enabled in a `Config` are compatible with the native host. For example this
   ensures that if avx2 is enabled that the host actually has avx2 support.
   [#3899](https://github.com/bytecodealliance/wasmtime/pull/3899)
->>>>>>> Update release notes for 0.36.0
 
 ### Removed
 
