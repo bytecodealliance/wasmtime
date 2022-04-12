@@ -2636,7 +2636,7 @@ pub fn constructor_cmove_or_from_values<C: Context>(
         let expr16_0 = C::writable_gpr_to_gpr(ctx, expr4_0);
         let expr17_0 = MInst::Cmove {
             size: expr6_0,
-            cc: pattern2_0.clone(),
+            cc: pattern3_0.clone(),
             consequent: expr15_0,
             alternative: expr16_0,
             dst: expr2_0,
@@ -2659,7 +2659,7 @@ pub fn constructor_cmove_or_from_values<C: Context>(
         let expr27_0 = C::writable_gpr_to_gpr(ctx, expr5_0);
         let expr28_0 = MInst::Cmove {
             size: expr6_0,
-            cc: pattern2_0.clone(),
+            cc: pattern3_0.clone(),
             consequent: expr26_0,
             alternative: expr27_0,
             dst: expr3_0,
