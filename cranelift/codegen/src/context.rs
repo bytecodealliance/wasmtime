@@ -100,8 +100,8 @@ impl Context {
     ///
     /// Run the function through all the passes necessary to generate code for the target ISA
     /// represented by `isa`, as well as the final step of emitting machine code into a
-    /// `Vec<u8>`. The machine code is not relocated. Instead, any relocations are emitted
-    /// into `relocs`.
+    /// `Vec<u8>`. The machine code is not relocated. Instead, any relocations can be obtained
+    /// from `mach_compile_result`.
     ///
     /// This function calls `compile` and `emit_to_memory`, taking care to resize `mem` as
     /// needed, so it provides a safe interface.
@@ -173,7 +173,8 @@ impl Context {
     /// Write all of the function's machine code to the memory at `mem`. The size of the machine
     /// code is returned by `compile` above.
     ///
-    /// The machine code is not relocated. Instead, any relocations are emitted into `relocs`.
+    /// The machine code is not relocated.
+    /// Instead, any relocations can be obtained from `mach_compile_result`.
     ///
     /// # Safety
     ///
