@@ -18,6 +18,7 @@
        ;; An ALU operation with three register sources and a register destination.
        (AluRRRR
         (alu_op ALUOp3)
+        (size OperandSize)
         (rd WritableReg)
         (rn Reg)
         (rm Reg)
@@ -833,13 +834,9 @@
 (type ALUOp3
   (enum
     ;; Multiply-add
-    (MAdd32)
-    ;; Multiply-add
-    (MAdd64)
+    (MAdd)
     ;; Multiply-sub
-    (MSub32)
-    ;; Multiply-sub
-    (MSub64)
+    (MSub)
 ))
 
 (type UImm5 (primitive UImm5))
@@ -1461,10 +1458,10 @@
         (alu_rrr_extend op ty src1 src2 extend)))
 
 ;; Helper for emitting `MInst.AluRRRR` instructions.
-(decl alu_rrrr (ALUOp3 Reg Reg Reg) Reg)
-(rule (alu_rrrr op src1 src2 src3)
+(decl alu_rrrr (ALUOp3 Type Reg Reg Reg) Reg)
+(rule (alu_rrrr op ty src1 src2 src3)
       (let ((dst WritableReg (temp_writable_reg $I64))
-            (_ Unit (emit (MInst.AluRRRR op dst src1 src2 src3))))
+            (_ Unit (emit (MInst.AluRRRR op (operand_size ty) dst src1 src2 src3))))
         dst))
 
 ;; Helper for emitting `MInst.BitRR` instructions.
@@ -1656,19 +1653,12 @@
 ;; Helpers for generating `madd` instructions.
 
 (decl madd (Type Reg Reg Reg) Reg)
-(rule (madd (fits_in_32 _ty) x y z) (madd32 x y z))
-(rule (madd $I64 x y z) (madd64 x y z))
-
-(decl madd32 (Reg Reg Reg) Reg)
-(rule (madd32 x y z) (alu_rrrr (ALUOp3.MAdd32) x y z))
-
-(decl madd64 (Reg Reg Reg) Reg)
-(rule (madd64 x y z) (alu_rrrr (ALUOp3.MAdd64) x y z))
+(rule (madd ty x y z) (alu_rrrr (ALUOp3.MAdd) ty x y z))
 
 ;; Helpers for generating `msub` instructions.
 
-(decl msub64 (Reg Reg Reg) Reg)
-(rule (msub64 x y z) (alu_rrrr (ALUOp3.MSub64) x y z))
+(decl msub (Type Reg Reg Reg) Reg)
+(rule (msub ty x y z) (alu_rrrr (ALUOp3.MSub) ty x y z))
 
 ;; Helper for generating `uqadd` instructions.
 (decl uqadd (Reg Reg VectorSize) Reg)
