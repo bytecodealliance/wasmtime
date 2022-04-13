@@ -12,14 +12,14 @@ use smallvec::{smallvec, SmallVec};
 use serde::{Deserialize, Serialize};
 
 /// The first 128 vregs (64 int, 64 float/vec) are "pinned" to
-/// physical registeres: this means that they are always constrained
-/// to the corresponding register at all use/mod/def sites.
+/// physical registers: this means that they are always constrained to
+/// the corresponding register at all use/mod/def sites.
 ///
 /// Arbitrary vregs can also be constrained to physical registers at
 /// particular use/def/mod sites, and this is preferable; but pinned
 /// vregs allow us to migrate code that has been written using
 /// RealRegs directly.
-pub const PINNED_VREGS: usize = 128;
+const PINNED_VREGS: usize = 128;
 
 /// Convert a `VReg` to its pinned `PReg`, if any.
 pub fn pinned_vreg_to_preg(vreg: VReg) -> Option<PReg> {
@@ -28,6 +28,16 @@ pub fn pinned_vreg_to_preg(vreg: VReg) -> Option<PReg> {
     } else {
         None
     }
+}
+
+/// Give the first available vreg for generated code (i.e., after all
+/// pinned vregs).
+pub fn first_user_vreg_index() -> usize {
+    // This is just the constant defined above, but we keep the
+    // constant private and expose only this helper function with the
+    // specific name in order to ensure other parts of the code don't
+    // open-code and depend on the index-space scheme.
+    PINNED_VREGS
 }
 
 /// A register named in an instruction. This register can be either a
@@ -55,7 +65,7 @@ impl Reg {
     /// Get the physical register (`RealReg`), if this register is
     /// one.
     pub fn to_real_reg(self) -> Option<RealReg> {
-        if self.0.vreg() < PINNED_VREGS {
+        if pinned_vreg_to_preg(self.0).is_some() {
             Some(RealReg(self.0))
         } else {
             None
@@ -65,7 +75,7 @@ impl Reg {
     /// Get the virtual (non-physical) register, if this register is
     /// one.
     pub fn to_virtual_reg(self) -> Option<VirtualReg> {
-        if self.0.vreg() >= PINNED_VREGS {
+        if pinned_vreg_to_preg(self.0).is_none() {
             Some(VirtualReg(self.0))
         } else {
             None
@@ -162,7 +172,7 @@ impl VirtualReg {
 
     /// Build a VirtualReg from a regalloc2 `VReg`.
     pub fn from_vreg(vreg: VReg) -> Self {
-        assert!(vreg.vreg() > PINNED_VREGS);
+        debug_assert!(pinned_vreg_to_preg(vreg).is_none());
         VirtualReg(VReg::new(vreg.vreg(), vreg.class()))
     }
 

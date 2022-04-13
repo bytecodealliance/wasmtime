@@ -1226,7 +1226,7 @@ impl<I: VCodeInst> RegallocFunction for VCode<I> {
     }
 
     fn num_vregs(&self) -> usize {
-        std::cmp::max(self.vreg_types.len(), PINNED_VREGS)
+        std::cmp::max(self.vreg_types.len(), first_user_vreg_index())
     }
 
     fn reftype_vregs(&self) -> &[VReg] {

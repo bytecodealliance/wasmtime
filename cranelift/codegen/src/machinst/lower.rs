@@ -19,7 +19,7 @@ use crate::ir::{
 use crate::machinst::{
     non_writable_value_regs, writable_value_regs, ABICallee, BlockIndex, BlockLoweringOrder,
     LoweredBlock, MachLabel, Reg, VCode, VCodeBuilder, VCodeConstant, VCodeConstantData,
-    VCodeConstants, VCodeInst, ValueRegs, Writable, PINNED_VREGS,
+    VCodeConstants, VCodeInst, ValueRegs, Writable,
 };
 use crate::CodegenResult;
 use alloc::boxed::Box;
@@ -28,6 +28,8 @@ use core::convert::TryInto;
 use regalloc2::VReg;
 use smallvec::{smallvec, SmallVec};
 use std::fmt::Debug;
+
+use super::first_user_vreg_index;
 
 /// An "instruction color" partitions CLIF instructions by side-effecting ops.
 /// All instructions with the same "color" are guaranteed not to be separated by
@@ -352,7 +354,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             /* backward = */ true,
         );
 
-        let mut next_vreg: usize = PINNED_VREGS;
+        let mut next_vreg: usize = first_user_vreg_index();
 
         let mut value_regs = SecondaryMap::with_default(ValueRegs::invalid());
 
