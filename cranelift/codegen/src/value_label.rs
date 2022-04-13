@@ -6,8 +6,12 @@ use core::cmp::Ordering;
 use core::convert::From;
 use core::ops::Deref;
 
+#[cfg(feature = "enable-serde")]
+use serde::{Deserialize, Serialize};
+
 /// Value location range.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct ValueLocRange {
     /// The ValueLoc containing a ValueLabel during this range.
     pub loc: LabelValueLoc,
@@ -19,6 +23,7 @@ pub struct ValueLocRange {
 
 /// The particular location for a value.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub enum LabelValueLoc {
     /// New-backend Reg.
     Reg(Reg),

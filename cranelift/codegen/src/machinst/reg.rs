@@ -8,6 +8,9 @@ use core::{fmt::Debug, hash::Hash};
 use regalloc2::{Allocation, Operand, PReg, VReg};
 use smallvec::{smallvec, SmallVec};
 
+#[cfg(feature = "enable-serde")]
+use serde::{Deserialize, Serialize};
+
 /// The first 128 vregs (64 int, 64 float/vec) are "pinned" to
 /// physical registeres: this means that they are always constrained
 /// to the corresponding register at all use/mod/def sites.
@@ -33,6 +36,7 @@ pub fn pinned_vreg_to_preg(vreg: VReg) -> Option<PReg> {
 /// `MachInst::get_operands()` when the `Reg`s are converted to
 /// `Operand`s.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct Reg(VReg);
 
 impl Reg {
@@ -101,6 +105,7 @@ impl std::fmt::Debug for Reg {
 /// A real (physical) register. This corresponds to one of the target
 /// ISA's named registers and can be used as an instruction operand.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct RealReg(VReg);
 
 impl RealReg {
@@ -141,6 +146,7 @@ impl std::fmt::Debug for RealReg {
 /// before register allocation occurs, in order to allow us to name as
 /// many register-carried values as necessary.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct VirtualReg(VReg);
 
 impl VirtualReg {
@@ -181,6 +187,7 @@ impl std::fmt::Debug for VirtualReg {
 /// usual, frictionless way to get one of these is to allocate a new
 /// temporary.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct Writable<T: Clone + Copy + Debug + PartialEq + Eq + PartialOrd + Ord + Hash> {
     reg: T,
 }
