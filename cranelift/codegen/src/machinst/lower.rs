@@ -29,7 +29,7 @@ use regalloc2::VReg;
 use smallvec::{smallvec, SmallVec};
 use std::fmt::Debug;
 
-use super::first_user_vreg_index;
+use super::{first_user_vreg_index, VCodeBuildDirection};
 
 /// An "instruction color" partitions CLIF instructions by side-effecting ops.
 /// All instructions with the same "color" are guaranteed not to be separated by
@@ -348,7 +348,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             emit_info,
             block_order,
             constants,
-            /* backward = */ true,
+            VCodeBuildDirection::Backward,
         );
 
         let mut next_vreg: usize = first_user_vreg_index();

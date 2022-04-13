@@ -222,7 +222,7 @@ pub struct EmitResult<I: VCodeInst> {
 
 /// A builder for a VCode function body.
 ///
-/// This builder has the ability to accept instructions in other
+/// This builder has the ability to accept instructions in either
 /// forward or reverse order, depending on the pass direction that
 /// produces the VCode. The lowering from CLIF to VCode<MachInst>
 /// ordinarily occurs in reverse order (in order to allow instructions
@@ -240,8 +240,8 @@ pub struct VCodeBuilder<I: VCodeInst> {
     /// In-progress VCode.
     vcode: VCode<I>,
 
-    /// Is the build occurring backward?
-    backward: bool,
+    /// In what direction is the build occuring?
+    direction: VCodeBuildDirection,
 
     /// Index of the last block-start in the vcode.
     block_start: usize,
@@ -266,6 +266,17 @@ pub struct VCodeBuilder<I: VCodeInst> {
     debug_info: FxHashMap<ValueLabel, Vec<(InsnIndex, InsnIndex, VReg)>>,
 }
 
+/// Direction in which a VCodeBuilder builds VCode.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum VCodeBuildDirection {
+    /// Forward-build pass: we expect the producer to call `emit()`
+    /// with instructions in forward program order within each block.
+    Forward,
+    /// Backward-build pass: we expect the producer to call `emit()`
+    /// with instructions in reverse program order within each block.
+    Backward,
+}
+
 impl<I: VCodeInst> VCodeBuilder<I> {
     /// Create a new VCodeBuilder.
     pub fn new(
@@ -273,13 +284,13 @@ impl<I: VCodeInst> VCodeBuilder<I> {
         emit_info: I::Info,
         block_order: BlockLoweringOrder,
         constants: VCodeConstants,
-        backward: bool,
+        direction: VCodeBuildDirection,
     ) -> VCodeBuilder<I> {
         let vcode = VCode::new(abi, emit_info, block_order, constants);
 
         VCodeBuilder {
             vcode,
-            backward,
+            direction,
             block_start: 0,
             succ_start: 0,
             block_params_start: 0,
@@ -489,7 +500,10 @@ impl<I: VCodeInst> VCodeBuilder<I> {
         }
     }
 
-    fn reverse(&mut self) {
+    /// Called once, when a build in Backward order is complete, to
+    /// perform the overall reversal (into final forward order) and
+    /// finalize metadata accordingly.
+    fn reverse_and_finalize(&mut self) {
         let n_insts = self.vcode.insts.len();
         if n_insts == 0 {
             return;
@@ -600,8 +614,8 @@ impl<I: VCodeInst> VCodeBuilder<I> {
 
     /// Build the final VCode.
     pub fn build(mut self) -> VCode<I> {
-        if self.backward {
-            self.reverse();
+        if self.direction == VCodeBuildDirection::Backward {
+            self.reverse_and_finalize();
         }
         self.collect_operands();
         self.compute_preds_from_succs();
