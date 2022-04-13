@@ -37,11 +37,11 @@ impl PtrLen {
         MmapMut::map_anon(alloc_size).map(|mut mmap| {
             // The order here is important; we assign the pointer first to get
             // around compile time borrow errors.
-            Ok(Self {
+            Self {
                 ptr: mmap.as_mut_ptr(),
                 map: Some(mmap),
                 len: alloc_size,
-            })
+            }
         })
     }
 

@@ -6,5 +6,5 @@ access to the Wasm spec interpreter. Its major parts:
    for FFI access
  - `Makefile`: the steps for gluing these pieces together into a static library
 
-Note: the makefile must be configured with the path to libgmp. See LIBGMP_PATHS
-in the makefile.
+Note: the `Makefile` must be configured with the path to `libgmp.a`; see
+`LIBGMP_PATHS` in the `Makefile` (Ubuntu: `libgmp-dev`, Fedora: `gmp-static`).

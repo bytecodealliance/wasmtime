@@ -92,7 +92,6 @@ impl ValType {
             WasmType::V128 => Self::V128,
             WasmType::FuncRef => Self::FuncRef,
             WasmType::ExternRef => Self::ExternRef,
-            WasmType::ExnRef => unimplemented!(),
         }
     }
 }

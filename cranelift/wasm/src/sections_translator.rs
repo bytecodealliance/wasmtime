@@ -11,8 +11,8 @@ use crate::environ::ModuleEnvironment;
 use crate::state::ModuleTranslationState;
 use crate::wasm_unsupported;
 use crate::{
-    DataIndex, ElemIndex, EntityType, FuncIndex, Global, GlobalIndex, GlobalInit, Memory,
-    MemoryIndex, Table, TableIndex, Tag, TagIndex, TypeIndex, WasmError, WasmResult,
+    DataIndex, ElemIndex, FuncIndex, Global, GlobalIndex, GlobalInit, Memory, MemoryIndex, Table,
+    TableIndex, Tag, TagIndex, TypeIndex, WasmError, WasmResult,
 };
 use core::convert::TryFrom;
 use core::convert::TryInto;
@@ -23,30 +23,10 @@ use std::vec::Vec;
 use wasmparser::{
     self, Data, DataKind, DataSectionReader, Element, ElementItem, ElementItems, ElementKind,
     ElementSectionReader, Export, ExportSectionReader, ExternalKind, FunctionSectionReader,
-    GlobalSectionReader, GlobalType, ImportSectionEntryType, ImportSectionReader,
-    MemorySectionReader, MemoryType, NameSectionReader, Naming, Operator, TableSectionReader,
-    TableType, TagSectionReader, TagType, TypeDef, TypeSectionReader,
+    GlobalSectionReader, GlobalType, ImportSectionReader, MemorySectionReader, MemoryType,
+    NameSectionReader, Naming, Operator, TableSectionReader, TableType, TagSectionReader, TagType,
+    TypeDef, TypeRef, TypeSectionReader,
 };
-
-fn entity_type(
-    ty: ImportSectionEntryType,
-    environ: &mut dyn ModuleEnvironment<'_>,
-) -> WasmResult<EntityType> {
-    Ok(match ty {
-        ImportSectionEntryType::Function(sig) => {
-            EntityType::Function(environ.type_to_signature(TypeIndex::from_u32(sig))?)
-        }
-        ImportSectionEntryType::Memory(ty) => EntityType::Memory(memory(ty)),
-        ImportSectionEntryType::Tag(t) => EntityType::Tag(tag(t)),
-        ImportSectionEntryType::Global(ty) => EntityType::Global(global(ty, GlobalInit::Import)?),
-        ImportSectionEntryType::Table(ty) => EntityType::Table(table(ty)?),
-
-        // doesn't get past validation
-        ImportSectionEntryType::Module(_) | ImportSectionEntryType::Instance(_) => {
-            unreachable!()
-        }
-    })
-}
 
 fn memory(ty: MemoryType) -> Memory {
     Memory {
@@ -58,8 +38,10 @@ fn memory(ty: MemoryType) -> Memory {
 }
 
 fn tag(e: TagType) -> Tag {
-    Tag {
-        ty: TypeIndex::from_u32(e.type_index),
+    match e.kind {
+        wasmparser::TagKind::Exception => Tag {
+            ty: TypeIndex::from_u32(e.func_type_idx),
+        },
     }
 }
 
@@ -97,27 +79,6 @@ pub fn parse_type_section<'a>(
                     .wasm_types
                     .push((wasm_func_ty.params, wasm_func_ty.returns));
             }
-            TypeDef::Module(t) => {
-                let imports = t
-                    .imports
-                    .iter()
-                    .map(|i| Ok((i.module, i.field, entity_type(i.ty, environ)?)))
-                    .collect::<WasmResult<Vec<_>>>()?;
-                let exports = t
-                    .exports
-                    .iter()
-                    .map(|e| Ok((e.name, entity_type(e.ty, environ)?)))
-                    .collect::<WasmResult<Vec<_>>>()?;
-                environ.declare_type_module(&imports, &exports)?;
-            }
-            TypeDef::Instance(t) => {
-                let exports = t
-                    .exports
-                    .iter()
-                    .map(|e| Ok((e.name, entity_type(e.ty, environ)?)))
-                    .collect::<WasmResult<Vec<_>>>()?;
-                environ.declare_type_instance(&exports)?;
-            }
         }
     }
     Ok(())
@@ -133,30 +94,26 @@ pub fn parse_import_section<'data>(
     for entry in imports {
         let import = entry?;
         match import.ty {
-            ImportSectionEntryType::Function(sig) => {
+            TypeRef::Func(sig) => {
                 environ.declare_func_import(
                     TypeIndex::from_u32(sig),
                     import.module,
-                    import.field,
+                    import.name,
                 )?;
             }
-            ImportSectionEntryType::Memory(ty) => {
-                environ.declare_memory_import(memory(ty), import.module, import.field)?;
+            TypeRef::Memory(ty) => {
+                environ.declare_memory_import(memory(ty), import.module, import.name)?;
             }
-            ImportSectionEntryType::Tag(e) => {
-                environ.declare_tag_import(tag(e), import.module, import.field)?;
+            TypeRef::Tag(e) => {
+                environ.declare_tag_import(tag(e), import.module, import.name)?;
             }
-            ImportSectionEntryType::Global(ty) => {
+            TypeRef::Global(ty) => {
                 let ty = global(ty, GlobalInit::Import)?;
-                environ.declare_global_import(ty, import.module, import.field)?;
+                environ.declare_global_import(ty, import.module, import.name)?;
             }
-            ImportSectionEntryType::Table(ty) => {
+            TypeRef::Table(ty) => {
                 let ty = table(ty)?;
-                environ.declare_table_import(ty, import.module, import.field)?;
-            }
-
-            ImportSectionEntryType::Module(_) | ImportSectionEntryType::Instance(_) => {
-                unimplemented!()
+                environ.declare_table_import(ty, import.module, import.name)?;
             }
         }
     }
@@ -279,7 +236,7 @@ pub fn parse_export_section<'data>(
 
     for entry in exports {
         let Export {
-            field,
+            name,
             ref kind,
             index,
         } = entry?;
@@ -289,18 +246,11 @@ pub fn parse_export_section<'data>(
         // becomes a concern here.
         let index = index as usize;
         match *kind {
-            ExternalKind::Function => environ.declare_func_export(FuncIndex::new(index), field)?,
-            ExternalKind::Table => environ.declare_table_export(TableIndex::new(index), field)?,
-            ExternalKind::Memory => {
-                environ.declare_memory_export(MemoryIndex::new(index), field)?
-            }
-            ExternalKind::Tag => environ.declare_tag_export(TagIndex::new(index), field)?,
-            ExternalKind::Global => {
-                environ.declare_global_export(GlobalIndex::new(index), field)?
-            }
-
-            // this never gets past validation
-            ExternalKind::Module | ExternalKind::Instance | ExternalKind::Type => unreachable!(),
+            ExternalKind::Func => environ.declare_func_export(FuncIndex::new(index), name)?,
+            ExternalKind::Table => environ.declare_table_export(TableIndex::new(index), name)?,
+            ExternalKind::Memory => environ.declare_memory_export(MemoryIndex::new(index), name)?,
+            ExternalKind::Tag => environ.declare_tag_export(TagIndex::new(index), name)?,
+            ExternalKind::Global => environ.declare_global_export(GlobalIndex::new(index), name)?,
         }
     }
 

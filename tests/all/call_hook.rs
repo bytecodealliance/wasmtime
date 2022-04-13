@@ -614,7 +614,7 @@ async fn basic_async_hook() -> Result<(), Error> {
     "#;
     let module = Module::new(&engine, wat)?;
 
-    let inst = linker.instantiate(&mut store, &module)?;
+    let inst = linker.instantiate_async(&mut store, &module).await?;
     let export = inst
         .get_export(&mut store, "export")
         .expect("get export")
@@ -694,7 +694,7 @@ async fn timeout_async_hook() -> Result<(), Error> {
     "#;
     let module = Module::new(&engine, wat)?;
 
-    let inst = linker.instantiate(&mut store, &module)?;
+    let inst = linker.instantiate_async(&mut store, &module).await?;
     let export = inst
         .get_typed_func::<(), (), _>(&mut store, "export")
         .expect("export is func");
@@ -764,7 +764,7 @@ async fn drop_suspended_async_hook() -> Result<(), Error> {
     "#;
     let module = Module::new(&engine, wat)?;
 
-    let inst = linker.instantiate(&mut store, &module)?;
+    let inst = linker.instantiate_async(&mut store, &module).await?;
     assert_eq!(*store.data(), 0);
     let export = inst
         .get_typed_func::<(), (), _>(&mut store, "")
