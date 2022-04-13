@@ -8,7 +8,6 @@ block0(v0: f32x4, v1: f32x4):
     return v2
 }
 
-;   v130 := v132
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -23,7 +22,6 @@ block0(v0: f64x2, v1: f64x2):
     return v2
 }
 
-;   v130 := v132
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -38,7 +36,6 @@ block0(v0: i32x4, v1: i32x4):
     return v2
 }
 
-;   v130 := v132
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -53,7 +50,6 @@ block0(v0: f32x4, v1: f32x4):
     return v2
 }
 
-;   v130 := v132
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -68,7 +64,6 @@ block0(v0: f64x2, v1: f64x2):
     return v2
 }
 
-;   v130 := v132
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -83,7 +78,6 @@ block0(v0: i32x4, v1: i32x4):
     return v2
 }
 
-;   v130 := v132
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -98,7 +92,6 @@ block0(v0: f32x4, v1: f32x4):
     return v2
 }
 
-;   v130 := v132
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -113,7 +106,6 @@ block0(v0: f64x2, v1: f64x2):
     return v2
 }
 
-;   v130 := v132
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -128,7 +120,6 @@ block0(v0: i32x4, v1: i32x4):
     return v2
 }
 
-;   v130 := v132
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -146,7 +137,6 @@ block0:
     return v3
 }
 
-;   v131 := v135
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -166,7 +156,6 @@ block0(v0: b16x8, v1: i16x8, v2: i16x8):
     return v3
 }
 
-;   v131 := v133
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -182,7 +171,6 @@ block0(v0: b32x4, v1: f32x4, v2: f32x4):
     return v3
 }
 
-;   v131 := v133
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -198,7 +186,6 @@ block0(v0: b64x2, v1: f64x2, v2: f64x2):
     return v3
 }
 
-;   v131 := v133
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -215,7 +202,6 @@ block0(v0: i32):
     return v2
 }
 
-;   v130 := v137
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -238,7 +224,6 @@ block0:
     return v2
 }
 
-;   v130 := v134
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -257,7 +242,6 @@ block0(v0: i32):
     return v2
 }
 
-;   v130 := v138
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -280,7 +264,6 @@ block0(v0: i8x16, v1: i32):
     return v2
 }
 
-;   v131 := v137
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -305,7 +288,6 @@ block0(v0: i64x2, v1: i32):
     return v2
 }
 
-;   v130 := v136
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:

@@ -11,7 +11,6 @@ block0(v0: i64, v1: i64, v2: i64):
   return v3
 }
 
-;   v131 := v136
 ; block0:
 ;   lrvgr %r5, %r2
 ;   lrvgr %r3, %r3
@@ -25,7 +24,6 @@ block0(v0: i32, v1: i32, v2: i64):
   return v3
 }
 
-;   v131 := v136
 ; block0:
 ;   lrvr %r5, %r2
 ;   lrvr %r3, %r3
@@ -39,7 +37,6 @@ block0(v0: i64, v1: i16, v2: i16, v3: i64):
   return v4
 }
 
-;   v132 := v139
 ;   stmg %r6, %r15, 48(%r15)
 ; block0:
 ;   lgr %r6, %r3
@@ -61,7 +58,6 @@ block0(v0: i64, v1: i8, v2: i8, v3: i64):
   return v4
 }
 
-;   v132 := v137
 ;   stmg %r12, %r15, 96(%r15)
 ; block0:
 ;   sllk %r2, %r5, 3

@@ -8,7 +8,6 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-;   v130 := v132
 ; block0:
 ;   add x0, x0, x1
 ;   ret
@@ -19,7 +18,6 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-;   v130 := v132
 ; block0:
 ;   sub x0, x0, x1
 ;   ret
@@ -30,7 +28,6 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-;   v130 := v132
 ; block0:
 ;   madd x0, x0, x1, xzr
 ;   ret
@@ -41,7 +38,6 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-;   v130 := v132
 ; block0:
 ;   umulh x0, x0, x1
 ;   ret
@@ -52,7 +48,6 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-;   v130 := v132
 ; block0:
 ;   smulh x0, x0, x1
 ;   ret
@@ -63,7 +58,6 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-;   v130 := v132
 ; block0:
 ;   cbnz x1, 8 ; udf
 ;   adds xzr, x1, #1
@@ -79,7 +73,6 @@ block0(v0: i64):
   return v2
 }
 
-;   v130 := v133
 ; block0:
 ;   orr x3, xzr, #2
 ;   sdiv x0, x0, x3
@@ -91,7 +84,6 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-;   v130 := v132
 ; block0:
 ;   cbnz x1, 8 ; udf
 ;   udiv x0, x0, x1
@@ -104,7 +96,6 @@ block0(v0: i64):
   return v2
 }
 
-;   v130 := v133
 ; block0:
 ;   orr x3, xzr, #2
 ;   udiv x0, x0, x3
@@ -116,7 +107,6 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-;   v130 := v133
 ; block0:
 ;   cbnz x1, 8 ; udf
 ;   sdiv x6, x0, x1
@@ -129,7 +119,6 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-;   v130 := v133
 ; block0:
 ;   cbnz x1, 8 ; udf
 ;   udiv x6, x0, x1
@@ -142,7 +131,6 @@ block0(v0: i32, v1: i32):
   return v2
 }
 
-;   v130 := v134
 ; block0:
 ;   sxtw x5, w0
 ;   sxtw x7, w1
@@ -160,7 +148,6 @@ block0(v0: i32):
   return v2
 }
 
-;   v130 := v134
 ; block0:
 ;   sxtw x3, w0
 ;   orr x5, xzr, #2
@@ -173,7 +160,6 @@ block0(v0: i32, v1: i32):
   return v2
 }
 
-;   v130 := v134
 ; block0:
 ;   mov w5, w0
 ;   mov w7, w1
@@ -188,7 +174,6 @@ block0(v0: i32):
   return v2
 }
 
-;   v130 := v134
 ; block0:
 ;   mov w3, w0
 ;   orr x5, xzr, #2
@@ -201,7 +186,6 @@ block0(v0: i32, v1: i32):
   return v2
 }
 
-;   v130 := v135
 ; block0:
 ;   sxtw x5, w0
 ;   sxtw x7, w1
@@ -216,7 +200,6 @@ block0(v0: i32, v1: i32):
   return v2
 }
 
-;   v130 := v135
 ; block0:
 ;   mov w5, w0
 ;   mov w7, w1
@@ -231,7 +214,6 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-;   v130 := v132
 ; block0:
 ;   and x0, x0, x1
 ;   ret
@@ -242,7 +224,6 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-;   v130 := v132
 ; block0:
 ;   orr x0, x0, x1
 ;   ret
@@ -253,7 +234,6 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-;   v130 := v132
 ; block0:
 ;   eor x0, x0, x1
 ;   ret
@@ -264,7 +244,6 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-;   v130 := v132
 ; block0:
 ;   bic x0, x0, x1
 ;   ret
@@ -275,7 +254,6 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-;   v130 := v132
 ; block0:
 ;   orn x0, x0, x1
 ;   ret
@@ -286,7 +264,6 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-;   v130 := v132
 ; block0:
 ;   eon x0, x0, x1
 ;   ret
@@ -297,7 +274,6 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-;   v130 := v132
 ; block0:
 ;   orn x0, xzr, x0
 ;   ret
@@ -310,7 +286,6 @@ block0(v0: i32, v1: i32):
   return v4
 }
 
-;   v132 := v134
 ; block0:
 ;   sub w0, w1, w0, LSL 21
 ;   ret
@@ -322,7 +297,6 @@ block0(v0: i32):
   return v2
 }
 
-;   v130 := v132
 ; block0:
 ;   sub w0, w0, #1
 ;   ret
@@ -334,7 +308,6 @@ block0(v0: i32):
   return v2
 }
 
-;   v130 := v132
 ; block0:
 ;   add w0, w0, #1
 ;   ret
@@ -346,7 +319,6 @@ block0(v0: i64):
   return v2
 }
 
-;   v130 := v132
 ; block0:
 ;   add x0, x0, #1
 ;   ret
@@ -358,7 +330,6 @@ block0(v0: i64):
   return v2
 }
 
-;   v130 := v133
 ; block0:
 ;   movz x3, #1
 ;   sub x0, xzr, x3
@@ -371,7 +342,6 @@ block0(v0: i8x16):
   return v2
 }
 
-;   v130 := v135
 ; block0:
 ;   movz x3, #1
 ;   sub w5, wzr, w3
@@ -385,8 +355,6 @@ block0(v0: i128, v1: i128):
     return v2
 }
 
-;   v132 := v136
-;   v133 := v137
 ; block0:
 ;   adds x0, x0, x2
 ;   adc x1, x1, x3
@@ -398,8 +366,6 @@ block0(v0: i128, v1: i128):
     return v2
 }
 
-;   v132 := v136
-;   v133 := v137
 ; block0:
 ;   subs x0, x0, x2
 ;   sbc x1, x1, x3
@@ -411,8 +377,6 @@ block0(v0: i128, v1: i128):
     return v2
 }
 
-;   v132 := v139
-;   v133 := v138
 ; block0:
 ;   umulh x10, x0, x2
 ;   madd x12, x0, x3, x10
@@ -427,7 +391,6 @@ block0(v0: i32, v1: i32, v2: i32):
     return v4
 }
 
-;   v132 := v134
 ; block0:
 ;   madd w0, w1, w2, w0
 ;   ret
@@ -439,7 +402,6 @@ block0(v0: i32, v1: i32, v2: i32):
     return v4
 }
 
-;   v132 := v134
 ; block0:
 ;   madd w0, w1, w2, w0
 ;   ret
@@ -451,7 +413,6 @@ block0(v0: i64):
   return v2
 }
 
-;   v130 := v134
 ; block0:
 ;   orr x3, xzr, #2
 ;   sdiv x5, x0, x3
@@ -465,7 +426,6 @@ block0(v0: i64):
   return v2
 }
 
-;   v130 := v134
 ; block0:
 ;   orr x3, xzr, #2
 ;   udiv x5, x0, x3
@@ -479,7 +439,6 @@ block0(v0: i64):
   return v2
 }
 
-;   v130 := v133
 ; block0:
 ;   movn x3, #0
 ;   adds xzr, x3, #1

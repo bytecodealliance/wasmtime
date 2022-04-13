@@ -28,7 +28,6 @@ block5(v5: i64):
   return v6
 }
 
-;   v134 := v136
 ; block0:
 ;   clgfi %r2, 3
 ;   jghe label1

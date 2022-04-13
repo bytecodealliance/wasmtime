@@ -8,7 +8,6 @@ block0(v0: i8, v1: i8):
   return v2
 }
 
-;   v130 := v132
 ; block0:
 ;   add w0, w0, w1
 ;   ret
@@ -19,7 +18,6 @@ block0(v0: i16, v1: i16):
   return v2
 }
 
-;   v130 := v132
 ; block0:
 ;   add w0, w0, w1
 ;   ret
@@ -30,7 +28,6 @@ block0(v0: i32, v1: i32):
   return v2
 }
 
-;   v130 := v132
 ; block0:
 ;   add w0, w0, w1
 ;   ret
@@ -42,7 +39,6 @@ block0(v0: i32, v1: i8):
   return v3
 }
 
-;   v131 := v133
 ; block0:
 ;   add w0, w0, w1, SXTB
 ;   ret
@@ -54,7 +50,6 @@ block0(v0: i64, v1: i32):
   return v3
 }
 
-;   v131 := v133
 ; block0:
 ;   add x0, x0, x1, SXTW
 ;   ret

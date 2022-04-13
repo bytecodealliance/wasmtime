@@ -7,7 +7,6 @@ block0(v0: i64):
     return v1
 }
 
-;   v129 := v147
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -41,29 +40,28 @@ block0(v0: i64):
     return v2
 }
 
-;   v130 := v148
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movq    0(%rdi), %r8
-;   movq    %r8, %r9
-;   shrq    $1, %r9, %r9
-;   movabsq $8608480567731124087, %r11
-;   andq    %r9, %r11, %r9
-;   subq    %r8, %r9, %r8
-;   shrq    $1, %r9, %r9
-;   andq    %r9, %r11, %r9
-;   subq    %r8, %r9, %r8
-;   shrq    $1, %r9, %r9
-;   andq    %r9, %r11, %r9
-;   subq    %r8, %r9, %r8
-;   movq    %r8, %rax
+;   movq    0(%rdi), %rdx
+;   movq    %rdx, %r8
+;   shrq    $1, %r8, %r8
+;   movabsq $8608480567731124087, %r9
+;   andq    %r8, %r9, %r8
+;   subq    %rdx, %r8, %rdx
+;   shrq    $1, %r8, %r8
+;   andq    %r8, %r9, %r8
+;   subq    %rdx, %r8, %rdx
+;   shrq    $1, %r8, %r8
+;   andq    %r8, %r9, %r8
+;   subq    %rdx, %r8, %rdx
+;   movq    %rdx, %rax
 ;   shrq    $4, %rax, %rax
-;   addq    %rax, %r8, %rax
-;   movabsq $1085102592571150095, %r8
-;   andq    %rax, %r8, %rax
-;   movabsq $72340172838076673, %rdi
-;   imulq   %rax, %rdi, %rax
+;   addq    %rax, %rdx, %rax
+;   movabsq $1085102592571150095, %rdx
+;   andq    %rax, %rdx, %rax
+;   movabsq $72340172838076673, %rsi
+;   imulq   %rax, %rsi, %rax
 ;   shrq    $56, %rax, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -75,7 +73,6 @@ block0(v0: i32):
     return v1
 }
 
-;   v129 := v145
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -107,25 +104,24 @@ block0(v0: i64):
     return v2
 }
 
-;   v130 := v146
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movl    0(%rdi), %r8d
-;   movq    %r8, %r9
-;   shrl    $1, %r9d, %r9d
-;   movl    $2004318071, %r11d
-;   andl    %r9d, %r11d, %r9d
-;   subl    %r8d, %r9d, %r8d
-;   shrl    $1, %r9d, %r9d
-;   andl    %r9d, %r11d, %r9d
-;   subl    %r8d, %r9d, %r8d
-;   shrl    $1, %r9d, %r9d
-;   andl    %r9d, %r11d, %r9d
-;   subl    %r8d, %r9d, %r8d
-;   movq    %r8, %rax
+;   movl    0(%rdi), %edx
+;   movq    %rdx, %r8
+;   shrl    $1, %r8d, %r8d
+;   movl    $2004318071, %r9d
+;   andl    %r8d, %r9d, %r8d
+;   subl    %edx, %r8d, %edx
+;   shrl    $1, %r8d, %r8d
+;   andl    %r8d, %r9d, %r8d
+;   subl    %edx, %r8d, %edx
+;   shrl    $1, %r8d, %r8d
+;   andl    %r8d, %r9d, %r8d
+;   subl    %edx, %r8d, %edx
+;   movq    %rdx, %rax
 ;   shrl    $4, %eax, %eax
-;   addl    %eax, %r8d, %eax
+;   addl    %eax, %edx, %eax
 ;   andl    %eax, $252645135, %eax
 ;   imull   %eax, $16843009, %eax
 ;   shrl    $24, %eax, %eax

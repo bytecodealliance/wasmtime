@@ -8,7 +8,6 @@ block0(v0: i32x4, v1: i32x4):
     return v2
 }
 
-;   v130 := v134
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -25,7 +24,6 @@ block0(v0: i32x4, v1: i32x4):
     return v2
 }
 
-;   v130 := v135
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -43,7 +41,6 @@ block0(v0: i16x8, v1: i16x8):
     return v2
 }
 
-;   v130 := v133
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -60,7 +57,6 @@ block0(v0: i8x16, v1: i8x16):
     return v2
 }
 
-;   v130 := v133
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:

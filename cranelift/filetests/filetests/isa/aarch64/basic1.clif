@@ -8,7 +8,6 @@ block0(v0: i32, v1: i32):
     return v2
 }
 
-;   v130 := v132
 ; block0:
 ;   add w0, w0, w1
 ;   ret

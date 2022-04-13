@@ -7,7 +7,6 @@ block0(v0: i64):
     return v1
 }
 
-;   v129 := v131
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -22,7 +21,6 @@ block0(v0: i32):
     return v1
 }
 
-;   v129 := v131
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:

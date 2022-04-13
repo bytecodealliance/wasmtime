@@ -11,7 +11,6 @@ block0(v0: i64):
     return v1
 }
 
-;   v129 := v131
 ; block0:
 ;   popcnt %r2, %r2, 8
 ;   br %r14
@@ -22,7 +21,6 @@ block0(v0: i32):
     return v1
 }
 
-;   v129 := v132
 ; block0:
 ;   llgfr %r5, %r2
 ;   popcnt %r2, %r5, 8
@@ -34,7 +32,6 @@ block0(v0: i16):
     return v1
 }
 
-;   v129 := v132
 ; block0:
 ;   llghr %r5, %r2
 ;   popcnt %r2, %r5, 8
@@ -46,7 +43,6 @@ block0(v0: i8):
     return v1
 }
 
-;   v129 := v131
 ; block0:
 ;   popcnt %r2, %r2
 ;   br %r14

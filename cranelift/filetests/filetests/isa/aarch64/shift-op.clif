@@ -10,7 +10,6 @@ block0(v0: i64):
   return v3
 }
 
-;   v131 := v133
 ; block0:
 ;   add x0, x0, x0, LSL 3
 ;   ret
@@ -22,7 +21,6 @@ block0(v0: i32):
   return v2
 }
 
-;   v130 := v132
 ; block0:
 ;   lsl w0, w0, #21
 ;   ret

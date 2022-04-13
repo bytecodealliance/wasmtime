@@ -12,8 +12,6 @@ block0(v0: i128, v1: i128):
   return v2
 }
 
-;   v132 := v155
-;   v133 := v154
 ; block0:
 ;   orr x10, xzr, #128
 ;   sub x12, x10, x2
@@ -45,7 +43,6 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-;   v130 := v132
 ; block0:
 ;   ror x0, x0, x1
 ;   ret
@@ -56,7 +53,6 @@ block0(v0: i32, v1: i32):
   return v2
 }
 
-;   v130 := v132
 ; block0:
 ;   ror w0, w0, w1
 ;   ret
@@ -67,7 +63,6 @@ block0(v0: i16, v1: i16):
   return v2
 }
 
-;   v130 := v138
 ; block0:
 ;   uxth w5, w0
 ;   and w7, w1, #15
@@ -84,7 +79,6 @@ block0(v0: i8, v1: i8):
   return v2
 }
 
-;   v130 := v138
 ; block0:
 ;   uxtb w5, w0
 ;   and w7, w1, #7
@@ -101,8 +95,6 @@ block0(v0: i128, v1: i128):
   return v2
 }
 
-;   v132 := v154
-;   v133 := v155
 ; block0:
 ;   orr x10, xzr, #128
 ;   sub x12, x10, x2
@@ -134,7 +126,6 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-;   v130 := v133
 ; block0:
 ;   sub x5, xzr, x1
 ;   ror x0, x0, x5
@@ -146,7 +137,6 @@ block0(v0: i32, v1: i32):
   return v2
 }
 
-;   v130 := v133
 ; block0:
 ;   sub w5, wzr, w1
 ;   ror w0, w0, w5
@@ -158,7 +148,6 @@ block0(v0: i16, v1: i16):
   return v2
 }
 
-;   v130 := v139
 ; block0:
 ;   sub w5, wzr, w1
 ;   uxth w7, w0
@@ -176,7 +165,6 @@ block0(v0: i8, v1: i8):
   return v2
 }
 
-;   v130 := v139
 ; block0:
 ;   sub w5, wzr, w1
 ;   uxtb w7, w0
@@ -194,7 +182,6 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-;   v130 := v132
 ; block0:
 ;   lsr x0, x0, x1
 ;   ret
@@ -205,7 +192,6 @@ block0(v0: i32, v1: i32):
   return v2
 }
 
-;   v130 := v132
 ; block0:
 ;   lsr w0, w0, w1
 ;   ret
@@ -216,7 +202,6 @@ block0(v0: i16, v1: i16):
   return v2
 }
 
-;   v130 := v134
 ; block0:
 ;   uxth w5, w0
 ;   and w7, w1, #15
@@ -229,7 +214,6 @@ block0(v0: i8, v1: i8):
   return v2
 }
 
-;   v130 := v134
 ; block0:
 ;   uxtb w5, w0
 ;   and w7, w1, #7
@@ -242,7 +226,6 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-;   v130 := v132
 ; block0:
 ;   lsl x0, x0, x1
 ;   ret
@@ -253,7 +236,6 @@ block0(v0: i32, v1: i32):
   return v2
 }
 
-;   v130 := v132
 ; block0:
 ;   lsl w0, w0, w1
 ;   ret
@@ -264,7 +246,6 @@ block0(v0: i16, v1: i16):
   return v2
 }
 
-;   v130 := v133
 ; block0:
 ;   and w5, w1, #15
 ;   lsl w0, w0, w5
@@ -276,7 +257,6 @@ block0(v0: i8, v1: i8):
   return v2
 }
 
-;   v130 := v133
 ; block0:
 ;   and w5, w1, #7
 ;   lsl w0, w0, w5
@@ -288,7 +268,6 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-;   v130 := v132
 ; block0:
 ;   asr x0, x0, x1
 ;   ret
@@ -299,7 +278,6 @@ block0(v0: i32, v1: i32):
   return v2
 }
 
-;   v130 := v132
 ; block0:
 ;   asr w0, w0, w1
 ;   ret
@@ -310,7 +288,6 @@ block0(v0: i16, v1: i16):
   return v2
 }
 
-;   v130 := v134
 ; block0:
 ;   sxth w5, w0
 ;   and w7, w1, #15
@@ -323,7 +300,6 @@ block0(v0: i8, v1: i8):
   return v2
 }
 
-;   v130 := v134
 ; block0:
 ;   sxtb w5, w0
 ;   and w7, w1, #7
@@ -337,7 +313,6 @@ block0(v0: i64):
   return v2
 }
 
-;   v130 := v132
 ; block0:
 ;   ror x0, x0, #17
 ;   ret
@@ -349,7 +324,6 @@ block0(v0: i64):
   return v2
 }
 
-;   v130 := v132
 ; block0:
 ;   ror x0, x0, #47
 ;   ret
@@ -361,7 +335,6 @@ block0(v0: i32):
   return v2
 }
 
-;   v130 := v132
 ; block0:
 ;   ror w0, w0, #15
 ;   ret
@@ -373,7 +346,6 @@ block0(v0: i16):
   return v2
 }
 
-;   v130 := v135
 ; block0:
 ;   uxth w3, w0
 ;   lsr w5, w3, #6
@@ -388,7 +360,6 @@ block0(v0: i8):
   return v2
 }
 
-;   v130 := v135
 ; block0:
 ;   uxtb w3, w0
 ;   lsr w5, w3, #5
@@ -403,7 +374,6 @@ block0(v0: i64):
   return v2
 }
 
-;   v130 := v132
 ; block0:
 ;   lsr x0, x0, #17
 ;   ret
@@ -415,7 +385,6 @@ block0(v0: i64):
   return v2
 }
 
-;   v130 := v132
 ; block0:
 ;   asr x0, x0, #17
 ;   ret
@@ -427,7 +396,6 @@ block0(v0: i64):
   return v2
 }
 
-;   v130 := v132
 ; block0:
 ;   lsl x0, x0, #17
 ;   ret

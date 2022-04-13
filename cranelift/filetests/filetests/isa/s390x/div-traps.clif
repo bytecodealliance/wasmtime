@@ -12,7 +12,6 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-;   v130 := v135
 ; block0:
 ;   lgr %r1, %r2
 ;   cgite %r3, 0
@@ -32,7 +31,6 @@ block0(v0: i64):
   return v2
 }
 
-;   v130 := v133
 ; block0:
 ;   lgr %r1, %r2
 ;   lghi %r2, 2
@@ -46,7 +44,6 @@ block0(v0: i32, v1: i32):
   return v2
 }
 
-;   v130 := v135
 ; block0:
 ;   lgfr %r1, %r2
 ;   cite %r3, 0
@@ -65,7 +62,6 @@ block0(v0: i32):
   return v2
 }
 
-;   v130 := v133
 ; block0:
 ;   lgfr %r1, %r2
 ;   lhi %r2, 2
@@ -79,7 +75,6 @@ block0(v0: i16, v1: i16):
   return v2
 }
 
-;   v130 := v136
 ; block0:
 ;   lghr %r1, %r2
 ;   lhr %r4, %r3
@@ -99,7 +94,6 @@ block0(v0: i16):
   return v2
 }
 
-;   v130 := v133
 ; block0:
 ;   lghr %r1, %r2
 ;   lhi %r2, 2
@@ -113,7 +107,6 @@ block0(v0: i8, v1: i8):
   return v2
 }
 
-;   v130 := v136
 ; block0:
 ;   lgbr %r1, %r2
 ;   lbr %r4, %r3
@@ -133,7 +126,6 @@ block0(v0: i8):
   return v2
 }
 
-;   v130 := v133
 ; block0:
 ;   lgbr %r1, %r2
 ;   lhi %r2, 2
@@ -147,7 +139,6 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-;   v130 := v132
 ; block0:
 ;   lghi %r0, 0
 ;   lgr %r1, %r2
@@ -163,7 +154,6 @@ block0(v0: i64):
   return v2
 }
 
-;   v130 := v133
 ; block0:
 ;   lghi %r0, 0
 ;   lgr %r1, %r2
@@ -178,7 +168,6 @@ block0(v0: i32, v1: i32):
   return v2
 }
 
-;   v130 := v132
 ; block0:
 ;   lhi %r0, 0
 ;   lgr %r1, %r2
@@ -194,7 +183,6 @@ block0(v0: i32):
   return v2
 }
 
-;   v130 := v133
 ; block0:
 ;   lhi %r0, 0
 ;   lgr %r1, %r2
@@ -209,7 +197,6 @@ block0(v0: i16, v1: i16):
   return v2
 }
 
-;   v130 := v133
 ; block0:
 ;   lhi %r0, 0
 ;   llhr %r1, %r2
@@ -226,7 +213,6 @@ block0(v0: i16):
   return v2
 }
 
-;   v130 := v133
 ; block0:
 ;   lhi %r0, 0
 ;   llhr %r1, %r2
@@ -241,7 +227,6 @@ block0(v0: i8, v1: i8):
   return v2
 }
 
-;   v130 := v133
 ; block0:
 ;   lhi %r0, 0
 ;   llcr %r1, %r2
@@ -258,7 +243,6 @@ block0(v0: i8):
   return v2
 }
 
-;   v130 := v133
 ; block0:
 ;   lhi %r0, 0
 ;   llcr %r1, %r2
@@ -273,7 +257,6 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-;   v130 := v132
 ; block0:
 ;   lgr %r1, %r2
 ;   cgite %r3, 0
@@ -289,7 +272,6 @@ block0(v0: i32, v1: i32):
   return v2
 }
 
-;   v130 := v132
 ; block0:
 ;   lgfr %r1, %r2
 ;   cite %r3, 0
@@ -303,7 +285,6 @@ block0(v0: i16, v1: i16):
   return v2
 }
 
-;   v130 := v133
 ; block0:
 ;   lghr %r1, %r2
 ;   lhr %r4, %r3
@@ -318,7 +299,6 @@ block0(v0: i8, v1: i8):
   return v2
 }
 
-;   v130 := v133
 ; block0:
 ;   lgbr %r1, %r2
 ;   lbr %r4, %r3
@@ -333,7 +313,6 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-;   v130 := v132
 ; block0:
 ;   lghi %r0, 0
 ;   lgr %r1, %r2
@@ -348,7 +327,6 @@ block0(v0: i32, v1: i32):
   return v2
 }
 
-;   v130 := v132
 ; block0:
 ;   lhi %r0, 0
 ;   lgr %r1, %r2
@@ -363,7 +341,6 @@ block0(v0: i16, v1: i16):
   return v2
 }
 
-;   v130 := v133
 ; block0:
 ;   lhi %r0, 0
 ;   llhr %r1, %r2
@@ -379,7 +356,6 @@ block0(v0: i8, v1: i8):
   return v2
 }
 
-;   v130 := v133
 ; block0:
 ;   lhi %r0, 0
 ;   llcr %r1, %r2

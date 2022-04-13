@@ -7,7 +7,6 @@ block0(v0: i64):
   return v1
 }
 
-;   v129 := v131
 ; block0:
 ;   ld %f0, 0(%r2)
 ;   br %r14
@@ -18,7 +17,6 @@ block0(v0: i64):
   return v1
 }
 
-;   v129 := v131
 ; block0:
 ;   le %f0, 0(%r2)
 ;   br %r14
@@ -29,7 +27,6 @@ block0(v0: i64):
   return v1
 }
 
-;   v129 := v132
 ; block0:
 ;   lrvg %r5, 0(%r2)
 ;   ldgr %f0, %r5
@@ -41,7 +38,6 @@ block0(v0: i64):
   return v1
 }
 
-;   v129 := v133
 ; block0:
 ;   lrv %r5, 0(%r2)
 ;   sllg %r3, %r5, 32

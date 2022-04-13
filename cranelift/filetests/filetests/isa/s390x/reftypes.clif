@@ -16,7 +16,6 @@ block0(v0: r64):
   return v1
 }
 
-;   v129 := v131
 ; block0:
 ;   cghi %r2, 0
 ;   lhi %r2, 0
@@ -29,7 +28,6 @@ block0(v0: r64):
   return v1
 }
 
-;   v129 := v131
 ; block0:
 ;   cghi %r2, -1
 ;   lhi %r2, 0
@@ -67,9 +65,6 @@ block3(v7: r64, v8: r64):
     return v7, v8, v9
 }
 
-;   v131 := v146
-;   v134 := v140
-;   v135 := v139
 ;   stmg %r14, %r15, 112(%r15)
 ;   aghi %r15, -184
 ;   virtual_sp_offset_adjust 160

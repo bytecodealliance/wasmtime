@@ -11,10 +11,6 @@ block0(v0: i64, v1: i32):
     return v2
 }
 
-;   v130 := v145
-;   v133 := v144
-;   v135 := v142
-;   v138 := v141
 ; block0:
 ;   llgfr %r4, %r3
 ;   lghi %r3, 0
@@ -39,9 +35,6 @@ block0(v0: i64, v1: i32):
     return v2
 }
 
-;   v130 := v142
-;   v134 := v141
-;   v137 := v140
 ; block0:
 ;   llgfr %r3, %r3
 ;   clgfi %r3, 65536

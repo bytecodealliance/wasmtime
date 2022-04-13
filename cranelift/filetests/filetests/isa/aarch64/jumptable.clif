@@ -29,7 +29,6 @@ block5(v5: i64):
   return v6
 }
 
-;   v134 := v136
 ; block0:
 ;   emit_island 36
 ;   subs wzr, w0, #3

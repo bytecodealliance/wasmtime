@@ -7,7 +7,6 @@ block0(v0: b1, v1: i32, v2: i32):
     return v3
 }
 
-;   v131 := v133
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:

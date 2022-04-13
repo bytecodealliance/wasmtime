@@ -10,17 +10,14 @@ block0(v0: i64, v1: i64):
     return v4, v5
 }
 
-;   v131 := v138
-;   v132 := v137
-;   v133 := v136
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movq    0(%rsi), %rdx
-;   cmpq    %rdx, %rdi
+;   movq    0(%rsi), %rcx
+;   cmpq    %rcx, %rdi
 ;   setz    %al
 ;   andq    %rax, $1, %rax
-;   cmpq    %rdx, %rdi
+;   cmpq    %rcx, %rdi
 ;   cmovzq  %rdi, %rsi, %rsi
 ;   movq    %rsi, %rdx
 ;   movq    %rbp, %rsp
@@ -36,19 +33,16 @@ block0(v0: f64, v1: i64):
     return v4, v5
 }
 
-;   v131 := v141
-;   v132 := v138
-;   v133 := v136
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movsd   0(%rdi), %xmm4
-;   ucomisd %xmm4, %xmm0
+;   movsd   0(%rdi), %xmm12
+;   ucomisd %xmm12, %xmm0
 ;   setnp   %al
-;   setz    %r9b
-;   andl    %eax, %r9d, %eax
+;   setz    %r8b
+;   andl    %eax, %r8d, %eax
 ;   andq    %rax, $1, %rax
-;   ucomisd %xmm0, %xmm4
+;   ucomisd %xmm0, %xmm12
 ;   movdqa  %xmm0, %xmm6
 ;   mov z, sd; j%xmm6 $next; mov%xmm0 %xmm0, %xmm0; $next: 
 ;   mov np, sd; j%xmm6 $next; mov%xmm0 %xmm0, %xmm0; $next: 

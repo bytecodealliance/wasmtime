@@ -8,8 +8,6 @@ block0(v0: i32, v1: i32):
     return v3
 }
 
-;   v130 := v133
-;   v131 := v130
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:

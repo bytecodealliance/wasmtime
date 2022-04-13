@@ -24,14 +24,13 @@ block0(v0: i64, v1: i64):
     return v4
 }
 
-;   v132 := v134
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   lea     16(%rbp), %rsi
 ;   movzbq  0(%rdi), %rax
-;   movzbq  0(%rsi), %r9
-;   addl    %eax, %r9d, %eax
+;   movzbq  0(%rsi), %r11
+;   addl    %eax, %r11d, %eax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -100,15 +99,14 @@ block0(v0: i64, v1: i64):
     return v4
 }
 
-;   v132 := v134
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   lea     16(%rbp), %rsi
 ;   lea     144(%rbp), %rdi
 ;   movzbq  0(%rsi), %rax
-;   movzbq  0(%rdi), %r9
-;   addl    %eax, %r9d, %eax
+;   movzbq  0(%rdi), %r11
+;   addl    %eax, %r11d, %eax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

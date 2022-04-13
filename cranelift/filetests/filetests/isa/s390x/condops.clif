@@ -9,7 +9,6 @@ block0(v0: i8, v1: i64, v2: i64):
   return v5
 }
 
-;   v133 := v136
 ; block0:
 ;   llcr %r5, %r2
 ;   clfi %r5, 42
@@ -23,7 +22,6 @@ block0(v0: b1, v1: i8, v2: i8):
   return v3
 }
 
-;   v131 := v134
 ; block0:
 ;   llcr %r5, %r2
 ;   chi %r5, 0
@@ -39,7 +37,6 @@ block0(v0: i32, v1: i8, v2: i8):
   return v5
 }
 
-;   v133 := v135
 ; block0:
 ;   clfi %r2, 42
 ;   lgr %r2, %r4

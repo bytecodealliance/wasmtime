@@ -7,7 +7,6 @@ block0(v0: i64, v1: i64, v2: i64):
   return v3
 }
 
-;   v131 := v133
 ; block0:
 ;   lg %r0, 0(%r3)
 ;   0: nngrk %r1, %r0, %r4 ; csg %r0, %r1, 0(%r3) ; jglh 0b ; 1:
@@ -20,7 +19,6 @@ block0(v0: i64, v1: i64, v2: i32):
   return v3
 }
 
-;   v131 := v133
 ; block0:
 ;   l %r0, 0(%r3)
 ;   0: nnrk %r1, %r0, %r4 ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
@@ -33,7 +31,6 @@ block0(v0: i64, v1: i64, v2: i16):
   return v3
 }
 
-;   v131 := v135
 ; block0:
 ;   sllk %r5, %r3, 3
 ;   nill %r3, 65532
@@ -48,7 +45,6 @@ block0(v0: i64, v1: i64, v2: i8):
   return v3
 }
 
-;   v131 := v136
 ; block0:
 ;   sllk %r5, %r3, 3
 ;   nill %r3, 65532
@@ -64,7 +60,6 @@ block0(v0: i64, v1: i64, v2: i64):
   return v3
 }
 
-;   v131 := v134
 ; block0:
 ;   lrvgr %r5, %r4
 ;   lg %r0, 0(%r3)
@@ -78,7 +73,6 @@ block0(v0: i64, v1: i64, v2: i32):
   return v3
 }
 
-;   v131 := v134
 ; block0:
 ;   lrvr %r5, %r4
 ;   l %r0, 0(%r3)
@@ -92,7 +86,6 @@ block0(v0: i64, v1: i64, v2: i16):
   return v3
 }
 
-;   v131 := v137
 ; block0:
 ;   sllk %r5, %r3, 3
 ;   nill %r3, 65532
@@ -109,7 +102,6 @@ block0(v0: i64, v1: i64, v2: i8):
   return v3
 }
 
-;   v131 := v136
 ; block0:
 ;   sllk %r5, %r3, 3
 ;   nill %r3, 65532

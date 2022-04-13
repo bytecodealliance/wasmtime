@@ -217,25 +217,6 @@ block0(v0: i64):
   return v39
 }
 
-;   v149 := v187
-;   v150 := v186
-;   v151 := v185
-;   v152 := v184
-;   v153 := v183
-;   v154 := v182
-;   v155 := v181
-;   v156 := v180
-;   v157 := v179
-;   v158 := v178
-;   v159 := v177
-;   v160 := v176
-;   v161 := v175
-;   v162 := v174
-;   v163 := v173
-;   v164 := v172
-;   v165 := v171
-;   v166 := v170
-;   v167 := v169
 ;   pushq   %rbp
 ;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
 ;   movq    %rsp, %rbp
@@ -261,55 +242,55 @@ block0(v0: i64):
 ;   unwind SaveReg { clobber_offset: 128, reg: p14f }
 ; block0:
 ;   movsd   0(%rcx), %xmm0
-;   movsd   8(%rcx), %xmm8
-;   movdqu  %xmm8, rsp(0 + virtual offset)
-;   movsd   16(%rcx), %xmm10
-;   movdqu  %xmm10, rsp(80 + virtual offset)
-;   movsd   24(%rcx), %xmm14
-;   movdqu  %xmm14, rsp(16 + virtual offset)
-;   movsd   32(%rcx), %xmm3
-;   movsd   40(%rcx), %xmm7
+;   movsd   8(%rcx), %xmm12
+;   movdqu  %xmm12, rsp(80 + virtual offset)
+;   movsd   16(%rcx), %xmm6
+;   movdqu  %xmm6, rsp(0 + virtual offset)
+;   movsd   24(%rcx), %xmm2
+;   movdqu  %xmm2, rsp(64 + virtual offset)
+;   movsd   32(%rcx), %xmm14
+;   movsd   40(%rcx), %xmm3
+;   movdqu  %xmm3, rsp(48 + virtual offset)
+;   movsd   48(%rcx), %xmm9
+;   movsd   56(%rcx), %xmm7
 ;   movdqu  %xmm7, rsp(32 + virtual offset)
-;   movsd   48(%rcx), %xmm13
-;   movsd   56(%rcx), %xmm11
-;   movdqu  %xmm11, rsp(48 + virtual offset)
-;   movsd   64(%rcx), %xmm2
-;   movsd   72(%rcx), %xmm5
-;   movdqu  %xmm5, rsp(64 + virtual offset)
-;   movsd   80(%rcx), %xmm1
-;   movsd   88(%rcx), %xmm5
-;   movsd   96(%rcx), %xmm9
-;   movsd   104(%rcx), %xmm8
-;   movsd   112(%rcx), %xmm4
-;   movsd   120(%rcx), %xmm14
-;   movsd   128(%rcx), %xmm12
-;   movsd   136(%rcx), %xmm7
-;   movsd   144(%rcx), %xmm6
-;   movdqu  rsp(0 + virtual offset), %xmm10
-;   addsd   %xmm0, %xmm0, %xmm10
-;   movdqu  rsp(16 + virtual offset), %xmm11
-;   movdqu  rsp(80 + virtual offset), %xmm10
-;   addsd   %xmm10, %xmm10, %xmm11
-;   movdqu  rsp(32 + virtual offset), %xmm11
-;   addsd   %xmm3, %xmm3, %xmm11
-;   movdqu  rsp(48 + virtual offset), %xmm11
+;   movsd   64(%rcx), %xmm13
+;   movsd   72(%rcx), %xmm10
+;   movdqu  %xmm10, rsp(16 + virtual offset)
+;   movsd   80(%rcx), %xmm11
+;   movsd   88(%rcx), %xmm10
+;   movsd   96(%rcx), %xmm5
+;   movsd   104(%rcx), %xmm12
+;   movsd   112(%rcx), %xmm1
+;   movsd   120(%rcx), %xmm2
+;   movsd   128(%rcx), %xmm8
+;   movsd   136(%rcx), %xmm3
+;   movsd   144(%rcx), %xmm4
+;   movdqu  rsp(80 + virtual offset), %xmm6
+;   addsd   %xmm0, %xmm0, %xmm6
+;   movdqu  rsp(0 + virtual offset), %xmm6
+;   movdqu  rsp(64 + virtual offset), %xmm7
+;   addsd   %xmm6, %xmm6, %xmm7
+;   movdqu  rsp(48 + virtual offset), %xmm7
+;   addsd   %xmm14, %xmm14, %xmm7
+;   movdqu  rsp(32 + virtual offset), %xmm7
+;   addsd   %xmm9, %xmm9, %xmm7
+;   movdqu  rsp(16 + virtual offset), %xmm7
+;   addsd   %xmm13, %xmm13, %xmm7
+;   addsd   %xmm11, %xmm11, %xmm10
+;   addsd   %xmm5, %xmm5, %xmm12
+;   addsd   %xmm1, %xmm1, %xmm2
+;   addsd   %xmm8, %xmm8, %xmm3
+;   addsd   %xmm4, 152(%xmm4), %rcx
+;   addsd   %xmm0, %xmm0, %xmm6
+;   addsd   %xmm14, %xmm14, %xmm9
 ;   addsd   %xmm13, %xmm13, %xmm11
-;   movdqu  rsp(64 + virtual offset), %xmm11
-;   addsd   %xmm2, %xmm2, %xmm11
-;   addsd   %xmm1, %xmm1, %xmm5
-;   addsd   %xmm9, %xmm9, %xmm8
-;   addsd   %xmm4, %xmm4, %xmm14
-;   addsd   %xmm12, %xmm12, %xmm7
-;   addsd   %xmm6, 152(%xmm6), %rcx
-;   addsd   %xmm0, %xmm0, %xmm10
-;   addsd   %xmm3, %xmm3, %xmm13
-;   addsd   %xmm2, %xmm2, %xmm1
-;   addsd   %xmm9, %xmm9, %xmm4
-;   addsd   %xmm12, %xmm12, %xmm6
-;   addsd   %xmm0, %xmm0, %xmm3
-;   addsd   %xmm2, %xmm2, %xmm9
-;   addsd   %xmm0, %xmm0, %xmm2
-;   addsd   %xmm0, %xmm0, %xmm12
+;   addsd   %xmm5, %xmm5, %xmm1
+;   addsd   %xmm8, %xmm8, %xmm4
+;   addsd   %xmm0, %xmm0, %xmm14
+;   addsd   %xmm13, %xmm13, %xmm5
+;   addsd   %xmm0, %xmm0, %xmm13
+;   addsd   %xmm0, %xmm0, %xmm8
 ;   movdqu  96(%rsp), %xmm6
 ;   movdqu  112(%rsp), %xmm7
 ;   movdqu  128(%rsp), %xmm8

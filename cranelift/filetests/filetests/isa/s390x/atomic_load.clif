@@ -7,7 +7,6 @@ block0(v0: i64):
   return v1
 }
 
-;   v129 := v131
 ; block0:
 ;   lg %r2, 0(%r2)
 ;   br %r14
@@ -20,7 +19,6 @@ block0:
   return v1
 }
 
-;   v129 := v131
 ; block0:
 ;   lgrl %r2, %sym + 0
 ;   br %r14
@@ -31,7 +29,6 @@ block0(v0: i64):
   return v1
 }
 
-;   v129 := v131
 ; block0:
 ;   l %r2, 0(%r2)
 ;   br %r14
@@ -44,7 +41,6 @@ block0:
   return v1
 }
 
-;   v129 := v131
 ; block0:
 ;   lrl %r2, %sym + 0
 ;   br %r14
@@ -55,7 +51,6 @@ block0(v0: i64):
   return v1
 }
 
-;   v129 := v131
 ; block0:
 ;   llh %r2, 0(%r2)
 ;   br %r14
@@ -68,7 +63,6 @@ block0:
   return v1
 }
 
-;   v129 := v131
 ; block0:
 ;   llhrl %r2, %sym + 0
 ;   br %r14
@@ -79,7 +73,6 @@ block0(v0: i64):
   return v1
 }
 
-;   v129 := v131
 ; block0:
 ;   llc %r2, 0(%r2)
 ;   br %r14

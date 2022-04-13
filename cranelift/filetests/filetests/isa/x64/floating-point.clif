@@ -29,10 +29,10 @@ block0(v0: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movsd   0(%rdi), %xmm2
-;   movabsq $9223372036854775807, %r9
-;   movq    %r9, %xmm0
-;   andpd   %xmm0, %xmm0, %xmm2
+;   movsd   0(%rdi), %xmm5
+;   movabsq $9223372036854775807, %r8
+;   movq    %r8, %xmm0
+;   andpd   %xmm0, %xmm0, %xmm5
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
