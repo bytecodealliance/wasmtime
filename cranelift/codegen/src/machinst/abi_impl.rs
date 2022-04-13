@@ -642,7 +642,7 @@ fn get_special_purpose_param_register(
     let idx = f.signature.special_param_index(purpose)?;
     match &abi.args[idx] {
         &ABIArg::Slots { ref slots, .. } => match &slots[0] {
-            &ABIArgSlot::Reg { reg, .. } => Some(reg.to_reg()),
+            &ABIArgSlot::Reg { reg, .. } => Some(reg.into()),
             _ => None,
         },
         _ => None,
@@ -967,7 +967,7 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
                         // Extension mode doesn't matter (we're copying out, not in; we
                         // ignore high bits by convention).
                         &ABIArgSlot::Reg { reg, ty, .. } => {
-                            insts.push(M::gen_move(*into_reg, reg.to_reg(), ty));
+                            insts.push(M::gen_move(*into_reg, reg.into(), ty));
                         }
                         &ABIArgSlot::Stack { offset, ty, .. } => {
                             insts.push(M::gen_load_stack(
@@ -1017,20 +1017,21 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         match &self.sig.rets[idx] {
             &ABIArg::Slots { ref slots, .. } => {
                 assert_eq!(from_regs.len(), slots.len());
-                for (slot, from_reg) in slots.iter().zip(from_regs.regs().iter()) {
+                for (slot, &from_reg) in slots.iter().zip(from_regs.regs().iter()) {
                     match slot {
                         &ABIArgSlot::Reg {
                             reg, ty, extension, ..
                         } => {
                             let from_bits = ty_bits(ty) as u8;
                             let ext = M::get_ext_mode(self.sig.call_conv, extension);
+                            let reg: Writable<Reg> = Writable::from_reg(Reg::from(reg));
                             match (ext, from_bits) {
                                 (ArgumentExtension::Uext, n) | (ArgumentExtension::Sext, n)
                                     if n < word_bits =>
                                 {
                                     let signed = ext == ArgumentExtension::Sext;
                                     ret.push(M::gen_extend(
-                                        Writable::from_reg(reg.to_reg()),
+                                        reg,
                                         from_reg.to_reg(),
                                         signed,
                                         from_bits,
@@ -1038,11 +1039,7 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
                                     ));
                                 }
                                 _ => {
-                                    ret.push(M::gen_move(
-                                        Writable::from_reg(reg.to_reg()),
-                                        from_reg.to_reg(),
-                                        ty,
-                                    ));
+                                    ret.push(M::gen_move(reg, from_reg.to_reg(), ty));
                                 }
                             };
                         }
@@ -1120,7 +1117,7 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
                 ABIArg::Slots { slots, .. } => {
                     for slot in slots {
                         match slot {
-                            ABIArgSlot::Reg { reg, .. } => rets.push(reg.to_reg()),
+                            ABIArgSlot::Reg { reg, .. } => rets.push(Reg::from(*reg)),
                             _ => {}
                         }
                     }
@@ -1334,8 +1331,8 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
     }
 
     fn gen_spill(&self, to_slot: SpillSlot, from_reg: RealReg) -> Self::I {
-        let ty = Self::I::type_for_rc(from_reg.to_reg().class());
-        self.store_spillslot(to_slot, ty, ValueRegs::one(from_reg.to_reg()))
+        let ty = Self::I::type_for_rc(Reg::from(from_reg).class());
+        self.store_spillslot(to_slot, ty, ValueRegs::one(Reg::from(from_reg)))
             .into_iter()
             .next()
             .unwrap()
@@ -1346,7 +1343,7 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         self.load_spillslot(
             from_slot,
             ty,
-            writable_value_regs(ValueRegs::one(to_reg.to_reg().to_reg())),
+            writable_value_regs(ValueRegs::one(Reg::from(to_reg.to_reg()))),
         )
         .into_iter()
         .next()
@@ -1362,7 +1359,7 @@ fn abisig_to_uses_and_defs<M: ABIMachineSpec>(sig: &ABISig) -> (Vec<Reg>, Vec<Wr
             for slot in slots {
                 match slot {
                     &ABIArgSlot::Reg { reg, .. } => {
-                        uses.insert(reg.to_reg());
+                        uses.insert(Reg::from(reg));
                     }
                     _ => {}
                 }
@@ -1379,7 +1376,7 @@ fn abisig_to_uses_and_defs<M: ABIMachineSpec>(sig: &ABISig) -> (Vec<Reg>, Vec<Wr
             for slot in slots {
                 match slot {
                     &ABIArgSlot::Reg { reg, .. } => {
-                        defs.insert(Writable::from_reg(reg.to_reg()));
+                        defs.insert(Writable::from_reg(Reg::from(reg)));
                     }
                     _ => {}
                 }
@@ -1547,7 +1544,7 @@ impl<M: ABIMachineSpec> ABICaller for ABICallerImpl<M> {
                                     _ => unreachable!(),
                                 };
                                 ctx.emit(M::gen_extend(
-                                    Writable::from_reg(reg.to_reg()),
+                                    Writable::from_reg(Reg::from(reg)),
                                     *from_reg,
                                     signed,
                                     ty_bits(ty) as u8,
@@ -1555,7 +1552,7 @@ impl<M: ABIMachineSpec> ABICaller for ABICallerImpl<M> {
                                 ));
                             } else {
                                 ctx.emit(M::gen_move(
-                                    Writable::from_reg(reg.to_reg()),
+                                    Writable::from_reg(Reg::from(reg)),
                                     *from_reg,
                                     ty,
                                 ));
@@ -1653,7 +1650,7 @@ impl<M: ABIMachineSpec> ABICaller for ABICallerImpl<M> {
                         // Extension mode doesn't matter because we're copying out, not in,
                         // and we ignore high bits in our own registers by convention.
                         &ABIArgSlot::Reg { reg, ty, .. } => {
-                            ctx.emit(M::gen_move(*into_reg, reg.to_reg(), ty));
+                            ctx.emit(M::gen_move(*into_reg, Reg::from(reg), ty));
                         }
                         &ABIArgSlot::Stack { offset, ty, .. } => {
                             let ret_area_base = self.sig.stack_arg_space;

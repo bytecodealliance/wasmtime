@@ -11,6 +11,7 @@ use crate::{CodegenError, CodegenResult};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use args::*;
+use regalloc2::VReg;
 use smallvec::{smallvec, SmallVec};
 use std::convert::TryFrom;
 
@@ -539,7 +540,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                 RegClass::Int => {
                     insts.push(Inst::store(
                         types::I64,
-                        r_reg.to_reg(),
+                        r_reg.into(),
                         Amode::imm_reg(cur_offset, regs::rsp()),
                     ));
                     cur_offset += 8;
@@ -548,7 +549,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                     cur_offset = align_to(cur_offset, 16);
                     insts.push(Inst::store(
                         types::I8X16,
-                        r_reg.to_reg(),
+                        r_reg.into(),
                         Amode::imm_reg(cur_offset, regs::rsp()),
                     ));
                     cur_offset += 16;
@@ -589,7 +590,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                 RegClass::Int => {
                     insts.push(Inst::mov64_m_r(
                         Amode::imm_reg(cur_offset, regs::rsp()),
-                        Writable::from_reg(rreg.to_reg()),
+                        Writable::from_reg(rreg.into()),
                     ));
                     cur_offset += 8;
                 }
@@ -598,7 +599,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                     insts.push(Inst::load(
                         types::I8X16,
                         Amode::imm_reg(cur_offset, regs::rsp()),
-                        Writable::from_reg(rreg.to_reg()),
+                        Writable::from_reg(rreg.into()),
                         ExtKind::None,
                     ));
                     cur_offset += 16;
@@ -813,7 +814,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         };
         // Sort registers for deterministic code output. We can do an unstable sort because the
         // registers will be unique (there are no dups).
-        regs.sort_unstable_by_key(|r| r.to_reg().to_reg().to_vreg().vreg());
+        regs.sort_unstable_by_key(|r| VReg::from(r.to_reg()).vreg());
         regs
     }
 

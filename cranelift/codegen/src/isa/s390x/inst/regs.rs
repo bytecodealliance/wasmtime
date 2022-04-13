@@ -35,7 +35,7 @@ const FPR_INDICES: [u8; 16] = [
 pub fn gpr(num: u8) -> Reg {
     assert!(num < 16);
     let preg = PReg::new(num as usize, RegClass::Int);
-    Reg::from_vreg(VReg::new(preg.index(), RegClass::Int))
+    Reg::from(VReg::new(preg.index(), RegClass::Int))
 }
 
 /// Get a writable reference to a GPR.
@@ -47,7 +47,7 @@ pub fn writable_gpr(num: u8) -> Writable<Reg> {
 pub fn fpr(num: u8) -> Reg {
     assert!(num < 16);
     let preg = PReg::new(num as usize, RegClass::Float);
-    Reg::from_vreg(VReg::new(preg.index(), RegClass::Float))
+    Reg::from(VReg::new(preg.index(), RegClass::Float))
 }
 
 /// Get a writable reference to a V-register.
@@ -89,7 +89,7 @@ pub fn zero_reg() -> Reg {
 /// Create the register universe for AArch64.
 pub fn create_machine_env(_flags: &settings::Flags) -> MachineEnv {
     fn preg(r: Reg) -> PReg {
-        r.to_real_reg().unwrap().to_preg()
+        r.to_real_reg().unwrap().into()
     }
 
     MachineEnv {

@@ -315,12 +315,9 @@ fn alloc_vregs<I: VCodeInst>(
     let v = *next_vreg;
     let (regclasses, tys) = I::rc_for_type(ty)?;
     *next_vreg += regclasses.len();
-    let regs = match regclasses {
-        &[rc0] => ValueRegs::one(Reg::from_vreg(VReg::new(v, rc0))),
-        &[rc0, rc1] => ValueRegs::two(
-            Reg::from_vreg(VReg::new(v, rc0)),
-            Reg::from_vreg(VReg::new(v + 1, rc1)),
-        ),
+    let regs: ValueRegs<Reg> = match regclasses {
+        &[rc0] => ValueRegs::one(VReg::new(v, rc0).into()),
+        &[rc0, rc1] => ValueRegs::two(VReg::new(v, rc0).into(), VReg::new(v + 1, rc1).into()),
         // We can extend this if/when we support 32-bit targets; e.g.,
         // an i128 on a 32-bit machine will need up to four machine regs
         // for a `Value`.
@@ -777,8 +774,8 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                 let arg = self.f.dfg.resolve_aliases(arg);
                 let regs = self.put_value_in_regs(arg);
                 for &vreg in regs.regs() {
-                    let vreg = self.vcode.resolve_vreg_alias(vreg.to_vreg());
-                    branch_arg_vregs.push(Reg::from_vreg(vreg));
+                    let vreg = self.vcode.resolve_vreg_alias(vreg.into());
+                    branch_arg_vregs.push(vreg.into());
                 }
             }
             self.vcode.add_branch_args_for_succ(&branch_arg_vregs[..]);

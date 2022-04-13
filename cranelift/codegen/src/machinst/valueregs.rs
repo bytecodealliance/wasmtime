@@ -37,17 +37,17 @@ pub trait InvalidSentinel: Copy + Eq {
 }
 impl InvalidSentinel for Reg {
     fn invalid_sentinel() -> Self {
-        Reg::from_vreg(VReg::invalid())
+        Reg::from(VReg::invalid())
     }
 }
 impl InvalidSentinel for VirtualReg {
     fn invalid_sentinel() -> Self {
-        VirtualReg::from_vreg(VReg::invalid())
+        VirtualReg::from(VReg::invalid())
     }
 }
 impl InvalidSentinel for RealReg {
     fn invalid_sentinel() -> Self {
-        RealReg::from_preg(PReg::invalid())
+        RealReg::from(PReg::invalid())
     }
 }
 impl InvalidSentinel for Writable<Reg> {

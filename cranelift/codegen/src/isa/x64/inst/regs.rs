@@ -34,7 +34,7 @@ pub const ENC_R15: u8 = 15;
 
 fn gpr(enc: u8) -> Reg {
     let preg = PReg::new(enc as usize, RegClass::Int);
-    Reg::from_vreg(VReg::new(preg.index(), RegClass::Int))
+    Reg::from(VReg::new(preg.index(), RegClass::Int))
 }
 
 pub(crate) fn rsi() -> Reg {
@@ -97,7 +97,7 @@ pub(crate) fn pinned_reg() -> Reg {
 
 fn fpr(enc: u8) -> Reg {
     let preg = PReg::new(enc as usize, RegClass::Float);
-    Reg::from_vreg(VReg::new(preg.index(), RegClass::Float))
+    Reg::from(VReg::new(preg.index(), RegClass::Float))
 }
 
 pub(crate) fn xmm0() -> Reg {
@@ -152,7 +152,7 @@ pub(crate) fn xmm15() -> Reg {
 /// Create the register environment for x64.
 pub(crate) fn create_reg_env_systemv(flags: &settings::Flags) -> MachineEnv {
     fn preg(r: Reg) -> PReg {
-        r.to_real_reg().unwrap().to_preg()
+        r.to_real_reg().unwrap().into()
     }
 
     let mut env = MachineEnv {
@@ -209,7 +209,7 @@ pub(crate) fn create_reg_env_systemv(flags: &settings::Flags) -> MachineEnv {
 
 /// Give the name of a RealReg.
 pub fn realreg_name(reg: RealReg) -> &'static str {
-    let preg = reg.to_preg();
+    let preg = PReg::from(reg);
     match preg.class() {
         RegClass::Int => match preg.hw_enc() as u8 {
             ENC_RAX => "%rax",

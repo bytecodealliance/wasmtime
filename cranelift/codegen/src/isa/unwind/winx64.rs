@@ -293,7 +293,7 @@ pub(crate) fn create_unwind_info_from_insts<MR: RegisterMapper<crate::machinst::
             &UnwindInst::SaveReg {
                 clobber_offset,
                 reg,
-            } => match MR::map(reg.to_reg()) {
+            } => match MR::map(reg.into()) {
                 MappedRegister::Int(reg) => {
                     unwind_codes.push(UnwindCode::SaveReg {
                         instruction_offset,

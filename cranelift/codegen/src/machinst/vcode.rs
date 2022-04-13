@@ -308,7 +308,7 @@ impl<I: VCodeInst> VCodeBuilder<I> {
         }
         self.vcode.vreg_types[vreg.index()] = ty;
         if is_reftype(ty) {
-            let vreg = vreg.to_reg().to_vreg();
+            let vreg: VReg = vreg.into();
             if self.vcode.reftyped_vregs_set.insert(vreg) {
                 self.vcode.reftyped_vregs.push(vreg);
             }
@@ -358,14 +358,14 @@ impl<I: VCodeInst> VCodeBuilder<I> {
 
     pub fn add_block_param(&mut self, param: VirtualReg, ty: Type) {
         self.set_vreg_type(param, ty);
-        self.vcode.block_params.push(param.to_reg().to_vreg());
+        self.vcode.block_params.push(param.into());
     }
 
     pub fn add_branch_args_for_succ(&mut self, args: &[Reg]) {
         let start = self.vcode.branch_block_args.len();
         self.vcode
             .branch_block_args
-            .extend(args.iter().map(|arg| arg.to_vreg()));
+            .extend(args.iter().map(|&arg| VReg::from(arg)));
         let end = self.vcode.branch_block_args.len();
         self.vcode.branch_block_arg_range.push((start, end));
     }
@@ -419,12 +419,12 @@ impl<I: VCodeInst> VCodeBuilder<I> {
             .last()
             .map(|(_start, end, _vreg)| *end)
             .unwrap_or(InsnIndex::new(0));
-        labels.push((last, inst, reg.to_vreg()));
+        labels.push((last, inst, reg.into()));
     }
 
     pub fn set_vreg_alias(&mut self, from: Reg, to: Reg) {
-        let from = from.to_vreg();
-        let resolved_to = self.resolve_vreg_alias(to.to_vreg());
+        let from = from.into();
+        let resolved_to = self.resolve_vreg_alias(to.into());
         // Disallow cycles (see below).
         assert_ne!(resolved_to, from);
         self.vcode.vreg_aliases.insert(from, resolved_to);
@@ -574,17 +574,16 @@ impl<I: VCodeInst> VCodeBuilder<I> {
             if !clobbers.is_empty() {
                 let clobbers = clobbers
                     .iter()
-                    .map(|wreg| wreg.to_reg().to_real_reg().unwrap().to_preg())
-                    .collect::<Vec<_>>();
+                    .map(|wreg| wreg.to_reg().to_real_reg().unwrap().into())
+                    .collect::<Vec<PReg>>();
                 self.vcode.clobbers.insert(InsnIndex::new(i), clobbers);
             }
 
             if let Some((dst, src)) = insn.is_move() {
-                let src =
-                    Operand::reg_use(Self::resolve_vreg_alias_impl(vreg_aliases, src.to_vreg()));
+                let src = Operand::reg_use(Self::resolve_vreg_alias_impl(vreg_aliases, src.into()));
                 let dst = Operand::reg_def(Self::resolve_vreg_alias_impl(
                     vreg_aliases,
-                    dst.to_reg().to_vreg(),
+                    dst.to_reg().into(),
                 ));
                 // Note that regalloc2 requires these in (src, dst) order.
                 self.vcode.is_move.insert(InsnIndex::new(i), (src, dst));
@@ -677,7 +676,7 @@ impl<I: VCodeInst> VCode<I> {
         for edit in &regalloc.edits {
             let Edit::Move { to, .. } = edit.1;
             if let Some(preg) = to.as_reg() {
-                let reg = RealReg::from_preg(preg);
+                let reg = RealReg::from(preg);
                 if clobbered_set.insert(reg) {
                     clobbered.push(Writable::from_reg(reg));
                 }
@@ -705,7 +704,7 @@ impl<I: VCodeInst> VCode<I> {
                     continue;
                 }
                 if let Some(preg) = alloc.as_reg() {
-                    let reg = RealReg::from_preg(preg);
+                    let reg = RealReg::from(preg);
                     if clobbered_set.insert(reg) {
                         clobbered.push(Writable::from_reg(reg));
                     }
@@ -715,7 +714,7 @@ impl<I: VCodeInst> VCode<I> {
             // Also add explicitly-clobbered registers.
             if let Some(inst_clobbers) = self.clobbers.get(&InsnIndex::new(i)) {
                 for &preg in inst_clobbers {
-                    let reg = RealReg::from_preg(preg);
+                    let reg = RealReg::from(preg);
                     if clobbered_set.insert(reg) {
                         clobbered.push(Writable::from_reg(reg));
                     }
@@ -965,8 +964,8 @@ impl<I: VCodeInst> VCode<I> {
                         match (from.as_reg(), to.as_reg()) {
                             (Some(from), Some(to)) => {
                                 // Reg-to-reg move.
-                                let from_rreg = RealReg::from_preg(from).to_reg();
-                                let to_rreg = Writable::from_reg(RealReg::from_preg(to).to_reg());
+                                let from_rreg = Reg::from(from);
+                                let to_rreg = Writable::from_reg(Reg::from(to));
                                 debug_assert_eq!(from.class(), to.class());
                                 let ty = I::type_for_rc(from.class());
                                 let mv = I::gen_move(to_rreg, from_rreg, ty);
@@ -980,7 +979,7 @@ impl<I: VCodeInst> VCode<I> {
                             (Some(from), None) => {
                                 // Spill from register to spillslot.
                                 let to = to.as_stack().unwrap();
-                                let from_rreg = RealReg::from_preg(from);
+                                let from_rreg = RealReg::from(from);
                                 debug_assert_eq!(from.class(), to.class());
                                 let spill = self.abi.gen_spill(to, from_rreg);
                                 if want_disasm {
@@ -993,7 +992,7 @@ impl<I: VCodeInst> VCode<I> {
                             (None, Some(to)) => {
                                 // Load from spillslot to register.
                                 let from = from.as_stack().unwrap();
-                                let to_rreg = Writable::from_reg(RealReg::from_preg(to));
+                                let to_rreg = Writable::from_reg(RealReg::from(to));
                                 debug_assert_eq!(from.class(), to.class());
                                 let reload = self.abi.gen_reload(to_rreg, from);
                                 if want_disasm {
@@ -1105,7 +1104,7 @@ impl<I: VCodeInst> VCode<I> {
             }
 
             let loc = if let Some(preg) = alloc.as_reg() {
-                LabelValueLoc::Reg(RealReg::from_preg(preg).to_reg())
+                LabelValueLoc::Reg(Reg::from(preg))
             } else {
                 // We can't translate spillslot locations at the
                 // moment because ValueLabelLoc requires an
@@ -1264,12 +1263,7 @@ impl<I: VCodeInst> fmt::Debug for VCode<I> {
         alias_keys.sort_unstable();
         for key in alias_keys {
             let dest = self.vreg_aliases.get(&key).unwrap();
-            writeln!(
-                f,
-                "  {:?} := {:?}",
-                Reg::from_vreg(key),
-                Reg::from_vreg(*dest)
-            )?;
+            writeln!(f, "  {:?} := {:?}", Reg::from(key), Reg::from(*dest))?;
         }
 
         for block in 0..self.num_blocks() {

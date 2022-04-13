@@ -50,18 +50,6 @@ pub fn first_user_vreg_index() -> usize {
 pub struct Reg(VReg);
 
 impl Reg {
-    /// Extract the underlying `regalloc2::VReg`. Note that physical
-    /// registers also map to particular (special) VRegs, so this
-    /// method can be used either on virtual or physical `Reg`s.
-    pub fn to_vreg(self) -> VReg {
-        self.0
-    }
-
-    /// Create a `Reg` from an underlying `regalloc2::VReg`.
-    pub fn from_vreg(vreg: VReg) -> Self {
-        Self(vreg)
-    }
-
     /// Get the physical register (`RealReg`), if this register is
     /// one.
     pub fn to_real_reg(self) -> Option<RealReg> {
@@ -101,10 +89,10 @@ impl Reg {
 impl std::fmt::Debug for Reg {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         if let Some(rreg) = self.to_real_reg() {
-            let preg = rreg.to_preg();
+            let preg: PReg = rreg.into();
             write!(f, "{}", preg)
-        } else if let Some(_vreg) = self.to_virtual_reg() {
-            let vreg = self.to_vreg();
+        } else if let Some(vreg) = self.to_virtual_reg() {
+            let vreg: VReg = vreg.into();
             write!(f, "{}", vreg)
         } else {
             unreachable!()
@@ -119,34 +107,19 @@ impl std::fmt::Debug for Reg {
 pub struct RealReg(VReg);
 
 impl RealReg {
-    /// Convert this `RealReg` to a generic `Reg`.
-    pub fn to_reg(self) -> Reg {
-        Reg(self.0)
-    }
-
     /// Get the class of this register.
     pub fn class(self) -> RegClass {
         self.0.class()
     }
 
-    /// Build a RealReg from a regalloc2 PReg.
-    pub fn from_preg(preg: PReg) -> Self {
-        RealReg(VReg::new(preg.index(), preg.class()))
-    }
-
-    /// Get the underlying `regalloc2::PReg` for this `RealReg`.
-    pub fn to_preg(self) -> PReg {
-        PReg::from_index(self.0.vreg())
-    }
-
     pub fn hw_enc(self) -> u8 {
-        self.to_preg().hw_enc() as u8
+        PReg::from(self).hw_enc() as u8
     }
 }
 
 impl std::fmt::Debug for RealReg {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        self.to_reg().fmt(f)
+        Reg::from(*self).fmt(f)
     }
 }
 
@@ -160,20 +133,9 @@ impl std::fmt::Debug for RealReg {
 pub struct VirtualReg(VReg);
 
 impl VirtualReg {
-    /// Convert this `VirtualReg` to a generic `Reg`.
-    pub fn to_reg(self) -> Reg {
-        Reg(self.0)
-    }
-
     /// Get the class of this register.
     pub fn class(self) -> RegClass {
         self.0.class()
-    }
-
-    /// Build a VirtualReg from a regalloc2 `VReg`.
-    pub fn from_vreg(vreg: VReg) -> Self {
-        debug_assert!(pinned_vreg_to_preg(vreg).is_none());
-        VirtualReg(VReg::new(vreg.vreg(), vreg.class()))
     }
 
     pub fn index(self) -> usize {
@@ -183,7 +145,7 @@ impl VirtualReg {
 
 impl std::fmt::Debug for VirtualReg {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        self.to_reg().fmt(f)
+        Reg::from(*self).fmt(f)
     }
 }
 
@@ -223,6 +185,80 @@ impl<T: Clone + Copy + Debug + PartialEq + Eq + PartialOrd + Ord + Hash> Writabl
         F: Fn(T) -> U,
     {
         Writable { reg: f(self.reg) }
+    }
+}
+
+// Conversions between regalloc2 types (VReg) and our types
+// (VirtualReg, RealReg, Reg).
+
+impl std::convert::From<regalloc2::VReg> for Reg {
+    fn from(vreg: regalloc2::VReg) -> Reg {
+        Reg(vreg)
+    }
+}
+
+impl std::convert::From<regalloc2::VReg> for VirtualReg {
+    fn from(vreg: regalloc2::VReg) -> VirtualReg {
+        debug_assert!(pinned_vreg_to_preg(vreg).is_none());
+        VirtualReg(vreg)
+    }
+}
+
+impl std::convert::From<regalloc2::VReg> for RealReg {
+    fn from(vreg: regalloc2::VReg) -> RealReg {
+        debug_assert!(pinned_vreg_to_preg(vreg).is_some());
+        RealReg(vreg)
+    }
+}
+
+impl std::convert::From<Reg> for regalloc2::VReg {
+    /// Extract the underlying `regalloc2::VReg`. Note that physical
+    /// registers also map to particular (special) VRegs, so this
+    /// method can be used either on virtual or physical `Reg`s.
+    fn from(reg: Reg) -> regalloc2::VReg {
+        reg.0
+    }
+}
+
+impl std::convert::From<VirtualReg> for regalloc2::VReg {
+    fn from(reg: VirtualReg) -> regalloc2::VReg {
+        reg.0
+    }
+}
+
+impl std::convert::From<RealReg> for regalloc2::VReg {
+    fn from(reg: RealReg) -> regalloc2::VReg {
+        reg.0
+    }
+}
+
+impl std::convert::From<RealReg> for regalloc2::PReg {
+    fn from(reg: RealReg) -> regalloc2::PReg {
+        PReg::from_index(reg.0.vreg())
+    }
+}
+
+impl std::convert::From<regalloc2::PReg> for RealReg {
+    fn from(preg: regalloc2::PReg) -> RealReg {
+        RealReg(VReg::new(preg.index(), preg.class()))
+    }
+}
+
+impl std::convert::From<regalloc2::PReg> for Reg {
+    fn from(preg: regalloc2::PReg) -> Reg {
+        Reg(VReg::new(preg.index(), preg.class()))
+    }
+}
+
+impl std::convert::From<RealReg> for Reg {
+    fn from(reg: RealReg) -> Reg {
+        Reg(reg.0)
+    }
+}
+
+impl std::convert::From<VirtualReg> for Reg {
+    fn from(reg: VirtualReg) -> Reg {
+        Reg(reg.0)
     }
 }
 
@@ -286,7 +322,7 @@ impl<'a, F: Fn(VReg) -> VReg> OperandCollector<'a, F> {
     /// Add a register use, at the start of the instruction (`Before`
     /// position).
     pub fn reg_use(&mut self, reg: Reg) {
-        self.add(Operand::reg_use(reg.to_vreg()));
+        self.add(Operand::reg_use(reg.into()));
     }
 
     /// Add multiple register uses.
@@ -300,7 +336,7 @@ impl<'a, F: Fn(VReg) -> VReg> OperandCollector<'a, F> {
     /// position). Use only when this def will be written after all
     /// uses are read.
     pub fn reg_def(&mut self, reg: Writable<Reg>) {
-        self.add(Operand::reg_def(reg.to_reg().to_vreg()));
+        self.add(Operand::reg_def(reg.to_reg().into()));
     }
 
     /// Add multiple register defs.
@@ -315,24 +351,21 @@ impl<'a, F: Fn(VReg) -> VReg> OperandCollector<'a, F> {
     /// when the def may be written before all uses are read; the
     /// regalloc will ensure that it does not overwrite any uses.
     pub fn reg_early_def(&mut self, reg: Writable<Reg>) {
-        self.add(Operand::reg_def_at_start(reg.to_reg().to_vreg()));
+        self.add(Operand::reg_def_at_start(reg.to_reg().into()));
     }
 
     /// Add a register "fixed use", which ties a vreg to a particular
     /// RealReg at this point.
     pub fn reg_fixed_use(&mut self, reg: Reg, rreg: Reg) {
         let rreg = rreg.to_real_reg().expect("fixed reg is not a RealReg");
-        self.add(Operand::reg_fixed_use(reg.to_vreg(), rreg.to_preg()));
+        self.add(Operand::reg_fixed_use(reg.into(), rreg.into()));
     }
 
     /// Add a register "fixed def", which ties a vreg to a particular
     /// RealReg at this point.
     pub fn reg_fixed_def(&mut self, reg: Writable<Reg>, rreg: Reg) {
         let rreg = rreg.to_real_reg().expect("fixed reg is not a RealReg");
-        self.add(Operand::reg_fixed_def(
-            reg.to_reg().to_vreg(),
-            rreg.to_preg(),
-        ));
+        self.add(Operand::reg_fixed_def(reg.to_reg().into(), rreg.into()));
     }
 
     /// Add a register def that reuses an earlier use-operand's
@@ -340,13 +373,13 @@ impl<'a, F: Fn(VReg) -> VReg> OperandCollector<'a, F> {
     /// current instruction's start of operands) must be known.
     pub fn reg_reuse_def(&mut self, reg: Writable<Reg>, idx: usize) {
         if reg.to_reg().to_virtual_reg().is_some() {
-            self.add(Operand::reg_reuse_def(reg.to_reg().to_vreg(), idx));
+            self.add(Operand::reg_reuse_def(reg.to_reg().into(), idx));
         } else {
             // Sometimes destination registers that reuse a source are
             // given with RealReg args. In this case, we assume the
             // creator of the instruction knows what they are doing
             // and just emit a normal def to the pinned vreg.
-            self.add(Operand::reg_def(reg.to_reg().to_vreg()));
+            self.add(Operand::reg_def(reg.to_reg().into()));
         }
     }
 
@@ -355,7 +388,7 @@ impl<'a, F: Fn(VReg) -> VReg> OperandCollector<'a, F> {
     /// instruction.
     pub fn reg_mod(&mut self, reg: Writable<Reg>) {
         self.add(Operand::new(
-            reg.to_reg().to_vreg(),
+            reg.to_reg().into(),
             regalloc2::OperandConstraint::Reg,
             regalloc2::OperandKind::Mod,
             regalloc2::OperandPos::Early,
@@ -412,15 +445,21 @@ impl<'a> AllocationConsumer<'a> {
 
     pub fn next(&mut self, pre_regalloc_reg: Reg) -> Reg {
         let alloc = self.allocs.next();
-
-        match (pre_regalloc_reg.to_real_reg(), alloc) {
-            (Some(rreg), _) => rreg.to_reg(),
-            (_, Some(alloc)) => RealReg::from_preg(
+        let alloc = alloc.map(|alloc| {
+            Reg::from(
                 alloc
                     .as_reg()
                     .expect("Should not have gotten a stack allocation"),
             )
-            .to_reg(),
+        });
+
+        match (pre_regalloc_reg.to_real_reg(), alloc) {
+            (Some(rreg), None) => rreg.into(),
+            (Some(rreg), Some(alloc)) => {
+                debug_assert_eq!(Reg::from(rreg), alloc);
+                alloc
+            }
+            (None, Some(alloc)) => alloc,
             _ => pre_regalloc_reg,
         }
     }

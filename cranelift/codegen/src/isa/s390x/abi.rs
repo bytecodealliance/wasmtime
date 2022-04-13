@@ -71,6 +71,8 @@ use crate::settings;
 use crate::{CodegenError, CodegenResult};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
+use regalloc2::PReg;
+use regalloc2::VReg;
 use smallvec::{smallvec, SmallVec};
 use std::convert::TryFrom;
 
@@ -537,7 +539,7 @@ impl ABIMachineSpec for S390xMachineDeps {
         // Save FPRs.
         for (i, reg) in clobbered_fpr.iter().enumerate() {
             insts.push(Inst::FpuStore64 {
-                rd: reg.to_reg().to_reg(),
+                rd: reg.to_reg().into(),
                 mem: MemArg::reg_plus_off(
                     stack_reg(),
                     (i * 8) as i64 + outgoing_args_size as i64 + fixed_frame_storage_size as i64,
@@ -580,7 +582,7 @@ impl ABIMachineSpec for S390xMachineDeps {
         // Restore FPRs.
         for (i, reg) in clobbered_fpr.iter().enumerate() {
             insts.push(Inst::FpuLoad64 {
-                rd: Writable::from_reg(reg.to_reg().to_reg()),
+                rd: Writable::from_reg(reg.to_reg().into()),
                 mem: MemArg::reg_plus_off(
                     stack_reg(),
                     (i * 8) as i64 + outgoing_args_size as i64 + fixed_frame_storage_size as i64,
@@ -727,7 +729,7 @@ impl ABIMachineSpec for S390xMachineDeps {
 
         // Sort registers for deterministic code output. We can do an unstable
         // sort because the registers will be unique (there are no dups).
-        regs.sort_unstable_by_key(|r| r.to_reg().to_preg().index());
+        regs.sort_unstable_by_key(|r| PReg::from(r.to_reg()).index());
         regs
     }
 
@@ -770,8 +772,8 @@ fn get_regs_saved_in_prologue(
         }
     }
     // Sort registers for deterministic code output.
-    int_saves.sort_by_key(|r| r.to_reg().to_reg().to_vreg().vreg());
-    fpr_saves.sort_by_key(|r| r.to_reg().to_reg().to_vreg().vreg());
+    int_saves.sort_by_key(|r| VReg::from(r.to_reg()).vreg());
+    fpr_saves.sort_by_key(|r| VReg::from(r.to_reg()).vreg());
     (int_saves, fpr_saves)
 }
 

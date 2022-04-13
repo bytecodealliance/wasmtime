@@ -26,7 +26,7 @@ pub const PINNED_REG: u8 = 21;
 pub fn xreg(num: u8) -> Reg {
     assert!(num < 31);
     let preg = PReg::new(num as usize, RegClass::Int);
-    Reg::from_vreg(VReg::new(preg.index(), RegClass::Int))
+    Reg::from(VReg::new(preg.index(), RegClass::Int))
 }
 
 /// Get a writable reference to an X-register.
@@ -38,7 +38,7 @@ pub fn writable_xreg(num: u8) -> Writable<Reg> {
 pub fn vreg(num: u8) -> Reg {
     assert!(num < 32);
     let preg = PReg::new(num as usize, RegClass::Float);
-    Reg::from_vreg(VReg::new(preg.index(), RegClass::Float))
+    Reg::from(VReg::new(preg.index(), RegClass::Float))
 }
 
 /// Get a writable reference to a V-register.
@@ -49,7 +49,7 @@ pub fn writable_vreg(num: u8) -> Writable<Reg> {
 /// Get a reference to the zero-register.
 pub fn zero_reg() -> Reg {
     let preg = PReg::new(31, RegClass::Int);
-    Reg::from_vreg(VReg::new(preg.index(), RegClass::Int))
+    Reg::from(VReg::new(preg.index(), RegClass::Int))
 }
 
 /// Get a writable reference to the zero-register (this discards a result).
@@ -71,7 +71,7 @@ pub fn stack_reg() -> Reg {
     // mask off the 6th bit (hw_enc & 31) to get the actual hardware
     // register encoding.
     let preg = PReg::new(31 + 32, RegClass::Int);
-    Reg::from_vreg(VReg::new(preg.index(), RegClass::Int))
+    Reg::from(VReg::new(preg.index(), RegClass::Int))
 }
 
 /// Get a writable reference to the stack-pointer register.
@@ -134,7 +134,7 @@ pub fn writable_tmp2_reg() -> Writable<Reg> {
 /// Create the register universe for AArch64.
 pub fn create_reg_env(flags: &settings::Flags) -> MachineEnv {
     fn preg(r: Reg) -> PReg {
-        r.to_real_reg().unwrap().to_preg()
+        r.to_real_reg().unwrap().into()
     }
 
     let mut env = MachineEnv {

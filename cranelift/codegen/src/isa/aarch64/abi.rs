@@ -14,6 +14,7 @@ use crate::settings;
 use crate::{CodegenError, CodegenResult};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
+use regalloc2::VReg;
 use smallvec::{smallvec, SmallVec};
 
 // We use a generic implementation that factors out AArch64 and x64 ABI commonalities, because
@@ -754,7 +755,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
         let iter = clobbered_int.chunks_exact(2);
 
         if let [rd] = iter.remainder() {
-            let rd = rd.to_reg().to_reg();
+            let rd: Reg = rd.to_reg().into();
 
             debug_assert_eq!(rd.class(), RegClass::Int);
             // str rd, [sp, #-16]!
@@ -781,9 +782,9 @@ impl ABIMachineSpec for AArch64MachineDeps {
         let mut iter = iter.rev();
 
         while let Some([rt, rt2]) = iter.next() {
-            // .to_reg().to_reg(): Writable<RealReg> --> RealReg --> Reg
-            let rt = rt.to_reg().to_reg();
-            let rt2 = rt2.to_reg().to_reg();
+            // .to_reg().into(): Writable<RealReg> --> RealReg --> Reg
+            let rt: Reg = rt.to_reg().into();
+            let rt2: Reg = rt2.to_reg().into();
 
             debug_assert!(rt.class() == RegClass::Int);
             debug_assert!(rt2.class() == RegClass::Int);
@@ -840,7 +841,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
         let iter = clobbered_vec.chunks_exact(2);
 
         if let [rd] = iter.remainder() {
-            let rd = rd.to_reg().to_reg();
+            let rd: Reg = rd.to_reg().into();
 
             debug_assert_eq!(rd.class(), RegClass::Float);
             insts.push(store_vec_reg(rd));
@@ -892,8 +893,8 @@ impl ABIMachineSpec for AArch64MachineDeps {
         let mut iter = iter.rev();
 
         while let Some([rt, rt2]) = iter.next() {
-            let rt = rt.to_reg().to_reg();
-            let rt2 = rt2.to_reg().to_reg();
+            let rt: Reg = rt.to_reg().into();
+            let rt2: Reg = rt2.to_reg().into();
 
             debug_assert_eq!(rt.class(), RegClass::Float);
             debug_assert_eq!(rt2.class(), RegClass::Float);
@@ -990,8 +991,8 @@ impl ABIMachineSpec for AArch64MachineDeps {
         let mut iter = clobbered_vec.chunks_exact(2);
 
         while let Some([rt, rt2]) = iter.next() {
-            let rt = rt.map(|r| r.to_reg());
-            let rt2 = rt2.map(|r| r.to_reg());
+            let rt: Writable<Reg> = rt.map(|r| r.into());
+            let rt2: Writable<Reg> = rt2.map(|r| r.into());
 
             debug_assert_eq!(rt.to_reg().class(), RegClass::Float);
             debug_assert_eq!(rt2.to_reg().class(), RegClass::Float);
@@ -1001,7 +1002,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
         debug_assert!(iter.remainder().len() <= 1);
 
         if let [rd] = iter.remainder() {
-            let rd = rd.map(|r| r.to_reg());
+            let rd: Writable<Reg> = rd.map(|r| r.into());
 
             debug_assert_eq!(rd.to_reg().class(), RegClass::Float);
             insts.push(load_vec_reg(rd));
@@ -1010,8 +1011,8 @@ impl ABIMachineSpec for AArch64MachineDeps {
         let mut iter = clobbered_int.chunks_exact(2);
 
         while let Some([rt, rt2]) = iter.next() {
-            let rt = rt.map(|r| r.to_reg());
-            let rt2 = rt2.map(|r| r.to_reg());
+            let rt: Writable<Reg> = rt.map(|r| r.into());
+            let rt2: Writable<Reg> = rt2.map(|r| r.into());
 
             debug_assert_eq!(rt.to_reg().class(), RegClass::Int);
             debug_assert_eq!(rt2.to_reg().class(), RegClass::Int);
@@ -1030,7 +1031,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
         debug_assert!(iter.remainder().len() <= 1);
 
         if let [rd] = iter.remainder() {
-            let rd = rd.map(|r| r.to_reg());
+            let rd: Writable<Reg> = rd.map(|r| r.into());
 
             debug_assert_eq!(rd.to_reg().class(), RegClass::Int);
             // ldr rd, [sp], #16
@@ -1198,7 +1199,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
 
         // Sort registers for deterministic code output. We can do an unstable
         // sort because the registers will be unique (there are no dups).
-        regs.sort_unstable_by_key(|r| r.to_reg().to_reg().to_vreg().vreg());
+        regs.sort_unstable_by_key(|r| VReg::from(r.to_reg()).vreg());
         regs
     }
 
@@ -1273,8 +1274,8 @@ fn get_regs_restored_in_epilogue(
     }
     // Sort registers for deterministic code output. We can do an unstable sort because the
     // registers will be unique (there are no dups).
-    int_saves.sort_unstable_by_key(|r| r.to_reg().to_reg().to_vreg().vreg());
-    vec_saves.sort_unstable_by_key(|r| r.to_reg().to_reg().to_vreg().vreg());
+    int_saves.sort_unstable_by_key(|r| VReg::from(r.to_reg()).vreg());
+    vec_saves.sort_unstable_by_key(|r| VReg::from(r.to_reg()).vreg());
     (int_saves, vec_saves)
 }
 
