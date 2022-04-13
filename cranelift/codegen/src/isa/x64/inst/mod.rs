@@ -1966,6 +1966,8 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             for &d in defs {
                 collector.reg_def(d);
             }
+            // FIXME: keep clobbers separate in the Inst and use
+            // `reg_clobber()`.
         }
 
         Inst::CallUnknown {
@@ -1981,6 +1983,8 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             for &d in defs {
                 collector.reg_def(d);
             }
+            // FIXME: keep clobbers separate in the Inst and use
+            // `reg_clobber()`.
         }
 
         Inst::JmpTableSeq {
@@ -2334,11 +2338,6 @@ impl MachInst for Inst {
             | Inst::Ud2 { .. } => true,
             _ => false,
         }
-    }
-
-    fn get_clobbers(&self) -> &[Writable<Reg>] {
-        // FIXME: use clobbers rather than phantom defs for calls.
-        &[]
     }
 
     type LabelUse = LabelUse;

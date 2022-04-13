@@ -581,15 +581,10 @@ impl<I: VCodeInst> VCodeBuilder<I> {
                 Self::resolve_vreg_alias_impl(vreg_aliases, vreg)
             });
             insn.get_operands(&mut op_collector);
-            let ops = op_collector.finish();
+            let (ops, clobbers) = op_collector.finish();
             self.vcode.operand_ranges.push(ops);
 
-            let clobbers = insn.get_clobbers();
             if !clobbers.is_empty() {
-                let clobbers = clobbers
-                    .iter()
-                    .map(|wreg| wreg.to_reg().to_real_reg().unwrap().into())
-                    .collect::<Vec<PReg>>();
                 self.vcode.clobbers.insert(InsnIndex::new(i), clobbers);
             }
 

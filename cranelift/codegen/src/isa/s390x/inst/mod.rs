@@ -715,10 +715,6 @@ impl MachInst for Inst {
         s390x_get_operands(self, collector);
     }
 
-    fn get_clobbers(&self) -> &[Writable<Reg>] {
-        &[]
-    }
-
     fn is_move(&self) -> Option<(Writable<Reg>, Reg)> {
         match self {
             &Inst::Mov32 { rd, rm } => Some((rd, rm)),

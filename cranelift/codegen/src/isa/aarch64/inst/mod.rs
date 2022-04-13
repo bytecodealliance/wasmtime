@@ -1043,10 +1043,6 @@ impl MachInst for Inst {
         aarch64_get_operands(self, collector);
     }
 
-    fn get_clobbers(&self) -> &[Writable<Reg>] {
-        &[]
-    }
-
     fn is_move(&self) -> Option<(Writable<Reg>, Reg)> {
         match self {
             &Inst::Mov64 { rd, rm } => Some((rd, rm)),

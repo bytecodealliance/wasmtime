@@ -289,40 +289,48 @@ pub type RegClass = regalloc2::RegClass;
 #[derive(Debug)]
 pub struct OperandCollector<'a, F: Fn(VReg) -> VReg> {
     operands: &'a mut Vec<Operand>,
-    start: usize,
+    operands_start: usize,
+    clobbers: Vec<PReg>,
     renamer: F,
 }
 
 impl<'a, F: Fn(VReg) -> VReg> OperandCollector<'a, F> {
     /// Start gathering operands into one flattened operand array.
     pub fn new(operands: &'a mut Vec<Operand>, renamer: F) -> Self {
-        let start = operands.len();
+        let operands_start = operands.len();
         Self {
             operands,
-            start,
+            operands_start,
+            clobbers: vec![],
             renamer,
         }
     }
 
     /// Add an operand.
-    pub fn add(&mut self, operand: Operand) {
+    fn add_operand(&mut self, operand: Operand) {
         let vreg = (self.renamer)(operand.vreg());
         let operand = Operand::new(vreg, operand.constraint(), operand.kind(), operand.pos());
         self.operands.push(operand);
     }
 
+    /// Add a clobber.
+    fn add_clobber(&mut self, clobber: PReg) {
+        self.clobbers.push(clobber);
+    }
+
     /// Finish the operand collection and return the tuple giving the
-    /// range of indices in the flattened operand array.
-    pub fn finish(self) -> (u32, u32) {
-        let start = self.start as u32;
+    /// range of indices in the flattened operand array, and the
+    /// clobber array.
+    pub fn finish(self) -> ((u32, u32), Vec<PReg>) {
+        let start = self.operands_start as u32;
         let end = self.operands.len() as u32;
-        (start, end)
+        ((start, end), self.clobbers)
     }
 
     /// Add a register use, at the start of the instruction (`Before`
     /// position).
     pub fn reg_use(&mut self, reg: Reg) {
-        self.add(Operand::reg_use(reg.into()));
+        self.add_operand(Operand::reg_use(reg.into()));
     }
 
     /// Add multiple register uses.
@@ -336,7 +344,7 @@ impl<'a, F: Fn(VReg) -> VReg> OperandCollector<'a, F> {
     /// position). Use only when this def will be written after all
     /// uses are read.
     pub fn reg_def(&mut self, reg: Writable<Reg>) {
-        self.add(Operand::reg_def(reg.to_reg().into()));
+        self.add_operand(Operand::reg_def(reg.to_reg().into()));
     }
 
     /// Add multiple register defs.
@@ -351,21 +359,21 @@ impl<'a, F: Fn(VReg) -> VReg> OperandCollector<'a, F> {
     /// when the def may be written before all uses are read; the
     /// regalloc will ensure that it does not overwrite any uses.
     pub fn reg_early_def(&mut self, reg: Writable<Reg>) {
-        self.add(Operand::reg_def_at_start(reg.to_reg().into()));
+        self.add_operand(Operand::reg_def_at_start(reg.to_reg().into()));
     }
 
     /// Add a register "fixed use", which ties a vreg to a particular
     /// RealReg at this point.
     pub fn reg_fixed_use(&mut self, reg: Reg, rreg: Reg) {
         let rreg = rreg.to_real_reg().expect("fixed reg is not a RealReg");
-        self.add(Operand::reg_fixed_use(reg.into(), rreg.into()));
+        self.add_operand(Operand::reg_fixed_use(reg.into(), rreg.into()));
     }
 
     /// Add a register "fixed def", which ties a vreg to a particular
     /// RealReg at this point.
     pub fn reg_fixed_def(&mut self, reg: Writable<Reg>, rreg: Reg) {
         let rreg = rreg.to_real_reg().expect("fixed reg is not a RealReg");
-        self.add(Operand::reg_fixed_def(reg.to_reg().into(), rreg.into()));
+        self.add_operand(Operand::reg_fixed_def(reg.to_reg().into(), rreg.into()));
     }
 
     /// Add a register def that reuses an earlier use-operand's
@@ -373,13 +381,13 @@ impl<'a, F: Fn(VReg) -> VReg> OperandCollector<'a, F> {
     /// current instruction's start of operands) must be known.
     pub fn reg_reuse_def(&mut self, reg: Writable<Reg>, idx: usize) {
         if reg.to_reg().to_virtual_reg().is_some() {
-            self.add(Operand::reg_reuse_def(reg.to_reg().into(), idx));
+            self.add_operand(Operand::reg_reuse_def(reg.to_reg().into(), idx));
         } else {
             // Sometimes destination registers that reuse a source are
             // given with RealReg args. In this case, we assume the
             // creator of the instruction knows what they are doing
             // and just emit a normal def to the pinned vreg.
-            self.add(Operand::reg_def(reg.to_reg().into()));
+            self.add_operand(Operand::reg_def(reg.to_reg().into()));
         }
     }
 
@@ -387,12 +395,19 @@ impl<'a, F: Fn(VReg) -> VReg> OperandCollector<'a, F> {
     /// in the same register on the input and output side of the
     /// instruction.
     pub fn reg_mod(&mut self, reg: Writable<Reg>) {
-        self.add(Operand::new(
+        self.add_operand(Operand::new(
             reg.to_reg().into(),
             regalloc2::OperandConstraint::Reg,
             regalloc2::OperandKind::Mod,
             regalloc2::OperandPos::Early,
         ));
+    }
+
+    /// Add a register clobber. This is a register that is written by
+    /// the instruction, so must be reserved (not used) for the whole
+    /// instruction, but is not used afterward.
+    pub fn reg_clobber(&mut self, reg: Writable<RealReg>) {
+        self.add_clobber(PReg::from(reg.to_reg()));
     }
 }
 
@@ -401,7 +416,7 @@ pub fn count_operands<I: MachInst>(inst: &I) -> usize {
     let mut ops = vec![];
     let mut coll = OperandCollector::new(&mut ops, |vreg| vreg);
     inst.get_operands(&mut coll);
-    let (start, end) = coll.finish();
+    let ((start, end), _) = coll.finish();
     debug_assert_eq!(0, start);
     end as usize
 }

@@ -89,11 +89,6 @@ pub trait MachInst: Clone + Debug {
     /// the modes of reference (use, def, modify).
     fn get_operands<F: Fn(VReg) -> VReg>(&self, collector: &mut OperandCollector<'_, F>);
 
-    /// Get the clobbers for this instruction, if any. These are like
-    /// defs (written registers) but are invalid, i.e., cannot legally
-    /// be read.
-    fn get_clobbers(&self) -> &[Writable<Reg>];
-
     /// If this is a simple move, return the (source, destination) tuple of registers.
     fn is_move(&self) -> Option<(Writable<Reg>, Reg)>;
 
