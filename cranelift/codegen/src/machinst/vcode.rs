@@ -792,21 +792,6 @@ impl<I: VCodeInst> VCode<I> {
 
         let mut disasm = String::new();
 
-        if want_disasm {
-            let mut alias_keys = self.vreg_aliases.keys().cloned().collect::<Vec<_>>();
-            alias_keys.sort_unstable();
-            for key in alias_keys {
-                let dest = self.vreg_aliases.get(&key).unwrap();
-                writeln!(
-                    &mut disasm,
-                    "  {:?} := {:?}",
-                    Reg::from_vreg(key),
-                    Reg::from_vreg(*dest)
-                )
-                .unwrap();
-            }
-        }
-
         if !self.debug_value_labels.is_empty() {
             inst_offsets.resize(self.insts.len(), 0);
         }
