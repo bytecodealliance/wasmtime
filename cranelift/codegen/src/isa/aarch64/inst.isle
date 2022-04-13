@@ -323,6 +323,7 @@
        ;; 2-op FPU instruction.
        (FpuRRR
         (fpu_op FPUOp2)
+        (size ScalarSize)
         (rd WritableReg)
         (rn Reg)
         (rm Reg))
@@ -952,26 +953,12 @@
 ;; A floating-point unit (FPU) operation with two args.
 (type FPUOp2
   (enum
-    (Add32)
-    (Add64)
-    (Sub32)
-    (Sub64)
-    (Mul32)
-    (Mul64)
-    (Div32)
-    (Div64)
-    (Max32)
-    (Max64)
-    (Min32)
-    (Min64)
-    ;; Signed saturating add
-    (Sqadd64)
-    ;; Unsigned saturating add
-    (Uqadd64)
-    ;; Signed saturating subtract
-    (Sqsub64)
-    ;; Unsigned saturating subtract
-    (Uqsub64)
+    (Add)
+    (Sub)
+    (Mul)
+    (Div)
+    (Max)
+    (Min)
 ))
 
 ;; A floating-point unit (FPU) operation with three args.

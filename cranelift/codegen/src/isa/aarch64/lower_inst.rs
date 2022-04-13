@@ -1591,32 +1591,26 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::Fadd | Opcode::Fsub | Opcode::Fmul | Opcode::Fdiv | Opcode::Fmin | Opcode::Fmax => {
             let ty = ty.unwrap();
-            let bits = ty_bits(ty);
             let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
             let rm = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
             let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             if !ty.is_vector() {
-                let fpu_op = match (op, bits) {
-                    (Opcode::Fadd, 32) => FPUOp2::Add32,
-                    (Opcode::Fadd, 64) => FPUOp2::Add64,
-                    (Opcode::Fsub, 32) => FPUOp2::Sub32,
-                    (Opcode::Fsub, 64) => FPUOp2::Sub64,
-                    (Opcode::Fmul, 32) => FPUOp2::Mul32,
-                    (Opcode::Fmul, 64) => FPUOp2::Mul64,
-                    (Opcode::Fdiv, 32) => FPUOp2::Div32,
-                    (Opcode::Fdiv, 64) => FPUOp2::Div64,
-                    (Opcode::Fmin, 32) => FPUOp2::Min32,
-                    (Opcode::Fmin, 64) => FPUOp2::Min64,
-                    (Opcode::Fmax, 32) => FPUOp2::Max32,
-                    (Opcode::Fmax, 64) => FPUOp2::Max64,
-                    _ => {
-                        return Err(CodegenError::Unsupported(format!(
-                            "{}: Unsupported type: {:?}",
-                            op, ty
-                        )))
-                    }
+                let fpu_op = match op {
+                    Opcode::Fadd => FPUOp2::Add,
+                    Opcode::Fsub => FPUOp2::Sub,
+                    Opcode::Fmul => FPUOp2::Mul,
+                    Opcode::Fdiv => FPUOp2::Div,
+                    Opcode::Fmin => FPUOp2::Min,
+                    Opcode::Fmax => FPUOp2::Max,
+                    _ => unreachable!(),
                 };
-                ctx.emit(Inst::FpuRRR { fpu_op, rd, rn, rm });
+                ctx.emit(Inst::FpuRRR {
+                    fpu_op,
+                    size: ScalarSize::from_ty(ty),
+                    rd,
+                    rn,
+                    rm,
+                });
             } else {
                 let alu_op = match op {
                     Opcode::Fadd => VecALUOp::Fadd,
@@ -2149,7 +2143,8 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     lower_constant_f64(ctx, rtmp1, max);
                 }
                 ctx.emit(Inst::FpuRRR {
-                    fpu_op: choose_32_64(in_ty, FPUOp2::Min32, FPUOp2::Min64),
+                    fpu_op: FPUOp2::Min,
+                    size: ScalarSize::from_ty(in_ty),
                     rd: rtmp2,
                     rn,
                     rm: rtmp1.to_reg(),
@@ -2160,7 +2155,8 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     lower_constant_f64(ctx, rtmp1, min);
                 }
                 ctx.emit(Inst::FpuRRR {
-                    fpu_op: choose_32_64(in_ty, FPUOp2::Max32, FPUOp2::Max64),
+                    fpu_op: FPUOp2::Max,
+                    size: ScalarSize::from_ty(in_ty),
                     rd: rtmp2,
                     rn: rtmp2.to_reg(),
                     rm: rtmp1.to_reg(),

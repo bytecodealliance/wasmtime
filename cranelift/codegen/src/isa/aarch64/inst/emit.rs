@@ -1686,28 +1686,25 @@ impl MachInstEmit for Inst {
                 };
                 sink.put4(enc_fpurr(top22, rd, rn));
             }
-            &Inst::FpuRRR { fpu_op, rd, rn, rm } => {
+            &Inst::FpuRRR {
+                fpu_op,
+                size,
+                rd,
+                rn,
+                rm,
+            } => {
                 let rd = allocs.next_writable(rd);
                 let rn = allocs.next(rn);
                 let rm = allocs.next(rm);
                 let top22 = match fpu_op {
-                    FPUOp2::Add32 => 0b000_11110_00_1_00000_001010,
-                    FPUOp2::Add64 => 0b000_11110_01_1_00000_001010,
-                    FPUOp2::Sub32 => 0b000_11110_00_1_00000_001110,
-                    FPUOp2::Sub64 => 0b000_11110_01_1_00000_001110,
-                    FPUOp2::Mul32 => 0b000_11110_00_1_00000_000010,
-                    FPUOp2::Mul64 => 0b000_11110_01_1_00000_000010,
-                    FPUOp2::Div32 => 0b000_11110_00_1_00000_000110,
-                    FPUOp2::Div64 => 0b000_11110_01_1_00000_000110,
-                    FPUOp2::Max32 => 0b000_11110_00_1_00000_010010,
-                    FPUOp2::Max64 => 0b000_11110_01_1_00000_010010,
-                    FPUOp2::Min32 => 0b000_11110_00_1_00000_010110,
-                    FPUOp2::Min64 => 0b000_11110_01_1_00000_010110,
-                    FPUOp2::Sqadd64 => 0b010_11110_11_1_00000_000011,
-                    FPUOp2::Uqadd64 => 0b011_11110_11_1_00000_000011,
-                    FPUOp2::Sqsub64 => 0b010_11110_11_1_00000_001011,
-                    FPUOp2::Uqsub64 => 0b011_11110_11_1_00000_001011,
+                    FPUOp2::Add => 0b000_11110_00_1_00000_001010,
+                    FPUOp2::Sub => 0b000_11110_00_1_00000_001110,
+                    FPUOp2::Mul => 0b000_11110_00_1_00000_000010,
+                    FPUOp2::Div => 0b000_11110_00_1_00000_000110,
+                    FPUOp2::Max => 0b000_11110_00_1_00000_010010,
+                    FPUOp2::Min => 0b000_11110_00_1_00000_010110,
                 };
+                let top22 = top22 | size.ftype() << 12;
                 sink.put4(enc_fpurrr(top22, rd, rn, rm));
             }
             &Inst::FpuRRI { fpu_op, rd, rn } => {
