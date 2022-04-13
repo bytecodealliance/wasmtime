@@ -2500,9 +2500,9 @@ dependencies = [
 
 [[package]]
 name = "rustix"
-version = "0.33.5"
+version = "0.33.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "03627528abcc4a365554d32a9f3bbf67f7694c102cfeda792dc86a2d6057cc85"
+checksum = "7ac32d9fc97153ca55305284cb6c2dcbb84e1fc6d7ac13392cea02222f2d8741"
 dependencies = [
  "bitflags",
  "errno",
