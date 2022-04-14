@@ -1395,7 +1395,7 @@ where
     }
 
     unsafe fn wrap_trampoline(ptr: *mut ValRaw, f: impl FnOnce(Self::Retptr) -> Self::Abi) {
-        *ptr.cast::<Self::Abi>() = f(());
+        T::abi_into_raw(f(()), ptr);
     }
 
     fn into_fallible(self) -> Result<T, Trap> {
@@ -1483,7 +1483,7 @@ macro_rules! impl_wasm_host_results {
             unsafe fn wrap_trampoline(mut _ptr: *mut ValRaw, f: impl FnOnce(Self::Retptr) -> Self::Abi) {
                 let ($($t,)*) = <($($t::Abi,)*) as HostAbi>::call(f);
                 $(
-                    *_ptr.cast() = $t;
+                    $t::abi_into_raw($t, _ptr);
                     _ptr = _ptr.add(1);
                 )*
             }
@@ -1936,7 +1936,7 @@ macro_rules! impl_into_func {
 
                     let mut _n = 0;
                     $(
-                        let $args = *args.add(_n).cast::<$args::Abi>();
+                        let $args = $args::abi_from_raw(args.add(_n));
                         _n += 1;
                     )*
                     R::wrap_trampoline(args, |retptr| {
