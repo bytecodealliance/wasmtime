@@ -5821,7 +5821,8 @@ fn test_aarch64_binemit() {
     ));
 
     insns.push((
-        Inst::FpuCmp32 {
+        Inst::FpuCmp {
+            size: ScalarSize::Size32,
             rn: vreg(23),
             rm: vreg(24),
         },
@@ -5830,7 +5831,8 @@ fn test_aarch64_binemit() {
     ));
 
     insns.push((
-        Inst::FpuCmp64 {
+        Inst::FpuCmp {
+            size: ScalarSize::Size64,
             rn: vreg(23),
             rm: vreg(24),
         },

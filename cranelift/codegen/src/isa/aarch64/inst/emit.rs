@@ -2008,15 +2008,10 @@ impl MachInstEmit for Inst {
                 assert_eq!(machreg_to_vec(rn2), (machreg_to_vec(rn) + 1) % 32);
                 sink.put4(enc_tbl(is_extension, 0b01, rd, rn, rm));
             }
-            &Inst::FpuCmp32 { rn, rm } => {
+            &Inst::FpuCmp { size, rn, rm } => {
                 let rn = allocs.next(rn);
                 let rm = allocs.next(rm);
-                sink.put4(enc_fcmp(ScalarSize::Size32, rn, rm));
-            }
-            &Inst::FpuCmp64 { rn, rm } => {
-                let rn = allocs.next(rn);
-                let rm = allocs.next(rm);
-                sink.put4(enc_fcmp(ScalarSize::Size64, rn, rm));
+                sink.put4(enc_fcmp(size, rn, rm));
             }
             &Inst::FpuToInt { op, rd, rn } => {
                 let rd = allocs.next_writable(rd);

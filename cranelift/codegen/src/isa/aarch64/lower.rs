@@ -1448,19 +1448,14 @@ pub(crate) fn lower_icmp<C: LowerCtx<I = Inst>>(
 
 pub(crate) fn lower_fcmp_or_ffcmp_to_flags<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRInst) {
     let ty = ctx.input_ty(insn, 0);
-    let bits = ty_bits(ty);
     let inputs = [InsnInput { insn, input: 0 }, InsnInput { insn, input: 1 }];
     let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
     let rm = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
-    match bits {
-        32 => {
-            ctx.emit(Inst::FpuCmp32 { rn, rm });
-        }
-        64 => {
-            ctx.emit(Inst::FpuCmp64 { rn, rm });
-        }
-        _ => panic!("Unknown float size"),
-    }
+    ctx.emit(Inst::FpuCmp {
+        size: ScalarSize::from_ty(ty),
+        rn,
+        rm,
+    });
 }
 
 /// Materialize a boolean value into a register from the flags
