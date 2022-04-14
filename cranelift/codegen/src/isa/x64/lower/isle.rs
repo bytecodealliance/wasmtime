@@ -2,23 +2,23 @@
 
 // Pull in the ISLE generated code.
 pub(crate) mod generated_code;
+use crate::machinst::{Reg, Writable};
 use generated_code::MInst;
-use regalloc::Writable;
 
 // Types that the generated ISLE code uses via `use super::*`.
-use super::{is_int_or_ref_ty, is_mergeable_load, lower_to_amode, Reg};
+use super::{is_int_or_ref_ty, is_mergeable_load, lower_to_amode};
 use crate::{
     ir::{
         condcodes::{FloatCC, IntCC},
         immediates::*,
         types::*,
-        Inst, InstructionData, MemFlags, Opcode, TrapCode, Value, ValueLabel, ValueList,
+        Inst, InstructionData, MemFlags, Opcode, TrapCode, Value, ValueList,
     },
     isa::{
         settings::Flags,
         unwind::UnwindInst,
         x64::{
-            inst::{args::*, regs, x64_map_regs},
+            inst::{args::*, regs},
             settings::Flags as IsaFlags,
         },
     },
@@ -45,15 +45,9 @@ pub(crate) fn lower<C>(
 where
     C: LowerCtx<I = MInst>,
 {
-    lower_common(
-        lower_ctx,
-        flags,
-        isa_flags,
-        outputs,
-        inst,
-        |cx, insn| generated_code::constructor_lower(cx, insn),
-        x64_map_regs,
-    )
+    lower_common(lower_ctx, flags, isa_flags, outputs, inst, |cx, insn| {
+        generated_code::constructor_lower(cx, insn)
+    })
 }
 
 impl<C> generated_code::Context for IsleContext<'_, C, Flags, IsaFlags, 6>
@@ -269,17 +263,7 @@ where
     }
 
     fn emit(&mut self, inst: &MInst) -> Unit {
-        for inst in inst.clone().mov_mitosis() {
-            self.emitted_insts.push((inst, false));
-        }
-    }
-
-    fn emit_safepoint(&mut self, inst: &MInst) -> Unit {
-        use crate::machinst::MachInst;
-        for inst in inst.clone().mov_mitosis() {
-            let is_safepoint = !inst.is_move().is_some();
-            self.emitted_insts.push((inst, is_safepoint));
-        }
+        self.lower_ctx.emit(inst.clone());
     }
 
     #[inline]

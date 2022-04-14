@@ -2,8 +2,8 @@
 
 use crate::isa::aarch64::inst::regs;
 use crate::isa::unwind::systemv::RegisterMappingError;
+use crate::machinst::{Reg, RegClass};
 use gimli::{write::CommonInformationEntry, Encoding, Format, Register};
-use regalloc::{Reg, RegClass};
 
 /// Creates a new aarch64 common information entry (CIE).
 pub fn create_cie() -> CommonInformationEntry {
@@ -17,11 +17,11 @@ pub fn create_cie() -> CommonInformationEntry {
         },
         4,  // Code alignment factor
         -8, // Data alignment factor
-        Register(regs::link_reg().get_hw_encoding().into()),
+        Register(regs::link_reg().to_real_reg().unwrap().hw_enc().into()),
     );
 
     // Every frame will start with the call frame address (CFA) at SP
-    let sp = Register(regs::stack_reg().get_hw_encoding().into());
+    let sp = Register((regs::stack_reg().to_real_reg().unwrap().hw_enc() & 31).into());
     entry.add_instruction(CallFrameInstruction::Cfa(sp, 0));
 
     entry
@@ -34,16 +34,15 @@ pub fn map_reg(reg: Reg) -> Result<Register, RegisterMappingError> {
     // https://developer.arm.com/documentation/ihi0057/e/?lang=en#dwarf-register-names
     //
     // X0--X31 is 0--31; V0--V31 is 64--95.
-    match reg.get_class() {
-        RegClass::I64 => {
-            let reg = reg.get_hw_encoding() as u16;
+    match reg.class() {
+        RegClass::Int => {
+            let reg = (reg.to_real_reg().unwrap().hw_enc() & 31) as u16;
             Ok(Register(reg))
         }
-        RegClass::V128 => {
-            let reg = reg.get_hw_encoding() as u16;
+        RegClass::Float => {
+            let reg = reg.to_real_reg().unwrap().hw_enc() as u16;
             Ok(Register(64 + reg))
         }
-        _ => Err(RegisterMappingError::UnsupportedRegisterBank("class?")),
     }
 }
 
@@ -54,13 +53,13 @@ impl crate::isa::unwind::systemv::RegisterMapper<Reg> for RegisterMapper {
         Ok(map_reg(reg)?.0)
     }
     fn sp(&self) -> u16 {
-        regs::stack_reg().get_hw_encoding().into()
+        (regs::stack_reg().to_real_reg().unwrap().hw_enc() & 31).into()
     }
     fn fp(&self) -> Option<u16> {
-        Some(regs::fp_reg().get_hw_encoding().into())
+        Some(regs::fp_reg().to_real_reg().unwrap().hw_enc().into())
     }
     fn lr(&self) -> Option<u16> {
-        Some(regs::link_reg().get_hw_encoding().into())
+        Some(regs::link_reg().to_real_reg().unwrap().hw_enc().into())
     }
     fn lr_offset(&self) -> Option<u32> {
         Some(8)

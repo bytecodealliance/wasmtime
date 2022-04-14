@@ -14,9 +14,8 @@ use crate::settings::Flags;
 use crate::{
     ir::{
         condcodes::*, immediates::*, types::*, AtomicRmwOp, Endianness, Inst, InstructionData,
-        StackSlot, TrapCode, Value, ValueLabel, ValueList,
+        StackSlot, TrapCode, Value, ValueList,
     },
-    isa::s390x::inst::s390x_map_regs,
     isa::unwind::UnwindInst,
     machinst::{InsnOutput, LowerCtx},
 };
@@ -43,15 +42,9 @@ pub(crate) fn lower<C>(
 where
     C: LowerCtx<I = MInst>,
 {
-    lower_common(
-        lower_ctx,
-        flags,
-        isa_flags,
-        outputs,
-        inst,
-        |cx, insn| generated_code::constructor_lower(cx, insn),
-        s390x_map_regs,
-    )
+    lower_common(lower_ctx, flags, isa_flags, outputs, inst, |cx, insn| {
+        generated_code::constructor_lower(cx, insn)
+    })
 }
 
 /// The main entry point for branch lowering with ISLE.
@@ -65,15 +58,9 @@ pub(crate) fn lower_branch<C>(
 where
     C: LowerCtx<I = MInst>,
 {
-    lower_common(
-        lower_ctx,
-        flags,
-        isa_flags,
-        &[],
-        branch,
-        |cx, insn| generated_code::constructor_lower_branch(cx, insn, &targets.to_vec()),
-        s390x_map_regs,
-    )
+    lower_common(lower_ctx, flags, isa_flags, &[], branch, |cx, insn| {
+        generated_code::constructor_lower_branch(cx, insn, &targets.to_vec())
+    })
 }
 
 impl<C> generated_code::Context for IsleContext<'_, C, Flags, IsaFlags, 6>
@@ -523,11 +510,6 @@ where
 
     #[inline]
     fn emit(&mut self, inst: &MInst) -> Unit {
-        self.emitted_insts.push((inst.clone(), false));
-    }
-
-    #[inline]
-    fn emit_safepoint(&mut self, inst: &MInst) -> Unit {
-        self.emitted_insts.push((inst.clone(), true));
+        self.lower_ctx.emit(inst.clone());
     }
 }

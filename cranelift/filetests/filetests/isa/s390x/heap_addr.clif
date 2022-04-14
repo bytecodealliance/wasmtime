@@ -1,4 +1,4 @@
-test compile
+test compile precise-output
 target s390x
 
 function %dynamic_heap_check(i64 vmctx, i32) -> i64 {
@@ -11,20 +11,20 @@ block0(v0: i64, v1: i32):
     return v2
 }
 
-; check: Block 0:
-; check:  llgfr %r3, %r3
-; nextln: lghi %r4, 0
-; nextln: ag %r4, 0(%r2)
-; nextln: clgr %r3, %r4
-; nextln: jgnh label1 ; jg label2
-; check: Block 1:
-; check: agr %r2, %r3
-; nextln: lghi %r5, 0
-; nextln: clgr %r3, %r4
-; nextln: locgrh %r2, %r5
-; nextln: br %r14
-; check: Block 2:
-; check:  trap
+; block0:
+;   llgfr %r4, %r3
+;   lghi %r3, 0
+;   ag %r3, 0(%r2)
+;   clgr %r4, %r3
+;   jgnh label1 ; jg label2
+; block1:
+;   agr %r2, %r4
+;   lghi %r5, 0
+;   clgr %r4, %r3
+;   locgrh %r2, %r5
+;   br %r14
+; block2:
+;   trap
 
 function %static_heap_check(i64 vmctx, i32) -> i64 {
     gv0 = vmctx
@@ -35,15 +35,16 @@ block0(v0: i64, v1: i32):
     return v2
 }
 
-; check: Block 0:
-; check:  llgfr %r3, %r3
-; nextln: clgfi %r3, 65536
-; nextln: jgnh label1 ; jg label2
-; check: Block 1:
-; check: agr %r2, %r3
-; nextln: lghi %r4, 0
-; nextln: clgfi %r3, 65536
-; nextln: locgrh %r2, %r4
-; nextln: br %r14
-; check: Block 2:
-; check:  trap
+; block0:
+;   llgfr %r3, %r3
+;   clgfi %r3, 65536
+;   jgnh label1 ; jg label2
+; block1:
+;   agr %r2, %r3
+;   lghi %r4, 0
+;   clgfi %r3, 65536
+;   locgrh %r2, %r4
+;   br %r14
+; block2:
+;   trap
+

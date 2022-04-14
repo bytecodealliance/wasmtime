@@ -6,10 +6,7 @@
 use crate::ir::types::*;
 use crate::ir::Type;
 use crate::isa::aarch64::inst::*;
-use crate::machinst::{ty_bits, MachLabel};
-
-use regalloc::{PrettyPrint, RealRegUniverse, Reg, Writable};
-
+use crate::machinst::{ty_bits, MachLabel, PrettyPrint, Reg, Writable};
 use core::convert::Into;
 use std::string::String;
 
@@ -222,6 +219,29 @@ impl AMode {
             _ => None,
         }
     }
+
+    pub fn with_allocs(&self, allocs: &mut AllocationConsumer<'_>) -> Self {
+        // This should match `memarg_operands()`.
+        match self {
+            &AMode::Unscaled(reg, imm9) => AMode::Unscaled(allocs.next(reg), imm9),
+            &AMode::UnsignedOffset(r, uimm12) => AMode::UnsignedOffset(allocs.next(r), uimm12),
+            &AMode::RegReg(r1, r2) => AMode::RegReg(allocs.next(r1), allocs.next(r2)),
+            &AMode::RegScaled(r1, r2, ty) => AMode::RegScaled(allocs.next(r1), allocs.next(r2), ty),
+            &AMode::RegScaledExtended(r1, r2, ty, ext) => {
+                AMode::RegScaledExtended(allocs.next(r1), allocs.next(r2), ty, ext)
+            }
+            &AMode::RegExtended(r1, r2, ext) => {
+                AMode::RegExtended(allocs.next(r1), allocs.next(r2), ext)
+            }
+            &AMode::PreIndexed(reg, simm9) => AMode::PreIndexed(allocs.next_writable(reg), simm9),
+            &AMode::PostIndexed(reg, simm9) => AMode::PostIndexed(allocs.next_writable(reg), simm9),
+            &AMode::RegOffset(r, off, ty) => AMode::RegOffset(allocs.next(r), off, ty),
+            &AMode::FPOffset(..)
+            | &AMode::SPOffset(..)
+            | &AMode::NominalSPOffset(..)
+            | AMode::Label(..) => self.clone(),
+        }
+    }
 }
 
 /// A memory argument to a load/store-pair.
@@ -230,6 +250,23 @@ pub enum PairAMode {
     SignedOffset(Reg, SImm7Scaled),
     PreIndexed(Writable<Reg>, SImm7Scaled),
     PostIndexed(Writable<Reg>, SImm7Scaled),
+}
+
+impl PairAMode {
+    pub fn with_allocs(&self, allocs: &mut AllocationConsumer<'_>) -> Self {
+        // Should match `pairmemarg_operands()`.
+        match self {
+            &PairAMode::SignedOffset(reg, simm7scaled) => {
+                PairAMode::SignedOffset(allocs.next(reg), simm7scaled)
+            }
+            &PairAMode::PreIndexed(reg, simm7scaled) => {
+                PairAMode::PreIndexed(allocs.next_writable(reg), simm7scaled)
+            }
+            &PairAMode::PostIndexed(reg, simm7scaled) => {
+                PairAMode::PostIndexed(allocs.next_writable(reg), simm7scaled)
+            }
+        }
+    }
 }
 
 //=============================================================================
@@ -362,19 +399,19 @@ impl BranchTarget {
 }
 
 impl PrettyPrint for ShiftOpAndAmt {
-    fn show_rru(&self, _mb_rru: Option<&RealRegUniverse>) -> String {
+    fn pretty_print(&self, _: u8, _: &mut AllocationConsumer<'_>) -> String {
         format!("{:?} {}", self.op(), self.amt().value())
     }
 }
 
 impl PrettyPrint for ExtendOp {
-    fn show_rru(&self, _mb_rru: Option<&RealRegUniverse>) -> String {
+    fn pretty_print(&self, _: u8, _: &mut AllocationConsumer<'_>) -> String {
         format!("{:?}", self)
     }
 }
 
 impl PrettyPrint for MemLabel {
-    fn show_rru(&self, _mb_rru: Option<&RealRegUniverse>) -> String {
+    fn pretty_print(&self, _: u8, _: &mut AllocationConsumer<'_>) -> String {
         match self {
             &MemLabel::PCRel(off) => format!("pc+{}", off),
         }
@@ -393,33 +430,36 @@ fn shift_for_type(ty: Type) -> usize {
 }
 
 impl PrettyPrint for AMode {
-    fn show_rru(&self, mb_rru: Option<&RealRegUniverse>) -> String {
+    fn pretty_print(&self, _: u8, allocs: &mut AllocationConsumer<'_>) -> String {
         match self {
             &AMode::Unscaled(reg, simm9) => {
+                let reg = pretty_print_reg(reg, allocs);
                 if simm9.value != 0 {
-                    format!("[{}, {}]", reg.show_rru(mb_rru), simm9.show_rru(mb_rru))
+                    let simm9 = simm9.pretty_print(8, allocs);
+                    format!("[{}, {}]", reg, simm9)
                 } else {
-                    format!("[{}]", reg.show_rru(mb_rru))
+                    format!("[{}]", reg)
                 }
             }
             &AMode::UnsignedOffset(reg, uimm12) => {
+                let reg = pretty_print_reg(reg, allocs);
                 if uimm12.value != 0 {
-                    format!("[{}, {}]", reg.show_rru(mb_rru), uimm12.show_rru(mb_rru))
+                    let uimm12 = uimm12.pretty_print(8, allocs);
+                    format!("[{}, {}]", reg, uimm12)
                 } else {
-                    format!("[{}]", reg.show_rru(mb_rru))
+                    format!("[{}]", reg)
                 }
             }
             &AMode::RegReg(r1, r2) => {
-                format!("[{}, {}]", r1.show_rru(mb_rru), r2.show_rru(mb_rru),)
+                let r1 = pretty_print_reg(r1, allocs);
+                let r2 = pretty_print_reg(r2, allocs);
+                format!("[{}, {}]", r1, r2)
             }
             &AMode::RegScaled(r1, r2, ty) => {
+                let r1 = pretty_print_reg(r1, allocs);
+                let r2 = pretty_print_reg(r2, allocs);
                 let shift = shift_for_type(ty);
-                format!(
-                    "[{}, {}, LSL #{}]",
-                    r1.show_rru(mb_rru),
-                    r2.show_rru(mb_rru),
-                    shift,
-                )
+                format!("[{}, {}, LSL #{}]", r1, r2, shift)
             }
             &AMode::RegScaledExtended(r1, r2, ty, op) => {
                 let shift = shift_for_type(ty);
@@ -427,39 +467,32 @@ impl PrettyPrint for AMode {
                     ExtendOp::SXTW | ExtendOp::UXTW => OperandSize::Size32,
                     _ => OperandSize::Size64,
                 };
-                let op = op.show_rru(mb_rru);
-                format!(
-                    "[{}, {}, {} #{}]",
-                    r1.show_rru(mb_rru),
-                    show_ireg_sized(r2, mb_rru, size),
-                    op,
-                    shift
-                )
+                let r1 = pretty_print_reg(r1, allocs);
+                let r2 = pretty_print_ireg(r2, size, allocs);
+                let op = op.pretty_print(0, allocs);
+                format!("[{}, {}, {} #{}]", r1, r2, op, shift)
             }
             &AMode::RegExtended(r1, r2, op) => {
                 let size = match op {
                     ExtendOp::SXTW | ExtendOp::UXTW => OperandSize::Size32,
                     _ => OperandSize::Size64,
                 };
-                let op = op.show_rru(mb_rru);
-                format!(
-                    "[{}, {}, {}]",
-                    r1.show_rru(mb_rru),
-                    show_ireg_sized(r2, mb_rru, size),
-                    op,
-                )
+                let r1 = pretty_print_reg(r1, allocs);
+                let r2 = pretty_print_ireg(r2, size, allocs);
+                let op = op.pretty_print(0, allocs);
+                format!("[{}, {}, {}]", r1, r2, op)
             }
-            &AMode::Label(ref label) => label.show_rru(mb_rru),
-            &AMode::PreIndexed(r, simm9) => format!(
-                "[{}, {}]!",
-                r.to_reg().show_rru(mb_rru),
-                simm9.show_rru(mb_rru)
-            ),
-            &AMode::PostIndexed(r, simm9) => format!(
-                "[{}], {}",
-                r.to_reg().show_rru(mb_rru),
-                simm9.show_rru(mb_rru)
-            ),
+            &AMode::Label(ref label) => label.pretty_print(0, allocs),
+            &AMode::PreIndexed(r, simm9) => {
+                let r = pretty_print_reg(r.to_reg(), allocs);
+                let simm9 = simm9.pretty_print(8, allocs);
+                format!("[{}, {}]!", r, simm9)
+            }
+            &AMode::PostIndexed(r, simm9) => {
+                let r = pretty_print_reg(r.to_reg(), allocs);
+                let simm9 = simm9.pretty_print(8, allocs);
+                format!("[{}], {}", r, simm9)
+            }
             // Eliminated by `mem_finalize()`.
             &AMode::SPOffset(..)
             | &AMode::FPOffset(..)
@@ -472,31 +505,33 @@ impl PrettyPrint for AMode {
 }
 
 impl PrettyPrint for PairAMode {
-    fn show_rru(&self, mb_rru: Option<&RealRegUniverse>) -> String {
+    fn pretty_print(&self, _: u8, allocs: &mut AllocationConsumer<'_>) -> String {
         match self {
             &PairAMode::SignedOffset(reg, simm7) => {
+                let reg = pretty_print_reg(reg, allocs);
                 if simm7.value != 0 {
-                    format!("[{}, {}]", reg.show_rru(mb_rru), simm7.show_rru(mb_rru))
+                    let simm7 = simm7.pretty_print(8, allocs);
+                    format!("[{}, {}]", reg, simm7)
                 } else {
-                    format!("[{}]", reg.show_rru(mb_rru))
+                    format!("[{}]", reg)
                 }
             }
-            &PairAMode::PreIndexed(reg, simm7) => format!(
-                "[{}, {}]!",
-                reg.to_reg().show_rru(mb_rru),
-                simm7.show_rru(mb_rru)
-            ),
-            &PairAMode::PostIndexed(reg, simm7) => format!(
-                "[{}], {}",
-                reg.to_reg().show_rru(mb_rru),
-                simm7.show_rru(mb_rru)
-            ),
+            &PairAMode::PreIndexed(reg, simm7) => {
+                let reg = pretty_print_reg(reg.to_reg(), allocs);
+                let simm7 = simm7.pretty_print(8, allocs);
+                format!("[{}, {}]!", reg, simm7)
+            }
+            &PairAMode::PostIndexed(reg, simm7) => {
+                let reg = pretty_print_reg(reg.to_reg(), allocs);
+                let simm7 = simm7.pretty_print(8, allocs);
+                format!("[{}], {}", reg, simm7)
+            }
         }
     }
 }
 
 impl PrettyPrint for Cond {
-    fn show_rru(&self, _mb_rru: Option<&RealRegUniverse>) -> String {
+    fn pretty_print(&self, _: u8, _: &mut AllocationConsumer<'_>) -> String {
         let mut s = format!("{:?}", self);
         s.make_ascii_lowercase();
         s
@@ -504,7 +539,7 @@ impl PrettyPrint for Cond {
 }
 
 impl PrettyPrint for BranchTarget {
-    fn show_rru(&self, _mb_rru: Option<&RealRegUniverse>) -> String {
+    fn pretty_print(&self, _: u8, _: &mut AllocationConsumer<'_>) -> String {
         match self {
             &BranchTarget::Label(label) => format!("label{:?}", label.get()),
             &BranchTarget::ResolvedOffset(off) => format!("{}", off),

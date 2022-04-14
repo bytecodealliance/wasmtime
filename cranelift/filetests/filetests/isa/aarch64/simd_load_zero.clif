@@ -9,16 +9,11 @@ block0:
   return v1
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 4)
-;   Inst 0:   movz x0, #1
-;   Inst 1:   movk x0, #1, LSL #48
-;   Inst 2:   fmov d0, x0
-;   Inst 3:   ret
-; }}
+; block0:
+;   movz x2, #1
+;   movk x2, #1, LSL #48
+;   fmov d0, x2
+;   ret
 
 function %f2() -> i32x4 {
 block0:
@@ -27,13 +22,8 @@ block0:
   return v1
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 3)
-;   Inst 0:   movz x0, #42679
-;   Inst 1:   fmov s0, w0
-;   Inst 2:   ret
-; }}
+; block0:
+;   movz x2, #42679
+;   fmov s0, w2
+;   ret
 

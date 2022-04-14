@@ -1,4 +1,4 @@
-test compile
+test compile precise-output
 target s390x
 
 function %f(i64, i64) -> b1 {
@@ -7,10 +7,11 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-; check:  clgr %r2, %r3
-; nextln: lhi %r2, 0
-; nextln: lochie %r2, 1
-; nextln: br %r14
+; block0:
+;   clgr %r2, %r3
+;   lhi %r2, 0
+;   lochie %r2, 1
+;   br %r14
 
 function %f(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -27,15 +28,15 @@ block2:
   return v5
 }
 
-; check: Block 0:
-; check:  clgr %r2, %r3
-; nextln: jge label1 ; jg label2
-; check: Block 1:
-; check:  lghi %r2, 1
-; nextln: br %r14
-; check: Block 2:
-; check:  lghi %r2, 2
-; nextln: br %r14
+; block0:
+;   clgr %r2, %r3
+;   jge label1 ; jg label2
+; block1:
+;   lghi %r2, 1
+;   br %r14
+; block2:
+;   lghi %r2, 2
+;   br %r14
 
 function %f(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -48,15 +49,14 @@ block1:
   return v4
 }
 
-; FIXME: Should optimize away branches
+; block0:
+;   clgr %r2, %r3
+;   jge label1 ; jg label2
+; block1:
+;   jg label3
+; block2:
+;   jg label3
+; block3:
+;   lghi %r2, 1
+;   br %r14
 
-; check: Block 0:
-; check:  clgr %r2, %r3
-; nextln: jge label1 ; jg label2
-; check: Block 1:
-; check:  jg label3
-; check: Block 2:
-; check:  jg label3
-; check: Block 3:
-; check:  lghi %r2, 1
-; nextln: br %r14

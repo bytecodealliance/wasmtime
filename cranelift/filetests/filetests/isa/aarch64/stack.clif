@@ -1,4 +1,4 @@
-test compile
+test compile precise-output
 set unwind_info=false
 target aarch64
 
@@ -10,14 +10,14 @@ block0:
   return v0
 }
 
-; check: stp fp, lr, [sp, #-16]!
-; nextln: mov fp, sp
-; nextln: sub sp, sp, #16
-; nextln: mov x0, sp
-; nextln: add sp, sp, #16
-; nextln: ldp fp, lr, [sp], #16
-; nextln: ret
-
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   sub sp, sp, #16
+; block0:
+;   mov x0, sp
+;   add sp, sp, #16
+;   ldp fp, lr, [sp], #16
+;   ret
 
 function %stack_addr_big() -> i64 {
 ss0 = explicit_slot 100000
@@ -28,20 +28,18 @@ block0:
   return v0
 }
 
-; check: stp fp, lr, [sp, #-16]!
-; nextln: mov fp, sp
-; nextln: movz w16, #34480
-; nextln: movk w16, #1, LSL #16
-; nextln: sub sp, sp, x16, UXTX
-; nextln: mov x0, sp
-; nextln: movz w16, #34480
-; nextln: movk w16, #1, LSL #16
-; nextln: add sp, sp, x16, UXTX
-; nextln: ldp fp, lr, [sp], #16
-; nextln: ret
-
-
-; FIXME: don't use stack_addr legalization for stack_load and stack_store
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   movz w16, #34480
+;   movk w16, #1, LSL #16
+;   sub sp, sp, x16, UXTX
+; block0:
+;   mov x0, sp
+;   movz w16, #34480
+;   movk w16, #1, LSL #16
+;   add sp, sp, x16, UXTX
+;   ldp fp, lr, [sp], #16
+;   ret
 
 function %stack_load_small() -> i64 {
 ss0 = explicit_slot 8
@@ -51,15 +49,15 @@ block0:
   return v0
 }
 
-; check: stp fp, lr, [sp, #-16]!
-; nextln: mov fp, sp
-; nextln: sub sp, sp, #16
-; nextln: mov x0, sp
-; nextln: ldr x0, [x0]
-; nextln: add sp, sp, #16
-; nextln: ldp fp, lr, [sp], #16
-; nextln: ret
-
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   sub sp, sp, #16
+; block0:
+;   mov x0, sp
+;   ldr x0, [x0]
+;   add sp, sp, #16
+;   ldp fp, lr, [sp], #16
+;   ret
 
 function %stack_load_big() -> i64 {
 ss0 = explicit_slot 100000
@@ -70,19 +68,19 @@ block0:
   return v0
 }
 
-; check: stp fp, lr, [sp, #-16]!
-; nextln: mov fp, sp
-; nextln: movz w16, #34480
-; nextln: movk w16, #1, LSL #16
-; nextln: sub sp, sp, x16, UXTX
-; nextln: mov x0, sp
-; nextln: ldr x0, [x0]
-; nextln: movz w16, #34480
-; nextln: movk w16, #1, LSL #16
-; nextln: add sp, sp, x16, UXTX
-; nextln: ldp fp, lr, [sp], #16
-; nextln: ret
-
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   movz w16, #34480
+;   movk w16, #1, LSL #16
+;   sub sp, sp, x16, UXTX
+; block0:
+;   mov x0, sp
+;   ldr x0, [x0]
+;   movz w16, #34480
+;   movk w16, #1, LSL #16
+;   add sp, sp, x16, UXTX
+;   ldp fp, lr, [sp], #16
+;   ret
 
 function %stack_store_small(i64) {
 ss0 = explicit_slot 8
@@ -92,15 +90,15 @@ block0(v0: i64):
   return
 }
 
-; check: stp fp, lr, [sp, #-16]!
-; nextln: mov fp, sp
-; nextln: sub sp, sp, #16
-; nextln: mov x1, sp
-; nextln: str x0, [x1]
-; nextln: add sp, sp, #16
-; nextln: ldp fp, lr, [sp], #16
-; nextln: ret
-
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   sub sp, sp, #16
+; block0:
+;   mov x2, sp
+;   str x0, [x2]
+;   add sp, sp, #16
+;   ldp fp, lr, [sp], #16
+;   ret
 
 function %stack_store_big(i64) {
 ss0 = explicit_slot 100000
@@ -111,21 +109,20 @@ block0(v0: i64):
   return
 }
 
-; check: stp fp, lr, [sp, #-16]!
-; nextln: mov fp, sp
-; nextln: movz w16, #34480
-; nextln: movk w16, #1, LSL #16
-; nextln: sub sp, sp, x16, UXTX
-; nextln: mov x1, sp
-; nextln: str x0, [x1]
-; nextln: movz w16, #34480
-; nextln: movk w16, #1, LSL #16
-; nextln: add sp, sp, x16, UXTX
-; nextln: ldp fp, lr, [sp], #16
-; nextln: ret
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   movz w16, #34480
+;   movk w16, #1, LSL #16
+;   sub sp, sp, x16, UXTX
+; block0:
+;   mov x2, sp
+;   str x0, [x2]
+;   movz w16, #34480
+;   movk w16, #1, LSL #16
+;   add sp, sp, x16, UXTX
+;   ldp fp, lr, [sp], #16
+;   ret
 
-; Force a b1 to be spilled into a slot at an SP offset between 0x100 and
-; 0x1fff, to exercise the scaled addressing mode.
 function %b1_spill_slot(b1) -> b1, i64 {
     ss0 = explicit_slot 1000
 
@@ -277,7 +274,161 @@ block0(v0: b1):
   return v0, v137
 }
 
-
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   stp x27, x28, [sp, #-16]!
+;   stp x25, x26, [sp, #-16]!
+;   stp x23, x24, [sp, #-16]!
+;   stp x21, x22, [sp, #-16]!
+;   stp x19, x20, [sp, #-16]!
+;   sub sp, sp, #1152
+; block0:
+;   str x0, [sp, #1000]
+;   movz x8, #2
+;   add x11, x8, #1
+;   str x11, [sp, #1136]
+;   movz x8, #4
+;   add x12, x8, #3
+;   str x12, [sp, #1128]
+;   movz x8, #6
+;   add x13, x8, #5
+;   str x13, [sp, #1120]
+;   movz x8, #8
+;   add x14, x8, #7
+;   str x14, [sp, #1112]
+;   movz x8, #10
+;   add x15, x8, #9
+;   str x15, [sp, #1104]
+;   movz x8, #12
+;   add x1, x8, #11
+;   str x1, [sp, #1096]
+;   movz x8, #14
+;   add x2, x8, #13
+;   str x2, [sp, #1088]
+;   movz x8, #16
+;   add x3, x8, #15
+;   str x3, [sp, #1080]
+;   movz x8, #18
+;   add x4, x8, #17
+;   str x4, [sp, #1072]
+;   movz x8, #20
+;   add x5, x8, #19
+;   str x5, [sp, #1064]
+;   movz x8, #22
+;   add x6, x8, #21
+;   str x6, [sp, #1056]
+;   movz x8, #24
+;   add x7, x8, #23
+;   str x7, [sp, #1048]
+;   movz x8, #26
+;   add x8, x8, #25
+;   str x8, [sp, #1040]
+;   movz x8, #28
+;   add x9, x8, #27
+;   str x9, [sp, #1032]
+;   movz x8, #30
+;   add x26, x8, #29
+;   str x26, [sp, #1024]
+;   movz x8, #32
+;   add x27, x8, #31
+;   str x27, [sp, #1016]
+;   movz x8, #34
+;   add x28, x8, #33
+;   movz x8, #36
+;   add x21, x8, #35
+;   str x21, [sp, #1008]
+;   movz x8, #38
+;   add x21, x8, #37
+;   movz x8, #30
+;   add x19, x8, #39
+;   movz x8, #32
+;   add x20, x8, #31
+;   movz x8, #34
+;   add x22, x8, #33
+;   movz x8, #36
+;   add x23, x8, #35
+;   movz x8, #38
+;   add x24, x8, #37
+;   movz x8, #30
+;   add x25, x8, #39
+;   movz x8, #32
+;   add x0, x8, #31
+;   movz x8, #34
+;   add x10, x8, #33
+;   movz x8, #36
+;   add x11, x8, #35
+;   movz x8, #38
+;   add x12, x8, #37
+;   movz x8, #30
+;   add x13, x8, #39
+;   movz x8, #32
+;   add x14, x8, #31
+;   movz x8, #34
+;   add x15, x8, #33
+;   movz x8, #36
+;   add x1, x8, #35
+;   movz x8, #38
+;   add x2, x8, #37
+;   ldr x3, [sp, #1136]
+;   add x3, x3, #39
+;   ldr x5, [sp, #1120]
+;   ldr x4, [sp, #1128]
+;   add x4, x4, x5
+;   ldr x5, [sp, #1104]
+;   ldr x8, [sp, #1112]
+;   add x5, x8, x5
+;   ldr x6, [sp, #1088]
+;   ldr x7, [sp, #1096]
+;   add x6, x7, x6
+;   ldr x7, [sp, #1072]
+;   ldr x8, [sp, #1080]
+;   add x7, x8, x7
+;   ldr x9, [sp, #1056]
+;   ldr x8, [sp, #1064]
+;   add x8, x8, x9
+;   ldr x9, [sp, #1040]
+;   ldr x26, [sp, #1048]
+;   add x9, x26, x9
+;   ldr x26, [sp, #1024]
+;   ldr x27, [sp, #1032]
+;   add x26, x27, x26
+;   ldr x27, [sp, #1016]
+;   add x27, x27, x28
+;   ldr x28, [sp, #1008]
+;   add x28, x28, x21
+;   add x21, x19, x20
+;   add x19, x22, x23
+;   add x25, x24, x25
+;   add x10, x0, x10
+;   add x11, x11, x12
+;   add x12, x13, x14
+;   add x13, x15, x1
+;   add x14, x2, x3
+;   add x15, x4, x5
+;   add x0, x6, x7
+;   add x9, x8, x9
+;   add x1, x26, x27
+;   add x2, x28, x21
+;   add x3, x19, x25
+;   add x10, x10, x11
+;   add x11, x12, x13
+;   add x12, x14, x15
+;   add x9, x0, x9
+;   add x13, x1, x2
+;   add x10, x3, x10
+;   add x11, x11, x12
+;   add x9, x9, x13
+;   add x10, x10, x11
+;   add x1, x9, x10
+;   ldr x0, [sp, #1000]
+;   add sp, sp, #1152
+;   ldp x19, x20, [sp], #16
+;   ldp x21, x22, [sp], #16
+;   ldp x23, x24, [sp], #16
+;   ldp x25, x26, [sp], #16
+;   ldp x27, x28, [sp], #16
+;   ldp fp, lr, [sp], #16
+;   ret
 
 function %i128_stack_store(i128) {
 ss0 = explicit_slot 16
@@ -286,15 +437,16 @@ block0(v0: i128):
   stack_store.i128 v0, ss0
   return
 }
-; TODO: Codegen improvement opportunities: This should be just a stp x0, x1, [sp, #-16]
-; check: stp fp, lr, [sp, #-16]!
-; nextln: mov fp, sp
-; nextln: sub sp, sp, #16
-; nextln: mov x2, sp
-; nextln: stp x0, x1, [x2]
-; nextln: add sp, sp, #16
-; nextln: ldp fp, lr, [sp], #16
 
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   sub sp, sp, #16
+; block0:
+;   mov x4, sp
+;   stp x0, x1, [x4]
+;   add sp, sp, #16
+;   ldp fp, lr, [sp], #16
+;   ret
 
 function %i128_stack_store_inst_offset(i128) {
 ss0 = explicit_slot 16
@@ -304,15 +456,16 @@ block0(v0: i128):
   stack_store.i128 v0, ss1+16
   return
 }
-; check: stp fp, lr, [sp, #-16]!
-; nextln: mov fp, sp
-; nextln: sub sp, sp, #32
-; nextln: add x2, sp, #32
-; nextln: stp x0, x1, [x2]
-; nextln: add sp, sp, #32
-; nextln: ldp fp, lr, [sp], #16
-; nextln: ret
 
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   sub sp, sp, #32
+; block0:
+;   add x4, sp, #32
+;   stp x0, x1, [x4]
+;   add sp, sp, #32
+;   ldp fp, lr, [sp], #16
+;   ret
 
 function %i128_stack_store_big(i128) {
 ss0 = explicit_slot 100000
@@ -322,20 +475,20 @@ block0(v0: i128):
   stack_store.i128 v0, ss0
   return
 }
-; check: stp fp, lr, [sp, #-16]!
-; nextln: mov fp, sp
-; nextln: movz w16, #34480
-; nextln: movk w16, #1, LSL #16
-; nextln: sub sp, sp, x16, UXTX
-; nextln: mov x2, sp
-; nextln: stp x0, x1, [x2]
-; nextln: movz w16, #34480
-; nextln: movk w16, #1, LSL #16
-; nextln: add sp, sp, x16, UXTX
-; nextln: ldp fp, lr, [sp], #16
-; nextln: ret
 
-
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   movz w16, #34480
+;   movk w16, #1, LSL #16
+;   sub sp, sp, x16, UXTX
+; block0:
+;   mov x4, sp
+;   stp x0, x1, [x4]
+;   movz w16, #34480
+;   movk w16, #1, LSL #16
+;   add sp, sp, x16, UXTX
+;   ldp fp, lr, [sp], #16
+;   ret
 
 function %i128_stack_load() -> i128 {
 ss0 = explicit_slot 16
@@ -344,20 +497,16 @@ block0:
   v0 = stack_load.i128 ss0
   return v0
 }
-; TODO: Codegen improvement opportunities: This should be just a ldp x0, x1, [sp, #-16]
-; check: stp fp, lr, [sp, #-16]!
-; nextln: mov fp, sp
-; nextln: sub sp, sp, #16
-; nextln: mov x0, sp
-; nextln: ldp x1, x0, [x0]
-; nextln: mov x2, x0
-; nextln: mov x0, x1
-; nextln: mov x1, x2
-; nextln: add sp, sp, #16
-; nextln: ldp fp, lr, [sp], #16
-; nextln: ret
 
-
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   sub sp, sp, #16
+; block0:
+;   mov x0, sp
+;   ldp x0, x1, [x0]
+;   add sp, sp, #16
+;   ldp fp, lr, [sp], #16
+;   ret
 
 function %i128_stack_load_inst_offset() -> i128 {
 ss0 = explicit_slot 16
@@ -367,19 +516,16 @@ block0:
   v0 = stack_load.i128 ss1+16
   return v0
 }
-; check: stp fp, lr, [sp, #-16]!
-; nextln: mov fp, sp
-; nextln: sub sp, sp, #32
-; nextln: add x0, sp, #32
-; nextln: ldp x1, x0, [x0]
-; nextln: mov x2, x0
-; nextln: mov x0, x1
-; nextln: mov x1, x2
-; nextln: add sp, sp, #32
-; nextln: ldp fp, lr, [sp], #16
-; nextln: ret
 
-
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   sub sp, sp, #32
+; block0:
+;   add x0, sp, #32
+;   ldp x0, x1, [x0]
+;   add sp, sp, #32
+;   ldp fp, lr, [sp], #16
+;   ret
 
 function %i128_stack_load_big() -> i128 {
 ss0 = explicit_slot 100000
@@ -389,18 +535,18 @@ block0:
   v0 = stack_load.i128 ss0
   return v0
 }
-; check: stp fp, lr, [sp, #-16]!
-; nextln: mov fp, sp
-; nextln: movz w16, #34480
-; nextln: movk w16, #1, LSL #16
-; nextln: sub sp, sp, x16, UXTX
-; nextln: mov x0, sp
-; nextln: ldp x1, x0, [x0]
-; nextln: mov x2, x0
-; nextln: mov x0, x1
-; nextln: mov x1, x2
-; nextln: movz w16, #34480
-; nextln: movk w16, #1, LSL #16
-; nextln: add sp, sp, x16, UXTX
-; nextln: ldp fp, lr, [sp], #16
-; nextln: ret
+
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   movz w16, #34480
+;   movk w16, #1, LSL #16
+;   sub sp, sp, x16, UXTX
+; block0:
+;   mov x0, sp
+;   ldp x0, x1, [x0]
+;   movz w16, #34480
+;   movk w16, #1, LSL #16
+;   add sp, sp, x16, UXTX
+;   ldp fp, lr, [sp], #16
+;   ret
+

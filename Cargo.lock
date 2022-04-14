@@ -529,7 +529,7 @@ dependencies = [
  "hashbrown 0.9.1",
  "log",
  "miette",
- "regalloc",
+ "regalloc2",
  "serde",
  "smallvec",
  "souper-ir",
@@ -1217,6 +1217,15 @@ checksum = "57eafdd0c16f57161105ae1b98a1238f97645f2f588438b2949c99a2af9616bf"
 dependencies = [
  "libc",
  "winapi",
+]
+
+[[package]]
+name = "fxhash"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c31b6d751ae2c7f11320402d34e41349dd1016f8d5d45e48c4312bc8625af50c"
+dependencies = [
+ "byteorder",
 ]
 
 [[package]]
@@ -2393,14 +2402,15 @@ dependencies = [
 ]
 
 [[package]]
-name = "regalloc"
-version = "0.0.34"
+name = "regalloc2"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "62446b1d3ebf980bdc68837700af1d77b37bc430e524bf95319c6eada2a4cc02"
+checksum = "3dd122b168f0046afcde717e002cdf76c9c87f829ae99dd12a02a0dcf7cc68f1"
 dependencies = [
+ "fxhash",
  "log",
- "rustc-hash",
  "serde",
+ "slice-group-by",
  "smallvec",
 ]
 
@@ -2652,6 +2662,12 @@ dependencies = [
  "digest",
  "rand_core 0.6.3",
 ]
+
+[[package]]
+name = "slice-group-by"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "03b634d87b960ab1a38c4fe143b508576f075e7c978bfad18217645ebfdfa2ec"
 
 [[package]]
 name = "smallvec"

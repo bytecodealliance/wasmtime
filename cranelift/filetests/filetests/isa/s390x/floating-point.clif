@@ -1,4 +1,4 @@
-test compile
+test compile precise-output
 target s390x
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -14,8 +14,9 @@ block0:
   return v1
 }
 
-; check:  bras %r1, 8 ; data.f32 0 ; le %f0, 0(%r1)
-; nextln: br %r14
+; block0:
+;   bras %r1, 8 ; data.f32 0 ; le %f0, 0(%r1)
+;   br %r14
 
 function %f64const_zero() -> f64 {
 block0:
@@ -23,8 +24,9 @@ block0:
   return v1
 }
 
-; check:  bras %r1, 12 ; data.f64 0 ; ld %f0, 0(%r1)
-; nextln: br %r14
+; block0:
+;   bras %r1, 12 ; data.f64 0 ; ld %f0, 0(%r1)
+;   br %r14
 
 function %f32const_one() -> f32 {
 block0:
@@ -32,8 +34,9 @@ block0:
   return v1
 }
 
-; check:  bras %r1, 8 ; data.f32 1 ; le %f0, 0(%r1)
-; nextln: br %r14
+; block0:
+;   bras %r1, 8 ; data.f32 1 ; le %f0, 0(%r1)
+;   br %r14
 
 function %f64const_one() -> f64 {
 block0:
@@ -41,12 +44,9 @@ block0:
   return v1
 }
 
-; check:  bras %r1, 12 ; data.f64 1 ; ld %f0, 0(%r1)
-; nextln: br %r14
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; FADD
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; block0:
+;   bras %r1, 12 ; data.f64 1 ; ld %f0, 0(%r1)
+;   br %r14
 
 function %fadd_f32(f32, f32) -> f32 {
 block0(v0: f32, v1: f32):
@@ -54,8 +54,9 @@ block0(v0: f32, v1: f32):
   return v2
 }
 
-; check:  aebr %f0, %f2
-; nextln: br %r14
+; block0:
+;   aebr %f0, %f2
+;   br %r14
 
 function %fadd_f64(f64, f64) -> f64 {
 block0(v0: f64, v1: f64):
@@ -63,12 +64,9 @@ block0(v0: f64, v1: f64):
   return v2
 }
 
-; check:  adbr %f0, %f2
-; nextln: br %r14
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; FSUB
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; block0:
+;   adbr %f0, %f2
+;   br %r14
 
 function %fsub_f32(f32, f32) -> f32 {
 block0(v0: f32, v1: f32):
@@ -76,8 +74,9 @@ block0(v0: f32, v1: f32):
   return v2
 }
 
-; check:  sebr %f0, %f2
-; nextln: br %r14
+; block0:
+;   sebr %f0, %f2
+;   br %r14
 
 function %fsub_f64(f64, f64) -> f64 {
 block0(v0: f64, v1: f64):
@@ -85,12 +84,9 @@ block0(v0: f64, v1: f64):
   return v2
 }
 
-; check:  sdbr %f0, %f2
-; nextln: br %r14
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; FMUL
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; block0:
+;   sdbr %f0, %f2
+;   br %r14
 
 function %fmul_f32(f32, f32) -> f32 {
 block0(v0: f32, v1: f32):
@@ -98,8 +94,9 @@ block0(v0: f32, v1: f32):
   return v2
 }
 
-; check:  meebr %f0, %f2
-; nextln: br %r14
+; block0:
+;   meebr %f0, %f2
+;   br %r14
 
 function %fmul_f64(f64, f64) -> f64 {
 block0(v0: f64, v1: f64):
@@ -107,12 +104,9 @@ block0(v0: f64, v1: f64):
   return v2
 }
 
-; check:  mdbr %f0, %f2
-; nextln: br %r14
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; FDIV
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; block0:
+;   mdbr %f0, %f2
+;   br %r14
 
 function %fdiv_f32(f32, f32) -> f32 {
 block0(v0: f32, v1: f32):
@@ -120,8 +114,9 @@ block0(v0: f32, v1: f32):
   return v2
 }
 
-; check:  debr %f0, %f2
-; nextln: br %r14
+; block0:
+;   debr %f0, %f2
+;   br %r14
 
 function %fdiv_f64(f64, f64) -> f64 {
 block0(v0: f64, v1: f64):
@@ -129,12 +124,9 @@ block0(v0: f64, v1: f64):
   return v2
 }
 
-; check:  ddbr %f0, %f2
-; nextln: br %r14
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; FMIN
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; block0:
+;   ddbr %f0, %f2
+;   br %r14
 
 function %fmin_f32(f32, f32) -> f32 {
 block0(v0: f32, v1: f32):
@@ -142,8 +134,9 @@ block0(v0: f32, v1: f32):
   return v2
 }
 
-; check:  wfminsb %f0, %f0, %f2, 1
-; nextln: br %r14
+; block0:
+;   wfminsb %f0, %f0, %f2, 1
+;   br %r14
 
 function %fmin_f64(f64, f64) -> f64 {
 block0(v0: f64, v1: f64):
@@ -151,12 +144,9 @@ block0(v0: f64, v1: f64):
   return v2
 }
 
-; check:  wfmindb %f0, %f0, %f2, 1
-; nextln: br %r14
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; FMAX
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; block0:
+;   wfmindb %f0, %f0, %f2, 1
+;   br %r14
 
 function %fmax_f32(f32, f32) -> f32 {
 block0(v0: f32, v1: f32):
@@ -164,8 +154,9 @@ block0(v0: f32, v1: f32):
   return v2
 }
 
-; check:  wfmaxsb %f0, %f0, %f2, 1
-; nextln: br %r14
+; block0:
+;   wfmaxsb %f0, %f0, %f2, 1
+;   br %r14
 
 function %fmax_f64(f64, f64) -> f64 {
 block0(v0: f64, v1: f64):
@@ -173,12 +164,9 @@ block0(v0: f64, v1: f64):
   return v2
 }
 
-; check:  wfmaxdb %f0, %f0, %f2, 1
-; nextln: br %r14
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; SQRT
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; block0:
+;   wfmaxdb %f0, %f0, %f2, 1
+;   br %r14
 
 function %sqrt_f32(f32) -> f32 {
 block0(v0: f32):
@@ -186,8 +174,9 @@ block0(v0: f32):
   return v1
 }
 
-; check:  sqebr %f0, %f0
-; nextln: br %r14
+; block0:
+;   sqebr %f0, %f0
+;   br %r14
 
 function %sqrt_f64(f64) -> f64 {
 block0(v0: f64):
@@ -195,12 +184,9 @@ block0(v0: f64):
   return v1
 }
 
-; check:  sqdbr %f0, %f0
-; nextln: br %r14
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; FABS
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; block0:
+;   sqdbr %f0, %f0
+;   br %r14
 
 function %fabs_f32(f32) -> f32 {
 block0(v0: f32):
@@ -208,8 +194,9 @@ block0(v0: f32):
   return v1
 }
 
-; check:  lpebr %f0, %f0
-; nextln: br %r14
+; block0:
+;   lpebr %f0, %f0
+;   br %r14
 
 function %fabs_f64(f64) -> f64 {
 block0(v0: f64):
@@ -217,12 +204,9 @@ block0(v0: f64):
   return v1
 }
 
-; check:  lpdbr %f0, %f0
-; nextln: br %r14
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; FNEG
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; block0:
+;   lpdbr %f0, %f0
+;   br %r14
 
 function %fneg_f32(f32) -> f32 {
 block0(v0: f32):
@@ -230,8 +214,9 @@ block0(v0: f32):
   return v1
 }
 
-; check:  lcebr %f0, %f0
-; nextln: br %r14
+; block0:
+;   lcebr %f0, %f0
+;   br %r14
 
 function %fneg_f64(f64) -> f64 {
 block0(v0: f64):
@@ -239,12 +224,9 @@ block0(v0: f64):
   return v1
 }
 
-; check:  lcdbr %f0, %f0
-; nextln: br %r14
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; FPROMOTE/FDEMOTE
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; block0:
+;   lcdbr %f0, %f0
+;   br %r14
 
 function %fpromote_f32(f32) -> f64 {
 block0(v0: f32):
@@ -252,8 +234,9 @@ block0(v0: f32):
   return v1
 }
 
-; check:  ldebr %f0, %f0
-; nextln: br %r14
+; block0:
+;   ldebr %f0, %f0
+;   br %r14
 
 function %fdemote_f64(f64) -> f32 {
 block0(v0: f64):
@@ -261,12 +244,9 @@ block0(v0: f64):
   return v1
 }
 
-; check:  ledbr %f0, %f0
-; nextln: br %r14
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; CEIL
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; block0:
+;   ledbr %f0, %f0
+;   br %r14
 
 function %ceil_f32(f32) -> f32 {
 block0(v0: f32):
@@ -274,8 +254,9 @@ block0(v0: f32):
   return v1
 }
 
-; check:  fiebr %f0, %f0, 6
-; nextln: br %r14
+; block0:
+;   fiebr %f0, %f0, 6
+;   br %r14
 
 function %ceil_f64(f64) -> f64 {
 block0(v0: f64):
@@ -283,12 +264,9 @@ block0(v0: f64):
   return v1
 }
 
-; check:  fidbr %f0, %f0, 6
-; nextln: br %r14
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; FLOOR
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; block0:
+;   fidbr %f0, %f0, 6
+;   br %r14
 
 function %floor_f32(f32) -> f32 {
 block0(v0: f32):
@@ -296,8 +274,9 @@ block0(v0: f32):
   return v1
 }
 
-; check:  fiebr %f0, %f0, 7
-; nextln: br %r14
+; block0:
+;   fiebr %f0, %f0, 7
+;   br %r14
 
 function %floor_f64(f64) -> f64 {
 block0(v0: f64):
@@ -305,12 +284,9 @@ block0(v0: f64):
   return v1
 }
 
-; check:  fidbr %f0, %f0, 7
-; nextln: br %r14
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; TRUNC
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; block0:
+;   fidbr %f0, %f0, 7
+;   br %r14
 
 function %trunc_f32(f32) -> f32 {
 block0(v0: f32):
@@ -318,8 +294,9 @@ block0(v0: f32):
   return v1
 }
 
-; check:  fiebr %f0, %f0, 5
-; nextln: br %r14
+; block0:
+;   fiebr %f0, %f0, 5
+;   br %r14
 
 function %trunc_f64(f64) -> f64 {
 block0(v0: f64):
@@ -327,12 +304,9 @@ block0(v0: f64):
   return v1
 }
 
-; check:  fidbr %f0, %f0, 5
-; nextln: br %r14
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; NEAREST
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; block0:
+;   fidbr %f0, %f0, 5
+;   br %r14
 
 function %nearest_f32(f32) -> f32 {
 block0(v0: f32):
@@ -340,8 +314,9 @@ block0(v0: f32):
   return v1
 }
 
-; check:  fiebr %f0, %f0, 4
-; nextln: br %r14
+; block0:
+;   fiebr %f0, %f0, 4
+;   br %r14
 
 function %nearest_f64(f64) -> f64 {
 block0(v0: f64):
@@ -349,12 +324,9 @@ block0(v0: f64):
   return v1
 }
 
-; check:  fidbr %f0, %f0, 4
-; nextln: br %r14
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; FMA
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; block0:
+;   fidbr %f0, %f0, 4
+;   br %r14
 
 function %fma_f32(f32, f32, f32) -> f32 {
 block0(v0: f32, v1: f32, v2: f32):
@@ -362,11 +334,11 @@ block0(v0: f32, v1: f32, v2: f32):
   return v3
 }
 
-; FIXME: regalloc
-
-; check:  maebr %f4, %f0, %f2
-; nextln: ler %f0, %f4
-; nextln: br %r14
+; block0:
+;   ldr %f1, %f0
+;   ldr %f0, %f4
+;   maebr %f0, %f1, %f2
+;   br %r14
 
 function %fma_f64(f64, f64, f64) -> f64 {
 block0(v0: f64, v1: f64, v2: f64):
@@ -374,13 +346,11 @@ block0(v0: f64, v1: f64, v2: f64):
   return v3
 }
 
-; check:  madbr %f4, %f0, %f2
-; nextln: ldr %f0, %f4
-; nextln: br %r14
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; FCOPYSIGN
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; block0:
+;   ldr %f1, %f0
+;   ldr %f0, %f4
+;   madbr %f0, %f1, %f2
+;   br %r14
 
 function %fcopysign_f32(f32, f32) -> f32 {
 block0(v0: f32, v1: f32):
@@ -388,8 +358,9 @@ block0(v0: f32, v1: f32):
   return v2
 }
 
-; check:  cpsdr %f0, %f2, %f0
-; nextln: br %r14
+; block0:
+;   cpsdr %f0, %f2, %f0
+;   br %r14
 
 function %fcopysign_f64(f64, f64) -> f64 {
 block0(v0: f64, v1: f64):
@@ -397,12 +368,9 @@ block0(v0: f64, v1: f64):
   return v2
 }
 
-; check:  cpsdr %f0, %f2, %f0
-; nextln: br %r14
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; FCVT_TO_UINT/FCVT_TO_SINT
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; block0:
+;   cpsdr %f0, %f2, %f0
+;   br %r14
 
 function %fcvt_to_uint_f32_i32(f32) -> i32 {
 block0(v0: f32):
@@ -410,11 +378,12 @@ block0(v0: f32):
   return v1
 }
 
-; check:  cebr %f0, %f0
-; nextln: jno 6 ; trap
-; nextln: clfebr %r2, 5, %f0, 0
-; nextln: jno 6 ; trap
-; nextln: br %r14
+; block0:
+;   cebr %f0, %f0
+;   jno 6 ; trap
+;   clfebr %r2, 5, %f0, 0
+;   jno 6 ; trap
+;   br %r14
 
 function %fcvt_to_sint_f32_i32(f32) -> i32 {
 block0(v0: f32):
@@ -422,11 +391,12 @@ block0(v0: f32):
   return v1
 }
 
-; check:  cebr %f0, %f0
-; nextln: jno 6 ; trap
-; nextln: cfebra %r2, 5, %f0, 0
-; nextln: jno 6 ; trap
-; nextln: br %r14
+; block0:
+;   cebr %f0, %f0
+;   jno 6 ; trap
+;   cfebra %r2, 5, %f0, 0
+;   jno 6 ; trap
+;   br %r14
 
 function %fcvt_to_uint_f32_i64(f32) -> i64 {
 block0(v0: f32):
@@ -434,11 +404,12 @@ block0(v0: f32):
   return v1
 }
 
-; check:  cebr %f0, %f0
-; nextln: jno 6 ; trap
-; nextln: clgebr %r2, 5, %f0, 0
-; nextln: jno 6 ; trap
-; nextln: br %r14
+; block0:
+;   cebr %f0, %f0
+;   jno 6 ; trap
+;   clgebr %r2, 5, %f0, 0
+;   jno 6 ; trap
+;   br %r14
 
 function %fcvt_to_sint_f32_i64(f32) -> i64 {
 block0(v0: f32):
@@ -446,11 +417,12 @@ block0(v0: f32):
   return v1
 }
 
-; check:  cebr %f0, %f0
-; nextln: jno 6 ; trap
-; nextln: cgebra %r2, 5, %f0, 0
-; nextln: jno 6 ; trap
-; nextln: br %r14
+; block0:
+;   cebr %f0, %f0
+;   jno 6 ; trap
+;   cgebra %r2, 5, %f0, 0
+;   jno 6 ; trap
+;   br %r14
 
 function %fcvt_to_uint_f64_i32(f64) -> i32 {
 block0(v0: f64):
@@ -458,11 +430,12 @@ block0(v0: f64):
   return v1
 }
 
-; check:  cdbr %f0, %f0
-; nextln: jno 6 ; trap
-; nextln: clfdbr %r2, 5, %f0, 0
-; nextln: jno 6 ; trap
-; nextln: br %r14
+; block0:
+;   cdbr %f0, %f0
+;   jno 6 ; trap
+;   clfdbr %r2, 5, %f0, 0
+;   jno 6 ; trap
+;   br %r14
 
 function %fcvt_to_sint_f64_i32(f64) -> i32 {
 block0(v0: f64):
@@ -470,11 +443,12 @@ block0(v0: f64):
   return v1
 }
 
-; check:  cdbr %f0, %f0
-; nextln: jno 6 ; trap
-; nextln: cfdbra %r2, 5, %f0, 0
-; nextln: jno 6 ; trap
-; nextln: br %r14
+; block0:
+;   cdbr %f0, %f0
+;   jno 6 ; trap
+;   cfdbra %r2, 5, %f0, 0
+;   jno 6 ; trap
+;   br %r14
 
 function %fcvt_to_uint_f64_i64(f64) -> i64 {
 block0(v0: f64):
@@ -482,11 +456,12 @@ block0(v0: f64):
   return v1
 }
 
-; check:  cdbr %f0, %f0
-; nextln: jno 6 ; trap
-; nextln: clgdbr %r2, 5, %f0, 0
-; nextln: jno 6 ; trap
-; nextln: br %r14
+; block0:
+;   cdbr %f0, %f0
+;   jno 6 ; trap
+;   clgdbr %r2, 5, %f0, 0
+;   jno 6 ; trap
+;   br %r14
 
 function %fcvt_to_sint_f64_i64(f64) -> i64 {
 block0(v0: f64):
@@ -494,15 +469,12 @@ block0(v0: f64):
   return v1
 }
 
-; check:  cdbr %f0, %f0
-; nextln: jno 6 ; trap
-; nextln: cgdbra %r2, 5, %f0, 0
-; nextln: jno 6 ; trap
-; nextln: br %r14
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; FCVT_FROM_UINT/FCVT_FROM_SINT
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; block0:
+;   cdbr %f0, %f0
+;   jno 6 ; trap
+;   cgdbra %r2, 5, %f0, 0
+;   jno 6 ; trap
+;   br %r14
 
 function %fcvt_from_uint_i32_f32(i32) -> f32 {
 block0(v0: i32):
@@ -510,8 +482,9 @@ block0(v0: i32):
   return v1
 }
 
-; check:  celfbr %f0, 0, %r2, 0
-; nextln: br %r14
+; block0:
+;   celfbr %f0, 0, %r2, 0
+;   br %r14
 
 function %fcvt_from_sint_i32_f32(i32) -> f32 {
 block0(v0: i32):
@@ -519,8 +492,9 @@ block0(v0: i32):
   return v1
 }
 
-; check:  cefbra %f0, 0, %r2, 0
-; nextln: br %r14
+; block0:
+;   cefbra %f0, 0, %r2, 0
+;   br %r14
 
 function %fcvt_from_uint_i64_f32(i64) -> f32 {
 block0(v0: i64):
@@ -528,8 +502,9 @@ block0(v0: i64):
   return v1
 }
 
-; check:  celgbr %f0, 0, %r2, 0
-; nextln: br %r14
+; block0:
+;   celgbr %f0, 0, %r2, 0
+;   br %r14
 
 function %fcvt_from_sint_i64_f32(i64) -> f32 {
 block0(v0: i64):
@@ -537,8 +512,9 @@ block0(v0: i64):
   return v1
 }
 
-; check:  cegbra %f0, 0, %r2, 0
-; nextln: br %r14
+; block0:
+;   cegbra %f0, 0, %r2, 0
+;   br %r14
 
 function %fcvt_from_uint_i32_f64(i32) -> f64 {
 block0(v0: i32):
@@ -546,8 +522,9 @@ block0(v0: i32):
   return v1
 }
 
-; check:  cdlfbr %f0, 0, %r2, 0
-; nextln: br %r14
+; block0:
+;   cdlfbr %f0, 0, %r2, 0
+;   br %r14
 
 function %fcvt_from_sint_i32_f64(i32) -> f64 {
 block0(v0: i32):
@@ -555,8 +532,9 @@ block0(v0: i32):
   return v1
 }
 
-; check:  cdfbra %f0, 0, %r2, 0
-; nextln: br %r14
+; block0:
+;   cdfbra %f0, 0, %r2, 0
+;   br %r14
 
 function %fcvt_from_uint_i64_f64(i64) -> f64 {
 block0(v0: i64):
@@ -564,8 +542,9 @@ block0(v0: i64):
   return v1
 }
 
-; check:  cdlgbr %f0, 0, %r2, 0
-; nextln: br %r14
+; block0:
+;   cdlgbr %f0, 0, %r2, 0
+;   br %r14
 
 function %fcvt_from_sint_i64_f64(i64) -> f64 {
 block0(v0: i64):
@@ -573,12 +552,9 @@ block0(v0: i64):
   return v1
 }
 
-; check:  cdgbra %f0, 0, %r2, 0
-; nextln: br %r14
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; FCVT_TO_UINT_SAT/FCVT_TO_SINT_SAT
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; block0:
+;   cdgbra %f0, 0, %r2, 0
+;   br %r14
 
 function %fcvt_to_uint_sat_f32_i32(f32) -> i32 {
 block0(v0: f32):
@@ -586,10 +562,11 @@ block0(v0: f32):
   return v1
 }
 
-; check:  clfebr %r2, 5, %f0, 0
-; nextln: cebr %f0, %f0
-; nextln: lochio %r2, 0
-; nextln: br %r14
+; block0:
+;   clfebr %r2, 5, %f0, 0
+;   cebr %f0, %f0
+;   lochio %r2, 0
+;   br %r14
 
 function %fcvt_to_sint_sat_f32_i32(f32) -> i32 {
 block0(v0: f32):
@@ -597,10 +574,11 @@ block0(v0: f32):
   return v1
 }
 
-; check:  cfebra %r2, 5, %f0, 0
-; nextln: cebr %f0, %f0
-; nextln: lochio %r2, 0
-; nextln: br %r14
+; block0:
+;   cfebra %r2, 5, %f0, 0
+;   cebr %f0, %f0
+;   lochio %r2, 0
+;   br %r14
 
 function %fcvt_to_uint_sat_f32_i64(f32) -> i64 {
 block0(v0: f32):
@@ -608,10 +586,11 @@ block0(v0: f32):
   return v1
 }
 
-; check:  clgebr %r2, 5, %f0, 0
-; nextln: cebr %f0, %f0
-; nextln: locghio %r2, 0
-; nextln: br %r14
+; block0:
+;   clgebr %r2, 5, %f0, 0
+;   cebr %f0, %f0
+;   locghio %r2, 0
+;   br %r14
 
 function %fcvt_to_sint_sat_f32_i64(f32) -> i64 {
 block0(v0: f32):
@@ -619,10 +598,11 @@ block0(v0: f32):
   return v1
 }
 
-; check:  cgebra %r2, 5, %f0, 0
-; nextln: cebr %f0, %f0
-; nextln: locghio %r2, 0
-; nextln: br %r14
+; block0:
+;   cgebra %r2, 5, %f0, 0
+;   cebr %f0, %f0
+;   locghio %r2, 0
+;   br %r14
 
 function %fcvt_to_uint_sat_f64_i32(f64) -> i32 {
 block0(v0: f64):
@@ -630,10 +610,11 @@ block0(v0: f64):
   return v1
 }
 
-; check:  clfdbr %r2, 5, %f0, 0
-; nextln: cdbr %f0, %f0
-; nextln: lochio %r2, 0
-; nextln: br %r14
+; block0:
+;   clfdbr %r2, 5, %f0, 0
+;   cdbr %f0, %f0
+;   lochio %r2, 0
+;   br %r14
 
 function %fcvt_to_sint_sat_f64_i32(f64) -> i32 {
 block0(v0: f64):
@@ -641,10 +622,11 @@ block0(v0: f64):
   return v1
 }
 
-; check:  cfdbra %r2, 5, %f0, 0
-; nextln: cdbr %f0, %f0
-; nextln: lochio %r2, 0
-; nextln: br %r14
+; block0:
+;   cfdbra %r2, 5, %f0, 0
+;   cdbr %f0, %f0
+;   lochio %r2, 0
+;   br %r14
 
 function %fcvt_to_uint_sat_f64_i64(f64) -> i64 {
 block0(v0: f64):
@@ -652,10 +634,11 @@ block0(v0: f64):
   return v1
 }
 
-; check:  clgdbr %r2, 5, %f0, 0
-; nextln: cdbr %f0, %f0
-; nextln: locghio %r2, 0
-; nextln: br %r14
+; block0:
+;   clgdbr %r2, 5, %f0, 0
+;   cdbr %f0, %f0
+;   locghio %r2, 0
+;   br %r14
 
 function %fcvt_to_sint_sat_f64_i64(f64) -> i64 {
 block0(v0: f64):
@@ -663,14 +646,11 @@ block0(v0: f64):
   return v1
 }
 
-; check:  cgdbra %r2, 5, %f0, 0
-; nextln: cdbr %f0, %f0
-; nextln: locghio %r2, 0
-; nextln: br %r14
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; BITCAST
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; block0:
+;   cgdbra %r2, 5, %f0, 0
+;   cdbr %f0, %f0
+;   locghio %r2, 0
+;   br %r14
 
 function %bitcast_i64_f64(i64) -> f64 {
 block0(v0: i64):
@@ -678,8 +658,9 @@ block0(v0: i64):
   return v1
 }
 
-; check:  ldgr %f0, %r2
-; nextln: br %r14
+; block0:
+;   ldgr %f0, %r2
+;   br %r14
 
 function %bitcast_f64_i64(f64) -> i64 {
 block0(v0: f64):
@@ -687,8 +668,9 @@ block0(v0: f64):
   return v1
 }
 
-; check:  lgdr %r2, %f0
-; nextln: br %r14
+; block0:
+;   lgdr %r2, %f0
+;   br %r14
 
 function %bitcast_i32_f32(i32) -> f32 {
 block0(v0: i32):
@@ -696,9 +678,10 @@ block0(v0: i32):
   return v1
 }
 
-; check:  sllg %r2, %r2, 32
-; nextln: ldgr %f0, %r2
-; nextln: br %r14
+; block0:
+;   sllg %r5, %r2, 32
+;   ldgr %f0, %r5
+;   br %r14
 
 function %bitcast_f32_i32(f32) -> i32 {
 block0(v0: f32):
@@ -706,6 +689,8 @@ block0(v0: f32):
   return v1
 }
 
-; check:  lgdr %r2, %f0
-; nextln: srlg %r2, %r2, 32
-; nextln: br %r14
+; block0:
+;   lgdr %r5, %f0
+;   srlg %r2, %r5, 32
+;   br %r14
+

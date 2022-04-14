@@ -8,14 +8,10 @@
 //!
 //! The container for machine instructions, at various stages of construction,
 //! is the `VCode` struct. We refer to a sequence of machine instructions organized
-//! into basic blocks as "vcode". This is short for "virtual-register code", though
-//! it's a bit of a misnomer because near the end of the pipeline, vcode has all
-//! real registers. Nevertheless, the name is catchy and we like it.
+//! into basic blocks as "vcode". This is short for "virtual-register code".
 //!
 //! The compilation pipeline, from an `ir::Function` (already optimized as much as
 //! you like by machine-independent optimization passes) onward, is as follows.
-//! (N.B.: though we show the VCode separately at each stage, the passes
-//! mutate the VCode in place; these are not separate copies of the code.)
 //!
 //! ```plain
 //!
@@ -31,37 +27,25 @@
 //!         |                          with unknown offsets.
 //!         |                        - critical edges (actually all edges)
 //!         |                          are split.)
-//!         | [regalloc]
 //!         |
-//!     VCode<arch_backend::Inst>   (machine instructions:
-//!         |                        - all real registers.
-//!         |                        - new instruction sequence returned
-//!         |                          out-of-band in RegAllocResult.
-//!         |                        - instruction sequence has spills,
-//!         |                          reloads, and moves inserted.
-//!         |                        - other invariants same as above.)
+//!         | [regalloc --> `regalloc2::Output`; VCode is unchanged]
 //!         |
-//!         | [preamble/postamble]
+//!         | [binary emission via MachBuffer]
 //!         |
-//!     VCode<arch_backend::Inst>   (machine instructions:
-//!         |                        - stack-frame size known.
-//!         |                        - out-of-band instruction sequence
-//!         |                          has preamble prepended to entry
-//!         |                          block, and postamble injected before
-//!         |                          every return instruction.
-//!         |                        - all symbolic stack references to
-//!         |                          stackslots and spillslots are resolved
-//!         |                          to concrete FP-offset mem addresses.)
-//!         |
-//!         | [binary emission via MachBuffer
-//!         |  with streaming branch resolution/simplification]
-//!         |
-//!     Vec<u8>                     (machine code!)
+//!     Vec<u8>                     (machine code:
+//!         |                        - two-dest branches resolved via
+//!         |                          streaming branch resolution/simplification.
+//!         |                        - regalloc `Allocation` results used directly
+//!         |                          by instruction emission code.
+//!         |                        - prologue and epilogue(s) built and emitted
+//!         |                          directly during emission.
+//!         |                        - nominal-SP-relative offsets resolved
+//!         |                          by tracking EmitState.)
 //!
 //! ```
 
 use crate::binemit::{Addend, CodeInfo, CodeOffset, Reloc, StackMap};
-use crate::ir::{SourceLoc, StackSlot, Type, ValueLabel};
+use crate::ir::{SourceLoc, StackSlot, Type};
 use crate::result::CodegenResult;
 use crate::settings::Flags;
 use crate::value_label::ValueLabelsRanges;
@@ -69,10 +53,7 @@ use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::fmt::Debug;
 use cranelift_entity::PrimaryMap;
-use regalloc::RegUsageCollector;
-use regalloc::{
-    RealReg, RealRegUniverse, Reg, RegClass, RegUsageMapper, SpillSlot, VirtualReg, Writable,
-};
+use regalloc2::{Allocation, VReg};
 use smallvec::{smallvec, SmallVec};
 use std::string::String;
 
@@ -98,20 +79,15 @@ pub use helpers::*;
 pub mod inst_common;
 pub use inst_common::*;
 pub mod valueregs;
+pub use reg::*;
 pub use valueregs::*;
-pub mod debug;
-pub use regmapping::*;
-pub mod regmapping;
+pub mod reg;
 
 /// A machine instruction.
 pub trait MachInst: Clone + Debug {
     /// Return the registers referenced by this machine instruction along with
     /// the modes of reference (use, def, modify).
-    fn get_regs(&self, collector: &mut RegUsageCollector);
-
-    /// Map virtual registers to physical registers using the given virt->phys
-    /// maps corresponding to the program points prior to, and after, this instruction.
-    fn map_regs<RUM: RegUsageMapper>(&mut self, maps: &RUM);
+    fn get_operands<F: Fn(VReg) -> VReg>(&self, collector: &mut OperandCollector<'_, F>);
 
     /// If this is a simple move, return the (source, destination) tuple of registers.
     fn is_move(&self) -> Option<(Writable<Reg>, Reg)>;
@@ -128,11 +104,6 @@ pub trait MachInst: Clone + Debug {
         true
     }
 
-    /// If this is a load or store to the stack, return that info.
-    fn stack_op_info(&self) -> Option<MachInstStackOpInfo> {
-        None
-    }
-
     /// Generate a move.
     fn gen_move(to_reg: Writable<Reg>, from_reg: Reg, ty: Type) -> Self;
 
@@ -144,10 +115,9 @@ pub trait MachInst: Clone + Debug {
         alloc_tmp: F,
     ) -> SmallVec<[Self; 4]>;
 
-    /// Possibly operate on a value directly in a spill-slot rather than a
-    /// register. Useful if the machine has register-memory instruction forms
-    /// (e.g., add directly from or directly to memory), like x86.
-    fn maybe_direct_reload(&self, reg: VirtualReg, slot: SpillSlot) -> Option<Self>;
+    /// Generate a dummy instruction that will keep a value alive but
+    /// has no other purpose.
+    fn gen_dummy_use(reg: Reg) -> Self;
 
     /// Determine register class(es) to store the given Cranelift type, and the
     /// Cranelift type actually stored in the underlying register(s).  May return
@@ -162,6 +132,13 @@ pub trait MachInst: Clone + Debug {
     /// I32. The actually-stored types are used only to inform the backend when
     /// generating spills and reloads for individual registers.
     fn rc_for_type(ty: Type) -> CodegenResult<(&'static [RegClass], &'static [Type])>;
+
+    /// Get an appropriate type that can fully hold a value in a given
+    /// register class. This may not be the only type that maps to
+    /// that class, but when used with `gen_move()` or the ABI trait's
+    /// load/spill constructors, it should produce instruction(s) that
+    /// move the entire register contents.
+    fn canonical_type_for_rc(rc: RegClass) -> Type;
 
     /// Generate a jump to another target. Used during lowering of
     /// control flow.
@@ -187,16 +164,8 @@ pub trait MachInst: Clone + Debug {
     /// be dependent on compilation flags.
     fn ref_type_regclass(_flags: &Flags) -> RegClass;
 
-    /// Does this instruction define a ValueLabel? Returns the `Reg` whose value
-    /// becomes the new value of the `ValueLabel` after this instruction.
-    fn defines_value_label(&self) -> Option<(ValueLabel, Reg)> {
-        None
-    }
-
-    /// Create a marker instruction that defines a value label.
-    fn gen_value_label_marker(_label: ValueLabel, _reg: Reg) -> Self {
-        Self::gen_nop(0)
-    }
+    /// Is this a safepoint?
+    fn is_safepoint(&self) -> bool;
 
     /// A label-use kind: a type that describes the types of label references that
     /// can occur in an instruction.
@@ -266,35 +235,6 @@ pub enum MachTerminator<'a> {
     Indirect(&'a [MachLabel]),
 }
 
-impl<'a> MachTerminator<'a> {
-    /// Get the successor labels named in a `MachTerminator`.
-    pub fn get_succs(&self) -> SmallVec<[MachLabel; 2]> {
-        let mut ret = smallvec![];
-        match self {
-            &MachTerminator::Uncond(l) => {
-                ret.push(l);
-            }
-            &MachTerminator::Cond(l1, l2) => {
-                ret.push(l1);
-                ret.push(l2);
-            }
-            &MachTerminator::Indirect(ls) => {
-                ret.extend(ls.iter().cloned());
-            }
-            _ => {}
-        }
-        ret
-    }
-
-    /// Is this a terminator?
-    pub fn is_term(&self) -> bool {
-        match self {
-            MachTerminator::None => false,
-            _ => true,
-        }
-    }
-}
-
 /// A trait describing the ability to encode a MachInst into binary machine code.
 pub trait MachInstEmit: MachInst {
     /// Persistent state carried across `emit` invocations.
@@ -302,9 +242,15 @@ pub trait MachInstEmit: MachInst {
     /// Constant information used in `emit` invocations.
     type Info;
     /// Emit the instruction.
-    fn emit(&self, code: &mut MachBuffer<Self>, info: &Self::Info, state: &mut Self::State);
+    fn emit(
+        &self,
+        allocs: &[Allocation],
+        code: &mut MachBuffer<Self>,
+        info: &Self::Info,
+        state: &mut Self::State,
+    );
     /// Pretty-print the instruction.
-    fn pretty_print(&self, mb_rru: Option<&RealRegUniverse>, state: &mut Self::State) -> String;
+    fn pretty_print_inst(&self, allocs: &[Allocation], state: &mut Self::State) -> String;
 }
 
 /// A trait describing the emission state carried between MachInsts when
@@ -408,16 +354,4 @@ pub enum UnwindInfoKind {
     /// Windows X64 Unwind info
     #[cfg(feature = "unwind")]
     Windows,
-}
-
-/// Info about an operation that loads or stores from/to the stack.
-#[derive(Clone, Copy, Debug)]
-pub enum MachInstStackOpInfo {
-    /// Load from an offset from the nominal stack pointer into the given reg.
-    LoadNomSPOff(Reg, i64),
-    /// Store to an offset from the nominal stack pointer from the given reg.
-    StoreNomSPOff(Reg, i64),
-    /// Adjustment of nominal-SP up or down. This value is added to subsequent
-    /// offsets in loads/stores above to produce real-SP offsets.
-    NomSPAdj(i64),
 }

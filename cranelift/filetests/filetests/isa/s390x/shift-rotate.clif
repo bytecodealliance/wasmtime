@@ -1,4 +1,4 @@
-test compile
+test compile precise-output
 target s390x
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -11,9 +11,10 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-; check:  lcgr %r3, %r3
-; nextln: rllg %r2, %r2, 0(%r3)
-; nextln: br %r14
+; block0:
+;   lcgr %r3, %r3
+;   rllg %r2, %r2, 0(%r3)
+;   br %r14
 
 function %rotr_i64_imm(i64) -> i64 {
 block0(v0: i64):
@@ -22,8 +23,9 @@ block0(v0: i64):
   return v2
 }
 
-; check:  rllg %r2, %r2, 47
-; nextln: br %r14
+; block0:
+;   rllg %r2, %r2, 47
+;   br %r14
 
 function %rotr_i32_reg(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
@@ -31,9 +33,10 @@ block0(v0: i32, v1: i32):
   return v2
 }
 
-; check:  lcr %r3, %r3
-; nextln: rll %r2, %r2, 0(%r3)
-; nextln: br %r14
+; block0:
+;   lcr %r3, %r3
+;   rll %r2, %r2, 0(%r3)
+;   br %r14
 
 function %rotr_i32_imm(i32) -> i32 {
 block0(v0: i32):
@@ -42,8 +45,9 @@ block0(v0: i32):
   return v2
 }
 
-; check:  rll %r2, %r2, 15
-; nextln: br %r14
+; block0:
+;   rll %r2, %r2, 15
+;   br %r14
 
 function %rotr_i16_reg(i16, i16) -> i16 {
 block0(v0: i16, v1: i16):
@@ -51,14 +55,15 @@ block0(v0: i16, v1: i16):
   return v2
 }
 
-; check:  llhr %r2, %r2
-; nextln: lcr %r4, %r3
-; nextln: nill %r3, 15
-; nextln: nill %r4, 15
-; nextln: sllk %r4, %r2, 0(%r4)
-; nextln: srlk %r2, %r2, 0(%r3)
-; nextln: ork %r2, %r4, %r2
-; nextln: br %r14
+; block0:
+;   llhr %r4, %r2
+;   lcr %r5, %r3
+;   nill %r3, 15
+;   nill %r5, 15
+;   sllk %r5, %r4, 0(%r5)
+;   srlk %r3, %r4, 0(%r3)
+;   ork %r2, %r5, %r3
+;   br %r14
 
 function %rotr_i16_imm(i16) -> i16 {
 block0(v0: i16):
@@ -67,11 +72,12 @@ block0(v0: i16):
   return v2
 }
 
-; check:  llhr %r2, %r2
-; nextln: sllk %r3, %r2, 6
-; nextln: srlk %r2, %r2, 10
-; nextln: ork %r2, %r3, %r2
-; nextln: br %r14
+; block0:
+;   llhr %r5, %r2
+;   sllk %r3, %r5, 6
+;   srlk %r5, %r5, 10
+;   ork %r2, %r3, %r5
+;   br %r14
 
 function %rotr_i8_reg(i8, i8) -> i8 {
 block0(v0: i8, v1: i8):
@@ -79,14 +85,15 @@ block0(v0: i8, v1: i8):
   return v2
 }
 
-; check:  llcr %r2, %r2
-; nextln: lcr %r4, %r3
-; nextln: nill %r3, 7
-; nextln: nill %r4, 7
-; nextln: sllk %r4, %r2, 0(%r4)
-; nextln: srlk %r2, %r2, 0(%r3)
-; nextln: ork %r2, %r4, %r2
-; nextln: br %r14
+; block0:
+;   llcr %r4, %r2
+;   lcr %r5, %r3
+;   nill %r3, 7
+;   nill %r5, 7
+;   sllk %r5, %r4, 0(%r5)
+;   srlk %r3, %r4, 0(%r3)
+;   ork %r2, %r5, %r3
+;   br %r14
 
 function %rotr_i8_imm(i8) -> i8 {
 block0(v0: i8):
@@ -95,15 +102,12 @@ block0(v0: i8):
   return v2
 }
 
-; check:  llcr %r2, %r2
-; nextln: sllk %r3, %r2, 5
-; nextln: srlk %r2, %r2, 3
-; nextln: ork %r2, %r3, %r2
-; nextln: br %r14
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; ROTL
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; block0:
+;   llcr %r5, %r2
+;   sllk %r3, %r5, 5
+;   srlk %r5, %r5, 3
+;   ork %r2, %r3, %r5
+;   br %r14
 
 function %rotl_i64_reg(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -111,8 +115,9 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-; check:  rllg %r2, %r2, 0(%r3)
-; nextln: br %r14
+; block0:
+;   rllg %r2, %r2, 0(%r3)
+;   br %r14
 
 function %rotl_i64_imm(i64) -> i64 {
 block0(v0: i64):
@@ -121,8 +126,9 @@ block0(v0: i64):
   return v2
 }
 
-; check:  rllg %r2, %r2, 17
-; nextln: br %r14
+; block0:
+;   rllg %r2, %r2, 17
+;   br %r14
 
 function %rotl_i32_reg(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
@@ -130,8 +136,9 @@ block0(v0: i32, v1: i32):
   return v2
 }
 
-; check:  rll %r2, %r2, 0(%r3)
-; nextln: br %r14
+; block0:
+;   rll %r2, %r2, 0(%r3)
+;   br %r14
 
 function %rotl_i32_imm(i32) -> i32 {
 block0(v0: i32):
@@ -140,8 +147,9 @@ block0(v0: i32):
   return v2
 }
 
-; check:  rll %r2, %r2, 17
-; nextln: br %r14
+; block0:
+;   rll %r2, %r2, 17
+;   br %r14
 
 function %rotl_i16_reg(i16, i16) -> i16 {
 block0(v0: i16, v1: i16):
@@ -149,14 +157,15 @@ block0(v0: i16, v1: i16):
   return v2
 }
 
-; check:  llhr %r2, %r2
-; nextln: lcr %r4, %r3
-; nextln: nill %r3, 15
-; nextln: nill %r4, 15
-; nextln: sllk %r3, %r2, 0(%r3)
-; nextln: srlk %r2, %r2, 0(%r4)
-; nextln: ork %r2, %r3, %r2
-; nextln: br %r14
+; block0:
+;   llhr %r4, %r2
+;   lcr %r5, %r3
+;   nill %r3, 15
+;   nill %r5, 15
+;   sllk %r2, %r4, 0(%r3)
+;   srlk %r3, %r4, 0(%r5)
+;   or %r2, %r3
+;   br %r14
 
 function %rotl_i16_imm(i16) -> i16 {
 block0(v0: i16):
@@ -165,11 +174,12 @@ block0(v0: i16):
   return v2
 }
 
-; check:  llhr %r2, %r2
-; nextln: sllk %r3, %r2, 10
-; nextln: srlk %r2, %r2, 6
-; nextln: ork %r2, %r3, %r2
-; nextln: br %r14
+; block0:
+;   llhr %r5, %r2
+;   sllk %r3, %r5, 10
+;   srlk %r5, %r5, 6
+;   ork %r2, %r3, %r5
+;   br %r14
 
 function %rotl_i8_reg(i8, i8) -> i8 {
 block0(v0: i8, v1: i8):
@@ -177,14 +187,15 @@ block0(v0: i8, v1: i8):
   return v2
 }
 
-; check:  llcr %r2, %r2
-; nextln: lcr %r4, %r3
-; nextln: nill %r3, 7
-; nextln: nill %r4, 7
-; nextln: sllk %r3, %r2, 0(%r3)
-; nextln: srlk %r2, %r2, 0(%r4)
-; nextln: ork %r2, %r3, %r2
-; nextln: br %r14
+; block0:
+;   llcr %r4, %r2
+;   lcr %r5, %r3
+;   nill %r3, 7
+;   nill %r5, 7
+;   sllk %r2, %r4, 0(%r3)
+;   srlk %r3, %r4, 0(%r5)
+;   or %r2, %r3
+;   br %r14
 
 function %rotr_i8_imm(i8) -> i8 {
 block0(v0: i8):
@@ -193,15 +204,12 @@ block0(v0: i8):
   return v2
 }
 
-; check:  llcr %r2, %r2
-; nextln: sllk %r3, %r2, 3
-; nextln: srlk %r2, %r2, 5
-; nextln: ork %r2, %r3, %r2
-; nextln: br %r14
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; USHR
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; block0:
+;   llcr %r5, %r2
+;   sllk %r3, %r5, 3
+;   srlk %r5, %r5, 5
+;   ork %r2, %r3, %r5
+;   br %r14
 
 function %ushr_i64_reg(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -209,8 +217,9 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-; check:  srlg %r2, %r2, 0(%r3)
-; nextln: br %r14
+; block0:
+;   srlg %r2, %r2, 0(%r3)
+;   br %r14
 
 function %ushr_i64_imm(i64) -> i64 {
 block0(v0: i64):
@@ -219,8 +228,9 @@ block0(v0: i64):
   return v2
 }
 
-; check:  srlg %r2, %r2, 17
-; nextln: br %r14
+; block0:
+;   srlg %r2, %r2, 17
+;   br %r14
 
 function %ushr_i32_reg(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
@@ -228,8 +238,10 @@ block0(v0: i32, v1: i32):
   return v2
 }
 
-; check:  srlk %r2, %r2, 0(%r3)
-; nextln: br %r14
+; block0:
+;   nill %r3, 31
+;   srlk %r2, %r2, 0(%r3)
+;   br %r14
 
 function %ushr_i32_imm(i32) -> i32 {
 block0(v0: i32):
@@ -238,8 +250,9 @@ block0(v0: i32):
   return v2
 }
 
-; check:  srlk %r2, %r2, 17
-; nextln: br %r14
+; block0:
+;   srlk %r2, %r2, 17
+;   br %r14
 
 function %ushr_i16_reg(i16, i16) -> i16 {
 block0(v0: i16, v1: i16):
@@ -247,10 +260,11 @@ block0(v0: i16, v1: i16):
   return v2
 }
 
-; check:  llhr %r2, %r2
-; nextln: nill %r3, 15
-; nextln: srlk %r2, %r2, 0(%r3)
-; nextln: br %r14
+; block0:
+;   llhr %r4, %r2
+;   nill %r3, 15
+;   srlk %r2, %r4, 0(%r3)
+;   br %r14
 
 function %ushr_i16_imm(i16) -> i16 {
 block0(v0: i16):
@@ -259,9 +273,10 @@ block0(v0: i16):
   return v2
 }
 
-; check:  llhr %r2, %r2
-; nextln: srlk %r2, %r2, 10
-; nextln: br %r14
+; block0:
+;   llhr %r5, %r2
+;   srlk %r2, %r5, 10
+;   br %r14
 
 function %ushr_i8_reg(i8, i8) -> i8 {
 block0(v0: i8, v1: i8):
@@ -269,10 +284,11 @@ block0(v0: i8, v1: i8):
   return v2
 }
 
-; check:  llcr %r2, %r2
-; nextln: nill %r3, 7
-; nextln: srlk %r2, %r2, 0(%r3)
-; nextln: br %r14
+; block0:
+;   llcr %r4, %r2
+;   nill %r3, 7
+;   srlk %r2, %r4, 0(%r3)
+;   br %r14
 
 function %ushr_i8_imm(i8) -> i8 {
 block0(v0: i8):
@@ -281,13 +297,10 @@ block0(v0: i8):
   return v2
 }
 
-; check:  llcr %r2, %r2
-; nextln: srlk %r2, %r2, 3
-; nextln: br %r14
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; ISHL
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; block0:
+;   llcr %r5, %r2
+;   srlk %r2, %r5, 3
+;   br %r14
 
 function %ishl_i64_reg(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -295,8 +308,9 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-; check:  sllg %r2, %r2, 0(%r3)
-; nextln: br %r14
+; block0:
+;   sllg %r2, %r2, 0(%r3)
+;   br %r14
 
 function %ishl_i64_imm(i64) -> i64 {
 block0(v0: i64):
@@ -305,8 +319,9 @@ block0(v0: i64):
   return v2
 }
 
-; check:  sllg %r2, %r2, 17
-; nextln: br %r14
+; block0:
+;   sllg %r2, %r2, 17
+;   br %r14
 
 function %ishl_i32_reg(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
@@ -314,8 +329,10 @@ block0(v0: i32, v1: i32):
   return v2
 }
 
-; check:  sllk %r2, %r2, 0(%r3)
-; nextln: br %r14
+; block0:
+;   nill %r3, 31
+;   sllk %r2, %r2, 0(%r3)
+;   br %r14
 
 function %ishl_i32_imm(i32) -> i32 {
 block0(v0: i32):
@@ -324,8 +341,9 @@ block0(v0: i32):
   return v2
 }
 
-; check:  sllk %r2, %r2, 17
-; nextln: br %r14
+; block0:
+;   sllk %r2, %r2, 17
+;   br %r14
 
 function %ishl_i16_reg(i16, i16) -> i16 {
 block0(v0: i16, v1: i16):
@@ -333,9 +351,10 @@ block0(v0: i16, v1: i16):
   return v2
 }
 
-; check:  nill %r3, 15
-; nextln: sllk %r2, %r2, 0(%r3)
-; nextln: br %r14
+; block0:
+;   nill %r3, 15
+;   sllk %r2, %r2, 0(%r3)
+;   br %r14
 
 function %ishl_i16_imm(i16) -> i16 {
 block0(v0: i16):
@@ -344,8 +363,9 @@ block0(v0: i16):
   return v2
 }
 
-; check:  sllk %r2, %r2, 10
-; nextln: br %r14
+; block0:
+;   sllk %r2, %r2, 10
+;   br %r14
 
 function %ishl_i8_reg(i8, i8) -> i8 {
 block0(v0: i8, v1: i8):
@@ -353,9 +373,10 @@ block0(v0: i8, v1: i8):
   return v2
 }
 
-; check:  nill %r3, 7
-; nextln: sllk %r2, %r2, 0(%r3)
-; nextln: br %r14
+; block0:
+;   nill %r3, 7
+;   sllk %r2, %r2, 0(%r3)
+;   br %r14
 
 function %ishl_i8_imm(i8) -> i8 {
 block0(v0: i8):
@@ -364,12 +385,9 @@ block0(v0: i8):
   return v2
 }
 
-; check:  sllk %r2, %r2, 3
-; nextln: br %r14
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; SSHR
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; block0:
+;   sllk %r2, %r2, 3
+;   br %r14
 
 function %sshr_i64_reg(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -377,8 +395,9 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-; check:  srag %r2, %r2, 0(%r3)
-; nextln: br %r14
+; block0:
+;   srag %r2, %r2, 0(%r3)
+;   br %r14
 
 function %sshr_i64_imm(i64) -> i64 {
 block0(v0: i64):
@@ -387,8 +406,9 @@ block0(v0: i64):
   return v2
 }
 
-; check:  srag %r2, %r2, 17
-; nextln: br %r14
+; block0:
+;   srag %r2, %r2, 17
+;   br %r14
 
 function %sshr_i32_reg(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
@@ -396,8 +416,10 @@ block0(v0: i32, v1: i32):
   return v2
 }
 
-; check:  srak %r2, %r2, 0(%r3)
-; nextln: br %r14
+; block0:
+;   nill %r3, 31
+;   srak %r2, %r2, 0(%r3)
+;   br %r14
 
 function %sshr_i32_imm(i32) -> i32 {
 block0(v0: i32):
@@ -406,8 +428,9 @@ block0(v0: i32):
   return v2
 }
 
-; check:  srak %r2, %r2, 17
-; nextln: br %r14
+; block0:
+;   srak %r2, %r2, 17
+;   br %r14
 
 function %sshr_i16_reg(i16, i16) -> i16 {
 block0(v0: i16, v1: i16):
@@ -415,10 +438,11 @@ block0(v0: i16, v1: i16):
   return v2
 }
 
-; check:  lhr %r2, %r2
-; nextln: nill %r3, 15
-; nextln: srak %r2, %r2, 0(%r3)
-; nextln: br %r14
+; block0:
+;   lhr %r4, %r2
+;   nill %r3, 15
+;   srak %r2, %r4, 0(%r3)
+;   br %r14
 
 function %sshr_i16_imm(i16) -> i16 {
 block0(v0: i16):
@@ -427,9 +451,10 @@ block0(v0: i16):
   return v2
 }
 
-; check:  lhr %r2, %r2
-; nextln: srak %r2, %r2, 10
-; nextln: br %r14
+; block0:
+;   lhr %r5, %r2
+;   srak %r2, %r5, 10
+;   br %r14
 
 function %sshr_i8_reg(i8, i8) -> i8 {
 block0(v0: i8, v1: i8):
@@ -437,10 +462,11 @@ block0(v0: i8, v1: i8):
   return v2
 }
 
-; check:  lbr %r2, %r2
-; nextln: nill %r3, 7
-; nextln: srak %r2, %r2, 0(%r3)
-; nextln: br %r14
+; block0:
+;   lbr %r4, %r2
+;   nill %r3, 7
+;   srak %r2, %r4, 0(%r3)
+;   br %r14
 
 function %sshr_i8_imm(i8) -> i8 {
 block0(v0: i8):
@@ -449,7 +475,8 @@ block0(v0: i8):
   return v2
 }
 
-; check:  lbr %r2, %r2
-; nextln: srak %r2, %r2, 3
-; nextln: br %r14
+; block0:
+;   lbr %r5, %r2
+;   srak %r2, %r5, 3
+;   br %r14
 

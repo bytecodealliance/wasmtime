@@ -1,4 +1,4 @@
-test compile
+test compile precise-output
 target s390x
 
 ; FIXME: Should allocate register save area.
@@ -11,10 +11,11 @@ block0:
   return v0
 }
 
-; check:  aghi %r15, -8
-; nextln: la %r2, 0(%r15)
-; nextln: aghi %r15, 8
-; nextln: br %r14
+;   aghi %r15, -8
+; block0:
+;   la %r2, 0(%r15)
+;   aghi %r15, 8
+;   br %r14
 
 function %stack_addr_big() -> i64 {
 ss0 = explicit_slot 100000
@@ -25,12 +26,11 @@ block0:
   return v0
 }
 
-; check:  agfi %r15, -100008
-; nextln: la %r2, 0(%r15)
-; nextln: agfi %r15, 100008
-; nextln: br %r14
-
-; FIXME: don't use stack_addr legalization for stack_load and stack_store
+;   agfi %r15, -100008
+; block0:
+;   la %r2, 0(%r15)
+;   agfi %r15, 100008
+;   br %r14
 
 function %stack_load_small() -> i64 {
 ss0 = explicit_slot 8
@@ -40,11 +40,12 @@ block0:
   return v0
 }
 
-; check:  aghi %r15, -8
-; nextln: la %r2, 0(%r15)
-; nextln: lg %r2, 0(%r2)
-; nextln: aghi %r15, 8
-; nextln: br %r14
+;   aghi %r15, -8
+; block0:
+;   la %r4, 0(%r15)
+;   lg %r2, 0(%r4)
+;   aghi %r15, 8
+;   br %r14
 
 function %stack_load_big() -> i64 {
 ss0 = explicit_slot 100000
@@ -55,12 +56,12 @@ block0:
   return v0
 }
 
-; check:  agfi %r15, -100008
-; nextln: la %r2, 0(%r15)
-; nextln: lg %r2, 0(%r2)
-; nextln: agfi %r15, 100008
-; nextln: br %r14
-
+;   agfi %r15, -100008
+; block0:
+;   la %r4, 0(%r15)
+;   lg %r2, 0(%r4)
+;   agfi %r15, 100008
+;   br %r14
 
 function %stack_store_small(i64) {
 ss0 = explicit_slot 8
@@ -70,11 +71,12 @@ block0(v0: i64):
   return
 }
 
-; check:  aghi %r15, -8
-; nextln: la %r3, 0(%r15)
-; nextln: stg %r2, 0(%r3)
-; nextln: aghi %r15, 8
-; nextln: br %r14
+;   aghi %r15, -8
+; block0:
+;   la %r4, 0(%r15)
+;   stg %r2, 0(%r4)
+;   aghi %r15, 8
+;   br %r14
 
 function %stack_store_big(i64) {
 ss0 = explicit_slot 100000
@@ -85,9 +87,10 @@ block0(v0: i64):
   return
 }
 
-; check:  agfi %r15, -100008
-; nextln: la %r3, 0(%r15)
-; nextln: stg %r2, 0(%r3)
-; nextln: agfi %r15, 100008
-; nextln: br %r14
+;   agfi %r15, -100008
+; block0:
+;   la %r4, 0(%r15)
+;   stg %r2, 0(%r4)
+;   agfi %r15, 100008
+;   br %r14
 

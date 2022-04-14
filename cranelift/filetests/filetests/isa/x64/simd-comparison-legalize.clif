@@ -8,20 +8,15 @@ block0(v0: i32x4, v1: i32x4):
     return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 8)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   pcmpeqd %xmm1, %xmm0
-;   Inst 3:   pcmpeqd %xmm1, %xmm1
-;   Inst 4:   pxor    %xmm1, %xmm0
-;   Inst 5:   movq    %rbp, %rsp
-;   Inst 6:   popq    %rbp
-;   Inst 7:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   pcmpeqd %xmm0, %xmm0, %xmm1
+;   pcmpeqd %xmm7, %xmm7, %xmm7
+;   pxor    %xmm0, %xmm0, %xmm7
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %icmp_ugt_i32x4(i32x4, i32x4) -> b32x4 {
 block0(v0: i32x4, v1: i32x4):
@@ -29,21 +24,16 @@ block0(v0: i32x4, v1: i32x4):
     return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 9)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   pmaxud  %xmm1, %xmm0
-;   Inst 3:   pcmpeqd %xmm1, %xmm0
-;   Inst 4:   pcmpeqd %xmm1, %xmm1
-;   Inst 5:   pxor    %xmm1, %xmm0
-;   Inst 6:   movq    %rbp, %rsp
-;   Inst 7:   popq    %rbp
-;   Inst 8:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   pmaxud  %xmm0, %xmm0, %xmm1
+;   pcmpeqd %xmm0, %xmm0, %xmm1
+;   pcmpeqd %xmm9, %xmm9, %xmm9
+;   pxor    %xmm0, %xmm0, %xmm9
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %icmp_sge_i16x8(i16x8, i16x8) -> b16x8 {
 block0(v0: i16x8, v1: i16x8):
@@ -51,21 +41,15 @@ block0(v0: i16x8, v1: i16x8):
     return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 9)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   movdqa  %xmm1, %xmm2
-;   Inst 3:   movdqa  %xmm0, %xmm1
-;   Inst 4:   pmaxsw  %xmm2, %xmm1
-;   Inst 5:   pcmpeqw %xmm1, %xmm0
-;   Inst 6:   movq    %rbp, %rsp
-;   Inst 7:   popq    %rbp
-;   Inst 8:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movdqa  %xmm0, %xmm5
+;   pmaxsw  %xmm5, %xmm5, %xmm1
+;   pcmpeqw %xmm0, %xmm0, %xmm5
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %icmp_uge_i8x16(i8x16, i8x16) -> b8x16 {
 block0(v0: i8x16, v1: i8x16):
@@ -73,19 +57,13 @@ block0(v0: i8x16, v1: i8x16):
     return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 9)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   movdqa  %xmm1, %xmm2
-;   Inst 3:   movdqa  %xmm0, %xmm1
-;   Inst 4:   pmaxub  %xmm2, %xmm1
-;   Inst 5:   pcmpeqb %xmm1, %xmm0
-;   Inst 6:   movq    %rbp, %rsp
-;   Inst 7:   popq    %rbp
-;   Inst 8:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movdqa  %xmm0, %xmm5
+;   pmaxub  %xmm5, %xmm5, %xmm1
+;   pcmpeqb %xmm0, %xmm0, %xmm5
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 

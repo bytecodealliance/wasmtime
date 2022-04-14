@@ -1,4 +1,4 @@
-test compile
+test compile precise-output
 target s390x arch13
 
 function %atomic_rmw_nand_i64(i64, i64, i64) -> i64 {
@@ -7,10 +7,11 @@ block0(v0: i64, v1: i64, v2: i64):
   return v3
 }
 
-; check:  lg %r0, 0(%r3)
-; nextln: 0: nngrk %r1, %r0, %r4 ; csg %r0, %r1, 0(%r3) ; jglh 0b ; 1:
-; nextln: lgr %r2, %r0
-; nextln: br %r14
+; block0:
+;   lg %r0, 0(%r3)
+;   0: nngrk %r1, %r0, %r4 ; csg %r0, %r1, 0(%r3) ; jglh 0b ; 1:
+;   lgr %r2, %r0
+;   br %r14
 
 function %atomic_rmw_nand_i32(i64, i64, i32) -> i32 {
 block0(v0: i64, v1: i64, v2: i32):
@@ -18,10 +19,11 @@ block0(v0: i64, v1: i64, v2: i32):
   return v3
 }
 
-; check:  l %r0, 0(%r3)
-; nextln: 0: nnrk %r1, %r0, %r4 ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
-; nextln: lr %r2, %r0
-; nextln: br %r14
+; block0:
+;   l %r0, 0(%r3)
+;   0: nnrk %r1, %r0, %r4 ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
+;   lgr %r2, %r0
+;   br %r14
 
 function %atomic_rmw_nand_i16(i64, i64, i16) -> i16 {
 block0(v0: i64, v1: i64, v2: i16):
@@ -29,12 +31,13 @@ block0(v0: i64, v1: i64, v2: i16):
   return v3
 }
 
-; check:  sllk %r2, %r3, 3
-; nextln: nill %r3, 65532
-; nextln: l %r0, 0(%r3)
-; nextln: 0: rll %r1, %r0, 0(%r2) ; rnsbg %r1, %r4, 32, 48, 16 ; xilf %r1, 4294901760 ; rll %r1, %r1, 0(%r2) ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
-; nextln: rll %r2, %r0, 16(%r2)
-; nextln: br %r14
+; block0:
+;   sllk %r5, %r3, 3
+;   nill %r3, 65532
+;   l %r0, 0(%r3)
+;   0: rll %r1, %r0, 0(%r5) ; rnsbg %r1, %r4, 32, 48, 16 ; xilf %r1, 4294901760 ; rll %r1, %r1, 0(%r5) ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
+;   rll %r2, %r0, 16(%r5)
+;   br %r14
 
 function %atomic_rmw_nand_i8(i64, i64, i8) -> i8 {
 block0(v0: i64, v1: i64, v2: i8):
@@ -42,13 +45,14 @@ block0(v0: i64, v1: i64, v2: i8):
   return v3
 }
 
-; check:  sllk %r2, %r3, 3
-; nextln: nill %r3, 65532
-; nextln: lcr %r5, %r2
-; nextln: l %r0, 0(%r3)
-; nextln: 0: rll %r1, %r0, 0(%r2) ; rnsbg %r1, %r4, 32, 40, 24 ; xilf %r1, 4278190080 ; rll %r1, %r1, 0(%r5) ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
-; nextln: rll %r2, %r0, 8(%r2)
-; nextln: br %r14
+; block0:
+;   sllk %r5, %r3, 3
+;   nill %r3, 65532
+;   lcr %r2, %r5
+;   l %r0, 0(%r3)
+;   0: rll %r1, %r0, 0(%r5) ; rnsbg %r1, %r4, 32, 40, 24 ; xilf %r1, 4278190080 ; rll %r1, %r1, 0(%r2) ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
+;   rll %r2, %r0, 8(%r5)
+;   br %r14
 
 function %atomic_rmw_nand_i64(i64, i64, i64) -> i64 {
 block0(v0: i64, v1: i64, v2: i64):
@@ -56,11 +60,12 @@ block0(v0: i64, v1: i64, v2: i64):
   return v3
 }
 
-; check:  lrvgr %r2, %r4
-; nextln: lg %r0, 0(%r3)
-; nextln: 0: nngrk %r1, %r0, %r2 ; csg %r0, %r1, 0(%r3) ; jglh 0b ; 1:
-; nextln: lrvgr %r2, %r0
-; nextln: br %r14
+; block0:
+;   lrvgr %r5, %r4
+;   lg %r0, 0(%r3)
+;   0: nngrk %r1, %r0, %r5 ; csg %r0, %r1, 0(%r3) ; jglh 0b ; 1:
+;   lrvgr %r2, %r0
+;   br %r14
 
 function %atomic_rmw_nand_i32(i64, i64, i32) -> i32 {
 block0(v0: i64, v1: i64, v2: i32):
@@ -68,11 +73,12 @@ block0(v0: i64, v1: i64, v2: i32):
   return v3
 }
 
-; check:  lrvr %r2, %r4
-; nextln: l %r0, 0(%r3)
-; nextln: 0: nnrk %r1, %r0, %r2 ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
-; nextln: lrvr %r2, %r0
-; nextln: br %r14
+; block0:
+;   lrvr %r5, %r4
+;   l %r0, 0(%r3)
+;   0: nnrk %r1, %r0, %r5 ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
+;   lrvr %r2, %r0
+;   br %r14
 
 function %atomic_rmw_nand_i16(i64, i64, i16) -> i16 {
 block0(v0: i64, v1: i64, v2: i16):
@@ -80,14 +86,15 @@ block0(v0: i64, v1: i64, v2: i16):
   return v3
 }
 
-; check:  sllk %r2, %r3, 3
-; nextln: nill %r3, 65532
-; nextln: lrvr %r4, %r4
-; nextln: l %r0, 0(%r3)
-; nextln: 0: rll %r1, %r0, 16(%r2) ; rnsbg %r1, %r4, 48, 64, 48 ; xilf %r1, 65535 ; rll %r1, %r1, 16(%r2) ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
-; nextln: rll %r2, %r0, 0(%r2)
-; nextln: lrvr %r2, %r2
-; nextln: br %r14
+; block0:
+;   sllk %r5, %r3, 3
+;   nill %r3, 65532
+;   lrvr %r2, %r4
+;   l %r0, 0(%r3)
+;   0: rll %r1, %r0, 16(%r5) ; rnsbg %r1, %r2, 48, 64, 48 ; xilf %r1, 65535 ; rll %r1, %r1, 16(%r5) ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
+;   rll %r2, %r0, 0(%r5)
+;   lrvr %r2, %r2
+;   br %r14
 
 function %atomic_rmw_nand_i8(i64, i64, i8) -> i8 {
 block0(v0: i64, v1: i64, v2: i8):
@@ -95,11 +102,12 @@ block0(v0: i64, v1: i64, v2: i8):
   return v3
 }
 
-; check:  sllk %r2, %r3, 3
-; nextln: nill %r3, 65532
-; nextln: lcr %r5, %r2
-; nextln: l %r0, 0(%r3)
-; nextln: 0: rll %r1, %r0, 0(%r2) ; rnsbg %r1, %r4, 32, 40, 24 ; xilf %r1, 4278190080 ; rll %r1, %r1, 0(%r5) ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
-; nextln: rll %r2, %r0, 8(%r2)
-; nextln: br %r14
+; block0:
+;   sllk %r5, %r3, 3
+;   nill %r3, 65532
+;   lcr %r2, %r5
+;   l %r0, 0(%r3)
+;   0: rll %r1, %r0, 0(%r5) ; rnsbg %r1, %r4, 32, 40, 24 ; xilf %r1, 4278190080 ; rll %r1, %r1, 0(%r2) ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
+;   rll %r2, %r0, 8(%r5)
+;   br %r14
 

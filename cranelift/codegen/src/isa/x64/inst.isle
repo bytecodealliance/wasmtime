@@ -41,7 +41,8 @@
        (Div (size OperandSize) ;; 1, 2, 4, or 8
             (signed bool)
             (divisor GprMem)
-            (dividend Gpr)
+            (dividend_lo Gpr)
+            (dividend_hi Gpr)
             (dst_quotient WritableGpr)
             (dst_remainder WritableGpr))
 
@@ -69,7 +70,8 @@
        ;; regalloc failures where %rdx is live before its first def!
        (CheckedDivOrRemSeq (kind DivOrRemKind)
                            (size OperandSize)
-                           (dividend Gpr)
+                           (dividend_lo Gpr)
+                           (dividend_hi Gpr)
                            ;; The divisor operand. Note it's marked as modified
                            ;; so that it gets assigned a register different from
                            ;; the temporary.
@@ -318,7 +320,7 @@
                     (opcode Opcode))
 
        ;; Return.
-       (Ret)
+       (Ret (rets VecReg))
 
        ;; A placeholder instruction, generating no code, meaning that a function
        ;; epilogue must be inserted there.
@@ -476,13 +478,12 @@
        ;; `rax`.
        (MachOTlsGetAddr (symbol ExternalName))
 
-       ;; A definition of a value label.
-       (ValueLabelMarker (reg Reg)
-                         (label ValueLabel))
-
        ;; An unwind pseudoinstruction describing the state of the machine at
        ;; this program point.
-       (Unwind (inst UnwindInst))))
+       (Unwind (inst UnwindInst))
+
+       ;; A pseudoinstruction that just keeps a value alive.
+       (DummyUse (reg Reg))))
 
 (type OperandSize extern
       (enum Size8

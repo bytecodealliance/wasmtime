@@ -11,7 +11,6 @@ use crate::machinst::lower::*;
 use crate::machinst::*;
 use crate::settings::Flags;
 use crate::CodegenResult;
-use regalloc::Reg;
 use smallvec::SmallVec;
 
 pub mod isle;

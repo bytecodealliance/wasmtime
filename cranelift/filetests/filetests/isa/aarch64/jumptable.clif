@@ -1,4 +1,4 @@
-test compile
+test compile precise-output
 set unwind_info=false
 target aarch64
 
@@ -29,16 +29,31 @@ block5(v5: i64):
   return v6
 }
 
-; check:   subs wzr, w0, #3
-; nextln:   b.hs label1 ; adr x1, pc+16 ; ldrsw x2, [x1, x0, LSL 2] ; add x1, x1, x2 ; br x1 ; jt_entries
-
-; check:   movz x1, #1
-; nextln:   b
-
-; check:   movz x1, #2
-; nextln:   b
-
-; check:   movz x1, #3
-
-; check:   add x0, x0, x1
+; block0:
+;   emit_island 36
+;   subs wzr, w0, #3
+;   b.hs label1 ; adr x15, pc+16 ; ldrsw x1, [x15, x0, LSL 2] ; add x15, x15, x1 ; br x15 ; jt_entries [Label(MachLabel(3)), Label(MachLabel(5)), Label(MachLabel(7))]
+; block1:
+;   movz x5, #4
+;   b label2
+; block2:
+;   b label9
+; block3:
+;   movz x5, #1
+;   b label4
+; block4:
+;   b label9
+; block5:
+;   movz x5, #2
+;   b label6
+; block6:
+;   b label9
+; block7:
+;   movz x5, #3
+;   b label8
+; block8:
+;   b label9
+; block9:
+;   add x0, x0, x5
+;   ret
 

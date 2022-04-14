@@ -66,11 +66,13 @@ use crate::isa;
 use crate::isa::s390x::inst::*;
 use crate::isa::unwind::UnwindInst;
 use crate::machinst::*;
+use crate::machinst::{RealReg, Reg, RegClass, Writable};
 use crate::settings;
 use crate::{CodegenError, CodegenResult};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
-use regalloc::{RealReg, Reg, RegClass, Set, Writable};
+use regalloc2::PReg;
+use regalloc2::VReg;
 use smallvec::{smallvec, SmallVec};
 use std::convert::TryFrom;
 
@@ -235,7 +237,7 @@ impl ABIMachineSpec for S390xMachineDeps {
 
             if let Some(reg) = candidate {
                 ret.push(ABIArg::reg(
-                    reg.to_real_reg(),
+                    reg.to_real_reg().unwrap(),
                     param.value_type,
                     param.extension,
                     param.purpose,
@@ -279,7 +281,7 @@ impl ABIMachineSpec for S390xMachineDeps {
             debug_assert!(args_or_rets == ArgsOrRets::Args);
             if let Some(reg) = get_intreg_for_arg(next_gpr) {
                 ret.push(ABIArg::reg(
-                    reg.to_real_reg(),
+                    reg.to_real_reg().unwrap(),
                     types::I64,
                     ir::ArgumentExtension::None,
                     ir::ArgumentPurpose::Normal,
@@ -340,8 +342,11 @@ impl ABIMachineSpec for S390xMachineDeps {
         }
     }
 
-    fn gen_ret() -> Inst {
-        Inst::Ret { link: gpr(14) }
+    fn gen_ret(rets: Vec<Reg>) -> Inst {
+        Inst::Ret {
+            link: gpr(14),
+            rets,
+        }
     }
 
     fn gen_add_imm(into_reg: Writable<Reg>, from_reg: Reg, imm: u32) -> SmallInstVec<Inst> {
@@ -462,7 +467,7 @@ impl ABIMachineSpec for S390xMachineDeps {
         _call_conv: isa::CallConv,
         _setup_frame: bool,
         flags: &settings::Flags,
-        clobbered_callee_saves: &Vec<Writable<RealReg>>,
+        clobbered_callee_saves: &[Writable<RealReg>],
         fixed_frame_storage_size: u32,
         outgoing_args_size: u32,
     ) -> (u64, SmallVec<[Inst; 16]>) {
@@ -471,16 +476,15 @@ impl ABIMachineSpec for S390xMachineDeps {
         let mut clobbered_gpr = vec![];
 
         for &reg in clobbered_callee_saves.iter() {
-            match reg.to_reg().get_class() {
-                RegClass::I64 => clobbered_gpr.push(reg),
-                RegClass::F64 => clobbered_fpr.push(reg),
-                class => panic!("Unexpected RegClass: {:?}", class),
+            match reg.to_reg().class() {
+                RegClass::Int => clobbered_gpr.push(reg),
+                RegClass::Float => clobbered_fpr.push(reg),
             }
         }
 
         let mut first_clobbered_gpr = 16;
         for reg in clobbered_gpr {
-            let enc = reg.to_reg().get_hw_encoding();
+            let enc = reg.to_reg().hw_enc();
             if enc < first_clobbered_gpr {
                 first_clobbered_gpr = enc;
             }
@@ -499,7 +503,7 @@ impl ABIMachineSpec for S390xMachineDeps {
         if first_clobbered_gpr < 16 {
             let offset = 8 * first_clobbered_gpr as i64;
             insts.push(Inst::StoreMultiple64 {
-                rt: gpr(first_clobbered_gpr as u8),
+                rt: gpr(first_clobbered_gpr),
                 rt2: gpr(15),
                 mem: MemArg::reg_plus_off(stack_reg(), offset, MemFlags::trusted()),
             });
@@ -509,7 +513,7 @@ impl ABIMachineSpec for S390xMachineDeps {
                 insts.push(Inst::Unwind {
                     inst: UnwindInst::SaveReg {
                         clobber_offset: clobber_size as u32 + (i * 8) as u32,
-                        reg: gpr(i as u8).to_real_reg(),
+                        reg: gpr(i).to_real_reg().unwrap(),
                     },
                 });
             }
@@ -535,7 +539,7 @@ impl ABIMachineSpec for S390xMachineDeps {
         // Save FPRs.
         for (i, reg) in clobbered_fpr.iter().enumerate() {
             insts.push(Inst::FpuStore64 {
-                rd: reg.to_reg().to_reg(),
+                rd: reg.to_reg().into(),
                 mem: MemArg::reg_plus_off(
                     stack_reg(),
                     (i * 8) as i64 + outgoing_args_size as i64 + fixed_frame_storage_size as i64,
@@ -558,7 +562,7 @@ impl ABIMachineSpec for S390xMachineDeps {
     fn gen_clobber_restore(
         call_conv: isa::CallConv,
         _: &settings::Flags,
-        clobbers: &Set<Writable<RealReg>>,
+        clobbers: &[Writable<RealReg>],
         fixed_frame_storage_size: u32,
         outgoing_args_size: u32,
     ) -> SmallVec<[Inst; 16]> {
@@ -568,7 +572,7 @@ impl ABIMachineSpec for S390xMachineDeps {
         let (clobbered_gpr, clobbered_fpr) = get_regs_saved_in_prologue(call_conv, clobbers);
         let mut first_clobbered_gpr = 16;
         for reg in clobbered_gpr {
-            let enc = reg.to_reg().get_hw_encoding();
+            let enc = reg.to_reg().hw_enc();
             if enc < first_clobbered_gpr {
                 first_clobbered_gpr = enc;
             }
@@ -578,7 +582,7 @@ impl ABIMachineSpec for S390xMachineDeps {
         // Restore FPRs.
         for (i, reg) in clobbered_fpr.iter().enumerate() {
             insts.push(Inst::FpuLoad64 {
-                rd: Writable::from_reg(reg.to_reg().to_reg()),
+                rd: Writable::from_reg(reg.to_reg().into()),
                 mem: MemArg::reg_plus_off(
                     stack_reg(),
                     (i * 8) as i64 + outgoing_args_size as i64 + fixed_frame_storage_size as i64,
@@ -603,7 +607,7 @@ impl ABIMachineSpec for S390xMachineDeps {
                 offset += stack_size as i64;
             }
             insts.push(Inst::LoadMultiple64 {
-                rt: writable_gpr(first_clobbered_gpr as u8),
+                rt: writable_gpr(first_clobbered_gpr),
                 rt2: writable_gpr(15),
                 mem: MemArg::reg_plus_off(stack_reg(), offset, MemFlags::trusted()),
             });
@@ -620,55 +624,43 @@ impl ABIMachineSpec for S390xMachineDeps {
         tmp: Writable<Reg>,
         _callee_conv: isa::CallConv,
         _caller_conv: isa::CallConv,
-    ) -> SmallVec<[(InstIsSafepoint, Inst); 2]> {
+    ) -> SmallVec<[Inst; 2]> {
         let mut insts = SmallVec::new();
         match &dest {
-            &CallDest::ExtName(ref name, RelocDistance::Near) => insts.push((
-                InstIsSafepoint::Yes,
-                Inst::Call {
-                    link: writable_gpr(14),
-                    info: Box::new(CallInfo {
-                        dest: name.clone(),
-                        uses,
-                        defs,
-                        opcode,
-                    }),
-                },
-            )),
+            &CallDest::ExtName(ref name, RelocDistance::Near) => insts.push(Inst::Call {
+                link: writable_gpr(14),
+                info: Box::new(CallInfo {
+                    dest: name.clone(),
+                    uses,
+                    defs,
+                    opcode,
+                }),
+            }),
             &CallDest::ExtName(ref name, RelocDistance::Far) => {
-                insts.push((
-                    InstIsSafepoint::No,
-                    Inst::LoadExtNameFar {
-                        rd: tmp,
-                        name: Box::new(name.clone()),
-                        offset: 0,
-                    },
-                ));
-                insts.push((
-                    InstIsSafepoint::Yes,
-                    Inst::CallInd {
-                        link: writable_gpr(14),
-                        info: Box::new(CallIndInfo {
-                            rn: tmp.to_reg(),
-                            uses,
-                            defs,
-                            opcode,
-                        }),
-                    },
-                ));
-            }
-            &CallDest::Reg(reg) => insts.push((
-                InstIsSafepoint::Yes,
-                Inst::CallInd {
+                insts.push(Inst::LoadExtNameFar {
+                    rd: tmp,
+                    name: Box::new(name.clone()),
+                    offset: 0,
+                });
+                insts.push(Inst::CallInd {
                     link: writable_gpr(14),
                     info: Box::new(CallIndInfo {
-                        rn: *reg,
+                        rn: tmp.to_reg(),
                         uses,
                         defs,
                         opcode,
                     }),
-                },
-            )),
+                });
+            }
+            &CallDest::Reg(reg) => insts.push(Inst::CallInd {
+                link: writable_gpr(14),
+                info: Box::new(CallIndInfo {
+                    rn: *reg,
+                    uses,
+                    defs,
+                    opcode,
+                }),
+            }),
         }
 
         insts
@@ -686,9 +678,8 @@ impl ABIMachineSpec for S390xMachineDeps {
     fn get_number_of_spillslots_for_value(rc: RegClass) -> u32 {
         // We allocate in terms of 8-byte slots.
         match rc {
-            RegClass::I64 => 1,
-            RegClass::F64 => 1,
-            _ => panic!("Unexpected register class!"),
+            RegClass::Int => 1,
+            RegClass::Float => 1,
         }
     }
 
@@ -706,13 +697,13 @@ impl ABIMachineSpec for S390xMachineDeps {
         let mut caller_saved = Vec::new();
         for i in 0..15 {
             let x = writable_gpr(i);
-            if is_reg_clobbered_by_call(call_conv_of_callee, x.to_reg().to_real_reg()) {
+            if is_reg_clobbered_by_call(call_conv_of_callee, x.to_reg().to_real_reg().unwrap()) {
                 caller_saved.push(x);
             }
         }
         for i in 0..15 {
             let v = writable_fpr(i);
-            if is_reg_clobbered_by_call(call_conv_of_callee, v.to_reg().to_real_reg()) {
+            if is_reg_clobbered_by_call(call_conv_of_callee, v.to_reg().to_real_reg().unwrap()) {
                 caller_saved.push(v);
             }
         }
@@ -728,7 +719,7 @@ impl ABIMachineSpec for S390xMachineDeps {
 
     fn get_clobbered_callee_saves(
         call_conv: isa::CallConv,
-        regs: &Set<Writable<RealReg>>,
+        regs: &[Writable<RealReg>],
     ) -> Vec<Writable<RealReg>> {
         let mut regs: Vec<Writable<RealReg>> = regs
             .iter()
@@ -738,7 +729,7 @@ impl ABIMachineSpec for S390xMachineDeps {
 
         // Sort registers for deterministic code output. We can do an unstable
         // sort because the registers will be unique (there are no dups).
-        regs.sort_unstable_by_key(|r| r.to_reg().get_index());
+        regs.sort_unstable_by_key(|r| PReg::from(r.to_reg()).index());
         regs
     }
 
@@ -754,50 +745,47 @@ impl ABIMachineSpec for S390xMachineDeps {
 }
 
 fn is_reg_saved_in_prologue(_call_conv: isa::CallConv, r: RealReg) -> bool {
-    match r.get_class() {
-        RegClass::I64 => {
+    match r.class() {
+        RegClass::Int => {
             // r6 - r15 inclusive are callee-saves.
-            r.get_hw_encoding() >= 6 && r.get_hw_encoding() <= 15
+            r.hw_enc() >= 6 && r.hw_enc() <= 15
         }
-        RegClass::F64 => {
+        RegClass::Float => {
             // f8 - f15 inclusive are callee-saves.
-            r.get_hw_encoding() >= 8 && r.get_hw_encoding() <= 15
+            r.hw_enc() >= 8 && r.hw_enc() <= 15
         }
-        _ => panic!("Unexpected RegClass"),
     }
 }
 
 fn get_regs_saved_in_prologue(
     call_conv: isa::CallConv,
-    regs: &Set<Writable<RealReg>>,
+    regs: &[Writable<RealReg>],
 ) -> (Vec<Writable<RealReg>>, Vec<Writable<RealReg>>) {
     let mut int_saves = vec![];
     let mut fpr_saves = vec![];
-    for &reg in regs.iter() {
+    for &reg in regs {
         if is_reg_saved_in_prologue(call_conv, reg.to_reg()) {
-            match reg.to_reg().get_class() {
-                RegClass::I64 => int_saves.push(reg),
-                RegClass::F64 => fpr_saves.push(reg),
-                _ => panic!("Unexpected RegClass"),
+            match reg.to_reg().class() {
+                RegClass::Int => int_saves.push(reg),
+                RegClass::Float => fpr_saves.push(reg),
             }
         }
     }
     // Sort registers for deterministic code output.
-    int_saves.sort_by_key(|r| r.to_reg().get_index());
-    fpr_saves.sort_by_key(|r| r.to_reg().get_index());
+    int_saves.sort_by_key(|r| VReg::from(r.to_reg()).vreg());
+    fpr_saves.sort_by_key(|r| VReg::from(r.to_reg()).vreg());
     (int_saves, fpr_saves)
 }
 
 fn is_reg_clobbered_by_call(_call_conv: isa::CallConv, r: RealReg) -> bool {
-    match r.get_class() {
-        RegClass::I64 => {
+    match r.class() {
+        RegClass::Int => {
             // r0 - r5 inclusive are caller-saves.
-            r.get_hw_encoding() <= 5
+            r.hw_enc() <= 5
         }
-        RegClass::F64 => {
+        RegClass::Float => {
             // f0 - f7 inclusive are caller-saves.
-            r.get_hw_encoding() <= 7
+            r.hw_enc() <= 7
         }
-        _ => panic!("Unexpected RegClass"),
     }
 }

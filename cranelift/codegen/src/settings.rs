@@ -510,7 +510,6 @@ mod tests {
         assert_eq!(
             f.to_string(),
             r#"[shared]
-regalloc = "backtracking"
 opt_level = "none"
 tls_model = "none"
 libcall_call_conv = "isa_default"

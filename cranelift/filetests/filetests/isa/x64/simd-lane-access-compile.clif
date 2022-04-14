@@ -12,24 +12,19 @@ block0:
     return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 12)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   load_const VCodeConstant(3), %xmm1
-;   Inst 3:   load_const VCodeConstant(2), %xmm0
-;   Inst 4:   load_const VCodeConstant(0), %xmm2
-;   Inst 5:   pshufb  %xmm2, %xmm1
-;   Inst 6:   load_const VCodeConstant(1), %xmm2
-;   Inst 7:   pshufb  %xmm2, %xmm0
-;   Inst 8:   orps    %xmm1, %xmm0
-;   Inst 9:   movq    %rbp, %rsp
-;   Inst 10:   popq    %rbp
-;   Inst 11:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   load_const VCodeConstant(3), %xmm1
+;   load_const VCodeConstant(2), %xmm0
+;   load_const VCodeConstant(0), %xmm9
+;   pshufb  %xmm1, %xmm1, %xmm9
+;   load_const VCodeConstant(1), %xmm12
+;   pshufb  %xmm0, %xmm0, %xmm12
+;   orps    %xmm0, %xmm0, %xmm1
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %shuffle_same_ssa_value() -> i8x16 {
 block0:
@@ -38,20 +33,15 @@ block0:
     return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 8)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   load_const VCodeConstant(1), %xmm0
-;   Inst 3:   load_const VCodeConstant(0), %xmm1
-;   Inst 4:   pshufb  %xmm1, %xmm0
-;   Inst 5:   movq    %rbp, %rsp
-;   Inst 6:   popq    %rbp
-;   Inst 7:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   load_const VCodeConstant(1), %xmm0
+;   load_const VCodeConstant(0), %xmm5
+;   pshufb  %xmm0, %xmm0, %xmm5
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %swizzle() -> i8x16 {
 block0:
@@ -61,23 +51,17 @@ block0:
     return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 11)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   load_const VCodeConstant(1), %xmm1
-;   Inst 3:   load_const VCodeConstant(1), %xmm0
-;   Inst 4:   load_const VCodeConstant(0), %xmm2
-;   Inst 5:   paddusb %xmm2, %xmm0
-;   Inst 6:   pshufb  %xmm0, %xmm1
-;   Inst 7:   movdqa  %xmm1, %xmm0
-;   Inst 8:   movq    %rbp, %rsp
-;   Inst 9:   popq    %rbp
-;   Inst 10:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   load_const VCodeConstant(1), %xmm0
+;   load_const VCodeConstant(1), %xmm2
+;   load_const VCodeConstant(0), %xmm7
+;   paddusb %xmm2, %xmm2, %xmm7
+;   pshufb  %xmm0, %xmm0, %xmm2
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %splat_i8(i8) -> i8x16 {
 block0(v0: i8):
@@ -85,21 +69,16 @@ block0(v0: i8):
     return v1
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 9)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   uninit  %xmm0
-;   Inst 3:   pinsrb  $0, %rdi, %xmm0
-;   Inst 4:   pxor    %xmm1, %xmm1
-;   Inst 5:   pshufb  %xmm1, %xmm0
-;   Inst 6:   movq    %rbp, %rsp
-;   Inst 7:   popq    %rbp
-;   Inst 8:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   uninit  %xmm0
+;   pinsrb  $0, %xmm0, %rdi, %xmm0
+;   pxor    %xmm6, %xmm6, %xmm6
+;   pshufb  %xmm0, %xmm0, %xmm6
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %splat_b16() -> b16x8 {
 block0:
@@ -108,22 +87,17 @@ block0:
     return v1
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 10)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   movl    $65535, %esi
-;   Inst 3:   uninit  %xmm0
-;   Inst 4:   pinsrw  $0, %rsi, %xmm0
-;   Inst 5:   pinsrw  $1, %rsi, %xmm0
-;   Inst 6:   pshufd  $0, %xmm0, %xmm0
-;   Inst 7:   movq    %rbp, %rsp
-;   Inst 8:   popq    %rbp
-;   Inst 9:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movl    $65535, %eax
+;   uninit  %xmm0
+;   pinsrw  $0, %xmm0, %rax, %xmm0
+;   pinsrw  $1, %xmm0, %rax, %xmm0
+;   pshufd  $0, %xmm0, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %splat_i32(i32) -> i32x4 {
 block0(v0: i32):
@@ -131,20 +105,15 @@ block0(v0: i32):
     return v1
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 8)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   uninit  %xmm0
-;   Inst 3:   pinsrd  $0, %rdi, %xmm0
-;   Inst 4:   pshufd  $0, %xmm0, %xmm0
-;   Inst 5:   movq    %rbp, %rsp
-;   Inst 6:   popq    %rbp
-;   Inst 7:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   uninit  %xmm0
+;   pinsrd  $0, %xmm0, %rdi, %xmm0
+;   pshufd  $0, %xmm0, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %splat_f64(f64) -> f64x2 {
 block0(v0: f64):
@@ -152,21 +121,17 @@ block0(v0: f64):
     return v1
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 9)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   uninit  %xmm1
-;   Inst 3:   movsd   %xmm0, %xmm1
-;   Inst 4:   movlhps %xmm0, %xmm1
-;   Inst 5:   movdqa  %xmm1, %xmm0
-;   Inst 6:   movq    %rbp, %rsp
-;   Inst 7:   popq    %rbp
-;   Inst 8:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movdqa  %xmm0, %xmm4
+;   uninit  %xmm0
+;   movdqa  %xmm4, %xmm5
+;   movsd   %xmm0, %xmm0, %xmm5
+;   movlhps %xmm0, %xmm0, %xmm5
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %load32_zero_coalesced(i64) -> i32x4 {
 block0(v0: i64):
@@ -175,18 +140,13 @@ block0(v0: i64):
     return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 6)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   movss   0(%rdi), %xmm0
-;   Inst 3:   movq    %rbp, %rsp
-;   Inst 4:   popq    %rbp
-;   Inst 5:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movss   0(%rdi), %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %load32_zero_int(i32) -> i32x4 {
 block0(v0: i32):
@@ -194,18 +154,13 @@ block0(v0: i32):
     return v1
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 6)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   movd    %edi, %xmm0
-;   Inst 3:   movq    %rbp, %rsp
-;   Inst 4:   popq    %rbp
-;   Inst 5:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movd    %edi, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %load32_zero_float(f32) -> f32x4 {
 block0(v0: f32):
@@ -213,15 +168,10 @@ block0(v0: f32):
     return v1
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 5)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   movq    %rbp, %rsp
-;   Inst 3:   popq    %rbp
-;   Inst 4:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 

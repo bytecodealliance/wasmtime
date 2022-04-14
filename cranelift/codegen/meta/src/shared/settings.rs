@@ -4,39 +4,6 @@ pub(crate) fn define() -> SettingGroup {
     let mut settings = SettingGroupBuilder::new("shared");
 
     settings.add_enum(
-        "regalloc",
-        "Register allocator to use with the MachInst backend.",
-        r#"
-            This selects the register allocator as an option among those offered by the `regalloc.rs`
-            crate. Please report register allocation bugs to the maintainers of this crate whenever
-            possible.
-
-            Note: this only applies to target that use the MachInst backend. As of 2020-04-17, this
-            means the x86_64 backend doesn't use this yet.
-
-            Possible values:
-
-            - `backtracking` is a greedy, backtracking register allocator as implemented in
-            Spidermonkey's optimizing tier IonMonkey. It may take more time to allocate registers, but
-            it should generate better code in general, resulting in better throughput of generated
-            code.
-            - `backtracking_checked` is the backtracking allocator with additional self checks that may
-            take some time to run, and thus these checks are disabled by default.
-            - `experimental_linear_scan` is an experimental linear scan allocator. It may take less
-            time to allocate registers, but generated code's quality may be inferior. As of
-            2020-04-17, it is still experimental and it should not be used in production settings.
-            - `experimental_linear_scan_checked` is the linear scan allocator with additional self
-            checks that may take some time to run, and thus these checks are disabled by default.
-        "#,
-        vec![
-            "backtracking",
-            "backtracking_checked",
-            "experimental_linear_scan",
-            "experimental_linear_scan_checked",
-        ],
-    );
-
-    settings.add_enum(
         "opt_level",
         "Optimization level for generated code.",
         r#"

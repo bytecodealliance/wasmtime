@@ -1,4 +1,4 @@
-test compile
+test compile precise-output
 target s390x
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -11,8 +11,9 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-; check:  agr %r2, %r3
-; nextln: br %r14
+; block0:
+;   agr %r2, %r3
+;   br %r14
 
 function %iadd_i64_ext32(i64, i32) -> i64 {
 block0(v0: i64, v1: i32):
@@ -21,8 +22,9 @@ block0(v0: i64, v1: i32):
   return v3
 }
 
-; check:  agfr %r2, %r3
-; nextln: br %r14
+; block0:
+;   agfr %r2, %r3
+;   br %r14
 
 function %iadd_i64_imm16(i64) -> i64 {
 block0(v0: i64):
@@ -31,8 +33,9 @@ block0(v0: i64):
   return v2
 }
 
-; check:  aghi %r2, 1
-; nextln: br %r14
+; block0:
+;   aghi %r2, 1
+;   br %r14
 
 function %iadd_i64_imm32(i64) -> i64 {
 block0(v0: i64):
@@ -41,8 +44,9 @@ block0(v0: i64):
   return v2
 }
 
-; check:  agfi %r2, 32768
-; nextln: br %r14
+; block0:
+;   agfi %r2, 32768
+;   br %r14
 
 function %iadd_i64_mem(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -51,8 +55,9 @@ block0(v0: i64, v1: i64):
   return v3
 }
 
-; check:  ag %r2, 0(%r3)
-; nextln: br %r14
+; block0:
+;   ag %r2, 0(%r3)
+;   br %r14
 
 function %iadd_i64_mem_ext16(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -61,8 +66,9 @@ block0(v0: i64, v1: i64):
   return v3
 }
 
-; check:  agh %r2, 0(%r3)
-; nextln: br %r14
+; block0:
+;   agh %r2, 0(%r3)
+;   br %r14
 
 function %iadd_i64_mem_ext32(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -71,8 +77,9 @@ block0(v0: i64, v1: i64):
   return v3
 }
 
-; check:  agf %r2, 0(%r3)
-; nextln: br %r14
+; block0:
+;   agf %r2, 0(%r3)
+;   br %r14
 
 function %iadd_i32(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
@@ -80,8 +87,9 @@ block0(v0: i32, v1: i32):
   return v2
 }
 
-; check:  ar %r2, %r3
-; nextln: br %r14
+; block0:
+;   ar %r2, %r3
+;   br %r14
 
 function %iadd_i32_imm16(i32) -> i32 {
 block0(v0: i32):
@@ -90,8 +98,9 @@ block0(v0: i32):
   return v2
 }
 
-; check:  ahi %r2, 1
-; nextln: br %r14
+; block0:
+;   ahi %r2, 1
+;   br %r14
 
 function %iadd_i32_imm(i32) -> i32 {
 block0(v0: i32):
@@ -100,8 +109,9 @@ block0(v0: i32):
   return v2
 }
 
-; check:  afi %r2, 32768
-; nextln: br %r14
+; block0:
+;   afi %r2, 32768
+;   br %r14
 
 function %iadd_i32_mem(i32, i64) -> i32 {
 block0(v0: i32, v1: i64):
@@ -110,8 +120,9 @@ block0(v0: i32, v1: i64):
   return v3
 }
 
-; check:  a %r2, 0(%r3)
-; nextln: br %r14
+; block0:
+;   a %r2, 0(%r3)
+;   br %r14
 
 function %iadd_i32_memoff(i32, i64) -> i32 {
 block0(v0: i32, v1: i64):
@@ -120,8 +131,9 @@ block0(v0: i32, v1: i64):
   return v3
 }
 
-; check:  ay %r2, 4096(%r3)
-; nextln: br %r14
+; block0:
+;   ay %r2, 4096(%r3)
+;   br %r14
 
 function %iadd_i32_mem_ext16(i32, i64) -> i32 {
 block0(v0: i32, v1: i64):
@@ -130,8 +142,9 @@ block0(v0: i32, v1: i64):
   return v3
 }
 
-; check:  ah %r2, 0(%r3)
-; nextln: br %r14
+; block0:
+;   ah %r2, 0(%r3)
+;   br %r14
 
 function %iadd_i32_memoff_ext16(i32, i64) -> i32 {
 block0(v0: i32, v1: i64):
@@ -140,8 +153,9 @@ block0(v0: i32, v1: i64):
   return v3
 }
 
-; check:  ahy %r2, 4096(%r3)
-; nextln: br %r14
+; block0:
+;   ahy %r2, 4096(%r3)
+;   br %r14
 
 function %iadd_i16(i16, i16) -> i16 {
 block0(v0: i16, v1: i16):
@@ -149,8 +163,9 @@ block0(v0: i16, v1: i16):
   return v2
 }
 
-; check:  ar %r2, %r3
-; nextln: br %r14
+; block0:
+;   ar %r2, %r3
+;   br %r14
 
 function %iadd_i16_imm(i16) -> i16 {
 block0(v0: i16):
@@ -159,8 +174,9 @@ block0(v0: i16):
   return v2
 }
 
-; check:  ahi %r2, 1
-; nextln: br %r14
+; block0:
+;   ahi %r2, 1
+;   br %r14
 
 function %iadd_i16_mem(i16, i64) -> i16 {
 block0(v0: i16, v1: i64):
@@ -169,8 +185,9 @@ block0(v0: i16, v1: i64):
   return v3
 }
 
-; check:  ah %r2, 0(%r3)
-; nextln: br %r14
+; block0:
+;   ah %r2, 0(%r3)
+;   br %r14
 
 function %iadd_i8(i8, i8) -> i8 {
 block0(v0: i8, v1: i8):
@@ -178,8 +195,9 @@ block0(v0: i8, v1: i8):
   return v2
 }
 
-; check:  ar %r2, %r3
-; nextln: br %r14
+; block0:
+;   ar %r2, %r3
+;   br %r14
 
 function %iadd_i8_imm(i8) -> i8 {
 block0(v0: i8):
@@ -188,8 +206,9 @@ block0(v0: i8):
   return v2
 }
 
-; check:  ahi %r2, 1
-; nextln: br %r14
+; block0:
+;   ahi %r2, 1
+;   br %r14
 
 function %iadd_i8_mem(i8, i64) -> i8 {
 block0(v0: i8, v1: i64):
@@ -198,13 +217,10 @@ block0(v0: i8, v1: i64):
   return v3
 }
 
-; check:  llc %r3, 0(%r3)
-; nextln: ar %r2, %r3
-; nextln: br %r14
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; IADD_IFCOUT
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; block0:
+;   llc %r4, 0(%r3)
+;   ar %r2, %r4
+;   br %r14
 
 function %iadd_i64(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -212,8 +228,9 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-; check:  algr %r2, %r3
-; nextln: br %r14
+; block0:
+;   algr %r2, %r3
+;   br %r14
 
 function %iadd_i64_ext32(i64, i32) -> i64 {
 block0(v0: i64, v1: i32):
@@ -222,8 +239,9 @@ block0(v0: i64, v1: i32):
   return v3
 }
 
-; check:  algfr %r2, %r3
-; nextln: br %r14
+; block0:
+;   algfr %r2, %r3
+;   br %r14
 
 function %iadd_i64_imm32(i64) -> i64 {
 block0(v0: i64):
@@ -232,8 +250,9 @@ block0(v0: i64):
   return v2
 }
 
-; check:  algfi %r2, 32768
-; nextln: br %r14
+; block0:
+;   algfi %r2, 32768
+;   br %r14
 
 function %iadd_i64_mem(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -242,8 +261,9 @@ block0(v0: i64, v1: i64):
   return v3
 }
 
-; check:  alg %r2, 0(%r3)
-; nextln: br %r14
+; block0:
+;   alg %r2, 0(%r3)
+;   br %r14
 
 function %iadd_i64_mem_ext32(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -252,8 +272,9 @@ block0(v0: i64, v1: i64):
   return v3
 }
 
-; check:  algf %r2, 0(%r3)
-; nextln: br %r14
+; block0:
+;   algf %r2, 0(%r3)
+;   br %r14
 
 function %iadd_i32(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
@@ -261,8 +282,9 @@ block0(v0: i32, v1: i32):
   return v2
 }
 
-; check:  alr %r2, %r3
-; nextln: br %r14
+; block0:
+;   alr %r2, %r3
+;   br %r14
 
 function %iadd_i32_imm(i32) -> i32 {
 block0(v0: i32):
@@ -271,8 +293,9 @@ block0(v0: i32):
   return v2
 }
 
-; check:  alfi %r2, 32768
-; nextln: br %r14
+; block0:
+;   alfi %r2, 32768
+;   br %r14
 
 function %iadd_i32_mem(i32, i64) -> i32 {
 block0(v0: i32, v1: i64):
@@ -281,8 +304,9 @@ block0(v0: i32, v1: i64):
   return v3
 }
 
-; check:  al %r2, 0(%r3)
-; nextln: br %r14
+; block0:
+;   al %r2, 0(%r3)
+;   br %r14
 
 function %iadd_i32_memoff(i32, i64) -> i32 {
 block0(v0: i32, v1: i64):
@@ -291,12 +315,9 @@ block0(v0: i32, v1: i64):
   return v3
 }
 
-; check:  aly %r2, 4096(%r3)
-; nextln: br %r14
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; ISUB
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; block0:
+;   aly %r2, 4096(%r3)
+;   br %r14
 
 function %isub_i64(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -304,8 +325,9 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-; check:  sgr %r2, %r3
-; nextln: br %r14
+; block0:
+;   sgr %r2, %r3
+;   br %r14
 
 function %isub_i64_ext32(i64, i32) -> i64 {
 block0(v0: i64, v1: i32):
@@ -314,8 +336,9 @@ block0(v0: i64, v1: i32):
   return v3
 }
 
-; check:  sgfr %r2, %r3
-; nextln: br %r14
+; block0:
+;   sgfr %r2, %r3
+;   br %r14
 
 function %isub_i64_imm16(i64) -> i64 {
 block0(v0: i64):
@@ -324,8 +347,9 @@ block0(v0: i64):
   return v2
 }
 
-; check:  aghi %r2, -1
-; nextln: br %r14
+; block0:
+;   aghi %r2, -1
+;   br %r14
 
 function %isub_i64_imm32(i64) -> i64 {
 block0(v0: i64):
@@ -334,8 +358,9 @@ block0(v0: i64):
   return v2
 }
 
-; check:  agfi %r2, -32769
-; nextln: br %r14
+; block0:
+;   agfi %r2, -32769
+;   br %r14
 
 function %isub_i64_mem(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -344,8 +369,9 @@ block0(v0: i64, v1: i64):
   return v3
 }
 
-; check:  sg %r2, 0(%r3)
-; nextln: br %r14
+; block0:
+;   sg %r2, 0(%r3)
+;   br %r14
 
 function %isub_i64_mem_ext16(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -354,8 +380,9 @@ block0(v0: i64, v1: i64):
   return v3
 }
 
-; check:  sgh %r2, 0(%r3)
-; nextln: br %r14
+; block0:
+;   sgh %r2, 0(%r3)
+;   br %r14
 
 function %isub_i64_mem_ext32(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -364,8 +391,9 @@ block0(v0: i64, v1: i64):
   return v3
 }
 
-; check:  sgf %r2, 0(%r3)
-; nextln: br %r14
+; block0:
+;   sgf %r2, 0(%r3)
+;   br %r14
 
 function %isub_i32(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
@@ -373,8 +401,9 @@ block0(v0: i32, v1: i32):
   return v2
 }
 
-; check:  sr %r2, %r3
-; nextln: br %r14
+; block0:
+;   sr %r2, %r3
+;   br %r14
 
 function %isub_i32_imm16(i32) -> i32 {
 block0(v0: i32):
@@ -383,8 +412,9 @@ block0(v0: i32):
   return v2
 }
 
-; check:  ahi %r2, -1
-; nextln: br %r14
+; block0:
+;   ahi %r2, -1
+;   br %r14
 
 function %isub_i32_imm(i32) -> i32 {
 block0(v0: i32):
@@ -393,8 +423,9 @@ block0(v0: i32):
   return v2
 }
 
-; check:  afi %r2, -32769
-; nextln: br %r14
+; block0:
+;   afi %r2, -32769
+;   br %r14
 
 function %isub_i32_mem(i32, i64) -> i32 {
 block0(v0: i32, v1: i64):
@@ -403,8 +434,9 @@ block0(v0: i32, v1: i64):
   return v3
 }
 
-; check:  s %r2, 0(%r3)
-; nextln: br %r14
+; block0:
+;   s %r2, 0(%r3)
+;   br %r14
 
 function %isub_i32_memoff(i32, i64) -> i32 {
 block0(v0: i32, v1: i64):
@@ -413,8 +445,9 @@ block0(v0: i32, v1: i64):
   return v3
 }
 
-; check:  sy %r2, 4096(%r3)
-; nextln: br %r14
+; block0:
+;   sy %r2, 4096(%r3)
+;   br %r14
 
 function %isub_i32_mem_ext16(i32, i64) -> i32 {
 block0(v0: i32, v1: i64):
@@ -423,8 +456,9 @@ block0(v0: i32, v1: i64):
   return v3
 }
 
-; check:  sh %r2, 0(%r3)
-; nextln: br %r14
+; block0:
+;   sh %r2, 0(%r3)
+;   br %r14
 
 function %isub_i32_memoff_ext16(i32, i64) -> i32 {
 block0(v0: i32, v1: i64):
@@ -433,8 +467,9 @@ block0(v0: i32, v1: i64):
   return v3
 }
 
-; check:  shy %r2, 4096(%r3)
-; nextln: br %r14
+; block0:
+;   shy %r2, 4096(%r3)
+;   br %r14
 
 function %isub_i16(i16, i16) -> i16 {
 block0(v0: i16, v1: i16):
@@ -442,8 +477,9 @@ block0(v0: i16, v1: i16):
   return v2
 }
 
-; check:  sr %r2, %r3
-; nextln: br %r14
+; block0:
+;   sr %r2, %r3
+;   br %r14
 
 function %isub_i16_imm(i16) -> i16 {
 block0(v0: i16):
@@ -452,8 +488,9 @@ block0(v0: i16):
   return v2
 }
 
-; check:  ahi %r2, -1
-; nextln: br %r14
+; block0:
+;   ahi %r2, -1
+;   br %r14
 
 function %isub_i16_mem(i16, i64) -> i16 {
 block0(v0: i16, v1: i64):
@@ -462,8 +499,9 @@ block0(v0: i16, v1: i64):
   return v3
 }
 
-; check:  sh %r2, 0(%r3)
-; nextln: br %r14
+; block0:
+;   sh %r2, 0(%r3)
+;   br %r14
 
 function %isub_i8(i8, i8) -> i8 {
 block0(v0: i8, v1: i8):
@@ -471,8 +509,9 @@ block0(v0: i8, v1: i8):
   return v2
 }
 
-; check:  sr %r2, %r3
-; nextln: br %r14
+; block0:
+;   sr %r2, %r3
+;   br %r14
 
 function %isub_i8_imm(i8) -> i8 {
 block0(v0: i8):
@@ -481,8 +520,9 @@ block0(v0: i8):
   return v2
 }
 
-; check:  ahi %r2, -1
-; nextln: br %r14
+; block0:
+;   ahi %r2, -1
+;   br %r14
 
 function %isub_i8_mem(i8, i64) -> i8 {
 block0(v0: i8, v1: i64):
@@ -491,13 +531,10 @@ block0(v0: i8, v1: i64):
   return v3
 }
 
-; check:  llc %r3, 0(%r3)
-; nextln: sr %r2, %r3
-; nextln: br %r14
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; IABS
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; block0:
+;   llc %r4, 0(%r3)
+;   sr %r2, %r4
+;   br %r14
 
 function %iabs_i64(i64) -> i64 {
 block0(v0: i64):
@@ -505,8 +542,9 @@ block0(v0: i64):
   return v1
 }
 
-; check:  lpgr %r2, %r2
-; nextln: br %r14
+; block0:
+;   lpgr %r2, %r2
+;   br %r14
 
 function %iabs_i64_ext32(i32) -> i64 {
 block0(v0: i32):
@@ -515,8 +553,9 @@ block0(v0: i32):
   return v2
 }
 
-; check:  lpgfr %r2, %r2
-; nextln: br %r14
+; block0:
+;   lpgfr %r2, %r2
+;   br %r14
 
 function %iabs_i32(i32) -> i32 {
 block0(v0: i32):
@@ -524,8 +563,9 @@ block0(v0: i32):
   return v1
 }
 
-; check:  lpr %r2, %r2
-; nextln: br %r14
+; block0:
+;   lpr %r2, %r2
+;   br %r14
 
 function %iabs_i16(i16) -> i16 {
 block0(v0: i16):
@@ -533,9 +573,10 @@ block0(v0: i16):
   return v1
 }
 
-; check:  lhr %r2, %r2
-; nextln: lpr %r2, %r2
-; nextln: br %r14
+; block0:
+;   lhr %r5, %r2
+;   lpr %r2, %r5
+;   br %r14
 
 function %iabs_i8(i8) -> i8 {
 block0(v0: i8):
@@ -543,15 +584,10 @@ block0(v0: i8):
   return v1
 }
 
-; check:  lbr %r2, %r2
-; nextln: lpr %r2, %r2
-; nextln: br %r14
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; INEG
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-; FIXME: neg-abs combination not yet supported
+; block0:
+;   lbr %r5, %r2
+;   lpr %r2, %r5
+;   br %r14
 
 function %ineg_i64(i64) -> i64 {
 block0(v0: i64):
@@ -559,8 +595,9 @@ block0(v0: i64):
   return v1
 }
 
-; check:  lcgr %r2, %r2
-; nextln: br %r14
+; block0:
+;   lcgr %r2, %r2
+;   br %r14
 
 function %ineg_i64_ext32(i32) -> i64 {
 block0(v0: i32):
@@ -569,8 +606,9 @@ block0(v0: i32):
   return v2
 }
 
-; check:  lcgfr %r2, %r2
-; nextln: br %r14
+; block0:
+;   lcgfr %r2, %r2
+;   br %r14
 
 function %ineg_i32(i32) -> i32 {
 block0(v0: i32):
@@ -578,8 +616,9 @@ block0(v0: i32):
   return v1
 }
 
-; check:  lcr %r2, %r2
-; nextln: br %r14
+; block0:
+;   lcr %r2, %r2
+;   br %r14
 
 function %ineg_i16(i16) -> i16 {
 block0(v0: i16):
@@ -587,8 +626,9 @@ block0(v0: i16):
   return v1
 }
 
-; check:  lcr %r2, %r2
-; nextln: br %r14
+; block0:
+;   lcr %r2, %r2
+;   br %r14
 
 function %ineg_i8(i8) -> i8 {
 block0(v0: i8):
@@ -596,12 +636,9 @@ block0(v0: i8):
   return v1
 }
 
-; check:  lcr %r2, %r2
-; nextln: br %r14
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; IMUL
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; block0:
+;   lcr %r2, %r2
+;   br %r14
 
 function %imul_i64(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -609,8 +646,9 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-; check:  msgr %r2, %r3
-; nextln: br %r14
+; block0:
+;   msgr %r2, %r3
+;   br %r14
 
 function %imul_i64_imm16(i64) -> i64 {
 block0(v0: i64):
@@ -619,8 +657,9 @@ block0(v0: i64):
   return v2
 }
 
-; check:  mghi %r2, 3
-; nextln: br %r14
+; block0:
+;   mghi %r2, 3
+;   br %r14
 
 function %imul_i64_imm32(i64) -> i64 {
 block0(v0: i64):
@@ -629,8 +668,9 @@ block0(v0: i64):
   return v2
 }
 
-; check:  msgfi %r2, 32769
-; nextln: br %r14
+; block0:
+;   msgfi %r2, 32769
+;   br %r14
 
 function %imul_i64_mem(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -639,8 +679,9 @@ block0(v0: i64, v1: i64):
   return v3
 }
 
-; check:  msg %r2, 0(%r3)
-; nextln: br %r14
+; block0:
+;   msg %r2, 0(%r3)
+;   br %r14
 
 function %imul_i64_mem_ext16(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -649,8 +690,9 @@ block0(v0: i64, v1: i64):
   return v3
 }
 
-; check:  mgh %r2, 0(%r3)
-; nextln: br %r14
+; block0:
+;   mgh %r2, 0(%r3)
+;   br %r14
 
 function %imul_i64_mem_ext32(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -659,8 +701,9 @@ block0(v0: i64, v1: i64):
   return v3
 }
 
-; check:  msgf %r2, 0(%r3)
-; nextln: br %r14
+; block0:
+;   msgf %r2, 0(%r3)
+;   br %r14
 
 function %imul_i32(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
@@ -668,8 +711,9 @@ block0(v0: i32, v1: i32):
   return v2
 }
 
-; check:  msr %r2, %r3
-; nextln: br %r14
+; block0:
+;   msr %r2, %r3
+;   br %r14
 
 function %imul_i32_imm16(i32) -> i32 {
 block0(v0: i32):
@@ -678,8 +722,9 @@ block0(v0: i32):
   return v2
 }
 
-; check:  mhi %r2, 3
-; nextln: br %r14
+; block0:
+;   mhi %r2, 3
+;   br %r14
 
 function %imul_i32_imm32(i32) -> i32 {
 block0(v0: i32):
@@ -688,8 +733,9 @@ block0(v0: i32):
   return v2
 }
 
-; check:  msfi %r2, 32769
-; nextln: br %r14
+; block0:
+;   msfi %r2, 32769
+;   br %r14
 
 function %imul_i32_mem(i32, i64) -> i32 {
 block0(v0: i32, v1: i64):
@@ -698,8 +744,9 @@ block0(v0: i32, v1: i64):
   return v3
 }
 
-; check:  ms %r2, 0(%r3)
-; nextln: br %r14
+; block0:
+;   ms %r2, 0(%r3)
+;   br %r14
 
 function %imul_i32_memoff(i32, i64) -> i32 {
 block0(v0: i32, v1: i64):
@@ -708,8 +755,9 @@ block0(v0: i32, v1: i64):
   return v3
 }
 
-; check:  msy %r2, 4096(%r3)
-; nextln: br %r14
+; block0:
+;   msy %r2, 4096(%r3)
+;   br %r14
 
 function %imul_i32_mem_ext16(i32, i64) -> i32 {
 block0(v0: i32, v1: i64):
@@ -718,8 +766,9 @@ block0(v0: i32, v1: i64):
   return v3
 }
 
-; check:  mh %r2, 0(%r3)
-; nextln: br %r14
+; block0:
+;   mh %r2, 0(%r3)
+;   br %r14
 
 function %imul_i32_memoff_ext16(i32, i64) -> i32 {
 block0(v0: i32, v1: i64):
@@ -728,8 +777,9 @@ block0(v0: i32, v1: i64):
   return v3
 }
 
-; check:  mhy %r2, 4096(%r3)
-; nextln: br %r14
+; block0:
+;   mhy %r2, 4096(%r3)
+;   br %r14
 
 function %imul_i16(i16, i16) -> i16 {
 block0(v0: i16, v1: i16):
@@ -737,8 +787,9 @@ block0(v0: i16, v1: i16):
   return v2
 }
 
-; check:  msr %r2, %r3
-; nextln: br %r14
+; block0:
+;   msr %r2, %r3
+;   br %r14
 
 function %imul_i16_imm(i16) -> i16 {
 block0(v0: i16):
@@ -747,8 +798,9 @@ block0(v0: i16):
   return v2
 }
 
-; check:  mhi %r2, 3
-; nextln: br %r14
+; block0:
+;   mhi %r2, 3
+;   br %r14
 
 function %imul_i16_mem(i16, i64) -> i16 {
 block0(v0: i16, v1: i64):
@@ -757,8 +809,9 @@ block0(v0: i16, v1: i64):
   return v3
 }
 
-; check:  mh %r2, 0(%r3)
-; nextln: br %r14
+; block0:
+;   mh %r2, 0(%r3)
+;   br %r14
 
 function %imul_i8(i8, i8) -> i8 {
 block0(v0: i8, v1: i8):
@@ -766,8 +819,9 @@ block0(v0: i8, v1: i8):
   return v2
 }
 
-; check:  msr %r2, %r3
-; nextln: br %r14
+; block0:
+;   msr %r2, %r3
+;   br %r14
 
 function %imul_i8_imm(i8) -> i8 {
 block0(v0: i8):
@@ -776,8 +830,9 @@ block0(v0: i8):
   return v2
 }
 
-; check:  mhi %r2, 3
-; nextln: br %r14
+; block0:
+;   mhi %r2, 3
+;   br %r14
 
 function %imul_i8_mem(i8, i64) -> i8 {
 block0(v0: i8, v1: i64):
@@ -786,13 +841,10 @@ block0(v0: i8, v1: i64):
   return v3
 }
 
-; check:  llc %r3, 0(%r3)
-; nextln: msr %r2, %r3
-; nextln: br %r14
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; UMULHI
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; block0:
+;   llc %r4, 0(%r3)
+;   msr %r2, %r4
+;   br %r14
 
 function %umulhi_i64(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -800,10 +852,11 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-; check:  lgr %r1, %r3
-; nextln: mlgr %r0, %r2
-; nextln: lgr %r2, %r0
-; nextln: br %r14
+; block0:
+;   lgr %r1, %r3
+;   mlgr %r0, %r2
+;   lgr %r2, %r0
+;   br %r14
 
 function %umulhi_i32(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
@@ -811,11 +864,14 @@ block0(v0: i32, v1: i32):
   return v2
 }
 
-; check:  llgfr %r2, %r2
-; nextln: llgfr %r3, %r3
-; nextln: msgr %r2, %r3
-; nextln: srlg %r2, %r2, 32
-; nextln: br %r14
+; block0:
+;   lgr %r4, %r3
+;   llgfr %r3, %r2
+;   lgr %r2, %r4
+;   llgfr %r5, %r2
+;   msgr %r3, %r5
+;   srlg %r2, %r3, 32
+;   br %r14
 
 function %umulhi_i16(i16, i16) -> i16 {
 block0(v0: i16, v1: i16):
@@ -823,11 +879,14 @@ block0(v0: i16, v1: i16):
   return v2
 }
 
-; check:  llhr %r2, %r2
-; nextln: llhr %r3, %r3
-; nextln: msr %r2, %r3
-; nextln: srlk %r2, %r2, 16
-; nextln: br %r14
+; block0:
+;   lgr %r4, %r3
+;   llhr %r3, %r2
+;   lgr %r2, %r4
+;   llhr %r5, %r2
+;   msr %r3, %r5
+;   srlk %r2, %r3, 16
+;   br %r14
 
 function %umulhi_i8(i8, i8) -> i8 {
 block0(v0: i8, v1: i8):
@@ -835,15 +894,14 @@ block0(v0: i8, v1: i8):
   return v2
 }
 
-; check:  llcr %r2, %r2
-; nextln: llcr %r3, %r3
-; nextln: msr %r2, %r3
-; nextln: srlk %r2, %r2, 8
-; nextln: br %r14
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; SMULHI
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; block0:
+;   lgr %r4, %r3
+;   llcr %r3, %r2
+;   lgr %r2, %r4
+;   llcr %r5, %r2
+;   msr %r3, %r5
+;   srlk %r2, %r3, 8
+;   br %r14
 
 function %smulhi_i64(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -851,9 +909,10 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-; check:  mgrk %r0, %r2, %r3
-; nextln: lgr %r2, %r0
-; nextln: br %r14
+; block0:
+;   mgrk %r0, %r2, %r3
+;   lgr %r2, %r0
+;   br %r14
 
 function %smulhi_i32(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
@@ -861,11 +920,14 @@ block0(v0: i32, v1: i32):
   return v2
 }
 
-; check:  lgfr %r2, %r2
-; nextln: lgfr %r3, %r3
-; nextln: msgr %r2, %r3
-; nextln: srag %r2, %r2, 32
-; nextln: br %r14
+; block0:
+;   lgr %r4, %r3
+;   lgfr %r3, %r2
+;   lgr %r2, %r4
+;   lgfr %r5, %r2
+;   msgr %r3, %r5
+;   srag %r2, %r3, 32
+;   br %r14
 
 function %smulhi_i16(i16, i16) -> i16 {
 block0(v0: i16, v1: i16):
@@ -873,11 +935,14 @@ block0(v0: i16, v1: i16):
   return v2
 }
 
-; check:  lhr %r2, %r2
-; nextln: lhr %r3, %r3
-; nextln: msr %r2, %r3
-; nextln: srak %r2, %r2, 16
-; nextln: br %r14
+; block0:
+;   lgr %r4, %r3
+;   lhr %r3, %r2
+;   lgr %r2, %r4
+;   lhr %r5, %r2
+;   msr %r3, %r5
+;   srak %r2, %r3, 16
+;   br %r14
 
 function %smulhi_i8(i8, i8) -> i8 {
 block0(v0: i8, v1: i8):
@@ -885,15 +950,14 @@ block0(v0: i8, v1: i8):
   return v2
 }
 
-; check:  lbr %r2, %r2
-; nextln: lbr %r3, %r3
-; nextln: msr %r2, %r3
-; nextln: srak %r2, %r2, 8
-; nextln: br %r14
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; SDIV
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; block0:
+;   lgr %r4, %r3
+;   lbr %r3, %r2
+;   lgr %r2, %r4
+;   lbr %r5, %r2
+;   msr %r3, %r5
+;   srak %r2, %r3, 8
+;   br %r14
 
 function %sdiv_i64(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -901,15 +965,16 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-; check:  lgr %r1, %r2
-; nextln: llihf %r2, 2147483647
-; nextln: iilf %r2, 4294967295
-; nextln: xgr %r2, %r1
-; nextln: ngr %r2, %r3
-; nextln: cgite %r2, -1
-; nextln: dsgr %r0, %r3
-; nextln: lgr %r2, %r1
-; nextln: br %r14
+; block0:
+;   lgr %r1, %r2
+;   llihf %r4, 2147483647
+;   iilf %r4, 4294967295
+;   xgr %r4, %r1
+;   ngrk %r5, %r4, %r3
+;   cgite %r5, -1
+;   dsgr %r0, %r3
+;   lgr %r2, %r1
+;   br %r14
 
 function %sdiv_i64_imm(i64) -> i64 {
 block0(v0: i64):
@@ -918,11 +983,12 @@ block0(v0: i64):
   return v2
 }
 
-; check:  lgr %r1, %r2
-; nextln: lghi %r2, 2
-; nextln: dsgr %r0, %r2
-; nextln: lgr %r2, %r1
-; nextln: br %r14
+; block0:
+;   lgr %r1, %r2
+;   lghi %r2, 2
+;   dsgr %r0, %r2
+;   lgr %r2, %r1
+;   br %r14
 
 function %sdiv_i32(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
@@ -930,14 +996,15 @@ block0(v0: i32, v1: i32):
   return v2
 }
 
-; check:  lgfr %r1, %r2
-; nextln: iilf %r2, 2147483647
-; nextln: xr %r2, %r1
-; nextln: nr %r2, %r3
-; nextln: cite %r2, -1
-; nextln: dsgfr %r0, %r3
-; nextln: lr %r2, %r1
-; nextln: br %r14
+; block0:
+;   lgfr %r1, %r2
+;   iilf %r4, 2147483647
+;   xrk %r2, %r4, %r1
+;   nrk %r4, %r2, %r3
+;   cite %r4, -1
+;   dsgfr %r0, %r3
+;   lgr %r2, %r1
+;   br %r14
 
 function %sdiv_i32_imm(i32) -> i32 {
 block0(v0: i32):
@@ -946,11 +1013,12 @@ block0(v0: i32):
   return v2
 }
 
-; check:  lgfr %r1, %r2
-; nextln: lhi %r2, 2
-; nextln: dsgfr %r0, %r2
-; nextln: lr %r2, %r1
-; nextln: br %r14
+; block0:
+;   lgfr %r1, %r2
+;   lhi %r2, 2
+;   dsgfr %r0, %r2
+;   lgr %r2, %r1
+;   br %r14
 
 function %sdiv_i16(i16, i16) -> i16 {
 block0(v0: i16, v1: i16):
@@ -958,15 +1026,16 @@ block0(v0: i16, v1: i16):
   return v2
 }
 
-; check:  lghr %r1, %r2
-; nextln: lhr %r2, %r3
-; nextln: lhi %r3, 32767
-; nextln: xr %r3, %r1
-; nextln: nr %r3, %r2
-; nextln: cite %r3, -1
-; nextln: dsgfr %r0, %r2
-; nextln: lr %r2, %r1
-; nextln: br %r14
+; block0:
+;   lghr %r1, %r2
+;   lhr %r4, %r3
+;   lhi %r2, 32767
+;   xrk %r5, %r2, %r1
+;   nrk %r2, %r5, %r4
+;   cite %r2, -1
+;   dsgfr %r0, %r4
+;   lgr %r2, %r1
+;   br %r14
 
 function %sdiv_i16_imm(i16) -> i16 {
 block0(v0: i16):
@@ -975,11 +1044,12 @@ block0(v0: i16):
   return v2
 }
 
-; check:  lghr %r1, %r2
-; nextln: lhi %r2, 2
-; nextln: dsgfr %r0, %r2
-; nextln: lr %r2, %r1
-; nextln: br %r14
+; block0:
+;   lghr %r1, %r2
+;   lhi %r2, 2
+;   dsgfr %r0, %r2
+;   lgr %r2, %r1
+;   br %r14
 
 function %sdiv_i8(i8, i8) -> i8 {
 block0(v0: i8, v1: i8):
@@ -987,15 +1057,16 @@ block0(v0: i8, v1: i8):
   return v2
 }
 
-; check:  lgbr %r1, %r2
-; nextln: lbr %r2, %r3
-; nextln: lhi %r3, 127
-; nextln: xr %r3, %r1
-; nextln: nr %r3, %r2
-; nextln: cite %r3, -1
-; nextln: dsgfr %r0, %r2
-; nextln: lr %r2, %r1
-; nextln: br %r14
+; block0:
+;   lgbr %r1, %r2
+;   lbr %r4, %r3
+;   lhi %r2, 127
+;   xrk %r5, %r2, %r1
+;   nrk %r2, %r5, %r4
+;   cite %r2, -1
+;   dsgfr %r0, %r4
+;   lgr %r2, %r1
+;   br %r14
 
 function %sdiv_i8_imm(i8) -> i8 {
 block0(v0: i8):
@@ -1004,15 +1075,12 @@ block0(v0: i8):
   return v2
 }
 
-; check:  lgbr %r1, %r2
-; nextln: lhi %r2, 2
-; nextln: dsgfr %r0, %r2
-; nextln: lr %r2, %r1
-; nextln: br %r14
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; UDIV
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; block0:
+;   lgbr %r1, %r2
+;   lhi %r2, 2
+;   dsgfr %r0, %r2
+;   lgr %r2, %r1
+;   br %r14
 
 function %udiv_i64(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -1020,11 +1088,12 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-; check:  lghi %r0, 0
-; nextln: lgr %r1, %r2
-; nextln: dlgr %r0, %r3
-; nextln: lgr %r2, %r1
-; nextln: br %r14
+; block0:
+;   lghi %r0, 0
+;   lgr %r1, %r2
+;   dlgr %r0, %r3
+;   lgr %r2, %r1
+;   br %r14
 
 function %udiv_i64_imm(i64) -> i64 {
 block0(v0: i64):
@@ -1033,12 +1102,13 @@ block0(v0: i64):
   return v2
 }
 
-; check:  lghi %r0, 0
-; nextln: lgr %r1, %r2
-; nextln: lghi %r2, 2
-; nextln: dlgr %r0, %r2
-; nextln: lgr %r2, %r1
-; nextln: br %r14
+; block0:
+;   lghi %r0, 0
+;   lgr %r1, %r2
+;   lghi %r3, 2
+;   dlgr %r0, %r3
+;   lgr %r2, %r1
+;   br %r14
 
 function %udiv_i32(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
@@ -1046,11 +1116,12 @@ block0(v0: i32, v1: i32):
   return v2
 }
 
-; check:  lhi %r0, 0
-; nextln: lr %r1, %r2
-; nextln: dlr %r0, %r3
-; nextln: lr %r2, %r1
-; nextln: br %r14
+; block0:
+;   lhi %r0, 0
+;   lgr %r1, %r2
+;   dlr %r0, %r3
+;   lgr %r2, %r1
+;   br %r14
 
 function %udiv_i32_imm(i32) -> i32 {
 block0(v0: i32):
@@ -1059,12 +1130,13 @@ block0(v0: i32):
   return v2
 }
 
-; check:  lhi %r0, 0
-; nextln: lr %r1, %r2
-; nextln: lhi %r2, 2
-; nextln: dlr %r0, %r2
-; nextln: lr %r2, %r1
-; nextln: br %r14
+; block0:
+;   lhi %r0, 0
+;   lgr %r1, %r2
+;   lhi %r3, 2
+;   dlr %r0, %r3
+;   lgr %r2, %r1
+;   br %r14
 
 function %udiv_i16(i16, i16) -> i16 {
 block0(v0: i16, v1: i16):
@@ -1072,12 +1144,13 @@ block0(v0: i16, v1: i16):
   return v2
 }
 
-; check:  lhi %r0, 0
-; nextln: llhr %r1, %r2
-; nextln: llhr %r2, %r3
-; nextln: dlr %r0, %r2
-; nextln: lr %r2, %r1
-; nextln: br %r14
+; block0:
+;   lhi %r0, 0
+;   llhr %r1, %r2
+;   llhr %r5, %r3
+;   dlr %r0, %r5
+;   lgr %r2, %r1
+;   br %r14
 
 function %udiv_i16_imm(i16) -> i16 {
 block0(v0: i16):
@@ -1086,12 +1159,13 @@ block0(v0: i16):
   return v2
 }
 
-; check:  lhi %r0, 0
-; nextln: llhr %r1, %r2
-; nextln: lhi %r2, 2
-; nextln: dlr %r0, %r2
-; nextln: lr %r2, %r1
-; nextln: br %r14
+; block0:
+;   lhi %r0, 0
+;   llhr %r1, %r2
+;   lhi %r3, 2
+;   dlr %r0, %r3
+;   lgr %r2, %r1
+;   br %r14
 
 function %udiv_i8(i8, i8) -> i8 {
 block0(v0: i8, v1: i8):
@@ -1099,12 +1173,13 @@ block0(v0: i8, v1: i8):
   return v2
 }
 
-; check:  lhi %r0, 0
-; nextln: llcr %r1, %r2
-; nextln: llcr %r2, %r3
-; nextln: dlr %r0, %r2
-; nextln: lr %r2, %r1
-; nextln: br %r14
+; block0:
+;   lhi %r0, 0
+;   llcr %r1, %r2
+;   llcr %r5, %r3
+;   dlr %r0, %r5
+;   lgr %r2, %r1
+;   br %r14
 
 function %udiv_i8_imm(i8) -> i8 {
 block0(v0: i8):
@@ -1113,16 +1188,13 @@ block0(v0: i8):
   return v2
 }
 
-; check:  lhi %r0, 0
-; nextln: llcr %r1, %r2
-; nextln: lhi %r2, 2
-; nextln: dlr %r0, %r2
-; nextln: lr %r2, %r1
-; nextln: br %r14
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; SREM
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; block0:
+;   lhi %r0, 0
+;   llcr %r1, %r2
+;   lhi %r3, 2
+;   dlr %r0, %r3
+;   lgr %r2, %r1
+;   br %r14
 
 function %srem_i64(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -1130,12 +1202,13 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-; check:  lgr %r1, %r2
-; nextln: cghi %r3, -1
-; nextln: locghie %r1, 0
-; nextln: dsgr %r0, %r3
-; nextln: lgr %r2, %r0
-; nextln: br %r14
+; block0:
+;   lgr %r1, %r2
+;   cghi %r3, -1
+;   locghie %r1, 0
+;   dsgr %r0, %r3
+;   lgr %r2, %r0
+;   br %r14
 
 function %srem_i32(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
@@ -1143,10 +1216,11 @@ block0(v0: i32, v1: i32):
   return v2
 }
 
-; check:  lgfr %r1, %r2
-; nextln: dsgfr %r0, %r3
-; nextln: lr %r2, %r0
-; nextln: br %r14
+; block0:
+;   lgfr %r1, %r2
+;   dsgfr %r0, %r3
+;   lgr %r2, %r0
+;   br %r14
 
 function %srem_i16(i16, i16) -> i16 {
 block0(v0: i16, v1: i16):
@@ -1154,11 +1228,12 @@ block0(v0: i16, v1: i16):
   return v2
 }
 
-; check:  lghr %r1, %r2
-; nextln: lhr %r2, %r3
-; nextln: dsgfr %r0, %r2
-; nextln: lr %r2, %r0
-; nextln: br %r14
+; block0:
+;   lghr %r1, %r2
+;   lhr %r4, %r3
+;   dsgfr %r0, %r4
+;   lgr %r2, %r0
+;   br %r14
 
 function %srem_i8(i8, i8) -> i8 {
 block0(v0: i8, v1: i8):
@@ -1166,15 +1241,12 @@ block0(v0: i8, v1: i8):
   return v2
 }
 
-; check:  lgbr %r1, %r2
-; nextln: lbr %r2, %r3
-; nextln: dsgfr %r0, %r2
-; nextln: lr %r2, %r0
-; nextln: br %r14
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; UREM
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; block0:
+;   lgbr %r1, %r2
+;   lbr %r4, %r3
+;   dsgfr %r0, %r4
+;   lgr %r2, %r0
+;   br %r14
 
 function %urem_i64(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -1182,11 +1254,12 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-; check:  lghi %r0, 0
-; nextln: lgr %r1, %r2
-; nextln: dlgr %r0, %r3
-; nextln: lgr %r2, %r0
-; nextln: br %r14
+; block0:
+;   lghi %r0, 0
+;   lgr %r1, %r2
+;   dlgr %r0, %r3
+;   lgr %r2, %r0
+;   br %r14
 
 function %urem_i32(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
@@ -1194,11 +1267,12 @@ block0(v0: i32, v1: i32):
   return v2
 }
 
-; check:  lhi %r0, 0
-; nextln: lr %r1, %r2
-; nextln: dlr %r0, %r3
-; nextln: lr %r2, %r0
-; nextln: br %r14
+; block0:
+;   lhi %r0, 0
+;   lgr %r1, %r2
+;   dlr %r0, %r3
+;   lgr %r2, %r0
+;   br %r14
 
 function %urem_i16(i16, i16) -> i16 {
 block0(v0: i16, v1: i16):
@@ -1206,12 +1280,13 @@ block0(v0: i16, v1: i16):
   return v2
 }
 
-; check:  lhi %r0, 0
-; check:  llhr %r1, %r2
-; nextln: llhr %r2, %r3
-; nextln: dlr %r0, %r2
-; nextln: lr %r2, %r0
-; nextln: br %r14
+; block0:
+;   lhi %r0, 0
+;   llhr %r1, %r2
+;   llhr %r5, %r3
+;   dlr %r0, %r5
+;   lgr %r2, %r0
+;   br %r14
 
 function %urem_i8(i8, i8) -> i8 {
 block0(v0: i8, v1: i8):
@@ -1219,10 +1294,11 @@ block0(v0: i8, v1: i8):
   return v2
 }
 
-; check:  lhi %r0, 0
-; check:  llcr %r1, %r2
-; nextln: llcr %r2, %r3
-; nextln: dlr %r0, %r2
-; nextln: lr %r2, %r0
-; nextln: br %r14
+; block0:
+;   lhi %r0, 0
+;   llcr %r1, %r2
+;   llcr %r5, %r3
+;   dlr %r0, %r5
+;   lgr %r2, %r0
+;   br %r14
 

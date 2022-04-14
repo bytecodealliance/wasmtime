@@ -397,9 +397,6 @@
 (decl emit (MInst) Unit)
 (extern constructor emit emit)
 
-(decl emit_safepoint (MInst) Unit)
-(extern constructor emit_safepoint emit_safepoint)
-
 ;;;; Helpers for Side-Effectful Instructions Without Results ;;;;;;;;;;;;;;;;;;;
 
 (type SideEffectNoResult (enum (Inst (inst MInst))))
@@ -409,12 +406,6 @@
 (decl side_effect (SideEffectNoResult) InstOutput)
 (rule (side_effect (SideEffectNoResult.Inst inst))
       (let ((_ Unit (emit inst)))
-        (output_none)))
-
-;; Similarly, but emit the side-effectful instruction as a safepoint.
-(decl safepoint (SideEffectNoResult) InstOutput)
-(rule (safepoint (SideEffectNoResult.Inst inst))
-      (let ((_ Unit (emit_safepoint inst)))
         (output_none)))
 
 ;;;; Helpers for Working with Flags ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

@@ -7,15 +7,13 @@ use crate::isa::s390x::settings as s390x_settings;
 use crate::isa::unwind::systemv::RegisterMappingError;
 use crate::isa::{Builder as IsaBuilder, TargetIsa};
 use crate::machinst::{
-    compile, MachCompileResult, MachTextSectionBuilder, TextSectionBuilder, VCode,
+    compile, MachCompileResult, MachTextSectionBuilder, Reg, TextSectionBuilder, VCode,
 };
 use crate::result::CodegenResult;
 use crate::settings as shared_settings;
-
 use alloc::{boxed::Box, vec::Vec};
 use core::fmt;
-
-use regalloc::{PrettyPrint, RealRegUniverse, Reg};
+use regalloc2::MachineEnv;
 use target_lexicon::{Architecture, Triple};
 
 // New backend:
@@ -24,7 +22,7 @@ pub(crate) mod inst;
 mod lower;
 mod settings;
 
-use inst::create_reg_universe;
+use inst::create_machine_env;
 
 use self::inst::EmitInfo;
 
@@ -33,7 +31,7 @@ pub struct S390xBackend {
     triple: Triple,
     flags: shared_settings::Flags,
     isa_flags: s390x_settings::Flags,
-    reg_universe: RealRegUniverse,
+    machine_env: MachineEnv,
 }
 
 impl S390xBackend {
@@ -43,12 +41,12 @@ impl S390xBackend {
         flags: shared_settings::Flags,
         isa_flags: s390x_settings::Flags,
     ) -> S390xBackend {
-        let reg_universe = create_reg_universe(&flags);
+        let machine_env = create_machine_env(&flags);
         S390xBackend {
             triple,
             flags,
             isa_flags,
-            reg_universe,
+            machine_env,
         }
     }
 
@@ -58,10 +56,10 @@ impl S390xBackend {
         &self,
         func: &Function,
         flags: shared_settings::Flags,
-    ) -> CodegenResult<VCode<inst::Inst>> {
+    ) -> CodegenResult<(VCode<inst::Inst>, regalloc2::Output)> {
         let emit_info = EmitInfo::new(flags.clone(), self.isa_flags.clone());
         let abi = Box::new(abi::S390xABICallee::new(func, flags, self.isa_flags())?);
-        compile::compile::<S390xBackend>(func, self, abi, &self.reg_universe, emit_info)
+        compile::compile::<S390xBackend>(func, self, abi, &self.machine_env, emit_info)
     }
 }
 
@@ -72,28 +70,27 @@ impl TargetIsa for S390xBackend {
         want_disasm: bool,
     ) -> CodegenResult<MachCompileResult> {
         let flags = self.flags();
-        let vcode = self.compile_vcode(func, flags.clone())?;
-        let (buffer, bb_starts, bb_edges) = vcode.emit();
-        let frame_size = vcode.frame_size();
-        let value_labels_ranges = vcode.value_labels_ranges();
-        let stackslot_offsets = vcode.stackslot_offsets().clone();
+        let (vcode, regalloc_result) = self.compile_vcode(func, flags.clone())?;
 
-        let disasm = if want_disasm {
-            Some(vcode.show_rru(Some(&create_reg_universe(flags))))
-        } else {
-            None
-        };
+        let want_disasm = want_disasm || log::log_enabled!(log::Level::Debug);
+        let emit_result = vcode.emit(&regalloc_result, want_disasm, flags.machine_code_cfg_info());
+        let frame_size = emit_result.frame_size;
+        let value_labels_ranges = emit_result.value_labels_ranges;
+        let buffer = emit_result.buffer.finish();
+        let stackslot_offsets = emit_result.stackslot_offsets;
 
-        let buffer = buffer.finish();
+        if let Some(disasm) = emit_result.disasm.as_ref() {
+            log::debug!("disassembly:\n{}", disasm);
+        }
 
         Ok(MachCompileResult {
             buffer,
             frame_size,
-            disasm,
+            disasm: emit_result.disasm,
             value_labels_ranges,
             stackslot_offsets,
-            bb_starts,
-            bb_edges,
+            bb_starts: emit_result.bb_offsets,
+            bb_edges: emit_result.bb_edges,
         })
     }
 
@@ -296,10 +293,11 @@ mod test {
         // jg label3
         // ahi %r2, -4660
         // br %r14
+
         let golden = vec![
-            167, 42, 18, 52, 167, 46, 0, 0, 192, 100, 0, 0, 0, 11, 236, 50, 18, 52, 0, 216, 167,
-            62, 0, 0, 192, 100, 255, 255, 255, 251, 167, 46, 0, 0, 192, 100, 255, 255, 255, 246,
-            167, 42, 237, 204, 7, 254,
+            236, 50, 18, 52, 0, 216, 167, 62, 0, 0, 192, 100, 0, 0, 0, 11, 236, 67, 18, 52, 0, 216,
+            167, 78, 0, 0, 192, 100, 255, 255, 255, 251, 167, 62, 0, 0, 192, 100, 255, 255, 255,
+            246, 236, 35, 237, 204, 0, 216, 7, 254,
         ];
 
         assert_eq!(code, &golden[..]);

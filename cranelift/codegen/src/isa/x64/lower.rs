@@ -20,7 +20,6 @@ use crate::settings::{Flags, TlsModel};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use log::trace;
-use regalloc::{Reg, RegClass, Writable};
 use smallvec::SmallVec;
 use std::convert::TryFrom;
 use target_lexicon::Triple;
@@ -1005,7 +1004,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 // simply use the flags here.
                 let cc = CC::from_intcc(cond_code);
 
-                ctx.emit_safepoint(Inst::TrapIf { trap_code, cc });
+                ctx.emit(Inst::TrapIf { trap_code, cc });
             } else if op == Opcode::Trapif {
                 let cond_code = ctx.data(insn).cond_code().unwrap();
 
@@ -1014,7 +1013,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 let cond_code = emit_cmp(ctx, ifcmp, cond_code);
                 let cc = CC::from_intcc(cond_code);
 
-                ctx.emit_safepoint(Inst::TrapIf { trap_code, cc });
+                ctx.emit(Inst::TrapIf { trap_code, cc });
             } else {
                 let cond_code = ctx.data(insn).fp_cond_code().unwrap();
 
@@ -1022,9 +1021,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 let ffcmp = matches_input(ctx, inputs[0], Opcode::Ffcmp).unwrap();
 
                 match emit_fcmp(ctx, ffcmp, cond_code, FcmpSpec::Normal) {
-                    FcmpCondResult::Condition(cc) => {
-                        ctx.emit_safepoint(Inst::TrapIf { trap_code, cc })
-                    }
+                    FcmpCondResult::Condition(cc) => ctx.emit(Inst::TrapIf { trap_code, cc }),
                     FcmpCondResult::AndConditions(cc1, cc2) => {
                         // A bit unfortunate, but materialize the flags in their own register, and
                         // check against this.
@@ -1038,14 +1035,14 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                             RegMemImm::reg(tmp.to_reg()),
                             tmp2,
                         ));
-                        ctx.emit_safepoint(Inst::TrapIf {
+                        ctx.emit(Inst::TrapIf {
                             trap_code,
                             cc: CC::NZ,
                         });
                     }
                     FcmpCondResult::OrConditions(cc1, cc2) => {
-                        ctx.emit_safepoint(Inst::TrapIf { trap_code, cc: cc1 });
-                        ctx.emit_safepoint(Inst::TrapIf { trap_code, cc: cc2 });
+                        ctx.emit(Inst::TrapIf { trap_code, cc: cc1 });
+                        ctx.emit(Inst::TrapIf { trap_code, cc: cc2 });
                     }
                     FcmpCondResult::InvertedEqualOrConditions(_, _) => unreachable!(),
                 };
@@ -2917,7 +2914,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let src_ty = ctx.input_ty(insn, 0);
             debug_assert!(src_ty.is_vector() && src_ty.bits() == 128);
             let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            debug_assert!(dst.to_reg().get_class() == RegClass::I64);
+            debug_assert!(dst.to_reg().class() == RegClass::Int);
 
             // The Intel specification allows using both 32-bit and 64-bit GPRs as destination for
             // the "move mask" instructions. This is controlled by the REX.R bit: "In 64-bit mode,

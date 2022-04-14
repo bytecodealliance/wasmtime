@@ -1,4 +1,4 @@
-test compile
+test compile precise-output
 target s390x
 
 function %f0(r64, r64) -> r64 {
@@ -6,8 +6,9 @@ block0(v0: r64, v1: r64):
   return v1
 }
 
-; check:  lgr %r2, %r3
-; nextln: br %r14
+; block0:
+;   lgr %r2, %r3
+;   br %r14
 
 function %f1(r64) -> b1 {
 block0(v0: r64):
@@ -15,10 +16,11 @@ block0(v0: r64):
   return v1
 }
 
-; check:  cghi %r2, 0
-; nextln: lhi %r2, 0
-; nextln: lochie %r2, 1
-; nextln: br %r14
+; block0:
+;   cghi %r2, 0
+;   lhi %r2, 0
+;   lochie %r2, 1
+;   br %r14
 
 function %f2(r64) -> b1 {
 block0(v0: r64):
@@ -26,10 +28,11 @@ block0(v0: r64):
   return v1
 }
 
-; check:  cghi %r2, -1
-; nextln: lhi %r2, 0
-; nextln: lochie %r2, 1
-; nextln: br %r14
+; block0:
+;   cghi %r2, -1
+;   lhi %r2, 0
+;   lochie %r2, 1
+;   br %r14
 
 function %f3() -> r64 {
 block0:
@@ -37,8 +40,9 @@ block0:
   return v0
 }
 
-; check:  lghi %r2, 0
-; nextln: br %r14
+; block0:
+;   lghi %r2, 0
+;   br %r14
 
 function %f4(r64, r64) -> r64, r64, r64 {
     fn0 = %f(r64) -> b1
@@ -61,41 +65,36 @@ block3(v7: r64, v8: r64):
     return v7, v8, v9
 }
 
-; check: Block 0:
-; check:  stmg %r12, %r15, 96(%r15)
-; nextln: aghi %r15, -192
-; nextln: virtual_sp_offset_adjust 160
-; nextln: lgr %r13, %r2
-; nextln: lgr %r12, %r3
-; nextln: lgr %r2, %r13
-; nextln: bras %r1, 12 ; data %f + 0 ; lg %r3, 0(%r1)
-; nextln: stg %r2, 168(%r15)
-; nextln: stg %r13, 176(%r15)
-; nextln: stg %r12, 184(%r15)
-; nextln: (safepoint: slots [S0, S1, S2]
-; nextln: basr %r14, %r3
-; nextln: lg %r13, 176(%r15)
-; nextln: lg %r12, 184(%r15)
-; nextln: la %r3, 160(%r15)
-; nextln: stg %r13, 0(%r3)
-; nextln: llcr %r2, %r2
-; nextln: chi %r2, 0
-; nextln: jgnlh label1 ; jg label3
-; check: Block 1:
-; check:  jg label2
-; check: Block 2:
-; check:  lgr %r2, %r12
-; nextln: jg label5
-; check: Block 3:
-; check:  jg label4
-; check: Block 4:
-; check:  lgr %r2, %r13
-; nextln: lgr %r13, %r12
-; nextln: jg label5
-; check: Block 5:
-; check:  la %r3, 160(%r15)
-; nextln: lg %r3, 0(%r3)
-; nextln: lgr %r4, %r3
-; nextln: lgr %r3, %r13
-; nextln: lmg %r12, %r15, 288(%r15)
-; nextln: br %r14
+;   stmg %r14, %r15, 112(%r15)
+;   aghi %r15, -184
+;   virtual_sp_offset_adjust 160
+; block0:
+;   lgr %r4, %r3
+;   lgr %r3, %r2
+;   bras %r1, 12 ; data %f + 0 ; lg %r5, 0(%r1)
+;   stg %r3, 168(%r15)
+;   stg %r4, 176(%r15)
+;   basr %r14, %r5
+;   lg %r3, 168(%r15)
+;   la %r4, 160(%r15)
+;   stg %r3, 0(%r4)
+;   llcr %r4, %r2
+;   chi %r4, 0
+;   jgnlh label1 ; jg label3
+; block1:
+;   jg label2
+; block2:
+;   lg %r2, 176(%r15)
+;   jg label5
+; block3:
+;   jg label4
+; block4:
+;   lgr %r2, %r3
+;   lg %r3, 176(%r15)
+;   jg label5
+; block5:
+;   la %r4, 160(%r15)
+;   lg %r4, 0(%r4)
+;   lmg %r14, %r15, 296(%r15)
+;   br %r14
+
