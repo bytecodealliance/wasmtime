@@ -666,14 +666,12 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
         &Inst::CCmpImm { rn, .. } => {
             collector.reg_use(rn);
         }
-        &Inst::AtomicRMWLoop { op, .. } => {
+        &Inst::AtomicRMWLoop { .. } => {
             collector.reg_use(xreg(25));
             collector.reg_use(xreg(26));
             collector.reg_def(writable_xreg(24));
             collector.reg_def(writable_xreg(27));
-            if op != AtomicRmwOp::Xchg {
-                collector.reg_def(writable_xreg(28));
-            }
+            collector.reg_def(writable_xreg(28));
         }
         &Inst::AtomicRMW { rs, rt, rn, .. } => {
             collector.reg_use(rs);
@@ -1556,13 +1554,14 @@ impl Inst {
                     _ => "",
                 };
                 let size = OperandSize::from_ty(ty);
-                let r_status = pretty_print_ireg(xreg(24), OperandSize::Size32, allocs);
+                let r_addr = pretty_print_ireg(xreg(25), OperandSize::Size64, allocs);
                 let r_arg2 = pretty_print_ireg(xreg(26), size, allocs);
+                let r_status = pretty_print_ireg(xreg(24), OperandSize::Size32, allocs);
                 let r_tmp = pretty_print_ireg(xreg(27), size, allocs);
                 let mut r_dst = pretty_print_ireg(xreg(28), size, allocs);
 
                 let mut loop_str: String = "1: ".to_string();
-                loop_str.push_str(&format!("ldaxr{} {}, [x25]; ", ty_suffix, r_tmp));
+                loop_str.push_str(&format!("ldaxr{} {}, [{}]; ", ty_suffix, r_tmp, r_addr));
 
                 let op_str = match op {
                     inst_common::AtomicRmwOp::Add => "add",
@@ -1599,8 +1598,8 @@ impl Inst {
                     loop_str.push_str(&format!("{} {}, {}, {}; ", op_str, r_dst, r_tmp, r_arg2));
                 }
                 loop_str.push_str(&format!(
-                    "stlxr{} {}, {}, [x25]; ",
-                    ty_suffix, r_status, r_dst
+                    "stlxr{} {}, {}, [{}]; ",
+                    ty_suffix, r_status, r_dst, r_addr
                 ));
                 loop_str.push_str(&format!("cbnz {}, 1b", r_status));
                 loop_str

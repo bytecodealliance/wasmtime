@@ -917,6 +917,10 @@ impl Inst {
             &Inst::Nop0 => "nop-zero-len".to_string(),
             &Inst::Nop2 => "nop".to_string(),
             &Inst::AluRRR { alu_op, rd, rn, rm } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
+                let rm = allocs.next(rm);
+
                 let (op, have_rr) = match alu_op {
                     ALUOp::Add32 => ("ark", true),
                     ALUOp::Add64 => ("agrk", true),
@@ -946,9 +950,9 @@ impl Inst {
                     let inst = Inst::AluRR { alu_op, rd, rm };
                     return inst.print_with_state(state, &mut empty_allocs);
                 }
-                let rd = pretty_print_reg(rd.to_reg(), allocs);
-                let rn = pretty_print_reg(rn, allocs);
-                let rm = pretty_print_reg(rm, allocs);
+                let rd = pretty_print_reg(rd.to_reg(), &mut empty_allocs);
+                let rn = pretty_print_reg(rn, &mut empty_allocs);
+                let rm = pretty_print_reg(rm, &mut empty_allocs);
                 format!("{} {}, {}, {}", op, rd, rn, rm)
             }
             &Inst::AluRRSImm16 {
@@ -957,6 +961,9 @@ impl Inst {
                 rn,
                 imm,
             } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
+
                 if rd.to_reg() == rn {
                     let inst = Inst::AluRSImm16 { alu_op, rd, imm };
                     return inst.print_with_state(state, &mut empty_allocs);
@@ -966,8 +973,8 @@ impl Inst {
                     ALUOp::Add64 => "aghik",
                     _ => unreachable!(),
                 };
-                let rd = pretty_print_reg(rd.to_reg(), allocs);
-                let rn = pretty_print_reg(rn, allocs);
+                let rd = pretty_print_reg(rd.to_reg(), &mut empty_allocs);
+                let rn = pretty_print_reg(rn, &mut empty_allocs);
                 format!("{} {}, {}, {}", op, rd, rn, imm)
             }
             &Inst::AluRR { alu_op, rd, rm } => {
@@ -1126,43 +1133,50 @@ impl Inst {
                 let op = "mgrk";
                 let rn = pretty_print_reg(rn, allocs);
                 let rm = pretty_print_reg(rm, allocs);
-                let rd = pretty_print_reg(gpr(0), &mut empty_allocs);
+                let rd = pretty_print_reg(gpr(0), allocs);
+                let _r1 = allocs.next(gpr(1));
                 format!("{} {}, {}, {}", op, rd, rn, rm)
             }
             &Inst::UMulWide { rn } => {
                 let op = "mlgr";
                 let rn = pretty_print_reg(rn, allocs);
-                let rd = pretty_print_reg(gpr(0), &mut empty_allocs);
+                let rd = pretty_print_reg(gpr(0), allocs);
+                let _r1 = allocs.next(gpr(1));
                 format!("{} {}, {}", op, rd, rn)
             }
             &Inst::SDivMod32 { rn, .. } => {
                 let op = "dsgfr";
                 let rn = pretty_print_reg(rn, allocs);
-                let rd = pretty_print_reg(gpr(0), &mut empty_allocs);
+                let rd = pretty_print_reg(gpr(0), allocs);
+                let _r1 = allocs.next(gpr(1));
                 format!("{} {}, {}", op, rd, rn)
             }
             &Inst::SDivMod64 { rn, .. } => {
                 let op = "dsgr";
                 let rn = pretty_print_reg(rn, allocs);
-                let rd = pretty_print_reg(gpr(0), &mut empty_allocs);
+                let rd = pretty_print_reg(gpr(0), allocs);
+                let _r1 = allocs.next(gpr(1));
                 format!("{} {}, {}", op, rd, rn)
             }
             &Inst::UDivMod32 { rn, .. } => {
                 let op = "dlr";
                 let rn = pretty_print_reg(rn, allocs);
-                let rd = pretty_print_reg(gpr(0), &mut empty_allocs);
+                let rd = pretty_print_reg(gpr(0), allocs);
+                let _r1 = allocs.next(gpr(1));
                 format!("{} {}, {}", op, rd, rn)
             }
             &Inst::UDivMod64 { rn, .. } => {
                 let op = "dlgr";
                 let rn = pretty_print_reg(rn, allocs);
-                let rd = pretty_print_reg(gpr(0), &mut empty_allocs);
+                let rd = pretty_print_reg(gpr(0), allocs);
+                let _r1 = allocs.next(gpr(1));
                 format!("{} {}, {}", op, rd, rn)
             }
             &Inst::Flogr { rn } => {
                 let op = "flogr";
                 let rn = pretty_print_reg(rn, allocs);
-                let rd = pretty_print_reg(gpr(0), &mut empty_allocs);
+                let rd = pretty_print_reg(gpr(0), allocs);
+                let _r1 = allocs.next(gpr(1));
                 format!("{} {}, {}", op, rd, rn)
             }
             &Inst::ShiftRR {

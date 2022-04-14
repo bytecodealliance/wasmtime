@@ -54,6 +54,6 @@ block5(v5: i64):
 ; block8:
 ;   jg label9
 ; block9:
-;   agrk %r2, %r2, %r4
+;   agr %r2, %r4
 ;   br %r14
 
