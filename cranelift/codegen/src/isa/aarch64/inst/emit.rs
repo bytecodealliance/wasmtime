@@ -758,6 +758,7 @@ impl MachInstEmit for Inst {
             }
             &Inst::AluRRRR {
                 alu_op,
+                size,
                 rd,
                 rm,
                 rn,
@@ -769,11 +770,10 @@ impl MachInstEmit for Inst {
                 let ra = allocs.next(ra);
 
                 let (top11, bit15) = match alu_op {
-                    ALUOp3::MAdd32 => (0b0_00_11011_000, 0),
-                    ALUOp3::MSub32 => (0b0_00_11011_000, 1),
-                    ALUOp3::MAdd64 => (0b1_00_11011_000, 0),
-                    ALUOp3::MSub64 => (0b1_00_11011_000, 1),
+                    ALUOp3::MAdd => (0b0_00_11011_000, 0),
+                    ALUOp3::MSub => (0b0_00_11011_000, 1),
                 };
+                let top11 = top11 | size.sf_bit() << 10;
                 sink.put4(enc_arith_rrrr(top11, rm, bit15, ra, rn, rd));
             }
             &Inst::AluRRImm12 {

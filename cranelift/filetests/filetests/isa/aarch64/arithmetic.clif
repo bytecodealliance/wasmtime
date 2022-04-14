@@ -406,6 +406,52 @@ block0(v0: i32, v1: i32, v2: i32):
 ;   madd w0, w1, w2, w0
 ;   ret
 
+function %msub_i32(i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = imul v1, v2
+    v4 = isub v0, v3
+    return v4
+}
+
+; block0:
+;   msub w0, w1, w2, w0
+;   ret
+
+function %msub_i64(i64, i64, i64) -> i64 {
+block0(v0: i64, v1: i64, v2: i64):
+    v3 = imul v1, v2
+    v4 = isub v0, v3
+    return v4
+}
+
+; block0:
+;   msub x0, x1, x2, x0
+;   ret
+
+function %imul_sub_i32(i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = imul v1, v2
+    v4 = isub v3, v0
+    return v4
+}
+
+; block0:
+;   madd w8, w1, w2, wzr
+;   sub w0, w8, w0
+;   ret
+
+function %imul_sub_i64(i64, i64, i64) -> i64 {
+block0(v0: i64, v1: i64, v2: i64):
+    v3 = imul v1, v2
+    v4 = isub v3, v0
+    return v4
+}
+
+; block0:
+;   madd x8, x1, x2, xzr
+;   sub x0, x8, x0
+;   ret
+
 function %srem_const (i64) -> i64 {
 block0(v0: i64):
   v1 = iconst.i64 2

@@ -70,6 +70,10 @@
 (rule (lower (has_type (fits_in_64 ty) (iadd (imul x y) z)))
       (madd ty x y z))
 
+;; Fold an `isub` and `imul` combination into a `msub` instruction.
+(rule (lower (has_type (fits_in_64 ty) (isub x (imul y z))))
+      (msub ty y z x))
+
 ;; vectors
 
 (rule (lower (has_type ty @ (multi_lane _ _) (iadd x y)))
@@ -202,9 +206,9 @@
            ;; madd    dst_hi, x_hi, y_lo, dst_hi
            ;; madd    dst_lo, x_lo, y_lo, zero
            (dst_hi1 Reg (umulh $I64 x_lo y_lo))
-           (dst_hi2 Reg (madd64 x_lo y_hi dst_hi1))
-           (dst_hi Reg (madd64 x_hi y_lo dst_hi2))
-           (dst_lo Reg (madd64 x_lo y_lo (zero_reg))))
+           (dst_hi2 Reg (madd $I64 x_lo y_hi dst_hi1))
+           (dst_hi Reg (madd $I64 x_hi y_lo dst_hi2))
+           (dst_lo Reg (madd $I64 x_lo y_lo (zero_reg))))
         (value_regs dst_lo dst_hi)))
 
 ;; Case for i8x16, i16x8, and i32x4.
@@ -358,7 +362,7 @@
 (rule (lower (has_type (fits_in_32 ty) (smulhi x y)))
       (let ((x64 Reg (put_in_reg_sext64 x))
             (y64 Reg (put_in_reg_sext64 y))
-            (mul Reg (madd64 x64 y64 (zero_reg)))
+            (mul Reg (madd $I64 x64 y64 (zero_reg)))
             (result Reg (asr_imm $I64 mul (imm_shift_from_u8 (ty_bits ty)))))
         result))
 
@@ -368,11 +372,13 @@
       (umulh $I64 x y))
 
 (rule (lower (has_type (fits_in_32 ty) (umulhi x y)))
-      (let ((x64 Reg (put_in_reg_zext64 x))
-            (y64 Reg (put_in_reg_zext64 y))
-            (mul Reg (madd64 x64 y64 (zero_reg)))
-            (result Reg (lsr_imm $I64 mul (imm_shift_from_u8 (ty_bits ty)))))
-        result))
+      (let (
+          (x64 Reg (put_in_reg_zext64 x))
+          (y64 Reg (put_in_reg_zext64 y))
+          (mul Reg (madd $I64 x64 y64 (zero_reg)))
+          (result Reg (lsr_imm $I64 mul (imm_shift_from_u8 (ty_bits ty))))
+        )
+        (value_reg result)))
 
 ;;;; Rules for `udiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -459,14 +465,14 @@
       (let ((x64 Reg (put_in_reg_zext64 x))
             (y64 Reg (put_nonzero_in_reg_zext64 y))
             (div Reg (a64_udiv $I64 x64 y64))
-            (result Reg (msub64 div y64 x64)))
+            (result Reg (msub $I64 div y64 x64)))
         result))
 
 (rule (lower (has_type (fits_in_64 ty) (srem x y)))
       (let ((x64 Reg (put_in_reg_sext64 x))
             (y64 Reg (put_nonzero_in_reg_sext64 y))
             (div Reg (a64_sdiv $I64 x64 y64))
-            (result Reg (msub64 div y64 x64)))
+            (result Reg (msub $I64 div y64 x64)))
         result))
 
 ;;;; Rules for `uextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1014,7 +1020,7 @@
       (let ((hi_clz Reg (a64_clz $I64 (value_regs_get val 1)))
             (lo_clz Reg (a64_clz $I64 (value_regs_get val 0)))
             (tmp Reg (lsr_imm $I64 hi_clz (imm_shift_from_u8 6))))
-        (value_regs (madd64 lo_clz tmp hi_clz) (imm $I64 0))))
+        (value_regs (madd $I64 lo_clz tmp hi_clz) (imm $I64 0))))
 
 ;;;; Rules for `ctz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1062,7 +1068,7 @@
             (hi_cls Reg (a64_cls $I64 hi))
             (sign_eq_eon Reg (eon $I64 hi lo))
             (sign_eq Reg (lsr_imm $I64 sign_eq_eon (imm_shift_from_u8 63)))
-            (lo_sign_bits Reg (madd64 lo_cls sign_eq sign_eq))
+            (lo_sign_bits Reg (madd $I64 lo_cls sign_eq sign_eq))
             (maybe_lo Reg (with_flags_reg
                            (cmp64_imm hi_cls (u8_into_imm12 63))
                            (csel (Cond.Eq) lo_sign_bits (zero_reg)))))

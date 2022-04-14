@@ -1288,16 +1288,15 @@ impl Inst {
             }
             &Inst::AluRRRR {
                 alu_op,
+                size,
                 rd,
                 rn,
                 rm,
                 ra,
             } => {
-                let (op, size) = match alu_op {
-                    ALUOp3::MAdd32 => ("madd", OperandSize::Size32),
-                    ALUOp3::MAdd64 => ("madd", OperandSize::Size64),
-                    ALUOp3::MSub32 => ("msub", OperandSize::Size32),
-                    ALUOp3::MSub64 => ("msub", OperandSize::Size64),
+                let op = match alu_op {
+                    ALUOp3::MAdd => "madd",
+                    ALUOp3::MSub => "msub",
                 };
                 let rd = pretty_print_ireg(rd.to_reg(), size, allocs);
                 let rn = pretty_print_ireg(rn, size, allocs);
