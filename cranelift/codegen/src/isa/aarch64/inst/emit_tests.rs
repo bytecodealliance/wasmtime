@@ -5428,7 +5428,8 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::FpuRRR {
-            fpu_op: FPUOp2::Add32,
+            fpu_op: FPUOp2::Add,
+            size: ScalarSize::Size32,
             rd: writable_vreg(15),
             rn: vreg(30),
             rm: vreg(31),
@@ -5439,7 +5440,8 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::FpuRRR {
-            fpu_op: FPUOp2::Add64,
+            fpu_op: FPUOp2::Add,
+            size: ScalarSize::Size64,
             rd: writable_vreg(15),
             rn: vreg(30),
             rm: vreg(31),
@@ -5450,7 +5452,8 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::FpuRRR {
-            fpu_op: FPUOp2::Sub32,
+            fpu_op: FPUOp2::Sub,
+            size: ScalarSize::Size32,
             rd: writable_vreg(15),
             rn: vreg(30),
             rm: vreg(31),
@@ -5461,7 +5464,8 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::FpuRRR {
-            fpu_op: FPUOp2::Sub64,
+            fpu_op: FPUOp2::Sub,
+            size: ScalarSize::Size64,
             rd: writable_vreg(15),
             rn: vreg(30),
             rm: vreg(31),
@@ -5472,7 +5476,8 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::FpuRRR {
-            fpu_op: FPUOp2::Mul32,
+            fpu_op: FPUOp2::Mul,
+            size: ScalarSize::Size32,
             rd: writable_vreg(15),
             rn: vreg(30),
             rm: vreg(31),
@@ -5483,7 +5488,8 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::FpuRRR {
-            fpu_op: FPUOp2::Mul64,
+            fpu_op: FPUOp2::Mul,
+            size: ScalarSize::Size64,
             rd: writable_vreg(15),
             rn: vreg(30),
             rm: vreg(31),
@@ -5494,7 +5500,8 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::FpuRRR {
-            fpu_op: FPUOp2::Div32,
+            fpu_op: FPUOp2::Div,
+            size: ScalarSize::Size32,
             rd: writable_vreg(15),
             rn: vreg(30),
             rm: vreg(31),
@@ -5505,7 +5512,8 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::FpuRRR {
-            fpu_op: FPUOp2::Div64,
+            fpu_op: FPUOp2::Div,
+            size: ScalarSize::Size64,
             rd: writable_vreg(15),
             rn: vreg(30),
             rm: vreg(31),
@@ -5516,7 +5524,8 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::FpuRRR {
-            fpu_op: FPUOp2::Max32,
+            fpu_op: FPUOp2::Max,
+            size: ScalarSize::Size32,
             rd: writable_vreg(15),
             rn: vreg(30),
             rm: vreg(31),
@@ -5527,7 +5536,8 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::FpuRRR {
-            fpu_op: FPUOp2::Max64,
+            fpu_op: FPUOp2::Max,
+            size: ScalarSize::Size64,
             rd: writable_vreg(15),
             rn: vreg(30),
             rm: vreg(31),
@@ -5538,7 +5548,8 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::FpuRRR {
-            fpu_op: FPUOp2::Min32,
+            fpu_op: FPUOp2::Min,
+            size: ScalarSize::Size32,
             rd: writable_vreg(15),
             rn: vreg(30),
             rm: vreg(31),
@@ -5549,57 +5560,14 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::FpuRRR {
-            fpu_op: FPUOp2::Min64,
+            fpu_op: FPUOp2::Min,
+            size: ScalarSize::Size64,
             rd: writable_vreg(15),
             rn: vreg(30),
             rm: vreg(31),
         },
         "CF5B7F1E",
         "fmin d15, d30, d31",
-    ));
-
-    insns.push((
-        Inst::FpuRRR {
-            fpu_op: FPUOp2::Uqadd64,
-            rd: writable_vreg(21),
-            rn: vreg(22),
-            rm: vreg(23),
-        },
-        "D50EF77E",
-        "uqadd d21, d22, d23",
-    ));
-
-    insns.push((
-        Inst::FpuRRR {
-            fpu_op: FPUOp2::Sqadd64,
-            rd: writable_vreg(21),
-            rn: vreg(22),
-            rm: vreg(23),
-        },
-        "D50EF75E",
-        "sqadd d21, d22, d23",
-    ));
-
-    insns.push((
-        Inst::FpuRRR {
-            fpu_op: FPUOp2::Uqsub64,
-            rd: writable_vreg(21),
-            rn: vreg(22),
-            rm: vreg(23),
-        },
-        "D52EF77E",
-        "uqsub d21, d22, d23",
-    ));
-
-    insns.push((
-        Inst::FpuRRR {
-            fpu_op: FPUOp2::Sqsub64,
-            rd: writable_vreg(21),
-            rn: vreg(22),
-            rm: vreg(23),
-        },
-        "D52EF75E",
-        "sqsub d21, d22, d23",
     ));
 
     insns.push((

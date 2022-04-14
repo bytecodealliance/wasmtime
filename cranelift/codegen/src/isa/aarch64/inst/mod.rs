@@ -1690,24 +1690,20 @@ impl Inst {
                 let rn = pretty_print_vreg_scalar(rn, sizesrc, allocs);
                 format!("{} {}, {}", op, rd, rn)
             }
-            &Inst::FpuRRR { fpu_op, rd, rn, rm } => {
-                let (op, size) = match fpu_op {
-                    FPUOp2::Add32 => ("fadd", ScalarSize::Size32),
-                    FPUOp2::Add64 => ("fadd", ScalarSize::Size64),
-                    FPUOp2::Sub32 => ("fsub", ScalarSize::Size32),
-                    FPUOp2::Sub64 => ("fsub", ScalarSize::Size64),
-                    FPUOp2::Mul32 => ("fmul", ScalarSize::Size32),
-                    FPUOp2::Mul64 => ("fmul", ScalarSize::Size64),
-                    FPUOp2::Div32 => ("fdiv", ScalarSize::Size32),
-                    FPUOp2::Div64 => ("fdiv", ScalarSize::Size64),
-                    FPUOp2::Max32 => ("fmax", ScalarSize::Size32),
-                    FPUOp2::Max64 => ("fmax", ScalarSize::Size64),
-                    FPUOp2::Min32 => ("fmin", ScalarSize::Size32),
-                    FPUOp2::Min64 => ("fmin", ScalarSize::Size64),
-                    FPUOp2::Sqadd64 => ("sqadd", ScalarSize::Size64),
-                    FPUOp2::Uqadd64 => ("uqadd", ScalarSize::Size64),
-                    FPUOp2::Sqsub64 => ("sqsub", ScalarSize::Size64),
-                    FPUOp2::Uqsub64 => ("uqsub", ScalarSize::Size64),
+            &Inst::FpuRRR {
+                fpu_op,
+                size,
+                rd,
+                rn,
+                rm,
+            } => {
+                let op = match fpu_op {
+                    FPUOp2::Add => "fadd",
+                    FPUOp2::Sub => "fsub",
+                    FPUOp2::Mul => "fmul",
+                    FPUOp2::Div => "fdiv",
+                    FPUOp2::Max => "fmax",
+                    FPUOp2::Min => "fmin",
                 };
                 let rd = pretty_print_vreg_scalar(rd.to_reg(), size, allocs);
                 let rn = pretty_print_vreg_scalar(rn, size, allocs);
