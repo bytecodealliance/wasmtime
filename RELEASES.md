@@ -6,6 +6,11 @@ Unreleased.
 
 ### Added
 
+* Updated Cranelift to use regalloc2, a new register allocator. This should
+  result in ~20% faster compile times, and for programs that suffered from
+  register-allocation pressure before, up to ~20% faster generated code.
+  [#3989](https://github.com/bytecodealliance/wasmtime/pull/3989)
+
 * Pre-built binaries for macOS M1 machines are now available as release
   artifacts.
   [#3983](https://github.com/bytecodealliance/wasmtime/pull/3983)
