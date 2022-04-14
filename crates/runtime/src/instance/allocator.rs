@@ -98,7 +98,7 @@ pub enum InstantiationError {
     #[error("Insufficient resources: {0}")]
     Resource(anyhow::Error),
 
-    /// A wasm link error occured.
+    /// A wasm link error occurred.
     #[error("Failed to link module")]
     Link(#[from] LinkError),
 
