@@ -119,24 +119,38 @@ typedef uint8_t wasmtime_v128[16];
  */
 typedef union wasmtime_valunion {
   /// Field used if #wasmtime_val_t::kind is #WASMTIME_I32
+  ///
+  /// Note that this field is always stored in a little-endian format.
   int32_t i32;
   /// Field used if #wasmtime_val_t::kind is #WASMTIME_I64
+  ///
+  /// Note that this field is always stored in a little-endian format.
   int64_t i64;
   /// Field used if #wasmtime_val_t::kind is #WASMTIME_F32
+  ///
+  /// Note that this field is always stored in a little-endian format.
   float32_t f32;
   /// Field used if #wasmtime_val_t::kind is #WASMTIME_F64
+  ///
+  /// Note that this field is always stored in a little-endian format.
   float64_t f64;
   /// Field used if #wasmtime_val_t::kind is #WASMTIME_FUNCREF
   ///
   /// If this value represents a `ref.null func` value then the `store_id` field
   /// is set to zero.
+  ///
+  /// Note that this field is always stored in a little-endian format.
   wasmtime_func_t funcref;
   /// Field used if #wasmtime_val_t::kind is #WASMTIME_EXTERNREF
   ///
   /// If this value represents a `ref.null extern` value then this pointer will
   /// be `NULL`.
+  ///
+  /// Note that this field is always stored in a little-endian format.
   wasmtime_externref_t *externref;
   /// Field used if #wasmtime_val_t::kind is #WASMTIME_V128
+  ///
+  /// Note that this field is always stored in a little-endian format.
   wasmtime_v128 v128;
 } wasmtime_valunion_t;
 

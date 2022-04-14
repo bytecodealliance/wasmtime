@@ -427,7 +427,8 @@ impl Compiler {
         };
 
         // Load the argument values out of `values_vec`.
-        let mflags = ir::MemFlags::trusted();
+        let mut mflags = ir::MemFlags::trusted();
+        mflags.set_endianness(ir::Endianness::Little);
         let callee_args = wasm_signature
             .params
             .iter()
@@ -458,7 +459,6 @@ impl Compiler {
         let results = builder.func.dfg.inst_results(call).to_vec();
 
         // Store the return values into `values_vec`.
-        let mflags = ir::MemFlags::trusted();
         for (i, r) in results.iter().enumerate() {
             builder
                 .ins()
@@ -507,7 +507,8 @@ impl Compiler {
         builder.seal_block(block0);
 
         let values_vec_ptr_val = builder.ins().stack_addr(pointer_type, ss, 0);
-        let mflags = MemFlags::trusted();
+        let mut mflags = MemFlags::trusted();
+        mflags.set_endianness(ir::Endianness::Little);
         for i in 0..ty.params().len() {
             let val = builder.func.dfg.block_params(block0)[i + 2];
             builder
@@ -528,7 +529,6 @@ impl Compiler {
             .ins()
             .call_indirect(new_sig, callee_value, &callee_args);
 
-        let mflags = MemFlags::trusted();
         let mut results = Vec::new();
         for (i, r) in ty.returns().iter().enumerate() {
             let load = builder.ins().load(
