@@ -269,10 +269,7 @@ pub struct VCodeBuilder<I: VCodeInst> {
 /// Direction in which a VCodeBuilder builds VCode.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum VCodeBuildDirection {
-    /// Forward-build pass: we expect the producer to call `emit()`
-    /// with instructions in forward program order within each block.
-    #[allow(dead_code)] // Not yet used but we expect to later!
-    Forward,
+    // TODO: add `Forward` once we need it and can test it adequately.
     /// Backward-build pass: we expect the producer to call `emit()`
     /// with instructions in reverse program order within each block.
     Backward,
