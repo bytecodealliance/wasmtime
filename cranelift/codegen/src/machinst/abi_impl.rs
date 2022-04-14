@@ -428,7 +428,7 @@ pub trait ABIMachineSpec {
     /// contains the registers in a sorted order.
     fn get_clobbered_callee_saves(
         call_conv: isa::CallConv,
-        regs: &Vec<Writable<RealReg>>,
+        regs: &[Writable<RealReg>],
     ) -> Vec<Writable<RealReg>>;
 
     /// Determine whether it is necessary to generate the usual frame-setup
@@ -452,7 +452,7 @@ pub trait ABIMachineSpec {
         call_conv: isa::CallConv,
         setup_frame: bool,
         flags: &settings::Flags,
-        clobbered_callee_saves: &Vec<Writable<RealReg>>,
+        clobbered_callee_saves: &[Writable<RealReg>],
         fixed_frame_storage_size: u32,
         outgoing_args_size: u32,
     ) -> (u64, SmallVec<[Self::I; 16]>);
@@ -464,7 +464,7 @@ pub trait ABIMachineSpec {
     fn gen_clobber_restore(
         call_conv: isa::CallConv,
         flags: &settings::Flags,
-        clobbers: &Vec<Writable<RealReg>>,
+        clobbers: &[Writable<RealReg>],
         fixed_frame_storage_size: u32,
         outgoing_args_size: u32,
     ) -> SmallVec<[Self::I; 16]>;

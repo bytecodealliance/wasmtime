@@ -79,7 +79,11 @@ pub struct VCode<I: VCodeInst> {
     operand_ranges: Vec<(u32, u32)>,
 
     /// Clobbers: a sparse map from instruction indices to clobber lists.
-    clobbers: FxHashMap<InsnIndex, Vec<PReg>>,
+    clobber_ranges: FxHashMap<InsnIndex, (u32, u32)>,
+
+    /// A flat list of clobbered registers, with index ranges held by
+    /// `clobber_ranges`.
+    clobbers: Vec<PReg>,
 
     /// Move information: for a given InsnIndex, (src, dst) operand pair.
     is_move: FxHashMap<InsnIndex, (Operand, Operand)>,
@@ -94,25 +98,21 @@ pub struct VCode<I: VCodeInst> {
     /// Block instruction indices.
     block_ranges: Vec<(InsnIndex, InsnIndex)>,
 
-    /// Block successors: index range in the successor-list below.
-    block_succ_range: Vec<(usize, usize)>,
+    /// Block successors: index range in the `block_succs_preds` list.
+    block_succ_range: Vec<(u32, u32)>,
 
-    /// Block successor lists, concatenated into one Vec. The `block_succ_range`
-    /// list of tuples above gives (start, end) ranges within this list that
-    /// correspond to each basic block's successors.
-    block_succs: Vec<regalloc2::Block>,
+    /// Block predecessors: index range in the `block_succs_preds` list.
+    block_pred_range: Vec<(u32, u32)>,
 
-    /// Block predecessors: index range in the predecessor-list below.
-    block_pred_range: Vec<(usize, usize)>,
-
-    /// Block predecessor lists, concatenated into one vec. The
-    /// `block_pred_range` list of tuples above gives (start, end)
-    /// ranges within this list that correspond to each basic block's
-    /// predecessors.
-    block_preds: Vec<regalloc2::Block>,
+    /// Block successor and predecessor lists, concatenated into one
+    /// Vec. The `block_succ_range` and `block_pred_range` lists of
+    /// tuples above give (start, end) ranges within this list that
+    /// correspond to each basic block's successors or predecessors,
+    /// respectively.
+    block_succs_preds: Vec<regalloc2::Block>,
 
     /// Block parameters: index range in `block_params` below.
-    block_params_range: Vec<(usize, usize)>,
+    block_params_range: Vec<(u32, u32)>,
 
     /// Block parameter lists, concatenated into one vec. The
     /// `block_params_range` list of tuples above gives (start, end)
@@ -136,11 +136,11 @@ pub struct VCode<I: VCodeInst> {
     /// for each block are concatenated.
     ///
     /// Indexed by the indices in `branch_block_arg_succ_range`.
-    branch_block_arg_range: Vec<(usize, usize)>,
+    branch_block_arg_range: Vec<(u32, u32)>,
 
     /// For a given block, indices in `branch_block_arg_range`
     /// corresponding to all of its successors.
-    branch_block_arg_succ_range: Vec<(usize, usize)>,
+    branch_block_arg_succ_range: Vec<(u32, u32)>,
 
     /// VReg aliases. Each key in this table is translated to its
     /// value when gathering Operands from instructions. Aliases are
@@ -208,7 +208,7 @@ pub struct EmitResult<I: VCodeInst> {
     /// pretty-printing for MachInsts as the pre-regalloc VCode Debug
     /// implementation, but additionally includes the prologue and
     /// epilogue(s), and makes use of the regalloc results.
-    pub disasm: String,
+    pub disasm: Option<String>,
 
     /// Offsets of stackslots.
     pub stackslot_offsets: PrimaryMap<StackSlot, u32>,
@@ -271,6 +271,7 @@ pub struct VCodeBuilder<I: VCodeInst> {
 pub enum VCodeBuildDirection {
     /// Forward-build pass: we expect the producer to call `emit()`
     /// with instructions in forward program order within each block.
+    #[allow(dead_code)] // Not yet used but we expect to later!
     Forward,
     /// Backward-build pass: we expect the producer to call `emit()`
     /// with instructions in reverse program order within each block.
@@ -348,22 +349,23 @@ impl<I: VCodeInst> VCodeBuilder<I> {
             .block_ranges
             .push((InsnIndex::new(start_idx), InsnIndex::new(end_idx)));
         // End the successors list.
-        let succ_end = self.vcode.block_succs.len();
+        let succ_end = self.vcode.block_succs_preds.len();
         self.vcode
             .block_succ_range
-            .push((self.succ_start, succ_end));
+            .push((self.succ_start as u32, succ_end as u32));
         self.succ_start = succ_end;
         // End the blockparams list.
         let block_params_end = self.vcode.block_params.len();
         self.vcode
             .block_params_range
-            .push((self.block_params_start, block_params_end));
+            .push((self.block_params_start as u32, block_params_end as u32));
         self.block_params_start = block_params_end;
         // End the branch blockparam args list.
         let branch_block_arg_succ_end = self.vcode.branch_block_arg_range.len();
-        self.vcode
-            .branch_block_arg_succ_range
-            .push((self.branch_block_arg_succ_start, branch_block_arg_succ_end));
+        self.vcode.branch_block_arg_succ_range.push((
+            self.branch_block_arg_succ_start as u32,
+            branch_block_arg_succ_end as u32,
+        ));
         self.branch_block_arg_succ_start = branch_block_arg_succ_end;
     }
 
@@ -378,7 +380,9 @@ impl<I: VCodeInst> VCodeBuilder<I> {
             .branch_block_args
             .extend(args.iter().map(|&arg| VReg::from(arg)));
         let end = self.vcode.branch_block_args.len();
-        self.vcode.branch_block_arg_range.push((start, end));
+        self.vcode
+            .branch_block_arg_range
+            .push((start as u32, end as u32));
     }
 
     /// Push an instruction for the current BB and current IR inst
@@ -388,21 +392,21 @@ impl<I: VCodeInst> VCodeBuilder<I> {
             MachTerminator::None | MachTerminator::Ret => {}
             MachTerminator::Uncond(target) => {
                 self.vcode
-                    .block_succs
+                    .block_succs_preds
                     .push(BlockIndex::new(target.get() as usize));
             }
             MachTerminator::Cond(true_branch, false_branch) => {
                 self.vcode
-                    .block_succs
+                    .block_succs_preds
                     .push(BlockIndex::new(true_branch.get() as usize));
                 self.vcode
-                    .block_succs
+                    .block_succs_preds
                     .push(BlockIndex::new(false_branch.get() as usize));
             }
             MachTerminator::Indirect(targets) => {
                 for target in targets {
                     self.vcode
-                        .block_succs
+                        .block_succs_preds
                         .push(BlockIndex::new(target.get() as usize));
                 }
             }
@@ -476,11 +480,11 @@ impl<I: VCodeInst> VCodeBuilder<I> {
         // all preds for a block into a contiguous sequence, we build
         // a list of (succ, pred) tuples and then sort.
         let mut succ_pred_edges: Vec<(BlockIndex, BlockIndex)> =
-            Vec::with_capacity(self.vcode.block_succs.len());
+            Vec::with_capacity(self.vcode.block_succs_preds.len());
         for (pred, &(start, end)) in self.vcode.block_succ_range.iter().enumerate() {
             let pred = BlockIndex::new(pred);
             for i in start..end {
-                let succ = BlockIndex::new(self.vcode.block_succs[i].index());
+                let succ = BlockIndex::new(self.vcode.block_succs_preds[i as usize].index());
                 succ_pred_edges.push((succ, pred));
             }
         }
@@ -489,14 +493,14 @@ impl<I: VCodeInst> VCodeBuilder<I> {
         let mut i = 0;
         for succ in 0..self.vcode.num_blocks() {
             let succ = BlockIndex::new(succ);
-            let start = self.vcode.block_preds.len();
+            let start = self.vcode.block_succs_preds.len();
             while i < succ_pred_edges.len() && succ_pred_edges[i].0 == succ {
                 let pred = succ_pred_edges[i].1;
-                self.vcode.block_preds.push(pred);
+                self.vcode.block_succs_preds.push(pred);
                 i += 1;
             }
-            let end = self.vcode.block_preds.len();
-            self.vcode.block_pred_range.push((start, end));
+            let end = self.vcode.block_succs_preds.len();
+            self.vcode.block_pred_range.push((start as u32, end as u32));
         }
     }
 
@@ -585,7 +589,12 @@ impl<I: VCodeInst> VCodeBuilder<I> {
             self.vcode.operand_ranges.push(ops);
 
             if !clobbers.is_empty() {
-                self.vcode.clobbers.insert(InsnIndex::new(i), clobbers);
+                let start = self.vcode.clobbers.len();
+                self.vcode.clobbers.extend(clobbers.into_iter());
+                let end = self.vcode.clobbers.len();
+                self.vcode
+                    .clobber_ranges
+                    .insert(InsnIndex::new(i), (start as u32, end as u32));
             }
 
             if let Some((dst, src)) = insn.is_move() {
@@ -639,15 +648,15 @@ impl<I: VCodeInst> VCode<I> {
             insts: Vec::with_capacity(10 * n_blocks),
             operands: Vec::with_capacity(30 * n_blocks),
             operand_ranges: Vec::with_capacity(10 * n_blocks),
-            clobbers: FxHashMap::default(),
+            clobber_ranges: FxHashMap::default(),
+            clobbers: vec![],
             is_move: FxHashMap::default(),
             srclocs: Vec::with_capacity(10 * n_blocks),
             entry: BlockIndex::new(0),
             block_ranges: Vec::with_capacity(n_blocks),
             block_succ_range: Vec::with_capacity(n_blocks),
-            block_succs: Vec::with_capacity(2 * n_blocks),
+            block_succs_preds: Vec::with_capacity(2 * n_blocks),
             block_pred_range: Vec::with_capacity(n_blocks),
-            block_preds: Vec::with_capacity(2 * n_blocks),
             block_params_range: Vec::with_capacity(n_blocks),
             block_params: Vec::with_capacity(5 * n_blocks),
             branch_block_args: Vec::with_capacity(10 * n_blocks),
@@ -673,7 +682,7 @@ impl<I: VCodeInst> VCode<I> {
     /// Get the successors for a block.
     pub fn succs(&self, block: BlockIndex) -> &[BlockIndex] {
         let (start, end) = self.block_succ_range[block.index()];
-        &self.block_succs[start..end]
+        &self.block_succs_preds[start as usize..end as usize]
     }
 
     fn compute_clobbers(&self, regalloc: &regalloc2::Output) -> Vec<Writable<RealReg>> {
@@ -721,7 +730,8 @@ impl<I: VCodeInst> VCode<I> {
             }
 
             // Also add explicitly-clobbered registers.
-            if let Some(inst_clobbers) = self.clobbers.get(&InsnIndex::new(i)) {
+            if let Some(&(start, end)) = self.clobber_ranges.get(&InsnIndex::new(i)) {
+                let inst_clobbers = &self.clobbers[(start as usize)..(end as usize)];
                 for &preg in inst_clobbers {
                     let reg = RealReg::from(preg);
                     if clobbered_set.insert(reg) {
@@ -814,17 +824,25 @@ impl<I: VCodeInst> VCode<I> {
             }
             assert_eq!(buffer.cur_offset(), new_offset);
 
+            let do_emit = |inst: &I,
+                           allocs: &[Allocation],
+                           disasm: &mut String,
+                           buffer: &mut MachBuffer<I>,
+                           state: &mut I::State| {
+                if want_disasm {
+                    let mut s = state.clone();
+                    writeln!(disasm, "  {}", inst.pretty_print_inst(allocs, &mut s)).unwrap();
+                }
+                inst.emit(allocs, buffer, &self.emit_info, state);
+            };
+
             // Is this the first block? Emit the prologue directly if so.
             if block == self.entry {
                 log::trace!(" -> entry block");
                 buffer.start_srcloc(SourceLoc::default());
                 state.pre_sourceloc(SourceLoc::default());
                 for inst in &prologue_insts {
-                    if want_disasm {
-                        let mut s = state.clone();
-                        writeln!(disasm, "  {}", inst.pretty_print_inst(&[], &mut s)).unwrap();
-                    }
-                    inst.emit(&[], &mut buffer, &self.emit_info, &mut state);
+                    do_emit(&inst, &[], &mut disasm, &mut buffer, &mut state);
                 }
                 buffer.end_srcloc();
             }
@@ -938,30 +956,15 @@ impl<I: VCodeInst> VCode<I> {
                         // epilogue will contain it).
                         if self.insts[iix.index()].is_term() == MachTerminator::Ret {
                             for inst in self.abi.gen_epilogue() {
-                                if want_disasm {
-                                    let mut s = state.clone();
-                                    writeln!(disasm, "  {}", inst.pretty_print_inst(&[], &mut s))
-                                        .unwrap();
-                                }
-
-                                inst.emit(&[], &mut buffer, &self.emit_info, &mut state);
+                                do_emit(&inst, &[], &mut disasm, &mut buffer, &mut state);
                             }
                         } else {
-                            if want_disasm {
-                                let mut s = state.clone();
-                                writeln!(
-                                    disasm,
-                                    "  {}",
-                                    self.insts[iix.index()].pretty_print_inst(allocs, &mut s)
-                                )
-                                .unwrap();
-                            }
-
                             // Emit the instruction!
-                            self.insts[iix.index()].emit(
+                            do_emit(
+                                &self.insts[iix.index()],
                                 allocs,
+                                &mut disasm,
                                 &mut buffer,
-                                &self.emit_info,
                                 &mut state,
                             );
                         }
@@ -978,12 +981,7 @@ impl<I: VCodeInst> VCode<I> {
                                 debug_assert_eq!(from.class(), to.class());
                                 let ty = I::canonical_type_for_rc(from.class());
                                 let mv = I::gen_move(to_rreg, from_rreg, ty);
-                                if want_disasm {
-                                    let mut s = state.clone();
-                                    writeln!(disasm, "  {}", mv.pretty_print_inst(&[], &mut s))
-                                        .unwrap();
-                                }
-                                mv.emit(&[], &mut buffer, &self.emit_info, &mut state);
+                                do_emit(&mv, &[], &mut disasm, &mut buffer, &mut state);
                             }
                             (Some(from), None) => {
                                 // Spill from register to spillslot.
@@ -991,12 +989,7 @@ impl<I: VCodeInst> VCode<I> {
                                 let from_rreg = RealReg::from(from);
                                 debug_assert_eq!(from.class(), to.class());
                                 let spill = self.abi.gen_spill(to, from_rreg);
-                                if want_disasm {
-                                    let mut s = state.clone();
-                                    writeln!(disasm, "  {}", spill.pretty_print_inst(&[], &mut s))
-                                        .unwrap();
-                                }
-                                spill.emit(&[], &mut buffer, &self.emit_info, &mut state);
+                                do_emit(&spill, &[], &mut disasm, &mut buffer, &mut state);
                             }
                             (None, Some(to)) => {
                                 // Load from spillslot to register.
@@ -1004,12 +997,7 @@ impl<I: VCodeInst> VCode<I> {
                                 let to_rreg = Writable::from_reg(RealReg::from(to));
                                 debug_assert_eq!(from.class(), to.class());
                                 let reload = self.abi.gen_reload(to_rreg, from);
-                                if want_disasm {
-                                    let mut s = state.clone();
-                                    writeln!(disasm, "  {}", reload.pretty_print_inst(&[], &mut s))
-                                        .unwrap();
-                                }
-                                reload.emit(&[], &mut buffer, &self.emit_info, &mut state);
+                                do_emit(&reload, &[], &mut disasm, &mut buffer, &mut state);
                             }
                             (None, None) => {
                                 panic!("regalloc2 should have eliminated stack-to-stack moves!");
@@ -1077,7 +1065,7 @@ impl<I: VCodeInst> VCode<I> {
             bb_edges,
             inst_offsets,
             func_body_len,
-            disasm,
+            disasm: if want_disasm { Some(disasm) } else { None },
             stackslot_offsets: self.abi.stackslot_offsets().clone(),
             value_labels_ranges,
             frame_size,
@@ -1176,24 +1164,25 @@ impl<I: VCodeInst> RegallocFunction for VCode<I> {
 
     fn block_succs(&self, block: BlockIndex) -> &[BlockIndex] {
         let (start, end) = self.block_succ_range[block.index()];
-        &self.block_succs[start..end]
+        &self.block_succs_preds[start as usize..end as usize]
     }
 
     fn block_preds(&self, block: BlockIndex) -> &[BlockIndex] {
         let (start, end) = self.block_pred_range[block.index()];
-        &self.block_preds[start..end]
+        &self.block_succs_preds[start as usize..end as usize]
     }
 
     fn block_params(&self, block: BlockIndex) -> &[VReg] {
         let (start, end) = self.block_params_range[block.index()];
-        &self.block_params[start..end]
+        &self.block_params[start as usize..end as usize]
     }
 
     fn branch_blockparams(&self, block: BlockIndex, _insn: InsnIndex, succ_idx: usize) -> &[VReg] {
         let (succ_range_start, succ_range_end) = self.branch_block_arg_succ_range[block.index()];
-        let succ_ranges = &self.branch_block_arg_range[succ_range_start..succ_range_end];
+        let succ_ranges =
+            &self.branch_block_arg_range[succ_range_start as usize..succ_range_end as usize];
         let (branch_block_args_start, branch_block_args_end) = succ_ranges[succ_idx];
-        &self.branch_block_args[branch_block_args_start..branch_block_args_end]
+        &self.branch_block_args[branch_block_args_start as usize..branch_block_args_end as usize]
     }
 
     fn is_ret(&self, insn: InsnIndex) -> bool {
@@ -1226,8 +1215,8 @@ impl<I: VCodeInst> RegallocFunction for VCode<I> {
     }
 
     fn inst_clobbers(&self, insn: InsnIndex) -> &[PReg] {
-        if let Some(clobbers) = self.clobbers.get(&insn) {
-            &clobbers[..]
+        if let Some(&(start, end)) = self.clobber_ranges.get(&insn) {
+            &self.clobbers[start as usize..end as usize]
         } else {
             &[]
         }

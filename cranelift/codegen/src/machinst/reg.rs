@@ -406,6 +406,7 @@ impl<'a, F: Fn(VReg) -> VReg> OperandCollector<'a, F> {
     /// Add a register clobber. This is a register that is written by
     /// the instruction, so must be reserved (not used) for the whole
     /// instruction, but is not used afterward.
+    #[allow(dead_code)] // FIXME: use clobbers rather than defs for calls!
     pub fn reg_clobber(&mut self, reg: Writable<RealReg>) {
         self.add_clobber(PReg::from(reg.to_reg()));
     }

@@ -706,7 +706,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
         call_conv: isa::CallConv,
         setup_frame: bool,
         flags: &settings::Flags,
-        clobbered_callee_saves: &Vec<Writable<RealReg>>,
+        clobbered_callee_saves: &[Writable<RealReg>],
         fixed_frame_storage_size: u32,
         _outgoing_args_size: u32,
     ) -> (u64, SmallVec<[Inst; 16]>) {
@@ -931,7 +931,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
     fn gen_clobber_restore(
         call_conv: isa::CallConv,
         flags: &settings::Flags,
-        clobbers: &Vec<Writable<RealReg>>,
+        clobbers: &[Writable<RealReg>],
         fixed_frame_storage_size: u32,
         _outgoing_args_size: u32,
     ) -> SmallVec<[Inst; 16]> {
@@ -1189,7 +1189,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
 
     fn get_clobbered_callee_saves(
         call_conv: isa::CallConv,
-        regs: &Vec<Writable<RealReg>>,
+        regs: &[Writable<RealReg>],
     ) -> Vec<Writable<RealReg>> {
         let mut regs: Vec<Writable<RealReg>> = regs
             .iter()
@@ -1260,11 +1260,11 @@ fn is_reg_saved_in_prologue(call_conv: isa::CallConv, r: RealReg) -> bool {
 /// written by the function's body.
 fn get_regs_restored_in_epilogue(
     call_conv: isa::CallConv,
-    regs: &Vec<Writable<RealReg>>,
+    regs: &[Writable<RealReg>],
 ) -> (Vec<Writable<RealReg>>, Vec<Writable<RealReg>>) {
     let mut int_saves = vec![];
     let mut vec_saves = vec![];
-    for &reg in regs.iter() {
+    for &reg in regs {
         if is_reg_saved_in_prologue(call_conv, reg.to_reg()) {
             match reg.to_reg().class() {
                 RegClass::Int => int_saves.push(reg),

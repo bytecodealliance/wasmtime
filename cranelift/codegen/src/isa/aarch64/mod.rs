@@ -78,18 +78,14 @@ impl TargetIsa for AArch64Backend {
         let buffer = emit_result.buffer.finish();
         let stackslot_offsets = emit_result.stackslot_offsets;
 
-        log::debug!("disassembly:\n{}", emit_result.disasm);
-
-        let disasm = if emit_result.disasm.is_empty() {
-            None
-        } else {
-            Some(emit_result.disasm)
-        };
+        if let Some(disasm) = emit_result.disasm.as_ref() {
+            log::debug!("disassembly:\n{}", disasm);
+        }
 
         Ok(MachCompileResult {
             buffer,
             frame_size,
-            disasm,
+            disasm: emit_result.disasm,
             value_labels_ranges,
             stackslot_offsets,
             bb_starts: emit_result.bb_offsets,

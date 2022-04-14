@@ -467,7 +467,7 @@ impl ABIMachineSpec for S390xMachineDeps {
         _call_conv: isa::CallConv,
         _setup_frame: bool,
         flags: &settings::Flags,
-        clobbered_callee_saves: &Vec<Writable<RealReg>>,
+        clobbered_callee_saves: &[Writable<RealReg>],
         fixed_frame_storage_size: u32,
         outgoing_args_size: u32,
     ) -> (u64, SmallVec<[Inst; 16]>) {
@@ -562,7 +562,7 @@ impl ABIMachineSpec for S390xMachineDeps {
     fn gen_clobber_restore(
         call_conv: isa::CallConv,
         _: &settings::Flags,
-        clobbers: &Vec<Writable<RealReg>>,
+        clobbers: &[Writable<RealReg>],
         fixed_frame_storage_size: u32,
         outgoing_args_size: u32,
     ) -> SmallVec<[Inst; 16]> {
@@ -719,7 +719,7 @@ impl ABIMachineSpec for S390xMachineDeps {
 
     fn get_clobbered_callee_saves(
         call_conv: isa::CallConv,
-        regs: &Vec<Writable<RealReg>>,
+        regs: &[Writable<RealReg>],
     ) -> Vec<Writable<RealReg>> {
         let mut regs: Vec<Writable<RealReg>> = regs
             .iter()
@@ -763,7 +763,7 @@ fn get_regs_saved_in_prologue(
 ) -> (Vec<Writable<RealReg>>, Vec<Writable<RealReg>>) {
     let mut int_saves = vec![];
     let mut fpr_saves = vec![];
-    for &reg in regs.iter() {
+    for &reg in regs {
         if is_reg_saved_in_prologue(call_conv, reg.to_reg()) {
             match reg.to_reg().class() {
                 RegClass::Int => int_saves.push(reg),

@@ -499,7 +499,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         _call_conv: isa::CallConv,
         setup_frame: bool,
         flags: &settings::Flags,
-        clobbered_callee_saves: &Vec<Writable<RealReg>>,
+        clobbered_callee_saves: &[Writable<RealReg>],
         fixed_frame_storage_size: u32,
         _outgoing_args_size: u32,
     ) -> (u64, SmallVec<[Self::I; 16]>) {
@@ -571,7 +571,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
     fn gen_clobber_restore(
         call_conv: isa::CallConv,
         flags: &settings::Flags,
-        clobbers: &Vec<Writable<RealReg>>,
+        clobbers: &[Writable<RealReg>],
         fixed_frame_storage_size: u32,
         _outgoing_args_size: u32,
     ) -> SmallVec<[Self::I; 16]> {
@@ -788,7 +788,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
 
     fn get_clobbered_callee_saves(
         call_conv: CallConv,
-        regs: &Vec<Writable<RealReg>>,
+        regs: &[Writable<RealReg>],
     ) -> Vec<Writable<RealReg>> {
         let mut regs: Vec<Writable<RealReg>> = match call_conv {
             CallConv::BaldrdashSystemV | CallConv::Baldrdash2020 => regs
@@ -1010,7 +1010,7 @@ fn is_callee_save_fastcall(r: RealReg) -> bool {
     }
 }
 
-fn compute_clobber_size(clobbers: &Vec<Writable<RealReg>>) -> u32 {
+fn compute_clobber_size(clobbers: &[Writable<RealReg>]) -> u32 {
     let mut clobbered_size = 0;
     for reg in clobbers {
         match reg.to_reg().class() {
