@@ -778,16 +778,81 @@ impl VMContext {
 /// This is provided for use with the `Func::new_unchecked` and
 /// `Func::call_unchecked` APIs. In general it's unlikely you should be using
 /// this from Rust, rather using APIs like `Func::wrap` and `TypedFunc::call`.
+///
+/// This is notably an "unsafe" way to work with `Val` and it's recommended to
+/// instead use `Val` where possible. An important note about this union is that
+/// fields are all stored in little-endian format, regardless of the endianness
+/// of the host system.
 #[allow(missing_docs)]
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub union ValRaw {
+    /// A WebAssembly `i32` value.
+    ///
+    /// Note that the payload here is a Rust `i32` but the WebAssembly `i32`
+    /// type does not assign an interpretation of the upper bit as either signed
+    /// or unsigned. The Rust type `i32` is simply chosen for convenience.
+    ///
+    /// This value is always stored in a little-endian format.
     pub i32: i32,
+
+    /// A WebAssembly `i64` value.
+    ///
+    /// Note that the payload here is a Rust `i64` but the WebAssembly `i64`
+    /// type does not assign an interpretation of the upper bit as either signed
+    /// or unsigned. The Rust type `i64` is simply chosen for convenience.
+    ///
+    /// This value is always stored in a little-endian format.
     pub i64: i64,
+
+    /// A WebAssembly `f32` value.
+    ///
+    /// Note that the payload here is a Rust `u32`. This is to allow passing any
+    /// representation of NaN into WebAssembly without risk of changing NaN
+    /// payload bits as its gets passed around the system. Otherwise though this
+    /// `u32` value is the return value of `f32::to_bits` in Rust.
+    ///
+    /// This value is always stored in a little-endian format.
     pub f32: u32,
+
+    /// A WebAssembly `f64` value.
+    ///
+    /// Note that the payload here is a Rust `u64`. This is to allow passing any
+    /// representation of NaN into WebAssembly without risk of changing NaN
+    /// payload bits as its gets passed around the system. Otherwise though this
+    /// `u64` value is the return value of `f64::to_bits` in Rust.
+    ///
+    /// This value is always stored in a little-endian format.
     pub f64: u64,
+
+    /// A WebAssembly `v128` value.
+    ///
+    /// The payload here is a Rust `u128` which has the same number of bits but
+    /// note that `v128` in WebAssembly is often considered a vector type such
+    /// as `i32x4` or `f64x2`. This means that the actual interpretation of the
+    /// underlying bits is left up to the instructions which consume this value.
+    ///
+    /// This value is always stored in a little-endian format.
     pub v128: u128,
+
+    /// A WebAssembly `funcref` value.
+    ///
+    /// The payload here is a pointer which is runtime-defined. This is one of
+    /// the main points of unsafety about the `ValRaw` type as the validity of
+    /// the pointer here is not easily verified and must be preserved by
+    /// carefully calling the correct functions throughout the runtime.
+    ///
+    /// This value is always stored in a little-endian format.
     pub funcref: usize,
+
+    /// A WebAssembly `externref` value.
+    ///
+    /// The payload here is a pointer which is runtime-defined. This is one of
+    /// the main points of unsafety about the `ValRaw` type as the validity of
+    /// the pointer here is not easily verified and must be preserved by
+    /// carefully calling the correct functions throughout the runtime.
+    ///
+    /// This value is always stored in a little-endian format.
     pub externref: usize,
 }
 
