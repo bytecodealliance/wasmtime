@@ -22,7 +22,7 @@ use std::string::{String, ToString};
 pub const PINNED_REG: u8 = 21;
 
 /// Get a reference to an X-register (integer register). Do not use
-/// this for xsp / xzr; we hvae two special registers for those.
+/// this for xsp / xzr; we have two special registers for those.
 pub fn xreg(num: u8) -> Reg {
     assert!(num < 31);
     let preg = PReg::new(num as usize, RegClass::Int);
