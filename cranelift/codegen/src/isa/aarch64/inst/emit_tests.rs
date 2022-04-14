@@ -5348,7 +5348,8 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::FpuRR {
-            fpu_op: FPUOp1::Abs32,
+            fpu_op: FPUOp1::Abs,
+            size: ScalarSize::Size32,
             rd: writable_vreg(15),
             rn: vreg(30),
         },
@@ -5358,7 +5359,8 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::FpuRR {
-            fpu_op: FPUOp1::Abs64,
+            fpu_op: FPUOp1::Abs,
+            size: ScalarSize::Size64,
             rd: writable_vreg(15),
             rn: vreg(30),
         },
@@ -5368,7 +5370,8 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::FpuRR {
-            fpu_op: FPUOp1::Neg32,
+            fpu_op: FPUOp1::Neg,
+            size: ScalarSize::Size32,
             rd: writable_vreg(15),
             rn: vreg(30),
         },
@@ -5378,7 +5381,8 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::FpuRR {
-            fpu_op: FPUOp1::Neg64,
+            fpu_op: FPUOp1::Neg,
+            size: ScalarSize::Size64,
             rd: writable_vreg(15),
             rn: vreg(30),
         },
@@ -5388,7 +5392,8 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::FpuRR {
-            fpu_op: FPUOp1::Sqrt32,
+            fpu_op: FPUOp1::Sqrt,
+            size: ScalarSize::Size32,
             rd: writable_vreg(15),
             rn: vreg(30),
         },
@@ -5398,7 +5403,8 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::FpuRR {
-            fpu_op: FPUOp1::Sqrt64,
+            fpu_op: FPUOp1::Sqrt,
+            size: ScalarSize::Size64,
             rd: writable_vreg(15),
             rn: vreg(30),
         },
@@ -5409,6 +5415,7 @@ fn test_aarch64_binemit() {
     insns.push((
         Inst::FpuRR {
             fpu_op: FPUOp1::Cvt32To64,
+            size: ScalarSize::Size32,
             rd: writable_vreg(15),
             rn: vreg(30),
         },
@@ -5419,6 +5426,7 @@ fn test_aarch64_binemit() {
     insns.push((
         Inst::FpuRR {
             fpu_op: FPUOp1::Cvt64To32,
+            size: ScalarSize::Size64,
             rd: writable_vreg(15),
             rn: vreg(30),
         },

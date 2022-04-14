@@ -317,6 +317,7 @@
        ;; 1-op FPU instruction.
        (FpuRR
         (fpu_op FPUOp1)
+        (size ScalarSize)
         (rd WritableReg)
         (rn Reg))
 
@@ -940,12 +941,9 @@
 ;; A floating-point unit (FPU) operation with one arg.
 (type FPUOp1
   (enum
-    (Abs32)
-    (Abs64)
-    (Neg32)
-    (Neg64)
-    (Sqrt32)
-    (Sqrt64)
+    (Abs)
+    (Neg)
+    (Sqrt)
     (Cvt32To64)
     (Cvt64To32)
 ))

@@ -1675,19 +1675,25 @@ impl Inst {
                 let rn = pretty_print_vreg_scalar(rn, size, allocs);
                 format!("fmov {}, {}", rd, rn)
             }
-            &Inst::FpuRR { fpu_op, rd, rn } => {
-                let (op, sizesrc, sizedest) = match fpu_op {
-                    FPUOp1::Abs32 => ("fabs", ScalarSize::Size32, ScalarSize::Size32),
-                    FPUOp1::Abs64 => ("fabs", ScalarSize::Size64, ScalarSize::Size64),
-                    FPUOp1::Neg32 => ("fneg", ScalarSize::Size32, ScalarSize::Size32),
-                    FPUOp1::Neg64 => ("fneg", ScalarSize::Size64, ScalarSize::Size64),
-                    FPUOp1::Sqrt32 => ("fsqrt", ScalarSize::Size32, ScalarSize::Size32),
-                    FPUOp1::Sqrt64 => ("fsqrt", ScalarSize::Size64, ScalarSize::Size64),
-                    FPUOp1::Cvt32To64 => ("fcvt", ScalarSize::Size32, ScalarSize::Size64),
-                    FPUOp1::Cvt64To32 => ("fcvt", ScalarSize::Size64, ScalarSize::Size32),
+            &Inst::FpuRR {
+                fpu_op,
+                size,
+                rd,
+                rn,
+            } => {
+                let op = match fpu_op {
+                    FPUOp1::Abs => "fabs",
+                    FPUOp1::Neg => "fneg",
+                    FPUOp1::Sqrt => "fsqrt",
+                    FPUOp1::Cvt32To64 | FPUOp1::Cvt64To32 => "fcvt",
                 };
-                let rd = pretty_print_vreg_scalar(rd.to_reg(), sizedest, allocs);
-                let rn = pretty_print_vreg_scalar(rn, sizesrc, allocs);
+                let dst_size = match fpu_op {
+                    FPUOp1::Cvt32To64 => ScalarSize::Size64,
+                    FPUOp1::Cvt64To32 => ScalarSize::Size32,
+                    _ => size,
+                };
+                let rd = pretty_print_vreg_scalar(rd.to_reg(), dst_size, allocs);
+                let rn = pretty_print_vreg_scalar(rn, size, allocs);
                 format!("{} {}, {}", op, rd, rn)
             }
             &Inst::FpuRRR {
