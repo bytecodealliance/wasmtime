@@ -185,25 +185,16 @@ fn enc_conditional_br(
     }
 }
 
-const MOVE_WIDE_FIXED: u32 = 0x12800000;
-
-#[repr(u32)]
-enum MoveWideOpcode {
-    MOVN = 0b00,
-    MOVZ = 0b10,
-    MOVK = 0b11,
-}
-
-fn enc_move_wide(
-    op: MoveWideOpcode,
-    rd: Writable<Reg>,
-    imm: MoveWideConst,
-    size: OperandSize,
-) -> u32 {
+fn enc_move_wide(op: MoveWideOp, rd: Writable<Reg>, imm: MoveWideConst, size: OperandSize) -> u32 {
     assert!(imm.shift <= 0b11);
-    MOVE_WIDE_FIXED
+    let op = match op {
+        MoveWideOp::MovN => 0b00,
+        MoveWideOp::MovZ => 0b10,
+        MoveWideOp::MovK => 0b11,
+    };
+    0x12800000
         | size.sf_bit() << 31
-        | (op as u32) << 29
+        | op << 29
         | u32::from(imm.shift) << 21
         | u32::from(imm.bits) << 5
         | machreg_to_gpr(rd.to_reg())
@@ -1315,51 +1306,45 @@ impl MachInstEmit for Inst {
                     }
                 }
             }
-            &Inst::Mov64 { rd, rm } => {
+            &Inst::Mov { size, rd, rm } => {
                 let rd = allocs.next_writable(rd);
                 let rm = allocs.next(rm);
                 assert!(rd.to_reg().class() == rm.class());
                 assert!(rm.class() == RegClass::Int);
 
-                // MOV to SP is interpreted as MOV to XZR instead. And our codegen
-                // should never MOV to XZR.
-                assert!(rd.to_reg() != stack_reg());
+                match size {
+                    OperandSize::Size64 => {
+                        // MOV to SP is interpreted as MOV to XZR instead. And our codegen
+                        // should never MOV to XZR.
+                        assert!(rd.to_reg() != stack_reg());
 
-                if rm == stack_reg() {
-                    // We can't use ORR here, so use an `add rd, sp, #0` instead.
-                    let imm12 = Imm12::maybe_from_u64(0).unwrap();
-                    sink.put4(enc_arith_rr_imm12(
-                        0b100_10001,
-                        imm12.shift_bits(),
-                        imm12.imm_bits(),
-                        rm,
-                        rd,
-                    ));
-                } else {
-                    // Encoded as ORR rd, rm, zero.
-                    sink.put4(enc_arith_rrr(0b10101010_000, 0b000_000, rd, zero_reg(), rm));
+                        if rm == stack_reg() {
+                            // We can't use ORR here, so use an `add rd, sp, #0` instead.
+                            let imm12 = Imm12::maybe_from_u64(0).unwrap();
+                            sink.put4(enc_arith_rr_imm12(
+                                0b100_10001,
+                                imm12.shift_bits(),
+                                imm12.imm_bits(),
+                                rm,
+                                rd,
+                            ));
+                        } else {
+                            // Encoded as ORR rd, rm, zero.
+                            sink.put4(enc_arith_rrr(0b10101010_000, 0b000_000, rd, zero_reg(), rm));
+                        }
+                    }
+                    OperandSize::Size32 => {
+                        // MOV to SP is interpreted as MOV to XZR instead. And our codegen
+                        // should never MOV to XZR.
+                        assert!(machreg_to_gpr(rd.to_reg()) != 31);
+                        // Encoded as ORR rd, rm, zero.
+                        sink.put4(enc_arith_rrr(0b00101010_000, 0b000_000, rd, zero_reg(), rm));
+                    }
                 }
             }
-            &Inst::Mov32 { rd, rm } => {
+            &Inst::MovWide { op, rd, imm, size } => {
                 let rd = allocs.next_writable(rd);
-                let rm = allocs.next(rm);
-                // MOV to SP is interpreted as MOV to XZR instead. And our codegen
-                // should never MOV to XZR.
-                assert!(machreg_to_gpr(rd.to_reg()) != 31);
-                // Encoded as ORR rd, rm, zero.
-                sink.put4(enc_arith_rrr(0b00101010_000, 0b000_000, rd, zero_reg(), rm));
-            }
-            &Inst::MovZ { rd, imm, size } => {
-                let rd = allocs.next_writable(rd);
-                sink.put4(enc_move_wide(MoveWideOpcode::MOVZ, rd, imm, size))
-            }
-            &Inst::MovN { rd, imm, size } => {
-                let rd = allocs.next_writable(rd);
-                sink.put4(enc_move_wide(MoveWideOpcode::MOVN, rd, imm, size))
-            }
-            &Inst::MovK { rd, imm, size } => {
-                let rd = allocs.next_writable(rd);
-                sink.put4(enc_move_wide(MoveWideOpcode::MOVK, rd, imm, size))
+                sink.put4(enc_move_wide(op, rd, imm, size));
             }
             &Inst::CSel { rd, rn, rm, cond } => {
                 let rd = allocs.next_writable(rd);
@@ -2700,7 +2685,11 @@ impl MachInstEmit for Inst {
             } => {
                 let rd = allocs.next_writable(rd);
                 let rn = allocs.next(rn);
-                let mov = Inst::Mov32 { rd, rm: rn };
+                let mov = Inst::Mov {
+                    size: OperandSize::Size32,
+                    rd,
+                    rm: rn,
+                };
                 mov.emit(&[], sink, emit_info, state);
             }
             &Inst::Extend {
@@ -2980,7 +2969,11 @@ impl MachInstEmit for Inst {
                     add.emit(&[], sink, emit_info, state);
                 } else if offset == 0 {
                     if reg != rd.to_reg() {
-                        let mov = Inst::Mov64 { rd, rm: reg };
+                        let mov = Inst::Mov {
+                            size: OperandSize::Size64,
+                            rd,
+                            rm: reg,
+                        };
 
                         mov.emit(&[], sink, emit_info, state);
                     }

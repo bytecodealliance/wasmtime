@@ -156,33 +156,18 @@
         (mem PairAMode)
         (flags MemFlags))
 
-       ;; A MOV instruction. These are encoded as ORR's (AluRRR form) but we
-       ;; keep them separate at the `Inst` level for better pretty-printing
-       ;; and faster `is_move()` logic.
-       (Mov64
+       ;; A MOV instruction. These are encoded as ORR's (AluRRR form).
+       ;; The 32-bit version zeroes the top 32 bits of the
+       ;; destination, which is effectively an alias for an unsigned
+       ;; 32-to-64-bit extension.
+       (Mov
+        (size OperandSize)
         (rd WritableReg)
         (rm Reg))
 
-       ;; A 32-bit MOV. Zeroes the top 32 bits of the destination. This is
-       ;; effectively an alias for an unsigned 32-to-64-bit extension.
-       (Mov32
-        (rd WritableReg)
-        (rm Reg))
-
-       ;; A MOVZ with a 16-bit immediate.
-       (MovZ
-        (rd WritableReg)
-        (imm MoveWideConst)
-        (size OperandSize))
-
-       ;; A MOVN with a 16-bit immediate.
-       (MovN
-        (rd WritableReg)
-        (imm MoveWideConst)
-        (size OperandSize))
-
-       ;; A MOVK with a 16-bit immediate.
-       (MovK
+       ;; A MOV[Z,N,K] with a 16-bit immediate.
+       (MovWide
+        (op MoveWideOp)
         (rd WritableReg)
         (imm MoveWideConst)
         (size OperandSize))
@@ -841,6 +826,13 @@
     (MSub)
 ))
 
+(type MoveWideOp
+  (enum
+    (MovZ)
+    (MovN)
+    (MovK)
+))
+
 (type UImm5 (primitive UImm5))
 (type Imm12 (primitive Imm12))
 (type ImmLogic (primitive ImmLogic))
@@ -1361,14 +1353,14 @@
 (decl movz (MoveWideConst OperandSize) Reg)
 (rule (movz imm size)
       (let ((dst WritableReg (temp_writable_reg $I64))
-            (_ Unit (emit (MInst.MovZ dst imm size))))
+            (_ Unit (emit (MInst.MovWide (MoveWideOp.MovZ) dst imm size))))
         dst))
 
 ;; Helper for emitting `MInst.MovN` instructions.
 (decl movn (MoveWideConst OperandSize) Reg)
 (rule (movn imm size)
       (let ((dst WritableReg (temp_writable_reg $I64))
-            (_ Unit (emit (MInst.MovN dst imm size))))
+            (_ Unit (emit (MInst.MovWide (MoveWideOp.MovN) dst imm size))))
         dst))
 
 ;; Helper for emitting `MInst.AluRRImmLogic` instructions.

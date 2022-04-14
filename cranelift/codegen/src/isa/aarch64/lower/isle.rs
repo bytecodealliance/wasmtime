@@ -7,8 +7,9 @@ pub mod generated_code;
 use super::{
     writable_zero_reg, zero_reg, AMode, ASIMDFPModImm, ASIMDMovModImm, AtomicRmwOp, BranchTarget,
     CallIndInfo, CallInfo, Cond, CondBrKind, ExtendOp, FPUOpRI, FloatCC, Imm12, ImmLogic, ImmShift,
-    Inst as MInst, IntCC, JTSequenceInfo, MachLabel, MoveWideConst, NarrowValueMode, Opcode,
-    OperandSize, PairAMode, Reg, ScalarSize, ShiftOpAndAmt, UImm5, VecMisc2, VectorSize, NZCV,
+    Inst as MInst, IntCC, JTSequenceInfo, MachLabel, MoveWideConst, MoveWideOp, NarrowValueMode,
+    Opcode, OperandSize, PairAMode, Reg, ScalarSize, ShiftOpAndAmt, UImm5, VecMisc2, VectorSize,
+    NZCV,
 };
 use crate::isa::aarch64::settings::Flags as IsaFlags;
 use crate::machinst::isle::*;
@@ -145,14 +146,29 @@ where
                         let imm =
                             MoveWideConst::maybe_with_shift(((!imm16) & 0xffff) as u16, i * 16)
                                 .unwrap();
-                        self.emit(&MInst::MovN { rd, imm, size });
+                        self.emit(&MInst::MovWide {
+                            op: MoveWideOp::MovN,
+                            rd,
+                            imm,
+                            size,
+                        });
                     } else {
                         let imm = MoveWideConst::maybe_with_shift(imm16 as u16, i * 16).unwrap();
-                        self.emit(&MInst::MovZ { rd, imm, size });
+                        self.emit(&MInst::MovWide {
+                            op: MoveWideOp::MovZ,
+                            rd,
+                            imm,
+                            size,
+                        });
                     }
                 } else {
                     let imm = MoveWideConst::maybe_with_shift(imm16 as u16, i * 16).unwrap();
-                    self.emit(&MInst::MovK { rd, imm, size });
+                    self.emit(&MInst::MovWide {
+                        op: MoveWideOp::MovK,
+                        rd,
+                        imm,
+                        size,
+                    });
                 }
             }
         }
