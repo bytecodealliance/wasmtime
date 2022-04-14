@@ -735,20 +735,11 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
 
             if !ty.is_vector() {
-                match ty_bits(ty) {
-                    32 => {
-                        ctx.emit(Inst::FpuCmp32 { rn, rm });
-                    }
-                    64 => {
-                        ctx.emit(Inst::FpuCmp64 { rn, rm });
-                    }
-                    _ => {
-                        return Err(CodegenError::Unsupported(format!(
-                            "Fcmp: Unsupported type: {:?}",
-                            ty
-                        )))
-                    }
-                }
+                ctx.emit(Inst::FpuCmp {
+                    size: ScalarSize::from_ty(ty),
+                    rn,
+                    rm,
+                });
                 materialize_bool_result(ctx, insn, rd, cond);
             } else {
                 lower_vector_compare(ctx, rd, rn, rm, ty, cond)?;
@@ -1076,7 +1067,8 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 rd: tmp,
                 rn: tmp.to_reg(),
             });
-            ctx.emit(Inst::FpuCmp64 {
+            ctx.emit(Inst::FpuCmp {
+                size: ScalarSize::Size64,
                 rn: tmp.to_reg(),
                 rm: tmp.to_reg(),
             });
@@ -1672,8 +1664,12 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     size,
                 });
             } else {
+                ctx.emit(Inst::FpuCmp {
+                    size: ScalarSize::from_ty(lane_type),
+                    rn: ra,
+                    rm: rb,
+                });
                 if lane_type == F32 {
-                    ctx.emit(Inst::FpuCmp32 { rn: ra, rm: rb });
                     ctx.emit(Inst::FpuCSel32 {
                         rd,
                         rn,
@@ -1681,7 +1677,6 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         cond: Cond::Gt,
                     });
                 } else {
-                    ctx.emit(Inst::FpuCmp64 { rn: ra, rm: rb });
                     ctx.emit(Inst::FpuCSel64 {
                         rd,
                         rn,
@@ -1897,11 +1892,11 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             // in-bounds conversion, per wasm semantics.
 
             // Check that the input is not a NaN.
-            if in_bits == 32 {
-                ctx.emit(Inst::FpuCmp32 { rn, rm: rn });
-            } else {
-                ctx.emit(Inst::FpuCmp64 { rn, rm: rn });
-            }
+            ctx.emit(Inst::FpuCmp {
+                size: ScalarSize::from_ty(input_ty),
+                rn,
+                rm: rn,
+            });
             let trap_code = TrapCode::BadConversionToInteger;
             ctx.emit(Inst::TrapIf {
                 trap_code,
@@ -1950,7 +1945,8 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
                 // >= low_bound
                 lower_constant_f32(ctx, tmp, low_bound);
-                ctx.emit(Inst::FpuCmp32 {
+                ctx.emit(Inst::FpuCmp {
+                    size: ScalarSize::Size32,
                     rn,
                     rm: tmp.to_reg(),
                 });
@@ -1962,7 +1958,8 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
                 // <= high_bound
                 lower_constant_f32(ctx, tmp, high_bound);
-                ctx.emit(Inst::FpuCmp32 {
+                ctx.emit(Inst::FpuCmp {
+                    size: ScalarSize::Size32,
                     rn,
                     rm: tmp.to_reg(),
                 });
@@ -2003,7 +2000,8 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
                 // >= low_bound
                 lower_constant_f64(ctx, tmp, low_bound);
-                ctx.emit(Inst::FpuCmp64 {
+                ctx.emit(Inst::FpuCmp {
+                    size: ScalarSize::Size64,
                     rn,
                     rm: tmp.to_reg(),
                 });
@@ -2015,7 +2013,8 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
                 // <= high_bound
                 lower_constant_f64(ctx, tmp, high_bound);
-                ctx.emit(Inst::FpuCmp64 {
+                ctx.emit(Inst::FpuCmp {
+                    size: ScalarSize::Size64,
                     rn,
                     rm: tmp.to_reg(),
                 });
@@ -2180,8 +2179,12 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         lower_constant_f64(ctx, rtmp1, 0.0);
                     }
                 }
+                ctx.emit(Inst::FpuCmp {
+                    size: ScalarSize::from_ty(in_ty),
+                    rn,
+                    rm: rn,
+                });
                 if in_bits == 32 {
-                    ctx.emit(Inst::FpuCmp32 { rn, rm: rn });
                     ctx.emit(Inst::FpuCSel32 {
                         rd: rtmp2,
                         rn: rtmp1.to_reg(),
@@ -2189,7 +2192,6 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         cond: Cond::Ne,
                     });
                 } else {
-                    ctx.emit(Inst::FpuCmp64 { rn, rm: rn });
                     ctx.emit(Inst::FpuCSel64 {
                         rd: rtmp2,
                         rn: rtmp1.to_reg(),

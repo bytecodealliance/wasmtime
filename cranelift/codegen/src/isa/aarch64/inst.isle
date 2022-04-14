@@ -327,13 +327,9 @@
         (rm Reg)
         (ra Reg))
 
-       ;; FPU comparison, single-precision (32 bit).
-       (FpuCmp32
-        (rn Reg)
-        (rm Reg))
-
-       ;; FPU comparison, double-precision (64 bit).
-       (FpuCmp64
+       ;; FPU comparison.
+       (FpuCmp
+        (size ScalarSize)
         (rn Reg)
         (rm Reg))
 

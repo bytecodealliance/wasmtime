@@ -807,7 +807,7 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_use(rn);
             collector.reg_use(rm);
         }
-        &Inst::FpuCmp32 { rn, rm } | &Inst::FpuCmp64 { rn, rm } => {
+        &Inst::FpuCmp { rn, rm, .. } => {
             collector.reg_use(rn);
             collector.reg_use(rm);
         }
@@ -1765,14 +1765,9 @@ impl Inst {
                 let ra = pretty_print_vreg_scalar(ra, size, allocs);
                 format!("{} {}, {}, {}, {}", op, rd, rn, rm, ra)
             }
-            &Inst::FpuCmp32 { rn, rm } => {
-                let rn = pretty_print_vreg_scalar(rn, ScalarSize::Size32, allocs);
-                let rm = pretty_print_vreg_scalar(rm, ScalarSize::Size32, allocs);
-                format!("fcmp {}, {}", rn, rm)
-            }
-            &Inst::FpuCmp64 { rn, rm } => {
-                let rn = pretty_print_vreg_scalar(rn, ScalarSize::Size64, allocs);
-                let rm = pretty_print_vreg_scalar(rm, ScalarSize::Size64, allocs);
+            &Inst::FpuCmp { size, rn, rm } => {
+                let rn = pretty_print_vreg_scalar(rn, size, allocs);
+                let rm = pretty_print_vreg_scalar(rm, size, allocs);
                 format!("fcmp {}, {}", rn, rm)
             }
             &Inst::FpuLoad32 { rd, ref mem, .. } => {
