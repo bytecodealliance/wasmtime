@@ -40,8 +40,8 @@ mod emit_tests;
 
 pub use crate::isa::aarch64::lower::isle::generated_code::{
     ALUOp, ALUOp3, AtomicRMWOp, BitOp, FPUOp1, FPUOp2, FPUOp3, FpuRoundMode, FpuToIntOp,
-    IntToFpuOp, MInst as Inst, VecALUOp, VecExtendOp, VecLanesOp, VecMisc2, VecPairOp, VecRRLongOp,
-    VecRRNarrowOp, VecRRPairLongOp, VecRRRLongOp, VecShiftImmOp,
+    IntToFpuOp, MInst as Inst, MoveWideOp, VecALUOp, VecExtendOp, VecLanesOp, VecMisc2, VecPairOp,
+    VecRRLongOp, VecRRNarrowOp, VecRRPairLongOp, VecRRRLongOp, VecShiftImmOp,
 };
 
 /// A floating-point unit (FPU) operation with two args, a register and an immediate.
@@ -130,14 +130,16 @@ impl Inst {
 
         if let Some(imm) = MoveWideConst::maybe_from_u64(value) {
             // 16-bit immediate (shifted by 0, 16, 32 or 48 bits) in MOVZ
-            smallvec![Inst::MovZ {
+            smallvec![Inst::MovWide {
+                op: MoveWideOp::MovZ,
                 rd,
                 imm,
                 size: OperandSize::Size64
             }]
         } else if let Some(imm) = MoveWideConst::maybe_from_u64(!value) {
             // 16-bit immediate (shifted by 0, 16, 32 or 48 bits) in MOVN
-            smallvec![Inst::MovN {
+            smallvec![Inst::MovWide {
+                op: MoveWideOp::MovN,
                 rd,
                 imm,
                 size: OperandSize::Size64
@@ -178,15 +180,30 @@ impl Inst {
                             let imm =
                                 MoveWideConst::maybe_with_shift(((!imm16) & 0xffff) as u16, i * 16)
                                     .unwrap();
-                            insts.push(Inst::MovN { rd, imm, size });
+                            insts.push(Inst::MovWide {
+                                op: MoveWideOp::MovN,
+                                rd,
+                                imm,
+                                size,
+                            });
                         } else {
                             let imm =
                                 MoveWideConst::maybe_with_shift(imm16 as u16, i * 16).unwrap();
-                            insts.push(Inst::MovZ { rd, imm, size });
+                            insts.push(Inst::MovWide {
+                                op: MoveWideOp::MovZ,
+                                rd,
+                                imm,
+                                size,
+                            });
                         }
                     } else {
                         let imm = MoveWideConst::maybe_with_shift(imm16 as u16, i * 16).unwrap();
-                        insts.push(Inst::MovK { rd, imm, size });
+                        insts.push(Inst::MovWide {
+                            op: MoveWideOp::MovK,
+                            rd,
+                            imm,
+                            size,
+                        });
                     }
                 }
             }
@@ -641,20 +658,14 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_def(rt2);
             pairmemarg_operands(mem, collector);
         }
-        &Inst::Mov64 { rd, rm } => {
+        &Inst::Mov { rd, rm, .. } => {
             collector.reg_def(rd);
             collector.reg_use(rm);
         }
-        &Inst::Mov32 { rd, rm } => {
-            collector.reg_def(rd);
-            collector.reg_use(rm);
-        }
-        &Inst::MovZ { rd, .. } | &Inst::MovN { rd, .. } => {
-            collector.reg_def(rd);
-        }
-        &Inst::MovK { rd, .. } => {
-            collector.reg_mod(rd);
-        }
+        &Inst::MovWide { op, rd, .. } => match op {
+            MoveWideOp::MovK => collector.reg_mod(rd),
+            _ => collector.reg_def(rd),
+        },
         &Inst::CSel { rd, rn, rm, .. } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
@@ -1043,7 +1054,11 @@ impl MachInst for Inst {
 
     fn is_move(&self) -> Option<(Writable<Reg>, Reg)> {
         match self {
-            &Inst::Mov64 { rd, rm } => Some((rd, rm)),
+            &Inst::Mov {
+                size: OperandSize::Size64,
+                rd,
+                rm,
+            } => Some((rd, rm)),
             &Inst::FpuMove64 { rd, rn } => Some((rd, rn)),
             &Inst::FpuMove128 { rd, rn } => Some((rd, rn)),
             _ => None,
@@ -1097,7 +1112,8 @@ impl MachInst for Inst {
         assert!(bits <= 128);
         assert!(to_reg.to_reg().class() == from_reg.class());
         match from_reg.class() {
-            RegClass::Int => Inst::Mov64 {
+            RegClass::Int => Inst::Mov {
+                size: OperandSize::Size64,
                 rd: to_reg,
                 rm: from_reg,
             },
@@ -1467,30 +1483,25 @@ impl Inst {
                 let mem = mem.pretty_print_default();
                 format!("ldp {}, {}, {}", rt, rt2, mem)
             }
-            &Inst::Mov64 { rd, rm } => {
-                let rd = pretty_print_ireg(rd.to_reg(), OperandSize::Size64, allocs);
-                let rm = pretty_print_ireg(rm, OperandSize::Size64, allocs);
+            &Inst::Mov { size, rd, rm } => {
+                let rd = pretty_print_ireg(rd.to_reg(), size, allocs);
+                let rm = pretty_print_ireg(rm, size, allocs);
                 format!("mov {}, {}", rd, rm)
             }
-            &Inst::Mov32 { rd, rm } => {
-                let rd = pretty_print_ireg(rd.to_reg(), OperandSize::Size32, allocs);
-                let rm = pretty_print_ireg(rm, OperandSize::Size32, allocs);
-                format!("mov {}, {}", rd, rm)
-            }
-            &Inst::MovZ { rd, ref imm, size } => {
+            &Inst::MovWide {
+                op,
+                rd,
+                ref imm,
+                size,
+            } => {
+                let op_str = match op {
+                    MoveWideOp::MovZ => "movz",
+                    MoveWideOp::MovN => "movn",
+                    MoveWideOp::MovK => "movk",
+                };
                 let rd = pretty_print_ireg(rd.to_reg(), size, allocs);
                 let imm = imm.pretty_print(0, allocs);
-                format!("movz {}, {}", rd, imm)
-            }
-            &Inst::MovN { rd, ref imm, size } => {
-                let rd = pretty_print_ireg(rd.to_reg(), size, allocs);
-                let imm = imm.pretty_print(0, allocs);
-                format!("movn {}, {}", rd, imm)
-            }
-            &Inst::MovK { rd, ref imm, size } => {
-                let rd = pretty_print_ireg(rd.to_reg(), size, allocs);
-                let imm = imm.pretty_print(0, allocs);
-                format!("movk {}, {}", rd, imm)
+                format!("{} {}, {}", op_str, rd, imm)
             }
             &Inst::CSel { rd, rn, rm, cond } => {
                 let rd = pretty_print_ireg(rd.to_reg(), OperandSize::Size64, allocs);
