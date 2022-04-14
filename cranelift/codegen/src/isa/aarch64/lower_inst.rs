@@ -1694,27 +1694,39 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::Sqrt | Opcode::Fneg | Opcode::Fabs | Opcode::Fpromote | Opcode::Fdemote => {
             let ty = ty.unwrap();
-            let bits = ty_bits(ty);
             let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
             let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             if !ty.is_vector() {
-                let fpu_op = match (op, bits) {
-                    (Opcode::Sqrt, 32) => FPUOp1::Sqrt32,
-                    (Opcode::Sqrt, 64) => FPUOp1::Sqrt64,
-                    (Opcode::Fneg, 32) => FPUOp1::Neg32,
-                    (Opcode::Fneg, 64) => FPUOp1::Neg64,
-                    (Opcode::Fabs, 32) => FPUOp1::Abs32,
-                    (Opcode::Fabs, 64) => FPUOp1::Abs64,
-                    (Opcode::Fpromote, 64) => FPUOp1::Cvt32To64,
-                    (Opcode::Fdemote, 32) => FPUOp1::Cvt64To32,
-                    _ => {
-                        return Err(CodegenError::Unsupported(format!(
-                            "{}: Unsupported type: {:?}",
-                            op, ty
-                        )))
+                let fpu_op = match op {
+                    Opcode::Sqrt => FPUOp1::Sqrt,
+                    Opcode::Fneg => FPUOp1::Neg,
+                    Opcode::Fabs => FPUOp1::Abs,
+                    Opcode::Fpromote => {
+                        if ty != F64 {
+                            return Err(CodegenError::Unsupported(format!(
+                                "Fpromote: Unsupported type: {:?}",
+                                ty
+                            )));
+                        }
+                        FPUOp1::Cvt32To64
                     }
+                    Opcode::Fdemote => {
+                        if ty != F32 {
+                            return Err(CodegenError::Unsupported(format!(
+                                "Fdemote: Unsupported type: {:?}",
+                                ty
+                            )));
+                        }
+                        FPUOp1::Cvt64To32
+                    }
+                    _ => unreachable!(),
                 };
-                ctx.emit(Inst::FpuRR { fpu_op, rd, rn });
+                ctx.emit(Inst::FpuRR {
+                    fpu_op,
+                    size: ScalarSize::from_ty(ctx.input_ty(insn, 0)),
+                    rd,
+                    rn,
+                });
             } else {
                 let op = match op {
                     Opcode::Fabs => VecMisc2::Fabs,

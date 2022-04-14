@@ -1671,19 +1671,28 @@ impl MachInstEmit for Inst {
                     rn,
                 ));
             }
-            &Inst::FpuRR { fpu_op, rd, rn } => {
+            &Inst::FpuRR {
+                fpu_op,
+                size,
+                rd,
+                rn,
+            } => {
                 let rd = allocs.next_writable(rd);
                 let rn = allocs.next(rn);
                 let top22 = match fpu_op {
-                    FPUOp1::Abs32 => 0b000_11110_00_1_000001_10000,
-                    FPUOp1::Abs64 => 0b000_11110_01_1_000001_10000,
-                    FPUOp1::Neg32 => 0b000_11110_00_1_000010_10000,
-                    FPUOp1::Neg64 => 0b000_11110_01_1_000010_10000,
-                    FPUOp1::Sqrt32 => 0b000_11110_00_1_000011_10000,
-                    FPUOp1::Sqrt64 => 0b000_11110_01_1_000011_10000,
-                    FPUOp1::Cvt32To64 => 0b000_11110_00_1_000101_10000,
-                    FPUOp1::Cvt64To32 => 0b000_11110_01_1_000100_10000,
+                    FPUOp1::Abs => 0b000_11110_00_1_000001_10000,
+                    FPUOp1::Neg => 0b000_11110_00_1_000010_10000,
+                    FPUOp1::Sqrt => 0b000_11110_00_1_000011_10000,
+                    FPUOp1::Cvt32To64 => {
+                        debug_assert_eq!(size, ScalarSize::Size32);
+                        0b000_11110_00_1_000101_10000
+                    }
+                    FPUOp1::Cvt64To32 => {
+                        debug_assert_eq!(size, ScalarSize::Size64);
+                        0b000_11110_01_1_000100_10000
+                    }
                 };
+                let top22 = top22 | size.ftype() << 12;
                 sink.put4(enc_fpurr(top22, rd, rn));
             }
             &Inst::FpuRRR {
