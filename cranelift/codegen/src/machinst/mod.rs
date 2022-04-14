@@ -133,8 +133,12 @@ pub trait MachInst: Clone + Debug {
     /// generating spills and reloads for individual registers.
     fn rc_for_type(ty: Type) -> CodegenResult<(&'static [RegClass], &'static [Type])>;
 
-    /// Get the appropriate type for a given register class.
-    fn type_for_rc(rc: RegClass) -> Type;
+    /// Get an appropriate type that can fully hold a value in a given
+    /// register class. This may not be the only type that maps to
+    /// that class, but when used with `gen_move()` or the ABI trait's
+    /// load/spill constructors, it should produce instruction(s) that
+    /// move the entire register contents.
+    fn canonical_type_for_rc(rc: RegClass) -> Type;
 
     /// Generate a jump to another target. Used during lowering of
     /// control flow.

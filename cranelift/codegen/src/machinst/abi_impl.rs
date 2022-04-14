@@ -1331,7 +1331,7 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
     }
 
     fn gen_spill(&self, to_slot: SpillSlot, from_reg: RealReg) -> Self::I {
-        let ty = Self::I::type_for_rc(Reg::from(from_reg).class());
+        let ty = Self::I::canonical_type_for_rc(Reg::from(from_reg).class());
         self.store_spillslot(to_slot, ty, ValueRegs::one(Reg::from(from_reg)))
             .into_iter()
             .next()
@@ -1339,7 +1339,7 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
     }
 
     fn gen_reload(&self, to_reg: Writable<RealReg>, from_slot: SpillSlot) -> Self::I {
-        let ty = Self::I::type_for_rc(to_reg.to_reg().class());
+        let ty = Self::I::canonical_type_for_rc(to_reg.to_reg().class());
         self.load_spillslot(
             from_slot,
             ty,

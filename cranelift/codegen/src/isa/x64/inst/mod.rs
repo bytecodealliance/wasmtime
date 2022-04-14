@@ -2198,7 +2198,7 @@ impl MachInst for Inst {
         }
     }
 
-    fn type_for_rc(rc: RegClass) -> Type {
+    fn canonical_type_for_rc(rc: RegClass) -> Type {
         match rc {
             RegClass::Float => types::I8X16,
             RegClass::Int => types::I64,
