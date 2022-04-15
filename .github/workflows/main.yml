@@ -134,7 +134,6 @@ jobs:
     - run: cargo check -p wasmtime --no-default-features --features vtune
     - run: cargo check -p wasmtime --no-default-features --features cache
     - run: cargo check -p wasmtime --no-default-features --features async
-    - run: cargo check -p wasmtime --no-default-features --features uffd
     - run: cargo check -p wasmtime --no-default-features --features pooling-allocator
     - run: cargo check -p wasmtime --no-default-features --features cranelift
     - run: cargo check -p wasmtime --no-default-features --features wasm-backtrace
@@ -313,15 +312,6 @@ jobs:
       env:
         RUST_BACKTRACE: 1
 
-    # Test Linux-specific functionality
-    - run: |
-        cargo test --features uffd -p wasmtime-runtime instance::allocator::pooling
-        cargo test --features uffd -p wasmtime-cli pooling_allocator
-        cargo test --features uffd -p wasmtime-cli wast::Cranelift
-      if: matrix.os == 'ubuntu-latest' && matrix.target == ''
-      env:
-        RUST_BACKTRACE: 1
-
   # Build and test the wasi-nn module.
   test_wasi_nn:
     name: Test wasi-nn module
@@ -363,7 +353,6 @@ jobs:
     - name: Install Rust
       run: rustup update stable && rustup default stable
     - run: cargo test --benches --release
-    - run: cargo test --benches --release --features uffd
 
   # Verify that cranelift's code generation is deterministic
   meta_determinist_check:

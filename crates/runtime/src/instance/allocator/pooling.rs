@@ -30,10 +30,6 @@ cfg_if::cfg_if! {
     if #[cfg(windows)] {
         mod windows;
         use windows as imp;
-    } else if #[cfg(all(feature = "uffd", target_os = "linux"))] {
-        mod uffd;
-        use uffd as imp;
-        use imp::initialize_memory_pool;
     } else if #[cfg(target_os = "linux")] {
         mod linux;
         use linux as imp;
@@ -205,9 +201,6 @@ impl Default for PoolingAllocationStrategy {
 /// structure depending on the limits used to create the pool.
 ///
 /// The pool maintains a free list for fast instance allocation.
-///
-/// The userfault handler relies on how instances are stored in the mapping,
-/// so make sure the uffd implementation is kept up-to-date.
 #[derive(Debug)]
 struct InstancePool {
     mapping: Mmap,
@@ -456,7 +449,7 @@ impl InstancePool {
         for ((def_mem_idx, memory), base) in
             memories.iter_mut().zip(self.memories.get(instance_index))
         {
-            let mut memory = mem::take(memory);
+            let memory = mem::take(memory);
             assert!(memory.is_static());
 
             match memory {
@@ -475,16 +468,6 @@ impl InstancePool {
                 }
 
                 _ => {
-                    // Reset any faulted guard pages as the physical
-                    // memory may be reused for another instance in
-                    // the future.
-                    #[cfg(all(feature = "uffd", target_os = "linux"))]
-                    memory
-                        .reset_guard_pages()
-                        .expect("failed to reset guard pages");
-                    // require mutable on all platforms, not just uffd
-                    drop(&mut memory);
-
                     let size = memory.byte_size();
                     drop(memory);
                     decommit_memory_pages(base, size)
@@ -667,9 +650,6 @@ impl InstancePool {
 ///
 /// Each instance index into the pool returns an iterator over the base addresses
 /// of the instance's linear memories.
-///
-/// The userfault handler relies on how memories are stored in the mapping,
-/// so make sure the uffd implementation is kept up-to-date.
 #[derive(Debug)]
 struct MemoryPool {
     mapping: Mmap,
@@ -777,10 +757,6 @@ impl MemoryPool {
             max_instances,
             max_memory_size: (instance_limits.memory_pages as usize) * (WASM_PAGE_SIZE as usize),
         };
-
-        // uffd support requires some special setup for the memory pool
-        #[cfg(all(feature = "uffd", target_os = "linux"))]
-        initialize_memory_pool(&pool)?;
 
         Ok(pool)
     }
@@ -1044,14 +1020,11 @@ impl StackPool {
 /// Note: the resource pools are manually dropped so that the fault handler terminates correctly.
 #[derive(Debug)]
 pub struct PoolingInstanceAllocator {
-    // This is manually drop so that the pools unmap their memory before the page fault handler drops.
-    instances: mem::ManuallyDrop<InstancePool>,
+    instances: InstancePool,
     #[cfg(all(feature = "async", unix))]
     stacks: StackPool,
     #[cfg(all(feature = "async", windows))]
     stack_size: usize,
-    #[cfg(all(feature = "uffd", target_os = "linux"))]
-    _fault_handler: imp::PageFaultHandler,
 }
 
 impl PoolingInstanceAllocator {
@@ -1068,30 +1041,15 @@ impl PoolingInstanceAllocator {
 
         let instances = InstancePool::new(strategy, &instance_limits, tunables)?;
 
-        #[cfg(all(feature = "uffd", target_os = "linux"))]
-        let _fault_handler = imp::PageFaultHandler::new(&instances)?;
-
         drop(stack_size); // suppress unused warnings w/o async feature
 
         Ok(Self {
-            instances: mem::ManuallyDrop::new(instances),
+            instances: instances,
             #[cfg(all(feature = "async", unix))]
             stacks: StackPool::new(&instance_limits, stack_size)?,
             #[cfg(all(feature = "async", windows))]
             stack_size,
-            #[cfg(all(feature = "uffd", target_os = "linux"))]
-            _fault_handler,
         })
-    }
-}
-
-impl Drop for PoolingInstanceAllocator {
-    fn drop(&mut self) {
-        // Manually drop the pools before the fault handler (if uffd is enabled)
-        // This ensures that any fault handler thread monitoring the pool memory terminates
-        unsafe {
-            mem::ManuallyDrop::drop(&mut self.instances);
-        }
     }
 }
 
@@ -1132,28 +1090,7 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
         is_bulk_memory: bool,
     ) -> Result<(), InstantiationError> {
         let instance = handle.instance_mut();
-
-        cfg_if::cfg_if! {
-            if #[cfg(all(feature = "uffd", target_os = "linux"))] {
-                match &module.memory_initialization {
-                    wasmtime_environ::MemoryInitialization::Paged { .. } => {
-                        if !is_bulk_memory {
-                            super::check_init_bounds(instance, module)?;
-                        }
-
-                        // Initialize the tables
-                        super::initialize_tables(instance, module)?;
-
-                        // Don't initialize the memory; the fault handler will back the pages when accessed
-
-                        Ok(())
-                    },
-                    _ => initialize_instance(instance, module, is_bulk_memory)
-                }
-            } else {
-                initialize_instance(instance, module, is_bulk_memory)
-            }
-        }
+        initialize_instance(instance, module, is_bulk_memory)
     }
 
     unsafe fn deallocate(&self, handle: &InstanceHandle) {

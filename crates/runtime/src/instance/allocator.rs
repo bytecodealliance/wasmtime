@@ -363,9 +363,9 @@ fn initialize_memories(instance: &mut Instance, module: &Module) -> Result<(), I
         },
         &mut |memory_index, init| {
             // If this initializer applies to a defined memory but that memory
-            // doesn't need initialization, due to something like uffd or
-            // copy-on-write pre-initializing it via mmap magic, then this
-            // initializer can be skipped entirely.
+            // doesn't need initialization, due to something like copy-on-write
+            // pre-initializing it via mmap magic, then this initializer can be
+            // skipped entirely.
             if let Some(memory_index) = module.defined_memory_index(memory_index) {
                 if !instance.memories[memory_index].needs_init() {
                     return true;

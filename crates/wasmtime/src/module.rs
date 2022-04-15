@@ -387,12 +387,6 @@ impl Module {
                 .compiler()
                 .emit_obj(&translation, &types, funcs, tunables, &mut obj)?;
 
-        // If configured, attempt to use paged memory initialization
-        // instead of the default mode of memory initialization
-        if engine.config().paged_memory_initialization {
-            translation.try_paged_init();
-        }
-
         // If configured attempt to use static memory initialization which
         // can either at runtime be implemented as a single memcpy to
         // initialize memory or otherwise enabling virtual-memory-tricks

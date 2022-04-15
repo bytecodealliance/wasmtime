@@ -36,9 +36,6 @@ rustix = "0.33.6"
 [target.'cfg(target_os = "windows")'.dependencies]
 winapi = { version = "0.3.7", features = ["winbase", "memoryapi", "errhandlingapi", "handleapi"] }
 
-[target.'cfg(target_os = "linux")'.dependencies]
-userfaultfd = { version = "0.4.1", optional = true }
-
 [build-dependencies]
 cc = "1.0"
 
@@ -53,9 +50,6 @@ async = ["wasmtime-fiber"]
 
 # Enables support for the pooling instance allocator
 pooling-allocator = []
-
-# Enables support for userfaultfd in the pooling allocator when building on Linux
-uffd = ["userfaultfd", "pooling-allocator"]
 
 # Enables trap handling using POSIX signals instead of Mach exceptions on MacOS.
 # It is useful for applications that do not bind their own exception ports and
