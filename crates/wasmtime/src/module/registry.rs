@@ -1,11 +1,12 @@
 //! Implements a registry of modules for a store.
 
-use crate::{signatures::SignatureCollection, Module};
+use crate::{Engine, Module};
+use std::cmp::Ordering;
 use std::{
     collections::BTreeMap,
     sync::{Arc, RwLock},
 };
-use wasmtime_environ::{EntityRef, FilePos, StackMap, TrapCode};
+use wasmtime_environ::{EntityRef, FilePos, TrapCode};
 use wasmtime_jit::CompiledModule;
 use wasmtime_runtime::{ModuleInfo, VMCallerCheckedAnyfunc, VMTrampoline};
 
@@ -15,30 +16,54 @@ lazy_static::lazy_static! {
 
 /// Used for registering modules with a store.
 ///
-/// The map is from the ending (exclusive) address for the module code to
-/// the registered module.
-///
-/// The `BTreeMap` is used to quickly locate a module based on a program counter value.
+/// Note that the primary reason for this registry is to ensure that everything
+/// in `Module` is kept alive for the duration of a `Store`. At this time we
+/// need "basically everything" within a `Moudle` to stay alive once it's
+/// instantiated within a store. While there's some smaller portions that could
+/// theoretically be omitted as they're not needed by the store they're
+/// currently small enough to not worry much about.
 #[derive(Default)]
 pub struct ModuleRegistry {
-    modules_with_code: BTreeMap<usize, Arc<RegisteredModule>>,
-    modules_without_code: Vec<Arc<CompiledModule>>,
+    // Sorted by module start address in memory, used for looking up based on a
+    // pc of a wasm function.
+    modules_with_code: Vec<Module>,
+
+    // Preserved for keeping data segments alive or similar
+    modules_without_code: Vec<Module>,
 }
 
 impl ModuleRegistry {
     /// Fetches information about a registered module given a program counter value.
-    pub fn lookup_module(&self, pc: usize) -> Option<Arc<dyn ModuleInfo>> {
-        self.module(pc)
-            .map(|m| -> Arc<dyn ModuleInfo> { m.clone() })
+    pub fn lookup_module(&self, pc: usize) -> Option<&dyn ModuleInfo> {
+        self.module(pc).map(|m| m.module_info())
     }
 
-    fn module(&self, pc: usize) -> Option<&Arc<RegisteredModule>> {
-        let (end, info) = self.modules_with_code.range(pc..).next()?;
-        if pc < info.start || *end < pc {
-            return None;
-        }
+    fn module(&self, pc: usize) -> Option<&Module> {
+        let idx = self.position(pc).ok()?;
+        Some(&self.modules_with_code[idx])
+    }
 
-        Some(info)
+    fn position(&self, pc: usize) -> Result<usize, usize> {
+        self.modules_with_code.binary_search_by(|module| {
+            let code = module.compiled_module().code();
+            let start = code.as_ptr() as usize;
+            // This closure returns where the `module` is relative to `pc`, so
+            // if the `pc` is before the start of this module then the module is
+            // "greater" than the pc.
+            if pc < start {
+                Ordering::Greater
+
+            // ... and if the `pc` is beyond the end of this module then the
+            // module is "less" than the pc
+            } else if pc >= start + code.len() {
+                Ordering::Less
+
+            // ... finally if the `pc` is within the module we've found our
+            // target.
+            } else {
+                Ordering::Equal
+            }
+        })
     }
 
     /// Registers a new module with the registry.
@@ -52,7 +77,7 @@ impl ModuleRegistry {
         // module in the future. For that reason we continue to register empty
         // modules and retain them.
         if compiled_module.finished_functions().len() == 0 {
-            self.modules_without_code.push(compiled_module.clone());
+            self.modules_without_code.push(module.clone());
             return;
         }
 
@@ -61,83 +86,20 @@ impl ModuleRegistry {
         let code = compiled_module.code();
         assert!(!code.is_empty());
         let start = code.as_ptr() as usize;
-        let end = start + code.len() - 1;
 
-        // Ensure the module isn't already present in the registry
-        // This is expected when a module is instantiated multiple times in the
-        // same store
-        if let Some(m) = self.modules_with_code.get(&end) {
-            assert_eq!(m.start, start);
-            return;
+        match self.position(start) {
+            // This module is already registered, so no need to re-add it.
+            Ok(_) => {}
+            // This module isn't already registered and if it were registered we
+            // should insert it at position `i`, so do so here.
+            Err(i) => self.modules_with_code.insert(i, module.clone()),
         }
-
-        // Assert that this module's code doesn't collide with any other registered modules
-        if let Some((_, prev)) = self.modules_with_code.range(end..).next() {
-            assert!(prev.start > end);
-        }
-
-        if let Some((prev_end, _)) = self.modules_with_code.range(..=start).next_back() {
-            assert!(*prev_end < start);
-        }
-
-        let prev = self.modules_with_code.insert(
-            end,
-            Arc::new(RegisteredModule {
-                start,
-                module: compiled_module.clone(),
-                signatures: module.signatures().clone(),
-            }),
-        );
-        assert!(prev.is_none());
-
-        GLOBAL_MODULES.write().unwrap().register(start, end, module);
     }
 
     /// Looks up a trampoline from an anyfunc.
     pub fn lookup_trampoline(&self, anyfunc: &VMCallerCheckedAnyfunc) -> Option<VMTrampoline> {
         let module = self.module(anyfunc.func_ptr.as_ptr() as usize)?;
-        module.signatures.trampoline(anyfunc.type_index)
-    }
-}
-
-impl Drop for ModuleRegistry {
-    fn drop(&mut self) {
-        let mut info = GLOBAL_MODULES.write().unwrap();
-        for end in self.modules_with_code.keys() {
-            info.unregister(*end);
-        }
-    }
-}
-
-struct RegisteredModule {
-    start: usize,
-    module: Arc<CompiledModule>,
-    signatures: Arc<SignatureCollection>,
-}
-
-impl ModuleInfo for RegisteredModule {
-    fn lookup_stack_map(&self, pc: usize) -> Option<&StackMap> {
-        let text_offset = pc - self.start;
-        let (index, func_offset) = self.module.func_by_text_offset(text_offset)?;
-        let info = self.module.func_info(index);
-
-        // Do a binary search to find the stack map for the given offset.
-        let index = match info
-            .stack_maps
-            .binary_search_by_key(&func_offset, |i| i.code_offset)
-        {
-            // Found it.
-            Ok(i) => i,
-
-            // No stack map associated with this PC.
-            //
-            // Because we know we are in Wasm code, and we must be at some kind
-            // of call/safepoint, then the Cranelift backend must have avoided
-            // emitting a stack map for this location because no refs were live.
-            Err(_) => return None,
-        };
-
-        Some(&info.stack_maps[index].stack_map)
+        module.signatures().trampoline(anyfunc.type_index)
     }
 }
 
@@ -146,11 +108,6 @@ struct GlobalRegisteredModule {
     start: usize,
     module: Arc<CompiledModule>,
     wasm_backtrace_details_env_used: bool,
-    /// Note that modules can be instantiated in many stores, so the purpose of
-    /// this field is to keep track of how many stores have registered a
-    /// module. Information is only removed from the global registry when this
-    /// reference count reaches 0.
-    references: usize,
 }
 
 /// This is the global module registry that stores information for all modules
@@ -173,14 +130,12 @@ impl GlobalModuleRegistry {
     /// Returns whether the `pc`, according to globally registered information,
     /// is a wasm trap or not.
     pub(crate) fn is_wasm_trap_pc(pc: usize) -> bool {
-        let modules = GLOBAL_MODULES.read().unwrap();
+        let (module, text_offset) = match GLOBAL_MODULES.read().unwrap().module(pc) {
+            Some((module, offset)) => (module.module.clone(), offset),
+            None => return false,
+        };
 
-        match modules.module(pc) {
-            Some((entry, text_offset)) => {
-                wasmtime_environ::lookup_trap_code(entry.module.trap_data(), text_offset).is_some()
-            }
-            None => false,
-        }
+        wasmtime_environ::lookup_trap_code(module.trap_data(), text_offset).is_some()
     }
 
     /// Returns, if found, the corresponding module for the `pc` as well as the
@@ -223,36 +178,43 @@ impl GlobalModuleRegistry {
         let (module, offset) = self.module(pc)?;
         wasmtime_environ::lookup_trap_code(module.module.trap_data(), offset)
     }
+}
 
-    /// Registers a new region of code, described by `(start, end)` and with
-    /// the given function information, with the global information.
-    fn register(&mut self, start: usize, end: usize, module: &Module) {
-        let info = self.0.entry(end).or_insert_with(|| GlobalRegisteredModule {
-            start,
-            module: module.compiled_module().clone(),
-            wasm_backtrace_details_env_used: module
-                .engine()
-                .config()
-                .wasm_backtrace_details_env_used,
-            references: 0,
-        });
-
-        // Note that ideally we'd debug_assert that the information previously
-        // stored, if any, matches the `functions` we were given, but for now we
-        // just do some simple checks to hope it's the same.
-        assert_eq!(info.start, start);
-        info.references += 1;
+/// Registers a new region of code.
+///
+/// Must not have been previously registered and must be `unregister`'d to
+/// prevent leaking memory.
+///
+/// This is required to enable traps to work correctly since the signal handler
+/// will lookup in the `GLOBAL_MODULES` list to determine which a particular pc
+/// is a trap or not.
+pub fn register(engine: &Engine, module: &Arc<CompiledModule>) {
+    let code = module.code();
+    if code.is_empty() {
+        return;
     }
+    let start = code.as_ptr() as usize;
+    let end = start + code.len() - 1;
+    let module = GlobalRegisteredModule {
+        start,
+        wasm_backtrace_details_env_used: engine.config().wasm_backtrace_details_env_used,
+        module: module.clone(),
+    };
+    let prev = GLOBAL_MODULES.write().unwrap().0.insert(end, module);
+    assert!(prev.is_none());
+}
 
-    /// Unregisters a region of code (keyed by the `end` address) from the
-    /// global information.
-    fn unregister(&mut self, end: usize) {
-        let info = self.0.get_mut(&end).unwrap();
-        info.references -= 1;
-        if info.references == 0 {
-            self.0.remove(&end);
-        }
+/// Unregisters a module from the global map.
+///
+/// Must hae been previously registered with `register`.
+pub fn unregister(module: &Arc<CompiledModule>) {
+    let code = module.code();
+    if code.is_empty() {
+        return;
     }
+    let end = (code.as_ptr() as usize) + code.len() - 1;
+    let module = GLOBAL_MODULES.write().unwrap().0.remove(&end);
+    assert!(module.is_some());
 }
 
 impl GlobalRegisteredModule {

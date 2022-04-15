@@ -1929,7 +1929,7 @@ impl Drop for StoreOpaque {
 }
 
 impl wasmtime_runtime::ModuleInfoLookup for ModuleRegistry {
-    fn lookup(&self, pc: usize) -> Option<Arc<dyn ModuleInfo>> {
+    fn lookup(&self, pc: usize) -> Option<&dyn ModuleInfo> {
         self.lookup_module(pc)
     }
 }
