@@ -326,62 +326,6 @@ impl<I: VCodeInst> MachBuffer<I> {
         }
     }
 
-    /// Debug-only: check invariants of labels and branch-records described
-    /// under "Branch-optimization Correctness" above.
-    ///
-    /// These invariants are checked at branch-simplification
-    /// time. Note that they may be temporarily violated at other
-    /// times, e.g. after calling `add_{cond,uncond}_branch()` and
-    /// before emitting branch bytes.
-    fn check_label_branch_invariants(&self) {
-        if !cfg!(fuzzing) {
-            return;
-        }
-        let cur_off = self.cur_offset();
-        // Check that every entry in latest_branches has *correct*
-        // labels_at_this_branch lists. We do not check completeness because
-        // that would require building a reverse index, which is too slow even
-        // for a debug invariant check.
-        let mut last_end = 0;
-        for b in &self.latest_branches {
-            debug_assert!(b.start < b.end);
-            debug_assert!(b.end <= cur_off);
-            debug_assert!(b.start >= last_end);
-            last_end = b.end;
-            for &l in &b.labels_at_this_branch {
-                debug_assert_eq!(self.resolve_label_offset(l), b.start);
-                debug_assert_eq!(self.label_aliases[l.0 as usize], UNKNOWN_LABEL);
-            }
-        }
-
-        // Check that every label is unresolved, or resolved at or
-        // before cur_offset. If at cur_offset, must be in
-        // `labels_at_tail`. We skip labels that are aliased to
-        // others already.
-        for (i, &off) in self.label_offsets.iter().enumerate() {
-            let label = MachLabel(i as u32);
-            if self.label_aliases[i] != UNKNOWN_LABEL {
-                continue;
-            }
-            debug_assert!(off == UNKNOWN_LABEL_OFFSET || off <= cur_off);
-            if off == cur_off {
-                debug_assert!(
-                    self.labels_at_tail_off == cur_off && self.labels_at_tail.contains(&label)
-                );
-            }
-        }
-
-        // Check that every label in `labels_at_tail_off` is precise, i.e.,
-        // resolves to the cur offset.
-        debug_assert!(self.labels_at_tail_off <= cur_off);
-        if self.labels_at_tail_off == cur_off {
-            for &l in &self.labels_at_tail {
-                debug_assert_eq!(self.resolve_label_offset(l), cur_off);
-                debug_assert_eq!(self.label_aliases[l.0 as usize], UNKNOWN_LABEL);
-            }
-        }
-    }
-
     /// Current offset from start of buffer.
     pub fn cur_offset(&self) -> CodeOffset {
         self.data.len() as CodeOffset
@@ -536,7 +480,6 @@ impl<I: VCodeInst> MachBuffer<I> {
         // offset and added it to the list (which contains all labels at the
         // current offset).
 
-        self.check_label_branch_invariants();
         self.optimize_branches();
 
         // Post-invariant: by `optimize_branches()` (see argument there).
