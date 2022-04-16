@@ -98,7 +98,6 @@ pub struct CallIndInfo {
 pub struct JTSequenceInfo {
     pub targets: Vec<BranchTarget>,
     pub default_target: BranchTarget,
-    pub targets_for_term: Vec<MachLabel>, // needed for MachTerminator.
 }
 
 fn count_zero_half_words(mut value: u64, num_half_words: u8) -> usize {
@@ -1091,17 +1090,13 @@ impl MachInst for Inst {
         }
     }
 
-    fn is_term<'a>(&'a self) -> MachTerminator<'a> {
+    fn is_term(&self) -> MachTerminator {
         match self {
             &Inst::Ret { .. } | &Inst::EpiloguePlaceholder => MachTerminator::Ret,
-            &Inst::Jump { dest } => MachTerminator::Uncond(dest.as_label().unwrap()),
-            &Inst::CondBr {
-                taken, not_taken, ..
-            } => MachTerminator::Cond(taken.as_label().unwrap(), not_taken.as_label().unwrap()),
-            &Inst::IndirectBr { ref targets, .. } => MachTerminator::Indirect(&targets[..]),
-            &Inst::JTSequence { ref info, .. } => {
-                MachTerminator::Indirect(&info.targets_for_term[..])
-            }
+            &Inst::Jump { .. } => MachTerminator::Uncond,
+            &Inst::CondBr { .. } => MachTerminator::Cond,
+            &Inst::IndirectBr { .. } => MachTerminator::Indirect,
+            &Inst::JTSequence { .. } => MachTerminator::Indirect,
             _ => MachTerminator::None,
         }
     }

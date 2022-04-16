@@ -733,19 +733,17 @@ impl MachInst for Inst {
         }
     }
 
-    fn is_term<'a>(&'a self) -> MachTerminator<'a> {
+    fn is_term(&self) -> MachTerminator {
         match self {
             &Inst::Ret { .. } | &Inst::EpiloguePlaceholder => MachTerminator::Ret,
-            &Inst::Jump { dest } => MachTerminator::Uncond(dest),
-            &Inst::CondBr {
-                taken, not_taken, ..
-            } => MachTerminator::Cond(taken, not_taken),
+            &Inst::Jump { .. } => MachTerminator::Uncond,
+            &Inst::CondBr { .. } => MachTerminator::Cond,
             &Inst::OneWayCondBr { .. } => {
                 // Explicitly invisible to CFG processing.
                 MachTerminator::None
             }
-            &Inst::IndirectBr { ref targets, .. } => MachTerminator::Indirect(&targets[..]),
-            &Inst::JTSequence { ref targets, .. } => MachTerminator::Indirect(&targets[..]),
+            &Inst::IndirectBr { .. } => MachTerminator::Indirect,
+            &Inst::JTSequence { .. } => MachTerminator::Indirect,
             _ => MachTerminator::None,
         }
     }

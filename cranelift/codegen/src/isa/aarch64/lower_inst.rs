@@ -2739,7 +2739,6 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
                     .map(|bix| BranchTarget::Label(*bix))
                     .collect();
                 let default_target = BranchTarget::Label(targets[0]);
-                let targets_for_term: Vec<MachLabel> = targets.to_vec();
                 ctx.emit(Inst::JTSequence {
                     ridx,
                     rtmp1,
@@ -2747,7 +2746,6 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
                     info: Box::new(JTSequenceInfo {
                         targets: jt_targets,
                         default_target,
-                        targets_for_term,
                     }),
                 });
             }
