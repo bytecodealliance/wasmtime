@@ -3,6 +3,21 @@ use crate::cdsl::settings::{SettingGroup, SettingGroupBuilder};
 pub(crate) fn define() -> SettingGroup {
     let mut settings = SettingGroupBuilder::new("shared");
 
+    settings.add_bool(
+        "regalloc_checker",
+        "Enable the symbolic checker for register allocation.",
+        r#"
+            This performs a verification that the register allocator preserves
+            equivalent dataflow with respect to the original (pre-regalloc)
+            program. This analysis is somewhat expensive. However, if it succeeds,
+            it provides independent evidence (by a carefully-reviewed, from-first-principles
+            analysis) that no regalloc bugs were triggered for the particular compilations
+            performed. This is a valuable assurance to have as regalloc bugs can be
+            very dangerous and difficult to debug.
+        "#,
+        false,
+    );
+
     settings.add_enum(
         "opt_level",
         "Optimization level for generated code.",

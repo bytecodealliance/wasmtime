@@ -47,5 +47,23 @@ pub fn compile<B: LowerBackend + TargetIsa>(
             .expect("register allocation")
     };
 
+    // Run the regalloc checker, if requested.
+    if b.flags().regalloc_checker() {
+        let _tt = timing::regalloc_checker();
+        let mut checker = regalloc2::checker::Checker::new(&vcode, machine_env);
+        checker.prepare(&regalloc_result);
+        checker
+            .run()
+            .map_err(|err| {
+                log::error!(
+                    "Register allocation checker errors:\n{:?}\nfor vcode:\n{:?}",
+                    err,
+                    vcode
+                );
+                err
+            })
+            .expect("register allocation checker");
+    }
+
     Ok((vcode, regalloc_result))
 }
