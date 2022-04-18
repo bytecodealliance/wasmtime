@@ -94,7 +94,7 @@ pub trait MachInst: Clone + Debug {
 
     /// Is this a terminator (branch or ret)? If so, return its type
     /// (ret/uncond/cond) and target if applicable.
-    fn is_term<'a>(&'a self) -> MachTerminator<'a>;
+    fn is_term(&self) -> MachTerminator;
 
     /// Returns true if the instruction is an epilogue placeholder.
     fn is_epilogue_placeholder(&self) -> bool;
@@ -221,18 +221,22 @@ pub trait MachInstLabelUse: Clone + Copy + Debug + Eq {
 
 /// Describes a block terminator (not call) in the vcode, when its branches
 /// have not yet been finalized (so a branch may have two targets).
+///
+/// Actual targets are not included: the single-source-of-truth for
+/// those is the VCode itself, which holds, for each block, successors
+/// and outgoing branch args per successor.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum MachTerminator<'a> {
+pub enum MachTerminator {
     /// Not a terminator.
     None,
     /// A return instruction.
     Ret,
     /// An unconditional branch to another block.
-    Uncond(MachLabel),
+    Uncond,
     /// A conditional branch to one of two other blocks.
-    Cond(MachLabel, MachLabel),
+    Cond,
     /// An indirect branch with known possible targets.
-    Indirect(&'a [MachLabel]),
+    Indirect,
 }
 
 /// A trait describing the ability to encode a MachInst into binary machine code.

@@ -745,6 +745,9 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     fn lower_clif_branches<B: LowerBackend<MInst = I>>(
         &mut self,
         backend: &B,
+        // Lowered block index:
+        bindex: BlockIndex,
+        // Original CLIF block:
         block: Block,
         branches: &SmallVec<[Inst; 2]>,
         targets: &SmallVec<[MachLabel; 2]>,
@@ -762,12 +765,15 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         let loc = self.srcloc(branches[0]);
         self.finish_ir_inst(loc);
         // Add block param outputs for current block.
-        self.lower_branch_blockparam_args(block);
+        self.lower_branch_blockparam_args(bindex);
         Ok(())
     }
 
-    fn lower_branch_blockparam_args(&mut self, block: Block) {
-        visit_block_succs(self.f, block, |inst, _succ| {
+    fn lower_branch_blockparam_args(&mut self, block: BlockIndex) {
+        for succ_idx in 0..self.vcode.block_order().succ_indices(block).len() {
+            // Avoid immutable borrow by explicitly indexing.
+            let (inst, succ) = self.vcode.block_order().succ_indices(block)[succ_idx];
+            // Get branch args and convert to Regs.
             let branch_args = self.f.dfg.inst_variable_args(inst);
             let mut branch_arg_vregs: SmallVec<[Reg; 16]> = smallvec![];
             for &arg in branch_args {
@@ -778,8 +784,8 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                     branch_arg_vregs.push(vreg.into());
                 }
             }
-            self.vcode.add_branch_args_for_succ(&branch_arg_vregs[..]);
-        });
+            self.vcode.add_succ(succ, &branch_arg_vregs[..]);
+        }
         self.finish_ir_inst(SourceLoc::default());
     }
 
@@ -849,7 +855,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             if let Some(bb) = lb.orig_block() {
                 self.collect_branches_and_targets(bindex, bb, &mut branches, &mut targets);
                 if branches.len() > 0 {
-                    self.lower_clif_branches(backend, bb, &branches, &targets)?;
+                    self.lower_clif_branches(backend, bindex, bb, &branches, &targets)?;
                     self.finish_ir_inst(self.srcloc(branches[0]));
                 }
             } else {
@@ -875,7 +881,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                             .add_block_param(vreg, self.vcode.get_vreg_type(vreg));
                     }
                 }
-                self.vcode.add_branch_args_for_succ(&branch_arg_vregs[..]);
+                self.vcode.add_succ(succ, &branch_arg_vregs[..]);
 
                 self.emit(I::gen_jump(MachLabel::from_block(succ)));
                 self.finish_ir_inst(SourceLoc::default());

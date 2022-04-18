@@ -2119,18 +2119,13 @@ impl MachInst for Inst {
         }
     }
 
-    fn is_term<'a>(&'a self) -> MachTerminator<'a> {
+    fn is_term(&self) -> MachTerminator {
         match self {
             // Interesting cases.
             &Self::Ret { .. } | &Self::EpiloguePlaceholder => MachTerminator::Ret,
-            &Self::JmpKnown { dst } => MachTerminator::Uncond(dst),
-            &Self::JmpCond {
-                taken, not_taken, ..
-            } => MachTerminator::Cond(taken, not_taken),
-            &Self::JmpTableSeq {
-                ref targets_for_term,
-                ..
-            } => MachTerminator::Indirect(&targets_for_term[..]),
+            &Self::JmpKnown { .. } => MachTerminator::Uncond,
+            &Self::JmpCond { .. } => MachTerminator::Cond,
+            &Self::JmpTableSeq { .. } => MachTerminator::Indirect,
             // All other cases are boring.
             _ => MachTerminator::None,
         }

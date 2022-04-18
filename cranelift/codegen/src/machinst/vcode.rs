@@ -371,7 +371,7 @@ impl<I: VCodeInst> VCodeBuilder<I> {
         self.vcode.block_params.push(param.into());
     }
 
-    pub fn add_branch_args_for_succ(&mut self, args: &[Reg]) {
+    fn add_branch_args_for_succ(&mut self, args: &[Reg]) {
         let start = self.vcode.branch_block_args.len();
         self.vcode
             .branch_block_args
@@ -385,32 +385,14 @@ impl<I: VCodeInst> VCodeBuilder<I> {
     /// Push an instruction for the current BB and current IR inst
     /// within the BB.
     pub fn push(&mut self, insn: I) {
-        match insn.is_term() {
-            MachTerminator::None | MachTerminator::Ret => {}
-            MachTerminator::Uncond(target) => {
-                self.vcode
-                    .block_succs_preds
-                    .push(BlockIndex::new(target.get() as usize));
-            }
-            MachTerminator::Cond(true_branch, false_branch) => {
-                self.vcode
-                    .block_succs_preds
-                    .push(BlockIndex::new(true_branch.get() as usize));
-                self.vcode
-                    .block_succs_preds
-                    .push(BlockIndex::new(false_branch.get() as usize));
-            }
-            MachTerminator::Indirect(targets) => {
-                for target in targets {
-                    self.vcode
-                        .block_succs_preds
-                        .push(BlockIndex::new(target.get() as usize));
-                }
-            }
-        }
-
         self.vcode.insts.push(insn);
         self.vcode.srclocs.push(self.cur_srcloc);
+    }
+
+    /// Add a successor block with branch args.
+    pub fn add_succ(&mut self, block: BlockIndex, args: &[Reg]) {
+        self.vcode.block_succs_preds.push(block);
+        self.add_branch_args_for_succ(args);
     }
 
     /// Set the current source location.
@@ -1191,9 +1173,7 @@ impl<I: VCodeInst> RegallocFunction for VCode<I> {
 
     fn is_branch(&self, insn: InsnIndex) -> bool {
         match self.insts[insn.index()].is_term() {
-            MachTerminator::Cond(..)
-            | MachTerminator::Uncond(..)
-            | MachTerminator::Indirect(..) => true,
+            MachTerminator::Cond | MachTerminator::Uncond | MachTerminator::Indirect => true,
             _ => false,
         }
     }
