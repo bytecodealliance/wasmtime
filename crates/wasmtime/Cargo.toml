@@ -89,9 +89,6 @@ async = ["wasmtime-fiber", "wasmtime-runtime/async", "async-trait"]
 # Enables support for the pooling instance allocation strategy
 pooling-allocator = ["wasmtime-runtime/pooling-allocator"]
 
-# Enables userfaultfd support in the runtime's pooling allocator when building on Linux
-uffd = ["wasmtime-runtime/uffd", "pooling-allocator"]
-
 # Enables support for all architectures in Cranelift, allowing
 # cross-compilation using the `wasmtime` crate's API, notably the
 # `Engine::precompile_module` function.
@@ -106,8 +103,7 @@ posix-signals-on-macos = ["wasmtime-runtime/posix-signals-on-macos"]
 # compatible linear memories. For more information see the documentation of
 # `Config::memory_init_cow`.
 #
-# Enabling this feature has no effect on unsupported platforms or when the
-# `uffd` feature is enabled.
+# Enabling this feature has no effect on unsupported platforms.
 memory-init-cow = ["wasmtime-runtime/memory-init-cow"]
 
 # Enables runtime support necessary to capture backtraces of WebAssembly code

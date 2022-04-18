@@ -246,12 +246,6 @@ unsafe fn assert_faults(ptr: *mut u8) {
     use std::io::Error;
     #[cfg(unix)]
     {
-        // I think things get real weird with uffd since there's a helper thread
-        // that's not cloned with `fork` below. Just skip this test for uffd
-        // since it's covered by tests elsewhere.
-        if cfg!(target_os = "linux") && cfg!(feature = "uffd") {
-            return;
-        }
         // There's probably a faster way to do this here, but, uh, when in rome?
         match libc::fork() {
             0 => {

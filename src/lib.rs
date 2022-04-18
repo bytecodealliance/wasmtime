@@ -250,11 +250,6 @@ struct CommonOptions {
     #[structopt(long)]
     disable_address_map: bool,
 
-    /// Switches memory initialization to happen in a paged fashion instead of
-    /// the data segments specified in the original wasm module.
-    #[structopt(long)]
-    paged_memory_initialization: bool,
-
     /// Disables the default of attempting to initialize linear memory via a
     /// copy-on-write mapping.
     #[cfg(feature = "memory-init-cow")]
@@ -343,7 +338,6 @@ impl CommonOptions {
 
         config.epoch_interruption(self.epoch_interruption);
         config.generate_address_map(!self.disable_address_map);
-        config.paged_memory_initialization(self.paged_memory_initialization);
         #[cfg(feature = "memory-init-cow")]
         config.memory_init_cow(!self.disable_memory_init_cow);
 

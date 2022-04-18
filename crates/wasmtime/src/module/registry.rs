@@ -48,9 +48,9 @@ impl ModuleRegistry {
         // If there's not actually any functions in this module then we may
         // still need to preserve it for its data segments. Instances of this
         // module will hold a pointer to the data stored in the module itself,
-        // and for schemes like uffd this performs lazy initialization which
-        // could use the module in the future. For that reason we continue to
-        // register empty modules and retain them.
+        // and for schemes that perform lazy initialization which could use the
+        // module in the future. For that reason we continue to register empty
+        // modules and retain them.
         if compiled_module.finished_functions().len() == 0 {
             self.modules_without_code.push(compiled_module.clone());
             return;
