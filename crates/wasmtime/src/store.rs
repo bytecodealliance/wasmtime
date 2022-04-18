@@ -76,6 +76,7 @@
 //! contents of `StoreOpaque`. This is an invariant that we, as the authors of
 //! `wasmtime`, must uphold for the public interface to be safe.
 
+use crate::linker::Definition;
 use crate::module::BareModuleInfo;
 use crate::{module::ModuleRegistry, Engine, Module, Trap, Val, ValRaw};
 use anyhow::{bail, Result};
@@ -296,7 +297,13 @@ pub struct StoreOpaque {
     async_state: AsyncState,
     out_of_gas_behavior: OutOfGas,
     epoch_deadline_behavior: EpochDeadline,
-    store_data: StoreData,
+    /// Indexed data within this `Store`, used to store information about
+    /// globals, functions, memories, etc.
+    ///
+    /// Note that this is `ManuallyDrop` because it needs to be dropped before
+    /// `rooted_host_funcs` below. This structure contains pointers which are
+    /// otherwise kept alive by the `Arc` references in `rooted_host_funcs`.
+    store_data: ManuallyDrop<StoreData>,
     default_callee: InstanceHandle,
 
     /// Used to optimzed wasm->host calls when the host function is defined with
@@ -306,6 +313,20 @@ pub struct StoreOpaque {
     /// Same as `hostcall_val_storage`, but for the direction of the host
     /// calling wasm.
     wasm_val_raw_storage: Vec<ValRaw>,
+
+    /// A list of lists of definitions which have been used to instantiate
+    /// within this `Store`.
+    ///
+    /// Note that not all instantiations end up pushing to this list. At the
+    /// time of this writing only the `InstancePre<T>` type will push to this
+    /// list. Pushes to this list are typically accompanied with
+    /// `HostFunc::to_func_store_rooted` to clone an `Arc` here once which
+    /// preserves a strong reference to the `Arc` for each `HostFunc` stored
+    /// within the list of `Definition`s.
+    ///
+    /// Note that this is `ManuallyDrop` as it must be dropped after
+    /// `store_data` above, where the function pointers are stored.
+    rooted_host_funcs: ManuallyDrop<Vec<Arc<[Definition]>>>,
 }
 
 #[cfg(feature = "async")]
@@ -471,10 +492,11 @@ impl<T> Store<T> {
                 },
                 out_of_gas_behavior: OutOfGas::Trap,
                 epoch_deadline_behavior: EpochDeadline::Trap,
-                store_data: StoreData::new(),
+                store_data: ManuallyDrop::new(StoreData::new()),
                 default_callee,
                 hostcall_val_storage: Vec::new(),
                 wasm_val_raw_storage: Vec::new(),
+                rooted_host_funcs: ManuallyDrop::new(Vec::new()),
             },
             limiter: None,
             call_hook: None,
@@ -1401,6 +1423,10 @@ impl StoreOpaque {
             self.wasm_val_raw_storage = storage;
         }
     }
+
+    pub(crate) fn push_rooted_funcs(&mut self, funcs: Arc<[Definition]>) {
+        self.rooted_host_funcs.push(funcs);
+    }
 }
 
 impl<T> StoreContextMut<'_, T> {
@@ -1913,8 +1939,8 @@ impl Drop for StoreOpaque {
         // NB it's important that this destructor does not access `self.data`.
         // That is deallocated by `Drop for Store<T>` above.
 
-        let allocator = self.engine.allocator();
         unsafe {
+            let allocator = self.engine.allocator();
             let ondemand = OnDemandInstanceAllocator::default();
             for instance in self.instances.iter() {
                 if instance.ondemand {
@@ -1924,6 +1950,11 @@ impl Drop for StoreOpaque {
                 }
             }
             ondemand.deallocate(&self.default_callee);
+
+            // See documentation for these fields on `StoreOpaque` for why they
+            // must be dropped in this order.
+            ManuallyDrop::drop(&mut self.store_data);
+            ManuallyDrop::drop(&mut self.rooted_host_funcs);
         }
     }
 }

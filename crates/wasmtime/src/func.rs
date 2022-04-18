@@ -224,6 +224,21 @@ enum FuncKind {
     /// situations is `SharedHost` and `StoreOwned`, so this ideally isn't
     /// larger than those two.
     Host(Box<HostFunc>),
+
+    /// A reference to a `HostFunc`, but one that's "rooted" in the `Store`
+    /// itself.
+    ///
+    /// This variant is created when an `InstancePre<T>` is instantiated in to a
+    /// `Store<T>`. In that situation the `InstancePre<T>` already has a list of
+    /// host functions that are packaged up in an `Arc`, so the `Arc<[T]>` is
+    /// cloned once into the `Store` to avoid each individual function requiring
+    /// an `Arc::clone`.
+    ///
+    /// The lifetime management of this type is `unsafe` because
+    /// `RootedHostFunc` is a small wrapper around `NonNull<HostFunc>`. To be
+    /// safe this is required that the memory of the host function is pinned
+    /// elsewhere (e.g. the `Arc` in the `Store`).
+    RootedHost(RootedHostFunc),
 }
 
 macro_rules! for_each_function_signature {
@@ -2070,6 +2085,29 @@ impl HostFunc {
         Func::from_func_kind(FuncKind::SharedHost(me), store)
     }
 
+    /// Inserts this `HostFunc` into a `Store`, returning the `Func` pointing to
+    /// it.
+    ///
+    /// This function is similar to, but not equivalent, to `HostFunc::to_func`.
+    /// Notably this function requires that the `Arc<Self>` pointer is otherwise
+    /// rooted within the `StoreOpaque` via another means. When in doubt use
+    /// `to_func` above as it's safer.
+    ///
+    /// # Unsafety
+    ///
+    /// Can only be inserted into stores with a matching `T` relative to when
+    /// this `HostFunc` was first created.
+    ///
+    /// Additionally the `&Arc<Self>` is not cloned in this function. Instead a
+    /// raw pointer to `Self` is stored within the `Store` for this function.
+    /// The caller must arrange for the `Arc<Self>` to be "rooted" in the store
+    /// provided via another means, probably by pushing to
+    /// `StoreOpaque::rooted_host_funcs`.
+    pub unsafe fn to_func_store_rooted(self: &Arc<Self>, store: &mut StoreOpaque) -> Func {
+        self.validate_store(store);
+        Func::from_func_kind(FuncKind::RootedHost(RootedHostFunc::new(self)), store)
+    }
+
     /// Same as [`HostFunc::to_func`], different ownership.
     unsafe fn into_func(self, store: &mut StoreOpaque) -> Func {
         self.validate_store(store);
@@ -2112,6 +2150,7 @@ impl FuncData {
         match &self.kind {
             FuncKind::StoreOwned { trampoline, .. } => *trampoline,
             FuncKind::SharedHost(host) => host.trampoline,
+            FuncKind::RootedHost(host) => host.trampoline,
             FuncKind::Host(host) => host.trampoline,
         }
     }
@@ -2132,7 +2171,50 @@ impl FuncKind {
         match self {
             FuncKind::StoreOwned { export, .. } => export,
             FuncKind::SharedHost(host) => &host.export,
+            FuncKind::RootedHost(host) => &host.export,
             FuncKind::Host(host) => &host.export,
+        }
+    }
+}
+
+use self::rooted::*;
+
+/// An inner module is used here to force unsafe construction of
+/// `RootedHostFunc` instead of accidentally safely allowing access to its
+/// constructor.
+mod rooted {
+    use super::HostFunc;
+    use std::ops::Deref;
+    use std::ptr::NonNull;
+    use std::sync::Arc;
+
+    /// A variant of a pointer-to-a-host-function used in `FuncKind::RootedHost`
+    /// above.
+    ///
+    /// For more documentation see `FuncKind::RootedHost`, `InstancePre`, and
+    /// `HostFunc::to_func_store_rooted`.
+    pub(crate) struct RootedHostFunc(NonNull<HostFunc>);
+
+    // These are required due to the usage of `NonNull` but should be safe
+    // because `HostFunc` is itself send/sync.
+    unsafe impl Send for RootedHostFunc where HostFunc: Send {}
+    unsafe impl Sync for RootedHostFunc where HostFunc: Sync {}
+
+    impl RootedHostFunc {
+        /// Note that this is `unsafe` because this wrapper type allows safe
+        /// access to the pointer given at any time, including outside the
+        /// window of validity of `func`, so callers must not use the return
+        /// value past the lifetime of the provided `func`.
+        pub(crate) unsafe fn new(func: &Arc<HostFunc>) -> RootedHostFunc {
+            RootedHostFunc(NonNull::from(&**func))
+        }
+    }
+
+    impl Deref for RootedHostFunc {
+        type Target = HostFunc;
+
+        fn deref(&self) -> &HostFunc {
+            unsafe { self.0.as_ref() }
         }
     }
 }
