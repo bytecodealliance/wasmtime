@@ -253,6 +253,34 @@ impl BlockLoweringOrder {
             block_in_count[entry] += 1;
         }
 
+        // All blocks ending in conditional branches or br_tables must
+        // have edge-moves inserted at the top of successor blocks,
+        // not at the end of themselves. This is because the moves
+        // would have to be inserted prior to the branch's register
+        // use; but RA2's model is that the moves happen *on* the
+        // edge, after every def/use in the block. RA2 will check for
+        // "branch register use safety" and panic if such a problem
+        // occurs. To avoid this, we force the below algorithm to
+        // never merge the edge block onto the end of a block that
+        // ends in a conditional branch. We do this by "faking" more
+        // than one successor, even if there is only one.
+        //
+        // (One might ask, isn't that always the case already? It
+        // could not be, in cases of br_table with no table and just a
+        // default label, for example.)
+        for block in f.layout.blocks() {
+            for inst in f.layout.block_likely_branches(block) {
+                // If the block has a branch with any "fixed args"
+                // (not blockparam args) ...
+                if f.dfg[inst].opcode().is_branch() && f.dfg.inst_fixed_args(inst).len() > 0 {
+                    // ... then force a minimum successor count of
+                    // two, so the below algorithm cannot put
+                    // edge-moves on the end of the block.
+                    block_out_count[block] = std::cmp::max(2, block_out_count[block]);
+                }
+            }
+        }
+
         // Here we define the implicit CLIF-plus-edges graph. There are
         // conceptually two such graphs: the original, with every edge explicit,
         // and the merged one, with blocks (represented by `LoweredBlock`
