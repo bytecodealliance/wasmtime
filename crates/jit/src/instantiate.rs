@@ -398,7 +398,7 @@ impl CompiledModule {
         info: Option<CompiledModuleInfo>,
         profiler: &dyn ProfilingAgent,
         id_allocator: &CompiledModuleIdAllocator,
-    ) -> Result<Arc<Self>> {
+    ) -> Result<Self> {
         // Transfer ownership of `obj` to a `CodeMemory` object which will
         // manage permissions, such as the executable bit. Once it's located
         // there we also publish it for being able to execute. Note that this
@@ -454,7 +454,7 @@ impl CompiledModule {
         };
         ret.register_debug_and_profiling(profiler)?;
 
-        Ok(Arc::new(ret))
+        Ok(ret)
     }
 
     fn register_debug_and_profiling(&mut self, profiler: &dyn ProfilingAgent) -> Result<()> {
