@@ -31,12 +31,6 @@ test = false
 doc = false
 
 [[bin]]
-name = "compile-mutate"
-path = "fuzz_targets/compile-mutate.rs"
-test = false
-doc = false
-
-[[bin]]
 name = "instantiate"
 path = "fuzz_targets/instantiate.rs"
 test = false
