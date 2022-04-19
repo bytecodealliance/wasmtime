@@ -1194,6 +1194,15 @@ impl Definition {
         }
     }
 
+    /// Note the unsafety here is due to calling
+    /// `HostFunc::to_func_store_rooted`.
+    pub(crate) unsafe fn to_extern_store_rooted(&self, store: &mut StoreOpaque) -> Extern {
+        match self {
+            Definition::Extern(e) => e.clone(),
+            Definition::HostFunc(func) => func.to_func_store_rooted(store).into(),
+        }
+    }
+
     pub(crate) fn comes_from_same_store(&self, store: &StoreOpaque) -> bool {
         match self {
             Definition::Extern(e) => e.comes_from_same_store(store),
