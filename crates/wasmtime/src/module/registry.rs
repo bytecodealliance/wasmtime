@@ -1,7 +1,6 @@
 //! Implements a registry of modules for a store.
 
 use crate::{Engine, Module};
-use std::cmp::Ordering;
 use std::{
     collections::BTreeMap,
     sync::{Arc, RwLock},
@@ -24,12 +23,16 @@ lazy_static::lazy_static! {
 /// currently small enough to not worry much about.
 #[derive(Default)]
 pub struct ModuleRegistry {
-    // Sorted by module start address in memory, used for looking up based on a
-    // pc of a wasm function.
-    modules_with_code: Vec<Module>,
+    // Keyed by the end address of the module's code in memory.
+    modules_with_code: BTreeMap<usize, Module>,
 
     // Preserved for keeping data segments alive or similar
     modules_without_code: Vec<Module>,
+}
+
+fn start(module: &Module) -> usize {
+    assert!(!module.compiled_module().code().is_empty());
+    module.compiled_module().code().as_ptr() as usize
 }
 
 impl ModuleRegistry {
@@ -39,31 +42,11 @@ impl ModuleRegistry {
     }
 
     fn module(&self, pc: usize) -> Option<&Module> {
-        let idx = self.position(pc).ok()?;
-        Some(&self.modules_with_code[idx])
-    }
-
-    fn position(&self, pc: usize) -> Result<usize, usize> {
-        self.modules_with_code.binary_search_by(|module| {
-            let code = module.compiled_module().code();
-            let start = code.as_ptr() as usize;
-            // This closure returns where the `module` is relative to `pc`, so
-            // if the `pc` is before the start of this module then the module is
-            // "greater" than the pc.
-            if pc < start {
-                Ordering::Greater
-
-            // ... and if the `pc` is beyond the end of this module then the
-            // module is "less" than the pc
-            } else if pc >= start + code.len() {
-                Ordering::Less
-
-            // ... finally if the `pc` is within the module we've found our
-            // target.
-            } else {
-                Ordering::Equal
-            }
-        })
+        let (end, module) = self.modules_with_code.range(pc..).next()?;
+        if pc < start(module) || *end < pc {
+            return None;
+        }
+        Some(module)
     }
 
     /// Registers a new module with the registry.
@@ -83,17 +66,28 @@ impl ModuleRegistry {
 
         // The module code range is exclusive for end, so make it inclusive as it
         // may be a valid PC value
-        let code = compiled_module.code();
-        assert!(!code.is_empty());
-        let start = code.as_ptr() as usize;
+        let start_addr = start(module);
+        let end_addr = start_addr + compiled_module.code().len() - 1;
 
-        match self.position(start) {
-            // This module is already registered, so no need to re-add it.
-            Ok(_) => {}
-            // This module isn't already registered and if it were registered we
-            // should insert it at position `i`, so do so here.
-            Err(i) => self.modules_with_code.insert(i, module.clone()),
+        // Ensure the module isn't already present in the registry
+        // This is expected when a module is instantiated multiple times in the
+        // same store
+        if let Some(m) = self.modules_with_code.get(&end_addr) {
+            assert_eq!(start(m), start_addr);
+            return;
         }
+
+        // Assert that this module's code doesn't collide with any other
+        // registered modules
+        if let Some((_, prev)) = self.modules_with_code.range(end_addr..).next() {
+            assert!(start(prev) > end_addr);
+        }
+        if let Some((prev_end, _)) = self.modules_with_code.range(..=start_addr).next_back() {
+            assert!(*prev_end < start_addr);
+        }
+
+        let prev = self.modules_with_code.insert(end_addr, module.clone());
+        assert!(prev.is_none());
     }
 
     /// Looks up a trampoline from an anyfunc.
