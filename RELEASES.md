@@ -15,11 +15,31 @@ Unreleased.
   artifacts.
   [#3983](https://github.com/bytecodealliance/wasmtime/pull/3983)
 
+* Copy-on-write images of memory can now be manually initialized for a `Module`
+  with an explicit method call, but it is still not required to call this method
+  and will automatically otherwise happen on the first instantiation.
+  [#3964](https://github.com/bytecodealliance/wasmtime/pull/3964)
+
 ### Fixed
 
 * Using `InstancePre::instantiate` or `Linker::instantiate` will now panic as
   intended when used with an async-configured `Store`.
   [#3972](https://github.com/bytecodealliance/wasmtime/pull/3972)
+
+### Changed
+
+* The unsafe `ValRaw` type in the `wasmtime` crate now always stores its values
+  in little-endian format instead of the prior native-endian format. Users of
+  `ValRaw` are recommended to audit their existing code for usage to continue
+  working on big-endian platforms.
+  [#4035](https://github.com/bytecodealliance/wasmtime/pull/4035)
+
+### Removed
+
+* Support for `Config::paged_memory_initialization` and the `uffd` crate feature
+  have been removed from the `wasmtime` crate. Users should migrate to using
+  `Config::memory_init_cow` which is more portable and faster at this point.
+  [#4040](https://github.com/bytecodealliance/wasmtime/pull/4040)
 
 --------------------------------------------------------------------------------
 
