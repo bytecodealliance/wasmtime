@@ -306,7 +306,8 @@ fn put_input_in_rs<C: LowerCtx<I = Inst>>(
     narrow_mode: NarrowValueMode,
 ) -> ResultRS {
     let inputs = ctx.get_input_as_source_or_const(input.insn, input.input);
-    if let Some((insn, 0)) = inputs.inst {
+    // Unique or non-unique use is fine for merging here.
+    if let Some((insn, 0)) = inputs.inst.as_inst() {
         let op = ctx.data(insn).opcode();
 
         if op == Opcode::Ishl {
@@ -353,7 +354,7 @@ fn get_as_extended_value<C: LowerCtx<I = Inst>>(
     narrow_mode: NarrowValueMode,
 ) -> Option<(Value, ExtendOp)> {
     let inputs = ctx.get_value_as_source_or_const(val);
-    let (insn, n) = inputs.inst?;
+    let (insn, n) = inputs.inst.as_inst()?;
     if n != 0 {
         return None;
     }
@@ -1125,7 +1126,7 @@ pub(crate) fn maybe_input_insn<C: LowerCtx<I = Inst>>(
         inputs,
         op
     );
-    if let Some((src_inst, _)) = inputs.inst {
+    if let Some((src_inst, _)) = inputs.inst.as_inst() {
         let data = c.data(src_inst);
         log::trace!(" -> input inst {:?}", data);
         if data.opcode() == op {
@@ -1161,14 +1162,14 @@ pub(crate) fn maybe_input_insn_via_conv<C: LowerCtx<I = Inst>>(
     conv: Opcode,
 ) -> Option<IRInst> {
     let inputs = c.get_input_as_source_or_const(input.insn, input.input);
-    if let Some((src_inst, _)) = inputs.inst {
+    if let Some((src_inst, _)) = inputs.inst.as_inst() {
         let data = c.data(src_inst);
         if data.opcode() == op {
             return Some(src_inst);
         }
         if data.opcode() == conv {
             let inputs = c.get_input_as_source_or_const(src_inst, 0);
-            if let Some((src_inst, _)) = inputs.inst {
+            if let Some((src_inst, _)) = inputs.inst.as_inst() {
                 let data = c.data(src_inst);
                 if data.opcode() == op {
                     return Some(src_inst);

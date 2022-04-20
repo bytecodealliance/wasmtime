@@ -61,7 +61,7 @@ fn matches_input<C: LowerCtx<I = Inst>>(
     op: Opcode,
 ) -> Option<IRInst> {
     let inputs = ctx.get_input_as_source_or_const(input.insn, input.input);
-    inputs.inst.and_then(|(src_inst, _)| {
+    inputs.inst.as_inst().and_then(|(src_inst, _)| {
         let data = ctx.data(src_inst);
         if data.opcode() == op {
             return Some(src_inst);
@@ -172,7 +172,7 @@ fn input_to_reg_mem<C: LowerCtx<I = Inst>>(ctx: &mut C, spec: InsnInput) -> RegM
         return RegMem::reg(generate_constant(ctx, ty, c).only_reg().unwrap());
     }
 
-    if let Some((src_insn, 0)) = inputs.inst {
+    if let InputSourceInst::UniqueUse(src_insn, 0) = inputs.inst {
         if let Some((addr_input, offset)) = is_mergeable_load(ctx, src_insn) {
             ctx.sink_inst(src_insn);
             let amode = lower_to_amode(ctx, addr_input, offset);
@@ -2423,6 +2423,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let cmp_insn = ctx
                 .get_input_as_source_or_const(inputs[0].insn, inputs[0].input)
                 .inst
+                .as_inst()
                 .unwrap()
                 .0;
             debug_assert_eq!(ctx.data(cmp_insn).opcode(), Opcode::Ifcmp);

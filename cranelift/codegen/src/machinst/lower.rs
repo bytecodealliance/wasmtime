@@ -197,11 +197,47 @@ pub struct NonRegInput {
     /// computation (and side-effect if applicable) could occur at the
     /// current instruction's location instead.
     ///
-    /// If this instruction's operation is merged into the current instruction,
-    /// the backend must call [LowerCtx::sink_inst()].
-    pub inst: Option<(Inst, usize)>,
+    /// If this instruction's operation is merged into the current
+    /// instruction, the backend must call [LowerCtx::sink_inst()].
+    ///
+    /// This enum indicates whether this use of the source instruction
+    /// is unique or not.
+    pub inst: InputSourceInst,
     /// The value is a known constant.
     pub constant: Option<u64>,
+}
+
+/// When examining an input to an instruction, this enum provides one
+/// of several options: there is or isn't a single instruction (that
+/// we can see and merge with) that produces that input's value, and
+/// we are or aren't the single user of that instruction.
+#[derive(Clone, Copy, Debug)]
+pub enum InputSourceInst {
+    /// The input in question is the single, unique use of the given
+    /// instruction and output index, and it can be sunk to the
+    /// location of this input.
+    UniqueUse(Inst, usize),
+    /// The input in question is one of multiple uses of the given
+    /// instruction. It can still be sunk to the location of this
+    /// input.
+    Use(Inst, usize),
+    /// We cannot determine which instruction produced the input, or
+    /// it is one of several instructions (e.g., due to a control-flow
+    /// merge and blockparam), or the source instruction cannot be
+    /// allowed to sink to the current location due to side-effects.
+    None,
+}
+
+impl InputSourceInst {
+    /// Get the instruction and output index for this source, whether
+    /// we are its single or one of many users.
+    pub fn as_inst(&self) -> Option<(Inst, usize)> {
+        match self {
+            &InputSourceInst::UniqueUse(inst, output_idx)
+            | &InputSourceInst::Use(inst, output_idx) => Some((inst, output_idx)),
+            &InputSourceInst::None => None,
+        }
+    }
 }
 
 /// A machine backend.
@@ -271,8 +307,13 @@ pub struct Lower<'func, I: VCodeInst> {
     /// Instruction constant values, if known.
     inst_constants: FxHashMap<Inst, u64>,
 
-    /// Use-counts per SSA value, as counted in the input IR.
-    value_uses: SecondaryMap<Value, u32>,
+    /// Use-counts per SSA value, as counted in the input IR. These
+    /// are "coarsened", in the abstract-interpretation sense: we only
+    /// care about "0, 1, many" states, as this is all we need and
+    /// this lets us do an efficient fixpoint analysis.
+    ///
+    /// See doc comment on `ValueUseState` for more details.
+    value_ir_uses: SecondaryMap<Value, ValueUseState>,
 
     /// Actual uses of each SSA value so far, incremented while lowering.
     value_lowered_uses: SecondaryMap<Value, u32>,
@@ -293,6 +334,108 @@ pub struct Lower<'func, I: VCodeInst> {
     /// The vreg containing the special VmContext parameter, if it is present in the current
     /// function's signature.
     vm_context: Option<Reg>,
+}
+
+/// How is a value used in the IR?
+///
+/// This can be seen as a coarsening of an integer count. We only need
+/// distinct states for zero, one, or many.
+///
+/// This analysis deserves further explanation. The basic idea is that
+/// we want to allow instruction lowering to know whether a value that
+/// an instruction references is *only* referenced by that one use, or
+/// by others as well. This is necessary to know when we might want to
+/// move a side-effect: we cannot, for example, duplicate a load, so
+/// we cannot let instruction lowering match a load as part of a
+/// subpattern and potentially incorporate it.
+///
+/// Note that a lot of subtlety comes into play once we have
+/// *indirect* uses. The classical example of this in our development
+/// history was the x86 compare instruction, which is incorporated
+/// into flags useres (selectif, trueif, branches) and can
+/// subsequently incorporate loads, or at least we would like it
+/// to. However, danger awaits: the compare might be the only user of
+/// a load, so we might think we can just move the load (and nothing
+/// is duplicated -- success!), except that the compare itself is
+/// codegenned in multiple places, where it is incorporated as a
+/// subpattern itself.
+///
+/// So we really want a notion of "unique all the way along the
+/// matching path". Rust's `&T` and `&mut T` offer a partial analogy
+/// to the semantics that we want here: we want to know when we've
+/// matched a unique use of an instruction, and that instruction's
+/// unique use of another instruction, etc, just as `&mut T` can only
+/// be obtained by going through a chain of `&mut T`. If one has a
+/// `&T` to a struct containing `&mut T` (one of several uses of an
+/// instruction that itself has a unique use of an instruction), one
+/// can only get a `&T` (one can only get a "I am one of several users
+/// of this instruction" result).
+///
+/// We could track these paths, either dynamically as one "looks up
+/// the operand tree" or precomputed. But the former requires state
+/// and means that the `LowerCtx` API carries that state implicitly,
+/// which we'd like to avoid if we can. And the latter implies O(n^2)
+/// storage: it is an all-pairs property (is inst `i` unique from the
+/// point of view of `j`).
+///
+/// To make matters even a little more complex still, a value that is
+/// not uniquely used when initially viewing the IR can *become*
+/// uniquely used, at least as a root allowing further unique uses of
+/// e.g. loads to merge, if no other instruction actually merges
+/// it. To be more concrete, if we have `v1 := load; v2 := op v1; v3
+/// := op v2; v4 := op v2` then `v2` is non-uniquely used, so from the
+/// point of view of lowering `v4` or `v3`, we cannot merge the load
+/// at `v1`. But if we decide just to use the assigned register for
+/// `v2` at both `v3` and `v4`, then we only actually codegen `v2`
+/// once, so it *is* a unique root at that point and we *can* merge
+/// the load.
+///
+/// Note also that the color scheme is not sufficient to give us this
+/// information, for various reasons: reasoning about side-effects
+/// does not tell us about potential duplication of uses through pure
+/// ops.
+///
+/// To keep things simple and avoid error-prone lowering APIs that
+/// would extract more information about whether instruction merging
+/// happens or not (we don't have that info now, and it would be
+/// difficult to refactor to get it and make that refactor 100%
+/// correct), we give up on the above "can become unique if not
+/// actually merged" point. Instead, we compute a
+/// transitive-uniqueness. That is what this enum represents.
+///
+/// To define it plainly: a value is `Unused` if no references exist
+/// to it; `Once` if only one other op refers to it, *and* that other
+/// op is `Unused` or `Once`; and `Multiple` otherwise. In other
+/// words, `Multiple` is contagious: even if an op's result value is
+/// directly used only once in the CLIF, that value is `Multiple` if
+/// the op that uses it is itself used multiple times (hence could be
+/// codegenned multiple times). In brief, this analysis tells us
+/// whether, if every op merged all of its operand tree, a given op
+/// could be codegenned in more than one place.
+///
+/// To compute this, we first consider direct uses. At this point
+/// `Unused` answers are correct, `Multiple` answers are correct, but
+/// some `Once`s may change to `Multiple`s. Then we propagate
+/// `Multiple` transitively using a workqueue/fixpoint algorithm.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ValueUseState {
+    /// Not used at all.
+    Unused,
+    /// Used exactly once.
+    Once,
+    /// Used multiple times.
+    Multiple,
+}
+
+impl ValueUseState {
+    /// Add one use.
+    fn inc(&mut self) {
+        let new = match self {
+            Self::Unused => Self::Once,
+            Self::Once | Self::Multiple => Self::Multiple,
+        };
+        *self = new;
+    }
 }
 
 /// Notion of "relocation distance". This gives an estimate of how far away a symbol will be from a
@@ -408,7 +551,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         let mut block_end_colors = SecondaryMap::with_default(InstColor::new(0));
         let mut side_effect_inst_entry_colors = FxHashMap::default();
         let mut inst_constants = FxHashMap::default();
-        let mut value_uses = SecondaryMap::with_default(0);
+        let mut value_ir_uses = SecondaryMap::with_default(ValueUseState::Unused);
         for bb in f.layout.blocks() {
             cur_color += 1;
             for inst in f.layout.block_insts(bb) {
@@ -427,10 +570,53 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                     inst_constants.insert(inst, c);
                 }
 
-                // Count uses of all arguments.
+                // Add arguments to queue to count uses.
                 for arg in f.dfg.inst_args(inst) {
                     let arg = f.dfg.resolve_aliases(*arg);
-                    value_uses[arg] += 1;
+                    value_ir_uses[arg].inc();
+                    log::trace!(
+                        " -> use of value {}; now state {:?}",
+                        arg,
+                        value_ir_uses[arg]
+                    );
+                }
+            }
+
+            // Transitively complete the `value_uses` array. The
+            // dependencies are acyclic, because we do not look
+            // through blockparams, so we only need to propagate
+            // `Multiple` uses backward (from the outputs of ops to
+            // inputs) in a single traversal. We keep a stack and set
+            // (to avoid duplicate insertion) as a LIFO workqueue,
+            // push as we transition another value to Multiple, and on
+            // pop, examine the inputs to its defining op if any.
+            let mut workqueue: SmallVec<[Value; 16]> = smallvec![];
+            let mut workqueue_set: FxHashSet<Value> = FxHashSet::default();
+            for (value, &state) in value_ir_uses.iter() {
+                if state == ValueUseState::Multiple {
+                    workqueue.push(value);
+                    workqueue_set.insert(value);
+                }
+            }
+
+            while let Some(value) = workqueue.pop() {
+                workqueue_set.remove(&value);
+                if let ValueDef::Result(inst, _) = f.dfg.value_def(value) {
+                    log::trace!(
+                        " -> processing value from workqueue: {} (inst {})",
+                        value,
+                        inst
+                    );
+                    for &arg in f.dfg.inst_args(inst) {
+                        let arg = f.dfg.resolve_aliases(arg);
+                        if value_ir_uses[arg] != ValueUseState::Multiple {
+                            value_ir_uses[arg] = ValueUseState::Multiple;
+                            log::trace!(" -> CLIF value {} becomes Multiple", arg);
+                            if workqueue_set.insert(arg) {
+                                workqueue.push(arg);
+                            }
+                        }
+                    }
                 }
             }
 
@@ -446,7 +632,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             side_effect_inst_entry_colors,
             inst_constants,
             next_vreg,
-            value_uses,
+            value_ir_uses,
             value_lowered_uses: SecondaryMap::default(),
             inst_sunk: FxHashSet::default(),
             cur_scan_entry_color: None,
@@ -1050,9 +1236,11 @@ impl<'func, I: VCodeInst> LowerCtx for Lower<'func, I> {
             // OK to merge source instruction if (i) we have a source
             // instruction, and:
             // - It has no side-effects, OR
-            // - It has a side-effect, has one output value, that one output has
-            //   only one use (this one), and the instruction's color is *one less
-            //   than* the current scan color.
+            // - It has a side-effect, has one output value, that one
+            //   output has only one use, directly or indirectly (so
+            //   cannot be duplicated -- see comment on
+            //   `ValueUseState`), and the instruction's color is *one
+            //   less than* the current scan color.
             //
             //   This latter set of conditions is testing whether a
             //   side-effecting instruction can sink to the current scan
@@ -1071,15 +1259,26 @@ impl<'func, I: VCodeInst> LowerCtx for Lower<'func, I> {
                 log::trace!(" -> src inst {}", src_inst);
                 log::trace!(" -> has lowering side effect: {}", src_side_effect);
                 if !src_side_effect {
-                    // Pure instruction: always possible to sink.
-                    Some((src_inst, result_idx))
+                    // Pure instruction: always possible to
+                    // sink. Let's determine whether we are the only
+                    // user or not.
+                    if self.value_ir_uses[val] == ValueUseState::Once {
+                        InputSourceInst::UniqueUse(src_inst, result_idx)
+                    } else {
+                        InputSourceInst::Use(src_inst, result_idx)
+                    }
                 } else {
                     // Side-effect: test whether this is the only use of the
                     // only result of the instruction, and whether colors allow
                     // the code-motion.
+                    log::trace!(
+                        " -> side-effecting op {} for val {}: use state {:?}",
+                        src_inst,
+                        val,
+                        self.value_ir_uses[val]
+                    );
                     if self.cur_scan_entry_color.is_some()
-                        && self.value_uses[val] == 1
-                        && self.value_lowered_uses[val] == 0
+                        && self.value_ir_uses[val] == ValueUseState::Once
                         && self.num_outputs(src_inst) == 1
                         && self
                             .side_effect_inst_entry_colors
@@ -1089,15 +1288,15 @@ impl<'func, I: VCodeInst> LowerCtx for Lower<'func, I> {
                             + 1
                             == self.cur_scan_entry_color.unwrap().get()
                     {
-                        Some((src_inst, 0))
+                        InputSourceInst::UniqueUse(src_inst, 0)
                     } else {
-                        None
+                        InputSourceInst::None
                     }
                 }
             }
-            _ => None,
+            _ => InputSourceInst::None,
         };
-        let constant = inst.and_then(|(inst, _)| self.get_constant(inst));
+        let constant = inst.as_inst().and_then(|(inst, _)| self.get_constant(inst));
 
         NonRegInput { inst, constant }
     }
