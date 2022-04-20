@@ -49,6 +49,7 @@ jobs:
 
       - name: Bump major version number
         run: |
+          set -ex
           # Push the current contents of `main` to a new release branch
           cur=$(./ci/print-current-version.sh)
           git push origin HEAD:release-$cur
@@ -104,15 +105,17 @@ jobs:
 
       - name: Perform latest release
         run: |
+          set -ex
           git fetch origin
-          cur=$(git for-each-ref --sort=-committerdate refs/remotes/origin --format '%(refname)' | grep release | head -n 1 | sed 's/.*release-//')
 
-          # Update the release date for $cur on the `main` branch. Note that the
-          # sed here is a little complicated because we will have two entries in
-          # `RELEASES.md`, one for $cur+1 which `main` is at plus one for $cur
-          # which we're about to release. We only want to update the release
-          # date of the second one.
-          sed -i "/^##.*$cur/,+3 s/^Unreleased/Released $(date +'%Y-%m-%d')/" RELEASES.md
+          # Determine the latest release branch
+          rustc ci/find-latest-release.rs -o /tmp/find-latest-release
+          cur=`/tmp/find-latest-release`
+
+          # Update the release date of $cur in RELEASES.md
+          rustc ci/update-release-date.rs -o /tmp/update-release-date
+          /tmp/update-release-date $(date +'%Y-%m-%d')
+
           git commit -a -F-<<EOF
           Update release date of Wasmtime $cur
 
@@ -183,6 +186,7 @@ jobs:
 
       - name: Bump and release patch version number
         run: |
+          set -ex
           # Update version numbers on a patch basis and update RELEASES.md if a
           # patch release marker is already in there. Note that this commit
           # message indicates that on-merge a release will be made.
@@ -222,6 +226,7 @@ jobs:
         # become a json-encoded string literal to send to GitHub. This
         # represents my best attempt.
         run: |
+          set -ex
           body=$(jq -sR < ./pr-body)
 
           curl --include --request POST \
