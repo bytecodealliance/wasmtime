@@ -49,6 +49,7 @@ jobs:
 
       - name: Bump major version number
         run: |
+          set -ex
           # Push the current contents of `main` to a new release branch
           cur=$(./ci/print-current-version.sh)
           git push origin HEAD:release-$cur
@@ -104,8 +105,9 @@ jobs:
 
       - name: Perform latest release
         run: |
+          set -ex
           git fetch origin
-          cur=$(git for-each-ref --sort=-committerdate refs/remotes/origin --format '%(refname)' | grep release | head -n 1 | sed 's/.*release-//')
+          cur=$(git for-each-ref refs/remotes/origin --format '%(refname)' | grep release | sed 's/.*release-//' | sort -n -r | head -n 1)
 
           # Update the release date for $cur on the `main` branch. Note that the
           # sed here is a little complicated because we will have two entries in
@@ -183,6 +185,7 @@ jobs:
 
       - name: Bump and release patch version number
         run: |
+          set -ex
           # Update version numbers on a patch basis and update RELEASES.md if a
           # patch release marker is already in there. Note that this commit
           # message indicates that on-merge a release will be made.
@@ -222,6 +225,7 @@ jobs:
         # become a json-encoded string literal to send to GitHub. This
         # represents my best attempt.
         run: |
+          set -ex
           body=$(jq -sR < ./pr-body)
 
           curl --include --request POST \
