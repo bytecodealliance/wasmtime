@@ -45,7 +45,7 @@ Unreleased.
 
 ## 0.36.0
 
-Unreleased.
+Released 2022-04-20
 
 ### Added
 
