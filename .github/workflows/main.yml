@@ -113,7 +113,7 @@ jobs:
         GITHUB_DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
         BUILD_REPOSITORY_ID: ${{ github.repository }}
         BUILD_SOURCEVERSION: ${{ github.sha }}
-      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'bytecodealliance/wasmtime'
 
   # Quick checks of various feature combinations and whether things
   # compile. The goal here isn't to run tests, mostly just serve as a
@@ -440,13 +440,14 @@ jobs:
     - run: cd .github/actions/github-release && npm install --production
     - name: Publish Release
       uses: ./.github/actions/github-release
-      if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+      if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')) && github.repository == 'bytecodealliance/wasmtime'
       with:
         files: "dist/*"
         token: ${{ secrets.GITHUB_TOKEN }}
       continue-on-error: true
 
   verify-publish:
+    if: github.repository == 'bytecodealliance/wasmtime'
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
