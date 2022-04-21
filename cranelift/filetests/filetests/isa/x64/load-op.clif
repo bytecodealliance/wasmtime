@@ -68,3 +68,14 @@ block0(v0: i64):
 block1:
   return v2
 }
+
+function %cmp_mem(i64) -> i64 {
+block0(v0: i64):
+  v1 = load.i64 v0
+  v2 = icmp eq v0, v1
+  v3 = bint.i64 v2
+  return v3
+
+  ; check:  cmpq    0(%rdi), %rdi
+  ; nextln: setz    %al
+}
