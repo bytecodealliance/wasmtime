@@ -447,6 +447,7 @@ jobs:
       continue-on-error: true
 
   verify-publish:
+    if: github.repository == 'bytecodealliance/wasmtime'
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
