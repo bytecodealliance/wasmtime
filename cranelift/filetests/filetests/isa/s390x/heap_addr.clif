@@ -13,15 +13,15 @@ block0(v0: i64, v1: i32):
 
 ; block0:
 ;   llgfr %r4, %r3
-;   lghi %r3, 0
-;   ag %r3, 0(%r2)
-;   clgr %r4, %r3
+;   lg %r5, 0(%r2)
+;   aghi %r5, 0
+;   clgr %r4, %r5
 ;   jgnh label1 ; jg label2
 ; block1:
 ;   agr %r2, %r4
-;   lghi %r5, 0
-;   clgr %r4, %r3
-;   locgrh %r2, %r5
+;   lghi %r3, 0
+;   clgr %r4, %r5
+;   locgrh %r2, %r3
 ;   br %r14
 ; block2:
 ;   trap
