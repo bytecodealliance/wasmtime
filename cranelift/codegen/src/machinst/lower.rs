@@ -352,12 +352,12 @@ pub struct Lower<'func, I: VCodeInst> {
 /// Note that a lot of subtlety comes into play once we have
 /// *indirect* uses. The classical example of this in our development
 /// history was the x86 compare instruction, which is incorporated
-/// into flags useres (selectif, trueif, branches) and can
+/// into flags users (e.g. `selectif`, `trueif`, branches) and can
 /// subsequently incorporate loads, or at least we would like it
 /// to. However, danger awaits: the compare might be the only user of
 /// a load, so we might think we can just move the load (and nothing
 /// is duplicated -- success!), except that the compare itself is
-/// codegenned in multiple places, where it is incorporated as a
+/// codegen'd in multiple places, where it is incorporated as a
 /// subpattern itself.
 ///
 /// So we really want a notion of "unique all the way along the
@@ -409,9 +409,9 @@ pub struct Lower<'func, I: VCodeInst> {
 /// words, `Multiple` is contagious: even if an op's result value is
 /// directly used only once in the CLIF, that value is `Multiple` if
 /// the op that uses it is itself used multiple times (hence could be
-/// codegenned multiple times). In brief, this analysis tells us
+/// codegen'd multiple times). In brief, this analysis tells us
 /// whether, if every op merged all of its operand tree, a given op
-/// could be codegenned in more than one place.
+/// could be codegen'd in more than one place.
 ///
 /// To compute this, we first consider direct uses. At this point
 /// `Unused` answers are correct, `Multiple` answers are correct, but

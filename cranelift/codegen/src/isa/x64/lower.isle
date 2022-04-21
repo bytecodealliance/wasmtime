@@ -1749,15 +1749,6 @@
 ;; than one instruction for certain types (e.g., XMM-held, I128).
 
 (rule (lower (has_type ty (select (icmp cc a @ (value_type (fits_in_64 a_ty)) b) x y)))
-      ;; N.B.: we force the comparison operators into registers, and disallow
-      ;; load-op fusion, because we do not have a transitive guarantee that this
-      ;; cmp-site will be the sole user of the value. Consider: the `icmp` might
-      ;; be the only user of a load, but there may be multiple users of the
-      ;; `icmp` (e.g., `select` or `bint` instructions) that each invoke emit a
-      ;; comparison. If we were to allow a load to sink to the *latest* one, but
-      ;; other sites did not permit sinking, then we would be missing the load
-      ;; for other cmp-sites. TODO:
-      ;; https://github.com/bytecodealliance/wasmtime/issues/3953.
       (let ((size OperandSize (raw_operand_size_of_type a_ty)))
            (with_flags (x64_cmp size b a) (cmove_from_values ty cc x y))))
 
