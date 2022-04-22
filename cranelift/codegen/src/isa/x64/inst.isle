@@ -2620,6 +2620,35 @@
             (_ Unit (emit (MInst.XmmRmR (SseOpcode.Maxpd) x y dst))))
         dst))
 
+
+;; Helper for creating `sqrtss` instructions.
+(decl x64_sqrtss (Xmm) Xmm)
+(rule (x64_sqrtss x)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (_ Unit (emit (MInst.XmmUnaryRmR (SseOpcode.Sqrtss) x dst))))
+        dst))
+
+;; Helper for creating `sqrtsd` instructions.
+(decl x64_sqrtsd (Xmm) Xmm)
+(rule (x64_sqrtsd x)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (_ Unit (emit (MInst.XmmUnaryRmR (SseOpcode.Sqrtsd) x dst))))
+        dst))
+
+;; Helper for creating `sqrtps` instructions.
+(decl x64_sqrtps (Xmm) Xmm)
+(rule (x64_sqrtps x)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (_ Unit (emit (MInst.XmmUnaryRmR (SseOpcode.Sqrtps) x dst))))
+        dst))
+
+;; Helper for creating `sqrtpd` instructions.
+(decl x64_sqrtpd (Xmm) Xmm)
+(rule (x64_sqrtpd x)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (_ Unit (emit (MInst.XmmUnaryRmR (SseOpcode.Sqrtpd) x dst))))
+        dst))
+
 ;; Helpers for creating `pcmpeq*` instructions.
 (decl x64_pcmpeq (Type Xmm XmmMem) Xmm)
 (rule (x64_pcmpeq $I8X16 x y) (x64_pcmpeqb x y))

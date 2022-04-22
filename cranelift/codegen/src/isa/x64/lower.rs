@@ -1050,24 +1050,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Sqrt => {
-            // We can't guarantee the RHS (if a load) is 128-bit aligned, so we
-            // must avoid merging a load here.
-            let src = RegMem::reg(put_input_in_reg(ctx, inputs[0]));
-            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let ty = ty.unwrap();
-
-            let sse_op = match ty {
-                types::F32 => SseOpcode::Sqrtss,
-                types::F64 => SseOpcode::Sqrtsd,
-                types::F32X4 => SseOpcode::Sqrtps,
-                types::F64X2 => SseOpcode::Sqrtpd,
-                _ => panic!(
-                    "invalid type: expected one of [F32, F64, F32X4, F64X2], found {}",
-                    ty
-                ),
-            };
-
-            ctx.emit(Inst::xmm_unary_rm_r(sse_op, src, dst));
+            implemented_in_isle(ctx);
         }
 
         Opcode::Fpromote => {
