@@ -2315,6 +2315,16 @@
 (rule (lower (has_type $F64X2 (fdiv x y)))
       (x64_divpd x y))
 
+;; Rules for `sqrt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(rule (lower (has_type $F32 (sqrt x)))
+      (x64_sqrtss x))
+(rule (lower (has_type $F64 (sqrt x)))
+      (x64_sqrtsd x))
+(rule (lower (has_type $F32X4 (sqrt x)))
+      (x64_sqrtps x))
+(rule (lower (has_type $F64X2 (sqrt x)))
+      (x64_sqrtpd x))
+
 ;; Rules for `fmin` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type $F32 (fmin x y)))
