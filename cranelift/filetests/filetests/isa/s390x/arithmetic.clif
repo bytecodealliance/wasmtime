@@ -262,7 +262,8 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
-;   alg %r2, 0(%r3)
+;   lg %r4, 0(%r3)
+;   algr %r2, %r4
 ;   br %r14
 
 function %iadd_i64_mem_ext32(i64, i64) -> i64 {
@@ -273,7 +274,8 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
-;   algf %r2, 0(%r3)
+;   llgf %r4, 0(%r3)
+;   algr %r2, %r4
 ;   br %r14
 
 function %iadd_i32(i32, i32) -> i32 {
@@ -305,7 +307,8 @@ block0(v0: i32, v1: i64):
 }
 
 ; block0:
-;   al %r2, 0(%r3)
+;   l %r4, 0(%r3)
+;   alr %r2, %r4
 ;   br %r14
 
 function %iadd_i32_memoff(i32, i64) -> i32 {
@@ -316,7 +319,8 @@ block0(v0: i32, v1: i64):
 }
 
 ; block0:
-;   aly %r2, 4096(%r3)
+;   ly %r4, 4096(%r3)
+;   alr %r2, %r4
 ;   br %r14
 
 function %isub_i64(i64, i64) -> i64 {
