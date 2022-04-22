@@ -551,7 +551,6 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         let mut block_end_colors = SecondaryMap::with_default(InstColor::new(0));
         let mut side_effect_inst_entry_colors = FxHashMap::default();
         let mut inst_constants = FxHashMap::default();
-        let mut value_ir_uses = SecondaryMap::with_default(ValueUseState::Unused);
         for bb in f.layout.blocks() {
             cur_color += 1;
             for inst in f.layout.block_insts(bb) {
@@ -569,59 +568,12 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                     log::trace!(" -> constant: {}", c);
                     inst_constants.insert(inst, c);
                 }
-
-                // Add arguments to queue to count uses.
-                for arg in f.dfg.inst_args(inst) {
-                    let arg = f.dfg.resolve_aliases(*arg);
-                    value_ir_uses[arg].inc();
-                    log::trace!(
-                        " -> use of value {}; now state {:?}",
-                        arg,
-                        value_ir_uses[arg]
-                    );
-                }
-            }
-
-            // Transitively complete the `value_uses` array. The
-            // dependencies are acyclic, because we do not look
-            // through blockparams, so we only need to propagate
-            // `Multiple` uses backward (from the outputs of ops to
-            // inputs) in a single traversal. We keep a stack and set
-            // (to avoid duplicate insertion) as a LIFO workqueue,
-            // push as we transition another value to Multiple, and on
-            // pop, examine the inputs to its defining op if any.
-            let mut workqueue: SmallVec<[Value; 16]> = smallvec![];
-            let mut workqueue_set: FxHashSet<Value> = FxHashSet::default();
-            for (value, &state) in value_ir_uses.iter() {
-                if state == ValueUseState::Multiple {
-                    workqueue.push(value);
-                    workqueue_set.insert(value);
-                }
-            }
-
-            while let Some(value) = workqueue.pop() {
-                workqueue_set.remove(&value);
-                if let ValueDef::Result(inst, _) = f.dfg.value_def(value) {
-                    log::trace!(
-                        " -> processing value from workqueue: {} (inst {})",
-                        value,
-                        inst
-                    );
-                    for &arg in f.dfg.inst_args(inst) {
-                        let arg = f.dfg.resolve_aliases(arg);
-                        if value_ir_uses[arg] != ValueUseState::Multiple {
-                            value_ir_uses[arg] = ValueUseState::Multiple;
-                            log::trace!(" -> CLIF value {} becomes Multiple", arg);
-                            if workqueue_set.insert(arg) {
-                                workqueue.push(arg);
-                            }
-                        }
-                    }
-                }
             }
 
             block_end_colors[bb] = InstColor::new(cur_color);
         }
+
+        let value_ir_uses = Self::compute_use_states(f);
 
         Ok(Lower {
             f,
@@ -641,6 +593,103 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             pinned_reg: None,
             vm_context,
         })
+    }
+
+    /// Pre-analysis: compute `value_ir_uses`. See comment on
+    /// `ValueUseState` for a description of what this analysis
+    /// computes.
+    fn compute_use_states<'a>(f: &'a Function) -> SecondaryMap<Value, ValueUseState> {
+        // We perform the analysis without recursion, so we don't
+        // overflow the stack on long chains of ops in the input.
+        //
+        // This is sort of a hybrid of a "shallow use-count" pass and
+        // a DFS. We iterate over all instructions and mark there args
+        // as used. However when we increment a use-count to
+        // "Multiple" we push its args onto the stack and do a DFS,
+        // immediately marking the whole dependency tree as
+        // Multiple. Doing both (shallow use-counting over all insts,
+        // and deep Multiple propagation) lets us trim both
+        // traversals, stopping recursion when a node is already at
+        // the appropriate state.
+        //
+        // In particular, note that the *coarsening* into {Unused,
+        // Once, Multiple} is part of what makes this pass more
+        // efficient than a full indirect-use-counting pass.
+
+        let mut value_ir_uses: SecondaryMap<Value, ValueUseState> =
+            SecondaryMap::with_default(ValueUseState::Unused);
+
+        // Stack of iterators over Values as we do DFS to mark
+        // Multiple-state subtrees.
+        type StackVec<'a> = SmallVec<[std::slice::Iter<'a, Value>; 16]>;
+        let mut stack: StackVec = smallvec![];
+
+        // Push args for a given inst onto the DFS stack.
+        let push_args_on_stack = |stack: &mut StackVec<'a>, value| {
+            log::trace!(" -> pushing args for {} onto stack", value);
+            if let ValueDef::Result(src_inst, _) = f.dfg.value_def(value) {
+                stack.push(f.dfg.inst_args(src_inst).iter());
+            }
+        };
+
+        // Do a DFS through `value_ir_uses` to mark a subtree as
+        // Multiple.
+        let process_dfs = |value_ir_uses: &mut SecondaryMap<Value, ValueUseState>,
+                           stack: &mut StackVec<'a>| {
+            while let Some(iter) = stack.last_mut() {
+                if let Some(&value) = iter.next() {
+                    let value = f.dfg.resolve_aliases(value);
+                    log::trace!(" -> DFS reaches {}", value);
+                    if value_ir_uses[value] == ValueUseState::Multiple {
+                        // Truncate DFS here: no need to go further,
+                        // as whole subtree must already be Multiple.
+                        continue;
+                    }
+                    value_ir_uses[value] = ValueUseState::Multiple;
+                    log::trace!(" -> became Multiple");
+                    push_args_on_stack(stack, value);
+                } else {
+                    // Empty iterator, discard.
+                    stack.pop();
+                }
+            }
+        };
+
+        for inst in f
+            .layout
+            .blocks()
+            .flat_map(|block| f.layout.block_insts(block))
+        {
+            // If this inst produces multiple values, we must mark all
+            // of its args as Multiple, because otherwise two uses
+            // could come in as Once on our two different results.
+            let force_multiple = f.dfg.inst_results(inst).len() > 1;
+
+            // Iterate over all args of all instructions, noting an
+            // additional use on each operand. If an operand becomes Multiple,
+            for &arg in f.dfg.inst_args(inst) {
+                let arg = f.dfg.resolve_aliases(arg);
+                let old = value_ir_uses[arg];
+                if force_multiple {
+                    log::trace!(
+                        "forcing arg {} to Multiple because of multiple results of user inst",
+                        arg
+                    );
+                    value_ir_uses[arg] = ValueUseState::Multiple;
+                } else {
+                    value_ir_uses[arg].inc();
+                }
+                let new = value_ir_uses[arg];
+                log::trace!("arg {} used, old state {:?}, new {:?}", arg, old, new,);
+                // On transition to Multiple, do DFS.
+                if old != ValueUseState::Multiple && new == ValueUseState::Multiple {
+                    push_args_on_stack(&mut stack, arg);
+                    process_dfs(&mut value_ir_uses, &mut stack);
+                }
+            }
+        }
+
+        value_ir_uses
     }
 
     fn gen_arg_setup(&mut self) {
