@@ -47,7 +47,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::str::FromStr;
-use std::sync::Arc;
 use wasmtime_environ::{FlagValue, Tunables, TypeTables};
 use wasmtime_jit::{subslice_range, CompiledModuleInfo};
 use wasmtime_runtime::MmapVec;
@@ -206,7 +205,7 @@ impl<'a> SerializedModule<'a> {
 
     pub fn into_module(self, engine: &Engine) -> Result<Module> {
         let (mmap, info, types) = self.into_parts(engine)?;
-        Module::from_parts(engine, mmap, info, Arc::new(types))
+        Module::from_parts(engine, mmap, info, types)
     }
 
     pub fn into_parts(

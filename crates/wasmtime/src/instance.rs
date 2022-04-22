@@ -569,10 +569,20 @@ impl OwnedImports {
 /// [`Linker::instantiate_pre`]: crate::Linker::instantiate_pre
 pub struct InstancePre<T> {
     module: Module,
-    items: Vec<Definition>,
+
+    /// The items which this `InstancePre` use to instantiate the `module`
+    /// provided, passed to `Instance::new_started` after inserting them into a
+    /// `Store`.
+    ///
+    /// Note that this is stored as an `Arc<[T]>` to quickly move a strong
+    /// reference to everything internally into a `Store<T>` without having to
+    /// clone each individual item.
+    items: Arc<[Definition]>,
+
     /// A count of `Definition::HostFunc` entries in `items` above to
     /// preallocate space in a `Store` up front for all entries to be inserted.
     host_funcs: usize,
+
     _marker: std::marker::PhantomData<fn() -> T>,
 }
 
@@ -589,6 +599,14 @@ impl<T> Clone for InstancePre<T> {
 }
 
 impl<T> InstancePre<T> {
+    /// Creates a new `InstancePre` which type-checks the `items` provided and
+    /// on success is ready to instantiate a new instance.
+    ///
+    /// # Unsafety
+    ///
+    /// This method is unsafe as the `T` of the `InstancePre<T>` is not
+    /// guaranteed to be the same as the `T` within the `Store`, the caller must
+    /// verify that.
     pub(crate) unsafe fn new(
         store: &mut StoreOpaque,
         module: &Module,
@@ -612,7 +630,7 @@ impl<T> InstancePre<T> {
             .count();
         Ok(InstancePre {
             module: module.clone(),
-            items,
+            items: items.into(),
             host_funcs,
             _marker: std::marker::PhantomData,
         })
@@ -689,24 +707,33 @@ impl<T> InstancePre<T> {
 fn pre_instantiate_raw(
     store: &mut StoreOpaque,
     module: &Module,
-    items: &[Definition],
+    items: &Arc<[Definition]>,
     host_funcs: usize,
 ) -> Result<OwnedImports> {
-    // Any linker-defined function of the `Definition::HostFunc` variant
-    // will insert a function into the store automatically as part of
-    // instantiation, so reserve space here to make insertion more efficient
-    // as it won't have to realloc during the instantiation.
-    store.store_data_mut().reserve_funcs(host_funcs);
+    if host_funcs > 0 {
+        // Any linker-defined function of the `Definition::HostFunc` variant
+        // will insert a function into the store automatically as part of
+        // instantiation, so reserve space here to make insertion more efficient
+        // as it won't have to realloc during the instantiation.
+        store.store_data_mut().reserve_funcs(host_funcs);
+
+        // The usage of `to_extern_store_rooted` requires that the items are
+        // rooted via another means, which happens here by cloning the list of
+        // items into the store once. This avoids cloning each individual item
+        // below.
+        store.push_rooted_funcs(items.clone());
+    }
 
     let mut imports = OwnedImports::new(module);
-    for import in items {
+    for import in items.iter() {
         if !import.comes_from_same_store(store) {
             bail!("cross-`Store` instantiation is not currently supported");
         }
         // This unsafety should be encapsulated in the constructor of
         // `InstancePre` where the `T` of the original item should match the
-        // `T` of the store.
-        let item = unsafe { import.to_extern(store) };
+        // `T` of the store. Additionally the rooting necessary has happened
+        // above.
+        let item = unsafe { import.to_extern_store_rooted(store) };
         imports.push(&item, store);
     }
 
