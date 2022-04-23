@@ -2,7 +2,7 @@
 
 // Pull in the ISLE generated code.
 pub(crate) mod generated_code;
-use crate::machinst::{Reg, Writable};
+use crate::machinst::{InputSourceInst, Reg, Writable};
 use generated_code::MInst;
 
 // Types that the generated ISLE code uses via `use super::*`.
@@ -84,7 +84,7 @@ where
             return RegMemImm::reg(generated_code::constructor_imm(self, ty, c).unwrap());
         }
 
-        if let Some((src_insn, 0)) = inputs.inst {
+        if let InputSourceInst::UniqueUse(src_insn, 0) = inputs.inst {
             if let Some((addr_input, offset)) = is_mergeable_load(self.lower_ctx, src_insn) {
                 self.lower_ctx.sink_inst(src_insn);
                 let amode = lower_to_amode(self.lower_ctx, addr_input, offset);
@@ -105,7 +105,7 @@ where
             return RegMem::reg(generated_code::constructor_imm(self, ty, c).unwrap());
         }
 
-        if let Some((src_insn, 0)) = inputs.inst {
+        if let InputSourceInst::UniqueUse(src_insn, 0) = inputs.inst {
             if let Some((addr_input, offset)) = is_mergeable_load(self.lower_ctx, src_insn) {
                 self.lower_ctx.sink_inst(src_insn);
                 let amode = lower_to_amode(self.lower_ctx, addr_input, offset);
@@ -237,7 +237,7 @@ where
 
     fn sinkable_load(&mut self, val: Value) -> Option<SinkableLoad> {
         let input = self.lower_ctx.get_value_as_source_or_const(val);
-        if let Some((inst, 0)) = input.inst {
+        if let InputSourceInst::UniqueUse(inst, 0) = input.inst {
             if let Some((addr_input, offset)) = is_mergeable_load(self.lower_ctx, inst) {
                 return Some(SinkableLoad {
                     inst,

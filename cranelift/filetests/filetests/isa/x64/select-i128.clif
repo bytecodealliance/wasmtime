@@ -13,8 +13,7 @@ block0(v0: i32, v1: i128, v2: i128):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movl    $42, %r9d
-;   cmpl    %r9d, %edi
+;   cmpl    $42, %edi
 ;   cmovzq  %rsi, %rcx, %rcx
 ;   cmovzq  %rdx, %r8, %r8
 ;   movq    %rcx, %rax
