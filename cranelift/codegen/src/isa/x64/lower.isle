@@ -1367,9 +1367,15 @@
 
 (decl cmp_and_choose (Type CC Value Value) ValueRegs)
 (rule (cmp_and_choose (fits_in_64 ty) cc x y)
-      (let ((size OperandSize (raw_operand_size_of_type ty)))
-        (with_flags_reg (x64_cmp size x y)
-                        (cmove ty cc y x))))
+      (let ((size OperandSize (raw_operand_size_of_type ty))
+            ;; We need to put x and y in registers explicitly because
+            ;; we use the values more than once. Hence, even if these
+            ;; are "unique uses" at the CLIF level and would otherwise
+            ;; allow for load-op merging, here we cannot do that.
+            (x_reg Reg x)
+            (y_reg Reg y))
+        (with_flags_reg (x64_cmp size x_reg y_reg)
+                        (cmove ty cc y_reg x_reg))))
 
 (rule (lower (has_type (fits_in_64 ty) (umin x y)))
       (cmp_and_choose ty (CC.B) x y))
