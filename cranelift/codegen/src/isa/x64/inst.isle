@@ -838,6 +838,11 @@
 (rule (to_amode flags base offset)
       (amode_imm_reg_flags offset (put_in_gpr base) flags))
 
+;; Offsetting an Amode. Used when we need to do consecutive
+;; loads/stores to adjacent addresses.
+(decl amode_offset (Amode u32) Amode)
+(extern constructor amode_offset amode_offset)
+
 ;; Shift kinds.
 
 (type ShiftKind extern
@@ -1403,6 +1408,15 @@
 (decl x64_pmovzxdq (XmmMem) Xmm)
 (rule (x64_pmovzxdq from)
       (xmm_unary_rm_r (SseOpcode.Pmovzxdq) from))
+
+(decl x64_movrm (Type SyntheticAmode Gpr) SideEffectNoResult)
+(rule (x64_movrm ty addr data)
+      (let ((size OperandSize (raw_operand_size_of_type ty)))
+        (SideEffectNoResult.Inst (MInst.MovRM size data addr))))
+
+(decl x64_xmm_movrm (SseOpcode SyntheticAmode Xmm) SideEffectNoResult)
+(rule (x64_xmm_movrm op addr data)
+      (SideEffectNoResult.Inst (MInst.XmmMovRM op data addr)))
 
 ;; Load a constant into an XMM register.
 (decl x64_xmm_load_const (Type VCodeConstant) Xmm)
