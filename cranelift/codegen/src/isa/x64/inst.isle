@@ -20,6 +20,12 @@
                 (src2 GprMemImm)
                 (dst WritableGpr))
 
+       ;; Integer arithmetic read-modify-write on memory.
+       (AluRM (size OperandSize) ;; 4 or 8
+              (op AluRmiROpcode)
+              (src1_dst SyntheticAmode)
+              (src2 Gpr))
+
        ;; Instructions on general-purpose registers that only read src and
        ;; defines dst (dst is not modified). `bsr`, etc.
        (UnaryRmR (size OperandSize) ;; 2, 4, or 8

@@ -270,6 +270,38 @@ pub(crate) fn emit(
             }
         }
 
+        Inst::AluRM {
+            size,
+            src1_dst,
+            src2,
+            op,
+        } => {
+            let src2 = allocs.next(src2.to_reg());
+            let src1_dst = src1_dst.finalize(state, sink).with_allocs(allocs);
+
+            assert!(*size == OperandSize::Size32 || *size == OperandSize::Size64);
+            let opcode = match op {
+                AluRmiROpcode::Add => 0x01,
+                AluRmiROpcode::Sub => 0x29,
+                AluRmiROpcode::And => 0x21,
+                AluRmiROpcode::Or => 0x09,
+                AluRmiROpcode::Xor => 0x31,
+                _ => panic!("Unsupported read-modify-write ALU opcode"),
+            };
+            let enc_g = int_reg_enc(src2);
+            emit_std_enc_mem(
+                sink,
+                state,
+                info,
+                LegacyPrefixes::None,
+                opcode,
+                1,
+                enc_g,
+                &src1_dst,
+                RexFlags::from(*size),
+            );
+        }
+
         Inst::UnaryRmR { size, op, src, dst } => {
             let dst = allocs.next(dst.to_reg().to_reg());
             let rex_flags = RexFlags::from(*size);
