@@ -332,7 +332,7 @@ impl MachInstEmit for Inst {
                 from_bits,
                 to_bits,
             } => {
-                //todo:: actual extend the value ;
+                //todo:: actual extend the value;;
                 Inst::AluRRImm12 {
                     alu_op: AluOPRRI::ADDI,
                     rd: rd,
@@ -419,6 +419,11 @@ impl MachInstEmit for Inst {
             }
 
             &Inst::VirtualSPOffsetAdj { amount } => {
+                log::trace!(
+                    "virtual sp offset adjusted by {} -> {}",
+                    amount,
+                    state.virtual_sp_offset + amount
+                );
                 state.virtual_sp_offset += amount;
             }
 

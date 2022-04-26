@@ -394,26 +394,6 @@ pub fn riscv64_map_regs<RM: RegMapper>(inst: &mut Inst, mapper: &RM) {
             mapper.map_def(rd);
             mapper.map_use(rs);
         }
-        &mut Inst::Load {
-            ref mut rd,
-            ref mut from,
-            ..
-        } => {
-            if let Some(r) = from.get_base_register_mut() {
-                mapper.map_use(r);
-            }
-            mapper.map_def(rd);
-        }
-        &mut Inst::Store {
-            ref mut to,
-            ref mut src,
-            ..
-        } => {
-            if let Some(r) = to.get_base_register_mut() {
-                mapper.map_use(r);
-            }
-            mapper.map_use(src);
-        }
         &mut Inst::Lui { ref mut rd, .. } => {
             mapper.map_def(rd);
         }

@@ -312,7 +312,9 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             panic!("ALU+imm and ALU+carry ops should not appear here!");
         }
 
-        Opcode::Iabs => {}
+        Opcode::Iabs => {
+            implemented_in_isle(ctx);
+        }
         Opcode::AvgRound => {}
 
         Opcode::Snarrow | Opcode::Unarrow | Opcode::Uunarrow => {}

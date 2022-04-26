@@ -10,6 +10,13 @@ use super::*;
 pub static WORD_SIZE: u8 = 8;
 
 use std::fmt::{Display, Formatter, Result};
+/*
+    document used this term.
+    short for "remain"?????????
+
+    1100000 00000 rs1 rm rd 1010011 FCVT.W.S
+    1100000 00001 rs1 rm rd 1010011 FCVT.WU.S
+*/
 static rm: u32 = 0;
 
 /// An addressing mode specified for a load/store operation.
@@ -52,6 +59,10 @@ impl AMode {
             &AMode::NominalSPOffset(..) => stack_reg(),
         }
     }
+
+    /*
+        only register in AMode::RegOffset can be alloc by regalloc.
+    */
     pub(crate) fn get_base_register_mut(&mut self) -> Option<&mut Reg> {
         match self {
             &mut AMode::RegOffset(ref mut reg, ..) => Some(reg),
@@ -188,6 +199,7 @@ impl CondBrKind {
 /*
     Op are always defined in isle file and implemented Dispaly.
     I use this to generate op_name instead of boring work.
+    todo::may be not appropriate!
 */
 fn get_op_name<T: std::fmt::Debug>(op: T) -> String {
     format!("{:?}", op).to_lowercase().replace("_", ".")
