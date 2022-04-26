@@ -1543,36 +1543,51 @@ impl TermEnv {
                 Some((Pattern::BindPattern(ty, id, Box::new(subpat)), ty))
             }
             &ast::Pattern::Var { ref var, pos } => {
-                // Look up the variable; it must already have been bound.
+                // Look up the variable; if it has already been bound,
+                // then this becomes a `Var` node (which matches the
+                // existing bound value), otherwise it becomes a
+                // `BindPattern` with a wildcard subpattern to capture
+                // at this location.
                 let name = tyenv.intern_mut(var);
-                let bv = match bindings.vars.iter().rev().find(|bv| bv.name == name) {
+                match bindings.vars.iter().rev().find(|bv| bv.name == name) {
                     None => {
-                        tyenv.report_error(
-                            pos,
-                            format!(
-                                "Unknown variable '{}' in bound-var pattern '={}'",
-                                var.0, var.0
-                            ),
-                        );
-                        return None;
+                        let ty = match expected_ty {
+                            Some(ty) => ty,
+                            None => {
+                                tyenv.report_error(
+                                pos,
+                                format!("Variable pattern '{}' not allowed in context without explicit type", var.0),
+                            );
+                                return None;
+                            }
+                        };
+                        let id = VarId(bindings.next_var);
+                        bindings.next_var += 1;
+                        log::trace!("binding var {:?}", var.0);
+                        bindings.vars.push(BoundVar { name, id, ty });
+                        Some((
+                            Pattern::BindPattern(ty, id, Box::new(Pattern::Wildcard(ty))),
+                            ty,
+                        ))
                     }
-                    Some(bv) => bv,
-                };
-                let ty = match expected_ty {
-                    None => bv.ty,
-                    Some(expected_ty) if expected_ty == bv.ty => bv.ty,
-                    Some(expected_ty) => {
-                        tyenv.report_error(
+                    Some(bv) => {
+                        let ty = match expected_ty {
+                            None => bv.ty,
+                            Some(expected_ty) if expected_ty == bv.ty => bv.ty,
+                            Some(expected_ty) => {
+                                tyenv.report_error(
                             pos,
                             format!(
                                 "Mismatched types: pattern expects type '{}' but already-bound var '{}' has type '{}'",
                                 tyenv.types[expected_ty.index()].name(tyenv),
                                 var.0,
                                 tyenv.types[bv.ty.index()].name(tyenv)));
-                        bv.ty // Try to keep going for more errors.
+                                bv.ty // Try to keep going for more errors.
+                            }
+                        };
+                        Some((Pattern::Var(ty, bv.id), ty))
                     }
-                };
-                Some((Pattern::Var(ty, bv.id), ty))
+                }
             }
             &ast::Pattern::Term {
                 ref sym,

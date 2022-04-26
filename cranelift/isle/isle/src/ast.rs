@@ -93,15 +93,22 @@ pub struct Extractor {
 /// A pattern: the left-hand side of a rule.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum Pattern {
-    /// An operator that binds a variable to a subterm and match the
+    /// A mention of a variable.
+    ///
+    /// Equivalent either to a binding (which can be emulated with
+    /// `BindPattern` with a `Pattern::Wildcard` subpattern), if this
+    /// is the first mention of the variable, in order to capture its
+    /// value; or else a match of the already-captured value. This
+    /// disambiguation happens when we lower `ast` nodes to `sema`
+    /// nodes as we resolve bound variable names.
+    Var { var: Ident, pos: Pos },
+    /// An operator that binds a variable to a subterm and matches the
     /// subpattern.
     BindPattern {
         var: Ident,
         subpat: Box<Pattern>,
         pos: Pos,
     },
-    /// A variable that has already been bound (`=x` syntax).
-    Var { var: Ident, pos: Pos },
     /// An operator that matches a constant integer value.
     ConstInt { val: i64, pos: Pos },
     /// An operator that matches an external constant value.
@@ -180,6 +187,13 @@ impl Pattern {
                 subpat: Box::new(subpat.make_macro_template(macro_args)),
                 pos,
             },
+            &Pattern::Var { ref var, pos } => {
+                if let Some(i) = macro_args.iter().position(|arg| arg.0 == var.0) {
+                    Pattern::MacroArg { index: i, pos }
+                } else {
+                    self.clone()
+                }
+            }
             &Pattern::And { ref subpats, pos } => {
                 let subpats = subpats
                     .iter()
@@ -203,10 +217,9 @@ impl Pattern {
                 }
             }
 
-            &Pattern::Var { .. }
-            | &Pattern::Wildcard { .. }
-            | &Pattern::ConstInt { .. }
-            | &Pattern::ConstPrim { .. } => self.clone(),
+            &Pattern::Wildcard { .. } | &Pattern::ConstInt { .. } | &Pattern::ConstPrim { .. } => {
+                self.clone()
+            }
             &Pattern::MacroArg { .. } => unreachable!(),
         }
     }
