@@ -254,8 +254,7 @@ impl Inst {
         Inst::Load {
             rd: into_reg,
             op: LoadOP::from_type(ty),
-            base: mem.get_base_register(),
-            offset: mem.get_offset(),
+            from: mem,
             flags,
         }
     }
@@ -265,8 +264,7 @@ impl Inst {
         Inst::Store {
             src: from_reg,
             op: StoreOP::from_type(ty),
-            base: mem.get_base_register(),
-            offset: mem.get_offset(),
+            to: mem,
             flags: MemFlags::new(),
         }
     }
@@ -293,12 +291,12 @@ fn riscv64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             collector.add_def(rd);
             collector.add_use(rs);
         }
-        &Inst::Load { rd, base, .. } => {
+        &Inst::Load { rd, from, .. } => {
             collector.add_def(rd);
-            collector.add_use(base);
+            collector.add_use(from.get_base_register());
         }
-        &Inst::Store { base, src, .. } => {
-            collector.add_use(base);
+        &Inst::Store { src, to, .. } => {
+            collector.add_use(to.get_base_register());
             collector.add_use(src);
         }
         &Inst::Lui { rd, .. } => {
@@ -313,13 +311,13 @@ fn riscv64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             collector.add_def(rd);
             collector.add_use(rs);
         }
-        &Inst::Load { rd, base, .. } => {
+        &Inst::Load { rd, from, .. } => {
             collector.add_def(rd);
-            collector.add_use(base);
+            collector.add_use(from.get_base_register());
         }
-        &Inst::Store { base, src, .. } => {
+        &Inst::Store { to, src, .. } => {
             collector.add_use(src);
-            collector.add_use(base);
+            collector.add_use(to.get_base_register());
         }
         &Inst::EpiloguePlaceholder => {}
         &Inst::Ret => {}
@@ -398,18 +396,22 @@ pub fn riscv64_map_regs<RM: RegMapper>(inst: &mut Inst, mapper: &RM) {
         }
         &mut Inst::Load {
             ref mut rd,
-            ref mut base,
+            ref mut from,
             ..
         } => {
+            if let Some(r) = from.get_base_register_mut() {
+                mapper.map_use(r);
+            }
             mapper.map_def(rd);
-            mapper.map_use(base);
         }
         &mut Inst::Store {
-            ref mut base,
+            ref mut to,
             ref mut src,
             ..
         } => {
-            mapper.map_use(base);
+            if let Some(r) = to.get_base_register_mut() {
+                mapper.map_use(r);
+            }
             mapper.map_use(src);
         }
         &mut Inst::Lui { ref mut rd, .. } => {
@@ -435,19 +437,23 @@ pub fn riscv64_map_regs<RM: RegMapper>(inst: &mut Inst, mapper: &RM) {
         }
         &mut Inst::Load {
             ref mut rd,
-            ref mut base,
+            ref mut from,
             ..
         } => {
             mapper.map_def(rd);
-            mapper.map_use(base);
+            if let Some(r) = from.get_base_register_mut() {
+                mapper.map_use(r);
+            }
         }
         &mut Inst::Store {
-            ref mut base,
+            ref mut to,
             ref mut src,
             ..
         } => {
             mapper.map_use(src);
-            mapper.map_use(base);
+            if let Some(r) = to.get_base_register_mut() {
+                mapper.map_use(r);
+            }
         }
         &mut Inst::EpiloguePlaceholder => {}
         &mut Inst::Ret => {}
@@ -771,32 +777,13 @@ impl Inst {
             &Inst::Load {
                 rd,
                 op,
-                base,
-                offset,
+                from,
                 flags,
             } => {
-                format!(
-                    "{} {},{}({})",
-                    op.op_name(),
-                    register_name(rd.to_reg()),
-                    offset,
-                    register_name(base),
-                )
+                format!("{} {},{}", op.op_name(), register_name(rd.to_reg()), from)
             }
-            &Inst::Store {
-                src,
-                op,
-                base,
-                offset,
-                flags,
-            } => {
-                format!(
-                    "{} {},{}({})",
-                    op.op_name(),
-                    register_name(src),
-                    offset,
-                    register_name(base),
-                )
+            &Inst::Store { src, op, to, flags } => {
+                format!("{} {},{}", op.op_name(), register_name(src), to)
             }
             &Inst::EpiloguePlaceholder => {
                 format!("epilogue place holder")
@@ -819,7 +806,7 @@ impl Inst {
                 )
             }
             &MInst::AjustSp { amount } => {
-                format!("{} sp,{}", "add", amount)
+                format!("{} sp,{}", "addi", amount)
             }
             &MInst::Call { .. } => todo!(),
             &MInst::CallInd { .. } => todo!(),

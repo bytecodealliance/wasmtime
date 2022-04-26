@@ -3,12 +3,13 @@
 // Some variants are never constructed, but we still want them as options in the future.
 #![allow(dead_code)]
 
-use crate::ir::condcodes::{CondCode, FloatCC};
+use crate::ir::condcodes::CondCode;
 
 use super::*;
 
 pub static WORD_SIZE: u8 = 8;
 
+use std::fmt::{Display, Formatter, Result};
 static rm: u32 = 0;
 
 /// An addressing mode specified for a load/store operation.
@@ -51,13 +52,39 @@ impl AMode {
             &AMode::NominalSPOffset(..) => stack_reg(),
         }
     }
+    pub(crate) fn get_base_register_mut(&mut self) -> Option<&mut Reg> {
+        match self {
+            &mut AMode::RegOffset(ref mut reg, ..) => Some(reg),
+            _ => None,
+        }
+    }
 
-    pub(crate) fn get_offset(&self) -> i64 {
+    pub(crate) fn get_offset(&self, state: &EmitState) -> i64 {
         match self {
             &AMode::RegOffset(_, offset, ..) => offset,
             &AMode::SPOffset(offset, _) => offset,
             &AMode::FPOffset(offset, _) => offset,
-            &AMode::NominalSPOffset(offset, _) => offset,
+            &AMode::NominalSPOffset(offset, _) => offset + state.virtual_sp_offset,
+        }
+    }
+}
+
+impl Display for AMode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        match self {
+            &AMode::RegOffset(r, offset, ..) => {
+                //todo:: with RegUniverse
+                write!(f, "{}({:?})", offset, r)
+            }
+            &AMode::SPOffset(offset, ..) => {
+                write!(f, "{}(sp)", offset)
+            }
+            &AMode::NominalSPOffset(offset, ..) => {
+                write!(f, "{}(nominal_sp)", offset)
+            }
+            &AMode::FPOffset(offset, ..) => {
+                write!(f, "{}(fp)", offset)
+            }
         }
     }
 }

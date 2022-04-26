@@ -50,14 +50,12 @@
       (rd WritableReg)
       (op LoadOP)
       (flags MemFlags)
-      (base Reg)
-      (offset i64)) 
+      (from AMode)) 
     ;; An Store 
     (Store
-      (offset i64)
+      (to AMode)
       (op StoreOP)
       (flags MemFlags)
-      (base Reg)
       (src Reg))
 
     (EpiloguePlaceholder)

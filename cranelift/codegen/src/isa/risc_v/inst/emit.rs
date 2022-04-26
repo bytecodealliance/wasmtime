@@ -4,6 +4,7 @@ use crate::binemit::StackMap;
 use crate::isa::risc_v::inst::*;
 use std::collections::HashSet;
 
+use super::*;
 use crate::isa::risc_v::inst::{zero_reg, AluOPRRR};
 use alloc::vec;
 use regalloc::{Reg, Writable};
@@ -98,9 +99,11 @@ impl Inst {
         for r in registers {
             insts.push(Inst::Store {
                 // unwrap can check this must be exceed imm12
-                offset: Imm12::maybe_from_u64(cur_offset).unwrap().as_u32() as i64,
+                to: AMode::SPOffset(
+                    Imm12::maybe_from_u64(cur_offset).unwrap().as_u32() as i64,
+                    I64,
+                ),
                 op: StoreOP::SD,
-                base: stack_reg(),
                 src: r.to_reg(),
                 flags: MemFlags::new(),
             });
@@ -115,9 +118,8 @@ impl Inst {
         let mut cur_offset = 0;
         for r in registers {
             insts.push(Inst::Load {
-                offset: Imm12::maybe_from_u64(cur_offset).unwrap().into(),
+                from: AMode::SPOffset(Imm12::maybe_from_u64(cur_offset).unwrap().into(), I64),
                 op: LoadOP::LD,
-                base: stack_reg(),
                 rd: r.clone(),
                 flags: MemFlags::new(),
             });
@@ -235,11 +237,12 @@ impl MachInstEmit for Inst {
             &Inst::Load {
                 rd,
                 op,
-                base,
-                offset,
+                from,
                 flags,
             } => {
                 let x;
+                let base = from.get_base_register();
+                let offset = from.get_offset(state);
                 if let Some(imm12) = Imm12::maybe_from_u64(offset as u64) {
                     x = op.op_code()
                         | (rd.to_reg().as_real_reg().unwrap().get_hw_encoding() as u32) << 7
@@ -263,8 +266,7 @@ impl MachInstEmit for Inst {
                     //lw rd , registers[0]
                     insts.push(Inst::Load {
                         op,
-                        base: registers[0].to_reg(),
-                        offset: Imm12::zero().into(),
+                        from: AMode::RegOffset(registers[0].to_reg(), Imm12::zero().into(), I64),
                         rd,
                         flags: MemFlags::new(),
                     });
@@ -275,19 +277,15 @@ impl MachInstEmit for Inst {
                     }
                 }
             }
-            &Inst::Store {
-                offset,
-                op,
-                base,
-                src,
-                flags,
-            } => {
+            &Inst::Store { op, src, flags, to } => {
+                let base = to.get_base_register();
+                let offset = to.get_offset(state);
                 let x;
                 if let Some(imm12) = Imm12::maybe_from_u64(offset as u64) {
                     x = op.op_code()
                         | (imm12.as_u32() & 0x1f) << 7
                         | op.funct3() << 12
-                        | (base.as_real_reg().unwrap().get_hw_encoding() as u32) << 15
+                        | (base.get_hw_encoding() as u32) << 15
                         | (src.as_real_reg().unwrap().get_hw_encoding() as u32) << 20
                         | (imm12.as_u32() >> 5) << 25;
                     sink.put4(x);
@@ -306,8 +304,11 @@ impl MachInstEmit for Inst {
                     // st registers[0] , src
                     insts.push(Inst::Store {
                         op,
-                        base: registers[0].to_reg(),
-                        offset: Imm12::zero().into(),
+                        to: AMode::RegOffset(
+                            registers[0].to_reg(),
+                            Imm12::zero().as_i16() as i64,
+                            I64,
+                        ),
                         src,
                         flags: MemFlags::new(),
                     });
@@ -416,6 +417,10 @@ impl MachInstEmit for Inst {
                     imm12: Imm12::zero(),
                 };
                 x.emit(sink, emit_info, state);
+            }
+
+            &Inst::VirtualSPOffsetAdj { amount } => {
+                state.virtual_sp_offset += amount;
             }
 
             _ => unimplemented!(),
