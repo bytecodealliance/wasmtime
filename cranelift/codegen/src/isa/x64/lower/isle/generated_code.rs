@@ -5057,10 +5057,115 @@ pub fn constructor_x64_pcmpgtq<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem
     return Some(expr2_0);
 }
 
+// Generated as internal constructor for term alu_rm.
+pub fn constructor_alu_rm<C: Context>(
+    ctx: &mut C,
+    arg0: Type,
+    arg1: &AluRmiROpcode,
+    arg2: &Amode,
+    arg3: Gpr,
+) -> Option<SideEffectNoResult> {
+    let pattern0_0 = arg0;
+    let pattern1_0 = arg1;
+    let pattern2_0 = arg2;
+    let pattern3_0 = arg3;
+    // Rule at src/isa/x64/inst.isle line 2706.
+    let expr0_0 = C::operand_size_of_type_32_64(ctx, pattern0_0);
+    let expr1_0 = C::amode_to_synthetic_amode(ctx, pattern2_0);
+    let expr2_0 = MInst::AluRM {
+        size: expr0_0,
+        op: pattern1_0.clone(),
+        src1_dst: expr1_0,
+        src2: pattern3_0,
+    };
+    let expr3_0 = SideEffectNoResult::Inst { inst: expr2_0 };
+    return Some(expr3_0);
+}
+
+// Generated as internal constructor for term x64_add_mem.
+pub fn constructor_x64_add_mem<C: Context>(
+    ctx: &mut C,
+    arg0: Type,
+    arg1: &Amode,
+    arg2: Gpr,
+) -> Option<SideEffectNoResult> {
+    let pattern0_0 = arg0;
+    let pattern1_0 = arg1;
+    let pattern2_0 = arg2;
+    // Rule at src/isa/x64/inst.isle line 2711.
+    let expr0_0 = AluRmiROpcode::Add;
+    let expr1_0 = constructor_alu_rm(ctx, pattern0_0, &expr0_0, pattern1_0, pattern2_0)?;
+    return Some(expr1_0);
+}
+
+// Generated as internal constructor for term x64_sub_mem.
+pub fn constructor_x64_sub_mem<C: Context>(
+    ctx: &mut C,
+    arg0: Type,
+    arg1: &Amode,
+    arg2: Gpr,
+) -> Option<SideEffectNoResult> {
+    let pattern0_0 = arg0;
+    let pattern1_0 = arg1;
+    let pattern2_0 = arg2;
+    // Rule at src/isa/x64/inst.isle line 2715.
+    let expr0_0 = AluRmiROpcode::Sub;
+    let expr1_0 = constructor_alu_rm(ctx, pattern0_0, &expr0_0, pattern1_0, pattern2_0)?;
+    return Some(expr1_0);
+}
+
+// Generated as internal constructor for term x64_and_mem.
+pub fn constructor_x64_and_mem<C: Context>(
+    ctx: &mut C,
+    arg0: Type,
+    arg1: &Amode,
+    arg2: Gpr,
+) -> Option<SideEffectNoResult> {
+    let pattern0_0 = arg0;
+    let pattern1_0 = arg1;
+    let pattern2_0 = arg2;
+    // Rule at src/isa/x64/inst.isle line 2719.
+    let expr0_0 = AluRmiROpcode::And;
+    let expr1_0 = constructor_alu_rm(ctx, pattern0_0, &expr0_0, pattern1_0, pattern2_0)?;
+    return Some(expr1_0);
+}
+
+// Generated as internal constructor for term x64_or_mem.
+pub fn constructor_x64_or_mem<C: Context>(
+    ctx: &mut C,
+    arg0: Type,
+    arg1: &Amode,
+    arg2: Gpr,
+) -> Option<SideEffectNoResult> {
+    let pattern0_0 = arg0;
+    let pattern1_0 = arg1;
+    let pattern2_0 = arg2;
+    // Rule at src/isa/x64/inst.isle line 2723.
+    let expr0_0 = AluRmiROpcode::Or;
+    let expr1_0 = constructor_alu_rm(ctx, pattern0_0, &expr0_0, pattern1_0, pattern2_0)?;
+    return Some(expr1_0);
+}
+
+// Generated as internal constructor for term x64_xor_mem.
+pub fn constructor_x64_xor_mem<C: Context>(
+    ctx: &mut C,
+    arg0: Type,
+    arg1: &Amode,
+    arg2: Gpr,
+) -> Option<SideEffectNoResult> {
+    let pattern0_0 = arg0;
+    let pattern1_0 = arg1;
+    let pattern2_0 = arg2;
+    // Rule at src/isa/x64/inst.isle line 2727.
+    let expr0_0 = AluRmiROpcode::Xor;
+    let expr1_0 = constructor_alu_rm(ctx, pattern0_0, &expr0_0, pattern1_0, pattern2_0)?;
+    return Some(expr1_0);
+}
+
 // Generated as internal constructor for term reg_to_xmm_mem.
 pub fn constructor_reg_to_xmm_mem<C: Context>(ctx: &mut C, arg0: Reg) -> Option<XmmMem> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/x64/inst.isle line 2758.
+    // Rule at src/isa/x64/inst.isle line 2784.
     let expr0_0 = C::xmm_new(ctx, pattern0_0);
     let expr1_0 = C::xmm_to_xmm_mem(ctx, expr0_0);
     return Some(expr1_0);
@@ -5069,7 +5174,7 @@ pub fn constructor_reg_to_xmm_mem<C: Context>(ctx: &mut C, arg0: Reg) -> Option<
 // Generated as internal constructor for term xmm_to_reg_mem.
 pub fn constructor_xmm_to_reg_mem<C: Context>(ctx: &mut C, arg0: Reg) -> Option<XmmMem> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/x64/inst.isle line 2761.
+    // Rule at src/isa/x64/inst.isle line 2787.
     let expr0_0 = C::xmm_new(ctx, pattern0_0);
     let expr1_0 = C::xmm_to_reg(ctx, expr0_0);
     let expr2_0 = RegMem::Reg { reg: expr1_0 };
@@ -5083,7 +5188,7 @@ pub fn constructor_writable_gpr_to_r_reg<C: Context>(
     arg0: WritableGpr,
 ) -> Option<Reg> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/x64/inst.isle line 2765.
+    // Rule at src/isa/x64/inst.isle line 2791.
     let expr0_0 = C::writable_gpr_to_reg(ctx, pattern0_0);
     let expr1_0 = C::writable_reg_to_reg(ctx, expr0_0);
     return Some(expr1_0);
@@ -5095,7 +5200,7 @@ pub fn constructor_writable_gpr_to_gpr_mem<C: Context>(
     arg0: WritableGpr,
 ) -> Option<GprMem> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/x64/inst.isle line 2768.
+    // Rule at src/isa/x64/inst.isle line 2794.
     let expr0_0 = C::writable_gpr_to_gpr(ctx, pattern0_0);
     let expr1_0 = C::gpr_to_gpr_mem(ctx, expr0_0);
     return Some(expr1_0);
@@ -5107,7 +5212,7 @@ pub fn constructor_writable_gpr_to_value_regs<C: Context>(
     arg0: WritableGpr,
 ) -> Option<ValueRegs> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/x64/inst.isle line 2771.
+    // Rule at src/isa/x64/inst.isle line 2797.
     let expr0_0 = constructor_writable_gpr_to_r_reg(ctx, pattern0_0)?;
     let expr1_0 = C::value_reg(ctx, expr0_0);
     return Some(expr1_0);
@@ -5119,7 +5224,7 @@ pub fn constructor_writable_xmm_to_r_reg<C: Context>(
     arg0: WritableXmm,
 ) -> Option<Reg> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/x64/inst.isle line 2774.
+    // Rule at src/isa/x64/inst.isle line 2800.
     let expr0_0 = C::writable_xmm_to_reg(ctx, pattern0_0);
     let expr1_0 = C::writable_reg_to_reg(ctx, expr0_0);
     return Some(expr1_0);
@@ -5131,7 +5236,7 @@ pub fn constructor_writable_xmm_to_xmm_mem<C: Context>(
     arg0: WritableXmm,
 ) -> Option<XmmMem> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/x64/inst.isle line 2777.
+    // Rule at src/isa/x64/inst.isle line 2803.
     let expr0_0 = C::writable_xmm_to_xmm(ctx, pattern0_0);
     let expr1_0 = C::xmm_to_xmm_mem(ctx, expr0_0);
     return Some(expr1_0);
@@ -5143,7 +5248,7 @@ pub fn constructor_writable_xmm_to_value_regs<C: Context>(
     arg0: WritableXmm,
 ) -> Option<ValueRegs> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/x64/inst.isle line 2780.
+    // Rule at src/isa/x64/inst.isle line 2806.
     let expr0_0 = constructor_writable_xmm_to_r_reg(ctx, pattern0_0)?;
     let expr1_0 = C::value_reg(ctx, expr0_0);
     return Some(expr1_0);
@@ -5155,7 +5260,7 @@ pub fn constructor_synthetic_amode_to_gpr_mem<C: Context>(
     arg0: &SyntheticAmode,
 ) -> Option<GprMem> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/x64/inst.isle line 2787.
+    // Rule at src/isa/x64/inst.isle line 2813.
     let expr0_0 = C::synthetic_amode_to_reg_mem(ctx, pattern0_0);
     let expr1_0 = C::reg_mem_to_gpr_mem(ctx, &expr0_0);
     return Some(expr1_0);
@@ -5164,7 +5269,7 @@ pub fn constructor_synthetic_amode_to_gpr_mem<C: Context>(
 // Generated as internal constructor for term amode_to_gpr_mem.
 pub fn constructor_amode_to_gpr_mem<C: Context>(ctx: &mut C, arg0: &Amode) -> Option<GprMem> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/x64/inst.isle line 2785.
+    // Rule at src/isa/x64/inst.isle line 2811.
     let expr0_0 = C::amode_to_synthetic_amode(ctx, pattern0_0);
     let expr1_0 = constructor_synthetic_amode_to_gpr_mem(ctx, &expr0_0)?;
     return Some(expr1_0);
@@ -5173,7 +5278,7 @@ pub fn constructor_amode_to_gpr_mem<C: Context>(ctx: &mut C, arg0: &Amode) -> Op
 // Generated as internal constructor for term amode_to_xmm_mem.
 pub fn constructor_amode_to_xmm_mem<C: Context>(ctx: &mut C, arg0: &Amode) -> Option<XmmMem> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/x64/inst.isle line 2790.
+    // Rule at src/isa/x64/inst.isle line 2816.
     let expr0_0 = C::amode_to_synthetic_amode(ctx, pattern0_0);
     let expr1_0 = constructor_synthetic_amode_to_xmm_mem(ctx, &expr0_0)?;
     return Some(expr1_0);
@@ -5185,7 +5290,7 @@ pub fn constructor_synthetic_amode_to_xmm_mem<C: Context>(
     arg0: &SyntheticAmode,
 ) -> Option<XmmMem> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/x64/inst.isle line 2793.
+    // Rule at src/isa/x64/inst.isle line 2819.
     let expr0_0 = C::synthetic_amode_to_reg_mem(ctx, pattern0_0);
     let expr1_0 = C::reg_mem_to_xmm_mem(ctx, &expr0_0);
     return Some(expr1_0);
@@ -5391,6 +5496,465 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<InstOutp
             match pattern2_0 {
                 &Opcode::Store => {
                     let (pattern4_0, pattern4_1) = C::unpack_value_array_2(ctx, pattern2_1);
+                    if let Some(pattern5_0) = C::def_inst(ctx, pattern4_0) {
+                        if let Some(pattern6_0) = C::first_result(ctx, pattern5_0) {
+                            let pattern7_0 = C::value_type(ctx, pattern6_0);
+                            if let Some(pattern8_0) = C::ty_32_or_64(ctx, pattern7_0) {
+                                let pattern9_0 = C::inst_data(ctx, pattern5_0);
+                                if let &InstructionData::Binary {
+                                    opcode: ref pattern10_0,
+                                    args: ref pattern10_1,
+                                } = &pattern9_0
+                                {
+                                    match pattern10_0 {
+                                        &Opcode::Iadd => {
+                                            let (pattern12_0, pattern12_1) =
+                                                C::unpack_value_array_2(ctx, pattern10_1);
+                                            if let Some(pattern13_0) =
+                                                C::sinkable_load(ctx, pattern12_0)
+                                            {
+                                                if let Some(pattern14_0) =
+                                                    C::def_inst(ctx, pattern12_0)
+                                                {
+                                                    let pattern15_0 =
+                                                        C::inst_data(ctx, pattern14_0);
+                                                    if let &InstructionData::Load {
+                                                        opcode: ref pattern16_0,
+                                                        arg: pattern16_1,
+                                                        flags: pattern16_2,
+                                                        offset: pattern16_3,
+                                                    } = &pattern15_0
+                                                    {
+                                                        if let &Opcode::Load = pattern16_0 {
+                                                            if pattern4_1 == pattern16_1 {
+                                                                if pattern2_2 == pattern16_2 {
+                                                                    if pattern2_3 == pattern16_3 {
+                                                                        // Rule at src/isa/x64/lower.isle line 2662.
+                                                                        let expr0_0 = C::sink_load(
+                                                                            ctx,
+                                                                            &pattern13_0,
+                                                                        );
+                                                                        let expr1_0 =
+                                                                            constructor_to_amode(
+                                                                                ctx,
+                                                                                pattern16_2,
+                                                                                pattern16_1,
+                                                                                pattern16_3,
+                                                                            )?;
+                                                                        let expr2_0 =
+                                                                            constructor_put_in_gpr(
+                                                                                ctx,
+                                                                                pattern12_1,
+                                                                            )?;
+                                                                        let expr3_0 = constructor_x64_add_mem(ctx, pattern8_0, &expr1_0, expr2_0)?;
+                                                                        let expr4_0 = constructor_side_effect(ctx, &expr3_0)?;
+                                                                        return Some(expr4_0);
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            if let Some(pattern13_0) =
+                                                C::sinkable_load(ctx, pattern12_1)
+                                            {
+                                                if let Some(pattern14_0) =
+                                                    C::def_inst(ctx, pattern12_1)
+                                                {
+                                                    let pattern15_0 =
+                                                        C::inst_data(ctx, pattern14_0);
+                                                    if let &InstructionData::Load {
+                                                        opcode: ref pattern16_0,
+                                                        arg: pattern16_1,
+                                                        flags: pattern16_2,
+                                                        offset: pattern16_3,
+                                                    } = &pattern15_0
+                                                    {
+                                                        if let &Opcode::Load = pattern16_0 {
+                                                            if pattern4_1 == pattern16_1 {
+                                                                if pattern2_2 == pattern16_2 {
+                                                                    if pattern2_3 == pattern16_3 {
+                                                                        // Rule at src/isa/x64/lower.isle line 2676.
+                                                                        let expr0_0 = C::sink_load(
+                                                                            ctx,
+                                                                            &pattern13_0,
+                                                                        );
+                                                                        let expr1_0 =
+                                                                            constructor_to_amode(
+                                                                                ctx,
+                                                                                pattern16_2,
+                                                                                pattern16_1,
+                                                                                pattern16_3,
+                                                                            )?;
+                                                                        let expr2_0 =
+                                                                            constructor_put_in_gpr(
+                                                                                ctx,
+                                                                                pattern12_0,
+                                                                            )?;
+                                                                        let expr3_0 = constructor_x64_add_mem(ctx, pattern8_0, &expr1_0, expr2_0)?;
+                                                                        let expr4_0 = constructor_side_effect(ctx, &expr3_0)?;
+                                                                        return Some(expr4_0);
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        &Opcode::Isub => {
+                                            let (pattern12_0, pattern12_1) =
+                                                C::unpack_value_array_2(ctx, pattern10_1);
+                                            if let Some(pattern13_0) =
+                                                C::sinkable_load(ctx, pattern12_0)
+                                            {
+                                                if let Some(pattern14_0) =
+                                                    C::def_inst(ctx, pattern12_0)
+                                                {
+                                                    let pattern15_0 =
+                                                        C::inst_data(ctx, pattern14_0);
+                                                    if let &InstructionData::Load {
+                                                        opcode: ref pattern16_0,
+                                                        arg: pattern16_1,
+                                                        flags: pattern16_2,
+                                                        offset: pattern16_3,
+                                                    } = &pattern15_0
+                                                    {
+                                                        if let &Opcode::Load = pattern16_0 {
+                                                            if pattern4_1 == pattern16_1 {
+                                                                if pattern2_2 == pattern16_2 {
+                                                                    if pattern2_3 == pattern16_3 {
+                                                                        // Rule at src/isa/x64/lower.isle line 2690.
+                                                                        let expr0_0 = C::sink_load(
+                                                                            ctx,
+                                                                            &pattern13_0,
+                                                                        );
+                                                                        let expr1_0 =
+                                                                            constructor_to_amode(
+                                                                                ctx,
+                                                                                pattern16_2,
+                                                                                pattern16_1,
+                                                                                pattern16_3,
+                                                                            )?;
+                                                                        let expr2_0 =
+                                                                            constructor_put_in_gpr(
+                                                                                ctx,
+                                                                                pattern12_1,
+                                                                            )?;
+                                                                        let expr3_0 = constructor_x64_sub_mem(ctx, pattern8_0, &expr1_0, expr2_0)?;
+                                                                        let expr4_0 = constructor_side_effect(ctx, &expr3_0)?;
+                                                                        return Some(expr4_0);
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        &Opcode::Band => {
+                                            let (pattern12_0, pattern12_1) =
+                                                C::unpack_value_array_2(ctx, pattern10_1);
+                                            if let Some(pattern13_0) =
+                                                C::sinkable_load(ctx, pattern12_0)
+                                            {
+                                                if let Some(pattern14_0) =
+                                                    C::def_inst(ctx, pattern12_0)
+                                                {
+                                                    let pattern15_0 =
+                                                        C::inst_data(ctx, pattern14_0);
+                                                    if let &InstructionData::Load {
+                                                        opcode: ref pattern16_0,
+                                                        arg: pattern16_1,
+                                                        flags: pattern16_2,
+                                                        offset: pattern16_3,
+                                                    } = &pattern15_0
+                                                    {
+                                                        if let &Opcode::Load = pattern16_0 {
+                                                            if pattern4_1 == pattern16_1 {
+                                                                if pattern2_2 == pattern16_2 {
+                                                                    if pattern2_3 == pattern16_3 {
+                                                                        // Rule at src/isa/x64/lower.isle line 2704.
+                                                                        let expr0_0 = C::sink_load(
+                                                                            ctx,
+                                                                            &pattern13_0,
+                                                                        );
+                                                                        let expr1_0 =
+                                                                            constructor_to_amode(
+                                                                                ctx,
+                                                                                pattern16_2,
+                                                                                pattern16_1,
+                                                                                pattern16_3,
+                                                                            )?;
+                                                                        let expr2_0 =
+                                                                            constructor_put_in_gpr(
+                                                                                ctx,
+                                                                                pattern12_1,
+                                                                            )?;
+                                                                        let expr3_0 = constructor_x64_and_mem(ctx, pattern8_0, &expr1_0, expr2_0)?;
+                                                                        let expr4_0 = constructor_side_effect(ctx, &expr3_0)?;
+                                                                        return Some(expr4_0);
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            if let Some(pattern13_0) =
+                                                C::sinkable_load(ctx, pattern12_1)
+                                            {
+                                                if let Some(pattern14_0) =
+                                                    C::def_inst(ctx, pattern12_1)
+                                                {
+                                                    let pattern15_0 =
+                                                        C::inst_data(ctx, pattern14_0);
+                                                    if let &InstructionData::Load {
+                                                        opcode: ref pattern16_0,
+                                                        arg: pattern16_1,
+                                                        flags: pattern16_2,
+                                                        offset: pattern16_3,
+                                                    } = &pattern15_0
+                                                    {
+                                                        if let &Opcode::Load = pattern16_0 {
+                                                            if pattern4_1 == pattern16_1 {
+                                                                if pattern2_2 == pattern16_2 {
+                                                                    if pattern2_3 == pattern16_3 {
+                                                                        // Rule at src/isa/x64/lower.isle line 2718.
+                                                                        let expr0_0 = C::sink_load(
+                                                                            ctx,
+                                                                            &pattern13_0,
+                                                                        );
+                                                                        let expr1_0 =
+                                                                            constructor_to_amode(
+                                                                                ctx,
+                                                                                pattern16_2,
+                                                                                pattern16_1,
+                                                                                pattern16_3,
+                                                                            )?;
+                                                                        let expr2_0 =
+                                                                            constructor_put_in_gpr(
+                                                                                ctx,
+                                                                                pattern12_0,
+                                                                            )?;
+                                                                        let expr3_0 = constructor_x64_and_mem(ctx, pattern8_0, &expr1_0, expr2_0)?;
+                                                                        let expr4_0 = constructor_side_effect(ctx, &expr3_0)?;
+                                                                        return Some(expr4_0);
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        &Opcode::Bor => {
+                                            let (pattern12_0, pattern12_1) =
+                                                C::unpack_value_array_2(ctx, pattern10_1);
+                                            if let Some(pattern13_0) =
+                                                C::sinkable_load(ctx, pattern12_0)
+                                            {
+                                                if let Some(pattern14_0) =
+                                                    C::def_inst(ctx, pattern12_0)
+                                                {
+                                                    let pattern15_0 =
+                                                        C::inst_data(ctx, pattern14_0);
+                                                    if let &InstructionData::Load {
+                                                        opcode: ref pattern16_0,
+                                                        arg: pattern16_1,
+                                                        flags: pattern16_2,
+                                                        offset: pattern16_3,
+                                                    } = &pattern15_0
+                                                    {
+                                                        if let &Opcode::Load = pattern16_0 {
+                                                            if pattern4_1 == pattern16_1 {
+                                                                if pattern2_2 == pattern16_2 {
+                                                                    if pattern2_3 == pattern16_3 {
+                                                                        // Rule at src/isa/x64/lower.isle line 2732.
+                                                                        let expr0_0 = C::sink_load(
+                                                                            ctx,
+                                                                            &pattern13_0,
+                                                                        );
+                                                                        let expr1_0 =
+                                                                            constructor_to_amode(
+                                                                                ctx,
+                                                                                pattern16_2,
+                                                                                pattern16_1,
+                                                                                pattern16_3,
+                                                                            )?;
+                                                                        let expr2_0 =
+                                                                            constructor_put_in_gpr(
+                                                                                ctx,
+                                                                                pattern12_1,
+                                                                            )?;
+                                                                        let expr3_0 =
+                                                                            constructor_x64_or_mem(
+                                                                                ctx, pattern8_0,
+                                                                                &expr1_0, expr2_0,
+                                                                            )?;
+                                                                        let expr4_0 = constructor_side_effect(ctx, &expr3_0)?;
+                                                                        return Some(expr4_0);
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            if let Some(pattern13_0) =
+                                                C::sinkable_load(ctx, pattern12_1)
+                                            {
+                                                if let Some(pattern14_0) =
+                                                    C::def_inst(ctx, pattern12_1)
+                                                {
+                                                    let pattern15_0 =
+                                                        C::inst_data(ctx, pattern14_0);
+                                                    if let &InstructionData::Load {
+                                                        opcode: ref pattern16_0,
+                                                        arg: pattern16_1,
+                                                        flags: pattern16_2,
+                                                        offset: pattern16_3,
+                                                    } = &pattern15_0
+                                                    {
+                                                        if let &Opcode::Load = pattern16_0 {
+                                                            if pattern4_1 == pattern16_1 {
+                                                                if pattern2_2 == pattern16_2 {
+                                                                    if pattern2_3 == pattern16_3 {
+                                                                        // Rule at src/isa/x64/lower.isle line 2746.
+                                                                        let expr0_0 = C::sink_load(
+                                                                            ctx,
+                                                                            &pattern13_0,
+                                                                        );
+                                                                        let expr1_0 =
+                                                                            constructor_to_amode(
+                                                                                ctx,
+                                                                                pattern16_2,
+                                                                                pattern16_1,
+                                                                                pattern16_3,
+                                                                            )?;
+                                                                        let expr2_0 =
+                                                                            constructor_put_in_gpr(
+                                                                                ctx,
+                                                                                pattern12_0,
+                                                                            )?;
+                                                                        let expr3_0 =
+                                                                            constructor_x64_or_mem(
+                                                                                ctx, pattern8_0,
+                                                                                &expr1_0, expr2_0,
+                                                                            )?;
+                                                                        let expr4_0 = constructor_side_effect(ctx, &expr3_0)?;
+                                                                        return Some(expr4_0);
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        &Opcode::Bxor => {
+                                            let (pattern12_0, pattern12_1) =
+                                                C::unpack_value_array_2(ctx, pattern10_1);
+                                            if let Some(pattern13_0) =
+                                                C::sinkable_load(ctx, pattern12_0)
+                                            {
+                                                if let Some(pattern14_0) =
+                                                    C::def_inst(ctx, pattern12_0)
+                                                {
+                                                    let pattern15_0 =
+                                                        C::inst_data(ctx, pattern14_0);
+                                                    if let &InstructionData::Load {
+                                                        opcode: ref pattern16_0,
+                                                        arg: pattern16_1,
+                                                        flags: pattern16_2,
+                                                        offset: pattern16_3,
+                                                    } = &pattern15_0
+                                                    {
+                                                        if let &Opcode::Load = pattern16_0 {
+                                                            if pattern4_1 == pattern16_1 {
+                                                                if pattern2_2 == pattern16_2 {
+                                                                    if pattern2_3 == pattern16_3 {
+                                                                        // Rule at src/isa/x64/lower.isle line 2760.
+                                                                        let expr0_0 = C::sink_load(
+                                                                            ctx,
+                                                                            &pattern13_0,
+                                                                        );
+                                                                        let expr1_0 =
+                                                                            constructor_to_amode(
+                                                                                ctx,
+                                                                                pattern16_2,
+                                                                                pattern16_1,
+                                                                                pattern16_3,
+                                                                            )?;
+                                                                        let expr2_0 =
+                                                                            constructor_put_in_gpr(
+                                                                                ctx,
+                                                                                pattern12_1,
+                                                                            )?;
+                                                                        let expr3_0 = constructor_x64_xor_mem(ctx, pattern8_0, &expr1_0, expr2_0)?;
+                                                                        let expr4_0 = constructor_side_effect(ctx, &expr3_0)?;
+                                                                        return Some(expr4_0);
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            if let Some(pattern13_0) =
+                                                C::sinkable_load(ctx, pattern12_1)
+                                            {
+                                                if let Some(pattern14_0) =
+                                                    C::def_inst(ctx, pattern12_1)
+                                                {
+                                                    let pattern15_0 =
+                                                        C::inst_data(ctx, pattern14_0);
+                                                    if let &InstructionData::Load {
+                                                        opcode: ref pattern16_0,
+                                                        arg: pattern16_1,
+                                                        flags: pattern16_2,
+                                                        offset: pattern16_3,
+                                                    } = &pattern15_0
+                                                    {
+                                                        if let &Opcode::Load = pattern16_0 {
+                                                            if pattern4_1 == pattern16_1 {
+                                                                if pattern2_2 == pattern16_2 {
+                                                                    if pattern2_3 == pattern16_3 {
+                                                                        // Rule at src/isa/x64/lower.isle line 2774.
+                                                                        let expr0_0 = C::sink_load(
+                                                                            ctx,
+                                                                            &pattern13_0,
+                                                                        );
+                                                                        let expr1_0 =
+                                                                            constructor_to_amode(
+                                                                                ctx,
+                                                                                pattern16_2,
+                                                                                pattern16_1,
+                                                                                pattern16_3,
+                                                                            )?;
+                                                                        let expr2_0 =
+                                                                            constructor_put_in_gpr(
+                                                                                ctx,
+                                                                                pattern12_0,
+                                                                            )?;
+                                                                        let expr3_0 = constructor_x64_xor_mem(ctx, pattern8_0, &expr1_0, expr2_0)?;
+                                                                        let expr4_0 = constructor_side_effect(ctx, &expr3_0)?;
+                                                                        return Some(expr4_0);
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        _ => {}
+                                    }
+                                }
+                            }
+                        }
+                    }
                     let pattern5_0 = C::value_type(ctx, pattern4_0);
                     if pattern5_0 == F32 {
                         // Rule at src/isa/x64/lower.isle line 2605.
