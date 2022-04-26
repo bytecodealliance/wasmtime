@@ -279,6 +279,15 @@ macro_rules! isle_prelude_methods {
         }
 
         #[inline]
+        fn ty_vec128_int(&mut self, ty: Type) -> Option<Type> {
+            if ty.is_vector() && ty.bits() == 128 && ty.lane_type().is_int() {
+                Some(ty)
+            } else {
+                None
+            }
+        }
+
+        #[inline]
         fn value_list_slice(&mut self, list: ValueList) -> ValueSlice {
             (list, 0)
         }

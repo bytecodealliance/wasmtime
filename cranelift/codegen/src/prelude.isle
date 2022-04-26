@@ -281,6 +281,11 @@
 (decl ty_vec128 (Type) Type)
 (extern extractor ty_vec128 ty_vec128)
 
+;; An extractor that only matches 128-bit vector types with integer
+;; lanes (I8X16, I16X8, I32X4, I64X2).
+(decl ty_vec128_int (Type) Type)
+(extern extractor ty_vec128_int ty_vec128_int)
+
 ;; An extractor that matches everything except i64x2
 (decl not_i64x2 () Type)
 (extern extractor not_i64x2 not_i64x2)
@@ -399,7 +404,10 @@
 
 ;;;; Helpers for Side-Effectful Instructions Without Results ;;;;;;;;;;;;;;;;;;;
 
-(type SideEffectNoResult (enum (Inst (inst MInst))))
+(type SideEffectNoResult (enum
+                          (Inst (inst MInst))
+                          (Inst2 (inst1 MInst)
+                                 (inst2 MInst))))
 
 ;; Create an empty `InstOutput`, but do emit the given side-effectful
 ;; instruction.
@@ -407,6 +415,14 @@
 (rule (side_effect (SideEffectNoResult.Inst inst))
       (let ((_ Unit (emit inst)))
         (output_none)))
+(rule (side_effect (SideEffectNoResult.Inst2 inst1 inst2))
+      (let ((_1 Unit (emit inst1))
+            (_2 Unit (emit inst2)))
+        (output_none)))
+
+(decl side_effect_concat (SideEffectNoResult SideEffectNoResult) SideEffectNoResult)
+(rule (side_effect_concat (SideEffectNoResult.Inst inst1) (SideEffectNoResult.Inst inst2))
+      (SideEffectNoResult.Inst2 inst1 inst2))
 
 ;;;; Helpers for Working with Flags ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

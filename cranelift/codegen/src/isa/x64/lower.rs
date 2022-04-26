@@ -2146,75 +2146,11 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::Uload16x4
         | Opcode::Sload32x2
         | Opcode::Uload32x2 => {
-            let offset = ctx.data(insn).load_store_offset().unwrap();
-
-            let elem_ty = match op {
-                Opcode::Sload8 | Opcode::Uload8 => types::I8,
-                Opcode::Sload16 | Opcode::Uload16 => types::I16,
-                Opcode::Sload32 | Opcode::Uload32 => types::I32,
-                Opcode::Sload8x8 | Opcode::Uload8x8 => types::I8X8,
-                Opcode::Sload16x4 | Opcode::Uload16x4 => types::I16X4,
-                Opcode::Sload32x2 | Opcode::Uload32x2 => types::I32X2,
-                Opcode::Load => ctx.output_ty(insn, 0),
-                _ => unimplemented!(),
-            };
-
-            let amode = match op {
-                Opcode::Load
-                | Opcode::Uload8
-                | Opcode::Sload8
-                | Opcode::Uload16
-                | Opcode::Sload16
-                | Opcode::Uload32
-                | Opcode::Sload32
-                | Opcode::Sload8x8
-                | Opcode::Uload8x8
-                | Opcode::Sload16x4
-                | Opcode::Uload16x4
-                | Opcode::Sload32x2
-                | Opcode::Uload32x2 => {
-                    assert_eq!(inputs.len(), 1, "only one input for load operands");
-                    lower_to_amode(ctx, inputs[0], offset)
-                }
-                _ => unreachable!(),
-            };
-
-            if elem_ty == types::I128 {
-                let dsts = get_output_reg(ctx, outputs[0]);
-                ctx.emit(Inst::mov64_m_r(amode.clone(), dsts.regs()[0]));
-                ctx.emit(Inst::mov64_m_r(amode.offset(8), dsts.regs()[1]));
-            } else {
-                implemented_in_isle(ctx);
-            }
+            implemented_in_isle(ctx);
         }
 
         Opcode::Store | Opcode::Istore8 | Opcode::Istore16 | Opcode::Istore32 => {
-            let offset = ctx.data(insn).load_store_offset().unwrap();
-
-            let elem_ty = match op {
-                Opcode::Istore8 => types::I8,
-                Opcode::Istore16 => types::I16,
-                Opcode::Istore32 => types::I32,
-                Opcode::Store => ctx.input_ty(insn, 0),
-                _ => unreachable!(),
-            };
-
-            let addr = match op {
-                Opcode::Store | Opcode::Istore8 | Opcode::Istore16 | Opcode::Istore32 => {
-                    assert_eq!(inputs.len(), 2, "only one input for store memory operands");
-                    lower_to_amode(ctx, inputs[1], offset)
-                }
-                _ => unreachable!(),
-            };
-
-            if elem_ty == types::I128 {
-                let srcs = put_input_in_regs(ctx, inputs[0]);
-                ctx.emit(Inst::store(types::I64, srcs.regs()[0], addr.clone()));
-                ctx.emit(Inst::store(types::I64, srcs.regs()[1], addr.offset(8)));
-            } else {
-                let src = put_input_in_reg(ctx, inputs[0]);
-                ctx.emit(Inst::store(elem_ty, src, addr));
-            }
+            implemented_in_isle(ctx);
         }
 
         Opcode::AtomicRmw => {

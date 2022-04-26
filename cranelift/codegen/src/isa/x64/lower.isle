@@ -2554,6 +2554,15 @@
 (rule (lower (has_type (ty_vec128 ty) (load flags address offset)))
       (x64_movdqu (to_amode flags address offset)))
 
+;; We can load an I128/B128 by doing two 64-bit loads.
+(rule (lower (has_type (ty_int_bool_128 _)
+                       (load flags address offset)))
+      (let ((addr_lo Amode (to_amode flags address offset))
+            (addr_hi Amode (amode_offset addr_lo 8))
+            (value_lo Reg (x64_mov addr_lo))
+            (value_hi Reg (x64_mov addr_hi)))
+        (value_regs value_lo value_hi)))
+
 ;; We also include widening vector loads; these sign- or zero-extend each lane
 ;; to the next wider width (e.g., 16x4 -> 32x4).
 (rule (lower (has_type $I16X8 (sload8x8 flags address offset)))
@@ -2570,3 +2579,79 @@
       (x64_pmovzxdq (to_amode flags address offset)))
 
 ;; TODO: Multi-register loads (I128)
+
+;; Rules for `store*` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; 8-, 16-, 32- and 64-bit GPR stores.
+(rule (lower (store flags
+                    value @ (value_type (is_gpr_type ty))
+                    address
+                    offset))
+      (side_effect
+       (x64_movrm ty (to_amode flags address offset) value)))
+
+;; Explicit 8/16/32-bit opcodes.
+(rule (lower (istore8 flags value address offset))
+      (side_effect
+       (x64_movrm $I8 (to_amode flags address offset) value)))
+(rule (lower (istore16 flags value address offset))
+      (side_effect
+       (x64_movrm $I16 (to_amode flags address offset) value)))
+(rule (lower (istore32 flags value address offset))
+      (side_effect
+       (x64_movrm $I32 (to_amode flags address offset) value)))
+
+;; F32 stores of values in XMM registers.
+(rule (lower (store flags
+                    value @ (value_type $F32)
+                    address
+                    offset))
+      (side_effect
+       (x64_xmm_movrm (SseOpcode.Movss) (to_amode flags address offset) value)))
+
+;; F64 stores of values in XMM registers.
+(rule (lower (store flags
+                    value @ (value_type $F64)
+                    address
+                    offset))
+      (side_effect
+       (x64_xmm_movrm (SseOpcode.Movsd) (to_amode flags address offset) value)))
+
+;; Stores of F32X4 vectors.
+(rule (lower (store flags
+                    value @ (value_type $F32X4)
+                    address
+                    offset))
+      (side_effect
+       (x64_xmm_movrm (SseOpcode.Movups) (to_amode flags address offset) value)))
+
+;; Stores of F64X2 vectors.
+(rule (lower (store flags
+                    value @ (value_type $F64X2)
+                    address
+                    offset))
+      (side_effect
+       (x64_xmm_movrm (SseOpcode.Movupd) (to_amode flags address offset) value)))
+
+;; Stores of all other 128-bit vector types with integer lanes.
+(rule (lower (store flags
+                    value @ (value_type (ty_vec128_int _))
+                    address
+                    offset))
+      (side_effect
+       (x64_xmm_movrm (SseOpcode.Movdqu) (to_amode flags address offset) value)))
+
+;; Stores of I128/B128 values: store the two 64-bit halves separately.
+(rule (lower (store flags
+                    value @ (value_type (ty_int_bool_128 _))
+                    address
+                    offset))
+      (let ((value_reg ValueRegs value)
+            (value_lo Gpr (value_regs_get_gpr value_reg 0))
+            (value_hi Gpr (value_regs_get_gpr value_reg 1))
+            (addr_lo Amode (to_amode flags address offset))
+            (addr_hi Amode (amode_offset addr_lo 8)))
+      (side_effect
+       (side_effect_concat
+        (x64_movrm $I64 addr_lo value_lo)
+        (x64_movrm $I64 addr_hi value_hi)))))
