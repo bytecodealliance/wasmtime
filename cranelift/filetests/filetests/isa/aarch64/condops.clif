@@ -37,9 +37,9 @@ block0(v0: i8, v1: i8, v2: i8):
 }
 
 ; block0:
-;   and x8, x1, x0
-;   bic x0, x2, x0
-;   orr x0, x0, x8
+;   and w7, w1, w0
+;   bic w9, w2, w0
+;   orr w0, w7, w9
 ;   ret
 
 function %i(b1, i8, i8) -> i8 {
