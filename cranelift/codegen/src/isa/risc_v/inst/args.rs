@@ -59,12 +59,36 @@ impl AMode {
         }
     }
 
-    pub(crate) fn get_offset(&self, state: &EmitState) -> i64 {
+    pub(crate) fn get_offset_with_state(&self, state: &EmitState) -> i64 {
+        match self {
+            _ => self.get_offset(),
+            &AMode::NominalSPOffset(offset, _) => offset + state.virtual_sp_offset,
+        }
+    }
+
+    fn get_offset(&self) -> i64 {
         match self {
             &AMode::RegOffset(_, offset, ..) => offset,
             &AMode::SPOffset(offset, _) => offset,
             &AMode::FPOffset(offset, _) => offset,
-            &AMode::NominalSPOffset(offset, _) => offset + state.virtual_sp_offset,
+            &AMode::NominalSPOffset(offset, _) => offset,
+        }
+    }
+
+    pub(crate) fn to_string_may_be_with_reg_universe(
+        &self,
+        universe: Option<&RealRegUniverse>,
+    ) -> String {
+        if let Some(universe) = universe {
+            let reg = self.get_base_register();
+            let offset = self.get_offset();
+
+            match self {
+                _ => format!("{}({})", offset, reg.show_with_rru(universe)),
+                &AMode::NominalSPOffset(..) => format!("{}", self),
+            }
+        } else {
+            format!("{}", self)
         }
     }
 }

@@ -780,10 +780,20 @@ impl Inst {
                 from,
                 flags,
             } => {
-                format!("{} {},{}", op.op_name(), register_name(rd.to_reg()), from)
+                format!(
+                    "{} {},{}",
+                    op.op_name(),
+                    register_name(rd.to_reg()),
+                    from.to_string_may_be_with_reg_universe(mb_rru)
+                )
             }
             &Inst::Store { src, op, to, flags } => {
-                format!("{} {},{}", op.op_name(), register_name(src), to)
+                format!(
+                    "{} {},{}",
+                    op.op_name(),
+                    register_name(src),
+                    to.to_string_may_be_with_reg_universe(mb_rru)
+                )
             }
             &Inst::EpiloguePlaceholder => {
                 format!("epilogue place holder")

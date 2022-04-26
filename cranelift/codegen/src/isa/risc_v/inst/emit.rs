@@ -231,7 +231,6 @@ impl MachInstEmit for Inst {
                         | (rs.as_real_reg().unwrap().get_hw_encoding() as u32) << 15
                         | (imm12.as_u32()) << 20
                 };
-
                 sink.put4(x);
             }
             &Inst::Load {
@@ -242,7 +241,7 @@ impl MachInstEmit for Inst {
             } => {
                 let x;
                 let base = from.get_base_register();
-                let offset = from.get_offset(state);
+                let offset = from.get_offset_with_state(state);
                 if let Some(imm12) = Imm12::maybe_from_u64(offset as u64) {
                     x = op.op_code()
                         | (rd.to_reg().as_real_reg().unwrap().get_hw_encoding() as u32) << 7
@@ -279,7 +278,7 @@ impl MachInstEmit for Inst {
             }
             &Inst::Store { op, src, flags, to } => {
                 let base = to.get_base_register();
-                let offset = to.get_offset(state);
+                let offset = to.get_offset_with_state(state);
                 let x;
                 if let Some(imm12) = Imm12::maybe_from_u64(offset as u64) {
                     x = op.op_code()
