@@ -1,0 +1,456 @@
+;; Instruction formats.
+(type MInst
+  (enum
+    ;; A no-op of zero size.
+    (Nop0)
+    (Nop4)
+
+    ;; load immediate
+    (Lui
+      (rd WritableReg)
+      (imm Imm20))
+
+    ;; (Auipc
+    ;;  (rd WritableReg)
+    ;;  (imm Imm20))
+    
+
+    ;; An ALU operation with one register sources and a register destination.
+    (AluRR
+      (alu_op AluOPRR)
+      (rd WritableReg)
+      (rs Reg))
+
+
+    ;; An ALU operation with two register sources and a register destination.
+    (AluRRR
+      (alu_op AluOPRRR)
+      (rd WritableReg)
+      (rs1 Reg)
+      (rs2 Reg))
+
+    ;; An ALU operation with three register sources and a register destination.
+    (AluRRRR
+      (alu_op AluOPRRRR)
+      (rd WritableReg)
+      (rs1 Reg)
+      (rs2 Reg)
+      (rs3 Reg))
+      
+    ;; An ALU operation with a register source and an immediate-12 source, and a register
+    ;; destination.
+    (AluRRImm12
+      (alu_op AluOPRRI)
+      (rd WritableReg)
+      (rs Reg)
+      (imm12 Imm12))
+
+    ;; An load
+    (Load
+      (rd WritableReg)
+      (op LoadOP)
+      (flags MemFlags)
+      (base Reg)
+      (offset i64)) 
+    ;; An Store 
+    (Store
+      (offset i64)
+      (op StoreOP)
+      (flags MemFlags)
+      (base Reg)
+      (src Reg))
+
+    (EpiloguePlaceholder)
+    (Ret)
+
+     (Extend
+      (rd WritableReg)
+      (rn Reg)
+      (signed bool)
+      (from_bits u8)
+      (to_bits u8))
+
+      (AjustSp
+      (amount i64))
+
+
+    (Call
+      (info BoxCallInfo))
+
+      ;; A machine indirect-call instruction.
+    (CallInd
+      (info BoxCallIndInfo))
+
+
+    (TrapIf
+      (rs1 Reg)
+      (rs2 Reg)
+      (cond Cond)
+      (trap_code TrapCode))
+  
+    (Trap
+      (trap_code TrapCode))
+
+    (Jump
+      (dest BranchTarget))
+  
+     (CondBr
+      (taken BranchTarget)
+      (not_taken BranchTarget)
+      (ty Type)
+      (kind CondBrKind))
+
+    ;; Load an inline symbol reference.
+    (LoadExtName
+      (rd WritableReg)
+      (name BoxExternalName)
+      (offset i64))
+    
+    ;; Load address referenced by `mem` into `rd`.
+    (LoadAddr
+      (rd WritableReg)
+      (mem AMode))
+    
+    ;; Marker, no-op in generated code: SP "virtual offset" is adjusted. This
+    ;; controls how AMode::NominalSPOffset args are lowered.
+    (VirtualSPOffsetAdj
+      (amount i64))
+
+    ;; A MOV instruction. These are encoded as ORR's (AluRRR form) but we
+    ;; keep them separate at the `Inst` level for better pretty-printing
+    ;; and faster `is_move()` logic.
+    (Mov
+      (rd WritableReg)
+      (rm Reg))
+
+    (Fence)
+
+    (FenceI)
+
+    (ECall)
+
+    (EBreak)
+
+    ;; An instruction guaranteed to always be undefined and to trigger an illegal instruction at
+    ;; runtime.
+    (Udf
+      (trap_code TrapCode))
+    
+    ;; 
+
+))
+
+(type AluOPRRRR(enum 
+  ;; float32
+  (FMADD_S)
+  (FMSUB_S)
+  (FNMSUB_S)
+  (FNMADD_S)
+  ;; float64
+  (FMADD_D)
+  (FMSUB_D)
+  (FNMSUB_D)
+  (FNMADD_D)
+))
+
+(type FClassResult(enum 
+  ;;0 rs1 is −∞.
+  (NegInfinite)
+  ;; 1 rs1 is a negative normal number.
+  (NegNormal)
+  ;; 2 rs1 is a negative subnormal number.
+  (NegSubNormal)
+  ;; 3 rs1 is −0.
+  (NegZero)
+  ;; 4 rs1 is +0.
+  (PosZero)
+  ;; 5 rs1 is a positive subnormal number.
+  (PosSunNormal)
+  ;; 6 rs1 is a positive normal number.
+  (PosNormal)
+  ;; 7 rs1 is +∞.
+  (PosInfinite)
+  ;; 8 rs1 is a signaling NaN.
+  (SNaN)
+  ;; 9 rs1 is a quiet NaN.
+  (QNaN)
+))
+
+(type AluOPRR (enum 
+  ;; RV32F Standard Extension
+  (FSQRT_S)
+  (FCVT_W_S)
+  (FCVT_WU_S)
+  (FMV_X_W)
+  (FCLASS_S)
+  (FCVT_S_W)
+  (FCVT_S_WU)
+  (FMV_W_X)
+
+  ;; RV64F Standard Extension (in addition to RV32F)
+  (FCVT_L_S)
+  (FCVT_LU_S)
+  (FCVT_S_L)
+  (FCVT_S_LU)
+  
+
+  ;; RV64D Standard Extension (in addition to RV32D)
+  (FCVT_L_D)
+  (FCVT_LU_D)
+  (FMV_X_D)
+  (FCVT_D_L)
+  (FCVT_D_LU)
+  (FMV_D_X)
+
+  ;; RV32D Standard Extension
+  (FSQRT_D)
+  (FCVT_S_D)
+  (FCVT_D_S)
+  (FCLASS_D)
+  (FCVT_W_D)
+  (FCVT_WU_D)
+  (FCVT_D_W)
+  (FCVT_D_WU)
+))
+
+(type LoadOP (enum  
+  (LB)
+  (LH)
+  (LW)
+  (LBU)
+  (LHU)
+  (LWU)
+  (LD)
+  (FLW)
+  (FLD)
+))
+
+(type StoreOP(enum
+  (SB)
+  (SH)
+  (SW)
+  (SD)
+  (FSW)
+  (FSD)
+))
+
+(type AluOPRRR (enum 
+  ;; base set
+  (ADD)
+  (SUB)
+  (SLL)
+  (SLT)
+  (SLTU)
+  (XOR)
+  (SRL)
+  (SRA)
+  (OR)
+  (AND)
+  
+  ;; RV64I Base Instruction Set (in addition to RV32I)
+  (ADDW)
+  (SUBW)
+  (SLLW)
+  (SRLW)
+  (Sraw)
+  
+  ;;RV32M Standard Extension
+  (MUL)
+  (MULH)
+  (MULHSU)
+  (MULHU)
+  (DIV)
+  (DIVU)
+  (REM)
+  (REMU)
+
+  ;; RV64M Standard Extension (in addition to RV32M)
+
+  (MULW)
+  (DIVW)
+  (DIVUW)
+  (REMW)
+  (REMUW)
+
+  ;; RV32F Standard Extension
+
+  (FADD_S)
+  (FSUB_S)
+  (FMUL_S)
+  (FDIV_S)
+
+  (FSGNJ_S)
+  (FSGNJN_S)
+  (FSGNJX_S)
+  (FMIN_S)
+  (FMAX_S)
+  (FEQ_S)
+  (FLT_S)
+  (FLE_S)
+ 
+  ;; RV32D Standard Extension
+  (FADD_D)
+  (FSUB_D)
+  (FMUL_D)
+  (FDIV_D)
+  (FSGNJ_D)
+  (FSGNJN_D)
+  (FSGNJX_D)
+  (FMIN_D)
+  (FMAX_D)
+  (FEQ_D)
+  (FLT_D)
+  (FLE_D)
+
+))
+
+
+(type AluOPRRI (enum 
+  (ADDI)
+  (SLTI)
+  (SLTIU)
+  (XORI)
+  (ORI)
+  (ANDI)
+  (SLLI)
+  (SRLI)
+  (SRAI)
+  (ADDIW)
+  (SLLIW)
+  (SRLIW)
+  (SRAIW)
+))
+
+;; The 2-bit floating-point format field fmt is encoded as shown in Table 8.3. It is set to S (00) for all
+;; instructions in the F extension.
+(type OPFPFMT (enum 
+  ;; 32-bit single-precision
+  (S)
+  ;;64-bit double-precision
+  (D)
+  ;; reserved
+  ;;(Reserved)
+  ;; 128-bit quad-precision
+  (Q)
+)) 
+
+
+(type FloatRoundingMode (enum 
+  ;; Round to Nearest, ties to Even
+  (RNE)
+  ;; Round towards Zero
+  (RTZ)
+  ;;  Round Down (towards −∞)
+  (RDN)
+  ;; Round Up (towards +∞)
+  (RUP)
+  ;; Round to Nearest, ties to Max Magnitude
+  (RMM)
+))
+
+(type FloatException (enum
+  ;; Invalid Operation
+  (NV)
+  ;; Divide by Zero
+  (DZ)
+  ;; Overflow
+  (OF)
+  ;; Underflow
+  (UF)
+  ;; Inexact
+  (NX)
+))
+
+
+(type BoxCallInfo (primitive BoxCallInfo))
+(type BoxCallIndInfo (primitive BoxCallIndInfo))
+(type CondBrKind (primitive CondBrKind))
+(type AMode (primitive AMode))
+
+
+(type Imm12 (primitive Imm12))
+(type UImm5 (primitive UImm5))
+(type Imm20 (primitive Imm20))
+(type Imm3 (primitive Imm3))
+(type BranchTarget (primitive BranchTarget))
+
+
+
+(type Cond  
+  (enum
+    (Eq)
+    (Ne)
+    (Lt)
+    (Ltu)
+    (Ge)
+    (Geu)
+))
+
+
+;; Helper for creating the zero register.
+(decl zero_reg () Reg)
+(extern constructor zero_reg zero_reg)
+
+;; for load immediate
+(decl imm (Type u64) Reg)
+(extern constructor imm imm)
+
+;;
+(decl imm12_from_u64 (Imm12) u64)
+(extern extractor imm12_from_u64 imm12_from_u64)
+
+
+(decl writable_zero_reg () WritableReg)
+(extern constructor writable_zero_reg writable_zero_reg)
+
+
+;; Helper for emitting `MInst.AluRR` instructions.
+(decl alu_rr (AluOPRR Reg) Reg)
+(rule (alu_rr op src )
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.AluRR op dst src))))
+        dst))
+
+
+;; Helper for emitting `MInst.AluRRR` instructions.
+(decl alu_rrr (AluOPRRR Reg Reg) Reg)
+(rule (alu_rrr op src1 src2)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.AluRRR op dst src1 src2))))
+        dst))
+
+
+;; Helper for emitting `MInst.AluRRR` instructions.
+(decl alu_rrrr (AluOPRRRR Reg Reg Reg) Reg)
+(rule (alu_rrrr op src1 src2 src3)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.AluRRRR op dst src1 src2 src3))))
+        dst))
+
+
+;; Helper for emitting `MInst.AluRRImm12` instructions.
+(decl alu_rr_imm12 (AluOPRRI Reg Imm12) Reg)
+(rule (alu_rr_imm12 op src imm)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.AluRRImm12 op dst src imm))))
+        dst))
+
+
+
+;; Helper for get negative of Imm12 
+(decl neg_imm12 (Imm12) Imm12)
+(extern constructor neg_imm12 neg_imm12) 
+
+
+;; Helper to go directly from a `Value`, when it's an `iconst`, to an `Imm12`.
+(decl imm12_from_value (Imm12) Value)
+(extractor
+  (imm12_from_value n)
+  (def_inst (iconst (u64_from_imm64 (imm12_from_u64 n)))))
+
+(decl select_addi (Type) AluOPRRI)
+(rule (select_addi (fits_in_32 ty)) (AluOPRRI.ADDIW))
+(rule (select_addi (fits_in_64 ty)) (AluOPRRI.ADDI))
+
+
+

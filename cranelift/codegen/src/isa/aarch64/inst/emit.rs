@@ -2570,6 +2570,7 @@ impl MachInstEmit for Inst {
                     sink.add_call_site(loc, info.opcode);
                 }
             }
+
             &Inst::CondBr {
                 taken,
                 not_taken,
