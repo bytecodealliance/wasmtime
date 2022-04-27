@@ -2111,7 +2111,7 @@
 ;; Rules for `uextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; T -> T is a no-op.
-(rule (lower (has_type ty (uextend src @ (value_type =ty))))
+(rule (lower (has_type ty (uextend src @ (value_type ty))))
       src)
 
 ;; I64 -> I128.
@@ -2177,7 +2177,7 @@
 (decl generic_sextend (Value Type Type) InstOutput)
 
 ;; T -> T is a no-op.
-(rule (generic_sextend src ty =ty)
+(rule (generic_sextend src ty ty)
       src)
 
 ;; Produce upper 64 bits sign-extended from lower 64: shift right by
@@ -2218,7 +2218,7 @@
 ;; Rules for `ireduce` / `breduce` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; T -> T is always a no-op, even I128 -> I128.
-(rule (lower (has_type ty (ireduce src @ (value_type =ty))))
+(rule (lower (has_type ty (ireduce src @ (value_type ty))))
       src)
 
 ;; T -> I{64,32,16,8}: We can simply pass through the value: values
@@ -2229,7 +2229,7 @@
 
 ;; Likewise for breduce.
 
-(rule (lower (has_type ty (breduce src @ (value_type =ty))))
+(rule (lower (has_type ty (breduce src @ (value_type ty))))
       src)
 
 (rule (lower (has_type (fits_in_64 ty) (breduce src)))
@@ -2660,126 +2660,126 @@
 
 ;; Add mem, reg
 (rule (lower
-       (store =flags
+       (store flags
               (has_type (ty_32_or_64 ty)
                         (iadd (and
                                (sinkable_load sink)
                                (load flags addr offset))
                               src2))
-              =addr
-              =offset))
+              addr
+              offset))
       (let ((_ RegMemImm (sink_load sink)))
         (side_effect
          (x64_add_mem ty (to_amode flags addr offset) src2))))
 
 ;; Add mem, reg with args swapped
 (rule (lower
-       (store =flags
+       (store flags
               (has_type (ty_32_or_64 ty)
                         (iadd src2
                               (and
                                (sinkable_load sink)
                                (load flags addr offset))))
-              =addr
-              =offset))
+              addr
+              offset))
       (let ((_ RegMemImm (sink_load sink)))
         (side_effect
          (x64_add_mem ty (to_amode flags addr offset) src2))))
 
 ;; Sub mem, reg
 (rule (lower
-       (store =flags
+       (store flags
               (has_type (ty_32_or_64 ty)
                         (isub (and
                                (sinkable_load sink)
                                (load flags addr offset))
                               src2))
-              =addr
-              =offset))
+              addr
+              offset))
       (let ((_ RegMemImm (sink_load sink)))
         (side_effect
          (x64_sub_mem ty (to_amode flags addr offset) src2))))
 
 ;; And mem, reg
 (rule (lower
-       (store =flags
+       (store flags
               (has_type (ty_32_or_64 ty)
                         (band (and
                                (sinkable_load sink)
                                (load flags addr offset))
                               src2))
-              =addr
-              =offset))
+              addr
+              offset))
       (let ((_ RegMemImm (sink_load sink)))
         (side_effect
          (x64_and_mem ty (to_amode flags addr offset) src2))))
 
 ;; And mem, reg with args swapped
 (rule (lower
-       (store =flags
+       (store flags
               (has_type (ty_32_or_64 ty)
                         (band src2
                               (and
                                (sinkable_load sink)
                                (load flags addr offset))))
-              =addr
-              =offset))
+              addr
+              offset))
       (let ((_ RegMemImm (sink_load sink)))
         (side_effect
          (x64_and_mem ty (to_amode flags addr offset) src2))))
 
 ;; Or mem, reg
 (rule (lower
-       (store =flags
+       (store flags
               (has_type (ty_32_or_64 ty)
                         (bor (and
                                (sinkable_load sink)
                                (load flags addr offset))
                               src2))
-              =addr
-              =offset))
+              addr
+              offset))
       (let ((_ RegMemImm (sink_load sink)))
         (side_effect
          (x64_or_mem ty (to_amode flags addr offset) src2))))
 
 ;; Or mem, reg with args swapped
 (rule (lower
-       (store =flags
+       (store flags
               (has_type (ty_32_or_64 ty)
                         (bor src2
                               (and
                                (sinkable_load sink)
                                (load flags addr offset))))
-              =addr
-              =offset))
+              addr
+              offset))
       (let ((_ RegMemImm (sink_load sink)))
         (side_effect
          (x64_or_mem ty (to_amode flags addr offset) src2))))
 
 ;; Xor mem, reg
 (rule (lower
-       (store =flags
+       (store flags
               (has_type (ty_32_or_64 ty)
                         (bxor (and
                                (sinkable_load sink)
                                (load flags addr offset))
                               src2))
-              =addr
-              =offset))
+              addr
+              offset))
       (let ((_ RegMemImm (sink_load sink)))
         (side_effect
          (x64_xor_mem ty (to_amode flags addr offset) src2))))
 
 ;; Xor mem, reg with args swapped
 (rule (lower
-       (store =flags
+       (store flags
               (has_type (ty_32_or_64 ty)
                         (bxor src2
                               (and
                                (sinkable_load sink)
                                (load flags addr offset))))
-              =addr
-              =offset))
+              addr
+              offset))
       (let ((_ RegMemImm (sink_load sink)))
         (side_effect
          (x64_xor_mem ty (to_amode flags addr offset) src2))))

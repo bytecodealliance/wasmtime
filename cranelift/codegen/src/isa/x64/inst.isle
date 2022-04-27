@@ -1222,7 +1222,7 @@
 (decl extend_to_gpr (Value Type ExtendKind) Gpr)
 
 ;; If the value is already of the requested type, no extending is necessary.
-(rule (extend_to_gpr (and val (value_type ty)) =ty _kind)
+(rule (extend_to_gpr (and val (value_type ty)) ty _kind)
       (put_in_gpr val))
 
 (rule (extend_to_gpr (and val (value_type from_ty))
