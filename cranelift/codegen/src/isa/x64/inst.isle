@@ -20,6 +20,12 @@
                 (src2 GprMemImm)
                 (dst WritableGpr))
 
+       ;; Integer arithmetic read-modify-write on memory.
+       (AluRM (size OperandSize) ;; 4 or 8
+              (op AluRmiROpcode)
+              (src1_dst SyntheticAmode)
+              (src2 Gpr))
+
        ;; Instructions on general-purpose registers that only read src and
        ;; defines dst (dst is not modified). `bsr`, etc.
        (UnaryRmR (size OperandSize) ;; 2, 4, or 8
@@ -2694,6 +2700,32 @@
 (rule (x64_pcmpgtd x y) (xmm_rm_r $I32X4 (SseOpcode.Pcmpgtd) x y))
 (decl x64_pcmpgtq (Xmm XmmMem) Xmm)
 (rule (x64_pcmpgtq x y) (xmm_rm_r $I64X2 (SseOpcode.Pcmpgtq) x y))
+
+;; Helpers for read-modify-write ALU form (AluRM).
+(decl alu_rm (Type AluRmiROpcode Amode Gpr) SideEffectNoResult)
+(rule (alu_rm ty opcode src1_dst src2)
+      (let ((size OperandSize (operand_size_of_type_32_64 ty)))
+        (SideEffectNoResult.Inst (MInst.AluRM size opcode src1_dst src2))))
+
+(decl x64_add_mem (Type Amode Gpr) SideEffectNoResult)
+(rule (x64_add_mem ty addr val)
+      (alu_rm ty (AluRmiROpcode.Add) addr val))
+
+(decl x64_sub_mem (Type Amode Gpr) SideEffectNoResult)
+(rule (x64_sub_mem ty addr val)
+      (alu_rm ty (AluRmiROpcode.Sub) addr val))
+
+(decl x64_and_mem (Type Amode Gpr) SideEffectNoResult)
+(rule (x64_and_mem ty addr val)
+      (alu_rm ty (AluRmiROpcode.And) addr val))
+
+(decl x64_or_mem (Type Amode Gpr) SideEffectNoResult)
+(rule (x64_or_mem ty addr val)
+      (alu_rm ty (AluRmiROpcode.Or) addr val))
+
+(decl x64_xor_mem (Type Amode Gpr) SideEffectNoResult)
+(rule (x64_xor_mem ty addr val)
+      (alu_rm ty (AluRmiROpcode.Xor) addr val))
 
 ;;;; Automatic conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

@@ -1501,6 +1501,125 @@ fn test_x64_emit() {
     ));
 
     // ========================================================
+    // AluRM
+
+    insns.push((
+        Inst::AluRM {
+            size: OperandSize::Size32,
+            op: AluRmiROpcode::Add,
+            src1_dst: Amode::imm_reg(99, rdi).into(),
+            src2: Gpr::new(r12).unwrap(),
+        },
+        "44016763",
+        "addl    %r12d, 99(%rdi)",
+    ));
+
+    insns.push((
+        Inst::AluRM {
+            size: OperandSize::Size64,
+            op: AluRmiROpcode::Add,
+            src1_dst: Amode::imm_reg_reg_shift(
+                0,
+                Gpr::new(rbp).unwrap(),
+                Gpr::new(rax).unwrap(),
+                3,
+            )
+            .into(),
+            src2: Gpr::new(rax).unwrap(),
+        },
+        "480144C500",
+        "addq    %rax, 0(%rbp,%rax,8)",
+    ));
+
+    insns.push((
+        Inst::AluRM {
+            size: OperandSize::Size32,
+            op: AluRmiROpcode::Sub,
+            src1_dst: Amode::imm_reg(0, rsp).into(),
+            src2: Gpr::new(rcx).unwrap(),
+        },
+        "290C24",
+        "subl    %ecx, 0(%rsp)",
+    ));
+
+    insns.push((
+        Inst::AluRM {
+            size: OperandSize::Size64,
+            op: AluRmiROpcode::Sub,
+            src1_dst: Amode::imm_reg(0, rbp).into(),
+            src2: Gpr::new(rax).unwrap(),
+        },
+        "48294500",
+        "subq    %rax, 0(%rbp)",
+    ));
+
+    insns.push((
+        Inst::AluRM {
+            size: OperandSize::Size32,
+            op: AluRmiROpcode::And,
+            src1_dst: Amode::imm_reg(0, rsp).into(),
+            src2: Gpr::new(rcx).unwrap(),
+        },
+        "210C24",
+        "andl    %ecx, 0(%rsp)",
+    ));
+
+    insns.push((
+        Inst::AluRM {
+            size: OperandSize::Size64,
+            op: AluRmiROpcode::And,
+            src1_dst: Amode::imm_reg(0, rbp).into(),
+            src2: Gpr::new(rax).unwrap(),
+        },
+        "48214500",
+        "andq    %rax, 0(%rbp)",
+    ));
+
+    insns.push((
+        Inst::AluRM {
+            size: OperandSize::Size32,
+            op: AluRmiROpcode::Or,
+            src1_dst: Amode::imm_reg(0, rsp).into(),
+            src2: Gpr::new(rcx).unwrap(),
+        },
+        "090C24",
+        "orl     %ecx, 0(%rsp)",
+    ));
+
+    insns.push((
+        Inst::AluRM {
+            size: OperandSize::Size64,
+            op: AluRmiROpcode::Or,
+            src1_dst: Amode::imm_reg(0, rbp).into(),
+            src2: Gpr::new(rax).unwrap(),
+        },
+        "48094500",
+        "orq     %rax, 0(%rbp)",
+    ));
+
+    insns.push((
+        Inst::AluRM {
+            size: OperandSize::Size32,
+            op: AluRmiROpcode::Xor,
+            src1_dst: Amode::imm_reg(0, rsp).into(),
+            src2: Gpr::new(rcx).unwrap(),
+        },
+        "310C24",
+        "xorl    %ecx, 0(%rsp)",
+    ));
+
+    insns.push((
+        Inst::AluRM {
+            size: OperandSize::Size64,
+            op: AluRmiROpcode::Xor,
+            src1_dst: Amode::imm_reg(0, rbp).into(),
+            src2: Gpr::new(rax).unwrap(),
+        },
+        "48314500",
+        "xorq    %rax, 0(%rbp)",
+    ));
+
+    // ========================================================
     // UnaryRmR
 
     insns.push((

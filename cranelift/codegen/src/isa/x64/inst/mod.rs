@@ -44,6 +44,7 @@ impl Inst {
             // These instructions are part of SSE2, which is a basic requirement in Cranelift, and
             // don't have to be checked.
             Inst::AluRmiR { .. }
+            | Inst::AluRM { .. }
             | Inst::AtomicRmwSeq { .. }
             | Inst::CallKnown { .. }
             | Inst::CallUnknown { .. }
@@ -917,6 +918,22 @@ impl PrettyPrint for Inst {
                     dst
                 )
             }
+            Inst::AluRM {
+                size,
+                op,
+                src1_dst,
+                src2,
+            } => {
+                let size_bytes = size_lqb(*size, op.is_8bit());
+                let src2 = pretty_print_reg(src2.to_reg(), size_bytes, allocs);
+                let src1_dst = src1_dst.pretty_print(size_bytes, allocs);
+                format!(
+                    "{} {}, {}",
+                    ljustify2(op.to_string(), suffix_lqb(*size, op.is_8bit())),
+                    src2,
+                    src1_dst,
+                )
+            }
             Inst::UnaryRmR { src, dst, op, size } => {
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), size.to_bytes(), allocs);
                 let src = src.pretty_print(size.to_bytes(), allocs);
@@ -1690,6 +1707,10 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
                 collector.reg_reuse_def(dst.to_writable_reg(), 0);
                 src2.get_operands(collector);
             }
+        }
+        Inst::AluRM { src1_dst, src2, .. } => {
+            collector.reg_use(src2.to_reg());
+            src1_dst.get_operands(collector);
         }
         Inst::Not { src, dst, .. } => {
             collector.reg_use(src.to_reg());
