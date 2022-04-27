@@ -4,7 +4,6 @@ use crate::binemit::StackMap;
 use crate::isa::risc_v::inst::*;
 use std::collections::HashSet;
 
-use super::*;
 use crate::isa::risc_v::inst::{zero_reg, AluOPRRR};
 use alloc::vec;
 use regalloc::{Reg, Writable};

@@ -161,7 +161,7 @@ pub fn writable_spilltmp_reg() -> Writable<Reg> {
 }
 
 /// Create the register universe for AArch64.
-pub fn create_reg_universe(flags: &settings::Flags) -> RealRegUniverse {
+pub fn create_reg_universe(_flags: &settings::Flags) -> RealRegUniverse {
     let mut regs: Vec<(RealReg, String)> = vec![];
     let mut allocable_by_class = [None; NUM_REG_CLASSES];
 

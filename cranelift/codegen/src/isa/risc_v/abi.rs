@@ -79,17 +79,18 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         args_or_rets: ArgsOrRets,
         add_ret_area_ptr: bool,
     ) -> CodegenResult<(Vec<ABIArg>, i64, Option<usize>)> {
-        let mut x_registers = a0_t0_a7();
+        let x_registers = a0_t0_a7();
         if args_or_rets == ArgsOrRets::Rets {
             a0_t0_a7().resize(2, Writable::invalid_sentinel());
         }
-        let mut f_registers = fa0_to_fa7();
+        let f_registers = fa0_to_fa7();
         if args_or_rets == ArgsOrRets::Rets {
             fa0_to_fa7().resize(2, Writable::invalid_sentinel());
         }
 
         let mut next_stack: i64 = 0;
-        let mut next_reg = 0;
+        let mut next_x_reg = 0;
+        let mut next_f_reg = 0;
         let mut abi_args = vec![];
         for i in 0..params.len() {
             let param = params[i];
@@ -122,9 +123,9 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                 continue;
             }
             match param.value_type {
-                B1 | B8 | B16 | B32 | B64 | I8 | I16 | I32 | I64 | R32 | R64 => {
-                    if next_reg < x_registers.len() {
-                        let reg = x_registers[next_reg].clone();
+                F32 | F64 => {
+                    if next_f_reg < f_registers.len() {
+                        let reg = x_registers[next_f_reg].clone();
                         let arg = ABIArg::reg(
                             reg.to_reg().as_real_reg().unwrap(),
                             param.value_type,
@@ -132,7 +133,20 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                             param.purpose,
                         );
                         abi_args.push(arg);
-                        next_reg += 1;
+                        next_f_reg += 1;
+                    }
+                }
+                B1 | B8 | B16 | B32 | B64 | I8 | I16 | I32 | I64 | R32 | R64 => {
+                    if next_x_reg < x_registers.len() {
+                        let reg = x_registers[next_x_reg].clone();
+                        let arg = ABIArg::reg(
+                            reg.to_reg().as_real_reg().unwrap(),
+                            param.value_type,
+                            param.extension,
+                            param.purpose,
+                        );
+                        abi_args.push(arg);
+                        next_x_reg += 1;
                     } else {
                         let arg = ABIArg::stack(
                             next_stack,
@@ -143,9 +157,6 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                         abi_args.push(arg);
                         next_stack += 8
                     }
-                }
-                F32 | F64 => {
-                    todo!();
                 }
                 _ => todo!("type not supported {}", param.value_type),
             };

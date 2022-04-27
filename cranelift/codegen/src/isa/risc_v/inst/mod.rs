@@ -363,7 +363,6 @@ impl Inst {
     pub fn load_fp_constant32<F: FnMut(Type) -> Writable<Reg>>(
         rd: Writable<Reg>,
         const_data: u32,
-        mut alloc_tmp: F,
     ) -> SmallVec<[Inst; 4]> {
         let tmp = alloc_tmp(I64);
         let mut insts = SmallVec::new();
@@ -380,7 +379,6 @@ impl Inst {
     pub fn load_fp_constant64<F: FnMut(Type) -> Writable<Reg>>(
         rd: Writable<Reg>,
         const_data: u64,
-        mut alloc_tmp: F,
     ) -> SmallVec<[Inst; 4]> {
         let tmp = alloc_tmp(I64);
         let mut insts = SmallVec::new();
@@ -395,9 +393,9 @@ impl Inst {
 
     /// Create instructions that load a 128-bit vector constant.
     pub fn load_fp_constant128<F: FnMut(Type) -> Writable<Reg>>(
-        rd: Writable<Reg>,
-        const_data: u128,
-        alloc_tmp: F,
+        _rd: Writable<Reg>,
+        _const_data: u128,
+        _alloc_tmp: F,
     ) -> SmallVec<[Inst; 5]> {
         todo!()
     }
@@ -778,16 +776,8 @@ impl MachInst for Inst {
             return Inst::load_constant_u64(to_regs.only_reg().unwrap(), value as u64);
         };
         match ty {
-            F32 => Inst::load_fp_constant32(
-                to_regs.only_reg().unwrap(),
-                value as u32,
-                |t| unimplemented!(),
-            ),
-            F64 => Inst::load_fp_constant64(
-                to_regs.only_reg().unwrap(),
-                value as u64,
-                |t| unimplemented!(),
-            ),
+            F32 => Inst::load_fp_constant32(to_regs.only_reg().unwrap(), value as u32),
+            F64 => Inst::load_fp_constant64(to_regs.only_reg().unwrap(), value as u64),
             _ => todo!(),
         }
     }

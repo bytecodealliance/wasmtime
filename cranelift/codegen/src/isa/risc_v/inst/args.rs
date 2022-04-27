@@ -17,7 +17,7 @@ use std::fmt::{Display, Formatter, Result};
     1100000 00000 rs1 rm rd 1010011 FCVT.W.S
     1100000 00001 rs1 rm rd 1010011 FCVT.WU.S
 */
-static rm: u32 = 0;
+static RM: u32 = 0;
 
 /// An addressing mode specified for a load/store operation.
 #[derive(Clone, Debug, Copy)]
@@ -370,34 +370,34 @@ impl AluOPRR {
 
     pub(crate) fn funct3(self) -> u32 {
         match self {
-            AluOPRR::FSQRT_S => rm,
-            AluOPRR::FCVT_W_S => rm,
-            AluOPRR::FCVT_WU_S => rm,
+            AluOPRR::FSQRT_S => RM,
+            AluOPRR::FCVT_W_S => RM,
+            AluOPRR::FCVT_WU_S => RM,
             AluOPRR::FMV_X_W => 0b000,
             AluOPRR::FCLASS_S => 0b001,
-            AluOPRR::FCVT_S_W => rm,
-            AluOPRR::FCVT_S_WU => rm,
+            AluOPRR::FCVT_S_W => RM,
+            AluOPRR::FCVT_S_WU => RM,
             AluOPRR::FMV_W_X => 0b000,
 
-            AluOPRR::FCVT_L_S => rm,
-            AluOPRR::FCVT_LU_S => rm,
-            AluOPRR::FCVT_S_L => rm,
-            AluOPRR::FCVT_S_LU => rm,
+            AluOPRR::FCVT_L_S => RM,
+            AluOPRR::FCVT_LU_S => RM,
+            AluOPRR::FCVT_S_L => RM,
+            AluOPRR::FCVT_S_LU => RM,
 
-            AluOPRR::FCVT_L_D => rm,
-            AluOPRR::FCVT_LU_D => rm,
+            AluOPRR::FCVT_L_D => RM,
+            AluOPRR::FCVT_LU_D => RM,
             AluOPRR::FMV_X_D => 0b000,
-            AluOPRR::FCVT_D_L => rm,
-            AluOPRR::FCVT_D_LU => rm,
+            AluOPRR::FCVT_D_L => RM,
+            AluOPRR::FCVT_D_LU => RM,
             AluOPRR::FMV_D_X => 0b000,
-            AluOPRR::FCVT_S_D => rm,
-            AluOPRR::FCVT_D_S => rm,
+            AluOPRR::FCVT_S_D => RM,
+            AluOPRR::FCVT_D_S => RM,
             AluOPRR::FCLASS_D => 0b001,
-            AluOPRR::FCVT_W_D => rm,
-            AluOPRR::FCVT_WU_D => rm,
-            AluOPRR::FCVT_D_W => rm,
-            AluOPRR::FCVT_D_WU => rm,
-            AluOPRR::FSQRT_D => rm,
+            AluOPRR::FCVT_W_D => RM,
+            AluOPRR::FCVT_WU_D => RM,
+            AluOPRR::FCVT_D_W => RM,
+            AluOPRR::FCVT_D_WU => RM,
+            AluOPRR::FSQRT_D => RM,
         }
     }
 }
@@ -494,10 +494,10 @@ impl AluOPRRR {
             AluOPRRR::REMW => 0b110,
             AluOPRRR::REMUW => 0b111,
 
-            AluOPRRR::FADD_S => rm,
-            AluOPRRR::FSUB_S => rm,
-            AluOPRRR::FMUL_S => rm,
-            AluOPRRR::FDIV_S => rm,
+            AluOPRRR::FADD_S => RM,
+            AluOPRRR::FSUB_S => RM,
+            AluOPRRR::FMUL_S => RM,
+            AluOPRRR::FDIV_S => RM,
 
             AluOPRRR::FSGNJ_S => 0b000,
             AluOPRRR::FSGNJN_S => 0b001,
@@ -509,10 +509,10 @@ impl AluOPRRR {
             AluOPRRR::FLT_S => 0b001,
             AluOPRRR::FLE_S => 0b000,
 
-            AluOPRRR::FADD_D => rm,
-            AluOPRRR::FSUB_D => rm,
-            AluOPRRR::FMUL_D => rm,
-            AluOPRRR::FDIV_D => rm,
+            AluOPRRR::FADD_D => RM,
+            AluOPRRR::FSUB_D => RM,
+            AluOPRRR::FMUL_D => RM,
+            AluOPRRR::FDIV_D => RM,
 
             AluOPRRR::FSGNJ_D => 0b000,
             AluOPRRR::FSGNJN_D => 0b001,

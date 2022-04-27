@@ -1,6 +1,6 @@
 use crate::isa::risc_v::inst::*;
 use crate::settings;
-use alloc::vec::{self, Vec};
+use alloc::vec::Vec;
 
 /*
 
