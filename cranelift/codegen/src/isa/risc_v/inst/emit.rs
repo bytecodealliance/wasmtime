@@ -418,17 +418,8 @@ impl MachInstEmit for Inst {
                     BranchTarget::Label(label) => {
                         let code = kind.emit();
                         let code_inverse = kind.inverse().emit().to_le_bytes();
-                        sink.use_label_at_offset(
-                            start_off,
-                            taken.as_label().unwrap(),
-                            LabelUse::B12,
-                        );
-                        sink.add_cond_branch(
-                            start_off,
-                            start_off + 4,
-                            taken.as_label().unwrap(),
-                            &code_inverse,
-                        );
+                        sink.use_label_at_offset(start_off, label, LabelUse::B12);
+                        sink.add_cond_branch(start_off, start_off + 4, label, &code_inverse);
                         sink.put4(code);
                     }
                     BranchTarget::ResolvedOffset(offset) => {

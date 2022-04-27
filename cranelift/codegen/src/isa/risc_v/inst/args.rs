@@ -195,18 +195,18 @@ impl CondBrKind {
     }
 }
 
-/*
-    Op are always defined in isle file and implemented Dispaly.
-    I use this to generate op_name instead of boring work.
-    todo::may be not appropriate!
-*/
-fn get_op_name<T: std::fmt::Debug>(op: T) -> String {
-    format!("{:?}", op).to_lowercase().replace("_", ".")
-}
-
 impl AluOPRRRR {
-    pub(crate) fn op_name(self) -> String {
-        get_op_name(self)
+    pub(crate) fn op_name(self) -> &'static str {
+        match self {
+            Self::FMADD_S => "fmadd.s",
+            Self::FMSUB_S => "fmsub.s",
+            Self::FNMSUB_S => "fnmsub.s",
+            Self::FNMADD_S => "fnmadd.s",
+            Self::FMADD_D => "fmadd.d",
+            Self::FMSUB_D => "fmsub.d",
+            Self::FNMSUB_D => "fnmsub.d",
+            Self::FNMADD_D => "fnmadd.d",
+        }
     }
 
     pub(crate) fn funct2(self) -> u32 {
@@ -240,8 +240,35 @@ impl AluOPRRRR {
 }
 
 impl AluOPRR {
-    pub(crate) fn op_name(self) -> String {
-        get_op_name(self)
+    pub(crate) fn op_name(self) -> &'static str {
+        match self {
+            Self::FSQRT_S => "fsqrt.s",
+            Self::FCVT_W_S => "fcvt.w.s",
+            Self::FCVT_WU_S => "fcvt.wu.s",
+            Self::FMV_X_W => "fmv.x.w",
+            Self::FCLASS_S => "fclass.s",
+            Self::FCVT_S_W => "fcvt.s.w",
+            Self::FCVT_S_WU => "fcvt.s.wu",
+            Self::FMV_W_X => "fmv.w.x",
+            Self::FCVT_L_S => "fcvt.l.s",
+            Self::FCVT_LU_S => "fcvt.lu.s",
+            Self::FCVT_S_L => "fcvt.s.l",
+            Self::FCVT_S_LU => "fcvt.s.lu",
+            Self::FCVT_L_D => "fcvt.l.d",
+            Self::FCVT_LU_D => "fcvt.lu.d",
+            Self::FMV_X_D => "fmv.x.d",
+            Self::FCVT_D_L => "fcvt.d.l",
+            Self::FCVT_D_LU => "fcvt.d.lu",
+            Self::FMV_D_X => "fmv.d.x",
+            Self::FSQRT_D => "fsqrt.d",
+            Self::FCVT_S_D => "fcvt.s.d",
+            Self::FCVT_D_S => "fcvt.d.s",
+            Self::FCLASS_D => "fclass.d",
+            Self::FCVT_W_D => "fcvt.w.d",
+            Self::FCVT_WU_D => "fcvt.wu.d",
+            Self::FCVT_D_W => "fcvt.d.w",
+            Self::FCVT_D_WU => "fcvt.d.wu",
+        }
     }
 
     pub(crate) fn op_code(self) -> u32 {
@@ -376,8 +403,61 @@ impl AluOPRR {
 }
 
 impl AluOPRRR {
-    pub fn op_name(self) -> String {
-        get_op_name(self)
+    pub(crate) fn op_name(self) -> &'static str {
+        match self {
+            Self::ADD => "add",
+            Self::SUB => "sub",
+            Self::SLL => "sll",
+            Self::SLT => "slt",
+            Self::SLTU => "sltu",
+            Self::XOR => "xor",
+            Self::SRL => "srl",
+            Self::SRA => "sra",
+            Self::OR => "or",
+            Self::AND => "and",
+            Self::ADDW => "addw",
+            Self::SUBW => "subw",
+            Self::SLLW => "sllw",
+            Self::SRLW => "srlw",
+            Self::Sraw => "sraw",
+            Self::MUL => "mul",
+            Self::MULH => "mulh",
+            Self::MULHSU => "mulhsu",
+            Self::MULHU => "mulhu",
+            Self::DIV => "div",
+            Self::DIVU => "divu",
+            Self::REM => "rem",
+            Self::REMU => "remu",
+            Self::MULW => "mulw",
+            Self::DIVW => "divw",
+            Self::DIVUW => "divuw",
+            Self::REMW => "remw",
+            Self::REMUW => "remuw",
+            Self::FADD_S => "fadd.s",
+            Self::FSUB_S => "fsub.s",
+            Self::FMUL_S => "fmul.s",
+            Self::FDIV_S => "fdiv.s",
+            Self::FSGNJ_S => "fsgnj.s",
+            Self::FSGNJN_S => "fsgnjn.s",
+            Self::FSGNJX_S => "fsgnjx.s",
+            Self::FMIN_S => "fmin.s",
+            Self::FMAX_S => "fmax.s",
+            Self::FEQ_S => "feq.s",
+            Self::FLT_S => "flt.s",
+            Self::FLE_S => "fle.s",
+            Self::FADD_D => "fadd.d",
+            Self::FSUB_D => "fsub.d",
+            Self::FMUL_D => "fmul.d",
+            Self::FDIV_D => "fdiv.d",
+            Self::FSGNJ_D => "fsgnj.d",
+            Self::FSGNJN_D => "fsgnjn.d",
+            Self::FSGNJX_D => "fsgnjx.d",
+            Self::FMIN_D => "fmin.d",
+            Self::FMAX_D => "fmax.d",
+            Self::FEQ_D => "feq.d",
+            Self::FLT_D => "flt.d",
+            Self::FLE_D => "fle.d",
+        }
     }
 
     pub fn funct3(self) -> u32 {
@@ -593,8 +673,22 @@ impl AluOPRRI {
         }
     }
 
-    pub(crate) fn op_name(self) -> String {
-        get_op_name(self)
+    pub(crate) fn op_name(self) -> &'static str {
+        match self {
+            Self::ADDI => "addi",
+            Self::SLTI => "slti",
+            Self::SLTIU => "sltiu",
+            Self::XORI => "xori",
+            Self::ORI => "ori",
+            Self::ANDI => "andi",
+            Self::SLLI => "slli",
+            Self::SRLI => "srli",
+            Self::SRAI => "srai",
+            Self::ADDIW => "addiw",
+            Self::SLLIW => "slliw",
+            Self::SRLIW => "srliw",
+            Self::SRAIW => "sraiw",
+        }
     }
 
     pub fn funct3(self) -> u32 {
@@ -656,8 +750,18 @@ impl FloatException {
 }
 
 impl LoadOP {
-    pub(crate) fn op_name(self) -> String {
-        get_op_name(self)
+    pub(crate) fn op_name(self) -> &'static str {
+        match self {
+            Self::LB => "lb",
+            Self::LH => "lh",
+            Self::LW => "lw",
+            Self::LBU => "lbu",
+            Self::LHU => "lhu",
+            Self::LWU => "lwu",
+            Self::LD => "ld",
+            Self::FLW => "flw",
+            Self::FLD => "fld",
+        }
     }
     pub(crate) fn from_type(t: Type) -> Self {
         if t.is_float() {
@@ -700,8 +804,15 @@ impl LoadOP {
 }
 
 impl StoreOP {
-    pub(crate) fn op_name(self) -> String {
-        get_op_name(self)
+    pub(crate) fn op_name(self) -> &'static str {
+        match self {
+            Self::SB => "sb",
+            Self::SH => "sh",
+            Self::SW => "sw",
+            Self::SD => "sd",
+            Self::FSW => "fsw",
+            Self::FSD => "fsd",
+        }
     }
     pub(crate) fn from_type(t: Type) -> Self {
         if t.is_float() {
@@ -774,8 +885,17 @@ impl FloatFlagOp {
         }
     }
 
-    pub(crate) fn op_name(self) -> String {
-        get_op_name(self)
+    pub(crate) fn op_name(self) -> &'static str {
+        match self {
+            Self::FRCSR => "frcsr",
+            Self::FRRM => "frrm",
+            Self::FRFLAGS => "frflags",
+            Self::FSRMI => "fsrmi",
+            Self::FSFLAGSI => "fsflagsi",
+            Self::FSCSR => "fscsr",
+            Self::FSRM => "fsrm",
+            Self::FSFLAGS => "fsflags",
+        }
     }
 
     pub(crate) fn op_code(self) -> u32 {
@@ -863,6 +983,92 @@ impl FloatCCBit {
             FloatCC::UnorderedOrGreaterThanOrEqual => {
                 Self::UN.bit() | Self::GT.bit() | Self::EQ.bit()
             }
+        }
+    }
+}
+
+impl AtomicOP {
+    pub(crate) fn op_name(self) -> &'static str {
+        match self {
+            Self::LR_W => "lr.w",
+            Self::SC_W => "sc.w",
+            Self::AMOSWAP_W => "amoswap.w",
+            Self::AMOADD_W => "amoadd.w",
+            Self::AMOXOR_W => "amoxor.w",
+            Self::AMOAND_W => "amoand.w",
+            Self::AMOOR_W => "amoor.w",
+            Self::AMOMIN_W => "amomin.w",
+            Self::AMOMAX_W => "amomax.w",
+            Self::AMOMINU_W => "amominu.w",
+            Self::AMOMAXU_W => "amomaxu.w",
+            Self::LR_D => "lr.d",
+            Self::SC_D => "sc.d",
+            Self::AMOSWAP_D => "amoswap.d",
+            Self::AMOADD_D => "amoadd.d",
+            Self::AMOXOR_D => "amoxor.d",
+            Self::AMOAND_D => "amoand.d",
+            Self::AMOOR_D => "amoor.d",
+            Self::AMOMIN_D => "amomin.d",
+            Self::AMOMAX_D => "amomax.d",
+            Self::AMOMINU_D => "amominu.d",
+            Self::AMOMAXU_D => "amomaxu.d",
+        }
+    }
+    pub(crate) fn op_code(self) -> u32 {
+        0b0101111
+    }
+
+    pub(crate) fn funct3(self) -> u32 {
+        match self {
+            AtomicOP::LR_W
+            | AtomicOP::SC_W
+            | AtomicOP::AMOSWAP_W
+            | AtomicOP::AMOADD_W
+            | AtomicOP::AMOXOR_W
+            | AtomicOP::AMOAND_W
+            | AtomicOP::AMOOR_W
+            | AtomicOP::AMOMIN_W
+            | AtomicOP::AMOMAX_W
+            | AtomicOP::AMOMINU_W
+            | AtomicOP::AMOMAXU_W => 0b010,
+
+            AtomicOP::LR_D
+            | AtomicOP::SC_D
+            | AtomicOP::AMOSWAP_D
+            | AtomicOP::AMOADD_D
+            | AtomicOP::AMOXOR_D
+            | AtomicOP::AMOAND_D
+            | AtomicOP::AMOOR_D
+            | AtomicOP::AMOMIN_D
+            | AtomicOP::AMOMAX_D
+            | AtomicOP::AMOMINU_D
+            | AtomicOP::AMOMAXU_D => 0b011,
+        }
+    }
+    pub(crate) fn funct5(self) -> u32 {
+        match self {
+            AtomicOP::LR_W => 0b00010,
+            AtomicOP::SC_W => 0b00011,
+            AtomicOP::AMOSWAP_W => 0b00001,
+            AtomicOP::AMOADD_W => 0b00000,
+            AtomicOP::AMOXOR_W => 0b00100,
+            AtomicOP::AMOAND_W => 0b01100,
+            AtomicOP::AMOOR_W => 0b01000,
+            AtomicOP::AMOMIN_W => 0b10000,
+            AtomicOP::AMOMAX_W => 0b10100,
+            AtomicOP::AMOMINU_W => 0b11000,
+            AtomicOP::AMOMAXU_W => 0b11100,
+            AtomicOP::LR_D => 0b00010,
+            AtomicOP::SC_D => 0b00011,
+            AtomicOP::AMOSWAP_D => 0b00001,
+            AtomicOP::AMOADD_D => 0b00000,
+            AtomicOP::AMOXOR_D => 0b00100,
+            AtomicOP::AMOAND_D => 0b01100,
+            AtomicOP::AMOOR_D => 0b01000,
+            AtomicOP::AMOMIN_D => 0b10000,
+            AtomicOP::AMOMAX_D => 0b10100,
+            AtomicOP::AMOMINU_D => 0b11000,
+            AtomicOP::AMOMAXU_D => 0b11100,
         }
     }
 }

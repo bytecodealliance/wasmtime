@@ -1,10 +1,5 @@
-use core::iter::FromIterator;
-use std::panic;
-
 use crate::isa::risc_v::inst::*;
-
 use crate::settings;
-
 use alloc::vec::{self, Vec};
 
 /*

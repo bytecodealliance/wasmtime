@@ -2,6 +2,7 @@
 
 // Some variants are not constructed, but we still want them as options in the future.
 #![allow(dead_code)]
+#![allow(non_camel_case_types)]
 
 use crate::binemit::{Addend, CodeOffset, Reloc};
 pub use crate::ir::condcodes::IntCC;
@@ -54,7 +55,7 @@ pub type OptionImm12 = Option<Imm12>;
 
 use crate::isa::risc_v::lower::isle::generated_code::MInst;
 pub use crate::isa::risc_v::lower::isle::generated_code::{
-    AluOPRR, AluOPRRI, AluOPRRR, AluOPRRRR, FClassResult, FloatException, FloatFlagOp,
+    AluOPRR, AluOPRRI, AluOPRRR, AluOPRRRR, AtomicOP, FClassResult, FloatException, FloatFlagOp,
     FloatRoundingMode, LoadOP, MInst as Inst, StoreOP, OPFPFMT,
 };
 
@@ -132,7 +133,7 @@ impl Display for BranchTarget {
 }
 
 impl Inst {
-    pub(crate) fn in_i32_range(value: u64) -> bool {
+    fn in_i32_range(value: u64) -> bool {
         let value = value as i64;
         value >= (i32::MIN as i64) && value <= (i32::MAX as i64)
     }
@@ -253,7 +254,6 @@ impl Inst {
     pub(crate) fn patch_taken_path_list(insts: &mut SmallInstVec<Inst>, patches: &'_ Vec<usize>) {
         for index in patches {
             let index = *index;
-
             match &mut insts[index] {
                 &mut Inst::CondBr { ref mut taken, .. } => match taken {
                     &mut BranchTarget::ResolvedOffset(ref mut off) => {
@@ -524,6 +524,11 @@ fn riscv64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             collector.add_def(rd);
             collector.add_use(base);
         }
+        &Inst::Atomic { rd, rs1, rs2, .. } => {
+            collector.add_def(rd);
+            collector.add_use(rs1);
+            collector.add_use(rs2);
+        }
     }
 }
 
@@ -680,6 +685,16 @@ pub fn riscv64_map_regs<RM: RegMapper>(inst: &mut Inst, mapper: &RM) {
             if let Some(r) = rs {
                 mapper.map_use(r);
             }
+        }
+        &mut Inst::Atomic {
+            ref mut rd,
+            ref mut rs1,
+            ref mut rs2,
+            ..
+        } => {
+            mapper.map_def(rd);
+            mapper.map_use(rs1);
+            mapper.map_use(rs2);
         }
     }
 }
@@ -1005,6 +1020,7 @@ impl Inst {
                     not_taken,
                 )
             }
+            &MInst::Atomic { .. } => todo!(),
             &MInst::LoadExtName { .. } => todo!(),
             &MInst::LoadAddr { .. } => todo!(),
             &MInst::VirtualSPOffsetAdj { .. } => todo!(),

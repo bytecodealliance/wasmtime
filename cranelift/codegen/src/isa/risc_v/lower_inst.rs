@@ -15,10 +15,9 @@ use crate::ir::types::{
     B1, B128, B16, B32, B64, B8, F32, F64, FFLAGS, I128, I16, I32, I64, I8, IFLAGS, R32, R64,
 };
 
+use super::lower::*;
 use crate::isa::risc_v::abi::*;
 use crate::isa::risc_v::inst::*;
-
-use super::lower::*;
 
 /// Actually codegen an instruction's results into registers.
 pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
@@ -212,7 +211,9 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let mut patch_set_false: Vec<usize> = vec![];
             let mut patch_set_true: Vec<usize> = vec![];
             let mut patch_jump_over: Vec<usize> = vec![];
-
+            if ty.is_vector() {
+                panic!("vector float compare is not supported");
+            }
             if cc_bit | FloatCCBit::EQ.bit() > 0 {
                 let op = if ty == F32 {
                     AluOPRRR::FEQ_S
@@ -323,6 +324,8 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             }
             // jump here , rd is already set to true , nothing need to be done.
             Inst::patch_taken_path_list(&mut insts, &patch_jump_over);
+
+            insts.into_iter().for_each(|inst| ctx.emit(inst));
         }
 
         Opcode::Debugtrap => {}

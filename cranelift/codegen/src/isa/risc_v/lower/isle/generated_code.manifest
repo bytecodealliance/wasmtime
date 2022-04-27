@@ -1,4 +1,4 @@
 src/clif.isle 9ea75a6f790b5c03
 src/prelude.isle b2bc986bcbbbb77
-src/isa/risc_v/inst.isle e1c8f3194dd9fc1c
+src/isa/risc_v/inst.isle 33f80c7a1c7c3e3c
 src/isa/risc_v/lower.isle 978f3dbfb6f69cb5
