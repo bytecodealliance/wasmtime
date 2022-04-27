@@ -3,7 +3,7 @@
 // Some variants are never constructed, but we still want them as options in the future.
 #![allow(dead_code)]
 
-use crate::ir::condcodes::CondCode;
+use crate::ir::condcodes::{CondCode, FloatCC};
 
 use super::*;
 
@@ -72,8 +72,8 @@ impl AMode {
 
     pub(crate) fn get_offset_with_state(&self, state: &EmitState) -> i64 {
         match self {
-            _ => self.get_offset(),
             &AMode::NominalSPOffset(offset, _) => offset + state.virtual_sp_offset,
+            _ => self.get_offset(),
         }
     }
 
@@ -93,10 +93,9 @@ impl AMode {
         if let Some(universe) = universe {
             let reg = self.get_base_register();
             let offset = self.get_offset();
-
             match self {
-                _ => format!("{}({})", offset, reg.show_with_rru(universe)),
                 &AMode::NominalSPOffset(..) => format!("{}", self),
+                _ => format!("{}({})", offset, reg.show_with_rru(universe)),
             }
         } else {
             format!("{}", self)
@@ -656,23 +655,6 @@ impl FloatException {
     }
 }
 
-impl FClassResult {
-    pub(crate) fn reuslt(self) -> u32 {
-        match self {
-            FClassResult::NegInfinite => 0,
-            FClassResult::NegNormal => 1,
-            FClassResult::NegSubNormal => 2,
-            FClassResult::NegZero => 3,
-            FClassResult::PosZero => 4,
-            FClassResult::PosSunNormal => 5,
-            FClassResult::PosNormal => 6,
-            FClassResult::PosInfinite => 7,
-            FClassResult::SNaN => 8,
-            FClassResult::QNaN => 9,
-        }
-    }
-}
-
 impl LoadOP {
     pub(crate) fn op_name(self) -> String {
         get_op_name(self)
@@ -747,6 +729,140 @@ impl StoreOP {
             Self::SD => 0b011,
             Self::FSW => 0b010,
             Self::FSD => 0b011,
+        }
+    }
+}
+
+impl FloatFlagOp {
+    // give me the option reg
+    pub(crate) fn rs1(self, reg: OptionReg) -> u32 {
+        // current all zero
+        if let Some(r) = reg {
+            r.get_hw_encoding() as u32
+        } else {
+            0
+        }
+    }
+    pub(crate) fn funct3(self) -> u32 {
+        match self {
+            FloatFlagOp::FRCSR => 0b010,
+            FloatFlagOp::FRRM => 0b010,
+            FloatFlagOp::FRFLAGS => 0b010,
+            FloatFlagOp::FSRMI => 0b101,
+            FloatFlagOp::FSFLAGSI => 0b101,
+            FloatFlagOp::FSCSR => 0b001,
+            FloatFlagOp::FSRM => 0b001,
+            FloatFlagOp::FSFLAGS => 0b001,
+        }
+    }
+    pub(crate) fn use_imm12(self) -> bool {
+        match self {
+            FloatFlagOp::FSRMI | FloatFlagOp::FSFLAGSI => true,
+            _ => false,
+        }
+    }
+    pub(crate) fn imm12(self, imm: OptionImm12) -> u32 {
+        match self {
+            FloatFlagOp::FRCSR => 0b000000000011,
+            FloatFlagOp::FRRM => 0b000000000010,
+            FloatFlagOp::FRFLAGS => 0b000000000001,
+            FloatFlagOp::FSRMI => imm.unwrap().as_u32(),
+            FloatFlagOp::FSFLAGSI => imm.unwrap().as_u32(),
+            FloatFlagOp::FSCSR => 0b000000000011,
+            FloatFlagOp::FSRM => 0b000000000010,
+            FloatFlagOp::FSFLAGS => 0b000000000001,
+        }
+    }
+
+    pub(crate) fn op_name(self) -> String {
+        get_op_name(self)
+    }
+
+    pub(crate) fn op_code(self) -> u32 {
+        0b1110011
+    }
+}
+
+impl FClassResult {
+    pub(crate) fn bit(self) -> u32 {
+        match self {
+            FClassResult::NegInfinite => 1 << 0,
+            FClassResult::NegNormal => 1 << 1,
+            FClassResult::NegSubNormal => 1 << 2,
+            FClassResult::NegZero => 1 << 3,
+            FClassResult::PosZero => 1 << 4,
+            FClassResult::PosSubNormal => 1 << 5,
+            FClassResult::PosNormal => 1 << 6,
+            FClassResult::PosInfinite => 1 << 7,
+            FClassResult::SNaN => 1 << 8,
+            FClassResult::QNaN => 1 << 9,
+        }
+    }
+
+    pub(crate) fn is_nan_bits() -> u32 {
+        Self::SNaN.bit() | Self::QNaN.bit()
+    }
+
+    pub(crate) fn is_zero_bits() -> u32 {
+        Self::NegZero.bit() | Self::PosZero.bit()
+    }
+    pub(crate) fn is_infinite_bits() -> u32 {
+        Self::PosInfinite.bit() | Self::NegInfinite.bit()
+    }
+}
+
+/*
+    Condition code for comparing floating point numbers.
+
+    This condition code is used by the fcmp instruction to compare floating point values. Two IEEE floating point values relate in exactly one of four ways:
+
+    UN - unordered when either value is NaN.
+    EQ - equal numerical value.
+    LT - x is less than y.
+    GT - x is greater than y.
+*/
+pub enum FloatCCBit {
+    UN,
+    EQ,
+    LT,
+    GT,
+}
+
+impl FloatCCBit {
+    #[inline(always)]
+    pub(crate) fn shift(self) -> u8 {
+        match self {
+            FloatCCBit::UN => 0,
+            FloatCCBit::EQ => 1,
+            FloatCCBit::LT => 2,
+            FloatCCBit::GT => 3,
+        }
+    }
+    #[inline(always)]
+    pub(crate) fn bit(self) -> u8 {
+        1 << self.shift()
+    }
+    /*
+        mask bit for floatcc
+    */
+    pub(crate) fn floatcc_2_mask_bits<T: Into<FloatCC>>(t: T) -> u8 {
+        match t.into() {
+            FloatCC::Ordered => Self::EQ.bit() | Self::LT.bit() | Self::GT.bit(),
+            FloatCC::Unordered => Self::UN.bit(),
+            FloatCC::Equal => Self::EQ.bit(),
+            FloatCC::NotEqual => Self::UN.bit() | Self::LT.bit() | Self::GT.bit(),
+            FloatCC::OrderedNotEqual => Self::LT.bit() | Self::GT.bit(),
+            FloatCC::UnorderedOrEqual => Self::UN.bit() | Self::EQ.bit(),
+            FloatCC::LessThan => Self::LT.bit(),
+            FloatCC::LessThanOrEqual => Self::LT.bit() | Self::EQ.bit(),
+            FloatCC::GreaterThan => Self::GT.bit(),
+            FloatCC::GreaterThanOrEqual => Self::GT.bit() | Self::EQ.bit(),
+            FloatCC::UnorderedOrLessThan => Self::UN.bit() | Self::LT.bit(),
+            FloatCC::UnorderedOrLessThanOrEqual => Self::UN.bit() | Self::LT.bit() | Self::EQ.bit(),
+            FloatCC::UnorderedOrGreaterThan => Self::UN.bit() | Self::GT.bit(),
+            FloatCC::UnorderedOrGreaterThanOrEqual => {
+                Self::UN.bit() | Self::GT.bit() | Self::EQ.bit()
+            }
         }
     }
 }

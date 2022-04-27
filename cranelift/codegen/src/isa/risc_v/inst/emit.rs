@@ -385,27 +385,70 @@ impl MachInstEmit for Inst {
                 unimplemented!("what is the trap code\n");
             }
             &Inst::Jump { dest } => {
-                sink.use_label_at_offset(start_off, dest.as_label().unwrap(), LabelUse::Jal20);
-                sink.add_uncond_branch(start_off, start_off + 4, dest.as_label().unwrap());
-                let x: u32 = (0b1101111) | (zero_reg().get_hw_encoding() as u32) << 7 | (0 << 12);
-                sink.put4(x);
+                let code: u32 =
+                    (0b1101111) | (zero_reg().get_hw_encoding() as u32) << 7 | (0 << 12);
+                match dest {
+                    BranchTarget::Label(lable) => {
+                        sink.use_label_at_offset(start_off, lable, LabelUse::Jal20);
+                        sink.add_uncond_branch(start_off, start_off + 4, lable);
+
+                        sink.put4(code);
+                    }
+                    BranchTarget::ResolvedOffset(0) => {
+                        // do nothing
+                    }
+                    BranchTarget::ResolvedOffset(offset) => {
+                        if LabelUse::Jal20.offset_in_range(offset) {
+                            let mut code = code.to_le_bytes();
+                            LabelUse::Jal20.patch_raw_offset(&mut code, offset);
+                        } else {
+                            Inst::construct_auipc_and_jalr(offset)
+                                .into_iter()
+                                .for_each(|i| i.emit(sink, emit_info, state));
+                        }
+                    }
+                }
             }
             &Inst::CondBr {
                 taken,
                 not_taken,
                 kind,
-                ty,
             } => {
-                let code = kind.emit();
-                let code_inverse = kind.inverse().emit().to_le_bytes();
-                sink.use_label_at_offset(start_off, taken.as_label().unwrap(), LabelUse::B12);
-                sink.add_cond_branch(
-                    start_off,
-                    start_off + 4,
-                    taken.as_label().unwrap(),
-                    &code_inverse,
-                );
-                sink.put4(code);
+                match taken {
+                    BranchTarget::Label(label) => {
+                        let code = kind.emit();
+                        let code_inverse = kind.inverse().emit().to_le_bytes();
+                        sink.use_label_at_offset(
+                            start_off,
+                            taken.as_label().unwrap(),
+                            LabelUse::B12,
+                        );
+                        sink.add_cond_branch(
+                            start_off,
+                            start_off + 4,
+                            taken.as_label().unwrap(),
+                            &code_inverse,
+                        );
+                        sink.put4(code);
+                    }
+                    BranchTarget::ResolvedOffset(offset) => {
+                        if LabelUse::B12.offset_in_range(offset) {
+                            let code = kind.emit();
+                            let mut code = code.to_le_bytes();
+                            LabelUse::B12.patch_raw_offset(&mut code, offset);
+                            code.into_iter().for_each(|b| sink.put1(*b));
+                        } else {
+                            let code = kind.emit();
+                            // jump is zero, this means when condition is met , no jump
+                            // fallthrough to next instruction which is the long jump.
+                            sink.put4(code);
+                            Inst::construct_auipc_and_jalr(offset)
+                                .into_iter()
+                                .for_each(|i| i.emit(sink, emit_info, state));
+                        }
+                    }
+                }
+
                 Inst::Jump { dest: not_taken }.emit(sink, emit_info, state);
             }
             &Inst::Mov { rd, rm } => {
@@ -426,7 +469,14 @@ impl MachInstEmit for Inst {
                 );
                 state.virtual_sp_offset += amount;
             }
-
+            &Inst::FloatFlagOperation { op, rs, imm, rd } => {
+                let x = op.op_code()
+                    | (rd.to_reg().get_hw_encoding() as u32) << 7
+                    | op.funct3() << 12
+                    | op.rs1(rs) << 15
+                    | op.imm12(imm) << 20;
+                sink.put4(x);
+            }
             _ => unimplemented!(),
         };
 

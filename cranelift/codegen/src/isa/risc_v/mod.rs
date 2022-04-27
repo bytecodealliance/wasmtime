@@ -119,8 +119,8 @@ impl TargetIsa for Riscv64Backend {
     #[cfg(feature = "unwind")]
     fn emit_unwind_info(
         &self,
-        result: &MachCompileResult,
-        kind: crate::machinst::UnwindInfoKind,
+        _result: &MachCompileResult,
+        _kind: crate::machinst::UnwindInfoKind,
     ) -> CodegenResult<Option<crate::isa::unwind::UnwindInfo>> {
         unimplemented!()
     }

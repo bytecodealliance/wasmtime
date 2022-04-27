@@ -28,6 +28,13 @@ impl Imm12 {
         Self { bits }
     }
 
+    pub(crate) fn form_bool(b: bool) -> Self {
+        if b {
+            Self { bits: 1 }
+        } else {
+            Self { bits: 0 }
+        }
+    }
     /// Create a zero immediate of this format.
     pub fn zero() -> Self {
         Imm12 { bits: 0 }

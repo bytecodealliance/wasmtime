@@ -92,7 +92,7 @@ fn assemble(code: &str) -> u32 {
     let file_name = "xxx.s";
     use std::io::Write;
     let mut file = std::fs::File::create(file_name).unwrap();
-    file.write_all(code.as_bytes());
+    file.write_all(code.as_bytes()).expect("write error {}");
     let mut cmd = Command::new("riscv64-linux-gnu-as");
     cmd.arg(file_name);
     let _output = cmd.output().expect("exec riscv64-linux-gnu-as failed , {}");

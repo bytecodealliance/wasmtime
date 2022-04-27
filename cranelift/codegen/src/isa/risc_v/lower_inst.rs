@@ -1,5 +1,8 @@
 //! Lower a single Cranelift instruction into vcode.
 
+use alloc::vec;
+use alloc::vec::Vec;
+
 use crate::ir::Inst as IRInst;
 use crate::ir::Opcode;
 use crate::isa::risc_v::settings as aarch64_settings;
@@ -7,6 +10,10 @@ use crate::machinst::lower::*;
 use crate::machinst::*;
 use crate::settings::Flags;
 use crate::CodegenResult;
+
+use crate::ir::types::{
+    B1, B128, B16, B32, B64, B8, F32, F64, FFLAGS, I128, I16, I32, I64, I8, IFLAGS, R32, R64,
+};
 
 use crate::isa::risc_v::abi::*;
 use crate::isa::risc_v::inst::*;
@@ -23,6 +30,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
     let op = ctx.data(insn).opcode();
     let inputs = insn_inputs(ctx, insn);
     let outputs = insn_outputs(ctx, insn);
+
     let ty = if outputs.len() > 0 {
         Some(ctx.output_ty(insn, 0))
     } else {
@@ -192,7 +200,130 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::Icmp => {}
 
-        Opcode::Fcmp => {}
+        Opcode::Fcmp => {
+            //
+            let mut insts = SmallInstVec::new();
+            let left = ctx.put_input_in_regs(insn, 0).only_reg().unwrap();
+            let right = ctx.put_input_in_regs(insn, 1).only_reg().unwrap();
+            let cc = ctx.data(insn).fp_cond_code().unwrap();
+            let cc_bit = FloatCCBit::floatcc_2_mask_bits(cc);
+            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+            let ty = ctx.input_ty(insn, 0);
+            let mut patch_set_false: Vec<usize> = vec![];
+            let mut patch_set_true: Vec<usize> = vec![];
+            let mut patch_jump_over: Vec<usize> = vec![];
+
+            if cc_bit | FloatCCBit::EQ.bit() > 0 {
+                let op = if ty == F32 {
+                    AluOPRRR::FEQ_S
+                } else {
+                    AluOPRRR::FEQ_D
+                };
+                insts.push(Inst::AluRRR {
+                    alu_op: op,
+                    rd,
+                    rs1: left,
+                    rs2: right,
+                });
+                patch_jump_over.push(insts.len());
+                insts.push(Inst::CondBr {
+                    taken: BranchTarget::patch(),
+                    not_taken: BranchTarget::zero(),
+                    kind: CondBrKind {
+                        kind: IntCC::NotEqual,
+                        rs1: rd.to_reg(),
+                        rs2: zero_reg(),
+                    },
+                });
+            }
+
+            if cc_bit | FloatCCBit::LT.bit() > 0 {
+                let op = if ty == F32 {
+                    AluOPRRR::FLT_S
+                } else {
+                    AluOPRRR::FLT_D
+                };
+                insts.push(Inst::AluRRR {
+                    alu_op: op,
+                    rd,
+                    rs1: left,
+                    rs2: right,
+                });
+                patch_jump_over.push(insts.len());
+                insts.push(Inst::CondBr {
+                    taken: BranchTarget::patch(),
+                    not_taken: BranchTarget::zero(),
+                    kind: CondBrKind {
+                        kind: IntCC::NotEqual,
+                        rs1: rd.to_reg(),
+                        rs2: zero_reg(),
+                    },
+                });
+            }
+
+            if cc_bit | FloatCCBit::GT.bit() > 0 {
+                // I have no left > right operation in risc-v instruction set
+                // first check order
+                insts.extend(Inst::generate_float_unordered(rd, ty, left, right));
+                patch_set_false.push(insts.len());
+                insts.push(Inst::CondBr {
+                    taken: BranchTarget::patch(),
+                    not_taken: BranchTarget::zero(),
+                    kind: CondBrKind {
+                        kind: IntCC::NotEqual, // rd == 1 unordered data
+                        rs1: rd.to_reg(),
+                        rs2: zero_reg(),
+                    },
+                });
+                // number is ordered
+                let op = if ty == F32 {
+                    AluOPRRR::FLE_S
+                } else {
+                    AluOPRRR::FLE_D
+                };
+                insts.push(Inst::AluRRR {
+                    alu_op: op,
+                    rd,
+                    rs1: left,
+                    rs2: right,
+                });
+                patch_set_true.push(insts.len());
+                // could be unorder
+                insts.push(Inst::CondBr {
+                    taken: BranchTarget::patch(),
+                    not_taken: BranchTarget::zero(),
+                    kind: CondBrKind {
+                        kind: IntCC::Equal,
+                        rs1: rd.to_reg(),
+                        rs2: zero_reg(),
+                    },
+                });
+            }
+            if cc_bit | FloatCCBit::UN.bit() > 0 {
+                insts.extend(Inst::generate_float_unordered(rd, ty, left, right));
+                patch_jump_over.push(insts.len());
+                insts.push(Inst::Jump {
+                    dest: BranchTarget::patch(),
+                });
+            }
+
+            Inst::patch_taken_path_list(&mut insts, &patch_set_false);
+            // here is false
+            insts.push(Inst::load_constant_imm12(rd, Imm12::form_bool(false)));
+            if patch_set_true.len() > 0 {
+                // jump over the next set value.
+                insts.push(Inst::Jump {
+                    dest: BranchTarget::offset(Inst::instruction_size() as i32),
+                })
+            }
+            // here is true , jump here and set value is true.
+            if patch_set_true.len() > 0 {
+                Inst::patch_taken_path_list(&mut insts, &patch_set_true);
+                insts.push(Inst::load_constant_imm12(rd, Imm12::form_bool(true)));
+            }
+            // jump here , rd is already set to true , nothing need to be done.
+            Inst::patch_taken_path_list(&mut insts, &patch_jump_over);
+        }
 
         Opcode::Debugtrap => {}
 
@@ -444,7 +575,6 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
                     }
                 };
                 let inst = Inst::CondBr {
-                    ty,
                     taken,
                     not_taken,
                     kind: cond,
@@ -464,7 +594,6 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
                         taken,
                         not_taken,
                         kind: CondBrKind { kind: cc, rs1, rs2 },
-                        ty,
                     };
                     ctx.emit(inst);
                 } else {
@@ -472,34 +601,11 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
                 }
             }
             Opcode::Brif => {
-                unimplemented!("risc-v has no compare iflag");
+                unreachable!("risc-v has no compare iflag");
             }
             Opcode::Brff => {
-                /*
-                   risc-v compare float value (in float registers) and write to a x register
-                */
-                // let condcode = ctx.data(branches[0]).fp_cond_code().unwrap();
-
-                // let rs1 = ctx.put_input_in_regs(branches[0], 0);
-
-                // match condcode {
-                //     crate::ir::condcodes::FloatCC::Ordered => todo!(),
-                //     crate::ir::condcodes::FloatCC::Unordered => todo!(),
-                //     crate::ir::condcodes::FloatCC::Equal => todo!(),
-                //     crate::ir::condcodes::FloatCC::NotEqual => todo!(),
-                //     crate::ir::condcodes::FloatCC::OrderedNotEqual => todo!(),
-                //     crate::ir::condcodes::FloatCC::UnorderedOrEqual => todo!(),
-                //     crate::ir::condcodes::FloatCC::LessThan => todo!(),
-                //     crate::ir::condcodes::FloatCC::LessThanOrEqual => todo!(),
-                //     crate::ir::condcodes::FloatCC::GreaterThan => todo!(),
-                //     crate::ir::condcodes::FloatCC::GreaterThanOrEqual => todo!(),
-                //     crate::ir::condcodes::FloatCC::UnorderedOrLessThan => todo!(),
-                //     crate::ir::condcodes::FloatCC::UnorderedOrLessThanOrEqual => todo!(),
-                //     crate::ir::condcodes::FloatCC::UnorderedOrGreaterThan => todo!(),
-                //     crate::ir::condcodes::FloatCC::UnorderedOrGreaterThanOrEqual => todo!(),
-                // }
+                unreachable!("risc-v has no compare fflag");
             }
-
             _ => unimplemented!(),
         }
     } else {
@@ -526,3 +632,248 @@ mod test {
     #[test]
     fn compile_ok() {}
 }
+
+// let left = ctx.put_input_in_regs(insn, 0).only_reg().unwrap();
+// let right = ctx.put_input_in_regs(insn, 1).only_reg().unwrap();
+
+// let left_tmp = ctx.alloc_tmp(I64).only_reg().unwrap();
+// let right_tmp = ctx.alloc_tmp(I64).only_reg().unwrap();
+// let tmp = ctx.alloc_tmp(I64).only_reg().unwrap();
+
+// let mut insts = vec![];
+// let mut unordered_b = vec![];
+// {
+//     // check left is_nan
+//     let class_op = if ctx.input_ty(insn, 0) == F32 {
+//         AluOPRR::FCLASS_S
+//     } else {
+//         AluOPRR::FCLASS_D
+//     };
+//     // if left is nan
+//     insts.push(Inst::AluRR {
+//         alu_op: class_op,
+//         rd: left_tmp,
+//         rs: left,
+//     });
+//     //
+//     insts.push(Inst::AluRRImm12 {
+//         alu_op: AluOPRRI::ANDI,
+//         rd: tmp,
+//         rs: left_tmp.to_reg(),
+//         imm12: Imm12::from_bits(FClassResult::is_nan_bits() as i16),
+//     });
+//     // left is nan
+//     unordered_b.push(insts.len());
+//     insts.push(Inst::CondBr {
+//         taken: BranchTarget::patch(),
+//         not_taken: BranchTarget::zero(),
+//         kind: CondBrKind {
+//             kind: IntCC::NotEqual,
+//             rs1: tmp.to_reg(),
+//             rs2: zero_reg(),
+//         },
+//     });
+// }
+
+// {
+//     // if right is nan
+//     insts.push(Inst::AluRR {
+//         alu_op: class_op,
+//         rd: right_tmp,
+//         rs: right,
+//     });
+//     insts.push(Inst::AluRRImm12 {
+//         alu_op: AluOPRRI::ANDI,
+//         rd: tmp,
+//         rs: right_tmp,
+//         imm12: Imm12::from_bits(FClassResult::is_nan_bits() as i16),
+//     });
+//     // right is nan
+//     unordered_b.push(insts.len());
+//     insts.push(Inst::CondBr {
+//         taken: BranchTarget::patch(),
+//         not_taken: BranchTarget::zero(),
+//         kind: CondBrKind {
+//             kind: IntCC::NotEqual,
+//             rs1: tmp,
+//             rs2: zero_reg(),
+//         },
+//     });
+// }
+
+// {
+//     // if left is pos infinite and right is pos infinite , or both neg infinite
+//     insts.push(Inst::AluRRR {
+//         alu_op: AluOPRRR::AND,
+//         rd: tmp,
+//         rs1: left_tmp,
+//         rs2: right_tmp,
+//     });
+//     insts.push(Inst::AluRRImm12 {
+//         alu_op: AluOPRRI::ANDI,
+//         rd: tmp,
+//         rs: tmp,
+//         imm12: Imm12::from_bits(FClassResult::is_infinite_bits() as i16),
+//     });
+//     unordered_b.push(insts.len());
+//     insts.push(Inst::CondBr {
+//         taken: BranchTarget::patch(),
+//         not_taken: BranchTarget::zero(),
+//         kind: CondBrKind {
+//             kind: IntCC::NotEqual,
+//             rs1: tmp,
+//             rs2: zero_reg(),
+//         },
+//     });
+// }
+
+// let jump_to_final_compare;
+
+// {
+//     // now we can use left_class_result for another purpose
+//     {
+//         // compute eq
+//         // at this point
+//         let eq_op = if ctx.input_ty(insn, 0) == F32 {
+//             AluOPRRR::FEQ_S
+//         } else {
+//             AluOPRRR::FEQ_D
+//         };
+//         insts.push(Inst::AluRRR {
+//             alu_op: eq_op,
+//             rd: left_tmp,
+//             rs1: left,
+//             rs2: right,
+//         });
+//         insts.push(Inst::AluRRImm12 {
+//             alu_op: AluOPRRI::SLLI,
+//             rd: tmp,
+//             rs: left_tmp,
+//             imm12: Imm12::from_bits(FloatCCBit::EQ.shift()),
+//         });
+//     }
+
+//     {
+//         // compute lt
+//         let lt_op = if ctx.input_ty(insn, 0) == F32 {
+//             AluOPRRR::FLT_S
+//         } else {
+//             AluOPRRR::FLT_D
+//         };
+//         insts.push(Inst::AluRRR {
+//             alu_op: lt_op,
+//             rd: left_tmp,
+//             rs1: left,
+//             rs2: right,
+//         });
+
+//         insts.push(Inst::AluRRImm12 {
+//             alu_op: AluOPRRI::SLLI,
+//             rd: left_tmp,
+//             rs: left_tmp,
+//             imm12: Imm12::from_bits(FloatCCBit::LT.shift()),
+//         });
+
+//         insts.push(Inst::AluOPRRR {
+//             alu_op: AluOPRRR::OR,
+//             rd: tmp,
+//             rs1: tmp,
+//             rs2: left_tmp,
+//         });
+//     }
+//     {
+//         //
+//         insts.push(Inst::load_constant_imm12(
+//             left_tmp,
+//             (FloatCCBit::EQ.bit() | FloatCCBit::LT.bit()) as u32,
+//         ));
+//         insts.push(Inst::AluRRR {
+//             alu_op: AluOPRRR::AND,
+//             rd: left_tmp,
+//             rs1: left_tmp,
+//             rs2: tmp,
+//         });
+//         //compute gt
+//         insts.push(Inst::CondBr {
+//             taken: BranchTarget::offset(Instructions::instruction_size()),
+//             not_taken: BranchTarget::zero(),
+//             kind: CondBrKind {
+//                 /*
+//                  */
+//                 kind: IntCC::NotEqual,
+//                 rs1: left_tmp,
+//                 rs2: zero_reg(),
+//             },
+//         });
+//         insts.push(Inst::AluRRImm12 {
+//             alu_op: AluOPRRI::ORI,
+//             rd: tmp,
+//             rs: tmp,
+//             imm12: Imm12::from_bits(FloatCCBit::GT.bit() as i16),
+//         });
+//     }
+
+//     jump_to_final_compare = insts.len();
+//     insts.push(Inst::Jump {
+//         dest: BranchTarget::patch(),
+//     });
+// };
+// let patch = |i: &mut Inst| match &mut i {
+//     &mut Inst::CondBr {
+//         ref mut not_taken, ..
+//     } => match not_taken {
+//         &mut BranchTarget::ResolvedOffset(ref mut off) => {
+//             *off = (Inst::instruction_size() * Inst::instruction_size()) as i32;
+//         }
+//         _ => unreachable!(),
+//     },
+//     _ => unreachable!(),
+// };
+// // patch
+// for i in unordered_b {
+//     // let length = insts.len();
+//     // match &mut insns[i] {
+//     //     &mut Inst::CondBr {
+//     //         ref mut not_taken, ..
+//     //     } => match not_taken {
+//     //         &mut BranchTarget::ResolvedOffset(ref mut off) => {
+//     //             *off = (Inst::instruction_size() * Inst::instruction_size()) as i32;
+//     //         }
+//     //         _ => unreachable!(),
+//     //     },
+//     //     _ => unreachable!(),
+//     // }
+//     patch(&mut insts[i]);
+// }
+// // make tmp as UN
+// insts.push(&Inst::load_constant_imm12(
+//     tmp,
+//     Imm12::from_bits(FloatCCBit::UN),
+// ));
+
+// // path
+// patch(&mut insts[jump_to_final_compare]);
+
+// insts.push(Inst::AluRRImm12 {
+//     alu_op: AluOPRRI::ORI,
+//     rd: tmp,
+//     rs: tmp.to_reg(),
+//     imm12: Imm12::from_bits(FloatCCBit::floatcc_2_mask_bits(ctx)),
+// });
+
+// insts.push(Inst::CondBr {
+//     taken: BranchTarget::offset(Inst::instruction_size() as u32),
+//     not_taken: BranchTarget::zero(),
+//     kind: CondBrKind {
+//         kind: IntCC::NotEqual, // means match , conditon is true
+//         rs1: tmp,
+//         rs2: zero_reg(),
+//     },
+// });
+
+// insts.push(Inst::load_constant_imm12(result_reg, Imm12::from_bits(0)));
+
+// insts.push(Inst::load_constant_imm12(result_reg, Imm12::from_bits(1)));
+// for i in insts {
+//     ctx.emit(i);
+// }

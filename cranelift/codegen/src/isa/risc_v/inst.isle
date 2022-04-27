@@ -10,9 +10,9 @@
       (rd WritableReg)
       (imm Imm20))
 
-    ;; (Auipc
-    ;;  (rd WritableReg)
-    ;;  (imm Imm20))
+     (Auipc
+      (rd WritableReg)
+      (imm Imm20))
     
 
     ;; An ALU operation with one register sources and a register destination.
@@ -95,7 +95,6 @@
      (CondBr
       (taken BranchTarget)
       (not_taken BranchTarget)
-      (ty Type)
       (kind CondBrKind))
 
     ;; Load an inline symbol reference.
@@ -134,8 +133,31 @@
     (Udf
       (trap_code TrapCode))
     
-    ;; 
+    ;; float flags operation
+    (FloatFlagOperation
+      (op FloatFlagOp)
+      (rs OptionReg)
+      (imm OptionImm12)
+      (rd   WritableReg))
 
+
+    (Jalr
+      ;;Plain unconditional jumps (assembler pseudo-op J) are encoded as a JAL with rd=x0.
+      (rd WritableReg)
+      (base Reg)
+      (offset Imm12))
+
+))
+
+(type FloatFlagOp (enum 
+  (FRCSR)
+  (FRRM)
+  (FRFLAGS)
+  (FSRMI)
+  (FSFLAGSI)
+  (FSCSR)
+  (FSRM)
+  (FSFLAGS)
 ))
 
 (type AluOPRRRR(enum 
@@ -163,7 +185,7 @@
   ;; 4 rs1 is +0.
   (PosZero)
   ;; 5 rs1 is a positive subnormal number.
-  (PosSunNormal)
+  (PosSubNormal)
   ;; 6 rs1 is a positive normal number.
   (PosNormal)
   ;; 7 rs1 is +∞.
@@ -184,6 +206,8 @@
   (FCVT_S_W)
   (FCVT_S_WU)
   (FMV_W_X)
+
+
 
   ;; RV64F Standard Extension (in addition to RV32F)
   (FCVT_L_S)
@@ -209,6 +233,7 @@
   (FCVT_WU_D)
   (FCVT_D_W)
   (FCVT_D_WU)
+  
 ))
 
 (type LoadOP (enum  
@@ -364,7 +389,8 @@
 (type BoxCallIndInfo (primitive BoxCallIndInfo))
 (type CondBrKind (primitive CondBrKind))
 (type AMode (primitive AMode))
-
+(type OptionReg (primitive OptionReg))
+(type OptionImm12 (primitive OptionImm12))
 
 (type Imm12 (primitive Imm12))
 (type UImm5 (primitive UImm5))

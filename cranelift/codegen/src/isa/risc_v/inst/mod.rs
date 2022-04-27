@@ -2,7 +2,6 @@
 
 // Some variants are not constructed, but we still want them as options in the future.
 #![allow(dead_code)]
-#![allow(non_camel_case_types)]
 
 use crate::binemit::{Addend, CodeOffset, Reloc};
 pub use crate::ir::condcodes::IntCC;
@@ -47,13 +46,16 @@ mod emit_tests;
 
 use std::fmt::{Display, Formatter};
 
+pub type OptionReg = Option<Reg>;
+pub type OptionImm12 = Option<Imm12>;
+
 //=============================================================================
 // Instructions (top level): definition
 
 use crate::isa::risc_v::lower::isle::generated_code::MInst;
 pub use crate::isa::risc_v::lower::isle::generated_code::{
-    AluOPRR, AluOPRRI, AluOPRRR, AluOPRRRR, FClassResult, FloatException, FloatRoundingMode,
-    LoadOP, MInst as Inst, StoreOP, OPFPFMT,
+    AluOPRR, AluOPRRI, AluOPRRR, AluOPRRRR, FClassResult, FloatException, FloatFlagOp,
+    FloatRoundingMode, LoadOP, MInst as Inst, StoreOP, OPFPFMT,
 };
 
 type BoxCallInfo = Box<CallInfo>;
@@ -97,11 +99,26 @@ pub enum BranchTarget {
 
 impl BranchTarget {
     /// Return the target's label, if it is a label-based target.
-    pub fn as_label(self) -> Option<MachLabel> {
+    pub(crate) fn as_label(self) -> Option<MachLabel> {
         match self {
             BranchTarget::Label(l) => Some(l),
             _ => None,
         }
+    }
+
+    pub(crate) fn zero() -> Self {
+        Self::ResolvedOffset(0)
+    }
+
+    /*
+        this location is waiting for patch when further instruction is emited.
+    */
+    pub(crate) fn patch() -> Self {
+        Self::ResolvedOffset(0)
+    }
+
+    pub(crate) fn offset(off: i32) -> Self {
+        Self::ResolvedOffset(off)
     }
 }
 
@@ -109,21 +126,20 @@ impl Display for BranchTarget {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             BranchTarget::Label(l) => write!(f, "{}", l.to_string()),
-            BranchTarget::ResolvedOffset(off) => todo!(),
+            BranchTarget::ResolvedOffset(off) => write!(f, "{:+}", off),
         }
     }
 }
-pub enum LoadConstantU64NeedRegisterCount {
-    One,
-    Two,
-}
+
 impl Inst {
-    pub fn in_i32_range(value: u64) -> bool {
+    pub(crate) fn in_i32_range(value: u64) -> bool {
         let value = value as i64;
         value >= (i32::MIN as i64) && value <= (i32::MAX as i64)
     }
-
-    pub fn load_constant_imm12(rd: Writable<Reg>, imm: Imm12) -> Inst {
+    pub(crate) fn instruction_size() -> usize {
+        4
+    }
+    pub(crate) fn load_constant_imm12(rd: Writable<Reg>, imm: Imm12) -> Inst {
         Inst::AluRRImm12 {
             alu_op: AluOPRRI::ORI,
             rd: rd,
@@ -132,7 +148,130 @@ impl Inst {
         }
     }
 
-    pub fn load_constant_u32(rd: Writable<Reg>, value: u32) -> SmallInstVec<Inst> {
+    /*
+        rd == 1 is unordered
+        rd == 0 is ordered
+    */
+    pub(crate) fn generate_float_unordered(
+        rd: Writable<Reg>,
+        ty: Type,
+        left: Reg,
+        right: Reg,
+    ) -> SmallInstVec<Inst> {
+        let mut insts = SmallVec::new();
+        let mut patch_true = vec![];
+        let class_op = if ty == F32 {
+            AluOPRR::FCLASS_S
+        } else {
+            AluOPRR::FCLASS_D
+        };
+        // left
+        insts.push(Inst::AluRR {
+            alu_op: class_op,
+            rd,
+            rs: left,
+        });
+        insts.push(Inst::AluRRImm12 {
+            alu_op: AluOPRRI::ORI,
+            rd,
+            rs: rd.to_reg(),
+            imm12: Imm12::from_bits(FClassResult::is_nan_bits() as i16),
+        });
+        patch_true.push(insts.len());
+        insts.push(Inst::CondBr {
+            taken: BranchTarget::patch(),
+            not_taken: BranchTarget::zero(),
+            kind: CondBrKind {
+                kind: IntCC::NotEqual,
+                rs1: rd.to_reg(),
+                rs2: zero_reg(),
+            },
+        });
+        //right
+        let tmp = writable_spilltmp_reg();
+        insts.push(Inst::AluRR {
+            alu_op: class_op,
+            rd: tmp,
+            rs: right,
+        });
+        insts.push(Inst::AluRRImm12 {
+            alu_op: AluOPRRI::ORI,
+            rd: tmp,
+            rs: tmp.to_reg(),
+            imm12: Imm12::from_bits(FClassResult::is_nan_bits() as i16),
+        });
+        patch_true.push(insts.len());
+        insts.push(Inst::CondBr {
+            taken: BranchTarget::patch(),
+            not_taken: BranchTarget::zero(),
+            kind: CondBrKind {
+                kind: IntCC::NotEqual,
+                rs1: tmp.to_reg(),
+                rs2: zero_reg(),
+            },
+        });
+        //left and right is not nan
+        // but there are maybe bother PosInfinite or NegInfinite
+        insts.push(Inst::AluRRR {
+            alu_op: AluOPRRR::AND,
+            rd: rd,
+            rs1: rd.to_reg(),
+            rs2: tmp.to_reg(),
+        });
+        insts.push(Inst::AluRRImm12 {
+            alu_op: AluOPRRI::ANDI,
+            rd: rd,
+            rs: rd.to_reg(),
+            imm12: Imm12::from_bits(FClassResult::is_infinite_bits() as i16),
+        });
+        insts.push(Inst::CondBr {
+            taken: BranchTarget::patch(),
+            not_taken: BranchTarget::zero(),
+            kind: CondBrKind {
+                kind: IntCC::Equal,
+                rs1: tmp.to_reg(),
+                rs2: zero_reg(),
+            },
+        });
+
+        // here is false
+        insts.push(Inst::load_constant_imm12(rd, Imm12::form_bool(false)));
+        // jump set true
+        insts.push(Inst::Jump {
+            dest: BranchTarget::offset(Inst::instruction_size() as i32),
+        });
+
+        Self::patch_taken_path_list(&mut insts, &patch_true);
+        // here is true
+        insts.push(Inst::load_constant_imm12(rd, Imm12::form_bool(true)));
+        insts
+    }
+
+    /*
+        notice always patch the taken path
+    */
+    pub(crate) fn patch_taken_path_list(insts: &mut SmallInstVec<Inst>, patches: &'_ Vec<usize>) {
+        for index in patches {
+            let index = *index;
+
+            match &mut insts[index] {
+                &mut Inst::CondBr { ref mut taken, .. } => match taken {
+                    &mut BranchTarget::ResolvedOffset(ref mut off) => {
+                        *off = (Inst::instruction_size() * Inst::instruction_size()) as i32;
+                    }
+                    _ => unreachable!(),
+                },
+                &mut Inst::Jump { ref mut dest } => match dest {
+                    &mut BranchTarget::ResolvedOffset(ref mut off) => {
+                        *off = (Inst::instruction_size() * Inst::instruction_size()) as i32;
+                    }
+                    _ => unreachable!(),
+                },
+                _ => unreachable!(),
+            }
+        }
+    }
+    pub(crate) fn load_constant_u32(rd: Writable<Reg>, value: u32) -> SmallInstVec<Inst> {
         let mut insts = SmallVec::new();
         if let Some(imm) = Imm12::maybe_from_u64(value as u64) {
             insts.push(Inst::load_constant_imm12(rd, imm));
@@ -161,6 +300,20 @@ impl Inst {
                 imm12: Imm12::from_bits(value as i16),
             });
         }
+        insts
+    }
+
+    pub(crate) fn construct_auipc_and_jalr(offset: i32) -> SmallInstVec<Inst> {
+        let mut insts = SmallInstVec::new();
+        insts.push(Inst::Auipc {
+            rd: writable_spilltmp_reg(),
+            imm: Imm20::from_bits(offset << 12),
+        });
+        insts.push(Inst::Jalr {
+            rd: writable_zero_reg(),
+            base: spilltmp_reg(),
+            offset: Imm12::from_bits((offset & 0xfff) as i16),
+        });
         insts
     }
 
@@ -281,6 +434,7 @@ fn riscv64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
         &Inst::Nop4 => {
             //todo do nothing ok
         }
+        &Inst::Auipc { rd, .. } => collector.add_def(rd),
         &Inst::Lui { rd, .. } => collector.add_def(rd),
         &Inst::AluRRR { rd, rs1, rs2, .. } => {
             collector.add_def(rd);
@@ -360,6 +514,16 @@ fn riscv64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             collector.add_def(rd);
             collector.add_uses(&[rs1, rs2, rs3]);
         }
+        &Inst::FloatFlagOperation { rs, rd, .. } => {
+            collector.add_def(rd);
+            if let Some(r) = rs {
+                collector.add_use(r);
+            }
+        }
+        &Inst::Jalr { rd, base, .. } => {
+            collector.add_def(rd);
+            collector.add_use(base);
+        }
     }
 }
 
@@ -375,7 +539,15 @@ pub fn riscv64_map_regs<RM: RegMapper>(inst: &mut Inst, mapper: &RM) {
             //todo do nothing ok
         }
         &mut Inst::Lui { ref mut rd, .. } => mapper.map_def(rd),
-        // &mut Inst::Auipc { ref mut rd, .. } => mapper.map_def(rd),
+        &mut Inst::Auipc { ref mut rd, .. } => mapper.map_def(rd),
+        &mut Inst::Jalr {
+            ref mut rd,
+            ref mut base,
+            ..
+        } => {
+            mapper.map_def(rd);
+            mapper.map_use(base);
+        }
         &mut Inst::AluRRR {
             ref mut rd,
             ref mut rs1,
@@ -499,6 +671,16 @@ pub fn riscv64_map_regs<RM: RegMapper>(inst: &mut Inst, mapper: &RM) {
             mapper.map_use(rs2);
             mapper.map_use(rs3);
         }
+        &mut Inst::FloatFlagOperation {
+            ref mut rs,
+            ref mut rd,
+            ..
+        } => {
+            mapper.map_def(rd);
+            if let Some(r) = rs {
+                mapper.map_use(r);
+            }
+        }
     }
 }
 
@@ -580,7 +762,6 @@ impl MachInst for Inst {
         if (ty.bits() <= 64 && (ty.is_bool() || ty.is_int())) || ty == R32 || ty == R64 {
             return Inst::load_constant_u64(to_regs.only_reg().unwrap(), value as u64);
         };
-
         match ty {
             F32 => Inst::load_fp_constant32(
                 to_regs.only_reg().unwrap(),
@@ -675,14 +856,6 @@ impl Inst {
     }
 }
 
-// fn register_name(mb_rru: Option<&RealRegUniverse>, rd: Reg) -> String {
-//     if let Some(x) = mb_rru {
-//         rd.show_rru(x)
-//     } else {
-//         format!("{:?}", rd)
-//     }
-// }
-
 impl Inst {
     fn print_with_state(&self, mb_rru: Option<&RealRegUniverse>, state: &mut EmitState) -> String {
         let register_name = |rd: Reg| {
@@ -698,6 +871,18 @@ impl Inst {
             }
             &Inst::Nop4 => {
                 format!(";;fixed 4-size nop")
+            }
+            &Inst::Auipc { rd, imm } => {
+                format!("{} {},{}", "auipc", register_name(rd.to_reg()), imm.bits)
+            }
+            &Inst::Jalr { rd, base, offset } => {
+                format!(
+                    "{} {},{},{}",
+                    "jalr",
+                    register_name(rd.to_reg()),
+                    register_name(base),
+                    offset.bits
+                )
             }
             &Inst::Lui { rd, ref imm } => {
                 format!("{} {},{}", "lui", register_name(rd.to_reg()), imm.bits)
@@ -836,6 +1021,25 @@ impl Inst {
             &MInst::Udf { .. } => todo!(),
             &MInst::EBreak {} => todo!(),
             &MInst::ECall {} => todo!(),
+            &MInst::FloatFlagOperation { op, rs, rd, imm } => {
+                if op.use_imm12() {
+                    format!(
+                        "{} {},{}",
+                        op.op_name(),
+                        register_name(rd.to_reg()),
+                        imm.unwrap().as_i16()
+                    )
+                } else if let Some(r) = rs {
+                    format!(
+                        "{} {},{}",
+                        op.op_name(),
+                        register_name(rd.to_reg()),
+                        register_name(r),
+                    )
+                } else {
+                    format!("{} {}", op.op_name(), register_name(rd.to_reg()))
+                }
+            }
         }
     }
 }
@@ -914,6 +1118,43 @@ impl MachInstLabelUse for LabelUse {
             "offset must not exceed max range."
         );
         // safe to convert long range to short range.
+        self.patch_raw_offset(buffer, offset as i32);
+    }
+
+    /// Is a veneer supported for this label reference type?
+    fn supports_veneer(self) -> bool {
+        false
+    }
+
+    /// How large is the veneer, if supported?
+    fn veneer_size(self) -> CodeOffset {
+        0
+    }
+
+    /// Generate a veneer into the buffer, given that this veneer is at `veneer_offset`, and return
+    /// an offset and label-use for the veneer's use of the original label.
+    fn generate_veneer(
+        self,
+        buffer: &mut [u8],
+        veneer_offset: CodeOffset,
+    ) -> (CodeOffset, LabelUse) {
+        unimplemented!("don't support");
+    }
+
+    fn from_reloc(reloc: Reloc, addend: Addend) -> Option<LabelUse> {
+        unimplemented!("don't support");
+    }
+}
+
+impl LabelUse {
+    fn offset_in_range(self, offset: i32) -> bool {
+        let offset = offset as i64;
+        let min = -(self.max_neg_range() as i64);
+        let max = self.max_pos_range() as i64;
+        offset >= min && offset <= max
+    }
+    fn patch_raw_offset(self, buffer: &mut [u8], offset: i32) {
+        // safe to convert long range to short range.
         let offset = offset as u32;
         match self {
             LabelUse::Jal20 => {
@@ -968,29 +1209,5 @@ impl MachInstLabelUse for LabelUse {
                 }
             }
         }
-    }
-
-    /// Is a veneer supported for this label reference type?
-    fn supports_veneer(self) -> bool {
-        false
-    }
-
-    /// How large is the veneer, if supported?
-    fn veneer_size(self) -> CodeOffset {
-        0
-    }
-
-    /// Generate a veneer into the buffer, given that this veneer is at `veneer_offset`, and return
-    /// an offset and label-use for the veneer's use of the original label.
-    fn generate_veneer(
-        self,
-        buffer: &mut [u8],
-        veneer_offset: CodeOffset,
-    ) -> (CodeOffset, LabelUse) {
-        unimplemented!("don't support");
-    }
-
-    fn from_reloc(reloc: Reloc, addend: Addend) -> Option<LabelUse> {
-        unimplemented!("don't support");
     }
 }
