@@ -39,9 +39,9 @@ mod emit_tests;
 // Instructions (top level): definition
 
 pub use crate::isa::aarch64::lower::isle::generated_code::{
-    ALUOp, ALUOp3, AtomicRMWOp, BitOp, FPUOp1, FPUOp2, FPUOp3, FpuRoundMode, FpuToIntOp,
-    IntToFpuOp, MInst as Inst, MoveWideOp, VecALUOp, VecExtendOp, VecLanesOp, VecMisc2, VecPairOp,
-    VecRRLongOp, VecRRNarrowOp, VecRRPairLongOp, VecRRRLongOp, VecShiftImmOp,
+    ALUOp, ALUOp3, AtomicRMWLoopOp, AtomicRMWOp, BitOp, FPUOp1, FPUOp2, FPUOp3, FpuRoundMode,
+    FpuToIntOp, IntToFpuOp, MInst as Inst, MoveWideOp, VecALUOp, VecExtendOp, VecLanesOp, VecMisc2,
+    VecPairOp, VecRRLongOp, VecRRNarrowOp, VecRRPairLongOp, VecRRRLongOp, VecShiftImmOp,
 };
 
 /// A floating-point unit (FPU) operation with two args, a register and an immediate.
@@ -676,12 +676,14 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
         &Inst::CCmpImm { rn, .. } => {
             collector.reg_use(rn);
         }
-        &Inst::AtomicRMWLoop { .. } => {
+        &Inst::AtomicRMWLoop { op, .. } => {
             collector.reg_use(xreg(25));
             collector.reg_use(xreg(26));
             collector.reg_def(writable_xreg(24));
             collector.reg_def(writable_xreg(27));
-            collector.reg_def(writable_xreg(28));
+            if op != AtomicRMWLoopOp::Xchg {
+                collector.reg_def(writable_xreg(28));
+            }
         }
         &Inst::AtomicRMW { rs, rt, rn, .. } => {
             collector.reg_use(rs);
@@ -1538,6 +1540,7 @@ impl Inst {
                     AtomicRMWOp::Umax => "ldumaxal",
                     AtomicRMWOp::Smin => "ldsminal",
                     AtomicRMWOp::Umin => "lduminal",
+                    AtomicRMWOp::Swp => "swpal",
                 };
 
                 let size = OperandSize::from_ty(ty);
@@ -1569,28 +1572,39 @@ impl Inst {
                 loop_str.push_str(&format!("ldaxr{} {}, [{}]; ", ty_suffix, r_tmp, r_addr));
 
                 let op_str = match op {
-                    inst_common::AtomicRmwOp::Add => "add",
-                    inst_common::AtomicRmwOp::Sub => "sub",
-                    inst_common::AtomicRmwOp::Xor => "eor",
-                    inst_common::AtomicRmwOp::Or => "orr",
-                    inst_common::AtomicRmwOp::And => "and",
+                    AtomicRMWLoopOp::Add => "add",
+                    AtomicRMWLoopOp::Sub => "sub",
+                    AtomicRMWLoopOp::Eor => "eor",
+                    AtomicRMWLoopOp::Orr => "orr",
+                    AtomicRMWLoopOp::And => "and",
                     _ => "",
                 };
 
                 if op_str.is_empty() {
                     match op {
-                        inst_common::AtomicRmwOp::Xchg => r_dst = r_arg2,
-                        inst_common::AtomicRmwOp::Nand => {
+                        AtomicRMWLoopOp::Xchg => r_dst = r_arg2,
+                        AtomicRMWLoopOp::Nand => {
                             loop_str.push_str(&format!("and {}, {}, {}; ", r_dst, r_tmp, r_arg2));
                             loop_str.push_str(&format!("mvn {}, {}; ", r_dst, r_dst));
                         }
                         _ => {
-                            loop_str.push_str(&format!("cmp {}, {}; ", r_tmp, r_arg2));
+                            if (op == AtomicRMWLoopOp::Smin || op == AtomicRMWLoopOp::Smax)
+                                && (ty == I8 || ty == I16)
+                            {
+                                loop_str
+                                    .push_str(&format!("sxt{} {}, {}; ", ty_suffix, r_tmp, r_tmp));
+                                loop_str.push_str(&format!(
+                                    "cmp {}, {}, sxt{}; ",
+                                    r_tmp, r_arg2, ty_suffix
+                                ));
+                            } else {
+                                loop_str.push_str(&format!("cmp {}, {}; ", r_tmp, r_arg2));
+                            }
                             let cond = match op {
-                                inst_common::AtomicRmwOp::Smin => "lt",
-                                inst_common::AtomicRmwOp::Smax => "gt",
-                                inst_common::AtomicRmwOp::Umin => "lo",
-                                inst_common::AtomicRmwOp::Umax => "hi",
+                                AtomicRMWLoopOp::Smin => "lt",
+                                AtomicRMWLoopOp::Smax => "gt",
+                                AtomicRMWLoopOp::Umin => "lo",
+                                AtomicRMWLoopOp::Umax => "hi",
                                 _ => unreachable!(),
                             };
                             loop_str.push_str(&format!(

@@ -5,8 +5,8 @@ pub mod generated_code;
 
 // Types that the generated ISLE code uses via `use super::*`.
 use super::{
-    writable_zero_reg, zero_reg, AMode, ASIMDFPModImm, ASIMDMovModImm, AtomicRmwOp, BranchTarget,
-    CallIndInfo, CallInfo, Cond, CondBrKind, ExtendOp, FPUOpRI, FloatCC, Imm12, ImmLogic, ImmShift,
+    writable_zero_reg, zero_reg, AMode, ASIMDFPModImm, ASIMDMovModImm, BranchTarget, CallIndInfo,
+    CallInfo, Cond, CondBrKind, ExtendOp, FPUOpRI, FloatCC, Imm12, ImmLogic, ImmShift,
     Inst as MInst, IntCC, JTSequenceInfo, MachLabel, MoveWideConst, MoveWideOp, NarrowValueMode,
     Opcode, OperandSize, PairAMode, Reg, ScalarSize, ShiftOpAndAmt, UImm5, VecMisc2, VectorSize,
     NZCV,
@@ -17,10 +17,11 @@ use crate::settings::Flags;
 use crate::{
     binemit::CodeOffset,
     ir::{
-        immediates::*, types::*, ExternalName, Inst, InstructionData, MemFlags, TrapCode, Value,
-        ValueList,
+        immediates::*, types::*, AtomicRmwOp, ExternalName, Inst, InstructionData, MemFlags,
+        TrapCode, Value, ValueList,
     },
     isa::aarch64::inst::args::{ShiftOp, ShiftOpShiftImm},
+    isa::aarch64::lower::{is_valid_atomic_transaction_ty, writable_xreg, xreg},
     isa::unwind::UnwindInst,
     machinst::{ty_bits, InsnOutput, LowerCtx},
 };
@@ -65,6 +66,14 @@ where
     C: LowerCtx<I = MInst>,
 {
     isle_prelude_methods!();
+
+    fn use_lse(&mut self, _: Inst) -> Option<()> {
+        if self.isa_flags.use_lse() {
+            Some(())
+        } else {
+            None
+        }
+    }
 
     fn move_wide_const_from_u64(&mut self, n: u64) -> Option<MoveWideConst> {
         MoveWideConst::maybe_from_u64(n)
@@ -111,6 +120,14 @@ where
             I8 | I16 | I32 | I64 | R64 => Some(ty),
             ty if ty.is_bool() => Some(ty),
             _ => None,
+        }
+    }
+
+    fn valid_atomic_transaction(&mut self, ty: Type) -> Option<Type> {
+        if is_valid_atomic_transaction_ty(ty) {
+            Some(ty)
+        } else {
+            None
         }
     }
 
@@ -192,6 +209,14 @@ where
 
     fn zero_reg(&mut self) -> Reg {
         zero_reg()
+    }
+
+    fn xreg(&mut self, index: u8) -> Reg {
+        xreg(index)
+    }
+
+    fn writable_xreg(&mut self, index: u8) -> WritableReg {
+        writable_xreg(index)
     }
 
     fn extended_value_from_value(&mut self, val: Value) -> Option<ExtendedValue> {

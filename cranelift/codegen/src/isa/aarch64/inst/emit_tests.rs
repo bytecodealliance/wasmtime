@@ -6207,8 +6207,16 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::AtomicRMWLoop {
+            ty: I8,
+            op: AtomicRMWLoopOp::Sub,
+        },
+        "3BFF5F087C031A4B3CFF1808B8FFFFB5",
+        "1: ldaxrb w27, [x25]; sub w28, w27, w26; stlxrb w24, w28, [x25]; cbnz w24, 1b",
+    ));
+    insns.push((
+        Inst::AtomicRMWLoop {
             ty: I16,
-            op: inst_common::AtomicRmwOp::Xor,
+            op: AtomicRMWLoopOp::Eor,
         },
         "3BFF5F487C031A4A3CFF1848B8FFFFB5",
         "1: ldaxrh w27, [x25]; eor w28, w27, w26; stlxrh w24, w28, [x25]; cbnz w24, 1b",
@@ -6216,7 +6224,7 @@ fn test_aarch64_binemit() {
     insns.push((
         Inst::AtomicRMWLoop {
             ty: I8,
-            op: inst_common::AtomicRmwOp::Add,
+            op: AtomicRMWLoopOp::Add,
         },
         "3BFF5F087C031A0B3CFF1808B8FFFFB5",
         "1: ldaxrb w27, [x25]; add w28, w27, w26; stlxrb w24, w28, [x25]; cbnz w24, 1b",
@@ -6224,7 +6232,7 @@ fn test_aarch64_binemit() {
     insns.push((
         Inst::AtomicRMWLoop {
             ty: I32,
-            op: inst_common::AtomicRmwOp::Or,
+            op: AtomicRMWLoopOp::Orr,
         },
         "3BFF5F887C031A2A3CFF1888B8FFFFB5",
         "1: ldaxr w27, [x25]; orr w28, w27, w26; stlxr w24, w28, [x25]; cbnz w24, 1b",
@@ -6232,7 +6240,7 @@ fn test_aarch64_binemit() {
     insns.push((
         Inst::AtomicRMWLoop {
             ty: I64,
-            op: inst_common::AtomicRmwOp::And,
+            op: AtomicRMWLoopOp::And,
         },
         "3BFF5FC87C031A8A3CFF18C8B8FFFFB5",
         "1: ldaxr x27, [x25]; and x28, x27, x26; stlxr w24, x28, [x25]; cbnz w24, 1b",
@@ -6240,7 +6248,7 @@ fn test_aarch64_binemit() {
     insns.push((
         Inst::AtomicRMWLoop {
             ty: I8,
-            op: inst_common::AtomicRmwOp::Xchg,
+            op: AtomicRMWLoopOp::Xchg,
         },
         "3BFF5F083AFF1808D8FFFFB5",
         "1: ldaxrb w27, [x25]; stlxrb w24, w26, [x25]; cbnz w24, 1b",
@@ -6248,15 +6256,23 @@ fn test_aarch64_binemit() {
     insns.push((
         Inst::AtomicRMWLoop {
             ty: I16,
-            op: inst_common::AtomicRmwOp::Nand,
+            op: AtomicRMWLoopOp::Nand,
         },
         "3BFF5F487C031A0AFC033C2A3CFF184898FFFFB5",
         "1: ldaxrh w27, [x25]; and w28, w27, w26; mvn w28, w28; stlxrh w24, w28, [x25]; cbnz w24, 1b",
     ));
     insns.push((
         Inst::AtomicRMWLoop {
+            ty: I16,
+            op: AtomicRMWLoopOp::Smin,
+        },
+        "3BFF5F487B3F00137FA33A6B7CB39A9A3CFF184878FFFFB5",
+        "1: ldaxrh w27, [x25]; sxth w27, w27; cmp w27, w26, sxth; csel w28, w27, w26, lt; stlxrh w24, w28, [x25]; cbnz w24, 1b",
+    ));
+    insns.push((
+        Inst::AtomicRMWLoop {
             ty: I32,
-            op: inst_common::AtomicRmwOp::Smin,
+            op: AtomicRMWLoopOp::Smin,
         },
         "3BFF5F887F031A6B7CB39A9A3CFF188898FFFFB5",
         "1: ldaxr w27, [x25]; cmp w27, w26; csel w28, w27, w26, lt; stlxr w24, w28, [x25]; cbnz w24, 1b",
@@ -6264,7 +6280,7 @@ fn test_aarch64_binemit() {
     insns.push((
         Inst::AtomicRMWLoop {
             ty: I64,
-            op: inst_common::AtomicRmwOp::Smax,
+            op: AtomicRMWLoopOp::Smax,
         },
         "3BFF5FC87F031AEB7CC39A9A3CFF18C898FFFFB5",
         "1: ldaxr x27, [x25]; cmp x27, x26; csel x28, x27, x26, gt; stlxr w24, x28, [x25]; cbnz w24, 1b",
@@ -6272,7 +6288,15 @@ fn test_aarch64_binemit() {
     insns.push((
         Inst::AtomicRMWLoop {
             ty: I8,
-            op: inst_common::AtomicRmwOp::Umin,
+            op: AtomicRMWLoopOp::Smax,
+        },
+        "3BFF5F087B1F00137F833A6B7CC39A9A3CFF180878FFFFB5",
+        "1: ldaxrb w27, [x25]; sxtb w27, w27; cmp w27, w26, sxtb; csel w28, w27, w26, gt; stlxrb w24, w28, [x25]; cbnz w24, 1b",
+    ));
+    insns.push((
+        Inst::AtomicRMWLoop {
+            ty: I8,
+            op: AtomicRMWLoopOp::Umin,
         },
         "3BFF5F087F031A6B7C339A9A3CFF180898FFFFB5",
         "1: ldaxrb w27, [x25]; cmp w27, w26; csel w28, w27, w26, lo; stlxrb w24, w28, [x25]; cbnz w24, 1b",
@@ -6280,7 +6304,7 @@ fn test_aarch64_binemit() {
     insns.push((
         Inst::AtomicRMWLoop {
             ty: I16,
-            op: inst_common::AtomicRmwOp::Umax,
+            op: AtomicRMWLoopOp::Umax,
         },
         "3BFF5F487F031A6B7C839A9A3CFF184898FFFFB5",
         "1: ldaxrh w27, [x25]; cmp w27, w26; csel w28, w27, w26, hi; stlxrh w24, w28, [x25]; cbnz w24, 1b",
@@ -6637,6 +6661,50 @@ fn test_aarch64_binemit() {
         },
         "7A73F9F8",
         "lduminal x25, x26, [x27]",
+    ));
+    insns.push((
+        Inst::AtomicRMW {
+            ty: I8,
+            op: AtomicRMWOp::Swp,
+            rs: xreg(28),
+            rt: writable_xreg(29),
+            rn: xreg(30),
+        },
+        "DD83FC38",
+        "swpalb w28, fp, [lr]",
+    ));
+    insns.push((
+        Inst::AtomicRMW {
+            ty: I16,
+            op: AtomicRMWOp::Swp,
+            rs: xreg(0),
+            rt: writable_xreg(1),
+            rn: xreg(2),
+        },
+        "4180E078",
+        "swpalh w0, w1, [x2]",
+    ));
+    insns.push((
+        Inst::AtomicRMW {
+            ty: I32,
+            op: AtomicRMWOp::Swp,
+            rs: xreg(3),
+            rt: writable_xreg(4),
+            rn: xreg(5),
+        },
+        "A480E3B8",
+        "swpal w3, w4, [x5]",
+    ));
+    insns.push((
+        Inst::AtomicRMW {
+            ty: I64,
+            op: AtomicRMWOp::Swp,
+            rs: xreg(6),
+            rt: writable_xreg(7),
+            rn: xreg(8),
+        },
+        "0781E6F8",
+        "swpal x6, x7, [x8]",
     ));
 
     insns.push((

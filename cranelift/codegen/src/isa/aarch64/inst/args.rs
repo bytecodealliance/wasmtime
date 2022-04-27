@@ -583,6 +583,13 @@ impl OperandSize {
         }
     }
 
+    pub fn bits(&self) -> u8 {
+        match self {
+            OperandSize::Size32 => 32,
+            OperandSize::Size64 => 64,
+        }
+    }
+
     /// Convert from an integer type into the smallest size that fits.
     pub fn from_ty(ty: Type) -> OperandSize {
         debug_assert!(!ty.is_vector());

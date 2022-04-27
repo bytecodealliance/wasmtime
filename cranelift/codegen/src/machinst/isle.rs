@@ -121,6 +121,11 @@ macro_rules! isle_prelude_methods {
         }
 
         #[inline]
+        fn ensure_in_vreg(&mut self, reg: Reg, ty: Type) -> Reg {
+            self.lower_ctx.ensure_in_vreg(reg, ty)
+        }
+
+        #[inline]
         fn value_regs_get(&mut self, regs: ValueRegs, i: usize) -> Reg {
             regs.regs()[i]
         }

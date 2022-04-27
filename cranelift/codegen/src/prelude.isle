@@ -129,6 +129,11 @@
 (decl put_in_regs (Value) ValueRegs)
 (extern constructor put_in_regs put_in_regs)
 
+;; If the given reg is a real register, cause the value in reg to be in a virtual
+;; reg, by copying it into a new virtual reg.
+(decl ensure_in_vreg (Reg Type) Reg)
+(extern constructor ensure_in_vreg ensure_in_vreg)
+
 ;; Get the `n`th register inside a `ValueRegs`.
 (decl value_regs_get (ValueRegs usize) Reg)
 (extern constructor value_regs_get value_regs_get)
