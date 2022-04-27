@@ -41,6 +41,50 @@ block0(v0: i64, v1: i8):
 ;   ldaddalb w1, w4, [x0]
 ;   ret
 
+function %atomic_rmw_sub_i64(i64, i64) {
+block0(v0: i64, v1: i64):
+    v2 = atomic_rmw.i64 sub v0, v1
+    return
+}
+
+; block0:
+;   sub x4, xzr, x1
+;   ldaddal x4, x6, [x0]
+;   ret
+
+function %atomic_rmw_sub_i32(i64, i32) {
+block0(v0: i64, v1: i32):
+    v2 = atomic_rmw.i32 sub v0, v1
+    return
+}
+
+; block0:
+;   sub w4, wzr, w1
+;   ldaddal w4, w6, [x0]
+;   ret
+
+function %atomic_rmw_sub_i16(i64, i16) {
+block0(v0: i64, v1: i16):
+    v2 = atomic_rmw.i16 sub v0, v1
+    return
+}
+
+; block0:
+;   sub w4, wzr, w1
+;   ldaddalh w4, w6, [x0]
+;   ret
+
+function %atomic_rmw_sub_i8(i64, i8) {
+block0(v0: i64, v1: i8):
+    v2 = atomic_rmw.i8 sub v0, v1
+    return
+}
+
+; block0:
+;   sub w4, wzr, w1
+;   ldaddalb w4, w6, [x0]
+;   ret
+
 function %atomic_rmw_and_i64(i64, i64) {
 block0(v0: i64, v1: i64):
     v2 = atomic_rmw.i64 and v0, v1
@@ -48,7 +92,8 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
-;   ldclral x1, x4, [x0]
+;   eon x4, x1, xzr
+;   ldclral x4, x6, [x0]
 ;   ret
 
 function %atomic_rmw_and_i32(i64, i32) {
@@ -58,7 +103,8 @@ block0(v0: i64, v1: i32):
 }
 
 ; block0:
-;   ldclral w1, w4, [x0]
+;   eon w4, w1, wzr
+;   ldclral w4, w6, [x0]
 ;   ret
 
 function %atomic_rmw_and_i16(i64, i16) {
@@ -68,7 +114,8 @@ block0(v0: i64, v1: i16):
 }
 
 ; block0:
-;   ldclralh w1, w4, [x0]
+;   eon w4, w1, wzr
+;   ldclralh w4, w6, [x0]
 ;   ret
 
 function %atomic_rmw_and_i8(i64, i8) {
@@ -78,7 +125,8 @@ block0(v0: i64, v1: i8):
 }
 
 ; block0:
-;   ldclralb w1, w4, [x0]
+;   eon w4, w1, wzr
+;   ldclralb w4, w6, [x0]
 ;   ret
 
 function %atomic_rmw_nand_i64(i64, i64) {

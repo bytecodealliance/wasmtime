@@ -209,10 +209,8 @@
        ;; effect of atomically modifying a memory location in a particular way.  Because we have
        ;; no way to explain to the regalloc about earlyclobber registers, this instruction has
        ;; completely fixed operand registers, and we rely on the RA's coalescing to remove copies
-       ;; in the surrounding code to the extent it can.  The sequence is both preceded and
-       ;; followed by a fence which is at least as comprehensive as that of the `Fence`
-       ;; instruction below.  This instruction is sequentially consistent.  The operand
-       ;; conventions are:
+       ;; in the surrounding code to the extent it can. Load- and store-exclusive instructions,
+       ;; with acquire-release semantics, are used to access memory. The operand conventions are:
        ;;
        ;; x25   (rd) address
        ;; x26   (rd) second operand for `op`
@@ -221,28 +219,10 @@
        ;; x28   (wr) scratch reg; value afterwards has no meaning
        (AtomicRMWLoop
         (ty Type) ;; I8, I16, I32 or I64
-        (op AtomicRmwOp))
-
-       ;; An atomic read-modify-write operation. These instructions require the
-       ;; Large System Extension (LSE) ISA support (FEAT_LSE). The instructions have
-       ;; acquire-release semantics.
-       (AtomicRMW
-        (op AtomicRMWOp)
-        (rs Reg)
-        (rt WritableReg)
-        (rn Reg)
-        (ty Type))
-
-       ;; An atomic compare-and-swap operation. This instruction is sequentially consistent.
-       (AtomicCAS
-        (rs WritableReg)
-        (rt Reg)
-        (rn Reg)
-        (ty Type))
+        (op AtomicRMWLoopOp))
 
        ;; Similar to AtomicRMWLoop, a compare-and-swap operation implemented using a load-linked
-       ;; store-conditional loop.
-       ;; This instruction is sequentially consistent.
+       ;; store-conditional loop, with acquire-release semantics.
        ;; Note that the operand conventions, although very similar to AtomicRMWLoop, are different:
        ;;
        ;; x25   (rd) address
@@ -253,6 +233,23 @@
        (AtomicCASLoop
         (ty Type) ;; I8, I16, I32 or I64
         )
+
+       ;; An atomic read-modify-write operation. These instructions require the
+       ;; Large System Extension (LSE) ISA support (FEAT_LSE). The instructions have
+       ;; acquire-release semantics.
+       (AtomicRMW
+         (op AtomicRMWOp)
+         (rs Reg)
+         (rt WritableReg)
+         (rn Reg)
+         (ty Type))
+
+       ;; An atomic compare-and-swap operation. This instruction is sequentially consistent.
+       (AtomicCAS
+         (rs WritableReg)
+         (rt Reg)
+         (rn Reg)
+         (ty Type))
 
        ;; Read `access_ty` bits from address `rt`, either 8, 16, 32 or 64-bits, and put
        ;; it in `rn`, optionally zero-extending to fill a word or double word result.
@@ -1261,7 +1258,29 @@
     (Smin)
     (Umax)
     (Umin)
+    (Swp)
 ))
+
+;; Atomic read-modify-write operations, with acquire-release semantics,
+;; implemented with a loop.
+(type AtomicRMWLoopOp
+  (enum
+    (Add)
+    (Sub)
+    (And)
+    (Nand)
+    (Eor)
+    (Orr)
+    (Smax)
+    (Smin)
+    (Umax)
+    (Umin)
+    (Xchg)
+))
+
+;; Extractors for target features ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(decl use_lse () Inst)
+(extern extractor use_lse use_lse)
 
 ;; Extractor helpers for various immmediate constants ;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1304,6 +1323,9 @@
 (decl integral_ty (Type) Type)
 (extern extractor integral_ty integral_ty)
 
+(decl valid_atomic_transaction (Type) Type)
+(extern extractor valid_atomic_transaction valid_atomic_transaction)
+
 ;; Helper to go directly from a `Value`, when it's an `iconst`, to an `Imm12`.
 (decl imm12_from_value (Imm12) Value)
 (extractor
@@ -1344,6 +1366,26 @@
 
 (decl writable_zero_reg () WritableReg)
 (extern constructor writable_zero_reg writable_zero_reg)
+
+;; Helpers for getting a particular real register
+(decl xreg (u8) Reg)
+(extern constructor xreg xreg)
+
+(decl writable_xreg (u8) WritableReg)
+(extern constructor writable_xreg writable_xreg)
+
+;; Helper for emitting `MInst.Mov64` instructions.
+(decl mov64_to_real (u8 Reg) Reg)
+(rule (mov64_to_real num src)
+      (let ((dst WritableReg (writable_xreg num))
+            (_ Unit (emit (MInst.Mov (operand_size $I64) dst src))))
+        dst))
+
+(decl mov64_from_real (u8) Reg)
+(rule (mov64_from_real num)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.Mov (operand_size $I64) dst (xreg num)))))
+        dst))
 
 ;; Helper for emitting `MInst.MovZ` instructions.
 (decl movz (MoveWideConst OperandSize) Reg)
@@ -2053,3 +2095,30 @@
 (decl cmeq0 (Reg VectorSize) Reg)
 (rule (cmeq0 rn size)
       (vec_misc (VecMisc2.Cmeq0) rn size))
+
+;; Helper for emitting `MInst.AtomicRMW` instructions.
+(decl lse_atomic_rmw (AtomicRMWOp Value Reg Type) Reg)
+(rule (lse_atomic_rmw op p r_arg2 ty)
+      (let (
+          (r_addr Reg p)
+          (dst WritableReg (temp_writable_reg ty))
+          (_ Unit (emit (MInst.AtomicRMW op r_arg2 dst r_addr ty)))
+        )
+        dst))
+
+;; Helper for emitting `MInst.AtomicRMWLoop` instructions.
+;; - Make sure that both args are in virtual regs, since in effect
+;; we have to do a parallel copy to get them safely to the AtomicRMW input
+;; regs, and that's not guaranteed safe if either is in a real reg.
+;; - Move the args to the preordained AtomicRMW input regs
+;; - And finally, copy the preordained AtomicRMW output reg to its destination.
+(decl atomic_rmw_loop (AtomicRMWLoopOp Value Value Type) Reg)
+(rule (atomic_rmw_loop op p arg2 ty)
+      (let (
+          (v_addr Reg (ensure_in_vreg p $I64))
+          (v_arg2 Reg (ensure_in_vreg arg2 $I64))
+          (r_addr Reg (mov64_to_real 25 v_addr))
+          (r_arg2 Reg (mov64_to_real 26 v_arg2))
+          (_ Unit (emit (MInst.AtomicRMWLoop ty op)))
+        )
+        (mov64_from_real 27)))

@@ -7,6 +7,7 @@ use crate::ir::constant::ConstantData;
 use crate::ir::types::*;
 use crate::ir::{LibCall, MemFlags, TrapCode};
 use crate::isa::aarch64::inst::*;
+use crate::isa::aarch64::lower::is_valid_atomic_transaction_ty;
 use crate::machinst::{ty_bits, Reg, RegClass, Writable};
 use core::convert::TryFrom;
 
@@ -505,7 +506,7 @@ fn enc_dmb_ish() -> u32 {
     0xD5033BBF
 }
 
-fn enc_ldal(ty: Type, op: AtomicRMWOp, rs: Reg, rt: Writable<Reg>, rn: Reg) -> u32 {
+fn enc_acq_rel(ty: Type, op: AtomicRMWOp, rs: Reg, rt: Writable<Reg>, rn: Reg) -> u32 {
     assert!(machreg_to_gpr(rt.to_reg()) != 31);
     let sz = match ty {
         I64 => 0b11,
@@ -513,6 +514,10 @@ fn enc_ldal(ty: Type, op: AtomicRMWOp, rs: Reg, rt: Writable<Reg>, rn: Reg) -> u
         I16 => 0b01,
         I8 => 0b00,
         _ => unreachable!(),
+    };
+    let bit15 = match op {
+        AtomicRMWOp::Swp => 0b1,
+        _ => 0b0,
     };
     let op = match op {
         AtomicRMWOp::Add => 0b000,
@@ -523,10 +528,12 @@ fn enc_ldal(ty: Type, op: AtomicRMWOp, rs: Reg, rt: Writable<Reg>, rn: Reg) -> u
         AtomicRMWOp::Smin => 0b101,
         AtomicRMWOp::Umax => 0b110,
         AtomicRMWOp::Umin => 0b111,
+        AtomicRMWOp::Swp => 0b000,
     };
     0b00_111_000_111_00000_0_000_00_00000_00000
         | (sz << 30)
         | (machreg_to_gpr(rs) << 16)
+        | bit15 << 15
         | (op << 12)
         | (machreg_to_gpr(rn) << 5)
         | machreg_to_gpr(rt.to_reg())
@@ -1371,15 +1378,18 @@ impl MachInstEmit for Inst {
                 sink.put4(enc_ccmp_imm(size, rn, imm, nzcv, cond));
             }
             &Inst::AtomicRMW { ty, op, rs, rt, rn } => {
+                assert!(is_valid_atomic_transaction_ty(ty));
                 let rs = allocs.next(rs);
                 let rt = allocs.next_writable(rt);
                 let rn = allocs.next(rn);
-                sink.put4(enc_ldal(ty, op, rs, rt, rn));
+                sink.put4(enc_acq_rel(ty, op, rs, rt, rn));
             }
             &Inst::AtomicRMWLoop { ty, op } => {
+                assert!(is_valid_atomic_transaction_ty(ty));
                 /* Emit this:
                      again:
                       ldaxr{,b,h}  x/w27, [x25]
+                      // maybe sign extend
                       op          x28, x27, x26 // op is add,sub,and,orr,eor
                       stlxr{,b,h}  w24, x/w28, [x25]
                       cbnz        x24, again
@@ -1414,10 +1424,31 @@ impl MachInstEmit for Inst {
                 }
                 sink.put4(enc_ldaxr(ty, x27wr, x25)); // ldaxr x27, [x25]
                 let size = OperandSize::from_ty(ty);
+                let sign_ext = match op {
+                    AtomicRMWLoopOp::Smin | AtomicRMWLoopOp::Smax => match ty {
+                        I16 => Some((ExtendOp::SXTH, 16)),
+                        I8 => Some((ExtendOp::SXTB, 8)),
+                        _ => None,
+                    },
+                    _ => None,
+                };
+
+                // sxt{b|h} the loaded result if necessary.
+                if sign_ext.is_some() {
+                    let (_, from_bits) = sign_ext.unwrap();
+                    Inst::Extend {
+                        rd: x27wr,
+                        rn: x27,
+                        signed: true,
+                        from_bits,
+                        to_bits: size.bits(),
+                    }
+                    .emit(&[], sink, emit_info, state);
+                }
 
                 match op {
-                    AtomicRmwOp::Xchg => {} // do nothing
-                    AtomicRmwOp::Nand => {
+                    AtomicRMWLoopOp::Xchg => {} // do nothing
+                    AtomicRMWLoopOp::Nand => {
                         // and x28, x27, x26
                         // mvn x28, x28
 
@@ -1439,29 +1470,42 @@ impl MachInstEmit for Inst {
                         }
                         .emit(&[], sink, emit_info, state);
                     }
-                    AtomicRmwOp::Umin
-                    | AtomicRmwOp::Umax
-                    | AtomicRmwOp::Smin
-                    | AtomicRmwOp::Smax => {
-                        // cmp x27, x26
+                    AtomicRMWLoopOp::Umin
+                    | AtomicRMWLoopOp::Umax
+                    | AtomicRMWLoopOp::Smin
+                    | AtomicRMWLoopOp::Smax => {
+                        // cmp x27, x26 {?sxt}
                         // csel.op x28, x27, x26
 
                         let cond = match op {
-                            AtomicRmwOp::Umin => Cond::Lo,
-                            AtomicRmwOp::Umax => Cond::Hi,
-                            AtomicRmwOp::Smin => Cond::Lt,
-                            AtomicRmwOp::Smax => Cond::Gt,
+                            AtomicRMWLoopOp::Umin => Cond::Lo,
+                            AtomicRMWLoopOp::Umax => Cond::Hi,
+                            AtomicRMWLoopOp::Smin => Cond::Lt,
+                            AtomicRMWLoopOp::Smax => Cond::Gt,
                             _ => unreachable!(),
                         };
 
-                        Inst::AluRRR {
-                            alu_op: ALUOp::SubS,
-                            size,
-                            rd: writable_zero_reg(),
-                            rn: x27,
-                            rm: x26,
+                        if sign_ext.is_some() {
+                            let (extendop, _) = sign_ext.unwrap();
+                            Inst::AluRRRExtend {
+                                alu_op: ALUOp::SubS,
+                                size,
+                                rd: writable_zero_reg(),
+                                rn: x27,
+                                rm: x26,
+                                extendop,
+                            }
+                            .emit(&[], sink, emit_info, state);
+                        } else {
+                            Inst::AluRRR {
+                                alu_op: ALUOp::SubS,
+                                size,
+                                rd: writable_zero_reg(),
+                                rn: x27,
+                                rm: x26,
+                            }
+                            .emit(&[], sink, emit_info, state);
                         }
-                        .emit(&[], sink, emit_info, state);
 
                         Inst::CSel {
                             cond,
@@ -1474,17 +1518,17 @@ impl MachInstEmit for Inst {
                     _ => {
                         // add/sub/and/orr/eor x28, x27, x26
                         let alu_op = match op {
-                            AtomicRmwOp::Add => ALUOp::Add,
-                            AtomicRmwOp::Sub => ALUOp::Sub,
-                            AtomicRmwOp::And => ALUOp::And,
-                            AtomicRmwOp::Or => ALUOp::Orr,
-                            AtomicRmwOp::Xor => ALUOp::Eor,
-                            AtomicRmwOp::Nand
-                            | AtomicRmwOp::Umin
-                            | AtomicRmwOp::Umax
-                            | AtomicRmwOp::Smin
-                            | AtomicRmwOp::Smax
-                            | AtomicRmwOp::Xchg => unreachable!(),
+                            AtomicRMWLoopOp::Add => ALUOp::Add,
+                            AtomicRMWLoopOp::Sub => ALUOp::Sub,
+                            AtomicRMWLoopOp::And => ALUOp::And,
+                            AtomicRMWLoopOp::Orr => ALUOp::Orr,
+                            AtomicRMWLoopOp::Eor => ALUOp::Eor,
+                            AtomicRMWLoopOp::Nand
+                            | AtomicRMWLoopOp::Umin
+                            | AtomicRMWLoopOp::Umax
+                            | AtomicRMWLoopOp::Smin
+                            | AtomicRMWLoopOp::Smax
+                            | AtomicRMWLoopOp::Xchg => unreachable!(),
                         };
 
                         Inst::AluRRR {
@@ -1502,7 +1546,7 @@ impl MachInstEmit for Inst {
                 if srcloc != SourceLoc::default() {
                     sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
                 }
-                if op == AtomicRmwOp::Xchg {
+                if op == AtomicRMWLoopOp::Xchg {
                     sink.put4(enc_stlxr(ty, x24wr, x26, x25)); // stlxr w24, x26, [x25]
                 } else {
                     sink.put4(enc_stlxr(ty, x24wr, x28, x25)); // stlxr w24, x28, [x25]
