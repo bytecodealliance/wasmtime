@@ -765,7 +765,18 @@
 (decl amode_to_synthetic_amode (Amode) SyntheticAmode)
 (extern constructor amode_to_synthetic_amode amode_to_synthetic_amode)
 
-(type Amode extern (enum))
+(type Amode extern (enum
+                    (ImmReg (simm32 u32)
+                            (base Reg)
+                            (flags MemFlags))
+                    (ImmRegRegShift (simm32 u32)
+                                    (base Gpr)
+                                    (index Gpr)
+                                    (shift u8)
+                                    (flags MemFlags))
+                    ;; Omit RipRelative here: we do not need to
+                    ;; process it when building amodes.
+                    ))
 
 (decl amode_with_flags (Amode MemFlags) Amode)
 (extern constructor amode_with_flags amode_with_flags)
@@ -797,20 +808,7 @@
 (extern constructor sum_extend_fits_in_32_bits sum_extend_fits_in_32_bits)
 
 ;; To generate an address for a memory access, we can pattern-match various CLIF
-;; sub-trees to x64's complex addressing modes (`Amode`). In pseudo-code:
-;;
-;; if address matches iadd(a, b):
-;;   if either a or b:
-;;     matches (ishl c with shift amount <= 3):
-;;       amode(base + offset + (c << amount))
-;;     matches (iconst c where c + offset will fit in 32 bits):
-;;       amode(base + eval(c + offset))
-;;     matches (uextend (iconst c) where c + offset will fit in 32 bits):
-;;       amode(base + eval(c + offset))
-;;   else:
-;;     amode(a + offset + (b << 0))
-;; else:
-;;   amode(base + offset)
+;; sub-trees to x64's complex addressing modes (`Amode`).
 ;;
 ;; The rules for `to_amode` correspond to a subset of the possible addressing
 ;; modes available by tweaking the SIB byte, the MOD bits, and the size of the
@@ -819,34 +817,89 @@
 ;; Encoding of ModR/M and SIB Bytes."
 (decl to_amode (MemFlags Value Offset32) Amode)
 
-;; ...matches (ishl c ...)
-(rule (to_amode flags (iadd (ishl src (const_shift_lt_eq_3 amt)) base) offset)
-      (amode_imm_reg_reg_shift_flags offset (put_in_gpr base) (put_in_gpr src) amt flags))
-(rule (to_amode flags (iadd base (ishl src (const_shift_lt_eq_3 amt))) offset)
-      (amode_imm_reg_reg_shift_flags offset (put_in_gpr base) (put_in_gpr src) amt flags))
-;; ...matches (iconst c ...); note how this matching pattern uses an in-out
-;; extractor to check that the offset and constant value (`c`, the in
-;; parameter), when summed will fit into x64's 32-bit displacement, returned as
-;; `sum` (the out parameter). The syntax for this could be improved (TODO).
-(rule (to_amode flags (iadd (iconst c) base) offset)
-      (if-let sum (sum_extend_fits_in_32_bits $I64 c offset))
-      (amode_imm_reg_flags sum (put_in_gpr base) flags))
-(rule (to_amode flags (iadd base (iconst c)) offset)
-      (if-let sum (sum_extend_fits_in_32_bits $I64 c offset))
-      (amode_imm_reg_flags sum (put_in_gpr base) flags))
-;; ...matches (uextend(iconst c) ...); see notes above.
-(rule (to_amode flags (iadd (has_type ty (uextend (iconst c))) base) offset)
-      (if-let sum (sum_extend_fits_in_32_bits $I64 c offset))
-      (amode_imm_reg_flags sum (put_in_gpr base) flags))
-(rule (to_amode flags (iadd base (has_type ty (uextend (iconst c)))) offset)
-      (if-let sum (sum_extend_fits_in_32_bits $I64 c offset))
-      (amode_imm_reg_flags sum (put_in_gpr base) flags))
-;; ...else only matches (iadd(a b))
-(rule (to_amode flags (iadd base index) offset)
-      (amode_imm_reg_reg_shift_flags offset (put_in_gpr base) (put_in_gpr index) 0 flags))
-;; ...else
+;; Initial step in amode processing: create an ImmReg with
+;; (invalid_reg) and encapsulating the flags and offset from the
+;; load/store.
+(decl amode_initial (MemFlags Offset32) Amode)
+(rule (amode_initial flags (offset32 off))
+      (Amode.ImmReg off (invalid_reg) flags))
+
+;; One step in amode processing: take an existing amode and add
+;; another value to it.
+(decl amode_add (Amode Value) Amode)
+
+;; An Amode can absorb a constant (i64, or extended i32) as long as
+;; the sum still fits in the signed-32-bit offset.
+(rule 1 (amode_add (Amode.ImmReg off base flags)
+                 (iconst (simm32 c)))
+      (if-let sum (s32_add_fallible off c))
+      (Amode.ImmReg sum base flags))
+(rule 1 (amode_add (Amode.ImmRegRegShift off base index shift flags)
+                 (iconst (simm32 c)))
+      (if-let sum (s32_add_fallible off c))
+      (Amode.ImmRegRegShift sum base index shift flags))
+;; Likewise for a zero-extended i32 const, as long as the constant
+;; wasn't negative. (Why nonnegative? Because adding a
+;; non-sign-extended negative to a 64-bit address is not the same as
+;; adding in simm32-space.)
+(rule 1 (amode_add (Amode.ImmReg off base flags)
+                 (uextend (iconst (simm32 (u32_nonnegative c)))))
+      (if-let sum (s32_add_fallible off c))
+      (Amode.ImmReg sum base flags))
+(rule 1 (amode_add (Amode.ImmRegRegShift off base index shift flags)
+                 (uextend (iconst (simm32 (u32_nonnegative c)))))
+      (if-let sum (s32_add_fallible off c))
+      (Amode.ImmRegRegShift sum base index shift flags))
+;; Likewise for a sign-extended i32 const.
+(rule 1 (amode_add (Amode.ImmReg off base flags)
+                 (sextend (iconst (simm32 c))))
+      (if-let sum (s32_add_fallible off c))
+      (Amode.ImmReg sum base flags))
+(rule 1 (amode_add (Amode.ImmRegRegShift off base index shift flags)
+                 (sextend (iconst (simm32 c))))
+      (if-let sum (s32_add_fallible off c))
+      (Amode.ImmRegRegShift sum base index shift flags))
+
+;; An Amode.ImmReg with invalid_reg (initial state) can absorb a
+;; register as the base register.
+(rule (amode_add (Amode.ImmReg off (invalid_reg) flags) value)
+      (Amode.ImmReg off value flags))
+;; An Amode.ImmReg can absorb another register as the index register.
+(rule (amode_add (Amode.ImmReg off base flags) value)
+      (if-let (valid_reg) base)
+      ;; Shift of 0 --> base + 1*value.
+      (Amode.ImmRegRegShift off base value 0 flags))
+;; An Amode.ImmReg can absorb a shift of another register as the index register.
+(rule 1 (amode_add (Amode.ImmReg off base flags) (ishl index (iconst (uimm8 shift))))
+      (if-let (valid_reg) base)
+      (if (u32_lteq (u8_as_u32 shift) 3))
+      (Amode.ImmRegRegShift off base index shift flags))
+(rule 1 (amode_add (Amode.ImmReg off base flags) (uextend (ishl index (iconst (uimm8 shift)))))
+      (if-let (valid_reg) base)
+      (if (u32_lteq (u8_as_u32 shift) 3))
+      (Amode.ImmRegRegShift off base (extend_to_gpr index $I64 (ExtendKind.Zero)) shift flags))
+(rule 2 (amode_add (Amode.ImmReg off base flags) (uextend (ishl index @ (iadd _ _) (iconst (uimm8 shift)))))
+      (if-let (valid_reg) base)
+      (if (u32_lteq (u8_as_u32 shift) 3))
+      (Amode.ImmRegRegShift off base index shift flags))
+
+;; An Amode.ImmRegRegShift can absorb any other value by creating a
+;; new add instruction and replacing the base with
+;; (base+value).
+(rule (amode_add (Amode.ImmRegRegShift off base index shift flags) value)
+      (let ((sum Gpr (x64_add $I64 base value)))
+        (Amode.ImmRegRegShift off sum index shift flags)))
+
+;; Any amode can absorb an `iadd` by absorbing first the LHS of the
+;; add, then the RHS.
+(rule 3 (amode_add amode (iadd x y))
+      (let ((amode1 Amode (amode_add amode x))
+            (amode2 Amode (amode_add amode1 y)))
+        amode2))
+
+;; Finally, define the toplevel `to_amode`.
 (rule (to_amode flags base offset)
-      (amode_imm_reg_flags offset (put_in_gpr base) flags))
+      (amode_add (amode_initial flags offset) base))
 
 ;; Offsetting an Amode. Used when we need to do consecutive
 ;; loads/stores to adjacent addresses.
