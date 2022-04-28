@@ -21,7 +21,7 @@ serde = { version = "1.0.94", features = ["derive"] }
 log = { version = "0.4.8", default-features = false }
 more-asserts = "0.2.1"
 gimli = { version = "0.26.0", default-features = false, features = ['read'] }
-object = { version = "0.27.0", default-features = false, features = ['read_core', 'write_core', 'elf'] }
+object = { version = "0.28.0", default-features = false, features = ['read_core', 'write_core', 'elf'] }
 target-lexicon = "0.12"
 
 [badges]
