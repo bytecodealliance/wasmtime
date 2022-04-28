@@ -37,7 +37,7 @@ impl Flags {
     pub fn iter(&self) -> impl Iterator<Item = Value> {
         let mut bytes = [0; 1];
         bytes.copy_from_slice(&self.bytes[0..1]);
-        DESCRIPTORS.iter().filter_map(move |d| {
+        DESCRIPTOrS.iter().filter_map(move |d| {
             let values = match &d.detail {
                 detail::Detail::Preset => return None,
                 detail::Detail::Enum { last, enumerators } => {
@@ -74,20 +74,20 @@ impl Flags {
         self.numbered_predicate(1)
     }
 }
-static DESCRIPTORS: [detail::Descriptor; 1] = [detail::Descriptor {
+static DESCRIPTOrS: [detail::Descriptor; 1] = [detail::Descriptor {
     name: "has_lse",
     description: "Has Large System Extensions support.",
     offset: 0,
     detail: detail::Detail::Bool { bit: 0 },
 }];
-static ENUMERATORS: [&str; 0] = [];
-static HASH_TABLE: [u16; 2] = [0xffff, 0];
+static ENUMERATOrS: [&str; 0] = [];
+static HASh_TABLE: [u16; 2] = [0xffff, 0];
 static PRESETS: [(u8, u8); 0] = [];
 static TEMPLATE: detail::Template = detail::Template {
     name: "arm64",
-    descriptors: &DESCRIPTORS,
-    enumerators: &ENUMERATORS,
-    hash_table: &HASH_TABLE,
+    descriptors: &DESCRIPTOrS,
+    enumerators: &ENUMERATOrS,
+    hash_table: &HASh_TABLE,
     defaults: &[0x00],
     presets: &PRESETS,
 };
@@ -98,7 +98,7 @@ pub fn builder() -> Builder {
 impl fmt::Display for Flags {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         writeln!(f, "[arm64]")?;
-        for d in &DESCRIPTORS {
+        for d in &DESCRIPTOrS {
             if !d.detail.is_preset() {
                 write!(f, "{} = ", d.name)?;
                 TEMPLATE.format_toml_value(d.detail, self.bytes[d.offset as usize], f)?;

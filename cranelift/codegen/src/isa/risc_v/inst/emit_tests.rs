@@ -28,7 +28,7 @@ fn test_riscv64_binemit() {
     //todo:: more
     insns.push(TestUnit::new(
         Inst::AluRRR {
-            alu_op: AluOPRRR::ADD,
+            alu_op: AluOPRRR::Add,
             rd: writable_fp_reg(),
             rs1: fp_reg(),
             rs2: zero_reg(),
@@ -37,7 +37,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRRImm12 {
-            alu_op: AluOPRRI::ADDI,
+            alu_op: AluOPRRI::Addi,
             rd: writable_fp_reg(),
             rs: stack_reg(),
             imm12: Imm12::maybe_from_u64(100).unwrap(),

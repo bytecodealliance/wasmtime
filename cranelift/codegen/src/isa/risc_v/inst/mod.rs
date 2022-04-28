@@ -142,7 +142,7 @@ impl Inst {
     }
     pub(crate) fn load_constant_imm12(rd: Writable<Reg>, imm: Imm12) -> Inst {
         Inst::AluRRImm12 {
-            alu_op: AluOPRRI::ORI,
+            alu_op: AluOPRRI::Ori,
             rd: rd,
             rs: zero_reg(),
             imm12: imm,
@@ -162,9 +162,9 @@ impl Inst {
         let mut insts = SmallVec::new();
         let mut patch_true = vec![];
         let class_op = if ty == F32 {
-            AluOPRR::FCLASS_S
+            AluOPRR::FclassS
         } else {
-            AluOPRR::FCLASS_D
+            AluOPRR::FclassD
         };
         // left
         insts.push(Inst::AluRR {
@@ -173,7 +173,7 @@ impl Inst {
             rs: left,
         });
         insts.push(Inst::AluRRImm12 {
-            alu_op: AluOPRRI::ORI,
+            alu_op: AluOPRRI::Ori,
             rd,
             rs: rd.to_reg(),
             imm12: Imm12::from_bits(FClassResult::is_nan_bits() as i16),
@@ -196,7 +196,7 @@ impl Inst {
             rs: right,
         });
         insts.push(Inst::AluRRImm12 {
-            alu_op: AluOPRRI::ORI,
+            alu_op: AluOPRRI::Ori,
             rd: tmp,
             rs: tmp.to_reg(),
             imm12: Imm12::from_bits(FClassResult::is_nan_bits() as i16),
@@ -214,13 +214,13 @@ impl Inst {
         //left and right is not nan
         // but there are maybe bother PosInfinite or NegInfinite
         insts.push(Inst::AluRRR {
-            alu_op: AluOPRRR::AND,
+            alu_op: AluOPRRR::And,
             rd: rd,
             rs1: rd.to_reg(),
             rs2: tmp.to_reg(),
         });
         insts.push(Inst::AluRRImm12 {
-            alu_op: AluOPRRI::ANDI,
+            alu_op: AluOPRRI::Andi,
             rd: rd,
             rs: rd.to_reg(),
             imm12: Imm12::from_bits(FClassResult::is_infinite_bits() as i16),
@@ -294,7 +294,7 @@ impl Inst {
                 imm: Imm20::from_bits((value as i32) << 12),
             });
             insts.push(Inst::AluRRImm12 {
-                alu_op: AluOPRRI::ADDI,
+                alu_op: AluOPRRI::Addi,
                 rd: rd,
                 rs: rd.to_reg(),
                 imm12: Imm12::from_bits(value as i16),
@@ -336,21 +336,21 @@ impl Inst {
             insts.extend(Inst::load_constant_u64(tmp, value & 0xffff_ffff));
             // rd = rd << 32
             insts.push(Inst::AluRRImm12 {
-                alu_op: AluOPRRI::SLLI,
+                alu_op: AluOPRRI::Slli,
                 rd: rd,
                 rs: rd.to_reg(),
                 imm12: Imm12::from_bits(32),
             });
             // tmp = tmp >> 32
             insts.push(Inst::AluRRImm12 {
-                alu_op: AluOPRRI::SRLI,
+                alu_op: AluOPRRI::Srli,
                 rd: tmp,
                 rs: tmp.to_reg(),
                 imm12: Imm12::from_bits(32),
             });
             // rd = rd | tmp
             insts.push(Inst::AluRRR {
-                alu_op: AluOPRRR::OR,
+                alu_op: AluOPRRR::Or,
                 rd: rd,
                 rs1: rd.to_reg(),
                 rs2: tmp.to_reg(),
@@ -360,15 +360,12 @@ impl Inst {
     }
 
     /// Create instructions that load a 32-bit floating-point constant.
-    pub fn load_fp_constant32<F: FnMut(Type) -> Writable<Reg>>(
-        rd: Writable<Reg>,
-        const_data: u32,
-    ) -> SmallVec<[Inst; 4]> {
-        let tmp = alloc_tmp(I64);
+    pub fn load_fp_constant32(rd: Writable<Reg>, const_data: u32) -> SmallVec<[Inst; 4]> {
+        let tmp = writable_spilltmp_reg();
         let mut insts = SmallVec::new();
         insts.extend(Self::load_constant_u32(tmp, const_data));
         insts.push(Inst::AluRR {
-            alu_op: AluOPRR::FMV_W_X,
+            alu_op: AluOPRR::FmvWX,
             rd,
             rs: tmp.to_reg(),
         });
@@ -376,15 +373,12 @@ impl Inst {
     }
 
     /// Create instructions that load a 64-bit floating-point constant.
-    pub fn load_fp_constant64<F: FnMut(Type) -> Writable<Reg>>(
-        rd: Writable<Reg>,
-        const_data: u64,
-    ) -> SmallVec<[Inst; 4]> {
-        let tmp = alloc_tmp(I64);
+    pub fn load_fp_constant64(rd: Writable<Reg>, const_data: u64) -> SmallVec<[Inst; 4]> {
+        let tmp = writable_spilltmp_reg();
         let mut insts = SmallVec::new();
         insts.extend(Self::load_constant_u64(tmp, const_data));
         insts.push(Inst::AluRR {
-            alu_op: AluOPRR::FMV_D_X,
+            alu_op: AluOPRR::FmvDX,
             rd,
             rs: tmp.to_reg(),
         });

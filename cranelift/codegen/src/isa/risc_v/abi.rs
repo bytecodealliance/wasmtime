@@ -33,15 +33,15 @@ pub(crate) type Riscv64ABICaller = ABICallerImpl<Riscv64MachineDeps>;
 //todo Spidermonkey specific ABI convention.
 
 // /// This is SpiderMonkey's `WasmTableCallSigReg`.
-// static BALDRDASH_SIG_REG: u8 = 10;
+// static BALdRDASh_SIG_REG: u8 = 10;
 
 // /// This is SpiderMonkey's `WasmTlsReg`.
-// static BALDRDASH_TLS_REG: u8 = 23;
+// static BALdRDASh_TLS_REG: u8 = 23;
 
 // /// Offset in stack-arg area to callee-TLS slot in Baldrdash-2020 calling convention.
-// static BALDRDASH_CALLEE_TLS_OFFSET: i64 = 0;
+// static BALdRDASh_CALLEE_TLS_OFFSET: i64 = 0;
 // /// Offset in stack-arg area to caller-TLS slot in Baldrdash-2020 calling convention.
-// static BALDRDASH_CALLER_TLS_OFFSET: i64 = 8;
+// static BALdRDASh_CALLER_TLS_OFFSET: i64 = 8;
 
 // These two lists represent the registers the JIT may *not* use at any point in generated code.
 //

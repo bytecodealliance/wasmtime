@@ -29,11 +29,11 @@
 ;; `i64` and smaller
 
 (rule (lower (has_type (fits_in_32 ty) (iadd x y)))
-      (alu_rrr (AluOPRRR.ADDW) x y))
+      (alu_rrr (AluOPRRR.Addw) x y))
 
 ;; Base case, simply adding things in registers.
 (rule (lower (has_type (fits_in_64 ty) (iadd x y)))
-      (alu_rrr (AluOPRRR.ADD) x y))
+      (alu_rrr (AluOPRRR.Add) x y))
 
 ;; Special cases for when one operand is an immediate that fits in 12 bits.
 (rule (lower (has_type (fits_in_64 ty) (iadd x (imm12_from_value y))))
@@ -52,9 +52,9 @@
 ;; Base case, simply subtracting things in registers.
 
 (rule (lower (has_type (fits_in_64 ty) (isub x y)))
-      (alu_rrr (AluOPRRR.SUB) x y))
+      (alu_rrr (AluOPRRR.Sub) x y))
 (rule (lower (has_type (fits_in_32 ty) (isub x y)))
-      (alu_rrr (AluOPRRR.SUBW) x y))
+      (alu_rrr (AluOPRRR.Subw) x y))
       
 ;; Special case for when one operand is an immediate that fits in 12 bits.
 (rule (lower (has_type (fits_in_64 ty) (isub x (imm12_from_value y))))
@@ -69,85 +69,85 @@
 
 ;; `i64` and smaller.
 (rule (lower (has_type (fits_in_64 ty) (ineg x)))
-      (alu_rrr (AluOPRRR.SUB) (zero_reg) x))
+      (alu_rrr (AluOPRRR.Sub) (zero_reg) x))
 (rule (lower (has_type (fits_in_32 ty) (ineg x)))
-      (alu_rrr (AluOPRRR.SUBW) (zero_reg) x))
+      (alu_rrr (AluOPRRR.Subw) (zero_reg) x))
 
 
 ;;;; Rules for `imul` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type (fits_in_64 ty) (imul x y)))
-      (alu_rrr (AluOPRRR.MUL) x y))
+      (alu_rrr (AluOPRRR.Mul) x y))
 (rule (lower (has_type (fits_in_32 ty) (imul x y)))
-      (alu_rrr (AluOPRRR.MULW) x y))
+      (alu_rrr (AluOPRRR.Mulw) x y))
 
 (rule (lower (has_type (fits_in_64 ty) (smulhi x y)))
-      (alu_rrr (AluOPRRR.MULH) x y))
+      (alu_rrr (AluOPRRR.Mulh) x y))
 
 (rule (lower (has_type (fits_in_64 ty) (umulhi x y)))
-      (alu_rrr (AluOPRRR.MULHSU) x y))
+      (alu_rrr (AluOPRRR.Mulhsu) x y))
 
 
 ;;;; Rules for `div` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_32 ty) (sdiv x y)))
-      (alu_rrr (AluOPRRR.DIVW) x y))
+      (alu_rrr (AluOPRRR.Divw) x y))
 
 (rule (lower (has_type (fits_in_32 ty) (udiv x y)))
-      (alu_rrr (AluOPRRR.DIVUW) x y))
+      (alu_rrr (AluOPRRR.Divuw) x y))
 
 (rule (lower (has_type (fits_in_64 ty) (sdiv x y)))
-      (alu_rrr (AluOPRRR.DIV) x y))
+      (alu_rrr (AluOPRRR.Div) x y))
 
 (rule (lower (has_type (fits_in_64 ty) (udiv x y)))
-      (alu_rrr (AluOPRRR.DIVU) x y))
+      (alu_rrr (AluOPRRR.DivU) x y))
 
 
 ;;;; Rules for `rem` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type (fits_in_32 ty) (srem x y)))
-      (alu_rrr (AluOPRRR.REMW) x y))
+      (alu_rrr (AluOPRRR.Remw) x y))
 
 (rule (lower (has_type (fits_in_32 ty) (urem x y)))
-      (alu_rrr (AluOPRRR.REMUW) x y))
+      (alu_rrr (AluOPRRR.Remuw) x y))
 
 (rule (lower (has_type (fits_in_64 ty) (srem x y)))
-      (alu_rrr (AluOPRRR.REM) x y))
+      (alu_rrr (AluOPRRR.Rem) x y))
 
 (rule (lower (has_type (fits_in_64 ty) (urem x y)))
-      (alu_rrr (AluOPRRR.REMU) x y))
+      (alu_rrr (AluOPRRR.RemU) x y))
 
 ;;;; Rules for `and` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 ty) (band x y)))
-      (alu_rrr (AluOPRRR.AND) x y))
+      (alu_rrr (AluOPRRR.And) x y))
 
 ;; Special cases for when one operand is an immediate that fits in 12 bits.
 (rule (lower (has_type (fits_in_64 ty) (band x (imm12_from_value y))))
-      (alu_rr_imm12 (AluOPRRI.ANDI) x y))
+      (alu_rr_imm12 (AluOPRRI.Andi) x y))
 
 (rule (lower (has_type (fits_in_64 ty) (band (imm12_from_value x) y)))
-      (alu_rr_imm12 (AluOPRRI.ANDI) y x))
+      (alu_rr_imm12 (AluOPRRI.Andi) y x))
 
 ;;;; Rules for `or` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 ty) (bor x y)))
-      (alu_rrr (AluOPRRR.OR) x y))
+      (alu_rrr (AluOPRRR.Or) x y))
 
 ;; Special cases for when one operand is an immediate that fits in 12 bits.
 (rule (lower (has_type (fits_in_64 ty) (bor x (imm12_from_value y))))
-      (alu_rr_imm12 (AluOPRRI.ORI) x y))
+      (alu_rr_imm12 (AluOPRRI.Ori) x y))
 
 (rule (lower (has_type (fits_in_64 ty) (bor (imm12_from_value x) y)))
-      (alu_rr_imm12 (AluOPRRI.ORI) y x))
+      (alu_rr_imm12 (AluOPRRI.Ori) y x))
 
 ;;;; Rules for `xor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 ty) (bxor x y)))
-      (alu_rrr (AluOPRRR.XOR) x y))
+      (alu_rrr (AluOPRRR.Xor) x y))
 
 ;; Special cases for when one operand is an immediate that fits in 12 bits.
 (rule (lower (has_type (fits_in_64 ty) (bxor x (imm12_from_value y))))
-      (alu_rr_imm12 (AluOPRRI.XORI) x y))
+      (alu_rr_imm12 (AluOPRRI.Xori) x y))
 
 (rule (lower (has_type (fits_in_64 ty) (bxor (imm12_from_value x) y)))
-      (alu_rr_imm12 (AluOPRRI.XORI) y x))
+      (alu_rr_imm12 (AluOPRRI.Xori) y x))
 
 
 

@@ -216,9 +216,9 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             }
             if cc_bit | FloatCCBit::EQ.bit() > 0 {
                 let op = if ty == F32 {
-                    AluOPRRR::FEQ_S
+                    AluOPRRR::FeqS
                 } else {
-                    AluOPRRR::FEQ_D
+                    AluOPRRR::FeqD
                 };
                 insts.push(Inst::AluRRR {
                     alu_op: op,
@@ -240,9 +240,9 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
             if cc_bit | FloatCCBit::LT.bit() > 0 {
                 let op = if ty == F32 {
-                    AluOPRRR::FLT_S
+                    AluOPRRR::FltS
                 } else {
-                    AluOPRRR::FLT_D
+                    AluOPRRR::FltD
                 };
                 insts.push(Inst::AluRRR {
                     alu_op: op,
@@ -278,9 +278,9 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 });
                 // number is ordered
                 let op = if ty == F32 {
-                    AluOPRRR::FLE_S
+                    AluOPRRR::FleS
                 } else {
-                    AluOPRRR::FLE_D
+                    AluOPRRR::FleD
                 };
                 insts.push(Inst::AluRRR {
                     alu_op: op,
@@ -648,9 +648,9 @@ mod test {
 // {
 //     // check left is_nan
 //     let class_op = if ctx.input_ty(insn, 0) == F32 {
-//         AluOPRR::FCLASS_S
+//         AluOPRR::FclassS
 //     } else {
-//         AluOPRR::FCLASS_D
+//         AluOPRR::FclassD
 //     };
 //     // if left is nan
 //     insts.push(Inst::AluRR {
@@ -660,7 +660,7 @@ mod test {
 //     });
 //     //
 //     insts.push(Inst::AluRRImm12 {
-//         alu_op: AluOPRRI::ANDI,
+//         alu_op: AluOPRRI::Andi,
 //         rd: tmp,
 //         rs: left_tmp.to_reg(),
 //         imm12: Imm12::from_bits(FClassResult::is_nan_bits() as i16),
@@ -686,7 +686,7 @@ mod test {
 //         rs: right,
 //     });
 //     insts.push(Inst::AluRRImm12 {
-//         alu_op: AluOPRRI::ANDI,
+//         alu_op: AluOPRRI::Andi,
 //         rd: tmp,
 //         rs: right_tmp,
 //         imm12: Imm12::from_bits(FClassResult::is_nan_bits() as i16),
@@ -707,13 +707,13 @@ mod test {
 // {
 //     // if left is pos infinite and right is pos infinite , or both neg infinite
 //     insts.push(Inst::AluRRR {
-//         alu_op: AluOPRRR::AND,
+//         alu_op: AluOPRRR::And,
 //         rd: tmp,
 //         rs1: left_tmp,
 //         rs2: right_tmp,
 //     });
 //     insts.push(Inst::AluRRImm12 {
-//         alu_op: AluOPRRI::ANDI,
+//         alu_op: AluOPRRI::Andi,
 //         rd: tmp,
 //         rs: tmp,
 //         imm12: Imm12::from_bits(FClassResult::is_infinite_bits() as i16),
@@ -738,9 +738,9 @@ mod test {
 //         // compute eq
 //         // at this point
 //         let eq_op = if ctx.input_ty(insn, 0) == F32 {
-//             AluOPRRR::FEQ_S
+//             AluOPRRR::FeqS
 //         } else {
-//             AluOPRRR::FEQ_D
+//             AluOPRRR::FeqD
 //         };
 //         insts.push(Inst::AluRRR {
 //             alu_op: eq_op,
@@ -749,7 +749,7 @@ mod test {
 //             rs2: right,
 //         });
 //         insts.push(Inst::AluRRImm12 {
-//             alu_op: AluOPRRI::SLLI,
+//             alu_op: AluOPRRI::Slli,
 //             rd: tmp,
 //             rs: left_tmp,
 //             imm12: Imm12::from_bits(FloatCCBit::EQ.shift()),
@@ -759,9 +759,9 @@ mod test {
 //     {
 //         // compute lt
 //         let lt_op = if ctx.input_ty(insn, 0) == F32 {
-//             AluOPRRR::FLT_S
+//             AluOPRRR::FltS
 //         } else {
-//             AluOPRRR::FLT_D
+//             AluOPRRR::FltD
 //         };
 //         insts.push(Inst::AluRRR {
 //             alu_op: lt_op,
@@ -771,14 +771,14 @@ mod test {
 //         });
 
 //         insts.push(Inst::AluRRImm12 {
-//             alu_op: AluOPRRI::SLLI,
+//             alu_op: AluOPRRI::Slli,
 //             rd: left_tmp,
 //             rs: left_tmp,
 //             imm12: Imm12::from_bits(FloatCCBit::LT.shift()),
 //         });
 
 //         insts.push(Inst::AluOPRRR {
-//             alu_op: AluOPRRR::OR,
+//             alu_op: AluOPRRR::Or,
 //             rd: tmp,
 //             rs1: tmp,
 //             rs2: left_tmp,
@@ -791,7 +791,7 @@ mod test {
 //             (FloatCCBit::EQ.bit() | FloatCCBit::LT.bit()) as u32,
 //         ));
 //         insts.push(Inst::AluRRR {
-//             alu_op: AluOPRRR::AND,
+//             alu_op: AluOPRRR::And,
 //             rd: left_tmp,
 //             rs1: left_tmp,
 //             rs2: tmp,
@@ -809,7 +809,7 @@ mod test {
 //             },
 //         });
 //         insts.push(Inst::AluRRImm12 {
-//             alu_op: AluOPRRI::ORI,
+//             alu_op: AluOPRRI::Ori,
 //             rd: tmp,
 //             rs: tmp,
 //             imm12: Imm12::from_bits(FloatCCBit::GT.bit() as i16),
@@ -858,7 +858,7 @@ mod test {
 // patch(&mut insts[jump_to_final_compare]);
 
 // insts.push(Inst::AluRRImm12 {
-//     alu_op: AluOPRRI::ORI,
+//     alu_op: AluOPRRI::Ori,
 //     rd: tmp,
 //     rs: tmp.to_reg(),
 //     imm12: Imm12::from_bits(FloatCCBit::floatcc_2_mask_bits(ctx)),

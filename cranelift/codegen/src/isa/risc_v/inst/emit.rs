@@ -91,7 +91,7 @@ impl Inst {
         let mut insts = smallvec![];
         // ajust sp ; alloc space
         insts.push(Inst::AjustSp {
-            amount: -(WORD_SIZE as i64) * (registers.len() as i64),
+            amount: -(WOrD_SIZE as i64) * (registers.len() as i64),
         });
         //
         let mut cur_offset = 0;
@@ -102,11 +102,11 @@ impl Inst {
                     Imm12::maybe_from_u64(cur_offset).unwrap().as_u32() as i64,
                     I64,
                 ),
-                op: StoreOP::SD,
+                op: StoreOP::Sd,
                 src: r.to_reg(),
                 flags: MemFlags::new(),
             });
-            cur_offset += WORD_SIZE as u64
+            cur_offset += WOrD_SIZE as u64
         }
         insts
     }
@@ -118,11 +118,11 @@ impl Inst {
         for r in registers {
             insts.push(Inst::Load {
                 from: AMode::SPOffset(Imm12::maybe_from_u64(cur_offset).unwrap().into(), I64),
-                op: LoadOP::LD,
+                op: LoadOP::Ld,
                 rd: r.clone(),
                 flags: MemFlags::new(),
             });
-            cur_offset += WORD_SIZE as u64
+            cur_offset += WOrD_SIZE as u64
         }
         // restore sp
         insts.push(Inst::AjustSp {
@@ -147,10 +147,10 @@ impl MachInstEmit for Inst {
             &Inst::Nop0 => {
                 // do nothing
             }
-            // ADDI x0, x0, 0
+            // Addi x0, x0, 0
             &Inst::Nop4 => {
                 let x = Inst::AluRRImm12 {
-                    alu_op: AluOPRRI::ADDI,
+                    alu_op: AluOPRRI::Addi,
                     rd: Writable::from_reg(zero_reg()),
                     rs: zero_reg(),
                     imm12: Imm12::zero(),
@@ -256,7 +256,7 @@ impl MachInstEmit for Inst {
                     insts.extend(Inst::load_constant_u64(registers[0], offset as u64));
                     //registers[0] += base
                     insts.push(Inst::AluRRR {
-                        alu_op: AluOPRRR::ADD,
+                        alu_op: AluOPRRR::Add,
                         rd: registers[0],
                         rs1: registers[0].to_reg(),
                         rs2: base,
@@ -294,7 +294,7 @@ impl MachInstEmit for Inst {
                     insts.extend(Inst::load_constant_u64(registers[0], offset as u64));
                     // registers[0] = base + offset
                     insts.push(Inst::AluRRR {
-                        alu_op: AluOPRRR::ADD,
+                        alu_op: AluOPRRR::Add,
                         rd: registers[0],
                         rs1: registers[0].to_reg(),
                         rs2: base,
@@ -333,7 +333,7 @@ impl MachInstEmit for Inst {
             } => {
                 //todo:: actual extend the value;;
                 Inst::AluRRImm12 {
-                    alu_op: AluOPRRI::ADDI,
+                    alu_op: AluOPRRI::Addi,
                     rd: rd,
                     rs: rn,
                     imm12: Imm12::zero(),
@@ -343,7 +343,7 @@ impl MachInstEmit for Inst {
             &Inst::AjustSp { amount } => {
                 if let Some(imm) = Imm12::maybe_from_u64(amount as u64) {
                     Inst::AluRRImm12 {
-                        alu_op: AluOPRRI::ADDI,
+                        alu_op: AluOPRRI::Addi,
                         rd: writable_stack_reg(),
                         rs: stack_reg(),
                         imm12: imm,
@@ -355,7 +355,7 @@ impl MachInstEmit for Inst {
                     insts.extend(Inst::push_registers(&registers));
                     insts.extend(Inst::load_constant_u64(registers[0], amount as u64));
                     insts.push(Inst::AluRRR {
-                        alu_op: AluOPRRR::ADD,
+                        alu_op: AluOPRRR::Add,
                         rd: writable_stack_reg(),
                         rs1: stack_reg(),
                         rs2: registers[0].to_reg(),
@@ -443,7 +443,7 @@ impl MachInstEmit for Inst {
             }
             &Inst::Mov { rd, rm } => {
                 let x = Inst::AluRRImm12 {
-                    alu_op: AluOPRRI::ORI,
+                    alu_op: AluOPRRI::Ori,
                     rd: rd,
                     rs: rm,
                     imm12: Imm12::zero(),
