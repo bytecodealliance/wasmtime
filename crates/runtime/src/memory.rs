@@ -334,17 +334,6 @@ impl ExternalMemory {
     }
 }
 
-impl Default for ExternalMemory {
-    fn default() -> Self {
-        Self {
-            base: &mut [],
-            size: 0,
-            make_accessible: Some(|_, _| unreachable!()),
-            memory_image: None,
-        }
-    }
-}
-
 impl RuntimeLinearMemory for ExternalMemory {
     fn byte_size(&self) -> usize {
         self.size
@@ -636,12 +625,5 @@ impl Memory {
         } else {
             None
         }
-    }
-}
-
-// The default memory representation is an empty memory that cannot grow.
-impl Default for Memory {
-    fn default() -> Self {
-        Memory(Box::new(ExternalMemory::default()))
     }
 }

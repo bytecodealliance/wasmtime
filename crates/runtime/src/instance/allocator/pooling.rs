@@ -446,10 +446,10 @@ impl InstancePool {
         memories: &mut PrimaryMap<DefinedMemoryIndex, Memory>,
     ) {
         // Decommit any linear memories that were used.
+        let memories = mem::take(memories);
         for ((def_mem_idx, memory), base) in
-            memories.iter_mut().zip(self.memories.get(instance_index))
+            memories.into_iter().zip(self.memories.get(instance_index))
         {
-            let memory = mem::take(memory);
             assert!(memory.is_external());
             let size = memory.byte_size();
             if let Some(mut image) = memory.unwrap_image_slot() {
