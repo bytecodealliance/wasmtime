@@ -269,7 +269,7 @@ impl RuntimeLinearMemory for MmapMemory {
 
 /// A "static" memory where the lifetime of the backing memory is managed
 /// elsewhere. Currently used with the pooling allocator.
-pub(crate) struct ExternalMemory {
+struct ExternalMemory {
     /// The memory in the host for this wasm memory. The length of this
     /// slice is the maximum size of the memory that can be grown to.
     base: &'static mut [u8],
@@ -284,34 +284,41 @@ pub(crate) struct ExternalMemory {
 
     /// The image management, if any, for this memory. Owned here and
     /// returned to the pooling allocator when termination occurs.
-    pub(crate) memory_image: Option<MemoryImageSlot>,
+    memory_image: Option<MemoryImageSlot>,
 }
 
 impl ExternalMemory {
     fn new(
         base: &'static mut [u8],
-        size: usize,
+        initial_size: usize,
+        maximum_size: Option<usize>,
         make_accessible: Option<fn(*mut u8, usize) -> Result<()>>,
         memory_image: Option<MemoryImageSlot>,
     ) -> Result<Self> {
-        if base.len() < size {
+        if base.len() < initial_size {
             bail!(
                 "initial memory size of {} exceeds the pooling allocator's \
                  configured maximum memory size of {} bytes",
-                size,
+                initial_size,
                 base.len(),
             );
         }
 
+        // Only use the part of the slice that is necessary.
+        let base = match maximum_size {
+            Some(max) if max < base.len() => &mut base[..max],
+            _ => base,
+        };
+
         if let Some(make_accessible) = make_accessible {
-            if size > 0 {
-                make_accessible(base.as_mut_ptr(), size)?;
+            if initial_size > 0 {
+                make_accessible(base.as_mut_ptr(), initial_size)?;
             }
         }
 
         Ok(Self {
             base,
-            size,
+            size: initial_size,
             make_accessible,
             memory_image,
         })
@@ -347,7 +354,6 @@ impl RuntimeLinearMemory for ExternalMemory {
         // Actually grow the memory.
         if let Some(image) = &mut self.memory_image {
             image.set_heap_limit(new_byte_size)?;
-            self.size = new_byte_size;
         } else {
             let make_accessible = self
                 .make_accessible
@@ -388,7 +394,7 @@ impl RuntimeLinearMemory for ExternalMemory {
 }
 
 /// Representation of a runtime wasm linear memory.
-pub struct Memory(pub(crate) Box<dyn RuntimeLinearMemory>);
+pub struct Memory(Box<dyn RuntimeLinearMemory>);
 
 impl Memory {
     /// Create a new dynamic (movable) memory instance for the specified plan.
@@ -416,14 +422,8 @@ impl Memory {
         store: &mut dyn Store,
     ) -> Result<Self> {
         let (minimum, maximum) = Self::limit_new(plan, store)?;
-
-        // Only use the part of the slice that is necessary.
-        let base = match maximum {
-            Some(max) if max < base.len() => &mut base[..max],
-            _ => base,
-        };
-
-        let pooled_memory = ExternalMemory::new(base, minimum, make_accessible, memory_image)?;
+        let pooled_memory =
+            ExternalMemory::new(base, minimum, maximum, make_accessible, memory_image)?;
         Ok(Memory(Box::new(pooled_memory)))
     }
 
@@ -555,6 +555,7 @@ impl Memory {
         store: &mut dyn Store,
     ) -> Result<Option<usize>, Error> {
         let old_byte_size = self.byte_size();
+
         // Wasm spec: when growing by 0 pages, always return the current size.
         if delta_pages == 0 {
             return Ok(Some(old_byte_size));
@@ -590,17 +591,38 @@ impl Memory {
             }
         }
 
-        if let Err(e) = self.0.grow_to(new_byte_size) {
-            store.memory_grow_failed(&e);
-            return Ok(None);
+        match self.0.grow_to(new_byte_size) {
+            Ok(_) => Ok(Some(old_byte_size)),
+            Err(e) => {
+                store.memory_grow_failed(&e);
+                Ok(None)
+            }
         }
-
-        Ok(Some(old_byte_size))
     }
 
     /// Return a `VMMemoryDefinition` for exposing the memory to compiled wasm code.
     pub fn vmmemory(&mut self) -> VMMemoryDefinition {
         self.0.vmmemory()
+    }
+
+    /// Check if the inner implementation of [`Memory`] is indeed an
+    /// `ExternalMemory`.
+    #[cfg(feature = "pooling-allocator")]
+    pub fn is_external(&self) -> bool {
+        let as_any = &self.0 as &dyn std::any::Any;
+        as_any.downcast_ref::<ExternalMemory>().is_some()
+    }
+
+    /// Consume the memory, returning its [`MemoryImageSlot`] if any is present.
+    /// This implicitly checks that the memory is an external memory.
+    #[cfg(feature = "pooling-allocator")]
+    pub fn unwrap_image_slot(self) -> Option<MemoryImageSlot> {
+        let as_any = self.0.into_any();
+        if let Ok(m) = as_any.downcast::<ExternalMemory>() {
+            m.memory_image
+        } else {
+            None
+        }
     }
 }
 

@@ -11,7 +11,6 @@ use super::{
     initialize_instance, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
     InstantiationError,
 };
-use crate::memory::ExternalMemory;
 use crate::{instance::Instance, Memory, Mmap, Table};
 use crate::{MemoryImageSlot, ModuleRuntimeInfo, Store};
 use anyhow::{anyhow, bail, Context, Result};
@@ -451,26 +450,20 @@ impl InstancePool {
             memories.iter_mut().zip(self.memories.get(instance_index))
         {
             let memory = mem::take(memory);
-            let memory_as_any = memory.0.into_any();
-            if let Ok(m) = memory_as_any.downcast::<ExternalMemory>() {
-                if let Some(mut image) = m.memory_image {
-                    // If there was any error clearing the image, just drop it
-                    // here, and let the drop handler for the slot unmap in a
-                    // way that retains the address space reservation.
-                    if image.clear_and_remain_ready().is_ok() {
-                        self.memories
-                            .return_memory_image_slot(instance_index, def_mem_idx, image);
-                    }
-                } else {
-                    // Otherwise, decommit the memory.
-                    use crate::memory::RuntimeLinearMemory;
-                    let size = m.byte_size();
-                    drop(m);
-                    decommit_memory_pages(base, size)
-                        .expect("failed to decommit linear memory pages");
+            assert!(memory.is_external());
+            let size = memory.byte_size();
+            if let Some(mut image) = memory.unwrap_image_slot() {
+                // Reset the image slot. If there is any error clearing the
+                // image, just drop it here, and let the drop handler for the
+                // slot unmap in a way that retains the address space
+                // reservation.
+                if image.clear_and_remain_ready().is_ok() {
+                    self.memories
+                        .return_memory_image_slot(instance_index, def_mem_idx, image);
                 }
             } else {
-                panic!("only pooled memories are allowed here");
+                // Otherwise, decommit the memory pages.
+                decommit_memory_pages(base, size).expect("failed to decommit linear memory pages");
             }
         }
     }
