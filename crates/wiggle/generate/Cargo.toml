@@ -17,7 +17,7 @@ include = ["src/**/*", "README.md", "LICENSE"]
 witx = { version = "0.9.1", path = "../../wasi-common/WASI/tools/witx" }
 quote = "1.0"
 proc-macro2 = "1.0"
-heck = "0.3"
+heck = "0.4"
 anyhow = "1"
 syn = { version = "1.0", features = ["full"] }
 shellexpand = "2.0"

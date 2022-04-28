@@ -150,7 +150,7 @@ dependencies = [
  "cfg-if",
  "libc",
  "miniz_oxide",
- "object 0.28.3",
+ "object",
  "rustc-demangle",
 ]
 
@@ -424,7 +424,7 @@ version = "3.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a3aab4734e083b809aaf5794e14e756d1c798d2c69c7f7de7a09a2f5214993c1"
 dependencies = [
- "heck 0.4.0",
+ "heck",
  "proc-macro-error",
  "proc-macro2",
  "quote",
@@ -654,7 +654,7 @@ dependencies = [
  "cranelift-frontend",
  "cranelift-module",
  "log",
- "object 0.27.1",
+ "object",
  "target-lexicon",
 ]
 
@@ -1074,19 +1074,6 @@ dependencies = [
 
 [[package]]
 name = "env_logger"
-version = "0.8.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a19187fea3ac7e84da7dacf48de0c45d63c6a76f9490dae389aead16c243fce3"
-dependencies = [
- "atty",
- "humantime 2.1.0",
- "log",
- "regex",
- "termcolor",
-]
-
-[[package]]
-name = "env_logger"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b2cf0344971ee6c64c31be0d530793fba457d322dfec2810c453d0ef228f9c3"
@@ -1317,15 +1304,6 @@ dependencies = [
 
 [[package]]
 name = "heck"
-version = "0.3.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6d621efb26863f0e9924c6ac577e8275e5e6b77455db64ffa6c65c904e9e132c"
-dependencies = [
- "unicode-segmentation",
-]
-
-[[package]]
-name = "heck"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2540771e65fc8cb83cd6e8a237f70c319bd5c29f78ed1084ba5d50eeac86f7f9"
@@ -1481,7 +1459,7 @@ version = "0.1.0"
 dependencies = [
  "clap 3.1.12",
  "cranelift-isle",
- "env_logger 0.8.4",
+ "env_logger 0.9.0",
  "miette",
 ]
 
@@ -1858,15 +1836,6 @@ dependencies = [
  "crc32fast",
  "hashbrown",
  "indexmap",
- "memchr",
-]
-
-[[package]]
-name = "object"
-version = "0.28.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "40bec70ba014595f99f7aa110b84331ffe1ee9aece7fe6f387cc7e3ecda4d456"
-dependencies = [
  "memchr",
 ]
 
@@ -3014,12 +2983,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "unicode-segmentation"
-version = "1.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7e8820f5d777f6224dc4be3632222971ac30164d4a258d595640799554ebfd99"
-
-[[package]]
 name = "unicode-width"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3356,7 +3319,7 @@ dependencies = [
  "lazy_static",
  "libc",
  "log",
- "object 0.27.1",
+ "object",
  "once_cell",
  "paste",
  "psm",
@@ -3399,7 +3362,7 @@ version = "0.19.0"
 dependencies = [
  "anyhow",
  "cap-std",
- "env_logger 0.8.4",
+ "env_logger 0.9.0",
  "once_cell",
  "wasi-cap-std-sync",
  "wasmtime",
@@ -3447,7 +3410,7 @@ dependencies = [
  "async-trait",
  "clap 3.1.12",
  "criterion",
- "env_logger 0.8.4",
+ "env_logger 0.9.0",
  "file-per-thread-logger",
  "filecheck",
  "humantime 2.1.0",
@@ -3476,7 +3439,7 @@ dependencies = [
  "wasmtime-wasi-crypto",
  "wasmtime-wasi-nn",
  "wasmtime-wast",
- "wast 39.0.0",
+ "wast 40.0.0",
  "wat",
  "winapi",
 ]
@@ -3494,7 +3457,7 @@ dependencies = [
  "gimli",
  "log",
  "more-asserts",
- "object 0.27.1",
+ "object",
  "target-lexicon",
  "thiserror",
  "wasmparser",
@@ -3511,7 +3474,7 @@ dependencies = [
  "indexmap",
  "log",
  "more-asserts",
- "object 0.27.1",
+ "object",
  "serde",
  "target-lexicon",
  "thiserror",
@@ -3551,7 +3514,7 @@ version = "0.19.0"
 dependencies = [
  "anyhow",
  "arbitrary",
- "env_logger 0.8.4",
+ "env_logger 0.9.0",
  "log",
  "rand 0.8.5",
  "rayon",
@@ -3582,7 +3545,7 @@ dependencies = [
  "gimli",
  "ittapi-rs",
  "log",
- "object 0.27.1",
+ "object",
  "region",
  "rustc-demangle",
  "rustix",
@@ -3600,7 +3563,7 @@ name = "wasmtime-jit-debug"
 version = "0.37.0"
 dependencies = [
  "lazy_static",
- "object 0.27.1",
+ "object",
  "rustix",
 ]
 
@@ -3692,17 +3655,6 @@ dependencies = [
 
 [[package]]
 name = "wast"
-version = "39.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e9bbbd53432b267421186feee3e52436531fa69a7cfee9403f5204352df3dd05"
-dependencies = [
- "leb128",
- "memchr",
- "unicode-width",
-]
-
-[[package]]
-name = "wast"
 version = "40.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9bb4f48a8b083dbc50e291e430afb8f524092bb00428957bcc63f49f856c64ac"
@@ -3764,7 +3716,7 @@ name = "wiggle-generate"
 version = "0.37.0"
 dependencies = [
  "anyhow",
- "heck 0.3.3",
+ "heck",
  "proc-macro2",
  "quote",
  "shellexpand",
@@ -3787,7 +3739,7 @@ dependencies = [
 name = "wiggle-test"
 version = "0.21.0"
 dependencies = [
- "env_logger 0.8.4",
+ "env_logger 0.9.0",
  "proptest",
  "thiserror",
  "tracing",

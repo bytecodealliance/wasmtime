@@ -19,7 +19,7 @@ wiggle = { path = "..", features = ["tracing_log"] }
 thiserror = "1.0"
 tracing = "0.1.26"
 tracing-subscriber = "0.3.1"
-env_logger = "0.8"
+env_logger = "0.9"
 
 [badges]
 maintenance = { status = "actively-developed" }
