@@ -19,6 +19,12 @@ use super::lower::*;
 use crate::isa::risc_v::abi::*;
 use crate::isa::risc_v::inst::*;
 
+pub(crate) fn is_valid_atomic_transaction_ty(ty: Type) -> bool {
+    match ty {
+        I8 | I16 | I32 | I64 => true,
+        _ => false,
+    }
+}
 /// Actually codegen an instruction's results into registers.
 pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
     ctx: &mut C,
@@ -127,7 +133,27 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::StackAddr => {}
 
-        Opcode::AtomicRmw => {}
+        Opcode::AtomicRmw => {
+            let r_dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+            let mut r_addr = ctx.put_input_in_regs(insn, 0).only_reg().unwrap();
+            let mut r_arg2 = ctx.put_input_in_regs(insn, 1).only_reg().unwrap();
+            let ty_access = ty.unwrap();
+            assert!(is_valid_atomic_transaction_ty(ty_access));
+            let op = ctx.data(insn).atomic_rmw_op().unwrap();
+
+            if let Some(risc_op) = AtomicOP::from_atomicrmw_type_and_op(ty_access, op) {
+                ctx.emit(Inst::Atomic {
+                    op: risc_op,
+                    rd: r_dst,
+                    addr: r_addr,
+                    src: r_arg2,
+                    // where are the memory order
+                    aq: false,
+                    rl: false,
+                });
+            } else {
+            }
+        }
 
         Opcode::AtomicCas => {}
 
@@ -135,7 +161,9 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::AtomicStore => {}
 
-        Opcode::Fence => {}
+        Opcode::Fence => {
+            ctx.emit(Inst::Fence);
+        }
 
         Opcode::StackLoad | Opcode::StackStore => {
             panic!("Direct stack memory access not supported; should not be used by Wasm");
@@ -208,20 +236,77 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let cc_bit = FloatCCBit::floatcc_2_mask_bits(cc);
             let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let ty = ctx.input_ty(insn, 0);
-            let mut patch_set_false: Vec<usize> = vec![];
-            let mut patch_set_true: Vec<usize> = vec![];
-            let mut patch_jump_over: Vec<usize> = vec![];
             if ty.is_vector() {
                 panic!("vector float compare is not supported");
             }
-            if cc_bit & FloatCCBit::EQ.bit() > 0 {
-                let op = if ty == F32 {
-                    AluOPRRR::FeqS
+            let eq_op = if ty == F32 {
+                AluOPRRR::FeqS
+            } else {
+                AluOPRRR::FeqD
+            };
+            let lt_op = if ty == F32 {
+                AluOPRRR::FltS
+            } else {
+                AluOPRRR::FltD
+            };
+            let le_op = if ty == F32 {
+                AluOPRRR::FleS
+            } else {
+                AluOPRRR::FleD
+            };
+
+            {
+                /*
+                    can be implemented by one risc-v instruction.
+                */
+                let x = if cc_bit.just_eq() {
+                    Some(eq_op)
+                } else if cc_bit.just_le() {
+                    Some(le_op)
+                } else if cc_bit.just_lt() {
+                    Some(lt_op)
                 } else {
-                    AluOPRRR::FeqD
+                    None
                 };
+                if let Some(op) = x {
+                    insts.push(Inst::AluRRR {
+                        alu_op: op,
+                        rd,
+                        rs1: left,
+                        rs2: right,
+                    });
+                    insts.into_iter().for_each(|inst| ctx.emit(inst));
+                    return CodegenResult::Ok(());
+                }
+            }
+
+            let mut patch_set_false: Vec<usize> = vec![];
+            let mut patch_set_true: Vec<usize> = vec![];
+            let mut patch_jump_over: Vec<usize> = vec![];
+            // if eq
+            if cc_bit.test(FloatCCBit::EQ) {
                 insts.push(Inst::AluRRR {
-                    alu_op: op,
+                    alu_op: eq_op,
+                    rd,
+                    rs1: left,
+                    rs2: right,
+                });
+
+                patch_jump_over.push(insts.len());
+                insts.push(Inst::CondBr {
+                    taken: BranchTarget::patch(),
+                    not_taken: BranchTarget::zero(),
+                    kind: CondBrKind {
+                        kind: IntCC::NotEqual,
+                        rs1: rd.to_reg(),
+                        rs2: zero_reg(),
+                    },
+                });
+            }
+            // if <
+            if cc_bit.test(FloatCCBit::LT) {
+                insts.push(Inst::AluRRR {
+                    alu_op: lt_op,
                     rd,
                     rs1: left,
                     rs2: right,
@@ -237,32 +322,8 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     },
                 });
             }
-
-            if cc_bit & FloatCCBit::LT.bit() > 0 {
-                let op = if ty == F32 {
-                    AluOPRRR::FltS
-                } else {
-                    AluOPRRR::FltD
-                };
-                insts.push(Inst::AluRRR {
-                    alu_op: op,
-                    rd,
-                    rs1: left,
-                    rs2: right,
-                });
-                patch_jump_over.push(insts.len());
-                insts.push(Inst::CondBr {
-                    taken: BranchTarget::patch(),
-                    not_taken: BranchTarget::zero(),
-                    kind: CondBrKind {
-                        kind: IntCC::NotEqual,
-                        rs1: rd.to_reg(),
-                        rs2: zero_reg(),
-                    },
-                });
-            }
-
-            if cc_bit & FloatCCBit::GT.bit() > 0 {
+            // if gt
+            if cc_bit.test(FloatCCBit::GT) {
                 // I have no left > right operation in risc-v instruction set
                 // first check order
                 insts.extend(Inst::generate_float_unordered(rd, ty, left, right));
@@ -277,13 +338,8 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     },
                 });
                 // number is ordered
-                let op = if ty == F32 {
-                    AluOPRRR::FleS
-                } else {
-                    AluOPRRR::FleD
-                };
                 insts.push(Inst::AluRRR {
-                    alu_op: op,
+                    alu_op: le_op,
                     rd,
                     rs1: left,
                     rs2: right,
@@ -300,8 +356,8 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     },
                 });
             }
-
-            if cc_bit & FloatCCBit::UN.bit() > 0 {
+            // if unorder
+            if cc_bit.test(FloatCCBit::UN) {
                 insts.extend(Inst::generate_float_unordered(rd, ty, left, right));
                 patch_jump_over.push(insts.len());
                 insts.push(Inst::Jump {
@@ -325,7 +381,6 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             }
             // jump here , rd is already set to true , nothing need to be done.
             Inst::patch_taken_path_list(&mut insts, &patch_jump_over);
-
             insts.into_iter().for_each(|inst| ctx.emit(inst));
         }
 

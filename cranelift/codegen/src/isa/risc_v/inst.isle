@@ -118,7 +118,8 @@
     ;; and faster `is_move()` logic.
     (Mov
       (rd WritableReg)
-      (rm Reg))
+      (rm Reg)
+      (ty Type))
 
     (Fence)
 
@@ -151,8 +152,8 @@
     (Atomic 
       (op AtomicOP)
       (rd WritableReg)
-      (rs1 Reg)
-      (rs2 Reg)
+      (addr Reg)
+      (src Reg)
       (aq bool)
       (rl bool))
 ))
@@ -432,6 +433,18 @@
 (type Imm20 (primitive Imm20))
 (type Imm3 (primitive Imm3))
 (type BranchTarget (primitive BranchTarget))
+
+(type ExtendOp extern
+  (enum
+    (UXTB)
+    (UXTH)
+    (UXTW)
+    (UXTX)
+    (SXTB)
+    (SXTH)
+    (SXTW)
+    (SXTX)
+))
 
 
 

@@ -313,6 +313,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         insts.push(Inst::Mov {
             rd: writable_fp_reg(),
             rm: stack_reg(),
+            ty: I64,
         });
         insts
     }

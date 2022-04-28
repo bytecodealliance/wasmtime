@@ -442,17 +442,55 @@ impl MachInstEmit for Inst {
                         }
                     }
                 }
-
                 Inst::Jump { dest: not_taken }.emit(sink, emit_info, state);
             }
-            &Inst::Mov { rd, rm } => {
-                let x = Inst::AluRRImm12 {
-                    alu_op: AluOPRRI::Ori,
-                    rd: rd,
-                    rs: rm,
-                    imm12: Imm12::zero(),
-                };
-                x.emit(sink, emit_info, state);
+
+            &Inst::Mov { rd, rm, ty } => {
+                /*
+                    todo::
+                    it is possible for rd and rm have diffent regClass?????
+
+
+                */
+                if rd.to_reg() != rm {
+                    if ty.is_float() {
+                        let mut insts = SmallInstVec::new();
+                        if ty == F32 {
+                            insts.push(Inst::AluRR {
+                                alu_op: AluOPRR::FmvXW,
+                                rd: writable_spilltmp_reg(),
+                                rs: rm,
+                            });
+                            insts.push(Inst::AluRR {
+                                alu_op: AluOPRR::FmvWX,
+                                rd: rd,
+                                rs: spilltmp_reg(),
+                            });
+                        } else {
+                            insts.push(Inst::AluRR {
+                                alu_op: AluOPRR::FmvXD,
+                                rd: writable_spilltmp_reg(),
+                                rs: rm,
+                            });
+                            insts.push(Inst::AluRR {
+                                alu_op: AluOPRR::FmvDX,
+                                rd: rd,
+                                rs: spilltmp_reg(),
+                            });
+                        }
+                        insts
+                            .into_iter()
+                            .for_each(|inst| inst.emit(sink, emit_info, state));
+                    } else {
+                        let x = Inst::AluRRImm12 {
+                            alu_op: AluOPRRI::Ori,
+                            rd: rd,
+                            rs: rm,
+                            imm12: Imm12::zero(),
+                        };
+                        x.emit(sink, emit_info, state);
+                    }
+                }
             }
 
             &Inst::VirtualSPOffsetAdj { amount } => {
@@ -471,7 +509,68 @@ impl MachInstEmit for Inst {
                     | op.imm12(imm) << 20;
                 sink.put4(x);
             }
-            _ => unimplemented!(),
+            &Inst::Atomic {
+                op,
+                rd,
+                addr,
+                src,
+                aq,
+                rl,
+            } => {
+                let x = op.op_code()
+                    | (rd.to_reg().get_hw_encoding() as u32) << 7
+                    | op.funct3() << 12
+                    | (addr.get_hw_encoding() as u32) << 15
+                    | (src.get_hw_encoding() as u32) << 20
+                    | op.funct7(aq, rl) << 25;
+
+                sink.put4(x);
+            }
+
+            /*
+                todo
+                why does fence look like have parameter.
+                0000 pred succ 00000 000 00000 0001111
+                what is pred and succ???????
+            */
+            &Inst::Fence => sink.put4(0x0ff0000f),
+            &Inst::FenceI => sink.put4(0x0000100f),
+            &Inst::Auipc { rd, imm } => {
+                let x =
+                    0b0010111 | (rd.to_reg().get_hw_encoding() as u32) << 7 | imm.as_u32() << 12;
+                sink.put4(x);
+            }
+            // &Inst::LoadExtName { rd, name, offset } => todo!(),
+            &Inst::LoadAddr { rd, mem } => {
+                let base = mem.get_base_register();
+                let offset = mem.get_offset_with_state(state);
+                if let Some(offset) = Imm12::maybe_from_u64(offset as u64) {
+                    Inst::AluRRImm12 {
+                        alu_op: AluOPRRI::Addi,
+                        rd: rd,
+                        rs: base,
+                        imm12: offset,
+                    }
+                    .emit(sink, emit_info, state);
+                } else {
+                    // need more register
+                    let registers = Inst::alloc_registers(None, 1);
+                    let mut insts = Inst::push_registers(&registers);
+                    insts.extend(Inst::load_constant_u64(registers[0], offset as u64));
+
+                    insts.push(Inst::AluRRR {
+                        rd,
+                        alu_op: AluOPRRR::Add,
+                        rs1: base,
+                        rs2: registers[0].to_reg(),
+                    });
+                    insts.extend(Inst::pop_registers(&registers));
+                    insts
+                        .into_iter()
+                        .for_each(|inst| inst.emit(sink, emit_info, state));
+                }
+            }
+            _ => todo!(),
         };
 
         let end_off = sink.cur_offset();

@@ -455,19 +455,6 @@ fn riscv64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             collector.add_use(src);
         }
 
-        &Inst::AluRRR { rd, rs1, rs2, .. } => {
-            collector.add_def(rd);
-            collector.add_use(rs1);
-            collector.add_use(rs2);
-        }
-        &Inst::Load { rd, from, .. } => {
-            collector.add_def(rd);
-            collector.add_use(from.get_base_register());
-        }
-        &Inst::Store { to, src, .. } => {
-            collector.add_use(src);
-            collector.add_use(to.get_base_register());
-        }
         &Inst::EpiloguePlaceholder => {}
         &Inst::Ret => {}
         &Inst::Extend { rd, rn, .. } => {
@@ -490,7 +477,7 @@ fn riscv64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
         &Inst::LoadExtName { rd, .. } => todo!(),
         &Inst::LoadAddr { rd, mem } => todo!(),
         &Inst::VirtualSPOffsetAdj { .. } => {}
-        &Inst::Mov { rd, rm } => {
+        &Inst::Mov { rd, rm, .. } => {
             collector.add_def(rd);
             collector.add_use(rm);
         }
@@ -519,10 +506,10 @@ fn riscv64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             collector.add_def(rd);
             collector.add_use(base);
         }
-        &Inst::Atomic { rd, rs1, rs2, .. } => {
+        &Inst::Atomic { rd, addr, src, .. } => {
             collector.add_def(rd);
-            collector.add_use(rs1);
-            collector.add_use(rs2);
+            collector.add_use(addr);
+            collector.add_use(src);
         }
     }
 }
@@ -565,19 +552,6 @@ pub fn riscv64_map_regs<RM: RegMapper>(inst: &mut Inst, mapper: &RM) {
         } => {
             mapper.map_def(rd);
             mapper.map_use(rs);
-        }
-        &mut Inst::Lui { ref mut rd, .. } => {
-            mapper.map_def(rd);
-        }
-        &mut Inst::AluRRR {
-            ref mut rd,
-            ref mut rs1,
-            ref mut rs2,
-            ..
-        } => {
-            mapper.map_def(rd);
-            mapper.map_use(rs1);
-            mapper.map_use(rs2);
         }
         &mut Inst::Load {
             ref mut rd,
@@ -634,6 +608,7 @@ pub fn riscv64_map_regs<RM: RegMapper>(inst: &mut Inst, mapper: &RM) {
         &mut Inst::Mov {
             ref mut rd,
             ref mut rm,
+            ..
         } => {
             mapper.map_def(rd);
             mapper.map_use(rm);
@@ -675,13 +650,13 @@ pub fn riscv64_map_regs<RM: RegMapper>(inst: &mut Inst, mapper: &RM) {
         }
         &mut Inst::Atomic {
             ref mut rd,
-            ref mut rs1,
-            ref mut rs2,
+            ref mut addr,
+            ref mut src,
             ..
         } => {
             mapper.map_def(rd);
-            mapper.map_use(rs1);
-            mapper.map_use(rs2);
+            mapper.map_use(addr);
+            mapper.map_use(src);
         }
     }
 }
@@ -702,7 +677,7 @@ impl MachInst for Inst {
 
     fn is_move(&self) -> Option<(Writable<Reg>, Reg)> {
         match self {
-            Inst::Mov { rd, rm } => Some((rd.clone(), rm.clone())),
+            Inst::Mov { rd, rm, .. } => Some((rd.clone(), rm.clone())),
             _ => None,
         }
     }
@@ -756,6 +731,7 @@ impl MachInst for Inst {
         Inst::Mov {
             rd: to_reg,
             rm: from_reg,
+            ty,
         }
     }
 
@@ -1008,16 +984,19 @@ impl Inst {
             &MInst::LoadExtName { .. } => todo!(),
             &MInst::LoadAddr { .. } => todo!(),
             &MInst::VirtualSPOffsetAdj { .. } => todo!(),
-            &MInst::Mov { rd, rm } => {
-                format!(
-                    "{} {},{}",
-                    "mov",
-                    register_name(rd.to_reg()),
-                    register_name(rm)
-                )
+            &MInst::Mov { rd, rm, ty } => {
+                let v = if ty == F32 {
+                    "fmv.s"
+                } else if ty == F64 {
+                    "fmv.d"
+                } else {
+                    "mov"
+                };
+                format!("{} {},{}", v, register_name(rd.to_reg()), register_name(rm))
             }
-            &MInst::Fence => todo!(),
-            &MInst::FenceI => todo!(),
+            &MInst::Fence => "fence".into(),
+            &MInst::FenceI => "fence.i".into(),
+
             &MInst::Udf { .. } => todo!(),
             &MInst::EBreak {} => todo!(),
             &MInst::ECall {} => todo!(),

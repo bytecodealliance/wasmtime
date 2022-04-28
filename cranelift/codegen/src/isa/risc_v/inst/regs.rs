@@ -92,7 +92,7 @@ pub fn fa0_to_fa7() -> Vec<Writable<Reg>> {
         .zip(fa0().get_index()..=fa7().get_index())
     {
         v.push(Writable::from_reg(Reg::new_real(
-            RegClass::I64,
+            RegClass::F64,
             enc,
             index as u8,
         )));

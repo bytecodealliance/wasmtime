@@ -981,32 +981,31 @@ impl FClassResult {
     LT - x is less than y.
     GT - x is greater than y.
 */
+#[derive(Clone)]
 pub enum FloatCCBit {
     UN,
     EQ,
     LT,
     GT,
+    C(u8),
 }
 
 impl FloatCCBit {
     #[inline(always)]
-    pub(crate) fn shift(self) -> u8 {
+    pub(crate) fn bit(&self) -> u8 {
         match self {
-            FloatCCBit::UN => 0,
-            FloatCCBit::EQ => 1,
-            FloatCCBit::LT => 2,
-            FloatCCBit::GT => 3,
+            FloatCCBit::UN => 1 << 0,
+            FloatCCBit::EQ => 1 << 1,
+            FloatCCBit::LT => 1 << 2,
+            FloatCCBit::GT => 1 << 3,
+            FloatCCBit::C(x) => *x,
         }
-    }
-    #[inline(always)]
-    pub(crate) fn bit(self) -> u8 {
-        1 << self.shift()
     }
     /*
         mask bit for floatcc
     */
-    pub(crate) fn floatcc_2_mask_bits<T: Into<FloatCC>>(t: T) -> u8 {
-        match t.into() {
+    pub(crate) fn floatcc_2_mask_bits<T: Into<FloatCC>>(t: T) -> Self {
+        let v = match t.into() {
             FloatCC::Ordered => Self::EQ.bit() | Self::LT.bit() | Self::GT.bit(),
             FloatCC::Unordered => Self::UN.bit(),
             FloatCC::Equal => Self::EQ.bit(),
@@ -1023,6 +1022,52 @@ impl FloatCCBit {
             FloatCC::UnorderedOrGreaterThanOrEqual => {
                 Self::UN.bit() | Self::GT.bit() | Self::EQ.bit()
             }
+        };
+        Self::C(v)
+    }
+
+    #[inline(always)]
+    pub(crate) fn test(&self, o: Self) -> bool {
+        (self.bit() & o.bit()) != 0
+    }
+    /*
+       there compare condition can be implemented by just one risc-v instruction.
+    */
+    pub(crate) fn just_eq(&self) -> bool {
+        match self {
+            Self::C(_) => self.test(Self::EQ) && self.clone().clean(Self::EQ).is_zero(),
+            _ => false,
+        }
+    }
+    pub(crate) fn just_lt(&self) -> bool {
+        match self {
+            Self::C(_) => self.test(Self::LT) && self.clone().clean(Self::LT).is_zero(),
+            _ => false,
+        }
+    }
+
+    pub(crate) fn just_le(&self) -> bool {
+        match self {
+            Self::C(_) => {
+                (self.test(Self::LT) && self.test(Self::EQ))
+                    && self.clone().clean(Self::LT).clean(Self::EQ).is_zero()
+            }
+            _ => false,
+        }
+    }
+
+    fn clean(mut self, o: Self) -> Self {
+        match self {
+            Self::C(ref mut x) => *x = *x & !(o.bit()),
+            _ => unreachable!(),
+        }
+        self
+    }
+
+    fn is_zero(&self) -> bool {
+        match self {
+            Self::C(x) => *x == 0,
+            _ => false,
         }
     }
 }
@@ -1056,6 +1101,16 @@ impl AtomicOP {
     }
     pub(crate) fn op_code(self) -> u32 {
         0b0101111
+    }
+    pub(crate) fn funct7(self, aq: bool, rl: bool) -> u32 {
+        let mut x = self.funct5() << 2;
+        if rl {
+            x |= 1;
+        }
+        if aq {
+            x |= 1 << 1;
+        }
+        x
     }
 
     pub(crate) fn funct3(self) -> u32 {
@@ -1111,4 +1166,80 @@ impl AtomicOP {
             AtomicOP::AmomaxuD => 0b11100,
         }
     }
+
+    pub(crate) fn from_atomicrmw_type_and_op(ty: Type, op: crate::ir::AtomicRmwOp) -> Option<Self> {
+        let type_32 = ty.bits() == 32;
+        match op {
+            crate::ir::AtomicRmwOp::Add => {
+                if type_32 {
+                    Some(Self::AmoaddW)
+                } else {
+                    Some(Self::AmoaddD)
+                }
+            }
+            crate::ir::AtomicRmwOp::Sub => None,
+            crate::ir::AtomicRmwOp::And => {
+                if type_32 {
+                    Some(Self::AmoandW)
+                } else {
+                    Some(Self::AmoandD)
+                }
+            }
+            crate::ir::AtomicRmwOp::Nand => todo!(),
+            crate::ir::AtomicRmwOp::Or => {
+                if type_32 {
+                    Some(Self::AmoorW)
+                } else {
+                    Some(Self::AmoorD)
+                }
+            }
+            crate::ir::AtomicRmwOp::Xor => {
+                if type_32 {
+                    Some(Self::AmoxorW)
+                } else {
+                    Some(Self::AmoxorD)
+                }
+            }
+            crate::ir::AtomicRmwOp::Xchg => {
+                if type_32 {
+                    Some(Self::AmoswapW)
+                } else {
+                    Some(Self::AmoswapD)
+                }
+            }
+            crate::ir::AtomicRmwOp::Umin => {
+                if type_32 {
+                    Some(Self::AmominuW)
+                } else {
+                    Some(Self::AmominuD)
+                }
+            }
+            crate::ir::AtomicRmwOp::Umax => {
+                if type_32 {
+                    Some(Self::AmomaxuW)
+                } else {
+                    Some(Self::AmomaxuD)
+                }
+            }
+            crate::ir::AtomicRmwOp::Smin => {
+                if type_32 {
+                    Some(Self::AmominW)
+                } else {
+                    Some(Self::AmominD)
+                }
+            }
+            crate::ir::AtomicRmwOp::Smax => {
+                if type_32 {
+                    Some(Self::AmomaxW)
+                } else {
+                    Some(Self::AmomaxD)
+                }
+            }
+        }
+    }
+}
+
+pub fn is_type_signed(ty: Type) -> bool {
+    assert!(ty.is_int());
+    ty == I8 || ty == I16 || ty == I32 || ty == I64 || ty == I128
 }
