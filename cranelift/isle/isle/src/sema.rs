@@ -232,6 +232,8 @@ pub enum TermKind {
     },
     /// A term declared via a `(decl ...)` form.
     Decl {
+        /// Whether the term is marked as `pure`.
+        pure: bool,
         /// The kind of this term's constructor, if any.
         constructor_kind: Option<ConstructorKind>,
         /// The kind of this term's extractor, if any.
@@ -392,13 +394,14 @@ impl Term {
         match &self.kind {
             TermKind::Decl {
                 constructor_kind: Some(ConstructorKind::ExternalConstructor { name }),
+                pure,
                 ..
             } => Some(ExternalSig {
                 func_name: tyenv.syms[name.index()].clone(),
                 full_name: format!("C::{}", tyenv.syms[name.index()]),
                 param_tys: self.arg_tys.clone(),
                 ret_tys: vec![self.ret_ty],
-                infallible: true,
+                infallible: !pure,
             }),
             TermKind::Decl {
                 constructor_kind: Some(ConstructorKind::InternalConstructor { .. }),
@@ -410,6 +413,10 @@ impl Term {
                     full_name: name,
                     param_tys: self.arg_tys.clone(),
                     ret_tys: vec![self.ret_ty],
+                    // Internal constructors are always fallible, even
+                    // if not pure, because ISLE allows partial
+                    // matching at the toplevel (an entry point can
+                    // fail to rewrite).
                     infallible: false,
                 })
             }
@@ -425,6 +432,8 @@ pub struct Rule {
     pub id: RuleId,
     /// The left-hand side pattern that this rule matches.
     pub lhs: Pattern,
+    /// Any subpattern "if-let" clauses.
+    pub iflets: Vec<IfLet>,
     /// The right-hand side expression that this rule evaluates upon successful
     /// match.
     pub rhs: Expr,
@@ -432,6 +441,18 @@ pub struct Rule {
     pub prio: Option<i64>,
     /// The source position where this rule is defined.
     pub pos: Pos,
+}
+
+/// An `if-let` clause with a subpattern match on an expr after the
+/// main LHS matches.
+#[derive(Clone, Debug)]
+pub struct IfLet {
+    /// The left-hand side pattern that this `if-let` clause matches
+    /// against the expression below.
+    pub lhs: Pattern,
+    /// The right-hand side expression that this pattern
+    /// evaluates. Must be pure.
+    pub rhs: Expr,
 }
 
 /// A left-hand side pattern of some rule.
@@ -861,6 +882,7 @@ impl TermEnv {
                         kind: TermKind::Decl {
                             constructor_kind: None,
                             extractor_kind: None,
+                            pure: decl.pure,
                         },
                     });
                 }
@@ -1337,6 +1359,18 @@ impl TermEnv {
                         }
                     };
 
+                    let pure = match &self.terms[rule_term.index()].kind {
+                        &TermKind::Decl { pure, .. } => pure,
+                        _ => {
+                            tyenv.report_error(
+                                pos,
+                                "Cannot define a rule on a left-hand-side that is an enum variant"
+                                    .to_string(),
+                            );
+                            continue;
+                        }
+                    };
+
                     let (lhs, ty) = unwrap_or_continue!(self.translate_pattern(
                         tyenv,
                         rule_term,
@@ -1345,17 +1379,25 @@ impl TermEnv {
                         &mut bindings,
                         /* is_root = */ true,
                     ));
+                    let iflets = unwrap_or_continue!(self.translate_iflets(
+                        tyenv,
+                        rule_term,
+                        &rule.iflets[..],
+                        &mut bindings,
+                    ));
                     let rhs = unwrap_or_continue!(self.translate_expr(
                         tyenv,
                         &rule.expr,
-                        ty,
-                        &mut bindings
+                        Some(ty),
+                        &mut bindings,
+                        pure,
                     ));
 
                     let rid = RuleId(self.rules.len());
                     self.rules.push(Rule {
                         id: rid,
                         lhs,
+                        iflets,
                         rhs,
                         prio: rule.prio,
                         pos,
@@ -1829,7 +1871,13 @@ impl TermEnv {
                     return None;
                 }
                 let ty = expected_ty.unwrap();
-                let expr = self.translate_expr(tyenv, expr, expected_ty.unwrap(), bindings)?;
+                let expr = self.translate_expr(
+                    tyenv,
+                    expr,
+                    expected_ty,
+                    bindings,
+                    /* pure = */ true,
+                )?;
                 Some((TermArgPattern::Expr(expr), ty))
             }
         }
@@ -1863,8 +1911,9 @@ impl TermEnv {
         &self,
         tyenv: &mut TypeEnv,
         expr: &ast::Expr,
-        ty: TypeId,
+        ty: Option<TypeId>,
         bindings: &mut Bindings,
+        pure: bool,
     ) -> Option<Expr> {
         log::trace!("translate_expr: {:?}", expr);
         match expr {
@@ -1890,25 +1939,43 @@ impl TermEnv {
                 // are doing an implicit conversion. Report an error
                 // if types don't match and no conversion is possible.
                 let ret_ty = self.terms[tid.index()].ret_ty;
-                let ty = if ret_ty != ty {
+                let ty = if ty.is_some() && ret_ty != ty.unwrap() {
                     // Is there a converter for this type mismatch?
                     if let Some(expanded_expr) =
-                        self.maybe_implicit_convert_expr(tyenv, expr, ret_ty, ty)
+                        self.maybe_implicit_convert_expr(tyenv, expr, ret_ty, ty.unwrap())
                     {
-                        return self.translate_expr(tyenv, &expanded_expr, ty, bindings);
+                        return self.translate_expr(tyenv, &expanded_expr, ty, bindings, pure);
                     }
 
                     tyenv.report_error(
                         pos,
                         format!("Mismatched types: expression expects type '{}' but term has return type '{}'",
-                                tyenv.types[ty.index()].name(tyenv),
+                                tyenv.types[ty.unwrap().index()].name(tyenv),
                                 tyenv.types[ret_ty.index()].name(tyenv)));
 
                     // Keep going, to discover more errors.
                     ret_ty
                 } else {
-                    ty
+                    ret_ty
                 };
+
+                // Check that the term's constructor is pure.
+                match &self.terms[tid.index()].kind {
+                    TermKind::Decl {
+                        pure: ctor_is_pure, ..
+                    } => {
+                        if pure && !ctor_is_pure {
+                            tyenv.report_error(
+                                pos,
+                                format!(
+                                    "Used non-pure constructor '{}' in pure expression context",
+                                    tyenv.syms[name.index()]
+                                ),
+                            );
+                        }
+                    }
+                    _ => {}
+                }
 
                 // Check that we have the correct argument count.
                 if self.terms[tid.index()].arg_tys.len() != args.len() {
@@ -1928,8 +1995,13 @@ impl TermEnv {
                 for (i, arg) in args.iter().enumerate() {
                     let term = unwrap_or_continue!(self.terms.get(tid.index()));
                     let arg_ty = unwrap_or_continue!(term.arg_tys.get(i).copied());
-                    let subexpr =
-                        unwrap_or_continue!(self.translate_expr(tyenv, arg, arg_ty, bindings));
+                    let subexpr = unwrap_or_continue!(self.translate_expr(
+                        tyenv,
+                        arg,
+                        Some(arg_ty),
+                        bindings,
+                        pure
+                    ));
                     subexprs.push(subexpr);
                 }
 
@@ -1947,12 +2019,12 @@ impl TermEnv {
                 };
 
                 // Verify type. Maybe do an implicit conversion.
-                if bv.ty != ty {
+                if ty.is_some() && bv.ty != ty.unwrap() {
                     // Is there a converter for this type mismatch?
                     if let Some(expanded_expr) =
-                        self.maybe_implicit_convert_expr(tyenv, expr, bv.ty, ty)
+                        self.maybe_implicit_convert_expr(tyenv, expr, bv.ty, ty.unwrap())
                     {
-                        return self.translate_expr(tyenv, &expanded_expr, ty, bindings);
+                        return self.translate_expr(tyenv, &expanded_expr, ty, bindings, pure);
                     }
 
                     tyenv.report_error(
@@ -1961,7 +2033,7 @@ impl TermEnv {
                             "Variable '{}' has type {} but we need {} in context",
                             name.0,
                             tyenv.types[bv.ty.index()].name(tyenv),
-                            tyenv.types[ty.index()].name(tyenv)
+                            tyenv.types[ty.unwrap().index()].name(tyenv)
                         ),
                     );
                 }
@@ -1969,6 +2041,15 @@ impl TermEnv {
                 Some(Expr::Var(bv.ty, bv.id))
             }
             &ast::Expr::ConstInt { val, pos } => {
+                if ty.is_none() {
+                    tyenv.report_error(
+                        pos,
+                        "integer literal in a context that needs an explicit type".to_string(),
+                    );
+                    return None;
+                }
+                let ty = ty.unwrap();
+
                 if !tyenv.types[ty.index()].is_prim() {
                     tyenv.report_error(
                         pos,
@@ -1990,19 +2071,19 @@ impl TermEnv {
                         return None;
                     }
                 };
-                if const_ty != ty {
+                if ty.is_some() && const_ty != ty.unwrap() {
                     tyenv.report_error(
                         pos,
                         format!(
                             "Constant '{}' has wrong type: expected {}, but is actually {}",
                             tyenv.syms[val.index()],
-                            tyenv.types[ty.index()].name(tyenv),
+                            tyenv.types[ty.unwrap().index()].name(tyenv),
                             tyenv.types[const_ty.index()].name(tyenv)
                         ),
                     );
                     return None;
                 }
-                Some(Expr::ConstPrim(ty, val))
+                Some(Expr::ConstPrim(const_ty, val))
             }
             &ast::Expr::Let {
                 ref defs,
@@ -2043,20 +2124,24 @@ impl TermEnv {
                     };
 
                     // Evaluate the variable's value.
-                    let val = Box::new(unwrap_or_continue!(
-                        self.translate_expr(tyenv, &def.val, tid, bindings)
-                    ));
+                    let val = Box::new(unwrap_or_continue!(self.translate_expr(
+                        tyenv,
+                        &def.val,
+                        Some(tid),
+                        bindings,
+                        pure
+                    )));
 
                     // Bind the var with the given type.
                     let id = VarId(bindings.next_var);
                     bindings.next_var += 1;
                     bindings.vars.push(BoundVar { name, id, ty: tid });
 
-                    let_defs.push((id, ty, val));
+                    let_defs.push((id, tid, val));
                 }
 
                 // Evaluate the body, expecting the type of the overall let-expr.
-                let body = Box::new(self.translate_expr(tyenv, body, ty, bindings)?);
+                let body = Box::new(self.translate_expr(tyenv, body, ty, bindings, pure)?);
                 let body_ty = body.ty();
 
                 // Pop the bindings.
@@ -2069,6 +2154,45 @@ impl TermEnv {
                 })
             }
         }
+    }
+
+    fn translate_iflets(
+        &self,
+        tyenv: &mut TypeEnv,
+        rule_term: TermId,
+        iflets: &[ast::IfLet],
+        bindings: &mut Bindings,
+    ) -> Option<Vec<IfLet>> {
+        let mut translated = vec![];
+        for iflet in iflets {
+            translated.push(unwrap_or_continue!(
+                self.translate_iflet(tyenv, rule_term, iflet, bindings)
+            ));
+        }
+        Some(translated)
+    }
+
+    fn translate_iflet(
+        &self,
+        tyenv: &mut TypeEnv,
+        rule_term: TermId,
+        iflet: &ast::IfLet,
+        bindings: &mut Bindings,
+    ) -> Option<IfLet> {
+        // Translate the expr first. Ensure it's pure.
+        let rhs =
+            self.translate_expr(tyenv, &iflet.expr, None, bindings, /* pure = */ true)?;
+        let ty = rhs.ty();
+        let (lhs, _lhs_ty) = self.translate_pattern(
+            tyenv,
+            rule_term,
+            &iflet.pattern,
+            Some(ty),
+            bindings,
+            /* is_root = */ true,
+        )?;
+
+        Some(IfLet { lhs, rhs })
     }
 }
 
