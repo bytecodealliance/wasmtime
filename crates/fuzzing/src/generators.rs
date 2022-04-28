@@ -702,7 +702,7 @@ impl<'a> Arbitrary<'a> for CodegenSettings {
                         // print a warning and return an error because this fuzz
                         // input must be discarded.
                         #[cfg(target_arch = $arch)]
-                        if enable && !std::$test!($std) {
+                        if enable && !std::arch::$test!($std) {
                             log::warn!("want to enable clif `{}` but host doesn't support it",
                                 $clif);
                             return Err(arbitrary::Error::EmptyChoose)
@@ -751,6 +751,11 @@ impl<'a> Arbitrary<'a> for CodegenSettings {
                     std:"avx512f" => clif:"has_avx512f" ratio: 1 in 1000,
                     std:"avx512vl" => clif:"has_avx512vl" ratio: 1 in 1000,
                     std:"avx512vbmi" => clif:"has_avx512vbmi" ratio: 1 in 1000,
+                },
+                "aarch64" => {
+                    test: is_aarch64_feature_detected,
+
+                    std: "lse" => clif: "has_lse",
                 },
             };
             return Ok(CodegenSettings::Target {

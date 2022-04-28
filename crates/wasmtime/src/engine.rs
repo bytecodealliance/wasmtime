@@ -388,9 +388,23 @@ impl Engine {
                 ))
             }
         }
+
+        let enabled;
+
+        #[cfg(target_arch = "aarch64")]
+        {
+            enabled = match flag {
+                "has_lse" => Some(std::arch::is_aarch64_feature_detected!("lse")),
+                // fall through to the very bottom to indicate that support is
+                // not enabled to test whether this feature is enabled on the
+                // host.
+                _ => None,
+            };
+        }
+
         #[cfg(target_arch = "x86_64")]
         {
-            let enabled = match flag {
+            enabled = match flag {
                 "has_sse3" => Some(std::is_x86_feature_detected!("sse3")),
                 "has_ssse3" => Some(std::is_x86_feature_detected!("ssse3")),
                 "has_sse41" => Some(std::is_x86_feature_detected!("sse4.1")),
@@ -412,18 +426,25 @@ impl Engine {
                 // host.
                 _ => None,
             };
-            match enabled {
-                Some(true) => return Ok(()),
-                Some(false) => {
-                    return Err(format!(
-                        "compilation setting {:?} is enabled but not available on the host",
-                        flag
-                    ))
-                }
-                // fall through
-                None => {}
-            }
         }
+
+        #[cfg(not(any(target_arch = "aarch64", target_arch = "x86_64")))]
+        {
+            enabled = None;
+        }
+
+        match enabled {
+            Some(true) => return Ok(()),
+            Some(false) => {
+                return Err(format!(
+                    "compilation setting {:?} is enabled, but not available on the host",
+                    flag
+                ))
+            }
+            // fall through
+            None => {}
+        }
+
         Err(format!(
             "cannot test if target-specific flag {:?} is available at runtime",
             flag
