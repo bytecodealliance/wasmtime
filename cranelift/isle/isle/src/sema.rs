@@ -793,6 +793,8 @@ impl TermEnv {
         tyenv.return_errors()?;
         env.collect_converters(tyenv, defs);
         tyenv.return_errors()?;
+        env.collect_externs(tyenv, defs);
+        tyenv.return_errors()?;
         env.collect_rules(tyenv, defs);
         env.check_for_undefined_decls(tyenv, defs);
         env.check_for_expr_terms_without_constructors(tyenv, defs);
@@ -1164,64 +1166,9 @@ impl TermEnv {
         }
     }
 
-    fn collect_rules(&mut self, tyenv: &mut TypeEnv, defs: &ast::Defs) {
+    fn collect_externs(&mut self, tyenv: &mut TypeEnv, defs: &ast::Defs) {
         for def in &defs.defs {
             match def {
-                &ast::Def::Rule(ref rule) => {
-                    let pos = rule.pos;
-                    let mut bindings = Bindings {
-                        next_var: 0,
-                        vars: vec![],
-                    };
-
-                    let rule_term = match rule.pattern.root_term() {
-                        Some(name) => {
-                            let sym = tyenv.intern_mut(name);
-                            match self.term_map.get(&sym) {
-                                Some(term) => *term,
-                                None => {
-                                    tyenv.report_error(
-                                        pos,
-                                        "Cannot define a rule for an unknown term".to_string(),
-                                    );
-                                    continue;
-                                }
-                            }
-                        }
-                        None => {
-                            tyenv.report_error(
-                                pos,
-                                "Rule does not have a term at the root of its left-hand side"
-                                    .to_string(),
-                            );
-                            continue;
-                        }
-                    };
-
-                    let (lhs, ty) = unwrap_or_continue!(self.translate_pattern(
-                        tyenv,
-                        rule_term,
-                        &rule.pattern,
-                        None,
-                        &mut bindings,
-                        /* is_root = */ true,
-                    ));
-                    let rhs = unwrap_or_continue!(self.translate_expr(
-                        tyenv,
-                        &rule.expr,
-                        ty,
-                        &mut bindings
-                    ));
-
-                    let rid = RuleId(self.rules.len());
-                    self.rules.push(Rule {
-                        id: rid,
-                        lhs,
-                        rhs,
-                        prio: rule.prio,
-                        pos,
-                    });
-                }
                 &ast::Def::Extern(ast::Extern::Constructor {
                     ref term,
                     ref func,
@@ -1350,6 +1297,69 @@ impl TermEnv {
                             continue;
                         }
                     }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    fn collect_rules(&mut self, tyenv: &mut TypeEnv, defs: &ast::Defs) {
+        for def in &defs.defs {
+            match def {
+                &ast::Def::Rule(ref rule) => {
+                    let pos = rule.pos;
+                    let mut bindings = Bindings {
+                        next_var: 0,
+                        vars: vec![],
+                    };
+
+                    let rule_term = match rule.pattern.root_term() {
+                        Some(name) => {
+                            let sym = tyenv.intern_mut(name);
+                            match self.term_map.get(&sym) {
+                                Some(term) => *term,
+                                None => {
+                                    tyenv.report_error(
+                                        pos,
+                                        "Cannot define a rule for an unknown term".to_string(),
+                                    );
+                                    continue;
+                                }
+                            }
+                        }
+                        None => {
+                            tyenv.report_error(
+                                pos,
+                                "Rule does not have a term at the root of its left-hand side"
+                                    .to_string(),
+                            );
+                            continue;
+                        }
+                    };
+
+                    let (lhs, ty) = unwrap_or_continue!(self.translate_pattern(
+                        tyenv,
+                        rule_term,
+                        &rule.pattern,
+                        None,
+                        &mut bindings,
+                        /* is_root = */ true,
+                    ));
+                    let rhs = unwrap_or_continue!(self.translate_expr(
+                        tyenv,
+                        &rule.expr,
+                        ty,
+                        &mut bindings
+                    ));
+
+                    let rid = RuleId(self.rules.len());
+                    self.rules.push(Rule {
+                        id: rid,
+                        lhs,
+                        rhs,
+                        prio: rule.prio,
+                        pos,
+                    });
                 }
                 _ => {}
             }
