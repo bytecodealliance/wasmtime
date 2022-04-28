@@ -54,9 +54,14 @@ dependencies = [
 
 [[package]]
 name = "ahash"
-version = "0.4.7"
+version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "739f4a8db6605981345c5654f3a85b056ce52f37a39d34da03f25bf2151ea16e"
+checksum = "fcb51a0695d8f838b1ee009b3fbf66bda078cd64590202a864a8f3e8c4315c47"
+dependencies = [
+ "getrandom 0.2.6",
+ "once_cell",
+ "version_check",
+]
 
 [[package]]
 name = "aho-corasick"
@@ -145,7 +150,7 @@ dependencies = [
  "cfg-if",
  "libc",
  "miniz_oxide",
- "object 0.28.3",
+ "object",
  "rustc-demangle",
 ]
 
@@ -475,7 +480,7 @@ dependencies = [
  "cranelift-isle",
  "criterion",
  "gimli",
- "hashbrown 0.9.1",
+ "hashbrown",
  "log",
  "miette",
  "regalloc2",
@@ -529,7 +534,7 @@ name = "cranelift-frontend"
 version = "0.84.0"
 dependencies = [
  "cranelift-codegen",
- "hashbrown 0.9.1",
+ "hashbrown",
  "log",
  "smallvec",
  "target-lexicon",
@@ -592,7 +597,7 @@ version = "0.84.0"
 dependencies = [
  "anyhow",
  "cranelift-codegen",
- "hashbrown 0.9.1",
+ "hashbrown",
 ]
 
 [[package]]
@@ -614,7 +619,7 @@ dependencies = [
  "cranelift-frontend",
  "cranelift-module",
  "log",
- "object 0.27.1",
+ "object",
  "target-lexicon",
 ]
 
@@ -685,7 +690,7 @@ dependencies = [
  "cranelift-codegen",
  "cranelift-entity",
  "cranelift-frontend",
- "hashbrown 0.9.1",
+ "hashbrown",
  "itertools",
  "log",
  "serde",
@@ -1268,18 +1273,12 @@ checksum = "eabb4a44450da02c90444cf74558da904edde8fb4e9035a9a6a4e15445af0bd7"
 
 [[package]]
 name = "hashbrown"
-version = "0.9.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d7afe4a420e3fe79967a00898cc1f4db7c8a49a9333a29f8a4bd76a253d5cd04"
-dependencies = [
- "ahash",
-]
-
-[[package]]
-name = "hashbrown"
 version = "0.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ab5ef0d4909ef3724cc8cce6ccc8572c5c817592e9285f5464f8e86f8bd3726e"
+dependencies = [
+ "ahash",
+]
 
 [[package]]
 name = "heck"
@@ -1356,7 +1355,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0f647032dfaa1f8b6dc29bd3edb7bbef4861b8b8007ebb118d6db284fd59f6ee"
 dependencies = [
  "autocfg 1.1.0",
- "hashbrown 0.11.2",
+ "hashbrown",
  "serde",
 ]
 
@@ -1811,21 +1810,13 @@ checksum = "17b02fc0ff9a9e4b35b3342880f48e896ebf69f2967921fe8646bf5b7125956a"
 
 [[package]]
 name = "object"
-version = "0.27.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "67ac1d3f9a1d3616fd9a60c8d74296f22406a238b6a72f5cc1e6f314df4ffbf9"
-dependencies = [
- "crc32fast",
- "indexmap",
- "memchr",
-]
-
-[[package]]
-name = "object"
 version = "0.28.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "40bec70ba014595f99f7aa110b84331ffe1ee9aece7fe6f387cc7e3ecda4d456"
 dependencies = [
+ "crc32fast",
+ "hashbrown",
+ "indexmap",
  "memchr",
 ]
 
@@ -3333,7 +3324,7 @@ dependencies = [
  "lazy_static",
  "libc",
  "log",
- "object 0.27.1",
+ "object",
  "once_cell",
  "paste",
  "psm",
@@ -3471,7 +3462,7 @@ dependencies = [
  "gimli",
  "log",
  "more-asserts",
- "object 0.27.1",
+ "object",
  "target-lexicon",
  "thiserror",
  "wasmparser",
@@ -3488,7 +3479,7 @@ dependencies = [
  "indexmap",
  "log",
  "more-asserts",
- "object 0.27.1",
+ "object",
  "serde",
  "target-lexicon",
  "thiserror",
@@ -3559,7 +3550,7 @@ dependencies = [
  "gimli",
  "ittapi-rs",
  "log",
- "object 0.27.1",
+ "object",
  "region",
  "rustc-demangle",
  "rustix",
@@ -3577,7 +3568,7 @@ name = "wasmtime-jit-debug"
 version = "0.37.0"
 dependencies = [
  "lazy_static",
- "object 0.27.1",
+ "object",
  "rustix",
 ]
 
