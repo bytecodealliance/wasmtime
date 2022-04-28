@@ -57,6 +57,11 @@ impl RuntimeLinearMemory for LinearMemoryProxy {
     fn into_any(self: Box<Self>) -> Box<dyn std::any::Any> {
         self
     }
+
+    #[cfg(feature = "pooling-allocator")]
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
 #[derive(Clone)]

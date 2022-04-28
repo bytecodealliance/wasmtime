@@ -80,6 +80,10 @@ pub trait RuntimeLinearMemory: Send + Sync {
     /// `Box::downcast` which only takes a `Box<dyn Any>`.
     #[cfg(feature = "pooling-allocator")]
     fn into_any(self: Box<Self>) -> Box<dyn std::any::Any>;
+
+    /// TODO
+    #[cfg(feature = "pooling-allocator")]
+    fn as_any(&self) -> &dyn std::any::Any;
 }
 
 /// A linear memory instance.
@@ -265,6 +269,11 @@ impl RuntimeLinearMemory for MmapMemory {
     fn into_any(self: Box<Self>) -> Box<dyn std::any::Any> {
         self
     }
+
+    #[cfg(feature = "pooling-allocator")]
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
 /// A "static" memory where the lifetime of the backing memory is managed
@@ -388,6 +397,11 @@ impl RuntimeLinearMemory for ExternalMemory {
 
     #[cfg(feature = "pooling-allocator")]
     fn into_any(self: Box<Self>) -> Box<dyn std::any::Any> {
+        self
+    }
+
+    #[cfg(feature = "pooling-allocator")]
+    fn as_any(&self) -> &dyn std::any::Any {
         self
     }
 }
@@ -608,7 +622,7 @@ impl Memory {
     /// `ExternalMemory`.
     #[cfg(feature = "pooling-allocator")]
     pub fn is_external(&self) -> bool {
-        let as_any = &self.0 as &dyn std::any::Any;
+        let as_any = self.0.as_any();
         as_any.downcast_ref::<ExternalMemory>().is_some()
     }
 
