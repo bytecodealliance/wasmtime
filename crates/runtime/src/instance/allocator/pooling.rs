@@ -11,6 +11,7 @@ use super::{
     initialize_instance, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
     InstantiationError,
 };
+use crate::memory::ExternalMemory;
 use crate::{instance::Instance, Memory, Mmap, Table};
 use crate::{MemoryImageSlot, ModuleRuntimeInfo, Store};
 use anyhow::{anyhow, bail, Context, Result};
@@ -445,34 +446,31 @@ impl InstancePool {
         instance_index: usize,
         memories: &mut PrimaryMap<DefinedMemoryIndex, Memory>,
     ) {
-        // Decommit any linear memories that were used
+        // Decommit any linear memories that were used.
         for ((def_mem_idx, memory), base) in
             memories.iter_mut().zip(self.memories.get(instance_index))
         {
             let memory = mem::take(memory);
-            assert!(memory.is_static());
-
-            match memory {
-                Memory::Static {
-                    memory_image: Some(mut image),
-                    ..
-                } => {
-                    // If there was any error clearing the image, just
-                    // drop it here, and let the drop handler for the
-                    // slot unmap in a way that retains the
-                    // address space reservation.
+            let memory_as_any = memory.0.into_any();
+            if let Ok(m) = memory_as_any.downcast::<ExternalMemory>() {
+                if let Some(mut image) = m.memory_image {
+                    // If there was any error clearing the image, just drop it
+                    // here, and let the drop handler for the slot unmap in a
+                    // way that retains the address space reservation.
                     if image.clear_and_remain_ready().is_ok() {
                         self.memories
                             .return_memory_image_slot(instance_index, def_mem_idx, image);
                     }
-                }
-
-                _ => {
-                    let size = memory.byte_size();
-                    drop(memory);
+                } else {
+                    // Otherwise, decommit the memory.
+                    use crate::memory::RuntimeLinearMemory;
+                    let size = m.byte_size();
+                    drop(m);
                     decommit_memory_pages(base, size)
                         .expect("failed to decommit linear memory pages");
                 }
+            } else {
+                panic!("only pooled memories are allowed here");
             }
         }
     }
