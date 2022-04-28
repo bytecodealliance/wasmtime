@@ -10,6 +10,7 @@
 use crate::disasm::print_all;
 use crate::utils::parse_sets_and_triple;
 use anyhow::{Context as _, Result};
+use clap::Parser;
 use cranelift_codegen::ir::DisplayFunctionAnnotations;
 use cranelift_codegen::print_errors::{pretty_error, pretty_verifier_error};
 use cranelift_codegen::settings::FlagsOrIsa;
@@ -20,7 +21,6 @@ use cranelift_wasm::{translate_module, DummyEnvironment, FuncIndex, ReturnMode};
 use std::io::Read;
 use std::path::Path;
 use std::path::PathBuf;
-use structopt::StructOpt;
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
 /// For verbose printing: only print if the `$x` expression is true.
@@ -61,58 +61,57 @@ macro_rules! vcprint {
 }
 
 /// Compiles Wasm binary/text into Cranelift IR and then into target language
-#[derive(StructOpt)]
+#[derive(Parser)]
 pub struct Options {
     /// Be more verbose
-    #[structopt(short = "v", long = "verbose")]
+    #[clap(short, long)]
     verbose: bool,
 
     /// Print the resulting Cranelift IR
-    #[structopt(short("p"))]
+    #[clap(short)]
     print: bool,
 
     /// Print pass timing report
-    #[structopt(short("T"))]
+    #[clap(short = 'T')]
     report_times: bool,
 
     /// Print machine code disassembly
-    #[structopt(short("D"), long("disasm"))]
+    #[clap(short = 'D', long)]
     disasm: bool,
 
     /// Configure Cranelift settings
-    #[structopt(long("set"))]
+    #[clap(long = "set")]
     settings: Vec<String>,
 
     /// Specify the Cranelift target
-    #[structopt(long("target"))]
+    #[clap(long = "target")]
     target: String,
 
     /// Specify an input file to be used. Use '-' for stdin.
-    #[structopt(parse(from_os_str))]
     files: Vec<PathBuf>,
 
     /// Enable debug output on stderr/stdout
-    #[structopt(short = "d")]
+    #[clap(short)]
     debug: bool,
 
     /// Print bytecode size
-    #[structopt(short("X"))]
+    #[clap(short = 'X')]
     print_size: bool,
 
     /// Just decode Wasm into Cranelift IR, don't compile it to native code
-    #[structopt(short("t"))]
+    #[clap(short = 't')]
     just_decode: bool,
 
     /// Just checks the correctness of Cranelift IR translated from Wasm
-    #[structopt(short("c"))]
+    #[clap(short = 'c')]
     check_translation: bool,
 
     /// Display values' ranges and their locations
-    #[structopt(long("value-ranges"))]
+    #[clap(long = "value-ranges")]
     value_ranges: bool,
 
     /// Use colors in output? [options: auto/never/always; default: auto]
-    #[structopt(long("color"), default_value("auto"))]
+    #[clap(long = "color", default_value("auto"))]
     color: ColorOpt,
 }
 

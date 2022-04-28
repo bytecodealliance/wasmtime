@@ -92,9 +92,9 @@ lazy_static::lazy_static! {
 pub mod commands;
 
 use anyhow::{bail, Result};
+use clap::Parser;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use structopt::StructOpt;
 use wasmtime::{Config, ProfilingStrategy};
 #[cfg(feature = "pooling-allocator")]
 use wasmtime::{InstanceLimits, PoolingAllocationStrategy};
@@ -138,51 +138,51 @@ fn init_file_per_thread_logger(prefix: &'static str) {
 }
 
 /// Common options for commands that translate WebAssembly modules
-#[derive(StructOpt)]
+#[derive(Parser)]
 struct CommonOptions {
     /// Use specified configuration file
-    #[structopt(long, parse(from_os_str), value_name = "CONFIG_PATH")]
+    #[clap(long, parse(from_os_str), value_name = "CONFIG_PATH")]
     config: Option<PathBuf>,
 
     /// Disable logging.
-    #[structopt(long, conflicts_with = "log_to_files")]
+    #[clap(long, conflicts_with = "log-to-files")]
     disable_logging: bool,
 
     /// Log to per-thread log files instead of stderr.
-    #[structopt(long)]
+    #[clap(long)]
     log_to_files: bool,
 
     /// Generate debug information
-    #[structopt(short = "g")]
+    #[clap(short = 'g')]
     debug_info: bool,
 
     /// Disable cache system
-    #[structopt(long)]
+    #[clap(long)]
     disable_cache: bool,
 
     /// Enables or disables WebAssembly features
-    #[structopt(long, value_name = "FEATURE,FEATURE,...", parse(try_from_str = parse_wasm_features))]
+    #[clap(long, value_name = "FEATURE,FEATURE,...", parse(try_from_str = parse_wasm_features))]
     wasm_features: Option<WasmFeatures>,
 
     /// Enables or disables WASI modules
-    #[structopt(long, value_name = "MODULE,MODULE,...", parse(try_from_str = parse_wasi_modules))]
+    #[clap(long, value_name = "MODULE,MODULE,...", parse(try_from_str = parse_wasi_modules))]
     wasi_modules: Option<WasiModules>,
 
     /// Generate jitdump file (supported on --features=profiling build)
-    #[structopt(long, conflicts_with = "vtune")]
+    #[clap(long, conflicts_with = "vtune")]
     jitdump: bool,
 
     /// Generate vtune (supported on --features=vtune build)
-    #[structopt(long, conflicts_with = "jitdump")]
+    #[clap(long, conflicts_with = "jitdump")]
     vtune: bool,
 
     /// Run optimization passes on translated functions, on by default
-    #[structopt(short = "O", long)]
+    #[clap(short = 'O', long)]
     optimize: bool,
 
     /// Optimization level for generated functions
     /// Supported levels: 0 (none), 1, 2 (most), or s (size); default is "most"
-    #[structopt(
+    #[clap(
         long,
         value_name = "LEVEL",
         parse(try_from_str = parse_opt_level),
@@ -192,12 +192,12 @@ struct CommonOptions {
 
     /// Set a Cranelift setting to a given value.
     /// Use `wasmtime settings` to list Cranelift settings for a target.
-    #[structopt(long = "cranelift-set", value_name = "NAME=VALUE", number_of_values = 1, verbatim_doc_comment, parse(try_from_str = parse_cranelift_flag))]
+    #[clap(long = "cranelift-set", value_name = "NAME=VALUE", number_of_values = 1, verbatim_doc_comment, parse(try_from_str = parse_cranelift_flag))]
     cranelift_set: Vec<(String, String)>,
 
     /// Enable a Cranelift boolean setting or preset.
     /// Use `wasmtime settings` to list Cranelift settings for a target.
-    #[structopt(
+    #[clap(
         long,
         value_name = "SETTING",
         number_of_values = 1,
@@ -207,27 +207,27 @@ struct CommonOptions {
 
     /// Maximum size in bytes of wasm memory before it becomes dynamically
     /// relocatable instead of up-front-reserved.
-    #[structopt(long, value_name = "MAXIMUM")]
+    #[clap(long, value_name = "MAXIMUM")]
     static_memory_maximum_size: Option<u64>,
 
     /// Force using a "static" style for all wasm memories.
-    #[structopt(long)]
+    #[clap(long)]
     static_memory_forced: bool,
 
     /// Byte size of the guard region after static memories are allocated.
-    #[structopt(long, value_name = "SIZE")]
+    #[clap(long, value_name = "SIZE")]
     static_memory_guard_size: Option<u64>,
 
     /// Byte size of the guard region after dynamic memories are allocated.
-    #[structopt(long, value_name = "SIZE")]
+    #[clap(long, value_name = "SIZE")]
     dynamic_memory_guard_size: Option<u64>,
 
     /// Enable Cranelift's internal debug verifier (expensive)
-    #[structopt(long)]
+    #[clap(long)]
     enable_cranelift_debug_verifier: bool,
 
     /// Enable Cranelift's internal NaN canonicalization
-    #[structopt(long)]
+    #[clap(long)]
     enable_cranelift_nan_canonicalization: bool,
 
     /// Enable execution fuel with N units fuel, where execution will trap after
@@ -237,29 +237,29 @@ struct CommonOptions {
     /// such as `nop`, `drop`, `block`, and `loop`, consume 0 units, as any
     /// execution cost associated with them involves other instructions which do
     /// consume fuel.
-    #[structopt(long, value_name = "N")]
+    #[clap(long, value_name = "N")]
     fuel: Option<u64>,
 
     /// Executing wasm code will yield when a global epoch counter
     /// changes, allowing for async operation without blocking the
     /// executor.
-    #[structopt(long)]
+    #[clap(long)]
     epoch_interruption: bool,
 
     /// Disables the on-by-default address map from native code to wasm code.
-    #[structopt(long)]
+    #[clap(long)]
     disable_address_map: bool,
 
     /// Disables the default of attempting to initialize linear memory via a
     /// copy-on-write mapping.
     #[cfg(feature = "memory-init-cow")]
-    #[structopt(long)]
+    #[clap(long)]
     disable_memory_init_cow: bool,
 
     /// Enables the pooling allocator, in place of the on-demand
     /// allocator.
     #[cfg(feature = "pooling-allocator")]
-    #[structopt(long)]
+    #[clap(long)]
     pooling_allocator: bool,
 }
 
@@ -561,7 +561,7 @@ mod test {
 
     #[test]
     fn test_all_features() -> Result<()> {
-        let options = CommonOptions::from_iter_safe(vec!["foo", "--wasm-features=all"])?;
+        let options = CommonOptions::try_parse_from(vec!["foo", "--wasm-features=all"])?;
 
         let WasmFeatures {
             reference_types,
@@ -586,7 +586,7 @@ mod test {
 
     #[test]
     fn test_no_features() -> Result<()> {
-        let options = CommonOptions::from_iter_safe(vec!["foo", "--wasm-features=-all"])?;
+        let options = CommonOptions::try_parse_from(vec!["foo", "--wasm-features=-all"])?;
 
         let WasmFeatures {
             reference_types,
@@ -611,7 +611,7 @@ mod test {
 
     #[test]
     fn test_multiple_features() -> Result<()> {
-        let options = CommonOptions::from_iter_safe(vec![
+        let options = CommonOptions::try_parse_from(vec![
             "foo",
             "--wasm-features=-reference-types,simd,multi-memory,memory64",
         ])?;
@@ -642,13 +642,13 @@ mod test {
             #[test]
             fn $test_name() -> Result<()> {
                 let options =
-                    CommonOptions::from_iter_safe(vec!["foo", concat!("--wasm-features=", $flag)])?;
+                    CommonOptions::try_parse_from(vec!["foo", concat!("--wasm-features=", $flag)])?;
 
                 let WasmFeatures { $name, .. } = options.wasm_features.unwrap();
 
                 assert_eq!($name, Some(true));
 
-                let options = CommonOptions::from_iter_safe(vec![
+                let options = CommonOptions::try_parse_from(vec![
                     "foo",
                     concat!("--wasm-features=-", $flag),
                 ])?;
@@ -676,7 +676,7 @@ mod test {
 
     #[test]
     fn test_default_modules() {
-        let options = CommonOptions::from_iter_safe(vec!["foo", "--wasi-modules=default"]).unwrap();
+        let options = CommonOptions::try_parse_from(vec!["foo", "--wasi-modules=default"]).unwrap();
         assert_eq!(
             options.wasi_modules.unwrap(),
             WasiModules {
@@ -689,7 +689,7 @@ mod test {
 
     #[test]
     fn test_empty_modules() {
-        let options = CommonOptions::from_iter_safe(vec!["foo", "--wasi-modules="]).unwrap();
+        let options = CommonOptions::try_parse_from(vec!["foo", "--wasi-modules="]).unwrap();
         assert_eq!(
             options.wasi_modules.unwrap(),
             WasiModules {
@@ -702,7 +702,7 @@ mod test {
 
     #[test]
     fn test_some_modules() {
-        let options = CommonOptions::from_iter_safe(vec![
+        let options = CommonOptions::try_parse_from(vec![
             "foo",
             "--wasi-modules=experimental-wasi-nn,-wasi-common",
         ])
@@ -720,7 +720,7 @@ mod test {
     #[test]
     fn test_no_modules() {
         let options =
-            CommonOptions::from_iter_safe(vec!["foo", "--wasi-modules=-default"]).unwrap();
+            CommonOptions::try_parse_from(vec!["foo", "--wasi-modules=-default"]).unwrap();
         assert_eq!(
             options.wasi_modules.unwrap(),
             WasiModules {

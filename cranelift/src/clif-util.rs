@@ -12,9 +12,9 @@
     )
 )]
 
+use clap::Parser;
 use cranelift_codegen::dbg::LOG_FILENAME_PREFIX;
-use std::{option::Option, path::PathBuf};
-use structopt::StructOpt;
+use std::path::PathBuf;
 
 mod bugpoint;
 mod cat;
@@ -40,7 +40,7 @@ fn handle_debug_flag(debug: bool) {
 }
 
 /// Cranelift code generator utility.
-#[derive(StructOpt)]
+#[derive(Parser)]
 enum Commands {
     Test(TestOptions),
     Run(run::Options),
@@ -63,58 +63,57 @@ enum Commands {
 }
 
 /// Run Cranelift tests
-#[derive(StructOpt)]
+#[derive(Parser)]
 struct TestOptions {
     /// Be more verbose
-    #[structopt(short = "v", long = "verbose")]
+    #[clap(short, long)]
     verbose: bool,
 
     /// Print pass timing report for test
-    #[structopt(short = "T")]
+    #[clap(short = 'T')]
     time_passes: bool,
 
     /// Enable debug output on stderr/stdout
-    #[structopt(short = "d")]
+    #[clap(short = 'd')]
     debug: bool,
 
     /// Specify an input file to be used. Use '-' for stdin.
-    #[structopt(required(true), parse(from_os_str))]
+    #[clap(required = true)]
     files: Vec<PathBuf>,
 }
 
 /// Run specified pass(es) on an input file.
-#[derive(StructOpt)]
+#[derive(Parser)]
 struct PassOptions {
     /// Be more verbose
-    #[structopt(short = "v", long = "verbose")]
+    #[clap(short, long)]
     verbose: bool,
 
     /// Print pass timing report for test
-    #[structopt(short = "T")]
+    #[clap(short = 'T')]
     time_passes: bool,
 
     /// Enable debug output on stderr/stdout
-    #[structopt(short = "d")]
+    #[clap(short)]
     debug: bool,
 
     /// Specify an input file to be used. Use '-' for stdin.
-    #[structopt(parse(from_os_str))]
     file: PathBuf,
 
     /// Specify the target architecture.
     target: String,
 
     /// Specify pass(es) to be run on the input file
-    #[structopt(required(true))]
+    #[clap(required = true)]
     passes: Vec<String>,
 }
 
 /// (Compiled without support for this subcommand)
-#[derive(StructOpt)]
+#[derive(Parser)]
 struct CompiledWithoutSupportOptions {}
 
 fn main() -> anyhow::Result<()> {
-    match Commands::from_args() {
+    match Commands::parse() {
         Commands::Cat(c) => cat::run(&c)?,
         Commands::Run(r) => run::run(&r)?,
         Commands::Interpret(i) => interpret::run(&i)?,

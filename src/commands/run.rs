@@ -2,16 +2,16 @@
 
 use crate::{CommonOptions, WasiModules};
 use anyhow::{anyhow, bail, Context as _, Result};
+use clap::Parser;
 use std::fs::File;
 use std::io::Read;
 use std::thread;
 use std::time::Duration;
 use std::{
-    ffi::{OsStr, OsString},
+    ffi::OsStr,
     path::{Component, Path, PathBuf},
     process,
 };
-use structopt::{clap::AppSettings, StructOpt};
 use wasmtime::{Engine, Func, Linker, Module, Store, Trap, Val, ValType};
 use wasmtime_wasi::sync::{ambient_authority, Dir, TcpListener, WasiCtxBuilder};
 
@@ -21,11 +21,11 @@ use wasmtime_wasi_nn::WasiNnCtx;
 #[cfg(feature = "wasi-crypto")]
 use wasmtime_wasi_crypto::WasiCryptoCtx;
 
-fn parse_module(s: &OsStr) -> Result<PathBuf, OsString> {
+fn parse_module(s: &OsStr) -> anyhow::Result<PathBuf> {
     // Do not accept wasmtime subcommand names as the module name
     match s.to_str() {
         Some("help") | Some("config") | Some("run") | Some("wast") | Some("compile") => {
-            Err("module name cannot be the same as a subcommand".into())
+            bail!("module name cannot be the same as a subcommand")
         }
         _ => Ok(s.into()),
     }
@@ -72,14 +72,14 @@ lazy_static::lazy_static! {
 }
 
 /// Runs a WebAssembly module
-#[derive(StructOpt)]
-#[structopt(name = "run", setting = AppSettings::TrailingVarArg, after_help = AFTER_HELP.as_str())]
+#[derive(Parser)]
+#[structopt(name = "run", trailing_var_arg = true, after_help = AFTER_HELP.as_str())]
 pub struct RunCommand {
-    #[structopt(flatten)]
+    #[clap(flatten)]
     common: CommonOptions,
 
     /// Allow unknown exports when running commands.
-    #[structopt(long = "allow-unknown-exports")]
+    #[clap(long = "allow-unknown-exports")]
     allow_unknown_exports: bool,
 
     /// Allow executing precompiled WebAssembly modules as `*.cwasm` files.
@@ -88,16 +88,16 @@ pub struct RunCommand {
     /// is arbitrary user input. Only `wasmtime`-precompiled modules generated
     /// via the `wasmtime compile` command or equivalent should be passed as an
     /// argument with this option specified.
-    #[structopt(long = "allow-precompiled")]
+    #[clap(long = "allow-precompiled")]
     allow_precompiled: bool,
 
     /// Inherit environment variables and file descriptors following the
     /// systemd listen fd specification (UNIX only)
-    #[structopt(long = "listenfd")]
+    #[clap(long = "listenfd")]
     listenfd: bool,
 
     /// Grant access to the given TCP listen socket
-    #[structopt(
+    #[clap(
         long = "tcplisten",
         number_of_values = 1,
         value_name = "SOCKET ADDRESS"
@@ -105,24 +105,23 @@ pub struct RunCommand {
     tcplisten: Vec<String>,
 
     /// Grant access to the given host directory
-    #[structopt(long = "dir", number_of_values = 1, value_name = "DIRECTORY")]
+    #[clap(long = "dir", number_of_values = 1, value_name = "DIRECTORY")]
     dirs: Vec<String>,
 
     /// Pass an environment variable to the program
-    #[structopt(long = "env", number_of_values = 1, value_name = "NAME=VAL", parse(try_from_str = parse_env_var))]
+    #[clap(long = "env", number_of_values = 1, value_name = "NAME=VAL", parse(try_from_str = parse_env_var))]
     vars: Vec<(String, String)>,
 
     /// The name of the function to run
-    #[structopt(long, value_name = "FUNCTION")]
+    #[clap(long, value_name = "FUNCTION")]
     invoke: Option<String>,
 
     /// Grant access to a guest directory mapped as a host directory
-    #[structopt(long = "mapdir", number_of_values = 1, value_name = "GUEST_DIR::HOST_DIR", parse(try_from_str = parse_map_dirs))]
+    #[clap(long = "mapdir", number_of_values = 1, value_name = "GUEST_DIR::HOST_DIR", parse(try_from_str = parse_map_dirs))]
     map_dirs: Vec<(String, String)>,
 
     /// The path of the WebAssembly module to run
-    #[structopt(
-        index = 1,
+    #[clap(
         required = true,
         value_name = "MODULE",
         parse(try_from_os_str = parse_module),
@@ -130,7 +129,7 @@ pub struct RunCommand {
     module: PathBuf,
 
     /// Load the given WebAssembly module before the main module
-    #[structopt(
+    #[clap(
         long = "preload",
         number_of_values = 1,
         value_name = "NAME=MODULE_PATH",
@@ -139,7 +138,7 @@ pub struct RunCommand {
     preloads: Vec<(String, PathBuf)>,
 
     /// Maximum execution time of wasm code before timing out (1, 2s, 100ms, etc)
-    #[structopt(
+    #[clap(
         long = "wasm-timeout",
         value_name = "TIME",
         parse(try_from_str = parse_dur),
@@ -148,7 +147,7 @@ pub struct RunCommand {
 
     // NOTE: this must come last for trailing varargs
     /// The arguments to pass to the module
-    #[structopt(value_name = "ARGS")]
+    #[clap(value_name = "ARGS")]
     module_args: Vec<String>,
 }
 
