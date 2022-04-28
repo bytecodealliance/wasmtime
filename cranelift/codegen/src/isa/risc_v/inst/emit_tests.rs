@@ -84,7 +84,7 @@ fn test_riscv64_binemit() {
 fn assemble(code: &str) -> u32 {
     use std::process::Command;
     std::env::set_current_dir("/var/tmp").expect("set_current_dir {}");
-    let file_name = "xxx.s";
+    let file_name = "riscv_tmp.s";
     use std::io::Write;
     let mut file = std::fs::File::create(file_name).unwrap();
     file.write_all(code.as_bytes()).expect("write error {}");

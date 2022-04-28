@@ -35,6 +35,7 @@ impl Imm12 {
             Self { bits: 0 }
         }
     }
+
     /// Create a zero immediate of this format.
     pub fn zero() -> Self {
         Imm12 { bits: 0 }
@@ -46,6 +47,7 @@ impl Imm12 {
         (self.bits as u32) & 0xfff
     }
 }
+
 impl Into<i64> for Imm12 {
     fn into(self) -> i64 {
         self.bits as i64

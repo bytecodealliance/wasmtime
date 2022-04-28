@@ -18,7 +18,7 @@ use crate::isa::risc_v::Riscv64Backend;
 
 use super::lower_inst;
 
-use regalloc::{Reg, Writable};
+use regalloc::Reg;
 
 pub mod isle;
 

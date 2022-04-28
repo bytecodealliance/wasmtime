@@ -91,7 +91,7 @@ impl Inst {
         let mut insts = smallvec![];
         // ajust sp ; alloc space
         insts.push(Inst::AjustSp {
-            amount: -(WOrD_SIZE as i64) * (registers.len() as i64),
+            amount: -(WORD_SIZE as i64) * (registers.len() as i64),
         });
         //
         let mut cur_offset = 0;
@@ -106,7 +106,7 @@ impl Inst {
                 src: r.to_reg(),
                 flags: MemFlags::new(),
             });
-            cur_offset += WOrD_SIZE as u64
+            cur_offset += WORD_SIZE as u64
         }
         insts
     }
@@ -122,7 +122,7 @@ impl Inst {
                 rd: r.clone(),
                 flags: MemFlags::new(),
             });
-            cur_offset += WOrD_SIZE as u64
+            cur_offset += WORD_SIZE as u64
         }
         // restore sp
         insts.push(Inst::AjustSp {
@@ -393,17 +393,20 @@ impl MachInstEmit for Inst {
 
                         sink.put4(code);
                     }
-                    BranchTarget::ResolvedOffset(0) => {
+                    BranchTarget::Patch => {
                         // do nothing
+                        panic!("need patch compiler internal fetal error")
                     }
                     BranchTarget::ResolvedOffset(offset) => {
-                        if LabelUse::Jal20.offset_in_range(offset) {
-                            let mut code = code.to_le_bytes();
-                            LabelUse::Jal20.patch_raw_offset(&mut code, offset);
-                        } else {
-                            Inst::construct_auipc_and_jalr(offset)
-                                .into_iter()
-                                .for_each(|i| i.emit(sink, emit_info, state));
+                        if offset != 0 {
+                            if LabelUse::Jal20.offset_in_range(offset) {
+                                let mut code = code.to_le_bytes();
+                                LabelUse::Jal20.patch_raw_offset(&mut code, offset);
+                            } else {
+                                Inst::construct_auipc_and_jalr(offset)
+                                    .into_iter()
+                                    .for_each(|i| i.emit(sink, emit_info, state));
+                            }
                         }
                     }
                 }
@@ -421,6 +424,7 @@ impl MachInstEmit for Inst {
                         sink.add_cond_branch(start_off, start_off + 4, label, &code_inverse);
                         sink.put4(code);
                     }
+                    BranchTarget::Patch => panic!("need patch compiler internal fetal error"),
                     BranchTarget::ResolvedOffset(offset) => {
                         if LabelUse::B12.offset_in_range(offset) {
                             let code = kind.emit();

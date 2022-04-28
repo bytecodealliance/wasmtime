@@ -294,7 +294,7 @@ pub enum FloatFlagOp {
     Frcsr,
     Frrm,
     Frflags,
-    FsrmI,
+    Fsrmi,
     Fsflagsi,
     Fscsr,
     Fsrm,

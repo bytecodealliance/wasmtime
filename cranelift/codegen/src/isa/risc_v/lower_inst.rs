@@ -214,7 +214,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             if ty.is_vector() {
                 panic!("vector float compare is not supported");
             }
-            if cc_bit | FloatCCBit::EQ.bit() > 0 {
+            if cc_bit & FloatCCBit::EQ.bit() > 0 {
                 let op = if ty == F32 {
                     AluOPRRR::FeqS
                 } else {
@@ -238,7 +238,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 });
             }
 
-            if cc_bit | FloatCCBit::LT.bit() > 0 {
+            if cc_bit & FloatCCBit::LT.bit() > 0 {
                 let op = if ty == F32 {
                     AluOPRRR::FltS
                 } else {
@@ -262,7 +262,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 });
             }
 
-            if cc_bit | FloatCCBit::GT.bit() > 0 {
+            if cc_bit & FloatCCBit::GT.bit() > 0 {
                 // I have no left > right operation in risc-v instruction set
                 // first check order
                 insts.extend(Inst::generate_float_unordered(rd, ty, left, right));
@@ -300,7 +300,8 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     },
                 });
             }
-            if cc_bit | FloatCCBit::UN.bit() > 0 {
+
+            if cc_bit & FloatCCBit::UN.bit() > 0 {
                 insts.extend(Inst::generate_float_unordered(rd, ty, left, right));
                 patch_jump_over.push(insts.len());
                 insts.push(Inst::Jump {

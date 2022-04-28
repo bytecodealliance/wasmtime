@@ -191,6 +191,7 @@ mod test {
 
     use super::*;
     use crate::cursor::{Cursor, FuncCursor};
+    use crate::ir::condcodes::FloatCC;
     use crate::ir::types::*;
     use crate::ir::{AbiParam, ExternalName, Function, InstBuilder, Signature};
     use crate::isa::CallConv;
@@ -272,6 +273,52 @@ mod test {
         let mut file = std::fs::File::create("d://xxx.bin").unwrap();
         file.write_all(_code).unwrap();
     }
+
+    #[test]
+    fn some_float_compare() {
+        init_logger();
+        let name = ExternalName::testcase("test0");
+        let mut sig = Signature::new(CallConv::SystemV);
+        sig.params.push(AbiParam::new(F32));
+        sig.params.push(AbiParam::new(F32));
+        sig.returns.push(AbiParam::new(F32));
+        let mut func = Function::with_name_signature(name, sig);
+
+        let bb0 = func.dfg.make_block();
+        let bb1 = func.dfg.make_block();
+        let bb2 = func.dfg.make_block();
+        let arg0 = func.dfg.append_block_param(bb0, F32);
+        let arg1 = func.dfg.append_block_param(bb0, F32);
+        let mut pos = FuncCursor::new(&mut func);
+        pos.insert_block(bb0);
+
+        let v1 = pos.ins().fcmp(FloatCC::GreaterThan, arg0, arg1);
+        pos.ins().brnz(v1, bb1, &[]);
+        pos.ins().jump(bb2, &[]);
+
+        pos.insert_block(bb1);
+        pos.ins().return_(&[arg0]);
+
+        pos.insert_block(bb2);
+        pos.ins().return_(&[arg1]);
+
+        let mut shared_flags_builder = settings::builder();
+        shared_flags_builder.set("opt_level", "none").unwrap();
+        let shared_flags = settings::Flags::new(shared_flags_builder);
+        let isa_flags = riscv_settings::Flags::new(&shared_flags, riscv_settings::builder());
+        let backend = Riscv64Backend::new_with_flags(TRIPLE.clone(), shared_flags, isa_flags);
+        let result = backend
+            .compile_function(&mut func, /* want_disasm = */ true)
+            .unwrap();
+        let _code = result.buffer.data();
+        let disasm = result.disasm.unwrap();
+        println!("{}", disasm);
+        println!("{:?}", _code);
+        use std::io::Write;
+        let mut file = std::fs::File::create("d://xxx.bin").unwrap();
+        file.write_all(_code).unwrap();
+    }
+
     #[test]
     fn test_compile_function() {
         // let name = ExternalName::testcase("test0");

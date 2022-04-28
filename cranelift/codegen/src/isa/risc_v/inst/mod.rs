@@ -96,6 +96,10 @@ pub enum BranchTarget {
     /// A fixed PC offset.
     /// todo when to use this??
     ResolvedOffset(i32),
+
+    /// need later stage to decide the jump offset.
+    /// patch_taken_path_list will make "Patch" become "ResolvedOffset"
+    Patch,
 }
 
 impl BranchTarget {
@@ -107,6 +111,7 @@ impl BranchTarget {
         }
     }
 
+    #[inline(always)]
     pub(crate) fn zero() -> Self {
         Self::ResolvedOffset(0)
     }
@@ -114,10 +119,11 @@ impl BranchTarget {
     /*
         this location is waiting for patch when further instruction is emited.
     */
+    #[inline(always)]
     pub(crate) fn patch() -> Self {
-        Self::ResolvedOffset(0)
+        Self::Patch
     }
-
+    #[inline(always)]
     pub(crate) fn offset(off: i32) -> Self {
         Self::ResolvedOffset(off)
     }
@@ -128,6 +134,7 @@ impl Display for BranchTarget {
         match self {
             BranchTarget::Label(l) => write!(f, "{}", l.to_string()),
             BranchTarget::ResolvedOffset(off) => write!(f, "{:+}", off),
+            BranchTarget::Patch => write!(f, "{}", "unkown_right_need_patch"),
         }
     }
 }
@@ -173,7 +180,7 @@ impl Inst {
             rs: left,
         });
         insts.push(Inst::AluRRImm12 {
-            alu_op: AluOPRRI::Ori,
+            alu_op: AluOPRRI::Andi,
             rd,
             rs: rd.to_reg(),
             imm12: Imm12::from_bits(FClassResult::is_nan_bits() as i16),
@@ -196,7 +203,7 @@ impl Inst {
             rs: right,
         });
         insts.push(Inst::AluRRImm12 {
-            alu_op: AluOPRRI::Ori,
+            alu_op: AluOPRRI::Andi,
             rd: tmp,
             rs: tmp.to_reg(),
             imm12: Imm12::from_bits(FClassResult::is_nan_bits() as i16),
@@ -225,16 +232,16 @@ impl Inst {
             rs: rd.to_reg(),
             imm12: Imm12::from_bits(FClassResult::is_infinite_bits() as i16),
         });
+        patch_true.push(insts.len());
         insts.push(Inst::CondBr {
             taken: BranchTarget::patch(),
             not_taken: BranchTarget::zero(),
             kind: CondBrKind {
-                kind: IntCC::Equal,
+                kind: IntCC::NotEqual,
                 rs1: tmp.to_reg(),
                 rs2: zero_reg(),
             },
         });
-
         // here is false
         insts.push(Inst::load_constant_imm12(rd, Imm12::form_bool(false)));
         // jump set true
@@ -249,28 +256,30 @@ impl Inst {
     }
 
     /*
-        notice always patch the taken path
+        notice always patch the taken path.
+        this will make jump that jump over all insts.
     */
     pub(crate) fn patch_taken_path_list(insts: &mut SmallInstVec<Inst>, patches: &'_ Vec<usize>) {
         for index in patches {
             let index = *index;
+            assert!(insts.len() > index);
+            let real_off =
+                ((insts.len() - index - 1/*self size */) * Inst::instruction_size()) as i32;
             match &mut insts[index] {
                 &mut Inst::CondBr { ref mut taken, .. } => match taken {
-                    &mut BranchTarget::ResolvedOffset(ref mut off) => {
-                        *off = (Inst::instruction_size() * Inst::instruction_size()) as i32;
-                    }
+                    &mut BranchTarget::Patch => *taken = BranchTarget::ResolvedOffset(real_off),
                     _ => unreachable!(),
                 },
                 &mut Inst::Jump { ref mut dest } => match dest {
-                    &mut BranchTarget::ResolvedOffset(ref mut off) => {
-                        *off = (Inst::instruction_size() * Inst::instruction_size()) as i32;
-                    }
+                    &mut BranchTarget::Patch => *dest = BranchTarget::ResolvedOffset(real_off),
+
                     _ => unreachable!(),
                 },
                 _ => unreachable!(),
             }
         }
     }
+
     pub(crate) fn load_constant_u32(rd: Writable<Reg>, value: u32) -> SmallInstVec<Inst> {
         let mut insts = SmallVec::new();
         if let Some(imm) = Imm12::maybe_from_u64(value as u64) {
@@ -307,7 +316,7 @@ impl Inst {
         let mut insts = SmallInstVec::new();
         insts.push(Inst::Auipc {
             rd: writable_spilltmp_reg(),
-            imm: Imm20::from_bits(offset << 12),
+            imm: Imm20::from_bits(offset >> 12),
         });
         insts.push(Inst::Jalr {
             rd: writable_zero_reg(),
@@ -445,17 +454,11 @@ fn riscv64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             collector.add_use(to.get_base_register());
             collector.add_use(src);
         }
-        &Inst::Lui { rd, .. } => {
-            collector.add_def(rd);
-        }
+
         &Inst::AluRRR { rd, rs1, rs2, .. } => {
             collector.add_def(rd);
             collector.add_use(rs1);
             collector.add_use(rs2);
-        }
-        &Inst::AluRRImm12 { rd, rs, .. } => {
-            collector.add_def(rd);
-            collector.add_use(rs);
         }
         &Inst::Load { rd, from, .. } => {
             collector.add_def(rd);
@@ -575,14 +578,6 @@ pub fn riscv64_map_regs<RM: RegMapper>(inst: &mut Inst, mapper: &RM) {
             mapper.map_def(rd);
             mapper.map_use(rs1);
             mapper.map_use(rs2);
-        }
-        &mut Inst::AluRRImm12 {
-            ref mut rd,
-            ref mut rs,
-            ..
-        } => {
-            mapper.map_def(rd);
-            mapper.map_use(rs);
         }
         &mut Inst::Load {
             ref mut rd,
@@ -705,8 +700,6 @@ impl MachInst for Inst {
         riscv64_map_regs(self, mapper);
     }
 
-    // look like risc-v has no move instrunction.
-    // todo x0 = xn + 0 is a move
     fn is_move(&self) -> Option<(Writable<Reg>, Reg)> {
         match self {
             Inst::Mov { rd, rm } => Some((rd.clone(), rm.clone())),
@@ -723,11 +716,16 @@ impl MachInst for Inst {
     }
 
     fn is_included_in_clobbers(&self) -> bool {
-        // why true
+        /*
+            default is true , why ???????
+        */
         true
     }
 
     fn is_term<'a>(&'a self) -> MachTerminator<'a> {
+        /*
+            todo more
+        */
         match self {
             &Inst::Jump { dest } => {
                 let dest = dest.as_label();
@@ -749,6 +747,7 @@ impl MachInst for Inst {
                 }
             }
             &Inst::Ret => MachTerminator::Ret,
+
             _ => MachTerminator::None,
         }
     }
@@ -995,11 +994,12 @@ impl Inst {
                 kind,
                 ..
             } => {
+                let (rs1, rs2) = kind.rs1_rs2();
                 format!(
                     "{} {},{},{},{}",
                     kind.kind_name(),
-                    register_name(kind.rs1),
-                    register_name(kind.rs2),
+                    register_name(rs1),
+                    register_name(rs2),
                     taken,
                     not_taken,
                 )
@@ -1159,7 +1159,7 @@ impl LabelUse {
         match self {
             LabelUse::Jal20 => {
                 // this is certainly safe
-                let raw = unsafe { &mut buffer[0] as *mut u8 as *mut u32 };
+                let raw = { &mut buffer[0] as *mut u8 as *mut u32 };
                 let v = ((offset >> 12 & 0b1111_1111) << 12)
                     | ((offset >> 11 & 0b1) << 20)
                     | ((offset >> 1 & 0b11_1111_1111) << 21)
@@ -1172,15 +1172,15 @@ impl LabelUse {
                 // this is certainly safe
                 // auipc part
                 {
-                    let raw = unsafe { &mut buffer[0] as *mut u8 as *mut u32 };
-                    let v = (offset & (!0xfff));
+                    let raw = { &mut buffer[0] as *mut u8 as *mut u32 };
+                    let v = offset & (!0xfff);
                     unsafe {
                         *raw |= v;
                     }
                 }
                 {
                     // this is certainly safe
-                    let raw = unsafe { &mut buffer[4] as *mut u8 as *mut u32 };
+                    let raw = { &mut buffer[4] as *mut u8 as *mut u32 };
                     let v = (offset & 0xfff) << 20;
                     unsafe {
                         *raw |= v;
@@ -1190,7 +1190,7 @@ impl LabelUse {
 
             LabelUse::Jalr12 => {
                 // this is certainly safe
-                let raw = unsafe { &mut buffer[0] as *mut u8 as *mut u32 };
+                let raw = { &mut buffer[0] as *mut u8 as *mut u32 };
                 let v = (offset & 0xfff) << 20;
                 unsafe {
                     *raw |= v;

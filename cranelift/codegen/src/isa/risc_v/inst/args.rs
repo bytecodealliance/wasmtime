@@ -7,7 +7,7 @@ use crate::ir::condcodes::{CondCode, FloatCC};
 
 use super::*;
 
-pub static WOrD_SIZE: u8 = 8;
+pub static WORD_SIZE: u8 = 8;
 
 use std::fmt::{Display, Formatter, Result};
 /*
@@ -47,8 +47,8 @@ pub enum AMode {
 }
 
 impl AMode {
-    pub(crate) fn reg_offset(reg: Reg, imm: i64, Type: Type) -> AMode {
-        AMode::RegOffset(reg, imm, Type)
+    pub(crate) fn reg_offset(reg: Reg, imm: i64, ty: Type) -> AMode {
+        AMode::RegOffset(reg, imm, ty)
     }
 
     pub(crate) fn get_base_register(&self) -> Reg {
@@ -137,11 +137,47 @@ impl Into<AMode> for StackAMode {
 /// brz can be compare with zero register which has the value 0
 #[derive(Clone, Copy, Debug)]
 pub struct CondBrKind {
-    pub kind: IntCC,
-    pub rs1: Reg,
-    pub rs2: Reg,
+    pub(crate) kind: IntCC,
+    pub(crate) rs1: Reg,
+    pub(crate) rs2: Reg,
+}
+pub(crate) enum BranchFunct3 {
+    // ==
+    Eq,
+    // !=
+    Ne,
+    // signed <
+    Lt,
+    // signed >=
+    Ge,
+    // unsigned <
+    Ltu,
+    // unsigned >=
+    Geu,
 }
 
+impl BranchFunct3 {
+    pub(crate) fn bits(self) -> u32 {
+        match self {
+            BranchFunct3::Eq => 0b000,
+            BranchFunct3::Ne => 0b001,
+            BranchFunct3::Lt => 0b100,
+            BranchFunct3::Ge => 0b101,
+            BranchFunct3::Ltu => 0b110,
+            BranchFunct3::Geu => 0b110,
+        }
+    }
+    pub(crate) fn op_name(self) -> &'static str {
+        match self {
+            BranchFunct3::Eq => "eq",
+            BranchFunct3::Ne => "ne",
+            BranchFunct3::Lt => "lt",
+            BranchFunct3::Ge => "ge",
+            BranchFunct3::Ltu => "ltu",
+            BranchFunct3::Geu => "geu",
+        }
+    }
+}
 impl CondBrKind {
     pub(crate) fn op_code(self) -> u32 {
         0b1100011
@@ -150,39 +186,48 @@ impl CondBrKind {
     /*
        funct3 and if need inverse the register
     */
-    pub(crate) fn funct3(&self) -> (u32, bool) {
+    pub(crate) fn funct3(&self) -> (BranchFunct3, bool) {
         match self.kind {
-            IntCC::Equal => (0b000, false),
-            IntCC::NotEqual => (0b001, false),
-            IntCC::SignedLessThan => (0b100, false),
-            IntCC::SignedGreaterThanOrEqual => (0b101, false),
+            IntCC::Equal => (BranchFunct3::Eq, false),
+            IntCC::NotEqual => (BranchFunct3::Ne, false),
+            IntCC::SignedLessThan => (BranchFunct3::Lt, false),
+            IntCC::SignedGreaterThanOrEqual => (BranchFunct3::Ge, false),
 
-            IntCC::SignedGreaterThan => (0b100, true),
-            IntCC::SignedLessThanOrEqual => (0b101, true),
+            IntCC::SignedGreaterThan => (BranchFunct3::Lt, true),
+            IntCC::SignedLessThanOrEqual => (BranchFunct3::Ge, true),
 
-            IntCC::UnsignedLessThan => (0b110, false),
-            IntCC::UnsignedGreaterThanOrEqual => (0b111, false),
+            IntCC::UnsignedLessThan => (BranchFunct3::Ltu, false),
+            IntCC::UnsignedGreaterThanOrEqual => (BranchFunct3::Geu, false),
 
-            IntCC::UnsignedGreaterThan => (0b110, true),
-            IntCC::UnsignedLessThanOrEqual => (0b111, true),
+            IntCC::UnsignedGreaterThan => (BranchFunct3::Ltu, true),
+            IntCC::UnsignedLessThanOrEqual => (BranchFunct3::Geu, true),
             IntCC::Overflow => todo!(),
             IntCC::NotOverflow => todo!(),
         }
     }
 
     pub(crate) fn kind_name(&self) -> String {
-        format!("b{}", self.kind.to_static_str())
+        let (f, _) = self.funct3();
+        format!("b{}", f.op_name())
     }
 
-    pub(crate) fn emit(self) -> u32 {
-        let (funct3, inverse_register) = self.funct3();
-        let (rs1, rs2) = if !inverse_register {
+    /*
+        sometimes the order is matter.
+    */
+    pub(crate) fn rs1_rs2(&self) -> (Reg, Reg) {
+        let (_, inverse_register) = self.funct3();
+        if !inverse_register {
             (self.rs1, self.rs2)
         } else {
             (self.rs2, self.rs1)
-        };
+        }
+    }
+
+    pub(crate) fn emit(self) -> u32 {
+        let (funct3, _) = self.funct3();
+        let (rs1, rs2) = self.rs1_rs2();
         self.op_code()
-            | funct3 << 12
+            | funct3.bits() << 12
             | (rs1.get_hw_encoding() as u32) << 15
             | (rs2.get_hw_encoding() as u32) << 20
     }
@@ -757,9 +802,10 @@ impl LoadOP {
             Self::Fld => "fld",
         }
     }
+
     pub(crate) fn from_type(t: Type) -> Self {
         if t.is_float() {
-            return if t.bits() == 32 { Self::Flw } else { Self::Fld };
+            return if t == F32 { Self::Flw } else { Self::Fld };
         }
         match t {
             B1 | B8 => Self::Lbu,
@@ -810,7 +856,7 @@ impl StoreOP {
     }
     pub(crate) fn from_type(t: Type) -> Self {
         if t.is_float() {
-            return if t.bits() == 32 { Self::Fsw } else { Self::Fsd };
+            return if t == F32 { Self::Fsw } else { Self::Fsd };
         }
         match t.bits() {
             1 | 8 => Self::Sb,
@@ -853,7 +899,7 @@ impl FloatFlagOp {
             FloatFlagOp::Frcsr => 0b010,
             FloatFlagOp::Frrm => 0b010,
             FloatFlagOp::Frflags => 0b010,
-            FloatFlagOp::FsrmI => 0b101,
+            FloatFlagOp::Fsrmi => 0b101,
             FloatFlagOp::Fsflagsi => 0b101,
             FloatFlagOp::Fscsr => 0b001,
             FloatFlagOp::Fsrm => 0b001,
@@ -862,7 +908,7 @@ impl FloatFlagOp {
     }
     pub(crate) fn use_imm12(self) -> bool {
         match self {
-            FloatFlagOp::FsrmI | FloatFlagOp::Fsflagsi => true,
+            FloatFlagOp::Fsrmi | FloatFlagOp::Fsflagsi => true,
             _ => false,
         }
     }
@@ -871,7 +917,7 @@ impl FloatFlagOp {
             FloatFlagOp::Frcsr => 0b000000000011,
             FloatFlagOp::Frrm => 0b000000000010,
             FloatFlagOp::Frflags => 0b000000000001,
-            FloatFlagOp::FsrmI => imm.unwrap().as_u32(),
+            FloatFlagOp::Fsrmi => imm.unwrap().as_u32(),
             FloatFlagOp::Fsflagsi => imm.unwrap().as_u32(),
             FloatFlagOp::Fscsr => 0b000000000011,
             FloatFlagOp::Fsrm => 0b000000000010,
@@ -884,7 +930,7 @@ impl FloatFlagOp {
             Self::Frcsr => "frcsr",
             Self::Frrm => "frrm",
             Self::Frflags => "frflags",
-            Self::FsrmI => "fsrmi",
+            Self::Fsrmi => "fsrmi",
             Self::Fsflagsi => "Fsflagsi",
             Self::Fscsr => "fscsr",
             Self::Fsrm => "fsrm",
