@@ -18,6 +18,14 @@ struct Parser<'a> {
     lexer: Lexer<'a>,
 }
 
+/// Used during parsing a `(rule ...)` to encapsulate some form that
+/// comes after the top-level pattern: an if-let clause, or the final
+/// top-level expr.
+enum IfLetOrExpr {
+    IfLet(IfLet),
+    Expr(Expr),
+}
+
 impl<'a> Parser<'a> {
     /// Construct a new parser from the given lexer.
     pub fn new(lexer: Lexer<'a>) -> Parser<'a> {
@@ -281,6 +289,14 @@ impl<'a> Parser<'a> {
 
     fn parse_decl(&mut self) -> Result<Decl> {
         let pos = self.pos();
+
+        let pure = if self.is_sym_str("pure") {
+            self.symbol()?;
+            true
+        } else {
+            false
+        };
+
         let term = self.parse_ident()?;
 
         self.lparen()?;
@@ -296,6 +312,7 @@ impl<'a> Parser<'a> {
             term,
             arg_tys,
             ret_ty,
+            pure,
             pos,
         })
     }
@@ -304,6 +321,7 @@ impl<'a> Parser<'a> {
         let pos = self.pos();
         if self.is_sym_str("constructor") {
             self.symbol()?;
+
             let term = self.parse_ident()?;
             let func = self.parse_ident()?;
             Ok(Extern::Constructor { term, func, pos })
@@ -387,13 +405,23 @@ impl<'a> Parser<'a> {
             None
         };
         let pattern = self.parse_pattern()?;
-        let expr = self.parse_expr()?;
-        Ok(Rule {
-            pattern,
-            expr,
-            pos,
-            prio,
-        })
+        let mut iflets = vec![];
+        loop {
+            match self.parse_iflet_or_expr()? {
+                IfLetOrExpr::IfLet(iflet) => {
+                    iflets.push(iflet);
+                }
+                IfLetOrExpr::Expr(expr) => {
+                    return Ok(Rule {
+                        pattern,
+                        iflets,
+                        expr,
+                        pos,
+                        prio,
+                    });
+                }
+            }
+        }
     }
 
     fn parse_pattern(&mut self) -> Result<Pattern> {
@@ -452,31 +480,52 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn parse_iflet_or_expr(&mut self) -> Result<IfLetOrExpr> {
+        let pos = self.pos();
+        if self.is_lparen() {
+            self.lparen()?;
+            let ret = if self.is_sym_str("if-let") {
+                self.symbol()?;
+                IfLetOrExpr::IfLet(self.parse_iflet()?)
+            } else if self.is_sym_str("if") {
+                // Shorthand form: `(if (x))` desugars to `(if-let _
+                // (x))`.
+                self.symbol()?;
+                IfLetOrExpr::IfLet(self.parse_iflet_if()?)
+            } else {
+                IfLetOrExpr::Expr(self.parse_expr_inner_parens(pos)?)
+            };
+            self.rparen()?;
+            Ok(ret)
+        } else {
+            self.parse_expr().map(|expr| IfLetOrExpr::Expr(expr))
+        }
+    }
+
+    fn parse_iflet(&mut self) -> Result<IfLet> {
+        let pos = self.pos();
+        let pattern = self.parse_pattern()?;
+        let expr = self.parse_expr()?;
+        Ok(IfLet { pattern, expr, pos })
+    }
+
+    fn parse_iflet_if(&mut self) -> Result<IfLet> {
+        let pos = self.pos();
+        let expr = self.parse_expr()?;
+        Ok(IfLet {
+            pattern: Pattern::Wildcard { pos },
+            expr,
+            pos,
+        })
+    }
+
     fn parse_expr(&mut self) -> Result<Expr> {
         let pos = self.pos();
         if self.is_lparen() {
             self.lparen()?;
-            if self.is_sym_str("let") {
-                self.symbol()?;
-                self.lparen()?;
-                let mut defs = vec![];
-                while !self.is_rparen() {
-                    let def = self.parse_letdef()?;
-                    defs.push(def);
-                }
-                self.rparen()?;
-                let body = Box::new(self.parse_expr()?);
-                self.rparen()?;
-                Ok(Expr::Let { defs, body, pos })
-            } else {
-                let sym = self.parse_ident()?;
-                let mut args = vec![];
-                while !self.is_rparen() {
-                    args.push(self.parse_expr()?);
-                }
-                self.rparen()?;
-                Ok(Expr::Term { sym, args, pos })
-            }
+            let ret = self.parse_expr_inner_parens(pos)?;
+            self.rparen()?;
+            Ok(ret)
         } else if self.is_sym_str("#t") {
             self.symbol()?;
             Ok(Expr::ConstInt { val: 1, pos })
@@ -494,6 +543,28 @@ impl<'a> Parser<'a> {
             Ok(Expr::ConstInt { val, pos })
         } else {
             Err(self.error(pos, "Invalid expression".into()))
+        }
+    }
+
+    fn parse_expr_inner_parens(&mut self, pos: Pos) -> Result<Expr> {
+        if self.is_sym_str("let") {
+            self.symbol()?;
+            self.lparen()?;
+            let mut defs = vec![];
+            while !self.is_rparen() {
+                let def = self.parse_letdef()?;
+                defs.push(def);
+            }
+            self.rparen()?;
+            let body = Box::new(self.parse_expr()?);
+            Ok(Expr::Let { defs, body, pos })
+        } else {
+            let sym = self.parse_ident()?;
+            let mut args = vec![];
+            while !self.is_rparen() {
+                args.push(self.parse_expr()?);
+            }
+            Ok(Expr::Term { sym, args, pos })
         }
     }
 

@@ -69,15 +69,25 @@ pub struct Decl {
     pub term: Ident,
     pub arg_tys: Vec<Ident>,
     pub ret_ty: Ident,
+    /// Whether this term's constructor is pure.
+    pub pure: bool,
     pub pos: Pos,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Rule {
     pub pattern: Pattern,
+    pub iflets: Vec<IfLet>,
     pub expr: Expr,
     pub pos: Pos,
     pub prio: Option<i64>,
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct IfLet {
+    pub pattern: Pattern,
+    pub expr: Expr,
+    pub pos: Pos,
 }
 
 /// An extractor macro: (A x y) becomes (B x _ y ...). Expanded during
