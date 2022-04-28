@@ -450,9 +450,9 @@ impl InstancePool {
         for ((def_mem_idx, memory), base) in
             memories.into_iter().zip(self.memories.get(instance_index))
         {
-            assert!(memory.is_external());
+            assert!(memory.is_static());
             let size = memory.byte_size();
-            if let Some(mut image) = memory.unwrap_image_slot() {
+            if let Some(mut image) = memory.unwrap_static_image() {
                 // Reset the image slot. If there is any error clearing the
                 // image, just drop it here, and let the drop handler for the
                 // slot unmap in a way that retains the address space

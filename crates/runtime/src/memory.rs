@@ -607,18 +607,19 @@ impl Memory {
         self.0.vmmemory()
     }
 
-    /// Check if the inner implementation of [`Memory`] is indeed an
-    /// `ExternalMemory`.
+    /// Check if the inner implementation of [`Memory`] is a memory created with
+    /// [`Memory::new_static()`].
     #[cfg(feature = "pooling-allocator")]
-    pub fn is_external(&self) -> bool {
+    pub fn is_static(&self) -> bool {
         let as_any = self.0.as_any();
         as_any.downcast_ref::<ExternalMemory>().is_some()
     }
 
     /// Consume the memory, returning its [`MemoryImageSlot`] if any is present.
-    /// This implicitly checks that the memory is an external memory.
+    /// The image should only be present for a subset of memories created with
+    /// [`Memory::new_static()`].
     #[cfg(feature = "pooling-allocator")]
-    pub fn unwrap_image_slot(self) -> Option<MemoryImageSlot> {
+    pub fn unwrap_static_image(self) -> Option<MemoryImageSlot> {
         let as_any = self.0.into_any();
         if let Ok(m) = as_any.downcast::<ExternalMemory>() {
             m.memory_image
