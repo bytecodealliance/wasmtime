@@ -7,7 +7,7 @@
 // - src/isa/s390x/lower.isle
 
 #![allow(dead_code, unreachable_code, unreachable_patterns)]
-#![allow(unused_imports, unused_variables, non_snake_case)]
+#![allow(unused_imports, unused_variables, non_snake_case, unused_mut)]
 #![allow(irrefutable_let_patterns)]
 
 use super::*; // Pulls in all external types.
@@ -1222,7 +1222,7 @@ pub fn constructor_lower_address<C: Context>(
                         if let Some(()) = C::reloc_distance_near(ctx, pattern6_1) {
                             let pattern8_0 = arg2;
                             let pattern9_0 = C::i64_from_offset(ctx, pattern8_0);
-                            let closure10 = || {
+                            let mut closure10 = || {
                                 return Some(pattern6_2);
                             };
                             if let Some(pattern10_0) = closure10() {
@@ -2885,7 +2885,7 @@ pub fn constructor_push_alu_uimm32shifted<C: Context>(
     let pattern2_0 = arg2;
     if let Some(pattern3_0) = C::real_reg(ctx, pattern2_0) {
         let pattern4_0 = arg3;
-        let closure5 = || {
+        let mut closure5 = || {
             return Some(pattern3_0);
         };
         if let Some(pattern5_0) = closure5() {
@@ -2955,7 +2955,7 @@ pub fn constructor_push_rxsbg<C: Context>(
     let pattern2_0 = arg2;
     if let Some(pattern3_0) = C::real_reg(ctx, pattern2_0) {
         let pattern4_0 = arg3;
-        let closure5 = || {
+        let mut closure5 = || {
             return Some(pattern3_0);
         };
         if let Some(pattern5_0) = closure5() {
@@ -13473,7 +13473,7 @@ pub fn constructor_icmpu_val<C: Context>(
                                             {
                                                 let pattern16_0 =
                                                     C::i64_from_offset(ctx, pattern8_3);
-                                                let closure17 = || {
+                                                let mut closure17 = || {
                                                     return Some(pattern14_2);
                                                 };
                                                 if let Some(pattern17_0) = closure17() {
@@ -13561,7 +13561,7 @@ pub fn constructor_icmpu_val<C: Context>(
                                             {
                                                 let pattern18_0 =
                                                     C::i64_from_offset(ctx, pattern10_3);
-                                                let closure19 = || {
+                                                let mut closure19 = || {
                                                     return Some(pattern16_2);
                                                 };
                                                 if let Some(pattern19_0) = closure19() {

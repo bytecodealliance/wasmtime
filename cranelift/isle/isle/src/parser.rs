@@ -411,23 +411,13 @@ impl<'a> Parser<'a> {
             Ok(Pattern::Wildcard { pos })
         } else if self.is_sym() {
             let s = self.symbol()?;
-            if s.starts_with("=") {
-                // Deprecated `=x` syntax. This will go away once we
-                // change all uses to just `x`, which we can do
-                // because we disambiguate whether a mention of `x` is
-                // a binding or a matching of the already-bound value.
-                let s = &s[1..];
-                let var = self.str_to_ident(pos, s)?;
-                Ok(Pattern::Var { var, pos })
+            let var = self.str_to_ident(pos, &s)?;
+            if self.is_at() {
+                self.at()?;
+                let subpat = Box::new(self.parse_pattern()?);
+                Ok(Pattern::BindPattern { var, subpat, pos })
             } else {
-                let var = self.str_to_ident(pos, &s)?;
-                if self.is_at() {
-                    self.at()?;
-                    let subpat = Box::new(self.parse_pattern()?);
-                    Ok(Pattern::BindPattern { var, subpat, pos })
-                } else {
-                    Ok(Pattern::Var { var, pos })
-                }
+                Ok(Pattern::Var { var, pos })
             }
         } else if self.is_lparen() {
             self.lparen()?;

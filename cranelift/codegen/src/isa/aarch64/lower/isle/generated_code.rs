@@ -7,7 +7,7 @@
 // - src/isa/aarch64/lower.isle
 
 #![allow(dead_code, unreachable_code, unreachable_patterns)]
-#![allow(unused_imports, unused_variables, non_snake_case)]
+#![allow(unused_imports, unused_variables, non_snake_case, unused_mut)]
 #![allow(irrefutable_let_patterns)]
 
 use super::*; // Pulls in all external types.
@@ -3105,7 +3105,7 @@ pub fn constructor_imm<C: Context>(ctx: &mut C, arg0: Type, arg1: u64) -> Option
     let pattern0_0 = arg0;
     if let Some(pattern1_0) = C::integral_ty(ctx, pattern0_0) {
         let pattern2_0 = arg1;
-        let closure3 = || {
+        let mut closure3 = || {
             let expr0_0: Type = I64;
             return Some(expr0_0);
         };
@@ -3332,7 +3332,7 @@ pub fn constructor_alu_rs_imm_logic_commutative<C: Context>(
                 imm: pattern5_1,
             } => {
                 if let &Opcode::Iconst = pattern5_0 {
-                    let closure7 = || {
+                    let mut closure7 = || {
                         return Some(pattern1_0);
                     };
                     if let Some(pattern7_0) = closure7() {
@@ -3364,7 +3364,7 @@ pub fn constructor_alu_rs_imm_logic_commutative<C: Context>(
                         } = &pattern9_0
                         {
                             if let &Opcode::Iconst = pattern10_0 {
-                                let closure12 = || {
+                                let mut closure12 = || {
                                     return Some(pattern1_0);
                                 };
                                 if let Some(pattern12_0) = closure12() {
@@ -3403,7 +3403,7 @@ pub fn constructor_alu_rs_imm_logic_commutative<C: Context>(
                 imm: pattern6_1,
             } => {
                 if let &Opcode::Iconst = pattern6_0 {
-                    let closure8 = || {
+                    let mut closure8 = || {
                         return Some(pattern1_0);
                     };
                     if let Some(pattern8_0) = closure8() {
@@ -3434,7 +3434,7 @@ pub fn constructor_alu_rs_imm_logic_commutative<C: Context>(
                         } = &pattern10_0
                         {
                             if let &Opcode::Iconst = pattern11_0 {
-                                let closure13 = || {
+                                let mut closure13 = || {
                                     return Some(pattern1_0);
                                 };
                                 if let Some(pattern13_0) = closure13() {
@@ -3490,7 +3490,7 @@ pub fn constructor_alu_rs_imm_logic<C: Context>(
                 imm: pattern6_1,
             } => {
                 if let &Opcode::Iconst = pattern6_0 {
-                    let closure8 = || {
+                    let mut closure8 = || {
                         return Some(pattern1_0);
                     };
                     if let Some(pattern8_0) = closure8() {
@@ -3521,7 +3521,7 @@ pub fn constructor_alu_rs_imm_logic<C: Context>(
                         } = &pattern10_0
                         {
                             if let &Opcode::Iconst = pattern11_0 {
-                                let closure13 = || {
+                                let mut closure13 = || {
                                     return Some(pattern1_0);
                                 };
                                 if let Some(pattern13_0) = closure13() {
@@ -4023,7 +4023,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<InstOutp
                                 } = &pattern9_0
                                 {
                                     if let &Opcode::Iconst = pattern10_0 {
-                                        let closure12 = || {
+                                        let mut closure12 = || {
                                             let expr0_0: Type = I32;
                                             return Some(expr0_0);
                                         };
@@ -4070,7 +4070,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<InstOutp
                                 } = &pattern9_0
                                 {
                                     if let &Opcode::Iconst = pattern10_0 {
-                                        let closure12 = || {
+                                        let mut closure12 = || {
                                             let expr0_0: Type = I32;
                                             return Some(expr0_0);
                                         };
@@ -4234,7 +4234,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<InstOutp
                                 } = &pattern9_0
                                 {
                                     if let &Opcode::Iconst = pattern10_0 {
-                                        let closure12 = || {
+                                        let mut closure12 = || {
                                             let expr0_0: Type = I64;
                                             return Some(expr0_0);
                                         };
@@ -4281,7 +4281,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<InstOutp
                                 } = &pattern9_0
                                 {
                                     if let &Opcode::Iconst = pattern10_0 {
-                                        let closure12 = || {
+                                        let mut closure12 = || {
                                             let expr0_0: Type = I64;
                                             return Some(expr0_0);
                                         };
@@ -5882,7 +5882,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<InstOutp
                             } = &pattern9_0
                             {
                                 if let &Opcode::Iconst = pattern10_0 {
-                                    let closure12 = || {
+                                    let mut closure12 = || {
                                         return Some(pattern3_0);
                                     };
                                     if let Some(pattern12_0) = closure12() {
@@ -5924,7 +5924,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<InstOutp
                             } = &pattern9_0
                             {
                                 if let &Opcode::Iconst = pattern10_0 {
-                                    let closure12 = || {
+                                    let mut closure12 = || {
                                         return Some(pattern3_0);
                                     };
                                     if let Some(pattern12_0) = closure12() {
@@ -6173,7 +6173,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<InstOutp
                                                     } = &pattern14_0
                                                     {
                                                         if let &Opcode::Iconst = pattern15_0 {
-                                                            let closure17 = || {
+                                                            let mut closure17 = || {
                                                                 return Some(pattern3_0);
                                                             };
                                                             if let Some(pattern17_0) = closure17() {
@@ -6297,7 +6297,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<InstOutp
                                                     } = &pattern14_0
                                                     {
                                                         if let &Opcode::Iconst = pattern15_0 {
-                                                            let closure17 = || {
+                                                            let mut closure17 = || {
                                                                 return Some(pattern3_0);
                                                             };
                                                             if let Some(pattern17_0) = closure17() {
@@ -6430,7 +6430,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<InstOutp
                                                     } = &pattern14_0
                                                     {
                                                         if let &Opcode::Iconst = pattern15_0 {
-                                                            let closure17 = || {
+                                                            let mut closure17 = || {
                                                                 return Some(pattern3_0);
                                                             };
                                                             if let Some(pattern17_0) = closure17() {
@@ -6611,7 +6611,7 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<InstOutp
                                             } = &pattern13_0
                                             {
                                                 if let &Opcode::Iconst = pattern14_0 {
-                                                    let closure16 = || {
+                                                    let mut closure16 = || {
                                                         return Some(pattern3_0);
                                                     };
                                                     if let Some(pattern16_0) = closure16() {
@@ -7153,7 +7153,7 @@ pub fn constructor_do_shift<C: Context>(
         } = &pattern5_0
         {
             if let &Opcode::Iconst = pattern6_0 {
-                let closure8 = || {
+                let mut closure8 = || {
                     return Some(pattern1_0);
                 };
                 if let Some(pattern8_0) = closure8() {

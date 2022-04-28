@@ -498,16 +498,16 @@ operators:
   `0x80`, `-0x80`) and boolean constants (`#t`, `#f`).
 * constants imported from the embedding, of arbitrary type
   (`$MyConst`).
-* Variable captures (bare identifiers like `x`; an identifier consists
-  of alphanumeric characters and underscores, and does not start with
-  a digit).
+* Variable captures and matches (bare identifiers like `x`; an
+  identifier consists of alphanumeric characters and underscores, and
+  does not start with a digit). The first occurrence of a variable `x`
+  captures the value; each subsequent occurrence matches on the
+  already-captured value, rejecting the match if not equal.
 * Variable captures with sub-patterns: `x @ PAT`, which captures the
   subterm in `x` as above but also matches `PAT` against the
   subterm. For example, `x @ (A y z)` matches an `A` term and captures
   its arguments as `y` and `z`, but also captures the whole term as
   `x`.
-* "Equal-variable" constraints (`=x`): a subterm must match an
-  already-captured value.
 * conjunctions of subpatterns: `(and PAT1 PAT2 ...)` matches all of
   the subpatterns against the term. If any subpattern does not match,
   then this matcher fails.
@@ -680,12 +680,11 @@ The typing rules for patterns in ISLE are:
   T2 T2) R)`, has type `R` and provides expected types `T1`, `T2`, and
   `T3` to its subpatterns.
   
-* A variable capture pattern `x` is compatible with any expected type,
-  and captures this expected type under the variable identifier `x` in
-  the type environment.
-  
-* A variable-equality pattern `=x` checks that the expected type is
-  equal to the already-captured type for `x` in the type environment.
+* A variable capture pattern `x` is compatible with any expected type
+  the first time it appears, and captures this expected type under the
+  variable identifier `x` in the type environment. Subsequent
+  appearances of `x` check that the expected type matches the
+  already-captured type.
   
 * A conjunction `(and PAT1 PAT2 ...)` checks that each subpattern is
   compatible with the expected type.
@@ -1397,7 +1396,7 @@ newline). The grammar accepted by the parser is as follows:
 <pattern> ::= <int>
             | <const-ident>
             | "_"
-            | "=" <ident>
+            | <ident>
             | <ident> "@" <pattern>
             | "(" "and" <pattern>* ")"
             | "(" <ident> <pattern-arg>* ")"
