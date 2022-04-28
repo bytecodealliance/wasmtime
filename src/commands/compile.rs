@@ -2,9 +2,9 @@
 
 use crate::CommonOptions;
 use anyhow::{bail, Context, Result};
+use clap::Parser;
 use std::fs;
 use std::path::PathBuf;
-use structopt::{clap::AppSettings, StructOpt};
 use target_lexicon::Triple;
 use wasmtime::Engine;
 
@@ -34,27 +34,26 @@ lazy_static::lazy_static! {
 }
 
 /// Compiles a WebAssembly module.
-#[derive(StructOpt)]
+#[derive(Parser)]
 #[structopt(
     name = "compile",
-    version = env!("CARGO_PKG_VERSION"),
-    setting = AppSettings::ColoredHelp,
+    version,
     after_help = AFTER_HELP.as_str()
 )]
 pub struct CompileCommand {
-    #[structopt(flatten)]
+    #[clap(flatten)]
     common: CommonOptions,
 
     /// The target triple; default is the host triple
-    #[structopt(long, value_name = "TARGET")]
+    #[clap(long, value_name = "TARGET")]
     target: Option<String>,
 
     /// The path of the output compiled module; defaults to <MODULE>.cwasm
-    #[structopt(short = "o", long, value_name = "OUTPUT", parse(from_os_str))]
+    #[clap(short = 'o', long, value_name = "OUTPUT", parse(from_os_str))]
     output: Option<PathBuf>,
 
     /// The path of the WebAssembly to compile
-    #[structopt(index = 1, value_name = "MODULE", parse(from_os_str))]
+    #[clap(index = 1, value_name = "MODULE", parse(from_os_str))]
     module: PathBuf,
 }
 
@@ -110,7 +109,7 @@ mod test {
 
         let output_path = NamedTempFile::new()?.into_temp_path();
 
-        let command = CompileCommand::from_iter_safe(vec![
+        let command = CompileCommand::try_parse_from(vec![
             "compile",
             "--disable-logging",
             "-o",
@@ -141,7 +140,7 @@ mod test {
         let output_path = NamedTempFile::new()?.into_temp_path();
 
         // Set all the x64 flags to make sure they work
-        let command = CompileCommand::from_iter_safe(vec![
+        let command = CompileCommand::try_parse_from(vec![
             "compile",
             "--disable-logging",
             "--cranelift-enable",
@@ -190,7 +189,7 @@ mod test {
         let output_path = NamedTempFile::new()?.into_temp_path();
 
         // Set all the aarch64 flags to make sure they work
-        let command = CompileCommand::from_iter_safe(vec![
+        let command = CompileCommand::try_parse_from(vec![
             "compile",
             "--disable-logging",
             "--cranelift-enable",
@@ -215,7 +214,7 @@ mod test {
         let output_path = NamedTempFile::new()?.into_temp_path();
 
         // aarch64 flags should not be supported
-        let command = CompileCommand::from_iter_safe(vec![
+        let command = CompileCommand::try_parse_from(vec![
             "compile",
             "--disable-logging",
             "--cranelift-enable",
@@ -251,7 +250,7 @@ mod test {
             "icelake",
             "znver1",
         ] {
-            let command = CompileCommand::from_iter_safe(vec![
+            let command = CompileCommand::try_parse_from(vec![
                 "compile",
                 "--disable-logging",
                 "--cranelift-enable",

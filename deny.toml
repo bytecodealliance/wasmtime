@@ -27,13 +27,17 @@ multiple-versions = "deny"
 wildcards = "allow"
 deny = []
 
-# Skip some multiple-versions checks, until they can be fixed.
-skip = [
-    { name = "ansi_term" }, # transitive dependencies only
-    { name = "env_logger" }, # pretty_env_logger and file-per-thread-logger depend on 0.7
-    { name = "humantime" }, # caused by env_logger
-    { name = "wast" }, # old one pulled in by witx
-    { name = "quick-error" }, # transitive dependencies
-    { name = "textwrap" }, # `miette` and `clap` depend on different versions
-    { name = "itoa" }, # `rustix` and `criterion` depend on different versions
+skip-tree = [
+    # Criterion 0.3 is pretty old at this point and has had an upcoming 0.4 for
+    # a long time. This is a dev-dependency so we don't really mind its
+    # dependency tree, so skip it entirely.
+    { name = "criterion", depth = 20 },
+
+    # This is maintained externally and we allow it to have duplicate
+    # dependencies relative to Wasmtime's main dependency tree.
+    { name = "witx", depth = 20 },
+
+    # This is somewhat unmaintained at this point and seems to pull in an old
+    # version of `env_logger`, so ignore it.
+    { name = "pretty_env_logger", depth = 20 },
 ]
