@@ -357,7 +357,7 @@ impl RuntimeLinearMemory for ExternalMemory {
     fn grow_to(&mut self, new_byte_size: usize) -> Result<()> {
         // Never exceed the static memory size; this check should have been made
         // prior to arriving here.
-        assert!(new_byte_size > self.base.len());
+        assert!(new_byte_size <= self.base.len());
 
         // Actually grow the memory.
         if let Some(image) = &mut self.memory_image {
