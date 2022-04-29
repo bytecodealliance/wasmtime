@@ -66,8 +66,6 @@ pub enum Token {
     Int(i64),
     /// `@`
     At,
-    /// `<`
-    Lt,
 }
 
 impl<'a> Lexer<'a> {
@@ -176,7 +174,7 @@ impl<'a> Lexer<'a> {
     fn next_token(&mut self) -> Result<Option<(Pos, Token)>> {
         fn is_sym_first_char(c: u8) -> bool {
             match c {
-                b'-' | b'0'..=b'9' | b'(' | b')' | b';' => false,
+                b'-' | b'0'..=b'9' | b'(' | b')' | b';' | b'<' | b'>' => false,
                 c if c.is_ascii_whitespace() => false,
                 _ => true,
             }
@@ -221,10 +219,6 @@ impl<'a> Lexer<'a> {
             b'@' => {
                 self.advance_pos();
                 Ok(Some((char_pos, Token::At)))
-            }
-            b'<' => {
-                self.advance_pos();
-                Ok(Some((char_pos, Token::Lt)))
             }
             c if is_sym_first_char(c) => {
                 let start = self.pos.offset;
@@ -295,7 +289,7 @@ impl<'a> Lexer<'a> {
                 };
                 Ok(Some((start_pos, tok)))
             }
-            c => panic!("Unexpected character '{}' at offset {}", c, self.pos.offset),
+            c => Err(self.error(self.pos, format!("Unexpected character '{}'", c))),
         }
     }
 

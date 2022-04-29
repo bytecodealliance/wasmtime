@@ -126,7 +126,7 @@ pub enum Pattern {
     /// An application of a type variant or term.
     Term {
         sym: Ident,
-        args: Vec<TermArgPattern>,
+        args: Vec<Pattern>,
         pos: Pos,
     },
     /// An operator that matches anything.
@@ -152,9 +152,7 @@ impl Pattern {
             Pattern::Term { sym, args, pos } => {
                 f(*pos, sym);
                 for arg in args {
-                    if let TermArgPattern::Pattern(p) = arg {
-                        p.terms(f);
-                    }
+                    arg.terms(f);
                 }
             }
             Pattern::And { subpats, .. } => {
@@ -291,41 +289,6 @@ impl Pattern {
     }
 }
 
-/// A pattern in a term argument. Adds "evaluated expression" to kinds
-/// of patterns in addition to all options in `Pattern`.
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub enum TermArgPattern {
-    /// A regular pattern that must match the existing value in the term's argument.
-    Pattern(Pattern),
-    /// An expression that is evaluated during the match phase and can
-    /// be given into an extractor. This is essentially a limited form
-    /// of unification or bidirectional argument flow (a la Prolog):
-    /// we can pass an arg *into* an extractor rather than getting the
-    /// arg *out of* it.
-    Expr(Expr),
-}
-
-impl TermArgPattern {
-    fn make_macro_template(&self, args: &[Ident]) -> TermArgPattern {
-        log::trace!("repplace_macro_args: {:?} with {:?}", self, args);
-        match self {
-            &TermArgPattern::Pattern(ref pat) => {
-                TermArgPattern::Pattern(pat.make_macro_template(args))
-            }
-            &TermArgPattern::Expr(_) => self.clone(),
-        }
-    }
-
-    fn subst_macro_args(&self, args: &[Pattern]) -> Option<TermArgPattern> {
-        match self {
-            &TermArgPattern::Pattern(ref pat) => {
-                Some(TermArgPattern::Pattern(pat.subst_macro_args(args)?))
-            }
-            &TermArgPattern::Expr(_) => Some(self.clone()),
-        }
-    }
-}
-
 /// An expression: the right-hand side of a rule.
 ///
 /// Note that this *almost* looks like a core Lisp or lambda calculus,
@@ -405,15 +368,6 @@ pub enum Extern {
         func: Ident,
         /// The position of this decl.
         pos: Pos,
-        /// Poliarity of args: whether values are inputs or outputs to
-        /// the external extractor function. This is a sort of
-        /// statically-defined approximation to Prolog-style
-        /// unification; we allow for the same flexible directionality
-        /// but fix it at DSL-definition time. By default, every arg
-        /// is an *output* from the extractor (and the 'retval", or
-        /// more precisely the term value that we are extracting, is
-        /// an "input").
-        arg_polarity: Option<Vec<ArgPolarity>>,
         /// Infallibility: if an external extractor returns `(T1, T2,
         /// ...)` rather than `Option<(T1, T2, ...)>`, and hence can
         /// never fail, it is declared as such and allows for slightly
@@ -431,17 +385,6 @@ pub enum Extern {
     },
     /// An external constant: `(const $IDENT type)` form.
     Const { name: Ident, ty: Ident, pos: Pos },
-}
-
-/// Whether an argument is an input or an output.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ArgPolarity {
-    /// An arg that must be given an Expr in the pattern and passes data *to*
-    /// the extractor op.
-    Input,
-    /// An arg that must be given a regular pattern (not Expr) and receives data
-    /// *from* the extractor op.
-    Output,
 }
 
 /// An implicit converter: the given term, which must have type
