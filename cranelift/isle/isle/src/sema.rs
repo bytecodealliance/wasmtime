@@ -198,6 +198,10 @@ pub struct TermEnv {
     /// defined implicit type-converter terms we can try to use to fit
     /// types together.
     pub converters: BTreeMap<(TypeId, TypeId), TermId>,
+
+    /// Flag for whether to expand internal extractors in the
+    /// translation from the AST to sema.
+    pub expand_internal_extractors: bool,
 }
 
 /// A term.
@@ -383,6 +387,24 @@ impl Term {
                     param_tys: arg_tys,
                     ret_tys,
                     infallible: *infallible,
+                })
+            }
+            TermKind::Decl {
+                extractor_kind: Some(ExtractorKind::InternalExtractor { .. }),
+                ..
+            } => {
+                let mut arg_tys = vec![];
+                let mut ret_tys = vec![];
+                arg_tys.push(self.ret_ty);
+                for &arg in self.arg_tys.iter() {
+                    ret_tys.push(arg);
+                }
+                Some(ExternalSig {
+                    func_name: tyenv.syms[self.name.index()].clone(),
+                    full_name: format!("C::{}", tyenv.syms[self.name.index()]),
+                    param_tys: arg_tys,
+                    ret_tys,
+                    infallible: true,
                 })
             }
             _ => None,
@@ -798,12 +820,17 @@ struct BoundVar {
 
 impl TermEnv {
     /// Construct the term environment from the AST and the type environment.
-    pub fn from_ast(tyenv: &mut TypeEnv, defs: &ast::Defs) -> Result<TermEnv> {
+    pub fn from_ast(
+        tyenv: &mut TypeEnv,
+        defs: &ast::Defs,
+        expand_internal_extractors: bool,
+    ) -> Result<TermEnv> {
         let mut env = TermEnv {
             terms: vec![],
             term_map: BTreeMap::new(),
             rules: vec![],
             converters: BTreeMap::new(),
+            expand_internal_extractors,
         };
 
         env.collect_term_sigs(tyenv, defs);
@@ -1773,36 +1800,54 @@ impl TermEnv {
                         extractor_kind: Some(ExtractorKind::InternalExtractor { ref template }),
                         ..
                     } => {
-                        // Expand the extractor macro! We create a map
-                        // from macro args to AST pattern trees and
-                        // then evaluate the template with these
-                        // substitutions.
-                        let mut macro_args: Vec<ast::Pattern> = vec![];
-                        for template_arg in args {
-                            let sub_ast = match template_arg {
-                                &ast::TermArgPattern::Pattern(ref pat) => pat.clone(),
-                                &ast::TermArgPattern::Expr(_) => {
-                                    tyenv.report_error(
+                        if self.expand_internal_extractors {
+                            // Expand the extractor macro! We create a map
+                            // from macro args to AST pattern trees and
+                            // then evaluate the template with these
+                            // substitutions.
+                            let mut macro_args: Vec<ast::Pattern> = vec![];
+                            for template_arg in args {
+                                let sub_ast = match template_arg {
+                                    &ast::TermArgPattern::Pattern(ref pat) => pat.clone(),
+                                    &ast::TermArgPattern::Expr(_) => {
+                                        tyenv.report_error(
                                         pos,
                                         "Cannot expand an extractor macro with an expression in a \
                                          macro argument"
                                             .to_string(),
                                     );
-                                    return None;
-                                }
-                            };
-                            macro_args.push(sub_ast.clone());
+                                        return None;
+                                    }
+                                };
+                                macro_args.push(sub_ast.clone());
+                            }
+                            log::trace!("internal extractor macro args = {:?}", args);
+                            let pat = template.subst_macro_args(&macro_args[..])?;
+                            return self.translate_pattern(
+                                tyenv,
+                                rule_term,
+                                &pat,
+                                expected_ty,
+                                bindings,
+                                /* is_root = */ false,
+                            );
+                        } else {
+                            log::trace!("not expanding internal extractor args = {:?}", args);
+                            for template_arg in args {
+                                match template_arg {
+                                    &ast::TermArgPattern::Pattern(_) => {}
+                                    &ast::TermArgPattern::Expr(_) => {
+                                        tyenv.report_error(
+                                            pos,
+                                            "Cannot have an extractor macro with an expression in a \
+                                             argument"
+                                                .to_string(),
+                                        );
+                                        return None;
+                                    }
+                                };
+                            }
                         }
-                        log::trace!("internal extractor macro args = {:?}", args);
-                        let pat = template.subst_macro_args(&macro_args[..])?;
-                        return self.translate_pattern(
-                            tyenv,
-                            rule_term,
-                            &pat,
-                            expected_ty,
-                            bindings,
-                            /* is_root = */ false,
-                        );
                     }
                     TermKind::Decl {
                         extractor_kind: None,

@@ -434,7 +434,35 @@ impl PatternSequence {
                                 extractor_kind: Some(ExtractorKind::InternalExtractor { .. }),
                                 ..
                             } => {
-                                panic!("Should have been expanded away")
+                                // Evaluate all `input` args.
+                                let mut inputs = vec![];
+                                let mut input_tys = vec![];
+                                let mut output_tys = vec![];
+                                let mut output_pats = vec![];
+                                inputs.push(input);
+                                input_tys.push(termdata.ret_ty);
+                                for arg in args.iter() {
+                                    let pat = match arg {
+                                        &TermArgPattern::Pattern(ref pat) => pat,
+                                        _ => panic!("Should have been caught by typechecking"),
+                                    };
+                                    output_tys.push(pat.ty());
+                                    output_pats.push(pat);
+                                }
+
+                                // Invoke the extractor.
+                                let arg_values =
+                                    self.add_extract(inputs, input_tys, output_tys, term, true);
+
+                                for (pat, &val) in output_pats.iter().zip(arg_values.iter()) {
+                                    self.gen_pattern(
+                                        ValueOrArgs::Value(val),
+                                        typeenv,
+                                        termenv,
+                                        pat,
+                                        vars,
+                                    );
+                                }
                             }
                             TermKind::Decl {
                                 extractor_kind:
