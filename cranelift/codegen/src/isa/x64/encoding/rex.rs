@@ -284,6 +284,7 @@ pub(crate) fn emit_std_enc_mem(
     enc_g: u8,
     mem_e: &Amode,
     rex: RexFlags,
+    bytes_at_end: u8,
 ) {
     // General comment for this function: the registers in `mem_e` must be
     // 64-bit integer registers, because they are part of an address
@@ -413,7 +414,14 @@ pub(crate) fn emit_std_enc_mem(
 
             let offset = sink.cur_offset();
             sink.use_label_at_offset(offset, *target, LabelUse::JmpRel32);
-            sink.put4(0);
+            // N.B.: some instructions (XmmRmRImm format for example)
+            // have bytes *after* the RIP-relative offset. The
+            // addressed location is relative to the end of the
+            // instruction, but the relocation is nominally relative
+            // to the end of the u32 field. So, to compensate for
+            // this, we emit a negative extra offset in the u32 field
+            // initially, and the relocation will add to it.
+            sink.put4(-(bytes_at_end as i32) as u32);
         }
     }
 }
@@ -466,6 +474,7 @@ pub(crate) fn emit_std_reg_mem(
     reg_g: Reg,
     mem_e: &Amode,
     rex: RexFlags,
+    bytes_at_end: u8,
 ) {
     let enc_g = reg_enc(reg_g);
     emit_std_enc_mem(
@@ -478,6 +487,7 @@ pub(crate) fn emit_std_reg_mem(
         enc_g,
         mem_e,
         rex,
+        bytes_at_end,
     );
 }
 
