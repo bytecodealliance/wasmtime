@@ -81,7 +81,8 @@ pub trait RuntimeLinearMemory: Send + Sync {
     #[cfg(feature = "pooling-allocator")]
     fn into_any(self: Box<Self>) -> Box<dyn std::any::Any>;
 
-    /// TODO
+    /// Similar to [`RuntimeLinearMemory::into_any()`], this function allows us
+    /// to downcast this trait to its underlying structure by reference.
     #[cfg(feature = "pooling-allocator")]
     fn as_any(&self) -> &dyn std::any::Any;
 }
