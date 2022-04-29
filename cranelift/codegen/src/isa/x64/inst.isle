@@ -497,8 +497,6 @@
             Size32
             Size64))
 
-(type VCodeConstant (primitive VCodeConstant))
-
 (type FenceKind extern
       (enum MFence
             LFence

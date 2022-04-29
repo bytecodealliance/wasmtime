@@ -539,6 +539,12 @@ macro_rules! isle_prelude_methods {
             let offset: i32 = offset.into();
             offset as u32
         }
+
+        #[inline]
+        fn emit_u64_le_const(&mut self, value: u64) -> VCodeConstant {
+            let data = VCodeConstantData::U64(value.to_le_bytes());
+            self.lower_ctx.use_constant(data)
+        }
     };
 }
 

@@ -442,6 +442,16 @@
 (decl emit (MInst) Unit)
 (extern constructor emit emit)
 
+;; Constant pool emission.
+
+(type VCodeConstant (primitive VCodeConstant))
+
+;; Add a u64 little-endian constant to the in-memory constant pool and
+;; return a VCodeConstant index that refers to it. This is
+;; side-effecting but idempotent (constants are deduplicated).
+(decl emit_u64_le_const (u64) VCodeConstant)
+(extern constructor emit_u64_le_const emit_u64_le_const)
+
 ;;;; Helpers for Side-Effectful Instructions Without Results ;;;;;;;;;;;;;;;;;;;
 
 (type SideEffectNoResult (enum
