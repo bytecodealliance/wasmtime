@@ -793,8 +793,8 @@
 ;; A helper to both check that the `Imm64` and `Offset32` values sum to less
 ;; than 32-bits AND return this summed `u32` value. Also, the `Imm64` will be
 ;; zero-extended from `Type` up to 64 bits. This is useful for `to_amode`.
-(decl sum_extend_fits_in_32_bits (Type Imm64 u32) Offset32)
-(extern extractor sum_extend_fits_in_32_bits sum_extend_fits_in_32_bits (in in out))
+(decl pure sum_extend_fits_in_32_bits (Type Imm64 Offset32) u32)
+(extern constructor sum_extend_fits_in_32_bits sum_extend_fits_in_32_bits)
 
 ;; To generate an address for a memory access, we can pattern-match various CLIF
 ;; sub-trees to x64's complex addressing modes (`Amode`). In pseudo-code:
@@ -828,14 +828,18 @@
 ;; extractor to check that the offset and constant value (`c`, the in
 ;; parameter), when summed will fit into x64's 32-bit displacement, returned as
 ;; `sum` (the out parameter). The syntax for this could be improved (TODO).
-(rule (to_amode flags (iadd (iconst c) base) _offset @ (sum_extend_fits_in_32_bits <$I64 <c sum))
+(rule (to_amode flags (iadd (iconst c) base) offset)
+      (if-let sum (sum_extend_fits_in_32_bits $I64 c offset))
       (amode_imm_reg_flags sum (put_in_gpr base) flags))
-(rule (to_amode flags (iadd base (iconst c)) _offset @ (sum_extend_fits_in_32_bits <$I64 <c sum))
+(rule (to_amode flags (iadd base (iconst c)) offset)
+      (if-let sum (sum_extend_fits_in_32_bits $I64 c offset))
       (amode_imm_reg_flags sum (put_in_gpr base) flags))
 ;; ...matches (uextend(iconst c) ...); see notes above.
-(rule (to_amode flags (iadd (has_type ty (uextend (iconst c))) base) _offset @ (sum_extend_fits_in_32_bits <ty <c sum))
+(rule (to_amode flags (iadd (has_type ty (uextend (iconst c))) base) offset)
+      (if-let sum (sum_extend_fits_in_32_bits $I64 c offset))
       (amode_imm_reg_flags sum (put_in_gpr base) flags))
-(rule (to_amode flags (iadd base (has_type ty (uextend (iconst c)))) _offset @ (sum_extend_fits_in_32_bits <ty <c sum))
+(rule (to_amode flags (iadd base (has_type ty (uextend (iconst c)))) offset)
+      (if-let sum (sum_extend_fits_in_32_bits $I64 c offset))
       (amode_imm_reg_flags sum (put_in_gpr base) flags))
 ;; ...else only matches (iadd(a b))
 (rule (to_amode flags (iadd base index) offset)

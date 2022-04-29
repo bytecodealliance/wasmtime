@@ -56,11 +56,13 @@
 ;; Special cases for when we're adding the shift of a different
 ;; register by a constant amount and the shift can get folded into the add.
 (rule (lower (has_type (fits_in_64 ty)
-                       (iadd x (ishl y (iconst (lshl_from_imm64 <ty amt))))))
+                       (iadd x (ishl y (iconst k)))))
+      (if-let amt (lshl_from_imm64 ty k))
       (add_shift ty x y amt))
 
 (rule (lower (has_type (fits_in_64 ty)
-                       (iadd (ishl x (iconst (lshl_from_imm64 <ty amt))) y)))
+                       (iadd (ishl x (iconst k)) y)))
+      (if-let amt (lshl_from_imm64 ty k))
       (add_shift ty y x amt))
 
 ;; Fold an `iadd` and `imul` combination into a `madd` instruction.
@@ -122,7 +124,8 @@
 ;; Finally a special case for when we're subtracting the shift of a different
 ;; register by a constant amount and the shift can get folded into the sub.
 (rule (lower (has_type (fits_in_64 ty)
-                       (isub x (ishl y (iconst (lshl_from_imm64 <ty amt))))))
+                       (isub x (ishl y (iconst k)))))
+      (if-let amt (lshl_from_imm64 ty k))
       (sub_shift ty x y amt))
 
 ;; vectors
@@ -568,7 +571,8 @@
 ;; Special case to use `orr_not_shift` if it's a `bnot` of a const-left-shifted
 ;; value.
 (rule (lower (has_type (fits_in_64 ty)
-                       (bnot (ishl x (iconst (lshl_from_imm64 <ty amt))))))
+                       (bnot (ishl x (iconst k)))))
+      (if-let amt (lshl_from_imm64 ty k))
       (orr_not_shift ty (zero_reg) x amt))
 
 ;; Implementation of `bnot` for `i128`.
@@ -737,7 +741,8 @@
 ;; Note that this rule explicitly has a higher priority than the others
 ;; to ensure it's attempted first, otherwise the type-based filters on the
 ;; previous rules seem to take priority over this rule.
-(rule 1 (do_shift op ty x (iconst (imm_shift_from_imm64 <ty shift)))
+(rule 1 (do_shift op ty x (iconst k))
+      (if-let shift (imm_shift_from_imm64 ty k))
       (alu_rr_imm_shift op ty x shift))
 
 ;;;; Rules for `ushr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -846,7 +851,8 @@
         (small_rotr ty (put_in_reg_zext32 x) neg_shift)))
 
 ;; Specialization for the 8/16-bit case when the rotation amount is an immediate.
-(rule (lower (has_type (fits_in_16 ty) (rotl x (iconst (imm_shift_from_imm64 <ty n)))))
+(rule (lower (has_type (fits_in_16 ty) (rotl x (iconst k))))
+      (if-let n (imm_shift_from_imm64 ty k))
       (small_rotr_imm ty (put_in_reg_zext32 x) (negate_imm_shift ty n)))
 
 ;; aarch64 doesn't have a left-rotate instruction, but a left rotation of K
@@ -868,11 +874,13 @@
         (a64_rotr $I64 x neg_shift)))
 
 ;; Specialization for the 32-bit case when the rotation amount is an immediate.
-(rule (lower (has_type $I32 (rotl x (iconst (imm_shift_from_imm64 <$I32 n)))))
+(rule (lower (has_type $I32 (rotl x (iconst k))))
+      (if-let n (imm_shift_from_imm64 $I32 k))
       (a64_rotr_imm $I32 x (negate_imm_shift $I32 n)))
 
 ;; Specialization for the 64-bit case when the rotation amount is an immediate.
-(rule (lower (has_type $I64 (rotl x (iconst (imm_shift_from_imm64 <$I64 n)))))
+(rule (lower (has_type $I64 (rotl x (iconst k))))
+      (if-let n (imm_shift_from_imm64 $I64 k))
       (a64_rotr_imm $I64 x (negate_imm_shift $I64 n)))
 
 (decl negate_imm_shift (Type ImmShift) ImmShift)
@@ -906,15 +914,18 @@
       (a64_rotr $I64 x y))
 
 ;; Specialization for the 8/16-bit case when the rotation amount is an immediate.
-(rule (lower (has_type (fits_in_16 ty) (rotr x (iconst (imm_shift_from_imm64 <ty n)))))
+(rule (lower (has_type (fits_in_16 ty) (rotr x (iconst k))))
+      (if-let n (imm_shift_from_imm64 ty k))
       (small_rotr_imm ty (put_in_reg_zext32 x) n))
 
 ;; Specialization for the 32-bit case when the rotation amount is an immediate.
-(rule (lower (has_type $I32 (rotr x (iconst (imm_shift_from_imm64 <$I32 n)))))
+(rule (lower (has_type $I32 (rotr x (iconst k))))
+      (if-let n (imm_shift_from_imm64 $I32 k))
       (a64_rotr_imm $I32 x n))
 
 ;; Specialization for the 64-bit case when the rotation amount is an immediate.
-(rule (lower (has_type $I64 (rotr x (iconst (imm_shift_from_imm64 <$I64 n)))))
+(rule (lower (has_type $I64 (rotr x (iconst k))))
+      (if-let n (imm_shift_from_imm64 $I64 k))
       (a64_rotr_imm $I64 x n))
 
 ;; For a < 32-bit rotate-right, we synthesize this as:

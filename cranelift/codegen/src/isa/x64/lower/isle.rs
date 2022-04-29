@@ -526,9 +526,9 @@ where
     #[inline]
     fn sum_extend_fits_in_32_bits(
         &mut self,
-        offset: Offset32,
         extend_from_ty: Type,
         constant_value: Imm64,
+        offset: Offset32,
     ) -> Option<u32> {
         let offset: i64 = offset.into();
         let constant_value: u64 = constant_value.bits() as u64;
