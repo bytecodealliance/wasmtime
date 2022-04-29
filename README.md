@@ -32,7 +32,7 @@ The Wasmtime CLI can be installed on Linux and macOS with a small install
 script:
 
 ```sh
-$ curl https://wasmtime.dev/install.sh -sSf | bash
+curl https://wasmtime.dev/install.sh -sSf | bash
 ```
 
 Windows or otherwise interested users can download installers and

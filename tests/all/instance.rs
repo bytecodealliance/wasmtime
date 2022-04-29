@@ -33,29 +33,6 @@ fn initializes_linear_memory() -> Result<()> {
 }
 
 #[test]
-fn initializes_linear_memory_paged() -> Result<()> {
-    let wat = r#"
-        (module
-            (memory (export "memory") 2)
-            (data (i32.const 0) "Hello World!")
-        )"#;
-
-    let mut config = Config::new();
-    config.paged_memory_initialization(true);
-
-    let module = Module::new(&Engine::new(&config)?, wat)?;
-
-    let mut store = Store::new(module.engine(), ());
-    let instance = Instance::new(&mut store, &module, &[])?;
-    let memory = instance.get_memory(&mut store, "memory").unwrap();
-
-    let mut bytes = [0; 12];
-    memory.read(&store, 0, &mut bytes)?;
-    assert_eq!(bytes, "Hello World!".as_bytes());
-    Ok(())
-}
-
-#[test]
 fn linear_memory_limits() -> Result<()> {
     // this test will allocate 4GB of virtual memory space, and may not work in
     // situations like CI QEMU emulation where it triggers SIGKILL.

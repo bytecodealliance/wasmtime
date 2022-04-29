@@ -18,16 +18,18 @@ use crate::ir::{
 };
 use crate::machinst::{
     non_writable_value_regs, writable_value_regs, ABICallee, BlockIndex, BlockLoweringOrder,
-    LoweredBlock, MachLabel, VCode, VCodeBuilder, VCodeConstant, VCodeConstantData, VCodeConstants,
-    VCodeInst, ValueRegs,
+    LoweredBlock, MachLabel, Reg, VCode, VCodeBuilder, VCodeConstant, VCodeConstantData,
+    VCodeConstants, VCodeInst, ValueRegs, Writable,
 };
 use crate::CodegenResult;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::convert::TryInto;
-use regalloc::{Reg, StackmapRequestInfo, Writable};
+use regalloc2::VReg;
 use smallvec::{smallvec, SmallVec};
 use std::fmt::Debug;
+
+use super::{first_user_vreg_index, VCodeBuildDirection};
 
 /// An "instruction color" partitions CLIF instructions by side-effecting ops.
 /// All instructions with the same "color" are guaranteed not to be separated by
@@ -160,8 +162,6 @@ pub trait LowerCtx {
     fn alloc_tmp(&mut self, ty: Type) -> ValueRegs<Writable<Reg>>;
     /// Emit a machine instruction.
     fn emit(&mut self, mach_inst: Self::I);
-    /// Emit a machine instruction that is a safepoint.
-    fn emit_safepoint(&mut self, mach_inst: Self::I);
     /// Indicate that the side-effect of an instruction has been sunk to the
     /// current scan location. This should only be done with the instruction's
     /// original results are not used (i.e., `put_input_in_regs` is not invoked
@@ -178,6 +178,9 @@ pub trait LowerCtx {
     /// Cause the value in `reg` to be in a virtual reg, by copying it into a new virtual reg
     /// if `reg` is a real reg.  `ty` describes the type of the value in `reg`.
     fn ensure_in_vreg(&mut self, reg: Reg, ty: Type) -> Reg;
+
+    /// Note that one vreg is to be treated as an alias of another.
+    fn set_vreg_alias(&mut self, from: Reg, to: Reg);
 }
 
 /// A representation of all of the ways in which a value is available, aside
@@ -194,11 +197,47 @@ pub struct NonRegInput {
     /// computation (and side-effect if applicable) could occur at the
     /// current instruction's location instead.
     ///
-    /// If this instruction's operation is merged into the current instruction,
-    /// the backend must call [LowerCtx::sink_inst()].
-    pub inst: Option<(Inst, usize)>,
+    /// If this instruction's operation is merged into the current
+    /// instruction, the backend must call [LowerCtx::sink_inst()].
+    ///
+    /// This enum indicates whether this use of the source instruction
+    /// is unique or not.
+    pub inst: InputSourceInst,
     /// The value is a known constant.
     pub constant: Option<u64>,
+}
+
+/// When examining an input to an instruction, this enum provides one
+/// of several options: there is or isn't a single instruction (that
+/// we can see and merge with) that produces that input's value, and
+/// we are or aren't the single user of that instruction.
+#[derive(Clone, Copy, Debug)]
+pub enum InputSourceInst {
+    /// The input in question is the single, unique use of the given
+    /// instruction and output index, and it can be sunk to the
+    /// location of this input.
+    UniqueUse(Inst, usize),
+    /// The input in question is one of multiple uses of the given
+    /// instruction. It can still be sunk to the location of this
+    /// input.
+    Use(Inst, usize),
+    /// We cannot determine which instruction produced the input, or
+    /// it is one of several instructions (e.g., due to a control-flow
+    /// merge and blockparam), or the source instruction cannot be
+    /// allowed to sink to the current location due to side-effects.
+    None,
+}
+
+impl InputSourceInst {
+    /// Get the instruction and output index for this source, whether
+    /// we are its single or one of many users.
+    pub fn as_inst(&self) -> Option<(Inst, usize)> {
+        match self {
+            &InputSourceInst::UniqueUse(inst, output_idx)
+            | &InputSourceInst::Use(inst, output_idx) => Some((inst, output_idx)),
+            &InputSourceInst::None => None,
+        }
+    }
 }
 
 /// A machine backend.
@@ -230,14 +269,6 @@ pub trait LowerBackend {
     fn maybe_pinned_reg(&self) -> Option<Reg> {
         None
     }
-}
-
-/// A pending instruction to insert and auxiliary information about it: its source location and
-/// whether it is a safepoint.
-struct InstTuple<I: VCodeInst> {
-    loc: SourceLoc,
-    is_safepoint: bool,
-    inst: I,
 }
 
 /// Machine-independent lowering driver / machine-instruction container. Maintains a correspondence
@@ -276,8 +307,13 @@ pub struct Lower<'func, I: VCodeInst> {
     /// Instruction constant values, if known.
     inst_constants: FxHashMap<Inst, u64>,
 
-    /// Use-counts per SSA value, as counted in the input IR.
-    value_uses: SecondaryMap<Value, u32>,
+    /// Use-counts per SSA value, as counted in the input IR. These
+    /// are "coarsened", in the abstract-interpretation sense: we only
+    /// care about "0, 1, many" states, as this is all we need and
+    /// this lets us do an efficient fixpoint analysis.
+    ///
+    /// See doc comment on `ValueUseState` for more details.
+    value_ir_uses: SecondaryMap<Value, ValueUseState>,
 
     /// Actual uses of each SSA value so far, incremented while lowering.
     value_lowered_uses: SecondaryMap<Value, u32>,
@@ -287,20 +323,10 @@ pub struct Lower<'func, I: VCodeInst> {
     inst_sunk: FxHashSet<Inst>,
 
     /// Next virtual register number to allocate.
-    next_vreg: u32,
-
-    /// Insts in reverse block order, before final copy to vcode.
-    block_insts: Vec<InstTuple<I>>,
-
-    /// Ranges in `block_insts` constituting BBs.
-    block_ranges: Vec<(usize, usize)>,
-
-    /// Instructions collected for the BB in progress, in reverse order, with
-    /// source-locs attached.
-    bb_insts: Vec<InstTuple<I>>,
+    next_vreg: usize,
 
     /// Instructions collected for the CLIF inst in progress, in forward order.
-    ir_insts: Vec<InstTuple<I>>,
+    ir_insts: Vec<I>,
 
     /// The register to use for GetPinnedReg, if any, on this architecture.
     pinned_reg: Option<Reg>,
@@ -308,6 +334,108 @@ pub struct Lower<'func, I: VCodeInst> {
     /// The vreg containing the special VmContext parameter, if it is present in the current
     /// function's signature.
     vm_context: Option<Reg>,
+}
+
+/// How is a value used in the IR?
+///
+/// This can be seen as a coarsening of an integer count. We only need
+/// distinct states for zero, one, or many.
+///
+/// This analysis deserves further explanation. The basic idea is that
+/// we want to allow instruction lowering to know whether a value that
+/// an instruction references is *only* referenced by that one use, or
+/// by others as well. This is necessary to know when we might want to
+/// move a side-effect: we cannot, for example, duplicate a load, so
+/// we cannot let instruction lowering match a load as part of a
+/// subpattern and potentially incorporate it.
+///
+/// Note that a lot of subtlety comes into play once we have
+/// *indirect* uses. The classical example of this in our development
+/// history was the x86 compare instruction, which is incorporated
+/// into flags users (e.g. `selectif`, `trueif`, branches) and can
+/// subsequently incorporate loads, or at least we would like it
+/// to. However, danger awaits: the compare might be the only user of
+/// a load, so we might think we can just move the load (and nothing
+/// is duplicated -- success!), except that the compare itself is
+/// codegen'd in multiple places, where it is incorporated as a
+/// subpattern itself.
+///
+/// So we really want a notion of "unique all the way along the
+/// matching path". Rust's `&T` and `&mut T` offer a partial analogy
+/// to the semantics that we want here: we want to know when we've
+/// matched a unique use of an instruction, and that instruction's
+/// unique use of another instruction, etc, just as `&mut T` can only
+/// be obtained by going through a chain of `&mut T`. If one has a
+/// `&T` to a struct containing `&mut T` (one of several uses of an
+/// instruction that itself has a unique use of an instruction), one
+/// can only get a `&T` (one can only get a "I am one of several users
+/// of this instruction" result).
+///
+/// We could track these paths, either dynamically as one "looks up
+/// the operand tree" or precomputed. But the former requires state
+/// and means that the `LowerCtx` API carries that state implicitly,
+/// which we'd like to avoid if we can. And the latter implies O(n^2)
+/// storage: it is an all-pairs property (is inst `i` unique from the
+/// point of view of `j`).
+///
+/// To make matters even a little more complex still, a value that is
+/// not uniquely used when initially viewing the IR can *become*
+/// uniquely used, at least as a root allowing further unique uses of
+/// e.g. loads to merge, if no other instruction actually merges
+/// it. To be more concrete, if we have `v1 := load; v2 := op v1; v3
+/// := op v2; v4 := op v2` then `v2` is non-uniquely used, so from the
+/// point of view of lowering `v4` or `v3`, we cannot merge the load
+/// at `v1`. But if we decide just to use the assigned register for
+/// `v2` at both `v3` and `v4`, then we only actually codegen `v2`
+/// once, so it *is* a unique root at that point and we *can* merge
+/// the load.
+///
+/// Note also that the color scheme is not sufficient to give us this
+/// information, for various reasons: reasoning about side-effects
+/// does not tell us about potential duplication of uses through pure
+/// ops.
+///
+/// To keep things simple and avoid error-prone lowering APIs that
+/// would extract more information about whether instruction merging
+/// happens or not (we don't have that info now, and it would be
+/// difficult to refactor to get it and make that refactor 100%
+/// correct), we give up on the above "can become unique if not
+/// actually merged" point. Instead, we compute a
+/// transitive-uniqueness. That is what this enum represents.
+///
+/// To define it plainly: a value is `Unused` if no references exist
+/// to it; `Once` if only one other op refers to it, *and* that other
+/// op is `Unused` or `Once`; and `Multiple` otherwise. In other
+/// words, `Multiple` is contagious: even if an op's result value is
+/// directly used only once in the CLIF, that value is `Multiple` if
+/// the op that uses it is itself used multiple times (hence could be
+/// codegen'd multiple times). In brief, this analysis tells us
+/// whether, if every op merged all of its operand tree, a given op
+/// could be codegen'd in more than one place.
+///
+/// To compute this, we first consider direct uses. At this point
+/// `Unused` answers are correct, `Multiple` answers are correct, but
+/// some `Once`s may change to `Multiple`s. Then we propagate
+/// `Multiple` transitively using a workqueue/fixpoint algorithm.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ValueUseState {
+    /// Not used at all.
+    Unused,
+    /// Used exactly once.
+    Once,
+    /// Used multiple times.
+    Multiple,
+}
+
+impl ValueUseState {
+    /// Add one use.
+    fn inc(&mut self) {
+        let new = match self {
+            Self::Unused => Self::Once,
+            Self::Once | Self::Multiple => Self::Multiple,
+        };
+        *self = new;
+    }
 }
 
 /// Notion of "relocation distance". This gives an estimate of how far away a symbol will be from a
@@ -324,22 +452,22 @@ pub enum RelocDistance {
 
 fn alloc_vregs<I: VCodeInst>(
     ty: Type,
-    next_vreg: &mut u32,
+    next_vreg: &mut usize,
     vcode: &mut VCodeBuilder<I>,
 ) -> CodegenResult<ValueRegs<Reg>> {
     let v = *next_vreg;
     let (regclasses, tys) = I::rc_for_type(ty)?;
-    *next_vreg += regclasses.len() as u32;
-    let regs = match regclasses {
-        &[rc0] => ValueRegs::one(Reg::new_virtual(rc0, v)),
-        &[rc0, rc1] => ValueRegs::two(Reg::new_virtual(rc0, v), Reg::new_virtual(rc1, v + 1)),
+    *next_vreg += regclasses.len();
+    let regs: ValueRegs<Reg> = match regclasses {
+        &[rc0] => ValueRegs::one(VReg::new(v, rc0).into()),
+        &[rc0, rc1] => ValueRegs::two(VReg::new(v, rc0).into(), VReg::new(v + 1, rc1).into()),
         // We can extend this if/when we support 32-bit targets; e.g.,
         // an i128 on a 32-bit machine will need up to four machine regs
         // for a `Value`.
         _ => panic!("Value must reside in 1 or 2 registers"),
     };
     for (&reg_ty, &reg) in tys.iter().zip(regs.regs().iter()) {
-        vcode.set_vreg_type(reg.to_virtual_reg(), reg_ty);
+        vcode.set_vreg_type(reg.to_virtual_reg().unwrap(), reg_ty);
     }
     Ok(regs)
 }
@@ -358,9 +486,15 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         block_order: BlockLoweringOrder,
     ) -> CodegenResult<Lower<'func, I>> {
         let constants = VCodeConstants::with_capacity(f.dfg.constants.len());
-        let mut vcode = VCodeBuilder::new(abi, emit_info, block_order, constants);
+        let mut vcode = VCodeBuilder::new(
+            abi,
+            emit_info,
+            block_order,
+            constants,
+            VCodeBuildDirection::Backward,
+        );
 
-        let mut next_vreg: u32 = 0;
+        let mut next_vreg: usize = first_user_vreg_index();
 
         let mut value_regs = SecondaryMap::with_default(ValueRegs::invalid());
 
@@ -381,10 +515,11 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                         let regs = alloc_vregs(ty, &mut next_vreg, &mut vcode)?;
                         value_regs[result] = regs;
                         log::trace!(
-                            "bb {} inst {} ({:?}): result regs {:?}",
+                            "bb {} inst {} ({:?}): result {} regs {:?}",
                             bb,
                             inst,
                             f.dfg[inst],
+                            result,
                             regs,
                         );
                     }
@@ -416,7 +551,6 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         let mut block_end_colors = SecondaryMap::with_default(InstColor::new(0));
         let mut side_effect_inst_entry_colors = FxHashMap::default();
         let mut inst_constants = FxHashMap::default();
-        let mut value_uses = SecondaryMap::with_default(0);
         for bb in f.layout.blocks() {
             cur_color += 1;
             for inst in f.layout.block_insts(bb) {
@@ -434,16 +568,12 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                     log::trace!(" -> constant: {}", c);
                     inst_constants.insert(inst, c);
                 }
-
-                // Count uses of all arguments.
-                for arg in f.dfg.inst_args(inst) {
-                    let arg = f.dfg.resolve_aliases(*arg);
-                    value_uses[arg] += 1;
-                }
             }
 
             block_end_colors[bb] = InstColor::new(cur_color);
         }
+
+        let value_ir_uses = Self::compute_use_states(f);
 
         Ok(Lower {
             f,
@@ -454,18 +584,123 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             side_effect_inst_entry_colors,
             inst_constants,
             next_vreg,
-            value_uses,
+            value_ir_uses,
             value_lowered_uses: SecondaryMap::default(),
             inst_sunk: FxHashSet::default(),
             cur_scan_entry_color: None,
             cur_inst: None,
-            block_insts: vec![],
-            block_ranges: vec![],
-            bb_insts: vec![],
             ir_insts: vec![],
             pinned_reg: None,
             vm_context,
         })
+    }
+
+    /// Pre-analysis: compute `value_ir_uses`. See comment on
+    /// `ValueUseState` for a description of what this analysis
+    /// computes.
+    fn compute_use_states<'a>(f: &'a Function) -> SecondaryMap<Value, ValueUseState> {
+        // We perform the analysis without recursion, so we don't
+        // overflow the stack on long chains of ops in the input.
+        //
+        // This is sort of a hybrid of a "shallow use-count" pass and
+        // a DFS. We iterate over all instructions and mark their args
+        // as used. However when we increment a use-count to
+        // "Multiple" we push its args onto the stack and do a DFS,
+        // immediately marking the whole dependency tree as
+        // Multiple. Doing both (shallow use-counting over all insts,
+        // and deep Multiple propagation) lets us trim both
+        // traversals, stopping recursion when a node is already at
+        // the appropriate state.
+        //
+        // In particular, note that the *coarsening* into {Unused,
+        // Once, Multiple} is part of what makes this pass more
+        // efficient than a full indirect-use-counting pass.
+
+        let mut value_ir_uses: SecondaryMap<Value, ValueUseState> =
+            SecondaryMap::with_default(ValueUseState::Unused);
+
+        // Stack of iterators over Values as we do DFS to mark
+        // Multiple-state subtrees.
+        type StackVec<'a> = SmallVec<[std::slice::Iter<'a, Value>; 16]>;
+        let mut stack: StackVec = smallvec![];
+
+        // Push args for a given inst onto the DFS stack.
+        let push_args_on_stack = |stack: &mut StackVec<'a>, value| {
+            log::trace!(" -> pushing args for {} onto stack", value);
+            if let ValueDef::Result(src_inst, _) = f.dfg.value_def(value) {
+                stack.push(f.dfg.inst_args(src_inst).iter());
+            }
+        };
+
+        // Do a DFS through `value_ir_uses` to mark a subtree as
+        // Multiple.
+        let mark_all_uses_as_multiple =
+            |value_ir_uses: &mut SecondaryMap<Value, ValueUseState>, stack: &mut StackVec<'a>| {
+                while let Some(iter) = stack.last_mut() {
+                    if let Some(&value) = iter.next() {
+                        let value = f.dfg.resolve_aliases(value);
+                        log::trace!(" -> DFS reaches {}", value);
+                        if value_ir_uses[value] == ValueUseState::Multiple {
+                            // Truncate DFS here: no need to go further,
+                            // as whole subtree must already be Multiple.
+                            #[cfg(debug_assertions)]
+                            {
+                                // With debug asserts, check one level
+                                // of that invariant at least.
+                                if let ValueDef::Result(src_inst, _) = f.dfg.value_def(value) {
+                                    debug_assert!(f.dfg.inst_args(src_inst).iter().all(|&arg| {
+                                        let arg = f.dfg.resolve_aliases(arg);
+                                        value_ir_uses[arg] == ValueUseState::Multiple
+                                    }));
+                                }
+                            }
+                            continue;
+                        }
+                        value_ir_uses[value] = ValueUseState::Multiple;
+                        log::trace!(" -> became Multiple");
+                        push_args_on_stack(stack, value);
+                    } else {
+                        // Empty iterator, discard.
+                        stack.pop();
+                    }
+                }
+            };
+
+        for inst in f
+            .layout
+            .blocks()
+            .flat_map(|block| f.layout.block_insts(block))
+        {
+            // If this inst produces multiple values, we must mark all
+            // of its args as Multiple, because otherwise two uses
+            // could come in as Once on our two different results.
+            let force_multiple = f.dfg.inst_results(inst).len() > 1;
+
+            // Iterate over all args of all instructions, noting an
+            // additional use on each operand. If an operand becomes Multiple,
+            for &arg in f.dfg.inst_args(inst) {
+                let arg = f.dfg.resolve_aliases(arg);
+                let old = value_ir_uses[arg];
+                if force_multiple {
+                    log::trace!(
+                        "forcing arg {} to Multiple because of multiple results of user inst",
+                        arg
+                    );
+                    value_ir_uses[arg] = ValueUseState::Multiple;
+                } else {
+                    value_ir_uses[arg].inc();
+                }
+                let new = value_ir_uses[arg];
+                log::trace!("arg {} used, old state {:?}, new {:?}", arg, old, new,);
+                // On transition to Multiple, do DFS.
+                if old != ValueUseState::Multiple && new == ValueUseState::Multiple {
+                    push_args_on_stack(&mut stack, arg);
+                    mark_all_uses_as_multiple(&mut value_ir_uses, &mut stack);
+                }
+            }
+        }
+
+        value_ir_uses
     }
 
     fn gen_arg_setup(&mut self) {
@@ -475,6 +710,12 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                 entry_bb,
                 self.f.dfg.block_params(entry_bb)
             );
+
+            // Make the vmctx available in debuginfo.
+            if let Some(vmctx_val) = self.f.special_param(ArgumentPurpose::VMContext) {
+                self.emit_value_label_marks_for_value(vmctx_val);
+            }
+
             for (i, param) in self.f.dfg.block_params(entry_bb).iter().enumerate() {
                 if !self.vcode.abi().arg_is_needed_in_body(i) {
                     continue;
@@ -509,14 +750,6 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     }
 
     fn gen_retval_setup(&mut self, gen_ret_inst: GenerateReturn) {
-        // Hack: to keep `vmctx` alive, if it exists, we emit a value label here
-        // for it if debug info is requested. This ensures that it exists either
-        // in a register or spillslot throughout the entire function body, and
-        // allows for a better debugging experience.
-        if let Some(vmctx_val) = self.f.special_param(ArgumentPurpose::VMContext) {
-            self.emit_value_label_marks_for_value(vmctx_val);
-        }
-
         let retval_regs = self.retval_regs.clone();
         for (i, regs) in retval_regs.into_iter().enumerate() {
             let regs = writable_value_regs(regs);
@@ -534,141 +767,16 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             GenerateReturn::No => self.vcode.abi().gen_epilogue_placeholder(),
         };
         self.emit(inst);
-    }
 
-    fn lower_edge(&mut self, pred: Block, inst: Inst, succ: Block) -> CodegenResult<()> {
-        log::trace!("lower_edge: pred {} succ {}", pred, succ);
-
-        let num_args = self.f.dfg.block_params(succ).len();
-        debug_assert!(num_args == self.f.dfg.inst_variable_args(inst).len());
-
-        // Most blocks have no params, so skip all the hoop-jumping below and make an early exit.
-        if num_args == 0 {
-            return Ok(());
-        }
-
-        self.cur_inst = Some(inst);
-
-        // Make up two vectors of info:
-        //
-        // * one for dsts which are to be assigned constants.  We'll deal with those second, so
-        //   as to minimise live ranges.
-        //
-        // * one for dsts whose sources are non-constants.
-
-        let mut const_bundles: SmallVec<[_; 16]> = SmallVec::new();
-        let mut var_bundles: SmallVec<[_; 16]> = SmallVec::new();
-
-        let mut i = 0;
-        for (dst_val, src_val) in self
-            .f
-            .dfg
-            .block_params(succ)
-            .iter()
-            .zip(self.f.dfg.inst_variable_args(inst).iter())
-        {
-            let src_val = self.f.dfg.resolve_aliases(*src_val);
-            let ty = self.f.dfg.value_type(src_val);
-
-            debug_assert!(ty == self.f.dfg.value_type(*dst_val));
-            let dst_regs = self.value_regs[*dst_val];
-
-            let input = self.get_value_as_source_or_const(src_val);
-            log::trace!("jump arg {} is {}", i, src_val);
-            i += 1;
-
-            if let Some(c) = input.constant {
-                log::trace!(" -> constant {}", c);
-                const_bundles.push((ty, writable_value_regs(dst_regs), c));
-            } else {
-                let src_regs = self.put_value_in_regs(src_val);
-                log::trace!(" -> reg {:?}", src_regs);
-                // Skip self-assignments.  Not only are they pointless, they falsely trigger the
-                // overlap-check below and hence can cause a lot of unnecessary copying through
-                // temporaries.
-                if dst_regs != src_regs {
-                    var_bundles.push((ty, writable_value_regs(dst_regs), src_regs));
-                }
+        // Hack: generate a virtual instruction that uses vmctx in
+        // order to keep it alive for the duration of the function,
+        // for the benefit of debuginfo.
+        if self.f.dfg.values_labels.is_some() {
+            if let Some(vmctx_val) = self.f.special_param(ArgumentPurpose::VMContext) {
+                let vmctx_reg = self.value_regs[vmctx_val].only_reg().unwrap();
+                self.emit(I::gen_dummy_use(vmctx_reg));
             }
         }
-
-        // Deal first with the moves whose sources are variables.
-
-        // FIXME: use regalloc.rs' SparseSetU here.  This would avoid all heap allocation
-        // for cases of up to circa 16 args.  Currently not possible because regalloc.rs
-        // does not export it.
-        let mut src_reg_set = FxHashSet::<Reg>::default();
-        for (_, _, src_regs) in &var_bundles {
-            for &reg in src_regs.regs() {
-                src_reg_set.insert(reg);
-            }
-        }
-        let mut overlaps = false;
-        'outer: for (_, dst_regs, _) in &var_bundles {
-            for &reg in dst_regs.regs() {
-                if src_reg_set.contains(&reg.to_reg()) {
-                    overlaps = true;
-                    break 'outer;
-                }
-            }
-        }
-
-        // If, as is mostly the case, the source and destination register sets are non
-        // overlapping, then we can copy directly, so as to save the register allocator work.
-        if !overlaps {
-            for (ty, dst_regs, src_regs) in &var_bundles {
-                let (_, reg_tys) = I::rc_for_type(*ty)?;
-                for ((dst, src), reg_ty) in dst_regs
-                    .regs()
-                    .iter()
-                    .zip(src_regs.regs().iter())
-                    .zip(reg_tys.iter())
-                {
-                    self.emit(I::gen_move(*dst, *src, *reg_ty));
-                }
-            }
-        } else {
-            // There's some overlap, so play safe and copy via temps.
-            let mut tmp_regs = SmallVec::<[ValueRegs<Writable<Reg>>; 16]>::new();
-            for (ty, _, _) in &var_bundles {
-                tmp_regs.push(self.alloc_tmp(*ty));
-            }
-            for ((ty, _, src_reg), tmp_reg) in var_bundles.iter().zip(tmp_regs.iter()) {
-                let (_, reg_tys) = I::rc_for_type(*ty)?;
-                for ((tmp, src), reg_ty) in tmp_reg
-                    .regs()
-                    .iter()
-                    .zip(src_reg.regs().iter())
-                    .zip(reg_tys.iter())
-                {
-                    self.emit(I::gen_move(*tmp, *src, *reg_ty));
-                }
-            }
-            for ((ty, dst_reg, _), tmp_reg) in var_bundles.iter().zip(tmp_regs.iter()) {
-                let (_, reg_tys) = I::rc_for_type(*ty)?;
-                for ((dst, tmp), reg_ty) in dst_reg
-                    .regs()
-                    .iter()
-                    .zip(tmp_reg.regs().iter())
-                    .zip(reg_tys.iter())
-                {
-                    self.emit(I::gen_move(*dst, tmp.to_reg(), *reg_ty));
-                }
-            }
-        }
-
-        // Now, finally, deal with the moves whose sources are constants.
-        for (ty, dst_reg, const_val) in &const_bundles {
-            for inst in I::gen_constant(*dst_reg, *const_val as u128, *ty, |ty| {
-                self.alloc_tmp(ty).only_reg().unwrap()
-            })
-            .into_iter()
-            {
-                self.emit(inst);
-            }
-        }
-
-        Ok(())
     }
 
     /// Has this instruction been sunk to a use-site (i.e., away from its
@@ -694,21 +802,24 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         self.cur_scan_entry_color = Some(self.block_end_colors[block]);
         // Lowering loop:
         // - For each non-branch instruction, in reverse order:
-        //   - If side-effecting (load, store, branch/call/return, possible trap), or if
-        //     used outside of this block, or if demanded by another inst, then lower.
+        //   - If side-effecting (load, store, branch/call/return,
+        //     possible trap), or if used outside of this block, or if
+        //     demanded by another inst, then lower.
         //
-        // That's it! Lowering of side-effecting ops will force all *needed*
-        // (live) non-side-effecting ops to be lowered at the right places, via
-        // the `use_input_reg()` callback on the `LowerCtx` (that's us). That's
-        // because `use_input_reg()` sets the eager/demand bit for any insts
-        // whose result registers are used.
+        // That's it! Lowering of side-effecting ops will force all
+        // *needed* (live) non-side-effecting ops to be lowered at the
+        // right places, via the `use_input_reg()` callback on the
+        // `LowerCtx` (that's us). That's because `use_input_reg()`
+        // sets the eager/demand bit for any insts whose result
+        // registers are used.
         //
-        // We build up the BB in reverse instruction order in `bb_insts`.
-        // Because the machine backend calls `ctx.emit()` in forward order, we
-        // collect per-IR-inst lowered instructions in `ir_insts`, then reverse
-        // these and append to `bb_insts` as we go backward through the block.
-        // `bb_insts` are then reversed again and appended to the VCode at the
-        // end of the BB (in the toplevel driver `lower()`).
+        // We set the VCodeBuilder to "backward" mode, so we emit
+        // blocks in reverse order wrt the BlockIndex sequence, and
+        // emit instructions in reverse order within blocks.  Because
+        // the machine backend calls `ctx.emit()` in forward order, we
+        // collect per-IR-inst lowered instructions in `ir_insts`,
+        // then reverse these and append to the VCode at the end of
+        // each IR instruction.
         for inst in self.f.layout.block_insts(block).rev() {
             let data = &self.f.dfg[inst];
             let has_side_effect = has_lowering_side_effect(self.f, inst);
@@ -750,9 +861,6 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             if has_side_effect || value_needed {
                 log::trace!("lowering: inst {}: {:?}", inst, self.f.dfg[inst]);
                 backend.lower(self, inst)?;
-                // Emit value-label markers if needed, to later recover debug
-                // mappings.
-                self.emit_value_label_markers_for_inst(inst);
             }
             if data.opcode().is_return() {
                 // Return: handle specially, using ABI-appropriate sequence.
@@ -767,8 +875,30 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
             let loc = self.srcloc(inst);
             self.finish_ir_inst(loc);
+
+            // Emit value-label markers if needed, to later recover
+            // debug mappings. This must happen before the instruction
+            // (so after we emit, in bottom-to-top pass).
+            self.emit_value_label_markers_for_inst(inst);
         }
+
+        // Add the block params to this block.
+        self.add_block_params(block)?;
+
         self.cur_scan_entry_color = None;
+        Ok(())
+    }
+
+    fn add_block_params(&mut self, block: Block) -> CodegenResult<()> {
+        for &param in self.f.dfg.block_params(block) {
+            let ty = self.f.dfg.value_type(param);
+            let (_reg_rcs, reg_tys) = I::rc_for_type(ty)?;
+            debug_assert_eq!(reg_tys.len(), self.value_regs[param].len());
+            for (&reg, &rty) in self.value_regs[param].regs().iter().zip(reg_tys.iter()) {
+                self.vcode
+                    .add_block_param(reg.to_virtual_reg().unwrap(), rty);
+            }
+        }
         Ok(())
     }
 
@@ -794,7 +924,6 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     }
 
     fn emit_value_label_marks_for_value(&mut self, val: Value) {
-        let mut markers: SmallVec<[I; 4]> = smallvec![];
         let regs = self.value_regs[val];
         if regs.len() > 1 {
             return;
@@ -813,11 +942,8 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                     reg,
                     label,
                 );
-                markers.push(I::gen_value_label_marker(label, reg));
+                self.vcode.add_value_label(reg, label);
             }
-        }
-        for marker in markers {
-            self.emit(marker);
         }
     }
 
@@ -849,41 +975,25 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     }
 
     fn finish_ir_inst(&mut self, loc: SourceLoc) {
-        // `bb_insts` is kept in reverse order, so emit the instructions in
-        // reverse order.
-        for mut tuple in self.ir_insts.drain(..).rev() {
-            tuple.loc = loc;
-            self.bb_insts.push(tuple);
+        self.vcode.set_srcloc(loc);
+        // The VCodeBuilder builds in reverse order (and reverses at
+        // the end), but `ir_insts` is in forward order, so reverse
+        // it.
+        for inst in self.ir_insts.drain(..).rev() {
+            self.vcode.push(inst);
         }
     }
 
     fn finish_bb(&mut self) {
-        let start = self.block_insts.len();
-        for tuple in self.bb_insts.drain(..).rev() {
-            self.block_insts.push(tuple);
-        }
-        let end = self.block_insts.len();
-        self.block_ranges.push((start, end));
-    }
-
-    fn copy_bbs_to_vcode(&mut self) {
-        for &(start, end) in self.block_ranges.iter().rev() {
-            for &InstTuple {
-                loc,
-                is_safepoint,
-                ref inst,
-            } in &self.block_insts[start..end]
-            {
-                self.vcode.set_srcloc(loc);
-                self.vcode.push(inst.clone(), is_safepoint);
-            }
-            self.vcode.end_bb();
-        }
+        self.vcode.end_bb();
     }
 
     fn lower_clif_branches<B: LowerBackend<MInst = I>>(
         &mut self,
         backend: &B,
+        // Lowered block index:
+        bindex: BlockIndex,
+        // Original CLIF block:
         block: Block,
         branches: &SmallVec<[Inst; 2]>,
         targets: &SmallVec<[MachLabel; 2]>,
@@ -900,7 +1010,29 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         backend.lower_branch_group(self, branches, targets)?;
         let loc = self.srcloc(branches[0]);
         self.finish_ir_inst(loc);
+        // Add block param outputs for current block.
+        self.lower_branch_blockparam_args(bindex);
         Ok(())
+    }
+
+    fn lower_branch_blockparam_args(&mut self, block: BlockIndex) {
+        for succ_idx in 0..self.vcode.block_order().succ_indices(block).len() {
+            // Avoid immutable borrow by explicitly indexing.
+            let (inst, succ) = self.vcode.block_order().succ_indices(block)[succ_idx];
+            // Get branch args and convert to Regs.
+            let branch_args = self.f.dfg.inst_variable_args(inst);
+            let mut branch_arg_vregs: SmallVec<[Reg; 16]> = smallvec![];
+            for &arg in branch_args {
+                let arg = self.f.dfg.resolve_aliases(arg);
+                let regs = self.put_value_in_regs(arg);
+                for &vreg in regs.regs() {
+                    let vreg = self.vcode.resolve_vreg_alias(vreg.into());
+                    branch_arg_vregs.push(vreg.into());
+                }
+            }
+            self.vcode.add_succ(succ, &branch_arg_vregs[..]);
+        }
+        self.finish_ir_inst(SourceLoc::default());
     }
 
     fn collect_branches_and_targets(
@@ -927,10 +1059,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     }
 
     /// Lower the function.
-    pub fn lower<B: LowerBackend<MInst = I>>(
-        mut self,
-        backend: &B,
-    ) -> CodegenResult<(VCode<I>, StackmapRequestInfo)> {
+    pub fn lower<B: LowerBackend<MInst = I>>(mut self, backend: &B) -> CodegenResult<VCode<I>> {
         log::trace!("about to lower function: {:?}", self.f);
 
         // Initialize the ABI object, giving it a temp if requested.
@@ -945,7 +1074,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         // not the whole `Lower` impl).
         self.pinned_reg = backend.maybe_pinned_reg();
 
-        self.vcode.set_entry(0);
+        self.vcode.set_entry(BlockIndex::new(0));
 
         // Reused vectors for branch lowering.
         let mut branches: SmallVec<[Inst; 2]> = SmallVec::new();
@@ -963,7 +1092,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
         // Main lowering loop over lowered blocks.
         for (bindex, lb) in lowered_order.iter().enumerate().rev() {
-            let bindex = bindex as BlockIndex;
+            let bindex = BlockIndex::new(bindex);
 
             // Lower the block body in reverse order (see comment in
             // `lower_clif_block()` for rationale).
@@ -972,34 +1101,45 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             if let Some(bb) = lb.orig_block() {
                 self.collect_branches_and_targets(bindex, bb, &mut branches, &mut targets);
                 if branches.len() > 0 {
-                    self.lower_clif_branches(backend, bb, &branches, &targets)?;
+                    self.lower_clif_branches(backend, bindex, bb, &branches, &targets)?;
                     self.finish_ir_inst(self.srcloc(branches[0]));
                 }
             } else {
-                // If no orig block, this must be a pure edge block; get the successor and
-                // emit a jump.
+                // If no orig block, this must be a pure edge block;
+                // get the successor and emit a jump. Add block params
+                // according to the one successor, and pass them
+                // through; note that the successor must have an
+                // original block.
                 let (_, succ) = self.vcode.block_order().succ_indices(bindex)[0];
+
+                let orig_succ = lowered_order[succ.index()];
+                let orig_succ = orig_succ
+                    .orig_block()
+                    .expect("Edge block succ must be body block");
+
+                let mut branch_arg_vregs: SmallVec<[Reg; 16]> = smallvec![];
+                for ty in self.f.dfg.block_param_types(orig_succ) {
+                    let regs = alloc_vregs(ty, &mut self.next_vreg, &mut self.vcode)?;
+                    for &reg in regs.regs() {
+                        branch_arg_vregs.push(reg);
+                        let vreg = reg.to_virtual_reg().unwrap();
+                        self.vcode
+                            .add_block_param(vreg, self.vcode.get_vreg_type(vreg));
+                    }
+                }
+                self.vcode.add_succ(succ, &branch_arg_vregs[..]);
+
                 self.emit(I::gen_jump(MachLabel::from_block(succ)));
                 self.finish_ir_inst(SourceLoc::default());
             }
 
-            // Out-edge phi moves.
-            if let Some((pred, inst, succ)) = lb.out_edge() {
-                self.lower_edge(pred, inst, succ)?;
-                self.finish_ir_inst(SourceLoc::default());
-            }
             // Original block body.
             if let Some(bb) = lb.orig_block() {
                 self.lower_clif_block(backend, bb)?;
                 self.emit_value_label_markers_for_block_args(bb);
             }
-            // In-edge phi moves.
-            if let Some((pred, inst, succ)) = lb.in_edge() {
-                self.lower_edge(pred, inst, succ)?;
-                self.finish_ir_inst(SourceLoc::default());
-            }
 
-            if bindex == 0 {
+            if bindex.index() == 0 {
                 // Set up the function with arg vreg inits.
                 self.gen_arg_setup();
                 self.finish_ir_inst(SourceLoc::default());
@@ -1008,13 +1148,12 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             self.finish_bb();
         }
 
-        self.copy_bbs_to_vcode();
-
-        // Now that we've emitted all instructions into the VCodeBuilder, let's build the VCode.
-        let (vcode, stack_map_info) = self.vcode.build();
+        // Now that we've emitted all instructions into the
+        // VCodeBuilder, let's build the VCode.
+        let vcode = self.vcode.build();
         log::trace!("built vcode: {:?}", vcode);
 
-        Ok((vcode, stack_map_info))
+        Ok(vcode)
     }
 }
 
@@ -1101,10 +1240,8 @@ impl<'func, I: VCodeInst> LowerCtx for Lower<'func, I> {
             &InstructionData::AtomicCas { flags, .. } => Some(flags),
             &InstructionData::AtomicRmw { flags, .. } => Some(flags),
             &InstructionData::Load { flags, .. }
-            | &InstructionData::LoadComplex { flags, .. }
             | &InstructionData::LoadNoOffset { flags, .. }
-            | &InstructionData::Store { flags, .. }
-            | &InstructionData::StoreComplex { flags, .. } => Some(flags),
+            | &InstructionData::Store { flags, .. } => Some(flags),
             &InstructionData::StoreNoOffset { flags, .. } => Some(flags),
             _ => None,
         }
@@ -1159,9 +1296,11 @@ impl<'func, I: VCodeInst> LowerCtx for Lower<'func, I> {
             // OK to merge source instruction if (i) we have a source
             // instruction, and:
             // - It has no side-effects, OR
-            // - It has a side-effect, has one output value, that one output has
-            //   only one use (this one), and the instruction's color is *one less
-            //   than* the current scan color.
+            // - It has a side-effect, has one output value, that one
+            //   output has only one use, directly or indirectly (so
+            //   cannot be duplicated -- see comment on
+            //   `ValueUseState`), and the instruction's color is *one
+            //   less than* the current scan color.
             //
             //   This latter set of conditions is testing whether a
             //   side-effecting instruction can sink to the current scan
@@ -1180,15 +1319,26 @@ impl<'func, I: VCodeInst> LowerCtx for Lower<'func, I> {
                 log::trace!(" -> src inst {}", src_inst);
                 log::trace!(" -> has lowering side effect: {}", src_side_effect);
                 if !src_side_effect {
-                    // Pure instruction: always possible to sink.
-                    Some((src_inst, result_idx))
+                    // Pure instruction: always possible to
+                    // sink. Let's determine whether we are the only
+                    // user or not.
+                    if self.value_ir_uses[val] == ValueUseState::Once {
+                        InputSourceInst::UniqueUse(src_inst, result_idx)
+                    } else {
+                        InputSourceInst::Use(src_inst, result_idx)
+                    }
                 } else {
                     // Side-effect: test whether this is the only use of the
                     // only result of the instruction, and whether colors allow
                     // the code-motion.
+                    log::trace!(
+                        " -> side-effecting op {} for val {}: use state {:?}",
+                        src_inst,
+                        val,
+                        self.value_ir_uses[val]
+                    );
                     if self.cur_scan_entry_color.is_some()
-                        && self.value_uses[val] == 1
-                        && self.value_lowered_uses[val] == 0
+                        && self.value_ir_uses[val] == ValueUseState::Once
                         && self.num_outputs(src_inst) == 1
                         && self
                             .side_effect_inst_entry_colors
@@ -1198,15 +1348,15 @@ impl<'func, I: VCodeInst> LowerCtx for Lower<'func, I> {
                             + 1
                             == self.cur_scan_entry_color.unwrap().get()
                     {
-                        Some((src_inst, 0))
+                        InputSourceInst::UniqueUse(src_inst, 0)
                     } else {
-                        None
+                        InputSourceInst::None
                     }
                 }
             }
-            _ => None,
+            _ => InputSourceInst::None,
         };
-        let constant = inst.and_then(|(inst, _)| self.get_constant(inst));
+        let constant = inst.as_inst().and_then(|(inst, _)| self.get_constant(inst));
 
         NonRegInput { inst, constant }
     }
@@ -1280,19 +1430,8 @@ impl<'func, I: VCodeInst> LowerCtx for Lower<'func, I> {
     }
 
     fn emit(&mut self, mach_inst: I) {
-        self.ir_insts.push(InstTuple {
-            loc: SourceLoc::default(),
-            is_safepoint: false,
-            inst: mach_inst,
-        });
-    }
-
-    fn emit_safepoint(&mut self, mach_inst: I) {
-        self.ir_insts.push(InstTuple {
-            loc: SourceLoc::default(),
-            is_safepoint: true,
-            inst: mach_inst,
-        });
+        log::trace!("emit: {:?}", mach_inst);
+        self.ir_insts.push(mach_inst);
     }
 
     fn sink_inst(&mut self, ir_inst: Inst) {
@@ -1338,13 +1477,18 @@ impl<'func, I: VCodeInst> LowerCtx for Lower<'func, I> {
     }
 
     fn ensure_in_vreg(&mut self, reg: Reg, ty: Type) -> Reg {
-        if reg.is_virtual() {
+        if reg.to_virtual_reg().is_some() {
             reg
         } else {
             let new_reg = self.alloc_tmp(ty).only_reg().unwrap();
             self.emit(I::gen_move(new_reg, reg, ty));
             new_reg.to_reg()
         }
+    }
+
+    fn set_vreg_alias(&mut self, from: Reg, to: Reg) {
+        log::trace!("set vreg alias: from {:?} to {:?}", from, to);
+        self.vcode.set_vreg_alias(from, to);
     }
 }
 

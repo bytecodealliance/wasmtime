@@ -6,12 +6,12 @@ description = "Cranelift module generator"
 license = "Apache-2.0 WITH LLVM-exception"
 repository = "https://github.com/bytecodealliance/wasmtime"
 readme = "README.md"
-edition = "2018"
+edition = "2021"
 publish = false
 
 
 [dependencies]
-cranelift = { path = "../umbrella", version = "0.82.0" }
+cranelift = { path = "../umbrella", version = "0.84.0" }
 
 anyhow = "1.0.19"
 arbitrary = "1.0.0"

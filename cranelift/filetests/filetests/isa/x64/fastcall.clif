@@ -8,120 +8,90 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64):
   return v0
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 8)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;   Inst 2:   movq    %rsp, %rbp
-;   Inst 3:   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;   Inst 4:   movq    %rcx, %rax
-;   Inst 5:   movq    %rbp, %rsp
-;   Inst 6:   popq    %rbp
-;   Inst 7:   ret
-; }}
+;   pushq   %rbp
+;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
+;   movq    %rsp, %rbp
+;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
+; block0:
+;   movq    %rcx, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %f1(i64, i64, i64, i64) -> i64 windows_fastcall {
 block0(v0: i64, v1: i64, v2: i64, v3: i64):
   return v1
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 8)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;   Inst 2:   movq    %rsp, %rbp
-;   Inst 3:   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;   Inst 4:   movq    %rdx, %rax
-;   Inst 5:   movq    %rbp, %rsp
-;   Inst 6:   popq    %rbp
-;   Inst 7:   ret
-; }}
+;   pushq   %rbp
+;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
+;   movq    %rsp, %rbp
+;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
+; block0:
+;   movq    %rdx, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %f2(i64, i64, i64, i64) -> i64 windows_fastcall {
 block0(v0: i64, v1: i64, v2: i64, v3: i64):
   return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 8)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;   Inst 2:   movq    %rsp, %rbp
-;   Inst 3:   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;   Inst 4:   movq    %r8, %rax
-;   Inst 5:   movq    %rbp, %rsp
-;   Inst 6:   popq    %rbp
-;   Inst 7:   ret
-; }}
+;   pushq   %rbp
+;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
+;   movq    %rsp, %rbp
+;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
+; block0:
+;   movq    %r8, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %f3(i64, i64, i64, i64) -> i64 windows_fastcall {
 block0(v0: i64, v1: i64, v2: i64, v3: i64):
   return v3
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 8)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;   Inst 2:   movq    %rsp, %rbp
-;   Inst 3:   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;   Inst 4:   movq    %r9, %rax
-;   Inst 5:   movq    %rbp, %rsp
-;   Inst 6:   popq    %rbp
-;   Inst 7:   ret
-; }}
+;   pushq   %rbp
+;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
+;   movq    %rsp, %rbp
+;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
+; block0:
+;   movq    %r9, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %f4(i64, i64, f64, i64) -> f64 windows_fastcall {
 block0(v0: i64, v1: i64, v2: f64, v3: i64):
   return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 8)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;   Inst 2:   movq    %rsp, %rbp
-;   Inst 3:   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;   Inst 4:   movaps  %xmm2, %xmm0
-;   Inst 5:   movq    %rbp, %rsp
-;   Inst 6:   popq    %rbp
-;   Inst 7:   ret
-; }}
+;   pushq   %rbp
+;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
+;   movq    %rsp, %rbp
+;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
+; block0:
+;   movdqa  %xmm2, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %f5(i64, i64, f64, i64) -> i64 windows_fastcall {
 block0(v0: i64, v1: i64, v2: f64, v3: i64):
   return v3
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 8)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;   Inst 2:   movq    %rsp, %rbp
-;   Inst 3:   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;   Inst 4:   movq    %r9, %rax
-;   Inst 5:   movq    %rbp, %rsp
-;   Inst 6:   popq    %rbp
-;   Inst 7:   ret
-; }}
+;   pushq   %rbp
+;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
+;   movq    %rsp, %rbp
+;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
+; block0:
+;   movq    %r9, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %f6(i64, i64, i64, i64, i64, i64) -> i64 windows_fastcall {
 block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64):
@@ -138,59 +108,33 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64):
 ;; TODO(#2704): fix regalloc's register priority ordering!
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 15)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;   Inst 2:   movq    %rsp, %rbp
-;   Inst 3:   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 16 }
-;   Inst 4:   subq    $16, %rsp
-;   Inst 5:   movq    %rsi, 0(%rsp)
-;   Inst 6:   unwind SaveReg { clobber_offset: 0, reg: r16J }
-;   Inst 7:   movq    48(%rbp), %rsi
-;   Inst 8:   movq    56(%rbp), %rsi
-;   Inst 9:   movq    %rsi, %rax
-;   Inst 10:   movq    0(%rsp), %rsi
-;   Inst 11:   addq    $16, %rsp
-;   Inst 12:   movq    %rbp, %rsp
-;   Inst 13:   popq    %rbp
-;   Inst 14:   ret
-; }}
+;   pushq   %rbp
+;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
+;   movq    %rsp, %rbp
+;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
+; block0:
+;   movq    48(%rbp), %r11
+;   movq    56(%rbp), %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %f7(i128, i64, i128, i128) -> i128 windows_fastcall {
 block0(v0: i128, v1: i64, v2: i128, v3: i128):
   return v3
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 20)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;   Inst 2:   movq    %rsp, %rbp
-;   Inst 3:   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 16 }
-;   Inst 4:   subq    $16, %rsp
-;   Inst 5:   movq    %rsi, 0(%rsp)
-;   Inst 6:   unwind SaveReg { clobber_offset: 0, reg: r16J }
-;   Inst 7:   movq    %rdi, 8(%rsp)
-;   Inst 8:   unwind SaveReg { clobber_offset: 8, reg: r17J }
-;   Inst 9:   movq    48(%rbp), %rsi
-;   Inst 10:   movq    56(%rbp), %rsi
-;   Inst 11:   movq    64(%rbp), %rdi
-;   Inst 12:   movq    %rsi, %rax
-;   Inst 13:   movq    %rdi, %rdx
-;   Inst 14:   movq    0(%rsp), %rsi
-;   Inst 15:   movq    8(%rsp), %rdi
-;   Inst 16:   addq    $16, %rsp
-;   Inst 17:   movq    %rbp, %rsp
-;   Inst 18:   popq    %rbp
-;   Inst 19:   ret
-; }}
+;   pushq   %rbp
+;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
+;   movq    %rsp, %rbp
+;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
+; block0:
+;   movq    48(%rbp), %r11
+;   movq    56(%rbp), %rax
+;   movq    64(%rbp), %rdx
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %f8(i64) -> i64 windows_fastcall {
   sig0 = (i64, i64, f64, f64, i64, i64) -> i64 windows_fastcall
@@ -202,37 +146,26 @@ block0(v0: i64):
   return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 25)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;   Inst 2:   movq    %rsp, %rbp
-;   Inst 3:   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 16 }
-;   Inst 4:   subq    $16, %rsp
-;   Inst 5:   movq    %rsi, 0(%rsp)
-;   Inst 6:   unwind SaveReg { clobber_offset: 0, reg: r16J }
-;   Inst 7:   movq    %rcx, %rsi
-;   Inst 8:   cvtsi2sd %rsi, %xmm3
-;   Inst 9:   subq    $48, %rsp
-;   Inst 10:   virtual_sp_offset_adjust 48
-;   Inst 11:   movq    %rsi, %rcx
-;   Inst 12:   movq    %rsi, %rdx
-;   Inst 13:   movaps  %xmm3, %xmm2
-;   Inst 14:   movq    %rsi, 32(%rsp)
-;   Inst 15:   movq    %rsi, 40(%rsp)
-;   Inst 16:   load_ext_name %g+0, %rsi
-;   Inst 17:   call    *%rsi
-;   Inst 18:   addq    $48, %rsp
-;   Inst 19:   virtual_sp_offset_adjust -48
-;   Inst 20:   movq    0(%rsp), %rsi
-;   Inst 21:   addq    $16, %rsp
-;   Inst 22:   movq    %rbp, %rsp
-;   Inst 23:   popq    %rbp
-;   Inst 24:   ret
-; }}
+;   pushq   %rbp
+;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
+;   movq    %rsp, %rbp
+;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
+; block0:
+;   cvtsi2sd %rcx, %xmm2
+;   subq    %rsp, $48, %rsp
+;   virtual_sp_offset_adjust 48
+;   movq    %rcx, %rdx
+;   movq    %rdx, %r8
+;   movdqa  %xmm2, %xmm3
+;   movq    %r8, 32(%rsp)
+;   movq    %r8, 40(%rsp)
+;   load_ext_name %g+0, %r9
+;   call    *%r9
+;   addq    %rsp, $48, %rsp
+;   virtual_sp_offset_adjust -48
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %f9(i64) -> f64 windows_fastcall {
 block0(v0: i64):
@@ -284,95 +217,91 @@ block0(v0: i64):
   return v39
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 85)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;   Inst 2:   movq    %rsp, %rbp
-;   Inst 3:   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 160 }
-;   Inst 4:   subq    $224, %rsp
-;   Inst 5:   movdqu  %xmm6, 64(%rsp)
-;   Inst 6:   unwind SaveReg { clobber_offset: 0, reg: r6V }
-;   Inst 7:   movdqu  %xmm7, 80(%rsp)
-;   Inst 8:   unwind SaveReg { clobber_offset: 16, reg: r7V }
-;   Inst 9:   movdqu  %xmm8, 96(%rsp)
-;   Inst 10:   unwind SaveReg { clobber_offset: 32, reg: r8V }
-;   Inst 11:   movdqu  %xmm9, 112(%rsp)
-;   Inst 12:   unwind SaveReg { clobber_offset: 48, reg: r9V }
-;   Inst 13:   movdqu  %xmm10, 128(%rsp)
-;   Inst 14:   unwind SaveReg { clobber_offset: 64, reg: r10V }
-;   Inst 15:   movdqu  %xmm11, 144(%rsp)
-;   Inst 16:   unwind SaveReg { clobber_offset: 80, reg: r11V }
-;   Inst 17:   movdqu  %xmm12, 160(%rsp)
-;   Inst 18:   unwind SaveReg { clobber_offset: 96, reg: r12V }
-;   Inst 19:   movdqu  %xmm13, 176(%rsp)
-;   Inst 20:   unwind SaveReg { clobber_offset: 112, reg: r13V }
-;   Inst 21:   movdqu  %xmm14, 192(%rsp)
-;   Inst 22:   unwind SaveReg { clobber_offset: 128, reg: r14V }
-;   Inst 23:   movdqu  %xmm15, 208(%rsp)
-;   Inst 24:   unwind SaveReg { clobber_offset: 144, reg: r15V }
-;   Inst 25:   movsd   0(%rcx), %xmm0
-;   Inst 26:   movdqu  %xmm0, rsp(48 + virtual offset)
-;   Inst 27:   movsd   8(%rcx), %xmm1
-;   Inst 28:   movsd   16(%rcx), %xmm0
-;   Inst 29:   movdqu  %xmm0, rsp(32 + virtual offset)
-;   Inst 30:   movsd   24(%rcx), %xmm3
-;   Inst 31:   movsd   32(%rcx), %xmm4
-;   Inst 32:   movsd   40(%rcx), %xmm5
-;   Inst 33:   movsd   48(%rcx), %xmm6
-;   Inst 34:   movsd   56(%rcx), %xmm7
-;   Inst 35:   movsd   64(%rcx), %xmm8
-;   Inst 36:   movsd   72(%rcx), %xmm9
-;   Inst 37:   movsd   80(%rcx), %xmm10
-;   Inst 38:   movsd   88(%rcx), %xmm11
-;   Inst 39:   movsd   96(%rcx), %xmm12
-;   Inst 40:   movsd   104(%rcx), %xmm13
-;   Inst 41:   movsd   112(%rcx), %xmm14
-;   Inst 42:   movsd   120(%rcx), %xmm15
-;   Inst 43:   movsd   128(%rcx), %xmm2
-;   Inst 44:   movdqu  %xmm2, rsp(0 + virtual offset)
-;   Inst 45:   movsd   136(%rcx), %xmm2
-;   Inst 46:   movsd   144(%rcx), %xmm0
-;   Inst 47:   movdqu  %xmm0, rsp(16 + virtual offset)
-;   Inst 48:   movdqu  rsp(48 + virtual offset), %xmm0
-;   Inst 49:   addsd   %xmm1, %xmm0
-;   Inst 50:   movdqu  rsp(32 + virtual offset), %xmm1
-;   Inst 51:   addsd   %xmm3, %xmm1
-;   Inst 52:   addsd   %xmm5, %xmm4
-;   Inst 53:   addsd   %xmm7, %xmm6
-;   Inst 54:   addsd   %xmm9, %xmm8
-;   Inst 55:   addsd   %xmm11, %xmm10
-;   Inst 56:   addsd   %xmm13, %xmm12
-;   Inst 57:   addsd   %xmm15, %xmm14
-;   Inst 58:   movdqu  rsp(0 + virtual offset), %xmm3
-;   Inst 59:   addsd   %xmm2, %xmm3
-;   Inst 60:   movdqu  rsp(16 + virtual offset), %xmm2
-;   Inst 61:   addsd   152(%rcx), %xmm2
-;   Inst 62:   addsd   %xmm1, %xmm0
-;   Inst 63:   addsd   %xmm6, %xmm4
-;   Inst 64:   addsd   %xmm10, %xmm8
-;   Inst 65:   addsd   %xmm14, %xmm12
-;   Inst 66:   addsd   %xmm2, %xmm3
-;   Inst 67:   addsd   %xmm4, %xmm0
-;   Inst 68:   addsd   %xmm12, %xmm8
-;   Inst 69:   addsd   %xmm8, %xmm0
-;   Inst 70:   addsd   %xmm3, %xmm0
-;   Inst 71:   movdqu  64(%rsp), %xmm6
-;   Inst 72:   movdqu  80(%rsp), %xmm7
-;   Inst 73:   movdqu  96(%rsp), %xmm8
-;   Inst 74:   movdqu  112(%rsp), %xmm9
-;   Inst 75:   movdqu  128(%rsp), %xmm10
-;   Inst 76:   movdqu  144(%rsp), %xmm11
-;   Inst 77:   movdqu  160(%rsp), %xmm12
-;   Inst 78:   movdqu  176(%rsp), %xmm13
-;   Inst 79:   movdqu  192(%rsp), %xmm14
-;   Inst 80:   movdqu  208(%rsp), %xmm15
-;   Inst 81:   addq    $224, %rsp
-;   Inst 82:   movq    %rbp, %rsp
-;   Inst 83:   popq    %rbp
-;   Inst 84:   ret
-; }}
+;   pushq   %rbp
+;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
+;   movq    %rsp, %rbp
+;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 144 }
+;   subq    %rsp, $240, %rsp
+;   movdqu  %xmm6, 96(%rsp)
+;   unwind SaveReg { clobber_offset: 0, reg: p6f }
+;   movdqu  %xmm7, 112(%rsp)
+;   unwind SaveReg { clobber_offset: 16, reg: p7f }
+;   movdqu  %xmm8, 128(%rsp)
+;   unwind SaveReg { clobber_offset: 32, reg: p8f }
+;   movdqu  %xmm9, 144(%rsp)
+;   unwind SaveReg { clobber_offset: 48, reg: p9f }
+;   movdqu  %xmm10, 160(%rsp)
+;   unwind SaveReg { clobber_offset: 64, reg: p10f }
+;   movdqu  %xmm11, 176(%rsp)
+;   unwind SaveReg { clobber_offset: 80, reg: p11f }
+;   movdqu  %xmm12, 192(%rsp)
+;   unwind SaveReg { clobber_offset: 96, reg: p12f }
+;   movdqu  %xmm13, 208(%rsp)
+;   unwind SaveReg { clobber_offset: 112, reg: p13f }
+;   movdqu  %xmm14, 224(%rsp)
+;   unwind SaveReg { clobber_offset: 128, reg: p14f }
+; block0:
+;   movsd   0(%rcx), %xmm0
+;   movsd   8(%rcx), %xmm12
+;   movdqu  %xmm12, rsp(80 + virtual offset)
+;   movsd   16(%rcx), %xmm6
+;   movdqu  %xmm6, rsp(0 + virtual offset)
+;   movsd   24(%rcx), %xmm2
+;   movdqu  %xmm2, rsp(64 + virtual offset)
+;   movsd   32(%rcx), %xmm14
+;   movsd   40(%rcx), %xmm3
+;   movdqu  %xmm3, rsp(48 + virtual offset)
+;   movsd   48(%rcx), %xmm9
+;   movsd   56(%rcx), %xmm7
+;   movdqu  %xmm7, rsp(32 + virtual offset)
+;   movsd   64(%rcx), %xmm13
+;   movsd   72(%rcx), %xmm10
+;   movdqu  %xmm10, rsp(16 + virtual offset)
+;   movsd   80(%rcx), %xmm11
+;   movsd   88(%rcx), %xmm10
+;   movsd   96(%rcx), %xmm5
+;   movsd   104(%rcx), %xmm12
+;   movsd   112(%rcx), %xmm1
+;   movsd   120(%rcx), %xmm2
+;   movsd   128(%rcx), %xmm8
+;   movsd   136(%rcx), %xmm3
+;   movsd   144(%rcx), %xmm4
+;   movdqu  rsp(80 + virtual offset), %xmm6
+;   addsd   %xmm0, %xmm0, %xmm6
+;   movdqu  rsp(0 + virtual offset), %xmm6
+;   movdqu  rsp(64 + virtual offset), %xmm7
+;   addsd   %xmm6, %xmm6, %xmm7
+;   movdqu  rsp(48 + virtual offset), %xmm7
+;   addsd   %xmm14, %xmm14, %xmm7
+;   movdqu  rsp(32 + virtual offset), %xmm7
+;   addsd   %xmm9, %xmm9, %xmm7
+;   movdqu  rsp(16 + virtual offset), %xmm7
+;   addsd   %xmm13, %xmm13, %xmm7
+;   addsd   %xmm11, %xmm11, %xmm10
+;   addsd   %xmm5, %xmm5, %xmm12
+;   addsd   %xmm1, %xmm1, %xmm2
+;   addsd   %xmm8, %xmm8, %xmm3
+;   addsd   %xmm4, 152(%xmm4), %rcx
+;   addsd   %xmm0, %xmm0, %xmm6
+;   addsd   %xmm14, %xmm14, %xmm9
+;   addsd   %xmm13, %xmm13, %xmm11
+;   addsd   %xmm5, %xmm5, %xmm1
+;   addsd   %xmm8, %xmm8, %xmm4
+;   addsd   %xmm0, %xmm0, %xmm14
+;   addsd   %xmm13, %xmm13, %xmm5
+;   addsd   %xmm0, %xmm0, %xmm13
+;   addsd   %xmm0, %xmm0, %xmm8
+;   movdqu  96(%rsp), %xmm6
+;   movdqu  112(%rsp), %xmm7
+;   movdqu  128(%rsp), %xmm8
+;   movdqu  144(%rsp), %xmm9
+;   movdqu  160(%rsp), %xmm10
+;   movdqu  176(%rsp), %xmm11
+;   movdqu  192(%rsp), %xmm12
+;   movdqu  208(%rsp), %xmm13
+;   movdqu  224(%rsp), %xmm14
+;   addq    %rsp, $240, %rsp
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 

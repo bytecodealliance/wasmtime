@@ -68,7 +68,7 @@ impl<'a> Codegen<'a> {
         .unwrap();
         writeln!(
             code,
-            "#![allow(unused_imports, unused_variables, non_snake_case)]"
+            "#![allow(unused_imports, unused_variables, non_snake_case, unused_mut)]"
         )
         .unwrap();
         writeln!(code, "#![allow(irrefutable_let_patterns)]").unwrap();
@@ -626,7 +626,7 @@ impl<'a> Codegen<'a> {
                 ref seq, output_ty, ..
             } => {
                 let closure_name = format!("closure{}", id.index());
-                writeln!(code, "{}let {} = || {{", indent, closure_name).unwrap();
+                writeln!(code, "{}let mut {} = || {{", indent, closure_name).unwrap();
                 let subindent = format!("{}    ", indent);
                 let mut subctx = ctx.clone();
                 let mut returns = vec![];

@@ -1,8 +1,8 @@
 //! Miscellaneous helpers for machine backends.
 
 use super::{InsnOutput, LowerCtx, VCodeInst, ValueRegs};
+use super::{Reg, Writable};
 use crate::ir::Type;
-use regalloc::{Reg, Writable};
 use std::ops::{Add, BitAnd, Not, Sub};
 
 /// Returns the size (in bits) of a given type.

@@ -50,13 +50,13 @@ pub extern "C" fn wasmtime_config_debug_info_set(c: &mut wasm_config_t, enable: 
 }
 
 #[no_mangle]
-pub extern "C" fn wasmtime_config_interruptable_set(c: &mut wasm_config_t, enable: bool) {
-    c.config.interruptable(enable);
+pub extern "C" fn wasmtime_config_consume_fuel_set(c: &mut wasm_config_t, enable: bool) {
+    c.config.consume_fuel(enable);
 }
 
 #[no_mangle]
-pub extern "C" fn wasmtime_config_consume_fuel_set(c: &mut wasm_config_t, enable: bool) {
-    c.config.consume_fuel(enable);
+pub extern "C" fn wasmtime_config_epoch_interruption_set(c: &mut wasm_config_t, enable: bool) {
+    c.config.epoch_interruption(enable);
 }
 
 #[no_mangle]
@@ -92,11 +92,6 @@ pub extern "C" fn wasmtime_config_wasm_multi_value_set(c: &mut wasm_config_t, en
 #[no_mangle]
 pub extern "C" fn wasmtime_config_wasm_multi_memory_set(c: &mut wasm_config_t, enable: bool) {
     c.config.wasm_multi_memory(enable);
-}
-
-#[no_mangle]
-pub extern "C" fn wasmtime_config_wasm_module_linking_set(c: &mut wasm_config_t, enable: bool) {
-    c.config.wasm_module_linking(enable);
 }
 
 #[no_mangle]

@@ -1,6 +1,6 @@
 //! S390x ISA definitions: immediate constants.
 
-use regalloc::{PrettyPrint, RealRegUniverse};
+use crate::machinst::{AllocationConsumer, PrettyPrint};
 use std::string::String;
 
 /// An unsigned 12-bit immediate.
@@ -207,25 +207,25 @@ impl UImm32Shifted {
 }
 
 impl PrettyPrint for UImm12 {
-    fn show_rru(&self, _mb_rru: Option<&RealRegUniverse>) -> String {
+    fn pretty_print(&self, _: u8, _: &mut AllocationConsumer<'_>) -> String {
         format!("{}", self.value)
     }
 }
 
 impl PrettyPrint for SImm20 {
-    fn show_rru(&self, _mb_rru: Option<&RealRegUniverse>) -> String {
+    fn pretty_print(&self, _: u8, _: &mut AllocationConsumer<'_>) -> String {
         format!("{}", self.value)
     }
 }
 
 impl PrettyPrint for UImm16Shifted {
-    fn show_rru(&self, _mb_rru: Option<&RealRegUniverse>) -> String {
+    fn pretty_print(&self, _: u8, _: &mut AllocationConsumer<'_>) -> String {
         format!("{}", self.bits)
     }
 }
 
 impl PrettyPrint for UImm32Shifted {
-    fn show_rru(&self, _mb_rru: Option<&RealRegUniverse>) -> String {
+    fn pretty_print(&self, _: u8, _: &mut AllocationConsumer<'_>) -> String {
         format!("{}", self.bits)
     }
 }

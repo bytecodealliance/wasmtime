@@ -58,7 +58,7 @@ pub enum ControlStackFrame {
         num_return_values: usize,
         original_stack_size: usize,
         exit_is_branched_to: bool,
-        blocktype: wasmparser::TypeOrFuncType,
+        blocktype: wasmparser::BlockType,
         /// Was the head of the `if` reachable?
         head_is_reachable: bool,
         /// What was the reachability at the end of the consequent?
@@ -411,7 +411,7 @@ impl FuncTranslationState {
         else_data: ElseData,
         num_param_types: usize,
         num_result_types: usize,
-        blocktype: wasmparser::TypeOrFuncType,
+        blocktype: wasmparser::BlockType,
     ) {
         debug_assert!(num_param_types <= self.stack.len());
 

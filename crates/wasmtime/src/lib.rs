@@ -265,12 +265,6 @@
 //! * `vtune` - Enabled by default, this feature compiles in support for VTune
 //!   profiling of JIT code.
 //!
-//! * `uffd` - Not enabled by default. This feature enables `userfaultfd` support
-//!   when using the pooling instance allocator. As handling page faults in user space
-//!   comes with a performance penalty, this feature should only be enabled when kernel
-//!   lock contention is hampering multithreading throughput. This feature is only
-//!   supported on Linux and requires a Linux kernel version 4.11 or higher.
-//!
 //! * `all-arch` - Not enabled by default. This feature compiles in support for
 //!   all architectures for both the JIT compiler and the `wasmtime compile` CLI
 //!   command.
@@ -289,6 +283,14 @@
 //!   that this is simply compile-time support and this must also be enabled at
 //!   run-time via [`Config::memory_init_cow`] (which is also enabled by
 //!   default).
+//!
+//! * `wasm-backtrace` - Enabled by default, this feature builds in support to
+//!   generate backtraces at runtime for WebAssembly modules. This means that
+//!   unwinding information is compiled into wasm modules and necessary runtime
+//!   dependencies are enabled as well. If this is turned off then some methods
+//!   to look at trap frames will not be available. Additionally at this time
+//!   disabling this feature means that the reference types feature is always
+//!   disabled as well.
 //!
 //! ## Examples
 //!
@@ -415,9 +417,9 @@ pub use crate::linker::*;
 pub use crate::memory::*;
 pub use crate::module::{FrameInfo, FrameSymbol, Module};
 pub use crate::r#ref::ExternRef;
-pub use crate::store::{
-    AsContext, AsContextMut, CallHook, InterruptHandle, Store, StoreContext, StoreContextMut,
-};
+#[cfg(feature = "async")]
+pub use crate::store::CallHookHandler;
+pub use crate::store::{AsContext, AsContextMut, CallHook, Store, StoreContext, StoreContextMut};
 pub use crate::trap::*;
 pub use crate::types::*;
 pub use crate::values::*;
@@ -439,7 +441,6 @@ fn _assert_send_sync() {
     fn _assert_send<T: Send>(_t: T) {}
     _assert::<Engine>();
     _assert::<Config>();
-    _assert::<InterruptHandle>();
     _assert::<(Func, TypedFunc<(), ()>, Global, Table, Memory)>();
     _assert::<Instance>();
     _assert::<Module>();

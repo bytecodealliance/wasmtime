@@ -25,7 +25,6 @@ fn main() -> anyhow::Result<()> {
         with_test_module(&mut out, "misc", |out| {
             test_directory(out, "tests/misc_testsuite", strategy)?;
             test_directory_module(out, "tests/misc_testsuite/multi-memory", strategy)?;
-            test_directory_module(out, "tests/misc_testsuite/module-linking", strategy)?;
             test_directory_module(out, "tests/misc_testsuite/simd", strategy)?;
             test_directory_module(out, "tests/misc_testsuite/threads", strategy)?;
             test_directory_module(out, "tests/misc_testsuite/memory64", strategy)?;

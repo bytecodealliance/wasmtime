@@ -193,9 +193,8 @@ impl Engine {
     pub fn precompile_module(&self, bytes: &[u8]) -> Result<Vec<u8>> {
         #[cfg(feature = "wat")]
         let bytes = wat::parse_bytes(&bytes)?;
-        let (_, artifacts, types) = crate::Module::build_artifacts(self, &bytes)?;
-        let artifacts = artifacts.into_iter().map(|i| i.0).collect::<Vec<_>>();
-        crate::module::SerializedModule::from_artifacts(self, &artifacts, &types)
+        let (mmap, _, types) = crate::Module::build_artifacts(self, &bytes)?;
+        crate::module::SerializedModule::from_artifacts(self, &mmap, &types)
             .to_bytes(&self.config().module_version)
     }
 
@@ -304,7 +303,7 @@ impl Engine {
             // can affect the way the generated code performs or behaves at
             // runtime.
             "avoid_div_traps" => *value == FlagValue::Bool(true),
-            "unwind_info" => *value == FlagValue::Bool(true),
+            "unwind_info" => *value == FlagValue::Bool(cfg!(feature = "wasm-backtrace")),
             "libcall_call_conv" => *value == FlagValue::Enum("isa_default".into()),
 
             // Features wasmtime doesn't use should all be disabled, since
@@ -337,6 +336,7 @@ impl Engine {
             | "enable_float"
             | "enable_simd"
             | "enable_verifier"
+            | "regalloc_checker"
             | "is_pic"
             | "machine_code_cfg_info"
             | "tls_model" // wasmtime doesn't use tls right now
@@ -388,9 +388,23 @@ impl Engine {
                 ))
             }
         }
+
+        let enabled;
+
+        #[cfg(target_arch = "aarch64")]
+        {
+            enabled = match flag {
+                "has_lse" => Some(std::arch::is_aarch64_feature_detected!("lse")),
+                // fall through to the very bottom to indicate that support is
+                // not enabled to test whether this feature is enabled on the
+                // host.
+                _ => None,
+            };
+        }
+
         #[cfg(target_arch = "x86_64")]
         {
-            let enabled = match flag {
+            enabled = match flag {
                 "has_sse3" => Some(std::is_x86_feature_detected!("sse3")),
                 "has_ssse3" => Some(std::is_x86_feature_detected!("ssse3")),
                 "has_sse41" => Some(std::is_x86_feature_detected!("sse4.1")),
@@ -412,18 +426,25 @@ impl Engine {
                 // host.
                 _ => None,
             };
-            match enabled {
-                Some(true) => return Ok(()),
-                Some(false) => {
-                    return Err(format!(
-                        "compilation setting {:?} is enabled but not available on the host",
-                        flag
-                    ))
-                }
-                // fall through
-                None => {}
-            }
         }
+
+        #[cfg(not(any(target_arch = "aarch64", target_arch = "x86_64")))]
+        {
+            enabled = None;
+        }
+
+        match enabled {
+            Some(true) => return Ok(()),
+            Some(false) => {
+                return Err(format!(
+                    "compilation setting {:?} is enabled, but not available on the host",
+                    flag
+                ))
+            }
+            // fall through
+            None => {}
+        }
+
         Err(format!(
             "cannot test if target-specific flag {:?} is available at runtime",
             flag

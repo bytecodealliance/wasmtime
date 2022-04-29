@@ -1,8 +1,8 @@
 //! Unwind information for System V ABI (s390x).
 
 use crate::isa::unwind::systemv::RegisterMappingError;
+use crate::machinst::{Reg, RegClass};
 use gimli::{write::CommonInformationEntry, Encoding, Format, Register};
-use regalloc::{Reg, RegClass};
 
 /// Creates a new s390x common information entry (CIE).
 pub fn create_cie() -> CommonInformationEntry {
@@ -64,10 +64,9 @@ pub fn map_reg(reg: Reg) -> Result<Register, RegisterMappingError> {
         Register(31),
     ];
 
-    match reg.get_class() {
-        RegClass::I64 => Ok(GPR_MAP[reg.get_hw_encoding() as usize]),
-        RegClass::F64 => Ok(FPR_MAP[reg.get_hw_encoding() as usize]),
-        _ => Err(RegisterMappingError::UnsupportedRegisterBank("class?")),
+    match reg.class() {
+        RegClass::Int => Ok(GPR_MAP[reg.to_real_reg().unwrap().hw_enc() as usize]),
+        RegClass::Float => Ok(FPR_MAP[reg.to_real_reg().unwrap().hw_enc() as usize]),
     }
 }
 

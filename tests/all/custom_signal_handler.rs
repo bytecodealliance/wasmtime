@@ -106,12 +106,11 @@ mod tests {
         module
             .imports()
             .map(|import| {
-                assert_eq!(Some("hostcall_read"), import.name());
+                assert_eq!("hostcall_read", import.name());
                 let func = Func::wrap(&mut *store, {
                     move |mut caller: Caller<'_, _>| {
                         let mem = caller.get_export("memory").unwrap().into_memory().unwrap();
                         let memory = mem.data(&caller);
-                        use std::convert::TryInto;
                         i32::from_le_bytes(memory[0..4].try_into().unwrap())
                     }
                 });

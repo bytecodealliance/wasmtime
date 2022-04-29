@@ -510,12 +510,12 @@ mod tests {
         assert_eq!(
             f.to_string(),
             r#"[shared]
-regalloc = "backtracking"
 opt_level = "none"
 tls_model = "none"
 libcall_call_conv = "isa_default"
 baldrdash_prologue_words = 0
 probestack_size_log2 = 12
+regalloc_checker = false
 enable_verifier = true
 is_pic = false
 use_colocated_libcalls = false

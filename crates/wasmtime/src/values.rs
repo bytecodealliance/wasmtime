@@ -103,24 +103,28 @@ impl Val {
     /// [`Func::to_raw`] are unsafe.
     pub unsafe fn to_raw(&self, store: impl AsContextMut) -> ValRaw {
         match self {
-            Val::I32(i) => ValRaw { i32: *i },
-            Val::I64(i) => ValRaw { i64: *i },
-            Val::F32(u) => ValRaw { f32: *u },
-            Val::F64(u) => ValRaw { f64: *u },
-            Val::V128(b) => ValRaw { v128: *b },
+            Val::I32(i) => ValRaw { i32: i.to_le() },
+            Val::I64(i) => ValRaw { i64: i.to_le() },
+            Val::F32(u) => ValRaw { f32: u.to_le() },
+            Val::F64(u) => ValRaw { f64: u.to_le() },
+            Val::V128(b) => ValRaw { v128: b.to_le() },
             Val::ExternRef(e) => {
                 let externref = match e {
                     Some(e) => e.to_raw(store),
                     None => 0,
                 };
-                ValRaw { externref }
+                ValRaw {
+                    externref: externref.to_le(),
+                }
             }
             Val::FuncRef(f) => {
                 let funcref = match f {
                     Some(f) => f.to_raw(store),
                     None => 0,
                 };
-                ValRaw { funcref }
+                ValRaw {
+                    funcref: funcref.to_le(),
+                }
             }
         }
     }
@@ -134,13 +138,15 @@ impl Val {
     /// otherwise that `raw` should have the type `ty` specified.
     pub unsafe fn from_raw(store: impl AsContextMut, raw: ValRaw, ty: ValType) -> Val {
         match ty {
-            ValType::I32 => Val::I32(raw.i32),
-            ValType::I64 => Val::I64(raw.i64),
-            ValType::F32 => Val::F32(raw.f32),
-            ValType::F64 => Val::F64(raw.f64),
-            ValType::V128 => Val::V128(raw.v128),
-            ValType::ExternRef => Val::ExternRef(ExternRef::from_raw(raw.externref)),
-            ValType::FuncRef => Val::FuncRef(Func::from_raw(store, raw.funcref)),
+            ValType::I32 => Val::I32(i32::from_le(raw.i32)),
+            ValType::I64 => Val::I64(i64::from_le(raw.i64)),
+            ValType::F32 => Val::F32(u32::from_le(raw.f32)),
+            ValType::F64 => Val::F64(u64::from_le(raw.f64)),
+            ValType::V128 => Val::V128(u128::from_le(raw.v128)),
+            ValType::ExternRef => {
+                Val::ExternRef(ExternRef::from_raw(usize::from_le(raw.externref)))
+            }
+            ValType::FuncRef => Val::FuncRef(Func::from_raw(store, usize::from_le(raw.funcref))),
         }
     }
 

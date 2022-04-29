@@ -257,7 +257,7 @@ pub fn lazy_per_thread_init() -> Result<(), Box<Trap>> {
     // when the thread exists. Otherwise this function is only ever called at
     // most once per-thread.
     thread_local! {
-        static STACK: RefCell<Option<Stack>> = RefCell::new(None);
+        static STACK: RefCell<Option<Stack>> = const { RefCell::new(None) };
     }
 
     /// The size of the sigaltstack (not including the guard, which will be

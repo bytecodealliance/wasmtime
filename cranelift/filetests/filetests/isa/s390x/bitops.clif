@@ -1,4 +1,4 @@
-test compile
+test compile precise-output
 target s390x
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -42,9 +42,10 @@ block0(v0: i64):
     return v1
 }
 
-; check:  flogr %r0, %r2
-; nextln: lgr %r2, %r0
-; nextln: br %r14
+; block0:
+;   flogr %r0, %r2
+;   lgr %r2, %r0
+;   br %r14
 
 function %clz_i32(i32) -> i32 {
 block0(v0: i32):
@@ -52,10 +53,11 @@ block0(v0: i32):
     return v1
 }
 
-; check:  llgfr %r2, %r2
-; nextln: flogr %r0, %r2
-; nextln: ahik %r2, %r0, -32
-; nextln: br %r14
+; block0:
+;   llgfr %r5, %r2
+;   flogr %r0, %r5
+;   ahik %r2, %r0, -32
+;   br %r14
 
 function %clz_i16(i16) -> i16 {
 block0(v0: i16):
@@ -63,10 +65,11 @@ block0(v0: i16):
     return v1
 }
 
-; check:  llghr %r2, %r2
-; nextln: flogr %r0, %r2
-; nextln: ahik %r2, %r0, -48
-; nextln: br %r14
+; block0:
+;   llghr %r5, %r2
+;   flogr %r0, %r5
+;   ahik %r2, %r0, -48
+;   br %r14
 
 function %clz_i8(i8) -> i8 {
 block0(v0: i8):
@@ -74,14 +77,11 @@ block0(v0: i8):
     return v1
 }
 
-; check:  llgcr %r2, %r2
-; nextln: flogr %r0, %r2
-; nextln: ahik %r2, %r0, -56
-; nextln: br %r14
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; CLS
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; block0:
+;   llgcr %r5, %r2
+;   flogr %r0, %r5
+;   ahik %r2, %r0, -56
+;   br %r14
 
 function %cls_i64(i64) -> i64 {
 block0(v0: i64):
@@ -89,11 +89,12 @@ block0(v0: i64):
     return v1
 }
 
-; check:  srag %r3, %r2, 63
-; nextln: xgr %r2, %r3
-; nextln: flogr %r0, %r2
-; nextln: lgr %r2, %r0
-; nextln: br %r14
+; block0:
+;   srag %r5, %r2, 63
+;   xgrk %r3, %r2, %r5
+;   flogr %r0, %r3
+;   lgr %r2, %r0
+;   br %r14
 
 function %cls_i32(i32) -> i32 {
 block0(v0: i32):
@@ -101,12 +102,13 @@ block0(v0: i32):
     return v1
 }
 
-; check:  lgfr %r2, %r2
-; nextln: srag %r3, %r2, 63
-; nextln: xgr %r2, %r3
-; nextln: flogr %r0, %r2
-; nextln: ahik %r2, %r0, -32
-; nextln: br %r14
+; block0:
+;   lgfr %r5, %r2
+;   srag %r3, %r5, 63
+;   xgr %r5, %r3
+;   flogr %r0, %r5
+;   ahik %r2, %r0, -32
+;   br %r14
 
 function %cls_i16(i16) -> i16 {
 block0(v0: i16):
@@ -114,12 +116,13 @@ block0(v0: i16):
     return v1
 }
 
-; check:  lghr %r2, %r2
-; nextln: srag %r3, %r2, 63
-; nextln: xgr %r2, %r3
-; nextln: flogr %r0, %r2
-; nextln: ahik %r2, %r0, -48
-; nextln: br %r14
+; block0:
+;   lghr %r5, %r2
+;   srag %r3, %r5, 63
+;   xgr %r5, %r3
+;   flogr %r0, %r5
+;   ahik %r2, %r0, -48
+;   br %r14
 
 function %cls_i8(i8) -> i8 {
 block0(v0: i8):
@@ -127,16 +130,13 @@ block0(v0: i8):
     return v1
 }
 
-; check:  lgbr %r2, %r2
-; nextln: srag %r3, %r2, 63
-; nextln: xgr %r2, %r3
-; nextln: flogr %r0, %r2
-; nextln: ahik %r2, %r0, -56
-; nextln: br %r14
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; CTZ
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; block0:
+;   lgbr %r5, %r2
+;   srag %r3, %r5, 63
+;   xgr %r5, %r3
+;   flogr %r0, %r5
+;   ahik %r2, %r0, -56
+;   br %r14
 
 function %ctz_i64(i64) -> i64 {
 block0(v0: i64):
@@ -144,13 +144,14 @@ block0(v0: i64):
     return v1
 }
 
-; check:  lcgr %r3, %r2
-; nextln: ngr %r2, %r3
-; nextln: flogr %r0, %r2
-; nextln: locghie %r0, -1
-; nextln: lghi %r2, 63
-; nextln: sgr %r2, %r0
-; nextln: br %r14
+; block0:
+;   lcgr %r5, %r2
+;   ngrk %r3, %r2, %r5
+;   flogr %r0, %r3
+;   locghie %r0, -1
+;   lghi %r3, 63
+;   sgrk %r2, %r3, %r0
+;   br %r14
 
 function %ctz_i32(i32) -> i32 {
 block0(v0: i32):
@@ -158,13 +159,14 @@ block0(v0: i32):
     return v1
 }
 
-; check:  oihl %r2, 1
-; nextln: lcgr %r3, %r2
-; nextln: ngr %r2, %r3
-; nextln: flogr %r0, %r2
-; nextln: lhi %r2, 63
-; nextln: sr %r2, %r0
-; nextln: br %r14
+; block0:
+;   oihl %r2, 1
+;   lcgr %r4, %r2
+;   ngr %r2, %r4
+;   flogr %r0, %r2
+;   lhi %r5, 63
+;   srk %r2, %r5, %r0
+;   br %r14
 
 function %ctz_i16(i16) -> i16 {
 block0(v0: i16):
@@ -172,13 +174,14 @@ block0(v0: i16):
     return v1
 }
 
-; check:  oilh %r2, 1
-; nextln: lcgr %r3, %r2
-; nextln: ngr %r2, %r3
-; nextln: flogr %r0, %r2
-; nextln: lhi %r2, 63
-; nextln: sr %r2, %r0
-; nextln: br %r14
+; block0:
+;   oilh %r2, 1
+;   lcgr %r4, %r2
+;   ngr %r2, %r4
+;   flogr %r0, %r2
+;   lhi %r5, 63
+;   srk %r2, %r5, %r0
+;   br %r14
 
 function %ctz_i8(i8) -> i8 {
 block0(v0: i8):
@@ -186,17 +189,14 @@ block0(v0: i8):
     return v1
 }
 
-; check:  oill %r2, 256
-; nextln: lcgr %r3, %r2
-; nextln: ngr %r2, %r3
-; nextln: flogr %r0, %r2
-; nextln: lhi %r2, 63
-; nextln: sr %r2, %r0
-; nextln: br %r14
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; POPCNT
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; block0:
+;   oill %r2, 256
+;   lcgr %r4, %r2
+;   ngr %r2, %r4
+;   flogr %r0, %r2
+;   lhi %r5, 63
+;   srk %r2, %r5, %r0
+;   br %r14
 
 function %popcnt_i64(i64) -> i64 {
 block0(v0: i64):
@@ -204,15 +204,16 @@ block0(v0: i64):
     return v1
 }
 
-; check:  popcnt %r2, %r2
-; nextln: sllg %r3, %r2, 32
-; nextln: agr %r2, %r3
-; nextln: sllg %r3, %r2, 16
-; nextln: agr %r2, %r3
-; nextln: sllg %r3, %r2, 8
-; nextln: agr %r2, %r3
-; nextln: srlg %r2, %r2, 56
-; nextln: br %r14
+; block0:
+;   popcnt %r5, %r2
+;   sllg %r3, %r5, 32
+;   agr %r5, %r3
+;   sllg %r3, %r5, 16
+;   agr %r5, %r3
+;   sllg %r3, %r5, 8
+;   agr %r5, %r3
+;   srlg %r2, %r5, 56
+;   br %r14
 
 function %popcnt_i32(i32) -> i32 {
 block0(v0: i32):
@@ -220,13 +221,14 @@ block0(v0: i32):
     return v1
 }
 
-; check:  popcnt %r2, %r2
-; nextln: sllk %r3, %r2, 16
-; nextln: ar %r2, %r3
-; nextln: sllk %r3, %r2, 8
-; nextln: ar %r2, %r3
-; nextln: srlk %r2, %r2, 24
-; nextln: br %r14
+; block0:
+;   popcnt %r5, %r2
+;   sllk %r3, %r5, 16
+;   ar %r5, %r3
+;   sllk %r3, %r5, 8
+;   ar %r5, %r3
+;   srlk %r2, %r5, 24
+;   br %r14
 
 function %popcnt_i16(i16) -> i16 {
 block0(v0: i16):
@@ -234,11 +236,12 @@ block0(v0: i16):
     return v1
 }
 
-; check:  popcnt %r2, %r2
-; nextln: sllk %r3, %r2, 8
-; nextln: ar %r2, %r3
-; nextln: srlk %r2, %r2, 8
-; nextln: br %r14
+; block0:
+;   popcnt %r5, %r2
+;   sllk %r3, %r5, 8
+;   ar %r5, %r3
+;   srlk %r2, %r5, 8
+;   br %r14
 
 function %popcnt_i8(i8) -> i8 {
 block0(v0: i8):
@@ -246,5 +249,7 @@ block0(v0: i8):
     return v1
 }
 
-; check: popcnt %r2, %r2
-; nextln: br %r14
+; block0:
+;   popcnt %r2, %r2
+;   br %r14
+

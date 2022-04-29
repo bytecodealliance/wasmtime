@@ -1,4 +1,4 @@
-test compile
+test compile precise-output
 target s390x
 
 function %f(i64) -> i64 {
@@ -28,24 +28,32 @@ block5(v5: i64):
   return v6
 }
 
-; check:  clgfi %r2, 3
-; nextln: jghe label1
-; nextln: sllg %r3, %r2, 2
-; nextln: larl %r1, 14 ; agf %r1, 0(%r1, %r3) ; br %r1 ; jt_entries label3 label5 label7
-
-; check:  Block 3
-; check:  lghi %r3, 1
-; nextln: jg
-
-; check:  Block 5
-; check:  lghi %r3, 2
-; nextln: jg
-
-; check:  Block 7
-; check:  lghi %r3, 3
-; nextln: jg
-
-; check:  agr %r2, %r3
-; nextln: br %r14
-
+; block0:
+;   clgfi %r2, 3
+;   jghe label1
+;   sllg %r5, %r2, 2
+;   larl %r1, 14 ; agf %r1, 0(%r1, %r5) ; br %r1 ; jt_entries label3 label5 label7
+; block1:
+;   lghi %r4, 4
+;   jg label2
+; block2:
+;   jg label9
+; block3:
+;   lghi %r4, 1
+;   jg label4
+; block4:
+;   jg label9
+; block5:
+;   lghi %r4, 2
+;   jg label6
+; block6:
+;   jg label9
+; block7:
+;   lghi %r4, 3
+;   jg label8
+; block8:
+;   jg label9
+; block9:
+;   agr %r2, %r4
+;   br %r14
 

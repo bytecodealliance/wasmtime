@@ -20,7 +20,7 @@ fi
 
 # Inform the environment of OpenVINO library locations. Then we use OPENVINO_INSTALL_DIR below to avoid building all of
 # OpenVINO from source (quite slow).
-source /opt/intel/openvino/bin/setupvars.sh
+source /opt/intel/openvino_2021/bin/setupvars.sh
 
 # Build Wasmtime with wasi-nn enabled; we attempt this first to avoid extra work if the build fails.
 OPENVINO_INSTALL_DIR=/opt/intel/openvino cargo build -p wasmtime-cli --features wasi-nn

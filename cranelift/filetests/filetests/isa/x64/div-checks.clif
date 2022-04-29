@@ -12,8 +12,8 @@ block0(v0: i8, v1: i8):
   v2 = srem.i8 v0, v1
 ; check:  movq    %rdi, %rax
 ; nextln: movl    $$0, %edx
-; nextln: srem $$rax:$$rdx, %sil
-; nextln: shrq    $$8, %rax
+; nextln: srem_seq %al, %dl, %sil, %al, %dl, tmp=(none)
+; nextln: shrq    $$8, %rax, %rax
 
   return v2
 }
@@ -23,7 +23,7 @@ block0(v0: i16, v1: i16):
   v2 = srem.i16 v0, v1
 ; check:  movq    %rdi, %rax
 ; nextln: movl    $$0, %edx
-; nextln: srem $$rax:$$rdx, %si
+; nextln: srem_seq %ax, %dx, %si, %ax, %dx, tmp=(none)
 ; nextln: movq    %rdx, %rax
 
   return v2
@@ -34,7 +34,7 @@ block0(v0: i32, v1: i32):
   v2 = srem.i32 v0, v1
 ; check:  movq    %rdi, %rax
 ; nextln: movl    $$0, %edx
-; nextln: srem $$rax:$$rdx, %esi
+; nextln: srem_seq %eax, %edx, %esi, %eax, %edx, tmp=(none)
 ; nextln: movq    %rdx, %rax
 
   return v2
@@ -45,7 +45,7 @@ block0(v0: i64, v1: i64):
   v2 = srem.i64 v0, v1
 ; check:  movq    %rdi, %rax
 ; nextln: movl    $$0, %edx
-; nextln: srem $$rax:$$rdx, %rsi
+; nextln: srem_seq %rax, %rdx, %rsi, %rax, %rdx, tmp=(none)
 ; nextln: movq    %rdx, %rax
 
   return v2

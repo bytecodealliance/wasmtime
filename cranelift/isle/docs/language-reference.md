@@ -498,16 +498,16 @@ operators:
   `0x80`, `-0x80`) and boolean constants (`#t`, `#f`).
 * constants imported from the embedding, of arbitrary type
   (`$MyConst`).
-* Variable captures (bare identifiers like `x`; an identifier consists
-  of alphanumeric characters and underscores, and does not start with
-  a digit).
+* Variable captures and matches (bare identifiers like `x`; an
+  identifier consists of alphanumeric characters and underscores, and
+  does not start with a digit). The first occurrence of a variable `x`
+  captures the value; each subsequent occurrence matches on the
+  already-captured value, rejecting the match if not equal.
 * Variable captures with sub-patterns: `x @ PAT`, which captures the
   subterm in `x` as above but also matches `PAT` against the
   subterm. For example, `x @ (A y z)` matches an `A` term and captures
   its arguments as `y` and `z`, but also captures the whole term as
   `x`.
-* "Equal-variable" constraints (`=x`): a subterm must match an
-  already-captured value.
 * conjunctions of subpatterns: `(and PAT1 PAT2 ...)` matches all of
   the subpatterns against the term. If any subpattern does not match,
   then this matcher fails.
@@ -680,12 +680,11 @@ The typing rules for patterns in ISLE are:
   T2 T2) R)`, has type `R` and provides expected types `T1`, `T2`, and
   `T3` to its subpatterns.
   
-* A variable capture pattern `x` is compatible with any expected type,
-  and captures this expected type under the variable identifier `x` in
-  the type environment.
-  
-* A variable-equality pattern `=x` checks that the expected type is
-  equal to the already-captured type for `x` in the type environment.
+* A variable capture pattern `x` is compatible with any expected type
+  the first time it appears, and captures this expected type under the
+  variable identifier `x` in the type environment. Subsequent
+  appearances of `x` check that the expected type matches the
+  already-captured type.
   
 * A conjunction `(and PAT1 PAT2 ...)` checks that each subpattern is
   compatible with the expected type.
@@ -949,6 +948,118 @@ how it interacts with Rust code. We consider these interactions to be
 semantically as important as the core language: they are not
 implementation details, but rather, a well-defined interface by which
 ISLE can interface with the outside world (an "FFI" of sorts).
+
+### If-Let Clauses
+
+As an extension to the basic left-hand-side / right-hand-side rule
+idiom, ISLE allows *if-let clauses* to be used. These add additional
+pattern-matching steps, and can be used to perform additional tests
+and also to use constructors in place of extractors during the match
+phase when this is more convenient.
+
+To introduce the concept, an example follows (this is taken from the
+[RFC](https://github.com/bytecodealliance/rfcs/tree/main/isle-extended-patterns.md)
+that proposed if-lets):
+
+```lisp
+;; `u32_fallible_add` can now be used in patterns in `if-let` clauses
+(decl pure u32_fallible_add (u32 u32) u32)
+(extern constructor u32_fallible_add u32_fallible_add)
+
+(rule (lower (load (iadd addr
+                         (iadd (uextend (iconst k1))
+                               (uextend (iconst k2))))))
+      (if-let k (u32_fallible_add k1 k2))
+      (isa_load (amode_reg_offset addr k)))
+```
+
+The key idea is that we allow a `rule` form to contain the following
+sub-forms:
+
+```lisp
+(rule LHS_PATTERN
+  (if-let PAT2 EXPR2)
+  (if-let PAT3 EXPR3)
+  ...
+  RHS)
+```
+
+The matching proceeds as follows: the main pattern (`LHS_PATTERN`)
+matches against the input value (the term to be rewritten), as
+described in detail above. Then, if this matches, execution proceeds
+to the if-let clauses in the order they are specified. For each, we
+evaluate the expression (`EXPR2` or `EXPR3` above) first. An
+expression in an if-let context is allowed to be "fallible": the
+constructors return `Option<T>` at the Rust level and can return
+`None`, in which case the whole rule application fails and we move on
+to the next rule as if the main pattern had failed to match. (MOre on
+the fallible constructors below.) If the expression evaluation
+succeeds, we match the associated pattern (`PAT2` or `PAT3` above)
+against the resulting value. This too can fail, causing the whole rule
+to fail. If it succeeds, any resulting variable bindings are
+available. Variables bound in the main pattern are available for all
+if-let expressions and patterns, and variables bound by a given if-let
+clause are available for all subsequent clauses. All bound variables
+(from the main pattern and if-let clauses) are available in the
+right-hand side expression.
+
+#### Pure Expressions and Constructors
+
+In order for an expression to be used in an if-let clause, it has to
+be *pure*: it cannot have side-effects. A pure expression is one that
+uses constants and pure constructors only. Enum variant constructors
+are always pure. In general constructors that invoke function calls,
+however (either as internal or external constructor calls), can lead
+to arbitrary Rust code and have side-effects. So, we add a new
+annotation to declarations as follows:
+
+```lisp
+;; `u32_fallible_add` can now be used in patterns in `if-let` clauses
+(decl pure u32_fallible_add (u32 u32) u32)
+
+;; This adds a method
+;; `fn u32_fallible_add(&mut self, _: u32, _: u32) -> Option<u32>`
+;; to the `Context` trait.
+(extern constructor u32_fallible_add u32_fallible_add)
+```
+
+The `pure` keyword here is a declaration that the term, when used as a
+constructor, has no side-effects. Declaring an external constructor on
+a pure term is a promise by the ISLE programmer that the external Rust
+function we are naming (here `u32_fallible_add`) has no side-effects
+and is thus safe to invoke during the match phase of a rule, when we
+have not committed to a given rule yet.
+
+When an internal constructor body is generated for a term that is pure
+(i.e., if we had `(rule (u32_fallible_add x y) ...)` in our program
+after the above declaration instead of the `extern`), the right-hand
+side expression of each rule that rewrites the term is also checked
+for purity.
+
+#### `if` Shorthand
+
+It is a fairly common idiom that if-let clauses are used as predicates
+on rules, such that their only purpose is to allow a rule to match,
+and not to perform any destructuring with a sub-pattern. For example,
+one might want to write:
+
+```lisp
+(rule (lower (special_inst ...))
+      (if-let _ (isa_extension_enabled))
+      (isa_special_inst ...))
+```
+
+where `isa_extension_enabled` is a pure constructor that is fallible,
+and succeeds only when a condition is true.
+
+To enable more succinct expression of this idiom, we allow the
+following shorthand notation using `if` instead:
+
+```lisp
+(rule (lower (special_inst ...))
+      (if (isa_extension_enabled))
+      (isa_special_inst ...))
+```
 
 ### Mapping to Rust: Constructors, Functions, and Control Flow
 
@@ -1397,7 +1508,7 @@ newline). The grammar accepted by the parser is as follows:
 <pattern> ::= <int>
             | <const-ident>
             | "_"
-            | "=" <ident>
+            | <ident>
             | <ident> "@" <pattern>
             | "(" "and" <pattern>* ")"
             | "(" <ident> <pattern-arg>* ")"

@@ -1,7 +1,7 @@
 use crate::store::{StoreData, StoreOpaque, Stored};
 use crate::{
-    AsContext, AsContextMut, CallHook, Engine, Extern, FuncType, Instance, InterruptHandle,
-    StoreContext, StoreContextMut, Trap, Val, ValRaw, ValType,
+    AsContext, AsContextMut, CallHook, Engine, Extern, FuncType, Instance, StoreContext,
+    StoreContextMut, Trap, Val, ValRaw, ValType,
 };
 use anyhow::{bail, Context as _, Result};
 use std::future::Future;
@@ -9,9 +9,8 @@ use std::mem;
 use std::panic::{self, AssertUnwindSafe};
 use std::pin::Pin;
 use std::ptr::NonNull;
-use std::sync::atomic::Ordering::Relaxed;
 use std::sync::Arc;
-use wasmtime_environ::{EntityIndex, FuncIndex};
+use wasmtime_environ::FuncIndex;
 use wasmtime_runtime::{
     raise_user_trap, ExportFunction, InstanceAllocator, InstanceHandle, OnDemandInstanceAllocator,
     VMCallerCheckedAnyfunc, VMContext, VMFunctionBody, VMFunctionImport, VMSharedSignatureIndex,
@@ -225,6 +224,21 @@ enum FuncKind {
     /// situations is `SharedHost` and `StoreOwned`, so this ideally isn't
     /// larger than those two.
     Host(Box<HostFunc>),
+
+    /// A reference to a `HostFunc`, but one that's "rooted" in the `Store`
+    /// itself.
+    ///
+    /// This variant is created when an `InstancePre<T>` is instantiated in to a
+    /// `Store<T>`. In that situation the `InstancePre<T>` already has a list of
+    /// host functions that are packaged up in an `Arc`, so the `Arc<[T]>` is
+    /// cloned once into the `Store` to avoid each individual function requiring
+    /// an `Arc::clone`.
+    ///
+    /// The lifetime management of this type is `unsafe` because
+    /// `RootedHostFunc` is a small wrapper around `NonNull<HostFunc>`. To be
+    /// safe this is required that the memory of the host function is pinned
+    /// elsewhere (e.g. the `Arc` in the `Store`).
+    RootedHost(RootedHostFunc),
 }
 
 macro_rules! for_each_function_signature {
@@ -273,8 +287,9 @@ macro_rules! generate_wrap_async_func {
         {
             assert!(store.as_context().async_support(), concat!("cannot use `wrap", $num, "_async` without enabling async support on the config"));
             Func::wrap(store, move |mut caller: Caller<'_, T>, $($args: $args),*| {
-                let async_cx = caller.store.as_context_mut().0.async_cx();
+                let async_cx = caller.store.as_context_mut().0.async_cx().expect("Attempt to start async function on dying fiber");
                 let mut future = Pin::from(func(caller, $($args),*));
+
                 match unsafe { async_cx.block_on(future.as_mut()) } {
                     Ok(ret) => ret.into_fallible(),
                     Err(e) => R::fallible_from_trap(e),
@@ -440,7 +455,12 @@ impl Func {
             "cannot use `new_async` without enabling async support in the config"
         );
         Func::new(store, ty, move |mut caller, params, results| {
-            let async_cx = caller.store.as_context_mut().0.async_cx();
+            let async_cx = caller
+                .store
+                .as_context_mut()
+                .0
+                .async_cx()
+                .expect("Attempt to spawn new action on dying fiber");
             let mut future = Pin::from(func(caller, params, results));
             match unsafe { async_cx.block_on(future.as_mut()) } {
                 Ok(Ok(())) => Ok(()),
@@ -1198,14 +1218,13 @@ pub(crate) fn invoke_wasm_and_catch_traps<T>(
     closure: impl FnMut(*mut VMContext),
 ) -> Result<(), Trap> {
     unsafe {
-        let exit = enter_wasm(store)?;
+        let exit = enter_wasm(store);
 
         if let Err(trap) = store.0.call_hook(CallHook::CallingWasm) {
             exit_wasm(store, exit);
             return Err(trap);
         }
         let result = wasmtime_runtime::catch_traps(
-            store.0.vminterrupts(),
             store.0.signal_handler(),
             store.0.default_callee(),
             closure,
@@ -1232,7 +1251,7 @@ pub(crate) fn invoke_wasm_and_catch_traps<T>(
 ///
 /// This function may fail if the the stack limit can't be set because an
 /// interrupt already happened.
-fn enter_wasm<T>(store: &mut StoreContextMut<'_, T>) -> Result<Option<usize>, Trap> {
+fn enter_wasm<T>(store: &mut StoreContextMut<'_, T>) -> Option<usize> {
     // If this is a recursive call, e.g. our stack canary is already set, then
     // we may be able to skip this function.
     //
@@ -1252,7 +1271,7 @@ fn enter_wasm<T>(store: &mut StoreContextMut<'_, T>) -> Result<Option<usize>, Tr
         .is_some()
         && !store.0.async_support()
     {
-        return Ok(None);
+        return None;
     }
 
     let stack_pointer = psm::stack_pointer() as usize;
@@ -1270,34 +1289,13 @@ fn enter_wasm<T>(store: &mut StoreContextMut<'_, T>) -> Result<Option<usize>, Tr
     // (a million bytes) the slop shouldn't matter too much.
     //
     // After we've got the stack limit then we store it into the `stack_limit`
-    // variable. Note that the store is an atomic swap to ensure that we can
-    // consume any previously-sent interrupt requests. If we found that wasm was
-    // previously interrupted then we immediately return a trap (after resetting
-    // the stack limit). Otherwise we're good to keep on going.
-    //
-    // Note the usage of `Relaxed` memory orderings here. This is specifically
-    // an optimization in the `Drop` below where a `Relaxed` store is speedier
-    // than a `SeqCst` store. The rationale for `Relaxed` here is that the
-    // atomic orderings here aren't actually protecting any memory, we're just
-    // trying to be atomic with respect to this one location in memory (for when
-    // `InterruptHandle` sends us a signal). Due to the lack of needing to
-    // synchronize with any other memory it's hoped that the choice of `Relaxed`
-    // here should be correct for our use case.
+    // variable.
     let wasm_stack_limit = stack_pointer - store.engine().config().max_wasm_stack;
-    let interrupts = store.0.interrupts();
-    let prev_stack = match interrupts.stack_limit.swap(wasm_stack_limit, Relaxed) {
-        wasmtime_environ::INTERRUPTED => {
-            // This means that an interrupt happened before we actually
-            // called this function, which means that we're now
-            // considered interrupted.
-            interrupts.stack_limit.store(usize::max_value(), Relaxed);
-            return Err(Trap::new_wasm(
-                None,
-                wasmtime_environ::TrapCode::Interrupt,
-                backtrace::Backtrace::new_unresolved(),
-            ));
-        }
-        n => n,
+    let prev_stack = unsafe {
+        mem::replace(
+            &mut *store.0.runtime_limits().stack_limit.get(),
+            wasm_stack_limit,
+        )
     };
 
     // The `usize::max_value()` sentinel is present on recursive calls to
@@ -1315,7 +1313,7 @@ fn enter_wasm<T>(store: &mut StoreContextMut<'_, T>) -> Result<Option<usize>, Tr
             .set_stack_canary(Some(stack_pointer));
     }
 
-    Ok(Some(prev_stack))
+    Some(prev_stack)
 }
 
 fn exit_wasm<T>(store: &mut StoreContextMut<'_, T>, prev_stack: Option<usize>) {
@@ -1333,8 +1331,9 @@ fn exit_wasm<T>(store: &mut StoreContextMut<'_, T>, prev_stack: Option<usize>) {
         store.0.externref_activations_table().set_stack_canary(None);
     }
 
-    // see docs above for why this uses `Relaxed`
-    store.0.interrupts().stack_limit.store(prev_stack, Relaxed);
+    unsafe {
+        *store.0.runtime_limits().stack_limit.get() = prev_stack;
+    }
 }
 
 /// A trait implemented for types which can be returned from closures passed to
@@ -1411,7 +1410,7 @@ where
     }
 
     unsafe fn wrap_trampoline(ptr: *mut ValRaw, f: impl FnOnce(Self::Retptr) -> Self::Abi) {
-        *ptr.cast::<Self::Abi>() = f(());
+        T::abi_into_raw(f(()), ptr);
     }
 
     fn into_fallible(self) -> Result<T, Trap> {
@@ -1499,7 +1498,7 @@ macro_rules! impl_wasm_host_results {
             unsafe fn wrap_trampoline(mut _ptr: *mut ValRaw, f: impl FnOnce(Self::Retptr) -> Self::Abi) {
                 let ($($t,)*) = <($($t::Abi,)*) as HostAbi>::call(f);
                 $(
-                    *_ptr.cast() = $t;
+                    $t::abi_into_raw($t, _ptr);
                     _ptr = _ptr.add(1);
                 )*
             }
@@ -1746,14 +1745,6 @@ impl<T> Caller<'_, T> {
         self.store.engine()
     }
 
-    /// Returns an [`InterruptHandle`] to interrupt wasm execution.
-    ///
-    /// See [`Store::interrupt_handle`](crate::Store::interrupt_handle) for more
-    /// information.
-    pub fn interrupt_handle(&self) -> Result<InterruptHandle> {
-        self.store.interrupt_handle()
-    }
-
     /// Perform garbage collection of `ExternRef`s.
     ///
     /// Same as [`Store::gc`](crate::Store::gc).
@@ -1960,7 +1951,7 @@ macro_rules! impl_into_func {
 
                     let mut _n = 0;
                     $(
-                        let $args = *args.add(_n).cast::<$args::Abi>();
+                        let $args = $args::abi_from_raw(args.add(_n));
                         _n += 1;
                     )*
                     R::wrap_trampoline(args, |retptr| {
@@ -2071,11 +2062,7 @@ impl HostFunc {
     /// Requires that this function's signature is already registered within
     /// `Engine`. This happens automatically during the above two constructors.
     fn _new(engine: &Engine, mut instance: InstanceHandle, trampoline: VMTrampoline) -> Self {
-        let idx = EntityIndex::Function(FuncIndex::from_u32(0));
-        let export = match instance.lookup_by_declaration(&idx) {
-            wasmtime_runtime::Export::Function(f) => f,
-            _ => unreachable!(),
-        };
+        let export = instance.get_exported_func(FuncIndex::from_u32(0));
 
         HostFunc {
             instance,
@@ -2096,6 +2083,29 @@ impl HostFunc {
         self.validate_store(store);
         let me = self.clone();
         Func::from_func_kind(FuncKind::SharedHost(me), store)
+    }
+
+    /// Inserts this `HostFunc` into a `Store`, returning the `Func` pointing to
+    /// it.
+    ///
+    /// This function is similar to, but not equivalent, to `HostFunc::to_func`.
+    /// Notably this function requires that the `Arc<Self>` pointer is otherwise
+    /// rooted within the `StoreOpaque` via another means. When in doubt use
+    /// `to_func` above as it's safer.
+    ///
+    /// # Unsafety
+    ///
+    /// Can only be inserted into stores with a matching `T` relative to when
+    /// this `HostFunc` was first created.
+    ///
+    /// Additionally the `&Arc<Self>` is not cloned in this function. Instead a
+    /// raw pointer to `Self` is stored within the `Store` for this function.
+    /// The caller must arrange for the `Arc<Self>` to be "rooted" in the store
+    /// provided via another means, probably by pushing to
+    /// `StoreOpaque::rooted_host_funcs`.
+    pub unsafe fn to_func_store_rooted(self: &Arc<Self>, store: &mut StoreOpaque) -> Func {
+        self.validate_store(store);
+        Func::from_func_kind(FuncKind::RootedHost(RootedHostFunc::new(self)), store)
     }
 
     /// Same as [`HostFunc::to_func`], different ownership.
@@ -2140,6 +2150,7 @@ impl FuncData {
         match &self.kind {
             FuncKind::StoreOwned { trampoline, .. } => *trampoline,
             FuncKind::SharedHost(host) => host.trampoline,
+            FuncKind::RootedHost(host) => host.trampoline,
             FuncKind::Host(host) => host.trampoline,
         }
     }
@@ -2160,7 +2171,50 @@ impl FuncKind {
         match self {
             FuncKind::StoreOwned { export, .. } => export,
             FuncKind::SharedHost(host) => &host.export,
+            FuncKind::RootedHost(host) => &host.export,
             FuncKind::Host(host) => &host.export,
+        }
+    }
+}
+
+use self::rooted::*;
+
+/// An inner module is used here to force unsafe construction of
+/// `RootedHostFunc` instead of accidentally safely allowing access to its
+/// constructor.
+mod rooted {
+    use super::HostFunc;
+    use std::ops::Deref;
+    use std::ptr::NonNull;
+    use std::sync::Arc;
+
+    /// A variant of a pointer-to-a-host-function used in `FuncKind::RootedHost`
+    /// above.
+    ///
+    /// For more documentation see `FuncKind::RootedHost`, `InstancePre`, and
+    /// `HostFunc::to_func_store_rooted`.
+    pub(crate) struct RootedHostFunc(NonNull<HostFunc>);
+
+    // These are required due to the usage of `NonNull` but should be safe
+    // because `HostFunc` is itself send/sync.
+    unsafe impl Send for RootedHostFunc where HostFunc: Send {}
+    unsafe impl Sync for RootedHostFunc where HostFunc: Sync {}
+
+    impl RootedHostFunc {
+        /// Note that this is `unsafe` because this wrapper type allows safe
+        /// access to the pointer given at any time, including outside the
+        /// window of validity of `func`, so callers must not use the return
+        /// value past the lifetime of the provided `func`.
+        pub(crate) unsafe fn new(func: &Arc<HostFunc>) -> RootedHostFunc {
+            RootedHostFunc(NonNull::from(&**func))
+        }
+    }
+
+    impl Deref for RootedHostFunc {
+        type Target = HostFunc;
+
+        fn deref(&self) -> &HostFunc {
+            unsafe { self.0.as_ref() }
         }
     }
 }

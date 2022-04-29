@@ -6,8 +6,9 @@ use super::TargetIsa;
 use crate::ir::{condcodes::IntCC, Function};
 #[cfg(feature = "unwind")]
 use crate::isa::unwind::systemv;
-use crate::isa::x64::{inst::regs::create_reg_universe_systemv, settings as x64_settings};
+use crate::isa::x64::{inst::regs::create_reg_env_systemv, settings as x64_settings};
 use crate::isa::Builder as IsaBuilder;
+use crate::machinst::Reg;
 use crate::machinst::{
     compile, MachCompileResult, MachTextSectionBuilder, TextSectionBuilder, VCode,
 };
@@ -15,8 +16,7 @@ use crate::result::{CodegenError, CodegenResult};
 use crate::settings::{self as shared_settings, Flags};
 use alloc::{boxed::Box, vec::Vec};
 use core::fmt;
-
-use regalloc::{PrettyPrint, RealRegUniverse, Reg};
+use regalloc2::MachineEnv;
 use target_lexicon::Triple;
 
 mod abi;
@@ -30,27 +30,31 @@ pub(crate) struct X64Backend {
     triple: Triple,
     flags: Flags,
     x64_flags: x64_settings::Flags,
-    reg_universe: RealRegUniverse,
+    reg_env: MachineEnv,
 }
 
 impl X64Backend {
     /// Create a new X64 backend with the given (shared) flags.
     fn new_with_flags(triple: Triple, flags: Flags, x64_flags: x64_settings::Flags) -> Self {
-        let reg_universe = create_reg_universe_systemv(&flags);
+        let reg_env = create_reg_env_systemv(&flags);
         Self {
             triple,
             flags,
             x64_flags,
-            reg_universe,
+            reg_env,
         }
     }
 
-    fn compile_vcode(&self, func: &Function, flags: Flags) -> CodegenResult<VCode<inst::Inst>> {
+    fn compile_vcode(
+        &self,
+        func: &Function,
+        flags: Flags,
+    ) -> CodegenResult<(VCode<inst::Inst>, regalloc2::Output)> {
         // This performs lowering to VCode, register-allocates the code, computes
         // block layout and finalizes branches. The result is ready for binary emission.
         let emit_info = EmitInfo::new(flags.clone(), self.x64_flags.clone());
         let abi = Box::new(abi::X64ABICallee::new(&func, flags, self.isa_flags())?);
-        compile::compile::<Self>(&func, self, abi, &self.reg_universe, emit_info)
+        compile::compile::<Self>(&func, self, abi, &self.reg_env, emit_info)
     }
 }
 
@@ -61,28 +65,27 @@ impl TargetIsa for X64Backend {
         want_disasm: bool,
     ) -> CodegenResult<MachCompileResult> {
         let flags = self.flags();
-        let vcode = self.compile_vcode(func, flags.clone())?;
+        let (vcode, regalloc_result) = self.compile_vcode(func, flags.clone())?;
 
-        let (buffer, bb_starts, bb_edges) = vcode.emit();
-        let buffer = buffer.finish();
-        let frame_size = vcode.frame_size();
-        let value_labels_ranges = vcode.value_labels_ranges();
-        let stackslot_offsets = vcode.stackslot_offsets().clone();
+        let want_disasm = want_disasm || log::log_enabled!(log::Level::Debug);
+        let emit_result = vcode.emit(&regalloc_result, want_disasm, flags.machine_code_cfg_info());
+        let frame_size = emit_result.frame_size;
+        let value_labels_ranges = emit_result.value_labels_ranges;
+        let buffer = emit_result.buffer.finish();
+        let stackslot_offsets = emit_result.stackslot_offsets;
 
-        let disasm = if want_disasm {
-            Some(vcode.show_rru(Some(&create_reg_universe_systemv(flags))))
-        } else {
-            None
-        };
+        if let Some(disasm) = emit_result.disasm.as_ref() {
+            log::debug!("disassembly:\n{}", disasm);
+        }
 
         Ok(MachCompileResult {
             buffer,
             frame_size,
-            disasm,
+            disasm: emit_result.disasm,
             value_labels_ranges,
             stackslot_offsets,
-            bb_starts,
-            bb_edges,
+            bb_starts: emit_result.bb_offsets,
+            bb_edges: emit_result.bb_edges,
         })
     }
 
@@ -319,30 +322,29 @@ mod test {
 
         // 00000000  55                push rbp
         // 00000001  4889E5            mov rbp,rsp
-        // 00000004  4889FE            mov rsi,rdi
-        // 00000007  81C634120000      add esi,0x1234
-        // 0000000D  85F6              test esi,esi
-        // 0000000F  0F841B000000      jz near 0x30
-        // 00000015  4889F7            mov rdi,rsi
-        // 00000018  4889F0            mov rax,rsi
-        // 0000001B  81E834120000      sub eax,0x1234
-        // 00000021  01F8              add eax,edi
-        // 00000023  85F6              test esi,esi
-        // 00000025  0F8505000000      jnz near 0x30
-        // 0000002B  4889EC            mov rsp,rbp
-        // 0000002E  5D                pop rbp
-        // 0000002F  C3                ret
-        // 00000030  4889F7            mov rdi,rsi    <--- cold block
-        // 00000033  81C734120000      add edi,0x1234
-        // 00000039  85FF              test edi,edi
-        // 0000003B  0F85EFFFFFFF      jnz near 0x30
-        // 00000041  E9D2FFFFFF        jmp 0x18
+        // 00000004  81C734120000      add edi,0x1234
+        // 0000000A  85FF              test edi,edi
+        // 0000000C  0F841C000000      jz near 0x2e
+        // 00000012  4989F8            mov r8,rdi
+        // 00000015  4889F8            mov rax,rdi
+        // 00000018  81E834120000      sub eax,0x1234
+        // 0000001E  4401C0            add eax,r8d
+        // 00000021  85FF              test edi,edi
+        // 00000023  0F8505000000      jnz near 0x2e
+        // 00000029  4889EC            mov rsp,rbp
+        // 0000002C  5D                pop rbp
+        // 0000002D  C3                ret
+        // 0000002E  4989F8            mov r8,rdi
+        // 00000031  4181C034120000    add r8d,0x1234
+        // 00000038  4585C0            test r8d,r8d
+        // 0000003B  0F85EDFFFFFF      jnz near 0x2e
+        // 00000041  E9CFFFFFFF        jmp 0x15
 
         let golden = vec![
-            85, 72, 137, 229, 72, 137, 254, 129, 198, 52, 18, 0, 0, 133, 246, 15, 132, 27, 0, 0, 0,
-            72, 137, 247, 72, 137, 240, 129, 232, 52, 18, 0, 0, 1, 248, 133, 246, 15, 133, 5, 0, 0,
-            0, 72, 137, 236, 93, 195, 72, 137, 247, 129, 199, 52, 18, 0, 0, 133, 255, 15, 133, 239,
-            255, 255, 255, 233, 210, 255, 255, 255,
+            85, 72, 137, 229, 129, 199, 52, 18, 0, 0, 133, 255, 15, 132, 28, 0, 0, 0, 73, 137, 248,
+            72, 137, 248, 129, 232, 52, 18, 0, 0, 68, 1, 192, 133, 255, 15, 133, 5, 0, 0, 0, 72,
+            137, 236, 93, 195, 73, 137, 248, 65, 129, 192, 52, 18, 0, 0, 69, 133, 192, 15, 133,
+            237, 255, 255, 255, 233, 207, 255, 255, 255,
         ];
 
         assert_eq!(code, &golden[..]);

@@ -14,6 +14,7 @@
     1. Release policy discussion
        - Policy around "when should we do a point release" is underspecified;
          clarify and establish guidelines one way or another
+    1. Development plan for the component model
     1. _Submit a PR to add your item here_
 
 ## Notes

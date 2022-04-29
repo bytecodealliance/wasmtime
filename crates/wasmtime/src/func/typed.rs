@@ -1,6 +1,6 @@
 use super::{invoke_wasm_and_catch_traps, HostAbi};
 use crate::store::{AutoAssertNoGc, StoreOpaque};
-use crate::{AsContextMut, ExternRef, Func, StoreContextMut, Trap, ValType};
+use crate::{AsContextMut, ExternRef, Func, StoreContextMut, Trap, ValRaw, ValType};
 use anyhow::{bail, Result};
 use std::marker;
 use std::mem::{self, MaybeUninit};
@@ -203,13 +203,17 @@ pub unsafe trait WasmTy: Send {
     #[doc(hidden)]
     fn is_externref(&self) -> bool;
     #[doc(hidden)]
+    unsafe fn abi_from_raw(raw: *mut ValRaw) -> Self::Abi;
+    #[doc(hidden)]
+    unsafe fn abi_into_raw(abi: Self::Abi, raw: *mut ValRaw);
+    #[doc(hidden)]
     fn into_abi(self, store: &mut StoreOpaque) -> Self::Abi;
     #[doc(hidden)]
     unsafe fn from_abi(abi: Self::Abi, store: &mut StoreOpaque) -> Self;
 }
 
-macro_rules! primitives {
-    ($($primitive:ident => $ty:ident)*) => ($(
+macro_rules! integers {
+    ($($primitive:ident => $ty:ident in $raw:ident)*) => ($(
         unsafe impl WasmTy for $primitive {
             type Abi = $primitive;
             #[inline]
@@ -225,6 +229,14 @@ macro_rules! primitives {
                 false
             }
             #[inline]
+            unsafe fn abi_from_raw(raw: *mut ValRaw) -> $primitive {
+                $primitive::from_le((*raw).$raw as $primitive)
+            }
+            #[inline]
+            unsafe fn abi_into_raw(abi: $primitive, raw: *mut ValRaw) {
+                (*raw).$raw = abi.to_le() as $raw;
+            }
+            #[inline]
             fn into_abi(self, _store: &mut StoreOpaque) -> Self::Abi {
                 self
             }
@@ -236,13 +248,52 @@ macro_rules! primitives {
     )*)
 }
 
-primitives! {
-    i32 => I32
-    u32 => I32
-    i64 => I64
-    u64 => I64
-    f32 => F32
-    f64 => F64
+integers! {
+    i32 => I32 in i32
+    i64 => I64 in i64
+    u32 => I32 in i32
+    u64 => I64 in i64
+}
+
+macro_rules! floats {
+    ($($float:ident/$int:ident => $ty:ident)*) => ($(
+        unsafe impl WasmTy for $float {
+            type Abi = $float;
+            #[inline]
+            fn valtype() -> ValType {
+                ValType::$ty
+            }
+            #[inline]
+            fn compatible_with_store(&self, _: &StoreOpaque) -> bool {
+                true
+            }
+            #[inline]
+            fn is_externref(&self) -> bool {
+                false
+            }
+            #[inline]
+            unsafe fn abi_from_raw(raw: *mut ValRaw) -> $float {
+                $float::from_bits($int::from_le((*raw).$float))
+            }
+            #[inline]
+            unsafe fn abi_into_raw(abi: $float, raw: *mut ValRaw) {
+                (*raw).$float = abi.to_bits().to_le();
+            }
+            #[inline]
+            fn into_abi(self, _store: &mut StoreOpaque) -> Self::Abi {
+                self
+            }
+            #[inline]
+            unsafe fn from_abi(abi: Self::Abi, _store: &mut StoreOpaque) -> Self {
+                abi
+            }
+        }
+    )*)
+}
+
+floats! {
+    f32/u32 => F32
+    f64/u64 => F64
 }
 
 unsafe impl WasmTy for Option<ExternRef> {
@@ -261,6 +312,16 @@ unsafe impl WasmTy for Option<ExternRef> {
     #[inline]
     fn is_externref(&self) -> bool {
         true
+    }
+
+    #[inline]
+    unsafe fn abi_from_raw(raw: *mut ValRaw) -> *mut u8 {
+        usize::from_le((*raw).externref) as *mut u8
+    }
+
+    #[inline]
+    unsafe fn abi_into_raw(abi: *mut u8, raw: *mut ValRaw) {
+        (*raw).externref = (abi as usize).to_le();
     }
 
     #[inline]
@@ -337,6 +398,16 @@ unsafe impl WasmTy for Option<Func> {
     #[inline]
     fn is_externref(&self) -> bool {
         false
+    }
+
+    #[inline]
+    unsafe fn abi_from_raw(raw: *mut ValRaw) -> Self::Abi {
+        usize::from_le((*raw).funcref) as Self::Abi
+    }
+
+    #[inline]
+    unsafe fn abi_into_raw(abi: Self::Abi, raw: *mut ValRaw) {
+        (*raw).funcref = (abi as usize).to_le();
     }
 
     #[inline]

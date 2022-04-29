@@ -7,14 +7,9 @@ block0(v0: i64):
   return v1
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 2)
-;   Inst 0:   ldar x0, [x0]
-;   Inst 1:   ret
-; }}
+; block0:
+;   ldar x0, [x0]
+;   ret
 
 function %atomic_load_i32(i64) -> i32 {
 block0(v0: i64):
@@ -22,14 +17,9 @@ block0(v0: i64):
   return v1
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 2)
-;   Inst 0:   ldar w0, [x0]
-;   Inst 1:   ret
-; }}
+; block0:
+;   ldar w0, [x0]
+;   ret
 
 function %atomic_load_i16(i64) -> i16 {
 block0(v0: i64):
@@ -37,14 +27,9 @@ block0(v0: i64):
   return v1
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 2)
-;   Inst 0:   ldarh w0, [x0]
-;   Inst 1:   ret
-; }}
+; block0:
+;   ldarh w0, [x0]
+;   ret
 
 function %atomic_load_i8(i64) -> i8 {
 block0(v0: i64):
@@ -52,14 +37,9 @@ block0(v0: i64):
   return v1
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 2)
-;   Inst 0:   ldarb w0, [x0]
-;   Inst 1:   ret
-; }}
+; block0:
+;   ldarb w0, [x0]
+;   ret
 
 function %atomic_load_i32_i64(i64) -> i64 {
 block0(v0: i64):
@@ -68,14 +48,9 @@ block0(v0: i64):
   return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 2)
-;   Inst 0:   ldar w0, [x0]
-;   Inst 1:   ret
-; }}
+; block0:
+;   ldar w0, [x0]
+;   ret
 
 function %atomic_load_i16_i64(i64) -> i64 {
 block0(v0: i64):
@@ -84,14 +59,9 @@ block0(v0: i64):
   return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 2)
-;   Inst 0:   ldarh w0, [x0]
-;   Inst 1:   ret
-; }}
+; block0:
+;   ldarh w0, [x0]
+;   ret
 
 function %atomic_load_i8_i64(i64) -> i64 {
 block0(v0: i64):
@@ -100,14 +70,9 @@ block0(v0: i64):
   return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 2)
-;   Inst 0:   ldarb w0, [x0]
-;   Inst 1:   ret
-; }}
+; block0:
+;   ldarb w0, [x0]
+;   ret
 
 function %atomic_load_i16_i32(i64) -> i32 {
 block0(v0: i64):
@@ -116,14 +81,9 @@ block0(v0: i64):
   return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 2)
-;   Inst 0:   ldarh w0, [x0]
-;   Inst 1:   ret
-; }}
+; block0:
+;   ldarh w0, [x0]
+;   ret
 
 function %atomic_load_i8_i32(i64) -> i32 {
 block0(v0: i64):
@@ -132,12 +92,7 @@ block0(v0: i64):
   return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 2)
-;   Inst 0:   ldarb w0, [x0]
-;   Inst 1:   ret
-; }}
+; block0:
+;   ldarb w0, [x0]
+;   ret
 

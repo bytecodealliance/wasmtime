@@ -2,7 +2,7 @@
 name = "wasmtime-fuzz"
 version = "0.0.0"
 authors = ["The Wasmtime Project Developers"]
-edition = "2018"
+edition = "2021"
 publish = false
 
 [package.metadata]
@@ -27,12 +27,6 @@ fuzz-spec-interpreter = ['wasmtime-fuzzing/fuzz-spec-interpreter']
 [[bin]]
 name = "compile"
 path = "fuzz_targets/compile.rs"
-test = false
-doc = false
-
-[[bin]]
-name = "compile-mutate"
-path = "fuzz_targets/compile-mutate.rs"
 test = false
 doc = false
 

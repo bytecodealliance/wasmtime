@@ -498,43 +498,12 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
         Load {
             flags, arg, offset, ..
         } => write!(w, "{} {}{}", flags, arg, offset),
-        LoadComplex {
-            flags,
-            ref args,
-            offset,
-            ..
-        } => {
-            let args = args.as_slice(pool);
-            write!(
-                w,
-                "{} {}{}",
-                flags,
-                DisplayValuesWithDelimiter(&args, '+'),
-                offset
-            )
-        }
         Store {
             flags,
             args,
             offset,
             ..
         } => write!(w, "{} {}, {}{}", flags, args[0], args[1], offset),
-        StoreComplex {
-            flags,
-            ref args,
-            offset,
-            ..
-        } => {
-            let args = args.as_slice(pool);
-            write!(
-                w,
-                "{} {}, {}{}",
-                flags,
-                args[0],
-                DisplayValuesWithDelimiter(&args[1..], '+'),
-                offset
-            )
-        }
         Trap { code, .. } => write!(w, " {}", code),
         CondTrap { arg, code, .. } => write!(w, " {}, {}", arg, code),
         IntCondTrap {

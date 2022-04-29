@@ -1,5 +1,8 @@
 test run
 target s390x
+target aarch64
+target aarch64 has_lse
+target x86_64
 
 ; We can't test that these instructions are right regarding atomicity, but we can
 ; test if they perform their operation correctly
@@ -26,7 +29,7 @@ function %atomic_rmw_add_i32(i32, i32) -> i32 {
     ss0 = explicit_slot 4
 
 block0(v0: i32, v1: i32):
-    v2 = stack_addr.i32 ss0
+    v2 = stack_addr.i64 ss0
     store.i32 little v0, v2
 
     v3 = atomic_rmw.i32 little add v2, v1
@@ -64,7 +67,7 @@ function %atomic_rmw_sub_i32(i32, i32) -> i32 {
     ss0 = explicit_slot 4
 
 block0(v0: i32, v1: i32):
-    v2 = stack_addr.i32 ss0
+    v2 = stack_addr.i64 ss0
     store.i32 little v0, v2
 
     v3 = atomic_rmw.i32 little sub v2, v1
@@ -102,7 +105,7 @@ function %atomic_rmw_and_i32(i32, i32) -> i32 {
     ss0 = explicit_slot 4
 
 block0(v0: i32, v1: i32):
-    v2 = stack_addr.i32 ss0
+    v2 = stack_addr.i64 ss0
     store.i32 little v0, v2
 
     v3 = atomic_rmw.i32 little and v2, v1
@@ -141,7 +144,7 @@ function %atomic_rmw_or_i32(i32, i32) -> i32 {
     ss0 = explicit_slot 4
 
 block0(v0: i32, v1: i32):
-    v2 = stack_addr.i32 ss0
+    v2 = stack_addr.i64 ss0
     store.i32 little v0, v2
 
     v3 = atomic_rmw.i32 little or v2, v1
@@ -180,7 +183,7 @@ function %atomic_rmw_xor_i32(i32, i32) -> i32 {
     ss0 = explicit_slot 4
 
 block0(v0: i32, v1: i32):
-    v2 = stack_addr.i32 ss0
+    v2 = stack_addr.i64 ss0
     store.i32 little v0, v2
 
     v3 = atomic_rmw.i32 little xor v2, v1
@@ -218,7 +221,7 @@ function %atomic_rmw_nand_i32(i32, i32) -> i32 {
     ss0 = explicit_slot 4
 
 block0(v0: i32, v1: i32):
-    v2 = stack_addr.i32 ss0
+    v2 = stack_addr.i64 ss0
     store.i32 little v0, v2
 
     v3 = atomic_rmw.i32 little nand v2, v1
@@ -257,7 +260,7 @@ function %atomic_rmw_umin_i32(i32, i32) -> i32 {
     ss0 = explicit_slot 4
 
 block0(v0: i32, v1: i32):
-    v2 = stack_addr.i32 ss0
+    v2 = stack_addr.i64 ss0
     store.i32 little v0, v2
 
     v3 = atomic_rmw.i32 little umin v2, v1
@@ -297,7 +300,7 @@ function %atomic_rmw_umax_i32(i32, i32) -> i32 {
     ss0 = explicit_slot 4
 
 block0(v0: i32, v1: i32):
-    v2 = stack_addr.i32 ss0
+    v2 = stack_addr.i64 ss0
     store.i32 little v0, v2
 
     v3 = atomic_rmw.i32 little umax v2, v1
@@ -337,7 +340,7 @@ function %atomic_rmw_smin_i32(i32, i32) -> i32 {
     ss0 = explicit_slot 4
 
 block0(v0: i32, v1: i32):
-    v2 = stack_addr.i32 ss0
+    v2 = stack_addr.i64 ss0
     store.i32 little v0, v2
 
     v3 = atomic_rmw.i32 little smin v2, v1
@@ -377,7 +380,7 @@ function %atomic_rmw_smax_i32(i32, i32) -> i32 {
     ss0 = explicit_slot 4
 
 block0(v0: i32, v1: i32):
-    v2 = stack_addr.i32 ss0
+    v2 = stack_addr.i64 ss0
     store.i32 little v0, v2
 
     v3 = atomic_rmw.i32 little smax v2, v1
@@ -415,7 +418,7 @@ function %atomic_rmw_xchg_i32(i32, i32) -> i32 {
     ss0 = explicit_slot 4
 
 block0(v0: i32, v1: i32):
-    v2 = stack_addr.i32 ss0
+    v2 = stack_addr.i64 ss0
     store.i32 little v0, v2
 
     v3 = atomic_rmw.i32 little xchg v2, v1

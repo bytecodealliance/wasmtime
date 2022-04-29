@@ -354,12 +354,16 @@ impl Config {
             ..
         } = &mut self.wasmtime.strategy
         {
-            limits.memories = 1;
-            limits.tables = 5;
-            limits.table_elements = 1_000;
-            // Set a lower bound of as the spec tests define memories with at
-            // least a few pages and some tests do memory grow operations.
-            limits.memory_pages = std::cmp::max(limits.memory_pages, 900);
+            // Configure the lower bound of a number of limits to what's
+            // required to actually run the spec tests. Fuzz-generated inputs
+            // may have limits less than these thresholds which would cause the
+            // spec tests to fail which isn't particularly interesting.
+            limits.memories = limits.memories.max(1);
+            limits.tables = limits.memories.max(5);
+            limits.table_elements = limits.memories.max(1_000);
+            limits.memory_pages = limits.memory_pages.max(900);
+            limits.count = limits.count.max(500);
+            limits.size = limits.size.max(64 * 1024);
 
             match &mut self.wasmtime.memory_config {
                 MemoryConfig::Normal(config) => {
@@ -378,14 +382,12 @@ impl Config {
         let mut cfg = wasmtime::Config::new();
         cfg.wasm_bulk_memory(true)
             .wasm_reference_types(true)
-            .wasm_module_linking(self.module_config.config.module_linking_enabled)
             .wasm_multi_value(self.module_config.config.multi_value_enabled)
             .wasm_multi_memory(self.module_config.config.max_memories > 1)
             .wasm_simd(self.module_config.config.simd_enabled)
             .wasm_memory64(self.module_config.config.memory64_enabled)
             .cranelift_nan_canonicalization(self.wasmtime.canonicalize_nans)
             .cranelift_opt_level(self.wasmtime.opt_level.to_wasmtime())
-            .interruptable(self.wasmtime.interruptable)
             .consume_fuel(self.wasmtime.consume_fuel)
             .epoch_interruption(self.wasmtime.epoch_interruption)
             .memory_init_cow(self.wasmtime.memory_init_cow)
@@ -486,23 +488,16 @@ impl Config {
     pub fn generate_timeout(&mut self, u: &mut Unstructured<'_>) -> arbitrary::Result<Timeout> {
         let time_duration = Duration::from_secs(20);
         let timeout = u
-            .choose(&[
-                Timeout::Time(time_duration),
-                Timeout::Fuel(100_000),
-                Timeout::Epoch(time_duration),
-            ])?
+            .choose(&[Timeout::Fuel(100_000), Timeout::Epoch(time_duration)])?
             .clone();
         match &timeout {
-            &Timeout::Time(..) => {
-                self.wasmtime.interruptable = true;
-            }
-            &Timeout::Fuel(..) => {
+            Timeout::Fuel(..) => {
                 self.wasmtime.consume_fuel = true;
             }
-            &Timeout::Epoch(..) => {
+            Timeout::Epoch(..) => {
                 self.wasmtime.epoch_interruption = true;
             }
-            &Timeout::None => unreachable!("Not an option given to choose()"),
+            Timeout::None => unreachable!("Not an option given to choose()"),
         }
         Ok(timeout)
     }
@@ -707,7 +702,7 @@ impl<'a> Arbitrary<'a> for CodegenSettings {
                         // print a warning and return an error because this fuzz
                         // input must be discarded.
                         #[cfg(target_arch = $arch)]
-                        if enable && !std::$test!($std) {
+                        if enable && !std::arch::$test!($std) {
                             log::warn!("want to enable clif `{}` but host doesn't support it",
                                 $clif);
                             return Err(arbitrary::Error::EmptyChoose)
@@ -756,6 +751,11 @@ impl<'a> Arbitrary<'a> for CodegenSettings {
                     std:"avx512f" => clif:"has_avx512f" ratio: 1 in 1000,
                     std:"avx512vl" => clif:"has_avx512vl" ratio: 1 in 1000,
                     std:"avx512vbmi" => clif:"has_avx512vbmi" ratio: 1 in 1000,
+                },
+                "aarch64" => {
+                    test: is_aarch64_feature_detected,
+
+                    std: "lse" => clif: "has_lse",
                 },
             };
             return Ok(CodegenSettings::Target {

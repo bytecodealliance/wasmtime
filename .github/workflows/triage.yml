@@ -16,6 +16,7 @@ concurrency:
 
 jobs:
   triage:
+    if: github.repository == 'bytecodealliance/wasmtime'
     runs-on: ubuntu-latest
     steps:
 

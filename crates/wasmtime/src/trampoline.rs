@@ -17,7 +17,7 @@ use crate::{GlobalType, MemoryType, TableType, Val};
 use anyhow::Result;
 use std::any::Any;
 use std::sync::Arc;
-use wasmtime_environ::{EntityIndex, GlobalIndex, MemoryIndex, Module, SignatureIndex, TableIndex};
+use wasmtime_environ::{GlobalIndex, MemoryIndex, Module, SignatureIndex, TableIndex};
 use wasmtime_runtime::{
     Imports, InstanceAllocationRequest, InstanceAllocator, OnDemandInstanceAllocator, StorePtr,
     VMFunctionImport, VMSharedSignatureIndex,
@@ -60,11 +60,9 @@ pub fn generate_global_export(
     val: Val,
 ) -> Result<wasmtime_runtime::ExportGlobal> {
     let instance = create_global(store, gt, val)?;
-    let idx = EntityIndex::Global(GlobalIndex::from_u32(0));
-    match store.instance_mut(instance).lookup_by_declaration(&idx) {
-        wasmtime_runtime::Export::Global(g) => Ok(g),
-        _ => unreachable!(),
-    }
+    Ok(store
+        .instance_mut(instance)
+        .get_exported_global(GlobalIndex::from_u32(0)))
 }
 
 pub fn generate_memory_export(
@@ -72,11 +70,9 @@ pub fn generate_memory_export(
     m: &MemoryType,
 ) -> Result<wasmtime_runtime::ExportMemory> {
     let instance = create_memory(store, m)?;
-    let idx = EntityIndex::Memory(MemoryIndex::from_u32(0));
-    match store.instance_mut(instance).lookup_by_declaration(&idx) {
-        wasmtime_runtime::Export::Memory(m) => Ok(m),
-        _ => unreachable!(),
-    }
+    Ok(store
+        .instance_mut(instance)
+        .get_exported_memory(MemoryIndex::from_u32(0)))
 }
 
 pub fn generate_table_export(
@@ -84,9 +80,7 @@ pub fn generate_table_export(
     t: &TableType,
 ) -> Result<wasmtime_runtime::ExportTable> {
     let instance = create_table(store, t)?;
-    let idx = EntityIndex::Table(TableIndex::from_u32(0));
-    match store.instance_mut(instance).lookup_by_declaration(&idx) {
-        wasmtime_runtime::Export::Table(t) => Ok(t),
-        _ => unreachable!(),
-    }
+    Ok(store
+        .instance_mut(instance)
+        .get_exported_table(TableIndex::from_u32(0)))
 }

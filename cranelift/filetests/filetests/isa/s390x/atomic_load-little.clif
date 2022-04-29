@@ -1,4 +1,4 @@
-test compile
+test compile precise-output
 target s390x
 
 function %atomic_load_i64(i64) -> i64 {
@@ -7,8 +7,9 @@ block0(v0: i64):
   return v1
 }
 
-; check:  lrvg %r2, 0(%r2)
-; nextln: br %r14
+; block0:
+;   lrvg %r2, 0(%r2)
+;   br %r14
 
 function %atomic_load_i64_sym() -> i64 {
   gv0 = symbol colocated %sym
@@ -18,8 +19,9 @@ block0:
   return v1
 }
 
-; check:  larl %r1, %sym + 0 ; lrvg %r2, 0(%r1)
-; nextln: br %r14
+; block0:
+;   larl %r1, %sym + 0 ; lrvg %r2, 0(%r1)
+;   br %r14
 
 function %atomic_load_i32(i64) -> i32 {
 block0(v0: i64):
@@ -27,8 +29,9 @@ block0(v0: i64):
   return v1
 }
 
-; check:  lrv %r2, 0(%r2)
-; nextln: br %r14
+; block0:
+;   lrv %r2, 0(%r2)
+;   br %r14
 
 function %atomic_load_i32_sym() -> i32 {
   gv0 = symbol colocated %sym
@@ -38,8 +41,9 @@ block0:
   return v1
 }
 
-; check:  larl %r1, %sym + 0 ; lrv %r2, 0(%r1)
-; nextln: br %r14
+; block0:
+;   larl %r1, %sym + 0 ; lrv %r2, 0(%r1)
+;   br %r14
 
 function %atomic_load_i16(i64) -> i16 {
 block0(v0: i64):
@@ -47,8 +51,9 @@ block0(v0: i64):
   return v1
 }
 
-; check:  lrvh %r2, 0(%r2)
-; nextln: br %r14
+; block0:
+;   lrvh %r2, 0(%r2)
+;   br %r14
 
 function %atomic_load_i16_sym() -> i16 {
   gv0 = symbol colocated %sym
@@ -58,8 +63,9 @@ block0:
   return v1
 }
 
-; check:  larl %r1, %sym + 0 ; lrvh %r2, 0(%r1)
-; nextln: br %r14
+; block0:
+;   larl %r1, %sym + 0 ; lrvh %r2, 0(%r1)
+;   br %r14
 
 function %atomic_load_i8(i64) -> i8 {
 block0(v0: i64):
@@ -67,6 +73,7 @@ block0(v0: i64):
   return v1
 }
 
-; check:  llc %r2, 0(%r2)
-; nextln: br %r14
+; block0:
+;   llc %r2, 0(%r2)
+;   br %r14
 

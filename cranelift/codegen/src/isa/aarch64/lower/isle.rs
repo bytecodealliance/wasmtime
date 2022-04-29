@@ -5,22 +5,23 @@ pub mod generated_code;
 
 // Types that the generated ISLE code uses via `use super::*`.
 use super::{
-    writable_zero_reg, zero_reg, AMode, ASIMDFPModImm, ASIMDMovModImm, AtomicRmwOp, BranchTarget,
-    CallIndInfo, CallInfo, Cond, CondBrKind, ExtendOp, FPUOpRI, FloatCC, Imm12, ImmLogic, ImmShift,
-    Inst as MInst, IntCC, JTSequenceInfo, MachLabel, MoveWideConst, NarrowValueMode, Opcode,
-    OperandSize, PairAMode, Reg, ScalarSize, ShiftOpAndAmt, UImm5, VecMisc2, VectorSize, NZCV,
+    writable_zero_reg, zero_reg, AMode, ASIMDFPModImm, ASIMDMovModImm, BranchTarget, CallIndInfo,
+    CallInfo, Cond, CondBrKind, ExtendOp, FPUOpRI, FloatCC, Imm12, ImmLogic, ImmShift,
+    Inst as MInst, IntCC, JTSequenceInfo, MachLabel, MoveWideConst, MoveWideOp, NarrowValueMode,
+    Opcode, OperandSize, PairAMode, Reg, ScalarSize, ShiftOpAndAmt, UImm5, VecMisc2, VectorSize,
+    NZCV,
 };
 use crate::isa::aarch64::settings::Flags as IsaFlags;
-use crate::machinst::isle::*;
+use crate::machinst::{isle::*, InputSourceInst};
 use crate::settings::Flags;
 use crate::{
     binemit::CodeOffset,
     ir::{
-        immediates::*, types::*, ExternalName, Inst, InstructionData, MemFlags, TrapCode, Value,
-        ValueLabel, ValueList,
+        immediates::*, types::*, AtomicRmwOp, ExternalName, Inst, InstructionData, MemFlags,
+        TrapCode, Value, ValueList,
     },
-    isa::aarch64::inst::aarch64_map_regs,
     isa::aarch64::inst::args::{ShiftOp, ShiftOpShiftImm},
+    isa::aarch64::lower::{is_valid_atomic_transaction_ty, writable_xreg, xreg},
     isa::unwind::UnwindInst,
     machinst::{ty_bits, InsnOutput, LowerCtx},
 };
@@ -45,15 +46,9 @@ pub(crate) fn lower<C>(
 where
     C: LowerCtx<I = MInst>,
 {
-    lower_common(
-        lower_ctx,
-        flags,
-        isa_flags,
-        outputs,
-        inst,
-        |cx, insn| generated_code::constructor_lower(cx, insn),
-        aarch64_map_regs,
-    )
+    lower_common(lower_ctx, flags, isa_flags, outputs, inst, |cx, insn| {
+        generated_code::constructor_lower(cx, insn)
+    })
 }
 
 pub struct ExtendedValue {
@@ -71,6 +66,14 @@ where
     C: LowerCtx<I = MInst>,
 {
     isle_prelude_methods!();
+
+    fn use_lse(&mut self, _: Inst) -> Option<()> {
+        if self.isa_flags.use_lse() {
+            Some(())
+        } else {
+            None
+        }
+    }
 
     fn move_wide_const_from_u64(&mut self, n: u64) -> Option<MoveWideConst> {
         MoveWideConst::maybe_from_u64(n)
@@ -120,6 +123,14 @@ where
         }
     }
 
+    fn valid_atomic_transaction(&mut self, ty: Type) -> Option<Type> {
+        if is_valid_atomic_transaction_ty(ty) {
+            Some(ty)
+        } else {
+            None
+        }
+    }
+
     /// This is the fallback case for loading a 64-bit integral constant into a
     /// register.
     ///
@@ -152,14 +163,29 @@ where
                         let imm =
                             MoveWideConst::maybe_with_shift(((!imm16) & 0xffff) as u16, i * 16)
                                 .unwrap();
-                        self.emit(&MInst::MovN { rd, imm, size });
+                        self.emit(&MInst::MovWide {
+                            op: MoveWideOp::MovN,
+                            rd,
+                            imm,
+                            size,
+                        });
                     } else {
                         let imm = MoveWideConst::maybe_with_shift(imm16 as u16, i * 16).unwrap();
-                        self.emit(&MInst::MovZ { rd, imm, size });
+                        self.emit(&MInst::MovWide {
+                            op: MoveWideOp::MovZ,
+                            rd,
+                            imm,
+                            size,
+                        });
                     }
                 } else {
                     let imm = MoveWideConst::maybe_with_shift(imm16 as u16, i * 16).unwrap();
-                    self.emit(&MInst::MovK { rd, imm, size });
+                    self.emit(&MInst::MovWide {
+                        op: MoveWideOp::MovK,
+                        rd,
+                        imm,
+                        size,
+                    });
                 }
             }
         }
@@ -185,6 +211,14 @@ where
         zero_reg()
     }
 
+    fn xreg(&mut self, index: u8) -> Reg {
+        xreg(index)
+    }
+
+    fn writable_xreg(&mut self, index: u8) -> WritableReg {
+        writable_xreg(index)
+    }
+
     fn extended_value_from_value(&mut self, val: Value) -> Option<ExtendedValue> {
         let (val, extend) =
             super::get_as_extended_value(self.lower_ctx, val, NarrowValueMode::None)?;
@@ -200,11 +234,7 @@ where
     }
 
     fn emit(&mut self, inst: &MInst) -> Unit {
-        self.emitted_insts.push((inst.clone(), false));
-    }
-
-    fn emit_safepoint(&mut self, inst: &MInst) -> Unit {
-        self.emitted_insts.push((inst.clone(), true));
+        self.lower_ctx.emit(inst.clone());
     }
 
     fn cond_br_zero(&mut self, reg: Reg) -> CondBrKind {
@@ -240,7 +270,7 @@ where
 
     fn sinkable_atomic_load(&mut self, val: Value) -> Option<SinkableAtomicLoad> {
         let input = self.lower_ctx.get_value_as_source_or_const(val);
-        if let Some((atomic_load, 0)) = input.inst {
+        if let InputSourceInst::UniqueUse(atomic_load, 0) = input.inst {
             if self.lower_ctx.data(atomic_load).opcode() == Opcode::AtomicLoad {
                 let atomic_addr = self.lower_ctx.input_as_value(atomic_load, 0);
                 return Some(SinkableAtomicLoad {

@@ -2,8 +2,8 @@
 
 use crate::CommonOptions;
 use anyhow::{Context as _, Result};
+use clap::Parser;
 use std::path::PathBuf;
-use structopt::{clap::AppSettings, StructOpt};
 use wasmtime::{Engine, Store};
 use wasmtime_wast::WastContext;
 
@@ -14,19 +14,18 @@ lazy_static::lazy_static! {
 }
 
 /// Runs a WebAssembly test script file
-#[derive(StructOpt)]
-#[structopt(
+#[derive(Parser)]
+#[clap(
     name = "wast",
-    version = env!("CARGO_PKG_VERSION"),
-    setting = AppSettings::ColoredHelp,
+    version,
     after_help = AFTER_HELP.as_str(),
 )]
 pub struct WastCommand {
-    #[structopt(flatten)]
+    #[clap(flatten)]
     common: CommonOptions,
 
     /// The path of the WebAssembly test script to run
-    #[structopt(required = true, value_name = "SCRIPT_FILE", parse(from_os_str))]
+    #[clap(required = true, value_name = "SCRIPT_FILE", parse(from_os_str))]
     scripts: Vec<PathBuf>,
 }
 

@@ -8,13 +8,8 @@ block0(v0: i128):
   return v1
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 1)
-;   Inst 0:   ret
-; }}
+; block0:
+;   ret
 
 function %ireduce_128_32(i128) -> i32 {
 block0(v0: i128):
@@ -22,13 +17,8 @@ block0(v0: i128):
   return v1
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 1)
-;   Inst 0:   ret
-; }}
+; block0:
+;   ret
 
 function %ireduce_128_16(i128) -> i16 {
 block0(v0: i128):
@@ -36,13 +26,8 @@ block0(v0: i128):
   return v1
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 1)
-;   Inst 0:   ret
-; }}
+; block0:
+;   ret
 
 function %ireduce_128_8(i128) -> i8 {
 block0(v0: i128):
@@ -50,11 +35,6 @@ block0(v0: i128):
   return v1
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 1)
-;   Inst 0:   ret
-; }}
+; block0:
+;   ret
 

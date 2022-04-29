@@ -7,7 +7,6 @@ use std::any::Any;
 use std::cell::UnsafeCell;
 use std::marker;
 use std::ptr::NonNull;
-use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use std::u32;
 
 /// An imported function.
@@ -503,7 +502,7 @@ pub struct VMSharedSignatureIndex(u32);
 mod test_vmshared_signature_index {
     use super::VMSharedSignatureIndex;
     use std::mem::size_of;
-    use wasmtime_environ::{Module, TargetSharedSignatureIndex, VMOffsets};
+    use wasmtime_environ::{Module, VMOffsets};
 
     #[test]
     fn check_vmshared_signature_index() {
@@ -512,14 +511,6 @@ mod test_vmshared_signature_index {
         assert_eq!(
             size_of::<VMSharedSignatureIndex>(),
             usize::from(offsets.size_of_vmshared_signature_index())
-        );
-    }
-
-    #[test]
-    fn check_target_shared_signature_index() {
-        assert_eq!(
-            size_of::<VMSharedSignatureIndex>(),
-            size_of::<TargetSharedSignatureIndex>()
         );
     }
 }
@@ -669,12 +660,11 @@ impl VMInvokeArgument {
 /// Structure used to control interrupting wasm code.
 #[derive(Debug)]
 #[repr(C)]
-pub struct VMInterrupts {
+pub struct VMRuntimeLimits {
     /// Current stack limit of the wasm module.
     ///
-    /// This is used to control both stack overflow as well as interrupting wasm
-    /// modules. For more information see `crates/environ/src/cranelift.rs`.
-    pub stack_limit: AtomicUsize,
+    /// For more information see `crates/cranelift/src/lib.rs`.
+    pub stack_limit: UnsafeCell<usize>,
 
     /// Indicator of how much fuel has been consumed and is remaining to
     /// WebAssembly.
@@ -691,28 +681,17 @@ pub struct VMInterrupts {
     pub epoch_deadline: UnsafeCell<u64>,
 }
 
-// The `VMInterrupts` type is a pod-type with no destructor, and we
-// only access `stack_limit` from other threads, so add in these trait
-// impls which are otherwise not available due to the `fuel_consumed`
-// and `epoch_deadline` variables in `VMInterrupts`.
-//
-// Note that users of `fuel_consumed` understand that the unsafety encompasses
-// ensuring that it's only mutated/accessed from one thread dynamically.
-unsafe impl Send for VMInterrupts {}
-unsafe impl Sync for VMInterrupts {}
+// The `VMRuntimeLimits` type is a pod-type with no destructor, and we don't
+// access any fields from other threads, so add in these trait impls which are
+// otherwise not available due to the `fuel_consumed` and `epoch_deadline`
+// variables in `VMRuntimeLimits`.
+unsafe impl Send for VMRuntimeLimits {}
+unsafe impl Sync for VMRuntimeLimits {}
 
-impl VMInterrupts {
-    /// Flag that an interrupt should occur
-    pub fn interrupt(&self) {
-        self.stack_limit
-            .store(wasmtime_environ::INTERRUPTED, SeqCst);
-    }
-}
-
-impl Default for VMInterrupts {
-    fn default() -> VMInterrupts {
-        VMInterrupts {
-            stack_limit: AtomicUsize::new(usize::max_value()),
+impl Default for VMRuntimeLimits {
+    fn default() -> VMRuntimeLimits {
+        VMRuntimeLimits {
+            stack_limit: UnsafeCell::new(usize::max_value()),
             fuel_consumed: UnsafeCell::new(0),
             epoch_deadline: UnsafeCell::new(0),
         }
@@ -720,19 +699,27 @@ impl Default for VMInterrupts {
 }
 
 #[cfg(test)]
-mod test_vminterrupts {
-    use super::VMInterrupts;
+mod test_vmruntime_limits {
+    use super::VMRuntimeLimits;
     use memoffset::offset_of;
     use std::mem::size_of;
     use wasmtime_environ::{Module, VMOffsets};
 
     #[test]
-    fn check_vminterrupts_interrupted_offset() {
+    fn field_offsets() {
         let module = Module::new();
         let offsets = VMOffsets::new(size_of::<*mut u8>() as u8, &module);
         assert_eq!(
-            offset_of!(VMInterrupts, stack_limit),
-            usize::from(offsets.vminterrupts_stack_limit())
+            offset_of!(VMRuntimeLimits, stack_limit),
+            usize::from(offsets.vmruntime_limits_stack_limit())
+        );
+        assert_eq!(
+            offset_of!(VMRuntimeLimits, fuel_consumed),
+            usize::from(offsets.vmruntime_limits_fuel_consumed())
+        );
+        assert_eq!(
+            offset_of!(VMRuntimeLimits, epoch_deadline),
+            usize::from(offsets.vmruntime_limits_epoch_deadline())
         );
     }
 }
@@ -791,16 +778,81 @@ impl VMContext {
 /// This is provided for use with the `Func::new_unchecked` and
 /// `Func::call_unchecked` APIs. In general it's unlikely you should be using
 /// this from Rust, rather using APIs like `Func::wrap` and `TypedFunc::call`.
+///
+/// This is notably an "unsafe" way to work with `Val` and it's recommended to
+/// instead use `Val` where possible. An important note about this union is that
+/// fields are all stored in little-endian format, regardless of the endianness
+/// of the host system.
 #[allow(missing_docs)]
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub union ValRaw {
+    /// A WebAssembly `i32` value.
+    ///
+    /// Note that the payload here is a Rust `i32` but the WebAssembly `i32`
+    /// type does not assign an interpretation of the upper bit as either signed
+    /// or unsigned. The Rust type `i32` is simply chosen for convenience.
+    ///
+    /// This value is always stored in a little-endian format.
     pub i32: i32,
+
+    /// A WebAssembly `i64` value.
+    ///
+    /// Note that the payload here is a Rust `i64` but the WebAssembly `i64`
+    /// type does not assign an interpretation of the upper bit as either signed
+    /// or unsigned. The Rust type `i64` is simply chosen for convenience.
+    ///
+    /// This value is always stored in a little-endian format.
     pub i64: i64,
+
+    /// A WebAssembly `f32` value.
+    ///
+    /// Note that the payload here is a Rust `u32`. This is to allow passing any
+    /// representation of NaN into WebAssembly without risk of changing NaN
+    /// payload bits as its gets passed around the system. Otherwise though this
+    /// `u32` value is the return value of `f32::to_bits` in Rust.
+    ///
+    /// This value is always stored in a little-endian format.
     pub f32: u32,
+
+    /// A WebAssembly `f64` value.
+    ///
+    /// Note that the payload here is a Rust `u64`. This is to allow passing any
+    /// representation of NaN into WebAssembly without risk of changing NaN
+    /// payload bits as its gets passed around the system. Otherwise though this
+    /// `u64` value is the return value of `f64::to_bits` in Rust.
+    ///
+    /// This value is always stored in a little-endian format.
     pub f64: u64,
+
+    /// A WebAssembly `v128` value.
+    ///
+    /// The payload here is a Rust `u128` which has the same number of bits but
+    /// note that `v128` in WebAssembly is often considered a vector type such
+    /// as `i32x4` or `f64x2`. This means that the actual interpretation of the
+    /// underlying bits is left up to the instructions which consume this value.
+    ///
+    /// This value is always stored in a little-endian format.
     pub v128: u128,
+
+    /// A WebAssembly `funcref` value.
+    ///
+    /// The payload here is a pointer which is runtime-defined. This is one of
+    /// the main points of unsafety about the `ValRaw` type as the validity of
+    /// the pointer here is not easily verified and must be preserved by
+    /// carefully calling the correct functions throughout the runtime.
+    ///
+    /// This value is always stored in a little-endian format.
     pub funcref: usize,
+
+    /// A WebAssembly `externref` value.
+    ///
+    /// The payload here is a pointer which is runtime-defined. This is one of
+    /// the main points of unsafety about the `ValRaw` type as the validity of
+    /// the pointer here is not easily verified and must be preserved by
+    /// carefully calling the correct functions throughout the runtime.
+    ///
+    /// This value is always stored in a little-endian format.
     pub externref: usize,
 }
 

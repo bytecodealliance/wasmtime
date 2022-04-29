@@ -7,21 +7,17 @@ block0(v0: f64):
     return v1
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 9)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   movabsq $9223372036854775807, %rsi
-;   Inst 3:   movq    %rsi, %xmm1
-;   Inst 4:   andpd   %xmm0, %xmm1
-;   Inst 5:   movaps  %xmm1, %xmm0
-;   Inst 6:   movq    %rbp, %rsp
-;   Inst 7:   popq    %rbp
-;   Inst 8:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movdqa  %xmm0, %xmm5
+;   movabsq $9223372036854775807, %rdx
+;   movq    %rdx, %xmm0
+;   movdqa  %xmm5, %xmm7
+;   andpd   %xmm0, %xmm0, %xmm7
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %f(i64) -> f64 {
 block0(v0: i64):
@@ -30,20 +26,14 @@ block0(v0: i64):
     return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 10)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   movsd   0(%rdi), %xmm0
-;   Inst 3:   movabsq $9223372036854775807, %rsi
-;   Inst 4:   movq    %rsi, %xmm1
-;   Inst 5:   andpd   %xmm0, %xmm1
-;   Inst 6:   movaps  %xmm1, %xmm0
-;   Inst 7:   movq    %rbp, %rsp
-;   Inst 8:   popq    %rbp
-;   Inst 9:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movsd   0(%rdi), %xmm5
+;   movabsq $9223372036854775807, %r8
+;   movq    %r8, %xmm0
+;   andpd   %xmm0, %xmm0, %xmm5
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 

@@ -1,4 +1,4 @@
-test compile
+test compile precise-output
 set avoid_div_traps=1
 target s390x
 
@@ -12,16 +12,17 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-; check:  lgr %r1, %r2
-; nextln: cgite %r3, 0
-; nextln: llihf %r2, 2147483647
-; nextln: iilf %r2, 4294967295
-; nextln: xgr %r2, %r1
-; nextln: ngr %r2, %r3
-; nextln: cgite %r2, -1
-; nextln: dsgr %r0, %r3
-; nextln: lgr %r2, %r1
-; nextln: br %r14
+; block0:
+;   lgr %r1, %r2
+;   cgite %r3, 0
+;   llihf %r5, 2147483647
+;   iilf %r5, 4294967295
+;   xgrk %r4, %r5, %r1
+;   ngrk %r2, %r4, %r3
+;   cgite %r2, -1
+;   dsgr %r0, %r3
+;   lgr %r2, %r1
+;   br %r14
 
 function %sdiv_i64_imm(i64) -> i64 {
 block0(v0: i64):
@@ -30,11 +31,12 @@ block0(v0: i64):
   return v2
 }
 
-; check:  lgr %r1, %r2
-; nextln: lghi %r2, 2
-; nextln: dsgr %r0, %r2
-; nextln: lgr %r2, %r1
-; nextln: br %r14
+; block0:
+;   lgr %r1, %r2
+;   lghi %r2, 2
+;   dsgr %r0, %r2
+;   lgr %r2, %r1
+;   br %r14
 
 function %sdiv_i32(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
@@ -42,15 +44,16 @@ block0(v0: i32, v1: i32):
   return v2
 }
 
-; check:  lgfr %r1, %r2
-; nextln: cite %r3, 0
-; nextln: iilf %r2, 2147483647
-; nextln: xr %r2, %r1
-; nextln: nr %r2, %r3
-; nextln: cite %r2, -1
-; nextln: dsgfr %r0, %r3
-; nextln: lr %r2, %r1
-; nextln: br %r14
+; block0:
+;   lgfr %r1, %r2
+;   cite %r3, 0
+;   iilf %r5, 2147483647
+;   xrk %r4, %r5, %r1
+;   nrk %r5, %r4, %r3
+;   cite %r5, -1
+;   dsgfr %r0, %r3
+;   lgr %r2, %r1
+;   br %r14
 
 function %sdiv_i32_imm(i32) -> i32 {
 block0(v0: i32):
@@ -59,11 +62,12 @@ block0(v0: i32):
   return v2
 }
 
-; check:  lgfr %r1, %r2
-; nextln: lhi %r2, 2
-; nextln: dsgfr %r0, %r2
-; nextln: lr %r2, %r1
-; nextln: br %r14
+; block0:
+;   lgfr %r1, %r2
+;   lhi %r2, 2
+;   dsgfr %r0, %r2
+;   lgr %r2, %r1
+;   br %r14
 
 function %sdiv_i16(i16, i16) -> i16 {
 block0(v0: i16, v1: i16):
@@ -71,16 +75,17 @@ block0(v0: i16, v1: i16):
   return v2
 }
 
-; check:  lghr %r1, %r2
-; nextln: lhr %r2, %r3
-; nextln: cite %r2, 0
-; nextln: lhi %r3, 32767
-; nextln: xr %r3, %r1
-; nextln: nr %r3, %r2
-; nextln: cite %r3, -1
-; nextln: dsgfr %r0, %r2
-; nextln: lr %r2, %r1
-; nextln: br %r14
+; block0:
+;   lghr %r1, %r2
+;   lhr %r4, %r3
+;   cite %r4, 0
+;   lhi %r3, 32767
+;   xrk %r5, %r3, %r1
+;   nrk %r3, %r5, %r4
+;   cite %r3, -1
+;   dsgfr %r0, %r4
+;   lgr %r2, %r1
+;   br %r14
 
 function %sdiv_i16_imm(i16) -> i16 {
 block0(v0: i16):
@@ -89,11 +94,12 @@ block0(v0: i16):
   return v2
 }
 
-; check:  lghr %r1, %r2
-; nextln: lhi %r2, 2
-; nextln: dsgfr %r0, %r2
-; nextln: lr %r2, %r1
-; nextln: br %r14
+; block0:
+;   lghr %r1, %r2
+;   lhi %r2, 2
+;   dsgfr %r0, %r2
+;   lgr %r2, %r1
+;   br %r14
 
 function %sdiv_i8(i8, i8) -> i8 {
 block0(v0: i8, v1: i8):
@@ -101,16 +107,17 @@ block0(v0: i8, v1: i8):
   return v2
 }
 
-; check:  lgbr %r1, %r2
-; nextln: lbr %r2, %r3
-; nextln: cite %r2, 0
-; nextln: lhi %r3, 127
-; nextln: xr %r3, %r1
-; nextln: nr %r3, %r2
-; nextln: cite %r3, -1
-; nextln: dsgfr %r0, %r2
-; nextln: lr %r2, %r1
-; nextln: br %r14
+; block0:
+;   lgbr %r1, %r2
+;   lbr %r4, %r3
+;   cite %r4, 0
+;   lhi %r3, 127
+;   xrk %r5, %r3, %r1
+;   nrk %r3, %r5, %r4
+;   cite %r3, -1
+;   dsgfr %r0, %r4
+;   lgr %r2, %r1
+;   br %r14
 
 function %sdiv_i8_imm(i8) -> i8 {
 block0(v0: i8):
@@ -119,15 +126,12 @@ block0(v0: i8):
   return v2
 }
 
-; check:  lgbr %r1, %r2
-; nextln: lhi %r2, 2
-; nextln: dsgfr %r0, %r2
-; nextln: lr %r2, %r1
-; nextln: br %r14
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; UDIV
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; block0:
+;   lgbr %r1, %r2
+;   lhi %r2, 2
+;   dsgfr %r0, %r2
+;   lgr %r2, %r1
+;   br %r14
 
 function %udiv_i64(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -135,12 +139,13 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-; check:  lghi %r0, 0
-; nextln: lgr %r1, %r2
-; nextln: cgite %r3, 0
-; nextln: dlgr %r0, %r3
-; nextln: lgr %r2, %r1
-; nextln: br %r14
+; block0:
+;   lghi %r0, 0
+;   lgr %r1, %r2
+;   cgite %r3, 0
+;   dlgr %r0, %r3
+;   lgr %r2, %r1
+;   br %r14
 
 function %udiv_i64_imm(i64) -> i64 {
 block0(v0: i64):
@@ -149,12 +154,13 @@ block0(v0: i64):
   return v2
 }
 
-; check:  lghi %r0, 0
-; nextln: lgr %r1, %r2
-; nextln: lghi %r2, 2
-; nextln: dlgr %r0, %r2
-; nextln: lgr %r2, %r1
-; nextln: br %r14
+; block0:
+;   lghi %r0, 0
+;   lgr %r1, %r2
+;   lghi %r3, 2
+;   dlgr %r0, %r3
+;   lgr %r2, %r1
+;   br %r14
 
 function %udiv_i32(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
@@ -162,12 +168,13 @@ block0(v0: i32, v1: i32):
   return v2
 }
 
-; check:  lhi %r0, 0
-; nextln: lr %r1, %r2
-; nextln: cite %r3, 0
-; nextln: dlr %r0, %r3
-; nextln: lr %r2, %r1
-; nextln: br %r14
+; block0:
+;   lhi %r0, 0
+;   lgr %r1, %r2
+;   cite %r3, 0
+;   dlr %r0, %r3
+;   lgr %r2, %r1
+;   br %r14
 
 function %udiv_i32_imm(i32) -> i32 {
 block0(v0: i32):
@@ -176,12 +183,13 @@ block0(v0: i32):
   return v2
 }
 
-; check:  lhi %r0, 0
-; nextln: lr %r1, %r2
-; nextln: lhi %r2, 2
-; nextln: dlr %r0, %r2
-; nextln: lr %r2, %r1
-; nextln: br %r14
+; block0:
+;   lhi %r0, 0
+;   lgr %r1, %r2
+;   lhi %r3, 2
+;   dlr %r0, %r3
+;   lgr %r2, %r1
+;   br %r14
 
 function %udiv_i16(i16, i16) -> i16 {
 block0(v0: i16, v1: i16):
@@ -189,13 +197,14 @@ block0(v0: i16, v1: i16):
   return v2
 }
 
-; check:  lhi %r0, 0
-; nextln: llhr %r1, %r2
-; nextln: llhr %r2, %r3
-; nextln: cite %r2, 0
-; nextln: dlr %r0, %r2
-; nextln: lr %r2, %r1
-; nextln: br %r14
+; block0:
+;   lhi %r0, 0
+;   llhr %r1, %r2
+;   llhr %r5, %r3
+;   cite %r5, 0
+;   dlr %r0, %r5
+;   lgr %r2, %r1
+;   br %r14
 
 function %udiv_i16_imm(i16) -> i16 {
 block0(v0: i16):
@@ -204,12 +213,13 @@ block0(v0: i16):
   return v2
 }
 
-; check:  lhi %r0, 0
-; nextln: llhr %r1, %r2
-; nextln: lhi %r2, 2
-; nextln: dlr %r0, %r2
-; nextln: lr %r2, %r1
-; nextln: br %r14
+; block0:
+;   lhi %r0, 0
+;   llhr %r1, %r2
+;   lhi %r3, 2
+;   dlr %r0, %r3
+;   lgr %r2, %r1
+;   br %r14
 
 function %udiv_i8(i8, i8) -> i8 {
 block0(v0: i8, v1: i8):
@@ -217,13 +227,14 @@ block0(v0: i8, v1: i8):
   return v2
 }
 
-; check:  lhi %r0, 0
-; nextln: llcr %r1, %r2
-; nextln: llcr %r2, %r3
-; nextln: cite %r2, 0
-; nextln: dlr %r0, %r2
-; nextln: lr %r2, %r1
-; nextln: br %r14
+; block0:
+;   lhi %r0, 0
+;   llcr %r1, %r2
+;   llcr %r5, %r3
+;   cite %r5, 0
+;   dlr %r0, %r5
+;   lgr %r2, %r1
+;   br %r14
 
 function %udiv_i8_imm(i8) -> i8 {
 block0(v0: i8):
@@ -232,16 +243,13 @@ block0(v0: i8):
   return v2
 }
 
-; check:  lhi %r0, 0
-; nextln: llcr %r1, %r2
-; nextln: lhi %r2, 2
-; nextln: dlr %r0, %r2
-; nextln: lr %r2, %r1
-; nextln: br %r14
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; SREM
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; block0:
+;   lhi %r0, 0
+;   llcr %r1, %r2
+;   lhi %r3, 2
+;   dlr %r0, %r3
+;   lgr %r2, %r1
+;   br %r14
 
 function %srem_i64(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -249,13 +257,14 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-; check:  lgr %r1, %r2
-; nextln: cgite %r3, 0
-; nextln: cghi %r3, -1
-; nextln: locghie %r1, 0
-; nextln: dsgr %r0, %r3
-; nextln: lgr %r2, %r0
-; nextln: br %r14
+; block0:
+;   lgr %r1, %r2
+;   cgite %r3, 0
+;   cghi %r3, -1
+;   locghie %r1, 0
+;   dsgr %r0, %r3
+;   lgr %r2, %r0
+;   br %r14
 
 function %srem_i32(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
@@ -263,11 +272,12 @@ block0(v0: i32, v1: i32):
   return v2
 }
 
-; check:  lgfr %r1, %r2
-; nextln: cite %r3, 0
-; nextln: dsgfr %r0, %r3
-; nextln: lr %r2, %r0
-; nextln: br %r14
+; block0:
+;   lgfr %r1, %r2
+;   cite %r3, 0
+;   dsgfr %r0, %r3
+;   lgr %r2, %r0
+;   br %r14
 
 function %srem_i16(i16, i16) -> i16 {
 block0(v0: i16, v1: i16):
@@ -275,12 +285,13 @@ block0(v0: i16, v1: i16):
   return v2
 }
 
-; check:  lghr %r1, %r2
-; nextln: lhr %r2, %r3
-; nextln: cite %r2, 0
-; nextln: dsgfr %r0, %r2
-; nextln: lr %r2, %r0
-; nextln: br %r14
+; block0:
+;   lghr %r1, %r2
+;   lhr %r4, %r3
+;   cite %r4, 0
+;   dsgfr %r0, %r4
+;   lgr %r2, %r0
+;   br %r14
 
 function %srem_i8(i8, i8) -> i8 {
 block0(v0: i8, v1: i8):
@@ -288,16 +299,13 @@ block0(v0: i8, v1: i8):
   return v2
 }
 
-; check:  lgbr %r1, %r2
-; nextln: lbr %r2, %r3
-; nextln: cite %r2, 0
-; nextln: dsgfr %r0, %r2
-; nextln: lr %r2, %r0
-; nextln: br %r14
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; UREM
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; block0:
+;   lgbr %r1, %r2
+;   lbr %r4, %r3
+;   cite %r4, 0
+;   dsgfr %r0, %r4
+;   lgr %r2, %r0
+;   br %r14
 
 function %urem_i64(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -305,12 +313,13 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-; check:  lghi %r0, 0
-; nextln: lgr %r1, %r2
-; nextln: cgite %r3, 0
-; nextln: dlgr %r0, %r3
-; nextln: lgr %r2, %r0
-; nextln: br %r14
+; block0:
+;   lghi %r0, 0
+;   lgr %r1, %r2
+;   cgite %r3, 0
+;   dlgr %r0, %r3
+;   lgr %r2, %r0
+;   br %r14
 
 function %urem_i32(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
@@ -318,12 +327,13 @@ block0(v0: i32, v1: i32):
   return v2
 }
 
-; check:  lhi %r0, 0
-; nextln: lr %r1, %r2
-; nextln: cite %r3, 0
-; nextln: dlr %r0, %r3
-; nextln: lr %r2, %r0
-; nextln: br %r14
+; block0:
+;   lhi %r0, 0
+;   lgr %r1, %r2
+;   cite %r3, 0
+;   dlr %r0, %r3
+;   lgr %r2, %r0
+;   br %r14
 
 function %urem_i16(i16, i16) -> i16 {
 block0(v0: i16, v1: i16):
@@ -331,13 +341,14 @@ block0(v0: i16, v1: i16):
   return v2
 }
 
-; check:  lhi %r0, 0
-; nextln: llhr %r1, %r2
-; nextln: llhr %r2, %r3
-; nextln: cite %r2, 0
-; nextln: dlr %r0, %r2
-; nextln: lr %r2, %r0
-; nextln: br %r14
+; block0:
+;   lhi %r0, 0
+;   llhr %r1, %r2
+;   llhr %r5, %r3
+;   cite %r5, 0
+;   dlr %r0, %r5
+;   lgr %r2, %r0
+;   br %r14
 
 function %urem_i8(i8, i8) -> i8 {
 block0(v0: i8, v1: i8):
@@ -345,11 +356,12 @@ block0(v0: i8, v1: i8):
   return v2
 }
 
-; check:  lhi %r0, 0
-; nextln: llcr %r1, %r2
-; nextln: llcr %r2, %r3
-; nextln: cite %r2, 0
-; nextln: dlr %r0, %r2
-; nextln: lr %r2, %r0
-; nextln: br %r14
+; block0:
+;   lhi %r0, 0
+;   llcr %r1, %r2
+;   llcr %r5, %r3
+;   cite %r5, 0
+;   dlr %r0, %r5
+;   lgr %r2, %r0
+;   br %r14
 

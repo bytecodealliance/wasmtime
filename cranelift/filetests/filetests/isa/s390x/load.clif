@@ -1,4 +1,4 @@
-test compile
+test compile precise-output
 target s390x
 
 function %load_i64(i64) -> i64 {
@@ -7,8 +7,9 @@ block0(v0: i64):
   return v1
 }
 
-; check:  lg %r2, 0(%r2)
-; nextln: br %r14
+; block0:
+;   lg %r2, 0(%r2)
+;   br %r14
 
 function %load_i64_sym() -> i64 {
   gv0 = symbol colocated %sym
@@ -18,8 +19,9 @@ block0:
   return v1
 }
 
-; check:  lgrl %r2, %sym + 0
-; nextln: br %r14
+; block0:
+;   lgrl %r2, %sym + 0
+;   br %r14
 
 function %uload8_i64(i64) -> i64 {
 block0(v0: i64):
@@ -27,8 +29,9 @@ block0(v0: i64):
   return v1
 }
 
-; check:  llgc %r2, 0(%r2)
-; nextln: br %r14
+; block0:
+;   llgc %r2, 0(%r2)
+;   br %r14
 
 function %sload8_i64(i64) -> i64 {
 block0(v0: i64):
@@ -36,8 +39,9 @@ block0(v0: i64):
   return v1
 }
 
-; check:  lgb %r2, 0(%r2)
-; nextln: br %r14
+; block0:
+;   lgb %r2, 0(%r2)
+;   br %r14
 
 function %uload16_i64(i64) -> i64 {
 block0(v0: i64):
@@ -45,8 +49,9 @@ block0(v0: i64):
   return v1
 }
 
-; check:  llgh %r2, 0(%r2)
-; nextln: br %r14
+; block0:
+;   llgh %r2, 0(%r2)
+;   br %r14
 
 function %uload16_i64_sym() -> i64 {
   gv0 = symbol colocated %sym
@@ -56,8 +61,9 @@ block0:
   return v1
 }
 
-; check:  llghrl %r2, %sym + 0
-; nextln: br %r14
+; block0:
+;   llghrl %r2, %sym + 0
+;   br %r14
 
 function %sload16_i64(i64) -> i64 {
 block0(v0: i64):
@@ -65,8 +71,9 @@ block0(v0: i64):
   return v1
 }
 
-; check:  lgh %r2, 0(%r2)
-; nextln: br %r14
+; block0:
+;   lgh %r2, 0(%r2)
+;   br %r14
 
 function %sload16_i64_sym() -> i64 {
   gv0 = symbol colocated %sym
@@ -76,8 +83,9 @@ block0:
   return v1
 }
 
-; check:  lghrl %r2, %sym + 0
-; nextln: br %r14
+; block0:
+;   lghrl %r2, %sym + 0
+;   br %r14
 
 function %uload32_i64(i64) -> i64 {
 block0(v0: i64):
@@ -85,8 +93,9 @@ block0(v0: i64):
   return v1
 }
 
-; check:  llgf %r2, 0(%r2)
-; nextln: br %r14
+; block0:
+;   llgf %r2, 0(%r2)
+;   br %r14
 
 function %uload32_i64_sym() -> i64 {
   gv0 = symbol colocated %sym
@@ -96,8 +105,9 @@ block0:
   return v1
 }
 
-; check:  llgfrl %r2, %sym + 0
-; nextln: br %r14
+; block0:
+;   llgfrl %r2, %sym + 0
+;   br %r14
 
 function %sload32_i64(i64) -> i64 {
 block0(v0: i64):
@@ -105,8 +115,9 @@ block0(v0: i64):
   return v1
 }
 
-; check:  lgf %r2, 0(%r2)
-; nextln: br %r14
+; block0:
+;   lgf %r2, 0(%r2)
+;   br %r14
 
 function %sload32_i64_sym() -> i64 {
   gv0 = symbol colocated %sym
@@ -116,8 +127,9 @@ block0:
   return v1
 }
 
-; check:  lgfrl %r2, %sym + 0
-; nextln: br %r14
+; block0:
+;   lgfrl %r2, %sym + 0
+;   br %r14
 
 function %load_i32(i64) -> i32 {
 block0(v0: i64):
@@ -125,8 +137,9 @@ block0(v0: i64):
   return v1
 }
 
-; check:  l %r2, 0(%r2)
-; nextln: br %r14
+; block0:
+;   l %r2, 0(%r2)
+;   br %r14
 
 function %load_i32_sym() -> i32 {
   gv0 = symbol colocated %sym
@@ -136,8 +149,9 @@ block0:
   return v1
 }
 
-; check:  lrl %r2, %sym + 0
-; nextln: br %r14
+; block0:
+;   lrl %r2, %sym + 0
+;   br %r14
 
 function %load_i32_off(i64) -> i32 {
 block0(v0: i64):
@@ -145,8 +159,9 @@ block0(v0: i64):
   return v1
 }
 
-; check:  ly %r2, 4096(%r2)
-; nextln: br %r14
+; block0:
+;   ly %r2, 4096(%r2)
+;   br %r14
 
 function %uload8_i32(i64) -> i32 {
 block0(v0: i64):
@@ -154,8 +169,9 @@ block0(v0: i64):
   return v1
 }
 
-; check:  llc %r2, 0(%r2)
-; nextln: br %r14
+; block0:
+;   llc %r2, 0(%r2)
+;   br %r14
 
 function %sload8_i32(i64) -> i32 {
 block0(v0: i64):
@@ -163,8 +179,9 @@ block0(v0: i64):
   return v1
 }
 
-; check:  lb %r2, 0(%r2)
-; nextln: br %r14
+; block0:
+;   lb %r2, 0(%r2)
+;   br %r14
 
 function %uload16_i32(i64) -> i32 {
 block0(v0: i64):
@@ -172,8 +189,9 @@ block0(v0: i64):
   return v1
 }
 
-; check:  llh %r2, 0(%r2)
-; nextln: br %r14
+; block0:
+;   llh %r2, 0(%r2)
+;   br %r14
 
 function %uload16_i32_sym() -> i32 {
   gv0 = symbol colocated %sym
@@ -183,8 +201,9 @@ block0:
   return v1
 }
 
-; check:  llhrl %r2, %sym + 0
-; nextln: br %r14
+; block0:
+;   llhrl %r2, %sym + 0
+;   br %r14
 
 function %sload16_i32(i64) -> i32 {
 block0(v0: i64):
@@ -192,8 +211,9 @@ block0(v0: i64):
   return v1
 }
 
-; check:  lh %r2, 0(%r2)
-; nextln: br %r14
+; block0:
+;   lh %r2, 0(%r2)
+;   br %r14
 
 function %sload16_i32_off(i64) -> i32 {
 block0(v0: i64):
@@ -201,8 +221,9 @@ block0(v0: i64):
   return v1
 }
 
-; check:  lhy %r2, 4096(%r2)
-; nextln: br %r14
+; block0:
+;   lhy %r2, 4096(%r2)
+;   br %r14
 
 function %sload16_i32_sym() -> i32 {
   gv0 = symbol colocated %sym
@@ -212,8 +233,9 @@ block0:
   return v1
 }
 
-; check:  lhrl %r2, %sym + 0
-; nextln: br %r14
+; block0:
+;   lhrl %r2, %sym + 0
+;   br %r14
 
 function %load_i16(i64) -> i16 {
 block0(v0: i64):
@@ -221,8 +243,9 @@ block0(v0: i64):
   return v1
 }
 
-; check:  llh %r2, 0(%r2)
-; nextln: br %r14
+; block0:
+;   llh %r2, 0(%r2)
+;   br %r14
 
 function %load_i16_sym() -> i16 {
   gv0 = symbol colocated %sym
@@ -232,8 +255,9 @@ block0:
   return v1
 }
 
-; check:  llhrl %r2, %sym + 0
-; nextln: br %r14
+; block0:
+;   llhrl %r2, %sym + 0
+;   br %r14
 
 function %uload8_i16(i64) -> i16 {
 block0(v0: i64):
@@ -241,8 +265,9 @@ block0(v0: i64):
   return v1
 }
 
-; check:  llc %r2, 0(%r2)
-; nextln: br %r14
+; block0:
+;   llc %r2, 0(%r2)
+;   br %r14
 
 function %sload8_i16(i64) -> i16 {
 block0(v0: i64):
@@ -250,8 +275,9 @@ block0(v0: i64):
   return v1
 }
 
-; check:  lb %r2, 0(%r2)
-; nextln: br %r14
+; block0:
+;   lb %r2, 0(%r2)
+;   br %r14
 
 function %load_i8(i64) -> i8 {
 block0(v0: i64):
@@ -259,6 +285,7 @@ block0(v0: i64):
   return v1
 }
 
-; check:  llc %r2, 0(%r2)
-; nextln: br %r14
+; block0:
+;   llc %r2, 0(%r2)
+;   br %r14
 

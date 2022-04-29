@@ -10,21 +10,36 @@ block0(v0: i32, v1: i128, v2: i128):
     return v5
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 11)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   movl    $42, %eax
-;   Inst 3:   cmpl    %eax, %edi
-;   Inst 4:   cmovzq  %rsi, %rcx
-;   Inst 5:   cmovzq  %rdx, %r8
-;   Inst 6:   movq    %rcx, %rax
-;   Inst 7:   movq    %r8, %rdx
-;   Inst 8:   movq    %rbp, %rsp
-;   Inst 9:   popq    %rbp
-;   Inst 10:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   cmpl    $42, %edi
+;   cmovzq  %rsi, %rcx, %rcx
+;   cmovzq  %rdx, %r8, %r8
+;   movq    %rcx, %rax
+;   movq    %r8, %rdx
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %f1(f32, i128, i128) -> i128 {
+block0(v0: f32, v1: i128, v2: i128):
+    v3 = fcmp.f32 eq v0, v0
+    v4 = select.i128 v3, v1, v2
+    return v4
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   ucomiss %xmm0, %xmm0
+;   cmovnzq %rdx, %rdi, %rdi
+;   cmovpq  %rdx, %rdi, %rdi
+;   cmovnzq %rcx, %rsi, %rsi
+;   cmovpq  %rcx, %rsi, %rsi
+;   movq    %rdi, %rax
+;   movq    %rsi, %rdx
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 

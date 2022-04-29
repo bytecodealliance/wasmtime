@@ -1,6 +1,106 @@
-# Wasmtime Releases
+--------------------------------------------------------------------------------
+
+## 0.37.0
+
+Unreleased.
+
+### Added
+
+* Updated Cranelift to use regalloc2, a new register allocator. This should
+  result in ~20% faster compile times, and for programs that suffered from
+  register-allocation pressure before, up to ~20% faster generated code.
+  [#3989](https://github.com/bytecodealliance/wasmtime/pull/3989)
+
+* Pre-built binaries for macOS M1 machines are now available as release
+  artifacts.
+  [#3983](https://github.com/bytecodealliance/wasmtime/pull/3983)
+
+* Copy-on-write images of memory can now be manually initialized for a `Module`
+  with an explicit method call, but it is still not required to call this method
+  and will automatically otherwise happen on the first instantiation.
+  [#3964](https://github.com/bytecodealliance/wasmtime/pull/3964)
+
+### Fixed
+
+* Using `InstancePre::instantiate` or `Linker::instantiate` will now panic as
+  intended when used with an async-configured `Store`.
+  [#3972](https://github.com/bytecodealliance/wasmtime/pull/3972)
+
+### Changed
+
+* The unsafe `ValRaw` type in the `wasmtime` crate now always stores its values
+  in little-endian format instead of the prior native-endian format. Users of
+  `ValRaw` are recommended to audit their existing code for usage to continue
+  working on big-endian platforms.
+  [#4035](https://github.com/bytecodealliance/wasmtime/pull/4035)
+
+### Removed
+
+* Support for `Config::paged_memory_initialization` and the `uffd` crate feature
+  have been removed from the `wasmtime` crate. Users should migrate to using
+  `Config::memory_init_cow` which is more portable and faster at this point.
+  [#4040](https://github.com/bytecodealliance/wasmtime/pull/4040)
 
 --------------------------------------------------------------------------------
+
+## 0.36.0
+
+Released 2022-04-20
+
+### Added
+
+* Support for epoch-based interruption has been added to the C API.
+  [#3925](https://github.com/bytecodealliance/wasmtime/pull/3925)
+
+* Support for disabling libunwind-based backtraces of WebAssembly code at
+  compile time has been added.
+  [#3932](https://github.com/bytecodealliance/wasmtime/pull/3932)
+
+* Async support for call hooks has been added to optionally execute "blocking"
+  work whenever a wasm module is entered or exited relative to the host.
+  [#3876](https://github.com/bytecodealliance/wasmtime/pull/3876)
+
+### Fixed
+
+* Loading a `Module` will now check, at runtime, that the compilation settings
+  enabled in a `Config` are compatible with the native host. For example this
+  ensures that if avx2 is enabled that the host actually has avx2 support.
+  [#3899](https://github.com/bytecodealliance/wasmtime/pull/3899)
+
+### Removed
+
+* Support for `Config::interruptable` and `InterruptHandle` has been removed
+  from the `wasmtime` crate. Users should migrate to using epoch-based
+  interruption instead.
+  [#3925](https://github.com/bytecodealliance/wasmtime/pull/3925)
+
+* The module linking implementation of Wasmtime has been removed to make room
+  for the upcoming support for the component model.
+  [#3958](https://github.com/bytecodealliance/wasmtime/pull/3958)
+
+--------------------------------------------------------------------------------
+
+## 0.35.3
+
+Released 2022-04-11.
+
+### Fixed
+
+* Backported a bugfix for an instruction lowering issue that could cause a
+  regalloc panic due to an undefined register in some cases. No miscompilation
+  was ever possible, but panics would result in a compilation failure.
+  [#4012](https://github.com/bytecodealliance/wasmtime/pull/4012)
+
+--------------------------------------------------------------------------------
+
+## 0.35.2
+
+Released 2022-03-31.
+
+### Security Fixes
+
+* [CVE-2022-24791](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-gwc9-348x-qwv2):
+  Fixed a use after free with `externref`s and epoch interruption.
 
 ## 0.35.1
 
@@ -16,6 +116,14 @@ Released 2022-03-09.
 ## 0.35.0
 
 Released 2022-03-07.
+
+### Added
+
+* The `wasmtime_wasi::add_to_linker` function now allows providing
+  a context object of a custom type instead of `wasmtime_wasi::WasiCtx`,
+  as long as that type implements the required WASI snapshot traits.
+  This allows, for example, wrapping `WasiCtx` into a struct and providing
+  custom implementations for those traits to override the default behaviour.
 
 ### Changed
 
@@ -71,6 +179,15 @@ Released 2022-03-07.
   [#3799](https://github.com/bytecodealliance/wasmtime/pull/3799)
 
 --------------------------------------------------------------------------------
+
+## 0.34.2
+
+Released 2022-03-31.
+
+### Security Fixes
+
+* [CVE-2022-24791](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-gwc9-348x-qwv2):
+  Fixed a use after free with `externref`s and epoch interruption.
 
 ## 0.34.1
 

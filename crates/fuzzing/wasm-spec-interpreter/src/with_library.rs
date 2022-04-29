@@ -59,6 +59,7 @@ mod ocaml_bindings {
             Value::I64(i: OCamlInt64),
             Value::F32(i: OCamlInt32),
             Value::F64(i: OCamlInt64),
+            Value::V128(i: OCamlBytes),
         }
     }
 
@@ -101,6 +102,23 @@ mod tests {
         assert_eq!(
             results,
             Err("Error(_, \"(Isabelle) trap: load\")".to_string())
+        );
+    }
+
+    #[test]
+    fn simd_not() {
+        let module = wat::parse_file("tests/simd_not.wat").unwrap();
+
+        let parameters = Some(vec![Value::V128(vec![
+            0, 255, 0, 0, 255, 0, 0, 0, 0, 255, 0, 0, 0, 0, 0, 0,
+        ])]);
+        let results = interpret(&module, parameters.clone()).unwrap();
+
+        assert_eq!(
+            results,
+            vec![Value::V128(vec![
+                255, 0, 255, 255, 0, 255, 255, 255, 255, 0, 255, 255, 255, 255, 255, 255
+            ])]
         );
     }
 }

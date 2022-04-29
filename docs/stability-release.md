@@ -10,8 +10,9 @@ The high-level summary of Wasmtime's release process is:
 
 Once a month Wasmtime will issue a new major version. This will be issued with a
 semver-major version update, such as 4.0.0 to 5.0.0. The precise schedule of
-Wasmtime's release may fluctuate slightly depending on public holidays and
-availability of release resources, but the general cadence will be once-a-month.
+Wasmtime's release is currently an automated PR is sent to bump the version on
+the 5th of every month and a release is made when the PR is merged. The PR
+typically gets merged within a few days.
 
 Each major release of Wasmtime reserves the right to break both behavior and API
 backwards-compatibility. This is not expected to happen frequently, however, and
@@ -27,11 +28,17 @@ any breaking change will follow these criteria:
   feedback about embeddings. Release notes will clearly indicate if any major
   breaking changes through accepted RFCs are included in a release.
 
-Patch releases of Wasmtime will only be issued for security and correctness
-issues for on-by-default behavior in the previous releases. If Wasmtime is
-currently at version 5.0.0 then 5.0.1 and 4.0.1 will be issued as patch releases
-if a bug is found. Patch releases are guaranteed to maintain API and behavior
-backwards-compatibility and are intended to be trivial for users to upgrade to.
+Patch releases of Wasmtime will only be issued for security and critical
+correctness issues for on-by-default behavior in the previous releases. If
+Wasmtime is currently at version 5.0.0 then 5.0.1 and 4.0.1 will be issued as
+patch releases if a bug is found. Patch releases are guaranteed to maintain API
+and behavior backwards-compatibility and are intended to be trivial for users to
+upgrade to.
+
+Patch releases for Cranelift will be made for any miscompilations found by
+Cranelift, even those that Wasmtime itself may not exercise. Due to the current
+release process a patch release for Cranelift will issue a patch release for
+Wasmtime as well.
 
 ## What's released?
 

@@ -11,6 +11,8 @@
 1. Announcements
     1. _Submit a PR to add your announcement here_
 1. Other agenda items
+    1. Wasmtime release fuzzing strategy
+       - see [#3955](https://github.com/bytecodealliance/wasmtime/pull/3955) for more context
     1. _Submit a PR to add your item here_
 
 ## Notes

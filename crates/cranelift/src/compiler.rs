@@ -129,7 +129,7 @@ impl wasmtime_environ::Compiler for Compiler {
         // needed by `ir::Function`.
         //
         // Otherwise our stack limit is specially calculated from the vmctx
-        // argument, where we need to load the `*const VMInterrupts`
+        // argument, where we need to load the `*const VMRuntimeLimits`
         // pointer, and then from that pointer we need to load the stack
         // limit itself. Note that manual register allocation is needed here
         // too due to how late in the process this codegen happens.
@@ -141,7 +141,7 @@ impl wasmtime_environ::Compiler for Compiler {
             .create_global_value(ir::GlobalValueData::VMContext);
         let interrupts_ptr = context.func.create_global_value(ir::GlobalValueData::Load {
             base: vmctx,
-            offset: i32::try_from(func_env.offsets.vmctx_interrupts())
+            offset: i32::try_from(func_env.offsets.vmctx_runtime_limits())
                 .unwrap()
                 .into(),
             global_type: isa.pointer_type(),
@@ -149,7 +149,7 @@ impl wasmtime_environ::Compiler for Compiler {
         });
         let stack_limit = context.func.create_global_value(ir::GlobalValueData::Load {
             base: interrupts_ptr,
-            offset: i32::try_from(func_env.offsets.vminterrupts_stack_limit())
+            offset: i32::try_from(func_env.offsets.vmruntime_limits_stack_limit())
                 .unwrap()
                 .into(),
             global_type: isa.pointer_type(),
@@ -188,9 +188,13 @@ impl wasmtime_environ::Compiler for Compiler {
 
         let stack_maps = mach_stack_maps_to_stack_maps(result.buffer.stack_maps());
 
-        let unwind_info = context
-            .create_unwind_info(isa)
-            .map_err(|error| CompileError::Codegen(pretty_error(&context.func, error)))?;
+        let unwind_info = if isa.flags().unwind_info() {
+            context
+                .create_unwind_info(isa)
+                .map_err(|error| CompileError::Codegen(pretty_error(&context.func, error)))?
+        } else {
+            None
+        };
 
         let address_transform =
             self.get_function_address_map(&context, &input, code_buf.len() as u32, tunables);
@@ -252,7 +256,7 @@ impl wasmtime_environ::Compiler for Compiler {
         let compiled_trampolines = translation
             .exported_signatures
             .iter()
-            .map(|i| self.host_to_wasm_trampoline(&types.wasm_signatures[*i]))
+            .map(|i| self.host_to_wasm_trampoline(&types[*i]))
             .collect::<Result<Vec<_>, _>>()?;
 
         let mut func_starts = Vec::with_capacity(funcs.len());
@@ -423,7 +427,8 @@ impl Compiler {
         };
 
         // Load the argument values out of `values_vec`.
-        let mflags = ir::MemFlags::trusted();
+        let mut mflags = ir::MemFlags::trusted();
+        mflags.set_endianness(ir::Endianness::Little);
         let callee_args = wasm_signature
             .params
             .iter()
@@ -454,7 +459,6 @@ impl Compiler {
         let results = builder.func.dfg.inst_results(call).to_vec();
 
         // Store the return values into `values_vec`.
-        let mflags = ir::MemFlags::trusted();
         for (i, r) in results.iter().enumerate() {
             builder
                 .ins()
@@ -503,7 +507,8 @@ impl Compiler {
         builder.seal_block(block0);
 
         let values_vec_ptr_val = builder.ins().stack_addr(pointer_type, ss, 0);
-        let mflags = MemFlags::trusted();
+        let mut mflags = MemFlags::trusted();
+        mflags.set_endianness(ir::Endianness::Little);
         for i in 0..ty.params().len() {
             let val = builder.func.dfg.block_params(block0)[i + 2];
             builder
@@ -524,7 +529,6 @@ impl Compiler {
             .ins()
             .call_indirect(new_sig, callee_value, &callee_args);
 
-        let mflags = MemFlags::trusted();
         let mut results = Vec::new();
         for (i, r) in ty.returns().iter().enumerate() {
             let load = builder.ins().load(
@@ -566,9 +570,13 @@ impl Compiler {
             .relocs()
             .is_empty());
 
-        let unwind_info = context
-            .create_unwind_info(isa)
-            .map_err(|error| CompileError::Codegen(pretty_error(&context.func, error)))?;
+        let unwind_info = if isa.flags().unwind_info() {
+            context
+                .create_unwind_info(isa)
+                .map_err(|error| CompileError::Codegen(pretty_error(&context.func, error)))?
+        } else {
+            None
+        };
 
         Ok(CompiledFunction {
             body: code_buf,

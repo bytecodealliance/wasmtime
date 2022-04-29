@@ -7,13 +7,8 @@ block0:
   trap user0
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 1)
-;   Inst 0:   udf
-; }}
+; block0:
+;   udf
 
 function %g(i64) {
 block0(v0: i64):
@@ -23,15 +18,10 @@ block0(v0: i64):
   return
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 3)
-;   Inst 0:   subs xzr, x0, #42
-;   Inst 1:   b.ne 8 ; udf
-;   Inst 2:   ret
-; }}
+; block0:
+;   subs xzr, x0, #42
+;   b.ne 8 ; udf
+;   ret
 
 function %h() {
 block0:
@@ -39,12 +29,7 @@ block0:
   return
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 2)
-;   Inst 0:   brk #0
-;   Inst 1:   ret
-; }}
+; block0:
+;   brk #0
+;   ret
 

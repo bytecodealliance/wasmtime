@@ -154,7 +154,7 @@ WASM_API_EXTERN bool wasmtime_context_fuel_consumed(const wasmtime_context_t *co
 WASM_API_EXTERN wasmtime_error_t *wasmtime_context_consume_fuel(wasmtime_context_t *context, uint64_t fuel, uint64_t *remaining);
 
 /**
- * \brief Configres WASI state within the specified store.
+ * \brief Configures WASI state within the specified store.
  *
  * This function is required if #wasmtime_linker_define_wasi is called. This
  * will configure the WASI state for instances defined within this store to the
@@ -167,47 +167,15 @@ WASM_API_EXTERN wasmtime_error_t *wasmtime_context_consume_fuel(wasmtime_context
 WASM_API_EXTERN wasmtime_error_t *wasmtime_context_set_wasi(wasmtime_context_t *context, wasi_config_t *wasi);
 
 /**
- * \typedef wasmtime_interrupt_handle_t
- * \brief Convenience alias for #wasmtime_interrupt_handle_t
+ * \brief Configures the relative deadline at which point WebAssembly code will
+ * trap.
  *
- * \struct wasmtime_interrupt_handle_t
- * \brief A handle used to interrupt executing WebAssembly code.
+ * This function configures the store-local epoch deadline after which point
+ * WebAssembly code will trap.
  *
- * This structure is an opaque handle that represents a handle to a store. This
- * handle can be used to remotely (from another thread) interrupt currently
- * executing WebAssembly code.
- *
- * This structure is safe to share from multiple threads.
+ * See also #wasmtime_config_epoch_interruption_set.
  */
-typedef struct wasmtime_interrupt_handle wasmtime_interrupt_handle_t;
-
-/**
- * \brief Creates a new interrupt handle to interrupt executing WebAssembly from
- * the provided store.
- *
- * There are a number of caveats about how interrupt is handled in Wasmtime. For
- * more information see the [Rust
- * documentation](https://bytecodealliance.github.io/wasmtime/api/wasmtime/struct.Store.html#method.interrupt_handle).
- *
- * This function returns `NULL` if the store's configuration does not have
- * interrupts enabled. See #wasmtime_config_interruptable_set.
- */
-WASM_API_EXTERN wasmtime_interrupt_handle_t *wasmtime_interrupt_handle_new(wasmtime_context_t *context);
-
-/**
- * \brief Requests that WebAssembly code running in the store attached to this
- * interrupt handle is interrupted.
- *
- * For more information about interrupts see #wasmtime_interrupt_handle_new.
- *
- * Note that this is safe to call from any thread.
- */
-WASM_API_EXTERN void wasmtime_interrupt_handle_interrupt(wasmtime_interrupt_handle_t *handle);
-
-/**
- * \brief Deletes an interrupt handle.
- */
-WASM_API_EXTERN void wasmtime_interrupt_handle_delete(wasmtime_interrupt_handle_t *handle);
+WASM_API_EXTERN void wasmtime_context_set_epoch_deadline(wasmtime_context_t *context, uint64_t ticks_beyond_current);
 
 #ifdef __cplusplus
 }  // extern "C"
