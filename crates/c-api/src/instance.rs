@@ -1,41 +1,21 @@
 use crate::{
     wasm_extern_t, wasm_extern_vec_t, wasm_module_t, wasm_store_t, wasm_trap_t, wasmtime_error_t,
-    wasmtime_extern_t, wasmtime_instancetype_t, wasmtime_module_t, CStoreContext, CStoreContextMut,
-    StoreRef,
+    wasmtime_extern_t, wasmtime_module_t, CStoreContextMut, StoreRef,
 };
 use std::mem::MaybeUninit;
-use wasmtime::{Extern, Instance, Trap};
+use wasmtime::{Instance, Trap};
 
 #[derive(Clone)]
-#[repr(transparent)]
 pub struct wasm_instance_t {
-    ext: wasm_extern_t,
+    store: StoreRef,
+    instance: Instance,
 }
 
 wasmtime_c_api_macros::declare_ref!(wasm_instance_t);
 
 impl wasm_instance_t {
     pub(crate) fn new(store: StoreRef, instance: Instance) -> wasm_instance_t {
-        wasm_instance_t {
-            ext: wasm_extern_t {
-                store: store,
-                which: instance.into(),
-            },
-        }
-    }
-
-    pub(crate) fn try_from(e: &wasm_extern_t) -> Option<&wasm_instance_t> {
-        match &e.which {
-            Extern::Instance(_) => Some(unsafe { &*(e as *const _ as *const _) }),
-            _ => None,
-        }
-    }
-
-    pub(crate) fn instance(&self) -> Instance {
-        match self.ext.which {
-            Extern::Instance(i) => i,
-            _ => unreachable!(),
-        }
+        wasm_instance_t { store, instance }
     }
 }
 
@@ -54,7 +34,7 @@ pub unsafe extern "C" fn wasm_instance_new(
             None => None,
         })
         .collect::<Vec<_>>();
-    match Instance::new(store.store.context_mut(), wasm_module.module(), &imports) {
+    match Instance::new(store.store.context_mut(), &wasm_module.module, &imports) {
         Ok(instance) => Some(Box::new(wasm_instance_t::new(
             store.store.clone(),
             instance,
@@ -69,20 +49,15 @@ pub unsafe extern "C" fn wasm_instance_new(
 }
 
 #[no_mangle]
-pub extern "C" fn wasm_instance_as_extern(m: &wasm_instance_t) -> &wasm_extern_t {
-    &m.ext
-}
-
-#[no_mangle]
 pub unsafe extern "C" fn wasm_instance_exports(
     instance: &mut wasm_instance_t,
     out: &mut wasm_extern_vec_t,
 ) {
-    let store = instance.ext.store.clone();
+    let store = instance.store.clone();
     out.set_buffer(
         instance
-            .instance()
-            .exports(instance.ext.store.context_mut())
+            .instance
+            .exports(instance.store.context_mut())
             .map(|e| {
                 Some(Box::new(wasm_extern_t {
                     which: e.into_extern(),
@@ -131,14 +106,6 @@ pub(crate) fn handle_instantiate(
             Err(e) => Some(Box::new(e.into())),
         },
     }
-}
-
-#[no_mangle]
-pub extern "C" fn wasmtime_instance_type(
-    store: CStoreContext<'_>,
-    instance: &Instance,
-) -> Box<wasmtime_instancetype_t> {
-    Box::new(wasmtime_instancetype_t::new(instance.ty(store)))
 }
 
 #[no_mangle]

@@ -6,7 +6,7 @@ use std::{
     sync::RwLock,
 };
 use std::{convert::TryFrom, sync::Arc};
-use wasmtime_environ::{PrimaryMap, SignatureIndex, WasmFuncType};
+use wasmtime_environ::{PrimaryMap, SignatureIndex, TypeTables, WasmFuncType};
 use wasmtime_runtime::{VMSharedSignatureIndex, VMTrampoline};
 
 /// Represents a collection of shared signatures.
@@ -27,14 +27,14 @@ impl SignatureCollection {
     /// and trampolines.
     pub fn new_for_module(
         registry: &SignatureRegistry,
-        signatures: &PrimaryMap<SignatureIndex, WasmFuncType>,
+        types: &TypeTables,
         trampolines: impl Iterator<Item = (SignatureIndex, VMTrampoline)>,
     ) -> Self {
         let (signatures, trampolines) = registry
             .0
             .write()
             .unwrap()
-            .register_for_module(signatures, trampolines);
+            .register_for_module(types, trampolines);
 
         Self {
             registry: registry.0.clone(),
@@ -89,7 +89,7 @@ struct SignatureRegistryInner {
 impl SignatureRegistryInner {
     fn register_for_module(
         &mut self,
-        signatures: &PrimaryMap<SignatureIndex, WasmFuncType>,
+        types: &TypeTables,
         trampolines: impl Iterator<Item = (SignatureIndex, VMTrampoline)>,
     ) -> (
         PrimaryMap<SignatureIndex, VMSharedSignatureIndex>,
@@ -98,8 +98,9 @@ impl SignatureRegistryInner {
         let mut sigs = PrimaryMap::default();
         let mut map = HashMap::default();
 
-        for (_, ty) in signatures.iter() {
-            sigs.push(self.register(ty));
+        for (idx, ty) in types.wasm_signatures() {
+            let b = sigs.push(self.register(ty));
+            assert_eq!(idx, b);
         }
 
         for (index, trampoline) in trampolines {

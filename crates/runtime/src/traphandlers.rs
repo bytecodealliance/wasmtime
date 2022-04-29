@@ -1,14 +1,12 @@
 //! WebAssembly trap handling, which is built on top of the lower-level
 //! signalhandling mechanisms.
 
-use crate::{VMContext, VMInterrupts};
+use crate::VMContext;
 use anyhow::Error;
-use backtrace::Backtrace;
 use std::any::Any;
 use std::cell::{Cell, UnsafeCell};
 use std::mem::MaybeUninit;
 use std::ptr;
-use std::sync::atomic::Ordering::SeqCst;
 use std::sync::Once;
 use wasmtime_environ::TrapCode;
 
@@ -122,10 +120,6 @@ pub enum Trap {
         pc: usize,
         /// Native stack backtrace at the time the trap occurred
         backtrace: Backtrace,
-        /// An indicator for whether this may have been a trap generated from an
-        /// interrupt, used for switching what would otherwise be a stack
-        /// overflow trap to be an interrupt trap.
-        maybe_interrupted: bool,
     },
 
     /// A trap raised from a wasm libcall
@@ -148,10 +142,9 @@ impl Trap {
     ///
     /// Internally saves a backtrace when constructed.
     pub fn wasm(trap_code: TrapCode) -> Self {
-        let backtrace = Backtrace::new_unresolved();
         Trap::Wasm {
             trap_code,
-            backtrace,
+            backtrace: Backtrace::new(),
         }
     }
 
@@ -159,8 +152,38 @@ impl Trap {
     ///
     /// Internally saves a backtrace when constructed.
     pub fn oom() -> Self {
-        let backtrace = Backtrace::new_unresolved();
-        Trap::OOM { backtrace }
+        Trap::OOM {
+            backtrace: Backtrace::new(),
+        }
+    }
+}
+
+/// A crate-local backtrace type which conditionally, at compile time, actually
+/// contains a backtrace from the `backtrace` crate or nothing.
+#[derive(Debug)]
+pub struct Backtrace {
+    #[cfg(feature = "wasm-backtrace")]
+    trace: backtrace::Backtrace,
+}
+
+impl Backtrace {
+    /// Captures a new backtrace
+    ///
+    /// Note that this function does nothing if the `wasm-backtrace` feature is
+    /// disabled.
+    pub fn new() -> Backtrace {
+        Backtrace {
+            #[cfg(feature = "wasm-backtrace")]
+            trace: backtrace::Backtrace::new_unresolved(),
+        }
+    }
+
+    /// Returns the backtrace frames associated with this backtrace. Note that
+    /// this is conditionally defined and not present when `wasm-backtrace` is
+    /// not present.
+    #[cfg(feature = "wasm-backtrace")]
+    pub fn frames(&self) -> &[backtrace::BacktraceFrame] {
+        self.trace.frames()
     }
 }
 
@@ -169,7 +192,6 @@ impl Trap {
 ///
 /// Highly unsafe since `closure` won't have any dtors run.
 pub unsafe fn catch_traps<'a, F>(
-    vminterrupts: *mut VMInterrupts,
     signal_handler: Option<*const SignalHandler<'static>>,
     callee: *mut VMContext,
     mut closure: F,
@@ -177,7 +199,7 @@ pub unsafe fn catch_traps<'a, F>(
 where
     F: FnMut(*mut VMContext),
 {
-    return CallThreadState::new(signal_handler).with(vminterrupts, |cx| {
+    return CallThreadState::new(signal_handler).with(|cx| {
         wasmtime_setjmp(
             cx.jmp_buf.as_ptr(),
             call_closure::<F>,
@@ -223,33 +245,21 @@ impl CallThreadState {
         }
     }
 
-    fn with(
-        self,
-        interrupts: *mut VMInterrupts,
-        closure: impl FnOnce(&CallThreadState) -> i32,
-    ) -> Result<(), Box<Trap>> {
+    fn with(self, closure: impl FnOnce(&CallThreadState) -> i32) -> Result<(), Box<Trap>> {
         let ret = tls::set(&self, || closure(&self))?;
         if ret != 0 {
             Ok(())
         } else {
-            Err(unsafe { self.read_trap(interrupts) })
+            Err(unsafe { self.read_trap() })
         }
     }
 
     #[cold]
-    unsafe fn read_trap(&self, interrupts: *mut VMInterrupts) -> Box<Trap> {
+    unsafe fn read_trap(&self) -> Box<Trap> {
         Box::new(match (*self.unwind.get()).as_ptr().read() {
             UnwindReason::UserTrap(data) => Trap::User(data),
             UnwindReason::LibTrap(trap) => trap,
-            UnwindReason::JitTrap { backtrace, pc } => {
-                let maybe_interrupted =
-                    (*interrupts).stack_limit.load(SeqCst) == wasmtime_environ::INTERRUPTED;
-                Trap::Jit {
-                    pc,
-                    backtrace,
-                    maybe_interrupted,
-                }
-            }
+            UnwindReason::JitTrap { backtrace, pc } => Trap::Jit { pc, backtrace },
             UnwindReason::Panic(panic) => std::panic::resume_unwind(panic),
         })
     }
@@ -317,7 +327,7 @@ impl CallThreadState {
     }
 
     fn capture_backtrace(&self, pc: *const u8) {
-        let backtrace = Backtrace::new_unresolved();
+        let backtrace = Backtrace::new();
         unsafe {
             (*self.unwind.get())
                 .as_mut_ptr()
@@ -354,13 +364,16 @@ mod tls {
     // thread local variable and has functions to access the variable.
     //
     // Note that this is specially done to fully encapsulate that the accessors
-    // for tls must not be inlined. Wasmtime's async support employs stack
+    // for tls may or may not be inlined. Wasmtime's async support employs stack
     // switching which can resume execution on different OS threads. This means
     // that borrows of our TLS pointer must never live across accesses because
     // otherwise the access may be split across two threads and cause unsafety.
     //
     // This also means that extra care is taken by the runtime to save/restore
     // these TLS values when the runtime may have crossed threads.
+    //
+    // Note, though, that if async support is disabled at compile time then
+    // these functions are free to be inlined.
     mod raw {
         use super::CallThreadState;
         use crate::Trap;
@@ -374,9 +387,10 @@ mod tls {
         // allows the runtime to perform per-thread initialization if necessary
         // for handling traps (e.g. setting up ports on macOS and sigaltstack on
         // Unix).
-        thread_local!(static PTR: Cell<(Ptr, bool)> = Cell::new((ptr::null(), false)));
+        thread_local!(static PTR: Cell<(Ptr, bool)> = const { Cell::new((ptr::null(), false)) });
 
-        #[inline(never)] // see module docs for why this is here
+        #[cfg_attr(feature = "async", inline(never))] // see module docs
+        #[cfg_attr(not(feature = "async"), inline)]
         pub fn replace(val: Ptr) -> Result<Ptr, Box<Trap>> {
             PTR.with(|p| {
                 // When a new value is configured that means that we may be
@@ -391,9 +405,10 @@ mod tls {
             })
         }
 
-        #[inline(never)]
         /// Eagerly initialize thread-local runtime functionality. This will be performed
         /// lazily by the runtime if users do not perform it eagerly.
+        #[cfg_attr(feature = "async", inline(never))] // see module docs
+        #[cfg_attr(not(feature = "async"), inline)]
         pub fn initialize() -> Result<(), Box<Trap>> {
             PTR.with(|p| {
                 let (state, initialized) = p.get();
@@ -406,7 +421,8 @@ mod tls {
             })
         }
 
-        #[inline(never)] // see module docs for why this is here
+        #[cfg_attr(feature = "async", inline(never))] // see module docs
+        #[cfg_attr(not(feature = "async"), inline)]
         pub fn get() -> Ptr {
             PTR.with(|p| p.get().0)
         }

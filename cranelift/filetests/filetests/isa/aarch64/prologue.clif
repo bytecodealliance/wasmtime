@@ -1,4 +1,4 @@
-test compile
+test compile precise-output
 set unwind_info=false
 target aarch64
 
@@ -75,19 +75,85 @@ block0(v0: f64):
     return v62
 }
 
-; check: stp fp, lr, [sp, #-16]!
-; nextln: mov fp, sp
-; nextln: stp d14, d15, [sp, #-16]!
-; nextln: stp d12, d13, [sp, #-16]!
-; nextln: stp d10, d11, [sp, #-16]!
-; nextln: stp d8, d9, [sp, #-16]!
-
-; check: ldp d8, d9, [sp], #16
-; nextln: ldp d10, d11, [sp], #16
-; nextln: ldp d12, d13, [sp], #16
-; nextln: ldp d14, d15, [sp], #16
-; nextln: ldp fp, lr, [sp], #16
-; nextln: ret
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   stp d14, d15, [sp, #-16]!
+;   stp d12, d13, [sp, #-16]!
+;   stp d10, d11, [sp, #-16]!
+;   stp d8, d9, [sp, #-16]!
+;   sub sp, sp, #16
+; block0:
+;   fadd d4, d0, d0
+;   fadd d6, d0, d0
+;   str q6, [sp]
+;   fadd d6, d0, d0
+;   fadd d8, d0, d0
+;   fadd d10, d0, d0
+;   fadd d12, d0, d0
+;   fadd d14, d0, d0
+;   fadd d1, d0, d0
+;   fadd d3, d0, d0
+;   fadd d5, d0, d0
+;   fadd d7, d0, d0
+;   fadd d9, d0, d0
+;   fadd d11, d0, d0
+;   fadd d13, d0, d0
+;   fadd d16, d0, d0
+;   fadd d15, d0, d0
+;   fadd d20, d0, d0
+;   fadd d22, d0, d0
+;   fadd d24, d0, d0
+;   fadd d26, d0, d0
+;   fadd d28, d0, d0
+;   fadd d30, d0, d0
+;   fadd d17, d0, d0
+;   fadd d19, d0, d0
+;   fadd d21, d0, d0
+;   fadd d23, d0, d0
+;   fadd d25, d0, d0
+;   fadd d27, d0, d0
+;   fadd d29, d0, d0
+;   fadd d18, d0, d0
+;   fadd d2, d0, d0
+;   fadd d0, d0, d4
+;   ldr q4, [sp]
+;   fadd d6, d4, d6
+;   fadd d4, d8, d10
+;   fadd d10, d12, d14
+;   fadd d8, d1, d3
+;   fadd d14, d5, d7
+;   fadd d12, d9, d11
+;   fadd d3, d13, d16
+;   fadd d1, d15, d20
+;   fadd d7, d22, d24
+;   fadd d5, d26, d28
+;   fadd d11, d30, d17
+;   fadd d9, d19, d21
+;   fadd d15, d23, d25
+;   fadd d13, d27, d29
+;   fadd d2, d18, d2
+;   fadd d0, d0, d6
+;   fadd d6, d4, d10
+;   fadd d4, d8, d14
+;   fadd d10, d12, d3
+;   fadd d8, d1, d7
+;   fadd d11, d5, d11
+;   fadd d12, d9, d15
+;   fadd d14, d13, d2
+;   fadd d0, d0, d6
+;   fadd d2, d4, d10
+;   fadd d4, d8, d11
+;   fadd d6, d12, d14
+;   fadd d8, d0, d2
+;   fadd d10, d4, d6
+;   fadd d0, d8, d10
+;   add sp, sp, #16
+;   ldp d8, d9, [sp], #16
+;   ldp d10, d11, [sp], #16
+;   ldp d12, d13, [sp], #16
+;   ldp d14, d15, [sp], #16
+;   ldp fp, lr, [sp], #16
+;   ret
 
 function %f2(i64) -> i64 {
 block0(v0: i64):
@@ -135,14 +201,49 @@ block0(v0: i64):
     return v36
 }
 
-; check: stp fp, lr, [sp, #-16]!
-; nextln: mov fp, sp
-; nextln: str x22, [sp, #-16]!
-; nextln: stp x19, x20, [sp, #-16]!
-; nextln: add x1, x0, x0
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   str x28, [sp, #-16]!
+;   stp x19, x21, [sp, #-16]!
+; block0:
+;   add x6, x0, x0
+;   add x7, x0, x6
+;   add x8, x0, x7
+;   add x9, x0, x8
+;   add x10, x0, x9
+;   add x11, x0, x10
+;   add x12, x0, x11
+;   add x13, x0, x12
+;   add x14, x0, x13
+;   add x15, x0, x14
+;   add x1, x0, x15
+;   add x2, x0, x1
+;   add x3, x0, x2
+;   add x4, x0, x3
+;   add x5, x0, x4
+;   add x28, x0, x5
+;   add x21, x0, x28
+;   add x19, x0, x21
+;   add x6, x0, x6
+;   add x7, x7, x8
+;   add x8, x9, x10
+;   add x9, x11, x12
+;   add x10, x13, x14
+;   add x11, x15, x1
+;   add x12, x2, x3
+;   add x13, x4, x5
+;   add x14, x28, x21
+;   add x6, x19, x6
+;   add x7, x7, x8
+;   add x8, x9, x10
+;   add x9, x11, x12
+;   add x10, x13, x14
+;   add x6, x6, x7
+;   add x7, x8, x9
+;   add x6, x10, x6
+;   add x0, x7, x6
+;   ldp x19, x21, [sp], #16
+;   ldr x28, [sp], #16
+;   ldp fp, lr, [sp], #16
+;   ret
 
-; check: add x0, x1, x0
-; nextln: ldp x19, x20, [sp], #16
-; nextln: ldr x22, [sp], #16
-; nextln: ldp fp, lr, [sp], #16
-; nextln: ret

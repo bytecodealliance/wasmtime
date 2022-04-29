@@ -1,12 +1,14 @@
 //! Result and error types representing the outcome of compiling a function.
 
+use regalloc2::checker::CheckerErrors;
+
 use crate::verifier::VerifierErrors;
 use std::string::String;
 
 /// A compilation error.
 ///
 /// When Cranelift fails to compile a function, it will return one of these error codes.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub enum CodegenError {
     /// A list of IR verifier errors.
     ///
@@ -36,6 +38,9 @@ pub enum CodegenError {
     /// A failure to map Cranelift register representation to a DWARF register representation.
     #[cfg(feature = "unwind")]
     RegisterMappingError(crate::isa::unwind::systemv::RegisterMappingError),
+
+    /// Register allocator internal error discovered by the symbolic checker.
+    Regalloc(CheckerErrors),
 }
 
 /// A convenient alias for a `Result` that uses `CodegenError` as the error type.
@@ -52,6 +57,7 @@ impl std::error::Error for CodegenError {
             | CodegenError::Unsupported { .. } => None,
             #[cfg(feature = "unwind")]
             CodegenError::RegisterMappingError { .. } => None,
+            CodegenError::Regalloc(..) => None,
         }
     }
 }
@@ -65,6 +71,7 @@ impl std::fmt::Display for CodegenError {
             CodegenError::Unsupported(feature) => write!(f, "Unsupported feature: {}", feature),
             #[cfg(feature = "unwind")]
             CodegenError::RegisterMappingError(_0) => write!(f, "Register mapping error"),
+            CodegenError::Regalloc(errors) => write!(f, "Regalloc validation errors: {:?}", errors),
         }
     }
 }

@@ -56,20 +56,6 @@ typedef struct wasmtime_memory {
   size_t index;
 } wasmtime_memory_t;
 
-/// \brief Representation of a instance in Wasmtime.
-///
-/// Instances are represented with a 64-bit identifying integer in Wasmtime.
-/// They do not have any destructor associated with them. Instances cannot
-/// interoperate between #wasmtime_store_t instances and if the wrong instance
-/// is passed to the wrong store then it may trigger an assertion to abort the
-/// process.
-typedef struct wasmtime_instance {
-  /// Internal identifier of what store this belongs to, never zero.
-  uint64_t store_id;
-  /// Internal index within the store.
-  size_t index;
-} wasmtime_instance_t;
-
 /// \brief Representation of a global in Wasmtime.
 ///
 /// Globals are represented with a 64-bit identifying integer in Wasmtime.
@@ -99,12 +85,6 @@ typedef uint8_t wasmtime_extern_kind_t;
 /// \brief Value of #wasmtime_extern_kind_t meaning that #wasmtime_extern_t is a
 /// memory
 #define WASMTIME_EXTERN_MEMORY 3
-/// \brief Value of #wasmtime_extern_kind_t meaning that #wasmtime_extern_t is
-/// an instance
-#define WASMTIME_EXTERN_INSTANCE 4
-/// \brief Value of #wasmtime_extern_kind_t meaning that #wasmtime_extern_t is
-/// a module
-#define WASMTIME_EXTERN_MODULE 5
 
 /**
  * \typedef wasmtime_extern_union_t
@@ -125,13 +105,6 @@ typedef union wasmtime_extern_union {
     wasmtime_table_t table;
     /// Field used if #wasmtime_extern_t::kind is #WASMTIME_EXTERN_MEMORY
     wasmtime_memory_t memory;
-    /// Field used if #wasmtime_extern_t::kind is #WASMTIME_EXTERN_INSTANCE
-    wasmtime_instance_t instance;
-    /// Field used if #wasmtime_extern_t::kind is #WASMTIME_EXTERN_MODULE
-    ///
-    /// Note that this may be an owned pointer depending on the ownership of the
-    /// #wasmtime_extern_t container value.
-    wasmtime_module_t *module;
 } wasmtime_extern_union_t;
 
 /**

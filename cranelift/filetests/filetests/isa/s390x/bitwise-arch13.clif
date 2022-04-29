@@ -1,5 +1,5 @@
 
-test compile
+test compile precise-output
 target s390x arch13
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -12,8 +12,9 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-; check:  nngrk %r2, %r2, %r3
-; nextln: br %r14
+; block0:
+;   nngrk %r2, %r2, %r3
+;   br %r14
 
 function %band_not_i32(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
@@ -21,8 +22,9 @@ block0(v0: i32, v1: i32):
   return v2
 }
 
-; check:  nnrk %r2, %r2, %r3
-; nextln: br %r14
+; block0:
+;   nnrk %r2, %r2, %r3
+;   br %r14
 
 function %band_not_i16(i16, i16) -> i16 {
 block0(v0: i16, v1: i16):
@@ -30,8 +32,9 @@ block0(v0: i16, v1: i16):
   return v2
 }
 
-; check:  nnrk %r2, %r2, %r3
-; nextln: br %r14
+; block0:
+;   nnrk %r2, %r2, %r3
+;   br %r14
 
 function %band_not_i8(i8, i8) -> i8 {
 block0(v0: i8, v1: i8):
@@ -39,12 +42,9 @@ block0(v0: i8, v1: i8):
   return v2
 }
 
-; check:  nnrk %r2, %r2, %r3
-; nextln: br %r14
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; BOR_NOT
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; block0:
+;   nnrk %r2, %r2, %r3
+;   br %r14
 
 function %bor_not_i64(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -52,8 +52,9 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-; check:  nogrk %r2, %r2, %r3
-; nextln: br %r14
+; block0:
+;   nogrk %r2, %r2, %r3
+;   br %r14
 
 function %bor_not_i32(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
@@ -61,8 +62,9 @@ block0(v0: i32, v1: i32):
   return v2
 }
 
-; check:  nork %r2, %r2, %r3
-; nextln: br %r14
+; block0:
+;   nork %r2, %r2, %r3
+;   br %r14
 
 function %bor_not_i16(i16, i16) -> i16 {
 block0(v0: i16, v1: i16):
@@ -70,8 +72,9 @@ block0(v0: i16, v1: i16):
   return v2
 }
 
-; check:  nork %r2, %r2, %r3
-; nextln: br %r14
+; block0:
+;   nork %r2, %r2, %r3
+;   br %r14
 
 function %bor_not_i8(i8, i8) -> i8 {
 block0(v0: i8, v1: i8):
@@ -79,12 +82,9 @@ block0(v0: i8, v1: i8):
   return v2
 }
 
-; check:  nork %r2, %r2, %r3
-; nextln: br %r14
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; BXOR_NOT
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; block0:
+;   nork %r2, %r2, %r3
+;   br %r14
 
 function %bxor_not_i64(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -92,8 +92,9 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-; check:  nxgrk %r2, %r2, %r3
-; nextln: br %r14
+; block0:
+;   nxgrk %r2, %r2, %r3
+;   br %r14
 
 function %bxor_not_i32(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
@@ -101,8 +102,9 @@ block0(v0: i32, v1: i32):
   return v2
 }
 
-; check:  nxrk %r2, %r2, %r3
-; nextln: br %r14
+; block0:
+;   nxrk %r2, %r2, %r3
+;   br %r14
 
 function %bxor_not_i16(i16, i16) -> i16 {
 block0(v0: i16, v1: i16):
@@ -110,8 +112,9 @@ block0(v0: i16, v1: i16):
   return v2
 }
 
-; check:  nxrk %r2, %r2, %r3
-; nextln: br %r14
+; block0:
+;   nxrk %r2, %r2, %r3
+;   br %r14
 
 function %bxor_not_i8(i8, i8) -> i8 {
 block0(v0: i8, v1: i8):
@@ -119,12 +122,9 @@ block0(v0: i8, v1: i8):
   return v2
 }
 
-; check:  nxrk %r2, %r2, %r3
-; nextln: br %r14
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; BNOT
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; block0:
+;   nxrk %r2, %r2, %r3
+;   br %r14
 
 function %bnot_i64(i64) -> i64 {
 block0(v0: i64):
@@ -132,8 +132,9 @@ block0(v0: i64):
   return v1
 }
 
-; check:  nogrk %r2, %r2, %r2
-; nextln: br %r14
+; block0:
+;   nogrk %r2, %r2, %r2
+;   br %r14
 
 function %bnot_i32(i32) -> i32 {
 block0(v0: i32):
@@ -141,8 +142,9 @@ block0(v0: i32):
   return v1
 }
 
-; check:  nork %r2, %r2, %r2
-; nextln: br %r14
+; block0:
+;   nork %r2, %r2, %r2
+;   br %r14
 
 function %bnot_i16(i16) -> i16 {
 block0(v0: i16):
@@ -150,8 +152,9 @@ block0(v0: i16):
   return v1
 }
 
-; check:  nork %r2, %r2, %r2
-; nextln: br %r14
+; block0:
+;   nork %r2, %r2, %r2
+;   br %r14
 
 function %bnot_i8(i8) -> i8 {
 block0(v0: i8):
@@ -159,12 +162,9 @@ block0(v0: i8):
   return v1
 }
 
-; check:  nork %r2, %r2, %r2
-; nextln: br %r14
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; BITSELECT
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; block0:
+;   nork %r2, %r2, %r2
+;   br %r14
 
 function %bitselect_i64(i64, i64, i64) -> i64 {
 block0(v0: i64, v1: i64, v2: i64):
@@ -172,10 +172,11 @@ block0(v0: i64, v1: i64, v2: i64):
   return v3
 }
 
-; check:  ngr %r3, %r2
-; nextln: nngrk %r2, %r4, %r2
-; nextln: ogr %r2, %r3
-; nextln: br %r14
+; block0:
+;   ngrk %r5, %r3, %r2
+;   nngrk %r3, %r4, %r2
+;   ogrk %r2, %r3, %r5
+;   br %r14
 
 function %bitselect_i32(i32, i32, i32) -> i32 {
 block0(v0: i32, v1: i32, v2: i32):
@@ -183,10 +184,11 @@ block0(v0: i32, v1: i32, v2: i32):
   return v3
 }
 
-; check:  nr %r3, %r2
-; nextln: nnrk %r2, %r4, %r2
-; nextln: or %r2, %r3
-; nextln: br %r14
+; block0:
+;   nrk %r5, %r3, %r2
+;   nnrk %r3, %r4, %r2
+;   ork %r2, %r3, %r5
+;   br %r14
 
 function %bitselect_i16(i16, i16, i16) -> i16 {
 block0(v0: i16, v1: i16, v2: i16):
@@ -194,10 +196,11 @@ block0(v0: i16, v1: i16, v2: i16):
   return v3
 }
 
-; check:  nr %r3, %r2
-; nextln: nnrk %r2, %r4, %r2
-; nextln: or %r2, %r3
-; nextln: br %r14
+; block0:
+;   nrk %r5, %r3, %r2
+;   nnrk %r3, %r4, %r2
+;   ork %r2, %r3, %r5
+;   br %r14
 
 function %bitselect_i8(i8, i8, i8) -> i8 {
 block0(v0: i8, v1: i8, v2: i8):
@@ -205,8 +208,9 @@ block0(v0: i8, v1: i8, v2: i8):
   return v3
 }
 
-; check:  nr %r3, %r2
-; nextln: nnrk %r2, %r4, %r2
-; nextln: or %r2, %r3
-; nextln: br %r14
+; block0:
+;   nrk %r5, %r3, %r2
+;   nnrk %r3, %r4, %r2
+;   ork %r2, %r3, %r5
+;   br %r14
 

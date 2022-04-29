@@ -23,10 +23,7 @@ fn instantiate(pre: &InstancePre<WasiCtx>, engine: &Engine) -> Result<()> {
 fn benchmark_name<'a>(strategy: &InstanceAllocationStrategy) -> &'static str {
     match strategy {
         InstanceAllocationStrategy::OnDemand => "default",
-        #[cfg(any(not(feature = "uffd"), not(target_os = "linux")))]
         InstanceAllocationStrategy::Pooling { .. } => "pooling",
-        #[cfg(all(feature = "uffd", target_os = "linux"))]
-        InstanceAllocationStrategy::Pooling { .. } => "uffd",
     }
 }
 
@@ -204,8 +201,6 @@ fn bench_instantiation(c: &mut Criterion) {
 
 fn strategies() -> impl Iterator<Item = InstanceAllocationStrategy> {
     std::array::IntoIter::new([
-        // Skip the on-demand allocator when uffd is enabled
-        #[cfg(any(not(feature = "uffd"), not(target_os = "linux")))]
         InstanceAllocationStrategy::OnDemand,
         InstanceAllocationStrategy::Pooling {
             strategy: Default::default(),

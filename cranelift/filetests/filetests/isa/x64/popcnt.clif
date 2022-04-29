@@ -7,37 +7,31 @@ block0(v0: i64):
     return v1
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 25)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   movq    %rdi, %rax
-;   Inst 3:   shrq    $1, %rax
-;   Inst 4:   movabsq $8608480567731124087, %rsi
-;   Inst 5:   andq    %rsi, %rax
-;   Inst 6:   subq    %rax, %rdi
-;   Inst 7:   shrq    $1, %rax
-;   Inst 8:   andq    %rsi, %rax
-;   Inst 9:   subq    %rax, %rdi
-;   Inst 10:   shrq    $1, %rax
-;   Inst 11:   andq    %rsi, %rax
-;   Inst 12:   subq    %rax, %rdi
-;   Inst 13:   movq    %rdi, %rsi
-;   Inst 14:   shrq    $4, %rsi
-;   Inst 15:   addq    %rdi, %rsi
-;   Inst 16:   movabsq $1085102592571150095, %rdi
-;   Inst 17:   andq    %rdi, %rsi
-;   Inst 18:   movabsq $72340172838076673, %rdi
-;   Inst 19:   imulq   %rdi, %rsi
-;   Inst 20:   shrq    $56, %rsi
-;   Inst 21:   movq    %rsi, %rax
-;   Inst 22:   movq    %rbp, %rsp
-;   Inst 23:   popq    %rbp
-;   Inst 24:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %rcx
+;   shrq    $1, %rcx, %rcx
+;   movabsq $8608480567731124087, %r8
+;   andq    %rcx, %r8, %rcx
+;   subq    %rdi, %rcx, %rdi
+;   shrq    $1, %rcx, %rcx
+;   andq    %rcx, %r8, %rcx
+;   subq    %rdi, %rcx, %rdi
+;   shrq    $1, %rcx, %rcx
+;   andq    %rcx, %r8, %rcx
+;   subq    %rdi, %rcx, %rdi
+;   movq    %rdi, %rax
+;   shrq    $4, %rax, %rax
+;   addq    %rax, %rdi, %rax
+;   movabsq $1085102592571150095, %rcx
+;   andq    %rax, %rcx, %rax
+;   movabsq $72340172838076673, %r11
+;   imulq   %rax, %r11, %rax
+;   shrq    $56, %rax, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %popcnt64load(i64) -> i64 {
 block0(v0: i64):
@@ -46,38 +40,32 @@ block0(v0: i64):
     return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 26)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   movq    0(%rdi), %rdi
-;   Inst 3:   movq    %rdi, %rax
-;   Inst 4:   shrq    $1, %rax
-;   Inst 5:   movabsq $8608480567731124087, %rsi
-;   Inst 6:   andq    %rsi, %rax
-;   Inst 7:   subq    %rax, %rdi
-;   Inst 8:   shrq    $1, %rax
-;   Inst 9:   andq    %rsi, %rax
-;   Inst 10:   subq    %rax, %rdi
-;   Inst 11:   shrq    $1, %rax
-;   Inst 12:   andq    %rsi, %rax
-;   Inst 13:   subq    %rax, %rdi
-;   Inst 14:   movq    %rdi, %rsi
-;   Inst 15:   shrq    $4, %rsi
-;   Inst 16:   addq    %rdi, %rsi
-;   Inst 17:   movabsq $1085102592571150095, %rdi
-;   Inst 18:   andq    %rdi, %rsi
-;   Inst 19:   movabsq $72340172838076673, %rdi
-;   Inst 20:   imulq   %rdi, %rsi
-;   Inst 21:   shrq    $56, %rsi
-;   Inst 22:   movq    %rsi, %rax
-;   Inst 23:   movq    %rbp, %rsp
-;   Inst 24:   popq    %rbp
-;   Inst 25:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    0(%rdi), %rdx
+;   movq    %rdx, %r8
+;   shrq    $1, %r8, %r8
+;   movabsq $8608480567731124087, %r9
+;   andq    %r8, %r9, %r8
+;   subq    %rdx, %r8, %rdx
+;   shrq    $1, %r8, %r8
+;   andq    %r8, %r9, %r8
+;   subq    %rdx, %r8, %rdx
+;   shrq    $1, %r8, %r8
+;   andq    %r8, %r9, %r8
+;   subq    %rdx, %r8, %rdx
+;   movq    %rdx, %rax
+;   shrq    $4, %rax, %rax
+;   addq    %rax, %rdx, %rax
+;   movabsq $1085102592571150095, %rdx
+;   andq    %rax, %rdx, %rax
+;   movabsq $72340172838076673, %rsi
+;   imulq   %rax, %rsi, %rax
+;   shrq    $56, %rax, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %popcnt32(i32) -> i32 {
 block0(v0: i32):
@@ -85,35 +73,29 @@ block0(v0: i32):
     return v1
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 23)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   movq    %rdi, %rax
-;   Inst 3:   shrl    $1, %eax
-;   Inst 4:   movl    $2004318071, %esi
-;   Inst 5:   andl    %esi, %eax
-;   Inst 6:   subl    %eax, %edi
-;   Inst 7:   shrl    $1, %eax
-;   Inst 8:   andl    %esi, %eax
-;   Inst 9:   subl    %eax, %edi
-;   Inst 10:   shrl    $1, %eax
-;   Inst 11:   andl    %esi, %eax
-;   Inst 12:   subl    %eax, %edi
-;   Inst 13:   movq    %rdi, %rsi
-;   Inst 14:   shrl    $4, %esi
-;   Inst 15:   addl    %edi, %esi
-;   Inst 16:   andl    $252645135, %esi
-;   Inst 17:   imull   $16843009, %esi
-;   Inst 18:   shrl    $24, %esi
-;   Inst 19:   movq    %rsi, %rax
-;   Inst 20:   movq    %rbp, %rsp
-;   Inst 21:   popq    %rbp
-;   Inst 22:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %rcx
+;   shrl    $1, %ecx, %ecx
+;   movl    $2004318071, %r8d
+;   andl    %ecx, %r8d, %ecx
+;   subl    %edi, %ecx, %edi
+;   shrl    $1, %ecx, %ecx
+;   andl    %ecx, %r8d, %ecx
+;   subl    %edi, %ecx, %edi
+;   shrl    $1, %ecx, %ecx
+;   andl    %ecx, %r8d, %ecx
+;   subl    %edi, %ecx, %edi
+;   movq    %rdi, %rax
+;   shrl    $4, %eax, %eax
+;   addl    %eax, %edi, %eax
+;   andl    %eax, $252645135, %eax
+;   imull   %eax, $16843009, %eax
+;   shrl    $24, %eax, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %popcnt32load(i64) -> i32 {
 block0(v0: i64):
@@ -122,34 +104,28 @@ block0(v0: i64):
     return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 24)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   movl    0(%rdi), %edi
-;   Inst 3:   movq    %rdi, %rax
-;   Inst 4:   shrl    $1, %eax
-;   Inst 5:   movl    $2004318071, %esi
-;   Inst 6:   andl    %esi, %eax
-;   Inst 7:   subl    %eax, %edi
-;   Inst 8:   shrl    $1, %eax
-;   Inst 9:   andl    %esi, %eax
-;   Inst 10:   subl    %eax, %edi
-;   Inst 11:   shrl    $1, %eax
-;   Inst 12:   andl    %esi, %eax
-;   Inst 13:   subl    %eax, %edi
-;   Inst 14:   movq    %rdi, %rsi
-;   Inst 15:   shrl    $4, %esi
-;   Inst 16:   addl    %edi, %esi
-;   Inst 17:   andl    $252645135, %esi
-;   Inst 18:   imull   $16843009, %esi
-;   Inst 19:   shrl    $24, %esi
-;   Inst 20:   movq    %rsi, %rax
-;   Inst 21:   movq    %rbp, %rsp
-;   Inst 22:   popq    %rbp
-;   Inst 23:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movl    0(%rdi), %edx
+;   movq    %rdx, %r8
+;   shrl    $1, %r8d, %r8d
+;   movl    $2004318071, %r9d
+;   andl    %r8d, %r9d, %r8d
+;   subl    %edx, %r8d, %edx
+;   shrl    $1, %r8d, %r8d
+;   andl    %r8d, %r9d, %r8d
+;   subl    %edx, %r8d, %edx
+;   shrl    $1, %r8d, %r8d
+;   andl    %r8d, %r9d, %r8d
+;   subl    %edx, %r8d, %edx
+;   movq    %rdx, %rax
+;   shrl    $4, %eax, %eax
+;   addl    %eax, %edx, %eax
+;   andl    %eax, $252645135, %eax
+;   imull   %eax, $16843009, %eax
+;   shrl    $24, %eax, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 

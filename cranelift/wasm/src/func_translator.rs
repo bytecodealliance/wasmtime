@@ -8,7 +8,6 @@ use crate::code_translator::{bitcast_arguments, translate_operator, wasm_param_t
 use crate::environ::{FuncEnvironment, ReturnMode};
 use crate::state::FuncTranslationState;
 use crate::translation_utils::get_vmctx_value_label;
-use crate::wasm_unsupported;
 use crate::WasmResult;
 use core::convert::TryInto;
 use cranelift_codegen::entity::EntityRef;
@@ -206,7 +205,6 @@ fn declare_locals<FE: FuncEnvironment + ?Sized>(
         ExternRef | FuncRef => {
             environ.translate_ref_null(builder.cursor(), wasm_type.try_into()?)?
         }
-        ty => return Err(wasm_unsupported!("unsupported local type {:?}", ty)),
     };
 
     let ty = builder.func.dfg.value_type(zeroval);

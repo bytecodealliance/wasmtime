@@ -596,7 +596,11 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             state.popn(num_args);
             state.pushn(inst_results);
         }
-        Operator::CallIndirect { index, table_index } => {
+        Operator::CallIndirect {
+            index,
+            table_index,
+            table_byte: _,
+        } => {
             // `index` is the index of the function's signature and `table_index` is the index of
             // the table to search the function in.
             let (sigref, num_args) = state.get_indirect_sig(builder.func, *index, environ)?;

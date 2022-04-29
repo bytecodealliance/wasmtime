@@ -8,19 +8,14 @@ block0(v0: b32x4):
     return v1
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 7)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   pcmpeqd %xmm1, %xmm1
-;   Inst 3:   pxor    %xmm1, %xmm0
-;   Inst 4:   movq    %rbp, %rsp
-;   Inst 5:   popq    %rbp
-;   Inst 6:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   pcmpeqd %xmm3, %xmm3, %xmm3
+;   pxor    %xmm0, %xmm0, %xmm3
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %vany_true_b32x4(b32x4) -> b1 {
 block0(v0: b32x4):
@@ -28,20 +23,14 @@ block0(v0: b32x4):
     return v1
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 8)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   ptest   %xmm0, %xmm0
-;   Inst 3:   setnz   %sil
-;   Inst 4:   movq    %rsi, %rax
-;   Inst 5:   movq    %rbp, %rsp
-;   Inst 6:   popq    %rbp
-;   Inst 7:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   ptest   %xmm0, %xmm0
+;   setnz   %al
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %vall_true_i64x2(i64x2) -> b1 {
 block0(v0: i64x2):
@@ -49,20 +38,14 @@ block0(v0: i64x2):
     return v1
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 10)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   pxor    %xmm1, %xmm1
-;   Inst 3:   pcmpeqq %xmm0, %xmm1
-;   Inst 4:   ptest   %xmm1, %xmm1
-;   Inst 5:   setz    %sil
-;   Inst 6:   movq    %rsi, %rax
-;   Inst 7:   movq    %rbp, %rsp
-;   Inst 8:   popq    %rbp
-;   Inst 9:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   pxor    %xmm4, %xmm4, %xmm4
+;   pcmpeqq %xmm4, %xmm4, %xmm0
+;   ptest   %xmm4, %xmm4
+;   setz    %al
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 

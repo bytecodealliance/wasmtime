@@ -601,7 +601,8 @@
 
     ;; A machine return instruction.
     (Ret
-      (link Reg))
+      (link Reg)
+      (rets VecReg))
 
     ;; A placeholder instruction, generating no code, meaning that a function epilogue must be
     ;; inserted there.
@@ -696,11 +697,10 @@
     (VirtualSPOffsetAdj
       (offset i64))
 
-    ;; A definition of a value label.
-    (ValueLabelMarker
-      (reg Reg)
-      (label ValueLabel))
-
+    ;; Pseudoinstruction to keep a value alive.
+    (DummyUse
+     (reg Reg))
+    
     ;; An unwind pseudoinstruction describing the state of the
     ;; machine at this program point.
     (Unwind

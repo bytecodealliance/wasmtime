@@ -1,14 +1,14 @@
 //! AArch64 ISA: binary code emission.
 
+use regalloc2::Allocation;
+
 use crate::binemit::{CodeOffset, Reloc, StackMap};
 use crate::ir::constant::ConstantData;
 use crate::ir::types::*;
 use crate::ir::{LibCall, MemFlags, TrapCode};
 use crate::isa::aarch64::inst::*;
-use crate::machinst::ty_bits;
-
-use regalloc::{Reg, RegClass, Writable};
-
+use crate::isa::aarch64::lower::is_valid_atomic_transaction_ty;
+use crate::machinst::{ty_bits, Reg, RegClass, Writable};
 use core::convert::TryFrom;
 
 /// Memory label/reference finalization: convert a MemLabel to a PC-relative
@@ -98,17 +98,17 @@ pub fn u64_constant(bits: u64) -> ConstantData {
 // Instructions and subcomponents: emission
 
 fn machreg_to_gpr(m: Reg) -> u32 {
-    assert_eq!(m.get_class(), RegClass::I64);
-    u32::try_from(m.to_real_reg().get_hw_encoding()).unwrap()
+    assert_eq!(m.class(), RegClass::Int);
+    u32::try_from(m.to_real_reg().unwrap().hw_enc() & 31).unwrap()
 }
 
 fn machreg_to_vec(m: Reg) -> u32 {
-    assert_eq!(m.get_class(), RegClass::V128);
-    u32::try_from(m.to_real_reg().get_hw_encoding()).unwrap()
+    assert_eq!(m.class(), RegClass::Float);
+    u32::try_from(m.to_real_reg().unwrap().hw_enc()).unwrap()
 }
 
 fn machreg_to_gpr_or_vec(m: Reg) -> u32 {
-    u32::try_from(m.to_real_reg().get_hw_encoding()).unwrap()
+    u32::try_from(m.to_real_reg().unwrap().hw_enc() & 31).unwrap()
 }
 
 pub(crate) fn enc_arith_rrr(
@@ -168,33 +168,34 @@ fn enc_cbr(op_31_24: u32, off_18_0: u32, op_4: u32, cond: u32) -> u32 {
     (op_31_24 << 24) | (off_18_0 << 5) | (op_4 << 4) | cond
 }
 
-fn enc_conditional_br(taken: BranchTarget, kind: CondBrKind) -> u32 {
+fn enc_conditional_br(
+    taken: BranchTarget,
+    kind: CondBrKind,
+    allocs: &mut AllocationConsumer<'_>,
+) -> u32 {
     match kind {
-        CondBrKind::Zero(reg) => enc_cmpbr(0b1_011010_0, taken.as_offset19_or_zero(), reg),
-        CondBrKind::NotZero(reg) => enc_cmpbr(0b1_011010_1, taken.as_offset19_or_zero(), reg),
+        CondBrKind::Zero(reg) => {
+            let reg = allocs.next(reg);
+            enc_cmpbr(0b1_011010_0, taken.as_offset19_or_zero(), reg)
+        }
+        CondBrKind::NotZero(reg) => {
+            let reg = allocs.next(reg);
+            enc_cmpbr(0b1_011010_1, taken.as_offset19_or_zero(), reg)
+        }
         CondBrKind::Cond(c) => enc_cbr(0b01010100, taken.as_offset19_or_zero(), 0b0, c.bits()),
     }
 }
 
-const MOVE_WIDE_FIXED: u32 = 0x12800000;
-
-#[repr(u32)]
-enum MoveWideOpcode {
-    MOVN = 0b00,
-    MOVZ = 0b10,
-    MOVK = 0b11,
-}
-
-fn enc_move_wide(
-    op: MoveWideOpcode,
-    rd: Writable<Reg>,
-    imm: MoveWideConst,
-    size: OperandSize,
-) -> u32 {
+fn enc_move_wide(op: MoveWideOp, rd: Writable<Reg>, imm: MoveWideConst, size: OperandSize) -> u32 {
     assert!(imm.shift <= 0b11);
-    MOVE_WIDE_FIXED
+    let op = match op {
+        MoveWideOp::MovN => 0b00,
+        MoveWideOp::MovZ => 0b10,
+        MoveWideOp::MovK => 0b11,
+    };
+    0x12800000
         | size.sf_bit() << 31
-        | (op as u32) << 29
+        | op << 29
         | u32::from(imm.shift) << 21
         | u32::from(imm.bits) << 5
         | machreg_to_gpr(rd.to_reg())
@@ -505,7 +506,7 @@ fn enc_dmb_ish() -> u32 {
     0xD5033BBF
 }
 
-fn enc_ldal(ty: Type, op: AtomicRMWOp, rs: Reg, rt: Writable<Reg>, rn: Reg) -> u32 {
+fn enc_acq_rel(ty: Type, op: AtomicRMWOp, rs: Reg, rt: Writable<Reg>, rn: Reg) -> u32 {
     assert!(machreg_to_gpr(rt.to_reg()) != 31);
     let sz = match ty {
         I64 => 0b11,
@@ -513,6 +514,10 @@ fn enc_ldal(ty: Type, op: AtomicRMWOp, rs: Reg, rt: Writable<Reg>, rn: Reg) -> u
         I16 => 0b01,
         I8 => 0b00,
         _ => unreachable!(),
+    };
+    let bit15 = match op {
+        AtomicRMWOp::Swp => 0b1,
+        _ => 0b0,
     };
     let op = match op {
         AtomicRMWOp::Add => 0b000,
@@ -523,10 +528,12 @@ fn enc_ldal(ty: Type, op: AtomicRMWOp, rs: Reg, rt: Writable<Reg>, rn: Reg) -> u
         AtomicRMWOp::Smin => 0b101,
         AtomicRMWOp::Umax => 0b110,
         AtomicRMWOp::Umin => 0b111,
+        AtomicRMWOp::Swp => 0b000,
     };
     0b00_111_000_111_00000_0_000_00_00000_00000
         | (sz << 30)
         | (machreg_to_gpr(rs) << 16)
+        | bit15 << 15
         | (op << 12)
         | (machreg_to_gpr(rn) << 5)
         | machreg_to_gpr(rt.to_reg())
@@ -674,7 +681,15 @@ impl MachInstEmit for Inst {
     type State = EmitState;
     type Info = EmitInfo;
 
-    fn emit(&self, sink: &mut MachBuffer<Inst>, emit_info: &Self::Info, state: &mut EmitState) {
+    fn emit(
+        &self,
+        allocs: &[Allocation],
+        sink: &mut MachBuffer<Inst>,
+        emit_info: &Self::Info,
+        state: &mut EmitState,
+    ) {
+        let mut allocs = AllocationConsumer::new(allocs);
+
         // N.B.: we *must* not exceed the "worst-case size" used to compute
         // where to insert islands, except when islands are explicitly triggered
         // (with an `EmitIsland`). We check this in debug builds. This is `mut`
@@ -690,6 +705,10 @@ impl MachInstEmit for Inst {
                 rn,
                 rm,
             } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
+                let rm = allocs.next(rm);
+
                 debug_assert!(match alu_op {
                     ALUOp::SDiv | ALUOp::UDiv | ALUOp::SMulH | ALUOp::UMulH =>
                         size == OperandSize::Size64,
@@ -737,17 +756,22 @@ impl MachInstEmit for Inst {
             }
             &Inst::AluRRRR {
                 alu_op,
+                size,
                 rd,
                 rm,
                 rn,
                 ra,
             } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
+                let rm = allocs.next(rm);
+                let ra = allocs.next(ra);
+
                 let (top11, bit15) = match alu_op {
-                    ALUOp3::MAdd32 => (0b0_00_11011_000, 0),
-                    ALUOp3::MSub32 => (0b0_00_11011_000, 1),
-                    ALUOp3::MAdd64 => (0b1_00_11011_000, 0),
-                    ALUOp3::MSub64 => (0b1_00_11011_000, 1),
+                    ALUOp3::MAdd => (0b0_00_11011_000, 0),
+                    ALUOp3::MSub => (0b0_00_11011_000, 1),
                 };
+                let top11 = top11 | size.sf_bit() << 10;
                 sink.put4(enc_arith_rrrr(top11, rm, bit15, ra, rn, rd));
             }
             &Inst::AluRRImm12 {
@@ -757,6 +781,8 @@ impl MachInstEmit for Inst {
                 rn,
                 ref imm12,
             } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
                 let top8 = match alu_op {
                     ALUOp::Add => 0b000_10001,
                     ALUOp::Sub => 0b010_10001,
@@ -780,6 +806,8 @@ impl MachInstEmit for Inst {
                 rn,
                 ref imml,
             } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
                 let (top9, inv) = match alu_op {
                     ALUOp::Orr => (0b001_100100, false),
                     ALUOp::And => (0b000_100100, false),
@@ -802,6 +830,8 @@ impl MachInstEmit for Inst {
                 rn,
                 ref immshift,
             } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
                 let amt = immshift.value();
                 let (top10, immr, imms) = match alu_op {
                     ALUOp::RotR => (0b0001001110, machreg_to_gpr(rn), u32::from(amt)),
@@ -839,6 +869,9 @@ impl MachInstEmit for Inst {
                 rm,
                 ref shiftop,
             } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
+                let rm = allocs.next(rm);
                 let top11: u32 = match alu_op {
                     ALUOp::Add => 0b000_01011000,
                     ALUOp::AddS => 0b001_01011000,
@@ -867,6 +900,9 @@ impl MachInstEmit for Inst {
                 rm,
                 extendop,
             } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
+                let rm = allocs.next(rm);
                 let top11: u32 = match alu_op {
                     ALUOp::Add => 0b00001011001,
                     ALUOp::Sub => 0b01001011001,
@@ -882,6 +918,8 @@ impl MachInstEmit for Inst {
             &Inst::BitRR {
                 op, size, rd, rn, ..
             } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
                 let (op1, op2) = match op {
                     BitOp::RBit => (0b00000, 0b000000),
                     BitOp::Clz => (0b00000, 0b000100),
@@ -902,10 +940,12 @@ impl MachInstEmit for Inst {
             | &Inst::FpuLoad32 { rd, ref mem, flags }
             | &Inst::FpuLoad64 { rd, ref mem, flags }
             | &Inst::FpuLoad128 { rd, ref mem, flags } => {
-                let (mem_insts, mem) = mem_finalize(sink.cur_offset(), mem, state);
+                let rd = allocs.next_writable(rd);
+                let mem = mem.with_allocs(&mut allocs);
+                let (mem_insts, mem) = mem_finalize(sink.cur_offset(), &mem, state);
 
                 for inst in mem_insts.into_iter() {
-                    inst.emit(sink, emit_info, state);
+                    inst.emit(&[], sink, emit_info, state);
                 }
 
                 // ldst encoding helpers take Reg, not Writable<Reg>.
@@ -936,20 +976,26 @@ impl MachInstEmit for Inst {
 
                 match &mem {
                     &AMode::Unscaled(reg, simm9) => {
+                        let reg = allocs.next(reg);
                         sink.put4(enc_ldst_simm9(op, simm9, 0b00, reg, rd));
                     }
                     &AMode::UnsignedOffset(reg, uimm12scaled) => {
+                        let reg = allocs.next(reg);
                         if uimm12scaled.value() != 0 {
                             assert_eq!(bits, ty_bits(uimm12scaled.scale_ty()));
                         }
                         sink.put4(enc_ldst_uimm12(op, uimm12scaled, reg, rd));
                     }
                     &AMode::RegReg(r1, r2) => {
+                        let r1 = allocs.next(r1);
+                        let r2 = allocs.next(r2);
                         sink.put4(enc_ldst_reg(
                             op, r1, r2, /* scaled = */ false, /* extendop = */ None, rd,
                         ));
                     }
                     &AMode::RegScaled(r1, r2, ty) | &AMode::RegScaledExtended(r1, r2, ty, _) => {
+                        let r1 = allocs.next(r1);
+                        let r2 = allocs.next(r2);
                         assert_eq!(bits, ty_bits(ty));
                         let extendop = match &mem {
                             &AMode::RegScaled(..) => None,
@@ -961,6 +1007,8 @@ impl MachInstEmit for Inst {
                         ));
                     }
                     &AMode::RegExtended(r1, r2, extendop) => {
+                        let r1 = allocs.next(r1);
+                        let r2 = allocs.next(r2);
                         sink.put4(enc_ldst_reg(
                             op,
                             r1,
@@ -999,10 +1047,12 @@ impl MachInstEmit for Inst {
                         }
                     }
                     &AMode::PreIndexed(reg, simm9) => {
-                        sink.put4(enc_ldst_simm9(op, simm9, 0b11, reg.to_reg(), rd));
+                        let reg = allocs.next(reg.to_reg());
+                        sink.put4(enc_ldst_simm9(op, simm9, 0b11, reg, rd));
                     }
                     &AMode::PostIndexed(reg, simm9) => {
-                        sink.put4(enc_ldst_simm9(op, simm9, 0b01, reg.to_reg(), rd));
+                        let reg = allocs.next(reg.to_reg());
+                        sink.put4(enc_ldst_simm9(op, simm9, 0b01, reg, rd));
                     }
                     // Eliminated by `mem_finalize()` above.
                     &AMode::SPOffset(..) | &AMode::FPOffset(..) | &AMode::NominalSPOffset(..) => {
@@ -1019,10 +1069,12 @@ impl MachInstEmit for Inst {
             | &Inst::FpuStore32 { rd, ref mem, flags }
             | &Inst::FpuStore64 { rd, ref mem, flags }
             | &Inst::FpuStore128 { rd, ref mem, flags } => {
-                let (mem_insts, mem) = mem_finalize(sink.cur_offset(), mem, state);
+                let rd = allocs.next(rd);
+                let mem = mem.with_allocs(&mut allocs);
+                let (mem_insts, mem) = mem_finalize(sink.cur_offset(), &mem, state);
 
                 for inst in mem_insts.into_iter() {
-                    inst.emit(sink, emit_info, state);
+                    inst.emit(&[], sink, emit_info, state);
                 }
 
                 let (op, bits) = match self {
@@ -1044,20 +1096,26 @@ impl MachInstEmit for Inst {
 
                 match &mem {
                     &AMode::Unscaled(reg, simm9) => {
+                        let reg = allocs.next(reg);
                         sink.put4(enc_ldst_simm9(op, simm9, 0b00, reg, rd));
                     }
                     &AMode::UnsignedOffset(reg, uimm12scaled) => {
+                        let reg = allocs.next(reg);
                         if uimm12scaled.value() != 0 {
                             assert_eq!(bits, ty_bits(uimm12scaled.scale_ty()));
                         }
                         sink.put4(enc_ldst_uimm12(op, uimm12scaled, reg, rd));
                     }
                     &AMode::RegReg(r1, r2) => {
+                        let r1 = allocs.next(r1);
+                        let r2 = allocs.next(r2);
                         sink.put4(enc_ldst_reg(
                             op, r1, r2, /* scaled = */ false, /* extendop = */ None, rd,
                         ));
                     }
                     &AMode::RegScaled(r1, r2, _ty) | &AMode::RegScaledExtended(r1, r2, _ty, _) => {
+                        let r1 = allocs.next(r1);
+                        let r2 = allocs.next(r2);
                         let extendop = match &mem {
                             &AMode::RegScaled(..) => None,
                             &AMode::RegScaledExtended(_, _, _, op) => Some(op),
@@ -1068,6 +1126,8 @@ impl MachInstEmit for Inst {
                         ));
                     }
                     &AMode::RegExtended(r1, r2, extendop) => {
+                        let r1 = allocs.next(r1);
+                        let r2 = allocs.next(r2);
                         sink.put4(enc_ldst_reg(
                             op,
                             r1,
@@ -1081,10 +1141,12 @@ impl MachInstEmit for Inst {
                         panic!("Store to a MemLabel not implemented!");
                     }
                     &AMode::PreIndexed(reg, simm9) => {
-                        sink.put4(enc_ldst_simm9(op, simm9, 0b11, reg.to_reg(), rd));
+                        let reg = allocs.next(reg.to_reg());
+                        sink.put4(enc_ldst_simm9(op, simm9, 0b11, reg, rd));
                     }
                     &AMode::PostIndexed(reg, simm9) => {
-                        sink.put4(enc_ldst_simm9(op, simm9, 0b01, reg.to_reg(), rd));
+                        let reg = allocs.next(reg.to_reg());
+                        sink.put4(enc_ldst_simm9(op, simm9, 0b01, reg, rd));
                     }
                     // Eliminated by `mem_finalize()` above.
                     &AMode::SPOffset(..) | &AMode::FPOffset(..) | &AMode::NominalSPOffset(..) => {
@@ -1100,23 +1162,29 @@ impl MachInstEmit for Inst {
                 ref mem,
                 flags,
             } => {
+                let rt = allocs.next(rt);
+                let rt2 = allocs.next(rt2);
+                let mem = mem.with_allocs(&mut allocs);
                 let srcloc = state.cur_srcloc();
                 if srcloc != SourceLoc::default() && !flags.notrap() {
                     // Register the offset at which the actual store instruction starts.
                     sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
                 }
-                match mem {
+                match &mem {
                     &PairAMode::SignedOffset(reg, simm7) => {
                         assert_eq!(simm7.scale_ty, I64);
+                        let reg = allocs.next(reg);
                         sink.put4(enc_ldst_pair(0b1010100100, simm7, reg, rt, rt2));
                     }
                     &PairAMode::PreIndexed(reg, simm7) => {
                         assert_eq!(simm7.scale_ty, I64);
-                        sink.put4(enc_ldst_pair(0b1010100110, simm7, reg.to_reg(), rt, rt2));
+                        let reg = allocs.next(reg.to_reg());
+                        sink.put4(enc_ldst_pair(0b1010100110, simm7, reg, rt, rt2));
                     }
                     &PairAMode::PostIndexed(reg, simm7) => {
                         assert_eq!(simm7.scale_ty, I64);
-                        sink.put4(enc_ldst_pair(0b1010100010, simm7, reg.to_reg(), rt, rt2));
+                        let reg = allocs.next(reg.to_reg());
+                        sink.put4(enc_ldst_pair(0b1010100010, simm7, reg, rt, rt2));
                     }
                 }
             }
@@ -1126,26 +1194,30 @@ impl MachInstEmit for Inst {
                 ref mem,
                 flags,
             } => {
+                let rt = allocs.next(rt.to_reg());
+                let rt2 = allocs.next(rt2.to_reg());
+                let mem = mem.with_allocs(&mut allocs);
                 let srcloc = state.cur_srcloc();
                 if srcloc != SourceLoc::default() && !flags.notrap() {
                     // Register the offset at which the actual load instruction starts.
                     sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
                 }
 
-                let rt = rt.to_reg();
-                let rt2 = rt2.to_reg();
-                match mem {
+                match &mem {
                     &PairAMode::SignedOffset(reg, simm7) => {
                         assert_eq!(simm7.scale_ty, I64);
+                        let reg = allocs.next(reg);
                         sink.put4(enc_ldst_pair(0b1010100101, simm7, reg, rt, rt2));
                     }
                     &PairAMode::PreIndexed(reg, simm7) => {
                         assert_eq!(simm7.scale_ty, I64);
-                        sink.put4(enc_ldst_pair(0b1010100111, simm7, reg.to_reg(), rt, rt2));
+                        let reg = allocs.next(reg.to_reg());
+                        sink.put4(enc_ldst_pair(0b1010100111, simm7, reg, rt, rt2));
                     }
                     &PairAMode::PostIndexed(reg, simm7) => {
                         assert_eq!(simm7.scale_ty, I64);
-                        sink.put4(enc_ldst_pair(0b1010100011, simm7, reg.to_reg(), rt, rt2));
+                        let reg = allocs.next(reg.to_reg());
+                        sink.put4(enc_ldst_pair(0b1010100011, simm7, reg, rt, rt2));
                     }
                 }
             }
@@ -1161,6 +1233,9 @@ impl MachInstEmit for Inst {
                 ref mem,
                 flags,
             } => {
+                let rt = allocs.next(rt.to_reg());
+                let rt2 = allocs.next(rt2.to_reg());
+                let mem = mem.with_allocs(&mut allocs);
                 let srcloc = state.cur_srcloc();
 
                 if srcloc != SourceLoc::default() && !flags.notrap() {
@@ -1173,37 +1248,22 @@ impl MachInstEmit for Inst {
                     &Inst::FpuLoadP128 { .. } => 0b10,
                     _ => unreachable!(),
                 };
-                let rt = rt.to_reg();
-                let rt2 = rt2.to_reg();
 
-                match mem {
+                match &mem {
                     &PairAMode::SignedOffset(reg, simm7) => {
                         assert!(simm7.scale_ty == F64 || simm7.scale_ty == I8X16);
+                        let reg = allocs.next(reg);
                         sink.put4(enc_ldst_vec_pair(opc, 0b10, true, simm7, reg, rt, rt2));
                     }
                     &PairAMode::PreIndexed(reg, simm7) => {
                         assert!(simm7.scale_ty == F64 || simm7.scale_ty == I8X16);
-                        sink.put4(enc_ldst_vec_pair(
-                            opc,
-                            0b11,
-                            true,
-                            simm7,
-                            reg.to_reg(),
-                            rt,
-                            rt2,
-                        ));
+                        let reg = allocs.next(reg.to_reg());
+                        sink.put4(enc_ldst_vec_pair(opc, 0b11, true, simm7, reg, rt, rt2));
                     }
                     &PairAMode::PostIndexed(reg, simm7) => {
                         assert!(simm7.scale_ty == F64 || simm7.scale_ty == I8X16);
-                        sink.put4(enc_ldst_vec_pair(
-                            opc,
-                            0b01,
-                            true,
-                            simm7,
-                            reg.to_reg(),
-                            rt,
-                            rt2,
-                        ));
+                        let reg = allocs.next(reg.to_reg());
+                        sink.put4(enc_ldst_vec_pair(opc, 0b01, true, simm7, reg, rt, rt2));
                     }
                 }
             }
@@ -1219,6 +1279,9 @@ impl MachInstEmit for Inst {
                 ref mem,
                 flags,
             } => {
+                let rt = allocs.next(rt);
+                let rt2 = allocs.next(rt2);
+                let mem = mem.with_allocs(&mut allocs);
                 let srcloc = state.cur_srcloc();
 
                 if srcloc != SourceLoc::default() && !flags.notrap() {
@@ -1232,83 +1295,76 @@ impl MachInstEmit for Inst {
                     _ => unreachable!(),
                 };
 
-                match mem {
+                match &mem {
                     &PairAMode::SignedOffset(reg, simm7) => {
                         assert!(simm7.scale_ty == F64 || simm7.scale_ty == I8X16);
+                        let reg = allocs.next(reg);
                         sink.put4(enc_ldst_vec_pair(opc, 0b10, false, simm7, reg, rt, rt2));
                     }
                     &PairAMode::PreIndexed(reg, simm7) => {
                         assert!(simm7.scale_ty == F64 || simm7.scale_ty == I8X16);
-                        sink.put4(enc_ldst_vec_pair(
-                            opc,
-                            0b11,
-                            false,
-                            simm7,
-                            reg.to_reg(),
-                            rt,
-                            rt2,
-                        ));
+                        let reg = allocs.next(reg.to_reg());
+                        sink.put4(enc_ldst_vec_pair(opc, 0b11, false, simm7, reg, rt, rt2));
                     }
                     &PairAMode::PostIndexed(reg, simm7) => {
                         assert!(simm7.scale_ty == F64 || simm7.scale_ty == I8X16);
-                        sink.put4(enc_ldst_vec_pair(
-                            opc,
-                            0b01,
-                            false,
-                            simm7,
-                            reg.to_reg(),
-                            rt,
-                            rt2,
-                        ));
+                        let reg = allocs.next(reg.to_reg());
+                        sink.put4(enc_ldst_vec_pair(opc, 0b01, false, simm7, reg, rt, rt2));
                     }
                 }
             }
-            &Inst::Mov64 { rd, rm } => {
-                assert!(rd.to_reg().get_class() == rm.get_class());
-                assert!(rm.get_class() == RegClass::I64);
+            &Inst::Mov { size, rd, rm } => {
+                let rd = allocs.next_writable(rd);
+                let rm = allocs.next(rm);
+                assert!(rd.to_reg().class() == rm.class());
+                assert!(rm.class() == RegClass::Int);
 
-                // MOV to SP is interpreted as MOV to XZR instead. And our codegen
-                // should never MOV to XZR.
-                assert!(rd.to_reg() != stack_reg());
+                match size {
+                    OperandSize::Size64 => {
+                        // MOV to SP is interpreted as MOV to XZR instead. And our codegen
+                        // should never MOV to XZR.
+                        assert!(rd.to_reg() != stack_reg());
 
-                if rm == stack_reg() {
-                    // We can't use ORR here, so use an `add rd, sp, #0` instead.
-                    let imm12 = Imm12::maybe_from_u64(0).unwrap();
-                    sink.put4(enc_arith_rr_imm12(
-                        0b100_10001,
-                        imm12.shift_bits(),
-                        imm12.imm_bits(),
-                        rm,
-                        rd,
-                    ));
-                } else {
-                    // Encoded as ORR rd, rm, zero.
-                    sink.put4(enc_arith_rrr(0b10101010_000, 0b000_000, rd, zero_reg(), rm));
+                        if rm == stack_reg() {
+                            // We can't use ORR here, so use an `add rd, sp, #0` instead.
+                            let imm12 = Imm12::maybe_from_u64(0).unwrap();
+                            sink.put4(enc_arith_rr_imm12(
+                                0b100_10001,
+                                imm12.shift_bits(),
+                                imm12.imm_bits(),
+                                rm,
+                                rd,
+                            ));
+                        } else {
+                            // Encoded as ORR rd, rm, zero.
+                            sink.put4(enc_arith_rrr(0b10101010_000, 0b000_000, rd, zero_reg(), rm));
+                        }
+                    }
+                    OperandSize::Size32 => {
+                        // MOV to SP is interpreted as MOV to XZR instead. And our codegen
+                        // should never MOV to XZR.
+                        assert!(machreg_to_gpr(rd.to_reg()) != 31);
+                        // Encoded as ORR rd, rm, zero.
+                        sink.put4(enc_arith_rrr(0b00101010_000, 0b000_000, rd, zero_reg(), rm));
+                    }
                 }
             }
-            &Inst::Mov32 { rd, rm } => {
-                // MOV to SP is interpreted as MOV to XZR instead. And our codegen
-                // should never MOV to XZR.
-                assert!(machreg_to_gpr(rd.to_reg()) != 31);
-                // Encoded as ORR rd, rm, zero.
-                sink.put4(enc_arith_rrr(0b00101010_000, 0b000_000, rd, zero_reg(), rm));
-            }
-            &Inst::MovZ { rd, imm, size } => {
-                sink.put4(enc_move_wide(MoveWideOpcode::MOVZ, rd, imm, size))
-            }
-            &Inst::MovN { rd, imm, size } => {
-                sink.put4(enc_move_wide(MoveWideOpcode::MOVN, rd, imm, size))
-            }
-            &Inst::MovK { rd, imm, size } => {
-                sink.put4(enc_move_wide(MoveWideOpcode::MOVK, rd, imm, size))
+            &Inst::MovWide { op, rd, imm, size } => {
+                let rd = allocs.next_writable(rd);
+                sink.put4(enc_move_wide(op, rd, imm, size));
             }
             &Inst::CSel { rd, rn, rm, cond } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
+                let rm = allocs.next(rm);
                 sink.put4(enc_csel(rd, rn, rm, cond));
             }
             &Inst::CSet { rd, cond } => {
+                let rd = allocs.next_writable(rd);
                 sink.put4(enc_cset(rd, cond));
             }
             &Inst::CSetm { rd, cond } => {
+                let rd = allocs.next_writable(rd);
                 sink.put4(enc_csetm(rd, cond));
             }
             &Inst::CCmpImm {
@@ -1318,15 +1374,22 @@ impl MachInstEmit for Inst {
                 nzcv,
                 cond,
             } => {
+                let rn = allocs.next(rn);
                 sink.put4(enc_ccmp_imm(size, rn, imm, nzcv, cond));
             }
             &Inst::AtomicRMW { ty, op, rs, rt, rn } => {
-                sink.put4(enc_ldal(ty, op, rs, rt, rn));
+                assert!(is_valid_atomic_transaction_ty(ty));
+                let rs = allocs.next(rs);
+                let rt = allocs.next_writable(rt);
+                let rn = allocs.next(rn);
+                sink.put4(enc_acq_rel(ty, op, rs, rt, rn));
             }
             &Inst::AtomicRMWLoop { ty, op } => {
+                assert!(is_valid_atomic_transaction_ty(ty));
                 /* Emit this:
                      again:
                       ldaxr{,b,h}  x/w27, [x25]
+                      // maybe sign extend
                       op          x28, x27, x26 // op is add,sub,and,orr,eor
                       stlxr{,b,h}  w24, x/w28, [x25]
                       cbnz        x24, again
@@ -1361,10 +1424,31 @@ impl MachInstEmit for Inst {
                 }
                 sink.put4(enc_ldaxr(ty, x27wr, x25)); // ldaxr x27, [x25]
                 let size = OperandSize::from_ty(ty);
+                let sign_ext = match op {
+                    AtomicRMWLoopOp::Smin | AtomicRMWLoopOp::Smax => match ty {
+                        I16 => Some((ExtendOp::SXTH, 16)),
+                        I8 => Some((ExtendOp::SXTB, 8)),
+                        _ => None,
+                    },
+                    _ => None,
+                };
+
+                // sxt{b|h} the loaded result if necessary.
+                if sign_ext.is_some() {
+                    let (_, from_bits) = sign_ext.unwrap();
+                    Inst::Extend {
+                        rd: x27wr,
+                        rn: x27,
+                        signed: true,
+                        from_bits,
+                        to_bits: size.bits(),
+                    }
+                    .emit(&[], sink, emit_info, state);
+                }
 
                 match op {
-                    AtomicRmwOp::Xchg => {} // do nothing
-                    AtomicRmwOp::Nand => {
+                    AtomicRMWLoopOp::Xchg => {} // do nothing
+                    AtomicRMWLoopOp::Nand => {
                         // and x28, x27, x26
                         // mvn x28, x28
 
@@ -1375,7 +1459,7 @@ impl MachInstEmit for Inst {
                             rn: x27,
                             rm: x26,
                         }
-                        .emit(sink, emit_info, state);
+                        .emit(&[], sink, emit_info, state);
 
                         Inst::AluRRR {
                             alu_op: ALUOp::OrrNot,
@@ -1384,31 +1468,44 @@ impl MachInstEmit for Inst {
                             rn: xzr,
                             rm: x28,
                         }
-                        .emit(sink, emit_info, state);
+                        .emit(&[], sink, emit_info, state);
                     }
-                    AtomicRmwOp::Umin
-                    | AtomicRmwOp::Umax
-                    | AtomicRmwOp::Smin
-                    | AtomicRmwOp::Smax => {
-                        // cmp x27, x26
+                    AtomicRMWLoopOp::Umin
+                    | AtomicRMWLoopOp::Umax
+                    | AtomicRMWLoopOp::Smin
+                    | AtomicRMWLoopOp::Smax => {
+                        // cmp x27, x26 {?sxt}
                         // csel.op x28, x27, x26
 
                         let cond = match op {
-                            AtomicRmwOp::Umin => Cond::Lo,
-                            AtomicRmwOp::Umax => Cond::Hi,
-                            AtomicRmwOp::Smin => Cond::Lt,
-                            AtomicRmwOp::Smax => Cond::Gt,
+                            AtomicRMWLoopOp::Umin => Cond::Lo,
+                            AtomicRMWLoopOp::Umax => Cond::Hi,
+                            AtomicRMWLoopOp::Smin => Cond::Lt,
+                            AtomicRMWLoopOp::Smax => Cond::Gt,
                             _ => unreachable!(),
                         };
 
-                        Inst::AluRRR {
-                            alu_op: ALUOp::SubS,
-                            size,
-                            rd: writable_zero_reg(),
-                            rn: x27,
-                            rm: x26,
+                        if sign_ext.is_some() {
+                            let (extendop, _) = sign_ext.unwrap();
+                            Inst::AluRRRExtend {
+                                alu_op: ALUOp::SubS,
+                                size,
+                                rd: writable_zero_reg(),
+                                rn: x27,
+                                rm: x26,
+                                extendop,
+                            }
+                            .emit(&[], sink, emit_info, state);
+                        } else {
+                            Inst::AluRRR {
+                                alu_op: ALUOp::SubS,
+                                size,
+                                rd: writable_zero_reg(),
+                                rn: x27,
+                                rm: x26,
+                            }
+                            .emit(&[], sink, emit_info, state);
                         }
-                        .emit(sink, emit_info, state);
 
                         Inst::CSel {
                             cond,
@@ -1416,22 +1513,22 @@ impl MachInstEmit for Inst {
                             rn: x27,
                             rm: x26,
                         }
-                        .emit(sink, emit_info, state);
+                        .emit(&[], sink, emit_info, state);
                     }
                     _ => {
                         // add/sub/and/orr/eor x28, x27, x26
                         let alu_op = match op {
-                            AtomicRmwOp::Add => ALUOp::Add,
-                            AtomicRmwOp::Sub => ALUOp::Sub,
-                            AtomicRmwOp::And => ALUOp::And,
-                            AtomicRmwOp::Or => ALUOp::Orr,
-                            AtomicRmwOp::Xor => ALUOp::Eor,
-                            AtomicRmwOp::Nand
-                            | AtomicRmwOp::Umin
-                            | AtomicRmwOp::Umax
-                            | AtomicRmwOp::Smin
-                            | AtomicRmwOp::Smax
-                            | AtomicRmwOp::Xchg => unreachable!(),
+                            AtomicRMWLoopOp::Add => ALUOp::Add,
+                            AtomicRMWLoopOp::Sub => ALUOp::Sub,
+                            AtomicRMWLoopOp::And => ALUOp::And,
+                            AtomicRMWLoopOp::Orr => ALUOp::Orr,
+                            AtomicRMWLoopOp::Eor => ALUOp::Eor,
+                            AtomicRMWLoopOp::Nand
+                            | AtomicRMWLoopOp::Umin
+                            | AtomicRMWLoopOp::Umax
+                            | AtomicRMWLoopOp::Smin
+                            | AtomicRMWLoopOp::Smax
+                            | AtomicRMWLoopOp::Xchg => unreachable!(),
                         };
 
                         Inst::AluRRR {
@@ -1441,7 +1538,7 @@ impl MachInstEmit for Inst {
                             rn: x27,
                             rm: x26,
                         }
-                        .emit(sink, emit_info, state);
+                        .emit(&[], sink, emit_info, state);
                     }
                 }
 
@@ -1449,7 +1546,7 @@ impl MachInstEmit for Inst {
                 if srcloc != SourceLoc::default() {
                     sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
                 }
-                if op == AtomicRmwOp::Xchg {
+                if op == AtomicRMWLoopOp::Xchg {
                     sink.put4(enc_stlxr(ty, x24wr, x26, x25)); // stlxr w24, x26, [x25]
                 } else {
                     sink.put4(enc_stlxr(ty, x24wr, x28, x25)); // stlxr w24, x28, [x25]
@@ -1462,10 +1559,14 @@ impl MachInstEmit for Inst {
                 sink.put4(enc_conditional_br(
                     BranchTarget::Label(again_label),
                     CondBrKind::NotZero(x24),
+                    &mut AllocationConsumer::default(),
                 ));
                 sink.use_label_at_offset(br_offset, again_label, LabelUse::Branch19);
             }
             &Inst::AtomicCAS { rs, rt, rn, ty } => {
+                let rs = allocs.next_writable(rs);
+                let rt = allocs.next(rt);
+                let rn = allocs.next(rn);
                 let size = match ty {
                     I8 => 0b00,
                     I16 => 0b01,
@@ -1526,6 +1627,7 @@ impl MachInstEmit for Inst {
                 sink.put4(enc_conditional_br(
                     BranchTarget::Label(out_label),
                     CondBrKind::Cond(Cond::Ne),
+                    &mut AllocationConsumer::default(),
                 ));
                 sink.use_label_at_offset(br_out_offset, out_label, LabelUse::Branch19);
 
@@ -1542,6 +1644,7 @@ impl MachInstEmit for Inst {
                 sink.put4(enc_conditional_br(
                     BranchTarget::Label(again_label),
                     CondBrKind::NotZero(x24),
+                    &mut AllocationConsumer::default(),
                 ));
                 sink.use_label_at_offset(br_again_offset, again_label, LabelUse::Branch19);
 
@@ -1549,21 +1652,31 @@ impl MachInstEmit for Inst {
                 sink.bind_label(out_label);
             }
             &Inst::LoadAcquire { access_ty, rt, rn } => {
+                let rn = allocs.next(rn);
+                let rt = allocs.next_writable(rt);
                 sink.put4(enc_ldar(access_ty, rt, rn));
             }
             &Inst::StoreRelease { access_ty, rt, rn } => {
+                let rn = allocs.next(rn);
+                let rt = allocs.next(rt);
                 sink.put4(enc_stlr(access_ty, rt, rn));
             }
             &Inst::Fence {} => {
                 sink.put4(enc_dmb_ish()); // dmb ish
             }
             &Inst::FpuMove64 { rd, rn } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
                 sink.put4(enc_fpurr(0b000_11110_01_1_000000_10000, rd, rn));
             }
             &Inst::FpuMove128 { rd, rn } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
                 sink.put4(enc_vecmov(/* 16b = */ true, rd, rn));
             }
             &Inst::FpuMoveFromVec { rd, rn, idx, size } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
                 let (imm5, shift, mask) = match size.lane_size() {
                     ScalarSize::Size32 => (0b00100, 3, 0b011),
                     ScalarSize::Size64 => (0b01000, 4, 0b001),
@@ -1579,84 +1692,101 @@ impl MachInstEmit for Inst {
                 );
             }
             &Inst::FpuExtend { rd, rn, size } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
                 sink.put4(enc_fpurr(
                     0b000_11110_00_1_000000_10000 | (size.ftype() << 13),
                     rd,
                     rn,
                 ));
             }
-            &Inst::FpuRR { fpu_op, rd, rn } => {
+            &Inst::FpuRR {
+                fpu_op,
+                size,
+                rd,
+                rn,
+            } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
                 let top22 = match fpu_op {
-                    FPUOp1::Abs32 => 0b000_11110_00_1_000001_10000,
-                    FPUOp1::Abs64 => 0b000_11110_01_1_000001_10000,
-                    FPUOp1::Neg32 => 0b000_11110_00_1_000010_10000,
-                    FPUOp1::Neg64 => 0b000_11110_01_1_000010_10000,
-                    FPUOp1::Sqrt32 => 0b000_11110_00_1_000011_10000,
-                    FPUOp1::Sqrt64 => 0b000_11110_01_1_000011_10000,
-                    FPUOp1::Cvt32To64 => 0b000_11110_00_1_000101_10000,
-                    FPUOp1::Cvt64To32 => 0b000_11110_01_1_000100_10000,
+                    FPUOp1::Abs => 0b000_11110_00_1_000001_10000,
+                    FPUOp1::Neg => 0b000_11110_00_1_000010_10000,
+                    FPUOp1::Sqrt => 0b000_11110_00_1_000011_10000,
+                    FPUOp1::Cvt32To64 => {
+                        debug_assert_eq!(size, ScalarSize::Size32);
+                        0b000_11110_00_1_000101_10000
+                    }
+                    FPUOp1::Cvt64To32 => {
+                        debug_assert_eq!(size, ScalarSize::Size64);
+                        0b000_11110_01_1_000100_10000
+                    }
                 };
+                let top22 = top22 | size.ftype() << 12;
                 sink.put4(enc_fpurr(top22, rd, rn));
             }
-            &Inst::FpuRRR { fpu_op, rd, rn, rm } => {
+            &Inst::FpuRRR {
+                fpu_op,
+                size,
+                rd,
+                rn,
+                rm,
+            } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
+                let rm = allocs.next(rm);
                 let top22 = match fpu_op {
-                    FPUOp2::Add32 => 0b000_11110_00_1_00000_001010,
-                    FPUOp2::Add64 => 0b000_11110_01_1_00000_001010,
-                    FPUOp2::Sub32 => 0b000_11110_00_1_00000_001110,
-                    FPUOp2::Sub64 => 0b000_11110_01_1_00000_001110,
-                    FPUOp2::Mul32 => 0b000_11110_00_1_00000_000010,
-                    FPUOp2::Mul64 => 0b000_11110_01_1_00000_000010,
-                    FPUOp2::Div32 => 0b000_11110_00_1_00000_000110,
-                    FPUOp2::Div64 => 0b000_11110_01_1_00000_000110,
-                    FPUOp2::Max32 => 0b000_11110_00_1_00000_010010,
-                    FPUOp2::Max64 => 0b000_11110_01_1_00000_010010,
-                    FPUOp2::Min32 => 0b000_11110_00_1_00000_010110,
-                    FPUOp2::Min64 => 0b000_11110_01_1_00000_010110,
-                    FPUOp2::Sqadd64 => 0b010_11110_11_1_00000_000011,
-                    FPUOp2::Uqadd64 => 0b011_11110_11_1_00000_000011,
-                    FPUOp2::Sqsub64 => 0b010_11110_11_1_00000_001011,
-                    FPUOp2::Uqsub64 => 0b011_11110_11_1_00000_001011,
+                    FPUOp2::Add => 0b000_11110_00_1_00000_001010,
+                    FPUOp2::Sub => 0b000_11110_00_1_00000_001110,
+                    FPUOp2::Mul => 0b000_11110_00_1_00000_000010,
+                    FPUOp2::Div => 0b000_11110_00_1_00000_000110,
+                    FPUOp2::Max => 0b000_11110_00_1_00000_010010,
+                    FPUOp2::Min => 0b000_11110_00_1_00000_010110,
                 };
+                let top22 = top22 | size.ftype() << 12;
                 sink.put4(enc_fpurrr(top22, rd, rn, rm));
             }
-            &Inst::FpuRRI { fpu_op, rd, rn } => match fpu_op {
-                FPUOpRI::UShr32(imm) => {
-                    debug_assert_eq!(32, imm.lane_size_in_bits);
-                    sink.put4(
-                        0b0_0_1_011110_0000000_00_0_0_0_1_00000_00000
-                            | imm.enc() << 16
-                            | machreg_to_vec(rn) << 5
-                            | machreg_to_vec(rd.to_reg()),
-                    )
+            &Inst::FpuRRI { fpu_op, rd, rn } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
+                match fpu_op {
+                    FPUOpRI::UShr32(imm) => {
+                        debug_assert_eq!(32, imm.lane_size_in_bits);
+                        sink.put4(
+                            0b0_0_1_011110_0000000_00_0_0_0_1_00000_00000
+                                | imm.enc() << 16
+                                | machreg_to_vec(rn) << 5
+                                | machreg_to_vec(rd.to_reg()),
+                        )
+                    }
+                    FPUOpRI::UShr64(imm) => {
+                        debug_assert_eq!(64, imm.lane_size_in_bits);
+                        sink.put4(
+                            0b01_1_111110_0000000_00_0_0_0_1_00000_00000
+                                | imm.enc() << 16
+                                | machreg_to_vec(rn) << 5
+                                | machreg_to_vec(rd.to_reg()),
+                        )
+                    }
+                    FPUOpRI::Sli64(imm) => {
+                        debug_assert_eq!(64, imm.lane_size_in_bits);
+                        sink.put4(
+                            0b01_1_111110_0000000_010101_00000_00000
+                                | imm.enc() << 16
+                                | machreg_to_vec(rn) << 5
+                                | machreg_to_vec(rd.to_reg()),
+                        )
+                    }
+                    FPUOpRI::Sli32(imm) => {
+                        debug_assert_eq!(32, imm.lane_size_in_bits);
+                        sink.put4(
+                            0b0_0_1_011110_0000000_010101_00000_00000
+                                | imm.enc() << 16
+                                | machreg_to_vec(rn) << 5
+                                | machreg_to_vec(rd.to_reg()),
+                        )
+                    }
                 }
-                FPUOpRI::UShr64(imm) => {
-                    debug_assert_eq!(64, imm.lane_size_in_bits);
-                    sink.put4(
-                        0b01_1_111110_0000000_00_0_0_0_1_00000_00000
-                            | imm.enc() << 16
-                            | machreg_to_vec(rn) << 5
-                            | machreg_to_vec(rd.to_reg()),
-                    )
-                }
-                FPUOpRI::Sli64(imm) => {
-                    debug_assert_eq!(64, imm.lane_size_in_bits);
-                    sink.put4(
-                        0b01_1_111110_0000000_010101_00000_00000
-                            | imm.enc() << 16
-                            | machreg_to_vec(rn) << 5
-                            | machreg_to_vec(rd.to_reg()),
-                    )
-                }
-                FPUOpRI::Sli32(imm) => {
-                    debug_assert_eq!(32, imm.lane_size_in_bits);
-                    sink.put4(
-                        0b0_0_1_011110_0000000_010101_00000_00000
-                            | imm.enc() << 16
-                            | machreg_to_vec(rn) << 5
-                            | machreg_to_vec(rd.to_reg()),
-                    )
-                }
-            },
+            }
             &Inst::FpuRRRR {
                 fpu_op,
                 rd,
@@ -1664,6 +1794,10 @@ impl MachInstEmit for Inst {
                 rm,
                 ra,
             } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
+                let rm = allocs.next(rm);
+                let ra = allocs.next(ra);
                 let top17 = match fpu_op {
                     FPUOp3::MAdd32 => 0b000_11111_00_0_00000_0,
                     FPUOp3::MAdd64 => 0b000_11111_01_0_00000_0,
@@ -1671,6 +1805,8 @@ impl MachInstEmit for Inst {
                 sink.put4(enc_fpurrrr(top17, rd, rn, rm, ra));
             }
             &Inst::VecMisc { op, rd, rn, size } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
                 let (q, enc_size) = size.enc_size();
                 let (u, bits_12_16, size) = match op {
                     VecMisc2::Not => (0b1, 0b00101, 0b00),
@@ -1813,6 +1949,8 @@ impl MachInstEmit for Inst {
                 sink.put4(enc_vec_rr_misc((q << 1) | u, size, bits_12_16, rd, rn));
             }
             &Inst::VecLanes { op, rd, rn, size } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
                 let (q, size) = match size {
                     VectorSize::Size8x8 => (0b0, 0b00),
                     VectorSize::Size8x16 => (0b1, 0b00),
@@ -1834,6 +1972,8 @@ impl MachInstEmit for Inst {
                 size,
                 imm,
             } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
                 let (is_shr, template) = match op {
                     VecShiftImmOp::Ushr => (true, 0b_011_011110_0000_000_000001_00000_00000_u32),
                     VecShiftImmOp::Sshr => (true, 0b_010_011110_0000_000_000001_00000_00000_u32),
@@ -1869,6 +2009,9 @@ impl MachInstEmit for Inst {
                 sink.put4(template | (immh_immb << 16) | (rn_enc << 5) | rd_enc);
             }
             &Inst::VecExtract { rd, rn, rm, imm4 } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
+                let rm = allocs.next(rm);
                 if imm4 < 16 {
                     let template = 0b_01_101110_000_00000_0_0000_0_00000_00000_u32;
                     let rm_enc = machreg_to_vec(rm);
@@ -1890,6 +2033,9 @@ impl MachInstEmit for Inst {
                 rm,
                 is_extension,
             } => {
+                let rn = allocs.next(rn);
+                let rm = allocs.next(rm);
+                let rd = allocs.next_writable(rd);
                 sink.put4(enc_tbl(is_extension, 0b00, rd, rn, rm));
             }
             &Inst::VecTbl2 {
@@ -1899,16 +2045,21 @@ impl MachInstEmit for Inst {
                 rm,
                 is_extension,
             } => {
+                let rn = allocs.next(rn);
+                let rn2 = allocs.next(rn2);
+                let rm = allocs.next(rm);
+                let rd = allocs.next_writable(rd);
                 assert_eq!(machreg_to_vec(rn2), (machreg_to_vec(rn) + 1) % 32);
                 sink.put4(enc_tbl(is_extension, 0b01, rd, rn, rm));
             }
-            &Inst::FpuCmp32 { rn, rm } => {
-                sink.put4(enc_fcmp(ScalarSize::Size32, rn, rm));
-            }
-            &Inst::FpuCmp64 { rn, rm } => {
-                sink.put4(enc_fcmp(ScalarSize::Size64, rn, rm));
+            &Inst::FpuCmp { size, rn, rm } => {
+                let rn = allocs.next(rn);
+                let rm = allocs.next(rm);
+                sink.put4(enc_fcmp(size, rn, rm));
             }
             &Inst::FpuToInt { op, rd, rn } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
                 let top16 = match op {
                     // FCVTZS (32/32-bit)
                     FpuToIntOp::F32ToI32 => 0b000_11110_00_1_11_000,
@@ -1930,6 +2081,8 @@ impl MachInstEmit for Inst {
                 sink.put4(enc_fputoint(top16, rd, rn));
             }
             &Inst::IntToFpu { op, rd, rn } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
                 let top16 = match op {
                     // SCVTF (32/32-bit)
                     IntToFpuOp::I32ToF32 => 0b000_11110_00_1_00_010,
@@ -1951,41 +2104,51 @@ impl MachInstEmit for Inst {
                 sink.put4(enc_inttofpu(top16, rd, rn));
             }
             &Inst::LoadFpuConst64 { rd, const_data } => {
+                let rd = allocs.next_writable(rd);
                 let inst = Inst::FpuLoad64 {
                     rd,
                     mem: AMode::Label(MemLabel::PCRel(8)),
                     flags: MemFlags::trusted(),
                 };
-                inst.emit(sink, emit_info, state);
+                inst.emit(&[], sink, emit_info, state);
                 let inst = Inst::Jump {
                     dest: BranchTarget::ResolvedOffset(12),
                 };
-                inst.emit(sink, emit_info, state);
+                inst.emit(&[], sink, emit_info, state);
                 sink.put8(const_data);
             }
             &Inst::LoadFpuConst128 { rd, const_data } => {
+                let rd = allocs.next_writable(rd);
                 let inst = Inst::FpuLoad128 {
                     rd,
                     mem: AMode::Label(MemLabel::PCRel(8)),
                     flags: MemFlags::trusted(),
                 };
-                inst.emit(sink, emit_info, state);
+                inst.emit(&[], sink, emit_info, state);
                 let inst = Inst::Jump {
                     dest: BranchTarget::ResolvedOffset(20),
                 };
-                inst.emit(sink, emit_info, state);
+                inst.emit(&[], sink, emit_info, state);
 
                 for i in const_data.to_le_bytes().iter() {
                     sink.put1(*i);
                 }
             }
             &Inst::FpuCSel32 { rd, rn, rm, cond } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
+                let rm = allocs.next(rm);
                 sink.put4(enc_fcsel(rd, rn, rm, cond, ScalarSize::Size32));
             }
             &Inst::FpuCSel64 { rd, rn, rm, cond } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
+                let rm = allocs.next(rm);
                 sink.put4(enc_fcsel(rd, rn, rm, cond, ScalarSize::Size64));
             }
             &Inst::FpuRound { op, rd, rn } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
                 let top22 = match op {
                     FpuRoundMode::Minus32 => 0b000_11110_00_1_001_010_10000,
                     FpuRoundMode::Minus64 => 0b000_11110_01_1_001_010_10000,
@@ -1999,6 +2162,8 @@ impl MachInstEmit for Inst {
                 sink.put4(enc_fround(top22, rd, rn));
             }
             &Inst::MovToFpu { rd, rn, size } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
                 let template = match size {
                     ScalarSize::Size32 => 0b000_11110_00_1_00_111_000000_00000_00000,
                     ScalarSize::Size64 => 0b100_11110_01_1_00_111_000000_00000_00000,
@@ -2007,6 +2172,7 @@ impl MachInstEmit for Inst {
                 sink.put4(template | (machreg_to_gpr(rn) << 5) | machreg_to_vec(rd.to_reg()));
             }
             &Inst::FpuMoveFPImm { rd, imm, size } => {
+                let rd = allocs.next_writable(rd);
                 let size_code = match size {
                     ScalarSize::Size32 => 0b00,
                     ScalarSize::Size64 => 0b01,
@@ -2020,6 +2186,8 @@ impl MachInstEmit for Inst {
                 );
             }
             &Inst::MovToVec { rd, rn, idx, size } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
                 let (imm5, shift) = match size.lane_size() {
                     ScalarSize::Size8 => (0b00001, 1),
                     ScalarSize::Size16 => (0b00010, 2),
@@ -2037,6 +2205,8 @@ impl MachInstEmit for Inst {
                 );
             }
             &Inst::MovFromVec { rd, rn, idx, size } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
                 let (q, imm5, shift, mask) = match size {
                     VectorSize::Size8x16 => (0b0, 0b00001, 1, 0b1111),
                     VectorSize::Size16x8 => (0b0, 0b00010, 2, 0b0111),
@@ -2061,6 +2231,8 @@ impl MachInstEmit for Inst {
                 size,
                 scalar_size,
             } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
                 let (imm5, shift, half) = match size {
                     VectorSize::Size8x8 => (0b00001, 1, true),
                     VectorSize::Size8x16 => (0b00001, 1, false),
@@ -2087,6 +2259,8 @@ impl MachInstEmit for Inst {
                 );
             }
             &Inst::VecDup { rd, rn, size } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
                 let imm5 = match size {
                     VectorSize::Size8x16 => 0b00001,
                     VectorSize::Size16x8 => 0b00010,
@@ -2102,6 +2276,8 @@ impl MachInstEmit for Inst {
                 );
             }
             &Inst::VecDupFromFpu { rd, rn, size } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
                 let imm5 = match size {
                     VectorSize::Size32x4 => 0b00100,
                     VectorSize::Size64x2 => 0b01000,
@@ -2115,6 +2291,7 @@ impl MachInstEmit for Inst {
                 );
             }
             &Inst::VecDupFPImm { rd, imm, size } => {
+                let rd = allocs.next_writable(rd);
                 let imm = imm.enc_bits();
                 let op = match size.lane_size() {
                     ScalarSize::Size32 => 0,
@@ -2131,6 +2308,7 @@ impl MachInstEmit for Inst {
                 invert,
                 size,
             } => {
+                let rd = allocs.next_writable(rd);
                 let (imm, shift, shift_ones) = imm.value();
                 let (op, cmode) = match size.lane_size() {
                     ScalarSize::Size8 => {
@@ -2178,6 +2356,8 @@ impl MachInstEmit for Inst {
                 rn,
                 high_half,
             } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
                 let (u, immh) = match t {
                     VecExtendOp::Sxtl8 => (0b0, 0b001),
                     VecExtendOp::Sxtl16 => (0b0, 0b010),
@@ -2201,6 +2381,8 @@ impl MachInstEmit for Inst {
                 rn,
                 high_half,
             } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
                 let (u, size, bits_12_16) = match op {
                     VecRRLongOp::Fcvtl16 => (0b0, 0b00, 0b10111),
                     VecRRLongOp::Fcvtl32 => (0b0, 0b01, 0b10111),
@@ -2223,6 +2405,8 @@ impl MachInstEmit for Inst {
                 rn,
                 high_half,
             } => {
+                let rn = allocs.next(rn);
+                let rd = allocs.next_writable(rd);
                 let (u, size, bits_12_16) = match op {
                     VecRRNarrowOp::Xtn16 => (0b0, 0b00, 0b10010),
                     VecRRNarrowOp::Xtn32 => (0b0, 0b01, 0b10010),
@@ -2255,6 +2439,8 @@ impl MachInstEmit for Inst {
                 src_idx,
                 size,
             } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
                 let (imm5, shift) = match size.lane_size() {
                     ScalarSize::Size8 => (0b00001, 1),
                     ScalarSize::Size16 => (0b00010, 2),
@@ -2276,6 +2462,8 @@ impl MachInstEmit for Inst {
                 );
             }
             &Inst::VecRRPair { op, rd, rn } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
                 let bits_12_16 = match op {
                     VecPairOp::Addp => 0b11011,
                 };
@@ -2289,6 +2477,9 @@ impl MachInstEmit for Inst {
                 alu_op,
                 high_half,
             } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
+                let rm = allocs.next(rm);
                 let (u, size, bit14) = match alu_op {
                     VecRRRLongOp::Smull8 => (0b0, 0b00, 0b1),
                     VecRRRLongOp::Smull16 => (0b0, 0b01, 0b1),
@@ -2311,6 +2502,8 @@ impl MachInstEmit for Inst {
                 ));
             }
             &Inst::VecRRPairLong { op, rd, rn } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
                 let (u, size) = match op {
                     VecRRPairLongOp::Saddlp8 => (0b0, 0b0),
                     VecRRPairLongOp::Uaddlp8 => (0b1, 0b0),
@@ -2327,6 +2520,9 @@ impl MachInstEmit for Inst {
                 alu_op,
                 size,
             } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
+                let rm = allocs.next(rm);
                 let (q, enc_size) = size.enc_size();
                 let is_float = match alu_op {
                     VecALUOp::Fcmeq
@@ -2431,6 +2627,8 @@ impl MachInstEmit for Inst {
                 sink.put4(enc_vec_rrr(top11 | q << 9, rm, bit15_10, rn, rd));
             }
             &Inst::VecLoadReplicate { rd, rn, size } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
                 let (q, size) = size.enc_size();
 
                 let srcloc = state.cur_srcloc();
@@ -2442,6 +2640,9 @@ impl MachInstEmit for Inst {
                 sink.put4(enc_ldst_vec(q, size, rn, rd));
             }
             &Inst::VecCSel { rd, rn, rm, cond } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
+                let rm = allocs.next(rm);
                 /* Emit this:
                       b.cond  else
                       mov     rd, rm
@@ -2460,6 +2661,7 @@ impl MachInstEmit for Inst {
                 sink.put4(enc_conditional_br(
                     BranchTarget::Label(else_label),
                     CondBrKind::Cond(cond),
+                    &mut AllocationConsumer::default(),
                 ));
                 sink.use_label_at_offset(br_else_offset, else_label, LabelUse::Branch19);
 
@@ -2482,9 +2684,11 @@ impl MachInstEmit for Inst {
                 sink.bind_label(out_label);
             }
             &Inst::MovToNZCV { rn } => {
+                let rn = allocs.next(rn);
                 sink.put4(0xd51b4200 | machreg_to_gpr(rn));
             }
             &Inst::MovFromNZCV { rd } => {
+                let rd = allocs.next_writable(rd);
                 sink.put4(0xd53b4200 | machreg_to_gpr(rd.to_reg()));
             }
             &Inst::Extend {
@@ -2494,6 +2698,8 @@ impl MachInstEmit for Inst {
                 from_bits: 1,
                 to_bits,
             } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
                 assert!(to_bits <= 64);
                 // Reduce zero-extend-from-1-bit to:
                 // - and rd, rn, #1
@@ -2507,7 +2713,7 @@ impl MachInstEmit for Inst {
                     rn,
                     imml,
                 }
-                .emit(sink, emit_info, state);
+                .emit(&[], sink, emit_info, state);
             }
             &Inst::Extend {
                 rd,
@@ -2516,8 +2722,14 @@ impl MachInstEmit for Inst {
                 from_bits: 32,
                 to_bits: 64,
             } => {
-                let mov = Inst::Mov32 { rd, rm: rn };
-                mov.emit(sink, emit_info, state);
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
+                let mov = Inst::Mov {
+                    size: OperandSize::Size32,
+                    rd,
+                    rm: rn,
+                };
+                mov.emit(&[], sink, emit_info, state);
             }
             &Inst::Extend {
                 rd,
@@ -2526,6 +2738,8 @@ impl MachInstEmit for Inst {
                 from_bits,
                 to_bits,
             } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
                 let (opc, size) = if signed {
                     (0b00, OperandSize::from_bits(to_bits))
                 } else {
@@ -2543,7 +2757,7 @@ impl MachInstEmit for Inst {
                 // Emit the jump itself.
                 sink.put4(enc_jump26(0b000101, dest.as_offset26_or_zero()));
             }
-            &Inst::Ret => {
+            &Inst::Ret { .. } => {
                 sink.put4(0xd65f03c0);
             }
             &Inst::EpiloguePlaceholder => {
@@ -2564,7 +2778,8 @@ impl MachInstEmit for Inst {
                 if let Some(s) = state.take_stack_map() {
                     sink.add_stack_map(StackMapExtent::UpcomingBytes(4), s);
                 }
-                sink.put4(0b1101011_0001_11111_000000_00000_00000 | (machreg_to_gpr(info.rn) << 5));
+                let rn = allocs.next(info.rn);
+                sink.put4(0b1101011_0001_11111_000000_00000_00000 | (machreg_to_gpr(rn) << 5));
                 let loc = state.cur_srcloc();
                 if info.opcode.is_call() {
                     sink.add_call_site(loc, info.opcode);
@@ -2580,10 +2795,12 @@ impl MachInstEmit for Inst {
                 let cond_off = sink.cur_offset();
                 if let Some(l) = taken.as_label() {
                     sink.use_label_at_offset(cond_off, l, LabelUse::Branch19);
-                    let inverted = enc_conditional_br(taken, kind.invert()).to_le_bytes();
+                    let mut allocs_inv = allocs.clone();
+                    let inverted =
+                        enc_conditional_br(taken, kind.invert(), &mut allocs_inv).to_le_bytes();
                     sink.add_cond_branch(cond_off, cond_off + 4, l, &inverted[..]);
                 }
-                sink.put4(enc_conditional_br(taken, kind));
+                sink.put4(enc_conditional_br(taken, kind, &mut allocs));
 
                 // Unconditional part next.
                 let uncond_off = sink.cur_offset();
@@ -2600,15 +2817,17 @@ impl MachInstEmit for Inst {
                 sink.put4(enc_conditional_br(
                     BranchTarget::Label(label),
                     kind.invert(),
+                    &mut allocs,
                 ));
                 sink.use_label_at_offset(off, label, LabelUse::Branch19);
                 // udf
                 let trap = Inst::Udf { trap_code };
-                trap.emit(sink, emit_info, state);
+                trap.emit(&[], sink, emit_info, state);
                 // LABEL:
                 sink.bind_label(label);
             }
             &Inst::IndirectBr { rn, .. } => {
+                let rn = allocs.next(rn);
                 sink.put4(enc_br(rn));
             }
             &Inst::Nop0 => {}
@@ -2627,6 +2846,7 @@ impl MachInstEmit for Inst {
                 sink.put4(0xd4a00000);
             }
             &Inst::Adr { rd, off } => {
+                let rd = allocs.next_writable(rd);
                 assert!(off > -(1 << 20));
                 assert!(off < (1 << 20));
                 sink.put4(enc_adr(off, rd));
@@ -2644,12 +2864,19 @@ impl MachInstEmit for Inst {
                 ref info,
                 ..
             } => {
+                let ridx = allocs.next(ridx);
+                let rtmp1 = allocs.next_writable(rtmp1);
+                let rtmp2 = allocs.next_writable(rtmp2);
                 // This sequence is *one* instruction in the vcode, and is expanded only here at
                 // emission time, because we cannot allow the regalloc to insert spills/reloads in
                 // the middle; we depend on hardcoded PC-rel addressing below.
 
                 // Branch to default when condition code from prior comparison indicates.
-                let br = enc_conditional_br(info.default_target, CondBrKind::Cond(Cond::Hs));
+                let br = enc_conditional_br(
+                    info.default_target,
+                    CondBrKind::Cond(Cond::Hs),
+                    &mut AllocationConsumer::default(),
+                );
                 // No need to inform the sink's branch folding logic about this branch, because it
                 // will not be merged with any other branch, flipped, or elided (it is not preceded
                 // or succeeded by any other branch). Just emit it with the label use.
@@ -2662,10 +2889,10 @@ impl MachInstEmit for Inst {
                 // Save index in a tmp (the live range of ridx only goes to start of this
                 // sequence; rtmp1 or rtmp2 may overwrite it).
                 let inst = Inst::gen_move(rtmp2, ridx, I64);
-                inst.emit(sink, emit_info, state);
+                inst.emit(&[], sink, emit_info, state);
                 // Load address of jump table
                 let inst = Inst::Adr { rd: rtmp1, off: 16 };
-                inst.emit(sink, emit_info, state);
+                inst.emit(&[], sink, emit_info, state);
                 // Load value out of jump table
                 let inst = Inst::SLoad32 {
                     rd: rtmp2,
@@ -2677,7 +2904,7 @@ impl MachInstEmit for Inst {
                     ),
                     flags: MemFlags::trusted(),
                 };
-                inst.emit(sink, emit_info, state);
+                inst.emit(&[], sink, emit_info, state);
                 // Add base of jump table to jump-table-sourced block offset
                 let inst = Inst::AluRRR {
                     alu_op: ALUOp::Add,
@@ -2686,14 +2913,14 @@ impl MachInstEmit for Inst {
                     rn: rtmp1.to_reg(),
                     rm: rtmp2.to_reg(),
                 };
-                inst.emit(sink, emit_info, state);
+                inst.emit(&[], sink, emit_info, state);
                 // Branch to computed address. (`targets` here is only used for successor queries
                 // and is not needed for emission.)
                 let inst = Inst::IndirectBr {
                     rn: rtmp1.to_reg(),
                     targets: vec![],
                 };
-                inst.emit(sink, emit_info, state);
+                inst.emit(&[], sink, emit_info, state);
                 // Emit jump table (table of 32-bit offsets).
                 let jt_off = sink.cur_offset();
                 for &target in info.targets.iter() {
@@ -2720,16 +2947,17 @@ impl MachInstEmit for Inst {
                 ref name,
                 offset,
             } => {
+                let rd = allocs.next_writable(rd);
                 let inst = Inst::ULoad64 {
                     rd,
                     mem: AMode::Label(MemLabel::PCRel(8)),
                     flags: MemFlags::trusted(),
                 };
-                inst.emit(sink, emit_info, state);
+                inst.emit(&[], sink, emit_info, state);
                 let inst = Inst::Jump {
                     dest: BranchTarget::ResolvedOffset(12),
                 };
-                inst.emit(sink, emit_info, state);
+                inst.emit(&[], sink, emit_info, state);
                 let srcloc = state.cur_srcloc();
                 sink.add_reloc(srcloc, Reloc::Abs8, name, offset);
                 if emit_info.0.emit_all_ones_funcaddrs() {
@@ -2739,15 +2967,24 @@ impl MachInstEmit for Inst {
                 }
             }
             &Inst::LoadAddr { rd, ref mem } => {
-                let (mem_insts, mem) = mem_finalize(sink.cur_offset(), mem, state);
+                let rd = allocs.next_writable(rd);
+                let mem = mem.with_allocs(&mut allocs);
+                let (mem_insts, mem) = mem_finalize(sink.cur_offset(), &mem, state);
                 for inst in mem_insts.into_iter() {
-                    inst.emit(sink, emit_info, state);
+                    inst.emit(&[], sink, emit_info, state);
                 }
 
                 let (reg, index_reg, offset) = match mem {
-                    AMode::RegExtended(r, idx, extendop) => (r, Some((idx, extendop)), 0),
-                    AMode::Unscaled(r, simm9) => (r, None, simm9.value()),
+                    AMode::RegExtended(r, idx, extendop) => {
+                        let r = allocs.next(r);
+                        (r, Some((idx, extendop)), 0)
+                    }
+                    AMode::Unscaled(r, simm9) => {
+                        let r = allocs.next(r);
+                        (r, None, simm9.value())
+                    }
                     AMode::UnsignedOffset(r, uimm12scaled) => {
+                        let r = allocs.next(r);
                         (r, None, uimm12scaled.value() as i32)
                     }
                     _ => panic!("Unsupported case for LoadAddr: {:?}", mem),
@@ -2769,12 +3006,16 @@ impl MachInstEmit for Inst {
                         extendop,
                     };
 
-                    add.emit(sink, emit_info, state);
+                    add.emit(&[], sink, emit_info, state);
                 } else if offset == 0 {
                     if reg != rd.to_reg() {
-                        let mov = Inst::Mov64 { rd, rm: reg };
+                        let mov = Inst::Mov {
+                            size: OperandSize::Size64,
+                            rd,
+                            rm: reg,
+                        };
 
-                        mov.emit(sink, emit_info, state);
+                        mov.emit(&[], sink, emit_info, state);
                     }
                 } else if let Some(imm12) = Imm12::maybe_from_u64(abs_offset) {
                     let add = Inst::AluRRImm12 {
@@ -2784,7 +3025,7 @@ impl MachInstEmit for Inst {
                         rn: reg,
                         imm12,
                     };
-                    add.emit(sink, emit_info, state);
+                    add.emit(&[], sink, emit_info, state);
                 } else {
                     // Use `tmp2` here: `reg` may be `spilltmp` if the `AMode` on this instruction
                     // was initially an `SPOffset`. Assert that `tmp2` is truly free to use. Note
@@ -2795,7 +3036,7 @@ impl MachInstEmit for Inst {
                     debug_assert!(reg != tmp2_reg());
                     let tmp = writable_tmp2_reg();
                     for insn in Inst::load_constant(tmp, abs_offset).into_iter() {
-                        insn.emit(sink, emit_info, state);
+                        insn.emit(&[], sink, emit_info, state);
                     }
                     let add = Inst::AluRRR {
                         alu_op,
@@ -2804,7 +3045,7 @@ impl MachInstEmit for Inst {
                         rn: reg,
                         rm: tmp.to_reg(),
                     };
-                    add.emit(sink, emit_info, state);
+                    add.emit(&[], sink, emit_info, state);
                 }
             }
             &Inst::VirtualSPOffsetAdj { offset } => {
@@ -2821,7 +3062,7 @@ impl MachInstEmit for Inst {
                     let jmp = Inst::Jump {
                         dest: BranchTarget::Label(jump_around_label),
                     };
-                    jmp.emit(sink, emit_info, state);
+                    jmp.emit(&[], sink, emit_info, state);
                     sink.emit_island(needed_space + 4);
                     sink.bind_label(jump_around_label);
                 }
@@ -2852,13 +3093,11 @@ impl MachInstEmit for Inst {
                 sink.put4(0xd503201f);
             }
 
-            &Inst::ValueLabelMarker { .. } => {
-                // Nothing; this is only used to compute debug info.
-            }
-
             &Inst::Unwind { ref inst } => {
                 sink.add_unwind(inst.clone());
             }
+
+            &Inst::DummyUse { .. } => {}
         }
 
         let end_off = sink.cur_offset();
@@ -2867,7 +3106,8 @@ impl MachInstEmit for Inst {
         state.clear_post_insn();
     }
 
-    fn pretty_print(&self, mb_rru: Option<&RealRegUniverse>, state: &mut EmitState) -> String {
-        self.print_with_state(mb_rru, state)
+    fn pretty_print_inst(&self, allocs: &[Allocation], state: &mut Self::State) -> String {
+        let mut allocs = AllocationConsumer::new(allocs);
+        self.print_with_state(state, &mut allocs)
     }
 }

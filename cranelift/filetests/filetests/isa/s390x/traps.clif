@@ -1,4 +1,4 @@
-test compile
+test compile precise-output
 target s390x
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -10,18 +10,16 @@ block0:
   trap user0
 }
 
-; check: trap
+; block0:
+;   trap
 
 function %resumable_trap() {
 block0:
   trap user0
 }
 
-; check: trap
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; TRAPZ
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; block0:
+;   trap
 
 function %trapz(i64) {
 block0(v0: i64):
@@ -31,18 +29,13 @@ block0(v0: i64):
   return
 }
 
-; FIXME: Does not use TrapIf internally as trapz is expanded.
-; check: Block 0
-; check:  clgfi %r2, 42
-; nextln: jge label1 ; jg label2
-; check: Block 1:
-; check:  br %r14
-; check: Block 2:
-; check:  trap
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; TRAPNZ/RESUMABLE_TRAPNZ
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; block0:
+;   clgfi %r2, 42
+;   jge label1 ; jg label2
+; block1:
+;   br %r14
+; block2:
+;   trap
 
 function %trapnz(i64) {
 block0(v0: i64):
@@ -52,14 +45,13 @@ block0(v0: i64):
   return
 }
 
-; FIXME: Does not use TrapIf internally as trapnz is expanded.
-; check: Block 0
-; check:  clgfi %r2, 42
-; nextln: jgne label1 ; jg label2
-; check: Block 1:
-; check:  br %r14
-; check: Block 2:
-; check:  trap
+; block0:
+;   clgfi %r2, 42
+;   jgne label1 ; jg label2
+; block1:
+;   br %r14
+; block2:
+;   trap
 
 function %resumable_trapnz(i64) {
 block0(v0: i64):
@@ -69,18 +61,13 @@ block0(v0: i64):
   return
 }
 
-; FIXME: Does not use TrapIf internally as resumable_trapnz is expanded.
-; check: Block 0
-; check:  clgfi %r2, 42
-; nextln: jgne label1 ; jg label2
-; check: Block 1:
-; check:  br %r14
-; check: Block 2:
-; check:  trap
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; DEBUGTRAP
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; block0:
+;   clgfi %r2, 42
+;   jgne label1 ; jg label2
+; block1:
+;   br %r14
+; block2:
+;   trap
 
 function %h() {
 block0:
@@ -88,4 +75,7 @@ block0:
   return
 }
 
-; check: debugtrap
+; block0:
+;   debugtrap
+;   br %r14
+

@@ -7,21 +7,18 @@
 //!
 //! - Floating-point immediates (FIMM instruction).
 
+use super::lower_inst;
+use crate::data_value::DataValue;
 use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::ir::types::*;
 use crate::ir::Inst as IRInst;
 use crate::ir::{Opcode, Type, Value};
-use crate::machinst::lower::*;
-use crate::machinst::*;
-use crate::{CodegenError, CodegenResult};
-
 use crate::isa::aarch64::inst::*;
 use crate::isa::aarch64::AArch64Backend;
-
-use super::lower_inst;
-
-use crate::data_value::DataValue;
-use regalloc::{Reg, Writable};
+use crate::machinst::lower::*;
+use crate::machinst::*;
+use crate::machinst::{Reg, Writable};
+use crate::{CodegenError, CodegenResult};
 use smallvec::SmallVec;
 use std::cmp;
 
@@ -309,7 +306,8 @@ fn put_input_in_rs<C: LowerCtx<I = Inst>>(
     narrow_mode: NarrowValueMode,
 ) -> ResultRS {
     let inputs = ctx.get_input_as_source_or_const(input.insn, input.input);
-    if let Some((insn, 0)) = inputs.inst {
+    // Unique or non-unique use is fine for merging here.
+    if let Some((insn, 0)) = inputs.inst.as_inst() {
         let op = ctx.data(insn).opcode();
 
         if op == Opcode::Ishl {
@@ -356,7 +354,7 @@ fn get_as_extended_value<C: LowerCtx<I = Inst>>(
     narrow_mode: NarrowValueMode,
 ) -> Option<(Value, ExtendOp)> {
     let inputs = ctx.get_value_as_source_or_const(val);
-    let (insn, n) = inputs.inst?;
+    let (insn, n) = inputs.inst.as_inst()?;
     if n != 0 {
         return None;
     }
@@ -662,8 +660,8 @@ pub(crate) fn lower_address<C: LowerCtx<I = Inst>>(
     roots: &[InsnInput],
     offset: i32,
 ) -> AMode {
-    // TODO: support base_reg + scale * index_reg. For this, we would need to pattern-match shl or
-    // mul instructions (Load/StoreComplex don't include scale factors).
+    // TODO: support base_reg + scale * index_reg. For this, we would need to
+    // pattern-match shl or mul instructions.
 
     // Collect addends through an arbitrary tree of 32-to-64-bit sign/zero
     // extends and addition ops. We update these as we consume address
@@ -1128,7 +1126,7 @@ pub(crate) fn maybe_input_insn<C: LowerCtx<I = Inst>>(
         inputs,
         op
     );
-    if let Some((src_inst, _)) = inputs.inst {
+    if let Some((src_inst, _)) = inputs.inst.as_inst() {
         let data = c.data(src_inst);
         log::trace!(" -> input inst {:?}", data);
         if data.opcode() == op {
@@ -1164,14 +1162,14 @@ pub(crate) fn maybe_input_insn_via_conv<C: LowerCtx<I = Inst>>(
     conv: Opcode,
 ) -> Option<IRInst> {
     let inputs = c.get_input_as_source_or_const(input.insn, input.input);
-    if let Some((src_inst, _)) = inputs.inst {
+    if let Some((src_inst, _)) = inputs.inst.as_inst() {
         let data = c.data(src_inst);
         if data.opcode() == op {
             return Some(src_inst);
         }
         if data.opcode() == conv {
             let inputs = c.get_input_as_source_or_const(src_inst, 0);
-            if let Some((src_inst, _)) = inputs.inst {
+            if let Some((src_inst, _)) = inputs.inst.as_inst() {
                 let data = c.data(src_inst);
                 if data.opcode() == op {
                     return Some(src_inst);
@@ -1451,19 +1449,14 @@ pub(crate) fn lower_icmp<C: LowerCtx<I = Inst>>(
 
 pub(crate) fn lower_fcmp_or_ffcmp_to_flags<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRInst) {
     let ty = ctx.input_ty(insn, 0);
-    let bits = ty_bits(ty);
     let inputs = [InsnInput { insn, input: 0 }, InsnInput { insn, input: 1 }];
     let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
     let rm = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
-    match bits {
-        32 => {
-            ctx.emit(Inst::FpuCmp32 { rn, rm });
-        }
-        64 => {
-            ctx.emit(Inst::FpuCmp64 { rn, rm });
-        }
-        _ => panic!("Unknown float size"),
-    }
+    ctx.emit(Inst::FpuCmp {
+        size: ScalarSize::from_ty(ty),
+        rn,
+        rm,
+    });
 }
 
 /// Materialize a boolean value into a register from the flags
@@ -1510,25 +1503,13 @@ pub(crate) fn emit_atomic_load<C: LowerCtx<I = Inst>>(
 
 fn load_op_to_ty(op: Opcode) -> Option<Type> {
     match op {
-        Opcode::Sload8 | Opcode::Uload8 | Opcode::Sload8Complex | Opcode::Uload8Complex => Some(I8),
-        Opcode::Sload16 | Opcode::Uload16 | Opcode::Sload16Complex | Opcode::Uload16Complex => {
-            Some(I16)
-        }
-        Opcode::Sload32 | Opcode::Uload32 | Opcode::Sload32Complex | Opcode::Uload32Complex => {
-            Some(I32)
-        }
-        Opcode::Load | Opcode::LoadComplex => None,
-        Opcode::Sload8x8 | Opcode::Uload8x8 | Opcode::Sload8x8Complex | Opcode::Uload8x8Complex => {
-            Some(I8X8)
-        }
-        Opcode::Sload16x4
-        | Opcode::Uload16x4
-        | Opcode::Sload16x4Complex
-        | Opcode::Uload16x4Complex => Some(I16X4),
-        Opcode::Sload32x2
-        | Opcode::Uload32x2
-        | Opcode::Sload32x2Complex
-        | Opcode::Uload32x2Complex => Some(I32X2),
+        Opcode::Sload8 | Opcode::Uload8 => Some(I8),
+        Opcode::Sload16 | Opcode::Uload16 => Some(I16),
+        Opcode::Sload32 | Opcode::Uload32 => Some(I32),
+        Opcode::Load => None,
+        Opcode::Sload8x8 | Opcode::Uload8x8 => Some(I8X8),
+        Opcode::Sload16x4 | Opcode::Uload16x4 => Some(I16X4),
+        Opcode::Sload32x2 | Opcode::Uload32x2 => Some(I32X2),
         _ => None,
     }
 }

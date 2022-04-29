@@ -1,4 +1,4 @@
-test compile
+test compile precise-output
 target s390x
 
 function %f(i8, i64, i64) -> i64 {
@@ -9,11 +9,12 @@ block0(v0: i8, v1: i64, v2: i64):
   return v5
 }
 
-; check:  llcr %r2, %r2
-; nextln: clfi %r2, 42
-; nextln: locgre %r4, %r3
-; nextln: lgr %r2, %r4
-; nextln: br %r14
+; block0:
+;   llcr %r5, %r2
+;   clfi %r5, 42
+;   lgr %r2, %r4
+;   locgre %r2, %r3
+;   br %r14
 
 function %g(b1, i8, i8) -> i8 {
 block0(v0: b1, v1: i8, v2: i8):
@@ -21,13 +22,12 @@ block0(v0: b1, v1: i8, v2: i8):
   return v3
 }
 
-; FIXME: optimize i8/i16 compares
-
-; check:  llcr %r2, %r2
-; nextln: chi %r2, 0
-; nextln: locrlh %r4, %r3
-; nextln: lr %r2, %r4
-; nextln: br %r14
+; block0:
+;   llcr %r5, %r2
+;   chi %r5, 0
+;   lgr %r2, %r4
+;   locrlh %r2, %r3
+;   br %r14
 
 function %i(i32, i8, i8) -> i8 {
 block0(v0: i32, v1: i8, v2: i8):
@@ -37,7 +37,9 @@ block0(v0: i32, v1: i8, v2: i8):
   return v5
 }
 
-; check:  clfi %r2, 42
-; nextln: locre %r4, %r3
-; nextln: lr %r2, %r4
-; nextln: br %r14
+; block0:
+;   clfi %r2, 42
+;   lgr %r2, %r4
+;   locre %r2, %r3
+;   br %r14
+

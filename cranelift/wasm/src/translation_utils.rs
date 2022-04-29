@@ -1,6 +1,5 @@
 //! Helper functions and structures for the translation.
 use crate::environ::TargetEnvironment;
-use crate::wasm_unsupported;
 use crate::WasmResult;
 use core::convert::TryInto;
 use core::u32;
@@ -34,7 +33,6 @@ pub fn type_to_type<PE: TargetEnvironment + ?Sized>(
         wasmparser::Type::ExternRef | wasmparser::Type::FuncRef => {
             Ok(environ.reference_type(ty.try_into()?))
         }
-        ty => Err(wasm_unsupported!("type_to_type: wasm type {:?}", ty)),
     }
 }
 
@@ -52,17 +50,13 @@ pub fn tabletype_to_type<PE: TargetEnvironment + ?Sized>(
         wasmparser::Type::V128 => Ok(Some(ir::types::I8X16)),
         wasmparser::Type::ExternRef => Ok(Some(environ.reference_type(ty.try_into()?))),
         wasmparser::Type::FuncRef => Ok(None),
-        ty => Err(wasm_unsupported!(
-            "tabletype_to_type: table wasm type {:?}",
-            ty
-        )),
     }
 }
 
 /// Get the parameter and result types for the given Wasm blocktype.
 pub fn blocktype_params_results<'a, T>(
     validator: &'a FuncValidator<T>,
-    ty_or_ft: wasmparser::TypeOrFuncType,
+    ty: wasmparser::BlockType,
 ) -> WasmResult<(
     impl ExactSizeIterator<Item = wasmparser::Type> + Clone + 'a,
     impl ExactSizeIterator<Item = wasmparser::Type> + Clone + 'a,
@@ -70,26 +64,32 @@ pub fn blocktype_params_results<'a, T>(
 where
     T: WasmModuleResources,
 {
-    return Ok(match ty_or_ft {
-        wasmparser::TypeOrFuncType::Type(ty) => {
-            let (params, results): (&'static [wasmparser::Type], &'static [wasmparser::Type]) =
-                match ty {
-                    wasmparser::Type::I32 => (&[], &[wasmparser::Type::I32]),
-                    wasmparser::Type::I64 => (&[], &[wasmparser::Type::I64]),
-                    wasmparser::Type::F32 => (&[], &[wasmparser::Type::F32]),
-                    wasmparser::Type::F64 => (&[], &[wasmparser::Type::F64]),
-                    wasmparser::Type::V128 => (&[], &[wasmparser::Type::V128]),
-                    wasmparser::Type::ExternRef => (&[], &[wasmparser::Type::ExternRef]),
-                    wasmparser::Type::FuncRef => (&[], &[wasmparser::Type::FuncRef]),
-                    wasmparser::Type::EmptyBlockType => (&[], &[]),
-                    ty => return Err(wasm_unsupported!("blocktype_params_results: type {:?}", ty)),
-                };
+    return Ok(match ty {
+        wasmparser::BlockType::Empty => {
+            let params: &'static [wasmparser::Type] = &[];
+            let results: &'static [wasmparser::Type] = &[];
             (
                 itertools::Either::Left(params.iter().copied()),
                 itertools::Either::Left(results.iter().copied()),
             )
         }
-        wasmparser::TypeOrFuncType::FuncType(ty_index) => {
+        wasmparser::BlockType::Type(ty) => {
+            let params: &'static [wasmparser::Type] = &[];
+            let results: &'static [wasmparser::Type] = match ty {
+                wasmparser::Type::I32 => &[wasmparser::Type::I32],
+                wasmparser::Type::I64 => &[wasmparser::Type::I64],
+                wasmparser::Type::F32 => &[wasmparser::Type::F32],
+                wasmparser::Type::F64 => &[wasmparser::Type::F64],
+                wasmparser::Type::V128 => &[wasmparser::Type::V128],
+                wasmparser::Type::ExternRef => &[wasmparser::Type::ExternRef],
+                wasmparser::Type::FuncRef => &[wasmparser::Type::FuncRef],
+            };
+            (
+                itertools::Either::Left(params.iter().copied()),
+                itertools::Either::Left(results.iter().copied()),
+            )
+        }
+        wasmparser::BlockType::FuncType(ty_index) => {
             let ty = validator
                 .resources()
                 .func_type_at(ty_index)
@@ -128,12 +128,6 @@ pub fn block_with_params<PE: TargetEnvironment + ?Sized>(
             }
             wasmparser::Type::V128 => {
                 builder.append_block_param(block, ir::types::I8X16);
-            }
-            ty => {
-                return Err(wasm_unsupported!(
-                    "block_with_params: type {:?} in multi-value block's signature",
-                    ty
-                ))
             }
         }
     }

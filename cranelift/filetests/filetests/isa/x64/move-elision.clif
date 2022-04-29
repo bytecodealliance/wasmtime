@@ -13,15 +13,10 @@ block0(v0: i32x4):
     return v3
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 5)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   movq    %rbp, %rsp
-;   Inst 3:   popq    %rbp
-;   Inst 4:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 

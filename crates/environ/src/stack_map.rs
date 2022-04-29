@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 /// Note that this is currently primarily documented as cranelift's
 /// `binemit::StackMap`, so for detailed documentation about this please read
 /// the docs over there.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct StackMap {
     bits: Box<[u32]>,
     mapped_words: u32,

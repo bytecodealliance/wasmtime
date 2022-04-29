@@ -30,7 +30,7 @@ function %atomic_cas_i32(i32, i32, i32) -> i32 {
 block0(v0: i32, v1: i32, v2: i32):
     stack_store.i32 v0, ss0
 
-    v3 = stack_addr.i32 ss0
+    v3 = stack_addr.i64 ss0
     v4 = atomic_cas.i32 v3, v1, v2
 
     v5 = stack_load.i32 ss0

@@ -1,0 +1,21 @@
+test compile precise-output
+target x86_64
+
+function u0:0(i32, i64) -> i32 fast { 
+block0(v1: i32, v2: i64): 
+    v3 = load.i32 notrap aligned v2
+    v4 = umax v1, v3
+    return v4
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movl    0(%rsi), %r9d
+;   cmpl    %edi, %r9d
+;   cmovnbl %r9d, %edi, %edi
+;   movq    %rdi, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+

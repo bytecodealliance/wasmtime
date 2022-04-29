@@ -1,18 +1,18 @@
 [package]
 name = "wasmtime-wast"
-version = "0.35.0"
+version = "0.37.0"
 authors = ["The Wasmtime Project Developers"]
 description = "wast testing support for wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"
 categories = ["wasm"]
 keywords = ["webassembly", "wasm"]
 repository = "https://github.com/bytecodealliance/wasmtime"
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 anyhow = "1.0.19"
-wasmtime = { path = "../wasmtime", version = "0.35.0", default-features = false, features = ['cranelift'] }
-wast = "39.0.0"
+wasmtime = { path = "../wasmtime", version = "0.37.0", default-features = false, features = ['cranelift'] }
+wast = "40.0.0"
 
 [badges]
 maintenance = { status = "actively-developed" }

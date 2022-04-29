@@ -24,14 +24,6 @@ pub struct Tunables {
     /// Whether or not to retain DWARF sections in compiled modules.
     pub parse_wasm_debuginfo: bool,
 
-    /// Whether or not to enable the ability to interrupt wasm code dynamically.
-    ///
-    /// More info can be found about the implementation in
-    /// crates/environ/src/cranelift.rs. Note that you can't interrupt host
-    /// calls and interrupts are implemented through the `VMInterrupts`
-    /// structure, or `InterruptHandle` in the `wasmtime` crate.
-    pub interruptable: bool,
-
     /// Whether or not fuel is enabled for generated code, meaning that fuel
     /// will be consumed every time a wasm instruction is executed.
     pub consume_fuel: bool,
@@ -89,7 +81,6 @@ impl Default for Tunables {
 
             generate_native_debuginfo: false,
             parse_wasm_debuginfo: true,
-            interruptable: false,
             consume_fuel: false,
             epoch_interruption: false,
             static_memory_bound_is_maximum: false,

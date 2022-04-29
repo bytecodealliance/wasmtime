@@ -62,7 +62,7 @@ jobs:
         submodules: true
     - uses: ./.github/actions/install-rust
       with:
-        toolchain: nightly-2021-12-15
+        toolchain: nightly-2022-04-27
 
     # Build C API documentation
     - run: sudo apt-get update -y && sudo apt-get install -y libclang1-9 libclang-cpp9
@@ -113,7 +113,7 @@ jobs:
         GITHUB_DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
         BUILD_REPOSITORY_ID: ${{ github.repository }}
         BUILD_SOURCEVERSION: ${{ github.sha }}
-      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'bytecodealliance/wasmtime'
 
   # Quick checks of various feature combinations and whether things
   # compile. The goal here isn't to run tests, mostly just serve as a
@@ -134,10 +134,10 @@ jobs:
     - run: cargo check -p wasmtime --no-default-features --features vtune
     - run: cargo check -p wasmtime --no-default-features --features cache
     - run: cargo check -p wasmtime --no-default-features --features async
-    - run: cargo check -p wasmtime --no-default-features --features uffd
     - run: cargo check -p wasmtime --no-default-features --features pooling-allocator
     - run: cargo check -p wasmtime --no-default-features --features cranelift
-    - run: cargo check -p wasmtime --no-default-features --features cranelift,wat,async,cache
+    - run: cargo check -p wasmtime --no-default-features --features wasm-backtrace
+    - run: cargo check -p wasmtime --no-default-features --features cranelift,wat,async,cache,wasm-backtrace
 
     # Check that benchmarks of the cranelift project build
     - run: cargo check --benches -p cranelift-codegen
@@ -178,7 +178,7 @@ jobs:
     # flags to rustc.
     - uses: ./.github/actions/install-rust
       with:
-        toolchain: nightly-2021-12-15
+        toolchain: nightly-2022-04-27
     - run: cargo install cargo-fuzz --vers "^0.11"
     # Install OCaml packages necessary for 'differential_spec' fuzz target.
     - run: sudo apt install -y ocaml-nox ocamlbuild ocaml-findlib libzarith-ocaml-dev
@@ -214,6 +214,7 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
+          # defaults to x86_64-apple-darwin
           - os: macos-latest
           - os: windows-2019
           - os: windows-2019
@@ -311,15 +312,6 @@ jobs:
       env:
         RUST_BACKTRACE: 1
 
-    # Test Linux-specific functionality
-    - run: |
-        cargo test --features uffd -p wasmtime-runtime instance::allocator::pooling
-        cargo test --features uffd -p wasmtime-cli pooling_allocator
-        cargo test --features uffd -p wasmtime-cli wast::Cranelift
-      if: matrix.os == 'ubuntu-latest' && matrix.target == ''
-      env:
-        RUST_BACKTRACE: 1
-
   # Build and test the wasi-nn module.
   test_wasi_nn:
     name: Test wasi-nn module
@@ -361,7 +353,6 @@ jobs:
     - name: Install Rust
       run: rustup update stable && rustup default stable
     - run: cargo test --benches --release
-    - run: cargo test --benches --release --features uffd
 
   # Verify that cranelift's code generation is deterministic
   meta_determinist_check:
@@ -389,6 +380,9 @@ jobs:
           os: ubuntu-latest
         - build: x86_64-macos
           os: macos-latest
+        - build: aarch64-macos
+          os: macos-latest
+          target: aarch64-apple-darwin
         - build: x86_64-windows
           os: windows-latest
         - build: x86_64-mingw
@@ -446,13 +440,14 @@ jobs:
     - run: cd .github/actions/github-release && npm install --production
     - name: Publish Release
       uses: ./.github/actions/github-release
-      if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+      if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')) && github.repository == 'bytecodealliance/wasmtime'
       with:
         files: "dist/*"
         token: ${{ secrets.GITHUB_TOKEN }}
       continue-on-error: true
 
   verify-publish:
+    if: github.repository == 'bytecodealliance/wasmtime'
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2

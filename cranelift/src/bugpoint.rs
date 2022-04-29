@@ -2,6 +2,7 @@
 
 use crate::utils::{parse_sets_and_triple, read_to_string};
 use anyhow::{Context as _, Result};
+use clap::Parser;
 use cranelift_codegen::cursor::{Cursor, FuncCursor};
 use cranelift_codegen::flowgraph::ControlFlowGraph;
 use cranelift_codegen::ir::types::{F32, F64};
@@ -16,24 +17,22 @@ use cranelift_reader::{parse_test, ParseOptions};
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use structopt::StructOpt;
 
 /// Reduce size of clif file causing panic during compilation.
-#[derive(StructOpt)]
+#[derive(Parser)]
 pub struct Options {
     /// Specify an input file to be used. Use '-' for stdin.
-    #[structopt(parse(from_os_str))]
     file: PathBuf,
 
     /// Configure Cranelift settings
-    #[structopt(long("set"))]
+    #[clap(long = "set")]
     settings: Vec<String>,
 
     /// Specify the target architecture.
     target: String,
 
     /// Be more verbose
-    #[structopt(short = "v", long = "verbose")]
+    #[clap(short, long)]
     verbose: bool,
 }
 

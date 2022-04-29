@@ -29,8 +29,6 @@ pub enum WasmType {
     FuncRef,
     /// ExternRef type
     ExternRef,
-    /// ExnRef type
-    ExnRef,
 }
 
 impl TryFrom<wasmparser::Type> for WasmType {
@@ -45,11 +43,6 @@ impl TryFrom<wasmparser::Type> for WasmType {
             V128 => Ok(WasmType::V128),
             FuncRef => Ok(WasmType::FuncRef),
             ExternRef => Ok(WasmType::ExternRef),
-            ExnRef => Ok(WasmType::ExnRef),
-            EmptyBlockType | Func => Err(WasmError::InvalidWebAssembly {
-                message: "unexpected value type".to_string(),
-                offset: 0,
-            }),
         }
     }
 }
@@ -64,7 +57,6 @@ impl From<WasmType> for wasmparser::Type {
             WasmType::V128 => wasmparser::Type::V128,
             WasmType::FuncRef => wasmparser::Type::FuncRef,
             WasmType::ExternRef => wasmparser::Type::ExternRef,
-            WasmType::ExnRef => wasmparser::Type::ExnRef,
         }
     }
 }
@@ -79,7 +71,6 @@ impl fmt::Display for WasmType {
             WasmType::V128 => write!(f, "v128"),
             WasmType::ExternRef => write!(f, "externref"),
             WasmType::FuncRef => write!(f, "funcref"),
-            WasmType::ExnRef => write!(f, "exnref"),
         }
     }
 }
@@ -213,30 +204,10 @@ entity_impl!(ElemIndex);
 pub struct TypeIndex(u32);
 entity_impl!(TypeIndex);
 
-/// Index type of a module inside the WebAssembly module.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
-pub struct ModuleIndex(u32);
-entity_impl!(ModuleIndex);
-
-/// Index type of an instance inside the WebAssembly module.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
-pub struct InstanceIndex(u32);
-entity_impl!(InstanceIndex);
-
 /// Index type of an event inside the WebAssembly module.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub struct TagIndex(u32);
 entity_impl!(TagIndex);
-
-/// Specialized index for just module types.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
-pub struct ModuleTypeIndex(u32);
-entity_impl!(ModuleTypeIndex);
-
-/// Specialized index for just instance types.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
-pub struct InstanceTypeIndex(u32);
-entity_impl!(InstanceTypeIndex);
 
 /// An index of an entity.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
@@ -249,10 +220,6 @@ pub enum EntityIndex {
     Memory(MemoryIndex),
     /// Global index.
     Global(GlobalIndex),
-    /// Module index.
-    Module(ModuleIndex),
-    /// Instance index.
-    Instance(InstanceIndex),
 }
 
 /// A type of an item in a wasm module where an item is typically something that
@@ -271,12 +238,6 @@ pub enum EntityType {
     /// A function type where the index points to the type section and records a
     /// function signature.
     Function(SignatureIndex),
-    /// An instance where the index points to the type section and records a
-    /// instance's exports.
-    Instance(InstanceTypeIndex),
-    /// A module where the index points to the type section and records a
-    /// module's imports and exports.
-    Module(ModuleTypeIndex),
 }
 
 /// A WebAssembly global.
@@ -386,8 +347,10 @@ pub struct Tag {
 
 impl From<wasmparser::TagType> for Tag {
     fn from(ty: wasmparser::TagType) -> Tag {
-        Tag {
-            ty: TypeIndex::from_u32(ty.type_index),
+        match ty.kind {
+            wasmparser::TagKind::Exception => Tag {
+                ty: TypeIndex::from_u32(ty.func_type_idx),
+            },
         }
     }
 }

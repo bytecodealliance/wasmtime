@@ -2,27 +2,27 @@
 
 use crate::utils::{iterate_files, read_to_string};
 use anyhow::Result;
+use clap::Parser;
 use cranelift_codegen::isa::{CallConv, TargetIsa};
 use cranelift_filetests::SingleFunctionCompiler;
 use cranelift_native::builder as host_isa_builder;
 use cranelift_reader::{parse_run_command, parse_test, Details, IsaSpec, ParseOptions};
 use std::path::{Path, PathBuf};
-use structopt::StructOpt;
 use target_lexicon::Triple;
 
 /// Execute clif code and verify with test expressions
-#[derive(StructOpt)]
+#[derive(Parser)]
 pub struct Options {
     /// Specify an input file to be used. Use '-' for stdin.
-    #[structopt(required(true), parse(from_os_str))]
+    #[clap(required = true)]
     files: Vec<PathBuf>,
 
     /// Enable debug output on stderr/stdout
-    #[structopt(short = "d")]
+    #[clap(short)]
     debug: bool,
 
     /// Be more verbose
-    #[structopt(short = "v", long = "verbose")]
+    #[clap(short, long)]
     verbose: bool,
 }
 

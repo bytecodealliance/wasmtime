@@ -70,6 +70,10 @@
 (rule (lower (has_type (fits_in_64 ty) (iadd (imul x y) z)))
       (madd ty x y z))
 
+;; Fold an `isub` and `imul` combination into a `msub` instruction.
+(rule (lower (has_type (fits_in_64 ty) (isub x (imul y z))))
+      (msub ty y z x))
+
 ;; vectors
 
 (rule (lower (has_type ty @ (multi_lane _ _) (iadd x y)))
@@ -145,22 +149,22 @@
 
 ;;;; Rules for `uadd_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type (vec128 ty) (uadd_sat x y)))
+(rule (lower (has_type (ty_vec128 ty) (uadd_sat x y)))
       (uqadd x y (vector_size ty)))
 
 ;;;; Rules for `sadd_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type (vec128 ty) (sadd_sat x y)))
+(rule (lower (has_type (ty_vec128 ty) (sadd_sat x y)))
       (sqadd x y (vector_size ty)))
 
 ;;;; Rules for `usub_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type (vec128 ty) (usub_sat x y)))
+(rule (lower (has_type (ty_vec128 ty) (usub_sat x y)))
       (uqsub x y (vector_size ty)))
 
 ;;;; Rules for `ssub_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type (vec128 ty) (ssub_sat x y)))
+(rule (lower (has_type (ty_vec128 ty) (ssub_sat x y)))
       (sqsub x y (vector_size ty)))
 
 ;;;; Rules for `ineg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -170,7 +174,7 @@
       (sub ty (zero_reg) x))
 
 ;; vectors.
-(rule (lower (has_type (vec128 ty) (ineg x)))
+(rule (lower (has_type (ty_vec128 ty) (ineg x)))
       (neg x (vector_size ty)))
 
 ;;;; Rules for `imul` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -202,13 +206,13 @@
            ;; madd    dst_hi, x_hi, y_lo, dst_hi
            ;; madd    dst_lo, x_lo, y_lo, zero
            (dst_hi1 Reg (umulh $I64 x_lo y_lo))
-           (dst_hi2 Reg (madd64 x_lo y_hi dst_hi1))
-           (dst_hi Reg (madd64 x_hi y_lo dst_hi2))
-           (dst_lo Reg (madd64 x_lo y_lo (zero_reg))))
+           (dst_hi2 Reg (madd $I64 x_lo y_hi dst_hi1))
+           (dst_hi Reg (madd $I64 x_hi y_lo dst_hi2))
+           (dst_lo Reg (madd $I64 x_lo y_lo (zero_reg))))
         (value_regs dst_lo dst_hi)))
 
 ;; Case for i8x16, i16x8, and i32x4.
-(rule (lower (has_type (vec128 ty @ (not_i64x2)) (imul x y)))
+(rule (lower (has_type (ty_vec128 ty @ (not_i64x2)) (imul x y)))
       (mul x y (vector_size ty)))
 
 ;; Special lowering for i64x2.
@@ -358,7 +362,7 @@
 (rule (lower (has_type (fits_in_32 ty) (smulhi x y)))
       (let ((x64 Reg (put_in_reg_sext64 x))
             (y64 Reg (put_in_reg_sext64 y))
-            (mul Reg (madd64 x64 y64 (zero_reg)))
+            (mul Reg (madd $I64 x64 y64 (zero_reg)))
             (result Reg (asr_imm $I64 mul (imm_shift_from_u8 (ty_bits ty)))))
         result))
 
@@ -368,11 +372,13 @@
       (umulh $I64 x y))
 
 (rule (lower (has_type (fits_in_32 ty) (umulhi x y)))
-      (let ((x64 Reg (put_in_reg_zext64 x))
-            (y64 Reg (put_in_reg_zext64 y))
-            (mul Reg (madd64 x64 y64 (zero_reg)))
-            (result Reg (lsr_imm $I64 mul (imm_shift_from_u8 (ty_bits ty)))))
-        result))
+      (let (
+          (x64 Reg (put_in_reg_zext64 x))
+          (y64 Reg (put_in_reg_zext64 y))
+          (mul Reg (madd $I64 x64 y64 (zero_reg)))
+          (result Reg (lsr_imm $I64 mul (imm_shift_from_u8 (ty_bits ty))))
+        )
+        (value_reg result)))
 
 ;;;; Rules for `udiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -459,14 +465,14 @@
       (let ((x64 Reg (put_in_reg_zext64 x))
             (y64 Reg (put_nonzero_in_reg_zext64 y))
             (div Reg (a64_udiv $I64 x64 y64))
-            (result Reg (msub64 div y64 x64)))
+            (result Reg (msub $I64 div y64 x64)))
         result))
 
 (rule (lower (has_type (fits_in_64 ty) (srem x y)))
       (let ((x64 Reg (put_in_reg_sext64 x))
             (y64 Reg (put_nonzero_in_reg_sext64 y))
             (div Reg (a64_sdiv $I64 x64 y64))
-            (result Reg (msub64 div y64 x64)))
+            (result Reg (msub $I64 div y64 x64)))
         result))
 
 ;;;; Rules for `uextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -575,7 +581,7 @@
         (value_regs new_lo new_hi)))
 
 ;; Implementation of `bnot` for vector types.
-(rule (lower (has_type (vec128 ty) (bnot x)))
+(rule (lower (has_type (ty_vec128 ty) (bnot x)))
       (not x (vector_size ty)))
 
 ;;;; Rules for `band` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -588,7 +594,7 @@
 
 (rule (lower (has_type $I128 (band x y))) (i128_alu_bitop (ALUOp.And) $I64 x y))
 
-(rule (lower (has_type (vec128 ty) (band x y)))
+(rule (lower (has_type (ty_vec128 ty) (band x y)))
       (and_vec x y (vector_size ty)))
 
 ;;;; Rules for `bor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -601,7 +607,7 @@
 
 (rule (lower (has_type $I128 (bor x y))) (i128_alu_bitop (ALUOp.Orr) $I64 x y))
 
-(rule (lower (has_type (vec128 ty) (bor x y)))
+(rule (lower (has_type (ty_vec128 ty) (bor x y)))
       (orr_vec x y (vector_size ty)))
 
 ;;;; Rules for `bxor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -614,7 +620,7 @@
 
 (rule (lower (has_type $I128 (bxor x y))) (i128_alu_bitop (ALUOp.Eor) $I64 x y))
 
-(rule (lower (has_type (vec128 ty) (bxor x y)))
+(rule (lower (has_type (ty_vec128 ty) (bxor x y)))
       (eor_vec x y (vector_size ty)))
 
 ;;;; Rules for `band_not` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -627,7 +633,7 @@
 
 (rule (lower (has_type $I128 (band_not x y))) (i128_alu_bitop (ALUOp.AndNot) $I64 x y))
 
-(rule (lower (has_type (vec128 ty) (band_not x y)))
+(rule (lower (has_type (ty_vec128 ty) (band_not x y)))
       (bic_vec x y (vector_size ty)))
 
 ;;;; Rules for `bor_not` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -691,7 +697,7 @@
           (csel (Cond.Ne) lo_lshift maybe_hi)))))
 
 ;; Shift for vector types.
-(rule (lower (has_type (vec128 ty) (ishl x y)))
+(rule (lower (has_type (ty_vec128 ty) (ishl x y)))
       (let ((size VectorSize (vector_size ty))
             (shift Reg (vec_dup y size)))
         (sshl x shift size)))
@@ -749,7 +755,7 @@
       (lower_ushr128 x (value_regs_get y 0)))
 
 ;; Vector shifts.
-(rule (lower (has_type (vec128 ty) (ushr x y)))
+(rule (lower (has_type (ty_vec128 ty) (ushr x y)))
       (let ((size VectorSize (vector_size ty))
             (shift Reg (vec_dup (sub $I32 (zero_reg) y) size)))
         (ushl x shift size)))
@@ -769,7 +775,7 @@
             (src_hi Reg (value_regs_get src 1))
             (lo_rshift Reg (lsr $I64 src_lo amt))
             (hi_rshift Reg (lsr $I64 src_hi amt))
-            
+
             (inv_amt Reg (orr_not $I32 (zero_reg) amt))
             (hi_lshift Reg (lsl $I64 (lsl_imm $I64 src_hi (imm_shift_from_u8 1))
                                 inv_amt))
@@ -798,7 +804,7 @@
 ;; Vector shifts.
 ;;
 ;; Note that right shifts are implemented with a negative left shift.
-(rule (lower (has_type (vec128 ty) (sshr x y)))
+(rule (lower (has_type (ty_vec128 ty) (sshr x y)))
       (let ((size VectorSize (vector_size ty))
             (shift Reg (vec_dup (sub $I32 (zero_reg) y) size)))
         (sshl x shift size)))
@@ -1014,7 +1020,7 @@
       (let ((hi_clz Reg (a64_clz $I64 (value_regs_get val 1)))
             (lo_clz Reg (a64_clz $I64 (value_regs_get val 0)))
             (tmp Reg (lsr_imm $I64 hi_clz (imm_shift_from_u8 6))))
-        (value_regs (madd64 lo_clz tmp hi_clz) (imm $I64 0))))
+        (value_regs (madd $I64 lo_clz tmp hi_clz) (imm $I64 0))))
 
 ;;;; Rules for `ctz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1062,7 +1068,7 @@
             (hi_cls Reg (a64_cls $I64 hi))
             (sign_eq_eon Reg (eon $I64 hi lo))
             (sign_eq Reg (lsr_imm $I64 sign_eq_eon (imm_shift_from_u8 63)))
-            (lo_sign_bits Reg (madd64 lo_cls sign_eq sign_eq))
+            (lo_sign_bits Reg (madd $I64 lo_cls sign_eq sign_eq))
             (maybe_lo Reg (with_flags_reg
                            (cmp64_imm hi_cls (u8_into_imm12 63))
                            (csel (Cond.Eq) lo_sign_bits (zero_reg)))))
@@ -1190,3 +1196,77 @@
       (let ((rn Reg y)
             (vec_size VectorSize (vector_size ty)))
           (value_reg (int_cmp_zero_swap cond rn vec_size))))
+
+;;;; Rules for `AtomicRMW` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (and (use_lse)
+                  (has_type (valid_atomic_transaction ty)
+                      (atomic_rmw flags (AtomicRmwOp.Add) addr src))))
+      (lse_atomic_rmw (AtomicRMWOp.Add) addr src ty))
+(rule (lower (and (use_lse)
+                  (has_type (valid_atomic_transaction ty)
+                      (atomic_rmw flags (AtomicRmwOp.Xor) addr src))))
+      (lse_atomic_rmw (AtomicRMWOp.Eor) addr src ty))
+(rule (lower (and (use_lse)
+                  (has_type (valid_atomic_transaction ty)
+                      (atomic_rmw flags (AtomicRmwOp.Or) addr src))))
+      (lse_atomic_rmw (AtomicRMWOp.Set) addr src ty))
+(rule (lower (and (use_lse)
+                  (has_type (valid_atomic_transaction ty)
+                      (atomic_rmw flags (AtomicRmwOp.Smax) addr src))))
+      (lse_atomic_rmw (AtomicRMWOp.Smax) addr src ty))
+(rule (lower (and (use_lse)
+                  (has_type (valid_atomic_transaction ty)
+                      (atomic_rmw flags (AtomicRmwOp.Smin) addr src))))
+      (lse_atomic_rmw (AtomicRMWOp.Smin) addr src ty))
+(rule (lower (and (use_lse)
+                  (has_type (valid_atomic_transaction ty)
+                      (atomic_rmw flags (AtomicRmwOp.Umax) addr src))))
+      (lse_atomic_rmw (AtomicRMWOp.Umax) addr src ty))
+(rule (lower (and (use_lse)
+                  (has_type (valid_atomic_transaction ty)
+                      (atomic_rmw flags (AtomicRmwOp.Umin) addr src))))
+      (lse_atomic_rmw (AtomicRMWOp.Umin) addr src ty))
+(rule (lower (and (use_lse)
+                  (has_type (valid_atomic_transaction ty)
+                      (atomic_rmw flags (AtomicRmwOp.Sub) addr src))))
+      (lse_atomic_rmw (AtomicRMWOp.Add) addr (sub ty (zero_reg) src) ty))
+(rule (lower (and (use_lse)
+                  (has_type (valid_atomic_transaction ty)
+                      (atomic_rmw flags (AtomicRmwOp.And) addr src))))
+      (lse_atomic_rmw (AtomicRMWOp.Clr) addr (eon ty src (zero_reg)) ty))
+
+
+(rule (lower (has_type (valid_atomic_transaction ty)
+             (atomic_rmw flags (AtomicRmwOp.Add) addr src)))
+      (atomic_rmw_loop (AtomicRMWLoopOp.Add) addr src ty))
+(rule (lower (has_type (valid_atomic_transaction ty)
+             (atomic_rmw flags (AtomicRmwOp.Sub) addr src)))
+      (atomic_rmw_loop (AtomicRMWLoopOp.Sub) addr src ty))
+(rule (lower (has_type (valid_atomic_transaction ty)
+             (atomic_rmw flags (AtomicRmwOp.And) addr src)))
+      (atomic_rmw_loop (AtomicRMWLoopOp.And) addr src ty))
+(rule (lower (has_type (valid_atomic_transaction ty)
+             (atomic_rmw flags (AtomicRmwOp.Nand) addr src)))
+      (atomic_rmw_loop (AtomicRMWLoopOp.Nand) addr src ty))
+(rule (lower (has_type (valid_atomic_transaction ty)
+             (atomic_rmw flags (AtomicRmwOp.Or) addr src)))
+      (atomic_rmw_loop (AtomicRMWLoopOp.Orr) addr src ty))
+(rule (lower (has_type (valid_atomic_transaction ty)
+             (atomic_rmw flags (AtomicRmwOp.Xor) addr src)))
+      (atomic_rmw_loop (AtomicRMWLoopOp.Eor) addr src ty))
+(rule (lower (has_type (valid_atomic_transaction ty)
+             (atomic_rmw flags (AtomicRmwOp.Smin) addr src)))
+      (atomic_rmw_loop (AtomicRMWLoopOp.Smin) addr src ty))
+(rule (lower (has_type (valid_atomic_transaction ty)
+             (atomic_rmw flags (AtomicRmwOp.Smax) addr src)))
+      (atomic_rmw_loop (AtomicRMWLoopOp.Smax) addr src ty))
+(rule (lower (has_type (valid_atomic_transaction ty)
+             (atomic_rmw flags (AtomicRmwOp.Umin) addr src)))
+      (atomic_rmw_loop (AtomicRMWLoopOp.Umin) addr src ty))
+(rule (lower (has_type (valid_atomic_transaction ty)
+             (atomic_rmw flags (AtomicRmwOp.Umax) addr src)))
+      (atomic_rmw_loop (AtomicRMWLoopOp.Umax) addr src ty))
+(rule (lower (has_type (valid_atomic_transaction ty)
+             (atomic_rmw flags (AtomicRmwOp.Xchg) addr src)))
+      (atomic_rmw_loop (AtomicRMWLoopOp.Xchg) addr src ty))

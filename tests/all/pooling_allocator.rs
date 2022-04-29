@@ -495,9 +495,7 @@ fn preserve_data_segments() -> Result<()> {
     let i = Instance::new(&mut store, &m, &[])?;
 
     // Drop the module. This should *not* drop the actual data referenced by the
-    // module, especially when uffd is enabled. If uffd is enabled we'll lazily
-    // fault in the memory of the module, which means it better still be alive
-    // after we drop this.
+    // module.
     drop(m);
 
     // Spray some stuff on the heap. If wasm data lived on the heap this should
@@ -515,8 +513,7 @@ fn preserve_data_segments() -> Result<()> {
 
     let mem = i.get_memory(&mut store, "mem").unwrap();
 
-    // This will segfault with uffd enabled, and then the uffd will lazily
-    // initialize the memory. Hopefully it's still `foo`!
+    // Hopefully it's still `foo`!
     assert!(mem.data(&store).starts_with(b"foo"));
 
     Ok(())

@@ -5,8 +5,10 @@ use crate::ir::MemFlags;
 use crate::ir::{SourceLoc, TrapCode};
 use crate::isa::s390x::inst::*;
 use crate::isa::s390x::settings as s390x_settings;
+use crate::machinst::reg::count_operands;
+use crate::machinst::{Reg, RegClass};
 use core::convert::TryFrom;
-use regalloc::{Reg, RegClass};
+use regalloc2::Allocation;
 
 /// Memory addressing mode finalization: convert "special" modes (e.g.,
 /// generic arbitrary stack offset) into real addressing modes, possibly by
@@ -125,7 +127,7 @@ pub fn mem_emit(
         true,
     );
     for inst in mem_insts.into_iter() {
-        inst.emit(sink, emit_info, state);
+        inst.emit(&[], sink, emit_info, state);
     }
 
     if add_trap && mem.can_trap() {
@@ -195,7 +197,7 @@ pub fn mem_rs_emit(
         false,
     );
     for inst in mem_insts.into_iter() {
-        inst.emit(sink, emit_info, state);
+        inst.emit(&[], sink, emit_info, state);
     }
 
     if add_trap && mem.can_trap() {
@@ -237,7 +239,7 @@ pub fn mem_imm8_emit(
 ) {
     let (mem_insts, mem) = mem_finalize(mem, state, true, true, false, false);
     for inst in mem_insts.into_iter() {
-        inst.emit(sink, emit_info, state);
+        inst.emit(&[], sink, emit_info, state);
     }
 
     if add_trap && mem.can_trap() {
@@ -275,7 +277,7 @@ pub fn mem_imm16_emit(
 ) {
     let (mem_insts, mem) = mem_finalize(mem, state, true, false, false, false);
     for inst in mem_insts.into_iter() {
-        inst.emit(sink, emit_info, state);
+        inst.emit(&[], sink, emit_info, state);
     }
 
     if add_trap && mem.can_trap() {
@@ -300,17 +302,17 @@ pub fn mem_imm16_emit(
 // Instructions and subcomponents: emission
 
 fn machreg_to_gpr(m: Reg) -> u8 {
-    assert_eq!(m.get_class(), RegClass::I64);
-    u8::try_from(m.to_real_reg().get_hw_encoding()).unwrap()
+    assert_eq!(m.class(), RegClass::Int);
+    u8::try_from(m.to_real_reg().unwrap().hw_enc()).unwrap()
 }
 
 fn machreg_to_fpr(m: Reg) -> u8 {
-    assert_eq!(m.get_class(), RegClass::F64);
-    u8::try_from(m.to_real_reg().get_hw_encoding()).unwrap()
+    assert_eq!(m.class(), RegClass::Float);
+    u8::try_from(m.to_real_reg().unwrap().hw_enc()).unwrap()
 }
 
 fn machreg_to_gpr_or_fpr(m: Reg) -> u8 {
-    u8::try_from(m.to_real_reg().get_hw_encoding()).unwrap()
+    u8::try_from(m.to_real_reg().unwrap().hw_enc()).unwrap()
 }
 
 /// E-type instructions.
@@ -936,7 +938,15 @@ impl MachInstEmit for Inst {
     type State = EmitState;
     type Info = EmitInfo;
 
-    fn emit(&self, sink: &mut MachBuffer<Inst>, emit_info: &Self::Info, state: &mut EmitState) {
+    fn emit(
+        &self,
+        allocs: &[Allocation],
+        sink: &mut MachBuffer<Inst>,
+        emit_info: &Self::Info,
+        state: &mut EmitState,
+    ) {
+        let mut allocs = AllocationConsumer::new(allocs);
+
         // Verify that we can emit this Inst in the current ISA
         let matches_isa_flags = |iset_requirement: &InstructionSet| -> bool {
             match iset_requirement {
@@ -965,6 +975,10 @@ impl MachInstEmit for Inst {
 
         match self {
             &Inst::AluRRR { alu_op, rd, rn, rm } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
+                let rm = allocs.next(rm);
+
                 let (opcode, have_rr) = match alu_op {
                     ALUOp::Add32 => (0xb9f8, true),        // ARK
                     ALUOp::Add64 => (0xb9e8, true),        // AGRK
@@ -992,7 +1006,7 @@ impl MachInstEmit for Inst {
                 };
                 if have_rr && rd.to_reg() == rn {
                     let inst = Inst::AluRR { alu_op, rd, rm };
-                    inst.emit(sink, emit_info, state);
+                    inst.emit(&[], sink, emit_info, state);
                 } else {
                     put(sink, &enc_rrf_ab(opcode, rd.to_reg(), rn, rm, 0));
                 }
@@ -1003,9 +1017,12 @@ impl MachInstEmit for Inst {
                 rn,
                 imm,
             } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
+
                 if rd.to_reg() == rn {
                     let inst = Inst::AluRSImm16 { alu_op, rd, imm };
-                    inst.emit(sink, emit_info, state);
+                    inst.emit(&[], sink, emit_info, state);
                 } else {
                     let opcode = match alu_op {
                         ALUOp::Add32 => 0xecd8, // AHIK
@@ -1016,6 +1033,9 @@ impl MachInstEmit for Inst {
                 }
             }
             &Inst::AluRR { alu_op, rd, rm } => {
+                let rd = allocs.next_writable(rd);
+                let rm = allocs.next(rm);
+
                 let (opcode, is_rre) = match alu_op {
                     ALUOp::Add32 => (0x1a, false),              // AR
                     ALUOp::Add64 => (0xb908, true),             // AGR
@@ -1051,6 +1071,9 @@ impl MachInstEmit for Inst {
                 rd,
                 ref mem,
             } => {
+                let rd = allocs.next_writable(rd);
+                let mem = mem.with_allocs(&mut allocs);
+
                 let (opcode_rx, opcode_rxy) = match alu_op {
                     ALUOp::Add32 => (Some(0x5a), Some(0xe35a)),        // A(Y)
                     ALUOp::Add32Ext16 => (Some(0x4a), Some(0xe34a)),   // AH(Y)
@@ -1083,10 +1106,12 @@ impl MachInstEmit for Inst {
                 };
                 let rd = rd.to_reg();
                 mem_emit(
-                    rd, mem, opcode_rx, opcode_rxy, None, true, sink, emit_info, state,
+                    rd, &mem, opcode_rx, opcode_rxy, None, true, sink, emit_info, state,
                 );
             }
             &Inst::AluRSImm16 { alu_op, rd, imm } => {
+                let rd = allocs.next_writable(rd);
+
                 let opcode = match alu_op {
                     ALUOp::Add32 => 0xa7a, // AHI
                     ALUOp::Add64 => 0xa7b, // AGHI
@@ -1097,6 +1122,8 @@ impl MachInstEmit for Inst {
                 put(sink, &enc_ri_a(opcode, rd.to_reg(), imm as u16));
             }
             &Inst::AluRSImm32 { alu_op, rd, imm } => {
+                let rd = allocs.next_writable(rd);
+
                 let opcode = match alu_op {
                     ALUOp::Add32 => 0xc29, // AFI
                     ALUOp::Add64 => 0xc28, // AGFI
@@ -1107,6 +1134,8 @@ impl MachInstEmit for Inst {
                 put(sink, &enc_ril_a(opcode, rd.to_reg(), imm as u32));
             }
             &Inst::AluRUImm32 { alu_op, rd, imm } => {
+                let rd = allocs.next_writable(rd);
+
                 let opcode = match alu_op {
                     ALUOp::AddLogical32 => 0xc2b, // ALFI
                     ALUOp::AddLogical64 => 0xc2a, // ALGFI
@@ -1117,6 +1146,8 @@ impl MachInstEmit for Inst {
                 put(sink, &enc_ril_a(opcode, rd.to_reg(), imm));
             }
             &Inst::AluRUImm16Shifted { alu_op, rd, imm } => {
+                let rd = allocs.next_writable(rd);
+
                 let opcode = match (alu_op, imm.shift) {
                     (ALUOp::And32, 0) => 0xa57, // NILL
                     (ALUOp::And32, 1) => 0xa56, // NILH
@@ -1135,6 +1166,8 @@ impl MachInstEmit for Inst {
                 put(sink, &enc_ri_a(opcode, rd.to_reg(), imm.bits));
             }
             &Inst::AluRUImm32Shifted { alu_op, rd, imm } => {
+                let rd = allocs.next_writable(rd);
+
                 let opcode = match (alu_op, imm.shift) {
                     (ALUOp::And32, 0) => 0xc0b, // NILF
                     (ALUOp::And64, 0) => 0xc0b, // NILF
@@ -1151,38 +1184,53 @@ impl MachInstEmit for Inst {
             }
 
             &Inst::SMulWide { rn, rm } => {
+                let rn = allocs.next(rn);
+                let rm = allocs.next(rm);
+
                 let opcode = 0xb9ec; // MGRK
                 put(sink, &enc_rrf_ab(opcode, gpr(0), rn, rm, 0));
             }
             &Inst::UMulWide { rn } => {
+                let rn = allocs.next(rn);
+
                 let opcode = 0xb986; // MLGR
                 put(sink, &enc_rre(opcode, gpr(0), rn));
             }
             &Inst::SDivMod32 { rn } => {
+                let rn = allocs.next(rn);
+
                 let opcode = 0xb91d; // DSGFR
                 let srcloc = state.cur_srcloc();
                 let trap_code = TrapCode::IntegerDivisionByZero;
                 put_with_trap(sink, &enc_rre(opcode, gpr(0), rn), srcloc, trap_code);
             }
             &Inst::SDivMod64 { rn } => {
+                let rn = allocs.next(rn);
+
                 let opcode = 0xb90d; // DSGR
                 let srcloc = state.cur_srcloc();
                 let trap_code = TrapCode::IntegerDivisionByZero;
                 put_with_trap(sink, &enc_rre(opcode, gpr(0), rn), srcloc, trap_code);
             }
             &Inst::UDivMod32 { rn } => {
+                let rn = allocs.next(rn);
+
                 let opcode = 0xb997; // DLR
                 let srcloc = state.cur_srcloc();
                 let trap_code = TrapCode::IntegerDivisionByZero;
                 put_with_trap(sink, &enc_rre(opcode, gpr(0), rn), srcloc, trap_code);
             }
             &Inst::UDivMod64 { rn } => {
+                let rn = allocs.next(rn);
+
                 let opcode = 0xb987; // DLGR
                 let srcloc = state.cur_srcloc();
                 let trap_code = TrapCode::IntegerDivisionByZero;
                 put_with_trap(sink, &enc_rre(opcode, gpr(0), rn), srcloc, trap_code);
             }
             &Inst::Flogr { rn } => {
+                let rn = allocs.next(rn);
+
                 let opcode = 0xb983; // FLOGR
                 put(sink, &enc_rre(opcode, gpr(0), rn));
             }
@@ -1194,6 +1242,10 @@ impl MachInstEmit for Inst {
                 shift_imm,
                 shift_reg,
             } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
+                let shift_reg = allocs.next(shift_reg);
+
                 let opcode = match shift_op {
                     ShiftOp::RotL32 => 0xeb1d, // RLL
                     ShiftOp::RotL64 => 0xeb1c, // RLLG
@@ -1218,6 +1270,9 @@ impl MachInstEmit for Inst {
                 end_bit,
                 rotate_amt,
             } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
+
                 let opcode = match op {
                     RxSBGOp::Insert => 0xec59, // RISBGN
                     RxSBGOp::And => 0xec54,    // RNSBG
@@ -1245,6 +1300,9 @@ impl MachInstEmit for Inst {
                 end_bit,
                 rotate_amt,
             } => {
+                let rd = allocs.next(rd);
+                let rn = allocs.next(rn);
+
                 let opcode = match op {
                     RxSBGOp::And => 0xec54, // RNSBG
                     RxSBGOp::Or => 0xec56,  // ROSBG
@@ -1265,6 +1323,9 @@ impl MachInstEmit for Inst {
             }
 
             &Inst::UnaryRR { op, rd, rn } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
+
                 match op {
                     UnaryOp::Abs32 => {
                         let opcode = 0x10; // LPR
@@ -1316,6 +1377,9 @@ impl MachInstEmit for Inst {
                 from_bits,
                 to_bits,
             } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
+
                 let opcode = match (signed, from_bits, to_bits) {
                     (_, 1, 32) => 0xb926,      // LBR
                     (_, 1, 64) => 0xb906,      // LGBR
@@ -1338,6 +1402,9 @@ impl MachInstEmit for Inst {
             }
 
             &Inst::CmpRR { op, rn, rm } => {
+                let rn = allocs.next(rn);
+                let rm = allocs.next(rm);
+
                 let (opcode, is_rre) = match op {
                     CmpOp::CmpS32 => (0x19, false),       // CR
                     CmpOp::CmpS64 => (0xb920, true),      // CGR
@@ -1354,6 +1421,9 @@ impl MachInstEmit for Inst {
                 }
             }
             &Inst::CmpRX { op, rn, ref mem } => {
+                let rn = allocs.next(rn);
+                let mem = mem.with_allocs(&mut allocs);
+
                 let (opcode_rx, opcode_rxy, opcode_ril) = match op {
                     CmpOp::CmpS32 => (Some(0x59), Some(0xe359), Some(0xc6d)), // C(Y), CRL
                     CmpOp::CmpS32Ext16 => (Some(0x49), Some(0xe379), Some(0xc65)), // CH(Y), CHRL
@@ -1367,10 +1437,12 @@ impl MachInstEmit for Inst {
                     CmpOp::CmpL64Ext32 => (None, Some(0xe331), Some(0xc6e)),  // CLGF, CLGFRL
                 };
                 mem_emit(
-                    rn, mem, opcode_rx, opcode_rxy, opcode_ril, true, sink, emit_info, state,
+                    rn, &mem, opcode_rx, opcode_rxy, opcode_ril, true, sink, emit_info, state,
                 );
             }
             &Inst::CmpRSImm16 { op, rn, imm } => {
+                let rn = allocs.next(rn);
+
                 let opcode = match op {
                     CmpOp::CmpS32 => 0xa7e, // CHI
                     CmpOp::CmpS64 => 0xa7f, // CGHI
@@ -1379,6 +1451,8 @@ impl MachInstEmit for Inst {
                 put(sink, &enc_ri_a(opcode, rn, imm as u16));
             }
             &Inst::CmpRSImm32 { op, rn, imm } => {
+                let rn = allocs.next(rn);
+
                 let opcode = match op {
                     CmpOp::CmpS32 => 0xc2d, // CFI
                     CmpOp::CmpS64 => 0xc2c, // CGFI
@@ -1387,6 +1461,8 @@ impl MachInstEmit for Inst {
                 put(sink, &enc_ril_a(opcode, rn, imm as u32));
             }
             &Inst::CmpRUImm32 { op, rn, imm } => {
+                let rn = allocs.next(rn);
+
                 let opcode = match op {
                     CmpOp::CmpL32 => 0xc2f, // CLFI
                     CmpOp::CmpL64 => 0xc2e, // CLGFI
@@ -1401,6 +1477,9 @@ impl MachInstEmit for Inst {
                 cond,
                 trap_code,
             } => {
+                let rn = allocs.next(rn);
+                let rm = allocs.next(rm);
+
                 let opcode = match op {
                     CmpOp::CmpS32 => 0xb972, // CRT
                     CmpOp::CmpS64 => 0xb960, // CGRT
@@ -1423,6 +1502,8 @@ impl MachInstEmit for Inst {
                 cond,
                 trap_code,
             } => {
+                let rn = allocs.next(rn);
+
                 let opcode = match op {
                     CmpOp::CmpS32 => 0xec72, // CIT
                     CmpOp::CmpS64 => 0xec70, // CGIT
@@ -1443,6 +1524,8 @@ impl MachInstEmit for Inst {
                 cond,
                 trap_code,
             } => {
+                let rn = allocs.next(rn);
+
                 let opcode = match op {
                     CmpOp::CmpL32 => 0xec73, // CLFIT
                     CmpOp::CmpL64 => 0xec71, // CLGIT
@@ -1463,6 +1546,10 @@ impl MachInstEmit for Inst {
                 rn,
                 ref mem,
             } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
+                let mem = mem.with_allocs(&mut allocs);
+
                 let opcode = match alu_op {
                     ALUOp::Add32 => 0xebf8,        // LAA
                     ALUOp::Add64 => 0xebe8,        // LAAG
@@ -1481,7 +1568,7 @@ impl MachInstEmit for Inst {
                 mem_rs_emit(
                     rd,
                     rn,
-                    mem,
+                    &mem,
                     None,
                     Some(opcode),
                     true,
@@ -1500,6 +1587,8 @@ impl MachInstEmit for Inst {
                 sink.bind_label(loop_label);
 
                 for inst in (&body).into_iter() {
+                    let op_count = count_operands(inst);
+                    let sub_allocs = allocs.next_n(op_count);
                     match &inst {
                         // Replace a CondBreak with a branch to done_label.
                         &Inst::CondBreak { cond } => {
@@ -1507,9 +1596,9 @@ impl MachInstEmit for Inst {
                                 target: done_label,
                                 cond: *cond,
                             };
-                            inst.emit(sink, emit_info, state);
+                            inst.emit(&sub_allocs[..], sink, emit_info, state);
                         }
-                        _ => inst.emit(sink, emit_info, state),
+                        _ => inst.emit(&sub_allocs[..], sink, emit_info, state),
                     };
                 }
 
@@ -1517,13 +1606,17 @@ impl MachInstEmit for Inst {
                     target: loop_label,
                     cond,
                 };
-                inst.emit(sink, emit_info, state);
+                inst.emit(&[], sink, emit_info, state);
 
                 // Emit label at the end of the loop.
                 sink.bind_label(done_label);
             }
             &Inst::CondBreak { .. } => unreachable!(), // Only valid inside a Loop.
             &Inst::AtomicCas32 { rd, rn, ref mem } | &Inst::AtomicCas64 { rd, rn, ref mem } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
+                let mem = mem.with_allocs(&mut allocs);
+
                 let (opcode_rs, opcode_rsy) = match self {
                     &Inst::AtomicCas32 { .. } => (Some(0xba), Some(0xeb14)), // CS(Y)
                     &Inst::AtomicCas64 { .. } => (None, Some(0xeb30)),       // CSG
@@ -1532,7 +1625,7 @@ impl MachInstEmit for Inst {
 
                 let rd = rd.to_reg();
                 mem_rs_emit(
-                    rd, rn, mem, opcode_rs, opcode_rsy, true, sink, emit_info, state,
+                    rd, rn, &mem, opcode_rs, opcode_rsy, true, sink, emit_info, state,
                 );
             }
             &Inst::Fence => {
@@ -1556,6 +1649,9 @@ impl MachInstEmit for Inst {
             | &Inst::LoadRev64 { rd, ref mem }
             | &Inst::FpuLoad32 { rd, ref mem }
             | &Inst::FpuLoad64 { rd, ref mem } => {
+                let rd = allocs.next_writable(rd);
+                let mem = mem.with_allocs(&mut allocs);
+
                 let (opcode_rx, opcode_rxy, opcode_ril) = match self {
                     &Inst::Load32 { .. } => (Some(0x58), Some(0xe358), Some(0xc4d)), // L(Y), LRL
                     &Inst::Load32ZExt8 { .. } => (None, Some(0xe394), None),         // LLC
@@ -1578,19 +1674,22 @@ impl MachInstEmit for Inst {
                 };
                 let rd = rd.to_reg();
                 mem_emit(
-                    rd, mem, opcode_rx, opcode_rxy, opcode_ril, true, sink, emit_info, state,
+                    rd, &mem, opcode_rx, opcode_rxy, opcode_ril, true, sink, emit_info, state,
                 );
             }
             &Inst::FpuLoadRev32 { rd, ref mem } | &Inst::FpuLoadRev64 { rd, ref mem } => {
+                let rd = allocs.next_writable(rd);
+                let mem = mem.with_allocs(&mut allocs);
+
                 let opcode = match self {
                     &Inst::FpuLoadRev32 { .. } => 0xe603, // VLEBRF
                     &Inst::FpuLoadRev64 { .. } => 0xe602, // VLEBRG
                     _ => unreachable!(),
                 };
 
-                let (mem_insts, mem) = mem_finalize(mem, state, true, false, false, true);
+                let (mem_insts, mem) = mem_finalize(&mem, state, true, false, false, true);
                 for inst in mem_insts.into_iter() {
-                    inst.emit(sink, emit_info, state);
+                    inst.emit(&[], sink, emit_info, state);
                 }
 
                 let srcloc = state.cur_srcloc();
@@ -1620,6 +1719,9 @@ impl MachInstEmit for Inst {
             | &Inst::StoreRev64 { rd, ref mem }
             | &Inst::FpuStore32 { rd, ref mem }
             | &Inst::FpuStore64 { rd, ref mem } => {
+                let rd = allocs.next(rd);
+                let mem = mem.with_allocs(&mut allocs);
+
                 let (opcode_rx, opcode_rxy, opcode_ril) = match self {
                     &Inst::Store8 { .. } => (Some(0x42), Some(0xe372), None), // STC(Y)
                     &Inst::Store16 { .. } => (Some(0x40), Some(0xe370), Some(0xc47)), // STH(Y), STHRL
@@ -1633,37 +1735,44 @@ impl MachInstEmit for Inst {
                     _ => unreachable!(),
                 };
                 mem_emit(
-                    rd, mem, opcode_rx, opcode_rxy, opcode_ril, true, sink, emit_info, state,
+                    rd, &mem, opcode_rx, opcode_rxy, opcode_ril, true, sink, emit_info, state,
                 );
             }
             &Inst::StoreImm8 { imm, ref mem } => {
+                let mem = mem.with_allocs(&mut allocs);
+
                 let opcode_si = 0x92; // MVI
                 let opcode_siy = 0xeb52; // MVIY
                 mem_imm8_emit(
-                    imm, mem, opcode_si, opcode_siy, true, sink, emit_info, state,
+                    imm, &mem, opcode_si, opcode_siy, true, sink, emit_info, state,
                 );
             }
             &Inst::StoreImm16 { imm, ref mem }
             | &Inst::StoreImm32SExt16 { imm, ref mem }
             | &Inst::StoreImm64SExt16 { imm, ref mem } => {
+                let mem = mem.with_allocs(&mut allocs);
+
                 let opcode = match self {
                     &Inst::StoreImm16 { .. } => 0xe544,       // MVHHI
                     &Inst::StoreImm32SExt16 { .. } => 0xe54c, // MVHI
                     &Inst::StoreImm64SExt16 { .. } => 0xe548, // MVGHI
                     _ => unreachable!(),
                 };
-                mem_imm16_emit(imm, mem, opcode, true, sink, emit_info, state);
+                mem_imm16_emit(imm, &mem, opcode, true, sink, emit_info, state);
             }
             &Inst::FpuStoreRev32 { rd, ref mem } | &Inst::FpuStoreRev64 { rd, ref mem } => {
+                let rd = allocs.next(rd);
+                let mem = mem.with_allocs(&mut allocs);
+
                 let opcode = match self {
                     &Inst::FpuStoreRev32 { .. } => 0xe60b, // VSTEBRF
                     &Inst::FpuStoreRev64 { .. } => 0xe60a, // VSTEBRG
                     _ => unreachable!(),
                 };
 
-                let (mem_insts, mem) = mem_finalize(mem, state, true, false, false, true);
+                let (mem_insts, mem) = mem_finalize(&mem, state, true, false, false, true);
                 for inst in mem_insts.into_iter() {
-                    inst.emit(sink, emit_info, state);
+                    inst.emit(&[], sink, emit_info, state);
                 }
 
                 let srcloc = state.cur_srcloc();
@@ -1682,6 +1791,8 @@ impl MachInstEmit for Inst {
             }
 
             &Inst::LoadMultiple64 { rt, rt2, ref mem } => {
+                let mem = mem.with_allocs(&mut allocs);
+
                 let opcode = 0xeb04; // LMG
                 let rt = rt.to_reg();
                 let rt2 = rt2.to_reg();
@@ -1698,6 +1809,8 @@ impl MachInstEmit for Inst {
                 );
             }
             &Inst::StoreMultiple64 { rt, rt2, ref mem } => {
+                let mem = mem.with_allocs(&mut allocs);
+
                 let opcode = 0xeb24; // STMG
                 mem_rs_emit(
                     rt,
@@ -1713,48 +1826,73 @@ impl MachInstEmit for Inst {
             }
 
             &Inst::LoadAddr { rd, ref mem } => {
+                let rd = allocs.next_writable(rd);
+                let mem = mem.with_allocs(&mut allocs);
+
                 let opcode_rx = Some(0x41); // LA
                 let opcode_rxy = Some(0xe371); // LAY
                 let opcode_ril = Some(0xc00); // LARL
                 let rd = rd.to_reg();
                 mem_emit(
-                    rd, mem, opcode_rx, opcode_rxy, opcode_ril, false, sink, emit_info, state,
+                    rd, &mem, opcode_rx, opcode_rxy, opcode_ril, false, sink, emit_info, state,
                 );
             }
 
             &Inst::Mov64 { rd, rm } => {
+                let rd = allocs.next_writable(rd);
+                let rm = allocs.next(rm);
+
                 let opcode = 0xb904; // LGR
                 put(sink, &enc_rre(opcode, rd.to_reg(), rm));
             }
             &Inst::Mov32 { rd, rm } => {
+                let rd = allocs.next_writable(rd);
+                let rm = allocs.next(rm);
+
                 let opcode = 0x18; // LR
                 put(sink, &enc_rr(opcode, rd.to_reg(), rm));
             }
             &Inst::Mov32Imm { rd, imm } => {
+                let rd = allocs.next_writable(rd);
+
                 let opcode = 0xc09; // IILF
                 put(sink, &enc_ril_a(opcode, rd.to_reg(), imm));
             }
             &Inst::Mov32SImm16 { rd, imm } => {
+                let rd = allocs.next_writable(rd);
+
                 let opcode = 0xa78; // LHI
                 put(sink, &enc_ri_a(opcode, rd.to_reg(), imm as u16));
             }
             &Inst::Mov64SImm16 { rd, imm } => {
+                let rd = allocs.next_writable(rd);
+
                 let opcode = 0xa79; // LGHI
                 put(sink, &enc_ri_a(opcode, rd.to_reg(), imm as u16));
             }
             &Inst::Mov64SImm32 { rd, imm } => {
+                let rd = allocs.next_writable(rd);
+
                 let opcode = 0xc01; // LGFI
                 put(sink, &enc_ril_a(opcode, rd.to_reg(), imm as u32));
             }
             &Inst::CMov32 { rd, cond, rm } => {
+                let rd = allocs.next_writable(rd);
+                let rm = allocs.next(rm);
+
                 let opcode = 0xb9f2; // LOCR
                 put(sink, &enc_rrf_cde(opcode, rd.to_reg(), rm, cond.bits(), 0));
             }
             &Inst::CMov64 { rd, cond, rm } => {
+                let rd = allocs.next_writable(rd);
+                let rm = allocs.next(rm);
+
                 let opcode = 0xb9e2; // LOCGR
                 put(sink, &enc_rrf_cde(opcode, rd.to_reg(), rm, cond.bits(), 0));
             }
             &Inst::CMov32SImm16 { rd, cond, imm } => {
+                let rd = allocs.next_writable(rd);
+
                 let opcode = 0xec42; // LOCHI
                 put(
                     sink,
@@ -1762,6 +1900,8 @@ impl MachInstEmit for Inst {
                 );
             }
             &Inst::CMov64SImm16 { rd, cond, imm } => {
+                let rd = allocs.next_writable(rd);
+
                 let opcode = 0xec46; // LOCGHI
                 put(
                     sink,
@@ -1769,6 +1909,8 @@ impl MachInstEmit for Inst {
                 );
             }
             &Inst::Mov64UImm16Shifted { rd, imm } => {
+                let rd = allocs.next_writable(rd);
+
                 let opcode = match imm.shift {
                     0 => 0xa5f, // LLILL
                     1 => 0xa5e, // LLILH
@@ -1779,6 +1921,8 @@ impl MachInstEmit for Inst {
                 put(sink, &enc_ri_a(opcode, rd.to_reg(), imm.bits));
             }
             &Inst::Mov64UImm32Shifted { rd, imm } => {
+                let rd = allocs.next_writable(rd);
+
                 let opcode = match imm.shift {
                     0 => 0xc0f, // LLILF
                     1 => 0xc0e, // LLIHF
@@ -1787,6 +1931,8 @@ impl MachInstEmit for Inst {
                 put(sink, &enc_ril_a(opcode, rd.to_reg(), imm.bits));
             }
             &Inst::Insert64UImm16Shifted { rd, imm } => {
+                let rd = allocs.next_writable(rd);
+
                 let opcode = match imm.shift {
                     0 => 0xa53, // IILL
                     1 => 0xa52, // IILH
@@ -1797,6 +1943,8 @@ impl MachInstEmit for Inst {
                 put(sink, &enc_ri_a(opcode, rd.to_reg(), imm.bits));
             }
             &Inst::Insert64UImm32Shifted { rd, imm } => {
+                let rd = allocs.next_writable(rd);
+
                 let opcode = match imm.shift {
                     0 => 0xc09, // IILF
                     1 => 0xc08, // IIHF
@@ -1809,6 +1957,8 @@ impl MachInstEmit for Inst {
                 ref name,
                 offset,
             } => {
+                let rd = allocs.next_writable(rd);
+
                 let opcode = 0xa75; // BRAS
                 let srcloc = state.cur_srcloc();
                 let reg = writable_spilltmp_reg().to_reg();
@@ -1823,38 +1973,58 @@ impl MachInstEmit for Inst {
                     rd,
                     mem: MemArg::reg(reg, MemFlags::trusted()),
                 };
-                inst.emit(sink, emit_info, state);
+                inst.emit(&[], sink, emit_info, state);
             }
 
             &Inst::FpuMove32 { rd, rn } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
+
                 let opcode = 0x38; // LER
                 put(sink, &enc_rr(opcode, rd.to_reg(), rn));
             }
             &Inst::FpuMove64 { rd, rn } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
+
                 let opcode = 0x28; // LDR
                 put(sink, &enc_rr(opcode, rd.to_reg(), rn));
             }
             &Inst::FpuCMov32 { rd, cond, rm } => {
+                let rd = allocs.next_writable(rd);
+                let rm = allocs.next(rm);
+
                 let opcode = 0xa74; // BCR
                 put(sink, &enc_ri_c(opcode, cond.invert().bits(), 4 + 2));
                 let opcode = 0x38; // LER
                 put(sink, &enc_rr(opcode, rd.to_reg(), rm));
             }
             &Inst::FpuCMov64 { rd, cond, rm } => {
+                let rd = allocs.next_writable(rd);
+                let rm = allocs.next(rm);
+
                 let opcode = 0xa74; // BCR
                 put(sink, &enc_ri_c(opcode, cond.invert().bits(), 4 + 2));
                 let opcode = 0x28; // LDR
                 put(sink, &enc_rr(opcode, rd.to_reg(), rm));
             }
             &Inst::MovToFpr { rd, rn } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
+
                 let opcode = 0xb3c1; // LDGR
                 put(sink, &enc_rre(opcode, rd.to_reg(), rn));
             }
             &Inst::MovFromFpr { rd, rn } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
+
                 let opcode = 0xb3cd; // LGDR
                 put(sink, &enc_rre(opcode, rd.to_reg(), rn));
             }
             &Inst::LoadFpuConst32 { rd, const_data } => {
+                let rd = allocs.next_writable(rd);
+
                 let opcode = 0xa75; // BRAS
                 let reg = writable_spilltmp_reg().to_reg();
                 put(sink, &enc_ri_b(opcode, reg, 8));
@@ -1863,9 +2033,11 @@ impl MachInstEmit for Inst {
                     rd,
                     mem: MemArg::reg(reg, MemFlags::trusted()),
                 };
-                inst.emit(sink, emit_info, state);
+                inst.emit(&[], sink, emit_info, state);
             }
             &Inst::LoadFpuConst64 { rd, const_data } => {
+                let rd = allocs.next_writable(rd);
+
                 let opcode = 0xa75; // BRAS
                 let reg = writable_spilltmp_reg().to_reg();
                 put(sink, &enc_ri_b(opcode, reg, 12));
@@ -1874,14 +2046,21 @@ impl MachInstEmit for Inst {
                     rd,
                     mem: MemArg::reg(reg, MemFlags::trusted()),
                 };
-                inst.emit(sink, emit_info, state);
+                inst.emit(&[], sink, emit_info, state);
             }
 
             &Inst::FpuCopysign { rd, rn, rm } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
+                let rm = allocs.next(rm);
+
                 let opcode = 0xb372; // CPSDR
                 put(sink, &enc_rrf_ab(opcode, rd.to_reg(), rn, rm, 0));
             }
             &Inst::FpuRR { fpu_op, rd, rn } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
+
                 let opcode = match fpu_op {
                     FPUOp1::Abs32 => 0xb300,     // LPEBR
                     FPUOp1::Abs64 => 0xb310,     // LPDBR
@@ -1897,6 +2076,9 @@ impl MachInstEmit for Inst {
                 put(sink, &enc_rre(opcode, rd.to_reg(), rn));
             }
             &Inst::FpuRRR { fpu_op, rd, rm } => {
+                let rd = allocs.next_writable(rd);
+                let rm = allocs.next(rm);
+
                 let opcode = match fpu_op {
                     FPUOp2::Add32 => 0xb30a, // AEBR
                     FPUOp2::Add64 => 0xb31a, // ADBR
@@ -1911,6 +2093,10 @@ impl MachInstEmit for Inst {
                 put(sink, &enc_rre(opcode, rd.to_reg(), rm));
             }
             &Inst::FpuRRRR { fpu_op, rd, rn, rm } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
+                let rm = allocs.next(rm);
+
                 let opcode = match fpu_op {
                     FPUOp3::MAdd32 => 0xb30e, // MAEBR
                     FPUOp3::MAdd64 => 0xb31e, // MADBR
@@ -1920,6 +2106,9 @@ impl MachInstEmit for Inst {
                 put(sink, &enc_rrd(opcode, rd.to_reg(), rm, rn));
             }
             &Inst::FpuToInt { op, rd, rn } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
+
                 let opcode = match op {
                     FpuToIntOp::F32ToI32 => 0xb398, // CFEBRA
                     FpuToIntOp::F32ToU32 => 0xb39c, // CLFEBR
@@ -1933,6 +2122,9 @@ impl MachInstEmit for Inst {
                 put(sink, &enc_rrf_cde(opcode, rd.to_reg(), rn, 5, 0));
             }
             &Inst::IntToFpu { op, rd, rn } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
+
                 let opcode = match op {
                     IntToFpuOp::I32ToF32 => 0xb394, // CEFBRA
                     IntToFpuOp::U32ToF32 => 0xb390, // CELFBR
@@ -1946,6 +2138,9 @@ impl MachInstEmit for Inst {
                 put(sink, &enc_rrf_cde(opcode, rd.to_reg(), rn, 0, 0));
             }
             &Inst::FpuRound { op, rd, rn } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
+
                 let (opcode, m3) = match op {
                     FpuRoundMode::Minus32 => (0xb357, 7),   // FIEBR
                     FpuRoundMode::Minus64 => (0xb35f, 7),   // FIDBR
@@ -1959,6 +2154,10 @@ impl MachInstEmit for Inst {
                 put(sink, &enc_rrf_cde(opcode, rd.to_reg(), rn, m3, 0));
             }
             &Inst::FpuVecRRR { fpu_op, rd, rn, rm } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
+                let rm = allocs.next(rm);
+
                 let (opcode, m4) = match fpu_op {
                     FPUOp2::Max32 => (0xe7ef, 2), // VFMAX
                     FPUOp2::Max64 => (0xe7ef, 3), // VFMAX
@@ -1969,15 +2168,23 @@ impl MachInstEmit for Inst {
                 put(sink, &enc_vrr(opcode, rd.to_reg(), rn, rm, m4, 8, 1));
             }
             &Inst::FpuCmp32 { rn, rm } => {
+                let rn = allocs.next(rn);
+                let rm = allocs.next(rm);
+
                 let opcode = 0xb309; // CEBR
                 put(sink, &enc_rre(opcode, rn, rm));
             }
             &Inst::FpuCmp64 { rn, rm } => {
+                let rn = allocs.next(rn);
+                let rm = allocs.next(rm);
+
                 let opcode = 0xb319; // CDBR
                 put(sink, &enc_rre(opcode, rn, rm));
             }
 
             &Inst::Call { link, ref info } => {
+                let link = allocs.next_writable(link);
+
                 let opcode = 0xc05; // BRASL
                 let reloc = Reloc::S390xPCRel32Dbl;
                 let srcloc = state.cur_srcloc();
@@ -1998,17 +2205,22 @@ impl MachInstEmit for Inst {
                 }
             }
             &Inst::CallInd { link, ref info } => {
+                let link = allocs.next_writable(link);
+                let rn = allocs.next(info.rn);
+
                 let opcode = 0x0d; // BASR
                 let srcloc = state.cur_srcloc();
                 if let Some(s) = state.take_stack_map() {
                     sink.add_stack_map(StackMapExtent::UpcomingBytes(2), s);
                 }
-                put(sink, &enc_rr(opcode, link.to_reg(), info.rn));
+                put(sink, &enc_rr(opcode, link.to_reg(), rn));
                 if info.opcode.is_call() {
                     sink.add_call_site(srcloc, info.opcode);
                 }
             }
-            &Inst::Ret { link } => {
+            &Inst::Ret { link, .. } => {
+                let link = allocs.next(link);
+
                 let opcode = 0x07; // BCR
                 put(sink, &enc_rr(opcode, gpr(15), link));
             }
@@ -2025,6 +2237,8 @@ impl MachInstEmit for Inst {
                 put(sink, &enc_ril_c(opcode, 15, 0));
             }
             &Inst::IndirectBr { rn, .. } => {
+                let rn = allocs.next(rn);
+
                 let opcode = 0x07; // BCR
                 put(sink, &enc_rr(opcode, gpr(15), rn));
             }
@@ -2079,6 +2293,8 @@ impl MachInstEmit for Inst {
                 put_with_trap(sink, &enc_e(0x0000), srcloc, trap_code);
             }
             &Inst::JTSequence { ridx, ref targets } => {
+                let ridx = allocs.next(ridx);
+
                 let table_label = sink.get_label();
 
                 // This sequence is *one* instruction in the vcode, and is expanded only here at
@@ -2093,7 +2309,7 @@ impl MachInstEmit for Inst {
                         target: table_label,
                     },
                 };
-                inst.emit(sink, emit_info, state);
+                inst.emit(&[], sink, emit_info, state);
 
                 // Set temp to target address by adding the value of the jump table entry.
                 let inst = Inst::AluRX {
@@ -2101,7 +2317,7 @@ impl MachInstEmit for Inst {
                     rd: rtmp,
                     mem: MemArg::reg_plus_reg(rtmp.to_reg(), ridx, MemFlags::trusted()),
                 };
-                inst.emit(sink, emit_info, state);
+                inst.emit(&[], sink, emit_info, state);
 
                 // Branch to computed address. (`targets` here is only used for successor queries
                 // and is not needed for emission.)
@@ -2109,7 +2325,7 @@ impl MachInstEmit for Inst {
                     rn: rtmp.to_reg(),
                     targets: vec![],
                 };
-                inst.emit(sink, emit_info, state);
+                inst.emit(&[], sink, emit_info, state);
 
                 // Emit jump table (table of 32-bit offsets).
                 // The first entry is the default target, which is not emitted
@@ -2138,13 +2354,11 @@ impl MachInstEmit for Inst {
                 state.virtual_sp_offset += offset;
             }
 
-            &Inst::ValueLabelMarker { .. } => {
-                // Nothing; this is only used to compute debug info.
-            }
-
             &Inst::Unwind { ref inst } => {
                 sink.add_unwind(inst.clone());
             }
+
+            &Inst::DummyUse { .. } => {}
         }
 
         let end_off = sink.cur_offset();
@@ -2153,7 +2367,8 @@ impl MachInstEmit for Inst {
         state.clear_post_insn();
     }
 
-    fn pretty_print(&self, mb_rru: Option<&RealRegUniverse>, state: &mut EmitState) -> String {
-        self.print_with_state(mb_rru, state)
+    fn pretty_print_inst(&self, allocs: &[Allocation], state: &mut EmitState) -> String {
+        let mut allocs = AllocationConsumer::new(allocs);
+        self.print_with_state(state, &mut allocs)
     }
 }

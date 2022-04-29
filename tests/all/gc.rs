@@ -14,7 +14,17 @@ impl Drop for SetFlagOnDrop {
 
 #[test]
 fn smoke_test_gc() -> anyhow::Result<()> {
+    smoke_test_gc_impl(false)
+}
+
+#[test]
+fn smoke_test_gc_epochs() -> anyhow::Result<()> {
+    smoke_test_gc_impl(true)
+}
+
+fn smoke_test_gc_impl(use_epochs: bool) -> anyhow::Result<()> {
     let (mut store, module) = ref_types_module(
+        use_epochs,
         r#"
             (module
                 (import "" "" (func $do_gc))
@@ -69,6 +79,7 @@ fn smoke_test_gc() -> anyhow::Result<()> {
 #[test]
 fn wasm_dropping_refs() -> anyhow::Result<()> {
     let (mut store, module) = ref_types_module(
+        false,
         r#"
             (module
                 (func (export "drop_ref") (param externref)
@@ -145,7 +156,7 @@ fn many_live_refs() -> anyhow::Result<()> {
         ",
     );
 
-    let (mut store, module) = ref_types_module(&wat)?;
+    let (mut store, module) = ref_types_module(false, &wat)?;
 
     let live_refs = Arc::new(AtomicUsize::new(0));
 
@@ -191,6 +202,7 @@ fn many_live_refs() -> anyhow::Result<()> {
 #[test]
 fn drop_externref_via_table_set() -> anyhow::Result<()> {
     let (mut store, module) = ref_types_module(
+        false,
         r#"
             (module
                 (table $t 1 externref)
@@ -337,7 +349,7 @@ fn table_drops_externref() -> anyhow::Result<()> {
 fn gee_i_sure_hope_refcounting_is_atomic() -> anyhow::Result<()> {
     let mut config = Config::new();
     config.wasm_reference_types(true);
-    config.interruptable(true);
+    config.epoch_interruption(true);
     let engine = Engine::new(&config)?;
     let mut store = Store::new(&engine, ());
     let module = Module::new(
@@ -380,14 +392,13 @@ fn gee_i_sure_hope_refcounting_is_atomic() -> anyhow::Result<()> {
     let flag = Arc::new(AtomicBool::new(false));
     let externref = ExternRef::new(SetFlagOnDrop(flag.clone()));
     let externref2 = externref.clone();
-    let handle = store.interrupt_handle()?;
 
     let child = std::thread::spawn(move || run.call(&mut store, Some(externref2)));
 
     for _ in 0..10000 {
         drop(externref.clone());
     }
-    handle.interrupt();
+    engine.increment_epoch();
 
     assert!(child.join().unwrap().is_err());
     assert!(!flag.load(SeqCst));
@@ -401,6 +412,7 @@ fn gee_i_sure_hope_refcounting_is_atomic() -> anyhow::Result<()> {
 #[test]
 fn global_init_no_leak() -> anyhow::Result<()> {
     let (mut store, module) = ref_types_module(
+        false,
         r#"
             (module
                 (import "" "" (global externref))
@@ -425,6 +437,7 @@ fn global_init_no_leak() -> anyhow::Result<()> {
 #[test]
 fn no_gc_middle_of_args() -> anyhow::Result<()> {
     let (mut store, module) = ref_types_module(
+        false,
         r#"
             (module
                 (import "" "return_some" (func $return (result externref externref externref)))

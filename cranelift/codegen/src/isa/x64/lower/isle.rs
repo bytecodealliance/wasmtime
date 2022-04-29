@@ -2,21 +2,23 @@
 
 // Pull in the ISLE generated code.
 pub(crate) mod generated_code;
+use crate::machinst::{InputSourceInst, Reg, Writable};
 use generated_code::MInst;
-use regalloc::Writable;
 
 // Types that the generated ISLE code uses via `use super::*`.
-use super::{is_int_or_ref_ty, is_mergeable_load, lower_to_amode, Reg};
+use super::{is_int_or_ref_ty, is_mergeable_load, lower_to_amode};
 use crate::{
     ir::{
-        condcodes::FloatCC, immediates::*, types::*, Inst, InstructionData, Opcode, TrapCode,
-        Value, ValueLabel, ValueList,
+        condcodes::{FloatCC, IntCC},
+        immediates::*,
+        types::*,
+        Inst, InstructionData, MemFlags, Opcode, TrapCode, Value, ValueList,
     },
     isa::{
         settings::Flags,
         unwind::UnwindInst,
         x64::{
-            inst::{args::*, regs, x64_map_regs},
+            inst::{args::*, regs},
             settings::Flags as IsaFlags,
         },
     },
@@ -43,15 +45,9 @@ pub(crate) fn lower<C>(
 where
     C: LowerCtx<I = MInst>,
 {
-    lower_common(
-        lower_ctx,
-        flags,
-        isa_flags,
-        outputs,
-        inst,
-        |cx, insn| generated_code::constructor_lower(cx, insn),
-        x64_map_regs,
-    )
+    lower_common(lower_ctx, flags, isa_flags, outputs, inst, |cx, insn| {
+        generated_code::constructor_lower(cx, insn)
+    })
 }
 
 impl<C> generated_code::Context for IsleContext<'_, C, Flags, IsaFlags, 6>
@@ -88,7 +84,7 @@ where
             return RegMemImm::reg(generated_code::constructor_imm(self, ty, c).unwrap());
         }
 
-        if let Some((src_insn, 0)) = inputs.inst {
+        if let InputSourceInst::UniqueUse(src_insn, 0) = inputs.inst {
             if let Some((addr_input, offset)) = is_mergeable_load(self.lower_ctx, src_insn) {
                 self.lower_ctx.sink_inst(src_insn);
                 let amode = lower_to_amode(self.lower_ctx, addr_input, offset);
@@ -109,7 +105,7 @@ where
             return RegMem::reg(generated_code::constructor_imm(self, ty, c).unwrap());
         }
 
-        if let Some((src_insn, 0)) = inputs.inst {
+        if let InputSourceInst::UniqueUse(src_insn, 0) = inputs.inst {
             if let Some((addr_input, offset)) = is_mergeable_load(self.lower_ctx, src_insn) {
                 self.lower_ctx.sink_inst(src_insn);
                 let amode = lower_to_amode(self.lower_ctx, addr_input, offset);
@@ -241,7 +237,7 @@ where
 
     fn sinkable_load(&mut self, val: Value) -> Option<SinkableLoad> {
         let input = self.lower_ctx.get_value_as_source_or_const(val);
-        if let Some((inst, 0)) = input.inst {
+        if let InputSourceInst::UniqueUse(inst, 0) = input.inst {
             if let Some((addr_input, offset)) = is_mergeable_load(self.lower_ctx, inst) {
                 return Some(SinkableLoad {
                     inst,
@@ -267,17 +263,7 @@ where
     }
 
     fn emit(&mut self, inst: &MInst) -> Unit {
-        for inst in inst.clone().mov_mitosis() {
-            self.emitted_insts.push((inst, false));
-        }
-    }
-
-    fn emit_safepoint(&mut self, inst: &MInst) -> Unit {
-        use crate::machinst::MachInst;
-        for inst in inst.clone().mov_mitosis() {
-            let is_safepoint = !inst.is_move().is_some();
-            self.emitted_insts.push((inst, is_safepoint));
-        }
+        self.lower_ctx.emit(inst.clone());
     }
 
     #[inline]
@@ -312,8 +298,27 @@ where
     }
 
     #[inline]
+    fn amode_imm_reg(&mut self, simm32: u32, base: Gpr) -> Amode {
+        Amode::imm_reg(simm32, base.to_reg())
+    }
+
+    #[inline]
+    fn amode_with_flags(&mut self, amode: &Amode, flags: MemFlags) -> Amode {
+        amode.with_flags(flags)
+    }
+
+    #[inline]
     fn amode_to_synthetic_amode(&mut self, amode: &Amode) -> SyntheticAmode {
         amode.clone().into()
+    }
+
+    #[inline]
+    fn const_shift_lt_eq_3(&mut self, shift_amount: Value) -> Option<u8> {
+        let input = self.lower_ctx.get_value_as_source_or_const(shift_amount);
+        match input.constant {
+            Some(shift_amount) if shift_amount <= 3 => Some(shift_amount as u8),
+            _ => None,
+        }
     }
 
     #[inline]
@@ -511,6 +516,38 @@ where
         } else {
             None
         }
+    }
+
+    #[inline]
+    fn intcc_to_cc(&mut self, intcc: &IntCC) -> CC {
+        CC::from_intcc(*intcc)
+    }
+
+    #[inline]
+    fn sum_extend_fits_in_32_bits(
+        &mut self,
+        offset: Offset32,
+        extend_from_ty: Type,
+        constant_value: Imm64,
+    ) -> Option<u32> {
+        let offset: i64 = offset.into();
+        let constant_value: u64 = constant_value.bits() as u64;
+        // If necessary, zero extend `constant_value` up to 64 bits.
+        let shift = 64 - extend_from_ty.bits();
+        let zero_extended_constant_value = (constant_value << shift) >> shift;
+        // Sum up the two operands.
+        let sum = offset.wrapping_add(zero_extended_constant_value as i64);
+        // Check that the sum will fit in 32-bits.
+        if sum == ((sum << 32) >> 32) {
+            Some(sum as u32)
+        } else {
+            None
+        }
+    }
+
+    #[inline]
+    fn amode_offset(&mut self, addr: &Amode, offset: u32) -> Amode {
+        addr.offset(offset)
     }
 }
 

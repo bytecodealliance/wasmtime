@@ -24,34 +24,6 @@ fn link_undefined() -> Result<()> {
 }
 
 #[test]
-fn undefined_error_message_with_linking() {
-    let mut config = Config::new();
-    config.wasm_module_linking(true);
-    let engine = Engine::new(&config).unwrap();
-    let module = Module::new(
-        &engine,
-        r#"
-        (module
-            (import "foo" "bar" (func))
-        )
-    "#,
-    )
-    .unwrap();
-    let linker = Linker::new(&engine);
-    let mut store = Store::new(&engine, ());
-    assert!(linker
-        .instantiate(&mut store, &module)
-        .unwrap_err()
-        .to_string()
-        .contains("foo"));
-    assert!(linker
-        .instantiate(&mut store, &module)
-        .unwrap_err()
-        .to_string()
-        .contains("bar"));
-}
-
-#[test]
 fn link_twice_bad() -> Result<()> {
     let mut store = Store::<()>::default();
     let mut linker = Linker::<()>::new(store.engine());
@@ -312,7 +284,7 @@ fn funcs_live_on_to_fight_another_day() -> Result<()> {
     let get_and_call = || -> Result<()> {
         assert_eq!(flag.load(SeqCst), 0);
         let mut store = Store::new(&engine, ());
-        let func = linker.get(&mut store, "", Some("")).unwrap();
+        let func = linker.get(&mut store, "", "").unwrap();
         func.into_func().unwrap().call(&mut store, &[], &mut [])?;
         assert_eq!(flag.load(SeqCst), 0);
         Ok(())
@@ -332,8 +304,8 @@ fn alias_one() -> Result<()> {
     assert!(linker.alias("a", "b", "c", "d").is_err());
     linker.func_wrap("a", "b", || {})?;
     assert!(linker.alias("a", "b", "c", "d").is_ok());
-    assert!(linker.get(&mut store, "a", Some("b")).is_some());
-    assert!(linker.get(&mut store, "c", Some("d")).is_some());
+    assert!(linker.get(&mut store, "a", "b").is_some());
+    assert!(linker.get(&mut store, "c", "d").is_some());
     Ok(())
 }
 

@@ -1,14 +1,13 @@
 //! Instruction operand sub-components (aka "parts"): definitions and printing.
 
-use super::regs::{self, show_ireg_sized};
+use super::regs::{self};
 use super::EmitState;
 use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::ir::{MemFlags, Type};
+use crate::isa::x64::inst::regs::pretty_print_reg;
 use crate::isa::x64::inst::Inst;
 use crate::machinst::*;
-use regalloc::{
-    PrettyPrint, PrettyPrintSized, RealRegUniverse, Reg, RegClass, RegUsageCollector, Writable,
-};
+use regalloc2::VReg;
 use smallvec::{smallvec, SmallVec};
 use std::fmt;
 use std::string::String;
@@ -21,25 +20,6 @@ pub trait ToWritableReg {
 /// An extension trait for converting `Writable<Reg>` to `Writable{Xmm,Gpr}`.
 pub trait FromWritableReg: Sized {
     fn from_writable_reg(w: Writable<Reg>) -> Option<Self>;
-}
-
-/// An extension trait for mapping register uses on `{Xmm,Gpr}`.
-pub trait MapUseExt {
-    fn map_use<RM>(&mut self, mapper: &RM)
-    where
-        RM: RegMapper;
-}
-
-/// An extension trait for mapping register mods and defs on
-/// `Writable{Xmm,Gpr}`.
-pub trait MapDefModExt {
-    fn map_def<RM>(&mut self, mapper: &RM)
-    where
-        RM: RegMapper;
-
-    fn map_mod<RM>(&mut self, mapper: &RM)
-    where
-        RM: RegMapper;
 }
 
 /// A macro for defining a newtype of `Reg` that enforces some invariant about
@@ -55,7 +35,7 @@ macro_rules! newtype_of_reg {
         |$check_reg:ident| $check:expr
     ) => {
         /// A newtype wrapper around `Reg`.
-        #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+        #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
         pub struct $newtype_reg(Reg);
 
         impl PartialEq<Reg> for $newtype_reg {
@@ -67,12 +47,6 @@ macro_rules! newtype_of_reg {
         impl From<$newtype_reg> for Reg {
             fn from(r: $newtype_reg) -> Self {
                 r.0
-            }
-        }
-
-        impl PrettyPrint for $newtype_reg {
-            fn show_rru(&self, mb_rru: Option<&RealRegUniverse>) -> String {
-                self.0.show_rru(mb_rru)
             }
         }
 
@@ -107,21 +81,6 @@ macro_rules! newtype_of_reg {
             }
         }
 
-        impl MapUseExt for $newtype_reg {
-            fn map_use<RM>(&mut self, mapper: &RM)
-            where
-                RM: RegMapper,
-            {
-                let mut reg = self.0;
-                mapper.map_use(&mut reg);
-                debug_assert!({
-                    let $check_reg = reg;
-                    $check
-                });
-                *self = $newtype_reg(reg);
-            }
-        }
-
         pub type $newtype_writable_reg = Writable<$newtype_reg>;
 
         #[allow(dead_code)] // Used by some newtypes and not others.
@@ -136,34 +95,6 @@ macro_rules! newtype_of_reg {
         impl FromWritableReg for $newtype_writable_reg {
             fn from_writable_reg(w: Writable<Reg>) -> Option<Self> {
                 Some(Writable::from_reg($newtype_reg::new(w.to_reg())?))
-            }
-        }
-
-        impl MapDefModExt for $newtype_writable_reg {
-            fn map_def<RM>(&mut self, mapper: &RM)
-            where
-                RM: RegMapper,
-            {
-                let mut reg = self.to_writable_reg();
-                mapper.map_def(&mut reg);
-                debug_assert!({
-                    let $check_reg = reg.to_reg();
-                    $check
-                });
-                *self = Writable::from_reg($newtype_reg(reg.to_reg()));
-            }
-
-            fn map_mod<RM>(&mut self, mapper: &RM)
-            where
-                RM: RegMapper,
-            {
-                let mut reg = self.to_writable_reg();
-                mapper.map_mod(&mut reg);
-                debug_assert!({
-                    let $check_reg = reg.to_reg();
-                    $check
-                });
-                *self = Writable::from_reg($newtype_reg(reg.to_reg()));
             }
         }
 
@@ -201,44 +132,16 @@ macro_rules! newtype_of_reg {
             }
 
             #[allow(dead_code)] // Used by some newtypes and not others.
-            pub fn map_uses<RM>(&mut self, mapper: &RM)
-            where
-                RM: RegMapper,
-            {
-                self.0.map_uses(mapper);
-                debug_assert!(match self.0 {
-                    RegMem::Reg { reg: $check_reg } => $check,
-                    _ => true,
-                });
-            }
-
-            #[allow(dead_code)] // Used by some newtypes and not others.
-            pub fn map_as_def<RM>(&mut self, mapper: &RM)
-            where
-                RM: RegMapper,
-            {
-                self.0.map_as_def(mapper);
-                debug_assert!(match self.0 {
-                    RegMem::Reg { reg: $check_reg } => $check,
-                    _ => true,
-                });
-            }
-
-            #[allow(dead_code)] // Used by some newtypes and not others.
-            pub fn get_regs_as_uses(&self, collector: &mut RegUsageCollector) {
-                self.0.get_regs_as_uses(collector);
+            pub fn get_operands<F: Fn(VReg) -> VReg>(
+                &self,
+                collector: &mut OperandCollector<'_, F>,
+            ) {
+                self.0.get_operands(collector);
             }
         }
-
         impl PrettyPrint for $newtype_reg_mem {
-            fn show_rru(&self, mb_rru: Option<&RealRegUniverse>) -> String {
-                self.0.show_rru(mb_rru)
-            }
-        }
-
-        impl PrettyPrintSized for $newtype_reg_mem {
-            fn show_rru_sized(&self, mb_rru: Option<&RealRegUniverse>, size: u8) -> String {
-                self.0.show_rru_sized(mb_rru, size)
+            fn pretty_print(&self, size: u8, allocs: &mut AllocationConsumer<'_>) -> String {
+                self.0.pretty_print(size, allocs)
             }
         }
 
@@ -278,44 +181,17 @@ macro_rules! newtype_of_reg {
             }
 
             #[allow(dead_code)] // Used by some newtypes and not others.
-            pub fn map_uses<RM>(&mut self, mapper: &RM)
-            where
-                RM: RegMapper,
-            {
-                self.0.map_uses(mapper);
-                debug_assert!(match self.0 {
-                    RegMemImm::Reg { reg: $check_reg } => $check,
-                    _ => true,
-                });
-            }
-
-            #[allow(dead_code)] // Used by some newtypes and not others.
-            pub fn map_as_def<RM>(&mut self, mapper: &RM)
-            where
-                RM: RegMapper,
-            {
-                self.0.map_as_def(mapper);
-                debug_assert!(match self.0 {
-                    RegMemImm::Reg { reg: $check_reg } => $check,
-                    _ => true,
-                });
-            }
-
-            #[allow(dead_code)] // Used by some newtypes and not others.
-            pub fn get_regs_as_uses(&self, collector: &mut RegUsageCollector) {
-                self.0.get_regs_as_uses(collector);
+            pub fn get_operands<F: Fn(VReg) -> VReg>(
+                &self,
+                collector: &mut OperandCollector<'_, F>,
+            ) {
+                self.0.get_operands(collector);
             }
         }
 
         impl PrettyPrint for $newtype_reg_mem_imm {
-            fn show_rru(&self, mb_rru: Option<&RealRegUniverse>) -> String {
-                self.0.show_rru(mb_rru)
-            }
-        }
-
-        impl PrettyPrintSized for $newtype_reg_mem_imm {
-            fn show_rru_sized(&self, mb_rru: Option<&RealRegUniverse>, size: u8) -> String {
-                self.0.show_rru_sized(mb_rru, size)
+            fn pretty_print(&self, size: u8, allocs: &mut AllocationConsumer<'_>) -> String {
+                self.0.pretty_print(size, allocs)
             }
         }
 
@@ -359,7 +235,7 @@ newtype_of_reg!(
     GprMem,
     GprMemImm,
     Imm8Gpr,
-    |reg| reg.get_class() == RegClass::I64
+    |reg| reg.class() == RegClass::Int
 );
 
 // Define a newtype of `Reg` for XMM registers.
@@ -370,7 +246,7 @@ newtype_of_reg!(
     XmmMem,
     XmmMemImm,
     Imm8Xmm,
-    |reg| reg.get_class() == RegClass::V128
+    |reg| reg.class() == RegClass::Float
 );
 
 /// A possible addressing mode (amode) that can be used in instructions.
@@ -400,7 +276,7 @@ pub enum Amode {
 
 impl Amode {
     pub(crate) fn imm_reg(simm32: u32, base: Reg) -> Self {
-        debug_assert!(base.get_class() == RegClass::I64);
+        debug_assert!(base.class() == RegClass::Int);
         Self::ImmReg {
             simm32,
             base,
@@ -409,8 +285,8 @@ impl Amode {
     }
 
     pub(crate) fn imm_reg_reg_shift(simm32: u32, base: Gpr, index: Gpr, shift: u8) -> Self {
-        debug_assert!(base.get_class() == RegClass::I64);
-        debug_assert!(index.get_class() == RegClass::I64);
+        debug_assert!(base.class() == RegClass::Int);
+        debug_assert!(index.class() == RegClass::Int);
         debug_assert!(shift <= 3);
         Self::ImmRegRegShift {
             simm32,
@@ -450,14 +326,17 @@ impl Amode {
     }
 
     /// Add the regs mentioned by `self` to `collector`.
-    pub(crate) fn get_regs_as_uses(&self, collector: &mut RegUsageCollector) {
+    pub(crate) fn get_operands<F: Fn(VReg) -> VReg>(
+        &self,
+        collector: &mut OperandCollector<'_, F>,
+    ) {
         match self {
             Amode::ImmReg { base, .. } => {
-                collector.add_use(*base);
+                collector.reg_use(*base);
             }
             Amode::ImmRegRegShift { base, index, .. } => {
-                collector.add_use(base.to_reg());
-                collector.add_use(index.to_reg());
+                collector.reg_use(base.to_reg());
+                collector.reg_use(index.to_reg());
             }
             Amode::RipRelative { .. } => {
                 // RIP isn't involved in regalloc.
@@ -476,13 +355,56 @@ impl Amode {
     pub(crate) fn can_trap(&self) -> bool {
         !self.get_flags().notrap()
     }
+
+    pub(crate) fn with_allocs(&self, allocs: &mut AllocationConsumer<'_>) -> Self {
+        // The order in which we consume allocs here must match the
+        // order in which we produce operands in get_operands() above.
+        match self {
+            &Amode::ImmReg {
+                simm32,
+                base,
+                flags,
+            } => Amode::ImmReg {
+                simm32,
+                flags,
+                base: allocs.next(base),
+            },
+            &Amode::ImmRegRegShift {
+                simm32,
+                base,
+                index,
+                shift,
+                flags,
+            } => Amode::ImmRegRegShift {
+                simm32,
+                shift,
+                flags,
+                base: Gpr::new(allocs.next(*base)).unwrap(),
+                index: Gpr::new(allocs.next(*index)).unwrap(),
+            },
+            &Amode::RipRelative { target } => Amode::RipRelative { target },
+        }
+    }
+
+    /// Offset the amode by a fixed offset.
+    pub(crate) fn offset(&self, offset: u32) -> Self {
+        let mut ret = self.clone();
+        match &mut ret {
+            &mut Amode::ImmReg { ref mut simm32, .. } => *simm32 += offset,
+            &mut Amode::ImmRegRegShift { ref mut simm32, .. } => *simm32 += offset,
+            _ => panic!("Cannot offset amode: {:?}", self),
+        }
+        ret
+    }
 }
 
 impl PrettyPrint for Amode {
-    fn show_rru(&self, mb_rru: Option<&RealRegUniverse>) -> String {
+    fn pretty_print(&self, _size: u8, allocs: &mut AllocationConsumer<'_>) -> String {
         match self {
             Amode::ImmReg { simm32, base, .. } => {
-                format!("{}({})", *simm32 as i32, base.show_rru(mb_rru))
+                // Note: size is always 8; the address is 64 bits,
+                // even if the addressed operand is smaller.
+                format!("{}({})", *simm32 as i32, pretty_print_reg(*base, 8, allocs))
             }
             Amode::ImmRegRegShift {
                 simm32,
@@ -493,8 +415,8 @@ impl PrettyPrint for Amode {
             } => format!(
                 "{}({},{},{})",
                 *simm32 as i32,
-                base.show_rru(mb_rru),
-                index.show_rru(mb_rru),
+                pretty_print_reg(base.to_reg(), 8, allocs),
+                pretty_print_reg(index.to_reg(), 8, allocs),
                 1 << shift
             ),
             Amode::RipRelative { ref target } => format!("label{}(%rip)", target.get()),
@@ -524,21 +446,14 @@ impl SyntheticAmode {
     }
 
     /// Add the regs mentioned by `self` to `collector`.
-    pub(crate) fn get_regs_as_uses(&self, collector: &mut RegUsageCollector) {
+    pub(crate) fn get_operands<F: Fn(VReg) -> VReg>(
+        &self,
+        collector: &mut OperandCollector<'_, F>,
+    ) {
         match self {
-            SyntheticAmode::Real(addr) => addr.get_regs_as_uses(collector),
+            SyntheticAmode::Real(addr) => addr.get_operands(collector),
             SyntheticAmode::NominalSPOffset { .. } => {
                 // Nothing to do; the base is SP and isn't involved in regalloc.
-            }
-            SyntheticAmode::ConstantOffset(_) => {}
-        }
-    }
-
-    pub(crate) fn map_uses<RM: RegMapper>(&mut self, map: &RM) {
-        match self {
-            SyntheticAmode::Real(addr) => addr.map_uses(map),
-            SyntheticAmode::NominalSPOffset { .. } => {
-                // Nothing to do.
             }
             SyntheticAmode::ConstantOffset(_) => {}
         }
@@ -561,6 +476,15 @@ impl SyntheticAmode {
             }
         }
     }
+
+    pub(crate) fn with_allocs(&self, allocs: &mut AllocationConsumer<'_>) -> Self {
+        match self {
+            SyntheticAmode::Real(addr) => SyntheticAmode::Real(addr.with_allocs(allocs)),
+            &SyntheticAmode::NominalSPOffset { .. } | &SyntheticAmode::ConstantOffset { .. } => {
+                self.clone()
+            }
+        }
+    }
 }
 
 impl Into<SyntheticAmode> for Amode {
@@ -570,9 +494,10 @@ impl Into<SyntheticAmode> for Amode {
 }
 
 impl PrettyPrint for SyntheticAmode {
-    fn show_rru(&self, mb_rru: Option<&RealRegUniverse>) -> String {
+    fn pretty_print(&self, _size: u8, allocs: &mut AllocationConsumer<'_>) -> String {
         match self {
-            SyntheticAmode::Real(addr) => addr.show_rru(mb_rru),
+            // See note in `Amode` regarding constant size of `8`.
+            SyntheticAmode::Real(addr) => addr.pretty_print(8, allocs),
             SyntheticAmode::NominalSPOffset { simm32 } => {
                 format!("rsp({} + virtual offset)", *simm32 as i32)
             }
@@ -594,7 +519,7 @@ pub enum RegMemImm {
 
 impl RegMemImm {
     pub(crate) fn reg(reg: Reg) -> Self {
-        debug_assert!(reg.get_class() == RegClass::I64 || reg.get_class() == RegClass::V128);
+        debug_assert!(reg.class() == RegClass::Int || reg.class() == RegClass::Float);
         Self::Reg { reg }
     }
     pub(crate) fn mem(addr: impl Into<SyntheticAmode>) -> Self {
@@ -607,15 +532,18 @@ impl RegMemImm {
     /// Asserts that in register mode, the reg class is the one that's expected.
     pub(crate) fn assert_regclass_is(&self, expected_reg_class: RegClass) {
         if let Self::Reg { reg } = self {
-            debug_assert_eq!(reg.get_class(), expected_reg_class);
+            debug_assert_eq!(reg.class(), expected_reg_class);
         }
     }
 
     /// Add the regs mentioned by `self` to `collector`.
-    pub(crate) fn get_regs_as_uses(&self, collector: &mut RegUsageCollector) {
+    pub(crate) fn get_operands<F: Fn(VReg) -> VReg>(
+        &self,
+        collector: &mut OperandCollector<'_, F>,
+    ) {
         match self {
-            Self::Reg { reg } => collector.add_use(*reg),
-            Self::Mem { addr } => addr.get_regs_as_uses(collector),
+            Self::Reg { reg } => collector.reg_use(*reg),
+            Self::Mem { addr } => addr.get_operands(collector),
             Self::Imm { .. } => {}
         }
     }
@@ -626,19 +554,25 @@ impl RegMemImm {
             _ => None,
         }
     }
-}
 
-impl PrettyPrint for RegMemImm {
-    fn show_rru(&self, mb_rru: Option<&RealRegUniverse>) -> String {
-        self.show_rru_sized(mb_rru, 8)
+    pub(crate) fn with_allocs(&self, allocs: &mut AllocationConsumer<'_>) -> Self {
+        match self {
+            Self::Reg { reg } => Self::Reg {
+                reg: allocs.next(*reg),
+            },
+            Self::Mem { addr } => Self::Mem {
+                addr: addr.with_allocs(allocs),
+            },
+            Self::Imm { .. } => self.clone(),
+        }
     }
 }
 
-impl PrettyPrintSized for RegMemImm {
-    fn show_rru_sized(&self, mb_rru: Option<&RealRegUniverse>, size: u8) -> String {
+impl PrettyPrint for RegMemImm {
+    fn pretty_print(&self, size: u8, allocs: &mut AllocationConsumer<'_>) -> String {
         match self {
-            Self::Reg { reg } => show_ireg_sized(*reg, mb_rru, size),
-            Self::Mem { addr } => addr.show_rru(mb_rru),
+            Self::Reg { reg } => pretty_print_reg(*reg, size, allocs),
+            Self::Mem { addr } => addr.pretty_print(size, allocs),
             Self::Imm { simm32 } => format!("${}", *simm32 as i32),
         }
     }
@@ -673,7 +607,7 @@ pub enum RegMem {
 
 impl RegMem {
     pub(crate) fn reg(reg: Reg) -> Self {
-        debug_assert!(reg.get_class() == RegClass::I64 || reg.get_class() == RegClass::V128);
+        debug_assert!(reg.class() == RegClass::Int || reg.class() == RegClass::Float);
         Self::Reg { reg }
     }
     pub(crate) fn mem(addr: impl Into<SyntheticAmode>) -> Self {
@@ -682,20 +616,34 @@ impl RegMem {
     /// Asserts that in register mode, the reg class is the one that's expected.
     pub(crate) fn assert_regclass_is(&self, expected_reg_class: RegClass) {
         if let Self::Reg { reg } = self {
-            debug_assert_eq!(reg.get_class(), expected_reg_class);
+            debug_assert_eq!(reg.class(), expected_reg_class);
         }
     }
     /// Add the regs mentioned by `self` to `collector`.
-    pub(crate) fn get_regs_as_uses(&self, collector: &mut RegUsageCollector) {
+    pub(crate) fn get_operands<F: Fn(VReg) -> VReg>(
+        &self,
+        collector: &mut OperandCollector<'_, F>,
+    ) {
         match self {
-            RegMem::Reg { reg } => collector.add_use(*reg),
-            RegMem::Mem { addr, .. } => addr.get_regs_as_uses(collector),
+            RegMem::Reg { reg } => collector.reg_use(*reg),
+            RegMem::Mem { addr, .. } => addr.get_operands(collector),
         }
     }
     pub(crate) fn to_reg(&self) -> Option<Reg> {
         match self {
             RegMem::Reg { reg } => Some(*reg),
             _ => None,
+        }
+    }
+
+    pub(crate) fn with_allocs(&self, allocs: &mut AllocationConsumer<'_>) -> Self {
+        match self {
+            RegMem::Reg { reg } => RegMem::Reg {
+                reg: allocs.next(*reg),
+            },
+            RegMem::Mem { addr } => RegMem::Mem {
+                addr: addr.with_allocs(allocs),
+            },
         }
     }
 }
@@ -707,16 +655,10 @@ impl From<Writable<Reg>> for RegMem {
 }
 
 impl PrettyPrint for RegMem {
-    fn show_rru(&self, mb_rru: Option<&RealRegUniverse>) -> String {
-        self.show_rru_sized(mb_rru, 8)
-    }
-}
-
-impl PrettyPrintSized for RegMem {
-    fn show_rru_sized(&self, mb_rru: Option<&RealRegUniverse>, size: u8) -> String {
+    fn pretty_print(&self, size: u8, allocs: &mut AllocationConsumer<'_>) -> String {
         match self {
-            RegMem::Reg { reg } => show_ireg_sized(*reg, mb_rru, size),
-            RegMem::Mem { addr, .. } => addr.show_rru(mb_rru),
+            RegMem::Reg { reg } => pretty_print_reg(*reg, size, allocs),
+            RegMem::Mem { addr, .. } => addr.pretty_print(size, allocs),
         }
     }
 }
@@ -1220,6 +1162,22 @@ impl SseOpcode {
         match self {
             SseOpcode::Movd => 4,
             _ => 8,
+        }
+    }
+
+    /// Does an XmmRmmRImm with this opcode use src1? FIXME: split
+    /// into separate instructions.
+    pub(crate) fn uses_src1(&self) -> bool {
+        match self {
+            SseOpcode::Pextrb => false,
+            SseOpcode::Pextrw => false,
+            SseOpcode::Pextrd => false,
+            SseOpcode::Pshufd => false,
+            SseOpcode::Roundss => false,
+            SseOpcode::Roundsd => false,
+            SseOpcode::Roundps => false,
+            SseOpcode::Roundpd => false,
+            _ => true,
         }
     }
 }

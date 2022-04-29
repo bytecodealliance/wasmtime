@@ -13,31 +13,20 @@ block0(v0: i64, v1: i32):
     return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (successor: Block 1)
-;   (successor: Block 2)
-;   (instruction range: 0 .. 5)
-;   Inst 0:   mov w2, w1
-;   Inst 1:   ldr x3, [x0]
-;   Inst 2:   mov x3, x3
-;   Inst 3:   subs xzr, x2, x3
-;   Inst 4:   b.ls label1 ; b label2
-; Block 1:
-;   (original IR block: block2)
-;   (instruction range: 5 .. 10)
-;   Inst 5:   add x0, x0, x1, UXTW
-;   Inst 6:   subs xzr, x2, x3
-;   Inst 7:   movz x1, #0
-;   Inst 8:   csel x0, x1, x0, hi
-;   Inst 9:   ret
-; Block 2:
-;   (original IR block: block1)
-;   (instruction range: 10 .. 11)
-;   Inst 10:   udf
-; }}
+; block0:
+;   mov w10, w1
+;   ldr x5, [x0]
+;   mov x11, x5
+;   subs xzr, x10, x11
+;   b.ls label1 ; b label2
+; block1:
+;   add x13, x0, x1, UXTW
+;   subs xzr, x10, x11
+;   movz x14, #0
+;   csel x0, x14, x13, hi
+;   ret
+; block2:
+;   udf
 
 function %static_heap_check(i64 vmctx, i32) -> i64 {
     gv0 = vmctx
@@ -48,27 +37,16 @@ block0(v0: i64, v1: i32):
     return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (successor: Block 1)
-;   (successor: Block 2)
-;   (instruction range: 0 .. 3)
-;   Inst 0:   mov w2, w1
-;   Inst 1:   subs xzr, x2, #65536
-;   Inst 2:   b.ls label1 ; b label2
-; Block 1:
-;   (original IR block: block2)
-;   (instruction range: 3 .. 8)
-;   Inst 3:   add x0, x0, x1, UXTW
-;   Inst 4:   subs xzr, x2, #65536
-;   Inst 5:   movz x1, #0
-;   Inst 6:   csel x0, x1, x0, hi
-;   Inst 7:   ret
-; Block 2:
-;   (original IR block: block1)
-;   (instruction range: 8 .. 9)
-;   Inst 8:   udf
-; }}
+; block0:
+;   mov w8, w1
+;   subs xzr, x8, #65536
+;   b.ls label1 ; b label2
+; block1:
+;   add x10, x0, x1, UXTW
+;   subs xzr, x8, #65536
+;   movz x11, #0
+;   csel x0, x11, x10, hi
+;   ret
+; block2:
+;   udf
 

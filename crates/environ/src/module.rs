@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::mem;
-use std::ops::Range;
+use std::ops::{Index, Range};
 use wasmtime_types::*;
 
 /// Implemenation styles for WebAssembly linear memory.
@@ -128,7 +128,7 @@ pub struct StaticMemoryInitializer {
 }
 
 /// The type of WebAssembly linear memory initialization to use for a module.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum MemoryInitialization {
     /// Memory initialization is segmented.
     ///
@@ -779,7 +779,7 @@ pub struct TableInitializer {
 }
 
 /// Table initialization data for all tables in the module.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum TableInitialization {
     /// "Segment" mode: table initializer segments, possibly with
     /// dynamic bases, possibly applying to an imported memory.
@@ -836,8 +836,6 @@ impl Default for TableInitialization {
 #[allow(missing_docs)]
 pub enum ModuleType {
     Function(SignatureIndex),
-    Module(ModuleTypeIndex),
-    Instance(InstanceTypeIndex),
 }
 
 impl ModuleType {
@@ -846,14 +844,13 @@ impl ModuleType {
     pub fn unwrap_function(&self) -> SignatureIndex {
         match self {
             ModuleType::Function(f) => *f,
-            _ => panic!("not a function type"),
         }
     }
 }
 
 /// A translated WebAssembly module, excluding the function bodies and
 /// memory initializers.
-#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[derive(Default, Debug, Serialize, Deserialize)]
 pub struct Module {
     /// The name of this wasm module, often found in the wasm file.
     pub name: Option<String>,
@@ -915,87 +912,28 @@ pub struct Module {
 
     /// WebAssembly global variables.
     pub globals: PrimaryMap<GlobalIndex, Global>,
-
-    /// The type of each wasm instance this module defines.
-    pub instances: PrimaryMap<InstanceIndex, InstanceTypeIndex>,
-
-    /// The type of each nested wasm module this module contains.
-    pub modules: PrimaryMap<ModuleIndex, ModuleTypeIndex>,
 }
 
 /// Initialization routines for creating an instance, encompassing imports,
 /// modules, instances, aliases, etc.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum Initializer {
     /// An imported item is required to be provided.
     Import {
         /// Name of this import
         name: String,
-        /// The field name projection of this import. When module-linking is
-        /// enabled this is always `None`. Otherwise this is always `Some`.
-        field: Option<String>,
+        /// The field name projection of this import
+        field: String,
         /// Where this import will be placed, which also has type information
         /// about the import.
         index: EntityIndex,
     },
-
-    /// An export from a previously defined instance is being inserted into our
-    /// index space.
-    ///
-    /// Note that when the module linking proposal is enabled two-level imports
-    /// will implicitly desugar to this initializer.
-    AliasInstanceExport {
-        /// The instance that we're referencing.
-        instance: InstanceIndex,
-        /// Which export is being inserted into our index space.
-        export: String,
-    },
-
-    /// A module is being instantiated with previously configured initializers
-    /// as arguments.
-    Instantiate {
-        /// The module that this instance is instantiating.
-        module: ModuleIndex,
-        /// The arguments provided to instantiation, along with their name in
-        /// the instance being instantiated.
-        args: IndexMap<String, EntityIndex>,
-    },
-
-    /// A module is being created from a set of compiled artifacts.
-    CreateModule {
-        /// The index of the artifact that's being converted into a module.
-        artifact_index: usize,
-        /// The list of artifacts that this module value will be inheriting.
-        artifacts: Vec<usize>,
-        /// The list of modules that this module value will inherit.
-        modules: Vec<ModuleUpvar>,
-    },
-
-    /// A module is created from a closed-over-module value, defined when this
-    /// module was created.
-    DefineModule(usize),
-}
-
-/// Where module values can come from when creating a new module from a compiled
-/// artifact.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum ModuleUpvar {
-    /// A module value is inherited from the module creating the new module.
-    Inherit(usize),
-    /// A module value comes from the instance-to-be-created module index space.
-    Local(ModuleIndex),
 }
 
 impl Module {
     /// Allocates the module data structures.
     pub fn new() -> Self {
         Module::default()
-    }
-
-    /// Get the given passive element, if it exists.
-    pub fn get_passive_element(&self, index: ElemIndex) -> Option<&[FuncIndex]> {
-        let index = *self.passive_elements_map.get(&index)?;
-        Some(self.passive_elements[index].as_ref())
     }
 
     /// Convert a `DefinedFuncIndex` into a `FuncIndex`.
@@ -1100,12 +1038,11 @@ impl Module {
 
     /// Returns an iterator of all the imports in this module, along with their
     /// module name, field name, and type that's being imported.
-    pub fn imports(&self) -> impl Iterator<Item = (&str, Option<&str>, EntityType)> {
-        self.initializers.iter().filter_map(move |i| match i {
+    pub fn imports(&self) -> impl Iterator<Item = (&str, &str, EntityType)> {
+        self.initializers.iter().map(move |i| match i {
             Initializer::Import { name, field, index } => {
-                Some((name.as_str(), field.as_deref(), self.type_of(*index)))
+                (name.as_str(), field.as_str(), self.type_of(*index))
             }
-            _ => None,
         })
     }
 
@@ -1116,8 +1053,6 @@ impl Module {
             EntityIndex::Table(i) => EntityType::Table(self.table_plans[i].table),
             EntityIndex::Memory(i) => EntityType::Memory(self.memory_plans[i].memory),
             EntityIndex::Function(i) => EntityType::Function(self.functions[i].signature),
-            EntityIndex::Instance(i) => EntityType::Instance(self.instances[i]),
-            EntityIndex::Module(i) => EntityType::Module(self.modules[i]),
         }
     }
 
@@ -1145,34 +1080,30 @@ impl Module {
 ///
 /// Note that this is shared amongst all modules coming out of a translation
 /// in the case of nested modules and the module linking proposal.
-#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[derive(Default, Debug, Serialize, Deserialize)]
 #[allow(missing_docs)]
 pub struct TypeTables {
-    pub wasm_signatures: PrimaryMap<SignatureIndex, WasmFuncType>,
-    pub module_signatures: PrimaryMap<ModuleTypeIndex, ModuleSignature>,
-    pub instance_signatures: PrimaryMap<InstanceTypeIndex, InstanceSignature>,
+    pub(crate) wasm_signatures: PrimaryMap<SignatureIndex, WasmFuncType>,
 }
 
-/// The type signature of known modules.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ModuleSignature {
-    /// All imports in this module, listed in order with their name and
-    /// what type they're importing.
-    pub imports: IndexMap<String, EntityType>,
-    /// Exports are what an instance type conveys, so we go through an
-    /// indirection over there.
-    pub exports: InstanceTypeIndex,
+impl TypeTables {
+    /// Returns an iterator of all of the core wasm function signatures
+    /// registered in this instance.
+    pub fn wasm_signatures(&self) -> impl Iterator<Item = (SignatureIndex, &WasmFuncType)> {
+        self.wasm_signatures.iter()
+    }
 }
 
-/// The type signature of known instances.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct InstanceSignature {
-    /// The name of what's being exported as well as its type signature.
-    pub exports: IndexMap<String, EntityType>,
+impl Index<SignatureIndex> for TypeTables {
+    type Output = WasmFuncType;
+
+    fn index(&self, idx: SignatureIndex) -> &WasmFuncType {
+        &self.wasm_signatures[idx]
+    }
 }
 
 /// Type information about functions in a wasm module.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct FunctionType {
     /// The type of this function, indexed into the module-wide type tables for
     /// a module compilation.

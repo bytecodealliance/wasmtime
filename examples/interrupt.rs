@@ -7,11 +7,11 @@ use anyhow::Result;
 use wasmtime::*;
 
 fn main() -> Result<()> {
-    // Enable interruptable code via `Config` and then create an interrupt
-    // handle which we'll use later to interrupt running code.
-    let engine = Engine::new(Config::new().interruptable(true))?;
+    // Enable epoch interruption code via `Config` which means that code will
+    // get interrupted when `Engine::increment_epoch` happens.
+    let engine = Engine::new(Config::new().epoch_interruption(true))?;
     let mut store = Store::new(&engine, ());
-    let interrupt_handle = store.interrupt_handle()?;
+    store.set_epoch_deadline(1);
 
     // Compile and instantiate a small example with an infinite loop.
     let module = Module::from_file(&engine, "examples/interrupt.wat")?;
@@ -22,14 +22,14 @@ fn main() -> Result<()> {
     std::thread::spawn(move || {
         std::thread::sleep(std::time::Duration::from_secs(1));
         println!("Interrupting!");
-        interrupt_handle.interrupt();
+        engine.increment_epoch();
     });
 
     println!("Entering infinite loop ...");
     let trap = run.call(&mut store, ()).unwrap_err();
 
     println!("trap received...");
-    assert!(trap.to_string().contains("wasm trap: interrupt"));
+    assert!(trap.to_string().contains("epoch deadline reached"));
 
     Ok(())
 }
