@@ -76,15 +76,9 @@ pub trait RuntimeLinearMemory: Send + Sync {
     fn needs_init(&self) -> bool;
 
     /// For the pooling allocator, we must be able to downcast this trait to its
-    /// underlying structure; this trampoline function allows us to use
-    /// `Box::downcast` which only takes a `Box<dyn Any>`.
+    /// underlying structure.
     #[cfg(feature = "pooling-allocator")]
-    fn into_any(self: Box<Self>) -> Box<dyn std::any::Any>;
-
-    /// Similar to [`RuntimeLinearMemory::into_any()`], this function allows us
-    /// to downcast this trait to its underlying structure by reference.
-    #[cfg(feature = "pooling-allocator")]
-    fn as_any(&self) -> &dyn std::any::Any;
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any;
 }
 
 /// A linear memory instance.
@@ -267,12 +261,7 @@ impl RuntimeLinearMemory for MmapMemory {
     }
 
     #[cfg(feature = "pooling-allocator")]
-    fn into_any(self: Box<Self>) -> Box<dyn std::any::Any> {
-        self
-    }
-
-    #[cfg(feature = "pooling-allocator")]
-    fn as_any(&self) -> &dyn std::any::Any {
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
         self
     }
 }
@@ -386,12 +375,7 @@ impl RuntimeLinearMemory for ExternalMemory {
     }
 
     #[cfg(feature = "pooling-allocator")]
-    fn into_any(self: Box<Self>) -> Box<dyn std::any::Any> {
-        self
-    }
-
-    #[cfg(feature = "pooling-allocator")]
-    fn as_any(&self) -> &dyn std::any::Any {
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
         self
     }
 }
@@ -611,8 +595,8 @@ impl Memory {
     /// Check if the inner implementation of [`Memory`] is a memory created with
     /// [`Memory::new_static()`].
     #[cfg(feature = "pooling-allocator")]
-    pub fn is_static(&self) -> bool {
-        let as_any = self.0.as_any();
+    pub fn is_static(&mut self) -> bool {
+        let as_any = self.0.as_any_mut();
         as_any.downcast_ref::<ExternalMemory>().is_some()
     }
 
@@ -620,10 +604,10 @@ impl Memory {
     /// The image should only be present for a subset of memories created with
     /// [`Memory::new_static()`].
     #[cfg(feature = "pooling-allocator")]
-    pub fn unwrap_static_image(self) -> Option<MemoryImageSlot> {
-        let as_any = self.0.into_any();
-        if let Ok(m) = as_any.downcast::<ExternalMemory>() {
-            m.memory_image
+    pub fn unwrap_static_image(mut self) -> Option<MemoryImageSlot> {
+        let as_any = self.0.as_any_mut();
+        if let Some(m) = as_any.downcast_mut::<ExternalMemory>() {
+            std::mem::take(&mut m.memory_image)
         } else {
             None
         }

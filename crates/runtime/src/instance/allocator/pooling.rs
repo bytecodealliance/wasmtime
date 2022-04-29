@@ -447,7 +447,7 @@ impl InstancePool {
     ) {
         // Decommit any linear memories that were used.
         let memories = mem::take(memories);
-        for ((def_mem_idx, memory), base) in
+        for ((def_mem_idx, mut memory), base) in
             memories.into_iter().zip(self.memories.get(instance_index))
         {
             assert!(memory.is_static());
