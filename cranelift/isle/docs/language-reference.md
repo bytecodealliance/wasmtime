@@ -1202,59 +1202,6 @@ If an extractor returns `None`, then the generated matching code
 proceeds just as if an enum variant match had failed: it moves on to
 try the next rule in turn.
 
-#### Advanced Extractors: Arg-Polarity
-
-There is one shortcoming in the extractor mechanism as defined so far:
-there is no mechanism to provide additional context or "parameterize"
-an external extractor; it only receives the term to deconstruct, with
-no other parameters.  For example, one might wish to write a
-`(GetNthArg n arg_pattern)` extractor that matches on an instruction,
-fetches the `n`th "arg" from it, and then returns that as the
-extracted match result, allowing `arg_pattern` to match against it.
-
-Inspired by Prolog, where argument data can flow in both directions
-during "unification", we implement a limited form of bidirectionality
-in ISLE for extractor arguments. Specifically, we can declare the
-"polarity" of the arguments to an extractor so that some of the
-arguments flow "in" rather than "out". This lets us provide data to
-the extractor via expressions embedded in the pattern.
-
-An example might make this more clear: we can define a term
-
-```lisp
-    (decl GetNthArg (u32 Arg) Inst)
-```
-
-that we wish to use as in the example given above, and then we can define
-an external extractor
-
-```lisp
-    (extern extractor GetNthArg get_nth_arg (in out))
-```
-
-which indicates that `get_nth_arg()` will take parameters of `&Inst`
-(the value being extracted) *and* `u32` (the in-arg), and return
-`Option<(Arg,)>`, i.e., *just* the out-args.
-
-In order to use this extractor, to avoid parse ambiguity (i.e., to
-avoid the need for the parser to know argument polarity while it is
-still parsing), we require special syntax for the in-argument so that
-it is parsed as an expression: it must be prepended by `<`. So one
-might use `GetNthArg` as follows:
-
-```lisp
-    (rule (Lower (and
-                   (Inst ...)
-                   (GetNthArg <2 second_arg)))
-          ...)
-```
-
-This functionality is meant to improve the expressive power of the
-DSL, but is not intended to be commonly used outside of "binding" or
-"library" ISLE code. In other words, because it is somewhat
-non-intuitive, it is best to wrap it within friendlier internal
-extractors.
-
 ### Mapping Type Declarations to Rust
 
 When we declare a type like
@@ -1528,9 +1475,5 @@ newline). The grammar accepted by the parser is as follows:
 
 <extern> ::= "constructor" <ident> <ident>
            | "extractor" [ "infallible" ] <ident> <ident>
-             [ "(" <polarity>* ")" ]
            | "const" <const-ident> <ident> <ty>
-           
-<polarity> ::= "in" | "out"
-
 ```
