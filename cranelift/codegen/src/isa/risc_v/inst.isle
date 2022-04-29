@@ -64,9 +64,7 @@
      (Extend
       (rd WritableReg)
       (rn Reg)
-      (signed bool)
-      (from_bits u8)
-      (to_bits u8))
+      (op ExtendOp))
 
       (AjustSp
       (amount i64))
@@ -434,18 +432,17 @@
 (type Imm3 (primitive Imm3))
 (type BranchTarget (primitive BranchTarget))
 
-(type ExtendOp extern
+(type ExtendOp 
   (enum
     (UXTB)
     (UXTH)
     (UXTW)
-    (UXTX)
+    (UXTD)
     (SXTB)
     (SXTH)
     (SXTW)
-    (SXTX)
+    (SXTD)
 ))
-
 
 
 (type Cond  

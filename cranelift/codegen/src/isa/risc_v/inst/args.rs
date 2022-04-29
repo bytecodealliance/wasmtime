@@ -1001,6 +1001,7 @@ impl FloatCCBit {
             FloatCCBit::C(x) => *x,
         }
     }
+
     /*
         mask bit for floatcc
     */
@@ -1167,75 +1168,118 @@ impl AtomicOP {
         }
     }
 
-    pub(crate) fn from_atomicrmw_type_and_op(ty: Type, op: crate::ir::AtomicRmwOp) -> Option<Self> {
+    pub(crate) fn from_atomicrmw_type_and_op(ty: Type, op: crate::ir::AtomicRmwOp) -> Self {
         let type_32 = ty.bits() == 32;
         match op {
             crate::ir::AtomicRmwOp::Add => {
                 if type_32 {
-                    Some(Self::AmoaddW)
+                    Self::AmoaddW
                 } else {
-                    Some(Self::AmoaddD)
+                    Self::AmoaddD
                 }
             }
-            crate::ir::AtomicRmwOp::Sub => None,
+            crate::ir::AtomicRmwOp::Sub => {
+                if type_32 {
+                    Self::AmoaddW
+                } else {
+                    Self::AmoaddD
+                }
+            }
             crate::ir::AtomicRmwOp::And => {
                 if type_32 {
-                    Some(Self::AmoandW)
+                    Self::AmoandW
                 } else {
-                    Some(Self::AmoandD)
+                    Self::AmoandD
                 }
             }
-            crate::ir::AtomicRmwOp::Nand => todo!(),
+            crate::ir::AtomicRmwOp::Nand => {
+                if type_32 {
+                    Self::AmoorW
+                } else {
+                    Self::AmoorD
+                }
+            }
             crate::ir::AtomicRmwOp::Or => {
                 if type_32 {
-                    Some(Self::AmoorW)
+                    Self::AmoorW
                 } else {
-                    Some(Self::AmoorD)
+                    Self::AmoorD
                 }
             }
             crate::ir::AtomicRmwOp::Xor => {
                 if type_32 {
-                    Some(Self::AmoxorW)
+                    Self::AmoxorW
                 } else {
-                    Some(Self::AmoxorD)
+                    Self::AmoxorD
                 }
             }
             crate::ir::AtomicRmwOp::Xchg => {
                 if type_32 {
-                    Some(Self::AmoswapW)
+                    Self::AmoswapW
                 } else {
-                    Some(Self::AmoswapD)
+                    Self::AmoswapD
                 }
             }
             crate::ir::AtomicRmwOp::Umin => {
                 if type_32 {
-                    Some(Self::AmominuW)
+                    Self::AmominuW
                 } else {
-                    Some(Self::AmominuD)
+                    Self::AmominuD
                 }
             }
             crate::ir::AtomicRmwOp::Umax => {
                 if type_32 {
-                    Some(Self::AmomaxuW)
+                    Self::AmomaxuW
                 } else {
-                    Some(Self::AmomaxuD)
+                    Self::AmomaxuD
                 }
             }
             crate::ir::AtomicRmwOp::Smin => {
                 if type_32 {
-                    Some(Self::AmominW)
+                    Self::AmominW
                 } else {
-                    Some(Self::AmominD)
+                    Self::AmominD
                 }
             }
             crate::ir::AtomicRmwOp::Smax => {
                 if type_32 {
-                    Some(Self::AmomaxW)
+                    Self::AmomaxW
                 } else {
-                    Some(Self::AmomaxD)
+                    Self::AmomaxD
                 }
             }
         }
+    }
+}
+
+impl ExtendOp {
+    pub(crate) fn op_name(self) -> &'static str {
+        match self {
+            ExtendOp::UXTB => "uxtb",
+            ExtendOp::UXTH => "uxth",
+            ExtendOp::UXTW => "uxtw",
+            ExtendOp::UXTD => "uxtd",
+            ExtendOp::SXTB => "sxtb",
+            ExtendOp::SXTH => "sxth",
+            ExtendOp::SXTW => "sxtw",
+            ExtendOp::SXTD => "sxtd",
+        }
+    }
+
+    pub(crate) fn from_extend_args(signed: bool, from_bits: u8, to_bits: u8) -> Option<Self> {
+        // match (signed, from_bits, to_bits) {
+        //     (false, 1, 8) => Some(Self::UXTB),
+        //     (false, _, 16) => Some(Self::UXTH),
+        //     (false, _, 32) => Some(Self::UXTW),
+        //     (false, _, 64) => Some(Self::UXTD),
+        //     (true, 1, 8) => Some(Self::SXTB),
+        //     (true, _, 16) => Some(Self::SXTH),
+        //     (true, _, 32) => Some(Self::SXTW),
+        //     (true, _, 64) => Some(Self::SXTD),
+        //     _ => None,
+        // }
+        // None
+        unimplemented!("not in use")
     }
 }
 

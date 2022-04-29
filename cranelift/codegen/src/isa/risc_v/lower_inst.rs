@@ -2,6 +2,7 @@
 
 use alloc::vec;
 use alloc::vec::Vec;
+use regalloc::Writable;
 
 use crate::ir::Inst as IRInst;
 use crate::ir::Opcode;
@@ -136,30 +137,118 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         Opcode::AtomicRmw => {
             let r_dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let mut r_addr = ctx.put_input_in_regs(insn, 0).only_reg().unwrap();
-            let mut r_arg2 = ctx.put_input_in_regs(insn, 1).only_reg().unwrap();
+            let mut arg2 = ctx.put_input_in_regs(insn, 1).only_reg().unwrap();
             let ty_access = ty.unwrap();
             assert!(is_valid_atomic_transaction_ty(ty_access));
             let op = ctx.data(insn).atomic_rmw_op().unwrap();
+            let mut insts = SmallInstVec::new();
+            let risc_op = AtomicOP::from_atomicrmw_type_and_op(ty_access, op);
+            match op {
+                // special cases
+                // sub will use add atomic instruction
+                AtomicRmwOp::Sub => {
+                    insts.push(Inst::AluRRR {
+                        alu_op: AluOPRRR::Sub,
+                        rd: Writable::from_reg(arg2),
+                        rs1: zero_reg(),
+                        rs2: arg2,
+                    });
+                    insts.push(Inst::AluRRR {
+                        alu_op: AluOPRRR::Sub,
+                        rd: Writable::from_reg(arg2),
+                        rs1: zero_reg(),
+                        rs2: arg2,
+                    });
+                }
+                AtomicRmwOp::Nand => {
+                    /*
+                    a = !(a&b);
+                    equals a = (!a)  | (!b)
+                    here are truth table.
+                        a = !(a&b);
+                        A	B	Y
+                        0	0	1
+                        0	1	1
+                        1	0	1
+                        1	1	0
 
-            if let Some(risc_op) = AtomicOP::from_atomicrmw_type_and_op(ty_access, op) {
-                ctx.emit(Inst::Atomic {
-                    op: risc_op,
-                    rd: r_dst,
-                    addr: r_addr,
-                    src: r_arg2,
-                    // where are the memory order
-                    aq: false,
-                    rl: false,
-                });
-            } else {
+                        a = (!a)  | (!b)
+                        A	B	Y
+                        0	0	1
+                        0	1	1
+                        1	0	1
+                        1	1	0
+                             */
+
+                    //
+                    unimplemented!("nand not implemented.")
+                }
+            }
+            insts.push(Inst::Atomic {
+                op: risc_op,
+                rd: r_dst,
+                addr: r_addr,
+                src: arg2,
+                /*
+                todo::
+                    where are the memory order parameter??
+                */
+                aq: false,
+                rl: false,
+            });
+            for i in insts {
+                ctx.emit(i);
             }
         }
 
-        Opcode::AtomicCas => {}
+        Opcode::AtomicCas => {
+            let r_dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+            let mut r_addr = ctx.put_input_in_regs(insn, 0).only_reg().unwrap();
+            let mut r_expected = ctx.put_input_in_regs(insn, 1).only_reg().unwrap();
+            let mut r_replacement = ctx.put_input_in_regs(insn, 2).only_reg().unwrap();
+            let ty_access = ty.unwrap();
+            assert!(is_valid_atomic_transaction_ty(ty_access));
+        }
 
-        Opcode::AtomicLoad => {}
+        Opcode::AtomicLoad => {
+            let r_dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+            let mut r_addr = ctx.put_input_in_regs(insn, 0).only_reg().unwrap();
+            let mut arg2 = ctx.put_input_in_regs(insn, 1).only_reg().unwrap();
+            let ty_access = ty.unwrap();
+            assert!(is_valid_atomic_transaction_ty(ty_access));
+            ctx.emit(Inst::Atomic {
+                op: if ty_access.bits() == 32 {
+                    AtomicOP::LrW
+                } else {
+                    AtomicOP::LrD
+                },
+                rd: r_dst,
+                addr: r_addr,
+                src: arg2,
+                aq: false,
+                rl: false,
+            });
+        }
 
-        Opcode::AtomicStore => {}
+        Opcode::AtomicStore => {
+            let r_dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+            let mut r_addr = ctx.put_input_in_regs(insn, 0).only_reg().unwrap();
+            let mut arg2 = ctx.put_input_in_regs(insn, 1).only_reg().unwrap();
+            let ty_access = ty.unwrap();
+            assert!(is_valid_atomic_transaction_ty(ty_access));
+            ctx.emit(Inst::Atomic {
+                op: if ty_access.bits() == 32 {
+                    AtomicOP::ScW
+                } else {
+                    AtomicOP::ScD
+                },
+                rd: r_dst,
+                addr: r_addr,
+                src: arg2,
+                aq: false,
+                rl: false,
+            });
+        }
 
         Opcode::Fence => {
             ctx.emit(Inst::Fence);

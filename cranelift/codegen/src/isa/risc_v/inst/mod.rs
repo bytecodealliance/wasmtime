@@ -55,8 +55,8 @@ pub type OptionImm12 = Option<Imm12>;
 
 use crate::isa::risc_v::lower::isle::generated_code::MInst;
 pub use crate::isa::risc_v::lower::isle::generated_code::{
-    AluOPRR, AluOPRRI, AluOPRRR, AluOPRRRR, AtomicOP, FClassResult, FloatException, FloatFlagOp,
-    FloatRoundingMode, LoadOP, MInst as Inst, StoreOP, OPFPFMT,
+    AluOPRR, AluOPRRI, AluOPRRR, AluOPRRRR, AtomicOP, ExtendOp, FClassResult, FloatException,
+    FloatFlagOp, FloatRoundingMode, LoadOP, MInst as Inst, StoreOP, OPFPFMT,
 };
 
 type BoxCallInfo = Box<CallInfo>;
@@ -383,15 +383,14 @@ impl Inst {
 
     /// Create instructions that load a 64-bit floating-point constant.
     pub fn load_fp_constant64(rd: Writable<Reg>, const_data: u64) -> SmallVec<[Inst; 4]> {
-        let tmp = writable_spilltmp_reg();
-        let mut insts = SmallVec::new();
-        insts.extend(Self::load_constant_u64(tmp, const_data));
-        insts.push(Inst::AluRR {
-            alu_op: AluOPRR::FmvDX,
-            rd,
-            rs: tmp.to_reg(),
-        });
-        insts
+        Inst::do_something_with_registers(1, |regs, insts| {
+            insts.extend(Self::load_constant_u64(regs[0], const_data));
+            insts.push(Inst::AluRR {
+                alu_op: AluOPRR::FmvDX,
+                rd,
+                rs: regs[0].to_reg(),
+            });
+        })
     }
 
     /// Create instructions that load a 128-bit vector constant.
@@ -824,13 +823,6 @@ impl PrettyPrint for Inst {
 }
 
 impl Inst {
-    fn extend_name(is_signed: bool, from_bits: u8, to_bits: u8) -> &'static str {
-        //todo this is wrong
-        "sext"
-    }
-}
-
-impl Inst {
     fn print_with_state(&self, mb_rru: Option<&RealRegUniverse>, state: &mut EmitState) -> String {
         let register_name = |rd: Reg| {
             if let Some(x) = mb_rru {
@@ -940,16 +932,10 @@ impl Inst {
             &Inst::Ret => {
                 format!("ret")
             }
-            &MInst::Extend {
-                rd,
-                rn,
-                signed,
-                from_bits,
-                to_bits,
-            } => {
+            &MInst::Extend { rd, rn, op } => {
                 format!(
                     "{} {},{}",
-                    Inst::extend_name(signed, from_bits, to_bits),
+                    op.op_name(),
                     register_name(rd.to_reg()),
                     register_name(rn)
                 )

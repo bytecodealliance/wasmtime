@@ -61,23 +61,36 @@ impl MachInstEmitState<Inst> for EmitState {
 }
 
 impl Inst {
+    pub(crate) fn construct_bit_not(rd: Writable<Reg>) -> Inst {
+        unimplemented!()
+    }
+
+    /*
+        1: alloc registers
+        2: push into the stack
+        3: do something with these registers
+        4: restore the registers
+    */
+    pub(crate) fn do_something_with_registers(
+        num: u8,
+        mut f: impl std::ops::FnMut(&std::vec::Vec<Writable<Reg>>, &mut SmallInstVec<Inst>),
+    ) -> SmallInstVec<Inst> {
+        let mut insts = SmallInstVec::new();
+        let registers = Self::alloc_registers(num);
+        insts.extend(Self::push_registers(&registers));
+        f(&registers, &mut insts);
+        insts.extend(Self::pop_registers(&registers));
+        insts
+    }
     /*
         alloc some registers for load large constant, or something else.
         if exclusive is given, which we must not include the  exclusive register (it's aleady been allocted or something),so must skip it.
     */
-    fn alloc_registers(
-        exclusive: Option<HashSet<Writable<Reg>>>,
-        amount: u8,
-    ) -> Vec<Writable<Reg>> {
+    fn alloc_registers(amount: u8) -> Vec<Writable<Reg>> {
         let mut v = vec![];
         let available = s2_to_s11();
         debug_assert!(amount <= available.len() as u8);
         for r in available {
-            if let Some(ref set) = exclusive {
-                if set.contains(&r) {
-                    continue;
-                }
-            }
             v.push(r);
             if v.len() == amount as usize {
                 return v;
@@ -249,30 +262,27 @@ impl MachInstEmit for Inst {
                         | (imm12.as_u32()) << 20;
                     sink.put4(x);
                 } else {
-                    let mut insts: SmallInstVec<Inst> = SmallInstVec::new();
-                    let registers = Inst::alloc_registers(None, 1);
-                    insts.extend(Inst::push_registers(&registers));
-                    //registers[0] = offset
-                    insts.extend(Inst::load_constant_u64(registers[0], offset as u64));
-                    //registers[0] += base
-                    insts.push(Inst::AluRRR {
-                        alu_op: AluOPRRR::Add,
-                        rd: registers[0],
-                        rs1: registers[0].to_reg(),
-                        rs2: base,
-                    });
-                    //lw rd , registers[0]
-                    insts.push(Inst::Load {
-                        op,
-                        from: AMode::RegOffset(registers[0].to_reg(), Imm12::zero().into(), I64),
-                        rd,
-                        flags: MemFlags::new(),
-                    });
-                    // restore uses register
-                    insts.extend(Inst::pop_registers(&registers));
-                    for v in insts {
-                        v.emit(sink, emit_info, state);
-                    }
+                    Inst::do_something_with_registers(1, |registers, insts| {
+                        insts.extend(Inst::load_constant_u64(registers[0], offset as u64));
+                        insts.push(Inst::AluRRR {
+                            alu_op: AluOPRRR::Add,
+                            rd: registers[0],
+                            rs1: registers[0].to_reg(),
+                            rs2: base,
+                        });
+                        insts.push(Inst::Load {
+                            op,
+                            from: AMode::RegOffset(
+                                registers[0].to_reg(),
+                                Imm12::zero().into(),
+                                I64,
+                            ),
+                            rd,
+                            flags: MemFlags::new(),
+                        });
+                    })
+                    .into_iter()
+                    .for_each(|inst| inst.emit(sink, emit_info, state));
                 }
             }
             &Inst::Store { op, src, flags, to } => {
@@ -288,32 +298,29 @@ impl MachInstEmit for Inst {
                         | (imm12.as_u32() >> 5) << 25;
                     sink.put4(x);
                 } else {
-                    let mut insts: SmallInstVec<Inst> = smallvec![];
-                    let registers = Inst::alloc_registers(None, 1);
-                    insts.extend(Inst::push_registers(&registers));
-                    insts.extend(Inst::load_constant_u64(registers[0], offset as u64));
-                    // registers[0] = base + offset
-                    insts.push(Inst::AluRRR {
-                        alu_op: AluOPRRR::Add,
-                        rd: registers[0],
-                        rs1: registers[0].to_reg(),
-                        rs2: base,
-                    });
-                    // st registers[0] , src
-                    insts.push(Inst::Store {
-                        op,
-                        to: AMode::RegOffset(
-                            registers[0].to_reg(),
-                            Imm12::zero().as_i16() as i64,
-                            I64,
-                        ),
-                        src,
-                        flags: MemFlags::new(),
-                    });
-                    insts.extend(Inst::pop_registers(&registers));
-                    for v in insts {
-                        v.emit(sink, emit_info, state);
-                    }
+                    Inst::do_something_with_registers(1, |registers, insts| {
+                        insts.extend(Inst::load_constant_u64(registers[0], offset as u64));
+                        // registers[0] = base + offset
+                        insts.push(Inst::AluRRR {
+                            alu_op: AluOPRRR::Add,
+                            rd: registers[0],
+                            rs1: registers[0].to_reg(),
+                            rs2: base,
+                        });
+                        // st registers[0] , src
+                        insts.push(Inst::Store {
+                            op,
+                            to: AMode::RegOffset(
+                                registers[0].to_reg(),
+                                Imm12::zero().as_i16() as i64,
+                                I64,
+                            ),
+                            src,
+                            flags: MemFlags::new(),
+                        });
+                    })
+                    .into_iter()
+                    .for_each(|inst| inst.emit(sink, emit_info, state));
                 }
             }
             &Inst::EpiloguePlaceholder => {
@@ -324,21 +331,17 @@ impl MachInstEmit for Inst {
                 let x: u32 = (0b1100111) | (1 << 15);
                 sink.put4(x);
             }
-            &Inst::Extend {
-                rd,
-                rn,
-                signed,
-                from_bits,
-                to_bits,
-            } => {
+            &Inst::Extend { rd, rn, op } => {
                 //todo:: actual extend the value;;
-                Inst::AluRRImm12 {
-                    alu_op: AluOPRRI::Addi,
-                    rd: rd,
-                    rs: rn,
-                    imm12: Imm12::zero(),
-                }
-                .emit(sink, emit_info, state);
+                // Inst::AluRRImm12 {
+                //     alu_op: AluOPRRI::Addi,
+                //     rd: rd,
+                //     rs: rn,
+                //     imm12: Imm12::zero(),
+                // }
+                // .emit(sink, emit_info, state);
+
+                unreachable!("no need to extend the value.")
             }
             &Inst::AjustSp { amount } => {
                 if let Some(imm) = Imm12::maybe_from_u64(amount as u64) {
@@ -350,20 +353,19 @@ impl MachInstEmit for Inst {
                     }
                     .emit(sink, emit_info, state);
                 } else {
-                    let mut insts: SmallInstVec<Inst> = SmallInstVec::new();
-                    let registers = Inst::alloc_registers(None, 1);
-                    insts.extend(Inst::push_registers(&registers));
-                    insts.extend(Inst::load_constant_u64(registers[0], amount as u64));
-                    insts.push(Inst::AluRRR {
-                        alu_op: AluOPRRR::Add,
-                        rd: writable_stack_reg(),
-                        rs1: stack_reg(),
-                        rs2: registers[0].to_reg(),
+                    Inst::do_something_with_registers(1, |registers, insts| {
+                        insts.extend(Inst::load_constant_u64(registers[0], amount as u64));
+                        insts.push(Inst::AluRRR {
+                            alu_op: AluOPRRR::Add,
+                            rd: writable_stack_reg(),
+                            rs1: stack_reg(),
+                            rs2: registers[0].to_reg(),
+                        });
+                    })
+                    .into_iter()
+                    .for_each(|inst| {
+                        inst.emit(sink, emit_info, state);
                     });
-                    insts.extend(Inst::pop_registers(&registers));
-                    for v in insts {
-                        v.emit(sink, emit_info, state);
-                    }
                 }
             }
             &Inst::Call { ref info } => {
@@ -390,7 +392,6 @@ impl MachInstEmit for Inst {
                     BranchTarget::Label(lable) => {
                         sink.use_label_at_offset(start_off, lable, LabelUse::Jal20);
                         sink.add_uncond_branch(start_off, start_off + 4, lable);
-
                         sink.put4(code);
                     }
                     BranchTarget::Patch => {
@@ -448,9 +449,7 @@ impl MachInstEmit for Inst {
             &Inst::Mov { rd, rm, ty } => {
                 /*
                     todo::
-                    it is possible for rd and rm have diffent regClass?????
-
-
+                    it is possible for rd and rm have diffent RegClass?????
                 */
                 if rd.to_reg() != rm {
                     if ty.is_float() {
@@ -554,20 +553,18 @@ impl MachInstEmit for Inst {
                     .emit(sink, emit_info, state);
                 } else {
                     // need more register
-                    let registers = Inst::alloc_registers(None, 1);
-                    let mut insts = Inst::push_registers(&registers);
-                    insts.extend(Inst::load_constant_u64(registers[0], offset as u64));
+                    Inst::do_something_with_registers(1, |registers, insts| {
+                        insts.extend(Inst::load_constant_u64(registers[0], offset as u64));
 
-                    insts.push(Inst::AluRRR {
-                        rd,
-                        alu_op: AluOPRRR::Add,
-                        rs1: base,
-                        rs2: registers[0].to_reg(),
-                    });
-                    insts.extend(Inst::pop_registers(&registers));
-                    insts
-                        .into_iter()
-                        .for_each(|inst| inst.emit(sink, emit_info, state));
+                        insts.push(Inst::AluRRR {
+                            rd,
+                            alu_op: AluOPRRR::Add,
+                            rs1: base,
+                            rs2: registers[0].to_reg(),
+                        });
+                    })
+                    .into_iter()
+                    .for_each(|inst| inst.emit(sink, emit_info, state));
                 }
             }
             _ => todo!(),

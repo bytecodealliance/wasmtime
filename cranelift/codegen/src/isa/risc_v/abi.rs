@@ -211,20 +211,52 @@ impl ABIMachineSpec for Riscv64MachineDeps {
     }
 
     fn gen_extend(
-        to_reg: Writable<Reg>,
-        from_reg: Reg,
-        signed: bool,
-        from_bits: u8,
-        to_bits: u8,
+        _to_reg: Writable<Reg>,
+        _from_reg: Reg,
+        _signed: bool,
+        _from_bits: u8,
+        _to_bits: u8,
     ) -> Inst {
-        assert!(from_bits < to_bits);
-        Inst::Extend {
-            rd: to_reg,
-            rn: from_reg,
-            signed,
-            from_bits,
-            to_bits,
-        }
+        // assert!(from_bits < to_bits);
+        // if let Some(x) = ExtendOp::from_extend_args(signed, from_bits, to_bits) {
+        //     Inst::Extend {
+        //         rd: to_reg,
+        //         rn: from_reg,
+        //         op: x,
+        //     }
+        // } else {
+        //     Inst::Mov {
+        //         rd: to_reg,
+        //         rm: from_reg,
+        //         ty: I64,
+        //     }
+        // }
+        unreachable!("no need to extend integer")
+    }
+
+    fn get_ext_mode(
+        _call_conv: isa::CallConv,
+        _specified: ir::ArgumentExtension,
+    ) -> ir::ArgumentExtension {
+        /*
+            todo:: right?????
+            risc-v will sign for you anyway.
+
+            if number is unsigned we should leave the bits no touch at all.
+                like "lb"
+                Format
+                    lbu rd,offset(rs1)
+                Description
+                    Loads a 8-bit value from memory and zero-extends this to XLEN bits before storing it in register rd.
+                Implementation
+                    x[rd] = M[x[rs1] + sext(offset)][7:0]
+            risc-v isa will sign the value for you always.
+
+            if number is singed the value is always extend to 64-bit.
+                lb
+
+        */
+        ir::ArgumentExtension::None
     }
 
     fn gen_ret() -> Inst {
@@ -232,7 +264,13 @@ impl ABIMachineSpec for Riscv64MachineDeps {
     }
 
     fn gen_add_imm(into_reg: Writable<Reg>, from_reg: Reg, imm: u32) -> SmallInstVec<Inst> {
-        let insts = Inst::load_constant_u32(into_reg, imm);
+        let mut insts = Inst::load_constant_u32(into_reg, imm);
+        insts.push(Inst::AluRRR {
+            alu_op: AluOPRRR::Add,
+            rd: into_reg,
+            rs1: into_reg.to_reg(),
+            rs2: from_reg,
+        });
         insts
     }
 
@@ -509,13 +547,6 @@ impl ABIMachineSpec for Riscv64MachineDeps {
 
     fn get_regs_clobbered_by_call(call_conv_of_callee: isa::CallConv) -> Vec<Writable<Reg>> {
         get_caller_save_register(call_conv_of_callee)
-    }
-
-    fn get_ext_mode(
-        _call_conv: isa::CallConv,
-        _specified: ir::ArgumentExtension,
-    ) -> ir::ArgumentExtension {
-        ir::ArgumentExtension::Sext
     }
 
     fn get_clobbered_callee_saves(
