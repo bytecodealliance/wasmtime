@@ -28,20 +28,20 @@ fn test_riscv64_binemit() {
     insns.push(TestUnit::new(
         Inst::AluRRR {
             alu_op: AluOPRRR::Add,
-            rd: writable_zero_reg(),
-            rs1: zero_reg(),
+            rd: writable_fp_reg(),
+            rs1: fp_reg(),
             rs2: zero_reg(),
         },
-        "add zero,zero,zero",
+        "add fp,fp,zero",
     ));
     insns.push(TestUnit::new(
         Inst::AluRRImm12 {
             alu_op: AluOPRRI::Addi,
-            rd: writable_stack_reg(),
+            rd: writable_fp_reg(),
             rs: stack_reg(),
             imm12: Imm12::maybe_from_u64(100).unwrap(),
         },
-        "addi sp,sp,100",
+        "addi fp,sp,100",
     ));
 
     {

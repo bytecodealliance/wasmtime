@@ -1,5 +1,5 @@
 //! AArch64 ISA definitions: registers.
-
+//!
 use core::fmt::Write;
 
 use crate::settings;
@@ -16,21 +16,21 @@ use regalloc2::{MachineEnv, PReg, RegClass};
 
 // first argument of function call
 pub fn a0() -> Reg {
-    x_reg(18)
+    x_reg(10)
 }
 
 // second argument of function call
 pub fn a1() -> Reg {
-    x_reg(19)
+    x_reg(11)
 }
 
 // third argument of function call
 pub fn a2() -> Reg {
-    x_reg(20)
+    x_reg(12)
 }
 
 pub fn a7() -> Reg {
-    x_reg(25)
+    x_reg(17)
 }
 
 pub fn a0_t0_a7() -> Vec<Writable<Reg>> {
@@ -56,27 +56,27 @@ pub fn stacklimit_reg() -> Reg {
     spilltmp_reg()
 }
 
-pub fn s1() -> Reg {
-    x_reg(3)
-}
+/*
 
-pub fn s11() -> Reg {
-    x_reg(13)
-}
-
-pub fn s1_to_s11() -> Vec<Writable<Reg>> {
+*/
+pub fn bunch_of_registers() -> Vec<Writable<Reg>> {
     let mut v = vec![];
-    for enc in s1().to_real_reg().unwrap().hw_enc()..=s11().to_real_reg().unwrap().hw_enc() {
+
+    /*
+        s2 --------> s11
+    */
+    for enc in x_reg(18).to_real_reg().unwrap().hw_enc()..=x_reg(27).to_real_reg().unwrap().hw_enc()
+    {
         v.push(Writable::from_reg(x_reg(enc as usize)));
     }
     v
 }
 
 pub fn fa0() -> Reg {
-    f_reg(18)
+    f_reg(10)
 }
 pub fn fa7() -> Reg {
-    f_reg(25)
+    f_reg(17)
 }
 
 pub fn fa0_to_fa7() -> Vec<Writable<Reg>> {
@@ -101,7 +101,7 @@ pub fn writable_zero_reg() -> Writable<Reg> {
 }
 
 pub fn stack_reg() -> Reg {
-    x_reg(14)
+    x_reg(2)
 }
 
 /// Get a writable reference to the stack-pointer register.
@@ -121,7 +121,7 @@ pub fn writable_link_reg() -> Writable<Reg> {
 
 /// Get a reference to the frame pointer (x29).
 pub fn fp_reg() -> Reg {
-    x_reg(2)
+    x_reg(8)
 }
 
 /// Get a writable reference to the frame pointer.
@@ -139,7 +139,7 @@ pub fn writable_fp_reg() -> Writable<Reg> {
 /// slightly special (used for linker veneers). We're free to use it as long as we don't expect it
 /// to live through call instructions.
 pub fn spilltmp_reg() -> Reg {
-    x_reg(12)
+    x_reg(31)
 }
 
 /// Get a writable reference to the spilltmp reg.
@@ -149,17 +149,30 @@ pub fn writable_spilltmp_reg() -> Writable<Reg> {
 
 /*
 
-    x_register 12 and 13 it's for compiler it self.
-    f register 15 for compiler is self.
+
 */
 pub fn crate_reg_eviroment(_flags: &settings::Flags) -> MachineEnv {
     let preferred_regs_by_class: [Vec<PReg>; 2] = {
         let mut x_register: Vec<PReg> = vec![];
-        for i in 16..=30 {
+        x_register.push(PReg::new(5, RegClass::Int));
+        for i in 6..=7 {
             x_register.push(PReg::new(i, RegClass::Int));
         }
+        for i in 10..=17 {
+            x_register.push(PReg::new(i, RegClass::Int));
+        }
+        for i in 28..=29 {
+            x_register.push(PReg::new(i, RegClass::Int));
+        }
+
         let mut f_register: Vec<PReg> = vec![];
-        for i in 16..=31 {
+        for i in 0..=7 {
+            f_register.push(PReg::new(i, RegClass::Float));
+        }
+        for i in 10..=17 {
+            f_register.push(PReg::new(i, RegClass::Float));
+        }
+        for i in 28..=30 {
             f_register.push(PReg::new(i, RegClass::Float));
         }
         [x_register, f_register]
@@ -167,22 +180,22 @@ pub fn crate_reg_eviroment(_flags: &settings::Flags) -> MachineEnv {
 
     let non_preferred_regs_by_class: [Vec<PReg>; 2] = {
         let mut x_register: Vec<PReg> = vec![];
-        /*
-            origin  s1-s11
-                    x3-x13
-        */
-        for i in 3..=11 {
+        x_register.push(PReg::new(9, RegClass::Int));
+        for i in 18..=27 {
             x_register.push(PReg::new(i, RegClass::Int));
         }
         let mut f_register: Vec<PReg> = vec![];
-        for i in 0..=14 {
+        for i in 8..=9 {
+            f_register.push(PReg::new(i, RegClass::Float));
+        }
+        for i in 18..=27 {
             f_register.push(PReg::new(i, RegClass::Float));
         }
         [x_register, f_register]
     };
 
     let scratch_by_class: [PReg; 2] =
-        [PReg::new(13, RegClass::Int), PReg::new(15, RegClass::Float)];
+        [PReg::new(30, RegClass::Int), PReg::new(31, RegClass::Float)];
     let fixed_stack_slots: Vec<PReg> = vec![];
 
     MachineEnv {

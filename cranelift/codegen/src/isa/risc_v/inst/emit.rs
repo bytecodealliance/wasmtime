@@ -94,7 +94,7 @@ impl Inst {
     */
     fn alloc_registers(amount: u8) -> Vec<Writable<Reg>> {
         let mut v = vec![];
-        let available = s1_to_s11();
+        let available = bunch_of_registers();
         debug_assert!(amount <= available.len() as u8);
         for r in available {
             v.push(r);

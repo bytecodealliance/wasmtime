@@ -551,8 +551,6 @@ impl ABIMachineSpec for Riscv64MachineDeps {
             .cloned()
             .filter(|r| is_reg_saved_in_prologue(call_conv, r.to_reg()))
             .collect();
-       
-       
 
         // Sort registers for deterministic code output. We can do an unstable
         // sort because the registers will be unique (there are no dups).
@@ -573,7 +571,6 @@ impl ABIMachineSpec for Riscv64MachineDeps {
             || stack_args_size > 0
             || num_clobbered_callee_saves > 0
             || fixed_frame_storage_size > 0
-        
     }
 }
 
@@ -583,7 +580,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
 pub fn get_caller_save_x_gpr() -> [bool; 32] {
     let mut x: [bool; 32] = [false; 32];
     for (i, v) in get_callee_save_x_gpr().iter().enumerate() {
-        if i == 0 || i == 31 || i == 12 || i == 13 {
+        if i == 0 || i == 3 || i == 4 || i == 30 || i == 31 {
             // there register caller and called not save at all , always been false.
             continue;
         }
@@ -595,6 +592,9 @@ pub fn get_caller_save_x_gpr() -> [bool; 32] {
 pub fn get_caller_save_f_gpr() -> [bool; 32] {
     let mut x: [bool; 32] = [false; 32];
     for (i, v) in get_callee_save_f_gpr().iter().enumerate() {
+        if i == 31 {
+            continue;
+        }
         x[i] = !v;
     }
     x
@@ -603,19 +603,22 @@ pub fn get_caller_save_f_gpr() -> [bool; 32] {
 fn get_callee_save_x_gpr() -> [bool; 32] {
     let mut x = [false; 32];
     x[2] = true;
-    for i in 3..=11 {
+    for i in 8..=9 {
         x[i] = true
     }
-    // sp save by prologue
-    // x[14] = true;
-    x[15] = true;
+    for i in 18..=27 {
+        x[i] = true
+    }
     x
 }
 
 fn get_callee_save_f_gpr() -> [bool; 32] {
     let mut x = [false; 32];
-    for i in 0..14 {
+    for i in 8..9 {
         x[i] = true;
+    }
+    for i in 18..=27 {
+        x[i] = true
     }
     x
 }
