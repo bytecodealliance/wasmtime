@@ -371,7 +371,7 @@ pub enum LoadOP {
     Lh,
     Lw,
     Lbu,
-    LhU,
+    Lhu,
     Lwu,
     Ld,
     Flw,

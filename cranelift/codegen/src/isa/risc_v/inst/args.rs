@@ -792,7 +792,7 @@ impl LoadOP {
             Self::Lh => "lh",
             Self::Lw => "lw",
             Self::Lbu => "lbu",
-            Self::LhU => "lhu",
+            Self::Lhu => "lhu",
             Self::Lwu => "lwu",
             Self::Ld => "ld",
             Self::Flw => "flw",
@@ -806,7 +806,7 @@ impl LoadOP {
         }
         match t {
             B1 | B8 => Self::Lbu,
-            B16 => Self::LhU,
+            B16 => Self::Lhu,
             B32 | R32 => Self::Lwu,
             B64 | R64 | I64 => Self::Ld,
 
@@ -819,7 +819,7 @@ impl LoadOP {
 
     pub(crate) fn op_code(self) -> u32 {
         match self {
-            Self::Lb | Self::Lh | Self::Lw | Self::Lbu | Self::LhU | Self::Lwu | Self::Ld => {
+            Self::Lb | Self::Lh | Self::Lw | Self::Lbu | Self::Lhu | Self::Lwu | Self::Ld => {
                 0b0000011
             }
             Self::Flw | Self::Fld => 0b0000111,
@@ -832,7 +832,7 @@ impl LoadOP {
             Self::Lw => 0b010,
             Self::Lwu => 0b110,
             Self::Lbu => 0b100,
-            Self::LhU => 0b101,
+            Self::Lhu => 0b101,
             Self::Ld => 0b011,
             Self::Flw => 0b010,
             Self::Fld => 0b011,

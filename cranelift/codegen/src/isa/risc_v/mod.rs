@@ -2,6 +2,7 @@
 
 use crate::ir::condcodes::IntCC;
 use crate::ir::Function;
+use crate::ir::MemFlags;
 use crate::isa::risc_v::settings as riscv_settings;
 use crate::isa::{Builder as IsaBuilder, TargetIsa};
 use crate::machinst::{
@@ -12,7 +13,6 @@ use crate::settings as shared_settings;
 use alloc::{boxed::Box, vec::Vec};
 use core::fmt;
 use regalloc2::MachineEnv;
-
 use target_lexicon::{
     Aarch64Architecture, Architecture, BinaryFormat, OperatingSystem, Riscv64Architecture, Triple,
 };
@@ -255,6 +255,7 @@ mod test {
 
         pos.insert_block(bb2);
         let v2 = pos.ins().iconst(I32, 2);
+        let v3 = pos.ins().load(I32, MemFlags::new(), v2, 100);
         pos.ins().return_(&[v2]);
 
         let mut shared_flags_builder = settings::builder();

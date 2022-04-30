@@ -162,7 +162,7 @@ impl MachInstEmit for Inst {
         emit_info: &Self::Info,
         state: &mut EmitState,
     ) {
-        let mut allocs_c = AllocationConsumer::new(allocs);
+        let mut mapper_to_real = AllocationConsumer::new(allocs);
 
         // N.B.: we *must* not exceed the "worst-case size" used to compute
         // where to insert islands, except when islands are explicitly triggered
@@ -186,14 +186,14 @@ impl MachInstEmit for Inst {
             }
 
             &Inst::Lui { rd, ref imm } => {
-                let rd = allocs_c.next_writable(rd);
+                let rd = mapper_to_real.next_writable(rd);
                 let x: u32 =
                     0b0110111 | machreg_to_gpr_num(rd.to_reg()) << 7 | (imm.as_u32() << 12);
                 sink.put4(x);
             }
             &Inst::AluRR { alu_op, rd, rs } => {
-                let rd = allocs_c.next_writable(rd);
-                let rs = allocs_c.next(rs);
+                let rd = mapper_to_real.next_writable(rd);
+                let rs = mapper_to_real.next(rs);
 
                 let x = alu_op.op_code()
                     | machreg_to_gpr_num(rs) << 7
@@ -210,10 +210,10 @@ impl MachInstEmit for Inst {
                 rs2,
                 rs3,
             } => {
-                let rd = allocs_c.next_writable(rd);
-                let rs1 = allocs_c.next(rs1);
-                let rs2 = allocs_c.next(rs2);
-                let rs3 = allocs_c.next(rs3);
+                let rd = mapper_to_real.next_writable(rd);
+                let rs1 = mapper_to_real.next(rs1);
+                let rs2 = mapper_to_real.next(rs2);
+                let rs3 = mapper_to_real.next(rs3);
                 let x = alu_op.op_code()
                     | machreg_to_gpr_num(rd.to_reg()) << 7
                     | alu_op.funct3() << 12
@@ -230,9 +230,9 @@ impl MachInstEmit for Inst {
                 rs1,
                 rs2,
             } => {
-                let rd = allocs_c.next_writable(rd);
-                let rs1 = allocs_c.next(rs1);
-                let rs2 = allocs_c.next(rs2);
+                let rd = mapper_to_real.next_writable(rd);
+                let rs1 = mapper_to_real.next(rs1);
+                let rs2 = mapper_to_real.next(rs2);
                 let x: u32 = alu_op.op_code()
                     | machreg_to_gpr_num(rd.to_reg()) << 7
                     | (alu_op.funct3()) << 12
@@ -247,8 +247,8 @@ impl MachInstEmit for Inst {
                 rs,
                 imm12,
             } => {
-                let rd = allocs_c.next_writable(rd);
-                let rs = allocs_c.next(rs);
+                let rd = mapper_to_real.next_writable(rd);
+                let rs = mapper_to_real.next(rs);
 
                 let x = if let Some(funct6) = alu_op.option_funct6() {
                     alu_op.op_code()
@@ -281,7 +281,8 @@ impl MachInstEmit for Inst {
             } => {
                 let x;
                 let base = from.get_base_register();
-                let base = allocs_c.next(base);
+                let base = mapper_to_real.next(base);
+                let rd = mapper_to_real.next_writable(rd);
                 let offset = from.get_offset_with_state(state);
                 if let Some(imm12) = Imm12::maybe_from_u64(offset as u64) {
                     x = op.op_code()
@@ -316,8 +317,8 @@ impl MachInstEmit for Inst {
             }
             &Inst::Store { op, src, flags, to } => {
                 let base = to.get_base_register();
-                let base = allocs_c.next(base);
-                let rs = allocs_c.next(src);
+                let base = mapper_to_real.next(base);
+                let rs = mapper_to_real.next(src);
                 let offset = to.get_offset_with_state(state);
                 let x;
                 if let Some(imm12) = Imm12::maybe_from_u64(offset as u64) {
@@ -448,8 +449,8 @@ impl MachInstEmit for Inst {
                 kind,
             } => {
                 let mut kind = kind;
-                kind.rs1 = allocs_c.next(kind.rs1);
-                kind.rs2 = allocs_c.next(kind.rs2);
+                kind.rs1 = mapper_to_real.next(kind.rs1);
+                kind.rs2 = mapper_to_real.next(kind.rs2);
                 match taken {
                     BranchTarget::Label(label) => {
                         let code = kind.emit();
@@ -480,8 +481,8 @@ impl MachInstEmit for Inst {
             }
 
             &Inst::Mov { rd, rm, ty } => {
-                let rd = allocs_c.next_writable(rd);
-                let rm = allocs_c.next(rm);
+                let rd = mapper_to_real.next_writable(rd);
+                let rm = mapper_to_real.next(rm);
                 /*
                     todo::
                     it is possible for rd and rm have diffent RegClass?????
@@ -570,7 +571,7 @@ impl MachInstEmit for Inst {
             &Inst::Fence => sink.put4(0x0ff0000f),
             &Inst::FenceI => sink.put4(0x0000100f),
             &Inst::Auipc { rd, imm } => {
-                let rd = allocs_c.next_writable(rd);
+                let rd = mapper_to_real.next_writable(rd);
 
                 let x = 0b0010111 | machreg_to_gpr_num(rd.to_reg()) << 7 | imm.as_u32() << 12;
                 sink.put4(x);
@@ -578,7 +579,7 @@ impl MachInstEmit for Inst {
             // &Inst::LoadExtName { rd, name, offset } => todo!(),
             &Inst::LoadAddr { rd, mem } => {
                 let base = mem.get_base_register();
-                let base = allocs_c.next(base);
+                let base = mapper_to_real.next(base);
                 let offset = mem.get_offset_with_state(state);
                 if let Some(offset) = Imm12::maybe_from_u64(offset as u64) {
                     Inst::AluRRImm12 {
