@@ -59,8 +59,7 @@ where
     }
 
     fn emit(&mut self, arg0: &MInst) -> Unit {
-        // self.emitted_insts.push((arg0.clone(), false));
-        unimplemented!()
+        self.lower_ctx.emit(arg0.clone());
     }
 
     // fn emit_safepoint(&mut self, arg0: &MInst) -> Unit {
@@ -87,11 +86,9 @@ where
     C: LowerCtx<I = MInst>,
 {
     fn emit_list(&mut self, list: &SmallInstVec<MInst>) {
-        // for i in list {
-        //     self.emitted_insts.push((i.clone(), false));
-        // }
-
-        unimplemented!();
+        for i in list {
+            self.lower_ctx.emit(i.clone());
+        }
     }
 
     // i128 implemetation

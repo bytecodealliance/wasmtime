@@ -403,9 +403,8 @@ impl ABIMachineSpec for Riscv64MachineDeps {
             } else {
                 F64
             };
-
             insts.push(Self::gen_store_stack(
-                StackAMode::FPOffset(off as i64, _type),
+                StackAMode::FPOffset(-(off as i64), _type),
                 real_reg_to_reg(reg.to_reg()),
                 _type,
             ));
@@ -552,10 +551,15 @@ impl ABIMachineSpec for Riscv64MachineDeps {
             .cloned()
             .filter(|r| is_reg_saved_in_prologue(call_conv, r.to_reg()))
             .collect();
+        /*
+            tp need save by callee.
+        */
+        regs.push(Writable::from_reg(tp().to_real_reg().unwrap()));
 
         // Sort registers for deterministic code output. We can do an unstable
         // sort because the registers will be unique (there are no dups).
         // regs.sort_unstable_by_key(|r| r.to_reg().get_index());
+        regs.sort();
         regs
     }
 
@@ -565,14 +569,14 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         num_clobbered_callee_saves: usize,
         fixed_frame_storage_size: u32,
     ) -> bool {
-        // !is_leaf
-        //     // The function arguments that are passed on the stack are addressed
-        //     // relative to the Frame Pointer.
-        //     || stack_args_size > 0
-        //     || num_clobbered_callee_saves > 0
-        //     || fixed_frame_storage_size > 0
+        !is_leaf
+            // The function arguments that are passed on the stack are addressed
+            // relative to the Frame Pointer.
+            || stack_args_size > 0
+            || num_clobbered_callee_saves > 0
+            || fixed_frame_storage_size > 0
         //todo:: remove this.
-        true
+        // true
     }
 }
 
@@ -582,7 +586,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
 pub fn get_caller_save_x_gpr() -> [bool; 32] {
     let mut x: [bool; 32] = [false; 32];
     for (i, v) in get_callee_save_x_gpr().iter().enumerate() {
-        if i == 0 || i == 3 || i == 4 || i == 31 {
+        if i == 0 || i == 31 || i == 12 || i == 13 {
             // there register caller and called not save at all , always been false.
             continue;
         }
@@ -601,34 +605,26 @@ pub fn get_caller_save_f_gpr() -> [bool; 32] {
 
 fn get_callee_save_x_gpr() -> [bool; 32] {
     let mut x = [false; 32];
-    //x2 sp Stack pointer Callee
     x[2] = true;
-    // x8 s0/fp Saved register/frame pointer Callee
-    x[8] = true;
-    // x9 s1 Saved register Callee
-    x[9] = true;
-    // x18–27 s2–11 Saved registers Callee
-    for i in 18..=27 {
-        x[i] = true;
+    for i in 3..=11 {
+        x[i] = true
     }
+    // sp save by prologue
+    // x[14] = true;
+    x[15] = true;
     x
 }
 
 fn get_callee_save_f_gpr() -> [bool; 32] {
     let mut x = [false; 32];
-    // f8–9 fs0–1 FP saved registers Callee
-    for i in 8..=9 {
-        x[i] = true;
-    }
-    // f18–27 fs2–11 FP saved registers Callee
-    for i in 18..=27 {
+    for i in 0..14 {
         x[i] = true;
     }
     x
 }
 
 // this should be the registers must be save by callee
-fn is_reg_saved_in_prologue(conv: CallConv, reg: RealReg) -> bool {
+fn is_reg_saved_in_prologue(_conv: CallConv, reg: RealReg) -> bool {
     if reg.class() == RegClass::Int {
         get_callee_save_x_gpr()[reg.hw_enc() as usize]
     } else {

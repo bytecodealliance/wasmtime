@@ -32,6 +32,9 @@ pub fn a2() -> Reg {
 pub fn a7() -> Reg {
     x_reg(25)
 }
+pub fn tp() -> Reg {
+    x_reg(15)
+}
 
 pub fn a0_t0_a7() -> Vec<Writable<Reg>> {
     let mut v = vec![];
@@ -147,6 +150,11 @@ pub fn writable_spilltmp_reg() -> Writable<Reg> {
     Writable::from_reg(spilltmp_reg())
 }
 
+/*
+
+    x_register 12 and 13 it's for compiler it self.
+    f register 15 for compiler is self.
+*/
 pub fn crate_reg_eviroment(_flags: &settings::Flags) -> MachineEnv {
     let preferred_regs_by_class: [Vec<PReg>; 2] = {
         let mut x_register: Vec<PReg> = vec![];
