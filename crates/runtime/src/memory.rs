@@ -68,12 +68,17 @@ pub trait RuntimeLinearMemory: Send + Sync {
 
     /// Return a `VMMemoryDefinition` for exposing the memory to compiled wasm
     /// code.
-    fn vmmemory(&self) -> VMMemoryDefinition;
+    fn vmmemory(&mut self) -> VMMemoryDefinition;
 
     /// Does this memory need initialization? It may not if it already
     /// has initial contents courtesy of the `MemoryImage` passed to
     /// `RuntimeMemoryCreator::new_memory()`.
     fn needs_init(&self) -> bool;
+
+    /// For the pooling allocator, we must be able to downcast this trait to its
+    /// underlying structure.
+    #[cfg(feature = "pooling-allocator")]
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any;
 }
 
 /// A linear memory instance.
@@ -242,7 +247,7 @@ impl RuntimeLinearMemory for MmapMemory {
         Ok(())
     }
 
-    fn vmmemory(&self) -> VMMemoryDefinition {
+    fn vmmemory(&mut self) -> VMMemoryDefinition {
         VMMemoryDefinition {
             base: unsafe { self.mmap.as_mut_ptr().add(self.pre_guard_size) },
             current_length: self.accessible,
@@ -254,34 +259,129 @@ impl RuntimeLinearMemory for MmapMemory {
         // is needed.
         self.memory_image.is_none()
     }
+
+    #[cfg(feature = "pooling-allocator")]
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+/// A "static" memory where the lifetime of the backing memory is managed
+/// elsewhere. Currently used with the pooling allocator.
+struct ExternalMemory {
+    /// The memory in the host for this wasm memory. The length of this
+    /// slice is the maximum size of the memory that can be grown to.
+    base: &'static mut [u8],
+
+    /// The current size, in bytes, of this memory.
+    size: usize,
+
+    /// A callback which makes portions of `base` accessible for when memory
+    /// is grown. Otherwise it's expected that accesses to `base` will
+    /// fault.
+    make_accessible: Option<fn(*mut u8, usize) -> Result<()>>,
+
+    /// The image management, if any, for this memory. Owned here and
+    /// returned to the pooling allocator when termination occurs.
+    memory_image: Option<MemoryImageSlot>,
+}
+
+impl ExternalMemory {
+    fn new(
+        base: &'static mut [u8],
+        initial_size: usize,
+        maximum_size: Option<usize>,
+        make_accessible: Option<fn(*mut u8, usize) -> Result<()>>,
+        memory_image: Option<MemoryImageSlot>,
+    ) -> Result<Self> {
+        if base.len() < initial_size {
+            bail!(
+                "initial memory size of {} exceeds the pooling allocator's \
+                 configured maximum memory size of {} bytes",
+                initial_size,
+                base.len(),
+            );
+        }
+
+        // Only use the part of the slice that is necessary.
+        let base = match maximum_size {
+            Some(max) if max < base.len() => &mut base[..max],
+            _ => base,
+        };
+
+        if let Some(make_accessible) = make_accessible {
+            if initial_size > 0 {
+                make_accessible(base.as_mut_ptr(), initial_size)?;
+            }
+        }
+
+        Ok(Self {
+            base,
+            size: initial_size,
+            make_accessible,
+            memory_image,
+        })
+    }
+}
+
+impl RuntimeLinearMemory for ExternalMemory {
+    fn byte_size(&self) -> usize {
+        self.size
+    }
+
+    fn maximum_byte_size(&self) -> Option<usize> {
+        Some(self.base.len())
+    }
+
+    fn grow_to(&mut self, new_byte_size: usize) -> Result<()> {
+        // Never exceed the static memory size; this check should have been made
+        // prior to arriving here.
+        assert!(new_byte_size <= self.base.len());
+
+        // Actually grow the memory.
+        if let Some(image) = &mut self.memory_image {
+            image.set_heap_limit(new_byte_size)?;
+        } else {
+            let make_accessible = self
+                .make_accessible
+                .expect("make_accessible must be Some if this is not a CoW memory");
+
+            // Operating system can fail to make memory accessible.
+            let old_byte_size = self.byte_size();
+            make_accessible(
+                unsafe { self.base.as_mut_ptr().add(old_byte_size) },
+                new_byte_size - old_byte_size,
+            )?;
+        }
+
+        // Update our accounting of the available size.
+        self.size = new_byte_size;
+        Ok(())
+    }
+
+    fn vmmemory(&mut self) -> VMMemoryDefinition {
+        VMMemoryDefinition {
+            base: self.base.as_mut_ptr().cast(),
+            current_length: self.size,
+        }
+    }
+
+    fn needs_init(&self) -> bool {
+        if let Some(slot) = &self.memory_image {
+            !slot.has_image()
+        } else {
+            true
+        }
+    }
+
+    #[cfg(feature = "pooling-allocator")]
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
 }
 
 /// Representation of a runtime wasm linear memory.
-pub enum Memory {
-    /// A "static" memory where the lifetime of the backing memory is managed
-    /// elsewhere. Currently used with the pooling allocator.
-    Static {
-        /// The memory in the host for this wasm memory. The length of this
-        /// slice is the maximum size of the memory that can be grown to.
-        base: &'static mut [u8],
-
-        /// The current size, in bytes, of this memory.
-        size: usize,
-
-        /// A callback which makes portions of `base` accessible for when memory
-        /// is grown. Otherwise it's expected that accesses to `base` will
-        /// fault.
-        make_accessible: Option<fn(*mut u8, usize) -> Result<()>>,
-
-        /// The image management, if any, for this memory. Owned here and
-        /// returned to the pooling allocator when termination occurs.
-        memory_image: Option<MemoryImageSlot>,
-    },
-
-    /// A "dynamic" memory whose data is managed at runtime and lifetime is tied
-    /// to this instance.
-    Dynamic(Box<dyn RuntimeLinearMemory>),
-}
+pub struct Memory(Box<dyn RuntimeLinearMemory>);
 
 impl Memory {
     /// Create a new dynamic (movable) memory instance for the specified plan.
@@ -292,7 +392,7 @@ impl Memory {
         memory_image: Option<&Arc<MemoryImage>>,
     ) -> Result<Self> {
         let (minimum, maximum) = Self::limit_new(plan, store)?;
-        Ok(Memory::Dynamic(creator.new_memory(
+        Ok(Memory(creator.new_memory(
             plan,
             minimum,
             maximum,
@@ -309,33 +409,9 @@ impl Memory {
         store: &mut dyn Store,
     ) -> Result<Self> {
         let (minimum, maximum) = Self::limit_new(plan, store)?;
-
-        if base.len() < minimum {
-            bail!(
-                "initial memory size of {} exceeds the pooling allocator's \
-                 configured maximum memory size of {} bytes",
-                minimum,
-                base.len(),
-            );
-        }
-
-        let base = match maximum {
-            Some(max) if max < base.len() => &mut base[..max],
-            _ => base,
-        };
-
-        if let Some(make_accessible) = make_accessible {
-            if minimum > 0 {
-                make_accessible(base.as_mut_ptr(), minimum)?;
-            }
-        }
-
-        Ok(Memory::Static {
-            base,
-            size: minimum,
-            make_accessible,
-            memory_image,
-        })
+        let pooled_memory =
+            ExternalMemory::new(base, minimum, maximum, make_accessible, memory_image)?;
+        Ok(Memory(Box::new(pooled_memory)))
     }
 
     /// Calls the `store`'s limiter to optionally prevent a memory from being allocated.
@@ -423,10 +499,7 @@ impl Memory {
 
     /// Returns the number of allocated wasm pages.
     pub fn byte_size(&self) -> usize {
-        match self {
-            Memory::Static { size, .. } => *size,
-            Memory::Dynamic(mem) => mem.byte_size(),
-        }
+        self.0.byte_size()
     }
 
     /// Returns the maximum number of pages the memory can grow to at runtime.
@@ -436,34 +509,14 @@ impl Memory {
     /// The runtime maximum may not be equal to the maximum from the linear memory's
     /// Wasm type when it is being constrained by an instance allocator.
     pub fn maximum_byte_size(&self) -> Option<usize> {
-        match self {
-            Memory::Static { base, .. } => Some(base.len()),
-            Memory::Dynamic(mem) => mem.maximum_byte_size(),
-        }
-    }
-
-    /// Returns whether or not the underlying storage of the memory is "static".
-    #[cfg(feature = "pooling-allocator")]
-    pub(crate) fn is_static(&self) -> bool {
-        if let Memory::Static { .. } = self {
-            true
-        } else {
-            false
-        }
+        self.0.maximum_byte_size()
     }
 
     /// Returns whether or not this memory needs initialization. It
     /// may not if it already has initial content thanks to a CoW
     /// mechanism.
     pub(crate) fn needs_init(&self) -> bool {
-        match self {
-            Memory::Static {
-                memory_image: Some(slot),
-                ..
-            } => !slot.has_image(),
-            Memory::Dynamic(mem) => mem.needs_init(),
-            _ => true,
-        }
+        self.0.needs_init()
     }
 
     /// Grow memory by the specified amount of wasm pages.
@@ -489,6 +542,7 @@ impl Memory {
         store: &mut dyn Store,
     ) -> Result<Option<usize>, Error> {
         let old_byte_size = self.byte_size();
+
         // Wasm spec: when growing by 0 pages, always return the current size.
         if delta_pages == 0 {
             return Ok(Some(old_byte_size));
@@ -524,80 +578,38 @@ impl Memory {
             }
         }
 
-        match self {
-            Memory::Static {
-                base,
-                size,
-                memory_image: Some(image),
-                ..
-            } => {
-                // Never exceed static memory size
-                if new_byte_size > base.len() {
-                    store.memory_grow_failed(&format_err!("static memory size exceeded"));
-                    return Ok(None);
-                }
-
-                if let Err(e) = image.set_heap_limit(new_byte_size) {
-                    store.memory_grow_failed(&e);
-                    return Ok(None);
-                }
-                *size = new_byte_size;
-            }
-            Memory::Static {
-                base,
-                size,
-                make_accessible,
-                ..
-            } => {
-                let make_accessible = make_accessible
-                    .expect("make_accessible must be Some if this is not a CoW memory");
-
-                // Never exceed static memory size
-                if new_byte_size > base.len() {
-                    store.memory_grow_failed(&format_err!("static memory size exceeded"));
-                    return Ok(None);
-                }
-
-                // Operating system can fail to make memory accessible
-                if let Err(e) = make_accessible(
-                    base.as_mut_ptr().add(old_byte_size),
-                    new_byte_size - old_byte_size,
-                ) {
-                    store.memory_grow_failed(&e);
-                    return Ok(None);
-                }
-                *size = new_byte_size;
-            }
-            Memory::Dynamic(mem) => {
-                if let Err(e) = mem.grow_to(new_byte_size) {
-                    store.memory_grow_failed(&e);
-                    return Ok(None);
-                }
+        match self.0.grow_to(new_byte_size) {
+            Ok(_) => Ok(Some(old_byte_size)),
+            Err(e) => {
+                store.memory_grow_failed(&e);
+                Ok(None)
             }
         }
-        Ok(Some(old_byte_size))
     }
 
     /// Return a `VMMemoryDefinition` for exposing the memory to compiled wasm code.
     pub fn vmmemory(&mut self) -> VMMemoryDefinition {
-        match self {
-            Memory::Static { base, size, .. } => VMMemoryDefinition {
-                base: base.as_mut_ptr().cast(),
-                current_length: *size,
-            },
-            Memory::Dynamic(mem) => mem.vmmemory(),
-        }
+        self.0.vmmemory()
     }
-}
 
-// The default memory representation is an empty memory that cannot grow.
-impl Default for Memory {
-    fn default() -> Self {
-        Memory::Static {
-            base: &mut [],
-            size: 0,
-            make_accessible: Some(|_, _| unreachable!()),
-            memory_image: None,
+    /// Check if the inner implementation of [`Memory`] is a memory created with
+    /// [`Memory::new_static()`].
+    #[cfg(feature = "pooling-allocator")]
+    pub fn is_static(&mut self) -> bool {
+        let as_any = self.0.as_any_mut();
+        as_any.downcast_ref::<ExternalMemory>().is_some()
+    }
+
+    /// Consume the memory, returning its [`MemoryImageSlot`] if any is present.
+    /// The image should only be present for a subset of memories created with
+    /// [`Memory::new_static()`].
+    #[cfg(feature = "pooling-allocator")]
+    pub fn unwrap_static_image(mut self) -> Option<MemoryImageSlot> {
+        let as_any = self.0.as_any_mut();
+        if let Some(m) = as_any.downcast_mut::<ExternalMemory>() {
+            std::mem::take(&mut m.memory_image)
+        } else {
+            None
         }
     }
 }

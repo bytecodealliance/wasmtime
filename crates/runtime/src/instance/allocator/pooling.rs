@@ -445,34 +445,25 @@ impl InstancePool {
         instance_index: usize,
         memories: &mut PrimaryMap<DefinedMemoryIndex, Memory>,
     ) {
-        // Decommit any linear memories that were used
-        for ((def_mem_idx, memory), base) in
-            memories.iter_mut().zip(self.memories.get(instance_index))
+        // Decommit any linear memories that were used.
+        let memories = mem::take(memories);
+        for ((def_mem_idx, mut memory), base) in
+            memories.into_iter().zip(self.memories.get(instance_index))
         {
-            let memory = mem::take(memory);
             assert!(memory.is_static());
-
-            match memory {
-                Memory::Static {
-                    memory_image: Some(mut image),
-                    ..
-                } => {
-                    // If there was any error clearing the image, just
-                    // drop it here, and let the drop handler for the
-                    // slot unmap in a way that retains the
-                    // address space reservation.
-                    if image.clear_and_remain_ready().is_ok() {
-                        self.memories
-                            .return_memory_image_slot(instance_index, def_mem_idx, image);
-                    }
+            let size = memory.byte_size();
+            if let Some(mut image) = memory.unwrap_static_image() {
+                // Reset the image slot. If there is any error clearing the
+                // image, just drop it here, and let the drop handler for the
+                // slot unmap in a way that retains the address space
+                // reservation.
+                if image.clear_and_remain_ready().is_ok() {
+                    self.memories
+                        .return_memory_image_slot(instance_index, def_mem_idx, image);
                 }
-
-                _ => {
-                    let size = memory.byte_size();
-                    drop(memory);
-                    decommit_memory_pages(base, size)
-                        .expect("failed to decommit linear memory pages");
-                }
+            } else {
+                // Otherwise, decommit the memory pages.
+                decommit_memory_pages(base, size).expect("failed to decommit linear memory pages");
             }
         }
     }

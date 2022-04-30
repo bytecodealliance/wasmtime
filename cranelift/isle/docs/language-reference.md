@@ -941,14 +941,6 @@ A term can have:
    
 4. A single external constructor binding (see next section).
 
-## ISLE to Rust
-
-Now that we have described the core ISLE language, we will document
-how it interacts with Rust code. We consider these interactions to be
-semantically as important as the core language: they are not
-implementation details, but rather, a well-defined interface by which
-ISLE can interface with the outside world (an "FFI" of sorts).
-
 ### If-Let Clauses
 
 As an extension to the basic left-hand-side / right-hand-side rule
@@ -1060,6 +1052,14 @@ following shorthand notation using `if` instead:
       (if (isa_extension_enabled))
       (isa_special_inst ...))
 ```
+
+## ISLE to Rust
+
+Now that we have described the core ISLE language, we will document
+how it interacts with Rust code. We consider these interactions to be
+semantically as important as the core language: they are not
+implementation details, but rather, a well-defined interface by which
+ISLE can interface with the outside world (an "FFI" of sorts).
 
 ### Mapping to Rust: Constructors, Functions, and Control Flow
 
