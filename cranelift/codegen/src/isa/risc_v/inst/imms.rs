@@ -2,8 +2,6 @@
 
 // Some variants are never constructed, but we still want them as options in the future.
 #[allow(dead_code)]
-use regalloc::{PrettyPrint, RealRegUniverse};
-
 use std::fmt::{Debug, Display, Formatter, Result};
 use std::string::String;
 
@@ -104,16 +102,16 @@ impl Display for Imm20 {
     }
 }
 
-impl PrettyPrint for Imm12 {
-    fn show_rru(&self, _mb_rru: Option<&RealRegUniverse>) -> String {
-        format!("{}", *self)
-    }
-}
-impl PrettyPrint for Imm20 {
-    fn show_rru(&self, _mb_rru: Option<&RealRegUniverse>) -> String {
-        format!("{}", *self)
-    }
-}
+// impl PrettyPrint for Imm12 {
+//     fn show_rru(&self, _mb_rru: Option<&RealRegUniverse>) -> String {
+//         format!("{}", *self)
+//     }
+// }
+// impl PrettyPrint for Imm20 {
+//     fn show_rru(&self, _mb_rru: Option<&RealRegUniverse>) -> String {
+//         format!("{}", *self)
+//     }
+// }
 #[cfg(test)]
 mod test {
     use super::*;

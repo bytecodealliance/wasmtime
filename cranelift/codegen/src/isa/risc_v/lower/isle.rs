@@ -23,7 +23,7 @@ use std::boxed::Box;
 use std::convert::TryFrom;
 use std::vec::Vec;
 
-use regalloc::Reg;
+use crate::machinst::Reg;
 
 type BoxCallInfo = Box<CallInfo>;
 type BoxCallIndInfo = Box<CallIndInfo>;
@@ -41,15 +41,9 @@ pub(crate) fn lower<C>(
 where
     C: LowerCtx<I = MInst>,
 {
-    lower_common(
-        lower_ctx,
-        flags,
-        isa_flags,
-        outputs,
-        inst,
-        |cx, insn| generated_code::constructor_lower(cx, insn),
-        riscv64_map_regs,
-    )
+    lower_common(lower_ctx, flags, isa_flags, outputs, inst, |cx, insn| {
+        generated_code::constructor_lower(cx, insn)
+    })
 }
 
 impl<C> generated_code::Context for IsleContext<'_, C, Flags, IsaFlags, 6>
@@ -65,12 +59,13 @@ where
     }
 
     fn emit(&mut self, arg0: &MInst) -> Unit {
-        self.emitted_insts.push((arg0.clone(), false));
+        // self.emitted_insts.push((arg0.clone(), false));
+        unimplemented!()
     }
 
-    fn emit_safepoint(&mut self, arg0: &MInst) -> Unit {
-        self.emitted_insts.push((arg0.clone(), true));
-    }
+    // fn emit_safepoint(&mut self, arg0: &MInst) -> Unit {
+    //     self.emitted_insts.push((arg0.clone(), true));
+    // }
 
     fn imm12_from_u64(&mut self, arg0: u64) -> Option<Imm12> {
         Imm12::maybe_from_u64(arg0)
@@ -92,9 +87,11 @@ where
     C: LowerCtx<I = MInst>,
 {
     fn emit_list(&mut self, list: &SmallInstVec<MInst>) {
-        for i in list {
-            self.emitted_insts.push((i.clone(), false));
-        }
+        // for i in list {
+        //     self.emitted_insts.push((i.clone(), false));
+        // }
+
+        unimplemented!();
     }
 
     // i128 implemetation

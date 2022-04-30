@@ -11,7 +11,8 @@ use crate::result::CodegenResult;
 use crate::settings as shared_settings;
 use alloc::{boxed::Box, vec::Vec};
 use core::fmt;
-use regalloc::{PrettyPrint, RealRegUniverse};
+use regalloc2::MachineEnv;
+
 use target_lexicon::{
     Aarch64Architecture, Architecture, BinaryFormat, OperatingSystem, Riscv64Architecture, Triple,
 };
@@ -23,7 +24,7 @@ mod lower;
 mod lower_inst;
 mod settings;
 
-use inst::create_reg_universe;
+use inst::crate_reg_eviroment;
 
 use self::inst::EmitInfo;
 
@@ -32,7 +33,7 @@ pub struct Riscv64Backend {
     triple: Triple,
     flags: shared_settings::Flags,
     isa_flags: riscv_settings::Flags,
-    reg_universe: RealRegUniverse,
+    mach_env: MachineEnv,
 }
 
 impl Riscv64Backend {
@@ -42,12 +43,12 @@ impl Riscv64Backend {
         flags: shared_settings::Flags,
         isa_flags: riscv_settings::Flags,
     ) -> Riscv64Backend {
-        let reg_universe = create_reg_universe(&flags);
+        let mach_env = crate_reg_eviroment(&flags);
         Riscv64Backend {
             triple,
             flags,
             isa_flags,
-            reg_universe,
+            mach_env,
         }
     }
 
@@ -57,10 +58,10 @@ impl Riscv64Backend {
         &self,
         func: &Function,
         flags: shared_settings::Flags,
-    ) -> CodegenResult<VCode<inst::Inst>> {
+    ) -> CodegenResult<(VCode<inst::Inst>, regalloc2::Output)> {
         let emit_info = EmitInfo::new(flags.clone());
         let abi = Box::new(abi::Riscv64Callee::new(func, flags, self.isa_flags())?);
-        compile::compile::<Riscv64Backend>(func, self, abi, &self.reg_universe, emit_info)
+        compile::compile::<Riscv64Backend>(func, self, abi, &self.mach_env, emit_info)
     }
 }
 
@@ -71,28 +72,27 @@ impl TargetIsa for Riscv64Backend {
         want_disasm: bool,
     ) -> CodegenResult<MachCompileResult> {
         let flags = self.flags();
-        let vcode = self.compile_vcode(func, flags.clone())?;
+        let (vcode, regalloc_result) = self.compile_vcode(func, flags.clone())?;
 
-        let (buffer, bb_starts, bb_edges) = vcode.emit();
-        let frame_size = vcode.frame_size();
-        let stackslot_offsets = vcode.stackslot_offsets().clone();
+        let want_disasm = want_disasm || log::log_enabled!(log::Level::Debug);
+        let emit_result = vcode.emit(&regalloc_result, want_disasm, flags.machine_code_cfg_info());
+        let frame_size = emit_result.frame_size;
+        let value_labels_ranges = emit_result.value_labels_ranges;
+        let buffer = emit_result.buffer.finish();
+        let stackslot_offsets = emit_result.stackslot_offsets;
 
-        let disasm = if want_disasm {
-            Some(vcode.show_rru(Some(&create_reg_universe(flags))))
-        } else {
-            None
-        };
-
-        let buffer = buffer.finish();
+        // if let Some(disasm) = emit_result.disasm.as_ref() {
+        //     log::debug!("disassembly:\n{}", disasm);
+        // }
 
         Ok(MachCompileResult {
             buffer,
             frame_size,
-            disasm,
-            value_labels_ranges: Default::default(),
+            disasm: emit_result.disasm,
+            value_labels_ranges,
             stackslot_offsets,
-            bb_starts,
-            bb_edges,
+            bb_starts: emit_result.bb_offsets,
+            bb_edges: emit_result.bb_edges,
         })
     }
 

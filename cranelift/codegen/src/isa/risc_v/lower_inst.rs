@@ -1,8 +1,8 @@
 //! Lower a single Cranelift instruction into vcode.
 
+use crate::machinst::Writable;
 use alloc::vec;
 use alloc::vec::Vec;
-use regalloc::Writable;
 
 use crate::ir::Inst as IRInst;
 use crate::ir::Opcode;
@@ -103,102 +103,83 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::Sload16
         | Opcode::Uload32
         | Opcode::Sload32
-        | Opcode::LoadComplex
-        | Opcode::Uload8Complex
-        | Opcode::Sload8Complex
-        | Opcode::Uload16Complex
-        | Opcode::Sload16Complex
-        | Opcode::Uload32Complex
-        | Opcode::Sload32Complex
         | Opcode::Sload8x8
         | Opcode::Uload8x8
         | Opcode::Sload16x4
         | Opcode::Uload16x4
         | Opcode::Sload32x2
-        | Opcode::Uload32x2
-        | Opcode::Uload8x8Complex
-        | Opcode::Sload8x8Complex
-        | Opcode::Uload16x4Complex
-        | Opcode::Sload16x4Complex
-        | Opcode::Uload32x2Complex
-        | Opcode::Sload32x2Complex => {}
+        | Opcode::Uload32x2 => {}
 
-        Opcode::Store
-        | Opcode::Istore8
-        | Opcode::Istore16
-        | Opcode::Istore32
-        | Opcode::StoreComplex
-        | Opcode::Istore8Complex
-        | Opcode::Istore16Complex
-        | Opcode::Istore32Complex => {}
+        Opcode::Store | Opcode::Istore8 | Opcode::Istore16 | Opcode::Istore32 => {}
 
         Opcode::StackAddr => {}
 
         Opcode::AtomicRmw => {
-            let r_dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let mut r_addr = ctx.put_input_in_regs(insn, 0).only_reg().unwrap();
-            let mut arg2 = ctx.put_input_in_regs(insn, 1).only_reg().unwrap();
-            let ty_access = ty.unwrap();
-            assert!(is_valid_atomic_transaction_ty(ty_access));
-            let op = ctx.data(insn).atomic_rmw_op().unwrap();
-            let mut insts = SmallInstVec::new();
-            let risc_op = AtomicOP::from_atomicrmw_type_and_op(ty_access, op);
-            match op {
-                // special cases
-                // sub will use add atomic instruction
-                AtomicRmwOp::Sub => {
-                    insts.push(Inst::AluRRR {
-                        alu_op: AluOPRRR::Sub,
-                        rd: Writable::from_reg(arg2),
-                        rs1: zero_reg(),
-                        rs2: arg2,
-                    });
-                    insts.push(Inst::AluRRR {
-                        alu_op: AluOPRRR::Sub,
-                        rd: Writable::from_reg(arg2),
-                        rs1: zero_reg(),
-                        rs2: arg2,
-                    });
-                }
-                AtomicRmwOp::Nand => {
-                    /*
-                    a = !(a&b);
-                    equals a = (!a)  | (!b)
-                    here are truth table.
-                        a = !(a&b);
-                        A	B	Y
-                        0	0	1
-                        0	1	1
-                        1	0	1
-                        1	1	0
+            // let r_dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+            // let mut r_addr = ctx.put_input_in_regs(insn, 0).only_reg().unwrap();
+            // let mut arg2 = ctx.put_input_in_regs(insn, 1).only_reg().unwrap();
+            // let ty_access = ty.unwrap();
+            // assert!(is_valid_atomic_transaction_ty(ty_access));
+            // let op = ctx.data(insn).atomic_rmw_op().unwrap();
+            // let mut insts = SmallInstVec::new();
+            // let risc_op = AtomicOP::from_atomicrmw_type_and_op(ty_access, op);
+            // match op {
+            //     // special cases
+            //     // sub will use add atomic instruction
+            //     // AtomicRmwOp::Sub => {
+            //     //     insts.push(Inst::AluRRR {
+            //     //         alu_op: AluOPRRR::Sub,
+            //     //         rd: Writable::from_reg(arg2),
+            //     //         rs1: zero_reg(),
+            //     //         rs2: arg2,
+            //     //     });
+            //     //     insts.push(Inst::AluRRR {
+            //     //         alu_op: AluOPRRR::Sub,
+            //     //         rd: Writable::from_reg(arg2),
+            //     //         rs1: zero_reg(),
+            //     //         rs2: arg2,
+            //     //     });
+            //     // }
+            //     // AtomicRmwOp::Nand => {
+            //     //     /*
+            //     //     a = !(a&b);
+            //     //     equals a = (!a)  | (!b)
+            //     //     here are truth table.
+            //     //         a = !(a&b);
+            //     //         A	B	Y
+            //     //         0	0	1
+            //     //         0	1	1
+            //     //         1	0	1
+            //     //         1	1	0
 
-                        a = (!a)  | (!b)
-                        A	B	Y
-                        0	0	1
-                        0	1	1
-                        1	0	1
-                        1	1	0
-                             */
+            //     //         a = (!a)  | (!b)
+            //     //         A	B	Y
+            //     //         0	0	1
+            //     //         0	1	1
+            //     //         1	0	1
+            //     //         1	1	0
+            //     //              */
 
-                    //
-                    unimplemented!("nand not implemented.")
-                }
-            }
-            insts.push(Inst::Atomic {
-                op: risc_op,
-                rd: r_dst,
-                addr: r_addr,
-                src: arg2,
-                /*
-                todo::
-                    where are the memory order parameter??
-                */
-                aq: false,
-                rl: false,
-            });
-            for i in insts {
-                ctx.emit(i);
-            }
+            //     //     //
+            //     //     unimplemented!("nand not implemented.")
+            //     // }
+            //     _ => unreachable!(),
+            // }
+            // insts.push(Inst::Atomic {
+            //     op: risc_op,
+            //     rd: r_dst,
+            //     addr: r_addr,
+            //     src: arg2,
+            //     /*
+            //     todo::
+            //         where are the memory order parameter??
+            //     */
+            //     aq: false,
+            //     rl: false,
+            // });
+            // for i in insts {
+            //     ctx.emit(i);
+            // }
         }
 
         Opcode::AtomicCas => {

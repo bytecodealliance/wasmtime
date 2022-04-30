@@ -9,6 +9,8 @@ use super::*;
 
 pub static WORD_SIZE: u8 = 8;
 
+use crate::machinst::*;
+
 use std::fmt::{Display, Formatter, Result};
 /*
     document used this term.
@@ -86,19 +88,13 @@ impl AMode {
         }
     }
 
-    pub(crate) fn to_string_may_be_with_reg_universe(
-        &self,
-        universe: Option<&RealRegUniverse>,
-    ) -> String {
-        if let Some(universe) = universe {
-            let reg = self.get_base_register();
-            let offset = self.get_offset();
-            match self {
-                &AMode::NominalSPOffset(..) => format!("{}", self),
-                _ => format!("{}({})", offset, reg.show_with_rru(universe)),
-            }
-        } else {
-            format!("{}", self)
+    pub(crate) fn to_string_may_be_alloc(&self, allocs: &mut AllocationConsumer<'_>) -> String {
+        let reg = self.get_base_register();
+        let next = allocs.next(reg);
+        let offset = self.get_offset();
+        match self {
+            &AMode::NominalSPOffset(..) => format!("{}", self),
+            _ => format!("{}({})", offset, reg_name(next),),
         }
     }
 }
@@ -226,10 +222,11 @@ impl CondBrKind {
     pub(crate) fn emit(self) -> u32 {
         let (funct3, _) = self.funct3();
         let (rs1, rs2) = self.rs1_rs2();
+
         self.op_code()
             | funct3.bits() << 12
-            | (rs1.get_hw_encoding() as u32) << 15
-            | (rs2.get_hw_encoding() as u32) << 20
+            | (rs1.to_real_reg().unwrap().hw_enc() as u32) << 15
+            | (rs2.to_real_reg().unwrap().hw_enc() as u32) << 20
     }
 
     pub(crate) fn inverse(self) -> Self {
@@ -889,7 +886,7 @@ impl FloatFlagOp {
     pub(crate) fn rs1(self, reg: OptionReg) -> u32 {
         // current all zero
         if let Some(r) = reg {
-            r.get_hw_encoding() as u32
+            r.to_real_reg().unwrap().hw_enc() as u32
         } else {
             0
         }

@@ -5,8 +5,10 @@ use crate::isa::risc_v::inst::*;
 use std::collections::HashSet;
 
 use crate::isa::risc_v::inst::{zero_reg, AluOPRRR};
+use crate::machinst::{AllocationConsumer, Reg, Writable};
+use regalloc2::Allocation;
+
 use alloc::vec;
-use regalloc::{Reg, Writable};
 
 pub struct EmitInfo(settings::Flags);
 
@@ -14,6 +16,10 @@ impl EmitInfo {
     pub(crate) fn new(flags: settings::Flags) -> Self {
         Self(flags)
     }
+}
+
+fn machreg_to_gpr_num(m: Reg) -> u32 {
+    u32::try_from(m.to_real_reg().unwrap().hw_enc() & 31).unwrap()
 }
 
 /// State carried between emissions of a sequence of instructions.
@@ -88,7 +94,7 @@ impl Inst {
     */
     fn alloc_registers(amount: u8) -> Vec<Writable<Reg>> {
         let mut v = vec![];
-        let available = s2_to_s11();
+        let available = s1_to_s11();
         debug_assert!(amount <= available.len() as u8);
         for r in available {
             v.push(r);
@@ -149,7 +155,15 @@ impl MachInstEmit for Inst {
     type State = EmitState;
     type Info = EmitInfo;
 
-    fn emit(&self, sink: &mut MachBuffer<Inst>, emit_info: &Self::Info, state: &mut EmitState) {
+    fn emit(
+        &self,
+        allocs: &[Allocation],
+        sink: &mut MachBuffer<Inst>,
+        emit_info: &Self::Info,
+        state: &mut EmitState,
+    ) {
+        let mut allocs_c = AllocationConsumer::new(allocs);
+
         // N.B.: we *must* not exceed the "worst-case size" used to compute
         // where to insert islands, except when islands are explicitly triggered
         // (with an `EmitIsland`). We check this in debug builds. This is `mut`
@@ -168,19 +182,23 @@ impl MachInstEmit for Inst {
                     rs: zero_reg(),
                     imm12: Imm12::zero(),
                 };
-                x.emit(sink, emit_info, state)
+                x.emit(allocs, sink, emit_info, state)
             }
 
             &Inst::Lui { rd, ref imm } => {
+                let rd = allocs_c.next_writable(rd);
                 let x: u32 =
-                    0b0110111 | (rd.to_reg().get_hw_encoding() as u32) << 7 | (imm.as_u32() << 12);
+                    0b0110111 | machreg_to_gpr_num(rd.to_reg()) << 7 | (imm.as_u32() << 12);
                 sink.put4(x);
             }
             &Inst::AluRR { alu_op, rd, rs } => {
+                let rd = allocs_c.next_writable(rd);
+                let rs = allocs_c.next(rs);
+
                 let x = alu_op.op_code()
-                    | (rd.to_reg().get_hw_encoding() as u32) << 7
+                    | machreg_to_gpr_num(rs) << 7
                     | alu_op.funct3() << 12
-                    | (rs.get_hw_encoding() as u32) << 15
+                    | machreg_to_gpr_num(rd.to_reg()) << 15
                     | alu_op.rs2() << 20
                     | alu_op.funct7() << 25;
                 sink.put4(x);
@@ -192,13 +210,17 @@ impl MachInstEmit for Inst {
                 rs2,
                 rs3,
             } => {
+                let rd = allocs_c.next_writable(rd);
+                let rs1 = allocs_c.next(rs1);
+                let rs2 = allocs_c.next(rs2);
+                let rs3 = allocs_c.next(rs3);
                 let x = alu_op.op_code()
-                    | (rd.to_reg().get_hw_encoding() as u32) << 7
+                    | machreg_to_gpr_num(rd.to_reg()) << 7
                     | alu_op.funct3() << 12
-                    | (rs1.get_hw_encoding() as u32) << 15
-                    | (rs2.get_hw_encoding() as u32) << 20
+                    | machreg_to_gpr_num(rs1) << 15
+                    | machreg_to_gpr_num(rs2) << 20
                     | alu_op.funct2() << 25
-                    | (rs3.get_hw_encoding() as u32) << 27;
+                    | machreg_to_gpr_num(rs3) << 27;
 
                 sink.put4(x);
             }
@@ -208,11 +230,14 @@ impl MachInstEmit for Inst {
                 rs1,
                 rs2,
             } => {
+                let rd = allocs_c.next_writable(rd);
+                let rs1 = allocs_c.next(rs1);
+                let rs2 = allocs_c.next(rs2);
                 let x: u32 = alu_op.op_code()
-                    | (rd.to_reg().as_real_reg().unwrap().get_hw_encoding() as u32) << 7
+                    | machreg_to_gpr_num(rd.to_reg()) << 7
                     | (alu_op.funct3()) << 12
-                    | (rs1.as_real_reg().unwrap().get_hw_encoding() as u32) << 15
-                    | (rs2.as_real_reg().unwrap().get_hw_encoding() as u32) << 20
+                    | machreg_to_gpr_num(rs1) << 15
+                    | machreg_to_gpr_num(rs2) << 20
                     | alu_op.funct7() << 25;
                 sink.put4(x);
             }
@@ -222,25 +247,28 @@ impl MachInstEmit for Inst {
                 rs,
                 imm12,
             } => {
+                let rd = allocs_c.next_writable(rd);
+                let rs = allocs_c.next(rs);
+
                 let x = if let Some(funct6) = alu_op.option_funct6() {
                     alu_op.op_code()
-                        | (rd.to_reg().as_real_reg().unwrap().get_hw_encoding() as u32) << 7
+                        | machreg_to_gpr_num(rd.to_reg()) << 7
                         | alu_op.funct3() << 12
-                        | (rs.as_real_reg().unwrap().get_hw_encoding() as u32) << 15
+                        | machreg_to_gpr_num(rs) << 15
                         | (imm12.as_u32()) << 20
                         | funct6 << 26
                 } else if let Some(funct7) = alu_op.option_funct7() {
                     alu_op.op_code()
-                        | (rd.to_reg().as_real_reg().unwrap().get_hw_encoding() as u32) << 7
+                        | machreg_to_gpr_num(rd.to_reg()) << 7
                         | alu_op.funct3() << 12
-                        | (rs.as_real_reg().unwrap().get_hw_encoding() as u32) << 15
+                        | machreg_to_gpr_num(rs) << 15
                         | (imm12.as_u32()) << 20
                         | funct7 << 25
                 } else {
                     alu_op.op_code()
-                        | (rd.to_reg().as_real_reg().unwrap().get_hw_encoding() as u32) << 7
+                        | machreg_to_gpr_num(rd.to_reg()) << 7
                         | alu_op.funct3() << 12
-                        | (rs.as_real_reg().unwrap().get_hw_encoding() as u32) << 15
+                        | machreg_to_gpr_num(rs) << 15
                         | (imm12.as_u32()) << 20
                 };
                 sink.put4(x);
@@ -253,12 +281,13 @@ impl MachInstEmit for Inst {
             } => {
                 let x;
                 let base = from.get_base_register();
+                let base = allocs_c.next(base);
                 let offset = from.get_offset_with_state(state);
                 if let Some(imm12) = Imm12::maybe_from_u64(offset as u64) {
                     x = op.op_code()
-                        | (rd.to_reg().as_real_reg().unwrap().get_hw_encoding() as u32) << 7
+                        | machreg_to_gpr_num(rd.to_reg()) << 7
                         | op.funct3() << 12
-                        | (base.as_real_reg().unwrap().get_hw_encoding() as u32) << 15
+                        | machreg_to_gpr_num(base) << 15
                         | (imm12.as_u32()) << 20;
                     sink.put4(x);
                 } else {
@@ -282,19 +311,21 @@ impl MachInstEmit for Inst {
                         });
                     })
                     .into_iter()
-                    .for_each(|inst| inst.emit(sink, emit_info, state));
+                    .for_each(|inst| inst.emit(allocs, sink, emit_info, state));
                 }
             }
             &Inst::Store { op, src, flags, to } => {
                 let base = to.get_base_register();
+                let base = allocs_c.next(base);
+                let rs = allocs_c.next(src);
                 let offset = to.get_offset_with_state(state);
                 let x;
                 if let Some(imm12) = Imm12::maybe_from_u64(offset as u64) {
                     x = op.op_code()
                         | (imm12.as_u32() & 0x1f) << 7
                         | op.funct3() << 12
-                        | (base.get_hw_encoding() as u32) << 15
-                        | (src.as_real_reg().unwrap().get_hw_encoding() as u32) << 20
+                        | machreg_to_gpr_num(base) << 15
+                        | machreg_to_gpr_num(src) << 20
                         | (imm12.as_u32() >> 5) << 25;
                     sink.put4(x);
                 } else {
@@ -320,7 +351,7 @@ impl MachInstEmit for Inst {
                         });
                     })
                     .into_iter()
-                    .for_each(|inst| inst.emit(sink, emit_info, state));
+                    .for_each(|inst| inst.emit(allocs, sink, emit_info, state));
                 }
             }
             &Inst::EpiloguePlaceholder => {
@@ -351,7 +382,7 @@ impl MachInstEmit for Inst {
                         rs: stack_reg(),
                         imm12: imm,
                     }
-                    .emit(sink, emit_info, state);
+                    .emit(allocs, sink, emit_info, state);
                 } else {
                     Inst::do_something_with_registers(1, |registers, insts| {
                         insts.extend(Inst::load_constant_u64(registers[0], amount as u64));
@@ -364,7 +395,7 @@ impl MachInstEmit for Inst {
                     })
                     .into_iter()
                     .for_each(|inst| {
-                        inst.emit(sink, emit_info, state);
+                        inst.emit(allocs, sink, emit_info, state);
                     });
                 }
             }
@@ -386,8 +417,7 @@ impl MachInstEmit for Inst {
                 unimplemented!("what is the trap code\n");
             }
             &Inst::Jump { dest } => {
-                let code: u32 =
-                    (0b1101111) | (zero_reg().get_hw_encoding() as u32) << 7 | (0 << 12);
+                let code: u32 = (0b1101111) | (0 << 12);
                 match dest {
                     BranchTarget::Label(lable) => {
                         sink.use_label_at_offset(start_off, lable, LabelUse::Jal20);
@@ -406,7 +436,7 @@ impl MachInstEmit for Inst {
                             } else {
                                 Inst::construct_auipc_and_jalr(offset)
                                     .into_iter()
-                                    .for_each(|i| i.emit(sink, emit_info, state));
+                                    .for_each(|i| i.emit(allocs, sink, emit_info, state));
                             }
                         }
                     }
@@ -417,6 +447,9 @@ impl MachInstEmit for Inst {
                 not_taken,
                 kind,
             } => {
+                let mut kind = kind;
+                kind.rs1 = allocs_c.next(kind.rs1);
+                kind.rs2 = allocs_c.next(kind.rs2);
                 match taken {
                     BranchTarget::Label(label) => {
                         let code = kind.emit();
@@ -431,7 +464,7 @@ impl MachInstEmit for Inst {
                             let code = kind.emit();
                             let mut code = code.to_le_bytes();
                             LabelUse::B12.patch_raw_offset(&mut code, offset);
-                            code.into_iter().for_each(|b| sink.put1(*b));
+                            code.into_iter().for_each(|b| sink.put1(b));
                         } else {
                             let code = kind.emit();
                             // jump is zero, this means when condition is met , no jump
@@ -439,14 +472,16 @@ impl MachInstEmit for Inst {
                             sink.put4(code);
                             Inst::construct_auipc_and_jalr(offset)
                                 .into_iter()
-                                .for_each(|i| i.emit(sink, emit_info, state));
+                                .for_each(|i| i.emit(allocs, sink, emit_info, state));
                         }
                     }
                 }
-                Inst::Jump { dest: not_taken }.emit(sink, emit_info, state);
+                Inst::Jump { dest: not_taken }.emit(allocs, sink, emit_info, state);
             }
 
             &Inst::Mov { rd, rm, ty } => {
+                let rd = allocs_c.next_writable(rd);
+                let rm = allocs_c.next(rm);
                 /*
                     todo::
                     it is possible for rd and rm have diffent RegClass?????
@@ -479,7 +514,7 @@ impl MachInstEmit for Inst {
                         }
                         insts
                             .into_iter()
-                            .for_each(|inst| inst.emit(sink, emit_info, state));
+                            .for_each(|inst| inst.emit(allocs, sink, emit_info, state));
                     } else {
                         let x = Inst::AluRRImm12 {
                             alu_op: AluOPRRI::Ori,
@@ -487,7 +522,7 @@ impl MachInstEmit for Inst {
                             rs: rm,
                             imm12: Imm12::zero(),
                         };
-                        x.emit(sink, emit_info, state);
+                        x.emit(allocs, sink, emit_info, state);
                     }
                 }
             }
@@ -500,14 +535,14 @@ impl MachInstEmit for Inst {
                 );
                 state.virtual_sp_offset += amount;
             }
-            &Inst::FloatFlagOperation { op, rs, imm, rd } => {
-                let x = op.op_code()
-                    | (rd.to_reg().get_hw_encoding() as u32) << 7
-                    | op.funct3() << 12
-                    | op.rs1(rs) << 15
-                    | op.imm12(imm) << 20;
-                sink.put4(x);
-            }
+            // &Inst::FloatFlagOperation { op, rs, imm, rd } => {
+            //     let x = op.op_code()
+            //         | machreg_to_gpr_num(rs) << 7
+            //         | op.funct3() << 12
+            //         | op.rs1(rs) << 15
+            //         | op.imm12(imm) << 20;
+            //     sink.put4(x);
+            // }
             &Inst::Atomic {
                 op,
                 rd,
@@ -517,10 +552,10 @@ impl MachInstEmit for Inst {
                 rl,
             } => {
                 let x = op.op_code()
-                    | (rd.to_reg().get_hw_encoding() as u32) << 7
+                    | machreg_to_gpr_num(rd.to_reg()) << 7
                     | op.funct3() << 12
-                    | (addr.get_hw_encoding() as u32) << 15
-                    | (src.get_hw_encoding() as u32) << 20
+                    | machreg_to_gpr_num(addr) << 15
+                    | machreg_to_gpr_num(src) << 20
                     | op.funct7(aq, rl) << 25;
 
                 sink.put4(x);
@@ -535,13 +570,15 @@ impl MachInstEmit for Inst {
             &Inst::Fence => sink.put4(0x0ff0000f),
             &Inst::FenceI => sink.put4(0x0000100f),
             &Inst::Auipc { rd, imm } => {
-                let x =
-                    0b0010111 | (rd.to_reg().get_hw_encoding() as u32) << 7 | imm.as_u32() << 12;
+                let rd = allocs_c.next_writable(rd);
+
+                let x = 0b0010111 | machreg_to_gpr_num(rd.to_reg()) << 7 | imm.as_u32() << 12;
                 sink.put4(x);
             }
             // &Inst::LoadExtName { rd, name, offset } => todo!(),
             &Inst::LoadAddr { rd, mem } => {
                 let base = mem.get_base_register();
+                let base = allocs_c.next(base);
                 let offset = mem.get_offset_with_state(state);
                 if let Some(offset) = Imm12::maybe_from_u64(offset as u64) {
                     Inst::AluRRImm12 {
@@ -550,7 +587,7 @@ impl MachInstEmit for Inst {
                         rs: base,
                         imm12: offset,
                     }
-                    .emit(sink, emit_info, state);
+                    .emit(allocs, sink, emit_info, state);
                 } else {
                     // need more register
                     Inst::do_something_with_registers(1, |registers, insts| {
@@ -564,7 +601,7 @@ impl MachInstEmit for Inst {
                         });
                     })
                     .into_iter()
-                    .for_each(|inst| inst.emit(sink, emit_info, state));
+                    .for_each(|inst| inst.emit(allocs, sink, emit_info, state));
                 }
             }
             _ => todo!(),
@@ -574,7 +611,8 @@ impl MachInstEmit for Inst {
         debug_assert!((end_off - start_off) <= Inst::worst_case_size());
     }
 
-    fn pretty_print(&self, mb_rru: Option<&RealRegUniverse>, state: &mut EmitState) -> String {
-        self.print_with_state(mb_rru, state)
+    fn pretty_print_inst(&self, allocs: &[Allocation], state: &mut Self::State) -> String {
+        let mut allocs = AllocationConsumer::new(allocs);
+        self.print_with_state(state, &mut allocs)
     }
 }

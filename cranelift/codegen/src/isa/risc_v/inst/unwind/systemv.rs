@@ -34,8 +34,8 @@
 //     // https://developer.arm.com/documentation/ihi0057/e/?lang=en#dwarf-register-names
 //     //
 //     // X0--X31 is 0--31; V0--V31 is 64--95.
-//     match reg.get_class() {
-//         RegClass::I64 => {
+//     match reg.class() {
+//         RegClass::Int => {
 //             let reg = reg.get_hw_encoding() as u16;
 //             Ok(Register(reg))
 //         }

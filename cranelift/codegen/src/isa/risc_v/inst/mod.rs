@@ -15,11 +15,11 @@ use crate::isa::CallConv;
 use crate::machinst::*;
 use crate::{settings, CodegenError, CodegenResult};
 
-use regalloc::RegUsageCollector;
-use regalloc::{PrettyPrint, RealRegUniverse, Reg, RegClass, SpillSlot, VirtualReg, Writable};
+use crate::machinst::*;
+use regalloc2::Allocation;
 
 use alloc::vec::Vec;
-
+use regalloc2::VReg;
 use smallvec::{smallvec, SmallVec};
 use std::boxed::Box;
 use std::string::String;
@@ -272,7 +272,6 @@ impl Inst {
                 },
                 &mut Inst::Jump { ref mut dest } => match dest {
                     &mut BranchTarget::Patch => *dest = BranchTarget::ResolvedOffset(real_off),
-
                     _ => unreachable!(),
                 },
                 _ => unreachable!(),
@@ -426,7 +425,7 @@ impl Inst {
 //=============================================================================
 // Instructions: get_regs
 // todo如果add_mod 好像是这种指令 x1 = x1 + 1 引用的
-fn riscv64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
+fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCollector<'_, F>) {
     match inst {
         &Inst::Nop0 => {
             //todo do nothing ok
@@ -434,51 +433,51 @@ fn riscv64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
         &Inst::Nop4 => {
             //todo do nothing ok
         }
-        &Inst::Auipc { rd, .. } => collector.add_def(rd),
-        &Inst::Lui { rd, .. } => collector.add_def(rd),
+        &Inst::Auipc { rd, .. } => collector.reg_def(rd),
+        &Inst::Lui { rd, .. } => collector.reg_def(rd),
         &Inst::AluRRR { rd, rs1, rs2, .. } => {
-            collector.add_def(rd);
-            collector.add_use(rs1);
-            collector.add_use(rs2);
+            collector.reg_def(rd);
+            collector.reg_use(rs1);
+            collector.reg_use(rs2);
         }
         &Inst::AluRRImm12 { rd, rs, .. } => {
-            collector.add_def(rd);
-            collector.add_use(rs);
+            collector.reg_def(rd);
+            collector.reg_use(rs);
         }
         &Inst::Load { rd, from, .. } => {
-            collector.add_def(rd);
-            collector.add_use(from.get_base_register());
+            collector.reg_def(rd);
+            collector.reg_use(from.get_base_register());
         }
         &Inst::Store { src, to, .. } => {
-            collector.add_use(to.get_base_register());
-            collector.add_use(src);
+            collector.reg_use(to.get_base_register());
+            collector.reg_use(src);
         }
 
         &Inst::EpiloguePlaceholder => {}
         &Inst::Ret => {}
         &Inst::Extend { rd, rn, .. } => {
-            collector.add_def(rd);
-            collector.add_use(rn);
+            collector.reg_def(rd);
+            collector.reg_use(rn);
         }
         &Inst::AjustSp { .. } => {}
         &Inst::Call { ref info } => todo!(),
         &Inst::CallInd { ref info } => todo!(),
         &Inst::TrapIf { rs1, rs2, .. } => {
-            collector.add_use(rs1);
-            collector.add_use(rs2);
+            collector.reg_use(rs1);
+            collector.reg_use(rs2);
         }
         &Inst::Trap { .. } => {}
         &Inst::Jump { .. } => {}
         &Inst::CondBr { kind, .. } => {
-            collector.add_use(kind.rs1);
-            collector.add_use(kind.rs2);
+            collector.reg_use(kind.rs1);
+            collector.reg_use(kind.rs2);
         }
         &Inst::LoadExtName { rd, .. } => todo!(),
         &Inst::LoadAddr { rd, mem } => todo!(),
         &Inst::VirtualSPOffsetAdj { .. } => {}
         &Inst::Mov { rd, rm, .. } => {
-            collector.add_def(rd);
-            collector.add_use(rm);
+            collector.reg_def(rd);
+            collector.reg_use(rm);
         }
         &Inst::Fence => todo!(),
         &Inst::FenceI => todo!(),
@@ -486,192 +485,56 @@ fn riscv64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
         &Inst::EBreak => todo!(),
         &Inst::Udf { .. } => todo!(),
         &Inst::AluRR { rd, rs, .. } => {
-            collector.add_use(rs);
-            collector.add_def(rd);
+            collector.reg_use(rs);
+            collector.reg_def(rd);
         }
         &Inst::AluRRRR {
             rd, rs1, rs2, rs3, ..
         } => {
-            collector.add_def(rd);
-            collector.add_uses(&[rs1, rs2, rs3]);
+            collector.reg_def(rd);
+            collector.reg_uses(&[rs1, rs2, rs3]);
         }
         &Inst::FloatFlagOperation { rs, rd, .. } => {
-            collector.add_def(rd);
+            collector.reg_def(rd);
             if let Some(r) = rs {
-                collector.add_use(r);
+                collector.reg_use(r);
             }
         }
         &Inst::Jalr { rd, base, .. } => {
-            collector.add_def(rd);
-            collector.add_use(base);
+            collector.reg_def(rd);
+            collector.reg_use(base);
         }
         &Inst::Atomic { rd, addr, src, .. } => {
-            collector.add_def(rd);
-            collector.add_use(addr);
-            collector.add_use(src);
+            collector.reg_def(rd);
+            collector.reg_use(addr);
+            collector.reg_use(src);
         }
     }
 }
-
-//=============================================================================
-// Instructions: map_regs
-
-pub fn riscv64_map_regs<RM: RegMapper>(inst: &mut Inst, mapper: &RM) {
-    match inst {
-        &mut Inst::Nop0 => {
-            //todo do nothing ok
-        }
-        &mut Inst::Nop4 => {
-            //todo do nothing ok
-        }
-        &mut Inst::Lui { ref mut rd, .. } => mapper.map_def(rd),
-        &mut Inst::Auipc { ref mut rd, .. } => mapper.map_def(rd),
-        &mut Inst::Jalr {
-            ref mut rd,
-            ref mut base,
-            ..
-        } => {
-            mapper.map_def(rd);
-            mapper.map_use(base);
-        }
-        &mut Inst::AluRRR {
-            ref mut rd,
-            ref mut rs1,
-            ref mut rs2,
-            ..
-        } => {
-            mapper.map_def(rd);
-            mapper.map_use(rs1);
-            mapper.map_use(rs2);
-        }
-        &mut Inst::AluRRImm12 {
-            ref mut rd,
-            ref mut rs,
-            ..
-        } => {
-            mapper.map_def(rd);
-            mapper.map_use(rs);
-        }
-        &mut Inst::Load {
-            ref mut rd,
-            ref mut from,
-            ..
-        } => {
-            mapper.map_def(rd);
-            if let Some(r) = from.get_base_register_mut() {
-                mapper.map_use(r);
-            }
-        }
-        &mut Inst::Store {
-            ref mut to,
-            ref mut src,
-            ..
-        } => {
-            mapper.map_use(src);
-            if let Some(r) = to.get_base_register_mut() {
-                mapper.map_use(r);
-            }
-        }
-        &mut Inst::EpiloguePlaceholder => {}
-        &mut Inst::Ret => {}
-        &mut Inst::Extend {
-            ref mut rd,
-            ref mut rn,
-            ..
-        } => {
-            mapper.map_def(rd);
-            mapper.map_use(rn);
-        }
-        &mut Inst::AjustSp { .. } => {}
-        &mut Inst::Call { ref mut info } => todo!(),
-        &mut Inst::CallInd { ref mut info } => todo!(),
-        &mut Inst::TrapIf {
-            ref mut rs1,
-            ref mut rs2,
-            ..
-        } => {
-            mapper.map_use(rs1);
-            mapper.map_use(rs2);
-        }
-        &mut Inst::Trap { .. } => {}
-        &mut Inst::Jump { .. } => {}
-        &mut Inst::CondBr { ref mut kind, .. } => {
-            mapper.map_use(&mut kind.rs1);
-            mapper.map_use(&mut kind.rs2);
-        }
-        &mut Inst::LoadExtName { ref mut rd, .. } => todo!(),
-        &mut Inst::LoadAddr { ref mut rd, .. } => {
-            mapper.map_def(rd);
-        }
-        &mut Inst::VirtualSPOffsetAdj { .. } => {}
-        &mut Inst::Mov {
-            ref mut rd,
-            ref mut rm,
-            ..
-        } => {
-            mapper.map_def(rd);
-            mapper.map_use(rm);
-        }
-        &mut Inst::Fence => todo!(),
-        &mut Inst::FenceI => todo!(),
-        &mut Inst::ECall => todo!(),
-        &mut Inst::EBreak => todo!(),
-        &mut Inst::Udf { .. } => todo!(),
-        &mut Inst::AluRR {
-            ref mut rd,
-            ref mut rs,
-            ..
-        } => {
-            mapper.map_def(rd);
-            mapper.map_use(rs);
-        }
-        &mut Inst::AluRRRR {
-            ref mut rd,
-            ref mut rs1,
-            ref mut rs2,
-            ref mut rs3,
-            ..
-        } => {
-            mapper.map_def(rd);
-            mapper.map_use(rs1);
-            mapper.map_use(rs2);
-            mapper.map_use(rs3);
-        }
-        &mut Inst::FloatFlagOperation {
-            ref mut rs,
-            ref mut rd,
-            ..
-        } => {
-            mapper.map_def(rd);
-            if let Some(r) = rs {
-                mapper.map_use(r);
-            }
-        }
-        &mut Inst::Atomic {
-            ref mut rd,
-            ref mut addr,
-            ref mut src,
-            ..
-        } => {
-            mapper.map_def(rd);
-            mapper.map_use(addr);
-            mapper.map_use(src);
-        }
-    }
-}
-
-//=============================================================================
-// Instructions: misc functions and external interface
 
 impl MachInst for Inst {
     type LabelUse = LabelUse;
 
-    fn get_regs(&self, collector: &mut RegUsageCollector) {
-        riscv64_get_regs(self, collector)
+    fn gen_dummy_use(reg: Reg) -> Self {
+        Inst::AluRRImm12 {
+            alu_op: AluOPRRI::Ori,
+            rd: Writable::from_reg(reg),
+            rs: reg,
+            imm12: Imm12::zero(),
+        }
+    }
+    fn canonical_type_for_rc(rc: RegClass) -> Type {
+        I64
     }
 
-    fn map_regs<RM: RegMapper>(&mut self, mapper: &RM) {
-        riscv64_map_regs(self, mapper);
+    fn is_safepoint(&self) -> bool {
+        /*
+            todo
+        */
+        false
+    }
+    fn get_operands<F: Fn(VReg) -> VReg>(&self, collector: &mut OperandCollector<'_, F>) {
+        riscv64_get_operands(self, collector);
     }
 
     fn is_move(&self) -> Option<(Writable<Reg>, Reg)> {
@@ -696,7 +559,7 @@ impl MachInst for Inst {
         true
     }
 
-    fn is_term<'a>(&'a self) -> MachTerminator<'a> {
+    fn is_term(&self) -> MachTerminator {
         /*
             todo more
         */
@@ -704,7 +567,7 @@ impl MachInst for Inst {
             &Inst::Jump { dest } => {
                 let dest = dest.as_label();
                 if dest.is_some() {
-                    MachTerminator::Uncond(dest.clone().unwrap())
+                    MachTerminator::Uncond
                 } else {
                     MachTerminator::None
                 }
@@ -715,7 +578,7 @@ impl MachInst for Inst {
                 let taken = taken.as_label();
                 let not_taken = not_taken.as_label();
                 if taken.is_some() && not_taken.is_some() {
-                    MachTerminator::Cond(taken.clone().unwrap(), not_taken.clone().unwrap())
+                    MachTerminator::Cond
                 } else {
                     MachTerminator::None
                 }
@@ -759,29 +622,25 @@ impl MachInst for Inst {
         Inst::Nop4
     }
 
-    fn maybe_direct_reload(&self, _reg: VirtualReg, _slot: SpillSlot) -> Option<Inst> {
-        None
-    }
-
     fn rc_for_type(ty: Type) -> CodegenResult<(&'static [RegClass], &'static [Type])> {
         match ty {
-            I8 => Ok((&[RegClass::I64], &[I8])),
-            I16 => Ok((&[RegClass::I64], &[I16])),
-            I32 => Ok((&[RegClass::I64], &[I32])),
-            I64 => Ok((&[RegClass::I64], &[I64])),
-            B1 => Ok((&[RegClass::I64], &[B1])),
-            B8 => Ok((&[RegClass::I64], &[B8])),
-            B16 => Ok((&[RegClass::I64], &[B16])),
-            B32 => Ok((&[RegClass::I64], &[B32])),
-            B64 => Ok((&[RegClass::I64], &[B64])),
+            I8 => Ok((&[RegClass::Int], &[I8])),
+            I16 => Ok((&[RegClass::Int], &[I16])),
+            I32 => Ok((&[RegClass::Int], &[I32])),
+            I64 => Ok((&[RegClass::Int], &[I64])),
+            B1 => Ok((&[RegClass::Int], &[B1])),
+            B8 => Ok((&[RegClass::Int], &[B8])),
+            B16 => Ok((&[RegClass::Int], &[B16])),
+            B32 => Ok((&[RegClass::Int], &[B32])),
+            B64 => Ok((&[RegClass::Int], &[B64])),
             R32 => panic!("32-bit reftype pointer should never be seen on risc-v64"),
-            R64 => Ok((&[RegClass::I64], &[R64])),
-            F32 => Ok((&[RegClass::F32], &[F32])),
-            F64 => Ok((&[RegClass::F64], &[F64])),
-            I128 => Ok((&[RegClass::I64, RegClass::I64], &[I64, I64])),
-            B128 => Ok((&[RegClass::I64, RegClass::I64], &[B64, B64])),
+            R64 => Ok((&[RegClass::Int], &[R64])),
+            F32 => Ok((&[RegClass::Float], &[F32])),
+            F64 => Ok((&[RegClass::Float], &[F64])),
+            I128 => Ok((&[RegClass::Int, RegClass::Int], &[I64, I64])),
+            B128 => Ok((&[RegClass::Int, RegClass::Int], &[B64, B64])),
 
-            IFLAGS | FFLAGS => Ok((&[RegClass::I64], &[I64])),
+            IFLAGS | FFLAGS => Ok((&[RegClass::Int], &[I64])),
             _ => Err(CodegenError::Unsupported(format!(
                 "Unexpected SSA-value type: {}",
                 ty
@@ -809,7 +668,7 @@ impl MachInst for Inst {
     }
 
     fn ref_type_regclass(_: &settings::Flags) -> RegClass {
-        RegClass::I64
+        RegClass::Int
     }
 }
 
@@ -817,19 +676,53 @@ impl MachInst for Inst {
 // Pretty-printing of instructions.
 
 impl PrettyPrint for Inst {
-    fn show_rru(&self, mb_rru: Option<&RealRegUniverse>) -> String {
-        self.pretty_print(mb_rru, &mut EmitState::default())
+    fn pretty_print(&self, size_bytes: u8, allocs: &mut AllocationConsumer<'_>) -> String {
+        unimplemented!()
+    }
+}
+
+fn reg_name(reg: Reg) -> String {
+    match reg.to_real_reg() {
+        Some(real) => match real.class() {
+            RegClass::Int => match real.hw_enc() {
+                0 => "zero".into(),
+                1 => "ra".into(),
+                2 => "fp".into(),
+                3..=11 => format!("s{}", real.hw_enc() - 2),
+                12 => format!("compiler_tmp0"),
+                13 => format!("regalloc_i_move"),
+                14 => "sp".into(),
+                15 => "tp".into(),
+                16..=17 => format!("v{}", real.hw_enc() - 16),
+                18..=25 => format!("a{}", real.hw_enc() - 18),
+                26..=30 => format!("t{}", real.hw_enc() - 26),
+                31 => "gp".into(),
+                _ => unreachable!(),
+            },
+            RegClass::Float => match real.hw_enc() {
+                0..=14 => format!("fs{}", real.hw_enc() - 0),
+                15 => "regalloc_f_move".into(),
+                16..=17 => format!("fv{}", real.hw_enc() - 16),
+                18..=25 => format!("fa{}", real.hw_enc() - 18),
+                26..=31 => format!("ft{}", real.hw_enc() - 26),
+                _ => unreachable!(),
+            },
+        },
+        None => {
+            format!("{:?}", reg)
+        }
     }
 }
 
 impl Inst {
-    fn print_with_state(&self, mb_rru: Option<&RealRegUniverse>, state: &mut EmitState) -> String {
-        let register_name = |rd: Reg| {
-            if let Some(x) = mb_rru {
-                rd.show_with_rru(x)
-            } else {
-                format!("{:?}", rd)
-            }
+    fn print_with_state(
+        &self,
+        state: &mut EmitState,
+        allocs: &mut AllocationConsumer<'_>,
+    ) -> String {
+        let mut register_name = |reg: Reg| -> String {
+            let next = allocs.next(reg);
+            reg_name(next)
         };
         match self {
             &Inst::Nop0 => {
@@ -915,7 +808,7 @@ impl Inst {
                     "{} {},{}",
                     op.op_name(),
                     register_name(rd.to_reg()),
-                    from.to_string_may_be_with_reg_universe(mb_rru)
+                    from.to_string_may_be_alloc(allocs)
                 )
             }
             &Inst::Store { src, op, to, flags } => {
@@ -923,7 +816,7 @@ impl Inst {
                     "{} {},{}",
                     op.op_name(),
                     register_name(src),
-                    to.to_string_may_be_with_reg_universe(mb_rru)
+                    to.to_string_may_be_alloc(allocs)
                 )
             }
             &Inst::EpiloguePlaceholder => {

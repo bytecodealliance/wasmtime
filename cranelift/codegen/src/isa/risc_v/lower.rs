@@ -18,8 +18,6 @@ use crate::isa::risc_v::Riscv64Backend;
 
 use super::lower_inst;
 
-use regalloc::Reg;
-
 pub mod isle;
 
 /// Emits instruction(s) to generate the given 64-bit constant value into a newly-allocated

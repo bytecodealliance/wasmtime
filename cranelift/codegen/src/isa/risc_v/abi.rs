@@ -13,12 +13,13 @@ use crate::isa::risc_v::inst::get_caller_save_register;
 use crate::isa::risc_v::{inst::EmitState, inst::*};
 use crate::isa::CallConv;
 use crate::machinst::*;
+use crate::machinst::*;
 use crate::settings;
 use crate::CodegenResult;
 use alloc::boxed::Box;
 use alloc::vec;
 use alloc::vec::Vec;
-use regalloc::{RealReg, Reg, RegClass, Set, Writable};
+
 use smallvec::{smallvec, SmallVec};
 
 // We use a generic implementation that factors out AArch64 and x64 ABI commonalities, because
@@ -128,7 +129,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                     if next_f_reg < f_registers.len() {
                         let reg = f_registers[next_f_reg].clone();
                         let arg = ABIArg::reg(
-                            reg.to_reg().as_real_reg().unwrap(),
+                            reg.to_reg().to_real_reg().unwrap(),
                             param.value_type,
                             param.extension,
                             param.purpose,
@@ -150,7 +151,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                     if next_x_reg < x_registers.len() {
                         let reg = x_registers[next_x_reg].clone();
                         let arg = ABIArg::reg(
-                            reg.to_reg().as_real_reg().unwrap(),
+                            reg.to_reg().to_real_reg().unwrap(),
                             param.value_type,
                             param.extension,
                             param.purpose,
@@ -259,7 +260,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         ir::ArgumentExtension::None
     }
 
-    fn gen_ret() -> Inst {
+    fn gen_ret(rets: Vec<Reg>) -> Inst {
         Inst::Ret
     }
 
@@ -382,9 +383,9 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         call_conv: isa::CallConv,
         setup_frame: bool,
         flags: &settings::Flags,
-        clobbered_callee_saves: &Vec<Writable<RealReg>>,
+        clobbered_callee_saves: &[Writable<RealReg>],
         fixed_frame_storage_size: u32,
-        _outgoing_args_size: u32,
+        outgoing_args_size: u32,
     ) -> (u64, SmallVec<[Inst; 16]>) {
         let mut insts = SmallVec::new();
         let clobbered_size = compute_clobber_size(&clobbered_callee_saves);
@@ -397,14 +398,15 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         for reg in clobbered_callee_saves {
             let r_reg = reg.to_reg();
             let off = cur_offset;
-            let _type = if r_reg.get_class() == RegClass::I64 {
+            let _type = if r_reg.class() == RegClass::Int {
                 I64
             } else {
                 F64
             };
+
             insts.push(Self::gen_store_stack(
                 StackAMode::FPOffset(off as i64, _type),
-                reg.to_reg().to_reg(),
+                real_reg_to_reg(reg.to_reg()),
                 _type,
             ));
             cur_offset += 8
@@ -420,9 +422,9 @@ impl ABIMachineSpec for Riscv64MachineDeps {
     fn gen_clobber_restore(
         call_conv: isa::CallConv,
         flags: &settings::Flags,
-        clobbers: &Set<Writable<RealReg>>,
+        clobbers: &[Writable<RealReg>],
         fixed_frame_storage_size: u32,
-        _outgoing_args_size: u32,
+        outgoing_args_size: u32,
     ) -> SmallVec<[Inst; 16]> {
         let mut insts = SmallVec::new();
         let clobbered_callee_saves = Self::get_clobbered_callee_saves(call_conv, clobbers);
@@ -430,14 +432,14 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         let mut cur_offset = fixed_frame_storage_size;
         for reg in &clobbered_callee_saves {
             let rreg = reg.to_reg();
-            let _type = if rreg.get_class() == RegClass::I64 {
+            let _type = if rreg.class() == RegClass::Int {
                 I64
             } else {
                 F64
             };
             insts.push(Self::gen_load_stack(
                 StackAMode::FPOffset(cur_offset as i64, _type),
-                Writable::from_reg(reg.to_reg().to_reg()),
+                Writable::from_reg(real_reg_to_reg(reg.to_reg())),
                 _type,
             ));
             cur_offset += 8
@@ -458,45 +460,36 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         tmp: Writable<Reg>,
         callee_conv: isa::CallConv,
         caller_conv: isa::CallConv,
-    ) -> SmallVec<[(InstIsSafepoint, Inst); 2]> {
+    ) -> SmallVec<[Self::I; 2]> {
         let mut insts = SmallVec::new();
         match &dest {
             &CallDest::ExtName(ref name, ..) => {
-                insts.push((
-                    InstIsSafepoint::No,
-                    Inst::LoadExtName {
-                        rd: tmp,
-                        name: Box::new(name.clone()),
-                        offset: 0,
-                    },
-                ));
-                insts.push((
-                    InstIsSafepoint::Yes,
-                    Inst::CallInd {
-                        info: Box::new(CallIndInfo {
-                            rn: tmp.to_reg(),
-                            uses,
-                            defs,
-                            opcode,
-                            caller_callconv: caller_conv,
-                            callee_callconv: callee_conv,
-                        }),
-                    },
-                ));
-            }
-            &CallDest::Reg(reg) => insts.push((
-                InstIsSafepoint::Yes,
-                Inst::CallInd {
+                insts.push(Inst::LoadExtName {
+                    rd: tmp,
+                    name: Box::new(name.clone()),
+                    offset: 0,
+                });
+                insts.push(Inst::CallInd {
                     info: Box::new(CallIndInfo {
-                        rn: *reg,
+                        rn: tmp.to_reg(),
                         uses,
                         defs,
                         opcode,
                         caller_callconv: caller_conv,
                         callee_callconv: callee_conv,
                     }),
-                },
-            )),
+                });
+            }
+            &CallDest::Reg(reg) => insts.push(Inst::CallInd {
+                info: Box::new(CallIndInfo {
+                    rn: *reg,
+                    uses,
+                    defs,
+                    opcode,
+                    caller_callconv: caller_conv,
+                    callee_callconv: callee_conv,
+                }),
+            }),
         }
         insts
     }
@@ -530,7 +523,8 @@ impl ABIMachineSpec for Riscv64MachineDeps {
     fn get_number_of_spillslots_for_value(rc: RegClass) -> u32 {
         // We allocate in terms of 8-byte slots.
         match rc {
-            RegClass::I64 => 1,
+            RegClass::Int => 1,
+            RegClass::Float => 1,
             _ => panic!("Unexpected register class!"),
         }
     }
@@ -551,7 +545,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
 
     fn get_clobbered_callee_saves(
         call_conv: isa::CallConv,
-        regs: &Set<Writable<RealReg>>,
+        regs: &[Writable<RealReg>],
     ) -> Vec<Writable<RealReg>> {
         let mut regs: Vec<Writable<RealReg>> = regs
             .iter()
@@ -561,7 +555,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
 
         // Sort registers for deterministic code output. We can do an unstable
         // sort because the registers will be unique (there are no dups).
-        regs.sort_unstable_by_key(|r| r.to_reg().get_index());
+        // regs.sort_unstable_by_key(|r| r.to_reg().get_index());
         regs
     }
 
@@ -635,21 +629,21 @@ fn get_callee_save_f_gpr() -> [bool; 32] {
 
 // this should be the registers must be save by callee
 fn is_reg_saved_in_prologue(conv: CallConv, reg: RealReg) -> bool {
-    if reg.get_class() == RegClass::I64 {
-        get_callee_save_x_gpr()[reg.get_hw_encoding()]
+    if reg.class() == RegClass::Int {
+        get_callee_save_x_gpr()[reg.hw_enc() as usize]
     } else {
-        get_callee_save_f_gpr()[reg.get_hw_encoding()]
+        get_callee_save_f_gpr()[reg.hw_enc() as usize]
     }
 }
 
-fn compute_clobber_size(clobbers: &Vec<Writable<RealReg>>) -> u32 {
+fn compute_clobber_size(clobbers: &[Writable<RealReg>]) -> u32 {
     let mut clobbered_size = 0;
     for reg in clobbers {
-        match reg.to_reg().get_class() {
-            RegClass::I64 => {
+        match reg.to_reg().class() {
+            RegClass::Int => {
                 clobbered_size += 8;
             }
-            RegClass::F64 => {
+            RegClass::Float => {
                 clobbered_size += 8;
             }
             _ => unreachable!(),
