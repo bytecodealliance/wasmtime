@@ -255,7 +255,8 @@ mod test {
 
         pos.insert_block(bb2);
         let v2 = pos.ins().iconst(I32, 2);
-        let v3 = pos.ins().load(I32, MemFlags::new(), v2, 100);
+        let _v3 = pos.ins().load(I32, MemFlags::new(), v2, 100);
+        pos.ins().store(MemFlags::new(), _v3, v2, 200);
         pos.ins().return_(&[v2]);
 
         let mut shared_flags_builder = settings::builder();

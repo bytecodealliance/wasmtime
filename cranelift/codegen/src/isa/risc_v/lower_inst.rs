@@ -5,6 +5,7 @@ use alloc::vec;
 use alloc::vec::Vec;
 
 use crate::ir::Inst as IRInst;
+use crate::ir::InstructionData;
 use crate::ir::Opcode;
 use crate::isa::risc_v::settings as aarch64_settings;
 use crate::machinst::lower::*;
@@ -192,7 +193,6 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Store | Opcode::Istore8 | Opcode::Istore16 | Opcode::Istore32 => {
-            let out_ty = ctx.output_ty(insn, 0);
             let flags = ctx
                 .memflags(insn)
                 .expect("Load instruction should have memflags");
@@ -271,7 +271,22 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             }
         }
 
-        Opcode::StackAddr => {}
+        Opcode::StackAddr => {
+            let (stack_slot, offset) = match *ctx.data(insn) {
+                InstructionData::StackLoad {
+                    opcode: Opcode::StackAddr,
+                    stack_slot,
+                    offset,
+                } => (stack_slot, offset),
+                _ => unreachable!(),
+            };
+            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+            let offset: i32 = offset.into();
+            let inst = ctx
+                .abi()
+                .stackslot_addr(stack_slot, u32::try_from(offset).unwrap(), rd);
+            ctx.emit(inst);
+        }
 
         Opcode::AtomicRmw => {
             // let r_dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
@@ -352,8 +367,8 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::AtomicLoad => {
             let r_dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let mut r_addr = ctx.put_input_in_regs(insn, 0).only_reg().unwrap();
-            let mut arg2 = ctx.put_input_in_regs(insn, 1).only_reg().unwrap();
+            let r_addr = ctx.put_input_in_regs(insn, 0).only_reg().unwrap();
+            let arg2 = ctx.put_input_in_regs(insn, 1).only_reg().unwrap();
             let ty_access = ty.unwrap();
             assert!(is_valid_atomic_transaction_ty(ty_access));
             ctx.emit(Inst::Atomic {
@@ -372,8 +387,8 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::AtomicStore => {
             let r_dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let mut r_addr = ctx.put_input_in_regs(insn, 0).only_reg().unwrap();
-            let mut arg2 = ctx.put_input_in_regs(insn, 1).only_reg().unwrap();
+            let r_addr = ctx.put_input_in_regs(insn, 0).only_reg().unwrap();
+            let arg2 = ctx.put_input_in_regs(insn, 1).only_reg().unwrap();
             let ty_access = ty.unwrap();
             assert!(is_valid_atomic_transaction_ty(ty_access));
             ctx.emit(Inst::Atomic {

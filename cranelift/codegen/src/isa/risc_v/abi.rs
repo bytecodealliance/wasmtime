@@ -551,10 +551,8 @@ impl ABIMachineSpec for Riscv64MachineDeps {
             .cloned()
             .filter(|r| is_reg_saved_in_prologue(call_conv, r.to_reg()))
             .collect();
-        /*
-            tp need save by callee.
-        */
-        regs.push(Writable::from_reg(tp().to_real_reg().unwrap()));
+       
+       
 
         // Sort registers for deterministic code output. We can do an unstable
         // sort because the registers will be unique (there are no dups).
@@ -575,8 +573,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
             || stack_args_size > 0
             || num_clobbered_callee_saves > 0
             || fixed_frame_storage_size > 0
-        //todo:: remove this.
-        // true
+        
     }
 }
 

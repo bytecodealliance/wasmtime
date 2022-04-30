@@ -32,9 +32,6 @@ pub fn a2() -> Reg {
 pub fn a7() -> Reg {
     x_reg(25)
 }
-pub fn tp() -> Reg {
-    x_reg(15)
-}
 
 pub fn a0_t0_a7() -> Vec<Writable<Reg>> {
     let mut v = vec![];

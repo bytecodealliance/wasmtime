@@ -6,100 +6,111 @@ use alloc::vec::Vec;
     todo:: more instruction
 
 */
-// #[test]
-// fn test_riscv64_binemit() {
-//     struct TestUnit {
-//         inst: Inst,
-//         assembly: &'static str,
-//         code: Option<u32>,
-//     }
-//     impl TestUnit {
-//         fn new(i: Inst, ass: &'static str) -> Self {
-//             Self {
-//                 inst: i,
-//                 assembly: ass,
-//                 code: None,
-//             }
-//         }
-//     }
+#[test]
+fn test_riscv64_binemit() {
+    struct TestUnit {
+        inst: Inst,
+        assembly: &'static str,
+        code: Option<u32>,
+    }
+    impl TestUnit {
+        fn new(i: Inst, ass: &'static str) -> Self {
+            Self {
+                inst: i,
+                assembly: ass,
+                code: None,
+            }
+        }
+    }
 
-//     let mut insns = Vec::<TestUnit>::new();
-//     //todo:: more
-//     insns.push(TestUnit::new(
-//         Inst::AluRRR {
-//             alu_op: AluOPRRR::Add,
-//             rd: writable_fp_reg(),
-//             rs1: fp_reg(),
-//             rs2: zero_reg(),
-//         },
-//         "add fp,fp,zero",
-//     ));
-//     insns.push(TestUnit::new(
-//         Inst::AluRRImm12 {
-//             alu_op: AluOPRRI::Addi,
-//             rd: writable_fp_reg(),
-//             rs: stack_reg(),
-//             imm12: Imm12::maybe_from_u64(100).unwrap(),
-//         },
-//         "addi fp,sp,100",
-//     ));
+    let mut insns = Vec::<TestUnit>::new();
+    //todo:: more
+    insns.push(TestUnit::new(
+        Inst::AluRRR {
+            alu_op: AluOPRRR::Add,
+            rd: writable_zero_reg(),
+            rs1: zero_reg(),
+            rs2: zero_reg(),
+        },
+        "add zero,zero,zero",
+    ));
+    insns.push(TestUnit::new(
+        Inst::AluRRImm12 {
+            alu_op: AluOPRRI::Addi,
+            rd: writable_stack_reg(),
+            rs: stack_reg(),
+            imm12: Imm12::maybe_from_u64(100).unwrap(),
+        },
+        "addi sp,sp,100",
+    ));
 
-//     {
-//         // generated code to speed up the test unit,otherwise you need invoke riscv-gun tool chain every time.
-//         // insns[0].code = Some(263219);
-//     }
-//     let flags = settings::Flags::new(settings::builder());
-//     let rru = crate_reg_eviroment(&flags);
-//     let emit_info = EmitInfo::new(flags);
-//     let mut missing_code = vec![];
-//     for (index, ref mut unit) in insns.into_iter().enumerate() {
-//         println!("Riscv64: {:?}, {}", unit.inst, unit.assembly);
-//         // Check the printed text is as expected.
-//         let actual_printing = unit.inst.show_rru(Some(&rru));
-//         assert_eq!(unit.assembly, actual_printing);
-//         if unit.code.is_none() {
-//             let code = assemble(unit.assembly);
-//             missing_code.push((index, code));
-//             unit.code = Some(code);
-//         }
-//         let mut buffer = MachBuffer::new();
-//         unit.inst
-//             .emit(allocs, &mut buffer, &emit_info, &mut Default::default());
-//         let buffer = buffer.finish();
-//         assert_eq!(buffer.data(), unit.code.unwrap().to_le_bytes());
-//     }
-//     if missing_code.len() > 0 {
-//         println!("// generated code to speed up the test unit,otherwise you need invode riscv-gun tool chain every time.");
-//         for i in missing_code {
-//             println!("insns[{}].code = Some({});", i.0, i.1);
-//         }
-//         println!("");
-//     }
-// }
+    {
+        // generated code to speed up the test unit,otherwise you need invoke riscv-gun tool chain every time.
+        // insns[0].code = Some(263219);
+    }
+    let flags = settings::Flags::new(settings::builder());
+    let rru = crate_reg_eviroment(&flags);
+    let emit_info = EmitInfo::new(flags);
+    let mut missing_code = vec![];
+    for (index, ref mut unit) in insns.into_iter().enumerate() {
+        println!("Riscv64: {:?}, {}", unit.inst, unit.assembly);
+        // Check the printed text is as expected.
 
+        let actual_printing = unit
+            .inst
+            .print_with_state(&mut EmitState::default(), &mut AllocationConsumer::new(&[]));
+        assert_eq!(unit.assembly, actual_printing);
+        if unit.code.is_none() {
+            let code = assemble(unit.assembly);
+            missing_code.push((index, code));
+            unit.code = Some(code);
+        }
+        let mut buffer = MachBuffer::new();
+        unit.inst
+            .emit(&[], &mut buffer, &emit_info, &mut Default::default());
+        let buffer = buffer.finish();
+        assert_eq!(buffer.data(), unit.code.unwrap().to_le_bytes());
+    }
+    if missing_code.len() > 0 {
+        println!("// generated code to speed up the test unit,otherwise you need invode riscv-gun tool chain every time.");
+        for i in missing_code {
+            println!("insns[{}].code = Some({});", i.0, i.1);
+        }
+        println!("");
+    }
+}
+
+#[cfg(windows)]
+fn get_riscv_tool_chain_name() -> (String, String) {
+    (
+        String::from("riscv64-unknown-elf-as"),
+        String::from("riscv64-unknown-elf-objdump"),
+    )
+}
+
+#[cfg(linux)]
+fn get_riscv_tool_chain_name() -> (String, String) {}
 /*
     todo:: make this can be run on windows
 */
 fn assemble(code: &str) -> u32 {
     use std::process::Command;
-    std::env::set_current_dir("/var/tmp").expect("set_current_dir {}");
+    let (as_name, objdump_name) = get_riscv_tool_chain_name();
+    std::env::set_current_dir(std::env::temp_dir()).expect("set_current_dir {}");
     let file_name = "riscv_tmp.s";
     use std::io::Write;
     let mut file = std::fs::File::create(file_name).unwrap();
     file.write_all(code.as_bytes()).expect("write error {}");
-    let mut cmd = Command::new("riscv64-linux-gnu-as");
+    let mut cmd = Command::new(as_name.as_str());
     cmd.arg(file_name);
-    let _output = cmd.output().expect("exec riscv64-linux-gnu-as failed , {}");
+    let _output = cmd.output().expect("exec as failed , {}");
     let output_file = "a.out";
-    let mut cmd = Command::new("riscv64-linux-gnu-objdump");
+    let mut cmd = Command::new(objdump_name.as_str());
     cmd.arg("-d").arg(output_file);
 
-    let output = cmd
-        .output()
-        .expect("exec riscv64-linux-gnu-objdump failed , {}");
+    let output = cmd.output().expect("exec objdump failed , {}");
     /*
         a.out:     file format elf64-littleriscv
-
 
     Disassembly of section .text:
 

@@ -318,7 +318,7 @@ impl MachInstEmit for Inst {
             &Inst::Store { op, src, flags, to } => {
                 let base = to.get_base_register();
                 let base = mapper_to_real.next(base);
-                let rs = mapper_to_real.next(src);
+                let src = mapper_to_real.next(src);
                 let offset = to.get_offset_with_state(state);
                 let x;
                 if let Some(imm12) = Imm12::maybe_from_u64(offset as u64) {
@@ -536,14 +536,20 @@ impl MachInstEmit for Inst {
                 );
                 state.virtual_sp_offset += amount;
             }
-            // &Inst::FloatFlagOperation { op, rs, imm, rd } => {
-            //     let x = op.op_code()
-            //         | machreg_to_gpr_num(rs) << 7
-            //         | op.funct3() << 12
-            //         | op.rs1(rs) << 15
-            //         | op.imm12(imm) << 20;
-            //     sink.put4(x);
-            // }
+            &Inst::FloatFlagOperation { op, rs, imm, rd } => {
+                let rs = if let Some(x) = rs {
+                    Some(mapper_to_real.next(x))
+                } else {
+                    None
+                };
+                let rd = mapper_to_real.next_writable(rd);
+                let x = op.op_code()
+                    | rs.map(|x| machreg_to_gpr_num(x)).unwrap_or(0) << 7
+                    | op.funct3() << 12
+                    | op.rs1(rs) << 15
+                    | op.imm12(imm) << 20;
+                sink.put4(x);
+            }
             &Inst::Atomic {
                 op,
                 rd,
