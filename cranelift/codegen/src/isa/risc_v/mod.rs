@@ -305,8 +305,6 @@ mod test {
         let v1 = pos.ins().fcmp(FloatCC::LessThan, arg0, arg1);
         let v2 = pos.ins().iconst(I128, 1);
         let v3 = pos.ins().iconst(I128, 1);
-        let v4 = pos.ins().select(v1, v2, v3);
-        pos.ins().atomic_store(MemFlags::new(), v4, v2);
 
         pos.ins().brnz(v1, bb1, &[]);
         pos.ins().jump(bb2, &[]);

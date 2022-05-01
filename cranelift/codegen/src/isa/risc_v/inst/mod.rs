@@ -15,6 +15,7 @@ use crate::isa::CallConv;
 use crate::machinst::*;
 use crate::{settings, CodegenError, CodegenResult};
 
+pub use crate::ir::condcodes::FloatCC;
 use crate::machinst::*;
 use regalloc2::Allocation;
 
@@ -96,10 +97,6 @@ pub enum BranchTarget {
     /// A fixed PC offset.
     /// todo when to use this??
     ResolvedOffset(i32),
-
-    /// need later stage to decide the jump offset.
-    /// patch_taken_path_list will make "Patch" become "ResolvedOffset"
-    Patch,
 }
 
 impl BranchTarget {
@@ -110,18 +107,9 @@ impl BranchTarget {
             _ => None,
         }
     }
-
     #[inline(always)]
     pub(crate) fn zero() -> Self {
         Self::ResolvedOffset(0)
-    }
-
-    /*
-        this location is waiting for patch when further instruction is emited.
-    */
-    #[inline(always)]
-    pub(crate) fn patch() -> Self {
-        Self::Patch
     }
     #[inline(always)]
     pub(crate) fn offset(off: i32) -> Self {
@@ -134,7 +122,6 @@ impl Display for BranchTarget {
         match self {
             BranchTarget::Label(l) => write!(f, "{}", l.to_string()),
             BranchTarget::ResolvedOffset(off) => write!(f, "{:+}", off),
-            BranchTarget::Patch => write!(f, "{}", "unkown_right_need_patch"),
         }
     }
 }
@@ -144,7 +131,8 @@ impl Inst {
         let value = value as i64;
         value >= (i32::MIN as i64) && value <= (i32::MAX as i64)
     }
-    pub(crate) fn instruction_size() -> usize {
+
+    pub(crate) fn instruction_size() -> i32 /* less type case */ {
         4
     }
     pub(crate) fn load_constant_imm12(rd: Writable<Reg>, imm: Imm12) -> Inst {
@@ -153,129 +141,6 @@ impl Inst {
             rd: rd,
             rs: zero_reg(),
             imm12: imm,
-        }
-    }
-
-    /*
-        rd == 1 is unordered
-        rd == 0 is ordered
-    */
-    pub(crate) fn generate_float_unordered(
-        rd: Writable<Reg>,
-        ty: Type,
-        left: Reg,
-        right: Reg,
-    ) -> SmallInstVec<Inst> {
-        let mut insts = SmallVec::new();
-        let mut patch_true = vec![];
-        let class_op = if ty == F32 {
-            AluOPRR::FclassS
-        } else {
-            AluOPRR::FclassD
-        };
-        // left
-        insts.push(Inst::AluRR {
-            alu_op: class_op,
-            rd,
-            rs: left,
-        });
-        insts.push(Inst::AluRRImm12 {
-            alu_op: AluOPRRI::Andi,
-            rd,
-            rs: rd.to_reg(),
-            imm12: Imm12::from_bits(FClassResult::is_nan_bits() as i16),
-        });
-        patch_true.push(insts.len());
-        insts.push(Inst::CondBr {
-            taken: BranchTarget::patch(),
-            not_taken: BranchTarget::zero(),
-            kind: CondBrKind {
-                kind: IntCC::NotEqual,
-                rs1: rd.to_reg(),
-                rs2: zero_reg(),
-            },
-        });
-        //right
-        let tmp = writable_spilltmp_reg();
-        insts.push(Inst::AluRR {
-            alu_op: class_op,
-            rd: tmp,
-            rs: right,
-        });
-        insts.push(Inst::AluRRImm12 {
-            alu_op: AluOPRRI::Andi,
-            rd: tmp,
-            rs: tmp.to_reg(),
-            imm12: Imm12::from_bits(FClassResult::is_nan_bits() as i16),
-        });
-        patch_true.push(insts.len());
-        insts.push(Inst::CondBr {
-            taken: BranchTarget::patch(),
-            not_taken: BranchTarget::zero(),
-            kind: CondBrKind {
-                kind: IntCC::NotEqual,
-                rs1: tmp.to_reg(),
-                rs2: zero_reg(),
-            },
-        });
-        //left and right is not nan
-        // but there are maybe bother PosInfinite or NegInfinite
-        insts.push(Inst::AluRRR {
-            alu_op: AluOPRRR::And,
-            rd: rd,
-            rs1: rd.to_reg(),
-            rs2: tmp.to_reg(),
-        });
-        insts.push(Inst::AluRRImm12 {
-            alu_op: AluOPRRI::Andi,
-            rd: rd,
-            rs: rd.to_reg(),
-            imm12: Imm12::from_bits(FClassResult::is_infinite_bits() as i16),
-        });
-        patch_true.push(insts.len());
-        insts.push(Inst::CondBr {
-            taken: BranchTarget::patch(),
-            not_taken: BranchTarget::zero(),
-            kind: CondBrKind {
-                kind: IntCC::NotEqual,
-                rs1: tmp.to_reg(),
-                rs2: zero_reg(),
-            },
-        });
-        // here is false
-        insts.push(Inst::load_constant_imm12(rd, Imm12::form_bool(false)));
-        // jump set true
-        insts.push(Inst::Jal {
-            dest: BranchTarget::offset(Inst::instruction_size() as i32),
-        });
-
-        Self::patch_taken_path_list(&mut insts, &patch_true);
-        // here is true
-        insts.push(Inst::load_constant_imm12(rd, Imm12::form_bool(true)));
-        insts
-    }
-
-    /*
-        notice always patch the taken path.
-        this will make jump that jump over all insts.
-    */
-    pub(crate) fn patch_taken_path_list(insts: &mut SmallInstVec<Inst>, patches: &'_ Vec<usize>) {
-        for index in patches {
-            let index = *index;
-            assert!(insts.len() > index);
-            let real_off =
-                ((insts.len() - index - 1/*self size */) * Inst::instruction_size()) as i32;
-            match &mut insts[index] {
-                &mut Inst::CondBr { ref mut taken, .. } => match taken {
-                    &mut BranchTarget::Patch => *taken = BranchTarget::ResolvedOffset(real_off),
-                    _ => unreachable!(),
-                },
-                &mut Inst::Jal { ref mut dest } => match dest {
-                    &mut BranchTarget::Patch => *dest = BranchTarget::ResolvedOffset(real_off),
-                    _ => unreachable!(),
-                },
-                _ => unreachable!(),
-            }
         }
     }
 
@@ -509,6 +374,11 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_use(addr);
             collector.reg_use(src);
         }
+        &Inst::Ffcmp { rd, rs1, rs2, .. } => {
+            collector.reg_def(rd);
+            collector.reg_use(rs1);
+            collector.reg_use(rs2);
+        }
     }
 }
 
@@ -724,6 +594,7 @@ impl Inst {
             let next = allocs.next(reg);
             reg_name(next)
         };
+
         match self {
             &Inst::Nop0 => {
                 format!(";;zero length nop")
@@ -809,6 +680,22 @@ impl Inst {
                     op.op_name(),
                     register_name(rd.to_reg()),
                     from.to_string_may_be_alloc(allocs)
+                )
+            }
+            &Inst::Ffcmp {
+                rd,
+                cc,
+                ty,
+                rs1,
+                rs2,
+            } => {
+                format!(
+                    "{}{} {},{},{}",
+                    if ty == F32 { "f" } else { "d" },
+                    cc,
+                    register_name(rd.to_reg()),
+                    register_name(rs1),
+                    register_name(rs2),
                 )
             }
             &Inst::Store { src, op, to, flags } => {

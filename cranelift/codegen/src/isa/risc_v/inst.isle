@@ -154,7 +154,17 @@
       (src Reg)
       (aq bool)
       (rl bool))
+    
+
+    ;; a float compare 
+    (Ffcmp 
+      (rd WritableReg)
+      (cc FloatCC)
+      (ty Type)
+      (rs1 Reg)
+      (rs2 Reg))
 ))
+
 
 (type AtomicOP (enum
   (LrW)
@@ -425,7 +435,6 @@
 (type AMode (primitive AMode))
 (type OptionReg (primitive OptionReg))
 (type OptionImm12 (primitive OptionImm12))
-
 (type Imm12 (primitive Imm12))
 (type UImm5 (primitive UImm5))
 (type Imm20 (primitive Imm20))

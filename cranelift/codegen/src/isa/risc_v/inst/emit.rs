@@ -70,6 +70,103 @@ impl Inst {
     pub(crate) fn construct_bit_not(rd: Writable<Reg>) -> Inst {
         unimplemented!()
     }
+    /*
+        rd == 1 is unordered
+        rd == 0 is ordered
+    */
+    pub(crate) fn generate_float_unordered(
+        sink: &mut MachBuffer<Inst>,
+        rd: Writable<Reg>,
+        ty: Type,
+        left: Reg,
+        right: Reg,
+    ) -> SmallInstVec<Inst> {
+        let mut insts = SmallVec::new();
+        let mut label_true = sink.get_label();
+        let class_op = if ty == F32 {
+            AluOPRR::FclassS
+        } else {
+            AluOPRR::FclassD
+        };
+        // left
+        insts.push(Inst::AluRR {
+            alu_op: class_op,
+            rd,
+            rs: left,
+        });
+        insts.push(Inst::AluRRImm12 {
+            alu_op: AluOPRRI::Andi,
+            rd,
+            rs: rd.to_reg(),
+            imm12: Imm12::from_bits(FClassResult::is_nan_bits() as i16),
+        });
+        insts.push(Inst::CondBr {
+            taken: BranchTarget::Label(label_true),
+            not_taken: BranchTarget::zero(),
+            kind: CondBrKind {
+                kind: IntCC::NotEqual,
+                rs1: rd.to_reg(),
+                rs2: zero_reg(),
+            },
+        });
+        //right
+        let tmp = writable_spilltmp_reg();
+        insts.push(Inst::AluRR {
+            alu_op: class_op,
+            rd: tmp,
+            rs: right,
+        });
+        insts.push(Inst::AluRRImm12 {
+            alu_op: AluOPRRI::Andi,
+            rd: tmp,
+            rs: tmp.to_reg(),
+            imm12: Imm12::from_bits(FClassResult::is_nan_bits() as i16),
+        });
+
+        insts.push(Inst::CondBr {
+            taken: BranchTarget::Label(label_true),
+            not_taken: BranchTarget::zero(),
+            kind: CondBrKind {
+                kind: IntCC::NotEqual,
+                rs1: tmp.to_reg(),
+                rs2: zero_reg(),
+            },
+        });
+        //left and right is not nan
+        // but there are maybe bother PosInfinite or NegInfinite
+        insts.push(Inst::AluRRR {
+            alu_op: AluOPRRR::And,
+            rd: rd,
+            rs1: rd.to_reg(),
+            rs2: tmp.to_reg(),
+        });
+        insts.push(Inst::AluRRImm12 {
+            alu_op: AluOPRRI::Andi,
+            rd: rd,
+            rs: rd.to_reg(),
+            imm12: Imm12::from_bits(FClassResult::is_infinite_bits() as i16),
+        });
+
+        insts.push(Inst::CondBr {
+            taken: BranchTarget::Label(label_true),
+            not_taken: BranchTarget::zero(),
+            kind: CondBrKind {
+                kind: IntCC::NotEqual,
+                rs1: tmp.to_reg(),
+                rs2: zero_reg(),
+            },
+        });
+        // here is false
+        insts.push(Inst::load_constant_imm12(rd, Imm12::form_bool(false)));
+        // jump set true
+        insts.push(Inst::Jal {
+            dest: BranchTarget::offset(Inst::instruction_size()),
+        });
+        sink.bind_label(label_true);
+        // here is true
+        insts.push(Inst::load_constant_imm12(rd, Imm12::form_bool(true)));
+        insts
+    }
 
     /*
         1: alloc registers
@@ -425,10 +522,7 @@ impl MachInstEmit for Inst {
                         sink.add_uncond_branch(start_off, start_off + 4, lable);
                         sink.put4(code);
                     }
-                    BranchTarget::Patch => {
-                        // do nothing
-                        panic!("need patch compiler internal fetal error")
-                    }
+
                     BranchTarget::ResolvedOffset(offset) => {
                         if offset != 0 {
                             if LabelUse::Jal20.offset_in_range(offset) {
@@ -459,7 +553,6 @@ impl MachInstEmit for Inst {
                         sink.add_cond_branch(start_off, start_off + 4, label, &code_inverse);
                         sink.put4(code);
                     }
-                    BranchTarget::Patch => panic!("need patch compiler internal fetal error"),
                     BranchTarget::ResolvedOffset(offset) => {
                         if LabelUse::B12.offset_in_range(offset) {
                             let code = kind.emit();
@@ -612,6 +705,154 @@ impl MachInstEmit for Inst {
                     })
                     .into_iter()
                     .for_each(|inst| inst.emit(allocs, sink, emit_info, state));
+                }
+            }
+
+            &Inst::Ffcmp {
+                rd,
+                cc,
+                ty,
+                rs1,
+                rs2,
+            } => {
+                //
+                let rd = mapper_to_real.next_writable(rd);
+                let rs1 = mapper_to_real.next(rs1);
+                let rs2 = mapper_to_real.next(rs2);
+
+                let cc_bit = FloatCCBit::floatcc_2_mask_bits(cc);
+                let eq_op = if ty == F32 {
+                    AluOPRRR::FeqS
+                } else {
+                    AluOPRRR::FeqD
+                };
+                let lt_op = if ty == F32 {
+                    AluOPRRR::FltS
+                } else {
+                    AluOPRRR::FltD
+                };
+                let le_op = if ty == F32 {
+                    AluOPRRR::FleS
+                } else {
+                    AluOPRRR::FleD
+                };
+
+                /*
+                    can be implemented by one risc-v instruction.
+                */
+                let x = if cc_bit.just_eq() {
+                    Some(eq_op)
+                } else if cc_bit.just_le() {
+                    Some(le_op)
+                } else if cc_bit.just_lt() {
+                    Some(lt_op)
+                } else {
+                    None
+                };
+
+                if let Some(op) = x {
+                    Inst::AluRRR {
+                        alu_op: op,
+                        rd,
+                        rs1,
+                        rs2,
+                    }
+                    .emit(allocs, sink, emit_info, state);
+                } else {
+                    let mut insts = SmallInstVec::new();
+                    // long path
+                    let mut label_set_false = sink.get_label();
+                    let mut label_set_true = sink.get_label();
+                    let mut label_jump_over = sink.get_label();
+                    // if eq
+                    if cc_bit.test(FloatCCBit::EQ) {
+                        insts.push(Inst::AluRRR {
+                            alu_op: eq_op,
+                            rd,
+                            rs1,
+                            rs2,
+                        });
+                        insts.push(Inst::CondBr {
+                            taken: BranchTarget::Label(label_jump_over),
+                            not_taken: BranchTarget::zero(),
+                            kind: CondBrKind {
+                                kind: IntCC::NotEqual,
+                                rs1: rd.to_reg(),
+                                rs2: zero_reg(),
+                            },
+                        });
+                    }
+                    // if <
+                    if cc_bit.test(FloatCCBit::LT) {
+                        insts.push(Inst::AluRRR {
+                            alu_op: lt_op,
+                            rd,
+                            rs1,
+                            rs2,
+                        });
+
+                        insts.push(Inst::CondBr {
+                            taken: BranchTarget::Label(label_jump_over),
+                            not_taken: BranchTarget::zero(),
+                            kind: CondBrKind {
+                                kind: IntCC::NotEqual,
+                                rs1: rd.to_reg(),
+                                rs2: zero_reg(),
+                            },
+                        });
+                    }
+
+                    // if gt
+                    if cc_bit.test(FloatCCBit::GT) {
+                        // I have no left > right operation in risc-v instruction set
+                        // first check order
+                        insts.extend(Inst::generate_float_unordered(sink, rd, ty, rs1, rs2));
+                        insts.push(Inst::CondBr {
+                            taken: BranchTarget::Label(label_set_false),
+                            not_taken: BranchTarget::zero(),
+                            kind: CondBrKind {
+                                kind: IntCC::NotEqual, // rd == 1 unordered data
+                                rs1: rd.to_reg(),
+                                rs2: zero_reg(),
+                            },
+                        });
+                        // number is ordered
+                        insts.push(Inst::AluRRR {
+                            alu_op: le_op,
+                            rd,
+                            rs1,
+                            rs2,
+                        });
+
+                        // could be unorder
+                        insts.push(Inst::CondBr {
+                            taken: BranchTarget::Label(label_set_true),
+                            not_taken: BranchTarget::zero(),
+                            kind: CondBrKind {
+                                kind: IntCC::Equal,
+                                rs1: rd.to_reg(),
+                                rs2: zero_reg(),
+                            },
+                        });
+                    }
+                    // if unorder
+                    if cc_bit.test(FloatCCBit::UN) {
+                        insts.extend(Inst::generate_float_unordered(sink, rd, ty, rs1, rs2));
+                        insts.push(Inst::Jal {
+                            dest: BranchTarget::Label(label_jump_over),
+                        });
+                    }
+                    sink.bind_label(label_set_false);
+                    insts.push(Inst::load_constant_imm12(rd, Imm12::form_bool(false)));
+                    insts.push(Inst::Jal {
+                        dest: BranchTarget::offset(Inst::instruction_size()),
+                    });
+                    sink.bind_label(label_set_true);
+                    insts.push(Inst::load_constant_imm12(rd, Imm12::form_bool(true)));
+                    sink.bind_label(label_jump_over);
+                    insts
+                        .into_iter()
+                        .for_each(|inst| inst.emit(allocs, sink, emit_info, state));
                 }
             }
             _ => todo!(),

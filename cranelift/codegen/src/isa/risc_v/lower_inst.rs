@@ -426,60 +426,60 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Select => {
-            assert!(ctx.input_ty(insn, 0).is_bool() || ctx.input_ty(insn, 0).is_int());
-            let dst = ctx.get_output(insn, 0);
-            let mut patch_false = vec![];
-            let ty_access = ty.unwrap();
-            let mut insts = SmallInstVec::new();
+            // assert!(ctx.input_ty(insn, 0).is_bool() || ctx.input_ty(insn, 0).is_int());
+            // let dst = ctx.get_output(insn, 0);
+            // let mut patch_false = vec![];
+            // let ty_access = ty.unwrap();
+            // let mut insts = SmallInstVec::new();
 
-            patch_false.push(insts.len());
-            let conditon_reg = put_input_in_reg(ctx, inputs[0]);
-            insts.push(Inst::CondBr {
-                taken: BranchTarget::patch(),
-                not_taken: BranchTarget::ResolvedOffset(0),
-                kind: CondBrKind {
-                    kind: IntCC::Equal,
-                    rs1: conditon_reg,
-                    rs2: zero_reg(),
-                },
-            });
-            // here is the true
-            // select the first value
-            let mut select_result = |index, insts: &mut SmallInstVec<Inst>| match ty_access.bits() {
-                128 => {
-                    let reg = ctx.put_input_in_regs(insn, index);
-                    insts.push(Inst::Mov {
-                        rd: dst.regs()[0],
-                        rm: reg.regs()[0],
-                        ty: I64,
-                    });
-                    insts.push(Inst::Mov {
-                        rd: dst.regs()[1],
-                        rm: reg.regs()[1],
-                        ty: I64,
-                    });
-                }
-                _ => {
-                    let reg = ctx.put_input_in_regs(insn, 2).only_reg().unwrap();
-                    insts.push(Inst::Mov {
-                        rd: dst.regs()[0],
-                        rm: reg,
-                        ty: ty_access,
-                    });
-                }
-            };
-            let mut patch_true = vec![];
-            insts.push(Inst::Jal {
-                dest: BranchTarget::patch(),
-            });
-            select_result(1, &mut insts);
-            // here is false
-            Inst::patch_taken_path_list(&mut insts, &patch_false);
-            // select second value
-            select_result(2, &mut insts);
+            // patch_false.push(insts.len());
+            // let conditon_reg = put_input_in_reg(ctx, inputs[0]);
+            // insts.push(Inst::CondBr {
+            //     taken: BranchTarget::patch(),
+            //     not_taken: BranchTarget::ResolvedOffset(0),
+            //     kind: CondBrKind {
+            //         kind: IntCC::Equal,
+            //         rs1: conditon_reg,
+            //         rs2: zero_reg(),
+            //     },
+            // });
+            // // here is the true
+            // // select the first value
+            // let mut select_result = |index, insts: &mut SmallInstVec<Inst>| match ty_access.bits() {
+            //     128 => {
+            //         let reg = ctx.put_input_in_regs(insn, index);
+            //         insts.push(Inst::Mov {
+            //             rd: dst.regs()[0],
+            //             rm: reg.regs()[0],
+            //             ty: I64,
+            //         });
+            //         insts.push(Inst::Mov {
+            //             rd: dst.regs()[1],
+            //             rm: reg.regs()[1],
+            //             ty: I64,
+            //         });
+            //     }
+            //     _ => {
+            //         let reg = ctx.put_input_in_regs(insn, 2).only_reg().unwrap();
+            //         insts.push(Inst::Mov {
+            //             rd: dst.regs()[0],
+            //             rm: reg,
+            //             ty: ty_access,
+            //         });
+            //     }
+            // };
+            // let mut patch_true = vec![];
+            // insts.push(Inst::Jal {
+            //     dest: BranchTarget::patch(),
+            // });
+            // select_result(1, &mut insts);
+            // // here is false
+            // Inst::patch_taken_path_list(&mut insts, &patch_false);
+            // // select second value
+            // select_result(2, &mut insts);
 
-            Inst::patch_taken_path_list(&mut insts, &patch_true);
-            insts.into_iter().for_each(|i| ctx.emit(i));
+            // Inst::patch_taken_path_list(&mut insts, &patch_true);
+            // insts.into_iter().for_each(|i| ctx.emit(i));
         }
 
         Opcode::Selectif | Opcode::SelectifSpectreGuard => {}
@@ -527,161 +527,18 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         Opcode::Icmp => {}
 
         Opcode::Fcmp => {
-            //
-            let mut insts = SmallInstVec::new();
-            let left = ctx.put_input_in_regs(insn, 0).only_reg().unwrap();
-            let right = ctx.put_input_in_regs(insn, 1).only_reg().unwrap();
-            let cc = ctx.data(insn).fp_cond_code().unwrap();
-
-            let cc_bit = FloatCCBit::floatcc_2_mask_bits(cc);
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let ty = ctx.input_ty(insn, 0);
-            if ty.is_vector() {
-                panic!("vector float compare is not supported");
-            }
-            let eq_op = if ty == F32 {
-                AluOPRRR::FeqS
-            } else {
-                AluOPRRR::FeqD
-            };
-            let lt_op = if ty == F32 {
-                AluOPRRR::FltS
-            } else {
-                AluOPRRR::FltD
-            };
-            let le_op = if ty == F32 {
-                AluOPRRR::FleS
-            } else {
-                AluOPRRR::FleD
-            };
-
-            {
-                /*
-                    can be implemented by one risc-v instruction.
-                */
-                let x = if cc_bit.just_eq() {
-                    Some(eq_op)
-                } else if cc_bit.just_le() {
-                    Some(le_op)
-                } else if cc_bit.just_lt() {
-                    Some(lt_op)
-                } else {
-                    None
-                };
-                if let Some(op) = x {
-                    insts.push(Inst::AluRRR {
-                        alu_op: op,
-                        rd,
-                        rs1: left,
-                        rs2: right,
-                    });
-                    insts.into_iter().for_each(|inst| ctx.emit(inst));
-                    return CodegenResult::Ok(());
-                }
-            }
-
-            let mut patch_set_false: Vec<usize> = vec![];
-            let mut patch_set_true: Vec<usize> = vec![];
-            let mut patch_jump_over: Vec<usize> = vec![];
-            // if eq
-            if cc_bit.test(FloatCCBit::EQ) {
-                insts.push(Inst::AluRRR {
-                    alu_op: eq_op,
-                    rd,
-                    rs1: left,
-                    rs2: right,
-                });
-
-                patch_jump_over.push(insts.len());
-                insts.push(Inst::CondBr {
-                    taken: BranchTarget::patch(),
-                    not_taken: BranchTarget::zero(),
-                    kind: CondBrKind {
-                        kind: IntCC::NotEqual,
-                        rs1: rd.to_reg(),
-                        rs2: zero_reg(),
-                    },
-                });
-            }
-            // if <
-            if cc_bit.test(FloatCCBit::LT) {
-                insts.push(Inst::AluRRR {
-                    alu_op: lt_op,
-                    rd,
-                    rs1: left,
-                    rs2: right,
-                });
-                patch_jump_over.push(insts.len());
-                insts.push(Inst::CondBr {
-                    taken: BranchTarget::patch(),
-                    not_taken: BranchTarget::zero(),
-                    kind: CondBrKind {
-                        kind: IntCC::NotEqual,
-                        rs1: rd.to_reg(),
-                        rs2: zero_reg(),
-                    },
-                });
-            }
-            // if gt
-            if cc_bit.test(FloatCCBit::GT) {
-                // I have no left > right operation in risc-v instruction set
-                // first check order
-                insts.extend(Inst::generate_float_unordered(rd, ty, left, right));
-                patch_set_false.push(insts.len());
-                insts.push(Inst::CondBr {
-                    taken: BranchTarget::patch(),
-                    not_taken: BranchTarget::zero(),
-                    kind: CondBrKind {
-                        kind: IntCC::NotEqual, // rd == 1 unordered data
-                        rs1: rd.to_reg(),
-                        rs2: zero_reg(),
-                    },
-                });
-                // number is ordered
-                insts.push(Inst::AluRRR {
-                    alu_op: le_op,
-                    rd,
-                    rs1: left,
-                    rs2: right,
-                });
-                patch_set_true.push(insts.len());
-                // could be unorder
-                insts.push(Inst::CondBr {
-                    taken: BranchTarget::patch(),
-                    not_taken: BranchTarget::zero(),
-                    kind: CondBrKind {
-                        kind: IntCC::Equal,
-                        rs1: rd.to_reg(),
-                        rs2: zero_reg(),
-                    },
-                });
-            }
-            // if unorder
-            if cc_bit.test(FloatCCBit::UN) {
-                insts.extend(Inst::generate_float_unordered(rd, ty, left, right));
-                patch_jump_over.push(insts.len());
-                insts.push(Inst::Jal {
-                    dest: BranchTarget::patch(),
-                });
-            }
-
-            Inst::patch_taken_path_list(&mut insts, &patch_set_false);
-            // here is false
-            insts.push(Inst::load_constant_imm12(rd, Imm12::form_bool(false)));
-            if patch_set_true.len() > 0 {
-                // jump over the next set value.
-                insts.push(Inst::Jal {
-                    dest: BranchTarget::offset(Inst::instruction_size() as i32),
-                })
-            }
-            // here is true , jump here and set value is true.
-            if patch_set_true.len() > 0 {
-                Inst::patch_taken_path_list(&mut insts, &patch_set_true);
-                insts.push(Inst::load_constant_imm12(rd, Imm12::form_bool(true)));
-            }
-            // jump here , rd is already set to true , nothing need to be done.
-            Inst::patch_taken_path_list(&mut insts, &patch_jump_over);
-            insts.into_iter().for_each(|inst| ctx.emit(inst));
+            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+            let rs1 = put_input_in_reg(ctx, inputs[0]);
+            let rs2 = put_input_in_reg(ctx, inputs[1]);
+            let cc = ctx.data(insn).fp_cond_code().unwrap();
+            ctx.emit(Inst::Ffcmp {
+                rd,
+                cc,
+                ty,
+                rs1,
+                rs2,
+            });
         }
 
         Opcode::Debugtrap => {}
@@ -708,7 +565,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::SetPinnedReg => {}
 
-        Opcode::Jal
+        Opcode::Jump
         | Opcode::Brz
         | Opcode::Brnz
         | Opcode::BrIcmp
@@ -905,7 +762,7 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
         let op0 = ctx.data(branches[0]).clone();
         let op1 = ctx.data(branches[1]).clone();
 
-        assert!(op1.opcode() == Opcode::Jal);
+        assert!(op1.opcode() == Opcode::Jump);
         let taken = BranchTarget::Label(targets[0]);
         // not_taken target is the target of the second branch, even if it is a Fallthrough
         // instruction: because we reorder blocks while we lower, the fallthrough in the new
@@ -971,7 +828,7 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
         // Must be an unconditional branch or an indirect branch.
         let op = ctx.data(branches[0]).opcode();
         match op {
-            Opcode::Jal => {
+            Opcode::Jump => {
                 assert!(branches.len() == 1);
                 ctx.emit(Inst::Jal {
                     dest: BranchTarget::Label(targets[0]),
