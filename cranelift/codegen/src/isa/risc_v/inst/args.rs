@@ -1071,6 +1071,12 @@ impl FloatCCBit {
 }
 
 impl AtomicOP {
+    pub(crate) fn is_load(self) -> bool {
+        match self {
+            Self::LrW | Self::ScW => true,
+            _ => false,
+        }
+    }
     pub(crate) fn op_name(self) -> &'static str {
         match self {
             Self::LrW => "lr.w",

@@ -58,10 +58,11 @@ pub fn stacklimit_reg() -> Reg {
 
 /*
 
+used when more register in code emiting.
+this should not include special purpose register such as fp sp etc.
 */
-pub fn bunch_of_registers() -> Vec<Writable<Reg>> {
+pub fn bunch_of_normal_registers() -> Vec<Writable<Reg>> {
     let mut v = vec![];
-
     /*
         s2 --------> s11
     */

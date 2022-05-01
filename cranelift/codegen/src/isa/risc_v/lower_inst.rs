@@ -289,71 +289,72 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::AtomicRmw => {
-            // let r_dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            // let mut r_addr = ctx.put_input_in_regs(insn, 0).only_reg().unwrap();
-            // let mut arg2 = ctx.put_input_in_regs(insn, 1).only_reg().unwrap();
-            // let ty_access = ty.unwrap();
-            // assert!(is_valid_atomic_transaction_ty(ty_access));
-            // let op = ctx.data(insn).atomic_rmw_op().unwrap();
-            // let mut insts = SmallInstVec::new();
-            // let risc_op = AtomicOP::from_atomicrmw_type_and_op(ty_access, op);
-            // match op {
-            //     // special cases
-            //     // sub will use add atomic instruction
-            //     // AtomicRmwOp::Sub => {
-            //     //     insts.push(Inst::AluRRR {
-            //     //         alu_op: AluOPRRR::Sub,
-            //     //         rd: Writable::from_reg(arg2),
-            //     //         rs1: zero_reg(),
-            //     //         rs2: arg2,
-            //     //     });
-            //     //     insts.push(Inst::AluRRR {
-            //     //         alu_op: AluOPRRR::Sub,
-            //     //         rd: Writable::from_reg(arg2),
-            //     //         rs1: zero_reg(),
-            //     //         rs2: arg2,
-            //     //     });
-            //     // }
-            //     // AtomicRmwOp::Nand => {
-            //     //     /*
-            //     //     a = !(a&b);
-            //     //     equals a = (!a)  | (!b)
-            //     //     here are truth table.
-            //     //         a = !(a&b);
-            //     //         A	B	Y
-            //     //         0	0	1
-            //     //         0	1	1
-            //     //         1	0	1
-            //     //         1	1	0
+            let r_dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+            let mut r_addr = ctx.put_input_in_regs(insn, 0).only_reg().unwrap();
+            let mut arg2 = ctx.put_input_in_regs(insn, 1).only_reg().unwrap();
+            let ty_access = ty.unwrap();
+            assert!(is_valid_atomic_transaction_ty(ty_access));
+            let op = ctx.data(insn).atomic_rmw_op().unwrap();
+            let mut insts = SmallInstVec::new();
+            let risc_op = AtomicOP::from_atomicrmw_type_and_op(ty_access, op);
+            match op {
+                // special cases
+                // sub will use add atomic instruction
+                crate::ir::AtomicRmwOp::Sub => {
+                    insts.push(Inst::AluRRR {
+                        alu_op: AluOPRRR::Sub,
+                        rd: Writable::from_reg(arg2),
+                        rs1: zero_reg(),
+                        rs2: arg2,
+                    });
+                    insts.push(Inst::AluRRR {
+                        alu_op: AluOPRRR::Sub,
+                        rd: Writable::from_reg(arg2),
+                        rs1: zero_reg(),
+                        rs2: arg2,
+                    });
+                }
+                // AtomicRmwOp::Nand => {
+                //     /*
+                //     a = !(a&b);
+                //     equals a = (!a)  | (!b)
+                //     here are truth table.
+                //         a = !(a&b);
+                //         A	B	Y
+                //         0	0	1
+                //         0	1	1
+                //         1	0	1
+                //         1	1	0
 
-            //     //         a = (!a)  | (!b)
-            //     //         A	B	Y
-            //     //         0	0	1
-            //     //         0	1	1
-            //     //         1	0	1
-            //     //         1	1	0
-            //     //              */
+                //         a = (!a)  | (!b)
+                //         A	B	Y
+                //         0	0	1
+                //         0	1	1
+                //         1	0	1
+                //         1	1	0
+                //              */
 
-            //     //     //
-            //     //     unimplemented!("nand not implemented.")
-            //     // }
-            //     _ => unreachable!(),
-            // }
-            // insts.push(Inst::Atomic {
-            //     op: risc_op,
-            //     rd: r_dst,
-            //     addr: r_addr,
-            //     src: arg2,
-            //     /*
-            //     todo::
-            //         where are the memory order parameter??
-            //     */
-            //     aq: false,
-            //     rl: false,
-            // });
-            // for i in insts {
-            //     ctx.emit(i);
-            // }
+                //     //
+                //     unimplemented!("nand not implemented.")
+                // }
+                // handled
+                _ => {}
+            }
+            insts.push(Inst::Atomic {
+                op: risc_op,
+                rd: r_dst,
+                addr: r_addr,
+                src: arg2,
+                /*
+                todo::
+                    where are the memory order parameter??
+                */
+                aq: false,
+                rl: false,
+            });
+            for i in insts {
+                ctx.emit(i);
+            }
         }
 
         Opcode::AtomicCas => {
@@ -368,7 +369,6 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         Opcode::AtomicLoad => {
             let r_dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let r_addr = ctx.put_input_in_regs(insn, 0).only_reg().unwrap();
-            let arg2 = ctx.put_input_in_regs(insn, 1).only_reg().unwrap();
             let ty_access = ty.unwrap();
             assert!(is_valid_atomic_transaction_ty(ty_access));
             ctx.emit(Inst::Atomic {
@@ -379,7 +379,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 },
                 rd: r_dst,
                 addr: r_addr,
-                src: arg2,
+                src: zero_reg(),
                 aq: false,
                 rl: false,
             });

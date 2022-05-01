@@ -859,7 +859,31 @@ impl Inst {
                     not_taken,
                 )
             }
-            &MInst::Atomic { .. } => todo!(),
+            &MInst::Atomic {
+                op,
+                rd,
+                addr,
+                src,
+                aq,
+                rl,
+            } => {
+                if op.is_load() {
+                    format!(
+                        "{} {},{}",
+                        op.op_name(),
+                        register_name(rd.to_reg()),
+                        register_name(addr)
+                    )
+                } else {
+                    format!(
+                        "{} {},{},{}",
+                        op.op_name(),
+                        register_name(rd.to_reg()),
+                        register_name(addr),
+                        register_name(src),
+                    )
+                }
+            }
             &MInst::LoadExtName { .. } => todo!(),
             &MInst::LoadAddr { .. } => todo!(),
             &MInst::VirtualSPOffsetAdj { .. } => todo!(),

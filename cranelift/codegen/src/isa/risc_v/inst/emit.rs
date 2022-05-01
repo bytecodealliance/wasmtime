@@ -94,7 +94,7 @@ impl Inst {
     */
     fn alloc_registers(amount: u8) -> Vec<Writable<Reg>> {
         let mut v = vec![];
-        let available = bunch_of_registers();
+        let available = bunch_of_normal_registers();
         debug_assert!(amount <= available.len() as u8);
         for r in available {
             v.push(r);
@@ -558,6 +558,9 @@ impl MachInstEmit for Inst {
                 aq,
                 rl,
             } => {
+                let rd = mapper_to_real.next_writable(rd);
+                let addr = mapper_to_real.next(addr);
+                let src = mapper_to_real.next(src);
                 let x = op.op_code()
                     | machreg_to_gpr_num(rd.to_reg()) << 7
                     | op.funct3() << 12

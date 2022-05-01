@@ -3,6 +3,8 @@
 use crate::ir::condcodes::IntCC;
 use crate::ir::Function;
 use crate::ir::MemFlags;
+use crate::ir::{StackSlotData, StackSlotKind};
+
 use crate::isa::risc_v::settings as riscv_settings;
 use crate::isa::{Builder as IsaBuilder, TargetIsa};
 use crate::machinst::{
@@ -187,8 +189,6 @@ pub fn init_logger() {
 
 #[cfg(test)]
 mod test {
-    use std::io;
-
     use super::*;
     use crate::cursor::{Cursor, FuncCursor};
     use crate::ir::condcodes::FloatCC;
@@ -197,6 +197,7 @@ mod test {
     use crate::isa::CallConv;
     use crate::settings;
     use crate::settings::Configurable;
+    use std::io;
 
     #[test]
     fn hello_world() {
@@ -209,6 +210,10 @@ mod test {
         sig.returns.push(AbiParam::new(I32));
 
         let mut func = Function::with_name_signature(name, sig);
+        func.create_stack_slot(StackSlotData {
+            kind: StackSlotKind::ExplicitSlot,
+            size: 10 * 1024 * 1024,
+        });
         let bb0 = func.dfg.make_block();
         let arg0 = func.dfg.append_block_param(bb0, I32);
         let arg1 = func.dfg.append_block_param(bb0, I32);
@@ -217,6 +222,7 @@ mod test {
         let v1 = pos.ins().iadd(arg0, arg1);
         let v2 = pos.ins().iconst(I32, 100);
         let v3 = pos.ins().iadd(v1, v2);
+
         pos.ins().return_(&[v1, v3]);
         let mut shared_flags_builder = settings::builder();
         shared_flags_builder.set("opt_level", "none").unwrap();
@@ -257,6 +263,7 @@ mod test {
         let v2 = pos.ins().iconst(I32, 2);
         let _v3 = pos.ins().load(I32, MemFlags::new(), v2, 100);
         pos.ins().store(MemFlags::new(), _v3, v2, 200);
+        pos.ins().atomic_load(I32, MemFlags::new(), v2);
         pos.ins().return_(&[v2]);
 
         let mut shared_flags_builder = settings::builder();
