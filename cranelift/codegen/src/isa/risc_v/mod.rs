@@ -298,10 +298,16 @@ mod test {
         let bb2 = func.dfg.make_block();
         let arg0 = func.dfg.append_block_param(bb0, F32);
         let arg1 = func.dfg.append_block_param(bb0, F32);
+
         let mut pos = FuncCursor::new(&mut func);
         pos.insert_block(bb0);
 
         let v1 = pos.ins().fcmp(FloatCC::LessThan, arg0, arg1);
+        let v2 = pos.ins().iconst(I128, 1);
+        let v3 = pos.ins().iconst(I128, 1);
+        let v4 = pos.ins().select(v1, v2, v3);
+        pos.ins().atomic_store(MemFlags::new(), v4, v2);
+
         pos.ins().brnz(v1, bb1, &[]);
         pos.ins().jump(bb2, &[]);
 
@@ -309,6 +315,7 @@ mod test {
         pos.ins().return_(&[arg0]);
 
         pos.insert_block(bb2);
+
         pos.ins().return_(&[arg1]);
 
         let mut shared_flags_builder = settings::builder();

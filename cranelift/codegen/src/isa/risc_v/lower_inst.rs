@@ -359,9 +359,9 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::AtomicCas => {
             let r_dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let mut r_addr = ctx.put_input_in_regs(insn, 0).only_reg().unwrap();
-            let mut r_expected = ctx.put_input_in_regs(insn, 1).only_reg().unwrap();
-            let mut r_replacement = ctx.put_input_in_regs(insn, 2).only_reg().unwrap();
+            let r_addr = ctx.put_input_in_regs(insn, 0).only_reg().unwrap();
+            let r_expected = ctx.put_input_in_regs(insn, 1).only_reg().unwrap();
+            let r_replacement = ctx.put_input_in_regs(insn, 2).only_reg().unwrap();
             let ty_access = ty.unwrap();
             assert!(is_valid_atomic_transaction_ty(ty_access));
         }
@@ -425,7 +425,62 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             // Nothing.
         }
 
-        Opcode::Select => {}
+        Opcode::Select => {
+            assert!(ctx.input_ty(insn, 0).is_bool() || ctx.input_ty(insn, 0).is_int());
+            let dst = ctx.get_output(insn, 0);
+            let mut patch_false = vec![];
+            let ty_access = ty.unwrap();
+            let mut insts = SmallInstVec::new();
+
+            patch_false.push(insts.len());
+            let conditon_reg = put_input_in_reg(ctx, inputs[0]);
+            insts.push(Inst::CondBr {
+                taken: BranchTarget::patch(),
+                not_taken: BranchTarget::ResolvedOffset(0),
+                kind: CondBrKind {
+                    kind: IntCC::Equal,
+                    rs1: conditon_reg,
+                    rs2: zero_reg(),
+                },
+            });
+            // here is the true
+            // select the first value
+            let mut select_result = |index, insts: &mut SmallInstVec<Inst>| match ty_access.bits() {
+                128 => {
+                    let reg = ctx.put_input_in_regs(insn, index);
+                    insts.push(Inst::Mov {
+                        rd: dst.regs()[0],
+                        rm: reg.regs()[0],
+                        ty: I64,
+                    });
+                    insts.push(Inst::Mov {
+                        rd: dst.regs()[1],
+                        rm: reg.regs()[1],
+                        ty: I64,
+                    });
+                }
+                _ => {
+                    let reg = ctx.put_input_in_regs(insn, 2).only_reg().unwrap();
+                    insts.push(Inst::Mov {
+                        rd: dst.regs()[0],
+                        rm: reg,
+                        ty: ty_access,
+                    });
+                }
+            };
+            let mut patch_true = vec![];
+            insts.push(Inst::Jal {
+                dest: BranchTarget::patch(),
+            });
+            select_result(1, &mut insts);
+            // here is false
+            Inst::patch_taken_path_list(&mut insts, &patch_false);
+            // select second value
+            select_result(2, &mut insts);
+
+            Inst::patch_taken_path_list(&mut insts, &patch_true);
+            insts.into_iter().for_each(|i| ctx.emit(i));
+        }
 
         Opcode::Selectif | Opcode::SelectifSpectreGuard => {}
 
@@ -477,6 +532,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let left = ctx.put_input_in_regs(insn, 0).only_reg().unwrap();
             let right = ctx.put_input_in_regs(insn, 1).only_reg().unwrap();
             let cc = ctx.data(insn).fp_cond_code().unwrap();
+
             let cc_bit = FloatCCBit::floatcc_2_mask_bits(cc);
             let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let ty = ctx.input_ty(insn, 0);
@@ -604,7 +660,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             if cc_bit.test(FloatCCBit::UN) {
                 insts.extend(Inst::generate_float_unordered(rd, ty, left, right));
                 patch_jump_over.push(insts.len());
-                insts.push(Inst::Jump {
+                insts.push(Inst::Jal {
                     dest: BranchTarget::patch(),
                 });
             }
@@ -614,7 +670,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             insts.push(Inst::load_constant_imm12(rd, Imm12::form_bool(false)));
             if patch_set_true.len() > 0 {
                 // jump over the next set value.
-                insts.push(Inst::Jump {
+                insts.push(Inst::Jal {
                     dest: BranchTarget::offset(Inst::instruction_size() as i32),
                 })
             }
@@ -652,7 +708,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::SetPinnedReg => {}
 
-        Opcode::Jump
+        Opcode::Jal
         | Opcode::Brz
         | Opcode::Brnz
         | Opcode::BrIcmp
@@ -849,7 +905,7 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
         let op0 = ctx.data(branches[0]).clone();
         let op1 = ctx.data(branches[1]).clone();
 
-        assert!(op1.opcode() == Opcode::Jump);
+        assert!(op1.opcode() == Opcode::Jal);
         let taken = BranchTarget::Label(targets[0]);
         // not_taken target is the target of the second branch, even if it is a Fallthrough
         // instruction: because we reorder blocks while we lower, the fallthrough in the new
@@ -915,9 +971,9 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
         // Must be an unconditional branch or an indirect branch.
         let op = ctx.data(branches[0]).opcode();
         match op {
-            Opcode::Jump => {
+            Opcode::Jal => {
                 assert!(branches.len() == 1);
-                ctx.emit(Inst::Jump {
+                ctx.emit(Inst::Jal {
                     dest: BranchTarget::Label(targets[0]),
                 });
             }
@@ -1117,7 +1173,7 @@ mod test {
 //     }
 
 //     jump_to_final_compare = insts.len();
-//     insts.push(Inst::Jump {
+//     insts.push(Inst::Jal {
 //         dest: BranchTarget::patch(),
 //     });
 // };

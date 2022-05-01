@@ -417,7 +417,7 @@ impl MachInstEmit for Inst {
             &Inst::Trap { trap_code } => {
                 unimplemented!("what is the trap code\n");
             }
-            &Inst::Jump { dest } => {
+            &Inst::Jal { dest } => {
                 let code: u32 = (0b1101111) | (0 << 12);
                 match dest {
                     BranchTarget::Label(lable) => {
@@ -477,7 +477,7 @@ impl MachInstEmit for Inst {
                         }
                     }
                 }
-                Inst::Jump { dest: not_taken }.emit(allocs, sink, emit_info, state);
+                Inst::Jal { dest: not_taken }.emit(allocs, sink, emit_info, state);
             }
 
             &Inst::Mov { rd, rm, ty } => {

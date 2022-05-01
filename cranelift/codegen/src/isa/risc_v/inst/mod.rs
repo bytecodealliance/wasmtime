@@ -245,7 +245,7 @@ impl Inst {
         // here is false
         insts.push(Inst::load_constant_imm12(rd, Imm12::form_bool(false)));
         // jump set true
-        insts.push(Inst::Jump {
+        insts.push(Inst::Jal {
             dest: BranchTarget::offset(Inst::instruction_size() as i32),
         });
 
@@ -270,7 +270,7 @@ impl Inst {
                     &mut BranchTarget::Patch => *taken = BranchTarget::ResolvedOffset(real_off),
                     _ => unreachable!(),
                 },
-                &mut Inst::Jump { ref mut dest } => match dest {
+                &mut Inst::Jal { ref mut dest } => match dest {
                     &mut BranchTarget::Patch => *dest = BranchTarget::ResolvedOffset(real_off),
                     _ => unreachable!(),
                 },
@@ -467,7 +467,7 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_use(rs2);
         }
         &Inst::Trap { .. } => {}
-        &Inst::Jump { .. } => {}
+        &Inst::Jal { .. } => {}
         &Inst::CondBr { kind, .. } => {
             collector.reg_use(kind.rs1);
             collector.reg_use(kind.rs2);
@@ -564,7 +564,7 @@ impl MachInst for Inst {
             todo more
         */
         match self {
-            &Inst::Jump { dest } => {
+            &Inst::Jal { dest } => {
                 let dest = dest.as_label();
                 if dest.is_some() {
                     MachTerminator::Uncond
@@ -649,7 +649,7 @@ impl MachInst for Inst {
     }
 
     fn gen_jump(target: MachLabel) -> Inst {
-        Inst::Jump {
+        Inst::Jal {
             dest: BranchTarget::Label(target),
         }
     }
@@ -840,8 +840,8 @@ impl Inst {
             &MInst::CallInd { .. } => todo!(),
             &MInst::TrapIf { .. } => todo!(),
             &MInst::Trap { .. } => todo!(),
-            &MInst::Jump { dest } => {
-                format!("{} {}", "jal", format!("{:?}", dest))
+            &MInst::Jal { dest } => {
+                format!("{} {}", "Jal", format!("{:?}", dest))
             }
             &MInst::CondBr {
                 taken,
@@ -930,7 +930,7 @@ impl Inst {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LabelUse {
     /// 20-bit branch offset (unconditional branches). PC-rel, offset is imm << 1. Immediate is 20
-    /// signed bits. use in jal
+    /// signed bits. use in Jal
     Jal20,
 
     /*

@@ -212,7 +212,7 @@ pub enum MInst {
     Trap {
         trap_code: TrapCode,
     },
-    Jump {
+    Jal {
         dest: BranchTarget,
     },
     CondBr {
