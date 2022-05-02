@@ -331,6 +331,7 @@ impl Engine {
             // the module itself, so their configuration values shouldn't
             // matter.
             "enable_heap_access_spectre_mitigation"
+            | "enable_table_access_spectre_mitigation"
             | "enable_nan_canonicalization"
             | "enable_jump_tables"
             | "enable_float"

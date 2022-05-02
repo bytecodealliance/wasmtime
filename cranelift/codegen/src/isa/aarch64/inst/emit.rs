@@ -2876,6 +2876,7 @@ impl MachInstEmit for Inst {
                     CondBrKind::Cond(Cond::Hs),
                     &mut AllocationConsumer::default(),
                 );
+
                 // No need to inform the sink's branch folding logic about this branch, because it
                 // will not be merged with any other branch, flipped, or elided (it is not preceded
                 // or succeeded by any other branch). Just emit it with the label use.
@@ -2885,10 +2886,17 @@ impl MachInstEmit for Inst {
                 }
                 sink.put4(br);
 
-                // Save index in a tmp (the live range of ridx only goes to start of this
-                // sequence; rtmp1 or rtmp2 may overwrite it).
-                let inst = Inst::gen_move(rtmp2, ridx, I64);
+                // Overwrite the index with a zero when the above
+                // branch misspeculates (Spectre mitigation). Save the
+                // resulting index in rtmp2.
+                let inst = Inst::CSel {
+                    rd: rtmp2,
+                    cond: Cond::Hs,
+                    rn: zero_reg(),
+                    rm: ridx,
+                };
                 inst.emit(&[], sink, emit_info, state);
+
                 // Load address of jump table
                 let inst = Inst::Adr { rd: rtmp1, off: 16 };
                 inst.emit(&[], sink, emit_info, state);

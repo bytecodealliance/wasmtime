@@ -305,5 +305,22 @@ pub(crate) fn define() -> SettingGroup {
         true,
     );
 
+    settings.add_bool(
+        "enable_table_access_spectre_mitigation",
+        "Enable Spectre mitigation on table bounds checks.",
+        r#"
+            This option uses a conditional move to ensure that when a table
+            access index is bounds-checked and a conditional branch is used
+            for the out-of-bounds case, a misspeculation of that conditional
+            branch (falsely predicted in-bounds) will select an in-bounds
+            index to load on the speculative path.
+            
+            This option is enabled by default because it is highly
+            recommended for secure sandboxing. The embedder should consider
+            the security implications carefully before disabling this option.
+        "#,
+        true,
+    );
+
     settings.build()
 }

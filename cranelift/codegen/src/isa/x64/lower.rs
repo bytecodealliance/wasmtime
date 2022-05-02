@@ -3411,16 +3411,6 @@ impl LowerBackend for X64Backend {
                         ext_spec,
                     );
 
-                    // Bounds-check (compute flags from idx - jt_size) and branch to default.
-                    // We only support u32::MAX entries, but we compare the full 64 bit register
-                    // when doing the bounds check.
-                    let cmp_size = if ty == types::I64 {
-                        OperandSize::Size64
-                    } else {
-                        OperandSize::Size32
-                    };
-                    ctx.emit(Inst::cmp_rmi_r(cmp_size, RegMemImm::imm(jt_size), idx));
-
                     // Emit the compound instruction that does:
                     //
                     // lea $jt, %rA
@@ -3442,6 +3432,23 @@ impl LowerBackend for X64Backend {
                     // is benign, since the temporary is dead after this instruction (and its
                     // Cranelift type is thus unused).
                     let tmp2 = ctx.alloc_tmp(types::I64).only_reg().unwrap();
+
+                    // Put a zero in tmp1. This is needed for Spectre
+                    // mitigations (a CMOV that zeroes the index on
+                    // misspeculation).
+                    let inst = Inst::imm(OperandSize::Size64, 0, tmp1);
+                    ctx.emit(inst);
+
+                    // Bounds-check (compute flags from idx - jt_size)
+                    // and branch to default.  We only support
+                    // u32::MAX entries, but we compare the full 64
+                    // bit register when doing the bounds check.
+                    let cmp_size = if ty == types::I64 {
+                        OperandSize::Size64
+                    } else {
+                        OperandSize::Size32
+                    };
+                    ctx.emit(Inst::cmp_rmi_r(cmp_size, RegMemImm::imm(jt_size), idx));
 
                     let targets_for_term: Vec<MachLabel> = targets.to_vec();
                     let default_target = targets[0];
