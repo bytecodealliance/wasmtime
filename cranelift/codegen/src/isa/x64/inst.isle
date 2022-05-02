@@ -851,7 +851,7 @@
 ;;   `invalid_reg` (the initial `Amode` above), we can put the new
 ;;   addend into a register and insert it into the `ImmReg`.
 ;;
-;; - Case 2: When we hvae an `ImmReg` with a valid register already,
+;; - Case 2: When we have an `ImmReg` with a valid register already,
 ;;   and we have another register to add, we can transition to an
 ;;   `ImmRegRegShift`.
 ;;
