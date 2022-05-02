@@ -486,9 +486,9 @@ where
     }
 
     #[inline]
-    fn same_reg(&mut self, src: Reg, dst: WritableReg) -> Option<()> {
+    fn same_reg(&mut self, dst: WritableReg, src: Reg) -> Option<Reg> {
         if dst.to_reg() == src {
-            Some(())
+            Some(src)
         } else {
             None
         }

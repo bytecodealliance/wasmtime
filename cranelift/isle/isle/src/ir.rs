@@ -387,12 +387,6 @@ impl PatternSequence {
                         let arg_tys = &termdata.arg_tys[..];
                         for (i, subpat) in args.iter().enumerate() {
                             let value = self.add_arg(i, arg_tys[i]);
-                            let subpat = match subpat {
-                                &TermArgPattern::Expr(..) => {
-                                    panic!("Should have been caught in typechecking")
-                                }
-                                &TermArgPattern::Pattern(ref pat) => pat,
-                            };
                             self.gen_pattern(
                                 ValueOrArgs::Value(value),
                                 typeenv,
@@ -411,10 +405,6 @@ impl PatternSequence {
                                 let arg_values =
                                     self.add_match_variant(input, ty, arg_tys, *variant);
                                 for (subpat, value) in args.iter().zip(arg_values.into_iter()) {
-                                    let subpat = match subpat {
-                                        &TermArgPattern::Pattern(ref pat) => pat,
-                                        _ => unreachable!("Should have been caught by sema"),
-                                    };
                                     self.gen_pattern(
                                         ValueOrArgs::Value(value),
                                         typeenv,
@@ -438,11 +428,7 @@ impl PatternSequence {
                             }
                             TermKind::Decl {
                                 extractor_kind:
-                                    Some(ExtractorKind::ExternalExtractor {
-                                        ref arg_polarity,
-                                        infallible,
-                                        ..
-                                    }),
+                                    Some(ExtractorKind::ExternalExtractor { infallible, .. }),
                                 ..
                             } => {
                                 // Evaluate all `input` args.
@@ -452,33 +438,9 @@ impl PatternSequence {
                                 let mut output_pats = vec![];
                                 inputs.push(input);
                                 input_tys.push(termdata.ret_ty);
-                                for (arg, pol) in args.iter().zip(arg_polarity.iter()) {
-                                    match pol {
-                                        &ArgPolarity::Input => {
-                                            let expr = match arg {
-                                                &TermArgPattern::Expr(ref expr) => expr,
-                                                _ => panic!(
-                                                    "Should have been caught by typechecking"
-                                                ),
-                                            };
-                                            let mut seq = ExprSequence::default();
-                                            let value = seq.gen_expr(typeenv, termenv, expr, vars);
-                                            seq.add_return(expr.ty(), value);
-                                            let value = self.add_expr_seq(seq, value, expr.ty());
-                                            inputs.push(value);
-                                            input_tys.push(expr.ty());
-                                        }
-                                        &ArgPolarity::Output => {
-                                            let pat = match arg {
-                                                &TermArgPattern::Pattern(ref pat) => pat,
-                                                _ => panic!(
-                                                    "Should have been caught by typechecking"
-                                                ),
-                                            };
-                                            output_tys.push(pat.ty());
-                                            output_pats.push(pat);
-                                        }
-                                    }
+                                for arg in args {
+                                    output_tys.push(arg.ty());
+                                    output_pats.push(arg);
                                 }
 
                                 // Invoke the extractor.

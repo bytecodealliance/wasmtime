@@ -268,16 +268,12 @@ pub enum ExtractorKind {
     ExternalExtractor {
         /// The external name of the extractor function.
         name: Sym,
-        /// Which arguments of the extractor are inputs and which are outputs?
-        arg_polarity: Vec<ArgPolarity>,
         /// Is the external extractor infallible?
         infallible: bool,
         /// The position where this external extractor was declared.
         pos: Pos,
     },
 }
-
-pub use crate::ast::ArgPolarity;
 
 /// An external function signature.
 #[derive(Clone, Debug)]
@@ -357,34 +353,16 @@ impl Term {
             TermKind::Decl {
                 extractor_kind:
                     Some(ExtractorKind::ExternalExtractor {
-                        name,
-                        ref arg_polarity,
-                        infallible,
-                        ..
+                        name, infallible, ..
                     }),
                 ..
-            } => {
-                let mut arg_tys = vec![];
-                let mut ret_tys = vec![];
-                arg_tys.push(self.ret_ty);
-                for (&arg, polarity) in self.arg_tys.iter().zip(arg_polarity.iter()) {
-                    match polarity {
-                        &ArgPolarity::Input => {
-                            arg_tys.push(arg);
-                        }
-                        &ArgPolarity::Output => {
-                            ret_tys.push(arg);
-                        }
-                    }
-                }
-                Some(ExternalSig {
-                    func_name: tyenv.syms[name.index()].clone(),
-                    full_name: format!("C::{}", tyenv.syms[name.index()]),
-                    param_tys: arg_tys,
-                    ret_tys,
-                    infallible: *infallible,
-                })
-            }
+            } => Some(ExternalSig {
+                func_name: tyenv.syms[name.index()].clone(),
+                full_name: format!("C::{}", tyenv.syms[name.index()]),
+                param_tys: vec![self.ret_ty],
+                ret_tys: self.arg_tys.clone(),
+                infallible: *infallible,
+            }),
             _ => None,
         }
     }
@@ -477,22 +455,13 @@ pub enum Pattern {
 
     /// Match the current value against the given extractor term with the given
     /// arguments.
-    Term(TypeId, TermId, Vec<TermArgPattern>),
+    Term(TypeId, TermId, Vec<Pattern>),
 
     /// Match anything of the given type successfully.
     Wildcard(TypeId),
 
     /// Match all of the following patterns of the given type.
     And(TypeId, Vec<Pattern>),
-}
-
-/// Arguments to a term inside a pattern (i.e. an extractor).
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum TermArgPattern {
-    /// A pattern to match sub-values (i.e. the extractor's results) against.
-    Pattern(Pattern),
-    /// An expression to generate a value that is passed into the extractor.
-    Expr(Expr),
 }
 
 /// A right-hand side expression of some rule.
@@ -1248,7 +1217,6 @@ impl TermEnv {
                     ref term,
                     ref func,
                     pos,
-                    ref arg_polarity,
                     infallible,
                 }) => {
                     let term_sym = tyenv.intern_mut(term);
@@ -1266,22 +1234,11 @@ impl TermEnv {
 
                     let termdata = &mut self.terms[term_id.index()];
 
-                    let arg_polarity = if let Some(pol) = arg_polarity.as_ref() {
-                        if pol.len() != termdata.arg_tys.len() {
-                            tyenv.report_error(pos, "Incorrect number of argument-polarity directions in extractor definition".to_string());
-                            continue;
-                        }
-                        pol.clone()
-                    } else {
-                        vec![ArgPolarity::Output; termdata.arg_tys.len()]
-                    };
-
                     match &mut termdata.kind {
                         TermKind::Decl { extractor_kind, .. } => match extractor_kind {
                             None => {
                                 *extractor_kind = Some(ExtractorKind::ExternalExtractor {
                                     name: func_sym,
-                                    arg_polarity,
                                     infallible,
                                     pos,
                                 });
@@ -1476,7 +1433,7 @@ impl TermEnv {
                 let expanded_pattern = ast::Pattern::Term {
                     sym: converter_term_ident,
                     pos: pattern.pos(),
-                    args: vec![ast::TermArgPattern::Pattern(pattern.clone())],
+                    args: vec![pattern.clone()],
                 };
 
                 return Some(expanded_pattern);
@@ -1712,63 +1669,12 @@ impl TermEnv {
                     TermKind::Decl {
                         constructor_kind: Some(ConstructorKind::InternalConstructor),
                         ..
-                    } if is_root && *tid == rule_term => {
-                        // This is just the `(foo ...)` pseudo-pattern inside a
-                        // `(rule (foo ...) ...)` form. Just keep checking the
-                        // sub-patterns.
-                        for arg in args {
-                            if let ast::TermArgPattern::Expr(e) = arg {
-                                tyenv.report_error(
-                                    e.pos(),
-                                    "cannot use output-polarity expression with top-level rules"
-                                        .to_string(),
-                                );
-                            }
-                        }
-                    }
-                    TermKind::EnumVariant { .. } => {
-                        for arg in args {
-                            if let &ast::TermArgPattern::Expr(_) = arg {
-                                tyenv.report_error(
-                                    pos,
-                                    format!(
-                                        "Term in pattern '{}' cannot have an injected expr, because \
-                                         it is an enum variant",
-                                        sym.0
-                                    )
-                                );
-                            }
-                        }
-                    }
+                    } if is_root && *tid == rule_term => {}
+                    TermKind::EnumVariant { .. } => {}
                     TermKind::Decl {
-                        extractor_kind:
-                            Some(ExtractorKind::ExternalExtractor {
-                                ref arg_polarity, ..
-                            }),
+                        extractor_kind: Some(ExtractorKind::ExternalExtractor { .. }),
                         ..
-                    } => {
-                        for (arg, pol) in args.iter().zip(arg_polarity.iter()) {
-                            match (arg, pol) {
-                                (&ast::TermArgPattern::Expr(..), &ArgPolarity::Input) => {}
-                                (&ast::TermArgPattern::Expr(ref e), &ArgPolarity::Output) => {
-                                    tyenv.report_error(
-                                        e.pos(),
-                                        "Expression used for output-polarity extractor arg"
-                                            .to_string(),
-                                    );
-                                }
-                                (_, &ArgPolarity::Output) => {}
-                                (&ast::TermArgPattern::Pattern(ref p), &ArgPolarity::Input) => {
-                                    tyenv.report_error(
-                                        p.pos(),
-                                        "Non-expression used in pattern but expression required for \
-                                         input-polarity extractor arg"
-                                            .to_string()
-                                    );
-                                }
-                            }
-                        }
-                    }
+                    } => {}
                     TermKind::Decl {
                         extractor_kind: Some(ExtractorKind::InternalExtractor { ref template }),
                         ..
@@ -1779,19 +1685,7 @@ impl TermEnv {
                         // substitutions.
                         let mut macro_args: Vec<ast::Pattern> = vec![];
                         for template_arg in args {
-                            let sub_ast = match template_arg {
-                                &ast::TermArgPattern::Pattern(ref pat) => pat.clone(),
-                                &ast::TermArgPattern::Expr(_) => {
-                                    tyenv.report_error(
-                                        pos,
-                                        "Cannot expand an extractor macro with an expression in a \
-                                         macro argument"
-                                            .to_string(),
-                                    );
-                                    return None;
-                                }
-                            };
-                            macro_args.push(sub_ast.clone());
+                            macro_args.push(template_arg.clone());
                         }
                         log::trace!("internal extractor macro args = {:?}", args);
                         let pat = template.subst_macro_args(&macro_args[..])?;
@@ -1824,13 +1718,13 @@ impl TermEnv {
                 for (i, arg) in args.iter().enumerate() {
                     let term = unwrap_or_continue!(self.terms.get(tid.index()));
                     let arg_ty = unwrap_or_continue!(term.arg_tys.get(i).copied());
-                    let (subpat, _) = unwrap_or_continue!(self.translate_pattern_term_arg(
+                    let (subpat, _) = unwrap_or_continue!(self.translate_pattern(
                         tyenv,
                         rule_term,
-                        pos,
                         arg,
                         Some(arg_ty),
                         bindings,
+                        /* is_root = */ false,
                     ));
                     subpats.push(subpat);
                 }
@@ -1838,48 +1732,6 @@ impl TermEnv {
                 Some((Pattern::Term(ty, *tid, subpats), ty))
             }
             &ast::Pattern::MacroArg { .. } => unreachable!(),
-        }
-    }
-
-    fn translate_pattern_term_arg(
-        &self,
-        tyenv: &mut TypeEnv,
-        rule_term: TermId,
-        pos: Pos,
-        pat: &ast::TermArgPattern,
-        expected_ty: Option<TypeId>,
-        bindings: &mut Bindings,
-    ) -> Option<(TermArgPattern, TypeId)> {
-        match pat {
-            &ast::TermArgPattern::Pattern(ref pat) => {
-                let (subpat, ty) = self.translate_pattern(
-                    tyenv,
-                    rule_term,
-                    pat,
-                    expected_ty,
-                    bindings,
-                    /* is_root = */ false,
-                )?;
-                Some((TermArgPattern::Pattern(subpat), ty))
-            }
-            &ast::TermArgPattern::Expr(ref expr) => {
-                if expected_ty.is_none() {
-                    tyenv.report_error(
-                        pos,
-                        "Expression in pattern must have expected type".to_string(),
-                    );
-                    return None;
-                }
-                let ty = expected_ty.unwrap();
-                let expr = self.translate_expr(
-                    tyenv,
-                    expr,
-                    expected_ty,
-                    bindings,
-                    /* pure = */ true,
-                )?;
-                Some((TermArgPattern::Expr(expr), ty))
-            }
         }
     }
 
