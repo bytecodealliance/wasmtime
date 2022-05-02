@@ -826,7 +826,7 @@
 ;; `Amode` in an incremental fashion as we add in each piece.
 ;;
 ;; We start with an "immediate + register" form that encapsulates the
-;; load/store's built-in Offset32, and `invalid_reg` as the
+;; load/store's built-in `Offset32` and `invalid_reg` as the
 ;; register. This is given by `amode_initial`. Then we add `Value`s
 ;; one at a time with `amode_add`. (Why start with `invalid_reg` at
 ;; all? Because we don't want to special-case the first input and
