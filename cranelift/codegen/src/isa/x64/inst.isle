@@ -841,7 +841,7 @@
 ;;
 ;; But we can often do better. The toplevel rule for `iadd` below will
 ;; turn an `(amode_add amode (iadd a b))` into two invocations of
-;; `amode_add`, for each operand of the `iadd. This is what allows us
+;; `amode_add`, for each operand of the `iadd`. This is what allows us
 ;; to handle sums of many parts.
 ;;
 ;; Then we "just" need to work out how we can incorporate a new
