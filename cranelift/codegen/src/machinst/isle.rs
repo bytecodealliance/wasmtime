@@ -113,7 +113,7 @@ macro_rules! isle_prelude_methods {
         #[inline]
         fn invalid_reg_etor(&mut self, reg: Reg) -> Option<()> {
             use crate::machinst::valueregs::InvalidSentinel;
-            if reg == Reg::invalid_sentinel() {
+            if reg.is_invalid_sentinel() {
                 Some(())
             } else {
                 None
@@ -123,7 +123,7 @@ macro_rules! isle_prelude_methods {
         #[inline]
         fn valid_reg(&mut self, reg: Reg) -> Option<()> {
             use crate::machinst::valueregs::InvalidSentinel;
-            if reg != Reg::invalid_sentinel() {
+            if !reg.is_invalid_sentinel() {
                 Some(())
             } else {
                 None
