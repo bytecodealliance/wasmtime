@@ -21,6 +21,12 @@ pub trait Context {
     fn unpack_value_array_3(&mut self, arg0: &ValueArray3) -> (Value, Value, Value);
     fn pack_value_array_3(&mut self, arg0: Value, arg1: Value, arg2: Value) -> ValueArray3;
     fn u32_add(&mut self, arg0: u32, arg1: u32) -> u32;
+    fn s32_add_fallible(&mut self, arg0: u32, arg1: u32) -> Option<u32>;
+    fn u32_nonnegative(&mut self, arg0: u32) -> Option<u32>;
+    fn offset32(&mut self, arg0: Offset32) -> Option<u32>;
+    fn u32_lteq(&mut self, arg0: u32, arg1: u32) -> Option<Unit>;
+    fn simm32(&mut self, arg0: Imm64) -> Option<u32>;
+    fn uimm8(&mut self, arg0: Imm64) -> Option<u8>;
     fn u8_and(&mut self, arg0: u8, arg1: u8) -> u8;
     fn value_reg(&mut self, arg0: Reg) -> ValueRegs;
     fn value_regs(&mut self, arg0: Reg, arg1: Reg) -> ValueRegs;
@@ -32,19 +38,22 @@ pub trait Context {
     fn output_builder_push(&mut self, arg0: &InstOutputBuilder, arg1: ValueRegs) -> Unit;
     fn output_builder_finish(&mut self, arg0: &InstOutputBuilder) -> InstOutput;
     fn temp_writable_reg(&mut self, arg0: Type) -> WritableReg;
+    fn invalid_reg_etor(&mut self, arg0: Reg) -> Option<()>;
     fn invalid_reg(&mut self) -> Reg;
+    fn valid_reg(&mut self, arg0: Reg) -> Option<()>;
     fn put_in_reg(&mut self, arg0: Value) -> Reg;
     fn put_in_regs(&mut self, arg0: Value) -> ValueRegs;
     fn ensure_in_vreg(&mut self, arg0: Reg, arg1: Type) -> Reg;
     fn value_regs_get(&mut self, arg0: ValueRegs, arg1: usize) -> Reg;
-    fn u8_as_u64(&mut self, arg0: u8) -> u64;
-    fn u16_as_u64(&mut self, arg0: u16) -> u64;
-    fn u32_as_u64(&mut self, arg0: u32) -> u64;
-    fn i64_as_u64(&mut self, arg0: i64) -> u64;
-    fn u64_add(&mut self, arg0: u64, arg1: u64) -> u64;
-    fn u64_sub(&mut self, arg0: u64, arg1: u64) -> u64;
-    fn u64_and(&mut self, arg0: u64, arg1: u64) -> u64;
-    fn ty_bits(&mut self, arg0: Type) -> u8;
+    fn u8_as_u32(&mut self, arg0: u8) -> Option<u32>;
+    fn u8_as_u64(&mut self, arg0: u8) -> Option<u64>;
+    fn u16_as_u64(&mut self, arg0: u16) -> Option<u64>;
+    fn u32_as_u64(&mut self, arg0: u32) -> Option<u64>;
+    fn i64_as_u64(&mut self, arg0: i64) -> Option<u64>;
+    fn u64_add(&mut self, arg0: u64, arg1: u64) -> Option<u64>;
+    fn u64_sub(&mut self, arg0: u64, arg1: u64) -> Option<u64>;
+    fn u64_and(&mut self, arg0: u64, arg1: u64) -> Option<u64>;
+    fn ty_bits(&mut self, arg0: Type) -> Option<u8>;
     fn ty_bits_u16(&mut self, arg0: Type) -> u16;
     fn ty_bits_u64(&mut self, arg0: Type) -> u64;
     fn ty_mask(&mut self, arg0: Type) -> u64;
@@ -100,7 +109,6 @@ pub trait Context {
     fn amode_with_flags(&mut self, arg0: &Amode, arg1: MemFlags) -> Amode;
     fn amode_imm_reg(&mut self, arg0: u32, arg1: Gpr) -> Amode;
     fn amode_imm_reg_reg_shift(&mut self, arg0: u32, arg1: Gpr, arg2: Gpr, arg3: u8) -> Amode;
-    fn const_shift_lt_eq_3(&mut self, arg0: Value) -> Option<u8>;
     fn sum_extend_fits_in_32_bits(
         &mut self,
         arg0: Type,
@@ -164,14 +172,14 @@ pub trait Context {
     fn popcount_low_mask(&mut self) -> VCodeConstant;
 }
 
-/// Internal type SideEffectNoResult: defined at src/prelude.isle line 412.
+/// Internal type SideEffectNoResult: defined at src/prelude.isle line 447.
 #[derive(Clone, Debug)]
 pub enum SideEffectNoResult {
     Inst { inst: MInst },
     Inst2 { inst1: MInst, inst2: MInst },
 }
 
-/// Internal type ProducesFlags: defined at src/prelude.isle line 439.
+/// Internal type ProducesFlags: defined at src/prelude.isle line 474.
 #[derive(Clone, Debug)]
 pub enum ProducesFlags {
     ProducesFlagsSideEffect { inst: MInst },
@@ -179,7 +187,7 @@ pub enum ProducesFlags {
     ProducesFlagsReturnsResultWithConsumer { inst: MInst, result: Reg },
 }
 
-/// Internal type ConsumesFlags: defined at src/prelude.isle line 450.
+/// Internal type ConsumesFlags: defined at src/prelude.isle line 485.
 #[derive(Clone, Debug)]
 pub enum ConsumesFlags {
     ConsumesFlagsReturnsResultWithProducer {
@@ -526,7 +534,27 @@ pub enum MInst {
     },
 }
 
-/// Internal type ExtendKind: defined at src/isa/x64/inst.isle line 1217.
+/// Internal type Amode: defined at src/isa/x64/inst.isle line 770.
+#[derive(Clone, Debug)]
+pub enum Amode {
+    ImmReg {
+        simm32: u32,
+        base: Reg,
+        flags: MemFlags,
+    },
+    ImmRegRegShift {
+        simm32: u32,
+        base: Gpr,
+        index: Gpr,
+        shift: u8,
+        flags: MemFlags,
+    },
+    RipRelative {
+        target: MachLabel,
+    },
+}
+
+/// Internal type ExtendKind: defined at src/isa/x64/inst.isle line 1354.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum ExtendKind {
     Sign,
@@ -536,7 +564,7 @@ pub enum ExtendKind {
 // Generated as internal constructor for term output_reg.
 pub fn constructor_output_reg<C: Context>(ctx: &mut C, arg0: Reg) -> Option<InstOutput> {
     let pattern0_0 = arg0;
-    // Rule at src/prelude.isle line 86.
+    // Rule at src/prelude.isle line 113.
     let expr0_0 = C::value_reg(ctx, pattern0_0);
     let expr1_0 = C::output(ctx, expr0_0);
     return Some(expr1_0);
@@ -545,7 +573,7 @@ pub fn constructor_output_reg<C: Context>(ctx: &mut C, arg0: Reg) -> Option<Inst
 // Generated as internal constructor for term output_value.
 pub fn constructor_output_value<C: Context>(ctx: &mut C, arg0: Value) -> Option<InstOutput> {
     let pattern0_0 = arg0;
-    // Rule at src/prelude.isle line 90.
+    // Rule at src/prelude.isle line 117.
     let expr0_0 = C::put_in_regs(ctx, pattern0_0);
     let expr1_0 = C::output(ctx, expr0_0);
     return Some(expr1_0);
@@ -554,7 +582,7 @@ pub fn constructor_output_value<C: Context>(ctx: &mut C, arg0: Value) -> Option<
 // Generated as internal constructor for term temp_reg.
 pub fn constructor_temp_reg<C: Context>(ctx: &mut C, arg0: Type) -> Option<Reg> {
     let pattern0_0 = arg0;
-    // Rule at src/prelude.isle line 110.
+    // Rule at src/prelude.isle line 137.
     let expr0_0 = C::temp_writable_reg(ctx, pattern0_0);
     let expr1_0 = C::writable_reg_to_reg(ctx, expr0_0);
     return Some(expr1_0);
@@ -563,7 +591,7 @@ pub fn constructor_temp_reg<C: Context>(ctx: &mut C, arg0: Type) -> Option<Reg> 
 // Generated as internal constructor for term lo_reg.
 pub fn constructor_lo_reg<C: Context>(ctx: &mut C, arg0: Value) -> Option<Reg> {
     let pattern0_0 = arg0;
-    // Rule at src/prelude.isle line 150.
+    // Rule at src/prelude.isle line 182.
     let expr0_0 = C::put_in_regs(ctx, pattern0_0);
     let expr1_0: usize = 0;
     let expr2_0 = C::value_regs_get(ctx, expr0_0, expr1_0);
@@ -580,7 +608,7 @@ pub fn constructor_side_effect<C: Context>(
         &SideEffectNoResult::Inst {
             inst: ref pattern1_0,
         } => {
-            // Rule at src/prelude.isle line 420.
+            // Rule at src/prelude.isle line 455.
             let expr0_0 = C::emit(ctx, pattern1_0);
             let expr1_0 = C::output_none(ctx);
             return Some(expr1_0);
@@ -589,7 +617,7 @@ pub fn constructor_side_effect<C: Context>(
             inst1: ref pattern1_0,
             inst2: ref pattern1_1,
         } => {
-            // Rule at src/prelude.isle line 423.
+            // Rule at src/prelude.isle line 458.
             let expr0_0 = C::emit(ctx, pattern1_0);
             let expr1_0 = C::emit(ctx, pattern1_1);
             let expr2_0 = C::output_none(ctx);
@@ -616,7 +644,7 @@ pub fn constructor_side_effect_concat<C: Context>(
             inst: ref pattern3_0,
         } = pattern2_0
         {
-            // Rule at src/prelude.isle line 429.
+            // Rule at src/prelude.isle line 464.
             let expr0_0 = SideEffectNoResult::Inst2 {
                 inst1: pattern1_0.clone(),
                 inst2: pattern3_0.clone(),
@@ -638,7 +666,7 @@ pub fn constructor_produces_flags_get_reg<C: Context>(
         result: pattern1_1,
     } = pattern0_0
     {
-        // Rule at src/prelude.isle line 466.
+        // Rule at src/prelude.isle line 501.
         return Some(pattern1_1);
     }
     return None;
@@ -655,7 +683,7 @@ pub fn constructor_produces_flags_ignore<C: Context>(
             inst: ref pattern1_0,
             result: pattern1_1,
         } => {
-            // Rule at src/prelude.isle line 471.
+            // Rule at src/prelude.isle line 506.
             let expr0_0 = ProducesFlags::ProducesFlagsSideEffect {
                 inst: pattern1_0.clone(),
             };
@@ -665,7 +693,7 @@ pub fn constructor_produces_flags_ignore<C: Context>(
             inst: ref pattern1_0,
             result: pattern1_1,
         } => {
-            // Rule at src/prelude.isle line 473.
+            // Rule at src/prelude.isle line 508.
             let expr0_0 = ProducesFlags::ProducesFlagsSideEffect {
                 inst: pattern1_0.clone(),
             };
@@ -694,7 +722,7 @@ pub fn constructor_consumes_flags_concat<C: Context>(
             result: pattern3_1,
         } = pattern2_0
         {
-            // Rule at src/prelude.isle line 480.
+            // Rule at src/prelude.isle line 515.
             let expr0_0 = C::value_regs(ctx, pattern1_1, pattern3_1);
             let expr1_0 = ConsumesFlags::ConsumesFlagsTwiceReturnsValueRegs {
                 inst1: pattern1_0.clone(),
@@ -724,7 +752,7 @@ pub fn constructor_with_flags<C: Context>(
                     inst: ref pattern3_0,
                     result: pattern3_1,
                 } => {
-                    // Rule at src/prelude.isle line 505.
+                    // Rule at src/prelude.isle line 540.
                     let expr0_0 = C::emit(ctx, pattern1_0);
                     let expr1_0 = C::emit(ctx, pattern3_0);
                     let expr2_0 = C::value_reg(ctx, pattern3_1);
@@ -735,7 +763,7 @@ pub fn constructor_with_flags<C: Context>(
                     inst2: ref pattern3_1,
                     result: pattern3_2,
                 } => {
-                    // Rule at src/prelude.isle line 511.
+                    // Rule at src/prelude.isle line 546.
                     let expr0_0 = C::emit(ctx, pattern1_0);
                     let expr1_0 = C::emit(ctx, pattern3_0);
                     let expr2_0 = C::emit(ctx, pattern3_1);
@@ -748,7 +776,7 @@ pub fn constructor_with_flags<C: Context>(
                     inst4: ref pattern3_3,
                     result: pattern3_4,
                 } => {
-                    // Rule at src/prelude.isle line 523.
+                    // Rule at src/prelude.isle line 558.
                     let expr0_0 = C::emit(ctx, pattern1_0);
                     let expr1_0 = C::emit(ctx, pattern3_0);
                     let expr2_0 = C::emit(ctx, pattern3_1);
@@ -769,7 +797,7 @@ pub fn constructor_with_flags<C: Context>(
                 result: pattern3_1,
             } = pattern2_0
             {
-                // Rule at src/prelude.isle line 499.
+                // Rule at src/prelude.isle line 534.
                 let expr0_0 = C::emit(ctx, pattern1_0);
                 let expr1_0 = C::emit(ctx, pattern3_0);
                 let expr2_0 = C::value_regs(ctx, pattern1_1, pattern3_1);
@@ -789,7 +817,7 @@ pub fn constructor_with_flags_reg<C: Context>(
 ) -> Option<Reg> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/prelude.isle line 540.
+    // Rule at src/prelude.isle line 575.
     let expr0_0 = constructor_with_flags(ctx, pattern0_0, pattern1_0)?;
     let expr1_0: usize = 0;
     let expr2_0 = C::value_regs_get(ctx, expr0_0, expr1_0);
@@ -835,7 +863,7 @@ pub fn constructor_amode_imm_reg_flags<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/x64/inst.isle line 777.
+    // Rule at src/isa/x64/inst.isle line 798.
     let expr0_0 = C::amode_imm_reg(ctx, pattern0_0, pattern1_0);
     let expr1_0 = C::amode_with_flags(ctx, &expr0_0, pattern2_0);
     return Some(expr1_0);
@@ -855,7 +883,7 @@ pub fn constructor_amode_imm_reg_reg_shift_flags<C: Context>(
     let pattern2_0 = arg2;
     let pattern3_0 = arg3;
     let pattern4_0 = arg4;
-    // Rule at src/isa/x64/inst.isle line 784.
+    // Rule at src/isa/x64/inst.isle line 805.
     let expr0_0 = C::amode_imm_reg_reg_shift(ctx, pattern0_0, pattern1_0, pattern2_0, pattern3_0);
     let expr1_0 = C::amode_with_flags(ctx, &expr0_0, pattern4_0);
     return Some(expr1_0);
@@ -870,6 +898,487 @@ pub fn constructor_to_amode<C: Context>(
 ) -> Option<Amode> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
+    let pattern2_0 = arg2;
+    // Rule at src/isa/x64/inst.isle line 985.
+    let expr0_0 = constructor_amode_initial(ctx, pattern0_0, pattern2_0)?;
+    let expr1_0 = constructor_amode_add(ctx, &expr0_0, pattern1_0)?;
+    return Some(expr1_0);
+}
+
+// Generated as internal constructor for term amode_initial.
+pub fn constructor_amode_initial<C: Context>(
+    ctx: &mut C,
+    arg0: MemFlags,
+    arg1: Offset32,
+) -> Option<Amode> {
+    let pattern0_0 = arg0;
+    let pattern1_0 = arg1;
+    if let Some(pattern2_0) = C::offset32(ctx, pattern1_0) {
+        // Rule at src/isa/x64/inst.isle line 875.
+        let expr0_0 = C::invalid_reg(ctx);
+        let expr1_0 = Amode::ImmReg {
+            simm32: pattern2_0,
+            base: expr0_0,
+            flags: pattern0_0,
+        };
+        return Some(expr1_0);
+    }
+    return None;
+}
+
+// Generated as internal constructor for term amode_add.
+pub fn constructor_amode_add<C: Context>(ctx: &mut C, arg0: &Amode, arg1: Value) -> Option<Amode> {
+    let pattern0_0 = arg0;
+    match pattern0_0 {
+        &Amode::ImmReg {
+            simm32: pattern1_0,
+            base: pattern1_1,
+            flags: pattern1_2,
+        } => {
+            let pattern2_0 = arg1;
+            if let Some(pattern3_0) = C::def_inst(ctx, pattern2_0) {
+                let pattern4_0 = C::inst_data(ctx, pattern3_0);
+                match &pattern4_0 {
+                    &InstructionData::UnaryImm {
+                        opcode: ref pattern5_0,
+                        imm: pattern5_1,
+                    } => {
+                        if let &Opcode::Iconst = pattern5_0 {
+                            if let Some(pattern7_0) = C::simm32(ctx, pattern5_1) {
+                                let mut closure8 = || {
+                                    let expr0_0 = C::s32_add_fallible(ctx, pattern1_0, pattern7_0)?;
+                                    return Some(expr0_0);
+                                };
+                                if let Some(pattern8_0) = closure8() {
+                                    // Rule at src/isa/x64/inst.isle line 943.
+                                    let expr0_0 = Amode::ImmReg {
+                                        simm32: pattern8_0,
+                                        base: pattern1_1,
+                                        flags: pattern1_2,
+                                    };
+                                    return Some(expr0_0);
+                                }
+                            }
+                        }
+                    }
+                    &InstructionData::Unary {
+                        opcode: ref pattern5_0,
+                        arg: pattern5_1,
+                    } => {
+                        match pattern5_0 {
+                            &Opcode::Uextend => {
+                                if let Some(pattern7_0) = C::def_inst(ctx, pattern5_1) {
+                                    let pattern8_0 = C::inst_data(ctx, pattern7_0);
+                                    if let &InstructionData::UnaryImm {
+                                        opcode: ref pattern9_0,
+                                        imm: pattern9_1,
+                                    } = &pattern8_0
+                                    {
+                                        if let &Opcode::Iconst = pattern9_0 {
+                                            if let Some(pattern11_0) = C::simm32(ctx, pattern9_1) {
+                                                if let Some(pattern12_0) =
+                                                    C::u32_nonnegative(ctx, pattern11_0)
+                                                {
+                                                    let mut closure13 = || {
+                                                        let expr0_0 = C::s32_add_fallible(
+                                                            ctx,
+                                                            pattern1_0,
+                                                            pattern12_0,
+                                                        )?;
+                                                        return Some(expr0_0);
+                                                    };
+                                                    if let Some(pattern13_0) = closure13() {
+                                                        // Rule at src/isa/x64/inst.isle line 956.
+                                                        let expr0_0 = Amode::ImmReg {
+                                                            simm32: pattern13_0,
+                                                            base: pattern1_1,
+                                                            flags: pattern1_2,
+                                                        };
+                                                        return Some(expr0_0);
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            &Opcode::Sextend => {
+                                if let Some(pattern7_0) = C::def_inst(ctx, pattern5_1) {
+                                    let pattern8_0 = C::inst_data(ctx, pattern7_0);
+                                    if let &InstructionData::UnaryImm {
+                                        opcode: ref pattern9_0,
+                                        imm: pattern9_1,
+                                    } = &pattern8_0
+                                    {
+                                        if let &Opcode::Iconst = pattern9_0 {
+                                            if let Some(pattern11_0) = C::simm32(ctx, pattern9_1) {
+                                                let mut closure12 = || {
+                                                    let expr0_0 = C::s32_add_fallible(
+                                                        ctx,
+                                                        pattern1_0,
+                                                        pattern11_0,
+                                                    )?;
+                                                    return Some(expr0_0);
+                                                };
+                                                if let Some(pattern12_0) = closure12() {
+                                                    // Rule at src/isa/x64/inst.isle line 966.
+                                                    let expr0_0 = Amode::ImmReg {
+                                                        simm32: pattern12_0,
+                                                        base: pattern1_1,
+                                                        flags: pattern1_2,
+                                                    };
+                                                    return Some(expr0_0);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        &Amode::ImmRegRegShift {
+            simm32: pattern1_0,
+            base: pattern1_1,
+            index: pattern1_2,
+            shift: pattern1_3,
+            flags: pattern1_4,
+        } => {
+            let pattern2_0 = arg1;
+            if let Some(pattern3_0) = C::def_inst(ctx, pattern2_0) {
+                let pattern4_0 = C::inst_data(ctx, pattern3_0);
+                match &pattern4_0 {
+                    &InstructionData::UnaryImm {
+                        opcode: ref pattern5_0,
+                        imm: pattern5_1,
+                    } => {
+                        if let &Opcode::Iconst = pattern5_0 {
+                            if let Some(pattern7_0) = C::simm32(ctx, pattern5_1) {
+                                let mut closure8 = || {
+                                    let expr0_0 = C::s32_add_fallible(ctx, pattern1_0, pattern7_0)?;
+                                    return Some(expr0_0);
+                                };
+                                if let Some(pattern8_0) = closure8() {
+                                    // Rule at src/isa/x64/inst.isle line 947.
+                                    let expr0_0 = Amode::ImmRegRegShift {
+                                        simm32: pattern8_0,
+                                        base: pattern1_1,
+                                        index: pattern1_2,
+                                        shift: pattern1_3,
+                                        flags: pattern1_4,
+                                    };
+                                    return Some(expr0_0);
+                                }
+                            }
+                        }
+                    }
+                    &InstructionData::Unary {
+                        opcode: ref pattern5_0,
+                        arg: pattern5_1,
+                    } => {
+                        match pattern5_0 {
+                            &Opcode::Uextend => {
+                                if let Some(pattern7_0) = C::def_inst(ctx, pattern5_1) {
+                                    let pattern8_0 = C::inst_data(ctx, pattern7_0);
+                                    if let &InstructionData::UnaryImm {
+                                        opcode: ref pattern9_0,
+                                        imm: pattern9_1,
+                                    } = &pattern8_0
+                                    {
+                                        if let &Opcode::Iconst = pattern9_0 {
+                                            if let Some(pattern11_0) = C::simm32(ctx, pattern9_1) {
+                                                if let Some(pattern12_0) =
+                                                    C::u32_nonnegative(ctx, pattern11_0)
+                                                {
+                                                    let mut closure13 = || {
+                                                        let expr0_0 = C::s32_add_fallible(
+                                                            ctx,
+                                                            pattern1_0,
+                                                            pattern12_0,
+                                                        )?;
+                                                        return Some(expr0_0);
+                                                    };
+                                                    if let Some(pattern13_0) = closure13() {
+                                                        // Rule at src/isa/x64/inst.isle line 960.
+                                                        let expr0_0 = Amode::ImmRegRegShift {
+                                                            simm32: pattern13_0,
+                                                            base: pattern1_1,
+                                                            index: pattern1_2,
+                                                            shift: pattern1_3,
+                                                            flags: pattern1_4,
+                                                        };
+                                                        return Some(expr0_0);
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            &Opcode::Sextend => {
+                                if let Some(pattern7_0) = C::def_inst(ctx, pattern5_1) {
+                                    let pattern8_0 = C::inst_data(ctx, pattern7_0);
+                                    if let &InstructionData::UnaryImm {
+                                        opcode: ref pattern9_0,
+                                        imm: pattern9_1,
+                                    } = &pattern8_0
+                                    {
+                                        if let &Opcode::Iconst = pattern9_0 {
+                                            if let Some(pattern11_0) = C::simm32(ctx, pattern9_1) {
+                                                let mut closure12 = || {
+                                                    let expr0_0 = C::s32_add_fallible(
+                                                        ctx,
+                                                        pattern1_0,
+                                                        pattern11_0,
+                                                    )?;
+                                                    return Some(expr0_0);
+                                                };
+                                                if let Some(pattern12_0) = closure12() {
+                                                    // Rule at src/isa/x64/inst.isle line 970.
+                                                    let expr0_0 = Amode::ImmRegRegShift {
+                                                        simm32: pattern12_0,
+                                                        base: pattern1_1,
+                                                        index: pattern1_2,
+                                                        shift: pattern1_3,
+                                                        flags: pattern1_4,
+                                                    };
+                                                    return Some(expr0_0);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        _ => {}
+    }
+    let pattern0_0 = arg0;
+    if let &Amode::ImmReg {
+        simm32: pattern1_0,
+        base: pattern1_1,
+        flags: pattern1_2,
+    } = pattern0_0
+    {
+        let pattern2_0 = arg1;
+        if let Some(pattern3_0) = C::def_inst(ctx, pattern2_0) {
+            let pattern4_0 = C::inst_data(ctx, pattern3_0);
+            match &pattern4_0 {
+                &InstructionData::Binary {
+                    opcode: ref pattern5_0,
+                    args: ref pattern5_1,
+                } => {
+                    if let &Opcode::Ishl = pattern5_0 {
+                        let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, pattern5_1);
+                        if let Some(pattern8_0) = C::def_inst(ctx, pattern7_1) {
+                            let pattern9_0 = C::inst_data(ctx, pattern8_0);
+                            if let &InstructionData::UnaryImm {
+                                opcode: ref pattern10_0,
+                                imm: pattern10_1,
+                            } = &pattern9_0
+                            {
+                                if let &Opcode::Iconst = pattern10_0 {
+                                    if let Some(pattern12_0) = C::uimm8(ctx, pattern10_1) {
+                                        let mut closure13 = || {
+                                            return Some(pattern1_1);
+                                        };
+                                        if let Some(pattern13_0) = closure13() {
+                                            if let Some(()) = C::valid_reg(ctx, pattern13_0) {
+                                                let mut closure15 = || {
+                                                    let expr0_0 = C::u8_as_u32(ctx, pattern12_0)?;
+                                                    let expr1_0: u32 = 3;
+                                                    let expr2_0 =
+                                                        C::u32_lteq(ctx, expr0_0, expr1_0)?;
+                                                    return Some(expr2_0);
+                                                };
+                                                if let Some(pattern15_0) = closure15() {
+                                                    // Rule at src/isa/x64/inst.isle line 914.
+                                                    let expr0_0 = C::gpr_new(ctx, pattern1_1);
+                                                    let expr1_0 =
+                                                        constructor_put_in_gpr(ctx, pattern7_0)?;
+                                                    let expr2_0 = Amode::ImmRegRegShift {
+                                                        simm32: pattern1_0,
+                                                        base: expr0_0,
+                                                        index: expr1_0,
+                                                        shift: pattern12_0,
+                                                        flags: pattern1_2,
+                                                    };
+                                                    return Some(expr2_0);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                &InstructionData::Unary {
+                    opcode: ref pattern5_0,
+                    arg: pattern5_1,
+                } => {
+                    if let &Opcode::Uextend = pattern5_0 {
+                        if let Some(pattern7_0) = C::def_inst(ctx, pattern5_1) {
+                            let pattern8_0 = C::inst_data(ctx, pattern7_0);
+                            if let &InstructionData::Binary {
+                                opcode: ref pattern9_0,
+                                args: ref pattern9_1,
+                            } = &pattern8_0
+                            {
+                                if let &Opcode::Ishl = pattern9_0 {
+                                    let (pattern11_0, pattern11_1) =
+                                        C::unpack_value_array_2(ctx, pattern9_1);
+                                    if let Some(pattern12_0) = C::def_inst(ctx, pattern11_0) {
+                                        let pattern13_0 = C::inst_data(ctx, pattern12_0);
+                                        if let &InstructionData::Binary {
+                                            opcode: ref pattern14_0,
+                                            args: ref pattern14_1,
+                                        } = &pattern13_0
+                                        {
+                                            if let &Opcode::Iadd = pattern14_0 {
+                                                let (pattern16_0, pattern16_1) =
+                                                    C::unpack_value_array_2(ctx, pattern14_1);
+                                                if let Some(pattern17_0) =
+                                                    C::def_inst(ctx, pattern11_1)
+                                                {
+                                                    let pattern18_0 =
+                                                        C::inst_data(ctx, pattern17_0);
+                                                    if let &InstructionData::UnaryImm {
+                                                        opcode: ref pattern19_0,
+                                                        imm: pattern19_1,
+                                                    } = &pattern18_0
+                                                    {
+                                                        if let &Opcode::Iconst = pattern19_0 {
+                                                            if let Some(pattern21_0) =
+                                                                C::uimm8(ctx, pattern19_1)
+                                                            {
+                                                                let mut closure22 = || {
+                                                                    return Some(pattern1_1);
+                                                                };
+                                                                if let Some(pattern22_0) =
+                                                                    closure22()
+                                                                {
+                                                                    if let Some(()) = C::valid_reg(
+                                                                        ctx,
+                                                                        pattern22_0,
+                                                                    ) {
+                                                                        let mut closure24 = || {
+                                                                            let expr0_0 =
+                                                                                C::u8_as_u32(
+                                                                                    ctx,
+                                                                                    pattern21_0,
+                                                                                )?;
+                                                                            let expr1_0: u32 = 3;
+                                                                            let expr2_0 =
+                                                                                C::u32_lteq(
+                                                                                    ctx, expr0_0,
+                                                                                    expr1_0,
+                                                                                )?;
+                                                                            return Some(expr2_0);
+                                                                        };
+                                                                        if let Some(pattern24_0) =
+                                                                            closure24()
+                                                                        {
+                                                                            // Rule at src/isa/x64/inst.isle line 929.
+                                                                            let expr0_0 =
+                                                                                C::gpr_new(
+                                                                                    ctx, pattern1_1,
+                                                                                );
+                                                                            let expr1_0 = constructor_put_in_gpr(ctx, pattern11_0)?;
+                                                                            let expr2_0 = Amode::ImmRegRegShift {
+                                                                                simm32: pattern1_0,
+                                                                                base: expr0_0,
+                                                                                index: expr1_0,
+                                                                                shift: pattern21_0,
+                                                                                flags: pattern1_2,
+                                                                            };
+                                                                            return Some(expr2_0);
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    if let Some(pattern12_0) = C::def_inst(ctx, pattern11_1) {
+                                        let pattern13_0 = C::inst_data(ctx, pattern12_0);
+                                        if let &InstructionData::UnaryImm {
+                                            opcode: ref pattern14_0,
+                                            imm: pattern14_1,
+                                        } = &pattern13_0
+                                        {
+                                            if let &Opcode::Iconst = pattern14_0 {
+                                                if let Some(pattern16_0) =
+                                                    C::uimm8(ctx, pattern14_1)
+                                                {
+                                                    let mut closure17 = || {
+                                                        return Some(pattern1_1);
+                                                    };
+                                                    if let Some(pattern17_0) = closure17() {
+                                                        if let Some(()) =
+                                                            C::valid_reg(ctx, pattern17_0)
+                                                        {
+                                                            let mut closure19 = || {
+                                                                let expr0_0 =
+                                                                    C::u8_as_u32(ctx, pattern16_0)?;
+                                                                let expr1_0: u32 = 3;
+                                                                let expr2_0 = C::u32_lteq(
+                                                                    ctx, expr0_0, expr1_0,
+                                                                )?;
+                                                                return Some(expr2_0);
+                                                            };
+                                                            if let Some(pattern19_0) = closure19() {
+                                                                // Rule at src/isa/x64/inst.isle line 918.
+                                                                let expr0_0 =
+                                                                    C::gpr_new(ctx, pattern1_1);
+                                                                let expr1_0: Type = I64;
+                                                                let expr2_0 = ExtendKind::Zero;
+                                                                let expr3_0 =
+                                                                    constructor_extend_to_gpr(
+                                                                        ctx,
+                                                                        pattern11_0,
+                                                                        expr1_0,
+                                                                        &expr2_0,
+                                                                    )?;
+                                                                let expr4_0 =
+                                                                    Amode::ImmRegRegShift {
+                                                                        simm32: pattern1_0,
+                                                                        base: expr0_0,
+                                                                        index: expr3_0,
+                                                                        shift: pattern16_0,
+                                                                        flags: pattern1_2,
+                                                                    };
+                                                                return Some(expr4_0);
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    let pattern0_0 = arg0;
+    let pattern1_0 = arg1;
     if let Some(pattern2_0) = C::def_inst(ctx, pattern1_0) {
         let pattern3_0 = C::inst_data(ctx, pattern2_0);
         if let &InstructionData::Binary {
@@ -879,245 +1388,81 @@ pub fn constructor_to_amode<C: Context>(
         {
             if let &Opcode::Iadd = pattern4_0 {
                 let (pattern6_0, pattern6_1) = C::unpack_value_array_2(ctx, pattern4_1);
-                if let Some(pattern7_0) = C::def_inst(ctx, pattern6_0) {
-                    let pattern8_0 = C::inst_data(ctx, pattern7_0);
-                    match &pattern8_0 {
-                        &InstructionData::UnaryImm {
-                            opcode: ref pattern9_0,
-                            imm: pattern9_1,
-                        } => {
-                            if let &Opcode::Iconst = pattern9_0 {
-                                let pattern11_0 = arg2;
-                                let mut closure12 = || {
-                                    let expr0_0: Type = I64;
-                                    let expr1_0 = C::sum_extend_fits_in_32_bits(
-                                        ctx,
-                                        expr0_0,
-                                        pattern9_1,
-                                        pattern11_0,
-                                    )?;
-                                    return Some(expr1_0);
-                                };
-                                if let Some(pattern12_0) = closure12() {
-                                    // Rule at src/isa/x64/inst.isle line 831.
-                                    let expr0_0 = constructor_put_in_gpr(ctx, pattern6_1)?;
-                                    let expr1_0 = constructor_amode_imm_reg_flags(
-                                        ctx,
-                                        pattern12_0,
-                                        expr0_0,
-                                        pattern0_0,
-                                    )?;
-                                    return Some(expr1_0);
-                                }
-                            }
-                        }
-                        &InstructionData::Binary {
-                            opcode: ref pattern9_0,
-                            args: ref pattern9_1,
-                        } => {
-                            if let &Opcode::Ishl = pattern9_0 {
-                                let (pattern11_0, pattern11_1) =
-                                    C::unpack_value_array_2(ctx, pattern9_1);
-                                if let Some(pattern12_0) = C::const_shift_lt_eq_3(ctx, pattern11_1)
-                                {
-                                    let pattern13_0 = arg2;
-                                    // Rule at src/isa/x64/inst.isle line 823.
-                                    let expr0_0 = C::offset32_to_u32(ctx, pattern13_0);
-                                    let expr1_0 = constructor_put_in_gpr(ctx, pattern6_1)?;
-                                    let expr2_0 = constructor_put_in_gpr(ctx, pattern11_0)?;
-                                    let expr3_0 = constructor_amode_imm_reg_reg_shift_flags(
-                                        ctx,
-                                        expr0_0,
-                                        expr1_0,
-                                        expr2_0,
-                                        pattern12_0,
-                                        pattern0_0,
-                                    )?;
-                                    return Some(expr3_0);
-                                }
-                            }
-                        }
-                        _ => {}
-                    }
-                    if let Some(pattern8_0) = C::first_result(ctx, pattern7_0) {
-                        let pattern9_0 = C::value_type(ctx, pattern8_0);
-                        let pattern10_0 = C::inst_data(ctx, pattern7_0);
-                        if let &InstructionData::Unary {
-                            opcode: ref pattern11_0,
-                            arg: pattern11_1,
-                        } = &pattern10_0
-                        {
-                            if let &Opcode::Uextend = pattern11_0 {
-                                if let Some(pattern13_0) = C::def_inst(ctx, pattern11_1) {
-                                    let pattern14_0 = C::inst_data(ctx, pattern13_0);
-                                    if let &InstructionData::UnaryImm {
-                                        opcode: ref pattern15_0,
-                                        imm: pattern15_1,
-                                    } = &pattern14_0
-                                    {
-                                        if let &Opcode::Iconst = pattern15_0 {
-                                            let pattern17_0 = arg2;
-                                            let mut closure18 = || {
-                                                let expr0_0: Type = I64;
-                                                let expr1_0 = C::sum_extend_fits_in_32_bits(
-                                                    ctx,
-                                                    expr0_0,
-                                                    pattern15_1,
-                                                    pattern17_0,
-                                                )?;
-                                                return Some(expr1_0);
-                                            };
-                                            if let Some(pattern18_0) = closure18() {
-                                                // Rule at src/isa/x64/inst.isle line 838.
-                                                let expr0_0 =
-                                                    constructor_put_in_gpr(ctx, pattern6_1)?;
-                                                let expr1_0 = constructor_amode_imm_reg_flags(
-                                                    ctx,
-                                                    pattern18_0,
-                                                    expr0_0,
-                                                    pattern0_0,
-                                                )?;
-                                                return Some(expr1_0);
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                if let Some(pattern7_0) = C::def_inst(ctx, pattern6_1) {
-                    let pattern8_0 = C::inst_data(ctx, pattern7_0);
-                    match &pattern8_0 {
-                        &InstructionData::UnaryImm {
-                            opcode: ref pattern9_0,
-                            imm: pattern9_1,
-                        } => {
-                            if let &Opcode::Iconst = pattern9_0 {
-                                let pattern11_0 = arg2;
-                                let mut closure12 = || {
-                                    let expr0_0: Type = I64;
-                                    let expr1_0 = C::sum_extend_fits_in_32_bits(
-                                        ctx,
-                                        expr0_0,
-                                        pattern9_1,
-                                        pattern11_0,
-                                    )?;
-                                    return Some(expr1_0);
-                                };
-                                if let Some(pattern12_0) = closure12() {
-                                    // Rule at src/isa/x64/inst.isle line 834.
-                                    let expr0_0 = constructor_put_in_gpr(ctx, pattern6_0)?;
-                                    let expr1_0 = constructor_amode_imm_reg_flags(
-                                        ctx,
-                                        pattern12_0,
-                                        expr0_0,
-                                        pattern0_0,
-                                    )?;
-                                    return Some(expr1_0);
-                                }
-                            }
-                        }
-                        &InstructionData::Binary {
-                            opcode: ref pattern9_0,
-                            args: ref pattern9_1,
-                        } => {
-                            if let &Opcode::Ishl = pattern9_0 {
-                                let (pattern11_0, pattern11_1) =
-                                    C::unpack_value_array_2(ctx, pattern9_1);
-                                if let Some(pattern12_0) = C::const_shift_lt_eq_3(ctx, pattern11_1)
-                                {
-                                    let pattern13_0 = arg2;
-                                    // Rule at src/isa/x64/inst.isle line 825.
-                                    let expr0_0 = C::offset32_to_u32(ctx, pattern13_0);
-                                    let expr1_0 = constructor_put_in_gpr(ctx, pattern6_0)?;
-                                    let expr2_0 = constructor_put_in_gpr(ctx, pattern11_0)?;
-                                    let expr3_0 = constructor_amode_imm_reg_reg_shift_flags(
-                                        ctx,
-                                        expr0_0,
-                                        expr1_0,
-                                        expr2_0,
-                                        pattern12_0,
-                                        pattern0_0,
-                                    )?;
-                                    return Some(expr3_0);
-                                }
-                            }
-                        }
-                        _ => {}
-                    }
-                    if let Some(pattern8_0) = C::first_result(ctx, pattern7_0) {
-                        let pattern9_0 = C::value_type(ctx, pattern8_0);
-                        let pattern10_0 = C::inst_data(ctx, pattern7_0);
-                        if let &InstructionData::Unary {
-                            opcode: ref pattern11_0,
-                            arg: pattern11_1,
-                        } = &pattern10_0
-                        {
-                            if let &Opcode::Uextend = pattern11_0 {
-                                if let Some(pattern13_0) = C::def_inst(ctx, pattern11_1) {
-                                    let pattern14_0 = C::inst_data(ctx, pattern13_0);
-                                    if let &InstructionData::UnaryImm {
-                                        opcode: ref pattern15_0,
-                                        imm: pattern15_1,
-                                    } = &pattern14_0
-                                    {
-                                        if let &Opcode::Iconst = pattern15_0 {
-                                            let pattern17_0 = arg2;
-                                            let mut closure18 = || {
-                                                let expr0_0: Type = I64;
-                                                let expr1_0 = C::sum_extend_fits_in_32_bits(
-                                                    ctx,
-                                                    expr0_0,
-                                                    pattern15_1,
-                                                    pattern17_0,
-                                                )?;
-                                                return Some(expr1_0);
-                                            };
-                                            if let Some(pattern18_0) = closure18() {
-                                                // Rule at src/isa/x64/inst.isle line 841.
-                                                let expr0_0 =
-                                                    constructor_put_in_gpr(ctx, pattern6_0)?;
-                                                let expr1_0 = constructor_amode_imm_reg_flags(
-                                                    ctx,
-                                                    pattern18_0,
-                                                    expr0_0,
-                                                    pattern0_0,
-                                                )?;
-                                                return Some(expr1_0);
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                let pattern7_0 = arg2;
-                // Rule at src/isa/x64/inst.isle line 845.
-                let expr0_0 = C::offset32_to_u32(ctx, pattern7_0);
-                let expr1_0 = constructor_put_in_gpr(ctx, pattern6_0)?;
-                let expr2_0 = constructor_put_in_gpr(ctx, pattern6_1)?;
-                let expr3_0: u8 = 0;
-                let expr4_0 = constructor_amode_imm_reg_reg_shift_flags(
-                    ctx, expr0_0, expr1_0, expr2_0, expr3_0, pattern0_0,
-                )?;
-                return Some(expr4_0);
+                // Rule at src/isa/x64/inst.isle line 889.
+                let expr0_0 = constructor_amode_add(ctx, pattern0_0, pattern6_0)?;
+                let expr1_0 = constructor_amode_add(ctx, &expr0_0, pattern6_1)?;
+                return Some(expr1_0);
             }
         }
     }
-    let pattern2_0 = arg2;
-    // Rule at src/isa/x64/inst.isle line 848.
-    let expr0_0 = C::offset32_to_u32(ctx, pattern2_0);
-    let expr1_0 = constructor_put_in_gpr(ctx, pattern1_0)?;
-    let expr2_0 = constructor_amode_imm_reg_flags(ctx, expr0_0, expr1_0, pattern0_0)?;
-    return Some(expr2_0);
+    match pattern0_0 {
+        &Amode::ImmReg {
+            simm32: pattern1_0,
+            base: pattern1_1,
+            flags: pattern1_2,
+        } => {
+            if let Some(()) = C::invalid_reg_etor(ctx, pattern1_1) {
+                let pattern3_0 = arg1;
+                // Rule at src/isa/x64/inst.isle line 898.
+                let expr0_0 = C::put_in_reg(ctx, pattern3_0);
+                let expr1_0 = Amode::ImmReg {
+                    simm32: pattern1_0,
+                    base: expr0_0,
+                    flags: pattern1_2,
+                };
+                return Some(expr1_0);
+            }
+            let pattern2_0 = arg1;
+            let mut closure3 = || {
+                return Some(pattern1_1);
+            };
+            if let Some(pattern3_0) = closure3() {
+                if let Some(()) = C::valid_reg(ctx, pattern3_0) {
+                    // Rule at src/isa/x64/inst.isle line 904.
+                    let expr0_0 = C::gpr_new(ctx, pattern1_1);
+                    let expr1_0 = constructor_put_in_gpr(ctx, pattern2_0)?;
+                    let expr2_0: u8 = 0;
+                    let expr3_0 = Amode::ImmRegRegShift {
+                        simm32: pattern1_0,
+                        base: expr0_0,
+                        index: expr1_0,
+                        shift: expr2_0,
+                        flags: pattern1_2,
+                    };
+                    return Some(expr3_0);
+                }
+            }
+        }
+        &Amode::ImmRegRegShift {
+            simm32: pattern1_0,
+            base: pattern1_1,
+            index: pattern1_2,
+            shift: pattern1_3,
+            flags: pattern1_4,
+        } => {
+            let pattern2_0 = arg1;
+            // Rule at src/isa/x64/inst.isle line 980.
+            let expr0_0: Type = I64;
+            let expr1_0 = constructor_put_in_gpr_mem_imm(ctx, pattern2_0)?;
+            let expr2_0 = constructor_x64_add(ctx, expr0_0, pattern1_1, &expr1_0)?;
+            let expr3_0 = Amode::ImmRegRegShift {
+                simm32: pattern1_0,
+                base: expr2_0,
+                index: pattern1_2,
+                shift: pattern1_3,
+                flags: pattern1_4,
+            };
+            return Some(expr3_0);
+        }
+        _ => {}
+    }
+    return None;
 }
 
 // Generated as internal constructor for term reg_to_gpr_mem_imm.
 pub fn constructor_reg_to_gpr_mem_imm<C: Context>(ctx: &mut C, arg0: Reg) -> Option<GprMemImm> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/x64/inst.isle line 1047.
+    // Rule at src/isa/x64/inst.isle line 1184.
     let expr0_0 = C::gpr_new(ctx, pattern0_0);
     let expr1_0 = C::gpr_to_gpr_mem_imm(ctx, expr0_0);
     return Some(expr1_0);
@@ -1126,7 +1471,7 @@ pub fn constructor_reg_to_gpr_mem_imm<C: Context>(ctx: &mut C, arg0: Reg) -> Opt
 // Generated as internal constructor for term put_in_gpr.
 pub fn constructor_put_in_gpr<C: Context>(ctx: &mut C, arg0: Value) -> Option<Gpr> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/x64/inst.isle line 1054.
+    // Rule at src/isa/x64/inst.isle line 1191.
     let expr0_0 = C::put_in_reg(ctx, pattern0_0);
     let expr1_0 = C::gpr_new(ctx, expr0_0);
     return Some(expr1_0);
@@ -1135,7 +1480,7 @@ pub fn constructor_put_in_gpr<C: Context>(ctx: &mut C, arg0: Value) -> Option<Gp
 // Generated as internal constructor for term put_in_gpr_mem.
 pub fn constructor_put_in_gpr_mem<C: Context>(ctx: &mut C, arg0: Value) -> Option<GprMem> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/x64/inst.isle line 1061.
+    // Rule at src/isa/x64/inst.isle line 1198.
     let expr0_0 = C::put_in_reg_mem(ctx, pattern0_0);
     let expr1_0 = C::reg_mem_to_gpr_mem(ctx, &expr0_0);
     return Some(expr1_0);
@@ -1144,7 +1489,7 @@ pub fn constructor_put_in_gpr_mem<C: Context>(ctx: &mut C, arg0: Value) -> Optio
 // Generated as internal constructor for term put_in_gpr_mem_imm.
 pub fn constructor_put_in_gpr_mem_imm<C: Context>(ctx: &mut C, arg0: Value) -> Option<GprMemImm> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/x64/inst.isle line 1068.
+    // Rule at src/isa/x64/inst.isle line 1205.
     let expr0_0 = C::put_in_reg_mem_imm(ctx, pattern0_0);
     let expr1_0 = C::gpr_mem_imm_new(ctx, &expr0_0);
     return Some(expr1_0);
@@ -1153,7 +1498,7 @@ pub fn constructor_put_in_gpr_mem_imm<C: Context>(ctx: &mut C, arg0: Value) -> O
 // Generated as internal constructor for term put_in_xmm.
 pub fn constructor_put_in_xmm<C: Context>(ctx: &mut C, arg0: Value) -> Option<Xmm> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/x64/inst.isle line 1075.
+    // Rule at src/isa/x64/inst.isle line 1212.
     let expr0_0 = C::put_in_reg(ctx, pattern0_0);
     let expr1_0 = C::xmm_new(ctx, expr0_0);
     return Some(expr1_0);
@@ -1162,7 +1507,7 @@ pub fn constructor_put_in_xmm<C: Context>(ctx: &mut C, arg0: Value) -> Option<Xm
 // Generated as internal constructor for term put_in_xmm_mem.
 pub fn constructor_put_in_xmm_mem<C: Context>(ctx: &mut C, arg0: Value) -> Option<XmmMem> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/x64/inst.isle line 1082.
+    // Rule at src/isa/x64/inst.isle line 1219.
     let expr0_0 = C::put_in_reg_mem(ctx, pattern0_0);
     let expr1_0 = C::reg_mem_to_xmm_mem(ctx, &expr0_0);
     return Some(expr1_0);
@@ -1171,7 +1516,7 @@ pub fn constructor_put_in_xmm_mem<C: Context>(ctx: &mut C, arg0: Value) -> Optio
 // Generated as internal constructor for term put_in_xmm_mem_imm.
 pub fn constructor_put_in_xmm_mem_imm<C: Context>(ctx: &mut C, arg0: Value) -> Option<XmmMemImm> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/x64/inst.isle line 1089.
+    // Rule at src/isa/x64/inst.isle line 1226.
     let expr0_0 = C::put_in_reg_mem_imm(ctx, pattern0_0);
     let expr1_0 = C::xmm_mem_imm_new(ctx, &expr0_0);
     return Some(expr1_0);
@@ -1180,7 +1525,7 @@ pub fn constructor_put_in_xmm_mem_imm<C: Context>(ctx: &mut C, arg0: Value) -> O
 // Generated as internal constructor for term output_gpr.
 pub fn constructor_output_gpr<C: Context>(ctx: &mut C, arg0: Gpr) -> Option<InstOutput> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/x64/inst.isle line 1094.
+    // Rule at src/isa/x64/inst.isle line 1231.
     let expr0_0 = C::gpr_to_reg(ctx, pattern0_0);
     let expr1_0 = constructor_output_reg(ctx, expr0_0)?;
     return Some(expr1_0);
@@ -1190,7 +1535,7 @@ pub fn constructor_output_gpr<C: Context>(ctx: &mut C, arg0: Gpr) -> Option<Inst
 pub fn constructor_value_gprs<C: Context>(ctx: &mut C, arg0: Gpr, arg1: Gpr) -> Option<ValueRegs> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 1099.
+    // Rule at src/isa/x64/inst.isle line 1236.
     let expr0_0 = C::gpr_to_reg(ctx, pattern0_0);
     let expr1_0 = C::gpr_to_reg(ctx, pattern1_0);
     let expr2_0 = C::value_regs(ctx, expr0_0, expr1_0);
@@ -1200,7 +1545,7 @@ pub fn constructor_value_gprs<C: Context>(ctx: &mut C, arg0: Gpr, arg1: Gpr) -> 
 // Generated as internal constructor for term output_xmm.
 pub fn constructor_output_xmm<C: Context>(ctx: &mut C, arg0: Xmm) -> Option<InstOutput> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/x64/inst.isle line 1104.
+    // Rule at src/isa/x64/inst.isle line 1241.
     let expr0_0 = C::xmm_to_reg(ctx, pattern0_0);
     let expr1_0 = constructor_output_reg(ctx, expr0_0)?;
     return Some(expr1_0);
@@ -1214,7 +1559,7 @@ pub fn constructor_value_regs_get_gpr<C: Context>(
 ) -> Option<Gpr> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 1111.
+    // Rule at src/isa/x64/inst.isle line 1248.
     let expr0_0 = C::value_regs_get(ctx, pattern0_0, pattern1_0);
     let expr1_0 = C::gpr_new(ctx, expr0_0);
     return Some(expr1_0);
@@ -1223,7 +1568,7 @@ pub fn constructor_value_regs_get_gpr<C: Context>(
 // Generated as internal constructor for term lo_gpr.
 pub fn constructor_lo_gpr<C: Context>(ctx: &mut C, arg0: Value) -> Option<Gpr> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/x64/inst.isle line 1124.
+    // Rule at src/isa/x64/inst.isle line 1261.
     let expr0_0 = constructor_lo_reg(ctx, pattern0_0)?;
     let expr1_0 = C::gpr_new(ctx, expr0_0);
     return Some(expr1_0);
@@ -1235,7 +1580,7 @@ pub fn constructor_sink_load_to_gpr_mem_imm<C: Context>(
     arg0: &SinkableLoad,
 ) -> Option<GprMemImm> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/x64/inst.isle line 1207.
+    // Rule at src/isa/x64/inst.isle line 1344.
     let expr0_0 = C::sink_load(ctx, pattern0_0);
     let expr1_0 = C::gpr_mem_imm_new(ctx, &expr0_0);
     return Some(expr1_0);
@@ -1253,12 +1598,12 @@ pub fn constructor_extend_to_gpr<C: Context>(
     let pattern2_0 = arg1;
     if pattern2_0 == pattern1_0 {
         let pattern4_0 = arg2;
-        // Rule at src/isa/x64/inst.isle line 1229.
+        // Rule at src/isa/x64/inst.isle line 1366.
         let expr0_0 = constructor_put_in_gpr(ctx, pattern0_0)?;
         return Some(expr0_0);
     }
     let pattern3_0 = arg2;
-    // Rule at src/isa/x64/inst.isle line 1232.
+    // Rule at src/isa/x64/inst.isle line 1369.
     let expr0_0 = C::ty_bits_u16(ctx, pattern1_0);
     let expr1_0 = C::operand_size_of_type_32_64(ctx, pattern2_0);
     let expr2_0 = constructor_operand_size_bits(ctx, &expr1_0)?;
@@ -1282,7 +1627,7 @@ pub fn constructor_extend<C: Context>(
             let pattern2_0 = arg1;
             let pattern3_0 = arg2;
             let pattern4_0 = arg3;
-            // Rule at src/isa/x64/inst.isle line 1252.
+            // Rule at src/isa/x64/inst.isle line 1389.
             let expr0_0 = constructor_x64_movsx(ctx, pattern3_0, pattern4_0)?;
             return Some(expr0_0);
         }
@@ -1290,7 +1635,7 @@ pub fn constructor_extend<C: Context>(
             let pattern2_0 = arg1;
             let pattern3_0 = arg2;
             let pattern4_0 = arg3;
-            // Rule at src/isa/x64/inst.isle line 1248.
+            // Rule at src/isa/x64/inst.isle line 1385.
             let expr0_0 = constructor_x64_movzx(ctx, pattern3_0, pattern4_0)?;
             return Some(expr0_0);
         }
@@ -1303,17 +1648,17 @@ pub fn constructor_extend<C: Context>(
 pub fn constructor_sse_xor_op<C: Context>(ctx: &mut C, arg0: Type) -> Option<SseOpcode> {
     let pattern0_0 = arg0;
     if pattern0_0 == F32X4 {
-        // Rule at src/isa/x64/inst.isle line 1259.
+        // Rule at src/isa/x64/inst.isle line 1396.
         let expr0_0 = SseOpcode::Xorps;
         return Some(expr0_0);
     }
     if pattern0_0 == F64X2 {
-        // Rule at src/isa/x64/inst.isle line 1260.
+        // Rule at src/isa/x64/inst.isle line 1397.
         let expr0_0 = SseOpcode::Xorpd;
         return Some(expr0_0);
     }
     if let Some((pattern1_0, pattern1_1)) = C::multi_lane(ctx, pattern0_0) {
-        // Rule at src/isa/x64/inst.isle line 1261.
+        // Rule at src/isa/x64/inst.isle line 1398.
         let expr0_0 = SseOpcode::Pxor;
         return Some(expr0_0);
     }
@@ -1330,7 +1675,7 @@ pub fn constructor_sse_xor<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/x64/inst.isle line 1265.
+    // Rule at src/isa/x64/inst.isle line 1402.
     let expr0_0 = constructor_sse_xor_op(ctx, pattern0_0)?;
     let expr1_0 = constructor_xmm_rm_r(ctx, pattern0_0, &expr0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -1340,40 +1685,40 @@ pub fn constructor_sse_xor<C: Context>(
 pub fn constructor_sse_cmp_op<C: Context>(ctx: &mut C, arg0: Type) -> Option<SseOpcode> {
     let pattern0_0 = arg0;
     if pattern0_0 == F32X4 {
-        // Rule at src/isa/x64/inst.isle line 1274.
+        // Rule at src/isa/x64/inst.isle line 1411.
         let expr0_0 = SseOpcode::Cmpps;
         return Some(expr0_0);
     }
     if pattern0_0 == F64X2 {
-        // Rule at src/isa/x64/inst.isle line 1275.
+        // Rule at src/isa/x64/inst.isle line 1412.
         let expr0_0 = SseOpcode::Cmppd;
         return Some(expr0_0);
     }
     if let Some((pattern1_0, pattern1_1)) = C::multi_lane(ctx, pattern0_0) {
         if pattern1_0 == 8 {
             if pattern1_1 == 16 {
-                // Rule at src/isa/x64/inst.isle line 1270.
+                // Rule at src/isa/x64/inst.isle line 1407.
                 let expr0_0 = SseOpcode::Pcmpeqb;
                 return Some(expr0_0);
             }
         }
         if pattern1_0 == 16 {
             if pattern1_1 == 8 {
-                // Rule at src/isa/x64/inst.isle line 1271.
+                // Rule at src/isa/x64/inst.isle line 1408.
                 let expr0_0 = SseOpcode::Pcmpeqw;
                 return Some(expr0_0);
             }
         }
         if pattern1_0 == 32 {
             if pattern1_1 == 4 {
-                // Rule at src/isa/x64/inst.isle line 1272.
+                // Rule at src/isa/x64/inst.isle line 1409.
                 let expr0_0 = SseOpcode::Pcmpeqd;
                 return Some(expr0_0);
             }
         }
         if pattern1_0 == 64 {
             if pattern1_1 == 2 {
-                // Rule at src/isa/x64/inst.isle line 1273.
+                // Rule at src/isa/x64/inst.isle line 1410.
                 let expr0_0 = SseOpcode::Pcmpeqq;
                 return Some(expr0_0);
             }
@@ -1385,7 +1730,7 @@ pub fn constructor_sse_cmp_op<C: Context>(ctx: &mut C, arg0: Type) -> Option<Sse
 // Generated as internal constructor for term vector_all_ones.
 pub fn constructor_vector_all_ones<C: Context>(ctx: &mut C, arg0: Type) -> Option<Xmm> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/x64/inst.isle line 1289.
+    // Rule at src/isa/x64/inst.isle line 1426.
     let expr0_0 = C::temp_writable_xmm(ctx);
     let expr1_0: Type = I32X4;
     let expr2_0 = constructor_sse_cmp_op(ctx, expr1_0)?;
@@ -1410,7 +1755,7 @@ pub fn constructor_make_i64x2_from_lanes<C: Context>(
 ) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 1299.
+    // Rule at src/isa/x64/inst.isle line 1436.
     let expr0_0 = C::temp_writable_xmm(ctx);
     let expr1_0 = C::writable_xmm_to_reg(ctx, expr0_0);
     let expr2_0 = MInst::XmmUninitializedValue { dst: expr0_0 };
@@ -1452,12 +1797,12 @@ pub fn constructor_mov_rmi_to_xmm<C: Context>(ctx: &mut C, arg0: &RegMemImm) -> 
     let pattern0_0 = arg0;
     match pattern0_0 {
         &RegMemImm::Imm { simm32: pattern1_0 } => {
-            // Rule at src/isa/x64/inst.isle line 1320.
+            // Rule at src/isa/x64/inst.isle line 1457.
             let expr0_0 = C::xmm_mem_imm_new(ctx, pattern0_0);
             return Some(expr0_0);
         }
         &RegMemImm::Reg { reg: pattern1_0 } => {
-            // Rule at src/isa/x64/inst.isle line 1321.
+            // Rule at src/isa/x64/inst.isle line 1458.
             let expr0_0 = SseOpcode::Movd;
             let expr1_0 = C::reg_to_gpr_mem(ctx, pattern1_0);
             let expr2_0 = OperandSize::Size32;
@@ -1468,7 +1813,7 @@ pub fn constructor_mov_rmi_to_xmm<C: Context>(ctx: &mut C, arg0: &RegMemImm) -> 
         &RegMemImm::Mem {
             addr: ref pattern1_0,
         } => {
-            // Rule at src/isa/x64/inst.isle line 1319.
+            // Rule at src/isa/x64/inst.isle line 1456.
             let expr0_0 = C::xmm_mem_imm_new(ctx, pattern0_0);
             return Some(expr0_0);
         }
@@ -1488,7 +1833,7 @@ pub fn constructor_x64_load<C: Context>(
     if pattern0_0 == I64 {
         let pattern2_0 = arg1;
         let pattern3_0 = arg2;
-        // Rule at src/isa/x64/inst.isle line 1335.
+        // Rule at src/isa/x64/inst.isle line 1472.
         let expr0_0 = C::temp_writable_gpr(ctx);
         let expr1_0 = MInst::Mov64MR {
             src: pattern2_0.clone(),
@@ -1501,7 +1846,7 @@ pub fn constructor_x64_load<C: Context>(
     if pattern0_0 == F32 {
         let pattern2_0 = arg1;
         let pattern3_0 = arg2;
-        // Rule at src/isa/x64/inst.isle line 1340.
+        // Rule at src/isa/x64/inst.isle line 1477.
         let expr0_0 = SseOpcode::Movss;
         let expr1_0 = constructor_synthetic_amode_to_xmm_mem(ctx, pattern2_0)?;
         let expr2_0 = constructor_xmm_unary_rm_r(ctx, &expr0_0, &expr1_0)?;
@@ -1511,7 +1856,7 @@ pub fn constructor_x64_load<C: Context>(
     if pattern0_0 == F64 {
         let pattern2_0 = arg1;
         let pattern3_0 = arg2;
-        // Rule at src/isa/x64/inst.isle line 1344.
+        // Rule at src/isa/x64/inst.isle line 1481.
         let expr0_0 = SseOpcode::Movsd;
         let expr1_0 = constructor_synthetic_amode_to_xmm_mem(ctx, pattern2_0)?;
         let expr2_0 = constructor_xmm_unary_rm_r(ctx, &expr0_0, &expr1_0)?;
@@ -1521,7 +1866,7 @@ pub fn constructor_x64_load<C: Context>(
     if pattern0_0 == F32X4 {
         let pattern2_0 = arg1;
         let pattern3_0 = arg2;
-        // Rule at src/isa/x64/inst.isle line 1348.
+        // Rule at src/isa/x64/inst.isle line 1485.
         let expr0_0 = SseOpcode::Movups;
         let expr1_0 = constructor_synthetic_amode_to_xmm_mem(ctx, pattern2_0)?;
         let expr2_0 = constructor_xmm_unary_rm_r(ctx, &expr0_0, &expr1_0)?;
@@ -1531,7 +1876,7 @@ pub fn constructor_x64_load<C: Context>(
     if pattern0_0 == F64X2 {
         let pattern2_0 = arg1;
         let pattern3_0 = arg2;
-        // Rule at src/isa/x64/inst.isle line 1352.
+        // Rule at src/isa/x64/inst.isle line 1489.
         let expr0_0 = SseOpcode::Movupd;
         let expr1_0 = constructor_synthetic_amode_to_xmm_mem(ctx, pattern2_0)?;
         let expr2_0 = constructor_xmm_unary_rm_r(ctx, &expr0_0, &expr1_0)?;
@@ -1541,7 +1886,7 @@ pub fn constructor_x64_load<C: Context>(
     if let Some((pattern1_0, pattern1_1)) = C::multi_lane(ctx, pattern0_0) {
         let pattern2_0 = arg1;
         let pattern3_0 = arg2;
-        // Rule at src/isa/x64/inst.isle line 1356.
+        // Rule at src/isa/x64/inst.isle line 1493.
         let expr0_0 = SseOpcode::Movdqu;
         let expr1_0 = constructor_synthetic_amode_to_xmm_mem(ctx, pattern2_0)?;
         let expr2_0 = constructor_xmm_unary_rm_r(ctx, &expr0_0, &expr1_0)?;
@@ -1552,7 +1897,7 @@ pub fn constructor_x64_load<C: Context>(
         let pattern2_0 = arg1;
         let pattern3_0 = arg2;
         if let &ExtKind::SignExtend = pattern3_0 {
-            // Rule at src/isa/x64/inst.isle line 1331.
+            // Rule at src/isa/x64/inst.isle line 1468.
             let expr0_0 = C::ty_bytes(ctx, pattern1_0);
             let expr1_0: u16 = 8;
             let expr2_0 = C::ext_mode(ctx, expr0_0, expr1_0);
@@ -1568,7 +1913,7 @@ pub fn constructor_x64_load<C: Context>(
 // Generated as internal constructor for term x64_mov.
 pub fn constructor_x64_mov<C: Context>(ctx: &mut C, arg0: &Amode) -> Option<Reg> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/x64/inst.isle line 1361.
+    // Rule at src/isa/x64/inst.isle line 1498.
     let expr0_0 = C::temp_writable_gpr(ctx);
     let expr1_0 = C::amode_to_synthetic_amode(ctx, pattern0_0);
     let expr2_0 = MInst::Mov64MR {
@@ -1588,7 +1933,7 @@ pub fn constructor_x64_movzx<C: Context>(
 ) -> Option<Gpr> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 1367.
+    // Rule at src/isa/x64/inst.isle line 1504.
     let expr0_0 = C::temp_writable_gpr(ctx);
     let expr1_0 = MInst::MovzxRmR {
         ext_mode: pattern0_0.clone(),
@@ -1608,7 +1953,7 @@ pub fn constructor_x64_movsx<C: Context>(
 ) -> Option<Gpr> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 1373.
+    // Rule at src/isa/x64/inst.isle line 1510.
     let expr0_0 = C::temp_writable_gpr(ctx);
     let expr1_0 = MInst::MovsxRmR {
         ext_mode: pattern0_0.clone(),
@@ -1623,7 +1968,7 @@ pub fn constructor_x64_movsx<C: Context>(
 // Generated as internal constructor for term x64_movss_load.
 pub fn constructor_x64_movss_load<C: Context>(ctx: &mut C, arg0: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/x64/inst.isle line 1379.
+    // Rule at src/isa/x64/inst.isle line 1516.
     let expr0_0 = SseOpcode::Movss;
     let expr1_0 = constructor_xmm_unary_rm_r(ctx, &expr0_0, pattern0_0)?;
     return Some(expr1_0);
@@ -1632,7 +1977,7 @@ pub fn constructor_x64_movss_load<C: Context>(ctx: &mut C, arg0: &XmmMem) -> Opt
 // Generated as internal constructor for term x64_movsd_load.
 pub fn constructor_x64_movsd_load<C: Context>(ctx: &mut C, arg0: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/x64/inst.isle line 1383.
+    // Rule at src/isa/x64/inst.isle line 1520.
     let expr0_0 = SseOpcode::Movsd;
     let expr1_0 = constructor_xmm_unary_rm_r(ctx, &expr0_0, pattern0_0)?;
     return Some(expr1_0);
@@ -1641,7 +1986,7 @@ pub fn constructor_x64_movsd_load<C: Context>(ctx: &mut C, arg0: &XmmMem) -> Opt
 // Generated as internal constructor for term x64_movups.
 pub fn constructor_x64_movups<C: Context>(ctx: &mut C, arg0: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/x64/inst.isle line 1387.
+    // Rule at src/isa/x64/inst.isle line 1524.
     let expr0_0 = SseOpcode::Movups;
     let expr1_0 = constructor_xmm_unary_rm_r(ctx, &expr0_0, pattern0_0)?;
     return Some(expr1_0);
@@ -1650,7 +1995,7 @@ pub fn constructor_x64_movups<C: Context>(ctx: &mut C, arg0: &XmmMem) -> Option<
 // Generated as internal constructor for term x64_movupd.
 pub fn constructor_x64_movupd<C: Context>(ctx: &mut C, arg0: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/x64/inst.isle line 1391.
+    // Rule at src/isa/x64/inst.isle line 1528.
     let expr0_0 = SseOpcode::Movupd;
     let expr1_0 = constructor_xmm_unary_rm_r(ctx, &expr0_0, pattern0_0)?;
     return Some(expr1_0);
@@ -1659,7 +2004,7 @@ pub fn constructor_x64_movupd<C: Context>(ctx: &mut C, arg0: &XmmMem) -> Option<
 // Generated as internal constructor for term x64_movdqu.
 pub fn constructor_x64_movdqu<C: Context>(ctx: &mut C, arg0: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/x64/inst.isle line 1395.
+    // Rule at src/isa/x64/inst.isle line 1532.
     let expr0_0 = SseOpcode::Movdqu;
     let expr1_0 = constructor_xmm_unary_rm_r(ctx, &expr0_0, pattern0_0)?;
     return Some(expr1_0);
@@ -1668,7 +2013,7 @@ pub fn constructor_x64_movdqu<C: Context>(ctx: &mut C, arg0: &XmmMem) -> Option<
 // Generated as internal constructor for term x64_pmovsxbw.
 pub fn constructor_x64_pmovsxbw<C: Context>(ctx: &mut C, arg0: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/x64/inst.isle line 1399.
+    // Rule at src/isa/x64/inst.isle line 1536.
     let expr0_0 = SseOpcode::Pmovsxbw;
     let expr1_0 = constructor_xmm_unary_rm_r(ctx, &expr0_0, pattern0_0)?;
     return Some(expr1_0);
@@ -1677,7 +2022,7 @@ pub fn constructor_x64_pmovsxbw<C: Context>(ctx: &mut C, arg0: &XmmMem) -> Optio
 // Generated as internal constructor for term x64_pmovzxbw.
 pub fn constructor_x64_pmovzxbw<C: Context>(ctx: &mut C, arg0: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/x64/inst.isle line 1403.
+    // Rule at src/isa/x64/inst.isle line 1540.
     let expr0_0 = SseOpcode::Pmovzxbw;
     let expr1_0 = constructor_xmm_unary_rm_r(ctx, &expr0_0, pattern0_0)?;
     return Some(expr1_0);
@@ -1686,7 +2031,7 @@ pub fn constructor_x64_pmovzxbw<C: Context>(ctx: &mut C, arg0: &XmmMem) -> Optio
 // Generated as internal constructor for term x64_pmovsxwd.
 pub fn constructor_x64_pmovsxwd<C: Context>(ctx: &mut C, arg0: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/x64/inst.isle line 1407.
+    // Rule at src/isa/x64/inst.isle line 1544.
     let expr0_0 = SseOpcode::Pmovsxwd;
     let expr1_0 = constructor_xmm_unary_rm_r(ctx, &expr0_0, pattern0_0)?;
     return Some(expr1_0);
@@ -1695,7 +2040,7 @@ pub fn constructor_x64_pmovsxwd<C: Context>(ctx: &mut C, arg0: &XmmMem) -> Optio
 // Generated as internal constructor for term x64_pmovzxwd.
 pub fn constructor_x64_pmovzxwd<C: Context>(ctx: &mut C, arg0: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/x64/inst.isle line 1411.
+    // Rule at src/isa/x64/inst.isle line 1548.
     let expr0_0 = SseOpcode::Pmovzxwd;
     let expr1_0 = constructor_xmm_unary_rm_r(ctx, &expr0_0, pattern0_0)?;
     return Some(expr1_0);
@@ -1704,7 +2049,7 @@ pub fn constructor_x64_pmovzxwd<C: Context>(ctx: &mut C, arg0: &XmmMem) -> Optio
 // Generated as internal constructor for term x64_pmovsxdq.
 pub fn constructor_x64_pmovsxdq<C: Context>(ctx: &mut C, arg0: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/x64/inst.isle line 1415.
+    // Rule at src/isa/x64/inst.isle line 1552.
     let expr0_0 = SseOpcode::Pmovsxdq;
     let expr1_0 = constructor_xmm_unary_rm_r(ctx, &expr0_0, pattern0_0)?;
     return Some(expr1_0);
@@ -1713,7 +2058,7 @@ pub fn constructor_x64_pmovsxdq<C: Context>(ctx: &mut C, arg0: &XmmMem) -> Optio
 // Generated as internal constructor for term x64_pmovzxdq.
 pub fn constructor_x64_pmovzxdq<C: Context>(ctx: &mut C, arg0: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/x64/inst.isle line 1419.
+    // Rule at src/isa/x64/inst.isle line 1556.
     let expr0_0 = SseOpcode::Pmovzxdq;
     let expr1_0 = constructor_xmm_unary_rm_r(ctx, &expr0_0, pattern0_0)?;
     return Some(expr1_0);
@@ -1729,7 +2074,7 @@ pub fn constructor_x64_movrm<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/x64/inst.isle line 1423.
+    // Rule at src/isa/x64/inst.isle line 1560.
     let expr0_0 = C::raw_operand_size_of_type(ctx, pattern0_0);
     let expr1_0 = MInst::MovRM {
         size: expr0_0,
@@ -1750,7 +2095,7 @@ pub fn constructor_x64_xmm_movrm<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/x64/inst.isle line 1428.
+    // Rule at src/isa/x64/inst.isle line 1565.
     let expr0_0 = C::xmm_to_reg(ctx, pattern2_0);
     let expr1_0 = MInst::XmmMovRM {
         op: pattern0_0.clone(),
@@ -1769,7 +2114,7 @@ pub fn constructor_x64_xmm_load_const<C: Context>(
 ) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 1433.
+    // Rule at src/isa/x64/inst.isle line 1570.
     let expr0_0 = C::temp_writable_xmm(ctx);
     let expr1_0 = C::writable_xmm_to_reg(ctx, expr0_0);
     let expr2_0 = MInst::XmmLoadConst {
@@ -1794,7 +2139,7 @@ pub fn constructor_alu_rmi_r<C: Context>(
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
     let pattern3_0 = arg3;
-    // Rule at src/isa/x64/inst.isle line 1446.
+    // Rule at src/isa/x64/inst.isle line 1583.
     let expr0_0 = C::temp_writable_gpr(ctx);
     let expr1_0 = C::operand_size_of_type_32_64(ctx, pattern0_0);
     let expr2_0 = MInst::AluRmiR {
@@ -1819,7 +2164,7 @@ pub fn constructor_x64_add<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/x64/inst.isle line 1454.
+    // Rule at src/isa/x64/inst.isle line 1591.
     let expr0_0 = AluRmiROpcode::Add;
     let expr1_0 = constructor_alu_rmi_r(ctx, pattern0_0, &expr0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -1835,7 +2180,7 @@ pub fn constructor_x64_add_with_flags_paired<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/x64/inst.isle line 1462.
+    // Rule at src/isa/x64/inst.isle line 1599.
     let expr0_0 = C::temp_writable_gpr(ctx);
     let expr1_0 = C::operand_size_of_type_32_64(ctx, pattern0_0);
     let expr2_0 = AluRmiROpcode::Add;
@@ -1864,7 +2209,7 @@ pub fn constructor_x64_adc_paired<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/x64/inst.isle line 1474.
+    // Rule at src/isa/x64/inst.isle line 1611.
     let expr0_0 = C::temp_writable_gpr(ctx);
     let expr1_0 = C::operand_size_of_type_32_64(ctx, pattern0_0);
     let expr2_0 = AluRmiROpcode::Adc;
@@ -1893,7 +2238,7 @@ pub fn constructor_x64_sub<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/x64/inst.isle line 1486.
+    // Rule at src/isa/x64/inst.isle line 1623.
     let expr0_0 = AluRmiROpcode::Sub;
     let expr1_0 = constructor_alu_rmi_r(ctx, pattern0_0, &expr0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -1909,7 +2254,7 @@ pub fn constructor_x64_sub_with_flags_paired<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/x64/inst.isle line 1494.
+    // Rule at src/isa/x64/inst.isle line 1631.
     let expr0_0 = C::temp_writable_gpr(ctx);
     let expr1_0 = C::operand_size_of_type_32_64(ctx, pattern0_0);
     let expr2_0 = AluRmiROpcode::Sub;
@@ -1938,7 +2283,7 @@ pub fn constructor_x64_sbb_paired<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/x64/inst.isle line 1506.
+    // Rule at src/isa/x64/inst.isle line 1643.
     let expr0_0 = C::temp_writable_gpr(ctx);
     let expr1_0 = C::operand_size_of_type_32_64(ctx, pattern0_0);
     let expr2_0 = AluRmiROpcode::Sbb;
@@ -1967,7 +2312,7 @@ pub fn constructor_x64_mul<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/x64/inst.isle line 1518.
+    // Rule at src/isa/x64/inst.isle line 1655.
     let expr0_0 = AluRmiROpcode::Mul;
     let expr1_0 = constructor_alu_rmi_r(ctx, pattern0_0, &expr0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -1983,7 +2328,7 @@ pub fn constructor_x64_and<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/x64/inst.isle line 1526.
+    // Rule at src/isa/x64/inst.isle line 1663.
     let expr0_0 = AluRmiROpcode::And;
     let expr1_0 = constructor_alu_rmi_r(ctx, pattern0_0, &expr0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -1999,7 +2344,7 @@ pub fn constructor_x64_and_with_flags_paired<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/x64/inst.isle line 1533.
+    // Rule at src/isa/x64/inst.isle line 1670.
     let expr0_0 = C::temp_writable_gpr(ctx);
     let expr1_0 = C::operand_size_of_type_32_64(ctx, pattern0_0);
     let expr2_0 = AluRmiROpcode::And;
@@ -2024,7 +2369,7 @@ pub fn constructor_x64_or<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/x64/inst.isle line 1544.
+    // Rule at src/isa/x64/inst.isle line 1681.
     let expr0_0 = AluRmiROpcode::Or;
     let expr1_0 = constructor_alu_rmi_r(ctx, pattern0_0, &expr0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -2040,7 +2385,7 @@ pub fn constructor_x64_xor<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/x64/inst.isle line 1552.
+    // Rule at src/isa/x64/inst.isle line 1689.
     let expr0_0 = AluRmiROpcode::Xor;
     let expr1_0 = constructor_alu_rmi_r(ctx, pattern0_0, &expr0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -2052,7 +2397,7 @@ pub fn constructor_imm<C: Context>(ctx: &mut C, arg0: Type, arg1: u64) -> Option
     if pattern0_0 == I64 {
         let pattern2_0 = arg1;
         if let Some(pattern3_0) = C::nonzero_u64_fits_in_u32(ctx, pattern2_0) {
-            // Rule at src/isa/x64/inst.isle line 1592.
+            // Rule at src/isa/x64/inst.isle line 1729.
             let expr0_0 = C::temp_writable_gpr(ctx);
             let expr1_0 = OperandSize::Size32;
             let expr2_0 = MInst::Imm {
@@ -2068,7 +2413,7 @@ pub fn constructor_imm<C: Context>(ctx: &mut C, arg0: Type, arg1: u64) -> Option
     if pattern0_0 == F32 {
         let pattern2_0 = arg1;
         if pattern2_0 == 0 {
-            // Rule at src/isa/x64/inst.isle line 1621.
+            // Rule at src/isa/x64/inst.isle line 1758.
             let expr0_0 = C::temp_writable_xmm(ctx);
             let expr1_0 = C::writable_xmm_to_xmm(ctx, expr0_0);
             let expr2_0 = SseOpcode::Xorps;
@@ -2083,7 +2428,7 @@ pub fn constructor_imm<C: Context>(ctx: &mut C, arg0: Type, arg1: u64) -> Option
             let expr6_0 = C::xmm_to_reg(ctx, expr1_0);
             return Some(expr6_0);
         }
-        // Rule at src/isa/x64/inst.isle line 1569.
+        // Rule at src/isa/x64/inst.isle line 1706.
         let expr0_0 = SseOpcode::Movd;
         let expr1_0: Type = I32;
         let expr2_0 = constructor_imm(ctx, expr1_0, pattern2_0)?;
@@ -2096,7 +2441,7 @@ pub fn constructor_imm<C: Context>(ctx: &mut C, arg0: Type, arg1: u64) -> Option
     if pattern0_0 == F64 {
         let pattern2_0 = arg1;
         if pattern2_0 == 0 {
-            // Rule at src/isa/x64/inst.isle line 1633.
+            // Rule at src/isa/x64/inst.isle line 1770.
             let expr0_0 = C::temp_writable_xmm(ctx);
             let expr1_0 = C::writable_xmm_to_xmm(ctx, expr0_0);
             let expr2_0 = SseOpcode::Xorpd;
@@ -2111,7 +2456,7 @@ pub fn constructor_imm<C: Context>(ctx: &mut C, arg0: Type, arg1: u64) -> Option
             let expr6_0 = C::xmm_to_reg(ctx, expr1_0);
             return Some(expr6_0);
         }
-        // Rule at src/isa/x64/inst.isle line 1575.
+        // Rule at src/isa/x64/inst.isle line 1712.
         let expr0_0 = SseOpcode::Movq;
         let expr1_0: Type = I64;
         let expr2_0 = constructor_imm(ctx, expr1_0, pattern2_0)?;
@@ -2124,7 +2469,7 @@ pub fn constructor_imm<C: Context>(ctx: &mut C, arg0: Type, arg1: u64) -> Option
     if let Some((pattern1_0, pattern1_1)) = C::multi_lane(ctx, pattern0_0) {
         let pattern2_0 = arg1;
         if pattern2_0 == 0 {
-            // Rule at src/isa/x64/inst.isle line 1611.
+            // Rule at src/isa/x64/inst.isle line 1748.
             let expr0_0 = C::temp_writable_xmm(ctx);
             let expr1_0 = C::writable_xmm_to_xmm(ctx, expr0_0);
             let expr2_0 = constructor_sse_xor_op(ctx, pattern0_0)?;
@@ -2143,7 +2488,7 @@ pub fn constructor_imm<C: Context>(ctx: &mut C, arg0: Type, arg1: u64) -> Option
     if let Some(pattern1_0) = C::fits_in_64(ctx, pattern0_0) {
         let pattern2_0 = arg1;
         if pattern2_0 == 0 {
-            // Rule at src/isa/x64/inst.isle line 1598.
+            // Rule at src/isa/x64/inst.isle line 1735.
             let expr0_0 = C::temp_writable_gpr(ctx);
             let expr1_0 = C::writable_gpr_to_gpr(ctx, expr0_0);
             let expr2_0 = C::operand_size_of_type_32_64(ctx, pattern1_0);
@@ -2160,7 +2505,7 @@ pub fn constructor_imm<C: Context>(ctx: &mut C, arg0: Type, arg1: u64) -> Option
             let expr7_0 = C::gpr_to_reg(ctx, expr1_0);
             return Some(expr7_0);
         }
-        // Rule at src/isa/x64/inst.isle line 1562.
+        // Rule at src/isa/x64/inst.isle line 1699.
         let expr0_0 = C::temp_writable_gpr(ctx);
         let expr1_0 = C::operand_size_of_type_32_64(ctx, pattern1_0);
         let expr2_0 = MInst::Imm {
@@ -2179,8 +2524,8 @@ pub fn constructor_imm<C: Context>(ctx: &mut C, arg0: Type, arg1: u64) -> Option
 pub fn constructor_imm_i64<C: Context>(ctx: &mut C, arg0: Type, arg1: i64) -> Option<Reg> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 1584.
-    let expr0_0 = C::i64_as_u64(ctx, pattern1_0);
+    // Rule at src/isa/x64/inst.isle line 1721.
+    let expr0_0 = C::i64_as_u64(ctx, pattern1_0)?;
     let expr1_0 = constructor_imm(ctx, pattern0_0, expr0_0)?;
     return Some(expr1_0);
 }
@@ -2197,7 +2542,7 @@ pub fn constructor_shift_r<C: Context>(
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
     let pattern3_0 = arg3;
-    // Rule at src/isa/x64/inst.isle line 1646.
+    // Rule at src/isa/x64/inst.isle line 1783.
     let expr0_0 = C::temp_writable_gpr(ctx);
     let expr1_0 = C::raw_operand_size_of_type(ctx, pattern0_0);
     let expr2_0 = MInst::ShiftR {
@@ -2222,7 +2567,7 @@ pub fn constructor_x64_rotl<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/x64/inst.isle line 1656.
+    // Rule at src/isa/x64/inst.isle line 1793.
     let expr0_0 = ShiftKind::RotateLeft;
     let expr1_0 = constructor_shift_r(ctx, pattern0_0, &expr0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -2238,7 +2583,7 @@ pub fn constructor_x64_rotr<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/x64/inst.isle line 1661.
+    // Rule at src/isa/x64/inst.isle line 1798.
     let expr0_0 = ShiftKind::RotateRight;
     let expr1_0 = constructor_shift_r(ctx, pattern0_0, &expr0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -2254,7 +2599,7 @@ pub fn constructor_x64_shl<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/x64/inst.isle line 1666.
+    // Rule at src/isa/x64/inst.isle line 1803.
     let expr0_0 = ShiftKind::ShiftLeft;
     let expr1_0 = constructor_shift_r(ctx, pattern0_0, &expr0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -2270,7 +2615,7 @@ pub fn constructor_x64_shr<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/x64/inst.isle line 1671.
+    // Rule at src/isa/x64/inst.isle line 1808.
     let expr0_0 = ShiftKind::ShiftRightLogical;
     let expr1_0 = constructor_shift_r(ctx, pattern0_0, &expr0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -2286,7 +2631,7 @@ pub fn constructor_x64_sar<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/x64/inst.isle line 1676.
+    // Rule at src/isa/x64/inst.isle line 1813.
     let expr0_0 = ShiftKind::ShiftRightArithmetic;
     let expr1_0 = constructor_shift_r(ctx, pattern0_0, &expr0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -2304,7 +2649,7 @@ pub fn constructor_cmp_rmi_r<C: Context>(
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
     let pattern3_0 = arg3;
-    // Rule at src/isa/x64/inst.isle line 1681.
+    // Rule at src/isa/x64/inst.isle line 1818.
     let expr0_0 = MInst::CmpRmiR {
         size: pattern0_0.clone(),
         opcode: pattern1_0.clone(),
@@ -2325,7 +2670,7 @@ pub fn constructor_x64_cmp<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/x64/inst.isle line 1690.
+    // Rule at src/isa/x64/inst.isle line 1827.
     let expr0_0 = CmpOpcode::Cmp;
     let expr1_0 = constructor_cmp_rmi_r(ctx, pattern0_0, &expr0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -2341,7 +2686,7 @@ pub fn constructor_x64_cmp_imm<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/x64/inst.isle line 1695.
+    // Rule at src/isa/x64/inst.isle line 1832.
     let expr0_0 = CmpOpcode::Cmp;
     let expr1_0 = RegMemImm::Imm { simm32: pattern1_0 };
     let expr2_0 = C::gpr_mem_imm_new(ctx, &expr1_0);
@@ -2359,7 +2704,7 @@ pub fn constructor_xmm_cmp_rm_r<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/x64/inst.isle line 1700.
+    // Rule at src/isa/x64/inst.isle line 1837.
     let expr0_0 = MInst::XmmCmpRmR {
         op: pattern0_0.clone(),
         src: pattern1_0.clone(),
@@ -2379,7 +2724,7 @@ pub fn constructor_x64_ucomis<C: Context>(
     let pattern1_0 = C::value_type(ctx, pattern0_0);
     if pattern1_0 == F32 {
         let pattern3_0 = arg1;
-        // Rule at src/isa/x64/inst.isle line 1706.
+        // Rule at src/isa/x64/inst.isle line 1843.
         let expr0_0 = SseOpcode::Ucomiss;
         let expr1_0 = constructor_put_in_xmm(ctx, pattern0_0)?;
         let expr2_0 = C::xmm_to_xmm_mem(ctx, expr1_0);
@@ -2389,7 +2734,7 @@ pub fn constructor_x64_ucomis<C: Context>(
     }
     if pattern1_0 == F64 {
         let pattern3_0 = arg1;
-        // Rule at src/isa/x64/inst.isle line 1710.
+        // Rule at src/isa/x64/inst.isle line 1847.
         let expr0_0 = SseOpcode::Ucomisd;
         let expr1_0 = constructor_put_in_xmm(ctx, pattern0_0)?;
         let expr2_0 = C::xmm_to_xmm_mem(ctx, expr1_0);
@@ -2410,7 +2755,7 @@ pub fn constructor_x64_test<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/x64/inst.isle line 1715.
+    // Rule at src/isa/x64/inst.isle line 1852.
     let expr0_0 = CmpOpcode::Test;
     let expr1_0 = constructor_cmp_rmi_r(ctx, pattern0_0, &expr0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -2428,7 +2773,7 @@ pub fn constructor_cmove<C: Context>(
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
     let pattern3_0 = arg3;
-    // Rule at src/isa/x64/inst.isle line 1722.
+    // Rule at src/isa/x64/inst.isle line 1859.
     let expr0_0 = C::temp_writable_gpr(ctx);
     let expr1_0 = C::operand_size_of_type_32_64(ctx, pattern0_0);
     let expr2_0 = MInst::Cmove {
@@ -2458,7 +2803,7 @@ pub fn constructor_cmove_xmm<C: Context>(
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
     let pattern3_0 = arg3;
-    // Rule at src/isa/x64/inst.isle line 1730.
+    // Rule at src/isa/x64/inst.isle line 1867.
     let expr0_0 = C::temp_writable_xmm(ctx);
     let expr1_0 = C::operand_size_of_type_32_64(ctx, pattern0_0);
     let expr2_0 = MInst::XmmCmove {
@@ -2489,7 +2834,7 @@ pub fn constructor_cmove_from_values<C: Context>(
         let pattern2_0 = arg1;
         let pattern3_0 = arg2;
         let pattern4_0 = arg3;
-        // Rule at src/isa/x64/inst.isle line 1741.
+        // Rule at src/isa/x64/inst.isle line 1878.
         let expr0_0 = C::put_in_regs(ctx, pattern3_0);
         let expr1_0 = C::put_in_regs(ctx, pattern4_0);
         let expr2_0 = C::temp_writable_gpr(ctx);
@@ -2534,7 +2879,7 @@ pub fn constructor_cmove_from_values<C: Context>(
             let pattern3_0 = arg1;
             let pattern4_0 = arg2;
             let pattern5_0 = arg3;
-            // Rule at src/isa/x64/inst.isle line 1765.
+            // Rule at src/isa/x64/inst.isle line 1902.
             let expr0_0 = constructor_put_in_xmm_mem(ctx, pattern4_0)?;
             let expr1_0 = constructor_put_in_xmm(ctx, pattern5_0)?;
             let expr2_0 = constructor_cmove_xmm(ctx, pattern2_0, pattern3_0, &expr0_0, expr1_0)?;
@@ -2546,7 +2891,7 @@ pub fn constructor_cmove_from_values<C: Context>(
             let pattern3_0 = arg1;
             let pattern4_0 = arg2;
             let pattern5_0 = arg3;
-            // Rule at src/isa/x64/inst.isle line 1762.
+            // Rule at src/isa/x64/inst.isle line 1899.
             let expr0_0 = constructor_put_in_gpr_mem(ctx, pattern4_0)?;
             let expr1_0 = constructor_put_in_gpr(ctx, pattern5_0)?;
             let expr2_0 = constructor_cmove(ctx, pattern2_0, pattern3_0, &expr0_0, expr1_0)?;
@@ -2570,7 +2915,7 @@ pub fn constructor_cmove_or<C: Context>(
     let pattern2_0 = arg2;
     let pattern3_0 = arg3;
     let pattern4_0 = arg4;
-    // Rule at src/isa/x64/inst.isle line 1772.
+    // Rule at src/isa/x64/inst.isle line 1909.
     let expr0_0 = C::temp_writable_gpr(ctx);
     let expr1_0 = C::temp_writable_gpr(ctx);
     let expr2_0 = C::operand_size_of_type_32_64(ctx, pattern0_0);
@@ -2612,7 +2957,7 @@ pub fn constructor_cmove_or_xmm<C: Context>(
     let pattern2_0 = arg2;
     let pattern3_0 = arg3;
     let pattern4_0 = arg4;
-    // Rule at src/isa/x64/inst.isle line 1784.
+    // Rule at src/isa/x64/inst.isle line 1921.
     let expr0_0 = C::temp_writable_xmm(ctx);
     let expr1_0 = C::temp_writable_xmm(ctx);
     let expr2_0 = C::operand_size_of_type_32_64(ctx, pattern0_0);
@@ -2655,7 +3000,7 @@ pub fn constructor_cmove_or_from_values<C: Context>(
         let pattern3_0 = arg2;
         let pattern4_0 = arg3;
         let pattern5_0 = arg4;
-        // Rule at src/isa/x64/inst.isle line 1799.
+        // Rule at src/isa/x64/inst.isle line 1936.
         let expr0_0 = C::put_in_regs(ctx, pattern4_0);
         let expr1_0 = C::put_in_regs(ctx, pattern5_0);
         let expr2_0 = C::temp_writable_gpr(ctx);
@@ -2727,7 +3072,7 @@ pub fn constructor_cmove_or_from_values<C: Context>(
             let pattern4_0 = arg2;
             let pattern5_0 = arg3;
             let pattern6_0 = arg4;
-            // Rule at src/isa/x64/inst.isle line 1821.
+            // Rule at src/isa/x64/inst.isle line 1958.
             let expr0_0 = constructor_put_in_xmm_mem(ctx, pattern5_0)?;
             let expr1_0 = constructor_put_in_xmm(ctx, pattern6_0)?;
             let expr2_0 = constructor_cmove_or_xmm(
@@ -2742,7 +3087,7 @@ pub fn constructor_cmove_or_from_values<C: Context>(
             let pattern4_0 = arg2;
             let pattern5_0 = arg3;
             let pattern6_0 = arg4;
-            // Rule at src/isa/x64/inst.isle line 1818.
+            // Rule at src/isa/x64/inst.isle line 1955.
             let expr0_0 = constructor_put_in_gpr_mem(ctx, pattern5_0)?;
             let expr1_0 = constructor_put_in_gpr(ctx, pattern6_0)?;
             let expr2_0 =
@@ -2756,7 +3101,7 @@ pub fn constructor_cmove_or_from_values<C: Context>(
 // Generated as internal constructor for term x64_setcc.
 pub fn constructor_x64_setcc<C: Context>(ctx: &mut C, arg0: &CC) -> Option<ConsumesFlags> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/x64/inst.isle line 1826.
+    // Rule at src/isa/x64/inst.isle line 1963.
     let expr0_0 = C::temp_writable_gpr(ctx);
     let expr1_0 = MInst::Setcc {
         cc: pattern0_0.clone(),
@@ -2782,7 +3127,7 @@ pub fn constructor_xmm_rm_r<C: Context>(
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
     let pattern3_0 = arg3;
-    // Rule at src/isa/x64/inst.isle line 1834.
+    // Rule at src/isa/x64/inst.isle line 1971.
     let expr0_0 = C::temp_writable_xmm(ctx);
     let expr1_0 = MInst::XmmRmR {
         op: pattern1_0.clone(),
@@ -2799,7 +3144,7 @@ pub fn constructor_xmm_rm_r<C: Context>(
 pub fn constructor_x64_paddb<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 1841.
+    // Rule at src/isa/x64/inst.isle line 1978.
     let expr0_0: Type = I8X16;
     let expr1_0 = SseOpcode::Paddb;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -2810,7 +3155,7 @@ pub fn constructor_x64_paddb<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) 
 pub fn constructor_x64_paddw<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 1846.
+    // Rule at src/isa/x64/inst.isle line 1983.
     let expr0_0: Type = I16X8;
     let expr1_0 = SseOpcode::Paddw;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -2821,7 +3166,7 @@ pub fn constructor_x64_paddw<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) 
 pub fn constructor_x64_paddd<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 1851.
+    // Rule at src/isa/x64/inst.isle line 1988.
     let expr0_0: Type = I32X4;
     let expr1_0 = SseOpcode::Paddd;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -2832,7 +3177,7 @@ pub fn constructor_x64_paddd<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) 
 pub fn constructor_x64_paddq<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 1856.
+    // Rule at src/isa/x64/inst.isle line 1993.
     let expr0_0: Type = I64X2;
     let expr1_0 = SseOpcode::Paddq;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -2843,7 +3188,7 @@ pub fn constructor_x64_paddq<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) 
 pub fn constructor_x64_paddsb<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 1861.
+    // Rule at src/isa/x64/inst.isle line 1998.
     let expr0_0: Type = I8X16;
     let expr1_0 = SseOpcode::Paddsb;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -2854,7 +3199,7 @@ pub fn constructor_x64_paddsb<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem)
 pub fn constructor_x64_paddsw<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 1866.
+    // Rule at src/isa/x64/inst.isle line 2003.
     let expr0_0: Type = I16X8;
     let expr1_0 = SseOpcode::Paddsw;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -2865,7 +3210,7 @@ pub fn constructor_x64_paddsw<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem)
 pub fn constructor_x64_paddusb<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 1871.
+    // Rule at src/isa/x64/inst.isle line 2008.
     let expr0_0: Type = I8X16;
     let expr1_0 = SseOpcode::Paddusb;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -2876,7 +3221,7 @@ pub fn constructor_x64_paddusb<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem
 pub fn constructor_x64_paddusw<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 1876.
+    // Rule at src/isa/x64/inst.isle line 2013.
     let expr0_0: Type = I16X8;
     let expr1_0 = SseOpcode::Paddusw;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -2887,7 +3232,7 @@ pub fn constructor_x64_paddusw<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem
 pub fn constructor_x64_psubb<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 1881.
+    // Rule at src/isa/x64/inst.isle line 2018.
     let expr0_0: Type = I8X16;
     let expr1_0 = SseOpcode::Psubb;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -2898,7 +3243,7 @@ pub fn constructor_x64_psubb<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) 
 pub fn constructor_x64_psubw<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 1886.
+    // Rule at src/isa/x64/inst.isle line 2023.
     let expr0_0: Type = I16X8;
     let expr1_0 = SseOpcode::Psubw;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -2909,7 +3254,7 @@ pub fn constructor_x64_psubw<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) 
 pub fn constructor_x64_psubd<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 1891.
+    // Rule at src/isa/x64/inst.isle line 2028.
     let expr0_0: Type = I32X4;
     let expr1_0 = SseOpcode::Psubd;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -2920,7 +3265,7 @@ pub fn constructor_x64_psubd<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) 
 pub fn constructor_x64_psubq<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 1896.
+    // Rule at src/isa/x64/inst.isle line 2033.
     let expr0_0: Type = I64X2;
     let expr1_0 = SseOpcode::Psubq;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -2931,7 +3276,7 @@ pub fn constructor_x64_psubq<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) 
 pub fn constructor_x64_psubsb<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 1901.
+    // Rule at src/isa/x64/inst.isle line 2038.
     let expr0_0: Type = I8X16;
     let expr1_0 = SseOpcode::Psubsb;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -2942,7 +3287,7 @@ pub fn constructor_x64_psubsb<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem)
 pub fn constructor_x64_psubsw<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 1906.
+    // Rule at src/isa/x64/inst.isle line 2043.
     let expr0_0: Type = I16X8;
     let expr1_0 = SseOpcode::Psubsw;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -2953,7 +3298,7 @@ pub fn constructor_x64_psubsw<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem)
 pub fn constructor_x64_psubusb<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 1911.
+    // Rule at src/isa/x64/inst.isle line 2048.
     let expr0_0: Type = I8X16;
     let expr1_0 = SseOpcode::Psubusb;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -2964,7 +3309,7 @@ pub fn constructor_x64_psubusb<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem
 pub fn constructor_x64_psubusw<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 1916.
+    // Rule at src/isa/x64/inst.isle line 2053.
     let expr0_0: Type = I16X8;
     let expr1_0 = SseOpcode::Psubusw;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -2975,7 +3320,7 @@ pub fn constructor_x64_psubusw<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem
 pub fn constructor_x64_pavgb<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 1921.
+    // Rule at src/isa/x64/inst.isle line 2058.
     let expr0_0: Type = I8X16;
     let expr1_0 = SseOpcode::Pavgb;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -2986,7 +3331,7 @@ pub fn constructor_x64_pavgb<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) 
 pub fn constructor_x64_pavgw<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 1926.
+    // Rule at src/isa/x64/inst.isle line 2063.
     let expr0_0: Type = I16X8;
     let expr1_0 = SseOpcode::Pavgw;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -2997,7 +3342,7 @@ pub fn constructor_x64_pavgw<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) 
 pub fn constructor_x64_pand<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 1931.
+    // Rule at src/isa/x64/inst.isle line 2068.
     let expr0_0: Type = F32X4;
     let expr1_0 = SseOpcode::Pand;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -3008,7 +3353,7 @@ pub fn constructor_x64_pand<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -
 pub fn constructor_x64_andps<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 1936.
+    // Rule at src/isa/x64/inst.isle line 2073.
     let expr0_0: Type = F32X4;
     let expr1_0 = SseOpcode::Andps;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -3019,7 +3364,7 @@ pub fn constructor_x64_andps<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) 
 pub fn constructor_x64_andpd<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 1941.
+    // Rule at src/isa/x64/inst.isle line 2078.
     let expr0_0: Type = F64X2;
     let expr1_0 = SseOpcode::Andpd;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -3030,7 +3375,7 @@ pub fn constructor_x64_andpd<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) 
 pub fn constructor_x64_por<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 1946.
+    // Rule at src/isa/x64/inst.isle line 2083.
     let expr0_0: Type = F32X4;
     let expr1_0 = SseOpcode::Por;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -3041,7 +3386,7 @@ pub fn constructor_x64_por<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) ->
 pub fn constructor_x64_orps<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 1951.
+    // Rule at src/isa/x64/inst.isle line 2088.
     let expr0_0: Type = F32X4;
     let expr1_0 = SseOpcode::Orps;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -3052,7 +3397,7 @@ pub fn constructor_x64_orps<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -
 pub fn constructor_x64_orpd<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 1956.
+    // Rule at src/isa/x64/inst.isle line 2093.
     let expr0_0: Type = F64X2;
     let expr1_0 = SseOpcode::Orpd;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -3063,7 +3408,7 @@ pub fn constructor_x64_orpd<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -
 pub fn constructor_x64_pxor<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 1961.
+    // Rule at src/isa/x64/inst.isle line 2098.
     let expr0_0: Type = I8X16;
     let expr1_0 = SseOpcode::Pxor;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -3074,7 +3419,7 @@ pub fn constructor_x64_pxor<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -
 pub fn constructor_x64_xorps<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 1966.
+    // Rule at src/isa/x64/inst.isle line 2103.
     let expr0_0: Type = F32X4;
     let expr1_0 = SseOpcode::Xorps;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -3085,7 +3430,7 @@ pub fn constructor_x64_xorps<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) 
 pub fn constructor_x64_xorpd<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 1971.
+    // Rule at src/isa/x64/inst.isle line 2108.
     let expr0_0: Type = F64X2;
     let expr1_0 = SseOpcode::Xorpd;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -3096,7 +3441,7 @@ pub fn constructor_x64_xorpd<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) 
 pub fn constructor_x64_pmullw<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 1976.
+    // Rule at src/isa/x64/inst.isle line 2113.
     let expr0_0: Type = I16X8;
     let expr1_0 = SseOpcode::Pmullw;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -3107,7 +3452,7 @@ pub fn constructor_x64_pmullw<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem)
 pub fn constructor_x64_pmulld<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 1981.
+    // Rule at src/isa/x64/inst.isle line 2118.
     let expr0_0: Type = I16X8;
     let expr1_0 = SseOpcode::Pmulld;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -3118,7 +3463,7 @@ pub fn constructor_x64_pmulld<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem)
 pub fn constructor_x64_pmulhw<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 1986.
+    // Rule at src/isa/x64/inst.isle line 2123.
     let expr0_0: Type = I16X8;
     let expr1_0 = SseOpcode::Pmulhw;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -3129,7 +3474,7 @@ pub fn constructor_x64_pmulhw<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem)
 pub fn constructor_x64_pmulhuw<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 1991.
+    // Rule at src/isa/x64/inst.isle line 2128.
     let expr0_0: Type = I16X8;
     let expr1_0 = SseOpcode::Pmulhuw;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -3140,7 +3485,7 @@ pub fn constructor_x64_pmulhuw<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem
 pub fn constructor_x64_pmuldq<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 1996.
+    // Rule at src/isa/x64/inst.isle line 2133.
     let expr0_0: Type = I16X8;
     let expr1_0 = SseOpcode::Pmuldq;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -3151,7 +3496,7 @@ pub fn constructor_x64_pmuldq<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem)
 pub fn constructor_x64_pmuludq<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2001.
+    // Rule at src/isa/x64/inst.isle line 2138.
     let expr0_0: Type = I64X2;
     let expr1_0 = SseOpcode::Pmuludq;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -3162,7 +3507,7 @@ pub fn constructor_x64_pmuludq<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem
 pub fn constructor_x64_punpckhwd<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2006.
+    // Rule at src/isa/x64/inst.isle line 2143.
     let expr0_0: Type = I16X8;
     let expr1_0 = SseOpcode::Punpckhwd;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -3173,7 +3518,7 @@ pub fn constructor_x64_punpckhwd<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmM
 pub fn constructor_x64_punpcklwd<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2011.
+    // Rule at src/isa/x64/inst.isle line 2148.
     let expr0_0: Type = I16X8;
     let expr1_0 = SseOpcode::Punpcklwd;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -3184,7 +3529,7 @@ pub fn constructor_x64_punpcklwd<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmM
 pub fn constructor_x64_andnps<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2016.
+    // Rule at src/isa/x64/inst.isle line 2153.
     let expr0_0: Type = F32X4;
     let expr1_0 = SseOpcode::Andnps;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -3195,7 +3540,7 @@ pub fn constructor_x64_andnps<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem)
 pub fn constructor_x64_andnpd<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2021.
+    // Rule at src/isa/x64/inst.isle line 2158.
     let expr0_0: Type = F64X2;
     let expr1_0 = SseOpcode::Andnpd;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -3206,7 +3551,7 @@ pub fn constructor_x64_andnpd<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem)
 pub fn constructor_x64_pandn<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2026.
+    // Rule at src/isa/x64/inst.isle line 2163.
     let expr0_0: Type = F64X2;
     let expr1_0 = SseOpcode::Pandn;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -3217,7 +3562,7 @@ pub fn constructor_x64_pandn<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) 
 pub fn constructor_x64_addss<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2031.
+    // Rule at src/isa/x64/inst.isle line 2168.
     let expr0_0: Type = F32;
     let expr1_0 = SseOpcode::Addss;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -3228,7 +3573,7 @@ pub fn constructor_x64_addss<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) 
 pub fn constructor_x64_addsd<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2036.
+    // Rule at src/isa/x64/inst.isle line 2173.
     let expr0_0: Type = F64;
     let expr1_0 = SseOpcode::Addsd;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -3239,7 +3584,7 @@ pub fn constructor_x64_addsd<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) 
 pub fn constructor_x64_addps<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2041.
+    // Rule at src/isa/x64/inst.isle line 2178.
     let expr0_0: Type = F32;
     let expr1_0 = SseOpcode::Addps;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -3250,7 +3595,7 @@ pub fn constructor_x64_addps<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) 
 pub fn constructor_x64_addpd<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2046.
+    // Rule at src/isa/x64/inst.isle line 2183.
     let expr0_0: Type = F32;
     let expr1_0 = SseOpcode::Addpd;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -3261,7 +3606,7 @@ pub fn constructor_x64_addpd<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) 
 pub fn constructor_x64_subss<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2051.
+    // Rule at src/isa/x64/inst.isle line 2188.
     let expr0_0: Type = F32;
     let expr1_0 = SseOpcode::Subss;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -3272,7 +3617,7 @@ pub fn constructor_x64_subss<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) 
 pub fn constructor_x64_subsd<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2056.
+    // Rule at src/isa/x64/inst.isle line 2193.
     let expr0_0: Type = F64;
     let expr1_0 = SseOpcode::Subsd;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -3283,7 +3628,7 @@ pub fn constructor_x64_subsd<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) 
 pub fn constructor_x64_subps<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2061.
+    // Rule at src/isa/x64/inst.isle line 2198.
     let expr0_0: Type = F32;
     let expr1_0 = SseOpcode::Subps;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -3294,7 +3639,7 @@ pub fn constructor_x64_subps<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) 
 pub fn constructor_x64_subpd<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2066.
+    // Rule at src/isa/x64/inst.isle line 2203.
     let expr0_0: Type = F32;
     let expr1_0 = SseOpcode::Subpd;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -3305,7 +3650,7 @@ pub fn constructor_x64_subpd<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) 
 pub fn constructor_x64_mulss<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2071.
+    // Rule at src/isa/x64/inst.isle line 2208.
     let expr0_0: Type = F32;
     let expr1_0 = SseOpcode::Mulss;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -3316,7 +3661,7 @@ pub fn constructor_x64_mulss<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) 
 pub fn constructor_x64_mulsd<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2076.
+    // Rule at src/isa/x64/inst.isle line 2213.
     let expr0_0: Type = F64;
     let expr1_0 = SseOpcode::Mulsd;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -3327,7 +3672,7 @@ pub fn constructor_x64_mulsd<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) 
 pub fn constructor_x64_mulps<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2081.
+    // Rule at src/isa/x64/inst.isle line 2218.
     let expr0_0: Type = F32;
     let expr1_0 = SseOpcode::Mulps;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -3338,7 +3683,7 @@ pub fn constructor_x64_mulps<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) 
 pub fn constructor_x64_mulpd<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2086.
+    // Rule at src/isa/x64/inst.isle line 2223.
     let expr0_0: Type = F32;
     let expr1_0 = SseOpcode::Mulpd;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -3349,7 +3694,7 @@ pub fn constructor_x64_mulpd<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) 
 pub fn constructor_x64_divss<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2091.
+    // Rule at src/isa/x64/inst.isle line 2228.
     let expr0_0: Type = F32;
     let expr1_0 = SseOpcode::Divss;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -3360,7 +3705,7 @@ pub fn constructor_x64_divss<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) 
 pub fn constructor_x64_divsd<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2096.
+    // Rule at src/isa/x64/inst.isle line 2233.
     let expr0_0: Type = F64;
     let expr1_0 = SseOpcode::Divsd;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -3371,7 +3716,7 @@ pub fn constructor_x64_divsd<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) 
 pub fn constructor_x64_divps<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2101.
+    // Rule at src/isa/x64/inst.isle line 2238.
     let expr0_0: Type = F32;
     let expr1_0 = SseOpcode::Divps;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -3382,7 +3727,7 @@ pub fn constructor_x64_divps<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) 
 pub fn constructor_x64_divpd<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2106.
+    // Rule at src/isa/x64/inst.isle line 2243.
     let expr0_0: Type = F32;
     let expr1_0 = SseOpcode::Divpd;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -3393,17 +3738,17 @@ pub fn constructor_x64_divpd<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) 
 pub fn constructor_sse_blend_op<C: Context>(ctx: &mut C, arg0: Type) -> Option<SseOpcode> {
     let pattern0_0 = arg0;
     if pattern0_0 == F32X4 {
-        // Rule at src/isa/x64/inst.isle line 2110.
+        // Rule at src/isa/x64/inst.isle line 2247.
         let expr0_0 = SseOpcode::Blendvps;
         return Some(expr0_0);
     }
     if pattern0_0 == F64X2 {
-        // Rule at src/isa/x64/inst.isle line 2111.
+        // Rule at src/isa/x64/inst.isle line 2248.
         let expr0_0 = SseOpcode::Blendvpd;
         return Some(expr0_0);
     }
     if let Some((pattern1_0, pattern1_1)) = C::multi_lane(ctx, pattern0_0) {
-        // Rule at src/isa/x64/inst.isle line 2112.
+        // Rule at src/isa/x64/inst.isle line 2249.
         let expr0_0 = SseOpcode::Pblendvb;
         return Some(expr0_0);
     }
@@ -3414,17 +3759,17 @@ pub fn constructor_sse_blend_op<C: Context>(ctx: &mut C, arg0: Type) -> Option<S
 pub fn constructor_sse_mov_op<C: Context>(ctx: &mut C, arg0: Type) -> Option<SseOpcode> {
     let pattern0_0 = arg0;
     if pattern0_0 == F32X4 {
-        // Rule at src/isa/x64/inst.isle line 2115.
+        // Rule at src/isa/x64/inst.isle line 2252.
         let expr0_0 = SseOpcode::Movaps;
         return Some(expr0_0);
     }
     if pattern0_0 == F64X2 {
-        // Rule at src/isa/x64/inst.isle line 2116.
+        // Rule at src/isa/x64/inst.isle line 2253.
         let expr0_0 = SseOpcode::Movapd;
         return Some(expr0_0);
     }
     if let Some((pattern1_0, pattern1_1)) = C::multi_lane(ctx, pattern0_0) {
-        // Rule at src/isa/x64/inst.isle line 2117.
+        // Rule at src/isa/x64/inst.isle line 2254.
         let expr0_0 = SseOpcode::Movdqa;
         return Some(expr0_0);
     }
@@ -3443,7 +3788,7 @@ pub fn constructor_x64_blend<C: Context>(
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
     let pattern3_0 = arg3;
-    // Rule at src/isa/x64/inst.isle line 2121.
+    // Rule at src/isa/x64/inst.isle line 2258.
     let expr0_0 = C::xmm0(ctx);
     let expr1_0 = constructor_sse_mov_op(ctx, pattern0_0)?;
     let expr2_0 = MInst::XmmUnaryRmR {
@@ -3467,7 +3812,7 @@ pub fn constructor_x64_blendvpd<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/x64/inst.isle line 2135.
+    // Rule at src/isa/x64/inst.isle line 2272.
     let expr0_0 = C::xmm0(ctx);
     let expr1_0 = SseOpcode::Movapd;
     let expr2_0 = C::xmm_to_xmm_mem(ctx, pattern2_0);
@@ -3491,7 +3836,7 @@ pub fn constructor_x64_movsd_regmove<C: Context>(
 ) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2149.
+    // Rule at src/isa/x64/inst.isle line 2286.
     let expr0_0: Type = I8X16;
     let expr1_0 = SseOpcode::Movsd;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -3502,7 +3847,7 @@ pub fn constructor_x64_movsd_regmove<C: Context>(
 pub fn constructor_x64_movlhps<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2154.
+    // Rule at src/isa/x64/inst.isle line 2291.
     let expr0_0: Type = I8X16;
     let expr1_0 = SseOpcode::Movlhps;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -3520,21 +3865,21 @@ pub fn constructor_x64_pmaxs<C: Context>(
     if pattern0_0 == I8X16 {
         let pattern2_0 = arg1;
         let pattern3_0 = arg2;
-        // Rule at src/isa/x64/inst.isle line 2159.
+        // Rule at src/isa/x64/inst.isle line 2296.
         let expr0_0 = constructor_x64_pmaxsb(ctx, pattern2_0, pattern3_0)?;
         return Some(expr0_0);
     }
     if pattern0_0 == I16X8 {
         let pattern2_0 = arg1;
         let pattern3_0 = arg2;
-        // Rule at src/isa/x64/inst.isle line 2160.
+        // Rule at src/isa/x64/inst.isle line 2297.
         let expr0_0 = constructor_x64_pmaxsw(ctx, pattern2_0, pattern3_0)?;
         return Some(expr0_0);
     }
     if pattern0_0 == I32X4 {
         let pattern2_0 = arg1;
         let pattern3_0 = arg2;
-        // Rule at src/isa/x64/inst.isle line 2161.
+        // Rule at src/isa/x64/inst.isle line 2298.
         let expr0_0 = constructor_x64_pmaxsd(ctx, pattern2_0, pattern3_0)?;
         return Some(expr0_0);
     }
@@ -3545,7 +3890,7 @@ pub fn constructor_x64_pmaxs<C: Context>(
 pub fn constructor_x64_pmaxsb<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2164.
+    // Rule at src/isa/x64/inst.isle line 2301.
     let expr0_0: Type = I8X16;
     let expr1_0 = SseOpcode::Pmaxsb;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -3556,7 +3901,7 @@ pub fn constructor_x64_pmaxsb<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem)
 pub fn constructor_x64_pmaxsw<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2166.
+    // Rule at src/isa/x64/inst.isle line 2303.
     let expr0_0: Type = I8X16;
     let expr1_0 = SseOpcode::Pmaxsw;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -3567,7 +3912,7 @@ pub fn constructor_x64_pmaxsw<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem)
 pub fn constructor_x64_pmaxsd<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2168.
+    // Rule at src/isa/x64/inst.isle line 2305.
     let expr0_0: Type = I8X16;
     let expr1_0 = SseOpcode::Pmaxsd;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -3585,21 +3930,21 @@ pub fn constructor_x64_pmins<C: Context>(
     if pattern0_0 == I8X16 {
         let pattern2_0 = arg1;
         let pattern3_0 = arg2;
-        // Rule at src/isa/x64/inst.isle line 2172.
+        // Rule at src/isa/x64/inst.isle line 2309.
         let expr0_0 = constructor_x64_pminsb(ctx, pattern2_0, pattern3_0)?;
         return Some(expr0_0);
     }
     if pattern0_0 == I16X8 {
         let pattern2_0 = arg1;
         let pattern3_0 = arg2;
-        // Rule at src/isa/x64/inst.isle line 2173.
+        // Rule at src/isa/x64/inst.isle line 2310.
         let expr0_0 = constructor_x64_pminsw(ctx, pattern2_0, pattern3_0)?;
         return Some(expr0_0);
     }
     if pattern0_0 == I32X4 {
         let pattern2_0 = arg1;
         let pattern3_0 = arg2;
-        // Rule at src/isa/x64/inst.isle line 2174.
+        // Rule at src/isa/x64/inst.isle line 2311.
         let expr0_0 = constructor_x64_pminsd(ctx, pattern2_0, pattern3_0)?;
         return Some(expr0_0);
     }
@@ -3610,7 +3955,7 @@ pub fn constructor_x64_pmins<C: Context>(
 pub fn constructor_x64_pminsb<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2177.
+    // Rule at src/isa/x64/inst.isle line 2314.
     let expr0_0: Type = I8X16;
     let expr1_0 = SseOpcode::Pminsb;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -3621,7 +3966,7 @@ pub fn constructor_x64_pminsb<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem)
 pub fn constructor_x64_pminsw<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2179.
+    // Rule at src/isa/x64/inst.isle line 2316.
     let expr0_0: Type = I16X8;
     let expr1_0 = SseOpcode::Pminsw;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -3632,7 +3977,7 @@ pub fn constructor_x64_pminsw<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem)
 pub fn constructor_x64_pminsd<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2181.
+    // Rule at src/isa/x64/inst.isle line 2318.
     let expr0_0: Type = I32X4;
     let expr1_0 = SseOpcode::Pminsd;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -3650,21 +3995,21 @@ pub fn constructor_x64_pmaxu<C: Context>(
     if pattern0_0 == I8X16 {
         let pattern2_0 = arg1;
         let pattern3_0 = arg2;
-        // Rule at src/isa/x64/inst.isle line 2185.
+        // Rule at src/isa/x64/inst.isle line 2322.
         let expr0_0 = constructor_x64_pmaxub(ctx, pattern2_0, pattern3_0)?;
         return Some(expr0_0);
     }
     if pattern0_0 == I16X8 {
         let pattern2_0 = arg1;
         let pattern3_0 = arg2;
-        // Rule at src/isa/x64/inst.isle line 2186.
+        // Rule at src/isa/x64/inst.isle line 2323.
         let expr0_0 = constructor_x64_pmaxuw(ctx, pattern2_0, pattern3_0)?;
         return Some(expr0_0);
     }
     if pattern0_0 == I32X4 {
         let pattern2_0 = arg1;
         let pattern3_0 = arg2;
-        // Rule at src/isa/x64/inst.isle line 2187.
+        // Rule at src/isa/x64/inst.isle line 2324.
         let expr0_0 = constructor_x64_pmaxud(ctx, pattern2_0, pattern3_0)?;
         return Some(expr0_0);
     }
@@ -3675,7 +4020,7 @@ pub fn constructor_x64_pmaxu<C: Context>(
 pub fn constructor_x64_pmaxub<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2190.
+    // Rule at src/isa/x64/inst.isle line 2327.
     let expr0_0: Type = I8X16;
     let expr1_0 = SseOpcode::Pmaxub;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -3686,7 +4031,7 @@ pub fn constructor_x64_pmaxub<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem)
 pub fn constructor_x64_pmaxuw<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2192.
+    // Rule at src/isa/x64/inst.isle line 2329.
     let expr0_0: Type = I8X16;
     let expr1_0 = SseOpcode::Pmaxuw;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -3697,7 +4042,7 @@ pub fn constructor_x64_pmaxuw<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem)
 pub fn constructor_x64_pmaxud<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2194.
+    // Rule at src/isa/x64/inst.isle line 2331.
     let expr0_0: Type = I8X16;
     let expr1_0 = SseOpcode::Pmaxud;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -3715,21 +4060,21 @@ pub fn constructor_x64_pminu<C: Context>(
     if pattern0_0 == I8X16 {
         let pattern2_0 = arg1;
         let pattern3_0 = arg2;
-        // Rule at src/isa/x64/inst.isle line 2198.
+        // Rule at src/isa/x64/inst.isle line 2335.
         let expr0_0 = constructor_x64_pminub(ctx, pattern2_0, pattern3_0)?;
         return Some(expr0_0);
     }
     if pattern0_0 == I16X8 {
         let pattern2_0 = arg1;
         let pattern3_0 = arg2;
-        // Rule at src/isa/x64/inst.isle line 2199.
+        // Rule at src/isa/x64/inst.isle line 2336.
         let expr0_0 = constructor_x64_pminuw(ctx, pattern2_0, pattern3_0)?;
         return Some(expr0_0);
     }
     if pattern0_0 == I32X4 {
         let pattern2_0 = arg1;
         let pattern3_0 = arg2;
-        // Rule at src/isa/x64/inst.isle line 2200.
+        // Rule at src/isa/x64/inst.isle line 2337.
         let expr0_0 = constructor_x64_pminud(ctx, pattern2_0, pattern3_0)?;
         return Some(expr0_0);
     }
@@ -3740,7 +4085,7 @@ pub fn constructor_x64_pminu<C: Context>(
 pub fn constructor_x64_pminub<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2203.
+    // Rule at src/isa/x64/inst.isle line 2340.
     let expr0_0: Type = I8X16;
     let expr1_0 = SseOpcode::Pminub;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -3751,7 +4096,7 @@ pub fn constructor_x64_pminub<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem)
 pub fn constructor_x64_pminuw<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2205.
+    // Rule at src/isa/x64/inst.isle line 2342.
     let expr0_0: Type = I8X16;
     let expr1_0 = SseOpcode::Pminuw;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -3762,7 +4107,7 @@ pub fn constructor_x64_pminuw<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem)
 pub fn constructor_x64_pminud<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2207.
+    // Rule at src/isa/x64/inst.isle line 2344.
     let expr0_0: Type = I8X16;
     let expr1_0 = SseOpcode::Pminud;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -3773,7 +4118,7 @@ pub fn constructor_x64_pminud<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem)
 pub fn constructor_x64_punpcklbw<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2211.
+    // Rule at src/isa/x64/inst.isle line 2348.
     let expr0_0: Type = I8X16;
     let expr1_0 = SseOpcode::Punpcklbw;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -3784,7 +4129,7 @@ pub fn constructor_x64_punpcklbw<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmM
 pub fn constructor_x64_punpckhbw<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2216.
+    // Rule at src/isa/x64/inst.isle line 2353.
     let expr0_0: Type = I8X16;
     let expr1_0 = SseOpcode::Punpckhbw;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -3795,7 +4140,7 @@ pub fn constructor_x64_punpckhbw<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmM
 pub fn constructor_x64_packsswb<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2221.
+    // Rule at src/isa/x64/inst.isle line 2358.
     let expr0_0: Type = I8X16;
     let expr1_0 = SseOpcode::Packsswb;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -3816,7 +4161,7 @@ pub fn constructor_xmm_rm_r_imm<C: Context>(
     let pattern2_0 = arg2;
     let pattern3_0 = arg3;
     let pattern4_0 = arg4;
-    // Rule at src/isa/x64/inst.isle line 2226.
+    // Rule at src/isa/x64/inst.isle line 2363.
     let expr0_0 = C::temp_writable_xmm(ctx);
     let expr1_0 = C::writable_xmm_to_reg(ctx, expr0_0);
     let expr2_0 = MInst::XmmRmRImm {
@@ -3844,7 +4189,7 @@ pub fn constructor_x64_palignr<C: Context>(
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
     let pattern3_0 = arg3;
-    // Rule at src/isa/x64/inst.isle line 2238.
+    // Rule at src/isa/x64/inst.isle line 2375.
     let expr0_0 = SseOpcode::Palignr;
     let expr1_0 = C::xmm_to_reg(ctx, pattern0_0);
     let expr2_0 = C::xmm_mem_to_reg_mem(ctx, pattern1_0);
@@ -3866,7 +4211,7 @@ pub fn constructor_x64_cmpp<C: Context>(
         let pattern2_0 = arg1;
         let pattern3_0 = arg2;
         let pattern4_0 = arg3;
-        // Rule at src/isa/x64/inst.isle line 2247.
+        // Rule at src/isa/x64/inst.isle line 2384.
         let expr0_0 = constructor_x64_cmpps(ctx, pattern2_0, pattern3_0, pattern4_0)?;
         return Some(expr0_0);
     }
@@ -3874,7 +4219,7 @@ pub fn constructor_x64_cmpp<C: Context>(
         let pattern2_0 = arg1;
         let pattern3_0 = arg2;
         let pattern4_0 = arg3;
-        // Rule at src/isa/x64/inst.isle line 2248.
+        // Rule at src/isa/x64/inst.isle line 2385.
         let expr0_0 = constructor_x64_cmppd(ctx, pattern2_0, pattern3_0, pattern4_0)?;
         return Some(expr0_0);
     }
@@ -3891,7 +4236,7 @@ pub fn constructor_x64_cmpps<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/x64/inst.isle line 2251.
+    // Rule at src/isa/x64/inst.isle line 2388.
     let expr0_0 = SseOpcode::Cmpps;
     let expr1_0 = C::xmm_to_reg(ctx, pattern0_0);
     let expr2_0 = C::xmm_mem_to_reg_mem(ctx, pattern1_0);
@@ -3911,7 +4256,7 @@ pub fn constructor_x64_cmppd<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/x64/inst.isle line 2262.
+    // Rule at src/isa/x64/inst.isle line 2399.
     let expr0_0 = SseOpcode::Cmppd;
     let expr1_0 = C::xmm_to_reg(ctx, pattern0_0);
     let expr2_0 = C::xmm_mem_to_reg_mem(ctx, pattern1_0);
@@ -3931,7 +4276,7 @@ pub fn constructor_x64_pinsrb<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/x64/inst.isle line 2271.
+    // Rule at src/isa/x64/inst.isle line 2408.
     let expr0_0 = SseOpcode::Pinsrb;
     let expr1_0 = C::xmm_to_reg(ctx, pattern0_0);
     let expr2_0 = C::gpr_mem_to_reg_mem(ctx, pattern1_0);
@@ -3950,7 +4295,7 @@ pub fn constructor_x64_pinsrw<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/x64/inst.isle line 2280.
+    // Rule at src/isa/x64/inst.isle line 2417.
     let expr0_0 = SseOpcode::Pinsrw;
     let expr1_0 = C::xmm_to_reg(ctx, pattern0_0);
     let expr2_0 = C::gpr_mem_to_reg_mem(ctx, pattern1_0);
@@ -3971,7 +4316,7 @@ pub fn constructor_x64_pinsrd<C: Context>(
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
     let pattern3_0 = arg3;
-    // Rule at src/isa/x64/inst.isle line 2289.
+    // Rule at src/isa/x64/inst.isle line 2426.
     let expr0_0 = SseOpcode::Pinsrd;
     let expr1_0 = C::xmm_to_reg(ctx, pattern0_0);
     let expr2_0 = C::gpr_mem_to_reg_mem(ctx, pattern1_0);
@@ -3984,7 +4329,7 @@ pub fn constructor_x64_pinsrd<C: Context>(
 pub fn constructor_x64_pmaddwd<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2298.
+    // Rule at src/isa/x64/inst.isle line 2435.
     let expr0_0 = C::temp_writable_xmm(ctx);
     let expr1_0 = SseOpcode::Pmaddwd;
     let expr2_0 = MInst::XmmRmR {
@@ -4008,7 +4353,7 @@ pub fn constructor_x64_insertps<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/x64/inst.isle line 2308.
+    // Rule at src/isa/x64/inst.isle line 2445.
     let expr0_0 = SseOpcode::Insertps;
     let expr1_0 = C::xmm_to_reg(ctx, pattern0_0);
     let expr2_0 = C::xmm_mem_to_reg_mem(ctx, pattern1_0);
@@ -4027,7 +4372,7 @@ pub fn constructor_x64_pshufd<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/x64/inst.isle line 2317.
+    // Rule at src/isa/x64/inst.isle line 2454.
     let expr0_0 = C::temp_writable_xmm(ctx);
     let expr1_0 = SseOpcode::Pshufd;
     let expr2_0 = constructor_writable_xmm_to_r_reg(ctx, expr0_0)?;
@@ -4050,7 +4395,7 @@ pub fn constructor_x64_pshufd<C: Context>(
 pub fn constructor_x64_pshufb<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2329.
+    // Rule at src/isa/x64/inst.isle line 2466.
     let expr0_0 = C::temp_writable_xmm(ctx);
     let expr1_0 = SseOpcode::Pshufb;
     let expr2_0 = MInst::XmmRmR {
@@ -4072,7 +4417,7 @@ pub fn constructor_xmm_unary_rm_r<C: Context>(
 ) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2339.
+    // Rule at src/isa/x64/inst.isle line 2476.
     let expr0_0 = C::temp_writable_xmm(ctx);
     let expr1_0 = MInst::XmmUnaryRmR {
         op: pattern0_0.clone(),
@@ -4087,7 +4432,7 @@ pub fn constructor_xmm_unary_rm_r<C: Context>(
 // Generated as internal constructor for term x64_pabsb.
 pub fn constructor_x64_pabsb<C: Context>(ctx: &mut C, arg0: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/x64/inst.isle line 2346.
+    // Rule at src/isa/x64/inst.isle line 2483.
     let expr0_0 = SseOpcode::Pabsb;
     let expr1_0 = constructor_xmm_unary_rm_r(ctx, &expr0_0, pattern0_0)?;
     return Some(expr1_0);
@@ -4096,7 +4441,7 @@ pub fn constructor_x64_pabsb<C: Context>(ctx: &mut C, arg0: &XmmMem) -> Option<X
 // Generated as internal constructor for term x64_pabsw.
 pub fn constructor_x64_pabsw<C: Context>(ctx: &mut C, arg0: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/x64/inst.isle line 2351.
+    // Rule at src/isa/x64/inst.isle line 2488.
     let expr0_0 = SseOpcode::Pabsw;
     let expr1_0 = constructor_xmm_unary_rm_r(ctx, &expr0_0, pattern0_0)?;
     return Some(expr1_0);
@@ -4105,7 +4450,7 @@ pub fn constructor_x64_pabsw<C: Context>(ctx: &mut C, arg0: &XmmMem) -> Option<X
 // Generated as internal constructor for term x64_pabsd.
 pub fn constructor_x64_pabsd<C: Context>(ctx: &mut C, arg0: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/x64/inst.isle line 2356.
+    // Rule at src/isa/x64/inst.isle line 2493.
     let expr0_0 = SseOpcode::Pabsd;
     let expr1_0 = constructor_xmm_unary_rm_r(ctx, &expr0_0, pattern0_0)?;
     return Some(expr1_0);
@@ -4119,7 +4464,7 @@ pub fn constructor_xmm_unary_rm_r_evex<C: Context>(
 ) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2361.
+    // Rule at src/isa/x64/inst.isle line 2498.
     let expr0_0 = C::temp_writable_xmm(ctx);
     let expr1_0 = MInst::XmmUnaryRmREvex {
         op: pattern0_0.clone(),
@@ -4134,7 +4479,7 @@ pub fn constructor_xmm_unary_rm_r_evex<C: Context>(
 // Generated as internal constructor for term x64_vpabsq.
 pub fn constructor_x64_vpabsq<C: Context>(ctx: &mut C, arg0: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/x64/inst.isle line 2368.
+    // Rule at src/isa/x64/inst.isle line 2505.
     let expr0_0 = Avx512Opcode::Vpabsq;
     let expr1_0 = constructor_xmm_unary_rm_r_evex(ctx, &expr0_0, pattern0_0)?;
     return Some(expr1_0);
@@ -4143,7 +4488,7 @@ pub fn constructor_x64_vpabsq<C: Context>(ctx: &mut C, arg0: &XmmMem) -> Option<
 // Generated as internal constructor for term x64_vpopcntb.
 pub fn constructor_x64_vpopcntb<C: Context>(ctx: &mut C, arg0: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/x64/inst.isle line 2373.
+    // Rule at src/isa/x64/inst.isle line 2510.
     let expr0_0 = Avx512Opcode::Vpopcntb;
     let expr1_0 = constructor_xmm_unary_rm_r_evex(ctx, &expr0_0, pattern0_0)?;
     return Some(expr1_0);
@@ -4159,7 +4504,7 @@ pub fn constructor_xmm_rm_r_evex<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/x64/inst.isle line 2378.
+    // Rule at src/isa/x64/inst.isle line 2515.
     let expr0_0 = C::temp_writable_xmm(ctx);
     let expr1_0 = MInst::XmmRmREvex {
         op: pattern0_0.clone(),
@@ -4176,7 +4521,7 @@ pub fn constructor_xmm_rm_r_evex<C: Context>(
 pub fn constructor_x64_vpmullq<C: Context>(ctx: &mut C, arg0: &XmmMem, arg1: Xmm) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2390.
+    // Rule at src/isa/x64/inst.isle line 2527.
     let expr0_0 = Avx512Opcode::Vpmullq;
     let expr1_0 = constructor_xmm_rm_r_evex(ctx, &expr0_0, pattern0_0, pattern1_0)?;
     return Some(expr1_0);
@@ -4194,7 +4539,7 @@ pub fn constructor_mul_hi<C: Context>(
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
     let pattern3_0 = arg3;
-    // Rule at src/isa/x64/inst.isle line 2399.
+    // Rule at src/isa/x64/inst.isle line 2536.
     let expr0_0 = C::temp_writable_gpr(ctx);
     let expr1_0 = C::temp_writable_gpr(ctx);
     let expr2_0 = C::operand_size_of_type_32_64(ctx, pattern0_0);
@@ -4223,7 +4568,7 @@ pub fn constructor_mulhi_u<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/x64/inst.isle line 2414.
+    // Rule at src/isa/x64/inst.isle line 2551.
     let expr0_0: bool = false;
     let expr1_0 = constructor_mul_hi(ctx, pattern0_0, expr0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -4239,7 +4584,7 @@ pub fn constructor_xmm_rmi_xmm<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/x64/inst.isle line 2419.
+    // Rule at src/isa/x64/inst.isle line 2556.
     let expr0_0 = C::temp_writable_xmm(ctx);
     let expr1_0 = MInst::XmmRmiReg {
         opcode: pattern0_0.clone(),
@@ -4256,7 +4601,7 @@ pub fn constructor_xmm_rmi_xmm<C: Context>(
 pub fn constructor_x64_psllw<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMemImm) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2429.
+    // Rule at src/isa/x64/inst.isle line 2566.
     let expr0_0 = SseOpcode::Psllw;
     let expr1_0 = constructor_xmm_rmi_xmm(ctx, &expr0_0, pattern0_0, pattern1_0)?;
     return Some(expr1_0);
@@ -4266,7 +4611,7 @@ pub fn constructor_x64_psllw<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMemIm
 pub fn constructor_x64_pslld<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMemImm) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2434.
+    // Rule at src/isa/x64/inst.isle line 2571.
     let expr0_0 = SseOpcode::Pslld;
     let expr1_0 = constructor_xmm_rmi_xmm(ctx, &expr0_0, pattern0_0, pattern1_0)?;
     return Some(expr1_0);
@@ -4276,7 +4621,7 @@ pub fn constructor_x64_pslld<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMemIm
 pub fn constructor_x64_psllq<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMemImm) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2439.
+    // Rule at src/isa/x64/inst.isle line 2576.
     let expr0_0 = SseOpcode::Psllq;
     let expr1_0 = constructor_xmm_rmi_xmm(ctx, &expr0_0, pattern0_0, pattern1_0)?;
     return Some(expr1_0);
@@ -4286,7 +4631,7 @@ pub fn constructor_x64_psllq<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMemIm
 pub fn constructor_x64_psrlw<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMemImm) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2444.
+    // Rule at src/isa/x64/inst.isle line 2581.
     let expr0_0 = SseOpcode::Psrlw;
     let expr1_0 = constructor_xmm_rmi_xmm(ctx, &expr0_0, pattern0_0, pattern1_0)?;
     return Some(expr1_0);
@@ -4296,7 +4641,7 @@ pub fn constructor_x64_psrlw<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMemIm
 pub fn constructor_x64_psrld<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMemImm) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2449.
+    // Rule at src/isa/x64/inst.isle line 2586.
     let expr0_0 = SseOpcode::Psrld;
     let expr1_0 = constructor_xmm_rmi_xmm(ctx, &expr0_0, pattern0_0, pattern1_0)?;
     return Some(expr1_0);
@@ -4306,7 +4651,7 @@ pub fn constructor_x64_psrld<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMemIm
 pub fn constructor_x64_psrlq<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMemImm) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2454.
+    // Rule at src/isa/x64/inst.isle line 2591.
     let expr0_0 = SseOpcode::Psrlq;
     let expr1_0 = constructor_xmm_rmi_xmm(ctx, &expr0_0, pattern0_0, pattern1_0)?;
     return Some(expr1_0);
@@ -4316,7 +4661,7 @@ pub fn constructor_x64_psrlq<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMemIm
 pub fn constructor_x64_psraw<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMemImm) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2459.
+    // Rule at src/isa/x64/inst.isle line 2596.
     let expr0_0 = SseOpcode::Psraw;
     let expr1_0 = constructor_xmm_rmi_xmm(ctx, &expr0_0, pattern0_0, pattern1_0)?;
     return Some(expr1_0);
@@ -4326,7 +4671,7 @@ pub fn constructor_x64_psraw<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMemIm
 pub fn constructor_x64_psrad<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMemImm) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2464.
+    // Rule at src/isa/x64/inst.isle line 2601.
     let expr0_0 = SseOpcode::Psrad;
     let expr1_0 = constructor_xmm_rmi_xmm(ctx, &expr0_0, pattern0_0, pattern1_0)?;
     return Some(expr1_0);
@@ -4342,7 +4687,7 @@ pub fn constructor_x64_pextrd<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/x64/inst.isle line 2469.
+    // Rule at src/isa/x64/inst.isle line 2606.
     let expr0_0 = C::temp_writable_gpr(ctx);
     let expr1_0 = SseOpcode::Pextrd;
     let expr2_0 = constructor_writable_gpr_to_r_reg(ctx, expr0_0)?;
@@ -4375,7 +4720,7 @@ pub fn constructor_gpr_to_xmm<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/x64/inst.isle line 2481.
+    // Rule at src/isa/x64/inst.isle line 2618.
     let expr0_0 = C::temp_writable_xmm(ctx);
     let expr1_0 = MInst::GprToXmm {
         op: pattern0_0.clone(),
@@ -4392,7 +4737,7 @@ pub fn constructor_gpr_to_xmm<C: Context>(
 pub fn constructor_x64_not<C: Context>(ctx: &mut C, arg0: Type, arg1: Gpr) -> Option<Gpr> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2488.
+    // Rule at src/isa/x64/inst.isle line 2625.
     let expr0_0 = C::temp_writable_gpr(ctx);
     let expr1_0 = C::operand_size_of_type_32_64(ctx, pattern0_0);
     let expr2_0 = MInst::Not {
@@ -4409,7 +4754,7 @@ pub fn constructor_x64_not<C: Context>(ctx: &mut C, arg0: Type, arg1: Gpr) -> Op
 pub fn constructor_x64_neg<C: Context>(ctx: &mut C, arg0: Type, arg1: Gpr) -> Option<Gpr> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2496.
+    // Rule at src/isa/x64/inst.isle line 2633.
     let expr0_0 = C::temp_writable_gpr(ctx);
     let expr1_0 = C::operand_size_of_type_32_64(ctx, pattern0_0);
     let expr2_0 = MInst::Neg {
@@ -4425,7 +4770,7 @@ pub fn constructor_x64_neg<C: Context>(ctx: &mut C, arg0: Type, arg1: Gpr) -> Op
 // Generated as internal constructor for term x64_lea.
 pub fn constructor_x64_lea<C: Context>(ctx: &mut C, arg0: &SyntheticAmode) -> Option<Gpr> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/x64/inst.isle line 2503.
+    // Rule at src/isa/x64/inst.isle line 2640.
     let expr0_0 = C::temp_writable_gpr(ctx);
     let expr1_0 = MInst::LoadEffectiveAddress {
         addr: pattern0_0.clone(),
@@ -4439,7 +4784,7 @@ pub fn constructor_x64_lea<C: Context>(ctx: &mut C, arg0: &SyntheticAmode) -> Op
 // Generated as internal constructor for term x64_ud2.
 pub fn constructor_x64_ud2<C: Context>(ctx: &mut C, arg0: &TrapCode) -> Option<SideEffectNoResult> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/x64/inst.isle line 2510.
+    // Rule at src/isa/x64/inst.isle line 2647.
     let expr0_0 = MInst::Ud2 {
         trap_code: pattern0_0.clone(),
     };
@@ -4449,7 +4794,7 @@ pub fn constructor_x64_ud2<C: Context>(ctx: &mut C, arg0: &TrapCode) -> Option<S
 
 // Generated as internal constructor for term x64_hlt.
 pub fn constructor_x64_hlt<C: Context>(ctx: &mut C) -> Option<SideEffectNoResult> {
-    // Rule at src/isa/x64/inst.isle line 2515.
+    // Rule at src/isa/x64/inst.isle line 2652.
     let expr0_0 = MInst::Hlt;
     let expr1_0 = SideEffectNoResult::Inst { inst: expr0_0 };
     return Some(expr1_0);
@@ -4459,7 +4804,7 @@ pub fn constructor_x64_hlt<C: Context>(ctx: &mut C) -> Option<SideEffectNoResult
 pub fn constructor_x64_lzcnt<C: Context>(ctx: &mut C, arg0: Type, arg1: Gpr) -> Option<Gpr> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2520.
+    // Rule at src/isa/x64/inst.isle line 2657.
     let expr0_0 = C::temp_writable_gpr(ctx);
     let expr1_0 = C::operand_size_of_type_32_64(ctx, pattern0_0);
     let expr2_0 = UnaryRmROpcode::Lzcnt;
@@ -4479,7 +4824,7 @@ pub fn constructor_x64_lzcnt<C: Context>(ctx: &mut C, arg0: Type, arg1: Gpr) -> 
 pub fn constructor_x64_tzcnt<C: Context>(ctx: &mut C, arg0: Type, arg1: Gpr) -> Option<Gpr> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2528.
+    // Rule at src/isa/x64/inst.isle line 2665.
     let expr0_0 = C::temp_writable_gpr(ctx);
     let expr1_0 = C::operand_size_of_type_32_64(ctx, pattern0_0);
     let expr2_0 = UnaryRmROpcode::Tzcnt;
@@ -4503,7 +4848,7 @@ pub fn constructor_x64_bsr<C: Context>(
 ) -> Option<ProducesFlags> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2536.
+    // Rule at src/isa/x64/inst.isle line 2673.
     let expr0_0 = C::temp_writable_gpr(ctx);
     let expr1_0 = C::operand_size_of_type_32_64(ctx, pattern0_0);
     let expr2_0 = UnaryRmROpcode::Bsr;
@@ -4532,7 +4877,7 @@ pub fn constructor_bsr_or_else<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/x64/inst.isle line 2545.
+    // Rule at src/isa/x64/inst.isle line 2682.
     let expr0_0 = constructor_x64_bsr(ctx, pattern0_0, pattern1_0)?;
     let expr1_0 = constructor_produces_flags_get_reg(ctx, &expr0_0)?;
     let expr2_0 = C::gpr_new(ctx, expr1_0);
@@ -4553,7 +4898,7 @@ pub fn constructor_x64_bsf<C: Context>(
 ) -> Option<ProducesFlags> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2556.
+    // Rule at src/isa/x64/inst.isle line 2693.
     let expr0_0 = C::temp_writable_gpr(ctx);
     let expr1_0 = C::operand_size_of_type_32_64(ctx, pattern0_0);
     let expr2_0 = UnaryRmROpcode::Bsf;
@@ -4582,7 +4927,7 @@ pub fn constructor_bsf_or_else<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/x64/inst.isle line 2565.
+    // Rule at src/isa/x64/inst.isle line 2702.
     let expr0_0 = constructor_x64_bsf(ctx, pattern0_0, pattern1_0)?;
     let expr1_0 = constructor_produces_flags_get_reg(ctx, &expr0_0)?;
     let expr2_0 = C::gpr_new(ctx, expr1_0);
@@ -4599,7 +4944,7 @@ pub fn constructor_bsf_or_else<C: Context>(
 pub fn constructor_x64_popcnt<C: Context>(ctx: &mut C, arg0: Type, arg1: Gpr) -> Option<Gpr> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2576.
+    // Rule at src/isa/x64/inst.isle line 2713.
     let expr0_0 = C::temp_writable_gpr(ctx);
     let expr1_0 = C::operand_size_of_type_32_64(ctx, pattern0_0);
     let expr2_0 = UnaryRmROpcode::Popcnt;
@@ -4627,7 +4972,7 @@ pub fn constructor_xmm_min_max_seq<C: Context>(
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
     let pattern3_0 = arg3;
-    // Rule at src/isa/x64/inst.isle line 2584.
+    // Rule at src/isa/x64/inst.isle line 2721.
     let expr0_0 = C::temp_writable_xmm(ctx);
     let expr1_0 = C::operand_size_of_type_32_64(ctx, pattern0_0);
     let expr2_0 = MInst::XmmMinMaxSeq {
@@ -4646,7 +4991,7 @@ pub fn constructor_xmm_min_max_seq<C: Context>(
 pub fn constructor_x64_minss<C: Context>(ctx: &mut C, arg0: Xmm, arg1: Xmm) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2592.
+    // Rule at src/isa/x64/inst.isle line 2729.
     let expr0_0 = C::temp_writable_xmm(ctx);
     let expr1_0 = SseOpcode::Minss;
     let expr2_0 = C::xmm_to_xmm_mem(ctx, pattern1_0);
@@ -4665,7 +5010,7 @@ pub fn constructor_x64_minss<C: Context>(ctx: &mut C, arg0: Xmm, arg1: Xmm) -> O
 pub fn constructor_x64_minsd<C: Context>(ctx: &mut C, arg0: Xmm, arg1: Xmm) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2599.
+    // Rule at src/isa/x64/inst.isle line 2736.
     let expr0_0 = C::temp_writable_xmm(ctx);
     let expr1_0 = SseOpcode::Minsd;
     let expr2_0 = C::xmm_to_xmm_mem(ctx, pattern1_0);
@@ -4684,7 +5029,7 @@ pub fn constructor_x64_minsd<C: Context>(ctx: &mut C, arg0: Xmm, arg1: Xmm) -> O
 pub fn constructor_x64_minps<C: Context>(ctx: &mut C, arg0: Xmm, arg1: Xmm) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2607.
+    // Rule at src/isa/x64/inst.isle line 2744.
     let expr0_0 = C::temp_writable_xmm(ctx);
     let expr1_0 = SseOpcode::Minps;
     let expr2_0 = C::xmm_to_xmm_mem(ctx, pattern1_0);
@@ -4703,7 +5048,7 @@ pub fn constructor_x64_minps<C: Context>(ctx: &mut C, arg0: Xmm, arg1: Xmm) -> O
 pub fn constructor_x64_minpd<C: Context>(ctx: &mut C, arg0: Xmm, arg1: Xmm) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2614.
+    // Rule at src/isa/x64/inst.isle line 2751.
     let expr0_0 = C::temp_writable_xmm(ctx);
     let expr1_0 = SseOpcode::Minpd;
     let expr2_0 = C::xmm_to_xmm_mem(ctx, pattern1_0);
@@ -4722,7 +5067,7 @@ pub fn constructor_x64_minpd<C: Context>(ctx: &mut C, arg0: Xmm, arg1: Xmm) -> O
 pub fn constructor_x64_maxss<C: Context>(ctx: &mut C, arg0: Xmm, arg1: Xmm) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2621.
+    // Rule at src/isa/x64/inst.isle line 2758.
     let expr0_0 = C::temp_writable_xmm(ctx);
     let expr1_0 = SseOpcode::Maxss;
     let expr2_0 = C::xmm_to_xmm_mem(ctx, pattern1_0);
@@ -4741,7 +5086,7 @@ pub fn constructor_x64_maxss<C: Context>(ctx: &mut C, arg0: Xmm, arg1: Xmm) -> O
 pub fn constructor_x64_maxsd<C: Context>(ctx: &mut C, arg0: Xmm, arg1: Xmm) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2628.
+    // Rule at src/isa/x64/inst.isle line 2765.
     let expr0_0 = C::temp_writable_xmm(ctx);
     let expr1_0 = SseOpcode::Maxsd;
     let expr2_0 = C::xmm_to_xmm_mem(ctx, pattern1_0);
@@ -4760,7 +5105,7 @@ pub fn constructor_x64_maxsd<C: Context>(ctx: &mut C, arg0: Xmm, arg1: Xmm) -> O
 pub fn constructor_x64_maxps<C: Context>(ctx: &mut C, arg0: Xmm, arg1: Xmm) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2635.
+    // Rule at src/isa/x64/inst.isle line 2772.
     let expr0_0 = C::temp_writable_xmm(ctx);
     let expr1_0 = SseOpcode::Maxps;
     let expr2_0 = C::xmm_to_xmm_mem(ctx, pattern1_0);
@@ -4779,7 +5124,7 @@ pub fn constructor_x64_maxps<C: Context>(ctx: &mut C, arg0: Xmm, arg1: Xmm) -> O
 pub fn constructor_x64_maxpd<C: Context>(ctx: &mut C, arg0: Xmm, arg1: Xmm) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2642.
+    // Rule at src/isa/x64/inst.isle line 2779.
     let expr0_0 = C::temp_writable_xmm(ctx);
     let expr1_0 = SseOpcode::Maxpd;
     let expr2_0 = C::xmm_to_xmm_mem(ctx, pattern1_0);
@@ -4797,7 +5142,7 @@ pub fn constructor_x64_maxpd<C: Context>(ctx: &mut C, arg0: Xmm, arg1: Xmm) -> O
 // Generated as internal constructor for term x64_sqrtss.
 pub fn constructor_x64_sqrtss<C: Context>(ctx: &mut C, arg0: Xmm) -> Option<Xmm> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/x64/inst.isle line 2650.
+    // Rule at src/isa/x64/inst.isle line 2787.
     let expr0_0 = C::temp_writable_xmm(ctx);
     let expr1_0 = SseOpcode::Sqrtss;
     let expr2_0 = C::xmm_to_xmm_mem(ctx, pattern0_0);
@@ -4814,7 +5159,7 @@ pub fn constructor_x64_sqrtss<C: Context>(ctx: &mut C, arg0: Xmm) -> Option<Xmm>
 // Generated as internal constructor for term x64_sqrtsd.
 pub fn constructor_x64_sqrtsd<C: Context>(ctx: &mut C, arg0: Xmm) -> Option<Xmm> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/x64/inst.isle line 2657.
+    // Rule at src/isa/x64/inst.isle line 2794.
     let expr0_0 = C::temp_writable_xmm(ctx);
     let expr1_0 = SseOpcode::Sqrtsd;
     let expr2_0 = C::xmm_to_xmm_mem(ctx, pattern0_0);
@@ -4831,7 +5176,7 @@ pub fn constructor_x64_sqrtsd<C: Context>(ctx: &mut C, arg0: Xmm) -> Option<Xmm>
 // Generated as internal constructor for term x64_sqrtps.
 pub fn constructor_x64_sqrtps<C: Context>(ctx: &mut C, arg0: Xmm) -> Option<Xmm> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/x64/inst.isle line 2664.
+    // Rule at src/isa/x64/inst.isle line 2801.
     let expr0_0 = C::temp_writable_xmm(ctx);
     let expr1_0 = SseOpcode::Sqrtps;
     let expr2_0 = C::xmm_to_xmm_mem(ctx, pattern0_0);
@@ -4848,7 +5193,7 @@ pub fn constructor_x64_sqrtps<C: Context>(ctx: &mut C, arg0: Xmm) -> Option<Xmm>
 // Generated as internal constructor for term x64_sqrtpd.
 pub fn constructor_x64_sqrtpd<C: Context>(ctx: &mut C, arg0: Xmm) -> Option<Xmm> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/x64/inst.isle line 2671.
+    // Rule at src/isa/x64/inst.isle line 2808.
     let expr0_0 = C::temp_writable_xmm(ctx);
     let expr1_0 = SseOpcode::Sqrtpd;
     let expr2_0 = C::xmm_to_xmm_mem(ctx, pattern0_0);
@@ -4873,28 +5218,28 @@ pub fn constructor_x64_pcmpeq<C: Context>(
     if pattern0_0 == I8X16 {
         let pattern2_0 = arg1;
         let pattern3_0 = arg2;
-        // Rule at src/isa/x64/inst.isle line 2678.
+        // Rule at src/isa/x64/inst.isle line 2815.
         let expr0_0 = constructor_x64_pcmpeqb(ctx, pattern2_0, pattern3_0)?;
         return Some(expr0_0);
     }
     if pattern0_0 == I16X8 {
         let pattern2_0 = arg1;
         let pattern3_0 = arg2;
-        // Rule at src/isa/x64/inst.isle line 2679.
+        // Rule at src/isa/x64/inst.isle line 2816.
         let expr0_0 = constructor_x64_pcmpeqw(ctx, pattern2_0, pattern3_0)?;
         return Some(expr0_0);
     }
     if pattern0_0 == I32X4 {
         let pattern2_0 = arg1;
         let pattern3_0 = arg2;
-        // Rule at src/isa/x64/inst.isle line 2680.
+        // Rule at src/isa/x64/inst.isle line 2817.
         let expr0_0 = constructor_x64_pcmpeqd(ctx, pattern2_0, pattern3_0)?;
         return Some(expr0_0);
     }
     if pattern0_0 == I64X2 {
         let pattern2_0 = arg1;
         let pattern3_0 = arg2;
-        // Rule at src/isa/x64/inst.isle line 2681.
+        // Rule at src/isa/x64/inst.isle line 2818.
         let expr0_0 = constructor_x64_pcmpeqq(ctx, pattern2_0, pattern3_0)?;
         return Some(expr0_0);
     }
@@ -4905,7 +5250,7 @@ pub fn constructor_x64_pcmpeq<C: Context>(
 pub fn constructor_x64_pcmpeqb<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2684.
+    // Rule at src/isa/x64/inst.isle line 2821.
     let expr0_0: Type = I8X16;
     let expr1_0 = SseOpcode::Pcmpeqb;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -4916,7 +5261,7 @@ pub fn constructor_x64_pcmpeqb<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem
 pub fn constructor_x64_pcmpeqw<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2686.
+    // Rule at src/isa/x64/inst.isle line 2823.
     let expr0_0: Type = I16X8;
     let expr1_0 = SseOpcode::Pcmpeqw;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -4927,7 +5272,7 @@ pub fn constructor_x64_pcmpeqw<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem
 pub fn constructor_x64_pcmpeqd<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2688.
+    // Rule at src/isa/x64/inst.isle line 2825.
     let expr0_0: Type = I32X4;
     let expr1_0 = SseOpcode::Pcmpeqd;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -4938,7 +5283,7 @@ pub fn constructor_x64_pcmpeqd<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem
 pub fn constructor_x64_pcmpeqq<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2690.
+    // Rule at src/isa/x64/inst.isle line 2827.
     let expr0_0: Type = I64X2;
     let expr1_0 = SseOpcode::Pcmpeqq;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -4956,28 +5301,28 @@ pub fn constructor_x64_pcmpgt<C: Context>(
     if pattern0_0 == I8X16 {
         let pattern2_0 = arg1;
         let pattern3_0 = arg2;
-        // Rule at src/isa/x64/inst.isle line 2694.
+        // Rule at src/isa/x64/inst.isle line 2831.
         let expr0_0 = constructor_x64_pcmpgtb(ctx, pattern2_0, pattern3_0)?;
         return Some(expr0_0);
     }
     if pattern0_0 == I16X8 {
         let pattern2_0 = arg1;
         let pattern3_0 = arg2;
-        // Rule at src/isa/x64/inst.isle line 2695.
+        // Rule at src/isa/x64/inst.isle line 2832.
         let expr0_0 = constructor_x64_pcmpgtw(ctx, pattern2_0, pattern3_0)?;
         return Some(expr0_0);
     }
     if pattern0_0 == I32X4 {
         let pattern2_0 = arg1;
         let pattern3_0 = arg2;
-        // Rule at src/isa/x64/inst.isle line 2696.
+        // Rule at src/isa/x64/inst.isle line 2833.
         let expr0_0 = constructor_x64_pcmpgtd(ctx, pattern2_0, pattern3_0)?;
         return Some(expr0_0);
     }
     if pattern0_0 == I64X2 {
         let pattern2_0 = arg1;
         let pattern3_0 = arg2;
-        // Rule at src/isa/x64/inst.isle line 2697.
+        // Rule at src/isa/x64/inst.isle line 2834.
         let expr0_0 = constructor_x64_pcmpgtq(ctx, pattern2_0, pattern3_0)?;
         return Some(expr0_0);
     }
@@ -4988,7 +5333,7 @@ pub fn constructor_x64_pcmpgt<C: Context>(
 pub fn constructor_x64_pcmpgtb<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2700.
+    // Rule at src/isa/x64/inst.isle line 2837.
     let expr0_0: Type = I8X16;
     let expr1_0 = SseOpcode::Pcmpgtb;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -4999,7 +5344,7 @@ pub fn constructor_x64_pcmpgtb<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem
 pub fn constructor_x64_pcmpgtw<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2702.
+    // Rule at src/isa/x64/inst.isle line 2839.
     let expr0_0: Type = I16X8;
     let expr1_0 = SseOpcode::Pcmpgtw;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -5010,7 +5355,7 @@ pub fn constructor_x64_pcmpgtw<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem
 pub fn constructor_x64_pcmpgtd<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2704.
+    // Rule at src/isa/x64/inst.isle line 2841.
     let expr0_0: Type = I32X4;
     let expr1_0 = SseOpcode::Pcmpgtd;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -5021,7 +5366,7 @@ pub fn constructor_x64_pcmpgtd<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem
 pub fn constructor_x64_pcmpgtq<C: Context>(ctx: &mut C, arg0: Xmm, arg1: &XmmMem) -> Option<Xmm> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src/isa/x64/inst.isle line 2706.
+    // Rule at src/isa/x64/inst.isle line 2843.
     let expr0_0: Type = I64X2;
     let expr1_0 = SseOpcode::Pcmpgtq;
     let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
@@ -5040,7 +5385,7 @@ pub fn constructor_alu_rm<C: Context>(
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
     let pattern3_0 = arg3;
-    // Rule at src/isa/x64/inst.isle line 2710.
+    // Rule at src/isa/x64/inst.isle line 2847.
     let expr0_0 = C::operand_size_of_type_32_64(ctx, pattern0_0);
     let expr1_0 = C::amode_to_synthetic_amode(ctx, pattern2_0);
     let expr2_0 = MInst::AluRM {
@@ -5063,7 +5408,7 @@ pub fn constructor_x64_add_mem<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/x64/inst.isle line 2715.
+    // Rule at src/isa/x64/inst.isle line 2852.
     let expr0_0 = AluRmiROpcode::Add;
     let expr1_0 = constructor_alu_rm(ctx, pattern0_0, &expr0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -5079,7 +5424,7 @@ pub fn constructor_x64_sub_mem<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/x64/inst.isle line 2719.
+    // Rule at src/isa/x64/inst.isle line 2856.
     let expr0_0 = AluRmiROpcode::Sub;
     let expr1_0 = constructor_alu_rm(ctx, pattern0_0, &expr0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -5095,7 +5440,7 @@ pub fn constructor_x64_and_mem<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/x64/inst.isle line 2723.
+    // Rule at src/isa/x64/inst.isle line 2860.
     let expr0_0 = AluRmiROpcode::And;
     let expr1_0 = constructor_alu_rm(ctx, pattern0_0, &expr0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -5111,7 +5456,7 @@ pub fn constructor_x64_or_mem<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/x64/inst.isle line 2727.
+    // Rule at src/isa/x64/inst.isle line 2864.
     let expr0_0 = AluRmiROpcode::Or;
     let expr1_0 = constructor_alu_rm(ctx, pattern0_0, &expr0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -5127,7 +5472,7 @@ pub fn constructor_x64_xor_mem<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src/isa/x64/inst.isle line 2731.
+    // Rule at src/isa/x64/inst.isle line 2868.
     let expr0_0 = AluRmiROpcode::Xor;
     let expr1_0 = constructor_alu_rm(ctx, pattern0_0, &expr0_0, pattern1_0, pattern2_0)?;
     return Some(expr1_0);
@@ -5136,7 +5481,7 @@ pub fn constructor_x64_xor_mem<C: Context>(
 // Generated as internal constructor for term reg_to_xmm_mem.
 pub fn constructor_reg_to_xmm_mem<C: Context>(ctx: &mut C, arg0: Reg) -> Option<XmmMem> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/x64/inst.isle line 2788.
+    // Rule at src/isa/x64/inst.isle line 2925.
     let expr0_0 = C::xmm_new(ctx, pattern0_0);
     let expr1_0 = C::xmm_to_xmm_mem(ctx, expr0_0);
     return Some(expr1_0);
@@ -5145,7 +5490,7 @@ pub fn constructor_reg_to_xmm_mem<C: Context>(ctx: &mut C, arg0: Reg) -> Option<
 // Generated as internal constructor for term xmm_to_reg_mem.
 pub fn constructor_xmm_to_reg_mem<C: Context>(ctx: &mut C, arg0: Reg) -> Option<XmmMem> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/x64/inst.isle line 2791.
+    // Rule at src/isa/x64/inst.isle line 2928.
     let expr0_0 = C::xmm_new(ctx, pattern0_0);
     let expr1_0 = C::xmm_to_reg(ctx, expr0_0);
     let expr2_0 = RegMem::Reg { reg: expr1_0 };
@@ -5159,7 +5504,7 @@ pub fn constructor_writable_gpr_to_r_reg<C: Context>(
     arg0: WritableGpr,
 ) -> Option<Reg> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/x64/inst.isle line 2795.
+    // Rule at src/isa/x64/inst.isle line 2932.
     let expr0_0 = C::writable_gpr_to_reg(ctx, pattern0_0);
     let expr1_0 = C::writable_reg_to_reg(ctx, expr0_0);
     return Some(expr1_0);
@@ -5171,7 +5516,7 @@ pub fn constructor_writable_gpr_to_gpr_mem<C: Context>(
     arg0: WritableGpr,
 ) -> Option<GprMem> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/x64/inst.isle line 2798.
+    // Rule at src/isa/x64/inst.isle line 2935.
     let expr0_0 = C::writable_gpr_to_gpr(ctx, pattern0_0);
     let expr1_0 = C::gpr_to_gpr_mem(ctx, expr0_0);
     return Some(expr1_0);
@@ -5183,7 +5528,7 @@ pub fn constructor_writable_gpr_to_value_regs<C: Context>(
     arg0: WritableGpr,
 ) -> Option<ValueRegs> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/x64/inst.isle line 2801.
+    // Rule at src/isa/x64/inst.isle line 2938.
     let expr0_0 = constructor_writable_gpr_to_r_reg(ctx, pattern0_0)?;
     let expr1_0 = C::value_reg(ctx, expr0_0);
     return Some(expr1_0);
@@ -5195,7 +5540,7 @@ pub fn constructor_writable_xmm_to_r_reg<C: Context>(
     arg0: WritableXmm,
 ) -> Option<Reg> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/x64/inst.isle line 2804.
+    // Rule at src/isa/x64/inst.isle line 2941.
     let expr0_0 = C::writable_xmm_to_reg(ctx, pattern0_0);
     let expr1_0 = C::writable_reg_to_reg(ctx, expr0_0);
     return Some(expr1_0);
@@ -5207,7 +5552,7 @@ pub fn constructor_writable_xmm_to_xmm_mem<C: Context>(
     arg0: WritableXmm,
 ) -> Option<XmmMem> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/x64/inst.isle line 2807.
+    // Rule at src/isa/x64/inst.isle line 2944.
     let expr0_0 = C::writable_xmm_to_xmm(ctx, pattern0_0);
     let expr1_0 = C::xmm_to_xmm_mem(ctx, expr0_0);
     return Some(expr1_0);
@@ -5219,7 +5564,7 @@ pub fn constructor_writable_xmm_to_value_regs<C: Context>(
     arg0: WritableXmm,
 ) -> Option<ValueRegs> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/x64/inst.isle line 2810.
+    // Rule at src/isa/x64/inst.isle line 2947.
     let expr0_0 = constructor_writable_xmm_to_r_reg(ctx, pattern0_0)?;
     let expr1_0 = C::value_reg(ctx, expr0_0);
     return Some(expr1_0);
@@ -5231,7 +5576,7 @@ pub fn constructor_synthetic_amode_to_gpr_mem<C: Context>(
     arg0: &SyntheticAmode,
 ) -> Option<GprMem> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/x64/inst.isle line 2817.
+    // Rule at src/isa/x64/inst.isle line 2954.
     let expr0_0 = C::synthetic_amode_to_reg_mem(ctx, pattern0_0);
     let expr1_0 = C::reg_mem_to_gpr_mem(ctx, &expr0_0);
     return Some(expr1_0);
@@ -5240,7 +5585,7 @@ pub fn constructor_synthetic_amode_to_gpr_mem<C: Context>(
 // Generated as internal constructor for term amode_to_gpr_mem.
 pub fn constructor_amode_to_gpr_mem<C: Context>(ctx: &mut C, arg0: &Amode) -> Option<GprMem> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/x64/inst.isle line 2815.
+    // Rule at src/isa/x64/inst.isle line 2952.
     let expr0_0 = C::amode_to_synthetic_amode(ctx, pattern0_0);
     let expr1_0 = constructor_synthetic_amode_to_gpr_mem(ctx, &expr0_0)?;
     return Some(expr1_0);
@@ -5249,7 +5594,7 @@ pub fn constructor_amode_to_gpr_mem<C: Context>(ctx: &mut C, arg0: &Amode) -> Op
 // Generated as internal constructor for term amode_to_xmm_mem.
 pub fn constructor_amode_to_xmm_mem<C: Context>(ctx: &mut C, arg0: &Amode) -> Option<XmmMem> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/x64/inst.isle line 2820.
+    // Rule at src/isa/x64/inst.isle line 2957.
     let expr0_0 = C::amode_to_synthetic_amode(ctx, pattern0_0);
     let expr1_0 = constructor_synthetic_amode_to_xmm_mem(ctx, &expr0_0)?;
     return Some(expr1_0);
@@ -5261,7 +5606,7 @@ pub fn constructor_synthetic_amode_to_xmm_mem<C: Context>(
     arg0: &SyntheticAmode,
 ) -> Option<XmmMem> {
     let pattern0_0 = arg0;
-    // Rule at src/isa/x64/inst.isle line 2823.
+    // Rule at src/isa/x64/inst.isle line 2960.
     let expr0_0 = C::synthetic_amode_to_reg_mem(ctx, pattern0_0);
     let expr1_0 = C::reg_mem_to_xmm_mem(ctx, &expr0_0);
     return Some(expr1_0);
@@ -11602,7 +11947,7 @@ pub fn constructor_do_clz<C: Context>(
     let expr5_0 = C::gpr_to_reg(ctx, expr4_0);
     let expr6_0 = C::ty_bits_u64(ctx, pattern1_0);
     let expr7_0: u64 = 1;
-    let expr8_0 = C::u64_sub(ctx, expr6_0, expr7_0);
+    let expr8_0 = C::u64_sub(ctx, expr6_0, expr7_0)?;
     let expr9_0 = constructor_imm(ctx, pattern0_0, expr8_0)?;
     let expr10_0 = C::gpr_new(ctx, expr9_0);
     let expr11_0 = constructor_reg_to_gpr_mem_imm(ctx, expr5_0)?;
@@ -11776,7 +12121,7 @@ pub fn constructor_do_bitrev8<C: Context>(ctx: &mut C, arg0: Type, arg1: Gpr) ->
     // Rule at src/isa/x64/lower.isle line 2037.
     let expr0_0 = C::ty_mask(ctx, pattern0_0);
     let expr1_0: u64 = 6148914691236517205;
-    let expr2_0 = C::u64_and(ctx, expr0_0, expr1_0);
+    let expr2_0 = C::u64_and(ctx, expr0_0, expr1_0)?;
     let expr3_0 = constructor_imm(ctx, pattern0_0, expr2_0)?;
     let expr4_0 = C::gpr_new(ctx, expr3_0);
     let expr5_0 = C::gpr_to_gpr_mem_imm(ctx, expr4_0);
@@ -11794,7 +12139,7 @@ pub fn constructor_do_bitrev8<C: Context>(ctx: &mut C, arg0: Type, arg1: Gpr) ->
     let expr17_0 = C::gpr_to_gpr_mem_imm(ctx, expr12_0);
     let expr18_0 = constructor_x64_or(ctx, pattern0_0, expr16_0, &expr17_0)?;
     let expr19_0: u64 = 3689348814741910323;
-    let expr20_0 = C::u64_and(ctx, expr0_0, expr19_0);
+    let expr20_0 = C::u64_and(ctx, expr0_0, expr19_0)?;
     let expr21_0 = constructor_imm(ctx, pattern0_0, expr20_0)?;
     let expr22_0 = C::gpr_new(ctx, expr21_0);
     let expr23_0 = C::gpr_to_gpr_mem_imm(ctx, expr22_0);
@@ -11812,7 +12157,7 @@ pub fn constructor_do_bitrev8<C: Context>(ctx: &mut C, arg0: Type, arg1: Gpr) ->
     let expr35_0 = C::gpr_to_gpr_mem_imm(ctx, expr30_0);
     let expr36_0 = constructor_x64_or(ctx, pattern0_0, expr34_0, &expr35_0)?;
     let expr37_0: u64 = 1085102592571150095;
-    let expr38_0 = C::u64_and(ctx, expr0_0, expr37_0);
+    let expr38_0 = C::u64_and(ctx, expr0_0, expr37_0)?;
     let expr39_0 = constructor_imm(ctx, pattern0_0, expr38_0)?;
     let expr40_0 = C::gpr_new(ctx, expr39_0);
     let expr41_0 = C::gpr_to_gpr_mem_imm(ctx, expr40_0);
@@ -11840,7 +12185,7 @@ pub fn constructor_do_bitrev16<C: Context>(ctx: &mut C, arg0: Type, arg1: Gpr) -
     let expr0_0 = constructor_do_bitrev8(ctx, pattern0_0, pattern1_0)?;
     let expr1_0 = C::ty_mask(ctx, pattern0_0);
     let expr2_0: u64 = 71777214294589695;
-    let expr3_0 = C::u64_and(ctx, expr1_0, expr2_0);
+    let expr3_0 = C::u64_and(ctx, expr1_0, expr2_0)?;
     let expr4_0 = constructor_imm(ctx, pattern0_0, expr3_0)?;
     let expr5_0 = C::gpr_new(ctx, expr4_0);
     let expr6_0 = C::gpr_to_gpr_mem_imm(ctx, expr5_0);
@@ -11868,7 +12213,7 @@ pub fn constructor_do_bitrev32<C: Context>(ctx: &mut C, arg0: Type, arg1: Gpr) -
     let expr0_0 = constructor_do_bitrev16(ctx, pattern0_0, pattern1_0)?;
     let expr1_0 = C::ty_mask(ctx, pattern0_0);
     let expr2_0: u64 = 281470681808895;
-    let expr3_0 = C::u64_and(ctx, expr1_0, expr2_0);
+    let expr3_0 = C::u64_and(ctx, expr1_0, expr2_0)?;
     let expr4_0 = constructor_imm(ctx, pattern0_0, expr3_0)?;
     let expr5_0 = C::gpr_new(ctx, expr4_0);
     let expr6_0 = C::gpr_to_gpr_mem_imm(ctx, expr5_0);

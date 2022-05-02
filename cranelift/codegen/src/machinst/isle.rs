@@ -111,6 +111,26 @@ macro_rules! isle_prelude_methods {
         }
 
         #[inline]
+        fn invalid_reg_etor(&mut self, reg: Reg) -> Option<()> {
+            use crate::machinst::valueregs::InvalidSentinel;
+            if reg.is_invalid_sentinel() {
+                Some(())
+            } else {
+                None
+            }
+        }
+
+        #[inline]
+        fn valid_reg(&mut self, reg: Reg) -> Option<()> {
+            use crate::machinst::valueregs::InvalidSentinel;
+            if !reg.is_invalid_sentinel() {
+                Some(())
+            } else {
+                None
+            }
+        }
+
+        #[inline]
         fn put_in_reg(&mut self, val: Value) -> Reg {
             self.lower_ctx.put_value_in_regs(val).only_reg().unwrap()
         }
@@ -131,44 +151,49 @@ macro_rules! isle_prelude_methods {
         }
 
         #[inline]
-        fn u8_as_u64(&mut self, x: u8) -> u64 {
-            x.into()
+        fn u8_as_u32(&mut self, x: u8) -> Option<u32> {
+            Some(x.into())
         }
 
         #[inline]
-        fn u16_as_u64(&mut self, x: u16) -> u64 {
-            x.into()
+        fn u8_as_u64(&mut self, x: u8) -> Option<u64> {
+            Some(x.into())
         }
 
         #[inline]
-        fn u32_as_u64(&mut self, x: u32) -> u64 {
-            x.into()
+        fn u16_as_u64(&mut self, x: u16) -> Option<u64> {
+            Some(x.into())
         }
 
         #[inline]
-        fn i64_as_u64(&mut self, x: i64) -> u64 {
-            x as u64
+        fn u32_as_u64(&mut self, x: u32) -> Option<u64> {
+            Some(x.into())
         }
 
         #[inline]
-        fn u64_add(&mut self, x: u64, y: u64) -> u64 {
-            x.wrapping_add(y)
+        fn i64_as_u64(&mut self, x: i64) -> Option<u64> {
+            Some(x as u64)
         }
 
         #[inline]
-        fn u64_sub(&mut self, x: u64, y: u64) -> u64 {
-            x.wrapping_sub(y)
+        fn u64_add(&mut self, x: u64, y: u64) -> Option<u64> {
+            Some(x.wrapping_add(y))
         }
 
         #[inline]
-        fn u64_and(&mut self, x: u64, y: u64) -> u64 {
-            x & y
+        fn u64_sub(&mut self, x: u64, y: u64) -> Option<u64> {
+            Some(x.wrapping_sub(y))
         }
 
         #[inline]
-        fn ty_bits(&mut self, ty: Type) -> u8 {
+        fn u64_and(&mut self, x: u64, y: u64) -> Option<u64> {
+            Some(x & y)
+        }
+
+        #[inline]
+        fn ty_bits(&mut self, ty: Type) -> Option<u8> {
             use std::convert::TryInto;
-            ty.bits().try_into().unwrap()
+            Some(ty.bits().try_into().unwrap())
         }
 
         #[inline]
@@ -452,6 +477,51 @@ macro_rules! isle_prelude_methods {
         #[inline]
         fn u32_add(&mut self, a: u32, b: u32) -> u32 {
             a.wrapping_add(b)
+        }
+
+        #[inline]
+        fn s32_add_fallible(&mut self, a: u32, b: u32) -> Option<u32> {
+            let a = a as i32;
+            let b = b as i32;
+            a.checked_add(b).map(|sum| sum as u32)
+        }
+
+        #[inline]
+        fn u32_nonnegative(&mut self, x: u32) -> Option<u32> {
+            if (x as i32) >= 0 {
+                Some(x)
+            } else {
+                None
+            }
+        }
+
+        #[inline]
+        fn u32_lteq(&mut self, a: u32, b: u32) -> Option<()> {
+            if a <= b {
+                Some(())
+            } else {
+                None
+            }
+        }
+
+        #[inline]
+        fn simm32(&mut self, x: Imm64) -> Option<u32> {
+            let x64: i64 = x.into();
+            let x32: i32 = x64.try_into().ok()?;
+            Some(x32 as u32)
+        }
+
+        #[inline]
+        fn uimm8(&mut self, x: Imm64) -> Option<u8> {
+            let x64: i64 = x.into();
+            let x8: u8 = x64.try_into().ok()?;
+            Some(x8)
+        }
+
+        #[inline]
+        fn offset32(&mut self, x: Offset32) -> Option<u32> {
+            let x: i32 = x.into();
+            Some(x as u32)
         }
 
         #[inline]

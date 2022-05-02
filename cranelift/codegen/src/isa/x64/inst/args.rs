@@ -249,30 +249,11 @@ newtype_of_reg!(
     |reg| reg.class() == RegClass::Float
 );
 
-/// A possible addressing mode (amode) that can be used in instructions.
-/// These denote a 64-bit value only.
-#[derive(Clone, Debug)]
-pub enum Amode {
-    /// Immediate sign-extended and a Register.
-    ImmReg {
-        simm32: u32,
-        base: Reg,
-        flags: MemFlags,
-    },
+// N.B.: `Amode` is defined in `inst.isle`. We add some convenience
+// constructors here.
 
-    /// sign-extend-32-to-64(Immediate) + Register1 + (Register2 << Shift)
-    ImmRegRegShift {
-        simm32: u32,
-        base: Gpr,
-        index: Gpr,
-        shift: u8, /* 0 .. 3 only */
-        flags: MemFlags,
-    },
-
-    /// sign-extend-32-to-64(Immediate) + RIP (instruction pointer).
-    /// To wit: not supported in 32-bits mode.
-    RipRelative { target: MachLabel },
-}
+// Re-export the type from the ISLE generated code.
+pub use crate::isa::x64::lower::isle::generated_code::Amode;
 
 impl Amode {
     pub(crate) fn imm_reg(simm32: u32, base: Reg) -> Self {
