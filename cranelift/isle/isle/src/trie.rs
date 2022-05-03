@@ -368,7 +368,7 @@ impl TrieNode {
                     // Move it to the end of the run of equal-unit-range ops.
                     edges.swap(last_edge_with_op.unwrap(), i - 1);
                     edge = Some(i - 1);
-                    edges[i - 1].range.max = prio;
+                    edges[i - 1].range.min = prio;
                     break;
                 }
                 edges.insert(
