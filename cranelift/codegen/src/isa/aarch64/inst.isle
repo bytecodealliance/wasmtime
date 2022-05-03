@@ -1290,14 +1290,14 @@
 (decl move_wide_const_from_negated_u64 (MoveWideConst) u64)
 (extern extractor move_wide_const_from_negated_u64 move_wide_const_from_negated_u64)
 
-(decl imm_logic_from_u64 (Type ImmLogic) u64)
-(extern extractor imm_logic_from_u64 imm_logic_from_u64 (in out))
+(decl pure imm_logic_from_u64 (Type u64) ImmLogic)
+(extern constructor imm_logic_from_u64 imm_logic_from_u64)
 
-(decl imm_logic_from_imm64 (Type ImmLogic) Imm64)
-(extern extractor imm_logic_from_imm64 imm_logic_from_imm64 (in out))
+(decl pure imm_logic_from_imm64 (Type Imm64) ImmLogic)
+(extern constructor imm_logic_from_imm64 imm_logic_from_imm64)
 
-(decl imm_shift_from_imm64 (Type ImmShift) Imm64)
-(extern extractor imm_shift_from_imm64 imm_shift_from_imm64 (in out))
+(decl pure imm_shift_from_imm64 (Type Imm64) ImmShift)
+(extern constructor imm_shift_from_imm64 imm_shift_from_imm64)
 
 (decl imm_shift_from_u8 (u8) ImmShift)
 (extern constructor imm_shift_from_u8 imm_shift_from_u8)
@@ -1317,8 +1317,8 @@
 (decl imm12_from_negated_u64 (Imm12) u64)
 (extern extractor imm12_from_negated_u64 imm12_from_negated_u64)
 
-(decl lshl_from_imm64 (Type ShiftOpAndAmt) Imm64)
-(extern extractor lshl_from_imm64 lshl_from_imm64 (in out))
+(decl pure lshl_from_imm64 (Type Imm64) ShiftOpAndAmt)
+(extern constructor lshl_from_imm64 lshl_from_imm64)
 
 (decl integral_ty (Type) Type)
 (extern extractor integral_ty integral_ty)
@@ -1330,13 +1330,13 @@
 (decl imm12_from_value (Imm12) Value)
 (extractor
   (imm12_from_value n)
-  (def_inst (iconst (u64_from_imm64 (imm12_from_u64 n)))))
+  (iconst (u64_from_imm64 (imm12_from_u64 n))))
 
 ;; Same as `imm12_from_value`, but tries negating the constant value.
 (decl imm12_from_negated_value (Imm12) Value)
 (extractor
   (imm12_from_negated_value n)
-  (def_inst (iconst (u64_from_imm64 (imm12_from_negated_u64 n)))))
+  (iconst (u64_from_imm64 (imm12_from_negated_u64 n))))
 
 ;; Helper type to represent a value and an extend operation fused together.
 (type ExtendedValue extern (enum))
@@ -1877,7 +1877,8 @@
       (movn n (OperandSize.Size64)))
 
 ;; Weird logical-instruction immediate in ORI using zero register
-(rule (imm (integral_ty _ty) (imm_logic_from_u64 <$I64 n))
+(rule (imm (integral_ty _ty) k)
+      (if-let n (imm_logic_from_u64 $I64 k))
       (orr_imm $I64 (zero_reg) n))
 
 (decl load_constant64_full (u64) Reg)
@@ -1978,29 +1979,35 @@
 
 ;; Base case of operating on registers.
 (rule (alu_rs_imm_logic_commutative op ty x y)
-      (alu_rrr op ty (put_in_reg x) (put_in_reg y)))
+      (alu_rrr op ty x y))
 
 ;; Special cases for when one operand is a constant.
-(rule (alu_rs_imm_logic_commutative op ty x (def_inst (iconst (imm_logic_from_imm64 <ty imm))))
-      (alu_rr_imm_logic op ty (put_in_reg x) imm))
-(rule (alu_rs_imm_logic_commutative op ty (def_inst (iconst (imm_logic_from_imm64 <ty imm))) x)
-      (alu_rr_imm_logic op ty (put_in_reg x) imm))
+(rule (alu_rs_imm_logic_commutative op ty x (iconst k))
+      (if-let imm (imm_logic_from_imm64 ty k))
+      (alu_rr_imm_logic op ty x imm))
+(rule (alu_rs_imm_logic_commutative op ty (iconst k) x)
+      (if-let imm (imm_logic_from_imm64 ty k))
+      (alu_rr_imm_logic op ty x imm))
 
 ;; Special cases for when one operand is shifted left by a constant.
-(rule (alu_rs_imm_logic_commutative op ty x (def_inst (ishl y (def_inst (iconst (lshl_from_imm64 <ty amt))))))
-      (alu_rrr_shift op ty (put_in_reg x) (put_in_reg y) amt))
-(rule (alu_rs_imm_logic_commutative op ty (def_inst (ishl x (def_inst (iconst (lshl_from_imm64 <ty amt))))) y)
-      (alu_rrr_shift op ty (put_in_reg y) (put_in_reg x) amt))
+(rule (alu_rs_imm_logic_commutative op ty x (ishl y (iconst k)))
+      (if-let amt (lshl_from_imm64 ty k))
+      (alu_rrr_shift op ty x y amt))
+(rule (alu_rs_imm_logic_commutative op ty (ishl x (iconst k)) y)
+      (if-let amt (lshl_from_imm64 ty k))
+      (alu_rrr_shift op ty y x amt))
 
 ;; Same as `alu_rs_imm_logic_commutative` above, except that it doesn't require
 ;; that the operation is commutative.
 (decl alu_rs_imm_logic (ALUOp Type Value Value) Reg)
 (rule (alu_rs_imm_logic op ty x y)
-      (alu_rrr op ty (put_in_reg x) (put_in_reg y)))
-(rule (alu_rs_imm_logic op ty x (def_inst (iconst (imm_logic_from_imm64 <ty imm))))
-      (alu_rr_imm_logic op ty (put_in_reg x) imm))
-(rule (alu_rs_imm_logic op ty x (def_inst (ishl y (def_inst (iconst (lshl_from_imm64 <ty amt))))))
-      (alu_rrr_shift op ty (put_in_reg x) (put_in_reg y) amt))
+      (alu_rrr op ty x y))
+(rule (alu_rs_imm_logic op ty x (iconst k))
+      (if-let imm (imm_logic_from_imm64 ty k))
+      (alu_rr_imm_logic op ty x imm))
+(rule (alu_rs_imm_logic op ty x (ishl y (iconst k)))
+      (if-let amt (lshl_from_imm64 ty k))
+      (alu_rrr_shift op ty x y amt))
 
 ;; Helper for generating i128 bitops which simply do the same operation to the
 ;; hi/lo registers.

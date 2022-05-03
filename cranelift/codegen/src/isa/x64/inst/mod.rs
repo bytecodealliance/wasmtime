@@ -2015,7 +2015,7 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             ..
         } => {
             collector.reg_use(*idx);
-            collector.reg_early_def(*tmp1);
+            collector.reg_mod(*tmp1);
             collector.reg_early_def(*tmp2);
         }
 

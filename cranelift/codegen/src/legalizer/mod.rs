@@ -120,7 +120,7 @@ pub fn simple_legalize(func: &mut ir::Function, cfg: &mut ControlFlowGraph, isa:
                     table,
                     arg,
                     offset,
-                } => expand_table_addr(inst, &mut pos.func, table, arg, offset),
+                } => expand_table_addr(isa, inst, &mut pos.func, table, arg, offset),
 
                 // bitops
                 InstructionData::BinaryImm64 {
