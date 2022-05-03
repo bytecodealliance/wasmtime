@@ -16,7 +16,7 @@
     )
 )]
 
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use clap::Parser;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -100,6 +100,7 @@ fn init_file_per_thread_logger(prefix: &'static str) {
 
 /// Common options for commands that translate WebAssembly modules
 #[derive(Parser)]
+#[cfg_attr(test, derive(Debug, PartialEq))]
 pub struct CommonOptions {
     /// Use specified configuration file
     #[clap(long, parse(from_os_str), value_name = "CONFIG_PATH")]
@@ -225,6 +226,13 @@ pub struct CommonOptions {
 }
 
 impl CommonOptions {
+    pub fn parse_from_str(s: &str) -> Result<Self> {
+        let parts = shellwords::split(s).context("unable to split options into words")?;
+        let options =
+            Self::try_parse_from(parts).context("unable to parse options from passed flags")?;
+        Ok(options)
+    }
+
     pub fn init_logging(&self) {
         if self.disable_logging {
             return;
@@ -374,6 +382,7 @@ fn parse_opt_level(opt_level: &str) -> Result<wasmtime::OptLevel> {
 }
 
 #[derive(Default, Clone, Copy)]
+#[cfg_attr(test, derive(Debug, PartialEq))]
 pub struct WasmFeatures {
     pub reference_types: Option<bool>,
     pub multi_value: Option<bool>,
@@ -689,6 +698,26 @@ mod test {
                 wasi_nn: false,
                 wasi_crypto: false
             }
+        );
+    }
+
+    #[test]
+    fn test_parse_from_str() {
+        fn use_func(flags: &str) -> CommonOptions {
+            CommonOptions::parse_from_str(flags).unwrap()
+        }
+        fn use_clap_parser(flags: &[&str]) -> CommonOptions {
+            CommonOptions::try_parse_from(flags).unwrap()
+        }
+
+        assert_eq!(use_func(""), use_clap_parser(&[]));
+        assert_eq!(
+            use_func("foo --wasm-features=threads"),
+            use_clap_parser(&["foo", "--wasm-features=threads"])
+        );
+        assert_eq!(
+            use_func("foo --cranelift-set \"enable_simd=true\""),
+            use_clap_parser(&["foo", "--cranelift-set", "enable_simd=true"])
         );
     }
 }
