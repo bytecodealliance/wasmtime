@@ -18,10 +18,10 @@ block0:
 ;   load_const VCodeConstant(3), %xmm1
 ;   load_const VCodeConstant(2), %xmm0
 ;   load_const VCodeConstant(0), %xmm9
-;   pshufb  %xmm1, %xmm1, %xmm9
+;   pshufb  %xmm1, %xmm9, %xmm1
 ;   load_const VCodeConstant(1), %xmm12
-;   pshufb  %xmm0, %xmm0, %xmm12
-;   orps    %xmm0, %xmm0, %xmm1
+;   pshufb  %xmm0, %xmm12, %xmm0
+;   orps    %xmm0, %xmm1, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -38,7 +38,7 @@ block0:
 ; block0:
 ;   load_const VCodeConstant(1), %xmm0
 ;   load_const VCodeConstant(0), %xmm5
-;   pshufb  %xmm0, %xmm0, %xmm5
+;   pshufb  %xmm0, %xmm5, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -57,8 +57,8 @@ block0:
 ;   load_const VCodeConstant(1), %xmm0
 ;   load_const VCodeConstant(1), %xmm2
 ;   load_const VCodeConstant(0), %xmm7
-;   paddusb %xmm2, %xmm2, %xmm7
-;   pshufb  %xmm0, %xmm0, %xmm2
+;   paddusb %xmm2, %xmm7, %xmm2
+;   pshufb  %xmm0, %xmm2, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -75,7 +75,7 @@ block0(v0: i8):
 ;   uninit  %xmm0
 ;   pinsrb  $0, %xmm0, %rdi, %xmm0
 ;   pxor    %xmm6, %xmm6, %xmm6
-;   pshufb  %xmm0, %xmm0, %xmm6
+;   pshufb  %xmm0, %xmm6, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -127,8 +127,8 @@ block0(v0: f64):
 ;   movdqa  %xmm0, %xmm4
 ;   uninit  %xmm0
 ;   movdqa  %xmm4, %xmm5
-;   movsd   %xmm0, %xmm0, %xmm5
-;   movlhps %xmm0, %xmm0, %xmm5
+;   movsd   %xmm0, %xmm5, %xmm0
+;   movlhps %xmm0, %xmm5, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
