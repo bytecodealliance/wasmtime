@@ -65,3 +65,97 @@ block0(v0: i64):
 ;   popq    %rbp
 ;   ret
 
+function %amode_reg_reg_imm(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = iadd v0, v1
+    v3 = iconst.i64 256
+    v4 = iadd v2, v3
+    v5 = load.i64 v4+64
+    return v5
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    320(%rdi,%rsi,1), %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %amode_reg_reg_imm_negative(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = iadd v0, v1
+    v3 = iconst.i64 -1
+    v4 = iadd v2, v3
+    v5 = load.i64 v4
+    return v5
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    -1(%rdi,%rsi,1), %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %amode_reg_reg_imm_scaled(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = iconst.i64 -1
+    v3 = iadd v0, v2
+    v4 = ishl_imm v1, 3
+    v5 = iadd v3, v4
+    v6 = load.i64 v5
+    return v6
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    -1(%rdi,%rsi,8), %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+
+function %amode_reg_reg_imm_uext_scaled(i64, i32) -> i64 {
+block0(v0: i64, v1: i32):
+    v2 = iconst.i64 -1
+    v3 = iadd v0, v2
+    v4 = ishl_imm v1, 3
+    v5 = uextend.i64 v4
+    v6 = iadd v3, v5
+    v7 = load.i64 v6
+    return v7
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movl    %esi, %r8d
+;   movq    -1(%rdi,%r8,8), %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %amode_reg_reg_imm_uext_scaled_add(i64, i32, i32) -> i64 {
+block0(v0: i64, v1: i32, v2: i32):
+    v3 = iconst.i64 -1
+    v4 = iadd v0, v3
+    v5 = iadd v1, v2
+    v6 = ishl_imm v5, 2
+    v7 = uextend.i64 v6
+    v8 = iadd v4, v7
+    v9 = load.i64 v8
+    return v9
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   addl    %esi, %edx, %esi
+;   movq    -1(%rdi,%rsi,4), %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+

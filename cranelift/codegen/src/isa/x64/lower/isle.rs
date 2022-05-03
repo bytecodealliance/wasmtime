@@ -313,15 +313,6 @@ where
     }
 
     #[inline]
-    fn const_shift_lt_eq_3(&mut self, shift_amount: Value) -> Option<u8> {
-        let input = self.lower_ctx.get_value_as_source_or_const(shift_amount);
-        match input.constant {
-            Some(shift_amount) if shift_amount <= 3 => Some(shift_amount as u8),
-            _ => None,
-        }
-    }
-
-    #[inline]
     fn writable_gpr_to_reg(&mut self, r: WritableGpr) -> WritableReg {
         r.to_writable_reg()
     }
@@ -526,9 +517,9 @@ where
     #[inline]
     fn sum_extend_fits_in_32_bits(
         &mut self,
-        offset: Offset32,
         extend_from_ty: Type,
         constant_value: Imm64,
+        offset: Offset32,
     ) -> Option<u32> {
         let offset: i64 = offset.into();
         let constant_value: u64 = constant_value.bits() as u64;

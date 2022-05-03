@@ -77,9 +77,6 @@ impl<'a> Parser<'a> {
     fn is_at(&self) -> bool {
         self.is(|tok| *tok == Token::At)
     }
-    fn is_lt(&self) -> bool {
-        self.is(|tok| *tok == Token::Lt)
-    }
     fn is_sym(&self) -> bool {
         self.is(|tok| tok.is_sym())
     }
@@ -108,9 +105,6 @@ impl<'a> Parser<'a> {
     }
     fn at(&mut self) -> Result<()> {
         self.take(|tok| *tok == Token::At).map(|_| ())
-    }
-    fn lt(&mut self) -> Result<()> {
-        self.take(|tok| *tok == Token::Lt).map(|_| ())
     }
 
     fn symbol(&mut self) -> Result<String> {
@@ -338,30 +332,10 @@ impl<'a> Parser<'a> {
             let term = self.parse_ident()?;
             let func = self.parse_ident()?;
 
-            let arg_polarity = if self.is_lparen() {
-                let mut pol = vec![];
-                self.lparen()?;
-                while !self.is_rparen() {
-                    if self.is_sym_str("in") {
-                        self.symbol()?;
-                        pol.push(ArgPolarity::Input);
-                    } else if self.is_sym_str("out") {
-                        self.symbol()?;
-                        pol.push(ArgPolarity::Output);
-                    } else {
-                        return Err(self.error(pos, "Invalid argument polarity".to_string()));
-                    }
-                }
-                self.rparen()?;
-                Some(pol)
-            } else {
-                None
-            };
             Ok(Extern::Extractor {
                 term,
                 func,
                 pos,
-                arg_polarity,
                 infallible,
             })
         } else if self.is_sym_str("const") {
@@ -461,22 +435,13 @@ impl<'a> Parser<'a> {
                 let sym = self.parse_ident()?;
                 let mut args = vec![];
                 while !self.is_rparen() {
-                    args.push(self.parse_pattern_term_arg()?);
+                    args.push(self.parse_pattern()?);
                 }
                 self.rparen()?;
                 Ok(Pattern::Term { sym, args, pos })
             }
         } else {
             Err(self.error(pos, "Unexpected pattern".into()))
-        }
-    }
-
-    fn parse_pattern_term_arg(&mut self) -> Result<TermArgPattern> {
-        if self.is_lt() {
-            self.lt()?;
-            Ok(TermArgPattern::Expr(self.parse_expr()?))
-        } else {
-            Ok(TermArgPattern::Pattern(self.parse_pattern()?))
         }
     }
 

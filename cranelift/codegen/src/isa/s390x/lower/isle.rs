@@ -248,7 +248,10 @@ where
         let inst = self.lower_ctx.dfg().value_def(val).inst()?;
         let constant = self.lower_ctx.get_constant(inst)?;
         let ty = self.lower_ctx.output_ty(inst, 0);
-        Some(super::sign_extend_to_u64(constant, self.ty_bits(ty)))
+        Some(super::sign_extend_to_u64(
+            constant,
+            self.ty_bits(ty).unwrap(),
+        ))
     }
 
     #[inline]
@@ -327,7 +330,7 @@ where
 
     #[inline]
     fn mask_amt_imm(&mut self, ty: Type, amt: i64) -> u8 {
-        let mask = self.ty_bits(ty) - 1;
+        let mask = self.ty_bits(ty).unwrap() - 1;
         (amt as u8) & mask
     }
 
@@ -486,9 +489,9 @@ where
     }
 
     #[inline]
-    fn same_reg(&mut self, src: Reg, dst: WritableReg) -> Option<()> {
+    fn same_reg(&mut self, dst: WritableReg, src: Reg) -> Option<Reg> {
         if dst.to_reg() == src {
-            Some(())
+            Some(src)
         } else {
             None
         }

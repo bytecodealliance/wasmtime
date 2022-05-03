@@ -83,13 +83,13 @@ where
         MoveWideConst::maybe_from_u64(!n)
     }
 
-    fn imm_logic_from_u64(&mut self, n: u64, ty: Type) -> Option<ImmLogic> {
+    fn imm_logic_from_u64(&mut self, ty: Type, n: u64) -> Option<ImmLogic> {
         let ty = if ty.bits() < 32 { I32 } else { ty };
         ImmLogic::maybe_from_u64(n, ty)
     }
 
-    fn imm_logic_from_imm64(&mut self, n: Imm64, ty: Type) -> Option<ImmLogic> {
-        self.imm_logic_from_u64(n.bits() as u64, ty)
+    fn imm_logic_from_imm64(&mut self, ty: Type, n: Imm64) -> Option<ImmLogic> {
+        self.imm_logic_from_u64(ty, n.bits() as u64)
     }
 
     fn imm12_from_u64(&mut self, n: u64) -> Option<Imm12> {
@@ -104,7 +104,7 @@ where
         ImmShift::maybe_from_u64(n.into()).unwrap()
     }
 
-    fn lshl_from_imm64(&mut self, n: Imm64, ty: Type) -> Option<ShiftOpAndAmt> {
+    fn lshl_from_imm64(&mut self, ty: Type, n: Imm64) -> Option<ShiftOpAndAmt> {
         let shiftimm = ShiftOpShiftImm::maybe_from_shift(n.bits() as u64)?;
         let shiftee_bits = ty_bits(ty);
         if shiftee_bits <= std::u8::MAX as usize {
@@ -292,7 +292,7 @@ where
         ImmLogic::maybe_from_u64(mask, I32).unwrap()
     }
 
-    fn imm_shift_from_imm64(&mut self, val: Imm64, ty: Type) -> Option<ImmShift> {
+    fn imm_shift_from_imm64(&mut self, ty: Type, val: Imm64) -> Option<ImmShift> {
         let imm_value = (val.bits() as u64) & ((ty.bits() - 1) as u64);
         ImmShift::maybe_from_u64(imm_value)
     }

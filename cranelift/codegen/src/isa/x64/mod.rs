@@ -203,7 +203,7 @@ mod test {
     use super::*;
     use crate::cursor::{Cursor, FuncCursor};
     use crate::ir::{types::*, SourceLoc, ValueLabel, ValueLabelStart};
-    use crate::ir::{AbiParam, ExternalName, Function, InstBuilder, Signature};
+    use crate::ir::{AbiParam, ExternalName, Function, InstBuilder, JumpTableData, Signature};
     use crate::isa::CallConv;
     use crate::settings;
     use crate::settings::Configurable;
@@ -365,5 +365,96 @@ mod test {
             isa_builder.finish(shared_flags),
             Err(CodegenError::Unsupported(_)),
         ));
+    }
+
+    // Check that br_table lowers properly. We can't test this with an
+    // ordinary compile-test because the br_table pseudoinstruction
+    // expands during emission.
+    #[test]
+    fn br_table() {
+        let name = ExternalName::testcase("test0");
+        let mut sig = Signature::new(CallConv::SystemV);
+        sig.params.push(AbiParam::new(I32));
+        sig.returns.push(AbiParam::new(I32));
+        let mut func = Function::with_name_signature(name, sig);
+
+        let bb0 = func.dfg.make_block();
+        let arg0 = func.dfg.append_block_param(bb0, I32);
+        let bb1 = func.dfg.make_block();
+        let bb2 = func.dfg.make_block();
+        let bb3 = func.dfg.make_block();
+
+        let mut pos = FuncCursor::new(&mut func);
+
+        pos.insert_block(bb0);
+        let mut jt_data = JumpTableData::new();
+        jt_data.push_entry(bb1);
+        jt_data.push_entry(bb2);
+        let jt = pos.func.create_jump_table(jt_data);
+        pos.ins().br_table(arg0, bb3, jt);
+
+        pos.insert_block(bb1);
+        let v1 = pos.ins().iconst(I32, 1);
+        pos.ins().return_(&[v1]);
+
+        pos.insert_block(bb2);
+        let v2 = pos.ins().iconst(I32, 2);
+        pos.ins().return_(&[v2]);
+
+        pos.insert_block(bb3);
+        let v3 = pos.ins().iconst(I32, 3);
+        pos.ins().return_(&[v3]);
+
+        let mut shared_flags_builder = settings::builder();
+        shared_flags_builder.set("opt_level", "none").unwrap();
+        shared_flags_builder.set("enable_verifier", "true").unwrap();
+        let shared_flags = settings::Flags::new(shared_flags_builder);
+        let isa_flags = x64_settings::Flags::new(&shared_flags, x64_settings::builder());
+        let backend = X64Backend::new_with_flags(
+            Triple::from_str("x86_64").unwrap(),
+            shared_flags,
+            isa_flags,
+        );
+        let result = backend
+            .compile_function(&mut func, /* want_disasm = */ false)
+            .unwrap();
+        let code = result.buffer.data();
+
+        // 00000000  55                push rbp
+        // 00000001  4889E5            mov rbp,rsp
+        // 00000004  41B900000000      mov r9d,0x0
+        // 0000000A  83FF02            cmp edi,byte +0x2
+        // 0000000D  0F8320000000      jnc near 0x33
+        // 00000013  8BC7              mov eax,edi
+        // 00000015  490F43C1          cmovnc rax,r9
+        // 00000019  4C8D0D0B000000    lea r9,[rel 0x2b]
+        // 00000020  4963448100        movsxd rax,dword [r9+rax*4+0x0]
+        // 00000025  4901C1            add r9,rax
+        // 00000028  41FFE1            jmp r9
+        // 0000002B  1200              adc al,[rax]
+        // 0000002D  0000              add [rax],al
+        // 0000002F  1C00              sbb al,0x0
+        // 00000031  0000              add [rax],al
+        // 00000033  B803000000        mov eax,0x3
+        // 00000038  4889EC            mov rsp,rbp
+        // 0000003B  5D                pop rbp
+        // 0000003C  C3                ret
+        // 0000003D  B801000000        mov eax,0x1
+        // 00000042  4889EC            mov rsp,rbp
+        // 00000045  5D                pop rbp
+        // 00000046  C3                ret
+        // 00000047  B802000000        mov eax,0x2
+        // 0000004C  4889EC            mov rsp,rbp
+        // 0000004F  5D                pop rbp
+        // 00000050  C3                ret
+
+        let golden = vec![
+            85, 72, 137, 229, 65, 185, 0, 0, 0, 0, 131, 255, 2, 15, 131, 32, 0, 0, 0, 139, 199, 73,
+            15, 67, 193, 76, 141, 13, 11, 0, 0, 0, 73, 99, 68, 129, 0, 73, 1, 193, 65, 255, 225,
+            18, 0, 0, 0, 28, 0, 0, 0, 184, 3, 0, 0, 0, 72, 137, 236, 93, 195, 184, 1, 0, 0, 0, 72,
+            137, 236, 93, 195, 184, 2, 0, 0, 0, 72, 137, 236, 93, 195,
+        ];
+
+        assert_eq!(code, &golden[..]);
     }
 }

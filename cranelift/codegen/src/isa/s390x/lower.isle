@@ -341,7 +341,9 @@
 ;; If the `avoid_div_traps` flag is true, we perform the check explicitly.
 ;; This still can be omittted if the divisor is a non-zero immediate.
 (decl zero_divisor_check_needed (Value) bool)
-(rule (zero_divisor_check_needed (i64_from_value (i64_nonzero _))) $false)
+(rule (zero_divisor_check_needed (i64_from_value x))
+      (if (i64_nonzero x))
+      $false)
 (rule (zero_divisor_check_needed (value_type (allow_div_traps))) $false)
 (rule (zero_divisor_check_needed _) $true)
 
@@ -422,7 +424,9 @@
 ;; minimum (signed) integer value is divided by -1, so if the divisor
 ;; is any immediate different from -1, the check can be omitted.
 (decl div_overflow_check_needed (Value) bool)
-(rule (div_overflow_check_needed (i64_from_value (i64_not_neg1 _))) $false)
+(rule (div_overflow_check_needed (i64_from_value x))
+      (if (i64_not_neg1 x))
+      $false)
 (rule (div_overflow_check_needed _) $true)
 
 ;; Perform the integer-overflow check if necessary.   This implements:
@@ -1168,7 +1172,8 @@
 
 ;; Load the address of a symbol, target reachable via PC-relative instruction.
 (rule (lower (symbol_value (symbol_value_data name (reloc_distance_near)
-                                                   (memarg_symbol_offset offset))))
+                                              off)))
+      (if-let offset (memarg_symbol_offset off))
       (load_addr (memarg_symbol name offset (memflags_trusted))))
 
 ;; Load the address of a symbol, general case.
@@ -1984,14 +1989,16 @@
 ;; Note that the ISA only provides instructions with a PC-relative memory
 ;; address here, so we need to check whether the sinkable load matches this.
 (rule (icmpu_val $true x @ (value_type (fits_in_64 ty))
-                 (sinkable_load_16 (load_sym y)))
+                 (sinkable_load_16 ld))
+      (if-let y (load_sym ld))
       (icmpu_mem_zext16 (ty_ext32 ty) (put_in_reg_zext32 x) (sink_load y)))
 
 ;; Compare (unsigned) a register and zero-extended memory.
 ;; Note that the ISA only provides instructions with a PC-relative memory
 ;; address here, so we need to check whether the sinkable load matches this.
 (rule (icmpu_val $true x @ (value_type (fits_in_64 ty))
-                 (sinkable_uload16 (uload16_sym y)))
+                 (sinkable_uload16 ld))
+      (if-let y (uload16_sym ld))
       (icmpu_mem_zext16 ty x (sink_uload16 y)))
 (rule (icmpu_val $true x @ (value_type (fits_in_64 ty)) (sinkable_uload32 y))
       (icmpu_mem_zext32 ty x (sink_uload32 y)))

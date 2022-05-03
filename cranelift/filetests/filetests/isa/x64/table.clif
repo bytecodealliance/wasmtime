@@ -1,0 +1,38 @@
+test compile precise-output
+set enable_safepoints=true
+set enable_table_access_spectre_mitigation=true
+
+target x86_64
+
+function %table_set(i32, r64, i64 vmctx) {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0
+    gv2 = load.i32 notrap aligned gv0 +8
+    table0 = dynamic gv1, element_size 1, bound gv2, index_type i32
+
+block0(v0: i32, v1: r64, v2: i64):
+    v3 = table_addr.i64 table0, v0, +0
+    store.r64 notrap aligned v1, v3
+    return
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movl    8(%rdx), %eax
+;   cmpl    %eax, %edi
+;   jb      label1; j label2
+; block1:
+;   movl    %edi, %r9d
+;   movq    0(%rdx), %rdx
+;   movq    %rdx, %r8
+;   addq    %r8, %r9, %r8
+;   cmpl    %eax, %edi
+;   cmovnbq %rdx, %r8, %r8
+;   movq    %rsi, 0(%r8)
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; block2:
+;   ud2 table_oob
+

@@ -12,8 +12,8 @@
 (decl Op (Opcode) Inst)
 (extern extractor infallible Op get_opcode)
 
-(decl InstInput (InstInput u32) Inst)
-(extern extractor infallible InstInput get_inst_input (out in))
+(decl InstInputs2 (InstInput InstInput) Inst)
+(extern extractor infallible InstInputs2 get_inst_inputs_2)
 
 (decl Producer (Inst) InstInput)
 (extern extractor Producer get_input_producer)
@@ -44,15 +44,13 @@
 (extractor
   (Iadd a b)
   (and
-    (Op (Opcode.Iadd))
-    (InstInput a <0)
-    (InstInput b <1)))
+   (Op (Opcode.Iadd))
+   (InstInputs2 a b)))
 (extractor
   (Isub a b)
   (and
-    (Op (Opcode.Isub))
-    (InstInput a <0)
-    (InstInput b <1)))
+   (Op (Opcode.Isub))
+   (InstInputs2 a b)))
 
 ;; Now the nice syntax-sugar that "end-user" backend authors can write:
 (rule

@@ -46,6 +46,33 @@
 (decl u32_add (u32 u32) u32)
 (extern constructor u32_add u32_add)
 
+;; Pure/fallible constructor that tries to add two `u32`s, interpreted
+;; as signed values, and fails to match on overflow.
+(decl pure s32_add_fallible (u32 u32) u32)
+(extern constructor s32_add_fallible s32_add_fallible)
+
+;; Extractor that matches a `u32` only if non-negative.
+(decl u32_nonnegative (u32) u32)
+(extern extractor u32_nonnegative u32_nonnegative)
+
+;; Extractor that pulls apart an Offset32 into a u32 with the raw
+;; signed-32-bit twos-complement bits.
+(decl offset32 (u32) Offset32)
+(extern extractor offset32 offset32)
+
+;; Pure/fallible constructor that tests if one u32 is less than or
+;; equal to another.
+(decl pure u32_lteq (u32 u32) Unit)
+(extern constructor u32_lteq u32_lteq)
+
+;; Get a signed 32-bit immediate in an u32 from an Imm64, if possible.
+(decl simm32 (u32) Imm64)
+(extern extractor simm32 simm32)
+
+;; Get an unsigned 8-bit immediate in a u8 from an Imm64, if possible.
+(decl uimm8 (u8) Imm64)
+(extern extractor uimm8 uimm8)
+
 (decl u8_and (u8 u8) u8)
 (extern constructor u8_and u8_and)
 
@@ -110,9 +137,14 @@
 (rule (temp_reg ty)
       (writable_reg_to_reg (temp_writable_reg ty)))
 
-;; Get the invalid register.
+;; Get or match the invalid register.
 (decl invalid_reg () Reg)
 (extern constructor invalid_reg invalid_reg)
+(extern extractor invalid_reg invalid_reg_etor)
+
+;; Match any register but the invalid register.
+(decl valid_reg () Reg)
+(extern extractor valid_reg valid_reg)
 
 ;; Put the given value into a register.
 ;;
@@ -163,27 +195,30 @@
 
 ;;;; Primitive Type Conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(decl u8_as_u64 (u8) u64)
+(decl pure u8_as_u32 (u8) u32)
+(extern constructor u8_as_u32 u8_as_u32)
+
+(decl pure u8_as_u64 (u8) u64)
 (extern constructor u8_as_u64 u8_as_u64)
 
-(decl u16_as_u64 (u16) u64)
+(decl pure u16_as_u64 (u16) u64)
 (extern constructor u16_as_u64 u16_as_u64)
 
-(decl u32_as_u64 (u32) u64)
+(decl pure u32_as_u64 (u32) u64)
 (extern constructor u32_as_u64 u32_as_u64)
 
-(decl i64_as_u64 (i64) u64)
+(decl pure i64_as_u64 (i64) u64)
 (extern constructor i64_as_u64 i64_as_u64)
 
 ;;;; Primitive Arithmetic ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(decl u64_add (u64 u64) u64)
+(decl pure u64_add (u64 u64) u64)
 (extern constructor u64_add u64_add)
 
-(decl u64_sub (u64 u64) u64)
+(decl pure u64_sub (u64 u64) u64)
 (extern constructor u64_sub u64_sub)
 
-(decl u64_and (u64 u64) u64)
+(decl pure u64_and (u64 u64) u64)
 (extern constructor u64_and u64_and)
 
 ;;;; `cranelift_codegen::ir::Type` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -221,7 +256,7 @@
 (extern const $F64X2 Type)
 
 ;; Get the bit width of a given type.
-(decl ty_bits (Type) u8)
+(decl pure ty_bits (Type) u8)
 (extern constructor ty_bits ty_bits)
 
 ;; Get the bit width of a given type.
