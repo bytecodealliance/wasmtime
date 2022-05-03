@@ -18,7 +18,7 @@ impl EmitInfo {
     }
 }
 
-fn machreg_to_gpr_num(m: Reg) -> u32 {
+fn reg_to_gpr_num(m: Reg) -> u32 {
     u32::try_from(m.to_real_reg().unwrap().hw_enc() & 31).unwrap()
 }
 
@@ -70,19 +70,46 @@ impl Inst {
     pub(crate) fn construct_bit_not(rd: Writable<Reg>) -> Inst {
         unimplemented!()
     }
+
+    /*
+        notice always patch the taken path.
+        this will make jump that jump over all insts.
+    */
+    pub(crate) fn patch_taken_path_list(insts: &mut SmallInstVec<Inst>, patches: &'_ Vec<usize>) {
+        for index in patches {
+            let index = *index;
+            assert!(insts.len() > index);
+            let real_off =
+                ((insts.len() - index - 1/*self size */) as i32 * Inst::instruction_size());
+            match &mut insts[index] {
+                &mut Inst::CondBr { ref mut taken, .. } => match taken {
+                    &mut BranchTarget::ResolvedOffset(_) => {
+                        *taken = BranchTarget::ResolvedOffset(real_off)
+                    }
+                    _ => unreachable!(),
+                },
+                &mut Inst::Jal { ref mut dest } => match dest {
+                    &mut BranchTarget::ResolvedOffset(_) => {
+                        *dest = BranchTarget::ResolvedOffset(real_off)
+                    }
+                    _ => unreachable!(),
+                },
+                _ => unreachable!(),
+            }
+        }
+    }
     /*
         rd == 1 is unordered
         rd == 0 is ordered
     */
     pub(crate) fn generate_float_unordered(
-        sink: &mut MachBuffer<Inst>,
         rd: Writable<Reg>,
         ty: Type,
         left: Reg,
         right: Reg,
     ) -> SmallInstVec<Inst> {
         let mut insts = SmallVec::new();
-        let mut label_true = sink.get_label();
+        let mut patch_true = vec![];
         let class_op = if ty == F32 {
             AluOPRR::FclassS
         } else {
@@ -100,8 +127,9 @@ impl Inst {
             rs: rd.to_reg(),
             imm12: Imm12::from_bits(FClassResult::is_nan_bits() as i16),
         });
+        patch_true.push(insts.len());
         insts.push(Inst::CondBr {
-            taken: BranchTarget::Label(label_true),
+            taken: BranchTarget::zero(),
             not_taken: BranchTarget::zero(),
             kind: CondBrKind {
                 kind: IntCC::NotEqual,
@@ -122,9 +150,9 @@ impl Inst {
             rs: tmp.to_reg(),
             imm12: Imm12::from_bits(FClassResult::is_nan_bits() as i16),
         });
-
+        patch_true.push(insts.len());
         insts.push(Inst::CondBr {
-            taken: BranchTarget::Label(label_true),
+            taken: BranchTarget::zero(),
             not_taken: BranchTarget::zero(),
             kind: CondBrKind {
                 kind: IntCC::NotEqual,
@@ -146,9 +174,9 @@ impl Inst {
             rs: rd.to_reg(),
             imm12: Imm12::from_bits(FClassResult::is_infinite_bits() as i16),
         });
-
+        patch_true.push(insts.len());
         insts.push(Inst::CondBr {
-            taken: BranchTarget::Label(label_true),
+            taken: BranchTarget::zero(),
             not_taken: BranchTarget::zero(),
             kind: CondBrKind {
                 kind: IntCC::NotEqual,
@@ -162,7 +190,7 @@ impl Inst {
         insts.push(Inst::Jal {
             dest: BranchTarget::offset(Inst::instruction_size()),
         });
-        sink.bind_label(label_true);
+        Inst::patch_taken_path_list(&mut insts, &patch_true);
         // here is true
         insts.push(Inst::load_constant_imm12(rd, Imm12::form_bool(true)));
         insts
@@ -284,8 +312,7 @@ impl MachInstEmit for Inst {
 
             &Inst::Lui { rd, ref imm } => {
                 let rd = mapper_to_real.next_writable(rd);
-                let x: u32 =
-                    0b0110111 | machreg_to_gpr_num(rd.to_reg()) << 7 | (imm.as_u32() << 12);
+                let x: u32 = 0b0110111 | reg_to_gpr_num(rd.to_reg()) << 7 | (imm.as_u32() << 12);
                 sink.put4(x);
             }
             &Inst::AluRR { alu_op, rd, rs } => {
@@ -293,9 +320,9 @@ impl MachInstEmit for Inst {
                 let rs = mapper_to_real.next(rs);
 
                 let x = alu_op.op_code()
-                    | machreg_to_gpr_num(rs) << 7
+                    | reg_to_gpr_num(rs) << 7
                     | alu_op.funct3() << 12
-                    | machreg_to_gpr_num(rd.to_reg()) << 15
+                    | reg_to_gpr_num(rd.to_reg()) << 15
                     | alu_op.rs2() << 20
                     | alu_op.funct7() << 25;
                 sink.put4(x);
@@ -312,12 +339,12 @@ impl MachInstEmit for Inst {
                 let rs2 = mapper_to_real.next(rs2);
                 let rs3 = mapper_to_real.next(rs3);
                 let x = alu_op.op_code()
-                    | machreg_to_gpr_num(rd.to_reg()) << 7
+                    | reg_to_gpr_num(rd.to_reg()) << 7
                     | alu_op.funct3() << 12
-                    | machreg_to_gpr_num(rs1) << 15
-                    | machreg_to_gpr_num(rs2) << 20
+                    | reg_to_gpr_num(rs1) << 15
+                    | reg_to_gpr_num(rs2) << 20
                     | alu_op.funct2() << 25
-                    | machreg_to_gpr_num(rs3) << 27;
+                    | reg_to_gpr_num(rs3) << 27;
 
                 sink.put4(x);
             }
@@ -331,10 +358,10 @@ impl MachInstEmit for Inst {
                 let rs1 = mapper_to_real.next(rs1);
                 let rs2 = mapper_to_real.next(rs2);
                 let x: u32 = alu_op.op_code()
-                    | machreg_to_gpr_num(rd.to_reg()) << 7
+                    | reg_to_gpr_num(rd.to_reg()) << 7
                     | (alu_op.funct3()) << 12
-                    | machreg_to_gpr_num(rs1) << 15
-                    | machreg_to_gpr_num(rs2) << 20
+                    | reg_to_gpr_num(rs1) << 15
+                    | reg_to_gpr_num(rs2) << 20
                     | alu_op.funct7() << 25;
                 sink.put4(x);
             }
@@ -344,28 +371,32 @@ impl MachInstEmit for Inst {
                 rs,
                 imm12,
             } => {
+                println!(
+                    "xxxxxxxxxxxxxxxx : {}",
+                    self.print_with_state(state, &mut mapper_to_real)
+                );
                 let rd = mapper_to_real.next_writable(rd);
                 let rs = mapper_to_real.next(rs);
 
                 let x = if let Some(funct6) = alu_op.option_funct6() {
                     alu_op.op_code()
-                        | machreg_to_gpr_num(rd.to_reg()) << 7
+                        | reg_to_gpr_num(rd.to_reg()) << 7
                         | alu_op.funct3() << 12
-                        | machreg_to_gpr_num(rs) << 15
+                        | reg_to_gpr_num(rs) << 15
                         | (imm12.as_u32()) << 20
                         | funct6 << 26
                 } else if let Some(funct7) = alu_op.option_funct7() {
                     alu_op.op_code()
-                        | machreg_to_gpr_num(rd.to_reg()) << 7
+                        | reg_to_gpr_num(rd.to_reg()) << 7
                         | alu_op.funct3() << 12
-                        | machreg_to_gpr_num(rs) << 15
+                        | reg_to_gpr_num(rs) << 15
                         | (imm12.as_u32()) << 20
                         | funct7 << 25
                 } else {
                     alu_op.op_code()
-                        | machreg_to_gpr_num(rd.to_reg()) << 7
+                        | reg_to_gpr_num(rd.to_reg()) << 7
                         | alu_op.funct3() << 12
-                        | machreg_to_gpr_num(rs) << 15
+                        | reg_to_gpr_num(rs) << 15
                         | (imm12.as_u32()) << 20
                 };
                 sink.put4(x);
@@ -383,9 +414,9 @@ impl MachInstEmit for Inst {
                 let offset = from.get_offset_with_state(state);
                 if let Some(imm12) = Imm12::maybe_from_u64(offset as u64) {
                     x = op.op_code()
-                        | machreg_to_gpr_num(rd.to_reg()) << 7
+                        | reg_to_gpr_num(rd.to_reg()) << 7
                         | op.funct3() << 12
-                        | machreg_to_gpr_num(base) << 15
+                        | reg_to_gpr_num(base) << 15
                         | (imm12.as_u32()) << 20;
                     sink.put4(x);
                 } else {
@@ -422,8 +453,8 @@ impl MachInstEmit for Inst {
                     x = op.op_code()
                         | (imm12.as_u32() & 0x1f) << 7
                         | op.funct3() << 12
-                        | machreg_to_gpr_num(base) << 15
-                        | machreg_to_gpr_num(src) << 20
+                        | reg_to_gpr_num(base) << 15
+                        | reg_to_gpr_num(src) << 20
                         | (imm12.as_u32() >> 5) << 25;
                     sink.put4(x);
                 } else {
@@ -637,7 +668,7 @@ impl MachInstEmit for Inst {
                 };
                 let rd = mapper_to_real.next_writable(rd);
                 let x = op.op_code()
-                    | rs.map(|x| machreg_to_gpr_num(x)).unwrap_or(0) << 7
+                    | rs.map(|x| reg_to_gpr_num(x)).unwrap_or(0) << 7
                     | op.funct3() << 12
                     | op.rs1(rs) << 15
                     | op.imm12(imm) << 20;
@@ -655,10 +686,10 @@ impl MachInstEmit for Inst {
                 let addr = mapper_to_real.next(addr);
                 let src = mapper_to_real.next(src);
                 let x = op.op_code()
-                    | machreg_to_gpr_num(rd.to_reg()) << 7
+                    | reg_to_gpr_num(rd.to_reg()) << 7
                     | op.funct3() << 12
-                    | machreg_to_gpr_num(addr) << 15
-                    | machreg_to_gpr_num(src) << 20
+                    | reg_to_gpr_num(addr) << 15
+                    | reg_to_gpr_num(src) << 20
                     | op.funct7(aq, rl) << 25;
 
                 sink.put4(x);
@@ -675,7 +706,7 @@ impl MachInstEmit for Inst {
             &Inst::Auipc { rd, imm } => {
                 let rd = mapper_to_real.next_writable(rd);
 
-                let x = 0b0010111 | machreg_to_gpr_num(rd.to_reg()) << 7 | imm.as_u32() << 12;
+                let x = 0b0010111 | reg_to_gpr_num(rd.to_reg()) << 7 | imm.as_u32() << 12;
                 sink.put4(x);
             }
             // &Inst::LoadExtName { rd, name, offset } => todo!(),
@@ -740,7 +771,7 @@ impl MachInstEmit for Inst {
                 /*
                     can be implemented by one risc-v instruction.
                 */
-                let x = if cc_bit.just_eq() {
+                let one_instruction_can_do = if cc_bit.just_eq() {
                     Some(eq_op)
                 } else if cc_bit.just_le() {
                     Some(le_op)
@@ -749,8 +780,7 @@ impl MachInstEmit for Inst {
                 } else {
                     None
                 };
-
-                if let Some(op) = x {
+                if let Some(op) = one_instruction_can_do {
                     Inst::AluRRR {
                         alu_op: op,
                         rd,
@@ -759,11 +789,11 @@ impl MachInstEmit for Inst {
                     }
                     .emit(allocs, sink, emit_info, state);
                 } else {
-                    let mut insts = SmallInstVec::new();
                     // long path
-                    let mut label_set_false = sink.get_label();
-                    let mut label_set_true = sink.get_label();
-                    let mut label_jump_over = sink.get_label();
+                    let mut insts = SmallInstVec::new();
+                    let label_set_false = sink.get_label();
+                    let label_set_true = sink.get_label();
+                    let label_jump_over = sink.get_label();
                     // if eq
                     if cc_bit.test(FloatCCBit::EQ) {
                         insts.push(Inst::AluRRR {
@@ -801,12 +831,14 @@ impl MachInstEmit for Inst {
                             },
                         });
                     }
-
                     // if gt
                     if cc_bit.test(FloatCCBit::GT) {
                         // I have no left > right operation in risc-v instruction set
                         // first check order
-                        insts.extend(Inst::generate_float_unordered(sink, rd, ty, rs1, rs2));
+                        insts.extend(Inst::generate_float_unordered(rd, ty, rs1, rs2));
+                        for ref i in insts.clone() {
+                            println!("{}", i.print_with_state(state, &mut mapper_to_real));
+                        }
                         insts.push(Inst::CondBr {
                             taken: BranchTarget::Label(label_set_false),
                             not_taken: BranchTarget::zero(),
@@ -823,7 +855,6 @@ impl MachInstEmit for Inst {
                             rs1,
                             rs2,
                         });
-
                         // could be unorder
                         insts.push(Inst::CondBr {
                             taken: BranchTarget::Label(label_set_true),
@@ -837,22 +868,26 @@ impl MachInstEmit for Inst {
                     }
                     // if unorder
                     if cc_bit.test(FloatCCBit::UN) {
-                        insts.extend(Inst::generate_float_unordered(sink, rd, ty, rs1, rs2));
+                        insts.extend(Inst::generate_float_unordered(rd, ty, rs1, rs2));
                         insts.push(Inst::Jal {
                             dest: BranchTarget::Label(label_jump_over),
                         });
                     }
-                    sink.bind_label(label_set_false);
-                    insts.push(Inst::load_constant_imm12(rd, Imm12::form_bool(false)));
-                    insts.push(Inst::Jal {
-                        dest: BranchTarget::offset(Inst::instruction_size()),
-                    });
-                    sink.bind_label(label_set_true);
-                    insts.push(Inst::load_constant_imm12(rd, Imm12::form_bool(true)));
-                    sink.bind_label(label_jump_over);
+
                     insts
                         .into_iter()
                         .for_each(|inst| inst.emit(allocs, sink, emit_info, state));
+
+                    sink.bind_label(label_set_false);
+                    Inst::load_constant_imm12(rd, Imm12::form_bool(false))
+                        .emit(allocs, sink, emit_info, state);
+                    Inst::Jal {
+                        dest: BranchTarget::offset(Inst::instruction_size()),
+                    }
+                    .emit(allocs, sink, emit_info, state);
+                    sink.bind_label(label_set_true);
+                    Inst::load_constant_imm12(rd, Imm12::form_bool(true))
+                        .emit(allocs, sink, emit_info, state);
                 }
             }
             _ => todo!(),

@@ -350,8 +350,8 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
         &Inst::EBreak => todo!(),
         &Inst::Udf { .. } => todo!(),
         &Inst::AluRR { rd, rs, .. } => {
-            collector.reg_use(rs);
             collector.reg_def(rd);
+            collector.reg_use(rs);
         }
         &Inst::AluRRRR {
             rd, rs1, rs2, rs3, ..
@@ -591,8 +591,8 @@ impl Inst {
         allocs: &mut AllocationConsumer<'_>,
     ) -> String {
         let mut register_name = |reg: Reg| -> String {
-            let next = allocs.next(reg);
-            reg_name(next)
+            // let reg = allocs.next(reg);
+            reg_name(reg)
         };
 
         match self {

@@ -302,9 +302,7 @@ mod test {
         let mut pos = FuncCursor::new(&mut func);
         pos.insert_block(bb0);
 
-        let v1 = pos.ins().fcmp(FloatCC::LessThan, arg0, arg1);
-        let v2 = pos.ins().iconst(I128, 1);
-        let v3 = pos.ins().iconst(I128, 1);
+        let v1 = pos.ins().fcmp(FloatCC::GreaterThan, arg0, arg1);
 
         pos.ins().brnz(v1, bb1, &[]);
         pos.ins().jump(bb2, &[]);
