@@ -693,16 +693,11 @@ impl<'a> Codegen<'a> {
 
             &TrieNode::Decision { ref edges } => {
                 let subindent = format!("{}    ", indent);
-                // if this is a decision node, generate each match op
-                // in turn (in priority order). Sort the ops within
-                // each priority, and gather together adjacent
-                // MatchVariant ops with the same input and disjoint
-                // variants in order to create a `match` rather than a
-                // chain of if-lets.
-                let mut edges = edges.clone();
-                edges.sort_by(|e1, e2| {
-                    (-e1.range.min, &e1.symbol).cmp(&(-e2.range.min, &e2.symbol))
-                });
+                // If this is a decision node, generate each match op
+                // in turn (in priority order). Gather together
+                // adjacent MatchVariant ops with the same input and
+                // disjoint variants in order to create a `match`
+                // rather than a chain of if-lets.
 
                 let mut i = 0;
                 while i < edges.len() {
@@ -712,8 +707,8 @@ impl<'a> Codegen<'a> {
                     let mut adjacent_variants = BTreeSet::new();
                     let mut adjacent_variant_input = None;
                     log::trace!(
-                        "edge: range = {:?}, symbol = {:?}",
-                        edges[i].range,
+                        "edge: prio = {:?}, symbol = {:?}",
+                        edges[i].prio,
                         edges[i].symbol
                     );
                     while last < edges.len() {
