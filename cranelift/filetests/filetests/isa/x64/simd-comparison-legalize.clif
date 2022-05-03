@@ -11,9 +11,9 @@ block0(v0: i32x4, v1: i32x4):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   pcmpeqd %xmm0, %xmm0, %xmm1
+;   pcmpeqd %xmm0, %xmm1, %xmm0
 ;   pcmpeqd %xmm7, %xmm7, %xmm7
-;   pxor    %xmm0, %xmm0, %xmm7
+;   pxor    %xmm0, %xmm7, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -27,10 +27,10 @@ block0(v0: i32x4, v1: i32x4):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   pmaxud  %xmm0, %xmm0, %xmm1
-;   pcmpeqd %xmm0, %xmm0, %xmm1
+;   pmaxud  %xmm0, %xmm1, %xmm0
+;   pcmpeqd %xmm0, %xmm1, %xmm0
 ;   pcmpeqd %xmm9, %xmm9, %xmm9
-;   pxor    %xmm0, %xmm0, %xmm9
+;   pxor    %xmm0, %xmm9, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -45,8 +45,8 @@ block0(v0: i16x8, v1: i16x8):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movdqa  %xmm0, %xmm5
-;   pmaxsw  %xmm5, %xmm5, %xmm1
-;   pcmpeqw %xmm0, %xmm0, %xmm5
+;   pmaxsw  %xmm5, %xmm1, %xmm5
+;   pcmpeqw %xmm0, %xmm5, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -61,8 +61,8 @@ block0(v0: i8x16, v1: i8x16):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movdqa  %xmm0, %xmm5
-;   pmaxub  %xmm5, %xmm5, %xmm1
-;   pcmpeqb %xmm0, %xmm0, %xmm5
+;   pmaxub  %xmm5, %xmm1, %xmm5
+;   pcmpeqb %xmm0, %xmm5, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
