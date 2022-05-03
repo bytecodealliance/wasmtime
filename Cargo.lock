@@ -3411,7 +3411,6 @@ dependencies = [
  "clap 3.1.12",
  "criterion",
  "env_logger 0.9.0",
- "file-per-thread-logger",
  "filecheck",
  "humantime 2.1.0",
  "lazy_static",
@@ -3421,8 +3420,6 @@ dependencies = [
  "more-asserts",
  "num_cpus",
  "once_cell",
- "pretty_env_logger",
- "rayon",
  "rustix",
  "target-lexicon",
  "tempfile",
@@ -3432,6 +3429,7 @@ dependencies = [
  "wasmparser",
  "wasmtime",
  "wasmtime-cache",
+ "wasmtime-cli-flags",
  "wasmtime-cranelift",
  "wasmtime-environ",
  "wasmtime-runtime",
@@ -3442,6 +3440,18 @@ dependencies = [
  "wast 40.0.0",
  "wat",
  "winapi",
+]
+
+[[package]]
+name = "wasmtime-cli-flags"
+version = "0.37.0"
+dependencies = [
+ "anyhow",
+ "clap 3.1.12",
+ "file-per-thread-logger",
+ "pretty_env_logger",
+ "rayon",
+ "wasmtime",
 ]
 
 [[package]]
