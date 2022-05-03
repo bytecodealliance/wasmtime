@@ -47,7 +47,6 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "wasmtime-cranelift",
     "wasmtime-jit",
     "wasmtime-cache",
-    "wasmtime-cli-flags",
     "wasmtime",
     // wasi-common/wiggle
     "wiggle",
@@ -59,6 +58,7 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "wasmtime-wasi-nn",
     "wasmtime-wasi-crypto",
     "wasmtime-wast",
+    "wasmtime-cli-flags",
     "wasmtime-cli",
 ];
 
