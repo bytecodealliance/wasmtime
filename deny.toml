@@ -40,4 +40,8 @@ skip-tree = [
     # This is somewhat unmaintained at this point and seems to pull in an old
     # version of `env_logger`, so ignore it.
     { name = "pretty_env_logger", depth = 20 },
+
+    # An old version of this crate is depended upon: `wasmtime-cli -> listenfd
+    # -> uuid`. Once `listenfd` upgrades to v1.0.0, this can be removed.
+    { name = "uuid", depth = 20 },
 ]
