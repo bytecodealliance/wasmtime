@@ -227,7 +227,7 @@ pub struct CommonOptions {
 
 impl CommonOptions {
     pub fn parse_from_str(s: &str) -> Result<Self> {
-        let parts = shellwords::split(s).context("unable to split options into words")?;
+        let parts = s.split(" ");
         let options =
             Self::try_parse_from(parts).context("unable to parse options from passed flags")?;
         Ok(options)
@@ -716,7 +716,7 @@ mod test {
             use_clap_parser(&["foo", "--wasm-features=threads"])
         );
         assert_eq!(
-            use_func("foo --cranelift-set \"enable_simd=true\""),
+            use_func("foo --cranelift-set enable_simd=true"),
             use_clap_parser(&["foo", "--cranelift-set", "enable_simd=true"])
         );
     }
