@@ -3429,6 +3429,7 @@ dependencies = [
  "more-asserts",
  "num_cpus",
  "once_cell",
+ "rayon",
  "rustix",
  "target-lexicon",
  "tempfile",
