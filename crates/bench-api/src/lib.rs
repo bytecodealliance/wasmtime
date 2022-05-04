@@ -90,6 +90,8 @@
 //!     execution_timer: ptr::null_mut(),
 //!     execution_start,
 //!     execution_end,
+//!     execution_flags_ptr: ptr::null(),
+//!     execution_flags_len: 0,
 //! };
 //!
 //! let mut bench_api = ptr::null_mut();
