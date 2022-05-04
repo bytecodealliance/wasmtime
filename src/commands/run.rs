@@ -1,6 +1,5 @@
 //! The module that implements the `wasmtime run` command.
 
-use crate::{CommonOptions, WasiModules};
 use anyhow::{anyhow, bail, Context as _, Result};
 use clap::Parser;
 use std::fs::File;
@@ -13,6 +12,7 @@ use std::{
     process,
 };
 use wasmtime::{Engine, Func, Linker, Module, Store, Trap, Val, ValType};
+use wasmtime_cli_flags::{CommonOptions, WasiModules};
 use wasmtime_wasi::sync::{ambient_authority, Dir, TcpListener, WasiCtxBuilder};
 
 #[cfg(feature = "wasi-nn")]

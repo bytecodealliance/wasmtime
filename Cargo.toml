@@ -23,6 +23,7 @@ doc = false
 [dependencies]
 wasmtime = { path = "crates/wasmtime", version = "0.37.0", default-features = false, features = ['cache', 'cranelift'] }
 wasmtime-cache = { path = "crates/cache", version = "=0.37.0" }
+wasmtime-cli-flags = { path = "crates/cli-flags", version = "=0.37.0" }
 wasmtime-cranelift = { path = "crates/cranelift", version = "=0.37.0" }
 wasmtime-environ = { path = "crates/environ", version = "=0.37.0" }
 wasmtime-wast = { path = "crates/wast", version = "=0.37.0" }
@@ -32,10 +33,7 @@ wasmtime-wasi-nn = { path = "crates/wasi-nn", version = "0.37.0", optional = tru
 clap = { version = "3.1.12", features = ["color", "suggestions", "derive"] }
 anyhow = "1.0.19"
 target-lexicon = { version = "0.12.0", default-features = false }
-pretty_env_logger = "0.4.0"
-file-per-thread-logger = "0.1.1"
 libc = "0.2.60"
-rayon = "1.5.0"
 humantime = "2.0.0"
 wasmparser = "0.84.0"
 lazy_static = "1.4.0"
@@ -63,6 +61,7 @@ memchr = "2.4"
 async-trait = "0.1"
 wat = "1.0.42"
 once_cell = "1.9.0"
+rayon = "1.5.0"
 
 [build-dependencies]
 anyhow = "1.0.19"
@@ -79,6 +78,7 @@ members = [
   "cranelift/serde",
   "crates/bench-api",
   "crates/c-api",
+  "crates/cli-flags",
   "crates/misc/run-examples",
   "examples/fib-debug/wasm",
   "examples/wasi/wasm",
@@ -105,11 +105,11 @@ jitdump = ["wasmtime/jitdump"]
 vtune = ["wasmtime/vtune"]
 wasi-crypto = ["wasmtime-wasi-crypto"]
 wasi-nn = ["wasmtime-wasi-nn"]
-memory-init-cow = ["wasmtime/memory-init-cow"]
-pooling-allocator = ["wasmtime/pooling-allocator"]
+memory-init-cow = ["wasmtime/memory-init-cow", "wasmtime-cli-flags/memory-init-cow"]
+pooling-allocator = ["wasmtime/pooling-allocator", "wasmtime-cli-flags/pooling-allocator"]
 all-arch = ["wasmtime/all-arch"]
 posix-signals-on-macos = ["wasmtime/posix-signals-on-macos"]
-wasm-backtrace = ["wasmtime/wasm-backtrace"]
+wasm-backtrace = ["wasmtime/wasm-backtrace", "wasmtime-cli-flags/wasm-backtrace"]
 
 # Stub feature that does nothing, for Cargo-features compatibility: the new
 # backend is the default now.

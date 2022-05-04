@@ -1,0 +1,28 @@
+[package]
+name = "wasmtime-cli-flags"
+version = "0.37.0"
+authors = ["The Wasmtime Project Developers"]
+description = "Exposes common CLI flags used for running Wasmtime"
+license = "Apache-2.0 WITH LLVM-exception"
+repository = "https://github.com/bytecodealliance/wasmtime"
+documentation = "https://docs.rs/wasmtime-cache/"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.19"
+clap = { version = "3.1.12", features = ["color", "suggestions", "derive"] }
+file-per-thread-logger = "0.1.1"
+pretty_env_logger = "0.4.0"
+rayon = "1.5.0"
+wasmtime = { path = "../wasmtime", version = "0.37.0", default-features = false }
+
+[features]
+default = [
+    "wasmtime/cache",
+    "wasmtime/cranelift",
+    "wasmtime/jitdump",
+    "wasmtime/vtune",
+]
+pooling-allocator = []
+memory-init-cow = []
+wasm-backtrace = []
