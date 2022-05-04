@@ -105,11 +105,11 @@ jitdump = ["wasmtime/jitdump"]
 vtune = ["wasmtime/vtune"]
 wasi-crypto = ["wasmtime-wasi-crypto"]
 wasi-nn = ["wasmtime-wasi-nn"]
-memory-init-cow = ["wasmtime/memory-init-cow"]
-pooling-allocator = ["wasmtime/pooling-allocator"]
+memory-init-cow = ["wasmtime/memory-init-cow", "wasmtime-cli-flags/memory-init-cow"]
+pooling-allocator = ["wasmtime/pooling-allocator", "wasmtime-cli-flags/pooling-allocator"]
 all-arch = ["wasmtime/all-arch"]
 posix-signals-on-macos = ["wasmtime/posix-signals-on-macos"]
-wasm-backtrace = ["wasmtime/wasm-backtrace"]
+wasm-backtrace = ["wasmtime/wasm-backtrace", "wasmtime-cli-flags/wasm-backtrace"]
 
 # Stub feature that does nothing, for Cargo-features compatibility: the new
 # backend is the default now.
