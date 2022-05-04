@@ -883,14 +883,14 @@ impl StoreOP {
 
 impl FloatFlagOp {
     // give me the option reg
-    pub(crate) fn rs1(self, reg: OptionReg) -> u32 {
-        // current all zero
-        if let Some(r) = reg {
-            r.to_real_reg().unwrap().hw_enc() as u32
-        } else {
-            0
-        }
-    }
+    // pub(crate) fn rs1(self, reg: OptionReg) -> u32 {
+    //     // current all zero
+    //     if let Some(r) = reg {
+    //         r.to_real_reg().unwrap().hw_enc() as u32
+    //     } else {
+    //         0
+    //     }
+    // }
     pub(crate) fn funct3(self) -> u32 {
         match self {
             FloatFlagOp::Frcsr => 0b010,

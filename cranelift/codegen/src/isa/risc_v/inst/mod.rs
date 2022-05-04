@@ -132,7 +132,7 @@ impl Inst {
         value >= (i32::MIN as i64) && value <= (i32::MAX as i64)
     }
 
-    pub(crate) fn instruction_size() -> i32 /* less type case */ {
+    pub(crate) fn instruction_size() -> i32 /* less type cast  */ {
         4
     }
     pub(crate) fn load_constant_imm12(rd: Writable<Reg>, imm: Imm12) -> Inst {
@@ -591,7 +591,7 @@ impl Inst {
         allocs: &mut AllocationConsumer<'_>,
     ) -> String {
         let mut register_name = |reg: Reg| -> String {
-            // let reg = allocs.next(reg);
+            let reg = allocs.next(reg);
             reg_name(reg)
         };
 

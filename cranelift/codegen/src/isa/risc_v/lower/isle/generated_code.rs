@@ -21,6 +21,12 @@ pub trait Context {
     fn unpack_value_array_3(&mut self, arg0: &ValueArray3) -> (Value, Value, Value);
     fn pack_value_array_3(&mut self, arg0: Value, arg1: Value, arg2: Value) -> ValueArray3;
     fn u32_add(&mut self, arg0: u32, arg1: u32) -> u32;
+    fn s32_add_fallible(&mut self, arg0: u32, arg1: u32) -> Option<u32>;
+    fn u32_nonnegative(&mut self, arg0: u32) -> Option<u32>;
+    fn offset32(&mut self, arg0: Offset32) -> Option<u32>;
+    fn u32_lteq(&mut self, arg0: u32, arg1: u32) -> Option<Unit>;
+    fn simm32(&mut self, arg0: Imm64) -> Option<u32>;
+    fn uimm8(&mut self, arg0: Imm64) -> Option<u8>;
     fn u8_and(&mut self, arg0: u8, arg1: u8) -> u8;
     fn value_reg(&mut self, arg0: Reg) -> ValueRegs;
     fn value_regs(&mut self, arg0: Reg, arg1: Reg) -> ValueRegs;
@@ -32,19 +38,22 @@ pub trait Context {
     fn output_builder_push(&mut self, arg0: &InstOutputBuilder, arg1: ValueRegs) -> Unit;
     fn output_builder_finish(&mut self, arg0: &InstOutputBuilder) -> InstOutput;
     fn temp_writable_reg(&mut self, arg0: Type) -> WritableReg;
+    fn invalid_reg_etor(&mut self, arg0: Reg) -> Option<()>;
     fn invalid_reg(&mut self) -> Reg;
+    fn valid_reg(&mut self, arg0: Reg) -> Option<()>;
     fn put_in_reg(&mut self, arg0: Value) -> Reg;
     fn put_in_regs(&mut self, arg0: Value) -> ValueRegs;
     fn ensure_in_vreg(&mut self, arg0: Reg, arg1: Type) -> Reg;
     fn value_regs_get(&mut self, arg0: ValueRegs, arg1: usize) -> Reg;
-    fn u8_as_u64(&mut self, arg0: u8) -> u64;
-    fn u16_as_u64(&mut self, arg0: u16) -> u64;
-    fn u32_as_u64(&mut self, arg0: u32) -> u64;
-    fn i64_as_u64(&mut self, arg0: i64) -> u64;
-    fn u64_add(&mut self, arg0: u64, arg1: u64) -> u64;
-    fn u64_sub(&mut self, arg0: u64, arg1: u64) -> u64;
-    fn u64_and(&mut self, arg0: u64, arg1: u64) -> u64;
-    fn ty_bits(&mut self, arg0: Type) -> u8;
+    fn u8_as_u32(&mut self, arg0: u8) -> Option<u32>;
+    fn u8_as_u64(&mut self, arg0: u8) -> Option<u64>;
+    fn u16_as_u64(&mut self, arg0: u16) -> Option<u64>;
+    fn u32_as_u64(&mut self, arg0: u32) -> Option<u64>;
+    fn i64_as_u64(&mut self, arg0: i64) -> Option<u64>;
+    fn u64_add(&mut self, arg0: u64, arg1: u64) -> Option<u64>;
+    fn u64_sub(&mut self, arg0: u64, arg1: u64) -> Option<u64>;
+    fn u64_and(&mut self, arg0: u64, arg1: u64) -> Option<u64>;
+    fn ty_bits(&mut self, arg0: Type) -> Option<u8>;
     fn ty_bits_u16(&mut self, arg0: Type) -> u16;
     fn ty_bits_u64(&mut self, arg0: Type) -> u64;
     fn ty_mask(&mut self, arg0: Type) -> u64;
@@ -98,14 +107,14 @@ pub trait Context {
     fn neg_imm12(&mut self, arg0: Imm12) -> Imm12;
 }
 
-/// Internal type SideEffectNoResult: defined at src\prelude.isle line 412.
+/// Internal type SideEffectNoResult: defined at src\prelude.isle line 447.
 #[derive(Clone, Debug)]
 pub enum SideEffectNoResult {
     Inst { inst: MInst },
     Inst2 { inst1: MInst, inst2: MInst },
 }
 
-/// Internal type ProducesFlags: defined at src\prelude.isle line 439.
+/// Internal type ProducesFlags: defined at src\prelude.isle line 474.
 #[derive(Clone, Debug)]
 pub enum ProducesFlags {
     ProducesFlagsSideEffect { inst: MInst },
@@ -113,7 +122,7 @@ pub enum ProducesFlags {
     ProducesFlagsReturnsResultWithConsumer { inst: MInst, result: Reg },
 }
 
-/// Internal type ConsumesFlags: defined at src\prelude.isle line 450.
+/// Internal type ConsumesFlags: defined at src\prelude.isle line 485.
 #[derive(Clone, Debug)]
 pub enum ConsumesFlags {
     ConsumesFlagsReturnsResultWithProducer {
@@ -526,7 +535,7 @@ pub enum Cond {
 // Generated as internal constructor for term output_reg.
 pub fn constructor_output_reg<C: Context>(ctx: &mut C, arg0: Reg) -> Option<InstOutput> {
     let pattern0_0 = arg0;
-    // Rule at src\prelude.isle line 86.
+    // Rule at src\prelude.isle line 113.
     let expr0_0 = C::value_reg(ctx, pattern0_0);
     let expr1_0 = C::output(ctx, expr0_0);
     return Some(expr1_0);
@@ -535,7 +544,7 @@ pub fn constructor_output_reg<C: Context>(ctx: &mut C, arg0: Reg) -> Option<Inst
 // Generated as internal constructor for term output_value.
 pub fn constructor_output_value<C: Context>(ctx: &mut C, arg0: Value) -> Option<InstOutput> {
     let pattern0_0 = arg0;
-    // Rule at src\prelude.isle line 90.
+    // Rule at src\prelude.isle line 117.
     let expr0_0 = C::put_in_regs(ctx, pattern0_0);
     let expr1_0 = C::output(ctx, expr0_0);
     return Some(expr1_0);
@@ -544,7 +553,7 @@ pub fn constructor_output_value<C: Context>(ctx: &mut C, arg0: Value) -> Option<
 // Generated as internal constructor for term temp_reg.
 pub fn constructor_temp_reg<C: Context>(ctx: &mut C, arg0: Type) -> Option<Reg> {
     let pattern0_0 = arg0;
-    // Rule at src\prelude.isle line 110.
+    // Rule at src\prelude.isle line 137.
     let expr0_0 = C::temp_writable_reg(ctx, pattern0_0);
     let expr1_0 = C::writable_reg_to_reg(ctx, expr0_0);
     return Some(expr1_0);
@@ -553,7 +562,7 @@ pub fn constructor_temp_reg<C: Context>(ctx: &mut C, arg0: Type) -> Option<Reg> 
 // Generated as internal constructor for term lo_reg.
 pub fn constructor_lo_reg<C: Context>(ctx: &mut C, arg0: Value) -> Option<Reg> {
     let pattern0_0 = arg0;
-    // Rule at src\prelude.isle line 150.
+    // Rule at src\prelude.isle line 182.
     let expr0_0 = C::put_in_regs(ctx, pattern0_0);
     let expr1_0: usize = 0;
     let expr2_0 = C::value_regs_get(ctx, expr0_0, expr1_0);
@@ -570,7 +579,7 @@ pub fn constructor_side_effect<C: Context>(
         &SideEffectNoResult::Inst {
             inst: ref pattern1_0,
         } => {
-            // Rule at src\prelude.isle line 420.
+            // Rule at src\prelude.isle line 455.
             let expr0_0 = C::emit(ctx, pattern1_0);
             let expr1_0 = C::output_none(ctx);
             return Some(expr1_0);
@@ -579,7 +588,7 @@ pub fn constructor_side_effect<C: Context>(
             inst1: ref pattern1_0,
             inst2: ref pattern1_1,
         } => {
-            // Rule at src\prelude.isle line 423.
+            // Rule at src\prelude.isle line 458.
             let expr0_0 = C::emit(ctx, pattern1_0);
             let expr1_0 = C::emit(ctx, pattern1_1);
             let expr2_0 = C::output_none(ctx);
@@ -606,7 +615,7 @@ pub fn constructor_side_effect_concat<C: Context>(
             inst: ref pattern3_0,
         } = pattern2_0
         {
-            // Rule at src\prelude.isle line 429.
+            // Rule at src\prelude.isle line 464.
             let expr0_0 = SideEffectNoResult::Inst2 {
                 inst1: pattern1_0.clone(),
                 inst2: pattern3_0.clone(),
@@ -628,7 +637,7 @@ pub fn constructor_produces_flags_get_reg<C: Context>(
         result: pattern1_1,
     } = pattern0_0
     {
-        // Rule at src\prelude.isle line 466.
+        // Rule at src\prelude.isle line 501.
         return Some(pattern1_1);
     }
     return None;
@@ -645,7 +654,7 @@ pub fn constructor_produces_flags_ignore<C: Context>(
             inst: ref pattern1_0,
             result: pattern1_1,
         } => {
-            // Rule at src\prelude.isle line 471.
+            // Rule at src\prelude.isle line 506.
             let expr0_0 = ProducesFlags::ProducesFlagsSideEffect {
                 inst: pattern1_0.clone(),
             };
@@ -655,7 +664,7 @@ pub fn constructor_produces_flags_ignore<C: Context>(
             inst: ref pattern1_0,
             result: pattern1_1,
         } => {
-            // Rule at src\prelude.isle line 473.
+            // Rule at src\prelude.isle line 508.
             let expr0_0 = ProducesFlags::ProducesFlagsSideEffect {
                 inst: pattern1_0.clone(),
             };
@@ -684,7 +693,7 @@ pub fn constructor_consumes_flags_concat<C: Context>(
             result: pattern3_1,
         } = pattern2_0
         {
-            // Rule at src\prelude.isle line 480.
+            // Rule at src\prelude.isle line 515.
             let expr0_0 = C::value_regs(ctx, pattern1_1, pattern3_1);
             let expr1_0 = ConsumesFlags::ConsumesFlagsTwiceReturnsValueRegs {
                 inst1: pattern1_0.clone(),
@@ -714,7 +723,7 @@ pub fn constructor_with_flags<C: Context>(
                     inst: ref pattern3_0,
                     result: pattern3_1,
                 } => {
-                    // Rule at src\prelude.isle line 505.
+                    // Rule at src\prelude.isle line 540.
                     let expr0_0 = C::emit(ctx, pattern1_0);
                     let expr1_0 = C::emit(ctx, pattern3_0);
                     let expr2_0 = C::value_reg(ctx, pattern3_1);
@@ -725,7 +734,7 @@ pub fn constructor_with_flags<C: Context>(
                     inst2: ref pattern3_1,
                     result: pattern3_2,
                 } => {
-                    // Rule at src\prelude.isle line 511.
+                    // Rule at src\prelude.isle line 546.
                     let expr0_0 = C::emit(ctx, pattern1_0);
                     let expr1_0 = C::emit(ctx, pattern3_0);
                     let expr2_0 = C::emit(ctx, pattern3_1);
@@ -738,7 +747,7 @@ pub fn constructor_with_flags<C: Context>(
                     inst4: ref pattern3_3,
                     result: pattern3_4,
                 } => {
-                    // Rule at src\prelude.isle line 523.
+                    // Rule at src\prelude.isle line 558.
                     let expr0_0 = C::emit(ctx, pattern1_0);
                     let expr1_0 = C::emit(ctx, pattern3_0);
                     let expr2_0 = C::emit(ctx, pattern3_1);
@@ -759,7 +768,7 @@ pub fn constructor_with_flags<C: Context>(
                 result: pattern3_1,
             } = pattern2_0
             {
-                // Rule at src\prelude.isle line 499.
+                // Rule at src\prelude.isle line 534.
                 let expr0_0 = C::emit(ctx, pattern1_0);
                 let expr1_0 = C::emit(ctx, pattern3_0);
                 let expr2_0 = C::value_regs(ctx, pattern1_1, pattern3_1);
@@ -779,7 +788,7 @@ pub fn constructor_with_flags_reg<C: Context>(
 ) -> Option<Reg> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src\prelude.isle line 540.
+    // Rule at src\prelude.isle line 575.
     let expr0_0 = constructor_with_flags(ctx, pattern0_0, pattern1_0)?;
     let expr1_0: usize = 0;
     let expr2_0 = C::value_regs_get(ctx, expr0_0, expr1_0);
