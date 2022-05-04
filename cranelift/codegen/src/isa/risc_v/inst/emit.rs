@@ -901,6 +901,7 @@ impl MachInstEmit for Inst {
                         emit_info,
                         state,
                     );
+                    sink.bind_label(label_jump_over);
                 }
             }
             _ => todo!(),
