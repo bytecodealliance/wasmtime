@@ -7,7 +7,6 @@ license = "Apache-2.0 WITH LLVM-exception"
 repository = "https://github.com/bytecodealliance/wasmtime"
 documentation = "https://docs.rs/wasmtime-cache/"
 edition = "2021"
-publish = false
 
 [dependencies]
 anyhow = "1.0.19"
