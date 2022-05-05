@@ -374,10 +374,6 @@ impl MachInstEmit for Inst {
                 rs,
                 imm12,
             } => {
-                println!(
-                    "xxxxxxxxxxxxxxxx : {}",
-                    self.print_with_state(state, &mut allocs)
-                );
                 let rd = allocs.next_writable(rd);
                 let rs = allocs.next(rs);
 
@@ -904,6 +900,76 @@ impl MachInstEmit for Inst {
                     sink.bind_label(label_jump_over);
                 }
             }
+
+            &Inst::Select {
+                ref dst,
+                conditon,
+                ref x,
+                ref y,
+                ty,
+            } => {
+                let dst: Vec<_> = dst
+                    .clone()
+                    .into_iter()
+                    .map(|r| allocs.next_writable(r))
+                    .collect();
+
+                let conditon = allocs.next(conditon);
+                let x = alloc_value_regs(x, &mut allocs);
+                let y = alloc_value_regs(y, &mut allocs);
+                let mut insts = SmallInstVec::new();
+                let mut patch_false = vec![];
+                patch_false.push(insts.len());
+                insts.push(Inst::CondBr {
+                    taken: BranchTarget::zero(),
+                    not_taken: BranchTarget::ResolvedOffset(0),
+                    kind: CondBrKind {
+                        kind: IntCC::Equal,
+                        rs1: conditon,
+                        rs2: zero_reg(),
+                    },
+                });
+                // here is the true
+                // select the first value
+                let select_result =
+                    |src: ValueRegs<Reg>, insts: &mut SmallInstVec<Inst>| match ty.bits() {
+                        128 => {
+                            insts.push(Inst::Mov {
+                                rd: dst[0],
+                                rm: src.regs()[0],
+                                ty: I64,
+                            });
+                            insts.push(Inst::Mov {
+                                rd: dst[1],
+                                rm: src.regs()[1],
+                                ty: I64,
+                            });
+                        }
+                        _ => {
+                            insts.push(Inst::Mov {
+                                rd: dst[0],
+                                rm: src.regs()[0],
+                                ty,
+                            });
+                        }
+                    };
+
+                let patch_true = vec![insts.len()];
+                insts.push(Inst::Jal {
+                    dest: BranchTarget::zero(),
+                });
+                select_result(x, &mut insts);
+                // here is false
+                Inst::patch_taken_path_list(&mut insts, &patch_false);
+                // select second value1
+                select_result(y, &mut insts);
+
+                Inst::patch_taken_path_list(&mut insts, &patch_true);
+
+                insts
+                    .into_iter()
+                    .for_each(|i| i.emit(&[], sink, emit_info, state));
+            }
             _ => todo!(),
         };
 
@@ -914,5 +980,14 @@ impl MachInstEmit for Inst {
     fn pretty_print_inst(&self, allocs: &[Allocation], state: &mut Self::State) -> String {
         let mut allocs = AllocationConsumer::new(allocs);
         self.print_with_state(state, &mut allocs)
+    }
+}
+
+fn alloc_value_regs(orgin: &ValueRegs<Reg>, alloc: &mut AllocationConsumer) -> ValueRegs<Reg> {
+    let x: Vec<_> = orgin.regs().into_iter().map(|r| alloc.next(*r)).collect();
+    match x.len() {
+        1 => ValueRegs::one(x[0]),
+        2 => ValueRegs::two(x[0], x[1]),
+        _ => unreachable!(),
     }
 }

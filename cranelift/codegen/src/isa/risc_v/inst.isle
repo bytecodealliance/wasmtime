@@ -163,6 +163,12 @@
       (ty Type)
       (rs1 Reg)
       (rs2 Reg))
+    (Select 
+      (dst VecWritableReg)
+      (ty Type)
+      (conditon Reg)
+      (x ValueRegs)
+      (y ValueRegs))
 ))
 
 

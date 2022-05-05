@@ -175,7 +175,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         from: AMode::RegOffset(base, off, I64),
                     });
                 }
-                8 => {
+                8 | 1 => {
                     let op = if is_type_signed(out_ty) {
                         LoadOP::Lb
                     } else {
@@ -258,7 +258,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         src: src.regs()[0],
                     });
                 }
-                8 => {
+                8 | 1 => {
                     let op = StoreOP::Sb;
                     ctx.emit(Inst::Store {
                         to: AMode::RegOffset(base, off, I64),
@@ -426,60 +426,25 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Select => {
-            // assert!(ctx.input_ty(insn, 0).is_bool() || ctx.input_ty(insn, 0).is_int());
-            // let dst = ctx.get_output(insn, 0);
-            // let mut patch_false = vec![];
-            // let ty_access = ty.unwrap();
-            // let mut insts = SmallInstVec::new();
+            assert!(ctx.input_ty(insn, 0).is_bool() || ctx.input_ty(insn, 0).is_int());
+            let dst: Vec<_> = ctx
+                .get_output(insn, 0)
+                .regs()
+                .into_iter()
+                .map(|r| *r)
+                .collect();
 
-            // patch_false.push(insts.len());
-            // let conditon_reg = put_input_in_reg(ctx, inputs[0]);
-            // insts.push(Inst::CondBr {
-            //     taken: BranchTarget::patch(),
-            //     not_taken: BranchTarget::ResolvedOffset(0),
-            //     kind: CondBrKind {
-            //         kind: IntCC::Equal,
-            //         rs1: conditon_reg,
-            //         rs2: zero_reg(),
-            //     },
-            // });
-            // // here is the true
-            // // select the first value
-            // let mut select_result = |index, insts: &mut SmallInstVec<Inst>| match ty_access.bits() {
-            //     128 => {
-            //         let reg = ctx.put_input_in_regs(insn, index);
-            //         insts.push(Inst::Mov {
-            //             rd: dst.regs()[0],
-            //             rm: reg.regs()[0],
-            //             ty: I64,
-            //         });
-            //         insts.push(Inst::Mov {
-            //             rd: dst.regs()[1],
-            //             rm: reg.regs()[1],
-            //             ty: I64,
-            //         });
-            //     }
-            //     _ => {
-            //         let reg = ctx.put_input_in_regs(insn, 2).only_reg().unwrap();
-            //         insts.push(Inst::Mov {
-            //             rd: dst.regs()[0],
-            //             rm: reg,
-            //             ty: ty_access,
-            //         });
-            //     }
-            // };
-            // let mut patch_true = vec![];
-            // insts.push(Inst::Jal {
-            //     dest: BranchTarget::patch(),
-            // });
-            // select_result(1, &mut insts);
-            // // here is false
-            // Inst::patch_taken_path_list(&mut insts, &patch_false);
-            // // select second value
-            // select_result(2, &mut insts);
-
-            // Inst::patch_taken_path_list(&mut insts, &patch_true);
-            // insts.into_iter().for_each(|i| ctx.emit(i));
+            let ty = ty.unwrap();
+            let conditon = put_input_in_reg(ctx, inputs[0]);
+            let x = ctx.put_input_in_regs(insn, 0);
+            let y = ctx.put_input_in_regs(insn, 1);
+            ctx.emit(Inst::Select {
+                dst,
+                conditon,
+                x,
+                y,
+                ty,
+            });
         }
 
         Opcode::Selectif | Opcode::SelectifSpectreGuard => {}
