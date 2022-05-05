@@ -390,7 +390,8 @@ impl Engine {
             }
         }
 
-        let enabled;
+        #[allow(unused_assignments)]
+        let mut enabled = None;
 
         #[cfg(target_arch = "aarch64")]
         {
@@ -401,6 +402,24 @@ impl Engine {
                 // host.
                 _ => None,
             };
+        }
+
+        // There is no is_s390x_feature_detected macro yet, so for now
+        // we use getauxval from the libc crate directly.
+        #[cfg(all(target_arch = "s390x", target_os = "linux"))]
+        {
+            let v = unsafe { libc::getauxval(libc::AT_HWCAP) };
+            const HWCAP_S390X_VXRS_EXT2: libc::c_ulong = 32768;
+
+            enabled = match flag {
+                // There is no separate HWCAP bit for mie2, so assume
+                // that any machine with vxrs_ext2 also has mie2.
+                "has_vxrs_ext2" | "has_mie2" => Some((v & HWCAP_S390X_VXRS_EXT2) != 0),
+                // fall through to the very bottom to indicate that support is
+                // not enabled to test whether this feature is enabled on the
+                // host.
+                _ => None,
+            }
         }
 
         #[cfg(target_arch = "x86_64")]
@@ -427,11 +446,6 @@ impl Engine {
                 // host.
                 _ => None,
             };
-        }
-
-        #[cfg(not(any(target_arch = "aarch64", target_arch = "x86_64")))]
-        {
-            enabled = None;
         }
 
         match enabled {
