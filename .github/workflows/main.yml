@@ -459,6 +459,8 @@ jobs:
         curl -L https://github.com/mozilla/sccache/releases/download/0.2.13/sccache-0.2.13-x86_64-unknown-linux-musl.tar.gz | tar xzf -
         echo "`pwd`/sccache-0.2.13-x86_64-unknown-linux-musl" >> $GITHUB_PATH
         echo RUSTC_WRAPPER=sccache >> $GITHUB_ENV
-    - run: |
-        rustc scripts/publish.rs
-        ./publish verify
+    - run: rustc scripts/publish.rs
+    # Make sure the tree is publish-able as-is
+    - run: ./publish verify
+    # Make sure we can bump version numbers for the next release
+    - run: ./publish bump
