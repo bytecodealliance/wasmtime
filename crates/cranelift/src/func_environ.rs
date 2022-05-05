@@ -593,7 +593,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         // The reason is that one can construct a "zip-bomb-like"
         // program with exponential-in-program-size runtime, with no
         // backedges (loops), by building a tree of function calls: f0
-        // calls f1 ten tims, f1 calls f2 ten times, etc. E.g., nine
+        // calls f1 ten times, f1 calls f2 ten times, etc. E.g., nine
         // levels of this yields a billion function calls with no
         // backedges. So we can't do checks only at backedges.
         //
