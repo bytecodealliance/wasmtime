@@ -169,6 +169,17 @@
       (conditon Reg)
       (x ValueRegs)
       (y ValueRegs))
+
+    (ReferenceValid
+      (rd WritableReg)
+      (op ReferenceValidOP)
+      (x Reg))
+))
+
+
+(type ReferenceValidOP(enum
+  (IsNull)
+  (IsInvalid)
 ))
 
 

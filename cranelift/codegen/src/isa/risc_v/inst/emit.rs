@@ -67,12 +67,27 @@ impl MachInstEmitState<Inst> for EmitState {
 }
 
 impl Inst {
-    pub(crate) fn construct_bit_not(rd: Writable<Reg>) -> Inst {
+    /*
+    inverse a bool
+     */
+    pub(crate) fn construct_bool_not(rd: Writable<Reg>, rs: Reg) -> Inst {
         Inst::AluRRImm12 {
             alu_op: AluOPRRI::Xori,
-            rd: rd,
-            rs: rd.to_reg(),
+            rd,
+            rs,
             imm12: Imm12::from_bits(1),
+        }
+    }
+
+    /*
+        inverset all bit
+    */
+    pub(crate) fn construct_bit_not(rd: Writable<Reg>, rs: Reg) -> Inst {
+        Inst::AluRRImm12 {
+            alu_op: AluOPRRI::Xori,
+            rd,
+            rs,
+            imm12: Imm12::from_bits(-1),
         }
     }
 
@@ -208,7 +223,7 @@ impl Inst {
         4: restore the registers
     */
     pub(crate) fn do_something_with_registers(
-        num: u8,
+        num: usize,
         mut f: impl std::ops::FnMut(&std::vec::Vec<Writable<Reg>>, &mut SmallInstVec<Inst>),
     ) -> SmallInstVec<Inst> {
         let mut insts = SmallInstVec::new();
@@ -222,13 +237,13 @@ impl Inst {
         alloc some registers for load large constant, or something else.
         if exclusive is given, which we must not include the  exclusive register (it's aleady been allocted or something),so must skip it.
     */
-    fn alloc_registers(amount: u8) -> Vec<Writable<Reg>> {
+    fn alloc_registers(amount: usize) -> Vec<Writable<Reg>> {
         let mut v = vec![];
         let available = bunch_of_normal_registers();
-        debug_assert!(amount <= available.len() as u8);
+        debug_assert!(amount <= available.len());
         for r in available {
             v.push(r);
-            if v.len() == amount as usize {
+            if v.len() == amount {
                 return v;
             }
         }
@@ -298,7 +313,7 @@ impl MachInstEmit for Inst {
         // (with an `EmitIsland`). We check this in debug builds. This is `mut`
         // to allow disabling the check for `JTSequence`, which is always
         // emitted following an `EmitIsland`.
-        let mut start_off = sink.cur_offset();
+        let start_off = sink.cur_offset();
         match self {
             &Inst::Nop0 => {
                 // do nothing
@@ -376,7 +391,6 @@ impl MachInstEmit for Inst {
             } => {
                 let rd = allocs.next_writable(rd);
                 let rs = allocs.next(rs);
-
                 let x = if let Some(funct6) = alu_op.option_funct6() {
                     alu_op.op_code()
                         | reg_to_gpr_num(rd.to_reg()) << 7
@@ -484,6 +498,58 @@ impl MachInstEmit for Inst {
             }
             &Inst::EpiloguePlaceholder => {
                 unimplemented!("what should I Do.");
+            }
+            &Inst::ReferenceValid { rd, op, x } => {
+                let rd = allocs.next_writable(rd);
+                let x = allocs.next(x);
+                let mut insts = SmallInstVec::new();
+                match op {
+                    ReferenceValidOP::IsNull => {
+                        insts.push(Inst::CondBr {
+                            taken: BranchTarget::ResolvedOffset(Inst::instruction_size() * 2),
+                            not_taken: BranchTarget::ResolvedOffset(0),
+                            kind: CondBrKind {
+                                kind: IntCC::Equal,
+                                rs1: zero_reg(),
+                                rs2: x,
+                            },
+                        });
+                        // here is false
+                        insts.push(Inst::load_constant_imm12(rd, Imm12::form_bool(false)));
+                        insts.push(Inst::Jal {
+                            dest: BranchTarget::ResolvedOffset(Inst::instruction_size()),
+                        });
+                        // here is true
+                        insts.push(Inst::load_constant_imm12(rd, Imm12::form_bool(true)));
+                    }
+
+                    ReferenceValidOP::IsInvalid => {
+                        /*
+                            todo:: right now just check if it is null
+                            null is a valid reference??????
+                        */
+                        insts.push(Inst::CondBr {
+                            taken: BranchTarget::ResolvedOffset(Inst::instruction_size() * 2),
+                            not_taken: BranchTarget::ResolvedOffset(0),
+                            kind: CondBrKind {
+                                kind: IntCC::Equal,
+                                rs1: zero_reg(),
+                                rs2: x,
+                            },
+                        });
+                        // here is false
+                        insts.push(Inst::load_constant_imm12(rd, Imm12::form_bool(false)));
+                        insts.push(Inst::Jal {
+                            dest: BranchTarget::ResolvedOffset(Inst::instruction_size()),
+                        });
+                        // here is true
+                        insts.push(Inst::load_constant_imm12(rd, Imm12::form_bool(true)));
+                    }
+                }
+
+                insts
+                    .into_iter()
+                    .for_each(|i| i.emit(&[], sink, emit_info, state));
             }
             &Inst::Ret => {
                 //jalr x0, x1, 0

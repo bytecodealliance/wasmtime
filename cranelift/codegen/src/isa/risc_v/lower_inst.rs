@@ -150,7 +150,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 32 => {
                     let op = if out_ty.is_float() {
                         LoadOP::Flw
-                    } else if is_type_signed(out_ty) {
+                    } else if is_int_and_type_signed(out_ty) {
                         LoadOP::Lw
                     } else {
                         LoadOP::Lwu
@@ -163,7 +163,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     });
                 }
                 16 => {
-                    let op = if is_type_signed(out_ty) {
+                    let op = if is_int_and_type_signed(out_ty) {
                         LoadOP::Lh
                     } else {
                         LoadOP::Lhu
@@ -176,7 +176,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     });
                 }
                 8 | 1 => {
-                    let op = if is_type_signed(out_ty) {
+                    let op = if is_int_and_type_signed(out_ty) {
                         LoadOP::Lb
                     } else {
                         LoadOP::Lbu
@@ -290,8 +290,8 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::AtomicRmw => {
             let r_dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let mut r_addr = ctx.put_input_in_regs(insn, 0).only_reg().unwrap();
-            let mut arg2 = ctx.put_input_in_regs(insn, 1).only_reg().unwrap();
+            let r_addr = ctx.put_input_in_regs(insn, 0).only_reg().unwrap();
+            let arg2 = ctx.put_input_in_regs(insn, 1).only_reg().unwrap();
             let ty_access = ty.unwrap();
             assert!(is_valid_atomic_transaction_ty(ty_access));
             let op = ctx.data(insn).atomic_rmw_op().unwrap();
@@ -364,6 +364,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let r_replacement = ctx.put_input_in_regs(insn, 2).only_reg().unwrap();
             let ty_access = ty.unwrap();
             assert!(is_valid_atomic_transaction_ty(ty_access));
+            unimplemented!()
         }
 
         Opcode::AtomicLoad => {
@@ -447,17 +448,65 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             });
         }
 
-        Opcode::Selectif | Opcode::SelectifSpectreGuard => {}
+        Opcode::Selectif | Opcode::SelectifSpectreGuard => ir_iflags_conflict(op),
 
-        Opcode::Bitselect | Opcode::Vselect => {}
+        Opcode::Bitselect => {
+            debug_assert_ne!(Opcode::Vselect, op);
+            let tmp = ctx.alloc_tmp(I64).only_reg().unwrap();
+            let tmp2 = ctx.alloc_tmp(I64).only_reg().unwrap();
+            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+            let rcond = put_input_in_reg(ctx, inputs[0]);
+            let x = put_input_in_reg(ctx, inputs[1]);
+            let y = put_input_in_reg(ctx, inputs[2]);
+            // x part
+            ctx.emit(Inst::AluRRR {
+                alu_op: AluOPRRR::And,
+                rd: tmp,
+                rs1: rcond,
+                rs2: x,
+            });
+            // bit not
+            ctx.emit(Inst::construct_bit_not(tmp2, rcond));
+            // y part
+            ctx.emit(Inst::AluRRR {
+                alu_op: AluOPRRR::And,
+                rd: tmp2,
+                rs1: rcond,
+                rs2: y,
+            });
+            ctx.emit(Inst::AluRRR {
+                alu_op: AluOPRRR::Or,
+                rd: rd,
+                rs1: tmp.to_reg(),
+                rs2: tmp2.to_reg(),
+            });
+        }
 
-        Opcode::Trueif => {}
+        Opcode::Vselect => {
+            todo!()
+        }
 
-        Opcode::Trueff => {}
+        Opcode::Trueif => ir_iflags_conflict(op),
 
-        Opcode::IsNull | Opcode::IsInvalid => {}
+        Opcode::Trueff => ir_fflags_conflict(op),
 
-        Opcode::Copy => {}
+        Opcode::IsNull | Opcode::IsInvalid => {
+            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+            let rs = put_input_in_reg(ctx, inputs[0]);
+            let ty = ctx.input_ty(insn, 0);
+            ctx.emit(Inst::ReferenceValid {
+                op: ReferenceValidOP::from_ir_op(op),
+                rd,
+                x: rs,
+            });
+        }
+
+        Opcode::Copy => {
+            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+            let rn = put_input_in_reg(ctx, inputs[0]);
+            let ty = ctx.input_ty(insn, 0);
+            ctx.emit(Inst::gen_move(rd, rn, ty));
+        }
 
         Opcode::Breduce | Opcode::Ireduce => {}
 

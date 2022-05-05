@@ -687,7 +687,7 @@ impl AluOPRRR {
 
 impl AluOPRRI {
     /*
-        int 64bit this is 6 bit length, other is 7 bit length
+        int 64bit this is 6 bit length, otherwise is 7 bit length
     */
     pub(crate) fn option_funct6(self) -> Option<u32> {
         match self {
@@ -698,13 +698,13 @@ impl AluOPRRI {
         }
     }
     /*
-        Slliw .. operation on 32-bit value , only need 5-bite shift size.
+        Slliw .. etc operation on 32-bit value , only need 5-bite shift size.
     */
     pub(crate) fn option_funct7(self) -> Option<u32> {
         match self {
-            Self::Slliw => Some(0b0000000),
-            Self::SrliW => Some(0b0000000),
-            Self::Sraiw => Some(0100000),
+            Self::Slliw => Some(0b000_0000),
+            Self::SrliW => Some(0b000_0000),
+            Self::Sraiw => Some(0b010_0000),
             _ => None,
         }
     }
@@ -1286,7 +1286,38 @@ impl ExtendOp {
     }
 }
 
+impl ReferenceValidOP {
+    pub(crate) fn op_name(self) -> &'static str {
+        match self {
+            ReferenceValidOP::IsNull => "is_null",
+            ReferenceValidOP::IsInvalid => "is_invalid",
+        }
+    }
+    #[inline(always)]
+    pub(crate) fn from_ir_op(op: crate::ir::Opcode) -> Self {
+        match op {
+            crate::ir::Opcode::IsInvalid => Self::IsInvalid,
+            crate::ir::Opcode::IsNull => Self::IsNull,
+
+            _ => unreachable!(),
+        }
+    }
+}
+
+#[inline(always)]
+pub fn is_int_and_type_signed(ty: Type) -> bool {
+    ty.is_int() && is_type_signed(ty)
+}
+#[inline(always)]
 pub fn is_type_signed(ty: Type) -> bool {
     assert!(ty.is_int());
     ty == I8 || ty == I16 || ty == I32 || ty == I64 || ty == I128
+}
+#[inline(always)]
+pub(crate) fn ir_iflags_conflict(op: crate::ir::Opcode) {
+    unreachable!("ir {} conflict with risc-v integer flag", op)
+}
+#[inline(always)]
+pub(crate) fn ir_fflags_conflict(op: crate::ir::Opcode) {
+    unreachable!("ir {} conflict with risc-v float flag", op)
 }

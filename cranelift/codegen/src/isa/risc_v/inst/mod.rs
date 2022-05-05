@@ -57,7 +57,7 @@ pub type OptionImm12 = Option<Imm12>;
 use crate::isa::risc_v::lower::isle::generated_code::MInst;
 pub use crate::isa::risc_v::lower::isle::generated_code::{
     AluOPRR, AluOPRRI, AluOPRRR, AluOPRRRR, AtomicOP, ExtendOp, FClassResult, FloatException,
-    FloatFlagOp, FloatRoundingMode, LoadOP, MInst as Inst, StoreOP, OPFPFMT,
+    FloatFlagOp, FloatRoundingMode, LoadOP, MInst as Inst, ReferenceValidOP, StoreOP, OPFPFMT,
 };
 
 type BoxCallInfo = Box<CallInfo>;
@@ -127,14 +127,18 @@ impl Display for BranchTarget {
 }
 
 impl Inst {
+    #[inline(always)]
     fn in_i32_range(value: u64) -> bool {
         let value = value as i64;
         value >= (i32::MIN as i64) && value <= (i32::MAX as i64)
     }
 
+    #[inline(always)]
     pub(crate) fn instruction_size() -> i32 /* less type cast  */ {
         4
     }
+
+    #[inline(always)]
     pub(crate) fn load_constant_imm12(rd: Writable<Reg>, imm: Imm12) -> Inst {
         Inst::AluRRImm12 {
             alu_op: AluOPRRI::Ori,
@@ -391,6 +395,10 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             x.regs().iter().for_each(|r| collector.reg_use(r.clone()));
             y.regs().iter().for_each(|r| collector.reg_use(r.clone()));
         }
+        &Inst::ReferenceValid { rd, x, .. } => {
+            collector.reg_def(rd);
+            collector.reg_use(x);
+        }
     }
 }
 
@@ -405,6 +413,7 @@ impl MachInst for Inst {
             imm12: Imm12::zero(),
         }
     }
+
     fn canonical_type_for_rc(rc: RegClass) -> Type {
         I64
     }
@@ -638,6 +647,14 @@ impl Inst {
                     "auipc",
                     register_name(rd.to_reg(), allocs),
                     imm.bits
+                )
+            }
+            &Inst::ReferenceValid { rd, op, x } => {
+                format!(
+                    "{} {},{}",
+                    op.op_name(),
+                    register_name(rd.to_reg(), allocs),
+                    register_name(x, allocs)
                 )
             }
             &Inst::Jalr { rd, base, offset } => {

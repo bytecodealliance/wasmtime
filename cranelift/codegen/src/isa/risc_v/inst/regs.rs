@@ -57,7 +57,6 @@ pub fn stacklimit_reg() -> Reg {
 }
 
 /*
-
 used when more register in code emiting.
 this should not include special purpose register such as fp sp etc.
 */
