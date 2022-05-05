@@ -212,7 +212,7 @@ impl ModuleTranslation<'_> {
     /// for now, this is sufficient to allow a system that "knows what
     /// it's doing" to always get static init.
     pub fn try_static_init(&mut self, page_size: u64, max_image_size_always_allowed: u64) {
-        // This method only attempts to transform a a `Segmented` memory init
+        // This method only attempts to transform a `Segmented` memory init
         // into a `Static` one, no other state.
         if !self.module.memory_initialization.is_segmented() {
             return;
@@ -264,7 +264,7 @@ impl ModuleTranslation<'_> {
             return;
         }
 
-        // Validate that the memory information collected is indeed validate for
+        // Validate that the memory information collected is indeed valid for
         // static memory initialization.
         for info in info.values().filter(|i| i.data_size > 0) {
             let image_size = info.max_addr - info.min_addr;
