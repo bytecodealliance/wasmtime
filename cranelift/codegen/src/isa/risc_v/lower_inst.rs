@@ -3,6 +3,7 @@
 use crate::machinst::Writable;
 use alloc::vec;
 use alloc::vec::Vec;
+use smallvec::SmallVec;
 
 use crate::ir::Inst as IRInst;
 use crate::ir::InstructionData;
@@ -27,6 +28,61 @@ pub(crate) fn is_valid_atomic_transaction_ty(ty: Type) -> bool {
         _ => false,
     }
 }
+pub(crate) fn intcc_contains_eq_or_ne(cc: IntCC) -> bool {
+    cc == IntCC::Equal || cc == IntCC::NotEqual
+}
+pub(crate) fn i128cmp_to_int64_compare_parts(
+    a: ValueRegs<Reg>,
+    b: ValueRegs<Reg>,
+    cc: IntCC,
+) -> (IntegerCompare, IntegerCompare) {
+    let hight_a = a.regs()[0];
+    let low_a = a.regs()[1];
+
+    let hight_b = b.regs()[0];
+    let low_b = b.regs()[1];
+    // hight part
+    let high = IntegerCompare {
+        kind: cc,
+        rs1: hight_a,
+        rs2: hight_b,
+    };
+    // low part
+    let x = match cc {
+        IntCC::Equal => IntCC::Equal,
+        IntCC::NotEqual => IntCC::NotEqual,
+        IntCC::SignedLessThan => IntCC::UnsignedLessThan,
+        IntCC::SignedGreaterThanOrEqual => IntCC::UnsignedGreaterThanOrEqual,
+        IntCC::SignedGreaterThan => IntCC::UnsignedGreaterThan,
+        IntCC::SignedLessThanOrEqual => IntCC::UnsignedLessThanOrEqual,
+        IntCC::UnsignedLessThan => IntCC::UnsignedLessThan,
+        IntCC::UnsignedGreaterThanOrEqual => IntCC::UnsignedGreaterThanOrEqual,
+        IntCC::UnsignedGreaterThan => IntCC::UnsignedGreaterThanOrEqual,
+        IntCC::UnsignedLessThanOrEqual => IntCC::UnsignedGreaterThanOrEqual,
+        IntCC::Overflow => IntCC::UnsignedGreaterThanOrEqual,
+        IntCC::Overflow | IntCC::NotOverflow => unreachable!(),
+    };
+    let low = IntegerCompare {
+        kind: x,
+        rs1: low_a,
+        rs2: low_b,
+    };
+    (high, low)
+}
+
+// pub(crate) fn lower_icmp<C: LowerCtx<I = Inst>>(
+//     ctx: &mut C,
+//     insn: IRInst,
+//     flags: &Flags,
+//     isa_flags: &aarch64_settings::Flags,
+// ) {
+//     let op = ctx.data(insn).opcode();
+//     assert(op == crate::ir::Opcode::Icmp);
+//     let inputs = insn_inputs(ctx, insn);
+//     let outputs = insn_outputs(ctx, insn);
+//     let ty = ctx.output_ty(insn, 0);
+// }
+
 /// Actually codegen an instruction's results into registers.
 pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
     ctx: &mut C,
@@ -698,65 +754,154 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
     Ok(())
 }
 
-/*
-    todo::int128 compare
-    gcc generate this.
+fn lower_br_icmp(
+    cc: IntCC,
+    a: ValueRegs<Reg>,
+    b: ValueRegs<Reg>,
+    taken: BranchTarget,
+    not_taken: BranchTarget,
+    ty: Type,
+) -> SmallInstVec<Inst> {
+    let mut insts = SmallInstVec::new();
+    if ty.bits() <= 64 {
+        let rs1 = a.only_reg().unwrap();
+        let rs2 = b.only_reg().unwrap();
+        let inst = Inst::CondBr {
+            taken,
+            not_taken,
+            kind: IntegerCompare { kind: cc, rs1, rs2 },
+        };
+        insts.push(inst);
+    } else {
+        // i128 compare
+        let (high, low) = i128cmp_to_int64_compare_parts(a, b, cc);
+        // let mut patch_to_low = vec![];
+        match cc {
+            IntCC::Equal => {
+                /*
+                    if high part not equal,
+                    then we can go to not_taken otherwise fallthrough.
+                */
+                insts.push(Inst::CondBr {
+                    taken: not_taken,
+                    not_taken: BranchTarget::zero(), /*  no branch  */
+                    kind: high.inverse(),
+                });
+                /*
+                    the rest part.
+                */
+                insts.push(Inst::CondBr {
+                    taken,
+                    not_taken,
+                    kind: low,
+                });
+            }
 
-    ```
-    int main(int argc, char **argv)
-    {
-        __int128_t a;
-        __int128_t b;
-        if (a > b)
-        {
-            return 1;
+            IntCC::NotEqual => {
+                /*
+                    if the high part not equal ,
+                    we know the whole must be not equal,
+                    we can goto the taken part , otherwise fallthrought.
+                */
+                insts.push(Inst::CondBr {
+                    taken,
+                    not_taken: BranchTarget::zero(), /*  no branch  */
+                    kind: high,
+                });
+
+                insts.push(Inst::CondBr {
+                    taken,
+                    not_taken,
+                    kind: low,
+                });
+            }
+
+            IntCC::SignedGreaterThanOrEqual | IntCC::SignedLessThanOrEqual => {
+                /*
+                    make cc == IntCC::SignedGreaterThanOrEqual
+                    must be true for IntCC::SignedLessThan too.
+                */
+                /*
+                    if "!(a.high >= b.high)" is true,
+                    we must goto the not_taken or otherwise fallthrough.
+                */
+                insts.push(Inst::CondBr {
+                    taken: not_taken,
+                    not_taken: BranchTarget::zero(),
+                    kind: high.inverse(),
+                });
+
+                /*
+                    here we must have a.high >= b.high too be true.
+                    if a.high > b.high we don't need compare the rest part
+                */
+                insts.push(Inst::CondBr {
+                    taken: taken,
+                    not_taken: BranchTarget::zero(),
+                    kind: high
+                        .clone()
+                        .set_kind(if cc == IntCC::SignedGreaterThanOrEqual {
+                            IntCC::SignedGreaterThan
+                        } else {
+                            IntCC::SignedLessThan
+                        }),
+                });
+                /*
+
+                    here we must have a.high == b.high too be true.
+                    just compare the rest part.
+                */
+                insts.push(Inst::CondBr {
+                    taken: taken,
+                    not_taken,
+                    kind: low,
+                });
+            }
+            IntCC::SignedGreaterThan | IntCC::SignedLessThan => {
+                /*
+                    make cc == IntCC::SignedGreaterThan
+                    must be true for IntCC::SignedLessThan too.
+                */
+                /*
+                    if a.hight > b.high
+                    we can goto the taken ,
+                    no need to compare the rest part.
+                */
+                insts.push(Inst::CondBr {
+                    taken,
+                    not_taken: BranchTarget::zero(),
+                    kind: high,
+                });
+                /*
+                    here we must have a.high <= b.hight.
+                    if not equal we know  a < b.high .
+                    we must goto the not_taken or otherwise we fallthrough.
+                */
+                insts.push(Inst::CondBr {
+                    taken: not_taken,
+                    not_taken: BranchTarget::zero(),
+                    kind: high.clone().set_kind(IntCC::NotEqual),
+                });
+                /*
+                    here we know a.high == b.high
+                    just compare the rest part.
+                */
+                insts.push(Inst::CondBr {
+                    taken,
+                    not_taken,
+                    kind: low,
+                });
+            }
+            IntCC::UnsignedLessThan
+            | IntCC::UnsignedGreaterThanOrEqual
+            | IntCC::UnsignedGreaterThan
+            | IntCC::UnsignedLessThanOrEqual
+            | IntCC::Overflow
+            | IntCC::NotOverflow => unreachable!(),
         }
-        else
-        {
-            return 2;
-        }
-        return 0;
     }
-    ```
-
-
-    .file	"main.c"
-    .option pic
-    .text
-    .align	1
-    .globl	main
-    .type	main, @function
-main:
-    addi	sp,sp,-64
-    sd	s0,56(sp)
-    addi	s0,sp,64
-    mv	a5,a0
-    sd	a1,-64(s0)
-    sw	a5,-52(s0)
-    ld	a4,-40(s0)
-    ld	a5,-24(s0)
-    bgt	a4,a5,.L5
-    ld	a4,-40(s0)
-    ld	a5,-24(s0)
-    bne	a4,a5,.L2
-    ld	a4,-48(s0)
-    ld	a5,-32(s0)
-    bleu	a4,a5,.L2
-.L5:
-    li	a5,1
-    j	.L4
-.L2:
-    li	a5,2
-.L4:
-    mv	a0,a5
-    ld	s0,56(sp)
-    addi	sp,sp,64
-    jr	ra
-    .size	main, .-main
-    .ident	"GCC: (Ubuntu 10.3.0-1ubuntu1~20.04) 10.3.0"
-    .section	.note.GNU-stack,"",@progbits
-```
-*/
+    insts
+}
 
 pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
     ctx: &mut C,
@@ -792,13 +937,13 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
                     unimplemented!("");
                 }
                 let cond = if op0.opcode() == Opcode::Brz {
-                    CondBrKind {
+                    IntegerCompare {
                         rs1: reg.only_reg().unwrap(),
                         rs2: zero_reg(),
                         kind: IntCC::Equal,
                     }
                 } else {
-                    CondBrKind {
+                    IntegerCompare {
                         rs1: reg.only_reg().unwrap(),
                         rs2: zero_reg(),
                         kind: IntCC::NotEqual,
@@ -813,22 +958,12 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
             }
             Opcode::BrIcmp => {
                 let ty = ctx.input_ty(branches[0], 0);
-                assert!(ty.is_int());
-                if ty.bits() as u32 <= Riscv64MachineDeps::word_bits() {
-                    let rs1 = ctx.put_input_in_regs(branches[0], 0);
-                    let rs2 = ctx.put_input_in_regs(branches[0], 1);
-                    let rs1 = rs1.only_reg().unwrap();
-                    let rs2 = rs2.only_reg().unwrap();
-                    let cc = op0.cond_code().unwrap();
-                    let inst = Inst::CondBr {
-                        taken,
-                        not_taken,
-                        kind: CondBrKind { kind: cc, rs1, rs2 },
-                    };
-                    ctx.emit(inst);
-                } else {
-                    unimplemented!();
-                }
+                let a = ctx.put_input_in_regs(branches[0], 0);
+                let b = ctx.put_input_in_regs(branches[0], 1);
+                let cc = op0.cond_code().unwrap();
+                lower_br_icmp(cc, a, b, taken, not_taken, ty)
+                    .into_iter()
+                    .for_each(|i| ctx.emit(i));
             }
             Opcode::Brif => {
                 unreachable!("risc-v has no compare iflag");
@@ -897,7 +1032,7 @@ mod test {
 //     insts.push(Inst::CondBr {
 //         taken: BranchTarget::patch(),
 //         not_taken: BranchTarget::zero(),
-//         kind: CondBrKind {
+//         kind: IntegerCompare {
 //             kind: IntCC::NotEqual,
 //             rs1: tmp.to_reg(),
 //             rs2: zero_reg(),
@@ -923,7 +1058,7 @@ mod test {
 //     insts.push(Inst::CondBr {
 //         taken: BranchTarget::patch(),
 //         not_taken: BranchTarget::zero(),
-//         kind: CondBrKind {
+//         kind: IntegerCompare {
 //             kind: IntCC::NotEqual,
 //             rs1: tmp,
 //             rs2: zero_reg(),
@@ -949,7 +1084,7 @@ mod test {
 //     insts.push(Inst::CondBr {
 //         taken: BranchTarget::patch(),
 //         not_taken: BranchTarget::zero(),
-//         kind: CondBrKind {
+//         kind: IntegerCompare {
 //             kind: IntCC::NotEqual,
 //             rs1: tmp,
 //             rs2: zero_reg(),
@@ -1027,7 +1162,7 @@ mod test {
 //         insts.push(Inst::CondBr {
 //             taken: BranchTarget::offset(Instructions::instruction_size()),
 //             not_taken: BranchTarget::zero(),
-//             kind: CondBrKind {
+//             kind: IntegerCompare {
 //                 /*
 //                  */
 //                 kind: IntCC::NotEqual,
@@ -1094,7 +1229,7 @@ mod test {
 // insts.push(Inst::CondBr {
 //     taken: BranchTarget::offset(Inst::instruction_size() as u32),
 //     not_taken: BranchTarget::zero(),
-//     kind: CondBrKind {
+//     kind: IntegerCompare {
 //         kind: IntCC::NotEqual, // means match , conditon is true
 //         rs1: tmp,
 //         rs2: zero_reg(),

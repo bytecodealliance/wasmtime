@@ -227,7 +227,7 @@ pub enum MInst {
     CondBr {
         taken: BranchTarget,
         not_taken: BranchTarget,
-        kind: CondBrKind,
+        kind: IntegerCompare,
     },
     LoadExtName {
         rd: WritableReg,
@@ -293,14 +293,14 @@ pub enum MInst {
     },
 }
 
-/// Internal type ReferenceValidOP: defined at src\isa\risc_v\inst.isle line 180.
+/// Internal type ReferenceValidOP: defined at src\isa\risc_v\inst.isle line 181.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum ReferenceValidOP {
     IsNull,
     IsInvalid,
 }
 
-/// Internal type AtomicOP: defined at src\isa\risc_v\inst.isle line 186.
+/// Internal type AtomicOP: defined at src\isa\risc_v\inst.isle line 187.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum AtomicOP {
     LrW,
@@ -327,7 +327,7 @@ pub enum AtomicOP {
     AmomaxuD,
 }
 
-/// Internal type FloatFlagOp: defined at src\isa\risc_v\inst.isle line 211.
+/// Internal type FloatFlagOp: defined at src\isa\risc_v\inst.isle line 212.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum FloatFlagOp {
     Frcsr,
@@ -340,7 +340,7 @@ pub enum FloatFlagOp {
     Fsflags,
 }
 
-/// Internal type AluOPRRRR: defined at src\isa\risc_v\inst.isle line 222.
+/// Internal type AluOPRRRR: defined at src\isa\risc_v\inst.isle line 223.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum AluOPRRRR {
     FmaddS,
@@ -353,7 +353,7 @@ pub enum AluOPRRRR {
     FnmaddD,
 }
 
-/// Internal type FClassResult: defined at src\isa\risc_v\inst.isle line 235.
+/// Internal type FClassResult: defined at src\isa\risc_v\inst.isle line 236.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum FClassResult {
     NegInfinite,
@@ -368,7 +368,7 @@ pub enum FClassResult {
     QNaN,
 }
 
-/// Internal type AluOPRR: defined at src\isa\risc_v\inst.isle line 258.
+/// Internal type AluOPRR: defined at src\isa\risc_v\inst.isle line 259.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum AluOPRR {
     FsqrtS,
@@ -399,7 +399,7 @@ pub enum AluOPRR {
     FcvtDWU,
 }
 
-/// Internal type LoadOP: defined at src\isa\risc_v\inst.isle line 298.
+/// Internal type LoadOP: defined at src\isa\risc_v\inst.isle line 299.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum LoadOP {
     Lb,
@@ -413,7 +413,7 @@ pub enum LoadOP {
     Fld,
 }
 
-/// Internal type StoreOP: defined at src\isa\risc_v\inst.isle line 310.
+/// Internal type StoreOP: defined at src\isa\risc_v\inst.isle line 311.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum StoreOP {
     Sb,
@@ -424,7 +424,7 @@ pub enum StoreOP {
     Fsd,
 }
 
-/// Internal type AluOPRRR: defined at src\isa\risc_v\inst.isle line 319.
+/// Internal type AluOPRRR: defined at src\isa\risc_v\inst.isle line 320.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum AluOPRRR {
     Add,
@@ -481,7 +481,7 @@ pub enum AluOPRRR {
     FleD,
 }
 
-/// Internal type AluOPRRI: defined at src\isa\risc_v\inst.isle line 392.
+/// Internal type AluOPRRI: defined at src\isa\risc_v\inst.isle line 393.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum AluOPRRI {
     Addi,
@@ -499,7 +499,7 @@ pub enum AluOPRRI {
     Sraiw,
 }
 
-/// Internal type OPFPFMT: defined at src\isa\risc_v\inst.isle line 410.
+/// Internal type OPFPFMT: defined at src\isa\risc_v\inst.isle line 411.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum OPFPFMT {
     S,
@@ -507,7 +507,7 @@ pub enum OPFPFMT {
     Q,
 }
 
-/// Internal type FloatRoundingMode: defined at src\isa\risc_v\inst.isle line 422.
+/// Internal type FloatRoundingMode: defined at src\isa\risc_v\inst.isle line 423.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum FloatRoundingMode {
     RNE,
@@ -517,7 +517,7 @@ pub enum FloatRoundingMode {
     RMM,
 }
 
-/// Internal type FloatException: defined at src\isa\risc_v\inst.isle line 435.
+/// Internal type FloatException: defined at src\isa\risc_v\inst.isle line 436.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum FloatException {
     NV,
@@ -527,7 +527,7 @@ pub enum FloatException {
     NX,
 }
 
-/// Internal type ExtendOp: defined at src\isa\risc_v\inst.isle line 461.
+/// Internal type ExtendOp: defined at src\isa\risc_v\inst.isle line 462.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum ExtendOp {
     UXTB,
@@ -540,7 +540,7 @@ pub enum ExtendOp {
     SXTD,
 }
 
-/// Internal type Cond: defined at src\isa\risc_v\inst.isle line 474.
+/// Internal type Cond: defined at src\isa\risc_v\inst.isle line 475.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum Cond {
     Eq,
@@ -818,7 +818,7 @@ pub fn constructor_with_flags_reg<C: Context>(
 pub fn constructor_alu_rr<C: Context>(ctx: &mut C, arg0: &AluOPRR, arg1: Reg) -> Option<Reg> {
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
-    // Rule at src\isa\risc_v\inst.isle line 504.
+    // Rule at src\isa\risc_v\inst.isle line 505.
     let expr0_0: Type = I64;
     let expr1_0 = C::temp_writable_reg(ctx, expr0_0);
     let expr2_0 = MInst::AluRR {
@@ -841,7 +841,7 @@ pub fn constructor_alu_rrr<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src\isa\risc_v\inst.isle line 512.
+    // Rule at src\isa\risc_v\inst.isle line 513.
     let expr0_0: Type = I64;
     let expr1_0 = C::temp_writable_reg(ctx, expr0_0);
     let expr2_0 = MInst::AluRRR {
@@ -867,7 +867,7 @@ pub fn constructor_alu_rrrr<C: Context>(
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
     let pattern3_0 = arg3;
-    // Rule at src\isa\risc_v\inst.isle line 520.
+    // Rule at src\isa\risc_v\inst.isle line 521.
     let expr0_0: Type = I64;
     let expr1_0 = C::temp_writable_reg(ctx, expr0_0);
     let expr2_0 = MInst::AluRRRR {
@@ -892,7 +892,7 @@ pub fn constructor_alu_rr_imm12<C: Context>(
     let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     let pattern2_0 = arg2;
-    // Rule at src\isa\risc_v\inst.isle line 528.
+    // Rule at src\isa\risc_v\inst.isle line 529.
     let expr0_0: Type = I64;
     let expr1_0 = C::temp_writable_reg(ctx, expr0_0);
     let expr2_0 = MInst::AluRRImm12 {
@@ -910,12 +910,12 @@ pub fn constructor_alu_rr_imm12<C: Context>(
 pub fn constructor_select_addi<C: Context>(ctx: &mut C, arg0: Type) -> Option<AluOPRRI> {
     let pattern0_0 = arg0;
     if let Some(pattern1_0) = C::fits_in_32(ctx, pattern0_0) {
-        // Rule at src\isa\risc_v\inst.isle line 547.
+        // Rule at src\isa\risc_v\inst.isle line 548.
         let expr0_0 = AluOPRRI::Addiw;
         return Some(expr0_0);
     }
     if let Some(pattern1_0) = C::fits_in_64(ctx, pattern0_0) {
-        // Rule at src\isa\risc_v\inst.isle line 548.
+        // Rule at src\isa\risc_v\inst.isle line 549.
         let expr0_0 = AluOPRRI::Addi;
         return Some(expr0_0);
     }

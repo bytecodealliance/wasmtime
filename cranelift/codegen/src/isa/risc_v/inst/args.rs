@@ -132,11 +132,12 @@ impl Into<AMode> for StackAMode {
 /// risc-v always take two register to compar
 /// brz can be compare with zero register which has the value 0
 #[derive(Clone, Copy, Debug)]
-pub struct CondBrKind {
+pub struct IntegerCompare {
     pub(crate) kind: IntCC,
     pub(crate) rs1: Reg,
     pub(crate) rs2: Reg,
 }
+
 pub(crate) enum BranchFunct3 {
     // ==
     Eq,
@@ -174,7 +175,7 @@ impl BranchFunct3 {
         }
     }
 }
-impl CondBrKind {
+impl IntegerCompare {
     pub(crate) fn op_code(self) -> u32 {
         0b1100011
     }
@@ -202,26 +203,26 @@ impl CondBrKind {
         }
     }
 
-    pub(crate) fn kind_name(&self) -> String {
+    pub(crate) fn op_name(&self) -> String {
         let (f, _) = self.funct3();
         format!("b{}", f.op_name())
     }
 
-    /*
-        sometimes the order is matter.
-    */
-    pub(crate) fn rs1_rs2(&self) -> (Reg, Reg) {
-        let (_, inverse_register) = self.funct3();
-        if !inverse_register {
-            (self.rs1, self.rs2)
-        } else {
-            (self.rs2, self.rs1)
-        }
+    pub(crate) fn set_kind(self, kind: IntCC) -> Self {
+        Self { kind, ..self }
     }
-
+    #[inline(always)]
+    pub(crate) fn register_should_inverse_when_emit(&self) -> bool {
+        let (_, x) = self.funct3();
+        x
+    }
     pub(crate) fn emit(self) -> u32 {
-        let (funct3, _) = self.funct3();
-        let (rs1, rs2) = self.rs1_rs2();
+        let (funct3, reverse) = self.funct3();
+        let (rs1, rs2) = if reverse {
+            (self.rs2, self.rs1)
+        } else {
+            (self.rs1, self.rs2)
+        };
 
         self.op_code()
             | funct3.bits() << 12

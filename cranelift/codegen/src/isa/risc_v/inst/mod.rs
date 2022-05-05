@@ -4,6 +4,13 @@
 #![allow(dead_code)]
 #![allow(non_camel_case_types)]
 
+/*
+
+    alloc (access) register when using regalloc must be strict in order otherwise will be surprise bug!!!!!!!!!!!!!!!!!
+
+    todo:: check them.
+
+*/
 use crate::binemit::{Addend, CodeOffset, Reloc};
 pub use crate::ir::condcodes::IntCC;
 use crate::ir::types::{
@@ -317,7 +324,7 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_def(rd);
             collector.reg_use(from.get_base_register());
         }
-        &Inst::Store { src, to, .. } => {
+        &Inst::Store { to, src, .. } => {
             collector.reg_use(to.get_base_register());
             collector.reg_use(src);
         }
@@ -500,6 +507,15 @@ impl MachInst for Inst {
         match ty {
             F32 => Inst::load_fp_constant32(to_regs.only_reg().unwrap(), value as u32),
             F64 => Inst::load_fp_constant64(to_regs.only_reg().unwrap(), value as u64),
+            I128 | B128 => {
+                let mut insts = SmallInstVec::new();
+                insts.extend(Inst::load_constant_u64(
+                    to_regs.regs()[0],
+                    (value >> 64) as u64,
+                ));
+                insts.extend(Inst::load_constant_u64(to_regs.regs()[1], value as u64));
+                return insts;
+            }
             _ => todo!(),
         }
     }
@@ -755,7 +771,7 @@ impl Inst {
                     register_name(rs2, allocs),
                 )
             }
-            &Inst::Store { src, op, to, flags } => {
+            &Inst::Store { to, src, op, flags } => {
                 format!(
                     "{} {},{}",
                     op.op_name(),
@@ -793,15 +809,19 @@ impl Inst {
                 kind,
                 ..
             } => {
-                let (rs1, rs2) = kind.rs1_rs2();
-                format!(
+                let rs1 = register_name(kind.rs1, allocs);
+                let rs2 = register_name(kind.rs2, allocs);
+                let swap = kind.register_should_inverse_when_emit();
+                let x = format!(
                     "{} {},{},{},{}",
-                    kind.kind_name(),
-                    register_name(rs1, allocs),
-                    register_name(rs2, allocs),
+                    kind.op_name(),
+                    if swap { rs2.as_str() } else { rs1.as_str() },
+                    if swap { rs1.as_str() } else { rs2.as_str() },
                     taken,
                     not_taken,
-                )
+                );
+
+                x
             }
             &MInst::Atomic {
                 op,

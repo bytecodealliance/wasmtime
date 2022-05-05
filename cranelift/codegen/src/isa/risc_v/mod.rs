@@ -459,6 +459,44 @@ mod test {
 
         println!("xxxxxx , {}", result.disasm.unwrap());
     }
+
+    #[test]
+    fn i128_compare() {
+        init_logger();
+        let name = ExternalName::testcase("test0");
+        let mut sig = Signature::new(CallConv::SystemV);
+        sig.returns.push(AbiParam::new(I32));
+        let mut func = Function::with_name_signature(name, sig);
+        let bb0 = func.dfg.make_block();
+        let bb1 = func.dfg.make_block();
+        let bb2 = func.dfg.make_block();
+        let mut pos = FuncCursor::new(&mut func);
+        pos.insert_block(bb0);
+        let v1 = pos.ins().iconst(I128, 100);
+        let v2 = pos.ins().iconst(I128, 200);
+        pos.ins()
+            .br_icmp(IntCC::SignedGreaterThan, v1, v2, bb1, &[]);
+
+        pos.ins().jump(bb2, &[]);
+        pos.insert_block(bb1);
+        let v3 = pos.ins().iconst(I32, 0);
+        pos.ins().return_(&[v3]);
+
+        pos.insert_block(bb2);
+        let v4 = pos.ins().iconst(I32, 1);
+        pos.ins().return_(&[v4]);
+
+        let mut shared_flags_builder = settings::builder();
+        shared_flags_builder.set("opt_level", "none").unwrap();
+        let shared_flags = settings::Flags::new(shared_flags_builder);
+        let isa_flags = riscv_settings::Flags::new(&shared_flags, riscv_settings::builder());
+        let backend = Riscv64Backend::new_with_flags(TRIPLE.clone(), shared_flags, isa_flags);
+        let result = backend
+            .compile_function(&mut func, /* want_disasm = */ true)
+            .unwrap();
+        let _code = result.buffer.data();
+        println!("xxxxxx , {}", result.disasm.unwrap());
+    }
 }
 
 static TRIPLE: Triple = Triple {

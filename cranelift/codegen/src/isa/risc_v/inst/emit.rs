@@ -151,7 +151,7 @@ impl Inst {
         insts.push(Inst::CondBr {
             taken: BranchTarget::zero(),
             not_taken: BranchTarget::zero(),
-            kind: CondBrKind {
+            kind: IntegerCompare {
                 kind: IntCC::NotEqual,
                 rs1: rd.to_reg(),
                 rs2: zero_reg(),
@@ -174,7 +174,7 @@ impl Inst {
         insts.push(Inst::CondBr {
             taken: BranchTarget::zero(),
             not_taken: BranchTarget::zero(),
-            kind: CondBrKind {
+            kind: IntegerCompare {
                 kind: IntCC::NotEqual,
                 rs1: tmp.to_reg(),
                 rs2: zero_reg(),
@@ -198,7 +198,7 @@ impl Inst {
         insts.push(Inst::CondBr {
             taken: BranchTarget::zero(),
             not_taken: BranchTarget::zero(),
-            kind: CondBrKind {
+            kind: IntegerCompare {
                 kind: IntCC::NotEqual,
                 rs1: tmp.to_reg(),
                 rs2: zero_reg(),
@@ -508,7 +508,7 @@ impl MachInstEmit for Inst {
                         insts.push(Inst::CondBr {
                             taken: BranchTarget::ResolvedOffset(Inst::instruction_size() * 2),
                             not_taken: BranchTarget::ResolvedOffset(0),
-                            kind: CondBrKind {
+                            kind: IntegerCompare {
                                 kind: IntCC::Equal,
                                 rs1: zero_reg(),
                                 rs2: x,
@@ -531,7 +531,7 @@ impl MachInstEmit for Inst {
                         insts.push(Inst::CondBr {
                             taken: BranchTarget::ResolvedOffset(Inst::instruction_size() * 2),
                             not_taken: BranchTarget::ResolvedOffset(0),
-                            kind: CondBrKind {
+                            kind: IntegerCompare {
                                 kind: IntCC::Equal,
                                 rs1: zero_reg(),
                                 rs2: x,
@@ -870,7 +870,7 @@ impl MachInstEmit for Inst {
                         insts.push(Inst::CondBr {
                             taken: BranchTarget::Label(label_jump_over),
                             not_taken: BranchTarget::zero(),
-                            kind: CondBrKind {
+                            kind: IntegerCompare {
                                 kind: IntCC::NotEqual,
                                 rs1: rd.to_reg(),
                                 rs2: zero_reg(),
@@ -889,7 +889,7 @@ impl MachInstEmit for Inst {
                         insts.push(Inst::CondBr {
                             taken: BranchTarget::Label(label_jump_over),
                             not_taken: BranchTarget::zero(),
-                            kind: CondBrKind {
+                            kind: IntegerCompare {
                                 kind: IntCC::NotEqual,
                                 rs1: rd.to_reg(),
                                 rs2: zero_reg(),
@@ -907,7 +907,7 @@ impl MachInstEmit for Inst {
                         insts.push(Inst::CondBr {
                             taken: BranchTarget::Label(label_set_false),
                             not_taken: BranchTarget::zero(),
-                            kind: CondBrKind {
+                            kind: IntegerCompare {
                                 kind: IntCC::NotEqual, // rd == 1 unordered data
                                 rs1: rd.to_reg(),
                                 rs2: zero_reg(),
@@ -924,7 +924,7 @@ impl MachInstEmit for Inst {
                         insts.push(Inst::CondBr {
                             taken: BranchTarget::Label(label_set_true),
                             not_taken: BranchTarget::zero(),
-                            kind: CondBrKind {
+                            kind: IntegerCompare {
                                 kind: IntCC::Equal,
                                 rs1: rd.to_reg(),
                                 rs2: zero_reg(),
@@ -989,7 +989,7 @@ impl MachInstEmit for Inst {
                 insts.push(Inst::CondBr {
                     taken: BranchTarget::zero(),
                     not_taken: BranchTarget::ResolvedOffset(0),
-                    kind: CondBrKind {
+                    kind: IntegerCompare {
                         kind: IntCC::Equal,
                         rs1: conditon,
                         rs2: zero_reg(),
