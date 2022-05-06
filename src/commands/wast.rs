@@ -1,10 +1,10 @@
 //! The module that implements the `wasmtime wast` command.
 
-use crate::CommonOptions;
 use anyhow::{Context as _, Result};
 use clap::Parser;
 use std::path::PathBuf;
 use wasmtime::{Engine, Store};
+use wasmtime_cli_flags::CommonOptions;
 use wasmtime_wast::WastContext;
 
 lazy_static::lazy_static! {

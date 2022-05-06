@@ -267,30 +267,30 @@ block0(v0: i64):
 ;   movsd   136(%rcx), %xmm3
 ;   movsd   144(%rcx), %xmm4
 ;   movdqu  rsp(80 + virtual offset), %xmm6
-;   addsd   %xmm0, %xmm0, %xmm6
+;   addsd   %xmm0, %xmm6, %xmm0
 ;   movdqu  rsp(0 + virtual offset), %xmm6
 ;   movdqu  rsp(64 + virtual offset), %xmm7
-;   addsd   %xmm6, %xmm6, %xmm7
+;   addsd   %xmm6, %xmm7, %xmm6
 ;   movdqu  rsp(48 + virtual offset), %xmm7
-;   addsd   %xmm14, %xmm14, %xmm7
+;   addsd   %xmm14, %xmm7, %xmm14
 ;   movdqu  rsp(32 + virtual offset), %xmm7
-;   addsd   %xmm9, %xmm9, %xmm7
+;   addsd   %xmm9, %xmm7, %xmm9
 ;   movdqu  rsp(16 + virtual offset), %xmm7
-;   addsd   %xmm13, %xmm13, %xmm7
-;   addsd   %xmm11, %xmm11, %xmm10
-;   addsd   %xmm5, %xmm5, %xmm12
-;   addsd   %xmm1, %xmm1, %xmm2
-;   addsd   %xmm8, %xmm8, %xmm3
-;   addsd   %xmm4, 152(%xmm4), %rcx
-;   addsd   %xmm0, %xmm0, %xmm6
-;   addsd   %xmm14, %xmm14, %xmm9
-;   addsd   %xmm13, %xmm13, %xmm11
-;   addsd   %xmm5, %xmm5, %xmm1
-;   addsd   %xmm8, %xmm8, %xmm4
-;   addsd   %xmm0, %xmm0, %xmm14
-;   addsd   %xmm13, %xmm13, %xmm5
-;   addsd   %xmm0, %xmm0, %xmm13
-;   addsd   %xmm0, %xmm0, %xmm8
+;   addsd   %xmm13, %xmm7, %xmm13
+;   addsd   %xmm11, %xmm10, %xmm11
+;   addsd   %xmm5, %xmm12, %xmm5
+;   addsd   %xmm1, %xmm2, %xmm1
+;   addsd   %xmm8, %xmm3, %xmm8
+;   addsd   %xmm4, 152(%rcx), %xmm4
+;   addsd   %xmm0, %xmm6, %xmm0
+;   addsd   %xmm14, %xmm9, %xmm14
+;   addsd   %xmm13, %xmm11, %xmm13
+;   addsd   %xmm5, %xmm1, %xmm5
+;   addsd   %xmm8, %xmm4, %xmm8
+;   addsd   %xmm0, %xmm14, %xmm0
+;   addsd   %xmm13, %xmm5, %xmm13
+;   addsd   %xmm0, %xmm13, %xmm0
+;   addsd   %xmm0, %xmm8, %xmm0
 ;   movdqu  96(%rsp), %xmm6
 ;   movdqu  112(%rsp), %xmm7
 ;   movdqu  128(%rsp), %xmm8

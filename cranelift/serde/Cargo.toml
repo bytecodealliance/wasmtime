@@ -1,6 +1,6 @@
 [package]
 name = "cranelift-serde"
-version = "0.84.0"
+version = "0.85.0"
 authors = ["The Cranelift Project Developers"]
 description = "Serializer/Deserializer for Cranelift IR"
 repository = "https://github.com/bytecodealliance/wasmtime"
@@ -16,8 +16,8 @@ path = "src/clif-json.rs"
 [dependencies]
 clap = { version = "3.1.12", features = ["derive"] }
 serde_json = "1.0.26"
-cranelift-codegen = { path = "../codegen", version = "0.84.0", features = ["enable-serde"] }
-cranelift-reader = { path = "../reader", version = "0.84.0" }
+cranelift-codegen = { path = "../codegen", version = "0.85.0", features = ["enable-serde"] }
+cranelift-reader = { path = "../reader", version = "0.85.0" }
 
 [badges]
 maintenance = { status = "experimental" }

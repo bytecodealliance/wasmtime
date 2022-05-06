@@ -1,12 +1,12 @@
 //! The module that implements the `wasmtime compile` command.
 
-use crate::CommonOptions;
 use anyhow::{bail, Context, Result};
 use clap::Parser;
 use std::fs;
 use std::path::PathBuf;
 use target_lexicon::Triple;
 use wasmtime::Engine;
+use wasmtime_cli_flags::CommonOptions;
 
 lazy_static::lazy_static! {
     static ref AFTER_HELP: String = {

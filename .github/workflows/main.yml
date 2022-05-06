@@ -196,6 +196,8 @@ jobs:
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
+    - name: Delete ISLE manifest files to force a re-build
+      run: rm cranelift/codegen/src/isa/aarch64/lower/isle/generated_code.manifest cranelift/codegen/src/isa/s390x/lower/isle/generated_code.manifest cranelift/codegen/src/isa/x64/lower/isle/generated_code.manifest
     - name: Rebuild ISLE DSL files
       run: cargo build -p cranelift-codegen --features "rebuild-isle"
     - name: Reformat
@@ -459,6 +461,8 @@ jobs:
         curl -L https://github.com/mozilla/sccache/releases/download/0.2.13/sccache-0.2.13-x86_64-unknown-linux-musl.tar.gz | tar xzf -
         echo "`pwd`/sccache-0.2.13-x86_64-unknown-linux-musl" >> $GITHUB_PATH
         echo RUSTC_WRAPPER=sccache >> $GITHUB_ENV
-    - run: |
-        rustc scripts/publish.rs
-        ./publish verify
+    - run: rustc scripts/publish.rs
+    # Make sure the tree is publish-able as-is
+    - run: ./publish verify
+    # Make sure we can bump version numbers for the next release
+    - run: ./publish bump
