@@ -136,9 +136,9 @@
     ;; float flags operation
     (FloatFlagOperation
       (op FloatFlagOp)
+      (rd   WritableReg)
       (rs OptionReg)
-      (imm OptionImm12)
-      (rd   WritableReg))
+      (imm OptionImm12))
 
     ;; a jump and link register operation 
     (Jalr
@@ -438,7 +438,7 @@
   (RMM)
 ))
 
-(type FloatException (enum
+(type FFlagsException (enum
   ;; Invalid Operation
   (NV)
   ;; Divide by Zero

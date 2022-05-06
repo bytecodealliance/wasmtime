@@ -256,9 +256,9 @@ pub enum MInst {
     },
     FloatFlagOperation {
         op: FloatFlagOp,
+        rd: WritableReg,
         rs: OptionReg,
         imm: OptionImm12,
-        rd: WritableReg,
     },
     Jalr {
         rd: WritableReg,
@@ -524,9 +524,9 @@ pub enum FloatRoundingMode {
     RMM,
 }
 
-/// Internal type FloatException: defined at src\isa\risc_v\inst.isle line 441.
+/// Internal type FFlagsException: defined at src\isa\risc_v\inst.isle line 441.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
-pub enum FloatException {
+pub enum FFlagsException {
     NV,
     DZ,
     OF,

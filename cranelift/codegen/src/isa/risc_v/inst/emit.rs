@@ -834,18 +834,35 @@ impl MachInstEmit for Inst {
                 );
                 state.virtual_sp_offset += amount;
             }
-            &Inst::FloatFlagOperation { op, rs, imm, rd } => {
+            &Inst::FloatFlagOperation { op, rd, rs, imm } => {
+                let rd = allocs.next_writable(rd);
                 let rs = if let Some(x) = rs {
                     Some(allocs.next(x))
                 } else {
                     None
                 };
-                let rd = allocs.next_writable(rd);
+
                 let x = op.op_code()
                     | reg_to_gpr_num(rd.to_reg()) << 7
                     | op.funct3() << 12
-                    | rs.map(|x| reg_to_gpr_num(x)).unwrap_or(0) << 15
+                    | if op == FloatFlagOp::Fsrmi {
+                        /*
+                            FIXME
+                            Riscv64: FloatFlagOperation { op: Fsrmi, rd: Writable { reg: p10i }, rs: None, imm: Some(Imm12 { bits: 2 }) }, fsrmi a0,2
+                            gnu:DebugRTypeIns { op_code: 115, rd: 10, funct3: 5, rs1: 2, rs2: 2, funct7: 0 }
+                            my :DebugRTypeIns { op_code: 115, rd: 10, funct3: 5, rs1: 0, rs2: 2, funct7: 0 }
+                            gnu:DebugITypeIns { op_code: 115, rd: 10, funct3: 5, rs: 2, imm12: 2 }
+                            my :DebugITypeIns { op_code: 115, rd: 10, funct3: 5, rs: 0, imm12: 2 }
+
+                            riscv gnu tool chain has set this to be "2"
+                            this should be "0"
+                        */
+                        2 << 15
+                    } else {
+                        rs.map(|x| reg_to_gpr_num(x)).unwrap_or(0) << 15
+                    }
                     | op.imm12(imm) << 20;
+
                 sink.put4(x);
             }
             &Inst::Atomic {

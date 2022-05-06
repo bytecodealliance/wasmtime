@@ -765,6 +765,7 @@ impl AluOPRRI {
 }
 
 impl FloatRoundingMode {
+    #[inline(always)]
     pub fn bits(self) -> u8 {
         match self {
             FloatRoundingMode::RNE => 0b000,
@@ -774,16 +775,24 @@ impl FloatRoundingMode {
             FloatRoundingMode::RMM => 0b100,
         }
     }
+    /*
+        use to FSRMI to set rounding mod
+    */
+    #[inline(always)]
+    pub(crate) fn to_imm12(self) -> Imm12 {
+        Imm12::from_bits(self.bits() as i16)
+    }
 }
 
-impl FloatException {
+impl FFlagsException {
+    #[inline(always)]
     pub(crate) fn mask(self) -> u32 {
         match self {
-            FloatException::NV => 1 << 4,
-            FloatException::DZ => 1 << 3,
-            FloatException::OF => 1 << 2,
-            FloatException::UF => 1 << 1,
-            FloatException::NX => 1 << 0,
+            FFlagsException::NV => 1 << 4,
+            FFlagsException::DZ => 1 << 3,
+            FFlagsException::OF => 1 << 2,
+            FFlagsException::UF => 1 << 1,
+            FFlagsException::NX => 1 << 0,
         }
     }
 }
@@ -931,7 +940,7 @@ impl FloatFlagOp {
             Self::Frrm => "frrm",
             Self::Frflags => "frflags",
             Self::Fsrmi => "fsrmi",
-            Self::Fsflagsi => "Fsflagsi",
+            Self::Fsflagsi => "fsflagsi",
             Self::Fscsr => "fscsr",
             Self::Fsrm => "fsrm",
             Self::Fsflags => "fsflags",
@@ -1034,19 +1043,21 @@ impl FloatCCBit {
     /*
        there compare condition can be implemented by just one risc-v instruction.
     */
+    #[inline(always)]
     pub(crate) fn just_eq(&self) -> bool {
         match self {
             Self::C(_) => self.test(Self::EQ) && self.clone().clean(Self::EQ).is_zero(),
             _ => false,
         }
     }
+    #[inline(always)]
     pub(crate) fn just_lt(&self) -> bool {
         match self {
             Self::C(_) => self.test(Self::LT) && self.clone().clean(Self::LT).is_zero(),
             _ => false,
         }
     }
-
+    #[inline(always)]
     pub(crate) fn just_le(&self) -> bool {
         match self {
             Self::C(_) => {
@@ -1056,7 +1067,7 @@ impl FloatCCBit {
             _ => false,
         }
     }
-
+    #[inline(always)]
     fn clean(mut self, o: Self) -> Self {
         match self {
             Self::C(ref mut x) => *x = *x & !(o.bit()),
@@ -1064,7 +1075,7 @@ impl FloatCCBit {
         }
         self
     }
-
+    #[inline(always)]
     fn is_zero(&self) -> bool {
         match self {
             Self::C(x) => *x == 0,
@@ -1074,12 +1085,14 @@ impl FloatCCBit {
 }
 
 impl AtomicOP {
+    #[inline(always)]
     pub(crate) fn is_load(self) -> bool {
         match self {
             Self::LrW | Self::LrD => true,
             _ => false,
         }
     }
+    #[inline(always)]
     pub(crate) fn is_store(self) -> bool {
         match self {
             Self::ScW | Self::ScD => true,
@@ -1112,9 +1125,11 @@ impl AtomicOP {
             Self::AmomaxuD => "amomaxu.d",
         }
     }
+    #[inline(always)]
     pub(crate) fn op_code(self) -> u32 {
         0b0101111
     }
+    #[inline(always)]
     pub(crate) fn funct7(self, aq: bool, rl: bool) -> u32 {
         let mut x = self.funct5() << 2;
         if rl {
@@ -1329,4 +1344,25 @@ pub(crate) fn ir_iflags_conflict(op: crate::ir::Opcode) {
 #[inline(always)]
 pub(crate) fn ir_fflags_conflict(op: crate::ir::Opcode) {
     unreachable!("ir {} conflict with risc-v float flag", op)
+}
+
+pub(crate) struct FFlags {
+    /*
+
+    The Floating-Point Control and Status Register, fcsr, is a RISC-V control and status register (CSR). The register selects the dynamic rounding mode for floating-point arithmetic operations and holds the accrued exception flags.
+
+      todo:: e holds exception flags, so you must cannot set it, right???
+        */
+    // e: FFlagsException,
+    r: FloatRoundingMode,
+}
+impl FFlags {
+    pub(crate) fn new(r: FloatRoundingMode) -> Self {
+        Self { r }
+    }
+
+    #[inline(always)]
+    pub(crate) fn to_imm12(self) -> Imm12 {
+        Imm12::from_bits(self.r.to_imm12().bits << 5)
+    }
 }

@@ -64,7 +64,7 @@ pub type VecBranchTarget = Vec<BranchTarget>;
 
 use crate::isa::risc_v::lower::isle::generated_code::MInst;
 pub use crate::isa::risc_v::lower::isle::generated_code::{
-    AluOPRR, AluOPRRI, AluOPRRR, AluOPRRRR, AtomicOP, ExtendOp, FClassResult, FloatException,
+    AluOPRR, AluOPRRI, AluOPRRR, AluOPRRRR, AtomicOP, ExtendOp, FClassResult, FFlagsException,
     FloatFlagOp, FloatRoundingMode, LoadOP, MInst as Inst, ReferenceValidOP, StoreOP, OPFPFMT,
 };
 
