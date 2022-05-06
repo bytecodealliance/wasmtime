@@ -513,7 +513,8 @@ pub(crate) fn compute<I: VCodeInst>(
                             end: end + 1,
                         });
                     } else {
-                        list.last_mut().unwrap().end = end + 1;
+                        let last = list.last_mut().unwrap();
+                        last.end = last.end.max(end + 1);
                     }
                 }
             }
