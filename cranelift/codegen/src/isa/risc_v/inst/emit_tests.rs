@@ -23,7 +23,7 @@ fn test_riscv64_binemit() {
         }
     }
 
-    let mut insns = Vec::<TestUnit>::new();
+    let mut insns = Vec::<TestUnit>::with_capacity(500);
     //todo:: more
     insns.push(TestUnit::new(
         Inst::AluRRR {
@@ -43,10 +43,31 @@ fn test_riscv64_binemit() {
         },
         "addi fp,sp,100",
     ));
+    insns.push(TestUnit::new(
+        Inst::Lui {
+            rd: writable_zero_reg(),
+            imm: Imm20::from_bits(120),
+        },
+        "lui zero,120",
+    ));
+    insns.push(TestUnit::new(
+        Inst::Auipc {
+            rd: writable_zero_reg(),
+            imm: Imm20::from_bits(120),
+        },
+        "auipc zero,120",
+    ));
+
+    insns.push(TestUnit::new(
+        Inst::Jal {
+            rd: writable_zero_reg(),
+            dest: BranchTarget::offset(120),
+        },
+        "jal zero,120",
+    ));
 
     {
-        // generated code to speed up the test unit,otherwise you need invoke riscv-gun tool chain every time.
-        // insns[0].code = Some(263219);
+        // some generate code
     }
     let flags = settings::Flags::new(settings::builder());
     let rru = crate_reg_eviroment(&flags);
@@ -55,7 +76,6 @@ fn test_riscv64_binemit() {
     for (index, ref mut unit) in insns.into_iter().enumerate() {
         println!("Riscv64: {:?}, {}", unit.inst, unit.assembly);
         // Check the printed text is as expected.
-
         let actual_printing = unit
             .inst
             .print_with_state(&mut EmitState::default(), &mut AllocationConsumer::new(&[]));

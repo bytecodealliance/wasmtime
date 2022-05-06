@@ -41,14 +41,14 @@ pub fn a0_t0_a7() -> Vec<Writable<Reg>> {
     v
 }
 
-pub fn wirteable_a0() -> Writable<Reg> {
+pub fn writable_a0() -> Writable<Reg> {
     Writable::from_reg(a0())
 }
-pub fn wirteable_a1() -> Writable<Reg> {
+pub fn writable_a1() -> Writable<Reg> {
     Writable::from_reg(a1())
 }
 
-pub fn wirteable_a2() -> Writable<Reg> {
+pub fn writable_a2() -> Writable<Reg> {
     Writable::from_reg(a2())
 }
 

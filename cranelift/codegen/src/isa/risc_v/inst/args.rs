@@ -203,11 +203,12 @@ impl IntegerCompare {
         }
     }
 
+    #[inline(always)]
     pub(crate) fn op_name(&self) -> String {
         let (f, _) = self.funct3();
         format!("b{}", f.op_name())
     }
-
+    #[inline(always)]
     pub(crate) fn set_kind(self, kind: IntCC) -> Self {
         Self { kind, ..self }
     }

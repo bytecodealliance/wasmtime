@@ -108,7 +108,7 @@ impl Inst {
                     }
                     _ => unreachable!(),
                 },
-                &mut Inst::Jal { ref mut dest } => match dest {
+                &mut Inst::Jal { ref mut dest, .. } => match dest {
                     &mut BranchTarget::ResolvedOffset(_) => {
                         *dest = BranchTarget::ResolvedOffset(real_off)
                     }
@@ -208,6 +208,7 @@ impl Inst {
         insts.push(Inst::load_constant_imm12(rd, Imm12::form_bool(false)));
         // jump set true
         insts.push(Inst::Jal {
+            rd: writable_zero_reg(),
             dest: BranchTarget::offset(Inst::instruction_size()),
         });
         Inst::patch_taken_path_list(&mut insts, &patch_true);
@@ -517,6 +518,7 @@ impl MachInstEmit for Inst {
                         // here is false
                         insts.push(Inst::load_constant_imm12(rd, Imm12::form_bool(false)));
                         insts.push(Inst::Jal {
+                            rd: writable_zero_reg(),
                             dest: BranchTarget::ResolvedOffset(Inst::instruction_size()),
                         });
                         // here is true
@@ -540,6 +542,7 @@ impl MachInstEmit for Inst {
                         // here is false
                         insts.push(Inst::load_constant_imm12(rd, Imm12::form_bool(false)));
                         insts.push(Inst::Jal {
+                            rd: writable_zero_reg(),
                             dest: BranchTarget::ResolvedOffset(Inst::instruction_size()),
                         });
                         // here is true
@@ -610,8 +613,9 @@ impl MachInstEmit for Inst {
             &Inst::Trap { trap_code } => {
                 unimplemented!("what is the trap code\n");
             }
-            &Inst::Jal { dest } => {
-                let code: u32 = (0b1101111) | (0 << 12);
+            &Inst::Jal { rd, dest } => {
+                let rd = allocs.next_writable(rd);
+                let code: u32 = (0b1101111) | (reg_to_gpr_num(rd.to_reg()) << 7);
                 match dest {
                     BranchTarget::Label(lable) => {
                         sink.use_label_at_offset(start_off, lable, LabelUse::Jal20);
@@ -625,7 +629,7 @@ impl MachInstEmit for Inst {
                                 let mut code = code.to_le_bytes();
                                 LabelUse::Jal20.patch_raw_offset(&mut code, offset);
                             } else {
-                                Inst::construct_auipc_and_jalr(offset)
+                                Inst::construct_auipc_and_jalr(writable_spilltmp_reg(), offset)
                                     .into_iter()
                                     .for_each(|i| i.emit(&[], sink, emit_info, state));
                             }
@@ -654,19 +658,23 @@ impl MachInstEmit for Inst {
                             let code = kind.emit();
                             let mut code = code.to_le_bytes();
                             LabelUse::B12.patch_raw_offset(&mut code, offset);
-                            code.into_iter().for_each(|b| sink.put1(b));
+                            sink.put_data(&code[..])
                         } else {
                             let code = kind.emit();
                             // jump is zero, this means when condition is met , no jump
                             // fallthrough to next instruction which is the long jump.
                             sink.put4(code);
-                            Inst::construct_auipc_and_jalr(offset)
+                            Inst::construct_auipc_and_jalr(writable_spilltmp_reg(), offset)
                                 .into_iter()
                                 .for_each(|i| i.emit(&[], sink, emit_info, state));
                         }
                     }
                 }
-                Inst::Jal { dest: not_taken }.emit(&[], sink, emit_info, state);
+                Inst::Jal {
+                    dest: not_taken,
+                    rd: writable_zero_reg(),
+                }
+                .emit(&[], sink, emit_info, state);
             }
 
             &Inst::Mov { rd, rm, ty } => {
@@ -716,7 +724,108 @@ impl MachInstEmit for Inst {
                     }
                 }
             }
+            &Inst::BrTable {
+                index,
+                tmp1,
+                default_,
+                ref targets,
+            } => {
+                let index = allocs.next(index);
+                let tmp1 = allocs.next_writable(tmp1);
 
+                {
+                    /*
+                        if index not match all targets,
+                        goto the default.
+                    */
+                    // index < 0
+                    sink.use_label_at_offset(
+                        sink.cur_offset(),
+                        default_.as_label().unwrap(),
+                        LabelUse::B12,
+                    );
+                    Inst::CondBr {
+                        taken: default_,
+                        not_taken: BranchTarget::zero(),
+                        kind: IntegerCompare {
+                            kind: IntCC::SignedLessThan,
+                            rs1: zero_reg(),
+                            rs2: index,
+                        },
+                    }
+                    .emit(&[], sink, emit_info, state);
+                    //index >= targets.len()
+                    Inst::load_constant_u64(tmp1, targets.len() as u64)
+                        .into_iter()
+                        .for_each(|i| {
+                            i.emit(&[], sink, emit_info, state);
+                        });
+
+                    sink.use_label_at_offset(
+                        sink.cur_offset(),
+                        default_.as_label().unwrap(),
+                        LabelUse::B12,
+                    );
+                    Inst::CondBr {
+                        taken: default_,
+                        not_taken: BranchTarget::zero(),
+                        kind: IntegerCompare {
+                            kind: IntCC::UnsignedGreaterThanOrEqual,
+                            rs1: index,
+                            rs2: tmp1.to_reg(),
+                        },
+                    }
+                    .emit(&[], sink, emit_info, state);
+                }
+                {
+                    let mut insts = SmallInstVec::new();
+                    /*
+                        offst == 0 make no jump at all, but get the current pc
+                    */
+                    let x = Inst::construct_auipc_and_jalr(tmp1, 0);
+                    insts.push(x[0].clone());
+                    // t *= 8;
+                    insts.push(Inst::AluRRImm12 {
+                        alu_op: AluOPRRI::Slli,
+                        rd: writable_spilltmp_reg(),
+                        rs: index,
+                        imm12: Imm12::from_bits(3),
+                    });
+                    // tmp1 += t
+                    insts.push(Inst::AluRRR {
+                        alu_op: AluOPRRR::Add,
+                        rd: tmp1,
+                        rs1: tmp1.to_reg(),
+                        rs2: spilltmp_reg(),
+                    });
+                    // tmp1 += 12  ;; 12 for three compute address instrction
+                    insts.push(Inst::AluRRImm12 {
+                        alu_op: AluOPRRI::Slli,
+                        rd: tmp1,
+                        rs: tmp1.to_reg(),
+                        imm12: Imm12::from_bits(12),
+                    });
+                    // finally goto jumps
+                    insts.push(x[1].clone());
+                    insts
+                        .into_iter()
+                        .for_each(|i| i.emit(&[], sink, emit_info, state));
+                }
+
+                /*
+                    here is all the jumps
+                */
+                for t in targets {
+                    sink.use_label_at_offset(
+                        sink.cur_offset(),
+                        t.as_label().unwrap(),
+                        LabelUse::PCRel32,
+                    );
+                    Inst::construct_auipc_and_jalr(writable_spilltmp_reg(), 0)
+                        .into_iter()
+                        .for_each(|i| i.emit(&[], sink, emit_info, state));
+                }
+            }
             &Inst::VirtualSPOffsetAdj { amount } => {
                 log::trace!(
                     "virtual sp offset adjusted by {} -> {}",
@@ -935,6 +1044,7 @@ impl MachInstEmit for Inst {
                     if cc_bit.test(FloatCCBit::UN) {
                         insts.extend(Inst::generate_float_unordered(rd, ty, rs1, rs2));
                         insts.push(Inst::Jal {
+                            rd: writable_zero_reg(),
                             dest: BranchTarget::Label(label_jump_over),
                         });
                     }
@@ -952,6 +1062,7 @@ impl MachInstEmit for Inst {
                     );
                     // jump over set true
                     Inst::Jal {
+                        rd: writable_zero_reg(),
                         dest: BranchTarget::offset(Inst::instruction_size()),
                     }
                     .emit(&[], sink, emit_info, state);
@@ -1022,6 +1133,7 @@ impl MachInstEmit for Inst {
 
                 let patch_true = vec![insts.len()];
                 insts.push(Inst::Jal {
+                    rd: writable_zero_reg(),
                     dest: BranchTarget::zero(),
                 });
                 select_result(x, &mut insts);
@@ -1036,7 +1148,15 @@ impl MachInstEmit for Inst {
                     .into_iter()
                     .for_each(|i| i.emit(&[], sink, emit_info, state));
             }
-            _ => todo!(),
+            &Inst::Jalr { rd, base, offset } => {
+                let rd = allocs.next_writable(rd);
+                let base = allocs.next(base);
+                let x = 0b1100111 |  reg_to_gpr_num(rd.to_reg() )  << 7 |  0b000 << 12 /* funct3 */  | reg_to_gpr_num(base) << 15;
+                let mut x = x.to_le_bytes();
+                LabelUse::Jalr12.patch_raw_offset(&mut x[..], offset.as_i16() as i32);
+                sink.put_data(&x[..]);
+            }
+            _ => todo!("{:?}", self),
         };
 
         let end_off = sink.cur_offset();

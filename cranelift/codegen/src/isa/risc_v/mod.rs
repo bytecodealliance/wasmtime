@@ -189,10 +189,12 @@ pub fn init_logger() {
 
 #[cfg(test)]
 mod test {
+    use alloc::vec;
+
     use super::*;
     use crate::cursor::{Cursor, FuncCursor};
     use crate::ir::condcodes::FloatCC;
-    use crate::ir::types::*;
+    use crate::ir::{types::*, JumpTable, JumpTableData};
     use crate::ir::{AbiParam, ExternalName, Function, InstBuilder, Signature};
     use crate::isa::CallConv;
     use crate::settings;
@@ -496,6 +498,48 @@ mod test {
             .unwrap();
         let _code = result.buffer.data();
         println!("xxxxxx , {}", result.disasm.unwrap());
+    }
+
+    #[test]
+    fn br_table() {
+        init_logger();
+        let name = ExternalName::testcase("test0");
+        let mut sig = Signature::new(CallConv::SystemV);
+        let mut func = Function::with_name_signature(name, sig);
+        let bb0 = func.dfg.make_block();
+        let bb1 = func.dfg.make_block();
+        let bb2 = func.dfg.make_block();
+        let bb3 = func.dfg.make_block();
+        let mut jump_table_data = JumpTableData::new();
+        jump_table_data.push_entry(bb1);
+        jump_table_data.push_entry(bb2);
+        let jump_table = func.create_jump_table(jump_table_data);
+
+        let mut pos = FuncCursor::new(&mut func);
+        pos.insert_block(bb0);
+        let v1 = pos.ins().iconst(I32, 1);
+        pos.ins().br_table(v1, bb3, jump_table);
+        pos.insert_block(bb1);
+
+        pos.ins().return_(&[]);
+        pos.insert_block(bb2);
+        pos.ins().return_(&[]);
+        pos.insert_block(bb3);
+        pos.ins().return_(&[]);
+
+        let mut shared_flags_builder = settings::builder();
+        shared_flags_builder.set("opt_level", "none").unwrap();
+        let shared_flags = settings::Flags::new(shared_flags_builder);
+        let isa_flags = riscv_settings::Flags::new(&shared_flags, riscv_settings::builder());
+        let backend = Riscv64Backend::new_with_flags(TRIPLE.clone(), shared_flags, isa_flags);
+        let result = backend
+            .compile_function(&mut func, /* want_disasm = */ true)
+            .unwrap();
+        let _code = result.buffer.data();
+        println!("xxxxxx , {}", result.disasm.unwrap());
+        use std::io::Write;
+        let mut file = std::fs::File::create("d://xxx.bin").unwrap();
+        file.write_all(_code).unwrap();
     }
 }
 

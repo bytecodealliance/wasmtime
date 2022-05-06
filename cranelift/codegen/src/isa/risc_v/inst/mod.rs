@@ -57,6 +57,7 @@ use std::fmt::{Display, Formatter};
 
 pub type OptionReg = Option<Reg>;
 pub type OptionImm12 = Option<Imm12>;
+pub type VecBranchTarget = Vec<BranchTarget>;
 
 //=============================================================================
 // Instructions (top level): definition
@@ -187,15 +188,16 @@ impl Inst {
         insts
     }
 
-    pub(crate) fn construct_auipc_and_jalr(offset: i32) -> SmallInstVec<Inst> {
+    pub(crate) fn construct_auipc_and_jalr(rd: Writable<Reg>, offset: i32) -> SmallInstVec<Inst> {
         let mut insts = SmallInstVec::new();
         insts.push(Inst::Auipc {
-            rd: writable_spilltmp_reg(),
+            rd,
             imm: Imm20::from_bits(offset >> 12),
         });
+
         insts.push(Inst::Jalr {
             rd: writable_zero_reg(),
-            base: spilltmp_reg(),
+            base: rd.to_reg(),
             offset: Imm12::from_bits((offset & 0xfff) as i16),
         });
         insts
@@ -309,6 +311,15 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
         &Inst::Nop4 => {
             //todo do nothing ok
         }
+        &Inst::BrTable {
+            index,
+            tmp1,
+            default_,
+            ref targets,
+        } => {
+            collector.reg_use(index);
+            collector.reg_def(tmp1);
+        }
         &Inst::Auipc { rd, .. } => collector.reg_def(rd),
         &Inst::Lui { rd, .. } => collector.reg_def(rd),
         &Inst::AluRRR { rd, rs1, rs2, .. } => {
@@ -343,7 +354,9 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_use(rs2);
         }
         &Inst::Trap { .. } => {}
-        &Inst::Jal { .. } => {}
+        &Inst::Jal { rd, .. } => {
+            collector.reg_def(rd);
+        }
         &Inst::CondBr { kind, .. } => {
             collector.reg_use(kind.rs1);
             collector.reg_use(kind.rs2);
@@ -462,7 +475,7 @@ impl MachInst for Inst {
             todo more
         */
         match self {
-            &Inst::Jal { dest } => {
+            &Inst::Jal { dest, .. } => {
                 let dest = dest.as_label();
                 if dest.is_some() {
                     MachTerminator::Uncond
@@ -557,6 +570,7 @@ impl MachInst for Inst {
 
     fn gen_jump(target: MachLabel) -> Inst {
         Inst::Jal {
+            rd: writable_zero_reg(),
             dest: BranchTarget::Label(target),
         }
     }
@@ -649,6 +663,22 @@ impl Inst {
             }
             x
         };
+        let format_lables = |labels: &[MachLabel]| -> String {
+            assert!(labels.len() > 0);
+            let mut x = String::from("[");
+            labels.iter().for_each(|l| {
+                x.push_str(
+                    format!(
+                        "{:?}{}",
+                        l,
+                        if l != labels.last().unwrap() { "," } else { "" },
+                    )
+                    .as_str(),
+                );
+            });
+            x.push_str("]");
+            x
+        };
 
         match self {
             &Inst::Nop0 => {
@@ -656,6 +686,23 @@ impl Inst {
             }
             &Inst::Nop4 => {
                 format!(";;fixed 4-size nop")
+            }
+            &Inst::BrTable {
+                index,
+                tmp1,
+                default_,
+                ref targets,
+            } => {
+                let targets: Vec<_> = targets.iter().map(|x| x.as_label().unwrap()).collect();
+
+                format!(
+                    "{} {},{},{};; tmp1={}",
+                    "br_table",
+                    register_name(index, allocs),
+                    default_,
+                    format_lables(&targets[..]),
+                    register_name(tmp1.to_reg(), allocs),
+                )
             }
             &Inst::Auipc { rd, imm } => {
                 format!(
@@ -800,8 +847,13 @@ impl Inst {
             &MInst::CallInd { .. } => todo!(),
             &MInst::TrapIf { .. } => todo!(),
             &MInst::Trap { .. } => todo!(),
-            &MInst::Jal { dest } => {
-                format!("{} {}", "Jal", format!("{:?}", dest))
+            &MInst::Jal { dest, rd } => {
+                format!(
+                    "{} {},{}",
+                    "Jal",
+                    register_name(rd.to_reg(), allocs),
+                    format!("{:?}", dest)
+                )
             }
             &MInst::CondBr {
                 taken,

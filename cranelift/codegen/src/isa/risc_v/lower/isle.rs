@@ -93,65 +93,7 @@ where
 
     // i128 implemetation
 }
-
-// struct TestContext {
-//     lower_ctx: TestContextLowerCtx,
-// }
-// struct TestContextLowerCtx {
-//     cfg: TestContextLowerCtxCfg,
-// }
-
-// impl TestContextLowerCtx {
-//     fn dfg(&self) -> &TestContextLowerCtxCfg {
-//         &self.cfg
-//     }
-//     fn symbol_value_data(&mut self, global_value: GlobalValue) {
-//         unimplemented!()
-//     }
-// }
-// struct TestContextLowerCtxCfg {
-//     value: ValueList,
-// }
-
-// impl TestContextLowerCtxCfg {
-//     fn inst_results_list(&self, i: Inst) -> ValueList {
-//         self.value
-//         ext_funcs : Vec[],
-//     }
-//     fn (&self , , func_ref: FuncRef)
-// }
-
-// impl generated_code::Context for TestContext {
-//     isle_prelude_methods!();
-
-//     fn emit(&mut self, arg0: &MInst) -> Unit {
-//         todo!()
-//     }
-
-//     fn emit_safepoint(&mut self, arg0: &MInst) -> Unit {
-//         todo!()
-//     }
-
-//     fn zero_reg(&mut self) -> Reg {
-//         todo!()
-//     }
-
-//     fn imm(&mut self, arg0: Type, arg1: u64) -> Reg {
-//         todo!()
-//     }
-
-//     fn imm12_from_u64(&mut self, arg0: u64) -> Option<Imm12> {
-//         todo!()
-//     }
-
-//     fn writable_zero_reg(&mut self) -> WritableReg {
-//         todo!()
-//     }
-
-//     fn neg_imm12(&mut self, arg0: Imm12) -> Imm12 {
-//         todo!()
-//     }
-// }
+ 
 
 #[cfg(test)]
 mod test {}

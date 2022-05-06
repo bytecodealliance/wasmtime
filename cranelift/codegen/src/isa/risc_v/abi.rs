@@ -500,9 +500,9 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         size: usize,
     ) -> SmallVec<[Self::I; 8]> {
         let mut insts = SmallVec::new();
-        let arg0 = wirteable_a0();
-        let arg1 = wirteable_a1();
-        let arg2 = wirteable_a2();
+        let arg0 = writable_a0();
+        let arg1 = writable_a1();
+        let arg2 = writable_a2();
         insts.push(Inst::gen_move(arg0, dst, I64));
         insts.push(Inst::gen_move(arg1, src, I64));
         insts.extend(Inst::load_constant_u64(arg2, size as u64));

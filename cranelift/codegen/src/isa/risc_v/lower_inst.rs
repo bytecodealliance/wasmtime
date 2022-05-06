@@ -31,44 +31,6 @@ pub(crate) fn is_valid_atomic_transaction_ty(ty: Type) -> bool {
 pub(crate) fn intcc_contains_eq_or_ne(cc: IntCC) -> bool {
     cc == IntCC::Equal || cc == IntCC::NotEqual
 }
-pub(crate) fn i128cmp_to_int64_compare_parts(
-    a: ValueRegs<Reg>,
-    b: ValueRegs<Reg>,
-    cc: IntCC,
-) -> (IntegerCompare, IntegerCompare) {
-    let hight_a = a.regs()[0];
-    let low_a = a.regs()[1];
-
-    let hight_b = b.regs()[0];
-    let low_b = b.regs()[1];
-    // hight part
-    let high = IntegerCompare {
-        kind: cc,
-        rs1: hight_a,
-        rs2: hight_b,
-    };
-    // low part
-    let x = match cc {
-        IntCC::Equal => IntCC::Equal,
-        IntCC::NotEqual => IntCC::NotEqual,
-        IntCC::SignedLessThan => IntCC::UnsignedLessThan,
-        IntCC::SignedGreaterThanOrEqual => IntCC::UnsignedGreaterThanOrEqual,
-        IntCC::SignedGreaterThan => IntCC::UnsignedGreaterThan,
-        IntCC::SignedLessThanOrEqual => IntCC::UnsignedLessThanOrEqual,
-        IntCC::UnsignedLessThan => IntCC::UnsignedLessThan,
-        IntCC::UnsignedGreaterThanOrEqual => IntCC::UnsignedGreaterThanOrEqual,
-        IntCC::UnsignedGreaterThan => IntCC::UnsignedGreaterThanOrEqual,
-        IntCC::UnsignedLessThanOrEqual => IntCC::UnsignedGreaterThanOrEqual,
-        IntCC::Overflow => IntCC::UnsignedGreaterThanOrEqual,
-        IntCC::Overflow | IntCC::NotOverflow => unreachable!(),
-    };
-    let low = IntegerCompare {
-        kind: x,
-        rs1: low_a,
-        rs2: low_b,
-    };
-    (high, low)
-}
 
 // pub(crate) fn lower_icmp<C: LowerCtx<I = Inst>>(
 //     ctx: &mut C,
@@ -772,134 +734,172 @@ fn lower_br_icmp(
             kind: IntegerCompare { kind: cc, rs1, rs2 },
         };
         insts.push(inst);
-    } else {
-        // i128 compare
-        let (high, low) = i128cmp_to_int64_compare_parts(a, b, cc);
-        // let mut patch_to_low = vec![];
-        match cc {
-            IntCC::Equal => {
-                /*
-                    if high part not equal,
-                    then we can go to not_taken otherwise fallthrough.
-                */
-                insts.push(Inst::CondBr {
-                    taken: not_taken,
-                    not_taken: BranchTarget::zero(), /*  no branch  */
-                    kind: high.inverse(),
-                });
-                /*
-                    the rest part.
-                */
-                insts.push(Inst::CondBr {
-                    taken,
-                    not_taken,
-                    kind: low,
-                });
-            }
-
-            IntCC::NotEqual => {
-                /*
-                    if the high part not equal ,
-                    we know the whole must be not equal,
-                    we can goto the taken part , otherwise fallthrought.
-                */
-                insts.push(Inst::CondBr {
-                    taken,
-                    not_taken: BranchTarget::zero(), /*  no branch  */
-                    kind: high,
-                });
-
-                insts.push(Inst::CondBr {
-                    taken,
-                    not_taken,
-                    kind: low,
-                });
-            }
-
-            IntCC::SignedGreaterThanOrEqual | IntCC::SignedLessThanOrEqual => {
-                /*
-                    make cc == IntCC::SignedGreaterThanOrEqual
-                    must be true for IntCC::SignedLessThan too.
-                */
-                /*
-                    if "!(a.high >= b.high)" is true,
-                    we must goto the not_taken or otherwise fallthrough.
-                */
-                insts.push(Inst::CondBr {
-                    taken: not_taken,
-                    not_taken: BranchTarget::zero(),
-                    kind: high.inverse(),
-                });
-
-                /*
-                    here we must have a.high >= b.high too be true.
-                    if a.high > b.high we don't need compare the rest part
-                */
-                insts.push(Inst::CondBr {
-                    taken: taken,
-                    not_taken: BranchTarget::zero(),
-                    kind: high
-                        .clone()
-                        .set_kind(if cc == IntCC::SignedGreaterThanOrEqual {
-                            IntCC::SignedGreaterThan
-                        } else {
-                            IntCC::SignedLessThan
-                        }),
-                });
-                /*
-
-                    here we must have a.high == b.high too be true.
-                    just compare the rest part.
-                */
-                insts.push(Inst::CondBr {
-                    taken: taken,
-                    not_taken,
-                    kind: low,
-                });
-            }
-            IntCC::SignedGreaterThan | IntCC::SignedLessThan => {
-                /*
-                    make cc == IntCC::SignedGreaterThan
-                    must be true for IntCC::SignedLessThan too.
-                */
-                /*
-                    if a.hight > b.high
-                    we can goto the taken ,
-                    no need to compare the rest part.
-                */
-                insts.push(Inst::CondBr {
-                    taken,
-                    not_taken: BranchTarget::zero(),
-                    kind: high,
-                });
-                /*
-                    here we must have a.high <= b.hight.
-                    if not equal we know  a < b.high .
-                    we must goto the not_taken or otherwise we fallthrough.
-                */
-                insts.push(Inst::CondBr {
-                    taken: not_taken,
-                    not_taken: BranchTarget::zero(),
-                    kind: high.clone().set_kind(IntCC::NotEqual),
-                });
-                /*
-                    here we know a.high == b.high
-                    just compare the rest part.
-                */
-                insts.push(Inst::CondBr {
-                    taken,
-                    not_taken,
-                    kind: low,
-                });
-            }
-            IntCC::UnsignedLessThan
-            | IntCC::UnsignedGreaterThanOrEqual
-            | IntCC::UnsignedGreaterThan
-            | IntCC::UnsignedLessThanOrEqual
-            | IntCC::Overflow
-            | IntCC::NotOverflow => unreachable!(),
-        }
+        return insts;
     }
+    fn i128cmp_to_int64_compare_parts(
+        a: ValueRegs<Reg>,
+        b: ValueRegs<Reg>,
+        cc: IntCC,
+    ) -> (IntegerCompare, IntegerCompare) {
+        let hight_a = a.regs()[0];
+        let low_a = a.regs()[1];
+
+        let hight_b = b.regs()[0];
+        let low_b = b.regs()[1];
+        // hight part
+        let high = IntegerCompare {
+            kind: cc,
+            rs1: hight_a,
+            rs2: hight_b,
+        };
+        // low part
+        let x = match cc {
+            IntCC::Equal => IntCC::Equal,
+            IntCC::NotEqual => IntCC::NotEqual,
+            IntCC::SignedLessThan => IntCC::UnsignedLessThan,
+            IntCC::SignedGreaterThanOrEqual => IntCC::UnsignedGreaterThanOrEqual,
+            IntCC::SignedGreaterThan => IntCC::UnsignedGreaterThan,
+            IntCC::SignedLessThanOrEqual => IntCC::UnsignedLessThanOrEqual,
+            IntCC::UnsignedLessThan => IntCC::UnsignedLessThan,
+            IntCC::UnsignedGreaterThanOrEqual => IntCC::UnsignedGreaterThanOrEqual,
+            IntCC::UnsignedGreaterThan => IntCC::UnsignedGreaterThanOrEqual,
+            IntCC::UnsignedLessThanOrEqual => IntCC::UnsignedGreaterThanOrEqual,
+            IntCC::Overflow => IntCC::UnsignedGreaterThanOrEqual,
+            IntCC::Overflow | IntCC::NotOverflow => unreachable!(),
+        };
+        let low = IntegerCompare {
+            kind: x,
+            rs1: low_a,
+            rs2: low_b,
+        };
+        (high, low)
+    }
+    // i128 compare
+    let (high, low) = i128cmp_to_int64_compare_parts(a, b, cc);
+    // let mut patch_to_low = vec![];
+    match cc {
+        IntCC::Equal => {
+            /*
+                if high part not equal,
+                then we can go to not_taken otherwise fallthrough.
+            */
+            insts.push(Inst::CondBr {
+                taken: not_taken,
+                not_taken: BranchTarget::zero(), /*  no branch  */
+                kind: high.inverse(),
+            });
+            /*
+                the rest part.
+            */
+            insts.push(Inst::CondBr {
+                taken,
+                not_taken,
+                kind: low,
+            });
+        }
+
+        IntCC::NotEqual => {
+            /*
+                if the high part not equal ,
+                we know the whole must be not equal,
+                we can goto the taken part , otherwise fallthrought.
+            */
+            insts.push(Inst::CondBr {
+                taken,
+                not_taken: BranchTarget::zero(), /*  no branch  */
+                kind: high,
+            });
+
+            insts.push(Inst::CondBr {
+                taken,
+                not_taken,
+                kind: low,
+            });
+        }
+
+        IntCC::SignedGreaterThanOrEqual | IntCC::SignedLessThanOrEqual => {
+            /*
+                make cc == IntCC::SignedGreaterThanOrEqual
+                must be true for IntCC::SignedLessThan too.
+            */
+            /*
+                if "!(a.high >= b.high)" is true,
+                we must goto the not_taken or otherwise fallthrough.
+            */
+            insts.push(Inst::CondBr {
+                taken: not_taken,
+                not_taken: BranchTarget::zero(),
+                kind: high.inverse(),
+            });
+
+            /*
+                here we must have a.high >= b.high too be true.
+                if a.high > b.high we don't need compare the rest part
+            */
+            insts.push(Inst::CondBr {
+                taken: taken,
+                not_taken: BranchTarget::zero(),
+                kind: high
+                    .clone()
+                    .set_kind(if cc == IntCC::SignedGreaterThanOrEqual {
+                        IntCC::SignedGreaterThan
+                    } else {
+                        IntCC::SignedLessThan
+                    }),
+            });
+            /*
+                here we must have a.high == b.high too be true.
+                just compare the rest part.
+            */
+            insts.push(Inst::CondBr {
+                taken: taken,
+                not_taken,
+                kind: low,
+            });
+        }
+        IntCC::SignedGreaterThan | IntCC::SignedLessThan => {
+            /*
+                make cc == IntCC::SignedGreaterThan
+                must be true for IntCC::SignedLessThan too.
+            */
+            /*
+                if a.hight > b.high
+                we can goto the taken ,
+                no need to compare the rest part.
+            */
+            insts.push(Inst::CondBr {
+                taken,
+                not_taken: BranchTarget::zero(),
+                kind: high,
+            });
+            /*
+                here we must have a.high <= b.hight.
+                if not equal we know  a < b.high .
+                we must goto the not_taken or otherwise we fallthrough.
+            */
+            insts.push(Inst::CondBr {
+                taken: not_taken,
+                not_taken: BranchTarget::zero(),
+                kind: high.clone().set_kind(IntCC::NotEqual),
+            });
+            /*
+                here we know a.high == b.high
+                just compare the rest part.
+            */
+            insts.push(Inst::CondBr {
+                taken,
+                not_taken,
+                kind: low,
+            });
+        }
+        IntCC::UnsignedLessThan
+        | IntCC::UnsignedGreaterThanOrEqual
+        | IntCC::UnsignedGreaterThan
+        | IntCC::UnsignedLessThanOrEqual
+        | IntCC::Overflow
+        | IntCC::NotOverflow => unreachable!(),
+    }
+
     insts
 }
 
@@ -966,12 +966,12 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
                     .for_each(|i| ctx.emit(i));
             }
             Opcode::Brif => {
-                unreachable!("risc-v has no compare iflag");
+                ir_iflags_conflict(op0.opcode());
             }
             Opcode::Brff => {
-                unreachable!("risc-v has no compare fflag");
+                ir_fflags_conflict(op0.opcode());
             }
-            _ => unimplemented!(),
+            _ => unreachable!(),
         }
     } else {
         // Must be an unconditional branch or an indirect branch.
@@ -980,12 +980,34 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
             Opcode::Jump => {
                 assert!(branches.len() == 1);
                 ctx.emit(Inst::Jal {
+                    rd: writable_zero_reg(),
                     dest: BranchTarget::Label(targets[0]),
                 });
             }
             Opcode::BrTable => {
-                unimplemented!()
+                let jt_size = targets.len() - 1;
+                assert!(jt_size <= std::u32::MAX as usize);
+                let ridx = put_input_in_reg(
+                    ctx,
+                    InsnInput {
+                        insn: branches[0],
+                        input: 0,
+                    },
+                );
+                let tmp1 = ctx.alloc_tmp(I64).only_reg().unwrap();
+                let jt_targets: Vec<BranchTarget> = targets
+                    .iter()
+                    .skip(1)
+                    .map(|bix| BranchTarget::Label(*bix))
+                    .collect();
+                ctx.emit(Inst::BrTable {
+                    index: ridx,
+                    tmp1,
+                    default_: BranchTarget::Label(targets[0]),
+                    targets: jt_targets,
+                });
             }
+
             _ => panic!("Unknown branch type!"),
         }
     }
@@ -997,248 +1019,3 @@ mod test {
     #[test]
     fn compile_ok() {}
 }
-
-// let left = ctx.put_input_in_regs(insn, 0).only_reg().unwrap();
-// let right = ctx.put_input_in_regs(insn, 1).only_reg().unwrap();
-
-// let left_tmp = ctx.alloc_tmp(I64).only_reg().unwrap();
-// let right_tmp = ctx.alloc_tmp(I64).only_reg().unwrap();
-// let tmp = ctx.alloc_tmp(I64).only_reg().unwrap();
-
-// let mut insts = vec![];
-// let mut unordered_b = vec![];
-// {
-//     // check left is_nan
-//     let class_op = if ctx.input_ty(insn, 0) == F32 {
-//         AluOPRR::FclassS
-//     } else {
-//         AluOPRR::FclassD
-//     };
-//     // if left is nan
-//     insts.push(Inst::AluRR {
-//         alu_op: class_op,
-//         rd: left_tmp,
-//         rs: left,
-//     });
-//     //
-//     insts.push(Inst::AluRRImm12 {
-//         alu_op: AluOPRRI::Andi,
-//         rd: tmp,
-//         rs: left_tmp.to_reg(),
-//         imm12: Imm12::from_bits(FClassResult::is_nan_bits() as i16),
-//     });
-//     // left is nan
-//     unordered_b.push(insts.len());
-//     insts.push(Inst::CondBr {
-//         taken: BranchTarget::patch(),
-//         not_taken: BranchTarget::zero(),
-//         kind: IntegerCompare {
-//             kind: IntCC::NotEqual,
-//             rs1: tmp.to_reg(),
-//             rs2: zero_reg(),
-//         },
-//     });
-// }
-
-// {
-//     // if right is nan
-//     insts.push(Inst::AluRR {
-//         alu_op: class_op,
-//         rd: right_tmp,
-//         rs: right,
-//     });
-//     insts.push(Inst::AluRRImm12 {
-//         alu_op: AluOPRRI::Andi,
-//         rd: tmp,
-//         rs: right_tmp,
-//         imm12: Imm12::from_bits(FClassResult::is_nan_bits() as i16),
-//     });
-//     // right is nan
-//     unordered_b.push(insts.len());
-//     insts.push(Inst::CondBr {
-//         taken: BranchTarget::patch(),
-//         not_taken: BranchTarget::zero(),
-//         kind: IntegerCompare {
-//             kind: IntCC::NotEqual,
-//             rs1: tmp,
-//             rs2: zero_reg(),
-//         },
-//     });
-// }
-
-// {
-//     // if left is pos infinite and right is pos infinite , or both neg infinite
-//     insts.push(Inst::AluRRR {
-//         alu_op: AluOPRRR::And,
-//         rd: tmp,
-//         rs1: left_tmp,
-//         rs2: right_tmp,
-//     });
-//     insts.push(Inst::AluRRImm12 {
-//         alu_op: AluOPRRI::Andi,
-//         rd: tmp,
-//         rs: tmp,
-//         imm12: Imm12::from_bits(FClassResult::is_infinite_bits() as i16),
-//     });
-//     unordered_b.push(insts.len());
-//     insts.push(Inst::CondBr {
-//         taken: BranchTarget::patch(),
-//         not_taken: BranchTarget::zero(),
-//         kind: IntegerCompare {
-//             kind: IntCC::NotEqual,
-//             rs1: tmp,
-//             rs2: zero_reg(),
-//         },
-//     });
-// }
-
-// let jump_to_final_compare;
-
-// {
-//     // now we can use left_class_result for another purpose
-//     {
-//         // compute eq
-//         // at this point
-//         let eq_op = if ctx.input_ty(insn, 0) == F32 {
-//             AluOPRRR::FeqS
-//         } else {
-//             AluOPRRR::FeqD
-//         };
-//         insts.push(Inst::AluRRR {
-//             alu_op: eq_op,
-//             rd: left_tmp,
-//             rs1: left,
-//             rs2: right,
-//         });
-//         insts.push(Inst::AluRRImm12 {
-//             alu_op: AluOPRRI::Slli,
-//             rd: tmp,
-//             rs: left_tmp,
-//             imm12: Imm12::from_bits(FloatCCBit::EQ.shift()),
-//         });
-//     }
-
-//     {
-//         // compute lt
-//         let lt_op = if ctx.input_ty(insn, 0) == F32 {
-//             AluOPRRR::FltS
-//         } else {
-//             AluOPRRR::FltD
-//         };
-//         insts.push(Inst::AluRRR {
-//             alu_op: lt_op,
-//             rd: left_tmp,
-//             rs1: left,
-//             rs2: right,
-//         });
-
-//         insts.push(Inst::AluRRImm12 {
-//             alu_op: AluOPRRI::Slli,
-//             rd: left_tmp,
-//             rs: left_tmp,
-//             imm12: Imm12::from_bits(FloatCCBit::LT.shift()),
-//         });
-
-//         insts.push(Inst::AluOPRRR {
-//             alu_op: AluOPRRR::Or,
-//             rd: tmp,
-//             rs1: tmp,
-//             rs2: left_tmp,
-//         });
-//     }
-//     {
-//         //
-//         insts.push(Inst::load_constant_imm12(
-//             left_tmp,
-//             (FloatCCBit::EQ.bit() | FloatCCBit::LT.bit()) as u32,
-//         ));
-//         insts.push(Inst::AluRRR {
-//             alu_op: AluOPRRR::And,
-//             rd: left_tmp,
-//             rs1: left_tmp,
-//             rs2: tmp,
-//         });
-//         //compute gt
-//         insts.push(Inst::CondBr {
-//             taken: BranchTarget::offset(Instructions::instruction_size()),
-//             not_taken: BranchTarget::zero(),
-//             kind: IntegerCompare {
-//                 /*
-//                  */
-//                 kind: IntCC::NotEqual,
-//                 rs1: left_tmp,
-//                 rs2: zero_reg(),
-//             },
-//         });
-//         insts.push(Inst::AluRRImm12 {
-//             alu_op: AluOPRRI::Ori,
-//             rd: tmp,
-//             rs: tmp,
-//             imm12: Imm12::from_bits(FloatCCBit::GT.bit() as i16),
-//         });
-//     }
-
-//     jump_to_final_compare = insts.len();
-//     insts.push(Inst::Jal {
-//         dest: BranchTarget::patch(),
-//     });
-// };
-// let patch = |i: &mut Inst| match &mut i {
-//     &mut Inst::CondBr {
-//         ref mut not_taken, ..
-//     } => match not_taken {
-//         &mut BranchTarget::ResolvedOffset(ref mut off) => {
-//             *off = (Inst::instruction_size() * Inst::instruction_size()) as i32;
-//         }
-//         _ => unreachable!(),
-//     },
-//     _ => unreachable!(),
-// };
-// // patch
-// for i in unordered_b {
-//     // let length = insts.len();
-//     // match &mut insns[i] {
-//     //     &mut Inst::CondBr {
-//     //         ref mut not_taken, ..
-//     //     } => match not_taken {
-//     //         &mut BranchTarget::ResolvedOffset(ref mut off) => {
-//     //             *off = (Inst::instruction_size() * Inst::instruction_size()) as i32;
-//     //         }
-//     //         _ => unreachable!(),
-//     //     },
-//     //     _ => unreachable!(),
-//     // }
-//     patch(&mut insts[i]);
-// }
-// // make tmp as UN
-// insts.push(&Inst::load_constant_imm12(
-//     tmp,
-//     Imm12::from_bits(FloatCCBit::UN),
-// ));
-
-// // path
-// patch(&mut insts[jump_to_final_compare]);
-
-// insts.push(Inst::AluRRImm12 {
-//     alu_op: AluOPRRI::Ori,
-//     rd: tmp,
-//     rs: tmp.to_reg(),
-//     imm12: Imm12::from_bits(FloatCCBit::floatcc_2_mask_bits(ctx)),
-// });
-
-// insts.push(Inst::CondBr {
-//     taken: BranchTarget::offset(Inst::instruction_size() as u32),
-//     not_taken: BranchTarget::zero(),
-//     kind: IntegerCompare {
-//         kind: IntCC::NotEqual, // means match , conditon is true
-//         rs1: tmp,
-//         rs2: zero_reg(),
-//     },
-// });
-
-// insts.push(Inst::load_constant_imm12(result_reg, Imm12::from_bits(0)));
-
-// insts.push(Inst::load_constant_imm12(result_reg, Imm12::from_bits(1)));
-// for i in insts {
-//     ctx.emit(i);
-// }

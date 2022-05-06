@@ -88,6 +88,7 @@
       (trap_code TrapCode))
 
     (Jal
+      (rd WritableReg)
       (dest BranchTarget))
   
      (CondBr
@@ -175,8 +176,12 @@
       (op ReferenceValidOP)
       (x Reg))
 
+    (BrTable
+      (index Reg)
+      (tmp1 WritableReg)
+      (default_ BranchTarget)
+      (targets VecBranchTarget))
 ))
-
 
 (type ReferenceValidOP(enum
   (IsNull)
@@ -447,6 +452,7 @@
 ))
 
 
+(type VecBranchTarget (primitive VecBranchTarget))
 (type BoxCallInfo (primitive BoxCallInfo))
 (type BoxCallIndInfo (primitive BoxCallIndInfo))
 (type IntegerCompare (primitive IntegerCompare))
