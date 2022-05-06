@@ -129,7 +129,7 @@ impl Display for BranchTarget {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             BranchTarget::Label(l) => write!(f, "{}", l.to_string()),
-            BranchTarget::ResolvedOffset(off) => write!(f, "{:+}", off),
+            BranchTarget::ResolvedOffset(off) => write!(f, "{}", off),
         }
     }
 }
@@ -368,10 +368,10 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_def(rd);
             collector.reg_use(rm);
         }
-        &Inst::Fence => todo!(),
-        &Inst::FenceI => todo!(),
-        &Inst::ECall => todo!(),
-        &Inst::EBreak => todo!(),
+        &Inst::Fence => {}
+        &Inst::FenceI => {}
+        &Inst::ECall => {}
+        &Inst::EBreak => {}
         &Inst::Udf { .. } => todo!(),
         &Inst::AluRR { rd, rs, .. } => {
             collector.reg_def(rd);
@@ -512,7 +512,7 @@ impl MachInst for Inst {
         to_regs: ValueRegs<Writable<Reg>>,
         value: u128,
         ty: Type,
-        alloc_tmp: F,
+        _alloc_tmp: F,
     ) -> SmallVec<[Inst; 4]> {
         if (ty.bits() <= 64 && (ty.is_bool() || ty.is_int())) || ty == R32 || ty == R64 {
             return Inst::load_constant_u64(to_regs.only_reg().unwrap(), value as u64);
@@ -722,11 +722,11 @@ impl Inst {
             }
             &Inst::Jalr { rd, base, offset } => {
                 format!(
-                    "{} {},{},{}",
+                    "{} {},{}({})",
                     "jalr",
                     register_name(rd.to_reg(), allocs),
+                    offset.bits,
                     register_name(base, allocs),
-                    offset.bits
                 )
             }
             &Inst::Lui { rd, ref imm } => {
@@ -848,12 +848,16 @@ impl Inst {
             &MInst::TrapIf { .. } => todo!(),
             &MInst::Trap { .. } => todo!(),
             &MInst::Jal { dest, rd } => {
-                format!(
-                    "{} {},{}",
-                    "Jal",
-                    register_name(rd.to_reg(), allocs),
-                    format!("{:?}", dest)
-                )
+                if rd.to_reg().is_real() && rd.to_reg().to_real_reg().unwrap().hw_enc() == 0 {
+                    format!("{} {}", "j", dest)
+                } else {
+                    format!(
+                        "{} {},{}",
+                        "jal",
+                        register_name(rd.to_reg(), allocs),
+                        format!("{}", dest)
+                    )
+                }
             }
             &MInst::CondBr {
                 taken,
@@ -865,15 +869,22 @@ impl Inst {
                 let rs2 = register_name(kind.rs2, allocs);
                 let swap = kind.register_should_inverse_when_emit();
                 let x = format!(
-                    "{} {},{},{},{}",
+                    "{} {},{},{}",
                     kind.op_name(),
                     if swap { rs2.as_str() } else { rs1.as_str() },
                     if swap { rs1.as_str() } else { rs2.as_str() },
                     taken,
-                    not_taken,
                 );
 
-                x
+                format!(
+                    "{}\n{}",
+                    x,
+                    Inst::Jal {
+                        rd: writable_zero_reg(),
+                        dest: not_taken,
+                    }
+                    .print_with_state(state, allocs)
+                )
             }
             &MInst::Atomic {
                 op,
@@ -883,21 +894,23 @@ impl Inst {
                 aq,
                 rl,
             } => {
+                let mut op_name = String::from(op.op_name());
+                if aq && rl {
+                    unreachable!("aq and rl can not both be true.")
+                }
+                if aq {
+                    op_name.push_str(".aq");
+                }
+                if rl {
+                    op_name.push_str(".rl");
+                }
+                let rd = register_name(rd.to_reg(), allocs);
+                let addr = register_name(addr, allocs);
+                let src = register_name(src, allocs);
                 if op.is_load() {
-                    format!(
-                        "{} {},{}",
-                        op.op_name(),
-                        register_name(rd.to_reg(), allocs),
-                        register_name(addr, allocs)
-                    )
+                    format!("{} {},({})", op_name, rd, addr,)
                 } else {
-                    format!(
-                        "{} {},{},{}",
-                        op.op_name(),
-                        register_name(rd.to_reg(), allocs),
-                        register_name(addr, allocs),
-                        register_name(src, allocs),
-                    )
+                    format!("{} {},{},({})", op_name, rd, src, addr)
                 }
             }
             &MInst::LoadExtName { .. } => todo!(),
@@ -939,8 +952,8 @@ impl Inst {
                 )
             }
             &MInst::Udf { .. } => todo!(),
-            &MInst::EBreak {} => todo!(),
-            &MInst::ECall {} => todo!(),
+            &MInst::EBreak {} => String::from("ebreak"),
+            &MInst::ECall {} => String::from("ecall"),
             &MInst::FloatFlagOperation { op, rs, rd, imm } => {
                 if op.use_imm12() {
                     format!(

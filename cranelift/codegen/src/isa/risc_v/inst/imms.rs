@@ -102,16 +102,35 @@ impl Display for Imm20 {
     }
 }
 
-// impl PrettyPrint for Imm12 {
-//     fn show_rru(&self, _mb_rru: Option<&RealRegUniverse>) -> String {
-//         format!("{}", *self)
-//     }
-// }
-// impl PrettyPrint for Imm20 {
-//     fn show_rru(&self, _mb_rru: Option<&RealRegUniverse>) -> String {
-//         format!("{}", *self)
-//     }
-// }
+pub(crate) struct Uimm5 {
+    bits: u8,
+}
+
+impl Uimm5 {
+    pub fn maybe_from_u64(val: u64) -> Option<Uimm5> {
+        if (val >> 5) == 0 {
+            Some(Self { bits: val as u8 })
+        } else {
+            None
+        }
+    }
+
+    pub fn from_bits(bits: u8) -> Self {
+        Self { bits }
+    }
+
+    /// Create a zero immediate of this format.
+    pub fn zero() -> Self {
+        Self { bits: 0 }
+    }
+    pub fn as_u8(self) -> u8 {
+        self.bits & 0b1_1111
+    }
+    pub fn as_u32(&self) -> u32 {
+        (self.bits as u32) & 0b1_1111
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;

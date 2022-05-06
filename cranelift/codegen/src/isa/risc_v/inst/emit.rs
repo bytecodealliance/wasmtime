@@ -339,9 +339,9 @@ impl MachInstEmit for Inst {
                 let rd = allocs.next_writable(rd);
                 let rs = allocs.next(rs);
                 let x = alu_op.op_code()
-                    | reg_to_gpr_num(rs) << 7
+                    | reg_to_gpr_num(rd.to_reg()) << 7
                     | alu_op.funct3() << 12
-                    | reg_to_gpr_num(rd.to_reg()) << 15
+                    | reg_to_gpr_num(rs) << 15
                     | alu_op.rs2() << 20
                     | alu_op.funct7() << 25;
                 sink.put4(x);
@@ -1156,6 +1156,13 @@ impl MachInstEmit for Inst {
                 LabelUse::Jalr12.patch_raw_offset(&mut x[..], offset.as_i16() as i32);
                 sink.put_data(&x[..]);
             }
+            &Inst::ECall => {
+                sink.put4(0x00000073);
+            }
+            &Inst::EBreak => {
+                sink.put4(0x00100073);
+            }
+
             _ => todo!("{:?}", self),
         };
 

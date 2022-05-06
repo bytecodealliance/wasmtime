@@ -19,7 +19,7 @@ use std::fmt::{Display, Formatter, Result};
     1100000 00000 rs1 rm rd 1010011 FCVT.W.S
     1100000 00001 rs1 rm rd 1010011 FCVT.WU.S
 */
-static RM: u32 = 0;
+static RISCV_RM_FUNCT3: u32 = 0b111; /*gnu gcc tool chain use this value.*/
 
 /// An addressing mode specified for a load/store operation.
 #[derive(Clone, Debug, Copy)]
@@ -261,8 +261,7 @@ impl AluOPRRRR {
     }
 
     pub(crate) fn funct3(self) -> u32 {
-        //todo look like all undefined, all zero
-        0
+        RISCV_RM_FUNCT3
     }
 
     pub(crate) fn op_code(self) -> u32 {
@@ -408,34 +407,36 @@ impl AluOPRR {
 
     pub(crate) fn funct3(self) -> u32 {
         match self {
-            AluOPRR::FsqrtS => RM,
-            AluOPRR::FcvtWS => RM,
-            AluOPRR::FcvtWuS => RM,
+            AluOPRR::FsqrtS => RISCV_RM_FUNCT3,
+            AluOPRR::FcvtWS => RISCV_RM_FUNCT3,
+            AluOPRR::FcvtWuS => RISCV_RM_FUNCT3,
             AluOPRR::FmvXW => 0b000,
             AluOPRR::FclassS => 0b001,
-            AluOPRR::FcvtSw => RM,
-            AluOPRR::FcvtSwU => RM,
+            AluOPRR::FcvtSw => RISCV_RM_FUNCT3,
+            AluOPRR::FcvtSwU => RISCV_RM_FUNCT3,
             AluOPRR::FmvWX => 0b000,
 
-            AluOPRR::FcvtLS => RM,
-            AluOPRR::FcvtLuS => RM,
-            AluOPRR::FcvtSL => RM,
-            AluOPRR::FcvtSLU => RM,
+            AluOPRR::FcvtLS => RISCV_RM_FUNCT3,
+            AluOPRR::FcvtLuS => RISCV_RM_FUNCT3,
+            AluOPRR::FcvtSL => RISCV_RM_FUNCT3,
+            AluOPRR::FcvtSLU => RISCV_RM_FUNCT3,
 
-            AluOPRR::FcvtLd => RM,
-            AluOPRR::FcvtLuD => RM,
+            AluOPRR::FcvtLd => RISCV_RM_FUNCT3,
+            AluOPRR::FcvtLuD => RISCV_RM_FUNCT3,
             AluOPRR::FmvXD => 0b000,
-            AluOPRR::FcvtDL => RM,
-            AluOPRR::FcvtDLu => RM,
+            AluOPRR::FcvtDL => RISCV_RM_FUNCT3,
+            AluOPRR::FcvtDLu => RISCV_RM_FUNCT3,
             AluOPRR::FmvDX => 0b000,
-            AluOPRR::FcvtSd => RM,
-            AluOPRR::FcvtDS => RM,
+            AluOPRR::FcvtSd => RISCV_RM_FUNCT3,
+            AluOPRR::FcvtDS => RISCV_RM_FUNCT3,
             AluOPRR::FclassD => 0b001,
-            AluOPRR::FcvtWD => RM,
-            AluOPRR::FcvtWuD => RM,
-            AluOPRR::FcvtDW => RM,
-            AluOPRR::FcvtDWU => RM,
-            AluOPRR::FsqrtD => RM,
+            AluOPRR::FcvtWD => RISCV_RM_FUNCT3,
+            AluOPRR::FcvtWuD => RISCV_RM_FUNCT3,
+            AluOPRR::FcvtDW => RISCV_RM_FUNCT3,
+            /** todo::  AluOPRR::FcvtDWU not the same with the document,maybe changed..*/
+            AluOPRR::FcvtDWU => 0b000,
+
+            AluOPRR::FsqrtD => RISCV_RM_FUNCT3,
         }
     }
 }
@@ -460,8 +461,8 @@ impl AluOPRRR {
             Self::Sraw => "sraw",
             Self::Mul => "mul",
             Self::Mulh => "mulh",
-            Self::Mulhsu => "Mulhsu",
-            Self::Mulhu => "Mulhu",
+            Self::Mulhsu => "mulhsu",
+            Self::Mulhu => "mulhu",
             Self::Div => "div",
             Self::DivU => "divu",
             Self::Rem => "rem",
@@ -532,10 +533,10 @@ impl AluOPRRR {
             AluOPRRR::Remw => 0b110,
             AluOPRRR::Remuw => 0b111,
 
-            AluOPRRR::FaddS => RM,
-            AluOPRRR::FsubS => RM,
-            AluOPRRR::FmulS => RM,
-            AluOPRRR::FdivS => RM,
+            AluOPRRR::FaddS => RISCV_RM_FUNCT3,
+            AluOPRRR::FsubS => RISCV_RM_FUNCT3,
+            AluOPRRR::FmulS => RISCV_RM_FUNCT3,
+            AluOPRRR::FdivS => RISCV_RM_FUNCT3,
 
             AluOPRRR::FsgnjS => 0b000,
             AluOPRRR::FsgnjnS => 0b001,
@@ -547,10 +548,10 @@ impl AluOPRRR {
             AluOPRRR::FltS => 0b001,
             AluOPRRR::FleS => 0b000,
 
-            AluOPRRR::FaddD => RM,
-            AluOPRRR::FsubD => RM,
-            AluOPRRR::FmulD => RM,
-            AluOPRRR::FdivD => RM,
+            AluOPRRR::FaddD => RISCV_RM_FUNCT3,
+            AluOPRRR::FsubD => RISCV_RM_FUNCT3,
+            AluOPRRR::FmulD => RISCV_RM_FUNCT3,
+            AluOPRRR::FdivD => RISCV_RM_FUNCT3,
 
             AluOPRRR::FsgnjD => 0b000,
             AluOPRRR::FsgnjnD => 0b001,
@@ -559,7 +560,7 @@ impl AluOPRRR {
             AluOPRRR::FmaxD => 0b001,
             AluOPRRR::FeqD => 0b010,
             AluOPRRR::FltD => 0b001,
-            AluOPRRR::FleD => 0b001,
+            AluOPRRR::FleD => 0b000,
         }
     }
 
@@ -1075,7 +1076,13 @@ impl FloatCCBit {
 impl AtomicOP {
     pub(crate) fn is_load(self) -> bool {
         match self {
-            Self::LrW | Self::ScW => true,
+            Self::LrW | Self::LrD => true,
+            _ => false,
+        }
+    }
+    pub(crate) fn is_store(self) -> bool {
+        match self {
+            Self::ScW | Self::ScD => true,
             _ => false,
         }
     }
