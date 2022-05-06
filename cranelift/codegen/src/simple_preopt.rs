@@ -636,6 +636,7 @@ mod simplify {
     ) {
         simplify(pos, inst, native_word_width);
         branch_opt(pos, inst);
+        special_integer_arith(pos, inst, native_word_width);
     }
 
     #[inline]
@@ -1026,6 +1027,269 @@ mod simplify {
             *opcode = info.new_opcode;
         } else {
             panic!();
+        }
+    }
+
+    /// Apply special case math optimizations.
+    fn special_integer_arith(pos: &mut FuncCursor, inst: Inst, native_word_width: u32) {
+        fn match_multi3_low(pos: &mut FuncCursor, inst: Inst, native_word_width: u32) -> Option<()> {
+            fn match_iadd(pos: &mut FuncCursor, inst: Inst) -> Option<(Opcode, [Value; 2])> {
+                match pos.func.dfg[inst] {
+                    InstructionData::Binary { opcode, args } => {
+                        if opcode == Opcode::Iadd {
+                            Some((opcode, args))
+                        } else {
+                            None
+                        }
+                    },
+                    _ => None
+                }
+            }
+
+            fn match_imul(pos: &mut FuncCursor, inst: Inst) -> Option<(Opcode, [Value; 2])> {
+                match pos.func.dfg[inst] {
+                    InstructionData::Binary { opcode, args } => {
+                        if opcode == Opcode::Imul {
+                            Some((opcode, args))
+                        } else {
+                            None
+                        }
+                    },
+                    _ => None
+                }
+            }
+
+            fn match_band(pos: &mut FuncCursor, inst: Inst) -> Option<(Opcode, [Value; 2])> {
+                match pos.func.dfg[inst] {
+                    InstructionData::Binary { opcode, args } => {
+                        if opcode == Opcode::Band {
+                            Some((opcode, args))
+                        } else {
+                            None
+                        }
+                    },
+                    _ => None
+                }
+            }
+
+            fn match_load_constant(pos: &mut FuncCursor, inst: Inst, value: i64) -> Option<()> {
+                match pos.func.dfg[inst] {
+                    InstructionData::UnaryImm { opcode: Opcode::Iconst, imm } if imm.bits() == value => {
+                        Some(())
+                    },
+                    _ => None
+                }
+            }
+
+            fn match_band_imm_mask_low(pos: &mut FuncCursor, inst: Inst) -> Option<Value> {
+                match pos.func.dfg[inst] {
+                    InstructionData::BinaryImm64 { opcode: Opcode::BandImm, arg, imm } if imm.bits() == 0x0000_0000_ffff_ffff => {
+                        Some(arg)
+                    },
+                    _ => None
+                }
+            }
+
+            fn match_value_into_inst_output(pos: &mut FuncCursor, value: Value, position: usize) -> Option<Inst> {
+                match pos.func.dfg.value_def(value) {
+                    ValueDef::Result(inst, p) if p == position => {
+                        Some(inst)
+                    },
+                    _ => None
+                }
+            }
+
+            fn match_ushr32(pos: &mut FuncCursor, inst: Inst) -> Option<Value> {
+                // either by immediate, or by load of the immediate
+                match pos.func.dfg[inst] {
+                    InstructionData::BinaryImm64 { opcode: Opcode::UshrImm, arg, imm } if imm.bits() == 32 => {
+                        Some(arg)
+                    },
+                    InstructionData::Binary { opcode: Opcode::UshrImm, args: [lhs, rhs] } => {
+                        for [lhs, rhs] in [[lhs, rhs], [rhs, lhs]] {
+                            // only consider rhs
+                            if let Some(rhs_inst) = match_value_into_inst_output(pos, rhs, 0) {
+                                if match_load_constant(pos, rhs_inst, 32).is_some() {
+                                    // we have identified the branch
+                                    return Some(lhs)
+                                } else {
+                                    continue
+                                }
+                            } else {
+                                continue
+                            }
+                        }
+
+                        None
+                    },
+                    _ => None
+                }
+            }
+
+            fn match_ushl32(pos: &mut FuncCursor, inst: Inst) -> Option<Value> {
+                // either by immediate, or by load of the immediate
+                match pos.func.dfg[inst] {
+                    InstructionData::BinaryImm64 { opcode: Opcode::IshlImm, arg, imm } if imm.bits() == 32 => {
+                        Some(arg)
+                    },
+                    InstructionData::Binary { opcode: Opcode::Ishl, args: [lhs, rhs] } => {
+                        for [lhs, rhs] in [[lhs, rhs], [rhs, lhs]] {
+                            // only consider rhs
+                            if let Some(rhs_inst) = match_value_into_inst_output(pos, rhs, 0) {
+                                if match_load_constant(pos, rhs_inst, 32).is_some() {
+                                    // we have identified the branch
+                                    return Some(lhs)
+                                } else {
+                                    continue
+                                }
+                            } else {
+                                continue
+                            }
+                        }
+
+                        None
+                    },
+                    _ => None
+                }
+            }
+
+            #[derive(Debug)]
+            struct LowestProductInfo {
+                x_low: Value,
+                y_low: Value,
+                full_x: Value,
+                full_y: Value,
+            }
+
+            fn match_u64_to_u32_and_full_mul(pos: &mut FuncCursor, inst: Inst, _native_word_width: u32) -> Option<LowestProductInfo> {
+                let (_highest_level_mul, [lhs, rhs]) = match_imul(pos, inst)?;
+                let u32_lhs_instr = match_value_into_inst_output(pos, lhs, 0)?;
+                let u32_rhs_instr = match_value_into_inst_output(pos, rhs, 0)?;
+                // 3 cases: both u32 lhs is done via masking with immediate, both via masking with loaded constant,
+                // or mixed
+                match (match_band_imm_mask_low(pos, u32_lhs_instr), match_band_imm_mask_low(pos, u32_rhs_instr)) {
+                    (
+                        Some(lhs_u64_value),
+                        Some(rhs_u64_value)
+                    ) => {
+                        Some(LowestProductInfo {
+                            x_low: lhs,
+                            y_low: rhs,
+                            full_x: lhs_u64_value,
+                            full_y: rhs_u64_value,
+                        })
+                    },
+                    _ => None // for now
+                }
+            }
+
+            #[derive(Debug)]
+            struct U32LikeCrossProductInfo {
+                x_low: Value,
+                y_high: Value,
+                full_x: Value,
+                full_y: Value,
+            }
+
+            fn match_single_u32_cross_product(pos: &mut FuncCursor, inst: Inst, _native_word_width: u32) -> Option<U32LikeCrossProductInfo> {
+                // like j = f * (i = b >> 32L)
+                // and we need to know 
+                let (_highest_level_mul, [lhs, rhs]) = match_imul(pos, inst)?;
+                dbg!(&pos.func);
+                // we can assume some symmetry
+                for [lhs, rhs] in [[lhs, rhs], [rhs, lhs]] {
+                    if let Some(rhs_inst) = match_value_into_inst_output(pos, rhs, 0) {
+                        // rhs should match into shift by 32 bits
+                        if let Some(full_rhs) = match_ushr32(pos, rhs_inst) {
+                            if let Some(lhs_inst) = match_value_into_inst_output(pos, lhs, 0) {
+                                if let Some(full_lhs) = match_band_imm_mask_low(pos, lhs_inst) {
+                                    return Some(
+                                        U32LikeCrossProductInfo {
+                                            full_x: full_lhs,
+                                            x_low: lhs,
+                                            full_y: full_rhs,
+                                            y_high: rhs,
+                                        }
+                                    )
+                                }
+                            } else {
+                                continue
+                            }
+                        } else {
+                            continue
+                        }
+                    } else {
+                        continue
+                    }
+                }
+
+                None
+            }
+
+            
+
+            // try the full expression like
+            // a.a =
+            //     (g = (h = (f = d & 4294967295L) * (g = b & 4294967295L)) +
+            //         ((f = (j = f * (i = b >> 32L)) + (k = d >> 32L) * g) << 32L));
+
+            let (_highest_level_add, [highest_lhs, highest_rhs]) = match_iadd(pos, inst)?;
+
+            // assume lhs is multiplication,
+            // and rhs is addition of two multiplications
+            let mut matcher = |lhs: Value, rhs: Value| -> Option<()> {
+                let lhs_inst = match_value_into_inst_output(pos, lhs, 0)?;
+                let lowest_product_info = match_u64_to_u32_and_full_mul(pos, lhs_inst, native_word_width)?;
+
+                let rhs_inst = match_value_into_inst_output(pos, rhs, 0)?;
+                let input_into_shift = match_ushl32(pos, rhs_inst)?;
+                let input_into_shift_inst = match_value_into_inst_output(pos, input_into_shift, 0)?;
+                let (_, [rhs_lhs, rhs_rhs]) = match_iadd(pos, input_into_shift_inst)?;
+
+                let t = match_value_into_inst_output(pos, rhs_lhs, 0)?;
+                let cross_product_0 = match_single_u32_cross_product(
+                    pos,
+                    t,
+                    native_word_width
+                )?;
+
+                let t = match_value_into_inst_output(pos, rhs_rhs, 0)?;
+                let cross_product_1 = match_single_u32_cross_product(
+                    pos,
+                    t,
+                    native_word_width
+                )?;
+
+                // check dep graph
+                // it can be many options formally
+
+                if lowest_product_info.full_x == cross_product_0.full_x 
+                    && lowest_product_info.full_y == cross_product_0.full_y
+                    && lowest_product_info.full_x == cross_product_1.full_y
+                    && lowest_product_info.full_y == cross_product_1.full_x
+                    && lowest_product_info.x_low == cross_product_0.x_low
+                    && lowest_product_info.y_low == cross_product_1.x_low {
+                        return Some(())
+                    }
+
+                None
+            };
+
+            for [lhs, rhs] in [[highest_lhs, highest_rhs], [highest_rhs, highest_lhs]] {
+                if let Some(_) = matcher(lhs, rhs) {
+                    return Some(())
+                } else {
+                    continue;
+                }
+            }
+            
+            None
+        }
+
+        if let Some(_) = match_multi3_low(pos, inst, native_word_width) {
+            println!("Found match for i128 mul");
+        } else {
+            return
         }
     }
 }
