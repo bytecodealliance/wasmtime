@@ -1339,11 +1339,11 @@ pub fn is_type_signed(ty: Type) -> bool {
 }
 #[inline(always)]
 pub(crate) fn ir_iflags_conflict(op: crate::ir::Opcode) {
-    unreachable!("ir {} conflict with risc-v integer flag", op)
+    unreachable!("ir {} conflict with risc-v iflags", op)
 }
 #[inline(always)]
 pub(crate) fn ir_fflags_conflict(op: crate::ir::Opcode) {
-    unreachable!("ir {} conflict with risc-v float flag", op)
+    unreachable!("ir {} conflict with risc-v fflags", op)
 }
 
 pub(crate) struct FFlags {

@@ -1168,9 +1168,7 @@ impl MachInstEmit for Inst {
             &Inst::Jalr { rd, base, offset } => {
                 let rd = allocs.next_writable(rd);
                 let base = allocs.next(base);
-                let x = 0b1100111 |  reg_to_gpr_num(rd.to_reg() )  << 7 |  0b000 << 12 /* funct3 */  | reg_to_gpr_num(base) << 15;
-                let mut x = x.to_le_bytes();
-                LabelUse::Jalr12.patch_raw_offset(&mut x[..], offset.as_i16() as i32);
+                let x = 0b1100111 |  reg_to_gpr_num(rd.to_reg() )  << 7 |  0b000 << 12 /* funct3 */  | reg_to_gpr_num(base) << 15 |  offset.as_u32() << 20;
                 sink.put_data(&x[..]);
             }
             &Inst::ECall => {

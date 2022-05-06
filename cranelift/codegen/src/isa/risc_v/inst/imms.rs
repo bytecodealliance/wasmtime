@@ -123,9 +123,9 @@ impl Uimm5 {
     pub fn zero() -> Self {
         Self { bits: 0 }
     }
-    pub fn as_u8(self) -> u8 {
-        self.bits & 0b1_1111
-    }
+    // pub fn as_u8(self) -> u8 {
+    //     self.bits & 0b1_1111
+    // }
     pub fn as_u32(&self) -> u32 {
         (self.bits as u32) & 0b1_1111
     }

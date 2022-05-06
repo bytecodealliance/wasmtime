@@ -993,14 +993,6 @@ pub enum LabelUse {
     PCRel32,
 
     /*
-            The indirect jump instruction JALR (jump and link register) uses the I-type encoding. The target
-    address is obtained by adding the 12-bit signed I-immediate to the register rs1, then setting the
-    least-significant bit of the result to zero. The address of the instruction following the jump (pc+4)
-    is written to register rd. Register x0 can be used as the destination if the result is not required.
-        */
-    Jalr12,
-
-    /*
         All branch instructions use the B-type instruction format. The 12-bit B-immediate encodes signed
     offsets in multiples of 2, and is added to the current pc to give the target address. The conditional
     branch range is ±4 KiB.
@@ -1017,7 +1009,7 @@ impl MachInstLabelUse for LabelUse {
         match self {
             LabelUse::Jal20 => ((1 << 20) - 1) * 2,
             LabelUse::PCRel32 => i32::MAX as CodeOffset,
-            LabelUse::Jalr12 => (1 << 12) - 1,
+
             LabelUse::B12 => ((1 << 12) - 1) * 2,
         }
     }
@@ -1025,7 +1017,7 @@ impl MachInstLabelUse for LabelUse {
     /// Maximum PC-relative range (negative).
     fn max_neg_range(self) -> CodeOffset {
         match self {
-            LabelUse::PCRel32 | LabelUse::Jalr12 => self.max_pos_range() + 1,
+            LabelUse::PCRel32 => self.max_pos_range() + 1,
             _ => self.max_pos_range() + 2,
         }
     }
@@ -1035,7 +1027,7 @@ impl MachInstLabelUse for LabelUse {
         match self {
             LabelUse::Jal20 => 4,
             LabelUse::PCRel32 => 8,
-            LabelUse::Jalr12 => 4,
+
             LabelUse::B12 => 4,
         }
     }
@@ -1044,7 +1036,7 @@ impl MachInstLabelUse for LabelUse {
     fn patch(self, buffer: &mut [u8], use_offset: CodeOffset, label_offset: CodeOffset) {
         assert!(use_offset % 4 == 0);
         assert!(label_offset % 4 == 0);
-        let offset = (label_offset as i64) - (use_offset as i64);
+        let offset = (label_offset as i64) - (use_offset as i64) - (self.patch_size() as i64) /* todo::verify this*/;
         //check range
         assert!(
             offset >= -(self.max_neg_range() as i64) && offset <= (self.max_pos_range() as i64),
@@ -1091,7 +1083,6 @@ impl LabelUse {
         let offset = offset as u32;
         match self {
             LabelUse::Jal20 => {
-                // this is certainly safe
                 let raw = { &mut buffer[0] as *mut u8 as *mut u32 };
                 let v = ((offset >> 12 & 0b1111_1111) << 12)
                     | ((offset >> 11 & 0b1) << 20)
@@ -1102,7 +1093,6 @@ impl LabelUse {
                 }
             }
             LabelUse::PCRel32 => {
-                // this is certainly safe
                 // auipc part
                 {
                     let raw = { &mut buffer[0] as *mut u8 as *mut u32 };
@@ -1112,7 +1102,6 @@ impl LabelUse {
                     }
                 }
                 {
-                    // this is certainly safe
                     let raw = { &mut buffer[4] as *mut u8 as *mut u32 };
                     let v = (offset & 0xfff) << 20;
                     unsafe {
@@ -1121,17 +1110,7 @@ impl LabelUse {
                 }
             }
 
-            LabelUse::Jalr12 => {
-                // this is certainly safe
-                let raw = { &mut buffer[0] as *mut u8 as *mut u32 };
-                let v = (offset & 0xfff) << 20;
-                unsafe {
-                    *raw |= v;
-                }
-            }
-
             LabelUse::B12 => {
-                // this is certainly safe
                 let raw = &mut buffer[0] as *mut u8 as *mut u32;
                 let v = ((offset >> 11 & 0b1) << 6)
                     | ((offset >> 1 & 0b1111) << 8)
