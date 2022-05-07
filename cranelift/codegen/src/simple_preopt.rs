@@ -4,10 +4,13 @@
 //! should be useful for already well-optimized code. More general purpose
 //! early-stage optimizations can be found in the preopt crate.
 
+use cranelift_entity::SecondaryMap;
+
 use crate::cursor::{Cursor, FuncCursor};
 use crate::divconst_magic_numbers::{magic_s32, magic_s64, magic_u32, magic_u64};
 use crate::divconst_magic_numbers::{MS32, MS64, MU32, MU64};
 use crate::flowgraph::ControlFlowGraph;
+use crate::ir::immediates::Offset32;
 use crate::ir::{
     condcodes::{CondCode, IntCC},
     instructions::Opcode,
@@ -636,7 +639,6 @@ mod simplify {
     ) {
         simplify(pos, inst, native_word_width);
         branch_opt(pos, inst);
-        special_integer_arith(pos, inst, native_word_width);
     }
 
     #[inline]
@@ -1029,269 +1031,6 @@ mod simplify {
             panic!();
         }
     }
-
-    /// Apply special case math optimizations.
-    fn special_integer_arith(pos: &mut FuncCursor, inst: Inst, native_word_width: u32) {
-        fn match_multi3_low(pos: &mut FuncCursor, inst: Inst, native_word_width: u32) -> Option<()> {
-            fn match_iadd(pos: &mut FuncCursor, inst: Inst) -> Option<(Opcode, [Value; 2])> {
-                match pos.func.dfg[inst] {
-                    InstructionData::Binary { opcode, args } => {
-                        if opcode == Opcode::Iadd {
-                            Some((opcode, args))
-                        } else {
-                            None
-                        }
-                    },
-                    _ => None
-                }
-            }
-
-            fn match_imul(pos: &mut FuncCursor, inst: Inst) -> Option<(Opcode, [Value; 2])> {
-                match pos.func.dfg[inst] {
-                    InstructionData::Binary { opcode, args } => {
-                        if opcode == Opcode::Imul {
-                            Some((opcode, args))
-                        } else {
-                            None
-                        }
-                    },
-                    _ => None
-                }
-            }
-
-            fn match_band(pos: &mut FuncCursor, inst: Inst) -> Option<(Opcode, [Value; 2])> {
-                match pos.func.dfg[inst] {
-                    InstructionData::Binary { opcode, args } => {
-                        if opcode == Opcode::Band {
-                            Some((opcode, args))
-                        } else {
-                            None
-                        }
-                    },
-                    _ => None
-                }
-            }
-
-            fn match_load_constant(pos: &mut FuncCursor, inst: Inst, value: i64) -> Option<()> {
-                match pos.func.dfg[inst] {
-                    InstructionData::UnaryImm { opcode: Opcode::Iconst, imm } if imm.bits() == value => {
-                        Some(())
-                    },
-                    _ => None
-                }
-            }
-
-            fn match_band_imm_mask_low(pos: &mut FuncCursor, inst: Inst) -> Option<Value> {
-                match pos.func.dfg[inst] {
-                    InstructionData::BinaryImm64 { opcode: Opcode::BandImm, arg, imm } if imm.bits() == 0x0000_0000_ffff_ffff => {
-                        Some(arg)
-                    },
-                    _ => None
-                }
-            }
-
-            fn match_value_into_inst_output(pos: &mut FuncCursor, value: Value, position: usize) -> Option<Inst> {
-                match pos.func.dfg.value_def(value) {
-                    ValueDef::Result(inst, p) if p == position => {
-                        Some(inst)
-                    },
-                    _ => None
-                }
-            }
-
-            fn match_ushr32(pos: &mut FuncCursor, inst: Inst) -> Option<Value> {
-                // either by immediate, or by load of the immediate
-                match pos.func.dfg[inst] {
-                    InstructionData::BinaryImm64 { opcode: Opcode::UshrImm, arg, imm } if imm.bits() == 32 => {
-                        Some(arg)
-                    },
-                    InstructionData::Binary { opcode: Opcode::UshrImm, args: [lhs, rhs] } => {
-                        for [lhs, rhs] in [[lhs, rhs], [rhs, lhs]] {
-                            // only consider rhs
-                            if let Some(rhs_inst) = match_value_into_inst_output(pos, rhs, 0) {
-                                if match_load_constant(pos, rhs_inst, 32).is_some() {
-                                    // we have identified the branch
-                                    return Some(lhs)
-                                } else {
-                                    continue
-                                }
-                            } else {
-                                continue
-                            }
-                        }
-
-                        None
-                    },
-                    _ => None
-                }
-            }
-
-            fn match_ushl32(pos: &mut FuncCursor, inst: Inst) -> Option<Value> {
-                // either by immediate, or by load of the immediate
-                match pos.func.dfg[inst] {
-                    InstructionData::BinaryImm64 { opcode: Opcode::IshlImm, arg, imm } if imm.bits() == 32 => {
-                        Some(arg)
-                    },
-                    InstructionData::Binary { opcode: Opcode::Ishl, args: [lhs, rhs] } => {
-                        for [lhs, rhs] in [[lhs, rhs], [rhs, lhs]] {
-                            // only consider rhs
-                            if let Some(rhs_inst) = match_value_into_inst_output(pos, rhs, 0) {
-                                if match_load_constant(pos, rhs_inst, 32).is_some() {
-                                    // we have identified the branch
-                                    return Some(lhs)
-                                } else {
-                                    continue
-                                }
-                            } else {
-                                continue
-                            }
-                        }
-
-                        None
-                    },
-                    _ => None
-                }
-            }
-
-            #[derive(Debug)]
-            struct LowestProductInfo {
-                x_low: Value,
-                y_low: Value,
-                full_x: Value,
-                full_y: Value,
-            }
-
-            fn match_u64_to_u32_and_full_mul(pos: &mut FuncCursor, inst: Inst, _native_word_width: u32) -> Option<LowestProductInfo> {
-                let (_highest_level_mul, [lhs, rhs]) = match_imul(pos, inst)?;
-                let u32_lhs_instr = match_value_into_inst_output(pos, lhs, 0)?;
-                let u32_rhs_instr = match_value_into_inst_output(pos, rhs, 0)?;
-                // 3 cases: both u32 lhs is done via masking with immediate, both via masking with loaded constant,
-                // or mixed
-                match (match_band_imm_mask_low(pos, u32_lhs_instr), match_band_imm_mask_low(pos, u32_rhs_instr)) {
-                    (
-                        Some(lhs_u64_value),
-                        Some(rhs_u64_value)
-                    ) => {
-                        Some(LowestProductInfo {
-                            x_low: lhs,
-                            y_low: rhs,
-                            full_x: lhs_u64_value,
-                            full_y: rhs_u64_value,
-                        })
-                    },
-                    _ => None // for now
-                }
-            }
-
-            #[derive(Debug)]
-            struct U32LikeCrossProductInfo {
-                x_low: Value,
-                y_high: Value,
-                full_x: Value,
-                full_y: Value,
-            }
-
-            fn match_single_u32_cross_product(pos: &mut FuncCursor, inst: Inst, _native_word_width: u32) -> Option<U32LikeCrossProductInfo> {
-                // like j = f * (i = b >> 32L)
-                // and we need to know 
-                let (_highest_level_mul, [lhs, rhs]) = match_imul(pos, inst)?;
-                dbg!(&pos.func);
-                // we can assume some symmetry
-                for [lhs, rhs] in [[lhs, rhs], [rhs, lhs]] {
-                    if let Some(rhs_inst) = match_value_into_inst_output(pos, rhs, 0) {
-                        // rhs should match into shift by 32 bits
-                        if let Some(full_rhs) = match_ushr32(pos, rhs_inst) {
-                            if let Some(lhs_inst) = match_value_into_inst_output(pos, lhs, 0) {
-                                if let Some(full_lhs) = match_band_imm_mask_low(pos, lhs_inst) {
-                                    return Some(
-                                        U32LikeCrossProductInfo {
-                                            full_x: full_lhs,
-                                            x_low: lhs,
-                                            full_y: full_rhs,
-                                            y_high: rhs,
-                                        }
-                                    )
-                                }
-                            } else {
-                                continue
-                            }
-                        } else {
-                            continue
-                        }
-                    } else {
-                        continue
-                    }
-                }
-
-                None
-            }
-
-            
-
-            // try the full expression like
-            // a.a =
-            //     (g = (h = (f = d & 4294967295L) * (g = b & 4294967295L)) +
-            //         ((f = (j = f * (i = b >> 32L)) + (k = d >> 32L) * g) << 32L));
-
-            let (_highest_level_add, [highest_lhs, highest_rhs]) = match_iadd(pos, inst)?;
-
-            // assume lhs is multiplication,
-            // and rhs is addition of two multiplications
-            let mut matcher = |lhs: Value, rhs: Value| -> Option<()> {
-                let lhs_inst = match_value_into_inst_output(pos, lhs, 0)?;
-                let lowest_product_info = match_u64_to_u32_and_full_mul(pos, lhs_inst, native_word_width)?;
-
-                let rhs_inst = match_value_into_inst_output(pos, rhs, 0)?;
-                let input_into_shift = match_ushl32(pos, rhs_inst)?;
-                let input_into_shift_inst = match_value_into_inst_output(pos, input_into_shift, 0)?;
-                let (_, [rhs_lhs, rhs_rhs]) = match_iadd(pos, input_into_shift_inst)?;
-
-                let t = match_value_into_inst_output(pos, rhs_lhs, 0)?;
-                let cross_product_0 = match_single_u32_cross_product(
-                    pos,
-                    t,
-                    native_word_width
-                )?;
-
-                let t = match_value_into_inst_output(pos, rhs_rhs, 0)?;
-                let cross_product_1 = match_single_u32_cross_product(
-                    pos,
-                    t,
-                    native_word_width
-                )?;
-
-                // check dep graph
-                // it can be many options formally
-
-                if lowest_product_info.full_x == cross_product_0.full_x 
-                    && lowest_product_info.full_y == cross_product_0.full_y
-                    && lowest_product_info.full_x == cross_product_1.full_y
-                    && lowest_product_info.full_y == cross_product_1.full_x
-                    && lowest_product_info.x_low == cross_product_0.x_low
-                    && lowest_product_info.y_low == cross_product_1.x_low {
-                        return Some(())
-                    }
-
-                None
-            };
-
-            for [lhs, rhs] in [[highest_lhs, highest_rhs], [highest_rhs, highest_lhs]] {
-                if let Some(_) = matcher(lhs, rhs) {
-                    return Some(())
-                } else {
-                    continue;
-                }
-            }
-            
-            None
-        }
-
-        if let Some(_) = match_multi3_low(pos, inst, native_word_width) {
-            println!("Found match for i128 mul");
-        } else {
-            return
-        }
-    }
 }
 
 /// The main pre-opt pass.
@@ -1315,4 +1054,429 @@ pub fn do_preopt(func: &mut Function, cfg: &mut ControlFlowGraph, isa: &dyn Targ
             branch_order(&mut pos, cfg, block, inst);
         }
     }
+    drop(pos);
+
+    try_fold_multi3(func);
+}
+
+fn try_fold_multi3(func: &mut Function) -> Option<()> {
+    if func.signature.params.len() != 7 {
+        return None;
+    }
+
+    if func.dfg.num_blocks() != 2 {
+        return None;
+    }
+
+    use crate::ir::*;
+
+    if &func.signature.params
+        != &[
+            AbiParam {
+                value_type: I64,
+                purpose: ArgumentPurpose::VMContext,
+                extension: ArgumentExtension::None,
+                legalized_to_pointer: false,
+            },
+            AbiParam {
+                value_type: I64,
+                purpose: ArgumentPurpose::Normal,
+                extension: ArgumentExtension::None,
+                legalized_to_pointer: false,
+            },
+            AbiParam {
+                value_type: I32,
+                purpose: ArgumentPurpose::Normal,
+                extension: ArgumentExtension::None,
+                legalized_to_pointer: false,
+            },
+            AbiParam {
+                value_type: I64,
+                purpose: ArgumentPurpose::Normal,
+                extension: ArgumentExtension::None,
+                legalized_to_pointer: false,
+            },
+            AbiParam {
+                value_type: I64,
+                purpose: ArgumentPurpose::Normal,
+                extension: ArgumentExtension::None,
+                legalized_to_pointer: false,
+            },
+            AbiParam {
+                value_type: I64,
+                purpose: ArgumentPurpose::Normal,
+                extension: ArgumentExtension::None,
+                legalized_to_pointer: false,
+            },
+            AbiParam {
+                value_type: I64,
+                purpose: ArgumentPurpose::Normal,
+                extension: ArgumentExtension::None,
+                legalized_to_pointer: false,
+            },
+        ]
+    {
+        return None;
+    }
+
+    // we will try to match based on forward-analysis,
+    // and ABI knowledge: that v3 - v6 inclusive are our i128
+
+    // we expect a preoptimized and somewhat normalized body to avoid peeking too deep
+    // into graphs
+
+    let mut pos = FuncCursor::new(func);
+    let main_body_block = pos.next_block().unwrap();
+    if pos.func.dfg.num_insts() > 40 {
+        // bail out
+        return None;
+    }
+
+    let start_of_block_position = pos.position();
+
+    let main_block_params = pos.func.dfg.block_params(main_body_block);
+    let x_low = main_block_params[3];
+    let x_high = main_block_params[4];
+
+    let y_low = main_block_params[5];
+    let y_high = main_block_params[6];
+
+    // now some heuristics. We are lucky that x and y are summetric, so roughly follow the same path
+
+    fn find_use_in_binop(pos: &mut FuncCursor, value: Value, opcode: Opcode) -> Option<Inst> {
+        while let Some(inst) = pos.next_inst() {
+            match pos.func.dfg[inst] {
+                InstructionData::Binary { opcode: op, args } if op == opcode => {
+                    if args.contains(&value) {
+                        return Some(inst);
+                    }
+                }
+                _ => continue,
+            }
+        }
+
+        None
+    }
+
+    fn find_use_in_binop_with_imm(
+        pos: &mut FuncCursor,
+        value: Value,
+        opcode: Opcode,
+        imm_value: i64,
+    ) -> Option<Inst> {
+        while let Some(inst) = pos.next_inst() {
+            match pos.func.dfg[inst] {
+                InstructionData::BinaryImm64 {
+                    opcode: op,
+                    arg,
+                    imm,
+                } if op == opcode && imm.bits() == imm_value && arg == value => return Some(inst),
+                _ => continue,
+            }
+        }
+
+        None
+    }
+
+    fn find_binop_with_inputs(
+        pos: &mut FuncCursor,
+        v0: Value,
+        v1: Value,
+        opcode: Opcode,
+    ) -> Option<Inst> {
+        while let Some(inst) = pos.next_inst() {
+            match pos.func.dfg[inst] {
+                InstructionData::Binary { opcode: op, args } if op == opcode => {
+                    if args == [v0, v1] || args == [v1, v0] {
+                        return Some(inst);
+                    }
+                }
+                _ => continue,
+            }
+        }
+
+        None
+    }
+
+    fn find_compare_with_inputs(
+        pos: &mut FuncCursor,
+        v0: Value,
+        v1: Value,
+        opcode: Opcode,
+        condition: IntCC,
+    ) -> Option<Inst> {
+        while let Some(inst) = pos.next_inst() {
+            match pos.func.dfg[inst] {
+                InstructionData::IntCompare {
+                    opcode: op,
+                    args,
+                    cond,
+                } if op == opcode && cond == condition => {
+                    if args == [v0, v1] || args == [v1, v0] {
+                        return Some(inst);
+                    }
+                }
+                _ => continue,
+            }
+        }
+
+        None
+    }
+
+    fn find_unary_op(pos: &mut FuncCursor, v0: Value, opcode: Opcode) -> Option<Inst> {
+        while let Some(inst) = pos.next_inst() {
+            match pos.func.dfg[inst] {
+                InstructionData::Unary { opcode: op, arg } if op == opcode && arg == v0 => {
+                    return Some(inst)
+                }
+                _ => continue,
+            }
+        }
+
+        None
+    }
+
+    fn find_store(
+        pos: &mut FuncCursor,
+        v0: Value,
+        offset: Offset32,
+        flags: MemFlags,
+    ) -> Option<Inst> {
+        while let Some(inst) = pos.next_inst() {
+            match pos.func.dfg[inst] {
+                InstructionData::Store {
+                    args,
+                    flags: fl,
+                    offset: of,
+                    opcode: Opcode::Store,
+                } if args.len() == 2 && args[0] == v0 && of == offset && fl == flags => {
+                    return Some(inst)
+                }
+                _ => continue,
+            }
+        }
+
+        None
+    }
+
+    // find lowest product
+    let x_low_low_inst =
+        find_use_in_binop_with_imm(&mut pos, x_low, Opcode::BandImm, 0x0000_0000_ffff_ffff)?;
+    pos.set_position(start_of_block_position);
+    let y_low_low_inst =
+        find_use_in_binop_with_imm(&mut pos, y_low, Opcode::BandImm, 0x0000_0000_ffff_ffff)?;
+    pos.set_position(start_of_block_position);
+    let x_low_low = pos.func.dfg.first_result(x_low_low_inst);
+    let y_low_low = pos.func.dfg.first_result(y_low_low_inst);
+    // do not restore position, as it can not be before inputs are materialized
+    let result_low_low_product_inst =
+        find_binop_with_inputs(&mut pos, x_low_low, y_low_low, Opcode::Imul)?;
+    let result_low_low_product = pos.func.dfg.first_result(result_low_low_product_inst);
+
+    // find cross products for low part of result
+    pos.set_position(start_of_block_position);
+    let x_low_high_inst = find_use_in_binop_with_imm(&mut pos, x_low, Opcode::UshrImm, 32)?;
+    let x_low_high = pos.func.dfg.first_result(x_low_high_inst);
+    let x_low_high_y_low_low_product_inst =
+        find_binop_with_inputs(&mut pos, x_low_high, y_low_low, Opcode::Imul)?;
+    let x_low_high_y_low_low_product = pos.func.dfg.first_result(x_low_high_y_low_low_product_inst);
+
+    // 2nd one
+    pos.set_position(start_of_block_position);
+    let y_low_high_inst = find_use_in_binop_with_imm(&mut pos, y_low, Opcode::UshrImm, 32)?;
+    let y_low_high = pos.func.dfg.first_result(y_low_high_inst);
+    let pos_x_y_low_high_are_ready = pos.position();
+
+    let x_low_low_y_low_high_product_inst =
+        find_binop_with_inputs(&mut pos, x_low_low, y_low_high, Opcode::Imul)?;
+    let x_low_low_y_low_high_product = pos.func.dfg.first_result(x_low_low_y_low_high_product_inst);
+
+    // final result of high
+    let result_low_high_inst = find_binop_with_inputs(
+        &mut pos,
+        x_low_high_y_low_low_product,
+        x_low_low_y_low_high_product,
+        Opcode::Iadd,
+    )?;
+    let result_low_high = pos.func.dfg.first_result(result_low_high_inst);
+
+    let pos_result_low_high_ready = pos.position();
+
+    // result_low_high is shifted left by 32 and added to the low-low product
+    let result_low_high_shl_inst =
+        find_use_in_binop_with_imm(&mut pos, result_low_high, Opcode::IshlImm, 32)?;
+    let result_low_high_shl = pos.func.dfg.first_result(result_low_high_shl_inst);
+
+    // final addition to get lower libm
+    let result_low_limb_inst = find_binop_with_inputs(
+        &mut pos,
+        result_low_low_product,
+        result_low_high_shl,
+        Opcode::Iadd,
+    )?;
+    let result_low_limb = pos.func.dfg.first_result(result_low_limb_inst);
+
+    let pos_lower_limb_ready = pos.position();
+
+    // continue the walk, now we need to find carry propagation and higher multiplication
+
+    // find the cross product
+    pos.set_position(pos_x_y_low_high_are_ready);
+    let result_high_low_contribution_from_xy_low_high_mul_inst =
+        find_binop_with_inputs(&mut pos, x_low_high, y_low_high, Opcode::Imul)?;
+    let result_high_low_contribution_from_xy_low_high_mul = pos
+        .func
+        .dfg
+        .first_result(result_high_low_contribution_from_xy_low_high_mul_inst);
+
+    // this carry propagations via comparison and sign extensions
+    pos.set_position(pos_x_y_low_high_are_ready);
+    let from_low_high_cross_product_carry_inst = if let Some(inst) = find_compare_with_inputs(
+        &mut pos,
+        result_low_high,
+        x_low_high_y_low_low_product,
+        Opcode::Icmp,
+        IntCC::UnsignedLessThan,
+    ) {
+        inst
+    } else {
+        pos.set_position(pos_x_y_low_high_are_ready);
+        if let Some(inst) = find_compare_with_inputs(
+            &mut pos,
+            result_low_high,
+            x_low_low_y_low_high_product,
+            Opcode::Icmp,
+            IntCC::UnsignedLessThan,
+        ) {
+            inst
+        } else {
+            return None;
+        }
+    };
+
+    let from_low_high_cross_product_carry = pos
+        .func
+        .dfg
+        .first_result(from_low_high_cross_product_carry_inst);
+    let carry_cast_inst = find_unary_op(&mut pos, from_low_high_cross_product_carry, Opcode::Bint)?;
+    let carry_cast = pos.func.dfg.first_result(carry_cast_inst);
+    let carry_uext_inst = find_unary_op(&mut pos, carry_cast, Opcode::Uextend)?;
+    let carry_uext = pos.func.dfg.first_result(carry_uext_inst);
+    let carry_shifted_inst = find_use_in_binop_with_imm(&mut pos, carry_uext, Opcode::IshlImm, 32)?;
+    let carry_shifted = pos.func.dfg.first_result(carry_shifted_inst);
+
+    // find result_low_high >> 32
+    pos.set_position(pos_result_low_high_ready);
+    let result_low_high_ushr32_inst =
+        find_use_in_binop_with_imm(&mut pos, result_low_high, Opcode::UshrImm, 32)?;
+    let result_low_high_ushr32 = pos.func.dfg.first_result(result_low_high_ushr32_inst);
+
+    let combine_carry_and_result_low_high_inst =
+        find_binop_with_inputs(&mut pos, carry_shifted, result_low_high_ushr32, Opcode::Bor)?;
+    let combine_carry_and_result_low_high = pos
+        .func
+        .dfg
+        .first_result(combine_carry_and_result_low_high_inst);
+
+    let combine_0_inst = find_binop_with_inputs(
+        &mut pos,
+        result_high_low_contribution_from_xy_low_high_mul,
+        combine_carry_and_result_low_high,
+        Opcode::Iadd,
+    )?;
+    let combine_0 = pos.func.dfg.first_result(combine_0_inst);
+
+    // carry into lower part
+    pos.set_position(pos_lower_limb_ready);
+    let carry_inst = find_compare_with_inputs(
+        &mut pos,
+        result_low_low_product,
+        result_low_limb,
+        Opcode::Icmp,
+        IntCC::UnsignedLessThan,
+    )?;
+    let carry = pos.func.dfg.first_result(carry_inst);
+    let carry_cast_inst = find_unary_op(&mut pos, carry, Opcode::Bint)?;
+    let carry_cast = pos.func.dfg.first_result(carry_cast_inst);
+    let carry_uext_inst = find_unary_op(&mut pos, carry_cast, Opcode::Uextend)?;
+    let carry_uext = pos.func.dfg.first_result(carry_uext_inst);
+
+    let combine_1_inst = find_binop_with_inputs(&mut pos, carry_uext, combine_0, Opcode::Iadd)?;
+    let combine_1 = pos.func.dfg.first_result(combine_1_inst);
+
+    pos.set_position(start_of_block_position);
+    let x_low_y_high_inst = find_binop_with_inputs(&mut pos, x_low, y_high, Opcode::Imul)?;
+    let x_low_y_high = pos.func.dfg.first_result(x_low_y_high_inst);
+
+    pos.set_position(start_of_block_position);
+    let x_high_y_low_inst = find_binop_with_inputs(&mut pos, x_high, y_low, Opcode::Imul)?;
+    let x_high_y_low = pos.func.dfg.first_result(x_high_y_low_inst);
+
+    let combine_2_inst =
+        find_binop_with_inputs(&mut pos, x_low_y_high, x_high_y_low, Opcode::Iadd)?;
+    let combine_2 = pos.func.dfg.first_result(combine_2_inst);
+
+    let result_high_limb_inst =
+        find_binop_with_inputs(&mut pos, combine_1, combine_2, Opcode::Iadd)?;
+    let result_high_limb = pos.func.dfg.first_result(result_high_limb_inst);
+
+    let _pos_higher_limb_ready = pos.position();
+
+    // insert before everything
+
+    pos.set_position(start_of_block_position);
+    pos.next_inst();
+
+    let x_full = pos.ins().iconcat(x_low, x_high);
+    let y_full = pos.ins().iconcat(y_low, y_high);
+    let result = pos.ins().imul(x_full, y_full);
+    let (result_low, result_high) = pos.ins().isplit(result);
+
+    let mut storage_flags = MemFlags::new();
+    storage_flags.set_endianness(Endianness::Little);
+
+    pos.set_position(pos_lower_limb_ready);
+    let store_result_low_inst =
+        find_store(&mut pos, result_low_limb, Offset32::new(0), storage_flags)?;
+    pos.func.dfg.inst_fixed_args_mut(store_result_low_inst)[0] = result_low;
+    let store_result_high_inst =
+        find_store(&mut pos, result_high_limb, Offset32::new(8), storage_flags)?;
+    pos.func.dfg.inst_fixed_args_mut(store_result_high_inst)[0] = result_high;
+
+    // since it's almost full body replacement, we can detatch and remove a lot
+    let mut all_unused_values = SecondaryMap::new();
+    for arg in pos.func.dfg.inst_args(result_low_limb_inst) {
+        all_unused_values[*arg] = true;
+    }
+    for arg in pos.func.dfg.inst_args(result_high_limb_inst) {
+        all_unused_values[*arg] = true;
+    }
+    pos.func.dfg.replace(result_low_limb_inst).nop();
+    pos.func.dfg.replace(result_high_limb_inst).nop();
+
+    pos.goto_last_inst(main_body_block);
+
+    fn cleanup_inner(pos: &mut FuncCursor, unused_values: &mut SecondaryMap<Value, bool>) {
+        while let Some(inst) = pos.prev_inst() {
+            let mut removed = false;
+            for result in pos.func.dfg.inst_results(inst) {
+                if removed {
+                    break;
+                }
+                if unused_values.get(*result).copied().unwrap_or(false) {
+                    removed = true;
+                    for arg in pos.func.dfg.inst_args(inst) {
+                        unused_values[*arg] = true;
+                    }
+                }
+            }
+            if removed {
+                pos.func.dfg.replace(inst).nop();
+            }
+        }
+    }
+
+    cleanup_inner(&mut pos, &mut all_unused_values);
+
+    return Some(());
 }
