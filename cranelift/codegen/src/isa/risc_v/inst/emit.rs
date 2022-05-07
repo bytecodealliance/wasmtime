@@ -1169,13 +1169,95 @@ impl MachInstEmit for Inst {
                 let rd = allocs.next_writable(rd);
                 let base = allocs.next(base);
                 let x = 0b1100111 |  reg_to_gpr_num(rd.to_reg() )  << 7 |  0b000 << 12 /* funct3 */  | reg_to_gpr_num(base) << 15 |  offset.as_u32() << 20;
-                sink.put_data(&x[..]);
+                sink.put4(x);
             }
             &Inst::ECall => {
                 sink.put4(0x00000073);
             }
             &Inst::EBreak => {
                 sink.put4(0x00100073);
+            }
+            &Inst::AtomicCas {
+                t0,
+                dst,
+                e,
+                addr,
+                v,
+                ty,
+            } => {
+                let t0 = allocs.next_writable(t0);
+                let dst = allocs.next_writable(dst);
+                let e = allocs.next(e);
+                let addr = allocs.next(addr);
+                let v = allocs.next(v);
+                /*
+                    # addr holds address of memory location
+                    # e holds expected value
+                    # v holds desired value
+                    # dst holds return value
+
+                cas:
+                    lr.w t0, (addr) # Load original value.
+                    bne t0, e, fail # Doesn’t match, so fail.
+                    sc.w dst, v, (addr) # Try to update.
+                    bne dst , v , cas  # retry
+                fail:
+
+                                           */
+                let fail_label = sink.get_label();
+                let cas_lebel = sink.get_label();
+                sink.bind_label(cas_lebel);
+                // lr.w t0, (addr)
+                Inst::Atomic {
+                    op: if ty.bits() == 64 {
+                        AtomicOP::LrD
+                    } else {
+                        AtomicOP::LrW
+                    },
+                    rd: t0,
+                    addr,
+                    src: zero_reg(),
+                    aq: true,
+                    rl: false,
+                }
+                .emit(&[], sink, emit_info, state);
+                // bne t0, e, fail
+                Inst::CondBr {
+                    taken: BranchTarget::zero(),
+                    not_taken: BranchTarget::Label(fail_label),
+                    kind: IntegerCompare {
+                        kind: IntCC::NotEqual,
+                        rs1: e,
+                        rs2: t0.to_reg(),
+                    },
+                }
+                .emit(&[], sink, emit_info, state);
+                //  sc.w dst, v, (addr)
+                Inst::Atomic {
+                    op: if ty.bits() == 64 {
+                        AtomicOP::ScD
+                    } else {
+                        AtomicOP::ScW
+                    },
+                    rd: dst,
+                    addr,
+                    src: v,
+                    aq: false,
+                    rl: true,
+                }
+                .emit(&[], sink, emit_info, state);
+                // bne dst , v , cas
+                Inst::CondBr {
+                    taken: BranchTarget::Label(cas_lebel),
+                    not_taken: BranchTarget::zero(),
+                    kind: IntegerCompare {
+                        kind: IntCC::NotEqual,
+                        rs1: dst.to_reg(),
+                        rs2: v,
+                    },
+                }
+                .emit(&[], sink, emit_info, state);
+                sink.bind_label(fail_label);
             }
 
             _ => todo!("{:?}", self),
@@ -1189,6 +1271,12 @@ impl MachInstEmit for Inst {
         let mut allocs = AllocationConsumer::new(allocs);
         self.print_with_state(state, &mut allocs)
     }
+}
+
+macro_rules! emit_inst {
+    (x : expr ) => {
+        x.emit(&[], sink, emit_info, state);
+    };
 }
 
 fn alloc_value_regs(orgin: &ValueRegs<Reg>, alloc: &mut AllocationConsumer) -> ValueRegs<Reg> {

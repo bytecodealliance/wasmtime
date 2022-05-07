@@ -1195,84 +1195,72 @@ impl AtomicOP {
         }
     }
 
-    pub(crate) fn from_atomicrmw_type_and_op(ty: Type, op: crate::ir::AtomicRmwOp) -> Self {
-        let type_32 = ty.bits() == 32;
+    pub(crate) fn from_atomicrmw_type_and_op(ty: Type, op: crate::ir::AtomicRmwOp) -> Option<Self> {
+        let type_32 = ty.bits() != 64;
         match op {
             crate::ir::AtomicRmwOp::Add => {
                 if type_32 {
-                    Self::AmoaddW
+                    Some(Self::AmoaddW)
                 } else {
-                    Self::AmoaddD
+                    Some(Self::AmoaddD)
                 }
             }
-            crate::ir::AtomicRmwOp::Sub => {
-                if type_32 {
-                    Self::AmoaddW
-                } else {
-                    Self::AmoaddD
-                }
-            }
+            crate::ir::AtomicRmwOp::Sub => None,
             crate::ir::AtomicRmwOp::And => {
                 if type_32 {
-                    Self::AmoandW
+                    Some(Self::AmoandW)
                 } else {
-                    Self::AmoandD
+                    Some(Self::AmoandD)
                 }
             }
-            crate::ir::AtomicRmwOp::Nand => {
-                if type_32 {
-                    Self::AmoorW
-                } else {
-                    Self::AmoorD
-                }
-            }
+            crate::ir::AtomicRmwOp::Nand => None,
             crate::ir::AtomicRmwOp::Or => {
                 if type_32 {
-                    Self::AmoorW
+                    Some(Self::AmoorW)
                 } else {
-                    Self::AmoorD
+                    Some(Self::AmoorD)
                 }
             }
             crate::ir::AtomicRmwOp::Xor => {
                 if type_32 {
-                    Self::AmoxorW
+                    Some(Self::AmoxorW)
                 } else {
-                    Self::AmoxorD
+                    Some(Self::AmoxorD)
                 }
             }
             crate::ir::AtomicRmwOp::Xchg => {
                 if type_32 {
-                    Self::AmoswapW
+                    Some(Self::AmoswapW)
                 } else {
-                    Self::AmoswapD
+                    Some(Self::AmoswapD)
                 }
             }
             crate::ir::AtomicRmwOp::Umin => {
                 if type_32 {
-                    Self::AmominuW
+                    Some(Self::AmominuW)
                 } else {
-                    Self::AmominuD
+                    Some(Self::AmominuD)
                 }
             }
             crate::ir::AtomicRmwOp::Umax => {
                 if type_32 {
-                    Self::AmomaxuW
+                    Some(Self::AmomaxuW)
                 } else {
-                    Self::AmomaxuD
+                    Some(Self::AmomaxuD)
                 }
             }
             crate::ir::AtomicRmwOp::Smin => {
                 if type_32 {
-                    Self::AmominW
+                    Some(Self::AmominW)
                 } else {
-                    Self::AmominD
+                    Some(Self::AmominD)
                 }
             }
             crate::ir::AtomicRmwOp::Smax => {
                 if type_32 {
-                    Self::AmomaxW
+                    Some(Self::AmomaxW)
                 } else {
-                    Self::AmomaxD
+                    Some(Self::AmomaxD)
                 }
             }
         }

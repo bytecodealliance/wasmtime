@@ -419,6 +419,18 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_def(rd);
             collector.reg_use(x);
         }
+        &Inst::AtomicCas {
+            t0,
+            dst,
+            e,
+            addr,
+            v,
+            ..
+        } => {
+            collector.reg_def(t0);
+            collector.reg_def(dst);
+            collector.reg_uses(&[e, addr, v]);
+        }
     }
 }
 
@@ -687,6 +699,21 @@ impl Inst {
             &Inst::Nop4 => {
                 format!(";;fixed 4-size nop")
             }
+            &Inst::AtomicCas {
+                t0,
+                dst,
+                e,
+                addr,
+                v,
+                ty,
+            } => {
+                let t0 = register_name(t0.to_reg(), allocs);
+                let dst = register_name(dst.to_reg(), allocs);
+                let e = register_name(e, allocs);
+                let addr = register_name(addr, allocs);
+                let v = register_name(v, allocs);
+                format!("{} {},{},{} ;; t0={}", "atomic_cas", dst, e, v, t0)
+            }
             &Inst::BrTable {
                 index,
                 tmp1,
@@ -869,22 +896,14 @@ impl Inst {
                 let rs2 = register_name(kind.rs2, allocs);
                 let swap = kind.register_should_inverse_when_emit();
                 let x = format!(
-                    "{} {},{},{}",
+                    "{} {},{},taken({}),not_taken({})",
                     kind.op_name(),
                     if swap { rs2.as_str() } else { rs1.as_str() },
                     if swap { rs1.as_str() } else { rs2.as_str() },
                     taken,
+                    not_taken
                 );
-
-                format!(
-                    "{}\n{}",
-                    x,
-                    Inst::Jal {
-                        rd: writable_zero_reg(),
-                        dest: not_taken,
-                    }
-                    .print_with_state(state, allocs)
-                )
+                x
             }
             &MInst::Atomic {
                 op,
@@ -1027,7 +1046,6 @@ impl MachInstLabelUse for LabelUse {
         match self {
             LabelUse::Jal20 => 4,
             LabelUse::PCRel32 => 8,
-
             LabelUse::B12 => 4,
         }
     }

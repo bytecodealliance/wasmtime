@@ -181,6 +181,14 @@
       (tmp1 WritableReg)
       (default_ BranchTarget)
       (targets VecBranchTarget))
+  
+    (AtomicCas
+      (t0 WritableReg)
+      (dst WritableReg)
+      (e Reg)
+      (addr Reg)
+      (v Reg)
+      (ty Type))
 ))
 
 (type ReferenceValidOP(enum
