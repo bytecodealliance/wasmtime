@@ -280,12 +280,11 @@ impl Inst {
         notice always patch the taken path.
         this will make jump that jump over all insts.
     */
-    pub(crate) fn patch_taken_path_list(insts: &mut SmallInstVec<Inst>, patches: &'_ Vec<usize>) {
+    pub(crate) fn patch_taken_list(insts: &mut SmallInstVec<Inst>, patches: &'_ Vec<usize>) {
         for index in patches {
             let index = *index;
             assert!(insts.len() > index);
-            let real_off =
-                ((insts.len() - index - 1/*self size */) as i32 * Inst::instruction_size());
+            let real_off = ((insts.len() - index) as i32 * Inst::instruction_size());
             match &mut insts[index] {
                 &mut Inst::CondBr { ref mut taken, .. } => match taken {
                     &mut BranchTarget::ResolvedOffset(_) => {
@@ -394,9 +393,9 @@ impl Inst {
         // jump set true
         insts.push(Inst::Jal {
             rd: writable_zero_reg(),
-            dest: BranchTarget::offset(Inst::instruction_size()),
+            dest: BranchTarget::offset(Inst::instruction_size() * 2),
         });
-        Inst::patch_taken_path_list(&mut insts, &patch_true);
+        Inst::patch_taken_list(&mut insts, &patch_true);
         // here is true
         insts.push(Inst::load_constant_imm12(rd, Imm12::form_bool(true)));
         insts
@@ -704,7 +703,7 @@ impl MachInstEmit for Inst {
                         insts.push(Inst::load_constant_imm12(rd, Imm12::form_bool(false)));
                         insts.push(Inst::Jal {
                             rd: writable_zero_reg(),
-                            dest: BranchTarget::ResolvedOffset(Inst::instruction_size()),
+                            dest: BranchTarget::ResolvedOffset(Inst::instruction_size() * 2),
                         });
                         // here is true
                         insts.push(Inst::load_constant_imm12(rd, Imm12::form_bool(true)));
@@ -728,7 +727,7 @@ impl MachInstEmit for Inst {
                         insts.push(Inst::load_constant_imm12(rd, Imm12::form_bool(false)));
                         insts.push(Inst::Jal {
                             rd: writable_zero_reg(),
-                            dest: BranchTarget::ResolvedOffset(Inst::instruction_size()),
+                            dest: BranchTarget::ResolvedOffset(Inst::instruction_size() * 2),
                         });
                         // here is true
                         insts.push(Inst::load_constant_imm12(rd, Imm12::form_bool(true)));
@@ -812,7 +811,7 @@ impl MachInstEmit for Inst {
                         dest: BranchTarget::zero(),
                     });
 
-                    Inst::patch_taken_path_list(&mut insts, &patch_extend_zero);
+                    Inst::patch_taken_list(&mut insts, &patch_extend_zero);
                     // signed bit is zero
                     insts.extend(Inst::load_constant_u64(
                         rd,
@@ -831,7 +830,7 @@ impl MachInstEmit for Inst {
                         rs2: rd.to_reg(),
                     });
 
-                    Inst::patch_taken_path_list(&mut insts, &patch_jump_over);
+                    Inst::patch_taken_list(&mut insts, &patch_jump_over);
                 } else {
                     /*
                         if this unsignd, we need use all zero the set upper bits,
@@ -908,12 +907,12 @@ impl MachInstEmit for Inst {
                         sink.add_uncond_branch(start_off, start_off + 4, lable);
                         sink.put4(code);
                     }
-
                     BranchTarget::ResolvedOffset(offset) => {
                         if offset != 0 {
                             if LabelUse::Jal20.offset_in_range(offset) {
                                 let mut code = code.to_le_bytes();
                                 LabelUse::Jal20.patch_raw_offset(&mut code, offset);
+                                sink.put_data(&code[..]);
                             } else {
                                 Inst::construct_auipc_and_jalr(writable_spilltmp_reg(), offset)
                                     .into_iter()
@@ -963,51 +962,55 @@ impl MachInstEmit for Inst {
                 .emit(&[], sink, emit_info, state);
             }
 
-            &Inst::Mov { rd, rm, ty } => {
+            &Inst::Mov { rd, rm, ty: ty } => {
                 let rd = allocs.next_writable(rd);
                 let rm = allocs.next(rm);
                 /*
                     todo::
                     it is possible for rd and rm have diffent RegClass?????
+                    好像有时候mov会被修改，以至于float寄存器的mov变成了整数寄存器的mov
+                    这是bug
+                    is_move可以查询这个Inst是否是移动
+                    is_move并没有提供ty信息
+                    bug!!!!!!!!!!!!!! need
                 */
-                if rd.to_reg() != rm {
-                    if ty.is_float() {
-                        let mut insts = SmallInstVec::new();
-                        if ty == F32 {
-                            insts.push(Inst::AluRR {
-                                alu_op: AluOPRR::FmvXW,
-                                rd: writable_spilltmp_reg(),
-                                rs: rm,
-                            });
-                            insts.push(Inst::AluRR {
-                                alu_op: AluOPRR::FmvWX,
-                                rd: rd,
-                                rs: spilltmp_reg(),
-                            });
-                        } else {
-                            insts.push(Inst::AluRR {
-                                alu_op: AluOPRR::FmvXD,
-                                rd: writable_spilltmp_reg(),
-                                rs: rm,
-                            });
-                            insts.push(Inst::AluRR {
-                                alu_op: AluOPRR::FmvDX,
-                                rd: rd,
-                                rs: spilltmp_reg(),
-                            });
-                        }
-                        insts
-                            .into_iter()
-                            .for_each(|inst| inst.emit(&[], sink, emit_info, state));
-                    } else {
-                        let x = Inst::AluRRImm12 {
-                            alu_op: AluOPRRI::Ori,
-                            rd: rd,
+                assert_ne!(rd.to_reg(), rm);
+                if rd.to_reg().class() == RegClass::Float {
+                    let mut insts = SmallInstVec::new();
+                    if ty == F32 {
+                        insts.push(Inst::AluRR {
+                            alu_op: AluOPRR::FmvXW,
+                            rd: writable_spilltmp_reg(),
                             rs: rm,
-                            imm12: Imm12::zero(),
-                        };
-                        x.emit(&[], sink, emit_info, state);
+                        });
+                        insts.push(Inst::AluRR {
+                            alu_op: AluOPRR::FmvWX,
+                            rd: rd,
+                            rs: spilltmp_reg(),
+                        });
+                    } else {
+                        insts.push(Inst::AluRR {
+                            alu_op: AluOPRR::FmvXD,
+                            rd: writable_spilltmp_reg(),
+                            rs: rm,
+                        });
+                        insts.push(Inst::AluRR {
+                            alu_op: AluOPRR::FmvDX,
+                            rd: rd,
+                            rs: spilltmp_reg(),
+                        });
                     }
+                    insts
+                        .into_iter()
+                        .for_each(|inst| inst.emit(&[], sink, emit_info, state));
+                } else {
+                    let x = Inst::AluRRImm12 {
+                        alu_op: AluOPRRI::Ori,
+                        rd: rd,
+                        rs: rm,
+                        imm12: Imm12::zero(),
+                    };
+                    x.emit(&[], sink, emit_info, state);
                 }
             }
             &Inst::BrTable {
@@ -1313,9 +1316,6 @@ impl MachInstEmit for Inst {
                         // I have no left > right operation in risc-v instruction set
                         // first check order
                         insts.extend(Inst::generate_float_unordered(rd, ty, rs1, rs2));
-                        for ref i in insts.clone() {
-                            println!("{}", i.print_with_state(state, &mut allocs));
-                        }
                         insts.push(Inst::CondBr {
                             taken: BranchTarget::Label(label_set_false),
                             not_taken: BranchTarget::zero(),
@@ -1366,7 +1366,7 @@ impl MachInstEmit for Inst {
                     // jump over set true
                     Inst::Jal {
                         rd: writable_zero_reg(),
-                        dest: BranchTarget::offset(Inst::instruction_size()),
+                        dest: BranchTarget::offset(Inst::instruction_size() * 2),
                     }
                     .emit(&[], sink, emit_info, state);
                     sink.bind_label(label_set_true);
@@ -1441,11 +1441,11 @@ impl MachInstEmit for Inst {
                 });
                 select_result(x, &mut insts);
                 // here is false
-                Inst::patch_taken_path_list(&mut insts, &patch_false);
+                Inst::patch_taken_list(&mut insts, &patch_false);
                 // select second value1
                 select_result(y, &mut insts);
 
-                Inst::patch_taken_path_list(&mut insts, &patch_true);
+                Inst::patch_taken_list(&mut insts, &patch_true);
 
                 insts
                     .into_iter()

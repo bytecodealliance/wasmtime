@@ -83,10 +83,6 @@ impl TargetIsa for Riscv64Backend {
         let buffer = emit_result.buffer.finish();
         let stackslot_offsets = emit_result.stackslot_offsets;
 
-        // if let Some(disasm) = emit_result.disasm.as_ref() {
-        //     log::debug!("disassembly:\n{}", disasm);
-        // }
-
         Ok(MachCompileResult {
             buffer,
             frame_size,
@@ -498,6 +494,9 @@ mod test {
             .unwrap();
         let _code = result.buffer.data();
         println!("xxxxxx , {}", result.disasm.unwrap());
+        use std::io::Write;
+        let mut file = std::fs::File::create("d://xxx.bin").unwrap();
+        file.write_all(_code).unwrap();
     }
 
     #[test]

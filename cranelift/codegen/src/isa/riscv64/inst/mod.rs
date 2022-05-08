@@ -1088,7 +1088,7 @@ impl MachInstLabelUse for LabelUse {
     fn patch(self, buffer: &mut [u8], use_offset: CodeOffset, label_offset: CodeOffset) {
         assert!(use_offset % 4 == 0);
         assert!(label_offset % 4 == 0);
-        let offset = (label_offset as i64) - (use_offset as i64) - (self.patch_size() as i64) /* todo::verify this*/;
+        let offset = (label_offset as i64) - (use_offset as i64); /* todo::verify this*/
         //check range
         assert!(
             offset >= -(self.max_neg_range() as i64) && offset <= (self.max_pos_range() as i64),

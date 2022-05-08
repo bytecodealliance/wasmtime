@@ -209,6 +209,11 @@ impl ABIMachineSpec for Riscv64MachineDeps {
     }
 
     fn gen_move(to_reg: Writable<Reg>, from_reg: Reg, ty: Type) -> Inst {
+        println!(
+            "######################## {:?} {:?} {:?}",
+            to_reg, from_reg, ty
+        );
+
         Inst::gen_move(to_reg, from_reg, ty)
     }
 
@@ -231,9 +236,9 @@ impl ABIMachineSpec for Riscv64MachineDeps {
 
     fn get_ext_mode(
         _call_conv: isa::CallConv,
-        _specified: ir::ArgumentExtension,
+        specified: ir::ArgumentExtension,
     ) -> ir::ArgumentExtension {
-        ir::ArgumentExtension::Sext
+        specified
     }
 
     fn gen_ret(rets: Vec<Reg>) -> Inst {
