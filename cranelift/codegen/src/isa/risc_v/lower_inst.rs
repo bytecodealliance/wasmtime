@@ -598,9 +598,83 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             }
         }
 
-        Opcode::Bint => {}
+        Opcode::Bint => {
+            let ty = ty.unwrap();
 
-        Opcode::Bitcast => {}
+            if ty.is_vector() {
+                return Err(CodegenError::Unsupported(format!(
+                    "Bint: Unsupported type: {:?}",
+                    ty
+                )));
+            }
+            let input = put_input_in_regs(ctx, inputs[0]);
+            let output = get_output_reg(ctx, outputs[0]);
+            ctx.emit(Inst::AluRRImm12 {
+                alu_op: AluOPRRI::Andi,
+                rd: Writable::from(output.regs()[0]),
+                rs: input.regs()[0],
+                imm12: Imm12::from_bits(1),
+            });
+            if ty_bits(ty) > 64 {
+                ctx.emit(Inst::load_constant_imm12(
+                    Writable::from(output.regs()[1]),
+                    Imm12::zero(),
+                ));
+            }
+        }
+
+        Opcode::Bitcast => {
+            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+            let ity = ctx.input_ty(insn, 0);
+            let oty = ctx.output_ty(insn, 0);
+            let ity_bits = ty_bits(ity);
+            let ity_vec_reg = ty_has_float_or_vec_representation(ity);
+            let oty_bits = ty_bits(oty);
+            let oty_vec_reg = ty_has_float_or_vec_representation(oty);
+            debug_assert_eq!(ity_bits, oty_bits);
+            match (ity_vec_reg, oty_vec_reg) {
+                (true, true) => {
+                    unimplemented!()
+                }
+                (false, false) => {
+                    let rm = put_input_in_reg(ctx, inputs[0]);
+                    match (ity.is_float(), oty.is_float()) {
+                        (false, false) => ctx.emit(Inst::gen_move(rd, from_reg, ty)),
+                        (true, true) => ctx.emit(Inst::gen_move(rd, from_reg, ty)),
+                        (false, true) => {
+                            // let tmp = ctx.alloc_tmp(I64);
+                            ctx.emit(Inst::AluRR {
+                                alu_op: if ity == F32 {
+                                    AluOPRR::FmvXW
+                                } else {
+                                    AluOPRR::FmvXD
+                                },
+                                rd: rd,
+                                rs: rm,
+                            });
+                        }
+                        (true, false) => {
+                            ctx.emit(Inst::AluRR {
+                                alu_op: if ity == F32 {
+                                    AluOPRR::FmvWX
+                                } else {
+                                    AluOPRR::FmvDX
+                                },
+                                rd: rd,
+                                rs: rm,
+                            });
+                        }
+                    }
+                }
+
+                (false, true) => {
+                    unimplemented!()
+                }
+                (true, false) => {
+                    unimplemented!()
+                }
+            }
+        }
 
         Opcode::FallthroughReturn | Opcode::Return => {
             for i in 0..ctx.num_inputs(insn) {
@@ -624,7 +698,9 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             panic!("Should never reach ifcmp as isel root!");
         }
 
-        Opcode::Icmp => {}
+        Opcode::Icmp => {
+            unimplemented!()
+        }
 
         Opcode::Fcmp => {
             let ty = ctx.input_ty(insn, 0);
@@ -641,29 +717,102 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             });
         }
 
-        Opcode::Debugtrap => {}
+        Opcode::Debugtrap => {
+            unimplemented!()
+        }
 
-        Opcode::Trap | Opcode::ResumableTrap => {}
+        Opcode::Trap | Opcode::ResumableTrap => {
+            let trap_code = ctx.data(insn).trap_code().unwrap();
+            ctx.emit(Inst::Udf { trap_code });
+        }
 
-        Opcode::Trapif | Opcode::Trapff => {}
+        Opcode::Trapif | Opcode::Trapff => {
+            unimplemented!()
+        }
 
         Opcode::Trapz | Opcode::Trapnz | Opcode::ResumableTrapnz => {
             panic!("trapz / trapnz / resumable_trapnz should have been removed by legalization!");
         }
 
-        Opcode::FuncAddr => {}
+        Opcode::FuncAddr => {
+            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+            let (extname, _) = ctx.call_target(insn).unwrap();
+            let extname = extname.clone();
+            ctx.emit(Inst::LoadExtName {
+                rd,
+                name: Box::new(extname),
+                offset: 0,
+            });
+        }
 
         Opcode::GlobalValue => {
             panic!("global_value should have been removed by legalization!");
         }
 
-        Opcode::SymbolValue => {}
+        Opcode::SymbolValue => {
+            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+            let (extname, _, offset) = ctx.symbol_value(insn).unwrap();
+            let extname = extname.clone();
+            ctx.emit(Inst::LoadExtName {
+                rd,
+                name: Box::new(extname),
+                offset,
+            });
+        }
 
-        Opcode::Call | Opcode::CallIndirect => {}
+        Opcode::Call | Opcode::CallIndirect => {
+            // let caller_conv = ctx.abi().call_conv();
+            // let (mut abi, inputs) = match op {
+            //     Opcode::Call => {
+            //         let (extname, dist) = ctx.call_target(insn).unwrap();
+            //         let extname = extname.clone();
+            //         let sig = ctx.call_sig(insn).unwrap();
+            //         assert!(inputs.len() == sig.params.len());
+            //         assert!(outputs.len() == sig.returns.len());
+            //         (
+            //             AArch64ABICaller::from_func(sig, &extname, dist, caller_conv, flags)?,
+            //             &inputs[..],
+            //         )
+            //     }
+            //     Opcode::CallIndirect => {
+            //         let ptr = put_input_in_reg(ctx, inputs[0], NarrowValueMode::ZeroExtend64);
+            //         let sig = ctx.call_sig(insn).unwrap();
+            //         assert!(inputs.len() - 1 == sig.params.len());
+            //         assert!(outputs.len() == sig.returns.len());
+            //         (
+            //             AArch64ABICaller::from_ptr(sig, ptr, op, caller_conv, flags)?,
+            //             &inputs[1..],
+            //         )
+            //     }
+            //     _ => unreachable!(),
+            // };
 
-        Opcode::GetPinnedReg => {}
+            // abi.emit_stack_pre_adjust(ctx);
+            // assert!(inputs.len() == abi.num_args());
+            // for i in abi.get_copy_to_arg_order() {
+            //     let input = inputs[i];
+            //     let arg_regs = put_input_in_regs(ctx, input);
+            //     abi.emit_copy_regs_to_arg(ctx, i, arg_regs);
+            // }
+            // abi.emit_call(ctx);
+            // for (i, output) in outputs.iter().enumerate() {
+            //     let retval_regs = get_output_reg(ctx, *output);
+            //     abi.emit_copy_retval_to_regs(ctx, i, retval_regs);
+            // }
+            // abi.emit_stack_post_adjust(ctx);
+        }
 
-        Opcode::SetPinnedReg => {}
+        Opcode::GetPinnedReg => {
+            // let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+            // ctx.emit(Inst::gen_move(rd, x_reg(PINNED_REG), I64));
+            what_is_pinned_register()
+        }
+
+        Opcode::SetPinnedReg => {
+            // let rm = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
+            // ctx.emit(Inst::gen_move(writable_xreg(PINNED_REG), rm, I64));
+            what_is_pinned_register()
+        }
 
         Opcode::Jump
         | Opcode::Brz
@@ -1082,6 +1231,9 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
     Ok(())
 }
 
+fn what_is_pinned_register() -> ! {
+    todo!()
+}
 #[cfg(test)]
 mod test {
     #[test]

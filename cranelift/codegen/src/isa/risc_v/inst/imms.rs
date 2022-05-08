@@ -22,10 +22,11 @@ impl Imm12 {
         }
     }
 
+    #[inline(always)]
     pub fn from_bits(bits: i16) -> Self {
         Self { bits }
     }
-
+    #[inline(always)]
     pub(crate) fn form_bool(b: bool) -> Self {
         if b {
             Self { bits: 1 }
@@ -35,12 +36,15 @@ impl Imm12 {
     }
 
     /// Create a zero immediate of this format.
+    #[inline(always)]
     pub fn zero() -> Self {
         Imm12 { bits: 0 }
     }
+    #[inline(always)]
     pub fn as_i16(self) -> i16 {
         self.bits
     }
+    #[inline(always)]
     pub fn as_u32(&self) -> u32 {
         (self.bits as u32) & 0xfff
     }
@@ -82,9 +86,12 @@ impl Imm20 {
             None
         }
     }
+
+    #[inline(always)]
     pub fn from_bits(bits: i32) -> Self {
         Self { bits }
     }
+    #[inline(always)]
     pub fn as_u32(&self) -> u32 {
         (self.bits as u32) & 0xf_ffff
     }
@@ -102,34 +109,36 @@ impl Display for Imm20 {
     }
 }
 
-pub(crate) struct Uimm5 {
-    bits: u8,
-}
+// pub(crate) struct Uimm5 {
+//     bits: u8,
+// }
 
-impl Uimm5 {
-    pub fn maybe_from_u64(val: u64) -> Option<Uimm5> {
-        if (val >> 5) == 0 {
-            Some(Self { bits: val as u8 })
-        } else {
-            None
-        }
-    }
+// impl Uimm5 {
+//     pub fn maybe_from_u64(val: u64) -> Option<Uimm5> {
+//         if (val >> 5) == 0 {
+//             Some(Self {
+//                 bits: (val & 0b1_1111) as u8,
+//             })
+//         } else {
+//             None
+//         }
+//     }
 
-    pub fn from_bits(bits: u8) -> Self {
-        Self { bits }
-    }
+//     pub fn from_bits(bits: u8) -> Self {
+//         Self { bits }
+//     }
 
-    /// Create a zero immediate of this format.
-    pub fn zero() -> Self {
-        Self { bits: 0 }
-    }
-    // pub fn as_u8(self) -> u8 {
-    //     self.bits & 0b1_1111
-    // }
-    pub fn as_u32(&self) -> u32 {
-        (self.bits as u32) & 0b1_1111
-    }
-}
+//     /// Create a zero immediate of this format.
+//     pub fn zero() -> Self {
+//         Self { bits: 0 }
+//     }
+//     // pub fn as_u8(self) -> u8 {
+//     //     self.bits & 0b1_1111
+//     // }
+//     pub fn as_u32(&self) -> u32 {
+//         (self.bits as u32) & 0b1_1111
+//     }
+// }
 
 #[cfg(test)]
 mod test {

@@ -67,7 +67,7 @@ where
         b32
         b64
         ///////////////////////////////////////////////////////////
-        "and are represented as either all zero bits or all one bits."
+        "represented as either all zero bits or all one bits."
         \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
                         */
         if ty.is_bool() && val != 0 {
@@ -79,25 +79,23 @@ where
         self.emit_list(&MInst::load_constant_u64(tmp, val));
         tmp.to_reg()
     }
-
+    #[inline(always)]
     fn emit(&mut self, arg0: &MInst) -> Unit {
         self.lower_ctx.emit(arg0.clone());
     }
-
-    // fn emit_safepoint(&mut self, arg0: &MInst) -> Unit {
-    //     self.emitted_insts.push((arg0.clone(), true));
-    // }
-
+    #[inline(always)]
     fn imm12_from_u64(&mut self, arg0: u64) -> Option<Imm12> {
         Imm12::maybe_from_u64(arg0)
     }
-
+    #[inline(always)]
     fn writable_zero_reg(&mut self) -> WritableReg {
         writable_zero_reg()
     }
+    #[inline(always)]
     fn neg_imm12(&mut self, arg0: Imm12) -> Imm12 {
         -arg0
     }
+    #[inline(always)]
     fn zero_reg(&mut self) -> Reg {
         zero_reg()
     }
@@ -107,6 +105,7 @@ impl<C> IsleContext<'_, C, Flags, IsaFlags, 6>
 where
     C: LowerCtx<I = MInst>,
 {
+    #[inline(always)]
     fn emit_list(&mut self, list: &SmallInstVec<MInst>) {
         for i in list {
             self.lower_ctx.emit(i.clone());
