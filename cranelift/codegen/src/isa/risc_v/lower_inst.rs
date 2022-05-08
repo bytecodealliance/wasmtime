@@ -914,8 +914,54 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let rs2 = put_input_in_reg(ctx, inputs[1]);
             let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             if !ty.is_vector() {
+                let ty_32 = ty == F32;
+                let op = match op {
+                    Opcode::Fadd => {
+                        if ty_32 {
+                            AluOPRRR::FaddS
+                        } else {
+                            AluOPRRR::FaddD
+                        }
+                    }
+                    Opcode::Fsub => {
+                        if ty_32 {
+                            AluOPRRR::FsubS
+                        } else {
+                            AluOPRRR::FsubD
+                        }
+                    }
+                    Opcode::Fmul => {
+                        if ty_32 {
+                            AluOPRRR::FmulS
+                        } else {
+                            AluOPRRR::FmulD
+                        }
+                    }
+                    Opcode::Fdiv => {
+                        if ty_32 {
+                            AluOPRRR::FdivS
+                        } else {
+                            AluOPRRR::FdivD
+                        }
+                    }
+                    Opcode::Fmin => {
+                        if ty_32 {
+                            AluOPRRR::FminS
+                        } else {
+                            AluOPRRR::FminD
+                        }
+                    }
+                    Opcode::Fmax => {
+                        if ty_32 {
+                            AluOPRRR::FmaxS
+                        } else {
+                            AluOPRRR::FmaxD
+                        }
+                    }
+                    _ => unreachable!(),
+                };
                 ctx.emit(Inst::AluRRR {
-                    alu_op: AluOPRRR::float_op(op),
+                    alu_op: op,
                     rd,
                     rs1,
                     rs2,

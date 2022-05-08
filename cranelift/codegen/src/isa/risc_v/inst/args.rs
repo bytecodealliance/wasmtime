@@ -253,55 +253,6 @@ impl AluOPRRRR {
         }
     }
 
-    pub(crate) fn float_op(op: crate::ir::Opcode, ty: Type) -> Self {
-        let ty_32 = ty == F32;
-        match op {
-            Opcode::Fadd => {
-                if ty_32 {
-                    AluOPRRR::FaddS
-                } else {
-                    AluOPRRR::FaddD
-                }
-            }
-            Opcode::Fsub => {
-                if ty_32 {
-                    AluOPRRR::FsubS
-                } else {
-                    AluOPRRR::FsubD
-                }
-            }
-            Opcode::Fmul => {
-                if ty_32 {
-                    AluOPRRR::FmulS
-                } else {
-                    AluOPRRR::FmulD
-                }
-            }
-            Opcode::Fdiv => {
-                if ty_32 {
-                    AluOPRRR::FdivS
-                } else {
-                    AluOPRRR::FdivD
-                }
-            }
-            Opcode::Fmin => {
-                if ty_32 {
-                    AluOPRRR::FminS
-                } else {
-                    AluOPRRR::FminD
-                }
-            }
-            Opcode::Fmax => {
-                if ty_32 {
-                    AluOPRRR::FmaxS
-                } else {
-                    AluOPRRR::FmaxD
-                }
-            }
-            _ => unreachable!(),
-        }
-    }
-
     pub(crate) fn funct2(self) -> u32 {
         match self {
             AluOPRRRR::FmaddS | AluOPRRRR::FmsubS | AluOPRRRR::FnmsubS | AluOPRRRR::FnmaddS => 0,
