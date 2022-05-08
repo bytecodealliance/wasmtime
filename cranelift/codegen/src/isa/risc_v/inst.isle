@@ -64,7 +64,9 @@
      (Extend
       (rd WritableReg)
       (rn Reg)
-      (op ExtendOp))
+      (signed bool)
+      (from_bits u8)
+      (to_bits u8))
 
       (AjustSp
       (amount i64))

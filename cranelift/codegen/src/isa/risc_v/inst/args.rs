@@ -1267,36 +1267,36 @@ impl AtomicOP {
     }
 }
 
-impl ExtendOp {
-    pub(crate) fn op_name(self) -> &'static str {
-        match self {
-            ExtendOp::UXTB => "uxtb",
-            ExtendOp::UXTH => "uxth",
-            ExtendOp::UXTW => "uxtw",
-            ExtendOp::UXTD => "uxtd",
-            ExtendOp::SXTB => "sxtb",
-            ExtendOp::SXTH => "sxth",
-            ExtendOp::SXTW => "sxtw",
-            ExtendOp::SXTD => "sxtd",
-        }
-    }
+// impl ExtendOp {
+//     pub(crate) fn op_name(self) -> &'static str {
+//         match self {
+//             ExtendOp::UXTB => "uxtb",
+//             ExtendOp::UXTH => "uxth",
+//             ExtendOp::UXTW => "uxtw",
+//             ExtendOp::UXTD => "uxtd",
+//             ExtendOp::SXTB => "sxtb",
+//             ExtendOp::SXTH => "sxth",
+//             ExtendOp::SXTW => "sxtw",
+//             ExtendOp::SXTD => "sxtd",
+//         }
+//     }
 
-    pub(crate) fn from_extend_args(signed: bool, from_bits: u8, to_bits: u8) -> Option<Self> {
-        // match (signed, from_bits, to_bits) {
-        //     (false, 1, 8) => Some(Self::UXTB),
-        //     (false, _, 16) => Some(Self::UXTH),
-        //     (false, _, 32) => Some(Self::UXTW),
-        //     (false, _, 64) => Some(Self::UXTD),
-        //     (true, 1, 8) => Some(Self::SXTB),
-        //     (true, _, 16) => Some(Self::SXTH),
-        //     (true, _, 32) => Some(Self::SXTW),
-        //     (true, _, 64) => Some(Self::SXTD),
-        //     _ => None,
-        // }
-        // None
-        unimplemented!("not in use")
-    }
-}
+//     pub(crate) fn from_extend_args(signed: bool, from_bits: u8, to_bits: u8) -> Option<Self> {
+//         // match (signed, from_bits, to_bits) {
+//         //     (false, 1, 8) => Some(Self::UXTB),
+//         //     (false, _, 16) => Some(Self::UXTH),
+//         //     (false, _, 32) => Some(Self::UXTW),
+//         //     (false, _, 64) => Some(Self::UXTD),
+//         //     (true, 1, 8) => Some(Self::SXTB),
+//         //     (true, _, 16) => Some(Self::SXTH),
+//         //     (true, _, 32) => Some(Self::SXTW),
+//         //     (true, _, 64) => Some(Self::SXTD),
+//         //     _ => None,
+//         // }
+//         // None
+//         unimplemented!("not in use")
+//     }
+// }
 
 impl ReferenceValidOP {
     pub(crate) fn op_name(self) -> &'static str {

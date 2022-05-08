@@ -12,6 +12,7 @@ use crate::isa::risc_v::settings as aarch64_settings;
 use crate::machinst::lower::*;
 use crate::machinst::*;
 use crate::settings::Flags;
+use crate::CodegenError;
 use crate::CodegenResult;
 
 use crate::ir::types::{
@@ -556,9 +557,46 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             ctx.emit(Inst::gen_move(rd, rn, ty));
         }
 
-        Opcode::Breduce | Opcode::Ireduce => {}
+        Opcode::Breduce | Opcode::Ireduce => {
+            // Smaller integers/booleans are stored with high-order bits
+            // undefined, so we can simply do a copy.
+            let rn = put_input_in_regs(ctx, inputs[0]).regs()[0];
+            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+            let ty = ctx.input_ty(insn, 0);
+            ctx.emit(Inst::gen_move(rd, rn, ty));
+        }
 
-        Opcode::Bextend | Opcode::Bmask => {}
+        Opcode::Bextend | Opcode::Bmask => {
+            let from_ty = ctx.input_ty(insn, 0);
+            let to_ty = ctx.output_ty(insn, 0);
+            let from_bits = ty_bits(from_ty);
+            let to_bits = ty_bits(to_ty);
+
+            if from_ty.is_vector() || from_bits > 64 || to_bits > 64 {
+                return Err(CodegenError::Unsupported(format!(
+                    "{}: Unsupported type: {:?}",
+                    op, from_ty
+                )));
+            }
+
+            assert!(from_bits <= to_bits);
+            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+            let rn = put_input_in_reg(ctx, inputs[0]);
+
+            if from_bits == to_bits {
+                ctx.emit(Inst::gen_move(rd, rn, to_ty));
+            } else {
+                let to_bits = if to_bits > 32 { 64 } else { 32 };
+                let from_bits = from_bits as u8;
+                ctx.emit(Inst::Extend {
+                    rd,
+                    rn,
+                    signed: true,
+                    from_bits,
+                    to_bits,
+                });
+            }
+        }
 
         Opcode::Bint => {}
 

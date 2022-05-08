@@ -216,10 +216,10 @@ impl Inst {
             let tmp = writable_spilltmp_reg();
             assert!(tmp != rd);
             // high part
-            insts.extend(Inst::load_constant_u64(rd, value >> 32));
+            insts.extend(Inst::load_constant_u32(rd, (value >> 32) as u32));
             // low part
 
-            insts.extend(Inst::load_constant_u64(tmp, value & 0xffff_ffff));
+            insts.extend(Inst::load_constant_u32(tmp, (value & 0xffff_ffff) as u32));
             // rd = rd << 32
             insts.push(Inst::AluRRImm12 {
                 alu_op: AluOPRRI::Slli,
@@ -692,6 +692,18 @@ impl Inst {
             x
         };
 
+        fn format_extend_op(signed: bool, from_bit: u8, to_bits: u8) -> String {
+            fn short_type_name(signed: bool, bits: u8) -> String {
+                format!("{}{}", if signed { "i" } else { "u" }, bits)
+            }
+            format!(
+                "{}ext_{}_to_{}",
+                if signed { "s" } else { "u" },
+                short_type_name(signed, from_bit),
+                short_type_name(signed, to_bits),
+            )
+        }
+
         match self {
             &Inst::Nop0 => {
                 format!(";;zero length nop")
@@ -859,10 +871,16 @@ impl Inst {
             &Inst::Ret => {
                 format!("ret")
             }
-            &MInst::Extend { rd, rn, op } => {
+            &MInst::Extend {
+                rd,
+                rn,
+                signed,
+                from_bits,
+                to_bits,
+            } => {
                 format!(
                     "{} {},{}",
-                    op.op_name(),
+                    format_extend_op(signed, from_bits, to_bits),
                     register_name(rd.to_reg(), allocs),
                     register_name(rn, allocs)
                 )

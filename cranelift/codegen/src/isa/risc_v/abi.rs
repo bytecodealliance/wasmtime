@@ -212,52 +212,27 @@ impl ABIMachineSpec for Riscv64MachineDeps {
     }
 
     fn gen_extend(
-        _to_reg: Writable<Reg>,
-        _from_reg: Reg,
-        _signed: bool,
-        _from_bits: u8,
-        _to_bits: u8,
+        to_reg: Writable<Reg>,
+        from_reg: Reg,
+        signed: bool,
+        from_bits: u8,
+        to_bits: u8,
     ) -> Inst {
-        // assert!(from_bits < to_bits);
-        // if let Some(x) = ExtendOp::from_extend_args(signed, from_bits, to_bits) {
-        //     Inst::Extend {
-        //         rd: to_reg,
-        //         rn: from_reg,
-        //         op: x,
-        //     }
-        // } else {
-        //     Inst::Mov {
-        //         rd: to_reg,
-        //         rm: from_reg,
-        //         ty: I64,
-        //     }
-        // }
-        unreachable!("no need to extend integer")
+        assert!(from_bits < to_bits);
+        Inst::Extend {
+            rd: to_reg,
+            rn: from_reg,
+            signed,
+            from_bits,
+            to_bits,
+        }
     }
 
     fn get_ext_mode(
         _call_conv: isa::CallConv,
         _specified: ir::ArgumentExtension,
     ) -> ir::ArgumentExtension {
-        /*
-            todo:: right?????
-            risc-v will sign for you anyway.
-
-            if number is unsigned we should leave the bits no touch at all.
-                like "lb"
-                Format
-                    lbu rd,offset(rs1)
-                Description
-                    Loads a 8-bit value from memory and zero-extends this to XLEN bits before storing it in register rd.
-                Implementation
-                    x[rd] = M[x[rs1] + sext(offset)][7:0]
-            risc-v isa will sign the value for you always.
-
-            if number is singed the value is always extend to 64-bit.
-                lb
-
-        */
-        ir::ArgumentExtension::None
+        ir::ArgumentExtension::Sext
     }
 
     fn gen_ret(rets: Vec<Reg>) -> Inst {

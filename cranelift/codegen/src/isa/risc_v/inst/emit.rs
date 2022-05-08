@@ -559,17 +559,110 @@ impl MachInstEmit for Inst {
                 let x: u32 = (0b1100111) | (1 << 15);
                 sink.put4(x);
             }
-            &Inst::Extend { rd, rn, op } => {
-                //todo:: actual extend the value;;
-                // Inst::AluRRImm12 {
-                //     alu_op: AluOPRRI::Addi,
-                //     rd: rd,
-                //     rs: rn,
-                //     imm12: Imm12::zero(),
-                // }
-                // .emit(sink, emit_info, state);
+            &Inst::Extend {
+                rd,
+                rn,
+                signed,
+                from_bits,
+                to_bits,
+            } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
+                /*
+                    notice!!!!!!!!
+                    bool is consider signed..
+                */
+                let mut insts = SmallInstVec::new();
+                if signed {
+                    //
+                    let sign_bit: u64 = 1 << (from_bits - 1);
+                    insts.extend(Inst::load_constant_u64(rd, sign_bit));
+                    // make sign bit
+                    insts.push(Inst::AluRRR {
+                        alu_op: AluOPRRR::And,
+                        rd,
+                        rs1: rn,
+                        rs2: rd.to_reg(),
+                    });
+                    // test the sign bit
+                    let mut patch_extend_zero = vec![];
+                    patch_extend_zero.push(insts.len());
+                    insts.push(Inst::CondBr {
+                        taken: BranchTarget::zero(),
+                        not_taken: BranchTarget::zero(),
+                        kind: IntegerCompare {
+                            kind: IntCC::Equal, // signed bit is zero
+                            rs1: zero_reg(),
+                            rs2: rd.to_reg(),
+                        },
+                    });
+                    insts.extend(Inst::load_constant_u64(
+                        rd,
+                        ! /*notice the not!!!*/match from_bits {
+                            8 => 0xff,
+                            16 => 0xffff,
+                            32 => 0xffff_ffff,
+                            _ => unreachable!(),
+                        },
+                    ));
 
-                unreachable!("no need to extend the value.")
+                    insts.push(Inst::AluRRR {
+                        alu_op: AluOPRRR::Or,
+                        rd,
+                        rs1: rn,
+                        rs2: rd.to_reg(),
+                    });
+
+                    let mut patch_jump_over = vec![];
+                    patch_jump_over.push(insts.len());
+                    insts.push(Inst::Jal {
+                        rd: writable_zero_reg(),
+                        dest: BranchTarget::zero(),
+                    });
+
+                    Inst::patch_taken_path_list(&mut insts, &patch_extend_zero);
+                    // signed bit is zero
+                    insts.extend(Inst::load_constant_u64(
+                        rd,
+                        match from_bits {
+                            8 => 0xff,
+                            16 => 0xffff,
+                            32 => 0xffff_ffff,
+                            _ => unreachable!(),
+                        },
+                    ));
+                    insts.push(Inst::AluRRR {
+                        alu_op: AluOPRRR::And,
+                        rd,
+                        rs1: rn,
+                        rs2: rd.to_reg(),
+                    });
+
+                    Inst::patch_taken_path_list(&mut insts, &patch_jump_over);
+                } else {
+                    /*
+                        if this unsignd, we need use all zero the set upper bits,
+                        since we cannot change the value.
+                        to_bits is not matter so use extra zero to set them.
+                    */
+                    let x: u64 = match from_bits {
+                        8 => 0xff,
+                        16 => 0xffff,
+                        32 => 0xffff_ffff,
+                        _ => unreachable!(),
+                    };
+                    // load
+                    // set all upper bit to zero
+                    insts.push(Inst::AluRRR {
+                        alu_op: AluOPRRR::And,
+                        rd,
+                        rs1: rd.to_reg(),
+                        rs2: rn,
+                    });
+                }
+                insts
+                    .into_iter()
+                    .for_each(|i| i.emit(&[], sink, emit_info, state));
             }
             &Inst::AjustSp { amount } => {
                 if let Some(imm) = Imm12::maybe_from_u64(amount as u64) {
