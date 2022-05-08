@@ -1,11 +1,11 @@
 //! Unwind information for System V ABI (Aarch64).
 
-// use crate::isa::risc_v::inst::regs;
+// use crate::isa::riscv64::inst::regs;
 // use crate::isa::unwind::systemv::RegisterMappingError;
 // use gimli::{write::CommonInformationEntry, Encoding, Format, Register};
 // use regalloc::{Reg, RegClass};
 
-// /// Creates a new risc_v common information entry (CIE).
+// /// Creates a new riscv64 common information entry (CIE).
 // pub fn create_cie() -> CommonInformationEntry {
 //     use gimli::write::CallFrameInstruction;
 
@@ -83,8 +83,8 @@
 
 //     #[test]
 //     fn test_simple_func() {
-//         let isa = lookup(triple!("risc_v"))
-//             .expect("expect risc_v ISA")
+//         let isa = lookup(triple!("riscv64"))
+//             .expect("expect riscv64 ISA")
 //             .finish(Flags::new(builder()))
 //             .expect("Creating compiler backend");
 
@@ -126,8 +126,8 @@
 
 //     #[test]
 //     fn test_multi_return_func() {
-//         let isa = lookup(triple!("risc_v"))
-//             .expect("expect risc_v ISA")
+//         let isa = lookup(triple!("riscv64"))
+//             .expect("expect riscv64 ISA")
 //             .finish(Flags::new(builder()))
 //             .expect("Creating compiler backend");
 

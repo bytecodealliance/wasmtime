@@ -5,7 +5,7 @@ use crate::ir::Function;
 use crate::ir::MemFlags;
 use crate::ir::{StackSlotData, StackSlotKind};
 
-use crate::isa::risc_v::settings as riscv_settings;
+use crate::isa::riscv64::settings as riscv_settings;
 use crate::isa::{Builder as IsaBuilder, TargetIsa};
 use crate::machinst::{
     compile, MachCompileResult, MachTextSectionBuilder, TextSectionBuilder, VCode,
@@ -355,7 +355,7 @@ mod test {
         // let shared_flags = settings::Flags::new(shared_flags_builder);
         // let isa_flags = aarch64_settings::Flags::new(&shared_flags, aarch64_settings::builder());
         // let backend = AArch64Backend::new_with_flags(
-        //     Triple::from_str("risc_v").unwrap(),
+        //     Triple::from_str("riscv64").unwrap(),
         //     shared_flags,
         //     isa_flags,
         // );
@@ -408,7 +408,7 @@ mod test {
         // let shared_flags = settings::Flags::new(shared_flags_builder);
         // let isa_flags = aarch64_settings::Flags::new(&shared_flags, aarch64_settings::builder());
         // let backend = AArch64Backend::new_with_flags(
-        //     Triple::from_str("risc_v").unwrap(),
+        //     Triple::from_str("riscv64").unwrap(),
         //     shared_flags,
         //     isa_flags,
         // );

@@ -1,10 +1,10 @@
 //! AArch64 ISA: binary code emission.
 
 use crate::binemit::StackMap;
-use crate::isa::risc_v::inst::*;
+use crate::isa::riscv64::inst::*;
 use std::collections::HashSet;
 
-use crate::isa::risc_v::inst::{zero_reg, AluOPRRR};
+use crate::isa::riscv64::inst::{zero_reg, AluOPRRR};
 use crate::machinst::{AllocationConsumer, Reg, Writable};
 use regalloc2::Allocation;
 

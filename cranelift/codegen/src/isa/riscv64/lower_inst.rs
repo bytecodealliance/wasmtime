@@ -8,7 +8,7 @@ use smallvec::SmallVec;
 use crate::ir::Inst as IRInst;
 use crate::ir::InstructionData;
 use crate::ir::Opcode;
-use crate::isa::risc_v::settings as aarch64_settings;
+use crate::isa::riscv64::settings as aarch64_settings;
 use crate::machinst::lower::*;
 use crate::machinst::*;
 use crate::settings::Flags;
@@ -21,8 +21,8 @@ use crate::ir::types::{
 };
 
 use super::lower::*;
-use crate::isa::risc_v::abi::*;
-use crate::isa::risc_v::inst::*;
+use crate::isa::riscv64::abi::*;
+use crate::isa::riscv64::inst::*;
 
 pub(crate) fn is_valid_atomic_transaction_ty(ty: Type) -> bool {
     match ty {

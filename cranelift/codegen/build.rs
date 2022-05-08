@@ -224,7 +224,7 @@ fn get_isle_compilations(crate_dir: &std::path::Path) -> Result<IsleCompilations
         make_isle_source_path_relative(&cur_dir, crate_dir.join("src").join("isa").join("s390x"));
 
     let src_isa_risc_v =
-        make_isle_source_path_relative(&cur_dir, crate_dir.join("src").join("isa").join("risc_v"));
+        make_isle_source_path_relative(&cur_dir, crate_dir.join("src").join("isa").join("riscv64"));
     // This is a set of ISLE compilation units.
     //
     // The format of each entry is:

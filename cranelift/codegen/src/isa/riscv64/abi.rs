@@ -10,7 +10,7 @@ use crate::ir::Opcode;
 use crate::ir::{ExternalName, LibCall};
 use crate::isa;
 
-use crate::isa::risc_v::{inst::EmitState, inst::*};
+use crate::isa::riscv64::{inst::EmitState, inst::*};
 use crate::isa::CallConv;
 use crate::machinst::*;
 use crate::machinst::*;

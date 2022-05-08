@@ -1,4 +1,4 @@
-//! ISLE integration glue code for risc_v lowering.
+//! ISLE integration glue code for riscv64 lowering.
 
 // Pull in the ISLE generated code.
 pub mod generated_code;
@@ -6,7 +6,7 @@ pub mod generated_code;
 // Types that the generated ISLE code uses via `use super::*`.
 use super::{writable_zero_reg, zero_reg, Inst as MInst};
 
-use crate::isa::risc_v::settings::Flags as IsaFlags;
+use crate::isa::riscv64::settings::Flags as IsaFlags;
 use crate::machinst::{isle::*, SmallInstVec};
 use crate::settings::Flags;
 
@@ -15,7 +15,7 @@ use crate::{
         immediates::*, types::*, ExternalName, Inst, InstructionData, MemFlags, TrapCode, Value,
         ValueList,
     },
-    isa::risc_v::inst::*,
+    isa::riscv64::inst::*,
     machinst::{InsnOutput, LowerCtx},
 };
 

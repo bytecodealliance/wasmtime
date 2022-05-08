@@ -1,4 +1,4 @@
-use crate::isa::risc_v::inst::*;
+use crate::isa::riscv64::inst::*;
 use crate::settings;
 use alloc::vec::Vec;
 

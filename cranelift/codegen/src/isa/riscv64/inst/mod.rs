@@ -1,4 +1,4 @@
-//! This module defines risc_v-specific machine instruction types.
+//! This module defines riscv64-specific machine instruction types.
 
 // Some variants are not constructed, but we still want them as options in the future.
 #![allow(dead_code)]
@@ -62,8 +62,8 @@ pub type VecBranchTarget = Vec<BranchTarget>;
 //=============================================================================
 // Instructions (top level): definition
 
-use crate::isa::risc_v::lower::isle::generated_code::MInst;
-pub use crate::isa::risc_v::lower::isle::generated_code::{
+use crate::isa::riscv64::lower::isle::generated_code::MInst;
+pub use crate::isa::riscv64::lower::isle::generated_code::{
     AluOPRR, AluOPRRI, AluOPRRR, AluOPRRRR, AtomicOP, ExtendOp, FClassResult, FFlagsException,
     FloatFlagOp, FloatRoundingMode, IntSelectOP, LoadOP, MInst as Inst, ReferenceValidOP, StoreOP,
     OPFPFMT,
