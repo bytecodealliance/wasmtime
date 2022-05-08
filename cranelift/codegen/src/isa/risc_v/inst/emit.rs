@@ -91,6 +91,191 @@ impl Inst {
         }
     }
 
+    pub(crate) fn lower_br_icmp(
+        cc: IntCC,
+        a: ValueRegs<Reg>,
+        b: ValueRegs<Reg>,
+        taken: BranchTarget,
+        not_taken: BranchTarget,
+        ty: Type,
+    ) -> SmallInstVec<Inst> {
+        let mut insts = SmallInstVec::new();
+        if ty.bits() <= 64 {
+            let rs1 = a.only_reg().unwrap();
+            let rs2 = b.only_reg().unwrap();
+            let inst = Inst::CondBr {
+                taken,
+                not_taken,
+                kind: IntegerCompare { kind: cc, rs1, rs2 },
+            };
+            insts.push(inst);
+            return insts;
+        }
+        fn i128cmp_to_int64_compare_parts(
+            a: ValueRegs<Reg>,
+            b: ValueRegs<Reg>,
+            cc: IntCC,
+        ) -> (IntegerCompare, IntegerCompare) {
+            let hight_a = a.regs()[0];
+            let low_a = a.regs()[1];
+            let hight_b = b.regs()[0];
+            let low_b = b.regs()[1];
+            // hight part
+            let high = IntegerCompare {
+                kind: cc,
+                rs1: hight_a,
+                rs2: hight_b,
+            };
+            // low part
+            let x = match cc {
+                IntCC::Equal => IntCC::Equal,
+                IntCC::NotEqual => IntCC::NotEqual,
+                IntCC::SignedLessThan => IntCC::UnsignedLessThan,
+                IntCC::SignedGreaterThanOrEqual => IntCC::UnsignedGreaterThanOrEqual,
+                IntCC::SignedGreaterThan => IntCC::UnsignedGreaterThan,
+                IntCC::SignedLessThanOrEqual => IntCC::UnsignedLessThanOrEqual,
+                IntCC::UnsignedLessThan => IntCC::UnsignedLessThan,
+                IntCC::UnsignedGreaterThanOrEqual => IntCC::UnsignedGreaterThanOrEqual,
+                IntCC::UnsignedGreaterThan => IntCC::UnsignedGreaterThanOrEqual,
+                IntCC::UnsignedLessThanOrEqual => IntCC::UnsignedGreaterThanOrEqual,
+                IntCC::Overflow => IntCC::UnsignedGreaterThanOrEqual,
+                IntCC::Overflow | IntCC::NotOverflow => unreachable!(),
+            };
+            let low = IntegerCompare {
+                kind: x,
+                rs1: low_a,
+                rs2: low_b,
+            };
+            (high, low)
+        }
+        // i128 compare
+        let (high, low) = i128cmp_to_int64_compare_parts(a, b, cc);
+        // let mut patch_to_low = vec![];
+        match cc {
+            IntCC::Equal => {
+                /*
+                    if high part not equal,
+                    then we can go to not_taken otherwise fallthrough.
+                */
+                insts.push(Inst::CondBr {
+                    taken: not_taken,
+                    not_taken: BranchTarget::zero(), /*  no branch  */
+                    kind: high.inverse(),
+                });
+                /*
+                    the rest part.
+                */
+                insts.push(Inst::CondBr {
+                    taken,
+                    not_taken,
+                    kind: low,
+                });
+            }
+
+            IntCC::NotEqual => {
+                /*
+                    if the high part not equal ,
+                    we know the whole must be not equal,
+                    we can goto the taken part , otherwise fallthrought.
+                */
+                insts.push(Inst::CondBr {
+                    taken,
+                    not_taken: BranchTarget::zero(), /*  no branch  */
+                    kind: high,
+                });
+
+                insts.push(Inst::CondBr {
+                    taken,
+                    not_taken,
+                    kind: low,
+                });
+            }
+
+            IntCC::SignedGreaterThanOrEqual | IntCC::SignedLessThanOrEqual => {
+                /*
+                    make cc == IntCC::SignedGreaterThanOrEqual
+                    must be true for IntCC::SignedLessThan too.
+                */
+                /*
+                    if "!(a.high >= b.high)" is true,
+                    we must goto the not_taken or otherwise fallthrough.
+                */
+                insts.push(Inst::CondBr {
+                    taken: not_taken,
+                    not_taken: BranchTarget::zero(),
+                    kind: high.inverse(),
+                });
+
+                /*
+                    here we must have a.high >= b.high too be true.
+                    if a.high > b.high we don't need compare the rest part
+                */
+                insts.push(Inst::CondBr {
+                    taken: taken,
+                    not_taken: BranchTarget::zero(),
+                    kind: high
+                        .clone()
+                        .set_kind(if cc == IntCC::SignedGreaterThanOrEqual {
+                            IntCC::SignedGreaterThan
+                        } else {
+                            IntCC::SignedLessThan
+                        }),
+                });
+                /*
+                    here we must have a.high == b.high too be true.
+                    just compare the rest part.
+                */
+                insts.push(Inst::CondBr {
+                    taken: taken,
+                    not_taken,
+                    kind: low,
+                });
+            }
+            IntCC::SignedGreaterThan | IntCC::SignedLessThan => {
+                /*
+                    make cc == IntCC::SignedGreaterThan
+                    must be true for IntCC::SignedLessThan too.
+                */
+                /*
+                    if a.hight > b.high
+                    we can goto the taken ,
+                    no need to compare the rest part.
+                */
+                insts.push(Inst::CondBr {
+                    taken,
+                    not_taken: BranchTarget::zero(),
+                    kind: high,
+                });
+                /*
+                    here we must have a.high <= b.hight.
+                    if not equal we know  a < b.high .
+                    we must goto the not_taken or otherwise we fallthrough.
+                */
+                insts.push(Inst::CondBr {
+                    taken: not_taken,
+                    not_taken: BranchTarget::zero(),
+                    kind: high.clone().set_kind(IntCC::NotEqual),
+                });
+                /*
+                    here we know a.high == b.high
+                    just compare the rest part.
+                */
+                insts.push(Inst::CondBr {
+                    taken,
+                    not_taken,
+                    kind: low,
+                });
+            }
+            IntCC::UnsignedLessThan
+            | IntCC::UnsignedGreaterThanOrEqual
+            | IntCC::UnsignedGreaterThan
+            | IntCC::UnsignedLessThanOrEqual
+            | IntCC::Overflow
+            | IntCC::NotOverflow => unreachable!(),
+        }
+
+        insts
+    }
     /*
         notice always patch the taken path.
         this will make jump that jump over all insts.
@@ -589,22 +774,30 @@ impl MachInstEmit for Inst {
                     patch_extend_zero.push(insts.len());
                     insts.push(Inst::CondBr {
                         taken: BranchTarget::zero(),
-                        not_taken: BranchTarget::zero(),
+                        not_taken: BranchTarget::zero(), //
                         kind: IntegerCompare {
                             kind: IntCC::Equal, // signed bit is zero
                             rs1: zero_reg(),
                             rs2: rd.to_reg(),
                         },
                     });
-                    insts.extend(Inst::load_constant_u64(
-                        rd,
-                        ! /*notice the not!!!*/match from_bits {
+
+                    insts.extend(Inst::load_constant_u64(rd, {
+                        let mut x: u64 = !match from_bits {
+                            1 => 0x1,
                             8 => 0xff,
                             16 => 0xffff,
                             32 => 0xffff_ffff,
                             _ => unreachable!(),
-                        },
-                    ));
+                        };
+                        x = !x;
+                        /*
+                            get rid of high unuse bits.
+                        */
+                        x = x << (64 - to_bits);
+                        x = x >> (64 - to_bits);
+                        x
+                    }));
 
                     insts.push(Inst::AluRRR {
                         alu_op: AluOPRRR::Or,
@@ -612,7 +805,6 @@ impl MachInstEmit for Inst {
                         rs1: rn,
                         rs2: rd.to_reg(),
                     });
-
                     let mut patch_jump_over = vec![];
                     patch_jump_over.push(insts.len());
                     insts.push(Inst::Jal {
@@ -625,6 +817,7 @@ impl MachInstEmit for Inst {
                     insts.extend(Inst::load_constant_u64(
                         rd,
                         match from_bits {
+                            1 => 0x1, /**/
                             8 => 0xff,
                             16 => 0xffff,
                             32 => 0xffff_ffff,
@@ -1353,6 +1546,58 @@ impl MachInstEmit for Inst {
                 sink.bind_label(fail_label);
             }
 
+            &Inst::IntSelect {
+                op,
+                ref dst,
+                ref x,
+                ref y,
+                ty,
+            } => {
+                let dst: Vec<_> = dst.iter().map(|r| allocs.next_writable(*r)).collect();
+                let x = alloc_value_regs(x, &mut allocs);
+                let y = alloc_value_regs(y, &mut allocs);
+                let label_true = sink.get_label();
+                let label_false = sink.get_label();
+                let label_done = sink.get_label();
+                Inst::lower_br_icmp(
+                    op.to_int_cc(),
+                    x,
+                    y,
+                    BranchTarget::Label(label_true),
+                    BranchTarget::Label(label_false),
+                    ty,
+                )
+                .into_iter()
+                .for_each(|i| i.emit(&[], sink, emit_info, state));
+                //here is true , use x.
+                sink.bind_label(label_true);
+                let mut gen_move = |dst: &Vec<Writable<Reg>>,
+                                    val: &ValueRegs<Reg>,
+                                    sink: &mut MachBuffer<Inst>,
+                                    state: &mut EmitState| {
+                    let mut insts = SmallInstVec::new();
+                    insts.push(Inst::Mov {
+                        rd: dst[0],
+                        rm: val.regs()[0],
+                        ty: if ty.bits() == 128 { I64 } else { ty },
+                    });
+                    if ty.bits() == 128 {
+                        insts.push(Inst::Mov {
+                            rd: dst[1],
+                            rm: val.regs()[1],
+                            ty: if ty.bits() == 128 { I64 } else { ty },
+                        });
+                    }
+                    insts
+                        .into_iter()
+                        .for_each(|i| i.emit(&[], sink, emit_info, state));
+                };
+                gen_move(&dst, &x, sink, state);
+                Inst::gen_jump(label_done).emit(&[], sink, emit_info, state);
+                sink.bind_label(label_false);
+                gen_move(&dst, &y, sink, state);
+                sink.bind_label(label_done);
+            }
             _ => todo!("{:?}", self),
         };
 

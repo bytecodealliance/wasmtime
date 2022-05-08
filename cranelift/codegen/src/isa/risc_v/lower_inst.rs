@@ -14,6 +14,7 @@ use crate::machinst::*;
 use crate::settings::Flags;
 use crate::CodegenError;
 use crate::CodegenResult;
+use std::boxed::Box;
 
 use crate::ir::types::{
     B1, B128, B16, B32, B64, B8, F32, F64, FFLAGS, I128, I16, I32, I64, I8, IFLAGS, R32, R64,
@@ -28,9 +29,6 @@ pub(crate) fn is_valid_atomic_transaction_ty(ty: Type) -> bool {
         I8 | I16 | I32 | I64 => true,
         _ => false,
     }
-}
-pub(crate) fn intcc_contains_eq_or_ne(cc: IntCC) -> bool {
-    cc == IntCC::Equal || cc == IntCC::NotEqual
 }
 
 // pub(crate) fn lower_icmp<C: LowerCtx<I = Inst>>(
@@ -638,33 +636,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 }
                 (false, false) => {
                     let rm = put_input_in_reg(ctx, inputs[0]);
-                    match (ity.is_float(), oty.is_float()) {
-                        (false, false) => ctx.emit(Inst::gen_move(rd, from_reg, ty)),
-                        (true, true) => ctx.emit(Inst::gen_move(rd, from_reg, ty)),
-                        (false, true) => {
-                            // let tmp = ctx.alloc_tmp(I64);
-                            ctx.emit(Inst::AluRR {
-                                alu_op: if ity == F32 {
-                                    AluOPRR::FmvXW
-                                } else {
-                                    AluOPRR::FmvXD
-                                },
-                                rd: rd,
-                                rs: rm,
-                            });
-                        }
-                        (true, false) => {
-                            ctx.emit(Inst::AluRR {
-                                alu_op: if ity == F32 {
-                                    AluOPRR::FmvWX
-                                } else {
-                                    AluOPRR::FmvDX
-                                },
-                                rd: rd,
-                                rs: rm,
-                            });
-                        }
-                    }
+                    ctx.emit(gen_move(rd, rm, ity, oty));
                 }
 
                 (false, true) => {
@@ -761,45 +733,45 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Call | Opcode::CallIndirect => {
-            // let caller_conv = ctx.abi().call_conv();
-            // let (mut abi, inputs) = match op {
-            //     Opcode::Call => {
-            //         let (extname, dist) = ctx.call_target(insn).unwrap();
-            //         let extname = extname.clone();
-            //         let sig = ctx.call_sig(insn).unwrap();
-            //         assert!(inputs.len() == sig.params.len());
-            //         assert!(outputs.len() == sig.returns.len());
-            //         (
-            //             AArch64ABICaller::from_func(sig, &extname, dist, caller_conv, flags)?,
-            //             &inputs[..],
-            //         )
-            //     }
-            //     Opcode::CallIndirect => {
-            //         let ptr = put_input_in_reg(ctx, inputs[0], NarrowValueMode::ZeroExtend64);
-            //         let sig = ctx.call_sig(insn).unwrap();
-            //         assert!(inputs.len() - 1 == sig.params.len());
-            //         assert!(outputs.len() == sig.returns.len());
-            //         (
-            //             AArch64ABICaller::from_ptr(sig, ptr, op, caller_conv, flags)?,
-            //             &inputs[1..],
-            //         )
-            //     }
-            //     _ => unreachable!(),
-            // };
+            let caller_conv = ctx.abi().call_conv();
+            let (mut abi, inputs) = match op {
+                Opcode::Call => {
+                    let (extname, dist) = ctx.call_target(insn).unwrap();
+                    let extname = extname.clone();
+                    let sig = ctx.call_sig(insn).unwrap();
+                    assert!(inputs.len() == sig.params.len());
+                    assert!(outputs.len() == sig.returns.len());
+                    (
+                        Riscv64ABICaller::from_func(sig, &extname, dist, caller_conv, flags)?,
+                        &inputs[..],
+                    )
+                }
+                Opcode::CallIndirect => {
+                    let ptr = put_input_in_reg(ctx, inputs[0]);
+                    let sig = ctx.call_sig(insn).unwrap();
+                    assert!(inputs.len() - 1 == sig.params.len());
+                    assert!(outputs.len() == sig.returns.len());
+                    (
+                        Riscv64ABICaller::from_ptr(sig, ptr, op, caller_conv, flags)?,
+                        &inputs[1..],
+                    )
+                }
+                _ => unreachable!(),
+            };
 
-            // abi.emit_stack_pre_adjust(ctx);
-            // assert!(inputs.len() == abi.num_args());
-            // for i in abi.get_copy_to_arg_order() {
-            //     let input = inputs[i];
-            //     let arg_regs = put_input_in_regs(ctx, input);
-            //     abi.emit_copy_regs_to_arg(ctx, i, arg_regs);
-            // }
-            // abi.emit_call(ctx);
-            // for (i, output) in outputs.iter().enumerate() {
-            //     let retval_regs = get_output_reg(ctx, *output);
-            //     abi.emit_copy_retval_to_regs(ctx, i, retval_regs);
-            // }
-            // abi.emit_stack_post_adjust(ctx);
+            abi.emit_stack_pre_adjust(ctx);
+            assert!(inputs.len() == abi.num_args());
+            for i in abi.get_copy_to_arg_order() {
+                let input = inputs[i];
+                let arg_regs = put_input_in_regs(ctx, input);
+                abi.emit_copy_regs_to_arg(ctx, i, arg_regs);
+            }
+            abi.emit_call(ctx);
+            for (i, output) in outputs.iter().enumerate() {
+                let retval_regs = get_output_reg(ctx, *output);
+                abi.emit_copy_retval_to_regs(ctx, i, retval_regs);
+            }
+            abi.emit_stack_post_adjust(ctx);
         }
 
         Opcode::GetPinnedReg => {
@@ -824,39 +796,133 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             panic!("Branch opcode reached non-branch lowering logic!");
         }
 
-        Opcode::Vconst => {}
+        Opcode::Vconst => {
+            unimplemented!()
+        }
 
-        Opcode::RawBitcast => {}
+        Opcode::RawBitcast => {
+            let rm = put_input_in_reg(ctx, inputs[0]);
+            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+            let ity = ctx.input_ty(insn, 0);
+            let oty = ctx.output_ty(insn, 0);
+            ctx.emit(gen_move(rd, rm, ity, oty));
+        }
 
-        Opcode::Extractlane => {}
+        Opcode::Extractlane => {
+            unimplemented!()
+        }
 
-        Opcode::Insertlane => {}
+        Opcode::Insertlane => {
+            unimplemented!()
+        }
 
-        Opcode::Splat => {}
+        Opcode::Splat => {
+            unimplemented!()
+        }
 
-        Opcode::ScalarToVector => {}
+        Opcode::ScalarToVector => {
+            unimplemented!()
+        }
 
-        Opcode::VallTrue if ctx.input_ty(insn, 0).lane_bits() == 64 => {}
+        Opcode::VanyTrue | Opcode::VallTrue => {
+            unimplemented!()
+        }
 
-        Opcode::VanyTrue | Opcode::VallTrue => {}
+        Opcode::VhighBits => {
+            unimplemented!()
+        }
 
-        Opcode::VhighBits => {}
+        Opcode::Shuffle => {
+            unimplemented!()
+        }
 
-        Opcode::Shuffle => {}
+        Opcode::Swizzle => {
+            unimplemented!()
+        }
 
-        Opcode::Swizzle => {}
+        Opcode::Isplit => {
+            let input_ty = ctx.input_ty(insn, 0);
+            if input_ty != I128 {
+                return Err(CodegenError::Unsupported(format!(
+                    "Isplit: Unsupported type: {:?}",
+                    input_ty
+                )));
+            }
 
-        Opcode::Isplit => {}
+            assert_eq!(ctx.output_ty(insn, 0), I64);
+            assert_eq!(ctx.output_ty(insn, 1), I64);
 
-        Opcode::Iconcat => {}
+            let src_regs = put_input_in_regs(ctx, inputs[0]);
+            let dst_lo = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+            let dst_hi = get_output_reg(ctx, outputs[1]).only_reg().unwrap();
 
-        Opcode::Imax | Opcode::Umax | Opcode::Umin | Opcode::Imin => {}
+            ctx.emit(Inst::gen_move(dst_lo, src_regs.regs()[0], I64));
+            ctx.emit(Inst::gen_move(dst_hi, src_regs.regs()[1], I64));
+        }
 
-        Opcode::IaddPairwise => {}
+        Opcode::Iconcat => {
+            let ty = ty.unwrap();
 
-        Opcode::WideningPairwiseDotProductS => {}
+            if ty != I128 {
+                return Err(CodegenError::Unsupported(format!(
+                    "Iconcat: Unsupported type: {:?}",
+                    ty
+                )));
+            }
+            assert_eq!(ctx.input_ty(insn, 0), I64);
+            assert_eq!(ctx.input_ty(insn, 1), I64);
+
+            let src_lo = put_input_in_reg(ctx, inputs[0]);
+            let src_hi = put_input_in_reg(ctx, inputs[1]);
+            let dst = get_output_reg(ctx, outputs[0]);
+
+            ctx.emit(Inst::gen_move(dst.regs()[0], src_lo, I64));
+            ctx.emit(Inst::gen_move(dst.regs()[1], src_hi, I64));
+        }
+
+        Opcode::Imax | Opcode::Umax | Opcode::Umin | Opcode::Imin => {
+            let ty = ty.unwrap();
+
+            if ty.is_int() {
+                let dst = ctx.get_output(insn, 0);
+                let dst: Vec<_> = dst.regs().iter().map(|r| *r).collect();
+                let x = put_input_in_regs(ctx, inputs[0]);
+                let y = put_input_in_regs(ctx, inputs[0]);
+                ctx.emit(Inst::IntSelect {
+                    op: IntSelectOP::from_ir_op(op),
+                    dst: dst,
+                    x,
+                    y,
+                    ty,
+                });
+            } else {
+                unimplemented!()
+            }
+        }
+
+        Opcode::IaddPairwise => {
+            todo!()
+        }
+
+        Opcode::WideningPairwiseDotProductS => {
+            todo!()
+        }
 
         Opcode::Fadd | Opcode::Fsub | Opcode::Fmul | Opcode::Fdiv | Opcode::Fmin | Opcode::Fmax => {
+            let ty = ty.unwrap();
+            let rs1 = put_input_in_reg(ctx, inputs[0]);
+            let rs2 = put_input_in_reg(ctx, inputs[1]);
+            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+            if !ty.is_vector() {
+                ctx.emit(Inst::AluRRR {
+                    alu_op: AluOPRRR::float_op(op),
+                    rd,
+                    rs1,
+                    rs2,
+                });
+            } else {
+                unimplemented!()
+            }
         }
 
         Opcode::FminPseudo | Opcode::FmaxPseudo => {}
@@ -933,193 +999,6 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
     Ok(())
 }
 
-fn lower_br_icmp(
-    cc: IntCC,
-    a: ValueRegs<Reg>,
-    b: ValueRegs<Reg>,
-    taken: BranchTarget,
-    not_taken: BranchTarget,
-    ty: Type,
-) -> SmallInstVec<Inst> {
-    let mut insts = SmallInstVec::new();
-    if ty.bits() <= 64 {
-        let rs1 = a.only_reg().unwrap();
-        let rs2 = b.only_reg().unwrap();
-        let inst = Inst::CondBr {
-            taken,
-            not_taken,
-            kind: IntegerCompare { kind: cc, rs1, rs2 },
-        };
-        insts.push(inst);
-        return insts;
-    }
-    fn i128cmp_to_int64_compare_parts(
-        a: ValueRegs<Reg>,
-        b: ValueRegs<Reg>,
-        cc: IntCC,
-    ) -> (IntegerCompare, IntegerCompare) {
-        let hight_a = a.regs()[0];
-        let low_a = a.regs()[1];
-
-        let hight_b = b.regs()[0];
-        let low_b = b.regs()[1];
-        // hight part
-        let high = IntegerCompare {
-            kind: cc,
-            rs1: hight_a,
-            rs2: hight_b,
-        };
-        // low part
-        let x = match cc {
-            IntCC::Equal => IntCC::Equal,
-            IntCC::NotEqual => IntCC::NotEqual,
-            IntCC::SignedLessThan => IntCC::UnsignedLessThan,
-            IntCC::SignedGreaterThanOrEqual => IntCC::UnsignedGreaterThanOrEqual,
-            IntCC::SignedGreaterThan => IntCC::UnsignedGreaterThan,
-            IntCC::SignedLessThanOrEqual => IntCC::UnsignedLessThanOrEqual,
-            IntCC::UnsignedLessThan => IntCC::UnsignedLessThan,
-            IntCC::UnsignedGreaterThanOrEqual => IntCC::UnsignedGreaterThanOrEqual,
-            IntCC::UnsignedGreaterThan => IntCC::UnsignedGreaterThanOrEqual,
-            IntCC::UnsignedLessThanOrEqual => IntCC::UnsignedGreaterThanOrEqual,
-            IntCC::Overflow => IntCC::UnsignedGreaterThanOrEqual,
-            IntCC::Overflow | IntCC::NotOverflow => unreachable!(),
-        };
-        let low = IntegerCompare {
-            kind: x,
-            rs1: low_a,
-            rs2: low_b,
-        };
-        (high, low)
-    }
-    // i128 compare
-    let (high, low) = i128cmp_to_int64_compare_parts(a, b, cc);
-    // let mut patch_to_low = vec![];
-    match cc {
-        IntCC::Equal => {
-            /*
-                if high part not equal,
-                then we can go to not_taken otherwise fallthrough.
-            */
-            insts.push(Inst::CondBr {
-                taken: not_taken,
-                not_taken: BranchTarget::zero(), /*  no branch  */
-                kind: high.inverse(),
-            });
-            /*
-                the rest part.
-            */
-            insts.push(Inst::CondBr {
-                taken,
-                not_taken,
-                kind: low,
-            });
-        }
-
-        IntCC::NotEqual => {
-            /*
-                if the high part not equal ,
-                we know the whole must be not equal,
-                we can goto the taken part , otherwise fallthrought.
-            */
-            insts.push(Inst::CondBr {
-                taken,
-                not_taken: BranchTarget::zero(), /*  no branch  */
-                kind: high,
-            });
-
-            insts.push(Inst::CondBr {
-                taken,
-                not_taken,
-                kind: low,
-            });
-        }
-
-        IntCC::SignedGreaterThanOrEqual | IntCC::SignedLessThanOrEqual => {
-            /*
-                make cc == IntCC::SignedGreaterThanOrEqual
-                must be true for IntCC::SignedLessThan too.
-            */
-            /*
-                if "!(a.high >= b.high)" is true,
-                we must goto the not_taken or otherwise fallthrough.
-            */
-            insts.push(Inst::CondBr {
-                taken: not_taken,
-                not_taken: BranchTarget::zero(),
-                kind: high.inverse(),
-            });
-
-            /*
-                here we must have a.high >= b.high too be true.
-                if a.high > b.high we don't need compare the rest part
-            */
-            insts.push(Inst::CondBr {
-                taken: taken,
-                not_taken: BranchTarget::zero(),
-                kind: high
-                    .clone()
-                    .set_kind(if cc == IntCC::SignedGreaterThanOrEqual {
-                        IntCC::SignedGreaterThan
-                    } else {
-                        IntCC::SignedLessThan
-                    }),
-            });
-            /*
-                here we must have a.high == b.high too be true.
-                just compare the rest part.
-            */
-            insts.push(Inst::CondBr {
-                taken: taken,
-                not_taken,
-                kind: low,
-            });
-        }
-        IntCC::SignedGreaterThan | IntCC::SignedLessThan => {
-            /*
-                make cc == IntCC::SignedGreaterThan
-                must be true for IntCC::SignedLessThan too.
-            */
-            /*
-                if a.hight > b.high
-                we can goto the taken ,
-                no need to compare the rest part.
-            */
-            insts.push(Inst::CondBr {
-                taken,
-                not_taken: BranchTarget::zero(),
-                kind: high,
-            });
-            /*
-                here we must have a.high <= b.hight.
-                if not equal we know  a < b.high .
-                we must goto the not_taken or otherwise we fallthrough.
-            */
-            insts.push(Inst::CondBr {
-                taken: not_taken,
-                not_taken: BranchTarget::zero(),
-                kind: high.clone().set_kind(IntCC::NotEqual),
-            });
-            /*
-                here we know a.high == b.high
-                just compare the rest part.
-            */
-            insts.push(Inst::CondBr {
-                taken,
-                not_taken,
-                kind: low,
-            });
-        }
-        IntCC::UnsignedLessThan
-        | IntCC::UnsignedGreaterThanOrEqual
-        | IntCC::UnsignedGreaterThan
-        | IntCC::UnsignedLessThanOrEqual
-        | IntCC::Overflow
-        | IntCC::NotOverflow => unreachable!(),
-    }
-
-    insts
-}
-
 pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
     ctx: &mut C,
     branches: &[IRInst],
@@ -1178,7 +1057,7 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
                 let a = ctx.put_input_in_regs(branches[0], 0);
                 let b = ctx.put_input_in_regs(branches[0], 1);
                 let cc = op0.cond_code().unwrap();
-                lower_br_icmp(cc, a, b, taken, not_taken, ty)
+                Inst::lower_br_icmp(cc, a, b, taken, not_taken, ty)
                     .into_iter()
                     .for_each(|i| ctx.emit(i));
             }
@@ -1229,6 +1108,35 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
         }
     }
     Ok(())
+}
+
+/*
+    if input or output is float,
+    you should use special instruction.
+*/
+fn gen_move(rd: Writable<Reg>, rm: Reg, ity: Type, oty: Type) -> Inst {
+    match (ity.is_float(), oty.is_float()) {
+        (false, false) => Inst::gen_move(rd, rm, oty),
+        (true, true) => Inst::gen_move(rd, rm, oty),
+        (false, true) => Inst::AluRR {
+            alu_op: if ity == F32 {
+                AluOPRR::FmvXW
+            } else {
+                AluOPRR::FmvXD
+            },
+            rd: rd,
+            rs: rm,
+        },
+        (true, false) => Inst::AluRR {
+            alu_op: if ity == F32 {
+                AluOPRR::FmvWX
+            } else {
+                AluOPRR::FmvDX
+            },
+            rd: rd,
+            rs: rm,
+        },
+    }
 }
 
 fn what_is_pinned_register() -> ! {

@@ -43,6 +43,7 @@ pub fn a0_t0_a7() -> Vec<Writable<Reg>> {
     }
     v
 }
+
 #[inline(always)]
 pub fn writable_a0() -> Writable<Reg> {
     Writable::from_reg(a0())
@@ -111,9 +112,6 @@ pub fn zero_reg() -> Reg {
     x_reg(0)
 }
 
-pub fn get_caller_save_register(_call_conv_of_callee: isa::CallConv) -> Vec<Writable<Reg>> {
-    unimplemented!();
-}
 /// Get a writable reference to the zero-register (this discards a result).
 /// #[inline(always)]
 pub fn writable_zero_reg() -> Writable<Reg> {
@@ -232,13 +230,13 @@ pub fn crate_reg_eviroment(_flags: &settings::Flags) -> MachineEnv {
     }
 }
 #[inline(always)]
-fn x_reg(enc: usize) -> Reg {
+pub(crate) fn x_reg(enc: usize) -> Reg {
     let p_reg = PReg::new(enc, RegClass::Int);
     let v_reg = VReg::new(p_reg.index(), p_reg.class());
     Reg::from(v_reg)
 }
 #[inline(always)]
-fn f_reg(enc: usize) -> Reg {
+pub(crate) fn f_reg(enc: usize) -> Reg {
     let p_reg = PReg::new(enc, RegClass::Float);
     let v_reg = VReg::new(p_reg.index(), p_reg.class());
     Reg::from(v_reg)

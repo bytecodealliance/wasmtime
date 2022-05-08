@@ -166,6 +166,8 @@
       (ty Type)
       (rs1 Reg)
       (rs2 Reg))
+
+    ;; select x or y base on condition 
     (Select 
       (dst VecWritableReg)
       (ty Type)
@@ -177,13 +179,14 @@
       (rd WritableReg)
       (op ReferenceValidOP)
       (x Reg))
-
+    
     (BrTable
       (index Reg)
       (tmp1 WritableReg)
       (default_ BranchTarget)
       (targets VecBranchTarget))
-  
+
+    ;; atomic compare and set operation
     (AtomicCas
       (t0 WritableReg)
       (dst WritableReg)
@@ -191,7 +194,24 @@
       (addr Reg)
       (v Reg)
       (ty Type))
+    ;; select x or y base on op_code 
+    (IntSelect
+    (op IntSelectOP)
+    (dst VecWritableReg)
+    (x ValueRegs)
+    (y ValueRegs)
+    (ty Type))
+
 ))
+
+
+(type IntSelectOP (enum
+  (Imax)
+  (Umax)
+  (Imin)
+  (Umin)
+))
+
 
 (type ReferenceValidOP(enum
   (IsNull)

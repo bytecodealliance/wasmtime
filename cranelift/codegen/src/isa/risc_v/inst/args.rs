@@ -253,6 +253,55 @@ impl AluOPRRRR {
         }
     }
 
+    pub(crate) fn float_op(op: crate::ir::Opcode, ty: Type) -> Self {
+        let ty_32 = ty == F32;
+        match op {
+            Opcode::Fadd => {
+                if ty_32 {
+                    AluOPRRR::FaddS
+                } else {
+                    AluOPRRR::FaddD
+                }
+            }
+            Opcode::Fsub => {
+                if ty_32 {
+                    AluOPRRR::FsubS
+                } else {
+                    AluOPRRR::FsubD
+                }
+            }
+            Opcode::Fmul => {
+                if ty_32 {
+                    AluOPRRR::FmulS
+                } else {
+                    AluOPRRR::FmulD
+                }
+            }
+            Opcode::Fdiv => {
+                if ty_32 {
+                    AluOPRRR::FdivS
+                } else {
+                    AluOPRRR::FdivD
+                }
+            }
+            Opcode::Fmin => {
+                if ty_32 {
+                    AluOPRRR::FminS
+                } else {
+                    AluOPRRR::FminD
+                }
+            }
+            Opcode::Fmax => {
+                if ty_32 {
+                    AluOPRRR::FmaxS
+                } else {
+                    AluOPRRR::FmaxD
+                }
+            }
+            _ => unreachable!(),
+        }
+    }
+
     pub(crate) fn funct2(self) -> u32 {
         match self {
             AluOPRRRR::FmaddS | AluOPRRRR::FmsubS | AluOPRRRR::FnmsubS | AluOPRRRR::FnmaddS => 0,
@@ -1267,36 +1316,36 @@ impl AtomicOP {
     }
 }
 
-// impl ExtendOp {
-//     pub(crate) fn op_name(self) -> &'static str {
-//         match self {
-//             ExtendOp::UXTB => "uxtb",
-//             ExtendOp::UXTH => "uxth",
-//             ExtendOp::UXTW => "uxtw",
-//             ExtendOp::UXTD => "uxtd",
-//             ExtendOp::SXTB => "sxtb",
-//             ExtendOp::SXTH => "sxth",
-//             ExtendOp::SXTW => "sxtw",
-//             ExtendOp::SXTD => "sxtd",
-//         }
-//     }
-
-//     pub(crate) fn from_extend_args(signed: bool, from_bits: u8, to_bits: u8) -> Option<Self> {
-//         // match (signed, from_bits, to_bits) {
-//         //     (false, 1, 8) => Some(Self::UXTB),
-//         //     (false, _, 16) => Some(Self::UXTH),
-//         //     (false, _, 32) => Some(Self::UXTW),
-//         //     (false, _, 64) => Some(Self::UXTD),
-//         //     (true, 1, 8) => Some(Self::SXTB),
-//         //     (true, _, 16) => Some(Self::SXTH),
-//         //     (true, _, 32) => Some(Self::SXTW),
-//         //     (true, _, 64) => Some(Self::SXTD),
-//         //     _ => None,
-//         // }
-//         // None
-//         unimplemented!("not in use")
-//     }
-// }
+impl IntSelectOP {
+    #[inline(always)]
+    pub(crate) fn from_ir_op(op: crate::ir::Opcode) -> Self {
+        match op {
+            crate::ir::Opcode::Imax => Self::Imax,
+            crate::ir::Opcode::Umax => Self::Umax,
+            crate::ir::Opcode::Imin => Self::Imin,
+            crate::ir::Opcode::Umin => Self::Umin,
+            _ => unreachable!(),
+        }
+    }
+    #[inline(always)]
+    pub(crate) fn op_name(self) -> &'static str {
+        match self {
+            IntSelectOP::Imax => "imax",
+            IntSelectOP::Umax => "umax",
+            IntSelectOP::Imin => "imin",
+            IntSelectOP::Umin => "umin",
+        }
+    }
+    #[inline(always)]
+    pub(crate) fn to_int_cc(self) -> IntCC {
+        match self {
+            IntSelectOP::Imax => IntCC::SignedGreaterThan,
+            IntSelectOP::Umax => IntCC::UnsignedGreaterThan,
+            IntSelectOP::Imin => IntCC::SignedLessThan,
+            IntSelectOP::Umin => IntCC::UnsignedLessThan,
+        }
+    }
+}
 
 impl ReferenceValidOP {
     pub(crate) fn op_name(self) -> &'static str {
@@ -1310,7 +1359,6 @@ impl ReferenceValidOP {
         match op {
             crate::ir::Opcode::IsInvalid => Self::IsInvalid,
             crate::ir::Opcode::IsNull => Self::IsNull,
-
             _ => unreachable!(),
         }
     }

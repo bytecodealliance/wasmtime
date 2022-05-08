@@ -65,7 +65,8 @@ pub type VecBranchTarget = Vec<BranchTarget>;
 use crate::isa::risc_v::lower::isle::generated_code::MInst;
 pub use crate::isa::risc_v::lower::isle::generated_code::{
     AluOPRR, AluOPRRI, AluOPRRR, AluOPRRRR, AtomicOP, ExtendOp, FClassResult, FFlagsException,
-    FloatFlagOp, FloatRoundingMode, LoadOP, MInst as Inst, ReferenceValidOP, StoreOP, OPFPFMT,
+    FloatFlagOp, FloatRoundingMode, IntSelectOP, LoadOP, MInst as Inst, ReferenceValidOP, StoreOP,
+    OPFPFMT,
 };
 
 type BoxCallInfo = Box<CallInfo>;
@@ -431,6 +432,9 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_def(dst);
             collector.reg_uses(&[e, addr, v]);
         }
+        &Inst::IntSelect { ref dst, x, y, .. } => {
+            collector.reg_defs(&dst[..]);
+        }
     }
 }
 
@@ -653,7 +657,7 @@ impl Inst {
         state: &mut EmitState,
         allocs: &mut AllocationConsumer<'_>,
     ) -> String {
-        let register_name = |reg: Reg, allocs: &mut AllocationConsumer<'_>| -> String {
+        let format_reg = |reg: Reg, allocs: &mut AllocationConsumer<'_>| -> String {
             let reg = allocs.next(reg);
             reg_name(reg)
         };
@@ -665,7 +669,7 @@ impl Inst {
                 String::default()
             };
             regs.iter().for_each(|i| {
-                x.push_str(register_name(i.clone(), allocs).as_str());
+                x.push_str(format_reg(i.clone(), allocs).as_str());
                 if *i != *regs.last().unwrap() {
                     x.push_str(",");
                 }
@@ -719,12 +723,29 @@ impl Inst {
                 v,
                 ty,
             } => {
-                let t0 = register_name(t0.to_reg(), allocs);
-                let dst = register_name(dst.to_reg(), allocs);
-                let e = register_name(e, allocs);
-                let addr = register_name(addr, allocs);
-                let v = register_name(v, allocs);
+                let t0 = format_reg(t0.to_reg(), allocs);
+                let dst = format_reg(dst.to_reg(), allocs);
+                let e = format_reg(e, allocs);
+                let addr = format_reg(addr, allocs);
+                let v = format_reg(v, allocs);
                 format!("{} {},{},{} ;; t0={}", "atomic_cas", dst, e, v, t0)
+            }
+            &Inst::IntSelect {
+                op,
+                ref dst,
+                x,
+                y,
+                ty,
+            } => {
+                let dst: Vec<_> = dst.iter().map(|r| r.to_reg()).collect();
+                format!(
+                    "{} {},{},{} ;; ty={}",
+                    op.op_name(),
+                    format_regs(&dst[..], allocs),
+                    format_regs(x.regs(), allocs),
+                    format_regs(y.regs(), allocs),
+                    ty,
+                )
             }
             &Inst::BrTable {
                 index,
@@ -737,17 +758,17 @@ impl Inst {
                 format!(
                     "{} {},{},{};; tmp1={}",
                     "br_table",
-                    register_name(index, allocs),
+                    format_reg(index, allocs),
                     default_,
                     format_lables(&targets[..]),
-                    register_name(tmp1.to_reg(), allocs),
+                    format_reg(tmp1.to_reg(), allocs),
                 )
             }
             &Inst::Auipc { rd, imm } => {
                 format!(
                     "{} {},{}",
                     "auipc",
-                    register_name(rd.to_reg(), allocs),
+                    format_reg(rd.to_reg(), allocs),
                     imm.bits
                 )
             }
@@ -755,26 +776,21 @@ impl Inst {
                 format!(
                     "{} {},{}",
                     op.op_name(),
-                    register_name(rd.to_reg(), allocs),
-                    register_name(x, allocs)
+                    format_reg(rd.to_reg(), allocs),
+                    format_reg(x, allocs)
                 )
             }
             &Inst::Jalr { rd, base, offset } => {
                 format!(
                     "{} {},{}({})",
                     "jalr",
-                    register_name(rd.to_reg(), allocs),
+                    format_reg(rd.to_reg(), allocs),
                     offset.bits,
-                    register_name(base, allocs),
+                    format_reg(base, allocs),
                 )
             }
             &Inst::Lui { rd, ref imm } => {
-                format!(
-                    "{} {},{}",
-                    "lui",
-                    register_name(rd.to_reg(), allocs),
-                    imm.bits
-                )
+                format!("{} {},{}", "lui", format_reg(rd.to_reg(), allocs), imm.bits)
             }
             &Inst::AluRRR {
                 alu_op,
@@ -785,17 +801,17 @@ impl Inst {
                 format!(
                     "{} {},{},{}",
                     alu_op.op_name(),
-                    register_name(rd.to_reg(), allocs),
-                    register_name(rs1, allocs),
-                    register_name(rs2, allocs)
+                    format_reg(rd.to_reg(), allocs),
+                    format_reg(rs1, allocs),
+                    format_reg(rs2, allocs)
                 )
             }
             &Inst::AluRR { alu_op, rd, rs } => {
                 format!(
                     "{} {},{}",
                     alu_op.op_name(),
-                    register_name(rd.to_reg(), allocs),
-                    register_name(rs, allocs),
+                    format_reg(rd.to_reg(), allocs),
+                    format_reg(rs, allocs),
                 )
             }
             &Inst::AluRRRR {
@@ -808,10 +824,10 @@ impl Inst {
                 format!(
                     "{} {},{},{},{}",
                     alu_op.op_name(),
-                    register_name(rd.to_reg(), allocs),
-                    register_name(rs1, allocs),
-                    register_name(rs2, allocs),
-                    register_name(rs3, allocs),
+                    format_reg(rd.to_reg(), allocs),
+                    format_reg(rs1, allocs),
+                    format_reg(rs2, allocs),
+                    format_reg(rs3, allocs),
                 )
             }
             &Inst::AluRRImm12 {
@@ -823,8 +839,8 @@ impl Inst {
                 format!(
                     "{} {},{},{}",
                     alu_op.op_name(),
-                    register_name(rd.to_reg(), allocs),
-                    register_name(rs, allocs),
+                    format_reg(rd.to_reg(), allocs),
+                    format_reg(rs, allocs),
                     imm12.as_i16()
                 )
             }
@@ -837,7 +853,7 @@ impl Inst {
                 format!(
                     "{} {},{}",
                     op.op_name(),
-                    register_name(rd.to_reg(), allocs),
+                    format_reg(rd.to_reg(), allocs),
                     from.to_string_may_be_alloc(allocs)
                 )
             }
@@ -852,16 +868,16 @@ impl Inst {
                     "{}{} {},{},{}",
                     if ty == F32 { "f" } else { "d" },
                     cc,
-                    register_name(rd.to_reg(), allocs),
-                    register_name(rs1, allocs),
-                    register_name(rs2, allocs),
+                    format_reg(rd.to_reg(), allocs),
+                    format_reg(rs1, allocs),
+                    format_reg(rs2, allocs),
                 )
             }
             &Inst::Store { to, src, op, flags } => {
                 format!(
                     "{} {},{}",
                     op.op_name(),
-                    register_name(src, allocs),
+                    format_reg(src, allocs),
                     to.to_string_may_be_alloc(allocs)
                 )
             }
@@ -881,8 +897,8 @@ impl Inst {
                 format!(
                     "{} {},{}",
                     format_extend_op(signed, from_bits, to_bits),
-                    register_name(rd.to_reg(), allocs),
-                    register_name(rn, allocs)
+                    format_reg(rd.to_reg(), allocs),
+                    format_reg(rn, allocs)
                 )
             }
             &MInst::AjustSp { amount } => {
@@ -899,7 +915,7 @@ impl Inst {
                     format!(
                         "{} {},{}",
                         "jal",
-                        register_name(rd.to_reg(), allocs),
+                        format_reg(rd.to_reg(), allocs),
                         format!("{}", dest)
                     )
                 }
@@ -910,8 +926,8 @@ impl Inst {
                 kind,
                 ..
             } => {
-                let rs1 = register_name(kind.rs1, allocs);
-                let rs2 = register_name(kind.rs2, allocs);
+                let rs1 = format_reg(kind.rs1, allocs);
+                let rs2 = format_reg(kind.rs2, allocs);
                 let swap = kind.register_should_inverse_when_emit();
                 let x = format!(
                     "{} {},{},taken({}),not_taken({})",
@@ -941,9 +957,9 @@ impl Inst {
                 if rl {
                     op_name.push_str(".rl");
                 }
-                let rd = register_name(rd.to_reg(), allocs);
-                let addr = register_name(addr, allocs);
-                let src = register_name(src, allocs);
+                let rd = format_reg(rd.to_reg(), allocs);
+                let addr = format_reg(addr, allocs);
+                let src = format_reg(src, allocs);
                 if op.is_load() {
                     format!("{} {},({})", op_name, rd, addr,)
                 } else {
@@ -964,8 +980,8 @@ impl Inst {
                 format!(
                     "{} {},{}",
                     v,
-                    register_name(rd.to_reg(), allocs),
-                    register_name(rm, allocs)
+                    format_reg(rd.to_reg(), allocs),
+                    format_reg(rm, allocs)
                 )
             }
             &MInst::Fence => "fence".into(),
@@ -983,7 +999,7 @@ impl Inst {
                     "select",
                     ty,
                     format_regs(&dst[..], allocs),
-                    register_name(conditon, allocs),
+                    format_reg(conditon, allocs),
                     format_regs(x.regs(), allocs),
                     format_regs(y.regs(), allocs),
                 )
@@ -996,18 +1012,18 @@ impl Inst {
                     format!(
                         "{} {},{}",
                         op.op_name(),
-                        register_name(rd.to_reg(), allocs),
+                        format_reg(rd.to_reg(), allocs),
                         imm.unwrap().as_i16()
                     )
                 } else if let Some(r) = rs {
                     format!(
                         "{} {},{}",
                         op.op_name(),
-                        register_name(rd.to_reg(), allocs),
-                        register_name(r, allocs),
+                        format_reg(rd.to_reg(), allocs),
+                        format_reg(r, allocs),
                     )
                 } else {
-                    format!("{} {}", op.op_name(), register_name(rd.to_reg(), allocs))
+                    format!("{} {}", op.op_name(), format_reg(rd.to_reg(), allocs))
                 }
             }
         }

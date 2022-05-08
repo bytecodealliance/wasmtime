@@ -9,7 +9,7 @@ use crate::ir::MemFlags;
 use crate::ir::Opcode;
 use crate::ir::{ExternalName, LibCall};
 use crate::isa;
-use crate::isa::risc_v::inst::get_caller_save_register;
+
 use crate::isa::risc_v::{inst::EmitState, inst::*};
 use crate::isa::CallConv;
 use crate::machinst::*;
@@ -19,6 +19,7 @@ use crate::CodegenResult;
 use alloc::boxed::Box;
 use alloc::vec;
 use alloc::vec::Vec;
+use regs::{f_reg, x_reg};
 
 use smallvec::{smallvec, SmallVec};
 
@@ -513,8 +514,21 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         s.nominal_sp_to_fp
     }
 
-    fn get_regs_clobbered_by_call(call_conv_of_callee: isa::CallConv) -> Vec<Writable<Reg>> {
-        get_caller_save_register(call_conv_of_callee)
+    fn get_regs_clobbered_by_call(_call_conv_of_callee: isa::CallConv) -> Vec<Writable<Reg>> {
+        let mut v = vec![];
+        for (k, need_save) in get_caller_save_x_gpr().iter().enumerate() {
+            if !*need_save {
+                continue;
+            }
+            v.push(Writable::from_reg(x_reg(k)));
+        }
+        for (k, need_save) in get_caller_save_f_gpr().iter().enumerate() {
+            if !*need_save {
+                continue;
+            }
+            v.push(Writable::from_reg(f_reg(k)));
+        }
+        v
     }
 
     fn get_clobbered_callee_saves(
@@ -549,9 +563,6 @@ impl ABIMachineSpec for Riscv64MachineDeps {
     }
 }
 
-/*
-    todo too slow.
-*/
 pub fn get_caller_save_x_gpr() -> [bool; 32] {
     let mut x: [bool; 32] = [false; 32];
     for (i, v) in get_callee_save_x_gpr().iter().enumerate() {
