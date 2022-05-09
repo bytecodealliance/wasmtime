@@ -1,8 +1,5 @@
 //! AArch64 ISA definitions: instruction arguments.
 
-// Some variants are never constructed, but we still want them as options in the future.
-#![allow(dead_code)]
-
 use crate::ir::types::*;
 use crate::ir::Type;
 use crate::isa::aarch64::inst::*;
@@ -18,8 +15,11 @@ use std::string::String;
 #[repr(u8)]
 pub enum ShiftOp {
     LSL = 0b00,
+    #[allow(dead_code)]
     LSR = 0b01,
+    #[allow(dead_code)]
     ASR = 0b10,
+    #[allow(dead_code)]
     ROR = 0b11,
 }
 
@@ -92,6 +92,7 @@ pub enum ExtendOp {
     SXTB = 0b100,
     SXTH = 0b101,
     SXTW = 0b110,
+    #[allow(dead_code)]
     SXTX = 0b111,
 }
 
@@ -131,6 +132,7 @@ pub enum AMode {
     /// Register plus register offset.
     RegReg(Reg, Reg),
 
+    #[allow(dead_code)]
     /// Register plus register offset, scaled by type's size.
     RegScaled(Reg, Reg, Type),
 
@@ -186,25 +188,10 @@ impl AMode {
         AMode::UnsignedOffset(reg, UImm12Scaled::zero(I64))
     }
 
-    /// Memory reference using the sum of two registers as an address.
-    pub fn reg_plus_reg(reg1: Reg, reg2: Reg) -> AMode {
-        AMode::RegReg(reg1, reg2)
-    }
-
-    /// Memory reference using `reg1 + sizeof(ty) * reg2` as an address.
-    pub fn reg_plus_reg_scaled(reg1: Reg, reg2: Reg, ty: Type) -> AMode {
-        AMode::RegScaled(reg1, reg2, ty)
-    }
-
     /// Memory reference using `reg1 + sizeof(ty) * reg2` as an address, with `reg2` sign- or
     /// zero-extended as per `op`.
     pub fn reg_plus_reg_scaled_extended(reg1: Reg, reg2: Reg, ty: Type, op: ExtendOp) -> AMode {
         AMode::RegScaledExtended(reg1, reg2, ty, op)
-    }
-
-    /// Memory reference to a label: a global function or value, or data in the constant pool.
-    pub fn label(label: MemLabel) -> AMode {
-        AMode::Label(label)
     }
 
     /// Does the address resolve to just a register value, with no offset or
@@ -560,18 +547,12 @@ impl OperandSize {
     pub fn is32(self) -> bool {
         self == OperandSize::Size32
     }
+
     /// 64-bit case?
     pub fn is64(self) -> bool {
         self == OperandSize::Size64
     }
-    /// Convert from an `is32` boolean flag to an `OperandSize`.
-    pub fn from_is32(is32: bool) -> OperandSize {
-        if is32 {
-            OperandSize::Size32
-        } else {
-            OperandSize::Size64
-        }
-    }
+
     /// Convert from a needed width to the smallest size that fits.
     pub fn from_bits<I: Into<usize>>(bits: I) -> OperandSize {
         let bits: usize = bits.into();
@@ -642,14 +623,6 @@ impl ScalarSize {
             ScalarSize::Size32 => OperandSize::Size32,
             ScalarSize::Size64 => OperandSize::Size64,
             _ => panic!("Unexpected operand_size request for: {:?}", self),
-        }
-    }
-
-    /// Convert from an integer operand size.
-    pub fn from_operand_size(size: OperandSize) -> ScalarSize {
-        match size {
-            OperandSize::Size32 => ScalarSize::Size32,
-            OperandSize::Size64 => ScalarSize::Size64,
         }
     }
 
@@ -752,31 +725,6 @@ impl VectorSize {
             VectorSize::Size32x2 => false,
             VectorSize::Size32x4 => true,
             VectorSize::Size64x2 => true,
-        }
-    }
-
-    /// Produces a `VectorSize` with lanes twice as wide.  Note that if the resulting
-    /// size would exceed 128 bits, then the number of lanes is also halved, so as to
-    /// ensure that the result size is at most 128 bits.
-    pub fn widen(&self) -> VectorSize {
-        match self {
-            VectorSize::Size8x8 => VectorSize::Size16x8,
-            VectorSize::Size8x16 => VectorSize::Size16x8,
-            VectorSize::Size16x4 => VectorSize::Size32x4,
-            VectorSize::Size16x8 => VectorSize::Size32x4,
-            VectorSize::Size32x2 => VectorSize::Size64x2,
-            VectorSize::Size32x4 => VectorSize::Size64x2,
-            VectorSize::Size64x2 => unreachable!(),
-        }
-    }
-
-    /// Produces a `VectorSize` that has the same lane width, but half as many lanes.
-    pub fn halve(&self) -> VectorSize {
-        match self {
-            VectorSize::Size8x16 => VectorSize::Size8x8,
-            VectorSize::Size16x8 => VectorSize::Size16x4,
-            VectorSize::Size32x4 => VectorSize::Size32x2,
-            _ => *self,
         }
     }
 

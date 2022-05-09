@@ -11,26 +11,6 @@ use crate::settings;
 //=============================================================================
 // Registers, the Universe thereof, and printing
 
-#[rustfmt::skip]
-const GPR_INDICES: [u8; 16] = [
-    // r0 and r1 reserved
-    30, 31,
-    // r2 - r5 call-clobbered
-    16, 17, 18, 19,
-    // r6 - r14 call-saved (order reversed)
-    28, 27, 26, 25, 24, 23, 22, 21, 20,
-    // r15 (SP)
-    29,
-];
-
-#[rustfmt::skip]
-const FPR_INDICES: [u8; 16] = [
-    // f0 - f7 as pairs
-    0, 4, 1, 5, 2, 6, 3, 7,
-    // f8 - f15 as pairs
-    8, 12, 9, 13, 10, 14, 11, 15,
-];
-
 /// Get a reference to a GPR (integer register).
 pub fn gpr(num: u8) -> Reg {
     assert!(num < 16);
