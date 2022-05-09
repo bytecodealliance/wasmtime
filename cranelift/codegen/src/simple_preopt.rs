@@ -4,8 +4,6 @@
 //! should be useful for already well-optimized code. More general purpose
 //! early-stage optimizations can be found in the preopt crate.
 
-use cranelift_entity::SecondaryMap;
-
 use crate::cursor::{Cursor, FuncCursor};
 use crate::divconst_magic_numbers::{magic_s32, magic_s64, magic_u32, magic_u64};
 use crate::divconst_magic_numbers::{MS32, MS64, MU32, MU64};
@@ -1143,21 +1141,6 @@ fn try_fold_multi3(func: &mut Function) -> Option<()> {
 
     // now some heuristics. We are lucky that x and y are summetric, so roughly follow the same path
 
-    fn find_use_in_binop(pos: &mut FuncCursor, value: Value, opcode: Opcode) -> Option<Inst> {
-        while let Some(inst) = pos.next_inst() {
-            match pos.func.dfg[inst] {
-                InstructionData::Binary { opcode: op, args } if op == opcode => {
-                    if args.contains(&value) {
-                        return Some(inst);
-                    }
-                }
-                _ => continue,
-            }
-        }
-
-        None
-    }
-
     fn find_use_in_binop_with_imm(
         pos: &mut FuncCursor,
         value: Value,
@@ -1442,41 +1425,6 @@ fn try_fold_multi3(func: &mut Function) -> Option<()> {
     let store_result_high_inst =
         find_store(&mut pos, result_high_limb, Offset32::new(8), storage_flags)?;
     pos.func.dfg.inst_fixed_args_mut(store_result_high_inst)[0] = result_high;
-
-    // since it's almost full body replacement, we can detatch and remove a lot
-    let mut all_unused_values = SecondaryMap::new();
-    for arg in pos.func.dfg.inst_args(result_low_limb_inst) {
-        all_unused_values[*arg] = true;
-    }
-    for arg in pos.func.dfg.inst_args(result_high_limb_inst) {
-        all_unused_values[*arg] = true;
-    }
-    pos.func.dfg.replace(result_low_limb_inst).nop();
-    pos.func.dfg.replace(result_high_limb_inst).nop();
-
-    pos.goto_last_inst(main_body_block);
-
-    fn cleanup_inner(pos: &mut FuncCursor, unused_values: &mut SecondaryMap<Value, bool>) {
-        while let Some(inst) = pos.prev_inst() {
-            let mut removed = false;
-            for result in pos.func.dfg.inst_results(inst) {
-                if removed {
-                    break;
-                }
-                if unused_values.get(*result).copied().unwrap_or(false) {
-                    removed = true;
-                    for arg in pos.func.dfg.inst_args(inst) {
-                        unused_values[*arg] = true;
-                    }
-                }
-            }
-            if removed {
-                pos.func.dfg.replace(inst).nop();
-            }
-        }
-    }
-
-    cleanup_inner(&mut pos, &mut all_unused_values);
 
     return Some(());
 }
