@@ -110,3 +110,61 @@ fn serialize_deterministic() {
     assert_deterministic("(module (data \"\") (data \"\"))");
     assert_deterministic("(module (elem) (elem))");
 }
+
+// This test asserts that the optimization to transform separate data segments
+// into an initialization image doesn't unnecessarily create a massive module by
+// accident with a very large initialization image in it.
+#[test]
+fn serialize_not_overly_massive() -> Result<()> {
+    let mut config = Config::new();
+    config.memory_guaranteed_dense_image_size(1 << 20);
+    let engine = Engine::new(&config)?;
+
+    let assert_smaller_than_1mb = |module: &str| -> Result<()> {
+        println!("{}", module);
+        let bytes = Module::new(&engine, module)?.serialize()?;
+        assert!(bytes.len() < (1 << 20));
+        Ok(())
+    };
+
+    // Tons of space between data segments should use sparse initialization,
+    // along with various permutations of empty and nonempty segments.
+    assert_smaller_than_1mb(
+        r#"(module
+            (memory 20000)
+            (data (i32.const 0) "a")
+            (data (i32.const 0x200000) "b")
+        )"#,
+    )?;
+    assert_smaller_than_1mb(
+        r#"(module
+            (memory 20000)
+            (data (i32.const 0) "a")
+            (data (i32.const 0x200000) "")
+        )"#,
+    )?;
+    assert_smaller_than_1mb(
+        r#"(module
+            (memory 20000)
+            (data (i32.const 0) "")
+            (data (i32.const 0x200000) "b")
+        )"#,
+    )?;
+    assert_smaller_than_1mb(
+        r#"(module
+            (memory 20000)
+            (data (i32.const 0) "")
+            (data (i32.const 0x200000) "")
+        )"#,
+    )?;
+
+    // lone data segment
+    assert_smaller_than_1mb(
+        r#"(module
+            (memory 20000)
+            (data (i32.const 0x200000) "b")
+        )"#,
+    )?;
+
+    Ok(())
+}

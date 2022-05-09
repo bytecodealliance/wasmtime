@@ -252,10 +252,12 @@ impl ModuleTranslation<'_> {
                 };
                 let info = &mut info[memory];
                 let data_len = u64::from(init.data.end - init.data.start);
-                info.data_size += data_len;
-                info.min_addr = info.min_addr.min(init.offset);
-                info.max_addr = info.max_addr.max(init.offset + data_len);
-                info.segments.push((idx, init.clone()));
+                if data_len > 0 {
+                    info.data_size += data_len;
+                    info.min_addr = info.min_addr.min(init.offset);
+                    info.max_addr = info.max_addr.max(init.offset + data_len);
+                    info.segments.push((idx, init.clone()));
+                }
                 idx += 1;
                 true
             },
