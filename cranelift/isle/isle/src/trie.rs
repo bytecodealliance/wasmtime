@@ -240,6 +240,9 @@ impl TrieNode {
                 // Sort by priority, highest integer value first; then
                 // by trie symbol.
                 edges.sort_by_cached_key(|edge| (-edge.prio, edge.symbol.clone()));
+                for child in edges {
+                    child.node.sort();
+                }
             }
             _ => {}
         }
