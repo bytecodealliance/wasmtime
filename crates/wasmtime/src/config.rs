@@ -14,6 +14,8 @@ use wasmtime_environ::Tunables;
 use wasmtime_jit::{JitDumpAgent, NullProfilerAgent, ProfilingAgent, VTuneAgent};
 use wasmtime_runtime::{InstanceAllocator, OnDemandInstanceAllocator, RuntimeMemoryCreator};
 
+pub use wasmtime_environ::CacheStore;
+
 #[cfg(feature = "pooling-allocator")]
 pub use wasmtime_runtime::{InstanceLimits, PoolingAllocationStrategy};
 
@@ -117,6 +119,8 @@ struct CompilerConfig {
     target: Option<target_lexicon::Triple>,
     settings: HashMap<String, String>,
     flags: HashSet<String>,
+    #[cfg(compiler)]
+    cache_store: Option<Arc<dyn CacheStore>>,
 }
 
 #[cfg(compiler)]
@@ -127,6 +131,7 @@ impl CompilerConfig {
             target: None,
             settings: HashMap::new(),
             flags: HashSet::new(),
+            cache_store: None,
         }
     }
 
@@ -224,6 +229,17 @@ impl Config {
         self.compiler_config.target =
             Some(target_lexicon::Triple::from_str(target).map_err(|e| anyhow::anyhow!(e))?);
 
+        Ok(self)
+    }
+
+    /// Enables the incremental compilation cache in Cranelift, using the provided `CacheStore`
+    /// backend for storage.
+    #[cfg(all(feature = "incremental-cache", feature = "cranelift"))]
+    pub fn enable_incremental_compilation(
+        &mut self,
+        cache_store: Arc<dyn CacheStore>,
+    ) -> Result<&mut Self> {
+        self.compiler_config.cache_store = Some(cache_store);
         Ok(self)
     }
 
@@ -1486,6 +1502,10 @@ impl Config {
         }
         for flag in self.compiler_config.flags.iter() {
             compiler.enable(flag)?;
+        }
+
+        if let Some(cache_store) = &self.compiler_config.cache_store {
+            compiler.enable_incremental_compilation(cache_store.clone());
         }
 
         compiler.build()

@@ -12,7 +12,7 @@ use core::str::FromStr;
 #[cfg(feature = "enable-serde")]
 use serde::{Deserialize, Serialize};
 
-const TESTCASE_NAME_LENGTH: usize = 16;
+pub(crate) const TESTCASE_NAME_LENGTH: usize = 16;
 
 /// The name of an external is either a reference to a user-defined symbol
 /// table, or a short sequence of ascii bytes so that test cases do not have
@@ -25,7 +25,7 @@ const TESTCASE_NAME_LENGTH: usize = 16;
 /// External names can also serve as a primitive testing and debugging tool.
 /// In particular, many `.clif` test files use function names to identify
 /// functions.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub enum ExternalName {
     /// A name in a user-defined symbol table. Cranelift does not interpret

@@ -29,7 +29,7 @@ use serde::{Deserialize, Serialize};
 
 /// A version marker used to ensure that serialized clif ir is never deserialized with a
 /// different version of Cranelift.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Hash)]
 pub struct VersionMarker;
 
 #[cfg(feature = "enable-serde")]
@@ -60,7 +60,6 @@ impl<'de> Deserialize<'de> for VersionMarker {
     }
 }
 
-///
 /// Functions can be cloned, but it is not a very fast operation.
 /// The clone will have all the same entity numbers as the original.
 #[derive(Clone)]

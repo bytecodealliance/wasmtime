@@ -50,7 +50,7 @@ pub struct Context {
     pub loop_analysis: LoopAnalysis,
 
     /// Result of MachBackend compilation, if computed.
-    compiled_code: Option<CompiledCode>,
+    pub(crate) compiled_code: Option<CompiledCode>,
 
     /// Flag: do we want a disassembly with the CompiledCode?
     pub want_disasm: bool,
@@ -109,7 +109,7 @@ impl Context {
     /// `Vec<u8>`. The machine code is not relocated. Instead, any relocations can be obtained
     /// from `compiled_code()`.
     ///
-    /// This function calls `compile` and `emit_to_memory`, taking care to resize `mem` as
+    /// This function calls `compile`, taking care to resize `mem` as
     /// needed, so it provides a safe interface.
     ///
     /// Returns information about the function's code and read-only data.
@@ -126,6 +126,50 @@ impl Context {
         Ok(compiled_code)
     }
 
+    pub(crate) fn compile_inner(&mut self, isa: &dyn TargetIsa) -> CodegenResult<()> {
+        self.verify_if(isa)?;
+
+        let opt_level = isa.flags().opt_level();
+        log::trace!(
+            "Compiling (opt level {:?}):\n{}",
+            opt_level,
+            self.func.display()
+        );
+
+        self.compute_cfg();
+        if opt_level != OptLevel::None {
+            self.preopt(isa)?;
+        }
+        if isa.flags().enable_nan_canonicalization() {
+            self.canonicalize_nans(isa)?;
+        }
+
+        self.legalize(isa)?;
+        if opt_level != OptLevel::None {
+            self.compute_domtree();
+            self.compute_loop_analysis();
+            self.licm(isa)?;
+            self.simple_gvn(isa)?;
+        }
+
+        self.compute_domtree();
+        self.eliminate_unreachable_code(isa)?;
+        if opt_level != OptLevel::None {
+            self.dce(isa)?;
+        }
+
+        self.remove_constant_phis(isa)?;
+
+        if opt_level != OptLevel::None && isa.flags().enable_alias_analysis() {
+            self.replace_redundant_loads()?;
+            self.simple_gvn(isa)?;
+        }
+
+        let result = isa.compile_function(&self.func, self.want_disasm)?;
+        self.compiled_code = Some(result);
+        Ok(())
+    }
+
     /// Compile the function.
     ///
     /// Run the function through all the passes necessary to generate code for the target ISA
@@ -135,52 +179,7 @@ impl Context {
     /// Returns information about the function's code and read-only data.
     pub fn compile(&mut self, isa: &dyn TargetIsa) -> CompileResult<&CompiledCode> {
         let _tt = timing::compile();
-
-        let mut inner = || {
-            self.verify_if(isa)?;
-
-            let opt_level = isa.flags().opt_level();
-            log::trace!(
-                "Compiling (opt level {:?}):\n{}",
-                opt_level,
-                self.func.display()
-            );
-
-            self.compute_cfg();
-            if opt_level != OptLevel::None {
-                self.preopt(isa)?;
-            }
-            if isa.flags().enable_nan_canonicalization() {
-                self.canonicalize_nans(isa)?;
-            }
-
-            self.legalize(isa)?;
-            if opt_level != OptLevel::None {
-                self.compute_domtree();
-                self.compute_loop_analysis();
-                self.licm(isa)?;
-                self.simple_gvn(isa)?;
-            }
-
-            self.compute_domtree();
-            self.eliminate_unreachable_code(isa)?;
-            if opt_level != OptLevel::None {
-                self.dce(isa)?;
-            }
-
-            self.remove_constant_phis(isa)?;
-
-            if opt_level != OptLevel::None && isa.flags().enable_alias_analysis() {
-                self.replace_redundant_loads()?;
-                self.simple_gvn(isa)?;
-            }
-
-            let result = isa.compile_function(&self.func, self.want_disasm)?;
-            self.compiled_code = Some(result);
-            Ok(())
-        };
-
-        inner()
+        self.compile_inner(isa)
             .map(|_| self.compiled_code.as_ref().unwrap())
             .map_err(|error| CompileError {
                 inner: error,

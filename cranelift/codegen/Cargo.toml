@@ -82,6 +82,13 @@ enable-serde = [
     "serde",
     "cranelift-entity/enable-serde",
     "regalloc2/enable-serde",
+    "smallvec/serde"
+]
+
+# Enable the incremental compilation cache for hot-reload use cases.
+incremental-cache = [
+    "enable-serde",
+    "bincode",
 ]
 
 # Enable support for the Souper harvester.

@@ -27,7 +27,7 @@ use serde::{Deserialize, Serialize};
 /// WebAssembly values, which are [little-endian by design].
 ///
 /// [little-endian by design]: https://github.com/WebAssembly/design/blob/master/Portability.md
-#[derive(Clone, Hash, Eq, PartialEq, Debug, Default)]
+#[derive(Clone, Hash, Eq, PartialEq, Debug, Default, PartialOrd, Ord)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct ConstantData(Vec<u8>);
 
@@ -174,11 +174,11 @@ impl FromStr for ConstantData {
 pub struct ConstantPool {
     /// This mapping maintains the insertion order as long as Constants are created with
     /// sequentially increasing integers.
-    handles_to_values: BTreeMap<Constant, ConstantData>,
+    pub(crate) handles_to_values: BTreeMap<Constant, ConstantData>,
 
     /// This mapping is unordered (no need for lexicographic ordering) but allows us to map
     /// constant data back to handles.
-    values_to_handles: HashMap<ConstantData, Constant>,
+    pub(crate) values_to_handles: HashMap<ConstantData, Constant>,
 }
 
 impl ConstantPool {

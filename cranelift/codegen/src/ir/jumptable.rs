@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 /// Contents of a jump table.
 ///
 /// All jump tables use 0-based indexing and are densely populated.
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct JumpTableData {
     // Table entries.

@@ -14,6 +14,19 @@ mod function_generator;
 
 pub type TestCaseInput = Vec<DataValue>;
 
+/// Simple wrapper to generate a single Cranelift `Function`.
+#[derive(Debug)]
+pub struct SingleFunction(pub Function);
+
+impl<'a> Arbitrary<'a> for SingleFunction {
+    fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
+        FuzzGen::new(u)
+            .generate_func()
+            .map_err(|_| arbitrary::Error::IncorrectFormat)
+            .map(Self)
+    }
+}
+
 #[derive(Debug)]
 pub struct TestCase {
     pub func: Function,
@@ -118,12 +131,14 @@ where
         Ok(ctx.func)
     }
 
-    pub fn generate_test(mut self) -> Result<TestCase> {
+    fn generate_func(&mut self) -> Result<Function> {
         let func = FunctionGenerator::new(&mut self.u, &self.config).generate()?;
+        self.run_func_passes(func)
+    }
+
+    pub fn generate_test(mut self) -> Result<TestCase> {
+        let func = self.generate_func()?;
         let inputs = self.generate_test_inputs(&func.signature)?;
-
-        let func = self.run_func_passes(func)?;
-
         Ok(TestCase { func, inputs })
     }
 }

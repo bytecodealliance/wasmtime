@@ -1037,11 +1037,11 @@ impl<'a> FunctionBuilder<'a> {
         if let Some(small_type) = size.try_into().ok().and_then(Type::int_with_byte_size) {
             if let Equal | NotEqual = zero_cc {
                 let mut left_flags = flags;
-                if size == left_align.get().into() {
+                if size == left_align.get() as u64 {
                     left_flags.set_aligned();
                 }
                 let mut right_flags = flags;
-                if size == right_align.get().into() {
+                if size == right_align.get() as u64 {
                     right_flags.set_aligned();
                 }
                 let left_val = self.ins().load(small_type, left_flags, left, 0);

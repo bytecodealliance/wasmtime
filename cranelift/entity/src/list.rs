@@ -62,7 +62,7 @@ use serde::{Deserialize, Serialize};
 ///
 /// The index stored in an `EntityList` points to part 2, the list elements. The value 0 is
 /// reserved for the empty list which isn't allocated in the vector.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct EntityList<T: EntityRef + ReservedValue> {
     index: u32,
@@ -132,6 +132,13 @@ impl<T: EntityRef + ReservedValue> ListPool<T> {
     pub fn clear(&mut self) {
         self.data.clear();
         self.free.clear();
+    }
+
+    /// Returns a list of the allocated data in that list.
+    ///
+    /// To be used for serialization purposes.
+    pub fn internal_data(&self) -> &[T] {
+        self.data.as_slice()
     }
 
     /// Read the length of a list field, if it exists.
