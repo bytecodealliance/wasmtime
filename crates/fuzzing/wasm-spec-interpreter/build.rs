@@ -12,7 +12,7 @@ const OCAML_DIR: &'static str = "ocaml";
 const SPEC_DIR: &'static str = "ocaml/spec";
 const SPEC_REPOSITORY: &'static str = "https://github.com/conrad-watt/spec";
 const SPEC_REPOSITORY_BRANCH: &'static str = "wasmtime_fuzzing";
-const SPEC_REPOSITORY_REV: &'static str = "52851c8394ee4099fb8bdeaec6d60d92e787052f";
+const SPEC_REPOSITORY_REV: &'static str = "5395f07394eac9383b99ae04bb1fb34a77394555";
 
 fn main() {
     if cfg!(feature = "build-libinterpret") {
