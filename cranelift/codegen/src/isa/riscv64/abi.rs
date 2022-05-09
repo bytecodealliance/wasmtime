@@ -209,11 +209,6 @@ impl ABIMachineSpec for Riscv64MachineDeps {
     }
 
     fn gen_move(to_reg: Writable<Reg>, from_reg: Reg, ty: Type) -> Inst {
-        println!(
-            "######################## {:?} {:?} {:?}",
-            to_reg, from_reg, ty
-        );
-
         Inst::gen_move(to_reg, from_reg, ty)
     }
 
@@ -505,7 +500,6 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         match rc {
             RegClass::Int => 1,
             RegClass::Float => 1,
-            _ => panic!("Unexpected register class!"),
         }
     }
 

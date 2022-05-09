@@ -885,7 +885,20 @@ impl MachInstEmit for Inst {
                 unimplemented!("call not implamented.")
             }
             &Inst::CallInd { ref info } => {
-                unimplemented!("call not implamented.")
+                if let Some(s) = state.take_stack_map() {
+                    sink.add_stack_map(StackMapExtent::UpcomingBytes(4), s);
+                }
+                let rn = allocs.next(info.rn);
+                Inst::Jalr {
+                    rd: writable_zero_reg(),
+                    base: rn,
+                    offset: Imm12::zero(),
+                }
+                .emit(&[], sink, emit_info, state);
+                let loc = state.cur_srcloc();
+                if info.opcode.is_call() {
+                    sink.add_call_site(loc, info.opcode);
+                }
             }
             &Inst::TrapIf {
                 rs1,
@@ -962,20 +975,11 @@ impl MachInstEmit for Inst {
                 .emit(&[], sink, emit_info, state);
             }
 
-            &Inst::Mov { rd, rm, ty: ty } => {
+            &Inst::Mov { rd, rm, ty } => {
                 let rd = allocs.next_writable(rd);
                 let rm = allocs.next(rm);
-                /*
-                    todo::
-                    it is possible for rd and rm have diffent RegClass?????
-                    好像有时候mov会被修改，以至于float寄存器的mov变成了整数寄存器的mov
-                    这是bug
-                    is_move可以查询这个Inst是否是移动
-                    is_move并没有提供ty信息
-                    bug!!!!!!!!!!!!!! need
-                */
                 assert_ne!(rd.to_reg(), rm);
-                if rd.to_reg().class() == RegClass::Float {
+                if ty.is_float() {
                     let mut insts = SmallInstVec::new();
                     if ty == F32 {
                         insts.push(Inst::AluRR {
@@ -1038,8 +1042,8 @@ impl MachInstEmit for Inst {
                         not_taken: BranchTarget::zero(),
                         kind: IntegerCompare {
                             kind: IntCC::SignedLessThan,
-                            rs1: zero_reg(),
-                            rs2: index,
+                            rs1: index,
+                            rs2: zero_reg(),
                         },
                     }
                     .emit(&[], sink, emit_info, state);
@@ -1087,12 +1091,12 @@ impl MachInstEmit for Inst {
                         rs1: tmp1.to_reg(),
                         rs2: spilltmp_reg(),
                     });
-                    // tmp1 += 12  ;; 12 for three compute address instrction
+                    // tmp1 += 16  ;; 16 for three compute address instrction
                     insts.push(Inst::AluRRImm12 {
-                        alu_op: AluOPRRI::Slli,
+                        alu_op: AluOPRRI::Addi,
                         rd: tmp1,
                         rs: tmp1.to_reg(),
-                        imm12: Imm12::from_bits(12),
+                        imm12: Imm12::from_bits(16),
                     });
                     // finally goto jumps
                     insts.push(x[1].clone());
@@ -1609,12 +1613,6 @@ impl MachInstEmit for Inst {
         let mut allocs = AllocationConsumer::new(allocs);
         self.print_with_state(state, &mut allocs)
     }
-}
-
-macro_rules! emit_inst {
-    (x : expr ) => {
-        x.emit(&[], sink, emit_info, state);
-    };
 }
 
 fn alloc_value_regs(orgin: &ValueRegs<Reg>, alloc: &mut AllocationConsumer) -> ValueRegs<Reg> {

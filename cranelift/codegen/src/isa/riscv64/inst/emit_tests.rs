@@ -3,6 +3,11 @@ use crate::settings;
 use alloc::vec::Vec;
 
 /*
+    todo:: test very important.
+    bne beq
+
+*/
+/*
     todo:: more instruction
     todo:: risc  tool chain jump is wired.............
 */
@@ -24,6 +29,15 @@ fn test_riscv64_binemit() {
     }
 
     let mut insns = Vec::<TestUnit>::with_capacity(500);
+
+    // insns.push(TestUnit::new(
+    //     Inst::Jal {
+    //         rd: writable_zero_reg(),
+    //         dest: BranchTarget::offset(4),
+    //     },
+    //     "j 4",
+    // ));
+
     //todo:: more
     insns.push(TestUnit::new(
         Inst::AluRRR {
@@ -58,24 +72,6 @@ fn test_riscv64_binemit() {
         "auipc zero,120",
     ));
 
-    /*
-        todo :  jal zero,120 generate this.
-           a.out:     file format elf64-littleriscv
-
-    Disassembly of section .text:
-
-    0000000000000000 <.text>:
-    0:   0000006f                j       0x0
-    */
-
-    // insns.push(TestUnit::new(
-    //     Inst::Jal {
-    //         rd: writable_a0(),
-    //         dest: BranchTarget::offset(120),
-    //     },
-    //     "jal a0,120",
-    // ));
-
     insns.push(TestUnit::new(
         Inst::Jalr {
             rd: writable_a0(),
@@ -85,21 +81,6 @@ fn test_riscv64_binemit() {
         "jalr a0,100(a0)",
     ));
 
-    /*
-        todo::gnu tool chain  generate looks quit not right
-    */
-    // insns.push(TestUnit::new(
-    //     Inst::CondBr {
-    //         taken: BranchTarget::offset(4),
-    //         not_taken: BranchTarget::zero(),
-    //         kind: IntegerCompare {
-    //             kind: IntCC::Equal,
-    //             rs1: a0(),
-    //             rs2: a0(),
-    //         },
-    //     },
-    //     "beq a0,a0,4\nj 0",
-    // ));
     insns.push(TestUnit::new(
         Inst::Load {
             rd: writable_a0(),
@@ -1457,6 +1438,7 @@ fn test_riscv64_binemit() {
     //     },
     //     "fsflagsi a0,64",
     // ));
+
     {
         /*
         notice!!
@@ -1464,156 +1446,6 @@ fn test_riscv64_binemit() {
             if you modify "insns"
             please remove all this block source code and regenerated this.
          */
-        // generated code to speed up the test unit,otherwise you need invode riscv-gun tool chain every time.
-        insns[0].code = Some(263219);
-        insns[1].code = Some(104924179);
-        insns[2].code = Some(491575);
-        insns[3].code = Some(491543);
-        insns[4].code = Some(105186663);
-        insns[5].code = Some(105219331);
-        insns[6].code = Some(105235715);
-        insns[7].code = Some(105223427);
-        insns[8].code = Some(105239811);
-        insns[9].code = Some(105227523);
-        insns[10].code = Some(105243907);
-        insns[11].code = Some(105231619);
-        insns[12].code = Some(105227527);
-        insns[13].code = Some(105231623);
-        insns[14].code = Some(111215139);
-        insns[15].code = Some(111219235);
-        insns[16].code = Some(111223331);
-        insns[17].code = Some(111227427);
-        insns[18].code = Some(111223335);
-        insns[19].code = Some(111227431);
-        insns[20].code = Some(105186579);
-        insns[21].code = Some(105194771);
-        insns[22].code = Some(105198867);
-        insns[23].code = Some(105202963);
-        insns[24].code = Some(105215251);
-        insns[25].code = Some(5575955);
-        insns[26].code = Some(5592339);
-        insns[27].code = Some(1079334163);
-        insns[28].code = Some(126158107);
-        insns[29].code = Some(5575963);
-        insns[30].code = Some(5592347);
-        insns[31].code = Some(1079334171);
-        insns[32].code = Some(1079334171);
-        insns[33].code = Some(11863347);
-        insns[34].code = Some(1085605171);
-        insns[35].code = Some(11867443);
-        insns[36].code = Some(11871539);
-        insns[37].code = Some(11875635);
-        insns[38].code = Some(11879731);
-        insns[39].code = Some(11883827);
-        insns[40].code = Some(1085625651);
-        insns[41].code = Some(11887923);
-        insns[42].code = Some(11892019);
-        insns[43].code = Some(11863355);
-        insns[44].code = Some(1085605179);
-        insns[45].code = Some(11867451);
-        insns[46].code = Some(11883835);
-        insns[47].code = Some(1085625659);
-        insns[48].code = Some(45417779);
-        insns[49].code = Some(45421875);
-        insns[50].code = Some(45425971);
-        insns[51].code = Some(45430067);
-        insns[52].code = Some(45434163);
-        insns[53].code = Some(45438259);
-        insns[54].code = Some(45442355);
-        insns[55].code = Some(45446451);
-        insns[56].code = Some(45417787);
-        insns[57].code = Some(45434171);
-        insns[58].code = Some(45442363);
-        insns[59].code = Some(45446459);
-        insns[60].code = Some(11892051);
-        insns[61].code = Some(146109779);
-        insns[62].code = Some(280327507);
-        insns[63].code = Some(414545235);
-        insns[64].code = Some(548734291);
-        insns[65].code = Some(548738387);
-        insns[66].code = Some(548742483);
-        insns[67].code = Some(682952019);
-        insns[68].code = Some(682956115);
-        insns[69].code = Some(2696226131);
-        insns[70].code = Some(2696222035);
-        insns[71].code = Some(2696217939);
-        insns[72].code = Some(45446483);
-        insns[73].code = Some(179664211);
-        insns[74].code = Some(313881939);
-        insns[75].code = Some(448099667);
-        insns[76].code = Some(582288723);
-        insns[77].code = Some(582292819);
-        insns[78].code = Some(582296915);
-        insns[79].code = Some(716506451);
-        insns[80].code = Some(716510547);
-        insns[81].code = Some(2729780563);
-        insns[82].code = Some(2729776467);
-        insns[83].code = Some(2729772371);
-        insns[84].code = Some(1476785491);
-        insns[85].code = Some(3221615955);
-        insns[86].code = Some(3222664531);
-        insns[87].code = Some(3758458195);
-        insns[88].code = Some(3758462291);
-        insns[89].code = Some(3490018643);
-        insns[90].code = Some(3491067219);
-        insns[91].code = Some(4026860883);
-        insns[92].code = Some(3223680339);
-        insns[93].code = Some(3224728915);
-        insns[94].code = Some(3492115795);
-        insns[95].code = Some(3493164371);
-        insns[96].code = Some(1510339923);
-        insns[97].code = Some(3255170387);
-        insns[98].code = Some(3256218963);
-        insns[99].code = Some(3792012627);
-        insns[100].code = Some(3792016723);
-        insns[101].code = Some(1075148115);
-        insns[102].code = Some(3524592979);
-        insns[103].code = Some(4060415315);
-        insns[104].code = Some(3257234771);
-        insns[105].code = Some(3258283347);
-        insns[106].code = Some(3525670227);
-        insns[107].code = Some(3526718803);
-        insns[108].code = Some(2293593411);
-        insns[109].code = Some(2293593415);
-        insns[110].code = Some(2293593419);
-        insns[111].code = Some(2293593423);
-        insns[112].code = Some(2327147843);
-        insns[113].code = Some(2327147847);
-        insns[114].code = Some(2327147851);
-        insns[115].code = Some(2327147855);
-        insns[116].code = Some(335914287);
-        insns[117].code = Some(449160495);
-        insns[118].code = Some(147170607);
-        insns[119].code = Some(12952879);
-        insns[120].code = Some(549823791);
-        insns[121].code = Some(1623565615);
-        insns[122].code = Some(1086694703);
-        insns[123].code = Some(2160436527);
-        insns[124].code = Some(2697307439);
-        insns[125].code = Some(3234178351);
-        insns[126].code = Some(3771049263);
-        insns[127].code = Some(335918383);
-        insns[128].code = Some(449164591);
-        insns[129].code = Some(147174703);
-        insns[130].code = Some(12956975);
-        insns[131].code = Some(549827887);
-        insns[132].code = Some(1623569711);
-        insns[133].code = Some(1086698799);
-        insns[134].code = Some(2160440623);
-        insns[135].code = Some(2697311535);
-        insns[136].code = Some(3234182447);
-        insns[137].code = Some(3771053359);
-        insns[138].code = Some(267386895);
-        insns[139].code = Some(4111);
-        insns[140].code = Some(115);
-        insns[141].code = Some(1048691);
-        insns[142].code = Some(3155315);
-        insns[143].code = Some(2106739);
-        insns[144].code = Some(1058163);
-        insns[145].code = Some(3511667);
-        insns[146].code = Some(2463091);
-        insns[147].code = Some(1414515);
-        insns[148].code = Some(2184563);
     }
     let flags = settings::Flags::new(settings::builder());
     let emit_info = EmitInfo::new(flags);
@@ -1658,7 +1490,12 @@ fn test_riscv64_binemit() {
     if missing_code.len() > 0 {
         println!("// generated code to speed up the test unit,otherwise you need invode riscv-gun tool chain every time.");
         for i in missing_code {
-            println!("insns[{}].code = Some({});", i.0, i.1);
+            println!(
+                "insns[{}].code = Some({}); //{:?}",
+                i.0,
+                i.1,
+                i.1.to_le_bytes()
+            );
         }
         println!("");
     }

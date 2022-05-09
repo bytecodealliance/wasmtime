@@ -161,7 +161,7 @@ impl BranchFunct3 {
             BranchFunct3::Lt => 0b100,
             BranchFunct3::Ge => 0b101,
             BranchFunct3::Ltu => 0b110,
-            BranchFunct3::Geu => 0b110,
+            BranchFunct3::Geu => 0b111,
         }
     }
     pub(crate) fn op_name(self) -> &'static str {
@@ -1324,6 +1324,7 @@ pub fn is_type_signed(ty: Type) -> bool {
     assert!(ty.is_int());
     ty == I8 || ty == I16 || ty == I32 || ty == I64 || ty == I128
 }
+
 #[inline(always)]
 pub(crate) fn ir_iflags_conflict(op: crate::ir::Opcode) {
     unreachable!("ir {} conflict with risc-v iflags", op)

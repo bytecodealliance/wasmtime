@@ -124,6 +124,21 @@ impl BranchTarget {
     pub(crate) fn offset(off: i32) -> Self {
         Self::ResolvedOffset(off)
     }
+    #[inline(always)]
+    pub(crate) fn is_zero(self) -> bool {
+        match self {
+            BranchTarget::Label(_) => false,
+            BranchTarget::ResolvedOffset(off) => off == 0,
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) fn as_offset(self) -> Option<i32> {
+        match self {
+            BranchTarget::Label(_) => None,
+            BranchTarget::ResolvedOffset(off) => Some(off),
+        }
+    }
 }
 
 impl Display for BranchTarget {
@@ -451,7 +466,11 @@ impl MachInst for Inst {
     }
 
     fn canonical_type_for_rc(rc: RegClass) -> Type {
-        I64
+        if rc == RegClass::Float {
+            F64
+        } else {
+            I64
+        }
     }
 
     fn is_safepoint(&self) -> bool {
@@ -510,6 +529,7 @@ impl MachInst for Inst {
                     MachTerminator::None
                 }
             }
+            &Inst::Jalr { .. } => MachTerminator::Uncond,
             &Inst::Ret => MachTerminator::Ret,
 
             _ => MachTerminator::None,
@@ -517,11 +537,12 @@ impl MachInst for Inst {
     }
 
     fn gen_move(to_reg: Writable<Reg>, from_reg: Reg, ty: Type) -> Inst {
-        Inst::Mov {
+        let x = Inst::Mov {
             rd: to_reg,
             rm: from_reg,
             ty,
-        }
+        };
+        x
     }
 
     fn gen_constant<F: FnMut(Type) -> Writable<Reg>>(
@@ -909,7 +930,7 @@ impl Inst {
             &MInst::TrapIf { .. } => todo!(),
             &MInst::Trap { .. } => todo!(),
             &MInst::Jal { dest, rd } => {
-                if rd.to_reg().is_real() && rd.to_reg().to_real_reg().unwrap().hw_enc() == 0 {
+                if rd.to_reg() == zero_reg() {
                     format!("{} {}", "j", dest)
                 } else {
                     format!(
@@ -929,15 +950,26 @@ impl Inst {
                 let rs1 = format_reg(kind.rs1, allocs);
                 let rs2 = format_reg(kind.rs2, allocs);
                 let swap = kind.register_should_inverse_when_emit();
-                let x = format!(
-                    "{} {},{},taken({}),not_taken({})",
-                    kind.op_name(),
-                    if swap { rs2.as_str() } else { rs1.as_str() },
-                    if swap { rs1.as_str() } else { rs2.as_str() },
-                    taken,
-                    not_taken
-                );
-                x
+                if not_taken.is_zero() && taken.as_label().is_some() {
+                    let off = taken.as_offset().unwrap();
+                    format!(
+                        "{} {},{},{}",
+                        kind.op_name(),
+                        if swap { rs2.as_str() } else { rs1.as_str() },
+                        if swap { rs1.as_str() } else { rs2.as_str() },
+                        off
+                    )
+                } else {
+                    let x = format!(
+                        "{} {},{},taken({}),not_taken({})",
+                        kind.op_name(),
+                        if swap { rs2.as_str() } else { rs1.as_str() },
+                        if swap { rs1.as_str() } else { rs2.as_str() },
+                        taken,
+                        not_taken
+                    );
+                    x
+                }
             }
             &MInst::Atomic {
                 op,
