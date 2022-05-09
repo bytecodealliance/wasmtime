@@ -1377,7 +1377,6 @@ pub fn constructor_amode_add<C: Context>(ctx: &mut C, arg0: &Amode, arg1: Value)
             }
         }
     }
-    let pattern0_0 = arg0;
     let pattern1_0 = arg1;
     if let Some(pattern2_0) = C::def_inst(ctx, pattern1_0) {
         let pattern3_0 = C::inst_data(ctx, pattern2_0);
@@ -1395,6 +1394,7 @@ pub fn constructor_amode_add<C: Context>(ctx: &mut C, arg0: &Amode, arg1: Value)
             }
         }
     }
+    let pattern0_0 = arg0;
     match pattern0_0 {
         &Amode::ImmReg {
             simm32: pattern1_0,

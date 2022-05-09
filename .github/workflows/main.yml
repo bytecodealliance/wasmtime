@@ -196,10 +196,8 @@ jobs:
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
-    - name: Delete ISLE manifest files to force a re-build
-      run: rm cranelift/codegen/src/isa/aarch64/lower/isle/generated_code.manifest cranelift/codegen/src/isa/s390x/lower/isle/generated_code.manifest cranelift/codegen/src/isa/x64/lower/isle/generated_code.manifest
-    - name: Rebuild ISLE DSL files
-      run: cargo build -p cranelift-codegen --features "rebuild-isle"
+    - name: Force-rebuild ISLE DSL files
+      run: ./scripts/force-rebuild-isle.sh
     - name: Reformat
       run: cargo fmt -p cranelift-codegen
     - name: Check that the ISLE DSL files are up-to-date
