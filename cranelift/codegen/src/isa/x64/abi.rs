@@ -537,6 +537,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                 Writable::from_reg(regs::rsp()),
             ));
         }
+
         // Store each clobbered register in order at offsets from RSP,
         // placing them above the fixed frame slots.
         let mut cur_offset = fixed_frame_storage_size;

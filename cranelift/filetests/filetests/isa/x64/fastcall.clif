@@ -315,3 +315,30 @@ block0(v0: i64):
 ;   popq    %rbp
 ;   ret
 
+function %f10(i64 vmctx, i64, i64, i64) -> i64 windows_fastcall {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0
+    stack_limit = gv1
+    ss0 = explicit_slot 20
+
+block0(v0: i64, v1: i64, v2: i64, v3: i64):
+  return v0
+}
+
+;   pushq   %rbp
+;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
+;   movq    %rsp, %rbp
+;   unwind SetFrameReg
+;   movq    0(%rcx), %r10
+;   addq    %r10, $32, %r10
+;   cmpq    %rsp, %r10
+;   jbe ; ud2 stk_ovf ;
+;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
+;   subq    %rsp, $32, %rsp
+; block0:
+;   movq    %rcx, %rax
+;   addq    %rsp, $32, %rsp
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
