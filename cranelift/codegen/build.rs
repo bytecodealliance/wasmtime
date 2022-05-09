@@ -232,6 +232,10 @@ fn get_isle_compilations(crate_dir: &std::path::Path) -> Result<IsleCompilations
     // There should be one entry for each backend that uses ISLE for lowering,
     // and if/when we replace our peephole optimization passes with ISLE, there
     // should be an entry for each of those as well.
+    //
+    // N.B.: add any new compilation outputs to
+    // `scripts/force-rebuild-isle.sh` if they do not fit the pattern
+    // `cranelift/codegen/src/isa/*/lower/isle/generated_code.rs`!
     Ok(IsleCompilations {
         items: vec![
             // The x86-64 instruction selector.
