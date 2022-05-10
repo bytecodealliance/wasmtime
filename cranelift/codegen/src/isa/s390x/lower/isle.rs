@@ -17,7 +17,7 @@ use crate::{
         StackSlot, TrapCode, Value, ValueList,
     },
     isa::unwind::UnwindInst,
-    machinst::{InsnOutput, LowerCtx},
+    machinst::{InsnOutput, LowerCtx, VCodeConstant, VCodeConstantData},
 };
 use std::boxed::Box;
 use std::cell::Cell;

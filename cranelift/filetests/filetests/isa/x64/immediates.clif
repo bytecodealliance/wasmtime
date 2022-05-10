@@ -1,0 +1,35 @@
+test compile precise-output
+target x86_64
+
+function %f0(i64, i64) {
+block0(v0: i64, v1: i64):
+  v2 = iconst.i64 0xffff_eeee_dddd_cccc
+  v3 = iadd.i64 v0, v2
+  store v3, v1
+  v4 = isub.i64 v0, v2
+  store v4, v1
+  v5 = band.i64 v0, v2
+  store v5, v1
+  v6 = bor.i64 v0, v2
+  store v6, v1
+  return
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %r11
+;   addq    %r11, const(VCodeConstant(0)), %r11
+;   movq    %r11, 0(%rsi)
+;   movq    %rdi, %rax
+;   subq    %rax, const(VCodeConstant(0)), %rax
+;   movq    %rax, 0(%rsi)
+;   movq    %rdi, %rax
+;   andq    %rax, const(VCodeConstant(0)), %rax
+;   movq    %rax, 0(%rsi)
+;   orq     %rdi, const(VCodeConstant(0)), %rdi
+;   movq    %rdi, 0(%rsi)
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
