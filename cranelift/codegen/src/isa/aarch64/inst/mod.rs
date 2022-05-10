@@ -1,8 +1,5 @@
 //! This module defines aarch64-specific machine instruction types.
 
-// Some variants are not constructed, but we still want them as options in the future.
-#![allow(dead_code)]
-
 use crate::binemit::{Addend, CodeOffset, Reloc};
 use crate::ir::types::{
     B1, B128, B16, B32, B64, B8, F32, F64, FFLAGS, I128, I16, I32, I64, I8, I8X16, IFLAGS, R32, R64,
@@ -2738,9 +2735,11 @@ pub enum LabelUse {
     /// 26-bit branch offset (unconditional branches). PC-rel, offset is imm << 2. Immediate is 26
     /// signed bits, in bits 25:0. Used by b, bl.
     Branch26,
+    #[allow(dead_code)]
     /// 19-bit offset for LDR (load literal). PC-rel, offset is imm << 2. Immediate is 19 signed bits,
     /// in bits 23:5.
     Ldr19,
+    #[allow(dead_code)]
     /// 21-bit offset for ADR (get address of label). PC-rel, offset is not shifted. Immediate is
     /// 21 signed bits, with high 19 bits in bits 23:5 and low 2 bits in bits 30:29.
     Adr21,

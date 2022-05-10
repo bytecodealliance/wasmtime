@@ -1,8 +1,5 @@
 //! This module defines s390x-specific machine instruction types.
 
-// Some variants are not constructed, but we still want them as options in the future.
-#![allow(dead_code)]
-
 use crate::binemit::{Addend, CodeOffset, Reloc};
 use crate::ir::{types, ExternalName, Opcode, Type};
 use crate::machinst::*;
@@ -2019,6 +2016,7 @@ impl Inst {
 /// Different forms of label references for different instruction formats.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LabelUse {
+    #[allow(dead_code)]
     /// RI-format branch.  16-bit signed offset.  PC-relative, offset is imm << 1.
     BranchRI,
     /// RIL-format branch.  32-bit signed offset.  PC-relative, offset is imm << 1.

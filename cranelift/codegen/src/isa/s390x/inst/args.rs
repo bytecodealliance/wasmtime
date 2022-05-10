@@ -1,8 +1,5 @@
 //! S390x ISA definitions: instruction arguments.
 
-// Some variants are never constructed, but we still want them as options in the future.
-#![allow(dead_code)]
-
 use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::ir::MemFlags;
 use crate::isa::s390x::inst::*;
