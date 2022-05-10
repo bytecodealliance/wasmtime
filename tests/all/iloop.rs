@@ -33,7 +33,7 @@ fn loops_interruptable() -> anyhow::Result<()> {
     store.engine().increment_epoch();
     let trap = iloop.call(&mut store, ()).unwrap_err();
     assert!(
-        trap.to_string().contains("epoch deadline reached"),
+        trap.trap_code().unwrap() == TrapCode::Interrupt,
         "bad message: {}",
         trap
     );
@@ -50,7 +50,7 @@ fn functions_interruptable() -> anyhow::Result<()> {
     store.engine().increment_epoch();
     let trap = iloop.call(&mut store, ()).unwrap_err();
     assert!(
-        trap.to_string().contains("epoch deadline reached"),
+        trap.trap_code().unwrap() == TrapCode::Interrupt,
         "{}",
         trap.to_string()
     );
@@ -103,7 +103,7 @@ fn loop_interrupt_from_afar() -> anyhow::Result<()> {
     thread.join().unwrap();
     assert!(HITS.load(SeqCst) > NUM_HITS);
     assert!(
-        trap.to_string().contains("epoch deadline reached"),
+        trap.trap_code().unwrap() == TrapCode::Interrupt,
         "bad message: {}",
         trap.to_string()
     );
@@ -143,7 +143,7 @@ fn function_interrupt_from_afar() -> anyhow::Result<()> {
     thread.join().unwrap();
     assert!(HITS.load(SeqCst) > NUM_HITS);
     assert!(
-        trap.to_string().contains("epoch deadline reached"),
+        trap.trap_code().unwrap() == TrapCode::Interrupt,
         "bad message: {}",
         trap.to_string()
     );
