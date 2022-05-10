@@ -890,7 +890,7 @@ impl MachInstEmit for Inst {
                 }
                 let rn = allocs.next(info.rn);
                 Inst::Jalr {
-                    rd: writable_zero_reg(),
+                    rd: writable_link_reg(),
                     base: rn,
                     offset: Imm12::zero(),
                 }

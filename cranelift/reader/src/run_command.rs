@@ -45,6 +45,7 @@ impl RunCommand {
                 };
                 if !matched {
                     let actual = DisplayDataValues(&actual);
+
                     return Err(format!("Failed test: {}, actual: {}", self, actual));
                 }
             }

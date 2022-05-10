@@ -24,6 +24,7 @@ use crate::{settings, CodegenError, CodegenResult};
 
 pub use crate::ir::condcodes::FloatCC;
 use crate::machinst::*;
+use alloc::fmt::format;
 use regalloc2::Allocation;
 
 use alloc::vec::Vec;
@@ -364,7 +365,9 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
         }
         &Inst::AjustSp { .. } => {}
         &Inst::Call { ref info } => todo!(),
-        &Inst::CallInd { ref info } => todo!(),
+        &Inst::CallInd { ref info } => {
+            collector.reg_use(info.rn);
+        }
         &Inst::TrapIf { rs1, rs2, .. } => {
             collector.reg_use(rs1);
             collector.reg_use(rs2);
@@ -639,7 +642,7 @@ impl PrettyPrint for Inst {
     }
 }
 
-fn reg_name(reg: Reg) -> String {
+pub fn reg_name(reg: Reg) -> String {
     match reg.to_real_reg() {
         Some(real) => match real.class() {
             RegClass::Int => match real.hw_enc() {
@@ -871,12 +874,9 @@ impl Inst {
                 from,
                 flags,
             } => {
-                format!(
-                    "{} {},{}",
-                    op.op_name(),
-                    format_reg(rd.to_reg(), allocs),
-                    from.to_string_may_be_alloc(allocs)
-                )
+                let base = from.to_string_may_be_alloc(allocs);
+                let rd = format_reg(rd.to_reg(), allocs);
+                format!("{} {},{}", op.op_name(), rd, base,)
             }
             &Inst::Ffcmp {
                 rd,
@@ -895,12 +895,9 @@ impl Inst {
                 )
             }
             &Inst::Store { to, src, op, flags } => {
-                format!(
-                    "{} {},{}",
-                    op.op_name(),
-                    format_reg(src, allocs),
-                    to.to_string_may_be_alloc(allocs)
-                )
+                let base = to.to_string_may_be_alloc(allocs);
+                let src = format_reg(src, allocs);
+                format!("{} {},{}", op.op_name(), src, base,)
             }
             &Inst::EpiloguePlaceholder => {
                 format!("epilogue place holder")
@@ -926,7 +923,7 @@ impl Inst {
                 format!("{} sp,{}", "addi", amount)
             }
             &MInst::Call { .. } => todo!(),
-            &MInst::CallInd { .. } => todo!(),
+            &MInst::CallInd { ref info } => format!("callind {}", format_reg(info.rn, allocs)),
             &MInst::TrapIf { .. } => todo!(),
             &MInst::Trap { .. } => todo!(),
             &MInst::Jal { dest, rd } => {

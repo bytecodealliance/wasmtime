@@ -230,13 +230,13 @@ pub fn crate_reg_eviroment(_flags: &settings::Flags) -> MachineEnv {
     }
 }
 #[inline(always)]
-pub(crate) fn x_reg(enc: usize) -> Reg {
+pub fn x_reg(enc: usize) -> Reg {
     let p_reg = PReg::new(enc, RegClass::Int);
     let v_reg = VReg::new(p_reg.index(), p_reg.class());
     Reg::from(v_reg)
 }
 #[inline(always)]
-pub(crate) fn f_reg(enc: usize) -> Reg {
+pub fn f_reg(enc: usize) -> Reg {
     let p_reg = PReg::new(enc, RegClass::Float);
     let v_reg = VReg::new(p_reg.index(), p_reg.class());
     Reg::from(v_reg)

@@ -39,7 +39,7 @@ pub struct Riscv64Backend {
 }
 
 impl Riscv64Backend {
-    /// Create a new AArch64 backend with the given (shared) flags.
+    /// Create a new riscv64 backend with the given (shared) flags.
     pub fn new_with_flags(
         triple: Triple,
         flags: shared_settings::Flags,
@@ -53,6 +53,36 @@ impl Riscv64Backend {
             mach_env,
         }
     }
+    /// Create a new riscv64 backend with the given (shared) flags.
+    pub fn new_test() -> Riscv64Backend {
+        // let mut b = crate::settings::builder();
+        // let shared = crate::settings::Flags::new(b.clone());
+        // let isa_flags = settings::Flags::new(&shared, b.clone());
+        // Riscv64Backend {
+        //     triple: TRIPLE.clone(),
+        //     flags: shared.clone(),
+        //     isa_flags,
+        //     mach_env: crate_reg_eviroment(&shared.clone()),
+        // }
+        use alloc::vec;
+
+        use super::*;
+        use crate::cursor::{Cursor, FuncCursor};
+        use crate::ir::condcodes::FloatCC;
+        use crate::ir::{types::*, JumpTable, JumpTableData};
+        use crate::ir::{AbiParam, ExternalName, Function, InstBuilder, Signature};
+        use crate::isa::CallConv;
+        use crate::settings;
+        use crate::settings::Configurable;
+        use std::io;
+
+        let mut shared_flags_builder = settings::builder();
+        shared_flags_builder.set("opt_level", "none").unwrap();
+        let shared_flags = settings::Flags::new(shared_flags_builder);
+        let isa_flags = riscv_settings::Flags::new(&shared_flags, riscv_settings::builder());
+        let backend = Riscv64Backend::new_with_flags(TRIPLE.clone(), shared_flags, isa_flags);
+        backend
+    }
 
     /// This performs lowering to VCode, register-allocates the code, computes block layout and
     /// finalizes branches. The result is ready for binary emission.
@@ -64,6 +94,14 @@ impl Riscv64Backend {
         let emit_info = EmitInfo::new(flags.clone());
         let abi = Box::new(abi::Riscv64Callee::new(func, flags, self.isa_flags())?);
         compile::compile::<Riscv64Backend>(func, self, abi, &self.mach_env, emit_info)
+    }
+    ///dfdfdsfdffdsfds
+    pub fn compile_function_test(
+        &self,
+        func: &Function,
+        want_disasm: bool,
+    ) -> CodegenResult<MachCompileResult> {
+        self.compile_function(func, want_disasm)
     }
 }
 
@@ -82,7 +120,9 @@ impl TargetIsa for Riscv64Backend {
         let value_labels_ranges = emit_result.value_labels_ranges;
         let buffer = emit_result.buffer.finish();
         let stackslot_offsets = emit_result.stackslot_offsets;
-
+        if want_disasm {
+            log::info!("compiler code:{}", emit_result.disasm.clone().unwrap());
+        }
         Ok(MachCompileResult {
             buffer,
             frame_size,
@@ -95,7 +135,7 @@ impl TargetIsa for Riscv64Backend {
     }
 
     fn name(&self) -> &'static str {
-        "risc-v64"
+        "riscv64"
     }
 
     fn triple(&self) -> &Triple {
@@ -177,7 +217,7 @@ impl log::Log for SimpleLogger {
     fn flush(&self) {}
 }
 
-pub fn init_logger() {
+fn init_logger() {
     log::set_logger(&SIMPLE_LOGGER)
         .map(|()| log::set_max_level(LevelFilter::max()))
         .unwrap()
@@ -596,8 +636,8 @@ mod test {
         file.write_all(_code).unwrap();
     }
 }
-
-static TRIPLE: Triple = Triple {
+///
+pub static TRIPLE: Triple = Triple {
     architecture: Architecture::Riscv64(Riscv64Architecture::Riscv64),
     vendor: target_lexicon::Vendor::Unknown,
     operating_system: OperatingSystem::Unknown,
