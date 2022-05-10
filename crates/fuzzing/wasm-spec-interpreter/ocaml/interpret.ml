@@ -61,7 +61,7 @@ let interpret_exn module_bytes opt_params =
   let fuel = Z.of_string "4611686018427387904" in
   let max_call_depth = Z.of_string "300" in
   (match run_fuzz (nat_of_integer fuel) (nat_of_integer max_call_depth) (make_empty_store_m ()) m_isa [] opt_params_ () with
-  | (s', RValue vs_isa') -> List.map convert_from_wasm (List.rev vs_isa')
+  | (s', RValue vs_isa') -> List.rev_map convert_from_wasm vs_isa'
   | (s', RTrap str) -> raise (Eval.Trap (Source.no_region, "(Isabelle) trap: " ^ str))
   | (s', (RCrash (Error_exhaustion str))) -> raise (Eval.Exhaustion (Source.no_region, "(Isabelle) call stack exhausted"))
   | (s', (RCrash (Error_invalid str))) -> raise (Eval.Crash (Source.no_region, "(Isabelle) error: " ^ str))

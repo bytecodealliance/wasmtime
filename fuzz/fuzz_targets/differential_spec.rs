@@ -22,7 +22,6 @@ fn run(data: &[u8]) -> Result<()> {
     config.set_differential_config();
 
     // Enable features that the spec interpreter has implemented
-    config.module_config.config.multi_value_enabled = false;
     config.module_config.config.simd_enabled = true;
 
     // TODO: this is a best-effort attempt to avoid errors caused by the
