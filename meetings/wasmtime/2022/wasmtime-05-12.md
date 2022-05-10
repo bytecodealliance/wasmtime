@@ -12,6 +12,7 @@
     1. _Submit a PR to add your announcement here_
 1. Other agenda items
     1. Discuss extending the pollers API
+    1. Discuss shared memory implementation (i.e., changes to `VMContext`)
     1. _Submit a PR to add your item here_
 
 ## Notes
