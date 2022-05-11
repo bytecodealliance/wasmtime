@@ -885,6 +885,16 @@ impl MachInstEmit for Inst {
                 unimplemented!("call not implamented.")
             }
             &Inst::CallInd { ref info } => {
+                /*
+
+
+
+
+
+
+
+
+                */
                 if let Some(s) = state.take_stack_map() {
                     sink.add_stack_map(StackMapExtent::UpcomingBytes(4), s);
                 }
@@ -1201,6 +1211,7 @@ impl MachInstEmit for Inst {
             }
             // &Inst::LoadExtName { rd, name, offset } => todo!(),
             &Inst::LoadAddr { rd, mem } => {
+                let rd = allocs.next_writable(rd);
                 let base = mem.get_base_register();
                 let base = allocs.next(base);
                 let offset = mem.get_offset_with_state(state);
@@ -1542,7 +1553,7 @@ impl MachInstEmit for Inst {
                     rl: true,
                 }
                 .emit(&[], sink, emit_info, state);
-                // bne dst , v , cas
+                // bne dst , v , cas retry.
                 Inst::CondBr {
                     taken: BranchTarget::Label(cas_lebel),
                     not_taken: BranchTarget::zero(),

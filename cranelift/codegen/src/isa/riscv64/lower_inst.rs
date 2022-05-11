@@ -397,12 +397,12 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::AtomicCas => {
+            let ty_access = ty.unwrap();
+            assert!(is_valid_atomic_transaction_ty(ty_access));
             let r_dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let r_addr = ctx.put_input_in_regs(insn, 0).only_reg().unwrap();
             let r_expected = ctx.put_input_in_regs(insn, 1).only_reg().unwrap();
             let r_replacement = ctx.put_input_in_regs(insn, 2).only_reg().unwrap();
-            let ty_access = ty.unwrap();
-            assert!(is_valid_atomic_transaction_ty(ty_access));
             let t0 = ctx.alloc_tmp(I64).only_reg().unwrap();
             ctx.emit(Inst::AtomicCas {
                 t0,
@@ -758,7 +758,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 }
                 _ => unreachable!(),
             };
-            
+
             abi.emit_stack_pre_adjust(ctx);
             assert!(inputs.len() == abi.num_args());
             for i in abi.get_copy_to_arg_order() {

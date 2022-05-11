@@ -386,7 +386,11 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_use(kind.rs2);
         }
         &Inst::LoadExtName { rd, .. } => todo!(),
-        &Inst::LoadAddr { rd, mem } => todo!(),
+        &Inst::LoadAddr { rd, mem } => {
+            collector.reg_def(rd);
+            collector.reg_use(mem.get_base_register());
+        }
+
         &Inst::VirtualSPOffsetAdj { .. } => {}
         &Inst::Mov { rd, rm, .. } => {
             collector.reg_def(rd);
@@ -757,7 +761,10 @@ impl Inst {
                 let e = format_reg(e, allocs);
                 let addr = format_reg(addr, allocs);
                 let v = format_reg(v, allocs);
-                format!("{} {},{},{} ;; t0={}", "atomic_cas", dst, e, v, t0)
+                format!(
+                    "{} {},{},{},({});; t0={}",
+                    "atomic_cas", dst, e, v, addr, t0
+                )
             }
             &Inst::IntSelect {
                 op,
@@ -1005,7 +1012,11 @@ impl Inst {
                 }
             }
             &MInst::LoadExtName { .. } => todo!(),
-            &MInst::LoadAddr { .. } => todo!(),
+            &MInst::LoadAddr { ref rd, ref mem } => {
+                let rd = format_reg(rd.to_reg(), allocs);
+                let mem = mem.to_string_may_be_alloc(allocs);
+                format!("load_addr {},{}", rd, mem)
+            }
             &MInst::VirtualSPOffsetAdj { .. } => todo!(),
             &MInst::Mov { rd, rm, ty } => {
                 let v = if ty == F32 {
