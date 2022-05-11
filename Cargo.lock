@@ -605,7 +605,6 @@ dependencies = [
  "log",
  "miette",
  "tempfile",
- "thiserror",
 ]
 
 [[package]]

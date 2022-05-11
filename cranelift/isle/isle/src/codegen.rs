@@ -1,6 +1,7 @@
 //! Generate Rust code from a series of Sequences.
 
 use crate::ir::{ExprInst, InstId, PatternInst, Value};
+use crate::log;
 use crate::sema::ExternalSig;
 use crate::sema::{TermEnv, TermId, Type, TypeEnv, TypeId, Variant};
 use crate::trie::{TrieEdge, TrieNode, TrieSymbol};
@@ -311,7 +312,7 @@ impl<'a> Codegen<'a> {
         ctx: &mut BodyContext,
         returns: &mut Vec<(usize, String)>,
     ) {
-        log::trace!("generate_expr_inst: {:?}", inst);
+        log!("generate_expr_inst: {:?}", inst);
         match inst {
             &ExprInst::ConstInt { ty, val } => {
                 let value = Value::Expr {
@@ -665,7 +666,7 @@ impl<'a> Codegen<'a> {
         indent: &str,
         ctx: &mut BodyContext,
     ) -> bool {
-        log::trace!("generate_body:\n{}", trie.pretty());
+        log!("generate_body:\n{}", trie.pretty());
         let mut returned = false;
         match trie {
             &TrieNode::Empty => {}
@@ -706,7 +707,7 @@ impl<'a> Codegen<'a> {
                     let mut last = i;
                     let mut adjacent_variants = BTreeSet::new();
                     let mut adjacent_variant_input = None;
-                    log::trace!(
+                    log!(
                         "edge: prio = {:?}, symbol = {:?}",
                         edges[i].prio,
                         edges[i].symbol

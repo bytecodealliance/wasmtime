@@ -27,3 +27,8 @@ pub mod lexer;
 pub mod parser;
 pub mod sema;
 pub mod trie;
+mod log;
+
+#[cfg(feature = "miette-errors")]
+mod error_miette;
+
