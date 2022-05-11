@@ -23,7 +23,7 @@ use crate::{
     isa::aarch64::inst::args::{ShiftOp, ShiftOpShiftImm},
     isa::aarch64::lower::{is_valid_atomic_transaction_ty, writable_xreg, xreg},
     isa::unwind::UnwindInst,
-    machinst::{ty_bits, InsnOutput, LowerCtx},
+    machinst::{ty_bits, InsnOutput, LowerCtx, VCodeConstant, VCodeConstantData},
 };
 use std::boxed::Box;
 use std::convert::TryFrom;

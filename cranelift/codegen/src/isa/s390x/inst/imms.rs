@@ -56,11 +56,6 @@ impl SImm20 {
         }
     }
 
-    /// Create a zero immediate of this format.
-    pub fn zero() -> SImm20 {
-        SImm20 { value: 0 }
-    }
-
     /// Bits for encoding.
     pub fn bits(&self) -> u32 {
         let encoded: u32 = self.value as u32;
@@ -130,11 +125,6 @@ impl UImm16Shifted {
             shift: self.shift,
         }
     }
-
-    /// Returns the value that this constant represents.
-    pub fn value(&self) -> u64 {
-        (self.bits as u64) << (16 * self.shift)
-    }
 }
 
 /// A 32-bit immediate with a {0,32}-bit shift.
@@ -179,30 +169,11 @@ impl UImm32Shifted {
         }
     }
 
-    pub fn from_uimm16shifted(value: UImm16Shifted) -> UImm32Shifted {
-        if value.shift % 2 == 0 {
-            UImm32Shifted {
-                bits: value.bits as u32,
-                shift: value.shift / 2,
-            }
-        } else {
-            UImm32Shifted {
-                bits: (value.bits as u32) << 16,
-                shift: value.shift / 2,
-            }
-        }
-    }
-
     pub fn negate_bits(&self) -> UImm32Shifted {
         UImm32Shifted {
             bits: !self.bits,
             shift: self.shift,
         }
-    }
-
-    /// Returns the value that this constant represents.
-    pub fn value(&self) -> u64 {
-        (self.bits as u64) << (32 * self.shift)
     }
 }
 

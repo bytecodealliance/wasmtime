@@ -78,10 +78,11 @@ where
                 return imm.to_reg_mem_imm();
             }
 
-            // Generate constants fresh at each use to minimize long-range
+            // A load from the constant pool is better than a
+            // rematerialization into a register, because it reduces
             // register pressure.
-            let ty = self.value_type(val);
-            return RegMemImm::reg(generated_code::constructor_imm(self, ty, c).unwrap());
+            let vcode_constant = self.emit_u64_le_const(c);
+            return RegMemImm::mem(SyntheticAmode::ConstantOffset(vcode_constant));
         }
 
         if let InputSourceInst::UniqueUse(src_insn, 0) = inputs.inst {
@@ -99,10 +100,11 @@ where
         let inputs = self.lower_ctx.get_value_as_source_or_const(val);
 
         if let Some(c) = inputs.constant {
-            // Generate constants fresh at each use to minimize long-range
+            // A load from the constant pool is better than a
+            // rematerialization into a register, because it reduces
             // register pressure.
-            let ty = self.value_type(val);
-            return RegMem::reg(generated_code::constructor_imm(self, ty, c).unwrap());
+            let vcode_constant = self.emit_u64_le_const(c);
+            return RegMem::mem(SyntheticAmode::ConstantOffset(vcode_constant));
         }
 
         if let InputSourceInst::UniqueUse(src_insn, 0) = inputs.inst {

@@ -3,7 +3,6 @@
 use regalloc2::Allocation;
 
 use crate::binemit::{CodeOffset, Reloc, StackMap};
-use crate::ir::constant::ConstantData;
 use crate::ir::types::*;
 use crate::ir::{LibCall, MemFlags, TrapCode};
 use crate::isa::aarch64::inst::*;
@@ -86,12 +85,6 @@ pub fn mem_finalize(
 
         _ => (smallvec![], mem.clone()),
     }
-}
-
-/// Helper: get a ConstantData from a u64.
-pub fn u64_constant(bits: u64) -> ConstantData {
-    let data = bits.to_le_bytes();
-    ConstantData::from(&data[..])
 }
 
 //=============================================================================

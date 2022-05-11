@@ -1856,7 +1856,14 @@ unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
 
     fn new_epoch(&mut self) -> Result<u64, anyhow::Error> {
         return match &self.epoch_deadline_behavior {
-            &EpochDeadline::Trap => Err(anyhow::Error::new(EpochDeadlineError)),
+            &EpochDeadline::Trap => {
+                let trap = Trap::new_wasm(
+                    None,
+                    wasmtime_environ::TrapCode::Interrupt,
+                    wasmtime_runtime::Backtrace::new(),
+                );
+                Err(anyhow::Error::from(trap))
+            }
             #[cfg(feature = "async")]
             &EpochDeadline::YieldAndExtendDeadline { delta } => {
                 // Do the async yield. May return a trap if future was
@@ -1870,17 +1877,6 @@ unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
                 Ok(self.get_epoch_deadline())
             }
         };
-
-        #[derive(Debug)]
-        struct EpochDeadlineError;
-
-        impl fmt::Display for EpochDeadlineError {
-            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                f.write_str("epoch deadline reached during execution")
-            }
-        }
-
-        impl std::error::Error for EpochDeadlineError {}
     }
 }
 

@@ -31,6 +31,7 @@ use regalloc2::{
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use cranelift_entity::{entity_impl, Keys, PrimaryMap};
+use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::fmt;
 
@@ -1288,6 +1289,7 @@ pub struct VCodeConstants {
     constants: PrimaryMap<VCodeConstant, VCodeConstantData>,
     pool_uses: HashMap<Constant, VCodeConstant>,
     well_known_uses: HashMap<*const [u8], VCodeConstant>,
+    u64s: HashMap<[u8; 8], VCodeConstant>,
 }
 impl VCodeConstants {
     /// Initialize the structure with the expected number of constants.
@@ -1296,6 +1298,7 @@ impl VCodeConstants {
             constants: PrimaryMap::with_capacity(expected_num_constants),
             pool_uses: HashMap::with_capacity(expected_num_constants),
             well_known_uses: HashMap::new(),
+            u64s: HashMap::new(),
         }
     }
 
@@ -1315,16 +1318,23 @@ impl VCodeConstants {
                 Some(&vcode_constant) => vcode_constant,
             },
             VCodeConstantData::WellKnown(data_ref) => {
-                match self.well_known_uses.get(&(data_ref as *const [u8])) {
-                    None => {
+                match self.well_known_uses.entry(data_ref as *const [u8]) {
+                    Entry::Vacant(v) => {
                         let vcode_constant = self.constants.push(data);
-                        self.well_known_uses
-                            .insert(data_ref as *const [u8], vcode_constant);
+                        v.insert(vcode_constant);
                         vcode_constant
                     }
-                    Some(&vcode_constant) => vcode_constant,
+                    Entry::Occupied(o) => *o.get(),
                 }
             }
+            VCodeConstantData::U64(value) => match self.u64s.entry(value) {
+                Entry::Vacant(v) => {
+                    let vcode_constant = self.constants.push(data);
+                    v.insert(vcode_constant);
+                    vcode_constant
+                }
+                Entry::Occupied(o) => *o.get(),
+            },
         }
     }
 
@@ -1361,6 +1371,10 @@ pub enum VCodeConstantData {
     /// A constant value generated during lowering; the value may depend on the instruction context
     /// which makes it difficult to de-duplicate--if possible, use other variants.
     Generated(ConstantData),
+    /// A constant of at most 64 bits. These are deduplicated as
+    /// well. Stored as a fixed-size array of `u8` so that we do not
+    /// encounter endianness problems when cross-compiling.
+    U64([u8; 8]),
 }
 impl VCodeConstantData {
     /// Retrieve the constant data as a byte slice.
@@ -1368,6 +1382,7 @@ impl VCodeConstantData {
         match self {
             VCodeConstantData::Pool(_, d) | VCodeConstantData::Generated(d) => d.as_slice(),
             VCodeConstantData::WellKnown(d) => d,
+            VCodeConstantData::U64(value) => &value[..],
         }
     }
 

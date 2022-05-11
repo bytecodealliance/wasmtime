@@ -88,11 +88,6 @@ impl SImm7Scaled {
         }
     }
 
-    /// Create a zero immediate of this format.
-    pub fn zero(scale_ty: Type) -> SImm7Scaled {
-        SImm7Scaled { value: 0, scale_ty }
-    }
-
     /// Bits for encoding.
     pub fn bits(&self) -> u32 {
         let ty_bytes: i16 = self.scale_ty.bytes() as i16;
@@ -200,11 +195,6 @@ impl SImm9 {
         } else {
             None
         }
-    }
-
-    /// Create a zero immediate of this format.
-    pub fn zero() -> SImm9 {
-        SImm9 { value: 0 }
     }
 
     /// Bits for encoding.
@@ -548,37 +538,6 @@ impl ImmLogic {
         // For every ImmLogical immediate, the inverse can also be encoded.
         Self::maybe_from_u64(!self.value, self.size.to_ty()).unwrap()
     }
-
-    /// This provides a safe(ish) way to avoid the costs of `maybe_from_u64` when we want to
-    /// encode a constant that we know at compiler-build time.  It constructs an `ImmLogic` from
-    /// the fields `n`, `r`, `s` and `size`, but in a debug build, checks that `value_to_check`
-    /// corresponds to those four fields.  The intention is that, in a non-debug build, this
-    /// reduces to something small enough that it will be a candidate for inlining.
-    pub fn from_n_r_s(value_to_check: u64, n: bool, r: u8, s: u8, size: OperandSize) -> Self {
-        // Construct it from the components we got given.
-        let imml = Self {
-            value: value_to_check,
-            n,
-            r,
-            s,
-            size,
-        };
-
-        // In debug mode, check that `n`/`r`/`s` are correct, given `value` and `size`.
-        debug_assert!(match ImmLogic::maybe_from_u64(
-            value_to_check,
-            if size == OperandSize::Size64 {
-                I64
-            } else {
-                I32
-            }
-        ) {
-            None => false, // fail: `value` is unrepresentable
-            Some(imml_check) => imml_check == imml,
-        });
-
-        imml
-    }
 }
 
 /// An immediate for shift instructions.
@@ -658,11 +617,6 @@ impl MoveWideConst {
                 shift: shift_enc,
             })
         }
-    }
-
-    /// Returns the value that this constant represents.
-    pub fn value(&self) -> u64 {
-        (self.bits as u64) << (16 * self.shift)
     }
 }
 

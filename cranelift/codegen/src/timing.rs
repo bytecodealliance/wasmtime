@@ -29,6 +29,7 @@ macro_rules! define_passes {
 
         $(
             #[doc=$desc]
+            #[must_use]
             pub fn $pass() -> TimingToken {
                 details::start_pass($enum::$pass)
             }
@@ -40,6 +41,8 @@ macro_rules! define_passes {
 define_passes! {
     Pass, NUM_PASSES, DESCRIPTIONS;
 
+    // All these are used in other crates but defined here so they appear in the unified
+    // `PassTimes` output.
     process_file: "Processing test file",
     parse_text: "Parsing textual Cranelift IR",
     wasm_translate_module: "Translate WASM module",
@@ -60,7 +63,6 @@ define_passes! {
     remove_constant_phis: "Remove constant phi-nodes",
 
     vcode_lower: "VCode lowering",
-    vcode_post_ra: "VCode post-register allocation finalization",
     vcode_emit: "VCode emission",
     vcode_emit_finish: "VCode emission finalization",
 
