@@ -1913,68 +1913,77 @@ pub(crate) fn define(
         .operands_out(vec![qa]),
     );
 
-    ig.push(
-        Inst::new(
-            "udiv",
-            r#"
-        Unsigned integer division: `a := \lfloor {x \over y} \rfloor`.
+    {
+        // Integer division and remainder are scalar-only; most
+        // hardware does not directly support vector integer division.
 
-        This operation traps if the divisor is zero.
-        "#,
-            &formats.binary,
-        )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a])
-        .can_trap(true),
-    );
+        let x = &Operand::new("x", iB);
+        let y = &Operand::new("y", iB);
+        let a = &Operand::new("a", iB);
 
-    ig.push(
-        Inst::new(
-            "sdiv",
-            r#"
-        Signed integer division rounded toward zero: `a := sign(xy)
-        \lfloor {|x| \over |y|}\rfloor`.
+        ig.push(
+            Inst::new(
+                "udiv",
+                r#"
+            Unsigned integer division: `a := \lfloor {x \over y} \rfloor`.
 
-        This operation traps if the divisor is zero, or if the result is not
-        representable in `B` bits two's complement. This only happens
-        when `x = -2^{B-1}, y = -1`.
-        "#,
-            &formats.binary,
-        )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a])
-        .can_trap(true),
-    );
+            This operation traps if the divisor is zero.
+            "#,
+                &formats.binary,
+            )
+            .operands_in(vec![x, y])
+            .operands_out(vec![a])
+            .can_trap(true),
+        );
 
-    ig.push(
-        Inst::new(
-            "urem",
-            r#"
-        Unsigned integer remainder.
+        ig.push(
+            Inst::new(
+                "sdiv",
+                r#"
+            Signed integer division rounded toward zero: `a := sign(xy)
+            \lfloor {|x| \over |y|}\rfloor`.
 
-        This operation traps if the divisor is zero.
-        "#,
-            &formats.binary,
-        )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a])
-        .can_trap(true),
-    );
+            This operation traps if the divisor is zero, or if the result is not
+            representable in `B` bits two's complement. This only happens
+            when `x = -2^{B-1}, y = -1`.
+            "#,
+                &formats.binary,
+            )
+            .operands_in(vec![x, y])
+            .operands_out(vec![a])
+            .can_trap(true),
+        );
 
-    ig.push(
-        Inst::new(
-            "srem",
-            r#"
-        Signed integer remainder. The result has the sign of the dividend.
+        ig.push(
+            Inst::new(
+                "urem",
+                r#"
+            Unsigned integer remainder.
 
-        This operation traps if the divisor is zero.
-        "#,
-            &formats.binary,
-        )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a])
-        .can_trap(true),
-    );
+            This operation traps if the divisor is zero.
+            "#,
+                &formats.binary,
+            )
+            .operands_in(vec![x, y])
+            .operands_out(vec![a])
+            .can_trap(true),
+        );
+
+        ig.push(
+            Inst::new(
+                "srem",
+                r#"
+            Signed integer remainder. The result has the sign of the dividend.
+
+            This operation traps if the divisor is zero.
+            "#,
+                &formats.binary,
+            )
+            .operands_in(vec![x, y])
+            .operands_out(vec![a])
+            .can_trap(true),
+        );
+    }
 
     let a = &Operand::new("a", iB);
     let x = &Operand::new("x", iB);
