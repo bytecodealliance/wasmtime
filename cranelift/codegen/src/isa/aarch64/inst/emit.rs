@@ -2779,6 +2779,7 @@ impl MachInstEmit for Inst {
                     sink.add_stack_map(StackMapExtent::UpcomingBytes(4), s);
                 }
                 let rn = allocs.next(info.rn);
+
                 sink.put4(0b1101011_0001_11111_000000_00000_00000 | (machreg_to_gpr(rn) << 5));
                 let loc = state.cur_srcloc();
                 if info.opcode.is_call() {

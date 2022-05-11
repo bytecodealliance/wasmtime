@@ -349,8 +349,8 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_use(rs);
         }
         &Inst::Load { rd, from, .. } => {
-            collector.reg_def(rd);
             collector.reg_use(from.get_base_register());
+            collector.reg_def(rd);
         }
         &Inst::Store { to, src, .. } => {
             collector.reg_use(to.get_base_register());
@@ -364,9 +364,14 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_use(rn);
         }
         &Inst::AjustSp { .. } => {}
-        &Inst::Call { ref info } => todo!(),
+        &Inst::Call { ref info } => {
+            collector.reg_uses(&info.uses[..]);
+            collector.reg_defs(&info.defs[..]);
+        }
         &Inst::CallInd { ref info } => {
             collector.reg_use(info.rn);
+            collector.reg_uses(&info.uses[..]);
+            collector.reg_defs(&info.defs[..]);
         }
         &Inst::TrapIf { rs1, rs2, .. } => {
             collector.reg_use(rs1);
@@ -923,7 +928,11 @@ impl Inst {
                 format!("{} sp,{}", "addi", amount)
             }
             &MInst::Call { .. } => todo!(),
-            &MInst::CallInd { ref info } => format!("callind {}", format_reg(info.rn, allocs)),
+            &MInst::CallInd { ref info } => {
+                let rd = format_reg(info.rn, allocs);
+                let uses = format_regs(&info.uses[..], allocs);
+                format!("callind {},{}", rd, uses)
+            }
             &MInst::TrapIf { .. } => todo!(),
             &MInst::Trap { .. } => todo!(),
             &MInst::Jal { dest, rd } => {

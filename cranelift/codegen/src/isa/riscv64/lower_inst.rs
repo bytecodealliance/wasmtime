@@ -758,7 +758,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 }
                 _ => unreachable!(),
             };
-
+            
             abi.emit_stack_pre_adjust(ctx);
             assert!(inputs.len() == abi.num_args());
             for i in abi.get_copy_to_arg_order() {

@@ -85,6 +85,7 @@ pub struct CallInfo {
 #[derive(Clone, Debug)]
 pub struct CallIndInfo {
     pub rn: Reg,
+    pub ra : Reg  , //save ra  
     pub uses: Vec<Reg>,
     pub defs: Vec<Writable<Reg>>,
     pub opcode: Opcode,

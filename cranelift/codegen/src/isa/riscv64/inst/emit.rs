@@ -888,14 +888,20 @@ impl MachInstEmit for Inst {
                 if let Some(s) = state.take_stack_map() {
                     sink.add_stack_map(StackMapExtent::UpcomingBytes(4), s);
                 }
+                let reigsters = vec![writable_link_reg()];
+                let mut insts = Inst::push_registers(&reigsters);
                 let rn = allocs.next(info.rn);
-                Inst::Jalr {
+                insts.push(Inst::Jalr {
                     rd: writable_link_reg(),
                     base: rn,
                     offset: Imm12::zero(),
-                }
-                .emit(&[], sink, emit_info, state);
+                });
+                insts.extend(Inst::pop_registers(&reigsters));
+                insts
+                    .into_iter()
+                    .for_each(|i| i.emit(&[], sink, emit_info, state));
                 let loc = state.cur_srcloc();
+
                 if info.opcode.is_call() {
                     sink.add_call_site(loc, info.opcode);
                 }
