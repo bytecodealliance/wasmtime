@@ -18,7 +18,8 @@ use crate::ast::Ident;
 use crate::error::*;
 use crate::lexer::Pos;
 use crate::log;
-use std::collections::btree_map::Entry;
+use crate::{StableMap, StableSet};
+use std::collections::hash_map::Entry;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::sync::Arc;
@@ -73,7 +74,7 @@ pub struct TypeEnv {
     pub syms: Vec<String>,
 
     /// Map of already-interned symbol names to their `Sym` ids.
-    pub sym_map: BTreeMap<String, Sym>,
+    pub sym_map: StableMap<String, Sym>,
 
     /// Arena of type definitions.
     ///
@@ -81,10 +82,10 @@ pub struct TypeEnv {
     pub types: Vec<Type>,
 
     /// A map from a type name symbol to its `TypeId`.
-    pub type_map: BTreeMap<Sym, TypeId>,
+    pub type_map: StableMap<Sym, TypeId>,
 
     /// The types of constant symbols.
-    pub const_types: BTreeMap<Sym, TypeId>,
+    pub const_types: StableMap<Sym, TypeId>,
 
     /// Type errors that we've found so far during type checking.
     pub errors: Vec<Error>,
@@ -188,7 +189,7 @@ pub struct TermEnv {
     pub terms: Vec<Term>,
 
     /// A map from am interned `Term`'s name to its `TermId`.
-    pub term_map: BTreeMap<Sym, TermId>,
+    pub term_map: StableMap<Sym, TermId>,
 
     /// Arena of interned rules defined in this ISLE program.
     ///
@@ -198,7 +199,7 @@ pub struct TermEnv {
     /// Map from (inner_ty, outer_ty) pairs to term IDs, giving the
     /// defined implicit type-converter terms we can try to use to fit
     /// types together.
-    pub converters: BTreeMap<(TypeId, TypeId), TermId>,
+    pub converters: StableMap<(TypeId, TypeId), TermId>,
 }
 
 /// A term.
@@ -548,10 +549,10 @@ impl TypeEnv {
             filenames: defs.filenames.clone(),
             file_texts: defs.file_texts.clone(),
             syms: vec![],
-            sym_map: BTreeMap::new(),
+            sym_map: StableMap::new(),
             types: vec![],
-            type_map: BTreeMap::new(),
-            const_types: BTreeMap::new(),
+            type_map: StableMap::new(),
+            const_types: StableMap::new(),
             errors: vec![],
         };
 
@@ -771,9 +772,9 @@ impl TermEnv {
     pub fn from_ast(tyenv: &mut TypeEnv, defs: &ast::Defs) -> Result<TermEnv> {
         let mut env = TermEnv {
             terms: vec![],
-            term_map: BTreeMap::new(),
+            term_map: StableMap::new(),
             rules: vec![],
-            converters: BTreeMap::new(),
+            converters: StableMap::new(),
         };
 
         env.collect_term_sigs(tyenv, defs);
@@ -1041,7 +1042,7 @@ impl TermEnv {
         let mut stack = vec![];
         'outer: for root in extractor_call_graph.keys().copied() {
             stack.clear();
-            stack.push((root, vec![root], BTreeSet::new()));
+            stack.push((root, vec![root], StableSet::new()));
 
             while let Some((caller, path, mut seen)) = stack.pop() {
                 let is_new = seen.insert(caller);
