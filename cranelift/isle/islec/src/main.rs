@@ -2,6 +2,7 @@ use clap::Parser;
 use cranelift_isle::{compile, lexer, parser};
 use miette::{Context, IntoDiagnostic, Result};
 use std::{
+    default::Default,
     fs,
     io::{self, Write},
     path::PathBuf,
@@ -36,7 +37,7 @@ fn main() -> Result<()> {
 
     let lexer = lexer::Lexer::from_files(opts.inputs)?;
     let defs = parser::parse(lexer)?;
-    let code = compile::compile(&defs)?;
+    let code = compile::compile(&defs, &Default::default())?;
 
     let stdout = io::stdout();
     let (mut output, output_name): (Box<dyn Write>, _) = match &opts.output {

@@ -17,6 +17,7 @@ use crate::ast;
 use crate::ast::Ident;
 use crate::error::*;
 use crate::lexer::Pos;
+use crate::log;
 use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -725,9 +726,9 @@ impl TypeEnv {
                 self.filenames[pos.file].clone(),
                 self.file_texts[pos.file].clone(),
             ),
-            span: miette::SourceSpan::from((pos.offset, 1)),
+            span: Span::new_single(pos.offset),
         };
-        log::trace!("{}", e);
+        log!("{}", e);
         e
     }
 
@@ -902,7 +903,7 @@ impl TermEnv {
 
     fn collect_constructors(&mut self, tyenv: &mut TypeEnv, defs: &ast::Defs) {
         for def in &defs.defs {
-            log::debug!("collect_constructors from def: {:?}", def);
+            log!("collect_constructors from def: {:?}", def);
             match def {
                 &ast::Def::Rule(ref rule) => {
                     let pos = rule.pos;
@@ -982,7 +983,7 @@ impl TermEnv {
                 };
 
                 let template = ext.template.make_macro_template(&ext.args[..]);
-                log::trace!("extractor def: {:?} becomes template {:?}", def, template);
+                log!("extractor def: {:?} becomes template {:?}", def, template);
 
                 let mut callees = BTreeSet::new();
                 template.terms(&mut |pos, t| {
@@ -1451,8 +1452,8 @@ impl TermEnv {
         bindings: &mut Bindings,
         is_root: bool,
     ) -> Option<(Pattern, TypeId)> {
-        log::trace!("translate_pattern: {:?}", pat);
-        log::trace!("translate_pattern: bindings = {:?}", bindings);
+        log!("translate_pattern: {:?}", pat);
+        log!("translate_pattern: bindings = {:?}", bindings);
         match pat {
             // TODO: flag on primitive type decl indicating it's an integer type?
             &ast::Pattern::ConstInt { val, pos } => {
@@ -1546,7 +1547,7 @@ impl TermEnv {
                 }
                 let id = VarId(bindings.next_var);
                 bindings.next_var += 1;
-                log::trace!("binding var {:?}", var.0);
+                log!("binding var {:?}", var.0);
                 bindings.vars.push(BoundVar { name, id, ty });
 
                 Some((Pattern::BindPattern(ty, id, Box::new(subpat)), ty))
@@ -1572,7 +1573,7 @@ impl TermEnv {
                         };
                         let id = VarId(bindings.next_var);
                         bindings.next_var += 1;
-                        log::trace!("binding var {:?}", var.0);
+                        log!("binding var {:?}", var.0);
                         bindings.vars.push(BoundVar { name, id, ty });
                         Some((
                             Pattern::BindPattern(ty, id, Box::new(Pattern::Wildcard(ty))),
@@ -1687,7 +1688,7 @@ impl TermEnv {
                         for template_arg in args {
                             macro_args.push(template_arg.clone());
                         }
-                        log::trace!("internal extractor macro args = {:?}", args);
+                        log!("internal extractor macro args = {:?}", args);
                         let pat = template.subst_macro_args(&macro_args[..])?;
                         return self.translate_pattern(
                             tyenv,
@@ -1767,7 +1768,7 @@ impl TermEnv {
         bindings: &mut Bindings,
         pure: bool,
     ) -> Option<Expr> {
-        log::trace!("translate_expr: {:?}", expr);
+        log!("translate_expr: {:?}", expr);
         match expr {
             &ast::Expr::Term {
                 ref sym,
