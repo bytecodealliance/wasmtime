@@ -727,7 +727,7 @@ impl TypeEnv {
                 self.filenames[pos.file].clone(),
                 self.file_texts[pos.file].clone(),
             ),
-            span: Span::new_single(pos.offset),
+            span: Span::new_single(pos),
         };
         log!("{}", e);
         e

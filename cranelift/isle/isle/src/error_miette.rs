@@ -8,7 +8,7 @@ use miette::{SourceCode, SourceSpan};
 
 impl From<Span> for SourceSpan {
     fn from(span: Span) -> Self {
-        SourceSpan::new(span.from.into(), span.to.into())
+        SourceSpan::new(span.from.offset.into(), span.to.offset.into())
     }
 }
 

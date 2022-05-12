@@ -2,6 +2,8 @@
 
 use std::sync::Arc;
 
+use crate::lexer::Pos;
+
 /// Either `Ok(T)` or `Err(isle::Error)`.
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -82,8 +84,30 @@ impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             Error::IoError { context, .. } => write!(f, "{}", context),
+
+            // Include locations directly in the `Display` output when
+            // we're not wrapping errors with miette (which provides
+            // its own way of showing locations and context).
+            #[cfg(not(feature = "miette-errors"))]
+            Error::ParseError { src, span, msg, .. } => write!(
+                f,
+                "{}: parse error: {}",
+                span.from.pretty_print_with_filename(&*src.name),
+                msg
+            ),
+            #[cfg(not(feature = "miette-errors"))]
+            Error::TypeError { src, span, msg, .. } => write!(
+                f,
+                "{}: type error: {}",
+                span.from.pretty_print_with_filename(&*src.name),
+                msg
+            ),
+
+            #[cfg(feature = "miette-errors")]
             Error::ParseError { msg, .. } => write!(f, "parse error: {}", msg),
+            #[cfg(feature = "miette-errors")]
             Error::TypeError { msg, .. } => write!(f, "type error: {}", msg),
+
             Error::Errors(_) => write!(
                 f,
                 "found {} errors:\n\n{}",
@@ -143,17 +167,27 @@ impl Source {
 #[derive(Clone, Debug)]
 pub struct Span {
     /// The byte offset of the start of the span.
-    pub from: usize,
+    pub from: Pos,
     /// The byte offset of the end of the span.
-    pub to: usize,
+    pub to: Pos,
 }
 
 impl Span {
     /// Create a new span that covers one character at the given offset.
-    pub fn new_single(offset: usize) -> Span {
+    pub fn new_single(pos: Pos) -> Span {
         Span {
-            from: offset,
-            to: offset + 1,
+            from: pos,
+            // This is a slight hack (we don't actually look at the
+            // file to find line/col of next char); but the span
+            // aspect, vs. just the starting point, is only relevant
+            // for miette and when miette is enabled we use only the
+            // `offset` here to provide its SourceSpans.
+            to: Pos {
+                file: pos.file,
+                offset: pos.offset + 1,
+                line: pos.line,
+                col: pos.col + 1,
+            },
         }
     }
 }
