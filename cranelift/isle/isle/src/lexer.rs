@@ -1,6 +1,6 @@
 //! Lexer for the ISLE language.
 
-use crate::error::{Error, Result, Source};
+use crate::error::{Error, Result, Source, Span};
 use std::borrow::Cow;
 use std::path::Path;
 use std::sync::Arc;
@@ -167,7 +167,7 @@ impl<'a> Lexer<'a> {
                 self.filenames[pos.file].clone(),
                 self.file_texts[pos.file].clone(),
             ),
-            span: miette::SourceSpan::from((self.pos().offset, 1)),
+            span: Span::new_single(self.pos().offset),
         }
     }
 

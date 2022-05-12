@@ -1,6 +1,7 @@
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
+use std::default::Default;
 
 fuzz_target!(|s: &str| {
     let _ = env_logger::try_init();
@@ -19,7 +20,7 @@ fuzz_target!(|s: &str| {
         Err(_) => return,
     };
 
-    let code = cranelift_isle::compile::compile(&defs);
+    let code = cranelift_isle::compile::compile(&defs, &Default::default());
     log::debug!("code = {:?}", code);
     let code = match code {
         Ok(c) => c,

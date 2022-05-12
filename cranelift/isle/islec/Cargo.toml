@@ -7,7 +7,7 @@ license = "Apache-2.0 WITH LLVM-exception"
 publish = false
 
 [dependencies]
-cranelift-isle = { version = "*", path = "../isle/" }
+cranelift-isle = { version = "*", path = "../isle/", features = ["miette-errors", "logging"] }
 env_logger = { version = "0.9", default-features = false }
-miette = { version = "3.0.0", features = ["fancy"] }
+miette = { version = "4.7.0", features = ["fancy"] }
 clap = { version = "3.1.12", features = ["derive"] }

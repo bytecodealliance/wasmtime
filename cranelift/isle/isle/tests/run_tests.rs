@@ -2,11 +2,12 @@
 
 use cranelift_isle::error::Result;
 use cranelift_isle::{compile, lexer, parser};
+use std::default::Default;
 
 fn build(filename: &str) -> Result<String> {
     let lexer = lexer::Lexer::from_files(vec![filename])?;
     let defs = parser::parse(lexer)?;
-    compile::compile(&defs)
+    compile::compile(&defs, &Default::default())
 }
 
 pub fn run_pass(filename: &str) {

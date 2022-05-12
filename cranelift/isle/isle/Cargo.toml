@@ -9,9 +9,14 @@ repository = "https://github.com/bytecodealliance/wasmtime/tree/main/cranelift/i
 version = "0.85.0"
 
 [dependencies]
-log = "0.4"
-miette = "3.0.0"
-thiserror = "1.0.29"
+log = { version = "0.4", optional = true }
+miette = { version = "4.7.0", optional = true }
 
 [dev-dependencies]
 tempfile = "3"
+
+[features]
+default = []
+
+logging = ["log"]
+miette-errors = ["miette"]

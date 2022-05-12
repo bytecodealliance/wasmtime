@@ -3,6 +3,7 @@
 #![allow(missing_docs)]
 
 use crate::lexer::Pos;
+use crate::log;
 use std::sync::Arc;
 
 /// The parsed form of an ISLE file.
@@ -172,7 +173,7 @@ impl Pattern {
     }
 
     pub fn make_macro_template(&self, macro_args: &[Ident]) -> Pattern {
-        log::trace!("make_macro_template: {:?} with {:?}", self, macro_args);
+        log!("make_macro_template: {:?} with {:?}", self, macro_args);
         match self {
             &Pattern::BindPattern {
                 ref var,
@@ -233,7 +234,7 @@ impl Pattern {
     }
 
     pub fn subst_macro_args(&self, macro_args: &[Pattern]) -> Option<Pattern> {
-        log::trace!("subst_macro_args: {:?} with {:?}", self, macro_args);
+        log!("subst_macro_args: {:?} with {:?}", self, macro_args);
         match self {
             &Pattern::BindPattern {
                 ref var,
