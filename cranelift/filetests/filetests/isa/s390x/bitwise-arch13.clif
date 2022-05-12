@@ -13,7 +13,7 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
-;   nngrk %r2, %r2, %r3
+;   ncgrk %r2, %r2, %r3
 ;   br %r14
 
 function %band_not_i32(i32, i32) -> i32 {
@@ -23,7 +23,7 @@ block0(v0: i32, v1: i32):
 }
 
 ; block0:
-;   nnrk %r2, %r2, %r3
+;   ncrk %r2, %r2, %r3
 ;   br %r14
 
 function %band_not_i16(i16, i16) -> i16 {
@@ -33,7 +33,7 @@ block0(v0: i16, v1: i16):
 }
 
 ; block0:
-;   nnrk %r2, %r2, %r3
+;   ncrk %r2, %r2, %r3
 ;   br %r14
 
 function %band_not_i8(i8, i8) -> i8 {
@@ -43,7 +43,7 @@ block0(v0: i8, v1: i8):
 }
 
 ; block0:
-;   nnrk %r2, %r2, %r3
+;   ncrk %r2, %r2, %r3
 ;   br %r14
 
 function %bor_not_i64(i64, i64) -> i64 {
@@ -53,7 +53,7 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
-;   nogrk %r2, %r2, %r3
+;   ocgrk %r2, %r2, %r3
 ;   br %r14
 
 function %bor_not_i32(i32, i32) -> i32 {
@@ -63,7 +63,7 @@ block0(v0: i32, v1: i32):
 }
 
 ; block0:
-;   nork %r2, %r2, %r3
+;   ocrk %r2, %r2, %r3
 ;   br %r14
 
 function %bor_not_i16(i16, i16) -> i16 {
@@ -73,7 +73,7 @@ block0(v0: i16, v1: i16):
 }
 
 ; block0:
-;   nork %r2, %r2, %r3
+;   ocrk %r2, %r2, %r3
 ;   br %r14
 
 function %bor_not_i8(i8, i8) -> i8 {
@@ -83,7 +83,7 @@ block0(v0: i8, v1: i8):
 }
 
 ; block0:
-;   nork %r2, %r2, %r3
+;   ocrk %r2, %r2, %r3
 ;   br %r14
 
 function %bxor_not_i64(i64, i64) -> i64 {
@@ -174,7 +174,7 @@ block0(v0: i64, v1: i64, v2: i64):
 
 ; block0:
 ;   ngrk %r5, %r3, %r2
-;   nngrk %r3, %r4, %r2
+;   ncgrk %r3, %r4, %r2
 ;   ogrk %r2, %r3, %r5
 ;   br %r14
 
@@ -186,7 +186,7 @@ block0(v0: i32, v1: i32, v2: i32):
 
 ; block0:
 ;   nrk %r5, %r3, %r2
-;   nnrk %r3, %r4, %r2
+;   ncrk %r3, %r4, %r2
 ;   ork %r2, %r3, %r5
 ;   br %r14
 
@@ -198,7 +198,7 @@ block0(v0: i16, v1: i16, v2: i16):
 
 ; block0:
 ;   nrk %r5, %r3, %r2
-;   nnrk %r3, %r4, %r2
+;   ncrk %r3, %r4, %r2
 ;   ork %r2, %r3, %r5
 ;   br %r14
 
@@ -210,7 +210,7 @@ block0(v0: i8, v1: i8, v2: i8):
 
 ; block0:
 ;   nrk %r5, %r3, %r2
-;   nnrk %r3, %r4, %r2
+;   ncrk %r3, %r4, %r2
 ;   ork %r2, %r3, %r5
 ;   br %r14
 

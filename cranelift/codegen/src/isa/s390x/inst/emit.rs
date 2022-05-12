@@ -996,12 +996,16 @@ impl MachInstEmit for Inst {
                     ALUOp::Orr64 => (0xb9e6, true),        // OGRK
                     ALUOp::Xor32 => (0xb9f7, true),        // XRK
                     ALUOp::Xor64 => (0xb9e7, true),        // XGRK
-                    ALUOp::AndNot32 => (0xb974, false),    // NNRK
-                    ALUOp::AndNot64 => (0xb964, false),    // NNGRK
-                    ALUOp::OrrNot32 => (0xb976, false),    // NORK
-                    ALUOp::OrrNot64 => (0xb966, false),    // NOGRK
-                    ALUOp::XorNot32 => (0xb977, false),    // NXRK
-                    ALUOp::XorNot64 => (0xb967, false),    // NXGRK
+                    ALUOp::NotAnd32 => (0xb974, false),    // NNRK
+                    ALUOp::NotAnd64 => (0xb964, false),    // NNGRK
+                    ALUOp::NotOrr32 => (0xb976, false),    // NORK
+                    ALUOp::NotOrr64 => (0xb966, false),    // NOGRK
+                    ALUOp::NotXor32 => (0xb977, false),    // NXRK
+                    ALUOp::NotXor64 => (0xb967, false),    // NXGRK
+                    ALUOp::AndNot32 => (0xb9f5, false),    // NCRK
+                    ALUOp::AndNot64 => (0xb9e5, false),    // NCGRK
+                    ALUOp::OrrNot32 => (0xb975, false),    // OCRK
+                    ALUOp::OrrNot64 => (0xb965, false),    // OCGRK
                     _ => unreachable!(),
                 };
                 if have_rr && rd.to_reg() == rn {
