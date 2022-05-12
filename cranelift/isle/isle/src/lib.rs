@@ -24,11 +24,10 @@ pub mod compile;
 pub mod error;
 pub mod ir;
 pub mod lexer;
+mod log;
 pub mod parser;
 pub mod sema;
 pub mod trie;
-mod log;
 
 #[cfg(feature = "miette-errors")]
 mod error_miette;
-

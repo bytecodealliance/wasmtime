@@ -1,9 +1,9 @@
 //! Trie construction.
 
 use crate::ir::{lower_rule, ExprSequence, PatternInst, PatternSequence};
+use crate::log;
 use crate::sema::{RuleId, TermEnv, TermId, TypeEnv};
 use std::collections::BTreeMap;
-use crate::log;
 
 /// Construct the tries for each term.
 pub fn build_tries(typeenv: &TypeEnv, termenv: &TermEnv) -> BTreeMap<TermId, TrieNode> {

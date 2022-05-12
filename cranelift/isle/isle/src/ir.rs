@@ -1,9 +1,9 @@
 //! Lowered matching IR.
 
 use crate::lexer::Pos;
+use crate::log;
 use crate::sema::*;
 use std::collections::BTreeMap;
-use crate::log;
 
 declare_id!(
     /// The id of an instruction in a `PatternSequence`.
