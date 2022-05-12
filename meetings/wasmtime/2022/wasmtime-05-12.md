@@ -54,14 +54,14 @@
    - Dan: sounds right, TLS thing can be done in Rust async eventually.
      Question is transitional plan
    - Dan: maybe this means we have a bit higher tolerance for now for temporary
-     workarounds 
+     workarounds
    - Andrew: what does the async timeline look like?
    - Alex: working on it, lots of spec work, still a bit unsure
    - Dan: recently started working on a "preview 2" snapshot of WASI, based on
      some new async stuff; timeline is months
 
 2. Shared memory implementation (i.e., changes to `VMContext`)
-   - Andrew: slides
+   - Andrew: [slides](wasmtime-05-12-slides.pdf)
    - Andrew: working on shared memory in Wasmtime, help from Alex.
    - Andrew: main problem is how to share `current_length` in
      `VMMemoryDefinition`, which has a separate copy in each instance
