@@ -744,14 +744,20 @@
     (Xor32)
     (Xor64)
     ;; NAND
+    (NotAnd32)
+    (NotAnd64)
+    ;; NOR
+    (NotOrr32)
+    (NotOrr64)
+    ;; XNOR
+    (NotXor32)
+    (NotXor64)
+    ;; And with complement
     (AndNot32)
     (AndNot64)
-    ;; NOR
+    ;; Or with complement
     (OrrNot32)
     (OrrNot64)
-    ;; XNOR
-    (XorNot32)
-    (XorNot64)
 ))
 
 ;; A unary operation.
@@ -2776,6 +2782,36 @@
         (push_xor_uimm32shifted ib ty dst val (uimm32shifted 0xffffffff 32))))
 
 
+;; Helpers for generating `not_and` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl aluop_not_and (Type) ALUOp)
+(rule (aluop_not_and (gpr32_ty _ty)) (ALUOp.NotAnd32))
+(rule (aluop_not_and (gpr64_ty _ty)) (ALUOp.NotAnd64))
+
+(decl not_and_reg (Type Reg Reg) Reg)
+(rule (not_and_reg ty x y) (alu_rrr ty (aluop_not_and ty) x y))
+
+
+;; Helpers for generating `not_or` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl aluop_not_or (Type) ALUOp)
+(rule (aluop_not_or (gpr32_ty _ty)) (ALUOp.NotOrr32))
+(rule (aluop_not_or (gpr64_ty _ty)) (ALUOp.NotOrr64))
+
+(decl not_or_reg (Type Reg Reg) Reg)
+(rule (not_or_reg ty x y) (alu_rrr ty (aluop_not_or ty) x y))
+
+
+;; Helpers for generating `not_xor` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl aluop_not_xor (Type) ALUOp)
+(rule (aluop_not_xor (gpr32_ty _ty)) (ALUOp.NotXor32))
+(rule (aluop_not_xor (gpr64_ty _ty)) (ALUOp.NotXor64))
+
+(decl not_xor_reg (Type Reg Reg) Reg)
+(rule (not_xor_reg ty x y) (alu_rrr ty (aluop_not_xor ty) x y))
+
+
 ;; Helpers for generating `and_not` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (decl aluop_and_not (Type) ALUOp)
@@ -2794,16 +2830,6 @@
 
 (decl or_not_reg (Type Reg Reg) Reg)
 (rule (or_not_reg ty x y) (alu_rrr ty (aluop_or_not ty) x y))
-
-
-;; Helpers for generating `xor_not` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(decl aluop_xor_not (Type) ALUOp)
-(rule (aluop_xor_not (gpr32_ty _ty)) (ALUOp.XorNot32))
-(rule (aluop_xor_not (gpr64_ty _ty)) (ALUOp.XorNot64))
-
-(decl xor_not_reg (Type Reg Reg) Reg)
-(rule (xor_not_reg ty x y) (alu_rrr ty (aluop_xor_not ty) x y))
 
 
 ;; Helpers for generating `abs` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
