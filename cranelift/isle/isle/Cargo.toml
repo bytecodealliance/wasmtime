@@ -18,5 +18,5 @@ tempfile = "3"
 [features]
 default = []
 
-logging = []
+logging = ["log"]
 miette-errors = ["miette"]

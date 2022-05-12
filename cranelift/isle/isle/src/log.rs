@@ -5,7 +5,7 @@
 #[macro_export]
 macro_rules! log {
     ($($msg:tt)*) => {
-        log::trace!($($msg)*)
+        ::log::trace!($($msg)*)
     };
 }
 
