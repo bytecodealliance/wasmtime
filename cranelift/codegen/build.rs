@@ -277,7 +277,7 @@ fn run_compilation(
 ) -> Result<(), Box<dyn std::error::Error + 'static>> {
     use cranelift_isle as isle;
 
-    println!("Rebuilding {}", compilation.output.display());
+    eprintln!("Rebuilding {}", compilation.output.display());
 
     let code = (|| {
         let lexer = isle::lexer::Lexer::from_files(
@@ -361,7 +361,7 @@ fn run_compilation(
         code
     });
 
-    println!(
+    eprintln!(
         "Writing ISLE-generated Rust code to {}",
         compilation.output.display()
     );
