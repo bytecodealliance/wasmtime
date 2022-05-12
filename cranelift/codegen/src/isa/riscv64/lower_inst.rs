@@ -26,7 +26,7 @@ use crate::isa::riscv64::inst::*;
 
 pub(crate) fn is_valid_atomic_transaction_ty(ty: Type) -> bool {
     match ty {
-        I8 | I16 | I32 | I64 => true,
+        I32 | I64 => true,
         _ => false,
     }
 }
@@ -135,78 +135,9 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let off = ctx.data(insn).load_store_offset().unwrap() as i64;
 
             let dst = get_output_reg(ctx, outputs[0]);
-            // compute address
-            match out_ty.bits() {
-                128 => {
-                    ctx.emit(Inst::Load {
-                        rd: dst.regs()[0],
-                        op: LoadOP::Ld,
-                        flags,
-                        from: AMode::RegOffset(base, off, I64),
-                    });
-                    ctx.emit(Inst::Load {
-                        rd: dst.regs()[1],
-                        op: LoadOP::Ld,
-                        flags,
-                        from: AMode::RegOffset(base, off + 8, I64),
-                    })
-                }
-                64 => {
-                    let op = if out_ty.is_float() {
-                        LoadOP::Fld
-                    } else {
-                        LoadOP::Ld
-                    };
-                    ctx.emit(Inst::Load {
-                        rd: dst.regs()[0],
-                        op: LoadOP::Ld,
-                        flags,
-                        from: AMode::RegOffset(base, off, I64),
-                    });
-                }
-                32 => {
-                    let op = if out_ty.is_float() {
-                        LoadOP::Flw
-                    } else if is_int_and_type_signed(out_ty) {
-                        LoadOP::Lw
-                    } else {
-                        LoadOP::Lwu
-                    };
-                    ctx.emit(Inst::Load {
-                        rd: dst.regs()[0],
-                        op: op,
-                        flags,
-                        from: AMode::RegOffset(base, off, I64),
-                    });
-                }
-                16 => {
-                    let op = if is_int_and_type_signed(out_ty) {
-                        LoadOP::Lh
-                    } else {
-                        LoadOP::Lhu
-                    };
-                    ctx.emit(Inst::Load {
-                        rd: dst.regs()[0],
-                        op: op,
-                        flags,
-                        from: AMode::RegOffset(base, off, I64),
-                    });
-                }
-                8 | 1 => {
-                    let op = if is_int_and_type_signed(out_ty) {
-                        LoadOP::Lb
-                    } else {
-                        LoadOP::Lbu
-                    };
-                    ctx.emit(Inst::Load {
-                        rd: dst.regs()[0],
-                        op: op,
-                        flags,
-                        from: AMode::RegOffset(base, off, I64),
-                    });
-                }
-                _ => unreachable!(),
-            }
+            gen_load(dst, base, off, out_ty, flags)
+                .into_iter()
+                .for_each(|i| ctx.emit(i));
         }
 
         Opcode::Store | Opcode::Istore8 | Opcode::Istore16 | Opcode::Istore32 => {
@@ -224,68 +155,9 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 Opcode::Store => ctx.input_ty(insn, 0),
                 _ => unreachable!(),
             };
-            match elem_ty.bits() {
-                128 => {
-                    ctx.emit(Inst::Store {
-                        to: AMode::RegOffset(base, off, I64),
-                        op: StoreOP::Sd,
-                        flags,
-                        src: src.regs()[0],
-                    });
-                    ctx.emit(Inst::Store {
-                        to: AMode::RegOffset(base, off + 8, I64),
-                        op: StoreOP::Sd,
-                        flags,
-                        src: src.regs()[1],
-                    });
-                }
-
-                64 => {
-                    let op = if elem_ty.is_float() {
-                        StoreOP::Fsd
-                    } else {
-                        StoreOP::Sd
-                    };
-                    ctx.emit(Inst::Store {
-                        to: AMode::RegOffset(base, off, I64),
-                        op,
-                        flags,
-                        src: src.regs()[0],
-                    });
-                }
-                32 => {
-                    let op = if elem_ty.is_float() {
-                        StoreOP::Fsw
-                    } else {
-                        StoreOP::Sw
-                    };
-                    ctx.emit(Inst::Store {
-                        to: AMode::RegOffset(base, off, I64),
-                        op,
-                        flags,
-                        src: src.regs()[0],
-                    });
-                }
-                16 => {
-                    let op = StoreOP::Sh;
-                    ctx.emit(Inst::Store {
-                        to: AMode::RegOffset(base, off, I64),
-                        op,
-                        flags,
-                        src: src.regs()[0],
-                    });
-                }
-                8 | 1 => {
-                    let op = StoreOP::Sb;
-                    ctx.emit(Inst::Store {
-                        to: AMode::RegOffset(base, off, I64),
-                        op,
-                        flags,
-                        src: src.regs()[0],
-                    });
-                }
-                _ => unreachable!(),
-            }
+            gen_store(src, base, off, elem_ty, flags)
+                .into_iter()
+                .for_each(|i| ctx.emit(i));
         }
 
         Opcode::StackAddr => {
@@ -457,8 +329,44 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             ctx.emit(Inst::Fence);
         }
 
-        Opcode::StackLoad | Opcode::StackStore => {
-            panic!("Direct stack memory access not supported; should not be used by Wasm");
+        Opcode::StackLoad => {
+            // panic!("Direct stack memory access not supported; should not be used by Wasm");
+            /*
+                other platform did not implemented this.
+                but test file cranelift\filetests\filetests\runtests\atomic-cas.clif
+                use this instruction
+            */
+            let offset = ctx.data(insn).load_store_offset().unwrap() as i64;
+            let flags = ctx.memflags(insn).unwrap_or(MemFlags::new());
+            gen_load(
+                get_output_reg(ctx, outputs[0]),
+                stack_reg(),
+                offset,
+                ctx.output_ty(insn, 0),
+                flags,
+            )
+            .into_iter()
+            .for_each(|i| ctx.emit(i));
+        }
+        Opcode::StackStore => {
+            // panic!("Direct stack memory access not supported; should not be used by Wasm");
+            /*
+                other platform did not implemented this.
+                but test file cranelift\filetests\filetests\runtests\atomic-cas.clif
+                use this instruction
+            */
+            let offset = ctx.data(insn).load_store_offset().unwrap() as i64;
+            let flags = ctx.memflags(insn).unwrap_or(MemFlags::new());
+
+            gen_store(
+                ctx.put_input_in_regs(insn, 0),
+                stack_reg(),
+                offset,
+                ctx.input_ty(insn, 0),
+                flags,
+            )
+            .into_iter()
+            .for_each(|i| ctx.emit(i));
         }
 
         Opcode::HeapAddr => {
@@ -540,7 +448,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         Opcode::IsNull | Opcode::IsInvalid => {
             let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let rs = put_input_in_reg(ctx, inputs[0]);
-            let ty = ctx.input_ty(insn, 0);
+            let _ty = ctx.input_ty(insn, 0);
             ctx.emit(Inst::ReferenceValid {
                 op: ReferenceValidOP::from_ir_op(op),
                 rd,
@@ -777,13 +685,13 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         Opcode::GetPinnedReg => {
             // let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             // ctx.emit(Inst::gen_move(rd, x_reg(PINNED_REG), I64));
-            what_is_pinned_register()
+            pinned_register_not_used()
         }
 
         Opcode::SetPinnedReg => {
             // let rm = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
             // ctx.emit(Inst::gen_move(writable_xreg(PINNED_REG), rm, I64));
-            what_is_pinned_register()
+            pinned_register_not_used()
         }
 
         Opcode::Jump
@@ -1185,9 +1093,166 @@ fn gen_move(rd: Writable<Reg>, rm: Reg, ity: Type, oty: Type) -> Inst {
     }
 }
 
-fn what_is_pinned_register() -> ! {
-    todo!()
+fn gen_load(
+    dst: ValueRegs<Writable<Reg>>,
+    base: Reg,
+    off: i64,
+    out_ty: Type,
+    flags: MemFlags,
+) -> SmallInstVec<Inst> {
+    let mut insts = SmallInstVec::new();
+    match out_ty.bits() {
+        128 => {
+            insts.push(Inst::Load {
+                rd: dst.regs()[0],
+                op: LoadOP::Ld,
+                flags,
+                from: AMode::RegOffset(base, off, I64),
+            });
+            insts.push(Inst::Load {
+                rd: dst.regs()[1],
+                op: LoadOP::Ld,
+                flags,
+                from: AMode::RegOffset(base, off + 8, I64),
+            })
+        }
+        64 => {
+            let op = if out_ty.is_float() {
+                LoadOP::Fld
+            } else {
+                LoadOP::Ld
+            };
+            insts.push(Inst::Load {
+                rd: dst.regs()[0],
+                op: LoadOP::Ld,
+                flags,
+                from: AMode::RegOffset(base, off, I64),
+            });
+        }
+        32 => {
+            let op = if out_ty.is_float() {
+                LoadOP::Flw
+            } else if is_int_and_type_signed(out_ty) {
+                LoadOP::Lw
+            } else {
+                LoadOP::Lwu
+            };
+            insts.push(Inst::Load {
+                rd: dst.regs()[0],
+                op: op,
+                flags,
+                from: AMode::RegOffset(base, off, I64),
+            });
+        }
+        16 => {
+            let op = if is_int_and_type_signed(out_ty) {
+                LoadOP::Lh
+            } else {
+                LoadOP::Lhu
+            };
+            insts.push(Inst::Load {
+                rd: dst.regs()[0],
+                op: op,
+                flags,
+                from: AMode::RegOffset(base, off, I64),
+            });
+        }
+        8 | 1 => {
+            let op = if is_int_and_type_signed(out_ty) {
+                LoadOP::Lb
+            } else {
+                LoadOP::Lbu
+            };
+            insts.push(Inst::Load {
+                rd: dst.regs()[0],
+                op: op,
+                flags,
+                from: AMode::RegOffset(base, off, I64),
+            });
+        }
+        _ => unreachable!(),
+    }
+
+    insts
 }
+
+fn gen_store(
+    src: ValueRegs<Reg>,
+    base: Reg,
+    off: i64,
+    elem_ty: Type,
+    flags: MemFlags,
+) -> SmallInstVec<Inst> {
+    let mut insts = SmallInstVec::new();
+    match elem_ty.bits() {
+        128 => {
+            insts.push(Inst::Store {
+                to: AMode::RegOffset(base, off, I64),
+                op: StoreOP::Sd,
+                flags,
+                src: src.regs()[0],
+            });
+            insts.push(Inst::Store {
+                to: AMode::RegOffset(base, off + 8, I64),
+                op: StoreOP::Sd,
+                flags,
+                src: src.regs()[1],
+            });
+        }
+
+        64 => {
+            let op = if elem_ty.is_float() {
+                StoreOP::Fsd
+            } else {
+                StoreOP::Sd
+            };
+            insts.push(Inst::Store {
+                to: AMode::RegOffset(base, off, I64),
+                op,
+                flags,
+                src: src.regs()[0],
+            });
+        }
+        32 => {
+            let op = if elem_ty.is_float() {
+                StoreOP::Fsw
+            } else {
+                StoreOP::Sw
+            };
+            insts.push(Inst::Store {
+                to: AMode::RegOffset(base, off, I64),
+                op,
+                flags,
+                src: src.regs()[0],
+            });
+        }
+        16 => {
+            let op = StoreOP::Sh;
+            insts.push(Inst::Store {
+                to: AMode::RegOffset(base, off, I64),
+                op,
+                flags,
+                src: src.regs()[0],
+            });
+        }
+        8 | 1 => {
+            let op = StoreOP::Sb;
+            insts.push(Inst::Store {
+                to: AMode::RegOffset(base, off, I64),
+                op,
+                flags,
+                src: src.regs()[0],
+            });
+        }
+        _ => unreachable!(),
+    }
+    insts
+}
+
+fn pinned_register_not_used() -> ! {
+    unimplemented!();
+}
+
 #[cfg(test)]
 mod test {
     #[test]

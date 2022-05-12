@@ -10,6 +10,7 @@ use crate::isa::riscv64::settings::Flags as IsaFlags;
 use crate::machinst::{isle::*, SmallInstVec};
 use crate::settings::Flags;
 
+use crate::machinst::{VCodeConstant, VCodeConstantData};
 use crate::{
     ir::{
         immediates::*, types::*, ExternalName, Inst, InstructionData, MemFlags, TrapCode, Value,

@@ -520,8 +520,8 @@ impl MachInstEmit for Inst {
                 sink.put4(x);
             }
             &Inst::AluRR { alu_op, rd, rs } => {
-                let rd = allocs.next_writable(rd);
                 let rs = allocs.next(rs);
+                let rd = allocs.next_writable(rd);
                 let x = alu_op.op_code()
                     | reg_to_gpr_num(rd.to_reg()) << 7
                     | alu_op.funct3() << 12
@@ -537,10 +537,10 @@ impl MachInstEmit for Inst {
                 rs2,
                 rs3,
             } => {
-                let rd = allocs.next_writable(rd);
                 let rs1 = allocs.next(rs1);
                 let rs2 = allocs.next(rs2);
                 let rs3 = allocs.next(rs3);
+                let rd = allocs.next_writable(rd);
                 let x = alu_op.op_code()
                     | reg_to_gpr_num(rd.to_reg()) << 7
                     | alu_op.funct3() << 12
@@ -557,9 +557,9 @@ impl MachInstEmit for Inst {
                 rs1,
                 rs2,
             } => {
-                let rd = allocs.next_writable(rd);
                 let rs1 = allocs.next(rs1);
                 let rs2 = allocs.next(rs2);
+                let rd = allocs.next_writable(rd);
                 let x: u32 = alu_op.op_code()
                     | reg_to_gpr_num(rd.to_reg()) << 7
                     | (alu_op.funct3()) << 12
@@ -574,8 +574,8 @@ impl MachInstEmit for Inst {
                 rs,
                 imm12,
             } => {
-                let rd = allocs.next_writable(rd);
                 let rs = allocs.next(rs);
+                let rd = allocs.next_writable(rd);
                 let x = if let Some(funct6) = alu_op.option_funct6() {
                     alu_op.op_code()
                         | reg_to_gpr_num(rd.to_reg()) << 7
@@ -685,8 +685,8 @@ impl MachInstEmit for Inst {
                 unimplemented!("what should I Do.");
             }
             &Inst::ReferenceValid { rd, op, x } => {
-                let rd = allocs.next_writable(rd);
                 let x = allocs.next(x);
+                let rd = allocs.next_writable(rd);
                 let mut insts = SmallInstVec::new();
                 match op {
                     ReferenceValidOP::IsNull => {
@@ -750,8 +750,8 @@ impl MachInstEmit for Inst {
                 from_bits,
                 to_bits,
             } => {
-                let rd = allocs.next_writable(rd);
                 let rn = allocs.next(rn);
+                let rd = allocs.next_writable(rd);
                 /*
                     notice!!!!!!!!
                     bool is consider signed..
@@ -888,12 +888,6 @@ impl MachInstEmit for Inst {
                 /*
 
 
-
-
-
-
-
-
                 */
                 if let Some(s) = state.take_stack_map() {
                     sink.add_stack_map(StackMapExtent::UpcomingBytes(4), s);
@@ -992,8 +986,8 @@ impl MachInstEmit for Inst {
             }
 
             &Inst::Mov { rd, rm, ty } => {
-                let rd = allocs.next_writable(rd);
                 let rm = allocs.next(rm);
+                let rd = allocs.next_writable(rd);
                 assert_ne!(rd.to_reg(), rm);
                 if ty.is_float() {
                     let mut insts = SmallInstVec::new();
@@ -1182,9 +1176,9 @@ impl MachInstEmit for Inst {
                 aq,
                 rl,
             } => {
-                let rd = allocs.next_writable(rd);
                 let addr = allocs.next(addr);
                 let src = allocs.next(src);
+                let rd = allocs.next_writable(rd);
                 let x = op.op_code()
                     | reg_to_gpr_num(rd.to_reg()) << 7
                     | op.funct3() << 12
@@ -1211,9 +1205,9 @@ impl MachInstEmit for Inst {
             }
             // &Inst::LoadExtName { rd, name, offset } => todo!(),
             &Inst::LoadAddr { rd, mem } => {
-                let rd = allocs.next_writable(rd);
                 let base = mem.get_base_register();
                 let base = allocs.next(base);
+                let rd = allocs.next_writable(rd);
                 let offset = mem.get_offset_with_state(state);
                 if let Some(offset) = Imm12::maybe_from_u64(offset as u64) {
                     Inst::AluRRImm12 {
@@ -1248,10 +1242,9 @@ impl MachInstEmit for Inst {
                 rs2,
             } => {
                 //
-                let rd = allocs.next_writable(rd);
                 let rs1 = allocs.next(rs1);
                 let rs2 = allocs.next(rs2);
-
+                let rd = allocs.next_writable(rd);
                 let cc_bit = FloatCCBit::floatcc_2_mask_bits(cc);
                 let eq_op = if ty == F32 {
                     AluOPRRR::FeqS
@@ -1409,15 +1402,14 @@ impl MachInstEmit for Inst {
                 ref y,
                 ty,
             } => {
+                let conditon = allocs.next(conditon);
+                let x = alloc_value_regs(x, &mut allocs);
+                let y = alloc_value_regs(y, &mut allocs);
                 let dst: Vec<_> = dst
                     .clone()
                     .into_iter()
                     .map(|r| allocs.next_writable(r))
                     .collect();
-
-                let conditon = allocs.next(conditon);
-                let x = alloc_value_regs(x, &mut allocs);
-                let y = alloc_value_regs(y, &mut allocs);
                 let mut insts = SmallInstVec::new();
                 let mut patch_false = vec![];
                 patch_false.push(insts.len());
@@ -1492,11 +1484,11 @@ impl MachInstEmit for Inst {
                 v,
                 ty,
             } => {
-                let t0 = allocs.next_writable(t0);
-                let dst = allocs.next_writable(dst);
                 let e = allocs.next(e);
                 let addr = allocs.next(addr);
                 let v = allocs.next(v);
+                let t0 = allocs.next_writable(t0);
+                let dst = allocs.next_writable(dst);
                 /*
                     # addr holds address of memory location
                     # e holds expected value
@@ -1530,8 +1522,8 @@ impl MachInstEmit for Inst {
                 .emit(&[], sink, emit_info, state);
                 // bne t0, e, fail
                 Inst::CondBr {
-                    taken: BranchTarget::zero(),
-                    not_taken: BranchTarget::Label(fail_label),
+                    taken: BranchTarget::Label(fail_label),
+                    not_taken: BranchTarget::zero(),
                     kind: IntegerCompare {
                         kind: IntCC::NotEqual,
                         rs1: e,
@@ -1574,9 +1566,9 @@ impl MachInstEmit for Inst {
                 ref y,
                 ty,
             } => {
-                let dst: Vec<_> = dst.iter().map(|r| allocs.next_writable(*r)).collect();
                 let x = alloc_value_regs(x, &mut allocs);
                 let y = alloc_value_regs(y, &mut allocs);
+                let dst: Vec<_> = dst.iter().map(|r| allocs.next_writable(*r)).collect();
                 let label_true = sink.get_label();
                 let label_false = sink.get_label();
                 let label_done = sink.get_label();
