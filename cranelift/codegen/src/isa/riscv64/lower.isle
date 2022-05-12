@@ -89,6 +89,10 @@
 
 
 ;;;; Rules for `div` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type (fits_in_16 ty) (udiv x y)))
+      (alu_rrr (AluOPRRR.Divuw) (narrow_int ty x) (narrow_int ty y)))
+
 (rule (lower (has_type (fits_in_32 ty) (sdiv x y)))
       (alu_rrr (AluOPRRR.Divw) x y))
 

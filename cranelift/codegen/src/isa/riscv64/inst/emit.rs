@@ -755,6 +755,9 @@ impl MachInstEmit for Inst {
                 /*
                     notice!!!!!!!!
                     bool is consider signed..
+                    bug risc will extend the value to 64bit
+                    use shift to implemented.
+
                 */
                 let mut insts = SmallInstVec::new();
                 if signed {

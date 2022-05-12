@@ -100,6 +100,10 @@ where
     fn zero_reg(&mut self) -> Reg {
         zero_reg()
     }
+    #[inline(always)]
+    fn imm_from_bits(&mut self, val: u64) -> Imm12 {
+        Imm12::maybe_from_u64(val).unwrap()
+    }
 }
 
 impl<C> IsleContext<'_, C, Flags, IsaFlags, 6>

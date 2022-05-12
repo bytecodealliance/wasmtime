@@ -527,6 +527,10 @@
 (decl imm (Type u64) Reg)
 (extern constructor imm imm)
 
+;; for load immediate
+(decl imm_from_bits (u64) Imm12)
+(extern constructor imm_from_bits imm_from_bits)
+
 ;;
 (decl imm12_from_u64 (Imm12) u64)
 (extern extractor imm12_from_u64 imm12_from_u64)
@@ -534,7 +538,6 @@
 
 (decl writable_zero_reg () WritableReg)
 (extern constructor writable_zero_reg writable_zero_reg)
-
 
 ;; Helper for emitting `MInst.AluRR` instructions.
 (decl alu_rr (AluOPRR Reg) Reg)
@@ -567,7 +570,12 @@
             (_ Unit (emit (MInst.AluRRImm12 op dst src imm))))
         dst))
 
-
+;; Helper for narrow down int to it's bits.
+(decl narrow_int(Type Reg) Reg)
+(rule (narrow_int $I8 r) (
+  alu_rr_imm12 (AluOPRRI.Srli) (alu_rr_imm12 (AluOPRRI.Slli) r (imm_from_bits 56)) (imm_from_bits 56))) 
+(rule (narrow_int $I16 r) (
+  alu_rr_imm12 (AluOPRRI.Srli) (alu_rr_imm12 (AluOPRRI.Slli) r (imm_from_bits 48)) (imm_from_bits 48)))
 
 ;; Helper for get negative of Imm12 
 (decl neg_imm12 (Imm12) Imm12)

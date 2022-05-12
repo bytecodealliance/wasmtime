@@ -193,7 +193,7 @@ impl Inst {
                  */
             insts.push(Inst::Lui {
                 rd: rd,
-                imm: Imm20::from_bits((value as i32) << 12),
+                imm: Imm20::from_bits((value as i32) >> 12),
             });
             insts.push(Inst::AluRRImm12 {
                 alu_op: AluOPRRI::Addi,

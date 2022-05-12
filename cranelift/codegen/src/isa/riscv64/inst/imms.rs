@@ -24,7 +24,9 @@ impl Imm12 {
 
     #[inline(always)]
     pub fn from_bits(bits: i16) -> Self {
-        Self { bits }
+        Self {
+            bits: bits & 0xf_ff,
+        }
     }
     #[inline(always)]
     pub(crate) fn form_bool(b: bool) -> Self {
