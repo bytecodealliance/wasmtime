@@ -166,6 +166,7 @@ struct IsleCompilations {
 struct IsleCompilation {
     output: std::path::PathBuf,
     inputs: Vec<std::path::PathBuf>,
+    untracked_inputs: Vec<std::path::PathBuf>,
 }
 
 /// Construct the list of compilations (transformations from ISLE
@@ -205,31 +206,31 @@ fn get_isle_compilations(
             IsleCompilation {
                 output: out_dir.join("isle_x64.rs"),
                 inputs: vec![
-                    clif_isle.clone(),
                     prelude_isle.clone(),
                     src_isa_x64.join("inst.isle"),
                     src_isa_x64.join("lower.isle"),
                 ],
+                untracked_inputs: vec![clif_isle.clone()],
             },
             // The aarch64 instruction selector.
             IsleCompilation {
                 output: out_dir.join("isle_aarch64.rs"),
                 inputs: vec![
-                    clif_isle.clone(),
                     prelude_isle.clone(),
                     src_isa_aarch64.join("inst.isle"),
                     src_isa_aarch64.join("lower.isle"),
                 ],
+                untracked_inputs: vec![clif_isle.clone()],
             },
             // The s390x instruction selector.
             IsleCompilation {
                 output: out_dir.join("isle_s390x.rs"),
                 inputs: vec![
-                    clif_isle.clone(),
                     prelude_isle.clone(),
                     src_isa_s390x.join("inst.isle"),
                     src_isa_s390x.join("lower.isle"),
                 ],
+                untracked_inputs: vec![clif_isle.clone()],
             },
         ],
     })
@@ -276,10 +277,15 @@ fn run_compilation(
 ) -> Result<(), Box<dyn std::error::Error + 'static>> {
     use cranelift_isle as isle;
 
-    println!("Rebuilding {}", compilation.output.display());
+    eprintln!("Rebuilding {}", compilation.output.display());
 
     let code = (|| {
-        let lexer = isle::lexer::Lexer::from_files(&compilation.inputs[..])?;
+        let lexer = isle::lexer::Lexer::from_files(
+            compilation
+                .inputs
+                .iter()
+                .chain(compilation.untracked_inputs.iter()),
+        )?;
         let defs = isle::parser::parse(lexer)?;
 
         let mut options = isle::codegen::CodegenOptions::default();
@@ -355,7 +361,7 @@ fn run_compilation(
         code
     });
 
-    println!(
+    eprintln!(
         "Writing ISLE-generated Rust code to {}",
         compilation.output.display()
     );
