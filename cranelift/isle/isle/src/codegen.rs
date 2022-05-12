@@ -5,7 +5,8 @@ use crate::log;
 use crate::sema::ExternalSig;
 use crate::sema::{TermEnv, TermId, Type, TypeEnv, TypeId, Variant};
 use crate::trie::{TrieEdge, TrieNode, TrieSymbol};
-use std::collections::{BTreeMap, BTreeSet};
+use crate::{StableMap, StableSet};
+use std::collections::BTreeMap;
 use std::fmt::Write;
 
 /// Options for code generation.
@@ -36,7 +37,7 @@ struct Codegen<'a> {
 #[derive(Clone, Debug, Default)]
 struct BodyContext {
     /// For each value: (is_ref, ty).
-    values: BTreeMap<Value, (bool, TypeId)>,
+    values: StableMap<Value, (bool, TypeId)>,
 }
 
 impl<'a> Codegen<'a> {
@@ -720,7 +721,7 @@ impl<'a> Codegen<'a> {
                     // Gather adjacent match variants so that we can turn these
                     // into a `match` rather than a sequence of `if let`s.
                     let mut last = i;
-                    let mut adjacent_variants = BTreeSet::new();
+                    let mut adjacent_variants = StableSet::new();
                     let mut adjacent_variant_input = None;
                     log!(
                         "edge: prio = {:?}, symbol = {:?}",
