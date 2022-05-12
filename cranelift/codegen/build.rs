@@ -80,9 +80,11 @@ fn main() {
         process::exit(1);
     }
 
-    if let Err(err) = build_isle(crate_dir, isle_dir) {
-        eprintln!("Error: {}", err);
-        process::exit(1);
+    if &std::env::var("SKIP_ISLE").unwrap_or("0".to_string()) != "1" {
+        if let Err(err) = build_isle(crate_dir, isle_dir) {
+            eprintln!("Error: {}", err);
+            process::exit(1);
+        }
     }
 
     if env::var("CRANELIFT_VERBOSE").is_ok() {
