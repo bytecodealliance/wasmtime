@@ -10,7 +10,7 @@ fn build_engine() -> Arc<Engine> {
     Arc::new(Engine::new(&config).unwrap())
 }
 
-fn make_env(engine: &Engine) -> Linker<()> {
+fn make_env<T>(engine: &Engine) -> Linker<T> {
     let mut linker = Linker::new(engine);
     let engine = engine.clone();
 
@@ -29,6 +29,12 @@ fn make_env(engine: &Engine) -> Linker<()> {
     linker
 }
 
+enum InterruptMode {
+    Trap,
+    Callback(u64),
+    Yield(u64),
+}
+
 /// Run a test with the given wasm, giving an initial deadline of
 /// `initial` ticks in the future, and either configuring the wasm to
 /// yield and set a deadline `delta` ticks in the future if `delta` is
@@ -39,19 +45,25 @@ fn make_env(engine: &Engine) -> Linker<()> {
 async fn run_and_count_yields_or_trap<F: Fn(Arc<Engine>)>(
     wasm: &str,
     initial: u64,
-    delta: Option<u64>,
+    delta: InterruptMode,
     setup_func: F,
 ) -> Option<usize> {
     let engine = build_engine();
     let linker = make_env(&engine);
     let module = Module::new(&engine, wasm).unwrap();
-    let mut store = Store::new(&engine, ());
+    let mut store = Store::new(&engine, 0);
     store.set_epoch_deadline(initial);
     match delta {
-        Some(delta) => {
+        InterruptMode::Yield(delta) => {
             store.epoch_deadline_async_yield_and_update(delta);
         }
-        None => {
+        InterruptMode::Callback(delta) => {
+            store.epoch_deadline_callback(move |s| {
+                *s += 1;
+                Ok(delta)
+            });
+        }
+        InterruptMode::Trap => {
             store.epoch_deadline_trap();
         }
     }
@@ -63,7 +75,8 @@ async fn run_and_count_yields_or_trap<F: Fn(Arc<Engine>)>(
     let f = instance.get_func(&mut store, "run").unwrap();
     let (result, yields) =
         CountPending::new(Box::pin(f.call_async(&mut store, &[], &mut []))).await;
-    return result.ok().map(|_| yields);
+    let store_increments = store.data();
+    return result.ok().map(|_| yields + store_increments);
 }
 
 #[tokio::test]
@@ -81,7 +94,29 @@ async fn epoch_yield_at_func_entry() {
                 (func $subfunc))
             ",
             1,
-            Some(1),
+            InterruptMode::Yield(1),
+            |_| {},
+        )
+        .await
+    );
+}
+
+#[tokio::test]
+async fn epoch_yield_at_func_entry_callback() {
+    // Just check that the callback mode behaves the same as the yielding version.
+    assert_eq!(
+        Some(1),
+        run_and_count_yields_or_trap(
+            "
+            (module
+                (import \"\" \"bump_epoch\" (func $bump))
+                (func (export \"run\")
+                    call $bump  ;; bump epoch
+                    call $subfunc) ;; call func; will notice new epoch and yield
+                (func $subfunc))
+            ",
+            1,
+            InterruptMode::Callback(1),
             |_| {},
         )
         .await
@@ -105,7 +140,7 @@ async fn epoch_yield_at_loop_header() {
                         (br_if $l (local.tee $i (i32.sub (local.get $i) (i32.const 1)))))))
             ",
             0,
-            Some(5),
+            InterruptMode::Yield(5),
             |_| {},
         )
         .await
@@ -125,7 +160,7 @@ async fn epoch_yield_immediate() {
                 (func (export \"run\")))
             ",
             0,
-            Some(1),
+            InterruptMode::Yield(1),
             |_| {},
         )
         .await
@@ -155,7 +190,7 @@ async fn epoch_yield_only_once() {
                   (call $bump)))
             ",
             1,
-            Some(1),
+            InterruptMode::Yield(1),
             |_| {},
         )
         .await
@@ -175,7 +210,7 @@ async fn epoch_interrupt_infinite_loop() {
                     (br $l))))
             ",
             1,
-            None,
+            InterruptMode::Trap,
             |engine| {
                 std::thread::spawn(move || {
                     std::thread::sleep(std::time::Duration::from_millis(50));
@@ -297,7 +332,7 @@ async fn epoch_interrupt_function_entries() {
                 (func $f9))
             ",
             1,
-            None,
+            InterruptMode::Trap,
             |engine| {
                 std::thread::spawn(move || {
                     std::thread::sleep(std::time::Duration::from_millis(50));
