@@ -45,11 +45,16 @@ pub struct Pos {
 impl Pos {
     /// Print this source position as `file.isle:12:34`.
     pub fn pretty_print(&self, filenames: &[Arc<str>]) -> String {
-        format!("{}:{}:{}", filenames[self.file], self.line, self.col)
+        self.pretty_print_with_filename(&filenames[self.file])
     }
     /// Print this source position as `file.isle line 12`.
     pub fn pretty_print_line(&self, filenames: &[Arc<str>]) -> String {
         format!("{} line {}", filenames[self.file], self.line)
+    }
+    /// As above for `pretty_print`, but with the specific filename
+    /// already provided.
+    pub fn pretty_print_with_filename(&self, filename: &str) -> String {
+        format!("{}:{}:{}", filename, self.line, self.col)
     }
 }
 
@@ -167,7 +172,7 @@ impl<'a> Lexer<'a> {
                 self.filenames[pos.file].clone(),
                 self.file_texts[pos.file].clone(),
             ),
-            span: Span::new_single(self.pos().offset),
+            span: Span::new_single(self.pos()),
         }
     }
 

@@ -39,7 +39,7 @@ impl<'a> Parser<'a> {
                 self.lexer.filenames[pos.file].clone(),
                 self.lexer.file_texts[pos.file].clone(),
             ),
-            span: Span::new_single(pos.offset),
+            span: Span::new_single(pos),
         }
     }
 
