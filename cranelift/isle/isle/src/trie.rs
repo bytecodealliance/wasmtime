@@ -1,6 +1,7 @@
 //! Trie construction.
 
 use crate::ir::{lower_rule, ExprSequence, PatternInst, PatternSequence};
+use crate::log;
 use crate::sema::{RuleId, TermEnv, TermId, TypeEnv};
 use std::collections::BTreeMap;
 
@@ -8,7 +9,7 @@ use std::collections::BTreeMap;
 pub fn build_tries(typeenv: &TypeEnv, termenv: &TermEnv) -> BTreeMap<TermId, TrieNode> {
     let mut builder = TermFunctionsBuilder::new(typeenv, termenv);
     builder.build();
-    log::trace!("builder: {:?}", builder);
+    log!("builder: {:?}", builder);
     builder.finalize()
 }
 
@@ -324,8 +325,8 @@ struct TermFunctionsBuilder<'a> {
 
 impl<'a> TermFunctionsBuilder<'a> {
     fn new(typeenv: &'a TypeEnv, termenv: &'a TermEnv) -> Self {
-        log::trace!("typeenv: {:?}", typeenv);
-        log::trace!("termenv: {:?}", termenv);
+        log!("typeenv: {:?}", typeenv);
+        log!("termenv: {:?}", termenv);
         Self {
             builders_by_term: BTreeMap::new(),
             typeenv,
@@ -341,7 +342,7 @@ impl<'a> TermFunctionsBuilder<'a> {
             let (pattern, expr) = lower_rule(self.typeenv, self.termenv, rule);
             let root_term = self.termenv.rules[rule.index()].lhs.root_term().unwrap();
 
-            log::trace!(
+            log!(
                 "build:\n- rule {:?}\n- pattern {:?}\n- expr {:?}",
                 self.termenv.rules[rule.index()],
                 pattern,

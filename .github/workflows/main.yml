@@ -188,21 +188,6 @@ jobs:
     # Check that the ISLE fuzz targets build too.
     - run: cargo fuzz build --dev --fuzz-dir ./cranelift/isle/fuzz
 
-  rebuild_isle:
-    name: Rebuild ISLE
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        submodules: true
-    - uses: ./.github/actions/install-rust
-    - name: Force-rebuild ISLE DSL files
-      run: ./scripts/force-rebuild-isle.sh
-    - name: Reformat
-      run: cargo fmt -p cranelift-codegen
-    - name: Check that the ISLE DSL files are up-to-date
-      run: git diff --exit-code
-
   # Perform all tests (debug mode) for `wasmtime`. This runs stable/beta/nightly
   # channels of Rust as well as macOS/Linux/Windows.
   test:
@@ -364,7 +349,7 @@ jobs:
         submodules: true
     - name: Install Rust
       run: rustup update stable && rustup default stable
-    - run: cd cranelift/codegen && cargo build --features "all-arch completely-skip-isle-for-ci-deterministic-check"
+    - run: cd cranelift/codegen && cargo build --features all-arch
     - run: ci/ensure_deterministic_build.sh
 
   # Perform release builds of `wasmtime` and `libwasmtime.so`. Builds on

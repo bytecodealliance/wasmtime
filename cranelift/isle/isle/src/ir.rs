@@ -1,6 +1,7 @@
 //! Lowered matching IR.
 
 use crate::lexer::Pos;
+use crate::log;
 use crate::sema::*;
 use std::collections::BTreeMap;
 
@@ -549,7 +550,7 @@ impl ExprSequence {
         expr: &Expr,
         vars: &BTreeMap<VarId, Value>,
     ) -> Value {
-        log::trace!("gen_expr: expr {:?}", expr);
+        log!("gen_expr: expr {:?}", expr);
         match expr {
             &Expr::ConstInt(ty, val) => self.add_const_int(ty, val),
             &Expr::ConstPrim(ty, val) => self.add_const_prim(ty, val),
@@ -627,7 +628,7 @@ pub fn lower_rule(
         .root_term()
         .expect("Pattern must have a term at the root");
 
-    log::trace!("lower_rule: ruledata {:?}", ruledata,);
+    log!("lower_rule: ruledata {:?}", ruledata,);
 
     // Lower the pattern, starting from the root input value.
     pattern_seq.gen_pattern(

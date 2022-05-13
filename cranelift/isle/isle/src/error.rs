@@ -1,62 +1,47 @@
 //! Error types.
 
-use miette::{Diagnostic, SourceCode, SourceSpan};
 use std::sync::Arc;
 
 /// Either `Ok(T)` or `Err(isle::Error)`.
 pub type Result<T> = std::result::Result<T, Error>;
 
 /// Errors produced by ISLE.
-#[derive(thiserror::Error, Diagnostic, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub enum Error {
     /// An I/O error.
-    #[error("{context}")]
     IoError {
         /// The underlying I/O error.
-        #[source]
         error: Arc<std::io::Error>,
         /// The context explaining what caused the I/O error.
         context: String,
     },
 
     /// The input ISLE source has a parse error.
-    #[error("parse error: {msg}")]
-    #[diagnostic()]
     ParseError {
         /// The error message.
         msg: String,
 
         /// The input ISLE source.
-        #[source_code]
         src: Source,
 
         /// The location of the parse error.
-        #[label("{msg}")]
-        span: SourceSpan,
+        span: Span,
     },
 
     /// The input ISLE source has a type error.
-    #[error("type error: {msg}")]
-    #[diagnostic()]
     TypeError {
         /// The error message.
         msg: String,
 
         /// The input ISLE source.
-        #[source_code]
         src: Source,
 
         /// The location of the type error.
-        #[label("{msg}")]
-        span: SourceSpan,
+        span: Span,
     },
 
     /// Multiple errors.
-    #[error("Found {} errors:\n\n{}",
-            self.unwrap_errors().len(),
-            DisplayErrors(self.unwrap_errors()))]
-    #[diagnostic()]
-    Errors(#[related] Vec<Error>),
+    Errors(Vec<Error>),
 }
 
 impl Error {
@@ -84,6 +69,31 @@ impl Error {
     }
 }
 
+impl std::error::Error for Error {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Error::IoError { error, .. } => Some(&*error as &dyn std::error::Error),
+            _ => None,
+        }
+    }
+}
+
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Error::IoError { context, .. } => write!(f, "{}", context),
+            Error::ParseError { msg, .. } => write!(f, "parse error: {}", msg),
+            Error::TypeError { msg, .. } => write!(f, "type error: {}", msg),
+            Error::Errors(_) => write!(
+                f,
+                "found {} errors:\n\n{}",
+                self.unwrap_errors().len(),
+                DisplayErrors(self.unwrap_errors())
+            ),
+        }
+    }
+}
+
 struct DisplayErrors<'a>(&'a [Error]);
 impl std::fmt::Display for DisplayErrors<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -97,8 +107,11 @@ impl std::fmt::Display for DisplayErrors<'_> {
 /// A source file and its contents.
 #[derive(Clone)]
 pub struct Source {
-    name: Arc<str>,
-    text: Arc<str>,
+    /// The name of this source file.
+    pub name: Arc<str>,
+    /// The text of this source file.
+    #[allow(unused)] // Used only when miette is enabled.
+    pub text: Arc<str>,
 }
 
 impl std::fmt::Debug for Source {
@@ -126,23 +139,21 @@ impl Source {
     }
 }
 
-impl SourceCode for Source {
-    fn read_span<'a>(
-        &'a self,
-        span: &SourceSpan,
-        context_lines_before: usize,
-        context_lines_after: usize,
-    ) -> std::result::Result<Box<dyn miette::SpanContents<'a> + 'a>, miette::MietteError> {
-        let contents = self
-            .text
-            .read_span(span, context_lines_before, context_lines_after)?;
-        Ok(Box::new(miette::MietteSpanContents::new_named(
-            self.name.to_string(),
-            contents.data(),
-            contents.span().clone(),
-            contents.line(),
-            contents.column(),
-            contents.line_count(),
-        )))
+/// A span in a given source.
+#[derive(Clone, Debug)]
+pub struct Span {
+    /// The byte offset of the start of the span.
+    pub from: usize,
+    /// The byte offset of the end of the span.
+    pub to: usize,
+}
+
+impl Span {
+    /// Create a new span that covers one character at the given offset.
+    pub fn new_single(offset: usize) -> Span {
+        Span {
+            from: offset,
+            to: offset + 1,
+        }
     }
 }
