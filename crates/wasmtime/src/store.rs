@@ -1869,7 +1869,7 @@ unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
 
     fn new_epoch(&mut self) -> Result<u64, anyhow::Error> {
         return match &mut self.epoch_deadline_behavior {
-            &mut EpochDeadline::Trap => {
+            EpochDeadline::Trap => {
                 let trap = Trap::new_wasm(
                     None,
                     wasmtime_environ::TrapCode::Interrupt,
@@ -1877,17 +1877,16 @@ unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
                 );
                 Err(anyhow::Error::from(trap))
             }
-            EpochDeadline::Callback(callback) => match callback(&mut self.data) {
-                Ok(delta) => {
-                    // Set a new deadline and return the new epoch deadline so
-                    // the Wasm code doesn't have to reload it.
-                    self.set_epoch_deadline(delta);
-                    Ok(self.get_epoch_deadline())
-                }
-                Err(e) => Err(e),
-            },
+            EpochDeadline::Callback(callback) => {
+                let delta = callback(&mut self.data)?;
+                // Set a new deadline and return the new epoch deadline so
+                // the Wasm code doesn't have to reload it.
+                self.set_epoch_deadline(delta);
+                Ok(self.get_epoch_deadline())
+            }
             #[cfg(feature = "async")]
-            &mut EpochDeadline::YieldAndExtendDeadline { delta } => {
+            EpochDeadline::YieldAndExtendDeadline { delta } => {
+                let delta = *delta;
                 // Do the async yield. May return a trap if future was
                 // canceled while we're yielded.
                 self.async_yield_impl()?;
