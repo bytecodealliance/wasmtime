@@ -479,12 +479,14 @@ mod test {
     fn hello_world2() {
         init_logger();
         let name = ExternalName::testcase("test0");
-        let sig = Signature::new(CallConv::SystemV);
+        let mut sig = Signature::new(CallConv::SystemV);
+        sig.returns.push(AbiParam::new(B1));
         let mut func = Function::with_name_signature(name, sig);
         let bb0 = func.dfg.make_block();
         let mut pos = FuncCursor::new(&mut func);
         pos.insert_block(bb0);
-        pos.ins().return_(&[]);
+        let v1 = pos.ins().bconst(B1, true);
+        pos.ins().return_(&[v1]);
         let mut shared_flags_builder = settings::builder();
         shared_flags_builder.set("opt_level", "none").unwrap();
         let shared_flags = settings::Flags::new(shared_flags_builder);

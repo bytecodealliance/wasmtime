@@ -116,10 +116,10 @@ impl Inst {
             b: ValueRegs<Reg>,
             cc: IntCC,
         ) -> (IntegerCompare, IntegerCompare) {
-            let hight_a = a.regs()[0];
-            let low_a = a.regs()[1];
-            let hight_b = b.regs()[0];
-            let low_b = b.regs()[1];
+            let hight_a = a.regs()[1];
+            let low_a = a.regs()[0];
+            let hight_b = b.regs()[1];
+            let low_b = b.regs()[0];
             // hight part
             let high = IntegerCompare {
                 kind: cc,

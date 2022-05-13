@@ -109,6 +109,34 @@ pub enum BranchTarget {
     ResolvedOffset(i32),
 }
 
+/*
+    if input or output is float,
+    you should use special instruction.
+*/
+pub(crate) fn gen_move(rd: Writable<Reg>, oty: Type, rm: Reg, ity: Type) -> Inst {
+    match (ity.is_float(), oty.is_float()) {
+        (false, false) => Inst::gen_move(rd, rm, oty),
+        (true, true) => Inst::gen_move(rd, rm, oty),
+        (false, true) => Inst::AluRR {
+            alu_op: if ity == F32 {
+                AluOPRR::FmvXW
+            } else {
+                AluOPRR::FmvXD
+            },
+            rd: rd,
+            rs: rm,
+        },
+        (true, false) => Inst::AluRR {
+            alu_op: if ity == F32 {
+                AluOPRR::FmvWX
+            } else {
+                AluOPRR::FmvDX
+            },
+            rd: rd,
+            rs: rm,
+        },
+    }
+}
 impl BranchTarget {
     /// Return the target's label, if it is a label-based target.
     pub(crate) fn as_label(self) -> Option<MachLabel> {
@@ -173,9 +201,9 @@ impl Inst {
         }
     }
 
-    pub(crate) fn load_constant_u32(rd: Writable<Reg>, value: u32) -> SmallInstVec<Inst> {
+    pub(crate) fn load_constant_u32(rd: Writable<Reg>, value: u64) -> SmallInstVec<Inst> {
         let mut insts = SmallVec::new();
-        if let Some(imm) = Imm12::maybe_from_u64(value as u64) {
+        if let Some(imm) = Imm12::maybe_from_u64(value) {
             insts.push(Inst::load_constant_imm12(rd, imm));
         } else {
             /*
@@ -227,16 +255,16 @@ impl Inst {
     */
     pub fn load_constant_u64(rd: Writable<Reg>, value: u64) -> SmallInstVec<Inst> {
         let mut insts = SmallVec::new();
-        if Imm12::maybe_from_u64(value).is_some() || Inst::in_i32_range(value) {
-            insts.extend(Inst::load_constant_u32(rd, value as u32));
+        if Inst::in_i32_range(value) {
+            insts.extend(Inst::load_constant_u32(rd, value));
         } else {
             let tmp = writable_spilltmp_reg();
             assert!(tmp != rd);
             // high part
-            insts.extend(Inst::load_constant_u32(rd, (value >> 32) as u32));
+            insts.extend(Inst::load_constant_u32(rd, value >> 32));
             // low part
 
-            insts.extend(Inst::load_constant_u32(tmp, (value & 0xffff_ffff) as u32));
+            insts.extend(Inst::load_constant_u32(tmp, value & 0xffff_ffff));
             // rd = rd << 32
             insts.push(Inst::AluRRImm12 {
                 alu_op: AluOPRRI::Slli,
@@ -266,7 +294,7 @@ impl Inst {
     pub fn load_fp_constant32(rd: Writable<Reg>, const_data: u32) -> SmallVec<[Inst; 4]> {
         let tmp = writable_spilltmp_reg();
         let mut insts = SmallVec::new();
-        insts.extend(Self::load_constant_u32(tmp, const_data));
+        insts.extend(Self::load_constant_u32(tmp, const_data as u64));
         insts.push(Inst::AluRR {
             alu_op: AluOPRR::FmvWX,
             rd,
@@ -565,10 +593,13 @@ impl MachInst for Inst {
 
     fn gen_constant<F: FnMut(Type) -> Writable<Reg>>(
         to_regs: ValueRegs<Writable<Reg>>,
-        value: u128,
+        mut value: u128,
         ty: Type,
         _alloc_tmp: F,
     ) -> SmallVec<[Inst; 4]> {
+        if ty.is_bool() && value != 0 {
+            value = !0;
+        }
         if (ty.bits() <= 64 && (ty.is_bool() || ty.is_int())) || ty == R32 || ty == R64 {
             return Inst::load_constant_u64(to_regs.only_reg().unwrap(), value as u64);
         };

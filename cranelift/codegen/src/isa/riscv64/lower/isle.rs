@@ -75,7 +75,7 @@ where
             // need all be one
             val = !0;
         }
-
+        panic!("XXXXXXXXXXXXX {} {:?}", val, ty);
         let tmp = self.temp_writable_reg(ty);
         self.emit_list(&MInst::load_constant_u64(tmp, val));
         tmp.to_reg()
@@ -104,6 +104,47 @@ where
     fn imm_from_bits(&mut self, val: u64) -> Imm12 {
         Imm12::maybe_from_u64(val).unwrap()
     }
+    #[inline(always)]
+    fn imm_from_neg_bits(&mut self, val: i64) -> Imm12 {
+        Imm12::maybe_from_u64(val as u64).unwrap()
+    }
+
+    fn float_bnot(&mut self, ty: Type, r: Reg) -> Reg {
+        let tmp_i = self.temp_writable_reg(I64);
+        let inst = gen_move(tmp_i, I64, r, ty);
+        self.emit(&inst);
+        self.emit(&MInst::construct_bit_not(tmp_i, tmp_i.to_reg()));
+        let tmp_f = self.temp_writable_reg(ty);
+        let inst = gen_move(tmp_f, ty, tmp_i.to_reg(), I64);
+        self.emit(&inst);
+        tmp_f.to_reg()
+    }
+    fn bnot_128(&mut self, value: ValueRegs) -> ValueRegs {
+        let tmp_hight = self.temp_writable_reg(I64);
+        let tmp_low = self.temp_writable_reg(I64);
+        let high = value.regs()[1];
+        let low = value.regs()[0];
+        self.emit(&MInst::construct_bit_not(tmp_hight, high));
+        self.emit(&MInst::construct_bit_not(tmp_low, low));
+        self.value_regs(tmp_low.to_reg(), tmp_hight.to_reg())
+    }
+    fn band_128(&mut self, x: ValueRegs, y: ValueRegs) -> ValueRegs {
+        let tmp_hight = self.temp_writable_reg(I64);
+        let tmp_low = self.temp_writable_reg(I64);
+        self.emit(&MInst::AluRRR {
+            alu_op: AluOPRRR::And,
+            rd: tmp_hight,
+            rs1: x.regs()[0],
+            rs2: y.regs()[0],
+        });
+        self.emit(&MInst::AluRRR {
+            alu_op: AluOPRRR::And,
+            rd: tmp_hight,
+            rs1: x.regs()[1],
+            rs2: y.regs()[1],
+        });
+        self.value_regs(tmp_low.to_reg(), tmp_hight.to_reg())
+    }
 }
 
 impl<C> IsleContext<'_, C, Flags, IsaFlags, 6>
@@ -121,4 +162,7 @@ where
 }
 
 #[cfg(test)]
-mod test {}
+mod test {
+    use super::*;
+    use crate::ir::types::B8X8;
+}

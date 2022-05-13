@@ -544,7 +544,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 }
                 (false, false) => {
                     let rm = put_input_in_reg(ctx, inputs[0]);
-                    ctx.emit(gen_move(rd, rm, ity, oty));
+                    ctx.emit(gen_move(rd, oty, rm, ity));
                 }
 
                 (false, true) => {
@@ -558,7 +558,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::FallthroughReturn | Opcode::Return => {
             for i in 0..ctx.num_inputs(insn) {
-                let src_reg = put_input_in_regs(ctx, inputs[i]);
+                let src_reg = ctx.put_input_in_regs(insn, 0);
                 let retval_reg = ctx.retval(i);
                 let ty = ctx.input_ty(insn, i);
                 assert!(src_reg.len() == retval_reg.len());
@@ -713,7 +713,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let ity = ctx.input_ty(insn, 0);
             let oty = ctx.output_ty(insn, 0);
-            ctx.emit(gen_move(rd, rm, ity, oty));
+            ctx.emit(gen_move(rd, oty, rm, ity));
         }
 
         Opcode::Extractlane => {
@@ -1063,36 +1063,6 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
     }
     Ok(())
 }
-
-/*
-    if input or output is float,
-    you should use special instruction.
-*/
-fn gen_move(rd: Writable<Reg>, rm: Reg, ity: Type, oty: Type) -> Inst {
-    match (ity.is_float(), oty.is_float()) {
-        (false, false) => Inst::gen_move(rd, rm, oty),
-        (true, true) => Inst::gen_move(rd, rm, oty),
-        (false, true) => Inst::AluRR {
-            alu_op: if ity == F32 {
-                AluOPRR::FmvXW
-            } else {
-                AluOPRR::FmvXD
-            },
-            rd: rd,
-            rs: rm,
-        },
-        (true, false) => Inst::AluRR {
-            alu_op: if ity == F32 {
-                AluOPRR::FmvWX
-            } else {
-                AluOPRR::FmvDX
-            },
-            rd: rd,
-            rs: rm,
-        },
-    }
-}
-
 fn gen_load(
     dst: ValueRegs<Writable<Reg>>,
     base: Reg,
@@ -1176,7 +1146,7 @@ fn gen_load(
     insts
 }
 
-fn gen_store(
+pub(crate) fn gen_store(
     src: ValueRegs<Reg>,
     base: Reg,
     off: i64,

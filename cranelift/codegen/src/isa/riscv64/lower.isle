@@ -46,8 +46,6 @@
 ;; i128
 
 
-
-
 ;;;; Rules for `isub` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Base case, simply subtracting things in registers.
 
@@ -111,6 +109,9 @@
 (rule (lower (has_type (fits_in_32 ty) (srem x y)))
       (alu_rrr (AluOPRRR.Remw) x y))
 
+(rule (lower (has_type (fits_in_16 ty) (urem x y)))
+      (alu_rrr (AluOPRRR.Remuw) (narrow_int ty x) (narrow_int ty y)))
+
 (rule (lower (has_type (fits_in_32 ty) (urem x y)))
       (alu_rrr (AluOPRRR.Remuw) x y))
 
@@ -130,6 +131,12 @@
 
 (rule (lower (has_type (fits_in_64 ty) (band (imm12_from_value x) y)))
       (alu_rr_imm12 (AluOPRRI.Andi) y x))
+
+(rule (lower (has_type $B128 (band x y)))
+      (band_128 y x))
+(rule (lower (has_type $I128 (band x y)))
+      (band_128 x y))
+
 
 ;;;; Rules for `or` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 ty) (bor x y)))
@@ -158,3 +165,14 @@
 ;;;; Rules for `f32const` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
+;;;; Rules for `bnot` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(rule (lower (has_type $F32 (bnot x)))
+      (float_bnot $F32 x))
+(rule (lower (has_type $F32 (bnot x)))
+      (float_bnot $F64 x))
+
+(rule (lower (has_type fits_in_64 (bnot x)))
+      (alu_rr_imm12 (AluOPRRI.Andi) x (imm_from_neg_bits -1)))
+
+(rule (lower (has_type I128 (bnot x)))
+      (bnot_128 x))

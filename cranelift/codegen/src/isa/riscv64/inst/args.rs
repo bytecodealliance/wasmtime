@@ -62,16 +62,6 @@ impl AMode {
         }
     }
 
-    /*
-        only register in AMode::RegOffset can be alloc by regalloc.
-    */
-    pub(crate) fn get_base_register_mut(&mut self) -> Option<&mut Reg> {
-        match self {
-            &mut AMode::RegOffset(ref mut reg, ..) => Some(reg),
-            _ => None,
-        }
-    }
-
     pub(crate) fn get_offset_with_state(&self, state: &EmitState) -> i64 {
         match self {
             &AMode::NominalSPOffset(offset, _) => offset + state.virtual_sp_offset,

@@ -12,11 +12,17 @@ pub struct Imm12 {
 
 impl Imm12 {
     pub fn maybe_from_u64(val: u64) -> Option<Imm12> {
-        let val = val as i64;
+        let bit = 1 << 11;
         if val == 0 {
             Some(Imm12 { bits: 0 })
-        } else if val <= 0x7ff && val >= -(0x7ff + 1) {
-            Some(Imm12 { bits: val as i16 })
+        } else if (val & bit) != 0 && (val >> 12) == 0xffff_ffff_ffff_f {
+            Some(Imm12 {
+                bits: (val & 0xffff) as i16,
+            })
+        } else if (val & bit) == 0 && (val >> 12) == 0 {
+            Some(Imm12 {
+                bits: (val & 0xffff) as i16,
+            })
         } else {
             None
         }
@@ -25,7 +31,7 @@ impl Imm12 {
     #[inline(always)]
     pub fn from_bits(bits: i16) -> Self {
         Self {
-            bits: bits & 0xf_ff,
+            bits: bits & 0xff_ff,
         }
     }
     #[inline(always)]
@@ -78,20 +84,11 @@ pub struct Imm20 {
 }
 
 impl Imm20 {
-    pub fn maybe_from_u64(val: u64) -> Option<Self> {
-        let val = val as i64;
-        if val == 0 {
-            Some(Imm20 { bits: 0 })
-        } else if val <= 0x7_ffff && val >= -(0x7_ffff + 1) {
-            Some(Imm20 { bits: val as i32 })
-        } else {
-            None
-        }
-    }
-
     #[inline(always)]
     pub fn from_bits(bits: i32) -> Self {
-        Self { bits }
+        Self {
+            bits: bits & 0xf_ffff,
+        }
     }
     #[inline(always)]
     pub fn as_u32(&self) -> u32 {
@@ -149,6 +146,8 @@ mod test {
     #[test]
     fn test_imm12() {
         let x = Imm12::zero();
-        assert_eq!(0, x.as_u32())
+        assert_eq!(0, x.as_u32());
+
+        Imm12::maybe_from_u64(0xffff_ffff).unwrap();
     }
 }
