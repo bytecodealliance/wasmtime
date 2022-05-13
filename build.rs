@@ -36,7 +36,6 @@ fn main() -> anyhow::Result<()> {
             // Skip running spec_testsuite tests if the submodule isn't checked
             // out.
             if spec_tests > 0 {
-                test_directory_module(out, "tests/spec_testsuite/proposals/simd", strategy)?;
                 test_directory_module(out, "tests/spec_testsuite/proposals/memory64", strategy)?;
             } else {
                 println!(
@@ -171,7 +170,7 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
         "Cranelift" => match (testsuite, testname) {
             // No simd support yet for s390x.
             ("simd", _) if platform_is_s390x() => return true,
-            ("memory64", "simd") if platform_is_s390x() => return true,
+            _ if platform_is_s390x() && testname.starts_with("simd") => return true,
             _ => {}
         },
         _ => panic!("unrecognized strategy"),
