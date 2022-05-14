@@ -214,6 +214,19 @@ WASMTIME_CONFIG_PROP(wasmtime_error_t*, strategy, wasmtime_strategy_t)
 WASMTIME_CONFIG_PROP(void, cranelift_debug_verifier, bool)
 
 /**
+ * \brief Configures whether Cranelift should perform a NaN-canonicalization pass.
+ *
+ * When Cranelift is used as a code generation backend this will configure
+ * it to replace NaNs with a single canonical value. This is useful for users
+ * requiring entirely deterministic WebAssembly computation.
+ * 
+ * This is not required by the WebAssembly spec, so it is not enabled by default.
+ * 
+ * The default value for this is `false`
+ */
+WASMTIME_CONFIG_PROP(void, cranelift_nan_canonicalization, bool)
+  
+/**
  * \brief Configures Cranelift's optimization level for JIT code.
  *
  * This setting in #WASMTIME_OPT_LEVEL_SPEED by default.
