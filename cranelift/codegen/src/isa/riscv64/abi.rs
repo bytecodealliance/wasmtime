@@ -5,6 +5,7 @@ use core::panic;
 use crate::ir;
 
 use crate::ir::types::*;
+use crate::ir::AbiParam;
 use crate::ir::MemFlags;
 use crate::ir::Opcode;
 use crate::ir::{ExternalName, LibCall};
@@ -81,22 +82,35 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         args_or_rets: ArgsOrRets,
         add_ret_area_ptr: bool,
     ) -> CodegenResult<(Vec<ABIArg>, i64, Option<usize>)> {
-        let x_registers = a0_t0_a7();
-        if args_or_rets == ArgsOrRets::Rets {
-            a0_t0_a7().resize(2, Writable::invalid_sentinel());
-        }
-        let f_registers = fa0_to_fa7();
-        if args_or_rets == ArgsOrRets::Rets {
-            fa0_to_fa7().resize(2, Writable::invalid_sentinel());
-        }
-
+        // all registers can be alloc
+        let x_registers = a0_t0_a7(args_or_rets);
+        let mut x_registers = &x_registers[..];
+        let f_registers = fa0_to_fa7(args_or_rets);
+        let mut f_registers = &f_registers[..];
+        // stack space
         let mut next_stack: i64 = 0;
-        let mut next_x_reg = 0;
-        let mut next_f_reg = 0;
-
         let mut abi_args = vec![];
+        //
+        let mut params_last = if params.len() > 0 {
+            params.len() - 1
+        } else {
+            0
+        };
+        let mut step_last_parameter = move || -> AbiParam {
+            params_last -= 1;
+            params[params_last].clone()
+        };
+
         for i in 0..params.len() {
             let param = params[i];
+            let param = if param.value_type.is_float() && f_registers.len() == 0 {
+                step_last_parameter()
+            } else if param.value_type.is_int() && x_registers.len() == 0 {
+                step_last_parameter()
+            } else {
+                param
+            };
+
             // Validate "purpose".
             match &param.purpose {
                 &ir::ArgumentPurpose::VMContext
@@ -125,10 +139,11 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                 });
                 continue;
             }
+
             match param.value_type {
                 F32 | F64 => {
-                    if next_f_reg < f_registers.len() {
-                        let reg = f_registers[next_f_reg].clone();
+                    if f_registers.len() > 0 {
+                        let reg = f_registers[0].clone();
                         let arg = ABIArg::reg(
                             reg.to_reg().to_real_reg().unwrap(),
                             param.value_type,
@@ -136,7 +151,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                             param.purpose,
                         );
                         abi_args.push(arg);
-                        next_f_reg += 1;
+                        f_registers = &f_registers[1..];
                     } else {
                         let arg = ABIArg::stack(
                             next_stack,
@@ -148,17 +163,18 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                         next_stack += 8
                     }
                 }
+
                 B1 | B8 | B16 | B32 | B64 | I8 | I16 | I32 | I64 | R32 | R64 => {
-                    if next_x_reg < x_registers.len() {
-                        let reg = x_registers[next_x_reg].clone();
+                    if x_registers.len() > 0 {
+                        let reg = x_registers[0].clone();
                         let arg = ABIArg::reg(
                             reg.to_reg().to_real_reg().unwrap(),
                             param.value_type,
                             param.extension,
                             param.purpose,
                         );
+                        x_registers = &x_registers[1..];
                         abi_args.push(arg);
-                        next_x_reg += 1;
                     } else {
                         let arg = ABIArg::stack(
                             next_stack,
@@ -169,6 +185,52 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                         abi_args.push(arg);
                         next_stack += 8
                     }
+                }
+                I128 | B128 => {
+                    let elem_type = if param.value_type == I128 { I64 } else { B64 };
+
+                    let mut slots = vec![];
+                    if x_registers.len() >= 2 {
+                        for i in 0..2 {
+                            let reg = x_registers[i].clone();
+                            slots.push(ABIArgSlot::Reg {
+                                reg: reg.to_reg().to_real_reg().unwrap(),
+                                ty: elem_type,
+                                extension: param.extension,
+                            });
+                        }
+                        x_registers = &x_registers[2..];
+                    } else if x_registers.len() == 1 {
+                        // put in register
+                        let reg = x_registers[0].clone();
+                        slots.push(ABIArgSlot::Reg {
+                            reg: reg.to_reg().to_real_reg().unwrap(),
+                            ty: elem_type,
+                            extension: param.extension,
+                        });
+                        x_registers = &x_registers[1..];
+
+                        slots.push(ABIArgSlot::Stack {
+                            offset: next_stack,
+                            ty: elem_type,
+                            extension: param.extension,
+                        });
+                        next_stack += 8;
+                    } else {
+                        for _i in 0..2 {
+                            slots.push(ABIArgSlot::Stack {
+                                offset: next_stack,
+                                ty: elem_type,
+                                extension: param.extension,
+                            });
+                            next_stack += 8;
+                        }
+                    }
+
+                    abi_args.push(ABIArg::Slots {
+                        slots: slots,
+                        purpose: ir::ArgumentPurpose::Normal,
+                    });
                 }
                 _ => todo!("type not supported {}", param.value_type),
             };

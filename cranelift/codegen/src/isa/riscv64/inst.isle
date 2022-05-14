@@ -196,13 +196,29 @@
       (ty Type))
     ;; select x or y base on op_code 
     (IntSelect
-    (op IntSelectOP)
-    (dst VecWritableReg)
-    (x ValueRegs)
-    (y ValueRegs)
-    (ty Type))
-
+      (op IntSelectOP)
+      (dst VecWritableReg)
+      (x ValueRegs)
+      (y ValueRegs)
+      (ty Type))
+      
+    (I128Arithmetic
+      (op I128ArithmeticOP)
+      (t0 WritableReg)
+      (dst VecWritableReg)
+      (x ValueRegs)
+      (y ValueRegs))
 ))
+
+
+(type I128ArithmeticOP (enum 
+  (Add)
+  (Sub)
+  (Mul)
+  (Div)
+  (Rem)
+))
+
 
 
 (type IntSelectOP (enum
@@ -217,7 +233,6 @@
   (IsNull)
   (IsInvalid)
 ))
-
 
 (type AtomicOP (enum
   (LrW)
@@ -507,7 +522,6 @@
     (SXTD)
 ))
 
-
 (type Cond  
   (enum
     (Eq)
@@ -590,10 +604,10 @@
   (imm12_from_value n)
   (def_inst (iconst (u64_from_imm64 (imm12_from_u64 n)))))
 
+
 (decl select_addi (Type) AluOPRRI)
 (rule (select_addi (fits_in_32 ty)) (AluOPRRI.Addiw))
 (rule (select_addi (fits_in_64 ty)) (AluOPRRI.Addi))
-
 
 (decl float_bnot (Type  Reg) Reg)
 (extern constructor float_bnot float_bnot)
@@ -604,3 +618,10 @@
 
 (decl band_128 (ValueRegs ValueRegs) ValueRegs)
 (extern constructor band_128 band_128)
+
+(decl i128_arithmetic (I128ArithmeticOP ValueRegs ValueRegs) ValueRegs)
+(extern constructor i128_arithmetic i128_arithmetic)
+
+
+
+

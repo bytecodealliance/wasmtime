@@ -2,6 +2,7 @@
 //!
 use core::fmt::Write;
 
+use crate::machinst::ArgsOrRets;
 use crate::settings;
 
 use crate::isa;
@@ -36,11 +37,19 @@ pub fn a7() -> Reg {
     x_reg(17)
 }
 #[inline(always)]
-pub fn a0_t0_a7() -> Vec<Writable<Reg>> {
+pub fn a0_t0_a7(args_or_rets: ArgsOrRets) -> Vec<Writable<Reg>> {
     let mut v = vec![];
-    for enc in a0().to_real_reg().unwrap().hw_enc()..=a7().to_real_reg().unwrap().hw_enc() {
+    let a0 = 10;
+    let a_last = if args_or_rets == ArgsOrRets::Args {
+        17
+    } else {
+        12
+    };
+
+    for enc in a0..a_last {
         v.push(Writable::from_reg(x_reg(enc as usize)));
     }
+
     v
 }
 
@@ -98,11 +107,18 @@ pub fn fa7() -> Reg {
     f_reg(17)
 }
 #[inline(always)]
-pub fn fa0_to_fa7() -> Vec<Writable<Reg>> {
+pub fn fa0_to_fa7(args_or_rets: ArgsOrRets) -> Vec<Writable<Reg>> {
     let mut v = vec![];
-    for enc in fa0().to_real_reg().unwrap().hw_enc()..=fa7().to_real_reg().unwrap().hw_enc() {
+    let fa0 = 10;
+    let fa_last = if args_or_rets == ArgsOrRets::Args {
+        17
+    } else {
+        12
+    };
+    for enc in fa0..=fa_last {
         v.push(Writable::from_reg(f_reg(enc as usize)));
     }
+
     v
 }
 

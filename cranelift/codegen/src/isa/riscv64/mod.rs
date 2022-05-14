@@ -276,52 +276,6 @@ mod test {
     }
 
     #[test]
-    fn hello_world_branch() {
-        init_logger();
-        let name = ExternalName::testcase("test0");
-        let mut sig = Signature::new(CallConv::SystemV);
-        sig.params.push(AbiParam::new(I32));
-        sig.returns.push(AbiParam::new(I32));
-
-        let mut func = Function::with_name_signature(name, sig);
-        let bb0 = func.dfg.make_block();
-        let bb1 = func.dfg.make_block();
-        let bb2 = func.dfg.make_block();
-        let arg0 = func.dfg.append_block_param(bb0, I32);
-        let mut pos = FuncCursor::new(&mut func);
-        pos.insert_block(bb0);
-
-        let _ = pos.ins().brz(arg0, bb1, &[]);
-        let _ = pos.ins().jump(bb2, &[]);
-        pos.insert_block(bb1);
-        let v1 = pos.ins().iconst(I32, 1);
-        pos.ins().return_(&[v1]);
-
-        pos.insert_block(bb2);
-        let v2 = pos.ins().iconst(I32, 2);
-        let _v3 = pos.ins().load(I32, MemFlags::new(), v2, 100);
-        pos.ins().store(MemFlags::new(), _v3, v2, 200);
-        pos.ins().atomic_load(I32, MemFlags::new(), v2);
-        pos.ins().return_(&[v2]);
-
-        let mut shared_flags_builder = settings::builder();
-        shared_flags_builder.set("opt_level", "none").unwrap();
-        let shared_flags = settings::Flags::new(shared_flags_builder);
-        let isa_flags = riscv_settings::Flags::new(&shared_flags, riscv_settings::builder());
-        let backend = Riscv64Backend::new_with_flags(TRIPLE.clone(), shared_flags, isa_flags);
-        let result = backend
-            .compile_function(&mut func, /* want_disasm = */ true)
-            .unwrap();
-        let _code = result.buffer.data();
-        let disasm = result.disasm.unwrap();
-        println!("{}", disasm);
-        println!("{:?}", _code);
-        use std::io::Write;
-        let mut file = std::fs::File::create("d://xxx.bin").unwrap();
-        file.write_all(_code).unwrap();
-    }
-
-    #[test]
     fn some_float_compare() {
         init_logger();
         let name = ExternalName::testcase("test0");

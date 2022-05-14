@@ -42,6 +42,10 @@
 (rule (lower (has_type (fits_in_64 ty) (iadd (imm12_from_value x) y)))
       (alu_rr_imm12 (select_addi ty) y x))
 
+(rule (lower (has_type $I128 (iadd  x y)))
+      (i128_arithmetic (I128ArithmeticOP.Add) x y))
+
+
 
 ;; i128
 
@@ -172,7 +176,9 @@
       (float_bnot $F64 x))
 
 (rule (lower (has_type fits_in_64 (bnot x)))
-      (alu_rr_imm12 (AluOPRRI.Andi) x (imm_from_neg_bits -1)))
+      (alu_rr_imm12 (AluOPRRI.Xori) x (imm_from_neg_bits -1)))
 
-(rule (lower (has_type I128 (bnot x)))
+(rule (lower (has_type $I128 (bnot x)))
+      (bnot_128 x))
+(rule (lower (has_type $B128 (bnot x)))
       (bnot_128 x))

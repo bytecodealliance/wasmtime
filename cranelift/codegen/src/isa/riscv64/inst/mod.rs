@@ -66,8 +66,8 @@ pub type VecBranchTarget = Vec<BranchTarget>;
 use crate::isa::riscv64::lower::isle::generated_code::MInst;
 pub use crate::isa::riscv64::lower::isle::generated_code::{
     AluOPRR, AluOPRRI, AluOPRRR, AluOPRRRR, AtomicOP, ExtendOp, FClassResult, FFlagsException,
-    FloatFlagOp, FloatRoundingMode, IntSelectOP, LoadOP, MInst as Inst, ReferenceValidOP, StoreOP,
-    OPFPFMT,
+    FloatFlagOp, FloatRoundingMode, I128ArithmeticOP, IntSelectOP, LoadOP, MInst as Inst,
+    ReferenceValidOP, StoreOP, OPFPFMT,
 };
 
 type BoxCallInfo = Box<CallInfo>;
@@ -497,6 +497,18 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_uses(y.regs());
             collector.reg_defs(&dst[..]);
         }
+        &Inst::I128Arithmetic {
+            t0,
+            ref dst,
+            ref x,
+            ref y,
+            ..
+        } => {
+            collector.reg_early_def(t0);
+            collector.reg_uses(x.regs());
+            collector.reg_uses(y.regs());
+            collector.reg_defs(&dst[..]);
+        }
     }
 }
 
@@ -841,6 +853,21 @@ impl Inst {
                     imm.bits
                 )
             }
+            &Inst::I128Arithmetic {
+                op,
+                ref t0,
+                ref dst,
+                ref x,
+                ref y,
+            } => {
+                let dst: Vec<_> = dst.iter().map(|r| r.to_reg()).collect();
+
+                let t0 = format_reg(t0.to_reg(), allocs);
+                let x = format_regs(x.regs(), allocs);
+                let y = format_regs(y.regs(), allocs);
+                let dst = format_regs(&dst[..], allocs);
+                format!("{} {},{},{};;t0={}", op.op_name(), dst, x, y, t0)
+            }
             &Inst::ReferenceValid { rd, op, x } => {
                 let x = format_reg(x, allocs);
                 let rd = format_reg(rd.to_reg(), allocs);
@@ -980,7 +1007,7 @@ impl Inst {
                 let rs1 = format_reg(kind.rs1, allocs);
                 let rs2 = format_reg(kind.rs2, allocs);
                 let swap = kind.register_should_inverse_when_emit();
-                if not_taken.is_zero() && taken.as_label().is_some() {
+                if not_taken.is_zero() && taken.as_label().is_none() {
                     let off = taken.as_offset().unwrap();
                     format!(
                         "{} {},{},{}",

@@ -1344,3 +1344,15 @@ impl FFlags {
         Imm12::from_bits(self.r.to_imm12().bits << 5)
     }
 }
+
+impl I128ArithmeticOP {
+    pub(crate) fn op_name(self) -> &'static str {
+        match self {
+            I128ArithmeticOP::Add => "add_i128",
+            I128ArithmeticOP::Sub => "sub_i128",
+            I128ArithmeticOP::Mul => "mul_i128",
+            I128ArithmeticOP::Div => "div_i128",
+            I128ArithmeticOP::Rem => "rem_i128",
+        }
+    }
+}

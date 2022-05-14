@@ -68,18 +68,6 @@ impl MachInstEmitState<Inst> for EmitState {
 
 impl Inst {
     /*
-    inverse a bool
-     */
-    pub(crate) fn construct_bool_not(rd: Writable<Reg>, rs: Reg) -> Inst {
-        Inst::AluRRImm12 {
-            alu_op: AluOPRRI::Xori,
-            rd,
-            rs,
-            imm12: Imm12::from_bits(1),
-        }
-    }
-
-    /*
         inverset all bit
     */
     pub(crate) fn construct_bit_not(rd: Writable<Reg>, rs: Reg) -> Inst {
@@ -364,7 +352,7 @@ impl Inst {
                 rs2: zero_reg(),
             },
         });
-        //left and right is not nan
+        // left and right is not nan
         // but there are maybe bother PosInfinite or NegInfinite
         insts.push(Inst::AluRRR {
             alu_op: AluOPRRR::And,
@@ -418,6 +406,7 @@ impl Inst {
         insts.extend(Self::pop_registers(&registers));
         insts
     }
+
     /*
         alloc some registers for load large constant, or something else.
         if exclusive is given, which we must not include the  exclusive register (it's aleady been allocted or something),so must skip it.
@@ -476,6 +465,64 @@ impl Inst {
         // restore sp
         insts.push(Inst::AjustSp {
             amount: cur_offset as i64,
+        });
+        insts
+    }
+
+    /*
+    riscv document says.
+
+    We did not include special instruction set support for overflow checks on integer arithmetic
+        operations in the base instruction set, as many overflow checks can be cheaply implemented using
+        RISC-V branches. Overflow checking for unsigned addition requires only a single additional
+        branch instruction after the addition: add t0, t1, t2; bltu t0, t1, overflow.
+            */
+    fn add_c_u(rd: Writable<Reg>, carry: Writable<Reg>, x: Reg, y: Reg) -> SmallInstVec<Inst> {
+        let mut insts = SmallInstVec::new();
+        insts.push(Inst::gen_move(carry, x, I64));
+        insts.push(Inst::AluRRR {
+            alu_op: AluOPRRR::Add,
+            rd,
+            rs1: x,
+            rs2: y,
+        });
+        insts.push(Inst::AluRRR {
+            alu_op: AluOPRRR::SltU,
+            rd: carry,
+            rs1: rd.to_reg(),
+            rs2: carry.to_reg(),
+        });
+        /*
+        gcc generate this .
+
+        add	a4,a2,a0
+        mv	a6,a4
+        sltu	a6,a6,a2
+            // a6 either be 1 or 0
+            // nothing looks will change
+        slli	a6,a6,32 ??????????
+        srli	a6,a6,32 ??????????????
+
+        add	a5,a3,a1
+        add	a3,a6,a5
+            */
+        insts
+    }
+
+    fn sub_b_u(rd: Writable<Reg>, borrow: Writable<Reg>, x: Reg, y: Reg) -> SmallInstVec<Inst> {
+        let mut insts = SmallInstVec::new();
+        insts.push(Inst::AluRRR {
+            alu_op: AluOPRRR::Sub,
+            rd,
+            rs1: x,
+            rs2: y,
+        });
+
+        insts.push(Inst::AluRRR {
+            alu_op: AluOPRRR::SltU,
+            rd: borrow,
+            rs1: x,
+            rs2: rd.to_reg(), // if x < rd then need borrow
         });
         insts
     }
@@ -743,6 +790,7 @@ impl MachInstEmit for Inst {
                 let x: u32 = (0b1100111) | (1 << 15);
                 sink.put4(x);
             }
+
             &Inst::Extend {
                 rd,
                 rn,
@@ -783,24 +831,57 @@ impl MachInstEmit for Inst {
                             rs2: rd.to_reg(),
                         },
                     });
-
-                    insts.extend(Inst::load_constant_u64(rd, {
-                        let mut x: u64 = !match from_bits {
-                            1 => 0x1,
-                            8 => 0xff,
-                            16 => 0xffff,
-                            32 => 0xffff_ffff,
-                            _ => unreachable!(),
-                        };
-                        x = !x;
+                    /*
+                        if extend from b1 -> b8
+                        rd will be   0b...1111_1110;
+                    */
+                    fn make_singed_extends_bits(
+                        rd: Writable<Reg>,
+                        to_bits: u8,
+                        from_bits: u8,
+                    ) -> SmallInstVec<Inst> {
+                        let mut insts = SmallInstVec::new();
+                        insts.push(Inst::load_constant_imm12(rd, Imm12::from_bits(-1)));
                         /*
-                            get rid of high unuse bits.
+                            shift out lower bits
                         */
-                        x = x << (64 - to_bits);
-                        x = x >> (64 - to_bits);
-                        x
-                    }));
-
+                        insts.push(Inst::AluRRImm12 {
+                            alu_op: AluOPRRI::Srli,
+                            rd: rd,
+                            rs: rd.to_reg(),
+                            imm12: Imm12::from_bits(to_bits as i16),
+                        });
+                        insts.push(Inst::AluRRImm12 {
+                            alu_op: AluOPRRI::Slli,
+                            rd: rd,
+                            rs: rd.to_reg(),
+                            imm12: Imm12::from_bits(to_bits as i16),
+                        });
+                        /*
+                            try shift out high bits
+                        */
+                        let need_shift_high = if 64 > to_bits {
+                            Some((64 - to_bits) as i16)
+                        } else {
+                            None
+                        };
+                        if let Some(shift) = need_shift_high {
+                            insts.push(Inst::AluRRImm12 {
+                                alu_op: AluOPRRI::Slli,
+                                rd: rd,
+                                rs: rd.to_reg(),
+                                imm12: Imm12::from_bits(shift),
+                            });
+                            insts.push(Inst::AluRRImm12 {
+                                alu_op: AluOPRRI::Srli,
+                                rd: rd,
+                                rs: rd.to_reg(),
+                                imm12: Imm12::from_bits(shift),
+                            });
+                        }
+                        insts
+                    }
+                    insts.extend(make_singed_extends_bits(rd, to_bits, from_bits));
                     insts.push(Inst::AluRRR {
                         alu_op: AluOPRRR::Or,
                         rd,
@@ -816,16 +897,19 @@ impl MachInstEmit for Inst {
 
                     Inst::patch_taken_list(&mut insts, &patch_extend_zero);
                     // signed bit is zero
-                    insts.extend(Inst::load_constant_u64(
+                    insts.push(Inst::load_constant_imm12(rd, Imm12::from_bits(-1)));
+                    insts.push(Inst::AluRRImm12 {
+                        alu_op: AluOPRRI::Slli,
                         rd,
-                        match from_bits {
-                            1 => 0x1, /**/
-                            8 => 0xff,
-                            16 => 0xffff,
-                            32 => 0xffff_ffff,
-                            _ => unreachable!(),
-                        },
-                    ));
+                        rs: rd.to_reg(),
+                        imm12: Imm12::from_bits((64 - to_bits) as i16),
+                    });
+                    insts.push(Inst::AluRRImm12 {
+                        alu_op: AluOPRRI::Srli,
+                        rd,
+                        rs: rd.to_reg(),
+                        imm12: Imm12::from_bits((64 - to_bits) as i16),
+                    });
                     insts.push(Inst::AluRRR {
                         alu_op: AluOPRRR::And,
                         rd,
@@ -835,17 +919,19 @@ impl MachInstEmit for Inst {
 
                     Inst::patch_taken_list(&mut insts, &patch_jump_over);
                 } else {
-                    /*
-                        if this unsignd, we need use all zero the set upper bits,
-                        since we cannot change the value.
-                        to_bits is not matter so use extra zero to set them.
-                    */
-                    let x: u64 = match from_bits {
-                        8 => 0xff,
-                        16 => 0xffff,
-                        32 => 0xffff_ffff,
-                        _ => unreachable!(),
-                    };
+                    insts.push(Inst::load_constant_imm12(rd, Imm12::from_bits(-1)));
+                    insts.push(Inst::AluRRImm12 {
+                        alu_op: AluOPRRI::Slli,
+                        rd,
+                        rs: rd.to_reg(),
+                        imm12: Imm12::from_bits((64 - to_bits) as i16),
+                    });
+                    insts.push(Inst::AluRRImm12 {
+                        alu_op: AluOPRRI::Srli,
+                        rd,
+                        rs: rd.to_reg(),
+                        imm12: Imm12::from_bits((64 - to_bits) as i16),
+                    });
                     // load
                     // set all upper bit to zero
                     insts.push(Inst::AluRRR {
@@ -1413,12 +1499,13 @@ impl MachInstEmit for Inst {
                     .into_iter()
                     .map(|r| allocs.next_writable(r))
                     .collect();
+
                 let mut insts = SmallInstVec::new();
                 let mut patch_false = vec![];
                 patch_false.push(insts.len());
                 insts.push(Inst::CondBr {
                     taken: BranchTarget::zero(),
-                    not_taken: BranchTarget::ResolvedOffset(0),
+                    not_taken: BranchTarget::zero(),
                     kind: IntegerCompare {
                         kind: IntCC::Equal,
                         rs1: conditon,
@@ -1505,6 +1592,11 @@ impl MachInstEmit for Inst {
                     bne dst , v , cas  # retry
                 fail:
 
+                todo :: addr dst could be same register!!!!!!!!!!!!
+                is this matter??????
+
+
+
                                            */
                 let fail_label = sink.get_label();
                 let cas_lebel = sink.get_label();
@@ -1561,7 +1653,81 @@ impl MachInstEmit for Inst {
                 .emit(&[], sink, emit_info, state);
                 sink.bind_label(fail_label);
             }
+            &Inst::I128Arithmetic {
+                op,
+                t0,
+                ref dst,
+                ref x,
+                ref y,
+            } => {
+                let t0 = allocs.next_writable(t0);
+                let x = alloc_value_regs(x, &mut allocs);
+                let y = alloc_value_regs(y, &mut allocs);
+                let dst: Vec<_> = dst.iter().map(|f| allocs.next_writable(*f)).collect();
+                let mut insts = SmallInstVec::new();
+                match op {
+                    I128ArithmeticOP::Add => {
+                        insts.extend(Inst::add_c_u(dst[0], t0, x.regs()[0], y.regs()[0]));
+                        insts.push(Inst::AluRRR {
+                            alu_op: AluOPRRR::Add,
+                            rd: dst[1],
+                            rs1: x.regs()[1],
+                            rs2: y.regs()[1],
+                        });
+                        insts.push(Inst::AluRRR {
+                            alu_op: AluOPRRR::Add,
+                            rd: dst[1],
+                            rs1: dst[1].to_reg(),
+                            rs2: t0.to_reg(),
+                        });
+                    }
+                    I128ArithmeticOP::Sub => {
+                        insts.extend(Inst::sub_b_u(dst[0], t0, x.regs()[0], y.regs()[0]));
+                        insts.push(Inst::AluRRR {
+                            alu_op: AluOPRRR::Sub,
+                            rd: dst[1],
+                            rs1: x.regs()[1],
+                            rs2: y.regs()[1],
+                        });
+                        insts.push(Inst::AluRRR {
+                            alu_op: AluOPRRR::Sub,
+                            rd: dst[1],
+                            rs1: dst[1].to_reg(),
+                            rs2: t0.to_reg(),
+                        });
+                    }
 
+                    I128ArithmeticOP::Mul => {
+                        /*
+                            notice register_len is 64.
+                            {x_low , x_high}
+                            {y_low , y_high}
+
+                            {r_low , r_high}
+                        should be:
+                            // lowest bits
+                            x_low * y_low -> r_low  mul
+                            //overflow from low bits
+                            (x_low * y_low) >> 64 -> t1  mulhu
+
+                            //
+                            (x_low *y_high) -> t2 mul
+                            (y_low *x_high) -> t3 mul
+
+                            // high part
+                            (x_high * y_high)   -> t4; mul
+
+                            t1 + t2 + t3 +t4 -> r_high
+                        */
+                    }
+                    I128ArithmeticOP::Div => todo!(),
+                    I128ArithmeticOP::Rem => todo!(),
+                }
+
+                insts
+                    .into_iter()
+                    .for_each(|i| i.emit(&[], sink, emit_info, state));
+            }
             &Inst::IntSelect {
                 op,
                 ref dst,

@@ -3,6 +3,8 @@
 // Pull in the ISLE generated code.
 pub mod generated_code;
 
+use self::generated_code::I128ArithmeticOP;
+
 // Types that the generated ISLE code uses via `use super::*`.
 use super::{writable_zero_reg, zero_reg, Inst as MInst};
 
@@ -75,7 +77,6 @@ where
             // need all be one
             val = !0;
         }
-        panic!("XXXXXXXXXXXXX {} {:?}", val, ty);
         let tmp = self.temp_writable_reg(ty);
         self.emit_list(&MInst::load_constant_u64(tmp, val));
         tmp.to_reg()
@@ -144,6 +145,21 @@ where
             rs2: y.regs()[1],
         });
         self.value_regs(tmp_low.to_reg(), tmp_hight.to_reg())
+    }
+
+    fn i128_arithmetic(&mut self, op: &I128ArithmeticOP, x: ValueRegs, y: ValueRegs) -> ValueRegs {
+        let mut dst = Vec::with_capacity(2);
+        dst.push(self.temp_writable_reg(I64));
+        dst.push(self.temp_writable_reg(I64));
+        let t0 = self.temp_writable_reg(I64);
+        self.emit(&MInst::I128Arithmetic {
+            op: *op,
+            t0,
+            dst: dst.clone(),
+            x,
+            y,
+        });
+        self.value_regs(dst[0].to_reg(), dst[1].to_reg())
     }
 }
 
