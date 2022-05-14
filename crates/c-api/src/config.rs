@@ -121,7 +121,7 @@ pub extern "C" fn wasmtime_config_cranelift_debug_verifier_set(
 }
 
 #[no_mangle]
-pub extern "C" fn wasmtime_config_cranelift_nan_canonicalization(
+pub extern "C" fn wasmtime_config_cranelift_nan_canonicalization_set(
     c: &mut wasm_config_t,
     enable: bool,
 ) {
