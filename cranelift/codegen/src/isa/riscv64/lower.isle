@@ -45,8 +45,6 @@
 (rule (lower (has_type $I128 (iadd  x y)))
       (i128_arithmetic (I128ArithmeticOP.Add) x y))
 
-
-
 ;; i128
 
 
@@ -55,6 +53,7 @@
 
 (rule (lower (has_type (fits_in_64 ty) (isub x y)))
       (alu_rrr (AluOPRRR.Sub) x y))
+
 (rule (lower (has_type (fits_in_32 ty) (isub x y)))
       (alu_rrr (AluOPRRR.Subw) x y))
       
@@ -65,6 +64,10 @@
 ;; Special case for when one operand is an immediate that fits in 12 bits.
 (rule (lower (has_type (fits_in_64 ty) (isub (imm12_from_value y) x)))
       (alu_rr_imm12  (select_addi ty) x (neg_imm12 y)))
+
+(rule (lower (has_type $I128 (isub x y)))
+      (i128_arithmetic (I128ArithmeticOP.Sub) x y))
+
 
 
 ;;;; Rules for `ineg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

@@ -511,18 +511,18 @@ impl Inst {
 
     fn sub_b_u(rd: Writable<Reg>, borrow: Writable<Reg>, x: Reg, y: Reg) -> SmallInstVec<Inst> {
         let mut insts = SmallInstVec::new();
+        insts.push(Inst::gen_move(borrow, x, I64));
         insts.push(Inst::AluRRR {
             alu_op: AluOPRRR::Sub,
             rd,
             rs1: x,
             rs2: y,
         });
-
         insts.push(Inst::AluRRR {
             alu_op: AluOPRRR::SltU,
             rd: borrow,
-            rs1: x,
-            rs2: rd.to_reg(), // if x < rd then need borrow
+            rs1: borrow.to_reg(),
+            rs2: rd.to_reg(), // if rd > x then need borrow
         });
         insts
     }
@@ -1594,8 +1594,6 @@ impl MachInstEmit for Inst {
 
                 todo :: addr dst could be same register!!!!!!!!!!!!
                 is this matter??????
-
-
 
                                            */
                 let fail_label = sink.get_label();
