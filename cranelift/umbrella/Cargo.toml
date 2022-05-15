@@ -9,7 +9,7 @@ repository = "https://github.com/bytecodealliance/wasmtime"
 categories = ["no-std"]
 readme = "README.md"
 keywords = ["compile", "compiler", "jit"]
-edition = "2021"
+edition.workspace = true
 
 [dependencies]
 cranelift-codegen = { path = "../codegen", version = "0.89.0", default-features = false }
