@@ -37,7 +37,7 @@ pub fn a7() -> Reg {
     x_reg(17)
 }
 #[inline(always)]
-pub fn a0_t0_a7(args_or_rets: ArgsOrRets) -> Vec<Writable<Reg>> {
+pub fn param_or_rets_xregs(args_or_rets: ArgsOrRets) -> Vec<Writable<Reg>> {
     let mut v = vec![];
     let a0 = 10;
     let a_last = if args_or_rets == ArgsOrRets::Args {
@@ -45,11 +45,9 @@ pub fn a0_t0_a7(args_or_rets: ArgsOrRets) -> Vec<Writable<Reg>> {
     } else {
         12
     };
-
     for enc in a0..a_last {
         v.push(Writable::from_reg(x_reg(enc as usize)));
     }
-
     v
 }
 
@@ -107,7 +105,7 @@ pub fn fa7() -> Reg {
     f_reg(17)
 }
 #[inline(always)]
-pub fn fa0_to_fa7(args_or_rets: ArgsOrRets) -> Vec<Writable<Reg>> {
+pub fn param_or_rets_fregs(args_or_rets: ArgsOrRets) -> Vec<Writable<Reg>> {
     let mut v = vec![];
     let fa0 = 10;
     let fa_last = if args_or_rets == ArgsOrRets::Args {

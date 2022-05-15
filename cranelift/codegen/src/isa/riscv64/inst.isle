@@ -205,6 +205,7 @@
     (I128Arithmetic
       (op I128ArithmeticOP)
       (t0 WritableReg)
+      (t1 WritableReg)
       (dst VecWritableReg)
       (x ValueRegs)
       (y ValueRegs))

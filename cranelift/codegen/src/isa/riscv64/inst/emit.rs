@@ -1654,11 +1654,13 @@ impl MachInstEmit for Inst {
             &Inst::I128Arithmetic {
                 op,
                 t0,
+                t1,
                 ref dst,
                 ref x,
                 ref y,
             } => {
                 let t0 = allocs.next_writable(t0);
+                let t1 = allocs.next_writable(t1);
                 let x = alloc_value_regs(x, &mut allocs);
                 let y = alloc_value_regs(y, &mut allocs);
                 let dst: Vec<_> = dst.iter().map(|f| allocs.next_writable(*f)).collect();
@@ -1702,21 +1704,68 @@ impl MachInstEmit for Inst {
                             {y_low , y_high}
 
                             {r_low , r_high}
-                        should be:
-                            // lowest bits
-                            x_low * y_low -> r_low  mul
-                            //overflow from low bits
-                            (x_low * y_low) >> 64 -> t1  mulhu
 
-                            //
-                            (x_low *y_high) -> t2 mul
-                            (y_low *x_high) -> t3 mul
+                            x_low * y_low >> 64 mul -> dst[1]
+                            x_high * y_low mul  -> dst[1]
+                            x_high * y_high mul -> dst[1]
 
-                            // high part
-                            (x_high * y_high)   -> t4; mul
-
-                            t1 + t2 + t3 +t4 -> r_high
+                            x_low * y_low mul  -> dst[0]
                         */
+                        // t0 for multiply
+                        // t1 for sum
+                        // x_low * y_low >> 64 -> t1
+                        // insts.push(Inst::AluRRR {
+                        //     alu_op: AluOPRRR::Mulhsu,
+                        //     rd: t1,
+                        //     rs1: x.regs()[0],
+                        //     rs2: y.regs()[0],
+                        // });
+                        // //
+                        // insts.push(Inst::AluRRR {
+                        //     alu_op: AluOPRRR::Mul,
+                        //     rd: t0,
+                        //     rs1: x.regs()[1],
+                        //     rs2: y.regs()[0],
+                        // });
+                        // insts.push(Inst::AluRRR {
+                        //     alu_op: AluOPRRR::Add,
+                        //     rd: t1,
+                        //     rs1: t1.to_reg(),
+                        //     rs2: t0.to_reg(),
+                        // });
+                        // insts.push(Inst::AluRRR {
+                        //     alu_op: AluOPRRR::Mul,
+                        //     rd: t0,
+                        //     rs1: x.regs()[0],
+                        //     rs2: y.regs()[1],
+                        // });
+                        // insts.push(Inst::AluRRR {
+                        //     alu_op: AluOPRRR::Add,
+                        //     rd: t1,
+                        //     rs1: t1.to_reg(),
+                        //     rs2: t0.to_reg(),
+                        // });
+                        // //
+                        // insts.push(Inst::AluRRR {
+                        //     alu_op: AluOPRRR::Mul,
+                        //     rd: t0,
+                        //     rs1: x.regs()[1],
+                        //     rs2: y.regs()[1],
+                        // });
+                        // insts.push(Inst::AluRRR {
+                        //     alu_op: AluOPRRR::Add,
+                        //     rd: dst[1],
+                        //     rs1: t1.to_reg(),
+                        //     rs2: t0.to_reg(),
+                        // });
+                        // //
+                        // insts.push(Inst::AluRRR {
+                        //     alu_op: AluOPRRR::Mul,
+                        //     rd: dst[0],
+                        //     rs1: x.regs()[0],
+                        //     rs2: y.regs()[0],
+                        // });
+                        todo!()
                     }
                     I128ArithmeticOP::Div => todo!(),
                     I128ArithmeticOP::Rem => todo!(),

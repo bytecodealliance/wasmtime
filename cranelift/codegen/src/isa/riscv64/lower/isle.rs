@@ -152,9 +152,12 @@ where
         dst.push(self.temp_writable_reg(I64));
         dst.push(self.temp_writable_reg(I64));
         let t0 = self.temp_writable_reg(I64);
+        let t1 = self.temp_writable_reg(I64);
+
         self.emit(&MInst::I128Arithmetic {
             op: *op,
             t0,
+            t1,
             dst: dst.clone(),
             x,
             y,

@@ -499,12 +499,14 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
         }
         &Inst::I128Arithmetic {
             t0,
+            t1,
             ref dst,
             ref x,
             ref y,
             ..
         } => {
             collector.reg_early_def(t0);
+            collector.reg_early_def(t1);
             collector.reg_uses(x.regs());
             collector.reg_uses(y.regs());
             collector.reg_defs(&dst[..]);
@@ -856,6 +858,7 @@ impl Inst {
             &Inst::I128Arithmetic {
                 op,
                 ref t0,
+                t1,
                 ref dst,
                 ref x,
                 ref y,
@@ -863,10 +866,11 @@ impl Inst {
                 let dst: Vec<_> = dst.iter().map(|r| r.to_reg()).collect();
 
                 let t0 = format_reg(t0.to_reg(), allocs);
+                let t1 = format_reg(t1.to_reg(), allocs);
                 let x = format_regs(x.regs(), allocs);
                 let y = format_regs(y.regs(), allocs);
                 let dst = format_regs(&dst[..], allocs);
-                format!("{} {},{},{};;t0={}", op.op_name(), dst, x, y, t0)
+                format!("{} {},{},{};;t0={},t1={}", op.op_name(), dst, x, y, t0, t1)
             }
             &Inst::ReferenceValid { rd, op, x } => {
                 let x = format_reg(x, allocs);

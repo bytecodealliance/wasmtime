@@ -92,6 +92,9 @@
 (rule (lower (has_type (fits_in_64 ty) (umulhi x y)))
       (alu_rrr (AluOPRRR.Mulhsu) x y))
 
+(rule (lower (has_type $I128 (imul x y)))
+      (i128_arithmetic (I128ArithmeticOP.Mul) x y))
+
 
 ;;;; Rules for `div` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

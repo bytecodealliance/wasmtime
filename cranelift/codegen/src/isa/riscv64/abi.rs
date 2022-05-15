@@ -83,34 +83,43 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         add_ret_area_ptr: bool,
     ) -> CodegenResult<(Vec<ABIArg>, i64, Option<usize>)> {
         // all registers can be alloc
-        let x_registers = a0_t0_a7(args_or_rets);
+        let x_registers = param_or_rets_xregs(args_or_rets);
         let mut x_registers = &x_registers[..];
-        let f_registers = fa0_to_fa7(args_or_rets);
+        let f_registers = param_or_rets_fregs(args_or_rets);
         let mut f_registers = &f_registers[..];
         // stack space
         let mut next_stack: i64 = 0;
         let mut abi_args = vec![];
-        //
-        let mut params_last = if params.len() > 0 {
-            params.len() - 1
-        } else {
-            0
-        };
-        let mut step_last_parameter = move || -> AbiParam {
-            params_last -= 1;
-            params[params_last].clone()
+
+        /*
+            when run out register , we should use stack space for parameter,
+            we should deal with paramter bakwards.
+            but we need result to be the same order with "params".
+        */
+        let mut abi_args_for_stack = vec![];
+        let mut step_last_parameter = {
+            let mut params_last = if params.len() > 0 {
+                params.len() - 1
+            } else {
+                0
+            };
+            move || -> AbiParam {
+                params_last -= 1;
+                params[params_last].clone()
+            }
         };
 
         for i in 0..params.len() {
-            let param = params[i];
-            let param = if param.value_type.is_float() && f_registers.len() == 0 {
-                step_last_parameter()
-            } else if param.value_type.is_int() && x_registers.len() == 0 {
+            let mut param = params[i];
+            let run_out_Of_registers = {
+                (param.value_type.is_float() && f_registers.len() == 0)
+                    || (param.value_type.is_int() && x_registers.len() == 0)
+            };
+            param = if run_out_Of_registers {
                 step_last_parameter()
             } else {
                 param
             };
-
             // Validate "purpose".
             match &param.purpose {
                 &ir::ArgumentPurpose::VMContext
@@ -127,7 +136,11 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                     param.purpose, params
                 ),
             }
-
+            let abi_args = if run_out_Of_registers {
+                &mut abi_args
+            } else {
+                &mut abi_args_for_stack
+            };
             if let ir::ArgumentPurpose::StructArgument(size) = param.purpose {
                 let offset = next_stack;
                 assert!(size % 8 == 0, "StructArgument size is not properly aligned");
@@ -139,7 +152,6 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                 });
                 continue;
             }
-
             match param.value_type {
                 F32 | F64 => {
                     if f_registers.len() > 0 {
@@ -188,7 +200,6 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                 }
                 I128 | B128 => {
                     let elem_type = if param.value_type == I128 { I64 } else { B64 };
-
                     let mut slots = vec![];
                     if x_registers.len() >= 2 {
                         for i in 0..2 {
@@ -236,6 +247,8 @@ impl ABIMachineSpec for Riscv64MachineDeps {
             };
         }
 
+        abi_args_for_stack.reverse();
+        abi_args.extend(abi_args_for_stack.into_iter());
         let pos: Option<usize> = if add_ret_area_ptr {
             assert!(ArgsOrRets::Rets == args_or_rets);
             if next_stack > 0 {
