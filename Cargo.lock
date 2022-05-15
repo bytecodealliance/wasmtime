@@ -3339,7 +3339,7 @@ dependencies = [
  "wasmtime-runtime",
  "wasmtime-wasi",
  "wat",
- "winapi",
+ "windows-sys",
 ]
 
 [[package]]
@@ -3401,7 +3401,7 @@ dependencies = [
  "sha2",
  "tempfile",
  "toml",
- "winapi",
+ "windows-sys",
  "zstd",
 ]
 
@@ -3442,7 +3442,7 @@ dependencies = [
  "wasmtime-wast",
  "wast 42.0.0",
  "wat",
- "winapi",
+ "windows-sys",
 ]
 
 [[package]]
@@ -3503,7 +3503,7 @@ dependencies = [
  "cc",
  "cfg-if",
  "rustix",
- "winapi",
+ "windows-sys",
 ]
 
 [[package]]
@@ -3569,7 +3569,7 @@ dependencies = [
  "wasmtime-environ",
  "wasmtime-jit-debug",
  "wasmtime-runtime",
- "winapi",
+ "windows-sys",
 ]
 
 [[package]]
@@ -3603,7 +3603,7 @@ dependencies = [
  "wasmtime-environ",
  "wasmtime-fiber",
  "wasmtime-jit-debug",
- "winapi",
+ "windows-sys",
 ]
 
 [[package]]

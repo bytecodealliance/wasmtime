@@ -2,7 +2,7 @@
 
 use anyhow::{bail, Result};
 use std::mem;
-use winapi::um::winnt;
+use windows_sys::Win32::System::Diagnostics::Debug::*;
 
 /// Represents a registry of function unwind information for Windows x64 ABI.
 pub struct UnwindRegistration {
@@ -16,9 +16,9 @@ impl UnwindRegistration {
         unwind_len: usize,
     ) -> Result<UnwindRegistration> {
         assert!(unwind_info as usize % 4 == 0);
-        let unit_len = mem::size_of::<winnt::RUNTIME_FUNCTION>();
+        let unit_len = mem::size_of::<IMAGE_RUNTIME_FUNCTION_ENTRY>();
         assert!(unwind_len % unit_len == 0);
-        if winnt::RtlAddFunctionTable(
+        if RtlAddFunctionTable(
             unwind_info as *mut _,
             (unwind_len / unit_len) as u32,
             base_address as u64,
@@ -40,7 +40,7 @@ impl UnwindRegistration {
 impl Drop for UnwindRegistration {
     fn drop(&mut self) {
         unsafe {
-            winnt::RtlDeleteFunctionTable(self.functions as _);
+            RtlDeleteFunctionTable(self.functions as _);
         }
     }
 }

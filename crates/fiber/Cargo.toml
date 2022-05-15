@@ -19,11 +19,11 @@ cfg-if = "1.0"
 [target.'cfg(unix)'.dependencies]
 rustix = { version = "0.35.6", features = ["mm", "param"] }
 
-[target.'cfg(windows)'.dependencies.winapi]
-version = "0.3.9"
+[target.'cfg(windows)'.dependencies.windows-sys]
+version = "0.36.1"
 features = [
-  "fibersapi",
-  "winbase",
+  "Win32_System_Threading",
+  "Win32_Foundation",
 ]
 
 [build-dependencies]
