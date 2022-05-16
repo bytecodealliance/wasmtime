@@ -111,11 +111,11 @@ impl ABIMachineSpec for Riscv64MachineDeps {
 
         for i in 0..params.len() {
             let mut param = params[i];
-            let run_out_Of_registers = {
+            let run_out_of_registers = {
                 (param.value_type.is_float() && f_registers.len() == 0)
                     || (param.value_type.is_int() && x_registers.len() == 0)
             };
-            param = if run_out_Of_registers {
+            param = if run_out_of_registers {
                 step_last_parameter()
             } else {
                 param
@@ -136,7 +136,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                     param.purpose, params
                 ),
             }
-            let abi_args = if run_out_Of_registers {
+            let abi_args = if run_out_of_registers {
                 &mut abi_args
             } else {
                 &mut abi_args_for_stack
@@ -237,7 +237,6 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                             next_stack += 8;
                         }
                     }
-
                     abi_args.push(ABIArg::Slots {
                         slots: slots,
                         purpose: ir::ArgumentPurpose::Normal,
@@ -246,7 +245,6 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                 _ => todo!("type not supported {}", param.value_type),
             };
         }
-
         abi_args_for_stack.reverse();
         abi_args.extend(abi_args_for_stack.into_iter());
         let pos: Option<usize> = if add_ret_area_ptr {

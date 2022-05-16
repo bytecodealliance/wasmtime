@@ -106,36 +106,44 @@ impl Display for Imm20 {
     }
 }
 
-// pub(crate) struct Uimm5 {
-//     bits: u8,
-// }
+#[derive(Clone, Copy)]
+pub struct Uimm5 {
+    bits: u8,
+}
 
-// impl Uimm5 {
-//     pub fn maybe_from_u64(val: u64) -> Option<Uimm5> {
-//         if (val >> 5) == 0 {
-//             Some(Self {
-//                 bits: (val & 0b1_1111) as u8,
-//             })
-//         } else {
-//             None
-//         }
-//     }
+impl Uimm5 {
+    pub fn maybe_from_u64(val: u64) -> Option<Uimm5> {
+        if (val >> 5) == 0 {
+            Some(Self {
+                bits: (val & 0b1_1111) as u8,
+            })
+        } else {
+            None
+        }
+    }
+    pub fn from_bits(bits: u8) -> Self {
+        Self { bits }
+    }
+    /// Create a zero immediate of this format.
+    pub fn zero() -> Self {
+        Self { bits: 0 }
+    }
+    pub fn as_u32(&self) -> u32 {
+        (self.bits as u32) & 0b1_1111
+    }
+}
 
-//     pub fn from_bits(bits: u8) -> Self {
-//         Self { bits }
-//     }
+impl Debug for Uimm5 {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        write!(f, "{}", self.bits)
+    }
+}
 
-//     /// Create a zero immediate of this format.
-//     pub fn zero() -> Self {
-//         Self { bits: 0 }
-//     }
-//     // pub fn as_u8(self) -> u8 {
-//     //     self.bits & 0b1_1111
-//     // }
-//     pub fn as_u32(&self) -> u32 {
-//         (self.bits as u32) & 0b1_1111
-//     }
-// }
+impl Display for Uimm5 {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        write!(f, "{}", self.bits)
+    }
+}
 
 #[cfg(test)]
 mod test {

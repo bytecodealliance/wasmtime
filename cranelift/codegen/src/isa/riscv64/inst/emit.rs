@@ -18,7 +18,7 @@ impl EmitInfo {
     }
 }
 
-fn reg_to_gpr_num(m: Reg) -> u32 {
+pub(crate) fn reg_to_gpr_num(m: Reg) -> u32 {
     u32::try_from(m.to_real_reg().unwrap().hw_enc() & 31).unwrap()
 }
 
@@ -1826,6 +1826,23 @@ impl MachInstEmit for Inst {
                 sink.bind_label(label_false);
                 gen_move(&dst, &y, sink, state);
                 sink.bind_label(label_done);
+            }
+            &Inst::Csr {
+                csrOP,
+                rd,
+                rs,
+                imm,
+                csr,
+            } => {
+                let rs = rs.map(|r| allocs.next(r));
+                let rd = allocs.next_writable(rd);
+                let x = csrOP.op_code()
+                    | reg_to_gpr_num(rd.to_reg()) << 7
+                    | csrOP.funct3() << 12
+                    | csrOP.rs1(rs, imm) << 15
+                    | csr.as_u32() << 20;
+
+                sink.put4(x);
             }
             _ => todo!("{:?}", self),
         };

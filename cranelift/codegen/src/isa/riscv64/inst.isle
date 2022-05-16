@@ -209,6 +209,22 @@
       (dst VecWritableReg)
       (x ValueRegs)
       (y ValueRegs))
+
+    (Csr
+    (csrOP CsrOP)
+    (rd WritableReg)
+    (rs OptionReg)
+    (imm OptionUimm5)
+    (csr CsrAddress))
+))
+
+(type CsrOP(enum 
+  (Csrrw)
+  (Csrrs)
+  (Csrrc)
+  (Csrrwi)
+  (Csrrsi)
+  (Csrrci)
 ))
 
 
@@ -505,12 +521,13 @@
 (type AMode (primitive AMode))
 (type OptionReg (primitive OptionReg))
 (type OptionImm12 (primitive OptionImm12))
+(type OptionUimm5 (primitive OptionUimm5))
 (type Imm12 (primitive Imm12))
 (type UImm5 (primitive UImm5))
 (type Imm20 (primitive Imm20))
 (type Imm3 (primitive Imm3))
 (type BranchTarget (primitive BranchTarget))
-
+(type CsrAddress (primitive CsrAddress))
 (type ExtendOp 
   (enum
     (UXTB)

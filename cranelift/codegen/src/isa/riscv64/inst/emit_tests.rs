@@ -18,6 +18,7 @@ fn test_riscv64_binemit() {
         assembly: &'static str,
         code: Option<u32>,
     }
+
     impl TestUnit {
         fn new(i: Inst, ass: &'static str) -> Self {
             Self {

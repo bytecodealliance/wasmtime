@@ -16,20 +16,20 @@ use core::fmt;
 /// Flags group `arm64`.
 pub struct Flags {
     bytes: [u8; 1],
+    v_len: usize,
 }
 impl Flags {
     /// Create flags arm64 settings group.
     #[allow(unused_variables)]
     pub fn new(shared: &settings::Flags, builder: Builder) -> Self {
-        let bvec = builder.state_for("arm64");
-        let mut arm64 = Self { bytes: [0; 1] };
+        let bvec = builder.state_for("riscv64");
+        let mut riscv64 = Self {
+            v_len: 128,
+            bytes: [0; 1],
+        };
         debug_assert_eq!(bvec.len(), 1);
-        arm64.bytes[0..1].copy_from_slice(&bvec);
-        // Precompute #1.
-        if arm64.has_lse() {
-            arm64.bytes[0] |= 1 << 1;
-        }
-        arm64
+        riscv64.bytes[0..1].copy_from_slice(&bvec);
+        riscv64
     }
 }
 impl Flags {
@@ -57,26 +57,23 @@ impl Flags {
 /// User-defined settings.
 #[allow(dead_code)]
 impl Flags {
-    /// Get a view of the boolean predicates.
-    pub fn predicate_view(&self) -> crate::settings::PredicateView {
-        crate::settings::PredicateView::new(&self.bytes[0..])
+    /*
+        detect the v_len for the host machine
+    */
+    fn detect_v_len() -> usize {
+        /*
+
+        */
+        unimplemented!()
     }
-    /// Dynamic numbered predicate getter.
-    fn numbered_predicate(&self, p: usize) -> bool {
-        self.bytes[0 + p / 8] & (1 << (p % 8)) != 0
-    }
-    /// Has Large System Extensions support.
-    pub fn has_lse(&self) -> bool {
-        self.numbered_predicate(0)
-    }
-    /// Computed predicate `arm64.has_lse()`.
-    pub fn use_lse(&self) -> bool {
-        self.numbered_predicate(1)
+    pub fn set_v_len(&mut self, l: usize) {
+        self.v_len = l;
     }
 }
+
 static DESCRIPTORS: [detail::Descriptor; 1] = [detail::Descriptor {
-    name: "has_lse",
-    description: "Has Large System Extensions support.",
+    name: "test",
+    description: "not sure now",
     offset: 0,
     detail: detail::Detail::Bool { bit: 0 },
 }];
@@ -84,7 +81,7 @@ static ENUMERATORS: [&str; 0] = [];
 static HASH_TABLE: [u16; 2] = [0xffff, 0];
 static PRESETS: [(u8, u8); 0] = [];
 static TEMPLATE: detail::Template = detail::Template {
-    name: "arm64",
+    name: "riscv64",
     descriptors: &DESCRIPTORS,
     enumerators: &ENUMERATORS,
     hash_table: &HASH_TABLE,
@@ -97,7 +94,7 @@ pub fn builder() -> Builder {
 }
 impl fmt::Display for Flags {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        writeln!(f, "[arm64]")?;
+        writeln!(f, "[riscv64]")?;
         for d in &DESCRIPTORS {
             if !d.detail.is_preset() {
                 write!(f, "{} = ", d.name)?;

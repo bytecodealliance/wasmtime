@@ -56,18 +56,18 @@ mod emit_tests;
 
 use std::fmt::{Display, Formatter};
 
-pub type OptionReg = Option<Reg>;
-pub type OptionImm12 = Option<Imm12>;
-pub type VecBranchTarget = Vec<BranchTarget>;
-
+pub(crate) type OptionReg = Option<Reg>;
+pub(crate) type OptionImm12 = Option<Imm12>;
+pub(crate) type VecBranchTarget = Vec<BranchTarget>;
+pub(crate) type OptionUimm5 = Option<Uimm5>;
 //=============================================================================
 // Instructions (top level): definition
 
 use crate::isa::riscv64::lower::isle::generated_code::MInst;
 pub use crate::isa::riscv64::lower::isle::generated_code::{
-    AluOPRR, AluOPRRI, AluOPRRR, AluOPRRRR, AtomicOP, ExtendOp, FClassResult, FFlagsException,
-    FloatFlagOp, FloatRoundingMode, I128ArithmeticOP, IntSelectOP, LoadOP, MInst as Inst,
-    ReferenceValidOP, StoreOP, OPFPFMT,
+    AluOPRR, AluOPRRI, AluOPRRR, AluOPRRRR, AtomicOP, CsrOP, ExtendOp, FClassResult,
+    FFlagsException, FloatFlagOp, FloatRoundingMode, I128ArithmeticOP, IntSelectOP, LoadOP,
+    MInst as Inst, ReferenceValidOP, StoreOP, OPFPFMT,
 };
 
 type BoxCallInfo = Box<CallInfo>;
@@ -511,6 +511,12 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_uses(y.regs());
             collector.reg_defs(&dst[..]);
         }
+        &Inst::Csr { rd, rs, .. } => {
+            if let Some(rs) = rs {
+                collector.reg_use(rs);
+            }
+            collector.reg_def(rd);
+        }
     }
 }
 
@@ -614,9 +620,11 @@ impl MachInst for Inst {
         if ty.is_bool() && value != 0 {
             value = !0;
         }
+
         if (ty.bits() <= 64 && (ty.is_bool() || ty.is_int())) || ty == R32 || ty == R64 {
             return Inst::load_constant_u64(to_regs.only_reg().unwrap(), value as u64);
         };
+
         match ty {
             F32 => Inst::load_fp_constant32(to_regs.only_reg().unwrap(), value as u32),
             F64 => Inst::load_fp_constant64(to_regs.only_reg().unwrap(), value as u64),
@@ -780,14 +788,14 @@ impl Inst {
             x
         };
 
-        fn format_extend_op(signed: bool, from_bit: u8, to_bits: u8) -> String {
+        fn format_extend_op(signed: bool, from_bits: u8, to_bits: u8) -> String {
             fn short_type_name(signed: bool, bits: u8) -> String {
                 format!("{}{}", if signed { "i" } else { "u" }, bits)
             }
             format!(
                 "{}ext_{}_to_{}",
                 if signed { "s" } else { "u" },
-                short_type_name(signed, from_bit),
+                short_type_name(signed, from_bits),
                 short_type_name(signed, to_bits),
             )
         }
@@ -901,6 +909,22 @@ impl Inst {
                 let rd = format_reg(rd.to_reg(), allocs);
                 format!("{} {},{}", alu_op.op_name(), rd, rs,)
             }
+            &Inst::Csr {
+                csrOP,
+                rd,
+                rs,
+                imm,
+                csr,
+            } => {
+                let rs = rs.map_or("".into(), |r| format_reg(r, allocs));
+                let rd = format_reg(rd.to_reg(), allocs);
+                if csrOP.need_rs() {
+                    format!("{} {},{},{}", csrOP.op_name(), rd, csr, rs)
+                } else {
+                    format!("{} {},{},{}", csrOP.op_name(), rd, csr, imm.unwrap())
+                }
+            }
+
             &Inst::AluRRRR {
                 alu_op,
                 rd,

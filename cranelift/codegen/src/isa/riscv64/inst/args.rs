@@ -9,6 +9,7 @@ use super::*;
 
 pub static WORD_SIZE: u8 = 8;
 
+use crate::isa::riscv64::inst::reg_to_gpr_num;
 use crate::machinst::*;
 
 use std::fmt::{Display, Formatter, Result};
@@ -215,10 +216,7 @@ impl IntegerCompare {
             (self.rs1, self.rs2)
         };
 
-        self.op_code()
-            | funct3.bits() << 12
-            | (rs1.to_real_reg().unwrap().hw_enc() as u32) << 15
-            | (rs2.to_real_reg().unwrap().hw_enc() as u32) << 20
+        self.op_code() | funct3.bits() << 12 | reg_to_gpr_num(rs1) << 15 | reg_to_gpr_num(rs2) << 20
     }
 
     pub(crate) fn inverse(self) -> Self {
@@ -1355,4 +1353,169 @@ impl I128ArithmeticOP {
             I128ArithmeticOP::Rem => "rem_i128",
         }
     }
+}
+
+#[derive(Clone, Copy)]
+pub enum CsrAddress {
+    Vstart = 0x8,
+    Vxsat = 0x9,
+    Vxrm = 0xa,
+    Vcsr = 0xf,
+    Vl = 0xc20,
+    Vtype = 0xc21,
+    Vlenb = 0xc22,
+}
+
+impl std::fmt::Debug for CsrAddress {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        write!(f, "0x{:x}", self.as_u32())
+    }
+}
+
+impl Display for CsrAddress {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        write!(f, "0x{:x}", self.as_u32())
+    }
+}
+impl CsrAddress {
+    pub(crate) fn as_u32(self) -> u32 {
+        self as u32
+    }
+}
+
+pub(crate) struct VType {
+    /*
+        todo::I have no ida vma and vta means.
+    */
+    vma: bool,
+    vta: bool,
+    vsew: Vsew,
+    valmul: Vlmul,
+}
+
+impl VType {
+    fn as_u32(self) -> u32 {
+        self.valmul.as_u32()
+            | self.vsew.as_u32() << 3
+            | if self.vta { 1 << 7 } else { 0 }
+            | if self.vma { 1 << 8 } else { 0 }
+    }
+
+    const fn vill_bit() -> u64 {
+        1 << 63
+    }
+}
+
+enum Vlmul {
+    vlmul_1_div_8 = 0b101,
+    vlmul_1_div_4 = 0b110,
+    vlmul_1_div_2 = 0b111,
+    vlmul_1 = 0b000,
+    vlmul_2 = 0b001,
+    vlmul_4 = 0b010,
+    vlmul_8 = 0b011,
+}
+
+impl Vlmul {
+    fn as_u32(self) -> u32 {
+        self as u32
+    }
+}
+
+enum Vsew {
+    sew_8 = 0b000,
+    sew_16 = 0b001,
+    sew_32 = 0b010,
+    sew_64 = 0b011,
+}
+
+impl Vsew {
+    fn as_u32(self) -> u32 {
+        self as u32
+    }
+}
+
+impl CsrOP {
+    pub(crate) fn op_name(self) -> &'static str {
+        match self {
+            CsrOP::Csrrw => "csrrw",
+            CsrOP::Csrrs => "csrrs",
+            CsrOP::Csrrc => "csrrc",
+            CsrOP::Csrrwi => "csrrwi",
+            CsrOP::Csrrsi => "csrrsi",
+            CsrOP::Csrrci => "csrrci",
+        }
+    }
+
+    pub(crate) const fn need_rs(self) -> bool {
+        match self {
+            CsrOP::Csrrw | CsrOP::Csrrs | CsrOP::Csrrc => true,
+            _ => false,
+        }
+    }
+    pub(crate) const fn op_code(self) -> u32 {
+        0b1110011
+    }
+
+    pub(crate) fn funct3(self) -> u32 {
+        match self {
+            CsrOP::Csrrw => 0b001,
+            CsrOP::Csrrs => 0b010,
+            CsrOP::Csrrc => 0b011,
+            CsrOP::Csrrwi => 0b101,
+            CsrOP::Csrrsi => 0b110,
+            CsrOP::Csrrci => 0b110,
+        }
+    }
+
+    pub(crate) fn rs1(self, rs: Option<Reg>, zimm: OptionUimm5) -> u32 {
+        if self.need_rs() {
+            reg_to_gpr_num(rs.unwrap())
+        } else {
+            zimm.unwrap().as_u32()
+        }
+    }
+}
+
+enum Vxrm {
+    // round-to-nearest-up (add +0.5 LSB)
+    rnu = 0b00,
+    // round-to-nearest-even
+    rne = 0b01,
+    //round-down (truncate)
+    rdn = 0b10,
+    // round-to-odd (OR bits into LSB, aka "jam")
+    rod = 0b11,
+}
+
+impl Vxrm {
+    pub(crate) fn as_u32(self) -> u32 {
+        self as u32
+    }
+}
+
+pub(crate) struct Vcsr {
+    xvrm: Vxrm,
+    // Fixed-point accrued saturation flag
+    vxsat: bool,
+}
+
+impl Vcsr {
+    pub(crate) fn as_u32(self) -> u32 {
+        return if self.vxsat { 1 } else { 0 } | self.xvrm.as_u32();
+    }
+}
+
+static mut V_LEN: usize = 0;
+
+/*
+    V_LEN is not contant accroding to riscv document.
+
+
+
+    Each hart supporting a vector extension de nes two parameters: 1. The maximum size in bits of a vector element that any operation can produce or consume, ELEN ≥ 8, which must be a power of 2. 2. The number of bits in a single vector register, VLEN ≥ ELEN, which must be a power of 2, and must be no greater than 216. Standard vector extensions (Section Standard Vector Extensions) and architecture pro les may set further constraints on ELEN and VLEN.
+*/
+
+pub(crate) fn set_x_len(l: usize) {
+    unsafe { V_LEN = l };
 }

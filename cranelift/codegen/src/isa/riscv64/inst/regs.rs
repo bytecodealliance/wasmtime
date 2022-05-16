@@ -45,7 +45,7 @@ pub fn param_or_rets_xregs(args_or_rets: ArgsOrRets) -> Vec<Writable<Reg>> {
     } else {
         12
     };
-    for enc in a0..a_last {
+    for enc in a0..=a_last {
         v.push(Writable::from_reg(x_reg(enc as usize)));
     }
     v
