@@ -10,6 +10,15 @@ block0(v0: b1, v1: i128, v2: i128):
 }
 ; run: %i128_select(true, 0, 1) == 0
 ; run: %i128_select(false, 0, 1) == 1
-
 ; run: %i128_select(true, 0x00000000_00000000_DECAFFFF_C0FFEEEE, 0xFFFFFFFF_FFFFFFFF_C0FFEEEE_DECAFFFF) == 0x00000000_00000000_DECAFFFF_C0FFEEEE
 ; run: %i128_select(false, 0x00000000_00000000_DECAFFFF_C0FFEEEE, 0xFFFFFFFF_FFFFFFFF_C0FFEEEE_DECAFFFF) == 0xFFFFFFFF_FFFFFFFF_C0FFEEEE_DECAFFFF
+
+;; Test for issue: https://github.com/bytecodealliance/wasmtime/issues/3963.
+function %i128_fcmp_eq_select(f32, i128, i128) -> i128 {
+block0(v0: f32, v1: i128, v2: i128):
+    v3 = fcmp eq v0, v0
+    v4 = select.i128 v3, v1, v2
+    return v4
+}
+; run: %i128_fcmp_eq_select(0x42.42, 1, 0) == 1
+; run: %i128_fcmp_eq_select(NaN, 1, 0) == 0

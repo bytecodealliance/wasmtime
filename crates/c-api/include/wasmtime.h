@@ -41,7 +41,7 @@
  *
  * * Linux - `-lpthread -ldl -lm`
  * * macOS - no extra flags needed
- * * Windows - `ws2_32.lib advapi32.lib userenv.lib ntdll.lib shell32.lib ole32.lib`
+ * * Windows - `ws2_32.lib advapi32.lib userenv.lib ntdll.lib shell32.lib ole32.lib bcrypt.lib`
  *
  * ## Building from Source
  *

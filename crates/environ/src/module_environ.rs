@@ -16,8 +16,8 @@ use std::sync::Arc;
 use wasmparser::Type as WasmType;
 use wasmparser::{
     DataKind, ElementItem, ElementKind, ExternalKind, FuncValidator, FunctionBody,
-    ImportSectionEntryType, NameSectionReader, Naming, Operator, Parser, Payload, TypeDef,
-    Validator, ValidatorResources, WasmFeatures,
+    NameSectionReader, Naming, Operator, Parser, Payload, TypeDef, TypeRef, Validator,
+    ValidatorResources, WasmFeatures,
 };
 
 /// Object containing the standalone environment information.
@@ -169,8 +169,7 @@ impl<'data> ModuleEnvironment<'data> {
         mut self,
         data: &'data [u8],
     ) -> WasmResult<(ModuleTranslation<'data>, TypeTables)> {
-        let mut validator = Validator::new();
-        validator.wasm_features(self.features);
+        let mut validator = Validator::new_with_features(self.features);
 
         for payload in Parser::new(0).parse_all(data) {
             self.translate_payload(&mut validator, payload?)?;
@@ -185,12 +184,16 @@ impl<'data> ModuleEnvironment<'data> {
         payload: Payload<'data>,
     ) -> WasmResult<()> {
         match payload {
-            Payload::Version { num, range } => {
-                validator.version(num, &range)?;
+            Payload::Version {
+                num,
+                encoding,
+                range,
+            } => {
+                validator.version(num, encoding, &range)?;
             }
 
-            Payload::End => {
-                validator.end()?;
+            Payload::End(offset) => {
+                validator.end(offset)?;
 
                 // With the `escaped_funcs` set of functions finished
                 // we can calculate the set of signatures that are exported as
@@ -223,11 +226,6 @@ impl<'data> ModuleEnvironment<'data> {
                         TypeDef::Func(wasm_func_ty) => {
                             self.declare_type_func(wasm_func_ty.try_into()?)?;
                         }
-
-                        // doesn't get past validation
-                        TypeDef::Module(_) | TypeDef::Instance(_) => {
-                            unreachable!();
-                        }
                     }
                 }
             }
@@ -241,35 +239,33 @@ impl<'data> ModuleEnvironment<'data> {
                 for entry in imports {
                     let import = entry?;
                     let ty = match import.ty {
-                        ImportSectionEntryType::Function(index) => {
+                        TypeRef::Func(index) => {
                             let index = TypeIndex::from_u32(index);
                             let sig_index = self.result.module.types[index].unwrap_function();
                             self.result.module.num_imported_funcs += 1;
                             self.result.debuginfo.wasm_file.imported_func_count += 1;
                             EntityType::Function(sig_index)
                         }
-                        ImportSectionEntryType::Memory(ty) => {
+                        TypeRef::Memory(ty) => {
                             if ty.shared {
                                 return Err(WasmError::Unsupported("shared memories".to_owned()));
                             }
                             self.result.module.num_imported_memories += 1;
                             EntityType::Memory(ty.into())
                         }
-                        ImportSectionEntryType::Global(ty) => {
+                        TypeRef::Global(ty) => {
                             self.result.module.num_imported_globals += 1;
                             EntityType::Global(Global::new(ty, GlobalInit::Import)?)
                         }
-                        ImportSectionEntryType::Table(ty) => {
+                        TypeRef::Table(ty) => {
                             self.result.module.num_imported_tables += 1;
                             EntityType::Table(ty.try_into()?)
                         }
 
                         // doesn't get past validation
-                        ImportSectionEntryType::Module(_)
-                        | ImportSectionEntryType::Instance(_)
-                        | ImportSectionEntryType::Tag(_) => unreachable!(),
+                        TypeRef::Tag(_) => unreachable!(),
                     };
-                    self.declare_import(import.module, import.field.unwrap(), ty);
+                    self.declare_import(import.module, import.name, ty);
                 }
             }
 
@@ -368,9 +364,9 @@ impl<'data> ModuleEnvironment<'data> {
                 self.result.module.exports.reserve(cnt);
 
                 for entry in exports {
-                    let wasmparser::Export { field, kind, index } = entry?;
+                    let wasmparser::Export { name, kind, index } = entry?;
                     let entity = match kind {
-                        ExternalKind::Function => {
+                        ExternalKind::Func => {
                             let index = FuncIndex::from_u32(index);
                             self.flag_func_escaped(index);
                             EntityIndex::Function(index)
@@ -380,15 +376,12 @@ impl<'data> ModuleEnvironment<'data> {
                         ExternalKind::Global => EntityIndex::Global(GlobalIndex::from_u32(index)),
 
                         // this never gets past validation
-                        ExternalKind::Module
-                        | ExternalKind::Instance
-                        | ExternalKind::Tag
-                        | ExternalKind::Type => unreachable!(),
+                        ExternalKind::Tag => unreachable!(),
                     };
                     self.result
                         .module
                         .exports
-                        .insert(String::from(field), entity);
+                        .insert(String::from(name), entity);
                 }
             }
 
@@ -502,7 +495,7 @@ impl<'data> ModuleEnvironment<'data> {
             }
 
             Payload::CodeSectionEntry(mut body) => {
-                let validator = validator.code_section_entry()?;
+                let validator = validator.code_section_entry(&body)?;
                 let func_index =
                     self.result.code_index + self.result.module.num_imported_funcs as u32;
                 let func_index = FuncIndex::from_u32(func_index);
@@ -617,30 +610,6 @@ impl<'data> ModuleEnvironment<'data> {
                 // the passive count, do not reserve anything here.
             }
 
-            Payload::AliasSection(s) => {
-                validator.alias_section(&s)?;
-                unreachable!() // should never get past validation
-            }
-
-            Payload::InstanceSection(s) => {
-                validator.instance_section(&s)?;
-                unreachable!() // should never get past validation
-            }
-
-            Payload::ModuleSectionStart {
-                count,
-                range,
-                size: _,
-            } => {
-                validator.module_section_start(count, &range)?;
-                unreachable!() // should never get past validation
-            }
-
-            Payload::ModuleSectionEntry { .. } => {
-                validator.module_section_entry();
-                unreachable!() // should never get past validation
-            }
-
             Payload::CustomSection {
                 name: "name",
                 data,
@@ -683,9 +652,13 @@ and for re-adding support for interface types you can see this issue:
                 self.register_dwarf_section(name, data);
             }
 
-            Payload::UnknownSection { id, range, .. } => {
-                validator.unknown_section(id, &range)?;
-                unreachable!();
+            // It's expected that validation will probably reject other
+            // payloads such as `UnknownSection` or those related to the
+            // component model. If, however, something gets past validation then
+            // that's a bug in Wasmtime as we forgot to implement something.
+            other => {
+                validator.payload(&other)?;
+                panic!("unimplemented section in wasm file {:?}", other);
             }
         }
         Ok(())

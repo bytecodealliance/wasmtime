@@ -105,9 +105,9 @@ struct ModuleInner {
     /// executed.
     module: Arc<CompiledModule>,
     /// Type information of this module.
-    types: Arc<TypeTables>,
+    types: TypeTables,
     /// Registered shared signature for the module.
-    signatures: Arc<SignatureCollection>,
+    signatures: SignatureCollection,
     /// A set of initialization images for memories, if any.
     ///
     /// Note that this is behind a `OnceCell` to lazily create this image. On
@@ -191,22 +191,6 @@ impl Module {
         #[cfg(feature = "wat")]
         let bytes = wat::parse_bytes(bytes)?;
         Self::from_binary(engine, &bytes)
-    }
-
-    /// Creates a new WebAssembly `Module` from the given in-memory `binary`
-    /// data. The provided `name` will be used in traps/backtrace details.
-    ///
-    /// See [`Module::new`] for other details.
-    #[cfg(compiler)]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
-    pub fn new_with_name(engine: &Engine, bytes: impl AsRef<[u8]>, name: &str) -> Result<Module> {
-        let mut module = Self::new(engine, bytes.as_ref())?;
-        Arc::get_mut(&mut Arc::get_mut(&mut module.inner).unwrap().module)
-            .unwrap()
-            .module_mut()
-            .expect("mutable module")
-            .name = Some(name.to_string());
-        Ok(module)
     }
 
     /// Creates a new WebAssembly `Module` from the contents of the given
@@ -332,14 +316,7 @@ impl Module {
             }
         };
 
-        let module = CompiledModule::from_artifacts(
-            mmap,
-            info,
-            &*engine.config().profiler,
-            engine.unique_id_allocator(),
-        )?;
-
-        Self::from_parts(engine, module, Arc::new(types))
+        Self::from_parts(engine, mmap, info, types)
     }
 
     /// Converts an input binary-encoded WebAssembly module to compilation
@@ -393,12 +370,6 @@ impl Module {
             engine
                 .compiler()
                 .emit_obj(&translation, &types, funcs, tunables, &mut obj)?;
-
-        // If configured, attempt to use paged memory initialization
-        // instead of the default mode of memory initialization
-        if engine.config().paged_memory_initialization {
-            translation.try_paged_init();
-        }
 
         // If configured attempt to use static memory initialization which
         // can either at runtime be implemented as a single memcpy to
@@ -498,17 +469,31 @@ impl Module {
 
     fn from_parts(
         engine: &Engine,
-        module: Arc<CompiledModule>,
-        types: Arc<TypeTables>,
+        mmap: MmapVec,
+        info: Option<CompiledModuleInfo>,
+        types: TypeTables,
     ) -> Result<Self> {
+        let module = Arc::new(CompiledModule::from_artifacts(
+            mmap,
+            info,
+            &*engine.config().profiler,
+            engine.unique_id_allocator(),
+        )?);
+
         // Validate the module can be used with the current allocator
         engine.allocator().validate(module.module())?;
 
-        let signatures = Arc::new(SignatureCollection::new_for_module(
+        let signatures = SignatureCollection::new_for_module(
             engine.signatures(),
             &types,
             module.trampolines().map(|(idx, f, _)| (idx, f)),
-        ));
+        );
+
+        // We're about to create a `Module` for real now so enter this module
+        // into the global registry of modules so we can resolve traps
+        // appropriately. Note that the corresponding `unregister` happens below
+        // in `Drop for ModuleInner`.
+        registry::register(engine, &module);
 
         Ok(Self {
             inner: Arc::new(ModuleInner {
@@ -541,8 +526,7 @@ impl Module {
     ///
     /// [binary]: https://webassembly.github.io/spec/core/binary/index.html
     pub fn validate(engine: &Engine, binary: &[u8]) -> Result<()> {
-        let mut validator = Validator::new();
-        validator.wasm_features(engine.config().features);
+        let mut validator = Validator::new_with_features(engine.config().features);
 
         let mut functions = Vec::new();
         for payload in Parser::new(0).parse_all(binary) {
@@ -570,7 +554,7 @@ impl Module {
         SerializedModule::new(self).to_bytes(&self.inner.engine.config().module_version)
     }
 
-    pub(crate) fn compiled_module(&self) -> &Arc<CompiledModule> {
+    pub(crate) fn compiled_module(&self) -> &CompiledModule {
         &self.inner.module
     }
 
@@ -578,11 +562,11 @@ impl Module {
         self.compiled_module().module()
     }
 
-    pub(crate) fn types(&self) -> &Arc<TypeTables> {
+    pub(crate) fn types(&self) -> &TypeTables {
         &self.inner.types
     }
 
-    pub(crate) fn signatures(&self) -> &Arc<SignatureCollection> {
+    pub(crate) fn signatures(&self) -> &SignatureCollection {
         &self.inner.signatures
     }
 
@@ -605,8 +589,6 @@ impl Module {
     /// let module = Module::new(&engine, "(module)")?;
     /// assert_eq!(module.name(), None);
     ///
-    /// let module = Module::new_with_name(&engine, "(module)", "bar")?;
-    /// assert_eq!(module.name(), Some("bar"));
     /// # Ok(())
     /// # }
     /// ```
@@ -804,6 +786,10 @@ impl Module {
         self.inner.clone()
     }
 
+    pub(crate) fn module_info(&self) -> &dyn wasmtime_runtime::ModuleInfo {
+        &*self.inner
+    }
+
     /// Returns the range of bytes in memory where this module's compilation
     /// image resides.
     ///
@@ -820,6 +806,38 @@ impl Module {
     /// modify the protections of memory in this range.
     pub fn image_range(&self) -> Range<usize> {
         self.compiled_module().image_range()
+    }
+
+    /// Force initialization of copy-on-write images to happen here-and-now
+    /// instead of when they're requested during first instantiation.
+    ///
+    /// When [copy-on-write memory
+    /// initialization](crate::Config::memory_init_cow) is enabled then Wasmtime
+    /// will lazily create the initialization image for a module. This method
+    /// can be used to explicitly dictate when this initialization happens.
+    ///
+    /// Note that this largely only matters on Linux when memfd is used.
+    /// Otherwise the copy-on-write image typically comes from disk and in that
+    /// situation the creation of the image is trivial as the image is always
+    /// sourced from disk. On Linux, though, when memfd is used a memfd is
+    /// created and the initialization image is written to it.
+    ///
+    /// Also note that this method is not required to be called, it's available
+    /// as a performance optimization if required but is otherwise handled
+    /// automatically.
+    pub fn initialize_copy_on_write_image(&self) -> Result<()> {
+        self.inner.memory_images()?;
+        Ok(())
+    }
+}
+
+impl ModuleInner {
+    fn memory_images(&self) -> Result<Option<&ModuleMemoryImages>> {
+        let images = self
+            .memory_images
+            .get_or_try_init(|| memory_images(&self.engine, &self.module))?
+            .as_ref();
+        Ok(images)
     }
 }
 
@@ -874,12 +892,8 @@ impl wasmtime_runtime::ModuleRuntimeInfo for ModuleInner {
     }
 
     fn memory_image(&self, memory: DefinedMemoryIndex) -> Result<Option<&Arc<MemoryImage>>> {
-        let images = self
-            .memory_images
-            .get_or_try_init(|| memory_images(&self.engine, &self.module))?;
-        Ok(images
-            .as_ref()
-            .and_then(|images| images.get_memory_image(memory)))
+        let images = self.memory_images()?;
+        Ok(images.and_then(|images| images.get_memory_image(memory)))
     }
 
     fn unique_id(&self) -> Option<CompiledModuleId> {
@@ -892,6 +906,38 @@ impl wasmtime_runtime::ModuleRuntimeInfo for ModuleInner {
 
     fn signature_ids(&self) -> &[VMSharedSignatureIndex] {
         self.signatures.as_module_map().values().as_slice()
+    }
+}
+
+impl wasmtime_runtime::ModuleInfo for ModuleInner {
+    fn lookup_stack_map(&self, pc: usize) -> Option<&wasmtime_environ::StackMap> {
+        let text_offset = pc - self.module.code().as_ptr() as usize;
+        let (index, func_offset) = self.module.func_by_text_offset(text_offset)?;
+        let info = self.module.func_info(index);
+
+        // Do a binary search to find the stack map for the given offset.
+        let index = match info
+            .stack_maps
+            .binary_search_by_key(&func_offset, |i| i.code_offset)
+        {
+            // Found it.
+            Ok(i) => i,
+
+            // No stack map associated with this PC.
+            //
+            // Because we know we are in Wasm code, and we must be at some kind
+            // of call/safepoint, then the Cranelift backend must have avoided
+            // emitting a stack map for this location because no refs were live.
+            Err(_) => return None,
+        };
+
+        Some(&info.stack_maps[index].stack_map)
+    }
+}
+
+impl Drop for ModuleInner {
+    fn drop(&mut self) {
+        registry::unregister(&self.module);
     }
 }
 

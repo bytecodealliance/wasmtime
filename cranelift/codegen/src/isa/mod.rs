@@ -235,7 +235,10 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
 
     #[cfg(feature = "unwind")]
     /// Map a regalloc::Reg to its corresponding DWARF register.
-    fn map_regalloc_reg_to_dwarf(&self, _: ::regalloc::Reg) -> Result<u16, RegisterMappingError> {
+    fn map_regalloc_reg_to_dwarf(
+        &self,
+        _: crate::machinst::Reg,
+    ) -> Result<u16, RegisterMappingError> {
         Err(RegisterMappingError::UnsupportedArchitecture)
     }
 

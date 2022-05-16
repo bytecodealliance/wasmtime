@@ -287,55 +287,51 @@ impl Instance {
         self.vmctx() as *const VMContext as *mut VMContext
     }
 
-    /// Lookup an export with the given export declaration.
-    pub fn lookup_by_declaration(&mut self, export: &EntityIndex) -> Export {
-        match export {
-            EntityIndex::Function(index) => {
-                let anyfunc = self.get_caller_checked_anyfunc(*index).unwrap();
-                let anyfunc =
-                    NonNull::new(anyfunc as *const VMCallerCheckedAnyfunc as *mut _).unwrap();
-                ExportFunction { anyfunc }.into()
-            }
-            EntityIndex::Table(index) => {
-                let (definition, vmctx) =
-                    if let Some(def_index) = self.module().defined_table_index(*index) {
-                        (self.table_ptr(def_index), self.vmctx_ptr())
-                    } else {
-                        let import = self.imported_table(*index);
-                        (import.from, import.vmctx)
-                    };
-                ExportTable {
-                    definition,
-                    vmctx,
-                    table: self.module().table_plans[*index].clone(),
-                }
-                .into()
-            }
-            EntityIndex::Memory(index) => {
-                let (definition, vmctx) =
-                    if let Some(def_index) = self.module().defined_memory_index(*index) {
-                        (self.memory_ptr(def_index), self.vmctx_ptr())
-                    } else {
-                        let import = self.imported_memory(*index);
-                        (import.from, import.vmctx)
-                    };
-                ExportMemory {
-                    definition,
-                    vmctx,
-                    memory: self.module().memory_plans[*index].clone(),
-                }
-                .into()
-            }
-            EntityIndex::Global(index) => ExportGlobal {
-                definition: if let Some(def_index) = self.module().defined_global_index(*index) {
-                    self.global_ptr(def_index)
-                } else {
-                    self.imported_global(*index).from
-                },
-                vmctx: self.vmctx_ptr(),
-                global: self.module().globals[*index],
-            }
-            .into(),
+    fn get_exported_func(&mut self, index: FuncIndex) -> ExportFunction {
+        let anyfunc = self.get_caller_checked_anyfunc(index).unwrap();
+        let anyfunc = NonNull::new(anyfunc as *const VMCallerCheckedAnyfunc as *mut _).unwrap();
+        ExportFunction { anyfunc }
+    }
+
+    fn get_exported_table(&mut self, index: TableIndex) -> ExportTable {
+        let (definition, vmctx) = if let Some(def_index) = self.module().defined_table_index(index)
+        {
+            (self.table_ptr(def_index), self.vmctx_ptr())
+        } else {
+            let import = self.imported_table(index);
+            (import.from, import.vmctx)
+        };
+        ExportTable {
+            definition,
+            vmctx,
+            table: self.module().table_plans[index].clone(),
+        }
+    }
+
+    fn get_exported_memory(&mut self, index: MemoryIndex) -> ExportMemory {
+        let (definition, vmctx) = if let Some(def_index) = self.module().defined_memory_index(index)
+        {
+            (self.memory_ptr(def_index), self.vmctx_ptr())
+        } else {
+            let import = self.imported_memory(index);
+            (import.from, import.vmctx)
+        };
+        ExportMemory {
+            definition,
+            vmctx,
+            memory: self.module().memory_plans[index].clone(),
+        }
+    }
+
+    fn get_exported_global(&mut self, index: GlobalIndex) -> ExportGlobal {
+        ExportGlobal {
+            definition: if let Some(def_index) = self.module().defined_global_index(index) {
+                self.global_ptr(def_index)
+            } else {
+                self.imported_global(index).from
+            },
+            vmctx: self.vmctx_ptr(),
+            global: self.module().globals[index],
         }
     }
 
@@ -1062,9 +1058,34 @@ impl InstanceHandle {
         self.instance().module()
     }
 
-    /// Lookup an export with the given export declaration.
-    pub fn lookup_by_declaration(&mut self, export: &EntityIndex) -> Export {
-        self.instance_mut().lookup_by_declaration(export)
+    /// Lookup a function by index.
+    pub fn get_exported_func(&mut self, export: FuncIndex) -> ExportFunction {
+        self.instance_mut().get_exported_func(export)
+    }
+
+    /// Lookup a global by index.
+    pub fn get_exported_global(&mut self, export: GlobalIndex) -> ExportGlobal {
+        self.instance_mut().get_exported_global(export)
+    }
+
+    /// Lookup a memory by index.
+    pub fn get_exported_memory(&mut self, export: MemoryIndex) -> ExportMemory {
+        self.instance_mut().get_exported_memory(export)
+    }
+
+    /// Lookup a table by index.
+    pub fn get_exported_table(&mut self, export: TableIndex) -> ExportTable {
+        self.instance_mut().get_exported_table(export)
+    }
+
+    /// Lookup an item with the given index.
+    pub fn get_export_by_index(&mut self, export: EntityIndex) -> Export {
+        match export {
+            EntityIndex::Function(i) => Export::Function(self.get_exported_func(i)),
+            EntityIndex::Global(i) => Export::Global(self.get_exported_global(i)),
+            EntityIndex::Table(i) => Export::Table(self.get_exported_table(i)),
+            EntityIndex::Memory(i) => Export::Memory(self.get_exported_memory(i)),
+        }
     }
 
     /// Return an iterator over the exports of this instance.

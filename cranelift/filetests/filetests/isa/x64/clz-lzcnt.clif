@@ -7,19 +7,13 @@ block0(v0: i64):
     return v1
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 7)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   lzcntq  %rdi, %rsi
-;   Inst 3:   movq    %rsi, %rax
-;   Inst 4:   movq    %rbp, %rsp
-;   Inst 5:   popq    %rbp
-;   Inst 6:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   lzcntq  %rdi, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %clz(i32) -> i32 {
 block0(v0: i32):
@@ -27,17 +21,11 @@ block0(v0: i32):
     return v1
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 7)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   lzcntl  %edi, %esi
-;   Inst 3:   movq    %rsi, %rax
-;   Inst 4:   movq    %rbp, %rsp
-;   Inst 5:   popq    %rbp
-;   Inst 6:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   lzcntl  %edi, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 

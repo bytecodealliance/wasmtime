@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-runtime"
-version = "0.35.0"
+version = "0.38.0"
 authors = ["The Wasmtime Project Developers"]
 description = "Runtime library support for Wasmtime"
 documentation = "https://docs.rs/wasmtime-runtime"
@@ -8,12 +8,12 @@ license = "Apache-2.0 WITH LLVM-exception"
 categories = ["wasm"]
 keywords = ["webassembly", "wasm"]
 repository = "https://github.com/bytecodealliance/wasmtime"
-edition = "2018"
+edition = "2021"
 
 [dependencies]
-wasmtime-environ = { path = "../environ", version = "=0.35.0" }
-wasmtime-fiber = { path = "../fiber", version = "=0.35.0", optional = true }
-wasmtime-jit-debug = { path = "../jit-debug", version = "=0.35.0", features = ["gdb_jit_int"] }
+wasmtime-environ = { path = "../environ", version = "=0.38.0" }
+wasmtime-fiber = { path = "../fiber", version = "=0.38.0", optional = true }
+wasmtime-jit-debug = { path = "../jit-debug", version = "=0.38.0", features = ["gdb_jit_int"] }
 region = "2.1.0"
 libc = { version = "0.2.112", default-features = false }
 log = "0.4.8"
@@ -31,13 +31,10 @@ memfd = { version = "0.4.1", optional = true }
 mach = "0.3.2"
 
 [target.'cfg(unix)'.dependencies]
-rustix = "0.33.5"
+rustix = "0.33.7"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 winapi = { version = "0.3.7", features = ["winbase", "memoryapi", "errhandlingapi", "handleapi"] }
-
-[target.'cfg(target_os = "linux")'.dependencies]
-userfaultfd = { version = "0.4.1", optional = true }
 
 [build-dependencies]
 cc = "1.0"
@@ -53,9 +50,6 @@ async = ["wasmtime-fiber"]
 
 # Enables support for the pooling instance allocator
 pooling-allocator = []
-
-# Enables support for userfaultfd in the pooling allocator when building on Linux
-uffd = ["userfaultfd", "pooling-allocator"]
 
 # Enables trap handling using POSIX signals instead of Mach exceptions on MacOS.
 # It is useful for applications that do not bind their own exception ports and

@@ -24,9 +24,7 @@ fn trivially_unsafe_for_gvn(opcode: Opcode) -> bool {
 /// Test that, if the specified instruction is a load, it doesn't have the `readonly` memflag.
 fn is_load_and_not_readonly(inst_data: &InstructionData) -> bool {
     match *inst_data {
-        InstructionData::Load { flags, .. } | InstructionData::LoadComplex { flags, .. } => {
-            !flags.readonly()
-        }
+        InstructionData::Load { flags, .. } => !flags.readonly(),
         _ => inst_data.opcode().can_load(),
     }
 }

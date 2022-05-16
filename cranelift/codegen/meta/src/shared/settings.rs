@@ -3,37 +3,19 @@ use crate::cdsl::settings::{SettingGroup, SettingGroupBuilder};
 pub(crate) fn define() -> SettingGroup {
     let mut settings = SettingGroupBuilder::new("shared");
 
-    settings.add_enum(
-        "regalloc",
-        "Register allocator to use with the MachInst backend.",
+    settings.add_bool(
+        "regalloc_checker",
+        "Enable the symbolic checker for register allocation.",
         r#"
-            This selects the register allocator as an option among those offered by the `regalloc.rs`
-            crate. Please report register allocation bugs to the maintainers of this crate whenever
-            possible.
-
-            Note: this only applies to target that use the MachInst backend. As of 2020-04-17, this
-            means the x86_64 backend doesn't use this yet.
-
-            Possible values:
-
-            - `backtracking` is a greedy, backtracking register allocator as implemented in
-            Spidermonkey's optimizing tier IonMonkey. It may take more time to allocate registers, but
-            it should generate better code in general, resulting in better throughput of generated
-            code.
-            - `backtracking_checked` is the backtracking allocator with additional self checks that may
-            take some time to run, and thus these checks are disabled by default.
-            - `experimental_linear_scan` is an experimental linear scan allocator. It may take less
-            time to allocate registers, but generated code's quality may be inferior. As of
-            2020-04-17, it is still experimental and it should not be used in production settings.
-            - `experimental_linear_scan_checked` is the linear scan allocator with additional self
-            checks that may take some time to run, and thus these checks are disabled by default.
+            This performs a verification that the register allocator preserves
+            equivalent dataflow with respect to the original (pre-regalloc)
+            program. This analysis is somewhat expensive. However, if it succeeds,
+            it provides independent evidence (by a carefully-reviewed, from-first-principles
+            analysis) that no regalloc bugs were triggered for the particular compilations
+            performed. This is a valuable assurance to have as regalloc bugs can be
+            very dangerous and difficult to debug.
         "#,
-        vec![
-            "backtracking",
-            "backtracking_checked",
-            "experimental_linear_scan",
-            "experimental_linear_scan_checked",
-        ],
+        false,
     );
 
     settings.add_enum(
@@ -316,6 +298,23 @@ pub(crate) fn define() -> SettingGroup {
             if the limit is static and the guard region is large enough that
             the index cannot reach past it.
 
+            This option is enabled by default because it is highly
+            recommended for secure sandboxing. The embedder should consider
+            the security implications carefully before disabling this option.
+        "#,
+        true,
+    );
+
+    settings.add_bool(
+        "enable_table_access_spectre_mitigation",
+        "Enable Spectre mitigation on table bounds checks.",
+        r#"
+            This option uses a conditional move to ensure that when a table
+            access index is bounds-checked and a conditional branch is used
+            for the out-of-bounds case, a misspeculation of that conditional
+            branch (falsely predicted in-bounds) will select an in-bounds
+            index to load on the speculative path.
+            
             This option is enabled by default because it is highly
             recommended for secure sandboxing. The embedder should consider
             the security implications carefully before disabling this option.

@@ -1,4 +1,4 @@
-test compile
+test compile precise-output
 set unwind_info=false
 set enable_probestack=false
 target aarch64
@@ -11,12 +11,13 @@ block0(v0: i64):
     return v1
 }
 
-; check:  stp fp, lr, [sp, #-16]!
-; nextln:  mov fp, sp
-; nextln:  ldr x1, 8 ; b 12 ; data
-; nextln:  blr x1
-; nextln:  ldp fp, lr, [sp], #16
-; nextln:  ret
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+; block0:
+;   ldr x5, 8 ; b 12 ; data TestCase { length: 1, ascii: [103, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   blr x5
+;   ldp fp, lr, [sp], #16
+;   ret
 
 function %f2(i32) -> i64 {
     fn0 = %g(i32 uext) -> i64 baldrdash_system_v
@@ -26,20 +27,40 @@ block0(v0: i32):
     return v1
 }
 
-; check:  stp fp, lr, [sp, #-16]!
-; nextln:  mov fp, sp
-; check:  mov w0, w0
-; nextln:  ldr x1, 8 ; b 12 ; data
-; nextln:  blr x1
-; check:  ldp fp, lr, [sp], #16
-; nextln:  ret
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   stp x27, x28, [sp, #-16]!
+;   stp x25, x26, [sp, #-16]!
+;   stp x23, x24, [sp, #-16]!
+;   stp x21, x22, [sp, #-16]!
+;   stp x19, x20, [sp, #-16]!
+;   stp d14, d15, [sp, #-16]!
+;   stp d12, d13, [sp, #-16]!
+;   stp d10, d11, [sp, #-16]!
+;   stp d8, d9, [sp, #-16]!
+; block0:
+;   mov w0, w0
+;   ldr x5, 8 ; b 12 ; data TestCase { length: 1, ascii: [103, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   blr x5
+;   ldp d8, d9, [sp], #16
+;   ldp d10, d11, [sp], #16
+;   ldp d12, d13, [sp], #16
+;   ldp d14, d15, [sp], #16
+;   ldp x19, x20, [sp], #16
+;   ldp x21, x22, [sp], #16
+;   ldp x23, x24, [sp], #16
+;   ldp x25, x26, [sp], #16
+;   ldp x27, x28, [sp], #16
+;   ldp fp, lr, [sp], #16
+;   ret
 
 function %f3(i32) -> i32 uext baldrdash_system_v {
 block0(v0: i32):
     return v0
 }
 
-; check:  mov w0, w0
+; block0:
+;   mov w0, w0
 
 function %f4(i32) -> i64 {
     fn0 = %g(i32 sext) -> i64 baldrdash_system_v
@@ -49,20 +70,40 @@ block0(v0: i32):
     return v1
 }
 
-; check:  stp fp, lr, [sp, #-16]!
-; nextln:  mov fp, sp
-; check:  sxtw x0, w0
-; nextln:  ldr x1, 8 ; b 12 ; data
-; nextln:  blr x1
-; check:  ldp fp, lr, [sp], #16
-; nextln:  ret
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   stp x27, x28, [sp, #-16]!
+;   stp x25, x26, [sp, #-16]!
+;   stp x23, x24, [sp, #-16]!
+;   stp x21, x22, [sp, #-16]!
+;   stp x19, x20, [sp, #-16]!
+;   stp d14, d15, [sp, #-16]!
+;   stp d12, d13, [sp, #-16]!
+;   stp d10, d11, [sp, #-16]!
+;   stp d8, d9, [sp, #-16]!
+; block0:
+;   sxtw x0, w0
+;   ldr x5, 8 ; b 12 ; data TestCase { length: 1, ascii: [103, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   blr x5
+;   ldp d8, d9, [sp], #16
+;   ldp d10, d11, [sp], #16
+;   ldp d12, d13, [sp], #16
+;   ldp d14, d15, [sp], #16
+;   ldp x19, x20, [sp], #16
+;   ldp x21, x22, [sp], #16
+;   ldp x23, x24, [sp], #16
+;   ldp x25, x26, [sp], #16
+;   ldp x27, x28, [sp], #16
+;   ldp fp, lr, [sp], #16
+;   ret
 
 function %f5(i32) -> i32 sext baldrdash_system_v {
 block0(v0: i32):
     return v0
 }
 
-; check:  sxtw x0, w0
+; block0:
+;   sxtw x0, w0
 
 function %f6(i8) -> i64 {
     fn0 = %g(i32, i32, i32, i32, i32, i32, i32, i32, i8 sext) -> i64
@@ -73,26 +114,27 @@ block0(v0: i8):
     return v2
 }
 
-; check:  stp fp, lr, [sp, #-16]!
-; nextln:  mov fp, sp
-; nextln:  mov x8, x0
-; nextln:  sub sp, sp, #16
-; nextln:  virtual_sp_offset_adjust 16
-; nextln:  movz x0, #42
-; nextln:  movz x1, #42
-; nextln:  movz x2, #42
-; nextln:  movz x3, #42
-; nextln:  movz x4, #42
-; nextln:  movz x5, #42
-; nextln:  movz x6, #42
-; nextln:  movz x7, #42
-; nextln:  sturb w8, [sp]
-; nextln:  ldr x8, 8 ; b 12 ; data
-; nextln:  blr x8
-; nextln:  add sp, sp, #16
-; nextln:  virtual_sp_offset_adjust -16
-; nextln:  ldp fp, lr, [sp], #16
-; nextln:  ret
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+; block0:
+;   mov x15, x0
+;   sub sp, sp, #16
+;   virtual_sp_offset_adjust 16
+;   movz x0, #42
+;   movz x1, #42
+;   movz x2, #42
+;   movz x3, #42
+;   movz x4, #42
+;   movz x5, #42
+;   movz x6, #42
+;   movz x7, #42
+;   strb w15, [sp]
+;   ldr x15, 8 ; b 12 ; data TestCase { length: 1, ascii: [103, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   blr x15
+;   add sp, sp, #16
+;   virtual_sp_offset_adjust -16
+;   ldp fp, lr, [sp], #16
+;   ret
 
 function %f7(i8) -> i32, i32, i32, i32, i32, i32, i32, i32, i8 sext {
 block0(v0: i8):
@@ -100,18 +142,19 @@ block0(v0: i8):
     return v1, v1, v1, v1, v1, v1, v1, v1, v0
 }
 
-; check:  mov x9, x0
-; nextln:  mov x8, x1
-; nextln:  movz x0, #42
-; nextln:  movz x1, #42
-; nextln:  movz x2, #42
-; nextln:  movz x3, #42
-; nextln:  movz x4, #42
-; nextln:  movz x5, #42
-; nextln:  movz x6, #42
-; nextln:  movz x7, #42
-; nextln:  sturb w9, [x8]
-; nextln:  ret
+; block0:
+;   mov x14, x0
+;   mov x8, x1
+;   movz x0, #42
+;   movz x1, #42
+;   movz x2, #42
+;   movz x3, #42
+;   movz x4, #42
+;   movz x5, #42
+;   movz x6, #42
+;   movz x7, #42
+;   strb w14, [x8]
+;   ret
 
 function %f8() {
     fn0 = %g0() -> f32
@@ -131,32 +174,33 @@ block0:
     return
 }
 
-; check:  stp fp, lr, [sp, #-16]!
-; nextln:  mov fp, sp
-; nextln:  sub sp, sp, #48
-; nextln:  ldr x0, 8 ; b 12 ; data
-; nextln:  blr x0
-; nextln:  str q0, [sp]
-; nextln:  ldr x0, 8 ; b 12 ; data
-; nextln:  blr x0
-; nextln:  str q0, [sp, #16]
-; nextln:  ldr x0, 8 ; b 12 ; data
-; nextln:  blr x0
-; nextln:  str q0, [sp, #32]
-; nextln:  ldr x0, 8 ; b 12 ; data
-; nextln:  blr x0
-; nextln:  ldr q0, [sp]
-; nextln:  ldr x0, 8 ; b 12 ; data
-; nextln:  blr x0
-; nextln:  ldr q0, [sp, #16]
-; nextln:  ldr x0, 8 ; b 12 ; data
-; nextln:  blr x0
-; nextln:  ldr q0, [sp, #32]
-; nextln:  ldr x0, 8 ; b 12 ; data
-; nextln:  blr x0
-; nextln:  add sp, sp, #48
-; nextln:  ldp fp, lr, [sp], #16
-; nextln:  ret
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   sub sp, sp, #48
+; block0:
+;   ldr x9, 8 ; b 12 ; data TestCase { length: 2, ascii: [103, 48, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   blr x9
+;   str q0, [sp]
+;   ldr x11, 8 ; b 12 ; data TestCase { length: 2, ascii: [103, 49, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   blr x11
+;   str q0, [sp, #16]
+;   ldr x13, 8 ; b 12 ; data TestCase { length: 2, ascii: [103, 49, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   blr x13
+;   str q0, [sp, #32]
+;   ldr x15, 8 ; b 12 ; data TestCase { length: 2, ascii: [103, 50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   blr x15
+;   ldr q0, [sp]
+;   ldr x1, 8 ; b 12 ; data TestCase { length: 2, ascii: [103, 51, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   blr x1
+;   ldr q0, [sp, #16]
+;   ldr x3, 8 ; b 12 ; data TestCase { length: 2, ascii: [103, 52, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   blr x3
+;   ldr q0, [sp, #32]
+;   ldr x5, 8 ; b 12 ; data TestCase { length: 2, ascii: [103, 52, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   blr x5
+;   add sp, sp, #48
+;   ldp fp, lr, [sp], #16
+;   ret
 
 function %f9() {
     fn0 = %g0() -> i8x16
@@ -174,32 +218,33 @@ block0:
     return
 }
 
-; check:  stp fp, lr, [sp, #-16]!
-; nextln:  mov fp, sp
-; nextln:  sub sp, sp, #48
-; nextln:  ldr x0, 8 ; b 12 ; data
-; nextln:  blr x0
-; nextln:  str q0, [sp]
-; nextln:  ldr x0, 8 ; b 12 ; data
-; nextln:  blr x0
-; nextln:  str q0, [sp, #16]
-; nextln:  ldr x0, 8 ; b 12 ; data
-; nextln:  blr x0
-; nextln:  str q0, [sp, #32]
-; nextln:  ldr x0, 8 ; b 12 ; data
-; nextln:  blr x0
-; nextln:  ldr q0, [sp]
-; nextln:  ldr x0, 8 ; b 12 ; data
-; nextln:  blr x0
-; nextln:  ldr q0, [sp, #16]
-; nextln:  ldr x0, 8 ; b 12 ; data
-; nextln:  blr x0
-; nextln:  ldr q0, [sp, #32]
-; nextln:  ldr x0, 8 ; b 12 ; data
-; nextln:  blr x0
-; nextln:  add sp, sp, #48
-; nextln:  ldp fp, lr, [sp], #16
-; nextln:  ret
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   sub sp, sp, #48
+; block0:
+;   ldr x9, 8 ; b 12 ; data TestCase { length: 2, ascii: [103, 48, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   blr x9
+;   str q0, [sp]
+;   ldr x11, 8 ; b 12 ; data TestCase { length: 2, ascii: [103, 48, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   blr x11
+;   str q0, [sp, #16]
+;   ldr x13, 8 ; b 12 ; data TestCase { length: 2, ascii: [103, 48, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   blr x13
+;   str q0, [sp, #32]
+;   ldr x15, 8 ; b 12 ; data TestCase { length: 2, ascii: [103, 49, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   blr x15
+;   ldr q0, [sp]
+;   ldr x1, 8 ; b 12 ; data TestCase { length: 2, ascii: [103, 50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   blr x1
+;   ldr q0, [sp, #16]
+;   ldr x3, 8 ; b 12 ; data TestCase { length: 2, ascii: [103, 50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   blr x3
+;   ldr q0, [sp, #32]
+;   ldr x5, 8 ; b 12 ; data TestCase { length: 2, ascii: [103, 50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   blr x5
+;   add sp, sp, #48
+;   ldp fp, lr, [sp], #16
+;   ret
 
 function %f10() {
     fn0 = %g0() -> f32
@@ -221,44 +266,43 @@ block0:
     return
 }
 
-; check:  stp fp, lr, [sp, #-16]!
-; nextln:  mov fp, sp
-; nextln:  sub sp, sp, #48
-; nextln:  ldr x0, 8 ; b 12 ; data
-; nextln:  blr x0
-; nextln:  str q0, [sp]
-; nextln:  ldr x0, 8 ; b 12 ; data
-; nextln:  blr x0
-; nextln:  str q0, [sp, #16]
-; nextln:  ldr x0, 8 ; b 12 ; data
-; nextln:  blr x0
-; nextln:  str q0, [sp, #32]
-; nextln:  ldr x0, 8 ; b 12 ; data
-; nextln:  blr x0
-; nextln:  ldr q0, [sp]
-; nextln:  ldr x0, 8 ; b 12 ; data
-; nextln:  blr x0
-; nextln:  ldr q0, [sp, #16]
-; nextln:  ldr x0, 8 ; b 12 ; data
-; nextln:  blr x0
-; nextln:  ldr q0, [sp, #32]
-; nextln:  ldr x0, 8 ; b 12 ; data
-; nextln:  blr x0
-; nextln:  add sp, sp, #48
-; nextln:  ldp fp, lr, [sp], #16
-; nextln:  ret
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   sub sp, sp, #48
+; block0:
+;   ldr x9, 8 ; b 12 ; data TestCase { length: 2, ascii: [103, 48, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   blr x9
+;   str q0, [sp]
+;   ldr x11, 8 ; b 12 ; data TestCase { length: 2, ascii: [103, 49, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   blr x11
+;   str q0, [sp, #16]
+;   ldr x13, 8 ; b 12 ; data TestCase { length: 2, ascii: [103, 50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   blr x13
+;   str q0, [sp, #32]
+;   ldr x15, 8 ; b 12 ; data TestCase { length: 2, ascii: [103, 51, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   blr x15
+;   ldr q0, [sp]
+;   ldr x1, 8 ; b 12 ; data TestCase { length: 2, ascii: [103, 52, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   blr x1
+;   ldr q0, [sp, #16]
+;   ldr x3, 8 ; b 12 ; data TestCase { length: 2, ascii: [103, 53, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   blr x3
+;   ldr q0, [sp, #32]
+;   ldr x5, 8 ; b 12 ; data TestCase { length: 2, ascii: [103, 54, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   blr x5
+;   add sp, sp, #48
+;   ldp fp, lr, [sp], #16
+;   ret
 
-
-; i128 tests
 function %f11(i128, i64) -> i64 {
 block0(v0: i128, v1: i64):
     v2, v3 = isplit v0
     return v3
 }
 
-; check: mov x0, x1
-; nextln: ret
-
+; block0:
+;   mov x0, x1
+;   ret
 
 function %f11_call(i64) -> i64 {
     fn0 = %f11(i128, i64) -> i64
@@ -270,28 +314,27 @@ block0(v0: i64):
     return v3
 }
 
-; check: stp fp, lr, [sp, #-16]!
-; nextln: mov fp, sp
-; nextln: mov x1, x0
-; nextln: movz x0, #42
-; nextln: movz x2, #42
-; nextln: ldr x3, 8 ; b 12 ; data
-; nextln: blr x3
-; nextln: ldp fp, lr, [sp], #16
-; nextln: ret
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+; block0:
+;   mov x9, x0
+;   movz x0, #42
+;   mov x1, x9
+;   movz x2, #42
+;   ldr x14, 8 ; b 12 ; data TestCase { length: 3, ascii: [102, 49, 49, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   blr x14
+;   ldp fp, lr, [sp], #16
+;   ret
 
-
-; The AArch64 ABI requires that the i128 argument be aligned
-; and to be passed in x2 and x3
 function %f12(i64, i128) -> i64 {
 block0(v0: i64, v1: i128):
     v2, v3 = isplit v1
     return v2
 }
 
-; check: mov x0, x2
-; nextln: ret
-
+; block0:
+;   mov x0, x2
+;   ret
 
 function %f12_call(i64) -> i64 {
     fn0 = %f12(i64, i128) -> i64
@@ -303,29 +346,26 @@ block0(v0: i64):
     return v3
 }
 
-; check: stp fp, lr, [sp, #-16]!
-; nextln: mov fp, sp
-; nextln: movz x3, #42
-; nextln: mov x2, x0
-; nextln: movz x0, #42
-; nextln: ldr x1, 8 ; b 12 ; data
-; nextln: blr x1
-; nextln: ldp fp, lr, [sp], #16
-; nextln: ret
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+; block0:
+;   movz x3, #42
+;   mov x2, x0
+;   movz x0, #42
+;   ldr x14, 8 ; b 12 ; data TestCase { length: 3, ascii: [102, 49, 50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   blr x14
+;   ldp fp, lr, [sp], #16
+;   ret
 
-
-
-; The Apple AArch64 ABI allows the i128 argument to not be aligned
-; and to be passed in x1 and x2
 function %f13(i64, i128) -> i64 apple_aarch64 {
 block0(v0: i64, v1: i128):
     v2, v3 = isplit v1
     return v2
 }
 
-; check: mov x0, x1
-; nextln: ret
-
+; block0:
+;   mov x0, x1
+;   ret
 
 function %f13_call(i64) -> i64 apple_aarch64 {
     fn0 = %f13(i64, i128) -> i64 apple_aarch64
@@ -337,31 +377,29 @@ block0(v0: i64):
     return v3
 }
 
-; check: stp fp, lr, [sp, #-16]!
-; nextln: mov fp, sp
-; nextln: movz x2, #42
-; nextln: mov x1, x0
-; nextln: movz x0, #42
-; nextln: ldr x3, 8 ; b 12 ; data
-; nextln: blr x3
-; nextln: ldp fp, lr, [sp], #16
-; nextln: ret
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+; block0:
+;   movz x2, #42
+;   mov x1, x0
+;   movz x0, #42
+;   ldr x14, 8 ; b 12 ; data TestCase { length: 3, ascii: [102, 49, 51, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   blr x14
+;   ldp fp, lr, [sp], #16
+;   ret
 
-
-
-; We only have 8 registers to pass data in
-; make sure we spill the last argument even though there is one slot available
 function %f14(i128, i128, i128, i64, i128) -> i128 {
 block0(v0: i128, v1: i128, v2: i128, v3: i64, v4: i128):
     return v4
 }
 
-; check: stp fp, lr, [sp, #-16]!
-; nextln: mov fp, sp
-; nextln: ldur x0, [fp, #16]
-; nextln: ldur x1, [fp, #24]
-; nextln: ldp fp, lr, [sp], #16
-; nextln: ret
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+; block0:
+;   ldr x0, [fp, #16]
+;   ldr x1, [fp, #24]
+;   ldp fp, lr, [sp], #16
+;   ret
 
 function %f14_call(i128, i64) -> i128 {
     fn0 = %f14(i128, i128, i128, i64, i128) -> i128
@@ -371,50 +409,40 @@ block0(v0: i128, v1: i64):
     return v2
 }
 
-; check: stp fp, lr, [sp, #-16]!
-; nextln: mov fp, sp
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+; block0:
+;   mov x14, x2
+;   sub sp, sp, #16
+;   virtual_sp_offset_adjust 16
+;   mov x13, x0
+;   mov x15, x1
+;   mov x2, x13
+;   mov x3, x15
+;   mov x4, x13
+;   mov x5, x15
+;   mov x6, x14
+;   str x13, [sp]
+;   str x15, [sp, #8]
+;   ldr x7, 8 ; b 12 ; data TestCase { length: 3, ascii: [102, 49, 52, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   blr x7
+;   add sp, sp, #16
+;   virtual_sp_offset_adjust -16
+;   ldp fp, lr, [sp], #16
+;   ret
 
-; TODO: Some codegen optimization possible here with x0,x1 moving to x7,x8 and then moving back
-; nextln: mov x7, x0
-; nextln: mov x8, x1
-; nextln: mov x6, x2
-; nextln: sub sp, sp, #16
-; nextln: virtual_sp_offset_adjust 16
-; nextln: mov x0, x7
-; nextln: mov x1, x8
-; nextln: mov x2, x7
-; nextln: mov x3, x8
-; nextln: mov x4, x7
-; nextln: mov x5, x8
-; nextln: stur x7, [sp]
-; nextln: stur x8, [sp, #8]
-
-; nextln: ldr x7, 8 ; b 12 ; data
-; nextln: blr x7
-; nextln: add sp, sp, #16
-; nextln: virtual_sp_offset_adjust -16
-
-; nextln: ldp fp, lr, [sp], #16
-; nextln: ret
-
-
-
-; We have one register slot available (Similar to %f14), however apple
-; allows us to start i128 on non even numbered registers (x7 in this case).
-;
-; It is unspecified if we can split the i128 into x7 + the stack.
-; In practice LLVM does not do this, so we are going to go with that.
 function %f15(i128, i128, i128, i64, i128) -> i128 apple_aarch64{
 block0(v0: i128, v1: i128, v2: i128, v3: i64, v4: i128):
     return v4
 }
 
-; check: stp fp, lr, [sp, #-16]!
-; nextln: mov fp, sp
-; nextln: ldur x0, [fp, #16]
-; nextln: ldur x1, [fp, #24]
-; nextln: ldp fp, lr, [sp], #16
-; nextln: ret
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+; block0:
+;   ldr x0, [fp, #16]
+;   ldr x1, [fp, #24]
+;   ldp fp, lr, [sp], #16
+;   ret
 
 function %f15_call(i128, i64) -> i128 apple_aarch64 {
     fn0 = %f15(i128, i128, i128, i64, i128) -> i128 apple_aarch64
@@ -424,31 +452,27 @@ block0(v0: i128, v1: i64):
     return v2
 }
 
-; check: stp fp, lr, [sp, #-16]!
-; nextln: mov fp, sp
-
-; nextln: mov x7, x0
-; nextln: mov x8, x1
-; nextln: mov x6, x2
-; nextln: sub sp, sp, #16
-; nextln: virtual_sp_offset_adjust 16
-; nextln: mov x0, x7
-; nextln: mov x1, x8
-; nextln: mov x2, x7
-; nextln: mov x3, x8
-; nextln: mov x4, x7
-; nextln: mov x5, x8
-; nextln: stur x7, [sp]
-; nextln: stur x8, [sp, #8]
-
-; nextln: ldr x7, 8 ; b 12 ; data
-; nextln: blr x7
-; nextln: add sp, sp, #16
-; nextln: virtual_sp_offset_adjust -16
-
-; nextln: ldp fp, lr, [sp], #16
-; nextln: ret
-
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+; block0:
+;   mov x14, x2
+;   sub sp, sp, #16
+;   virtual_sp_offset_adjust 16
+;   mov x13, x0
+;   mov x15, x1
+;   mov x2, x13
+;   mov x3, x15
+;   mov x4, x13
+;   mov x5, x15
+;   mov x6, x14
+;   str x13, [sp]
+;   str x15, [sp, #8]
+;   ldr x7, 8 ; b 12 ; data TestCase { length: 3, ascii: [102, 49, 53, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   blr x7
+;   add sp, sp, #16
+;   virtual_sp_offset_adjust -16
+;   ldp fp, lr, [sp], #16
+;   ret
 
 function %f16() -> i32, i32 wasmtime_system_v {
 block0:
@@ -457,9 +481,10 @@ block0:
     return v0, v1
 }
 
-; check: mov x1, x0
-; nextln: movz x0, #0
-; nextln: movz x2, #1
-; nextln: stur w2, [x1]
-; nextln: ret
+; block0:
+;   mov x11, x0
+;   movz x0, #0
+;   movz x7, #1
+;   str w7, [x11]
+;   ret
 

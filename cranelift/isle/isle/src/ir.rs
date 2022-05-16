@@ -1,8 +1,9 @@
 //! Lowered matching IR.
 
 use crate::lexer::Pos;
+use crate::log;
 use crate::sema::*;
-use std::collections::BTreeMap;
+use crate::StableMap;
 
 declare_id!(
     /// The id of an instruction in a `PatternSequence`.
@@ -340,7 +341,7 @@ impl PatternSequence {
         typeenv: &TypeEnv,
         termenv: &TermEnv,
         pat: &Pattern,
-        vars: &mut BTreeMap<VarId, Value>,
+        vars: &mut StableMap<VarId, Value>,
     ) {
         match pat {
             &Pattern::BindPattern(_ty, var, ref subpat) => {
@@ -387,12 +388,6 @@ impl PatternSequence {
                         let arg_tys = &termdata.arg_tys[..];
                         for (i, subpat) in args.iter().enumerate() {
                             let value = self.add_arg(i, arg_tys[i]);
-                            let subpat = match subpat {
-                                &TermArgPattern::Expr(..) => {
-                                    panic!("Should have been caught in typechecking")
-                                }
-                                &TermArgPattern::Pattern(ref pat) => pat,
-                            };
                             self.gen_pattern(
                                 ValueOrArgs::Value(value),
                                 typeenv,
@@ -411,10 +406,6 @@ impl PatternSequence {
                                 let arg_values =
                                     self.add_match_variant(input, ty, arg_tys, *variant);
                                 for (subpat, value) in args.iter().zip(arg_values.into_iter()) {
-                                    let subpat = match subpat {
-                                        &TermArgPattern::Pattern(ref pat) => pat,
-                                        _ => unreachable!("Should have been caught by sema"),
-                                    };
                                     self.gen_pattern(
                                         ValueOrArgs::Value(value),
                                         typeenv,
@@ -438,11 +429,7 @@ impl PatternSequence {
                             }
                             TermKind::Decl {
                                 extractor_kind:
-                                    Some(ExtractorKind::ExternalExtractor {
-                                        ref arg_polarity,
-                                        infallible,
-                                        ..
-                                    }),
+                                    Some(ExtractorKind::ExternalExtractor { infallible, .. }),
                                 ..
                             } => {
                                 // Evaluate all `input` args.
@@ -452,33 +439,9 @@ impl PatternSequence {
                                 let mut output_pats = vec![];
                                 inputs.push(input);
                                 input_tys.push(termdata.ret_ty);
-                                for (arg, pol) in args.iter().zip(arg_polarity.iter()) {
-                                    match pol {
-                                        &ArgPolarity::Input => {
-                                            let expr = match arg {
-                                                &TermArgPattern::Expr(ref expr) => expr,
-                                                _ => panic!(
-                                                    "Should have been caught by typechecking"
-                                                ),
-                                            };
-                                            let mut seq = ExprSequence::default();
-                                            let value = seq.gen_expr(typeenv, termenv, expr, vars);
-                                            seq.add_return(expr.ty(), value);
-                                            let value = self.add_expr_seq(seq, value, expr.ty());
-                                            inputs.push(value);
-                                            input_tys.push(expr.ty());
-                                        }
-                                        &ArgPolarity::Output => {
-                                            let pat = match arg {
-                                                &TermArgPattern::Pattern(ref pat) => pat,
-                                                _ => panic!(
-                                                    "Should have been caught by typechecking"
-                                                ),
-                                            };
-                                            output_tys.push(pat.ty());
-                                            output_pats.push(pat);
-                                        }
-                                    }
+                                for arg in args {
+                                    output_tys.push(arg.ty());
+                                    output_pats.push(arg);
                                 }
 
                                 // Invoke the extractor.
@@ -585,9 +548,9 @@ impl ExprSequence {
         typeenv: &TypeEnv,
         termenv: &TermEnv,
         expr: &Expr,
-        vars: &BTreeMap<VarId, Value>,
+        vars: &StableMap<VarId, Value>,
     ) -> Value {
-        log::trace!("gen_expr: expr {:?}", expr);
+        log!("gen_expr: expr {:?}", expr);
         match expr {
             &Expr::ConstInt(ty, val) => self.add_const_int(ty, val),
             &Expr::ConstPrim(ty, val) => self.add_const_prim(ty, val),
@@ -628,13 +591,14 @@ impl ExprSequence {
                     }
                     TermKind::Decl {
                         constructor_kind: Some(ConstructorKind::ExternalConstructor { .. }),
+                        pure,
                         ..
                     } => {
                         self.add_construct(
                             &arg_values_tys[..],
                             ty,
                             term,
-                            /* infallible = */ true,
+                            /* infallible = */ !pure,
                         )
                     }
                     TermKind::Decl {
@@ -658,13 +622,13 @@ pub fn lower_rule(
     expr_seq.pos = termenv.rules[rule.index()].pos;
 
     let ruledata = &termenv.rules[rule.index()];
-    let mut vars = BTreeMap::new();
+    let mut vars = StableMap::new();
     let root_term = ruledata
         .lhs
         .root_term()
         .expect("Pattern must have a term at the root");
 
-    log::trace!("lower_rule: ruledata {:?}", ruledata,);
+    log!("lower_rule: ruledata {:?}", ruledata,);
 
     // Lower the pattern, starting from the root input value.
     pattern_seq.gen_pattern(
@@ -674,6 +638,23 @@ pub fn lower_rule(
         &ruledata.lhs,
         &mut vars,
     );
+
+    // Lower the `if-let` clauses into the pattern seq, using
+    // `PatternInst::Expr` for the sub-exprs (right-hand sides).
+    for iflet in &ruledata.iflets {
+        let mut subexpr_seq: ExprSequence = Default::default();
+        let subexpr_ret_value = subexpr_seq.gen_expr(tyenv, termenv, &iflet.rhs, &mut vars);
+        subexpr_seq.add_return(iflet.rhs.ty(), subexpr_ret_value);
+        let pattern_value =
+            pattern_seq.add_expr_seq(subexpr_seq, subexpr_ret_value, iflet.rhs.ty());
+        pattern_seq.gen_pattern(
+            ValueOrArgs::Value(pattern_value),
+            tyenv,
+            termenv,
+            &iflet.lhs,
+            &mut vars,
+        );
+    }
 
     // Lower the expression, making use of the bound variables
     // from the pattern.

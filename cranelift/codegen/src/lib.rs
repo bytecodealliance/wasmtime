@@ -101,7 +101,6 @@ mod inst_predicates;
 mod iterators;
 mod legalizer;
 mod licm;
-mod log;
 mod nan_canonicalization;
 mod remove_constant_phis;
 mod result;

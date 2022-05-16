@@ -1,5 +1,5 @@
 use escaping::{escape_id, handle_2big_enum_variant, NamingConvention};
-use heck::{ShoutySnakeCase, SnakeCase};
+use heck::{ToShoutySnakeCase, ToSnakeCase};
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
 use witx::{BuiltinType, Id, Type, TypeRef, WasmType};
@@ -216,7 +216,7 @@ impl Names {
 /// variable. `dyn` was promoted to a strict keyword beginning in the 2018 edition.
 mod escaping {
     use {
-        heck::{CamelCase, SnakeCase},
+        heck::{ToSnakeCase, ToUpperCamelCase},
         proc_macro2::Ident,
         quote::format_ident,
         witx::Id,
@@ -245,7 +245,7 @@ mod escaping {
         match (conv, id.as_str()) {
             // For camel-cased identifiers, `Self` is the only potential keyword conflict.
             (CamelCase, "self") => format_ident!("Self_"),
-            (CamelCase, s) => format_ident!("{}", s.to_camel_case()),
+            (CamelCase, s) => format_ident!("{}", s.to_upper_camel_case()),
             // Snake-cased identifiers are where the bulk of conflicts can occur.
             (SnakeCase, s) => {
                 let s = s.to_snake_case();

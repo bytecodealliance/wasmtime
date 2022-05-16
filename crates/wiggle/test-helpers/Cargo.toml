@@ -3,7 +3,7 @@ name = "wiggle-test"
 version = "0.21.0"
 authors = ["Pat Hickey <phickey@fastly.com>", "Jakub Konka <kubkon@jakubkonka.com>", "Alex Crichton <alex@alexcrichton.com>"]
 license = "Apache-2.0 WITH LLVM-exception"
-edition = "2018"
+edition = "2021"
 description = "Reusable testing components for wiggle code generator. Only intended to be used by tests in `wiggle` crate."
 categories = ["wasm"]
 keywords = ["webassembly", "wasm"]
@@ -19,7 +19,7 @@ wiggle = { path = "..", features = ["tracing_log"] }
 thiserror = "1.0"
 tracing = "0.1.26"
 tracing-subscriber = "0.3.1"
-env_logger = "0.8"
+env_logger = "0.9"
 
 [badges]
 maintenance = { status = "actively-developed" }

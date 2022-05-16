@@ -20,7 +20,6 @@ use crate::settings::{Flags, TlsModel};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use log::trace;
-use regalloc::{Reg, RegClass, Writable};
 use smallvec::SmallVec;
 use std::convert::TryFrom;
 use target_lexicon::Triple;
@@ -62,7 +61,7 @@ fn matches_input<C: LowerCtx<I = Inst>>(
     op: Opcode,
 ) -> Option<IRInst> {
     let inputs = ctx.get_input_as_source_or_const(input.insn, input.input);
-    inputs.inst.and_then(|(src_inst, _)| {
+    inputs.inst.as_inst().and_then(|(src_inst, _)| {
         let data = ctx.data(src_inst);
         if data.opcode() == op {
             return Some(src_inst);
@@ -173,7 +172,7 @@ fn input_to_reg_mem<C: LowerCtx<I = Inst>>(ctx: &mut C, spec: InsnInput) -> RegM
         return RegMem::reg(generate_constant(ctx, ty, c).only_reg().unwrap());
     }
 
-    if let Some((src_insn, 0)) = inputs.inst {
+    if let InputSourceInst::UniqueUse(src_insn, 0) = inputs.inst {
         if let Some((addr_input, offset)) = is_mergeable_load(ctx, src_insn) {
             ctx.sink_inst(src_insn);
             let amode = lower_to_amode(ctx, addr_input, offset);
@@ -480,22 +479,11 @@ fn emit_cmp<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRInst, cc: IntCC) -> IntC
     } else {
         // TODO Try to commute the operands (and invert the condition) if one is an immediate.
         let lhs = put_input_in_reg(ctx, inputs[0]);
-        // We force the RHS into a register, and disallow load-op fusion, because we
-        // do not have a transitive guarantee that this cmp-site will be the sole
-        // user of the value. Consider: the icmp might be the only user of a load,
-        // but there may be multiple users of the icmp (e.g.  select or bint
-        // instructions) that each invoke `emit_cmp()`. If we were to allow a load
-        // to sink to the *latest* one, but other sites did not permit sinking, then
-        // we would be missing the load for other cmp-sites.
-        let rhs = put_input_in_reg(ctx, inputs[1]);
+        let rhs = input_to_reg_mem_imm(ctx, inputs[1]);
 
         // Cranelift's icmp semantics want to compare lhs - rhs, while Intel gives
         // us dst - src at the machine instruction level, so invert operands.
-        ctx.emit(Inst::cmp_rmi_r(
-            OperandSize::from_ty(ty),
-            RegMemImm::reg(rhs),
-            lhs,
-        ));
+        ctx.emit(Inst::cmp_rmi_r(OperandSize::from_ty(ty), rhs, lhs));
         cc
     }
 }
@@ -579,10 +567,8 @@ fn emit_fcmp<C: LowerCtx<I = Inst>>(
         (inputs[0], inputs[1])
     };
     let lhs = put_input_in_reg(ctx, lhs_input);
-    // See above in `emit_cmp()`. We must only use the reg/reg form of the
-    // comparison in order to avoid issues with merged loads.
-    let rhs = put_input_in_reg(ctx, rhs_input);
-    ctx.emit(Inst::xmm_cmp_rm_r(op, RegMem::reg(rhs), lhs));
+    let rhs = input_to_reg_mem(ctx, rhs_input);
+    ctx.emit(Inst::xmm_cmp_rm_r(op, rhs, lhs));
 
     let cond_result = match cond_code {
         FloatCC::Equal => FcmpCondResult::AndConditions(CC::NP, CC::Z),
@@ -1005,7 +991,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 // simply use the flags here.
                 let cc = CC::from_intcc(cond_code);
 
-                ctx.emit_safepoint(Inst::TrapIf { trap_code, cc });
+                ctx.emit(Inst::TrapIf { trap_code, cc });
             } else if op == Opcode::Trapif {
                 let cond_code = ctx.data(insn).cond_code().unwrap();
 
@@ -1014,7 +1000,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 let cond_code = emit_cmp(ctx, ifcmp, cond_code);
                 let cc = CC::from_intcc(cond_code);
 
-                ctx.emit_safepoint(Inst::TrapIf { trap_code, cc });
+                ctx.emit(Inst::TrapIf { trap_code, cc });
             } else {
                 let cond_code = ctx.data(insn).fp_cond_code().unwrap();
 
@@ -1022,9 +1008,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 let ffcmp = matches_input(ctx, inputs[0], Opcode::Ffcmp).unwrap();
 
                 match emit_fcmp(ctx, ffcmp, cond_code, FcmpSpec::Normal) {
-                    FcmpCondResult::Condition(cc) => {
-                        ctx.emit_safepoint(Inst::TrapIf { trap_code, cc })
-                    }
+                    FcmpCondResult::Condition(cc) => ctx.emit(Inst::TrapIf { trap_code, cc }),
                     FcmpCondResult::AndConditions(cc1, cc2) => {
                         // A bit unfortunate, but materialize the flags in their own register, and
                         // check against this.
@@ -1038,14 +1022,14 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                             RegMemImm::reg(tmp.to_reg()),
                             tmp2,
                         ));
-                        ctx.emit_safepoint(Inst::TrapIf {
+                        ctx.emit(Inst::TrapIf {
                             trap_code,
                             cc: CC::NZ,
                         });
                     }
                     FcmpCondResult::OrConditions(cc1, cc2) => {
-                        ctx.emit_safepoint(Inst::TrapIf { trap_code, cc: cc1 });
-                        ctx.emit_safepoint(Inst::TrapIf { trap_code, cc: cc2 });
+                        ctx.emit(Inst::TrapIf { trap_code, cc: cc1 });
+                        ctx.emit(Inst::TrapIf { trap_code, cc: cc2 });
                     }
                     FcmpCondResult::InvertedEqualOrConditions(_, _) => unreachable!(),
                 };
@@ -1053,24 +1037,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Sqrt => {
-            // We can't guarantee the RHS (if a load) is 128-bit aligned, so we
-            // must avoid merging a load here.
-            let src = RegMem::reg(put_input_in_reg(ctx, inputs[0]));
-            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let ty = ty.unwrap();
-
-            let sse_op = match ty {
-                types::F32 => SseOpcode::Sqrtss,
-                types::F64 => SseOpcode::Sqrtsd,
-                types::F32X4 => SseOpcode::Sqrtps,
-                types::F64X2 => SseOpcode::Sqrtpd,
-                _ => panic!(
-                    "invalid type: expected one of [F32, F64, F32X4, F64X2], found {}",
-                    ty
-                ),
-            };
-
-            ctx.emit(Inst::xmm_unary_rm_r(sse_op, src, dst));
+            implemented_in_isle(ctx);
         }
 
         Opcode::Fpromote => {
@@ -2173,237 +2140,17 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::Sload16
         | Opcode::Uload32
         | Opcode::Sload32
-        | Opcode::LoadComplex
-        | Opcode::Uload8Complex
-        | Opcode::Sload8Complex
-        | Opcode::Uload16Complex
-        | Opcode::Sload16Complex
-        | Opcode::Uload32Complex
-        | Opcode::Sload32Complex
         | Opcode::Sload8x8
         | Opcode::Uload8x8
         | Opcode::Sload16x4
         | Opcode::Uload16x4
         | Opcode::Sload32x2
         | Opcode::Uload32x2 => {
-            let offset = ctx.data(insn).load_store_offset().unwrap();
-
-            let elem_ty = match op {
-                Opcode::Sload8 | Opcode::Uload8 | Opcode::Sload8Complex | Opcode::Uload8Complex => {
-                    types::I8
-                }
-                Opcode::Sload16
-                | Opcode::Uload16
-                | Opcode::Sload16Complex
-                | Opcode::Uload16Complex => types::I16,
-                Opcode::Sload32
-                | Opcode::Uload32
-                | Opcode::Sload32Complex
-                | Opcode::Uload32Complex => types::I32,
-                Opcode::Sload8x8
-                | Opcode::Uload8x8
-                | Opcode::Sload8x8Complex
-                | Opcode::Uload8x8Complex => types::I8X8,
-                Opcode::Sload16x4
-                | Opcode::Uload16x4
-                | Opcode::Sload16x4Complex
-                | Opcode::Uload16x4Complex => types::I16X4,
-                Opcode::Sload32x2
-                | Opcode::Uload32x2
-                | Opcode::Sload32x2Complex
-                | Opcode::Uload32x2Complex => types::I32X2,
-                Opcode::Load | Opcode::LoadComplex => ctx.output_ty(insn, 0),
-                _ => unimplemented!(),
-            };
-
-            let ext_mode = ExtMode::new(elem_ty.bits(), 64);
-
-            let sign_extend = match op {
-                Opcode::Sload8
-                | Opcode::Sload8Complex
-                | Opcode::Sload16
-                | Opcode::Sload16Complex
-                | Opcode::Sload32
-                | Opcode::Sload32Complex
-                | Opcode::Sload8x8
-                | Opcode::Sload8x8Complex
-                | Opcode::Sload16x4
-                | Opcode::Sload16x4Complex
-                | Opcode::Sload32x2
-                | Opcode::Sload32x2Complex => true,
-                _ => false,
-            };
-
-            let amode = match op {
-                Opcode::Load
-                | Opcode::Uload8
-                | Opcode::Sload8
-                | Opcode::Uload16
-                | Opcode::Sload16
-                | Opcode::Uload32
-                | Opcode::Sload32
-                | Opcode::Sload8x8
-                | Opcode::Uload8x8
-                | Opcode::Sload16x4
-                | Opcode::Uload16x4
-                | Opcode::Sload32x2
-                | Opcode::Uload32x2 => {
-                    assert_eq!(inputs.len(), 1, "only one input for load operands");
-                    lower_to_amode(ctx, inputs[0], offset)
-                }
-
-                Opcode::LoadComplex
-                | Opcode::Uload8Complex
-                | Opcode::Sload8Complex
-                | Opcode::Uload16Complex
-                | Opcode::Sload16Complex
-                | Opcode::Uload32Complex
-                | Opcode::Sload32Complex
-                | Opcode::Sload8x8Complex
-                | Opcode::Uload8x8Complex
-                | Opcode::Sload16x4Complex
-                | Opcode::Uload16x4Complex
-                | Opcode::Sload32x2Complex
-                | Opcode::Uload32x2Complex => {
-                    assert_eq!(
-                        inputs.len(),
-                        2,
-                        "can't handle more than two inputs in complex load"
-                    );
-                    let base = put_input_in_reg(ctx, inputs[0]);
-                    let index = put_input_in_reg(ctx, inputs[1]);
-                    let shift = 0;
-                    let flags = ctx.memflags(insn).expect("load should have memflags");
-                    Amode::imm_reg_reg_shift(
-                        offset as u32,
-                        Gpr::new(base).unwrap(),
-                        Gpr::new(index).unwrap(),
-                        shift,
-                    )
-                    .with_flags(flags)
-                }
-                _ => unreachable!(),
-            };
-
-            if elem_ty == types::I128 {
-                let dsts = get_output_reg(ctx, outputs[0]);
-                ctx.emit(Inst::mov64_m_r(amode.clone(), dsts.regs()[0]));
-                ctx.emit(Inst::mov64_m_r(amode.offset(8), dsts.regs()[1]));
-            } else {
-                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-                let is_xmm = elem_ty.is_float() || elem_ty.is_vector();
-                match (sign_extend, is_xmm) {
-                    (true, false) => {
-                        // The load is sign-extended only when the output size is lower than 64 bits,
-                        // so ext-mode is defined in this case.
-                        ctx.emit(Inst::movsx_rm_r(ext_mode.unwrap(), RegMem::mem(amode), dst));
-                    }
-                    (false, false) => {
-                        if elem_ty.bytes() == 8 {
-                            // Use a plain load.
-                            ctx.emit(Inst::mov64_m_r(amode, dst))
-                        } else {
-                            // Use a zero-extended load.
-                            ctx.emit(Inst::movzx_rm_r(ext_mode.unwrap(), RegMem::mem(amode), dst))
-                        }
-                    }
-                    (_, true) => {
-                        ctx.emit(match elem_ty {
-                            types::F32 => Inst::xmm_mov(SseOpcode::Movss, RegMem::mem(amode), dst),
-                            types::F64 => Inst::xmm_mov(SseOpcode::Movsd, RegMem::mem(amode), dst),
-                            types::I8X8 => {
-                                if sign_extend == true {
-                                    Inst::xmm_mov(SseOpcode::Pmovsxbw, RegMem::mem(amode), dst)
-                                } else {
-                                    Inst::xmm_mov(SseOpcode::Pmovzxbw, RegMem::mem(amode), dst)
-                                }
-                            }
-                            types::I16X4 => {
-                                if sign_extend == true {
-                                    Inst::xmm_mov(SseOpcode::Pmovsxwd, RegMem::mem(amode), dst)
-                                } else {
-                                    Inst::xmm_mov(SseOpcode::Pmovzxwd, RegMem::mem(amode), dst)
-                                }
-                            }
-                            types::I32X2 => {
-                                if sign_extend == true {
-                                    Inst::xmm_mov(SseOpcode::Pmovsxdq, RegMem::mem(amode), dst)
-                                } else {
-                                    Inst::xmm_mov(SseOpcode::Pmovzxdq, RegMem::mem(amode), dst)
-                                }
-                            }
-                            _ if elem_ty.is_vector() && elem_ty.bits() == 128 => {
-                                Inst::xmm_mov(SseOpcode::Movups, RegMem::mem(amode), dst)
-                            }
-                            // TODO Specialize for different types: MOVUPD, MOVDQU
-                            _ => unreachable!(
-                                "unexpected type for load: {:?} - {:?}",
-                                elem_ty,
-                                elem_ty.bits()
-                            ),
-                        });
-                    }
-                }
-            }
+            implemented_in_isle(ctx);
         }
 
-        Opcode::Store
-        | Opcode::Istore8
-        | Opcode::Istore16
-        | Opcode::Istore32
-        | Opcode::StoreComplex
-        | Opcode::Istore8Complex
-        | Opcode::Istore16Complex
-        | Opcode::Istore32Complex => {
-            let offset = ctx.data(insn).load_store_offset().unwrap();
-
-            let elem_ty = match op {
-                Opcode::Istore8 | Opcode::Istore8Complex => types::I8,
-                Opcode::Istore16 | Opcode::Istore16Complex => types::I16,
-                Opcode::Istore32 | Opcode::Istore32Complex => types::I32,
-                Opcode::Store | Opcode::StoreComplex => ctx.input_ty(insn, 0),
-                _ => unreachable!(),
-            };
-
-            let addr = match op {
-                Opcode::Store | Opcode::Istore8 | Opcode::Istore16 | Opcode::Istore32 => {
-                    assert_eq!(inputs.len(), 2, "only one input for store memory operands");
-                    lower_to_amode(ctx, inputs[1], offset)
-                }
-
-                Opcode::StoreComplex
-                | Opcode::Istore8Complex
-                | Opcode::Istore16Complex
-                | Opcode::Istore32Complex => {
-                    assert_eq!(
-                        inputs.len(),
-                        3,
-                        "can't handle more than two inputs in complex store"
-                    );
-                    let base = put_input_in_reg(ctx, inputs[1]);
-                    let index = put_input_in_reg(ctx, inputs[2]);
-                    let shift = 0;
-                    let flags = ctx.memflags(insn).expect("store should have memflags");
-                    Amode::imm_reg_reg_shift(
-                        offset as u32,
-                        Gpr::new(base).unwrap(),
-                        Gpr::new(index).unwrap(),
-                        shift,
-                    )
-                    .with_flags(flags)
-                }
-
-                _ => unreachable!(),
-            };
-
-            if elem_ty == types::I128 {
-                let srcs = put_input_in_regs(ctx, inputs[0]);
-                ctx.emit(Inst::store(types::I64, srcs.regs()[0], addr.clone()));
-                ctx.emit(Inst::store(types::I64, srcs.regs()[1], addr.offset(8)));
-            } else {
-                let src = put_input_in_reg(ctx, inputs[0]);
-                ctx.emit(Inst::store(elem_ty, src, addr));
-            }
+        Opcode::Store | Opcode::Istore8 | Opcode::Istore16 | Opcode::Istore32 => {
+            implemented_in_isle(ctx);
         }
 
         Opcode::AtomicRmw => {
@@ -2582,6 +2329,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let cmp_insn = ctx
                 .get_input_as_source_or_const(inputs[0].insn, inputs[0].input)
                 .inst
+                .as_inst()
                 .unwrap()
                 .0;
             debug_assert_eq!(ctx.data(cmp_insn).opcode(), Opcode::Ifcmp);
@@ -3073,7 +2821,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let src_ty = ctx.input_ty(insn, 0);
             debug_assert!(src_ty.is_vector() && src_ty.bits() == 128);
             let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            debug_assert!(dst.to_reg().get_class() == RegClass::I64);
+            debug_assert!(dst.to_reg().class() == RegClass::Int);
 
             // The Intel specification allows using both 32-bit and 64-bit GPRs as destination for
             // the "move mask" instructions. This is controlled by the REX.R bit: "In 64-bit mode,
@@ -3293,15 +3041,6 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         // Unimplemented opcodes below. These are not currently used by Wasm
         // lowering or other known embeddings, but should be either supported or
         // removed eventually.
-        Opcode::Uload8x8Complex
-        | Opcode::Sload8x8Complex
-        | Opcode::Uload16x4Complex
-        | Opcode::Sload16x4Complex
-        | Opcode::Uload32x2Complex
-        | Opcode::Sload32x2Complex => {
-            unimplemented!("Vector load {:?} not implemented", op);
-        }
-
         Opcode::Cls => unimplemented!("Cls not supported"),
 
         Opcode::Fma => unimplemented!("Fma not supported"),
@@ -3672,16 +3411,6 @@ impl LowerBackend for X64Backend {
                         ext_spec,
                     );
 
-                    // Bounds-check (compute flags from idx - jt_size) and branch to default.
-                    // We only support u32::MAX entries, but we compare the full 64 bit register
-                    // when doing the bounds check.
-                    let cmp_size = if ty == types::I64 {
-                        OperandSize::Size64
-                    } else {
-                        OperandSize::Size32
-                    };
-                    ctx.emit(Inst::cmp_rmi_r(cmp_size, RegMemImm::imm(jt_size), idx));
-
                     // Emit the compound instruction that does:
                     //
                     // lea $jt, %rA
@@ -3703,6 +3432,23 @@ impl LowerBackend for X64Backend {
                     // is benign, since the temporary is dead after this instruction (and its
                     // Cranelift type is thus unused).
                     let tmp2 = ctx.alloc_tmp(types::I64).only_reg().unwrap();
+
+                    // Put a zero in tmp1. This is needed for Spectre
+                    // mitigations (a CMOV that zeroes the index on
+                    // misspeculation).
+                    let inst = Inst::imm(OperandSize::Size64, 0, tmp1);
+                    ctx.emit(inst);
+
+                    // Bounds-check (compute flags from idx - jt_size)
+                    // and branch to default.  We only support
+                    // u32::MAX entries, but we compare the full 64
+                    // bit register when doing the bounds check.
+                    let cmp_size = if ty == types::I64 {
+                        OperandSize::Size64
+                    } else {
+                        OperandSize::Size32
+                    };
+                    ctx.emit(Inst::cmp_rmi_r(cmp_size, RegMemImm::imm(jt_size), idx));
 
                     let targets_for_term: Vec<MachLabel> = targets.to_vec();
                     let default_target = targets[0];

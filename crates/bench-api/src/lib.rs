@@ -90,6 +90,8 @@
 //!     execution_timer: ptr::null_mut(),
 //!     execution_start,
 //!     execution_end,
+//!     execution_flags_ptr: ptr::null(),
+//!     execution_flags_len: 0,
 //! };
 //!
 //! let mut bench_api = ptr::null_mut();
@@ -138,7 +140,9 @@ use anyhow::{anyhow, Context, Result};
 use std::os::raw::{c_int, c_void};
 use std::slice;
 use std::{env, path::PathBuf};
+use target_lexicon::Triple;
 use wasmtime::{Config, Engine, Instance, Linker, Module, Store};
+use wasmtime_cli_flags::CommonOptions;
 use wasmtime_wasi::{sync::WasiCtxBuilder, WasiCtx};
 
 pub type ExitCode = c_int;
@@ -190,6 +194,11 @@ pub struct WasmBenchConfig {
     pub execution_timer: *mut u8,
     pub execution_start: extern "C" fn(*mut u8),
     pub execution_end: extern "C" fn(*mut u8),
+
+    /// The (optional) flags to use when running Wasmtime. These correspond to
+    /// the flags used when running Wasmtime from the command line.
+    pub execution_flags_ptr: *const u8,
+    pub execution_flags_len: usize,
 }
 
 impl WasmBenchConfig {
@@ -228,6 +237,22 @@ impl WasmBenchConfig {
             std::str::from_utf8(stdin_path).context("given stdin path is not valid UTF-8")?;
         Ok(Some(stdin_path.into()))
     }
+
+    fn execution_flags(&self) -> Result<Option<Config>> {
+        if self.execution_flags_ptr.is_null() {
+            return Ok(None);
+        }
+
+        let execution_flags = unsafe {
+            std::slice::from_raw_parts(self.execution_flags_ptr, self.execution_flags_len)
+        };
+        let execution_flags = std::str::from_utf8(execution_flags)
+            .context("given execution flags string is not valid UTF-8")?;
+
+        let options = CommonOptions::parse_from_str(execution_flags)?;
+        let config = options.config(Some(&Triple::host().to_string()))?;
+        Ok(Some(config))
+    }
 }
 
 /// Exposes a C-compatible way of creating the engine from the bytes of a single
@@ -256,8 +281,10 @@ pub extern "C" fn wasm_bench_create(
         let stdout_path = config.stdout_path()?;
         let stderr_path = config.stderr_path()?;
         let stdin_path = config.stdin_path()?;
+        let engine_config = config.execution_flags()?;
 
         let state = Box::new(BenchState::new(
+            engine_config,
             config.compilation_timer,
             config.compilation_start,
             config.compilation_end,
@@ -393,6 +420,7 @@ struct HostState {
 
 impl BenchState {
     fn new(
+        engine_config: Option<Config>,
         compilation_timer: *mut u8,
         compilation_start: extern "C" fn(*mut u8),
         compilation_end: extern "C" fn(*mut u8),
@@ -405,9 +433,7 @@ impl BenchState {
         make_wasi_cx: impl FnMut() -> Result<WasiCtx> + 'static,
     ) -> Result<Self> {
         // NB: do not configure a code cache.
-        let mut config = Config::new();
-        config.wasm_simd(true);
-        let engine = Engine::new(&config)?;
+        let engine = Engine::new(&engine_config.unwrap_or(Config::new()))?;
         let mut linker = Linker::<HostState>::new(&engine);
 
         // Define the benchmarking start/end functions.

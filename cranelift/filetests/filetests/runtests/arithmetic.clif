@@ -183,6 +183,154 @@ block0(v0: i8,v1: i8):
 ; run: %mul_i8(0xC0, 0xDE) == 0x80
 
 
+function %madd_i8(i8, i8, i8) -> i8 {
+block0(v0: i8, v1: i8, v2: i8):
+    v3 = imul v1, v2
+    v4 = iadd v0, v3
+    return v4
+}
+; run: %madd_i8(0, 1, 0) == 0
+; run: %madd_i8(1, 0, 0) == 1
+; run: %madd_i8(0, -1, 1) == -1
+; run: %madd_i8(2, 2, 2) == 6
+; run: %madd_i8(0, 0x7F, 0x7F) == 1
+; run: %madd_i8(0x7F, 0x7F, -1) == 0
+; run: %madd_i8(0x80, 0x7F, 0) == 0x80
+; run: %madd_i8(0x80, 0x7F, 0x80) == 0
+; run: %madd_i8(0x01, 0xFE, 0) == 1
+; run: %madd_i8(0x01, 0xFE, 2) == -3
+; run: %madd_i8(0, 0xC0, 0xDE) == 0x80
+; run: %madd_i8(0xC0, 0xC0, 0xDE) == 0x40
+
+function %madd_i16(i16, i16, i16) -> i16 {
+block0(v0: i16, v1: i16, v2: i16):
+    v3 = imul v1, v2
+    v4 = iadd v0, v3
+    return v4
+}
+; run: %madd_i16(0, 1, 0) == 0
+; run: %madd_i16(1, 0, 0) == 1
+; run: %madd_i16(0, -1, 1) == -1
+; run: %madd_i16(2, 2, 2) == 6
+; run: %madd_i16(0, 0x7FFF, 0x7FFF) == 1
+; run: %madd_i16(0x7FFF, 1, 0x7FFF) == -2
+; run: %madd_i16(0x8000, 1, 0x7FFF) == -1
+; run: %madd_i16(0x0123, 0x0456, 0xFEDC) == 0xF0B
+; run: %madd_i16(0xC0FF, 0x0123, 0xDECA) == 0x9D
+
+function %madd_i32(i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = imul v1, v2
+    v4 = iadd v0, v3
+    return v4
+}
+; run: %madd_i32(0, 1, 0) == 0
+; run: %madd_i32(1, 0, 0) == 1
+; run: %madd_i32(0, -1, 1) == -1
+; run: %madd_i32(2, 2, 2) == 6
+; run: %madd_i32(0, 0x7FFFFFFF, 0x7FFFFFFF) == 1
+; run: %madd_i32(-1, 0x7FFFFFFF, 0x7FFFFFFF) == 0
+; run: %madd_i32(0x80000000, 1, 0x7FFFFFFF) == -1
+; run: %madd_i32(0x80000000, 0x01234567, 0x7FFFFFFF) == 0xFEDCBA99
+; run: %madd_i32(0x01234567, 0x80000000, 0xFEDCBA98) == 0x1234567
+; run: %madd_i32(0xC0FFEEEE, 0xDECAFFFF, 0x0DEBAC1E) == 0x32DE42D0
+
+function %madd_i64(i64, i64, i64) -> i64 {
+block0(v0: i64, v1: i64, v2: i64):
+    v3 = imul v1, v2
+    v4 = iadd v0, v3
+    return v4
+}
+; run: %madd_i64(0, 1, 0) == 0
+; run: %madd_i64(1, 0, 0) == 1
+; run: %madd_i64(0, -1, 1) == -1
+; run: %madd_i64(2, 2, 2) == 6
+; run: %madd_i64(0, 0x7FFFFFFF_FFFFFFFF, 0x7FFFFFFF_FFFFFFFF) == 1
+; run: %madd_i64(-1, 0x7FFFFFFF_FFFFFFFF, 0x7FFFFFFF_FFFFFFFF) == 0
+; run: %madd_i64(0, 0x80000000_00000000, 0x7FFFFFFF_FFFFFFFF) == 0x80000000_00000000
+; run: %madd_i64(1, 0x80000000_00000000, 0x7FFFFFFF_FFFFFFFF) == 0x80000000_00000001
+; run: %madd_i64(0x01234567_89ABCDEF, 0x01234567_FEDCBA98, 0xFEDCBA98_76543210) == 0x89C0845D_DDC9276F
+; run: %madd_i64(0xC0FFEEEE_C0FFEEEE, 0xBAADF00D_BAADF00D, 0xDECAFFFF_DECAFFFF) == 0x2EB8ECEC_A6A0FEE1
+
+function %msub_i8(i8, i8, i8) -> i8 {
+block0(v0: i8, v1: i8, v2: i8):
+    v3 = imul v1, v2
+    v4 = isub v0, v3
+    return v4
+}
+; run: %msub_i8(0, 0, 0) == 0
+; run: %msub_i8(1, 1, 1) == 0
+; run: %msub_i8(1, 1, 0) == 1
+; run: %msub_i8(0, 1, 1) == -1
+; run: %msub_i8(1, 1, -1) == 2
+; run: %msub_i8(-2, 1, -1) == -1
+; run: %msub_i8(2, 2, 2) == -2
+; run: %msub_i8(0, 0x7F, 0x7F) == -1
+; run: %msub_i8(0x7F, 0x80, 0x7F) == -1
+; run: %msub_i8(0x80, 1, 0x7F) == 1
+; run: %msub_i8(0x01, 0x80, 0xFE) == 1
+; run: %msub_i8(0xFF, 1, 0xDE) == 0x21
+
+function %msub_i16(i16, i16, i16) -> i16 {
+block0(v0: i16, v1: i16, v2: i16):
+    v3 = imul v1, v2
+    v4 = isub v0, v3
+    return v4
+}
+; run: %msub_i16(0, 0, 0) == 0
+; run: %msub_i16(1, 1, 1) == 0
+; run: %msub_i16(1, 1, 0) == 1
+; run: %msub_i16(0, 1, 1) == -1
+; run: %msub_i16(1, 1, -1) == 2
+; run: %msub_i16(-2, 1, -1) == -1
+; run: %msub_i16(2, 2, 2) == -2
+; run: %msub_i16(0, 0x7FFF, 0x7FFF) == -1
+; run: %msub_i16(0x0FFF, 1, 0x7FFF) == 0x9000
+; run: %msub_i16(0x7000, 1, 0x7FFF) == 0xF001
+; run: %msub_i16(0x0123, 0x0456, 0xFEDC) == 0xF33B
+; run: %msub_i16(0xC0FF, 0x0123, 0xDECA) == 0x8161
+
+function %msub_i32(i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = imul v1, v2
+    v4 = isub v0, v3
+    return v4
+}
+; run: %msub_i32(0, 0, 0) == 0
+; run: %msub_i32(1, 1, 1) == 0
+; run: %msub_i32(1, 1, 0) == 1
+; run: %msub_i32(0, 1, 1) == -1
+; run: %msub_i32(1, 1, -1) == 2
+; run: %msub_i32(-2, 1, -1) == -1
+; run: %msub_i32(2, 2, 2) == -2
+; run: %msub_i32(0, 0x7FFFFFFF, 0x7FFFFFFF) == -1
+; run: %msub_i32(0x0FFFFF, 1, 0x7FFFFFFF) == 0x80100000
+; run: %msub_i32(0x7FFFFFFF, 1, 0x80000000) == -1
+; run: %msub_i32(0x80000000, 0x01234567, 0x7FFFFFFF) == 0x01234567
+; run: %msub_i32(0xFEDCBA98, 0x80000000, 0x01234567) == 0x7EDCBA98
+; run: %msub_i32(0xC0FFEEEE, 0xDECAFFFF, 0x0DEBAC1E) == 0x4F219B0C
+
+function %msub_i64(i64, i64, i64) -> i64 {
+block0(v0: i64, v1: i64, v2: i64):
+    v3 = imul v1, v2
+    v4 = isub v0, v3
+    return v4
+}
+; run: %msub_i64(0, 0, 0) == 0
+; run: %msub_i64(1, 1, 1) == 0
+; run: %msub_i64(1, 1, 0) == 1
+; run: %msub_i64(0, 1, 1) == -1
+; run: %msub_i64(1, 1, -1) == 2
+; run: %msub_i64(-2, 1, -1) == -1
+; run: %msub_i64(2, 2, 2) == -2
+; run: %msub_i64(0, 0x7FFFFFFF_FFFFFFFF, 0x7FFFFFFF_FFFFFFFF) == -1
+; run: %msub_i64(0x0FFFFF_FFFFFFFF, 1, 0x7FFFFFFF_FFFFFFFF) == 0x80100000_00000000
+; run: %msub_i64(0, 0x80000000_00000000, 0x7FFFFFFF_FFFFFFFF) == 0x80000000_00000000
+; run: %msub_i64(1, 0x80000000_00000000, 0x7FFFFFFF_FFFFFFFF) == 0x80000000_00000001
+; run: %msub_i64(0x01234567_89ABCDEF, 0x01234567_FEDCBA98, 0xFEDCBA98_76543210) == 0x78860671_358E746F
+; run: %msub_i64(0xC0FFEEEE_C0FFEEEE, 0xBAADF00D_BAADF00D, 0xDECAFFFF_DECAFFFF) == 0x5346F0F0_DB5EDEFB
+
+
 function %sdiv_i64(i64, i64) -> i64 {
 block0(v0: i64,v1: i64):
     v2 = sdiv v0, v1

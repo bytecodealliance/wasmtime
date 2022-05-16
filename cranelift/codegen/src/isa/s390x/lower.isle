@@ -341,7 +341,9 @@
 ;; If the `avoid_div_traps` flag is true, we perform the check explicitly.
 ;; This still can be omittted if the divisor is a non-zero immediate.
 (decl zero_divisor_check_needed (Value) bool)
-(rule (zero_divisor_check_needed (i64_from_value (i64_nonzero _))) $false)
+(rule (zero_divisor_check_needed (i64_from_value x))
+      (if (i64_nonzero x))
+      $false)
 (rule (zero_divisor_check_needed (value_type (allow_div_traps))) $false)
 (rule (zero_divisor_check_needed _) $true)
 
@@ -422,7 +424,9 @@
 ;; minimum (signed) integer value is divided by -1, so if the divisor
 ;; is any immediate different from -1, the check can be omitted.
 (decl div_overflow_check_needed (Value) bool)
-(rule (div_overflow_check_needed (i64_from_value (i64_not_neg1 _))) $false)
+(rule (div_overflow_check_needed (i64_from_value x))
+      (if (i64_not_neg1 x))
+      $false)
 (rule (div_overflow_check_needed _) $true)
 
 ;; Perform the integer-overflow check if necessary.   This implements:
@@ -624,7 +628,7 @@
 ;; z15 version using a single instruction (NOR).
 (rule (lower (has_type (and (mie2_enabled) (fits_in_64 ty)) (bnot x)))
       (let ((rx Reg x))
-        (or_not_reg ty rx rx)))
+        (not_or_reg ty rx rx)))
 
 ;; z14 version using XOR with -1.
 (rule (lower (has_type (and (mie2_disabled) (fits_in_64 ty)) (bnot x)))
@@ -704,7 +708,7 @@
 
 ;; z14 version using XOR with -1.
 (rule (lower (has_type (and (mie2_disabled) (fits_in_64 ty)) (band_not x y)))
-      (not_reg ty (and_reg ty x y)))
+      (and_reg ty x (not_reg ty y)))
 
 
 ;;;; Rules for `bor_not` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -715,14 +719,14 @@
 
 ;; z14 version using XOR with -1.
 (rule (lower (has_type (and (mie2_disabled) (fits_in_64 ty)) (bor_not x y)))
-      (not_reg ty (or_reg ty x y)))
+      (or_reg ty x (not_reg ty y)))
 
 
 ;;;; Rules for `bxor_not` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; z15 version using a single instruction.
 (rule (lower (has_type (and (mie2_enabled) (fits_in_64 ty)) (bxor_not x y)))
-      (xor_not_reg ty x y))
+      (not_xor_reg ty x y))
 
 ;; z14 version using XOR with -1.
 (rule (lower (has_type (and (mie2_disabled) (fits_in_64 ty)) (bxor_not x y)))
@@ -742,7 +746,7 @@
 (rule (lower (has_type (and (mie2_disabled) (fits_in_64 ty)) (bitselect x y z)))
       (let ((rx Reg x)
             (if_true Reg (and_reg ty y rx))
-            (if_false Reg (not_reg ty (and_reg ty z rx))))
+            (if_false Reg (and_reg ty z (not_reg ty rx))))
         (or_reg ty if_false if_true)))
 
 
@@ -1168,7 +1172,8 @@
 
 ;; Load the address of a symbol, target reachable via PC-relative instruction.
 (rule (lower (symbol_value (symbol_value_data name (reloc_distance_near)
-                                                   (memarg_symbol_offset offset))))
+                                              off)))
+      (if-let offset (memarg_symbol_offset off))
       (load_addr (memarg_symbol name offset (memflags_trusted))))
 
 ;; Load the address of a symbol, general case.
@@ -1594,10 +1599,10 @@
 ;; simply byte-swap the source operand.
 (rule (atomic_rmw_body ib (and (mie2_enabled) (ty_32_or_64 ty)) (bigendian)
                        (AtomicRmwOp.Nand) tmp val src)
-      (push_alu_reg ib (aluop_and_not ty) tmp val src))
+      (push_alu_reg ib (aluop_not_and ty) tmp val src))
 (rule (atomic_rmw_body ib (and (mie2_enabled) (ty_32_or_64 ty)) (littleendian)
                        (AtomicRmwOp.Nand) tmp val src)
-      (push_alu_reg ib (aluop_and_not ty) tmp val (bswap_reg ty src)))
+      (push_alu_reg ib (aluop_not_and ty) tmp val (bswap_reg ty src)))
 (rule (atomic_rmw_body ib (and (mie2_disabled) (ty_32_or_64 ty)) (bigendian)
                        (AtomicRmwOp.Nand) tmp val src)
       (push_not_reg ib ty tmp
@@ -1984,14 +1989,16 @@
 ;; Note that the ISA only provides instructions with a PC-relative memory
 ;; address here, so we need to check whether the sinkable load matches this.
 (rule (icmpu_val $true x @ (value_type (fits_in_64 ty))
-                 (sinkable_load_16 (load_sym y)))
+                 (sinkable_load_16 ld))
+      (if-let y (load_sym ld))
       (icmpu_mem_zext16 (ty_ext32 ty) (put_in_reg_zext32 x) (sink_load y)))
 
 ;; Compare (unsigned) a register and zero-extended memory.
 ;; Note that the ISA only provides instructions with a PC-relative memory
 ;; address here, so we need to check whether the sinkable load matches this.
 (rule (icmpu_val $true x @ (value_type (fits_in_64 ty))
-                 (sinkable_uload16 (uload16_sym y)))
+                 (sinkable_uload16 ld))
+      (if-let y (uload16_sym ld))
       (icmpu_mem_zext16 ty x (sink_uload16 y)))
 (rule (icmpu_val $true x @ (value_type (fits_in_64 ty)) (sinkable_uload32 y))
       (icmpu_mem_zext32 ty x (sink_uload32 y)))
@@ -2137,31 +2144,31 @@
 ;;;; Rules for `trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (trap trap_code))
-      (safepoint (trap_impl trap_code)))
+      (side_effect (trap_impl trap_code)))
 
 
 ;;;; Rules for `resumable_trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (resumable_trap trap_code))
-      (safepoint (trap_impl trap_code)))
+      (side_effect (trap_impl trap_code)))
 
 
 ;;;; Rules for `trapz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (trapz val trap_code))
-      (safepoint (trap_if_bool (invert_bool (value_nonzero val)) trap_code)))
+      (side_effect (trap_if_bool (invert_bool (value_nonzero val)) trap_code)))
 
 
 ;;;; Rules for `trapnz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (trapnz val trap_code))
-      (safepoint (trap_if_bool (value_nonzero val) trap_code)))
+      (side_effect (trap_if_bool (value_nonzero val) trap_code)))
 
 
 ;;;; Rules for `resumable_trapnz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (resumable_trapnz val trap_code))
-      (safepoint (trap_if_bool (value_nonzero val) trap_code)))
+      (side_effect (trap_if_bool (value_nonzero val) trap_code)))
 
 
 ;;;; Rules for `debugtrap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -2179,7 +2186,7 @@
 ;; the desired comparison here; there is no separate `ifcmp` lowering.
 
 (rule (lower (trapif int_cc (ifcmp x y) trap_code))
-      (safepoint (trap_if_bool (icmp_val $false int_cc x y) trap_code)))
+      (side_effect (trap_if_bool (icmp_val $false int_cc x y) trap_code)))
 
 ;; Recognize the case of `iadd_ifcout` feeding into `trapif`.  Note that
 ;; in the case, the `iadd_ifcout` is generated by a separate lowering

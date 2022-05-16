@@ -331,11 +331,13 @@ impl Engine {
             // the module itself, so their configuration values shouldn't
             // matter.
             "enable_heap_access_spectre_mitigation"
+            | "enable_table_access_spectre_mitigation"
             | "enable_nan_canonicalization"
             | "enable_jump_tables"
             | "enable_float"
             | "enable_simd"
             | "enable_verifier"
+            | "regalloc_checker"
             | "is_pic"
             | "machine_code_cfg_info"
             | "tls_model" // wasmtime doesn't use tls right now
@@ -387,9 +389,42 @@ impl Engine {
                 ))
             }
         }
+
+        #[allow(unused_assignments)]
+        let mut enabled = None;
+
+        #[cfg(target_arch = "aarch64")]
+        {
+            enabled = match flag {
+                "has_lse" => Some(std::arch::is_aarch64_feature_detected!("lse")),
+                // fall through to the very bottom to indicate that support is
+                // not enabled to test whether this feature is enabled on the
+                // host.
+                _ => None,
+            };
+        }
+
+        // There is no is_s390x_feature_detected macro yet, so for now
+        // we use getauxval from the libc crate directly.
+        #[cfg(all(target_arch = "s390x", target_os = "linux"))]
+        {
+            let v = unsafe { libc::getauxval(libc::AT_HWCAP) };
+            const HWCAP_S390X_VXRS_EXT2: libc::c_ulong = 32768;
+
+            enabled = match flag {
+                // There is no separate HWCAP bit for mie2, so assume
+                // that any machine with vxrs_ext2 also has mie2.
+                "has_vxrs_ext2" | "has_mie2" => Some((v & HWCAP_S390X_VXRS_EXT2) != 0),
+                // fall through to the very bottom to indicate that support is
+                // not enabled to test whether this feature is enabled on the
+                // host.
+                _ => None,
+            }
+        }
+
         #[cfg(target_arch = "x86_64")]
         {
-            let enabled = match flag {
+            enabled = match flag {
                 "has_sse3" => Some(std::is_x86_feature_detected!("sse3")),
                 "has_ssse3" => Some(std::is_x86_feature_detected!("ssse3")),
                 "has_sse41" => Some(std::is_x86_feature_detected!("sse4.1")),
@@ -411,18 +446,20 @@ impl Engine {
                 // host.
                 _ => None,
             };
-            match enabled {
-                Some(true) => return Ok(()),
-                Some(false) => {
-                    return Err(format!(
-                        "compilation setting {:?} is enabled but not available on the host",
-                        flag
-                    ))
-                }
-                // fall through
-                None => {}
-            }
         }
+
+        match enabled {
+            Some(true) => return Ok(()),
+            Some(false) => {
+                return Err(format!(
+                    "compilation setting {:?} is enabled, but not available on the host",
+                    flag
+                ))
+            }
+            // fall through
+            None => {}
+        }
+
         Err(format!(
             "cannot test if target-specific flag {:?} is available at runtime",
             flag

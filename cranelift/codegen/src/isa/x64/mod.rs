@@ -6,8 +6,9 @@ use super::TargetIsa;
 use crate::ir::{condcodes::IntCC, Function};
 #[cfg(feature = "unwind")]
 use crate::isa::unwind::systemv;
-use crate::isa::x64::{inst::regs::create_reg_universe_systemv, settings as x64_settings};
+use crate::isa::x64::{inst::regs::create_reg_env_systemv, settings as x64_settings};
 use crate::isa::Builder as IsaBuilder;
+use crate::machinst::Reg;
 use crate::machinst::{
     compile, MachCompileResult, MachTextSectionBuilder, TextSectionBuilder, VCode,
 };
@@ -15,8 +16,7 @@ use crate::result::{CodegenError, CodegenResult};
 use crate::settings::{self as shared_settings, Flags};
 use alloc::{boxed::Box, vec::Vec};
 use core::fmt;
-
-use regalloc::{PrettyPrint, RealRegUniverse, Reg};
+use regalloc2::MachineEnv;
 use target_lexicon::Triple;
 
 mod abi;
@@ -30,27 +30,31 @@ pub(crate) struct X64Backend {
     triple: Triple,
     flags: Flags,
     x64_flags: x64_settings::Flags,
-    reg_universe: RealRegUniverse,
+    reg_env: MachineEnv,
 }
 
 impl X64Backend {
     /// Create a new X64 backend with the given (shared) flags.
     fn new_with_flags(triple: Triple, flags: Flags, x64_flags: x64_settings::Flags) -> Self {
-        let reg_universe = create_reg_universe_systemv(&flags);
+        let reg_env = create_reg_env_systemv(&flags);
         Self {
             triple,
             flags,
             x64_flags,
-            reg_universe,
+            reg_env,
         }
     }
 
-    fn compile_vcode(&self, func: &Function, flags: Flags) -> CodegenResult<VCode<inst::Inst>> {
+    fn compile_vcode(
+        &self,
+        func: &Function,
+        flags: Flags,
+    ) -> CodegenResult<(VCode<inst::Inst>, regalloc2::Output)> {
         // This performs lowering to VCode, register-allocates the code, computes
         // block layout and finalizes branches. The result is ready for binary emission.
         let emit_info = EmitInfo::new(flags.clone(), self.x64_flags.clone());
         let abi = Box::new(abi::X64ABICallee::new(&func, flags, self.isa_flags())?);
-        compile::compile::<Self>(&func, self, abi, &self.reg_universe, emit_info)
+        compile::compile::<Self>(&func, self, abi, &self.reg_env, emit_info)
     }
 }
 
@@ -61,28 +65,27 @@ impl TargetIsa for X64Backend {
         want_disasm: bool,
     ) -> CodegenResult<MachCompileResult> {
         let flags = self.flags();
-        let vcode = self.compile_vcode(func, flags.clone())?;
+        let (vcode, regalloc_result) = self.compile_vcode(func, flags.clone())?;
 
-        let (buffer, bb_starts, bb_edges) = vcode.emit();
-        let buffer = buffer.finish();
-        let frame_size = vcode.frame_size();
-        let value_labels_ranges = vcode.value_labels_ranges();
-        let stackslot_offsets = vcode.stackslot_offsets().clone();
+        let want_disasm = want_disasm || log::log_enabled!(log::Level::Debug);
+        let emit_result = vcode.emit(&regalloc_result, want_disasm, flags.machine_code_cfg_info());
+        let frame_size = emit_result.frame_size;
+        let value_labels_ranges = emit_result.value_labels_ranges;
+        let buffer = emit_result.buffer.finish();
+        let stackslot_offsets = emit_result.stackslot_offsets;
 
-        let disasm = if want_disasm {
-            Some(vcode.show_rru(Some(&create_reg_universe_systemv(flags))))
-        } else {
-            None
-        };
+        if let Some(disasm) = emit_result.disasm.as_ref() {
+            log::debug!("disassembly:\n{}", disasm);
+        }
 
         Ok(MachCompileResult {
             buffer,
             frame_size,
-            disasm,
+            disasm: emit_result.disasm,
             value_labels_ranges,
             stackslot_offsets,
-            bb_starts,
-            bb_edges,
+            bb_starts: emit_result.bb_offsets,
+            bb_edges: emit_result.bb_edges,
         })
     }
 
@@ -200,7 +203,7 @@ mod test {
     use super::*;
     use crate::cursor::{Cursor, FuncCursor};
     use crate::ir::{types::*, SourceLoc, ValueLabel, ValueLabelStart};
-    use crate::ir::{AbiParam, ExternalName, Function, InstBuilder, Signature};
+    use crate::ir::{AbiParam, ExternalName, Function, InstBuilder, JumpTableData, Signature};
     use crate::isa::CallConv;
     use crate::settings;
     use crate::settings::Configurable;
@@ -319,30 +322,29 @@ mod test {
 
         // 00000000  55                push rbp
         // 00000001  4889E5            mov rbp,rsp
-        // 00000004  4889FE            mov rsi,rdi
-        // 00000007  81C634120000      add esi,0x1234
-        // 0000000D  85F6              test esi,esi
-        // 0000000F  0F841B000000      jz near 0x30
-        // 00000015  4889F7            mov rdi,rsi
-        // 00000018  4889F0            mov rax,rsi
-        // 0000001B  81E834120000      sub eax,0x1234
-        // 00000021  01F8              add eax,edi
-        // 00000023  85F6              test esi,esi
-        // 00000025  0F8505000000      jnz near 0x30
-        // 0000002B  4889EC            mov rsp,rbp
-        // 0000002E  5D                pop rbp
-        // 0000002F  C3                ret
-        // 00000030  4889F7            mov rdi,rsi    <--- cold block
-        // 00000033  81C734120000      add edi,0x1234
-        // 00000039  85FF              test edi,edi
-        // 0000003B  0F85EFFFFFFF      jnz near 0x30
-        // 00000041  E9D2FFFFFF        jmp 0x18
+        // 00000004  81C734120000      add edi,0x1234
+        // 0000000A  85FF              test edi,edi
+        // 0000000C  0F841C000000      jz near 0x2e
+        // 00000012  4989F8            mov r8,rdi
+        // 00000015  4889F8            mov rax,rdi
+        // 00000018  81E834120000      sub eax,0x1234
+        // 0000001E  4401C0            add eax,r8d
+        // 00000021  85FF              test edi,edi
+        // 00000023  0F8505000000      jnz near 0x2e
+        // 00000029  4889EC            mov rsp,rbp
+        // 0000002C  5D                pop rbp
+        // 0000002D  C3                ret
+        // 0000002E  4989F8            mov r8,rdi
+        // 00000031  4181C034120000    add r8d,0x1234
+        // 00000038  4585C0            test r8d,r8d
+        // 0000003B  0F85EDFFFFFF      jnz near 0x2e
+        // 00000041  E9CFFFFFFF        jmp 0x15
 
         let golden = vec![
-            85, 72, 137, 229, 72, 137, 254, 129, 198, 52, 18, 0, 0, 133, 246, 15, 132, 27, 0, 0, 0,
-            72, 137, 247, 72, 137, 240, 129, 232, 52, 18, 0, 0, 1, 248, 133, 246, 15, 133, 5, 0, 0,
-            0, 72, 137, 236, 93, 195, 72, 137, 247, 129, 199, 52, 18, 0, 0, 133, 255, 15, 133, 239,
-            255, 255, 255, 233, 210, 255, 255, 255,
+            85, 72, 137, 229, 129, 199, 52, 18, 0, 0, 133, 255, 15, 132, 28, 0, 0, 0, 73, 137, 248,
+            72, 137, 248, 129, 232, 52, 18, 0, 0, 68, 1, 192, 133, 255, 15, 133, 5, 0, 0, 0, 72,
+            137, 236, 93, 195, 73, 137, 248, 65, 129, 192, 52, 18, 0, 0, 69, 133, 192, 15, 133,
+            237, 255, 255, 255, 233, 207, 255, 255, 255,
         ];
 
         assert_eq!(code, &golden[..]);
@@ -363,5 +365,96 @@ mod test {
             isa_builder.finish(shared_flags),
             Err(CodegenError::Unsupported(_)),
         ));
+    }
+
+    // Check that br_table lowers properly. We can't test this with an
+    // ordinary compile-test because the br_table pseudoinstruction
+    // expands during emission.
+    #[test]
+    fn br_table() {
+        let name = ExternalName::testcase("test0");
+        let mut sig = Signature::new(CallConv::SystemV);
+        sig.params.push(AbiParam::new(I32));
+        sig.returns.push(AbiParam::new(I32));
+        let mut func = Function::with_name_signature(name, sig);
+
+        let bb0 = func.dfg.make_block();
+        let arg0 = func.dfg.append_block_param(bb0, I32);
+        let bb1 = func.dfg.make_block();
+        let bb2 = func.dfg.make_block();
+        let bb3 = func.dfg.make_block();
+
+        let mut pos = FuncCursor::new(&mut func);
+
+        pos.insert_block(bb0);
+        let mut jt_data = JumpTableData::new();
+        jt_data.push_entry(bb1);
+        jt_data.push_entry(bb2);
+        let jt = pos.func.create_jump_table(jt_data);
+        pos.ins().br_table(arg0, bb3, jt);
+
+        pos.insert_block(bb1);
+        let v1 = pos.ins().iconst(I32, 1);
+        pos.ins().return_(&[v1]);
+
+        pos.insert_block(bb2);
+        let v2 = pos.ins().iconst(I32, 2);
+        pos.ins().return_(&[v2]);
+
+        pos.insert_block(bb3);
+        let v3 = pos.ins().iconst(I32, 3);
+        pos.ins().return_(&[v3]);
+
+        let mut shared_flags_builder = settings::builder();
+        shared_flags_builder.set("opt_level", "none").unwrap();
+        shared_flags_builder.set("enable_verifier", "true").unwrap();
+        let shared_flags = settings::Flags::new(shared_flags_builder);
+        let isa_flags = x64_settings::Flags::new(&shared_flags, x64_settings::builder());
+        let backend = X64Backend::new_with_flags(
+            Triple::from_str("x86_64").unwrap(),
+            shared_flags,
+            isa_flags,
+        );
+        let result = backend
+            .compile_function(&mut func, /* want_disasm = */ false)
+            .unwrap();
+        let code = result.buffer.data();
+
+        // 00000000  55                push rbp
+        // 00000001  4889E5            mov rbp,rsp
+        // 00000004  41B900000000      mov r9d,0x0
+        // 0000000A  83FF02            cmp edi,byte +0x2
+        // 0000000D  0F8320000000      jnc near 0x33
+        // 00000013  8BC7              mov eax,edi
+        // 00000015  490F43C1          cmovnc rax,r9
+        // 00000019  4C8D0D0B000000    lea r9,[rel 0x2b]
+        // 00000020  4963448100        movsxd rax,dword [r9+rax*4+0x0]
+        // 00000025  4901C1            add r9,rax
+        // 00000028  41FFE1            jmp r9
+        // 0000002B  1200              adc al,[rax]
+        // 0000002D  0000              add [rax],al
+        // 0000002F  1C00              sbb al,0x0
+        // 00000031  0000              add [rax],al
+        // 00000033  B803000000        mov eax,0x3
+        // 00000038  4889EC            mov rsp,rbp
+        // 0000003B  5D                pop rbp
+        // 0000003C  C3                ret
+        // 0000003D  B801000000        mov eax,0x1
+        // 00000042  4889EC            mov rsp,rbp
+        // 00000045  5D                pop rbp
+        // 00000046  C3                ret
+        // 00000047  B802000000        mov eax,0x2
+        // 0000004C  4889EC            mov rsp,rbp
+        // 0000004F  5D                pop rbp
+        // 00000050  C3                ret
+
+        let golden = vec![
+            85, 72, 137, 229, 65, 185, 0, 0, 0, 0, 131, 255, 2, 15, 131, 32, 0, 0, 0, 139, 199, 73,
+            15, 67, 193, 76, 141, 13, 11, 0, 0, 0, 73, 99, 68, 129, 0, 73, 1, 193, 65, 255, 225,
+            18, 0, 0, 0, 28, 0, 0, 0, 184, 3, 0, 0, 0, 72, 137, 236, 93, 195, 184, 1, 0, 0, 0, 72,
+            137, 236, 93, 195, 184, 2, 0, 0, 0, 72, 137, 236, 93, 195,
+        ];
+
+        assert_eq!(code, &golden[..]);
     }
 }

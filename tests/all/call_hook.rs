@@ -52,10 +52,10 @@ fn call_wrapped_func() -> Result<(), Error> {
             |caller: Caller<State>, space| {
                 verify(caller.data());
 
-                assert_eq!((*space.add(0)).i32, 1);
-                assert_eq!((*space.add(1)).i64, 2);
-                assert_eq!((*space.add(2)).f32, 3.0f32.to_bits());
-                assert_eq!((*space.add(3)).f64, 4.0f64.to_bits());
+                assert_eq!((*space.add(0)).i32, 1i32.to_le());
+                assert_eq!((*space.add(1)).i64, 2i64.to_le());
+                assert_eq!((*space.add(2)).f32, 3.0f32.to_bits().to_le());
+                assert_eq!((*space.add(3)).f64, 4.0f64.to_bits().to_le());
                 Ok(())
             },
         )
@@ -614,7 +614,7 @@ async fn basic_async_hook() -> Result<(), Error> {
     "#;
     let module = Module::new(&engine, wat)?;
 
-    let inst = linker.instantiate(&mut store, &module)?;
+    let inst = linker.instantiate_async(&mut store, &module).await?;
     let export = inst
         .get_export(&mut store, "export")
         .expect("get export")
@@ -694,7 +694,7 @@ async fn timeout_async_hook() -> Result<(), Error> {
     "#;
     let module = Module::new(&engine, wat)?;
 
-    let inst = linker.instantiate(&mut store, &module)?;
+    let inst = linker.instantiate_async(&mut store, &module).await?;
     let export = inst
         .get_typed_func::<(), (), _>(&mut store, "export")
         .expect("export is func");
@@ -764,7 +764,7 @@ async fn drop_suspended_async_hook() -> Result<(), Error> {
     "#;
     let module = Module::new(&engine, wat)?;
 
-    let inst = linker.instantiate(&mut store, &module)?;
+    let inst = linker.instantiate_async(&mut store, &module).await?;
     assert_eq!(*store.data(), 0);
     let export = inst
         .get_typed_func::<(), (), _>(&mut store, "")

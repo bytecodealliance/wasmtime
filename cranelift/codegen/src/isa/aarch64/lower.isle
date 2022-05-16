@@ -56,11 +56,13 @@
 ;; Special cases for when we're adding the shift of a different
 ;; register by a constant amount and the shift can get folded into the add.
 (rule (lower (has_type (fits_in_64 ty)
-                       (iadd x (ishl y (iconst (lshl_from_imm64 <ty amt))))))
+                       (iadd x (ishl y (iconst k)))))
+      (if-let amt (lshl_from_imm64 ty k))
       (add_shift ty x y amt))
 
 (rule (lower (has_type (fits_in_64 ty)
-                       (iadd (ishl x (iconst (lshl_from_imm64 <ty amt))) y)))
+                       (iadd (ishl x (iconst k)) y)))
+      (if-let amt (lshl_from_imm64 ty k))
       (add_shift ty y x amt))
 
 ;; Fold an `iadd` and `imul` combination into a `madd` instruction.
@@ -69,6 +71,10 @@
 
 (rule (lower (has_type (fits_in_64 ty) (iadd (imul x y) z)))
       (madd ty x y z))
+
+;; Fold an `isub` and `imul` combination into a `msub` instruction.
+(rule (lower (has_type (fits_in_64 ty) (isub x (imul y z))))
+      (msub ty y z x))
 
 ;; vectors
 
@@ -118,7 +124,8 @@
 ;; Finally a special case for when we're subtracting the shift of a different
 ;; register by a constant amount and the shift can get folded into the sub.
 (rule (lower (has_type (fits_in_64 ty)
-                       (isub x (ishl y (iconst (lshl_from_imm64 <ty amt))))))
+                       (isub x (ishl y (iconst k)))))
+      (if-let amt (lshl_from_imm64 ty k))
       (sub_shift ty x y amt))
 
 ;; vectors
@@ -202,9 +209,9 @@
            ;; madd    dst_hi, x_hi, y_lo, dst_hi
            ;; madd    dst_lo, x_lo, y_lo, zero
            (dst_hi1 Reg (umulh $I64 x_lo y_lo))
-           (dst_hi2 Reg (madd64 x_lo y_hi dst_hi1))
-           (dst_hi Reg (madd64 x_hi y_lo dst_hi2))
-           (dst_lo Reg (madd64 x_lo y_lo (zero_reg))))
+           (dst_hi2 Reg (madd $I64 x_lo y_hi dst_hi1))
+           (dst_hi Reg (madd $I64 x_hi y_lo dst_hi2))
+           (dst_lo Reg (madd $I64 x_lo y_lo (zero_reg))))
         (value_regs dst_lo dst_hi)))
 
 ;; Case for i8x16, i16x8, and i32x4.
@@ -358,7 +365,7 @@
 (rule (lower (has_type (fits_in_32 ty) (smulhi x y)))
       (let ((x64 Reg (put_in_reg_sext64 x))
             (y64 Reg (put_in_reg_sext64 y))
-            (mul Reg (madd64 x64 y64 (zero_reg)))
+            (mul Reg (madd $I64 x64 y64 (zero_reg)))
             (result Reg (asr_imm $I64 mul (imm_shift_from_u8 (ty_bits ty)))))
         result))
 
@@ -368,11 +375,13 @@
       (umulh $I64 x y))
 
 (rule (lower (has_type (fits_in_32 ty) (umulhi x y)))
-      (let ((x64 Reg (put_in_reg_zext64 x))
-            (y64 Reg (put_in_reg_zext64 y))
-            (mul Reg (madd64 x64 y64 (zero_reg)))
-            (result Reg (lsr_imm $I64 mul (imm_shift_from_u8 (ty_bits ty)))))
-        result))
+      (let (
+          (x64 Reg (put_in_reg_zext64 x))
+          (y64 Reg (put_in_reg_zext64 y))
+          (mul Reg (madd $I64 x64 y64 (zero_reg)))
+          (result Reg (lsr_imm $I64 mul (imm_shift_from_u8 (ty_bits ty))))
+        )
+        (value_reg result)))
 
 ;;;; Rules for `udiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -459,14 +468,14 @@
       (let ((x64 Reg (put_in_reg_zext64 x))
             (y64 Reg (put_nonzero_in_reg_zext64 y))
             (div Reg (a64_udiv $I64 x64 y64))
-            (result Reg (msub64 div y64 x64)))
+            (result Reg (msub $I64 div y64 x64)))
         result))
 
 (rule (lower (has_type (fits_in_64 ty) (srem x y)))
       (let ((x64 Reg (put_in_reg_sext64 x))
             (y64 Reg (put_nonzero_in_reg_sext64 y))
             (div Reg (a64_sdiv $I64 x64 y64))
-            (result Reg (msub64 div y64 x64)))
+            (result Reg (msub $I64 div y64 x64)))
         result))
 
 ;;;; Rules for `uextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -562,7 +571,8 @@
 ;; Special case to use `orr_not_shift` if it's a `bnot` of a const-left-shifted
 ;; value.
 (rule (lower (has_type (fits_in_64 ty)
-                       (bnot (ishl x (iconst (lshl_from_imm64 <ty amt))))))
+                       (bnot (ishl x (iconst k)))))
+      (if-let amt (lshl_from_imm64 ty k))
       (orr_not_shift ty (zero_reg) x amt))
 
 ;; Implementation of `bnot` for `i128`.
@@ -731,7 +741,8 @@
 ;; Note that this rule explicitly has a higher priority than the others
 ;; to ensure it's attempted first, otherwise the type-based filters on the
 ;; previous rules seem to take priority over this rule.
-(rule 1 (do_shift op ty x (iconst (imm_shift_from_imm64 <ty shift)))
+(rule 1 (do_shift op ty x (iconst k))
+      (if-let shift (imm_shift_from_imm64 ty k))
       (alu_rr_imm_shift op ty x shift))
 
 ;;;; Rules for `ushr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -840,7 +851,8 @@
         (small_rotr ty (put_in_reg_zext32 x) neg_shift)))
 
 ;; Specialization for the 8/16-bit case when the rotation amount is an immediate.
-(rule (lower (has_type (fits_in_16 ty) (rotl x (iconst (imm_shift_from_imm64 <ty n)))))
+(rule (lower (has_type (fits_in_16 ty) (rotl x (iconst k))))
+      (if-let n (imm_shift_from_imm64 ty k))
       (small_rotr_imm ty (put_in_reg_zext32 x) (negate_imm_shift ty n)))
 
 ;; aarch64 doesn't have a left-rotate instruction, but a left rotation of K
@@ -862,11 +874,13 @@
         (a64_rotr $I64 x neg_shift)))
 
 ;; Specialization for the 32-bit case when the rotation amount is an immediate.
-(rule (lower (has_type $I32 (rotl x (iconst (imm_shift_from_imm64 <$I32 n)))))
+(rule (lower (has_type $I32 (rotl x (iconst k))))
+      (if-let n (imm_shift_from_imm64 $I32 k))
       (a64_rotr_imm $I32 x (negate_imm_shift $I32 n)))
 
 ;; Specialization for the 64-bit case when the rotation amount is an immediate.
-(rule (lower (has_type $I64 (rotl x (iconst (imm_shift_from_imm64 <$I64 n)))))
+(rule (lower (has_type $I64 (rotl x (iconst k))))
+      (if-let n (imm_shift_from_imm64 $I64 k))
       (a64_rotr_imm $I64 x (negate_imm_shift $I64 n)))
 
 (decl negate_imm_shift (Type ImmShift) ImmShift)
@@ -900,15 +914,18 @@
       (a64_rotr $I64 x y))
 
 ;; Specialization for the 8/16-bit case when the rotation amount is an immediate.
-(rule (lower (has_type (fits_in_16 ty) (rotr x (iconst (imm_shift_from_imm64 <ty n)))))
+(rule (lower (has_type (fits_in_16 ty) (rotr x (iconst k))))
+      (if-let n (imm_shift_from_imm64 ty k))
       (small_rotr_imm ty (put_in_reg_zext32 x) n))
 
 ;; Specialization for the 32-bit case when the rotation amount is an immediate.
-(rule (lower (has_type $I32 (rotr x (iconst (imm_shift_from_imm64 <$I32 n)))))
+(rule (lower (has_type $I32 (rotr x (iconst k))))
+      (if-let n (imm_shift_from_imm64 $I32 k))
       (a64_rotr_imm $I32 x n))
 
 ;; Specialization for the 64-bit case when the rotation amount is an immediate.
-(rule (lower (has_type $I64 (rotr x (iconst (imm_shift_from_imm64 <$I64 n)))))
+(rule (lower (has_type $I64 (rotr x (iconst k))))
+      (if-let n (imm_shift_from_imm64 $I64 k))
       (a64_rotr_imm $I64 x n))
 
 ;; For a < 32-bit rotate-right, we synthesize this as:
@@ -1014,7 +1031,7 @@
       (let ((hi_clz Reg (a64_clz $I64 (value_regs_get val 1)))
             (lo_clz Reg (a64_clz $I64 (value_regs_get val 0)))
             (tmp Reg (lsr_imm $I64 hi_clz (imm_shift_from_u8 6))))
-        (value_regs (madd64 lo_clz tmp hi_clz) (imm $I64 0))))
+        (value_regs (madd $I64 lo_clz tmp hi_clz) (imm $I64 0))))
 
 ;;;; Rules for `ctz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1062,7 +1079,7 @@
             (hi_cls Reg (a64_cls $I64 hi))
             (sign_eq_eon Reg (eon $I64 hi lo))
             (sign_eq Reg (lsr_imm $I64 sign_eq_eon (imm_shift_from_u8 63)))
-            (lo_sign_bits Reg (madd64 lo_cls sign_eq sign_eq))
+            (lo_sign_bits Reg (madd $I64 lo_cls sign_eq sign_eq))
             (maybe_lo Reg (with_flags_reg
                            (cmp64_imm hi_cls (u8_into_imm12 63))
                            (csel (Cond.Eq) lo_sign_bits (zero_reg)))))
@@ -1125,7 +1142,22 @@
 (rule (lower (has_type $I8X16 (popcnt x)))
       (vec_cnt x (VectorSize.Size8x16)))
 
-;;;; Rules for `fcmp` 32 bit ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Rules for `bitselect` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type (ty_int_bool_ref_scalar_64 ty) (bitselect c x y)))
+      (let ((tmp1 Reg (and_reg ty x c))
+            (tmp2 Reg (bic ty y c)))
+        (orr ty tmp1 tmp2)))
+
+(rule (lower (has_type (ty_vec128 ty) (bitselect c x y)))
+        (bsl ty c x y))
+
+;;;; Rules for `vselect` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type (ty_vec128 ty) (vselect c x y)))
+        (bsl ty c x y))
+
+;;;; Rules for `fcmp` 32 bit ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type ty @ (multi_lane _ _) (fcmp (fcmp_zero_cond_not_eq cond) x (splat (f32const (zero_value_f32 y))))))
       (let ((rn Reg x)
@@ -1190,3 +1222,77 @@
       (let ((rn Reg y)
             (vec_size VectorSize (vector_size ty)))
           (value_reg (int_cmp_zero_swap cond rn vec_size))))
+
+;;;; Rules for `AtomicRMW` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (and (use_lse)
+                  (has_type (valid_atomic_transaction ty)
+                      (atomic_rmw flags (AtomicRmwOp.Add) addr src))))
+      (lse_atomic_rmw (AtomicRMWOp.Add) addr src ty))
+(rule (lower (and (use_lse)
+                  (has_type (valid_atomic_transaction ty)
+                      (atomic_rmw flags (AtomicRmwOp.Xor) addr src))))
+      (lse_atomic_rmw (AtomicRMWOp.Eor) addr src ty))
+(rule (lower (and (use_lse)
+                  (has_type (valid_atomic_transaction ty)
+                      (atomic_rmw flags (AtomicRmwOp.Or) addr src))))
+      (lse_atomic_rmw (AtomicRMWOp.Set) addr src ty))
+(rule (lower (and (use_lse)
+                  (has_type (valid_atomic_transaction ty)
+                      (atomic_rmw flags (AtomicRmwOp.Smax) addr src))))
+      (lse_atomic_rmw (AtomicRMWOp.Smax) addr src ty))
+(rule (lower (and (use_lse)
+                  (has_type (valid_atomic_transaction ty)
+                      (atomic_rmw flags (AtomicRmwOp.Smin) addr src))))
+      (lse_atomic_rmw (AtomicRMWOp.Smin) addr src ty))
+(rule (lower (and (use_lse)
+                  (has_type (valid_atomic_transaction ty)
+                      (atomic_rmw flags (AtomicRmwOp.Umax) addr src))))
+      (lse_atomic_rmw (AtomicRMWOp.Umax) addr src ty))
+(rule (lower (and (use_lse)
+                  (has_type (valid_atomic_transaction ty)
+                      (atomic_rmw flags (AtomicRmwOp.Umin) addr src))))
+      (lse_atomic_rmw (AtomicRMWOp.Umin) addr src ty))
+(rule (lower (and (use_lse)
+                  (has_type (valid_atomic_transaction ty)
+                      (atomic_rmw flags (AtomicRmwOp.Sub) addr src))))
+      (lse_atomic_rmw (AtomicRMWOp.Add) addr (sub ty (zero_reg) src) ty))
+(rule (lower (and (use_lse)
+                  (has_type (valid_atomic_transaction ty)
+                      (atomic_rmw flags (AtomicRmwOp.And) addr src))))
+      (lse_atomic_rmw (AtomicRMWOp.Clr) addr (eon ty src (zero_reg)) ty))
+
+
+(rule (lower (has_type (valid_atomic_transaction ty)
+             (atomic_rmw flags (AtomicRmwOp.Add) addr src)))
+      (atomic_rmw_loop (AtomicRMWLoopOp.Add) addr src ty))
+(rule (lower (has_type (valid_atomic_transaction ty)
+             (atomic_rmw flags (AtomicRmwOp.Sub) addr src)))
+      (atomic_rmw_loop (AtomicRMWLoopOp.Sub) addr src ty))
+(rule (lower (has_type (valid_atomic_transaction ty)
+             (atomic_rmw flags (AtomicRmwOp.And) addr src)))
+      (atomic_rmw_loop (AtomicRMWLoopOp.And) addr src ty))
+(rule (lower (has_type (valid_atomic_transaction ty)
+             (atomic_rmw flags (AtomicRmwOp.Nand) addr src)))
+      (atomic_rmw_loop (AtomicRMWLoopOp.Nand) addr src ty))
+(rule (lower (has_type (valid_atomic_transaction ty)
+             (atomic_rmw flags (AtomicRmwOp.Or) addr src)))
+      (atomic_rmw_loop (AtomicRMWLoopOp.Orr) addr src ty))
+(rule (lower (has_type (valid_atomic_transaction ty)
+             (atomic_rmw flags (AtomicRmwOp.Xor) addr src)))
+      (atomic_rmw_loop (AtomicRMWLoopOp.Eor) addr src ty))
+(rule (lower (has_type (valid_atomic_transaction ty)
+             (atomic_rmw flags (AtomicRmwOp.Smin) addr src)))
+      (atomic_rmw_loop (AtomicRMWLoopOp.Smin) addr src ty))
+(rule (lower (has_type (valid_atomic_transaction ty)
+             (atomic_rmw flags (AtomicRmwOp.Smax) addr src)))
+      (atomic_rmw_loop (AtomicRMWLoopOp.Smax) addr src ty))
+(rule (lower (has_type (valid_atomic_transaction ty)
+             (atomic_rmw flags (AtomicRmwOp.Umin) addr src)))
+      (atomic_rmw_loop (AtomicRMWLoopOp.Umin) addr src ty))
+(rule (lower (has_type (valid_atomic_transaction ty)
+             (atomic_rmw flags (AtomicRmwOp.Umax) addr src)))
+      (atomic_rmw_loop (AtomicRMWLoopOp.Umax) addr src ty))
+(rule (lower (has_type (valid_atomic_transaction ty)
+             (atomic_rmw flags (AtomicRmwOp.Xchg) addr src)))
+      (atomic_rmw_loop (AtomicRMWLoopOp.Xchg) addr src ty))

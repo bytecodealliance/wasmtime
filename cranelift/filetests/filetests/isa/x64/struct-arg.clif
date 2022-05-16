@@ -7,20 +7,14 @@ block0(v0: i64):
     return v1
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 8)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   lea     16(%rbp), %rsi
-;   Inst 3:   movzbq  0(%rsi), %rsi
-;   Inst 4:   movq    %rsi, %rax
-;   Inst 5:   movq    %rbp, %rsp
-;   Inst 6:   popq    %rbp
-;   Inst 7:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   lea     16(%rbp), %rsi
+;   movzbq  0(%rsi), %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function u0:1(i64 sarg(64), i64) -> i8 system_v {
 block0(v0: i64, v1: i64):
@@ -30,22 +24,16 @@ block0(v0: i64, v1: i64):
     return v4
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 10)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   lea     16(%rbp), %rsi
-;   Inst 3:   movzbq  0(%rdi), %rdi
-;   Inst 4:   movzbq  0(%rsi), %rsi
-;   Inst 5:   addl    %esi, %edi
-;   Inst 6:   movq    %rdi, %rax
-;   Inst 7:   movq    %rbp, %rsp
-;   Inst 8:   popq    %rbp
-;   Inst 9:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   lea     16(%rbp), %rsi
+;   movzbq  0(%rdi), %rax
+;   movzbq  0(%rsi), %r11
+;   addl    %eax, %r11d, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function u0:2(i64) -> i8 system_v {
 fn1 = colocated u0:0(i64 sarg(64)) -> i8 system_v
@@ -55,27 +43,23 @@ block0(v0: i64):
     return v1
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 15)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   movq    %rdi, %rsi
-;   Inst 3:   subq    $64, %rsp
-;   Inst 4:   virtual_sp_offset_adjust 64
-;   Inst 5:   lea     0(%rsp), %rdi
-;   Inst 6:   movl    $64, %edx
-;   Inst 7:   load_ext_name %Memcpy+0, %rcx
-;   Inst 8:   call    *%rcx
-;   Inst 9:   call    User { namespace: 0, index: 0 }
-;   Inst 10:   addq    $64, %rsp
-;   Inst 11:   virtual_sp_offset_adjust -64
-;   Inst 12:   movq    %rbp, %rsp
-;   Inst 13:   popq    %rbp
-;   Inst 14:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %r8
+;   subq    %rsp, $64, %rsp
+;   virtual_sp_offset_adjust 64
+;   lea     0(%rsp), %rdi
+;   movq    %r8, %rsi
+;   movl    $64, %edx
+;   load_ext_name %Memcpy+0, %rcx
+;   call    *%rcx
+;   call    User { namespace: 0, index: 0 }
+;   addq    %rsp, $64, %rsp
+;   virtual_sp_offset_adjust -64
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function u0:3(i64, i64) -> i8 system_v {
 fn1 = colocated u0:0(i64, i64 sarg(64)) -> i8 system_v
@@ -85,32 +69,27 @@ block0(v0: i64, v1: i64):
     return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 20)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   subq    $16, %rsp
-;   Inst 3:   movq    %r12, 0(%rsp)
-;   Inst 4:   movq    %rdi, %r12
-;   Inst 5:   subq    $64, %rsp
-;   Inst 6:   virtual_sp_offset_adjust 64
-;   Inst 7:   lea     0(%rsp), %rdi
-;   Inst 8:   movl    $64, %edx
-;   Inst 9:   load_ext_name %Memcpy+0, %rcx
-;   Inst 10:   call    *%rcx
-;   Inst 11:   movq    %r12, %rdi
-;   Inst 12:   call    User { namespace: 0, index: 0 }
-;   Inst 13:   addq    $64, %rsp
-;   Inst 14:   virtual_sp_offset_adjust -64
-;   Inst 15:   movq    0(%rsp), %r12
-;   Inst 16:   addq    $16, %rsp
-;   Inst 17:   movq    %rbp, %rsp
-;   Inst 18:   popq    %rbp
-;   Inst 19:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+;   subq    %rsp, $16, %rsp
+;   movq    %r12, 0(%rsp)
+; block0:
+;   movq    %rdi, %r12
+;   subq    %rsp, $64, %rsp
+;   virtual_sp_offset_adjust 64
+;   lea     0(%rsp), %rdi
+;   movl    $64, %edx
+;   load_ext_name %Memcpy+0, %rcx
+;   call    *%rcx
+;   movq    %r12, %rdi
+;   call    User { namespace: 0, index: 0 }
+;   addq    %rsp, $64, %rsp
+;   virtual_sp_offset_adjust -64
+;   movq    0(%rsp), %r12
+;   addq    %rsp, $16, %rsp
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function u0:4(i64 sarg(128), i64 sarg(64)) -> i8 system_v {
 block0(v0: i64, v1: i64):
@@ -120,23 +99,17 @@ block0(v0: i64, v1: i64):
     return v4
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 11)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   lea     16(%rbp), %rsi
-;   Inst 3:   lea     144(%rbp), %rdi
-;   Inst 4:   movzbq  0(%rsi), %rsi
-;   Inst 5:   movzbq  0(%rdi), %rdi
-;   Inst 6:   addl    %edi, %esi
-;   Inst 7:   movq    %rsi, %rax
-;   Inst 8:   movq    %rbp, %rsp
-;   Inst 9:   popq    %rbp
-;   Inst 10:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   lea     16(%rbp), %rsi
+;   lea     144(%rbp), %rdi
+;   movzbq  0(%rsi), %rax
+;   movzbq  0(%rdi), %r11
+;   addl    %eax, %r11d, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function u0:5(i64, i64, i64) -> i8 system_v {
 fn1 = colocated u0:0(i64, i64 sarg(128), i64 sarg(64)) -> i8 system_v
@@ -146,38 +119,33 @@ block0(v0: i64, v1: i64, v2: i64):
     return v3
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 28)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   subq    $16, %rsp
-;   Inst 3:   movq    %r12, 0(%rsp)
-;   Inst 4:   movq    %r13, 8(%rsp)
-;   Inst 5:   movq    %rdi, %r12
-;   Inst 6:   movq    %rdx, %r13
-;   Inst 7:   subq    $192, %rsp
-;   Inst 8:   virtual_sp_offset_adjust 192
-;   Inst 9:   lea     0(%rsp), %rdi
-;   Inst 10:   movl    $128, %edx
-;   Inst 11:   load_ext_name %Memcpy+0, %rcx
-;   Inst 12:   call    *%rcx
-;   Inst 13:   lea     128(%rsp), %rdi
-;   Inst 14:   movq    %r13, %rsi
-;   Inst 15:   movl    $64, %edx
-;   Inst 16:   load_ext_name %Memcpy+0, %rcx
-;   Inst 17:   call    *%rcx
-;   Inst 18:   movq    %r12, %rdi
-;   Inst 19:   call    User { namespace: 0, index: 0 }
-;   Inst 20:   addq    $192, %rsp
-;   Inst 21:   virtual_sp_offset_adjust -192
-;   Inst 22:   movq    0(%rsp), %r12
-;   Inst 23:   movq    8(%rsp), %r13
-;   Inst 24:   addq    $16, %rsp
-;   Inst 25:   movq    %rbp, %rsp
-;   Inst 26:   popq    %rbp
-;   Inst 27:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+;   subq    %rsp, $16, %rsp
+;   movq    %rbx, 0(%rsp)
+;   movq    %r14, 8(%rsp)
+; block0:
+;   movq    %rdi, %r14
+;   movq    %rdx, %rbx
+;   subq    %rsp, $192, %rsp
+;   virtual_sp_offset_adjust 192
+;   lea     0(%rsp), %rdi
+;   movl    $128, %edx
+;   load_ext_name %Memcpy+0, %rcx
+;   call    *%rcx
+;   lea     128(%rsp), %rdi
+;   movq    %rbx, %rsi
+;   movl    $64, %edx
+;   load_ext_name %Memcpy+0, %rcx
+;   call    *%rcx
+;   movq    %r14, %rdi
+;   call    User { namespace: 0, index: 0 }
+;   addq    %rsp, $192, %rsp
+;   virtual_sp_offset_adjust -192
+;   movq    0(%rsp), %rbx
+;   movq    8(%rsp), %r14
+;   addq    %rsp, $16, %rsp
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 

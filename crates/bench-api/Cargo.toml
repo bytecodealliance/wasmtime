@@ -6,7 +6,7 @@ description = "Exposes a benchmarking API for the Wasmtime runtime"
 license = "Apache-2.0 WITH LLVM-exception"
 repository = "https://github.com/bytecodealliance/wasmtime"
 readme = "README.md"
-edition = "2018"
+edition = "2021"
 publish = false
 
 [lib]
@@ -17,7 +17,9 @@ crate-type = ["rlib", "cdylib"]
 [dependencies]
 anyhow = "1.0"
 shuffling-allocator = { version = "1.1.1", optional = true }
+target-lexicon = "0.12"
 wasmtime = { path = "../wasmtime", default-features = true }
+wasmtime-cli-flags = { path = "../cli-flags", default-features = true }
 wasmtime-wasi = { path = "../wasi" }
 wasmtime-wasi-crypto = { path = "../wasi-crypto", optional = true }
 wasmtime-wasi-nn = { path = "../wasi-nn", optional = true }

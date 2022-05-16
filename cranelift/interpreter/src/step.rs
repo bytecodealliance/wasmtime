@@ -285,64 +285,33 @@ where
         Opcode::CallIndirect => unimplemented!("CallIndirect"),
         Opcode::FuncAddr => unimplemented!("FuncAddr"),
         Opcode::Load
-        | Opcode::LoadComplex
         | Opcode::Uload8
-        | Opcode::Uload8Complex
         | Opcode::Sload8
-        | Opcode::Sload8Complex
         | Opcode::Uload16
-        | Opcode::Uload16Complex
         | Opcode::Sload16
-        | Opcode::Sload16Complex
         | Opcode::Uload32
-        | Opcode::Uload32Complex
         | Opcode::Sload32
-        | Opcode::Sload32Complex
         | Opcode::Uload8x8
-        | Opcode::Uload8x8Complex
         | Opcode::Sload8x8
-        | Opcode::Sload8x8Complex
         | Opcode::Uload16x4
-        | Opcode::Uload16x4Complex
         | Opcode::Sload16x4
-        | Opcode::Sload16x4Complex
         | Opcode::Uload32x2
-        | Opcode::Uload32x2Complex
-        | Opcode::Sload32x2
-        | Opcode::Sload32x2Complex => {
+        | Opcode::Sload32x2 => {
             let ctrl_ty = inst_context.controlling_type().unwrap();
             let (load_ty, kind) = match inst.opcode() {
-                Opcode::Load | Opcode::LoadComplex => (ctrl_ty, None),
-                Opcode::Uload8 | Opcode::Uload8Complex => {
-                    (types::I8, Some(ValueConversionKind::ZeroExtend(ctrl_ty)))
-                }
-                Opcode::Sload8 | Opcode::Sload8Complex => {
-                    (types::I8, Some(ValueConversionKind::SignExtend(ctrl_ty)))
-                }
-                Opcode::Uload16 | Opcode::Uload16Complex => {
-                    (types::I16, Some(ValueConversionKind::ZeroExtend(ctrl_ty)))
-                }
-                Opcode::Sload16 | Opcode::Sload16Complex => {
-                    (types::I16, Some(ValueConversionKind::SignExtend(ctrl_ty)))
-                }
-                Opcode::Uload32 | Opcode::Uload32Complex => {
-                    (types::I32, Some(ValueConversionKind::ZeroExtend(ctrl_ty)))
-                }
-                Opcode::Sload32 | Opcode::Sload32Complex => {
-                    (types::I32, Some(ValueConversionKind::SignExtend(ctrl_ty)))
-                }
+                Opcode::Load => (ctrl_ty, None),
+                Opcode::Uload8 => (types::I8, Some(ValueConversionKind::ZeroExtend(ctrl_ty))),
+                Opcode::Sload8 => (types::I8, Some(ValueConversionKind::SignExtend(ctrl_ty))),
+                Opcode::Uload16 => (types::I16, Some(ValueConversionKind::ZeroExtend(ctrl_ty))),
+                Opcode::Sload16 => (types::I16, Some(ValueConversionKind::SignExtend(ctrl_ty))),
+                Opcode::Uload32 => (types::I32, Some(ValueConversionKind::ZeroExtend(ctrl_ty))),
+                Opcode::Sload32 => (types::I32, Some(ValueConversionKind::SignExtend(ctrl_ty))),
                 Opcode::Uload8x8
-                | Opcode::Uload8x8Complex
                 | Opcode::Sload8x8
-                | Opcode::Sload8x8Complex
                 | Opcode::Uload16x4
-                | Opcode::Uload16x4Complex
                 | Opcode::Sload16x4
-                | Opcode::Sload16x4Complex
                 | Opcode::Uload32x2
-                | Opcode::Uload32x2Complex
-                | Opcode::Sload32x2
-                | Opcode::Sload32x2Complex => unimplemented!(),
+                | Opcode::Sload32x2 => unimplemented!(),
                 _ => unreachable!(),
             };
 
@@ -360,25 +329,12 @@ where
                 (cf, _) => cf,
             }
         }
-        Opcode::Store
-        | Opcode::StoreComplex
-        | Opcode::Istore8
-        | Opcode::Istore8Complex
-        | Opcode::Istore16
-        | Opcode::Istore16Complex
-        | Opcode::Istore32
-        | Opcode::Istore32Complex => {
+        Opcode::Store | Opcode::Istore8 | Opcode::Istore16 | Opcode::Istore32 => {
             let kind = match inst.opcode() {
-                Opcode::Store | Opcode::StoreComplex => None,
-                Opcode::Istore8 | Opcode::Istore8Complex => {
-                    Some(ValueConversionKind::Truncate(types::I8))
-                }
-                Opcode::Istore16 | Opcode::Istore16Complex => {
-                    Some(ValueConversionKind::Truncate(types::I16))
-                }
-                Opcode::Istore32 | Opcode::Istore32Complex => {
-                    Some(ValueConversionKind::Truncate(types::I32))
-                }
+                Opcode::Store => None,
+                Opcode::Istore8 => Some(ValueConversionKind::Truncate(types::I8)),
+                Opcode::Istore16 => Some(ValueConversionKind::Truncate(types::I16)),
+                Opcode::Istore32 => Some(ValueConversionKind::Truncate(types::I32)),
                 _ => unreachable!(),
             };
 

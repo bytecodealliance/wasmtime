@@ -1,4 +1,4 @@
-test compile
+test compile precise-output
 target s390x
 
 function %atomic_store_i64(i64, i64) {
@@ -7,9 +7,10 @@ block0(v0: i64, v1: i64):
   return
 }
 
-; check:  stg %r2, 0(%r3)
-; nextln: bcr 14, 0
-; nextln: br %r14
+; block0:
+;   stg %r2, 0(%r3)
+;   bcr 14, 0
+;   br %r14
 
 function %atomic_store_i64_sym(i64) {
   gv0 = symbol colocated %sym
@@ -19,9 +20,10 @@ block0(v0: i64):
   return
 }
 
-; check:  stgrl %r2, %sym + 0
-; nextln: bcr 14, 0
-; nextln: br %r14
+; block0:
+;   stgrl %r2, %sym + 0
+;   bcr 14, 0
+;   br %r14
 
 function %atomic_store_imm_i64(i64) {
 block0(v0: i64):
@@ -30,9 +32,10 @@ block0(v0: i64):
   return
 }
 
-; check:  mvghi 0(%r2), 12345
-; nextln: bcr 14, 0
-; nextln: br %r14
+; block0:
+;   mvghi 0(%r2), 12345
+;   bcr 14, 0
+;   br %r14
 
 function %atomic_store_i32(i32, i64) {
 block0(v0: i32, v1: i64):
@@ -40,9 +43,10 @@ block0(v0: i32, v1: i64):
   return
 }
 
-; check:  st %r2, 0(%r3)
-; nextln: bcr 14, 0
-; nextln: br %r14
+; block0:
+;   st %r2, 0(%r3)
+;   bcr 14, 0
+;   br %r14
 
 function %atomic_store_i32_sym(i32) {
   gv0 = symbol colocated %sym
@@ -52,9 +56,10 @@ block0(v0: i32):
   return
 }
 
-; check:  strl %r2, %sym + 0
-; nextln: bcr 14, 0
-; nextln: br %r14
+; block0:
+;   strl %r2, %sym + 0
+;   bcr 14, 0
+;   br %r14
 
 function %atomic_store_imm_i32(i64) {
 block0(v0: i64):
@@ -63,9 +68,10 @@ block0(v0: i64):
   return
 }
 
-; check:  mvhi 0(%r2), 12345
-; nextln: bcr 14, 0
-; nextln: br %r14
+; block0:
+;   mvhi 0(%r2), 12345
+;   bcr 14, 0
+;   br %r14
 
 function %atomic_store_i16(i16, i64) {
 block0(v0: i16, v1: i64):
@@ -73,9 +79,10 @@ block0(v0: i16, v1: i64):
   return
 }
 
-; check:  sth %r2, 0(%r3)
-; nextln: bcr 14, 0
-; nextln: br %r14
+; block0:
+;   sth %r2, 0(%r3)
+;   bcr 14, 0
+;   br %r14
 
 function %atomic_store_i16_sym(i16) {
   gv0 = symbol colocated %sym
@@ -85,9 +92,10 @@ block0(v0: i16):
   return
 }
 
-; check:  sthrl %r2, %sym + 0
-; nextln: bcr 14, 0
-; nextln: br %r14
+; block0:
+;   sthrl %r2, %sym + 0
+;   bcr 14, 0
+;   br %r14
 
 function %atomic_store_imm_i16(i64) {
 block0(v0: i64):
@@ -96,9 +104,10 @@ block0(v0: i64):
   return
 }
 
-; check:  mvhhi 0(%r2), 12345
-; nextln: bcr 14, 0
-; nextln: br %r14
+; block0:
+;   mvhhi 0(%r2), 12345
+;   bcr 14, 0
+;   br %r14
 
 function %atomic_store_i8(i8, i64) {
 block0(v0: i8, v1: i64):
@@ -106,9 +115,10 @@ block0(v0: i8, v1: i64):
   return
 }
 
-; check:  stc %r2, 0(%r3)
-; nextln: bcr 14, 0
-; nextln: br %r14
+; block0:
+;   stc %r2, 0(%r3)
+;   bcr 14, 0
+;   br %r14
 
 function %atomic_store_imm_i8(i64) {
 block0(v0: i64):
@@ -117,7 +127,8 @@ block0(v0: i64):
   return
 }
 
-; check:  mvi 0(%r2), 123
-; nextln: bcr 14, 0
-; nextln: br %r14
+; block0:
+;   mvi 0(%r2), 123
+;   bcr 14, 0
+;   br %r14
 

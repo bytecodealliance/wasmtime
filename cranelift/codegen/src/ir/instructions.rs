@@ -304,9 +304,7 @@ impl InstructionData {
                 Some(DataValue::from(imm as i32)) // Note the switch from unsigned to signed.
             }
             &InstructionData::Load { offset, .. }
-            | &InstructionData::LoadComplex { offset, .. }
             | &InstructionData::Store { offset, .. }
-            | &InstructionData::StoreComplex { offset, .. }
             | &InstructionData::StackLoad { offset, .. }
             | &InstructionData::StackStore { offset, .. }
             | &InstructionData::TableAddr { offset, .. } => Some(DataValue::from(offset)),
@@ -388,10 +386,8 @@ impl InstructionData {
         match self {
             &InstructionData::Load { offset, .. }
             | &InstructionData::StackLoad { offset, .. }
-            | &InstructionData::LoadComplex { offset, .. }
             | &InstructionData::Store { offset, .. }
-            | &InstructionData::StackStore { offset, .. }
-            | &InstructionData::StoreComplex { offset, .. } => Some(offset.into()),
+            | &InstructionData::StackStore { offset, .. } => Some(offset.into()),
             _ => None,
         }
     }
@@ -400,10 +396,8 @@ impl InstructionData {
     pub fn memflags(&self) -> Option<MemFlags> {
         match self {
             &InstructionData::Load { flags, .. }
-            | &InstructionData::LoadComplex { flags, .. }
             | &InstructionData::LoadNoOffset { flags, .. }
             | &InstructionData::Store { flags, .. }
-            | &InstructionData::StoreComplex { flags, .. }
             | &InstructionData::StoreNoOffset { flags, .. } => Some(flags),
             _ => None,
         }

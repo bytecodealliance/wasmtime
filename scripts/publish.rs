@@ -53,11 +53,12 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "wasi-common",
     "wasi-cap-std-sync",
     "wasi-tokio",
-    // other mic wasmtime crates
+    // other misc wasmtime crates
     "wasmtime-wasi",
     "wasmtime-wasi-nn",
     "wasmtime-wasi-crypto",
     "wasmtime-wast",
+    "wasmtime-cli-flags",
     "wasmtime-cli",
 ];
 
@@ -452,9 +453,7 @@ fn verify(crates: &[Crate]) {
             .arg("--manifest-path")
             .arg(&krate.manifest)
             .env("CARGO_TARGET_DIR", "./target");
-        if krate.name == "witx"
-            || krate.name.contains("wasi-nn")
-        {
+        if krate.name == "witx" || krate.name.contains("wasi-nn") {
             cmd.arg("--no-verify");
         }
         let status = cmd.status().unwrap();

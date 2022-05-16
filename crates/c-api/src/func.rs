@@ -104,6 +104,7 @@ pub unsafe extern "C" fn wasm_func_new_with_env(
 ) -> Box<wasm_func_t> {
     let finalizer = crate::ForeignData { data, finalizer };
     create_function(store, ty, move |params, results| {
+        drop(&finalizer); // move entire finalizer into this closure
         callback(finalizer.data, params, results)
     })
 }
@@ -233,6 +234,8 @@ pub(crate) unsafe fn c_callback_to_rust_fn(
 ) -> impl Fn(Caller<'_, crate::StoreData>, &[Val], &mut [Val]) -> Result<(), Trap> {
     let foreign = crate::ForeignData { data, finalizer };
     move |mut caller, params, results| {
+        drop(&foreign); // move entire foreign into this closure
+
         // Convert `params/results` to `wasmtime_val_t`. Use the previous
         // storage in `hostcall_val_storage` to help avoid allocations all the
         // time.
@@ -295,6 +298,7 @@ pub(crate) unsafe fn c_unchecked_callback_to_rust_fn(
 ) -> impl Fn(Caller<'_, crate::StoreData>, *mut ValRaw) -> Result<(), Trap> {
     let foreign = crate::ForeignData { data, finalizer };
     move |caller, values| {
+        drop(&foreign); // move entire foreign into this closure
         let mut caller = wasmtime_caller_t { caller };
         match callback(foreign.data, &mut caller, values) {
             None => Ok(()),

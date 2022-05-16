@@ -1,4 +1,4 @@
-test compile
+test compile precise-output
 target s390x
 
 function %load_f64(i64) -> f64 {
@@ -7,8 +7,9 @@ block0(v0: i64):
   return v1
 }
 
-; check:  ld %f0, 0(%r2)
-; nextln: br %r14
+; block0:
+;   ld %f0, 0(%r2)
+;   br %r14
 
 function %load_f32(i64) -> f32 {
 block0(v0: i64):
@@ -16,8 +17,9 @@ block0(v0: i64):
   return v1
 }
 
-; check:  le %f0, 0(%r2)
-; nextln: br %r14
+; block0:
+;   le %f0, 0(%r2)
+;   br %r14
 
 function %load_f64_little(i64) -> f64 {
 block0(v0: i64):
@@ -25,9 +27,10 @@ block0(v0: i64):
   return v1
 }
 
-; check:  lrvg %r2, 0(%r2)
-; nextln: ldgr %f0, %r2
-; nextln: br %r14
+; block0:
+;   lrvg %r5, 0(%r2)
+;   ldgr %f0, %r5
+;   br %r14
 
 function %load_f32_little(i64) -> f32 {
 block0(v0: i64):
@@ -35,10 +38,11 @@ block0(v0: i64):
   return v1
 }
 
-; check:  lrv %r2, 0(%r2)
-; nextln: sllg %r2, %r2, 32
-; nextln: ldgr %f0, %r2
-; nextln: br %r14
+; block0:
+;   lrv %r5, 0(%r2)
+;   sllg %r3, %r5, 32
+;   ldgr %f0, %r3
+;   br %r14
 
 function %store_f64(f64, i64) {
 block0(v0: f64, v1: i64):
@@ -46,8 +50,9 @@ block0(v0: f64, v1: i64):
   return
 }
 
-; check:  std %f0, 0(%r2)
-; nextln: br %r14
+; block0:
+;   std %f0, 0(%r2)
+;   br %r14
 
 function %store_f32(f32, i64) {
 block0(v0: f32, v1: i64):
@@ -55,8 +60,9 @@ block0(v0: f32, v1: i64):
   return
 }
 
-; check:  ste %f0, 0(%r2)
-; nextln: br %r14
+; block0:
+;   ste %f0, 0(%r2)
+;   br %r14
 
 function %store_f64_little(f64, i64) {
 block0(v0: f64, v1: i64):
@@ -64,9 +70,10 @@ block0(v0: f64, v1: i64):
   return
 }
 
-; check:  lgdr %r3, %f0
-; nextln: strvg %r3, 0(%r2)
-; nextln: br %r14
+; block0:
+;   lgdr %r3, %f0
+;   strvg %r3, 0(%r2)
+;   br %r14
 
 function %store_f32_little(f32, i64) {
 block0(v0: f32, v1: i64):
@@ -74,8 +81,9 @@ block0(v0: f32, v1: i64):
   return
 }
 
-; check:  lgdr %r3, %f0
-; nextln: srlg %r3, %r3, 32
-; nextln: strv %r3, 0(%r2)
-; nextln: br %r14
+; block0:
+;   lgdr %r3, %f0
+;   srlg %r4, %r3, 32
+;   strv %r4, 0(%r2)
+;   br %r14
 

@@ -5,19 +5,19 @@
 
 use crate::utils::read_to_string;
 use anyhow::{Context, Result};
+use clap::Parser;
 use cranelift_reader::parse_functions;
 use std::path::{Path, PathBuf};
-use structopt::StructOpt;
 
 /// Outputs .clif file
-#[derive(StructOpt)]
+#[derive(Parser)]
 pub struct Options {
     /// Specify input file(s) to be used. Use '-' for stdin.
-    #[structopt(required(true), parse(from_os_str))]
+    #[clap(required = true)]
     files: Vec<PathBuf>,
 
     /// Enable debug output on stderr/stdout
-    #[structopt(short = "d")]
+    #[clap(short)]
     debug: bool,
 }
 

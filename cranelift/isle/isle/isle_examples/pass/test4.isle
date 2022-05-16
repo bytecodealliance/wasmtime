@@ -20,7 +20,7 @@
     (and
       a
       (Ext1 x)
-      (Ext2 =x)))
+      (Ext2 x)))
   (C #t))
 
 (type Opcode (enum A B C))

@@ -8,21 +8,16 @@ block0(v0: i128, v1: i128):
     return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 9)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   addq    %rdx, %rdi
-;   Inst 3:   adcq    %rcx, %rsi
-;   Inst 4:   movq    %rdi, %rax
-;   Inst 5:   movq    %rsi, %rdx
-;   Inst 6:   movq    %rbp, %rsp
-;   Inst 7:   popq    %rbp
-;   Inst 8:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   addq    %rdi, %rdx, %rdi
+;   adcq    %rsi, %rcx, %rsi
+;   movq    %rdi, %rax
+;   movq    %rsi, %rdx
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %f1(i128, i128) -> i128 {
 block0(v0: i128, v1: i128):
@@ -30,21 +25,16 @@ block0(v0: i128, v1: i128):
     return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 9)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   subq    %rdx, %rdi
-;   Inst 3:   sbbq    %rcx, %rsi
-;   Inst 4:   movq    %rdi, %rax
-;   Inst 5:   movq    %rsi, %rdx
-;   Inst 6:   movq    %rbp, %rsp
-;   Inst 7:   popq    %rbp
-;   Inst 8:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   subq    %rdi, %rdx, %rdi
+;   sbbq    %rsi, %rcx, %rsi
+;   movq    %rdi, %rax
+;   movq    %rsi, %rdx
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %f2(i128, i128) -> i128 {
 block0(v0: i128, v1: i128):
@@ -52,21 +42,16 @@ block0(v0: i128, v1: i128):
     return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 9)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   andq    %rdx, %rdi
-;   Inst 3:   andq    %rcx, %rsi
-;   Inst 4:   movq    %rdi, %rax
-;   Inst 5:   movq    %rsi, %rdx
-;   Inst 6:   movq    %rbp, %rsp
-;   Inst 7:   popq    %rbp
-;   Inst 8:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   andq    %rdi, %rdx, %rdi
+;   andq    %rsi, %rcx, %rsi
+;   movq    %rdi, %rax
+;   movq    %rsi, %rdx
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %f3(i128, i128) -> i128 {
 block0(v0: i128, v1: i128):
@@ -74,21 +59,16 @@ block0(v0: i128, v1: i128):
     return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 9)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   orq     %rdx, %rdi
-;   Inst 3:   orq     %rcx, %rsi
-;   Inst 4:   movq    %rdi, %rax
-;   Inst 5:   movq    %rsi, %rdx
-;   Inst 6:   movq    %rbp, %rsp
-;   Inst 7:   popq    %rbp
-;   Inst 8:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   orq     %rdi, %rdx, %rdi
+;   orq     %rsi, %rcx, %rsi
+;   movq    %rdi, %rax
+;   movq    %rsi, %rdx
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %f4(i128, i128) -> i128 {
 block0(v0: i128, v1: i128):
@@ -96,21 +76,16 @@ block0(v0: i128, v1: i128):
     return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 9)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   xorq    %rdx, %rdi
-;   Inst 3:   xorq    %rcx, %rsi
-;   Inst 4:   movq    %rdi, %rax
-;   Inst 5:   movq    %rsi, %rdx
-;   Inst 6:   movq    %rbp, %rsp
-;   Inst 7:   popq    %rbp
-;   Inst 8:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   xorq    %rdi, %rdx, %rdi
+;   xorq    %rsi, %rcx, %rsi
+;   movq    %rdi, %rax
+;   movq    %rsi, %rdx
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %f5(i128) -> i128 {
 block0(v0: i128):
@@ -118,24 +93,16 @@ block0(v0: i128):
     return v1
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 12)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   movq    %rsi, %rax
-;   Inst 3:   movq    %rdi, %rsi
-;   Inst 4:   notq    %rsi
-;   Inst 5:   movq    %rax, %rdi
-;   Inst 6:   notq    %rdi
-;   Inst 7:   movq    %rsi, %rax
-;   Inst 8:   movq    %rdi, %rdx
-;   Inst 9:   movq    %rbp, %rsp
-;   Inst 10:   popq    %rbp
-;   Inst 11:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   notq    %rdi, %rdi
+;   notq    %rsi, %rsi
+;   movq    %rdi, %rax
+;   movq    %rsi, %rdx
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %f6(i128, i128) -> i128 {
 block0(v0: i128, v1: i128):
@@ -143,26 +110,24 @@ block0(v0: i128, v1: i128):
     return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 14)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   movq    %rsi, %rax
-;   Inst 3:   movq    %rdi, %rsi
-;   Inst 4:   imulq   %rcx, %rsi
-;   Inst 5:   imulq   %rdx, %rax
-;   Inst 6:   addq    %rax, %rsi
-;   Inst 7:   movq    %rdi, %rax
-;   Inst 8:   mul     %rdx
-;   Inst 9:   addq    %rdx, %rsi
-;   Inst 10:   movq    %rsi, %rdx
-;   Inst 11:   movq    %rbp, %rsp
-;   Inst 12:   popq    %rbp
-;   Inst 13:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %r11
+;   imulq   %r11, %rcx, %r11
+;   movq    %rdi, %rax
+;   imulq   %rsi, %rdx, %rsi
+;   movq    %r11, %rdi
+;   addq    %rdi, %rsi, %rdi
+;   movq    %rdi, %r11
+;   mul     %rax, %rdx, %rax, %rdx
+;   movq    %r11, %r8
+;   addq    %r8, %rdx, %r8
+;   movq    %r8, %r11
+;   movq    %r11, %rdx
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %f7(i64, i64) -> i128 {
 block0(v0: i64, v1: i64):
@@ -170,19 +135,14 @@ block0(v0: i64, v1: i64):
     return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 7)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   movq    %rdi, %rax
-;   Inst 3:   movq    %rsi, %rdx
-;   Inst 4:   movq    %rbp, %rsp
-;   Inst 5:   popq    %rbp
-;   Inst 6:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %rax
+;   movq    %rsi, %rdx
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %f8(i128) -> i64, i64 {
 block0(v0: i128):
@@ -190,19 +150,14 @@ block0(v0: i128):
     return v1, v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 7)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   movq    %rdi, %rax
-;   Inst 3:   movq    %rsi, %rdx
-;   Inst 4:   movq    %rbp, %rsp
-;   Inst 5:   popq    %rbp
-;   Inst 6:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %rax
+;   movq    %rsi, %rdx
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %f9(i128, i128) -> b1 {
 block0(v0: i128, v1: i128):
@@ -228,126 +183,123 @@ block0(v0: i128, v1: i128):
     return v20
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 114)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   subq    $64, %rsp
-;   Inst 3:   movq    %r12, 16(%rsp)
-;   Inst 4:   movq    %r13, 24(%rsp)
-;   Inst 5:   movq    %r14, 32(%rsp)
-;   Inst 6:   movq    %rbx, 40(%rsp)
-;   Inst 7:   movq    %r15, 48(%rsp)
-;   Inst 8:   cmpq    %rdx, %rdi
-;   Inst 9:   setz    %al
-;   Inst 10:   cmpq    %rcx, %rsi
-;   Inst 11:   setz    %r8b
-;   Inst 12:   andq    %r8, %rax
-;   Inst 13:   testq   $1, %rax
-;   Inst 14:   setnz   %al
-;   Inst 15:   movq    %rax, rsp(0 + virtual offset)
-;   Inst 16:   cmpq    %rdx, %rdi
-;   Inst 17:   setnz   %al
-;   Inst 18:   cmpq    %rcx, %rsi
-;   Inst 19:   setnz   %r8b
-;   Inst 20:   orq     %r8, %rax
-;   Inst 21:   testq   $1, %rax
-;   Inst 22:   setnz   %r8b
-;   Inst 23:   cmpq    %rcx, %rsi
-;   Inst 24:   setl    %r9b
-;   Inst 25:   setz    %al
-;   Inst 26:   cmpq    %rdx, %rdi
-;   Inst 27:   setb    %r10b
-;   Inst 28:   andq    %rax, %r10
-;   Inst 29:   orq     %r9, %r10
-;   Inst 30:   andq    $1, %r10
-;   Inst 31:   setnz   %r9b
-;   Inst 32:   cmpq    %rcx, %rsi
-;   Inst 33:   setl    %r10b
-;   Inst 34:   setz    %al
-;   Inst 35:   cmpq    %rdx, %rdi
-;   Inst 36:   setbe   %r11b
-;   Inst 37:   andq    %rax, %r11
-;   Inst 38:   orq     %r10, %r11
-;   Inst 39:   andq    $1, %r11
-;   Inst 40:   setnz   %r10b
-;   Inst 41:   cmpq    %rcx, %rsi
-;   Inst 42:   setnle  %r11b
-;   Inst 43:   setz    %al
-;   Inst 44:   cmpq    %rdx, %rdi
-;   Inst 45:   setnbe  %r12b
-;   Inst 46:   andq    %rax, %r12
-;   Inst 47:   orq     %r11, %r12
-;   Inst 48:   andq    $1, %r12
-;   Inst 49:   setnz   %r11b
-;   Inst 50:   cmpq    %rcx, %rsi
-;   Inst 51:   setnle  %r12b
-;   Inst 52:   setz    %al
-;   Inst 53:   cmpq    %rdx, %rdi
-;   Inst 54:   setnb   %r13b
-;   Inst 55:   andq    %rax, %r13
-;   Inst 56:   orq     %r12, %r13
-;   Inst 57:   andq    $1, %r13
-;   Inst 58:   setnz   %r12b
-;   Inst 59:   cmpq    %rcx, %rsi
-;   Inst 60:   setb    %r13b
-;   Inst 61:   setz    %al
-;   Inst 62:   cmpq    %rdx, %rdi
-;   Inst 63:   setb    %r14b
-;   Inst 64:   andq    %rax, %r14
-;   Inst 65:   orq     %r13, %r14
-;   Inst 66:   andq    $1, %r14
-;   Inst 67:   setnz   %r13b
-;   Inst 68:   cmpq    %rcx, %rsi
-;   Inst 69:   setb    %r14b
-;   Inst 70:   setz    %al
-;   Inst 71:   cmpq    %rdx, %rdi
-;   Inst 72:   setbe   %bl
-;   Inst 73:   andq    %rax, %rbx
-;   Inst 74:   orq     %r14, %rbx
-;   Inst 75:   andq    $1, %rbx
-;   Inst 76:   setnz   %r14b
-;   Inst 77:   cmpq    %rcx, %rsi
-;   Inst 78:   setnbe  %bl
-;   Inst 79:   setz    %r15b
-;   Inst 80:   cmpq    %rdx, %rdi
-;   Inst 81:   setnbe  %al
-;   Inst 82:   andq    %r15, %rax
-;   Inst 83:   orq     %rbx, %rax
-;   Inst 84:   andq    $1, %rax
-;   Inst 85:   setnz   %bl
-;   Inst 86:   cmpq    %rcx, %rsi
-;   Inst 87:   setnbe  %sil
-;   Inst 88:   setz    %cl
-;   Inst 89:   cmpq    %rdx, %rdi
-;   Inst 90:   setnb   %dil
-;   Inst 91:   andq    %rcx, %rdi
-;   Inst 92:   orq     %rsi, %rdi
-;   Inst 93:   andq    $1, %rdi
-;   Inst 94:   setnz   %sil
-;   Inst 95:   movq    rsp(0 + virtual offset), %rax
-;   Inst 96:   andl    %r8d, %eax
-;   Inst 97:   andl    %r10d, %r9d
-;   Inst 98:   andl    %r12d, %r11d
-;   Inst 99:   andl    %r14d, %r13d
-;   Inst 100:   andl    %esi, %ebx
-;   Inst 101:   andl    %r9d, %eax
-;   Inst 102:   andl    %r13d, %r11d
-;   Inst 103:   andl    %r11d, %eax
-;   Inst 104:   andl    %ebx, %eax
-;   Inst 105:   movq    16(%rsp), %r12
-;   Inst 106:   movq    24(%rsp), %r13
-;   Inst 107:   movq    32(%rsp), %r14
-;   Inst 108:   movq    40(%rsp), %rbx
-;   Inst 109:   movq    48(%rsp), %r15
-;   Inst 110:   addq    $64, %rsp
-;   Inst 111:   movq    %rbp, %rsp
-;   Inst 112:   popq    %rbp
-;   Inst 113:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+;   subq    %rsp, $64, %rsp
+;   movq    %rbx, 16(%rsp)
+;   movq    %r12, 24(%rsp)
+;   movq    %r13, 32(%rsp)
+;   movq    %r14, 40(%rsp)
+;   movq    %r15, 48(%rsp)
+; block0:
+;   cmpq    %rdx, %rdi
+;   setz    %al
+;   cmpq    %rcx, %rsi
+;   setz    %r8b
+;   andq    %rax, %r8, %rax
+;   testq   $1, %rax
+;   setnz   %al
+;   cmpq    %rdx, %rdi
+;   setnz   %r8b
+;   cmpq    %rcx, %rsi
+;   setnz   %r9b
+;   orq     %r8, %r9, %r8
+;   testq   $1, %r8
+;   setnz   %r8b
+;   movq    %r8, rsp(8 + virtual offset)
+;   cmpq    %rcx, %rsi
+;   setl    %r9b
+;   setz    %r15b
+;   cmpq    %rdx, %rdi
+;   setb    %r11b
+;   andq    %r11, %r15, %r11
+;   orq     %r11, %r9, %r11
+;   andq    %r11, $1, %r11
+;   setnz   %r9b
+;   cmpq    %rcx, %rsi
+;   setl    %r11b
+;   setz    %bl
+;   cmpq    %rdx, %rdi
+;   setbe   %r14b
+;   andq    %r14, %rbx, %r14
+;   orq     %r14, %r11, %r14
+;   andq    %r14, $1, %r14
+;   setnz   %r8b
+;   movq    %r8, rsp(0 + virtual offset)
+;   cmpq    %rcx, %rsi
+;   setnle  %r15b
+;   setz    %r12b
+;   cmpq    %rdx, %rdi
+;   setnbe  %bl
+;   andq    %rbx, %r12, %rbx
+;   orq     %rbx, %r15, %rbx
+;   andq    %rbx, $1, %rbx
+;   setnz   %r15b
+;   cmpq    %rcx, %rsi
+;   setnle  %bl
+;   setz    %r13b
+;   cmpq    %rdx, %rdi
+;   setnb   %r12b
+;   andq    %r12, %r13, %r12
+;   orq     %r12, %rbx, %r12
+;   andq    %r12, $1, %r12
+;   setnz   %bl
+;   cmpq    %rcx, %rsi
+;   setb    %r12b
+;   setz    %r14b
+;   cmpq    %rdx, %rdi
+;   setb    %r13b
+;   andq    %r13, %r14, %r13
+;   orq     %r13, %r12, %r13
+;   andq    %r13, $1, %r13
+;   setnz   %r12b
+;   cmpq    %rcx, %rsi
+;   setb    %r13b
+;   setz    %r8b
+;   cmpq    %rdx, %rdi
+;   setbe   %r14b
+;   andq    %r14, %r8, %r14
+;   orq     %r14, %r13, %r14
+;   andq    %r14, $1, %r14
+;   setnz   %r13b
+;   cmpq    %rcx, %rsi
+;   setnbe  %r14b
+;   setz    %r11b
+;   cmpq    %rdx, %rdi
+;   setnbe  %r8b
+;   andq    %r8, %r11, %r8
+;   orq     %r8, %r14, %r8
+;   andq    %r8, $1, %r8
+;   setnz   %r14b
+;   cmpq    %rcx, %rsi
+;   setnbe  %sil
+;   setz    %cl
+;   cmpq    %rdx, %rdi
+;   setnb   %r8b
+;   andq    %r8, %rcx, %r8
+;   orq     %r8, %rsi, %r8
+;   andq    %r8, $1, %r8
+;   setnz   %dl
+;   movq    rsp(8 + virtual offset), %r11
+;   andl    %eax, %r11d, %eax
+;   movq    rsp(0 + virtual offset), %rdi
+;   andl    %r9d, %edi, %r9d
+;   andl    %r15d, %ebx, %r15d
+;   andl    %r12d, %r13d, %r12d
+;   andl    %r14d, %edx, %r14d
+;   andl    %eax, %r9d, %eax
+;   andl    %r15d, %r12d, %r15d
+;   andl    %eax, %r15d, %eax
+;   andl    %eax, %r14d, %eax
+;   movq    16(%rsp), %rbx
+;   movq    24(%rsp), %r12
+;   movq    32(%rsp), %r13
+;   movq    40(%rsp), %r14
+;   movq    48(%rsp), %r15
+;   addq    %rsp, $64, %rsp
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %f10(i128) -> i32 {
 block0(v0: i128):
@@ -363,36 +315,25 @@ block2:
     return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (successor: Block 1)
-;   (successor: Block 2)
-;   (instruction range: 0 .. 8)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   cmpq    $0, %rdi
-;   Inst 3:   setz    %dil
-;   Inst 4:   cmpq    $0, %rsi
-;   Inst 5:   setz    %sil
-;   Inst 6:   andb    %dil, %sil
-;   Inst 7:   jnz     label1; j label2
-; Block 1:
-;   (original IR block: block1)
-;   (instruction range: 8 .. 12)
-;   Inst 8:   movl    $1, %eax
-;   Inst 9:   movq    %rbp, %rsp
-;   Inst 10:   popq    %rbp
-;   Inst 11:   ret
-; Block 2:
-;   (original IR block: block2)
-;   (instruction range: 12 .. 16)
-;   Inst 12:   movl    $2, %eax
-;   Inst 13:   movq    %rbp, %rsp
-;   Inst 14:   popq    %rbp
-;   Inst 15:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   cmpq    $0, %rdi
+;   setz    %dil
+;   cmpq    $0, %rsi
+;   setz    %cl
+;   andb    %cl, %dil, %cl
+;   jnz     label1; j label2
+; block1:
+;   movl    $1, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; block2:
+;   movl    $2, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %f11(i128) -> i32 {
 block0(v0: i128):
@@ -408,36 +349,25 @@ block2:
     return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (successor: Block 1)
-;   (successor: Block 2)
-;   (instruction range: 0 .. 8)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   cmpq    $0, %rdi
-;   Inst 3:   setnz   %dil
-;   Inst 4:   cmpq    $0, %rsi
-;   Inst 5:   setnz   %sil
-;   Inst 6:   orb     %dil, %sil
-;   Inst 7:   jnz     label1; j label2
-; Block 1:
-;   (original IR block: block1)
-;   (instruction range: 8 .. 12)
-;   Inst 8:   movl    $1, %eax
-;   Inst 9:   movq    %rbp, %rsp
-;   Inst 10:   popq    %rbp
-;   Inst 11:   ret
-; Block 2:
-;   (original IR block: block2)
-;   (instruction range: 12 .. 16)
-;   Inst 12:   movl    $2, %eax
-;   Inst 13:   movq    %rbp, %rsp
-;   Inst 14:   popq    %rbp
-;   Inst 15:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   cmpq    $0, %rdi
+;   setnz   %dil
+;   cmpq    $0, %rsi
+;   setnz   %cl
+;   orb     %cl, %dil, %cl
+;   jnz     label1; j label2
+; block1:
+;   movl    $1, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; block2:
+;   movl    $2, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %f12(i64) -> i128 {
 block0(v0: i64):
@@ -445,21 +375,14 @@ block0(v0: i64):
     return v1
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 9)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   movq    %rdi, %rsi
-;   Inst 3:   xorq    %rdi, %rdi
-;   Inst 4:   movq    %rsi, %rax
-;   Inst 5:   movq    %rdi, %rdx
-;   Inst 6:   movq    %rbp, %rsp
-;   Inst 7:   popq    %rbp
-;   Inst 8:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   xorq    %rdx, %rdx, %rdx
+;   movq    %rdi, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %f13(i64) -> i128 {
 block0(v0: i64):
@@ -467,22 +390,15 @@ block0(v0: i64):
     return v1
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 10)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   movq    %rdi, %rsi
-;   Inst 3:   movq    %rsi, %rdi
-;   Inst 4:   sarq    $63, %rdi
-;   Inst 5:   movq    %rsi, %rax
-;   Inst 6:   movq    %rdi, %rdx
-;   Inst 7:   movq    %rbp, %rsp
-;   Inst 8:   popq    %rbp
-;   Inst 9:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %rdx
+;   sarq    $63, %rdx, %rdx
+;   movq    %rdi, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %f14(i8) -> i128 {
 block0(v0: i8):
@@ -490,22 +406,15 @@ block0(v0: i8):
     return v1
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 10)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   movsbq  %dil, %rsi
-;   Inst 3:   movq    %rsi, %rdi
-;   Inst 4:   sarq    $63, %rdi
-;   Inst 5:   movq    %rsi, %rax
-;   Inst 6:   movq    %rdi, %rdx
-;   Inst 7:   movq    %rbp, %rsp
-;   Inst 8:   popq    %rbp
-;   Inst 9:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movsbq  %dil, %rax
+;   movq    %rax, %rdx
+;   sarq    $63, %rdx, %rdx
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %f15(i8) -> i128 {
 block0(v0: i8):
@@ -513,21 +422,14 @@ block0(v0: i8):
     return v1
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 9)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   movzbq  %dil, %rsi
-;   Inst 3:   xorq    %rdi, %rdi
-;   Inst 4:   movq    %rsi, %rax
-;   Inst 5:   movq    %rdi, %rdx
-;   Inst 6:   movq    %rbp, %rsp
-;   Inst 7:   popq    %rbp
-;   Inst 8:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movzbq  %dil, %rax
+;   xorq    %rdx, %rdx, %rdx
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %f16(i128) -> i64 {
 block0(v0: i128):
@@ -535,18 +437,13 @@ block0(v0: i128):
     return v1
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 6)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   movq    %rdi, %rax
-;   Inst 3:   movq    %rbp, %rsp
-;   Inst 4:   popq    %rbp
-;   Inst 5:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %f17(i128) -> i8 {
 block0(v0: i128):
@@ -554,18 +451,13 @@ block0(v0: i128):
     return v1
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 6)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   movq    %rdi, %rax
-;   Inst 3:   movq    %rbp, %rsp
-;   Inst 4:   popq    %rbp
-;   Inst 5:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %f18(b1) -> i128 {
 block0(v0: b1):
@@ -573,22 +465,15 @@ block0(v0: b1):
     return v1
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 10)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   movq    %rdi, %rsi
-;   Inst 3:   andq    $1, %rsi
-;   Inst 4:   xorq    %rdi, %rdi
-;   Inst 5:   movq    %rsi, %rax
-;   Inst 6:   movq    %rdi, %rdx
-;   Inst 7:   movq    %rbp, %rsp
-;   Inst 8:   popq    %rbp
-;   Inst 9:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   andq    %rdi, $1, %rdi
+;   xorq    %rdx, %rdx, %rdx
+;   movq    %rdi, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %f19(i128) -> i128 {
 block0(v0: i128):
@@ -596,60 +481,52 @@ block0(v0: i128):
     return v1
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 48)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   movq    %rdi, %rax
-;   Inst 3:   movq    %rax, %rcx
-;   Inst 4:   shrq    $1, %rcx
-;   Inst 5:   movabsq $8608480567731124087, %rdi
-;   Inst 6:   andq    %rdi, %rcx
-;   Inst 7:   subq    %rcx, %rax
-;   Inst 8:   shrq    $1, %rcx
-;   Inst 9:   andq    %rdi, %rcx
-;   Inst 10:   subq    %rcx, %rax
-;   Inst 11:   shrq    $1, %rcx
-;   Inst 12:   andq    %rdi, %rcx
-;   Inst 13:   subq    %rcx, %rax
-;   Inst 14:   movq    %rax, %rdi
-;   Inst 15:   shrq    $4, %rdi
-;   Inst 16:   addq    %rax, %rdi
-;   Inst 17:   movabsq $1085102592571150095, %rax
-;   Inst 18:   andq    %rax, %rdi
-;   Inst 19:   movabsq $72340172838076673, %rax
-;   Inst 20:   imulq   %rax, %rdi
-;   Inst 21:   shrq    $56, %rdi
-;   Inst 22:   movq    %rsi, %rcx
-;   Inst 23:   shrq    $1, %rcx
-;   Inst 24:   movabsq $8608480567731124087, %rax
-;   Inst 25:   andq    %rax, %rcx
-;   Inst 26:   subq    %rcx, %rsi
-;   Inst 27:   shrq    $1, %rcx
-;   Inst 28:   andq    %rax, %rcx
-;   Inst 29:   subq    %rcx, %rsi
-;   Inst 30:   shrq    $1, %rcx
-;   Inst 31:   andq    %rax, %rcx
-;   Inst 32:   subq    %rcx, %rsi
-;   Inst 33:   movq    %rsi, %rax
-;   Inst 34:   shrq    $4, %rax
-;   Inst 35:   addq    %rsi, %rax
-;   Inst 36:   movabsq $1085102592571150095, %rsi
-;   Inst 37:   andq    %rsi, %rax
-;   Inst 38:   movabsq $72340172838076673, %rsi
-;   Inst 39:   imulq   %rsi, %rax
-;   Inst 40:   shrq    $56, %rax
-;   Inst 41:   addq    %rax, %rdi
-;   Inst 42:   xorq    %rsi, %rsi
-;   Inst 43:   movq    %rdi, %rax
-;   Inst 44:   movq    %rsi, %rdx
-;   Inst 45:   movq    %rbp, %rsp
-;   Inst 46:   popq    %rbp
-;   Inst 47:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %r9
+;   shrq    $1, %r9, %r9
+;   movabsq $8608480567731124087, %rax
+;   andq    %r9, %rax, %r9
+;   subq    %rdi, %r9, %rdi
+;   shrq    $1, %r9, %r9
+;   andq    %r9, %rax, %r9
+;   subq    %rdi, %r9, %rdi
+;   shrq    $1, %r9, %r9
+;   andq    %r9, %rax, %r9
+;   subq    %rdi, %r9, %rdi
+;   movq    %rdi, %rax
+;   shrq    $4, %rax, %rax
+;   addq    %rax, %rdi, %rax
+;   movabsq $1085102592571150095, %r9
+;   andq    %rax, %r9, %rax
+;   movabsq $72340172838076673, %rcx
+;   imulq   %rax, %rcx, %rax
+;   shrq    $56, %rax, %rax
+;   movq    %rsi, %rdi
+;   shrq    $1, %rdi, %rdi
+;   movabsq $8608480567731124087, %rcx
+;   andq    %rdi, %rcx, %rdi
+;   subq    %rsi, %rdi, %rsi
+;   shrq    $1, %rdi, %rdi
+;   andq    %rdi, %rcx, %rdi
+;   subq    %rsi, %rdi, %rsi
+;   shrq    $1, %rdi, %rdi
+;   andq    %rdi, %rcx, %rdi
+;   subq    %rsi, %rdi, %rsi
+;   movq    %rsi, %rcx
+;   shrq    $4, %rcx, %rcx
+;   addq    %rcx, %rsi, %rcx
+;   movabsq $1085102592571150095, %rsi
+;   andq    %rcx, %rsi, %rcx
+;   movabsq $72340172838076673, %rdx
+;   imulq   %rcx, %rdx, %rcx
+;   shrq    $56, %rcx, %rcx
+;   addq    %rax, %rcx, %rax
+;   xorq    %rdx, %rdx, %rdx
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %f20(i128) -> i128 {
 block0(v0: i128):
@@ -657,102 +534,94 @@ block0(v0: i128):
     return v1
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 90)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   movq    %rsi, %rcx
-;   Inst 3:   movabsq $6148914691236517205, %rsi
-;   Inst 4:   movq    %rcx, %rax
-;   Inst 5:   andq    %rsi, %rax
-;   Inst 6:   shrq    $1, %rcx
-;   Inst 7:   andq    %rsi, %rcx
-;   Inst 8:   shlq    $1, %rax
-;   Inst 9:   orq     %rcx, %rax
-;   Inst 10:   movabsq $3689348814741910323, %rsi
-;   Inst 11:   movq    %rax, %rcx
-;   Inst 12:   andq    %rsi, %rcx
-;   Inst 13:   shrq    $2, %rax
-;   Inst 14:   andq    %rsi, %rax
-;   Inst 15:   shlq    $2, %rcx
-;   Inst 16:   orq     %rax, %rcx
-;   Inst 17:   movabsq $1085102592571150095, %rsi
-;   Inst 18:   movq    %rcx, %rax
-;   Inst 19:   andq    %rsi, %rax
-;   Inst 20:   shrq    $4, %rcx
-;   Inst 21:   andq    %rsi, %rcx
-;   Inst 22:   shlq    $4, %rax
-;   Inst 23:   orq     %rcx, %rax
-;   Inst 24:   movabsq $71777214294589695, %rsi
-;   Inst 25:   movq    %rax, %rcx
-;   Inst 26:   andq    %rsi, %rcx
-;   Inst 27:   shrq    $8, %rax
-;   Inst 28:   andq    %rsi, %rax
-;   Inst 29:   shlq    $8, %rcx
-;   Inst 30:   orq     %rax, %rcx
-;   Inst 31:   movabsq $281470681808895, %rsi
-;   Inst 32:   movq    %rcx, %rax
-;   Inst 33:   andq    %rsi, %rax
-;   Inst 34:   shrq    $16, %rcx
-;   Inst 35:   andq    %rsi, %rcx
-;   Inst 36:   shlq    $16, %rax
-;   Inst 37:   orq     %rcx, %rax
-;   Inst 38:   movabsq $4294967295, %rcx
-;   Inst 39:   movq    %rax, %rsi
-;   Inst 40:   andq    %rcx, %rsi
-;   Inst 41:   shrq    $32, %rax
-;   Inst 42:   shlq    $32, %rsi
-;   Inst 43:   orq     %rax, %rsi
-;   Inst 44:   movabsq $6148914691236517205, %rax
-;   Inst 45:   movq    %rdi, %rcx
-;   Inst 46:   andq    %rax, %rcx
-;   Inst 47:   shrq    $1, %rdi
-;   Inst 48:   andq    %rax, %rdi
-;   Inst 49:   shlq    $1, %rcx
-;   Inst 50:   orq     %rdi, %rcx
-;   Inst 51:   movabsq $3689348814741910323, %rdi
-;   Inst 52:   movq    %rcx, %rax
-;   Inst 53:   andq    %rdi, %rax
-;   Inst 54:   shrq    $2, %rcx
-;   Inst 55:   andq    %rdi, %rcx
-;   Inst 56:   shlq    $2, %rax
-;   Inst 57:   orq     %rcx, %rax
-;   Inst 58:   movabsq $1085102592571150095, %rdi
-;   Inst 59:   movq    %rax, %rcx
-;   Inst 60:   andq    %rdi, %rcx
-;   Inst 61:   shrq    $4, %rax
-;   Inst 62:   andq    %rdi, %rax
-;   Inst 63:   shlq    $4, %rcx
-;   Inst 64:   orq     %rax, %rcx
-;   Inst 65:   movabsq $71777214294589695, %rdi
-;   Inst 66:   movq    %rcx, %rax
-;   Inst 67:   andq    %rdi, %rax
-;   Inst 68:   shrq    $8, %rcx
-;   Inst 69:   andq    %rdi, %rcx
-;   Inst 70:   shlq    $8, %rax
-;   Inst 71:   orq     %rcx, %rax
-;   Inst 72:   movabsq $281470681808895, %rdi
-;   Inst 73:   movq    %rax, %rcx
-;   Inst 74:   andq    %rdi, %rcx
-;   Inst 75:   shrq    $16, %rax
-;   Inst 76:   andq    %rdi, %rax
-;   Inst 77:   shlq    $16, %rcx
-;   Inst 78:   orq     %rax, %rcx
-;   Inst 79:   movabsq $4294967295, %rax
-;   Inst 80:   movq    %rcx, %rdi
-;   Inst 81:   andq    %rax, %rdi
-;   Inst 82:   shrq    $32, %rcx
-;   Inst 83:   shlq    $32, %rdi
-;   Inst 84:   orq     %rcx, %rdi
-;   Inst 85:   movq    %rsi, %rax
-;   Inst 86:   movq    %rdi, %rdx
-;   Inst 87:   movq    %rbp, %rsp
-;   Inst 88:   popq    %rbp
-;   Inst 89:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movabsq $6148914691236517205, %r9
+;   movq    %rsi, %rax
+;   andq    %rax, %r9, %rax
+;   shrq    $1, %rsi, %rsi
+;   andq    %rsi, %r9, %rsi
+;   shlq    $1, %rax, %rax
+;   orq     %rax, %rsi, %rax
+;   movabsq $3689348814741910323, %rcx
+;   movq    %rax, %rdx
+;   andq    %rdx, %rcx, %rdx
+;   shrq    $2, %rax, %rax
+;   andq    %rax, %rcx, %rax
+;   shlq    $2, %rdx, %rdx
+;   orq     %rdx, %rax, %rdx
+;   movabsq $1085102592571150095, %r9
+;   movq    %rdx, %rsi
+;   andq    %rsi, %r9, %rsi
+;   shrq    $4, %rdx, %rdx
+;   andq    %rdx, %r9, %rdx
+;   shlq    $4, %rsi, %rsi
+;   orq     %rsi, %rdx, %rsi
+;   movabsq $71777214294589695, %rax
+;   movq    %rsi, %rdx
+;   andq    %rdx, %rax, %rdx
+;   shrq    $8, %rsi, %rsi
+;   andq    %rsi, %rax, %rsi
+;   shlq    $8, %rdx, %rdx
+;   orq     %rdx, %rsi, %rdx
+;   movabsq $281470681808895, %r9
+;   movq    %rdx, %r11
+;   andq    %r11, %r9, %r11
+;   shrq    $16, %rdx, %rdx
+;   andq    %rdx, %r9, %rdx
+;   shlq    $16, %r11, %r11
+;   orq     %r11, %rdx, %r11
+;   movabsq $4294967295, %rcx
+;   movq    %r11, %rax
+;   andq    %rax, %rcx, %rax
+;   shrq    $32, %r11, %r11
+;   shlq    $32, %rax, %rax
+;   orq     %rax, %r11, %rax
+;   movabsq $6148914691236517205, %rdx
+;   movq    %rdi, %r9
+;   andq    %r9, %rdx, %r9
+;   shrq    $1, %rdi, %rdi
+;   andq    %rdi, %rdx, %rdi
+;   shlq    $1, %r9, %r9
+;   orq     %r9, %rdi, %r9
+;   movabsq $3689348814741910323, %rsi
+;   movq    %r9, %rcx
+;   andq    %rcx, %rsi, %rcx
+;   shrq    $2, %r9, %r9
+;   andq    %r9, %rsi, %r9
+;   shlq    $2, %rcx, %rcx
+;   orq     %rcx, %r9, %rcx
+;   movabsq $1085102592571150095, %rdx
+;   movq    %rcx, %r9
+;   andq    %r9, %rdx, %r9
+;   shrq    $4, %rcx, %rcx
+;   andq    %rcx, %rdx, %rcx
+;   shlq    $4, %r9, %r9
+;   orq     %r9, %rcx, %r9
+;   movabsq $71777214294589695, %rsi
+;   movq    %r9, %rcx
+;   andq    %rcx, %rsi, %rcx
+;   shrq    $8, %r9, %r9
+;   andq    %r9, %rsi, %r9
+;   shlq    $8, %rcx, %rcx
+;   orq     %rcx, %r9, %rcx
+;   movabsq $281470681808895, %rdx
+;   movq    %rcx, %r8
+;   andq    %r8, %rdx, %r8
+;   shrq    $16, %rcx, %rcx
+;   andq    %rcx, %rdx, %rcx
+;   shlq    $16, %r8, %r8
+;   orq     %r8, %rcx, %r8
+;   movabsq $4294967295, %rsi
+;   movq    %r8, %rdx
+;   andq    %rdx, %rsi, %rdx
+;   shrq    $32, %r8, %r8
+;   shlq    $32, %rdx, %rdx
+;   orq     %rdx, %r8, %rdx
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %f21(i128, i64) {
 block0(v0: i128, v1: i64):
@@ -760,19 +629,14 @@ block0(v0: i128, v1: i64):
     return
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 7)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   movq    %rdi, 0(%rdx)
-;   Inst 3:   movq    %rsi, 8(%rdx)
-;   Inst 4:   movq    %rbp, %rsp
-;   Inst 5:   popq    %rbp
-;   Inst 6:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, 0(%rdx)
+;   movq    %rsi, 8(%rdx)
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %f22(i64) -> i128 {
 block0(v0: i64):
@@ -780,21 +644,14 @@ block0(v0: i64):
     return v1
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 9)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   movq    0(%rdi), %rsi
-;   Inst 3:   movq    8(%rdi), %rdi
-;   Inst 4:   movq    %rsi, %rax
-;   Inst 5:   movq    %rdi, %rdx
-;   Inst 6:   movq    %rbp, %rsp
-;   Inst 7:   popq    %rbp
-;   Inst 8:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    0(%rdi), %rax
+;   movq    8(%rdi), %rdx
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %f23(i128, b1) -> i128 {
 block0(v0: i128, v1: b1):
@@ -813,46 +670,31 @@ block2(v6: i128):
     return v8
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (successor: Block 1)
-;   (successor: Block 2)
-;   (instruction range: 0 .. 4)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   testb   $1, %dl
-;   Inst 3:   jnz     label1; j label2
-; Block 1:
-;   (original IR block: block1)
-;   (instruction range: 4 .. 15)
-;   Inst 4:   xorq    %rdi, %rdi
-;   Inst 5:   xorq    %rsi, %rsi
-;   Inst 6:   movl    $1, %ecx
-;   Inst 7:   xorq    %rax, %rax
-;   Inst 8:   addq    %rcx, %rdi
-;   Inst 9:   adcq    %rax, %rsi
-;   Inst 10:   movq    %rdi, %rax
-;   Inst 11:   movq    %rsi, %rdx
-;   Inst 12:   movq    %rbp, %rsp
-;   Inst 13:   popq    %rbp
-;   Inst 14:   ret
-; Block 2:
-;   (original IR block: block2)
-;   (instruction range: 15 .. 26)
-;   Inst 15:   xorq    %rdi, %rdi
-;   Inst 16:   xorq    %rsi, %rsi
-;   Inst 17:   movl    $2, %ecx
-;   Inst 18:   xorq    %rax, %rax
-;   Inst 19:   addq    %rcx, %rdi
-;   Inst 20:   adcq    %rax, %rsi
-;   Inst 21:   movq    %rdi, %rax
-;   Inst 22:   movq    %rsi, %rdx
-;   Inst 23:   movq    %rbp, %rsp
-;   Inst 24:   popq    %rbp
-;   Inst 25:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   testb   $1, %dl
+;   jnz     label1; j label2
+; block1:
+;   xorq    %rax, %rax, %rax
+;   xorq    %rdx, %rdx, %rdx
+;   movl    $1, %r8d
+;   xorq    %r9, %r9, %r9
+;   addq    %rax, %r8, %rax
+;   adcq    %rdx, %r9, %rdx
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; block2:
+;   xorq    %rax, %rax, %rax
+;   xorq    %rdx, %rdx, %rdx
+;   movl    $2, %edi
+;   xorq    %rcx, %rcx, %rcx
+;   addq    %rax, %rdi, %rax
+;   adcq    %rdx, %rcx, %rdx
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %f24(i128, i128, i64, i128, i128, i128) -> i128 {
 
@@ -866,43 +708,38 @@ block0(v0: i128, v1: i128, v2: i64, v3: i128, v4: i128, v5: i128):
     return v11
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 31)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   subq    $16, %rsp
-;   Inst 3:   movq    %r12, 0(%rsp)
-;   Inst 4:   movq    %r13, 8(%rsp)
-;   Inst 5:   movq    %r9, %r11
-;   Inst 6:   movq    16(%rbp), %r13
-;   Inst 7:   movq    24(%rbp), %r12
-;   Inst 8:   movq    32(%rbp), %r10
-;   Inst 9:   movq    40(%rbp), %r9
-;   Inst 10:   movq    48(%rbp), %rax
-;   Inst 11:   addq    %rdx, %rdi
-;   Inst 12:   movq    %rsi, %rdx
-;   Inst 13:   adcq    %rcx, %rdx
-;   Inst 14:   xorq    %rsi, %rsi
-;   Inst 15:   addq    %r8, %r11
-;   Inst 16:   adcq    %rsi, %r13
-;   Inst 17:   addq    %r9, %r12
-;   Inst 18:   adcq    %rax, %r10
-;   Inst 19:   addq    %r11, %rdi
-;   Inst 20:   adcq    %r13, %rdx
-;   Inst 21:   addq    %rdi, %r12
-;   Inst 22:   adcq    %rdx, %r10
-;   Inst 23:   movq    %r12, %rax
-;   Inst 24:   movq    %r10, %rdx
-;   Inst 25:   movq    0(%rsp), %r12
-;   Inst 26:   movq    8(%rsp), %r13
-;   Inst 27:   addq    $16, %rsp
-;   Inst 28:   movq    %rbp, %rsp
-;   Inst 29:   popq    %rbp
-;   Inst 30:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+;   subq    %rsp, $64, %rsp
+;   movq    %rbx, 32(%rsp)
+;   movq    %r13, 40(%rsp)
+;   movq    %r15, 48(%rsp)
+; block0:
+;   movq    %rdx, rsp(0 + virtual offset)
+;   movq    16(%rbp), %r11
+;   movq    24(%rbp), %rax
+;   movq    32(%rbp), %rdx
+;   movq    40(%rbp), %r15
+;   movq    48(%rbp), %rbx
+;   movq    rsp(0 + virtual offset), %r13
+;   addq    %rdi, %r13, %rdi
+;   adcq    %rsi, %rcx, %rsi
+;   xorq    %rcx, %rcx, %rcx
+;   addq    %r9, %r8, %r9
+;   adcq    %r11, %rcx, %r11
+;   addq    %rax, %r15, %rax
+;   adcq    %rdx, %rbx, %rdx
+;   addq    %rdi, %r9, %rdi
+;   adcq    %rsi, %r11, %rsi
+;   addq    %rax, %rdi, %rax
+;   adcq    %rdx, %rsi, %rdx
+;   movq    32(%rsp), %rbx
+;   movq    40(%rsp), %r13
+;   movq    48(%rsp), %r15
+;   addq    %rsp, $64, %rsp
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %f25(i128) -> i128, i128, i128, i64, i128, i128 {
 block0(v0: i128):
@@ -910,49 +747,41 @@ block0(v0: i128):
     return v0, v0, v0, v1, v0, v0
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 37)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   subq    $32, %rsp
-;   Inst 3:   movq    %r12, 0(%rsp)
-;   Inst 4:   movq    %r13, 8(%rsp)
-;   Inst 5:   movq    %r14, 16(%rsp)
-;   Inst 6:   movq    %rbx, 24(%rsp)
-;   Inst 7:   movq    %rsi, %rax
-;   Inst 8:   movq    %rdx, %rsi
-;   Inst 9:   movq    %rdi, %r12
-;   Inst 10:   movq    %rdi, %rcx
-;   Inst 11:   movq    %rax, %rdx
-;   Inst 12:   movq    %rdi, %r8
-;   Inst 13:   movq    %rax, %r9
-;   Inst 14:   movq    %rdi, %r10
-;   Inst 15:   movq    %rax, %r11
-;   Inst 16:   movq    %rdi, %r13
-;   Inst 17:   movq    %rax, %r14
-;   Inst 18:   movq    %rax, %rbx
-;   Inst 19:   movq    %rcx, %rax
-;   Inst 20:   movq    %r8, 0(%rsi)
-;   Inst 21:   movq    %r9, 8(%rsi)
-;   Inst 22:   movq    %r10, 16(%rsi)
-;   Inst 23:   movq    %r11, 24(%rsi)
-;   Inst 24:   movq    %r12, 32(%rsi)
-;   Inst 25:   movq    %r13, 40(%rsi)
-;   Inst 26:   movq    %r14, 48(%rsi)
-;   Inst 27:   movq    %rdi, 56(%rsi)
-;   Inst 28:   movq    %rbx, 64(%rsi)
-;   Inst 29:   movq    0(%rsp), %r12
-;   Inst 30:   movq    8(%rsp), %r13
-;   Inst 31:   movq    16(%rsp), %r14
-;   Inst 32:   movq    24(%rsp), %rbx
-;   Inst 33:   addq    $32, %rsp
-;   Inst 34:   movq    %rbp, %rsp
-;   Inst 35:   popq    %rbp
-;   Inst 36:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+;   subq    %rsp, $32, %rsp
+;   movq    %rbx, 0(%rsp)
+;   movq    %r13, 8(%rsp)
+;   movq    %r14, 16(%rsp)
+;   movq    %r15, 24(%rsp)
+; block0:
+;   movq    %rdx, %r14
+;   movq    %rdi, %rax
+;   movq    %rsi, %rdx
+;   movq    %rdi, %rbx
+;   movq    %rsi, %r13
+;   movq    %rdi, %r15
+;   movq    %rsi, %r11
+;   movq    %rdi, %rcx
+;   movq    %rdi, %r8
+;   movq    %rsi, %r9
+;   movq    %rbx, 0(%r14)
+;   movq    %r13, 8(%r14)
+;   movq    %r15, 16(%r14)
+;   movq    %r11, 24(%r14)
+;   movq    %rcx, 32(%r14)
+;   movq    %r8, 40(%r14)
+;   movq    %r9, 48(%r14)
+;   movq    %rdi, 56(%r14)
+;   movq    %rsi, 64(%r14)
+;   movq    0(%rsp), %rbx
+;   movq    8(%rsp), %r13
+;   movq    16(%rsp), %r14
+;   movq    24(%rsp), %r15
+;   addq    %rsp, $32, %rsp
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %f26(i128, i128) -> i128, i128 {
     fn0 = %g(i128, i128) -> i128, i128
@@ -961,33 +790,29 @@ block0(v0: i128, v1: i128):
     return v2, v3
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 21)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   subq    $16, %rsp
-;   Inst 3:   movq    %r12, 0(%rsp)
-;   Inst 4:   movq    %r8, %r12
-;   Inst 5:   subq    $16, %rsp
-;   Inst 6:   virtual_sp_offset_adjust 16
-;   Inst 7:   lea     0(%rsp), %r8
-;   Inst 8:   load_ext_name %g+0, %rax
-;   Inst 9:   call    *%rax
-;   Inst 10:   movq    0(%rsp), %rsi
-;   Inst 11:   movq    8(%rsp), %rdi
-;   Inst 12:   addq    $16, %rsp
-;   Inst 13:   virtual_sp_offset_adjust -16
-;   Inst 14:   movq    %rsi, 0(%r12)
-;   Inst 15:   movq    %rdi, 8(%r12)
-;   Inst 16:   movq    0(%rsp), %r12
-;   Inst 17:   addq    $16, %rsp
-;   Inst 18:   movq    %rbp, %rsp
-;   Inst 19:   popq    %rbp
-;   Inst 20:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+;   subq    %rsp, $16, %rsp
+;   movq    %r12, 0(%rsp)
+; block0:
+;   movq    %r8, %r12
+;   subq    %rsp, $16, %rsp
+;   virtual_sp_offset_adjust 16
+;   lea     0(%rsp), %r8
+;   load_ext_name %g+0, %r9
+;   call    *%r9
+;   movq    0(%rsp), %r11
+;   movq    8(%rsp), %rdi
+;   addq    %rsp, $16, %rsp
+;   virtual_sp_offset_adjust -16
+;   movq    %r12, %r8
+;   movq    %r11, 0(%r8)
+;   movq    %rdi, 8(%r8)
+;   movq    0(%rsp), %r12
+;   addq    %rsp, $16, %rsp
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %f27(i128) -> i128 {
 block0(v0: i128):
@@ -995,33 +820,26 @@ block0(v0: i128):
     return v1
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 21)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   movabsq $-1, %rcx
-;   Inst 3:   bsrq    %rsi, %rax
-;   Inst 4:   cmovzq  %rcx, %rax
-;   Inst 5:   movl    $63, %esi
-;   Inst 6:   subq    %rax, %rsi
-;   Inst 7:   movabsq $-1, %rax
-;   Inst 8:   bsrq    %rdi, %rcx
-;   Inst 9:   cmovzq  %rax, %rcx
-;   Inst 10:   movl    $63, %edi
-;   Inst 11:   subq    %rcx, %rdi
-;   Inst 12:   addq    $64, %rdi
-;   Inst 13:   cmpq    $64, %rsi
-;   Inst 14:   cmovnzq %rsi, %rdi
-;   Inst 15:   xorq    %rsi, %rsi
-;   Inst 16:   movq    %rdi, %rax
-;   Inst 17:   movq    %rsi, %rdx
-;   Inst 18:   movq    %rbp, %rsp
-;   Inst 19:   popq    %rbp
-;   Inst 20:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movabsq $-1, %r9
+;   bsrq    %rsi, %rax
+;   cmovzq  %r9, %rax, %rax
+;   movl    $63, %r8d
+;   subq    %r8, %rax, %r8
+;   movabsq $-1, %rsi
+;   bsrq    %rdi, %rcx
+;   cmovzq  %rsi, %rcx, %rcx
+;   movl    $63, %eax
+;   subq    %rax, %rcx, %rax
+;   addq    %rax, $64, %rax
+;   cmpq    $64, %r8
+;   cmovnzq %r8, %rax, %rax
+;   xorq    %rdx, %rdx, %rdx
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %f28(i128) -> i128 {
 block0(v0: i128):
@@ -1029,30 +847,22 @@ block0(v0: i128):
     return v1
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 18)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   movq    %rsi, %rax
-;   Inst 3:   movl    $64, %ecx
-;   Inst 4:   bsfq    %rdi, %rsi
-;   Inst 5:   cmovzq  %rcx, %rsi
-;   Inst 6:   movl    $64, %ecx
-;   Inst 7:   bsfq    %rax, %rdi
-;   Inst 8:   cmovzq  %rcx, %rdi
-;   Inst 9:   addq    $64, %rdi
-;   Inst 10:   cmpq    $64, %rsi
-;   Inst 11:   cmovzq  %rdi, %rsi
-;   Inst 12:   xorq    %rdi, %rdi
-;   Inst 13:   movq    %rsi, %rax
-;   Inst 14:   movq    %rdi, %rdx
-;   Inst 15:   movq    %rbp, %rsp
-;   Inst 16:   popq    %rbp
-;   Inst 17:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movl    $64, %r9d
+;   bsfq    %rdi, %rax
+;   cmovzq  %r9, %rax, %rax
+;   movl    $64, %edx
+;   bsfq    %rsi, %rsi
+;   cmovzq  %rdx, %rsi, %rsi
+;   addq    %rsi, $64, %rsi
+;   cmpq    $64, %rax
+;   cmovzq  %rsi, %rax, %rax
+;   xorq    %rdx, %rdx, %rdx
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %f29(i8, i128) -> i8 {
 block0(v0: i8, v1: i128):
@@ -1060,20 +870,16 @@ block0(v0: i8, v1: i128):
     return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 8)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   movq    %rsi, %rcx
-;   Inst 3:   shlb    %cl, %dil
-;   Inst 4:   movq    %rdi, %rax
-;   Inst 5:   movq    %rbp, %rsp
-;   Inst 6:   popq    %rbp
-;   Inst 7:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rsi, %r9
+;   movq    %r9, %rcx
+;   shlb    %cl, %dil, %dil
+;   movq    %rdi, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %f30(i128, i128) -> i128 {
 block0(v0: i128, v1: i128):
@@ -1081,36 +887,27 @@ block0(v0: i128, v1: i128):
     return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 24)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   movq    %rdi, %rax
-;   Inst 3:   movq    %rsi, %rdi
-;   Inst 4:   movq    %rax, %rsi
-;   Inst 5:   movq    %rdx, %rcx
-;   Inst 6:   shlq    %cl, %rsi
-;   Inst 7:   movq    %rdx, %rcx
-;   Inst 8:   shlq    %cl, %rdi
-;   Inst 9:   movl    $64, %ecx
-;   Inst 10:   subq    %rdx, %rcx
-;   Inst 11:   shrq    %cl, %rax
-;   Inst 12:   xorq    %rcx, %rcx
-;   Inst 13:   testq   $127, %rdx
-;   Inst 14:   cmovzq  %rcx, %rax
-;   Inst 15:   orq     %rdi, %rax
-;   Inst 16:   testq   $64, %rdx
-;   Inst 17:   cmovzq  %rsi, %rcx
-;   Inst 18:   cmovzq  %rax, %rsi
-;   Inst 19:   movq    %rcx, %rax
-;   Inst 20:   movq    %rsi, %rdx
-;   Inst 21:   movq    %rbp, %rsp
-;   Inst 22:   popq    %rbp
-;   Inst 23:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdx, %r8
+;   movq    %r8, %rcx
+;   movq    %rdi, %rdx
+;   shlq    %cl, %rdx, %rdx
+;   shlq    %cl, %rsi, %rsi
+;   movl    $64, %ecx
+;   subq    %rcx, %r8, %rcx
+;   shrq    %cl, %rdi, %rdi
+;   xorq    %rax, %rax, %rax
+;   testq   $127, %r8
+;   cmovzq  %rax, %rdi, %rdi
+;   orq     %rdi, %rsi, %rdi
+;   testq   $64, %r8
+;   cmovzq  %rdx, %rax, %rax
+;   cmovzq  %rdi, %rdx, %rdx
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %f31(i128, i128) -> i128 {
 block0(v0: i128, v1: i128):
@@ -1118,37 +915,29 @@ block0(v0: i128, v1: i128):
     return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 25)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   movq    %rsi, %rax
-;   Inst 3:   movq    %rdx, %rcx
-;   Inst 4:   shrq    %cl, %rdi
-;   Inst 5:   movq    %rax, %rsi
-;   Inst 6:   movq    %rdx, %rcx
-;   Inst 7:   shrq    %cl, %rsi
-;   Inst 8:   movl    $64, %ecx
-;   Inst 9:   subq    %rdx, %rcx
-;   Inst 10:   shlq    %cl, %rax
-;   Inst 11:   xorq    %rcx, %rcx
-;   Inst 12:   testq   $127, %rdx
-;   Inst 13:   cmovzq  %rcx, %rax
-;   Inst 14:   orq     %rdi, %rax
-;   Inst 15:   xorq    %rcx, %rcx
-;   Inst 16:   testq   $64, %rdx
-;   Inst 17:   movq    %rsi, %rdi
-;   Inst 18:   cmovzq  %rax, %rdi
-;   Inst 19:   cmovzq  %rsi, %rcx
-;   Inst 20:   movq    %rdi, %rax
-;   Inst 21:   movq    %rcx, %rdx
-;   Inst 22:   movq    %rbp, %rsp
-;   Inst 23:   popq    %rbp
-;   Inst 24:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdx, %r9
+;   movq    %r9, %rcx
+;   shrq    %cl, %rdi, %rdi
+;   movq    %rsi, %r8
+;   shrq    %cl, %r8, %r8
+;   movl    $64, %ecx
+;   subq    %rcx, %r9, %rcx
+;   shlq    %cl, %rsi, %rsi
+;   xorq    %rdx, %rdx, %rdx
+;   testq   $127, %r9
+;   cmovzq  %rdx, %rsi, %rsi
+;   orq     %rsi, %rdi, %rsi
+;   xorq    %rdx, %rdx, %rdx
+;   testq   $64, %r9
+;   movq    %r8, %rax
+;   cmovzq  %rsi, %rax, %rax
+;   cmovzq  %r8, %rdx, %rdx
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %f32(i128, i128) -> i128 {
 block0(v0: i128, v1: i128):
@@ -1156,38 +945,32 @@ block0(v0: i128, v1: i128):
     return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 26)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   movq    %rdi, %rax
-;   Inst 3:   movq    %rdx, %rcx
-;   Inst 4:   shrq    %cl, %rax
-;   Inst 5:   movq    %rsi, %rdi
-;   Inst 6:   movq    %rdx, %rcx
-;   Inst 7:   sarq    %cl, %rdi
-;   Inst 8:   movl    $64, %ecx
-;   Inst 9:   subq    %rdx, %rcx
-;   Inst 10:   movq    %rsi, %r8
-;   Inst 11:   shlq    %cl, %r8
-;   Inst 12:   xorq    %rcx, %rcx
-;   Inst 13:   testq   $127, %rdx
-;   Inst 14:   cmovzq  %rcx, %r8
-;   Inst 15:   orq     %r8, %rax
-;   Inst 16:   sarq    $63, %rsi
-;   Inst 17:   testq   $64, %rdx
-;   Inst 18:   movq    %rdi, %rcx
-;   Inst 19:   cmovzq  %rax, %rcx
-;   Inst 20:   cmovzq  %rdi, %rsi
-;   Inst 21:   movq    %rcx, %rax
-;   Inst 22:   movq    %rsi, %rdx
-;   Inst 23:   movq    %rbp, %rsp
-;   Inst 24:   popq    %rbp
-;   Inst 25:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdx, %r8
+;   movq    %r8, %rcx
+;   shrq    %cl, %rdi, %rdi
+;   movq    %rsi, %rdx
+;   sarq    %cl, %rdx, %rdx
+;   movl    $64, %ecx
+;   movq    %r8, %r11
+;   subq    %rcx, %r11, %rcx
+;   movq    %rsi, %r8
+;   shlq    %cl, %r8, %r8
+;   xorq    %r9, %r9, %r9
+;   testq   $127, %r11
+;   cmovzq  %r9, %r8, %r8
+;   orq     %rdi, %r8, %rdi
+;   sarq    $63, %rsi, %rsi
+;   testq   $64, %r11
+;   movq    %rdx, %rax
+;   cmovzq  %rdi, %rax, %rax
+;   cmovzq  %rdx, %rsi, %rsi
+;   movq    %rsi, %rdx
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %f33(i128, i128) -> i128 {
 block0(v0: i128, v1: i128):
@@ -1195,60 +978,50 @@ block0(v0: i128, v1: i128):
     return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 48)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   movq    %rdi, %rax
-;   Inst 3:   movq    %rdx, %rcx
-;   Inst 4:   shlq    %cl, %rax
-;   Inst 5:   movq    %rsi, %r8
-;   Inst 6:   movq    %rdx, %rcx
-;   Inst 7:   shlq    %cl, %r8
-;   Inst 8:   movl    $64, %ecx
-;   Inst 9:   subq    %rdx, %rcx
-;   Inst 10:   movq    %rdi, %r9
-;   Inst 11:   shrq    %cl, %r9
-;   Inst 12:   xorq    %rcx, %rcx
-;   Inst 13:   testq   $127, %rdx
-;   Inst 14:   cmovzq  %rcx, %r9
-;   Inst 15:   orq     %r8, %r9
-;   Inst 16:   testq   $64, %rdx
-;   Inst 17:   movq    %rcx, %r8
-;   Inst 18:   cmovzq  %rax, %r8
-;   Inst 19:   cmovzq  %r9, %rax
-;   Inst 20:   movl    $128, %r9d
-;   Inst 21:   subq    %rdx, %r9
-;   Inst 22:   movq    %rdi, %rdx
-;   Inst 23:   movq    %r9, %rcx
-;   Inst 24:   shrq    %cl, %rdx
-;   Inst 25:   movq    %rsi, %rdi
-;   Inst 26:   movq    %r9, %rcx
-;   Inst 27:   shrq    %cl, %rdi
-;   Inst 28:   movl    $64, %ecx
-;   Inst 29:   subq    %r9, %rcx
-;   Inst 30:   shlq    %cl, %rsi
-;   Inst 31:   xorq    %rcx, %rcx
-;   Inst 32:   testq   $127, %r9
-;   Inst 33:   cmovzq  %rcx, %rsi
-;   Inst 34:   orq     %rdx, %rsi
-;   Inst 35:   xorq    %rdx, %rdx
-;   Inst 36:   testq   $64, %r9
-;   Inst 37:   movq    %rdi, %rcx
-;   Inst 38:   cmovzq  %rsi, %rcx
-;   Inst 39:   movq    %rdx, %rsi
-;   Inst 40:   cmovzq  %rdi, %rsi
-;   Inst 41:   orq     %rcx, %r8
-;   Inst 42:   orq     %rsi, %rax
-;   Inst 43:   movq    %rax, %rdx
-;   Inst 44:   movq    %r8, %rax
-;   Inst 45:   movq    %rbp, %rsp
-;   Inst 46:   popq    %rbp
-;   Inst 47:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdx, %r11
+;   movq    %r11, %rcx
+;   movq    %rdi, %rdx
+;   shlq    %cl, %rdx, %rdx
+;   movq    %rsi, %r9
+;   shlq    %cl, %r9, %r9
+;   movl    $64, %ecx
+;   subq    %rcx, %r11, %rcx
+;   movq    %rdi, %r8
+;   shrq    %cl, %r8, %r8
+;   xorq    %rax, %rax, %rax
+;   testq   $127, %r11
+;   cmovzq  %rax, %r8, %r8
+;   orq     %r8, %r9, %r8
+;   testq   $64, %r11
+;   cmovzq  %rdx, %rax, %rax
+;   cmovzq  %r8, %rdx, %rdx
+;   movl    $128, %ecx
+;   movq    %r11, %r8
+;   subq    %rcx, %r8, %rcx
+;   shrq    %cl, %rdi, %rdi
+;   movq    %rsi, %r9
+;   shrq    %cl, %r9, %r9
+;   movq    %rcx, %r8
+;   movl    $64, %ecx
+;   subq    %rcx, %r8, %rcx
+;   shlq    %cl, %rsi, %rsi
+;   xorq    %r11, %r11, %r11
+;   testq   $127, %r8
+;   cmovzq  %r11, %rsi, %rsi
+;   orq     %rsi, %rdi, %rsi
+;   xorq    %r11, %r11, %r11
+;   testq   $64, %r8
+;   movq    %r9, %rdi
+;   cmovzq  %rsi, %rdi, %rdi
+;   cmovzq  %r9, %r11, %r11
+;   orq     %rax, %rdi, %rax
+;   orq     %rdx, %r11, %rdx
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %f34(i128, i128) -> i128 {
 block0(v0: i128, v1: i128):
@@ -1256,55 +1029,49 @@ block0(v0: i128, v1: i128):
     return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 45)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   movq    %rdi, %rax
-;   Inst 3:   movq    %rdx, %rcx
-;   Inst 4:   shrq    %cl, %rax
-;   Inst 5:   movq    %rsi, %r9
-;   Inst 6:   movq    %rdx, %rcx
-;   Inst 7:   shrq    %cl, %r9
-;   Inst 8:   movl    $64, %ecx
-;   Inst 9:   subq    %rdx, %rcx
-;   Inst 10:   movq    %rsi, %r8
-;   Inst 11:   shlq    %cl, %r8
-;   Inst 12:   xorq    %rcx, %rcx
-;   Inst 13:   testq   $127, %rdx
-;   Inst 14:   cmovzq  %rcx, %r8
-;   Inst 15:   orq     %rax, %r8
-;   Inst 16:   xorq    %rcx, %rcx
-;   Inst 17:   testq   $64, %rdx
-;   Inst 18:   movq    %r9, %rax
-;   Inst 19:   cmovzq  %r8, %rax
-;   Inst 20:   movq    %rcx, %r8
-;   Inst 21:   cmovzq  %r9, %r8
-;   Inst 22:   movl    $128, %r9d
-;   Inst 23:   subq    %rdx, %r9
-;   Inst 24:   movq    %rdi, %rdx
-;   Inst 25:   movq    %r9, %rcx
-;   Inst 26:   shlq    %cl, %rdx
-;   Inst 27:   movq    %r9, %rcx
-;   Inst 28:   shlq    %cl, %rsi
-;   Inst 29:   movl    $64, %ecx
-;   Inst 30:   subq    %r9, %rcx
-;   Inst 31:   shrq    %cl, %rdi
-;   Inst 32:   xorq    %rcx, %rcx
-;   Inst 33:   testq   $127, %r9
-;   Inst 34:   cmovzq  %rcx, %rdi
-;   Inst 35:   orq     %rsi, %rdi
-;   Inst 36:   testq   $64, %r9
-;   Inst 37:   cmovzq  %rdx, %rcx
-;   Inst 38:   cmovzq  %rdi, %rdx
-;   Inst 39:   orq     %rcx, %rax
-;   Inst 40:   orq     %rdx, %r8
-;   Inst 41:   movq    %r8, %rdx
-;   Inst 42:   movq    %rbp, %rsp
-;   Inst 43:   popq    %rbp
-;   Inst 44:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdx, %r11
+;   movq    %r11, %rcx
+;   movq    %rdi, %rax
+;   shrq    %cl, %rax, %rax
+;   movq    %rsi, %r8
+;   shrq    %cl, %r8, %r8
+;   movl    $64, %ecx
+;   subq    %rcx, %r11, %rcx
+;   movq    %rsi, %r9
+;   shlq    %cl, %r9, %r9
+;   xorq    %rdx, %rdx, %rdx
+;   testq   $127, %r11
+;   cmovzq  %rdx, %r9, %r9
+;   orq     %r9, %rax, %r9
+;   xorq    %rdx, %rdx, %rdx
+;   testq   $64, %r11
+;   movq    %r8, %rax
+;   cmovzq  %r9, %rax, %rax
+;   cmovzq  %r8, %rdx, %rdx
+;   movl    $128, %ecx
+;   movq    %r11, %r8
+;   subq    %rcx, %r8, %rcx
+;   movq    %rdi, %r11
+;   shlq    %cl, %r11, %r11
+;   shlq    %cl, %rsi, %rsi
+;   movq    %rcx, %r8
+;   movl    $64, %ecx
+;   movq    %r8, %r9
+;   subq    %rcx, %r9, %rcx
+;   shrq    %cl, %rdi, %rdi
+;   xorq    %r8, %r8, %r8
+;   testq   $127, %r9
+;   cmovzq  %r8, %rdi, %rdi
+;   orq     %rdi, %rsi, %rdi
+;   testq   $64, %r9
+;   cmovzq  %r11, %r8, %r8
+;   cmovzq  %rdi, %r11, %r11
+;   orq     %rax, %r8, %rax
+;   orq     %rdx, %r11, %rdx
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 

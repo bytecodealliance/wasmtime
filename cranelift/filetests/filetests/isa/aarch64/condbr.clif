@@ -8,15 +8,10 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 3)
-;   Inst 0:   subs xzr, x0, x1
-;   Inst 1:   cset x0, eq
-;   Inst 2:   ret
-; }}
+; block0:
+;   subs xzr, x0, x1
+;   cset x0, eq
+;   ret
 
 function %icmp_eq_i128(i128, i128) -> b1 {
 block0(v0: i128, v1: i128):
@@ -24,17 +19,12 @@ block0(v0: i128, v1: i128):
   return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 5)
-;   Inst 0:   eor x0, x0, x2
-;   Inst 1:   eor x1, x1, x3
-;   Inst 2:   adds xzr, x0, x1
-;   Inst 3:   cset x0, eq
-;   Inst 4:   ret
-; }}
+; block0:
+;   eor x10, x0, x2
+;   eor x12, x1, x3
+;   adds xzr, x10, x12
+;   cset x0, eq
+;   ret
 
 function %icmp_ne_i128(i128, i128) -> b1 {
 block0(v0: i128, v1: i128):
@@ -42,17 +32,12 @@ block0(v0: i128, v1: i128):
   return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 5)
-;   Inst 0:   eor x0, x0, x2
-;   Inst 1:   eor x1, x1, x3
-;   Inst 2:   adds xzr, x0, x1
-;   Inst 3:   cset x0, ne
-;   Inst 4:   ret
-; }}
+; block0:
+;   eor x10, x0, x2
+;   eor x12, x1, x3
+;   adds xzr, x10, x12
+;   cset x0, ne
+;   ret
 
 function %icmp_slt_i128(i128, i128) -> b1 {
 block0(v0: i128, v1: i128):
@@ -60,18 +45,13 @@ block0(v0: i128, v1: i128):
   return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 6)
-;   Inst 0:   subs xzr, x0, x2
-;   Inst 1:   cset x0, lo
-;   Inst 2:   subs xzr, x1, x3
-;   Inst 3:   cset x1, lt
-;   Inst 4:   csel x0, x0, x1, eq
-;   Inst 5:   ret
-; }}
+; block0:
+;   subs xzr, x0, x2
+;   cset x11, lo
+;   subs xzr, x1, x3
+;   cset x14, lt
+;   csel x0, x11, x14, eq
+;   ret
 
 function %icmp_ult_i128(i128, i128) -> b1 {
 block0(v0: i128, v1: i128):
@@ -79,18 +59,13 @@ block0(v0: i128, v1: i128):
   return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 6)
-;   Inst 0:   subs xzr, x0, x2
-;   Inst 1:   cset x0, lo
-;   Inst 2:   subs xzr, x1, x3
-;   Inst 3:   cset x1, lo
-;   Inst 4:   csel x0, x0, x1, eq
-;   Inst 5:   ret
-; }}
+; block0:
+;   subs xzr, x0, x2
+;   cset x11, lo
+;   subs xzr, x1, x3
+;   cset x14, lo
+;   csel x0, x11, x14, eq
+;   ret
 
 function %icmp_sle_i128(i128, i128) -> b1 {
 block0(v0: i128, v1: i128):
@@ -98,18 +73,13 @@ block0(v0: i128, v1: i128):
   return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 6)
-;   Inst 0:   subs xzr, x0, x2
-;   Inst 1:   cset x0, ls
-;   Inst 2:   subs xzr, x1, x3
-;   Inst 3:   cset x1, le
-;   Inst 4:   csel x0, x0, x1, eq
-;   Inst 5:   ret
-; }}
+; block0:
+;   subs xzr, x0, x2
+;   cset x11, ls
+;   subs xzr, x1, x3
+;   cset x14, le
+;   csel x0, x11, x14, eq
+;   ret
 
 function %icmp_ule_i128(i128, i128) -> b1 {
 block0(v0: i128, v1: i128):
@@ -117,18 +87,13 @@ block0(v0: i128, v1: i128):
   return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 6)
-;   Inst 0:   subs xzr, x0, x2
-;   Inst 1:   cset x0, ls
-;   Inst 2:   subs xzr, x1, x3
-;   Inst 3:   cset x1, ls
-;   Inst 4:   csel x0, x0, x1, eq
-;   Inst 5:   ret
-; }}
+; block0:
+;   subs xzr, x0, x2
+;   cset x11, ls
+;   subs xzr, x1, x3
+;   cset x14, ls
+;   csel x0, x11, x14, eq
+;   ret
 
 function %icmp_sgt_i128(i128, i128) -> b1 {
 block0(v0: i128, v1: i128):
@@ -136,18 +101,13 @@ block0(v0: i128, v1: i128):
   return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 6)
-;   Inst 0:   subs xzr, x0, x2
-;   Inst 1:   cset x0, hi
-;   Inst 2:   subs xzr, x1, x3
-;   Inst 3:   cset x1, gt
-;   Inst 4:   csel x0, x0, x1, eq
-;   Inst 5:   ret
-; }}
+; block0:
+;   subs xzr, x0, x2
+;   cset x11, hi
+;   subs xzr, x1, x3
+;   cset x14, gt
+;   csel x0, x11, x14, eq
+;   ret
 
 function %icmp_ugt_i128(i128, i128) -> b1 {
 block0(v0: i128, v1: i128):
@@ -155,18 +115,13 @@ block0(v0: i128, v1: i128):
   return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 6)
-;   Inst 0:   subs xzr, x0, x2
-;   Inst 1:   cset x0, hi
-;   Inst 2:   subs xzr, x1, x3
-;   Inst 3:   cset x1, hi
-;   Inst 4:   csel x0, x0, x1, eq
-;   Inst 5:   ret
-; }}
+; block0:
+;   subs xzr, x0, x2
+;   cset x11, hi
+;   subs xzr, x1, x3
+;   cset x14, hi
+;   csel x0, x11, x14, eq
+;   ret
 
 function %icmp_sge_i128(i128, i128) -> b1 {
 block0(v0: i128, v1: i128):
@@ -174,18 +129,13 @@ block0(v0: i128, v1: i128):
   return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 6)
-;   Inst 0:   subs xzr, x0, x2
-;   Inst 1:   cset x0, hs
-;   Inst 2:   subs xzr, x1, x3
-;   Inst 3:   cset x1, ge
-;   Inst 4:   csel x0, x0, x1, eq
-;   Inst 5:   ret
-; }}
+; block0:
+;   subs xzr, x0, x2
+;   cset x11, hs
+;   subs xzr, x1, x3
+;   cset x14, ge
+;   csel x0, x11, x14, eq
+;   ret
 
 function %icmp_uge_i128(i128, i128) -> b1 {
 block0(v0: i128, v1: i128):
@@ -193,18 +143,13 @@ block0(v0: i128, v1: i128):
   return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 6)
-;   Inst 0:   subs xzr, x0, x2
-;   Inst 1:   cset x0, hs
-;   Inst 2:   subs xzr, x1, x3
-;   Inst 3:   cset x1, hs
-;   Inst 4:   csel x0, x0, x1, eq
-;   Inst 5:   ret
-; }}
+; block0:
+;   subs xzr, x0, x2
+;   cset x11, hs
+;   subs xzr, x1, x3
+;   cset x14, hs
+;   csel x0, x11, x14, eq
+;   ret
 
 function %icmp_of_i128(i128, i128) -> b1 {
 block0(v0: i128, v1: i128):
@@ -212,16 +157,11 @@ block0(v0: i128, v1: i128):
   return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 4)
-;   Inst 0:   adds xzr, x0, x2
-;   Inst 1:   adcs xzr, x1, x3
-;   Inst 2:   cset x0, vs
-;   Inst 3:   ret
-; }}
+; block0:
+;   adds xzr, x0, x2
+;   adcs xzr, x1, x3
+;   cset x0, vs
+;   ret
 
 function %icmp_nof_i128(i128, i128) -> b1 {
 block0(v0: i128, v1: i128):
@@ -229,16 +169,11 @@ block0(v0: i128, v1: i128):
   return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 4)
-;   Inst 0:   adds xzr, x0, x2
-;   Inst 1:   adcs xzr, x1, x3
-;   Inst 2:   cset x0, vc
-;   Inst 3:   ret
-; }}
+; block0:
+;   adds xzr, x0, x2
+;   adcs xzr, x1, x3
+;   cset x0, vc
+;   ret
 
 function %f(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -255,26 +190,15 @@ block2:
   return v5
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (successor: Block 1)
-;   (successor: Block 2)
-;   (instruction range: 0 .. 2)
-;   Inst 0:   subs xzr, x0, x1
-;   Inst 1:   b.eq label1 ; b label2
-; Block 1:
-;   (original IR block: block1)
-;   (instruction range: 2 .. 4)
-;   Inst 2:   movz x0, #1
-;   Inst 3:   ret
-; Block 2:
-;   (original IR block: block2)
-;   (instruction range: 4 .. 6)
-;   Inst 4:   movz x0, #2
-;   Inst 5:   ret
-; }}
+; block0:
+;   subs xzr, x0, x1
+;   b.eq label1 ; b label2
+; block1:
+;   movz x0, #1
+;   ret
+; block2:
+;   movz x0, #2
+;   ret
 
 function %f(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -287,29 +211,16 @@ block1:
   return v4
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (successor: Block 1)
-;   (successor: Block 2)
-;   (instruction range: 0 .. 2)
-;   Inst 0:   subs xzr, x0, x1
-;   Inst 1:   b.eq label1 ; b label2
-; Block 1:
-;   (successor: Block 3)
-;   (instruction range: 2 .. 3)
-;   Inst 2:   b label3
-; Block 2:
-;   (successor: Block 3)
-;   (instruction range: 3 .. 4)
-;   Inst 3:   b label3
-; Block 3:
-;   (original IR block: block1)
-;   (instruction range: 4 .. 6)
-;   Inst 4:   movz x0, #1
-;   Inst 5:   ret
-; }}
+; block0:
+;   subs xzr, x0, x1
+;   b.eq label1 ; b label2
+; block1:
+;   b label3
+; block2:
+;   b label3
+; block3:
+;   movz x0, #1
+;   ret
 
 function %i128_brz(i128){
 block0(v0: i128):
@@ -321,28 +232,15 @@ block1:
     return
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (successor: Block 1)
-;   (successor: Block 2)
-;   (instruction range: 0 .. 2)
-;   Inst 0:   orr x0, x0, x1
-;   Inst 1:   cbz x0, label1 ; b label2
-; Block 1:
-;   (successor: Block 3)
-;   (instruction range: 2 .. 3)
-;   Inst 2:   b label3
-; Block 2:
-;   (successor: Block 3)
-;   (instruction range: 3 .. 4)
-;   Inst 3:   b label3
-; Block 3:
-;   (original IR block: block1)
-;   (instruction range: 4 .. 5)
-;   Inst 4:   ret
-; }}
+; block0:
+;   orr x4, x0, x1
+;   cbz x4, label1 ; b label2
+; block1:
+;   b label3
+; block2:
+;   b label3
+; block3:
+;   ret
 
 function %i128_brnz(i128){
 block0(v0: i128):
@@ -354,28 +252,15 @@ block1:
     return
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (successor: Block 1)
-;   (successor: Block 2)
-;   (instruction range: 0 .. 2)
-;   Inst 0:   orr x0, x0, x1
-;   Inst 1:   cbnz x0, label1 ; b label2
-; Block 1:
-;   (successor: Block 3)
-;   (instruction range: 2 .. 3)
-;   Inst 2:   b label3
-; Block 2:
-;   (successor: Block 3)
-;   (instruction range: 3 .. 4)
-;   Inst 3:   b label3
-; Block 3:
-;   (original IR block: block1)
-;   (instruction range: 4 .. 5)
-;   Inst 4:   ret
-; }}
+; block0:
+;   orr x4, x0, x1
+;   cbnz x4, label1 ; b label2
+; block1:
+;   b label3
+; block2:
+;   b label3
+; block3:
+;   ret
 
 function %i128_bricmp_eq(i128, i128) {
 block0(v0: i128, v1: i128):
@@ -386,30 +271,17 @@ block1:
   return
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (successor: Block 1)
-;   (successor: Block 2)
-;   (instruction range: 0 .. 4)
-;   Inst 0:   eor x0, x0, x2
-;   Inst 1:   eor x1, x1, x3
-;   Inst 2:   adds xzr, x0, x1
-;   Inst 3:   b.eq label1 ; b label2
-; Block 1:
-;   (successor: Block 3)
-;   (instruction range: 4 .. 5)
-;   Inst 4:   b label3
-; Block 2:
-;   (successor: Block 3)
-;   (instruction range: 5 .. 6)
-;   Inst 5:   b label3
-; Block 3:
-;   (original IR block: block1)
-;   (instruction range: 6 .. 7)
-;   Inst 6:   ret
-; }}
+; block0:
+;   eor x8, x0, x2
+;   eor x10, x1, x3
+;   adds xzr, x8, x10
+;   b.eq label1 ; b label2
+; block1:
+;   b label3
+; block2:
+;   b label3
+; block3:
+;   ret
 
 function %i128_bricmp_ne(i128, i128) {
 block0(v0: i128, v1: i128):
@@ -420,30 +292,17 @@ block1:
   return
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (successor: Block 1)
-;   (successor: Block 2)
-;   (instruction range: 0 .. 4)
-;   Inst 0:   eor x0, x0, x2
-;   Inst 1:   eor x1, x1, x3
-;   Inst 2:   adds xzr, x0, x1
-;   Inst 3:   b.ne label1 ; b label2
-; Block 1:
-;   (successor: Block 3)
-;   (instruction range: 4 .. 5)
-;   Inst 4:   b label3
-; Block 2:
-;   (successor: Block 3)
-;   (instruction range: 5 .. 6)
-;   Inst 5:   b label3
-; Block 3:
-;   (original IR block: block1)
-;   (instruction range: 6 .. 7)
-;   Inst 6:   ret
-; }}
+; block0:
+;   eor x8, x0, x2
+;   eor x10, x1, x3
+;   adds xzr, x8, x10
+;   b.ne label1 ; b label2
+; block1:
+;   b label3
+; block2:
+;   b label3
+; block3:
+;   ret
 
 function %i128_bricmp_slt(i128, i128) {
 block0(v0: i128, v1: i128):
@@ -454,33 +313,20 @@ block1:
   return
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (successor: Block 1)
-;   (successor: Block 2)
-;   (instruction range: 0 .. 7)
-;   Inst 0:   subs xzr, x0, x2
-;   Inst 1:   cset x0, lo
-;   Inst 2:   subs xzr, x1, x3
-;   Inst 3:   cset x1, lt
-;   Inst 4:   csel x0, x0, x1, eq
-;   Inst 5:   subs xzr, xzr, x0
-;   Inst 6:   b.lt label1 ; b label2
-; Block 1:
-;   (successor: Block 3)
-;   (instruction range: 7 .. 8)
-;   Inst 7:   b label3
-; Block 2:
-;   (successor: Block 3)
-;   (instruction range: 8 .. 9)
-;   Inst 8:   b label3
-; Block 3:
-;   (original IR block: block1)
-;   (instruction range: 9 .. 10)
-;   Inst 9:   ret
-; }}
+; block0:
+;   subs xzr, x0, x2
+;   cset x9, lo
+;   subs xzr, x1, x3
+;   cset x12, lt
+;   csel x9, x9, x12, eq
+;   subs xzr, xzr, x9
+;   b.lt label1 ; b label2
+; block1:
+;   b label3
+; block2:
+;   b label3
+; block3:
+;   ret
 
 function %i128_bricmp_ult(i128, i128) {
 block0(v0: i128, v1: i128):
@@ -491,33 +337,20 @@ block1:
   return
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (successor: Block 1)
-;   (successor: Block 2)
-;   (instruction range: 0 .. 7)
-;   Inst 0:   subs xzr, x0, x2
-;   Inst 1:   cset x0, lo
-;   Inst 2:   subs xzr, x1, x3
-;   Inst 3:   cset x1, lo
-;   Inst 4:   csel x0, x0, x1, eq
-;   Inst 5:   subs xzr, xzr, x0
-;   Inst 6:   b.lo label1 ; b label2
-; Block 1:
-;   (successor: Block 3)
-;   (instruction range: 7 .. 8)
-;   Inst 7:   b label3
-; Block 2:
-;   (successor: Block 3)
-;   (instruction range: 8 .. 9)
-;   Inst 8:   b label3
-; Block 3:
-;   (original IR block: block1)
-;   (instruction range: 9 .. 10)
-;   Inst 9:   ret
-; }}
+; block0:
+;   subs xzr, x0, x2
+;   cset x9, lo
+;   subs xzr, x1, x3
+;   cset x12, lo
+;   csel x9, x9, x12, eq
+;   subs xzr, xzr, x9
+;   b.lo label1 ; b label2
+; block1:
+;   b label3
+; block2:
+;   b label3
+; block3:
+;   ret
 
 function %i128_bricmp_sle(i128, i128) {
 block0(v0: i128, v1: i128):
@@ -528,34 +361,21 @@ block1:
   return
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (successor: Block 1)
-;   (successor: Block 2)
-;   (instruction range: 0 .. 8)
-;   Inst 0:   subs xzr, x0, x2
-;   Inst 1:   cset x0, ls
-;   Inst 2:   subs xzr, x1, x3
-;   Inst 3:   cset x1, le
-;   Inst 4:   csel x0, x0, x1, eq
-;   Inst 5:   movz x1, #1
-;   Inst 6:   subs xzr, x1, x0
-;   Inst 7:   b.le label1 ; b label2
-; Block 1:
-;   (successor: Block 3)
-;   (instruction range: 8 .. 9)
-;   Inst 8:   b label3
-; Block 2:
-;   (successor: Block 3)
-;   (instruction range: 9 .. 10)
-;   Inst 9:   b label3
-; Block 3:
-;   (original IR block: block1)
-;   (instruction range: 10 .. 11)
-;   Inst 10:   ret
-; }}
+; block0:
+;   subs xzr, x0, x2
+;   cset x9, ls
+;   subs xzr, x1, x3
+;   cset x12, le
+;   csel x9, x9, x12, eq
+;   movz x12, #1
+;   subs xzr, x12, x9
+;   b.le label1 ; b label2
+; block1:
+;   b label3
+; block2:
+;   b label3
+; block3:
+;   ret
 
 function %i128_bricmp_ule(i128, i128) {
 block0(v0: i128, v1: i128):
@@ -566,34 +386,21 @@ block1:
   return
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (successor: Block 1)
-;   (successor: Block 2)
-;   (instruction range: 0 .. 8)
-;   Inst 0:   subs xzr, x0, x2
-;   Inst 1:   cset x0, ls
-;   Inst 2:   subs xzr, x1, x3
-;   Inst 3:   cset x1, ls
-;   Inst 4:   csel x0, x0, x1, eq
-;   Inst 5:   movz x1, #1
-;   Inst 6:   subs xzr, x1, x0
-;   Inst 7:   b.ls label1 ; b label2
-; Block 1:
-;   (successor: Block 3)
-;   (instruction range: 8 .. 9)
-;   Inst 8:   b label3
-; Block 2:
-;   (successor: Block 3)
-;   (instruction range: 9 .. 10)
-;   Inst 9:   b label3
-; Block 3:
-;   (original IR block: block1)
-;   (instruction range: 10 .. 11)
-;   Inst 10:   ret
-; }}
+; block0:
+;   subs xzr, x0, x2
+;   cset x9, ls
+;   subs xzr, x1, x3
+;   cset x12, ls
+;   csel x9, x9, x12, eq
+;   movz x12, #1
+;   subs xzr, x12, x9
+;   b.ls label1 ; b label2
+; block1:
+;   b label3
+; block2:
+;   b label3
+; block3:
+;   ret
 
 function %i128_bricmp_sgt(i128, i128) {
 block0(v0: i128, v1: i128):
@@ -604,33 +411,20 @@ block1:
   return
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (successor: Block 1)
-;   (successor: Block 2)
-;   (instruction range: 0 .. 7)
-;   Inst 0:   subs xzr, x0, x2
-;   Inst 1:   cset x0, hi
-;   Inst 2:   subs xzr, x1, x3
-;   Inst 3:   cset x1, gt
-;   Inst 4:   csel x0, x0, x1, eq
-;   Inst 5:   subs xzr, x0, xzr
-;   Inst 6:   b.gt label1 ; b label2
-; Block 1:
-;   (successor: Block 3)
-;   (instruction range: 7 .. 8)
-;   Inst 7:   b label3
-; Block 2:
-;   (successor: Block 3)
-;   (instruction range: 8 .. 9)
-;   Inst 8:   b label3
-; Block 3:
-;   (original IR block: block1)
-;   (instruction range: 9 .. 10)
-;   Inst 9:   ret
-; }}
+; block0:
+;   subs xzr, x0, x2
+;   cset x9, hi
+;   subs xzr, x1, x3
+;   cset x12, gt
+;   csel x9, x9, x12, eq
+;   subs xzr, x9, xzr
+;   b.gt label1 ; b label2
+; block1:
+;   b label3
+; block2:
+;   b label3
+; block3:
+;   ret
 
 function %i128_bricmp_ugt(i128, i128) {
 block0(v0: i128, v1: i128):
@@ -641,33 +435,20 @@ block1:
   return
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (successor: Block 1)
-;   (successor: Block 2)
-;   (instruction range: 0 .. 7)
-;   Inst 0:   subs xzr, x0, x2
-;   Inst 1:   cset x0, hi
-;   Inst 2:   subs xzr, x1, x3
-;   Inst 3:   cset x1, hi
-;   Inst 4:   csel x0, x0, x1, eq
-;   Inst 5:   subs xzr, x0, xzr
-;   Inst 6:   b.hi label1 ; b label2
-; Block 1:
-;   (successor: Block 3)
-;   (instruction range: 7 .. 8)
-;   Inst 7:   b label3
-; Block 2:
-;   (successor: Block 3)
-;   (instruction range: 8 .. 9)
-;   Inst 8:   b label3
-; Block 3:
-;   (original IR block: block1)
-;   (instruction range: 9 .. 10)
-;   Inst 9:   ret
-; }}
+; block0:
+;   subs xzr, x0, x2
+;   cset x9, hi
+;   subs xzr, x1, x3
+;   cset x12, hi
+;   csel x9, x9, x12, eq
+;   subs xzr, x9, xzr
+;   b.hi label1 ; b label2
+; block1:
+;   b label3
+; block2:
+;   b label3
+; block3:
+;   ret
 
 function %i128_bricmp_sge(i128, i128) {
 block0(v0: i128, v1: i128):
@@ -678,34 +459,21 @@ block1:
   return
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (successor: Block 1)
-;   (successor: Block 2)
-;   (instruction range: 0 .. 8)
-;   Inst 0:   subs xzr, x0, x2
-;   Inst 1:   cset x0, hs
-;   Inst 2:   subs xzr, x1, x3
-;   Inst 3:   cset x1, ge
-;   Inst 4:   csel x0, x0, x1, eq
-;   Inst 5:   movz x1, #1
-;   Inst 6:   subs xzr, x0, x1
-;   Inst 7:   b.ge label1 ; b label2
-; Block 1:
-;   (successor: Block 3)
-;   (instruction range: 8 .. 9)
-;   Inst 8:   b label3
-; Block 2:
-;   (successor: Block 3)
-;   (instruction range: 9 .. 10)
-;   Inst 9:   b label3
-; Block 3:
-;   (original IR block: block1)
-;   (instruction range: 10 .. 11)
-;   Inst 10:   ret
-; }}
+; block0:
+;   subs xzr, x0, x2
+;   cset x9, hs
+;   subs xzr, x1, x3
+;   cset x12, ge
+;   csel x9, x9, x12, eq
+;   movz x12, #1
+;   subs xzr, x9, x12
+;   b.ge label1 ; b label2
+; block1:
+;   b label3
+; block2:
+;   b label3
+; block3:
+;   ret
 
 function %i128_bricmp_uge(i128, i128) {
 block0(v0: i128, v1: i128):
@@ -716,34 +484,21 @@ block1:
   return
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (successor: Block 1)
-;   (successor: Block 2)
-;   (instruction range: 0 .. 8)
-;   Inst 0:   subs xzr, x0, x2
-;   Inst 1:   cset x0, hs
-;   Inst 2:   subs xzr, x1, x3
-;   Inst 3:   cset x1, hs
-;   Inst 4:   csel x0, x0, x1, eq
-;   Inst 5:   movz x1, #1
-;   Inst 6:   subs xzr, x0, x1
-;   Inst 7:   b.hs label1 ; b label2
-; Block 1:
-;   (successor: Block 3)
-;   (instruction range: 8 .. 9)
-;   Inst 8:   b label3
-; Block 2:
-;   (successor: Block 3)
-;   (instruction range: 9 .. 10)
-;   Inst 9:   b label3
-; Block 3:
-;   (original IR block: block1)
-;   (instruction range: 10 .. 11)
-;   Inst 10:   ret
-; }}
+; block0:
+;   subs xzr, x0, x2
+;   cset x9, hs
+;   subs xzr, x1, x3
+;   cset x12, hs
+;   csel x9, x9, x12, eq
+;   movz x12, #1
+;   subs xzr, x9, x12
+;   b.hs label1 ; b label2
+; block1:
+;   b label3
+; block2:
+;   b label3
+; block3:
+;   ret
 
 function %i128_bricmp_of(i128, i128) {
 block0(v0: i128, v1: i128):
@@ -754,29 +509,16 @@ block1:
   return
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (successor: Block 1)
-;   (successor: Block 2)
-;   (instruction range: 0 .. 3)
-;   Inst 0:   adds xzr, x0, x2
-;   Inst 1:   adcs xzr, x1, x3
-;   Inst 2:   b.vs label1 ; b label2
-; Block 1:
-;   (successor: Block 3)
-;   (instruction range: 3 .. 4)
-;   Inst 3:   b label3
-; Block 2:
-;   (successor: Block 3)
-;   (instruction range: 4 .. 5)
-;   Inst 4:   b label3
-; Block 3:
-;   (original IR block: block1)
-;   (instruction range: 5 .. 6)
-;   Inst 5:   ret
-; }}
+; block0:
+;   adds xzr, x0, x2
+;   adcs xzr, x1, x3
+;   b.vs label1 ; b label2
+; block1:
+;   b label3
+; block2:
+;   b label3
+; block3:
+;   ret
 
 function %i128_bricmp_nof(i128, i128) {
 block0(v0: i128, v1: i128):
@@ -787,27 +529,14 @@ block1:
   return
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (successor: Block 1)
-;   (successor: Block 2)
-;   (instruction range: 0 .. 3)
-;   Inst 0:   adds xzr, x0, x2
-;   Inst 1:   adcs xzr, x1, x3
-;   Inst 2:   b.vc label1 ; b label2
-; Block 1:
-;   (successor: Block 3)
-;   (instruction range: 3 .. 4)
-;   Inst 3:   b label3
-; Block 2:
-;   (successor: Block 3)
-;   (instruction range: 4 .. 5)
-;   Inst 4:   b label3
-; Block 3:
-;   (original IR block: block1)
-;   (instruction range: 5 .. 6)
-;   Inst 5:   ret
-; }}
+; block0:
+;   adds xzr, x0, x2
+;   adcs xzr, x1, x3
+;   b.vc label1 ; b label2
+; block1:
+;   b label3
+; block2:
+;   b label3
+; block3:
+;   ret
 

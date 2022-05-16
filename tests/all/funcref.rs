@@ -6,6 +6,7 @@ use wasmtime::*;
 #[test]
 fn pass_funcref_in_and_out_of_wasm() -> anyhow::Result<()> {
     let (mut store, module) = ref_types_module(
+        false,
         r#"
             (module
                 (func (export "func") (param funcref) (result funcref)
@@ -60,7 +61,8 @@ fn pass_funcref_in_and_out_of_wasm() -> anyhow::Result<()> {
 
     // Passing in a `funcref` from another store fails.
     {
-        let (mut other_store, other_module) = ref_types_module(r#"(module (func (export "f")))"#)?;
+        let (mut other_store, other_module) =
+            ref_types_module(false, r#"(module (func (export "f")))"#)?;
         let other_store_instance = Instance::new(&mut other_store, &other_module, &[])?;
         let f = other_store_instance
             .get_func(&mut other_store, "f")
@@ -77,6 +79,7 @@ fn pass_funcref_in_and_out_of_wasm() -> anyhow::Result<()> {
 #[test]
 fn receive_null_funcref_from_wasm() -> anyhow::Result<()> {
     let (mut store, module) = ref_types_module(
+        false,
         r#"
             (module
                 (func (export "get-null") (result funcref)

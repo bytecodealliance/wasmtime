@@ -47,9 +47,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::str::FromStr;
-use std::sync::Arc;
 use wasmtime_environ::{FlagValue, Tunables, TypeTables};
-use wasmtime_jit::{subslice_range, CompiledModule, CompiledModuleInfo};
+use wasmtime_jit::{subslice_range, CompiledModuleInfo};
 use wasmtime_runtime::MmapVec;
 
 const HEADER: &[u8] = b"\0wasmtime-aot";
@@ -60,7 +59,7 @@ struct WasmFeatures {
     pub reference_types: bool,
     pub multi_value: bool,
     pub bulk_memory: bool,
-    pub module_linking: bool,
+    pub component_model: bool,
     pub simd: bool,
     pub threads: bool,
     pub tail_call: bool,
@@ -78,7 +77,7 @@ impl From<&wasmparser::WasmFeatures> for WasmFeatures {
             reference_types,
             multi_value,
             bulk_memory,
-            module_linking,
+            component_model,
             simd,
             threads,
             tail_call,
@@ -99,7 +98,7 @@ impl From<&wasmparser::WasmFeatures> for WasmFeatures {
             reference_types,
             multi_value,
             bulk_memory,
-            module_linking,
+            component_model,
             simd,
             threads,
             tail_call,
@@ -206,14 +205,7 @@ impl<'a> SerializedModule<'a> {
 
     pub fn into_module(self, engine: &Engine) -> Result<Module> {
         let (mmap, info, types) = self.into_parts(engine)?;
-        let module = CompiledModule::from_artifacts(
-            mmap,
-            info,
-            &*engine.config().profiler,
-            engine.unique_id_allocator(),
-        )?;
-
-        Module::from_parts(engine, module, Arc::new(types))
+        Module::from_parts(engine, mmap, info, types)
     }
 
     pub fn into_parts(
@@ -486,7 +478,7 @@ impl<'a> SerializedModule<'a> {
             reference_types,
             multi_value,
             bulk_memory,
-            module_linking,
+            component_model,
             simd,
             threads,
             tail_call,
@@ -514,9 +506,9 @@ impl<'a> SerializedModule<'a> {
             "WebAssembly bulk memory support",
         )?;
         Self::check_bool(
-            module_linking,
-            other.module_linking,
-            "WebAssembly module linking support",
+            component_model,
+            other.component_model,
+            "WebAssembly component model support",
         )?;
         Self::check_bool(simd, other.simd, "WebAssembly SIMD support")?;
         Self::check_bool(threads, other.threads, "WebAssembly threads support")?;

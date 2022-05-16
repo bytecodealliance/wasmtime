@@ -10,28 +10,23 @@ block0(v0: i32):
     return v0, v1
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 18)
-;   Inst 0:   stp fp, lr, [sp, #-16]!
-;   Inst 1:   mov fp, sp
-;   Inst 2:   str x19, [sp, #-16]!
-;   Inst 3:   stp d14, d15, [sp, #-16]!
-;   Inst 4:   stp d12, d13, [sp, #-16]!
-;   Inst 5:   stp d10, d11, [sp, #-16]!
-;   Inst 6:   stp d8, d9, [sp, #-16]!
-;   Inst 7:   mov x19, x0
-;   Inst 8:   elf_tls_get_addr u1:0
-;   Inst 9:   mov x1, x0
-;   Inst 10:   mov x0, x19
-;   Inst 11:   ldp d8, d9, [sp], #16
-;   Inst 12:   ldp d10, d11, [sp], #16
-;   Inst 13:   ldp d12, d13, [sp], #16
-;   Inst 14:   ldp d14, d15, [sp], #16
-;   Inst 15:   ldr x19, [sp], #16
-;   Inst 16:   ldp fp, lr, [sp], #16
-;   Inst 17:   ret
-; }}
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   str x25, [sp, #-16]!
+;   stp d14, d15, [sp, #-16]!
+;   stp d12, d13, [sp, #-16]!
+;   stp d10, d11, [sp, #-16]!
+;   stp d8, d9, [sp, #-16]!
+; block0:
+;   mov x25, x0
+;   elf_tls_get_addr u1:0
+;   mov x1, x0
+;   mov x0, x25
+;   ldp d8, d9, [sp], #16
+;   ldp d10, d11, [sp], #16
+;   ldp d12, d13, [sp], #16
+;   ldp d14, d15, [sp], #16
+;   ldr x25, [sp], #16
+;   ldp fp, lr, [sp], #16
+;   ret
 

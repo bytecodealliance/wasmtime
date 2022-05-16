@@ -1,15 +1,9 @@
 //! AArch64 ISA definitions: instruction arguments.
 
-// Some variants are never constructed, but we still want them as options in the future.
-#![allow(dead_code)]
-
 use crate::ir::types::*;
 use crate::ir::Type;
 use crate::isa::aarch64::inst::*;
-use crate::machinst::{ty_bits, MachLabel};
-
-use regalloc::{PrettyPrint, RealRegUniverse, Reg, Writable};
-
+use crate::machinst::{ty_bits, MachLabel, PrettyPrint, Reg, Writable};
 use core::convert::Into;
 use std::string::String;
 
@@ -21,8 +15,11 @@ use std::string::String;
 #[repr(u8)]
 pub enum ShiftOp {
     LSL = 0b00,
+    #[allow(dead_code)]
     LSR = 0b01,
+    #[allow(dead_code)]
     ASR = 0b10,
+    #[allow(dead_code)]
     ROR = 0b11,
 }
 
@@ -95,6 +92,7 @@ pub enum ExtendOp {
     SXTB = 0b100,
     SXTH = 0b101,
     SXTW = 0b110,
+    #[allow(dead_code)]
     SXTX = 0b111,
 }
 
@@ -134,6 +132,7 @@ pub enum AMode {
     /// Register plus register offset.
     RegReg(Reg, Reg),
 
+    #[allow(dead_code)]
     /// Register plus register offset, scaled by type's size.
     RegScaled(Reg, Reg, Type),
 
@@ -189,25 +188,10 @@ impl AMode {
         AMode::UnsignedOffset(reg, UImm12Scaled::zero(I64))
     }
 
-    /// Memory reference using the sum of two registers as an address.
-    pub fn reg_plus_reg(reg1: Reg, reg2: Reg) -> AMode {
-        AMode::RegReg(reg1, reg2)
-    }
-
-    /// Memory reference using `reg1 + sizeof(ty) * reg2` as an address.
-    pub fn reg_plus_reg_scaled(reg1: Reg, reg2: Reg, ty: Type) -> AMode {
-        AMode::RegScaled(reg1, reg2, ty)
-    }
-
     /// Memory reference using `reg1 + sizeof(ty) * reg2` as an address, with `reg2` sign- or
     /// zero-extended as per `op`.
     pub fn reg_plus_reg_scaled_extended(reg1: Reg, reg2: Reg, ty: Type, op: ExtendOp) -> AMode {
         AMode::RegScaledExtended(reg1, reg2, ty, op)
-    }
-
-    /// Memory reference to a label: a global function or value, or data in the constant pool.
-    pub fn label(label: MemLabel) -> AMode {
-        AMode::Label(label)
     }
 
     /// Does the address resolve to just a register value, with no offset or
@@ -222,6 +206,29 @@ impl AMode {
             _ => None,
         }
     }
+
+    pub fn with_allocs(&self, allocs: &mut AllocationConsumer<'_>) -> Self {
+        // This should match `memarg_operands()`.
+        match self {
+            &AMode::Unscaled(reg, imm9) => AMode::Unscaled(allocs.next(reg), imm9),
+            &AMode::UnsignedOffset(r, uimm12) => AMode::UnsignedOffset(allocs.next(r), uimm12),
+            &AMode::RegReg(r1, r2) => AMode::RegReg(allocs.next(r1), allocs.next(r2)),
+            &AMode::RegScaled(r1, r2, ty) => AMode::RegScaled(allocs.next(r1), allocs.next(r2), ty),
+            &AMode::RegScaledExtended(r1, r2, ty, ext) => {
+                AMode::RegScaledExtended(allocs.next(r1), allocs.next(r2), ty, ext)
+            }
+            &AMode::RegExtended(r1, r2, ext) => {
+                AMode::RegExtended(allocs.next(r1), allocs.next(r2), ext)
+            }
+            &AMode::PreIndexed(reg, simm9) => AMode::PreIndexed(allocs.next_writable(reg), simm9),
+            &AMode::PostIndexed(reg, simm9) => AMode::PostIndexed(allocs.next_writable(reg), simm9),
+            &AMode::RegOffset(r, off, ty) => AMode::RegOffset(allocs.next(r), off, ty),
+            &AMode::FPOffset(..)
+            | &AMode::SPOffset(..)
+            | &AMode::NominalSPOffset(..)
+            | AMode::Label(..) => self.clone(),
+        }
+    }
 }
 
 /// A memory argument to a load/store-pair.
@@ -230,6 +237,23 @@ pub enum PairAMode {
     SignedOffset(Reg, SImm7Scaled),
     PreIndexed(Writable<Reg>, SImm7Scaled),
     PostIndexed(Writable<Reg>, SImm7Scaled),
+}
+
+impl PairAMode {
+    pub fn with_allocs(&self, allocs: &mut AllocationConsumer<'_>) -> Self {
+        // Should match `pairmemarg_operands()`.
+        match self {
+            &PairAMode::SignedOffset(reg, simm7scaled) => {
+                PairAMode::SignedOffset(allocs.next(reg), simm7scaled)
+            }
+            &PairAMode::PreIndexed(reg, simm7scaled) => {
+                PairAMode::PreIndexed(allocs.next_writable(reg), simm7scaled)
+            }
+            &PairAMode::PostIndexed(reg, simm7scaled) => {
+                PairAMode::PostIndexed(allocs.next_writable(reg), simm7scaled)
+            }
+        }
+    }
 }
 
 //=============================================================================
@@ -362,19 +386,19 @@ impl BranchTarget {
 }
 
 impl PrettyPrint for ShiftOpAndAmt {
-    fn show_rru(&self, _mb_rru: Option<&RealRegUniverse>) -> String {
+    fn pretty_print(&self, _: u8, _: &mut AllocationConsumer<'_>) -> String {
         format!("{:?} {}", self.op(), self.amt().value())
     }
 }
 
 impl PrettyPrint for ExtendOp {
-    fn show_rru(&self, _mb_rru: Option<&RealRegUniverse>) -> String {
+    fn pretty_print(&self, _: u8, _: &mut AllocationConsumer<'_>) -> String {
         format!("{:?}", self)
     }
 }
 
 impl PrettyPrint for MemLabel {
-    fn show_rru(&self, _mb_rru: Option<&RealRegUniverse>) -> String {
+    fn pretty_print(&self, _: u8, _: &mut AllocationConsumer<'_>) -> String {
         match self {
             &MemLabel::PCRel(off) => format!("pc+{}", off),
         }
@@ -393,33 +417,36 @@ fn shift_for_type(ty: Type) -> usize {
 }
 
 impl PrettyPrint for AMode {
-    fn show_rru(&self, mb_rru: Option<&RealRegUniverse>) -> String {
+    fn pretty_print(&self, _: u8, allocs: &mut AllocationConsumer<'_>) -> String {
         match self {
             &AMode::Unscaled(reg, simm9) => {
+                let reg = pretty_print_reg(reg, allocs);
                 if simm9.value != 0 {
-                    format!("[{}, {}]", reg.show_rru(mb_rru), simm9.show_rru(mb_rru))
+                    let simm9 = simm9.pretty_print(8, allocs);
+                    format!("[{}, {}]", reg, simm9)
                 } else {
-                    format!("[{}]", reg.show_rru(mb_rru))
+                    format!("[{}]", reg)
                 }
             }
             &AMode::UnsignedOffset(reg, uimm12) => {
+                let reg = pretty_print_reg(reg, allocs);
                 if uimm12.value != 0 {
-                    format!("[{}, {}]", reg.show_rru(mb_rru), uimm12.show_rru(mb_rru))
+                    let uimm12 = uimm12.pretty_print(8, allocs);
+                    format!("[{}, {}]", reg, uimm12)
                 } else {
-                    format!("[{}]", reg.show_rru(mb_rru))
+                    format!("[{}]", reg)
                 }
             }
             &AMode::RegReg(r1, r2) => {
-                format!("[{}, {}]", r1.show_rru(mb_rru), r2.show_rru(mb_rru),)
+                let r1 = pretty_print_reg(r1, allocs);
+                let r2 = pretty_print_reg(r2, allocs);
+                format!("[{}, {}]", r1, r2)
             }
             &AMode::RegScaled(r1, r2, ty) => {
+                let r1 = pretty_print_reg(r1, allocs);
+                let r2 = pretty_print_reg(r2, allocs);
                 let shift = shift_for_type(ty);
-                format!(
-                    "[{}, {}, LSL #{}]",
-                    r1.show_rru(mb_rru),
-                    r2.show_rru(mb_rru),
-                    shift,
-                )
+                format!("[{}, {}, LSL #{}]", r1, r2, shift)
             }
             &AMode::RegScaledExtended(r1, r2, ty, op) => {
                 let shift = shift_for_type(ty);
@@ -427,39 +454,32 @@ impl PrettyPrint for AMode {
                     ExtendOp::SXTW | ExtendOp::UXTW => OperandSize::Size32,
                     _ => OperandSize::Size64,
                 };
-                let op = op.show_rru(mb_rru);
-                format!(
-                    "[{}, {}, {} #{}]",
-                    r1.show_rru(mb_rru),
-                    show_ireg_sized(r2, mb_rru, size),
-                    op,
-                    shift
-                )
+                let r1 = pretty_print_reg(r1, allocs);
+                let r2 = pretty_print_ireg(r2, size, allocs);
+                let op = op.pretty_print(0, allocs);
+                format!("[{}, {}, {} #{}]", r1, r2, op, shift)
             }
             &AMode::RegExtended(r1, r2, op) => {
                 let size = match op {
                     ExtendOp::SXTW | ExtendOp::UXTW => OperandSize::Size32,
                     _ => OperandSize::Size64,
                 };
-                let op = op.show_rru(mb_rru);
-                format!(
-                    "[{}, {}, {}]",
-                    r1.show_rru(mb_rru),
-                    show_ireg_sized(r2, mb_rru, size),
-                    op,
-                )
+                let r1 = pretty_print_reg(r1, allocs);
+                let r2 = pretty_print_ireg(r2, size, allocs);
+                let op = op.pretty_print(0, allocs);
+                format!("[{}, {}, {}]", r1, r2, op)
             }
-            &AMode::Label(ref label) => label.show_rru(mb_rru),
-            &AMode::PreIndexed(r, simm9) => format!(
-                "[{}, {}]!",
-                r.to_reg().show_rru(mb_rru),
-                simm9.show_rru(mb_rru)
-            ),
-            &AMode::PostIndexed(r, simm9) => format!(
-                "[{}], {}",
-                r.to_reg().show_rru(mb_rru),
-                simm9.show_rru(mb_rru)
-            ),
+            &AMode::Label(ref label) => label.pretty_print(0, allocs),
+            &AMode::PreIndexed(r, simm9) => {
+                let r = pretty_print_reg(r.to_reg(), allocs);
+                let simm9 = simm9.pretty_print(8, allocs);
+                format!("[{}, {}]!", r, simm9)
+            }
+            &AMode::PostIndexed(r, simm9) => {
+                let r = pretty_print_reg(r.to_reg(), allocs);
+                let simm9 = simm9.pretty_print(8, allocs);
+                format!("[{}], {}", r, simm9)
+            }
             // Eliminated by `mem_finalize()`.
             &AMode::SPOffset(..)
             | &AMode::FPOffset(..)
@@ -472,31 +492,33 @@ impl PrettyPrint for AMode {
 }
 
 impl PrettyPrint for PairAMode {
-    fn show_rru(&self, mb_rru: Option<&RealRegUniverse>) -> String {
+    fn pretty_print(&self, _: u8, allocs: &mut AllocationConsumer<'_>) -> String {
         match self {
             &PairAMode::SignedOffset(reg, simm7) => {
+                let reg = pretty_print_reg(reg, allocs);
                 if simm7.value != 0 {
-                    format!("[{}, {}]", reg.show_rru(mb_rru), simm7.show_rru(mb_rru))
+                    let simm7 = simm7.pretty_print(8, allocs);
+                    format!("[{}, {}]", reg, simm7)
                 } else {
-                    format!("[{}]", reg.show_rru(mb_rru))
+                    format!("[{}]", reg)
                 }
             }
-            &PairAMode::PreIndexed(reg, simm7) => format!(
-                "[{}, {}]!",
-                reg.to_reg().show_rru(mb_rru),
-                simm7.show_rru(mb_rru)
-            ),
-            &PairAMode::PostIndexed(reg, simm7) => format!(
-                "[{}], {}",
-                reg.to_reg().show_rru(mb_rru),
-                simm7.show_rru(mb_rru)
-            ),
+            &PairAMode::PreIndexed(reg, simm7) => {
+                let reg = pretty_print_reg(reg.to_reg(), allocs);
+                let simm7 = simm7.pretty_print(8, allocs);
+                format!("[{}, {}]!", reg, simm7)
+            }
+            &PairAMode::PostIndexed(reg, simm7) => {
+                let reg = pretty_print_reg(reg.to_reg(), allocs);
+                let simm7 = simm7.pretty_print(8, allocs);
+                format!("[{}], {}", reg, simm7)
+            }
         }
     }
 }
 
 impl PrettyPrint for Cond {
-    fn show_rru(&self, _mb_rru: Option<&RealRegUniverse>) -> String {
+    fn pretty_print(&self, _: u8, _: &mut AllocationConsumer<'_>) -> String {
         let mut s = format!("{:?}", self);
         s.make_ascii_lowercase();
         s
@@ -504,7 +526,7 @@ impl PrettyPrint for Cond {
 }
 
 impl PrettyPrint for BranchTarget {
-    fn show_rru(&self, _mb_rru: Option<&RealRegUniverse>) -> String {
+    fn pretty_print(&self, _: u8, _: &mut AllocationConsumer<'_>) -> String {
         match self {
             &BranchTarget::Label(label) => format!("label{:?}", label.get()),
             &BranchTarget::ResolvedOffset(off) => format!("{}", off),
@@ -525,18 +547,12 @@ impl OperandSize {
     pub fn is32(self) -> bool {
         self == OperandSize::Size32
     }
+
     /// 64-bit case?
     pub fn is64(self) -> bool {
         self == OperandSize::Size64
     }
-    /// Convert from an `is32` boolean flag to an `OperandSize`.
-    pub fn from_is32(is32: bool) -> OperandSize {
-        if is32 {
-            OperandSize::Size32
-        } else {
-            OperandSize::Size64
-        }
-    }
+
     /// Convert from a needed width to the smallest size that fits.
     pub fn from_bits<I: Into<usize>>(bits: I) -> OperandSize {
         let bits: usize = bits.into();
@@ -545,6 +561,13 @@ impl OperandSize {
             OperandSize::Size32
         } else {
             OperandSize::Size64
+        }
+    }
+
+    pub fn bits(&self) -> u8 {
+        match self {
+            OperandSize::Size32 => 32,
+            OperandSize::Size64 => 64,
         }
     }
 
@@ -600,14 +623,6 @@ impl ScalarSize {
             ScalarSize::Size32 => OperandSize::Size32,
             ScalarSize::Size64 => OperandSize::Size64,
             _ => panic!("Unexpected operand_size request for: {:?}", self),
-        }
-    }
-
-    /// Convert from an integer operand size.
-    pub fn from_operand_size(size: OperandSize) -> ScalarSize {
-        match size {
-            OperandSize::Size32 => ScalarSize::Size32,
-            OperandSize::Size64 => ScalarSize::Size64,
         }
     }
 
@@ -710,31 +725,6 @@ impl VectorSize {
             VectorSize::Size32x2 => false,
             VectorSize::Size32x4 => true,
             VectorSize::Size64x2 => true,
-        }
-    }
-
-    /// Produces a `VectorSize` with lanes twice as wide.  Note that if the resulting
-    /// size would exceed 128 bits, then the number of lanes is also halved, so as to
-    /// ensure that the result size is at most 128 bits.
-    pub fn widen(&self) -> VectorSize {
-        match self {
-            VectorSize::Size8x8 => VectorSize::Size16x8,
-            VectorSize::Size8x16 => VectorSize::Size16x8,
-            VectorSize::Size16x4 => VectorSize::Size32x4,
-            VectorSize::Size16x8 => VectorSize::Size32x4,
-            VectorSize::Size32x2 => VectorSize::Size64x2,
-            VectorSize::Size32x4 => VectorSize::Size64x2,
-            VectorSize::Size64x2 => unreachable!(),
-        }
-    }
-
-    /// Produces a `VectorSize` that has the same lane width, but half as many lanes.
-    pub fn halve(&self) -> VectorSize {
-        match self {
-            VectorSize::Size8x16 => VectorSize::Size8x8,
-            VectorSize::Size16x8 => VectorSize::Size16x4,
-            VectorSize::Size32x4 => VectorSize::Size32x2,
-            _ => *self,
         }
     }
 

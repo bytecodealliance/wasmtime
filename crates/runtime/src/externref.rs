@@ -99,6 +99,7 @@
 //! Examination of Deferred Reference Counting and Cycle Detection* by Quinane:
 //! <https://openresearch-repository.anu.edu.au/bitstream/1885/42030/2/hon-thesis.pdf>
 
+use std::alloc::Layout;
 use std::any::Any;
 use std::cell::UnsafeCell;
 use std::cmp;
@@ -108,7 +109,6 @@ use std::mem;
 use std::ops::Deref;
 use std::ptr::{self, NonNull};
 use std::sync::atomic::{self, AtomicUsize, Ordering};
-use std::{alloc::Layout, sync::Arc};
 use wasmtime_environ::StackMap;
 
 /// An external reference to some opaque data.
@@ -814,7 +814,7 @@ impl VMExternRefActivationsTable {
 /// program counter value.
 pub trait ModuleInfoLookup {
     /// Lookup the module information from a program counter value.
-    fn lookup(&self, pc: usize) -> Option<Arc<dyn ModuleInfo>>;
+    fn lookup(&self, pc: usize) -> Option<&dyn ModuleInfo>;
 }
 
 /// Used by the runtime to query module information.
