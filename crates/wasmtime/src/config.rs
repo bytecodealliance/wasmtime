@@ -360,23 +360,27 @@ impl Config {
     ///
     /// The [`Store`](crate::Store) tracks the deadline, and controls
     /// what happens when the deadline is reached during
-    /// execution. Two behaviors are possible:
+    /// execution. Several behaviors are possible:
     ///
     /// - Trap if code is executing when the epoch deadline is
     ///   met. See
     ///   [`Store::epoch_deadline_trap`](crate::Store::epoch_deadline_trap).
     ///
+    /// - Call an arbitrary function. This function may chose to trap or
+    ///   increment the epoch. See
+    ///   [`Store::epoch_deadline_callback`](crate::Store::epoch_deadline_callback).
+    ///
     /// - Yield to the executor loop, then resume when the future is
     ///   next polled. See
     ///   [`Store::epoch_deadline_async_yield_and_update`](crate::Store::epoch_deadline_async_yield_and_update).
     ///
-    /// The first is the default; set the second for the timeslicing
-    /// behavior described above.
+    /// Trapping is the default. The yielding behaviour may be used for
+    /// the timeslicing behavior described above.
     ///
-    /// This feature is available with or without async
-    /// support. However, without async support, only the trapping
-    /// behavior is available. In this mode, epoch-based interruption
-    /// can serve as a simple external-interruption mechanism.
+    /// This feature is available with or without async support.
+    /// However, without async support, the timeslicing behaviour is
+    /// not available. This means epoch-based interruption can only
+    /// serve as a simple external-interruption mechanism.
     ///
     /// An initial deadline can be set before executing code by
     /// calling
@@ -404,6 +408,7 @@ impl Config {
     /// - [`Engine::increment_epoch`](crate::Engine::increment_epoch)
     /// - [`Store::set_epoch_deadline`](crate::Store::set_epoch_deadline)
     /// - [`Store::epoch_deadline_trap`](crate::Store::epoch_deadline_trap)
+    /// - [`Store::epoch_deadline_callback`](crate::Store::epoch_deadline_callback)
     /// - [`Store::epoch_deadline_async_yield_and_update`](crate::Store::epoch_deadline_async_yield_and_update)
     pub fn epoch_interruption(&mut self, enable: bool) -> &mut Self {
         self.tunables.epoch_interruption = enable;

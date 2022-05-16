@@ -1,4 +1,5 @@
 use crate::async_functions::{CountPending, PollOnce};
+use anyhow::{anyhow, Result};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use wasmtime::*;
@@ -10,7 +11,7 @@ fn build_engine() -> Arc<Engine> {
     Arc::new(Engine::new(&config).unwrap())
 }
 
-fn make_env(engine: &Engine) -> Linker<()> {
+fn make_env<T>(engine: &Engine) -> Linker<T> {
     let mut linker = Linker::new(engine);
     let engine = engine.clone();
 
@@ -29,29 +30,38 @@ fn make_env(engine: &Engine) -> Linker<()> {
     linker
 }
 
+enum InterruptMode {
+    Trap,
+    Callback(fn(&mut usize) -> Result<u64>),
+    Yield(u64),
+}
+
 /// Run a test with the given wasm, giving an initial deadline of
 /// `initial` ticks in the future, and either configuring the wasm to
 /// yield and set a deadline `delta` ticks in the future if `delta` is
 /// `Some(..)` or trapping if `delta` is `None`.
 ///
-/// Returns `Some(yields)` if function completed normally, giving the
-/// number of yields that occured, or `None` if a trap occurred.
+/// Returns `Some((yields, store))` if function completed normally, giving
+/// the number of yields that occurred, or `None` if a trap occurred.
 async fn run_and_count_yields_or_trap<F: Fn(Arc<Engine>)>(
     wasm: &str,
     initial: u64,
-    delta: Option<u64>,
+    delta: InterruptMode,
     setup_func: F,
-) -> Option<usize> {
+) -> Option<(usize, usize)> {
     let engine = build_engine();
     let linker = make_env(&engine);
     let module = Module::new(&engine, wasm).unwrap();
-    let mut store = Store::new(&engine, ());
+    let mut store = Store::new(&engine, 0);
     store.set_epoch_deadline(initial);
     match delta {
-        Some(delta) => {
+        InterruptMode::Yield(delta) => {
             store.epoch_deadline_async_yield_and_update(delta);
         }
-        None => {
+        InterruptMode::Callback(func) => {
+            store.epoch_deadline_callback(func);
+        }
+        InterruptMode::Trap => {
             store.epoch_deadline_trap();
         }
     }
@@ -63,14 +73,15 @@ async fn run_and_count_yields_or_trap<F: Fn(Arc<Engine>)>(
     let f = instance.get_func(&mut store, "run").unwrap();
     let (result, yields) =
         CountPending::new(Box::pin(f.call_async(&mut store, &[], &mut []))).await;
-    return result.ok().map(|_| yields);
+    let store = store.data();
+    return result.ok().map(|_| (yields, *store));
 }
 
 #[tokio::test]
 async fn epoch_yield_at_func_entry() {
     // Should yield at start of call to func $subfunc.
     assert_eq!(
-        Some(1),
+        Some((1, 0)),
         run_and_count_yields_or_trap(
             "
             (module
@@ -81,7 +92,7 @@ async fn epoch_yield_at_func_entry() {
                 (func $subfunc))
             ",
             1,
-            Some(1),
+            InterruptMode::Yield(1),
             |_| {},
         )
         .await
@@ -92,7 +103,7 @@ async fn epoch_yield_at_func_entry() {
 async fn epoch_yield_at_loop_header() {
     // Should yield at top of loop, once per five iters.
     assert_eq!(
-        Some(2),
+        Some((2, 0)),
         run_and_count_yields_or_trap(
             "
             (module
@@ -105,7 +116,7 @@ async fn epoch_yield_at_loop_header() {
                         (br_if $l (local.tee $i (i32.sub (local.get $i) (i32.const 1)))))))
             ",
             0,
-            Some(5),
+            InterruptMode::Yield(5),
             |_| {},
         )
         .await
@@ -117,7 +128,7 @@ async fn epoch_yield_immediate() {
     // We should see one yield immediately when the initial deadline
     // is zero.
     assert_eq!(
-        Some(1),
+        Some((1, 0)),
         run_and_count_yields_or_trap(
             "
             (module
@@ -125,7 +136,7 @@ async fn epoch_yield_immediate() {
                 (func (export \"run\")))
             ",
             0,
-            Some(1),
+            InterruptMode::Yield(1),
             |_| {},
         )
         .await
@@ -139,7 +150,7 @@ async fn epoch_yield_only_once() {
     // not yield again (the double-check block will reload the correct
     // epoch).
     assert_eq!(
-        Some(1),
+        Some((1, 0)),
         run_and_count_yields_or_trap(
             "
             (module
@@ -155,7 +166,7 @@ async fn epoch_yield_only_once() {
                   (call $bump)))
             ",
             1,
-            Some(1),
+            InterruptMode::Yield(1),
             |_| {},
         )
         .await
@@ -175,7 +186,7 @@ async fn epoch_interrupt_infinite_loop() {
                     (br $l))))
             ",
             1,
-            None,
+            InterruptMode::Trap,
             |engine| {
                 std::thread::spawn(move || {
                     std::thread::sleep(std::time::Duration::from_millis(50));
@@ -297,13 +308,58 @@ async fn epoch_interrupt_function_entries() {
                 (func $f9))
             ",
             1,
-            None,
+            InterruptMode::Trap,
             |engine| {
                 std::thread::spawn(move || {
                     std::thread::sleep(std::time::Duration::from_millis(50));
                     engine.increment_epoch();
                 });
             },
+        )
+        .await
+    );
+}
+
+#[tokio::test]
+async fn epoch_callback_continue() {
+    assert_eq!(
+        Some((0, 1)),
+        run_and_count_yields_or_trap(
+            "
+            (module
+                (import \"\" \"bump_epoch\" (func $bump))
+                (func (export \"run\")
+                    call $bump  ;; bump epoch
+                    call $subfunc) ;; call func; will notice new epoch and yield
+                (func $subfunc))
+            ",
+            1,
+            InterruptMode::Callback(|s| {
+                *s += 1;
+                Ok(1)
+            }),
+            |_| {},
+        )
+        .await
+    );
+}
+
+#[tokio::test]
+async fn epoch_callback_trap() {
+    assert_eq!(
+        None,
+        run_and_count_yields_or_trap(
+            "
+            (module
+                (import \"\" \"bump_epoch\" (func $bump))
+                (func (export \"run\")
+                    call $bump  ;; bump epoch
+                    call $subfunc) ;; call func; will notice new epoch and yield
+                (func $subfunc))
+            ",
+            1,
+            InterruptMode::Callback(|_| Err(anyhow!("Failing in callback"))),
+            |_| {},
         )
         .await
     );
