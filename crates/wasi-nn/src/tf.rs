@@ -5,9 +5,10 @@ use std::ops::Deref;
 use std::path::Path;
 use std::str;
 use std::sync::Arc;
-use wasi_nn_tf_runtime::Tensor as TFTensor;
-use wasi_nn_tf_runtime::DEFAULT_SERVING_SIGNATURE_DEF_KEY;
-use wasi_nn_tf_runtime::{
+use tensorflow::library;
+use tensorflow::Tensor as TFTensor;
+use tensorflow::DEFAULT_SERVING_SIGNATURE_DEF_KEY;
+use tensorflow::{
     FetchToken, Graph, Operation, SavedModelBundle, SessionOptions, SessionRunArgs, Status,
 };
 
@@ -29,6 +30,11 @@ impl Backend for TensorflowBackend {
             if builders.len() != 2 {
                 return Err(BackendError::InvalidNumberOfBuilders(2, builders.len()).into());
             }
+            // Initialize the Tensorflow backend
+            let retval = tensorflow::library::load().or_else(|e| {
+                println!("Error loading the TensorFlow backend: \n {}", e);
+                Err(e)
+            });
 
             let unmap = map_dir.as_ref().unwrap();
             let mut graph = Graph::new();
