@@ -179,13 +179,12 @@ pub fn finish_compile(
         SectionKind::ReadOnlyData,
     );
     let mut total_data_len = 0;
-    for data in data {
-        let offset = obj.append_section_data(data_id, &data, data_align.unwrap_or(1));
-        // All data segments are expected to be adjacent to one another, and
-        // with a higher alignment each data segment needs to be individually
-        // aligned to make this so, so assert that the offset this was placed at
-        // is always against the previous segment.
-        assert_eq!(offset as usize, total_data_len);
+    for (i, data) in data.iter().enumerate() {
+        // The first data segment has its alignment specified as the alignment
+        // for the entire section, but everything afterwards is adjacent so it
+        // has alignment of 1.
+        let align = if i == 0 { data_align.unwrap_or(1) } else { 1 };
+        obj.append_section_data(data_id, data, align);
         total_data_len += data.len();
     }
     for data in passive_data.iter() {
@@ -398,7 +397,7 @@ impl CompiledModule {
         info: Option<CompiledModuleInfo>,
         profiler: &dyn ProfilingAgent,
         id_allocator: &CompiledModuleIdAllocator,
-    ) -> Result<Arc<Self>> {
+    ) -> Result<Self> {
         // Transfer ownership of `obj` to a `CodeMemory` object which will
         // manage permissions, such as the executable bit. Once it's located
         // there we also publish it for being able to execute. Note that this
@@ -454,7 +453,7 @@ impl CompiledModule {
         };
         ret.register_debug_and_profiling(profiler)?;
 
-        Ok(Arc::new(ret))
+        Ok(ret)
     }
 
     fn register_debug_and_profiling(&mut self, profiler: &dyn ProfilingAgent) -> Result<()> {

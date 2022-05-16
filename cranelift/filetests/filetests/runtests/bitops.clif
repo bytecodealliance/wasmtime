@@ -1,9 +1,7 @@
 test run
 target aarch64
-target arm
 target s390x
 ; target x86_64 TODO: Not yet implemented on x86_64
-
 
 function %bnot_band() -> b1 {
 block0:
@@ -14,3 +12,44 @@ block0:
     return v4
 }
 ; run
+
+function %bitselect_i8(i8, i8, i8) -> i8 {
+block0(v0: i8, v1: i8, v2: i8):
+    v3 = bitselect v0, v1, v2
+    return v3
+}
+
+; run: %bitselect_i8(0, 0, 0xFF) == 0xFF
+; run: %bitselect_i8(0x55, 0, 0xFF) == 0xAA
+; run: %bitselect_i8(0xF0, 32, 13) == 45
+; run: %bitselect_i8(0xFF, 0xFF, 0) == 0xFF
+
+function %bitselect_i16(i16, i16, i16) -> i16 {
+block0(v0: i16, v1: i16, v2: i16):
+    v3 = bitselect v0, v1, v2
+    return v3
+}
+
+; run: %bitselect_i16(0, 0, 0xFFFF) == 0xFFFF
+; run: %bitselect_i16(0x5555, 0, 0xFFFF) == 0xAAAA
+; run: %bitselect_i16(0xFFFF, 0xFFFF, 0) == 0xFFFF
+
+function %bitselect_i32(i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = bitselect v0, v1, v2
+    return v3
+}
+
+; run: %bitselect_i32(0, 0, 0xFFFFFFFF) == 0xFFFFFFFF
+; run: %bitselect_i32(0x55555555, 0, 0xFFFFFFFF) == 0xAAAAAAAA
+; run: %bitselect_i32(0xFFFFFFFF, 0xFFFFFFFF, 0) == 0xFFFFFFFF
+
+function %bitselect_i64(i64, i64, i64) -> i64 {
+block0(v0: i64, v1: i64, v2: i64):
+    v3 = bitselect v0, v1, v2
+    return v3
+}
+
+; run: %bitselect_i64(0, 0, 0xFFFFFFFFFFFFFFFF) == 0xFFFFFFFFFFFFFFFF
+; run: %bitselect_i64(0x5555555555555555, 0, 0xFFFFFFFFFFFFFFFF) == 0xAAAAAAAAAAAAAAAA
+; run: %bitselect_i64(0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0) == 0xFFFFFFFFFFFFFFFF

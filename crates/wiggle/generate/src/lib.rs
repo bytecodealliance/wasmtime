@@ -7,7 +7,7 @@ mod names;
 mod types;
 pub mod wasmtime;
 
-use heck::ShoutySnakeCase;
+use heck::ToShoutySnakeCase;
 use lifetimes::anon_lifetime;
 use proc_macro2::{Literal, TokenStream};
 use quote::quote;

@@ -1,8 +1,7 @@
 use crate::ir::{types, Inst, Value, ValueList};
-use crate::machinst::{get_output_reg, InsnOutput, LowerCtx, MachInst, RegRenamer};
+use crate::machinst::{get_output_reg, InsnOutput, LowerCtx, Reg, Writable};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
-use regalloc::{Reg, Writable};
 use smallvec::SmallVec;
 use std::cell::Cell;
 
@@ -107,7 +106,28 @@ macro_rules! isle_prelude_methods {
 
         #[inline]
         fn invalid_reg(&mut self) -> Reg {
-            Reg::invalid()
+            use crate::machinst::valueregs::InvalidSentinel;
+            Reg::invalid_sentinel()
+        }
+
+        #[inline]
+        fn invalid_reg_etor(&mut self, reg: Reg) -> Option<()> {
+            use crate::machinst::valueregs::InvalidSentinel;
+            if reg.is_invalid_sentinel() {
+                Some(())
+            } else {
+                None
+            }
+        }
+
+        #[inline]
+        fn valid_reg(&mut self, reg: Reg) -> Option<()> {
+            use crate::machinst::valueregs::InvalidSentinel;
+            if !reg.is_invalid_sentinel() {
+                Some(())
+            } else {
+                None
+            }
         }
 
         #[inline]
@@ -121,49 +141,59 @@ macro_rules! isle_prelude_methods {
         }
 
         #[inline]
+        fn ensure_in_vreg(&mut self, reg: Reg, ty: Type) -> Reg {
+            self.lower_ctx.ensure_in_vreg(reg, ty)
+        }
+
+        #[inline]
         fn value_regs_get(&mut self, regs: ValueRegs, i: usize) -> Reg {
             regs.regs()[i]
         }
 
         #[inline]
-        fn u8_as_u64(&mut self, x: u8) -> u64 {
-            x.into()
+        fn u8_as_u32(&mut self, x: u8) -> Option<u32> {
+            Some(x.into())
         }
 
         #[inline]
-        fn u16_as_u64(&mut self, x: u16) -> u64 {
-            x.into()
+        fn u8_as_u64(&mut self, x: u8) -> Option<u64> {
+            Some(x.into())
         }
 
         #[inline]
-        fn u32_as_u64(&mut self, x: u32) -> u64 {
-            x.into()
+        fn u16_as_u64(&mut self, x: u16) -> Option<u64> {
+            Some(x.into())
         }
 
         #[inline]
-        fn i64_as_u64(&mut self, x: i64) -> u64 {
-            x as u64
+        fn u32_as_u64(&mut self, x: u32) -> Option<u64> {
+            Some(x.into())
         }
 
         #[inline]
-        fn u64_add(&mut self, x: u64, y: u64) -> u64 {
-            x.wrapping_add(y)
+        fn i64_as_u64(&mut self, x: i64) -> Option<u64> {
+            Some(x as u64)
         }
 
         #[inline]
-        fn u64_sub(&mut self, x: u64, y: u64) -> u64 {
-            x.wrapping_sub(y)
+        fn u64_add(&mut self, x: u64, y: u64) -> Option<u64> {
+            Some(x.wrapping_add(y))
         }
 
         #[inline]
-        fn u64_and(&mut self, x: u64, y: u64) -> u64 {
-            x & y
+        fn u64_sub(&mut self, x: u64, y: u64) -> Option<u64> {
+            Some(x.wrapping_sub(y))
         }
 
         #[inline]
-        fn ty_bits(&mut self, ty: Type) -> u8 {
+        fn u64_and(&mut self, x: u64, y: u64) -> Option<u64> {
+            Some(x & y)
+        }
+
+        #[inline]
+        fn ty_bits(&mut self, ty: Type) -> Option<u8> {
             use std::convert::TryInto;
-            ty.bits().try_into().unwrap()
+            Some(ty.bits().try_into().unwrap())
         }
 
         #[inline]
@@ -220,6 +250,15 @@ macro_rules! isle_prelude_methods {
         }
 
         #[inline]
+        fn ty_int_bool_ref_scalar_64(&mut self, ty: Type) -> Option<Type> {
+            if ty.bits() <= 64 && !ty.is_float() && !ty.is_vector() {
+                Some(ty)
+            } else {
+                None
+            }
+        }
+
+        #[inline]
         fn ty_32_or_64(&mut self, ty: Type) -> Option<Type> {
             if ty.bits() == 32 || ty.bits() == 64 {
                 Some(ty)
@@ -246,6 +285,14 @@ macro_rules! isle_prelude_methods {
         }
 
         #[inline]
+        fn ty_int_bool_ref_64(&mut self, ty: Type) -> Option<Type> {
+            match ty {
+                I64 | B64 | R64 => Some(ty),
+                _ => None,
+            }
+        }
+
+        #[inline]
         fn ty_int_bool_128(&mut self, ty: Type) -> Option<Type> {
             match ty {
                 I128 | B128 => Some(ty),
@@ -264,6 +311,15 @@ macro_rules! isle_prelude_methods {
         #[inline]
         fn ty_vec128(&mut self, ty: Type) -> Option<Type> {
             if ty.is_vector() && ty.bits() == 128 {
+                Some(ty)
+            } else {
+                None
+            }
+        }
+
+        #[inline]
+        fn ty_vec128_int(&mut self, ty: Type) -> Option<Type> {
+            if ty.is_vector() && ty.bits() == 128 && ty.lane_type().is_int() {
                 Some(ty)
             } else {
                 None
@@ -433,6 +489,51 @@ macro_rules! isle_prelude_methods {
         }
 
         #[inline]
+        fn s32_add_fallible(&mut self, a: u32, b: u32) -> Option<u32> {
+            let a = a as i32;
+            let b = b as i32;
+            a.checked_add(b).map(|sum| sum as u32)
+        }
+
+        #[inline]
+        fn u32_nonnegative(&mut self, x: u32) -> Option<u32> {
+            if (x as i32) >= 0 {
+                Some(x)
+            } else {
+                None
+            }
+        }
+
+        #[inline]
+        fn u32_lteq(&mut self, a: u32, b: u32) -> Option<()> {
+            if a <= b {
+                Some(())
+            } else {
+                None
+            }
+        }
+
+        #[inline]
+        fn simm32(&mut self, x: Imm64) -> Option<u32> {
+            let x64: i64 = x.into();
+            let x32: i32 = x64.try_into().ok()?;
+            Some(x32 as u32)
+        }
+
+        #[inline]
+        fn uimm8(&mut self, x: Imm64) -> Option<u8> {
+            let x64: i64 = x.into();
+            let x8: u8 = x64.try_into().ok()?;
+            Some(x8)
+        }
+
+        #[inline]
+        fn offset32(&mut self, x: Offset32) -> Option<u32> {
+            let x: i32 = x.into();
+            Some(x as u32)
+        }
+
+        #[inline]
         fn u8_and(&mut self, a: u8, b: u8) -> u8 {
             a & b
         }
@@ -440,6 +541,18 @@ macro_rules! isle_prelude_methods {
         #[inline]
         fn lane_type(&mut self, ty: Type) -> Type {
             ty.lane_type()
+        }
+
+        #[inline]
+        fn offset32_to_u32(&mut self, offset: Offset32) -> u32 {
+            let offset: i32 = offset.into();
+            offset as u32
+        }
+
+        #[inline]
+        fn emit_u64_le_const(&mut self, value: u64) -> VCodeConstant {
+            let data = VCodeConstantData::U64(value.to_le_bytes());
+            self.lower_ctx.use_constant(data)
         }
     };
 }
@@ -453,7 +566,6 @@ where
     pub lower_ctx: &'a mut C,
     pub flags: &'a F,
     pub isa_flags: &'a I,
-    pub emitted_insts: SmallVec<[(C::I, bool); N]>,
 }
 
 /// Shared lowering code amongst all backends for doing ISLE-based lowering.
@@ -468,7 +580,6 @@ pub(crate) fn lower_common<C, F, I, IF, const N: usize>(
     outputs: &[InsnOutput],
     inst: Inst,
     isle_lower: IF,
-    map_regs: fn(&mut C::I, &RegRenamer),
 ) -> Result<(), ()>
 where
     C: LowerCtx,
@@ -481,7 +592,6 @@ where
         lower_ctx,
         flags,
         isa_flags,
-        emitted_insts: SmallVec::new(),
     };
 
     let temp_regs = isle_lower(&mut isle_ctx, inst).ok_or(())?;
@@ -500,10 +610,15 @@ where
     }
 
     // The ISLE generated code emits its own registers to define the
-    // instruction's lowered values in. We rename those registers to the
-    // registers they were assigned when their value was used as an operand in
-    // earlier lowerings.
-    let mut renamer = RegRenamer::default();
+    // instruction's lowered values in. However, other instructions
+    // that use this SSA value will be lowered assuming that the value
+    // is generated into a pre-assigned, different, register.
+    //
+    // To connect the two, we set up "aliases" in the VCodeBuilder
+    // that apply when it is building the Operand table for the
+    // regalloc to use. These aliases effectively rewrite any use of
+    // the pre-assigned register to the register that was returned by
+    // the ISLE lowering logic.
     for i in 0..outputs.len() {
         let regs = temp_regs[i];
         let dsts = get_output_reg(isle_ctx.lower_ctx, outputs[i]);
@@ -514,39 +629,9 @@ where
             // Flags values do not occupy any registers.
             assert!(regs.len() == 0);
         } else {
-            let (_, tys) = <C::I>::rc_for_type(ty).unwrap();
-            assert!(regs.len() == tys.len());
-            assert!(regs.len() == dsts.len());
-            for ((dst, temp), ty) in dsts.regs().iter().zip(regs.regs().iter()).zip(tys) {
-                renamer.add_rename(*temp, dst.to_reg(), *ty);
+            for (dst, temp) in dsts.regs().iter().zip(regs.regs().iter()) {
+                isle_ctx.lower_ctx.set_vreg_alias(dst.to_reg(), *temp);
             }
-        }
-    }
-    for (inst, _) in isle_ctx.emitted_insts.iter_mut() {
-        map_regs(inst, &renamer);
-    }
-
-    // If any renamed register wasn't actually defined in the ISLE-generated
-    // instructions then what we're actually doing is "renaming" an input to a
-    // new name which requires manually inserting a `mov` instruction. Note that
-    // this typically doesn't happen and is only here for cases where the input
-    // is sometimes passed through unmodified to the output, such as
-    // zero-extending a 64-bit input to a 128-bit output which doesn't actually
-    // change the input and simply produces another zero'd register.
-    for (old, new, ty) in renamer.unmapped_defs() {
-        isle_ctx
-            .lower_ctx
-            .emit(<C::I>::gen_move(Writable::from_reg(new), old, ty));
-    }
-
-    // Once everything is remapped we forward all emitted instructions to the
-    // `lower_ctx`. Note that this happens after the synthetic mov's above in
-    // case any of these instruction use those movs.
-    for (inst, is_safepoint) in isle_ctx.emitted_insts {
-        if is_safepoint {
-            lower_ctx.emit_safepoint(inst);
-        } else {
-            lower_ctx.emit(inst);
         }
     }
 

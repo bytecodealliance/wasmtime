@@ -29,7 +29,7 @@ fn main() -> Result<()> {
     let trap = run.call(&mut store, ()).unwrap_err();
 
     println!("trap received...");
-    assert!(trap.to_string().contains("epoch deadline reached"));
+    assert!(trap.trap_code().unwrap() == TrapCode::Interrupt);
 
     Ok(())
 }

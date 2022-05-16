@@ -1,28 +1,28 @@
 //! CLI tool to interpret Cranelift IR files.
 
 use crate::utils::iterate_files;
+use clap::Parser;
 use cranelift_interpreter::environment::FunctionStore;
 use cranelift_interpreter::interpreter::{Interpreter, InterpreterState};
 use cranelift_interpreter::step::ControlFlow;
 use cranelift_reader::{parse_run_command, parse_test, ParseError, ParseOptions};
 use std::path::PathBuf;
 use std::{fs, io};
-use structopt::StructOpt;
 use thiserror::Error;
 
 /// Interpret clif code
-#[derive(StructOpt)]
+#[derive(Parser)]
 pub struct Options {
     /// Specify an input file to be used. Use '-' for stdin.
-    #[structopt(required(true), parse(from_os_str))]
+    #[clap(required = true)]
     files: Vec<PathBuf>,
 
     /// Enable debug output on stderr/stdout
-    #[structopt(short = "d")]
+    #[clap(short)]
     debug: bool,
 
     /// Be more verbose
-    #[structopt(short = "v", long = "verbose")]
+    #[clap(short, long)]
     verbose: bool,
 }
 

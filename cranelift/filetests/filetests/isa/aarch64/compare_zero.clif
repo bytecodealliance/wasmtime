@@ -10,14 +10,9 @@ block0(v0: i8x16):
   return v3
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 2)
-;   Inst 0:   cmeq v0.16b, v0.16b, #0
-;   Inst 1:   ret
-; }}
+; block0:
+;   cmeq v0.16b, v0.16b, #0
+;   ret
 
 function %f1(i16x8) -> b16x8 {
 block0(v0: i16x8):
@@ -27,14 +22,9 @@ block0(v0: i16x8):
   return v3
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 2)
-;   Inst 0:   cmeq v0.8h, v0.8h, #0
-;   Inst 1:   ret
-; }}
+; block0:
+;   cmeq v0.8h, v0.8h, #0
+;   ret
 
 function %f2(i32x4) -> b32x4 {
 block0(v0: i32x4):
@@ -44,15 +34,10 @@ block0(v0: i32x4):
   return v3
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 3)
-;   Inst 0:   cmeq v0.4s, v0.4s, #0
-;   Inst 1:   mvn v0.16b, v0.16b
-;   Inst 2:   ret
-; }}
+; block0:
+;   cmeq v3.4s, v0.4s, #0
+;   mvn v0.16b, v3.16b
+;   ret
 
 function %f3(i64x2) -> b64x2 {
 block0(v0: i64x2):
@@ -62,15 +47,10 @@ block0(v0: i64x2):
   return v3
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 3)
-;   Inst 0:   cmeq v0.2d, v0.2d, #0
-;   Inst 1:   mvn v0.16b, v0.16b
-;   Inst 2:   ret
-; }}
+; block0:
+;   cmeq v3.2d, v0.2d, #0
+;   mvn v0.16b, v3.16b
+;   ret
 
 function %f4(i8x16) -> b8x16 {
 block0(v0: i8x16):
@@ -80,14 +60,9 @@ block0(v0: i8x16):
   return v3
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 2)
-;   Inst 0:   cmle v0.16b, v0.16b, #0
-;   Inst 1:   ret
-; }}
+; block0:
+;   cmle v0.16b, v0.16b, #0
+;   ret
 
 function %f5(i16x8) -> b16x8 {
 block0(v0: i16x8):
@@ -97,14 +72,9 @@ block0(v0: i16x8):
   return v3
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 2)
-;   Inst 0:   cmge v0.8h, v0.8h, #0
-;   Inst 1:   ret
-; }}
+; block0:
+;   cmge v0.8h, v0.8h, #0
+;   ret
 
 function %f6(i32x4) -> b32x4 {
 block0(v0: i32x4):
@@ -114,14 +84,9 @@ block0(v0: i32x4):
   return v3
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 2)
-;   Inst 0:   cmge v0.4s, v0.4s, #0
-;   Inst 1:   ret
-; }}
+; block0:
+;   cmge v0.4s, v0.4s, #0
+;   ret
 
 function %f7(i64x2) -> b64x2 {
 block0(v0: i64x2):
@@ -131,14 +96,9 @@ block0(v0: i64x2):
   return v3
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 2)
-;   Inst 0:   cmle v0.2d, v0.2d, #0
-;   Inst 1:   ret
-; }}
+; block0:
+;   cmle v0.2d, v0.2d, #0
+;   ret
 
 function %f8(i8x16) -> b8x16 {
 block0(v0: i8x16):
@@ -148,14 +108,9 @@ block0(v0: i8x16):
   return v3
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 2)
-;   Inst 0:   cmlt v0.16b, v0.16b, #0
-;   Inst 1:   ret
-; }}
+; block0:
+;   cmlt v0.16b, v0.16b, #0
+;   ret
 
 function %f9(i16x8) -> b16x8 {
 block0(v0: i16x8):
@@ -165,14 +120,9 @@ block0(v0: i16x8):
   return v3
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 2)
-;   Inst 0:   cmgt v0.8h, v0.8h, #0
-;   Inst 1:   ret
-; }}
+; block0:
+;   cmgt v0.8h, v0.8h, #0
+;   ret
 
 function %f10(i32x4) -> b32x4 {
 block0(v0: i32x4):
@@ -182,14 +132,9 @@ block0(v0: i32x4):
   return v3
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 2)
-;   Inst 0:   cmgt v0.4s, v0.4s, #0
-;   Inst 1:   ret
-; }}
+; block0:
+;   cmgt v0.4s, v0.4s, #0
+;   ret
 
 function %f11(i64x2) -> b64x2 {
 block0(v0: i64x2):
@@ -199,14 +144,9 @@ block0(v0: i64x2):
   return v3
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 2)
-;   Inst 0:   cmlt v0.2d, v0.2d, #0
-;   Inst 1:   ret
-; }}
+; block0:
+;   cmlt v0.2d, v0.2d, #0
+;   ret
 
 function %f12(f32x4) -> b32x4 {
 block0(v0: f32x4):
@@ -216,14 +156,9 @@ block0(v0: f32x4):
   return v3
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 2)
-;   Inst 0:   fcmeq v0.4s, v0.4s, #0.0
-;   Inst 1:   ret
-; }}
+; block0:
+;   fcmeq v0.4s, v0.4s, #0.0
+;   ret
 
 function %f13(f64x2) -> b64x2 {
 block0(v0: f64x2):
@@ -233,14 +168,9 @@ block0(v0: f64x2):
   return v3
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 2)
-;   Inst 0:   fcmeq v0.2d, v0.2d, #0.0
-;   Inst 1:   ret
-; }}
+; block0:
+;   fcmeq v0.2d, v0.2d, #0.0
+;   ret
 
 function %f14(f64x2) -> b64x2 {
 block0(v0: f64x2):
@@ -250,15 +180,10 @@ block0(v0: f64x2):
   return v3
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 3)
-;   Inst 0:   fcmeq v0.2d, v0.2d, #0.0
-;   Inst 1:   mvn v0.16b, v0.16b
-;   Inst 2:   ret
-; }}
+; block0:
+;   fcmeq v3.2d, v0.2d, #0.0
+;   mvn v0.16b, v3.16b
+;   ret
 
 function %f15(f32x4) -> b32x4 {
 block0(v0: f32x4):
@@ -268,15 +193,10 @@ block0(v0: f32x4):
   return v3
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 3)
-;   Inst 0:   fcmeq v0.4s, v0.4s, #0.0
-;   Inst 1:   mvn v0.16b, v0.16b
-;   Inst 2:   ret
-; }}
+; block0:
+;   fcmeq v3.4s, v0.4s, #0.0
+;   mvn v0.16b, v3.16b
+;   ret
 
 function %f16(f32x4) -> b32x4 {
 block0(v0: f32x4):
@@ -286,14 +206,9 @@ block0(v0: f32x4):
   return v3
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 2)
-;   Inst 0:   fcmle v0.4s, v0.4s, #0.0
-;   Inst 1:   ret
-; }}
+; block0:
+;   fcmle v0.4s, v0.4s, #0.0
+;   ret
 
 function %f17(f64x2) -> b64x2 {
 block0(v0: f64x2):
@@ -303,14 +218,9 @@ block0(v0: f64x2):
   return v3
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 2)
-;   Inst 0:   fcmge v0.2d, v0.2d, #0.0
-;   Inst 1:   ret
-; }}
+; block0:
+;   fcmge v0.2d, v0.2d, #0.0
+;   ret
 
 function %f18(f64x2) -> b64x2 {
 block0(v0: f64x2):
@@ -320,14 +230,9 @@ block0(v0: f64x2):
   return v3
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 2)
-;   Inst 0:   fcmge v0.2d, v0.2d, #0.0
-;   Inst 1:   ret
-; }}
+; block0:
+;   fcmge v0.2d, v0.2d, #0.0
+;   ret
 
 function %f19(f32x4) -> b32x4 {
 block0(v0: f32x4):
@@ -337,14 +242,9 @@ block0(v0: f32x4):
   return v3
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 2)
-;   Inst 0:   fcmle v0.4s, v0.4s, #0.0
-;   Inst 1:   ret
-; }}
+; block0:
+;   fcmle v0.4s, v0.4s, #0.0
+;   ret
 
 function %f20(f32x4) -> b32x4 {
 block0(v0: f32x4):
@@ -354,14 +254,9 @@ block0(v0: f32x4):
   return v3
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 2)
-;   Inst 0:   fcmlt v0.4s, v0.4s, #0.0
-;   Inst 1:   ret
-; }}
+; block0:
+;   fcmlt v0.4s, v0.4s, #0.0
+;   ret
 
 function %f21(f64x2) -> b64x2 {
 block0(v0: f64x2):
@@ -371,14 +266,9 @@ block0(v0: f64x2):
   return v3
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 2)
-;   Inst 0:   fcmgt v0.2d, v0.2d, #0.0
-;   Inst 1:   ret
-; }}
+; block0:
+;   fcmgt v0.2d, v0.2d, #0.0
+;   ret
 
 function %f22(f64x2) -> b64x2 {
 block0(v0: f64x2):
@@ -388,14 +278,9 @@ block0(v0: f64x2):
   return v3
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 2)
-;   Inst 0:   fcmgt v0.2d, v0.2d, #0.0
-;   Inst 1:   ret
-; }}
+; block0:
+;   fcmgt v0.2d, v0.2d, #0.0
+;   ret
 
 function %f23(f32x4) -> b32x4 {
 block0(v0: f32x4):
@@ -405,11 +290,7 @@ block0(v0: f32x4):
   return v3
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 2)
-;   Inst 0:   fcmlt v0.4s, v0.4s, #0.0
-;   Inst 1:   ret
-; }}
+; block0:
+;   fcmlt v0.4s, v0.4s, #0.0
+;   ret
+

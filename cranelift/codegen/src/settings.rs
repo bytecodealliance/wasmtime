@@ -510,12 +510,12 @@ mod tests {
         assert_eq!(
             f.to_string(),
             r#"[shared]
-regalloc = "backtracking"
 opt_level = "none"
 tls_model = "none"
 libcall_call_conv = "isa_default"
 baldrdash_prologue_words = 0
 probestack_size_log2 = 12
+regalloc_checker = false
 enable_verifier = true
 is_pic = false
 use_colocated_libcalls = false
@@ -535,6 +535,7 @@ enable_probestack = true
 probestack_func_adjusts_sp = false
 enable_jump_tables = true
 enable_heap_access_spectre_mitigation = true
+enable_table_access_spectre_mitigation = true
 "#
         );
         assert_eq!(f.opt_level(), super::OptLevel::None);

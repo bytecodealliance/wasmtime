@@ -1,4 +1,4 @@
-test compile
+test compile precise-output
 target s390x
 
 function %foo() {
@@ -6,12 +6,16 @@ block0:
     return
 }
 
+; block0:
+;   br %r14
+
 function %stack_limit_leaf_zero(i64 stack_limit) {
 block0(v0: i64):
     return
 }
 
-; check:  br %r14
+; block0:
+;   br %r14
 
 function %stack_limit_gv_leaf_zero(i64 vmctx) {
     gv0 = vmctx
@@ -22,8 +26,8 @@ block0(v0: i64):
     return
 }
 
-; check:  br %r14
-
+; block0:
+;   br %r14
 
 function %stack_limit_call_zero(i64 stack_limit) {
     fn0 = %foo()
@@ -32,14 +36,15 @@ block0(v0: i64):
     return
 }
 
-; check:  clgrtle %r15, %r2
-; nextln: stmg %r14, %r15, 112(%r15)
-; nextln: aghi %r15, -160
-; nextln: virtual_sp_offset_adjust 160
-; nextln: bras %r1, 12 ; data %foo + 0 ; lg %r2, 0(%r1)
-; nextln: basr %r14, %r2
-; nextln: lmg %r14, %r15, 272(%r15)
-; nextln: br %r14
+;   clgrtle %r15, %r2
+;   stmg %r14, %r15, 112(%r15)
+;   aghi %r15, -160
+;   virtual_sp_offset_adjust 160
+; block0:
+;   bras %r1, 12 ; data %foo + 0 ; lg %r4, 0(%r1)
+;   basr %r14, %r4
+;   lmg %r14, %r15, 272(%r15)
+;   br %r14
 
 function %stack_limit_gv_call_zero(i64 vmctx) {
     gv0 = vmctx
@@ -52,16 +57,17 @@ block0(v0: i64):
     return
 }
 
-; check:  lg %r1, 0(%r2)
-; nextln: lg %r1, 4(%r1)
-; nextln: clgrtle %r15, %r1
-; nextln: stmg %r14, %r15, 112(%r15)
-; nextln: aghi %r15, -160
-; nextln: virtual_sp_offset_adjust 160
-; nextln: bras %r1, 12 ; data %foo + 0 ; lg %r2, 0(%r1)
-; nextln: basr %r14, %r2
-; nextln: lmg %r14, %r15, 272(%r15)
-; nextln: br %r14
+;   lg %r1, 0(%r2)
+;   lg %r1, 4(%r1)
+;   clgrtle %r15, %r1
+;   stmg %r14, %r15, 112(%r15)
+;   aghi %r15, -160
+;   virtual_sp_offset_adjust 160
+; block0:
+;   bras %r1, 12 ; data %foo + 0 ; lg %r4, 0(%r1)
+;   basr %r14, %r4
+;   lmg %r14, %r15, 272(%r15)
+;   br %r14
 
 function %stack_limit(i64 stack_limit) {
     ss0 = explicit_slot 168
@@ -69,11 +75,12 @@ block0(v0: i64):
     return
 }
 
-; check: la %r1, 168(%r2)
-; nextln: clgrtle %r15, %r1
-; nextln: aghi %r15, -168
-; nextln: aghi %r15, 168
-; nextln: br %r14
+;   la %r1, 168(%r2)
+;   clgrtle %r15, %r1
+;   aghi %r15, -168
+; block0:
+;   aghi %r15, 168
+;   br %r14
 
 function %large_stack_limit(i64 stack_limit) {
     ss0 = explicit_slot 400000
@@ -81,12 +88,13 @@ block0(v0: i64):
     return
 }
 
-; check:  clgrtle %r15, %r2
-; nextln: lay %r1, 400000(%r2)
-; nextln: clgrtle %r15, %r1
-; nextln: agfi %r15, -400000
-; nextln: agfi %r15, 400000
-; nextln: br %r14
+;   clgrtle %r15, %r2
+;   lay %r1, 400000(%r2)
+;   clgrtle %r15, %r1
+;   agfi %r15, -400000
+; block0:
+;   agfi %r15, 400000
+;   br %r14
 
 function %huge_stack_limit(i64 stack_limit) {
     ss0 = explicit_slot 4000000
@@ -94,13 +102,14 @@ block0(v0: i64):
     return
 }
 
-; check:  clgrtle %r15, %r2
-; nextln: lgr %r1, %r2
-; nextln: algfi %r1, 4000000
-; nextln: clgrtle %r15, %r1
-; nextln: agfi %r15, -4000000
-; nextln: agfi %r15, 4000000
-; nextln: br %r14
+;   clgrtle %r15, %r2
+;   lgr %r1, %r2
+;   algfi %r1, 4000000
+;   clgrtle %r15, %r1
+;   agfi %r15, -4000000
+; block0:
+;   agfi %r15, 4000000
+;   br %r14
 
 function %limit_preamble(i64 vmctx) {
     gv0 = vmctx
@@ -112,13 +121,14 @@ block0(v0: i64):
     return
 }
 
-; check:  lg %r1, 0(%r2)
-; nextln: lg %r1, 4(%r1)
-; nextln: la %r1, 24(%r1)
-; nextln: clgrtle %r15, %r1
-; nextln: aghi %r15, -24
-; nextln: aghi %r15, 24
-; nextln: br %r14
+;   lg %r1, 0(%r2)
+;   lg %r1, 4(%r1)
+;   la %r1, 24(%r1)
+;   clgrtle %r15, %r1
+;   aghi %r15, -24
+; block0:
+;   aghi %r15, 24
+;   br %r14
 
 function %limit_preamble_large(i64 vmctx) {
     gv0 = vmctx
@@ -130,14 +140,15 @@ block0(v0: i64):
     return
 }
 
-; check:  lg %r1, 0(%r2)
-; nextln: lg %r1, 4(%r1)
-; nextln: clgrtle %r15, %r1
-; nextln: lay %r1, 400000(%r1)
-; nextln: clgrtle %r15, %r1
-; nextln: agfi %r15, -400000
-; nextln: agfi %r15, 400000
-; nextln: br %r14
+;   lg %r1, 0(%r2)
+;   lg %r1, 4(%r1)
+;   clgrtle %r15, %r1
+;   lay %r1, 400000(%r1)
+;   clgrtle %r15, %r1
+;   agfi %r15, -400000
+; block0:
+;   agfi %r15, 400000
+;   br %r14
 
 function %limit_preamble_huge(i64 vmctx) {
     gv0 = vmctx
@@ -149,14 +160,15 @@ block0(v0: i64):
     return
 }
 
-; check:  lg %r1, 0(%r2)
-; nextln: lg %r1, 4(%r1)
-; nextln: clgrtle %r15, %r1
-; nextln: algfi %r1, 4000000
-; nextln: clgrtle %r15, %r1
-; nextln: agfi %r15, -4000000
-; nextln: agfi %r15, 4000000
-; nextln: br %r14
+;   lg %r1, 0(%r2)
+;   lg %r1, 4(%r1)
+;   clgrtle %r15, %r1
+;   algfi %r1, 4000000
+;   clgrtle %r15, %r1
+;   agfi %r15, -4000000
+; block0:
+;   agfi %r15, 4000000
+;   br %r14
 
 function %limit_preamble_huge_offset(i64 vmctx) {
     gv0 = vmctx
@@ -167,9 +179,11 @@ block0(v0: i64):
     return
 }
 
-; check:  lgfi %r1, 1000000 ; lg %r1, 0(%r1,%r2)
-; nextln: la %r1, 24(%r1)
-; nextln: clgrtle %r15, %r1
-; nextln: aghi %r15, -24
-; nextln: aghi %r15, 24
-; nextln: br %r14
+;   lgfi %r1, 1000000 ; lg %r1, 0(%r1,%r2)
+;   la %r1, 24(%r1)
+;   clgrtle %r15, %r1
+;   aghi %r15, -24
+; block0:
+;   aghi %r15, 24
+;   br %r14
+

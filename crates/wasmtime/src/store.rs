@@ -76,6 +76,7 @@
 //! contents of `StoreOpaque`. This is an invariant that we, as the authors of
 //! `wasmtime`, must uphold for the public interface to be safe.
 
+use crate::linker::Definition;
 use crate::module::BareModuleInfo;
 use crate::{module::ModuleRegistry, Engine, Module, Trap, Val, ValRaw};
 use anyhow::{bail, Result};
@@ -201,6 +202,7 @@ pub struct StoreInner<T> {
 
     limiter: Option<ResourceLimiterInner<T>>,
     call_hook: Option<CallHookInner<T>>,
+    epoch_deadline_behavior: EpochDeadline<T>,
     // for comments about `ManuallyDrop`, see `Store::into_data`
     data: ManuallyDrop<T>,
 }
@@ -295,8 +297,13 @@ pub struct StoreOpaque {
     #[cfg(feature = "async")]
     async_state: AsyncState,
     out_of_gas_behavior: OutOfGas,
-    epoch_deadline_behavior: EpochDeadline,
-    store_data: StoreData,
+    /// Indexed data within this `Store`, used to store information about
+    /// globals, functions, memories, etc.
+    ///
+    /// Note that this is `ManuallyDrop` because it needs to be dropped before
+    /// `rooted_host_funcs` below. This structure contains pointers which are
+    /// otherwise kept alive by the `Arc` references in `rooted_host_funcs`.
+    store_data: ManuallyDrop<StoreData>,
     default_callee: InstanceHandle,
 
     /// Used to optimzed wasm->host calls when the host function is defined with
@@ -306,6 +313,20 @@ pub struct StoreOpaque {
     /// Same as `hostcall_val_storage`, but for the direction of the host
     /// calling wasm.
     wasm_val_raw_storage: Vec<ValRaw>,
+
+    /// A list of lists of definitions which have been used to instantiate
+    /// within this `Store`.
+    ///
+    /// Note that not all instantiations end up pushing to this list. At the
+    /// time of this writing only the `InstancePre<T>` type will push to this
+    /// list. Pushes to this list are typically accompanied with
+    /// `HostFunc::to_func_store_rooted` to clone an `Arc` here once which
+    /// preserves a strong reference to the `Arc` for each `HostFunc` stored
+    /// within the list of `Definition`s.
+    ///
+    /// Note that this is `ManuallyDrop` as it must be dropped after
+    /// `store_data` above, where the function pointers are stored.
+    rooted_host_funcs: ManuallyDrop<Vec<Arc<[Definition]>>>,
 }
 
 #[cfg(feature = "async")]
@@ -405,10 +426,11 @@ enum OutOfGas {
 
 /// What to do when the engine epoch reaches the deadline for a Store
 /// during execution of a function using that store.
-#[derive(Copy, Clone)]
-enum EpochDeadline {
+enum EpochDeadline<T> {
     /// Return early with a trap.
     Trap,
+    /// Call a custom deadline handler.
+    Callback(Box<dyn FnMut(&mut T) -> Result<u64> + Send + Sync>),
     /// Extend the deadline by the specified number of ticks after
     /// yielding to the async executor loop.
     #[cfg(feature = "async")]
@@ -470,14 +492,15 @@ impl<T> Store<T> {
                     current_poll_cx: UnsafeCell::new(ptr::null_mut()),
                 },
                 out_of_gas_behavior: OutOfGas::Trap,
-                epoch_deadline_behavior: EpochDeadline::Trap,
-                store_data: StoreData::new(),
+                store_data: ManuallyDrop::new(StoreData::new()),
                 default_callee,
                 hostcall_val_storage: Vec::new(),
                 wasm_val_raw_storage: Vec::new(),
+                rooted_host_funcs: ManuallyDrop::new(Vec::new()),
             },
             limiter: None,
             call_hook: None,
+            epoch_deadline_behavior: EpochDeadline::Trap,
             data: ManuallyDrop::new(data),
         });
 
@@ -820,7 +843,8 @@ impl<T> Store<T> {
     ///
     /// This behavior is the default if the store is not otherwise
     /// configured via
-    /// [`epoch_deadline_trap()`](Store::epoch_deadline_trap) or
+    /// [`epoch_deadline_trap()`](Store::epoch_deadline_trap),
+    /// [`epoch_deadline_callback()`](Store::epoch_deadline_callback) or
     /// [`epoch_deadline_async_yield_and_update()`](Store::epoch_deadline_async_yield_and_update).
     ///
     /// This setting is intended to allow for coarse-grained
@@ -833,6 +857,33 @@ impl<T> Store<T> {
     /// for an introduction to epoch-based interruption.
     pub fn epoch_deadline_trap(&mut self) {
         self.inner.epoch_deadline_trap();
+    }
+
+    /// Configures epoch-deadline expiration to invoke a custom callback
+    /// function.
+    ///
+    /// When epoch-interruption-instrumented code is executed on this
+    /// store and the epoch deadline is reached before completion, the
+    /// provided callback function is invoked.
+    ///
+    /// This function should return a positive `delta`, which is used to
+    /// update the new epoch, setting it to the current epoch plus
+    /// `delta` ticks. Alternatively, the callback may return an error,
+    /// which will terminate execution.
+    ///
+    /// This setting is intended to allow for coarse-grained
+    /// interruption, but not a deterministic deadline of a fixed,
+    /// finite interval. For deterministic interruption, see the
+    /// "fuel" mechanism instead.
+    ///
+    /// See documentation on
+    /// [`Config::epoch_interruption()`](crate::Config::epoch_interruption)
+    /// for an introduction to epoch-based interruption.
+    pub fn epoch_deadline_callback(
+        &mut self,
+        callback: impl FnMut(&mut T) -> Result<u64> + Send + Sync + 'static,
+    ) {
+        self.inner.epoch_deadline_callback(Box::new(callback));
     }
 
     #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
@@ -1329,22 +1380,6 @@ impl StoreOpaque {
         }
     }
 
-    fn epoch_deadline_trap(&mut self) {
-        self.epoch_deadline_behavior = EpochDeadline::Trap;
-    }
-
-    fn epoch_deadline_async_yield_and_update(&mut self, delta: u64) {
-        assert!(
-            self.async_support(),
-            "cannot use `epoch_deadline_async_yield_and_update` without enabling async support in the config"
-        );
-        #[cfg(feature = "async")]
-        {
-            self.epoch_deadline_behavior = EpochDeadline::YieldAndExtendDeadline { delta };
-        }
-        drop(delta); // suppress warning in non-async build
-    }
-
     #[inline]
     pub fn signal_handler(&self) -> Option<*const SignalHandler<'static>> {
         let handler = self.signal_handler.as_ref()?;
@@ -1400,6 +1435,10 @@ impl StoreOpaque {
         if storage.capacity() > self.wasm_val_raw_storage.capacity() {
             self.wasm_val_raw_storage = storage;
         }
+    }
+
+    pub(crate) fn push_rooted_funcs(&mut self, funcs: Arc<[Definition]>) {
+        self.rooted_host_funcs.push(funcs);
     }
 }
 
@@ -1829,10 +1868,25 @@ unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
     }
 
     fn new_epoch(&mut self) -> Result<u64, anyhow::Error> {
-        return match &self.epoch_deadline_behavior {
-            &EpochDeadline::Trap => Err(anyhow::Error::new(EpochDeadlineError)),
+        return match &mut self.epoch_deadline_behavior {
+            EpochDeadline::Trap => {
+                let trap = Trap::new_wasm(
+                    None,
+                    wasmtime_environ::TrapCode::Interrupt,
+                    wasmtime_runtime::Backtrace::new(),
+                );
+                Err(anyhow::Error::from(trap))
+            }
+            EpochDeadline::Callback(callback) => {
+                let delta = callback(&mut self.data)?;
+                // Set a new deadline and return the new epoch deadline so
+                // the Wasm code doesn't have to reload it.
+                self.set_epoch_deadline(delta);
+                Ok(self.get_epoch_deadline())
+            }
             #[cfg(feature = "async")]
-            &EpochDeadline::YieldAndExtendDeadline { delta } => {
+            EpochDeadline::YieldAndExtendDeadline { delta } => {
+                let delta = *delta;
                 // Do the async yield. May return a trap if future was
                 // canceled while we're yielded.
                 self.async_yield_impl()?;
@@ -1844,17 +1898,6 @@ unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
                 Ok(self.get_epoch_deadline())
             }
         };
-
-        #[derive(Debug)]
-        struct EpochDeadlineError;
-
-        impl fmt::Display for EpochDeadlineError {
-            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                f.write_str("epoch deadline reached during execution")
-            }
-        }
-
-        impl std::error::Error for EpochDeadlineError {}
     }
 }
 
@@ -1871,6 +1914,29 @@ impl<T> StoreInner<T> {
         // return into it.
         let epoch_deadline = unsafe { (*self.vmruntime_limits()).epoch_deadline.get_mut() };
         *epoch_deadline = self.engine().current_epoch() + delta;
+    }
+
+    fn epoch_deadline_trap(&mut self) {
+        self.epoch_deadline_behavior = EpochDeadline::Trap;
+    }
+
+    fn epoch_deadline_callback(
+        &mut self,
+        callback: Box<dyn FnMut(&mut T) -> Result<u64> + Send + Sync>,
+    ) {
+        self.epoch_deadline_behavior = EpochDeadline::Callback(callback);
+    }
+
+    fn epoch_deadline_async_yield_and_update(&mut self, delta: u64) {
+        assert!(
+            self.async_support(),
+            "cannot use `epoch_deadline_async_yield_and_update` without enabling async support in the config"
+        );
+        #[cfg(feature = "async")]
+        {
+            self.epoch_deadline_behavior = EpochDeadline::YieldAndExtendDeadline { delta };
+        }
+        drop(delta); // suppress warning in non-async build
     }
 
     fn get_epoch_deadline(&self) -> u64 {
@@ -1913,8 +1979,8 @@ impl Drop for StoreOpaque {
         // NB it's important that this destructor does not access `self.data`.
         // That is deallocated by `Drop for Store<T>` above.
 
-        let allocator = self.engine.allocator();
         unsafe {
+            let allocator = self.engine.allocator();
             let ondemand = OnDemandInstanceAllocator::default();
             for instance in self.instances.iter() {
                 if instance.ondemand {
@@ -1924,12 +1990,17 @@ impl Drop for StoreOpaque {
                 }
             }
             ondemand.deallocate(&self.default_callee);
+
+            // See documentation for these fields on `StoreOpaque` for why they
+            // must be dropped in this order.
+            ManuallyDrop::drop(&mut self.store_data);
+            ManuallyDrop::drop(&mut self.rooted_host_funcs);
         }
     }
 }
 
 impl wasmtime_runtime::ModuleInfoLookup for ModuleRegistry {
-    fn lookup(&self, pc: usize) -> Option<Arc<dyn ModuleInfo>> {
+    fn lookup(&self, pc: usize) -> Option<&dyn ModuleInfo> {
         self.lookup_module(pc)
     }
 }

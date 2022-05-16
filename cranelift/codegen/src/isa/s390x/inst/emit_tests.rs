@@ -4,6 +4,11 @@ use crate::isa::s390x::settings as s390x_settings;
 use crate::settings;
 use alloc::vec::Vec;
 
+#[cfg(test)]
+fn simm20_zero() -> SImm20 {
+    SImm20::maybe_from_i64(0).unwrap()
+}
+
 #[test]
 fn test_s390x_binemit() {
     let mut insns = Vec::<(Inst, &str, &str)>::new();
@@ -173,7 +178,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::AluRRR {
-            alu_op: ALUOp::AndNot32,
+            alu_op: ALUOp::NotAnd32,
             rd: writable_gpr(1),
             rn: gpr(2),
             rm: gpr(3),
@@ -183,7 +188,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::AluRRR {
-            alu_op: ALUOp::AndNot64,
+            alu_op: ALUOp::NotAnd64,
             rd: writable_gpr(4),
             rn: gpr(5),
             rm: gpr(6),
@@ -193,7 +198,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::AluRRR {
-            alu_op: ALUOp::OrrNot32,
+            alu_op: ALUOp::NotOrr32,
             rd: writable_gpr(1),
             rn: gpr(2),
             rm: gpr(3),
@@ -203,7 +208,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::AluRRR {
-            alu_op: ALUOp::OrrNot64,
+            alu_op: ALUOp::NotOrr64,
             rd: writable_gpr(4),
             rn: gpr(5),
             rm: gpr(6),
@@ -213,7 +218,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::AluRRR {
-            alu_op: ALUOp::XorNot32,
+            alu_op: ALUOp::NotXor32,
             rd: writable_gpr(1),
             rn: gpr(2),
             rm: gpr(3),
@@ -223,13 +228,53 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::AluRRR {
-            alu_op: ALUOp::XorNot64,
+            alu_op: ALUOp::NotXor64,
             rd: writable_gpr(4),
             rn: gpr(5),
             rm: gpr(6),
         },
         "B9676045",
         "nxgrk %r4, %r5, %r6",
+    ));
+    insns.push((
+        Inst::AluRRR {
+            alu_op: ALUOp::AndNot32,
+            rd: writable_gpr(1),
+            rn: gpr(2),
+            rm: gpr(3),
+        },
+        "B9F53012",
+        "ncrk %r1, %r2, %r3",
+    ));
+    insns.push((
+        Inst::AluRRR {
+            alu_op: ALUOp::AndNot64,
+            rd: writable_gpr(4),
+            rn: gpr(5),
+            rm: gpr(6),
+        },
+        "B9E56045",
+        "ncgrk %r4, %r5, %r6",
+    ));
+    insns.push((
+        Inst::AluRRR {
+            alu_op: ALUOp::OrrNot32,
+            rd: writable_gpr(1),
+            rn: gpr(2),
+            rm: gpr(3),
+        },
+        "B9753012",
+        "ocrk %r1, %r2, %r3",
+    ));
+    insns.push((
+        Inst::AluRRR {
+            alu_op: ALUOp::OrrNot64,
+            rd: writable_gpr(4),
+            rn: gpr(5),
+            rm: gpr(6),
+        },
+        "B9656045",
+        "ocgrk %r4, %r5, %r6",
     ));
 
     insns.push((
@@ -498,7 +543,7 @@ fn test_s390x_binemit() {
             mem: MemArg::BXD20 {
                 base: gpr(2),
                 index: zero_reg(),
-                disp: SImm20::zero(),
+                disp: simm20_zero(),
                 flags: MemFlags::trusted(),
             },
         },
@@ -512,7 +557,7 @@ fn test_s390x_binemit() {
             mem: MemArg::BXD20 {
                 base: gpr(2),
                 index: zero_reg(),
-                disp: SImm20::zero(),
+                disp: simm20_zero(),
                 flags: MemFlags::trusted(),
             },
         },
@@ -582,7 +627,7 @@ fn test_s390x_binemit() {
             mem: MemArg::BXD20 {
                 base: gpr(2),
                 index: zero_reg(),
-                disp: SImm20::zero(),
+                disp: simm20_zero(),
                 flags: MemFlags::trusted(),
             },
         },
@@ -652,7 +697,7 @@ fn test_s390x_binemit() {
             mem: MemArg::BXD20 {
                 base: gpr(2),
                 index: zero_reg(),
-                disp: SImm20::zero(),
+                disp: simm20_zero(),
                 flags: MemFlags::trusted(),
             },
         },
@@ -666,7 +711,7 @@ fn test_s390x_binemit() {
             mem: MemArg::BXD20 {
                 base: gpr(2),
                 index: zero_reg(),
-                disp: SImm20::zero(),
+                disp: simm20_zero(),
                 flags: MemFlags::trusted(),
             },
         },
@@ -736,7 +781,7 @@ fn test_s390x_binemit() {
             mem: MemArg::BXD20 {
                 base: gpr(2),
                 index: zero_reg(),
-                disp: SImm20::zero(),
+                disp: simm20_zero(),
                 flags: MemFlags::trusted(),
             },
         },
@@ -806,7 +851,7 @@ fn test_s390x_binemit() {
             mem: MemArg::BXD20 {
                 base: gpr(2),
                 index: zero_reg(),
-                disp: SImm20::zero(),
+                disp: simm20_zero(),
                 flags: MemFlags::trusted(),
             },
         },
@@ -820,7 +865,7 @@ fn test_s390x_binemit() {
             mem: MemArg::BXD20 {
                 base: gpr(2),
                 index: zero_reg(),
-                disp: SImm20::zero(),
+                disp: simm20_zero(),
                 flags: MemFlags::trusted(),
             },
         },
@@ -890,7 +935,7 @@ fn test_s390x_binemit() {
             mem: MemArg::BXD20 {
                 base: gpr(2),
                 index: zero_reg(),
-                disp: SImm20::zero(),
+                disp: simm20_zero(),
                 flags: MemFlags::trusted(),
             },
         },
@@ -932,7 +977,7 @@ fn test_s390x_binemit() {
             mem: MemArg::BXD20 {
                 base: gpr(2),
                 index: zero_reg(),
-                disp: SImm20::zero(),
+                disp: simm20_zero(),
                 flags: MemFlags::trusted(),
             },
         },
@@ -974,7 +1019,7 @@ fn test_s390x_binemit() {
             mem: MemArg::BXD20 {
                 base: gpr(2),
                 index: zero_reg(),
-                disp: SImm20::zero(),
+                disp: simm20_zero(),
                 flags: MemFlags::trusted(),
             },
         },
@@ -1573,7 +1618,7 @@ fn test_s390x_binemit() {
             mem: MemArg::BXD20 {
                 base: gpr(2),
                 index: zero_reg(),
-                disp: SImm20::zero(),
+                disp: simm20_zero(),
                 flags: MemFlags::trusted(),
             },
         },
@@ -1585,7 +1630,7 @@ fn test_s390x_binemit() {
             op: CmpOp::CmpS32,
             rn: gpr(1),
             mem: MemArg::Label {
-                target: MachLabel::from_block(1),
+                target: MachLabel::from_block(BlockIndex::new(1)),
             },
         },
         "C61D00000003",
@@ -1612,7 +1657,7 @@ fn test_s390x_binemit() {
             mem: MemArg::BXD20 {
                 base: gpr(2),
                 index: zero_reg(),
-                disp: SImm20::zero(),
+                disp: simm20_zero(),
                 flags: MemFlags::trusted(),
             },
         },
@@ -1624,7 +1669,7 @@ fn test_s390x_binemit() {
             op: CmpOp::CmpS32Ext16,
             rn: gpr(1),
             mem: MemArg::Label {
-                target: MachLabel::from_block(1),
+                target: MachLabel::from_block(BlockIndex::new(1)),
             },
         },
         "C61500000003",
@@ -1649,7 +1694,7 @@ fn test_s390x_binemit() {
             op: CmpOp::CmpS64,
             rn: gpr(1),
             mem: MemArg::Label {
-                target: MachLabel::from_block(1),
+                target: MachLabel::from_block(BlockIndex::new(1)),
             },
         },
         "C61800000003",
@@ -1674,7 +1719,7 @@ fn test_s390x_binemit() {
             op: CmpOp::CmpS64Ext16,
             rn: gpr(1),
             mem: MemArg::Label {
-                target: MachLabel::from_block(1),
+                target: MachLabel::from_block(BlockIndex::new(1)),
             },
         },
         "C61400000003",
@@ -1699,7 +1744,7 @@ fn test_s390x_binemit() {
             op: CmpOp::CmpS64Ext32,
             rn: gpr(1),
             mem: MemArg::Label {
-                target: MachLabel::from_block(1),
+                target: MachLabel::from_block(BlockIndex::new(1)),
             },
         },
         "C61C00000003",
@@ -1726,7 +1771,7 @@ fn test_s390x_binemit() {
             mem: MemArg::BXD20 {
                 base: gpr(2),
                 index: zero_reg(),
-                disp: SImm20::zero(),
+                disp: simm20_zero(),
                 flags: MemFlags::trusted(),
             },
         },
@@ -1738,7 +1783,7 @@ fn test_s390x_binemit() {
             op: CmpOp::CmpL32,
             rn: gpr(1),
             mem: MemArg::Label {
-                target: MachLabel::from_block(1),
+                target: MachLabel::from_block(BlockIndex::new(1)),
             },
         },
         "C61F00000003",
@@ -1749,7 +1794,7 @@ fn test_s390x_binemit() {
             op: CmpOp::CmpL32Ext16,
             rn: gpr(1),
             mem: MemArg::Label {
-                target: MachLabel::from_block(1),
+                target: MachLabel::from_block(BlockIndex::new(1)),
             },
         },
         "C61700000003",
@@ -1774,7 +1819,7 @@ fn test_s390x_binemit() {
             op: CmpOp::CmpL64,
             rn: gpr(1),
             mem: MemArg::Label {
-                target: MachLabel::from_block(1),
+                target: MachLabel::from_block(BlockIndex::new(1)),
             },
         },
         "C61A00000003",
@@ -1785,7 +1830,7 @@ fn test_s390x_binemit() {
             op: CmpOp::CmpL64Ext16,
             rn: gpr(1),
             mem: MemArg::Label {
-                target: MachLabel::from_block(1),
+                target: MachLabel::from_block(BlockIndex::new(1)),
             },
         },
         "C61600000003",
@@ -1810,7 +1855,7 @@ fn test_s390x_binemit() {
             op: CmpOp::CmpL64Ext32,
             rn: gpr(1),
             mem: MemArg::Label {
-                target: MachLabel::from_block(1),
+                target: MachLabel::from_block(BlockIndex::new(1)),
             },
         },
         "C61E00000003",
@@ -4536,7 +4581,7 @@ fn test_s390x_binemit() {
         Inst::Load32 {
             rd: writable_gpr(1),
             mem: MemArg::Label {
-                target: MachLabel::from_block(1),
+                target: MachLabel::from_block(BlockIndex::new(1)),
             },
         },
         "C41D00000003",
@@ -4546,7 +4591,7 @@ fn test_s390x_binemit() {
         Inst::Load32SExt16 {
             rd: writable_gpr(1),
             mem: MemArg::Label {
-                target: MachLabel::from_block(1),
+                target: MachLabel::from_block(BlockIndex::new(1)),
             },
         },
         "C41500000003",
@@ -4556,7 +4601,7 @@ fn test_s390x_binemit() {
         Inst::Load32ZExt16 {
             rd: writable_gpr(1),
             mem: MemArg::Label {
-                target: MachLabel::from_block(1),
+                target: MachLabel::from_block(BlockIndex::new(1)),
             },
         },
         "C41200000003",
@@ -4566,7 +4611,7 @@ fn test_s390x_binemit() {
         Inst::Load64 {
             rd: writable_gpr(1),
             mem: MemArg::Label {
-                target: MachLabel::from_block(1),
+                target: MachLabel::from_block(BlockIndex::new(1)),
             },
         },
         "C41800000003",
@@ -4576,7 +4621,7 @@ fn test_s390x_binemit() {
         Inst::Load64SExt16 {
             rd: writable_gpr(1),
             mem: MemArg::Label {
-                target: MachLabel::from_block(1),
+                target: MachLabel::from_block(BlockIndex::new(1)),
             },
         },
         "C41400000003",
@@ -4586,7 +4631,7 @@ fn test_s390x_binemit() {
         Inst::Load64ZExt16 {
             rd: writable_gpr(1),
             mem: MemArg::Label {
-                target: MachLabel::from_block(1),
+                target: MachLabel::from_block(BlockIndex::new(1)),
             },
         },
         "C41600000003",
@@ -4596,7 +4641,7 @@ fn test_s390x_binemit() {
         Inst::Load64SExt32 {
             rd: writable_gpr(1),
             mem: MemArg::Label {
-                target: MachLabel::from_block(1),
+                target: MachLabel::from_block(BlockIndex::new(1)),
             },
         },
         "C41C00000003",
@@ -4606,7 +4651,7 @@ fn test_s390x_binemit() {
         Inst::Load64ZExt32 {
             rd: writable_gpr(1),
             mem: MemArg::Label {
-                target: MachLabel::from_block(1),
+                target: MachLabel::from_block(BlockIndex::new(1)),
             },
         },
         "C41E00000003",
@@ -5790,7 +5835,7 @@ fn test_s390x_binemit() {
         Inst::Store16 {
             rd: gpr(1),
             mem: MemArg::Label {
-                target: MachLabel::from_block(1),
+                target: MachLabel::from_block(BlockIndex::new(1)),
             },
         },
         "C41700000003",
@@ -5800,7 +5845,7 @@ fn test_s390x_binemit() {
         Inst::Store32 {
             rd: gpr(1),
             mem: MemArg::Label {
-                target: MachLabel::from_block(1),
+                target: MachLabel::from_block(BlockIndex::new(1)),
             },
         },
         "C41F00000003",
@@ -5810,7 +5855,7 @@ fn test_s390x_binemit() {
         Inst::Store64 {
             rd: gpr(1),
             mem: MemArg::Label {
-                target: MachLabel::from_block(1),
+                target: MachLabel::from_block(BlockIndex::new(1)),
             },
         },
         "C41B00000003",
@@ -6035,7 +6080,7 @@ fn test_s390x_binemit() {
         Inst::LoadAddr {
             rd: writable_gpr(1),
             mem: MemArg::Label {
-                target: MachLabel::from_block(1),
+                target: MachLabel::from_block(BlockIndex::new(1)),
             },
         },
         "C01000000003",
@@ -6499,7 +6544,7 @@ fn test_s390x_binemit() {
 
     insns.push((
         Inst::Jump {
-            dest: MachLabel::from_block(0),
+            dest: MachLabel::from_block(BlockIndex::new(0)),
         },
         "C0F400000000",
         "jg label0",
@@ -6507,7 +6552,7 @@ fn test_s390x_binemit() {
 
     insns.push((
         Inst::OneWayCondBr {
-            target: MachLabel::from_block(0),
+            target: MachLabel::from_block(BlockIndex::new(0)),
             cond: Cond::from_mask(1),
         },
         "C01400000000",
@@ -6515,7 +6560,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::OneWayCondBr {
-            target: MachLabel::from_block(0),
+            target: MachLabel::from_block(BlockIndex::new(0)),
             cond: Cond::from_mask(2),
         },
         "C02400000000",
@@ -6523,7 +6568,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::OneWayCondBr {
-            target: MachLabel::from_block(0),
+            target: MachLabel::from_block(BlockIndex::new(0)),
             cond: Cond::from_mask(3),
         },
         "C03400000000",
@@ -6531,7 +6576,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::OneWayCondBr {
-            target: MachLabel::from_block(0),
+            target: MachLabel::from_block(BlockIndex::new(0)),
             cond: Cond::from_mask(4),
         },
         "C04400000000",
@@ -6539,7 +6584,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::OneWayCondBr {
-            target: MachLabel::from_block(0),
+            target: MachLabel::from_block(BlockIndex::new(0)),
             cond: Cond::from_mask(5),
         },
         "C05400000000",
@@ -6547,7 +6592,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::OneWayCondBr {
-            target: MachLabel::from_block(0),
+            target: MachLabel::from_block(BlockIndex::new(0)),
             cond: Cond::from_mask(6),
         },
         "C06400000000",
@@ -6555,7 +6600,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::OneWayCondBr {
-            target: MachLabel::from_block(0),
+            target: MachLabel::from_block(BlockIndex::new(0)),
             cond: Cond::from_mask(7),
         },
         "C07400000000",
@@ -6563,7 +6608,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::OneWayCondBr {
-            target: MachLabel::from_block(0),
+            target: MachLabel::from_block(BlockIndex::new(0)),
             cond: Cond::from_mask(8),
         },
         "C08400000000",
@@ -6571,7 +6616,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::OneWayCondBr {
-            target: MachLabel::from_block(0),
+            target: MachLabel::from_block(BlockIndex::new(0)),
             cond: Cond::from_mask(9),
         },
         "C09400000000",
@@ -6579,7 +6624,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::OneWayCondBr {
-            target: MachLabel::from_block(0),
+            target: MachLabel::from_block(BlockIndex::new(0)),
             cond: Cond::from_mask(10),
         },
         "C0A400000000",
@@ -6587,7 +6632,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::OneWayCondBr {
-            target: MachLabel::from_block(0),
+            target: MachLabel::from_block(BlockIndex::new(0)),
             cond: Cond::from_mask(11),
         },
         "C0B400000000",
@@ -6595,7 +6640,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::OneWayCondBr {
-            target: MachLabel::from_block(0),
+            target: MachLabel::from_block(BlockIndex::new(0)),
             cond: Cond::from_mask(12),
         },
         "C0C400000000",
@@ -6603,7 +6648,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::OneWayCondBr {
-            target: MachLabel::from_block(0),
+            target: MachLabel::from_block(BlockIndex::new(0)),
             cond: Cond::from_mask(13),
         },
         "C0D400000000",
@@ -6611,7 +6656,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::OneWayCondBr {
-            target: MachLabel::from_block(0),
+            target: MachLabel::from_block(BlockIndex::new(0)),
             cond: Cond::from_mask(14),
         },
         "C0E400000000",
@@ -6620,8 +6665,8 @@ fn test_s390x_binemit() {
 
     insns.push((
         Inst::CondBr {
-            taken: MachLabel::from_block(0),
-            not_taken: MachLabel::from_block(0),
+            taken: MachLabel::from_block(BlockIndex::new(0)),
+            not_taken: MachLabel::from_block(BlockIndex::new(0)),
             cond: Cond::from_mask(1),
         },
         "C01400000000C0F4FFFFFFFD",
@@ -6629,8 +6674,8 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::CondBr {
-            taken: MachLabel::from_block(0),
-            not_taken: MachLabel::from_block(0),
+            taken: MachLabel::from_block(BlockIndex::new(0)),
+            not_taken: MachLabel::from_block(BlockIndex::new(0)),
             cond: Cond::from_mask(2),
         },
         "C02400000000C0F4FFFFFFFD",
@@ -6638,8 +6683,8 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::CondBr {
-            taken: MachLabel::from_block(0),
-            not_taken: MachLabel::from_block(0),
+            taken: MachLabel::from_block(BlockIndex::new(0)),
+            not_taken: MachLabel::from_block(BlockIndex::new(0)),
             cond: Cond::from_mask(3),
         },
         "C03400000000C0F4FFFFFFFD",
@@ -6647,8 +6692,8 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::CondBr {
-            taken: MachLabel::from_block(0),
-            not_taken: MachLabel::from_block(0),
+            taken: MachLabel::from_block(BlockIndex::new(0)),
+            not_taken: MachLabel::from_block(BlockIndex::new(0)),
             cond: Cond::from_mask(4),
         },
         "C04400000000C0F4FFFFFFFD",
@@ -6656,8 +6701,8 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::CondBr {
-            taken: MachLabel::from_block(0),
-            not_taken: MachLabel::from_block(0),
+            taken: MachLabel::from_block(BlockIndex::new(0)),
+            not_taken: MachLabel::from_block(BlockIndex::new(0)),
             cond: Cond::from_mask(5),
         },
         "C05400000000C0F4FFFFFFFD",
@@ -6665,8 +6710,8 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::CondBr {
-            taken: MachLabel::from_block(0),
-            not_taken: MachLabel::from_block(0),
+            taken: MachLabel::from_block(BlockIndex::new(0)),
+            not_taken: MachLabel::from_block(BlockIndex::new(0)),
             cond: Cond::from_mask(6),
         },
         "C06400000000C0F4FFFFFFFD",
@@ -6674,8 +6719,8 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::CondBr {
-            taken: MachLabel::from_block(0),
-            not_taken: MachLabel::from_block(0),
+            taken: MachLabel::from_block(BlockIndex::new(0)),
+            not_taken: MachLabel::from_block(BlockIndex::new(0)),
             cond: Cond::from_mask(7),
         },
         "C07400000000C0F4FFFFFFFD",
@@ -6683,8 +6728,8 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::CondBr {
-            taken: MachLabel::from_block(0),
-            not_taken: MachLabel::from_block(0),
+            taken: MachLabel::from_block(BlockIndex::new(0)),
+            not_taken: MachLabel::from_block(BlockIndex::new(0)),
             cond: Cond::from_mask(8),
         },
         "C08400000000C0F4FFFFFFFD",
@@ -6692,8 +6737,8 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::CondBr {
-            taken: MachLabel::from_block(0),
-            not_taken: MachLabel::from_block(0),
+            taken: MachLabel::from_block(BlockIndex::new(0)),
+            not_taken: MachLabel::from_block(BlockIndex::new(0)),
             cond: Cond::from_mask(9),
         },
         "C09400000000C0F4FFFFFFFD",
@@ -6701,8 +6746,8 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::CondBr {
-            taken: MachLabel::from_block(0),
-            not_taken: MachLabel::from_block(0),
+            taken: MachLabel::from_block(BlockIndex::new(0)),
+            not_taken: MachLabel::from_block(BlockIndex::new(0)),
             cond: Cond::from_mask(10),
         },
         "C0A400000000C0F4FFFFFFFD",
@@ -6710,8 +6755,8 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::CondBr {
-            taken: MachLabel::from_block(0),
-            not_taken: MachLabel::from_block(0),
+            taken: MachLabel::from_block(BlockIndex::new(0)),
+            not_taken: MachLabel::from_block(BlockIndex::new(0)),
             cond: Cond::from_mask(11),
         },
         "C0B400000000C0F4FFFFFFFD",
@@ -6719,8 +6764,8 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::CondBr {
-            taken: MachLabel::from_block(0),
-            not_taken: MachLabel::from_block(0),
+            taken: MachLabel::from_block(BlockIndex::new(0)),
+            not_taken: MachLabel::from_block(BlockIndex::new(0)),
             cond: Cond::from_mask(12),
         },
         "C0C400000000C0F4FFFFFFFD",
@@ -6728,8 +6773,8 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::CondBr {
-            taken: MachLabel::from_block(0),
-            not_taken: MachLabel::from_block(0),
+            taken: MachLabel::from_block(BlockIndex::new(0)),
+            not_taken: MachLabel::from_block(BlockIndex::new(0)),
             cond: Cond::from_mask(13),
         },
         "C0D400000000C0F4FFFFFFFD",
@@ -6737,8 +6782,8 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::CondBr {
-            taken: MachLabel::from_block(0),
-            not_taken: MachLabel::from_block(0),
+            taken: MachLabel::from_block(BlockIndex::new(0)),
+            not_taken: MachLabel::from_block(BlockIndex::new(0)),
             cond: Cond::from_mask(14),
         },
         "C0E400000000C0F4FFFFFFFD",
@@ -6782,7 +6827,14 @@ fn test_s390x_binemit() {
         "basr %r14, %r1",
     ));
 
-    insns.push((Inst::Ret { link: gpr(14) }, "07FE", "br %r14"));
+    insns.push((
+        Inst::Ret {
+            link: gpr(14),
+            rets: vec![],
+        },
+        "07FE",
+        "br %r14",
+    ));
 
     insns.push((Inst::Debugtrap, "0001", "debugtrap"));
 
@@ -8246,7 +8298,6 @@ fn test_s390x_binemit() {
     isa_flag_builder.enable("arch13").unwrap();
     let isa_flags = s390x_settings::Flags::new(&flags, isa_flag_builder);
 
-    let rru = create_reg_universe(&flags);
     let emit_info = EmitInfo::new(flags, isa_flags);
     for (insn, expected_encoding, expected_printing) in insns {
         println!(
@@ -8255,7 +8306,8 @@ fn test_s390x_binemit() {
         );
 
         // Check the printed text is as expected.
-        let actual_printing = insn.show_rru(Some(&rru));
+        let actual_printing =
+            insn.print_with_state(&mut EmitState::default(), &mut AllocationConsumer::new(&[]));
         assert_eq!(expected_printing, actual_printing);
 
         let mut buffer = MachBuffer::new();
@@ -8265,7 +8317,7 @@ fn test_s390x_binemit() {
         buffer.bind_label(label0);
 
         // Emit the instruction.
-        insn.emit(&mut buffer, &emit_info, &mut Default::default());
+        insn.emit(&[], &mut buffer, &emit_info, &mut Default::default());
 
         // Label 1 after the instruction.
         let label1 = buffer.get_label();

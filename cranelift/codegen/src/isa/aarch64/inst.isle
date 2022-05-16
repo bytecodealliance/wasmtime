@@ -1,795 +1,775 @@
 ;; Instruction formats.
 (type MInst
-  (enum
-    ;; A no-op of zero size.
-    (Nop0)
+      (enum
+       ;; A no-op of zero size.
+       (Nop0)
 
-    ;; A no-op that is one instruction large.
-    (Nop4)
+       ;; A no-op that is one instruction large.
+       (Nop4)
 
-    ;; An ALU operation with two register sources and a register destination.
-    (AluRRR
-      (alu_op ALUOp)
-      (size OperandSize)
-      (rd WritableReg)
-      (rn Reg)
-      (rm Reg))
+       ;; An ALU operation with two register sources and a register destination.
+       (AluRRR
+        (alu_op ALUOp)
+        (size OperandSize)
+        (rd WritableReg)
+        (rn Reg)
+        (rm Reg))
 
-    ;; An ALU operation with three register sources and a register destination.
-    (AluRRRR
-      (alu_op ALUOp3)
-      (rd WritableReg)
-      (rn Reg)
-      (rm Reg)
-      (ra Reg))
+       ;; An ALU operation with three register sources and a register destination.
+       (AluRRRR
+        (alu_op ALUOp3)
+        (size OperandSize)
+        (rd WritableReg)
+        (rn Reg)
+        (rm Reg)
+        (ra Reg))
 
-    ;; An ALU operation with a register source and an immediate-12 source, and a register
-    ;; destination.
-    (AluRRImm12
-      (alu_op ALUOp)
-      (size OperandSize)
-      (rd WritableReg)
-      (rn Reg)
-      (imm12 Imm12))
+       ;; An ALU operation with a register source and an immediate-12 source, and a register
+       ;; destination.
+       (AluRRImm12
+        (alu_op ALUOp)
+        (size OperandSize)
+        (rd WritableReg)
+        (rn Reg)
+        (imm12 Imm12))
 
-    ;; An ALU operation with a register source and an immediate-logic source, and a register destination.
-    (AluRRImmLogic
-      (alu_op ALUOp)
-      (size OperandSize)
-      (rd WritableReg)
-      (rn Reg)
-      (imml ImmLogic))
+       ;; An ALU operation with a register source and an immediate-logic source, and a register destination.
+       (AluRRImmLogic
+        (alu_op ALUOp)
+        (size OperandSize)
+        (rd WritableReg)
+        (rn Reg)
+        (imml ImmLogic))
 
-    ;; An ALU operation with a register source and an immediate-shiftamt source, and a register destination.
-    (AluRRImmShift
-      (alu_op ALUOp)
-      (size OperandSize)
-      (rd WritableReg)
-      (rn Reg)
-      (immshift ImmShift))
+       ;; An ALU operation with a register source and an immediate-shiftamt source, and a register destination.
+       (AluRRImmShift
+        (alu_op ALUOp)
+        (size OperandSize)
+        (rd WritableReg)
+        (rn Reg)
+        (immshift ImmShift))
 
-    ;; An ALU operation with two register sources, one of which can be shifted, and a register
-    ;; destination.
-    (AluRRRShift
-      (alu_op ALUOp)
-      (size OperandSize)
-      (rd WritableReg)
-      (rn Reg)
-      (rm Reg)
-      (shiftop ShiftOpAndAmt))
+       ;; An ALU operation with two register sources, one of which can be shifted, and a register
+       ;; destination.
+       (AluRRRShift
+        (alu_op ALUOp)
+        (size OperandSize)
+        (rd WritableReg)
+        (rn Reg)
+        (rm Reg)
+        (shiftop ShiftOpAndAmt))
 
-    ;; An ALU operation with two register sources, one of which can be {zero,sign}-extended and
-    ;; shifted, and a register destination.
-    (AluRRRExtend
-      (alu_op ALUOp)
-      (size OperandSize)
-      (rd WritableReg)
-      (rn Reg)
-      (rm Reg)
-      (extendop ExtendOp))
+       ;; An ALU operation with two register sources, one of which can be {zero,sign}-extended and
+       ;; shifted, and a register destination.
+       (AluRRRExtend
+        (alu_op ALUOp)
+        (size OperandSize)
+        (rd WritableReg)
+        (rn Reg)
+        (rm Reg)
+        (extendop ExtendOp))
 
-    ;; A bit op instruction with a single register source.
-    (BitRR
-      (op BitOp)
-      (size OperandSize)
-      (rd WritableReg)
-      (rn Reg))
+       ;; A bit op instruction with a single register source.
+       (BitRR
+        (op BitOp)
+        (size OperandSize)
+        (rd WritableReg)
+        (rn Reg))
 
-    ;; An unsigned (zero-extending) 8-bit load.
-    (ULoad8
-      (rd WritableReg)
-      (mem AMode)
-      (flags MemFlags))
+       ;; An unsigned (zero-extending) 8-bit load.
+       (ULoad8
+        (rd WritableReg)
+        (mem AMode)
+        (flags MemFlags))
 
-    ;; A signed (sign-extending) 8-bit load.
-    (SLoad8
-      (rd WritableReg)
-      (mem AMode)
-      (flags MemFlags))
+       ;; A signed (sign-extending) 8-bit load.
+       (SLoad8
+        (rd WritableReg)
+        (mem AMode)
+        (flags MemFlags))
 
-    ;; An unsigned (zero-extending) 16-bit load.
-    (ULoad16
-      (rd WritableReg)
-      (mem AMode)
-      (flags MemFlags))
+       ;; An unsigned (zero-extending) 16-bit load.
+       (ULoad16
+        (rd WritableReg)
+        (mem AMode)
+        (flags MemFlags))
 
-    ;; A signed (sign-extending) 16-bit load.
-    (SLoad16
-      (rd WritableReg)
-      (mem AMode)
-      (flags MemFlags))
+       ;; A signed (sign-extending) 16-bit load.
+       (SLoad16
+        (rd WritableReg)
+        (mem AMode)
+        (flags MemFlags))
 
-    ;; An unsigned (zero-extending) 32-bit load.
-    (ULoad32
-      (rd WritableReg)
-      (mem AMode)
-      (flags MemFlags))
+       ;; An unsigned (zero-extending) 32-bit load.
+       (ULoad32
+        (rd WritableReg)
+        (mem AMode)
+        (flags MemFlags))
 
-    ;; A signed (sign-extending) 32-bit load.
-    (SLoad32
-      (rd WritableReg)
-      (mem AMode)
-      (flags MemFlags))
+       ;; A signed (sign-extending) 32-bit load.
+       (SLoad32
+        (rd WritableReg)
+        (mem AMode)
+        (flags MemFlags))
 
-    ;; A 64-bit load.
-    (ULoad64
-      (rd WritableReg)
-      (mem AMode)
-      (flags MemFlags))
+       ;; A 64-bit load.
+       (ULoad64
+        (rd WritableReg)
+        (mem AMode)
+        (flags MemFlags))
 
-    ;; An 8-bit store.
-    (Store8
-      (rd Reg)
-      (mem AMode)
-      (flags MemFlags))
+       ;; An 8-bit store.
+       (Store8
+        (rd Reg)
+        (mem AMode)
+        (flags MemFlags))
 
-    ;; A 16-bit store.
-    (Store16
-      (rd Reg)
-      (mem AMode)
-      (flags MemFlags))
+       ;; A 16-bit store.
+       (Store16
+        (rd Reg)
+        (mem AMode)
+        (flags MemFlags))
 
-    ;; A 32-bit store.
-    (Store32
-      (rd Reg)
-      (mem AMode)
-      (flags MemFlags))
+       ;; A 32-bit store.
+       (Store32
+        (rd Reg)
+        (mem AMode)
+        (flags MemFlags))
 
-    ;; A 64-bit store.
-    (Store64
-      (rd Reg)
-      (mem AMode)
-      (flags MemFlags))
+       ;; A 64-bit store.
+       (Store64
+        (rd Reg)
+        (mem AMode)
+        (flags MemFlags))
 
-    ;; A store of a pair of registers.
-    (StoreP64
-      (rt Reg)
-      (rt2 Reg)
-      (mem PairAMode)
-      (flags MemFlags))
+       ;; A store of a pair of registers.
+       (StoreP64
+        (rt Reg)
+        (rt2 Reg)
+        (mem PairAMode)
+        (flags MemFlags))
 
-    ;; A load of a pair of registers.
-    (LoadP64
-      (rt WritableReg)
-      (rt2 WritableReg)
-      (mem PairAMode)
-      (flags MemFlags))
+       ;; A load of a pair of registers.
+       (LoadP64
+        (rt WritableReg)
+        (rt2 WritableReg)
+        (mem PairAMode)
+        (flags MemFlags))
 
-    ;; A MOV instruction. These are encoded as ORR's (AluRRR form) but we
-    ;; keep them separate at the `Inst` level for better pretty-printing
-    ;; and faster `is_move()` logic.
-    (Mov64
-      (rd WritableReg)
-      (rm Reg))
+       ;; A MOV instruction. These are encoded as ORR's (AluRRR form).
+       ;; The 32-bit version zeroes the top 32 bits of the
+       ;; destination, which is effectively an alias for an unsigned
+       ;; 32-to-64-bit extension.
+       (Mov
+        (size OperandSize)
+        (rd WritableReg)
+        (rm Reg))
 
-    ;; A 32-bit MOV. Zeroes the top 32 bits of the destination. This is
-    ;; effectively an alias for an unsigned 32-to-64-bit extension.
-    (Mov32
-      (rd WritableReg)
-      (rm Reg))
+       ;; A MOV[Z,N,K] with a 16-bit immediate.
+       (MovWide
+        (op MoveWideOp)
+        (rd WritableReg)
+        (imm MoveWideConst)
+        (size OperandSize))
 
-    ;; A MOVZ with a 16-bit immediate.
-    (MovZ
-      (rd WritableReg)
-      (imm MoveWideConst)
-      (size OperandSize))
+       ;; A sign- or zero-extend operation.
+       (Extend
+        (rd WritableReg)
+        (rn Reg)
+        (signed bool)
+        (from_bits u8)
+        (to_bits u8))
 
-    ;; A MOVN with a 16-bit immediate.
-    (MovN
-      (rd WritableReg)
-      (imm MoveWideConst)
-      (size OperandSize))
+       ;; A conditional-select operation.
+       (CSel
+        (rd WritableReg)
+        (cond Cond)
+        (rn Reg)
+        (rm Reg))
 
-    ;; A MOVK with a 16-bit immediate.
-    (MovK
-      (rd WritableReg)
-      (imm MoveWideConst)
-      (size OperandSize))
+       ;; A conditional-set operation.
+       (CSet
+        (rd WritableReg)
+        (cond Cond))
 
-    ;; A sign- or zero-extend operation.
-    (Extend
-      (rd WritableReg)
-      (rn Reg)
-      (signed bool)
-      (from_bits u8)
-      (to_bits u8))
+       ;; A conditional-set-mask operation.
+       (CSetm
+        (rd WritableReg)
+        (cond Cond))
 
-    ;; A conditional-select operation.
-    (CSel
-      (rd WritableReg)
-      (cond Cond)
-      (rn Reg)
-      (rm Reg))
+       ;; A conditional comparison with an immediate.
+       (CCmpImm
+        (size OperandSize)
+        (rn Reg)
+        (imm UImm5)
+        (nzcv NZCV)
+        (cond Cond))
 
-    ;; A conditional-set operation.
-    (CSet
-      (rd WritableReg)
-      (cond Cond))
-
-    ;; A conditional-set-mask operation.
-    (CSetm
-      (rd WritableReg)
-      (cond Cond))
-
-    ;; A conditional comparison with an immediate.
-    (CCmpImm
-      (size OperandSize)
-      (rn Reg)
-      (imm UImm5)
-      (nzcv NZCV)
-      (cond Cond))
-
-    ;; A synthetic insn, which is a load-linked store-conditional loop, that has the overall
-    ;; effect of atomically modifying a memory location in a particular way.  Because we have
-    ;; no way to explain to the regalloc about earlyclobber registers, this instruction has
-    ;; completely fixed operand registers, and we rely on the RA's coalescing to remove copies
-    ;; in the surrounding code to the extent it can.  The sequence is both preceded and
-    ;; followed by a fence which is at least as comprehensive as that of the `Fence`
-    ;; instruction below.  This instruction is sequentially consistent.  The operand
-    ;; conventions are:
-    ;;
-    ;; x25   (rd) address
-    ;; x26   (rd) second operand for `op`
-    ;; x27   (wr) old value
-    ;; x24   (wr) scratch reg; value afterwards has no meaning
-    ;; x28   (wr) scratch reg; value afterwards has no meaning
-    (AtomicRMWLoop
-      (ty Type) ;; I8, I16, I32 or I64
-      (op AtomicRmwOp))
-
-    ;; An atomic read-modify-write operation. These instructions require the
-    ;; Large System Extension (LSE) ISA support (FEAT_LSE). The instructions have
-    ;; acquire-release semantics.
-    (AtomicRMW
-      (op AtomicRMWOp)
-      (rs Reg)
-      (rt WritableReg)
-      (rn Reg)
-      (ty Type))
-
-    ;; An atomic compare-and-swap operation. This instruction is sequentially consistent.
-    (AtomicCAS
-      (rs WritableReg)
-      (rt Reg)
-      (rn Reg)
-      (ty Type))
-
-    ;; Similar to AtomicRMWLoop, a compare-and-swap operation implemented using a load-linked
-    ;; store-conditional loop.
-    ;; This instruction is sequentially consistent.
-    ;; Note that the operand conventions, although very similar to AtomicRMWLoop, are different:
-    ;;
-    ;; x25   (rd) address
-    ;; x26   (rd) expected value
-    ;; x28   (rd) replacement value
-    ;; x27   (wr) old value
-    ;; x24   (wr) scratch reg; value afterwards has no meaning
-    (AtomicCASLoop
+       ;; A synthetic insn, which is a load-linked store-conditional loop, that has the overall
+       ;; effect of atomically modifying a memory location in a particular way.  Because we have
+       ;; no way to explain to the regalloc about earlyclobber registers, this instruction has
+       ;; completely fixed operand registers, and we rely on the RA's coalescing to remove copies
+       ;; in the surrounding code to the extent it can. Load- and store-exclusive instructions,
+       ;; with acquire-release semantics, are used to access memory. The operand conventions are:
+       ;;
+       ;; x25   (rd) address
+       ;; x26   (rd) second operand for `op`
+       ;; x27   (wr) old value
+       ;; x24   (wr) scratch reg; value afterwards has no meaning
+       ;; x28   (wr) scratch reg; value afterwards has no meaning
+       (AtomicRMWLoop
         (ty Type) ;; I8, I16, I32 or I64
-    )
-
-    ;; Read `access_ty` bits from address `rt`, either 8, 16, 32 or 64-bits, and put
-    ;; it in `rn`, optionally zero-extending to fill a word or double word result.
-    ;; This instruction is sequentially consistent.
-    (LoadAcquire
-      (access_ty Type) ;; I8, I16, I32 or I64
-      (rt WritableReg)
-      (rn Reg))
-
-    ;; Write the lowest `ty` bits of `rt` to address `rn`.
-    ;; This instruction is sequentially consistent.
-    (StoreRelease
-      (access_ty Type) ;; I8, I16, I32 or I64
-      (rt Reg)
-      (rn Reg))
-
-    ;; A memory fence.  This must provide ordering to ensure that, at a minimum, neither loads
-    ;; nor stores may move forwards or backwards across the fence.  Currently emitted as "dmb
-    ;; ish".  This instruction is sequentially consistent.
-    (Fence)
-
-    ;; FPU move. Note that this is distinct from a vector-register
-    ;; move; moving just 64 bits seems to be significantly faster.
-    (FpuMove64
-      (rd WritableReg)
-      (rn Reg))
-
-    ;; Vector register move.
-    (FpuMove128
-      (rd WritableReg)
-      (rn Reg))
-
-    ;; Move to scalar from a vector element.
-    (FpuMoveFromVec
-      (rd WritableReg)
-      (rn Reg)
-      (idx u8)
-      (size VectorSize))
-
-    ;; Zero-extend a SIMD & FP scalar to the full width of a vector register.
-    ;; 16-bit scalars require half-precision floating-point support (FEAT_FP16).
-    (FpuExtend
-      (rd WritableReg)
-      (rn Reg)
-      (size ScalarSize))
-
-    ;; 1-op FPU instruction.
-    (FpuRR
-      (fpu_op FPUOp1)
-      (rd WritableReg)
-      (rn Reg))
-
-    ;; 2-op FPU instruction.
-    (FpuRRR
-      (fpu_op FPUOp2)
-      (rd WritableReg)
-      (rn Reg)
-      (rm Reg))
-
-    (FpuRRI
-      (fpu_op FPUOpRI)
-      (rd WritableReg)
-      (rn Reg))
-
-    ;; 3-op FPU instruction.
-    (FpuRRRR
-      (fpu_op FPUOp3)
-      (rd WritableReg)
-      (rn Reg)
-      (rm Reg)
-      (ra Reg))
-
-    ;; FPU comparison, single-precision (32 bit).
-    (FpuCmp32
-      (rn Reg)
-      (rm Reg))
-
-    ;; FPU comparison, double-precision (64 bit).
-    (FpuCmp64
-      (rn Reg)
-      (rm Reg))
-
-    ;; Floating-point load, single-precision (32 bit).
-    (FpuLoad32
-      (rd WritableReg)
-      (mem AMode)
-      (flags MemFlags))
-
-    ;; Floating-point store, single-precision (32 bit).
-    (FpuStore32
-      (rd Reg)
-      (mem AMode)
-      (flags MemFlags))
-
-    ;; Floating-point load, double-precision (64 bit).
-    (FpuLoad64
-      (rd WritableReg)
-      (mem AMode)
-      (flags MemFlags))
-
-    ;; Floating-point store, double-precision (64 bit).
-    (FpuStore64
-      (rd Reg)
-      (mem AMode)
-      (flags MemFlags))
-
-    ;; Floating-point/vector load, 128 bit.
-    (FpuLoad128
-      (rd WritableReg)
-      (mem AMode)
-      (flags MemFlags))
-
-    ;; Floating-point/vector store, 128 bit.
-    (FpuStore128
-      (rd Reg)
-      (mem AMode)
-      (flags MemFlags))
-
-    ;; A load of a pair of floating-point registers, double precision (64-bit).
-    (FpuLoadP64
-      (rt WritableReg)
-      (rt2 WritableReg)
-      (mem PairAMode)
-      (flags MemFlags))
-
-    ;; A store of a pair of floating-point registers, double precision (64-bit).
-    (FpuStoreP64
-      (rt Reg)
-      (rt2 Reg)
-      (mem PairAMode)
-      (flags MemFlags))
-
-    ;; A load of a pair of floating-point registers, 128-bit.
-    (FpuLoadP128
-      (rt WritableReg)
-      (rt2 WritableReg)
-      (mem PairAMode)
-      (flags MemFlags))
-
-    ;; A store of a pair of floating-point registers, 128-bit.
-    (FpuStoreP128
-      (rt Reg)
-      (rt2 Reg)
-      (mem PairAMode)
-      (flags MemFlags))
-
-    (LoadFpuConst64
-      (rd WritableReg)
-      (const_data u64))
-
-    (LoadFpuConst128
-      (rd WritableReg)
-      (const_data u128))
-
-    ;; Conversion: FP -> integer.
-    (FpuToInt
-      (op FpuToIntOp)
-      (rd WritableReg)
-      (rn Reg))
-
-    ;; Conversion: integer -> FP.
-    (IntToFpu
-      (op IntToFpuOp)
-      (rd WritableReg)
-      (rn Reg))
-
-    ;; FP conditional select, 32 bit.
-    (FpuCSel32
-      (rd WritableReg)
-      (rn Reg)
-      (rm Reg)
-      (cond Cond))
-
-    ;; FP conditional select, 64 bit.
-    (FpuCSel64
-      (rd WritableReg)
-      (rn Reg)
-      (rm Reg)
-      (cond Cond))
-
-    ;; Round to integer.
-    (FpuRound
-      (op FpuRoundMode)
-      (rd WritableReg)
-      (rn Reg))
-
-    ;; Move from a GPR to a vector register.  The scalar value is parked in the lowest lane
-    ;; of the destination, and all other lanes are zeroed out.  Currently only 32- and 64-bit
-    ;; transactions are supported.
-    (MovToFpu
-      (rd WritableReg)
-      (rn Reg)
-      (size ScalarSize))
-
-    ;; Loads a floating-point immediate.
-    (FpuMoveFPImm
-      (rd WritableReg)
-      (imm ASIMDFPModImm)
-      (size ScalarSize))
-
-    ;; Move to a vector element from a GPR.
-    (MovToVec
-      (rd WritableReg)
-      (rn Reg)
-      (idx u8)
-      (size VectorSize))
-
-    ;; Unsigned move from a vector element to a GPR.
-    (MovFromVec
-      (rd WritableReg)
-      (rn Reg)
-      (idx u8)
-      (size VectorSize))
-
-    ;; Signed move from a vector element to a GPR.
-    (MovFromVecSigned
-      (rd WritableReg)
-      (rn Reg)
-      (idx u8)
-      (size VectorSize)
-      (scalar_size OperandSize))
-
-    ;; Duplicate general-purpose register to vector.
-    (VecDup
-      (rd WritableReg)
-      (rn Reg)
-      (size VectorSize))
-
-    ;; Duplicate scalar to vector.
-    (VecDupFromFpu
-      (rd WritableReg)
-      (rn Reg)
-      (size VectorSize))
-
-    ;; Duplicate FP immediate to vector.
-    (VecDupFPImm
-      (rd WritableReg)
-      (imm ASIMDFPModImm)
-      (size VectorSize))
-
-    ;; Duplicate immediate to vector.
-    (VecDupImm
-      (rd WritableReg)
-      (imm ASIMDMovModImm)
-      (invert bool)
-      (size VectorSize))
-
-    ;; Vector extend.
-    (VecExtend
-      (t VecExtendOp)
-      (rd WritableReg)
-      (rn Reg)
-      (high_half bool))
-
-    ;; Move vector element to another vector element.
-    (VecMovElement
-      (rd WritableReg)
-      (rn Reg)
-      (dest_idx u8)
-      (src_idx u8)
-      (size VectorSize))
-
-    ;; Vector widening operation.
-    (VecRRLong
-      (op VecRRLongOp)
-      (rd WritableReg)
-      (rn Reg)
-      (high_half bool))
-
-    ;; Vector narrowing operation.
-    (VecRRNarrow
-      (op VecRRNarrowOp)
-      (rd WritableReg)
-      (rn Reg)
-      (high_half bool))
-
-    ;; 1-operand vector instruction that operates on a pair of elements.
-    (VecRRPair
-      (op VecPairOp)
-      (rd WritableReg)
-      (rn Reg))
-
-    ;; 2-operand vector instruction that produces a result with twice the
-    ;; lane width and half the number of lanes.
-    (VecRRRLong
-      (alu_op VecRRRLongOp)
-      (rd WritableReg)
-      (rn Reg)
-      (rm Reg)
-      (high_half bool))
-
-    ;; 1-operand vector instruction that extends elements of the input
-    ;; register and operates on a pair of elements. The output lane width
-    ;; is double that of the input.
-    (VecRRPairLong
-      (op VecRRPairLongOp)
-      (rd WritableReg)
-      (rn Reg))
-
-    ;; A vector ALU op.
-    (VecRRR
-      (alu_op VecALUOp)
-      (rd WritableReg)
-      (rn Reg)
-      (rm Reg)
-      (size VectorSize))
-
-    ;; Vector two register miscellaneous instruction.
-    (VecMisc
-      (op VecMisc2)
-      (rd WritableReg)
-      (rn Reg)
-      (size VectorSize))
-
-    ;; Vector instruction across lanes.
-    (VecLanes
-      (op VecLanesOp)
-      (rd WritableReg)
-      (rn Reg)
-      (size VectorSize))
-
-    ;; Vector shift by immediate Shift Left (immediate), Unsigned Shift Right (immediate)
-    ;; Signed Shift Right (immediate).  These are somewhat unusual in that, for right shifts,
-    ;; the allowed range of `imm` values is 1 to lane-size-in-bits, inclusive.  A zero
-    ;; right-shift cannot be encoded.  Left shifts are "normal", though, having valid `imm`
-    ;; values from 0 to lane-size-in-bits - 1 inclusive.
-    (VecShiftImm
-      (op VecShiftImmOp)
-      (rd WritableReg)
-      (rn Reg)
-      (size VectorSize)
-      (imm u8))
-
-    ;; Vector extract - create a new vector, being the concatenation of the lowest `imm4` bytes
-    ;; of `rm` followed by the uppermost `16 - imm4` bytes of `rn`.
-    (VecExtract
-      (rd WritableReg)
-      (rn Reg)
-      (rm Reg)
-      (imm4 u8))
-
-    ;; Table vector lookup - single register table. The table consists of 8-bit elements and is
-    ;; stored in `rn`, while `rm` contains 8-bit element indices. `is_extension` specifies whether
-    ;; to emit a TBX or a TBL instruction, i.e. whether to leave the elements in the destination
-    ;; vector that correspond to out-of-range indices (greater than 15) unmodified or to set them
-    ;; to 0.
-    (VecTbl
-      (rd WritableReg)
-      (rn Reg)
-      (rm Reg)
-      (is_extension bool))
-
-    ;; Table vector lookup - two register table. The table consists of 8-bit elements and is
-    ;; stored in `rn` and `rn2`, while `rm` contains 8-bit element indices. `is_extension`
-    ;; specifies whether to emit a TBX or a TBL instruction, i.e. whether to leave the elements in
-    ;; the destination vector that correspond to out-of-range indices (greater than 31) unmodified
-    ;; or to set them to 0. The table registers `rn` and `rn2` must have consecutive numbers
-    ;; modulo 32, that is v31 and v0 (in that order) are consecutive registers.
-    (VecTbl2
-      (rd WritableReg)
-      (rn Reg)
-      (rn2 Reg)
-      (rm Reg)
-      (is_extension bool))
-
-    ;; Load an element and replicate to all lanes of a vector.
-    (VecLoadReplicate
-      (rd WritableReg)
-      (rn Reg)
-      (size VectorSize))
-
-    ;; Vector conditional select, 128 bit.  A synthetic instruction, which generates a 4-insn
-    ;; control-flow diamond.
-    (VecCSel
-      (rd WritableReg)
-      (rn Reg)
-      (rm Reg)
-      (cond Cond))
-
-    ;; Move to the NZCV flags (actually a `MSR NZCV, Xn` insn).
-    (MovToNZCV
-      (rn Reg))
-
-    ;; Move from the NZCV flags (actually a `MRS Xn, NZCV` insn).
-    (MovFromNZCV
-      (rd WritableReg))
-
-    ;; A machine call instruction. N.B.: this allows only a +/- 128MB offset (it uses a relocation
-    ;; of type `Reloc::Arm64Call`); if the destination distance is not `RelocDistance::Near`, the
-    ;; code should use a `LoadExtName` / `CallInd` sequence instead, allowing an arbitrary 64-bit
-    ;; target.
-    (Call
-      (info BoxCallInfo))
-
-    ;; A machine indirect-call instruction.
-    (CallInd
-      (info BoxCallIndInfo))
-
-    ;; ---- branches (exactly one must appear at end of BB) ----
-
-    ;; A machine return instruction.
-    (Ret)
-
-    ;; A placeholder instruction, generating no code, meaning that a function epilogue must be
-    ;; inserted there.
-    (EpiloguePlaceholder)
-
-    ;; An unconditional branch.
-    (Jump
-      (dest BranchTarget))
-
-    ;; A conditional branch. Contains two targets; at emission time, both are emitted, but
-    ;; the MachBuffer knows to truncate the trailing branch if fallthrough. We optimize the
-    ;; choice of taken/not_taken (inverting the branch polarity as needed) based on the
-    ;; fallthrough at the time of lowering.
-    (CondBr
-      (taken BranchTarget)
-      (not_taken BranchTarget)
-      (kind CondBrKind))
-
-    ;; A conditional trap: execute a `udf` if the condition is true. This is
-    ;; one VCode instruction because it uses embedded control flow; it is
-    ;; logically a single-in, single-out region, but needs to appear as one
-    ;; unit to the register allocator.
-    ;;
-    ;; The `CondBrKind` gives the conditional-branch condition that will
-    ;; *execute* the embedded `Inst`. (In the emitted code, we use the inverse
-    ;; of this condition in a branch that skips the trap instruction.)
-    (TrapIf
-      (kind CondBrKind)
-      (trap_code TrapCode))
-
-    ;; An indirect branch through a register, augmented with set of all
-    ;; possible successors.
-    (IndirectBr
-      (rn Reg)
-      (targets VecMachLabel))
-
-    ;; A "break" instruction, used for e.g. traps and debug breakpoints.
-    (Brk)
-
-    ;; An instruction guaranteed to always be undefined and to trigger an illegal instruction at
-    ;; runtime.
-    (Udf
-      (trap_code TrapCode))
-
-    ;; Compute the address (using a PC-relative offset) of a memory location, using the `ADR`
-    ;; instruction. Note that we take a simple offset, not a `MemLabel`, here, because `Adr` is
-    ;; only used for now in fixed lowering sequences with hardcoded offsets. In the future we may
-    ;; need full `MemLabel` support.
-    (Adr
-      (rd WritableReg)
-      ;; Offset in range -2^20 .. 2^20.
-      (off i32))
-
-    ;; Raw 32-bit word, used for inline constants and jump-table entries.
-    (Word4
-      (data u32))
-
-    ;; Raw 64-bit word, used for inline constants.
-    (Word8
-      (data u64))
-
-    ;; Jump-table sequence, as one compound instruction (see note in lower_inst.rs for rationale).
-    (JTSequence
-      (info BoxJTSequenceInfo)
-      (ridx Reg)
-      (rtmp1 WritableReg)
-      (rtmp2 WritableReg))
-
-    ;; Load an inline symbol reference.
-    (LoadExtName
-      (rd WritableReg)
-      (name BoxExternalName)
-      (offset i64))
-
-    ;; Load address referenced by `mem` into `rd`.
-    (LoadAddr
-      (rd WritableReg)
-      (mem AMode))
-
-    ;; Marker, no-op in generated code: SP "virtual offset" is adjusted. This
-    ;; controls how AMode::NominalSPOffset args are lowered.
-    (VirtualSPOffsetAdj
-      (offset i64))
-
-    ;; Meta-insn, no-op in generated code: emit constant/branch veneer island
-    ;; at this point (with a guard jump around it) if less than the needed
-    ;; space is available before the next branch deadline. See the `MachBuffer`
-    ;; implementation in `machinst/buffer.rs` for the overall algorithm. In
-    ;; brief, we retain a set of "pending/unresolved label references" from
-    ;; branches as we scan forward through instructions to emit machine code;
-    ;; if we notice we're about to go out of range on an unresolved reference,
-    ;; we stop, emit a bunch of "veneers" (branches in a form that has a longer
-    ;; range, e.g. a 26-bit-offset unconditional jump), and point the original
-    ;; label references to those. This is an "island" because it comes in the
-    ;; middle of the code.
-    ;;
-    ;; This meta-instruction is a necessary part of the logic that determines
-    ;; where to place islands. Ordinarily, we want to place them between basic
-    ;; blocks, so we compute the worst-case size of each block, and emit the
-    ;; island before starting a block if we would exceed a deadline before the
-    ;; end of the block. However, some sequences (such as an inline jumptable)
-    ;; are variable-length and not accounted for by this logic; so these
-    ;; lowered sequences include an `EmitIsland` to trigger island generation
-    ;; where necessary.
-    (EmitIsland
-      ;; The needed space before the next deadline.
-      (needed_space CodeOffset))
-
-    ;; A call to the `ElfTlsGetAddr` libcall. Returns address of TLS symbol in x0.
-    (ElfTlsGetAddr
-      (symbol ExternalName))
-
-    ;; A definition of a value label.
-    (ValueLabelMarker
-      (reg Reg)
-      (label ValueLabel))
-
-    ;; An unwind pseudo-instruction.
-    (Unwind
-      (inst UnwindInst))
-))
+        (op AtomicRMWLoopOp))
+
+       ;; Similar to AtomicRMWLoop, a compare-and-swap operation implemented using a load-linked
+       ;; store-conditional loop, with acquire-release semantics.
+       ;; Note that the operand conventions, although very similar to AtomicRMWLoop, are different:
+       ;;
+       ;; x25   (rd) address
+       ;; x26   (rd) expected value
+       ;; x28   (rd) replacement value
+       ;; x27   (wr) old value
+       ;; x24   (wr) scratch reg; value afterwards has no meaning
+       (AtomicCASLoop
+        (ty Type) ;; I8, I16, I32 or I64
+        )
+
+       ;; An atomic read-modify-write operation. These instructions require the
+       ;; Large System Extension (LSE) ISA support (FEAT_LSE). The instructions have
+       ;; acquire-release semantics.
+       (AtomicRMW
+         (op AtomicRMWOp)
+         (rs Reg)
+         (rt WritableReg)
+         (rn Reg)
+         (ty Type))
+
+       ;; An atomic compare-and-swap operation. This instruction is sequentially consistent.
+       (AtomicCAS
+         (rs WritableReg)
+         (rt Reg)
+         (rn Reg)
+         (ty Type))
+
+       ;; Read `access_ty` bits from address `rt`, either 8, 16, 32 or 64-bits, and put
+       ;; it in `rn`, optionally zero-extending to fill a word or double word result.
+       ;; This instruction is sequentially consistent.
+       (LoadAcquire
+        (access_ty Type) ;; I8, I16, I32 or I64
+        (rt WritableReg)
+        (rn Reg))
+
+       ;; Write the lowest `ty` bits of `rt` to address `rn`.
+       ;; This instruction is sequentially consistent.
+       (StoreRelease
+        (access_ty Type) ;; I8, I16, I32 or I64
+        (rt Reg)
+        (rn Reg))
+
+       ;; A memory fence.  This must provide ordering to ensure that, at a minimum, neither loads
+       ;; nor stores may move forwards or backwards across the fence.  Currently emitted as "dmb
+       ;; ish".  This instruction is sequentially consistent.
+       (Fence)
+
+       ;; FPU move. Note that this is distinct from a vector-register
+       ;; move; moving just 64 bits seems to be significantly faster.
+       (FpuMove64
+        (rd WritableReg)
+        (rn Reg))
+
+       ;; Vector register move.
+       (FpuMove128
+        (rd WritableReg)
+        (rn Reg))
+
+       ;; Move to scalar from a vector element.
+       (FpuMoveFromVec
+        (rd WritableReg)
+        (rn Reg)
+        (idx u8)
+        (size VectorSize))
+
+       ;; Zero-extend a SIMD & FP scalar to the full width of a vector register.
+       ;; 16-bit scalars require half-precision floating-point support (FEAT_FP16).
+       (FpuExtend
+        (rd WritableReg)
+        (rn Reg)
+        (size ScalarSize))
+
+       ;; 1-op FPU instruction.
+       (FpuRR
+        (fpu_op FPUOp1)
+        (size ScalarSize)
+        (rd WritableReg)
+        (rn Reg))
+
+       ;; 2-op FPU instruction.
+       (FpuRRR
+        (fpu_op FPUOp2)
+        (size ScalarSize)
+        (rd WritableReg)
+        (rn Reg)
+        (rm Reg))
+
+       (FpuRRI
+        (fpu_op FPUOpRI)
+        (rd WritableReg)
+        (rn Reg))
+
+       ;; 3-op FPU instruction.
+       (FpuRRRR
+        (fpu_op FPUOp3)
+        (rd WritableReg)
+        (rn Reg)
+        (rm Reg)
+        (ra Reg))
+
+       ;; FPU comparison.
+       (FpuCmp
+        (size ScalarSize)
+        (rn Reg)
+        (rm Reg))
+
+       ;; Floating-point load, single-precision (32 bit).
+       (FpuLoad32
+        (rd WritableReg)
+        (mem AMode)
+        (flags MemFlags))
+
+       ;; Floating-point store, single-precision (32 bit).
+       (FpuStore32
+        (rd Reg)
+        (mem AMode)
+        (flags MemFlags))
+
+       ;; Floating-point load, double-precision (64 bit).
+       (FpuLoad64
+        (rd WritableReg)
+        (mem AMode)
+        (flags MemFlags))
+
+       ;; Floating-point store, double-precision (64 bit).
+       (FpuStore64
+        (rd Reg)
+        (mem AMode)
+        (flags MemFlags))
+
+       ;; Floating-point/vector load, 128 bit.
+       (FpuLoad128
+        (rd WritableReg)
+        (mem AMode)
+        (flags MemFlags))
+
+       ;; Floating-point/vector store, 128 bit.
+       (FpuStore128
+        (rd Reg)
+        (mem AMode)
+        (flags MemFlags))
+
+       ;; A load of a pair of floating-point registers, double precision (64-bit).
+       (FpuLoadP64
+        (rt WritableReg)
+        (rt2 WritableReg)
+        (mem PairAMode)
+        (flags MemFlags))
+
+       ;; A store of a pair of floating-point registers, double precision (64-bit).
+       (FpuStoreP64
+        (rt Reg)
+        (rt2 Reg)
+        (mem PairAMode)
+        (flags MemFlags))
+
+       ;; A load of a pair of floating-point registers, 128-bit.
+       (FpuLoadP128
+        (rt WritableReg)
+        (rt2 WritableReg)
+        (mem PairAMode)
+        (flags MemFlags))
+
+       ;; A store of a pair of floating-point registers, 128-bit.
+       (FpuStoreP128
+        (rt Reg)
+        (rt2 Reg)
+        (mem PairAMode)
+        (flags MemFlags))
+
+       (LoadFpuConst64
+        (rd WritableReg)
+        (const_data u64))
+
+       (LoadFpuConst128
+        (rd WritableReg)
+        (const_data u128))
+
+       ;; Conversion: FP -> integer.
+       (FpuToInt
+        (op FpuToIntOp)
+        (rd WritableReg)
+        (rn Reg))
+
+       ;; Conversion: integer -> FP.
+       (IntToFpu
+        (op IntToFpuOp)
+        (rd WritableReg)
+        (rn Reg))
+
+       ;; FP conditional select, 32 bit.
+       (FpuCSel32
+        (rd WritableReg)
+        (rn Reg)
+        (rm Reg)
+        (cond Cond))
+
+       ;; FP conditional select, 64 bit.
+       (FpuCSel64
+        (rd WritableReg)
+        (rn Reg)
+        (rm Reg)
+        (cond Cond))
+
+       ;; Round to integer.
+       (FpuRound
+        (op FpuRoundMode)
+        (rd WritableReg)
+        (rn Reg))
+
+       ;; Move from a GPR to a vector register.  The scalar value is parked in the lowest lane
+       ;; of the destination, and all other lanes are zeroed out.  Currently only 32- and 64-bit
+       ;; transactions are supported.
+       (MovToFpu
+        (rd WritableReg)
+        (rn Reg)
+        (size ScalarSize))
+
+       ;; Loads a floating-point immediate.
+       (FpuMoveFPImm
+        (rd WritableReg)
+        (imm ASIMDFPModImm)
+        (size ScalarSize))
+
+       ;; Move to a vector element from a GPR.
+       (MovToVec
+        (rd WritableReg)
+        (rn Reg)
+        (idx u8)
+        (size VectorSize))
+
+       ;; Unsigned move from a vector element to a GPR.
+       (MovFromVec
+        (rd WritableReg)
+        (rn Reg)
+        (idx u8)
+        (size VectorSize))
+
+       ;; Signed move from a vector element to a GPR.
+       (MovFromVecSigned
+        (rd WritableReg)
+        (rn Reg)
+        (idx u8)
+        (size VectorSize)
+        (scalar_size OperandSize))
+
+       ;; Duplicate general-purpose register to vector.
+       (VecDup
+        (rd WritableReg)
+        (rn Reg)
+        (size VectorSize))
+
+       ;; Duplicate scalar to vector.
+       (VecDupFromFpu
+        (rd WritableReg)
+        (rn Reg)
+        (size VectorSize))
+
+       ;; Duplicate FP immediate to vector.
+       (VecDupFPImm
+        (rd WritableReg)
+        (imm ASIMDFPModImm)
+        (size VectorSize))
+
+       ;; Duplicate immediate to vector.
+       (VecDupImm
+        (rd WritableReg)
+        (imm ASIMDMovModImm)
+        (invert bool)
+        (size VectorSize))
+
+       ;; Vector extend.
+       (VecExtend
+        (t VecExtendOp)
+        (rd WritableReg)
+        (rn Reg)
+        (high_half bool))
+
+       ;; Move vector element to another vector element.
+       (VecMovElement
+        (rd WritableReg)
+        (rn Reg)
+        (dest_idx u8)
+        (src_idx u8)
+        (size VectorSize))
+
+       ;; Vector widening operation.
+       (VecRRLong
+        (op VecRRLongOp)
+        (rd WritableReg)
+        (rn Reg)
+        (high_half bool))
+
+       ;; Vector narrowing operation.
+       (VecRRNarrow
+        (op VecRRNarrowOp)
+        (rd WritableReg)
+        (rn Reg)
+        (high_half bool))
+
+       ;; 1-operand vector instruction that operates on a pair of elements.
+       (VecRRPair
+        (op VecPairOp)
+        (rd WritableReg)
+        (rn Reg))
+
+       ;; 2-operand vector instruction that produces a result with twice the
+       ;; lane width and half the number of lanes.
+       (VecRRRLong
+        (alu_op VecRRRLongOp)
+        (rd WritableReg)
+        (rn Reg)
+        (rm Reg)
+        (high_half bool))
+
+       ;; 1-operand vector instruction that extends elements of the input
+       ;; register and operates on a pair of elements. The output lane width
+       ;; is double that of the input.
+       (VecRRPairLong
+        (op VecRRPairLongOp)
+        (rd WritableReg)
+        (rn Reg))
+
+       ;; A vector ALU op.
+       (VecRRR
+        (alu_op VecALUOp)
+        (rd WritableReg)
+        (rn Reg)
+        (rm Reg)
+        (size VectorSize))
+
+       ;; Vector two register miscellaneous instruction.
+       (VecMisc
+        (op VecMisc2)
+        (rd WritableReg)
+        (rn Reg)
+        (size VectorSize))
+
+       ;; Vector instruction across lanes.
+       (VecLanes
+        (op VecLanesOp)
+        (rd WritableReg)
+        (rn Reg)
+        (size VectorSize))
+
+       ;; Vector shift by immediate Shift Left (immediate), Unsigned Shift Right (immediate)
+       ;; Signed Shift Right (immediate).  These are somewhat unusual in that, for right shifts,
+       ;; the allowed range of `imm` values is 1 to lane-size-in-bits, inclusive.  A zero
+       ;; right-shift cannot be encoded.  Left shifts are "normal", though, having valid `imm`
+       ;; values from 0 to lane-size-in-bits - 1 inclusive.
+       (VecShiftImm
+        (op VecShiftImmOp)
+        (rd WritableReg)
+        (rn Reg)
+        (size VectorSize)
+        (imm u8))
+
+       ;; Vector extract - create a new vector, being the concatenation of the lowest `imm4` bytes
+       ;; of `rm` followed by the uppermost `16 - imm4` bytes of `rn`.
+       (VecExtract
+        (rd WritableReg)
+        (rn Reg)
+        (rm Reg)
+        (imm4 u8))
+
+       ;; Table vector lookup - single register table. The table consists of 8-bit elements and is
+       ;; stored in `rn`, while `rm` contains 8-bit element indices. `is_extension` specifies whether
+       ;; to emit a TBX or a TBL instruction, i.e. whether to leave the elements in the destination
+       ;; vector that correspond to out-of-range indices (greater than 15) unmodified or to set them
+       ;; to 0.
+       (VecTbl
+        (rd WritableReg)
+        (rn Reg)
+        (rm Reg)
+        (is_extension bool))
+
+       ;; Table vector lookup - two register table. The table consists of 8-bit elements and is
+       ;; stored in `rn` and `rn2`, while `rm` contains 8-bit element indices. `is_extension`
+       ;; specifies whether to emit a TBX or a TBL instruction, i.e. whether to leave the elements in
+       ;; the destination vector that correspond to out-of-range indices (greater than 31) unmodified
+       ;; or to set them to 0. The table registers `rn` and `rn2` must have consecutive numbers
+       ;; modulo 32, that is v31 and v0 (in that order) are consecutive registers.
+       (VecTbl2
+        (rd WritableReg)
+        (rn Reg)
+        (rn2 Reg)
+        (rm Reg)
+        (is_extension bool))
+
+       ;; Load an element and replicate to all lanes of a vector.
+       (VecLoadReplicate
+        (rd WritableReg)
+        (rn Reg)
+        (size VectorSize))
+
+       ;; Vector conditional select, 128 bit.  A synthetic instruction, which generates a 4-insn
+       ;; control-flow diamond.
+       (VecCSel
+        (rd WritableReg)
+        (rn Reg)
+        (rm Reg)
+        (cond Cond))
+
+       ;; Move to the NZCV flags (actually a `MSR NZCV, Xn` insn).
+       (MovToNZCV
+        (rn Reg))
+
+       ;; Move from the NZCV flags (actually a `MRS Xn, NZCV` insn).
+       (MovFromNZCV
+        (rd WritableReg))
+
+       ;; A machine call instruction. N.B.: this allows only a +/- 128MB offset (it uses a relocation
+       ;; of type `Reloc::Arm64Call`); if the destination distance is not `RelocDistance::Near`, the
+       ;; code should use a `LoadExtName` / `CallInd` sequence instead, allowing an arbitrary 64-bit
+       ;; target.
+       (Call
+        (info BoxCallInfo))
+
+       ;; A machine indirect-call instruction.
+       (CallInd
+        (info BoxCallIndInfo))
+
+       ;; ---- branches (exactly one must appear at end of BB) ----
+
+       ;; A machine return instruction.
+       (Ret
+        (rets VecReg))
+
+       ;; A placeholder instruction, generating no code, meaning that a function epilogue must be
+       ;; inserted there.
+       (EpiloguePlaceholder)
+
+       ;; An unconditional branch.
+       (Jump
+        (dest BranchTarget))
+
+       ;; A conditional branch. Contains two targets; at emission time, both are emitted, but
+       ;; the MachBuffer knows to truncate the trailing branch if fallthrough. We optimize the
+       ;; choice of taken/not_taken (inverting the branch polarity as needed) based on the
+       ;; fallthrough at the time of lowering.
+       (CondBr
+        (taken BranchTarget)
+        (not_taken BranchTarget)
+        (kind CondBrKind))
+
+       ;; A conditional trap: execute a `udf` if the condition is true. This is
+       ;; one VCode instruction because it uses embedded control flow; it is
+       ;; logically a single-in, single-out region, but needs to appear as one
+       ;; unit to the register allocator.
+       ;;
+       ;; The `CondBrKind` gives the conditional-branch condition that will
+       ;; *execute* the embedded `Inst`. (In the emitted code, we use the inverse
+       ;; of this condition in a branch that skips the trap instruction.)
+       (TrapIf
+        (kind CondBrKind)
+        (trap_code TrapCode))
+
+       ;; An indirect branch through a register, augmented with set of all
+       ;; possible successors.
+       (IndirectBr
+        (rn Reg)
+        (targets VecMachLabel))
+
+       ;; A "break" instruction, used for e.g. traps and debug breakpoints.
+       (Brk)
+
+       ;; An instruction guaranteed to always be undefined and to trigger an illegal instruction at
+       ;; runtime.
+       (Udf
+        (trap_code TrapCode))
+
+       ;; Compute the address (using a PC-relative offset) of a memory location, using the `ADR`
+       ;; instruction. Note that we take a simple offset, not a `MemLabel`, here, because `Adr` is
+       ;; only used for now in fixed lowering sequences with hardcoded offsets. In the future we may
+       ;; need full `MemLabel` support.
+       (Adr
+        (rd WritableReg)
+        ;; Offset in range -2^20 .. 2^20.
+        (off i32))
+
+       ;; Raw 32-bit word, used for inline constants and jump-table entries.
+       (Word4
+        (data u32))
+
+       ;; Raw 64-bit word, used for inline constants.
+       (Word8
+        (data u64))
+
+       ;; Jump-table sequence, as one compound instruction (see note in lower_inst.rs for rationale).
+       (JTSequence
+        (info BoxJTSequenceInfo)
+        (ridx Reg)
+        (rtmp1 WritableReg)
+        (rtmp2 WritableReg))
+
+       ;; Load an inline symbol reference.
+       (LoadExtName
+        (rd WritableReg)
+        (name BoxExternalName)
+        (offset i64))
+
+       ;; Load address referenced by `mem` into `rd`.
+       (LoadAddr
+        (rd WritableReg)
+        (mem AMode))
+
+       ;; Marker, no-op in generated code: SP "virtual offset" is adjusted. This
+       ;; controls how AMode::NominalSPOffset args are lowered.
+       (VirtualSPOffsetAdj
+        (offset i64))
+
+       ;; Meta-insn, no-op in generated code: emit constant/branch veneer island
+       ;; at this point (with a guard jump around it) if less than the needed
+       ;; space is available before the next branch deadline. See the `MachBuffer`
+       ;; implementation in `machinst/buffer.rs` for the overall algorithm. In
+       ;; brief, we retain a set of "pending/unresolved label references" from
+       ;; branches as we scan forward through instructions to emit machine code;
+       ;; if we notice we're about to go out of range on an unresolved reference,
+       ;; we stop, emit a bunch of "veneers" (branches in a form that has a longer
+       ;; range, e.g. a 26-bit-offset unconditional jump), and point the original
+       ;; label references to those. This is an "island" because it comes in the
+       ;; middle of the code.
+       ;;
+       ;; This meta-instruction is a necessary part of the logic that determines
+       ;; where to place islands. Ordinarily, we want to place them between basic
+       ;; blocks, so we compute the worst-case size of each block, and emit the
+       ;; island before starting a block if we would exceed a deadline before the
+       ;; end of the block. However, some sequences (such as an inline jumptable)
+       ;; are variable-length and not accounted for by this logic; so these
+       ;; lowered sequences include an `EmitIsland` to trigger island generation
+       ;; where necessary.
+       (EmitIsland
+        ;; The needed space before the next deadline.
+        (needed_space CodeOffset))
+
+       ;; A call to the `ElfTlsGetAddr` libcall. Returns address of TLS symbol in x0.
+       (ElfTlsGetAddr
+        (symbol ExternalName))
+
+       ;; An unwind pseudo-instruction.
+       (Unwind
+        (inst UnwindInst))
+
+       ;; A dummy use, useful to keep a value alive.
+       (DummyUse
+        (reg Reg))))
 
 ;; An ALU operation. This can be paired with several instruction formats
 ;; below (see `Inst`) in any combination.
@@ -834,13 +814,16 @@
 (type ALUOp3
   (enum
     ;; Multiply-add
-    (MAdd32)
-    ;; Multiply-add
-    (MAdd64)
+    (MAdd)
     ;; Multiply-sub
-    (MSub32)
-    ;; Multiply-sub
-    (MSub64)
+    (MSub)
+))
+
+(type MoveWideOp
+  (enum
+    (MovZ)
+    (MovN)
+    (MovK)
 ))
 
 (type UImm5 (primitive UImm5))
@@ -943,12 +926,9 @@
 ;; A floating-point unit (FPU) operation with one arg.
 (type FPUOp1
   (enum
-    (Abs32)
-    (Abs64)
-    (Neg32)
-    (Neg64)
-    (Sqrt32)
-    (Sqrt64)
+    (Abs)
+    (Neg)
+    (Sqrt)
     (Cvt32To64)
     (Cvt64To32)
 ))
@@ -956,26 +936,12 @@
 ;; A floating-point unit (FPU) operation with two args.
 (type FPUOp2
   (enum
-    (Add32)
-    (Add64)
-    (Sub32)
-    (Sub64)
-    (Mul32)
-    (Mul64)
-    (Div32)
-    (Div64)
-    (Max32)
-    (Max64)
-    (Min32)
-    (Min64)
-    ;; Signed saturating add
-    (Sqadd64)
-    ;; Unsigned saturating add
-    (Uqadd64)
-    ;; Signed saturating subtract
-    (Sqsub64)
-    ;; Unsigned saturating subtract
-    (Uqsub64)
+    (Add)
+    (Sub)
+    (Mul)
+    (Div)
+    (Max)
+    (Min)
 ))
 
 ;; A floating-point unit (FPU) operation with three args.
@@ -1292,7 +1258,29 @@
     (Smin)
     (Umax)
     (Umin)
+    (Swp)
 ))
+
+;; Atomic read-modify-write operations, with acquire-release semantics,
+;; implemented with a loop.
+(type AtomicRMWLoopOp
+  (enum
+    (Add)
+    (Sub)
+    (And)
+    (Nand)
+    (Eor)
+    (Orr)
+    (Smax)
+    (Smin)
+    (Umax)
+    (Umin)
+    (Xchg)
+))
+
+;; Extractors for target features ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(decl use_lse () Inst)
+(extern extractor use_lse use_lse)
 
 ;; Extractor helpers for various immmediate constants ;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1302,14 +1290,14 @@
 (decl move_wide_const_from_negated_u64 (MoveWideConst) u64)
 (extern extractor move_wide_const_from_negated_u64 move_wide_const_from_negated_u64)
 
-(decl imm_logic_from_u64 (Type ImmLogic) u64)
-(extern extractor imm_logic_from_u64 imm_logic_from_u64 (in out))
+(decl pure imm_logic_from_u64 (Type u64) ImmLogic)
+(extern constructor imm_logic_from_u64 imm_logic_from_u64)
 
-(decl imm_logic_from_imm64 (Type ImmLogic) Imm64)
-(extern extractor imm_logic_from_imm64 imm_logic_from_imm64 (in out))
+(decl pure imm_logic_from_imm64 (Type Imm64) ImmLogic)
+(extern constructor imm_logic_from_imm64 imm_logic_from_imm64)
 
-(decl imm_shift_from_imm64 (Type ImmShift) Imm64)
-(extern extractor imm_shift_from_imm64 imm_shift_from_imm64 (in out))
+(decl pure imm_shift_from_imm64 (Type Imm64) ImmShift)
+(extern constructor imm_shift_from_imm64 imm_shift_from_imm64)
 
 (decl imm_shift_from_u8 (u8) ImmShift)
 (extern constructor imm_shift_from_u8 imm_shift_from_u8)
@@ -1329,23 +1317,26 @@
 (decl imm12_from_negated_u64 (Imm12) u64)
 (extern extractor imm12_from_negated_u64 imm12_from_negated_u64)
 
-(decl lshl_from_imm64 (Type ShiftOpAndAmt) Imm64)
-(extern extractor lshl_from_imm64 lshl_from_imm64 (in out))
+(decl pure lshl_from_imm64 (Type Imm64) ShiftOpAndAmt)
+(extern constructor lshl_from_imm64 lshl_from_imm64)
 
 (decl integral_ty (Type) Type)
 (extern extractor integral_ty integral_ty)
+
+(decl valid_atomic_transaction (Type) Type)
+(extern extractor valid_atomic_transaction valid_atomic_transaction)
 
 ;; Helper to go directly from a `Value`, when it's an `iconst`, to an `Imm12`.
 (decl imm12_from_value (Imm12) Value)
 (extractor
   (imm12_from_value n)
-  (def_inst (iconst (u64_from_imm64 (imm12_from_u64 n)))))
+  (iconst (u64_from_imm64 (imm12_from_u64 n))))
 
 ;; Same as `imm12_from_value`, but tries negating the constant value.
 (decl imm12_from_negated_value (Imm12) Value)
 (extractor
   (imm12_from_negated_value n)
-  (def_inst (iconst (u64_from_imm64 (imm12_from_negated_u64 n)))))
+  (iconst (u64_from_imm64 (imm12_from_negated_u64 n))))
 
 ;; Helper type to represent a value and an extend operation fused together.
 (type ExtendedValue extern (enum))
@@ -1376,18 +1367,38 @@
 (decl writable_zero_reg () WritableReg)
 (extern constructor writable_zero_reg writable_zero_reg)
 
+;; Helpers for getting a particular real register
+(decl xreg (u8) Reg)
+(extern constructor xreg xreg)
+
+(decl writable_xreg (u8) WritableReg)
+(extern constructor writable_xreg writable_xreg)
+
+;; Helper for emitting `MInst.Mov64` instructions.
+(decl mov64_to_real (u8 Reg) Reg)
+(rule (mov64_to_real num src)
+      (let ((dst WritableReg (writable_xreg num))
+            (_ Unit (emit (MInst.Mov (operand_size $I64) dst src))))
+        dst))
+
+(decl mov64_from_real (u8) Reg)
+(rule (mov64_from_real num)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.Mov (operand_size $I64) dst (xreg num)))))
+        dst))
+
 ;; Helper for emitting `MInst.MovZ` instructions.
 (decl movz (MoveWideConst OperandSize) Reg)
 (rule (movz imm size)
       (let ((dst WritableReg (temp_writable_reg $I64))
-            (_ Unit (emit (MInst.MovZ dst imm size))))
+            (_ Unit (emit (MInst.MovWide (MoveWideOp.MovZ) dst imm size))))
         dst))
 
 ;; Helper for emitting `MInst.MovN` instructions.
 (decl movn (MoveWideConst OperandSize) Reg)
 (rule (movn imm size)
       (let ((dst WritableReg (temp_writable_reg $I64))
-            (_ Unit (emit (MInst.MovN dst imm size))))
+            (_ Unit (emit (MInst.MovWide (MoveWideOp.MovN) dst imm size))))
         dst))
 
 ;; Helper for emitting `MInst.AluRRImmLogic` instructions.
@@ -1462,10 +1473,10 @@
         (alu_rrr_extend op ty src1 src2 extend)))
 
 ;; Helper for emitting `MInst.AluRRRR` instructions.
-(decl alu_rrrr (ALUOp3 Reg Reg Reg) Reg)
-(rule (alu_rrrr op src1 src2 src3)
+(decl alu_rrrr (ALUOp3 Type Reg Reg Reg) Reg)
+(rule (alu_rrrr op ty src1 src2 src3)
       (let ((dst WritableReg (temp_writable_reg $I64))
-            (_ Unit (emit (MInst.AluRRRR op dst src1 src2 src3))))
+            (_ Unit (emit (MInst.AluRRRR op (operand_size ty) dst src1 src2 src3))))
         dst))
 
 ;; Helper for emitting `MInst.BitRR` instructions.
@@ -1657,19 +1668,12 @@
 ;; Helpers for generating `madd` instructions.
 
 (decl madd (Type Reg Reg Reg) Reg)
-(rule (madd (fits_in_32 _ty) x y z) (madd32 x y z))
-(rule (madd $I64 x y z) (madd64 x y z))
-
-(decl madd32 (Reg Reg Reg) Reg)
-(rule (madd32 x y z) (alu_rrrr (ALUOp3.MAdd32) x y z))
-
-(decl madd64 (Reg Reg Reg) Reg)
-(rule (madd64 x y z) (alu_rrrr (ALUOp3.MAdd64) x y z))
+(rule (madd ty x y z) (alu_rrrr (ALUOp3.MAdd) ty x y z))
 
 ;; Helpers for generating `msub` instructions.
 
-(decl msub64 (Reg Reg Reg) Reg)
-(rule (msub64 x y z) (alu_rrrr (ALUOp3.MSub64) x y z))
+(decl msub (Type Reg Reg Reg) Reg)
+(rule (msub ty x y z) (alu_rrrr (ALUOp3.MSub) ty x y z))
 
 ;; Helper for generating `uqadd` instructions.
 (decl uqadd (Reg Reg VectorSize) Reg)
@@ -1805,6 +1809,9 @@
 
 ;; Helpers for generating `and` instructions.
 
+(decl and_reg (Type Reg Reg) Reg)
+(rule (and_reg ty x y) (alu_rrr (ALUOp.And) ty x y))
+
 (decl and_imm (Type Reg ImmLogic) Reg)
 (rule (and_imm ty x y) (alu_rr_imm_logic (ALUOp.And) ty x y))
 
@@ -1816,6 +1823,10 @@
 (rule (eor_vec x y size) (vec_rrr (VecALUOp.Eor) x y size))
 
 ;; Helpers for generating `bic` instructions.
+
+(decl bic (Type Reg Reg) Reg)
+(rule (bic ty x y) (alu_rrr (ALUOp.AndNot) ty x y))
+
 (decl bic_vec (Reg Reg VectorSize) Reg)
 (rule (bic_vec x y size) (vec_rrr (VecALUOp.Bic) x y size))
 
@@ -1860,6 +1871,15 @@
 (decl vec_cnt (Reg VectorSize) Reg)
 (rule (vec_cnt x size) (vec_misc (VecMisc2.Cnt) x size))
 
+;; Helpers for generating a `bsl` instruction.
+
+(decl bsl (Type Reg Reg Reg) Reg)
+(rule (bsl ty c x y)
+      (let ((dst WritableReg (temp_writable_reg ty))
+            (_1 Unit (emit (MInst.FpuMove128 dst c)))
+            (_2 Unit (emit (MInst.VecRRR (VecALUOp.Bsl) dst x y (vector_size ty)))))
+        dst))
+
 ;; Immediate value helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (decl imm (Type u64) Reg)
@@ -1873,7 +1893,8 @@
       (movn n (OperandSize.Size64)))
 
 ;; Weird logical-instruction immediate in ORI using zero register
-(rule (imm (integral_ty _ty) (imm_logic_from_u64 <$I64 n))
+(rule (imm (integral_ty _ty) k)
+      (if-let n (imm_logic_from_u64 $I64 k))
       (orr_imm $I64 (zero_reg) n))
 
 (decl load_constant64_full (u64) Reg)
@@ -1974,29 +1995,35 @@
 
 ;; Base case of operating on registers.
 (rule (alu_rs_imm_logic_commutative op ty x y)
-      (alu_rrr op ty (put_in_reg x) (put_in_reg y)))
+      (alu_rrr op ty x y))
 
 ;; Special cases for when one operand is a constant.
-(rule (alu_rs_imm_logic_commutative op ty x (def_inst (iconst (imm_logic_from_imm64 <ty imm))))
-      (alu_rr_imm_logic op ty (put_in_reg x) imm))
-(rule (alu_rs_imm_logic_commutative op ty (def_inst (iconst (imm_logic_from_imm64 <ty imm))) x)
-      (alu_rr_imm_logic op ty (put_in_reg x) imm))
+(rule (alu_rs_imm_logic_commutative op ty x (iconst k))
+      (if-let imm (imm_logic_from_imm64 ty k))
+      (alu_rr_imm_logic op ty x imm))
+(rule (alu_rs_imm_logic_commutative op ty (iconst k) x)
+      (if-let imm (imm_logic_from_imm64 ty k))
+      (alu_rr_imm_logic op ty x imm))
 
 ;; Special cases for when one operand is shifted left by a constant.
-(rule (alu_rs_imm_logic_commutative op ty x (def_inst (ishl y (def_inst (iconst (lshl_from_imm64 <ty amt))))))
-      (alu_rrr_shift op ty (put_in_reg x) (put_in_reg y) amt))
-(rule (alu_rs_imm_logic_commutative op ty (def_inst (ishl x (def_inst (iconst (lshl_from_imm64 <ty amt))))) y)
-      (alu_rrr_shift op ty (put_in_reg y) (put_in_reg x) amt))
+(rule (alu_rs_imm_logic_commutative op ty x (ishl y (iconst k)))
+      (if-let amt (lshl_from_imm64 ty k))
+      (alu_rrr_shift op ty x y amt))
+(rule (alu_rs_imm_logic_commutative op ty (ishl x (iconst k)) y)
+      (if-let amt (lshl_from_imm64 ty k))
+      (alu_rrr_shift op ty y x amt))
 
 ;; Same as `alu_rs_imm_logic_commutative` above, except that it doesn't require
 ;; that the operation is commutative.
 (decl alu_rs_imm_logic (ALUOp Type Value Value) Reg)
 (rule (alu_rs_imm_logic op ty x y)
-      (alu_rrr op ty (put_in_reg x) (put_in_reg y)))
-(rule (alu_rs_imm_logic op ty x (def_inst (iconst (imm_logic_from_imm64 <ty imm))))
-      (alu_rr_imm_logic op ty (put_in_reg x) imm))
-(rule (alu_rs_imm_logic op ty x (def_inst (ishl y (def_inst (iconst (lshl_from_imm64 <ty amt))))))
-      (alu_rrr_shift op ty (put_in_reg x) (put_in_reg y) amt))
+      (alu_rrr op ty x y))
+(rule (alu_rs_imm_logic op ty x (iconst k))
+      (if-let imm (imm_logic_from_imm64 ty k))
+      (alu_rr_imm_logic op ty x imm))
+(rule (alu_rs_imm_logic op ty x (ishl y (iconst k)))
+      (if-let amt (lshl_from_imm64 ty k))
+      (alu_rrr_shift op ty x y amt))
 
 ;; Helper for generating i128 bitops which simply do the same operation to the
 ;; hi/lo registers.
@@ -2091,3 +2118,30 @@
 (decl cmeq0 (Reg VectorSize) Reg)
 (rule (cmeq0 rn size)
       (vec_misc (VecMisc2.Cmeq0) rn size))
+
+;; Helper for emitting `MInst.AtomicRMW` instructions.
+(decl lse_atomic_rmw (AtomicRMWOp Value Reg Type) Reg)
+(rule (lse_atomic_rmw op p r_arg2 ty)
+      (let (
+          (r_addr Reg p)
+          (dst WritableReg (temp_writable_reg ty))
+          (_ Unit (emit (MInst.AtomicRMW op r_arg2 dst r_addr ty)))
+        )
+        dst))
+
+;; Helper for emitting `MInst.AtomicRMWLoop` instructions.
+;; - Make sure that both args are in virtual regs, since in effect
+;; we have to do a parallel copy to get them safely to the AtomicRMW input
+;; regs, and that's not guaranteed safe if either is in a real reg.
+;; - Move the args to the preordained AtomicRMW input regs
+;; - And finally, copy the preordained AtomicRMW output reg to its destination.
+(decl atomic_rmw_loop (AtomicRMWLoopOp Value Value Type) Reg)
+(rule (atomic_rmw_loop op p arg2 ty)
+      (let (
+          (v_addr Reg (ensure_in_vreg p $I64))
+          (v_arg2 Reg (ensure_in_vreg arg2 $I64))
+          (r_addr Reg (mov64_to_real 25 v_addr))
+          (r_arg2 Reg (mov64_to_real 26 v_arg2))
+          (_ Unit (emit (MInst.AtomicRMWLoop ty op)))
+        )
+        (mov64_from_real 27)))

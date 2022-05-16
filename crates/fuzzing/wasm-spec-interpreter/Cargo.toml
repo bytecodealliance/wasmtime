@@ -4,7 +4,7 @@ description = "A Rust-to-OCaml wrapper for the WebAssembly specification interpr
 name = "wasm-spec-interpreter"
 version = "0.1.0"
 publish = false
-edition = "2018"
+edition = "2021"
 license = "Apache-2.0 WITH LLVM-exception"
 
 # Until https://gitlab.com/ocaml-rust/ocaml-boxroot/-/issues/1 is resolved and

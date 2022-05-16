@@ -230,7 +230,6 @@ impl WorkerThread {
 
     #[cfg(target_os = "windows")]
     fn lower_thread_priority() {
-        use std::convert::TryInto;
         use winapi::um::processthreadsapi::{GetCurrentThread, SetThreadPriority};
         use winapi::um::winbase::THREAD_MODE_BACKGROUND_BEGIN;
 

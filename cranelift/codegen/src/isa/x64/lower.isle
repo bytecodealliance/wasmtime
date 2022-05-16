@@ -1349,10 +1349,9 @@
 ;; internally as `xmm_rm_r` will merge the temp register into our `vec`
 ;; register.
 (rule (vec_insert_lane $F64X2 vec (RegMem.Reg val) 0)
-      (x64_movsd vec val))
+      (x64_movsd_regmove vec val))
 (rule (vec_insert_lane $F64X2 vec mem 0)
-      (x64_movsd vec (xmm_unary_rm_r (SseOpcode.Movsd)
-                                 mem)))
+      (x64_movsd_regmove vec (x64_movsd_load mem)))
 
 ;; f64x2.replace_lane 1
 ;;
@@ -1368,9 +1367,13 @@
 
 (decl cmp_and_choose (Type CC Value Value) ValueRegs)
 (rule (cmp_and_choose (fits_in_64 ty) cc x y)
-      (let ((x_reg Gpr x)
-            (y_reg Gpr y)
-            (size OperandSize (raw_operand_size_of_type ty)))
+      (let ((size OperandSize (raw_operand_size_of_type ty))
+            ;; We need to put x and y in registers explicitly because
+            ;; we use the values more than once. Hence, even if these
+            ;; are "unique uses" at the CLIF level and would otherwise
+            ;; allow for load-op merging, here we cannot do that.
+            (x_reg Reg x)
+            (y_reg Reg y))
         (with_flags_reg (x64_cmp size x_reg y_reg)
                         (cmove ty cc y_reg x_reg))))
 
@@ -1433,12 +1436,12 @@
 ;;;; Rules for `trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (trap code))
-      (safepoint (x64_ud2 code)))
+      (side_effect (x64_ud2 code)))
 
 ;;;; Rules for `resumable_trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (resumable_trap code))
-      (safepoint (x64_ud2 code)))
+      (side_effect (x64_ud2 code)))
 
 ;;;; Rules for `icmp` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1752,19 +1755,8 @@
 ;; than one instruction for certain types (e.g., XMM-held, I128).
 
 (rule (lower (has_type ty (select (icmp cc a @ (value_type (fits_in_64 a_ty)) b) x y)))
-      ;; N.B.: we force the comparison operators into registers, and disallow
-      ;; load-op fusion, because we do not have a transitive guarantee that this
-      ;; cmp-site will be the sole user of the value. Consider: the `icmp` might
-      ;; be the only user of a load, but there may be multiple users of the
-      ;; `icmp` (e.g., `select` or `bint` instructions) that each invoke emit a
-      ;; comparison. If we were to allow a load to sink to the *latest* one, but
-      ;; other sites did not permit sinking, then we would be missing the load
-      ;; for other cmp-sites. TODO:
-      ;; https://github.com/bytecodealliance/wasmtime/issues/3953.
-      (let ((gpr_a Gpr (put_in_gpr a))
-            (gpr_b Gpr (put_in_gpr b))
-            (size OperandSize (raw_operand_size_of_type a_ty)))
-           (with_flags (x64_cmp size gpr_b gpr_a) (cmove_from_values ty cc x y))))
+      (let ((size OperandSize (raw_operand_size_of_type a_ty)))
+           (with_flags (x64_cmp size b a) (cmove_from_values ty cc x y))))
 
 ;; Finally, we lower `select` from a condition value `c`. These rules are meant
 ;; to be the final, default lowerings if no other patterns matched above.
@@ -2119,7 +2111,7 @@
 ;; Rules for `uextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; T -> T is a no-op.
-(rule (lower (has_type ty (uextend src @ (value_type =ty))))
+(rule (lower (has_type ty (uextend src @ (value_type ty))))
       src)
 
 ;; I64 -> I128.
@@ -2185,7 +2177,7 @@
 (decl generic_sextend (Value Type Type) InstOutput)
 
 ;; T -> T is a no-op.
-(rule (generic_sextend src ty =ty)
+(rule (generic_sextend src ty ty)
       src)
 
 ;; Produce upper 64 bits sign-extended from lower 64: shift right by
@@ -2226,7 +2218,7 @@
 ;; Rules for `ireduce` / `breduce` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; T -> T is always a no-op, even I128 -> I128.
-(rule (lower (has_type ty (ireduce src @ (value_type =ty))))
+(rule (lower (has_type ty (ireduce src @ (value_type ty))))
       src)
 
 ;; T -> I{64,32,16,8}: We can simply pass through the value: values
@@ -2237,7 +2229,7 @@
 
 ;; Likewise for breduce.
 
-(rule (lower (has_type ty (breduce src @ (value_type =ty))))
+(rule (lower (has_type ty (breduce src @ (value_type ty))))
       src)
 
 (rule (lower (has_type (fits_in_64 ty) (breduce src)))
@@ -2315,6 +2307,16 @@
       (x64_divps x y))
 (rule (lower (has_type $F64X2 (fdiv x y)))
       (x64_divpd x y))
+
+;; Rules for `sqrt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(rule (lower (has_type $F32 (sqrt x)))
+      (x64_sqrtss x))
+(rule (lower (has_type $F64 (sqrt x)))
+      (x64_sqrtsd x))
+(rule (lower (has_type $F32X4 (sqrt x)))
+      (x64_sqrtps x))
+(rule (lower (has_type $F64X2 (sqrt x)))
+      (x64_sqrtpd x))
 
 ;; Rules for `fmin` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -2506,3 +2508,278 @@
       (x64_maxps y x))
 (rule (lower (has_type $F64X2 (fmax_pseudo x y)))
       (x64_maxpd y x))
+
+;; Rules for `load*` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; In order to load a value from memory to a GPR register, we may need to extend
+;; the loaded value from 8-, 16-, or 32-bits to this backend's expected GPR
+;; width: 64 bits. Note that `ext_mode` will load 1-bit types (booleans) as
+;; 8-bit loads.
+;;
+;; By default, we zero-extend all sub-64-bit loads to a GPR.
+(rule (lower (has_type (and (fits_in_32 ty) (is_gpr_type _)) (load flags address offset)))
+      (x64_movzx (ext_mode (ty_bits_u16 ty) 64) (to_amode flags address offset)))
+;; But if we know that both the `from` and `to` are 64 bits, we simply load with
+;; no extension.
+(rule (lower (has_type (ty_int_bool_ref_64 ty) (load flags address offset)))
+      (x64_mov (to_amode flags address offset)))
+;; Also, certain scalar loads have a specific `from` width and extension kind
+;; (signed -> `sx`, zeroed -> `zx`). We overwrite the high bits of the 64-bit
+;; GPR even if the `to` type is smaller (e.g., 16-bits).
+(rule (lower (has_type (is_gpr_type ty) (uload8 flags address offset)))
+      (x64_movzx (ExtMode.BQ) (to_amode flags address offset)))
+(rule (lower (has_type (is_gpr_type ty) (sload8 flags address offset)))
+      (x64_movsx (ExtMode.BQ) (to_amode flags address offset)))
+(rule (lower (has_type (is_gpr_type ty) (uload16 flags address offset)))
+      (x64_movzx (ExtMode.WQ) (to_amode flags address offset)))
+(rule (lower (has_type (is_gpr_type ty) (sload16 flags address offset)))
+      (x64_movsx (ExtMode.WQ) (to_amode flags address offset)))
+(rule (lower (has_type (is_gpr_type ty) (uload32 flags address offset)))
+      (x64_movzx (ExtMode.LQ) (to_amode flags address offset)))
+(rule (lower (has_type (is_gpr_type ty) (sload32 flags address offset)))
+      (x64_movsx (ExtMode.LQ) (to_amode flags address offset)))
+
+;; To load to XMM registers, we use the x64-specific instructions for each type.
+;; For `$F32` and `$F64` this is important--we only want to load 32 or 64 bits.
+;; But for the 128-bit types, this is not strictly necessary for performance but
+;; might help with clarity during disassembly.
+(rule (lower (has_type $F32 (load flags address offset)))
+      (x64_movss_load (to_amode flags address offset)))
+(rule (lower (has_type $F64 (load flags address offset)))
+      (x64_movsd_load (to_amode flags address offset)))
+(rule (lower (has_type $F32X4 (load flags address offset)))
+      (x64_movups (to_amode flags address offset)))
+(rule (lower (has_type $F64X2 (load flags address offset)))
+      (x64_movupd (to_amode flags address offset)))
+(rule (lower (has_type (ty_vec128 ty) (load flags address offset)))
+      (x64_movdqu (to_amode flags address offset)))
+
+;; We can load an I128/B128 by doing two 64-bit loads.
+(rule (lower (has_type (ty_int_bool_128 _)
+                       (load flags address offset)))
+      (let ((addr_lo Amode (to_amode flags address offset))
+            (addr_hi Amode (amode_offset addr_lo 8))
+            (value_lo Reg (x64_mov addr_lo))
+            (value_hi Reg (x64_mov addr_hi)))
+        (value_regs value_lo value_hi)))
+
+;; We also include widening vector loads; these sign- or zero-extend each lane
+;; to the next wider width (e.g., 16x4 -> 32x4).
+(rule (lower (has_type $I16X8 (sload8x8 flags address offset)))
+      (x64_pmovsxbw (to_amode flags address offset)))
+(rule (lower (has_type $I16X8 (uload8x8 flags address offset)))
+      (x64_pmovzxbw (to_amode flags address offset)))
+(rule (lower (has_type $I32X4 (sload16x4 flags address offset)))
+      (x64_pmovsxwd (to_amode flags address offset)))
+(rule (lower (has_type $I32X4 (uload16x4 flags address offset)))
+      (x64_pmovzxwd (to_amode flags address offset)))
+(rule (lower (has_type $I64X2 (sload32x2 flags address offset)))
+      (x64_pmovsxdq (to_amode flags address offset)))
+(rule (lower (has_type $I64X2 (uload32x2 flags address offset)))
+      (x64_pmovzxdq (to_amode flags address offset)))
+
+;; TODO: Multi-register loads (I128)
+
+;; Rules for `store*` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; 8-, 16-, 32- and 64-bit GPR stores.
+(rule (lower (store flags
+                    value @ (value_type (is_gpr_type ty))
+                    address
+                    offset))
+      (side_effect
+       (x64_movrm ty (to_amode flags address offset) value)))
+
+;; Explicit 8/16/32-bit opcodes.
+(rule (lower (istore8 flags value address offset))
+      (side_effect
+       (x64_movrm $I8 (to_amode flags address offset) value)))
+(rule (lower (istore16 flags value address offset))
+      (side_effect
+       (x64_movrm $I16 (to_amode flags address offset) value)))
+(rule (lower (istore32 flags value address offset))
+      (side_effect
+       (x64_movrm $I32 (to_amode flags address offset) value)))
+
+;; F32 stores of values in XMM registers.
+(rule (lower (store flags
+                    value @ (value_type $F32)
+                    address
+                    offset))
+      (side_effect
+       (x64_xmm_movrm (SseOpcode.Movss) (to_amode flags address offset) value)))
+
+;; F64 stores of values in XMM registers.
+(rule (lower (store flags
+                    value @ (value_type $F64)
+                    address
+                    offset))
+      (side_effect
+       (x64_xmm_movrm (SseOpcode.Movsd) (to_amode flags address offset) value)))
+
+;; Stores of F32X4 vectors.
+(rule (lower (store flags
+                    value @ (value_type $F32X4)
+                    address
+                    offset))
+      (side_effect
+       (x64_xmm_movrm (SseOpcode.Movups) (to_amode flags address offset) value)))
+
+;; Stores of F64X2 vectors.
+(rule (lower (store flags
+                    value @ (value_type $F64X2)
+                    address
+                    offset))
+      (side_effect
+       (x64_xmm_movrm (SseOpcode.Movupd) (to_amode flags address offset) value)))
+
+;; Stores of all other 128-bit vector types with integer lanes.
+(rule (lower (store flags
+                    value @ (value_type (ty_vec128_int _))
+                    address
+                    offset))
+      (side_effect
+       (x64_xmm_movrm (SseOpcode.Movdqu) (to_amode flags address offset) value)))
+
+;; Stores of I128/B128 values: store the two 64-bit halves separately.
+(rule (lower (store flags
+                    value @ (value_type (ty_int_bool_128 _))
+                    address
+                    offset))
+      (let ((value_reg ValueRegs value)
+            (value_lo Gpr (value_regs_get_gpr value_reg 0))
+            (value_hi Gpr (value_regs_get_gpr value_reg 1))
+            (addr_lo Amode (to_amode flags address offset))
+            (addr_hi Amode (amode_offset addr_lo 8)))
+      (side_effect
+       (side_effect_concat
+        (x64_movrm $I64 addr_lo value_lo)
+        (x64_movrm $I64 addr_hi value_hi)))))
+
+;; Rules for `load*` + ALU op + `store*` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Add mem, reg
+(rule (lower
+       (store flags
+              (has_type (ty_32_or_64 ty)
+                        (iadd (and
+                               (sinkable_load sink)
+                               (load flags addr offset))
+                              src2))
+              addr
+              offset))
+      (let ((_ RegMemImm (sink_load sink)))
+        (side_effect
+         (x64_add_mem ty (to_amode flags addr offset) src2))))
+
+;; Add mem, reg with args swapped
+(rule (lower
+       (store flags
+              (has_type (ty_32_or_64 ty)
+                        (iadd src2
+                              (and
+                               (sinkable_load sink)
+                               (load flags addr offset))))
+              addr
+              offset))
+      (let ((_ RegMemImm (sink_load sink)))
+        (side_effect
+         (x64_add_mem ty (to_amode flags addr offset) src2))))
+
+;; Sub mem, reg
+(rule (lower
+       (store flags
+              (has_type (ty_32_or_64 ty)
+                        (isub (and
+                               (sinkable_load sink)
+                               (load flags addr offset))
+                              src2))
+              addr
+              offset))
+      (let ((_ RegMemImm (sink_load sink)))
+        (side_effect
+         (x64_sub_mem ty (to_amode flags addr offset) src2))))
+
+;; And mem, reg
+(rule (lower
+       (store flags
+              (has_type (ty_32_or_64 ty)
+                        (band (and
+                               (sinkable_load sink)
+                               (load flags addr offset))
+                              src2))
+              addr
+              offset))
+      (let ((_ RegMemImm (sink_load sink)))
+        (side_effect
+         (x64_and_mem ty (to_amode flags addr offset) src2))))
+
+;; And mem, reg with args swapped
+(rule (lower
+       (store flags
+              (has_type (ty_32_or_64 ty)
+                        (band src2
+                              (and
+                               (sinkable_load sink)
+                               (load flags addr offset))))
+              addr
+              offset))
+      (let ((_ RegMemImm (sink_load sink)))
+        (side_effect
+         (x64_and_mem ty (to_amode flags addr offset) src2))))
+
+;; Or mem, reg
+(rule (lower
+       (store flags
+              (has_type (ty_32_or_64 ty)
+                        (bor (and
+                               (sinkable_load sink)
+                               (load flags addr offset))
+                              src2))
+              addr
+              offset))
+      (let ((_ RegMemImm (sink_load sink)))
+        (side_effect
+         (x64_or_mem ty (to_amode flags addr offset) src2))))
+
+;; Or mem, reg with args swapped
+(rule (lower
+       (store flags
+              (has_type (ty_32_or_64 ty)
+                        (bor src2
+                              (and
+                               (sinkable_load sink)
+                               (load flags addr offset))))
+              addr
+              offset))
+      (let ((_ RegMemImm (sink_load sink)))
+        (side_effect
+         (x64_or_mem ty (to_amode flags addr offset) src2))))
+
+;; Xor mem, reg
+(rule (lower
+       (store flags
+              (has_type (ty_32_or_64 ty)
+                        (bxor (and
+                               (sinkable_load sink)
+                               (load flags addr offset))
+                              src2))
+              addr
+              offset))
+      (let ((_ RegMemImm (sink_load sink)))
+        (side_effect
+         (x64_xor_mem ty (to_amode flags addr offset) src2))))
+
+;; Xor mem, reg with args swapped
+(rule (lower
+       (store flags
+              (has_type (ty_32_or_64 ty)
+                        (bxor src2
+                              (and
+                               (sinkable_load sink)
+                               (load flags addr offset))))
+              addr
+              offset))
+      (let ((_ RegMemImm (sink_load sink)))
+        (side_effect
+         (x64_xor_mem ty (to_amode flags addr offset) src2))))

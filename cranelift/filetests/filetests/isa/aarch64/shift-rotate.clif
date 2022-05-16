@@ -12,37 +12,30 @@ block0(v0: i128, v1: i128):
   return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 25)
-;   Inst 0:   mov x4, x1
-;   Inst 1:   orr x1, xzr, #128
-;   Inst 2:   sub x1, x1, x2
-;   Inst 3:   lsr x5, x0, x2
-;   Inst 4:   lsr x3, x4, x2
-;   Inst 5:   orn w6, wzr, w2
-;   Inst 6:   lsl x7, x4, #1
-;   Inst 7:   lsl x6, x7, x6
-;   Inst 8:   orr x5, x5, x6
-;   Inst 9:   ands xzr, x2, #64
-;   Inst 10:   csel x2, x3, x5, ne
-;   Inst 11:   csel x3, xzr, x3, ne
-;   Inst 12:   lsl x5, x0, x1
-;   Inst 13:   lsl x4, x4, x1
-;   Inst 14:   orn w6, wzr, w1
-;   Inst 15:   lsr x0, x0, #1
-;   Inst 16:   lsr x0, x0, x6
-;   Inst 17:   orr x0, x4, x0
-;   Inst 18:   ands xzr, x1, #64
-;   Inst 19:   csel x1, xzr, x5, ne
-;   Inst 20:   csel x0, x5, x0, ne
-;   Inst 21:   orr x3, x3, x0
-;   Inst 22:   orr x0, x2, x1
-;   Inst 23:   mov x1, x3
-;   Inst 24:   ret
-; }}
+; block0:
+;   orr x10, xzr, #128
+;   sub x12, x10, x2
+;   lsr x14, x0, x2
+;   lsr x3, x1, x2
+;   orn w4, wzr, w2
+;   lsl x5, x1, #1
+;   lsl x6, x5, x4
+;   orr x8, x14, x6
+;   ands xzr, x2, #64
+;   csel x11, x3, x8, ne
+;   csel x13, xzr, x3, ne
+;   lsl x15, x0, x12
+;   lsl x1, x1, x12
+;   orn w3, wzr, w12
+;   lsr x5, x0, #1
+;   lsr x7, x5, x3
+;   orr x9, x1, x7
+;   ands xzr, x12, #64
+;   csel x12, xzr, x15, ne
+;   csel x14, x15, x9, ne
+;   orr x1, x13, x14
+;   orr x0, x11, x12
+;   ret
 
 function %f0(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -50,14 +43,9 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 2)
-;   Inst 0:   ror x0, x0, x1
-;   Inst 1:   ret
-; }}
+; block0:
+;   ror x0, x0, x1
+;   ret
 
 function %f1(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
@@ -65,14 +53,9 @@ block0(v0: i32, v1: i32):
   return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 2)
-;   Inst 0:   ror w0, w0, w1
-;   Inst 1:   ret
-; }}
+; block0:
+;   ror w0, w0, w1
+;   ret
 
 function %f2(i16, i16) -> i16 {
 block0(v0: i16, v1: i16):
@@ -80,20 +63,15 @@ block0(v0: i16, v1: i16):
   return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 8)
-;   Inst 0:   uxth w0, w0
-;   Inst 1:   and w1, w1, #15
-;   Inst 2:   sub w2, w1, #16
-;   Inst 3:   sub w2, wzr, w2
-;   Inst 4:   lsr w1, w0, w1
-;   Inst 5:   lsl w0, w0, w2
-;   Inst 6:   orr w0, w0, w1
-;   Inst 7:   ret
-; }}
+; block0:
+;   uxth w5, w0
+;   and w7, w1, #15
+;   sub w9, w7, #16
+;   sub w11, wzr, w9
+;   lsr w13, w5, w7
+;   lsl w15, w5, w11
+;   orr w0, w15, w13
+;   ret
 
 function %f3(i8, i8) -> i8 {
 block0(v0: i8, v1: i8):
@@ -101,20 +79,15 @@ block0(v0: i8, v1: i8):
   return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 8)
-;   Inst 0:   uxtb w0, w0
-;   Inst 1:   and w1, w1, #7
-;   Inst 2:   sub w2, w1, #8
-;   Inst 3:   sub w2, wzr, w2
-;   Inst 4:   lsr w1, w0, w1
-;   Inst 5:   lsl w0, w0, w2
-;   Inst 6:   orr w0, w0, w1
-;   Inst 7:   ret
-; }}
+; block0:
+;   uxtb w5, w0
+;   and w7, w1, #7
+;   sub w9, w7, #8
+;   sub w11, wzr, w9
+;   lsr w13, w5, w7
+;   lsl w15, w5, w11
+;   orr w0, w15, w13
+;   ret
 
 function %i128_rotl(i128, i128) -> i128 {
 block0(v0: i128, v1: i128):
@@ -122,36 +95,30 @@ block0(v0: i128, v1: i128):
   return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 24)
-;   Inst 0:   mov x4, x0
-;   Inst 1:   orr x0, xzr, #128
-;   Inst 2:   sub x0, x0, x2
-;   Inst 3:   lsl x3, x4, x2
-;   Inst 4:   lsl x5, x1, x2
-;   Inst 5:   orn w6, wzr, w2
-;   Inst 6:   lsr x7, x4, #1
-;   Inst 7:   lsr x6, x7, x6
-;   Inst 8:   orr x5, x5, x6
-;   Inst 9:   ands xzr, x2, #64
-;   Inst 10:   csel x2, xzr, x3, ne
-;   Inst 11:   csel x3, x3, x5, ne
-;   Inst 12:   lsr x5, x4, x0
-;   Inst 13:   lsr x4, x1, x0
-;   Inst 14:   orn w6, wzr, w0
-;   Inst 15:   lsl x1, x1, #1
-;   Inst 16:   lsl x1, x1, x6
-;   Inst 17:   orr x1, x5, x1
-;   Inst 18:   ands xzr, x0, #64
-;   Inst 19:   csel x0, x4, x1, ne
-;   Inst 20:   csel x1, xzr, x4, ne
-;   Inst 21:   orr x0, x2, x0
-;   Inst 22:   orr x1, x3, x1
-;   Inst 23:   ret
-; }}
+; block0:
+;   orr x10, xzr, #128
+;   sub x12, x10, x2
+;   lsl x14, x0, x2
+;   lsl x3, x1, x2
+;   orn w4, wzr, w2
+;   lsr x5, x0, #1
+;   lsr x6, x5, x4
+;   orr x8, x3, x6
+;   ands xzr, x2, #64
+;   csel x11, xzr, x14, ne
+;   csel x13, x14, x8, ne
+;   lsr x15, x0, x12
+;   lsr x2, x1, x12
+;   orn w3, wzr, w12
+;   lsl x5, x1, #1
+;   lsl x7, x5, x3
+;   orr x9, x15, x7
+;   ands xzr, x12, #64
+;   csel x12, x2, x9, ne
+;   csel x14, xzr, x2, ne
+;   orr x0, x11, x12
+;   orr x1, x13, x14
+;   ret
 
 function %f4(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -159,15 +126,10 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 3)
-;   Inst 0:   sub x1, xzr, x1
-;   Inst 1:   ror x0, x0, x1
-;   Inst 2:   ret
-; }}
+; block0:
+;   sub x5, xzr, x1
+;   ror x0, x0, x5
+;   ret
 
 function %f5(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
@@ -175,15 +137,10 @@ block0(v0: i32, v1: i32):
   return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 3)
-;   Inst 0:   sub w1, wzr, w1
-;   Inst 1:   ror w0, w0, w1
-;   Inst 2:   ret
-; }}
+; block0:
+;   sub w5, wzr, w1
+;   ror w0, w0, w5
+;   ret
 
 function %f6(i16, i16) -> i16 {
 block0(v0: i16, v1: i16):
@@ -191,21 +148,16 @@ block0(v0: i16, v1: i16):
   return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 9)
-;   Inst 0:   sub w1, wzr, w1
-;   Inst 1:   uxth w0, w0
-;   Inst 2:   and w1, w1, #15
-;   Inst 3:   sub w2, w1, #16
-;   Inst 4:   sub w2, wzr, w2
-;   Inst 5:   lsr w1, w0, w1
-;   Inst 6:   lsl w0, w0, w2
-;   Inst 7:   orr w0, w0, w1
-;   Inst 8:   ret
-; }}
+; block0:
+;   sub w5, wzr, w1
+;   uxth w7, w0
+;   and w9, w5, #15
+;   sub w11, w9, #16
+;   sub w13, wzr, w11
+;   lsr w15, w7, w9
+;   lsl w1, w7, w13
+;   orr w0, w1, w15
+;   ret
 
 function %f7(i8, i8) -> i8 {
 block0(v0: i8, v1: i8):
@@ -213,21 +165,16 @@ block0(v0: i8, v1: i8):
   return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 9)
-;   Inst 0:   sub w1, wzr, w1
-;   Inst 1:   uxtb w0, w0
-;   Inst 2:   and w1, w1, #7
-;   Inst 3:   sub w2, w1, #8
-;   Inst 4:   sub w2, wzr, w2
-;   Inst 5:   lsr w1, w0, w1
-;   Inst 6:   lsl w0, w0, w2
-;   Inst 7:   orr w0, w0, w1
-;   Inst 8:   ret
-; }}
+; block0:
+;   sub w5, wzr, w1
+;   uxtb w7, w0
+;   and w9, w5, #7
+;   sub w11, w9, #8
+;   sub w13, wzr, w11
+;   lsr w15, w7, w9
+;   lsl w1, w7, w13
+;   orr w0, w1, w15
+;   ret
 
 function %f8(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -235,14 +182,9 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 2)
-;   Inst 0:   lsr x0, x0, x1
-;   Inst 1:   ret
-; }}
+; block0:
+;   lsr x0, x0, x1
+;   ret
 
 function %f9(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
@@ -250,14 +192,9 @@ block0(v0: i32, v1: i32):
   return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 2)
-;   Inst 0:   lsr w0, w0, w1
-;   Inst 1:   ret
-; }}
+; block0:
+;   lsr w0, w0, w1
+;   ret
 
 function %f10(i16, i16) -> i16 {
 block0(v0: i16, v1: i16):
@@ -265,16 +202,11 @@ block0(v0: i16, v1: i16):
   return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 4)
-;   Inst 0:   uxth w0, w0
-;   Inst 1:   and w1, w1, #15
-;   Inst 2:   lsr w0, w0, w1
-;   Inst 3:   ret
-; }}
+; block0:
+;   uxth w5, w0
+;   and w7, w1, #15
+;   lsr w0, w5, w7
+;   ret
 
 function %f11(i8, i8) -> i8 {
 block0(v0: i8, v1: i8):
@@ -282,16 +214,11 @@ block0(v0: i8, v1: i8):
   return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 4)
-;   Inst 0:   uxtb w0, w0
-;   Inst 1:   and w1, w1, #7
-;   Inst 2:   lsr w0, w0, w1
-;   Inst 3:   ret
-; }}
+; block0:
+;   uxtb w5, w0
+;   and w7, w1, #7
+;   lsr w0, w5, w7
+;   ret
 
 function %f12(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -299,14 +226,9 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 2)
-;   Inst 0:   lsl x0, x0, x1
-;   Inst 1:   ret
-; }}
+; block0:
+;   lsl x0, x0, x1
+;   ret
 
 function %f13(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
@@ -314,14 +236,9 @@ block0(v0: i32, v1: i32):
   return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 2)
-;   Inst 0:   lsl w0, w0, w1
-;   Inst 1:   ret
-; }}
+; block0:
+;   lsl w0, w0, w1
+;   ret
 
 function %f14(i16, i16) -> i16 {
 block0(v0: i16, v1: i16):
@@ -329,15 +246,10 @@ block0(v0: i16, v1: i16):
   return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 3)
-;   Inst 0:   and w1, w1, #15
-;   Inst 1:   lsl w0, w0, w1
-;   Inst 2:   ret
-; }}
+; block0:
+;   and w5, w1, #15
+;   lsl w0, w0, w5
+;   ret
 
 function %f15(i8, i8) -> i8 {
 block0(v0: i8, v1: i8):
@@ -345,15 +257,10 @@ block0(v0: i8, v1: i8):
   return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 3)
-;   Inst 0:   and w1, w1, #7
-;   Inst 1:   lsl w0, w0, w1
-;   Inst 2:   ret
-; }}
+; block0:
+;   and w5, w1, #7
+;   lsl w0, w0, w5
+;   ret
 
 function %f16(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -361,14 +268,9 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 2)
-;   Inst 0:   asr x0, x0, x1
-;   Inst 1:   ret
-; }}
+; block0:
+;   asr x0, x0, x1
+;   ret
 
 function %f17(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
@@ -376,14 +278,9 @@ block0(v0: i32, v1: i32):
   return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 2)
-;   Inst 0:   asr w0, w0, w1
-;   Inst 1:   ret
-; }}
+; block0:
+;   asr w0, w0, w1
+;   ret
 
 function %f18(i16, i16) -> i16 {
 block0(v0: i16, v1: i16):
@@ -391,16 +288,11 @@ block0(v0: i16, v1: i16):
   return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 4)
-;   Inst 0:   sxth w0, w0
-;   Inst 1:   and w1, w1, #15
-;   Inst 2:   asr w0, w0, w1
-;   Inst 3:   ret
-; }}
+; block0:
+;   sxth w5, w0
+;   and w7, w1, #15
+;   asr w0, w5, w7
+;   ret
 
 function %f19(i8, i8) -> i8 {
 block0(v0: i8, v1: i8):
@@ -408,16 +300,11 @@ block0(v0: i8, v1: i8):
   return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 4)
-;   Inst 0:   sxtb w0, w0
-;   Inst 1:   and w1, w1, #7
-;   Inst 2:   asr w0, w0, w1
-;   Inst 3:   ret
-; }}
+; block0:
+;   sxtb w5, w0
+;   and w7, w1, #7
+;   asr w0, w5, w7
+;   ret
 
 function %f20(i64) -> i64 {
 block0(v0: i64):
@@ -426,14 +313,9 @@ block0(v0: i64):
   return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 2)
-;   Inst 0:   ror x0, x0, #17
-;   Inst 1:   ret
-; }}
+; block0:
+;   ror x0, x0, #17
+;   ret
 
 function %f21(i64) -> i64 {
 block0(v0: i64):
@@ -442,14 +324,9 @@ block0(v0: i64):
   return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 2)
-;   Inst 0:   ror x0, x0, #47
-;   Inst 1:   ret
-; }}
+; block0:
+;   ror x0, x0, #47
+;   ret
 
 function %f22(i32) -> i32 {
 block0(v0: i32):
@@ -458,14 +335,9 @@ block0(v0: i32):
   return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 2)
-;   Inst 0:   ror w0, w0, #15
-;   Inst 1:   ret
-; }}
+; block0:
+;   ror w0, w0, #15
+;   ret
 
 function %f23(i16) -> i16 {
 block0(v0: i16):
@@ -474,17 +346,12 @@ block0(v0: i16):
   return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 5)
-;   Inst 0:   uxth w0, w0
-;   Inst 1:   lsr w1, w0, #6
-;   Inst 2:   lsl w0, w0, #10
-;   Inst 3:   orr w0, w0, w1
-;   Inst 4:   ret
-; }}
+; block0:
+;   uxth w3, w0
+;   lsr w5, w3, #6
+;   lsl w7, w3, #10
+;   orr w0, w7, w5
+;   ret
 
 function %f24(i8) -> i8 {
 block0(v0: i8):
@@ -493,17 +360,12 @@ block0(v0: i8):
   return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 5)
-;   Inst 0:   uxtb w0, w0
-;   Inst 1:   lsr w1, w0, #5
-;   Inst 2:   lsl w0, w0, #3
-;   Inst 3:   orr w0, w0, w1
-;   Inst 4:   ret
-; }}
+; block0:
+;   uxtb w3, w0
+;   lsr w5, w3, #5
+;   lsl w7, w3, #3
+;   orr w0, w7, w5
+;   ret
 
 function %f25(i64) -> i64 {
 block0(v0: i64):
@@ -512,14 +374,9 @@ block0(v0: i64):
   return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 2)
-;   Inst 0:   lsr x0, x0, #17
-;   Inst 1:   ret
-; }}
+; block0:
+;   lsr x0, x0, #17
+;   ret
 
 function %f26(i64) -> i64 {
 block0(v0: i64):
@@ -528,14 +385,9 @@ block0(v0: i64):
   return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 2)
-;   Inst 0:   asr x0, x0, #17
-;   Inst 1:   ret
-; }}
+; block0:
+;   asr x0, x0, #17
+;   ret
 
 function %f27(i64) -> i64 {
 block0(v0: i64):
@@ -544,12 +396,7 @@ block0(v0: i64):
   return v2
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 2)
-;   Inst 0:   lsl x0, x0, #17
-;   Inst 1:   ret
-; }}
+; block0:
+;   lsl x0, x0, #17
+;   ret
 

@@ -11,14 +11,9 @@ block0(v0: i8x16):
   return v3
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 2)
-;   Inst 0:   saddlp v0.8h, v0.16b
-;   Inst 1:   ret
-; }}
+; block0:
+;   saddlp v0.8h, v0.16b
+;   ret
 
 function %fn2(i8x16) -> i16x8 {
 block0(v0: i8x16):
@@ -28,14 +23,9 @@ block0(v0: i8x16):
   return v3
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 2)
-;   Inst 0:   uaddlp v0.8h, v0.16b
-;   Inst 1:   ret
-; }}
+; block0:
+;   uaddlp v0.8h, v0.16b
+;   ret
 
 function %fn3(i16x8) -> i32x4 {
 block0(v0: i16x8):
@@ -45,14 +35,9 @@ block0(v0: i16x8):
   return v3
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 2)
-;   Inst 0:   saddlp v0.4s, v0.8h
-;   Inst 1:   ret
-; }}
+; block0:
+;   saddlp v0.4s, v0.8h
+;   ret
 
 function %fn4(i16x8) -> i32x4 {
 block0(v0: i16x8):
@@ -62,14 +47,9 @@ block0(v0: i16x8):
   return v3
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 2)
-;   Inst 0:   uaddlp v0.4s, v0.8h
-;   Inst 1:   ret
-; }}
+; block0:
+;   uaddlp v0.4s, v0.8h
+;   ret
 
 function %fn5(i8x16, i8x16) -> i16x8 {
 block0(v0: i8x16, v1: i8x16):
@@ -79,16 +59,11 @@ block0(v0: i8x16, v1: i8x16):
   return v4
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 4)
-;   Inst 0:   sxtl v0.8h, v0.8b
-;   Inst 1:   sxtl2 v1.8h, v1.16b
-;   Inst 2:   addp v0.8h, v0.8h, v1.8h
-;   Inst 3:   ret
-; }}
+; block0:
+;   sxtl v4.8h, v0.8b
+;   sxtl2 v6.8h, v1.16b
+;   addp v0.8h, v4.8h, v6.8h
+;   ret
 
 function %fn6(i8x16, i8x16) -> i16x8 {
 block0(v0: i8x16, v1: i8x16):
@@ -98,16 +73,11 @@ block0(v0: i8x16, v1: i8x16):
   return v4
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 4)
-;   Inst 0:   uxtl v0.8h, v0.8b
-;   Inst 1:   uxtl2 v1.8h, v1.16b
-;   Inst 2:   addp v0.8h, v0.8h, v1.8h
-;   Inst 3:   ret
-; }}
+; block0:
+;   uxtl v4.8h, v0.8b
+;   uxtl2 v6.8h, v1.16b
+;   addp v0.8h, v4.8h, v6.8h
+;   ret
 
 function %fn7(i8x16) -> i16x8 {
 block0(v0: i8x16):
@@ -117,16 +87,11 @@ block0(v0: i8x16):
   return v3
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 4)
-;   Inst 0:   uxtl v1.8h, v0.8b
-;   Inst 1:   sxtl2 v0.8h, v0.16b
-;   Inst 2:   addp v0.8h, v1.8h, v0.8h
-;   Inst 3:   ret
-; }}
+; block0:
+;   uxtl v2.8h, v0.8b
+;   sxtl2 v4.8h, v0.16b
+;   addp v0.8h, v2.8h, v4.8h
+;   ret
 
 function %fn8(i8x16) -> i16x8 {
 block0(v0: i8x16):
@@ -136,14 +101,9 @@ block0(v0: i8x16):
   return v3
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 4)
-;   Inst 0:   sxtl v1.8h, v0.8b
-;   Inst 1:   uxtl2 v0.8h, v0.16b
-;   Inst 2:   addp v0.8h, v1.8h, v0.8h
-;   Inst 3:   ret
-; }}
+; block0:
+;   sxtl v2.8h, v0.8b
+;   uxtl2 v4.8h, v0.16b
+;   addp v0.8h, v2.8h, v4.8h
+;   ret
 

@@ -1,11 +1,11 @@
 use crate::utils::parse_sets_and_triple;
 use anyhow::{Context as _, Result};
+use clap::Parser;
 use cranelift_codegen::Context;
 use cranelift_wasm::{DummyEnvironment, ReturnMode};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use std::path::{Path, PathBuf};
 use std::{fs, io};
-use structopt::StructOpt;
 
 static WASM_MAGIC: &[u8] = &[0x00, 0x61, 0x73, 0x6D];
 
@@ -13,22 +13,21 @@ static WASM_MAGIC: &[u8] = &[0x00, 0x61, 0x73, 0x6D];
 ///
 /// Candidates are emitted in Souper's text format:
 /// <https://github.com/google/souper>
-#[derive(StructOpt)]
+#[derive(Parser)]
 pub struct Options {
     /// Specify an input file to be used. Use '-' for stdin.
-    #[structopt(parse(from_os_str))]
     input: PathBuf,
 
     /// Specify the output file to be used. Use '-' for stdout.
-    #[structopt(short("o"), long("output"), default_value("-"), parse(from_os_str))]
+    #[clap(short, long, default_value("-"))]
     output: PathBuf,
 
     /// Configure Cranelift settings
-    #[structopt(long("set"))]
+    #[clap(long = "set")]
     settings: Vec<String>,
 
     /// Specify the Cranelift target
-    #[structopt(long("target"))]
+    #[clap(long = "target")]
     target: String,
 }
 

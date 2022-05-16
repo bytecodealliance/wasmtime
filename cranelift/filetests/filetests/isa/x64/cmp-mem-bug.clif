@@ -10,25 +10,19 @@ block0(v0: i64, v1: i64):
     return v4, v5
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 13)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   movq    0(%rsi), %rax
-;   Inst 3:   cmpq    %rax, %rdi
-;   Inst 4:   setz    %cl
-;   Inst 5:   andq    $1, %rcx
-;   Inst 6:   cmpq    %rax, %rdi
-;   Inst 7:   cmovzq  %rdi, %rsi
-;   Inst 8:   movq    %rcx, %rax
-;   Inst 9:   movq    %rsi, %rdx
-;   Inst 10:   movq    %rbp, %rsp
-;   Inst 11:   popq    %rbp
-;   Inst 12:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    0(%rsi), %rcx
+;   cmpq    %rcx, %rdi
+;   setz    %al
+;   andq    %rax, $1, %rax
+;   cmpq    %rcx, %rdi
+;   cmovzq  %rdi, %rsi, %rsi
+;   movq    %rsi, %rdx
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %f1(f64, i64) -> i64, f64 {
 block0(v0: f64, v1: i64):
@@ -39,27 +33,20 @@ block0(v0: f64, v1: i64):
     return v4, v5
 }
 
-; VCode_ShowWithRRU {{
-;   Entry block: 0
-; Block 0:
-;   (original IR block: block0)
-;   (instruction range: 0 .. 17)
-;   Inst 0:   pushq   %rbp
-;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   movsd   0(%rdi), %xmm1
-;   Inst 3:   ucomisd %xmm1, %xmm0
-;   Inst 4:   setnp   %sil
-;   Inst 5:   setz    %dil
-;   Inst 6:   andl    %edi, %esi
-;   Inst 7:   andq    $1, %rsi
-;   Inst 8:   ucomisd %xmm0, %xmm1
-;   Inst 9:   movaps  %xmm0, %xmm1
-;   Inst 10:   jz $next; movsd %xmm0, %xmm1; $next: 
-;   Inst 11:   jnp $next; movsd %xmm0, %xmm1; $next: 
-;   Inst 12:   movq    %rsi, %rax
-;   Inst 13:   movaps  %xmm1, %xmm0
-;   Inst 14:   movq    %rbp, %rsp
-;   Inst 15:   popq    %rbp
-;   Inst 16:   ret
-; }}
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movsd   0(%rdi), %xmm12
+;   ucomisd %xmm12, %xmm0
+;   setnp   %al
+;   setz    %r8b
+;   andl    %eax, %r8d, %eax
+;   andq    %rax, $1, %rax
+;   ucomisd %xmm0, %xmm12
+;   movdqa  %xmm0, %xmm6
+;   mov z, sd; j%xmm6 $next; mov%xmm0 %xmm0, %xmm0; $next: 
+;   mov np, sd; j%xmm6 $next; mov%xmm0 %xmm0, %xmm0; $next: 
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 

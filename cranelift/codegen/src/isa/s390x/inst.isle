@@ -601,7 +601,8 @@
 
     ;; A machine return instruction.
     (Ret
-      (link Reg))
+      (link Reg)
+      (rets VecReg))
 
     ;; A placeholder instruction, generating no code, meaning that a function epilogue must be
     ;; inserted there.
@@ -696,11 +697,10 @@
     (VirtualSPOffsetAdj
       (offset i64))
 
-    ;; A definition of a value label.
-    (ValueLabelMarker
-      (reg Reg)
-      (label ValueLabel))
-
+    ;; Pseudoinstruction to keep a value alive.
+    (DummyUse
+     (reg Reg))
+    
     ;; An unwind pseudoinstruction describing the state of the
     ;; machine at this program point.
     (Unwind
@@ -744,14 +744,20 @@
     (Xor32)
     (Xor64)
     ;; NAND
+    (NotAnd32)
+    (NotAnd64)
+    ;; NOR
+    (NotOrr32)
+    (NotOrr64)
+    ;; XNOR
+    (NotXor32)
+    (NotXor64)
+    ;; And with complement
     (AndNot32)
     (AndNot64)
-    ;; NOR
+    ;; Or with complement
     (OrrNot32)
     (OrrNot64)
-    ;; XNOR
-    (XorNot32)
-    (XorNot64)
 ))
 
 ;; A unary operation.
@@ -937,14 +943,18 @@
 
 ;; Detect specific integer values
 
-(decl i64_nonequal (i64 i64) i64)
-(extern extractor i64_nonequal i64_nonequal (out in))
+(decl pure i64_nonequal (i64 i64) i64)
+(extern constructor i64_nonequal i64_nonequal)
 
-(decl i64_nonzero (i64) i64)
-(extractor (i64_nonzero val) (i64_nonequal val <0))
+(decl pure i64_nonzero (i64) i64)
+(rule (i64_nonzero x)
+      (if (i64_nonequal x 0))
+      x)
 
-(decl i64_not_neg1 (i64) i64)
-(extractor (i64_not_neg1 val) (i64_nonequal val <-1))
+(decl pure i64_not_neg1 (i64) i64)
+(rule (i64_not_neg1 x)
+      (if (i64_nonequal x -1))
+      x)
 
 ;; Integer type casts (with the rust `as` semantics).
 
@@ -1116,12 +1126,13 @@
 
 ;; Form the sum of two offset values, and check that the result is
 ;; a valid `MemArg::Symbol` offset (i.e. is even and fits into i32).
-(decl memarg_symbol_offset_sum (i64 i32) i64)
-(extern extractor memarg_symbol_offset_sum memarg_symbol_offset_sum (in out))
+(decl pure memarg_symbol_offset_sum (i64 i64) i32)
+(extern constructor memarg_symbol_offset_sum memarg_symbol_offset_sum)
 
 ;; Likewise, but just check a single offset value.
-(decl memarg_symbol_offset (i32) i64)
-(extractor (memarg_symbol_offset offset) (memarg_symbol_offset_sum <0 offset))
+(decl pure memarg_symbol_offset (i64) i32)
+(rule (memarg_symbol_offset x)
+      (memarg_symbol_offset_sum x 0))
 
 ;; Lower an address into a `MemArg`.
 
@@ -1130,29 +1141,33 @@
 (rule (lower_address flags addr (i64_from_offset offset))
       (memarg_reg_plus_off addr offset flags))
 
-(rule (lower_address flags (def_inst (iadd x y)) (i64_from_offset 0))
+(rule (lower_address flags (iadd x y) (i64_from_offset 0))
       (memarg_reg_plus_reg x y flags))
 
 (rule (lower_address flags
-        (def_inst (symbol_value (symbol_value_data name (reloc_distance_near) offset)))
-        (i64_from_offset (memarg_symbol_offset_sum <offset final_offset)))
+                     (symbol_value (symbol_value_data name (reloc_distance_near) sym_offset))
+                     (i64_from_offset offset))
+      (if-let final_offset (memarg_symbol_offset_sum offset sym_offset))
       (memarg_symbol name final_offset flags))
 
 
 ;; Test whether a `load` address will be lowered to a `MemArg::Symbol`.
 
-(decl load_sym (Inst) Inst)
-(extractor (load_sym inst)
-  (and inst
-       (load _ (def_inst (symbol_value (symbol_value_data _ (reloc_distance_near) offset)))
-               (i64_from_offset (memarg_symbol_offset_sum <offset _)))))
+(decl pure load_sym (Inst) Inst)
+(rule (load_sym inst)
+      (if-let (load _ (symbol_value (symbol_value_data _ (reloc_distance_near) sym_offset))
+                    (i64_from_offset load_offset))
+          inst)
+      (if (memarg_symbol_offset_sum sym_offset load_offset))
+      inst)
 
-(decl uload16_sym (Inst) Inst)
-(extractor (uload16_sym inst)
-  (and inst
-       (uload16 _ (def_inst (symbol_value (symbol_value_data _ (reloc_distance_near) offset)))
-                  (i64_from_offset (memarg_symbol_offset_sum <offset _)))))
-
+(decl pure uload16_sym (Inst) Inst)
+(rule (uload16_sym inst)
+      (if-let (uload16 _ (symbol_value (symbol_value_data _ (reloc_distance_near) sym_offset))
+                       (i64_from_offset load_offset))
+          inst)
+      (if (memarg_symbol_offset_sum sym_offset load_offset))
+      inst)
 
 ;; Helpers for stack-slot addresses ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1170,11 +1185,11 @@
 
 ;; A value that is the result of a sign-extend from a 32-bit value.
 (decl sext32_value (Value) Value)
-(extractor (sext32_value x) (def_inst (sextend (and x (value_type $I32)))))
+(extractor (sext32_value x) (sextend (and x (value_type $I32))))
 
 ;; A value that is the result of a zero-extend from a 32-bit value.
 (decl zext32_value (Value) Value)
-(extractor (zext32_value x) (def_inst (uextend (and x (value_type $I32)))))
+(extractor (zext32_value x) (uextend (and x (value_type $I32))))
 
 
 ;; Helpers for sinkable loads ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1777,8 +1792,8 @@
 ;; Similarly, because we cannot allocate temp registers, if an instruction
 ;; requires matching source and destination registers, this needs to be handled
 ;; by the user.  Another helper to verify that constraint.
-(decl same_reg (WritableReg) Reg)
-(extern extractor same_reg same_reg (in))
+(decl pure same_reg (WritableReg Reg) Reg)
+(extern constructor same_reg same_reg)
 
 ;; Push a `MInst.AluRRR` instruction to a sequence.
 (decl push_alu_reg (VecMInstBuilder ALUOp WritableReg Reg Reg) Reg)
@@ -1788,7 +1803,8 @@
 
 ;; Push a `MInst.AluRUImm32Shifted` instruction to a sequence.
 (decl push_alu_uimm32shifted (VecMInstBuilder ALUOp WritableReg Reg UImm32Shifted) Reg)
-(rule (push_alu_uimm32shifted ib op (real_reg dst) (same_reg <dst) imm)
+(rule (push_alu_uimm32shifted ib op (real_reg dst) r imm)
+      (if (same_reg dst r))
       (let ((_ Unit (inst_builder_push ib (MInst.AluRUImm32Shifted op dst imm))))
         dst))
 
@@ -1801,7 +1817,8 @@
 
 ;; Push a `MInst.RxSBG` instruction to a sequence.
 (decl push_rxsbg (VecMInstBuilder RxSBGOp WritableReg Reg Reg u8 u8 i8) Reg)
-(rule (push_rxsbg ib op (real_reg dst) (same_reg <dst) src start_bit end_bit rotate_amt)
+(rule (push_rxsbg ib op (real_reg dst) r src start_bit end_bit rotate_amt)
+      (if (same_reg dst r))
       (let ((_ Unit (inst_builder_push ib
                       (MInst.RxSBG op dst src start_bit end_bit rotate_amt))))
         dst))
@@ -2088,9 +2105,9 @@
 (rule (emit_put_in_reg_zext32 dst (and (value_type (fits_in_16 ty)) (sinkable_load load)))
       (emit_zext32_mem dst ty (sink_load load)))
 (rule (emit_put_in_reg_zext32 dst val @ (value_type (fits_in_16 ty)))
-      (emit_zext32_reg dst ty (put_in_reg val)))
+      (emit_zext32_reg dst ty val))
 (rule (emit_put_in_reg_zext32 dst val @ (value_type (ty_32_or_64 ty)))
-      (emit_mov ty dst (put_in_reg val)))
+      (emit_mov ty dst val))
 
 ;; Place `Value` into destination, sign-extending to 32 bits if smaller.  (Non-SSA form.)
 (decl emit_put_in_reg_sext32 (WritableReg Value) Unit)
@@ -2099,9 +2116,9 @@
 (rule (emit_put_in_reg_sext32 dst (and (value_type (fits_in_16 ty)) (sinkable_load load)))
       (emit_sext32_mem dst ty (sink_load load)))
 (rule (emit_put_in_reg_sext32 dst val @ (value_type (fits_in_16 ty)))
-      (emit_sext32_reg dst ty (put_in_reg val)))
+      (emit_sext32_reg dst ty val))
 (rule (emit_put_in_reg_sext32 dst val @ (value_type (ty_32_or_64 ty)))
-      (emit_mov ty dst (put_in_reg val)))
+      (emit_mov ty dst val))
 
 ;; Place `Value` into destination, zero-extending to 64 bits if smaller.  (Non-SSA form.)
 (decl emit_put_in_reg_zext64 (WritableReg Value) Unit)
@@ -2110,9 +2127,9 @@
 (rule (emit_put_in_reg_zext64 dst (and (value_type (gpr32_ty ty)) (sinkable_load load)))
       (emit_zext64_mem dst ty (sink_load load)))
 (rule (emit_put_in_reg_zext64 dst val @ (value_type (gpr32_ty ty)))
-      (emit_zext64_reg dst ty (put_in_reg val)))
+      (emit_zext64_reg dst ty val))
 (rule (emit_put_in_reg_zext64 dst val @ (value_type (gpr64_ty ty)))
-      (emit_mov ty dst (put_in_reg val)))
+      (emit_mov ty dst val))
 
 ;; Place `Value` into destination, sign-extending to 64 bits if smaller.  (Non-SSA form.)
 (decl emit_put_in_reg_sext64 (WritableReg Value) Unit)
@@ -2121,9 +2138,9 @@
 (rule (emit_put_in_reg_sext64 dst (and (value_type (gpr32_ty ty)) (sinkable_load load)))
       (emit_sext64_mem dst ty (sink_load load)))
 (rule (emit_put_in_reg_sext64 dst val @ (value_type (gpr32_ty ty)))
-      (emit_sext64_reg dst ty (put_in_reg val)))
+      (emit_sext64_reg dst ty val))
 (rule (emit_put_in_reg_sext64 dst val @ (value_type (gpr64_ty ty)))
-      (emit_mov ty dst (put_in_reg val)))
+      (emit_mov ty dst val))
 
 ;; Place `Value` into a register, zero-extending to 32 bits if smaller.
 (decl put_in_reg_zext32 (Value) Reg)
@@ -2132,9 +2149,9 @@
 (rule (put_in_reg_zext32 (and (value_type (fits_in_16 ty)) (sinkable_load load)))
       (zext32_mem ty (sink_load load)))
 (rule (put_in_reg_zext32 val @ (value_type (fits_in_16 ty)))
-      (zext32_reg ty (put_in_reg val)))
+      (zext32_reg ty val))
 (rule (put_in_reg_zext32 val @ (value_type (ty_32_or_64 _ty)))
-      (put_in_reg val))
+      val)
 
 ;; Place `Value` into a register, sign-extending to 32 bits if smaller.
 (decl put_in_reg_sext32 (Value) Reg)
@@ -2143,9 +2160,9 @@
 (rule (put_in_reg_sext32 (and (value_type (fits_in_16 ty)) (sinkable_load load)))
       (sext32_mem ty (sink_load load)))
 (rule (put_in_reg_sext32 val @ (value_type (fits_in_16 ty)))
-      (sext32_reg ty (put_in_reg val)))
+      (sext32_reg ty val))
 (rule (put_in_reg_sext32 val @ (value_type (ty_32_or_64 _ty)))
-      (put_in_reg val))
+      val)
 
 ;; Place `Value` into a register, zero-extending to 64 bits if smaller.
 (decl put_in_reg_zext64 (Value) Reg)
@@ -2154,9 +2171,9 @@
 (rule (put_in_reg_zext64 (and (value_type (gpr32_ty ty)) (sinkable_load load)))
       (zext64_mem ty (sink_load load)))
 (rule (put_in_reg_zext64 val @ (value_type (gpr32_ty ty)))
-      (zext64_reg ty (put_in_reg val)))
+      (zext64_reg ty val))
 (rule (put_in_reg_zext64 val @ (value_type (gpr64_ty ty)))
-      (put_in_reg val))
+      val)
 
 ;; Place `Value` into a register, sign-extending to 64 bits if smaller.
 (decl put_in_reg_sext64 (Value) Reg)
@@ -2165,9 +2182,9 @@
 (rule (put_in_reg_sext64 (and (value_type (gpr32_ty ty)) (sinkable_load load)))
       (sext64_mem ty (sink_load load)))
 (rule (put_in_reg_sext64 val @ (value_type (gpr32_ty ty)))
-      (sext64_reg ty (put_in_reg val)))
+      (sext64_reg ty val))
 (rule (put_in_reg_sext64 val @ (value_type (gpr64_ty ty)))
-      (put_in_reg val))
+      val)
 
 ;; Place `Value` into the low half of a register pair, zero-extending
 ;; to 32 bits if smaller.  The high half is taken from the input.
@@ -2765,6 +2782,36 @@
         (push_xor_uimm32shifted ib ty dst val (uimm32shifted 0xffffffff 32))))
 
 
+;; Helpers for generating `not_and` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl aluop_not_and (Type) ALUOp)
+(rule (aluop_not_and (gpr32_ty _ty)) (ALUOp.NotAnd32))
+(rule (aluop_not_and (gpr64_ty _ty)) (ALUOp.NotAnd64))
+
+(decl not_and_reg (Type Reg Reg) Reg)
+(rule (not_and_reg ty x y) (alu_rrr ty (aluop_not_and ty) x y))
+
+
+;; Helpers for generating `not_or` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl aluop_not_or (Type) ALUOp)
+(rule (aluop_not_or (gpr32_ty _ty)) (ALUOp.NotOrr32))
+(rule (aluop_not_or (gpr64_ty _ty)) (ALUOp.NotOrr64))
+
+(decl not_or_reg (Type Reg Reg) Reg)
+(rule (not_or_reg ty x y) (alu_rrr ty (aluop_not_or ty) x y))
+
+
+;; Helpers for generating `not_xor` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl aluop_not_xor (Type) ALUOp)
+(rule (aluop_not_xor (gpr32_ty _ty)) (ALUOp.NotXor32))
+(rule (aluop_not_xor (gpr64_ty _ty)) (ALUOp.NotXor64))
+
+(decl not_xor_reg (Type Reg Reg) Reg)
+(rule (not_xor_reg ty x y) (alu_rrr ty (aluop_not_xor ty) x y))
+
+
 ;; Helpers for generating `and_not` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (decl aluop_and_not (Type) ALUOp)
@@ -2783,16 +2830,6 @@
 
 (decl or_not_reg (Type Reg Reg) Reg)
 (rule (or_not_reg ty x y) (alu_rrr ty (aluop_or_not ty) x y))
-
-
-;; Helpers for generating `xor_not` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(decl aluop_xor_not (Type) ALUOp)
-(rule (aluop_xor_not (gpr32_ty _ty)) (ALUOp.XorNot32))
-(rule (aluop_xor_not (gpr64_ty _ty)) (ALUOp.XorNot64))
-
-(decl xor_not_reg (Type Reg Reg) Reg)
-(rule (xor_not_reg ty x y) (alu_rrr ty (aluop_xor_not ty) x y))
 
 
 ;; Helpers for generating `abs` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

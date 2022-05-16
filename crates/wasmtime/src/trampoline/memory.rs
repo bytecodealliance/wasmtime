@@ -42,7 +42,7 @@ impl RuntimeLinearMemory for LinearMemoryProxy {
         self.mem.grow_to(new_size)
     }
 
-    fn vmmemory(&self) -> VMMemoryDefinition {
+    fn vmmemory(&mut self) -> VMMemoryDefinition {
         VMMemoryDefinition {
             base: self.mem.as_ptr(),
             current_length: self.mem.byte_size(),
@@ -51,6 +51,11 @@ impl RuntimeLinearMemory for LinearMemoryProxy {
 
     fn needs_init(&self) -> bool {
         true
+    }
+
+    #[cfg(feature = "pooling-allocator")]
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
     }
 }
 

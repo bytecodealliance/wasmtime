@@ -3,6 +3,7 @@
 #![allow(missing_docs)]
 
 use crate::lexer::Pos;
+use crate::log;
 use std::sync::Arc;
 
 /// The parsed form of an ISLE file.
@@ -69,15 +70,25 @@ pub struct Decl {
     pub term: Ident,
     pub arg_tys: Vec<Ident>,
     pub ret_ty: Ident,
+    /// Whether this term's constructor is pure.
+    pub pure: bool,
     pub pos: Pos,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Rule {
     pub pattern: Pattern,
+    pub iflets: Vec<IfLet>,
     pub expr: Expr,
     pub pos: Pos,
     pub prio: Option<i64>,
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct IfLet {
+    pub pattern: Pattern,
+    pub expr: Expr,
+    pub pos: Pos,
 }
 
 /// An extractor macro: (A x y) becomes (B x _ y ...). Expanded during
@@ -93,15 +104,22 @@ pub struct Extractor {
 /// A pattern: the left-hand side of a rule.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum Pattern {
-    /// An operator that binds a variable to a subterm and match the
+    /// A mention of a variable.
+    ///
+    /// Equivalent either to a binding (which can be emulated with
+    /// `BindPattern` with a `Pattern::Wildcard` subpattern), if this
+    /// is the first mention of the variable, in order to capture its
+    /// value; or else a match of the already-captured value. This
+    /// disambiguation happens when we lower `ast` nodes to `sema`
+    /// nodes as we resolve bound variable names.
+    Var { var: Ident, pos: Pos },
+    /// An operator that binds a variable to a subterm and matches the
     /// subpattern.
     BindPattern {
         var: Ident,
         subpat: Box<Pattern>,
         pos: Pos,
     },
-    /// A variable that has already been bound (`=x` syntax).
-    Var { var: Ident, pos: Pos },
     /// An operator that matches a constant integer value.
     ConstInt { val: i64, pos: Pos },
     /// An operator that matches an external constant value.
@@ -109,7 +127,7 @@ pub enum Pattern {
     /// An application of a type variant or term.
     Term {
         sym: Ident,
-        args: Vec<TermArgPattern>,
+        args: Vec<Pattern>,
         pos: Pos,
     },
     /// An operator that matches anything.
@@ -135,9 +153,7 @@ impl Pattern {
             Pattern::Term { sym, args, pos } => {
                 f(*pos, sym);
                 for arg in args {
-                    if let TermArgPattern::Pattern(p) = arg {
-                        p.terms(f);
-                    }
+                    arg.terms(f);
                 }
             }
             Pattern::And { subpats, .. } => {
@@ -157,7 +173,7 @@ impl Pattern {
     }
 
     pub fn make_macro_template(&self, macro_args: &[Ident]) -> Pattern {
-        log::trace!("make_macro_template: {:?} with {:?}", self, macro_args);
+        log!("make_macro_template: {:?} with {:?}", self, macro_args);
         match self {
             &Pattern::BindPattern {
                 ref var,
@@ -180,6 +196,13 @@ impl Pattern {
                 subpat: Box::new(subpat.make_macro_template(macro_args)),
                 pos,
             },
+            &Pattern::Var { ref var, pos } => {
+                if let Some(i) = macro_args.iter().position(|arg| arg.0 == var.0) {
+                    Pattern::MacroArg { index: i, pos }
+                } else {
+                    self.clone()
+                }
+            }
             &Pattern::And { ref subpats, pos } => {
                 let subpats = subpats
                     .iter()
@@ -203,16 +226,15 @@ impl Pattern {
                 }
             }
 
-            &Pattern::Var { .. }
-            | &Pattern::Wildcard { .. }
-            | &Pattern::ConstInt { .. }
-            | &Pattern::ConstPrim { .. } => self.clone(),
+            &Pattern::Wildcard { .. } | &Pattern::ConstInt { .. } | &Pattern::ConstPrim { .. } => {
+                self.clone()
+            }
             &Pattern::MacroArg { .. } => unreachable!(),
         }
     }
 
     pub fn subst_macro_args(&self, macro_args: &[Pattern]) -> Option<Pattern> {
-        log::trace!("subst_macro_args: {:?} with {:?}", self, macro_args);
+        log!("subst_macro_args: {:?} with {:?}", self, macro_args);
         match self {
             &Pattern::BindPattern {
                 ref var,
@@ -264,41 +286,6 @@ impl Pattern {
             | &Pattern::Var { pos, .. }
             | &Pattern::Wildcard { pos, .. }
             | &Pattern::MacroArg { pos, .. } => pos,
-        }
-    }
-}
-
-/// A pattern in a term argument. Adds "evaluated expression" to kinds
-/// of patterns in addition to all options in `Pattern`.
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub enum TermArgPattern {
-    /// A regular pattern that must match the existing value in the term's argument.
-    Pattern(Pattern),
-    /// An expression that is evaluated during the match phase and can
-    /// be given into an extractor. This is essentially a limited form
-    /// of unification or bidirectional argument flow (a la Prolog):
-    /// we can pass an arg *into* an extractor rather than getting the
-    /// arg *out of* it.
-    Expr(Expr),
-}
-
-impl TermArgPattern {
-    fn make_macro_template(&self, args: &[Ident]) -> TermArgPattern {
-        log::trace!("repplace_macro_args: {:?} with {:?}", self, args);
-        match self {
-            &TermArgPattern::Pattern(ref pat) => {
-                TermArgPattern::Pattern(pat.make_macro_template(args))
-            }
-            &TermArgPattern::Expr(_) => self.clone(),
-        }
-    }
-
-    fn subst_macro_args(&self, args: &[Pattern]) -> Option<TermArgPattern> {
-        match self {
-            &TermArgPattern::Pattern(ref pat) => {
-                Some(TermArgPattern::Pattern(pat.subst_macro_args(args)?))
-            }
-            &TermArgPattern::Expr(_) => Some(self.clone()),
         }
     }
 }
@@ -382,15 +369,6 @@ pub enum Extern {
         func: Ident,
         /// The position of this decl.
         pos: Pos,
-        /// Poliarity of args: whether values are inputs or outputs to
-        /// the external extractor function. This is a sort of
-        /// statically-defined approximation to Prolog-style
-        /// unification; we allow for the same flexible directionality
-        /// but fix it at DSL-definition time. By default, every arg
-        /// is an *output* from the extractor (and the 'retval", or
-        /// more precisely the term value that we are extracting, is
-        /// an "input").
-        arg_polarity: Option<Vec<ArgPolarity>>,
         /// Infallibility: if an external extractor returns `(T1, T2,
         /// ...)` rather than `Option<(T1, T2, ...)>`, and hence can
         /// never fail, it is declared as such and allows for slightly
@@ -408,17 +386,6 @@ pub enum Extern {
     },
     /// An external constant: `(const $IDENT type)` form.
     Const { name: Ident, ty: Ident, pos: Pos },
-}
-
-/// Whether an argument is an input or an output.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ArgPolarity {
-    /// An arg that must be given an Expr in the pattern and passes data *to*
-    /// the extractor op.
-    Input,
-    /// An arg that must be given a regular pattern (not Expr) and receives data
-    /// *from* the extractor op.
-    Output,
 }
 
 /// An implicit converter: the given term, which must have type

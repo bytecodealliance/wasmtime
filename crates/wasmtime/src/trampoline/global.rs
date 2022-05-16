@@ -71,11 +71,9 @@ pub fn create_global(store: &mut StoreOpaque, gt: &GlobalType, val: Val) -> Resu
 
     if let Some(x) = externref_init {
         let instance = store.instance_mut(id);
-        match instance.lookup_by_declaration(&EntityIndex::Global(global_id)) {
-            wasmtime_runtime::Export::Global(g) => unsafe {
-                *(*g.definition).as_externref_mut() = Some(x.inner);
-            },
-            _ => unreachable!(),
+        let g = instance.get_exported_global(global_id);
+        unsafe {
+            *(*g.definition).as_externref_mut() = Some(x.inner);
         }
     }
 

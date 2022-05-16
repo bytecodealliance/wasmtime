@@ -8,6 +8,7 @@
 //! operand ("G" in Intelese), the order is always G first, then E. The term "enc" in the following
 //! means "hardware register encoding number".
 
+use crate::machinst::{Reg, RegClass};
 use crate::{
     ir::TrapCode,
     isa::x64::inst::{
@@ -16,7 +17,6 @@ use crate::{
     },
     machinst::MachBuffer,
 };
-use regalloc::{Reg, RegClass};
 
 pub(crate) fn low8_will_sign_extend_to_64(x: u32) -> bool {
     let xs = (x as i32) as i64;
@@ -50,8 +50,8 @@ pub(crate) fn encode_sib(shift: u8, enc_index: u8, enc_base: u8) -> u8 {
 pub(crate) fn int_reg_enc(reg: impl Into<Reg>) -> u8 {
     let reg = reg.into();
     debug_assert!(reg.is_real());
-    debug_assert_eq!(reg.get_class(), RegClass::I64);
-    reg.get_hw_encoding()
+    debug_assert_eq!(reg.class(), RegClass::Int);
+    reg.to_real_reg().unwrap().hw_enc()
 }
 
 /// Get the encoding number of any register.
@@ -59,7 +59,7 @@ pub(crate) fn int_reg_enc(reg: impl Into<Reg>) -> u8 {
 pub(crate) fn reg_enc(reg: impl Into<Reg>) -> u8 {
     let reg = reg.into();
     debug_assert!(reg.is_real());
-    reg.get_hw_encoding()
+    reg.to_real_reg().unwrap().hw_enc()
 }
 
 /// A small bit field to record a REX prefix specification:
@@ -284,6 +284,7 @@ pub(crate) fn emit_std_enc_mem(
     enc_g: u8,
     mem_e: &Amode,
     rex: RexFlags,
+    bytes_at_end: u8,
 ) {
     // General comment for this function: the registers in `mem_e` must be
     // 64-bit integer registers, because they are part of an address
@@ -413,7 +414,14 @@ pub(crate) fn emit_std_enc_mem(
 
             let offset = sink.cur_offset();
             sink.use_label_at_offset(offset, *target, LabelUse::JmpRel32);
-            sink.put4(0);
+            // N.B.: some instructions (XmmRmRImm format for example)
+            // have bytes *after* the RIP-relative offset. The
+            // addressed location is relative to the end of the
+            // instruction, but the relocation is nominally relative
+            // to the end of the u32 field. So, to compensate for
+            // this, we emit a negative extra offset in the u32 field
+            // initially, and the relocation will add to it.
+            sink.put4(-(bytes_at_end as i32) as u32);
         }
     }
 }
@@ -466,6 +474,7 @@ pub(crate) fn emit_std_reg_mem(
     reg_g: Reg,
     mem_e: &Amode,
     rex: RexFlags,
+    bytes_at_end: u8,
 ) {
     let enc_g = reg_enc(reg_g);
     emit_std_enc_mem(
@@ -478,6 +487,7 @@ pub(crate) fn emit_std_reg_mem(
         enc_g,
         mem_e,
         rex,
+        bytes_at_end,
     );
 }
 

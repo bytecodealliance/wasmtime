@@ -14,6 +14,7 @@ on:
 
 jobs:
   push_tag:
+    if: github.repository == 'bytecodealliance/wasmtime'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2

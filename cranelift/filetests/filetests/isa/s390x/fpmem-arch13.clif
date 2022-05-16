@@ -1,4 +1,4 @@
-test compile
+test compile precise-output
 target s390x arch13
 
 function %load_f64_little(i64) -> f64 {
@@ -7,8 +7,9 @@ block0(v0: i64):
   return v1
 }
 
-; check:  vlebrg %f0, 0(%r2), 0
-; nextln: br %r14
+; block0:
+;   vlebrg %f0, 0(%r2), 0
+;   br %r14
 
 function %load_f32_little(i64) -> f32 {
 block0(v0: i64):
@@ -16,8 +17,9 @@ block0(v0: i64):
   return v1
 }
 
-; check:  vlebrf %f0, 0(%r2), 0
-; nextln: br %r14
+; block0:
+;   vlebrf %f0, 0(%r2), 0
+;   br %r14
 
 function %store_f64_little(f64, i64) {
 block0(v0: f64, v1: i64):
@@ -25,8 +27,9 @@ block0(v0: f64, v1: i64):
   return
 }
 
-; check:  vstebrg %f0, 0(%r2), 0
-; nextln: br %r14
+; block0:
+;   vstebrg %f0, 0(%r2), 0
+;   br %r14
 
 function %store_f32_little(f32, i64) {
 block0(v0: f32, v1: i64):
@@ -34,6 +37,7 @@ block0(v0: f32, v1: i64):
   return
 }
 
-; check:  vstebrf %f0, 0(%r2), 0
-; nextln: br %r14
+; block0:
+;   vstebrf %f0, 0(%r2), 0
+;   br %r14
 

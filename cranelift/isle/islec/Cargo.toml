@@ -2,12 +2,12 @@
 name = "islec"
 version = "0.1.0"
 authors = ["The Cranelift Project Developers"]
-edition = "2018"
+edition = "2021"
 license = "Apache-2.0 WITH LLVM-exception"
 publish = false
 
 [dependencies]
-cranelift-isle = { version = "*", path = "../isle/" }
-env_logger = { version = "0.8", default-features = false }
-miette = { version = "3.0.0", features = ["fancy"] }
-structopt = "0.3.23"
+cranelift-isle = { version = "*", path = "../isle/", features = ["miette-errors", "logging"] }
+env_logger = { version = "0.9", default-features = false }
+miette = { version = "4.7.0", features = ["fancy"] }
+clap = { version = "3.1.12", features = ["derive"] }

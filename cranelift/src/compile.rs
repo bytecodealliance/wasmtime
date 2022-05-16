@@ -3,6 +3,7 @@
 use crate::disasm::print_all;
 use crate::utils::{parse_sets_and_triple, read_to_string};
 use anyhow::{Context as _, Result};
+use clap::Parser;
 use cranelift_codegen::print_errors::pretty_error;
 use cranelift_codegen::settings::FlagsOrIsa;
 use cranelift_codegen::timing;
@@ -10,37 +11,35 @@ use cranelift_codegen::Context;
 use cranelift_reader::{parse_test, ParseOptions};
 use std::path::Path;
 use std::path::PathBuf;
-use structopt::StructOpt;
 
 /// Compiles Cranelift IR into target language
-#[derive(StructOpt)]
+#[derive(Parser)]
 pub struct Options {
     /// Print the resulting Cranelift IR
-    #[structopt(short("p"))]
+    #[clap(short)]
     print: bool,
 
     /// Print pass timing report
-    #[structopt(short("T"))]
+    #[clap(short = 'T')]
     report_times: bool,
 
     /// Print machine code disassembly
-    #[structopt(short("D"), long("disasm"))]
+    #[clap(short = 'D', long)]
     disasm: bool,
 
     /// Configure Cranelift settings
-    #[structopt(long("set"))]
+    #[clap(long = "set")]
     settings: Vec<String>,
 
     /// Specify the Cranelift target
-    #[structopt(long("target"))]
+    #[clap(long = "target")]
     target: String,
 
     /// Specify an input file to be used. Use '-' for stdin.
-    #[structopt(parse(from_os_str))]
     files: Vec<PathBuf>,
 
     /// Enable debug output on stderr/stdout
-    #[structopt(short = "d")]
+    #[clap(short)]
     debug: bool,
 }
 

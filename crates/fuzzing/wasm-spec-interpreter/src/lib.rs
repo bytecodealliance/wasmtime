@@ -16,6 +16,7 @@ pub enum Value {
     I64(i64),
     F32(i32),
     F64(i64),
+    V128(Vec<u8>),
 }
 
 #[cfg(feature = "has-libinterpret")]

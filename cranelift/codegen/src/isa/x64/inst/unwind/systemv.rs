@@ -1,8 +1,8 @@
 //! Unwind information for System V ABI (x86-64).
 
 use crate::isa::unwind::systemv::RegisterMappingError;
+use crate::machinst::{Reg, RegClass};
 use gimli::{write::CommonInformationEntry, Encoding, Format, Register, X86_64};
-use regalloc::{Reg, RegClass};
 
 /// Creates a new x86-64 common information entry (CIE).
 pub fn create_cie() -> CommonInformationEntry {
@@ -69,14 +69,13 @@ pub fn map_reg(reg: Reg) -> Result<Register, RegisterMappingError> {
         X86_64::XMM15,
     ];
 
-    match reg.get_class() {
-        RegClass::I64 => {
+    match reg.class() {
+        RegClass::Int => {
             // x86 GP registers have a weird mapping to DWARF registers, so we use a
             // lookup table.
-            Ok(X86_GP_REG_MAP[reg.get_hw_encoding() as usize])
+            Ok(X86_GP_REG_MAP[reg.to_real_reg().unwrap().hw_enc() as usize])
         }
-        RegClass::V128 => Ok(X86_XMM_REG_MAP[reg.get_hw_encoding() as usize]),
-        _ => Err(RegisterMappingError::UnsupportedRegisterBank("class?")),
+        RegClass::Float => Ok(X86_XMM_REG_MAP[reg.to_real_reg().unwrap().hw_enc() as usize]),
     }
 }
 
