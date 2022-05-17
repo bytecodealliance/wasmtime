@@ -5,11 +5,9 @@ use alloc::vec::Vec;
 /*
     todo:: test very important.
     bne beq
-
 */
 /*
     todo:: more instruction
-    todo:: risc  tool chain jump is wired.............
 */
 #[test]
 fn test_riscv64_binemit() {
@@ -17,6 +15,8 @@ fn test_riscv64_binemit() {
         inst: Inst,
         assembly: &'static str,
         code: Option<u32>,
+        option_for_as: Option<Vec<String>>,
+        option_for_dump: Option<Vec<String>>,
     }
 
     impl TestUnit {
@@ -25,21 +25,532 @@ fn test_riscv64_binemit() {
                 inst: i,
                 assembly: ass,
                 code: None,
+                option_for_as: None,
+                option_for_dump: None,
+            }
+        }
+        fn new_with_gcc_option(
+            i: Inst,
+            ass: &'static str,
+            option_for_as: Option<Vec<String>>,
+            option_for_dump: Option<Vec<String>>,
+        ) -> Self {
+            Self {
+                inst: i,
+                assembly: ass,
+                code: None,
+                option_for_as,
+                option_for_dump,
             }
         }
     }
 
     let mut insns = Vec::<TestUnit>::with_capacity(500);
 
-    // insns.push(TestUnit::new(
-    //     Inst::Jal {
-    //         rd: writable_zero_reg(),
-    //         dest: BranchTarget::offset(4),
-    //     },
-    //     "j 4",
-    // ));
+    //
+    insns.push(TestUnit::new_with_gcc_option(
+        Inst::AluRRImm12 {
+            alu_op: AluOPRRI::Bclri,
+            rd: writable_a1(),
+            rs: a0(),
+            imm12: AluOPRRI::Bclri.funct12(Some(5)),
+        },
+        "bclri a1,a0,5",
+        Some(vec![gcc_aluoprri_march_arg(AluOPRRI::Bclri)]),
+        None,
+    ));
+    insns.push(TestUnit::new_with_gcc_option(
+        Inst::AluRRImm12 {
+            alu_op: AluOPRRI::Bexti,
+            rd: writable_a1(),
+            rs: a0(),
+            imm12: AluOPRRI::Bclri.funct12(Some(5)),
+        },
+        "bexti a1,a0,5",
+        Some(vec![gcc_aluoprri_march_arg(AluOPRRI::Bexti)]),
+        None,
+    ));
 
-    //todo:: more
+    insns.push(TestUnit::new_with_gcc_option(
+        Inst::AluRRImm12 {
+            alu_op: AluOPRRI::Binvi,
+            rd: writable_a1(),
+            rs: a0(),
+            imm12: AluOPRRI::Binvi.funct12(Some(5)),
+        },
+        "binvi a1,a0,5",
+        Some(vec![gcc_aluoprri_march_arg(AluOPRRI::Binvi)]),
+        None,
+    ));
+
+    insns.push(TestUnit::new_with_gcc_option(
+        Inst::AluRRImm12 {
+            alu_op: AluOPRRI::Bseti,
+            rd: writable_a1(),
+            rs: a0(),
+            imm12: AluOPRRI::Bseti.funct12(Some(5)),
+        },
+        "bseti a1,a0,5",
+        Some(vec![gcc_aluoprri_march_arg(AluOPRRI::Bseti)]),
+        None,
+    ));
+
+    insns.push(TestUnit::new_with_gcc_option(
+        Inst::AluRRImm12 {
+            alu_op: AluOPRRI::Rori,
+            rd: writable_a1(),
+            rs: a0(),
+            imm12: AluOPRRI::Rori.funct12(Some(5)),
+        },
+        "rori a1,a0,5",
+        Some(vec![gcc_aluoprri_march_arg(AluOPRRI::Rori)]),
+        None,
+    ));
+    insns.push(TestUnit::new_with_gcc_option(
+        Inst::AluRRImm12 {
+            alu_op: AluOPRRI::Roriw,
+            rd: writable_a1(),
+            rs: a0(),
+            imm12: AluOPRRI::Roriw.funct12(Some(5)),
+        },
+        "roriw a1,a0,5",
+        Some(vec![gcc_aluoprri_march_arg(AluOPRRI::Roriw)]),
+        None,
+    ));
+
+    insns.push(TestUnit::new_with_gcc_option(
+        Inst::AluRRImm12 {
+            alu_op: AluOPRRI::SlliUw,
+            rd: writable_a1(),
+            rs: a0(),
+            imm12: AluOPRRI::SlliUw.funct12(Some(5)),
+        },
+        "slli.uw a1,a0,5",
+        Some(vec![gcc_aluoprri_march_arg(AluOPRRI::SlliUw)]),
+        None,
+    ));
+
+    insns.push(TestUnit::new_with_gcc_option(
+        Inst::AluRRImm12 {
+            alu_op: AluOPRRI::Clz,
+            rd: writable_a1(),
+            rs: a0(),
+            imm12: AluOPRRI::Clz.funct12(None),
+        },
+        "clz a1,a0",
+        Some(vec![gcc_aluoprri_march_arg(AluOPRRI::Clz)]),
+        None,
+    ));
+
+    insns.push(TestUnit::new_with_gcc_option(
+        Inst::AluRRImm12 {
+            alu_op: AluOPRRI::Clzw,
+            rd: writable_a1(),
+            rs: a0(),
+            imm12: AluOPRRI::Clzw.funct12(None),
+        },
+        "clzw a1,a0",
+        Some(vec![gcc_aluoprri_march_arg(AluOPRRI::Clzw)]),
+        None,
+    ));
+
+    insns.push(TestUnit::new_with_gcc_option(
+        Inst::AluRRImm12 {
+            alu_op: AluOPRRI::Cpop,
+            rd: writable_a1(),
+            rs: a0(),
+            imm12: AluOPRRI::Cpop.funct12(None),
+        },
+        "cpop a1,a0",
+        Some(vec![gcc_aluoprri_march_arg(AluOPRRI::Cpop)]),
+        None,
+    ));
+
+    insns.push(TestUnit::new_with_gcc_option(
+        Inst::AluRRImm12 {
+            alu_op: AluOPRRI::Cpopw,
+            rd: writable_a1(),
+            rs: a0(),
+            imm12: AluOPRRI::Cpopw.funct12(None),
+        },
+        "cpopw a1,a0",
+        Some(vec![gcc_aluoprri_march_arg(AluOPRRI::Cpopw)]),
+        None,
+    ));
+
+    insns.push(TestUnit::new_with_gcc_option(
+        Inst::AluRRImm12 {
+            alu_op: AluOPRRI::Ctz,
+            rd: writable_a1(),
+            rs: a0(),
+            imm12: AluOPRRI::Ctz.funct12(None),
+        },
+        "ctz a1,a0",
+        Some(vec![gcc_aluoprri_march_arg(AluOPRRI::Ctz)]),
+        None,
+    ));
+
+    insns.push(TestUnit::new_with_gcc_option(
+        Inst::AluRRImm12 {
+            alu_op: AluOPRRI::Ctzw,
+            rd: writable_a1(),
+            rs: a0(),
+            imm12: AluOPRRI::Ctzw.funct12(None),
+        },
+        "ctzw a1,a0",
+        Some(vec![gcc_aluoprri_march_arg(AluOPRRI::Ctzw)]),
+        None,
+    ));
+
+    insns.push(TestUnit::new_with_gcc_option(
+        Inst::AluRRImm12 {
+            alu_op: AluOPRRI::Rev8,
+            rd: writable_a1(),
+            rs: a0(),
+            imm12: AluOPRRI::Rev8.funct12(None),
+        },
+        "rev8 a1,a0",
+        Some(vec![gcc_aluoprri_march_arg(AluOPRRI::Rev8)]),
+        None,
+    ));
+
+    insns.push(TestUnit::new_with_gcc_option(
+        Inst::AluRRImm12 {
+            alu_op: AluOPRRI::Sextb,
+            rd: writable_a1(),
+            rs: a0(),
+            imm12: AluOPRRI::Sextb.funct12(None),
+        },
+        "sext.b a1,a0",
+        Some(vec![gcc_aluoprri_march_arg(AluOPRRI::Sextb)]),
+        None,
+    ));
+    insns.push(TestUnit::new_with_gcc_option(
+        Inst::AluRRImm12 {
+            alu_op: AluOPRRI::Sexth,
+            rd: writable_a1(),
+            rs: a0(),
+            imm12: AluOPRRI::Sexth.funct12(None),
+        },
+        "sext.h a1,a0",
+        Some(vec![gcc_aluoprri_march_arg(AluOPRRI::Sexth)]),
+        None,
+    ));
+    insns.push(TestUnit::new_with_gcc_option(
+        Inst::AluRRImm12 {
+            alu_op: AluOPRRI::Zexth,
+            rd: writable_a1(),
+            rs: a0(),
+            imm12: AluOPRRI::Zexth.funct12(None),
+        },
+        "zext.h a1,a0",
+        Some(vec![gcc_aluoprri_march_arg(AluOPRRI::Zexth)]),
+        None,
+    ));
+    insns.push(TestUnit::new_with_gcc_option(
+        Inst::AluRRImm12 {
+            alu_op: AluOPRRI::Orcb,
+            rd: writable_a1(),
+            rs: a0(),
+            imm12: AluOPRRI::Orcb.funct12(None),
+        },
+        "orc.b a1,a0",
+        Some(vec![gcc_aluoprri_march_arg(AluOPRRI::Orcb)]),
+        None,
+    ));
+
+    //
+    insns.push(TestUnit::new_with_gcc_option(
+        Inst::AluRRR {
+            alu_op: AluOPRRR::Adduw,
+            rd: writable_a1(),
+            rs1: a0(),
+            rs2: zero_reg(),
+        },
+        "add.uw a1,a0,zero",
+        Some(vec![gcc_aluoprrr_march_arg(AluOPRRR::Adduw)]),
+        None,
+    ));
+
+    insns.push(TestUnit::new_with_gcc_option(
+        Inst::AluRRR {
+            alu_op: AluOPRRR::Andn,
+            rd: writable_a1(),
+            rs1: a0(),
+            rs2: zero_reg(),
+        },
+        "andn a1,a0,zero",
+        Some(vec![gcc_aluoprrr_march_arg(AluOPRRR::Andn)]),
+        None,
+    ));
+    insns.push(TestUnit::new_with_gcc_option(
+        Inst::AluRRR {
+            alu_op: AluOPRRR::Bclr,
+            rd: writable_a1(),
+            rs1: a0(),
+            rs2: zero_reg(),
+        },
+        "bclr a1,a0,zero",
+        Some(vec![gcc_aluoprrr_march_arg(AluOPRRR::Bclr)]),
+        None,
+    ));
+
+    insns.push(TestUnit::new_with_gcc_option(
+        Inst::AluRRR {
+            alu_op: AluOPRRR::Bext,
+            rd: writable_a1(),
+            rs1: a0(),
+            rs2: zero_reg(),
+        },
+        "bext a1,a0,zero",
+        Some(vec![gcc_aluoprrr_march_arg(AluOPRRR::Bext)]),
+        None,
+    ));
+
+    insns.push(TestUnit::new_with_gcc_option(
+        Inst::AluRRR {
+            alu_op: AluOPRRR::Binv,
+            rd: writable_a1(),
+            rs1: a0(),
+            rs2: zero_reg(),
+        },
+        "binv a1,a0,zero",
+        Some(vec![gcc_aluoprrr_march_arg(AluOPRRR::Binv)]),
+        None,
+    ));
+    insns.push(TestUnit::new_with_gcc_option(
+        Inst::AluRRR {
+            alu_op: AluOPRRR::Bset,
+            rd: writable_a1(),
+            rs1: a0(),
+            rs2: zero_reg(),
+        },
+        "bset a1,a0,zero",
+        Some(vec![gcc_aluoprrr_march_arg(AluOPRRR::Bset)]),
+        None,
+    ));
+
+    insns.push(TestUnit::new_with_gcc_option(
+        Inst::AluRRR {
+            alu_op: AluOPRRR::Clmul,
+            rd: writable_a1(),
+            rs1: a0(),
+            rs2: zero_reg(),
+        },
+        "clmul a1,a0,zero",
+        Some(vec![gcc_aluoprrr_march_arg(AluOPRRR::Clmul)]),
+        None,
+    ));
+
+    insns.push(TestUnit::new_with_gcc_option(
+        Inst::AluRRR {
+            alu_op: AluOPRRR::Clmulh,
+            rd: writable_a1(),
+            rs1: a0(),
+            rs2: zero_reg(),
+        },
+        "clmulh a1,a0,zero",
+        Some(vec![gcc_aluoprrr_march_arg(AluOPRRR::Clmulh)]),
+        None,
+    ));
+
+    insns.push(TestUnit::new_with_gcc_option(
+        Inst::AluRRR {
+            alu_op: AluOPRRR::Clmulr,
+            rd: writable_a1(),
+            rs1: a0(),
+            rs2: zero_reg(),
+        },
+        "clmulr a1,a0,zero",
+        Some(vec![gcc_aluoprrr_march_arg(AluOPRRR::Clmulr)]),
+        None,
+    ));
+
+    insns.push(TestUnit::new_with_gcc_option(
+        Inst::AluRRR {
+            alu_op: AluOPRRR::Max,
+            rd: writable_a1(),
+            rs1: a0(),
+            rs2: zero_reg(),
+        },
+        "max a1,a0,zero",
+        Some(vec![gcc_aluoprrr_march_arg(AluOPRRR::Max)]),
+        None,
+    ));
+
+    insns.push(TestUnit::new_with_gcc_option(
+        Inst::AluRRR {
+            alu_op: AluOPRRR::Maxu,
+            rd: writable_a1(),
+            rs1: a0(),
+            rs2: zero_reg(),
+        },
+        "maxu a1,a0,zero",
+        Some(vec![gcc_aluoprrr_march_arg(AluOPRRR::Maxu)]),
+        None,
+    ));
+
+    insns.push(TestUnit::new_with_gcc_option(
+        Inst::AluRRR {
+            alu_op: AluOPRRR::Min,
+            rd: writable_a1(),
+            rs1: a0(),
+            rs2: zero_reg(),
+        },
+        "min a1,a0,zero",
+        Some(vec![gcc_aluoprrr_march_arg(AluOPRRR::Min)]),
+        None,
+    ));
+
+    insns.push(TestUnit::new_with_gcc_option(
+        Inst::AluRRR {
+            alu_op: AluOPRRR::Minu,
+            rd: writable_a1(),
+            rs1: a0(),
+            rs2: zero_reg(),
+        },
+        "minu a1,a0,zero",
+        Some(vec![gcc_aluoprrr_march_arg(AluOPRRR::Minu)]),
+        None,
+    ));
+
+    insns.push(TestUnit::new_with_gcc_option(
+        Inst::AluRRR {
+            alu_op: AluOPRRR::Orn,
+            rd: writable_a1(),
+            rs1: a0(),
+            rs2: zero_reg(),
+        },
+        "orn a1,a0,zero",
+        Some(vec![gcc_aluoprrr_march_arg(AluOPRRR::Orn)]),
+        None,
+    ));
+
+    insns.push(TestUnit::new_with_gcc_option(
+        Inst::AluRRR {
+            alu_op: AluOPRRR::Rol,
+            rd: writable_a1(),
+            rs1: a0(),
+            rs2: zero_reg(),
+        },
+        "rol a1,a0,zero",
+        Some(vec![gcc_aluoprrr_march_arg(AluOPRRR::Rol)]),
+        None,
+    ));
+
+    insns.push(TestUnit::new_with_gcc_option(
+        Inst::AluRRR {
+            alu_op: AluOPRRR::Rolw,
+            rd: writable_a1(),
+            rs1: a0(),
+            rs2: zero_reg(),
+        },
+        "rolw a1,a0,zero",
+        Some(vec![gcc_aluoprrr_march_arg(AluOPRRR::Rolw)]),
+        None,
+    ));
+    insns.push(TestUnit::new_with_gcc_option(
+        Inst::AluRRR {
+            alu_op: AluOPRRR::Ror,
+            rd: writable_a1(),
+            rs1: a0(),
+            rs2: zero_reg(),
+        },
+        "ror a1,a0,zero",
+        Some(vec![gcc_aluoprrr_march_arg(AluOPRRR::Ror)]),
+        None,
+    ));
+    insns.push(TestUnit::new_with_gcc_option(
+        Inst::AluRRR {
+            alu_op: AluOPRRR::Rorw,
+            rd: writable_a1(),
+            rs1: a0(),
+            rs2: zero_reg(),
+        },
+        "rorw a1,a0,zero",
+        Some(vec![gcc_aluoprrr_march_arg(AluOPRRR::Rorw)]),
+        None,
+    ));
+    insns.push(TestUnit::new_with_gcc_option(
+        Inst::AluRRR {
+            alu_op: AluOPRRR::Sh1add,
+            rd: writable_a1(),
+            rs1: a0(),
+            rs2: zero_reg(),
+        },
+        "sh1add a1,a0,zero",
+        Some(vec![gcc_aluoprrr_march_arg(AluOPRRR::Sh1add)]),
+        None,
+    ));
+
+    insns.push(TestUnit::new_with_gcc_option(
+        Inst::AluRRR {
+            alu_op: AluOPRRR::Sh1adduw,
+            rd: writable_a1(),
+            rs1: a0(),
+            rs2: zero_reg(),
+        },
+        "sh1add.uw a1,a0,zero",
+        Some(vec![gcc_aluoprrr_march_arg(AluOPRRR::Sh1adduw)]),
+        None,
+    ));
+    insns.push(TestUnit::new_with_gcc_option(
+        Inst::AluRRR {
+            alu_op: AluOPRRR::Sh2add,
+            rd: writable_a1(),
+            rs1: a0(),
+            rs2: zero_reg(),
+        },
+        "sh2add a1,a0,zero",
+        Some(vec![gcc_aluoprrr_march_arg(AluOPRRR::Sh2add)]),
+        None,
+    ));
+    insns.push(TestUnit::new_with_gcc_option(
+        Inst::AluRRR {
+            alu_op: AluOPRRR::Sh2adduw,
+            rd: writable_a1(),
+            rs1: a0(),
+            rs2: zero_reg(),
+        },
+        "sh2add.uw a1,a0,zero",
+        Some(vec![gcc_aluoprrr_march_arg(AluOPRRR::Sh2adduw)]),
+        None,
+    ));
+    insns.push(TestUnit::new_with_gcc_option(
+        Inst::AluRRR {
+            alu_op: AluOPRRR::Sh3add,
+            rd: writable_a1(),
+            rs1: a0(),
+            rs2: zero_reg(),
+        },
+        "sh3add a1,a0,zero",
+        Some(vec![gcc_aluoprrr_march_arg(AluOPRRR::Sh3add)]),
+        None,
+    ));
+    insns.push(TestUnit::new_with_gcc_option(
+        Inst::AluRRR {
+            alu_op: AluOPRRR::Sh3adduw,
+            rd: writable_a1(),
+            rs1: a0(),
+            rs2: zero_reg(),
+        },
+        "sh3add.uw a1,a0,zero",
+        Some(vec![gcc_aluoprrr_march_arg(AluOPRRR::Sh3adduw)]),
+        None,
+    ));
+    insns.push(TestUnit::new_with_gcc_option(
+        Inst::AluRRR {
+            alu_op: AluOPRRR::Xnor,
+            rd: writable_a1(),
+            rs1: a0(),
+            rs2: zero_reg(),
+        },
+        "xnor a1,a0,zero",
+        Some(vec![gcc_aluoprrr_march_arg(AluOPRRR::Xnor)]),
+        None,
+    ));
+
+    //
     insns.push(TestUnit::new(
         Inst::AluRRR {
             alu_op: AluOPRRR::Add,
@@ -49,15 +560,15 @@ fn test_riscv64_binemit() {
         },
         "add fp,fp,zero",
     ));
-    insns.push(TestUnit::new(
-        Inst::AluRRImm12 {
-            alu_op: AluOPRRI::Addi,
-            rd: writable_fp_reg(),
-            rs: stack_reg(),
-            imm12: Imm12::maybe_from_u64(100).unwrap(),
-        },
-        "addi fp,sp,100",
-    ));
+    // insns.push(TestUnit::new(
+    //     Inst::AluRRImm12 {
+    //         alu_op: AluOPRRI::Addi,
+    //         rd: writable_fp_reg(),
+    //         rs: stack_reg(),
+    //         imm12: Imm12::maybe_from_u64(100).unwrap(),
+    //     },
+    //     "addi fp,sp,100",
+    // ));
     insns.push(TestUnit::new(
         Inst::Lui {
             rd: writable_zero_reg(),
@@ -1459,7 +1970,7 @@ fn test_riscv64_binemit() {
             .print_with_state(&mut EmitState::default(), &mut AllocationConsumer::new(&[]));
         assert_eq!(unit.assembly, actual_printing);
         if unit.code.is_none() {
-            let code = assemble(unit.assembly);
+            let code = assemble(unit.assembly, &unit.option_for_as, &unit.option_for_dump);
             missing_code.push((index, code));
             unit.code = Some(code);
         }
@@ -1482,8 +1993,8 @@ fn test_riscv64_binemit() {
                 let my = DebugITypeIns::from_bs(buffer.data());
                 println!("gnu:{:?}", gnu);
                 println!("my :{:?}", my);
-                // println!("gnu:{:b}", gnu.funct7);
-                // println!("my :{:b}", my.funct7);
+                println!("gnu:{:b}", gnu.op_code);
+                println!("my :{:b}", my.op_code);
             }
             assert_eq!(buffer.data(), unit.code.unwrap().to_le_bytes());
         }
@@ -1521,21 +2032,30 @@ fn get_riscv_tool_chain_name() -> (String, String) {
 /*
     todo:: make this can be run on windows
 */
-fn assemble(code: &str) -> u32 {
+fn assemble(code: &str, as_option: &Option<Vec<String>>, dump_option: &Option<Vec<String>>) -> u32 {
+    let mut code = String::from(code);
+    code.push_str("\n");
     use std::process::Command;
-    let (as_name, objdump_name) = get_riscv_tool_chain_name();
     std::env::set_current_dir(std::env::temp_dir()).expect("set_current_dir {}");
+
     let file_name = "riscv_tmp.s";
     use std::io::Write;
     let mut file = std::fs::File::create(file_name).unwrap();
+
     file.write_all(code.as_bytes()).expect("write error {}");
+    file.sync_all().unwrap();
+    let (as_name, objdump_name) = get_riscv_tool_chain_name();
     let mut cmd = Command::new(as_name.as_str());
+    as_option.clone().map(|ref a| cmd.args(&a[..]));
     cmd.arg(file_name);
+
     let _output = cmd.output().expect("exec as failed , {}");
     let output_file = "a.out";
     let mut cmd = Command::new(objdump_name.as_str());
+    dump_option.clone().map(|ref a| {
+        cmd.args(&a[..]);
+    });
     cmd.arg("-d").arg(output_file);
-
     let output = cmd.output().expect("exec objdump failed , {}");
     /*
         a.out:     file format elf64-littleriscv
@@ -1587,6 +2107,69 @@ fn assemble(code: &str) -> u32 {
         }
     }
     unreachable!()
+}
+
+/*
+    need enable to support bitmanip extension.
+*/
+fn gcc_aluoprrr_march_arg(op: AluOPRRR) -> String {
+    let x = match op {
+        AluOPRRR::Adduw => "-march=rv64g_zba",
+        AluOPRRR::Andn => "-march=rv64g_zbb",
+        AluOPRRR::Bclr => "-march=rv64g_zbs",
+        AluOPRRR::Bext => "-march=rv64g_zbs",
+        AluOPRRR::Binv => "-march=rv64g_zbs",
+        AluOPRRR::Bset => "-march=rv64g_zbs",
+        AluOPRRR::Clmul => "-march=rv64g_zbc",
+        AluOPRRR::Clmulh => "-march=rv64g_zbc",
+        AluOPRRR::Clmulr => "-march=rv64g_zbc",
+        AluOPRRR::Max => "-march=rv64g_zbb",
+        AluOPRRR::Maxu => "-march=rv64g_zbb",
+        AluOPRRR::Min => "-march=rv64g_zbb",
+        AluOPRRR::Minu => "-march=rv64g_zbb",
+        AluOPRRR::Orn => "-march=rv64g_zbb",
+        AluOPRRR::Rol => "-march=rv64g_zbb",
+        AluOPRRR::Rolw => "-march=rv64g_zbb",
+        AluOPRRR::Ror => "-march=rv64g_zbb",
+        AluOPRRR::Rorw => "-march=rv64g_zbb",
+        AluOPRRR::Sh1add => "-march=rv64g_zba",
+        AluOPRRR::Sh1adduw => "-march=rv64g_zba",
+        AluOPRRR::Sh2add => "-march=rv64g_zba",
+        AluOPRRR::Sh2adduw => "-march=rv64g_zba",
+        AluOPRRR::Sh3add => "-march=rv64g_zba",
+        AluOPRRR::Sh3adduw => "-march=rv64g_zba",
+        AluOPRRR::Xnor => "-march=rv64g_zbb",
+        _ => unreachable!(),
+    };
+    x.into()
+}
+
+/*
+    need enable to support bitmanip extension.
+*/
+fn gcc_aluoprri_march_arg(op: AluOPRRI) -> String {
+    let x = match op {
+        AluOPRRI::Bclri => "-march=rv64g_zbs",
+        AluOPRRI::Bexti => "-march=rv64g_zbs",
+        AluOPRRI::Binvi => "-march=rv64g_zbs",
+        AluOPRRI::Bseti => "-march=rv64g_zbs",
+        AluOPRRI::Rori => "-march=rv64g_zbb",
+        AluOPRRI::Roriw => "-march=rv64g_zbb",
+        AluOPRRI::SlliUw => "-march=rv64g_zba",
+        AluOPRRI::Clz => "-march=rv64g_zbb",
+        AluOPRRI::Clzw => "-march=rv64g_zbb",
+        AluOPRRI::Cpop => "-march=rv64g_zbb",
+        AluOPRRI::Cpopw => "-march=rv64g_zbb",
+        AluOPRRI::Ctz => "-march=rv64g_zbb",
+        AluOPRRI::Ctzw => "-march=rv64g_zbb",
+        AluOPRRI::Rev8 => "-march=rv64g_zbb",
+        AluOPRRI::Sextb => "-march=rv64g_zbb",
+        AluOPRRI::Sexth => "-march=rv64g_zbb",
+        AluOPRRI::Zexth => "-march=rv64g_zbb",
+        AluOPRRI::Orcb => "-march=rv64g_zbb",
+        _ => unreachable!(),
+    };
+    x.into()
 }
 
 #[derive(Debug)]
@@ -1642,7 +2225,6 @@ impl DebugITypeIns {
         let a = [x[0], x[1], x[2], x[3]];
         Self::from_u32(u32::from_le_bytes(a))
     }
-
     pub(crate) fn from_u32(x: u32) -> Self {
         let op_code = x & 0b111_1111;
         let x = x >> 7;

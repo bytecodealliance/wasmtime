@@ -68,6 +68,7 @@ impl Flags {
     }
     pub fn set_v_len(&mut self, l: usize) {
         self.v_len = l;
+        crate::isa::riscv64::inst::set_x_len(l);
     }
 }
 

@@ -211,7 +211,7 @@
       (y ValueRegs))
 
     (Csr
-    (csrOP CsrOP)
+    (csr_op CsrOP)
     (rd WritableReg)
     (rs OptionReg)
     (imm OptionUimm5)
@@ -361,6 +361,8 @@
   (FcvtDW)
   (FcvtDWU)
   
+  ;; bitmapip
+  
 ))
 
 (type LoadOP (enum  
@@ -454,6 +456,33 @@
   (FltD)
   (FleD)
 
+  ;; bitmapip
+  (Adduw)
+  (Andn)
+  (Bclr)
+  (Bext)
+  (Binv)
+  (Bset)
+  (Clmul)
+  (Clmulh)
+  (Clmulr)
+  (Max)
+  (Maxu)
+  (Min)
+  (Minu)
+  (Orn)
+  (Rol)
+  (Rolw)
+  (Ror)
+  (Rorw)
+  (Sh1add)
+  (Sh1adduw)
+  (Sh2add)
+  (Sh2adduw)
+  (Sh3add)
+  (Sh3adduw)
+  (Xnor)
+
 ))
 
 
@@ -471,6 +500,24 @@
   (Slliw)
   (SrliW)
   (Sraiw)
+  (Bclri)
+  (Bexti)
+  (Binvi)
+  (Bseti)
+  (Rori)
+  (Roriw)
+  (SlliUw)
+  (Clz)
+  (Clzw)
+  (Cpop)
+  (Cpopw)
+  (Ctz)
+  (Ctzw)
+  (Rev8)
+  (Sextb)
+  (Sexth)
+  (Zexth)
+  (Orcb)
 ))
 
 ;; The 2-bit floating-point format field fmt is encoded as shown in Table 8.3. It is set to S (00) for all

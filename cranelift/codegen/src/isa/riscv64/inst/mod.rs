@@ -910,7 +910,7 @@ impl Inst {
                 format!("{} {},{}", alu_op.op_name(), rd, rs,)
             }
             &Inst::Csr {
-                csrOP,
+                csr_op,
                 rd,
                 rs,
                 imm,
@@ -918,10 +918,10 @@ impl Inst {
             } => {
                 let rs = rs.map_or("".into(), |r| format_reg(r, allocs));
                 let rd = format_reg(rd.to_reg(), allocs);
-                if csrOP.need_rs() {
-                    format!("{} {},{},{}", csrOP.op_name(), rd, csr, rs)
+                if csr_op.need_rs() {
+                    format!("{} {},{},{}", csr_op.op_name(), rd, csr, rs)
                 } else {
-                    format!("{} {},{},{}", csrOP.op_name(), rd, csr, imm.unwrap())
+                    format!("{} {},{},{}", csr_op.op_name(), rd, csr, imm.unwrap())
                 }
             }
 
@@ -946,7 +946,16 @@ impl Inst {
             } => {
                 let rs = format_reg(rs, allocs);
                 let rd = format_reg(rd.to_reg(), allocs);
-                format!("{} {},{},{}", alu_op.op_name(), rd, rs, imm12.as_i16())
+                if alu_op.is_bit_manip() {
+                    if let Some(shamt) = alu_op.need_shamt() {
+                        let shamt = (imm12.as_i16() as u8) & AluOPRRI::shamt_mask(shamt);
+                        format!("{} {},{},{}", alu_op.op_name(), rd, rs, shamt)
+                    } else {
+                        format!("{} {},{}", alu_op.op_name(), rd, rs)
+                    }
+                } else {
+                    format!("{} {},{},{}", alu_op.op_name(), rd, rs, imm12.as_i16())
+                }
             }
             &Inst::Load {
                 rd,
