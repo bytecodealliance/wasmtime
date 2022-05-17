@@ -628,7 +628,7 @@
 ;; z15 version using a single instruction (NOR).
 (rule (lower (has_type (and (mie2_enabled) (fits_in_64 ty)) (bnot x)))
       (let ((rx Reg x))
-        (or_not_reg ty rx rx)))
+        (not_or_reg ty rx rx)))
 
 ;; z14 version using XOR with -1.
 (rule (lower (has_type (and (mie2_disabled) (fits_in_64 ty)) (bnot x)))
@@ -708,7 +708,7 @@
 
 ;; z14 version using XOR with -1.
 (rule (lower (has_type (and (mie2_disabled) (fits_in_64 ty)) (band_not x y)))
-      (not_reg ty (and_reg ty x y)))
+      (and_reg ty x (not_reg ty y)))
 
 
 ;;;; Rules for `bor_not` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -719,14 +719,14 @@
 
 ;; z14 version using XOR with -1.
 (rule (lower (has_type (and (mie2_disabled) (fits_in_64 ty)) (bor_not x y)))
-      (not_reg ty (or_reg ty x y)))
+      (or_reg ty x (not_reg ty y)))
 
 
 ;;;; Rules for `bxor_not` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; z15 version using a single instruction.
 (rule (lower (has_type (and (mie2_enabled) (fits_in_64 ty)) (bxor_not x y)))
-      (xor_not_reg ty x y))
+      (not_xor_reg ty x y))
 
 ;; z14 version using XOR with -1.
 (rule (lower (has_type (and (mie2_disabled) (fits_in_64 ty)) (bxor_not x y)))
@@ -746,7 +746,7 @@
 (rule (lower (has_type (and (mie2_disabled) (fits_in_64 ty)) (bitselect x y z)))
       (let ((rx Reg x)
             (if_true Reg (and_reg ty y rx))
-            (if_false Reg (not_reg ty (and_reg ty z rx))))
+            (if_false Reg (and_reg ty z (not_reg ty rx))))
         (or_reg ty if_false if_true)))
 
 
@@ -1599,10 +1599,10 @@
 ;; simply byte-swap the source operand.
 (rule (atomic_rmw_body ib (and (mie2_enabled) (ty_32_or_64 ty)) (bigendian)
                        (AtomicRmwOp.Nand) tmp val src)
-      (push_alu_reg ib (aluop_and_not ty) tmp val src))
+      (push_alu_reg ib (aluop_not_and ty) tmp val src))
 (rule (atomic_rmw_body ib (and (mie2_enabled) (ty_32_or_64 ty)) (littleendian)
                        (AtomicRmwOp.Nand) tmp val src)
-      (push_alu_reg ib (aluop_and_not ty) tmp val (bswap_reg ty src)))
+      (push_alu_reg ib (aluop_not_and ty) tmp val (bswap_reg ty src)))
 (rule (atomic_rmw_body ib (and (mie2_disabled) (ty_32_or_64 ty)) (bigendian)
                        (AtomicRmwOp.Nand) tmp val src)
       (push_not_reg ib ty tmp

@@ -1809,6 +1809,9 @@
 
 ;; Helpers for generating `and` instructions.
 
+(decl and_reg (Type Reg Reg) Reg)
+(rule (and_reg ty x y) (alu_rrr (ALUOp.And) ty x y))
+
 (decl and_imm (Type Reg ImmLogic) Reg)
 (rule (and_imm ty x y) (alu_rr_imm_logic (ALUOp.And) ty x y))
 
@@ -1820,6 +1823,10 @@
 (rule (eor_vec x y size) (vec_rrr (VecALUOp.Eor) x y size))
 
 ;; Helpers for generating `bic` instructions.
+
+(decl bic (Type Reg Reg) Reg)
+(rule (bic ty x y) (alu_rrr (ALUOp.AndNot) ty x y))
+
 (decl bic_vec (Reg Reg VectorSize) Reg)
 (rule (bic_vec x y size) (vec_rrr (VecALUOp.Bic) x y size))
 
@@ -1863,6 +1870,15 @@
 
 (decl vec_cnt (Reg VectorSize) Reg)
 (rule (vec_cnt x size) (vec_misc (VecMisc2.Cnt) x size))
+
+;; Helpers for generating a `bsl` instruction.
+
+(decl bsl (Type Reg Reg Reg) Reg)
+(rule (bsl ty c x y)
+      (let ((dst WritableReg (temp_writable_reg ty))
+            (_1 Unit (emit (MInst.FpuMove128 dst c)))
+            (_2 Unit (emit (MInst.VecRRR (VecALUOp.Bsl) dst x y (vector_size ty)))))
+        dst))
 
 ;; Immediate value helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

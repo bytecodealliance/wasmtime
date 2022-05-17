@@ -420,55 +420,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             }
         }
 
-        Opcode::Bitselect | Opcode::Vselect => {
-            let ty = ty.unwrap();
-            if !ty.is_vector() {
-                debug_assert_ne!(Opcode::Vselect, op);
-                let tmp = ctx.alloc_tmp(I64).only_reg().unwrap();
-                let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-                let rcond = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-                let rn = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
-                let rm = put_input_in_reg(ctx, inputs[2], NarrowValueMode::None);
-                // AND rTmp, rn, rcond
-                ctx.emit(Inst::AluRRR {
-                    alu_op: ALUOp::And,
-                    size: OperandSize::Size64,
-                    rd: tmp,
-                    rn,
-                    rm: rcond,
-                });
-                // BIC rd, rm, rcond
-                ctx.emit(Inst::AluRRR {
-                    alu_op: ALUOp::AndNot,
-                    size: OperandSize::Size64,
-                    rd,
-                    rn: rm,
-                    rm: rcond,
-                });
-                // ORR rd, rd, rTmp
-                ctx.emit(Inst::AluRRR {
-                    alu_op: ALUOp::Orr,
-                    size: OperandSize::Size64,
-                    rd,
-                    rn: rd.to_reg(),
-                    rm: tmp.to_reg(),
-                });
-            } else {
-                let rcond = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-                let rn = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
-                let rm = put_input_in_reg(ctx, inputs[2], NarrowValueMode::None);
-                let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-                ctx.emit(Inst::gen_move(rd, rcond, ty));
-
-                ctx.emit(Inst::VecRRR {
-                    alu_op: VecALUOp::Bsl,
-                    rd,
-                    rn,
-                    rm,
-                    size: VectorSize::from_ty(ty),
-                });
-            }
-        }
+        Opcode::Bitselect | Opcode::Vselect => implemented_in_isle(ctx),
 
         Opcode::Trueif => {
             let condcode = ctx.data(insn).cond_code().unwrap();

@@ -250,6 +250,15 @@ macro_rules! isle_prelude_methods {
         }
 
         #[inline]
+        fn ty_int_bool_ref_scalar_64(&mut self, ty: Type) -> Option<Type> {
+            if ty.bits() <= 64 && !ty.is_float() && !ty.is_vector() {
+                Some(ty)
+            } else {
+                None
+            }
+        }
+
+        #[inline]
         fn ty_32_or_64(&mut self, ty: Type) -> Option<Type> {
             if ty.bits() == 32 || ty.bits() == 64 {
                 Some(ty)

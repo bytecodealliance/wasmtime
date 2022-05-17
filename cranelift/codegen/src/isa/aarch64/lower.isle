@@ -1142,7 +1142,22 @@
 (rule (lower (has_type $I8X16 (popcnt x)))
       (vec_cnt x (VectorSize.Size8x16)))
 
-;;;; Rules for `fcmp` 32 bit ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Rules for `bitselect` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type (ty_int_bool_ref_scalar_64 ty) (bitselect c x y)))
+      (let ((tmp1 Reg (and_reg ty x c))
+            (tmp2 Reg (bic ty y c)))
+        (orr ty tmp1 tmp2)))
+
+(rule (lower (has_type (ty_vec128 ty) (bitselect c x y)))
+        (bsl ty c x y))
+
+;;;; Rules for `vselect` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type (ty_vec128 ty) (vselect c x y)))
+        (bsl ty c x y))
+
+;;;; Rules for `fcmp` 32 bit ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type ty @ (multi_lane _ _) (fcmp (fcmp_zero_cond_not_eq cond) x (splat (f32const (zero_value_f32 y))))))
       (let ((rn Reg x)

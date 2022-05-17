@@ -202,6 +202,7 @@ pub struct StoreInner<T> {
 
     limiter: Option<ResourceLimiterInner<T>>,
     call_hook: Option<CallHookInner<T>>,
+    epoch_deadline_behavior: EpochDeadline<T>,
     // for comments about `ManuallyDrop`, see `Store::into_data`
     data: ManuallyDrop<T>,
 }
@@ -296,7 +297,6 @@ pub struct StoreOpaque {
     #[cfg(feature = "async")]
     async_state: AsyncState,
     out_of_gas_behavior: OutOfGas,
-    epoch_deadline_behavior: EpochDeadline,
     /// Indexed data within this `Store`, used to store information about
     /// globals, functions, memories, etc.
     ///
@@ -426,10 +426,11 @@ enum OutOfGas {
 
 /// What to do when the engine epoch reaches the deadline for a Store
 /// during execution of a function using that store.
-#[derive(Copy, Clone)]
-enum EpochDeadline {
+enum EpochDeadline<T> {
     /// Return early with a trap.
     Trap,
+    /// Call a custom deadline handler.
+    Callback(Box<dyn FnMut(&mut T) -> Result<u64> + Send + Sync>),
     /// Extend the deadline by the specified number of ticks after
     /// yielding to the async executor loop.
     #[cfg(feature = "async")]
@@ -491,7 +492,6 @@ impl<T> Store<T> {
                     current_poll_cx: UnsafeCell::new(ptr::null_mut()),
                 },
                 out_of_gas_behavior: OutOfGas::Trap,
-                epoch_deadline_behavior: EpochDeadline::Trap,
                 store_data: ManuallyDrop::new(StoreData::new()),
                 default_callee,
                 hostcall_val_storage: Vec::new(),
@@ -500,6 +500,7 @@ impl<T> Store<T> {
             },
             limiter: None,
             call_hook: None,
+            epoch_deadline_behavior: EpochDeadline::Trap,
             data: ManuallyDrop::new(data),
         });
 
@@ -842,7 +843,8 @@ impl<T> Store<T> {
     ///
     /// This behavior is the default if the store is not otherwise
     /// configured via
-    /// [`epoch_deadline_trap()`](Store::epoch_deadline_trap) or
+    /// [`epoch_deadline_trap()`](Store::epoch_deadline_trap),
+    /// [`epoch_deadline_callback()`](Store::epoch_deadline_callback) or
     /// [`epoch_deadline_async_yield_and_update()`](Store::epoch_deadline_async_yield_and_update).
     ///
     /// This setting is intended to allow for coarse-grained
@@ -855,6 +857,33 @@ impl<T> Store<T> {
     /// for an introduction to epoch-based interruption.
     pub fn epoch_deadline_trap(&mut self) {
         self.inner.epoch_deadline_trap();
+    }
+
+    /// Configures epoch-deadline expiration to invoke a custom callback
+    /// function.
+    ///
+    /// When epoch-interruption-instrumented code is executed on this
+    /// store and the epoch deadline is reached before completion, the
+    /// provided callback function is invoked.
+    ///
+    /// This function should return a positive `delta`, which is used to
+    /// update the new epoch, setting it to the current epoch plus
+    /// `delta` ticks. Alternatively, the callback may return an error,
+    /// which will terminate execution.
+    ///
+    /// This setting is intended to allow for coarse-grained
+    /// interruption, but not a deterministic deadline of a fixed,
+    /// finite interval. For deterministic interruption, see the
+    /// "fuel" mechanism instead.
+    ///
+    /// See documentation on
+    /// [`Config::epoch_interruption()`](crate::Config::epoch_interruption)
+    /// for an introduction to epoch-based interruption.
+    pub fn epoch_deadline_callback(
+        &mut self,
+        callback: impl FnMut(&mut T) -> Result<u64> + Send + Sync + 'static,
+    ) {
+        self.inner.epoch_deadline_callback(Box::new(callback));
     }
 
     #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
@@ -1351,22 +1380,6 @@ impl StoreOpaque {
         }
     }
 
-    fn epoch_deadline_trap(&mut self) {
-        self.epoch_deadline_behavior = EpochDeadline::Trap;
-    }
-
-    fn epoch_deadline_async_yield_and_update(&mut self, delta: u64) {
-        assert!(
-            self.async_support(),
-            "cannot use `epoch_deadline_async_yield_and_update` without enabling async support in the config"
-        );
-        #[cfg(feature = "async")]
-        {
-            self.epoch_deadline_behavior = EpochDeadline::YieldAndExtendDeadline { delta };
-        }
-        drop(delta); // suppress warning in non-async build
-    }
-
     #[inline]
     pub fn signal_handler(&self) -> Option<*const SignalHandler<'static>> {
         let handler = self.signal_handler.as_ref()?;
@@ -1855,8 +1868,8 @@ unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
     }
 
     fn new_epoch(&mut self) -> Result<u64, anyhow::Error> {
-        return match &self.epoch_deadline_behavior {
-            &EpochDeadline::Trap => {
+        return match &mut self.epoch_deadline_behavior {
+            EpochDeadline::Trap => {
                 let trap = Trap::new_wasm(
                     None,
                     wasmtime_environ::TrapCode::Interrupt,
@@ -1864,8 +1877,16 @@ unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
                 );
                 Err(anyhow::Error::from(trap))
             }
+            EpochDeadline::Callback(callback) => {
+                let delta = callback(&mut self.data)?;
+                // Set a new deadline and return the new epoch deadline so
+                // the Wasm code doesn't have to reload it.
+                self.set_epoch_deadline(delta);
+                Ok(self.get_epoch_deadline())
+            }
             #[cfg(feature = "async")]
-            &EpochDeadline::YieldAndExtendDeadline { delta } => {
+            EpochDeadline::YieldAndExtendDeadline { delta } => {
+                let delta = *delta;
                 // Do the async yield. May return a trap if future was
                 // canceled while we're yielded.
                 self.async_yield_impl()?;
@@ -1893,6 +1914,29 @@ impl<T> StoreInner<T> {
         // return into it.
         let epoch_deadline = unsafe { (*self.vmruntime_limits()).epoch_deadline.get_mut() };
         *epoch_deadline = self.engine().current_epoch() + delta;
+    }
+
+    fn epoch_deadline_trap(&mut self) {
+        self.epoch_deadline_behavior = EpochDeadline::Trap;
+    }
+
+    fn epoch_deadline_callback(
+        &mut self,
+        callback: Box<dyn FnMut(&mut T) -> Result<u64> + Send + Sync>,
+    ) {
+        self.epoch_deadline_behavior = EpochDeadline::Callback(callback);
+    }
+
+    fn epoch_deadline_async_yield_and_update(&mut self, delta: u64) {
+        assert!(
+            self.async_support(),
+            "cannot use `epoch_deadline_async_yield_and_update` without enabling async support in the config"
+        );
+        #[cfg(feature = "async")]
+        {
+            self.epoch_deadline_behavior = EpochDeadline::YieldAndExtendDeadline { delta };
+        }
+        drop(delta); // suppress warning in non-async build
     }
 
     fn get_epoch_deadline(&self) -> u64 {
