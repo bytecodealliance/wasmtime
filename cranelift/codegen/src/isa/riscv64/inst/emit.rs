@@ -798,147 +798,55 @@ impl MachInstEmit for Inst {
                 from_bits,
                 to_bits,
             } => {
+                /*
+                    is bool type need extend???
+                */
+                assert!(from_bits != 1);
                 let rn = allocs.next(rn);
                 let rd = allocs.next_writable(rd);
-                /*
-                    notice!!!!!!!!
-                    bool is consider signed..
-                    bug risc will extend the value to 64bit
-                    use shift to implemented.
-
-                */
                 let mut insts = SmallInstVec::new();
                 if signed {
-                    //
-                    let sign_bit: u64 = 1 << (from_bits - 1);
-                    insts.extend(Inst::load_constant_u64(rd, sign_bit));
-                    // make sign bit
-                    insts.push(Inst::AluRRR {
-                        alu_op: AluOPRRR::And,
-                        rd,
-                        rs1: rn,
-                        rs2: rd.to_reg(),
-                    });
-                    // test the sign bit
-                    let mut patch_extend_zero = vec![];
-                    patch_extend_zero.push(insts.len());
-                    insts.push(Inst::CondBr {
-                        taken: BranchTarget::zero(),
-                        not_taken: BranchTarget::zero(), //
-                        kind: IntegerCompare {
-                            kind: IntCC::Equal, // signed bit is zero
-                            rs1: zero_reg(),
-                            rs2: rd.to_reg(),
-                        },
-                    });
-                    /*
-                        if extend from b1 -> b8
-                        rd will be   0b...1111_1110;
-                    */
-                    fn make_singed_extends_bits(
-                        rd: Writable<Reg>,
-                        to_bits: u8,
-                        from_bits: u8,
-                    ) -> SmallInstVec<Inst> {
-                        let mut insts = SmallInstVec::new();
-                        insts.push(Inst::load_constant_imm12(rd, Imm12::from_bits(-1)));
-                        /*
-                            shift out lower bits
-                        */
-                        insts.push(Inst::AluRRImm12 {
-                            alu_op: AluOPRRI::Srli,
-                            rd: rd,
-                            rs: rd.to_reg(),
-                            imm12: Imm12::from_bits(to_bits as i16),
-                        });
-                        insts.push(Inst::AluRRImm12 {
-                            alu_op: AluOPRRI::Slli,
-                            rd: rd,
-                            rs: rd.to_reg(),
-                            imm12: Imm12::from_bits(to_bits as i16),
-                        });
-                        /*
-                            try shift out high bits
-                        */
-                        let need_shift_high = if 64 > to_bits {
-                            Some((64 - to_bits) as i16)
-                        } else {
-                            None
-                        };
-                        if let Some(shift) = need_shift_high {
+                    match from_bits {
+                        8 => {
+                            let op = AluOPRRI::Sextb;
+                            let imm12 = op.funct12(None);
                             insts.push(Inst::AluRRImm12 {
-                                alu_op: AluOPRRI::Slli,
-                                rd: rd,
-                                rs: rd.to_reg(),
-                                imm12: Imm12::from_bits(shift),
-                            });
-                            insts.push(Inst::AluRRImm12 {
-                                alu_op: AluOPRRI::Srli,
-                                rd: rd,
-                                rs: rd.to_reg(),
-                                imm12: Imm12::from_bits(shift),
+                                alu_op: op,
+                                rd,
+                                rs: rn,
+                                imm12,
                             });
                         }
-                        insts
+
+                        16 => {
+                            let op = AluOPRRI::Sexth;
+                            let imm12 = op.funct12(None);
+                            insts.push(Inst::AluRRImm12 {
+                                alu_op: op,
+                                rd,
+                                rs: rn,
+                                imm12,
+                            });
+                        }
+                        32 => {
+                            // 32 bit int to 64 bit value
+                            todo!();
+                        }
+                        _ => unreachable!(),
                     }
-                    insts.extend(make_singed_extends_bits(rd, to_bits, from_bits));
-                    insts.push(Inst::AluRRR {
-                        alu_op: AluOPRRR::Or,
-                        rd,
-                        rs1: rn,
-                        rs2: rd.to_reg(),
-                    });
-                    let mut patch_jump_over = vec![];
-                    patch_jump_over.push(insts.len());
-                    insts.push(Inst::Jal {
-                        rd: writable_zero_reg(),
-                        dest: BranchTarget::zero(),
-                    });
-
-                    Inst::patch_taken_list(&mut insts, &patch_extend_zero);
-                    // signed bit is zero
-                    insts.push(Inst::load_constant_imm12(rd, Imm12::from_bits(-1)));
-                    insts.push(Inst::AluRRImm12 {
-                        alu_op: AluOPRRI::Slli,
-                        rd,
-                        rs: rd.to_reg(),
-                        imm12: Imm12::from_bits((64 - to_bits) as i16),
-                    });
-                    insts.push(Inst::AluRRImm12 {
-                        alu_op: AluOPRRI::Srli,
-                        rd,
-                        rs: rd.to_reg(),
-                        imm12: Imm12::from_bits((64 - to_bits) as i16),
-                    });
-                    insts.push(Inst::AluRRR {
-                        alu_op: AluOPRRR::And,
-                        rd,
-                        rs1: rn,
-                        rs2: rd.to_reg(),
-                    });
-
-                    Inst::patch_taken_list(&mut insts, &patch_jump_over);
                 } else {
-                    insts.push(Inst::load_constant_imm12(rd, Imm12::from_bits(-1)));
+                    let shift_bits = (64 - from_bits) as i16;
                     insts.push(Inst::AluRRImm12 {
                         alu_op: AluOPRRI::Slli,
                         rd,
-                        rs: rd.to_reg(),
-                        imm12: Imm12::from_bits((64 - to_bits) as i16),
+                        rs: rn,
+                        imm12: Imm12::from_bits(shift_bits),
                     });
                     insts.push(Inst::AluRRImm12 {
                         alu_op: AluOPRRI::Srli,
                         rd,
                         rs: rd.to_reg(),
-                        imm12: Imm12::from_bits((64 - to_bits) as i16),
-                    });
-                    // load
-                    // set all upper bit to zero
-                    insts.push(Inst::AluRRR {
-                        alu_op: AluOPRRR::And,
-                        rd,
-                        rs1: rd.to_reg(),
-                        rs2: rn,
+                        imm12: Imm12::from_bits(shift_bits),
                     });
                 }
                 insts
@@ -1828,7 +1736,7 @@ impl MachInstEmit for Inst {
                 sink.bind_label(label_done);
             }
             &Inst::Csr {
-                csrOP,
+                csr_op,
                 rd,
                 rs,
                 imm,
@@ -1836,10 +1744,10 @@ impl MachInstEmit for Inst {
             } => {
                 let rs = rs.map(|r| allocs.next(r));
                 let rd = allocs.next_writable(rd);
-                let x = csrOP.op_code()
+                let x = csr_op.op_code()
                     | reg_to_gpr_num(rd.to_reg()) << 7
-                    | csrOP.funct3() << 12
-                    | csrOP.rs1(rs, imm) << 15
+                    | csr_op.funct3() << 12
+                    | csr_op.rs1(rs, imm) << 15
                     | csr.as_u32() << 20;
 
                 sink.put4(x);

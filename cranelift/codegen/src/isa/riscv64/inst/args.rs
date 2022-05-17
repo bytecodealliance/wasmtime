@@ -430,7 +430,7 @@ impl AluOPRR {
 }
 
 impl AluOPRRR {
-    pub(crate) fn op_name(self) -> &'static str {
+    pub(crate) const fn op_name(self) -> &'static str {
         match self {
             Self::Add => "add",
             Self::Sub => "sub",
@@ -484,6 +484,31 @@ impl AluOPRRR {
             Self::FeqD => "feq.d",
             Self::FltD => "flt.d",
             Self::FleD => "fle.d",
+            Self::Adduw => "add.uw",
+            Self::Andn => "andn",
+            Self::Bclr => "bclr",
+            Self::Bext => "bext",
+            Self::Binv => "binv",
+            Self::Bset => "bset",
+            Self::Clmul => "clmul",
+            Self::Clmulh => "clmulh",
+            Self::Clmulr => "clmulr",
+            Self::Max => "max",
+            Self::Maxu => "maxu",
+            Self::Min => "min",
+            Self::Minu => "minu",
+            Self::Orn => "orn",
+            Self::Rol => "rol",
+            Self::Rolw => "rolw",
+            Self::Ror => "ror",
+            Self::Rorw => "rorw",
+            Self::Sh1add => "sh1add",
+            Self::Sh1adduw => "sh1add.uw",
+            Self::Sh2add => "sh2add",
+            Self::Sh2adduw => "sh2add.uw",
+            Self::Sh3add => "sh3add",
+            Self::Sh3adduw => "sh3add.uw",
+            Self::Xnor => "xnor",
         }
     }
 
@@ -549,6 +574,31 @@ impl AluOPRRR {
             AluOPRRR::FeqD => 0b010,
             AluOPRRR::FltD => 0b001,
             AluOPRRR::FleD => 0b000,
+            AluOPRRR::Adduw => 0b000,
+            AluOPRRR::Andn => 0b111,
+            AluOPRRR::Bclr => 0b001,
+            AluOPRRR::Bext => 0b101,
+            AluOPRRR::Binv => 0b001,
+            AluOPRRR::Bset => 0b001,
+            AluOPRRR::Clmul => 0b001,
+            AluOPRRR::Clmulh => 0b011,
+            AluOPRRR::Clmulr => 0b010,
+            AluOPRRR::Max => 0b110,
+            AluOPRRR::Maxu => 0b111,
+            AluOPRRR::Min => 0b100,
+            AluOPRRR::Minu => 0b101,
+            AluOPRRR::Orn => 0b110,
+            AluOPRRR::Rol => 0b001,
+            AluOPRRR::Rolw => 0b001,
+            AluOPRRR::Ror => 0b101,
+            AluOPRRR::Rorw => 0b101,
+            AluOPRRR::Sh1add => 0b010,
+            AluOPRRR::Sh1adduw => 0b010,
+            AluOPRRR::Sh2add => 0b100,
+            AluOPRRR::Sh2adduw => 0b100,
+            AluOPRRR::Sh3add => 0b110,
+            AluOPRRR::Sh3adduw => 0b110,
+            AluOPRRR::Xnor => 0b100,
         }
     }
 
@@ -609,10 +659,36 @@ impl AluOPRRR {
             | AluOPRRR::FeqD
             | AluOPRRR::FltD
             | AluOPRRR::FleD => 0b1010011,
+
+            AluOPRRR::Adduw => 0b0111011,
+            AluOPRRR::Andn
+            | AluOPRRR::Bclr
+            | AluOPRRR::Bext
+            | AluOPRRR::Binv
+            | AluOPRRR::Bset
+            | AluOPRRR::Clmul
+            | AluOPRRR::Clmulh
+            | AluOPRRR::Clmulr
+            | AluOPRRR::Max
+            | AluOPRRR::Maxu
+            | AluOPRRR::Min
+            | AluOPRRR::Minu
+            | AluOPRRR::Orn
+            | AluOPRRR::Rol
+            | AluOPRRR::Rolw
+            | AluOPRRR::Ror
+            | AluOPRRR::Rorw
+            | AluOPRRR::Sh1add
+            | AluOPRRR::Sh1adduw
+            | AluOPRRR::Sh2add
+            | AluOPRRR::Sh2adduw
+            | AluOPRRR::Sh3add
+            | AluOPRRR::Sh3adduw
+            | AluOPRRR::Xnor => 0b0110011,
         }
     }
 
-    pub fn funct7(self) -> u32 {
+    pub const fn funct7(self) -> u32 {
         match self {
             AluOPRRR::Add => 0b0000000,
             AluOPRRR::Sub => 0b0100000,
@@ -672,6 +748,31 @@ impl AluOPRRR {
             AluOPRRR::FeqD => 0b1010001,
             AluOPRRR::FltD => 0b1010001,
             AluOPRRR::FleD => 0b1010001,
+            AluOPRRR::Adduw => 0b0010000,
+            AluOPRRR::Andn => 0b0000010,
+            AluOPRRR::Bclr => 0b0010010,
+            AluOPRRR::Bext => 0b0010010,
+            AluOPRRR::Binv => 0b0010110,
+            AluOPRRR::Bset => 0b0010100,
+            AluOPRRR::Clmul => 0b1010000,
+            AluOPRRR::Clmulh => 0b1010000,
+            AluOPRRR::Clmulr => 0b1010000,
+            AluOPRRR::Max => 0b1010000,
+            AluOPRRR::Maxu => 0b1010000,
+            AluOPRRR::Min => 0b1010000,
+            AluOPRRR::Minu => 0b1010000,
+            AluOPRRR::Orn => 0b0000010,
+            AluOPRRR::Rol => 0b0000110,
+            AluOPRRR::Rolw => 0b0000110,
+            AluOPRRR::Ror => 0b0000110,
+            AluOPRRR::Rorw => 0b0000110,
+            AluOPRRR::Sh1add => 0b0000100,
+            AluOPRRR::Sh1adduw => 0b0000100,
+            AluOPRRR::Sh2add => 0b0000100,
+            AluOPRRR::Sh2adduw => 0b0000100,
+            AluOPRRR::Sh3add => 0b0000100,
+            AluOPRRR::Sh3adduw => 0b0000100,
+            AluOPRRR::Xnor => 0b0000010,
         }
     }
 }
@@ -715,6 +816,24 @@ impl AluOPRRI {
             Self::Slliw => "slliw",
             Self::SrliW => "srliw",
             Self::Sraiw => "sraiw",
+            Self::Bclri => "bclri",
+            Self::Bexti => "bexti",
+            Self::Binvi => "binvi",
+            Self::Bseti => "bseti",
+            Self::Rori => "rori",
+            Self::Roriw => "roriw",
+            Self::SlliUw => "slliUw",
+            Self::Clz => "clz",
+            Self::Clzw => "clzw",
+            Self::Cpop => "cpop",
+            Self::Cpopw => "cpopw",
+            Self::Ctz => "ctz",
+            Self::Ctzw => "ctzw",
+            Self::Rev8 => "rev8",
+            Self::Sextb => "sextb",
+            Self::Sexth => "sexth",
+            Self::Zexth => "zexth",
+            Self::Orcb => "orc.b",
         }
     }
 
@@ -733,6 +852,25 @@ impl AluOPRRI {
             AluOPRRI::Slliw => 0b001,
             AluOPRRI::SrliW => 0b101,
             AluOPRRI::Sraiw => 0b101,
+            AluOPRRI::Bclri => 0b100,
+            AluOPRRI::Bexti => 0b101,
+            AluOPRRI::Binvi => 0b001,
+            AluOPRRI::Bseti => 0b001,
+
+            AluOPRRI::Rori => 0b101,
+            AluOPRRI::Roriw => 0b101,
+            AluOPRRI::SlliUw => 0b001,
+            AluOPRRI::Clz => 0b001,
+            AluOPRRI::Clzw => 0b001,
+            AluOPRRI::Cpop => 0b001,
+            AluOPRRI::Cpopw => 0b001,
+            AluOPRRI::Ctz => 0b001,
+            AluOPRRI::Ctzw => 0b001,
+            AluOPRRI::Rev8 => 0b101,
+            AluOPRRI::Sextb => 0b001,
+            AluOPRRI::Sexth => 0b001,
+            AluOPRRI::Zexth => 0b100,
+            AluOPRRI::Orcb => 0b101,
         }
     }
 
@@ -746,9 +884,54 @@ impl AluOPRRI {
             | AluOPRRI::Andi
             | AluOPRRI::Slli
             | AluOPRRI::Srli
-            | AluOPRRI::Srai => 0b0010011,
+            | AluOPRRI::Srai
+            | AluOPRRI::Bclri
+            | AluOPRRI::Bexti
+            | AluOPRRI::Binvi
+            | AluOPRRI::Bseti
+            | AluOPRRI::Rori
+            | AluOPRRI::Roriw
+            | AluOPRRI::SlliUw
+            | AluOPRRI::Clz
+            | AluOPRRI::Clzw
+            | AluOPRRI::Cpop
+            | AluOPRRI::Cpopw
+            | AluOPRRI::Ctz
+            | AluOPRRI::Ctzw
+            | AluOPRRI::Rev8
+            | AluOPRRI::Sextb
+            | AluOPRRI::Sexth
+            | AluOPRRI::Zexth
+            | AluOPRRI::Orcb => 0b0010011,
             AluOPRRI::Addiw | AluOPRRI::Slliw | AluOPRRI::SrliW | AluOPRRI::Sraiw => 0b0011011,
         }
+    }
+    /*
+        some instruction use imm12 for function code.
+    */
+    pub(crate) fn funct12(self, shamt: Option<u8>) -> Imm12 {
+        let shamt = shamt.map(|s| s as u32);
+        let bits: u32 = match self {
+            Self::Bclri => shamt.unwrap() | 0b010010 << 6,
+            Self::Bexti => shamt.unwrap() | 0b010010 << 6,
+            Self::Binvi => shamt.unwrap() | 0b010110 << 6,
+            Self::Bseti => shamt.unwrap() | 0b010100 << 6,
+            Self::Rori => shamt.unwrap() | 0b000110 << 6,
+            Self::Roriw => shamt.unwrap() | 0b000110 << 5,
+            Self::SlliUw => shamt.unwrap() | 0b010000 << 6,
+            Self::Clz => 0b000011000000,
+            Self::Clzw => 0b000011000000,
+            Self::Cpop => 0b000011001000,
+            Self::Cpopw => 0b000011001000,
+            Self::Ctz => 0b000011010000,
+            Self::Ctzw => 0b000011010000,
+            Self::Rev8 => 0b000110010110,
+            Self::Sextb => 0b000011000100,
+            Self::Sexth => 0b000011010100,
+            Self::Zexth => 0b001000000000,
+            _ => unreachable!(),
+        };
+        Imm12::from_bits(bits as i16)
     }
 }
 
@@ -882,15 +1065,6 @@ impl StoreOP {
 }
 
 impl FloatFlagOp {
-    // give me the option reg
-    // pub(crate) fn rs1(self, reg: OptionReg) -> u32 {
-    //     // current all zero
-    //     if let Some(r) = reg {
-    //         r.to_real_reg().unwrap().hw_enc() as u32
-    //     } else {
-    //         0
-    //     }
-    // }
     pub(crate) fn funct3(self) -> u32 {
         match self {
             FloatFlagOp::Frcsr => 0b010,
@@ -1511,11 +1685,20 @@ static mut V_LEN: usize = 0;
 /*
     V_LEN is not contant accroding to riscv document.
 
-
-
     Each hart supporting a vector extension de nes two parameters: 1. The maximum size in bits of a vector element that any operation can produce or consume, ELEN ≥ 8, which must be a power of 2. 2. The number of bits in a single vector register, VLEN ≥ ELEN, which must be a power of 2, and must be no greater than 216. Standard vector extensions (Section Standard Vector Extensions) and architecture pro les may set further constraints on ELEN and VLEN.
-*/
 
+    it is ugly, but I need this global var to pass the paramter.
+
+*/
+#[inline]
 pub(crate) fn set_x_len(l: usize) {
     unsafe { V_LEN = l };
+}
+
+#[inline]
+pub(crate) fn get_x_len() -> usize {
+    if unsafe { V_LEN } == 0 {
+        panic!("V_LEN is not set.")
+    }
+    unsafe { V_LEN }
 }

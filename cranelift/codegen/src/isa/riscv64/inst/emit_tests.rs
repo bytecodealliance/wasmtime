@@ -7,16 +7,19 @@ use alloc::vec::Vec;
     bne beq
 
 */
+
 /*
     todo:: more instruction
-    todo:: risc  tool chain jump is wired.............
 */
+
 #[test]
 fn test_riscv64_binemit() {
     struct TestUnit {
         inst: Inst,
         assembly: &'static str,
         code: Option<u32>,
+        option_for_as: Option<&'static [&'static str]>,
+        option_for_dump: Option<&'static [&'static str]>,
     }
 
     impl TestUnit {
@@ -25,6 +28,22 @@ fn test_riscv64_binemit() {
                 inst: i,
                 assembly: ass,
                 code: None,
+                option_for_as: None,
+                option_for_dump: None,
+            }
+        }
+        fn new_with_gcc_option(
+            i: Inst,
+            ass: &'static str,
+            option_for_as: Option<&'static [&'static str]>,
+            option_for_dump: Option<&'static [&'static str]>,
+        ) -> Self {
+            Self {
+                inst: i,
+                assembly: ass,
+                code: None,
+                option_for_as,
+                option_for_dump,
             }
         }
     }
@@ -39,7 +58,18 @@ fn test_riscv64_binemit() {
     //     "j 4",
     // ));
 
-    //todo:: more
+    insns.push(TestUnit::new_with_gcc_option(
+        Inst::AluRRR {
+            alu_op: AluOPRRR::Adduw,
+            rd: writable_fp_reg(),
+            rs1: fp_reg(),
+            rs2: zero_reg(),
+        },
+        "add.uw fp,fp,zero",
+        None,
+        None,
+    ));
+
     insns.push(TestUnit::new(
         Inst::AluRRR {
             alu_op: AluOPRRR::Add,
@@ -1459,7 +1489,7 @@ fn test_riscv64_binemit() {
             .print_with_state(&mut EmitState::default(), &mut AllocationConsumer::new(&[]));
         assert_eq!(unit.assembly, actual_printing);
         if unit.code.is_none() {
-            let code = assemble(unit.assembly);
+            let code = assemble(unit.assembly, unit.option_for_as, unit.option_for_dump);
             missing_code.push((index, code));
             unit.code = Some(code);
         }
@@ -1515,21 +1545,25 @@ fn get_riscv_tool_chain_name() -> (String, String) {}
 /*
     todo:: make this can be run on windows
 */
-fn assemble(code: &str) -> u32 {
+fn assemble(code: &str, as_option: Option<&[&str]>, dump_option: Option<&[&str]>) -> u32 {
     use std::process::Command;
-    let (as_name, objdump_name) = get_riscv_tool_chain_name();
+
     std::env::set_current_dir(std::env::temp_dir()).expect("set_current_dir {}");
     let file_name = "riscv_tmp.s";
     use std::io::Write;
     let mut file = std::fs::File::create(file_name).unwrap();
     file.write_all(code.as_bytes()).expect("write error {}");
+
+    let (as_name, objdump_name) = get_riscv_tool_chain_name();
     let mut cmd = Command::new(as_name.as_str());
+    as_option.map(|a| cmd.args(a));
     cmd.arg(file_name);
+
     let _output = cmd.output().expect("exec as failed , {}");
     let output_file = "a.out";
     let mut cmd = Command::new(objdump_name.as_str());
+    dump_option.map(|a| cmd.args(a));
     cmd.arg("-d").arg(output_file);
-
     let output = cmd.output().expect("exec objdump failed , {}");
     /*
         a.out:     file format elf64-littleriscv

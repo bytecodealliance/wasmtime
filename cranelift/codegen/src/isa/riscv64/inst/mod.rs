@@ -910,7 +910,7 @@ impl Inst {
                 format!("{} {},{}", alu_op.op_name(), rd, rs,)
             }
             &Inst::Csr {
-                csrOP,
+                csr_op,
                 rd,
                 rs,
                 imm,
@@ -918,10 +918,10 @@ impl Inst {
             } => {
                 let rs = rs.map_or("".into(), |r| format_reg(r, allocs));
                 let rd = format_reg(rd.to_reg(), allocs);
-                if csrOP.need_rs() {
-                    format!("{} {},{},{}", csrOP.op_name(), rd, csr, rs)
+                if csr_op.need_rs() {
+                    format!("{} {},{},{}", csr_op.op_name(), rd, csr, rs)
                 } else {
-                    format!("{} {},{},{}", csrOP.op_name(), rd, csr, imm.unwrap())
+                    format!("{} {},{},{}", csr_op.op_name(), rd, csr, imm.unwrap())
                 }
             }
 
