@@ -1502,7 +1502,7 @@ fn test_riscv64_binemit() {
     }
 }
 
-#[cfg(windows)]
+#[cfg(target_os = "windows")]
 fn get_riscv_tool_chain_name() -> (String, String) {
     (
         String::from("riscv64-unknown-elf-as"),
@@ -1510,8 +1510,14 @@ fn get_riscv_tool_chain_name() -> (String, String) {
     )
 }
 
-#[cfg(linux)]
-fn get_riscv_tool_chain_name() -> (String, String) {}
+#[cfg(target_os = "linux")]
+fn get_riscv_tool_chain_name() -> (String, String) {
+    (
+        String::from("riscv64-unknown-linux-gnu-as"),
+        String::from("riscv64-unknown-linux-gnu-objdump"),
+    )
+}
+
 /*
     todo:: make this can be run on windows
 */
