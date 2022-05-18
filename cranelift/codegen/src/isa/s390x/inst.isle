@@ -868,7 +868,7 @@
     ;; Pseudoinstruction to keep a value alive.
     (DummyUse
      (reg Reg))
-    
+
     ;; An unwind pseudoinstruction describing the state of the
     ;; machine at this program point.
     (Unwind
@@ -1640,15 +1640,6 @@
 ;; Extract a sinkable instruction from a value operand.
 (decl sinkable_inst (Inst) Value)
 (extern extractor sinkable_inst sinkable_inst)
-
-;; Sink a sinkable instruction.
-;;
-;; This is a side-effectful operation that notifies the context that the
-;; sinkable instruction been sunk into another instruction, and no longer
-;; needs to be lowered.
-(decl sink_inst (Inst) Unit)
-(extern constructor sink_inst sink_inst)
-
 
 ;; Sinkable big-endian load instruction.
 (decl sinkable_load (Inst) Value)

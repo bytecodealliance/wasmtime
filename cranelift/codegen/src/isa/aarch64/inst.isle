@@ -627,7 +627,8 @@
        (VecLoadReplicate
         (rd WritableReg)
         (rn Reg)
-        (size VectorSize))
+        (size VectorSize)
+        (flags MemFlags))
 
        ;; Vector conditional select, 128 bit.  A synthetic instruction, which generates a 4-insn
        ;; control-flow diamond.
@@ -1376,6 +1377,16 @@
 (decl cond_br_cond (Cond) CondBrKind)
 (extern constructor cond_br_cond cond_br_cond)
 
+;; Lower the address of a load or a store.
+(decl amode (Type Inst u32) AMode)
+;; TODO: Port lower_address() to ISLE.
+(extern constructor amode amode)
+
+;; Matches an `AMode` that is just a register.
+(decl pure amode_is_reg (AMode) Reg)
+;; TODO: Implement in ISLE.
+(extern constructor amode_is_reg amode_is_reg)
+
 ;; Instruction creation helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Helper for creating the zero register.
@@ -1479,6 +1490,13 @@
 (rule (vec_dup src size)
       (let ((dst WritableReg (temp_writable_reg $I8X16))
             (_ Unit (emit (MInst.VecDup dst src size))))
+        dst))
+
+;; Helper for emitting `MInst.VecDupFromFpu` instructions.
+(decl vec_dup_from_fpu (Reg VectorSize) Reg)
+(rule (vec_dup_from_fpu src size)
+      (let ((dst WritableReg (temp_writable_reg $I8X16))
+            (_ Unit (emit (MInst.VecDupFromFpu dst src size))))
         dst))
 
 ;; Helper for emitting `MInst.AluRRImm12` instructions.
@@ -2167,7 +2185,7 @@
 (decl sinkable_atomic_load (SinkableAtomicLoad) Value)
 (extern extractor sinkable_atomic_load sinkable_atomic_load)
 
-;; Sink a `SinkableLoad` into a `Reg`.
+;; Sink a `SinkableAtomicLoad` into a `Reg`.
 ;;
 ;; This is a side-effectful operation that notifies the context that the
 ;; instruction that produced the `SinkableAtomicLoad` has been sunk into another
@@ -2229,6 +2247,29 @@
         (value_regs
           (alu_rrr op ty x_lo y_lo)
           (alu_rrr op ty x_hi y_hi))))
+
+;; Helper for emitting `MInst.VecLoadReplicate` instructions.
+(decl ld1r (Reg VectorSize MemFlags) Reg)
+(rule (ld1r src size flags)
+      (let ((dst WritableReg (temp_writable_reg $I8X16))
+            (_ Unit (emit (MInst.VecLoadReplicate dst src size flags))))
+        dst))
+
+;; Helper for emitting `MInst.LoadAddr` instructions.
+(decl load_addr (AMode) Reg)
+(rule (load_addr addr)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.LoadAddr dst addr))))
+        dst))
+
+(rule (load_addr addr)
+      (if-let addr_reg (amode_is_reg addr))
+      addr_reg)
+
+;; Lower a vector splat with a constant parameter.
+(decl splat_const (u64 VectorSize) Reg)
+;; TODO: Port lower_splat_const() to ISLE.
+(extern constructor splat_const splat_const)
 
 ;; Generate comparison to zero operator from input condition code
 (decl float_cc_cmp_zero_to_vec_misc_op (FloatCC) VecMisc2)

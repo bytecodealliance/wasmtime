@@ -2351,10 +2351,10 @@ fn test_aarch64_binemit() {
         Inst::VecDup {
             rd: writable_vreg(25),
             rn: xreg(7),
-            size: VectorSize::Size8x16,
+            size: VectorSize::Size8x8,
         },
-        "F90C014E",
-        "dup v25.16b, w7",
+        "F90C010E",
+        "dup v25.8b, w7",
     ));
     insns.push((
         Inst::VecDup {
@@ -2387,10 +2387,10 @@ fn test_aarch64_binemit() {
         Inst::VecDup {
             rd: writable_vreg(0),
             rn: xreg(28),
-            size: VectorSize::Size32x4,
+            size: VectorSize::Size32x2,
         },
-        "800F044E",
-        "dup v0.4s, w28",
+        "800F040E",
+        "dup v0.2s, w28",
     ));
     insns.push((
         Inst::VecDup {
@@ -5199,8 +5199,8 @@ fn test_aarch64_binemit() {
         Inst::VecLoadReplicate {
             rd: writable_vreg(31),
             rn: xreg(0),
-
             size: VectorSize::Size64x2,
+            flags: MemFlags::trusted(),
         },
         "1FCC404D",
         "ld1r { v31.2d }, [x0]",
@@ -5210,8 +5210,8 @@ fn test_aarch64_binemit() {
         Inst::VecLoadReplicate {
             rd: writable_vreg(0),
             rn: xreg(25),
-
             size: VectorSize::Size8x8,
+            flags: MemFlags::trusted(),
         },
         "20C3400D",
         "ld1r { v0.8b }, [x25]",

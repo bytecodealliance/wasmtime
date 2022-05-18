@@ -244,18 +244,13 @@ block0(v0: i128):
     return v1
 }
 
-;   stp fp, lr, [sp, #-16]!
-;   mov fp, sp
-;   stp d11, d13, [sp, #-16]!
 ; block0:
 ;   fmov d6, x0
 ;   mov v6.d[1], x1
-;   cnt v11.16b, v6.16b
-;   addv b13, v11.16b
-;   umov w0, v13.b[0]
+;   cnt v19.16b, v6.16b
+;   addv b21, v19.16b
+;   umov w0, v21.b[0]
 ;   movz w1, #0
-;   ldp d11, d13, [sp], #16
-;   ldp fp, lr, [sp], #16
 ;   ret
 
 function %d(i64) -> i64 {
