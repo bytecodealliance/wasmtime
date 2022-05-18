@@ -2,8 +2,6 @@
 
 use crate::ir::condcodes::IntCC;
 use crate::ir::Function;
-use crate::ir::MemFlags;
-use crate::ir::{StackSlotData, StackSlotKind};
 
 use crate::isa::riscv64::settings as riscv_settings;
 use crate::isa::{Builder as IsaBuilder, TargetIsa};
@@ -64,13 +62,12 @@ impl Riscv64Backend {
         //     isa_flags,
         //     mach_env: crate_reg_eviroment(&shared.clone()),
         // }
-        use alloc::vec;
 
         use super::*;
         use crate::cursor::{Cursor, FuncCursor};
         use crate::ir::condcodes::FloatCC;
         use crate::ir::{types::*, JumpTable, JumpTableData};
-        use crate::ir::{AbiParam, ExternalName, Function, InstBuilder, Signature};
+
         use crate::isa::CallConv;
         use crate::settings;
         use crate::settings::Configurable;

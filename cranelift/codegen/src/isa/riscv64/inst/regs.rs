@@ -5,7 +5,6 @@ use core::fmt::Write;
 use crate::machinst::ArgsOrRets;
 use crate::settings;
 
-use crate::isa;
 use crate::machinst::{Reg, Writable};
 
 use crate::machinst::RealReg;

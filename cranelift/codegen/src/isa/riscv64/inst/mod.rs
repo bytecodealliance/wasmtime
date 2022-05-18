@@ -23,7 +23,7 @@ use crate::machinst::*;
 use crate::{settings, CodegenError, CodegenResult};
 
 pub use crate::ir::condcodes::FloatCC;
-use crate::machinst::*;
+
 use alloc::fmt::format;
 use regalloc2::Allocation;
 
@@ -137,6 +137,7 @@ pub(crate) fn gen_move(rd: Writable<Reg>, oty: Type, rm: Reg, ity: Type) -> Inst
         },
     }
 }
+
 impl BranchTarget {
     /// Return the target's label, if it is a label-based target.
     pub(crate) fn as_label(self) -> Option<MachLabel> {
@@ -386,7 +387,7 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
         }
 
         &Inst::EpiloguePlaceholder => {}
-        &Inst::Ret => {}
+        &Inst::Ret { .. } => {}
         &Inst::Extend { rd, rn, .. } => {
             collector.reg_use(rn);
             collector.reg_def(rd);
@@ -597,7 +598,7 @@ impl MachInst for Inst {
                 }
             }
             &Inst::Jalr { .. } => MachTerminator::Uncond,
-            &Inst::Ret => MachTerminator::Ret,
+            &Inst::Ret { .. } => MachTerminator::Ret,
             _ => MachTerminator::None,
         }
     }
@@ -746,7 +747,7 @@ pub fn reg_name(reg: Reg) -> String {
 impl Inst {
     fn print_with_state(
         &self,
-        state: &mut EmitState,
+        _state: &mut EmitState,
         allocs: &mut AllocationConsumer<'_>,
     ) -> String {
         let format_reg = |reg: Reg, allocs: &mut AllocationConsumer<'_>| -> String {
@@ -994,9 +995,10 @@ impl Inst {
             &Inst::EpiloguePlaceholder => {
                 format!("epilogue place holder")
             }
-            &Inst::Ret => {
+            &Inst::Ret { .. } => {
                 format!("ret")
             }
+
             &MInst::Extend {
                 rd,
                 rn,

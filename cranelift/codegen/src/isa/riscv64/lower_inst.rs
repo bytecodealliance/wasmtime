@@ -3,7 +3,6 @@
 use crate::machinst::Writable;
 use alloc::vec;
 use alloc::vec::Vec;
-use smallvec::SmallVec;
 
 use crate::ir::Inst as IRInst;
 use crate::ir::InstructionData;

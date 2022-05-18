@@ -421,9 +421,7 @@ impl AluOPRR {
             AluOPRR::FcvtWD => RISCV_RM_FUNCT3,
             AluOPRR::FcvtWuD => RISCV_RM_FUNCT3,
             AluOPRR::FcvtDW => RISCV_RM_FUNCT3,
-            /** todo::  AluOPRR::FcvtDWU not the same with the document,maybe changed..*/
             AluOPRR::FcvtDWU => 0b000,
-
             AluOPRR::FsqrtD => RISCV_RM_FUNCT3,
         }
     }

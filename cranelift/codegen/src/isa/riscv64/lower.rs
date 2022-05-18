@@ -8,7 +8,7 @@
 //! - Floating-point immediates (FIMM instruction).
 
 use crate::ir::Inst as IRInst;
-use crate::ir::Type;
+
 use crate::machinst::lower::*;
 use crate::machinst::*;
 use crate::CodegenResult;

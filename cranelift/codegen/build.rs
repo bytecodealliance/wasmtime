@@ -236,16 +236,13 @@ fn get_isle_compilations(
             },
             // The risc-v instruction selector.
             IsleCompilation {
-                output: src_isa_risc_v
-                    .join("lower")
-                    .join("isle")
-                    .join("generated_code.rs"),
+                output: out_dir.join("isle_riscv64.rs"),
                 inputs: vec![
-                    clif_isle.clone(),
                     prelude_isle.clone(),
                     src_isa_risc_v.join("inst.isle"),
                     src_isa_risc_v.join("lower.isle"),
                 ],
+                untracked_inputs: vec![clif_isle.clone()],
             },
         ],
     })

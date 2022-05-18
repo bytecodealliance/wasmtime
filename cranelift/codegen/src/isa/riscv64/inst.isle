@@ -59,7 +59,7 @@
       (src Reg))
 
     (EpiloguePlaceholder)
-    (Ret)
+    (Ret (rets VecReg))
 
      (Extend
       (rd WritableReg)

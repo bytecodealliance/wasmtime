@@ -14,7 +14,7 @@ use crate::isa;
 use crate::isa::riscv64::{inst::EmitState, inst::*};
 use crate::isa::CallConv;
 use crate::machinst::*;
-use crate::machinst::*;
+
 use crate::settings;
 use crate::CodegenResult;
 use alloc::boxed::Box;
@@ -310,7 +310,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
     }
 
     fn gen_ret(rets: Vec<Reg>) -> Inst {
-        Inst::Ret
+        Inst::Ret { rets }
     }
 
     fn gen_add_imm(into_reg: Writable<Reg>, from_reg: Reg, imm: u32) -> SmallInstVec<Inst> {

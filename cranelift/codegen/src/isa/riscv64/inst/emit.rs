@@ -272,7 +272,7 @@ impl Inst {
         for index in patches {
             let index = *index;
             assert!(insts.len() > index);
-            let real_off = ((insts.len() - index) as i32 * Inst::instruction_size());
+            let real_off = (insts.len() - index) as i32 * Inst::instruction_size();
             match &mut insts[index] {
                 &mut Inst::CondBr { ref mut taken, .. } => match taken {
                     &mut BranchTarget::ResolvedOffset(_) => {
@@ -785,7 +785,7 @@ impl MachInstEmit for Inst {
                     .into_iter()
                     .for_each(|i| i.emit(&[], sink, emit_info, state));
             }
-            &Inst::Ret => {
+            &Inst::Ret { .. } => {
                 //jalr x0, x1, 0
                 let x: u32 = (0b1100111) | (1 << 15);
                 sink.put4(x);
