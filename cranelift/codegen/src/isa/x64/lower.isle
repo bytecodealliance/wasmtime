@@ -2578,8 +2578,6 @@
 (rule (lower (has_type $I64X2 (uload32x2 flags address offset)))
       (x64_pmovzxdq (to_amode flags address offset)))
 
-;; TODO: Multi-register loads (I128)
-
 ;; Rules for `store*` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; 8-, 16-, 32- and 64-bit GPR stores.
