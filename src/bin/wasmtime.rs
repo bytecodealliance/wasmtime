@@ -59,11 +59,10 @@ impl Wasmtime {
 fn main() -> Result<()> {
     Wasmtime::try_parse()
         .unwrap_or_else(|e| match e.kind() {
-            ErrorKind::DisplayHelp
-            | ErrorKind::DisplayVersion
-            | ErrorKind::MissingSubcommand
-            | ErrorKind::MissingRequiredArgument => e.exit(),
-            _ => Wasmtime::Run(RunCommand::parse()),
+            ErrorKind::UnrecognizedSubcommand | ErrorKind::UnknownArgument => {
+                Wasmtime::Run(RunCommand::parse())
+            }
+            _ => e.exit(),
         })
         .execute()
 }
