@@ -14,9 +14,9 @@ use std::convert::{TryFrom, TryInto};
 use std::path::PathBuf;
 use std::sync::Arc;
 use wasmparser::{
-    DataKind, ElementItem, ElementKind, Encoding, ExternalKind, FuncValidator, FunctionBody,
-    NameSectionReader, Naming, Operator, Parser, Payload, TypeDef, TypeRef, Validator,
-    ValidatorResources,
+    CustomSectionReader, DataKind, ElementItem, ElementKind, Encoding, ExternalKind, FuncValidator,
+    FunctionBody, NameSectionReader, Naming, Operator, Parser, Payload, TypeDef, TypeRef,
+    Validator, ValidatorResources,
 };
 
 /// Object containing the standalone environment information.
@@ -632,7 +632,7 @@ and for re-adding support for interface types you can see this issue:
             }
 
             Payload::CustomSection(s) => {
-                self.register_dwarf_section(s.name(), s.data());
+                self.register_dwarf_section(&s);
             }
 
             // It's expected that validation will probably reject other
@@ -647,7 +647,8 @@ and for re-adding support for interface types you can see this issue:
         Ok(())
     }
 
-    fn register_dwarf_section(&mut self, name: &str, data: &'data [u8]) {
+    fn register_dwarf_section(&mut self, section: &CustomSectionReader<'data>) {
+        let name = section.name();
         if !name.starts_with(".debug_") {
             return;
         }
@@ -658,6 +659,7 @@ and for re-adding support for interface types you can see this issue:
         let info = &mut self.result.debuginfo;
         let dwarf = &mut info.dwarf;
         let endian = gimli::LittleEndian;
+        let data = section.data();
         let slice = gimli::EndianSlice::new(data, endian);
 
         match name {

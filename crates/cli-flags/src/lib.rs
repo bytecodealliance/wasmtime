@@ -39,6 +39,8 @@ pub const SUPPORTED_WASM_FEATURES: &[(&str, &str)] = &[
     ("simd", "enables support for proposed SIMD instructions"),
     ("threads", "enables support for WebAssembly threads"),
     ("memory64", "enables support for 64-bit memories"),
+    #[cfg(feature = "component-model")]
+    ("component-model", "enables support for the component model"),
 ];
 
 pub const SUPPORTED_WASI_MODULES: &[(&str, &str)] = &[
@@ -333,6 +335,8 @@ impl CommonOptions {
             threads,
             multi_memory,
             memory64,
+            #[cfg(feature = "component-model")]
+            component_model,
         } = self.wasm_features.unwrap_or_default();
 
         if let Some(enable) = simd {
@@ -357,6 +361,10 @@ impl CommonOptions {
         }
         if let Some(enable) = memory64 {
             config.wasm_memory64(enable);
+        }
+        #[cfg(feature = "component-model")]
+        if let Some(enable) = component_model {
+            config.wasm_component_model(enable);
         }
     }
 
@@ -391,6 +399,8 @@ pub struct WasmFeatures {
     pub threads: Option<bool>,
     pub multi_memory: Option<bool>,
     pub memory64: Option<bool>,
+    #[cfg(feature = "component-model")]
+    pub component_model: Option<bool>,
 }
 
 fn parse_wasm_features(features: &str) -> Result<WasmFeatures> {
@@ -439,6 +449,8 @@ fn parse_wasm_features(features: &str) -> Result<WasmFeatures> {
         threads: all.or(values["threads"]),
         multi_memory: all.or(values["multi-memory"]),
         memory64: all.or(values["memory64"]),
+        #[cfg(feature = "component-model")]
+        component_model: all.or(values["component-model"]),
     })
 }
 
