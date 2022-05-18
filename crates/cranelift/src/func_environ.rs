@@ -766,9 +766,9 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         // if null, we take a slow-path that invokes a
         // libcall.
         let table_entry_addr = builder.ins().table_addr(pointer_type, table, index, 0);
-        let value = builder
-            .ins()
-            .load(pointer_type, ir::MemFlags::trusted(), table_entry_addr, 0);
+        let mut flags = ir::MemFlags::trusted();
+        flags.set_table();
+        let value = builder.ins().load(pointer_type, flags, table_entry_addr, 0);
         // Mask off the "initialized bit". See documentation on
         // FUNCREF_INIT_BIT in crates/environ/src/ref_bits.rs for more
         // details.
@@ -979,10 +979,9 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
                 // Load the table element.
                 let elem_addr = builder.ins().table_addr(pointer_type, table, index, 0);
-                let elem =
-                    builder
-                        .ins()
-                        .load(reference_type, ir::MemFlags::trusted(), elem_addr, 0);
+                let mut flags = ir::MemFlags::trusted();
+                flags.set_table();
+                let elem = builder.ins().load(reference_type, flags, elem_addr, 0);
 
                 let elem_is_null = builder.ins().is_null(elem);
                 builder.ins().brnz(elem_is_null, continue_block, &[]);
@@ -1087,12 +1086,11 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                     let value_with_init_bit = builder
                         .ins()
                         .bor_imm(value, Imm64::from(FUNCREF_INIT_BIT as i64));
-                    builder.ins().store(
-                        ir::MemFlags::trusted(),
-                        value_with_init_bit,
-                        table_entry_addr,
-                        0,
-                    );
+                    let mut flags = ir::MemFlags::trusted();
+                    flags.set_table();
+                    builder
+                        .ins()
+                        .store(flags, value_with_init_bit, table_entry_addr, 0);
                     Ok(())
                 }
             },
@@ -1172,13 +1170,10 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 // saving a reference to a deallocated object, and then using it
                 // after its been freed).
                 builder.switch_to_block(check_current_elem_block);
-                let current_elem =
-                    builder
-                        .ins()
-                        .load(pointer_type, ir::MemFlags::trusted(), table_entry_addr, 0);
-                builder
-                    .ins()
-                    .store(ir::MemFlags::trusted(), value, table_entry_addr, 0);
+                let mut flags = ir::MemFlags::trusted();
+                flags.set_table();
+                let current_elem = builder.ins().load(pointer_type, flags, table_entry_addr, 0);
+                builder.ins().store(flags, value, table_entry_addr, 0);
 
                 // If the current element is non-null, decrement its reference
                 // count. And if its reference count has reached zero, then make

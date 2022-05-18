@@ -11,9 +11,20 @@ enum FlagBit {
     Readonly,
     LittleEndian,
     BigEndian,
+    /// Accesses the "heap" part of abstract state. Used for alias
+    /// analysis. Mutually exclusive with "table" and "vmctx".
+    Heap,
+    /// Accesses the "table" part of abstract state. Used for alias
+    /// analysis. Mutually exclusive with "heap" and "vmctx".
+    Table,
+    /// Accesses the "vmctx" part of abstract state. Used for alias
+    /// analysis. Mutually exclusive with "heap" and "table".
+    Vmctx,
 }
 
-const NAMES: [&str; 5] = ["notrap", "aligned", "readonly", "little", "big"];
+const NAMES: [&str; 8] = [
+    "notrap", "aligned", "readonly", "little", "big", "heap", "table", "vmctx",
+];
 
 /// Endianness of a memory access.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
@@ -154,6 +165,63 @@ impl MemFlags {
     /// Set the `readonly` flag.
     pub fn set_readonly(&mut self) {
         self.set(FlagBit::Readonly)
+    }
+
+    /// Test if the `heap` bit is set.
+    ///
+    /// Loads and stores with this flag accesses the "heap" part of
+    /// abstract state. This is disjoint from the "table", "vmctx",
+    /// and "other" parts of abstract state. In concrete terms, this
+    /// means that behavior is undefined if the same memory is also
+    /// accessed by another load/store with one of the other
+    /// alias-analysis bits (`table`, `vmctx`) set, or `heap` not set.
+    pub fn heap(self) -> bool {
+        self.read(FlagBit::Heap)
+    }
+
+    /// Set the `heap` bit. See the notes about mutual exclusion with
+    /// other bits in `heap()`.
+    pub fn set_heap(&mut self) {
+        assert!(!self.table() && !self.vmctx());
+        self.set(FlagBit::Heap);
+    }
+
+    /// Test if the `table` bit is set.
+    ///
+    /// Loads and stores with this flag accesses the "table" part of
+    /// abstract state. This is disjoint from the "heap", "vmctx",
+    /// and "other" parts of abstract state. In concrete terms, this
+    /// means that behavior is undefined if the same memory is also
+    /// accessed by another load/store with one of the other
+    /// alias-analysis bits (`heap`, `vmctx`) set, or `table` not set.
+    pub fn table(self) -> bool {
+        self.read(FlagBit::Table)
+    }
+
+    /// Set the `table` bit. See the notes about mutual exclusion with
+    /// other bits in `table()`.
+    pub fn set_table(&mut self) {
+        assert!(!self.heap() && !self.vmctx());
+        self.set(FlagBit::Table);
+    }
+
+    /// Test if the `vmctx` bit is set.
+    ///
+    /// Loads and stores with this flag accesses the "vmctx" part of
+    /// abstract state. This is disjoint from the "heap", "table",
+    /// and "other" parts of abstract state. In concrete terms, this
+    /// means that behavior is undefined if the same memory is also
+    /// accessed by another load/store with one of the other
+    /// alias-analysis bits (`heap`, `table`) set, or `vmctx` not set.
+    pub fn vmctx(self) -> bool {
+        self.read(FlagBit::Vmctx)
+    }
+
+    /// Set the `vmctx` bit. See the notes about mutual exclusion with
+    /// other bits in `vmctx()`.
+    pub fn set_vmctx(&mut self) {
+        assert!(!self.heap() && !self.table());
+        self.set(FlagBit::Vmctx);
     }
 }
 
