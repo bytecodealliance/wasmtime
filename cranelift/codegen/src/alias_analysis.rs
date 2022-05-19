@@ -52,7 +52,7 @@
 //!
 //! In theory we could also do *dead-store elimination*, where if a
 //! store overwrites a key in the table, *and* if no other load/store
-//! to the abstract state cateogry occurred, *and* no other trapping
+//! to the abstract state category occurred, *and* no other trapping
 //! instruction occurred (at which point we need an up-to-date memory
 //! state because post-trap-termination memory state can be observed),
 //! *and* we can prove the original store could not have trapped, then
