@@ -389,7 +389,7 @@ impl Table {
     ///         (table (import \"\" \"\") 2 funcref)
     ///         (func $f (result i32)
     ///             i32.const 10)
-    ///         (elem (i32.const 0) (func $f))
+    ///         (elem (i32.const 0) $f)
     ///     )"
     /// )?;
     ///
