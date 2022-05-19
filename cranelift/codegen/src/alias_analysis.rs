@@ -42,24 +42,24 @@
 //! load, we can also insert, if we don't already have a value (from
 //! the store that produced the load's value).
 //!
-//! Then we can do three optimizations at once given this table (the
-//! first two of these are done in load_store_opts.rs):
+//! Then we can do two optimizations at once given this table. If a
+//! load accesses a location identified by a (last store, address,
+//! type) key already in the table, we replace it with the SSA value
+//! for that memory location. This is usually known as "redundant load
+//! elimination" if the value came from an earlier load of the same
+//! location, or "store-to-load forwarding" if the value came from an
+//! earlier store to the same location.
 //!
-//! - Redundant load elimination and store-to-load forwarding: if a
-//!   load accesses a location identified by a (last store, address,
-//!   type) key already in the table, replace it with the SSA value
-//!   for that memory location. This is usually known as "redundant
-//!   load elimination" if the value came from an earlier load of the
-//!   same location, or "store-to-load forwarding" if the value came
-//!   from an earlier store to the same location.
-//! - Dead-store elimination: if a store overwrites a key in the
-//!   table, *and* if no other load/store to the abstract state cateogry
-//!   occurred, *and* no other trapping instruction occurred (at which
-//!   point we need an up-to-date memory state because
-//!   post-trap-termination memory state can be observed), *and* we
-//!   can prove the original store could not have trapped, then we can
-//!   eliminate the original store. Because this is so complex, we
-//!   don't yet do this.
+//! In theory we could also do *dead-store elimination*, where if a
+//! store overwrites a key in the table, *and* if no other load/store
+//! to the abstract state cateogry occurred, *and* no other trapping
+//! instruction occurred (at which point we need an up-to-date memory
+//! state because post-trap-termination memory state can be observed),
+//! *and* we can prove the original store could not have trapped, then
+//! we can eliminate the original store. Because this is so complex,
+//! and the conditions for doing it correctly when post-trap state
+//! must be correct likely reduce the potential benefit, we don't yet
+//! do this.
 
 use crate::{
     cursor::{Cursor, FuncCursor},
@@ -163,7 +163,18 @@ struct MemoryLoc {
     address: Value,
     offset: Offset32,
     ty: Type,
-    extending_opcode: Option<crate::ir::Opcode>,
+    /// We keep the *opcode* of the instruction that produced the
+    /// value we record at this key if the opcode is anything other
+    /// than an ordinary load or store. This is needed when we
+    /// consider loads that extend the value: e.g., an 8-to-32
+    /// sign-extending load will produce a 32-bit value from an 8-bit
+    /// value in memory, so we can only reuse that (as part of RLE)
+    /// for another load with the same extending opcode.
+    ///
+    /// We could improve the transform to insert explicit extend ops
+    /// in place of extending loads when we know the memory value, but
+    /// we haven't yet done this.
+    extending_opcode: Option<Opcode>,
 }
 
 /// An alias-analysis pass.
