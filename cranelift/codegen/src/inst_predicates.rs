@@ -1,9 +1,7 @@
 //! Instruction predicates/properties, shared by various analyses.
 use crate::ir::immediates::Offset32;
 use crate::ir::instructions::BranchInfo;
-use crate::ir::{
-    Block, DataFlowGraph, Function, Inst, InstructionData, MemFlags, Opcode, Type, Value,
-};
+use crate::ir::{Block, DataFlowGraph, Function, Inst, InstructionData, Opcode, Type, Value};
 use crate::machinst::ty_bits;
 use cranelift_entity::EntityRef;
 
@@ -79,23 +77,6 @@ pub fn is_constant_64bit(func: &Function, inst: Inst) -> Option<u64> {
             Some(imm)
         }
         _ => None,
-    }
-}
-
-/// Get the MemFlags from the given instruction, if any.
-pub fn inst_memflags(func: &Function, inst: Inst) -> Option<MemFlags> {
-    let data = &func.dfg[inst];
-    match data {
-        InstructionData::AtomicRmw { flags, .. }
-        | InstructionData::AtomicCas { flags, .. }
-        | InstructionData::Load { flags, .. }
-        | InstructionData::LoadNoOffset { flags, .. }
-        | InstructionData::Store { flags, .. }
-        | InstructionData::StoreNoOffset { flags, .. } => Some(flags.clone()),
-        _ => {
-            debug_assert!(!data.opcode().can_load() && !data.opcode().can_store());
-            None
-        }
     }
 }
 

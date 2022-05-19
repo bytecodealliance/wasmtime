@@ -66,8 +66,7 @@ use crate::{
     dominator_tree::DominatorTree,
     fx::{FxHashMap, FxHashSet},
     inst_predicates::{
-        has_memory_fence_semantics, inst_addr_offset_type, inst_memflags, inst_store_data,
-        visit_block_succs,
+        has_memory_fence_semantics, inst_addr_offset_type, inst_store_data, visit_block_succs,
     },
     ir::{immediates::Offset32, Block, Function, Inst, Opcode, Type, Value},
 };
@@ -92,7 +91,7 @@ impl LastStores {
             self.vmctx = inst.into();
             self.other = inst.into();
         } else if opcode.can_store() {
-            if let Some(memflags) = inst_memflags(func, inst) {
+            if let Some(memflags) = func.dfg[inst].memflags() {
                 if memflags.heap() {
                     self.heap = inst.into();
                 } else if memflags.table() {
@@ -112,7 +111,7 @@ impl LastStores {
     }
 
     fn get_last_store(&self, func: &Function, inst: Inst) -> PackedOption<Inst> {
-        if let Some(memflags) = inst_memflags(func, inst) {
+        if let Some(memflags) = func.dfg[inst].memflags() {
             if memflags.heap() {
                 self.heap
             } else if memflags.table() {
