@@ -1,6 +1,10 @@
-test compile precise-output
+test alias-analysis
 set opt_level=speed
 target aarch64
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Redundant-load elimination
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 function %f0(i64 vmctx, i32) -> i32, i32, i32, i32 {
     gv0 = vmctx
@@ -11,62 +15,27 @@ function %f0(i64 vmctx, i32) -> i32, i32, i32, i32 {
 block0(v0: i64, v1: i32):
     v2 = heap_addr.i64 heap0, v1, 0
     v3 = load.i32 v2+8
+    ;; This should reuse the load above.
     v4 = heap_addr.i64 heap0, v1, 0
     v5 = load.i32 v4+8
+    ; check: v5 -> v3
+    
     call fn0(v0)
+
+    ;; The second load is redundant wrt the first, but the call above
+    ;; is a barrier that prevents reusing v3 or v5.
     v6 = load.i32 v4+8
     v7 = load.i32 v4+8
+    ; check: v7 -> v6
+    
     return v3, v5, v6, v7
 }
 
-;   stp fp, lr, [sp, #-16]!
-;   mov fp, sp
-;   str x25, [sp, #-16]!
-;   stp x23, x24, [sp, #-16]!
-; block0:
-;   ldr x24, [x0, #8]
-;   add x14, x24, #8
-;   ldr w7, [x14, w1, UXTW]
-;   mov x25, x1
-;   mov x23, x7
-;   ldr x1, 8 ; b 12 ; data TestCase { length: 1, ascii: [103, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
-;   blr x1
-;   add x1, x24, #8
-;   mov x9, x25
-;   ldr w3, [x1, w9, UXTW]
-;   mov x0, x23
-;   mov x1, x23
-;   mov x2, x3
-;   ldp x23, x24, [sp], #16
-;   ldr x25, [sp], #16
-;   ldp fp, lr, [sp], #16
-;   ret
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Store-to-load forwarding
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-function %f1(i64 vmctx, i32) -> i32, i32 {
-    gv0 = vmctx
-    gv1 = load.i64 notrap readonly aligned gv0+8
-    heap0 = static gv1, bound 0x1_0000_0000, offset_guard 0x8000_0000, index_type i32
-    fn0 = %g(i64 vmctx)
-
-block0(v0: i64, v1: i32):
-    v2 = heap_addr.i64 heap0, v1, 0
-    v3 = load.i32 v2+8
-    v4 = heap_addr.i64 heap0, v1, 0
-    v5 = load.i32 v4+8
-    return v3, v5
-}
-
-;   stp fp, lr, [sp, #-16]!
-;   mov fp, sp
-; block0:
-;   ldr x4, [x0, #8]
-;   add x9, x4, #8
-;   ldr w1, [x9, w1, UXTW]
-;   mov x0, x1
-;   ldp fp, lr, [sp], #16
-;   ret
-
-function %f2(i64 vmctx, i32) -> i32 {
+function %f1(i64 vmctx, i32) -> i32 {
     gv0 = vmctx
     gv1 = load.i64 notrap readonly aligned gv0+8
     heap0 = static gv1, bound 0x1_0000_0000, offset_guard 0x8000_0000, index_type i32
@@ -75,18 +44,11 @@ function %f2(i64 vmctx, i32) -> i32 {
 block0(v0: i64, v1: i32):
     v2 = heap_addr.i64 heap0, v1, 0
     store.i32 v1, v2+8
+
+    ;; This load should pick up the store above.
     v3 = heap_addr.i64 heap0, v1, 0
     v4 = load.i32 v3+8
+    ; check: v4 -> v1
+    
     return v4
 }
-
-;   stp fp, lr, [sp, #-16]!
-;   mov fp, sp
-; block0:
-;   ldr x4, [x0, #8]
-;   add x7, x4, #8
-;   str w1, [x7, w1, UXTW]
-;   mov x0, x1
-;   ldp fp, lr, [sp], #16
-;   ret
-

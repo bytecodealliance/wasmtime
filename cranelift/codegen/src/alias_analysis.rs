@@ -270,83 +270,74 @@ impl<'a> AliasAnalysis<'a> {
     /// (e.g. in cases of double-indirection with two separate chains
     /// of loads).
     pub fn compute_and_update_aliases(&mut self) {
-        let first_block = self
-            .func
-            .layout
-            .blocks()
-            .next()
-            .expect("Must have at least one block");
-        let mut pos = FuncCursor::new(self.func).at_top(first_block);
-        let mut state = LastStores::default();
-        let mut last_block = None;
-        while let Some(inst) = pos.next_inst() {
-            if let Some(block) = pos.func.layout.inst_block(inst) {
-                if Some(block) != last_block {
-                    last_block = Some(block);
-                    state = self
-                        .block_input
-                        .get(&block)
-                        .cloned()
-                        .unwrap_or_else(|| LastStores::default());
-                }
-            }
-            log::trace!(
-                "alias analysis: scanning at inst{} with state {:?} ({:?})",
-                inst.index(),
-                state,
-                pos.func.dfg[inst],
-            );
+        let mut pos = FuncCursor::new(self.func);
 
-            if let Some((address, offset, ty)) = inst_addr_offset_type(pos.func, inst) {
-                let address = pos.func.dfg.resolve_aliases(address);
-                let opcode = pos.func.dfg[inst].opcode();
+        while let Some(block) = pos.next_block() {
+            let mut state = self
+                .block_input
+                .get(&block)
+                .cloned()
+                .unwrap_or_else(|| LastStores::default());
 
-                if opcode.can_store() {
-                    let store_data = inst_store_data(pos.func, inst).unwrap();
-                    let store_data = pos.func.dfg.resolve_aliases(store_data);
-                    let mem_loc = MemoryLoc {
-                        last_store: inst.into(),
-                        address,
-                        offset,
-                        ty,
-                        extending_opcode: get_ext_opcode(opcode),
-                    };
-                    log::trace!(
-                        "alias analysis: at inst{}: store with data v{} at loc {:?}",
-                        inst.index(),
-                        store_data.index(),
-                        mem_loc
-                    );
-                    self.mem_values.insert(mem_loc, (inst, store_data));
-                } else if opcode.can_load() {
-                    let last_store = state.get_last_store(pos.func, inst);
-                    let load_result = pos.func.dfg.inst_results(inst)[0];
-                    let mem_loc = MemoryLoc {
-                        last_store,
-                        address,
-                        offset,
-                        ty,
-                        extending_opcode: get_ext_opcode(opcode),
-                    };
-                    log::trace!(
-                        "alias analysis: at inst{}: load with last_store inst{} at loc {:?}",
-                        inst.index(),
-                        last_store.map(|inst| inst.index()).unwrap_or(usize::MAX),
-                        mem_loc
-                    );
+            while let Some(inst) = pos.next_inst() {
+                log::trace!(
+                    "alias analysis: scanning at inst{} with state {:?} ({:?})",
+                    inst.index(),
+                    state,
+                    pos.func.dfg[inst],
+                );
 
-                    // Is there a Value already known to be stored
-                    // at this specific memory location?  If so,
-                    // we can alias the load result to this
-                    // already-known Value.
-                    //
-                    // Check if the definition dominates this
-                    // location; it might not, if it comes from a
-                    // load (stores will always dominate though if
-                    // their `last_store` survives through
-                    // meet-points to this use-site).
-                    let aliased =
-                        if let Some((def_inst, value)) = self.mem_values.get(&mem_loc).cloned() {
+                if let Some((address, offset, ty)) = inst_addr_offset_type(pos.func, inst) {
+                    let address = pos.func.dfg.resolve_aliases(address);
+                    let opcode = pos.func.dfg[inst].opcode();
+
+                    if opcode.can_store() {
+                        let store_data = inst_store_data(pos.func, inst).unwrap();
+                        let store_data = pos.func.dfg.resolve_aliases(store_data);
+                        let mem_loc = MemoryLoc {
+                            last_store: inst.into(),
+                            address,
+                            offset,
+                            ty,
+                            extending_opcode: get_ext_opcode(opcode),
+                        };
+                        log::trace!(
+                            "alias analysis: at inst{}: store with data v{} at loc {:?}",
+                            inst.index(),
+                            store_data.index(),
+                            mem_loc
+                        );
+                        self.mem_values.insert(mem_loc, (inst, store_data));
+                    } else if opcode.can_load() {
+                        let last_store = state.get_last_store(pos.func, inst);
+                        let load_result = pos.func.dfg.inst_results(inst)[0];
+                        let mem_loc = MemoryLoc {
+                            last_store,
+                            address,
+                            offset,
+                            ty,
+                            extending_opcode: get_ext_opcode(opcode),
+                        };
+                        log::trace!(
+                            "alias analysis: at inst{}: load with last_store inst{} at loc {:?}",
+                            inst.index(),
+                            last_store.map(|inst| inst.index()).unwrap_or(usize::MAX),
+                            mem_loc
+                        );
+
+                        // Is there a Value already known to be stored
+                        // at this specific memory location?  If so,
+                        // we can alias the load result to this
+                        // already-known Value.
+                        //
+                        // Check if the definition dominates this
+                        // location; it might not, if it comes from a
+                        // load (stores will always dominate though if
+                        // their `last_store` survives through
+                        // meet-points to this use-site).
+                        let aliased = if let Some((def_inst, value)) =
+                            self.mem_values.get(&mem_loc).cloned()
+                        {
                             log::trace!(
                                 " -> sees known value v{} from inst{}",
                                 value.index(),
@@ -370,20 +361,21 @@ impl<'a> AliasAnalysis<'a> {
                             false
                         };
 
-                    // Otherwise, we can keep *this* load around
-                    // as a new equivalent value.
-                    if !aliased {
-                        log::trace!(
-                            " -> inserting load result v{} at loc {:?}",
-                            load_result.index(),
-                            mem_loc
-                        );
-                        self.mem_values.insert(mem_loc, (inst, load_result));
+                        // Otherwise, we can keep *this* load around
+                        // as a new equivalent value.
+                        if !aliased {
+                            log::trace!(
+                                " -> inserting load result v{} at loc {:?}",
+                                load_result.index(),
+                                mem_loc
+                            );
+                            self.mem_values.insert(mem_loc, (inst, load_result));
+                        }
                     }
                 }
-            }
 
-            state.update(pos.func, inst);
+                state.update(pos.func, inst);
+            }
         }
     }
 }
