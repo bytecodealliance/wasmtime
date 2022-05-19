@@ -328,6 +328,7 @@ impl AluOPRR {
             | AluOPRR::FcvtDWU => 0b1010011,
         }
     }
+
     /*
     todo in rs2 position.
     What should I call this.
@@ -403,12 +404,10 @@ impl AluOPRR {
             AluOPRR::FcvtSw => RISCV_RM_FUNCT3,
             AluOPRR::FcvtSwU => RISCV_RM_FUNCT3,
             AluOPRR::FmvWX => 0b000,
-
             AluOPRR::FcvtLS => RISCV_RM_FUNCT3,
             AluOPRR::FcvtLuS => RISCV_RM_FUNCT3,
             AluOPRR::FcvtSL => RISCV_RM_FUNCT3,
             AluOPRR::FcvtSLU => RISCV_RM_FUNCT3,
-
             AluOPRR::FcvtLd => RISCV_RM_FUNCT3,
             AluOPRR::FcvtLuD => RISCV_RM_FUNCT3,
             AluOPRR::FmvXD => 0b000,

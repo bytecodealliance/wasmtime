@@ -180,13 +180,26 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             /*
                 todo:: where is the memory ordering parameter. ?????????
             */
-
             let r_dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let r_addr = ctx.put_input_in_regs(insn, 0).only_reg().unwrap();
-            let arg2 = ctx.put_input_in_regs(insn, 1).only_reg().unwrap();
+
             let ty_access = ty.unwrap();
             assert!(is_valid_atomic_transaction_ty(ty_access));
             let op = ctx.data(insn).atomic_rmw_op().unwrap();
+            let arg2: Reg = if ty_access == I32
+                && (op == crate::ir::AtomicRmwOp::Umin || op == crate::ir::AtomicRmwOp::Umax)
+            {
+                // we must narrow down int to fit u32
+                let tmp = ctx.alloc_tmp(I64).only_reg().unwrap();
+                let arg2 = ctx.put_input_in_regs(insn, 1).only_reg().unwrap();
+                Inst::narrow_down_int(tmp, arg2, ty_access)
+                    .into_iter()
+                    .for_each(|i| ctx.emit(i));
+                tmp.to_reg()
+            } else {
+                ctx.put_input_in_regs(insn, 1).only_reg().unwrap()
+            };
+
             let risc_op = AtomicOP::from_atomicrmw_type_and_op(ty_access, op);
             if let Some(op) = risc_op {
                 let i = Inst::Atomic {
@@ -238,7 +251,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     addr: r_addr,
                     src: zero_reg(),
                     aq: false,
-                    rl: false,
+                    rl: true,
                 });
                 // tmp = tmp & arg2
                 ctx.emit(Inst::AluRRR {
@@ -249,18 +262,18 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 });
                 // tmp = bit_not tmp;
                 ctx.emit(Inst::construct_bit_not(tmp, tmp.to_reg()));
-
+                let st_op = if ty_access.bits() == 64 {
+                    AtomicOP::AmoswapD
+                } else {
+                    AtomicOP::AmoswapW
+                };
                 ctx.emit(Inst::Atomic {
-                    op: if ty_access.bits() == 64 {
-                        AtomicOP::AmoswapD
-                    } else {
-                        AtomicOP::AmoswapW
-                    },
+                    op: st_op,
                     rd: r_dst,
                     src: tmp.to_reg(),
                     addr: r_addr,
                     aq: false,
-                    rl: false,
+                    rl: true,
                 });
             } else {
                 unreachable!();
@@ -406,32 +419,32 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::Bitselect => {
             debug_assert_ne!(Opcode::Vselect, op);
-            let tmp = ctx.alloc_tmp(I64).only_reg().unwrap();
+            let tmp1 = ctx.alloc_tmp(I64).only_reg().unwrap();
             let tmp2 = ctx.alloc_tmp(I64).only_reg().unwrap();
             let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let rcond = put_input_in_reg(ctx, inputs[0]);
             let x = put_input_in_reg(ctx, inputs[1]);
             let y = put_input_in_reg(ctx, inputs[2]);
-            // x part
+            // get all x part
             ctx.emit(Inst::AluRRR {
                 alu_op: AluOPRRR::And,
-                rd: tmp,
+                rd: tmp1,
                 rs1: rcond,
                 rs2: x,
             });
             // bit not
             ctx.emit(Inst::construct_bit_not(tmp2, rcond));
-            // y part
+            // get y  part
             ctx.emit(Inst::AluRRR {
                 alu_op: AluOPRRR::And,
                 rd: tmp2,
-                rs1: rcond,
+                rs1: tmp2.to_reg(),
                 rs2: y,
             });
             ctx.emit(Inst::AluRRR {
                 alu_op: AluOPRRR::Or,
                 rd: rd,
-                rs1: tmp.to_reg(),
+                rs1: tmp1.to_reg(),
                 rs2: tmp2.to_reg(),
             });
         }

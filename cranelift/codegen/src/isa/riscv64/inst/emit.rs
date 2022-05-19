@@ -79,6 +79,27 @@ impl Inst {
         }
     }
 
+    pub(crate) fn narrow_down_int(rd: Writable<Reg>, rs: Reg, ty: Type) -> SmallInstVec<Inst> {
+        assert!(is_int_and_type_signed(ty));
+        assert!(ty.bits() != 64);
+        let mut insts = SmallInstVec::new();
+        let shift = (64 - ty.bits()) as i16;
+
+        insts.push(Inst::AluRRImm12 {
+            alu_op: AluOPRRI::Slli,
+            rd: rd,
+            rs: rs,
+            imm12: Imm12::from_bits(shift),
+        });
+        insts.push(Inst::AluRRImm12 {
+            alu_op: AluOPRRI::Srli,
+            rd: rd,
+            rs: rd.to_reg(),
+            imm12: Imm12::from_bits(shift),
+        });
+        insts
+    }
+
     pub(crate) fn lower_br_icmp(
         cc: IntCC,
         a: ValueRegs<Reg>,

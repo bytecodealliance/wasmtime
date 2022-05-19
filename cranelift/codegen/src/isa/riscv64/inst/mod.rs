@@ -1085,8 +1085,8 @@ impl Inst {
                 if rl {
                     op_name.push_str(".rl");
                 }
-                let src = format_reg(src, allocs);
                 let addr = format_reg(addr, allocs);
+                let src = format_reg(src, allocs);
                 let rd = format_reg(rd.to_reg(), allocs);
                 if op.is_load() {
                     format!("{} {},({})", op_name, rd, addr,)

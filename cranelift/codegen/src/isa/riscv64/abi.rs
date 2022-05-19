@@ -137,9 +137,9 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                 ),
             }
             let abi_args = if run_out_of_registers {
-                &mut abi_args
-            } else {
                 &mut abi_args_for_stack
+            } else {
+                &mut abi_args 
             };
             if let ir::ArgumentPurpose::StructArgument(size) = param.purpose {
                 let offset = next_stack;
