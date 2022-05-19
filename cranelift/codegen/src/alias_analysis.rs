@@ -65,8 +65,11 @@ use crate::{
     cursor::{Cursor, FuncCursor},
     dominator_tree::DominatorTree,
     fx::{FxHashMap, FxHashSet},
-    inst_predicates::{inst_addr_offset_type, inst_memflags, inst_store_data, visit_block_succs},
-    ir::{immediates::Offset32, Block, Function, Inst, Type, Value},
+    inst_predicates::{
+        has_memory_fence_semantics, inst_addr_offset_type, inst_memflags, inst_store_data,
+        visit_block_succs,
+    },
+    ir::{immediates::Offset32, Block, Function, Inst, Opcode, Type, Value},
 };
 use cranelift_entity::{packed_option::PackedOption, EntityRef};
 
@@ -83,7 +86,12 @@ struct LastStores {
 impl LastStores {
     fn update(&mut self, func: &Function, inst: Inst) {
         let opcode = func.dfg[inst].opcode();
-        if opcode.can_store() {
+        if has_memory_fence_semantics(opcode) {
+            self.heap = inst.into();
+            self.table = inst.into();
+            self.vmctx = inst.into();
+            self.other = inst.into();
+        } else if opcode.can_store() {
             if let Some(memflags) = inst_memflags(func, inst) {
                 if memflags.heap() {
                     self.heap = inst.into();
@@ -100,11 +108,6 @@ impl LastStores {
                 self.vmctx = inst.into();
                 self.other = inst.into();
             }
-        } else if opcode.is_call() {
-            self.heap = inst.into();
-            self.table = inst.into();
-            self.vmctx = inst.into();
-            self.other = inst.into();
         }
     }
 
@@ -374,10 +377,9 @@ impl<'a> AliasAnalysis<'a> {
     }
 }
 
-fn get_ext_opcode(op: crate::ir::Opcode) -> Option<crate::ir::Opcode> {
-    use crate::ir::Opcode::*;
+fn get_ext_opcode(op: Opcode) -> Option<Opcode> {
     match op {
-        Load | Store => None,
+        Opcode::Load | Opcode::Store => None,
         _ => Some(op),
     }
 }

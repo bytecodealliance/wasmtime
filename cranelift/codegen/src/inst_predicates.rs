@@ -1,5 +1,4 @@
 //! Instruction predicates/properties, shared by various analyses.
-
 use crate::ir::immediates::Offset32;
 use crate::ir::instructions::BranchInfo;
 use crate::ir::{
@@ -132,6 +131,20 @@ pub fn inst_store_data(func: &Function, inst: Inst) -> Option<Value> {
             Some(args[0])
         }
         _ => None,
+    }
+}
+
+/// Determine whether this opcode behaves as a memory fence, i.e.,
+/// prohibits any moving of memory accesses across it.
+pub fn has_memory_fence_semantics(op: Opcode) -> bool {
+    match op {
+        Opcode::AtomicRmw
+        | Opcode::AtomicCas
+        | Opcode::AtomicLoad
+        | Opcode::AtomicStore
+        | Opcode::Fence => true,
+        Opcode::Call | Opcode::CallIndirect => true,
+        _ => false,
     }
 }
 
