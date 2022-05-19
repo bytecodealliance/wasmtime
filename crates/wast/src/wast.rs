@@ -291,8 +291,11 @@ impl<T> WastContext<T> {
                 mut module,
                 message,
             } => {
-                let bytes = module.encode()?;
-                let err = match self.module(None, &bytes) {
+                let err = match module
+                    .encode()
+                    .map_err(|e| e.into())
+                    .and_then(|bytes| self.module(None, &bytes))
+                {
                     Ok(()) => bail!("expected module to fail to build"),
                     Err(e) => e,
                 };
