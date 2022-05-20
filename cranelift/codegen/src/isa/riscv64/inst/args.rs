@@ -959,8 +959,9 @@ impl AluOPRRI {
 
     /*
         some instruction use imm12 for function code.
+        return Self and Imm12
     */
-    pub(crate) fn funct12(self, shamt: Option<u8>) -> Imm12 {
+    pub(crate) fn funct12(self, shamt: Option<u8>) -> (Self, Imm12) {
         if self.need_shamt().is_some() {
             assert!(shamt.is_some());
         } else {
@@ -988,7 +989,7 @@ impl AluOPRRI {
             Self::Orcb => 0b001010000111,
             _ => unreachable!(),
         };
-        Imm12::from_bits(bits as i16)
+        (self, Imm12::from_bits(bits as i16))
     }
 }
 

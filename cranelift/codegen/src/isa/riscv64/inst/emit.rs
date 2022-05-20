@@ -838,8 +838,7 @@ impl MachInstEmit for Inst {
                             insts.push(Inst::load_constant_imm12(rd, Imm12::from_bits(-1)));
                         }
                         8 => {
-                            let op = AluOPRRI::Sextb;
-                            let imm12 = op.funct12(None);
+                            let (op, imm12) = AluOPRRI::Sextb.funct12(None);
                             insts.push(Inst::AluRRImm12 {
                                 alu_op: op,
                                 rd,
@@ -848,8 +847,7 @@ impl MachInstEmit for Inst {
                             });
                         }
                         16 => {
-                            let op = AluOPRRI::Sexth;
-                            let imm12 = op.funct12(None);
+                            let (op, imm12) = AluOPRRI::Sexth.funct12(None);
                             insts.push(Inst::AluRRImm12 {
                                 alu_op: op,
                                 rd,

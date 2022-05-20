@@ -201,13 +201,15 @@ where
                 let tmp2 = self.temp_writable_reg(I64);
                 let tmp3 = self.temp_writable_reg(I64);
                 // first count lower trailing zeros
+                let (op, imm12) = AluOPRRI::Ctz.funct12(None);
                 self.emit(&MInst::AluRRImm12 {
-                    alu_op: AluOPRRI::Ctz,
+                    alu_op: op,
                     rd: tmp1,
                     rs: val.regs()[0],
-                    imm12: AluOPRRI::Ctz.funct12(None),
+                    imm12,
                 });
                 // load constant 64
+
                 self.emit(&MInst::AluRRImm12 {
                     alu_op: AluOPRRI::Ori,
                     rd: tmp3,
@@ -231,11 +233,12 @@ where
                     rs2: tmp2.to_reg(),
                 });
                 // count hight parts
+                let (op, imm12) = AluOPRRI::Ctz.funct12(None);
                 self.emit(&MInst::AluRRImm12 {
-                    alu_op: AluOPRRI::Ctz,
+                    alu_op: op,
                     rd: tmp2,
                     rs: tmp2.to_reg(),
-                    imm12: AluOPRRI::Ctz.funct12(None),
+                    imm12: imm12,
                 });
                 // add them togother
                 self.emit(&MInst::AluRRR {
@@ -246,19 +249,21 @@ where
                 });
             }
             64 => {
+                let (op, imm12) = AluOPRRI::Ctz.funct12(None);
                 self.emit(&MInst::AluRRImm12 {
-                    alu_op: AluOPRRI::Ctz,
+                    alu_op: op,
                     rd: tmp1,
                     rs: val.regs()[0],
-                    imm12: AluOPRRI::Ctz.funct12(None),
+                    imm12,
                 });
             }
             32 => {
+                let (op, imm12) = AluOPRRI::Ctzw.funct12(None);
                 self.emit(&MInst::AluRRImm12 {
-                    alu_op: AluOPRRI::Ctzw,
+                    alu_op: op,
                     rd: tmp1,
                     rs: val.regs()[0],
-                    imm12: AluOPRRI::Ctz.funct12(None),
+                    imm12: imm12,
                 });
             }
             16 | 8 => {
@@ -274,11 +279,12 @@ where
                     rs1: tmp1.to_reg(),
                     rs2: val.regs()[0],
                 });
+                let (op, imm12) = AluOPRRI::Ctz.funct12(None);
                 self.emit(&MInst::AluRRImm12 {
-                    alu_op: AluOPRRI::Ctzw,
+                    alu_op: op,
                     rd: tmp1,
                     rs: val.regs()[0],
-                    imm12: AluOPRRI::Ctz.funct12(None),
+                    imm12,
                 });
             }
             _ => unreachable!(),
@@ -305,11 +311,12 @@ where
                     self.emit(&MInst::gen_move(low, val, I64));
                 }
                 // extract the signed bit
+                let (op, imm12) = AluOPRRI::Bexti.funct12(Some(from_bits - 1));
                 self.emit(&MInst::AluRRImm12 {
-                    alu_op: AluOPRRI::Bexti,
+                    alu_op: op,
                     rd: tmp,
                     rs: val,
-                    imm12: AluOPRRI::Bexti.funct12(Some(from_bits - 1)),
+                    imm12,
                 });
                 //pretend signed extend from b1->b64
                 self.emit(&MInst::Extend {
