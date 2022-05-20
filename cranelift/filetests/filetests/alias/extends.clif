@@ -1,0 +1,44 @@
+test alias-analysis
+set opt_level=speed
+target aarch64
+
+;; Test that extension modes are properly accounted for when deciding
+;; whether loads alias.
+
+function %f0(i64 vmctx, i32) -> i32, i32, i32, i64, i64, i64 {
+    gv0 = vmctx
+    gv1 = load.i64 notrap readonly aligned gv0+8
+    heap0 = static gv1, bound 0x1_0000_0000, offset_guard 0x8000_0000, index_type i32
+ 
+block0(v0: i64, v1: i32):
+    v2 = heap_addr.i64 heap0, v1, 0
+
+    ;; Initial load. This will not be reused by anything below, even
+    ;; though it does access the same address.
+    v3 = load.i32 v2+8
+
+    ;; These loads must remain (must not be removed as redundant).
+    v4 = uload8.i32 v2+8
+    ; check: v4 = uload8.i32 v2+8
+    v5 = sload8.i32 v2+8
+    ; check: v5 = sload8.i32 v2+8
+    v6 = load.i64 v2+8
+    ; check: v6 = load.i64 v2+8
+
+    ;; 8-bit store only partially overwrites the address.
+    istore8 v6, v2+8
+
+    ;; This must not pick up the store data.
+    v7 = load.i64 v2+8
+    ; check: v7 = load.i64 v2+8
+
+    ;; Another store, this one non-truncating but actually using an
+    ;; `i8` value.
+    v8 = iconst.i8 123
+    store.i8 v8, v2+8
+
+    v9 = load.i64 v2+8
+    ; check: v9 = load.i64 v2+8
+
+    return v3, v4, v5, v6, v7, v9
+}

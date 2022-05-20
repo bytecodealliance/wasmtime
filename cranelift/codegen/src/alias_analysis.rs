@@ -380,6 +380,7 @@ impl<'a> AliasAnalysis<'a> {
 }
 
 fn get_ext_opcode(op: Opcode) -> Option<Opcode> {
+    debug_assert!(op.can_load() || op.can_store());
     match op {
         Opcode::Load | Opcode::Store => None,
         _ => Some(op),
