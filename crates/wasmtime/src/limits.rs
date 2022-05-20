@@ -7,8 +7,26 @@ pub const DEFAULT_MEMORY_LIMIT: usize = 10000;
 
 /// Used by hosts to limit resource consumption of instances.
 ///
-/// An instance can be created with a resource limiter so that hosts can take into account
-/// non-WebAssembly resource usage to determine if a linear memory or table should grow.
+/// This trait is used in conjunction with the
+/// [`Store::limiter`](crate::Store::limiter) to synchronously limit the
+/// allocation of resources within a store. As a store-level limit this means
+/// that all creation of instances, memories, and tables are limited within the
+/// store. Resources limited via this trait are primarily related to memory and
+/// limiting CPU resources needs to be done with something such as
+/// [`Config::consume_fuel`](crate::Config::consume_fuel) or
+/// [`Config::epoch_interruption`](crate::Config::epoch_interruption).
+///
+/// Note that this trait does not limit 100% of memory allocated via a
+/// [`Store`](crate::Store). Wasmtime will still allocate memory to track data
+/// structures and additionally embedder-specific memory allocations are not
+/// tracked via this trait. This trait only limits resources allocated by a
+/// WebAssembly instance itself.
+///
+/// This trait is intended for synchronously limiting the resources of a module.
+/// If your use case requires blocking to answer whether a request is permitted
+/// or not and you're otherwise working in an asynchronous context the
+/// [`ResourceLimiterAsync`] trait is also provided to avoid blocking an OS
+/// thread while a limit is determined.
 pub trait ResourceLimiter {
     /// Notifies the resource limiter that an instance's linear memory has been
     /// requested to grow.
@@ -19,6 +37,9 @@ pub trait ResourceLimiter {
     ///   instance allocator, also in bytes. A value of `None`
     ///   indicates that the linear memory is unbounded.
     ///
+    /// The `current` and `desired` amounts are guaranteed to always be
+    /// multiples of the WebAssembly page size, 64KiB.
+    ///
     /// This function should return `true` to indicate that the growing
     /// operation is permitted or `false` if not permitted. Returning `true`
     /// when a maximum has been exceeded will have no effect as the linear
@@ -28,6 +49,12 @@ pub trait ResourceLimiter {
     /// `memory.grow`. Requests where the allocation requested size doesn't fit
     /// in `usize` or exceeds the memory's listed maximum size may not invoke
     /// this method.
+    ///
+    /// Returning `false` from this method will cause the `memory.grow`
+    /// instruction in a module to return -1 (failure), or in the case of an
+    /// embedder API calling [`Memory::new`](crate::Memory::new) or
+    /// [`Memory::grow`](crate::Memory::grow) an error will be returned from
+    /// those methods.
     fn memory_growing(&mut self, current: usize, desired: usize, maximum: Option<usize>) -> bool;
 
     /// Notifies the resource limiter that growing a linear memory, permitted by
@@ -38,16 +65,24 @@ pub trait ResourceLimiter {
     /// memory. In that case, `error` might be downcastable to a `std::io::Error`.
     fn memory_grow_failed(&mut self, _error: &anyhow::Error) {}
 
-    /// Notifies the resource limiter that an instance's table has been requested to grow.
+    /// Notifies the resource limiter that an instance's table has been
+    /// requested to grow.
     ///
     /// * `current` is the current number of elements in the table.
     /// * `desired` is the desired number of elements in the table.
-    /// * `maximum` is either the table's maximum or a maximum from an instance allocator.
-    ///   A value of `None` indicates that the table is unbounded.
+    /// * `maximum` is either the table's maximum or a maximum from an instance
+    ///   allocator.  A value of `None` indicates that the table is unbounded.
     ///
-    /// This function should return `true` to indicate that the growing operation is permitted or
-    /// `false` if not permitted. Returning `true` when a maximum has been exceeded will have no
-    /// effect as the table will not grow.
+    /// This function should return `true` to indicate that the growing
+    /// operation is permitted or `false` if not permitted. Returning `true`
+    /// when a maximum has been exceeded will have no effect as the table will
+    /// not grow.
+    ///
+    /// Currently in Wasmtime each table element requires a pointer's worth of
+    /// space (e.g. `mem::size_of::<usize>()`).
+    ///
+    /// Like `memory_growing` returning `false` from this function will cause
+    /// `table.grow` to return -1 or embedder APIs will return an error.
     fn table_growing(&mut self, current: u32, desired: u32, maximum: Option<u32>) -> bool;
 
     /// Notifies the resource limiter that growing a linear memory, permitted by
@@ -68,7 +103,7 @@ pub trait ResourceLimiter {
 
     /// The maximum number of tables that can be created for a `Store`.
     ///
-    /// Module instantiation will fail if this limit is exceeded.
+    /// Creation of tables will fail if this limit is exceeded.
     ///
     /// This value defaults to 10,000.
     fn tables(&self) -> usize {
@@ -77,7 +112,7 @@ pub trait ResourceLimiter {
 
     /// The maximum number of linear memories that can be created for a `Store`
     ///
-    /// Instantiation will fail with an error if this limit is exceeded.
+    /// Creation of memories will fail with an error if this limit is exceeded.
     ///
     /// This value defaults to 10,000.
     fn memories(&self) -> usize {
@@ -85,15 +120,24 @@ pub trait ResourceLimiter {
     }
 }
 
-#[cfg(feature = "async")]
-/// Used by hosts to limit resource consumption of instances.  Identical to
-/// [`ResourceLimiter`], except that the `memory_growing` and `table_growing`
-/// functions are async. Must be used with an async [`Store`](`crate::Store`).
+/// Used by hosts to limit resource consumption of instances, blocking
+/// asynchronously if necessary.
+///
+/// This trait is identical to [`ResourceLimiter`], except that the
+/// `memory_growing` and `table_growing` functions are `async`. Must be used
+/// with an async [`Store`](`crate::Store`) configured via
+/// [`Config::async_support`](crate::Config::async_support).
 ///
 /// This trait is used with
 /// [`Store::limiter_async`](`crate::Store::limiter_async`)`: see those docs
 /// for restrictions on using other Wasmtime interfaces with an async resource
-/// limiter.
+/// limiter. Additionally see [`ResourceLimiter`] for more information about
+/// limiting resources from WebAssembly.
+///
+/// The `async` here enables embedders that are already using asynchronous
+/// execution of WebAssembly to block the WebAssembly, but no the OS thread, to
+/// answer the question whether growing a memory or table is allowed.
+#[cfg(feature = "async")]
 #[async_trait::async_trait]
 pub trait ResourceLimiterAsync {
     /// Async version of [`ResourceLimiter::memory_growing`]
@@ -134,6 +178,9 @@ pub struct StoreLimitsBuilder(StoreLimits);
 
 impl StoreLimitsBuilder {
     /// Creates a new [`StoreLimitsBuilder`].
+    ///
+    /// See the documentation on each builder method for the default for each
+    /// value.
     pub fn new() -> Self {
         Self(StoreLimits::default())
     }
@@ -195,6 +242,13 @@ impl StoreLimitsBuilder {
 }
 
 /// Provides limits for a [`Store`](crate::Store).
+///
+/// This type is created with a [`StoreLimitsBuilder`] and is typically used in
+/// conjuction with [`Store::limiter`](crate::Store::limiter).
+///
+/// This is a convenience type included to avoid needing to implement the
+/// [`ResourceLimiter`] trait if your use case fits in the static configuration
+/// that this [`StoreLimits`] provides.
 pub struct StoreLimits {
     memory_size: Option<usize>,
     table_elements: Option<u32>,
@@ -215,7 +269,6 @@ impl Default for StoreLimits {
     }
 }
 
-#[cfg_attr(feature = "async", async_trait::async_trait)]
 impl ResourceLimiter for StoreLimits {
     fn memory_growing(&mut self, _current: usize, desired: usize, _maximum: Option<usize>) -> bool {
         match self.memory_size {

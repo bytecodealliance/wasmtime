@@ -567,12 +567,57 @@ impl<T> Store<T> {
         }
     }
 
-    /// Configures the [`ResourceLimiter`](crate::ResourceLimiter) used to limit
-    /// resource creation within this [`Store`].
+    /// Configures the [`ResourceLimiter`] used to limit resource creation
+    /// within this [`Store`].
+    ///
+    /// Whenever resources such as linear memory, tables, or instances are
+    /// allocated the `limiter` specified here is invoked with the store's data
+    /// `T` and the returned [`ResourceLimiter`] is used to limit the operation
+    /// being allocated. The returned [`ResourceLimiter`] is intended to live
+    /// within the `T` itself, for example by storing a
+    /// [`StoreLimits`](crate::StoreLimits).
     ///
     /// Note that this limiter is only used to limit the creation/growth of
     /// resources in the future, this does not retroactively attempt to apply
     /// limits to the [`Store`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use wasmtime::*;
+    ///
+    /// struct MyApplicationState {
+    ///     my_state: u32,
+    ///     limits: StoreLimits,
+    /// }
+    ///
+    /// let engine = Engine::default();
+    /// let my_state = MyApplicationState {
+    ///     my_state: 42,
+    ///     limits: StoreLimitsBuilder::new()
+    ///         .memory_size(1 << 20 /* 1 MB */)
+    ///         .instances(2)
+    ///         .build(),
+    /// };
+    /// let mut store = Store::new(&engine, my_state);
+    /// store.limiter(|state| &mut state.limits);
+    ///
+    /// // Creation of smaller memories is allowed
+    /// Memory::new(&mut store, MemoryType::new(1, None)).unwrap();
+    ///
+    /// // Creation of a larger memory, however, will exceed the 1MB limit we've
+    /// // configured
+    /// assert!(Memory::new(&mut store, MemoryType::new(1000, None)).is_err());
+    ///
+    /// // The number of instances in this store is limited to 2, so the third
+    /// // instance here should fail.
+    /// let module = Module::new(&engine, "(module)").unwrap();
+    /// assert!(Instance::new(&mut store, &module, &[]).is_ok());
+    /// assert!(Instance::new(&mut store, &module, &[]).is_ok());
+    /// assert!(Instance::new(&mut store, &module, &[]).is_err());
+    /// ```
+    ///
+    /// [`ResourceLimiter`]: crate::ResourceLimiter
     pub fn limiter(
         &mut self,
         mut limiter: impl FnMut(&mut T) -> &mut (dyn crate::ResourceLimiter) + Send + Sync + 'static,
@@ -592,20 +637,12 @@ impl<T> Store<T> {
         inner.limiter = Some(ResourceLimiterInner::Sync(Box::new(limiter)));
     }
 
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
     /// Configures the [`ResourceLimiterAsync`](crate::ResourceLimiterAsync)
-    /// used to limit resource creation within this [`Store`]. Must be used
-    /// with an async `Store`!.
+    /// used to limit resource creation within this [`Store`].
     ///
-    /// Note that this limiter is only used to limit the creation/growth of
-    /// resources in the future, this does not retroactively attempt to apply
-    /// limits to the [`Store`].
-    ///
-    /// This variation on the [`ResourceLimiter`](`crate::ResourceLimiter`)
-    /// makes the `memory_growing` and `table_growing` functions `async`. This
-    /// means that, as part of your resource limiting strategy, the async
-    /// resource limiter may yield execution until a resource becomes
-    /// available.
+    /// This method is an asynchronous variant of the [`Store::limiter`] method
+    /// where the embedder can block the wasm request for more resources with
+    /// host `async` execution of futures.
     ///
     /// By using a [`ResourceLimiterAsync`](`crate::ResourceLimiterAsync`)
     /// with a [`Store`], you can no longer use
@@ -617,7 +654,14 @@ impl<T> Store<T> {
     /// [`Memory::grow_async`](`crate::Memory::grow_async`),
     /// [`Table::new_async`](`crate::Table::new_async`), and
     /// [`Table::grow_async`](`crate::Table::grow_async`).
+    ///
+    /// Note that this limiter is only used to limit the creation/growth of
+    /// resources in the future, this does not retroactively attempt to apply
+    /// limits to the [`Store`]. Additionally this must be used with an async
+    /// [`Store`] configured via
+    /// [`Config::async_support`](crate::Config::async_support).
     #[cfg(feature = "async")]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
     pub fn limiter_async(
         &mut self,
         mut limiter: impl FnMut(&mut T) -> &mut (dyn crate::ResourceLimiterAsync)
