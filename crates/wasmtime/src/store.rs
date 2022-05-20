@@ -574,7 +574,8 @@ impl<T> Store<T> {
     /// allocated the `limiter` specified here is invoked with the store's data
     /// `T` and the returned [`ResourceLimiter`] is used to limit the operation
     /// being allocated. The returned [`ResourceLimiter`] is intended to live
-    /// within the `T` itself, for example by storing a [`StoreLimits`].
+    /// within the `T` itself, for example by storing a
+    /// [`StoreLimits`](crate::StoreLimits).
     ///
     /// Note that this limiter is only used to limit the creation/growth of
     /// resources in the future, this does not retroactively attempt to apply
