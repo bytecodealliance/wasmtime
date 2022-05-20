@@ -169,11 +169,14 @@ where
         // trampoline we'll call later.
         if cfg!(debug_assertions) {
             unsafe {
-                params_and_results.as_mut_ptr().write_bytes(0xab_u8, 1);
+                const CANON_ABI_UNINIT_PATTERN: u8 = 0xAB;
+                params_and_results
+                    .as_mut_ptr()
+                    .write_bytes(CANON_ABI_UNINIT_PATTERN, 1);
             }
         }
 
-        // Perform the lowering operation for hte parameters which will write
+        // Perform the lowering operation for the parameters which will write
         // all of the parameters to the stack. This stack buffer is then passed
         // to core wasm as `*mut ValRaw` which will read the values from the
         // stack and later store the results here as well.
@@ -314,7 +317,7 @@ pub unsafe trait ComponentParams {
     #[doc(hidden)]
     fn typecheck(params: &[(Option<String>, InterfaceType)], types: &ComponentTypes) -> Result<()>;
 
-    /// Views this instsance of `ComponentParams` as a tuple, allowing
+    /// Views this instance of `ComponentParams` as a tuple, allowing
     /// delegation to all of the methods in `ComponentValue`.
     #[doc(hidden)]
     fn as_tuple(&self) -> &Self::AsTuple;
@@ -980,7 +983,7 @@ unsafe impl ComponentValue for str {
     fn typecheck(ty: &InterfaceType, _types: &ComponentTypes) -> Result<()> {
         match ty {
             InterfaceType::String => Ok(()),
-            other => bail!("expected `list` found `{}`", desc(other)),
+            other => bail!("expected `string` found `{}`", desc(other)),
         }
     }
 
@@ -1232,6 +1235,7 @@ impl<'a, T: ComponentValue> Cursor<'a, Vec<T>> {
 
 #[inline]
 const fn align_to(a: usize, align: u32) -> usize {
+    debug_assert!(align.is_power_of_two());
     let align = align as usize;
     (a + (align - 1)) & !(align - 1)
 }

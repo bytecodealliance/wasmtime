@@ -152,13 +152,13 @@ impl Func {
     /// # }
     /// ```
     ///
-    /// Calling a function which takes multiple parameters:
+    /// Calling a function which takes multiple parameters and returns a boolean:
     ///
     /// ```
     /// # use wasmtime::component::Func;
     /// # use wasmtime::Store;
     /// # fn foo(func: &Func, mut store: Store<()>) -> anyhow::Result<()> {
-    /// let typed = func.typed::<(u32, Option<&str>, &[u8],), bool, _>(&store)?;
+    /// let typed = func.typed::<(u32, Option<&str>, &[u8]), bool, _>(&store)?;
     /// let ok: bool = typed.call(&mut store, (1, Some("hello"), b"bytes!"))?;
     /// println!("return value was: {ok}");
     /// # Ok(())
