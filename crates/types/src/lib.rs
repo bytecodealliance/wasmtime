@@ -164,6 +164,11 @@ entity_impl!(DefinedTableIndex);
 pub struct DefinedMemoryIndex(u32);
 entity_impl!(DefinedMemoryIndex);
 
+/// Index type of a defined memory inside the WebAssembly module.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
+pub struct OwnedMemoryIndex(u32);
+entity_impl!(OwnedMemoryIndex);
+
 /// Index type of a defined global inside the WebAssembly module.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub struct DefinedGlobalIndex(u32);

@@ -211,7 +211,7 @@ impl Instance {
 
     /// Return the indexed `VMMemoryDefinition`.
     fn memory_ptr(&self, index: DefinedMemoryIndex) -> *mut VMMemoryDefinition {
-        unsafe { self.vmctx_plus_offset(self.offsets.vmctx_vmmemory_definition(index)) }
+        unsafe { *self.vmctx_plus_offset(self.offsets.vmctx_vmmemory_pointer(index)) }
     }
 
     /// Return the indexed `VMGlobalDefinition`.
@@ -935,10 +935,28 @@ impl Instance {
             ptr = ptr.add(1);
         }
 
-        // Initialize the defined memories
+        // Initialize the defined memories. This fills in both the
+        // `defined_memories` table and the `owned_memories` table at the same
+        // time. Entries in `defined_memories` hold a pointer to a definition
+        // (all memories) whereas the `owned_memories` hold the actual
+        // definitions of memories owned (not shared) in the module.
         let mut ptr = self.vmctx_plus_offset(self.offsets.vmctx_memories_begin());
+        let mut owned_ptr = self.vmctx_plus_offset(self.offsets.vmctx_owned_memories_begin());
         for i in 0..module.memory_plans.len() - module.num_imported_memories {
-            ptr::write(ptr, self.memories[DefinedMemoryIndex::new(i)].vmmemory());
+            if module.memory_plans[MemoryIndex::new(i)].memory.shared {
+                let def_ptr = self.memories[DefinedMemoryIndex::new(i)]
+                    .as_shared_memory()
+                    .unwrap()
+                    .vmmemory_ptr_mut();
+                ptr::write(ptr, def_ptr);
+            } else {
+                ptr::write(
+                    owned_ptr,
+                    self.memories[DefinedMemoryIndex::new(i)].vmmemory(),
+                );
+                ptr::write(ptr, owned_ptr);
+                owned_ptr = owned_ptr.add(1);
+            }
             ptr = ptr.add(1);
         }
 
@@ -1105,9 +1123,9 @@ impl InstanceHandle {
     }
 
     /// Return the memory index for the given `VMMemoryDefinition` in this instance.
-    pub unsafe fn memory_index(&self, memory: &VMMemoryDefinition) -> DefinedMemoryIndex {
-        self.instance().memory_index(memory)
-    }
+    // pub unsafe fn memory_index(&self, memory: &VMMemoryDefinition) -> DefinedMemoryIndex {
+    //     self.instance().memory_index(memory)
+    // }
 
     /// Get a memory defined locally within this module.
     pub fn get_defined_memory(&mut self, index: DefinedMemoryIndex) -> *mut Memory {

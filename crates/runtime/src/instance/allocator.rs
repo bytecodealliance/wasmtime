@@ -513,6 +513,38 @@ impl Default for OnDemandInstanceAllocator {
     }
 }
 
+/// Allocate an instance containing a single memory.
+///
+/// In order to import a [`Memory`] into a WebAssembly instance, Wasmtime
+/// requires that memory to exist in its own instance. Here we bring to life
+/// such a "Frankenstein" instance with the only purpose of exporting a
+/// [`Memory`].
+///
+/// TODO explain how this applies to shared memory
+pub unsafe fn allocate_single_memory_instance(
+    req: InstanceAllocationRequest,
+    memory: Memory,
+) -> Result<InstanceHandle, InstantiationError> {
+    let mut memories = PrimaryMap::default();
+    memories.push(memory);
+    let tables = PrimaryMap::default();
+    let module = req.runtime_info.module();
+    let offsets = VMOffsets::new(HostPtr, module);
+    let layout = Instance::alloc_layout(&offsets);
+    let instance = alloc::alloc(layout) as *mut Instance;
+    Instance::new_at(instance, layout.size(), offsets, req, memories, tables);
+    Ok(InstanceHandle { instance })
+}
+
+/// Internal implementation of [`InstanceHandle`] deallocation.
+///
+/// See [`InstanceAllocator::deallocate()`] for more details.
+pub unsafe fn deallocate(handle: &InstanceHandle) {
+    let layout = Instance::alloc_layout(&handle.instance().offsets);
+    ptr::drop_in_place(handle.instance);
+    alloc::dealloc(handle.instance.cast(), layout);
+}
+
 unsafe impl InstanceAllocator for OnDemandInstanceAllocator {
     unsafe fn allocate(
         &self,
@@ -542,9 +574,7 @@ unsafe impl InstanceAllocator for OnDemandInstanceAllocator {
     }
 
     unsafe fn deallocate(&self, handle: &InstanceHandle) {
-        let layout = Instance::alloc_layout(&handle.instance().offsets);
-        ptr::drop_in_place(handle.instance);
-        alloc::dealloc(handle.instance.cast(), layout);
+        deallocate(handle)
     }
 
     #[cfg(feature = "async")]

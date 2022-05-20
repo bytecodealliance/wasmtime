@@ -30,6 +30,7 @@ mod relocs;
 mod stack_overflow;
 mod store;
 mod table;
+mod threads;
 mod traps;
 mod wast;
 
