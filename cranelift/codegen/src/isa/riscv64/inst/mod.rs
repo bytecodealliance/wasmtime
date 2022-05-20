@@ -357,11 +357,7 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
         &Inst::Nop4 => {
             //todo do nothing ok
         }
-        &Inst::BrTable {
-            index,
-            tmp1,
-           .. 
-        } => {
+        &Inst::BrTable { index, tmp1, .. } => {
             collector.reg_use(index);
             collector.reg_early_def(tmp1);
         }
@@ -765,14 +761,14 @@ impl Inst {
         };
 
         fn format_extend_op(signed: bool, from_bits: u8, to_bits: u8) -> String {
-            fn short_type_name(signed: bool, bits: u8) -> String {
-                format!("{}{}", if signed { "i" } else { "u" }, bits)
+            fn short_type_name(bits: u8) -> String {
+                format!("{}", bits)
             }
             format!(
                 "{}ext_{}_to_{}",
                 if signed { "s" } else { "u" },
-                short_type_name(signed, from_bits),
-                short_type_name(signed, to_bits),
+                short_type_name(from_bits),
+                short_type_name(to_bits),
             )
         }
 

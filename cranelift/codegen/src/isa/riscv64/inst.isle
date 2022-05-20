@@ -669,7 +669,6 @@
   (imm12_from_value n)
   (def_inst (iconst (u64_from_imm64 (imm12_from_u64 n)))))
 
-
 (decl select_addi (Type) AluOPRRI)
 (rule (select_addi (fits_in_32 ty)) (AluOPRRI.Addiw))
 (rule (select_addi (fits_in_64 ty)) (AluOPRRI.Addi))
@@ -679,7 +678,6 @@
 
 (decl bnot_128 (ValueRegs) ValueRegs)
 (extern constructor bnot_128 bnot_128)
-
 
 (decl band_128 (ValueRegs ValueRegs) ValueRegs)
 (extern constructor band_128 band_128)
@@ -696,3 +694,5 @@
 (decl r_clz (Type ValueRegs)Reg)
 (extern constructor r_clz r_clz)
 
+(decl extend(Reg bool u8 u8 )ValueRegs)
+(extern constructor extend extend)

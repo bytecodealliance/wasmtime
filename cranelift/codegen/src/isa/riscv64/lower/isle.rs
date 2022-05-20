@@ -9,7 +9,7 @@ use self::generated_code::I128ArithmeticOP;
 use super::{writable_zero_reg, zero_reg, Inst as MInst};
 
 use crate::isa::riscv64::settings::Flags as IsaFlags;
-use crate::machinst::{isle::*, SmallInstVec};
+use crate::machinst::{isle::*, MachInst, SmallInstVec};
 use crate::settings::Flags;
 
 use crate::machinst::{VCodeConstant, VCodeConstantData};
@@ -284,6 +284,71 @@ where
             _ => unreachable!(),
         }
         tmp1.to_reg()
+    }
+
+    fn extend(&mut self, val: Reg, is_signed: bool, from_bits: u8, to_bits: u8) -> ValueRegs {
+        if is_signed {
+            if to_bits == 128 {
+                let low = self.temp_writable_reg(I64);
+                let tmp = self.temp_writable_reg(I64);
+                let high = self.temp_writable_reg(I64);
+                // extend the lower parts if need
+                if from_bits != 64 {
+                    self.emit(&MInst::Extend {
+                        rd: tmp,
+                        rn: val,
+                        signed: is_signed,
+                        from_bits,
+                        to_bits: 64,
+                    });
+                } else {
+                    self.emit(&MInst::gen_move(low, val, I64));
+                }
+                // extract the signed bit
+                self.emit(&MInst::AluRRImm12 {
+                    alu_op: AluOPRRI::Bexti,
+                    rd: tmp,
+                    rs: val,
+                    imm12: AluOPRRI::Bexti.funct12(Some(from_bits - 1)),
+                });
+                //pretend signed extend from b1->b64
+                self.emit(&MInst::Extend {
+                    rd: high,
+                    rn: tmp.to_reg(),
+                    signed: is_signed,
+                    from_bits: 1,
+                    to_bits: 64,
+                });
+                ValueRegs::two(low.to_reg(), high.to_reg())
+            } else {
+                let tmp = self.temp_writable_reg(I64);
+                self.emit(&MInst::Extend {
+                    rd: tmp,
+                    rn: val,
+                    signed: is_signed,
+                    from_bits,
+                    to_bits,
+                });
+                ValueRegs::one(tmp.to_reg())
+            }
+        } else {
+            // this  is unsigned.
+            let tmp = self.temp_writable_reg(I64);
+            self.emit(&MInst::Extend {
+                rd: tmp,
+                rn: val,
+                signed: is_signed,
+                from_bits,
+                to_bits,
+            });
+            if to_bits == 128 {
+                let tmp2 = self.temp_writable_reg(I64);
+                self.emit(&MInst::load_constant_imm12(tmp2, Imm12::from_bits(0)));
+                ValueRegs::two(tmp.to_reg(), tmp2.to_reg())
+            } else {
+                ValueRegs::one(tmp.to_reg())
+            }
+        }
     }
 }
 

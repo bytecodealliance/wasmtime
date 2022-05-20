@@ -816,15 +816,27 @@ impl MachInstEmit for Inst {
                 from_bits,
                 to_bits,
             } => {
-                /*
-                    is bool type need extend???
-                */
-                assert!(from_bits != 1);
                 let rn = allocs.next(rn);
                 let rd = allocs.next_writable(rd);
                 let mut insts = SmallInstVec::new();
                 if signed {
                     match from_bits {
+                        1 => {
+                            insts.push(Inst::CondBr {
+                                taken: BranchTarget::offset(Inst::instruction_size() * 3),
+                                not_taken: BranchTarget::zero(),
+                                kind: IntegerCompare {
+                                    rs1: rn,
+                                    rs2: zero_reg(),
+                                    kind: IntCC::NotEqual,
+                                },
+                            });
+                            insts.push(Inst::load_constant_imm12(rd, Imm12::from_bits(0)));
+                            insts.push(Inst::Jal {
+                                dest: BranchTarget::offset(Inst::instruction_size() * 2),
+                            });
+                            insts.push(Inst::load_constant_imm12(rd, Imm12::from_bits(-1)));
+                        }
                         8 => {
                             let op = AluOPRRI::Sextb;
                             let imm12 = op.funct12(None);
@@ -835,7 +847,6 @@ impl MachInstEmit for Inst {
                                 imm12,
                             });
                         }
-
                         16 => {
                             let op = AluOPRRI::Sexth;
                             let imm12 = op.funct12(None);
