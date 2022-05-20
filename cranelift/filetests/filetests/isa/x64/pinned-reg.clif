@@ -1,0 +1,36 @@
+test compile precise-output
+set enable_pinned_reg=true
+target x86_64
+
+function %f0() {
+block0:
+    v1 = get_pinned_reg.i64
+    v2 = iadd_imm v1, 1
+    set_pinned_reg v2
+    return
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   addq    %r15, $1, %r15
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %f1() windows_fastcall {
+block0:
+    v1 = get_pinned_reg.i64
+    v2 = iadd_imm v1, 1
+    set_pinned_reg v2
+    return
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   addq    %r15, $1, %r15
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+

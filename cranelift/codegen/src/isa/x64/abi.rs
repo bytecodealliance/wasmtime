@@ -397,7 +397,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
 
     fn get_stacklimit_reg() -> Reg {
         debug_assert!(
-            !is_callee_save_systemv(regs::r10().to_real_reg().unwrap())
+            !is_callee_save_systemv(regs::r10().to_real_reg().unwrap(), false)
                 && !is_callee_save_baldrdash(regs::r10().to_real_reg().unwrap())
         );
 
@@ -577,7 +577,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
     ) -> SmallVec<[Self::I; 16]> {
         let mut insts = SmallVec::new();
 
-        let clobbered_callee_saves = Self::get_clobbered_callee_saves(call_conv, clobbers);
+        let clobbered_callee_saves = Self::get_clobbered_callee_saves(call_conv, flags, clobbers);
         let stack_size = fixed_frame_storage_size + compute_clobber_size(&clobbered_callee_saves);
 
         // Restore regs by loading from offsets of RSP. RSP will be
@@ -788,6 +788,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
 
     fn get_clobbered_callee_saves(
         call_conv: CallConv,
+        flags: &settings::Flags,
         regs: &[Writable<RealReg>],
     ) -> Vec<Writable<RealReg>> {
         let mut regs: Vec<Writable<RealReg>> = match call_conv {
@@ -802,12 +803,12 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             CallConv::Fast | CallConv::Cold | CallConv::SystemV | CallConv::WasmtimeSystemV => regs
                 .iter()
                 .cloned()
-                .filter(|r| is_callee_save_systemv(r.to_reg()))
+                .filter(|r| is_callee_save_systemv(r.to_reg(), flags.enable_pinned_reg()))
                 .collect(),
             CallConv::WindowsFastcall | CallConv::WasmtimeFastcall => regs
                 .iter()
                 .cloned()
-                .filter(|r| is_callee_save_fastcall(r.to_reg()))
+                .filter(|r| is_callee_save_fastcall(r.to_reg(), flags.enable_pinned_reg()))
                 .collect(),
             CallConv::Probestack => todo!("probestack?"),
             CallConv::AppleAarch64 | CallConv::WasmtimeAppleAarch64 => unreachable!(),
@@ -969,11 +970,15 @@ fn get_fltreg_for_retval(
     }
 }
 
-fn is_callee_save_systemv(r: RealReg) -> bool {
+fn is_callee_save_systemv(r: RealReg, enable_pinned_reg: bool) -> bool {
     use regs::*;
     match r.class() {
         RegClass::Int => match r.hw_enc() {
-            ENC_RBX | ENC_RBP | ENC_R12 | ENC_R13 | ENC_R14 | ENC_R15 => true,
+            ENC_RBX | ENC_RBP | ENC_R12 | ENC_R13 | ENC_R14 => true,
+            // R15 is the pinned register; if we're using it that way,
+            // it is effectively globally-allocated, and is not
+            // callee-saved.
+            ENC_R15 => !enable_pinned_reg,
             _ => false,
         },
         RegClass::Float => false,
@@ -989,18 +994,20 @@ fn is_callee_save_baldrdash(r: RealReg) -> bool {
                 false
             } else {
                 // Defer to native for the other ones.
-                is_callee_save_systemv(r)
+                is_callee_save_systemv(r, /* enable_pinned_reg = */ true)
             }
         }
         RegClass::Float => false,
     }
 }
 
-fn is_callee_save_fastcall(r: RealReg) -> bool {
+fn is_callee_save_fastcall(r: RealReg, enable_pinned_reg: bool) -> bool {
     use regs::*;
     match r.class() {
         RegClass::Int => match r.hw_enc() {
-            ENC_RBX | ENC_RBP | ENC_RSI | ENC_RDI | ENC_R12 | ENC_R13 | ENC_R14 | ENC_R15 => true,
+            ENC_RBX | ENC_RBP | ENC_RSI | ENC_RDI | ENC_R12 | ENC_R13 | ENC_R14 => true,
+            // See above for SysV: we must treat the pinned reg specially.
+            ENC_R15 => !enable_pinned_reg,
             _ => false,
         },
         RegClass::Float => match r.hw_enc() {
