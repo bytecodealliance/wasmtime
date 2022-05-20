@@ -1,0 +1,45 @@
+test alias-analysis
+set opt_level=speed
+target aarch64
+
+;; Test that certain instructions act as fences that inhibit alias
+;; analysis to move accesses across them.
+
+function %f0(i64 vmctx, i32) -> i32, i32, i32, i32, i32, i32, i32, i32, i32, i32 {
+    gv0 = vmctx
+    gv1 = load.i64 notrap readonly aligned gv0+8
+    heap0 = static gv1, bound 0x1_0000_0000, offset_guard 0x8000_0000, index_type i32
+ 
+block0(v0: i64, v1: i32):
+    v2 = heap_addr.i64 heap0, v1, 0
+
+    v3 = load.i32 v2+8
+    v4 = load.i32 vmctx v0+16
+
+    atomic_store.i32 v1, v0
+
+    v5 = load.i32 vmctx v0+16
+    ; check: v5 = load.i32 vmctx v0+16
+
+    v6 = atomic_cas.i32 v0, v1, v1
+
+    v7 = load.i32 vmctx v0+16
+    ; check: v7 = load.i32 vmctx v0+16
+
+    fence
+
+    v8 = load.i32 vmctx v0+16
+    ; check: v8 = load.i32 vmctx v0+16
+
+    v9 = atomic_rmw.i32 add v0, v1
+
+    v10 = load.i32 vmctx v0+16
+    ; check: v10 = load.i32 vmctx v0+16
+
+    v11 = atomic_load.i32 v0
+
+    v12 = load.i32 vmctx v0+16
+    ; check: v12 = load.i32 vmctx v0+16    
+
+    return v3, v4, v5, v6, v7, v8, v9, v10, v11, v12
+}

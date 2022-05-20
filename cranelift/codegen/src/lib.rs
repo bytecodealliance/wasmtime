@@ -91,6 +91,7 @@ pub use crate::entity::packed_option;
 pub use crate::machinst::buffer::{MachCallSite, MachReloc, MachSrcLoc, MachStackMap, MachTrap};
 pub use crate::machinst::TextSectionBuilder;
 
+mod alias_analysis;
 mod bitset;
 mod constant_hash;
 mod context;

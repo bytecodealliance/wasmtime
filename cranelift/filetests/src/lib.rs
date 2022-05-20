@@ -37,6 +37,7 @@ mod runone;
 mod runtest_environment;
 mod subtest;
 
+mod test_alias_analysis;
 mod test_cat;
 mod test_compile;
 mod test_dce;
@@ -111,6 +112,7 @@ pub fn run_passes(
 /// a `.clif` test file.
 fn new_subtest(parsed: &TestCommand) -> anyhow::Result<Box<dyn subtest::SubTest>> {
     match parsed.command {
+        "alias-analysis" => test_alias_analysis::subtest(parsed),
         "cat" => test_cat::subtest(parsed),
         "compile" => test_compile::subtest(parsed),
         "dce" => test_dce::subtest(parsed),

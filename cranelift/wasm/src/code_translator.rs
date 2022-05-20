@@ -160,7 +160,9 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 GlobalVariable::Const(val) => val,
                 GlobalVariable::Memory { gv, offset, ty } => {
                     let addr = builder.ins().global_value(environ.pointer_type(), gv);
-                    let flags = ir::MemFlags::trusted();
+                    let mut flags = ir::MemFlags::trusted();
+                    // Put globals in the "table" abstract heap category as well.
+                    flags.set_table();
                     builder.ins().load(ty, flags, addr, offset)
                 }
                 GlobalVariable::Custom => environ.translate_custom_global_get(
@@ -175,7 +177,9 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 GlobalVariable::Const(_) => panic!("global #{} is a constant", *global_index),
                 GlobalVariable::Memory { gv, offset, ty } => {
                     let addr = builder.ins().global_value(environ.pointer_type(), gv);
-                    let flags = ir::MemFlags::trusted();
+                    let mut flags = ir::MemFlags::trusted();
+                    // Put globals in the "table" abstract heap category as well.
+                    flags.set_table();
                     let mut val = state.pop1();
                     // Ensure SIMD values are cast to their default Cranelift type, I8x16.
                     if ty.is_vector() {
@@ -2348,6 +2352,12 @@ fn prepare_addr<FE: FuncEnvironment + ?Sized>(
     // guarantee. WebAssembly memory accesses are always little-endian.
     let mut flags = MemFlags::new();
     flags.set_endianness(ir::Endianness::Little);
+
+    // The access occurs to the `heap` disjoint category of abstract
+    // state. This may allow alias analysis to merge redundant loads,
+    // etc. when heap accesses occur interleaved with other (table,
+    // vmctx, stack) accesses.
+    flags.set_heap();
 
     Ok((flags, addr, offset.into()))
 }
