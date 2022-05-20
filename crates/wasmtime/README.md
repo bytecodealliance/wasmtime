@@ -21,23 +21,26 @@ Wasmtime are:
   efficient instantiation, low-overhead transitions between the embedder and
   wasm, and scalability of concurrent instances.
 
-* **Secure**. Wasmtime's development is strongly focused on the correctness of
+* **[Secure]**. Wasmtime's development is strongly focused on the correctness of
   its implementation with 24/7 fuzzing donated by [Google's OSS Fuzz],
   leveraging Rust's API and runtime safety guarantees, careful design of
   features and APIs through an [RFC process], a [security policy] in place
   for when things go wrong, and a [release policy] for patching older versions
-  as well.
+  as well. We follow best practices for defense-in-depth and known
+  protections and mitigations for issues like Spectre. Finally, we're working
+  to push the state-of-the-art by collaborating with academic
+  researchers to formally verify critical parts of Wasmtime and Cranelift.
 
-* **Configurable**. Wastime supports a rich set of APIs and build time
-  configuration to provide many option such as further means of restricting
+* **[Configurable]**. Wastime supports a rich set of APIs and build time
+  configuration to provide many options such as further means of restricting
   WebAssembly beyond its basic guarantees such as its CPU and Memory
   consumption. Wasmtime also runs in tiny environments all the way up to massive
   servers with many concurrent instances.
 
-* **WASI**. Wasmtime supports a rich set of APIs for interacting with the host
+* **[WASI]**. Wasmtime supports a rich set of APIs for interacting with the host
   environment through the [WASI standard](https://wasi.dev).
 
-* **Standards Compliant**. Wasmtime passes the [official WebAssembly test
+* **[Standards Compliant]**. Wasmtime passes the [official WebAssembly test
   suite](https://github.com/WebAssembly/testsuite), implements the [official C
   API of wasm](https://github.com/WebAssembly/wasm-c-api), and implements
   [future proposals to WebAssembly](https://github.com/WebAssembly/proposals) as
@@ -50,6 +53,10 @@ Wasmtime are:
 [security policy]: https://bytecodealliance.org/security
 [RFC process]: https://github.com/bytecodealliance/rfcs
 [release policy]: https://docs.wasmtime.dev/stability-release.html
+[Secure]: https://docs.wasmtime.dev/security.html
+[Configurable]: https://docs.rs/wasmtime/latest/wasmtime/struct.Config.html
+[WASI]: https://docs.rs/wasmtime-wasi/latest/wasmtime_wasi/
+[Standards Compliant]: https://docs.wasmtime.dev/stability-wasm-proposals-support.html
 
 ## Example
 
