@@ -164,6 +164,127 @@ where
         });
         self.value_regs(dst[0].to_reg(), dst[1].to_reg())
     }
+
+    fn bit_reverse(&mut self, ty: Type, rs: Reg) -> Reg {
+        // let tmp = self.temp_writable_reg(I64);
+        // self.emit(&MInst::AluRRImm12 {
+        //     alu_op: AluOPRRI::Rev8,
+        //     rd: tmp,
+        //     rs,
+        //     imm12: AluOPRRI::Rev8.funct12(None),
+        // });
+        // if ty.bits() != 64 {
+        //     let shift = 64 - ty.bits();
+        //     self.emit(&MInst::AluRRImm12 {
+        //         alu_op: AluOPRRI::Srli,
+        //         rd: tmp,
+        //         rs: tmp.to_reg(),
+        //         imm12: Imm12::from_bits(shift as i16),
+        //     });
+        // }
+        // tmp.to_reg()
+        todo!()
+    }
+    fn r_clz(&mut self, ty: Type, val: ValueRegs) -> Reg {
+        // if ty.bits() == 128 {
+        // } else {
+        //     let tmp = self.temp_writable_reg(I64);
+        //     self.emit(&MInst::AluRRImm12 {});
+        // }
+        todo!()
+    }
+
+    fn r_ctz(&mut self, ty: Type, val: ValueRegs) -> Reg {
+        let tmp1 = self.temp_writable_reg(I64);
+        match ty.bits() {
+            128 => {
+                let tmp2 = self.temp_writable_reg(I64);
+                let tmp3 = self.temp_writable_reg(I64);
+                // first count lower trailing zeros
+                self.emit(&MInst::AluRRImm12 {
+                    alu_op: AluOPRRI::Ctz,
+                    rd: tmp1,
+                    rs: val.regs()[0],
+                    imm12: AluOPRRI::Ctz.funct12(None),
+                });
+                // load constant 64
+                self.emit(&MInst::AluRRImm12 {
+                    alu_op: AluOPRRI::Ori,
+                    rd: tmp3,
+                    rs: zero_reg(),
+                    imm12: Imm12::from_bits(64),
+                });
+                // if lower trailing zeros is less than 64 we know the upper 64-bit no need to count.
+                self.emit(&MInst::AluRRR {
+                    alu_op: AluOPRRR::Slt,
+                    rd: tmp3,
+                    rs1: tmp1.to_reg(),
+                    rs2: tmp3.to_reg(),
+                });
+                // set high part lowest bit.
+                self.emit(&MInst::AluRRR {
+                    alu_op: AluOPRRR::Or,
+                    rd: tmp2, /* if tmp2 == 0 we don't change the high part value and need to count ,otherwise
+                              we set lowest bit to 1 , Ctz will return 0 which is the result we want.
+                                        */
+                    rs1: val.regs()[1],
+                    rs2: tmp2.to_reg(),
+                });
+                // count hight parts
+                self.emit(&MInst::AluRRImm12 {
+                    alu_op: AluOPRRI::Ctz,
+                    rd: tmp2,
+                    rs: tmp2.to_reg(),
+                    imm12: AluOPRRI::Ctz.funct12(None),
+                });
+                // add them togother
+                self.emit(&MInst::AluRRR {
+                    alu_op: AluOPRRR::Add,
+                    rd: tmp1,
+                    rs1: tmp1.to_reg(),
+                    rs2: tmp2.to_reg(),
+                });
+            }
+            64 => {
+                self.emit(&MInst::AluRRImm12 {
+                    alu_op: AluOPRRI::Ctz,
+                    rd: tmp1,
+                    rs: val.regs()[0],
+                    imm12: AluOPRRI::Ctz.funct12(None),
+                });
+            }
+            32 => {
+                self.emit(&MInst::AluRRImm12 {
+                    alu_op: AluOPRRI::Ctzw,
+                    rd: tmp1,
+                    rs: val.regs()[0],
+                    imm12: AluOPRRI::Ctz.funct12(None),
+                });
+            }
+            16 | 8 => {
+                // first we must make sure all upper bit are 1
+                // so we don't count extra zero.
+                MInst::load_constant_u64(tmp1, if ty.bits() == 8 { !0xff } else { !0xffff })
+                    .into_iter()
+                    .for_each(|i| self.emit(&i));
+
+                self.emit(&MInst::AluRRR {
+                    alu_op: AluOPRRR::Or,
+                    rd: tmp1,
+                    rs1: tmp1.to_reg(),
+                    rs2: val.regs()[0],
+                });
+                self.emit(&MInst::AluRRImm12 {
+                    alu_op: AluOPRRI::Ctzw,
+                    rd: tmp1,
+                    rs: val.regs()[0],
+                    imm12: AluOPRRI::Ctz.funct12(None),
+                });
+            }
+            _ => unreachable!(),
+        }
+        tmp1.to_reg()
+    }
 }
 
 impl<C> IsleContext<'_, C, Flags, IsaFlags, 6>

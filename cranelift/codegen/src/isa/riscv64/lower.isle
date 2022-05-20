@@ -113,7 +113,6 @@
 (rule (lower (has_type (fits_in_64 ty) (udiv x y)))
       (alu_rrr (AluOPRRR.DivU) x y))
 
-
 ;;;; Rules for `rem` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type (fits_in_32 ty) (srem x y)))
@@ -188,3 +187,24 @@
       (bnot_128 x))
 (rule (lower (has_type $B128 (bnot x)))
       (bnot_128 x))
+
+
+
+;;;; Rules for `bit_reverse` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(rule (lower (has_type ty (bitrev x)))
+      (bit_reverse ty x))
+
+(rule (lower (has_type $I128 (bitrev x)))
+      (let ((val ValueRegs x)
+            (lo_rev Reg (bit_reverse $I64 (value_regs_get val 0)))
+            (hi_rev Reg (bit_reverse $I64 (value_regs_get val 1))))
+        (value_regs hi_rev lo_rev)))
+
+
+;;;; Rules for `ctz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(rule (lower (has_type ty (ctz x)))
+      (r_ctz ty x))
+
+;;;; Rules for `clz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(rule (lower (has_type ty (clz x)))
+      (r_clz ty x))

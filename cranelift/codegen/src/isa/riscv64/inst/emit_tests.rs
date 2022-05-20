@@ -47,6 +47,18 @@ fn test_riscv64_binemit() {
 
     let mut insns = Vec::<TestUnit>::with_capacity(500);
 
+    insns.push(TestUnit::new_with_gcc_option(
+        Inst::AluRRImm12 {
+            alu_op: AluOPRRI::Rev8,
+            rd: writable_a1(),
+            rs: a0(),
+            imm12: AluOPRRI::Rev8.funct12(None),
+        },
+        "rev8 a1,a0",
+        Some(vec![gcc_aluoprri_march_arg(AluOPRRI::Rev8)]),
+        None,
+    ));
+
     //
     insns.push(TestUnit::new_with_gcc_option(
         Inst::AluRRImm12 {
@@ -199,18 +211,6 @@ fn test_riscv64_binemit() {
         },
         "ctzw a1,a0",
         Some(vec![gcc_aluoprri_march_arg(AluOPRRI::Ctzw)]),
-        None,
-    ));
-
-    insns.push(TestUnit::new_with_gcc_option(
-        Inst::AluRRImm12 {
-            alu_op: AluOPRRI::Rev8,
-            rd: writable_a1(),
-            rs: a0(),
-            imm12: AluOPRRI::Rev8.funct12(None),
-        },
-        "rev8 a1,a0",
-        Some(vec![gcc_aluoprri_march_arg(AluOPRRI::Rev8)]),
         None,
     ));
 
@@ -1970,7 +1970,7 @@ fn test_riscv64_binemit() {
             .print_with_state(&mut EmitState::default(), &mut AllocationConsumer::new(&[]));
         assert_eq!(unit.assembly, actual_printing);
         if unit.code.is_none() {
-            let code = assemble(unit.assembly, &unit.option_for_as, &unit.option_for_dump);
+            let code = assemble(unit.assembly, &unit.option_for_as);
             missing_code.push((index, code));
             unit.code = Some(code);
         }
@@ -2032,7 +2032,7 @@ fn get_riscv_tool_chain_name() -> (String, String) {
 /*
     todo:: make this can be run on windows
 */
-fn assemble(code: &str, as_option: &Option<Vec<String>>, dump_option: &Option<Vec<String>>) -> u32 {
+fn assemble(code: &str, as_option: &Option<Vec<String>>) -> u32 {
     let mut code = String::from(code);
     code.push_str("\n");
     use std::process::Command;
@@ -2051,10 +2051,8 @@ fn assemble(code: &str, as_option: &Option<Vec<String>>, dump_option: &Option<Ve
 
     let _output = cmd.output().expect("exec as failed , {}");
     let output_file = "a.out";
+
     let mut cmd = Command::new(objdump_name.as_str());
-    dump_option.clone().map(|ref a| {
-        cmd.args(&a[..]);
-    });
     cmd.arg("-d").arg(output_file);
     let output = cmd.output().expect("exec objdump failed , {}");
     /*

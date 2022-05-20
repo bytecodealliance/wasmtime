@@ -360,11 +360,10 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
         &Inst::BrTable {
             index,
             tmp1,
-            default_,
-            ref targets,
+           .. 
         } => {
             collector.reg_use(index);
-            collector.reg_def(tmp1);
+            collector.reg_early_def(tmp1);
         }
         &Inst::Auipc { rd, .. } => collector.reg_def(rd),
         &Inst::Lui { rd, .. } => collector.reg_def(rd),
@@ -407,9 +406,7 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_use(rs2);
         }
         &Inst::Trap { .. } => {}
-        &Inst::Jal { rd, .. } => {
-            collector.reg_def(rd);
-        }
+        &Inst::Jal { .. } => {}
         &Inst::CondBr { kind, .. } => {
             collector.reg_use(kind.rs1);
             collector.reg_use(kind.rs2);
@@ -574,31 +571,12 @@ impl MachInst for Inst {
     }
 
     fn is_term(&self) -> MachTerminator {
-        /*
-            todo more
-        */
         match self {
-            &Inst::Jal { dest, .. } => {
-                let dest = dest.as_label();
-                if dest.is_some() {
-                    MachTerminator::Uncond
-                } else {
-                    MachTerminator::None
-                }
-            }
-            &Inst::CondBr {
-                taken, not_taken, ..
-            } => {
-                let taken = taken.as_label();
-                let not_taken = not_taken.as_label();
-                if taken.is_some() && not_taken.is_some() {
-                    MachTerminator::Cond
-                } else {
-                    MachTerminator::None
-                }
-            }
+            &Inst::Jal { .. } => MachTerminator::Uncond,
+            &Inst::CondBr { .. } => MachTerminator::Cond,
             &Inst::Jalr { .. } => MachTerminator::Uncond,
             &Inst::Ret { .. } => MachTerminator::Ret,
+            &Inst::BrTable { .. } => MachTerminator::Indirect,
             _ => MachTerminator::None,
         }
     }
@@ -662,14 +640,12 @@ impl MachInst for Inst {
             B16 => Ok((&[RegClass::Int], &[B16])),
             B32 => Ok((&[RegClass::Int], &[B32])),
             B64 => Ok((&[RegClass::Int], &[B64])),
-            R32 => panic!("32-bit reftype pointer should never be seen on risc-v64"),
+            R32 => panic!("32-bit reftype pointer should never be seen on riscv64"),
             R64 => Ok((&[RegClass::Int], &[R64])),
             F32 => Ok((&[RegClass::Float], &[F32])),
             F64 => Ok((&[RegClass::Float], &[F64])),
             I128 => Ok((&[RegClass::Int, RegClass::Int], &[I64, I64])),
             B128 => Ok((&[RegClass::Int, RegClass::Int], &[B64, B64])),
-
-            IFLAGS | FFLAGS => Ok((&[RegClass::Int], &[I64])),
             _ => Err(CodegenError::Unsupported(format!(
                 "Unexpected SSA-value type: {}",
                 ty
@@ -679,7 +655,6 @@ impl MachInst for Inst {
 
     fn gen_jump(target: MachLabel) -> Inst {
         Inst::Jal {
-            rd: writable_zero_reg(),
             dest: BranchTarget::Label(target),
         }
     }
@@ -1025,17 +1000,8 @@ impl Inst {
             }
             &MInst::TrapIf { .. } => todo!(),
             &MInst::Trap { .. } => todo!(),
-            &MInst::Jal { dest, rd } => {
-                if rd.to_reg() == zero_reg() {
-                    format!("{} {}", "j", dest)
-                } else {
-                    format!(
-                        "{} {},{}",
-                        "jal",
-                        format_reg(rd.to_reg(), allocs),
-                        format!("{}", dest)
-                    )
-                }
+            &MInst::Jal { dest, .. } => {
+                format!("{} {}", "j", dest)
             }
             &MInst::CondBr {
                 taken,

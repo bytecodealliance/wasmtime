@@ -937,7 +937,10 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::SshrImm
         | Opcode::IcmpImm
         | Opcode::IfcmpImm => {
-            panic!("ALU+imm and ALU+carry ops should not appear here!");
+            panic!(
+                "op:{:?} ALU+imm and ALU+carry ops should not appear here!",
+                op
+            );
         }
 
         Opcode::Iabs => {
@@ -995,28 +998,41 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
             Opcode::Brz | Opcode::Brnz => {
                 let ty = ctx.input_ty(branches[0], 0);
                 let reg = ctx.put_input_in_regs(branches[0], 0);
-                if ty.bits() as u32 >= Riscv64MachineDeps::word_bits() {
-                    unimplemented!("");
-                }
-                let cond = if op0.opcode() == Opcode::Brz {
-                    IntegerCompare {
-                        rs1: reg.only_reg().unwrap(),
-                        rs2: zero_reg(),
-                        kind: IntCC::Equal,
-                    }
+                if ty.bits() as u32 > Riscv64MachineDeps::word_bits() {
+                    let insts = Inst::lower_br_icmp(
+                        if op0.opcode() == Opcode::Brz {
+                            IntCC::Equal
+                        } else {
+                            IntCC::NotEqual
+                        },
+                        reg,
+                        ValueRegs::two(zero_reg(), zero_reg()),
+                        taken,
+                        not_taken,
+                        ty,
+                    );
+                    insts.into_iter().for_each(|i| ctx.emit(i));
                 } else {
-                    IntegerCompare {
-                        rs1: reg.only_reg().unwrap(),
-                        rs2: zero_reg(),
-                        kind: IntCC::NotEqual,
-                    }
-                };
-                let inst = Inst::CondBr {
-                    taken,
-                    not_taken,
-                    kind: cond,
-                };
-                ctx.emit(inst);
+                    let cond = if op0.opcode() == Opcode::Brz {
+                        IntegerCompare {
+                            rs1: reg.only_reg().unwrap(),
+                            rs2: zero_reg(),
+                            kind: IntCC::Equal,
+                        }
+                    } else {
+                        IntegerCompare {
+                            rs1: reg.only_reg().unwrap(),
+                            rs2: zero_reg(),
+                            kind: IntCC::NotEqual,
+                        }
+                    };
+                    let inst = Inst::CondBr {
+                        taken,
+                        not_taken,
+                        kind: cond,
+                    };
+                    ctx.emit(inst);
+                }
             }
             Opcode::BrIcmp => {
                 let ty = ctx.input_ty(branches[0], 0);
@@ -1042,7 +1058,6 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
             Opcode::Jump => {
                 assert!(branches.len() == 1);
                 ctx.emit(Inst::Jal {
-                    rd: writable_zero_reg(),
                     dest: BranchTarget::Label(targets[0]),
                 });
             }
@@ -1069,7 +1084,6 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
                     targets: jt_targets,
                 });
             }
-
             _ => panic!("Unknown branch type!"),
         }
     }

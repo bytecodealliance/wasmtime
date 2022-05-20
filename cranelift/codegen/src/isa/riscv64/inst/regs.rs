@@ -179,6 +179,7 @@ pub fn spilltmp_reg() -> Reg {
 }
 
 /// Get a writable reference to the spilltmp reg.
+/// todo how to verify when is ok to use this register.
 #[inline(always)]
 pub fn writable_spilltmp_reg() -> Writable<Reg> {
     Writable::from_reg(spilltmp_reg())

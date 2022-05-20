@@ -229,6 +229,7 @@ mod test {
     use crate::ir::condcodes::FloatCC;
     use crate::ir::{types::*, JumpTable, JumpTableData};
     use crate::ir::{AbiParam, ExternalName, Function, InstBuilder, Signature};
+    use crate::ir::{StackSlotData, StackSlotKind};
     use crate::isa::CallConv;
     use crate::settings;
     use crate::settings::Configurable;
@@ -514,7 +515,7 @@ mod test {
         let bb0 = func.dfg.make_block();
         let bb1 = func.dfg.make_block();
         let bb2 = func.dfg.make_block();
-        let bb3 = func.dfg.make_block();
+        let bb100 = func.dfg.make_block();
         let mut jump_table_data = JumpTableData::new();
         jump_table_data.push_entry(bb1);
         jump_table_data.push_entry(bb2);
@@ -524,13 +525,13 @@ mod test {
         let mut pos = FuncCursor::new(&mut func);
         pos.insert_block(bb0);
         let v1 = pos.ins().iconst(I32, 1);
-        pos.ins().br_table(v1, bb3, jump_table);
+        pos.ins().br_table(v1, bb100, jump_table);
         pos.insert_block(bb1);
 
         pos.ins().return_(&[]);
         pos.insert_block(bb2);
         pos.ins().return_(&[]);
-        pos.insert_block(bb3);
+        pos.insert_block(bb100);
         pos.ins().return_(&[]);
 
         let mut shared_flags_builder = settings::builder();

@@ -90,7 +90,7 @@
       (trap_code TrapCode))
 
     (Jal
-      (rd WritableReg)
+      ;; (rd WritableReg) don't use 
       (dest BranchTarget))
   
      (CondBr
@@ -687,6 +687,12 @@
 (decl i128_arithmetic (I128ArithmeticOP ValueRegs ValueRegs) ValueRegs)
 (extern constructor i128_arithmetic i128_arithmetic)
 
+(decl bit_reverse (Type Reg)Reg)
+(extern constructor bit_reverse bit_reverse)
 
+(decl r_ctz (Type ValueRegs)Reg)
+(extern constructor r_ctz r_ctz)
 
+(decl r_clz (Type ValueRegs)Reg)
+(extern constructor r_clz r_clz)
 
