@@ -346,6 +346,7 @@ impl Config {
         config.bulk_memory_enabled = true;
         config.reference_types_enabled = true;
         config.multi_value_enabled = true;
+        config.simd_enabled = true;
         config.max_memories = 1;
         config.max_tables = 5;
 
