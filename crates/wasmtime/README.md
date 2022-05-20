@@ -16,7 +16,10 @@ cross-platform engine for running WebAssembly programs. Notable features of
 Wasmtime are:
 
 * **Fast**. Wasmtime is built on the optimizing [Cranelift] code generator to
-  quickly generate high-quality machine code at runtime.
+  quickly generate high-quality machine code either at runtime or
+  ahead-of-time. Wasmtime's runtime is also optimized for cases such as
+  efficient instantiation, low-overhead transitions between the embedder and
+  wasm, and scalability of concurrent instances.
 
 * **Secure**. Wasmtime's development is strongly focused on the correctness of
   its implementation with 24/7 fuzzing donated by [Google's OSS Fuzz],
