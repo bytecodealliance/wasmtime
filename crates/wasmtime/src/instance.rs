@@ -165,7 +165,7 @@ impl Instance {
     /// Internal function to create an instance and run the start function.
     ///
     /// This function's unsafety is the same as `Instance::new_raw`.
-    unsafe fn new_started<T>(
+    pub(crate) unsafe fn new_started<T>(
         store: &mut StoreContextMut<'_, T>,
         module: &Module,
         imports: Imports<'_>,
@@ -506,9 +506,14 @@ impl Instance {
     pub fn get_global(&self, store: impl AsContextMut, name: &str) -> Option<Global> {
         self.get_export(store, name)?.into_global()
     }
+
+    #[cfg(feature = "component-model")]
+    pub(crate) fn id(&self, store: &StoreOpaque) -> InstanceId {
+        store[self.0].id
+    }
 }
 
-struct OwnedImports {
+pub(crate) struct OwnedImports {
     functions: PrimaryMap<FuncIndex, VMFunctionImport>,
     tables: PrimaryMap<TableIndex, VMTableImport>,
     memories: PrimaryMap<MemoryIndex, VMMemoryImport>,
@@ -517,13 +522,34 @@ struct OwnedImports {
 
 impl OwnedImports {
     fn new(module: &Module) -> OwnedImports {
-        let raw = module.compiled_module().module();
+        let mut ret = OwnedImports::empty();
+        ret.reserve(module);
+        return ret;
+    }
+
+    pub(crate) fn empty() -> OwnedImports {
         OwnedImports {
-            functions: PrimaryMap::with_capacity(raw.num_imported_funcs),
-            tables: PrimaryMap::with_capacity(raw.num_imported_tables),
-            memories: PrimaryMap::with_capacity(raw.num_imported_memories),
-            globals: PrimaryMap::with_capacity(raw.num_imported_globals),
+            functions: PrimaryMap::new(),
+            tables: PrimaryMap::new(),
+            memories: PrimaryMap::new(),
+            globals: PrimaryMap::new(),
         }
+    }
+
+    pub(crate) fn reserve(&mut self, module: &Module) {
+        let raw = module.compiled_module().module();
+        self.functions.reserve(raw.num_imported_funcs);
+        self.tables.reserve(raw.num_imported_tables);
+        self.memories.reserve(raw.num_imported_memories);
+        self.globals.reserve(raw.num_imported_globals);
+    }
+
+    #[cfg(feature = "component-model")]
+    pub(crate) fn clear(&mut self) {
+        self.functions.clear();
+        self.tables.clear();
+        self.memories.clear();
+        self.globals.clear();
     }
 
     fn push(&mut self, item: &Extern, store: &mut StoreOpaque) {
@@ -543,7 +569,37 @@ impl OwnedImports {
         }
     }
 
-    fn as_ref(&self) -> Imports<'_> {
+    /// Note that this is unsafe as the validity of `item` is not verified and
+    /// it contains a bunch of raw pointers.
+    #[cfg(feature = "component-model")]
+    pub(crate) unsafe fn push_export(&mut self, item: &wasmtime_runtime::Export) {
+        match item {
+            wasmtime_runtime::Export::Function(f) => {
+                let f = f.anyfunc.as_ref();
+                self.functions.push(VMFunctionImport {
+                    body: f.func_ptr,
+                    vmctx: f.vmctx,
+                });
+            }
+            wasmtime_runtime::Export::Global(g) => {
+                self.globals.push(VMGlobalImport { from: g.definition });
+            }
+            wasmtime_runtime::Export::Table(t) => {
+                self.tables.push(VMTableImport {
+                    from: t.definition,
+                    vmctx: t.vmctx,
+                });
+            }
+            wasmtime_runtime::Export::Memory(m) => {
+                self.memories.push(VMMemoryImport {
+                    from: m.definition,
+                    vmctx: m.vmctx,
+                });
+            }
+        }
+    }
+
+    pub(crate) fn as_ref(&self) -> Imports<'_> {
         Imports {
             tables: self.tables.values().as_slice(),
             globals: self.globals.values().as_slice(),

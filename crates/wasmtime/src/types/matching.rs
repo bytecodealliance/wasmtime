@@ -3,13 +3,13 @@ use crate::store::StoreOpaque;
 use crate::{signatures::SignatureCollection, Engine, Extern};
 use anyhow::{bail, Result};
 use wasmtime_environ::{
-    EntityType, Global, Memory, SignatureIndex, Table, TypeTables, WasmFuncType, WasmType,
+    EntityType, Global, Memory, ModuleTypes, SignatureIndex, Table, WasmFuncType, WasmType,
 };
 use wasmtime_runtime::VMSharedSignatureIndex;
 
 pub struct MatchCx<'a> {
     pub signatures: &'a SignatureCollection,
-    pub types: &'a TypeTables,
+    pub types: &'a ModuleTypes,
     pub store: &'a StoreOpaque,
     pub engine: &'a Engine,
 }

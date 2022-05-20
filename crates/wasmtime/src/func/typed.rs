@@ -1,11 +1,11 @@
 use super::{invoke_wasm_and_catch_traps, HostAbi};
 use crate::store::{AutoAssertNoGc, StoreOpaque};
-use crate::{AsContextMut, ExternRef, Func, StoreContextMut, Trap, ValRaw, ValType};
+use crate::{AsContextMut, ExternRef, Func, FuncType, StoreContextMut, Trap, ValRaw, ValType};
 use anyhow::{bail, Result};
 use std::marker;
 use std::mem::{self, MaybeUninit};
 use std::ptr;
-use wasmtime_runtime::{VMContext, VMFunctionBody};
+use wasmtime_runtime::{VMCallerCheckedAnyfunc, VMContext, VMFunctionBody, VMSharedSignatureIndex};
 
 /// A statically typed WebAssembly function.
 ///
@@ -76,7 +76,8 @@ where
             !store.0.async_support(),
             "must use `call_async` with async stores"
         );
-        unsafe { self._call(&mut store, params) }
+        let func = self.func.caller_checked_anyfunc(store.0);
+        unsafe { Self::call_raw(&mut store, func, params) }
     }
 
     /// Invokes this WebAssembly function with the specified parameters.
@@ -106,15 +107,24 @@ where
             "must use `call` with non-async stores"
         );
         store
-            .on_fiber(|store| unsafe { self._call(store, params) })
+            .on_fiber(|store| {
+                let func = self.func.caller_checked_anyfunc(store.0);
+                unsafe { Self::call_raw(store, func, params) }
+            })
             .await?
     }
 
-    unsafe fn _call<T>(
-        &self,
+    pub(crate) unsafe fn call_raw<T>(
         store: &mut StoreContextMut<'_, T>,
+        func: ptr::NonNull<VMCallerCheckedAnyfunc>,
         params: Params,
     ) -> Result<Results, Trap> {
+        // double-check that params/results match for this function's type in
+        // debug mode.
+        if cfg!(debug_assertions) {
+            Self::debug_typecheck(store.0, func.as_ref().type_index);
+        }
+
         // See the comment in `Func::call_impl`'s `write_params` function.
         if params.externrefs_count()
             > store
@@ -150,12 +160,7 @@ where
         // efficient to move in memory. This closure is actually invoked on the
         // other side of a C++ shim, so it can never be inlined enough to make
         // the memory go away, so the size matters here for performance.
-        let mut captures = (
-            self.func.caller_checked_anyfunc(store.0),
-            MaybeUninit::uninit(),
-            params,
-            false,
-        );
+        let mut captures = (func, MaybeUninit::uninit(), params, false);
 
         let result = invoke_wasm_and_catch_traps(store, |callee| {
             let (anyfunc, ret, params, returned) = &mut captures;
@@ -173,6 +178,19 @@ where
         debug_assert_eq!(result.is_ok(), returned);
         result?;
         Ok(Results::from_abi(store.0, ret.assume_init()))
+    }
+
+    /// Purely a debug-mode assertion, not actually used in release builds.
+    fn debug_typecheck(store: &StoreOpaque, func: VMSharedSignatureIndex) {
+        let ty = FuncType::from_wasm_func_type(
+            store
+                .engine()
+                .signatures()
+                .lookup_type(func)
+                .expect("signature should be registered"),
+        );
+        Params::typecheck(ty.params()).expect("params should match");
+        Results::typecheck(ty.results()).expect("results should match");
     }
 }
 

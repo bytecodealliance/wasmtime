@@ -30,6 +30,9 @@ fn run_wast(wast: &str, strategy: Strategy, pooling: bool) -> anyhow::Result<()>
         .wasm_memory64(memory64)
         .cranelift_debug_verifier(true);
 
+    #[cfg(feature = "component-model")]
+    cfg.wasm_component_model(feature_found(wast, "component-model"));
+
     if feature_found(wast, "canonicalize-nan") {
         cfg.cranelift_nan_canonicalization(true);
     }

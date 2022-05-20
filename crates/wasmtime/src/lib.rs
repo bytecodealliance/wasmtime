@@ -430,6 +430,9 @@ pub use crate::trap::*;
 pub use crate::types::*;
 pub use crate::values::*;
 
+#[cfg(feature = "component-model")]
+pub mod component;
+
 cfg_if::cfg_if! {
     if #[cfg(all(target_os = "macos", not(feature = "posix-signals-on-macos")))] {
         // no extensions for macOS at this time

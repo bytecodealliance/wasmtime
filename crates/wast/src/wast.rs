@@ -10,7 +10,7 @@ use wast::parser::{self, ParseBuffer};
 use wast::token::{Float32, Float64};
 use wast::{
     AssertExpression, NanPattern, QuoteWat, V128Pattern, Wast, WastDirective, WastExecute,
-    WastInvoke,
+    WastInvoke, Wat,
 };
 
 /// Translate from a `script::Value` to a `RuntimeValue`.
@@ -49,6 +49,13 @@ enum Outcome<T = Vec<Val>> {
 }
 
 impl<T> Outcome<T> {
+    fn map<U>(self, map: impl FnOnce(T) -> U) -> Outcome<U> {
+        match self {
+            Outcome::Ok(t) => Outcome::Ok(map(t)),
+            Outcome::Trap(t) => Outcome::Trap(t),
+        }
+    }
+
     fn into_result(self) -> Result<T, Trap> {
         match self {
             Outcome::Ok(t) => Ok(t),
@@ -87,9 +94,19 @@ impl<T> WastContext<T> {
         }
     }
 
-    fn instantiate(&mut self, module: &[u8]) -> Result<Outcome<Instance>> {
+    fn instantiate_module(&mut self, module: &[u8]) -> Result<Outcome<Instance>> {
         let module = Module::new(self.store.engine(), module)?;
         let instance = match self.linker.instantiate(&mut self.store, &module) {
+            Ok(i) => i,
+            Err(e) => return e.downcast::<Trap>().map(Outcome::Trap),
+        };
+        Ok(Outcome::Ok(instance))
+    }
+
+    #[cfg(feature = "component-model")]
+    fn instantiate_component(&mut self, module: &[u8]) -> Result<Outcome<component::Instance>> {
+        let module = component::Component::new(self.store.engine(), module)?;
+        let instance = match component::Instance::new(&mut self.store, &module) {
             Ok(i) => i,
             Err(e) => return e.downcast::<Trap>().map(Outcome::Trap),
         };
@@ -107,8 +124,13 @@ impl<T> WastContext<T> {
         match exec {
             WastExecute::Invoke(invoke) => self.perform_invoke(invoke),
             WastExecute::Wat(mut module) => {
-                let binary = module.encode()?;
-                let result = self.instantiate(&binary)?;
+                let result = match &mut module {
+                    Wat::Module(m) => self.instantiate_module(&m.encode()?)?.map(|_| ()),
+                    #[cfg(feature = "component-model")]
+                    Wat::Component(m) => self.instantiate_component(&m.encode()?)?.map(|_| ()),
+                    #[cfg(not(feature = "component-model"))]
+                    Wat::Component(_) => bail!("component-model support not enabled"),
+                };
                 Ok(match result {
                     Outcome::Ok(_) => Outcome::Ok(Vec::new()),
                     Outcome::Trap(e) => Outcome::Trap(e),
@@ -128,15 +150,33 @@ impl<T> WastContext<T> {
     }
 
     /// Define a module and register it.
-    fn module(&mut self, instance_name: Option<&str>, module: &[u8]) -> Result<()> {
-        let instance = match self.instantiate(module)? {
-            Outcome::Ok(i) => i,
-            Outcome::Trap(e) => return Err(e).context("instantiation failed"),
+    fn wat(&mut self, mut wat: QuoteWat<'_>) -> Result<()> {
+        let (is_module, name) = match &wat {
+            QuoteWat::Wat(Wat::Module(m)) => (true, m.id),
+            QuoteWat::QuoteModule(..) => (true, None),
+            QuoteWat::Wat(Wat::Component(m)) => (false, m.id),
+            QuoteWat::QuoteComponent(..) => (false, None),
         };
-        if let Some(name) = instance_name {
-            self.linker.instance(&mut self.store, name, instance)?;
+        let bytes = wat.encode()?;
+        if is_module {
+            let instance = match self.instantiate_module(&bytes)? {
+                Outcome::Ok(i) => i,
+                Outcome::Trap(e) => return Err(e).context("instantiation failed"),
+            };
+            if let Some(name) = name {
+                self.linker
+                    .instance(&mut self.store, name.name(), instance)?;
+            }
+            self.current = Some(instance);
+        } else {
+            #[cfg(feature = "component-model")]
+            match self.instantiate_component(&bytes)? {
+                Outcome::Ok(_) => {}
+                Outcome::Trap(e) => return Err(e).context("instantiation failed"),
+            }
+            #[cfg(not(feature = "component-model"))]
+            bail!("component-model support not enabled");
         }
-        self.current = Some(instance);
         Ok(())
     }
 
@@ -239,19 +279,10 @@ impl<T> WastContext<T> {
     }
 
     fn run_directive(&mut self, directive: WastDirective) -> Result<()> {
-        use WastDirective::*;
+        use wast::WastDirective::*;
 
         match directive {
-            Wat(mut module) => {
-                let binary = module.encode()?;
-                let name = match &module {
-                    QuoteWat::Wat(wast::Wat::Module(m)) => m.id,
-                    QuoteWat::Wat(wast::Wat::Component(c)) => c.id,
-                    QuoteWat::QuoteModule(..) => None,
-                    QuoteWat::QuoteComponent(..) => None,
-                };
-                self.module(name.map(|s| s.name()), &binary)?;
-            }
+            Wat(module) => self.wat(module)?,
             Register {
                 span: _,
                 name,
@@ -288,14 +319,10 @@ impl<T> WastContext<T> {
             }
             AssertInvalid {
                 span: _,
-                mut module,
+                module,
                 message,
             } => {
-                let err = match module
-                    .encode()
-                    .map_err(|e| e.into())
-                    .and_then(|bytes| self.module(None, &bytes))
-                {
+                let err = match self.wat(module) {
                     Ok(()) => bail!("expected module to fail to build"),
                     Err(e) => e,
                 };
@@ -309,25 +336,20 @@ impl<T> WastContext<T> {
                 }
             }
             AssertMalformed {
-                mut module,
+                module,
                 span: _,
                 message: _,
             } => {
-                let result = module
-                    .encode()
-                    .map_err(|e| e.into())
-                    .and_then(|bytes| self.module(None, &bytes));
-                if result.is_ok() {
+                if let Ok(_) = self.wat(module) {
                     bail!("expected malformed module to fail to instantiate");
                 }
             }
             AssertUnlinkable {
                 span: _,
-                mut module,
+                module,
                 message,
             } => {
-                let bytes = module.encode()?;
-                let err = match self.module(None, &bytes) {
+                let err = match self.wat(QuoteWat::Wat(module)) {
                     Ok(()) => bail!("expected module to fail to link"),
                     Err(e) => e,
                 };

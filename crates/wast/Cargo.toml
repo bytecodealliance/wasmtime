@@ -16,3 +16,6 @@ wast = "41.0.0"
 
 [badges]
 maintenance = { status = "actively-developed" }
+
+[features]
+component-model = ['wasmtime/component-model']

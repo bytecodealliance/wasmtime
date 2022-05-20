@@ -137,7 +137,9 @@ jobs:
     - run: cargo check -p wasmtime --no-default-features --features pooling-allocator
     - run: cargo check -p wasmtime --no-default-features --features cranelift
     - run: cargo check -p wasmtime --no-default-features --features wasm-backtrace
+    - run: cargo check -p wasmtime --no-default-features --features component-model
     - run: cargo check -p wasmtime --no-default-features --features cranelift,wat,async,cache,wasm-backtrace
+    - run: cargo check --features component-model
 
     # Check that benchmarks of the cranelift project build
     - run: cargo check --benches -p cranelift-codegen
@@ -296,6 +298,10 @@ jobs:
       if: matrix.os == 'ubuntu-latest' && matrix.target == ''
       env:
         RUST_BACKTRACE: 1
+
+    # Test the component-model related functionality which is gated behind a
+    # compile-time feature
+    - run: cargo test --features component-model
 
   # Build and test the wasi-nn module.
   test_wasi_nn:
