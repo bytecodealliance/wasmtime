@@ -610,13 +610,8 @@ impl<'data> ModuleEnvironment<'data> {
                 // the passive count, do not reserve anything here.
             }
 
-            Payload::CustomSection {
-                name: "name",
-                data,
-                data_offset,
-                range: _,
-            } => {
-                let result = NameSectionReader::new(data, data_offset)
+            Payload::CustomSection(s) if s.name() == "name" => {
+                let result = NameSectionReader::new(s.data(), s.data_offset())
                     .map_err(|e| e.into())
                     .and_then(|s| self.name_section(s));
                 if let Err(e) = result {
@@ -624,14 +619,9 @@ impl<'data> ModuleEnvironment<'data> {
                 }
             }
 
-            Payload::CustomSection {
-                name: "webidl-bindings",
-                ..
-            }
-            | Payload::CustomSection {
-                name: "wasm-interface-types",
-                ..
-            } => {
+            Payload::CustomSection(s)
+                if s.name() == "webidl-bindings" || s.name() == "wasm-interface-types" =>
+            {
                 return Err(WasmError::Unsupported(
                     "\
 Support for interface types has temporarily been removed from `wasmtime`.
@@ -648,8 +638,8 @@ and for re-adding support for interface types you can see this issue:
                 ))
             }
 
-            Payload::CustomSection { name, data, .. } => {
-                self.register_dwarf_section(name, data);
+            Payload::CustomSection(s) => {
+                self.register_dwarf_section(s.name(), s.data());
             }
 
             // It's expected that validation will probably reject other

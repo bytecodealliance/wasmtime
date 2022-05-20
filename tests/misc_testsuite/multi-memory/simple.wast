@@ -5,20 +5,20 @@
   (func (export "store1") (param i32 i64)
       local.get 0
       local.get 1
-      i64.store (memory $m1))
+      i64.store $m1)
 
   (func (export "store2") (param i32 i64)
       local.get 0
       local.get 1
-      i64.store (memory $m2))
+      i64.store $m2)
 
   (func (export "load1") (param i32) (result i64)
       local.get 0
-      i64.load (memory $m1))
+      i64.load $m1)
 
   (func (export "load2") (param i32) (result i64)
       local.get 0
-      i64.load (memory $m2))
+      i64.load $m2)
 )
 
 (invoke "store1" (i32.const 0) (i64.const 1))
@@ -64,20 +64,20 @@
   (func (export "store1") (param i32 i64)
       local.get 0
       local.get 1
-      i64.store (memory $m1))
+      i64.store $m1)
 
   (func (export "store2") (param i32 i64)
       local.get 0
       local.get 1
-      i64.store (memory $m2))
+      i64.store $m2)
 
   (func (export "load1") (param i32) (result i64)
       local.get 0
-      i64.load (memory $m1))
+      i64.load $m1)
 
   (func (export "load2") (param i32) (result i64)
       local.get 0
-      i64.load (memory $m2))
+      i64.load $m2)
 )
 
 (invoke "store1" (i32.const 0) (i64.const 1))
@@ -92,11 +92,11 @@
 
   (func (export "grow1") (param i32) (result i32)
       local.get 0
-      memory.grow (memory $m1))
+      memory.grow $m1)
 
   (func (export "grow2") (param i32) (result i32)
       local.get 0
-      memory.grow (memory $m2))
+      memory.grow $m2)
 
   (func (export "size1") (result i32) memory.size $m1)
   (func (export "size2") (result i32) memory.size $m2)
@@ -128,7 +128,7 @@
       i32.const 4
       memory.init $m2 $d
       i32.const 1
-      i32.load (memory $m2))
+      i32.load $m2)
 
   (data $d "\01\00\00\00" "\02\00\00\00")
 )
@@ -154,7 +154,7 @@
       i32.const 2
       memory.fill $m2
       i32.const 1
-      i32.load (memory $m2))
+      i32.load $m2)
 )
 
 (assert_return (invoke "fill1") (i32.const 0x01010101))

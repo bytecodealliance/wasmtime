@@ -107,13 +107,8 @@ pub fn translate_module<'data>(
                 environ.reserve_passive_data(count)?;
             }
 
-            Payload::CustomSection {
-                name: "name",
-                data,
-                data_offset,
-                range: _,
-            } => {
-                let result = NameSectionReader::new(data, data_offset)
+            Payload::CustomSection(s) if s.name() == "name" => {
+                let result = NameSectionReader::new(s.data(), s.data_offset())
                     .map_err(|e| e.into())
                     .and_then(|s| parse_name_section(s, environ));
                 if let Err(e) = result {
@@ -121,7 +116,7 @@ pub fn translate_module<'data>(
                 }
             }
 
-            Payload::CustomSection { name, data, .. } => environ.custom_section(name, data)?,
+            Payload::CustomSection(s) => environ.custom_section(s.name(), s.data())?,
 
             other => {
                 validator.payload(&other)?;

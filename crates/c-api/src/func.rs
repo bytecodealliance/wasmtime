@@ -265,7 +265,7 @@ pub(crate) unsafe fn c_callback_to_rust_fn(
 
         // Translate the `wasmtime_val_t` results into the `results` space
         for (i, result) in out_results.iter().enumerate() {
-            results[i] = unsafe { result.to_val() };
+            results[i] = result.to_val();
         }
 
         // Move our `vals` storage back into the store now that we no longer

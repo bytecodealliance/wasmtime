@@ -35,7 +35,6 @@ anyhow = "1.0.19"
 target-lexicon = { version = "0.12.0", default-features = false }
 libc = "0.2.60"
 humantime = "2.0.0"
-wasmparser = "0.84.0"
 lazy_static = "1.4.0"
 listenfd = "0.3.5"
 
@@ -53,7 +52,7 @@ test-programs = { path = "crates/test-programs" }
 wasmtime-runtime = { path = "crates/runtime" }
 tokio = { version = "1.8.0", features = ["rt", "time", "macros", "rt-multi-thread"] }
 tracing-subscriber = "0.3.1"
-wast = "40.0.0"
+wast = "41.0.0"
 criterion = "0.3.4"
 num_cpus = "1.13.0"
 winapi = { version = "0.3.9", features = ['memoryapi'] }
