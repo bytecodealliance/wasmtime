@@ -209,13 +209,19 @@
       (dst VecWritableReg)
       (x ValueRegs)
       (y ValueRegs))
-
+    
     (Csr
-    (csr_op CsrOP)
-    (rd WritableReg)
-    (rs OptionReg)
-    (imm OptionUimm5)
-    (csr CsrAddress))
+      (csr_op CsrOP)
+      (rd WritableReg)
+      (rs OptionReg)
+      (imm OptionUimm5)
+      (csr CsrAddress))
+    (Icmp
+      (cc IntCC)
+      (rd WritableReg)
+      (a ValueRegs) 
+      (b ValueRegs)
+      (ty Type))
 ))
 
 (type CsrOP(enum 
@@ -651,6 +657,14 @@
             (_ Unit (emit (MInst.AluRRImm12 op dst src imm))))
         dst))
 
+(decl bitmaip_imm12 (AluOPRRI u8) Imm12)
+(extern constructor bitmaip_imm12 bitmaip_imm12)
+
+(decl alu_rr_imm12_bit_map (AluOPRRI Reg u8) Reg)
+(rule (alu_rr_imm12_bit_map op src shamt)
+      (alu_rr_imm12 op src (bitmaip_imm12 op shamt)))
+
+
 ;; Helper for narrow down int to it's bits.
 (decl narrow_int(Type Reg) Reg)
 (rule (narrow_int $I8 r) (
@@ -679,8 +693,6 @@
 (decl bnot_128 (ValueRegs) ValueRegs)
 (extern constructor bnot_128 bnot_128)
 
-(decl band_128 (ValueRegs ValueRegs) ValueRegs)
-(extern constructor band_128 band_128)
 
 (decl i128_arithmetic (I128ArithmeticOP ValueRegs ValueRegs) ValueRegs)
 (extern constructor i128_arithmetic i128_arithmetic)
@@ -699,3 +711,7 @@
 
 (decl band_not_128(ValueRegs ValueRegs)ValueRegs)
 (extern constructor band_not_128 band_not_128)
+
+
+(decl b128_binary(AluOPRRR ValueRegs ValueRegs) ValueRegs)
+(extern constructor b128_binary b128_binary)

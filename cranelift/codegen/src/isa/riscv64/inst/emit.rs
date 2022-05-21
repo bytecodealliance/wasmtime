@@ -147,7 +147,6 @@ impl Inst {
                 IntCC::UnsignedGreaterThanOrEqual => IntCC::UnsignedGreaterThanOrEqual,
                 IntCC::UnsignedGreaterThan => IntCC::UnsignedGreaterThanOrEqual,
                 IntCC::UnsignedLessThanOrEqual => IntCC::UnsignedGreaterThanOrEqual,
-                IntCC::Overflow => IntCC::UnsignedGreaterThanOrEqual,
                 IntCC::Overflow | IntCC::NotOverflow => unreachable!(),
             };
             let low = IntegerCompare {
@@ -155,10 +154,10 @@ impl Inst {
                 rs1: low_a,
                 rs2: low_b,
             };
-            (high, low)
+            (low, high)
         }
         // i128 compare
-        let (high, low) = i128cmp_to_int64_compare_parts(a, b, cc);
+        let (low, high) = i128cmp_to_int64_compare_parts(a, b, cc);
         // let mut patch_to_low = vec![];
         match cc {
             IntCC::Equal => {
@@ -200,10 +199,13 @@ impl Inst {
                 });
             }
 
-            IntCC::SignedGreaterThanOrEqual | IntCC::SignedLessThanOrEqual => {
+            IntCC::SignedGreaterThanOrEqual
+            | IntCC::SignedLessThanOrEqual
+            | IntCC::UnsignedGreaterThanOrEqual
+            | IntCC::UnsignedLessThanOrEqual => {
                 /*
                     make cc == IntCC::SignedGreaterThanOrEqual
-                    must be true for IntCC::SignedLessThan too.
+                    must be true for IntCC::SignedLessThan ... too.
                 */
                 /*
                     if "!(a.high >= b.high)" is true,
@@ -214,36 +216,32 @@ impl Inst {
                     not_taken: BranchTarget::zero(),
                     kind: high.inverse(),
                 });
-
                 /*
-                    here we must have a.high >= b.high too be true.
+                    here we must have a.high >= b.high to be true.
                     if a.high > b.high we don't need compare the rest part
                 */
                 insts.push(Inst::CondBr {
                     taken: taken,
                     not_taken: BranchTarget::zero(),
-                    kind: high
-                        .clone()
-                        .set_kind(if cc == IntCC::SignedGreaterThanOrEqual {
-                            IntCC::SignedGreaterThan
-                        } else {
-                            IntCC::SignedLessThan
-                        }),
+                    kind: high.clone().set_kind(IntCC::NotEqual),
                 });
                 /*
-                    here we must have a.high == b.high too be true.
+                    here we must have a.high == b.high to be true.
                     just compare the rest part.
                 */
                 insts.push(Inst::CondBr {
-                    taken: taken,
+                    taken,
                     not_taken,
                     kind: low,
                 });
             }
-            IntCC::SignedGreaterThan | IntCC::SignedLessThan => {
+            IntCC::SignedGreaterThan
+            | IntCC::SignedLessThan
+            | IntCC::UnsignedLessThan
+            | IntCC::UnsignedGreaterThan => {
                 /*
                     make cc == IntCC::SignedGreaterThan
-                    must be true for IntCC::SignedLessThan too.
+                    must be true for IntCC::SignedLessThan ... too.
                 */
                 /*
                     if a.hight > b.high
@@ -275,12 +273,8 @@ impl Inst {
                     kind: low,
                 });
             }
-            IntCC::UnsignedLessThan
-            | IntCC::UnsignedGreaterThanOrEqual
-            | IntCC::UnsignedGreaterThan
-            | IntCC::UnsignedLessThanOrEqual
-            | IntCC::Overflow
-            | IntCC::NotOverflow => unreachable!(),
+
+            IntCC::Overflow | IntCC::NotOverflow => unreachable!(),
         }
 
         insts
@@ -1103,7 +1097,7 @@ impl MachInstEmit for Inst {
                     /*
                         offst == 0 make no jump at all, but get the current pc.
                     */
-                    let mut x = Inst::construct_auipc_and_jalr(tmp1, 16);
+                    let   x = Inst::construct_auipc_and_jalr(tmp1, 16);
                     insts.push(x[0].clone());
                     // t *= 8;
                     insts.push(Inst::AluRRImm12 {
@@ -1485,6 +1479,49 @@ impl MachInstEmit for Inst {
             &Inst::EBreak => {
                 sink.put4(0x00100073);
             }
+            &Inst::Icmp {
+                cc,
+                rd,
+                ref a,
+                ref b,
+                ty,
+            } => {
+                let a = alloc_value_regs(a, &mut allocs);
+                let b = alloc_value_regs(b, &mut allocs);
+                let rd = allocs.next_writable(rd);
+                let label_true = sink.get_label();
+                let label_false = sink.get_label();
+                Inst::lower_br_icmp(
+                    cc,
+                    a,
+                    b,
+                    BranchTarget::Label(label_true),
+                    BranchTarget::Label(label_false),
+                    ty,
+                )
+                .into_iter()
+                .for_each(|i| i.emit(&[], sink, emit_info, state));
+
+                sink.bind_label(label_true);
+                Inst::load_constant_imm12(rd, Imm12::from_bits(-1)).emit(
+                    &[],
+                    sink,
+                    emit_info,
+                    state,
+                );
+
+                Inst::Jal {
+                    dest: BranchTarget::offset(Inst::instruction_size() * 2),
+                }
+                .emit(&[], sink, emit_info, state);
+                sink.bind_label(label_false);
+                Inst::load_constant_imm12(rd, Imm12::from_bits(0)).emit(
+                    &[],
+                    sink,
+                    emit_info,
+                    state,
+                );
+            }
             &Inst::AtomicCas {
                 t0,
                 dst,
@@ -1717,31 +1754,34 @@ impl MachInstEmit for Inst {
                 )
                 .into_iter()
                 .for_each(|i| i.emit(&[], sink, emit_info, state));
-                //here is true , use x.
-                sink.bind_label(label_true);
+
                 let gen_move = |dst: &Vec<Writable<Reg>>,
                                 val: &ValueRegs<Reg>,
                                 sink: &mut MachBuffer<Inst>,
                                 state: &mut EmitState| {
+                    let ty = if ty.bits() == 128 { I64 } else { ty };
                     let mut insts = SmallInstVec::new();
                     insts.push(Inst::Mov {
                         rd: dst[0],
                         rm: val.regs()[0],
-                        ty: if ty.bits() == 128 { I64 } else { ty },
+                        ty,
                     });
                     if ty.bits() == 128 {
                         insts.push(Inst::Mov {
                             rd: dst[1],
                             rm: val.regs()[1],
-                            ty: if ty.bits() == 128 { I64 } else { ty },
+                            ty,
                         });
                     }
                     insts
                         .into_iter()
                         .for_each(|i| i.emit(&[], sink, emit_info, state));
                 };
+                //here is true , use x.
+                sink.bind_label(label_true);
                 gen_move(&dst, &x, sink, state);
                 Inst::gen_jump(label_done).emit(&[], sink, emit_info, state);
+                // here is false use y
                 sink.bind_label(label_false);
                 gen_move(&dst, &y, sink, state);
                 sink.bind_label(label_done);

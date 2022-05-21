@@ -949,11 +949,15 @@ impl AluOPRRI {
         }
     }
 
-    pub(crate) fn shamt_mask(x: u8) -> u8 {
-        match x {
-            5 => 0b1_1111,
-            6 => 0b11_1111,
-            _ => unreachable!(),
+    pub(crate) fn shamt_mask(self, x: u8) -> u8 {
+        let s = self.need_shamt();
+        match s {
+            Some(x) => match x {
+                5 => 0b1_1111,
+                6 => 0b11_1111,
+                _ => unreachable!(),
+            },
+            None => 0,
         }
     }
 

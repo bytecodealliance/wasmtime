@@ -129,23 +129,6 @@ where
         self.emit(&MInst::construct_bit_not(tmp_low, low));
         self.value_regs(tmp_low.to_reg(), tmp_hight.to_reg())
     }
-    fn band_128(&mut self, x: ValueRegs, y: ValueRegs) -> ValueRegs {
-        let tmp_hight = self.temp_writable_reg(I64);
-        let tmp_low = self.temp_writable_reg(I64);
-        self.emit(&MInst::AluRRR {
-            alu_op: AluOPRRR::And,
-            rd: tmp_hight,
-            rs1: x.regs()[0],
-            rs2: y.regs()[0],
-        });
-        self.emit(&MInst::AluRRR {
-            alu_op: AluOPRRR::And,
-            rd: tmp_hight,
-            rs1: x.regs()[1],
-            rs2: y.regs()[1],
-        });
-        self.value_regs(tmp_low.to_reg(), tmp_hight.to_reg())
-    }
 
     fn i128_arithmetic(&mut self, op: &I128ArithmeticOP, x: ValueRegs, y: ValueRegs) -> ValueRegs {
         let mut dst = Vec::with_capacity(2);
@@ -310,6 +293,15 @@ where
         ValueRegs::two(low.to_reg(), high.to_reg())
     }
 
+    fn bitmaip_imm12(&mut self, op: &AluOPRRI, shamt: u8) -> Imm12 {
+        op.funct12(if op.need_shamt().is_some() {
+            Some(shamt)
+        } else {
+            None
+        })
+        .1
+    }
+
     fn extend(&mut self, val: Reg, is_signed: bool, from_bits: u8, to_bits: u8) -> ValueRegs {
         if is_signed {
             if to_bits == 128 {
@@ -374,6 +366,25 @@ where
                 ValueRegs::one(tmp.to_reg())
             }
         }
+    }
+
+    fn b128_binary(&mut self, op: &AluOPRRR, a: ValueRegs, b: ValueRegs) -> ValueRegs {
+        let op = *op;
+        let low = self.temp_writable_reg(I64);
+        let high = self.temp_writable_reg(I64);
+        self.emit(&MInst::AluRRR {
+            alu_op: op,
+            rd: low,
+            rs1: a.regs()[0],
+            rs2: b.regs()[0],
+        });
+        self.emit(&MInst::AluRRR {
+            alu_op: op,
+            rd: high,
+            rs1: a.regs()[1],
+            rs2: b.regs()[1],
+        });
+        ValueRegs::two(low.to_reg(), high.to_reg())
     }
 }
 

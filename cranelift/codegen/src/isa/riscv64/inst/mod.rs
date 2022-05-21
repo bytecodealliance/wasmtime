@@ -511,6 +511,11 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             }
             collector.reg_def(rd);
         }
+        &Inst::Icmp { rd, a, b, .. } => {
+            collector.reg_uses(a.regs());
+            collector.reg_uses(b.regs());
+            collector.reg_def(rd);
+        }
     }
 }
 
@@ -797,6 +802,12 @@ impl Inst {
                     "atomic_cas", dst, e, v, addr, t0
                 )
             }
+            &Inst::Icmp { cc, rd, a, b, ty } => {
+                let a = format_regs(a.regs(), allocs);
+                let b = format_regs(b.regs(), allocs);
+                let rd = format_reg(rd.to_reg(), allocs);
+                format!("{} {},{},{};;ty={}", cc.to_static_str(), rd, a, b, ty)
+            }
             &Inst::IntSelect {
                 op,
                 ref dst,
@@ -920,7 +931,7 @@ impl Inst {
                 let rd = format_reg(rd.to_reg(), allocs);
                 if alu_op.is_bit_manip() {
                     if let Some(shamt) = alu_op.need_shamt() {
-                        let shamt = (imm12.as_i16() as u8) & AluOPRRI::shamt_mask(shamt);
+                        let shamt = (imm12.as_i16() as u8) & alu_op.shamt_mask(shamt);
                         format!("{} {},{},{}", alu_op.op_name(), rd, rs, shamt)
                     } else {
                         format!("{} {},{}", alu_op.op_name(), rd, rs)

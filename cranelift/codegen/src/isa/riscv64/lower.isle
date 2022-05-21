@@ -142,9 +142,9 @@
       (alu_rr_imm12 (AluOPRRI.Andi) y x))
 
 (rule (lower (has_type $B128 (band x y)))
-      (band_128 y x))
+      (b128_binary (AluOPRRR.And) x y))
 (rule (lower (has_type $I128 (band x y)))
-      (band_128 x y))
+      (b128_binary (AluOPRRR.And) x y))
 
 
 ;;;; Rules for `or` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -157,6 +157,10 @@
 
 (rule (lower (has_type (fits_in_64 ty) (bor (imm12_from_value x) y)))
       (alu_rr_imm12 (AluOPRRI.Ori) y x))
+(rule (lower (has_type $B128 (bor x y)))
+      (b128_binary (AluOPRRR.Or) x y))
+(rule (lower (has_type $I128 (bor x y)))
+      (b128_binary (AluOPRRR.Or) x y))
 
 ;;;; Rules for `xor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 ty) (bxor x y)))
@@ -168,7 +172,19 @@
 
 (rule (lower (has_type (fits_in_64 ty) (bxor (imm12_from_value x) y)))
       (alu_rr_imm12 (AluOPRRI.Xori) y x))
+(rule (lower (has_type $B128 (bxor x y)))
+      (b128_binary (AluOPRRR.Xor) x y))
+(rule (lower (has_type $I128 (bxor x y)))
+      (b128_binary (AluOPRRR.Xor) x y))
 
+
+;;;; Rules for `xor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(rule (lower (has_type (fits_in_64 ty) (bor_not x y)))
+      (alu_rrr (AluOPRRR.Orn) x y))
+(rule (lower (has_type $B128 (bor_not x y)))
+      (b128_binary (AluOPRRR.Orn) x y))
+(rule (lower (has_type $I128 (bor_not x y)))
+      (b128_binary (AluOPRRR.Orn) x y))
 
 
 ;;;; Rules for `f32const` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -223,3 +239,13 @@
 
 (rule (lower (has_type  $I128 (band_not x y)))
       (band_not_128 x y))
+
+;;;; Rules for `popcnt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(rule (lower (has_type $I8 (popcnt x)))
+      (alu_rr_imm12_bit_map (AluOPRRI.Cpopw) (narrow_int $I8 x) 0))
+(rule (lower (has_type $I16 (popcnt x)))
+      (alu_rr_imm12_bit_map (AluOPRRI.Cpopw) (narrow_int $I16 x) 0))
+(rule (lower (has_type $I32 (popcnt x)))
+      (alu_rr_imm12_bit_map (AluOPRRI.Cpopw) x 0))
+(rule (lower (has_type $I64 (popcnt x)))
+      (alu_rr_imm12_bit_map (AluOPRRI.Cpop) x 0))

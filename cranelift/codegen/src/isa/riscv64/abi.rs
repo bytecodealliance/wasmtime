@@ -139,7 +139,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
             let abi_args = if run_out_of_registers {
                 &mut abi_args_for_stack
             } else {
-                &mut abi_args 
+                &mut abi_args
             };
             if let ir::ArgumentPurpose::StructArgument(size) = param.purpose {
                 let offset = next_stack;
@@ -175,7 +175,6 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                         next_stack += 8
                     }
                 }
-
                 B1 | B8 | B16 | B32 | B64 | I8 | I16 | I32 | I64 | R32 | R64 => {
                     if x_registers.len() > 0 {
                         let reg = x_registers[0].clone();
@@ -220,7 +219,6 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                             extension: param.extension,
                         });
                         x_registers = &x_registers[1..];
-
                         slots.push(ABIArgSlot::Stack {
                             offset: next_stack,
                             ty: elem_type,
@@ -238,7 +236,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                         }
                     }
                     abi_args.push(ABIArg::Slots {
-                        slots: slots,
+                        slots,
                         purpose: ir::ArgumentPurpose::Normal,
                     });
                 }

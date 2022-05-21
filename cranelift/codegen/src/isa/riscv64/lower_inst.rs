@@ -480,8 +480,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             // undefined, so we can simply do a copy.
             let rn = put_input_in_regs(ctx, inputs[0]).regs()[0];
             let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let ty = ctx.input_ty(insn, 0);
-            ctx.emit(Inst::gen_move(rd, rn, ty));
+            ctx.emit(Inst::gen_move(rd, rn, ty.unwrap()));
         }
 
         Opcode::Bextend | Opcode::Bmask => {
@@ -496,11 +495,9 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     op, from_ty
                 )));
             }
-
             assert!(from_bits <= to_bits);
             let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let rn = put_input_in_reg(ctx, inputs[0]);
-
             if from_bits == to_bits {
                 ctx.emit(Inst::gen_move(rd, rn, to_ty));
             } else {
@@ -518,7 +515,6 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::Bint => {
             let ty = ty.unwrap();
-
             if ty.is_vector() {
                 return Err(CodegenError::Unsupported(format!(
                     "Bint: Unsupported type: {:?}",
@@ -533,7 +529,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 rs: input.regs()[0],
                 imm12: Imm12::from_bits(1),
             });
-            if ty_bits(ty) > 64 {
+            if ty_bits(ty) == 128 {
                 ctx.emit(Inst::load_constant_imm12(
                     Writable::from(output.regs()[1]),
                     Imm12::zero(),
@@ -591,7 +587,12 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Icmp => {
-            unimplemented!()
+            let ty = ctx.input_ty(insn, 0);
+            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+            let a = put_input_in_regs(ctx, inputs[0]);
+            let b = put_input_in_regs(ctx, inputs[1]);
+            let cc = ctx.data(insn).cond_code().unwrap();
+            ctx.emit(Inst::Icmp { cc, rd, a, b, ty });
         }
 
         Opcode::Fcmp => {
@@ -678,7 +679,6 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 }
                 _ => unreachable!(),
             };
-
             abi.emit_stack_pre_adjust(ctx);
             assert!(inputs.len() == abi.num_args());
             for i in abi.get_copy_to_arg_order() {
@@ -802,12 +802,11 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::Imax | Opcode::Umax | Opcode::Umin | Opcode::Imin => {
             let ty = ty.unwrap();
-
             if ty.is_int() {
                 let dst = ctx.get_output(insn, 0);
                 let dst: Vec<_> = dst.regs().iter().map(|r| *r).collect();
                 let x = put_input_in_regs(ctx, inputs[0]);
-                let y = put_input_in_regs(ctx, inputs[0]);
+                let y = put_input_in_regs(ctx, inputs[1]);
                 ctx.emit(Inst::IntSelect {
                     op: IntSelectOP::from_ir_op(op),
                     dst: dst,
