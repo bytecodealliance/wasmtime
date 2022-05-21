@@ -189,7 +189,6 @@
       (bnot_128 x))
 
 
-
 ;;;; Rules for `bit_reverse` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type ty (bitrev x)))
       (bit_reverse ty x))
@@ -216,3 +215,11 @@
 ;;;; Rules for `sextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type out (sextend x @ (value_type in))))
       (extend x $true (ty_bits in) (ty_bits out)))
+
+
+;;;; Rules for `band_not` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(rule (lower (has_type (fits_in_64 ty) (band_not x y)))
+      (alu_rrr (AluOPRRR.Andn) x y))
+
+(rule (lower (has_type  $I128 (band_not x y)))
+      (band_not_128 x y))

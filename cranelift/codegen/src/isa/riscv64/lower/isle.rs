@@ -292,6 +292,24 @@ where
         tmp1.to_reg()
     }
 
+    fn band_not_128(&mut self, a: ValueRegs, b: ValueRegs) -> ValueRegs {
+        let low = self.temp_writable_reg(I64);
+        let high = self.temp_writable_reg(I64);
+        self.emit(&MInst::AluRRR {
+            alu_op: AluOPRRR::Andn,
+            rd: low,
+            rs1: a.regs()[0],
+            rs2: b.regs()[0],
+        });
+        self.emit(&MInst::AluRRR {
+            alu_op: AluOPRRR::Andn,
+            rd: high,
+            rs1: a.regs()[1],
+            rs2: b.regs()[1],
+        });
+        ValueRegs::two(low.to_reg(), high.to_reg())
+    }
+
     fn extend(&mut self, val: Reg, is_signed: bool, from_bits: u8, to_bits: u8) -> ValueRegs {
         if is_signed {
             if to_bits == 128 {

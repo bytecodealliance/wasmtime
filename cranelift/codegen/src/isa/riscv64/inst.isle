@@ -696,3 +696,6 @@
 
 (decl extend(Reg bool u8 u8 )ValueRegs)
 (extern constructor extend extend)
+
+(decl band_not_128(ValueRegs ValueRegs)ValueRegs)
+(extern constructor band_not_128 band_not_128)
