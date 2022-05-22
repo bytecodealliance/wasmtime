@@ -1,5 +1,7 @@
 //! AArch64 ISA: binary code emission.
 
+use core::panic;
+
 use crate::binemit::StackMap;
 use crate::isa::riscv64::inst::*;
 
@@ -376,45 +378,42 @@ impl Inst {
             insts.push(inst);
             return insts;
         }
-        fn i128cmp_to_int64_compare_parts(
-            a: ValueRegs<Reg>,
-            b: ValueRegs<Reg>,
-            cc: IntCC,
-        ) -> (IntegerCompare, IntegerCompare) {
-            let hight_a = a.regs()[1];
-            let low_a = a.regs()[0];
-            let hight_b = b.regs()[1];
-            let low_b = b.regs()[0];
-            // hight part
-            let high = IntegerCompare {
+
+        let low = |cc: IntCC| -> IntegerCompare {
+            IntegerCompare {
+                rs1: a.regs()[0],
+                rs2: b.regs()[0],
                 kind: cc,
-                rs1: hight_a,
-                rs2: hight_b,
-            };
-            // low part
+            }
+        };
+        let high = |cc: IntCC| -> IntegerCompare {
+            IntegerCompare {
+                rs1: a.regs()[1],
+                rs2: b.regs()[1],
+                kind: cc,
+            }
+        };
+
+        fn remove_eq(cc: IntCC) -> IntCC {
+            match cc {
+                IntCC::SignedGreaterThanOrEqual => IntCC::SignedGreaterThan,
+                IntCC::SignedLessThanOrEqual => IntCC::SignedLessThan,
+                IntCC::UnsignedGreaterThanOrEqual => IntCC::UnsignedGreaterThan,
+                IntCC::UnsignedLessThanOrEqual => IntCC::UnsignedLessThan,
+                _ => cc,
+            }
+        }
+
+        fn remove_signed(cc: IntCC) -> IntCC {
             let x = match cc {
-                IntCC::Equal => IntCC::Equal,
-                IntCC::NotEqual => IntCC::NotEqual,
                 IntCC::SignedLessThan => IntCC::UnsignedLessThan,
                 IntCC::SignedGreaterThanOrEqual => IntCC::UnsignedGreaterThanOrEqual,
                 IntCC::SignedGreaterThan => IntCC::UnsignedGreaterThan,
                 IntCC::SignedLessThanOrEqual => IntCC::UnsignedLessThanOrEqual,
-                IntCC::UnsignedLessThan => IntCC::UnsignedLessThan,
-                IntCC::UnsignedGreaterThanOrEqual => IntCC::UnsignedGreaterThanOrEqual,
-                IntCC::UnsignedGreaterThan => IntCC::UnsignedGreaterThanOrEqual,
-                IntCC::UnsignedLessThanOrEqual => IntCC::UnsignedGreaterThanOrEqual,
-                IntCC::Overflow | IntCC::NotOverflow => unreachable!(),
+                _ => cc,
             };
-            let low = IntegerCompare {
-                kind: x,
-                rs1: low_a,
-                rs2: low_b,
-            };
-            (low, high)
+            x
         }
-        // i128 compare
-        let (low, high) = i128cmp_to_int64_compare_parts(a, b, cc);
-        // let mut patch_to_low = vec![];
         match cc {
             IntCC::Equal => {
                 /*
@@ -424,7 +423,7 @@ impl Inst {
                 insts.push(Inst::CondBr {
                     taken: not_taken,
                     not_taken: BranchTarget::zero(), /*  no branch  */
-                    kind: high.inverse(),
+                    kind: high(IntCC::NotEqual),
                 });
                 /*
                     the rest part.
@@ -432,7 +431,7 @@ impl Inst {
                 insts.push(Inst::CondBr {
                     taken,
                     not_taken,
-                    kind: low,
+                    kind: low(IntCC::Equal),
                 });
             }
 
@@ -445,91 +444,41 @@ impl Inst {
                 insts.push(Inst::CondBr {
                     taken,
                     not_taken: BranchTarget::zero(), /*  no branch  */
-                    kind: high,
+                    kind: high(IntCC::NotEqual),
                 });
 
                 insts.push(Inst::CondBr {
                     taken,
                     not_taken,
-                    kind: low,
+                    kind: low(IntCC::NotEqual),
                 });
             }
-
             IntCC::SignedGreaterThanOrEqual
             | IntCC::SignedLessThanOrEqual
             | IntCC::UnsignedGreaterThanOrEqual
-            | IntCC::UnsignedLessThanOrEqual => {
-                /*
-                    make cc == IntCC::SignedGreaterThanOrEqual
-                    must be true for IntCC::SignedLessThan ... too.
-                */
-                /*
-                    if "!(a.high >= b.high)" is true,
-                    we must goto the not_taken or otherwise fallthrough.
-                */
-                insts.push(Inst::CondBr {
-                    taken: not_taken,
-                    not_taken: BranchTarget::zero(),
-                    kind: high.inverse(),
-                });
-                /*
-                    here we must have a.high >= b.high to be true.
-                    if a.high > b.high we don't need compare the rest part
-                */
-                insts.push(Inst::CondBr {
-                    taken: taken,
-                    not_taken: BranchTarget::zero(),
-                    kind: high.clone().set_kind(IntCC::NotEqual),
-                });
-                /*
-                    here we must have a.high == b.high to be true.
-                    just compare the rest part.
-                */
-                insts.push(Inst::CondBr {
-                    taken,
-                    not_taken,
-                    kind: low,
-                });
-            }
-            IntCC::SignedGreaterThan
+            | IntCC::UnsignedLessThanOrEqual
+            | IntCC::SignedGreaterThan
             | IntCC::SignedLessThan
             | IntCC::UnsignedLessThan
             | IntCC::UnsignedGreaterThan => {
-                /*
-                    make cc == IntCC::SignedGreaterThan
-                    must be true for IntCC::SignedLessThan ... too.
-                */
-                /*
-                    if a.hight > b.high
-                    we can goto the taken ,
-                    no need to compare the rest part.
-                */
+                //
                 insts.push(Inst::CondBr {
                     taken,
                     not_taken: BranchTarget::zero(),
-                    kind: high,
+                    kind: high(remove_eq(cc)),
                 });
-                /*
-                    here we must have a.high <= b.hight.
-                    if not equal we know  a < b.high .
-                    we must goto the not_taken or otherwise we fallthrough.
-                */
+                //
                 insts.push(Inst::CondBr {
                     taken: not_taken,
                     not_taken: BranchTarget::zero(),
-                    kind: high.clone().set_kind(IntCC::NotEqual),
+                    kind: high(IntCC::NotEqual),
                 });
-                /*
-                    here we know a.high == b.high
-                    just compare the rest part.
-                */
                 insts.push(Inst::CondBr {
                     taken,
                     not_taken,
-                    kind: low,
+                    kind: low(remove_signed(cc)),
                 });
             }
-
             IntCC::Overflow | IntCC::NotOverflow => unreachable!(),
         }
 
