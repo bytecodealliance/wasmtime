@@ -341,44 +341,8 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             ctx.emit(Inst::Fence);
         }
 
-        Opcode::StackLoad => {
-            // panic!("Direct stack memory access not supported; should not be used by Wasm");
-            /*
-                other platform did not implemented this.
-                but test file cranelift\filetests\filetests\runtests\atomic-cas.clif
-                use this instruction
-            */
-            let offset = ctx.data(insn).load_store_offset().unwrap() as i64;
-            let flags = ctx.memflags(insn).unwrap_or(MemFlags::new());
-            gen_load(
-                get_output_reg(ctx, outputs[0]),
-                stack_reg(),
-                offset,
-                ctx.output_ty(insn, 0),
-                flags,
-            )
-            .into_iter()
-            .for_each(|i| ctx.emit(i));
-        }
-        Opcode::StackStore => {
-            // panic!("Direct stack memory access not supported; should not be used by Wasm");
-            /*
-                other platform did not implemented this.
-                but test file cranelift\filetests\filetests\runtests\atomic-cas.clif
-                use this instruction
-            */
-            let offset = ctx.data(insn).load_store_offset().unwrap() as i64;
-            let flags = ctx.memflags(insn).unwrap_or(MemFlags::new());
-
-            gen_store(
-                ctx.put_input_in_regs(insn, 0),
-                stack_reg(),
-                offset,
-                ctx.input_ty(insn, 0),
-                flags,
-            )
-            .into_iter()
-            .for_each(|i| ctx.emit(i));
+        Opcode::StackLoad | Opcode::StackStore => {
+            panic!("Direct stack memory access not supported; should not be used by Wasm");
         }
 
         Opcode::HeapAddr => {

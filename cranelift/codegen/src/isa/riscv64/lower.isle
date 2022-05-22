@@ -87,10 +87,10 @@
       (alu_rrr (AluOPRRR.Mulw) x y))
 
 (rule (lower (has_type (fits_in_64 ty) (smulhi x y)))
-      (alu_rrr (AluOPRRR.Mulh) x y))
+      (lower_mlhi $true ty x y))
 
 (rule (lower (has_type (fits_in_64 ty) (umulhi x y)))
-      (alu_rrr (AluOPRRR.Mulhsu) x y))
+      (lower_mlhi $false ty x y))
 
 (rule (lower (has_type $I128 (imul x y)))
       (i128_arithmetic (I128ArithmeticOP.Mul) x y))

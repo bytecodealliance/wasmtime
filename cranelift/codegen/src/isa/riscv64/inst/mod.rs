@@ -1065,7 +1065,9 @@ impl Inst {
                 let rd = format_reg(rd.to_reg(), allocs);
                 format!("load_addr {},{}", rd, mem)
             }
-            &MInst::VirtualSPOffsetAdj { .. } => todo!(),
+            &MInst::VirtualSPOffsetAdj { amount } => {
+                format!("add virtaul_sp,virtaul_sp,{}", amount)
+            }
             &MInst::Mov { rd, rm, ty } => {
                 let rd = format_reg(rd.to_reg(), allocs);
                 let rm = format_reg(rm, allocs);

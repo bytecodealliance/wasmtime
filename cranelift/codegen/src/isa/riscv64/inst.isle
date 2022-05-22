@@ -671,6 +671,8 @@
   alu_rr_imm12 (AluOPRRI.Srli) (alu_rr_imm12 (AluOPRRI.Slli) r (imm_from_bits 56)) (imm_from_bits 56))) 
 (rule (narrow_int $I16 r) (
   alu_rr_imm12 (AluOPRRI.Srli) (alu_rr_imm12 (AluOPRRI.Slli) r (imm_from_bits 48)) (imm_from_bits 48)))
+(rule (narrow_int $I32 r) (
+  alu_rr_imm12 (AluOPRRI.Srli) (alu_rr_imm12 (AluOPRRI.Slli) r (imm_from_bits 32)) (imm_from_bits 32)))
 
 ;; Helper for get negative of Imm12 
 (decl neg_imm12 (Imm12) Imm12)
@@ -715,3 +717,6 @@
 
 (decl b128_binary(AluOPRRR ValueRegs ValueRegs) ValueRegs)
 (extern constructor b128_binary b128_binary)
+
+(decl lower_mlhi (bool Type Reg Reg)Reg)
+(extern constructor lower_mlhi lower_mlhi)

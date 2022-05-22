@@ -385,6 +385,51 @@ where
         });
         ValueRegs::two(low.to_reg(), high.to_reg())
     }
+
+    fn lower_mlhi(&mut self, is_signed: bool, ty: Type, a: Reg, b: Reg) -> Reg {
+        let rd = self.temp_writable_reg(I64);
+        if ty.bits() == 64 {
+            self.emit(&MInst::AluRRR {
+                alu_op: if is_signed {
+                    AluOPRRR::Mulh
+                } else {
+                    AluOPRRR::Mulhu
+                },
+                rd: rd,
+                rs1: a,
+                rs2: b,
+            });
+        } else {
+            /*
+                first we must narrow down int,because we perform unsinged multiply.
+            */
+            let a = if is_signed {
+                a
+            } else {
+                generated_code::constructor_narrow_int(self, ty, a).unwrap()
+            };
+            let b = if is_signed {
+                b
+            } else {
+                generated_code::constructor_narrow_int(self, ty, b).unwrap()
+            };
+            self.emit(&MInst::AluRRR {
+                alu_op: AluOPRRR::Mul,
+                rd: rd,
+                rs1: a,
+                rs2: b,
+            });
+
+            self.emit(&MInst::AluRRImm12 {
+                alu_op: AluOPRRI::Srli,
+                rd,
+                rs: rd.to_reg(),
+                imm12: Imm12::from_bits(ty.bits() as i16),
+            });
+        }
+
+        rd.to_reg()
+    }
 }
 
 impl<C> IsleContext<'_, C, Flags, IsaFlags, 6>

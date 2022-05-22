@@ -1184,6 +1184,7 @@ impl FloatFlagOp {
 }
 
 impl FClassResult {
+    #[inline]
     pub(crate) fn bit(self) -> u32 {
         match self {
             FClassResult::NegInfinite => 1 << 0,
@@ -1199,13 +1200,15 @@ impl FClassResult {
         }
     }
 
+    #[inline]
     pub(crate) fn is_nan_bits() -> u32 {
         Self::SNaN.bit() | Self::QNaN.bit()
     }
-
+    #[inline]
     pub(crate) fn is_zero_bits() -> u32 {
         Self::NegZero.bit() | Self::PosZero.bit()
     }
+    #[inline]
     pub(crate) fn is_infinite_bits() -> u32 {
         Self::PosInfinite.bit() | Self::NegInfinite.bit()
     }
@@ -1550,6 +1553,7 @@ impl ReferenceValidOP {
 pub fn is_int_and_type_signed(ty: Type) -> bool {
     ty.is_int() && is_type_signed(ty)
 }
+
 #[inline(always)]
 pub fn is_type_signed(ty: Type) -> bool {
     assert!(ty.is_int());
