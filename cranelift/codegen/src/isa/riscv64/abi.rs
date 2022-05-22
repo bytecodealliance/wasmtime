@@ -377,7 +377,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
     }
 
     fn gen_debug_frame_info(
-        flags: &settings::Flags,
+        _flags: &settings::Flags,
         _isa_flags: &Vec<settings::Value>,
     ) -> SmallInstVec<Inst> {
         smallvec![]
@@ -427,12 +427,12 @@ impl ABIMachineSpec for Riscv64MachineDeps {
     // Returns stack bytes used as well as instructions. Does not adjust
     // nominal SP offset; abi_impl generic code will do that.
     fn gen_clobber_save(
-        call_conv: isa::CallConv,
-        setup_frame: bool,
-        flags: &settings::Flags,
+        _call_conv: isa::CallConv,
+        _setup_frame: bool,
+        _flags: &settings::Flags,
         clobbered_callee_saves: &[Writable<RealReg>],
         fixed_frame_storage_size: u32,
-        outgoing_args_size: u32,
+        _outgoing_args_size: u32,
     ) -> (u64, SmallVec<[Inst; 16]>) {
         let mut insts = SmallVec::new();
         let clobbered_size = compute_clobber_size(&clobbered_callee_saves);
@@ -441,52 +441,50 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         let stack_size = fixed_frame_storage_size + clobbered_size;
         // Store each clobbered register in order at offsets from RSP,
         // placing them above the fixed frame slots.
-        let mut cur_offset = fixed_frame_storage_size;
-        for reg in clobbered_callee_saves {
-            let r_reg = reg.to_reg();
-            let off = cur_offset;
-            let _type = if r_reg.class() == RegClass::Int {
-                I64
-            } else {
-                F64
-            };
-            insts.push(Self::gen_store_stack(
-                StackAMode::FPOffset(-(off as i64), _type),
-                real_reg_to_reg(reg.to_reg()),
-                _type,
-            ));
-            cur_offset += 8
-        }
         if stack_size > 0 {
             insts.push(Inst::AjustSp {
                 amount: -(stack_size as i64),
             });
+        }
+        let mut cur_offset = 0;
+        for reg in clobbered_callee_saves {
+            let r_reg = reg.to_reg();
+            let ty = match r_reg.class() {
+                regalloc2::RegClass::Int => I64,
+                regalloc2::RegClass::Float => F64,
+            };
+
+            insts.push(Self::gen_store_stack(
+                StackAMode::SPOffset(cur_offset, ty),
+                real_reg_to_reg(reg.to_reg()),
+                ty,
+            ));
+            cur_offset += 8
         }
         (clobbered_size as u64, insts)
     }
 
     fn gen_clobber_restore(
         call_conv: isa::CallConv,
-        flags: &settings::Flags,
+        _flags: &settings::Flags,
         clobbers: &[Writable<RealReg>],
         fixed_frame_storage_size: u32,
-        outgoing_args_size: u32,
+        _outgoing_args_size: u32,
     ) -> SmallVec<[Inst; 16]> {
         let mut insts = SmallVec::new();
         let clobbered_callee_saves = Self::get_clobbered_callee_saves(call_conv, clobbers);
         let stack_size = fixed_frame_storage_size + compute_clobber_size(&clobbered_callee_saves);
-        let mut cur_offset = fixed_frame_storage_size;
+        let mut cur_offset = 0;
         for reg in &clobbered_callee_saves {
             let rreg = reg.to_reg();
-            let _type = if rreg.class() == RegClass::Int {
-                I64
-            } else {
-                F64
+            let ty = match rreg.class() {
+                regalloc2::RegClass::Int => I64,
+                regalloc2::RegClass::Float => F64,
             };
             insts.push(Self::gen_load_stack(
-                StackAMode::FPOffset(cur_offset as i64, _type),
+                StackAMode::SPOffset(cur_offset, ty),
                 Writable::from_reg(real_reg_to_reg(reg.to_reg())),
-                _type,
+                ty,
             ));
             cur_offset += 8
         }

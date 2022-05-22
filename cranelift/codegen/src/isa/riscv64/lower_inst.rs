@@ -16,7 +16,7 @@ use crate::CodegenResult;
 use std::boxed::Box;
 
 use crate::ir::types::{
-    B1, B128, B16, B32, B64, B8, F32, F64, FFLAGS, I128, I16, I32, I64, I8, IFLAGS, R32, R64,
+    B128, B16, B32, B64, B8, F32, F64, FFLAGS, I128, I16, I32, I64, I8, R32, R64,
 };
 
 use super::lower::*;
@@ -1119,7 +1119,7 @@ fn gen_load(
             };
             insts.push(Inst::Load {
                 rd: dst.regs()[0],
-                op: LoadOP::Ld,
+                op,
                 flags,
                 from: AMode::RegOffset(base, off, I64),
             });
@@ -1134,7 +1134,7 @@ fn gen_load(
             };
             insts.push(Inst::Load {
                 rd: dst.regs()[0],
-                op: op,
+                op,
                 flags,
                 from: AMode::RegOffset(base, off, I64),
             });

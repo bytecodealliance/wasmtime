@@ -10,7 +10,6 @@ use super::*;
 pub static WORD_SIZE: u8 = 8;
 
 use crate::isa::riscv64::inst::reg_to_gpr_num;
-use crate::machinst::*;
 
 use std::fmt::{Display, Formatter, Result};
 /*
@@ -195,19 +194,27 @@ impl IntegerCompare {
     }
 
     #[inline(always)]
-    pub(crate) fn op_name(&self) -> String {
-        let (f, _) = self.funct3();
-        format!("b{}", f.op_name())
+    pub(crate) fn op_name(&self) -> &'static str {
+        match self.kind {
+            IntCC::Equal => "beq",
+            IntCC::NotEqual => "bne",
+            IntCC::SignedLessThan => "blt",
+            IntCC::SignedGreaterThanOrEqual => "bge",
+            IntCC::SignedGreaterThan => "bgt",
+            IntCC::SignedLessThanOrEqual => "ble",
+            IntCC::UnsignedLessThan => "bltu",
+            IntCC::UnsignedGreaterThanOrEqual => "bgeu",
+            IntCC::UnsignedGreaterThan => "bgtu",
+            IntCC::UnsignedLessThanOrEqual => "bleu",
+            IntCC::Overflow => todo!(),
+            IntCC::NotOverflow => todo!(),
+        }
     }
     #[inline(always)]
     pub(crate) fn set_kind(self, kind: IntCC) -> Self {
         Self { kind, ..self }
     }
-    #[inline(always)]
-    pub(crate) fn register_should_inverse_when_emit(&self) -> bool {
-        let (_, x) = self.funct3();
-        x
-    }
+
     pub(crate) fn emit(self) -> u32 {
         let (funct3, reverse) = self.funct3();
         let (rs1, rs2) = if reverse {

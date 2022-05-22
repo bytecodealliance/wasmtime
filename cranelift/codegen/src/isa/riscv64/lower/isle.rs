@@ -294,11 +294,10 @@ where
     }
 
     fn bitmaip_imm12(&mut self, op: &AluOPRRI, shamt: u8) -> Imm12 {
-        op.funct12(if op.need_shamt().is_some() {
-            Some(shamt)
-        } else {
-            None
-        })
+        op.funct12(op.need_shamt().map(|mask| {
+            assert!(mask >= shamt);
+            shamt
+        }))
         .1
     }
 
@@ -403,7 +402,4 @@ where
 }
 
 #[cfg(test)]
-mod test {
-    use super::*;
-    use crate::ir::types::B8X8;
-}
+mod test {}

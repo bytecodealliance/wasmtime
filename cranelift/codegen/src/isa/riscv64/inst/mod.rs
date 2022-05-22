@@ -13,9 +13,7 @@
 */
 use crate::binemit::{Addend, CodeOffset, Reloc};
 pub use crate::ir::condcodes::IntCC;
-use crate::ir::types::{
-    B1, B128, B16, B32, B64, B8, F32, F64, FFLAGS, I128, I16, I32, I64, I8, IFLAGS, R32, R64,
-};
+use crate::ir::types::{B1, B128, B16, B32, B64, B8, F32, F64, I128, I16, I32, I64, I8, R32, R64};
 
 pub use crate::ir::{ExternalName, MemFlags, Opcode, SourceLoc, Type, ValueLabel};
 use crate::isa::CallConv;
@@ -451,7 +449,7 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
         &Inst::Ffcmp { rd, rs1, rs2, .. } => {
             collector.reg_use(rs1);
             collector.reg_use(rs2);
-            collector.reg_def(rd);
+            collector.reg_early_def(rd);
         }
         &Inst::Select {
             ref dst,
@@ -961,7 +959,7 @@ impl Inst {
                 let rs2 = format_reg(rs2, allocs);
                 let rd = format_reg(rd.to_reg(), allocs);
                 format!(
-                    "{}{} {},{},{}",
+                    "{}.{} {},{},{}",
                     if ty == F32 { "f" } else { "d" },
                     cc,
                     rd,
@@ -1018,22 +1016,16 @@ impl Inst {
             } => {
                 let rs1 = format_reg(kind.rs1, allocs);
                 let rs2 = format_reg(kind.rs2, allocs);
-                let swap = kind.register_should_inverse_when_emit();
+
                 if not_taken.is_zero() && taken.as_label().is_none() {
                     let off = taken.as_offset().unwrap();
-                    format!(
-                        "{} {},{},{}",
-                        kind.op_name(),
-                        if swap { rs2.as_str() } else { rs1.as_str() },
-                        if swap { rs1.as_str() } else { rs2.as_str() },
-                        off
-                    )
+                    format!("{} {},{},{}", kind.op_name(), rs1, rs2, off)
                 } else {
                     let x = format!(
                         "{} {},{},taken({}),not_taken({})",
                         kind.op_name(),
-                        if swap { rs2.as_str() } else { rs1.as_str() },
-                        if swap { rs1.as_str() } else { rs2.as_str() },
+                        rs1,
+                        rs2,
                         taken,
                         not_taken
                     );

@@ -35,7 +35,7 @@ impl Imm12 {
     #[inline(always)]
     pub(crate) fn form_bool(b: bool) -> Self {
         if b {
-            Self { bits: 1 }
+            Self { bits: -1 }
         } else {
             Self { bits: 0 }
         }

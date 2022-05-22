@@ -2,7 +2,6 @@
 
 use crate::binemit::StackMap;
 use crate::isa::riscv64::inst::*;
-use std::collections::HashSet;
 
 use crate::isa::riscv64::inst::{zero_reg, AluOPRRR};
 use crate::machinst::{AllocationConsumer, Reg, Writable};
@@ -288,6 +287,7 @@ impl Inst {
             let index = *index;
             assert!(insts.len() > index);
             let real_off = (insts.len() - index) as i32 * Inst::instruction_size();
+            assert!(real_off > 4);
             match &mut insts[index] {
                 &mut Inst::CondBr { ref mut taken, .. } => match taken {
                     &mut BranchTarget::ResolvedOffset(_) => {
@@ -1097,7 +1097,7 @@ impl MachInstEmit for Inst {
                     /*
                         offst == 0 make no jump at all, but get the current pc.
                     */
-                    let   x = Inst::construct_auipc_and_jalr(tmp1, 16);
+                    let x = Inst::construct_auipc_and_jalr(tmp1, 16);
                     insts.push(x[0].clone());
                     // t *= 8;
                     insts.push(Inst::AluRRImm12 {
@@ -1266,7 +1266,6 @@ impl MachInstEmit for Inst {
                 } else {
                     AluOPRRR::FleD
                 };
-
                 /*
                     can be implemented by one risc-v instruction.
                 */
@@ -1287,115 +1286,98 @@ impl MachInstEmit for Inst {
                         rs2,
                     }
                     .emit(&[], sink, emit_info, state);
-                } else {
-                    // long path
-                    let mut insts = SmallInstVec::new();
-                    let label_set_false = sink.get_label();
-                    let label_set_true = sink.get_label();
-                    let label_jump_over = sink.get_label();
-                    // if eq
-                    if cc_bit.test(FloatCCBit::EQ) {
-                        insts.push(Inst::AluRRR {
-                            alu_op: eq_op,
-                            rd,
-                            rs1,
-                            rs2,
-                        });
-                        insts.push(Inst::CondBr {
-                            taken: BranchTarget::Label(label_jump_over),
-                            not_taken: BranchTarget::zero(),
-                            kind: IntegerCompare {
-                                kind: IntCC::NotEqual,
-                                rs1: rd.to_reg(),
-                                rs2: zero_reg(),
-                            },
-                        });
-                    }
-                    // if <
-                    if cc_bit.test(FloatCCBit::LT) {
-                        insts.push(Inst::AluRRR {
-                            alu_op: lt_op,
-                            rd,
-                            rs1,
-                            rs2,
-                        });
-
-                        insts.push(Inst::CondBr {
-                            taken: BranchTarget::Label(label_jump_over),
-                            not_taken: BranchTarget::zero(),
-                            kind: IntegerCompare {
-                                kind: IntCC::NotEqual,
-                                rs1: rd.to_reg(),
-                                rs2: zero_reg(),
-                            },
-                        });
-                    }
-                    // if gt
-                    if cc_bit.test(FloatCCBit::GT) {
-                        // I have no left > right operation in risc-v instruction set
-                        // first check order
-                        insts.extend(Inst::generate_float_unordered(rd, ty, rs1, rs2));
-                        insts.push(Inst::CondBr {
-                            taken: BranchTarget::Label(label_set_false),
-                            not_taken: BranchTarget::zero(),
-                            kind: IntegerCompare {
-                                kind: IntCC::NotEqual, // rd == 1 unordered data
-                                rs1: rd.to_reg(),
-                                rs2: zero_reg(),
-                            },
-                        });
-                        // number is ordered
-                        insts.push(Inst::AluRRR {
-                            alu_op: le_op,
-                            rd,
-                            rs1,
-                            rs2,
-                        });
-                        // could be unorder
-                        insts.push(Inst::CondBr {
-                            taken: BranchTarget::Label(label_set_true),
-                            not_taken: BranchTarget::zero(),
-                            kind: IntegerCompare {
-                                kind: IntCC::Equal,
-                                rs1: rd.to_reg(),
-                                rs2: zero_reg(),
-                            },
-                        });
-                    }
-                    // if unorder
-                    if cc_bit.test(FloatCCBit::UN) {
-                        insts.extend(Inst::generate_float_unordered(rd, ty, rs1, rs2));
-                        insts.push(Inst::Jal {
-                            dest: BranchTarget::Label(label_jump_over),
-                        });
-                    }
-                    // here is set false
-                    insts
-                        .into_iter()
-                        .for_each(|inst| inst.emit(&[], sink, emit_info, state));
-                    //emit and bind label
-                    sink.bind_label(label_set_false);
-                    Inst::load_constant_imm12(rd, Imm12::form_bool(false)).emit(
-                        &[],
-                        sink,
-                        emit_info,
-                        state,
-                    );
-                    // jump over set true
-                    Inst::Jal {
-                        dest: BranchTarget::offset(Inst::instruction_size() * 2),
-                    }
-                    .emit(&[], sink, emit_info, state);
-                    sink.bind_label(label_set_true);
-                    // here is set true
-                    Inst::load_constant_imm12(rd, Imm12::form_bool(true)).emit(
-                        &[],
-                        sink,
-                        emit_info,
-                        state,
-                    );
-                    sink.bind_label(label_jump_over);
+                    return;
                 }
+                // long path
+                let mut insts = SmallInstVec::new();
+                let label_jump_true = sink.get_label();
+                let label_jump_over = sink.get_label();
+                // if eq
+                if cc_bit.test(FloatCCBit::EQ) {
+                    insts.push(Inst::AluRRR {
+                        alu_op: eq_op,
+                        rd,
+                        rs1,
+                        rs2,
+                    });
+                    insts.push(Inst::CondBr {
+                        taken: BranchTarget::Label(label_jump_true),
+                        not_taken: BranchTarget::zero(),
+                        kind: IntegerCompare {
+                            kind: IntCC::NotEqual,
+                            rs1: rd.to_reg(),
+                            rs2: zero_reg(),
+                        },
+                    });
+                }
+                // if <
+                if cc_bit.test(FloatCCBit::LT) {
+                    insts.push(Inst::AluRRR {
+                        alu_op: lt_op,
+                        rd,
+                        rs1,
+                        rs2,
+                    });
+                    insts.push(Inst::CondBr {
+                        taken: BranchTarget::Label(label_jump_true),
+                        not_taken: BranchTarget::zero(),
+                        kind: IntegerCompare {
+                            kind: IntCC::NotEqual,
+                            rs1: rd.to_reg(),
+                            rs2: zero_reg(),
+                        },
+                    });
+                }
+                // if gt
+                if cc_bit.test(FloatCCBit::GT) {
+                    // number is ordered
+                    insts.push(Inst::AluRRR {
+                        alu_op: lt_op,
+                        rd,
+                        rs1: rs2,
+                        rs2: rs1,
+                    });
+                    // could be unorder
+                    insts.push(Inst::CondBr {
+                        taken: BranchTarget::Label(label_jump_true),
+                        not_taken: BranchTarget::zero(),
+                        kind: IntegerCompare {
+                            kind: IntCC::NotEqual,
+                            rs1: rd.to_reg(),
+                            rs2: zero_reg(),
+                        },
+                    });
+                }
+                // if unorder
+                if cc_bit.test(FloatCCBit::UN) {
+                    insts.extend(Inst::generate_float_unordered(rd, ty, rs1, rs2));
+                    insts.push(Inst::Jal {
+                        dest: BranchTarget::Label(label_jump_over),
+                    });
+                }
+                insts
+                    .into_iter()
+                    .for_each(|inst| inst.emit(&[], sink, emit_info, state));
+
+                Inst::load_constant_imm12(rd, Imm12::form_bool(false)).emit(
+                    &[],
+                    sink,
+                    emit_info,
+                    state,
+                );
+                Inst::Jal {
+                    dest: BranchTarget::offset(Inst::instruction_size() * 2),
+                }
+                .emit(&[], sink, emit_info, state);
+                // here is true , load true to rd.
+                sink.bind_label(label_jump_true);
+                Inst::load_constant_imm12(rd, Imm12::form_bool(true)).emit(
+                    &[],
+                    sink,
+                    emit_info,
+                    state,
+                );
+                sink.bind_label(label_jump_over);
             }
 
             &Inst::Select {
@@ -1450,17 +1432,15 @@ impl MachInstEmit for Inst {
                             });
                         }
                     };
-
+                select_result(x, &mut insts);
                 let patch_true = vec![insts.len()];
                 insts.push(Inst::Jal {
                     dest: BranchTarget::zero(),
                 });
-                select_result(x, &mut insts);
                 // here is false
                 Inst::patch_taken_list(&mut insts, &patch_false);
                 // select second value1
                 select_result(y, &mut insts);
-
                 Inst::patch_taken_list(&mut insts, &patch_true);
 
                 insts
@@ -1807,7 +1787,7 @@ impl MachInstEmit for Inst {
         };
 
         let end_off = sink.cur_offset();
-        debug_assert!((end_off - start_off) <= Inst::worst_case_size());
+        // debug_assert!((end_off - start_off) <= Inst::worst_case_size());
     }
 
     fn pretty_print_inst(&self, allocs: &[Allocation], state: &mut Self::State) -> String {
