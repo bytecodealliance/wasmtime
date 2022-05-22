@@ -1590,14 +1590,19 @@ impl FFlags {
     }
 }
 
-impl I128ArithmeticOP {
+impl I128BinaryOP {
     pub(crate) fn op_name(self) -> &'static str {
         match self {
-            I128ArithmeticOP::Add => "add_i128",
-            I128ArithmeticOP::Sub => "sub_i128",
-            I128ArithmeticOP::Mul => "mul_i128",
-            I128ArithmeticOP::Div => "div_i128",
-            I128ArithmeticOP::Rem => "rem_i128",
+            I128BinaryOP::Add => "add_i128",
+            I128BinaryOP::Sub => "sub_i128",
+            I128BinaryOP::Mul => "mul_i128",
+            I128BinaryOP::Div => "div_i128",
+            I128BinaryOP::Rem => "rem_i128",
+            I128BinaryOP::Ishl => "ishl_i128",
+            I128BinaryOP::Ushr => "ushr_i128",
+            I128BinaryOP::Sshr => "sshr_i128",
+            I128BinaryOP::Rotl => "rotl_i128",
+            I128BinaryOP::Rotr => "rotr_i128",
         }
     }
 }

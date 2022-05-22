@@ -64,7 +64,7 @@ pub(crate) type OptionUimm5 = Option<Uimm5>;
 use crate::isa::riscv64::lower::isle::generated_code::MInst;
 pub use crate::isa::riscv64::lower::isle::generated_code::{
     AluOPRR, AluOPRRI, AluOPRRR, AluOPRRRR, AtomicOP, CsrOP, ExtendOp, FClassResult,
-    FFlagsException, FloatFlagOp, FloatRoundingMode, I128ArithmeticOP, IntSelectOP, LoadOP,
+    FFlagsException, FloatFlagOp, FloatRoundingMode, I128BinaryOP, IntSelectOP, LoadOP,
     MInst as Inst, ReferenceValidOP, StoreOP, OPFPFMT,
 };
 

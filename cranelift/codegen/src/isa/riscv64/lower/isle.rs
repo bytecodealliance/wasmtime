@@ -3,7 +3,7 @@
 // Pull in the ISLE generated code.
 pub mod generated_code;
 
-use self::generated_code::I128ArithmeticOP;
+use self::generated_code::I128BinaryOP;
 
 // Types that the generated ISLE code uses via `use super::*`.
 use super::{writable_zero_reg, zero_reg, Inst as MInst};
@@ -130,13 +130,12 @@ where
         self.value_regs(tmp_low.to_reg(), tmp_hight.to_reg())
     }
 
-    fn i128_arithmetic(&mut self, op: &I128ArithmeticOP, x: ValueRegs, y: ValueRegs) -> ValueRegs {
+    fn i128_arithmetic(&mut self, op: &I128BinaryOP, x: ValueRegs, y: ValueRegs) -> ValueRegs {
         let mut dst = Vec::with_capacity(2);
         dst.push(self.temp_writable_reg(I64));
         dst.push(self.temp_writable_reg(I64));
         let t0 = self.temp_writable_reg(I64);
         let t1 = self.temp_writable_reg(I64);
-
         self.emit(&MInst::I128Arithmetic {
             op: *op,
             t0,
@@ -148,7 +147,7 @@ where
         self.value_regs(dst[0].to_reg(), dst[1].to_reg())
     }
 
-    fn bit_reverse(&mut self, ty: Type, rs: Reg) -> Reg {
+    fn lower_bit_reverse(&mut self, ty: Type, rs: Reg) -> Reg {
         // let tmp = self.temp_writable_reg(I64);
         // self.emit(&MInst::AluRRImm12 {
         //     alu_op: AluOPRRI::Rev8,
@@ -177,7 +176,7 @@ where
         todo!()
     }
 
-    fn r_ctz(&mut self, ty: Type, val: ValueRegs) -> Reg {
+    fn lower_ctz(&mut self, ty: Type, val: ValueRegs) -> Reg {
         let tmp1 = self.temp_writable_reg(I64);
         match ty.bits() {
             128 => {
@@ -384,6 +383,197 @@ where
             rs2: b.regs()[1],
         });
         ValueRegs::two(low.to_reg(), high.to_reg())
+    }
+
+    fn lower_rotl(&mut self, ty: Type, rs: Reg, amount: Reg) -> Reg {
+        let rd = self.temp_writable_reg(I64);
+        match ty.bits() {
+            64 => {
+                self.emit(&MInst::AluRRR {
+                    alu_op: AluOPRRR::Rol,
+                    rd: rd,
+                    rs1: rs,
+                    rs2: amount,
+                });
+            }
+            32 => {
+                self.emit(&MInst::AluRRR {
+                    alu_op: AluOPRRR::Rolw,
+                    rd: rd,
+                    rs1: rs,
+                    rs2: amount,
+                });
+            }
+            16 | 8 => {
+                let amount = {
+                    //shift is bigger than it's bits is useless.
+                    //get rid of.
+                    let old_amount = amount;
+                    let tmp = self.temp_writable_reg(I64);
+                    self.emit(&MInst::load_constant_imm12(
+                        tmp,
+                        Imm12::from_bits(ty.bits() as i16),
+                    ));
+                    let amount = self.temp_writable_reg(I64);
+                    self.emit(&MInst::AluRRR {
+                        alu_op: AluOPRRR::RemU,
+                        rd: amount,
+                        rs1: old_amount,
+                        rs2: tmp.to_reg(),
+                    });
+                    amount.to_reg()
+                };
+                let value = self.temp_writable_reg(I64);
+                self.emit(&MInst::AluRRR {
+                    alu_op: AluOPRRR::Rol,
+                    rd: value,
+                    rs1: rs,
+                    rs2: amount,
+                });
+                let a = BitsRange::new_r_i(value.to_reg(), amount, ty.bits() as u8);
+                let b_high = {
+                    let tmp = self.temp_writable_reg(I64);
+                    self.emit(&MInst::AluRRImm12 {
+                        alu_op: AluOPRRI::Addi,
+                        rd: tmp,
+                        rs: amount,
+                        imm12: Imm12::from_bits(ty.bits() as i16),
+                    });
+                    tmp.to_reg()
+                };
+                let b = BitsRange::new_i_r(value.to_reg(), ty.bits() as u8, b_high);
+                BitsRange::merge_with_hook_after_legalization(
+                    &a,
+                    Some(|a| {
+                        let mut insts = SmallInstVec::new();
+                        insts
+                    }),
+                    &b,
+                    Some(|b| {
+                        let mut insts = SmallInstVec::new();
+                        insts.push(MInst::AluRRImm12 {
+                            alu_op: AluOPRRI::Srli,
+                            rd: b,
+                            rs: b.to_reg(),
+                            imm12: Imm12::from_bits(ty.bits() as i16),
+                        });
+                        insts
+                    }),
+                    rd,
+                    |ty| self.temp_writable_reg(ty),
+                )
+                .iter()
+                .for_each(|i| self.emit(i));
+            }
+            _ => unreachable!(),
+        }
+        rd.to_reg()
+    }
+
+    fn lower_rotr(&mut self, ty: Type, rs: Reg, amount: Reg) -> Reg {
+        let rd = self.temp_writable_reg(I64);
+        match ty.bits() {
+            64 => {
+                self.emit(&MInst::AluRRR {
+                    alu_op: AluOPRRR::Ror,
+                    rd: rd,
+                    rs1: rs,
+                    rs2: amount,
+                });
+            }
+            32 => {
+                self.emit(&MInst::AluRRR {
+                    alu_op: AluOPRRR::Rorw,
+                    rd: rd,
+                    rs1: rs,
+                    rs2: amount,
+                });
+            }
+
+            16 | 8 => {
+                let amount = {
+                    //shift is bigger than it's bits is useless.
+                    //get rid of.
+                    let old_amount = amount;
+                    let tmp = self.temp_writable_reg(I64);
+                    self.emit(&MInst::load_constant_imm12(
+                        tmp,
+                        Imm12::from_bits(ty.bits() as i16),
+                    ));
+                    let amount = self.temp_writable_reg(I64);
+                    self.emit(&MInst::AluRRR {
+                        alu_op: AluOPRRR::RemU,
+                        rd: amount,
+                        rs1: old_amount,
+                        rs2: tmp.to_reg(),
+                    });
+                    amount.to_reg()
+                };
+                let value = self.temp_writable_reg(I64);
+                self.emit(&MInst::AluRRR {
+                    alu_op: AluOPRRR::Ror,
+                    rd: value,
+                    rs1: rs,
+                    rs2: amount,
+                });
+                /*
+                    let's protend amount == 5 and ty == I8
+                        a's range is [0,8-5)    3 bits.
+                        b's range is [64-5,64)  5 bits.
+                    reuslt is a & (b >> 64-5)
+                */
+                let a = BitsRange::new_i_r(value.to_reg(), 0, {
+                    let tmp = self.temp_writable_reg(I64);
+                    self.emit(&MInst::load_constant_imm12(
+                        tmp,
+                        Imm12::from_bits(ty.bits() as i16),
+                    ));
+                    self.emit(&MInst::AluRRR {
+                        alu_op: AluOPRRR::Sub,
+                        rd: tmp,
+                        rs1: tmp.to_reg(),
+                        rs2: amount,
+                    });
+                    tmp.to_reg()
+                });
+                let b_lowest = {
+                    let tmp = self.temp_writable_reg(I64);
+                    self.emit(&MInst::load_constant_imm12(tmp, Imm12::from_bits(64)));
+                    self.emit(&MInst::AluRRR {
+                        alu_op: AluOPRRR::Sub,
+                        rd: tmp,
+                        rs1: tmp.to_reg(),
+                        rs2: amount,
+                    });
+                    tmp.to_reg()
+                };
+                let b = BitsRange::new_r_i(value.to_reg(), b_lowest, 64);
+                BitsRange::merge_with_hook_after_legalization(
+                    &a,
+                    Some(|a| {
+                        let insts = SmallInstVec::new();
+                        insts
+                    }),
+                    &b,
+                    Some(|b| {
+                        let mut insts = SmallInstVec::new();
+                        insts.push(MInst::AluRRR {
+                            alu_op: AluOPRRR::Srl,
+                            rd: b,
+                            rs1: b.to_reg(),
+                            rs2: b_lowest,
+                        });
+                        insts
+                    }),
+                    rd,
+                    |ty| self.temp_writable_reg(ty),
+                )
+                .iter()
+                .for_each(|i| self.emit(i));
+            }
+            _ => unreachable!(),
+        }
+        rd.to_reg()
     }
 
     fn lower_mlhi(&mut self, is_signed: bool, ty: Type, a: Reg, b: Reg) -> Reg {

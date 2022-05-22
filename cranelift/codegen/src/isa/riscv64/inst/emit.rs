@@ -65,7 +65,264 @@ impl MachInstEmitState<Inst> for EmitState {
     }
 }
 
+/*
+    represent
+*/
+pub(crate) struct BitsRange {
+    rs: Reg,
+    // include
+    lowest: BitsRangeValue,
+    // not include
+    highest: BitsRangeValue,
+}
+
+pub(crate) enum BitsRangeValue {
+    Reg(Reg),
+    Imm(u8),
+}
+
+impl BitsRange {
+    pub(crate) fn new_r_r(rs: Reg, lowest: Reg, highest: Reg) -> Self {
+        Self {
+            rs,
+            lowest: BitsRangeValue::Reg(lowest),
+            highest: BitsRangeValue::Reg(highest),
+        }
+    }
+
+    pub(crate) fn new_i_r(rs: Reg, lowest: u8, highest: Reg) -> Self {
+        Self {
+            rs,
+            lowest: BitsRangeValue::Imm(lowest),
+            highest: BitsRangeValue::Reg(highest),
+        }
+    }
+
+    pub(crate) fn new_r_i(rs: Reg, lowest: Reg, highest: u8) -> Self {
+        Self {
+            rs,
+            lowest: BitsRangeValue::Reg(lowest),
+            highest: BitsRangeValue::Imm(highest),
+        }
+    }
+
+    pub(crate) fn new_i_i(rs: Reg, lowest: u8, highest: u8) -> Self {
+        Self {
+            rs,
+            lowest: BitsRangeValue::Imm(lowest),
+            highest: BitsRangeValue::Imm(highest),
+        }
+    }
+
+    fn legalization<F: FnMut(Type) -> Writable<Reg>>(
+        &self,
+        rd: Writable<Reg>,
+        mut f: F,
+    ) -> SmallInstVec<Inst> {
+        let mut insts = SmallInstVec::new();
+        match self.lowest {
+            BitsRangeValue::Reg(lowest) => {
+                insts.push(Inst::AluRRR {
+                    alu_op: AluOPRRR::Srl,
+                    rd,
+                    rs1: self.rs,
+                    rs2: lowest,
+                });
+                insts.push(Inst::AluRRR {
+                    alu_op: AluOPRRR::Sll,
+                    rd,
+                    rs1: rd.to_reg(),
+                    rs2: lowest,
+                });
+            }
+            BitsRangeValue::Imm(imm) => {
+                if imm != 0 {
+                    insts.push(Inst::AluRRImm12 {
+                        alu_op: AluOPRRI::Srli,
+                        rd,
+                        rs: self.rs,
+                        imm12: Imm12::from_bits(imm as i16),
+                    });
+                    insts.push(Inst::AluRRImm12 {
+                        alu_op: AluOPRRI::Slli,
+                        rd,
+                        rs: rd.to_reg(),
+                        imm12: Imm12::from_bits(imm as i16),
+                    });
+                } else {
+                    insts.push(Inst::gen_move(rd, self.rs, I64));
+                }
+            }
+        }
+
+        match self.highest {
+            BitsRangeValue::Reg(highest) => {
+                let tmp = f(I64);
+                insts.push(Inst::load_constant_imm12(tmp, Imm12::from_bits(64)));
+                insts.push(Inst::AluRRR {
+                    alu_op: AluOPRRR::Sub,
+                    rd: tmp,
+                    rs1: tmp.to_reg(),
+                    rs2: highest,
+                });
+
+                insts.push(Inst::AluRRR {
+                    alu_op: AluOPRRR::Sll,
+                    rd,
+                    rs1: rd.to_reg(),
+                    rs2: tmp.to_reg(),
+                });
+                insts.push(Inst::AluRRR {
+                    alu_op: AluOPRRR::Srl,
+                    rd,
+                    rs1: rd.to_reg(),
+                    rs2: tmp.to_reg(),
+                });
+            }
+            BitsRangeValue::Imm(imm) => {
+                if imm != 64 {
+                    insts.push(Inst::AluRRImm12 {
+                        alu_op: AluOPRRI::Slli,
+                        rd,
+                        rs: rd.to_reg(),
+                        imm12: Imm12::from_bits((64 - imm) as i16),
+                    });
+                    insts.push(Inst::AluRRImm12 {
+                        alu_op: AluOPRRI::Srli,
+                        rd,
+                        rs: rd.to_reg(),
+                        imm12: Imm12::from_bits((64 - imm) as i16),
+                    });
+                }
+            }
+        }
+        insts
+    }
+
+    /*
+        merge two bit range
+    */
+    pub(crate) fn merge_with_hook_after_legalization<F: FnMut(Type) -> Writable<Reg>>(
+        a: &Self,
+        after_a_legalization: Option<impl FnMut(Writable<Reg>) -> SmallInstVec<Inst>>,
+        b: &Self,
+        after_b_legalization: Option<impl FnMut(Writable<Reg>) -> SmallInstVec<Inst>>,
+        rd: Writable<Reg>,
+        mut f: F,
+    ) -> SmallInstVec<Inst> {
+        let mut insts = SmallInstVec::new();
+        let tmp = f(I64);
+        insts.extend(a.legalization(tmp, &mut f));
+        after_a_legalization
+            .map(|mut f| f(tmp))
+            .map(|ins| insts.extend(ins));
+
+        insts.extend(b.legalization(rd, &mut f));
+        after_b_legalization
+            .map(|mut f| f(rd))
+            .map(|ins| insts.extend(ins));
+        insts.push(Inst::AluRRR {
+            alu_op: AluOPRRR::Or,
+            rd: rd,
+            rs1: rd.to_reg(),
+            rs2: tmp.to_reg(),
+        });
+        insts
+    }
+
+    pub(crate) fn merge<F: FnMut(Type) -> Writable<Reg>>(
+        a: &Self,
+        b: &Self,
+        rd: Writable<Reg>,
+        mut f: F,
+    ) {
+        Self::merge_with_hook_after_legalization(
+            a,
+            Some(|_| SmallInstVec::new()),
+            b,
+            Some(|_| SmallInstVec::new()),
+            rd,
+            f,
+        );
+    }
+}
+
 impl Inst {
+    /*
+        construct a mask
+            if amount = 5 and left_shift = Some(8)
+            value in rd will be  0b...001_1111_0000_0000
+    */
+    pub(crate) fn construct_low_mask(
+        rd: Writable<Reg>,
+        tmp: Writable<Reg>,
+        amount: Reg,
+        left_shift: Option<u8>,
+    ) -> SmallInstVec<Inst> {
+        let mut insts = SmallInstVec::new();
+        {
+            // make tmp = 64 - rs
+            insts.push(Inst::load_constant_imm12(tmp, Imm12::from_bits(64)));
+            insts.push(Inst::AluRRR {
+                alu_op: AluOPRRR::Sub,
+                rd: tmp,
+                rs1: tmp.to_reg(),
+                rs2: amount,
+            });
+        }
+        insts.push(Inst::load_constant_imm12(rd, Imm12::from_bits(-1)));
+        insts.push(Inst::AluRRR {
+            alu_op: AluOPRRR::Sll,
+            rd: rd,
+            rs1: rd.to_reg(),
+            rs2: tmp.to_reg(),
+        });
+        insts.push(Inst::AluRRR {
+            alu_op: AluOPRRR::Srl,
+            rd: rd,
+            rs1: rd.to_reg(),
+            rs2: tmp.to_reg(),
+        });
+        left_shift.map(|x| {
+            insts.push(Inst::AluRRImm12 {
+                alu_op: AluOPRRI::Slli,
+                rd,
+                rs: rd.to_reg(),
+                imm12: Imm12::from_bits(x as i16),
+            });
+        });
+        insts
+    }
+
+    // /*
+    //     if amount 5 then
+    //         value in rd will be 0b1111100.000...
+    // */
+    // pub(crate) fn construct_high_mask<F: FnMut(Type) -> Writable<Reg>>(
+    //     rd: Writable<Reg>,
+    //     amount: Reg,
+    //     mut f: F,
+    // ) -> SmallInstVec<Inst> {
+    //     let mut insts = SmallInstVec::new();
+    //     let shift = f(I64);
+    //     insts.push(Inst::load_constant_imm12(shift, Imm12::from_bits(64)));
+    //     insts.push(Inst::AluRRR {
+    //         alu_op: AluOPRRR::Sub,
+    //         rd: shift,
+    //         rs1: shift.to_reg(),
+    //         rs2: amount,
+    //     });
+    //     let tmp = f(I64);
+    //     insts.push(Inst::load_constant_imm12(shift, Imm12::from_bits(-1)));
+    //     insts.push(Inst::AluRRR {
+    //         alu_op: AluOPRRR::Sll,
+    //         rd,
+    //         rs1: tmp.to_reg(),
+    //         rs2: shift.to_reg(),
+    //     });
+    //     insts
+    // }
+
     /*
         inverset all bit
     */
@@ -1602,7 +1859,7 @@ impl MachInstEmit for Inst {
                 let dst: Vec<_> = dst.iter().map(|f| allocs.next_writable(*f)).collect();
                 let mut insts = SmallInstVec::new();
                 match op {
-                    I128ArithmeticOP::Add => {
+                    I128BinaryOP::Add => {
                         insts.extend(Inst::add_c_u(dst[0], t0, x.regs()[0], y.regs()[0]));
                         insts.push(Inst::AluRRR {
                             alu_op: AluOPRRR::Add,
@@ -1617,7 +1874,7 @@ impl MachInstEmit for Inst {
                             rs2: t0.to_reg(),
                         });
                     }
-                    I128ArithmeticOP::Sub => {
+                    I128BinaryOP::Sub => {
                         insts.extend(Inst::sub_b_u(dst[0], t0, x.regs()[0], y.regs()[0]));
                         insts.push(Inst::AluRRR {
                             alu_op: AluOPRRR::Sub,
@@ -1633,7 +1890,7 @@ impl MachInstEmit for Inst {
                         });
                     }
 
-                    I128ArithmeticOP::Mul => {
+                    I128BinaryOP::Mul => {
                         /*
                             notice register_len is 64.
                             {x_low , x_high}
@@ -1703,8 +1960,13 @@ impl MachInstEmit for Inst {
                         // });
                         todo!()
                     }
-                    I128ArithmeticOP::Div => todo!(),
-                    I128ArithmeticOP::Rem => todo!(),
+                    I128BinaryOP::Div => todo!(),
+                    I128BinaryOP::Rem => todo!(),
+                    I128BinaryOP::Ishl => todo!(),
+                    I128BinaryOP::Ushr => todo!(),
+                    I128BinaryOP::Sshr => todo!(),
+                    I128BinaryOP::Rotl => todo!(),
+                    I128BinaryOP::Rotr => todo!(),
                 }
 
                 insts
