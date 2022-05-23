@@ -245,6 +245,8 @@
   (Sshr)
   (Rotl)
   (Rotr)
+  (Xnor)
+  (Orn)
 ))
 
 
@@ -713,8 +715,8 @@
 (decl r_clz (Type ValueRegs)Reg)
 (extern constructor r_clz r_clz)
 
-(decl extend(Reg bool u8 u8 )ValueRegs)
-(extern constructor extend extend)
+(decl lower_extend(Reg bool u8 u8 )ValueRegs)
+(extern constructor lower_extend lower_extend)
 
 (decl band_not_128(ValueRegs ValueRegs)ValueRegs)
 (extern constructor band_not_128 band_not_128)

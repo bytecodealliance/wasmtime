@@ -318,11 +318,19 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::AtomicStore => {
-            let r_dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+            let r_dst = if outputs.len() > 0 {
+                get_output_reg(ctx, outputs[0]).only_reg().unwrap()
+            } else {
+                writable_zero_reg()
+            };
+            let ty_access = if outputs.len() > 0 {
+                ty.unwrap()
+            } else {
+                ctx.input_ty(insn, 0)
+            };
+            assert!(is_valid_atomic_transaction_ty(ty_access));
             let r_addr = ctx.put_input_in_regs(insn, 0).only_reg().unwrap();
             let arg2 = ctx.put_input_in_regs(insn, 1).only_reg().unwrap();
-            let ty_access = ty.unwrap();
-            assert!(is_valid_atomic_transaction_ty(ty_access));
             ctx.emit(Inst::Atomic {
                 op: if ty_access.bits() == 32 {
                     AtomicOP::ScW
@@ -363,13 +371,14 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 .get_output(insn, 0)
                 .regs()
                 .into_iter()
-                .map(|r| *r)
+                .map(|r| r.clone())
                 .collect();
 
             let ty = ty.unwrap();
             let conditon = put_input_in_reg(ctx, inputs[0]);
-            let x = ctx.put_input_in_regs(insn, 0);
-            let y = ctx.put_input_in_regs(insn, 1);
+            let x = ctx.put_input_in_regs(insn, 1);
+            let y = ctx.put_input_in_regs(insn, 2);
+
             ctx.emit(Inst::Select {
                 dst,
                 conditon,
@@ -530,7 +539,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::FallthroughReturn | Opcode::Return => {
             for i in 0..ctx.num_inputs(insn) {
-                let src_reg = ctx.put_input_in_regs(insn, 0);
+                let src_reg = ctx.put_input_in_regs(insn, i);
                 let retval_reg = ctx.retval(i);
                 let ty = ctx.input_ty(insn, i);
                 assert!(src_reg.len() == retval_reg.len());
@@ -737,6 +746,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             assert_eq!(ctx.output_ty(insn, 1), I64);
 
             let src_regs = put_input_in_regs(ctx, inputs[0]);
+
             let dst_lo = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let dst_hi = get_output_reg(ctx, outputs[1]).only_reg().unwrap();
 

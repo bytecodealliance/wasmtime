@@ -7,6 +7,7 @@ use crate::isa::riscv64::inst::*;
 
 use crate::isa::riscv64::inst::{zero_reg, AluOPRRR};
 use crate::machinst::{AllocationConsumer, Reg, Writable};
+use alloc::borrow::ToOwned;
 use regalloc2::Allocation;
 
 use alloc::vec;
@@ -67,189 +68,151 @@ impl MachInstEmitState<Inst> for EmitState {
     }
 }
 
-/*
-    represent
-*/
-pub(crate) struct BitsRange {
-    rs: Reg,
-    // include
-    lowest: BitsRangeValue,
-    // not include
-    highest: BitsRangeValue,
-}
-
-pub(crate) enum BitsRangeValue {
+pub(crate) enum BitsShift {
     Reg(Reg),
     Imm(u8),
 }
 
-impl BitsRange {
-    pub(crate) fn new_r_r(rs: Reg, lowest: Reg, highest: Reg) -> Self {
-        Self {
-            rs,
-            lowest: BitsRangeValue::Reg(lowest),
-            highest: BitsRangeValue::Reg(highest),
-        }
+impl BitsShift {
+    pub(crate) fn new_r(r: Reg) -> Self {
+        Self::Reg(r)
     }
 
-    pub(crate) fn new_i_r(rs: Reg, lowest: u8, highest: Reg) -> Self {
-        Self {
-            rs,
-            lowest: BitsRangeValue::Imm(lowest),
-            highest: BitsRangeValue::Reg(highest),
-        }
-    }
-
-    pub(crate) fn new_r_i(rs: Reg, lowest: Reg, highest: u8) -> Self {
-        Self {
-            rs,
-            lowest: BitsRangeValue::Reg(lowest),
-            highest: BitsRangeValue::Imm(highest),
-        }
-    }
-
-    pub(crate) fn new_i_i(rs: Reg, lowest: u8, highest: u8) -> Self {
-        Self {
-            rs,
-            lowest: BitsRangeValue::Imm(lowest),
-            highest: BitsRangeValue::Imm(highest),
-        }
-    }
-
-    fn legalization<F: FnMut(Type) -> Writable<Reg>>(
-        &self,
-        rd: Writable<Reg>,
-        mut f: F,
-    ) -> SmallInstVec<Inst> {
-        let mut insts = SmallInstVec::new();
-        match self.lowest {
-            BitsRangeValue::Reg(lowest) => {
-                insts.push(Inst::AluRRR {
-                    alu_op: AluOPRRR::Srl,
-                    rd,
-                    rs1: self.rs,
-                    rs2: lowest,
-                });
-                insts.push(Inst::AluRRR {
-                    alu_op: AluOPRRR::Sll,
-                    rd,
-                    rs1: rd.to_reg(),
-                    rs2: lowest,
-                });
-            }
-            BitsRangeValue::Imm(imm) => {
-                if imm != 0 {
-                    insts.push(Inst::AluRRImm12 {
-                        alu_op: AluOPRRI::Srli,
-                        rd,
-                        rs: self.rs,
-                        imm12: Imm12::from_bits(imm as i16),
-                    });
-                    insts.push(Inst::AluRRImm12 {
-                        alu_op: AluOPRRI::Slli,
-                        rd,
-                        rs: rd.to_reg(),
-                        imm12: Imm12::from_bits(imm as i16),
-                    });
-                } else {
-                    insts.push(Inst::gen_move(rd, self.rs, I64));
-                }
-            }
-        }
-
-        match self.highest {
-            BitsRangeValue::Reg(highest) => {
-                let tmp = f(I64);
-                insts.push(Inst::load_constant_imm12(tmp, Imm12::from_bits(64)));
-                insts.push(Inst::AluRRR {
-                    alu_op: AluOPRRR::Sub,
-                    rd: tmp,
-                    rs1: tmp.to_reg(),
-                    rs2: highest,
-                });
-
-                insts.push(Inst::AluRRR {
-                    alu_op: AluOPRRR::Sll,
-                    rd,
-                    rs1: rd.to_reg(),
-                    rs2: tmp.to_reg(),
-                });
-                insts.push(Inst::AluRRR {
-                    alu_op: AluOPRRR::Srl,
-                    rd,
-                    rs1: rd.to_reg(),
-                    rs2: tmp.to_reg(),
-                });
-            }
-            BitsRangeValue::Imm(imm) => {
-                if imm != 64 {
-                    insts.push(Inst::AluRRImm12 {
-                        alu_op: AluOPRRI::Slli,
-                        rd,
-                        rs: rd.to_reg(),
-                        imm12: Imm12::from_bits((64 - imm) as i16),
-                    });
-                    insts.push(Inst::AluRRImm12 {
-                        alu_op: AluOPRRI::Srli,
-                        rd,
-                        rs: rd.to_reg(),
-                        imm12: Imm12::from_bits((64 - imm) as i16),
-                    });
-                }
-            }
-        }
-        insts
+    pub(crate) fn new_i(r: u8) -> Self {
+        Self::Imm(r)
     }
 
     /*
-        merge two bit range
+        get rid of all lowest bit value
     */
-    pub(crate) fn merge_with_hook_after_legalization<F: FnMut(Type) -> Writable<Reg>>(
-        a: &Self,
-        after_a_legalization: Option<impl FnMut(Writable<Reg>) -> SmallInstVec<Inst>>,
-        b: &Self,
-        after_b_legalization: Option<impl FnMut(Writable<Reg>) -> SmallInstVec<Inst>>,
-        rd: Writable<Reg>,
-        mut f: F,
-    ) -> SmallInstVec<Inst> {
+    pub(crate) fn shift_out_right(self, rd: Writable<Reg>, rs: Reg) -> SmallInstVec<Inst> {
         let mut insts = SmallInstVec::new();
-        let tmp = f(I64);
-        insts.extend(a.legalization(tmp, &mut f));
-        after_a_legalization
-            .map(|mut f| f(tmp))
-            .map(|ins| insts.extend(ins));
-
-        insts.extend(b.legalization(rd, &mut f));
-        after_b_legalization
-            .map(|mut f| f(rd))
-            .map(|ins| insts.extend(ins));
-        insts.push(Inst::AluRRR {
-            alu_op: AluOPRRR::Or,
-            rd: rd,
-            rs1: rd.to_reg(),
-            rs2: tmp.to_reg(),
-        });
+        match self {
+            Self::Reg(r) => {
+                insts.push(Inst::AluRRR {
+                    alu_op: AluOPRRR::Srl,
+                    rd,
+                    rs1: rs,
+                    rs2: r,
+                });
+                insts.push(Inst::AluRRR {
+                    alu_op: AluOPRRR::Sll,
+                    rd,
+                    rs1: rd.to_reg(),
+                    rs2: r,
+                });
+            }
+            Self::Imm(imm) => {
+                insts.push(Inst::AluRRImm12 {
+                    alu_op: AluOPRRI::Srli,
+                    rd,
+                    rs: rs,
+                    imm12: Imm12::from_bits(imm as i16),
+                });
+                insts.push(Inst::AluRRImm12 {
+                    alu_op: AluOPRRI::Slli,
+                    rd,
+                    rs: rd.to_reg(),
+                    imm12: Imm12::from_bits(imm as i16),
+                });
+            }
+        }
         insts
     }
 
-    pub(crate) fn merge<F: FnMut(Type) -> Writable<Reg>>(
-        a: &Self,
-        b: &Self,
-        rd: Writable<Reg>,
-        mut f: F,
-    ) {
-        Self::merge_with_hook_after_legalization(
-            a,
-            Some(|_| SmallInstVec::new()),
-            b,
-            Some(|_| SmallInstVec::new()),
-            rd,
-            f,
-        );
+    pub(crate) fn shift_right(self, rd: Writable<Reg>, rs: Reg) -> SmallInstVec<Inst> {
+        let mut insts = SmallInstVec::new();
+        match self {
+            Self::Reg(r) => {
+                insts.push(Inst::AluRRR {
+                    alu_op: AluOPRRR::Srl,
+                    rd,
+                    rs1: rs,
+                    rs2: r,
+                });
+            }
+            Self::Imm(imm) => {
+                insts.push(Inst::AluRRImm12 {
+                    alu_op: AluOPRRI::Srli,
+                    rd,
+                    rs: rs,
+                    imm12: Imm12::from_bits(imm as i16),
+                });
+            }
+        }
+        insts
+    }
+
+    pub(crate) fn shift_out_left(self, rd: Writable<Reg>, rs: Reg) -> SmallInstVec<Inst> {
+        let mut insts = SmallInstVec::new();
+        match self {
+            Self::Reg(amount) => {
+                insts.push(Inst::AluRRR {
+                    alu_op: AluOPRRR::Sll,
+                    rd,
+                    rs1: rs,
+                    rs2: amount,
+                });
+                insts.push(Inst::AluRRR {
+                    alu_op: AluOPRRR::Srl,
+                    rd,
+                    rs1: rd.to_reg(),
+                    rs2: amount,
+                });
+            }
+            Self::Imm(imm) => {
+                insts.push(Inst::AluRRImm12 {
+                    alu_op: AluOPRRI::Slli,
+                    rd,
+                    rs: rs,
+                    imm12: Imm12::from_bits(imm as i16),
+                });
+                insts.push(Inst::AluRRImm12 {
+                    alu_op: AluOPRRI::Srli,
+                    rd,
+                    rs: rd.to_reg(),
+                    imm12: Imm12::from_bits(imm as i16),
+                });
+            }
+        }
+        insts
+    }
+    pub(crate) fn shift_left(self, rd: Writable<Reg>, rs: Reg) -> SmallInstVec<Inst> {
+        let mut insts = SmallInstVec::new();
+        match self {
+            Self::Reg(amount) => {
+                insts.push(Inst::AluRRR {
+                    alu_op: AluOPRRR::Sll,
+                    rd,
+                    rs1: rs,
+                    rs2: amount,
+                });
+            }
+            Self::Imm(imm) => {
+                insts.push(Inst::AluRRImm12 {
+                    alu_op: AluOPRRI::Slli,
+                    rd,
+                    rs: rs,
+                    imm12: Imm12::from_bits(imm as i16),
+                });
+            }
+        }
+        insts
     }
 }
 
 impl Inst {
+    pub(crate) fn construct_imm_sub_rs(rd: Writable<Reg>, imm: u64, rs: Reg) -> SmallInstVec<Inst> {
+        let mut insts = Inst::load_constant_u64(rd, imm);
+        insts.push(Inst::AluRRR {
+            alu_op: AluOPRRR::Sub,
+            rd,
+            rs1: rd.to_reg(),
+            rs2: rs,
+        });
+        insts
+    }
+
     /*
         construct a mask
             if amount = 5 and left_shift = Some(8)
@@ -342,7 +305,6 @@ impl Inst {
         assert!(ty.bits() != 64);
         let mut insts = SmallInstVec::new();
         let shift = (64 - ty.bits()) as i16;
-
         insts.push(Inst::AluRRImm12 {
             alu_op: AluOPRRI::Slli,
             rd: rd,
@@ -1205,45 +1167,48 @@ impl MachInstEmit for Inst {
             }
 
             &Inst::Mov { rd, rm, ty } => {
-                let rm = allocs.next(rm);
-                let rd = allocs.next_writable(rd);
-                assert_ne!(rd.to_reg(), rm);
-                if ty.is_float() {
-                    let mut insts = SmallInstVec::new();
-                    if ty == F32 {
-                        insts.push(Inst::AluRR {
-                            alu_op: AluOPRR::FmvXW,
-                            rd: writable_spilltmp_reg(),
-                            rs: rm,
-                        });
-                        insts.push(Inst::AluRR {
-                            alu_op: AluOPRR::FmvWX,
-                            rd: rd,
-                            rs: spilltmp_reg(),
-                        });
+                if rd.to_reg() != rm {
+                    let rm = allocs.next(rm);
+                    let rd = allocs.next_writable(rd);
+                    if ty.is_float() {
+                        let mut insts = SmallInstVec::new();
+                        if ty == F32 {
+                            insts.push(Inst::AluRR {
+                                alu_op: AluOPRR::FmvXW,
+                                rd: writable_spilltmp_reg(),
+                                rs: rm,
+                            });
+                            insts.push(Inst::AluRR {
+                                alu_op: AluOPRR::FmvWX,
+                                rd: rd,
+                                rs: spilltmp_reg(),
+                            });
+                        } else {
+                            insts.push(Inst::AluRR {
+                                alu_op: AluOPRR::FmvXD,
+                                rd: writable_spilltmp_reg(),
+                                rs: rm,
+                            });
+                            insts.push(Inst::AluRR {
+                                alu_op: AluOPRR::FmvDX,
+                                rd: rd,
+                                rs: spilltmp_reg(),
+                            });
+                        }
+                        insts
+                            .into_iter()
+                            .for_each(|inst| inst.emit(&[], sink, emit_info, state));
                     } else {
-                        insts.push(Inst::AluRR {
-                            alu_op: AluOPRR::FmvXD,
-                            rd: writable_spilltmp_reg(),
-                            rs: rm,
-                        });
-                        insts.push(Inst::AluRR {
-                            alu_op: AluOPRR::FmvDX,
+                        let x = Inst::AluRRImm12 {
+                            alu_op: AluOPRRI::Ori,
                             rd: rd,
-                            rs: spilltmp_reg(),
-                        });
+                            rs: rm,
+                            imm12: Imm12::zero(),
+                        };
+                        x.emit(&[], sink, emit_info, state);
                     }
-                    insts
-                        .into_iter()
-                        .for_each(|inst| inst.emit(&[], sink, emit_info, state));
                 } else {
-                    let x = Inst::AluRRImm12 {
-                        alu_op: AluOPRRI::Ori,
-                        rd: rd,
-                        rs: rm,
-                        imm12: Imm12::zero(),
-                    };
-                    x.emit(&[], sink, emit_info, state);
+                    log::warn!("a redundancy move why???? {:?}->{:?}", rm, rd.to_reg());
                 }
             }
             &Inst::BrTable {
@@ -1916,6 +1881,8 @@ impl MachInstEmit for Inst {
                     I128BinaryOP::Sshr => todo!(),
                     I128BinaryOP::Rotl => todo!(),
                     I128BinaryOP::Rotr => todo!(),
+                    I128BinaryOP::Xnor => todo!(),
+                    I128BinaryOP::Orn => todo!(),
                 }
 
                 insts

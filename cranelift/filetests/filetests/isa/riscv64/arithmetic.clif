@@ -1,0 +1,41 @@
+test compile precise-output
+target s390x
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; IADD
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %iadd_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = iadd.i64 v0, v1
+  return v2
+}
+
+; block0:
+;   add a0,a0,a1
+;   ret
+
+function %iadd_i64_mem(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = load.i64 v1
+  v3 = iadd.i64 v0, v2
+  return v3
+}
+
+; block0:
+;   ld a1,0(a1)
+;   add a0,a0,a1
+;   ret
+
+function %iadd_i64_mem_ext16(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = sload16.i64 v1
+  v3 = iadd.i64 v0, v2
+  return v3
+}
+
+; block0:
+;   ld a1,0(a1)
+;   add a0,a0,a1
+;   ret
+

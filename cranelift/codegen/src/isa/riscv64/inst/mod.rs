@@ -459,9 +459,9 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             ..
         } => {
             collector.reg_use(conditon);
-            x.regs().iter().for_each(|r| collector.reg_use(r.clone()));
-            y.regs().iter().for_each(|r| collector.reg_use(r.clone()));
-            dst.iter().for_each(|r| collector.reg_def(*r));
+            collector.reg_uses(x.regs());
+            collector.reg_uses(y.regs());
+            collector.reg_defs(&dst[..]);
         }
         &Inst::ReferenceValid { rd, x, .. } => {
             collector.reg_use(x);
@@ -1094,8 +1094,9 @@ impl Inst {
                 let y = format_regs(y.regs(), allocs);
                 let dst: Vec<_> = dst.clone().into_iter().map(|r| r.to_reg()).collect();
                 let dst = format_regs(&dst[..], allocs);
-                format!("{}_{} {},{},{},{}", "select", ty, dst, condition, x, y)
+                format!("select_{} {},{},{};;condition={}", ty, dst, x, y, condition)
             }
+
             &MInst::Udf { .. } => todo!(),
             &MInst::EBreak {} => String::from("ebreak"),
             &MInst::ECall {} => String::from("ecall"),

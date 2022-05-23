@@ -1603,6 +1603,8 @@ impl I128BinaryOP {
             I128BinaryOP::Sshr => "sshr_i128",
             I128BinaryOP::Rotl => "rotl_i128",
             I128BinaryOP::Rotr => "rotr_i128",
+            I128BinaryOP::Xnor => "xnor_i128",
+            I128BinaryOP::Orn  => "xnor_i128",
         }
     }
 }

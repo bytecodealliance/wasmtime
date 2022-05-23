@@ -226,11 +226,11 @@
 
 ;;;; Rules for `uextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type out (uextend x @ (value_type in))))
-      (extend x $false (ty_bits in) (ty_bits out)))
+      (lower_extend x $false (ty_bits in) (ty_bits out)))
 
 ;;;; Rules for `sextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type out (sextend x @ (value_type in))))
-      (extend x $true (ty_bits in) (ty_bits out)))
+      (lower_extend x $true (ty_bits in) (ty_bits out)))
 
 
 ;;;; Rules for `band_not` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -301,3 +301,19 @@
 
 (rule (lower (has_type  $I128 (rotr x y)))
       (i128_arithmetic (I128BinaryOP.Rotr) x y))
+
+
+;;;; Rules for `bxor_not` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(rule (lower (has_type (fits_in_64 ty)(bxor_not x y)))
+      (alu_rrr  (AluOPRRR.Xnor) y x))  ;; notice x y order!!!
+
+(rule (lower (has_type  $I128 (bxor_not x y)))
+      (i128_arithmetic (I128BinaryOP.Xnor) y x));; notice x y order!!!
+
+
+;;;; Rules for `xor_not` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(rule (lower (has_type (fits_in_64 ty)(bor_not x y)))
+      (alu_rrr  (AluOPRRR.Orn) x y))  
+
+(rule (lower (has_type  $I128 (bor_not x y)))
+      (i128_arithmetic (I128BinaryOP.Orn) x y)) 
