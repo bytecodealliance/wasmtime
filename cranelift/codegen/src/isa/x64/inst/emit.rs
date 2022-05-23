@@ -1208,8 +1208,7 @@ pub(crate) fn emit(
             emit_reloc(sink, Reloc::X86CallPCRel4, &dest, -4);
             sink.put4(0);
             if opcode.is_call() {
-                let loc = state.cur_srcloc();
-                sink.add_call_site(loc, *opcode);
+                sink.add_call_site(*opcode);
             }
         }
 
@@ -1253,8 +1252,7 @@ pub(crate) fn emit(
                 sink.add_stack_map(StackMapExtent::StartedAtOffset(start_offset), s);
             }
             if opcode.is_call() {
-                let loc = state.cur_srcloc();
-                sink.add_call_site(loc, *opcode);
+                sink.add_call_site(*opcode);
             }
         }
 

@@ -1283,14 +1283,13 @@ impl<I: VCodeInst> MachBuffer<I> {
     }
 
     /// Add a call-site record at the current offset.
-    pub fn add_call_site(&mut self, srcloc: SourceLoc, opcode: Opcode) {
+    pub fn add_call_site(&mut self, opcode: Opcode) {
         debug_assert!(
             opcode.is_call(),
             "adding call site info for a non-call instruction."
         );
         self.call_sites.push(MachCallSite {
             ret_addr: self.data.len() as CodeOffset,
-            srcloc,
             opcode,
         });
     }
@@ -1461,8 +1460,6 @@ pub struct MachTrap {
 pub struct MachCallSite {
     /// The offset of the call's return address, *relative to the containing section*.
     pub ret_addr: CodeOffset,
-    /// The original source location.
-    pub srcloc: SourceLoc,
     /// The call's opcode.
     pub opcode: Opcode,
 }
@@ -1979,7 +1976,7 @@ mod test {
         buf.put1(2);
         buf.add_trap(TrapCode::IntegerOverflow);
         buf.add_trap(TrapCode::IntegerDivisionByZero);
-        buf.add_call_site(SourceLoc::default(), Opcode::Call);
+        buf.add_call_site(Opcode::Call);
         buf.add_reloc(Reloc::Abs4, &ExternalName::user(0, 0), 0);
         buf.put1(3);
         buf.add_reloc(Reloc::Abs8, &ExternalName::user(1, 1), 1);

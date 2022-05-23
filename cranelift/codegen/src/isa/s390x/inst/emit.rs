@@ -2185,8 +2185,7 @@ impl MachInstEmit for Inst {
                     0,
                 );
                 if info.opcode.is_call() {
-                    let srcloc = state.cur_srcloc();
-                    sink.add_call_site(srcloc, info.opcode);
+                    sink.add_call_site(info.opcode);
                 }
             }
             &Inst::CallInd { link, ref info } => {
@@ -2194,13 +2193,12 @@ impl MachInstEmit for Inst {
                 let rn = allocs.next(info.rn);
 
                 let opcode = 0x0d; // BASR
-                let srcloc = state.cur_srcloc();
                 if let Some(s) = state.take_stack_map() {
                     sink.add_stack_map(StackMapExtent::UpcomingBytes(2), s);
                 }
                 put(sink, &enc_rr(opcode, link.to_reg(), rn));
                 if info.opcode.is_call() {
-                    sink.add_call_site(srcloc, info.opcode);
+                    sink.add_call_site(info.opcode);
                 }
             }
             &Inst::Ret { link, .. } => {
