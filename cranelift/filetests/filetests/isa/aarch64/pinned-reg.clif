@@ -1,0 +1,16 @@
+test compile precise-output
+set enable_pinned_reg=true
+target aarch64
+
+function %f0() {
+block0:
+    v1 = get_pinned_reg.i64
+    v2 = iadd_imm v1, 1
+    set_pinned_reg v2
+    return
+}
+
+; block0:
+;   add x21, x21, #1
+;   ret
+

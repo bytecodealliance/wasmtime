@@ -719,8 +719,14 @@ impl ABIMachineSpec for S390xMachineDeps {
 
     fn get_clobbered_callee_saves(
         call_conv: isa::CallConv,
+        flags: &settings::Flags,
         regs: &[Writable<RealReg>],
     ) -> Vec<Writable<RealReg>> {
+        assert!(
+            !flags.enable_pinned_reg(),
+            "Pinned register not supported on s390x"
+        );
+
         let mut regs: Vec<Writable<RealReg>> = regs
             .iter()
             .cloned()

@@ -428,6 +428,7 @@ pub trait ABIMachineSpec {
     /// contains the registers in a sorted order.
     fn get_clobbered_callee_saves(
         call_conv: isa::CallConv,
+        flags: &settings::Flags,
         regs: &[Writable<RealReg>],
     ) -> Vec<Writable<RealReg>>;
 
@@ -1224,7 +1225,8 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         }
         let mask = M::stack_align(self.call_conv) - 1;
         let total_stacksize = (total_stacksize + mask) & !mask; // 16-align the stack.
-        let clobbered_callee_saves = M::get_clobbered_callee_saves(self.call_conv, &self.clobbered);
+        let clobbered_callee_saves =
+            M::get_clobbered_callee_saves(self.call_conv, &self.flags, &self.clobbered);
         let mut insts = smallvec![];
 
         if !self.call_conv.extends_baldrdash() {
