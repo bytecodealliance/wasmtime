@@ -29,8 +29,8 @@ block0(v0: i64, v1: i64):
 ; block0:
 ;   lea     16(%rbp), %rsi
 ;   movzbq  0(%rdi), %rax
-;   movzbq  0(%rsi), %r11
-;   addl    %eax, %r11d, %eax
+;   movzbq  0(%rsi), %r10
+;   addl    %eax, %r10d, %eax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -105,8 +105,8 @@ block0(v0: i64, v1: i64):
 ;   lea     16(%rbp), %rsi
 ;   lea     144(%rbp), %rdi
 ;   movzbq  0(%rsi), %rax
-;   movzbq  0(%rdi), %r11
-;   addl    %eax, %r11d, %eax
+;   movzbq  0(%rdi), %r10
+;   addl    %eax, %r10d, %eax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

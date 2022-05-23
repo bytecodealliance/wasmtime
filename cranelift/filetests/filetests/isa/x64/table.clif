@@ -23,13 +23,13 @@ block0(v0: i32, v1: r64, v2: i64):
 ;   cmpl    %eax, %edi
 ;   jb      label1; j label2
 ; block1:
-;   movl    %edi, %r9d
-;   movq    0(%rdx), %rdx
-;   movq    %rdx, %r8
-;   addq    %r8, %r9, %r8
+;   movl    %edi, %r8d
+;   movq    0(%rdx), %rcx
+;   movq    %rcx, %rdx
+;   addq    %rdx, %r8, %rdx
 ;   cmpl    %eax, %edi
-;   cmovnbq %rdx, %r8, %r8
-;   movq    %rsi, 0(%r8)
+;   cmovnbq %rcx, %rdx, %rdx
+;   movq    %rsi, 0(%rdx)
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

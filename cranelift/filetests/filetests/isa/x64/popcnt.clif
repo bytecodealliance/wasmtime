@@ -10,24 +10,24 @@ block0(v0: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movq    %rdi, %rcx
-;   shrq    $1, %rcx, %rcx
+;   movq    %rdi, %rax
+;   shrq    $1, %rax, %rax
 ;   movabsq $8608480567731124087, %r8
-;   andq    %rcx, %r8, %rcx
-;   subq    %rdi, %rcx, %rdi
-;   shrq    $1, %rcx, %rcx
-;   andq    %rcx, %r8, %rcx
-;   subq    %rdi, %rcx, %rdi
-;   shrq    $1, %rcx, %rcx
-;   andq    %rcx, %r8, %rcx
-;   subq    %rdi, %rcx, %rdi
+;   andq    %rax, %r8, %rax
+;   subq    %rdi, %rax, %rdi
+;   shrq    $1, %rax, %rax
+;   andq    %rax, %r8, %rax
+;   subq    %rdi, %rax, %rdi
+;   shrq    $1, %rax, %rax
+;   andq    %rax, %r8, %rax
+;   subq    %rdi, %rax, %rdi
 ;   movq    %rdi, %rax
 ;   shrq    $4, %rax, %rax
 ;   addq    %rax, %rdi, %rax
-;   movabsq $1085102592571150095, %rcx
-;   andq    %rax, %rcx, %rax
-;   movabsq $72340172838076673, %r11
-;   imulq   %rax, %r11, %rax
+;   movabsq $1085102592571150095, %rsi
+;   andq    %rax, %rsi, %rax
+;   movabsq $72340172838076673, %rdx
+;   imulq   %rax, %rdx, %rax
 ;   shrq    $56, %rax, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -43,25 +43,25 @@ block0(v0: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movq    0(%rdi), %rdx
-;   movq    %rdx, %r8
-;   shrq    $1, %r8, %r8
+;   movq    0(%rdi), %rcx
+;   movq    %rcx, %rdx
+;   shrq    $1, %rdx, %rdx
 ;   movabsq $8608480567731124087, %r9
-;   andq    %r8, %r9, %r8
-;   subq    %rdx, %r8, %rdx
-;   shrq    $1, %r8, %r8
-;   andq    %r8, %r9, %r8
-;   subq    %rdx, %r8, %rdx
-;   shrq    $1, %r8, %r8
-;   andq    %r8, %r9, %r8
-;   subq    %rdx, %r8, %rdx
-;   movq    %rdx, %rax
+;   andq    %rdx, %r9, %rdx
+;   subq    %rcx, %rdx, %rcx
+;   shrq    $1, %rdx, %rdx
+;   andq    %rdx, %r9, %rdx
+;   subq    %rcx, %rdx, %rcx
+;   shrq    $1, %rdx, %rdx
+;   andq    %rdx, %r9, %rdx
+;   subq    %rcx, %rdx, %rcx
+;   movq    %rcx, %rax
 ;   shrq    $4, %rax, %rax
-;   addq    %rax, %rdx, %rax
-;   movabsq $1085102592571150095, %rdx
-;   andq    %rax, %rdx, %rax
-;   movabsq $72340172838076673, %rsi
-;   imulq   %rax, %rsi, %rax
+;   addq    %rax, %rcx, %rax
+;   movabsq $1085102592571150095, %rdi
+;   andq    %rax, %rdi, %rax
+;   movabsq $72340172838076673, %r8
+;   imulq   %rax, %r8, %rax
 ;   shrq    $56, %rax, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -76,17 +76,17 @@ block0(v0: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movq    %rdi, %rcx
-;   shrl    $1, %ecx, %ecx
+;   movq    %rdi, %rax
+;   shrl    $1, %eax, %eax
 ;   movl    $2004318071, %r8d
-;   andl    %ecx, %r8d, %ecx
-;   subl    %edi, %ecx, %edi
-;   shrl    $1, %ecx, %ecx
-;   andl    %ecx, %r8d, %ecx
-;   subl    %edi, %ecx, %edi
-;   shrl    $1, %ecx, %ecx
-;   andl    %ecx, %r8d, %ecx
-;   subl    %edi, %ecx, %edi
+;   andl    %eax, %r8d, %eax
+;   subl    %edi, %eax, %edi
+;   shrl    $1, %eax, %eax
+;   andl    %eax, %r8d, %eax
+;   subl    %edi, %eax, %edi
+;   shrl    $1, %eax, %eax
+;   andl    %eax, %r8d, %eax
+;   subl    %edi, %eax, %edi
 ;   movq    %rdi, %rax
 ;   shrl    $4, %eax, %eax
 ;   addl    %eax, %edi, %eax
@@ -107,21 +107,21 @@ block0(v0: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movl    0(%rdi), %edx
-;   movq    %rdx, %r8
-;   shrl    $1, %r8d, %r8d
+;   movl    0(%rdi), %ecx
+;   movq    %rcx, %rdx
+;   shrl    $1, %edx, %edx
 ;   movl    $2004318071, %r9d
-;   andl    %r8d, %r9d, %r8d
-;   subl    %edx, %r8d, %edx
-;   shrl    $1, %r8d, %r8d
-;   andl    %r8d, %r9d, %r8d
-;   subl    %edx, %r8d, %edx
-;   shrl    $1, %r8d, %r8d
-;   andl    %r8d, %r9d, %r8d
-;   subl    %edx, %r8d, %edx
-;   movq    %rdx, %rax
+;   andl    %edx, %r9d, %edx
+;   subl    %ecx, %edx, %ecx
+;   shrl    $1, %edx, %edx
+;   andl    %edx, %r9d, %edx
+;   subl    %ecx, %edx, %ecx
+;   shrl    $1, %edx, %edx
+;   andl    %edx, %r9d, %edx
+;   subl    %ecx, %edx, %ecx
+;   movq    %rcx, %rax
 ;   shrl    $4, %eax, %eax
-;   addl    %eax, %edx, %eax
+;   addl    %eax, %ecx, %eax
 ;   andl    %eax, $252645135, %eax
 ;   imull   %eax, $16843009, %eax
 ;   shrl    $24, %eax, %eax
