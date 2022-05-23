@@ -166,7 +166,7 @@ pub(crate) fn create_reg_env_systemv(flags: &settings::Flags) -> MachineEnv {
                 preg(rdx()),
                 preg(r8()),
                 preg(r9()),
-                // N.B.: not r10; it is our scratch reg.
+                preg(r10()),
                 preg(r11()),
             ],
             // Preferred XMMs: all of them.
@@ -186,7 +186,7 @@ pub(crate) fn create_reg_env_systemv(flags: &settings::Flags) -> MachineEnv {
                 preg(xmm12()),
                 preg(xmm13()),
                 preg(xmm14()),
-                // N.B.: not xmm15; it is our scratch reg.
+                preg(xmm15()),
             ],
         ],
         non_preferred_regs_by_class: [
@@ -195,7 +195,6 @@ pub(crate) fn create_reg_env_systemv(flags: &settings::Flags) -> MachineEnv {
             // Non-preferred XMMs: none.
             vec![],
         ],
-        scratch_by_class: [preg(r10()), preg(xmm15())],
         fixed_stack_slots: vec![],
     };
 

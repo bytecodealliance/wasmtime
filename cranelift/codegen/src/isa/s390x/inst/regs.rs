@@ -102,7 +102,7 @@ pub fn create_machine_env(_flags: &settings::Flags) -> MachineEnv {
                 preg(gpr(10)),
                 preg(gpr(11)),
                 preg(gpr(12)),
-                // no r13; it is our scratch reg.
+                preg(gpr(13)),
                 preg(gpr(14)),
                 // no r15; it is the stack pointer.
             ],
@@ -114,10 +114,9 @@ pub fn create_machine_env(_flags: &settings::Flags) -> MachineEnv {
                 preg(fpr(12)),
                 preg(fpr(13)),
                 preg(fpr(14)),
-                // no f15; it is our scratch reg.
+                preg(fpr(15)),
             ],
         ],
-        scratch_by_class: [preg(gpr(13)), preg(fpr(15))],
         fixed_stack_slots: vec![],
     }
 }
