@@ -51,11 +51,11 @@ block0(v0: i64, v1: i64):
   store.i64 v3, v1
   v4 = load.i64 v3
   return v4
-  ; check:  movq    0(%rdi), %r11
-  ; nextln: movq    %r11, %rax
-  ; nextln: addq    %rax, %rdi, %rax
-  ; nextln: movq    %rax, 0(%rsi)
-  ; nextln: movq    0(%r11,%rdi,1), %rax
+  ; check:  movq    0(%rdi), %r10
+  ; nextln: movq    %r10, %r11
+  ; nextln: addq    %r11, %rdi, %r11
+  ; nextln: movq    %r11, 0(%rsi)
+  ; nextln: movq    0(%r10,%rdi,1), %rax
 }
 
 function %merge_scalar_to_vector(i64) -> i32x4 {

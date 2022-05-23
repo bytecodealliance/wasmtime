@@ -29,18 +29,19 @@ block1:
   return v0, v1, v2, v3, v4, v5
 }
 
-;   stmg %r6, %r15, 48(%r15)
+;   stmg %r8, %r15, 64(%r15)
 ; block0:
 ;   lgr %r12, %r2
 ;   lghi %r2, 1
 ;   lghi %r3, 2
 ;   lghi %r4, 3
 ;   lghi %r5, 4
-;   lghi %r10, 5
-;   lghi %r6, 6
-;   stg %r10, 0(%r12)
-;   stg %r6, 8(%r12)
-;   lmg %r6, %r15, 48(%r15)
+;   lghi %r8, 5
+;   lghi %r11, 6
+;   lgr %r9, %r12
+;   stg %r8, 0(%r9)
+;   stg %r11, 8(%r9)
+;   lmg %r8, %r15, 64(%r15)
 ;   br %r14
 
 function %f3() -> f64, f64, f64, f64 {

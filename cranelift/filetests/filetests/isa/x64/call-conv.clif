@@ -36,20 +36,20 @@ block0(v0: i32, v1: f32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movq    %rdi, %rax
+;   movq    %rdi, %r11
 ;   movdqa  %xmm0, %xmm6
 ;   subq    %rsp, $32, %rsp
 ;   virtual_sp_offset_adjust 32
-;   movq    %rax, %rcx
+;   movq    %r11, %rcx
 ;   movdqa  %xmm6, %xmm1
-;   movq    %rax, %rdi
+;   movq    %r11, %rdi
 ;   movdqa  %xmm1, %xmm6
 ;   call    *%rdi
 ;   addq    %rsp, $32, %rsp
 ;   virtual_sp_offset_adjust -32
-;   movq    %rdi, %rax
+;   movq    %rdi, %r11
 ;   movdqa  %xmm6, %xmm0
-;   call    *%rax
+;   call    *%r11
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -129,20 +129,19 @@ block0(
 
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
-;   subq    %rsp, $96, %rsp
-;   movq    %rbx, 48(%rsp)
-;   movq    %r12, 56(%rsp)
-;   movq    %r13, 64(%rsp)
-;   movq    %r14, 72(%rsp)
-;   movq    %r15, 80(%rsp)
+;   subq    %rsp, $64, %rsp
+;   movq    %rbx, 32(%rsp)
+;   movq    %r13, 40(%rsp)
+;   movq    %r14, 48(%rsp)
+;   movq    %r15, 56(%rsp)
 ; block0:
 ;   movq    %rsi, %rbx
 ;   movq    %rdx, %r14
-;   movq    %rcx, %r12
+;   movq    %rcx, %rax
 ;   movq    %r8, %r13
 ;   movq    %r9, %r15
-;   movq    16(%rbp), %rax
-;   movq    24(%rbp), %r11
+;   movq    16(%rbp), %r11
+;   movq    24(%rbp), %r10
 ;   movss   32(%rbp), %xmm9
 ;   movsd   40(%rbp), %xmm8
 ;   subq    %rsp, $144, %rsp
@@ -150,7 +149,7 @@ block0(
 ;   movq    %rdi, %rcx
 ;   movq    %rbx, %rdx
 ;   movq    %r14, %r8
-;   movq    %r12, %r9
+;   movq    %rax, %r9
 ;   movq    %r13, %rsi
 ;   movq    %rsi, 32(%rsp)
 ;   movq    %r15, %rsi
@@ -163,19 +162,18 @@ block0(
 ;   movsd   %xmm5, 88(%rsp)
 ;   movsd   %xmm6, 96(%rsp)
 ;   movsd   %xmm7, 104(%rsp)
-;   movq    %rax, 112(%rsp)
-;   movl    %r11d, 120(%rsp)
+;   movq    %r11, 112(%rsp)
+;   movl    %r10d, 120(%rsp)
 ;   movss   %xmm9, 128(%rsp)
 ;   movsd   %xmm8, 136(%rsp)
 ;   call    *%rdi
 ;   addq    %rsp, $144, %rsp
 ;   virtual_sp_offset_adjust -144
-;   movq    48(%rsp), %rbx
-;   movq    56(%rsp), %r12
-;   movq    64(%rsp), %r13
-;   movq    72(%rsp), %r14
-;   movq    80(%rsp), %r15
-;   addq    %rsp, $96, %rsp
+;   movq    32(%rsp), %rbx
+;   movq    40(%rsp), %r13
+;   movq    48(%rsp), %r14
+;   movq    56(%rsp), %r15
+;   addq    %rsp, $64, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -194,26 +192,22 @@ block0(v0: i64, v1:i64, v2:i64, v3:i64, v4:i64):
 
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
-;   subq    %rsp, $16, %rsp
-;   movq    %rbx, 0(%rsp)
 ; block0:
-;   movq    %rsi, %r11
-;   movq    %rdx, %r9
-;   movq    %rcx, %rax
-;   movq    %r8, %rbx
+;   movq    %rsi, %r9
+;   movq    %rdx, %rax
+;   movq    %rcx, %r11
+;   movq    %r8, %r10
 ;   subq    %rsp, $48, %rsp
 ;   virtual_sp_offset_adjust 48
 ;   movq    %rdi, %rcx
-;   movq    %r11, %rdx
-;   movq    %r9, %r8
-;   movq    %rax, %r9
-;   movq    %rbx, %r11
-;   movq    %r11, 32(%rsp)
+;   movq    %r9, %rdx
+;   movq    %rax, %r8
+;   movq    %r11, %r9
+;   movq    %r10, %rsi
+;   movq    %rsi, 32(%rsp)
 ;   call    *%rdi
 ;   addq    %rsp, $48, %rsp
 ;   virtual_sp_offset_adjust -48
-;   movq    0(%rsp), %rbx
-;   addq    %rsp, $16, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -229,25 +223,23 @@ block0(v0: i32, v1: f32, v2: i64, v3: f64, v4: i32, v5: i32, v6: i32, v7: f32, v
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movdqa  %xmm0, %xmm6
-;   movq    %rsi, %rax
+;   movq    %rsi, %r10
 ;   movdqa  %xmm1, %xmm14
 ;   movq    %rcx, %r11
 ;   movq    %r8, %r9
-;   movdqa  %xmm3, %xmm10
+;   movdqa  %xmm3, %xmm15
 ;   subq    %rsp, $96, %rsp
 ;   virtual_sp_offset_adjust 96
 ;   movq    %rdi, %rcx
 ;   movdqa  %xmm6, %xmm1
-;   movq    %rax, %r8
+;   movq    %r10, %r8
 ;   movdqa  %xmm14, %xmm3
 ;   movl    %edx, 32(%rsp)
-;   movq    %r11, %rdx
-;   movl    %edx, 40(%rsp)
-;   movq    %r9, %rax
-;   movl    %eax, 48(%rsp)
+;   movq    %r11, %r10
+;   movl    %r10d, 40(%rsp)
+;   movl    %r9d, 48(%rsp)
 ;   movss   %xmm2, 56(%rsp)
-;   movdqa  %xmm10, %xmm2
-;   movsd   %xmm2, 64(%rsp)
+;   movsd   %xmm15, 64(%rsp)
 ;   movss   %xmm4, 72(%rsp)
 ;   movsd   %xmm5, 80(%rsp)
 ;   call    *%rdi
@@ -350,11 +342,11 @@ block0:
 ;   movq    %rbx, 0(%rsp)
 ; block0:
 ;   movq    %rdi, %rbx
-;   movl    $1, %esi
+;   movl    $1, %r11d
 ;   subq    %rsp, $16, %rsp
 ;   virtual_sp_offset_adjust 16
 ;   lea     0(%rsp), %rdi
-;   call    *%rsi
+;   call    *%r11
 ;   movq    0(%rsp), %rcx
 ;   addq    %rsp, $16, %rsp
 ;   virtual_sp_offset_adjust -16
@@ -381,8 +373,8 @@ block0:
 ;   movq    %r12, 0(%rsp)
 ; block0:
 ;   movq    %rdi, %r12
-;   movl    $1, %eax
-;   call    *%rax
+;   movl    $1, %edi
+;   call    *%rdi
 ;   movq    %r12, %rdi
 ;   movq    %rax, 0(%rdi)
 ;   movl    %edx, 8(%rdi)
@@ -409,10 +401,10 @@ block0(v0: f32, v1: i64, v2: i32, v3: f32):
 ;   movq    %rdx, %rbx
 ;   movl    $1, %eax
 ;   call    *%rax
-;   movq    %rbx, %rcx
-;   movq    %rax, 0(%rcx)
-;   movl    %edx, 8(%rcx)
-;   movss   %xmm1, 12(%rcx)
+;   movq    %rbx, %r10
+;   movq    %rax, 0(%r10)
+;   movl    %edx, 8(%r10)
+;   movss   %xmm1, 12(%r10)
 ;   movq    0(%rsp), %rbx
 ;   addq    %rsp, $16, %rsp
 ;   movq    %rbp, %rsp
