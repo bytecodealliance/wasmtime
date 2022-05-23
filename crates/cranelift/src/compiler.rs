@@ -678,11 +678,7 @@ fn mach_reloc_to_reloc(reloc: &MachReloc) -> Relocation {
 }
 
 fn mach_trap_to_trap(trap: &MachTrap) -> TrapInformation {
-    let &MachTrap {
-        offset,
-        srcloc: _,
-        code,
-    } = trap;
+    let &MachTrap { offset, code } = trap;
     TrapInformation {
         code_offset: offset,
         trap_code: match code {

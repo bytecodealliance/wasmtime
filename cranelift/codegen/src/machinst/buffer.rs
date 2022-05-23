@@ -1275,10 +1275,9 @@ impl<I: VCodeInst> MachBuffer<I> {
     }
 
     /// Add a trap record at the current offset.
-    pub fn add_trap(&mut self, srcloc: SourceLoc, code: TrapCode) {
+    pub fn add_trap(&mut self, code: TrapCode) {
         self.traps.push(MachTrap {
             offset: self.data.len() as CodeOffset,
-            srcloc,
             code,
         });
     }
@@ -1453,8 +1452,6 @@ pub struct MachTrap {
     /// The offset at which the trap instruction occurs, *relative to the
     /// containing section*.
     pub offset: CodeOffset,
-    /// The original source location.
-    pub srcloc: SourceLoc,
     /// The trap code.
     pub code: TrapCode,
 }
@@ -1978,10 +1975,10 @@ mod test {
 
         buf.bind_label(label(0));
         buf.put1(1);
-        buf.add_trap(SourceLoc::default(), TrapCode::HeapOutOfBounds);
+        buf.add_trap(TrapCode::HeapOutOfBounds);
         buf.put1(2);
-        buf.add_trap(SourceLoc::default(), TrapCode::IntegerOverflow);
-        buf.add_trap(SourceLoc::default(), TrapCode::IntegerDivisionByZero);
+        buf.add_trap(TrapCode::IntegerOverflow);
+        buf.add_trap(TrapCode::IntegerDivisionByZero);
         buf.add_call_site(SourceLoc::default(), Opcode::Call);
         buf.add_reloc(Reloc::Abs4, &ExternalName::user(0, 0), 0);
         buf.put1(3);

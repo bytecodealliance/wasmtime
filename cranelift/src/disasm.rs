@@ -25,12 +25,7 @@ pub fn print_relocs(relocs: &[MachReloc]) -> String {
 
 pub fn print_traps(traps: &[MachTrap]) -> String {
     let mut text = String::new();
-    for &MachTrap {
-        offset,
-        srcloc: _,
-        code,
-    } in traps
-    {
+    for &MachTrap { offset, code } in traps {
         writeln!(text, "trap: {} at {}", code, offset).unwrap();
     }
     text
