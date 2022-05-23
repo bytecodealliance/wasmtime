@@ -29,7 +29,7 @@ pub struct FuncData {
 }
 
 pub(crate) struct Options {
-    string_encoding: Option<StringEncoding>,
+    string_encoding: StringEncoding,
     intrinsics: Option<Intrinsics>,
 }
 

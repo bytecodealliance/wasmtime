@@ -74,7 +74,27 @@ impl<T> MaybeUninitExt<T> for MaybeUninit<T> {
 /// This type is primarily created with the [`Func::typed`] API.
 pub struct TypedFunc<Params, Return> {
     func: Func,
-    _marker: marker::PhantomData<fn(Params) -> Return>,
+
+    // The definition of this field is somewhat subtle and may be surprising.
+    // Naively one might expect something like
+    //
+    //      _marker: marker::PhantomData<fn(Params) -> Return>,
+    //
+    // Since this is a function pointer after all. The problem with this
+    // definition though is that it imposes the wrong variance on `Params` from
+    // what we want. Abstractly a `fn(Params)` is able to store `Params` within
+    // it meaning you can only give it `Params` that live longer than the
+    // function pointer.
+    //
+    // With a component model function, however, we're always copying data from
+    // the host into the guest, so we are never storing pointers to `Params`
+    // into the guest outside the duration of a `call`, meaning we can actually
+    // accept values in `TypedFunc::call` which live for a shorter duration
+    // than the `Params` argument on the struct.
+    //
+    // This all means that we don't use a phantom function pointer, but instead
+    // feign phantom storage here to get the variance desired.
+    _marker: marker::PhantomData<(Params, Return)>,
 }
 
 impl<Params, Return> Copy for TypedFunc<Params, Return> {}
@@ -565,7 +585,7 @@ impl<'a, T> Memory<'a, T> {
 
     #[inline]
     fn string_encoding(&self) -> StringEncoding {
-        self.store.0[self.func.0].options.string_encoding.unwrap()
+        self.store.0[self.func.0].options.string_encoding
     }
 
     #[inline]
@@ -1040,7 +1060,7 @@ fn lower_string<T>(mem: &mut Memory<'_, T>, string: &str) -> Result<(usize, usiz
                 bytes[1] = u_bytes[1];
                 copied += 1;
             }
-            if copied < size {
+            if (copied * 2) < size {
                 ptr = mem.realloc(ptr, size, 2, copied * 2)?;
             }
             Ok((ptr, copied))
@@ -1184,10 +1204,11 @@ where
         .len()
         .checked_mul(elem_size)
         .ok_or_else(|| anyhow::anyhow!("size overflow copying a list"))?;
-    let mut ptr = mem.realloc(0, 0, T::align(), size)?;
+    let ptr = mem.realloc(0, 0, T::align(), size)?;
+    let mut cur = ptr;
     for item in list {
-        item.store(mem, ptr)?;
-        ptr += elem_size;
+        item.store(mem, cur)?;
+        cur += elem_size;
     }
     Ok((ptr, list.len()))
 }
@@ -1230,6 +1251,32 @@ impl<'a, T: ComponentValue> Cursor<'a, Vec<T>> {
             // indeed valid, meaning this `unsafe` should be ok.
             unsafe { self.move_to(ptr + T::size() * i) }
         }))
+    }
+}
+
+impl<'a> Cursor<'a, Vec<u8>> {
+    /// Get access to the raw underlying memory for this byte slice.
+    ///
+    /// Note that this is specifically only implemented for a `(list u8)` type
+    /// since it's known to be valid in terms of alignment and representation
+    /// validity.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the pointer or of this slice point outside of linear
+    /// memory.
+    pub fn as_slice(&self) -> Result<&'a [u8]> {
+        let (ptr, len) = {
+            let ptr_and_len = self.item_bytes();
+            // FIXME: needs memory64 treatment
+            let ptr = u32::from_le_bytes(ptr_and_len[..4].try_into().unwrap());
+            let len = u32::from_le_bytes(ptr_and_len[4..].try_into().unwrap());
+            (usize::try_from(ptr)?, usize::try_from(len)?)
+        };
+        self.all_memory()
+            .get(ptr..)
+            .and_then(|m| m.get(..len))
+            .ok_or_else(|| anyhow::anyhow!("list out of bounds"))
     }
 }
 
@@ -1787,7 +1834,7 @@ mod value {
     pub struct Cursor<'a, T> {
         offset: usize,
         all_memory: &'a [u8],
-        string_encoding: Option<StringEncoding>,
+        string_encoding: StringEncoding,
         _marker: marker::PhantomData<T>,
     }
 
@@ -1868,13 +1915,8 @@ mod value {
         }
 
         /// Returns the string encoding in use.
-        ///
-        /// # Panics
-        ///
-        /// Panics if string encoding isn't specified, meaning this should only
-        /// be called when lifting strings.
         pub(super) fn string_encoding(&self) -> StringEncoding {
-            self.string_encoding.unwrap()
+            self.string_encoding
         }
 
         /// Increments this `Cursor` forward by `offset` bytes to point to a

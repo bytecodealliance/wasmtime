@@ -1,8 +1,8 @@
-use crate::component::{Component, Func};
+use crate::component::{Component, ComponentParams, ComponentReturn, Func, TypedFunc};
 use crate::instance::OwnedImports;
 use crate::store::{StoreOpaque, Stored};
 use crate::{AsContextMut, Module, StoreContextMut};
-use anyhow::Result;
+use anyhow::{anyhow, Context, Result};
 use wasmtime_environ::component::{
     CoreExport, Export, ExportItem, Instantiation, RuntimeInstanceIndex,
 };
@@ -69,6 +69,34 @@ impl Instance {
         let result = data.get_func(store, name);
         store[self.0] = Some(data);
         return result;
+    }
+
+    /// Looks up an exported [`Func`] value by name and with its type.
+    ///
+    /// This function is a convenience wrapper over [`Instance::get_func`] and
+    /// [`Func::typed`]. For more information see the linked documentation.
+    ///
+    /// Returns an error if `name` isn't a function export or if the export's
+    /// type did not match `Params` or `Results`
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` does not own this instance.
+    pub fn get_typed_func<Params, Results, S>(
+        &self,
+        mut store: S,
+        name: &str,
+    ) -> Result<TypedFunc<Params, Results>>
+    where
+        Params: ComponentParams,
+        Results: ComponentReturn,
+        S: AsContextMut,
+    {
+        let f = self
+            .get_func(store.as_context_mut(), name)
+            .ok_or_else(|| anyhow!("failed to find function export `{}`", name))?;
+        Ok(f.typed::<Params, Results, _>(store)
+            .with_context(|| format!("failed to convert function `{}` to given type", name))?)
     }
 }
 
