@@ -657,7 +657,6 @@ fn collect_address_maps(
 fn mach_reloc_to_reloc(reloc: &MachReloc) -> Relocation {
     let &MachReloc {
         offset,
-        srcloc: _,
         kind,
         ref name,
         addend,

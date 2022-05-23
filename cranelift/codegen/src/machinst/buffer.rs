@@ -1231,13 +1231,7 @@ impl<I: VCodeInst> MachBuffer<I> {
     }
 
     /// Add an external relocation at the current offset.
-    pub fn add_reloc(
-        &mut self,
-        srcloc: SourceLoc,
-        kind: Reloc,
-        name: &ExternalName,
-        addend: Addend,
-    ) {
+    pub fn add_reloc(&mut self, kind: Reloc, name: &ExternalName, addend: Addend) {
         let name = name.clone();
         // FIXME(#3277): This should use `I::LabelUse::from_reloc` to optionally
         // generate a label-use statement to track whether an island is possibly
@@ -1274,7 +1268,6 @@ impl<I: VCodeInst> MachBuffer<I> {
         // actually result in any memory unsafety or anything like that.
         self.relocs.push(MachReloc {
             offset: self.data.len() as CodeOffset,
-            srcloc,
             kind,
             name,
             addend,
@@ -1446,8 +1439,6 @@ pub struct MachReloc {
     /// The offset at which the relocation applies, *relative to the
     /// containing section*.
     pub offset: CodeOffset,
-    /// The original source location.
-    pub srcloc: SourceLoc,
     /// The kind of relocation.
     pub kind: Reloc,
     /// The external symbol / name to which this relocation refers.
@@ -1992,19 +1983,9 @@ mod test {
         buf.add_trap(SourceLoc::default(), TrapCode::IntegerOverflow);
         buf.add_trap(SourceLoc::default(), TrapCode::IntegerDivisionByZero);
         buf.add_call_site(SourceLoc::default(), Opcode::Call);
-        buf.add_reloc(
-            SourceLoc::default(),
-            Reloc::Abs4,
-            &ExternalName::user(0, 0),
-            0,
-        );
+        buf.add_reloc(Reloc::Abs4, &ExternalName::user(0, 0), 0);
         buf.put1(3);
-        buf.add_reloc(
-            SourceLoc::default(),
-            Reloc::Abs8,
-            &ExternalName::user(1, 1),
-            1,
-        );
+        buf.add_reloc(Reloc::Abs8, &ExternalName::user(1, 1), 1);
         buf.put1(4);
 
         let buf = buf.finish();

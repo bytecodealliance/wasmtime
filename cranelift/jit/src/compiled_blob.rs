@@ -22,7 +22,6 @@ impl CompiledBlob {
         for &MachReloc {
             kind,
             offset,
-            srcloc: _,
             ref name,
             addend,
         } in &self.relocs

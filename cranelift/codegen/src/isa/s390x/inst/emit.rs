@@ -162,12 +162,10 @@ pub fn mem_emit(
             ref name, offset, ..
         } => {
             let reloc = Reloc::S390xPCRel32Dbl;
-            let srcloc = state.cur_srcloc();
             put_with_reloc(
                 sink,
                 &enc_ril_b(opcode_ril.unwrap(), rd, 0),
                 2,
-                srcloc,
                 reloc,
                 name,
                 offset.into(),
@@ -863,7 +861,6 @@ fn put_with_reloc(
     sink: &mut MachBuffer<Inst>,
     enc: &[u8],
     offset: usize,
-    ri2_srcloc: SourceLoc,
     ri2_reloc: Reloc,
     ri2_name: &ExternalName,
     ri2_offset: i64,
@@ -872,7 +869,7 @@ fn put_with_reloc(
     for i in 0..offset {
         sink.put1(enc[i]);
     }
-    sink.add_reloc(ri2_srcloc, ri2_reloc, ri2_name, ri2_offset + offset as i64);
+    sink.add_reloc(ri2_reloc, ri2_name, ri2_offset + offset as i64);
     for i in offset..len {
         sink.put1(enc[i]);
     }
@@ -1964,10 +1961,9 @@ impl MachInstEmit for Inst {
                 let rd = allocs.next_writable(rd);
 
                 let opcode = 0xa75; // BRAS
-                let srcloc = state.cur_srcloc();
                 let reg = writable_spilltmp_reg().to_reg();
                 put(sink, &enc_ri_b(opcode, reg, 12));
-                sink.add_reloc(srcloc, Reloc::Abs8, name, offset);
+                sink.add_reloc(Reloc::Abs8, name, offset);
                 if emit_info.flags.emit_all_ones_funcaddrs() {
                     sink.put8(u64::max_value());
                 } else {
@@ -2191,7 +2187,6 @@ impl MachInstEmit for Inst {
 
                 let opcode = 0xc05; // BRASL
                 let reloc = Reloc::S390xPCRel32Dbl;
-                let srcloc = state.cur_srcloc();
                 if let Some(s) = state.take_stack_map() {
                     sink.add_stack_map(StackMapExtent::UpcomingBytes(6), s);
                 }
@@ -2199,12 +2194,12 @@ impl MachInstEmit for Inst {
                     sink,
                     &enc_ril_b(opcode, link.to_reg(), 0),
                     2,
-                    srcloc,
                     reloc,
                     &info.dest,
                     0,
                 );
                 if info.opcode.is_call() {
+                    let srcloc = state.cur_srcloc();
                     sink.add_call_site(srcloc, info.opcode);
                 }
             }

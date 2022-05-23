@@ -9,7 +9,6 @@ pub fn print_relocs(relocs: &[MachReloc]) -> String {
     for &MachReloc {
         kind,
         offset,
-        srcloc: _,
         ref name,
         addend,
     } in relocs

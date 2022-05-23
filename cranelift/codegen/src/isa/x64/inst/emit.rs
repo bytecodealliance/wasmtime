@@ -45,15 +45,8 @@ fn one_way_jmp(sink: &mut MachBuffer<Inst>, cc: CC, label: MachLabel) {
 }
 
 /// Emits a relocation, attaching the current source location as well.
-fn emit_reloc(
-    sink: &mut MachBuffer<Inst>,
-    state: &EmitState,
-    kind: Reloc,
-    name: &ExternalName,
-    addend: Addend,
-) {
-    let srcloc = state.cur_srcloc();
-    sink.add_reloc(srcloc, kind, name, addend);
+fn emit_reloc(sink: &mut MachBuffer<Inst>, kind: Reloc, name: &ExternalName, addend: Addend) {
+    sink.add_reloc(kind, name, addend);
 }
 
 /// The top-level emit function.
@@ -1238,7 +1231,7 @@ pub(crate) fn emit(
             sink.put1(0xE8);
             // The addend adjusts for the difference between the end of the instruction and the
             // beginning of the immediate field.
-            emit_reloc(sink, state, Reloc::X86CallPCRel4, &dest, -4);
+            emit_reloc(sink, Reloc::X86CallPCRel4, &dest, -4);
             sink.put4(0);
             if opcode.is_call() {
                 let loc = state.cur_srcloc();
@@ -2585,7 +2578,7 @@ pub(crate) fn emit(
                 sink.put1(0x48 | ((enc_dst >> 3) & 1) << 2);
                 sink.put1(0x8B);
                 sink.put1(0x05 | ((enc_dst & 7) << 3));
-                emit_reloc(sink, state, Reloc::X86GOTPCRel4, name, -4);
+                emit_reloc(sink, Reloc::X86GOTPCRel4, name, -4);
                 sink.put4(0);
                 // Offset in the relocation above applies to the address of the *GOT entry*, not
                 // the loaded address; so we emit a separate add or sub instruction if needed.
@@ -2608,7 +2601,7 @@ pub(crate) fn emit(
                 let enc_dst = int_reg_enc(dst);
                 sink.put1(0x48 | ((enc_dst >> 3) & 1));
                 sink.put1(0xB8 | (enc_dst & 7));
-                emit_reloc(sink, state, Reloc::Abs8, name, *offset);
+                emit_reloc(sink, Reloc::Abs8, name, *offset);
                 if info.flags.emit_all_ones_funcaddrs() {
                     sink.put8(u64::max_value());
                 } else {
@@ -2908,7 +2901,7 @@ pub(crate) fn emit(
             sink.put1(0b01001000); // REX.W
             sink.put1(0x8d); // LEA
             sink.put1(0x3d); // ModRM byte
-            emit_reloc(sink, state, Reloc::ElfX86_64TlsGd, symbol, -4);
+            emit_reloc(sink, Reloc::ElfX86_64TlsGd, symbol, -4);
             sink.put4(0); // offset
 
             // data16 data16 callq __tls_get_addr-4
@@ -2918,7 +2911,6 @@ pub(crate) fn emit(
             sink.put1(0xe8); // CALL
             emit_reloc(
                 sink,
-                state,
                 Reloc::X86CallPLTRel4,
                 &ExternalName::LibCall(LibCall::ElfTlsGetAddr),
                 -4,
@@ -2931,7 +2923,7 @@ pub(crate) fn emit(
             sink.put1(0x48); // REX.w
             sink.put1(0x8b); // MOV
             sink.put1(0x3d); // ModRM byte
-            emit_reloc(sink, state, Reloc::MachOX86_64Tlv, symbol, -4);
+            emit_reloc(sink, Reloc::MachOX86_64Tlv, symbol, -4);
             sink.put4(0); // offset
 
             // callq *(%rdi)
