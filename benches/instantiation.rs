@@ -200,7 +200,7 @@ fn bench_instantiation(c: &mut Criterion) {
 }
 
 fn strategies() -> impl Iterator<Item = InstanceAllocationStrategy> {
-    std::array::IntoIter::new([
+    [
         InstanceAllocationStrategy::OnDemand,
         InstanceAllocationStrategy::Pooling {
             strategy: Default::default(),
@@ -209,7 +209,8 @@ fn strategies() -> impl Iterator<Item = InstanceAllocationStrategy> {
                 ..Default::default()
             },
         },
-    ])
+    ]
+    .into_iter()
 }
 
 criterion_group!(benches, bench_instantiation);

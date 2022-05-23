@@ -601,9 +601,7 @@ impl Inst {
     }
 
     pub(crate) fn trap(trap_code: TrapCode) -> Inst {
-        Inst::Ud2 {
-            trap_code: trap_code,
-        }
+        Inst::Ud2 { trap_code }
     }
 
     pub(crate) fn setcc(cc: CC, dst: Writable<Reg>) -> Inst {
@@ -2431,10 +2429,6 @@ impl EmitState {
 
     fn clear_post_insn(&mut self) {
         self.stack_map = None;
-    }
-
-    pub(crate) fn cur_srcloc(&self) -> SourceLoc {
-        self.cur_srcloc
     }
 }
 

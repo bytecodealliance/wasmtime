@@ -964,7 +964,7 @@ impl MachInstEmit for Inst {
                 let srcloc = state.cur_srcloc();
                 if srcloc != SourceLoc::default() && !flags.notrap() {
                     // Register the offset at which the actual load instruction starts.
-                    sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
+                    sink.add_trap(TrapCode::HeapOutOfBounds);
                 }
 
                 match &mem {
@@ -1084,7 +1084,7 @@ impl MachInstEmit for Inst {
                 let srcloc = state.cur_srcloc();
                 if srcloc != SourceLoc::default() && !flags.notrap() {
                     // Register the offset at which the actual store instruction starts.
-                    sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
+                    sink.add_trap(TrapCode::HeapOutOfBounds);
                 }
 
                 match &mem {
@@ -1161,7 +1161,7 @@ impl MachInstEmit for Inst {
                 let srcloc = state.cur_srcloc();
                 if srcloc != SourceLoc::default() && !flags.notrap() {
                     // Register the offset at which the actual store instruction starts.
-                    sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
+                    sink.add_trap(TrapCode::HeapOutOfBounds);
                 }
                 match &mem {
                     &PairAMode::SignedOffset(reg, simm7) => {
@@ -1193,7 +1193,7 @@ impl MachInstEmit for Inst {
                 let srcloc = state.cur_srcloc();
                 if srcloc != SourceLoc::default() && !flags.notrap() {
                     // Register the offset at which the actual load instruction starts.
-                    sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
+                    sink.add_trap(TrapCode::HeapOutOfBounds);
                 }
 
                 match &mem {
@@ -1233,7 +1233,7 @@ impl MachInstEmit for Inst {
 
                 if srcloc != SourceLoc::default() && !flags.notrap() {
                     // Register the offset at which the actual load instruction starts.
-                    sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
+                    sink.add_trap(TrapCode::HeapOutOfBounds);
                 }
 
                 let opc = match self {
@@ -1279,7 +1279,7 @@ impl MachInstEmit for Inst {
 
                 if srcloc != SourceLoc::default() && !flags.notrap() {
                     // Register the offset at which the actual store instruction starts.
-                    sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
+                    sink.add_trap(TrapCode::HeapOutOfBounds);
                 }
 
                 let opc = match self {
@@ -1413,7 +1413,7 @@ impl MachInstEmit for Inst {
                 sink.bind_label(again_label);
                 let srcloc = state.cur_srcloc();
                 if srcloc != SourceLoc::default() {
-                    sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
+                    sink.add_trap(TrapCode::HeapOutOfBounds);
                 }
                 sink.put4(enc_ldaxr(ty, x27wr, x25)); // ldaxr x27, [x25]
                 let size = OperandSize::from_ty(ty);
@@ -1537,7 +1537,7 @@ impl MachInstEmit for Inst {
 
                 let srcloc = state.cur_srcloc();
                 if srcloc != SourceLoc::default() {
-                    sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
+                    sink.add_trap(TrapCode::HeapOutOfBounds);
                 }
                 if op == AtomicRMWLoopOp::Xchg {
                     sink.put4(enc_stlxr(ty, x24wr, x26, x25)); // stlxr w24, x26, [x25]
@@ -1599,7 +1599,7 @@ impl MachInstEmit for Inst {
                 sink.bind_label(again_label);
                 let srcloc = state.cur_srcloc();
                 if srcloc != SourceLoc::default() {
-                    sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
+                    sink.add_trap(TrapCode::HeapOutOfBounds);
                 }
                 // ldaxr x27, [x25]
                 sink.put4(enc_ldaxr(ty, x27wr, x25));
@@ -1626,7 +1626,7 @@ impl MachInstEmit for Inst {
 
                 let srcloc = state.cur_srcloc();
                 if srcloc != SourceLoc::default() {
-                    sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
+                    sink.add_trap(TrapCode::HeapOutOfBounds);
                 }
                 sink.put4(enc_stlxr(ty, x24wr, x28, x25)); // stlxr w24, x28, [x25]
 
@@ -2627,7 +2627,7 @@ impl MachInstEmit for Inst {
                 let srcloc = state.cur_srcloc();
                 if srcloc != SourceLoc::default() {
                     // Register the offset at which the actual load instruction starts.
-                    sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
+                    sink.add_trap(TrapCode::HeapOutOfBounds);
                 }
 
                 sink.put4(enc_ldst_vec(q, size, rn, rd));
@@ -2760,11 +2760,10 @@ impl MachInstEmit for Inst {
                 if let Some(s) = state.take_stack_map() {
                     sink.add_stack_map(StackMapExtent::UpcomingBytes(4), s);
                 }
-                let loc = state.cur_srcloc();
-                sink.add_reloc(loc, Reloc::Arm64Call, &info.dest, 0);
+                sink.add_reloc(Reloc::Arm64Call, &info.dest, 0);
                 sink.put4(enc_jump26(0b100101, 0));
                 if info.opcode.is_call() {
-                    sink.add_call_site(loc, info.opcode);
+                    sink.add_call_site(info.opcode);
                 }
             }
             &Inst::CallInd { ref info } => {
@@ -2773,9 +2772,8 @@ impl MachInstEmit for Inst {
                 }
                 let rn = allocs.next(info.rn);
                 sink.put4(0b1101011_0001_11111_000000_00000_00000 | (machreg_to_gpr(rn) << 5));
-                let loc = state.cur_srcloc();
                 if info.opcode.is_call() {
-                    sink.add_call_site(loc, info.opcode);
+                    sink.add_call_site(info.opcode);
                 }
             }
             &Inst::CondBr {
@@ -2830,8 +2828,7 @@ impl MachInstEmit for Inst {
                 sink.put4(0xd4200000);
             }
             &Inst::Udf { trap_code } => {
-                let srcloc = state.cur_srcloc();
-                sink.add_trap(srcloc, trap_code);
+                sink.add_trap(trap_code);
                 if let Some(s) = state.take_stack_map() {
                     sink.add_stack_map(StackMapExtent::UpcomingBytes(4), s);
                 }
@@ -2958,8 +2955,7 @@ impl MachInstEmit for Inst {
                     dest: BranchTarget::ResolvedOffset(12),
                 };
                 inst.emit(&[], sink, emit_info, state);
-                let srcloc = state.cur_srcloc();
-                sink.add_reloc(srcloc, Reloc::Abs8, name, offset);
+                sink.add_reloc(Reloc::Abs8, name, offset);
                 if emit_info.0.emit_all_ones_funcaddrs() {
                     sink.put8(u64::max_value());
                 } else {
@@ -3073,16 +3069,15 @@ impl MachInstEmit for Inst {
                 // See: https://gcc.godbolt.org/z/KhMh5Gvra
 
                 // adrp x0, <label>
-                sink.add_reloc(state.cur_srcloc(), Reloc::Aarch64TlsGdAdrPage21, symbol, 0);
+                sink.add_reloc(Reloc::Aarch64TlsGdAdrPage21, symbol, 0);
                 sink.put4(0x90000000);
 
                 // add x0, x0, <label>
-                sink.add_reloc(state.cur_srcloc(), Reloc::Aarch64TlsGdAddLo12Nc, symbol, 0);
+                sink.add_reloc(Reloc::Aarch64TlsGdAddLo12Nc, symbol, 0);
                 sink.put4(0x91000000);
 
                 // bl __tls_get_addr
                 sink.add_reloc(
-                    state.cur_srcloc(),
                     Reloc::Arm64Call,
                     &ExternalName::LibCall(LibCall::ElfTlsGetAddr),
                     0,
