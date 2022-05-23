@@ -112,14 +112,19 @@ pub unsafe fn resume_panic(payload: Box<dyn Any + Send>) -> ! {
 #[derive(Debug)]
 pub enum Trap {
     /// A user-raised trap through `raise_user_trap`.
-    User(Error),
+    User {
+        /// The user-provided error
+        error: Error,
+        /// Native stack backtrace at the time the trap occurred
+        backtrace: Option<Backtrace>,
+    },
 
     /// A trap raised from jit code
     Jit {
         /// The program counter in JIT code where this trap happened.
         pc: usize,
         /// Native stack backtrace at the time the trap occurred
-        backtrace: Backtrace,
+        backtrace: Option<Backtrace>,
     },
 
     /// A trap raised from a wasm libcall
@@ -127,34 +132,48 @@ pub enum Trap {
         /// Code of the trap.
         trap_code: TrapCode,
         /// Native stack backtrace at the time the trap occurred
-        backtrace: Backtrace,
+        backtrace: Option<Backtrace>,
     },
 
     /// A trap indicating that the runtime was unable to allocate sufficient memory.
     OOM {
         /// Native stack backtrace at the time the OOM occurred
-        backtrace: Backtrace,
+        backtrace: Option<Backtrace>,
     },
 }
 
 impl Trap {
-    /// Construct a new Wasm trap with the given source location and trap code.
+    /// Construct a new Wasm trap with the given trap code.
     ///
-    /// Internally saves a backtrace when constructed.
+    /// Internally saves a backtrace when passed across a setjmp boundary, if the
+    /// engine is configured to save backtraces.
     pub fn wasm(trap_code: TrapCode) -> Self {
         Trap::Wasm {
             trap_code,
-            backtrace: Backtrace::new(),
+            backtrace: None,
         }
     }
 
-    /// Construct a new OOM trap with the given source location and trap code.
+    /// Construct a new Wasm trap from a user Error.
     ///
-    /// Internally saves a backtrace when constructed.
-    pub fn oom() -> Self {
-        Trap::OOM {
-            backtrace: Backtrace::new(),
+    /// Internally saves a backtrace when passed across a setjmp boundary, if the
+    /// engine is configured to save backtraces.
+    pub fn user(error: Error) -> Self {
+        Trap::User {
+            error,
+            backtrace: None,
         }
+    }
+    /// Construct a new OOM trap.
+    ///
+    /// Internally saves a backtrace when passed across a setjmp boundary, if the
+    /// engine is configured to save backtraces.
+    pub fn oom() -> Self {
+        Trap::OOM { backtrace: None }
+    }
+
+    fn insert_backtrace(&mut self, backtrace: Backtrace) {
+        // TODO
     }
 }
 
@@ -193,13 +212,14 @@ impl Backtrace {
 /// Highly unsafe since `closure` won't have any dtors run.
 pub unsafe fn catch_traps<'a, F>(
     signal_handler: Option<*const SignalHandler<'static>>,
+    capture_backtrace: bool,
     callee: *mut VMContext,
     mut closure: F,
 ) -> Result<(), Box<Trap>>
 where
     F: FnMut(*mut VMContext),
 {
-    return CallThreadState::new(signal_handler).with(|cx| {
+    return CallThreadState::new(signal_handler, capture_backtrace).with(|cx| {
         wasmtime_setjmp(
             cx.jmp_buf.as_ptr(),
             call_closure::<F>,
@@ -219,29 +239,34 @@ where
 /// Temporary state stored on the stack which is registered in the `tls` module
 /// below for calls into wasm.
 pub struct CallThreadState {
-    unwind: UnsafeCell<MaybeUninit<UnwindReason>>,
+    unwind: UnsafeCell<MaybeUninit<(UnwindReason, Option<Backtrace>)>>,
     jmp_buf: Cell<*const u8>,
     handling_trap: Cell<bool>,
     signal_handler: Option<*const SignalHandler<'static>>,
     prev: Cell<tls::Ptr>,
+    capture_backtrace: bool,
 }
 
 enum UnwindReason {
     Panic(Box<dyn Any + Send>),
     UserTrap(Error),
     LibTrap(Trap),
-    JitTrap { backtrace: Backtrace, pc: usize },
+    JitTrap { pc: usize }, // Removed a backtrace here
 }
 
 impl CallThreadState {
     #[inline]
-    fn new(signal_handler: Option<*const SignalHandler<'static>>) -> CallThreadState {
+    fn new(
+        signal_handler: Option<*const SignalHandler<'static>>,
+        capture_backtrace: bool,
+    ) -> CallThreadState {
         CallThreadState {
             unwind: UnsafeCell::new(MaybeUninit::uninit()),
             jmp_buf: Cell::new(ptr::null()),
             handling_trap: Cell::new(false),
             signal_handler,
             prev: Cell::new(ptr::null()),
+            capture_backtrace,
         }
     }
 
@@ -257,16 +282,26 @@ impl CallThreadState {
     #[cold]
     unsafe fn read_trap(&self) -> Box<Trap> {
         Box::new(match (*self.unwind.get()).as_ptr().read() {
-            UnwindReason::UserTrap(data) => Trap::User(data),
-            UnwindReason::LibTrap(trap) => trap,
-            UnwindReason::JitTrap { backtrace, pc } => Trap::Jit { pc, backtrace },
-            UnwindReason::Panic(panic) => std::panic::resume_unwind(panic),
+            (UnwindReason::UserTrap(error), backtrace) => Trap::User { error, backtrace },
+            (UnwindReason::LibTrap(mut trap), backtrace) => {
+                if let Some(backtrace) = backtrace {
+                    trap.insert_backtrace(backtrace);
+                }
+                trap
+            } // XXX fix this
+            (UnwindReason::JitTrap { pc }, backtrace) => Trap::Jit { pc, backtrace },
+            (UnwindReason::Panic(panic), _) => std::panic::resume_unwind(panic),
         })
     }
 
     fn unwind_with(&self, reason: UnwindReason) -> ! {
+        let backtrace = if self.capture_backtrace {
+            Some(Backtrace::new())
+        } else {
+            None
+        };
         unsafe {
-            (*self.unwind.get()).as_mut_ptr().write(reason);
+            (*self.unwind.get()).as_mut_ptr().write((reason, backtrace));
             wasmtime_longjmp(self.jmp_buf.get());
         }
     }
@@ -327,14 +362,15 @@ impl CallThreadState {
     }
 
     fn capture_backtrace(&self, pc: *const u8) {
-        let backtrace = Backtrace::new();
+        let backtrace = if self.capture_backtrace {
+            Some(Backtrace::new())
+        } else {
+            None
+        };
         unsafe {
             (*self.unwind.get())
                 .as_mut_ptr()
-                .write(UnwindReason::JitTrap {
-                    backtrace,
-                    pc: pc as usize,
-                });
+                .write((UnwindReason::JitTrap { pc: pc as usize }, backtrace));
         }
     }
 }
