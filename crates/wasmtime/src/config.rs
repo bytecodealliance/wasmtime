@@ -143,7 +143,6 @@ impl Config {
             ret.cranelift_opt_level(OptLevel::Speed);
         }
         ret.wasm_reference_types(true);
-        ret.features.reference_types = true;
         ret.wasm_multi_value(true);
         ret.wasm_bulk_memory(true);
         ret.wasm_simd(true);
@@ -530,9 +529,6 @@ impl Config {
     /// [proposal]: https://github.com/webassembly/reference-types
     pub fn wasm_reference_types(&mut self, enable: bool) -> &mut Self {
         self.features.reference_types = enable;
-        if enable {
-            self.wasm_backtrace(true);
-        }
 
         #[cfg(compiler)]
         {

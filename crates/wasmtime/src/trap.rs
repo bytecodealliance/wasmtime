@@ -257,17 +257,12 @@ impl Trap {
     }
 
     /// Creates a new `Trap`.
-    /// TODO fix these docs
-    /// * `trap_pc` - this is the precise program counter, if available, that
-    ///   wasm trapped at. This is used when learning about the wasm stack trace
-    ///   to ensure we assign the correct source to every frame.
-    ///
     /// * `reason` - this is the wasmtime-internal reason for why this trap is
     ///   being created.
     ///
-    /// * `native_trace` - this is a captured backtrace from when the trap
-    ///   occurred, and this will iterate over the frames to find frames that
-    ///   lie in wasm jit code.
+    /// * `backtrace` - this is a captured backtrace from when the trap
+    ///   occurred. Contains the native backtrace, and the backtrace of
+    ///   WebAssembly frames.
     fn new_with_trace(reason: TrapReason, backtrace: Option<TrapBacktrace>) -> Self {
         let backtrace = if let Some(bt) = backtrace {
             OnceCell::with_value(bt)
@@ -318,15 +313,14 @@ impl Trap {
     }
 
     fn record_backtrace(&self, backtrace: TrapBacktrace) {
-        // Check if a backtrace has already been recorded.  When a trap is
-        // created on top of the wasm stack, the trampoline will re-raise it
-        // via `wasmtime_runtime::raise_user_trap(trap.into::<Box<dyn
-        // Error>>())` after panic::catch_unwind. We don't want to overwrite the
-        // first backtrace recorded, as it is most precise.
-        if self.inner.backtrace.get().is_none() {
-            // Don't inspect result: we checked to make sure the once cell is empty.
-            let _ = self.inner.backtrace.set(backtrace);
-        }
+        // When a trap is created on top of the wasm stack, the trampoline will
+        // re-raise it via
+        // `wasmtime_runtime::raise_user_trap(trap.into::<Box<dyn Error>>())`
+        // after panic::catch_unwind. We don't want to overwrite the first
+        // backtrace recorded, as it is most precise.
+        // FIXME: make sure backtraces are only created once per trap! they are
+        // actually kinda expensive to create.
+        let _ = self.inner.backtrace.try_insert(backtrace);
     }
 }
 

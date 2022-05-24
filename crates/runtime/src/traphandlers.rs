@@ -175,18 +175,10 @@ impl Trap {
 
     fn insert_backtrace(&mut self, bt: Backtrace) {
         match self {
-            Trap::User {
-                ref mut backtrace, ..
-            } => *backtrace = Some(bt),
-            Trap::Jit {
-                ref mut backtrace, ..
-            } => *backtrace = Some(bt),
-            Trap::Wasm {
-                ref mut backtrace, ..
-            } => *backtrace = Some(bt),
-            Trap::OOM {
-                ref mut backtrace, ..
-            } => *backtrace = Some(bt),
+            Trap::User { backtrace, .. } => *backtrace = Some(bt),
+            Trap::Jit { backtrace, .. } => *backtrace = Some(bt),
+            Trap::Wasm { backtrace, .. } => *backtrace = Some(bt),
+            Trap::OOM { backtrace, .. } => *backtrace = Some(bt),
         }
     }
 }
@@ -273,7 +265,7 @@ impl CallThreadState {
                     trap.insert_backtrace(backtrace);
                 }
                 trap
-            } // XXX fix this
+            }
             (UnwindReason::JitTrap { pc }, backtrace) => Trap::Jit { pc, backtrace },
             (UnwindReason::Panic(panic), _) => std::panic::resume_unwind(panic),
         })
