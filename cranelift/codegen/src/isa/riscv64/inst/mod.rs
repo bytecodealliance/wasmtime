@@ -383,7 +383,7 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
         &Inst::Ret { .. } => {}
         &Inst::Extend { rd, rn, .. } => {
             collector.reg_use(rn);
-            collector.reg_def(rd);
+            collector.reg_early_def(rd);
         }
         &Inst::AjustSp { .. } => {}
         &Inst::Call { ref info } => {

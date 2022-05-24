@@ -715,7 +715,7 @@
 (decl lower_bit_reverse (Type Reg)Reg)
 (extern constructor lower_bit_reverse lower_bit_reverse)
 
-(decl lower_ctz (Type ValueRegs)Reg)
+(decl lower_ctz (Type ValueRegs)ValueRegs)
 (extern constructor lower_ctz lower_ctz)
 
 (decl lower_clz (Type ValueRegs)Reg)

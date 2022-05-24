@@ -170,82 +170,128 @@ where
         todo!()
     }
     fn lower_clz(&mut self, ty: Type, val: ValueRegs) -> Reg {
-        // if ty.bits() == 128 {
-        // } else {
-        //     let tmp = self.temp_writable_reg(I64);
-        //     self.emit(&MInst::AluRRImm12 {});
-        // }
-        todo!()
+        assert!(ty.is_int());
+        let tmp = self.temp_writable_reg(I64);
+        if ty != I128 {
+            let rs = val.regs()[0];
+            match ty.bits() {
+                64 => {
+                    let (op, imm12) = AluOPRRI::Clz.funct12(None);
+                    self.emit(&MInst::AluRRImm12 {
+                        alu_op: op,
+                        rd: tmp,
+                        rs,
+                        imm12,
+                    });
+                }
+                32 => {
+                    let (op, imm12) = AluOPRRI::Clzw.funct12(None);
+                    self.emit(&MInst::AluRRImm12 {
+                        alu_op: op,
+                        rd: tmp,
+                        rs,
+                        imm12,
+                    });
+                }
+                16 | 8 => {
+                    let rs = generated_code::constructor_narrow_int(self, ty, rs).unwrap();
+                    let (op, imm12) = AluOPRRI::Clzw.funct12(None);
+                    self.emit(&MInst::AluRRImm12 {
+                        alu_op: op,
+                        rd: tmp,
+                        rs,
+                        imm12,
+                    });
+                    self.emit(&MInst::AluRRImm12 {
+                        alu_op: AluOPRRI::Addi,
+                        rd: tmp,
+                        rs: tmp.to_reg(),
+                        imm12: Imm12::from_bits(-(32 - ty.bits() as i16)),
+                    })
+                }
+
+                _ => unreachable!(),
+            }
+        } else {
+            unimplemented!()
+        }
+        tmp.to_reg()
     }
 
-    fn lower_ctz(&mut self, ty: Type, val: ValueRegs) -> Reg {
-        let tmp1 = self.temp_writable_reg(I64);
+    fn lower_ctz(&mut self, ty: Type, val: ValueRegs) -> ValueRegs {
+        let rd = self.temp_writable_reg(I64);
+        let (op, imm12) = AluOPRRI::Ctz.funct12(None);
         match ty.bits() {
             128 => {
-                let tmp2 = self.temp_writable_reg(I64);
-                let tmp3 = self.temp_writable_reg(I64);
+                let tmp_high = self.temp_writable_reg(I64);
                 // first count lower trailing zeros
-                let (op, imm12) = AluOPRRI::Ctz.funct12(None);
+
                 self.emit(&MInst::AluRRImm12 {
                     alu_op: op,
-                    rd: tmp1,
+                    rd,
                     rs: val.regs()[0],
                     imm12,
                 });
+                let tmp_src_high = self.temp_writable_reg(I64);
                 // load constant 64
-
                 self.emit(&MInst::AluRRImm12 {
                     alu_op: AluOPRRI::Ori,
-                    rd: tmp3,
+                    rd: tmp_src_high,
                     rs: zero_reg(),
                     imm12: Imm12::from_bits(64),
                 });
                 // if lower trailing zeros is less than 64 we know the upper 64-bit no need to count.
                 self.emit(&MInst::AluRRR {
                     alu_op: AluOPRRR::Slt,
-                    rd: tmp3,
-                    rs1: tmp1.to_reg(),
-                    rs2: tmp3.to_reg(),
+                    rd: tmp_src_high,
+                    rs1: rd.to_reg(),
+                    rs2: tmp_src_high.to_reg(),
                 });
                 // set high part lowest bit.
                 self.emit(&MInst::AluRRR {
                     alu_op: AluOPRRR::Or,
-                    rd: tmp2, /* if tmp2 == 0 we don't change the high part value and need to count ,otherwise
-                              we set lowest bit to 1 , Ctz will return 0 which is the result we want.
-                                        */
+                    rd: tmp_high, /* if tmp2 == 0 we don't change the high part value and need to count ,otherwise
+                                  we set lowest bit to 1 , Ctz will return 0 which is the result we want.
+                                            */
                     rs1: val.regs()[1],
-                    rs2: tmp2.to_reg(),
+                    rs2: tmp_src_high.to_reg(),
                 });
                 // count hight parts
-                let (op, imm12) = AluOPRRI::Ctz.funct12(None);
+
                 self.emit(&MInst::AluRRImm12 {
                     alu_op: op,
-                    rd: tmp2,
-                    rs: tmp2.to_reg(),
+                    rd: tmp_high,
+                    rs: tmp_high.to_reg(),
                     imm12: imm12,
                 });
                 // add them togother
                 self.emit(&MInst::AluRRR {
                     alu_op: AluOPRRR::Add,
-                    rd: tmp1,
-                    rs1: tmp1.to_reg(),
-                    rs2: tmp2.to_reg(),
+                    rd,
+                    rs1: rd.to_reg(),
+                    rs2: tmp_high.to_reg(),
                 });
+
+                /*
+
+                    todo why return 128-bit value?????
+                */
+                let r = self.temp_writable_reg(I64);
+                self.emit(&MInst::load_constant_imm12(r, Imm12::from_bits(0)));
+                return ValueRegs::two(rd.to_reg(), r.to_reg());
             }
             64 => {
-                let (op, imm12) = AluOPRRI::Ctz.funct12(None);
                 self.emit(&MInst::AluRRImm12 {
                     alu_op: op,
-                    rd: tmp1,
+                    rd,
                     rs: val.regs()[0],
                     imm12,
                 });
             }
             32 => {
-                let (op, imm12) = AluOPRRI::Ctzw.funct12(None);
                 self.emit(&MInst::AluRRImm12 {
                     alu_op: op,
-                    rd: tmp1,
+                    rd,
                     rs: val.regs()[0],
                     imm12: imm12,
                 });
@@ -253,27 +299,27 @@ where
             16 | 8 => {
                 // first we must make sure all upper bit are 1
                 // so we don't count extra zero.
-                MInst::load_constant_u64(tmp1, if ty.bits() == 8 { !0xff } else { !0xffff })
+                MInst::load_constant_u64(rd, if ty.bits() == 8 { !0xff } else { !0xffff })
                     .into_iter()
                     .for_each(|i| self.emit(&i));
 
                 self.emit(&MInst::AluRRR {
                     alu_op: AluOPRRR::Or,
-                    rd: tmp1,
-                    rs1: tmp1.to_reg(),
+                    rd,
+                    rs1: rd.to_reg(),
                     rs2: val.regs()[0],
                 });
                 let (op, imm12) = AluOPRRI::Ctz.funct12(None);
                 self.emit(&MInst::AluRRImm12 {
                     alu_op: op,
-                    rd: tmp1,
+                    rd,
                     rs: val.regs()[0],
                     imm12,
                 });
             }
             _ => unreachable!(),
         }
-        tmp1.to_reg()
+        ValueRegs::one(rd.to_reg())
     }
 
     fn band_not_128(&mut self, a: ValueRegs, b: ValueRegs) -> ValueRegs {

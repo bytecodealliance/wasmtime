@@ -2041,7 +2041,7 @@ impl MachInstEmit for Inst {
         };
 
         let end_off = sink.cur_offset();
-        // debug_assert!((end_off - start_off) <= Inst::worst_case_size());
+        debug_assert!((end_off - start_off) <= Inst::worst_case_size());
     }
 
     fn pretty_print_inst(&self, allocs: &[Allocation], state: &mut Self::State) -> String {
