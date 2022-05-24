@@ -32,10 +32,24 @@ use wasmtime_environ::{
     TrapCode, TrapEncodingBuilder, TrapInformation, Tunables, VMOffsets,
 };
 
+struct CompilerContext {
+    func_translator: FuncTranslator,
+    codegen_context: Context,
+}
+
+impl Default for CompilerContext {
+    fn default() -> Self {
+        Self {
+            func_translator: FuncTranslator::new(),
+            codegen_context: Context::new(),
+        }
+    }
+}
+
 /// A compiler that compiles a WebAssembly module with Compiler, translating
 /// the Wasm to Compiler IR, optimizing it and then translating to assembly.
 pub(crate) struct Compiler {
-    translators: Mutex<Vec<FuncTranslator>>,
+    contexts: Mutex<Vec<CompilerContext>>,
     isa: Box<dyn TargetIsa>,
     linkopts: LinkOptions,
 }
@@ -43,19 +57,24 @@ pub(crate) struct Compiler {
 impl Compiler {
     pub(crate) fn new(isa: Box<dyn TargetIsa>, linkopts: LinkOptions) -> Compiler {
         Compiler {
-            translators: Default::default(),
+            contexts: Default::default(),
             isa,
             linkopts,
         }
     }
 
-    fn take_translator(&self) -> FuncTranslator {
-        let candidate = self.translators.lock().unwrap().pop();
-        candidate.unwrap_or_else(FuncTranslator::new)
+    fn take_context(&self) -> CompilerContext {
+        let candidate = self.contexts.lock().unwrap().pop();
+        candidate
+            .map(|mut ctx| {
+                ctx.codegen_context.clear();
+                ctx
+            })
+            .unwrap_or_else(Default::default)
     }
 
-    fn save_translator(&self, translator: FuncTranslator) {
-        self.translators.lock().unwrap().push(translator);
+    fn save_context(&self, ctx: CompilerContext) {
+        self.contexts.lock().unwrap().push(ctx);
     }
 
     fn get_function_address_map(
@@ -114,7 +133,12 @@ impl wasmtime_environ::Compiler for Compiler {
         let isa = &*self.isa;
         let module = &translation.module;
         let func_index = module.func_index(func_index);
-        let mut context = Context::new();
+
+        let CompilerContext {
+            mut func_translator,
+            codegen_context: mut context,
+        } = self.take_context();
+
         context.func.name = get_func_name(func_index);
         context.func.signature = func_signature(isa, translation, types, func_index);
         if tunables.generate_native_debuginfo {
@@ -156,14 +180,12 @@ impl wasmtime_environ::Compiler for Compiler {
             readonly: false,
         });
         context.func.stack_limit = Some(stack_limit);
-        let mut func_translator = self.take_translator();
         func_translator.translate_body(
             &mut input.validator,
             input.body.clone(),
             &mut context.func,
             &mut func_env,
         )?;
-        self.save_translator(func_translator);
 
         let mut code_buf: Vec<u8> = Vec::new();
         context
@@ -217,11 +239,19 @@ impl wasmtime_environ::Compiler for Compiler {
         log::trace!("{:?} timing info\n{}", func_index, timing);
 
         let length = u32::try_from(code_buf.len()).unwrap();
+
+        let stack_slots = std::mem::take(&mut context.func.stack_slots);
+
+        self.save_context(CompilerContext {
+            func_translator,
+            codegen_context: context,
+        });
+
         Ok(Box::new(CompiledFunction {
             body: code_buf,
             relocations: func_relocs,
             value_labels_ranges: ranges.unwrap_or(Default::default()),
-            stack_slots: context.func.stack_slots,
+            stack_slots,
             unwind_info,
             traps,
             info: FunctionInfo {
@@ -405,8 +435,11 @@ impl Compiler {
         host_signature.params.push(ir::AbiParam::new(pointer_type));
         host_signature.params.push(ir::AbiParam::new(pointer_type));
 
-        let mut func_translator = self.take_translator();
-        let mut context = Context::new();
+        let CompilerContext {
+            mut func_translator,
+            codegen_context: mut context,
+        } = self.take_context();
+
         context.func = ir::Function::with_name_signature(ExternalName::user(0, 0), host_signature);
 
         // This trampoline will load all the parameters from the `values_vec`
@@ -467,8 +500,11 @@ impl Compiler {
         builder.ins().return_(&[]);
         builder.finalize();
 
-        let func = self.finish_trampoline(context, isa)?;
-        self.save_translator(func_translator);
+        let func = self.finish_trampoline(&mut context, isa)?;
+        self.save_context(CompilerContext {
+            func_translator,
+            codegen_context: context,
+        });
         Ok(func)
     }
 
@@ -489,7 +525,11 @@ impl Compiler {
         let value_size = mem::size_of::<u128>();
         let values_vec_len = (value_size * cmp::max(ty.params().len(), ty.returns().len())) as u32;
 
-        let mut context = Context::new();
+        let CompilerContext {
+            mut func_translator,
+            codegen_context: mut context,
+        } = self.take_context();
+
         context.func =
             ir::Function::with_name_signature(ir::ExternalName::user(0, 0), wasm_signature);
 
@@ -498,7 +538,6 @@ impl Compiler {
             values_vec_len,
         ));
 
-        let mut func_translator = self.take_translator();
         let mut builder = FunctionBuilder::new(&mut context.func, func_translator.context());
         let block0 = builder.create_block();
 
@@ -542,14 +581,17 @@ impl Compiler {
         builder.ins().return_(&results);
         builder.finalize();
 
-        let func = self.finish_trampoline(context, isa)?;
-        self.save_translator(func_translator);
+        let func = self.finish_trampoline(&mut context, isa)?;
+        self.save_context(CompilerContext {
+            func_translator,
+            codegen_context: context,
+        });
         Ok(func)
     }
 
     fn finish_trampoline(
         &self,
-        mut context: Context,
+        context: &mut Context,
         isa: &dyn TargetIsa,
     ) -> Result<CompiledFunction, CompileError> {
         let mut code_buf = Vec::new();
