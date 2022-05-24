@@ -966,7 +966,7 @@ impl Func {
         // Store the argument values into `values_vec`.
         let mut values_vec = store.0.take_wasm_val_raw_storage();
         debug_assert!(values_vec.is_empty());
-        values_vec.resize_with(values_vec_size, || ValRaw { i32: 0 });
+        values_vec.resize_with(values_vec_size, || ValRaw::i32(0));
         for (arg, slot) in params.iter().cloned().zip(&mut values_vec) {
             unsafe {
                 *slot = arg.to_raw(&mut *store);
