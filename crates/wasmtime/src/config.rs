@@ -91,6 +91,7 @@ pub struct Config {
     pub(crate) allocation_strategy: InstanceAllocationStrategy,
     pub(crate) max_wasm_stack: usize,
     pub(crate) features: WasmFeatures,
+    pub(crate) wasm_backtrace: bool,
     pub(crate) wasm_backtrace_details_env_used: bool,
     #[cfg(feature = "async")]
     pub(crate) async_stack_size: usize,
@@ -124,6 +125,7 @@ impl Config {
             // 1` forces this), or at least it passed when this change was
             // committed.
             max_wasm_stack: 512 * 1024,
+            wasm_backtrace: true,
             wasm_backtrace_details_env_used: false,
             features: WasmFeatures::default(),
             #[cfg(feature = "async")]
@@ -140,9 +142,8 @@ impl Config {
             ret.cranelift_debug_verifier(false);
             ret.cranelift_opt_level(OptLevel::Speed);
         }
-        #[cfg(feature = "wasm-backtrace")]
         ret.wasm_reference_types(true);
-        ret.features.reference_types = cfg!(feature = "wasm-backtrace");
+        ret.features.reference_types = true;
         ret.wasm_multi_value(true);
         ret.wasm_bulk_memory(true);
         ret.wasm_simd(true);
@@ -276,6 +277,20 @@ impl Config {
     /// By default this option is `false`.
     pub fn debug_info(&mut self, enable: bool) -> &mut Self {
         self.tunables.generate_native_debuginfo = enable;
+        self
+    }
+
+    /// Configures whether backtraces exist in a `Trap`.
+    ///
+    /// Enabled by default, this feature builds in support to
+    /// generate backtraces at runtime for WebAssembly modules. This means that
+    /// unwinding information is compiled into wasm modules and necessary runtime
+    /// dependencies are enabled as well. If this is turned off then some methods
+    /// to look at trap frames will not be available.
+    ///
+    /// When disabled, wasm backtrace details are ignored.
+    pub fn wasm_backtrace(&mut self, enable: bool) -> &mut Self {
+        self.wasm_backtrace = enable;
         self
     }
 
@@ -502,22 +517,22 @@ impl Config {
     /// Configures whether the [WebAssembly reference types proposal][proposal]
     /// will be enabled for compilation.
     ///
+    /// When enabled, this will also enable wasm backtraces.
+    ///
     /// This feature gates items such as the `externref` and `funcref` types as
     /// well as allowing a module to define multiple tables.
     ///
     /// Note that enabling the reference types feature will also enable the bulk
     /// memory feature.
     ///
-    /// This feature is `true` by default. If the `wasm-backtrace` feature is
-    /// disabled at compile time, however, then this is `false` by default and
-    /// it cannot be turned on since GC currently requires backtraces to work.
-    /// Note that the `wasm-backtrace` feature is on by default, however.
+    /// This feature is `true` by default.
     ///
     /// [proposal]: https://github.com/webassembly/reference-types
-    #[cfg(feature = "wasm-backtrace")]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "wasm-backtrace")))]
     pub fn wasm_reference_types(&mut self, enable: bool) -> &mut Self {
         self.features.reference_types = enable;
+        if enable {
+            self.wasm_backtrace(true);
+        }
 
         #[cfg(compiler)]
         {
@@ -1291,16 +1306,7 @@ fn compiler_builder(strategy: Strategy) -> Result<Box<dyn CompilerBuilder>> {
     let mut builder = match strategy {
         Strategy::Auto | Strategy::Cranelift => wasmtime_cranelift::builder(),
     };
-    builder
-        .set(
-            "unwind_info",
-            if cfg!(feature = "wasm-backtrace") {
-                "true"
-            } else {
-                "false"
-            },
-        )
-        .unwrap();
+    builder.set("unwind_info", "true").unwrap(); // XXX set this later based on wasm_backtrace or reference types flags
     Ok(builder)
 }
 
@@ -1331,6 +1337,7 @@ impl Clone for Config {
             mem_creator: self.mem_creator.clone(),
             allocation_strategy: self.allocation_strategy.clone(),
             max_wasm_stack: self.max_wasm_stack,
+            wasm_backtrace: self.wasm_backtrace,
             wasm_backtrace_details_env_used: self.wasm_backtrace_details_env_used,
             async_support: self.async_support,
             #[cfg(feature = "async")]

@@ -1914,11 +1914,7 @@ unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
     fn new_epoch(&mut self) -> Result<u64, anyhow::Error> {
         return match &mut self.epoch_deadline_behavior {
             EpochDeadline::Trap => {
-                let trap = Trap::new_wasm(
-                    None,
-                    wasmtime_environ::TrapCode::Interrupt,
-                    wasmtime_runtime::Backtrace::new(),
-                );
+                let trap = Trap::new_wasm(wasmtime_environ::TrapCode::Interrupt, None);
                 Err(anyhow::Error::from(trap))
             }
             EpochDeadline::Callback(callback) => {

@@ -1235,6 +1235,7 @@ pub(crate) fn invoke_wasm_and_catch_traps<T>(
         }
         let result = wasmtime_runtime::catch_traps(
             store.0.signal_handler(),
+            true, // XXX plumb through the engine config on capturing backtraces here
             store.0.default_callee(),
             closure,
         );
