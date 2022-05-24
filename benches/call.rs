@@ -160,7 +160,7 @@ fn bench_host_to_wasm<Params, Results>(
         let untyped = instance.get_func(&mut *store, name).unwrap();
         let params = typed_params.to_vals();
         let results = typed_results.to_vals();
-        let mut space = vec![ValRaw { i32: 0 }; params.len().max(results.len())];
+        let mut space = vec![ValRaw::i32(0); params.len().max(results.len())];
         b.iter(|| unsafe {
             for (i, param) in params.iter().enumerate() {
                 space[i] = param.to_raw(&mut *store);
