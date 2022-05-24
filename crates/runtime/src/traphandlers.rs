@@ -11,6 +11,7 @@ use std::sync::Once;
 use wasmtime_environ::TrapCode;
 
 pub use self::tls::{tls_eager_initialize, TlsRestore};
+pub use backtrace::Backtrace;
 
 #[link(name = "wasmtime-helpers")]
 extern "C" {
@@ -172,37 +173,21 @@ impl Trap {
         Trap::OOM { backtrace: None }
     }
 
-    fn insert_backtrace(&mut self, backtrace: Backtrace) {
-        // TODO
-    }
-}
-
-/// A crate-local backtrace type which conditionally, at compile time, actually
-/// contains a backtrace from the `backtrace` crate or nothing.
-#[derive(Debug)]
-pub struct Backtrace {
-    #[cfg(feature = "wasm-backtrace")]
-    trace: backtrace::Backtrace,
-}
-
-impl Backtrace {
-    /// Captures a new backtrace
-    ///
-    /// Note that this function does nothing if the `wasm-backtrace` feature is
-    /// disabled.
-    pub fn new() -> Backtrace {
-        Backtrace {
-            #[cfg(feature = "wasm-backtrace")]
-            trace: backtrace::Backtrace::new_unresolved(),
+    fn insert_backtrace(&mut self, bt: Backtrace) {
+        match self {
+            Trap::User {
+                ref mut backtrace, ..
+            } => *backtrace = Some(bt),
+            Trap::Jit {
+                ref mut backtrace, ..
+            } => *backtrace = Some(bt),
+            Trap::Wasm {
+                ref mut backtrace, ..
+            } => *backtrace = Some(bt),
+            Trap::OOM {
+                ref mut backtrace, ..
+            } => *backtrace = Some(bt),
         }
-    }
-
-    /// Returns the backtrace frames associated with this backtrace. Note that
-    /// this is conditionally defined and not present when `wasm-backtrace` is
-    /// not present.
-    #[cfg(feature = "wasm-backtrace")]
-    pub fn frames(&self) -> &[backtrace::BacktraceFrame] {
-        self.trace.frames()
     }
 }
 
