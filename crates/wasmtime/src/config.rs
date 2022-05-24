@@ -290,6 +290,20 @@ impl Config {
     /// When disabled, wasm backtrace details are ignored.
     pub fn wasm_backtrace(&mut self, enable: bool) -> &mut Self {
         self.wasm_backtrace = enable;
+        #[cfg(compiler)]
+        {
+            // unwind_info must be enabled when either backtraces or reference types are enabled:
+            self.compiler
+                .set(
+                    "unwind_info",
+                    if enable || self.features.reference_types {
+                        "true"
+                    } else {
+                        "false"
+                    },
+                )
+                .unwrap();
+        }
         self
     }
 
@@ -534,6 +548,17 @@ impl Config {
         {
             self.compiler
                 .set("enable_safepoints", if enable { "true" } else { "false" })
+                .unwrap();
+            // unwind_info must be enabled when either backtraces or reference types are enabled:
+            self.compiler
+                .set(
+                    "unwind_info",
+                    if enable || self.wasm_backtrace {
+                        "true"
+                    } else {
+                        "false"
+                    },
+                )
                 .unwrap();
         }
 
@@ -1299,11 +1324,9 @@ impl Config {
 
 #[cfg(compiler)]
 fn compiler_builder(strategy: Strategy) -> Result<Box<dyn CompilerBuilder>> {
-    let mut builder = match strategy {
-        Strategy::Auto | Strategy::Cranelift => wasmtime_cranelift::builder(),
-    };
-    builder.set("unwind_info", "true").unwrap(); // XXX set this later based on wasm_backtrace or reference types flags
-    Ok(builder)
+    match strategy {
+        Strategy::Auto | Strategy::Cranelift => Ok(wasmtime_cranelift::builder()),
+    }
 }
 
 fn round_up_to_pages(val: u64) -> u64 {
