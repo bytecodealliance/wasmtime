@@ -137,13 +137,22 @@ pub struct LiftedFunction {
 }
 
 /// Canonical ABI options associated with a lifted function.
-#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CanonicalOptions {
-    /// The optionally-specified encoding used for strings.
-    pub string_encoding: Option<StringEncoding>,
+    /// The encoding used for strings.
+    pub string_encoding: StringEncoding,
     /// Representation of the `into` option where intrinsics are peeled out and
     /// identified from an instance.
     pub intrinsics: Option<Intrinsics>,
+}
+
+impl Default for CanonicalOptions {
+    fn default() -> CanonicalOptions {
+        CanonicalOptions {
+            string_encoding: StringEncoding::Utf8,
+            intrinsics: None,
+        }
+    }
 }
 
 /// Possible encodings of strings within the component model.

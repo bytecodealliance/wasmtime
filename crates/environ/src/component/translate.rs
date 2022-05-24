@@ -650,13 +650,13 @@ impl<'a, 'data> Translator<'a, 'data> {
         for opt in opts {
             match opt {
                 wasmparser::CanonicalOption::UTF8 => {
-                    ret.string_encoding = Some(StringEncoding::Utf8);
+                    ret.string_encoding = StringEncoding::Utf8;
                 }
                 wasmparser::CanonicalOption::UTF16 => {
-                    ret.string_encoding = Some(StringEncoding::Utf16);
+                    ret.string_encoding = StringEncoding::Utf16;
                 }
                 wasmparser::CanonicalOption::CompactUTF16 => {
-                    ret.string_encoding = Some(StringEncoding::CompactUtf16);
+                    ret.string_encoding = StringEncoding::CompactUtf16;
                 }
                 wasmparser::CanonicalOption::Into(instance) => {
                     let instance = InstanceIndex::from_u32(*instance);

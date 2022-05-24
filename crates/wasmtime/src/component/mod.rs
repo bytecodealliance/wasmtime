@@ -8,7 +8,15 @@ mod func;
 mod instance;
 mod store;
 pub use self::component::Component;
-pub use self::func::Func;
+pub use self::func::{
+    ComponentParams, ComponentReturn, ComponentValue, Cursor, Func, TypedFunc, Value,
+};
 pub use self::instance::Instance;
+
+// These items are expected to be used by an eventual
+// `#[derive(ComponentValue)]`, they are not part of Wasmtime's API stability
+// guarantees
+#[doc(hidden)]
+pub use {self::func::Memory, wasmtime_environ};
 
 pub(crate) use self::store::ComponentStoreData;

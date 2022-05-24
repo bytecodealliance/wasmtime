@@ -2,6 +2,8 @@ use anyhow::Result;
 use wasmtime::component::Component;
 use wasmtime::{Config, Engine};
 
+mod func;
+
 fn engine() -> Engine {
     let mut config = Config::new();
     config.wasm_component_model(true);
