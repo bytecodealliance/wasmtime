@@ -43,7 +43,7 @@
       (alu_rr_imm12 (select_addi ty) y x))
 
 (rule (lower (has_type $I128 (iadd  x y)))
-      (i128_arithmetic (I128BinaryOP.Add) x y))
+      (i128_arithmetic (I128OP.Add) x y))
 
 ;; i128
 
@@ -66,7 +66,7 @@
       (alu_rr_imm12  (select_addi ty) x (neg_imm12 y)))
 
 (rule (lower (has_type $I128 (isub x y)))
-      (i128_arithmetic (I128BinaryOP.Sub) x y))
+      (i128_arithmetic (I128OP.Sub) x y))
 
 
 
@@ -93,7 +93,7 @@
       (lower_mlhi $false ty x y))
 
 (rule (lower (has_type $I128 (imul x y)))
-      (i128_arithmetic (I128BinaryOP.Mul) x y))
+      (i128_arithmetic (I128OP.Mul) x y))
 
 
 ;;;; Rules for `div` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -222,7 +222,7 @@
 
 ;;;; Rules for `clz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type ty (clz x)))
-      (r_clz ty x))
+      (lower_clz ty x))
 
 ;;;; Rules for `uextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type out (uextend x @ (value_type in))))
@@ -259,7 +259,7 @@
 (rule (lower (has_type (fits_in_64 ty)(ishl x y)))
       (alu_rrr (AluOPRRR.Sll) x y))
 (rule (lower (has_type  $I128 (ishl x y)))
-      (i128_arithmetic (I128BinaryOP.Ishl) x y))
+      (i128_arithmetic (I128OP.Ishl) x y))
 
 
 ;;;; Rules for `ushr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -272,7 +272,7 @@
 (rule (lower (has_type (fits_in_64 ty)(ushr x (imm12_from_value y))))
       (alu_rr_imm12 (AluOPRRI.Srli) x y))
 (rule (lower (has_type  $I128 (ushr x y)))
-      (i128_arithmetic (I128BinaryOP.Ushr) x y))
+      (i128_arithmetic (I128OP.Ushr) x y))
 
 
 ;;;; Rules for `sshr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -285,7 +285,7 @@
 (rule (lower (has_type (fits_in_64 ty)(sshr x (imm12_from_value y))))
       (alu_rr_imm12 (AluOPRRI.Srli) x y))
 (rule (lower (has_type  $I128 (sshr x y)))
-      (i128_arithmetic (I128BinaryOP.Sshr) x y))
+      (i128_arithmetic (I128OP.Sshr) x y))
 
 
 ;;;; Rules for `rotl` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -293,14 +293,14 @@
       (lower_rotl ty x y))
 
 (rule (lower (has_type  $I128 (rotl x y)))
-      (i128_arithmetic (I128BinaryOP.Rotl) x y))
+      (i128_arithmetic (I128OP.Rotl) x y))
 
 ;;;; Rules for `rotr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 ty)(rotr x y)))
       (lower_rotr ty x y))
 
 (rule (lower (has_type  $I128 (rotr x y)))
-      (i128_arithmetic (I128BinaryOP.Rotr) x y))
+      (i128_arithmetic (I128OP.Rotr) x y))
 
 
 ;;;; Rules for `bxor_not` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -308,7 +308,7 @@
       (alu_rrr  (AluOPRRR.Xnor) y x))  ;; notice x y order!!!
 
 (rule (lower (has_type  $I128 (bxor_not x y)))
-      (i128_arithmetic (I128BinaryOP.Xnor) y x));; notice x y order!!!
+      (i128_arithmetic (I128OP.Xnor) y x));; notice x y order!!!
 
 
 ;;;; Rules for `xor_not` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -316,4 +316,11 @@
       (alu_rrr  (AluOPRRR.Orn) x y))  
 
 (rule (lower (has_type  $I128 (bor_not x y)))
-      (i128_arithmetic (I128BinaryOP.Orn) x y)) 
+      (i128_arithmetic (I128OP.Orn) x y)) 
+
+
+;;;; Rules for `cls` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(rule (lower (has_type (fits_in_64 ty)(cls x)))
+      (lower_cls  x ty))  
+(rule (lower (has_type  $I128 (cls x)))
+      (lower_cls  x $I128))  

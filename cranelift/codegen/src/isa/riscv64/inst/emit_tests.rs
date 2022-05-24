@@ -2216,6 +2216,11 @@ pub(crate) struct DebugITypeIns {
     funct3: u32,
     rs: u32,
     imm12: u32,
+
+    shamt5: u32,
+    shamt6: u32,
+    funct7: u32,
+    funct6: u32,
 }
 
 impl DebugITypeIns {
@@ -2234,12 +2239,36 @@ impl DebugITypeIns {
         let x = x >> 5;
 
         let imm12 = x & 0b1111_1111_1111;
+        let shamt5 = imm12 & 0b1_1111;
+        let shamt6 = imm12 & 0b11_1111;
+        let funct7 = imm12 >> 5;
+        let funct6 = funct7 >> 1;
         Self {
             op_code,
             rd,
             funct3,
             rs,
             imm12,
+            shamt5,
+            shamt6,
+            funct7,
+            funct6,
         }
     }
+    fn print_b(self) {
+        println!("opcode:{:b}", self.op_code);
+        println!("rd:{}", self.rd);
+        println!("funct3:{:b}", self.funct3);
+        println!("rs:{}", self.rs);
+        println!("shamt5:{:b}", self.shamt5);
+        println!("shamt6:{:b}", self.shamt6);
+        println!("funct6:{:b}", self.funct6);
+        println!("funct7:{:b}", self.funct7);
+    }
+}
+#[test]
+fn xxx() {
+    let x = 1240847763;
+    let x = DebugITypeIns::from_u32(x);
+    x.print_b();
 }

@@ -5,7 +5,7 @@ pub mod generated_code;
 
 use alloc::borrow::ToOwned;
 
-use self::generated_code::I128BinaryOP;
+use self::generated_code::I128OP;
 
 // Types that the generated ISLE code uses via `use super::*`.
 use super::{writable_zero_reg, zero_reg, Inst as MInst};
@@ -132,7 +132,7 @@ where
         self.value_regs(tmp_low.to_reg(), tmp_hight.to_reg())
     }
 
-    fn i128_arithmetic(&mut self, op: &I128BinaryOP, x: ValueRegs, y: ValueRegs) -> ValueRegs {
+    fn i128_arithmetic(&mut self, op: &I128OP, x: ValueRegs, y: ValueRegs) -> ValueRegs {
         let mut dst = Vec::with_capacity(2);
         dst.push(self.temp_writable_reg(I64));
         dst.push(self.temp_writable_reg(I64));
@@ -169,7 +169,7 @@ where
         // tmp.to_reg()
         todo!()
     }
-    fn r_clz(&mut self, ty: Type, val: ValueRegs) -> Reg {
+    fn lower_clz(&mut self, ty: Type, val: ValueRegs) -> Reg {
         // if ty.bits() == 128 {
         // } else {
         //     let tmp = self.temp_writable_reg(I64);
@@ -443,9 +443,9 @@ where
                     ));
                     tmp_shift.to_reg()
                 };
-                insts.extend(BitsShift::new_r(tmp_shift).shift_out_right(tmp, value.to_reg()));
+                insts.extend(BitsShifter::new_r(tmp_shift).shift_out_right(tmp, value.to_reg()));
                 let tmp2 = self.temp_writable_reg(I64);
-                insts.extend(BitsShift::new_i(ty.bits() as u8).shift_right(tmp2, value.to_reg()));
+                insts.extend(BitsShifter::new_i(ty.bits() as u8).shift_right(tmp2, value.to_reg()));
                 insts.push(MInst::AluRRR {
                     alu_op: AluOPRRR::And,
                     rd,
@@ -561,6 +561,29 @@ where
         }
 
         rd.to_reg()
+    }
+
+    fn lower_cls(&mut self, val: ValueRegs, ty: Type) -> Reg {
+        let tmp = self.temp_writable_reg(I64);
+        if ty.bits() != 128 {
+            self.emit(&MInst::Cls {
+                rs: val.regs()[0],
+                rd: tmp,
+                ty,
+            });
+        } else {
+            let t0 = self.temp_writable_reg(I64);
+            let t1 = self.temp_writable_reg(I64);
+            self.emit(&MInst::I128Arithmetic {
+                op: I128OP::Cls,
+                t0,
+                t1,
+                dst: vec![tmp],
+                x: val,
+                y: ValueRegs::two(zero_reg(), zero_reg()), // not used
+            });
+        }
+        tmp.to_reg()
     }
 }
 

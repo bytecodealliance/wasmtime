@@ -468,22 +468,33 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     op, from_ty
                 )));
             }
-            assert!(from_bits <= to_bits);
+
+            assert!(
+                if op == Opcode::Bextend {
+                    from_bits <= to_bits
+                } else {
+                    true
+                },
+                "{}:{}->{}",
+                op,
+                from_bits,
+                to_bits
+            );
             let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let rn = put_input_in_reg(ctx, inputs[0]);
-            if from_bits == to_bits {
-                ctx.emit(Inst::gen_move(rd, rn, to_ty));
-            } else {
-                let to_bits = if to_bits > 32 { 64 } else { 32 };
-                let from_bits = from_bits as u8;
-                ctx.emit(Inst::Extend {
-                    rd,
-                    rn,
-                    signed: true,
-                    from_bits,
-                    to_bits,
-                });
-            }
+            // if from_bits >= to_bits {
+            ctx.emit(Inst::gen_move(rd, rn, to_ty));
+            // } else {
+            //     let to_bits = if to_bits > 32 { 64 } else { 32 };
+            //     let from_bits = from_bits as u8;
+            //     ctx.emit(Inst::Extend {
+            //         rd,
+            //         rn,
+            //         signed: true,
+            //         from_bits,
+            //         to_bits,
+            //     });
+            // }
         }
 
         Opcode::Bint => {

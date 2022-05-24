@@ -203,7 +203,7 @@
       (ty Type))
       
     (I128Arithmetic
-      (op I128BinaryOP)
+      (op I128OP)
       (t0 WritableReg)
       (t1 WritableReg)
       (dst VecWritableReg)
@@ -222,7 +222,12 @@
       (a ValueRegs) 
       (b ValueRegs)
       (ty Type))
+    (Cls
+      (rs Reg)
+      (rd WritableReg)
+      (ty Type))
 ))
+
 
 (type CsrOP(enum 
   (Csrrw)
@@ -234,7 +239,7 @@
 ))
 
 
-(type I128BinaryOP (enum 
+(type I128OP (enum 
   (Add)
   (Sub)
   (Mul)
@@ -247,6 +252,7 @@
   (Rotr)
   (Xnor)
   (Orn)
+  (Cls)
 ))
 
 
@@ -703,7 +709,7 @@
 (extern constructor bnot_128 bnot_128)
 
 
-(decl i128_arithmetic (I128BinaryOP ValueRegs ValueRegs) ValueRegs)
+(decl i128_arithmetic (I128OP ValueRegs ValueRegs) ValueRegs)
 (extern constructor i128_arithmetic i128_arithmetic)
 
 (decl lower_bit_reverse (Type Reg)Reg)
@@ -712,8 +718,8 @@
 (decl lower_ctz (Type ValueRegs)Reg)
 (extern constructor lower_ctz lower_ctz)
 
-(decl r_clz (Type ValueRegs)Reg)
-(extern constructor r_clz r_clz)
+(decl lower_clz (Type ValueRegs)Reg)
+(extern constructor lower_clz lower_clz)
 
 (decl lower_extend(Reg bool u8 u8 )ValueRegs)
 (extern constructor lower_extend lower_extend)
@@ -733,3 +739,6 @@
 (extern constructor lower_rotl lower_rotl)
 (decl lower_rotr(Type Reg Reg) Reg)
 (extern constructor lower_rotr lower_rotr)
+
+(decl lower_cls(ValueRegs Type) Reg)
+(extern constructor lower_cls lower_cls)

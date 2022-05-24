@@ -951,7 +951,7 @@ impl AluOPRRI {
             Self::Bseti => Some(6),
             Self::Rori => Some(6),
             Self::Roriw => Some(5),
-            Self::SlliUw => Some(6),
+            Self::SlliUw => Some(5),
             _ => None,
         }
     }
@@ -986,7 +986,7 @@ impl AluOPRRI {
             Self::Bseti => shamt.unwrap() | 0b001010 << 6,
             Self::Rori => shamt.unwrap() | 0b011000 << 6,
             Self::Roriw => shamt.unwrap() | 0b0110000 << 5,
-            Self::SlliUw => shamt.unwrap() | 0b000010 << 6,
+            Self::SlliUw => shamt.unwrap() | 0b000010 << 5,
             Self::Clz => 0b011000000000,
             Self::Clzw => 0b011000000000,
             Self::Cpop => 0b011000000010,
@@ -1590,21 +1590,22 @@ impl FFlags {
     }
 }
 
-impl I128BinaryOP {
+impl I128OP {
     pub(crate) fn op_name(self) -> &'static str {
         match self {
-            I128BinaryOP::Add => "add_i128",
-            I128BinaryOP::Sub => "sub_i128",
-            I128BinaryOP::Mul => "mul_i128",
-            I128BinaryOP::Div => "div_i128",
-            I128BinaryOP::Rem => "rem_i128",
-            I128BinaryOP::Ishl => "ishl_i128",
-            I128BinaryOP::Ushr => "ushr_i128",
-            I128BinaryOP::Sshr => "sshr_i128",
-            I128BinaryOP::Rotl => "rotl_i128",
-            I128BinaryOP::Rotr => "rotr_i128",
-            I128BinaryOP::Xnor => "xnor_i128",
-            I128BinaryOP::Orn  => "xnor_i128",
+            I128OP::Add => "add_i128",
+            I128OP::Sub => "sub_i128",
+            I128OP::Mul => "mul_i128",
+            I128OP::Div => "div_i128",
+            I128OP::Rem => "rem_i128",
+            I128OP::Ishl => "ishl_i128",
+            I128OP::Ushr => "ushr_i128",
+            I128OP::Sshr => "sshr_i128",
+            I128OP::Rotl => "rotl_i128",
+            I128OP::Rotr => "rotr_i128",
+            I128OP::Xnor => "xnor_i128",
+            I128OP::Orn => "orn_i128",
+            I128OP::Cls => "cls_i128",
         }
     }
 }

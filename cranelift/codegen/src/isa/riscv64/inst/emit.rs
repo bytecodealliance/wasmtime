@@ -68,12 +68,12 @@ impl MachInstEmitState<Inst> for EmitState {
     }
 }
 
-pub(crate) enum BitsShift {
+pub(crate) enum BitsShifter {
     Reg(Reg),
     Imm(u8),
 }
 
-impl BitsShift {
+impl BitsShifter {
     pub(crate) fn new_r(r: Reg) -> Self {
         Self::Reg(r)
     }
@@ -1018,10 +1018,53 @@ impl MachInstEmit for Inst {
                             });
                         }
                         32 => {
-                            // 32 bit int to 64 bit value
-                            todo!();
+                            let mut patch_signed_extend = vec![];
+                            patch_signed_extend.push(insts.len());
+                            insts.push(Inst::CondBr {
+                                taken: BranchTarget::zero(),
+                                not_taken: BranchTarget::zero(),
+                                kind: IntegerCompare {
+                                    kind: IntCC::SignedLessThan,
+                                    rs1: rn,
+                                    rs2: zero_reg(),
+                                },
+                            });
+                            insts.push(Inst::AluRRImm12 {
+                                alu_op: AluOPRRI::Slli,
+                                rd,
+                                rs: rn,
+                                imm12: Imm12::from_bits(32),
+                            });
+                            insts.push(Inst::AluRRImm12 {
+                                alu_op: AluOPRRI::Srli,
+                                rd,
+                                rs: rd.to_reg(),
+                                imm12: Imm12::from_bits(32),
+                            });
+                            let mut patch_zero_extend_jump_over = vec![];
+                            patch_zero_extend_jump_over.push(insts.len());
+                            // here are zero extend.
+                            insts.push(Inst::Jal {
+                                dest: BranchTarget::zero(),
+                            });
+
+                            Inst::patch_taken_list(&mut insts, &patch_signed_extend);
+                            insts.push(Inst::load_constant_imm12(rd, Imm12::from_bits(-1)));
+                            insts.push(Inst::AluRRImm12 {
+                                alu_op: AluOPRRI::Slli,
+                                rd,
+                                rs: rd.to_reg(),
+                                imm12: Imm12::from_bits(32),
+                            });
+                            insts.push(Inst::AluRRR {
+                                alu_op: AluOPRRR::Or,
+                                rd,
+                                rs1: rd.to_reg(),
+                                rs2: rn,
+                            });
+                            Inst::patch_taken_list(&mut insts, &patch_zero_extend_jump_over);
                         }
-                        _ => unreachable!(),
+                        _ => unreachable!("from_bits:{}", from_bits),
                     }
                 } else {
                     let shift_bits = (64 - from_bits) as i16;
@@ -1773,7 +1816,7 @@ impl MachInstEmit for Inst {
                 let dst: Vec<_> = dst.iter().map(|f| allocs.next_writable(*f)).collect();
                 let mut insts = SmallInstVec::new();
                 match op {
-                    I128BinaryOP::Add => {
+                    I128OP::Add => {
                         insts.extend(Inst::add_c_u(dst[0], t0, x.regs()[0], y.regs()[0]));
                         insts.push(Inst::AluRRR {
                             alu_op: AluOPRRR::Add,
@@ -1788,7 +1831,7 @@ impl MachInstEmit for Inst {
                             rs2: t0.to_reg(),
                         });
                     }
-                    I128BinaryOP::Sub => {
+                    I128OP::Sub => {
                         insts.extend(Inst::sub_b_u(dst[0], t0, x.regs()[0], y.regs()[0]));
                         insts.push(Inst::AluRRR {
                             alu_op: AluOPRRR::Sub,
@@ -1804,87 +1847,58 @@ impl MachInstEmit for Inst {
                         });
                     }
 
-                    I128BinaryOP::Mul => {
-                        /*
-                            notice register_len is 64.
-                            {x_low , x_high}
-                            {y_low , y_high}
-
-                            {r_low , r_high}
-
-                            x_low * y_low >> 64 mul -> dst[1]
-                            x_high * y_low mul  -> dst[1]
-                            x_high * y_high mul -> dst[1]
-
-                            x_low * y_low mul  -> dst[0]
-                        */
-                        // t0 for multiply
-                        // t1 for sum
-                        // x_low * y_low >> 64 -> t1
-                        // insts.push(Inst::AluRRR {
-                        //     alu_op: AluOPRRR::Mulhsu,
-                        //     rd: t1,
-                        //     rs1: x.regs()[0],
-                        //     rs2: y.regs()[0],
-                        // });
-                        // //
-                        // insts.push(Inst::AluRRR {
-                        //     alu_op: AluOPRRR::Mul,
-                        //     rd: t0,
-                        //     rs1: x.regs()[1],
-                        //     rs2: y.regs()[0],
-                        // });
-                        // insts.push(Inst::AluRRR {
-                        //     alu_op: AluOPRRR::Add,
-                        //     rd: t1,
-                        //     rs1: t1.to_reg(),
-                        //     rs2: t0.to_reg(),
-                        // });
-                        // insts.push(Inst::AluRRR {
-                        //     alu_op: AluOPRRR::Mul,
-                        //     rd: t0,
-                        //     rs1: x.regs()[0],
-                        //     rs2: y.regs()[1],
-                        // });
-                        // insts.push(Inst::AluRRR {
-                        //     alu_op: AluOPRRR::Add,
-                        //     rd: t1,
-                        //     rs1: t1.to_reg(),
-                        //     rs2: t0.to_reg(),
-                        // });
-                        // //
-                        // insts.push(Inst::AluRRR {
-                        //     alu_op: AluOPRRR::Mul,
-                        //     rd: t0,
-                        //     rs1: x.regs()[1],
-                        //     rs2: y.regs()[1],
-                        // });
-                        // insts.push(Inst::AluRRR {
-                        //     alu_op: AluOPRRR::Add,
-                        //     rd: dst[1],
-                        //     rs1: t1.to_reg(),
-                        //     rs2: t0.to_reg(),
-                        // });
-                        // //
-                        // insts.push(Inst::AluRRR {
-                        //     alu_op: AluOPRRR::Mul,
-                        //     rd: dst[0],
-                        //     rs1: x.regs()[0],
-                        //     rs2: y.regs()[0],
-                        // });
+                    I128OP::Mul => {
                         todo!()
                     }
-                    I128BinaryOP::Div => todo!(),
-                    I128BinaryOP::Rem => todo!(),
-                    I128BinaryOP::Ishl => todo!(),
-                    I128BinaryOP::Ushr => todo!(),
-                    I128BinaryOP::Sshr => todo!(),
-                    I128BinaryOP::Rotl => todo!(),
-                    I128BinaryOP::Rotr => todo!(),
-                    I128BinaryOP::Xnor => todo!(),
-                    I128BinaryOP::Orn => todo!(),
-                }
+                    I128OP::Div => todo!(),
+                    I128OP::Rem => todo!(),
+                    I128OP::Ishl => todo!(),
+                    I128OP::Ushr => todo!(),
+                    I128OP::Sshr => todo!(),
+                    I128OP::Rotl => todo!(),
+                    I128OP::Rotr => todo!(),
+                    I128OP::Xnor => todo!(),
+                    I128OP::Orn => todo!(),
+                    I128OP::Cls => {
+                        let mut insts = SmallInstVec::new();
+                        // count the high part
+                        insts.push(Inst::Cls {
+                            rd: t0,
+                            rs: x.regs()[1],
+                            ty: I64,
+                        });
+                        insts.push(Inst::load_constant_imm12(t1, Imm12::from_bits(63)));
+                        let label_jump_over = vec![insts.len()];
+                        insts.push(Inst::CondBr {
+                            taken: BranchTarget::zero(),
+                            not_taken: BranchTarget::zero(),
+                            kind: IntegerCompare {
+                                kind: IntCC::NotEqual,
+                                rs1: t0.to_reg(),
+                                rs2: t1.to_reg(),
+                            },
+                        });
+                        // count lower part
+                        insts.push(Inst::Cls {
+                            rd: t1,
+                            rs: x.regs()[0],
+                            ty: I64,
+                        });
+                        // add the together
 
+                        insts.push(Inst::AluRRR {
+                            alu_op: AluOPRRR::Add,
+                            rd: dst[0],
+                            rs1: t0.to_reg(),
+                            rs2: t1.to_reg(),
+                        });
+
+                        Inst::patch_taken_list(&mut insts, &label_jump_over);
+                        insts
+                            .into_iter()
+                            .for_each(|i| i.emit(&[], sink, emit_info, state));
+                    }
+                }
                 insts
                     .into_iter()
                     .for_each(|i| i.emit(&[], sink, emit_info, state));
@@ -1960,6 +1974,68 @@ impl MachInstEmit for Inst {
                     | csr.as_u32() << 20;
 
                 sink.put4(x);
+            }
+
+            &Inst::Cls { rs, rd, ty } => {
+                let rs = allocs.next(rs);
+                let rd = allocs.next_writable(rd);
+                let mut insts = SmallInstVec::new();
+                insts.extend(BitsShifter::new_i((64 - ty.bits()) as u8).shift_out_left(rd, rs));
+                //extract sign bit.
+                {
+                    let (op, imm12) = AluOPRRI::Bexti.funct12(Some((ty.bits() - 1) as u8));
+                    insts.push(Inst::AluRRImm12 {
+                        alu_op: op,
+                        rd,
+                        rs: rd.to_reg(),
+                        imm12,
+                    });
+                }
+                let patch_signed = vec![insts.len()];
+                insts.push(Inst::CondBr {
+                    taken: BranchTarget::zero(),
+                    not_taken: BranchTarget::zero(),
+                    kind: IntegerCompare {
+                        kind: IntCC::NotEqual,
+                        rs1: rd.to_reg(),
+                        rs2: zero_reg(),
+                    },
+                });
+
+                //here is need counting leading zeros.
+                let cls = |rd: Writable<Reg>, rs: Reg, insts: &mut SmallInstVec<Inst>| {
+                    {
+                        let (op, imm12) = AluOPRRI::Clz.funct12(None);
+                        insts.push(Inst::AluRRImm12 {
+                            alu_op: op,
+                            rd,
+                            rs,
+                            imm12,
+                        });
+                    }
+                    // make result.
+                    insts.push(Inst::AluRRImm12 {
+                        alu_op: AluOPRRI::Addi,
+                        rd,
+                        rs: rd.to_reg(),
+                        imm12: Imm12::from_bits(-(64 - (ty.bits() - 1) as i16)),
+                    });
+                };
+                cls(rd, rs, &mut insts);
+                let patch_jump_over = vec![insts.len()];
+                insts.push(Inst::Jal {
+                    dest: BranchTarget::zero(),
+                });
+                Inst::patch_taken_list(&mut insts, &patch_signed);
+                // sign bit is 1.
+                // reverse all bits.
+                insts.push(Inst::construct_bit_not(rd, rs));
+                cls(rd, rd.to_reg(), &mut insts);
+                Inst::patch_taken_list(&mut insts, &patch_jump_over);
+
+                insts
+                    .into_iter()
+                    .for_each(|i| i.emit(&[], sink, emit_info, state));
             }
             _ => todo!("{:?}", self),
         };
