@@ -1857,7 +1857,7 @@ impl MachInstEmit for Inst {
                     I128OP::Sshr => todo!(),
                     I128OP::Rotl => todo!(),
                     I128OP::Rotr => todo!(),
-                    I128OP::Xnor => todo!(),
+
                     I128OP::Orn => todo!(),
                     I128OP::Cls => {
                         let mut insts = SmallInstVec::new();

@@ -250,7 +250,6 @@
   (Sshr)
   (Rotl)
   (Rotr)
-  (Xnor)
   (Orn)
   (Cls)
 ))
@@ -742,3 +741,6 @@
 
 (decl lower_cls(ValueRegs Type) Reg)
 (extern constructor lower_cls lower_cls)
+
+(decl lower_i128_xnor(ValueRegs ValueRegs)ValueRegs)
+(extern constructor lower_i128_xnor lower_i128_xnor)

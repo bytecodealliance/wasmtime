@@ -340,6 +340,24 @@ where
         ValueRegs::two(low.to_reg(), high.to_reg())
     }
 
+    fn lower_i128_xnor(&mut self, x: ValueRegs, y: ValueRegs) -> ValueRegs {
+        let low = self.temp_writable_reg(I64);
+        let high = self.temp_writable_reg(I64);
+        self.emit(&MInst::AluRRR {
+            alu_op: AluOPRRR::Xnor,
+            rd: low,
+            rs1: x.regs()[0],
+            rs2: y.regs()[0],
+        });
+        self.emit(&MInst::AluRRR {
+            alu_op: AluOPRRR::Xnor,
+            rd: high,
+            rs1: x.regs()[1],
+            rs2: y.regs()[1],
+        });
+        ValueRegs::two(low.to_reg(), high.to_reg())
+    }
+
     fn bitmaip_imm12(&mut self, op: &AluOPRRI, shamt: u8) -> Imm12 {
         op.funct12(op.need_shamt().map(|mask| {
             assert!(mask >= shamt);
