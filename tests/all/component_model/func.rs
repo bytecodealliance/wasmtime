@@ -7,7 +7,7 @@ use wasmtime::{Store, Trap, TrapCode};
 const CANON_32BIT_NAN: u32 = 0b01111111110000000000000000000000;
 const CANON_64BIT_NAN: u64 = 0b0111111111111000000000000000000000000000000000000000000000000000;
 
-// A simple bump allocator which can be used with modules belowt
+// A simple bump allocator which can be used with modules below
 const REALLOC_AND_FREE: &str = r#"
     (global $last (mut i32) (i32.const 8))
     (func $realloc (export "canonical_abi_realloc")
@@ -54,8 +54,8 @@ const REALLOC_AND_FREE: &str = r#"
         ;; ensure anything necessary is set to valid data by spraying a bit
         ;; pattern that is invalid
         global.get $last
-        local.get $new_size
         i32.const 0xde
+        local.get $new_size
         memory.fill
 
         ;; bump our pointer
