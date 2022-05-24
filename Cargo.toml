@@ -98,7 +98,6 @@ default = [
   "wasi-nn",
   "pooling-allocator",
   "memory-init-cow",
-  "wasm-backtrace",
 ]
 jitdump = ["wasmtime/jitdump"]
 vtune = ["wasmtime/vtune"]
@@ -108,7 +107,6 @@ memory-init-cow = ["wasmtime/memory-init-cow", "wasmtime-cli-flags/memory-init-c
 pooling-allocator = ["wasmtime/pooling-allocator", "wasmtime-cli-flags/pooling-allocator"]
 all-arch = ["wasmtime/all-arch"]
 posix-signals-on-macos = ["wasmtime/posix-signals-on-macos"]
-wasm-backtrace = ["wasmtime/wasm-backtrace", "wasmtime-cli-flags/wasm-backtrace"]
 component-model = ["wasmtime/component-model", "wasmtime-wast/component-model", "wasmtime-cli-flags/component-model"]
 
 # Stub feature that does nothing, for Cargo-features compatibility: the new
