@@ -71,6 +71,32 @@ fn test_trap_trace() -> Result<()> {
 }
 
 #[test]
+fn test_trap_backtrace_disabled() -> Result<()> {
+    let mut config = Config::default();
+    config.wasm_backtrace(false);
+    let engine = Engine::new(&config).unwrap();
+    let mut store = Store::<()>::new(&engine, ());
+    let wat = r#"
+        (module $hello_mod
+            (func (export "run") (call $hello))
+            (func $hello (unreachable))
+        )
+    "#;
+
+    let module = Module::new(store.engine(), wat)?;
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let run_func = instance.get_typed_func::<(), (), _>(&mut store, "run")?;
+
+    let e = run_func
+        .call(&mut store, ())
+        .err()
+        .expect("error calling function");
+
+    assert!(e.trace().is_none(), "backtraces should be disabled");
+    Ok(())
+}
+
+#[test]
 #[cfg_attr(all(target_os = "macos", target_arch = "aarch64"), ignore)] // TODO #2808 system libunwind is broken on aarch64
 fn test_trap_trace_cb() -> Result<()> {
     let mut store = Store::<()>::default();
