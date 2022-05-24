@@ -239,7 +239,9 @@ where
         // This comment about 64-bit integers is also referred to below with
         // "WRITEPTR64".
         let params_and_results = &mut MaybeUninit::new(ParamsAndResults {
-            params: ValRaw { i64: ptr as i64 },
+            params: ValRaw {
+                i64: (ptr as i64).to_le(),
+            },
         });
 
         self.call_raw(store, params_and_results)
