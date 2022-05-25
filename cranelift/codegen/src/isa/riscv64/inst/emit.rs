@@ -446,45 +446,22 @@ impl Inst {
 
         insts
     }
-    /*
-        notice always patch the taken path.
-        this will make jump that jump over all insts.
-    */
-    pub(crate) fn patch_taken_list(insts: &mut SmallInstVec<Inst>, patches: &'_ Vec<usize>) {
-        for index in patches {
-            let index = *index;
-            assert!(insts.len() > index);
-            let real_off = (insts.len() - index) as i32 * Inst::instruction_size();
-            assert!(real_off > 4);
-            match &mut insts[index] {
-                &mut Inst::CondBr { ref mut taken, .. } => match taken {
-                    &mut BranchTarget::ResolvedOffset(_) => {
-                        *taken = BranchTarget::ResolvedOffset(real_off)
-                    }
-                    _ => unreachable!(),
-                },
-                &mut Inst::Jal { ref mut dest, .. } => match dest {
-                    &mut BranchTarget::ResolvedOffset(_) => {
-                        *dest = BranchTarget::ResolvedOffset(real_off)
-                    }
-                    _ => unreachable!(),
-                },
-                _ => unreachable!(),
-            }
-        }
-    }
+
     /*
         rd == 1 is unordered
         rd == 0 is ordered
     */
     pub(crate) fn generate_float_unordered(
+        sink: &mut MachBuffer<Inst>,
+        emit_info: &EmitInfo,
+        state: &mut EmitState,
         rd: Writable<Reg>,
         ty: Type,
         left: Reg,
         right: Reg,
-    ) -> SmallInstVec<Inst> {
-        let mut insts = SmallVec::new();
-        let mut patch_true = vec![];
+    ) {
+        let mut insts = SmallInstVec::new();
+        let label_true = sink.get_label();
         let class_op = if ty == F32 {
             AluOPRR::FclassS
         } else {
@@ -502,9 +479,8 @@ impl Inst {
             rs: rd.to_reg(),
             imm12: Imm12::from_bits(FClassResult::is_nan_bits() as i16),
         });
-        patch_true.push(insts.len());
         insts.push(Inst::CondBr {
-            taken: BranchTarget::zero(),
+            taken: BranchTarget::Label(label_true),
             not_taken: BranchTarget::zero(),
             kind: IntegerCompare {
                 kind: IntCC::NotEqual,
@@ -525,9 +501,9 @@ impl Inst {
             rs: tmp.to_reg(),
             imm12: Imm12::from_bits(FClassResult::is_nan_bits() as i16),
         });
-        patch_true.push(insts.len());
+
         insts.push(Inst::CondBr {
-            taken: BranchTarget::zero(),
+            taken: BranchTarget::Label(label_true),
             not_taken: BranchTarget::zero(),
             kind: IntegerCompare {
                 kind: IntCC::NotEqual,
@@ -549,9 +525,9 @@ impl Inst {
             rs: rd.to_reg(),
             imm12: Imm12::from_bits(FClassResult::is_infinite_bits() as i16),
         });
-        patch_true.push(insts.len());
+
         insts.push(Inst::CondBr {
-            taken: BranchTarget::zero(),
+            taken: BranchTarget::Label(label_true),
             not_taken: BranchTarget::zero(),
             kind: IntegerCompare {
                 kind: IntCC::NotEqual,
@@ -559,16 +535,22 @@ impl Inst {
                 rs2: zero_reg(),
             },
         });
+
         // here is false
         insts.push(Inst::load_constant_imm12(rd, Imm12::form_bool(false)));
         // jump set true
         insts.push(Inst::Jal {
             dest: BranchTarget::offset(Inst::instruction_size() * 2),
         });
-        Inst::patch_taken_list(&mut insts, &patch_true);
+        insts.drain(..).for_each(|i: Inst| {
+            i.emit(&[], sink, emit_info, state);
+        });
+        sink.bind_label(label_true);
         // here is true
         insts.push(Inst::load_constant_imm12(rd, Imm12::form_bool(true)));
-        insts
+        insts.drain(..).for_each(|i: Inst| {
+            i.emit(&[], sink, emit_info, state);
+        });
     }
 
     /*
@@ -1018,10 +1000,9 @@ impl MachInstEmit for Inst {
                             });
                         }
                         32 => {
-                            let mut patch_signed_extend = vec![];
-                            patch_signed_extend.push(insts.len());
+                            let mut label_signed = sink.get_label();
                             insts.push(Inst::CondBr {
-                                taken: BranchTarget::zero(),
+                                taken: BranchTarget::Label(label_signed),
                                 not_taken: BranchTarget::zero(),
                                 kind: IntegerCompare {
                                     kind: IntCC::SignedLessThan,
@@ -1041,14 +1022,17 @@ impl MachInstEmit for Inst {
                                 rs: rd.to_reg(),
                                 imm12: Imm12::from_bits(32),
                             });
-                            let mut patch_zero_extend_jump_over = vec![];
-                            patch_zero_extend_jump_over.push(insts.len());
+                            let mut label_jump_over = sink.get_label();
                             // here are zero extend.
                             insts.push(Inst::Jal {
-                                dest: BranchTarget::zero(),
+                                dest: BranchTarget::Label(label_jump_over),
                             });
 
-                            Inst::patch_taken_list(&mut insts, &patch_signed_extend);
+                            insts
+                                .drain(..)
+                                .for_each(|i| i.emit(&[], sink, emit_info, state));
+
+                            sink.bind_label(label_signed);
                             insts.push(Inst::load_constant_imm12(rd, Imm12::from_bits(-1)));
                             insts.push(Inst::AluRRImm12 {
                                 alu_op: AluOPRRI::Slli,
@@ -1062,7 +1046,10 @@ impl MachInstEmit for Inst {
                                 rs1: rd.to_reg(),
                                 rs2: rn,
                             });
-                            Inst::patch_taken_list(&mut insts, &patch_zero_extend_jump_over);
+                            insts
+                                .drain(..)
+                                .for_each(|i| i.emit(&[], sink, emit_info, state));
+                            sink.bind_label(label_jump_over);
                         }
                         _ => unreachable!("from_bits:{}", from_bits),
                     }
@@ -1564,7 +1551,7 @@ impl MachInstEmit for Inst {
                 }
                 // if unorder
                 if cc_bit.test(FloatCCBit::UN) {
-                    insts.extend(Inst::generate_float_unordered(rd, ty, rs1, rs2));
+                    Inst::generate_float_unordered(sink, emit_info, state, rd, ty, rs1, rs2);
                     insts.push(Inst::Jal {
                         dest: BranchTarget::Label(label_jump_over),
                     });
@@ -1611,10 +1598,9 @@ impl MachInstEmit for Inst {
                     .collect();
 
                 let mut insts = SmallInstVec::new();
-                let mut patch_false = vec![];
-                patch_false.push(insts.len());
+                let mut label_false = sink.get_label();
                 insts.push(Inst::CondBr {
-                    taken: BranchTarget::zero(),
+                    taken: BranchTarget::Label(label_false),
                     not_taken: BranchTarget::zero(),
                     kind: IntegerCompare {
                         kind: IntCC::Equal,
@@ -1624,8 +1610,9 @@ impl MachInstEmit for Inst {
                 });
                 // here is the true
                 // select the first value
-                let select_result =
-                    |src: ValueRegs<Reg>, insts: &mut SmallInstVec<Inst>| match ty.bits() {
+                let select_result = |src: ValueRegs<Reg>| {
+                    let mut insts = SmallInstVec::new();
+                    match ty.bits() {
                         128 => {
                             insts.push(Inst::Mov {
                                 rd: dst[0],
@@ -1646,20 +1633,24 @@ impl MachInstEmit for Inst {
                             });
                         }
                     };
-                select_result(x, &mut insts);
-                let patch_true = vec![insts.len()];
+                    insts
+                };
+                insts.extend(select_result(x));
+                let label_jump_over = sink.get_label();
                 insts.push(Inst::Jal {
-                    dest: BranchTarget::zero(),
+                    dest: BranchTarget::Label(label_jump_over),
                 });
                 // here is false
-                Inst::patch_taken_list(&mut insts, &patch_false);
+                insts
+                    .drain(..)
+                    .for_each(|i: Inst| i.emit(&[], sink, emit_info, state));
+                sink.bind_label(label_false);
                 // select second value1
-                select_result(y, &mut insts);
-                Inst::patch_taken_list(&mut insts, &patch_true);
-
+                insts.extend(select_result(y));
                 insts
                     .into_iter()
                     .for_each(|i| i.emit(&[], sink, emit_info, state));
+                sink.bind_label(label_jump_over);
             }
             &Inst::Jalr { rd, base, offset } => {
                 let rd = allocs.next_writable(rd);
@@ -2070,65 +2061,65 @@ impl MachInstEmit for Inst {
             }
 
             &Inst::Cls { rs, rd, ty } => {
-                let rs = allocs.next(rs);
-                let rd = allocs.next_writable(rd);
-                let mut insts = SmallInstVec::new();
-                insts.extend(BitsShifter::new_i((64 - ty.bits()) as u8).shift_out_left(rd, rs));
-                //extract sign bit.
-                {
-                    let (op, imm12) = AluOPRRI::Bexti.funct12(Some((ty.bits() - 1) as u8));
-                    insts.push(Inst::AluRRImm12 {
-                        alu_op: op,
-                        rd,
-                        rs: rd.to_reg(),
-                        imm12,
-                    });
-                }
-                let patch_signed = vec![insts.len()];
-                insts.push(Inst::CondBr {
-                    taken: BranchTarget::zero(),
-                    not_taken: BranchTarget::zero(),
-                    kind: IntegerCompare {
-                        kind: IntCC::NotEqual,
-                        rs1: rd.to_reg(),
-                        rs2: zero_reg(),
-                    },
-                });
+                // let rs = allocs.next(rs);
+                // let rd = allocs.next_writable(rd);
+                // let mut insts = SmallInstVec::new();
+                // insts.extend(BitsShifter::new_i((64 - ty.bits()) as u8).shift_out_left(rd, rs));
+                // //extract sign bit.
+                // {
+                //     let (op, imm12) = AluOPRRI::Bexti.funct12(Some((ty.bits() - 1) as u8));
+                //     insts.push(Inst::AluRRImm12 {
+                //         alu_op: op,
+                //         rd,
+                //         rs: rd.to_reg(),
+                //         imm12,
+                //     });
+                // }
+                // let patch_signed = vec![insts.len()];
+                // insts.push(Inst::CondBr {
+                //     taken: BranchTarget::zero(),
+                //     not_taken: BranchTarget::zero(),
+                //     kind: IntegerCompare {
+                //         kind: IntCC::NotEqual,
+                //         rs1: rd.to_reg(),
+                //         rs2: zero_reg(),
+                //     },
+                // });
 
-                //here is need counting leading zeros.
-                let cls = |rd: Writable<Reg>, rs: Reg, insts: &mut SmallInstVec<Inst>| {
-                    {
-                        let (op, imm12) = AluOPRRI::Clz.funct12(None);
-                        insts.push(Inst::AluRRImm12 {
-                            alu_op: op,
-                            rd,
-                            rs,
-                            imm12,
-                        });
-                    }
-                    // make result.
-                    insts.push(Inst::AluRRImm12 {
-                        alu_op: AluOPRRI::Addi,
-                        rd,
-                        rs: rd.to_reg(),
-                        imm12: Imm12::from_bits(-(64 - (ty.bits() - 1) as i16)),
-                    });
-                };
-                cls(rd, rs, &mut insts);
-                let patch_jump_over = vec![insts.len()];
-                insts.push(Inst::Jal {
-                    dest: BranchTarget::zero(),
-                });
-                Inst::patch_taken_list(&mut insts, &patch_signed);
-                // sign bit is 1.
-                // reverse all bits.
-                insts.push(Inst::construct_bit_not(rd, rs));
-                cls(rd, rd.to_reg(), &mut insts);
-                Inst::patch_taken_list(&mut insts, &patch_jump_over);
+                // //here is need counting leading zeros.
+                // let cls = |rd: Writable<Reg>, rs: Reg, insts: &mut SmallInstVec<Inst>| {
+                //     {
+                //         let (op, imm12) = AluOPRRI::Clz.funct12(None);
+                //         insts.push(Inst::AluRRImm12 {
+                //             alu_op: op,
+                //             rd,
+                //             rs,
+                //             imm12,
+                //         });
+                //     }
+                //     // make result.
+                //     insts.push(Inst::AluRRImm12 {
+                //         alu_op: AluOPRRI::Addi,
+                //         rd,
+                //         rs: rd.to_reg(),
+                //         imm12: Imm12::from_bits(-(64 - (ty.bits() - 1) as i16)),
+                //     });
+                // };
+                // cls(rd, rs, &mut insts);
+                // let patch_jump_over = vec![insts.len()];
+                // insts.push(Inst::Jal {
+                //     dest: BranchTarget::zero(),
+                // });
+                // Inst::patch_taken_list(&mut insts, &patch_signed);
+                // // sign bit is 1.
+                // // reverse all bits.
+                // insts.push(Inst::construct_bit_not(rd, rs));
+                // cls(rd, rd.to_reg(), &mut insts);
+                // Inst::patch_taken_list(&mut insts, &patch_jump_over);
 
-                insts
-                    .into_iter()
-                    .for_each(|i| i.emit(&[], sink, emit_info, state));
+                // insts
+                //     .into_iter()
+                //     .for_each(|i| i.emit(&[], sink, emit_info, state));
             }
 
             &Inst::SelectReg {
