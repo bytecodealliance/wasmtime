@@ -244,7 +244,9 @@
          (rn Reg)
          (ty Type))
 
-       ;; An atomic compare-and-swap operation. This instruction is sequentially consistent.
+       ;; An atomic compare-and-swap operation. These instructions require the
+       ;; Large System Extension (LSE) ISA support (FEAT_LSE). The instructions have
+       ;; acquire-release semantics.
        (AtomicCAS
          (rs WritableReg)
          (rt Reg)
@@ -2129,6 +2131,16 @@
         )
         dst))
 
+;; Helper for emitting `MInst.AtomicCAS` instructions.
+(decl lse_atomic_cas (Reg Reg Reg Type) Reg)
+(rule (lse_atomic_cas addr expect replace ty)
+      (let (
+            (dst WritableReg (temp_writable_reg ty))
+            (_1 Unit (emit (MInst.Mov (operand_size ty) dst expect)))
+            (_2 Unit (emit (MInst.AtomicCAS dst replace addr ty)))
+          )
+          dst))
+
 ;; Helper for emitting `MInst.AtomicRMWLoop` instructions.
 ;; - Make sure that both args are in virtual regs, since in effect
 ;; we have to do a parallel copy to get them safely to the AtomicRMW input
@@ -2144,4 +2156,28 @@
           (r_arg2 Reg (mov64_to_real 26 v_arg2))
           (_ Unit (emit (MInst.AtomicRMWLoop ty op)))
         )
+        (mov64_from_real 27)))
+
+;; Helper for emitting `MInst.AtomicCASLoop` instructions.
+;; This is very similar to, but not identical to, the AtomicRmw case.  Note
+;; that the AtomicCASLoop sequence does its own masking, so we don't need to worry
+;; about zero-extending narrow (I8/I16/I32) values here.
+;; Make sure that all three args are in virtual regs.  See corresponding comment
+;; for `atomic_rmw_loop` above.
+(decl atomic_cas_loop (Reg Reg Reg Type) Reg)
+(rule (atomic_cas_loop addr expect replace ty)
+      (let (
+          (v_addr Reg (ensure_in_vreg addr $I64))
+          (v_exp Reg (ensure_in_vreg expect $I64))
+          (v_rep Reg (ensure_in_vreg replace $I64))
+          ;; Move the args to the preordained AtomicCASLoop input regs
+          (r_addr Reg (mov64_to_real 25 v_addr))
+          (r_exp Reg (mov64_to_real 26 v_exp))
+          (r_rep Reg (mov64_to_real 28 v_rep))
+          ;; Now the AtomicCASLoop itself, implemented in the normal way, with a
+          ;; load-exclusive, store-exclusive loop
+          (_ Unit (emit (MInst.AtomicCASLoop ty)))
+        )
+        ;; And finally, copy the preordained AtomicCASLoop output reg to its destination.
+        ;; Also, x24 and x28 are trashed.
         (mov64_from_real 27)))
