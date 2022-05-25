@@ -25,5 +25,4 @@ default = [
 ]
 pooling-allocator = []
 memory-init-cow = []
-wasm-backtrace = []
 component-model = []

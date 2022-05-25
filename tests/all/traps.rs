@@ -49,7 +49,7 @@ fn test_trap_trace() -> Result<()> {
         .err()
         .expect("error calling function");
 
-    let trace = e.trace();
+    let trace = e.trace().expect("backtrace is available");
     assert_eq!(trace.len(), 2);
     assert_eq!(trace[0].module_name().unwrap(), "hello_mod");
     assert_eq!(trace[0].func_index(), 1);
@@ -67,6 +67,32 @@ fn test_trap_trace() -> Result<()> {
         e.to_string()
     );
 
+    Ok(())
+}
+
+#[test]
+fn test_trap_backtrace_disabled() -> Result<()> {
+    let mut config = Config::default();
+    config.wasm_backtrace(false);
+    let engine = Engine::new(&config).unwrap();
+    let mut store = Store::<()>::new(&engine, ());
+    let wat = r#"
+        (module $hello_mod
+            (func (export "run") (call $hello))
+            (func $hello (unreachable))
+        )
+    "#;
+
+    let module = Module::new(store.engine(), wat)?;
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let run_func = instance.get_typed_func::<(), (), _>(&mut store, "run")?;
+
+    let e = run_func
+        .call(&mut store, ())
+        .err()
+        .expect("error calling function");
+
+    assert!(e.trace().is_none(), "backtraces should be disabled");
     Ok(())
 }
 
@@ -94,7 +120,7 @@ fn test_trap_trace_cb() -> Result<()> {
         .err()
         .expect("error calling function");
 
-    let trace = e.trace();
+    let trace = e.trace().expect("backtrace is available");
     assert_eq!(trace.len(), 2);
     assert_eq!(trace[0].module_name().unwrap(), "hello_mod");
     assert_eq!(trace[0].func_index(), 2);
@@ -124,7 +150,7 @@ fn test_trap_stack_overflow() -> Result<()> {
         .err()
         .expect("error calling function");
 
-    let trace = e.trace();
+    let trace = e.trace().expect("backtrace is available");
     assert!(trace.len() >= 32);
     for i in 0..trace.len() {
         assert_eq!(trace[i].module_name().unwrap(), "rec_mod");
@@ -429,8 +455,9 @@ fn present_after_module_drop() -> Result<()> {
 
     fn assert_trap(t: Trap) {
         println!("{}", t);
-        assert_eq!(t.trace().len(), 1);
-        assert_eq!(t.trace()[0].func_index(), 0);
+        let trace = t.trace().expect("backtrace is available");
+        assert_eq!(trace.len(), 1);
+        assert_eq!(trace[0].func_index(), 0);
     }
 }
 
@@ -525,7 +552,7 @@ fn parse_dwarf_info() -> Result<()> {
         .downcast::<Trap>()?;
 
     let mut found = false;
-    for frame in trap.trace() {
+    for frame in trap.trace().expect("backtrace is available") {
         for symbol in frame.symbols() {
             if let Some(file) = symbol.file() {
                 if file.ends_with("input.rs") {
@@ -661,7 +688,7 @@ fn traps_without_address_map() -> Result<()> {
         .err()
         .expect("error calling function");
 
-    let trace = e.trace();
+    let trace = e.trace().expect("backtrace is available");
     assert_eq!(trace.len(), 2);
     assert_eq!(trace[0].func_name(), Some("hello"));
     assert_eq!(trace[0].func_index(), 1);

@@ -1,5 +1,6 @@
 use crate::module::GlobalModuleRegistry;
 use crate::FrameInfo;
+use once_cell::sync::OnceCell;
 use std::fmt;
 use std::sync::Arc;
 use wasmtime_environ::TrapCode as EnvTrapCode;
@@ -127,95 +128,18 @@ impl fmt::Display for TrapCode {
     }
 }
 
-struct TrapInner {
-    reason: TrapReason,
-    #[cfg(feature = "wasm-backtrace")]
+#[derive(Debug)]
+pub(crate) struct TrapBacktrace {
     wasm_trace: Vec<FrameInfo>,
     native_trace: Backtrace,
-    #[cfg(feature = "wasm-backtrace")]
     hint_wasm_backtrace_details_env: bool,
 }
 
-fn _assert_trap_is_sync_and_send(t: &Trap) -> (&dyn Sync, &dyn Send) {
-    (t, t)
-}
-
-impl Trap {
-    /// Creates a new `Trap` with `message`.
-    /// # Example
-    /// ```
-    /// let trap = wasmtime::Trap::new("unexpected error");
-    /// assert!(trap.to_string().contains("unexpected error"));
-    /// ```
-    #[cold] // traps are exceptional, this helps move handling off the main path
-    pub fn new<I: Into<String>>(message: I) -> Self {
-        let reason = TrapReason::Message(message.into());
-        Trap::new_with_trace(None, reason, Backtrace::new())
-    }
-
-    /// Creates a new `Trap` representing an explicit program exit with a classic `i32`
-    /// exit status value.
-    #[cold] // see Trap::new
-    pub fn i32_exit(status: i32) -> Self {
-        Trap::new_with_trace(None, TrapReason::I32Exit(status), Backtrace::new())
-    }
-
-    #[cold] // see Trap::new
-    pub(crate) fn from_runtime_box(runtime_trap: Box<wasmtime_runtime::Trap>) -> Self {
-        Self::from_runtime(*runtime_trap)
-    }
-
-    #[cold] // see Trap::new
-    pub(crate) fn from_runtime(runtime_trap: wasmtime_runtime::Trap) -> Self {
-        match runtime_trap {
-            wasmtime_runtime::Trap::User(error) => Trap::from(error),
-            wasmtime_runtime::Trap::Jit { pc, backtrace } => {
-                let code = GlobalModuleRegistry::with(|modules| {
-                    modules
-                        .lookup_trap_code(pc)
-                        .unwrap_or(EnvTrapCode::StackOverflow)
-                });
-                Trap::new_wasm(Some(pc), code, backtrace)
-            }
-            wasmtime_runtime::Trap::Wasm {
-                trap_code,
-                backtrace,
-            } => Trap::new_wasm(None, trap_code, backtrace),
-            wasmtime_runtime::Trap::OOM { backtrace } => {
-                let reason = TrapReason::Message("out of memory".to_string());
-                Trap::new_with_trace(None, reason, backtrace)
-            }
-        }
-    }
-
-    #[cold] // see Trap::new
-    pub(crate) fn new_wasm(
-        trap_pc: Option<usize>,
-        code: EnvTrapCode,
-        backtrace: Backtrace,
-    ) -> Self {
-        let code = TrapCode::from_non_user(code);
-        Trap::new_with_trace(trap_pc, TrapReason::InstructionTrap(code), backtrace)
-    }
-
-    /// Creates a new `Trap`.
-    ///
-    /// * `trap_pc` - this is the precise program counter, if available, that
-    ///   wasm trapped at. This is used when learning about the wasm stack trace
-    ///   to ensure we assign the correct source to every frame.
-    ///
-    /// * `reason` - this is the wasmtime-internal reason for why this trap is
-    ///   being created.
-    ///
-    /// * `native_trace` - this is a captured backtrace from when the trap
-    ///   occurred, and this will iterate over the frames to find frames that
-    ///   lie in wasm jit code.
-    #[cfg_attr(not(feature = "wasm-backtrace"), allow(unused_mut, unused_variables))]
-    fn new_with_trace(trap_pc: Option<usize>, reason: TrapReason, native_trace: Backtrace) -> Self {
+impl TrapBacktrace {
+    pub fn new(native_trace: Backtrace, trap_pc: Option<usize>) -> Self {
         let mut wasm_trace = Vec::<FrameInfo>::new();
         let mut hint_wasm_backtrace_details_env = false;
 
-        #[cfg(feature = "wasm-backtrace")]
         GlobalModuleRegistry::with(|registry| {
             for frame in native_trace.frames() {
                 let pc = frame.ip() as usize;
@@ -250,15 +174,103 @@ impl Trap {
                 }
             }
         });
+        Self {
+            wasm_trace,
+            native_trace,
+            hint_wasm_backtrace_details_env,
+        }
+    }
+}
+
+struct TrapInner {
+    reason: TrapReason,
+    backtrace: OnceCell<TrapBacktrace>,
+}
+
+fn _assert_trap_is_sync_and_send(t: &Trap) -> (&dyn Sync, &dyn Send) {
+    (t, t)
+}
+
+impl Trap {
+    /// Creates a new `Trap` with `message`.
+    /// # Example
+    /// ```
+    /// let trap = wasmtime::Trap::new("unexpected error");
+    /// assert!(trap.to_string().contains("unexpected error"));
+    /// ```
+    #[cold] // traps are exceptional, this helps move handling off the main path
+    pub fn new<I: Into<String>>(message: I) -> Self {
+        let reason = TrapReason::Message(message.into());
+        Trap::new_with_trace(reason, None)
+    }
+
+    /// Creates a new `Trap` representing an explicit program exit with a classic `i32`
+    /// exit status value.
+    #[cold] // see Trap::new
+    pub fn i32_exit(status: i32) -> Self {
+        Trap::new_with_trace(TrapReason::I32Exit(status), None)
+    }
+
+    #[cold] // see Trap::new
+    pub(crate) fn from_runtime_box(runtime_trap: Box<wasmtime_runtime::Trap>) -> Self {
+        Self::from_runtime(*runtime_trap)
+    }
+
+    #[cold] // see Trap::new
+    pub(crate) fn from_runtime(runtime_trap: wasmtime_runtime::Trap) -> Self {
+        match runtime_trap {
+            wasmtime_runtime::Trap::User { error, backtrace } => {
+                let trap = Trap::from(error);
+                if let Some(backtrace) = backtrace {
+                    trap.record_backtrace(TrapBacktrace::new(backtrace, None));
+                }
+                trap
+            }
+            wasmtime_runtime::Trap::Jit { pc, backtrace } => {
+                let code = GlobalModuleRegistry::with(|modules| {
+                    modules
+                        .lookup_trap_code(pc)
+                        .unwrap_or(EnvTrapCode::StackOverflow)
+                });
+                let backtrace = backtrace.map(|bt| TrapBacktrace::new(bt, Some(pc)));
+                Trap::new_wasm(code, backtrace)
+            }
+            wasmtime_runtime::Trap::Wasm {
+                trap_code,
+                backtrace,
+            } => {
+                let backtrace = backtrace.map(|bt| TrapBacktrace::new(bt, None));
+                Trap::new_wasm(trap_code, backtrace)
+            }
+            wasmtime_runtime::Trap::OOM { backtrace } => {
+                let reason = TrapReason::Message("out of memory".to_string());
+                let backtrace = backtrace.map(|bt| TrapBacktrace::new(bt, None));
+                Trap::new_with_trace(reason, backtrace)
+            }
+        }
+    }
+
+    #[cold] // see Trap::new
+    pub(crate) fn new_wasm(code: EnvTrapCode, backtrace: Option<TrapBacktrace>) -> Self {
+        let code = TrapCode::from_non_user(code);
+        Trap::new_with_trace(TrapReason::InstructionTrap(code), backtrace)
+    }
+
+    /// Creates a new `Trap`.
+    /// * `reason` - this is the wasmtime-internal reason for why this trap is
+    ///   being created.
+    ///
+    /// * `backtrace` - this is a captured backtrace from when the trap
+    ///   occurred. Contains the native backtrace, and the backtrace of
+    ///   WebAssembly frames.
+    fn new_with_trace(reason: TrapReason, backtrace: Option<TrapBacktrace>) -> Self {
+        let backtrace = if let Some(bt) = backtrace {
+            OnceCell::with_value(bt)
+        } else {
+            OnceCell::new()
+        };
         Trap {
-            inner: Arc::new(TrapInner {
-                reason,
-                native_trace,
-                #[cfg(feature = "wasm-backtrace")]
-                wasm_trace,
-                #[cfg(feature = "wasm-backtrace")]
-                hint_wasm_backtrace_details_env,
-            }),
+            inner: Arc::new(TrapInner { reason, backtrace }),
         }
     }
 
@@ -283,10 +295,12 @@ impl Trap {
 
     /// Returns a list of function frames in WebAssembly code that led to this
     /// trap happening.
-    #[cfg(feature = "wasm-backtrace")]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "wasm-backtrace")))]
-    pub fn trace(&self) -> &[FrameInfo] {
-        &self.inner.wasm_trace
+    pub fn trace(&self) -> Option<&[FrameInfo]> {
+        self.inner
+            .backtrace
+            .get()
+            .as_ref()
+            .map(|bt| bt.wasm_trace.as_slice())
     }
 
     /// Code of a trap that happened while executing a WASM instruction.
@@ -297,16 +311,26 @@ impl Trap {
             _ => None,
         }
     }
+
+    fn record_backtrace(&self, backtrace: TrapBacktrace) {
+        // When a trap is created on top of the wasm stack, the trampoline will
+        // re-raise it via
+        // `wasmtime_runtime::raise_user_trap(trap.into::<Box<dyn Error>>())`
+        // after panic::catch_unwind. We don't want to overwrite the first
+        // backtrace recorded, as it is most precise.
+        // FIXME: make sure backtraces are only created once per trap! they are
+        // actually kinda expensive to create.
+        let _ = self.inner.backtrace.try_insert(backtrace);
+    }
 }
 
 impl fmt::Debug for Trap {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut f = f.debug_struct("Trap");
         f.field("reason", &self.inner.reason);
-        #[cfg(feature = "wasm-backtrace")]
-        {
-            f.field("wasm_trace", &self.inner.wasm_trace)
-                .field("native_trace", &self.inner.native_trace);
+        if let Some(backtrace) = self.inner.backtrace.get() {
+            f.field("wasm_trace", &backtrace.wasm_trace)
+                .field("native_trace", &backtrace.native_trace);
         }
         f.finish()
     }
@@ -316,15 +340,13 @@ impl fmt::Display for Trap {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.inner.reason)?;
 
-        #[cfg(feature = "wasm-backtrace")]
-        {
-            let trace = self.trace();
+        if let Some(trace) = self.trace() {
             if trace.is_empty() {
                 return Ok(());
             }
             writeln!(f, "\nwasm backtrace:")?;
 
-            for (i, frame) in self.trace().iter().enumerate() {
+            for (i, frame) in trace.iter().enumerate() {
                 let name = frame.module_name().unwrap_or("<unknown>");
                 write!(f, "  {:>3}: ", i)?;
 
@@ -369,7 +391,13 @@ impl fmt::Display for Trap {
                     }
                 }
             }
-            if self.inner.hint_wasm_backtrace_details_env {
+            if self
+                .inner
+                .backtrace
+                .get()
+                .map(|t| t.hint_wasm_backtrace_details_env)
+                .unwrap_or(false)
+            {
                 writeln!(f, "note: using the `WASMTIME_BACKTRACE_DETAILS=1` environment variable to may show more debugging information")?;
             }
         }
@@ -404,7 +432,7 @@ impl From<Box<dyn std::error::Error + Send + Sync>> for Trap {
             trap.clone()
         } else {
             let reason = TrapReason::Error(e.into());
-            Trap::new_with_trace(None, reason, Backtrace::new())
+            Trap::new_with_trace(reason, None)
         }
     }
 }

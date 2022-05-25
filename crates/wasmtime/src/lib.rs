@@ -290,14 +290,6 @@
 //!   run-time via [`Config::memory_init_cow`] (which is also enabled by
 //!   default).
 //!
-//! * `wasm-backtrace` - Enabled by default, this feature builds in support to
-//!   generate backtraces at runtime for WebAssembly modules. This means that
-//!   unwinding information is compiled into wasm modules and necessary runtime
-//!   dependencies are enabled as well. If this is turned off then some methods
-//!   to look at trap frames will not be available. Additionally at this time
-//!   disabling this feature means that the reference types feature is always
-//!   disabled as well.
-//!
 //! ## Examples
 //!
 //! In addition to the examples below be sure to check out the [online embedding
