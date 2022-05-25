@@ -2,20 +2,14 @@ use std::path::Path;
 use std::sync::{Condvar, Mutex};
 use wasmtime::{
     Config, Engine, InstanceAllocationStrategy, InstanceLimits, PoolingAllocationStrategy, Store,
-    Strategy,
 };
 use wasmtime_wast::WastContext;
 
 include!(concat!(env!("OUT_DIR"), "/wast_testsuite_tests.rs"));
 
 // Each of the tests included from `wast_testsuite_tests` will call this
-// function which actually executes the `wast` test suite given the `strategy`
-// to compile it.
-fn run_wast(wast: &str, strategy: Strategy, pooling: bool) -> anyhow::Result<()> {
-    match strategy {
-        Strategy::Cranelift => {}
-        _ => unimplemented!(),
-    }
+// function which actually executes the `wast` test suite.
+fn run_wast(wast: &str, pooling: bool) -> anyhow::Result<()> {
     let wast = Path::new(wast);
 
     let simd = feature_found(wast, "simd");

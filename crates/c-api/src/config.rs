@@ -5,7 +5,7 @@
 use crate::{handle_result, wasmtime_error_t};
 use std::ffi::CStr;
 use std::os::raw::c_char;
-use wasmtime::{Config, OptLevel, ProfilingStrategy, Strategy};
+use wasmtime::{Config, OptLevel, ProfilingStrategy};
 
 #[repr(C)]
 #[derive(Clone)]
@@ -14,13 +14,6 @@ pub struct wasm_config_t {
 }
 
 wasmtime_c_api_macros::declare_own!(wasm_config_t);
-
-#[repr(u8)]
-#[derive(Clone)]
-pub enum wasmtime_strategy_t {
-    WASMTIME_STRATEGY_AUTO,
-    WASMTIME_STRATEGY_CRANELIFT,
-}
 
 #[repr(u8)]
 #[derive(Clone)]
@@ -97,19 +90,6 @@ pub extern "C" fn wasmtime_config_wasm_multi_memory_set(c: &mut wasm_config_t, e
 #[no_mangle]
 pub extern "C" fn wasmtime_config_wasm_memory64_set(c: &mut wasm_config_t, enable: bool) {
     c.config.wasm_memory64(enable);
-}
-
-#[no_mangle]
-pub extern "C" fn wasmtime_config_strategy_set(
-    c: &mut wasm_config_t,
-    strategy: wasmtime_strategy_t,
-) -> Option<Box<wasmtime_error_t>> {
-    use wasmtime_strategy_t::*;
-    let result = c.config.strategy(match strategy {
-        WASMTIME_STRATEGY_AUTO => Strategy::Auto,
-        WASMTIME_STRATEGY_CRANELIFT => Strategy::Cranelift,
-    });
-    handle_result(result, |_cfg| {})
 }
 
 #[no_mangle]

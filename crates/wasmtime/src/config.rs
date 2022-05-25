@@ -110,7 +110,7 @@ impl Config {
         let mut ret = Self {
             tunables: Tunables::default(),
             #[cfg(compiler)]
-            compiler: compiler_builder(Strategy::Auto).unwrap(),
+            compiler: wasmtime_cranelift::builder(),
             #[cfg(feature = "cache")]
             cache_config: CacheConfig::new_cache_disabled(),
             profiler: Arc::new(NullProfilerAgent),
@@ -666,26 +666,6 @@ impl Config {
     pub fn wasm_component_model(&mut self, enable: bool) -> &mut Self {
         self.features.component_model = enable;
         self
-    }
-
-    /// Configures which compilation strategy will be used for wasm modules.
-    ///
-    /// This method can be used to configure which compiler is used for wasm
-    /// modules, and for more documentation consult the [`Strategy`] enumeration
-    /// and its documentation.
-    ///
-    /// The default value for this is `Strategy::Auto`.
-    ///
-    /// # Errors
-    ///
-    /// Some compilation strategies require compile-time options of `wasmtime`
-    /// itself to be set, but if they're not set and the strategy is specified
-    /// here then an error will be returned.
-    #[cfg(compiler)]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
-    pub fn strategy(&mut self, strategy: Strategy) -> Result<&mut Self> {
-        self.compiler = compiler_builder(strategy)?;
-        Ok(self)
     }
 
     /// Creates a default profiler based on the profiling strategy chosen.
@@ -1321,13 +1301,6 @@ impl Config {
     }
 }
 
-#[cfg(compiler)]
-fn compiler_builder(strategy: Strategy) -> Result<Box<dyn CompilerBuilder>> {
-    match strategy {
-        Strategy::Auto | Strategy::Cranelift => Ok(wasmtime_cranelift::builder()),
-    }
-}
-
 fn round_up_to_pages(val: u64) -> u64 {
     let page_size = region::page::size() as u64;
     debug_assert!(page_size.is_power_of_two());
@@ -1403,28 +1376,6 @@ impl fmt::Debug for Config {
         }
         f.finish()
     }
-}
-
-/// Possible Compilation strategies for a wasm module.
-///
-/// This is used as an argument to the [`Config::strategy`] method.
-#[non_exhaustive]
-#[derive(Clone, Debug)]
-pub enum Strategy {
-    /// An indicator that the compilation strategy should be automatically
-    /// selected.
-    ///
-    /// This is generally what you want for most projects and indicates that the
-    /// `wasmtime` crate itself should make the decision about what the best
-    /// code generator for a wasm module is.
-    ///
-    /// Currently this always defaults to Cranelift, but the default value may
-    /// change over time.
-    Auto,
-
-    /// Currently the default backend, Cranelift aims to be a reasonably fast
-    /// code generator which generates high quality machine code.
-    Cranelift,
 }
 
 /// Possible optimization levels for the Cranelift codegen backend.

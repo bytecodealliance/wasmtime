@@ -16,41 +16,38 @@ fn main() -> anyhow::Result<()> {
         env::var_os("OUT_DIR").expect("The OUT_DIR environment variable must be set"),
     );
     let mut out = String::new();
+    writeln!(out, "#[cfg(test)]")?;
+    writeln!(out, "#[allow(non_snake_case)]")?;
+    writeln!(out, "mod Cranelift {{")?;
 
-    for strategy in &["Cranelift"] {
-        writeln!(out, "#[cfg(test)]")?;
-        writeln!(out, "#[allow(non_snake_case)]")?;
-        writeln!(out, "mod {} {{", strategy)?;
+    with_test_module(&mut out, "misc", |out| {
+        test_directory(out, "tests/misc_testsuite")?;
+        test_directory_module(out, "tests/misc_testsuite/multi-memory")?;
+        test_directory_module(out, "tests/misc_testsuite/simd")?;
+        test_directory_module(out, "tests/misc_testsuite/threads")?;
+        test_directory_module(out, "tests/misc_testsuite/memory64")?;
+        if cfg!(feature = "component-model") {
+            test_directory_module(out, "tests/misc_testsuite/component-model")?;
+        }
+        Ok(())
+    })?;
 
-        with_test_module(&mut out, "misc", |out| {
-            test_directory(out, "tests/misc_testsuite", strategy)?;
-            test_directory_module(out, "tests/misc_testsuite/multi-memory", strategy)?;
-            test_directory_module(out, "tests/misc_testsuite/simd", strategy)?;
-            test_directory_module(out, "tests/misc_testsuite/threads", strategy)?;
-            test_directory_module(out, "tests/misc_testsuite/memory64", strategy)?;
-            if cfg!(feature = "component-model") {
-                test_directory_module(out, "tests/misc_testsuite/component-model", strategy)?;
-            }
-            Ok(())
-        })?;
-
-        with_test_module(&mut out, "spec", |out| {
-            let spec_tests = test_directory(out, "tests/spec_testsuite", strategy)?;
-            // Skip running spec_testsuite tests if the submodule isn't checked
-            // out.
-            if spec_tests > 0 {
-                test_directory_module(out, "tests/spec_testsuite/proposals/memory64", strategy)?;
-            } else {
-                println!(
-                    "cargo:warning=The spec testsuite is disabled. To enable, run `git submodule \
+    with_test_module(&mut out, "spec", |out| {
+        let spec_tests = test_directory(out, "tests/spec_testsuite")?;
+        // Skip running spec_testsuite tests if the submodule isn't checked
+        // out.
+        if spec_tests > 0 {
+            test_directory_module(out, "tests/spec_testsuite/proposals/memory64")?;
+        } else {
+            println!(
+                "cargo:warning=The spec testsuite is disabled. To enable, run `git submodule \
                  update --remote`."
-                );
-            }
-            Ok(())
-        })?;
+            );
+        }
+        Ok(())
+    })?;
 
-        writeln!(out, "}}")?;
-    }
+    writeln!(out, "}}")?;
 
     // Write out our auto-generated tests and opportunistically format them with
     // `rustfmt` if it's installed.
@@ -60,21 +57,13 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn test_directory_module(
-    out: &mut String,
-    path: impl AsRef<Path>,
-    strategy: &str,
-) -> anyhow::Result<usize> {
+fn test_directory_module(out: &mut String, path: impl AsRef<Path>) -> anyhow::Result<usize> {
     let path = path.as_ref();
     let testsuite = &extract_name(path);
-    with_test_module(out, testsuite, |out| test_directory(out, path, strategy))
+    with_test_module(out, testsuite, |out| test_directory(out, path))
 }
 
-fn test_directory(
-    out: &mut String,
-    path: impl AsRef<Path>,
-    strategy: &str,
-) -> anyhow::Result<usize> {
+fn test_directory(out: &mut String, path: impl AsRef<Path>) -> anyhow::Result<usize> {
     let path = path.as_ref();
     let mut dir_entries: Vec<_> = path
         .read_dir()
@@ -88,7 +77,7 @@ fn test_directory(
                 return None;
             }
             // Ignore files starting with `.`, which could be editor temporary files
-            if p.file_stem()?.to_str()?.starts_with(".") {
+            if p.file_stem()?.to_str()?.starts_with('.') {
                 return None;
             }
             Some(p)
@@ -99,8 +88,8 @@ fn test_directory(
 
     let testsuite = &extract_name(path);
     for entry in dir_entries.iter() {
-        write_testsuite_tests(out, entry, testsuite, strategy, false)?;
-        write_testsuite_tests(out, entry, testsuite, strategy, true)?;
+        write_testsuite_tests(out, entry, testsuite, false)?;
+        write_testsuite_tests(out, entry, testsuite, true)?;
     }
 
     Ok(dir_entries.len())
@@ -113,8 +102,8 @@ fn extract_name(path: impl AsRef<Path>) -> String {
         .expect("filename should have a stem")
         .to_str()
         .expect("filename should be representable as a string")
-        .replace("-", "_")
-        .replace("/", "_")
+        .replace('-', "_")
+        .replace('/', "_")
 }
 
 fn with_test_module<T>(
@@ -136,7 +125,6 @@ fn write_testsuite_tests(
     out: &mut String,
     path: impl AsRef<Path>,
     testsuite: &str,
-    strategy: &str,
     pooling: bool,
 ) -> anyhow::Result<()> {
     let path = path.as_ref();
@@ -144,7 +132,7 @@ fn write_testsuite_tests(
 
     writeln!(out, "#[test]")?;
     // Ignore when using QEMU for running tests (limited memory).
-    if ignore(testsuite, &testname, strategy) {
+    if ignore(testsuite, &testname) {
         writeln!(out, "#[ignore]")?;
     }
 
@@ -157,9 +145,8 @@ fn write_testsuite_tests(
     writeln!(out, "    let _ = env_logger::try_init();")?;
     writeln!(
         out,
-        "    crate::wast::run_wast(r#\"{}\"#, crate::wast::Strategy::{}, {}).unwrap();",
+        "    crate::wast::run_wast(r#\"{}\"#, {}).unwrap();",
         path.display(),
-        strategy,
         pooling
     )?;
     writeln!(out, "}}")?;
@@ -168,15 +155,12 @@ fn write_testsuite_tests(
 }
 
 /// Ignore tests that aren't supported yet.
-fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
-    match strategy {
-        "Cranelift" => match (testsuite, testname) {
-            // No simd support yet for s390x.
-            ("simd", _) if platform_is_s390x() => return true,
-            _ if platform_is_s390x() && testname.starts_with("simd") => return true,
-            _ => {}
-        },
-        _ => panic!("unrecognized strategy"),
+fn ignore(testsuite: &str, testname: &str) -> bool {
+    match (testsuite, testname) {
+        // No simd support yet for s390x.
+        ("simd", _) if platform_is_s390x() => return true,
+        _ if platform_is_s390x() && testname.starts_with("simd") => return true,
+        _ => {}
     }
 
     false
