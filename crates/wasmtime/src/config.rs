@@ -286,7 +286,7 @@ impl Config {
     /// unwinding information is compiled into wasm modules and necessary runtime
     /// dependencies are enabled as well.
     ///
-    /// When disabled, wasm backtrace details are ignored, and [`Trap::trace()`]
+    /// When disabled, wasm backtrace details are ignored, and [`crate::Trap::trace()`]
     /// will always return `None`.
 
     pub fn wasm_backtrace(&mut self, enable: bool) -> &mut Self {
