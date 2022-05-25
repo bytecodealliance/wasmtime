@@ -226,6 +226,11 @@
       (rs Reg)
       (rd WritableReg)
       (ty Type))
+    (SelectReg
+      (rd WritableReg)
+      (rs1 Reg)
+      (rs2 Reg)
+      (condition IntegerCompare))
 ))
 
 
@@ -701,8 +706,8 @@
 (rule (select_addi (fits_in_32 ty)) (AluOPRRI.Addiw))
 (rule (select_addi (fits_in_64 ty)) (AluOPRRI.Addi))
 
-(decl float_bnot (Type  Reg) Reg)
-(extern constructor float_bnot float_bnot)
+(decl lower_float_bnot (Type  Reg) Reg)
+(extern constructor lower_float_bnot lower_float_bnot)
 
 (decl bnot_128 (ValueRegs) ValueRegs)
 (extern constructor bnot_128 bnot_128)
@@ -723,8 +728,8 @@
 (decl lower_extend(Reg bool u8 u8 )ValueRegs)
 (extern constructor lower_extend lower_extend)
 
-(decl band_not_128(ValueRegs ValueRegs)ValueRegs)
-(extern constructor band_not_128 band_not_128)
+(decl lower_band_not_i128(ValueRegs ValueRegs)ValueRegs)
+(extern constructor lower_band_not_i128 lower_band_not_i128)
 
 
 (decl b128_binary(AluOPRRR ValueRegs ValueRegs) ValueRegs)
@@ -736,11 +741,22 @@
 
 (decl lower_rotl(Type Reg Reg) Reg)
 (extern constructor lower_rotl lower_rotl)
+
 (decl lower_rotr(Type Reg Reg) Reg)
 (extern constructor lower_rotr lower_rotr)
 
-(decl lower_cls(ValueRegs Type) Reg)
+
+(decl lower_cls(ValueRegs Type) ValueRegs)
 (extern constructor lower_cls lower_cls)
 
 (decl lower_i128_xnor(ValueRegs ValueRegs)ValueRegs)
 (extern constructor lower_i128_xnor lower_i128_xnor)
+
+(decl lower_float_xnot (Type Reg Reg) Reg)
+(extern constructor lower_float_xnot lower_float_xnot)
+
+(decl lower_popcnt_i128(ValueRegs) ValueRegs)
+(extern constructor lower_popcnt_i128 lower_popcnt_i128)
+
+(decl lowre_i128_rotate(bool ValueRegs ValueRegs) ValueRegs)
+(extern constructor lowre_i128_rotate lowre_i128_rotate)

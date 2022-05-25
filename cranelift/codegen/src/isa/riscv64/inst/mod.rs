@@ -518,6 +518,18 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_use(rs);
             collector.reg_early_def(rd);
         }
+        &Inst::SelectReg {
+            rd,
+            rs1,
+            rs2,
+            condition,
+        } => {
+            collector.reg_use(condition.rs1);
+            collector.reg_use(condition.rs2);
+            collector.reg_use(rs1);
+            collector.reg_use(rs2);
+            collector.reg_def(rd);
+        }
     }
 }
 
@@ -786,12 +798,30 @@ impl Inst {
             &Inst::Nop4 => {
                 format!(";;fixed 4-size nop")
             }
-            &Inst::Cls { rd, rs, ty } => {
+            &Inst::Cls { rd, rs, ty, .. } => {
                 let rs = format_reg(rs, allocs);
                 let rd = format_reg(rd.to_reg(), allocs);
                 format!("cls {},{}", rd, rs)
             }
-
+            &Inst::SelectReg {
+                rd,
+                rs1,
+                rs2,
+                condition,
+            } => {
+                let c_rs1 = format_reg(condition.rs1, allocs);
+                let c_rs2 = format_reg(condition.rs2, allocs);
+                let rs1 = format_reg(rs1, allocs);
+                let rs2 = format_reg(rs2, allocs);
+                let rd = format_reg(rd.to_reg(), allocs);
+                format!(
+                    "select_reg {},{},{};;conditin={} ",
+                    rd,
+                    rs1,
+                    rs2,
+                    format!("{}{}{}", c_rs1, condition.kind.to_static_str(), c_rs2),
+                )
+            }
             &Inst::AtomicCas {
                 t0,
                 dst,

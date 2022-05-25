@@ -192,9 +192,9 @@
 
 ;;;; Rules for `bnot` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type $F32 (bnot x)))
-      (float_bnot $F32 x))
+      (lower_float_bnot $F32 x))
 (rule (lower (has_type $F32 (bnot x)))
-      (float_bnot $F64 x))
+      (lower_float_bnot $F64 x))
 
 (rule (lower (has_type fits_in_64 (bnot x)))
       (alu_rr_imm12 (AluOPRRI.Xori) x (imm_from_neg_bits -1)))
@@ -238,7 +238,7 @@
       (alu_rrr (AluOPRRR.Andn) x y))
 
 (rule (lower (has_type  $I128 (band_not x y)))
-      (band_not_128 x y))
+      (lower_band_not_i128 x y))
 
 ;;;; Rules for `popcnt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_16 ty) (popcnt x)))
@@ -247,7 +247,8 @@
       (alu_rr_imm12_bit_map (AluOPRRI.Cpopw) x 0))
 (rule (lower (has_type $I64 (popcnt x)))
       (alu_rr_imm12_bit_map (AluOPRRI.Cpop) x 0))
-
+(rule (lower (has_type $I128 (popcnt x)))
+      (lower_popcnt_i128 x))
 
 ;;;; Rules for `ishl` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_32 ty)(ishl x y)))
@@ -293,14 +294,14 @@
       (lower_rotl ty x y))
 
 (rule (lower (has_type  $I128 (rotl x y)))
-      (i128_arithmetic (I128OP.Rotl) x y))
+      (lowre_i128_rotate $true x y))
 
 ;;;; Rules for `rotr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 ty)(rotr x y)))
       (lower_rotr ty x y))
 
 (rule (lower (has_type  $I128 (rotr x y)))
-      (i128_arithmetic (I128OP.Rotr) x y))
+      (lowre_i128_rotate $false x y))
 
 
 ;;;; Rules for `bxor_not` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -310,8 +311,13 @@
 (rule (lower (has_type  $I128 (bxor_not x y)))
       (lower_i128_xnor y x));; notice x y order!!!
 
+(rule (lower (has_type  $F32 (bxor_not x y)))
+      (lower_float_xnot $F32 y x))  ;; notice x y order!!!
+(rule (lower (has_type  $F64 (bxor_not x y)))
+      (lower_float_xnot $F64 y x))  ;; notice x y order!!!
 
-;;;; Rules for `xor_not` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;; Rules for `bor_not` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 ty)(bor_not x y)))
       (alu_rrr  (AluOPRRR.Orn) x y))  
 
