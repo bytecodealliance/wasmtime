@@ -239,9 +239,7 @@ where
         // This comment about 64-bit integers is also referred to below with
         // "WRITEPTR64".
         let params_and_results = &mut MaybeUninit::new(ParamsAndResults {
-            params: ValRaw {
-                i64: (ptr as i64).to_le(),
-            },
+            params: ValRaw::i64(ptr as i64),
         });
 
         self.call_raw(store, params_and_results)
@@ -727,7 +725,7 @@ unsafe impl ComponentValue for () {
 // Macro to help generate `ComponentValue` implementations for primitive types
 // such as integers, char, bool, etc.
 macro_rules! integers {
-    ($($primitive:ident = $ty:ident in $field:ident $(as $unsigned:ident)?,)*) => ($(
+    ($($primitive:ident = $ty:ident in $field:ident/$get:ident,)*) => ($(
         unsafe impl ComponentValue for $primitive {
             type Lower = ValRaw;
             type Lift = $primitive;
@@ -745,8 +743,7 @@ macro_rules! integers {
                 _func: &Func,
                 dst: &mut MaybeUninit<Self::Lower>,
             ) -> Result<()> {
-                map_maybe_uninit!(dst.$field)
-                    .write((*self $(as $unsigned)? as $field).to_le());
+                dst.write(ValRaw::$field(*self as $field));
                 Ok(())
             }
 
@@ -767,17 +764,11 @@ macro_rules! integers {
 
             #[inline]
             fn lift(src: &Self::Lower) -> Result<Self::Lift> {
-                // Convert from little-endian and then view the signed storage
-                // as an optionally-unsigned type.
-                let field = unsafe {
-                    $field::from_le(src.$field) $(as $unsigned)?
-                };
-
                 // Perform a lossless cast from our field storage to the
                 // destination type. Note that `try_from` here is load bearing
                 // which rejects conversions like `500u32` to `u8` because
                 // that's out-of-bounds for `u8`.
-                Ok($primitive::try_from(field)?)
+                Ok($primitive::try_from(src.$get())?)
             }
         }
 
@@ -792,18 +783,18 @@ macro_rules! integers {
 }
 
 integers! {
-    i8 = S8 in i32,
-    u8 = U8 in i32 as u32,
-    i16 = S16 in i32,
-    u16 = U16 in i32 as u32,
-    i32 = S32 in i32,
-    u32 = U32 in i32 as u32,
-    i64 = S64 in i64,
-    u64 = U64 in i64 as u64,
+    i8 = S8 in i32/get_i32,
+    u8 = U8 in u32/get_u32,
+    i16 = S16 in i32/get_i32,
+    u16 = U16 in u32/get_u32,
+    i32 = S32 in i32/get_i32,
+    u32 = U32 in u32/get_u32,
+    i64 = S64 in i64/get_i64,
+    u64 = U64 in u64/get_u64,
 }
 
 macro_rules! floats {
-    ($($float:ident/$storage:ident = $ty:ident)*) => ($(const _: () = {
+    ($($float:ident/$get_float:ident = $ty:ident)*) => ($(const _: () = {
         /// All floats in-and-out of the canonical ABI always have their NaN
         /// payloads canonicalized. Conveniently the `NAN` constant in Rust has
         /// the same representation as canonical NAN, so we can use that for the
@@ -834,8 +825,7 @@ macro_rules! floats {
                 _func: &Func,
                 dst: &mut MaybeUninit<Self::Lower>,
             ) -> Result<()> {
-                map_maybe_uninit!(dst.$float)
-                    .write(canonicalize(*self).to_bits().to_le());
+                dst.write(ValRaw::$float(canonicalize(*self).to_bits()));
                 Ok(())
             }
 
@@ -855,8 +845,7 @@ macro_rules! floats {
 
             #[inline]
             fn lift(src: &Self::Lower) -> Result<Self::Lift> {
-                let field = $storage::from_le(unsafe { src.$float });
-                Ok(canonicalize($float::from_bits(field)))
+                Ok(canonicalize($float::from_bits(src.$get_float())))
             }
         }
 
@@ -874,8 +863,8 @@ macro_rules! floats {
 }
 
 floats! {
-    f32/u32 = Float32
-    f64/u64 = Float64
+    f32/get_f32 = Float32
+    f64/get_f64 = Float64
 }
 
 unsafe impl ComponentValue for bool {
@@ -895,7 +884,7 @@ unsafe impl ComponentValue for bool {
         _func: &Func,
         dst: &mut MaybeUninit<Self::Lower>,
     ) -> Result<()> {
-        map_maybe_uninit!(dst.i32).write((*self as i32).to_le());
+        dst.write(ValRaw::i32(*self as i32));
         Ok(())
     }
 
@@ -916,7 +905,7 @@ unsafe impl ComponentValue for bool {
 
     #[inline]
     fn lift(src: &Self::Lower) -> Result<Self::Lift> {
-        match i32::from_le(unsafe { src.i32 }) {
+        match src.get_i32() {
             0 => Ok(false),
             1 => Ok(true),
             _ => bail!("invalid boolean value"),
@@ -958,7 +947,7 @@ unsafe impl ComponentValue for char {
         _func: &Func,
         dst: &mut MaybeUninit<Self::Lower>,
     ) -> Result<()> {
-        map_maybe_uninit!(dst.i32).write((u32::from(*self) as i32).to_le());
+        dst.write(ValRaw::u32(u32::from(*self)));
         Ok(())
     }
 
@@ -979,8 +968,7 @@ unsafe impl ComponentValue for char {
 
     #[inline]
     fn lift(src: &Self::Lower) -> Result<Self::Lift> {
-        let bits = i32::from_le(unsafe { src.i32 }) as u32;
-        Ok(char::try_from(bits)?)
+        Ok(char::try_from(src.get_u32())?)
     }
 }
 
@@ -1018,8 +1006,8 @@ unsafe impl ComponentValue for str {
         let (ptr, len) = lower_string(&mut Memory::new(store.as_context_mut(), func), self)?;
         // See "WRITEPTR64" above for why this is always storing a 64-bit
         // integer.
-        map_maybe_uninit!(dst[0].i64).write((ptr as i64).to_le());
-        map_maybe_uninit!(dst[1].i64).write((len as i64).to_le());
+        map_maybe_uninit!(dst[0]).write(ValRaw::i64(ptr as i64));
+        map_maybe_uninit!(dst[1]).write(ValRaw::i64(len as i64));
         Ok(())
     }
 
@@ -1155,8 +1143,8 @@ where
         let (ptr, len) = lower_list(&mut Memory::new(store.as_context_mut(), func), self)?;
         // See "WRITEPTR64" above for why this is always storing a 64-bit
         // integer.
-        map_maybe_uninit!(dst[0].i64).write((ptr as i64).to_le());
-        map_maybe_uninit!(dst[1].i64).write((len as i64).to_le());
+        map_maybe_uninit!(dst[0]).write(ValRaw::i64(ptr as i64));
+        map_maybe_uninit!(dst[1]).write(ValRaw::i64(len as i64));
         Ok(())
     }
 
@@ -1311,7 +1299,7 @@ where
     ) -> Result<()> {
         match self {
             None => {
-                map_maybe_uninit!(dst.A1.i32).write(0_i32.to_le());
+                map_maybe_uninit!(dst.A1).write(ValRaw::i32(0));
                 // Note that this is unsafe as we're writing an arbitrary
                 // bit-pattern to an arbitrary type, but part of the unsafe
                 // contract of the `ComponentValue` trait is that we can assign
@@ -1323,7 +1311,7 @@ where
                 }
             }
             Some(val) => {
-                map_maybe_uninit!(dst.A1.i32).write(1_i32.to_le());
+                map_maybe_uninit!(dst.A1).write(ValRaw::i32(1));
                 val.lower(store, func, map_maybe_uninit!(dst.A2))?;
             }
         }
@@ -1354,7 +1342,7 @@ where
     }
 
     fn lift(src: &Self::Lower) -> Result<Self::Lift> {
-        Ok(match i32::from_le(unsafe { src.A1.i32 }) {
+        Ok(match src.A1.get_i32() {
             0 => None,
             1 => Some(T::lift(&src.A2)?),
             _ => bail!("invalid option discriminant"),
@@ -1442,11 +1430,11 @@ where
 
         match self {
             Ok(e) => {
-                map_maybe_uninit!(dst.tag.i32).write(0_i32.to_le());
+                map_maybe_uninit!(dst.tag).write(ValRaw::i32(0));
                 e.lower(store, func, map_maybe_uninit!(dst.payload.ok))?;
             }
             Err(e) => {
-                map_maybe_uninit!(dst.tag.i32).write(1_i32.to_le());
+                map_maybe_uninit!(dst.tag).write(ValRaw::i32(1));
                 e.lower(store, func, map_maybe_uninit!(dst.payload.err))?;
             }
         }
@@ -1492,7 +1480,7 @@ where
         // being used then both `T` and `E` have zero size.
         assert!(mem::size_of_val(&src.payload) == 0);
 
-        Ok(match i32::from_le(unsafe { src.tag.i32 }) {
+        Ok(match src.tag.get_i32() {
             0 => Ok(unsafe { T::lift(&src.payload.ok)? }),
             1 => Err(unsafe { E::lift(&src.payload.err)? }),
             _ => bail!("invalid expected discriminant"),
@@ -1778,7 +1766,7 @@ unsafe impl<T: ComponentValue> ComponentReturn for Value<T> {
 
     fn lift(store: &StoreOpaque, func: &Func, src: &Self::Lower) -> Result<Self> {
         // FIXME: needs to read an i64 for memory64
-        let ptr = u32::from_le(unsafe { src.i32 as u32 }) as usize;
+        let ptr = src.get_u32() as usize;
         Value::new(store, func, ptr)
     }
 }

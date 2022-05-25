@@ -231,7 +231,7 @@ pub unsafe trait WasmTy: Send {
 }
 
 macro_rules! integers {
-    ($($primitive:ident => $ty:ident in $raw:ident)*) => ($(
+    ($($primitive:ident/$get_primitive:ident => $ty:ident in $raw:ident)*) => ($(
         unsafe impl WasmTy for $primitive {
             type Abi = $primitive;
             #[inline]
@@ -248,11 +248,11 @@ macro_rules! integers {
             }
             #[inline]
             unsafe fn abi_from_raw(raw: *mut ValRaw) -> $primitive {
-                $primitive::from_le((*raw).$raw as $primitive)
+                (*raw).$get_primitive()
             }
             #[inline]
             unsafe fn abi_into_raw(abi: $primitive, raw: *mut ValRaw) {
-                (*raw).$raw = abi.to_le() as $raw;
+                *raw = ValRaw::$primitive(abi);
             }
             #[inline]
             fn into_abi(self, _store: &mut StoreOpaque) -> Self::Abi {
@@ -267,14 +267,14 @@ macro_rules! integers {
 }
 
 integers! {
-    i32 => I32 in i32
-    i64 => I64 in i64
-    u32 => I32 in i32
-    u64 => I64 in i64
+    i32/get_i32 => I32 in i32
+    i64/get_i64 => I64 in i64
+    u32/get_u32 => I32 in i32
+    u64/get_u64 => I64 in i64
 }
 
 macro_rules! floats {
-    ($($float:ident/$int:ident => $ty:ident)*) => ($(
+    ($($float:ident/$int:ident/$get_float:ident => $ty:ident)*) => ($(
         unsafe impl WasmTy for $float {
             type Abi = $float;
             #[inline]
@@ -291,11 +291,11 @@ macro_rules! floats {
             }
             #[inline]
             unsafe fn abi_from_raw(raw: *mut ValRaw) -> $float {
-                $float::from_bits($int::from_le((*raw).$float))
+                $float::from_bits((*raw).$get_float())
             }
             #[inline]
             unsafe fn abi_into_raw(abi: $float, raw: *mut ValRaw) {
-                (*raw).$float = abi.to_bits().to_le();
+                *raw = ValRaw::$float(abi.to_bits());
             }
             #[inline]
             fn into_abi(self, _store: &mut StoreOpaque) -> Self::Abi {
@@ -310,8 +310,8 @@ macro_rules! floats {
 }
 
 floats! {
-    f32/u32 => F32
-    f64/u64 => F64
+    f32/u32/get_f32 => F32
+    f64/u64/get_f64 => F64
 }
 
 unsafe impl WasmTy for Option<ExternRef> {
@@ -334,12 +334,12 @@ unsafe impl WasmTy for Option<ExternRef> {
 
     #[inline]
     unsafe fn abi_from_raw(raw: *mut ValRaw) -> *mut u8 {
-        usize::from_le((*raw).externref) as *mut u8
+        (*raw).get_externref() as *mut u8
     }
 
     #[inline]
     unsafe fn abi_into_raw(abi: *mut u8, raw: *mut ValRaw) {
-        (*raw).externref = (abi as usize).to_le();
+        *raw = ValRaw::externref(abi as usize);
     }
 
     #[inline]
@@ -420,12 +420,12 @@ unsafe impl WasmTy for Option<Func> {
 
     #[inline]
     unsafe fn abi_from_raw(raw: *mut ValRaw) -> Self::Abi {
-        usize::from_le((*raw).funcref) as Self::Abi
+        (*raw).get_funcref() as Self::Abi
     }
 
     #[inline]
     unsafe fn abi_into_raw(abi: Self::Abi, raw: *mut ValRaw) {
-        (*raw).funcref = (abi as usize).to_le();
+        *raw = ValRaw::funcref(abi as usize);
     }
 
     #[inline]

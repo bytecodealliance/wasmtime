@@ -794,7 +794,7 @@ pub union ValRaw {
     /// or unsigned. The Rust type `i32` is simply chosen for convenience.
     ///
     /// This value is always stored in a little-endian format.
-    pub i32: i32,
+    i32: i32,
 
     /// A WebAssembly `i64` value.
     ///
@@ -803,7 +803,7 @@ pub union ValRaw {
     /// or unsigned. The Rust type `i64` is simply chosen for convenience.
     ///
     /// This value is always stored in a little-endian format.
-    pub i64: i64,
+    i64: i64,
 
     /// A WebAssembly `f32` value.
     ///
@@ -813,7 +813,7 @@ pub union ValRaw {
     /// `u32` value is the return value of `f32::to_bits` in Rust.
     ///
     /// This value is always stored in a little-endian format.
-    pub f32: u32,
+    f32: u32,
 
     /// A WebAssembly `f64` value.
     ///
@@ -823,7 +823,7 @@ pub union ValRaw {
     /// `u64` value is the return value of `f64::to_bits` in Rust.
     ///
     /// This value is always stored in a little-endian format.
-    pub f64: u64,
+    f64: u64,
 
     /// A WebAssembly `v128` value.
     ///
@@ -833,7 +833,7 @@ pub union ValRaw {
     /// underlying bits is left up to the instructions which consume this value.
     ///
     /// This value is always stored in a little-endian format.
-    pub v128: u128,
+    v128: u128,
 
     /// A WebAssembly `funcref` value.
     ///
@@ -843,7 +843,7 @@ pub union ValRaw {
     /// carefully calling the correct functions throughout the runtime.
     ///
     /// This value is always stored in a little-endian format.
-    pub funcref: usize,
+    funcref: usize,
 
     /// A WebAssembly `externref` value.
     ///
@@ -853,7 +853,119 @@ pub union ValRaw {
     /// carefully calling the correct functions throughout the runtime.
     ///
     /// This value is always stored in a little-endian format.
-    pub externref: usize,
+    externref: usize,
+}
+
+impl ValRaw {
+    /// Creates a WebAssembly `i32` value
+    #[inline]
+    pub fn i32(i: i32) -> ValRaw {
+        ValRaw { i32: i.to_le() }
+    }
+
+    /// Creates a WebAssembly `i64` value
+    #[inline]
+    pub fn i64(i: i64) -> ValRaw {
+        ValRaw { i64: i.to_le() }
+    }
+
+    /// Creates a WebAssembly `i32` value
+    #[inline]
+    pub fn u32(i: u32) -> ValRaw {
+        ValRaw::i32(i as i32)
+    }
+
+    /// Creates a WebAssembly `i64` value
+    #[inline]
+    pub fn u64(i: u64) -> ValRaw {
+        ValRaw::i64(i as i64)
+    }
+
+    /// Creates a WebAssembly `f32` value
+    #[inline]
+    pub fn f32(i: u32) -> ValRaw {
+        ValRaw { f32: i.to_le() }
+    }
+
+    /// Creates a WebAssembly `f64` value
+    #[inline]
+    pub fn f64(i: u64) -> ValRaw {
+        ValRaw { f64: i.to_le() }
+    }
+
+    /// Creates a WebAssembly `v128` value
+    #[inline]
+    pub fn v128(i: u128) -> ValRaw {
+        ValRaw { v128: i.to_le() }
+    }
+
+    /// Creates a WebAssembly `funcref` value
+    #[inline]
+    pub fn funcref(i: usize) -> ValRaw {
+        ValRaw { funcref: i.to_le() }
+    }
+
+    /// Creates a WebAssembly `externref` value
+    #[inline]
+    pub fn externref(i: usize) -> ValRaw {
+        ValRaw {
+            externref: i.to_le(),
+        }
+    }
+
+    /// Gets the WebAssembly `i32` value
+    #[inline]
+    pub fn get_i32(&self) -> i32 {
+        unsafe { i32::from_le(self.i32) }
+    }
+
+    /// Gets the WebAssembly `i64` value
+    #[inline]
+    pub fn get_i64(&self) -> i64 {
+        unsafe { i64::from_le(self.i64) }
+    }
+
+    /// Gets the WebAssembly `i32` value
+    #[inline]
+    pub fn get_u32(&self) -> u32 {
+        self.get_i32() as u32
+    }
+
+    /// Gets the WebAssembly `i64` value
+    #[inline]
+    pub fn get_u64(&self) -> u64 {
+        self.get_i64() as u64
+    }
+
+    /// Gets the WebAssembly `f32` value
+    #[inline]
+    pub fn get_f32(&self) -> u32 {
+        unsafe { u32::from_le(self.f32) }
+    }
+
+    /// Gets the WebAssembly `f64` value
+    #[inline]
+    pub fn get_f64(&self) -> u64 {
+        unsafe { u64::from_le(self.f64) }
+    }
+
+    /// Gets the WebAssembly `v128` value
+    #[inline]
+    pub fn get_v128(&self) -> u128 {
+        unsafe { u128::from_le(self.v128) }
+    }
+
+    /// Gets the WebAssembly `funcref` value
+    #[inline]
+    pub fn get_funcref(&self) -> usize {
+        unsafe { usize::from_le(self.funcref) }
+    }
+
+    /// Gets the WebAssembly `externref` value
+    #[inline]
+    pub fn get_externref(&self) -> usize {
+        unsafe { usize::from_le(self.externref) }
+    }
 }
 
 /// Trampoline function pointer type.
