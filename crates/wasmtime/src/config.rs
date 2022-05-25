@@ -284,10 +284,11 @@ impl Config {
     /// Enabled by default, this feature builds in support to
     /// generate backtraces at runtime for WebAssembly modules. This means that
     /// unwinding information is compiled into wasm modules and necessary runtime
-    /// dependencies are enabled as well. If this is turned off then some methods
-    /// to look at trap frames will not be available.
+    /// dependencies are enabled as well.
     ///
-    /// When disabled, wasm backtrace details are ignored.
+    /// When disabled, wasm backtrace details are ignored, and [`Trap::trace()`]
+    /// will always return `None`.
+
     pub fn wasm_backtrace(&mut self, enable: bool) -> &mut Self {
         self.wasm_backtrace = enable;
         #[cfg(compiler)]
@@ -529,8 +530,6 @@ impl Config {
 
     /// Configures whether the [WebAssembly reference types proposal][proposal]
     /// will be enabled for compilation.
-    ///
-    /// When enabled, this will also enable wasm backtraces.
     ///
     /// This feature gates items such as the `externref` and `funcref` types as
     /// well as allowing a module to define multiple tables.
