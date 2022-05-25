@@ -1,8 +1,11 @@
+use crate::component::func::HostFunc;
 use crate::component::linker::{Definition, NameMap, Strings};
 use crate::types::matching;
 use crate::Module;
 use anyhow::{anyhow, bail, Context, Result};
-use wasmtime_environ::component::{ComponentInstanceType, ComponentTypes, ModuleType, TypeDef};
+use wasmtime_environ::component::{
+    ComponentInstanceType, ComponentTypes, FuncTypeIndex, ModuleType, TypeDef,
+};
 
 pub struct TypeChecker<'a> {
     pub types: &'a ComponentTypes,
@@ -20,7 +23,10 @@ impl TypeChecker<'_> {
                 Definition::Instance(actual) => self.instance(&self.types[t], actual),
                 _ => bail!("expected instance found {}", actual.desc()),
             },
-            TypeDef::Func(_) => bail!("expected func found {}", actual.desc()),
+            TypeDef::Func(t) => match actual {
+                Definition::Func(actual) => self.func(t, actual),
+                _ => bail!("expected func found {}", actual.desc()),
+            },
             TypeDef::Component(_) => bail!("expected component found {}", actual.desc()),
             TypeDef::Interface(_) => bail!("expected type found {}", actual.desc()),
         }
@@ -72,12 +78,17 @@ impl TypeChecker<'_> {
         }
         Ok(())
     }
+
+    fn func(&self, expected: FuncTypeIndex, actual: &HostFunc) -> Result<()> {
+        actual.typecheck(expected, self.types)
+    }
 }
 
 impl Definition {
     fn desc(&self) -> &'static str {
         match self {
             Definition::Module(_) => "module",
+            Definition::Func(_) => "func",
             Definition::Instance(_) => "instance",
         }
     }

@@ -10,7 +10,9 @@ mod linker;
 mod matching;
 mod store;
 pub use self::component::Component;
-pub use self::func::{ComponentParams, ComponentValue, Func, Op, TypedFunc, WasmList, WasmStr};
+pub use self::func::{
+    ComponentParams, ComponentValue, Func, IntoComponentFunc, Op, TypedFunc, WasmList, WasmStr,
+};
 pub use self::instance::{Instance, InstancePre};
 pub use self::linker::Linker;
 
@@ -18,6 +20,9 @@ pub use self::linker::Linker;
 // `#[derive(ComponentValue)]`, they are not part of Wasmtime's API stability
 // guarantees
 #[doc(hidden)]
-pub use {self::func::Memory, wasmtime_environ};
+pub use {
+    self::func::{Memory, MemoryMut, Options},
+    wasmtime_environ,
+};
 
 pub(crate) use self::store::ComponentStoreData;

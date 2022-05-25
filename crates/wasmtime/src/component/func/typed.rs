@@ -274,6 +274,7 @@ where
             trampoline,
             export,
             options,
+            instance,
             ..
         } = store.0[self.func.0];
 
@@ -294,9 +295,21 @@ where
         assert!(mem::align_of_val(map_maybe_uninit!(space.params)) == val_align);
         assert!(mem::align_of_val(map_maybe_uninit!(space.ret)) == val_align);
 
-        lower(store, &options, params, map_maybe_uninit!(space.params))?;
+        let instance = store.0[instance.0].as_ref().unwrap().instance();
+        let may_enter = instance.may_enter();
+        let may_leave = instance.may_leave();
 
         unsafe {
+            if !*may_enter {
+                bail!("cannot reenter component instance");
+            }
+            debug_assert!(*may_leave);
+
+            *may_leave = false;
+            let result = lower(store, &options, params, map_maybe_uninit!(space.params));
+            *may_leave = true;
+            result?;
+
             // This is unsafe as we are providing the guarantee that all the
             // inputs are valid. The various pointers passed in for the function
             // are all valid since they're coming from our store, and the
@@ -319,11 +332,17 @@ where
             // `[ValRaw]`, and additionally they should have the correct types
             // for the function we just called (which filled in the return
             // values).
-            lift(
+            *may_enter = false;
+            let result = lift(
                 store.0,
                 &options,
                 map_maybe_uninit!(space.ret).assume_init_ref(),
-            )
+            );
+
+            // TODO: this technically needs to happen only after the
+            // `post-return` is called.
+            *may_enter = true;
+            return result;
         }
     }
 }

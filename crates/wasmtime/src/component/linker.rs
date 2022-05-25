@@ -1,6 +1,7 @@
+use crate::component::func::HostFunc;
 use crate::component::instance::RuntimeImport;
 use crate::component::matching::TypeChecker;
-use crate::component::{Component, Instance, InstancePre};
+use crate::component::{Component, Instance, InstancePre, IntoComponentFunc};
 use crate::{AsContextMut, Engine, Module};
 use anyhow::{anyhow, bail, Context, Result};
 use std::collections::hash_map::{Entry, HashMap};
@@ -45,6 +46,7 @@ pub type NameMap = HashMap<usize, Definition>;
 #[derive(Clone)]
 pub enum Definition {
     Instance(NameMap),
+    Func(Arc<HostFunc>),
     Module(Module),
 }
 
@@ -155,6 +157,7 @@ impl<T> Linker<T> {
             }
             let import = match cur {
                 Definition::Module(m) => RuntimeImport::Module(m.clone()),
+                Definition::Func(f) => RuntimeImport::Func(f.clone()),
 
                 // This is guaranteed by the compilation process that "leaf"
                 // runtime imports are never instances.
@@ -195,6 +198,36 @@ impl<T> LinkerInstance<'_, T> {
             allow_shadowing: self.allow_shadowing,
             _marker: self._marker,
         }
+    }
+
+    /// Defines a new host-provided function into this [`Linker`].
+    ///
+    /// This method is used to give host functions to wasm components. The
+    /// `func` provided will be callable from linked components with the type
+    /// signature dictated by `Params` and `Return`. The `Params` is a tuple of
+    /// types that will come from wasm and `Return` is a value coming from the
+    /// host going back to wasm.
+    ///
+    /// The [`IntoComponentFunc`] trait is implemented for functions whose
+    /// arguments and return values implement the
+    /// [`ComponentValue`](crate::component::ComponentValue) trait. Additionally
+    /// the `func` may take a [`StoreContextMut`](crate::StoreContextMut) as its
+    /// first parameter.
+    ///
+    /// Note that `func` must be an `Fn` and must also be `Send + Sync +
+    /// 'static`. Shared state within a func is typically accesed with the `T`
+    /// type parameter from [`Store<T>`](crate::Store) which is accessible
+    /// through the leading [`StoreContextMut<'_, T>`](crate::StoreContextMut)
+    /// argument which can be provided to the `func` given here.
+    //
+    // TODO: needs more words and examples
+    pub fn func_wrap<Params, Return>(
+        &mut self,
+        name: &str,
+        func: impl IntoComponentFunc<T, Params, Return>,
+    ) -> Result<()> {
+        let name = self.strings.intern(name);
+        self.insert(name, Definition::Func(func.into_host_func()))
     }
 
     /// Defines a [`Module`] within this instance.
