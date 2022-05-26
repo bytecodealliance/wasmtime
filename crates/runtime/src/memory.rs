@@ -448,7 +448,7 @@ impl RuntimeLinearMemory for StaticMemory {
 pub struct SharedMemory(Arc<SharedMemoryInner>);
 impl SharedMemory {
     /// Construct a new [`SharedMemory`].
-    pub fn new(ty: wasmtime_types::Memory, tunables: &Tunables) -> Result<Self> {
+    pub fn new(ty: wasmtime_environ::Memory, tunables: &Tunables) -> Result<Self> {
         assert!(ty.shared);
         let plan = MemoryPlan::for_memory(ty, tunables);
         let (minimum_bytes, maximum_bytes) = Memory::limit_new(&plan, None)?;
@@ -459,7 +459,7 @@ impl SharedMemory {
     }
 
     /// Wrap an existing [Memory] with the locking provided by a [SharedMemory].
-    pub fn wrap(mut memory: Box<dyn RuntimeLinearMemory>, ty: wasmtime_types::Memory) -> Self {
+    pub fn wrap(mut memory: Box<dyn RuntimeLinearMemory>, ty: wasmtime_environ::Memory) -> Self {
         assert!(
             memory.as_any_mut().type_id() != std::any::TypeId::of::<SharedMemory>(),
             "cannot re-wrap a shared memory"
@@ -473,7 +473,7 @@ impl SharedMemory {
     }
 
     /// Return the memory type for this [`SharedMemory`].
-    pub fn ty(&self) -> wasmtime_types::Memory {
+    pub fn ty(&self) -> wasmtime_environ::Memory {
         self.0.ty
     }
 
@@ -495,7 +495,7 @@ impl SharedMemory {
 
 struct SharedMemoryInner {
     memory: RwLock<Box<dyn RuntimeLinearMemory>>,
-    ty: wasmtime_types::Memory,
+    ty: wasmtime_environ::Memory,
     def: LongTermVMMemoryDefinition,
 }
 

@@ -3596,7 +3596,6 @@ dependencies = [
  "wasmtime-environ",
  "wasmtime-fiber",
  "wasmtime-jit-debug",
- "wasmtime-types",
  "winapi",
 ]
 
