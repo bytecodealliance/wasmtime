@@ -100,15 +100,15 @@ fn test_probe_shared_memory_size() -> Result<()> {
     let mut store = Store::new(&engine, ());
     let instance = Instance::new(&mut store, &module, &[])?;
     let size_fn = instance.get_typed_func::<(), i32, _>(&mut store, "size")?;
+    let memory = instance.get_memory(&mut store, "memory").unwrap();
 
     assert_eq!(size_fn.call(&mut store, ())?, 1);
-    assert_eq!(
-        instance
-            .get_memory(&mut store, "memory")
-            .unwrap()
-            .size(&store),
-        1
-    );
+    assert_eq!(memory.size(&store), 1);
+
+    memory.into_shared_memory(&mut store)?.grow(1)?;
+
+    assert_eq!(size_fn.call(&mut store, ())?, 2);
+    assert_eq!(memory.size(&store), 2);
 
     Ok(())
 }
@@ -122,8 +122,8 @@ fn test_grow_memory_in_multiple_threads() -> Result<()> {
 
     let mut config = Config::new();
     config.wasm_threads(true);
-    let engine = Arc::new(Engine::new(&config)?);
-    let module = Arc::new(Module::new(&engine, wat)?);
+    let engine = Engine::new(&config)?;
+    let module = Module::new(&engine, wat)?;
     let shared_memory = SharedMemory::new(&engine, MemoryType::shared(1, 10))?;
     let mut threads = vec![];
     let sizes = Arc::new(RwLock::new(vec![]));
