@@ -285,7 +285,7 @@ impl Memory {
     ) -> Result<Self> {
         let store = store.as_context_mut();
         if !Engine::same(store.engine(), shared_memory.engine()) {
-            bail!("cross-`Engine` instantiation is not currently supported");
+            bail!("a shared memory must be created with the same `Engine` as the store");
         }
 
         // When we clone this shared memory, we only increment its reference
