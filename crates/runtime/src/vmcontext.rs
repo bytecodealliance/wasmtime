@@ -215,13 +215,6 @@ pub struct VMMemoryDefinition {
     pub current_length: usize,
 }
 
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub union VMMemoryUnion {
-    shared: *mut VMMemoryDefinition,
-    owned: VMMemoryDefinition,
-}
-
 #[cfg(test)]
 mod test_vmmemory_definition {
     use super::VMMemoryDefinition;
