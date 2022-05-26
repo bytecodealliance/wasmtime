@@ -202,6 +202,37 @@ impl BitsShifter {
 }
 
 impl Inst {
+    /*
+        do something with rouding mode,
+        this will save, using your "rounding mode" and restore the rounding mode for you.
+    */
+    pub(crate) fn using_roung_mode<CallBack: FnMut(&mut SmallInstVec<Inst>)>(
+        save_csr_reg_tmp: Writable<Reg>,
+        r: FloatRoundingMode,
+        mut call_back: CallBack,
+    ) -> SmallInstVec<Inst> {
+        let mut insts = SmallInstVec::new();
+        // save rounding mode
+        insts.push(Inst::Csr {
+            csr_op: CsrOP::Csrrwi,
+            rd: save_csr_reg_tmp,
+            rs: None,
+            imm: Some(r.to_uimm5()),
+            csr: CsrAddress::Fcsr,
+        });
+        // do your thing.
+        call_back(&mut insts);
+        //restore rounding mode.
+        insts.push(Inst::Csr {
+            csr_op: CsrOP::Csrrw,
+            rd: writable_zero_reg(),
+            rs: Some(save_csr_reg_tmp.to_reg()),
+            imm: None,
+            csr: CsrAddress::Fcsr,
+        });
+        insts
+    }
+
     pub(crate) fn construct_imm_sub_rs(rd: Writable<Reg>, imm: u64, rs: Reg) -> SmallInstVec<Inst> {
         let mut insts = Inst::load_constant_u64(rd, imm);
         insts.push(Inst::AluRRR {
@@ -301,7 +332,6 @@ impl Inst {
     }
 
     pub(crate) fn narrow_down_int(rd: Writable<Reg>, rs: Reg, ty: Type) -> SmallInstVec<Inst> {
-        assert!(is_int_and_type_signed(ty));
         assert!(ty.bits() != 64);
         let mut insts = SmallInstVec::new();
         let shift = (64 - ty.bits()) as i16;
@@ -1202,29 +1232,16 @@ impl MachInstEmit for Inst {
                     let rd = allocs.next_writable(rd);
                     if ty.is_float() {
                         let mut insts = SmallInstVec::new();
-                        if ty == F32 {
-                            insts.push(Inst::AluRR {
-                                alu_op: AluOPRR::FmvXW,
-                                rd: writable_spilltmp_reg(),
-                                rs: rm,
-                            });
-                            insts.push(Inst::AluRR {
-                                alu_op: AluOPRR::FmvWX,
-                                rd: rd,
-                                rs: spilltmp_reg(),
-                            });
-                        } else {
-                            insts.push(Inst::AluRR {
-                                alu_op: AluOPRR::FmvXD,
-                                rd: writable_spilltmp_reg(),
-                                rs: rm,
-                            });
-                            insts.push(Inst::AluRR {
-                                alu_op: AluOPRR::FmvDX,
-                                rd: rd,
-                                rs: spilltmp_reg(),
-                            });
-                        }
+                        insts.push(Inst::AluRR {
+                            alu_op: AluOPRR::move_f_to_x_op(ty),
+                            rd: writable_spilltmp_reg(),
+                            rs: rm,
+                        });
+                        insts.push(Inst::AluRR {
+                            alu_op: AluOPRR::move_x_to_f_op(ty),
+                            rd: rd,
+                            rs: spilltmp_reg(),
+                        });
                         insts
                             .into_iter()
                             .for_each(|inst| inst.emit(&[], sink, emit_info, state));
@@ -1694,7 +1711,6 @@ impl MachInstEmit for Inst {
                     emit_info,
                     state,
                 );
-
                 Inst::Jal {
                     dest: BranchTarget::offset(Inst::instruction_size() * 2),
                 }
@@ -1732,10 +1748,6 @@ impl MachInstEmit for Inst {
                     sc.w dst, v, (addr) # Try to update.
                     bne dst , v , cas  # retry
                 fail:
-
-                todo :: addr dst could be same register!!!!!!!!!!!!
-                is this matter??????
-
                                            */
                 let fail_label = sink.get_label();
                 let cas_lebel = sink.get_label();
@@ -2150,6 +2162,74 @@ impl MachInstEmit for Inst {
                 // here condition is true , use rs1
                 sink.bind_label(label_true);
                 Inst::gen_move(rd, rs1, I64).emit(&[], sink, emit_info, state);
+                sink.bind_label(label_jump_over);
+            }
+            &Inst::FcvtToIntSat {
+                rd,
+                rs,
+                is_signed,
+                in_type,
+                out_type,
+            } => {
+                let rs = allocs.next(rs);
+                let rd = allocs.next_writable(rd);
+                // get class information.
+                Inst::AluRR {
+                    alu_op: if in_type == F32 {
+                        AluOPRR::FclassS
+                    } else {
+                        AluOPRR::FclassD
+                    },
+                    rd,
+                    rs,
+                }
+                .emit(&[], sink, emit_info, state);
+                // rd = rd & is_nan()
+                Inst::AluRRImm12 {
+                    alu_op: AluOPRRI::Andi,
+                    rd,
+                    rs: rd.to_reg(),
+                    imm12: Imm12::from_bits(FClassResult::is_nan_bits() as i16),
+                }
+                .emit(&[], sink, emit_info, state);
+                // jump t0 nan
+                let label_jump_nan = sink.get_label();
+                Inst::CondBr {
+                    taken: BranchTarget::Label(label_jump_nan),
+                    not_taken: BranchTarget::zero(),
+                    kind: IntegerCompare {
+                        kind: IntCC::NotEqual,
+                        rs1: zero_reg(),
+                        rs2: rd.to_reg(),
+                    },
+                }
+                .emit(&[], sink, emit_info, state);
+                // convert to int normally.
+                Inst::AluRR {
+                    alu_op: AluOPRR::float_convert_2_int_op(in_type, is_signed, out_type),
+                    rd: rd,
+                    rs: rs,
+                }
+                .emit(&[], sink, emit_info, state);
+                // I already have the result,jump over.
+                let label_jump_over = sink.get_label();
+                Inst::Jal {
+                    dest: BranchTarget::Label(label_jump_over),
+                }
+                .emit(&[], sink, emit_info, state);
+
+                // here is nan , move 0 into rd register
+
+                sink.bind_label(label_jump_nan);
+
+                Inst::load_constant_imm12(rd, Imm12::from_bits(0)).emit(
+                    &[],
+                    sink,
+                    emit_info,
+                    state,
+                );
+
+                // bind jump_over
                 sink.bind_label(label_jump_over);
             }
 

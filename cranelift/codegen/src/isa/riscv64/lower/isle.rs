@@ -396,11 +396,7 @@ where
     fn lower_float_xnot(&mut self, ty: Type, x: Reg, y: Reg) -> Reg {
         let tmpx = self.temp_writable_reg(I64);
         let tmpy = self.temp_writable_reg(I64);
-        let move_to_x_reg_op = if ty == F32 {
-            AluOPRR::FmvXW
-        } else {
-            AluOPRR::FmvXD
-        };
+        let move_to_x_reg_op = AluOPRR::move_f_to_x_op(ty);
         // move to x registers
         self.emit(&MInst::AluRR {
             alu_op: move_to_x_reg_op,
@@ -732,14 +728,13 @@ where
         }
     }
 
-    // i128 implemetation
-    fn lowre_i128_rotate(
+    fn lower_i128_rotate(
         &mut self,
-        shift_left: bool,
+        rotate_left: bool,
         val: ValueRegs,
         shamt: ValueRegs,
     ) -> ValueRegs {
-        let shamt = {
+        let shamt_63 = {
             let tmp = self.temp_writable_reg(I64);
             self.emit(&MInst::AluRRImm12 {
                 alu_op: AluOPRRI::Andi,
@@ -761,7 +756,7 @@ where
                 alu_op: AluOPRRR::Sub,
                 rd: tmp,
                 rs1: tmp.to_reg(),
-                rs2: shamt,
+                rs2: shamt_63,
             });
             tmp.to_reg()
         };
@@ -784,14 +779,14 @@ where
                         */
 
         let first_shift = || {
-            if shift_left {
+            if rotate_left {
                 AluOPRRR::Sll
             } else {
                 AluOPRRR::Srl
             }
         };
         let second_shift = || {
-            if shift_left {
+            if rotate_left {
                 AluOPRRR::Srl
             } else {
                 AluOPRRR::Sll
@@ -803,7 +798,7 @@ where
                 alu_op: first_shift(),
                 rd: low,
                 rs1: val.regs()[0],
-                rs2: shamt,
+                rs2: shamt_63,
             });
             //
             let tmp = self.temp_writable_reg(I64);
@@ -819,7 +814,7 @@ where
                 rs1: zero_reg(),
                 rs2: tmp.to_reg(),
                 condition: IntegerCompare {
-                    rs1: shamt,
+                    rs1: shamt_63,
                     rs2: zero_reg(),
                     kind: IntCC::Equal,
                 },
@@ -839,7 +834,7 @@ where
                 alu_op: first_shift(),
                 rd: high,
                 rs1: val.regs()[1],
-                rs2: shamt,
+                rs2: shamt_63,
             });
             //
             let tmp = self.temp_writable_reg(I64);
@@ -855,7 +850,7 @@ where
                 rs1: zero_reg(),
                 rs2: tmp.to_reg(),
                 condition: IntegerCompare {
-                    rs1: shamt,
+                    rs1: shamt_63,
                     rs2: zero_reg(),
                     kind: IntCC::Equal,
                 },
@@ -879,7 +874,7 @@ where
             self.emit(&MInst::AluRRImm12 {
                 alu_op: AluOPRRI::Andi,
                 rd: tmp,
-                rs: shamt,
+                rs: shamt.regs()[0],
                 imm12: Imm12::from_bits(127),
             });
             tmp.to_reg()
@@ -913,6 +908,62 @@ where
 
         ValueRegs::two(new_low.to_reg(), new_high.to_reg())
     }
+
+    fn lower_float_abs(&mut self, ty: Type, val: Reg) -> Reg {
+        let tmp = self.temp_writable_reg(I64);
+        // move into x register.
+        self.emit(&MInst::AluRR {
+            alu_op: AluOPRR::move_f_to_x_op(ty),
+            rd: tmp,
+            rs: val,
+        });
+        // clean sign bit.
+        {
+            let (op, imm12) = AluOPRRI::Bclri.funct12(Some(float_sign_bit(ty)));
+            self.emit(&MInst::AluRRImm12 {
+                alu_op: op,
+                rd: tmp,
+                rs: tmp.to_reg(),
+                imm12,
+            });
+        }
+        // move back to float register.
+        let rd = self.temp_writable_reg(F64);
+        self.emit(&MInst::AluRR {
+            alu_op: AluOPRR::move_x_to_f_op(ty),
+            rd,
+            rs: tmp.to_reg(),
+        });
+        rd.to_reg()
+    }
+
+    fn lower_float_neg(&mut self, ty: Type, val: Reg) -> Reg {
+        let tmp = self.temp_writable_reg(I64);
+        // move into x register.
+        self.emit(&MInst::AluRR {
+            alu_op: AluOPRR::move_f_to_x_op(ty),
+            rd: tmp,
+            rs: val,
+        });
+        // invert sign bit.
+        {
+            let (op, imm12) = AluOPRRI::Binvi.funct12(Some(float_sign_bit(ty)));
+            self.emit(&MInst::AluRRImm12 {
+                alu_op: op,
+                rd: tmp,
+                rs: tmp.to_reg(),
+                imm12,
+            });
+        }
+        // move back to float register.
+        let rd = self.temp_writable_reg(F64);
+        self.emit(&MInst::AluRR {
+            alu_op: AluOPRR::move_x_to_f_op(ty),
+            rd,
+            rs: tmp.to_reg(),
+        });
+        rd.to_reg()
+    }
 }
 
 impl<C> IsleContext<'_, C, Flags, IsaFlags, 6>
@@ -926,6 +977,3 @@ where
         }
     }
 }
-
-#[cfg(test)]
-mod test {}

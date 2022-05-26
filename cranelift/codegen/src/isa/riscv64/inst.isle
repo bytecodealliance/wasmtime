@@ -231,6 +231,13 @@
       (rs1 Reg)
       (rs2 Reg)
       (condition IntegerCompare))
+    
+    (FcvtToIntSat
+      (rd WritableReg)
+      (rs Reg)
+      (is_signed bool)
+      (in_type Type)
+      (out_type Type))
 ))
 
 
@@ -644,25 +651,25 @@
 (extern constructor writable_zero_reg writable_zero_reg)
 
 ;; Helper for emitting `MInst.AluRR` instructions.
-(decl alu_rr (AluOPRR Reg) Reg)
-(rule (alu_rr op src )
-      (let ((dst WritableReg (temp_writable_reg $I64))
+(decl alu_rr (AluOPRR Type Reg) Reg)
+(rule (alu_rr op ty src )
+      (let ((dst WritableReg (temp_writable_reg ty))
             (_ Unit (emit (MInst.AluRR op dst src))))
         dst))
 
 
 ;; Helper for emitting `MInst.AluRRR` instructions.
-(decl alu_rrr (AluOPRRR Reg Reg) Reg)
-(rule (alu_rrr op src1 src2)
-      (let ((dst WritableReg (temp_writable_reg $I64))
+(decl alu_rrr (AluOPRRR Type Reg Reg) Reg)
+(rule (alu_rrr op ty src1 src2)
+      (let ((dst WritableReg (temp_writable_reg ty))
             (_ Unit (emit (MInst.AluRRR op dst src1 src2))))
         dst))
 
 
 ;; Helper for emitting `MInst.AluRRR` instructions.
-(decl alu_rrrr (AluOPRRRR Reg Reg Reg) Reg)
-(rule (alu_rrrr op src1 src2 src3)
-      (let ((dst WritableReg (temp_writable_reg $I64))
+(decl alu_rrrr (AluOPRRRR Type Reg Reg Reg) Reg)
+(rule (alu_rrrr op ty src1 src2 src3)
+      (let ((dst WritableReg (temp_writable_reg ty))
             (_ Unit (emit (MInst.AluRRRR op dst src1 src2 src3))))
         dst))
 
@@ -758,5 +765,12 @@
 (decl lower_popcnt_i128(ValueRegs) ValueRegs)
 (extern constructor lower_popcnt_i128 lower_popcnt_i128)
 
-(decl lowre_i128_rotate(bool ValueRegs ValueRegs) ValueRegs)
-(extern constructor lowre_i128_rotate lowre_i128_rotate)
+(decl lower_i128_rotate(bool ValueRegs ValueRegs) ValueRegs)
+(extern constructor lower_i128_rotate lower_i128_rotate)
+
+
+(decl lower_float_abs (Type  Reg) Reg)
+(extern constructor lower_float_abs lower_float_abs)
+
+(decl lower_float_neg (Type  Reg) Reg)
+(extern constructor lower_float_neg lower_float_neg)

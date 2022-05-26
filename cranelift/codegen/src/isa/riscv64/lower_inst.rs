@@ -13,6 +13,7 @@ use crate::machinst::*;
 use crate::settings::Flags;
 use crate::CodegenError;
 use crate::CodegenResult;
+
 use std::boxed::Box;
 
 use crate::ir::types::{
@@ -482,19 +483,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             );
             let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let rn = put_input_in_reg(ctx, inputs[0]);
-            // if from_bits >= to_bits {
             ctx.emit(Inst::gen_move(rd, rn, to_ty));
-            // } else {
-            //     let to_bits = if to_bits > 32 { 64 } else { 32 };
-            //     let from_bits = from_bits as u8;
-            //     ctx.emit(Inst::Extend {
-            //         rd,
-            //         rn,
-            //         signed: true,
-            //         from_bits,
-            //         to_bits,
-            //     });
-            // }
         }
 
         Opcode::Bint => {
@@ -875,23 +864,172 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             }
         }
 
-        Opcode::FminPseudo | Opcode::FmaxPseudo => {}
+        Opcode::FminPseudo | Opcode::FmaxPseudo => {
+            todo!();
+        }
 
-        Opcode::Sqrt | Opcode::Fneg | Opcode::Fabs | Opcode::Fpromote | Opcode::Fdemote => {}
+        Opcode::Sqrt | Opcode::Fneg | Opcode::Fabs => {
+            implemented_in_isle(ctx);
+        }
+        Opcode::Fpromote | Opcode::Fdemote => {
+            let ty = ty.unwrap();
+            if ty.is_vector() {
+                unimplemented!();
+            } else {
+                let input_ty = ctx.input_ty(insn, 0);
+                let rs = put_input_in_reg(ctx, inputs[0]);
+                let rd = ctx.get_output(insn, 0).only_reg().unwrap();
 
-        Opcode::Ceil | Opcode::Floor | Opcode::Trunc | Opcode::Nearest => {}
+                let op = match (input_ty.bits(), ty.bits()) {
+                    (32, 64) => AluOPRR::FcvtDS,
+                    (64, 32) => AluOPRR::FcvtSd,
+                    _ => unreachable!(),
+                };
+                ctx.emit(Inst::AluRR { alu_op: op, rd, rs });
+            }
+        }
 
-        Opcode::Fma => {}
+        Opcode::Ceil | Opcode::Floor | Opcode::Trunc | Opcode::Nearest => {
+            let ty = ty.unwrap();
+            if ty.is_vector() {
+                unimplemented!();
+            } else {
+                let rounding_mode = match op {
+                    Opcode::Ceil => FloatRoundingMode::RUP,
+                    Opcode::Floor => FloatRoundingMode::RDN,
+                    Opcode::Trunc => FloatRoundingMode::RTZ,
+                    Opcode::Nearest => FloatRoundingMode::RNE,
+                    _ => unreachable!(),
+                };
 
-        Opcode::Fcopysign => {}
+                let input_ty = ctx.input_ty(insn, 0);
+                let rs = put_input_in_reg(ctx, inputs[0]);
+                let rd = ctx.get_output(insn, 0).only_reg().unwrap();
+                let insts = Inst::using_roung_mode(
+                    ctx.alloc_tmp(I64).only_reg().unwrap(),
+                    rounding_mode,
+                    |insts| {
+                        //
+                        let tmp = ctx.alloc_tmp(I64).only_reg().unwrap();
+                        // convert into integer
+                        //
+                        let convert_type = if input_ty == F32 { I32 } else { I64 };
+                        insts.push(Inst::AluRR {
+                            alu_op: AluOPRR::float_convert_2_int_op(input_ty, true, convert_type),
+                            rd: tmp,
+                            rs: rs,
+                        });
+                        //convert back
+                        insts.push(Inst::AluRR {
+                            alu_op: AluOPRR::int_convert_2_float_op(convert_type, true, ty),
+                            rd: rd,
+                            rs: tmp.to_reg(),
+                        });
+                    },
+                );
+                insts.into_iter().for_each(|i| ctx.emit(i));
+            }
+        }
 
-        Opcode::FcvtToUint | Opcode::FcvtToSint => {}
+        Opcode::Fma => {
+            implemented_in_isle(ctx);
+        }
+        Opcode::Fcopysign => {
+            implemented_in_isle(ctx);
+        }
 
-        Opcode::FcvtFromUint | Opcode::FcvtFromSint => {}
+        Opcode::FcvtToUint | Opcode::FcvtToSint => {
+            let input_ty = ctx.input_ty(insn, 0);
+            let out_ty = ty.unwrap();
+            if input_ty.is_vector() {
+                unimplemented!()
+            } else {
+                let rd = ctx.get_output(insn, 0).only_reg().unwrap();
+                let rs = put_input_in_reg(ctx, inputs[0]);
+                let insts = Inst::using_roung_mode(
+                    ctx.alloc_tmp(I64).only_reg().unwrap(),
+                    FloatRoundingMode::RNE,
+                    |insts| {
+                        insts.push(Inst::AluRR {
+                            alu_op: AluOPRR::float_convert_2_int_op(
+                                input_ty,
+                                if op == Opcode::FcvtToUint {
+                                    false
+                                } else {
+                                    true
+                                },
+                                out_ty,
+                            ),
+                            rd,
+                            rs,
+                        });
+                    },
+                );
+                insts.into_iter().for_each(|i| ctx.emit(i));
+            }
+        }
 
-        Opcode::FcvtToUintSat | Opcode::FcvtToSintSat => {}
+        Opcode::FcvtFromUint | Opcode::FcvtFromSint => {
+            let input_ty = ctx.input_ty(insn, 0);
+            let out_ty = ty.unwrap();
+            if input_ty.is_vector() {
+                unimplemented!()
+            } else {
+                let rd = ctx.get_output(insn, 0).only_reg().unwrap();
+                let mut rs = put_input_in_reg(ctx, inputs[0]);
+                //
+                let mut insts = SmallInstVec::new();
+                if op == Opcode::FcvtFromUint && input_ty.bits() < 32 {
+                    // need narrow down value
+                    let rd = ctx.alloc_tmp(I64).only_reg().unwrap();
+                    insts = Inst::narrow_down_int(rd, rs, input_ty);
+                    rs = rd.to_reg();
+                };
+                insts.extend(Inst::using_roung_mode(
+                    ctx.alloc_tmp(I64).only_reg().unwrap(),
+                    FloatRoundingMode::RNE,
+                    |insts| {
+                        insts.push(Inst::AluRR {
+                            alu_op: AluOPRR::int_convert_2_float_op(
+                                input_ty,
+                                if op == Opcode::FcvtFromUint {
+                                    false
+                                } else {
+                                    true
+                                },
+                                out_ty,
+                            ),
+                            rd,
+                            rs,
+                        });
+                    },
+                ));
+                insts.into_iter().for_each(|i| ctx.emit(i));
+            }
+        }
 
-        Opcode::IaddIfcout => {}
+        Opcode::FcvtToUintSat | Opcode::FcvtToSintSat => {
+            //need
+            let input_ty = ctx.input_ty(insn, 0);
+            let out_ty = ty.unwrap();
+            if input_ty.is_vector() {
+                unimplemented!()
+            } else {
+                let rd = ctx.get_output(insn, 0).only_reg().unwrap();
+                let mut rs = put_input_in_reg(ctx, inputs[0]);
+                ctx.emit(Inst::FcvtToIntSat {
+                    rd: rd,
+                    rs: rs,
+                    is_signed: op == Opcode::FcvtToSintSat,
+                    in_type: input_ty,
+                    out_type: out_ty,
+                });
+            }
+        }
+
+        Opcode::IaddIfcout => {
+            unimplemented!();
+        }
 
         Opcode::IaddImm
         | Opcode::ImulImm
@@ -930,23 +1068,41 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         Opcode::Iabs => {
             implemented_in_isle(ctx);
         }
-        Opcode::AvgRound => {}
+        Opcode::AvgRound => {
+            unimplemented!();
+        }
 
-        Opcode::Snarrow | Opcode::Unarrow | Opcode::Uunarrow => {}
+        Opcode::Snarrow | Opcode::Unarrow | Opcode::Uunarrow => {
+            unimplemented!();
+        }
 
-        Opcode::SwidenLow | Opcode::SwidenHigh | Opcode::UwidenLow | Opcode::UwidenHigh => {}
+        Opcode::SwidenLow | Opcode::SwidenHigh | Opcode::UwidenLow | Opcode::UwidenHigh => {
+            unimplemented!();
+        }
 
-        Opcode::TlsValue => {}
+        Opcode::TlsValue => {
+            unimplemented!();
+        }
 
-        Opcode::SqmulRoundSat => {}
+        Opcode::SqmulRoundSat => {
+            unimplemented!();
+        }
 
-        Opcode::FcvtLowFromSint => {}
+        Opcode::FcvtLowFromSint => {
+            unimplemented!();
+        }
 
-        Opcode::FvpromoteLow => {}
+        Opcode::FvpromoteLow => {
+            unimplemented!();
+        }
 
-        Opcode::Fvdemote => {}
+        Opcode::Fvdemote => {
+            unimplemented!();
+        }
 
-        Opcode::ConstAddr | Opcode::Vconcat | Opcode::Vsplit | Opcode::IfcmpSp => {}
+        Opcode::ConstAddr | Opcode::Vconcat | Opcode::Vsplit | Opcode::IfcmpSp => {
+            unimplemented!();
+        }
     }
 
     Ok(())
@@ -1230,7 +1386,7 @@ pub(crate) fn gen_store(
 }
 
 fn pinned_register_not_used() -> ! {
-    unimplemented!();
+    unreachable!()
 }
 
 #[cfg(test)]

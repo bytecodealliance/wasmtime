@@ -29,11 +29,11 @@
 ;; `i64` and smaller
 
 (rule (lower (has_type (fits_in_32 ty) (iadd x y)))
-      (alu_rrr (AluOPRRR.Addw) x y))
+      (alu_rrr (AluOPRRR.Addw) $I32 x y))
 
 ;; Base case, simply adding things in registers.
 (rule (lower (has_type (fits_in_64 ty) (iadd x y)))
-      (alu_rrr (AluOPRRR.Add) x y))
+      (alu_rrr (AluOPRRR.Add) $I64 x y))
 
 ;; Special cases for when one operand is an immediate that fits in 12 bits.
 (rule (lower (has_type (fits_in_64 ty) (iadd x (imm12_from_value y))))
@@ -52,10 +52,10 @@
 ;; Base case, simply subtracting things in registers.
 
 (rule (lower (has_type (fits_in_64 ty) (isub x y)))
-      (alu_rrr (AluOPRRR.Sub) x y))
+      (alu_rrr (AluOPRRR.Sub) $I64 x y))
 
 (rule (lower (has_type (fits_in_32 ty) (isub x y)))
-      (alu_rrr (AluOPRRR.Subw) x y))
+      (alu_rrr (AluOPRRR.Subw) $I32 x y))
       
 ;; Special case for when one operand is an immediate that fits in 12 bits.
 (rule (lower (has_type (fits_in_64 ty) (isub x (imm12_from_value y))))
@@ -74,17 +74,17 @@
 
 ;; `i64` and smaller.
 (rule (lower (has_type (fits_in_64 ty) (ineg x)))
-      (alu_rrr (AluOPRRR.Sub) (zero_reg) x))
+      (alu_rrr (AluOPRRR.Sub) $I64 (zero_reg) x))
 (rule (lower (has_type (fits_in_32 ty) (ineg x)))
-      (alu_rrr (AluOPRRR.Subw) (zero_reg) x))
+      (alu_rrr (AluOPRRR.Subw) $I32 (zero_reg) x))
 
 
 ;;;; Rules for `imul` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type (fits_in_64 ty) (imul x y)))
-      (alu_rrr (AluOPRRR.Mul) x y))
+      (alu_rrr (AluOPRRR.Mul) $I64 x y))
 (rule (lower (has_type (fits_in_32 ty) (imul x y)))
-      (alu_rrr (AluOPRRR.Mulw) x y))
+      (alu_rrr (AluOPRRR.Mulw) $I32 x y))
 
 (rule (lower (has_type (fits_in_64 ty) (smulhi x y)))
       (lower_mlhi $true ty x y))
@@ -99,40 +99,40 @@
 ;;;; Rules for `div` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type (fits_in_16 ty) (udiv x y)))
-      (alu_rrr (AluOPRRR.Divuw) (narrow_int ty x) (narrow_int ty y)))
+      (alu_rrr (AluOPRRR.Divuw) $I64 (narrow_int ty x) (narrow_int ty y)))
 
 (rule (lower (has_type (fits_in_32 ty) (sdiv x y)))
-      (alu_rrr (AluOPRRR.Divw) x y))
+      (alu_rrr (AluOPRRR.Divw) $I64 x y))
 
 (rule (lower (has_type (fits_in_32 ty) (udiv x y)))
-      (alu_rrr (AluOPRRR.Divuw) x y))
+      (alu_rrr (AluOPRRR.Divuw) $I64  x y))
 
 (rule (lower (has_type (fits_in_64 ty) (sdiv x y)))
-      (alu_rrr (AluOPRRR.Div) x y))
+      (alu_rrr (AluOPRRR.Div) $I64 x y))
 
 (rule (lower (has_type (fits_in_64 ty) (udiv x y)))
-      (alu_rrr (AluOPRRR.DivU) x y))
+      (alu_rrr (AluOPRRR.DivU) $I64 x y))
 
 ;;;; Rules for `rem` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type (fits_in_32 ty) (srem x y)))
-      (alu_rrr (AluOPRRR.Remw) x y))
+      (alu_rrr (AluOPRRR.Remw) $I64 x y))
 
 (rule (lower (has_type (fits_in_16 ty) (urem x y)))
-      (alu_rrr (AluOPRRR.Remuw) (narrow_int ty x) (narrow_int ty y)))
+      (alu_rrr (AluOPRRR.Remuw) $I64 (narrow_int ty x) (narrow_int ty y)))
 
 (rule (lower (has_type (fits_in_32 ty) (urem x y)))
-      (alu_rrr (AluOPRRR.Remuw) x y))
+      (alu_rrr (AluOPRRR.Remuw) $I64 x y))
 
 (rule (lower (has_type (fits_in_64 ty) (srem x y)))
-      (alu_rrr (AluOPRRR.Rem) x y))
+      (alu_rrr (AluOPRRR.Rem) $I64  x y))
 
 (rule (lower (has_type (fits_in_64 ty) (urem x y)))
-      (alu_rrr (AluOPRRR.RemU) x y))
+      (alu_rrr (AluOPRRR.RemU) $I64 x y))
 
 ;;;; Rules for `and` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 ty) (band x y)))
-      (alu_rrr (AluOPRRR.And) x y))
+      (alu_rrr (AluOPRRR.And) $I64 x y))
 
 ;; Special cases for when one operand is an immediate that fits in 12 bits.
 (rule (lower (has_type (fits_in_64 ty) (band x (imm12_from_value y))))
@@ -149,7 +149,7 @@
 
 ;;;; Rules for `or` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 ty) (bor x y)))
-      (alu_rrr (AluOPRRR.Or) x y))
+      (alu_rrr (AluOPRRR.Or) $I64 x y))
 
 ;; Special cases for when one operand is an immediate that fits in 12 bits.
 (rule (lower (has_type (fits_in_64 ty) (bor x (imm12_from_value y))))
@@ -164,7 +164,7 @@
 
 ;;;; Rules for `xor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 ty) (bxor x y)))
-      (alu_rrr (AluOPRRR.Xor) x y))
+      (alu_rrr (AluOPRRR.Xor) $I64 x y))
 
 ;; Special cases for when one operand is an immediate that fits in 12 bits.
 (rule (lower (has_type (fits_in_64 ty) (bxor x (imm12_from_value y))))
@@ -180,7 +180,7 @@
 
 ;;;; Rules for `xor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 ty) (bor_not x y)))
-      (alu_rrr (AluOPRRR.Orn) x y))
+      (alu_rrr (AluOPRRR.Orn)  $I64 x y))
 (rule (lower (has_type $B128 (bor_not x y)))
       (b128_binary (AluOPRRR.Orn) x y))
 (rule (lower (has_type $I128 (bor_not x y)))
@@ -235,7 +235,7 @@
 
 ;;;; Rules for `band_not` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 ty) (band_not x y)))
-      (alu_rrr (AluOPRRR.Andn) x y))
+      (alu_rrr (AluOPRRR.Andn) $I64 x y))
 
 (rule (lower (has_type  $I128 (band_not x y)))
       (lower_band_not_i128 x y))
@@ -252,22 +252,22 @@
 
 ;;;; Rules for `ishl` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_32 ty)(ishl x y)))
-      (alu_rrr (AluOPRRR.Sllw) x y))
+      (alu_rrr (AluOPRRR.Sllw) $I64 x y))
 (rule (lower (has_type (fits_in_32 ty)(ishl x (imm12_from_value y))))
       (alu_rr_imm12 (AluOPRRI.Slliw) x y))
 (rule (lower (has_type (fits_in_64 ty)(ishl x (imm12_from_value y))))
       (alu_rr_imm12 (AluOPRRI.Slli) x y))
 (rule (lower (has_type (fits_in_64 ty)(ishl x y)))
-      (alu_rrr (AluOPRRR.Sll) x y))
+      (alu_rrr (AluOPRRR.Sll) $I64 x y))
 (rule (lower (has_type  $I128 (ishl x y)))
       (i128_arithmetic (I128OP.Ishl) x y))
 
 
 ;;;; Rules for `ushr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_32 ty)(ushr x y)))
-      (alu_rrr (AluOPRRR.Srlw) x y))
+      (alu_rrr (AluOPRRR.Srlw) $I64 x y))
 (rule (lower (has_type (fits_in_64 ty)(ushr x y)))
-      (alu_rrr (AluOPRRR.Srl) x y))
+      (alu_rrr (AluOPRRR.Srl) $I64 x y))
 (rule (lower (has_type (fits_in_32 ty)(ushr x (imm12_from_value y))))
       (alu_rr_imm12 (AluOPRRI.SrliW) x y))
 (rule (lower (has_type (fits_in_64 ty)(ushr x (imm12_from_value y))))
@@ -278,9 +278,9 @@
 
 ;;;; Rules for `sshr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_32 ty)(sshr x y)))
-      (alu_rrr (AluOPRRR.Sraw) x y))
+      (alu_rrr (AluOPRRR.Sraw) $I64 x y))
 (rule (lower (has_type (fits_in_64 ty)(sshr x y)))
-      (alu_rrr (AluOPRRR.Sra) x y))
+      (alu_rrr (AluOPRRR.Sra) $I64 x y))
 (rule (lower (has_type (fits_in_32 ty)(sshr x (imm12_from_value y))))
       (alu_rr_imm12 (AluOPRRI.SrliW) x y))
 (rule (lower (has_type (fits_in_64 ty)(sshr x (imm12_from_value y))))
@@ -294,19 +294,19 @@
       (lower_rotl ty x y))
 
 (rule (lower (has_type  $I128 (rotl x y)))
-      (lowre_i128_rotate $true x y))
+      (lower_i128_rotate $true x y))
 
 ;;;; Rules for `rotr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 ty)(rotr x y)))
       (lower_rotr ty x y))
 
 (rule (lower (has_type  $I128 (rotr x y)))
-      (lowre_i128_rotate $false x y))
+      (lower_i128_rotate $false x y))
 
 
 ;;;; Rules for `bxor_not` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 ty)(bxor_not x y)))
-      (alu_rrr  (AluOPRRR.Xnor) y x))  ;; notice x y order!!!
+      (alu_rrr  (AluOPRRR.Xnor) $I64 y x))  ;; notice x y order!!!
 
 (rule (lower (has_type  $I128 (bxor_not x y)))
       (lower_i128_xnor y x));; notice x y order!!!
@@ -319,7 +319,7 @@
 
 ;;;; Rules for `bor_not` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 ty)(bor_not x y)))
-      (alu_rrr  (AluOPRRR.Orn) x y))  
+      (alu_rrr  (AluOPRRR.Orn) $I64 x y))  
 
 (rule (lower (has_type  $I128 (bor_not x y)))
       (i128_arithmetic (I128OP.Orn) x y)) 
@@ -327,6 +327,59 @@
 
 ;;;; Rules for `cls` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 ty)(cls x)))
-      (lower_cls  x ty))  
+      (lower_cls  x ty))
 (rule (lower (has_type  $I128 (cls x)))
-      (lower_cls  x $I128))  
+      (lower_cls  x $I128))
+
+ 
+
+;;;; Rules for `fabs` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(rule (lower (has_type $F32 (fabs x)))
+      (lower_float_abs $F32 x))
+(rule (lower (has_type $F64 (fabs x)))
+      (lower_float_abs $F64 x))
+
+;;;; Rules for `fneg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(rule (lower (has_type $F32 (fneg x)))
+      (lower_float_neg $F32 x))
+(rule (lower (has_type $F64 (fneg x)))
+      (lower_float_neg $F64 x))
+
+
+;;;; Rules for `fcopysign` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(rule (lower (has_type $F32 (fcopysign x y)))
+      (alu_rrr (AluOPRRR.FsgnjS) $F64 x y))
+(rule (lower (has_type $F64 (fcopysign x y)))
+      (alu_rrr (AluOPRRR.FsgnjD) $F64 x y))
+
+
+;;;; Rules for `fma` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(rule (lower (has_type $F32 (fma  x y z )))
+      (alu_rrrr (AluOPRRRR.FmaddS) $F64 x y z))
+(rule (lower (has_type $F64 (fma  x y z )))
+      (alu_rrrr (AluOPRRRR.FmaddD) $F64 x y z))
+
+;;;; special instruction provides by isa can used to speed up computation.;;;;;;
+;;;; Rules for `FmaddS` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(rule (lower (has_type $F32 (fadd (fmul x y) z )))
+      (alu_rrrr (AluOPRRRR.FmaddS) $F64 x y z))
+
+(rule (lower (has_type $F32 (fadd x (fmul y z) )))
+      (alu_rrrr (AluOPRRRR.FmaddS) $F64 y z x))
+
+;;;; Rules for `FmaddD` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(rule (lower (has_type $F64 (fadd (fmul x y) z )))
+      (alu_rrrr (AluOPRRRR.FmaddD) $F64 x y z))
+
+(rule (lower (has_type $F64 (fadd x (fmul y z) )))
+      (alu_rrrr (AluOPRRRR.FmaddD) $F64 y z x))
+
+;;;; todo support fnmadd.s .......
+
+
+;;;; Rules for `sqrt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(rule (lower (has_type $F32 (sqrt x)))
+      (alu_rr (AluOPRR.FsqrtS)$F64 x))
+
+(rule (lower (has_type $F64 (sqrt x)))
+      (alu_rr (AluOPRR.FsqrtD)$F64 x))

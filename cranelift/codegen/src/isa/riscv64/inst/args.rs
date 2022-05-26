@@ -305,6 +305,65 @@ impl AluOPRR {
         }
     }
 
+    /*
+        move from x register to float register.
+    */
+    pub(crate) const fn move_x_to_f_op(ty: Type) -> Self {
+        match ty {
+            F32 => Self::FmvWX,
+            F64 => Self::FmvDX,
+            _ => unreachable!(),
+        }
+    }
+    /*
+        move from f register to x register.
+    */
+    pub(crate) const fn move_f_to_x_op(ty: Type) -> Self {
+        match ty {
+            F32 => Self::FmvXW,
+            F64 => Self::FmvXD,
+            _ => unreachable!(),
+        }
+    }
+
+    pub(crate) fn float_convert_2_int_op(from: Type, is_type_signed: bool, to: Type) -> Self {
+        let type_32 = to.bits() == 32;
+        match from {
+            F32 => match (is_type_signed, type_32) {
+                (true, true) => Self::FcvtWS,
+                (true, false) => Self::FcvtWuS,
+                (false, true) => Self::FcvtLS,
+                (false, false) => Self::FcvtLuS,
+            },
+            F64 => match (is_type_signed, type_32) {
+                (true, true) => Self::FcvtWD,
+                (true, false) => Self::FcvtWuD,
+                (false, true) => Self::FcvtLd,
+                (false, false) => Self::FcvtLuD,
+            },
+            _ => unreachable!("from type:{}", from),
+        }
+    }
+
+    pub(crate) fn int_convert_2_float_op(from: Type, is_type_signed: bool, to: Type) -> Self {
+        let type_32 = from.bits() == 32;
+        match to {
+            F32 => match (type_32, is_type_signed) {
+                (true, true) => Self::FcvtSw,
+                (true, false) => Self::FcvtSwU,
+                (false, true) => Self::FcvtSL,
+                (false, false) => Self::FcvtSLU,
+            },
+            F64 => match (type_32, is_type_signed) {
+                (true, true) => Self::FcvtDW,
+                (true, false) => Self::FcvtDWU,
+                (false, true) => Self::FcvtDL,
+                (false, false) => Self::FcvtDLu,
+            },
+            _ => unreachable!("to type:{}", to),
+        }
+    }
+
     pub(crate) fn op_code(self) -> u32 {
         match self {
             AluOPRR::FsqrtS
@@ -1016,11 +1075,15 @@ impl FloatRoundingMode {
         }
     }
     /*
-        use to FSRMI to set rounding mod
+        use to FSRMI to set rounding mod.
+        todo:: bug!!!!!!!!!!!! remove this.
     */
     #[inline(always)]
     pub(crate) fn to_imm12(self) -> Imm12 {
         Imm12::from_bits(self.bits() as i16)
+    }
+    pub(crate) fn to_uimm5(self) -> Uimm5 {
+        Uimm5::from_bits(self.bits())
     }
 }
 
@@ -1583,11 +1646,6 @@ impl FFlags {
     pub(crate) fn new(r: FloatRoundingMode) -> Self {
         Self { r }
     }
-
-    #[inline(always)]
-    pub(crate) fn to_imm12(self) -> Imm12 {
-        Imm12::from_bits(self.r.to_imm12().bits << 5)
-    }
 }
 
 impl I128OP {
@@ -1603,7 +1661,6 @@ impl I128OP {
             I128OP::Sshr => "sshr_i128",
             I128OP::Rotl => "rotl_i128",
             I128OP::Rotr => "rotr_i128",
-
             I128OP::Orn => "orn_i128",
             I128OP::Cls => "cls_i128",
         }
@@ -1612,6 +1669,7 @@ impl I128OP {
 
 #[derive(Clone, Copy)]
 pub enum CsrAddress {
+    Fcsr = 0x3,
     Vstart = 0x8,
     Vxsat = 0x9,
     Vxrm = 0xa,
@@ -1782,4 +1840,12 @@ pub(crate) fn get_x_len() -> usize {
         panic!("V_LEN is not set.")
     }
     unsafe { V_LEN }
+}
+
+#[inline]
+pub(crate) fn float_sign_bit(ty: Type) -> u8 {
+    match ty {
+        F32 | F64 => (ty.bits() - 1) as u8,
+        _ => unreachable!(),
+    }
 }

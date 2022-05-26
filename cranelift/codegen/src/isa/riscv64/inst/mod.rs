@@ -116,20 +116,12 @@ pub(crate) fn gen_move(rd: Writable<Reg>, oty: Type, rm: Reg, ity: Type) -> Inst
         (false, false) => Inst::gen_move(rd, rm, oty),
         (true, true) => Inst::gen_move(rd, rm, oty),
         (false, true) => Inst::AluRR {
-            alu_op: if ity == F32 {
-                AluOPRR::FmvXW
-            } else {
-                AluOPRR::FmvXD
-            },
+            alu_op: AluOPRR::move_f_to_x_op(ity),
             rd: rd,
             rs: rm,
         },
         (true, false) => Inst::AluRR {
-            alu_op: if ity == F32 {
-                AluOPRR::FmvWX
-            } else {
-                AluOPRR::FmvDX
-            },
+            alu_op: AluOPRR::move_x_to_f_op(ity),
             rd: rd,
             rs: rm,
         },
@@ -295,7 +287,7 @@ impl Inst {
         let mut insts = SmallVec::new();
         insts.extend(Self::load_constant_u32(tmp, const_data as u64));
         insts.push(Inst::AluRR {
-            alu_op: AluOPRR::FmvWX,
+            alu_op: AluOPRR::move_x_to_f_op(F32),
             rd,
             rs: tmp.to_reg(),
         });
@@ -477,7 +469,7 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
         } => {
             collector.reg_uses(&[e, addr, v]);
             collector.reg_early_def(t0);
-            collector.reg_def(dst);
+            collector.reg_early_def(dst);
         }
         &Inst::IntSelect {
             ref dst,
@@ -528,6 +520,10 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_use(condition.rs2);
             collector.reg_use(rs1);
             collector.reg_use(rs2);
+            collector.reg_def(rd);
+        }
+        &Inst::FcvtToIntSat { rd, rs, .. } => {
+            collector.reg_use(rs);
             collector.reg_def(rd);
         }
     }
@@ -802,6 +798,24 @@ impl Inst {
                 let rs = format_reg(rs, allocs);
                 let rd = format_reg(rd.to_reg(), allocs);
                 format!("cls {},{}", rd, rs)
+            }
+            &Inst::FcvtToIntSat {
+                rd,
+                rs,
+                is_signed,
+                in_type,
+                out_type,
+            } => {
+                let rs = format_reg(rs, allocs);
+                let rd = format_reg(rd.to_reg(), allocs);
+                format!(
+                    "fcvt_to_{}int_sat {},{};;in_ty={} out_ty={}",
+                    if is_signed { "s" } else { "u" },
+                    rd,
+                    rs,
+                    in_type,
+                    out_type
+                )
             }
             &Inst::SelectReg {
                 rd,
