@@ -522,9 +522,10 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_use(rs2);
             collector.reg_def(rd);
         }
-        &Inst::FcvtToIntSat { rd, rs, .. } => {
+        &Inst::FcvtToIntSat { rd, rs, tmp, .. } => {
             collector.reg_use(rs);
             collector.reg_def(rd);
+            collector.reg_def(tmp);
         }
     }
 }
@@ -805,16 +806,19 @@ impl Inst {
                 is_signed,
                 in_type,
                 out_type,
+                tmp,
             } => {
                 let rs = format_reg(rs, allocs);
                 let rd = format_reg(rd.to_reg(), allocs);
+                let tmp = format_reg(tmp.to_reg(), allocs);
                 format!(
-                    "fcvt_to_{}int_sat {},{};;in_ty={} out_ty={}",
+                    "fcvt_to_{}int_sat {},{};;in_ty={} out_ty={} tmp={}",
                     if is_signed { "s" } else { "u" },
                     rd,
                     rs,
                     in_type,
-                    out_type
+                    out_type,
+                    tmp
                 )
             }
             &Inst::SelectReg {

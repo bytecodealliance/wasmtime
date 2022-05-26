@@ -553,7 +553,7 @@ block0(v0: f32):
 }
 
 ; block0:
-;   fcvt_to_uint_sat a0,fa0;;in_ty=f32 out_ty=i32
+;   fcvt_to_uint_sat a0,fa0;;in_ty=f32 out_ty=i32 tmp=a1
 ;   ret
 
 function %f50(f32) -> i32 {
@@ -563,7 +563,7 @@ block0(v0: f32):
 }
 
 ; block0:
-;   fcvt_to_sint_sat a0,fa0;;in_ty=f32 out_ty=i32
+;   fcvt_to_sint_sat a0,fa0;;in_ty=f32 out_ty=i32 tmp=a1
 ;   ret
 
 function %f51(f32) -> i64 {
@@ -573,7 +573,7 @@ block0(v0: f32):
 }
 
 ; block0:
-;   fcvt_to_uint_sat a0,fa0;;in_ty=f32 out_ty=i64
+;   fcvt_to_uint_sat a0,fa0;;in_ty=f32 out_ty=i64 tmp=a1
 ;   ret
 
 function %f52(f32) -> i64 {
@@ -583,7 +583,7 @@ block0(v0: f32):
 }
 
 ; block0:
-;   fcvt_to_sint_sat a0,fa0;;in_ty=f32 out_ty=i64
+;   fcvt_to_sint_sat a0,fa0;;in_ty=f32 out_ty=i64 tmp=a1
 ;   ret
 
 function %f53(f64) -> i32 {
@@ -593,7 +593,7 @@ block0(v0: f64):
 }
 
 ; block0:
-;   fcvt_to_uint_sat a0,fa0;;in_ty=f64 out_ty=i32
+;   fcvt_to_uint_sat a0,fa0;;in_ty=f64 out_ty=i32 tmp=a1
 ;   ret
 
 function %f54(f64) -> i32 {
@@ -603,7 +603,7 @@ block0(v0: f64):
 }
 
 ; block0:
-;   fcvt_to_sint_sat a0,fa0;;in_ty=f64 out_ty=i32
+;   fcvt_to_sint_sat a0,fa0;;in_ty=f64 out_ty=i32 tmp=a1
 ;   ret
 
 function %f55(f64) -> i64 {
@@ -613,7 +613,7 @@ block0(v0: f64):
 }
 
 ; block0:
-;   fcvt_to_uint_sat a0,fa0;;in_ty=f64 out_ty=i64
+;   fcvt_to_uint_sat a0,fa0;;in_ty=f64 out_ty=i64 tmp=a1
 ;   ret
 
 function %f56(f64) -> i64 {
@@ -623,6 +623,6 @@ block0(v0: f64):
 }
 
 ; block0:
-;   fcvt_to_sint_sat a0,fa0;;in_ty=f64 out_ty=i64
+;   fcvt_to_sint_sat a0,fa0;;in_ty=f64 out_ty=i64 tmp=a1
 ;   ret
 

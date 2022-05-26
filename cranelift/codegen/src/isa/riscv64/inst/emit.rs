@@ -203,7 +203,7 @@ impl BitsShifter {
 
 impl Inst {
     /*
-        do something with rouding mode,
+        do something with rouding mode csr.
         this will save, using your "rounding mode" and restore the rounding mode for you.
     */
     pub(crate) fn using_roung_mode<CallBack: FnMut(&mut SmallInstVec<Inst>)>(
@@ -2167,12 +2167,14 @@ impl MachInstEmit for Inst {
             &Inst::FcvtToIntSat {
                 rd,
                 rs,
+                tmp,
                 is_signed,
                 in_type,
                 out_type,
             } => {
                 let rs = allocs.next(rs);
                 let rd = allocs.next_writable(rd);
+                let tmp = allocs.next_writable(tmp);
                 // get class information.
                 Inst::AluRR {
                     alu_op: if in_type == F32 {
@@ -2180,15 +2182,15 @@ impl MachInstEmit for Inst {
                     } else {
                         AluOPRR::FclassD
                     },
-                    rd,
+                    rd: tmp,
                     rs,
                 }
                 .emit(&[], sink, emit_info, state);
                 // rd = rd & is_nan()
                 Inst::AluRRImm12 {
                     alu_op: AluOPRRI::Andi,
-                    rd,
-                    rs: rd.to_reg(),
+                    rd: tmp,
+                    rs: tmp.to_reg(),
                     imm12: Imm12::from_bits(FClassResult::is_nan_bits() as i16),
                 }
                 .emit(&[], sink, emit_info, state);
@@ -2200,17 +2202,21 @@ impl MachInstEmit for Inst {
                     kind: IntegerCompare {
                         kind: IntCC::NotEqual,
                         rs1: zero_reg(),
-                        rs2: rd.to_reg(),
+                        rs2: tmp.to_reg(),
                     },
                 }
                 .emit(&[], sink, emit_info, state);
                 // convert to int normally.
-                Inst::AluRR {
-                    alu_op: AluOPRR::float_convert_2_int_op(in_type, is_signed, out_type),
-                    rd: rd,
-                    rs: rs,
-                }
-                .emit(&[], sink, emit_info, state);
+                Inst::using_roung_mode(tmp, FloatRoundingMode::RNE, |insts| {
+                    insts.push(Inst::AluRR {
+                        alu_op: AluOPRR::float_convert_2_int_op(in_type, is_signed, out_type),
+                        rd: rd,
+                        rs: rs,
+                    });
+                })
+                .into_iter()
+                .for_each(|i| i.emit(&[], sink, emit_info, state));
+
                 // I already have the result,jump over.
                 let label_jump_over = sink.get_label();
                 Inst::Jal {
@@ -2219,7 +2225,6 @@ impl MachInstEmit for Inst {
                 .emit(&[], sink, emit_info, state);
 
                 // here is nan , move 0 into rd register
-
                 sink.bind_label(label_jump_nan);
 
                 Inst::load_constant_imm12(rd, Imm12::from_bits(0)).emit(

@@ -1017,12 +1017,14 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             } else {
                 let rd = ctx.get_output(insn, 0).only_reg().unwrap();
                 let mut rs = put_input_in_reg(ctx, inputs[0]);
+                let tmp = ctx.alloc_tmp(I64).only_reg().unwrap();
                 ctx.emit(Inst::FcvtToIntSat {
                     rd: rd,
                     rs: rs,
                     is_signed: op == Opcode::FcvtToSintSat,
                     in_type: input_ty,
                     out_type: out_ty,
+                    tmp,
                 });
             }
         }

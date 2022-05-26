@@ -235,6 +235,7 @@
     (FcvtToIntSat
       (rd WritableReg)
       (rs Reg)
+      (tmp WritableReg)
       (is_signed bool)
       (in_type Type)
       (out_type Type))
