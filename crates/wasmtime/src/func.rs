@@ -1852,7 +1852,7 @@ macro_rules! impl_into_func {
                 /// by Cranelift, since Cranelift is generating raw function
                 /// calls directly to this function.
                 unsafe extern "C" fn wasm_to_host_shim<T, F, $($args,)* R>(
-                    vmctx: *mut VMContext,
+                    vmctx: *mut (),
                     caller_vmctx: *mut VMContext,
                     $( $args: $args::Abi, )*
                     retptr: R::Retptr,
@@ -1875,6 +1875,12 @@ macro_rules! impl_into_func {
                     // should be part of this block, and the long-jmp-ing
                     // happens after the block in handling `CallResult`.
                     let result = Caller::with(caller_vmctx, |mut caller| {
+                        // The general type for the first context argument is
+                        // `*mut ()` but within the context of this function we
+                        // know that this is `VMContext` due to the compilation
+                        // of this function. Note that this is debug-asserted in
+                        // `host_state()` with the `VMCONTEXT_MAGIC` value.
+                        let vmctx = vmctx as *mut VMContext;
                         let state = (*vmctx).host_state();
                         // Double-check ourselves in debug mode, but we control
                         // the `Any` here so an unsafe downcast should also
@@ -1940,7 +1946,7 @@ macro_rules! impl_into_func {
                 /// calls the given function pointer, and then stores the result
                 /// back into the `args` array.
                 unsafe extern "C" fn host_trampoline<$($args,)* R>(
-                    callee_vmctx: *mut VMContext,
+                    callee_vmctx: *mut (),
                     caller_vmctx: *mut VMContext,
                     ptr: *const VMFunctionBody,
                     args: *mut ValRaw,
@@ -1952,7 +1958,7 @@ macro_rules! impl_into_func {
                     let ptr = mem::transmute::<
                         *const VMFunctionBody,
                         unsafe extern "C" fn(
-                            *mut VMContext,
+                            *mut (),
                             *mut VMContext,
                             $( $args::Abi, )*
                             R::Retptr,

@@ -343,12 +343,9 @@ impl Instance {
         let vmctx = instance.vmctx_ptr();
         unsafe {
             super::func::invoke_wasm_and_catch_traps(store, |_default_callee| {
-                mem::transmute::<
-                    *const VMFunctionBody,
-                    unsafe extern "C" fn(*mut VMContext, *mut VMContext),
-                >(f.anyfunc.as_ref().func_ptr.as_ptr())(
-                    f.anyfunc.as_ref().vmctx, vmctx
-                )
+                mem::transmute::<*const VMFunctionBody, unsafe extern "C" fn(*mut (), *mut VMContext)>(
+                    f.anyfunc.as_ref().func_ptr.as_ptr(),
+                )(f.anyfunc.as_ref().vmctx, vmctx)
             })?;
         }
         Ok(())

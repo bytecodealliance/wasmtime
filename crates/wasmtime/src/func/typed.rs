@@ -464,7 +464,7 @@ pub unsafe trait WasmParams: Send {
     #[doc(hidden)]
     unsafe fn invoke<R: WasmResults>(
         func: *const VMFunctionBody,
-        vmctx1: *mut VMContext,
+        vmctx1: *mut (),
         vmctx2: *mut VMContext,
         abi: Self::Abi,
     ) -> R::ResultAbi;
@@ -494,7 +494,7 @@ where
 
     unsafe fn invoke<R: WasmResults>(
         func: *const VMFunctionBody,
-        vmctx1: *mut VMContext,
+        vmctx1: *mut (),
         vmctx2: *mut VMContext,
         abi: Self::Abi,
     ) -> R::ResultAbi {
@@ -554,14 +554,14 @@ macro_rules! impl_wasm_params {
 
             unsafe fn invoke<R: WasmResults>(
                 func: *const VMFunctionBody,
-                vmctx1: *mut VMContext,
+                vmctx1: *mut (),
                 vmctx2: *mut VMContext,
                 abi: Self::Abi,
             ) -> R::ResultAbi {
                 let fnptr = mem::transmute::<
                     *const VMFunctionBody,
                     unsafe extern "C" fn(
-                        *mut VMContext,
+                        *mut (),
                         *mut VMContext,
                         $($t::Abi,)*
                         <R::ResultAbi as HostAbi>::Retptr,
