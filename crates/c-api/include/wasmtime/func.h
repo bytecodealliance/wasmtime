@@ -101,6 +101,8 @@ WASM_API_EXTERN void wasmtime_func_new(
  *        array depends on the function type that the host function is created
  *        with, but it will be the maximum of the number of parameters and
  *        number of results.
+ * \param num_args_and_results the size of the `args_and_results` parameter in
+ *        units of #wasmtime_val_raw_t.
  *
  * This callback can optionally return a #wasm_trap_t indicating that a trap
  * should be raised in WebAssembly. It's expected that in this case the caller
