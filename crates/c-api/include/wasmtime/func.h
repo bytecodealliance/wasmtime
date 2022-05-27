@@ -121,7 +121,8 @@ WASM_API_EXTERN void wasmtime_func_new(
 typedef wasm_trap_t* (*wasmtime_func_unchecked_callback_t)(
     void *env,
     wasmtime_caller_t* caller,
-    wasmtime_val_raw_t *args_and_results);
+    wasmtime_val_raw_t *args_and_results,
+    size_t num_args_and_results);
 
 /**
  * \brief Creates a new host function in the same manner of #wasmtime_func_new,
