@@ -134,14 +134,6 @@
     ;; runtime.
     (Udf
       (trap_code TrapCode))
-    
-    ;; float flags operation
-    (FloatFlagOperation
-      (op FloatFlagOp)
-      (rd   WritableReg)
-      (rs OptionReg)
-      (imm OptionImm12))
-
     ;; a jump and link register operation 
     (Jalr
       ;;Plain unconditional jumps (assembler pseudo-op J) are encoded as a JAL with rd=x0.
@@ -261,8 +253,6 @@
   (Ishl)
   (Ushr)
   (Sshr)
-  (Rotl)
-  (Rotr)
   (Orn)
   (Cls)
 ))

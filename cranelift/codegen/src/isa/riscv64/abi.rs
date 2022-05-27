@@ -701,9 +701,3 @@ fn compute_clobber_size(clobbers: &[Writable<RealReg>]) -> u32 {
     }
     align_to(clobbered_size, 16)
 }
-
-#[cfg(test)]
-mod test {
-    #[test]
-    fn compile_ok() {}
-}

@@ -59,6 +59,13 @@ pub enum Reloc {
     /// Set the add immediate field to the low 12 bits of the final address. Does not check for overflow.
     /// This is equivalent to `R_AARCH64_TLSGD_ADD_LO12_NC` in the [aaelf64](https://github.com/ARM-software/abi-aa/blob/2bcab1e3b22d55170c563c3c7940134089176746/aaelf64/aaelf64.rst#relocations-for-thread-local-storage)
     Aarch64TlsGdAddLo12Nc,
+
+    /// procedure call.
+    /// call symbol
+    /// expands to the following assembly and relocation:
+    /// auipc ra, 0
+    /// jalr ra, ra, 0
+    RiscvCall,
 }
 
 impl fmt::Display for Reloc {
@@ -74,11 +81,11 @@ impl fmt::Display for Reloc {
             Self::X86CallPLTRel4 => write!(f, "CallPLTRel4"),
             Self::X86GOTPCRel4 => write!(f, "GOTPCRel4"),
             Self::Arm32Call | Self::Arm64Call => write!(f, "Call"),
-
             Self::ElfX86_64TlsGd => write!(f, "ElfX86_64TlsGd"),
             Self::MachOX86_64Tlv => write!(f, "MachOX86_64Tlv"),
             Self::Aarch64TlsGdAdrPage21 => write!(f, "Aarch64TlsGdAdrPage21"),
             Self::Aarch64TlsGdAddLo12Nc => write!(f, "Aarch64TlsGdAddLo12Nc"),
+            Self::RiscvCall => write!(f, "riscvCall"),
         }
     }
 }

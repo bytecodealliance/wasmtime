@@ -4,13 +4,6 @@
 #![allow(dead_code)]
 #![allow(non_camel_case_types)]
 
-/*
-
-    alloc (access) register when using regalloc must be strict in order otherwise will be surprise bug!!!!!!!!!!!!!!!!!
-
-    todo:: check them.
-
-*/
 use crate::binemit::{Addend, CodeOffset, Reloc};
 pub use crate::ir::condcodes::IntCC;
 use crate::ir::types::{B1, B128, B16, B32, B64, B8, F32, F64, I128, I16, I32, I64, I8, R32, R64};
@@ -397,7 +390,9 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_use(kind.rs1);
             collector.reg_use(kind.rs2);
         }
-        &Inst::LoadExtName { rd, .. } => todo!(),
+        &Inst::LoadExtName { rd, .. } => {
+            collector.reg_def(rd);
+        }
         &Inst::LoadAddr { rd, mem } => {
             collector.reg_use(mem.get_base_register());
             collector.reg_def(rd);
@@ -423,12 +418,7 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_uses(&[rs1, rs2, rs3]);
             collector.reg_def(rd);
         }
-        &Inst::FloatFlagOperation { rs, rd, .. } => {
-            if let Some(r) = rs {
-                collector.reg_use(r);
-            }
-            collector.reg_def(rd);
-        }
+
         &Inst::Jalr { rd, base, .. } => {
             collector.reg_use(base);
             collector.reg_def(rd);
@@ -1117,7 +1107,14 @@ impl Inst {
                     format!("{} {},{},({})", op_name, rd, src, addr)
                 }
             }
-            &MInst::LoadExtName { .. } => todo!(),
+            &MInst::LoadExtName {
+                rd,
+                ref name,
+                offset,
+            } => {
+                let rd = format_reg(rd.to_reg(), allocs);
+                format!("load_sym {},{}{:+}", rd, name, offset)
+            }
             &MInst::LoadAddr { ref rd, ref mem } => {
                 let mem = mem.to_string_may_be_alloc(allocs);
                 let rd = format_reg(rd.to_reg(), allocs);
@@ -1158,25 +1155,6 @@ impl Inst {
             &MInst::Udf { .. } => todo!(),
             &MInst::EBreak {} => String::from("ebreak"),
             &MInst::ECall {} => String::from("ecall"),
-            &MInst::FloatFlagOperation { op, rs, rd, imm } => {
-                if op.use_imm12() {
-                    format!(
-                        "{} {},{}",
-                        op.op_name(),
-                        format_reg(rd.to_reg(), allocs),
-                        imm.unwrap().as_i16()
-                    )
-                } else if let Some(r) = rs {
-                    format!(
-                        "{} {},{}",
-                        op.op_name(),
-                        format_reg(rd.to_reg(), allocs),
-                        format_reg(r, allocs),
-                    )
-                } else {
-                    format!("{} {}", op.op_name(), format_reg(rd.to_reg(), allocs))
-                }
-            }
         }
     }
 }

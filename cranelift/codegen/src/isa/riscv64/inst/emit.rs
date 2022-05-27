@@ -1127,34 +1127,84 @@ impl MachInstEmit for Inst {
                     });
                 }
             }
+
             &Inst::Call { ref info } => {
-                unimplemented!("call not implamented.")
-            }
-            &Inst::CallInd { ref info } => {
-                /*
-
-
-                */
                 if let Some(s) = state.take_stack_map() {
                     sink.add_stack_map(StackMapExtent::UpcomingBytes(4), s);
                 }
-                let reigsters = vec![writable_link_reg()];
-                let mut insts = Inst::push_registers(&reigsters);
+                let call_indirect = match info.dest {
+                    ExternalName::User { namespace, index } => None,
+                    ExternalName::TestCase { length, ascii } => Some(Inst::alloc_registers(1)[0]),
+                    ExternalName::LibCall(_) => Some(Inst::alloc_registers(1)[0]),
+                };
+
+                let mut save_reigisters = vec![writable_link_reg()];
+                call_indirect.map(|r| save_reigisters.push(r));
+
+                Inst::push_registers(&save_reigisters)
+                    .into_iter()
+                    .for_each(|i| i.emit(&[], sink, emit_info, state));
+
+                match call_indirect {
+                    Some(r) => {
+                        // load extern name
+                        Inst::LoadExtName {
+                            rd: r,
+                            name: Box::new(info.dest.clone()),
+                            offset: 0,
+                        }
+                        .emit(&[], sink, emit_info, state);
+                        let loc = state.cur_srcloc();
+                        if info.opcode.is_call() {
+                            sink.add_call_site(loc, info.opcode);
+                        }
+                        // call
+                        Inst::Jalr {
+                            rd: writable_link_reg(),
+                            base: r.to_reg(),
+                            offset: Imm12::zero(),
+                        }
+                        .emit(&[], sink, emit_info, state);
+                    }
+                    None => {
+                        //
+                        let srcloc = state.cur_srcloc();
+                        if info.opcode.is_call() {
+                            sink.add_call_site(srcloc, info.opcode);
+                        }
+                        // call
+                        sink.add_reloc(srcloc, Reloc::RiscvCall, &info.dest, 0);
+                        Inst::construct_auipc_and_jalr(writable_link_reg(), 0)
+                            .into_iter()
+                            .for_each(|i| i.emit(&[], sink, emit_info, state));
+                    }
+                }
+                Inst::pop_registers(&save_reigisters)
+                    .into_iter()
+                    .for_each(|i| i.emit(&[], sink, emit_info, state));
+            }
+            &Inst::CallInd { ref info } => {
                 let rn = allocs.next(info.rn);
-                insts.push(Inst::Jalr {
-                    rd: writable_link_reg(),
-                    base: rn,
-                    offset: Imm12::zero(),
-                });
-                insts.extend(Inst::pop_registers(&reigsters));
-                insts
+                if let Some(s) = state.take_stack_map() {
+                    sink.add_stack_map(StackMapExtent::UpcomingBytes(4), s);
+                }
+                let reigisters = vec![writable_link_reg()];
+                Inst::push_registers(&reigisters)
                     .into_iter()
                     .for_each(|i| i.emit(&[], sink, emit_info, state));
                 let loc = state.cur_srcloc();
-
                 if info.opcode.is_call() {
                     sink.add_call_site(loc, info.opcode);
                 }
+                Inst::Jalr {
+                    rd: writable_link_reg(),
+                    base: rn,
+                    offset: Imm12::zero(),
+                }
+                .emit(&[], sink, emit_info, state);
+                Inst::pop_registers(&reigisters)
+                    .into_iter()
+                    .for_each(|i| i.emit(&[], sink, emit_info, state));
             }
             &Inst::TrapIf {
                 rs1,
@@ -1360,37 +1410,7 @@ impl MachInstEmit for Inst {
                 );
                 state.virtual_sp_offset += amount;
             }
-            &Inst::FloatFlagOperation { op, rd, rs, imm } => {
-                let rd = allocs.next_writable(rd);
-                let rs = if let Some(x) = rs {
-                    Some(allocs.next(x))
-                } else {
-                    None
-                };
 
-                let x = op.op_code()
-                    | reg_to_gpr_num(rd.to_reg()) << 7
-                    | op.funct3() << 12
-                    | if op == FloatFlagOp::Fsrmi {
-                        /*
-                            FIXME
-                            Riscv64: FloatFlagOperation { op: Fsrmi, rd: Writable { reg: p10i }, rs: None, imm: Some(Imm12 { bits: 2 }) }, fsrmi a0,2
-                            gnu:DebugRTypeIns { op_code: 115, rd: 10, funct3: 5, rs1: 2, rs2: 2, funct7: 0 }
-                            my :DebugRTypeIns { op_code: 115, rd: 10, funct3: 5, rs1: 0, rs2: 2, funct7: 0 }
-                            gnu:DebugITypeIns { op_code: 115, rd: 10, funct3: 5, rs: 2, imm12: 2 }
-                            my :DebugITypeIns { op_code: 115, rd: 10, funct3: 5, rs: 0, imm12: 2 }
-
-                            riscv gnu tool chain has set this to be "2"
-                            this should be "0"
-                        */
-                        2 << 15
-                    } else {
-                        rs.map(|x| reg_to_gpr_num(x)).unwrap_or(0) << 15
-                    }
-                    | op.imm12(imm) << 20;
-
-                sink.put4(x);
-            }
             &Inst::Atomic {
                 op,
                 rd,
@@ -1859,13 +1879,7 @@ impl MachInstEmit for Inst {
                     I128OP::Ishl => todo!(),
                     I128OP::Ushr => todo!(),
                     I128OP::Sshr => todo!(),
-                    I128OP::Rotl => {
-                        // low parts
-                        {}
-                        // high part
-                        {}
-                    }
-                    I128OP::Rotr => todo!(),
+
                     I128OP::Orn => todo!(),
                     I128OP::Cls => {
                         let label_clz = sink.get_label();
@@ -2238,11 +2252,43 @@ impl MachInstEmit for Inst {
                 sink.bind_label(label_jump_over);
             }
 
+            &Inst::LoadExtName {
+                rd,
+                ref name,
+                offset,
+            } => {
+                // get the current pc.
+                Inst::Auipc {
+                    rd: rd,
+                    imm: Imm20::from_bits(0),
+                }
+                .emit(&[], sink, emit_info, state);
+                // load the value .
+                Inst::Load {
+                    rd: rd,
+                    op: LoadOP::Ld,
+                    flags: MemFlags::trusted(),
+                    from: AMode::RegOffset(rd.to_reg(), 8, I64),
+                }
+                .emit(&[], sink, emit_info, state);
+                // jump over.
+                Inst::Jal {
+                    dest: BranchTarget::offset(12),
+                }
+                .emit(&[], sink, emit_info, state);
+                let srcloc = state.cur_srcloc;
+                sink.add_reloc(srcloc, Reloc::Abs8, name.as_ref(), offset);
+                if emit_info.0.emit_all_ones_funcaddrs() {
+                    sink.put8(u64::max_value());
+                } else {
+                    sink.put8(0);
+                }
+            }
             _ => todo!("{:?}", self),
         };
 
         let end_off = sink.cur_offset();
-        // debug_assert!((end_off - start_off) <= Inst::worst_case_size());
+        debug_assert!((end_off - start_off) <= Inst::worst_case_size());
     }
 
     fn pretty_print_inst(&self, allocs: &[Allocation], state: &mut Self::State) -> String {

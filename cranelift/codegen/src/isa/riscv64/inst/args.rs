@@ -1659,8 +1659,7 @@ impl I128OP {
             I128OP::Ishl => "ishl_i128",
             I128OP::Ushr => "ushr_i128",
             I128OP::Sshr => "sshr_i128",
-            I128OP::Rotl => "rotl_i128",
-            I128OP::Rotr => "rotr_i128",
+
             I128OP::Orn => "orn_i128",
             I128OP::Cls => "cls_i128",
         }
