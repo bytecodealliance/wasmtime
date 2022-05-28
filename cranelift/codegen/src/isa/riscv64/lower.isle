@@ -251,29 +251,30 @@
       (lower_popcnt_i128 x))
 
 ;;;; Rules for `ishl` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule (lower (has_type (fits_in_32 ty)(ishl x y)))
+(rule (lower (has_type (fits_in_32 ty)(ishl x (valueregs_2_reg y))))
       (alu_rrr (AluOPRRR.Sllw) $I64 x y))
 (rule (lower (has_type (fits_in_32 ty)(ishl x (imm12_from_value y))))
       (alu_rr_imm12 (AluOPRRI.Slliw) x y))
 (rule (lower (has_type (fits_in_64 ty)(ishl x (imm12_from_value y))))
       (alu_rr_imm12 (AluOPRRI.Slli) x y))
-(rule (lower (has_type (fits_in_64 ty)(ishl x y)))
+(rule (lower (has_type (fits_in_64 ty)(ishl x (valueregs_2_reg y))))
       (alu_rrr (AluOPRRR.Sll) $I64 x y))
+
 (rule (lower (has_type  $I128 (ishl x y)))
-      (i128_arithmetic (I128OP.Ishl) x y))
+      (lower_i128_logical_shift $true $true x y))
 
 
 ;;;; Rules for `ushr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule (lower (has_type (fits_in_32 ty)(ushr x y)))
+(rule (lower (has_type (fits_in_32 ty)(ushr x  (valueregs_2_reg y))))
       (alu_rrr (AluOPRRR.Srlw) $I64 x y))
-(rule (lower (has_type (fits_in_64 ty)(ushr x y)))
+(rule (lower (has_type (fits_in_64 ty)(ushr x (valueregs_2_reg y))))
       (alu_rrr (AluOPRRR.Srl) $I64 x y))
 (rule (lower (has_type (fits_in_32 ty)(ushr x (imm12_from_value y))))
       (alu_rr_imm12 (AluOPRRI.SrliW) x y))
 (rule (lower (has_type (fits_in_64 ty)(ushr x (imm12_from_value y))))
       (alu_rr_imm12 (AluOPRRI.Srli) x y))
 (rule (lower (has_type  $I128 (ushr x y)))
-      (i128_arithmetic (I128OP.Ushr) x y))
+      (lower_i128_logical_shift $false $false x y))
 
 
 ;;;; Rules for `sshr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -286,7 +287,7 @@
 (rule (lower (has_type (fits_in_64 ty)(sshr x (imm12_from_value y))))
       (alu_rr_imm12 (AluOPRRI.Srli) x y))
 (rule (lower (has_type  $I128 (sshr x y)))
-      (i128_arithmetic (I128OP.Sshr) x y))
+      (lower_i128_logical_shift $false $true x y))
 
 
 ;;;; Rules for `rotl` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

@@ -827,7 +827,7 @@ impl Inst {
                     rd,
                     rs1,
                     rs2,
-                    format!("{}{}{}", c_rs1, condition.kind.to_static_str(), c_rs2),
+                    format!("{} {} {}", c_rs1, condition.kind.to_static_str(), c_rs2),
                 )
             }
             &Inst::AtomicCas {
@@ -892,6 +892,7 @@ impl Inst {
                     imm.bits
                 )
             }
+
             &Inst::I128Arithmetic {
                 op,
                 ref t0,

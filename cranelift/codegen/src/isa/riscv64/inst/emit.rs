@@ -1133,9 +1133,9 @@ impl MachInstEmit for Inst {
                     sink.add_stack_map(StackMapExtent::UpcomingBytes(4), s);
                 }
                 let call_indirect = match info.dest {
-                    ExternalName::User { namespace, index } => None,
-                    ExternalName::TestCase { length, ascii } => Some(Inst::alloc_registers(1)[0]),
-                    ExternalName::LibCall(_) => Some(Inst::alloc_registers(1)[0]),
+                    ExternalName::User { .. } => None,
+                    ExternalName::TestCase { .. } => Some(Inst::alloc_registers(1)[0]),
+                    ExternalName::LibCall(..) => Some(Inst::alloc_registers(1)[0]),
                 };
 
                 let mut save_reigisters = vec![writable_link_reg()];
@@ -2257,23 +2257,24 @@ impl MachInstEmit for Inst {
                 ref name,
                 offset,
             } => {
+                let rd = allocs.next_writable(rd);
                 // get the current pc.
                 Inst::Auipc {
                     rd: rd,
                     imm: Imm20::from_bits(0),
                 }
                 .emit(&[], sink, emit_info, state);
-                // load the value .
+                // load the value.
                 Inst::Load {
                     rd: rd,
                     op: LoadOP::Ld,
                     flags: MemFlags::trusted(),
-                    from: AMode::RegOffset(rd.to_reg(), 8, I64),
+                    from: AMode::RegOffset(rd.to_reg(), 12 /* auipc load and jal */, I64),
                 }
                 .emit(&[], sink, emit_info, state);
                 // jump over.
                 Inst::Jal {
-                    dest: BranchTarget::offset(12),
+                    dest: BranchTarget::offset(12 /* jal and abs8 size  */),
                 }
                 .emit(&[], sink, emit_info, state);
                 let srcloc = state.cur_srcloc;

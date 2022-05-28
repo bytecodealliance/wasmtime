@@ -1167,6 +1167,7 @@ impl StoreOP {
         }
     }
     pub(crate) fn from_type(t: Type) -> Self {
+        println!("!!!!!!!!!!!!!!!!!{}", t);
         if t.is_float() {
             return if t == F32 { Self::Fsw } else { Self::Fsd };
         }

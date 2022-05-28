@@ -42,7 +42,7 @@ pub fn param_or_rets_xregs(args_or_rets: ArgsOrRets) -> Vec<Writable<Reg>> {
     let a_last = if args_or_rets == ArgsOrRets::Args {
         17
     } else {
-        12
+        11
     };
     for enc in a0..=a_last {
         v.push(Writable::from_reg(x_reg(enc as usize)));
@@ -110,7 +110,7 @@ pub fn param_or_rets_fregs(args_or_rets: ArgsOrRets) -> Vec<Writable<Reg>> {
     let fa_last = if args_or_rets == ArgsOrRets::Args {
         17
     } else {
-        12
+        11
     };
     for enc in fa0..=fa_last {
         v.push(Writable::from_reg(f_reg(enc as usize)));

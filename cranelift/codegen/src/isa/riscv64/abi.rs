@@ -246,19 +246,28 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         abi_args_for_stack.reverse();
         abi_args.extend(abi_args_for_stack.into_iter());
         let pos: Option<usize> = if add_ret_area_ptr {
-            assert!(ArgsOrRets::Rets == args_or_rets);
-            if next_stack > 0 {
+            assert!(ArgsOrRets::Args == args_or_rets);
+            if x_registers.len() > 0 {
+                let reg = x_registers[0].clone();
+                let arg = ABIArg::reg(
+                    reg.to_reg().to_real_reg().unwrap(),
+                    I64,
+                    ir::ArgumentExtension::None,
+                    ir::ArgumentPurpose::Normal,
+                );
+                x_registers = &x_registers[1..];
+                abi_args.push(arg);
+                Some(abi_args.len() - 1)
+            } else {
                 let arg = ABIArg::stack(
                     next_stack,
                     I64,
-                    ir::ArgumentExtension::Uext,
+                    ir::ArgumentExtension::None,
                     ir::ArgumentPurpose::Normal,
                 );
                 abi_args.push(arg);
                 next_stack += 8;
                 Some(abi_args.len() - 1)
-            } else {
-                None
             }
         } else {
             None

@@ -1,0 +1,20 @@
+test compile precise-output
+set unwind_info=false
+target riscv64
+
+function %f(i64, i64) -> i64 {
+    sig0 = (i64) -> i64
+block0(v0: i64, v1: i64):
+    v2 = call_indirect.i64 sig0, v1(v0)
+    return v2
+}
+
+;   addi sp,-8
+;   sd fp,0(sp)
+;   mov fp,sp
+; block0:
+;   callind a1
+;   ld fp,0(sp)
+;   addi sp,8
+;   ret
+

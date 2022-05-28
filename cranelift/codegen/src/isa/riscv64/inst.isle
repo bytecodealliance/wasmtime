@@ -765,3 +765,12 @@
 
 (decl lower_float_neg (Type  Reg) Reg)
 (extern constructor lower_float_neg lower_float_neg)
+
+
+(decl lower_i128_logical_shift(bool bool ValueRegs ValueRegs)ValueRegs)
+(extern constructor lower_i128_logical_shift lower_i128_logical_shift)
+
+(decl valueregs_2_reg(Reg) Value)
+(extern extractor valueregs_2_reg valueregs_2_reg)
+
+(convert ValueRegs Reg valueregs_2_reg)
