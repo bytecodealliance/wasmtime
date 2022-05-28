@@ -8,9 +8,7 @@ mod func;
 mod instance;
 mod store;
 pub use self::component::Component;
-pub use self::func::{
-    ComponentParams, ComponentReturn, ComponentValue, Cursor, Func, TypedFunc, Value,
-};
+pub use self::func::{ComponentParams, ComponentValue, Func, Op, TypedFunc, WasmList, WasmStr};
 pub use self::instance::Instance;
 
 // These items are expected to be used by an eventual

@@ -1,9 +1,8 @@
 use crate::component::Func;
 use crate::store::StoreOpaque;
-use crate::{AsContextMut, StoreContextMut, ValRaw};
+use crate::{AsContext, AsContextMut, StoreContext, StoreContextMut, ValRaw};
 use anyhow::{bail, Result};
 use std::borrow::Cow;
-use std::convert::Infallible;
 use std::marker;
 use std::mem::{self, MaybeUninit};
 use std::str;
@@ -11,7 +10,6 @@ use wasmtime_environ::component::{ComponentTypes, InterfaceType, StringEncoding}
 
 const MAX_STACK_PARAMS: usize = 16;
 const MAX_STACK_RESULTS: usize = 1;
-const UTF16_TAG: usize = 1 << 31;
 
 /// A helper macro to safely map `MaybeUninit<T>` to `MaybeUninit<U>` where `U`
 /// is a field projection within `T`.
@@ -108,7 +106,7 @@ impl<Params, Return> Clone for TypedFunc<Params, Return> {
 impl<Params, Return> TypedFunc<Params, Return>
 where
     Params: ComponentParams,
-    Return: ComponentReturn,
+    Return: ComponentValue,
 {
     /// Creates a new [`TypedFunc`] from the provided component [`Func`],
     /// unsafely asserting that the underlying function takes `Params` as
@@ -165,97 +163,162 @@ where
     ///
     /// This function will panic if `store` does not own this function.
     pub fn call(&self, mut store: impl AsContextMut, params: Params) -> Result<Return> {
-        let mut store = store.as_context_mut();
+        let store = &mut store.as_context_mut();
+        // Note that this is in theory simpler than it might read at this time.
+        // Here we're doing a runtime dispatch on the `flatten_count` for the
+        // params/results to see whether they're inbounds. This creates 4 cases
+        // to handle. In reality this is a highly optimizable branch where LLVM
+        // will easily figure out that only one branch here is taken.
+        //
+        // Otherwise this current construction is done to ensure that the stack
+        // space reserved for the params/results is always of the appropriate
+        // size (as the params/results needed differ depending on the "flatten"
+        // count)
         if <Params::AsTuple as ComponentValue>::flatten_count() <= MAX_STACK_PARAMS {
-            self.call_stack_args(&mut store, &params)
+            if Return::flatten_count() <= MAX_STACK_RESULTS {
+                self.call_raw(
+                    store,
+                    &params,
+                    Self::lower_stack_args,
+                    Self::lift_stack_result,
+                )
+            } else {
+                self.call_raw(
+                    store,
+                    &params,
+                    Self::lower_stack_args,
+                    Self::lift_heap_result,
+                )
+            }
         } else {
-            self.call_heap_args(&mut store, &params)
-        }
-    }
-
-    fn call_stack_args<T>(
-        &self,
-        store: &mut StoreContextMut<'_, T>,
-        params: &Params,
-    ) -> Result<Return> {
-        // Create storage space for both the parameters and the results (stored
-        // on top of one another), and initially have it all uninitialized.
-        let params_and_results = &mut MaybeUninit::<
-            ParamsAndResults<<Params::AsTuple as ComponentValue>::Lower, Return::Lower>,
-        >::uninit();
-
-        // In debug assertions mode start with an arbitrary bit-pattern which
-        // should be overwritten for anything actually read by the wasm
-        // trampoline we'll call later.
-        if cfg!(debug_assertions) {
-            unsafe {
-                const CANON_ABI_UNINIT_PATTERN: u8 = 0xAB;
-                params_and_results
-                    .as_mut_ptr()
-                    .write_bytes(CANON_ABI_UNINIT_PATTERN, 1);
+            if Return::flatten_count() <= MAX_STACK_RESULTS {
+                self.call_raw(
+                    store,
+                    &params,
+                    Self::lower_heap_args,
+                    Self::lift_stack_result,
+                )
+            } else {
+                self.call_raw(
+                    store,
+                    &params,
+                    Self::lower_heap_args,
+                    Self::lift_heap_result,
+                )
             }
         }
-
-        // Perform the lowering operation for the parameters which will write
-        // all of the parameters to the stack. This stack buffer is then passed
-        // to core wasm as `*mut ValRaw` which will read the values from the
-        // stack and later store the results here as well.
-        params.lower(
-            store,
-            &self.func,
-            map_maybe_uninit!(params_and_results.params),
-        )?;
-
-        self.call_raw(store, params_and_results)
     }
 
-    fn call_heap_args<T>(
+    /// Lower parameters directly onto the stack specified by the `dst`
+    /// location.
+    ///
+    /// This is only valid to call when the "flatten count" is small enough, or
+    /// when the canonical ABI says arguments go through the stack rather than
+    /// the heap.
+    fn lower_stack_args<T>(
         &self,
         store: &mut StoreContextMut<'_, T>,
         params: &Params,
-    ) -> Result<Return> {
+        dst: &mut MaybeUninit<<Params::AsTuple as ComponentValue>::Lower>,
+    ) -> Result<()> {
+        assert!(<Params::AsTuple as ComponentValue>::flatten_count() <= MAX_STACK_PARAMS);
+        params.lower(store, &self.func, dst)?;
+        Ok(())
+    }
+
+    /// Lower parameters onto a heap-allocated location.
+    ///
+    /// This is used when the stack space to be used for the arguments is above
+    /// the `MAX_STACK_PARAMS` threshold. Here the wasm's `realloc` function is
+    /// invoked to allocate space and then parameters are stored at that heap
+    /// pointer location.
+    fn lower_heap_args<T>(
+        &self,
+        store: &mut StoreContextMut<'_, T>,
+        params: &Params,
+        dst: &mut MaybeUninit<ValRaw>,
+    ) -> Result<()> {
+        assert!(<Params::AsTuple as ComponentValue>::flatten_count() > MAX_STACK_PARAMS);
+
         // Memory must exist via validation if the arguments are stored on the
-        // heap, so we can create a `Memory` at this point. Afterwards `realloc`
-        // is used to allocate space for all the arguments and then they're all
-        // stored in linear memory.
-        let mut memory = Memory::new(store.as_context_mut(), &self.func);
+        // heap, so we can create a `MemoryMut` at this point. Afterwards
+        // `realloc` is used to allocate space for all the arguments and then
+        // they're all stored in linear memory.
+        //
+        // Note that `realloc` will bake in a check that the returned pointer is
+        // in-bounds.
+        let mut memory = MemoryMut::new(store.as_context_mut(), &self.func);
         let ptr = memory.realloc(0, 0, Params::align(), Params::size())?;
         params.store(&mut memory, ptr)?;
 
-        // Space for the parameters and results are created on the stack here.
-        // Note that the parameter here is a single `ValRaw` since the function
-        // will only have one parameter which is a pointer into the heap where
-        // all of the arguments are stored. The space for the results is
-        // reserved by the other field of the union of `ParamsAndResults`.
-        //
-        // Also note that the pointer here is stored as a 64-bit integer. This
-        // allows this to work with either 32 or 64-bit memories. For a 32-bit
-        // memory it'll just ignore the upper 32 zero bits, and for 64-bit
-        // memories this'll have the full 64-bits. Note that for 32-bit
-        // memories the call to `realloc` above guarantees that the `ptr` is
-        // in-bounds meaning that we will know that the zero-extended upper
-        // bits of `ptr` are guaranteed to be zero.
+        // Note that the pointer here is stored as a 64-bit integer. This allows
+        // this to work with either 32 or 64-bit memories. For a 32-bit memory
+        // it'll just ignore the upper 32 zero bits, and for 64-bit memories
+        // this'll have the full 64-bits. Note that for 32-bit memories the call
+        // to `realloc` above guarantees that the `ptr` is in-bounds meaning
+        // that we will know that the zero-extended upper bits of `ptr` are
+        // guaranteed to be zero.
         //
         // This comment about 64-bit integers is also referred to below with
         // "WRITEPTR64".
-        let params_and_results = &mut MaybeUninit::new(ParamsAndResults {
-            params: ValRaw::i64(ptr as i64),
-        });
+        dst.write(ValRaw::i64(ptr as i64));
 
-        self.call_raw(store, params_and_results)
+        Ok(())
     }
 
-    fn call_raw<T, U>(
+    /// Lift the result of a function directly from the stack result.
+    ///
+    /// This is only used when the result fits in the maximum number of stack
+    /// slots.
+    fn lift_stack_result(&self, store: &StoreOpaque, dst: &Return::Lower) -> Result<Return> {
+        assert!(Return::flatten_count() <= MAX_STACK_RESULTS);
+        Return::lift(store, &self.func, dst)
+    }
+
+    /// Lift the result of a function where the result is stored indirectly on
+    /// the heap.
+    fn lift_heap_result(&self, store: &StoreOpaque, dst: &ValRaw) -> Result<Return> {
+        assert!(Return::flatten_count() > MAX_STACK_RESULTS);
+        // FIXME: needs to read an i64 for memory64
+        let ptr = usize::try_from(dst.get_u32()).unwrap();
+        let memory = Memory::new(store, &self.func);
+        let bytes = memory
+            .as_slice()
+            .get(ptr..)
+            .and_then(|b| b.get(..Return::size()))
+            .ok_or_else(|| anyhow::anyhow!("pointer out of bounds of memory"))?;
+        Return::load(&memory, bytes)
+    }
+
+    /// Invokes the underlying wasm function, lowering arguments and lifting the
+    /// result.
+    ///
+    /// The `lower` function and `lift` function provided here are what actually
+    /// do the lowering and lifting. The `LowerParams` and `LowerReturn` types
+    /// are what will be allocated on the stack for this function call. They
+    /// should be appropriately sized for the lowering/lifting operation
+    /// happening.
+    fn call_raw<T, LowerParams, LowerReturn>(
         &self,
         store: &mut StoreContextMut<'_, T>,
-        space: &mut MaybeUninit<ParamsAndResults<U, Return::Lower>>,
+        params: &Params,
+        lower: impl FnOnce(
+            &Self,
+            &mut StoreContextMut<'_, T>,
+            &Params,
+            &mut MaybeUninit<LowerParams>,
+        ) -> Result<()>,
+        lift: impl FnOnce(&Self, &StoreOpaque, &LowerReturn) -> Result<Return>,
     ) -> Result<Return>
     where
-        U: Copy,
+        LowerParams: Copy,
+        LowerReturn: Copy,
     {
         let super::FuncData {
             trampoline, export, ..
         } = store.0[self.func.0];
+
+        let space = &mut MaybeUninit::<ParamsAndResults<LowerParams, LowerReturn>>::uninit();
 
         // Double-check the size/alignemnt of `space`, just in case.
         //
@@ -271,6 +334,8 @@ where
         assert!(mem::align_of_val(space) == val_align);
         assert!(mem::align_of_val(map_maybe_uninit!(space.params)) == val_align);
         assert!(mem::align_of_val(map_maybe_uninit!(space.ret)) == val_align);
+
+        lower(self, store, params, map_maybe_uninit!(space.params))?;
 
         unsafe {
             // This is unsafe as we are providing the guarantee that all the
@@ -288,16 +353,16 @@ where
             )?;
 
             // Note that `.assume_init_ref()` here is unsafe but we're relying
-            // on the correctness of the structure of `params_and_results`, the
-            // structure of `Return::Lower`, and the type-checking performed to
-            // acquire the `TypedFunc` to make this safe. It should be the case
-            // that `Return::Lower` is the exact representation of the return
-            // value when interpreted as `[ValRaw]`, and additionally they
-            // should have the correct types for the function we just called
-            // (which filled in the return values).
-            Return::lift(
+            // on the correctness of the structure of `LowerReturn` and the
+            // type-checking performed to acquire the `TypedFunc` to make this
+            // safe. It should be the case that `LowerReturn` is the exact
+            // representation of the return value when interpreted as
+            // `[ValRaw]`, and additionally they should have the correct types
+            // for the function we just called (which filled in the return
+            // values).
+            lift(
+                self,
                 store.0,
-                &self.func,
                 map_maybe_uninit!(space.ret).assume_init_ref(),
             )
         }
@@ -357,7 +422,7 @@ pub unsafe trait ComponentParams {
     /// Convenience method to `ComponentValue::store` when viewing this
     /// parameter list as a tuple.
     #[doc(hidden)]
-    fn store<T>(&self, memory: &mut Memory<'_, T>, offset: usize) -> Result<()> {
+    fn store<T>(&self, memory: &mut MemoryMut<'_, T>, offset: usize) -> Result<()> {
         self.as_tuple().store(memory, offset)
     }
 
@@ -394,7 +459,7 @@ macro_rules! impl_component_params {
                     bail!("expected {} types, found {}", $n, params.len());
                 }
                 let mut params = params.iter().map(|i| &i.1);
-                $($t::typecheck(params.next().unwrap(), _types)?;)*
+                $($t::typecheck(params.next().unwrap(), _types, Op::Lower)?;)*
                 debug_assert!(params.next().is_none());
                 Ok(())
             }
@@ -462,49 +527,27 @@ pub unsafe trait ComponentValue {
     #[doc(hidden)]
     type Lower: Copy;
 
-    /// Representation of the "lifted" form of this component value.
+    /// Returns the number of core wasm abi values will be used to represent
+    /// this type in its lowered form.
     ///
-    /// This is somewhat subtle and is not always what you might expect. This is
-    /// only used for values which are actually possible to return by-value in
-    /// the canonical ABI. Everything returned indirectly (e.g. takes up two or
-    /// more core wasm values to represent) is instead returned as `Value<T>`
-    /// and this associated type isn't used.
-    ///
-    /// For that reason this `Lift` is defined as `Self` for most primitives,
-    /// but it's actually `Infallible` (some empty void-like enum) for
-    /// strings/lists because those aren't possible to lift from core wasm
-    /// values.
-    ///
-    /// This is also used for ADT-definitions of tuples/options/results since
-    /// it's technically possible to return `(u32,)` or something like
-    /// `option<()>` which is all an immediate return value as well. In general
-    /// this is expected to largely be `Infallible` (or similar) and functions
-    /// return `Value<T>` instead at the `TypedFunc` layer.
+    /// This divides the size of `Self::Lower` by the size of `ValRaw`.
     #[doc(hidden)]
-    type Lift;
+    fn flatten_count() -> usize {
+        assert!(mem::size_of::<Self::Lower>() % mem::size_of::<ValRaw>() == 0);
+        assert!(mem::align_of::<Self::Lower>() == mem::align_of::<ValRaw>());
+        mem::size_of::<Self::Lower>() / mem::size_of::<ValRaw>()
+    }
 
     /// Performs a type-check to see whether this comopnent value type matches
     /// the interface type `ty` provided.
-    #[doc(hidden)]
-    fn typecheck(ty: &InterfaceType, types: &ComponentTypes) -> Result<()>;
-
-    /// Performs the "lower" function in the canonical ABI.
     ///
-    /// This method will lower the given value into wasm linear memory. The
-    /// `store` and `func` are provided in case memory is needed (e.g. for
-    /// strings/lists) so `realloc` can be called. The `dst` is the destination
-    /// to store the lowered results.
-    ///
-    /// Note that `dst` is a pointer to uninitialized memory. It's expected
-    /// that `dst` is fully initialized by the time this function returns, hence
-    /// the `unsafe` on the trait implementation.
+    /// The `op` provided is the operations which could be performed with this
+    /// type if the typecheck passes, either lifting or lowering. Some Rust
+    /// types are only valid for one operation and we can't prevent the wrong
+    /// one from being used at compile time so we rely on the runtime check
+    /// here.
     #[doc(hidden)]
-    fn lower<T>(
-        &self,
-        store: &mut StoreContextMut<T>,
-        func: &Func,
-        dst: &mut MaybeUninit<Self::Lower>,
-    ) -> Result<()>;
+    fn typecheck(ty: &InterfaceType, types: &ComponentTypes, op: Op) -> Result<()>;
 
     /// Returns the size, in bytes, that this type has in the canonical ABI.
     ///
@@ -523,6 +566,45 @@ pub unsafe trait ComponentValue {
     #[doc(hidden)]
     fn align() -> u32;
 
+    /// Performs the "lower" function in the canonical ABI.
+    ///
+    /// This method will lower the given value into wasm linear memory. The
+    /// `store` and `func` are provided in case memory is needed (e.g. for
+    /// strings/lists) so `realloc` can be called. The `dst` is the destination
+    /// to store the lowered results.
+    ///
+    /// Note that `dst` is a pointer to uninitialized memory. It's expected
+    /// that `dst` is fully initialized by the time this function returns, hence
+    /// the `unsafe` on the trait implementation.
+    ///
+    /// This will only be called if `typecheck` passes for `Op::Lower`.
+    #[doc(hidden)]
+    fn lower<T>(
+        &self,
+        store: &mut StoreContextMut<T>,
+        func: &Func,
+        dst: &mut MaybeUninit<Self::Lower>,
+    ) -> Result<()>;
+
+    /// Performs the "lift" oepration in the canonical ABI.
+    ///
+    /// This will read the core wasm values from `src` and use the memory
+    /// specified by `func` and `store` optionally if necessary. An instance of
+    /// `Self` is then created from the values, assuming validation succeeds.
+    ///
+    /// Note that this has a default implementation but if `typecheck` passes
+    /// for `Op::Lift` this needs to be overridden.
+    #[doc(hidden)]
+    fn lift(store: &StoreOpaque, func: &Func, src: &Self::Lower) -> Result<Self>
+    where
+        Self: Sized,
+    {
+        // NB: ideally there would be no default implementation here but to
+        // enable `impl ComponentValue for str` this is the way we get it today.
+        drop((store, func, src));
+        unreachable!("this should be rejected during typechecking")
+    }
+
     /// Performs the "store" operation in the canonical ABI.
     ///
     /// This function will store `self` into the linear memory described by
@@ -534,34 +616,45 @@ pub unsafe trait ComponentValue {
     /// be improved in the future to remove extra bounds checks. For now this
     /// function will panic if there's a bug and `offset` isn't valid within
     /// memory.
-    #[doc(hidden)]
-    fn store<T>(&self, memory: &mut Memory<'_, T>, offset: usize) -> Result<()>;
-
-    /// Returns the number of core wasm abi values will be used to represent
-    /// this type in its lowered form.
     ///
-    /// This divides the size of `Self::Lower` by the size of `ValRaw`.
+    /// This will only be called if `typecheck` passes for `Op::Lower`.
     #[doc(hidden)]
-    fn flatten_count() -> usize {
-        assert!(mem::size_of::<Self::Lower>() % mem::size_of::<ValRaw>() == 0);
-        assert!(mem::align_of::<Self::Lower>() == mem::align_of::<ValRaw>());
-        mem::size_of::<Self::Lower>() / mem::size_of::<ValRaw>()
+    fn store<T>(&self, memory: &mut MemoryMut<'_, T>, offset: usize) -> Result<()>;
+
+    /// Performs the "load" operation in the canonical ABI.
+    ///
+    /// This is given the linear-memory representation of `Self` in the `bytes`
+    /// array provided which is guaranteed to be `Self::size()` bytes large. All
+    /// of memory is then also described with `Memory` for bounds-checks and
+    /// such as necessary for strings/lists.
+    ///
+    /// Note that this has a default implementation but if `typecheck` passes
+    /// for `Op::Lift` this needs to be overridden.
+    #[doc(hidden)]
+    fn load(memory: &Memory<'_>, bytes: &[u8]) -> Result<Self>
+    where
+        Self: Sized,
+    {
+        // See `lift` above for why there's a default implementation here
+        drop((memory, bytes));
+        unreachable!("this should be rejected during typechecking")
     }
+}
 
-    /// Performs the "lift" oepration in the canonical ABI.
-    ///
-    /// Like `Self::Lift` this is somewhat special, it's actually only ever
-    /// called if `Self::Lower` is zero or one `ValRaw` instances. If the
-    /// lowered representation of this type needs more instances of `ValRaw`
-    /// then the value is always returned through memory which means a `Cursor`
-    /// is instead used to iterate over the contents.
-    ///
-    /// This takes the lowered representation as input and returns the
-    /// associated `Lift` type for this implementation. For types where `Lift`
-    /// is `Infallible` or similar this simply panics as it should never be
-    /// called at runtime.
-    #[doc(hidden)]
-    fn lift(src: &Self::Lower) -> Result<Self::Lift>;
+/// Operational parameter passed to `ComponentValue::typecheck` indicating how a
+/// value will be used in a particular context.
+///
+/// This is used to disallow, at runtime, loading a `&Vec<String>` from wasm
+/// since that can't be done. Instead that has to be `WasmList<WasmStr>`.
+#[doc(hidden)]
+#[derive(Copy, Clone)]
+pub enum Op {
+    /// A "lift" operation will be performed, meaning values will be read from
+    /// wasm.
+    Lift,
+    /// A "lower" operation will be performed, meaning values will be written to
+    /// wasm.
+    Lower,
 }
 
 /// A helper structure to package up proof-of-memory. This holds a store pointer
@@ -573,14 +666,14 @@ pub unsafe trait ComponentValue {
 /// left this in for convenience in the hope that this can be updated in the
 /// future.
 #[doc(hidden)]
-pub struct Memory<'a, T> {
+pub struct MemoryMut<'a, T> {
     store: StoreContextMut<'a, T>,
     func: &'a Func,
 }
 
-impl<'a, T> Memory<'a, T> {
-    fn new(store: StoreContextMut<'a, T>, func: &'a Func) -> Memory<'a, T> {
-        Memory { func, store }
+impl<'a, T> MemoryMut<'a, T> {
+    fn new(store: StoreContextMut<'a, T>, func: &'a Func) -> MemoryMut<'a, T> {
+        MemoryMut { func, store }
     }
 
     #[inline]
@@ -622,17 +715,50 @@ impl<'a, T> Memory<'a, T> {
     }
 }
 
+/// Like `MemoryMut` but for a read-only version that's used during lifting.
+#[doc(hidden)]
+pub struct Memory<'a> {
+    store: &'a StoreOpaque,
+    func: &'a Func,
+}
+
+impl<'a> Memory<'a> {
+    fn new(store: &'a StoreOpaque, func: &'a Func) -> Memory<'a> {
+        Memory { store, func }
+    }
+
+    fn as_slice(&self) -> &'a [u8] {
+        self.func.memory(self.store)
+    }
+
+    fn string_encoding(&self) -> StringEncoding {
+        self.store[self.func.0].options.string_encoding
+    }
+}
+
 // Macro to help generate "forwarding implementations" of `ComponentValue` to
 // another type, used for wrappers in Rust like `&T`, `Box<T>`, etc.
 macro_rules! forward_component_param {
     ($(($($generics:tt)*) $a:ty => $b:ty,)*) => ($(
-        unsafe impl <$($generics)*> ComponentValue for $a {
+        unsafe impl <$($generics)*> ComponentValue for $a
+        {
             type Lower = <$b as ComponentValue>::Lower;
-            type Lift = <$b as ComponentValue>::Lift;
 
             #[inline]
-            fn typecheck(ty: &InterfaceType, types: &ComponentTypes) -> Result<()> {
-                <$b as ComponentValue>::typecheck(ty, types)
+            fn typecheck(ty: &InterfaceType, types: &ComponentTypes, op: Op) -> Result<()> {
+                match op {
+                    // Lowering rust wrappers is ok since we know how to
+                    // traverse the host to lower the item.
+                    Op::Lower => {}
+
+                    // Lifting, however, is not ok and has no meaning. For
+                    // example we can't create a `&str` from wasm. It also
+                    // doesn't really make sense to create `Arc<T>`, for
+                    // example. In these cases different types need to be used
+                    // such as `WasmList` or `WasmStr`.
+                    Op::Lift => bail!("this type cannot be lifted from wasm"),
+                }
+                <$b as ComponentValue>::typecheck(ty, types, op)
             }
 
             fn lower<U>(
@@ -654,12 +780,16 @@ macro_rules! forward_component_param {
                 <$b as ComponentValue>::align()
             }
 
-            fn store<U>(&self, memory: &mut Memory<'_, U>, offset: usize) -> Result<()> {
+            fn store<U>(&self, memory: &mut MemoryMut<'_, U>, offset: usize) -> Result<()> {
                 <$b as ComponentValue>::store(self, memory, offset)
             }
 
-            fn lift(src: &Self::Lower) -> Result<Self::Lift> {
-                <$b as ComponentValue>::lift(src)
+            fn lift(_store: &StoreOpaque, _func: &Func,_src: &Self::Lower) -> Result<Self> {
+                unreachable!()
+            }
+
+            fn load(_mem: &Memory, _bytes: &[u8]) -> Result<Self> {
+                unreachable!()
             }
         }
     )*)
@@ -678,9 +808,8 @@ unsafe impl ComponentValue for () {
     // A 0-sized array is used here to represent that it has zero-size but it
     // still has the alignment of `ValRaw`.
     type Lower = [ValRaw; 0];
-    type Lift = ();
 
-    fn typecheck(ty: &InterfaceType, _types: &ComponentTypes) -> Result<()> {
+    fn typecheck(ty: &InterfaceType, _types: &ComponentTypes, _op: Op) -> Result<()> {
         match ty {
             // FIXME(WebAssembly/component-model#21) this may either want to
             // match more types, not actually exist as a trait impl, or
@@ -712,12 +841,17 @@ unsafe impl ComponentValue for () {
     }
 
     #[inline]
-    fn store<T>(&self, _memory: &mut Memory<'_, T>, _offset: usize) -> Result<()> {
+    fn store<T>(&self, _memory: &mut MemoryMut<'_, T>, _offset: usize) -> Result<()> {
         Ok(())
     }
 
     #[inline]
-    fn lift(_src: &Self::Lower) -> Result<()> {
+    fn lift(_store: &StoreOpaque, _func: &Func, _src: &Self::Lower) -> Result<Self> {
+        Ok(())
+    }
+
+    #[inline]
+    fn load(_mem: &Memory, _bytes: &[u8]) -> Result<Self> {
         Ok(())
     }
 }
@@ -728,9 +862,8 @@ macro_rules! integers {
     ($($primitive:ident = $ty:ident in $field:ident/$get:ident,)*) => ($(
         unsafe impl ComponentValue for $primitive {
             type Lower = ValRaw;
-            type Lift = $primitive;
 
-            fn typecheck(ty: &InterfaceType, _types: &ComponentTypes) -> Result<()> {
+            fn typecheck(ty: &InterfaceType, _types: &ComponentTypes, _op: Op) -> Result<()> {
                 match ty {
                     InterfaceType::$ty => Ok(()),
                     other => bail!("expected `{}` found `{}`", desc(&InterfaceType::$ty), desc(other))
@@ -757,26 +890,23 @@ macro_rules! integers {
             #[inline]
             fn align() -> u32 { mem::size_of::<$primitive>() as u32 }
 
-            fn store<T>(&self, memory: &mut Memory<'_, T>, offset: usize) -> Result<()> {
+            fn store<T>(&self, memory: &mut MemoryMut<'_, T>, offset: usize) -> Result<()> {
                 *memory.get(offset) = self.to_le_bytes();
                 Ok(())
             }
 
             #[inline]
-            fn lift(src: &Self::Lower) -> Result<Self::Lift> {
+            fn lift(_store: &StoreOpaque, _func: &Func, src: &Self::Lower) -> Result<Self> {
                 // Perform a lossless cast from our field storage to the
                 // destination type. Note that `try_from` here is load bearing
                 // which rejects conversions like `500u32` to `u8` because
                 // that's out-of-bounds for `u8`.
                 Ok($primitive::try_from(src.$get())?)
             }
-        }
 
-        impl Cursor<'_, $primitive> {
-            /// Returns the underlying value that this cursor points to.
             #[inline]
-            pub fn get(&self) -> $primitive {
-                $primitive::from_le_bytes(self.item_bytes().try_into().unwrap())
+            fn load(_mem: &Memory<'_>, bytes: &[u8]) -> Result<Self> {
+                Ok($primitive::from_le_bytes(bytes.try_into().unwrap()))
             }
         }
     )*)
@@ -795,10 +925,10 @@ integers! {
 
 macro_rules! floats {
     ($($float:ident/$get_float:ident = $ty:ident)*) => ($(const _: () = {
-        /// All floats in-and-out of the canonical ABI always have their NaN
-        /// payloads canonicalized. Conveniently the `NAN` constant in Rust has
-        /// the same representation as canonical NAN, so we can use that for the
-        /// NAN value.
+        /// All floats in-and-out of the canonical abi always have their nan
+        /// payloads canonicalized. conveniently the `NAN` constant in rust has
+        /// the same representation as canonical nan, so we can use that for the
+        /// nan value.
         #[inline]
         fn canonicalize(float: $float) -> $float {
             if float.is_nan() {
@@ -810,9 +940,8 @@ macro_rules! floats {
 
         unsafe impl ComponentValue for $float {
             type Lower = ValRaw;
-            type Lift = $float;
 
-            fn typecheck(ty: &InterfaceType, _types: &ComponentTypes) -> Result<()> {
+            fn typecheck(ty: &InterfaceType, _types: &ComponentTypes, _op: Op) -> Result<()> {
                 match ty {
                     InterfaceType::$ty => Ok(()),
                     other => bail!("expected `{}` found `{}`", desc(&InterfaceType::$ty), desc(other))
@@ -832,31 +961,25 @@ macro_rules! floats {
             #[inline]
             fn size() -> usize { mem::size_of::<$float>() }
 
-            // Note that like integers size is used here instead of alignment to
-            // respect the canonical ABI, not host platforms.
+            // note that like integers size is used here instead of alignment to
+            // respect the canonical abi, not host platforms.
             #[inline]
             fn align() -> u32 { mem::size_of::<$float>() as u32 }
 
-            fn store<T>(&self, memory: &mut Memory<'_, T>, offset: usize) -> Result<()> {
+            fn store<T>(&self, memory: &mut MemoryMut<'_, T>, offset: usize) -> Result<()> {
                 let ptr = memory.get(offset);
                 *ptr = canonicalize(*self).to_bits().to_le_bytes();
                 Ok(())
             }
 
             #[inline]
-            fn lift(src: &Self::Lower) -> Result<Self::Lift> {
+            fn lift(_store: &StoreOpaque, _func: &Func, src: &Self::Lower) -> Result<Self> {
                 Ok(canonicalize($float::from_bits(src.$get_float())))
             }
-        }
 
-        impl Cursor<'_, $float> {
-            /// Returns the underlying value that this cursor points to.
-            ///
-            /// Note that NaN values in the component model are canonicalized
-            /// so any NaN read is guaranteed to be a "canonical NaN".
             #[inline]
-            pub fn get(&self) -> $float {
-                canonicalize($float::from_le_bytes(self.item_bytes().try_into().unwrap()))
+            fn load(_mem: &Memory<'_>, bytes: &[u8]) -> Result<Self> {
+                Ok(canonicalize($float::from_le_bytes(bytes.try_into().unwrap())))
             }
         }
     };)*)
@@ -869,9 +992,8 @@ floats! {
 
 unsafe impl ComponentValue for bool {
     type Lower = ValRaw;
-    type Lift = bool;
 
-    fn typecheck(ty: &InterfaceType, _types: &ComponentTypes) -> Result<()> {
+    fn typecheck(ty: &InterfaceType, _types: &ComponentTypes, _op: Op) -> Result<()> {
         match ty {
             InterfaceType::Bool => Ok(()),
             other => bail!("expected `bool` found `{}`", desc(other)),
@@ -898,31 +1020,23 @@ unsafe impl ComponentValue for bool {
         1
     }
 
-    fn store<T>(&self, memory: &mut Memory<'_, T>, offset: usize) -> Result<()> {
+    fn store<T>(&self, memory: &mut MemoryMut<'_, T>, offset: usize) -> Result<()> {
         memory.get::<1>(offset)[0] = *self as u8;
         Ok(())
     }
 
     #[inline]
-    fn lift(src: &Self::Lower) -> Result<Self::Lift> {
+    fn lift(_store: &StoreOpaque, _func: &Func, src: &Self::Lower) -> Result<Self> {
         match src.get_i32() {
             0 => Ok(false),
             1 => Ok(true),
             _ => bail!("invalid boolean value"),
         }
     }
-}
 
-impl Cursor<'_, bool> {
-    /// Returns the underlying value that this cursor points to.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the wasm memory does not have the boolean stored in
-    /// the correct canonical ABI format.
     #[inline]
-    pub fn get(&self) -> Result<bool> {
-        match self.item_bytes()[0] {
+    fn load(_mem: &Memory<'_>, bytes: &[u8]) -> Result<Self> {
+        match bytes[0] {
             0 => Ok(false),
             1 => Ok(true),
             _ => bail!("invalid boolean value"),
@@ -932,9 +1046,8 @@ impl Cursor<'_, bool> {
 
 unsafe impl ComponentValue for char {
     type Lower = ValRaw;
-    type Lift = char;
 
-    fn typecheck(ty: &InterfaceType, _types: &ComponentTypes) -> Result<()> {
+    fn typecheck(ty: &InterfaceType, _types: &ComponentTypes, _op: Op) -> Result<()> {
         match ty {
             InterfaceType::Char => Ok(()),
             other => bail!("expected `char` found `{}`", desc(other)),
@@ -961,36 +1074,35 @@ unsafe impl ComponentValue for char {
         4
     }
 
-    fn store<T>(&self, memory: &mut Memory<'_, T>, offset: usize) -> Result<()> {
+    fn store<T>(&self, memory: &mut MemoryMut<'_, T>, offset: usize) -> Result<()> {
         *memory.get::<4>(offset) = u32::from(*self).to_le_bytes();
         Ok(())
     }
 
     #[inline]
-    fn lift(src: &Self::Lower) -> Result<Self::Lift> {
+    fn lift(_store: &StoreOpaque, _func: &Func, src: &Self::Lower) -> Result<Self> {
         Ok(char::try_from(src.get_u32())?)
     }
-}
 
-impl Cursor<'_, char> {
-    /// Returns the underlying value that this cursor points to.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the wasm memory does not have the char stored in
-    /// the correct canonical ABI format (e.g it's an invalid char)
     #[inline]
-    pub fn get(&self) -> Result<char> {
-        let bits = u32::from_le_bytes(self.item_bytes().try_into().unwrap());
+    fn load(_memory: &Memory<'_>, bytes: &[u8]) -> Result<Self> {
+        let bits = u32::from_le_bytes(bytes.try_into().unwrap());
         Ok(char::try_from(bits)?)
     }
 }
 
+// Note that this is similar to `ComponentValue for WasmStr` except it can only
+// be used for lowering, not lifting.
 unsafe impl ComponentValue for str {
     type Lower = [ValRaw; 2];
-    type Lift = Infallible;
 
-    fn typecheck(ty: &InterfaceType, _types: &ComponentTypes) -> Result<()> {
+    fn typecheck(ty: &InterfaceType, _types: &ComponentTypes, op: Op) -> Result<()> {
+        match op {
+            Op::Lower => {}
+            Op::Lift => {
+                bail!("strings in Rust cannot be lifted from wasm, use `WasmStr` instead")
+            }
+        }
         match ty {
             InterfaceType::String => Ok(()),
             other => bail!("expected `string` found `{}`", desc(other)),
@@ -1003,7 +1115,7 @@ unsafe impl ComponentValue for str {
         func: &Func,
         dst: &mut MaybeUninit<[ValRaw; 2]>,
     ) -> Result<()> {
-        let (ptr, len) = lower_string(&mut Memory::new(store.as_context_mut(), func), self)?;
+        let (ptr, len) = lower_string(&mut MemoryMut::new(store.as_context_mut(), func), self)?;
         // See "WRITEPTR64" above for why this is always storing a 64-bit
         // integer.
         map_maybe_uninit!(dst[0]).write(ValRaw::i64(ptr as i64));
@@ -1019,20 +1131,16 @@ unsafe impl ComponentValue for str {
         4
     }
 
-    fn store<T>(&self, mem: &mut Memory<'_, T>, offset: usize) -> Result<()> {
+    fn store<T>(&self, mem: &mut MemoryMut<'_, T>, offset: usize) -> Result<()> {
         let (ptr, len) = lower_string(mem, self)?;
         // FIXME: needs memory64 handling
         *mem.get(offset + 0) = (ptr as i32).to_le_bytes();
         *mem.get(offset + 4) = (len as i32).to_le_bytes();
         Ok(())
     }
-
-    fn lift(_src: &Self::Lower) -> Result<Self::Lift> {
-        unreachable!("never lifted, should use `Value<str>` instead")
-    }
 }
 
-fn lower_string<T>(mem: &mut Memory<'_, T>, string: &str) -> Result<(usize, usize)> {
+fn lower_string<T>(mem: &mut MemoryMut<'_, T>, string: &str) -> Result<(usize, usize)> {
     match mem.string_encoding() {
         StringEncoding::Utf8 => {
             let ptr = mem.realloc(0, 0, 1, string.len())?;
@@ -1061,50 +1169,87 @@ fn lower_string<T>(mem: &mut Memory<'_, T>, string: &str) -> Result<(usize, usiz
     }
 }
 
-impl<'a> Cursor<'a, String> {
+/// Representation of a string located in linear memory in a WebAssembly
+/// instance.
+///
+/// This type is used with [`TypedFunc`], for example, when WebAssembly returns
+/// a string. This type cannot be used to give a string to WebAssembly, instead
+/// `&str` should be used for that (since it's coming from the host).
+///
+/// Note that this type represents an in-bounds string in linear memory, but it
+/// does not represent a valid string (e.g. valid utf-8). Validation happens
+/// when [`WasmStr::to_str`] is called.
+//
+// TODO: should probably expand this with examples
+pub struct WasmStr {
+    ptr: usize,
+    len: usize,
+    func: Func,
+}
+
+impl WasmStr {
+    fn new(ptr: usize, len: usize, memory: &Memory<'_>) -> Result<WasmStr> {
+        let byte_len = match memory.string_encoding() {
+            StringEncoding::Utf8 => Some(len),
+            StringEncoding::Utf16 => len.checked_mul(2),
+            StringEncoding::CompactUtf16 => unimplemented!(),
+        };
+        match byte_len.and_then(|len| ptr.checked_add(len)) {
+            Some(n) if n <= memory.as_slice().len() => {}
+            _ => bail!("string pointer/length out of bounds of memory"),
+        }
+        Ok(WasmStr {
+            ptr,
+            len,
+            func: *memory.func,
+        })
+    }
+
     /// Returns the underlying string that this cursor points to.
     ///
     /// Note that this will internally decode the string from the wasm's
     /// encoding to utf-8 and additionally perform validation.
     ///
+    /// The `store` provided must be the store where this string lives to
+    /// access the correct memory.
+    ///
     /// # Errors
     ///
-    /// Returns an error if this string's pointer/length are out of bounds or
-    /// if the string wasn't encoded correctly (e.g. invalid utf-8).
-    pub fn to_str(&self) -> Result<Cow<'a, str>> {
-        let ptr_and_len = self.item_bytes();
-        // FIXME: needs memory64 treatment
-        let ptr = u32::from_le_bytes(ptr_and_len[..4].try_into().unwrap());
-        let len = u32::from_le_bytes(ptr_and_len[4..].try_into().unwrap());
-        let (ptr, len) = (usize::try_from(ptr)?, usize::try_from(len)?);
-        match self.string_encoding() {
-            StringEncoding::Utf8 => self.decode_utf8(ptr, len),
-            StringEncoding::Utf16 => self.decode_utf16(ptr, len),
-            StringEncoding::CompactUtf16 => {
-                if len & UTF16_TAG != 0 {
-                    self.decode_utf16(ptr, len ^ UTF16_TAG)
-                } else {
-                    self.decode_latin1(ptr, len)
-                }
-            }
+    /// Returns an error if the string wasn't encoded correctly (e.g. invalid
+    /// utf-8).
+    ///
+    /// # Panics
+    ///
+    /// Panics if this string is not owned by `store`.
+    //
+    // TODO: should add accessors for specifically utf-8 and utf-16 that perhaps
+    // in an opt-in basis don't do validation. Additionally there should be some
+    // method that returns `[u16]` after validating to avoid the utf16-to-utf8
+    // transcode.
+    pub fn to_str<'a, T: 'a>(&self, store: impl Into<StoreContext<'a, T>>) -> Result<Cow<'a, str>> {
+        self._to_str(store.into().0)
+    }
+
+    fn _to_str<'a>(&self, store: &'a StoreOpaque) -> Result<Cow<'a, str>> {
+        match store[self.func.0].options.string_encoding {
+            StringEncoding::Utf8 => self.decode_utf8(store),
+            StringEncoding::Utf16 => self.decode_utf16(store),
+            StringEncoding::CompactUtf16 => unimplemented!(),
         }
     }
 
-    fn decode_utf8(&self, ptr: usize, len: usize) -> Result<Cow<'a, str>> {
-        let memory = self.all_memory();
-        let memory = memory
-            .get(ptr..)
-            .and_then(|s| s.get(..len))
-            .ok_or_else(|| anyhow::anyhow!("string out of bounds"))?;
-        Ok(str::from_utf8(memory)?.into())
+    fn decode_utf8<'a>(&self, store: &'a StoreOpaque) -> Result<Cow<'a, str>> {
+        let memory = self.func.memory(store);
+        // Note that bounds-checking already happen in construction of `WasmStr`
+        // so this is never expected to panic. This could theoretically be
+        // unchecked indexing if we're feeling wild enough.
+        Ok(str::from_utf8(&memory[self.ptr..][..self.len])?.into())
     }
 
-    fn decode_utf16(&self, ptr: usize, len: usize) -> Result<Cow<'a, str>> {
-        let memory = self.all_memory();
-        let memory = len
-            .checked_mul(2)
-            .and_then(|byte_len| memory.get(ptr..)?.get(..byte_len))
-            .ok_or_else(|| anyhow::anyhow!("string out of bounds"))?;
+    fn decode_utf16<'a>(&self, store: &'a StoreOpaque) -> Result<Cow<'a, str>> {
+        let memory = self.func.memory(store);
+        // See notes in `decode_utf8` for why this is panicking indexing.
+        let memory = &memory[self.ptr..][..self.len * 2];
         Ok(std::char::decode_utf16(
             memory
                 .chunks(2)
@@ -1113,10 +1258,61 @@ impl<'a> Cursor<'a, String> {
         .collect::<Result<String, _>>()?
         .into())
     }
+}
 
-    fn decode_latin1(&self, ptr: usize, len: usize) -> Result<Cow<'a, str>> {
-        drop((ptr, len));
-        unimplemented!()
+// Note that this is similar to `ComponentValue for str` except it can only be
+// used for lifting, not lowering.
+unsafe impl ComponentValue for WasmStr {
+    type Lower = [ValRaw; 2];
+
+    fn size() -> usize {
+        8
+    }
+
+    fn align() -> u32 {
+        4
+    }
+
+    fn typecheck(ty: &InterfaceType, _types: &ComponentTypes, op: Op) -> Result<()> {
+        match op {
+            Op::Lift => {}
+            Op::Lower => {
+                bail!("wasm strings cannot be lowered back to wasm, use `&str` instead")
+            }
+        }
+        match ty {
+            InterfaceType::String => Ok(()),
+            other => bail!("expected `string` found `{}`", desc(other)),
+        }
+    }
+
+    fn lower<T>(
+        &self,
+        _store: &mut StoreContextMut<T>,
+        _func: &Func,
+        _dst: &mut MaybeUninit<[ValRaw; 2]>,
+    ) -> Result<()> {
+        unreachable!()
+    }
+
+    fn store<T>(&self, _mem: &mut MemoryMut<'_, T>, _offset: usize) -> Result<()> {
+        unreachable!()
+    }
+
+    fn lift(store: &StoreOpaque, func: &Func, src: &Self::Lower) -> Result<Self> {
+        // FIXME: needs memory64 treatment
+        let ptr = src[0].get_u32();
+        let len = src[1].get_u32();
+        let (ptr, len) = (usize::try_from(ptr)?, usize::try_from(len)?);
+        WasmStr::new(ptr, len, &Memory::new(store, func))
+    }
+
+    fn load(memory: &Memory<'_>, bytes: &[u8]) -> Result<Self> {
+        // FIXME: needs memory64 treatment
+        let ptr = u32::from_le_bytes(bytes[..4].try_into().unwrap());
+        let len = u32::from_le_bytes(bytes[4..].try_into().unwrap());
+        let (ptr, len) = (usize::try_from(ptr)?, usize::try_from(len)?);
+        WasmStr::new(ptr, len, memory)
     }
 }
 
@@ -1125,11 +1321,16 @@ where
     T: ComponentValue,
 {
     type Lower = [ValRaw; 2];
-    type Lift = Infallible;
 
-    fn typecheck(ty: &InterfaceType, types: &ComponentTypes) -> Result<()> {
+    fn typecheck(ty: &InterfaceType, types: &ComponentTypes, op: Op) -> Result<()> {
+        match op {
+            Op::Lower => {}
+            Op::Lift => {
+                bail!("slices in Rust cannot be lifted from wasm, use `WasmList<T>` instead")
+            }
+        }
         match ty {
-            InterfaceType::List(t) => T::typecheck(&types[*t], types),
+            InterfaceType::List(t) => T::typecheck(&types[*t], types, op),
             other => bail!("expected `list` found `{}`", desc(other)),
         }
     }
@@ -1140,7 +1341,7 @@ where
         func: &Func,
         dst: &mut MaybeUninit<[ValRaw; 2]>,
     ) -> Result<()> {
-        let (ptr, len) = lower_list(&mut Memory::new(store.as_context_mut(), func), self)?;
+        let (ptr, len) = lower_list(&mut MemoryMut::new(store.as_context_mut(), func), self)?;
         // See "WRITEPTR64" above for why this is always storing a 64-bit
         // integer.
         map_maybe_uninit!(dst[0]).write(ValRaw::i64(ptr as i64));
@@ -1158,15 +1359,11 @@ where
         4
     }
 
-    fn store<U>(&self, mem: &mut Memory<'_, U>, offset: usize) -> Result<()> {
+    fn store<U>(&self, mem: &mut MemoryMut<'_, U>, offset: usize) -> Result<()> {
         let (ptr, len) = lower_list(mem, self)?;
         *mem.get(offset + 0) = (ptr as i32).to_le_bytes();
         *mem.get(offset + 4) = (len as i32).to_le_bytes();
         Ok(())
-    }
-
-    fn lift(_src: &Self::Lower) -> Result<Self::Lift> {
-        unreachable!("never lifted, should use `Value<[T]>` instead")
     }
 }
 
@@ -1175,17 +1372,17 @@ where
 // Some attempts to fix this have proved not fruitful. In isolation an attempt
 // was made where:
 //
-// * `Memory` stored a `*mut [u8]` as its "last view" of memory to avoid
+// * `MemoryMut` stored a `*mut [u8]` as its "last view" of memory to avoid
 //   reloading the base pointer constantly. This view is reset on `realloc`.
-// * The bounds-checks in `Memory::get` were removed (replaced with unsafe
+// * The bounds-checks in `MemoryMut::get` were removed (replaced with unsafe
 //   indexing)
 //
 // Even then though this didn't correctly vectorized for `Vec<u8>`. It's not
 // entirely clear why but it appeared that it's related to reloading the base
-// pointer fo memory (I guess from `Memory` itself?). Overall I'm not really
+// pointer fo memory (I guess from `MemoryMut` itself?). Overall I'm not really
 // clear on what's happening there, but this is surely going to be a performance
 // bottleneck in the future.
-fn lower_list<T, U>(mem: &mut Memory<'_, U>, list: &[T]) -> Result<(usize, usize)>
+fn lower_list<T, U>(mem: &mut MemoryMut<'_, U>, list: &[T]) -> Result<(usize, usize)>
 where
     T: ComponentValue,
 {
@@ -1203,70 +1400,151 @@ where
     Ok((ptr, list.len()))
 }
 
-impl<'a, T: ComponentValue> Cursor<'a, Vec<T>> {
-    /// Returns the item length of this vector
-    pub fn len(&self) -> usize {
-        // FIXME: needs memory64 treatment
-        u32::from_le_bytes(self.item_bytes()[4..].try_into().unwrap()) as usize
+/// Representation of a list of values that are owned by a WebAssembly instance.
+///
+/// This type is used whenever a `(list T)` is returned from a [`TypedFunc`],
+/// for example. This type represents a list of values that are stored in linear
+/// memory which are waiting to be read.
+///
+/// Note that this type represents only a valid range of bytes for the list
+/// itself, it does not represent validity of the elements themselves and that's
+/// performed when they're iterated.
+pub struct WasmList<T> {
+    ptr: usize,
+    len: usize,
+    func: Func,
+    _marker: marker::PhantomData<T>,
+}
+
+impl<T: ComponentValue> WasmList<T> {
+    fn new(ptr: usize, len: usize, memory: &Memory<'_>) -> Result<WasmList<T>> {
+        match len
+            .checked_mul(T::size())
+            .and_then(|len| ptr.checked_add(len))
+        {
+            Some(n) if n <= memory.as_slice().len() => {}
+            _ => bail!("list pointer/length out of bounds of memory"),
+        }
+        Ok(WasmList {
+            ptr,
+            len,
+            func: *memory.func,
+            _marker: marker::PhantomData,
+        })
     }
 
-    /// Returns an iterator over the elements of this vector.
-    ///
-    /// The returned iterator is an exact-size iterator and is of length
-    /// `self.len()`. Note that the iterator is also an iterator of [`Cursor`]
-    /// types representing that the desired values all continue to live in wasm
-    /// linear memory.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if this list's pointer/length combination is
-    /// out-of-bounds, or if the length times the element size is too large to
-    /// fit in linear memory.
-    pub fn iter(&self) -> Result<impl ExactSizeIterator<Item = Cursor<'a, T>> + '_> {
-        let (ptr, len) = {
-            let ptr_and_len = self.item_bytes();
-            // FIXME: needs memory64 treatment
-            let ptr = u32::from_le_bytes(ptr_and_len[..4].try_into().unwrap());
-            let len = u32::from_le_bytes(ptr_and_len[4..].try_into().unwrap());
-            (usize::try_from(ptr)?, usize::try_from(len)?)
-        };
-        len.checked_mul(T::size())
-            .and_then(|byte_len| self.all_memory().get(ptr..)?.get(..byte_len))
-            .ok_or_else(|| anyhow::anyhow!("list out of bounds"))?;
+    /// Returns the item length of this vector
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.len
+    }
 
-        Ok((0..len).map(move |i| {
-            // The `move_to` function is not safe because `Cursor` is a static
-            // proof that the offset/length is in-bounds. This bounds-check,
-            // however, was just performed above so we know that the offset is
-            // indeed valid, meaning this `unsafe` should be ok.
-            unsafe { self.move_to(ptr + T::size() * i) }
-        }))
+    /// Gets the `n`th element of this list.
+    ///
+    /// Returns `None` if `index` is out of bounds. Returns `Some(Err(..))` if
+    /// the value couldn't be decoded (it was invalid). Returns `Some(Ok(..))`
+    /// if the value is valid.
+    //
+    // TODO: given that interface values are intended to be consumed in one go
+    // should we even expose a random access iteration API? In theory all
+    // consumers should be validating through the iterator.
+    pub fn get(&self, store: impl AsContext, index: usize) -> Option<Result<T>> {
+        self._get(store.as_context().0, index)
+    }
+
+    fn _get(&self, store: &StoreOpaque, index: usize) -> Option<Result<T>> {
+        if index >= self.len {
+            return None;
+        }
+        let memory = Memory::new(store, &self.func);
+        // Note that this is using panicking indexing and this is expected to
+        // never fail. The bounds-checking here happened during the construction
+        // of the `WasmList` itself which means these should always be in-bounds
+        // (and wasm memory can only grow). This could theoretically be
+        // unchecked indexing if we're confident enough and it's actually a perf
+        // issue one day.
+        let bytes = &memory.as_slice()[self.ptr + index * T::size()..][..T::size()];
+        Some(T::load(&memory, bytes))
+    }
+
+    /// Returns an iterator over the elements of this list.
+    ///
+    /// Each item of the list may fail to decode and is represented through the
+    /// `Result` value of the iterator.
+    pub fn iter<'a, U: 'a>(
+        &'a self,
+        store: impl Into<StoreContext<'a, U>>,
+    ) -> impl ExactSizeIterator<Item = Result<T>> + 'a {
+        let store = store.into().0;
+        (0..self.len).map(move |i| self._get(store, i).unwrap())
     }
 }
 
-impl<'a> Cursor<'a, Vec<u8>> {
+impl WasmList<u8> {
     /// Get access to the raw underlying memory for this byte slice.
     ///
     /// Note that this is specifically only implemented for a `(list u8)` type
     /// since it's known to be valid in terms of alignment and representation
     /// validity.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the pointer or of this slice point outside of linear
-    /// memory.
-    pub fn as_slice(&self) -> Result<&'a [u8]> {
-        let (ptr, len) = {
-            let ptr_and_len = self.item_bytes();
-            // FIXME: needs memory64 treatment
-            let ptr = u32::from_le_bytes(ptr_and_len[..4].try_into().unwrap());
-            let len = u32::from_le_bytes(ptr_and_len[4..].try_into().unwrap());
-            (usize::try_from(ptr)?, usize::try_from(len)?)
-        };
-        self.all_memory()
-            .get(ptr..)
-            .and_then(|m| m.get(..len))
-            .ok_or_else(|| anyhow::anyhow!("list out of bounds"))
+    pub fn as_slice<'a, T: 'a>(&self, store: impl Into<StoreContext<'a, T>>) -> &'a [u8] {
+        // See comments in `WasmList::get` for the panicking indexing
+        &self.func.memory(store.into().0)[self.ptr..][..self.len]
+    }
+}
+
+// Note that this is similar to `ComponentValue for str` except it can only be
+// used for lifting, not lowering.
+unsafe impl<T: ComponentValue> ComponentValue for WasmList<T> {
+    type Lower = [ValRaw; 2];
+
+    fn size() -> usize {
+        8
+    }
+
+    fn align() -> u32 {
+        4
+    }
+
+    fn typecheck(ty: &InterfaceType, types: &ComponentTypes, op: Op) -> Result<()> {
+        match op {
+            Op::Lift => {}
+            Op::Lower => {
+                bail!("wasm lists cannot be lowered back to wasm, use `&[T]` instead")
+            }
+        }
+        match ty {
+            InterfaceType::List(t) => T::typecheck(&types[*t], types, op),
+            other => bail!("expected `list` found `{}`", desc(other)),
+        }
+    }
+
+    fn lower<U>(
+        &self,
+        _store: &mut StoreContextMut<U>,
+        _func: &Func,
+        _dst: &mut MaybeUninit<[ValRaw; 2]>,
+    ) -> Result<()> {
+        unreachable!()
+    }
+
+    fn store<U>(&self, _mem: &mut MemoryMut<'_, U>, _offset: usize) -> Result<()> {
+        unreachable!()
+    }
+
+    fn lift(store: &StoreOpaque, func: &Func, src: &Self::Lower) -> Result<Self> {
+        // FIXME: needs memory64 treatment
+        let ptr = src[0].get_u32();
+        let len = src[1].get_u32();
+        let (ptr, len) = (usize::try_from(ptr)?, usize::try_from(len)?);
+        WasmList::new(ptr, len, &Memory::new(store, func))
+    }
+
+    fn load(memory: &Memory<'_>, bytes: &[u8]) -> Result<Self> {
+        // FIXME: needs memory64 treatment
+        let ptr = u32::from_le_bytes(bytes[..4].try_into().unwrap());
+        let len = u32::from_le_bytes(bytes[4..].try_into().unwrap());
+        let (ptr, len) = (usize::try_from(ptr)?, usize::try_from(len)?);
+        WasmList::new(ptr, len, memory)
     }
 }
 
@@ -1282,11 +1560,10 @@ where
     T: ComponentValue,
 {
     type Lower = TupleLower2<<u32 as ComponentValue>::Lower, T::Lower>;
-    type Lift = Option<T::Lift>;
 
-    fn typecheck(ty: &InterfaceType, types: &ComponentTypes) -> Result<()> {
+    fn typecheck(ty: &InterfaceType, types: &ComponentTypes, op: Op) -> Result<()> {
         match ty {
-            InterfaceType::Option(t) => T::typecheck(&types[*t], types),
+            InterfaceType::Option(t) => T::typecheck(&types[*t], types, op),
             other => bail!("expected `option` found `{}`", desc(other)),
         }
     }
@@ -1328,7 +1605,7 @@ where
         T::align()
     }
 
-    fn store<U>(&self, mem: &mut Memory<'_, U>, offset: usize) -> Result<()> {
+    fn store<U>(&self, mem: &mut MemoryMut<'_, U>, offset: usize) -> Result<()> {
         match self {
             None => {
                 mem.get::<1>(offset)[0] = 0;
@@ -1341,30 +1618,20 @@ where
         Ok(())
     }
 
-    fn lift(src: &Self::Lower) -> Result<Self::Lift> {
+    fn lift(store: &StoreOpaque, func: &Func, src: &Self::Lower) -> Result<Self> {
         Ok(match src.A1.get_i32() {
             0 => None,
-            1 => Some(T::lift(&src.A2)?),
+            1 => Some(T::lift(store, func, &src.A2)?),
             _ => bail!("invalid option discriminant"),
         })
     }
-}
 
-impl<'a, T: ComponentValue> Cursor<'a, Option<T>> {
-    /// Returns the underlying value for this `Option<T>`
-    ///
-    /// Note that the payload of the `Option` returned is itself a cursor as it
-    /// still points into linear memory.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the discriminant for this `Option<T>` in linear
-    /// memory is invalid.
-    #[inline]
-    pub fn get(&self) -> Result<Option<Cursor<'a, T>>> {
-        match self.item_bytes()[0] {
+    fn load(memory: &Memory<'_>, bytes: &[u8]) -> Result<Self> {
+        let discrim = bytes[0];
+        let payload = &bytes[align_to(1, T::align())..];
+        match discrim {
             0 => Ok(None),
-            1 => Ok(Some(self.bump(align_to(1, T::align())))),
+            1 => Ok(Some(T::load(memory, payload)?)),
             _ => bail!("invalid option discriminant"),
         }
     }
@@ -1390,14 +1657,13 @@ where
     E: ComponentValue,
 {
     type Lower = ResultLower<T::Lower, E::Lower>;
-    type Lift = Result<T::Lift, E::Lift>;
 
-    fn typecheck(ty: &InterfaceType, types: &ComponentTypes) -> Result<()> {
+    fn typecheck(ty: &InterfaceType, types: &ComponentTypes, op: Op) -> Result<()> {
         match ty {
             InterfaceType::Expected(r) => {
                 let expected = &types[*r];
-                T::typecheck(&expected.ok, types)?;
-                E::typecheck(&expected.err, types)?;
+                T::typecheck(&expected.ok, types, op)?;
+                E::typecheck(&expected.err, types, op)?;
                 Ok(())
             }
             other => bail!("expected `expected` found `{}`", desc(other)),
@@ -1451,7 +1717,7 @@ where
         T::align().max(E::align())
     }
 
-    fn store<U>(&self, mem: &mut Memory<'_, U>, offset: usize) -> Result<()> {
+    fn store<U>(&self, mem: &mut MemoryMut<'_, U>, offset: usize) -> Result<()> {
         match self {
             Ok(e) => {
                 mem.get::<1>(offset)[0] = 0;
@@ -1465,49 +1731,43 @@ where
         Ok(())
     }
 
-    fn lift(src: &Self::Lower) -> Result<Self::Lift> {
-        // This implementation is not correct if there's actually information in
-        // the payload. This doesn't validate that if `payload` has a nonzero
-        // size that the "extended" bits are all zero. For example if
-        // `Result<i32, i64>` is returned then that's represented as `i32 i64`
-        // and `0 i64::MAX` is an invalid return value. This implementation,
-        // however, would consider that valid since it would not try to read the
-        // upper bits of the i64.
+    fn lift(store: &StoreOpaque, func: &Func, src: &Self::Lower) -> Result<Self> {
+        // TODO: need to make a case that upper-bits are not validated to be
+        // zero.
         //
-        // For now this is ok because `lift` is only called for types where
-        // `Lower` is at most one `ValRaw`. A `Result<T, E>` always takes up at
-        // least one `ValRaw` for the discriminant so we know that if this is
-        // being used then both `T` and `E` have zero size.
-        assert!(mem::size_of_val(&src.payload) == 0);
+        // * `Result<u32, u64>` flattens as `i32 i64`
+        // * This impl wants to say `0 u64::MAX` is a valid flattening of
+        //   `Ok(u32::MAX)`.
+        // * Otherwise validation needs to be performed that, where necessary,
+        //   upper bits are zero.
+        // * Points in favor:
+        //   * `Result<u32, (u32, u32)>` flattens as `i32 i32 i32` and
+        //     `Ok(0)` doesn't  validate that the third `i32` is any
+        //     particular value.
+        //   * Padding bytes are ignored in the in-memory representation.
+        //
+        // Otherwise I don't know how to implement the validation for now. This
+        // would need to, at compile time via the Rust trait system, figure out
+        // the flatten lowering for `Result<T, E>` for `T` and `E` and then ask
+        // `T`'s lowered type to validate that it's valid within the context of
+        // the the overall lowered type. This... is trait trickery that is
+        // beyond me but seems like it should be possible. Would be nice if we
+        // didn't have to do that though.
 
         Ok(match src.tag.get_i32() {
-            0 => Ok(unsafe { T::lift(&src.payload.ok)? }),
-            1 => Err(unsafe { E::lift(&src.payload.err)? }),
+            0 => Ok(unsafe { T::lift(store, func, &src.payload.ok)? }),
+            1 => Err(unsafe { E::lift(store, func, &src.payload.err)? }),
             _ => bail!("invalid expected discriminant"),
         })
     }
-}
 
-impl<'a, T, E> Cursor<'a, Result<T, E>>
-where
-    T: ComponentValue,
-    E: ComponentValue,
-{
-    /// Returns the underlying value for this `Result<T, E>`
-    ///
-    /// Note that the payloads of the `Result` returned are themselves cursors
-    /// as they still point into linear memory.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the discriminant for this `Result` in linear
-    /// memory is invalid.
-    #[inline]
-    pub fn get(&self) -> Result<Result<Cursor<'a, T>, Cursor<'a, E>>> {
+    fn load(memory: &Memory<'_>, bytes: &[u8]) -> Result<Self> {
         let align = <Result<T, E> as ComponentValue>::align();
-        match self.item_bytes()[0] {
-            0 => Ok(Ok(self.bump(align_to(1, align)))),
-            1 => Ok(Err(self.bump(align_to(1, align)))),
+        let discrim = bytes[0];
+        let payload = &bytes[align_to(1, align)..];
+        match discrim {
+            0 => Ok(Ok(T::load(memory, &payload[..T::size()])?)),
+            1 => Ok(Err(E::load(memory, &payload[..E::size()])?)),
             _ => bail!("invalid expected discriminant"),
         }
     }
@@ -1535,11 +1795,11 @@ macro_rules! impl_component_ty_for_tuples {
         where $($t: ComponentValue),*
         {
             type Lower = [<TupleLower$n>]<$($t::Lower),*>;
-            type Lift = ($($t::Lift,)*);
 
             fn typecheck(
                 ty: &InterfaceType,
                 types: &ComponentTypes,
+                op: Op,
             ) -> Result<()> {
                 match ty {
                     InterfaceType::Tuple(t) => {
@@ -1548,7 +1808,7 @@ macro_rules! impl_component_ty_for_tuples {
                             bail!("expected {}-tuple, found {}-tuple", $n, tuple.types.len());
                         }
                         let mut tuple = tuple.types.iter();
-                        $($t::typecheck(tuple.next().unwrap(), types)?;)*
+                        $($t::typecheck(tuple.next().unwrap(), types, op)?;)*
                         debug_assert!(tuple.next().is_none());
                         Ok(())
                     }
@@ -1581,7 +1841,7 @@ macro_rules! impl_component_ty_for_tuples {
                 align
             }
 
-            fn store<U>(&self, memory: &mut Memory<'_, U>, mut offset: usize) -> Result<()> {
+            fn store<U>(&self, memory: &mut MemoryMut<'_, U>, mut offset: usize) -> Result<()> {
                 let ($($t,)*) = self;
                 // TODO: this requires that `offset` is aligned which we may not
                 // want to do
@@ -1594,45 +1854,22 @@ macro_rules! impl_component_ty_for_tuples {
                 Ok(())
             }
 
-            #[inline]
-            fn lift(src: &Self::Lower) -> Result<Self::Lift> {
-                Ok(($($t::lift(&src.$t)?,)*))
+            fn lift(store: &StoreOpaque, func: &Func, src: &Self::Lower) -> Result<Self> {
+                Ok(($($t::lift(store, func, &src.$t)?,)*))
+            }
+
+            fn load(memory: &Memory<'_>, bytes: &[u8]) -> Result<Self> {
+                let mut _offset = 0;
+                $(
+                    _offset = align_to(_offset, $t::align());
+                    let $t = $t::load(memory, &bytes[_offset..][..$t::size()])?;
+                    _offset += $t::size();
+                )*
+                Ok(($($t,)*))
             }
         }
 
-        impl<'a, $($t),*> Cursor<'a, ($($t,)*)>
-        where
-            $($t: ComponentValue),*
-        {
-            fn start_offset(&self) -> usize {
-                0
-            }
-
-            define_tuple_cursor_accessors!(start_offset $($t)*);
-        }
     }};
-}
-
-macro_rules! define_tuple_cursor_accessors {
-    ($offset:ident) => {};
-    ($offset:ident $t:ident $($u:ident)*) => {
-        paste::paste! {
-            /// Returns a pointer to the `n`th field of the tuple contained
-            /// within this cursor.
-            #[inline]
-            pub fn [<$t:lower>](&self) -> Cursor<'a, $t> {
-                self.bump(align_to(self.$offset(), $t::align()))
-            }
-
-            #[allow(dead_code)]
-            #[inline]
-            fn [<$t:lower _end>](&self) -> usize {
-                align_to(self.$offset(), $t::align()) + $t::size()
-            }
-
-            define_tuple_cursor_accessors!([<$t:lower _end>] $($u)*);
-        }
-    };
 }
 
 for_each_function_signature!(impl_component_ty_for_tuples);
@@ -1663,298 +1900,5 @@ fn desc(ty: &InterfaceType) -> &'static str {
         InterfaceType::Flags(_) => "flags",
         InterfaceType::Enum(_) => "enum",
         InterfaceType::Union(_) => "union",
-    }
-}
-
-/// A trait representing values which can be returned from a [`TypedFunc`].
-///
-/// For all values which implement the [`ComponentValue`] trait this is
-/// implemented for either `T` or [`Value<T>`]. For more information on which
-/// to use see the documentation at [`Func::typed`].
-///
-/// The contents of this trait are hidden as it's intended to be an
-/// implementation detail of Wasmtime. The contents of this trait are not
-/// covered by Wasmtime's stability guarantees.
-//
-// Note that this is an `unsafe` trait because the safety of `TypedFunc` relies
-// on `typecheck` being correct relative to `Lower`, among other things.
-//
-// Also note that this trait specifically is not sealed because we'll
-// eventually have a proc macro that generates implementations of this trait
-// for external types in a `#[derive]`-like fashion.
-pub unsafe trait ComponentReturn: Sized {
-    /// The core wasm lowered value used to interpret this return value.
-    ///
-    /// This is `T::Lower` in the case of `ComponentReturn for T` and this is
-    /// otherwise a singular `ValRaw` for `Value<T>` to store the i32 return
-    /// value.
-    #[doc(hidden)]
-    type Lower: Copy;
-
-    /// Performs a type-check to ensure that this `ComponentReturn` value
-    /// matches the interface type specified.
-    ///
-    /// Note that even if `Self` matches the `ty` specified this function will
-    /// also perform a check to ensure that `Lower` is suitable for returning
-    /// `Self` in the core wasm ABI. For example `Value<u8>` has the type
-    /// `InterfaceType::U8` but is not suitable as a return type since
-    /// `Value<u8>` represents an indirect return value and `u8` is a direct
-    /// return. That check is done by this function.
-    #[doc(hidden)]
-    fn typecheck(ty: &InterfaceType, types: &ComponentTypes) -> Result<()>;
-
-    /// Performs the lifting operation from the core wasm return value into
-    /// `Self`.
-    ///
-    /// Note that this can fail in the case that an indirect pointer was
-    /// returned and the indirect pointer is out-of-bounds.
-    #[doc(hidden)]
-    fn lift(store: &StoreOpaque, func: &Func, src: &Self::Lower) -> Result<Self>;
-}
-
-// Note that the trait bound here requires that the lifted value of `T` is
-// itself. This is true for primitives and ADTs above and is required to
-// implement the `lift` function. That also means that implementations of
-// `ComponentValue` for strings/lists statically can't use this impl because
-// their `Lift` is not themselves.
-unsafe impl<T: ComponentValue<Lift = T>> ComponentReturn for T {
-    type Lower = T::Lower;
-
-    fn typecheck(ty: &InterfaceType, types: &ComponentTypes) -> Result<()> {
-        // Perform a check that the size of the return value is indeed at most
-        // one core wasm abi value. If there is more than one core wasm abi
-        // return value then the `Value<T>` type must be used instead.
-        if T::flatten_count() > MAX_STACK_RESULTS {
-            let name = std::any::type_name::<T>();
-            bail!(
-                "cannot use `{name}` as a return value as it is \
-                 returned indirectly, use `Value<{name}>` instead"
-            );
-        }
-
-        // ... and if the ABI is appropriate then we can otherwise delegate to
-        // a normal type-check.
-        T::typecheck(ty, types)
-    }
-
-    fn lift(_store: &StoreOpaque, _func: &Func, src: &Self::Lower) -> Result<Self> {
-        <T as ComponentValue>::lift(src)
-    }
-}
-
-unsafe impl<T: ComponentValue> ComponentReturn for Value<T> {
-    type Lower = ValRaw;
-
-    fn typecheck(ty: &InterfaceType, types: &ComponentTypes) -> Result<()> {
-        // Similar to the impl above, except this is the reverse. When using
-        // `Value<T>` that means the return value is expected to be indirectly
-        // returned in linear memory. That means we need to verify that the
-        // canonical ABI indeed return `T` indirectly by double-checking that
-        // the core wasm abi makeup of the type requires more than one value.
-        if T::flatten_count() <= MAX_STACK_RESULTS {
-            let name = std::any::type_name::<T>();
-            bail!(
-                "cannot use `Value<{name}>` as a return value as it is not \
-                 returned indirectly, use `{name}` instead"
-            );
-        }
-
-        // ... and like above if the abi lines up then delegate to `T` for
-        // further type-checking.
-        T::typecheck(ty, types)
-    }
-
-    fn lift(store: &StoreOpaque, func: &Func, src: &Self::Lower) -> Result<Self> {
-        // FIXME: needs to read an i64 for memory64
-        let ptr = src.get_u32() as usize;
-        Value::new(store, func, ptr)
-    }
-}
-
-pub use self::value::*;
-
-/// The `Value` and `Cursor` types have internal variants that are important to
-/// uphold so they're defined in a small submodule here to statically prevent
-/// access to their private internals by the surrounding module.
-mod value {
-    use super::*;
-    use crate::StoreContext;
-
-    /// A pointer to a type which is stored in WebAssembly linear memory.
-    ///
-    /// This structure is used as the return value from [`TypedFunc`] at this
-    /// time to represent a function that returns its value through linear
-    /// memory instead of directly through return values.
-    ///
-    /// A [`Value<T>`] represents a valid chunk of WebAssembly linear memory.
-    /// From a [`Value<T>`] a [`Cursor<T>`] can be created which is used to
-    /// actually inspect the contents of WebAssembly linear memory.
-    //
-    // As an implementation note the `Value` type has an unsafe contract where
-    // `pointer` is valid for `T::size()` bytes within the memory pointed to by
-    // the `origin` function specified. This `Value` itself does not pin the
-    // memory as its purpose is to not pin the store. The pinning of the store
-    // happens later.
-    pub struct Value<T> {
-        pointer: usize,
-        origin: Func,
-        _marker: marker::PhantomData<T>,
-    }
-
-    /// A type which is used to inspect the contents of `T` as it resides in
-    /// WebAssembly linear memory.
-    ///
-    /// The [`Cursor<T>`] type is created by the [`Value::cursor`] method which
-    /// holds a shared borrow onto the [`Store`](crate::Store). This does
-    /// not necessarily represent that `T` itself is stored in linear memory,
-    /// for example `Cursor<String>` doesn't mean that a host `String` type
-    /// is stored in linear memory but rather a canonical ABI string is stored
-    /// in linear memory. The [`Cursor<T>`] has per-`T` methods on it to access
-    /// the contents of wasm linear memory.
-    ///
-    /// The existence of [`Cursor<T>`] means that the pointer that the cursor
-    /// has is valid for `T::size()` bytes of linear memory. The actual memory
-    /// it points to may have invalid contents, but that's left for each
-    /// method-of-interpretation to determine.
-    //
-    // As an implementation detail, like `Value`, the existence of a `Cursor`
-    // is static proof that `offset` within `all_memory` is valid for
-    // `T::size()` bytes. This enables the `item_bytes` method to use unchecked
-    // indexing.
-    pub struct Cursor<'a, T> {
-        offset: usize,
-        all_memory: &'a [u8],
-        string_encoding: StringEncoding,
-        _marker: marker::PhantomData<T>,
-    }
-
-    impl<T> Value<T>
-    where
-        T: ComponentValue,
-    {
-        pub(super) fn new(store: &StoreOpaque, origin: &Func, pointer: usize) -> Result<Value<T>> {
-            // Construction of a `Value` indicates proof that the `pointer` is
-            // valid, so the check is performed here to ensure that it's safe
-            // to construct the `Value`.
-            origin
-                .memory(store)
-                .get(pointer..)
-                .and_then(|s| s.get(..T::size()))
-                .ok_or_else(|| anyhow::anyhow!("pointer out of bounds of memory"))?;
-            Ok(Value {
-                pointer,
-                origin: *origin,
-                _marker: marker::PhantomData,
-            })
-        }
-
-        /// Returns a [`Cursor<T>`] that can be used to read linear memory.
-        ///
-        /// This method will borrow the `store` provided to get access to wasm
-        /// linear memory and the returned [`Cursor<T>`] is used to iterate
-        /// over the wasm linear memory using accessor methods specific to
-        /// the type `T`.
-        ///
-        /// # Panics
-        ///
-        /// This function will panic if `store` doesn't own the wasm linear
-        /// memory that this `Value` points to.
-        pub fn cursor<'a, U: 'a>(&self, store: impl Into<StoreContext<'a, U>>) -> Cursor<'a, T> {
-            let store = store.into();
-            let all_memory = self.origin.memory(store.0);
-
-            // Note that construction of a `Cursor` is static proof that the
-            // `offset` is valid. This should be ok here because this `Value`
-            // was already validated and memory cannot shrink, so after the
-            // `Value` was created the memory should still be of an appropriate
-            // size.
-            Cursor {
-                offset: self.pointer,
-                all_memory,
-                string_encoding: store.0[self.origin.0].options.string_encoding,
-                _marker: marker::PhantomData,
-            }
-        }
-    }
-
-    impl<'a, T: ComponentValue> Cursor<'a, T> {
-        /// Returns the bytes that `T` is stored within.
-        #[inline]
-        pub(super) fn item_bytes(&self) -> &[u8] {
-            // The existence of `Cursor<T>` as a wrapper type is intended to
-            // serve as proof that this `unsafe` block is indeed safe. The
-            // unchecked indexing here is possible due to the bounds checks
-            // that happen during construction of a `Cursor`.
-            //
-            // ... but in debug mode we double-check just to be sure.
-            unsafe {
-                if cfg!(debug_assertions) {
-                    drop(&self.all_memory[self.offset..][..T::size()]);
-                }
-                self.all_memory
-                    .get_unchecked(self.offset..)
-                    .get_unchecked(..T::size())
-            }
-        }
-
-        /// Returns all of linear memory, useful for strings/lists which have
-        /// indirect pointers.
-        #[inline]
-        pub(super) fn all_memory(&self) -> &'a [u8] {
-            self.all_memory
-        }
-
-        /// Returns the string encoding in use.
-        pub(super) fn string_encoding(&self) -> StringEncoding {
-            self.string_encoding
-        }
-
-        /// Increments this `Cursor` forward by `offset` bytes to point to a
-        /// `U` that is contained within `T`.
-        ///
-        /// # Panics
-        ///
-        /// Panics if `offset + U::size()` is larger than `T::size()`.
-        #[inline]
-        pub(super) fn bump<U>(&self, offset: usize) -> Cursor<'a, U>
-        where
-            U: ComponentValue,
-        {
-            // Perform a bounds check that if we increase `self.offset` by
-            // `offset` and point to `U` that the result is still contained
-            // within this `Cursor<T>`. After doing so it's safe to call
-            // `move_to` as the bounds check has been performed.
-            //
-            // Note that it's expected that this bounds-check can be optimized
-            // out in most cases. The `offset` argument is typically a constant
-            // thing like a field or payload offset, and then `{T,U}::size()`
-            // are also trivially const-evaluatable by LLVM. If this shows up
-            // in profiles more functions may need `#[inline]`.
-            assert!(offset + U::size() <= T::size());
-            unsafe { self.move_to(self.offset + offset) }
-        }
-
-        /// An unsafe method to construct a new `Cursor` pointing to within
-        /// the same linear memory that this `Cursor` points to but for a
-        /// different type `U` and at a different `offset`.
-        ///
-        /// # Unsafety
-        ///
-        /// This function is unsafe because `Cursor` is a static proof that the
-        /// `offset` is valid for `U::size()` bytes within linear memory.
-        /// Callers must uphold this invariant themselves and perform a bounds
-        /// check before being able to safely call this method.
-        #[inline]
-        pub(super) unsafe fn move_to<U>(&self, offset: usize) -> Cursor<'a, U>
-        where
-            U: ComponentValue,
-        {
-            Cursor {
-                offset,
-                all_memory: self.all_memory,
-                string_encoding: self.string_encoding,
-                _marker: marker::PhantomData,
-            }
-        }
     }
 }
