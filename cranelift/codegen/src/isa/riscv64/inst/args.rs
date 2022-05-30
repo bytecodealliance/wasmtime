@@ -899,6 +899,7 @@ impl AluOPRRI {
             Self::Sexth => "sext.h",
             Self::Zexth => "zext.h",
             Self::Orcb => "orc.b",
+            Self::Brev8 => "brev8",
         }
     }
 
@@ -935,6 +936,7 @@ impl AluOPRRI {
             AluOPRRI::Sexth => 0b001,
             AluOPRRI::Zexth => 0b100,
             AluOPRRI::Orcb => 0b101,
+            AluOPRRI::Brev8 => 0b101,
         }
     }
 
@@ -960,7 +962,8 @@ impl AluOPRRI {
             | AluOPRRI::Rev8
             | AluOPRRI::Sextb
             | AluOPRRI::Sexth
-            | AluOPRRI::Orcb => 0b0010011,
+            | AluOPRRI::Orcb
+            | AluOPRRI::Brev8 => 0b0010011,
 
             AluOPRRI::Addiw
             | AluOPRRI::Slliw
@@ -994,7 +997,8 @@ impl AluOPRRI {
             | Self::Sextb
             | Self::Sexth
             | Self::Zexth
-            | Self::Orcb => true,
+            | Self::Orcb
+            | Self::Brev8 => true,
             _ => false,
         }
     }
@@ -1010,7 +1014,8 @@ impl AluOPRRI {
             Self::Bseti => Some(6),
             Self::Rori => Some(6),
             Self::Roriw => Some(5),
-            Self::SlliUw => Some(5),
+            Self::SlliUw => Some(6),
+
             _ => None,
         }
     }
@@ -1045,7 +1050,7 @@ impl AluOPRRI {
             Self::Bseti => shamt.unwrap() | 0b001010 << 6,
             Self::Rori => shamt.unwrap() | 0b011000 << 6,
             Self::Roriw => shamt.unwrap() | 0b0110000 << 5,
-            Self::SlliUw => shamt.unwrap() | 0b000010 << 5,
+            Self::SlliUw => shamt.unwrap() | 0b000010 << 6,
             Self::Clz => 0b011000000000,
             Self::Clzw => 0b011000000000,
             Self::Cpop => 0b011000000010,
@@ -1057,6 +1062,7 @@ impl AluOPRRI {
             Self::Sexth => 0b011000000101,
             Self::Zexth => 0b000010000000,
             Self::Orcb => 0b001010000111,
+            Self::Brev8 => 0b0110_1000_0111,
             _ => unreachable!(),
         };
         (self, Imm12::from_bits(bits as i16))

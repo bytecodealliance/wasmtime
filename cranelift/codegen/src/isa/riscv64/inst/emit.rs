@@ -1052,7 +1052,7 @@ impl MachInstEmit for Inst {
                                 rs: rd.to_reg(),
                                 imm12: Imm12::from_bits(32),
                             });
-                            let mut label_jump_over = sink.get_label();
+                            let label_jump_over = sink.get_label();
                             // here are zero extend.
                             insts.push(Inst::Jal {
                                 dest: BranchTarget::Label(label_jump_over),

@@ -3,11 +3,7 @@ use crate::settings;
 use alloc::vec::Vec;
 
 /*
-    todo:: test very important.
-    bne beq
-*/
-/*
-    todo:: more instruction
+    todo:: more instruction.
 */
 #[test]
 fn test_riscv64_binemit() {
@@ -47,6 +43,17 @@ fn test_riscv64_binemit() {
 
     let mut insns = Vec::<TestUnit>::with_capacity(500);
 
+    insns.push(TestUnit::new_with_gcc_option(
+        Inst::AluRRImm12 {
+            alu_op: AluOPRRI::Brev8,
+            rd: writable_a1(),
+            rs: a0(),
+            imm12: AluOPRRI::Brev8.funct12(None).1,
+        },
+        "brev8 a1,a0",
+        Some(vec![gcc_aluoprri_march_arg(AluOPRRI::Brev8)]),
+        None,
+    ));
     insns.push(TestUnit::new_with_gcc_option(
         Inst::AluRRImm12 {
             alu_op: AluOPRRI::Rev8,
@@ -2078,6 +2085,7 @@ fn gcc_aluoprri_march_arg(op: AluOPRRI) -> String {
         AluOPRRI::Sexth => "-march=rv64g_zbb",
         AluOPRRI::Zexth => "-march=rv64g_zbb",
         AluOPRRI::Orcb => "-march=rv64g_zbb",
+        AluOPRRI::Brev8 => "-march=rv64g_zbkb",
         _ => unreachable!(),
     };
     x.into()

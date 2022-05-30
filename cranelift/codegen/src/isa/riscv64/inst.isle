@@ -539,6 +539,7 @@
   (Sexth)
   (Zexth)
   (Orcb)
+  (Brev8)
 ))
 
 ;; The 2-bit floating-point format field fmt is encoded as shown in Table 8.3. It is set to S (00) for all
@@ -774,3 +775,5 @@
 (extern extractor valueregs_2_reg valueregs_2_reg)
 
 (convert ValueRegs Reg valueregs_2_reg)
+
+ 

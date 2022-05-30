@@ -150,24 +150,56 @@ where
     }
 
     fn lower_bit_reverse(&mut self, ty: Type, rs: Reg) -> Reg {
-        // let tmp = self.temp_writable_reg(I64);
-        // self.emit(&MInst::AluRRImm12 {
-        //     alu_op: AluOPRRI::Rev8,
-        //     rd: tmp,
-        //     rs,
-        //     imm12: AluOPRRI::Rev8.funct12(None),
-        // });
-        // if ty.bits() != 64 {
-        //     let shift = 64 - ty.bits();
-        //     self.emit(&MInst::AluRRImm12 {
-        //         alu_op: AluOPRRI::Srli,
-        //         rd: tmp,
-        //         rs: tmp.to_reg(),
-        //         imm12: Imm12::from_bits(shift as i16),
-        //     });
-        // }
-        // tmp.to_reg()
-        todo!()
+        match ty.bits() {
+            64 | 32 | 16 => {
+                let result = self.temp_writable_reg(I64);
+                {
+                    // first reverset byte.
+                    let (op, imm12) = AluOPRRI::Rev8.funct12(None);
+                    self.emit(&MInst::AluRRImm12 {
+                        alu_op: op,
+                        rd: result,
+                        rs,
+                        imm12: imm12,
+                    })
+                }
+                //
+                {
+                    //reverset bits.
+                    let (op, imm12) = AluOPRRI::Brev8.funct12(None);
+                    self.emit(&MInst::AluRRImm12 {
+                        alu_op: op,
+                        rd: result,
+                        rs: result.to_reg(),
+                        imm12: imm12,
+                    })
+                }
+                if ty.bits() != 64 {
+                    // shift to it's bits.
+                    self.emit(&MInst::AluRRImm12 {
+                        alu_op: AluOPRRI::Srli,
+                        rd: result,
+                        rs: result.to_reg(),
+                        imm12: Imm12::from_bits((64 - ty.bits()) as i16),
+                    });
+                }
+                result.to_reg()
+            }
+
+            8 => {
+                let result = self.temp_writable_reg(I64);
+                let (op, imm12) = AluOPRRI::Brev8.funct12(None);
+                self.emit(&MInst::AluRRImm12 {
+                    alu_op: op,
+                    rd: result,
+                    rs,
+                    imm12,
+                });
+                result.to_reg()
+            }
+
+            _ => unreachable!(),
+        }
     }
     fn lower_clz(&mut self, ty: Type, val: ValueRegs) -> Reg {
         assert!(ty.is_int());
