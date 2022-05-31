@@ -1389,7 +1389,10 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                         i32::from(self.offsets.vmmemory_definition_current_length());
                     (memory, base_offset, current_length_offset)
                 } else {
-                    let owned_index = self.module.owned_memory_index(def_index).expect("TODO");
+                    let owned_index = self
+                        .module
+                        .owned_memory_index(def_index)
+                        .expect("non-shared memory must have an owned index");
                     let owned_base_offset =
                         self.offsets.vmctx_vmmemory_definition_base(owned_index);
                     let owned_length_offset = self
