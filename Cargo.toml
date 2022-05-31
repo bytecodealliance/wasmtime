@@ -36,7 +36,7 @@ target-lexicon = { version = "0.12.0", default-features = false }
 libc = "0.2.60"
 humantime = "2.0.0"
 lazy_static = "1.4.0"
-listenfd = "0.3.5"
+listenfd = "1.0.0"
 
 [target.'cfg(unix)'.dependencies]
 rustix = "0.33.7"
