@@ -298,7 +298,7 @@ impl Memory {
     /// Attempt to convert a [Memory] into a [SharedMemory]; this is only
     /// possible if the underlying [Memory] was initially created as a
     /// [SharedMemory] (i.e., with the `shared` annotation).
-    pub(crate) fn into_shared_memory(self, mut store: impl AsContextMut) -> Option<SharedMemory> {
+    pub(crate) fn as_shared_memory(&self, mut store: impl AsContextMut) -> Option<SharedMemory> {
         let store = store.as_context_mut().0;
         let runtime_memory = unsafe { self.wasmtime_memory(store).as_mut().unwrap() };
         runtime_memory

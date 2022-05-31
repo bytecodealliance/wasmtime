@@ -78,7 +78,7 @@ impl Extern {
     /// Returns `None` if this is not a memory.
     pub fn into_shared_memory(self, store: impl AsContextMut) -> Option<SharedMemory> {
         match self {
-            Extern::Memory(memory) => memory.into_shared_memory(store),
+            Extern::Memory(memory) => memory.as_shared_memory(store),
             _ => None,
         }
     }

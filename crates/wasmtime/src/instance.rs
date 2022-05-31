@@ -511,7 +511,7 @@ impl Instance {
         let mut store = store.as_context_mut();
         self.get_export(&mut store, name)?
             .into_memory()
-            .map(|m| m.into_shared_memory(store))
+            .map(|m| m.as_shared_memory(store))
             .flatten()
     }
 
