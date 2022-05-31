@@ -295,6 +295,14 @@ impl Trap {
 
     /// Returns a list of function frames in WebAssembly code that led to this
     /// trap happening.
+    ///
+    /// This function return an `Option` of a list of frames to indicate that
+    /// wasm frames are not always available. Frames will never be available if
+    /// backtraces are disabled via
+    /// [`Config::wasm_backtrace`](crate::Config::wasm_backtrace). Frames will
+    /// also not be available for freshly-created traps. WebAssembly frames are
+    /// currently only captured when the trap reaches wasm itself to get raised
+    /// across a wasm boundary.
     pub fn trace(&self) -> Option<&[FrameInfo]> {
         self.inner
             .backtrace

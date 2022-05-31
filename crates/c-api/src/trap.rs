@@ -64,13 +64,7 @@ pub extern "C" fn wasm_trap_message(trap: &wasm_trap_t, out: &mut wasm_message_t
 
 #[no_mangle]
 pub extern "C" fn wasm_trap_origin(raw: &wasm_trap_t) -> Option<Box<wasm_frame_t>> {
-    if raw
-        .trap
-        .trace()
-        .expect("backtraces are always enabled")
-        .len()
-        > 0
-    {
+    if raw.trap.trace().unwrap_or(&[]).len() > 0 {
         Some(Box::new(wasm_frame_t {
             trap: raw.trap.clone(),
             idx: 0,
@@ -84,11 +78,7 @@ pub extern "C" fn wasm_trap_origin(raw: &wasm_trap_t) -> Option<Box<wasm_frame_t
 
 #[no_mangle]
 pub extern "C" fn wasm_trap_trace(raw: &wasm_trap_t, out: &mut wasm_frame_vec_t) {
-    let vec = (0..raw
-        .trap
-        .trace()
-        .expect("backtraces are always enabled")
-        .len())
+    let vec = (0..raw.trap.trace().unwrap_or(&[]).len())
         .map(|idx| {
             Some(Box::new(wasm_frame_t {
                 trap: raw.trap.clone(),

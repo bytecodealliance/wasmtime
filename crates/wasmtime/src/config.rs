@@ -288,7 +288,6 @@ impl Config {
     ///
     /// When disabled, wasm backtrace details are ignored, and [`crate::Trap::trace()`]
     /// will always return `None`.
-
     pub fn wasm_backtrace(&mut self, enable: bool) -> &mut Self {
         self.wasm_backtrace = enable;
         #[cfg(compiler)]
