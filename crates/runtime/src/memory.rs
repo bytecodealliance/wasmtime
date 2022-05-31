@@ -180,8 +180,8 @@ pub struct MmapMemory {
 }
 
 impl MmapMemory {
-    /// Create a new linear memory instance with specified minimum and maximum number of wasm pages.
-    /// TODO remove minimum/maximum; already contained within `plan`.
+    /// Create a new linear memory instance with specified minimum and maximum
+    /// number of wasm pages.
     pub fn new(
         plan: &MemoryPlan,
         minimum: usize,
