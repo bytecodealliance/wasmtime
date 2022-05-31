@@ -115,13 +115,15 @@ block0(v0: i128, v1: i128):
 ; block0:
 ;   movq    %rdi, %r9
 ;   imulq   %r9, %rcx, %r9
-;   movq    %rdi, %rax
 ;   imulq   %rsi, %rdx, %rsi
-;   addq    %r9, %rsi, %r9
+;   movq    %r9, %r8
+;   addq    %r8, %rsi, %r8
+;   movq    %r8, %r9
+;   movq    %rdi, %rax
 ;   mul     %rax, %rdx, %rax, %rdx
-;   movq    %r9, %rdi
-;   addq    %rdi, %rdx, %rdi
-;   movq    %rdi, %r9
+;   movq    %r9, %r11
+;   addq    %r11, %rdx, %r11
+;   movq    %r11, %r9
 ;   movq    %r9, %rdx
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
