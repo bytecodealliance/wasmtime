@@ -381,13 +381,13 @@ impl MemoryType {
     ///
     /// Note that shared memories are part of the threads proposal for
     /// WebAssembly which is not standardized yet.
-    pub fn shared(minimum: u64, maximum: u64) -> MemoryType {
+    pub fn shared(minimum: u32, maximum: u32) -> MemoryType {
         MemoryType {
             ty: Memory {
                 memory64: false,
                 shared: true,
-                minimum,
-                maximum: Some(maximum),
+                minimum: minimum.into(),
+                maximum: Some(maximum.into()),
             },
         }
     }
