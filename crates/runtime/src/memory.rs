@@ -513,6 +513,14 @@ struct SharedMemoryInner {
     def: LongTermVMMemoryDefinition,
 }
 
+/// Shared memory needs some representation of a `VMMemoryDefinition` for
+/// JIT-generated code to access. This structure owns the base pointer and
+/// length to the actual memory and we share this definition across threads by:
+/// - never changing the base pointer; according to the specification, shared
+///   memory must be created with a known maximum size so it can be allocated
+///   once and never moved
+/// - carefully changing the length, using atomic accesses in both the runtime
+///   and JIT-generated code.
 struct LongTermVMMemoryDefinition(VMMemoryDefinition);
 unsafe impl Send for LongTermVMMemoryDefinition {}
 unsafe impl Sync for LongTermVMMemoryDefinition {}
