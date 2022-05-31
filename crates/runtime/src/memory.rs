@@ -677,6 +677,10 @@ impl Memory {
         // the limiter is lossy and may not be 100% accurate, but for now the
         // expected uses of limiter means that's ok.
         if let Some(store) = store {
+            assert!(
+                !plan.memory.shared,
+                "cannot resource-limit shared memories because they are not attached to a store"
+            );
             if !store.memory_growing(0, minimum.unwrap_or(absolute_max), maximum)? {
                 bail!(
                     "memory minimum size of {} pages exceeds memory limits",
