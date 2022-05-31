@@ -273,7 +273,7 @@ impl CallThreadState {
 
     fn unwind_with(&self, reason: UnwindReason) -> ! {
         let backtrace = if self.capture_backtrace {
-            Some(Backtrace::new())
+            Some(Backtrace::new_unresolved())
         } else {
             None
         };
@@ -340,7 +340,7 @@ impl CallThreadState {
 
     fn capture_backtrace(&self, pc: *const u8) {
         let backtrace = if self.capture_backtrace {
-            Some(Backtrace::new())
+            Some(Backtrace::new_unresolved())
         } else {
             None
         };
