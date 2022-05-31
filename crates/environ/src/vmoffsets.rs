@@ -177,6 +177,7 @@ impl<P: PtrSize> VMOffsets<P> {
         let num_shared_memories = module
             .memory_plans
             .iter()
+            .skip(module.num_imported_memories)
             .filter(|p| p.1.memory.shared)
             .count();
         VMOffsets::from(VMOffsetsFields {

@@ -1,5 +1,8 @@
 use anyhow::Result;
-use std::sync::{Arc, RwLock};
+use std::{
+    collections::{hash_map::RandomState, HashSet},
+    sync::{Arc, RwLock},
+};
 use wasmtime::*;
 
 #[test]
@@ -38,13 +41,11 @@ fn test_export_shared_memory() -> Result<()> {
     let mut store = Store::new(&engine, ());
     let instance = Instance::new(&mut store, &module, &[])?;
     let shared_memory = instance.get_shared_memory(&mut store, "memory").unwrap();
-    shared_memory.data();
-    Ok(())
-}
 
-#[test]
-fn test_construct_memory_with_shared_type() -> Result<()> {
-    // let memory = Memory::new(&mut store, MemoryType::shared(1, 5))?;
+    assert_eq!(shared_memory.size(), 1);
+    assert!(shared_memory.ty().is_shared());
+    assert_eq!(shared_memory.ty().maximum(), Some(5));
+
     Ok(())
 }
 
@@ -66,10 +67,13 @@ fn test_sharing_of_shared_memory() -> Result<()> {
     let instance2 = Instance::new(&mut store, &module, &[import2])?;
 
     // Modify the memory in one place.
-    shared_memory.data_mut()[0] = 42;
+    unsafe {
+        (*shared_memory.data_mut())[0] = 42;
+    }
 
     // Verify that the memory is the same in all shared locations.
-    let shared_memory_first_word = i32::from_le_bytes(shared_memory.data()[0..4].try_into()?);
+    let shared_memory_first_word =
+        i32::from_le_bytes(unsafe { (*shared_memory.data())[0..4].try_into()? });
     let instance1_first_word = instance1
         .get_typed_func::<(), i32, _>(&mut store, "first_word")?
         .call(&mut store, ())?;
@@ -104,7 +108,6 @@ fn test_probe_shared_memory_size() -> Result<()> {
     shared_memory.grow(1)?;
 
     assert_eq!(shared_memory.size(), 2);
-    std::sync::atomic::fence(std::sync::atomic::Ordering::SeqCst);
     assert_eq!(size_fn.call(&mut store, ())?, 2);
 
     Ok(())
@@ -112,8 +115,11 @@ fn test_probe_shared_memory_size() -> Result<()> {
 
 #[test]
 fn test_grow_memory_in_multiple_threads() -> Result<()> {
+    const NUM_THREADS: usize = 4;
+    const NUM_GROW_OPS: usize = 1000;
+
     let wat = r#"(module
-        (import "env" "memory" (memory 1 10 shared))
+        (import "env" "memory" (memory 1 4000 shared))
         (func (export "grow") (param $delta i32) (result i32) (memory.grow (local.get $delta)))
     )"#;
 
@@ -121,28 +127,37 @@ fn test_grow_memory_in_multiple_threads() -> Result<()> {
     config.wasm_threads(true);
     let engine = Engine::new(&config)?;
     let module = Module::new(&engine, wat)?;
-    let shared_memory = SharedMemory::new(&engine, MemoryType::shared(1, 10))?;
+    let shared_memory = SharedMemory::new(&engine, MemoryType::shared(1, NUM_GROW_OPS as u32))?;
     let mut threads = vec![];
-    let sizes = Arc::new(RwLock::new(vec![]));
+    let observed_sizes = Arc::new(RwLock::new(vec![]));
 
     // Spawn several threads using a single shared memory and grow the memory
     // concurrently on all threads.
-    for _ in 0..4 {
+    for _ in 0..NUM_THREADS {
         let engine = engine.clone();
         let module = module.clone();
-        let sizes = sizes.clone();
+        let observed_sizes = observed_sizes.clone();
         let shared_memory = shared_memory.clone();
         let thread = std::thread::spawn(move || {
             let mut store = Store::new(&engine, ());
             let import = shared_memory.as_extern(&mut store).unwrap();
             let instance = Instance::new(&mut store, &module, &[import]).unwrap();
-            let grow = instance
+            let grow_fn = instance
                 .get_typed_func::<i32, i32, _>(&mut store, "grow")
                 .unwrap();
-            for _ in 0..4 {
-                let old_size = grow.call(&mut store, 1).unwrap();
-                sizes.write().unwrap().push(old_size as u32);
-            }
+            let mut thread_local_observed_sizes: Vec<_> = (0..NUM_GROW_OPS / NUM_THREADS)
+                .map(|_| grow_fn.call(&mut store, 1).unwrap() as u32)
+                .collect();
+            println!(
+                "Returned memory sizes for {:?}: {:?}",
+                std::thread::current().id(),
+                thread_local_observed_sizes
+            );
+            assert!(is_sorted(thread_local_observed_sizes.as_slice()));
+            observed_sizes
+                .write()
+                .unwrap()
+                .append(&mut thread_local_observed_sizes);
         });
         threads.push(thread);
     }
@@ -152,10 +167,14 @@ fn test_grow_memory_in_multiple_threads() -> Result<()> {
         t.join().unwrap()
     }
 
-    // Ensure the returned "old memory sizes" were pushed in increasing order,
-    // indicating that the lock worked.
-    println!("Returned memory sizes: {:?}", sizes);
-    assert!(is_sorted(sizes.read().unwrap().as_slice()));
+    // Ensure the returned "old memory sizes" are all unique--i.e., we have not
+    // observed the same growth twice.
+    let unique_observed_sizes: HashSet<u32, RandomState> =
+        HashSet::from_iter(observed_sizes.read().unwrap().iter().cloned());
+    assert_eq!(
+        observed_sizes.read().unwrap().len(),
+        unique_observed_sizes.len()
+    );
 
     Ok(())
 }

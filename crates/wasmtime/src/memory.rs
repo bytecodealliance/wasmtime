@@ -4,7 +4,6 @@ use crate::{AsContext, AsContextMut, Engine, MemoryType, StoreContext, StoreCont
 use anyhow::{bail, Result};
 use std::convert::TryFrom;
 use std::slice;
-use wasmtime_environ::DefinedMemoryIndex;
 
 /// Error for out of bounds [`Memory`] access.
 #[derive(Debug)]
@@ -751,7 +750,7 @@ impl SharedMemory {
 
     /// Return a reference to the [`Engine`] used to configure the shared
     /// memory.
-    pub fn engine(&self) -> &Engine {
+    fn engine(&self) -> &Engine {
         &self.1
     }
 
@@ -776,22 +775,24 @@ impl SharedMemory {
         self.0.byte_size()
     }
 
-    /// Return read access to the available portion of the shared memory. Note
-    /// that the available pages may be between `[minimum, maximum]`.
-    pub fn data(&self) -> &[u8] {
-        unsafe {
-            let definition = *self.0.vmmemory_ptr();
-            slice::from_raw_parts(definition.base, definition.current_length)
-        }
+    /// Return read access to the available portion of the shared memory.
+    ///
+    /// Because the memory is shared, it is possible that this memory is being
+    /// modified elsewhere. Users of this function must manage synchronization
+    /// and locking to this region of memory themselves.
+    pub unsafe fn data(&self) -> *const [u8] {
+        let definition = *self.0.vmmemory_ptr();
+        slice::from_raw_parts(definition.base, definition.current_length)
     }
 
-    /// Return write access to the available portion of the shared memory. Note
-    /// that the available pages may be between `[minimum, maximum]`.
-    pub fn data_mut(&mut self) -> &mut [u8] {
-        unsafe {
-            let definition = *self.0.vmmemory_ptr_mut();
-            slice::from_raw_parts_mut(definition.base, definition.current_length)
-        }
+    /// Return write access to the available portion of the shared memory.
+    ///
+    /// Because the memory is shared, it is possible that this memory is being
+    /// modified (or read) elsewhere. Users of this function must manage
+    /// synchronization and locking to this region of memory themselves.
+    pub unsafe fn data_mut(&mut self) -> *mut [u8] {
+        let definition = *self.0.vmmemory_ptr_mut();
+        slice::from_raw_parts_mut(definition.base, definition.current_length)
     }
 
     /// Grows this WebAssembly memory by `delta` pages.
@@ -822,7 +823,8 @@ impl SharedMemory {
         }
     }
 
-    /// Convert... TODO
+    /// Convert the [`SharedMemory`] into an [`Extern`](crate::Extern) for
+    /// importing into an [`Instance`](crate::Instance).
     pub fn as_extern(&self, store: impl AsContextMut) -> Result<crate::Extern> {
         let memory = Memory::from_shared_memory(store, self)?;
         Ok(memory.into())
