@@ -69,12 +69,16 @@ pub trait RuntimeLinearMemory: Send + Sync {
     /// all the steps of the default implementation *plus* the required locking.
     ///
     /// The `store` is used only for error reporting.
-    fn grow(&mut self, delta_pages: u64, store: &mut dyn Store) -> Result<Option<usize>, Error> {
+    fn grow(
+        &mut self,
+        delta_pages: u64,
+        mut store: Option<&mut dyn Store>,
+    ) -> Result<Option<(usize, usize)>, Error> {
         let old_byte_size = self.byte_size();
 
         // Wasm spec: when growing by 0 pages, always return the current size.
         if delta_pages == 0 {
-            return Ok(Some(old_byte_size));
+            return Ok(Some((old_byte_size, old_byte_size)));
         }
 
         // The largest wasm-page-aligned region of memory is possible to
@@ -96,22 +100,28 @@ pub trait RuntimeLinearMemory: Send + Sync {
 
         let maximum = self.maximum_byte_size();
         // Store limiter gets first chance to reject memory_growing.
-        if !store.memory_growing(old_byte_size, new_byte_size, maximum)? {
-            return Ok(None);
+        if let Some(store) = &mut store {
+            if !store.memory_growing(old_byte_size, new_byte_size, maximum)? {
+                return Ok(None);
+            }
         }
 
         // Never exceed maximum, even if limiter permitted it.
         if let Some(max) = maximum {
             if new_byte_size > max {
-                store.memory_grow_failed(&format_err!("Memory maximum size exceeded"));
+                if let Some(store) = store {
+                    store.memory_grow_failed(&format_err!("Memory maximum size exceeded"));
+                }
                 return Ok(None);
             }
         }
 
         match self.grow_to(new_byte_size) {
-            Ok(_) => Ok(Some(old_byte_size)),
+            Ok(_) => Ok(Some((old_byte_size, new_byte_size))),
             Err(e) => {
-                store.memory_grow_failed(&e);
+                if let Some(store) = store {
+                    store.memory_grow_failed(&e);
+                }
                 Ok(None)
             }
         }
@@ -445,7 +455,7 @@ impl RuntimeLinearMemory for StaticMemory {
 /// [thread proposal]:
 ///     https://github.com/WebAssembly/threads/blob/master/proposals/threads/Overview.md#webassemblymemoryprototypegrow
 #[derive(Clone)]
-pub struct SharedMemory(Arc<SharedMemoryInner>);
+pub struct SharedMemory(Arc<RwLock<SharedMemoryInner>>);
 impl SharedMemory {
     /// Construct a new [`SharedMemory`].
     pub fn new(ty: wasmtime_environ::Memory, tunables: &Tunables) -> Result<Self> {
@@ -454,8 +464,12 @@ impl SharedMemory {
         let (minimum_bytes, maximum_bytes) = Memory::limit_new(&plan, None)?;
         let mut mmap_memory = MmapMemory::new(&plan, minimum_bytes, maximum_bytes, None)?;
         let def = LongTermVMMemoryDefinition(mmap_memory.vmmemory());
-        let memory: RwLock<Box<dyn RuntimeLinearMemory>> = RwLock::new(Box::new(mmap_memory));
-        Ok(Self(Arc::new(SharedMemoryInner { memory, ty, def })))
+        let memory: Box<dyn RuntimeLinearMemory> = Box::new(mmap_memory);
+        Ok(Self(Arc::new(RwLock::new(SharedMemoryInner {
+            memory,
+            ty,
+            def,
+        }))))
     }
 
     /// Wrap an existing [Memory] with the locking provided by a [SharedMemory].
@@ -465,16 +479,16 @@ impl SharedMemory {
             "cannot re-wrap a shared memory"
         );
         let def = LongTermVMMemoryDefinition(memory.vmmemory());
-        Self(Arc::new(SharedMemoryInner {
-            memory: RwLock::new(memory),
+        Self(Arc::new(RwLock::new(SharedMemoryInner {
+            memory: memory,
             ty,
             def,
-        }))
+        })))
     }
 
     /// Return the memory type for this [`SharedMemory`].
     pub fn ty(&self) -> wasmtime_environ::Memory {
-        self.0.ty
+        self.0.read().unwrap().ty
     }
 
     /// Convert this shared memory into a [`Memory`].
@@ -484,17 +498,17 @@ impl SharedMemory {
 
     /// Return a mutable pointer to the shared memory's [VMMemoryDefinition].
     pub fn vmmemory_ptr_mut(&mut self) -> *mut VMMemoryDefinition {
-        &self.0.def.0 as *const _ as *mut _
+        &self.0.read().unwrap().def.0 as *const _ as *mut _
     }
 
     /// Return a pointer to the shared memory's [VMMemoryDefinition].
     pub fn vmmemory_ptr(&self) -> *const VMMemoryDefinition {
-        &self.0.def.0 as *const _
+        &self.0.read().unwrap().def.0 as *const _
     }
 }
 
 struct SharedMemoryInner {
-    memory: RwLock<Box<dyn RuntimeLinearMemory>>,
+    memory: Box<dyn RuntimeLinearMemory>,
     ty: wasmtime_environ::Memory,
     def: LongTermVMMemoryDefinition,
 }
@@ -506,27 +520,38 @@ unsafe impl Sync for LongTermVMMemoryDefinition {}
 /// Proxy all calls through the [`RwLock`].
 impl RuntimeLinearMemory for SharedMemory {
     fn byte_size(&self) -> usize {
-        self.0.memory.read().unwrap().byte_size()
+        self.0.read().unwrap().memory.byte_size()
     }
 
     fn maximum_byte_size(&self) -> Option<usize> {
-        self.0.memory.read().unwrap().maximum_byte_size()
+        self.0.read().unwrap().memory.maximum_byte_size()
     }
 
-    fn grow(&mut self, delta_pages: u64, store: &mut dyn Store) -> Result<Option<usize>, Error> {
-        self.0.memory.write().unwrap().grow(delta_pages, store)
+    fn grow(
+        &mut self,
+        delta_pages: u64,
+        store: Option<&mut dyn Store>,
+    ) -> Result<Option<(usize, usize)>, Error> {
+        let mut inner = self.0.write().unwrap();
+        let result = inner.memory.grow(delta_pages, store)?;
+        if let Some((_old_size_in_bytes, new_size_in_bytes)) = result {
+            // Store the new size to the `VMMemoryDefinition` for JIT-generated
+            // code to access.
+            inner.def.0.current_length = new_size_in_bytes;
+        }
+        Ok(result)
     }
 
     fn grow_to(&mut self, size: usize) -> Result<()> {
-        self.0.memory.write().unwrap().grow_to(size)
+        self.0.write().unwrap().memory.grow_to(size)
     }
 
     fn vmmemory(&mut self) -> VMMemoryDefinition {
-        self.0.memory.write().unwrap().vmmemory()
+        self.0.write().unwrap().memory.vmmemory()
     }
 
     fn needs_init(&self) -> bool {
-        self.0.memory.read().unwrap().needs_init()
+        self.0.read().unwrap().memory.needs_init()
     }
 
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
@@ -705,9 +730,11 @@ impl Memory {
     pub unsafe fn grow(
         &mut self,
         delta_pages: u64,
-        store: &mut dyn Store,
+        store: Option<&mut dyn Store>,
     ) -> Result<Option<usize>, Error> {
-        self.0.grow(delta_pages, store)
+        self.0
+            .grow(delta_pages, store)
+            .map(|opt| opt.map(|(old, _new)| old))
     }
 
     /// Return a `VMMemoryDefinition` for exposing the memory to compiled wasm code.

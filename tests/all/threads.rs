@@ -23,8 +23,8 @@ fn test_import_shared_memory() -> Result<()> {
     let module = Module::new(&engine, wat)?;
     let mut store = Store::new(&engine, ());
     let shared_memory = SharedMemory::new(&engine, MemoryType::shared(1, 5))?;
-    let memory = Memory::from_shared_memory(&mut store, &shared_memory)?;
-    let _instance = Instance::new(&mut store, &module, &[memory.into()])?;
+    let import = shared_memory.as_extern(&mut store)?;
+    let _instance = Instance::new(&mut store, &module, &[import])?;
     Ok(())
 }
 
@@ -37,10 +37,7 @@ fn test_export_shared_memory() -> Result<()> {
     let module = Module::new(&engine, wat)?;
     let mut store = Store::new(&engine, ());
     let instance = Instance::new(&mut store, &module, &[])?;
-    let shared_memory = instance
-        .get_memory(&mut store, "memory")
-        .unwrap()
-        .into_shared_memory(&mut store)?;
+    let shared_memory = instance.get_shared_memory(&mut store, "memory").unwrap();
     shared_memory.data();
     Ok(())
 }
@@ -63,16 +60,16 @@ fn test_sharing_of_shared_memory() -> Result<()> {
     let module = Module::new(&engine, wat)?;
     let mut store = Store::new(&engine, ());
     let mut shared_memory = SharedMemory::new(&engine, MemoryType::shared(1, 5))?;
-    let memory = Memory::from_shared_memory(&mut store, &shared_memory)?;
-    let instance1 = Instance::new(&mut store, &module, &[memory.into()])?;
-    let instance2 = Instance::new(&mut store, &module, &[memory.into()])?;
+    let import1 = shared_memory.as_extern(&mut store)?;
+    let instance1 = Instance::new(&mut store, &module, &[import1])?;
+    let import2 = shared_memory.as_extern(&mut store)?;
+    let instance2 = Instance::new(&mut store, &module, &[import2])?;
 
     // Modify the memory in one place.
     shared_memory.data_mut()[0] = 42;
 
     // Verify that the memory is the same in all shared locations.
     let shared_memory_first_word = i32::from_le_bytes(shared_memory.data()[0..4].try_into()?);
-    let memory_first_word = i32::from_le_bytes(memory.data(&store)[0..4].try_into()?);
     let instance1_first_word = instance1
         .get_typed_func::<(), i32, _>(&mut store, "first_word")?
         .call(&mut store, ())?;
@@ -80,7 +77,6 @@ fn test_sharing_of_shared_memory() -> Result<()> {
         .get_typed_func::<(), i32, _>(&mut store, "first_word")?
         .call(&mut store, ())?;
     assert_eq!(shared_memory_first_word, 42);
-    assert_eq!(memory_first_word, 42);
     assert_eq!(instance1_first_word, 42);
     assert_eq!(instance2_first_word, 42);
 
@@ -90,7 +86,7 @@ fn test_sharing_of_shared_memory() -> Result<()> {
 #[test]
 fn test_probe_shared_memory_size() -> Result<()> {
     let wat = r#"(module
-        (memory (export "memory") 1 1 shared)
+        (memory (export "memory") 1 2 shared)
         (func (export "size") (result i32) (memory.size))
     )"#;
     let mut config = Config::new();
@@ -100,15 +96,16 @@ fn test_probe_shared_memory_size() -> Result<()> {
     let mut store = Store::new(&engine, ());
     let instance = Instance::new(&mut store, &module, &[])?;
     let size_fn = instance.get_typed_func::<(), i32, _>(&mut store, "size")?;
-    let memory = instance.get_memory(&mut store, "memory").unwrap();
+    let mut shared_memory = instance.get_shared_memory(&mut store, "memory").unwrap();
 
     assert_eq!(size_fn.call(&mut store, ())?, 1);
-    assert_eq!(memory.size(&store), 1);
+    assert_eq!(shared_memory.size(), 1);
 
-    memory.into_shared_memory(&mut store)?.grow(1)?;
+    shared_memory.grow(1)?;
 
+    assert_eq!(shared_memory.size(), 2);
+    std::sync::atomic::fence(std::sync::atomic::Ordering::SeqCst);
     assert_eq!(size_fn.call(&mut store, ())?, 2);
-    assert_eq!(memory.size(&store), 2);
 
     Ok(())
 }
@@ -137,8 +134,8 @@ fn test_grow_memory_in_multiple_threads() -> Result<()> {
         let shared_memory = shared_memory.clone();
         let thread = std::thread::spawn(move || {
             let mut store = Store::new(&engine, ());
-            let memory = Memory::from_shared_memory(&mut store, &shared_memory).unwrap();
-            let instance = Instance::new(&mut store, &module, &[memory.into()]).unwrap();
+            let import = shared_memory.as_extern(&mut store).unwrap();
+            let instance = Instance::new(&mut store, &module, &[import]).unwrap();
             let grow = instance
                 .get_typed_func::<i32, i32, _>(&mut store, "grow")
                 .unwrap();

@@ -244,7 +244,7 @@ impl StoreLimitsBuilder {
 /// Provides limits for a [`Store`](crate::Store).
 ///
 /// This type is created with a [`StoreLimitsBuilder`] and is typically used in
-/// conjuction with [`Store::limiter`](crate::Store::limiter).
+/// conjunction with [`Store::limiter`](crate::Store::limiter).
 ///
 /// This is a convenience type included to avoid needing to implement the
 /// [`ResourceLimiter`] trait if your use case fits in the static configuration

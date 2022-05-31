@@ -279,7 +279,7 @@ impl Memory {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn from_shared_memory(
+    fn from_shared_memory(
         mut store: impl AsContextMut,
         shared_memory: &SharedMemory,
     ) -> Result<Self> {
@@ -298,13 +298,12 @@ impl Memory {
     /// Attempt to convert a [Memory] into a [SharedMemory]; this is only
     /// possible if the underlying [Memory] was initially created as a
     /// [SharedMemory] (i.e., with the `shared` annotation).
-    pub fn into_shared_memory(self, mut store: impl AsContextMut) -> Result<SharedMemory> {
+    pub(crate) fn into_shared_memory(self, mut store: impl AsContextMut) -> Option<SharedMemory> {
         let store = store.as_context_mut().0;
         let runtime_memory = unsafe { self.wasmtime_memory(store).as_mut().unwrap() };
-        match runtime_memory.as_shared_memory() {
-            Some(m) => Ok(SharedMemory(m, store.engine().clone())),
-            None => bail!("unable to convert memory into a shared memory"),
-        }
+        runtime_memory
+            .as_shared_memory()
+            .map(|m| SharedMemory(m, store.engine().clone()))
     }
 
     /// Helper function for attaching the memory to a "frankenstein" instance
@@ -555,7 +554,7 @@ impl Memory {
         let store = store.as_context_mut().0;
         let mem = self.wasmtime_memory(store);
         unsafe {
-            match (*mem).grow(delta, store)? {
+            match (*mem).grow(delta, Some(store))? {
                 Some(size) => {
                     let vm = (*mem).vmmemory();
                     *store[self.0].definition = vm;
@@ -812,9 +811,22 @@ impl SharedMemory {
     /// the maximum limits of this memory. A
     /// [`ResourceLimiter`](crate::ResourceLimiter) is another example of
     /// preventing a memory to grow.
-    pub fn grow(&self, _delta: u64) -> Result<u64> {
-        todo!()
-        // self.0.grow(delta, <need to provide a store>)
+    pub fn grow(&mut self, delta: u64) -> Result<u64> {
+        use wasmtime_runtime::RuntimeLinearMemory;
+        match self.0.grow(delta, None)? {
+            Some((old_size, _new_size)) => {
+                // For shared memory, the `VMMemoryDefinition` is updated inside
+                // the locked region.
+                Ok(u64::try_from(old_size).unwrap() / u64::from(wasmtime_environ::WASM_PAGE_SIZE))
+            }
+            None => bail!("failed to grow memory by `{}`", delta),
+        }
+    }
+
+    /// Convert... TODO
+    pub fn as_extern(&self, store: impl AsContextMut) -> Result<crate::Extern> {
+        let memory = Memory::from_shared_memory(store, self)?;
+        Ok(memory.into())
     }
 }
 

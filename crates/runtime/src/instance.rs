@@ -406,7 +406,7 @@ impl Instance {
         let store = unsafe { &mut *instance.store() };
         let memory = &mut instance.memories[idx];
 
-        let result = unsafe { memory.grow(delta, store) };
+        let result = unsafe { memory.grow(delta, Some(store)) };
         let vmmemory = memory.vmmemory();
 
         // Update the state used by wasm code in case the base pointer and/or

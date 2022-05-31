@@ -2,8 +2,8 @@ use crate::linker::Definition;
 use crate::store::{InstanceId, StoreOpaque, Stored};
 use crate::types::matching;
 use crate::{
-    AsContextMut, Engine, Export, Extern, Func, Global, Memory, Module, StoreContextMut, Table,
-    Trap, TypedFunc,
+    AsContextMut, Engine, Export, Extern, Func, Global, Memory, Module, SharedMemory,
+    StoreContextMut, Table, Trap, TypedFunc,
 };
 use anyhow::{anyhow, bail, Context, Error, Result};
 use std::mem;
@@ -493,6 +493,26 @@ impl Instance {
     /// Panics if `store` does not own this instance.
     pub fn get_memory(&self, store: impl AsContextMut, name: &str) -> Option<Memory> {
         self.get_export(store, name)?.into_memory()
+    }
+
+    /// Looks up an exported [`SharedMemory`] value by name.
+    ///
+    /// Returns `None` if there was no export named `name`, or if there was but
+    /// it wasn't a shared memory.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` does not own this instance.
+    pub fn get_shared_memory(
+        &self,
+        mut store: impl AsContextMut,
+        name: &str,
+    ) -> Option<SharedMemory> {
+        let mut store = store.as_context_mut();
+        self.get_export(&mut store, name)?
+            .into_memory()
+            .map(|m| m.into_shared_memory(store))
+            .flatten()
     }
 
     /// Looks up an exported [`Global`] value by name.

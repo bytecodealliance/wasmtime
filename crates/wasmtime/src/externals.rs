@@ -2,7 +2,7 @@ use crate::store::{StoreData, StoreOpaque, Stored};
 use crate::trampoline::{generate_global_export, generate_table_export};
 use crate::{
     AsContext, AsContextMut, ExternRef, ExternType, Func, GlobalType, Memory, Mutability,
-    TableType, Trap, Val, ValType,
+    SharedMemory, TableType, Trap, Val, ValType,
 };
 use anyhow::{anyhow, bail, Result};
 use std::mem;
@@ -68,6 +68,17 @@ impl Extern {
     pub fn into_memory(self) -> Option<Memory> {
         match self {
             Extern::Memory(memory) => Some(memory),
+            _ => None,
+        }
+    }
+
+    /// Returns the underlying `SharedMemory`, if this external is a shared
+    /// memory.
+    ///
+    /// Returns `None` if this is not a memory.
+    pub fn into_shared_memory(self, store: impl AsContextMut) -> Option<SharedMemory> {
+        match self {
+            Extern::Memory(memory) => memory.into_shared_memory(store),
             _ => None,
         }
     }
