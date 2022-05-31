@@ -189,7 +189,9 @@ impl<P: PtrSize> VMOffsets<P> {
             num_defined_memories: cast_to_u32(
                 module.memory_plans.len() - module.num_imported_memories,
             ),
-            num_owned_memories: cast_to_u32(module.memory_plans.len() - num_shared_memories),
+            num_owned_memories: cast_to_u32(
+                module.memory_plans.len() - (module.num_imported_memories + num_shared_memories),
+            ),
             num_defined_globals: cast_to_u32(module.globals.len() - module.num_imported_globals),
             num_escaped_funcs: cast_to_u32(module.num_escaped_funcs),
         })
