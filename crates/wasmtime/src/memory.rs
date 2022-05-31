@@ -594,8 +594,7 @@ impl Memory {
         unsafe {
             let export = &store[self.0];
             let mut handle = wasmtime_runtime::InstanceHandle::from_vmctx(export.vmctx);
-            // let idx = handle.memory_index(&*export.definition);
-            let idx = DefinedMemoryIndex::from_u32(0);
+            let idx = handle.memory_index(&*export.definition);
             handle.get_defined_memory(idx)
         }
     }

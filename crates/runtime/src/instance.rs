@@ -1123,9 +1123,9 @@ impl InstanceHandle {
     }
 
     /// Return the memory index for the given `VMMemoryDefinition` in this instance.
-    // pub unsafe fn memory_index(&self, memory: &VMMemoryDefinition) -> DefinedMemoryIndex {
-    //     self.instance().memory_index(memory)
-    // }
+    pub unsafe fn memory_index(&self, memory: &VMMemoryDefinition) -> DefinedMemoryIndex {
+        self.instance().memory_index(memory)
+    }
 
     /// Get a memory defined locally within this module.
     pub fn get_defined_memory(&mut self, index: DefinedMemoryIndex) -> *mut Memory {
