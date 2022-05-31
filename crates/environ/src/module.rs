@@ -932,6 +932,7 @@ impl Module {
         let owned_memory_index = self
             .memory_plans
             .iter()
+            .skip(self.num_imported_memories)
             .take(memory.index())
             .filter(|(_, mp)| !mp.memory.shared)
             .count();
