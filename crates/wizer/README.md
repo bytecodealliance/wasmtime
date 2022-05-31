@@ -131,9 +131,29 @@ use wizer::Wizer;
 let input_wasm = get_input_wasm_bytes();
 
 let initialized_wasm_bytes = Wizer::new()
-    .allow_wasi(true)
+    .allow_wasi(true)?
     .run(&input_wasm)?;
 ```
+
+## Using Wizer with a custom Linker
+
+If you want your module to be able to import other modules during instantiation, you can
+use the `.make_linker(...)` builder method to provide your own Linker, for example:
+
+```rust
+use wizer::Wizer;
+
+let input_wasm = get_input_wasm_bytes();
+let initialized_wasm_bytes = Wizer::new()
+    .make_linker(Some(Rc::new(|e: &wasmtime::Engine| {
+        let mut linker = wasmtime::Linker::new(e);
+        linker.func_wrap("foo", "bar", |x: i32| x + 1)?;
+        Ok(linker)
+    })))
+    .run(&input_wasm)?;
+```
+
+Note that `allow_wasi(true)` and a custom linker are currently mutually exclusive
 
 ## How Does it Work?
 

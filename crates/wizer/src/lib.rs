@@ -22,6 +22,7 @@ use dummy::dummy_imports;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 use std::path::PathBuf;
+use std::rc::Rc;
 #[cfg(feature = "structopt")]
 use structopt::StructOpt;
 use wasmtime::Extern;
@@ -38,9 +39,8 @@ const DEFAULT_WASM_MODULE_LINKING: bool = false;
 /// context.
 pub(crate) type Store = wasmtime::Store<Option<WasiCtx>>;
 
-/// We only ever use `Linker<T>` with a fixed `T` that is our optional WASI
-/// context.
-pub(crate) type Linker = wasmtime::Linker<Option<WasiCtx>>;
+/// The type of linker that Wizer uses when evaluating the initialization function.
+pub type Linker = wasmtime::Linker<Option<WasiCtx>>;
 
 #[cfg(feature = "structopt")]
 fn parse_map_dirs(s: &str) -> anyhow::Result<(PathBuf, PathBuf)> {
@@ -73,7 +73,7 @@ fn parse_map_dirs(s: &str) -> anyhow::Result<(PathBuf, PathBuf)> {
 ///   identity and aren't comparable in the Wasm spec, which makes snapshotting
 ///   difficult.
 #[cfg_attr(feature = "structopt", derive(StructOpt))]
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Wizer {
     /// The Wasm export name of the function that should be executed to
     /// initialize the Wasm module.
@@ -122,6 +122,9 @@ pub struct Wizer {
     /// rather than per-instance.
     #[cfg_attr(feature = "structopt", structopt(long = "allow-wasi"))]
     allow_wasi: bool,
+
+    #[cfg_attr(feature = "structopt", structopt(skip))]
+    make_linker: Option<Rc<dyn Fn(&wasmtime::Engine) -> anyhow::Result<Linker>>>,
 
     /// When using WASI during initialization, should `stdin`, `stderr`, and
     /// `stdout` be inherited?
@@ -197,6 +200,39 @@ pub struct Wizer {
     wasm_module_linking: Option<bool>,
 }
 
+impl std::fmt::Debug for Wizer {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let Wizer {
+            init_func,
+            func_renames,
+            allow_wasi,
+            make_linker: _,
+            inherit_stdio,
+            inherit_env,
+            keep_init_func,
+            dirs,
+            map_dirs,
+            wasm_multi_memory,
+            wasm_multi_value,
+            wasm_module_linking,
+        } = self;
+        f.debug_struct("Wizer")
+            .field("init_func", &init_func)
+            .field("func_renames", &func_renames)
+            .field("allow_wasi", &allow_wasi)
+            .field("make_linker", &"..")
+            .field("inherit_stdio", &inherit_stdio)
+            .field("inherit_env", &inherit_env)
+            .field("keep_init_func", &keep_init_func)
+            .field("dirs", &dirs)
+            .field("map_dirs", &map_dirs)
+            .field("wasm_multi_memory", &wasm_multi_memory)
+            .field("wasm_multi_value", &wasm_multi_value)
+            .field("wasm_module_linking", &wasm_module_linking)
+            .finish()
+    }
+}
+
 struct FuncRenames {
     /// For a given export name that we encounter in the original module, a map
     /// to a new name, if any, to emit in the output module.
@@ -245,6 +281,7 @@ impl Wizer {
             init_func: "wizer.initialize".into(),
             func_renames: vec![],
             allow_wasi: false,
+            make_linker: None,
             inherit_stdio: None,
             inherit_env: None,
             keep_init_func: None,
@@ -284,9 +321,35 @@ impl Wizer {
     /// rather than per-instance.
     ///
     /// Defaults to `false`.
-    pub fn allow_wasi(&mut self, allow: bool) -> &mut Self {
+    pub fn allow_wasi(&mut self, allow: bool) -> anyhow::Result<&mut Self> {
+        anyhow::ensure!(
+            self.make_linker.is_none(),
+            "Cannot use 'allow_wasi' with a custom linker"
+        );
         self.allow_wasi = allow;
-        self
+        Ok(self)
+    }
+
+    /// The linker to use during initialization rather than the default
+    /// `wasmtime::Linker`.
+    ///
+    /// If you want your Wasm module to be able to import non-WASI functionality
+    /// (or a subset of WASI) during initialization, you can provide a closure
+    /// that returns a `Linker` result. Note, this has the same non-determinism
+    /// concerns that `.allow_wasi(true)` does: if the allowed imports interact
+    /// with the world in some way, the outcome of that interaction will be
+    /// snapshotted by Wizer during initialization and will yield the same result
+    /// in every instance of the wizened module.
+    pub fn make_linker(
+        &mut self,
+        make_linker: Option<Rc<dyn Fn(&wasmtime::Engine) -> anyhow::Result<Linker>>>,
+    ) -> anyhow::Result<&mut Self> {
+        anyhow::ensure!(
+            !self.allow_wasi,
+            "Cannot use 'allow_wasi' with a custom linker"
+        );
+        self.make_linker = make_linker;
+        Ok(self)
     }
 
     /// When using WASI during initialization, should `stdin`, `stdout`, and
@@ -632,7 +695,11 @@ impl Wizer {
     ) -> anyhow::Result<(wasmtime::Instance, bool)> {
         log::debug!("Calling the initialization function");
 
-        let mut linker = wasmtime::Linker::new(store.engine());
+        let mut linker = if let Some(make_linker) = self.make_linker.as_deref() {
+            make_linker(store.engine()).context("failed to make custom linker")?
+        } else {
+            wasmtime::Linker::new(store.engine())
+        };
 
         if self.allow_wasi {
             wasmtime_wasi::add_to_linker(&mut linker, |ctx: &mut Option<WasiCtx>| {
