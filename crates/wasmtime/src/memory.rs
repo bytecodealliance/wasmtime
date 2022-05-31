@@ -258,26 +258,6 @@ impl Memory {
     }
 
     /// Creates a new WebAssembly memory given a [`SharedMemory`].
-    ///
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use wasmtime::*;
-    /// # fn main() -> anyhow::Result<()> {
-    /// let mut config = Config::new();
-    /// config.wasm_threads(true);
-    /// let engine = Engine::new(&config)?;
-    /// let mut store = Store::new(&engine, ());
-    ///
-    /// let shared_memory = SharedMemory::new(1, 2)?;
-    /// let memory = Memory::from_shared_memory(&mut store, shared_memory)?;
-    /// let module = Module::new(&engine, "(module (memory (import \"\" \"\") 1 2 shared))")?;
-    /// let instance = Instance::new(&mut store, &module, &[memory.into()])?;
-    /// // ...
-    /// # Ok(())
-    /// # }
-    /// ```
     fn from_shared_memory(
         mut store: impl AsContextMut,
         shared_memory: &SharedMemory,
@@ -730,6 +710,25 @@ pub unsafe trait MemoryCreator: Send + Sync {
 ///
 /// [threads proposal]:
 ///     https://github.com/WebAssembly/threads/blob/master/proposals/threads/Overview.md
+///
+/// # Examples
+///
+/// ```
+/// # use wasmtime::*;
+/// # fn main() -> anyhow::Result<()> {
+/// let mut config = Config::new();
+/// config.wasm_threads(true);
+/// let engine = Engine::new(&config)?;
+/// let mut store = Store::new(&engine, ());
+///
+/// let shared_memory = SharedMemory::new(&engine, MemoryType::shared(1, 2))?;
+/// let shared_memory_import = shared_memory.as_extern(&mut store)?;
+/// let module = Module::new(&engine, r#"(module (memory (import "" "") 1 2 shared))"#)?;
+/// let instance = Instance::new(&mut store, &module, &[shared_memory_import])?;
+/// // ...
+/// # Ok(())
+/// # }
+/// ```
 #[derive(Clone)]
 pub struct SharedMemory(wasmtime_runtime::SharedMemory, Engine);
 impl SharedMemory {
