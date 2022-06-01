@@ -725,7 +725,7 @@ impl Compiler {
             obj.append_section_data(section_id, &body, 1);
         }
 
-        // // Write all debug data relocations.
+        // Write all debug data relocations.
         for (name, relocs) in debug_relocs {
             let section_id = *dwarf_sections_ids.get(name).unwrap();
             for reloc in relocs {
