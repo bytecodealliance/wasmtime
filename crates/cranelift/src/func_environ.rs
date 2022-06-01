@@ -1725,12 +1725,14 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                     let vmmemory_ptr =
                         pos.ins()
                             .load(pointer_type, ir::MemFlags::trusted(), base, offset);
-                    // TODO should be an atomic_load (need a way to to do atomic_load + offset).
-                    pos.ins().load(
+                    let vmmemory_definition_offset =
+                        i64::from(self.offsets.vmmemory_definition_current_length());
+                    let vmmemory_definition_ptr =
+                        pos.ins().iadd_imm(vmmemory_ptr, vmmemory_definition_offset);
+                    pos.ins().atomic_load(
                         pointer_type,
                         ir::MemFlags::trusted(),
-                        vmmemory_ptr,
-                        i32::from(self.offsets.vmmemory_definition_current_length()),
+                        vmmemory_definition_ptr,
                     )
                 } else {
                     let owned_index = self.module.owned_memory_index(def_index).expect("TODO");
@@ -1748,12 +1750,24 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 let vmmemory_ptr =
                     pos.ins()
                         .load(pointer_type, ir::MemFlags::trusted(), base, offset);
-                pos.ins().load(
-                    pointer_type,
-                    ir::MemFlags::trusted(),
-                    vmmemory_ptr,
-                    i32::from(self.offsets.vmmemory_definition_current_length()),
-                )
+                if is_shared {
+                    let vmmemory_definition_offset =
+                        i64::from(self.offsets.vmmemory_definition_current_length());
+                    let vmmemory_definition_ptr =
+                        pos.ins().iadd_imm(vmmemory_ptr, vmmemory_definition_offset);
+                    pos.ins().atomic_load(
+                        pointer_type,
+                        ir::MemFlags::trusted(),
+                        vmmemory_definition_ptr,
+                    )
+                } else {
+                    pos.ins().load(
+                        pointer_type,
+                        ir::MemFlags::trusted(),
+                        vmmemory_ptr,
+                        i32::from(self.offsets.vmmemory_definition_current_length()),
+                    )
+                }
             }
         };
         let current_length_in_pages = pos
