@@ -385,8 +385,9 @@ impl Memory {
     pub fn data<'a, T: 'a>(&self, store: impl Into<StoreContext<'a, T>>) -> &'a [u8] {
         unsafe {
             let store = store.into();
-            let definition = *store[self.0].definition;
-            slice::from_raw_parts(definition.base, definition.current_length)
+            let definition = &*store[self.0].definition;
+            debug_assert!(!self.ty(store).is_shared());
+            slice::from_raw_parts(definition.base, definition.current_length())
         }
     }
 
@@ -401,8 +402,9 @@ impl Memory {
     pub fn data_mut<'a, T: 'a>(&self, store: impl Into<StoreContextMut<'a, T>>) -> &'a mut [u8] {
         unsafe {
             let store = store.into();
-            let definition = *store[self.0].definition;
-            slice::from_raw_parts_mut(definition.base, definition.current_length)
+            let definition = &*store[self.0].definition;
+            debug_assert!(!self.ty(store).is_shared());
+            slice::from_raw_parts_mut(definition.base, definition.current_length())
         }
     }
 
@@ -467,7 +469,7 @@ impl Memory {
     }
 
     pub(crate) fn internal_data_size(&self, store: &StoreOpaque) -> usize {
-        unsafe { (*store[self.0].definition).current_length }
+        unsafe { (*store[self.0].definition).current_length() }
     }
 
     /// Returns the size, in WebAssembly pages, of this wasm memory.
@@ -573,8 +575,7 @@ impl Memory {
         unsafe {
             let export = &store[self.0];
             let mut handle = wasmtime_runtime::InstanceHandle::from_vmctx(export.vmctx);
-            let idx = handle.memory_index(&*export.definition);
-            handle.get_defined_memory(idx)
+            handle.get_defined_memory(export.index)
         }
     }
 
@@ -594,7 +595,7 @@ impl Memory {
         wasmtime_runtime::VMMemoryImport {
             from: export.definition,
             vmctx: export.vmctx,
-            // index: DefinedMemoryIndex::from_u32(0), // TODO incorrect... must be stored on export
+            index: export.index,
         }
     }
 
@@ -774,24 +775,25 @@ impl SharedMemory {
         self.0.byte_size()
     }
 
-    /// Return read access to the available portion of the shared memory.
+    /// Return access to the available portion of the shared memory.
     ///
     /// Because the memory is shared, it is possible that this memory is being
-    /// modified elsewhere. Users of this function must manage synchronization
-    /// and locking to this region of memory themselves.
-    pub unsafe fn data(&self) -> *const [u8] {
-        let definition = *self.0.vmmemory_ptr();
-        slice::from_raw_parts(definition.base, definition.current_length)
-    }
-
-    /// Return write access to the available portion of the shared memory.
+    /// modified in other threads--in other words, the data can change at any
+    /// time. Users of this function must manage synchronization and locking to
+    /// this region of memory themselves.
     ///
-    /// Because the memory is shared, it is possible that this memory is being
-    /// modified (or read) elsewhere. Users of this function must manage
-    /// synchronization and locking to this region of memory themselves.
-    pub unsafe fn data_mut(&mut self) -> *mut [u8] {
-        let definition = *self.0.vmmemory_ptr_mut();
-        slice::from_raw_parts_mut(definition.base, definition.current_length)
+    /// Not only can the data change, but the length of this region can change
+    /// as well. Other threads can call `memory.grow` operations that will
+    /// extend the region length but--importantly--this will not be reflected in
+    /// the size of region returned by this function.
+    ///
+    /// Write access to the region is available by casting, e.g.: `mem.data() as
+    /// *mut [u8]`.
+    pub fn data(&self) -> *const [u8] {
+        unsafe {
+            let definition = &*self.0.vmmemory_ptr();
+            slice::from_raw_parts(definition.base, definition.current_length())
+        }
     }
 
     /// Grows this WebAssembly memory by `delta` pages.

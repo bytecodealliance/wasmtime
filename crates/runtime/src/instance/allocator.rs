@@ -10,7 +10,6 @@ use std::alloc;
 use std::any::Any;
 use std::convert::TryFrom;
 use std::ptr;
-use std::slice;
 use std::sync::Arc;
 use thiserror::Error;
 use wasmtime_environ::{
@@ -315,7 +314,7 @@ fn check_memory_init_bounds(
             .and_then(|start| start.checked_add(init.data.len()));
 
         match end {
-            Some(end) if end <= memory.current_length => {
+            Some(end) if end <= memory.current_length() => {
                 // Initializer is in bounds
             }
             _ => {
@@ -331,7 +330,7 @@ fn check_memory_init_bounds(
 
 fn initialize_memories(instance: &mut Instance, module: &Module) -> Result<(), InstantiationError> {
     let memory_size_in_pages =
-        &|memory| (instance.get_memory(memory).current_length as u64) / u64::from(WASM_PAGE_SIZE);
+        &|memory| (instance.get_memory(memory).current_length() as u64) / u64::from(WASM_PAGE_SIZE);
 
     // Loads the `global` value and returns it as a `u64`, but sign-extends
     // 32-bit globals which can be used as the base for 32-bit memories.
@@ -372,10 +371,15 @@ fn initialize_memories(instance: &mut Instance, module: &Module) -> Result<(), I
                 }
             }
             let memory = instance.get_memory(memory_index);
-            let dst_slice =
-                unsafe { slice::from_raw_parts_mut(memory.base, memory.current_length) };
-            let dst = &mut dst_slice[usize::try_from(init.offset).unwrap()..][..init.data.len()];
-            dst.copy_from_slice(instance.wasm_data(init.data.clone()));
+
+            unsafe {
+                let src = instance.wasm_data(init.data.clone());
+                let dst = memory.base.add(usize::try_from(init.offset).unwrap());
+                // FIXME audit whether this is safe in the presence of shared
+                // memory
+                // (https://github.com/bytecodealliance/wasmtime/issues/4203).
+                ptr::copy_nonoverlapping(src.as_ptr(), dst, src.len())
+            }
             true
         },
     );

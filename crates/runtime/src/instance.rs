@@ -193,13 +193,13 @@ impl Instance {
             self.memory(defined_index)
         } else {
             let import = self.imported_memory(index);
-            *unsafe { import.from.as_ref().unwrap() }
+            unsafe { VMMemoryDefinition::load(import.from) }
         }
     }
 
     /// Return the indexed `VMMemoryDefinition`.
     fn memory(&self, index: DefinedMemoryIndex) -> VMMemoryDefinition {
-        unsafe { *self.memory_ptr(index) }
+        unsafe { VMMemoryDefinition::load(self.memory_ptr(index)) }
     }
 
     /// Set the indexed memory to `VMMemoryDefinition`.
@@ -309,17 +309,18 @@ impl Instance {
     }
 
     fn get_exported_memory(&mut self, index: MemoryIndex) -> ExportMemory {
-        let (definition, vmctx) = if let Some(def_index) = self.module().defined_memory_index(index)
-        {
-            (self.memory_ptr(def_index), self.vmctx_ptr())
-        } else {
-            let import = self.imported_memory(index);
-            (import.from, import.vmctx)
-        };
+        let (definition, vmctx, def_index) =
+            if let Some(def_index) = self.module().defined_memory_index(index) {
+                (self.memory_ptr(def_index), self.vmctx_ptr(), def_index)
+            } else {
+                let import = self.imported_memory(index);
+                (import.from, import.vmctx, import.index)
+            };
         ExportMemory {
             definition,
             vmctx,
             memory: self.module().memory_plans[index].clone(),
+            index: def_index,
         }
     }
 
@@ -369,19 +370,6 @@ impl Instance {
         index
     }
 
-    /// Return the memory index for the given `VMMemoryDefinition`.
-    unsafe fn memory_index(&self, memory: &VMMemoryDefinition) -> DefinedMemoryIndex {
-        let index = DefinedMemoryIndex::new(
-            usize::try_from(
-                (memory as *const VMMemoryDefinition)
-                    .offset_from(self.memory_ptr(DefinedMemoryIndex::new(0))),
-            )
-            .unwrap(),
-        );
-        assert_lt!(index.index(), self.memories.len());
-        index
-    }
-
     /// Grow memory by the specified amount of pages.
     ///
     /// Returns `None` if memory can't be grown by the specified amount
@@ -398,9 +386,7 @@ impl Instance {
             let import = self.imported_memory(index);
             unsafe {
                 let foreign_instance = (*import.vmctx).instance_mut();
-                let foreign_memory_def = &*import.from;
-                let foreign_memory_index = foreign_instance.memory_index(foreign_memory_def);
-                (foreign_memory_index, foreign_instance)
+                (import.index, foreign_instance)
             }
         };
         let store = unsafe { &mut *instance.store() };
@@ -661,14 +647,16 @@ impl Instance {
         let src_mem = self.get_memory(src_index);
         let dst_mem = self.get_memory(dst_index);
 
-        let src = self.validate_inbounds(src_mem.current_length, src, len)?;
-        let dst = self.validate_inbounds(dst_mem.current_length, dst, len)?;
+        let src = self.validate_inbounds(src_mem.current_length(), src, len)?;
+        let dst = self.validate_inbounds(dst_mem.current_length(), dst, len)?;
 
         // Bounds and casts are checked above, by this point we know that
         // everything is safe.
         unsafe {
             let dst = dst_mem.base.add(dst);
             let src = src_mem.base.add(src);
+            // FIXME audit whether this is safe in the presence of shared memory
+            // (https://github.com/bytecodealliance/wasmtime/issues/4203).
             ptr::copy(src, dst, len as usize);
         }
 
@@ -701,12 +689,14 @@ impl Instance {
         len: u64,
     ) -> Result<(), Trap> {
         let memory = self.get_memory(memory_index);
-        let dst = self.validate_inbounds(memory.current_length, dst, len)?;
+        let dst = self.validate_inbounds(memory.current_length(), dst, len)?;
 
         // Bounds and casts are checked above, by this point we know that
         // everything is safe.
         unsafe {
             let dst = memory.base.add(dst);
+            // FIXME audit whether this is safe in the presence of shared memory
+            // (https://github.com/bytecodealliance/wasmtime/issues/4203).
             ptr::write_bytes(dst, val, len as usize);
         }
 
@@ -751,16 +741,16 @@ impl Instance {
 
         let memory = self.get_memory(memory_index);
         let data = self.wasm_data(range);
-        let dst = self.validate_inbounds(memory.current_length, dst, len.into())?;
+        let dst = self.validate_inbounds(memory.current_length(), dst, len.into())?;
         let src = self.validate_inbounds(data.len(), src.into(), len.into())?;
         let len = len as usize;
 
-        let src_slice = &data[src..(src + len)];
-
         unsafe {
+            let src_start = data.as_ptr().add(src);
             let dst_start = memory.base.add(dst);
-            let dst_slice = slice::from_raw_parts_mut(dst_start, len);
-            dst_slice.copy_from_slice(src_slice);
+            // FIXME audit whether this is safe in the presence of shared memory
+            // (https://github.com/bytecodealliance/wasmtime/issues/4203).
+            ptr::copy_nonoverlapping(src_start, dst_start, len);
         }
 
         Ok(())
@@ -943,17 +933,16 @@ impl Instance {
         let mut ptr = self.vmctx_plus_offset(self.offsets.vmctx_memories_begin());
         let mut owned_ptr = self.vmctx_plus_offset(self.offsets.vmctx_owned_memories_begin());
         for i in 0..module.memory_plans.len() - module.num_imported_memories {
-            if module.memory_plans[MemoryIndex::new(i)].memory.shared {
-                let def_ptr = self.memories[DefinedMemoryIndex::new(i)]
+            let defined_memory_index = DefinedMemoryIndex::new(i);
+            let memory_index = module.memory_index(defined_memory_index);
+            if module.memory_plans[memory_index].memory.shared {
+                let def_ptr = self.memories[defined_memory_index]
                     .as_shared_memory()
                     .unwrap()
                     .vmmemory_ptr_mut();
                 ptr::write(ptr, def_ptr);
             } else {
-                ptr::write(
-                    owned_ptr,
-                    self.memories[DefinedMemoryIndex::new(i)].vmmemory(),
-                );
+                ptr::write(owned_ptr, self.memories[defined_memory_index].vmmemory());
                 ptr::write(ptr, owned_ptr);
                 owned_ptr = owned_ptr.add(1);
             }
@@ -1120,11 +1109,6 @@ impl InstanceHandle {
     /// Return a reference to the custom state attached to this instance.
     pub fn host_state(&self) -> &dyn Any {
         self.instance().host_state()
-    }
-
-    /// Return the memory index for the given `VMMemoryDefinition` in this instance.
-    pub unsafe fn memory_index(&self, memory: &VMMemoryDefinition) -> DefinedMemoryIndex {
-        self.instance().memory_index(memory)
     }
 
     /// Get a memory defined locally within this module.

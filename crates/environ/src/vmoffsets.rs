@@ -474,7 +474,7 @@ impl<P: PtrSize> VMOffsets<P> {
     /// Return the size of `VMMemoryImport`.
     #[inline]
     pub fn size_of_vmmemory_import(&self) -> u8 {
-        2 * self.pointer_size()
+        3 * self.pointer_size()
     }
 }
 

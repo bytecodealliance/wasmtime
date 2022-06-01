@@ -11,6 +11,7 @@ use anyhow::Error;
 use anyhow::{bail, format_err, Result};
 use more_asserts::{assert_ge, assert_le};
 use std::convert::TryFrom;
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, RwLock};
 use wasmtime_environ::{MemoryPlan, MemoryStyle, Tunables, WASM32_MAX_PAGES, WASM64_MAX_PAGES};
 
@@ -318,7 +319,7 @@ impl RuntimeLinearMemory for MmapMemory {
     fn vmmemory(&mut self) -> VMMemoryDefinition {
         VMMemoryDefinition {
             base: unsafe { self.mmap.as_mut_ptr().add(self.pre_guard_size) },
-            current_length: self.accessible,
+            current_length: self.accessible.into(),
         }
     }
 
@@ -429,7 +430,7 @@ impl RuntimeLinearMemory for StaticMemory {
     fn vmmemory(&mut self) -> VMMemoryDefinition {
         VMMemoryDefinition {
             base: self.base.as_mut_ptr().cast(),
-            current_length: self.size,
+            current_length: self.size.into(),
         }
     }
 
@@ -545,7 +546,11 @@ impl RuntimeLinearMemory for SharedMemory {
         if let Some((_old_size_in_bytes, new_size_in_bytes)) = result {
             // Store the new size to the `VMMemoryDefinition` for JIT-generated
             // code to access.
-            inner.def.0.current_length = new_size_in_bytes;
+            inner
+                .def
+                .0
+                .current_length
+                .store(new_size_in_bytes, Ordering::SeqCst);
         }
         Ok(result)
     }

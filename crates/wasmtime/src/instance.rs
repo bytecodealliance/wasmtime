@@ -614,6 +614,7 @@ impl OwnedImports {
                 self.memories.push(VMMemoryImport {
                     from: m.definition,
                     vmctx: m.vmctx,
+                    index: m.index,
                 });
             }
         }

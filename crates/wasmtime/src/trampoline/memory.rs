@@ -100,7 +100,7 @@ impl RuntimeLinearMemory for LinearMemoryProxy {
     fn vmmemory(&mut self) -> VMMemoryDefinition {
         VMMemoryDefinition {
             base: self.mem.as_ptr(),
-            current_length: self.mem.byte_size(),
+            current_length: self.mem.byte_size().into(),
         }
     }
 
