@@ -232,6 +232,13 @@ pub trait Compiler: Send + Sync {
 
     /// Same as [`Compiler::flags`], but ISA-specific (a cranelift-ism)
     fn isa_flags(&self) -> BTreeMap<String, FlagValue>;
+
+    /// Returns a suitable compiler usable for component-related compliations.
+    ///
+    /// Note that the `ComponentCompiler` trait can also be implemented for
+    /// `Self` in which case this function would simply return `self`.
+    #[cfg(feature = "component-model")]
+    fn component_compiler(&self) -> &dyn crate::component::ComponentCompiler;
 }
 
 /// Value of a configured setting for a [`Compiler`]

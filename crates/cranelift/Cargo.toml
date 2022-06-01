@@ -28,3 +28,4 @@ thiserror = "1.0.4"
 
 [features]
 all-arch = ["cranelift-codegen/all-arch"]
+component-model = ["wasmtime-environ/component-model"]

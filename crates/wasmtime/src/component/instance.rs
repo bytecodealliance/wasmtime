@@ -204,7 +204,16 @@ impl<'a> Instantiator<'a> {
                     let idx = self.data.instances.push(i);
                     assert_eq!(idx, *instance);
                 }
-                Initializer::LowerImport(_) => unimplemented!(),
+                Initializer::LowerImport(i) => {
+                    drop(self.component.trampoline_ptr(i.index));
+                    drop(
+                        self.component
+                            .signatures()
+                            .shared_signature(i.canonical_abi)
+                            .unwrap(),
+                    );
+                    unimplemented!()
+                }
 
                 Initializer::ExtractMemory { index, export } => {
                     let memory = match self.data.lookup_export(store.0, export) {

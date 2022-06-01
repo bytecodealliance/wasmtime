@@ -26,9 +26,13 @@
 //! any time. Some comments may reflect historical rather than current state as
 //! well (sorry).
 
+mod compiler;
 mod info;
 mod translate;
 mod types;
+mod vmcomponent_offsets;
+pub use self::compiler::*;
 pub use self::info::*;
 pub use self::translate::*;
 pub use self::types::*;
+pub use self::vmcomponent_offsets::*;

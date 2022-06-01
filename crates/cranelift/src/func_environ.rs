@@ -16,7 +16,7 @@ use std::convert::TryFrom;
 use std::mem;
 use wasmparser::Operator;
 use wasmtime_environ::{
-    BuiltinFunctionIndex, MemoryPlan, MemoryStyle, Module, ModuleTranslation, ModuleTypes,
+    BuiltinFunctionIndex, MemoryPlan, MemoryStyle, Module, ModuleTranslation, ModuleTypes, PtrSize,
     TableStyle, Tunables, VMOffsets, WASM_PAGE_SIZE,
 };
 use wasmtime_environ::{FUNCREF_INIT_BIT, FUNCREF_MASK};
@@ -1536,7 +1536,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             pointer_type,
             mem_flags,
             anyfunc_ptr,
-            i32::from(self.offsets.vmcaller_checked_anyfunc_func_ptr()),
+            i32::from(self.offsets.ptr.vmcaller_checked_anyfunc_func_ptr()),
         );
 
         // If necessary, check the signature.
@@ -1572,7 +1572,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                     sig_id_type,
                     mem_flags,
                     anyfunc_ptr,
-                    i32::from(self.offsets.vmcaller_checked_anyfunc_type_index()),
+                    i32::from(self.offsets.ptr.vmcaller_checked_anyfunc_type_index()),
                 );
 
                 // Check that they match.
@@ -1594,7 +1594,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             pointer_type,
             mem_flags,
             anyfunc_ptr,
-            i32::from(self.offsets.vmcaller_checked_anyfunc_vmctx()),
+            i32::from(self.offsets.ptr.vmcaller_checked_anyfunc_vmctx()),
         );
         real_call_args.push(vmctx);
         real_call_args.push(caller_vmctx);

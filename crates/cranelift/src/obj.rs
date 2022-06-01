@@ -88,7 +88,7 @@ impl<'a> ModuleTextBuilder<'a> {
     ///
     /// Returns the symbol associated with the function as well as the range
     /// that the function resides within the text section.
-    fn append_func(
+    pub fn append_func(
         &mut self,
         labeled: bool,
         name: Vec<u8>,
