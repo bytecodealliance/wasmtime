@@ -134,6 +134,12 @@ fn typecheck() -> Result<()> {
             (func (export "ret-tuple1")
                 (canon.lift (func (result (tuple u32))) (into $i) (func $i "ret-one"))
             )
+            (func (export "ret-string")
+                (canon.lift (func (result string)) (into $i) (func $i "ret-one"))
+            )
+            (func (export "ret-list-u8")
+                (canon.lift (func (result (list u8))) (into $i) (func $i "ret-one"))
+            )
         )
     "#;
 
@@ -146,13 +152,15 @@ fn typecheck() -> Result<()> {
     let take_two_args = instance.get_func(&mut store, "take-two-args").unwrap();
     let ret_tuple = instance.get_func(&mut store, "ret-tuple").unwrap();
     let ret_tuple1 = instance.get_func(&mut store, "ret-tuple1").unwrap();
+    let ret_string = instance.get_func(&mut store, "ret-string").unwrap();
+    let ret_list_u8 = instance.get_func(&mut store, "ret-list-u8").unwrap();
     assert!(thunk.typed::<(), u32, _>(&store).is_err());
     assert!(thunk.typed::<(u32,), (), _>(&store).is_err());
     assert!(thunk.typed::<(), (), _>(&store).is_ok());
     assert!(take_string.typed::<(), (), _>(&store).is_err());
-    assert!(take_string.typed::<(), Value<String>, _>(&store).is_err());
+    assert!(take_string.typed::<(), String, _>(&store).is_err());
     assert!(take_string
-        .typed::<(String, String), Value<String>, _>(&store)
+        .typed::<(String, String), String, _>(&store)
         .is_err());
     assert!(take_string.typed::<(String,), (), _>(&store).is_ok());
     assert!(take_string.typed::<(&str,), (), _>(&store).is_ok());
@@ -161,17 +169,20 @@ fn typecheck() -> Result<()> {
     assert!(take_two_args.typed::<(i32, &[u8]), u32, _>(&store).is_err());
     assert!(take_two_args.typed::<(u32, &[u8]), (), _>(&store).is_err());
     assert!(take_two_args.typed::<(i32, &[u8]), (), _>(&store).is_ok());
-    assert!(take_two_args
-        .typed::<(i32, &[u8]), Value<()>, _>(&store)
-        .is_err());
     assert!(ret_tuple.typed::<(), (), _>(&store).is_err());
     assert!(ret_tuple.typed::<(), (u8,), _>(&store).is_err());
-    assert!(ret_tuple.typed::<(), (u8, i8), _>(&store).is_err());
-    assert!(ret_tuple.typed::<(), Value<(u8, i8)>, _>(&store).is_ok());
+    assert!(ret_tuple.typed::<(), (u8, i8), _>(&store).is_ok());
     assert!(ret_tuple1.typed::<(), (u32,), _>(&store).is_ok());
     assert!(ret_tuple1.typed::<(), u32, _>(&store).is_err());
-    assert!(ret_tuple1.typed::<(), Value<u32>, _>(&store).is_err());
-    assert!(ret_tuple1.typed::<(), Value<(u32,)>, _>(&store).is_err());
+    assert!(ret_string.typed::<(), (), _>(&store).is_err());
+    assert!(ret_string.typed::<(), String, _>(&store).is_err());
+    assert!(ret_string.typed::<(), &str, _>(&store).is_err());
+    assert!(ret_string.typed::<(), WasmStr, _>(&store).is_ok());
+    assert!(ret_list_u8.typed::<(), &[u8], _>(&store).is_err());
+    assert!(ret_list_u8.typed::<(), Vec<u8>, _>(&store).is_err());
+    assert!(ret_list_u8.typed::<(), WasmList<u16>, _>(&store).is_err());
+    assert!(ret_list_u8.typed::<(), WasmList<i8>, _>(&store).is_err());
+    assert!(ret_list_u8.typed::<(), WasmList<u8>, _>(&store).is_ok());
 
     Ok(())
 }
@@ -719,24 +730,15 @@ fn tuple_result() -> Result<()> {
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, ());
     let instance = Instance::new(&mut store, &component)?;
-    let result = instance
-        .get_typed_func::<(i8, u16, f32, f64), Value<(i8, u16, f32, f64)>, _>(&mut store, "tuple")?
-        .call(&mut store, (-1, 100, 3.0, 100.0))?;
-    let cursor = result.cursor(&store);
-    assert_eq!(cursor.a1().get(), -1);
-    assert_eq!(cursor.a2().get(), 100);
-    assert_eq!(cursor.a3().get(), 3.0);
-    assert_eq!(cursor.a4().get(), 100.0);
 
-    let err = instance
-        .get_typed_func::<(i8, u16, f32, f64), (i8, u16, f32, f64), _>(&mut store, "tuple")
-        .err()
-        .unwrap();
-    let err = format!("{:?}", err);
-    assert!(err.contains("is returned indirectly"), "{}", err);
+    let input = (-1, 100, 3.0, 100.0);
+    let output = instance
+        .get_typed_func::<(i8, u16, f32, f64), (i8, u16, f32, f64), _>(&mut store, "tuple")?
+        .call(&mut store, input)?;
+    assert_eq!(input, output);
 
     let invalid_func =
-        instance.get_typed_func::<(), Value<(i8, u16, f32, f64)>, _>(&mut store, "invalid")?;
+        instance.get_typed_func::<(), (i8, u16, f32, f64), _>(&mut store, "invalid")?;
     let err = invalid_func.call(&mut store, ()).err().unwrap();
     assert!(
         err.to_string().contains("pointer out of bounds of memory"),
@@ -812,39 +814,27 @@ fn strings() -> Result<()> {
     let mut store = Store::new(&engine, ());
     let instance = Instance::new(&mut store, &component)?;
     let list8_to_str =
-        instance.get_typed_func::<(&[u8],), Value<String>, _>(&mut store, "list8-to-str")?;
+        instance.get_typed_func::<(&[u8],), WasmStr, _>(&mut store, "list8-to-str")?;
     let str_to_list8 =
-        instance.get_typed_func::<(&str,), Value<Vec<u8>>, _>(&mut store, "str-to-list8")?;
+        instance.get_typed_func::<(&str,), WasmList<u8>, _>(&mut store, "str-to-list8")?;
     let list16_to_str =
-        instance.get_typed_func::<(&[u16],), Value<String>, _>(&mut store, "list16-to-str")?;
+        instance.get_typed_func::<(&[u16],), WasmStr, _>(&mut store, "list16-to-str")?;
     let str_to_list16 =
-        instance.get_typed_func::<(&str,), Value<Vec<u16>>, _>(&mut store, "str-to-list16")?;
+        instance.get_typed_func::<(&str,), WasmList<u16>, _>(&mut store, "str-to-list16")?;
 
     let mut roundtrip = |x: &str| -> Result<()> {
         let ret = list8_to_str.call(&mut store, (x.as_bytes(),))?;
-        assert_eq!(ret.cursor(&store).to_str()?, x);
+        assert_eq!(ret.to_str(&store)?, x);
 
         let utf16 = x.encode_utf16().collect::<Vec<_>>();
         let ret = list16_to_str.call(&mut store, (&utf16[..],))?;
-        assert_eq!(ret.cursor(&store).to_str()?, x);
+        assert_eq!(ret.to_str(&store)?, x);
 
         let ret = str_to_list8.call(&mut store, (x,))?;
-        assert_eq!(
-            ret.cursor(&store)
-                .iter()?
-                .map(|s| s.get())
-                .collect::<Vec<_>>(),
-            x.as_bytes()
-        );
+        assert_eq!(ret.iter(&store).collect::<Result<Vec<_>>>()?, x.as_bytes());
 
         let ret = str_to_list16.call(&mut store, (x,))?;
-        assert_eq!(
-            ret.cursor(&store)
-                .iter()?
-                .map(|s| s.get())
-                .collect::<Vec<_>>(),
-            utf16,
-        );
+        assert_eq!(ret.iter(&store).collect::<Result<Vec<_>>>()?, utf16,);
 
         Ok(())
     };
@@ -856,23 +846,23 @@ fn strings() -> Result<()> {
     roundtrip("Löwe 老虎 Léopard")?;
 
     let ret = list8_to_str.call(&mut store, (b"\xff",))?;
-    let err = ret.cursor(&store).to_str().unwrap_err();
+    let err = ret.to_str(&store).unwrap_err();
     assert!(err.to_string().contains("invalid utf-8"), "{}", err);
 
     let ret = list8_to_str.call(&mut store, (b"hello there \xff invalid",))?;
-    let err = ret.cursor(&store).to_str().unwrap_err();
+    let err = ret.to_str(&store).unwrap_err();
     assert!(err.to_string().contains("invalid utf-8"), "{}", err);
 
     let ret = list16_to_str.call(&mut store, (&[0xd800],))?;
-    let err = ret.cursor(&store).to_str().unwrap_err();
+    let err = ret.to_str(&store).unwrap_err();
     assert!(err.to_string().contains("unpaired surrogate"), "{}", err);
 
     let ret = list16_to_str.call(&mut store, (&[0xdfff],))?;
-    let err = ret.cursor(&store).to_str().unwrap_err();
+    let err = ret.to_str(&store).unwrap_err();
     assert!(err.to_string().contains("unpaired surrogate"), "{}", err);
 
     let ret = list16_to_str.call(&mut store, (&[0xd800, 0xff00],))?;
-    let err = ret.cursor(&store).to_str().unwrap_err();
+    let err = ret.to_str(&store).unwrap_err();
     assert!(err.to_string().contains("unpaired surrogate"), "{}", err);
 
     Ok(())
@@ -962,7 +952,7 @@ fn many_parameters() -> Result<()> {
         &[bool],
         &[char],
         &[&str],
-    ), Value<(Vec<u8>, u32)>, _>(&mut store, "many-param")?;
+    ), (WasmList<u8>, u32), _>(&mut store, "many-param")?;
 
     let input = (
         -100,
@@ -987,12 +977,10 @@ fn many_parameters() -> Result<()> {
         ]
         .as_slice(),
     );
-    let result = func.call(&mut store, input)?;
-    let cursor = result.cursor(&store);
-    let memory = cursor.a1().as_slice()?;
-    let pointer = usize::try_from(cursor.a2().get()).unwrap();
+    let (memory, pointer) = func.call(&mut store, input)?;
+    let memory = memory.as_slice(&store);
 
-    let mut actual = &memory[pointer..][..72];
+    let mut actual = &memory[pointer as usize..][..72];
     assert_eq!(i8::from_le_bytes(*actual.take_n::<1>()), input.0);
     actual.skip::<7>();
     assert_eq!(u64::from_le_bytes(*actual.take_n::<8>()), input.1);
@@ -1317,22 +1305,16 @@ fn char_bool_memory() -> Result<()> {
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, ());
     let instance = Instance::new(&mut store, &component)?;
-    let func =
-        instance.get_typed_func::<(u32, u32), Value<(bool, char)>, _>(&mut store, "ret-tuple")?;
+    let func = instance.get_typed_func::<(u32, u32), (bool, char), _>(&mut store, "ret-tuple")?;
 
     let ret = func.call(&mut store, (0, 'a' as u32))?;
-    assert_eq!(ret.cursor(&store).a1().get()?, false);
-    assert_eq!(ret.cursor(&store).a2().get()?, 'a');
+    assert_eq!(ret, (false, 'a'));
 
     let ret = func.call(&mut store, (1, '🍰' as u32))?;
-    assert_eq!(ret.cursor(&store).a1().get()?, true);
-    assert_eq!(ret.cursor(&store).a2().get()?, '🍰');
+    assert_eq!(ret, (true, '🍰'));
 
-    let ret = func.call(&mut store, (2, 'a' as u32))?;
-    assert!(ret.cursor(&store).a1().get().is_err());
-
-    let ret = func.call(&mut store, (0, 0xd800))?;
-    assert!(ret.cursor(&store).a2().get().is_err());
+    assert!(func.call(&mut store, (2, 'a' as u32)).is_err());
+    assert!(func.call(&mut store, (0, 0xd800)).is_err());
 
     Ok(())
 }
@@ -1381,17 +1363,14 @@ fn string_list_oob() -> Result<()> {
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, ());
     let instance = Instance::new(&mut store, &component)?;
-    let ret_list_u8 =
-        instance.get_typed_func::<(), Value<Vec<u8>>, _>(&mut store, "ret-list-u8")?;
-    let ret_string = instance.get_typed_func::<(), Value<String>, _>(&mut store, "ret-string")?;
+    let ret_list_u8 = instance.get_typed_func::<(), WasmList<u8>, _>(&mut store, "ret-list-u8")?;
+    let ret_string = instance.get_typed_func::<(), WasmStr, _>(&mut store, "ret-string")?;
 
-    let list = ret_list_u8.call(&mut store, ())?;
-    let err = list.cursor(&store).iter().err().unwrap();
-    assert!(err.to_string().contains("list out of bounds"), "{}", err);
+    let err = ret_list_u8.call(&mut store, ()).err().unwrap();
+    assert!(err.to_string().contains("out of bounds"), "{}", err);
 
-    let ret = ret_string.call(&mut store, ())?;
-    let err = ret.cursor(&store).to_str().unwrap_err();
-    assert!(err.to_string().contains("string out of bounds"), "{}", err);
+    let err = ret_string.call(&mut store, ()).err().unwrap();
+    assert!(err.to_string().contains("out of bounds"), "{}", err);
 
     Ok(())
 }
@@ -1574,45 +1553,33 @@ fn option() -> Result<()> {
     assert_eq!(option_unit_to_u32.call(&mut store, (Some(()),))?, 1);
 
     let option_u8_to_tuple = instance
-        .get_typed_func::<(Option<u8>,), Value<(u32, u32)>, _>(&mut store, "option-u8-to-tuple")?;
-    let ret = option_u8_to_tuple.call(&mut store, (None,))?;
-    assert_eq!(ret.cursor(&store).a1().get(), 0);
-    assert_eq!(ret.cursor(&store).a2().get(), 0);
-    let ret = option_u8_to_tuple.call(&mut store, (Some(0),))?;
-    assert_eq!(ret.cursor(&store).a1().get(), 1);
-    assert_eq!(ret.cursor(&store).a2().get(), 0);
-    let ret = option_u8_to_tuple.call(&mut store, (Some(100),))?;
-    assert_eq!(ret.cursor(&store).a1().get(), 1);
-    assert_eq!(ret.cursor(&store).a2().get(), 100);
+        .get_typed_func::<(Option<u8>,), (u32, u32), _>(&mut store, "option-u8-to-tuple")?;
+    assert_eq!(option_u8_to_tuple.call(&mut store, (None,))?, (0, 0));
+    assert_eq!(option_u8_to_tuple.call(&mut store, (Some(0),))?, (1, 0));
+    assert_eq!(option_u8_to_tuple.call(&mut store, (Some(100),))?, (1, 100));
 
-    let option_u32_to_tuple = instance.get_typed_func::<(Option<u32>,), Value<(u32, u32)>, _>(
+    let option_u32_to_tuple = instance
+        .get_typed_func::<(Option<u32>,), (u32, u32), _>(&mut store, "option-u32-to-tuple")?;
+    assert_eq!(option_u32_to_tuple.call(&mut store, (None,))?, (0, 0));
+    assert_eq!(option_u32_to_tuple.call(&mut store, (Some(0),))?, (1, 0));
+    assert_eq!(
+        option_u32_to_tuple.call(&mut store, (Some(100),))?,
+        (1, 100)
+    );
+
+    let option_string_to_tuple = instance.get_typed_func::<(Option<&str>,), (u32, WasmStr), _>(
         &mut store,
-        "option-u32-to-tuple",
+        "option-string-to-tuple",
     )?;
-    let ret = option_u32_to_tuple.call(&mut store, (None,))?;
-    assert_eq!(ret.cursor(&store).a1().get(), 0);
-    assert_eq!(ret.cursor(&store).a2().get(), 0);
-    let ret = option_u32_to_tuple.call(&mut store, (Some(0),))?;
-    assert_eq!(ret.cursor(&store).a1().get(), 1);
-    assert_eq!(ret.cursor(&store).a2().get(), 0);
-    let ret = option_u32_to_tuple.call(&mut store, (Some(100),))?;
-    assert_eq!(ret.cursor(&store).a1().get(), 1);
-    assert_eq!(ret.cursor(&store).a2().get(), 100);
-
-    let option_string_to_tuple = instance
-        .get_typed_func::<(Option<&str>,), Value<(u32, String)>, _>(
-            &mut store,
-            "option-string-to-tuple",
-        )?;
-    let ret = option_string_to_tuple.call(&mut store, (None,))?;
-    assert_eq!(ret.cursor(&store).a1().get(), 0);
-    assert_eq!(ret.cursor(&store).a2().to_str()?, "");
-    let ret = option_string_to_tuple.call(&mut store, (Some(""),))?;
-    assert_eq!(ret.cursor(&store).a1().get(), 1);
-    assert_eq!(ret.cursor(&store).a2().to_str()?, "");
-    let ret = option_string_to_tuple.call(&mut store, (Some("hello"),))?;
-    assert_eq!(ret.cursor(&store).a1().get(), 1);
-    assert_eq!(ret.cursor(&store).a2().to_str()?, "hello");
+    let (a, b) = option_string_to_tuple.call(&mut store, (None,))?;
+    assert_eq!(a, 0);
+    assert_eq!(b.to_str(&store)?, "");
+    let (a, b) = option_string_to_tuple.call(&mut store, (Some(""),))?;
+    assert_eq!(a, 1);
+    assert_eq!(b.to_str(&store)?, "");
+    let (a, b) = option_string_to_tuple.call(&mut store, (Some("hello"),))?;
+    assert_eq!(a, 1);
+    assert_eq!(b.to_str(&store)?, "hello");
 
     let to_option_unit =
         instance.get_typed_func::<(u32,), Option<()>, _>(&mut store, "to-option-unit")?;
@@ -1622,37 +1589,31 @@ fn option() -> Result<()> {
     assert!(err.to_string().contains("invalid option"), "{}", err);
 
     let to_option_u8 =
-        instance.get_typed_func::<(u32, u32), Value<Option<u8>>, _>(&mut store, "to-option-u8")?;
-    let ret = to_option_u8.call(&mut store, (0x00_00, 0))?;
-    assert!(ret.cursor(&store).get()?.is_none());
-    let ret = to_option_u8.call(&mut store, (0x00_01, 0))?;
-    assert_eq!(ret.cursor(&store).get()?.unwrap().get(), 0x00);
-    let ret = to_option_u8.call(&mut store, (0xfd_01, 0))?;
-    assert_eq!(ret.cursor(&store).get()?.unwrap().get(), 0xfd);
-    let ret = to_option_u8.call(&mut store, (0x00_02, 0))?;
-    assert!(ret.cursor(&store).get().is_err());
+        instance.get_typed_func::<(u32, u32), Option<u8>, _>(&mut store, "to-option-u8")?;
+    assert_eq!(to_option_u8.call(&mut store, (0x00_00, 0))?, None);
+    assert_eq!(to_option_u8.call(&mut store, (0x00_01, 0))?, Some(0));
+    assert_eq!(to_option_u8.call(&mut store, (0xfd_01, 0))?, Some(0xfd));
+    assert!(to_option_u8.call(&mut store, (0x00_02, 0)).is_err());
 
-    let to_option_u32 = instance
-        .get_typed_func::<(u32, u32), Value<Option<u32>>, _>(&mut store, "to-option-u32")?;
-    let ret = to_option_u32.call(&mut store, (0, 0))?;
-    assert!(ret.cursor(&store).get()?.is_none());
-    let ret = to_option_u32.call(&mut store, (1, 0))?;
-    assert_eq!(ret.cursor(&store).get()?.unwrap().get(), 0);
-    let ret = to_option_u32.call(&mut store, (1, 0x1234fead))?;
-    assert_eq!(ret.cursor(&store).get()?.unwrap().get(), 0x1234fead);
-    let ret = to_option_u32.call(&mut store, (2, 0))?;
-    assert!(ret.cursor(&store).get().is_err());
+    let to_option_u32 =
+        instance.get_typed_func::<(u32, u32), Option<u32>, _>(&mut store, "to-option-u32")?;
+    assert_eq!(to_option_u32.call(&mut store, (0, 0))?, None);
+    assert_eq!(to_option_u32.call(&mut store, (1, 0))?, Some(0));
+    assert_eq!(
+        to_option_u32.call(&mut store, (1, 0x1234fead))?,
+        Some(0x1234fead)
+    );
+    assert!(to_option_u32.call(&mut store, (2, 0)).is_err());
 
     let to_option_string = instance
-        .get_typed_func::<(u32, &str), Value<Option<String>>, _>(&mut store, "to-option-string")?;
+        .get_typed_func::<(u32, &str), Option<WasmStr>, _>(&mut store, "to-option-string")?;
     let ret = to_option_string.call(&mut store, (0, ""))?;
-    assert!(ret.cursor(&store).get()?.is_none());
+    assert!(ret.is_none());
     let ret = to_option_string.call(&mut store, (1, ""))?;
-    assert_eq!(ret.cursor(&store).get()?.unwrap().to_str()?, "");
+    assert_eq!(ret.unwrap().to_str(&store)?, "");
     let ret = to_option_string.call(&mut store, (1, "cheesecake"))?;
-    assert_eq!(ret.cursor(&store).get()?.unwrap().to_str()?, "cheesecake");
-    let ret = to_option_string.call(&mut store, (2, ""))?;
-    assert!(ret.cursor(&store).get().is_err());
+    assert_eq!(ret.unwrap().to_str(&store)?, "cheesecake");
+    assert!(to_option_string.call(&mut store, (2, "")).is_err());
 
     Ok(())
 }
@@ -1757,28 +1718,24 @@ fn expected() -> Result<()> {
     assert_eq!(take_expected_unit.call(&mut store, (Err(()),))?, 1);
 
     let take_expected_u8_f32 = instance
-        .get_typed_func::<(Result<u8, f32>,), Value<(u32, u32)>, _>(
-            &mut store,
-            "take-expected-u8-f32",
-        )?;
-    let ret = take_expected_u8_f32.call(&mut store, (Ok(1),))?;
-    assert_eq!(ret.cursor(&store).a1().get(), 0);
-    assert_eq!(ret.cursor(&store).a2().get(), 1);
-    let ret = take_expected_u8_f32.call(&mut store, (Err(2.0),))?;
-    assert_eq!(ret.cursor(&store).a1().get(), 1);
-    assert_eq!(ret.cursor(&store).a2().get(), 2.0f32.to_bits());
+        .get_typed_func::<(Result<u8, f32>,), (u32, u32), _>(&mut store, "take-expected-u8-f32")?;
+    assert_eq!(take_expected_u8_f32.call(&mut store, (Ok(1),))?, (0, 1));
+    assert_eq!(
+        take_expected_u8_f32.call(&mut store, (Err(2.0),))?,
+        (1, 2.0f32.to_bits())
+    );
 
     let take_expected_string = instance
-        .get_typed_func::<(Result<&str, &[u8]>,), Value<(u32, String)>, _>(
+        .get_typed_func::<(Result<&str, &[u8]>,), (u32, WasmStr), _>(
             &mut store,
             "take-expected-string",
         )?;
-    let ret = take_expected_string.call(&mut store, (Ok("hello"),))?;
-    assert_eq!(ret.cursor(&store).a1().get(), 0);
-    assert_eq!(ret.cursor(&store).a2().to_str()?, "hello");
-    let ret = take_expected_string.call(&mut store, (Err(b"goodbye"),))?;
-    assert_eq!(ret.cursor(&store).a1().get(), 1);
-    assert_eq!(ret.cursor(&store).a2().to_str()?, "goodbye");
+    let (a, b) = take_expected_string.call(&mut store, (Ok("hello"),))?;
+    assert_eq!(a, 0);
+    assert_eq!(b.to_str(&store)?, "hello");
+    let (a, b) = take_expected_string.call(&mut store, (Err(b"goodbye"),))?;
+    assert_eq!(a, 1);
+    assert_eq!(b.to_str(&store)?, "goodbye");
 
     let to_expected_unit =
         instance.get_typed_func::<(u32,), Result<(), ()>, _>(&mut store, "to-expected-unit")?;
@@ -1787,23 +1744,17 @@ fn expected() -> Result<()> {
     let err = to_expected_unit.call(&mut store, (2,)).unwrap_err();
     assert!(err.to_string().contains("invalid expected"), "{}", err);
 
-    let to_expected_s16_f32 = instance.get_typed_func::<(u32, u32), Value<Result<i16, f32>>, _>(
-        &mut store,
-        "to-expected-s16-f32",
-    )?;
-    let ret = to_expected_s16_f32.call(&mut store, (0, 0))?;
-    assert_eq!(ret.cursor(&store).get()?.ok().unwrap().get(), 0);
-    let ret = to_expected_s16_f32.call(&mut store, (0, 100))?;
-    assert_eq!(ret.cursor(&store).get()?.ok().unwrap().get(), 100);
-    let ret = to_expected_s16_f32.call(&mut store, (1, 1.0f32.to_bits()))?;
-    assert_eq!(ret.cursor(&store).get()?.err().unwrap().get(), 1.0);
-    let ret = to_expected_s16_f32.call(&mut store, (1, CANON_32BIT_NAN | 1))?;
+    let to_expected_s16_f32 = instance
+        .get_typed_func::<(u32, u32), Result<i16, f32>, _>(&mut store, "to-expected-s16-f32")?;
+    assert_eq!(to_expected_s16_f32.call(&mut store, (0, 0))?, Ok(0));
+    assert_eq!(to_expected_s16_f32.call(&mut store, (0, 100))?, Ok(100));
     assert_eq!(
-        ret.cursor(&store).get()?.err().unwrap().get().to_bits(),
-        CANON_32BIT_NAN
+        to_expected_s16_f32.call(&mut store, (1, 1.0f32.to_bits()))?,
+        Err(1.0)
     );
-    let ret = to_expected_s16_f32.call(&mut store, (2, 0))?;
-    assert!(ret.cursor(&store).get().is_err());
+    let ret = to_expected_s16_f32.call(&mut store, (1, CANON_32BIT_NAN | 1))?;
+    assert_eq!(ret.unwrap_err().to_bits(), CANON_32BIT_NAN);
+    assert!(to_expected_s16_f32.call(&mut store, (2, 0)).is_err());
 
     Ok(())
 }
@@ -1865,7 +1816,7 @@ fn fancy_list() -> Result<()> {
     let instance = Instance::new(&mut store, &component)?;
 
     let func = instance
-        .get_typed_func::<(&[(Option<u8>, Result<(), &str>)],), Value<(u32, u32, Vec<u8>)>, _>(
+        .get_typed_func::<(&[(Option<u8>, Result<(), &str>)],), (u32, u32, WasmList<u8>), _>(
             &mut store, "take",
         )?;
 
@@ -1874,11 +1825,10 @@ fn fancy_list() -> Result<()> {
         (Some(2), Err("hello there")),
         (Some(200), Err("general kenobi")),
     ];
-    let ret = func.call(&mut store, (&input,))?;
-    let ret = ret.cursor(&store);
-    let memory = ret.a3().as_slice()?;
-    let ptr = usize::try_from(ret.a1().get()).unwrap();
-    let len = usize::try_from(ret.a2().get()).unwrap();
+    let (ptr, len, list) = func.call(&mut store, (&input,))?;
+    let memory = list.as_slice(&store);
+    let ptr = usize::try_from(ptr).unwrap();
+    let len = usize::try_from(len).unwrap();
     let mut array = &memory[ptr..][..len * 16];
 
     for (a, b) in input.iter() {
