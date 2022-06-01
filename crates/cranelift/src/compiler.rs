@@ -482,7 +482,9 @@ impl Compiler {
     /// specified (e.g. a System-V ABI) and will call a `host_fn` that has a
     /// type signature of:
     ///
-    ///     extern "C" fn(*mut VMContext, *mut VMContext, *mut ValRaw, usize)
+    /// ```ignore
+    /// extern "C" fn(*mut VMContext, *mut VMContext, *mut ValRaw, usize)
+    /// ```
     ///
     /// where the first two arguments are forwarded from the trampoline
     /// generated here itself, and the second two arguments are a pointer/length
