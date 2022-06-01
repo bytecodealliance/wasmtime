@@ -1,10 +1,10 @@
 use crate::builder::LinkOptions;
-use crate::debug::ModuleMemoryOffset;
+use crate::debug::{DwarfSectionRelocTarget, ModuleMemoryOffset};
 use crate::func_environ::{get_func_name, FuncEnvironment};
-use crate::obj::ObjectBuilder;
+use crate::obj::ModuleTextBuilder;
 use crate::{
     blank_sig, func_signature, indirect_signature, value_type, wasmtime_call_conv,
-    CompiledFunction, FunctionAddressMap, Relocation, RelocationTarget,
+    CompiledFunction, CompiledFunctions, FunctionAddressMap, Relocation, RelocationTarget,
 };
 use anyhow::{Context as _, Result};
 use cranelift_codegen::ir::{self, ExternalName, InstBuilder, MemFlags, Value};
@@ -19,10 +19,12 @@ use cranelift_wasm::{
     DefinedFuncIndex, DefinedMemoryIndex, FuncIndex, FuncTranslator, MemoryIndex, SignatureIndex,
     WasmFuncType,
 };
-use object::write::Object;
+use object::write::{Object, StandardSegment, SymbolId};
+use object::{RelocationEncoding, RelocationKind, SectionKind};
 use std::any::Any;
 use std::cmp;
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::mem;
 use std::sync::Mutex;
@@ -272,14 +274,14 @@ impl wasmtime_environ::Compiler for Compiler {
         tunables: &Tunables,
         obj: &mut Object<'static>,
     ) -> Result<(PrimaryMap<DefinedFuncIndex, FunctionInfo>, Vec<Trampoline>)> {
-        let funcs: crate::CompiledFunctions = funcs
+        let funcs: CompiledFunctions = funcs
             .into_iter()
             .map(|(_i, f)| *f.downcast().unwrap())
             .collect();
 
-        let mut builder = ObjectBuilder::new(obj, &translation.module, &*self.isa);
+        let mut builder = ModuleTextBuilder::new(obj, &translation.module, &*self.isa);
         if self.linkopts.force_jump_veneers {
-            builder.text.force_veneers();
+            builder.force_veneers();
         }
         let mut addrs = AddressMapSection::default();
         let mut traps = TrapEncodingBuilder::default();
@@ -297,13 +299,7 @@ impl wasmtime_environ::Compiler for Compiler {
             }
             traps.push(range.clone(), &func.traps);
             func_starts.push(range.start);
-            if self.linkopts.padding_between_functions > 0 {
-                builder.text.append(
-                    false,
-                    &vec![0; self.linkopts.padding_between_functions],
-                    Some(1),
-                );
-            }
+            builder.append_padding(self.linkopts.padding_between_functions);
         }
 
         // Build trampolines for every signature that can be used by this module.
@@ -316,40 +312,9 @@ impl wasmtime_environ::Compiler for Compiler {
             trampolines.push(builder.trampoline(*i, &func));
         }
 
-        builder.unwind_info();
+        let symbols = builder.finish()?;
 
-        if tunables.generate_native_debuginfo && funcs.len() > 0 {
-            let ofs = VMOffsets::new(
-                self.isa
-                    .triple()
-                    .architecture
-                    .pointer_width()
-                    .unwrap()
-                    .bytes(),
-                &translation.module,
-            );
-
-            let memory_offset = if ofs.num_imported_memories > 0 {
-                ModuleMemoryOffset::Imported(ofs.vmctx_vmmemory_import(MemoryIndex::new(0)))
-            } else if ofs.num_defined_memories > 0 {
-                ModuleMemoryOffset::Defined(
-                    ofs.vmctx_vmmemory_definition_base(DefinedMemoryIndex::new(0)),
-                )
-            } else {
-                ModuleMemoryOffset::None
-            };
-            let dwarf_sections = crate::debug::emit_dwarf(
-                &*self.isa,
-                &translation.debuginfo,
-                &funcs,
-                &memory_offset,
-            )
-            .with_context(|| "failed to emit DWARF debug information")?;
-            builder.dwarf_sections(&dwarf_sections)?;
-        }
-
-        builder.finish()?;
-
+        self.append_dwarf(obj, translation, &funcs, tunables, &symbols)?;
         if tunables.generate_address_map {
             addrs.append_to(obj);
         }
@@ -377,10 +342,9 @@ impl wasmtime_environ::Compiler for Compiler {
         let host_to_wasm = self.host_to_wasm_trampoline(ty)?;
         let wasm_to_host = self.wasm_to_host_trampoline(ty, host_fn)?;
         let module = Module::new();
-        let mut builder = ObjectBuilder::new(obj, &module, &*self.isa);
+        let mut builder = ModuleTextBuilder::new(obj, &module, &*self.isa);
         let a = builder.trampoline(SignatureIndex::new(0), &host_to_wasm);
         let b = builder.trampoline(SignatureIndex::new(1), &wasm_to_host);
-        builder.unwind_info();
         builder.finish()?;
         Ok((a, b))
     }
@@ -711,6 +675,81 @@ impl Compiler {
             address_map: Default::default(),
             traps: Vec::new(),
         })
+    }
+
+    pub fn append_dwarf(
+        &self,
+        obj: &mut Object<'_>,
+        translation: &ModuleTranslation<'_>,
+        funcs: &CompiledFunctions,
+        tunables: &Tunables,
+        func_symbols: &PrimaryMap<DefinedFuncIndex, SymbolId>,
+    ) -> Result<()> {
+        if !tunables.generate_native_debuginfo || funcs.len() == 0 {
+            return Ok(());
+        }
+        let ofs = VMOffsets::new(
+            self.isa
+                .triple()
+                .architecture
+                .pointer_width()
+                .unwrap()
+                .bytes(),
+            &translation.module,
+        );
+
+        let memory_offset = if ofs.num_imported_memories > 0 {
+            ModuleMemoryOffset::Imported(ofs.vmctx_vmmemory_import(MemoryIndex::new(0)))
+        } else if ofs.num_defined_memories > 0 {
+            ModuleMemoryOffset::Defined(
+                ofs.vmctx_vmmemory_definition_base(DefinedMemoryIndex::new(0)),
+            )
+        } else {
+            ModuleMemoryOffset::None
+        };
+        let dwarf_sections =
+            crate::debug::emit_dwarf(&*self.isa, &translation.debuginfo, &funcs, &memory_offset)
+                .with_context(|| "failed to emit DWARF debug information")?;
+
+        let (debug_bodies, debug_relocs): (Vec<_>, Vec<_>) = dwarf_sections
+            .iter()
+            .map(|s| ((s.name, &s.body), (s.name, &s.relocs)))
+            .unzip();
+        let mut dwarf_sections_ids = HashMap::new();
+        for (name, body) in debug_bodies {
+            let segment = obj.segment_name(StandardSegment::Debug).to_vec();
+            let section_id = obj.add_section(segment, name.as_bytes().to_vec(), SectionKind::Debug);
+            dwarf_sections_ids.insert(name, section_id);
+            obj.append_section_data(section_id, &body, 1);
+        }
+
+        // // Write all debug data relocations.
+        for (name, relocs) in debug_relocs {
+            let section_id = *dwarf_sections_ids.get(name).unwrap();
+            for reloc in relocs {
+                let target_symbol = match reloc.target {
+                    DwarfSectionRelocTarget::Func(index) => {
+                        func_symbols[DefinedFuncIndex::new(index)]
+                    }
+                    DwarfSectionRelocTarget::Section(name) => {
+                        obj.section_symbol(dwarf_sections_ids[name])
+                    }
+                };
+                obj.add_relocation(
+                    section_id,
+                    object::write::Relocation {
+                        offset: u64::from(reloc.offset),
+                        size: reloc.size << 3,
+                        kind: RelocationKind::Absolute,
+                        encoding: RelocationEncoding::Generic,
+                        symbol: target_symbol,
+                        addend: i64::from(reloc.addend),
+                    },
+                )?;
+            }
+        }
+
+        Ok(())
     }
 }
 
