@@ -1,13 +1,13 @@
 use crate::builder::LinkOptions;
-use crate::debug::ModuleMemoryOffset;
+use crate::debug::{DwarfSectionRelocTarget, ModuleMemoryOffset};
 use crate::func_environ::{get_func_name, FuncEnvironment};
-use crate::obj::ObjectBuilder;
+use crate::obj::ModuleTextBuilder;
 use crate::{
     blank_sig, func_signature, indirect_signature, value_type, wasmtime_call_conv,
-    CompiledFunction, FunctionAddressMap, Relocation, RelocationTarget,
+    CompiledFunction, CompiledFunctions, FunctionAddressMap, Relocation, RelocationTarget,
 };
 use anyhow::{Context as _, Result};
-use cranelift_codegen::ir::{self, ExternalName, InstBuilder, MemFlags};
+use cranelift_codegen::ir::{self, ExternalName, InstBuilder, MemFlags, Value};
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::print_errors::pretty_error;
 use cranelift_codegen::Context;
@@ -19,10 +19,12 @@ use cranelift_wasm::{
     DefinedFuncIndex, DefinedMemoryIndex, FuncIndex, FuncTranslator, MemoryIndex, SignatureIndex,
     WasmFuncType,
 };
-use object::write::Object;
+use object::write::{Object, StandardSegment, SymbolId};
+use object::{RelocationEncoding, RelocationKind, SectionKind};
 use std::any::Any;
 use std::cmp;
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::mem;
 use std::sync::Mutex;
@@ -272,14 +274,14 @@ impl wasmtime_environ::Compiler for Compiler {
         tunables: &Tunables,
         obj: &mut Object<'static>,
     ) -> Result<(PrimaryMap<DefinedFuncIndex, FunctionInfo>, Vec<Trampoline>)> {
-        let funcs: crate::CompiledFunctions = funcs
+        let funcs: CompiledFunctions = funcs
             .into_iter()
             .map(|(_i, f)| *f.downcast().unwrap())
             .collect();
 
-        let mut builder = ObjectBuilder::new(obj, &translation.module, &*self.isa);
+        let mut builder = ModuleTextBuilder::new(obj, &translation.module, &*self.isa);
         if self.linkopts.force_jump_veneers {
-            builder.text.force_veneers();
+            builder.force_veneers();
         }
         let mut addrs = AddressMapSection::default();
         let mut traps = TrapEncodingBuilder::default();
@@ -297,13 +299,7 @@ impl wasmtime_environ::Compiler for Compiler {
             }
             traps.push(range.clone(), &func.traps);
             func_starts.push(range.start);
-            if self.linkopts.padding_between_functions > 0 {
-                builder.text.append(
-                    false,
-                    &vec![0; self.linkopts.padding_between_functions],
-                    Some(1),
-                );
-            }
+            builder.append_padding(self.linkopts.padding_between_functions);
         }
 
         // Build trampolines for every signature that can be used by this module.
@@ -316,40 +312,9 @@ impl wasmtime_environ::Compiler for Compiler {
             trampolines.push(builder.trampoline(*i, &func));
         }
 
-        builder.unwind_info();
+        let symbols = builder.finish()?;
 
-        if tunables.generate_native_debuginfo && funcs.len() > 0 {
-            let ofs = VMOffsets::new(
-                self.isa
-                    .triple()
-                    .architecture
-                    .pointer_width()
-                    .unwrap()
-                    .bytes(),
-                &translation.module,
-            );
-
-            let memory_offset = if ofs.num_imported_memories > 0 {
-                ModuleMemoryOffset::Imported(ofs.vmctx_vmmemory_import(MemoryIndex::new(0)))
-            } else if ofs.num_defined_memories > 0 {
-                ModuleMemoryOffset::Defined(
-                    ofs.vmctx_vmmemory_definition_base(DefinedMemoryIndex::new(0)),
-                )
-            } else {
-                ModuleMemoryOffset::None
-            };
-            let dwarf_sections = crate::debug::emit_dwarf(
-                &*self.isa,
-                &translation.debuginfo,
-                &funcs,
-                &memory_offset,
-            )
-            .with_context(|| "failed to emit DWARF debug information")?;
-            builder.dwarf_sections(&dwarf_sections)?;
-        }
-
-        builder.finish()?;
-
+        self.append_dwarf(obj, translation, &funcs, tunables, &symbols)?;
         if tunables.generate_address_map {
             addrs.append_to(obj);
         }
@@ -377,10 +342,9 @@ impl wasmtime_environ::Compiler for Compiler {
         let host_to_wasm = self.host_to_wasm_trampoline(ty)?;
         let wasm_to_host = self.wasm_to_host_trampoline(ty, host_fn)?;
         let module = Module::new();
-        let mut builder = ObjectBuilder::new(obj, &module, &*self.isa);
+        let mut builder = ModuleTextBuilder::new(obj, &module, &*self.isa);
         let a = builder.trampoline(SignatureIndex::new(0), &host_to_wasm);
         let b = builder.trampoline(SignatureIndex::new(1), &wasm_to_host);
-        builder.unwind_info();
         builder.finish()?;
         Ok((a, b))
     }
@@ -508,6 +472,28 @@ impl Compiler {
         Ok(func)
     }
 
+    /// Creates a trampoline for WebAssembly calling into the host where all the
+    /// arguments are spilled to the stack and results are loaded from the
+    /// stack.
+    ///
+    /// This style of trampoline is currently only used with the
+    /// `Func::new`-style created functions in the Wasmtime embedding API. The
+    /// generated trampoline has a function signature appropriate to the `ty`
+    /// specified (e.g. a System-V ABI) and will call a `host_fn` that has a
+    /// type signature of:
+    ///
+    /// ```ignore
+    /// extern "C" fn(*mut VMContext, *mut VMContext, *mut ValRaw, usize)
+    /// ```
+    ///
+    /// where the first two arguments are forwarded from the trampoline
+    /// generated here itself, and the second two arguments are a pointer/length
+    /// into stack-space of this trampoline with storage for both the arguments
+    /// to the function and the results.
+    ///
+    /// Note that `host_fn` is an immediate which is an actual function pointer
+    /// in this process. As such this compiled trampoline is not suitable for
+    /// serialization.
     fn wasm_to_host_trampoline(
         &self,
         ty: &WasmFuncType,
@@ -523,12 +509,6 @@ impl Compiler {
         host_signature.params.push(ir::AbiParam::new(pointer_type));
         host_signature.params.push(ir::AbiParam::new(pointer_type));
 
-        // Compute the size of the values vector. The vmctx and caller vmctx are passed separately.
-        let value_size = mem::size_of::<u128>();
-        let values_vec_len = cmp::max(ty.params().len(), ty.returns().len());
-        let values_vec_byte_size = u32::try_from(value_size * values_vec_len).unwrap();
-        let values_vec_len = u32::try_from(values_vec_len).unwrap();
-
         let CompilerContext {
             mut func_translator,
             codegen_context: mut context,
@@ -537,35 +517,16 @@ impl Compiler {
         context.func =
             ir::Function::with_name_signature(ir::ExternalName::user(0, 0), wasm_signature);
 
-        let ss = context.func.create_stack_slot(ir::StackSlotData::new(
-            ir::StackSlotKind::ExplicitSlot,
-            values_vec_byte_size,
-        ));
-
         let mut builder = FunctionBuilder::new(&mut context.func, func_translator.context());
         let block0 = builder.create_block();
 
-        builder.append_block_params_for_function_params(block0);
-        builder.switch_to_block(block0);
-        builder.seal_block(block0);
-
-        let values_vec_ptr_val = builder.ins().stack_addr(pointer_type, ss, 0);
-        let mut mflags = MemFlags::trusted();
-        mflags.set_endianness(ir::Endianness::Little);
-        for i in 0..ty.params().len() {
-            let val = builder.func.dfg.block_params(block0)[i + 2];
-            builder
-                .ins()
-                .store(mflags, val, values_vec_ptr_val, (i * value_size) as i32);
-        }
+        let (values_vec_ptr_val, values_vec_len) =
+            self.wasm_to_host_spill_args(ty, &mut builder, block0);
 
         let block_params = builder.func.dfg.block_params(block0);
-        let vmctx_ptr_val = block_params[0];
-        let caller_vmctx_ptr_val = block_params[1];
-
-        let callee_args = vec![
-            vmctx_ptr_val,
-            caller_vmctx_ptr_val,
+        let callee_args = [
+            block_params[0],
+            block_params[1],
             values_vec_ptr_val,
             builder
                 .ins()
@@ -573,11 +534,93 @@ impl Compiler {
         ];
 
         let new_sig = builder.import_signature(host_signature);
-
         let callee_value = builder.ins().iconst(pointer_type, host_fn as i64);
         builder
             .ins()
             .call_indirect(new_sig, callee_value, &callee_args);
+
+        self.wasm_to_host_load_results(ty, &mut builder, values_vec_ptr_val);
+
+        let func = self.finish_trampoline(&mut context, isa)?;
+        self.save_context(CompilerContext {
+            func_translator,
+            codegen_context: context,
+        });
+        Ok(func)
+    }
+
+    /// Used for spilling arguments in wasm-to-host trampolines into the stack
+    /// of the function of `builder` specified.
+    ///
+    /// The `block0` is the entry block of the function and `ty` is the wasm
+    /// signature of the trampoline generated. This function will allocate a
+    /// stack slot suitable for storing both the arguments and return values of
+    /// the function, and then the arguments will all be stored in this block.
+    ///
+    /// The stack slot pointer is returned in addition to the size, in units of
+    /// `ValRaw`, of the stack slot.
+    fn wasm_to_host_spill_args(
+        &self,
+        ty: &WasmFuncType,
+        builder: &mut FunctionBuilder,
+        block0: ir::Block,
+    ) -> (Value, u32) {
+        let isa = &*self.isa;
+        let pointer_type = isa.pointer_type();
+
+        // Compute the size of the values vector.
+        let value_size = mem::size_of::<u128>();
+        let values_vec_len = cmp::max(ty.params().len(), ty.returns().len());
+        let values_vec_byte_size = u32::try_from(value_size * values_vec_len).unwrap();
+        let values_vec_len = u32::try_from(values_vec_len).unwrap();
+
+        let ss = builder.func.create_stack_slot(ir::StackSlotData::new(
+            ir::StackSlotKind::ExplicitSlot,
+            values_vec_byte_size,
+        ));
+
+        builder.append_block_params_for_function_params(block0);
+        builder.switch_to_block(block0);
+        builder.seal_block(block0);
+
+        // Note that loads and stores are unconditionally done in the
+        // little-endian format rather than the host's native-endianness,
+        // despite this load/store being unrelated to execution in wasm itself.
+        // For more details on this see the `ValRaw` type in the
+        // `wasmtime-runtime` crate.
+        let mut mflags = MemFlags::trusted();
+        mflags.set_endianness(ir::Endianness::Little);
+
+        let values_vec_ptr_val = builder.ins().stack_addr(pointer_type, ss, 0);
+        for i in 0..ty.params().len() {
+            let val = builder.func.dfg.block_params(block0)[i + 2];
+            builder
+                .ins()
+                .store(mflags, val, values_vec_ptr_val, (i * value_size) as i32);
+        }
+        (values_vec_ptr_val, values_vec_len)
+    }
+
+    /// Use for loading the results of a host call from a trampoline's stack
+    /// space.
+    ///
+    /// This is intended to be used with the stack space allocated by
+    /// `wasm_to_host_spill_args` above. This is called after the function call
+    /// is made which will load results from the stack space and then return
+    /// them with the appropriate ABI (e.g. System-V).
+    fn wasm_to_host_load_results(
+        &self,
+        ty: &WasmFuncType,
+        builder: &mut FunctionBuilder,
+        values_vec_ptr_val: Value,
+    ) {
+        let isa = &*self.isa;
+        let value_size = mem::size_of::<u128>();
+
+        // Note that this is little-endian like `wasm_to_host_spill_args` above,
+        // see notes there for more information.
+        let mut mflags = MemFlags::trusted();
+        mflags.set_endianness(ir::Endianness::Little);
 
         let mut results = Vec::new();
         for (i, r) in ty.returns().iter().enumerate() {
@@ -591,13 +634,6 @@ impl Compiler {
         }
         builder.ins().return_(&results);
         builder.finalize();
-
-        let func = self.finish_trampoline(&mut context, isa)?;
-        self.save_context(CompilerContext {
-            func_translator,
-            codegen_context: context,
-        });
-        Ok(func)
     }
 
     fn finish_trampoline(
@@ -641,6 +677,81 @@ impl Compiler {
             address_map: Default::default(),
             traps: Vec::new(),
         })
+    }
+
+    pub fn append_dwarf(
+        &self,
+        obj: &mut Object<'_>,
+        translation: &ModuleTranslation<'_>,
+        funcs: &CompiledFunctions,
+        tunables: &Tunables,
+        func_symbols: &PrimaryMap<DefinedFuncIndex, SymbolId>,
+    ) -> Result<()> {
+        if !tunables.generate_native_debuginfo || funcs.len() == 0 {
+            return Ok(());
+        }
+        let ofs = VMOffsets::new(
+            self.isa
+                .triple()
+                .architecture
+                .pointer_width()
+                .unwrap()
+                .bytes(),
+            &translation.module,
+        );
+
+        let memory_offset = if ofs.num_imported_memories > 0 {
+            ModuleMemoryOffset::Imported(ofs.vmctx_vmmemory_import(MemoryIndex::new(0)))
+        } else if ofs.num_defined_memories > 0 {
+            ModuleMemoryOffset::Defined(
+                ofs.vmctx_vmmemory_definition_base(DefinedMemoryIndex::new(0)),
+            )
+        } else {
+            ModuleMemoryOffset::None
+        };
+        let dwarf_sections =
+            crate::debug::emit_dwarf(&*self.isa, &translation.debuginfo, &funcs, &memory_offset)
+                .with_context(|| "failed to emit DWARF debug information")?;
+
+        let (debug_bodies, debug_relocs): (Vec<_>, Vec<_>) = dwarf_sections
+            .iter()
+            .map(|s| ((s.name, &s.body), (s.name, &s.relocs)))
+            .unzip();
+        let mut dwarf_sections_ids = HashMap::new();
+        for (name, body) in debug_bodies {
+            let segment = obj.segment_name(StandardSegment::Debug).to_vec();
+            let section_id = obj.add_section(segment, name.as_bytes().to_vec(), SectionKind::Debug);
+            dwarf_sections_ids.insert(name, section_id);
+            obj.append_section_data(section_id, &body, 1);
+        }
+
+        // Write all debug data relocations.
+        for (name, relocs) in debug_relocs {
+            let section_id = *dwarf_sections_ids.get(name).unwrap();
+            for reloc in relocs {
+                let target_symbol = match reloc.target {
+                    DwarfSectionRelocTarget::Func(index) => {
+                        func_symbols[DefinedFuncIndex::new(index)]
+                    }
+                    DwarfSectionRelocTarget::Section(name) => {
+                        obj.section_symbol(dwarf_sections_ids[name])
+                    }
+                };
+                obj.add_relocation(
+                    section_id,
+                    object::write::Relocation {
+                        offset: u64::from(reloc.offset),
+                        size: reloc.size << 3,
+                        kind: RelocationKind::Absolute,
+                        encoding: RelocationEncoding::Generic,
+                        symbol: target_symbol,
+                        addend: i64::from(reloc.addend),
+                    },
+                )?;
+            }
+        }
+
+        Ok(())
     }
 }
 
