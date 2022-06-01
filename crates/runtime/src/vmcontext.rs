@@ -773,7 +773,7 @@ impl VMContext {
         // static offset is asserted in `VMOffsets::from` and needs to be kept
         // in sync with this line for this debug assertion to work.
         //
-        // Also note that this magic is only ever in valid in the presence of
+        // Also note that this magic is only ever invalid in the presence of
         // bugs, meaning we don't actually read the magic and act differently
         // at runtime depending what it is, so this is a debug assertion as
         // opposed to a regular assertion.
@@ -1016,10 +1016,9 @@ impl ValRaw {
 /// * `*mut VMOpaqueContext` - this a contextual pointer defined within the
 ///   context of the receiving function pointer. For now this is always `*mut
 ///   VMContext` but with the component model it may be the case that this is a
-///   different type of pointer. The type of pointer depends third function
-///   pointer argument itself.
+///   different type of pointer.
 ///
-/// * `*mut VMContext` - this is teh "caller" context, which at this time is
+/// * `*mut VMContext` - this is the "caller" context, which at this time is
 ///   always unconditionally core wasm (even in the component model). This
 ///   contextual pointer cannot be `NULL` and provides information necessary to
 ///   resolve the caller's context for the `Caller` API in Wasmtime.
