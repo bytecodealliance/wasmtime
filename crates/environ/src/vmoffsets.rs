@@ -4,6 +4,7 @@
 // Currently the `VMContext` allocation by field looks like this:
 //
 // struct VMContext {
+//      magic: u32,
 //      runtime_limits: *const VMRuntimeLimits,
 //      externref_activations_table: *mut VMExternRefActivationsTable,
 //      store: *mut dyn Store,
@@ -74,6 +75,7 @@ pub struct VMOffsets<P> {
     pub num_escaped_funcs: u32,
 
     // precalculated offsets of various member fields
+    magic: u32,
     runtime_limits: u32,
     epoch_ptr: u32,
     externref_activations_table: u32,
@@ -222,6 +224,7 @@ impl<P: PtrSize> VMOffsets<P> {
             externref_activations_table: "jit host externref state",
             epoch_ptr: "jit current epoch state",
             runtime_limits: "jit runtime limits state",
+            magic: "magic value",
         }
     }
 }
@@ -239,6 +242,7 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
             num_defined_memories: fields.num_defined_memories,
             num_defined_globals: fields.num_defined_globals,
             num_escaped_funcs: fields.num_escaped_funcs,
+            magic: 0,
             runtime_limits: 0,
             epoch_ptr: 0,
             externref_activations_table: 0,
@@ -278,7 +282,7 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
                 next_field_offset = cadd(next_field_offset, u32::from($size));
                 fields!($($rest)*);
             };
-            (align($align:literal), $($rest:tt)*) => {
+            (align($align:expr), $($rest:tt)*) => {
                 next_field_offset = align(next_field_offset, $align);
                 fields!($($rest)*);
             };
@@ -286,6 +290,8 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
         }
 
         fields! {
+            size(magic) = 4u32,
+            align(u32::from(ret.ptr.size())),
             size(runtime_limits) = ret.ptr.size(),
             size(epoch_ptr) = ret.ptr.size(),
             size(externref_activations_table) = ret.ptr.size(),
@@ -314,6 +320,11 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
         }
 
         ret.size = next_field_offset;
+
+        // This is required by the implementation of `VMContext::instance` and
+        // `VMContext::instance_mut`. If this value changes then those locations
+        // need to be updated.
+        assert_eq!(ret.magic, 0);
 
         return ret;
     }
@@ -535,6 +546,12 @@ impl<P: PtrSize> VMOffsets<P> {
 
 /// Offsets for `VMContext`.
 impl<P: PtrSize> VMOffsets<P> {
+    /// Return the offset to the `magic` value in this `VMContext`.
+    #[inline]
+    pub fn vmctx_magic(&self) -> u32 {
+        self.magic
+    }
+
     /// Return the offset to the `VMRuntimeLimits` structure
     #[inline]
     pub fn vmctx_runtime_limits(&self) -> u32 {

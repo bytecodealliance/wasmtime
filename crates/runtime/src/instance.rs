@@ -9,8 +9,8 @@ use crate::table::{Table, TableElement, TableElementType};
 use crate::traphandlers::Trap;
 use crate::vmcontext::{
     VMBuiltinFunctionsArray, VMCallerCheckedAnyfunc, VMContext, VMFunctionImport,
-    VMGlobalDefinition, VMGlobalImport, VMMemoryDefinition, VMMemoryImport, VMRuntimeLimits,
-    VMTableDefinition, VMTableImport,
+    VMGlobalDefinition, VMGlobalImport, VMMemoryDefinition, VMMemoryImport, VMOpaqueContext,
+    VMRuntimeLimits, VMTableDefinition, VMTableImport, VMCONTEXT_MAGIC,
 };
 use crate::{
     ExportFunction, ExportGlobal, ExportMemory, ExportTable, Imports, ModuleRuntimeInfo, Store,
@@ -488,7 +488,7 @@ impl Instance {
                 (self.runtime_info.image_base()
                     + self.runtime_info.function_info(def_index).start as usize)
                     as *mut _,
-                self.vmctx_ptr(),
+                VMOpaqueContext::from_vmcontext(self.vmctx_ptr()),
             )
         } else {
             let import = self.imported_function(index);
@@ -878,6 +878,8 @@ impl Instance {
     /// function.
     unsafe fn initialize_vmctx(&mut self, module: &Module, store: StorePtr, imports: Imports) {
         assert!(std::ptr::eq(module, self.module().as_ref()));
+
+        *self.vmctx_plus_offset(self.offsets.vmctx_magic()) = VMCONTEXT_MAGIC;
 
         if let Some(store) = store.as_raw() {
             *self.runtime_limits() = (*store).vmruntime_limits();

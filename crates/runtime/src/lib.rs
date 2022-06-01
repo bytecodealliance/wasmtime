@@ -65,8 +65,9 @@ pub use crate::traphandlers::{
 };
 pub use crate::vmcontext::{
     VMCallerCheckedAnyfunc, VMContext, VMFunctionBody, VMFunctionImport, VMGlobalDefinition,
-    VMGlobalImport, VMInvokeArgument, VMMemoryDefinition, VMMemoryImport, VMRuntimeLimits,
-    VMSharedSignatureIndex, VMTableDefinition, VMTableImport, VMTrampoline, ValRaw,
+    VMGlobalImport, VMInvokeArgument, VMMemoryDefinition, VMMemoryImport, VMOpaqueContext,
+    VMRuntimeLimits, VMSharedSignatureIndex, VMTableDefinition, VMTableImport, VMTrampoline,
+    ValRaw,
 };
 
 mod module_id;

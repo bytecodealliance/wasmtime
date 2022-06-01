@@ -9,6 +9,8 @@ use std::marker;
 use std::ptr::NonNull;
 use std::u32;
 
+pub const VMCONTEXT_MAGIC: u32 = u32::from_le_bytes(*b"core");
+
 /// An imported function.
 #[derive(Debug, Copy, Clone)]
 #[repr(C)]
@@ -16,8 +18,13 @@ pub struct VMFunctionImport {
     /// A pointer to the imported function body.
     pub body: NonNull<VMFunctionBody>,
 
-    /// A pointer to the `VMContext` that owns the function.
-    pub vmctx: *mut VMContext,
+    /// The VM state associated with this function.
+    ///
+    /// For core wasm instances this will be `*mut VMContext` but for the
+    /// upcoming implementation of the component model this will be something
+    /// else. The actual definition of what this pointer points to depends on
+    /// the definition of `func_ptr` and what compiled it.
+    pub vmctx: *mut VMOpaqueContext,
 }
 
 // Declare that this type is send/sync, it's the responsibility of users of
@@ -546,8 +553,13 @@ pub struct VMCallerCheckedAnyfunc {
     pub func_ptr: NonNull<VMFunctionBody>,
     /// Function signature id.
     pub type_index: VMSharedSignatureIndex,
-    /// Function `VMContext`.
-    pub vmctx: *mut VMContext,
+    /// The VM state associated with this function.
+    ///
+    /// For core wasm instances this will be `*mut VMContext` but for the
+    /// upcoming implementation of the component model this will be something
+    /// else. The actual definition of what this pointer points to depends on
+    /// the definition of `func_ptr` and what compiled it.
+    pub vmctx: *mut VMOpaqueContext,
     // If more elements are added here, remember to add offset_of tests below!
 }
 
@@ -746,6 +758,29 @@ pub struct VMContext {
 }
 
 impl VMContext {
+    /// Helper function to cast between context types using a debug assertion to
+    /// protect against some mistakes.
+    #[inline]
+    pub unsafe fn from_opaque(opaque: *mut VMOpaqueContext) -> *mut VMContext {
+        // Note that in general the offset of the "magic" field is stored in
+        // `VMOffsets::vmctx_magic`. Given though that this is a sanity check
+        // about converting this pointer to another type we ideally don't want
+        // to read the offset from potentially corrupt memory. Instead it would
+        // be better to catch errors here as soon as possible.
+        //
+        // To accomplish this the `VMContext` structure is laid out with the
+        // magic field at a statically known offset (here it's 0 for now). This
+        // static offset is asserted in `VMOffsets::from` and needs to be kept
+        // in sync with this line for this debug assertion to work.
+        //
+        // Also note that this magic is only ever invalid in the presence of
+        // bugs, meaning we don't actually read the magic and act differently
+        // at runtime depending what it is, so this is a debug assertion as
+        // opposed to a regular assertion.
+        debug_assert_eq!((*opaque).magic, VMCONTEXT_MAGIC);
+        opaque.cast()
+    }
+
     /// Return a mutable reference to the associated `Instance`.
     ///
     /// # Safety
@@ -968,10 +1003,69 @@ impl ValRaw {
     }
 }
 
-/// Trampoline function pointer type.
-pub type VMTrampoline = unsafe extern "C" fn(
-    *mut VMContext,        // callee vmctx
-    *mut VMContext,        // caller vmctx
-    *const VMFunctionBody, // function we're actually calling
-    *mut ValRaw,           // space for arguments and return values
-);
+/// Type definition of the trampoline used to enter WebAssembly from the host.
+///
+/// This function type is what's generated for the entry trampolines that are
+/// compiled into a WebAssembly module's image. Note that trampolines are not
+/// always used by Wasmtime since the `TypedFunc` API allows bypassing the
+/// trampoline and directly calling the underlying wasm function (at the time of
+/// this writing).
+///
+/// The trampoline's arguments here are:
+///
+/// * `*mut VMOpaqueContext` - this a contextual pointer defined within the
+///   context of the receiving function pointer. For now this is always `*mut
+///   VMContext` but with the component model it may be the case that this is a
+///   different type of pointer.
+///
+/// * `*mut VMContext` - this is the "caller" context, which at this time is
+///   always unconditionally core wasm (even in the component model). This
+///   contextual pointer cannot be `NULL` and provides information necessary to
+///   resolve the caller's context for the `Caller` API in Wasmtime.
+///
+/// * `*const VMFunctionBody` - this is the indirect function pointer which is
+///   the actual target function to invoke. This function uses the System-V ABI
+///   for its argumenst and a semi-custom ABI for the return values (one return
+///   value is returned directly, multiple return values have the first one
+///   returned directly and remaining ones returned indirectly through a
+///   stack pointer). This function pointer may be Cranelift-compiled code or it
+///   may also be a host-compiled trampoline (e.g. when a host function calls a
+///   host function through the `wasmtime::Func` wrapper). The definition of the
+///   first argument of this function depends on what this receiving function
+///   pointer desires.
+///
+/// * `*mut ValRaw` - this is storage space for both arguments and results of
+///   the function. The trampoline will read the arguments from this array to
+///   pass to the function pointer provided. The results are then written to the
+///   array afterwards (both reads and writes start at index 0). It's the
+///   caller's responsibility to make sure this array is appropriately sized.
+pub type VMTrampoline =
+    unsafe extern "C" fn(*mut VMOpaqueContext, *mut VMContext, *const VMFunctionBody, *mut ValRaw);
+
+/// An "opaque" version of `VMContext` which must be explicitly casted to a
+/// target context.
+///
+/// This context is used to represent that contexts specified in
+/// `VMCallerCheckedAnyfunc` can have any type and don't have an implicit
+/// structure. Neither wasmtime nor cranelift-generated code can rely on the
+/// structure of an opaque context in general and only the code which configured
+/// the context is able to rely on a particular structure. This is because the
+/// context pointer configured for `VMCallerCheckedAnyfunc` is guaranteed to be
+/// the first parameter passed.
+///
+/// Note that Wasmtime currently has a layout where all contexts that are casted
+/// to an opaque context start with a 32-bit "magic" which can be used in debug
+/// mode to debug-assert that the casts here are correct and have at least a
+/// little protection against incorrect casts.
+pub struct VMOpaqueContext {
+    magic: u32,
+    _marker: marker::PhantomPinned,
+}
+
+impl VMOpaqueContext {
+    /// Helper function to clearly indicate that cast desired
+    #[inline]
+    pub fn from_vmcontext(ptr: *mut VMContext) -> *mut VMOpaqueContext {
+        ptr.cast()
+    }
+}

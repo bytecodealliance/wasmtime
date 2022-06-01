@@ -5,7 +5,9 @@ use anyhow::{bail, Result};
 use std::marker;
 use std::mem::{self, MaybeUninit};
 use std::ptr;
-use wasmtime_runtime::{VMCallerCheckedAnyfunc, VMContext, VMFunctionBody, VMSharedSignatureIndex};
+use wasmtime_runtime::{
+    VMCallerCheckedAnyfunc, VMContext, VMFunctionBody, VMOpaqueContext, VMSharedSignatureIndex,
+};
 
 /// A statically typed WebAssembly function.
 ///
@@ -464,7 +466,7 @@ pub unsafe trait WasmParams: Send {
     #[doc(hidden)]
     unsafe fn invoke<R: WasmResults>(
         func: *const VMFunctionBody,
-        vmctx1: *mut VMContext,
+        vmctx1: *mut VMOpaqueContext,
         vmctx2: *mut VMContext,
         abi: Self::Abi,
     ) -> R::ResultAbi;
@@ -494,7 +496,7 @@ where
 
     unsafe fn invoke<R: WasmResults>(
         func: *const VMFunctionBody,
-        vmctx1: *mut VMContext,
+        vmctx1: *mut VMOpaqueContext,
         vmctx2: *mut VMContext,
         abi: Self::Abi,
     ) -> R::ResultAbi {
@@ -554,14 +556,14 @@ macro_rules! impl_wasm_params {
 
             unsafe fn invoke<R: WasmResults>(
                 func: *const VMFunctionBody,
-                vmctx1: *mut VMContext,
+                vmctx1: *mut VMOpaqueContext,
                 vmctx2: *mut VMContext,
                 abi: Self::Abi,
             ) -> R::ResultAbi {
                 let fnptr = mem::transmute::<
                     *const VMFunctionBody,
                     unsafe extern "C" fn(
-                        *mut VMContext,
+                        *mut VMOpaqueContext,
                         *mut VMContext,
                         $($t::Abi,)*
                         <R::ResultAbi as HostAbi>::Retptr,

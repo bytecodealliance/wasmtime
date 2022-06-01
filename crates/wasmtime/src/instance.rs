@@ -11,7 +11,7 @@ use std::sync::Arc;
 use wasmtime_environ::{EntityType, FuncIndex, GlobalIndex, MemoryIndex, PrimaryMap, TableIndex};
 use wasmtime_runtime::{
     Imports, InstanceAllocationRequest, InstantiationError, StorePtr, VMContext, VMFunctionBody,
-    VMFunctionImport, VMGlobalImport, VMMemoryImport, VMTableImport,
+    VMFunctionImport, VMGlobalImport, VMMemoryImport, VMOpaqueContext, VMTableImport,
 };
 
 /// An instantiated WebAssembly module.
@@ -345,7 +345,7 @@ impl Instance {
             super::func::invoke_wasm_and_catch_traps(store, |_default_callee| {
                 mem::transmute::<
                     *const VMFunctionBody,
-                    unsafe extern "C" fn(*mut VMContext, *mut VMContext),
+                    unsafe extern "C" fn(*mut VMOpaqueContext, *mut VMContext),
                 >(f.anyfunc.as_ref().func_ptr.as_ptr())(
                     f.anyfunc.as_ref().vmctx, vmctx
                 )

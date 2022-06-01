@@ -12,8 +12,8 @@ use wasmtime_environ::{
 use wasmtime_jit::{CodeMemory, ProfilingAgent};
 use wasmtime_runtime::{
     Imports, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
-    OnDemandInstanceAllocator, StorePtr, VMContext, VMFunctionBody, VMSharedSignatureIndex,
-    VMTrampoline,
+    OnDemandInstanceAllocator, StorePtr, VMContext, VMFunctionBody, VMOpaqueContext,
+    VMSharedSignatureIndex, VMTrampoline,
 };
 
 struct TrampolineState<F> {
@@ -23,7 +23,7 @@ struct TrampolineState<F> {
 }
 
 unsafe extern "C" fn stub_fn<F>(
-    vmctx: *mut VMContext,
+    vmctx: *mut VMOpaqueContext,
     caller_vmctx: *mut VMContext,
     values_vec: *mut ValRaw,
     values_vec_len: usize,
@@ -44,6 +44,7 @@ unsafe extern "C" fn stub_fn<F>(
     // have any. To prevent leaks we avoid having any local destructors by
     // avoiding local variables.
     let result = panic::catch_unwind(AssertUnwindSafe(|| {
+        let vmctx = VMContext::from_opaque(vmctx);
         // Double-check ourselves in debug mode, but we control
         // the `Any` here so an unsafe downcast should also
         // work.
