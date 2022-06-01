@@ -3,8 +3,10 @@ use crate::instance::OwnedImports;
 use crate::store::{StoreOpaque, Stored};
 use crate::{AsContextMut, Module, StoreContextMut};
 use anyhow::{anyhow, Context, Result};
+use std::sync::Arc;
 use wasmtime_environ::component::{
-    CoreExport, Export, ExportItem, Instantiation, RuntimeInstanceIndex,
+    ComponentTypes, CoreDef, CoreExport, Export, ExportItem, Initializer, ModuleToInstantiate,
+    RuntimeInstanceIndex, RuntimeMemoryIndex, RuntimeReallocIndex,
 };
 use wasmtime_environ::{EntityIndex, PrimaryMap};
 
@@ -24,6 +26,10 @@ pub(crate) struct InstanceData {
     // alive and things like that, instead only the bare minimum necessary
     // should be kept alive here (mostly just `wasmtime_environ::Component`.
     component: Component,
+
+    // TODO: move these to `VMComponentContext`
+    memories: PrimaryMap<RuntimeMemoryIndex, wasmtime_runtime::ExportMemory>,
+    reallocs: PrimaryMap<RuntimeReallocIndex, wasmtime_runtime::ExportFunction>,
 }
 
 impl Instance {
@@ -38,10 +44,7 @@ impl Instance {
         let mut instantiator = Instantiator::new(component);
         instantiator.run(&mut store)?;
 
-        let data = Box::new(InstanceData {
-            instances: instantiator.instances,
-            component: component.clone(),
-        });
+        let data = Box::new(instantiator.data);
         Ok(Instance(store.0.store_data_mut().insert(Some(data))))
     }
 
@@ -103,19 +106,56 @@ impl Instance {
 impl InstanceData {
     fn get_func(&self, store: &mut StoreOpaque, name: &str) -> Option<Func> {
         match self.component.env_component().exports.get(name)? {
-            Export::LiftedFunction(func) => Some(Func::from_lifted_func(
-                store,
-                self.component.types(),
-                &self.instances,
-                func,
-            )),
+            Export::LiftedFunction { ty, func, options } => {
+                Some(Func::from_lifted_func(store, self, *ty, func, options))
+            }
         }
+    }
+
+    fn lookup_def(&self, store: &mut StoreOpaque, item: &CoreDef) -> wasmtime_runtime::Export {
+        match item {
+            CoreDef::Lowered(_) => unimplemented!(),
+            CoreDef::Export(e) => self.lookup_export(store, e),
+        }
+    }
+
+    pub fn lookup_export<T>(
+        &self,
+        store: &mut StoreOpaque,
+        item: &CoreExport<T>,
+    ) -> wasmtime_runtime::Export
+    where
+        T: Copy + Into<EntityIndex>,
+    {
+        let instance = &self.instances[item.instance];
+        let id = instance.id(store);
+        let instance = store.instance_mut(id);
+        let idx = match &item.item {
+            ExportItem::Index(idx) => (*idx).into(),
+            ExportItem::Name(name) => instance.module().exports[name],
+        };
+        instance.get_export_by_index(idx)
+    }
+
+    pub fn component_types(&self) -> &Arc<ComponentTypes> {
+        self.component.types()
+    }
+
+    pub fn runtime_memory(&self, memory: RuntimeMemoryIndex) -> wasmtime_runtime::ExportMemory {
+        self.memories[memory].clone()
+    }
+
+    pub fn runtime_realloc(
+        &self,
+        realloc: RuntimeReallocIndex,
+    ) -> wasmtime_runtime::ExportFunction {
+        self.reallocs[realloc].clone()
     }
 }
 
 struct Instantiator<'a> {
     component: &'a Component,
-    instances: PrimaryMap<RuntimeInstanceIndex, crate::Instance>,
+    data: InstanceData,
     imports: OwnedImports,
 }
 
@@ -127,33 +167,61 @@ impl<'a> Instantiator<'a> {
         }
         Instantiator {
             component,
-            instances: PrimaryMap::with_capacity(env_component.instances.len()),
             imports: OwnedImports::empty(),
+            data: InstanceData {
+                instances: PrimaryMap::with_capacity(env_component.num_runtime_instances as usize),
+                component: component.clone(),
+                memories: Default::default(),
+                reallocs: Default::default(),
+            },
         }
     }
 
     fn run<T>(&mut self, store: &mut StoreContextMut<'_, T>) -> Result<()> {
         let env_component = self.component.env_component();
-        for (index, instantiation) in env_component.instances.iter() {
-            let (module, args) = match instantiation {
-                Instantiation::ModuleUpvar { module, args } => {
-                    (self.component.upvar(*module), args)
-                }
-                Instantiation::ModuleImport { import_index, args } => {
-                    drop((import_index, args));
-                    unimplemented!("component module imports");
-                }
-            };
+        for initializer in env_component.initializers.iter() {
+            match initializer {
+                Initializer::InstantiateModule {
+                    instance,
+                    module,
+                    args,
+                } => {
+                    let module = match module {
+                        ModuleToInstantiate::Upvar(module) => self.component.upvar(*module),
+                        ModuleToInstantiate::Import(idx) => {
+                            drop(idx);
+                            unimplemented!("component module imports");
+                        }
+                    };
 
-            // Note that the unsafety here should be ok because the
-            // validity of the component means that type-checks have
-            // already been performed. This maens that the unsafety due
-            // to imports having the wrong type should not happen here.
-            let imports = self.build_imports(store.0, module, args);
-            let instance =
-                unsafe { crate::Instance::new_started(store, module, imports.as_ref())? };
-            let idx = self.instances.push(instance);
-            assert_eq!(idx, index);
+                    // Note that the unsafety here should be ok because the
+                    // validity of the component means that type-checks have
+                    // already been performed. This maens that the unsafety due
+                    // to imports having the wrong type should not happen here.
+                    let imports = self.build_imports(store.0, module, args);
+                    let i =
+                        unsafe { crate::Instance::new_started(store, module, imports.as_ref())? };
+                    let idx = self.data.instances.push(i);
+                    assert_eq!(idx, *instance);
+                }
+                Initializer::LowerImport(_) => unimplemented!(),
+
+                Initializer::ExtractMemory { index, export } => {
+                    let memory = match self.data.lookup_export(store.0, export) {
+                        wasmtime_runtime::Export::Memory(m) => m,
+                        _ => unreachable!(),
+                    };
+                    assert_eq!(*index, self.data.memories.push(memory));
+                }
+
+                Initializer::ExtractRealloc { index, def } => {
+                    let func = match self.data.lookup_def(store.0, def) {
+                        wasmtime_runtime::Export::Function(f) => f,
+                        _ => unreachable!(),
+                    };
+                    assert_eq!(*index, self.data.reallocs.push(func));
+                }
+            }
         }
         Ok(())
     }
@@ -162,13 +230,13 @@ impl<'a> Instantiator<'a> {
         &mut self,
         store: &mut StoreOpaque,
         module: &Module,
-        args: &[CoreExport<EntityIndex>],
+        args: &[CoreDef],
     ) -> &OwnedImports {
         self.imports.clear();
         self.imports.reserve(module);
 
         for arg in args {
-            let export = lookup(store, &self.instances, arg);
+            let export = self.data.lookup_def(store, arg);
 
             // The unsafety here should be ok since the `export` is loaded
             // directly from an instance which should only give us valid export
@@ -180,22 +248,4 @@ impl<'a> Instantiator<'a> {
 
         &self.imports
     }
-}
-
-pub(crate) fn lookup<T>(
-    store: &mut StoreOpaque,
-    instances: &PrimaryMap<RuntimeInstanceIndex, crate::Instance>,
-    item: &CoreExport<T>,
-) -> wasmtime_runtime::Export
-where
-    T: Copy + Into<EntityIndex>,
-{
-    let instance = &instances[item.instance];
-    let id = instance.id(store);
-    let instance = store.instance_mut(id);
-    let idx = match &item.item {
-        ExportItem::Index(idx) => (*idx).into(),
-        ExportItem::Name(name) => instance.module().exports[name],
-    };
-    instance.get_export_by_index(idx)
 }

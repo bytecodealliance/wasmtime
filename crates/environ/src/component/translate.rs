@@ -1,5 +1,8 @@
 use crate::component::*;
-use crate::{EntityIndex, ModuleEnvironment, ModuleTranslation, PrimaryMap, Tunables};
+use crate::{
+    EntityIndex, EntityType, ModuleEnvironment, ModuleTranslation, PrimaryMap, SignatureIndex,
+    Tunables,
+};
 use anyhow::{bail, Result};
 use std::collections::HashMap;
 use std::mem;
@@ -32,8 +35,7 @@ pub struct Translation<'data> {
     // runtime. These are used to understand the structure of the component and
     // where items come from but at this time these index spaces and their
     // definitions are not required at runtime as they're effectively "erased"
-    // at the moment. This will probably change as more of the component model
-    // is implemented.
+    // at the moment.
     //
     /// Modules and how they're defined (either closed-over or imported)
     modules: PrimaryMap<ModuleIndex, ModuleDef>,
@@ -54,10 +56,36 @@ pub struct Translation<'data> {
 
     /// Core wasm tables, always sourced from a previously module instance.
     tables: PrimaryMap<TableIndex, CoreSource<'data>>,
+
+    /// This is a list of pairs where the first element points to an index
+    /// within `component.initializers` to an `Initializer::LowerImport` entry.
+    /// After a component has finished translation and we have a
+    /// `wasmparser::Types` value to lookup type information within the type of
+    /// `FuncIndex`, within this component, will be used to fill in the
+    /// `LowerImport::canonical_abi` field.
+    ///
+    /// This avoids wasmtime having to duplicate the
+    /// interface-types-signature-to-core-wasm-signature lowering logic.
+    signatures_to_fill: Vec<(usize, FuncIndex)>,
+
+    /// Intern'd map of imports where `RuntimeImport` represents some
+    /// (optional) projection of imports from an original import and
+    /// `RuntimeImportIndex` is an array built at runtime used to instantiate
+    /// this component.
+    import_map: HashMap<RuntimeImport, RuntimeImportIndex>,
+
+    /// Intern'd map of exports to the memory index they're referred to by at
+    /// runtime, used when building `CanonicalOptions` to avoid storing the same
+    /// memory many times within a `VMComponentContext`.
+    memory_to_runtime: HashMap<CoreExport<MemoryIndex>, RuntimeMemoryIndex>,
+
+    /// Same as `memory_to_runtime` but an intern'd map for realloc functions
+    /// instead.
+    realloc_to_runtime: HashMap<CoreDef, RuntimeReallocIndex>,
 }
 
 /// How a module is defined within a component.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum ModuleDef {
     /// This module is defined as an "upvar" or a closed over variable
     /// implicitly available for the component.
@@ -71,29 +99,71 @@ enum ModuleDef {
     /// nothing is known about it except for its type. The `import_index`
     /// provided here indexes into the `Component`'s import list.
     Import {
-        type_idx: ModuleTypeIndex,
-        import_index: usize,
+        ty: ModuleTypeIndex,
+        import: RuntimeImport,
     },
 }
 
-#[derive(Debug)]
+/// How instances are defined within a component.
+#[derive(Debug, Clone)]
 enum InstanceDef<'data> {
+    /// A module instance created through the instantiation of a previous
+    /// module.
     Module {
+        /// The runtime index associated with this instance.
+        ///
+        /// Not to be confused with `InstanceIndex` which counts "synthetic"
+        /// instances as well.
         instance: RuntimeInstanceIndex,
+
+        /// The module that was instantiated.
         module: ModuleIndex,
     },
+
+    /// A "synthetic" module created as a bag of exports from other items
+    /// already defined within this component.
     ModuleSynthetic(HashMap<&'data str, EntityIndex>),
+
+    /// An instance which was imported from the host.
+    Import {
+        /// The type of the imported instance
+        ty: ComponentInstanceTypeIndex,
+        /// The description of where this import came from.
+        import: RuntimeImport,
+    },
+
+    /// Same as `ModuleSynthetic` except for component items.
+    ComponentSynthetic(HashMap<&'data str, ComponentItem>),
 }
 
-/// Source of truth for where a core wasm item comes from.
+/// Description of the function index space and how functions are defined.
 #[derive(Clone)]
 enum Func<'data> {
+    // component functions
+    //
+    /// A component function that is imported from the host.
+    Import(RuntimeImport),
+
+    /// A component function that is lifted from core wasm function.
     Lifted {
+        /// The resulting type of the lifted function
         ty: FuncTypeIndex,
+        /// Which core wasm function is lifted, currently required to be an
+        /// instance export as opposed to a lowered import.
         func: CoreSource<'data>,
+        /// The options specified when the function was lifted.
         options: CanonicalOptions,
     },
+
+    // core function
+    //
+    /// A core wasm function that's extracted from a core wasm instance.
     Core(CoreSource<'data>),
+    /// A core wasm function created by lowering an imported host function.
+    ///
+    /// Note that `LoweredIndex` here refers to the nth
+    /// `Initializer::LowerImport`.
+    Lowered(LoweredIndex),
 }
 
 /// Source of truth for where a core wasm item comes from.
@@ -118,6 +188,28 @@ enum Action {
     KeepGoing,
     Skip(usize),
     Done,
+}
+
+/// Pre-intern'd representation of a `RuntimeImportIndex`.
+///
+/// When this is actually used within a component it will be committed into the
+/// `import_map` to give it a `RuntimeImportIndex` via the
+/// `runtime_import_index` function.
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+struct RuntimeImport {
+    source: ImportIndex,
+    exports: Vec<String>,
+}
+
+impl RuntimeImport {
+    fn append(&self, name: &str) -> RuntimeImport {
+        let mut exports = self.exports.clone();
+        exports.push(name.to_string());
+        RuntimeImport {
+            source: self.source,
+            exports,
+        }
+    }
 }
 
 impl<'a, 'data> Translator<'a, 'data> {
@@ -189,7 +281,24 @@ impl<'a, 'data> Translator<'a, 'data> {
             }
 
             Payload::End(offset) => {
-                self.validator.end(offset)?;
+                let types = self.validator.end(offset)?;
+
+                // With type information in hand fill in the canonical abi type
+                // of lowered functions.
+                for (idx, func) in self.result.signatures_to_fill.drain(..) {
+                    let i = match &mut self.result.component.initializers[idx] {
+                        Initializer::LowerImport(i) => i,
+                        _ => unreachable!(),
+                    };
+                    assert!(i.canonical_abi.as_u32() == 0);
+                    i.canonical_abi = self.types.module_types_builder().wasm_func_type(
+                        types
+                            .function_at(func.as_u32())
+                            .expect("should be in-bounds")
+                            .clone()
+                            .try_into()?,
+                    );
+                }
 
                 // When leaving a module be sure to pop the types scope to
                 // ensure that when we go back to the previous module outer
@@ -224,30 +333,35 @@ impl<'a, 'data> Translator<'a, 'data> {
                     let import = import?;
                     let ty = TypeIndex::from_u32(import.ty);
                     let ty = self.types.component_outer_type(0, ty);
-                    let (import_index, prev) = self
+                    // Record the `ImportIndex` to be associated with this
+                    // import and create the `RuntimeImport` representing the
+                    // "root" where it has no extra `exports`
+                    let source = self
                         .result
                         .component
-                        .imports
-                        .insert_full(import.name.to_string(), ty);
-                    assert!(prev.is_none());
+                        .import_types
+                        .push((import.name.to_string(), ty));
+                    let import = RuntimeImport {
+                        source,
+                        exports: Vec::new(),
+                    };
                     match ty {
-                        TypeDef::Module(type_idx) => {
-                            self.result.modules.push(ModuleDef::Import {
-                                type_idx,
-                                import_index,
-                            });
+                        TypeDef::Module(ty) => {
+                            self.result.modules.push(ModuleDef::Import { ty, import });
+                        }
+                        TypeDef::ComponentInstance(ty) => {
+                            self.result
+                                .instances
+                                .push(InstanceDef::Import { ty, import });
+                        }
+                        TypeDef::Func(_ty) => {
+                            self.result.funcs.push(Func::Import(import));
                         }
                         TypeDef::Component(_) => {
-                            unimplemented!("component imports");
-                        }
-                        TypeDef::ComponentInstance(_) => {
-                            unimplemented!("component instance imports");
-                        }
-                        TypeDef::Func(_) => {
-                            unimplemented!("function imports");
+                            unimplemented!("imports of components");
                         }
                         TypeDef::Interface(_) => {
-                            unimplemented!("interface type imports");
+                            unimplemented!("imports of types");
                         }
                     }
                 }
@@ -270,8 +384,8 @@ impl<'a, 'data> Translator<'a, 'data> {
                             func_index,
                             options,
                         } => {
-                            drop((func_index, options));
-                            unimplemented!("lowered functions");
+                            let func = FuncIndex::from_u32(func_index);
+                            self.lower_function(func, &options)
                         }
                     };
                     self.result.funcs.push(func);
@@ -282,6 +396,10 @@ impl<'a, 'data> Translator<'a, 'data> {
             // `ModuleEnvironment` from core wasm compilation. This will return
             // to the caller the size of the module so it knows how many bytes
             // of the input are skipped.
+            //
+            // Note that this is just initial type translation of the core wasm
+            // module and actual function compilation is deferred until this
+            // entire process has completed.
             Payload::ModuleSection { parser, range } => {
                 self.validator.module_section(&range)?;
                 let translation = ModuleEnvironment::new(
@@ -317,8 +435,7 @@ impl<'a, 'data> Translator<'a, 'data> {
                             unimplemented!("instantiating a component");
                         }
                         wasmparser::Instance::ComponentFromExports(exports) => {
-                            drop(exports);
-                            unimplemented!("instantiating a component");
+                            self.component_instance_from_exports(&exports)
                         }
                     };
                     self.result.instances.push(instance);
@@ -366,7 +483,7 @@ impl<'a, 'data> Translator<'a, 'data> {
 
     fn module_instance(
         &mut self,
-        module: ModuleIndex,
+        module_idx: ModuleIndex,
         args: &[wasmparser::ModuleArg<'data>],
     ) -> InstanceDef<'data> {
         // Map the flat list of `args` to instead a name-to-instance index.
@@ -379,102 +496,124 @@ impl<'a, 'data> Translator<'a, 'data> {
             }
         }
 
-        let instantiation = match self.result.modules[module] {
-            // For modules which we are statically aware of we can look at the
-            // exact order of imports required and build up a list of arguemnts
-            // in that order. This will be fast at runtime because all we have
-            // to do is build up the import lists for instantiation, no name
-            // lookups necessary.
+        let (imports, module) = match self.result.modules[module_idx].clone() {
+            // A module defined within this component is being instantiated
+            // which means we statically know the structure of the module. The
+            // list of imports required is ordered by the actual list of imports
+            // listed on the module itself (which wasmtime later requires during
+            // instantiation).
             ModuleDef::Upvar(upvar_idx) => {
-                let trans = &self.result.upvars[upvar_idx];
-                Instantiation::ModuleUpvar {
-                    module: upvar_idx,
-                    args: self.module_instance_args(
-                        &instance_by_name,
-                        trans.module.imports().map(|(m, n, _)| (m, n)),
-                    ),
-                }
+                let args = self.result.upvars[upvar_idx]
+                    .module
+                    .imports()
+                    .map(|(m, n, _)| (m.to_string(), n.to_string()))
+                    .collect::<Vec<_>>();
+                (args, ModuleToInstantiate::Upvar(upvar_idx))
             }
 
             // For imported modules the list of arguments is built to match the
-            // order of the imports listed. Note that this will need to be
-            // reshuffled at runtime since the actual module being instantiated
-            // may originally have required imports in a different order.
-            ModuleDef::Import {
-                type_idx,
-                import_index,
-            } => {
-                let ty = &self.types[type_idx];
-                Instantiation::ModuleImport {
-                    import_index,
-                    args: self.module_instance_args(
-                        &instance_by_name,
-                        ty.imports.keys().map(|(a, b)| (a.as_str(), b.as_str())),
-                    ),
-                }
+            // order of the imports listed in the declared type of the module.
+            // Note that this will need to be reshuffled at runtime since the
+            // actual module being instantiated may originally have required
+            // imports in a different order.
+            ModuleDef::Import { ty, import } => {
+                let import = self.runtime_import_index(import);
+                let args = self.types[ty].imports.keys().cloned().collect();
+                (args, ModuleToInstantiate::Import(import))
             }
         };
-        let instance = self.result.component.instances.push(instantiation);
-        InstanceDef::Module { instance, module }
+
+        // Translate the desired order of import strings to a `CoreDef` used to
+        // instantiate each module. Of the two-level namespace the `module` name
+        // is indicated by the `args` argument to this function and the `name`
+        // is the export of the instance found that's used.
+        let args = imports
+            .iter()
+            .map(|(module, name)| self.lookup_core_def(instance_by_name[module.as_str()], name))
+            .collect();
+
+        // Record initializer information related to this instantiation now that
+        // we've figure out all the arguments.
+        let instance = RuntimeInstanceIndex::from_u32(self.result.component.num_runtime_instances);
+        self.result.component.num_runtime_instances += 1;
+        self.result
+            .component
+            .initializers
+            .push(Initializer::InstantiateModule {
+                instance,
+                module,
+                args,
+            });
+        InstanceDef::Module {
+            instance,
+            module: module_idx,
+        }
     }
 
-    /// Translates the named arguments required by a core wasm module specified
-    /// by `iter` into a list of where the arguments come from at runtime.
+    /// Calculate the `CoreDef`, a definition of a core wasm item, corresponding
+    /// to the export `name` of the `instance` specified.
     ///
-    /// The `instance_by_name` map is used go go from the module name of an
-    /// import to the instance that's satisfying the import. The `name` field
-    /// of the import is then looked up within the instance's own exports.
-    fn module_instance_args<'b>(
-        &self,
-        instance_by_name: &HashMap<&'data str, InstanceIndex>,
-        iter: impl Iterator<Item = (&'b str, &'b str)>,
-    ) -> Box<[CoreExport<EntityIndex>]> {
-        iter.map(|(module, name)| {
-            self.lookup_core_source(instance_by_name[module], name)
-                .to_core_export(|i| i)
-        })
-        .collect()
-    }
-
-    /// Looks up the `CoreSource` corresponding to the export `name` of the
-    /// `module` specified.
-    ///
-    /// This classifies the export of the module as either one which we
-    /// statically know by index within the module itself (because we know the
-    /// module), or one that must be referred to by name.
-    fn lookup_core_source(&self, instance: InstanceIndex, name: &'data str) -> CoreSource<'data> {
+    /// This classifies the export of the instance as one which we
+    /// statically know by index within an instantiated module (because
+    /// we know the module), one that must be referred to by name since the
+    /// module isn't known, or it's a synthesized lowering or adapter of a
+    /// component function.
+    fn lookup_core_def(&mut self, instance: InstanceIndex, name: &str) -> CoreDef {
         match &self.result.instances[instance] {
-            // The `instance` points to an instantiated module...
-            InstanceDef::Module { module, instance } => match self.result.modules[*module] {
-                // ... and the module instantiated is one that we statically
-                // know the structure of. This means that `name` points to an
-                // exact index of an item within the module which we lookup here
-                // and record.
-                ModuleDef::Upvar(upvar_idx) => {
-                    let trans = &self.result.upvars[upvar_idx];
-                    CoreSource::Index(*instance, trans.module.exports[name])
-                }
+            InstanceDef::Module { module, instance } => {
+                let (src, _ty) = self.lookup_core_source_in_module(*instance, *module, name);
+                src.to_core_def()
+            }
 
-                // ... and the module instantiated is imported so we don't
-                // statically know its structure. This means taht the export
-                // must be identified by name.
-                ModuleDef::Import { .. } => CoreSource::Export(*instance, name),
-            },
-
-            // The `instance `points to a "synthetic" instance created in the
-            // component as a collection of named items from other instances.
-            // This means that we're simply copying over the original source of
-            // the item in the first place.
             InstanceDef::ModuleSynthetic(defs) => match defs[&name] {
-                EntityIndex::Function(f) => match &self.result.funcs[f] {
-                    Func::Core(c) => c.clone(),
+                EntityIndex::Function(f) => match self.result.funcs[f].clone() {
+                    Func::Core(c) => c.to_core_def(),
+                    Func::Lowered(i) => CoreDef::Lowered(i),
+
                     // should not be possible to hit with a valid component
-                    Func::Lifted { .. } => unreachable!(),
+                    Func::Lifted { .. } | Func::Import { .. } => unreachable!(),
                 },
-                EntityIndex::Global(g) => self.result.globals[g].clone(),
-                EntityIndex::Table(t) => self.result.tables[t].clone(),
-                EntityIndex::Memory(m) => self.result.memories[m].clone(),
+                EntityIndex::Global(g) => self.result.globals[g].to_core_def(),
+                EntityIndex::Table(t) => self.result.tables[t].to_core_def(),
+                EntityIndex::Memory(m) => self.result.memories[m].to_core_def(),
             },
+
+            // should not be possible to hit with a valid component
+            InstanceDef::Import { .. } | InstanceDef::ComponentSynthetic(_) => unreachable!(),
+        }
+    }
+
+    /// Calculates the `CoreSource` associated with the export `name` as an
+    /// instance of the instantiated `module` specified.
+    ///
+    /// The `instance` index here represents the runtime instance index that
+    /// we're looking up within.
+    fn lookup_core_source_in_module<'b>(
+        &self,
+        instance: RuntimeInstanceIndex,
+        module: ModuleIndex,
+        name: &'b str,
+    ) -> (CoreSource<'b>, EntityType) {
+        match self.result.modules[module] {
+            // The module instantiated is one that we statically know the
+            // structure of. This means that `name` points to an exact index of
+            // an item within the module which we lookup here and record.
+            ModuleDef::Upvar(upvar_idx) => {
+                let trans = &self.result.upvars[upvar_idx];
+                let idx = trans.module.exports[name];
+                let src = CoreSource::Index(instance, idx);
+                let ty = trans.module.type_of(idx);
+                (src, ty)
+            }
+
+            // The module instantiated is imported so we don't statically know
+            // its structure. This means that the export must be identified by
+            // name.
+            ModuleDef::Import { ty, .. } => {
+                let src = CoreSource::Export(instance, name);
+                let ty = self.types[ty].exports[name].clone();
+                (src, ty)
+            }
         }
     }
 
@@ -505,11 +644,48 @@ impl<'a, 'data> Translator<'a, 'data> {
                 }
 
                 // doesn't get past validation
-                wasmparser::ExternalKind::Tag => unimplemented!(),
+                wasmparser::ExternalKind::Tag => unimplemented!("wasm exceptions"),
             };
             map.insert(export.name, idx);
         }
         InstanceDef::ModuleSynthetic(map)
+    }
+
+    /// Creates a synthetic module from the list of items currently in the
+    /// module and their given names.
+    fn component_instance_from_exports(
+        &mut self,
+        exports: &[wasmparser::ComponentExport<'data>],
+    ) -> InstanceDef<'data> {
+        let mut map = HashMap::with_capacity(exports.len());
+        for export in exports {
+            let idx = match &export.kind {
+                wasmparser::ComponentArgKind::Function(i) => {
+                    let index = FuncIndex::from_u32(*i);
+                    ComponentItem::Func(index)
+                }
+                wasmparser::ComponentArgKind::Module(i) => {
+                    let index = ModuleIndex::from_u32(*i);
+                    ComponentItem::Module(index)
+                }
+                wasmparser::ComponentArgKind::Instance(i) => {
+                    let index = InstanceIndex::from_u32(*i);
+                    ComponentItem::Instance(index)
+                }
+                wasmparser::ComponentArgKind::Component(i) => {
+                    let index = ComponentIndex::from_u32(*i);
+                    ComponentItem::Component(index)
+                }
+                wasmparser::ComponentArgKind::Value(_) => {
+                    unimplemented!("component values");
+                }
+                wasmparser::ComponentArgKind::Type(_) => {
+                    unimplemented!("component type export");
+                }
+            };
+            map.insert(export.name, idx);
+        }
+        InstanceDef::ComponentSynthetic(map)
     }
 
     fn export(&mut self, export: &wasmparser::ComponentExport<'data>) {
@@ -518,40 +694,60 @@ impl<'a, 'data> Translator<'a, 'data> {
             wasmparser::ComponentExportKind::Module(i) => {
                 let idx = ModuleIndex::from_u32(i);
                 drop(idx);
-                unimplemented!("unimplemented module export");
+                unimplemented!("exporting a module");
             }
             wasmparser::ComponentExportKind::Component(i) => {
                 let idx = ComponentIndex::from_u32(i);
                 drop(idx);
-                unimplemented!("unimplemented component export");
+                unimplemented!("exporting a component");
             }
             wasmparser::ComponentExportKind::Instance(i) => {
                 let idx = InstanceIndex::from_u32(i);
                 drop(idx);
-                unimplemented!("unimplemented instance export");
+                unimplemented!("exporting an instance");
             }
             wasmparser::ComponentExportKind::Function(i) => {
                 let idx = FuncIndex::from_u32(i);
-                match &self.result.funcs[idx] {
-                    Func::Lifted { ty, func, options } => Export::LiftedFunction(LiftedFunction {
-                        ty: *ty,
+                match self.result.funcs[idx].clone() {
+                    Func::Lifted { ty, func, options } => Export::LiftedFunction {
+                        ty,
                         func: func.to_core_export(|i| match i {
                             EntityIndex::Function(i) => i,
                             _ => unreachable!(),
                         }),
-                        options: options.clone(),
-                    }),
+                        options,
+                    },
+
+                    // TODO: Not 100% clear what to do about this. Given the
+                    // expected implementation of host functions there's not a
+                    // great way to actually invoke a host function after it's
+                    // been wrapped up in a `Func` (or similar). One of the
+                    // major issues here is that the callee expects the
+                    // canonical-abi format but the caller has host-rust format,
+                    // and bridging that gap is expected to be nontrivial.
+                    //
+                    // This may be solvable with like a temporary arena to lower
+                    // into which is discarded after the call finishes? Or...
+                    // something like that? This may not be too important to
+                    // support in terms of perf so if it's not the fastest thing
+                    // in the world that's probably alright.
+                    //
+                    // Nevertheless this shouldn't panic, eventually when the
+                    // component model implementation is finished this should do
+                    // something reasonable.
+                    Func::Import { .. } => unimplemented!("exporting an import"),
+
                     // should not be possible to hit with a valid module.
-                    Func::Core(_) => unreachable!(),
+                    Func::Core(_) | Func::Lowered(_) => unreachable!(),
                 }
             }
             wasmparser::ComponentExportKind::Value(_) => {
-                unimplemented!("unimplemented value export");
+                unimplemented!("exporting a value");
             }
             wasmparser::ComponentExportKind::Type(i) => {
                 let idx = TypeIndex::from_u32(i);
                 drop(idx);
-                unimplemented!("unimplemented value export");
+                unimplemented!("exporting a type");
             }
         };
         self.result
@@ -568,11 +764,7 @@ impl<'a, 'data> Translator<'a, 'data> {
                 name,
             } => {
                 let instance = InstanceIndex::from_u32(*instance);
-                match &self.result.instances[instance] {
-                    InstanceDef::Module { .. } | InstanceDef::ModuleSynthetic(_) => {
-                        self.alias_module_instance_export(*kind, instance, name);
-                    }
-                }
+                self.alias_instance_export(*kind, instance, name);
             }
             wasmparser::Alias::OuterModule { .. } => {
                 unimplemented!("alias outer module");
@@ -597,36 +789,111 @@ impl<'a, 'data> Translator<'a, 'data> {
         }
     }
 
-    /// Inserts an item in to the relevant namespace aliasing the `name`'d
-    /// export of the `instance` provided.
-    fn alias_module_instance_export(
+    fn alias_instance_export(
         &mut self,
         kind: wasmparser::AliasKind,
         instance: InstanceIndex,
         name: &'data str,
     ) {
-        let src = self.lookup_core_source(instance, name);
-        match kind {
-            wasmparser::AliasKind::Func => {
-                self.result.funcs.push(Func::Core(src));
+        match &self.result.instances[instance] {
+            // The `instance` points to an imported component instance, meaning
+            // that the item we're pushing into our index spaces is effectively
+            // another form of import. The `name` is appended to the `import`
+            // found here and then the appropriate namespace of an import is
+            // recorded as well.
+            InstanceDef::Import { import, ty } => {
+                let import = import.append(name);
+                match self.types[*ty].exports[name] {
+                    TypeDef::Module(ty) => {
+                        assert_eq!(kind, wasmparser::AliasKind::Module);
+                        self.result.modules.push(ModuleDef::Import { import, ty });
+                    }
+                    TypeDef::ComponentInstance(ty) => {
+                        assert_eq!(kind, wasmparser::AliasKind::Instance);
+                        self.result
+                            .instances
+                            .push(InstanceDef::Import { import, ty });
+                    }
+                    TypeDef::Func(_ty) => {
+                        assert_eq!(kind, wasmparser::AliasKind::ComponentFunc);
+                        self.result.funcs.push(Func::Import(import));
+                    }
+                    TypeDef::Interface(_) => unimplemented!("alias type export"),
+                    TypeDef::Component(_) => unimplemented!("alias component export"),
+                }
             }
-            wasmparser::AliasKind::Global => {
-                self.result.globals.push(src);
+
+            // The `instance` points to an instantiated module, meaning we can
+            // lookup the `CoreSource` associated with it and use the type
+            // information to insert it into the appropriate namespace.
+            InstanceDef::Module { instance, module } => {
+                let (src, ty) = self.lookup_core_source_in_module(*instance, *module, name);
+                match ty {
+                    EntityType::Function(_) => {
+                        assert_eq!(kind, wasmparser::AliasKind::Func);
+                        self.result.funcs.push(Func::Core(src));
+                    }
+                    EntityType::Global(_) => {
+                        assert_eq!(kind, wasmparser::AliasKind::Global);
+                        self.result.globals.push(src);
+                    }
+                    EntityType::Memory(_) => {
+                        assert_eq!(kind, wasmparser::AliasKind::Memory);
+                        self.result.memories.push(src);
+                    }
+                    EntityType::Table(_) => {
+                        assert_eq!(kind, wasmparser::AliasKind::Table);
+                        self.result.tables.push(src);
+                    }
+                    EntityType::Tag(_) => unimplemented!("wasm exceptions"),
+                }
             }
-            wasmparser::AliasKind::Memory => {
-                self.result.memories.push(src);
-            }
-            wasmparser::AliasKind::Table => {
-                self.result.tables.push(src);
-            }
-            other => {
-                panic!("unknown/unimplemented alias kind {other:?}");
-            }
+
+            // For synthetic component/module instances we can just copy the
+            // definition of the original item into a new slot as well to record
+            // that the index describes the same item.
+            InstanceDef::ComponentSynthetic(exports) => match exports[&name] {
+                ComponentItem::Func(i) => {
+                    assert_eq!(kind, wasmparser::AliasKind::ComponentFunc);
+                    self.result.funcs.push(self.result.funcs[i].clone());
+                }
+                ComponentItem::Module(i) => {
+                    assert_eq!(kind, wasmparser::AliasKind::Module);
+                    self.result.modules.push(self.result.modules[i].clone());
+                }
+                ComponentItem::Instance(i) => {
+                    assert_eq!(kind, wasmparser::AliasKind::Instance);
+                    self.result.instances.push(self.result.instances[i].clone());
+                }
+                ComponentItem::Component(_) => unimplemented!("aliasing a component export"),
+            },
+
+            // ... and like above for synthetic components aliasing exports from
+            // synthetic modules is also just copying around the identifying
+            // information.
+            InstanceDef::ModuleSynthetic(exports) => match exports[&name] {
+                EntityIndex::Function(i) => {
+                    assert_eq!(kind, wasmparser::AliasKind::Func);
+                    self.result.funcs.push(self.result.funcs[i].clone());
+                }
+                EntityIndex::Global(i) => {
+                    assert_eq!(kind, wasmparser::AliasKind::Global);
+                    self.result.globals.push(self.result.globals[i].clone());
+                }
+                EntityIndex::Table(i) => {
+                    assert_eq!(kind, wasmparser::AliasKind::Table);
+                    self.result.tables.push(self.result.tables[i].clone());
+                }
+                EntityIndex::Memory(i) => {
+                    assert_eq!(kind, wasmparser::AliasKind::Memory);
+                    self.result.memories.push(self.result.memories[i].clone());
+                }
+            },
         }
     }
 
     fn lift_function(
-        &self,
+        &mut self,
         ty: TypeIndex,
         func: FuncIndex,
         options: &[wasmparser::CanonicalOption],
@@ -638,14 +905,64 @@ impl<'a, 'data> Translator<'a, 'data> {
         };
         let func = match &self.result.funcs[func] {
             Func::Core(core) => core.clone(),
+
+            // TODO: it's not immediately obvious how to implement this. Once
+            // lowered imports are fully implemented it may be the case that
+            // implementing this "just falls out" of the same implementation.
+            // This technically is valid and basically just result in leaking
+            // memory into core wasm (since nothing is around to call
+            // deallocation/free functions).
+            Func::Lowered(_) => unimplemented!("lifting a lowered function"),
+
             // should not be possible after validation
-            Func::Lifted { .. } => unreachable!(),
+            Func::Lifted { .. } | Func::Import { .. } => unreachable!(),
         };
         let options = self.canonical_options(options);
         Func::Lifted { ty, func, options }
     }
 
-    fn canonical_options(&self, opts: &[wasmparser::CanonicalOption]) -> CanonicalOptions {
+    fn lower_function(
+        &mut self,
+        func: FuncIndex,
+        options: &[wasmparser::CanonicalOption],
+    ) -> Func<'data> {
+        let options = self.canonical_options(options);
+        match self.result.funcs[func].clone() {
+            Func::Import(import) => {
+                let import = self.runtime_import_index(import);
+                let index = LoweredIndex::from_u32(self.result.component.num_lowerings);
+                self.result.component.num_lowerings += 1;
+                let fill_idx = self.result.component.initializers.len();
+                self.result
+                    .component
+                    .initializers
+                    .push(Initializer::LowerImport(LowerImport {
+                        index,
+                        import,
+                        options,
+                        // This is filled after the component is finished when
+                        // we have wasmparser's type information available, so
+                        // leave a dummy for now to get filled in.
+                        canonical_abi: SignatureIndex::from_u32(0),
+                    }));
+                self.result
+                    .signatures_to_fill
+                    .push((fill_idx, self.result.funcs.next_key()));
+                Func::Lowered(index)
+            }
+
+            // TODO: From reading the spec, this technically should create a
+            // function that lifts the arguments and then afterwards
+            // unconditionally traps. That would mean that this validates the
+            // arguments within the context of `options` and then traps.
+            Func::Lifted { .. } => unimplemented!("lower a lifted function"),
+
+            // should not be possible after validation
+            Func::Core(_) | Func::Lowered(_) => unreachable!(),
+        }
+    }
+
+    fn canonical_options(&mut self, opts: &[wasmparser::CanonicalOption]) -> CanonicalOptions {
         let mut ret = CanonicalOptions::default();
         for opt in opts {
             match opt {
@@ -663,33 +980,63 @@ impl<'a, 'data> Translator<'a, 'data> {
 
                     // Note that the `unreachable!()` should not happen for
                     // components which have passed validation.
-                    let memory = self
-                        .lookup_core_source(instance, "memory")
-                        .to_core_export(|i| match i {
-                            EntityIndex::Memory(i) => i,
-                            _ => unreachable!(),
-                        });
-                    let canonical_abi_free = self
-                        .lookup_core_source(instance, "canonical_abi_free")
-                        .to_core_export(|i| match i {
-                            EntityIndex::Function(i) => i,
-                            _ => unreachable!(),
-                        });
-                    let canonical_abi_realloc = self
-                        .lookup_core_source(instance, "canonical_abi_realloc")
-                        .to_core_export(|i| match i {
-                            EntityIndex::Function(i) => i,
-                            _ => unreachable!(),
-                        });
-                    ret.intrinsics = Some(Intrinsics {
-                        memory,
-                        canonical_abi_free,
-                        canonical_abi_realloc,
-                    })
+                    let memory =
+                        self.lookup_core_def(instance, "memory")
+                            .unwrap_export(|i| match i {
+                                EntityIndex::Memory(i) => i,
+                                _ => unreachable!(),
+                            });
+                    let memory = self.runtime_memory(memory);
+                    ret.memory = Some(memory);
+
+                    let realloc = self.lookup_core_def(instance, "canonical_abi_realloc");
+                    let realloc = self.runtime_realloc(realloc);
+                    ret.realloc = Some(realloc);
                 }
             }
         }
         return ret;
+    }
+
+    fn runtime_import_index(&mut self, import: RuntimeImport) -> RuntimeImportIndex {
+        if let Some(idx) = self.result.import_map.get(&import) {
+            return *idx;
+        }
+        let idx = self
+            .result
+            .component
+            .imports
+            .push((import.source, import.exports.clone()));
+        self.result.import_map.insert(import, idx);
+        return idx;
+    }
+
+    fn runtime_memory(&mut self, export: CoreExport<MemoryIndex>) -> RuntimeMemoryIndex {
+        if let Some(idx) = self.result.memory_to_runtime.get(&export) {
+            return *idx;
+        }
+        let index = RuntimeMemoryIndex::from_u32(self.result.component.num_runtime_memories);
+        self.result.component.num_runtime_memories += 1;
+        self.result.memory_to_runtime.insert(export.clone(), index);
+        self.result
+            .component
+            .initializers
+            .push(Initializer::ExtractMemory { index, export });
+        index
+    }
+
+    fn runtime_realloc(&mut self, def: CoreDef) -> RuntimeReallocIndex {
+        if let Some(idx) = self.result.realloc_to_runtime.get(&def) {
+            return *idx;
+        }
+        let index = RuntimeReallocIndex::from_u32(self.result.component.num_runtime_reallocs);
+        self.result.component.num_runtime_reallocs += 1;
+        self.result.realloc_to_runtime.insert(def.clone(), index);
+        self.result
+            .component
+            .initializers
+            .push(Initializer::ExtractRealloc { index, def });
+        index
     }
 }
 
@@ -703,6 +1050,30 @@ impl CoreSource<'_> {
             CoreSource::Export(instance, name) => CoreExport {
                 instance: *instance,
                 item: ExportItem::Name(name.to_string()),
+            },
+        }
+    }
+
+    fn to_core_def(&self) -> CoreDef {
+        self.to_core_export(|i| i).into()
+    }
+}
+
+impl CoreDef {
+    fn unwrap_export<T>(self, get_index: impl FnOnce(EntityIndex) -> T) -> CoreExport<T> {
+        let export = match self {
+            CoreDef::Export(export) => export,
+            CoreDef::Lowered(_) => unreachable!(),
+        };
+        let instance = export.instance;
+        match export.item {
+            ExportItem::Index(idx) => CoreExport {
+                instance,
+                item: ExportItem::Index(get_index(idx)),
+            },
+            ExportItem::Name(name) => CoreExport {
+                instance,
+                item: ExportItem::Name(name),
             },
         }
     }
