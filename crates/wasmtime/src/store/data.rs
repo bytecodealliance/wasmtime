@@ -4,7 +4,7 @@ use std::fmt;
 use std::marker;
 use std::num::NonZeroU64;
 use std::ops::{Index, IndexMut};
-use std::sync::atomic::{AtomicU64, Ordering::SeqCst};
+use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
 
 // This is defined here, in a private submodule, so we can explicitly reexport
 // it only as `pub(crate)`. This avoids a ton of
@@ -116,8 +116,9 @@ where
         index.assert_belongs_to(self.id);
         // Note that if this is ever a performance bottleneck it should be safe
         // to use unchecked indexing here because presence of a `Stored<T>` is
-        // proof of an item having been inserted into a store so after the store
-        // check above the actual index should always be valid.
+        // proof of an item having been inserted into a store and lists in
+        // stores are never shrunk. After the store check above the actual index
+        // should always be valid.
         &T::list(self)[index.index()]
     }
 }
@@ -183,7 +184,7 @@ where
     }
 }
 
-/// A unique identifier to get attached to a stores.
+/// A unique identifier to get attached to a store.
 ///
 /// This identifier is embedded into the `Stored<T>` structure and is used to
 /// identify the original store that items come from. For example a `Memory` is
@@ -204,7 +205,11 @@ impl StoreId {
         //
         // If a store is created once per microsecond then this will last the
         // current process for 584,540 years before overflowing.
-        let id = NEXT_ID.fetch_add(1, SeqCst);
+        //
+        // Also note the usage of `Relaxed` ordering here which should be ok
+        // since we're only looking for atomicity on this counter and this
+        // otherwise isn't used to synchronize memory stored anywhere else.
+        let id = NEXT_ID.fetch_add(1, Relaxed);
         if id & (1 << 63) != 0 {
             NEXT_ID.store(1 << 63, SeqCst);
             panic!("store id allocator overflow");
