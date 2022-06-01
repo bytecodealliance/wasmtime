@@ -98,11 +98,54 @@ indices! {
     /// modules, and this index indexes, at runtime, which of the upvars is
     /// referenced.
     pub struct ModuleUpvarIndex(u32);
+
+    /// Used to index imports into a `Component`
+    ///
+    /// This does not correspond to anything in the binary format for the
+    /// component model.
+    pub struct ImportIndex(u32);
+
+    /// Index that represents a leaf item imported into a component where a
+    /// "leaf" means "not an instance".
+    ///
+    /// This does not correspond to anything in the binary format for the
+    /// component model.
+    pub struct RuntimeImportIndex(u32);
+
+    /// Index that represents a lowered host function and is used to represent
+    /// host function lowerings with options and such.
+    ///
+    /// This does not correspond to anything in the binary format for the
+    /// component model.
+    pub struct LoweredIndex(u32);
+
+    /// Index representing a linear memory extracted from a wasm instance
+    /// which is stored in a `VMComponentContext`. This is used to deduplicate
+    /// references to the same linear memory where it's only stored once in a
+    /// `VMComponentContext`.
+    ///
+    /// This does not correspond to anything in the binary format for the
+    /// component model.
+    pub struct RuntimeMemoryIndex(u32);
+
+    /// Same as `RuntimeMemoryIndex` except for the `realloc` function.
+    pub struct RuntimeReallocIndex(u32);
 }
 
 // Reexport for convenience some core-wasm indices which are also used in the
 // component model, typically for when aliasing exports of core wasm modules.
 pub use crate::{FuncIndex, GlobalIndex, MemoryIndex, TableIndex, TypeIndex};
+
+/// Equivalent of `EntityIndex` but for the component model instead of core
+/// wasm.
+#[derive(Debug, Clone, Copy)]
+#[allow(missing_docs)]
+pub enum ComponentItem {
+    Func(FuncIndex),
+    Module(ModuleIndex),
+    Instance(InstanceIndex),
+    Component(ComponentIndex),
+}
 
 /// Runtime information about the type information contained within a component.
 ///
@@ -158,6 +201,18 @@ impl_index! {
     impl Index<FlagsTypeIndex> for ComponentTypes { FlagsType => flags }
     impl Index<UnionTypeIndex> for ComponentTypes { UnionType => unions }
     impl Index<ExpectedTypeIndex> for ComponentTypes { ExpectedType => expecteds }
+}
+
+// Additionally forward anything that can index `ModuleTypes` to `ModuleTypes`
+// (aka `SignatureIndex`)
+impl<T> Index<T> for ComponentTypes
+where
+    ModuleTypes: Index<T>,
+{
+    type Output = <ModuleTypes as Index<T>>::Output;
+    fn index(&self, idx: T) -> &Self::Output {
+        self.module_types.index(idx)
+    }
 }
 
 /// Structured used to build a [`ComponentTypes`] during translation.

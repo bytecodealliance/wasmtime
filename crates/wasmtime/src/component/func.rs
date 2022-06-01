@@ -1,13 +1,13 @@
-use crate::component::instance::lookup;
+use crate::component::instance::InstanceData;
 use crate::store::{StoreOpaque, Stored};
 use crate::{AsContext, StoreContextMut};
 use anyhow::{bail, Context, Result};
 use std::convert::TryFrom;
 use std::sync::Arc;
 use wasmtime_environ::component::{
-    ComponentTypes, FuncTypeIndex, LiftedFunction, RuntimeInstanceIndex, StringEncoding,
+    CanonicalOptions, ComponentTypes, CoreExport, FuncTypeIndex, StringEncoding,
 };
-use wasmtime_environ::PrimaryMap;
+use wasmtime_environ::FuncIndex;
 use wasmtime_runtime::{Export, ExportFunction, ExportMemory, VMTrampoline};
 
 mod typed;
@@ -36,50 +36,35 @@ pub(crate) struct Options {
 struct Intrinsics {
     memory: ExportMemory,
     realloc: ExportFunction,
-    #[allow(dead_code)] // FIXME: remove this when actually used
-    free: ExportFunction,
 }
 
 impl Func {
     pub(crate) fn from_lifted_func(
         store: &mut StoreOpaque,
-        types: &Arc<ComponentTypes>,
-        instances: &PrimaryMap<RuntimeInstanceIndex, crate::Instance>,
-        func: &LiftedFunction,
+        instance: &InstanceData,
+        ty: FuncTypeIndex,
+        func: &CoreExport<FuncIndex>,
+        options: &CanonicalOptions,
     ) -> Func {
-        let export = match lookup(store, instances, &func.func) {
+        let export = match instance.lookup_export(store, func) {
             Export::Function(f) => f,
             _ => unreachable!(),
         };
         let trampoline = store.lookup_trampoline(unsafe { export.anyfunc.as_ref() });
-        let intrinsics = func.options.intrinsics.as_ref().map(|i| {
-            let memory = match lookup(store, instances, &i.memory) {
-                Export::Memory(m) => m,
-                _ => unreachable!(),
-            };
-            let realloc = match lookup(store, instances, &i.canonical_abi_realloc) {
-                Export::Function(f) => f,
-                _ => unreachable!(),
-            };
-            let free = match lookup(store, instances, &i.canonical_abi_free) {
-                Export::Function(f) => f,
-                _ => unreachable!(),
-            };
-            Intrinsics {
-                memory,
-                realloc,
-                free,
-            }
+        let intrinsics = options.memory.map(|i| {
+            let memory = instance.runtime_memory(i);
+            let realloc = instance.runtime_realloc(options.realloc.unwrap());
+            Intrinsics { memory, realloc }
         });
         Func(store.store_data_mut().insert(FuncData {
             trampoline,
             export,
             options: Options {
                 intrinsics,
-                string_encoding: func.options.string_encoding,
+                string_encoding: options.string_encoding,
             },
-            ty: func.ty,
-            types: types.clone(),
+            ty,
+            types: instance.component_types().clone(),
         }))
     }
 
