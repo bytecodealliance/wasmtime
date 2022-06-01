@@ -211,7 +211,7 @@ impl StoreId {
         // otherwise isn't used to synchronize memory stored anywhere else.
         let id = NEXT_ID.fetch_add(1, Relaxed);
         if id & (1 << 63) != 0 {
-            NEXT_ID.store(1 << 63, SeqCst);
+            NEXT_ID.store(1 << 63, Relaxed);
             panic!("store id allocator overflow");
         }
 
