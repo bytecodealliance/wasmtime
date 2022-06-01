@@ -10,7 +10,7 @@ fn run_wat(args: &[wasmtime::Val], expected: i32, wat: &str) -> Result<()> {
 
 fn get_wizer() -> Wizer {
     let mut wizer = Wizer::new();
-    wizer.allow_wasi(true);
+    wizer.allow_wasi(true).unwrap();
     wizer.wasm_multi_memory(true);
     wizer.wasm_module_linking(true);
     wizer
@@ -818,7 +818,7 @@ fn rename_functions() -> Result<()> {
 
     let wasm = wat_to_wasm(wat)?;
     let mut wizer = Wizer::new();
-    wizer.allow_wasi(true);
+    wizer.allow_wasi(true).unwrap();
     wizer.func_rename("func_a", "func_b");
     wizer.func_rename("func_b", "func_c");
     let wasm = wizer.run(&wasm)?;
@@ -874,7 +874,7 @@ fn renames_and_module_linking() -> Result<()> {
     let wasm = wat_to_wasm(wat)?;
     let mut wizer = Wizer::new();
     wizer.wasm_module_linking(true);
-    wizer.allow_wasi(true);
+    wizer.allow_wasi(true).unwrap();
     wizer.func_rename("a", "b");
     wizer.func_rename("b", "c");
     let wasm = wizer.run(&wasm)?;
