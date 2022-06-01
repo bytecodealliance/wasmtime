@@ -509,10 +509,7 @@ impl Instance {
         name: &str,
     ) -> Option<SharedMemory> {
         let mut store = store.as_context_mut();
-        self.get_export(&mut store, name)?
-            .into_memory()
-            .map(|m| m.as_shared_memory(store))
-            .flatten()
+        self.get_export(&mut store, name)?.into_shared_memory()
     }
 
     /// Looks up an exported [`Global`] value by name.
@@ -584,6 +581,9 @@ impl OwnedImports {
                 self.tables.push(i.vmimport(store));
             }
             Extern::Memory(i) => {
+                self.memories.push(i.vmimport(store));
+            }
+            Extern::SharedMemory(i) => {
                 self.memories.push(i.vmimport(store));
             }
         }

@@ -26,7 +26,7 @@ use std::ops::Range;
 use std::ptr::NonNull;
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
-use std::{mem, ptr, slice};
+use std::{mem, ptr};
 use wasmtime_environ::{
     packed_option::ReservedValue, DataIndex, DefinedGlobalIndex, DefinedMemoryIndex,
     DefinedTableIndex, ElemIndex, EntityIndex, EntityRef, EntitySet, FuncIndex, GlobalIndex,

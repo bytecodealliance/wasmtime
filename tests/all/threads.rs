@@ -26,8 +26,7 @@ fn test_import_shared_memory() -> Result<()> {
     let module = Module::new(&engine, wat)?;
     let mut store = Store::new(&engine, ());
     let shared_memory = SharedMemory::new(&engine, MemoryType::shared(1, 5))?;
-    let import = shared_memory.as_extern(&mut store)?;
-    let _instance = Instance::new(&mut store, &module, &[import])?;
+    let _instance = Instance::new(&mut store, &module, &[shared_memory.into()])?;
     Ok(())
 }
 
@@ -60,15 +59,13 @@ fn test_sharing_of_shared_memory() -> Result<()> {
     let engine = Engine::new(&config)?;
     let module = Module::new(&engine, wat)?;
     let mut store = Store::new(&engine, ());
-    let mut shared_memory = SharedMemory::new(&engine, MemoryType::shared(1, 5))?;
-    let import1 = shared_memory.as_extern(&mut store)?;
-    let instance1 = Instance::new(&mut store, &module, &[import1])?;
-    let import2 = shared_memory.as_extern(&mut store)?;
-    let instance2 = Instance::new(&mut store, &module, &[import2])?;
+    let shared_memory = SharedMemory::new(&engine, MemoryType::shared(1, 5))?;
+    let instance1 = Instance::new(&mut store, &module, &[shared_memory.clone().into()])?;
+    let instance2 = Instance::new(&mut store, &module, &[shared_memory.clone().into()])?;
 
     // Modify the memory in one place.
     unsafe {
-        (*shared_memory.data_mut())[0] = 42;
+        (*(shared_memory.data() as *mut [u8]))[0] = 42;
     }
 
     // Verify that the memory is the same in all shared locations.
@@ -114,6 +111,42 @@ fn test_probe_shared_memory_size() -> Result<()> {
 }
 
 #[test]
+fn test_multi_memory() -> Result<()> {
+    let wat = r#"(module
+        (import "env" "imported" (memory $imported 5 10 shared))
+        (memory (export "owned") 10 20)
+        (memory (export "shared") 1 2 shared)
+        (export "imported" (memory $imported))
+    )"#;
+    let mut config = Config::new();
+    config.wasm_threads(true);
+    config.wasm_multi_memory(true);
+    let engine = Engine::new(&config)?;
+    let module = Module::new(&engine, wat)?;
+    let mut store = Store::new(&engine, ());
+    let incoming_shared_memory = SharedMemory::new(&engine, MemoryType::shared(5, 10))?;
+    let instance = Instance::new(&mut store, &module, &[incoming_shared_memory.into()])?;
+    let owned_memory = instance.get_memory(&mut store, "owned").unwrap();
+    let shared_memory = instance.get_shared_memory(&mut store, "shared").unwrap();
+    let imported_memory = instance.get_shared_memory(&mut store, "imported").unwrap();
+
+    assert_eq!(owned_memory.size(&store), 10);
+    assert_eq!(owned_memory.ty(&store).minimum(), 10);
+    assert_eq!(owned_memory.ty(&store).maximum(), Some(20));
+    assert_eq!(owned_memory.ty(&store).is_shared(), false);
+    assert_eq!(shared_memory.size(), 1);
+    assert_eq!(shared_memory.ty().minimum(), 1);
+    assert_eq!(shared_memory.ty().maximum(), Some(2));
+    assert_eq!(shared_memory.ty().is_shared(), true);
+    assert_eq!(imported_memory.size(), 5);
+    assert_eq!(imported_memory.ty().minimum(), 5);
+    assert_eq!(imported_memory.ty().maximum(), Some(10));
+    assert_eq!(imported_memory.ty().is_shared(), true);
+
+    Ok(())
+}
+
+#[test]
 fn test_grow_memory_in_multiple_threads() -> Result<()> {
     const NUM_THREADS: usize = 4;
     const NUM_GROW_OPS: usize = 1000;
@@ -140,8 +173,7 @@ fn test_grow_memory_in_multiple_threads() -> Result<()> {
         let shared_memory = shared_memory.clone();
         let thread = std::thread::spawn(move || {
             let mut store = Store::new(&engine, ());
-            let import = shared_memory.as_extern(&mut store).unwrap();
-            let instance = Instance::new(&mut store, &module, &[import]).unwrap();
+            let instance = Instance::new(&mut store, &module, &[shared_memory.into()]).unwrap();
             let grow_fn = instance
                 .get_typed_func::<i32, i32, _>(&mut store, "grow")
                 .unwrap();

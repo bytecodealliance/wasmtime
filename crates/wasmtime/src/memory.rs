@@ -257,34 +257,6 @@ impl Memory {
             .await?
     }
 
-    /// Creates a new WebAssembly memory given a [`SharedMemory`].
-    fn from_shared_memory(
-        mut store: impl AsContextMut,
-        shared_memory: &SharedMemory,
-    ) -> Result<Self> {
-        let store = store.as_context_mut();
-        if !Engine::same(store.engine(), shared_memory.engine()) {
-            bail!("a shared memory must be created with the same `Engine` as the store");
-        }
-
-        // When we clone this shared memory, we only increment its reference
-        // count.
-        let mem = shared_memory.0.clone();
-
-        Self::_new(store.0, shared_memory.ty(), Some(mem))
-    }
-
-    /// Attempt to convert a [Memory] into a [SharedMemory]; this is only
-    /// possible if the underlying [Memory] was initially created as a
-    /// [SharedMemory] (i.e., with the `shared` annotation).
-    pub(crate) fn as_shared_memory(&self, mut store: impl AsContextMut) -> Option<SharedMemory> {
-        let store = store.as_context_mut().0;
-        let runtime_memory = unsafe { self.wasmtime_memory(store).as_mut().unwrap() };
-        runtime_memory
-            .as_shared_memory()
-            .map(|m| SharedMemory(m, store.engine().clone()))
-    }
-
     /// Helper function for attaching the memory to a "frankenstein" instance
     fn _new(
         store: &mut StoreOpaque,
@@ -723,9 +695,8 @@ pub unsafe trait MemoryCreator: Send + Sync {
 /// let mut store = Store::new(&engine, ());
 ///
 /// let shared_memory = SharedMemory::new(&engine, MemoryType::shared(1, 2))?;
-/// let shared_memory_import = shared_memory.as_extern(&mut store)?;
 /// let module = Module::new(&engine, r#"(module (memory (import "" "") 1 2 shared))"#)?;
-/// let instance = Instance::new(&mut store, &module, &[shared_memory_import])?;
+/// let instance = Instance::new(&mut store, &module, &[shared_memory.into()])?;
 /// // ...
 /// # Ok(())
 /// # }
@@ -746,12 +717,6 @@ impl SharedMemory {
         // TODO: check the tunables (only static allocation allowed)
         let memory = wasmtime_runtime::SharedMemory::new(ty.wasmtime_memory().clone(), tunables)?;
         Ok(Self(memory, engine.clone()))
-    }
-
-    /// Return a reference to the [`Engine`] used to configure the shared
-    /// memory.
-    fn engine(&self) -> &Engine {
-        &self.1
     }
 
     /// Return the type of the shared memory.
@@ -824,11 +789,37 @@ impl SharedMemory {
         }
     }
 
-    /// Convert the [`SharedMemory`] into an [`Extern`](crate::Extern) for
-    /// importing into an [`Instance`](crate::Instance).
-    pub fn as_extern(&self, store: impl AsContextMut) -> Result<crate::Extern> {
-        let memory = Memory::from_shared_memory(store, self)?;
-        Ok(memory.into())
+    /// Return a reference to the [`Engine`] used to configure the shared
+    /// memory.
+    pub(crate) fn engine(&self) -> &Engine {
+        &self.1
+    }
+
+    /// Construct a single-memory instance to provide a way to import
+    /// [`SharedMemory`] into other modules.
+    pub(crate) fn vmimport(&self, store: &mut StoreOpaque) -> wasmtime_runtime::VMMemoryImport {
+        let runtime_shared_memory = self.clone().0;
+        let owned_memory_handle =
+            Memory::_new(store, self.ty(), Some(runtime_shared_memory)).unwrap();
+        owned_memory_handle.vmimport(store)
+    }
+
+    /// Create a [`SharedMemory`] from an [`ExportMemory`] definition. This
+    /// function is available to handle the case in which a Wasm module exports
+    /// shared memory and the user wants host-side access to it.
+    pub(crate) unsafe fn from_wasmtime_memory(
+        wasmtime_export: wasmtime_runtime::ExportMemory,
+        store: &mut StoreOpaque,
+    ) -> Self {
+        let mut handle = wasmtime_runtime::InstanceHandle::from_vmctx(wasmtime_export.vmctx);
+        let memory = handle
+            .get_defined_memory(wasmtime_export.index)
+            .as_mut()
+            .unwrap();
+        let shared_memory = memory
+            .as_shared_memory()
+            .expect("unable to convert from a shared memory");
+        Self(shared_memory, store.engine().clone()) // TODO is this the correct engine?
     }
 }
 

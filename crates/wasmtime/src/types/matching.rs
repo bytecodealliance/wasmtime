@@ -35,6 +35,10 @@ impl MatchCx<'_> {
         )
     }
 
+    pub fn shared_memory(&self, expected: &Memory, actual: &crate::SharedMemory) -> Result<()> {
+        memory_ty(expected, actual.ty().wasmtime_memory(), Some(actual.size()))
+    }
+
     pub fn func(&self, expected: SignatureIndex, actual: &crate::Func) -> Result<()> {
         self.vmshared_signature_index(expected, actual.sig_index(self.store.store_data()))
     }
@@ -87,6 +91,7 @@ impl MatchCx<'_> {
             },
             EntityType::Memory(expected) => match actual {
                 Extern::Memory(actual) => self.memory(expected, actual),
+                Extern::SharedMemory(actual) => self.shared_memory(expected, actual),
                 _ => bail!("expected memory, but found {}", actual.desc()),
             },
             EntityType::Function(expected) => match actual {
