@@ -9,8 +9,8 @@ use crate::table::{Table, TableElement, TableElementType};
 use crate::traphandlers::Trap;
 use crate::vmcontext::{
     VMBuiltinFunctionsArray, VMCallerCheckedAnyfunc, VMContext, VMFunctionImport,
-    VMGlobalDefinition, VMGlobalImport, VMMemoryDefinition, VMMemoryImport, VMRuntimeLimits,
-    VMTableDefinition, VMTableImport, VMCONTEXT_MAGIC,
+    VMGlobalDefinition, VMGlobalImport, VMMemoryDefinition, VMMemoryImport, VMOpaqueContext,
+    VMRuntimeLimits, VMTableDefinition, VMTableImport, VMCONTEXT_MAGIC,
 };
 use crate::{
     ExportFunction, ExportGlobal, ExportMemory, ExportTable, Imports, ModuleRuntimeInfo, Store,
@@ -488,11 +488,7 @@ impl Instance {
                 (self.runtime_info.image_base()
                     + self.runtime_info.function_info(def_index).start as usize)
                     as *mut _,
-                // Note that `*mut VMContext` is erased here to `*mut ()`. The
-                // origin function pointer, coming from our own image, knows
-                // that it's still `VMContext but in general callers are
-                // unable to know this.
-                self.vmctx_ptr() as *mut (),
+                VMOpaqueContext::from_vmcontext(self.vmctx_ptr()),
             )
         } else {
             let import = self.imported_function(index);
