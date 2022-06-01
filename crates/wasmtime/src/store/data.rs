@@ -4,7 +4,7 @@ use std::fmt;
 use std::marker;
 use std::num::NonZeroU64;
 use std::ops::{Index, IndexMut};
-use std::sync::atomic::{AtomicU64, Ordering::SeqCst};
+use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
 
 // This is defined here, in a private submodule, so we can explicitly reexport
 // it only as `pub(crate)`. This avoids a ton of
@@ -14,7 +14,7 @@ use std::sync::atomic::{AtomicU64, Ordering::SeqCst};
 pub struct InstanceId(pub(super) usize);
 
 pub struct StoreData {
-    id: NonZeroU64,
+    id: StoreId,
     funcs: Vec<crate::func::FuncData>,
     tables: Vec<wasmtime_runtime::ExportTable>,
     globals: Vec<wasmtime_runtime::ExportGlobal>,
@@ -50,18 +50,8 @@ impl_store_data! {
 
 impl StoreData {
     pub fn new() -> StoreData {
-        static NEXT_ID: AtomicU64 = AtomicU64::new(0);
-
-        // Only allow 2^63 stores at which point we start panicking to prevent
-        // overflow. This should still last us to effectively the end of time.
-        let id = NEXT_ID.fetch_add(1, SeqCst);
-        if id & (1 << 63) != 0 {
-            NEXT_ID.store(1 << 63, SeqCst);
-            panic!("store id allocator overflow");
-        }
-
         StoreData {
-            id: NonZeroU64::new(id + 1).unwrap(),
+            id: StoreId::allocate(),
             funcs: Vec::new(),
             tables: Vec::new(),
             globals: Vec::new(),
@@ -70,6 +60,10 @@ impl StoreData {
             #[cfg(feature = "component-model")]
             components: Default::default(),
         }
+    }
+
+    pub fn id(&self) -> StoreId {
+        self.id
     }
 
     pub fn insert<T>(&mut self, data: T) -> Stored<T>
@@ -93,14 +87,12 @@ impl StoreData {
     where
         T: StoredData,
     {
-        if id.store_id() != self.id {
+        if id.store_id != self.id {
             return false;
         }
         // This should be true as an invariant of our API, but double-check with
         // debug assertions enabled.
-        if cfg!(debug_assertions) {
-            assert!(id.index() < T::list(self).len());
-        }
+        debug_assert!(id.index() < T::list(self).len());
         true
     }
 
@@ -121,10 +113,12 @@ where
 
     #[inline]
     fn index(&self, index: Stored<T>) -> &Self::Output {
-        assert!(
-            index.store_id() == self.id,
-            "object used with the wrong store"
-        );
+        index.assert_belongs_to(self.id);
+        // Note that if this is ever a performance bottleneck it should be safe
+        // to use unchecked indexing here because presence of a `Stored<T>` is
+        // proof of an item having been inserted into a store and lists in
+        // stores are never shrunk. After the store check above the actual index
+        // should always be valid.
         &T::list(self)[index.index()]
     }
 }
@@ -135,10 +129,9 @@ where
 {
     #[inline]
     fn index_mut(&mut self, index: Stored<T>) -> &mut Self::Output {
-        assert!(
-            index.store_id() == self.id,
-            "object used with the wrong store"
-        );
+        index.assert_belongs_to(self.id);
+        // Note that this could be unchecked indexing, see the note in `Index`
+        // above.
         &mut T::list_mut(self)[index.index()]
     }
 }
@@ -191,15 +184,50 @@ where
     }
 }
 
+/// A unique identifier to get attached to a store.
+///
+/// This identifier is embedded into the `Stored<T>` structure and is used to
+/// identify the original store that items come from. For example a `Memory` is
+/// owned by a `Store` and will embed a `StoreId` internally to say which store
+/// it came from. Comparisons with this value are how panics are generated for
+/// mismatching the item that a store belongs to.
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct StoreId(NonZeroU64);
+
+impl StoreId {
+    /// Allocates a new unique identifier for a store that has never before been
+    /// used in this process.
+    fn allocate() -> StoreId {
+        static NEXT_ID: AtomicU64 = AtomicU64::new(0);
+
+        // Only allow 2^63 stores at which point we start panicking to prevent
+        // overflow.
+        //
+        // If a store is created once per microsecond then this will last the
+        // current process for 584,540 years before overflowing.
+        //
+        // Also note the usage of `Relaxed` ordering here which should be ok
+        // since we're only looking for atomicity on this counter and this
+        // otherwise isn't used to synchronize memory stored anywhere else.
+        let id = NEXT_ID.fetch_add(1, Relaxed);
+        if id & (1 << 63) != 0 {
+            NEXT_ID.store(1 << 63, Relaxed);
+            panic!("store id allocator overflow");
+        }
+
+        StoreId(NonZeroU64::new(id + 1).unwrap())
+    }
+}
+
 #[repr(C)] // used by reference in the C API
 pub struct Stored<T> {
-    store_id: NonZeroU64,
+    store_id: StoreId,
     index: usize,
     _marker: marker::PhantomData<fn() -> T>,
 }
 
 impl<T> Stored<T> {
-    fn new(store_id: NonZeroU64, index: usize) -> Stored<T> {
+    fn new(store_id: StoreId, index: usize) -> Stored<T> {
         Stored {
             store_id,
             index,
@@ -207,13 +235,22 @@ impl<T> Stored<T> {
         }
     }
 
-    fn store_id(&self) -> NonZeroU64 {
-        self.store_id
+    #[inline]
+    fn assert_belongs_to(&self, store: StoreId) {
+        if self.store_id == store {
+            return;
+        }
+        store_id_mismatch();
     }
 
     fn index(&self) -> usize {
         self.index
     }
+}
+
+#[cold]
+fn store_id_mismatch() {
+    panic!("object used with the wrong store");
 }
 
 impl<T> PartialEq for Stored<T> {
@@ -232,6 +269,6 @@ impl<T> Clone for Stored<T> {
 
 impl<T> fmt::Debug for Stored<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "store={}, index={}", self.store_id(), self.index())
+        write!(f, "store={}, index={}", self.store_id.0, self.index())
     }
 }
