@@ -367,7 +367,7 @@ impl Func {
     pub unsafe fn new_unchecked<T>(
         mut store: impl AsContextMut<Data = T>,
         ty: FuncType,
-        func: impl Fn(Caller<'_, T>, *mut ValRaw) -> Result<(), Trap> + Send + Sync + 'static,
+        func: impl Fn(Caller<'_, T>, &mut [ValRaw]) -> Result<(), Trap> + Send + Sync + 'static,
     ) -> Self {
         let store = store.as_context_mut().0;
         let host = HostFunc::new_unchecked(store.engine(), ty, func);
@@ -1024,7 +1024,7 @@ impl Func {
     fn invoke<T>(
         mut caller: Caller<'_, T>,
         ty: &FuncType,
-        values_vec: *mut ValRaw,
+        values_vec: &mut [ValRaw],
         func: &dyn Fn(Caller<'_, T>, &[Val], &mut [Val]) -> Result<(), Trap>,
     ) -> Result<(), Trap> {
         // Translate the raw JIT arguments in `values_vec` into a `Val` which
@@ -1041,7 +1041,7 @@ impl Func {
         let nparams = ty.params().len();
         val_vec.reserve(nparams + ty.results().len());
         for (i, ty) in ty.params().enumerate() {
-            val_vec.push(unsafe { Val::from_raw(&mut caller.store, *values_vec.add(i), ty) })
+            val_vec.push(unsafe { Val::from_raw(&mut caller.store, values_vec[i], ty) })
         }
 
         val_vec.extend((0..ty.results().len()).map(|_| Val::null()));
@@ -1075,7 +1075,7 @@ impl Func {
                 ));
             }
             unsafe {
-                *values_vec.add(i) = ret.to_raw(&mut caller.store);
+                values_vec[i] = ret.to_raw(&mut caller.store);
             }
         }
 
@@ -2045,9 +2045,9 @@ impl HostFunc {
     pub unsafe fn new_unchecked<T>(
         engine: &Engine,
         ty: FuncType,
-        func: impl Fn(Caller<'_, T>, *mut ValRaw) -> Result<(), Trap> + Send + Sync + 'static,
+        func: impl Fn(Caller<'_, T>, &mut [ValRaw]) -> Result<(), Trap> + Send + Sync + 'static,
     ) -> Self {
-        let func = move |caller_vmctx, values: *mut ValRaw| {
+        let func = move |caller_vmctx, values: &mut [ValRaw]| {
             Caller::<T>::with(caller_vmctx, |mut caller| {
                 caller.store.0.call_hook(CallHook::CallingHost)?;
                 let result = func(caller.sub_caller(), values)?;

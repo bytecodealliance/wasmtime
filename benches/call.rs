@@ -314,15 +314,15 @@ fn wasm_to_host(c: &mut Criterion) {
             let ty = FuncType::new([ValType::I32, ValType::I64], [ValType::F32]);
             unchecked
                 .func_new_unchecked("", "nop-params-and-results", ty, |mut caller, space| {
-                    match Val::from_raw(&mut caller, *space, ValType::I32) {
+                    match Val::from_raw(&mut caller, space[0], ValType::I32) {
                         Val::I32(0) => {}
                         _ => unreachable!(),
                     }
-                    match Val::from_raw(&mut caller, *space.add(1), ValType::I64) {
+                    match Val::from_raw(&mut caller, space[1], ValType::I64) {
                         Val::I64(0) => {}
                         _ => unreachable!(),
                     }
-                    *space = Val::F32(0).to_raw(&mut caller);
+                    space[0] = Val::F32(0).to_raw(&mut caller);
                     Ok(())
                 })
                 .unwrap();

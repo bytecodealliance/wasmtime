@@ -52,10 +52,10 @@ fn call_wrapped_func() -> Result<(), Error> {
             |caller: Caller<State>, space| {
                 verify(caller.data());
 
-                assert_eq!((*space.add(0)).get_i32(), 1i32);
-                assert_eq!((*space.add(1)).get_i64(), 2i64);
-                assert_eq!((*space.add(2)).get_f32(), 3.0f32.to_bits());
-                assert_eq!((*space.add(3)).get_f64(), 4.0f64.to_bits());
+                assert_eq!(space[0].get_i32(), 1i32);
+                assert_eq!(space[1].get_i64(), 2i64);
+                assert_eq!(space[2].get_f32(), 3.0f32.to_bits());
+                assert_eq!(space[3].get_f64(), 4.0f64.to_bits());
                 Ok(())
             },
         )

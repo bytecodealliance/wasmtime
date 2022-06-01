@@ -516,14 +516,18 @@ impl Compiler {
         let isa = &*self.isa;
         let pointer_type = isa.pointer_type();
         let wasm_signature = indirect_signature(isa, ty);
-        // The host signature has an added parameter for the `values_vec` input
-        // and output.
         let mut host_signature = blank_sig(isa, wasmtime_call_conv(isa));
+        // The host signature has an added parameter for the `values_vec`
+        // input/output buffer in addition to the size of the buffer, in units
+        // of `ValRaw`.
+        host_signature.params.push(ir::AbiParam::new(pointer_type));
         host_signature.params.push(ir::AbiParam::new(pointer_type));
 
         // Compute the size of the values vector. The vmctx and caller vmctx are passed separately.
         let value_size = mem::size_of::<u128>();
-        let values_vec_len = (value_size * cmp::max(ty.params().len(), ty.returns().len())) as u32;
+        let values_vec_len = cmp::max(ty.params().len(), ty.returns().len());
+        let values_vec_byte_size = u32::try_from(value_size * values_vec_len).unwrap();
+        let values_vec_len = u32::try_from(values_vec_len).unwrap();
 
         let CompilerContext {
             mut func_translator,
@@ -535,7 +539,7 @@ impl Compiler {
 
         let ss = context.func.create_stack_slot(ir::StackSlotData::new(
             ir::StackSlotKind::ExplicitSlot,
-            values_vec_len,
+            values_vec_byte_size,
         ));
 
         let mut builder = FunctionBuilder::new(&mut context.func, func_translator.context());
@@ -559,7 +563,14 @@ impl Compiler {
         let vmctx_ptr_val = block_params[0];
         let caller_vmctx_ptr_val = block_params[1];
 
-        let callee_args = vec![vmctx_ptr_val, caller_vmctx_ptr_val, values_vec_ptr_val];
+        let callee_args = vec![
+            vmctx_ptr_val,
+            caller_vmctx_ptr_val,
+            values_vec_ptr_val,
+            builder
+                .ins()
+                .iconst(pointer_type, i64::from(values_vec_len)),
+        ];
 
         let new_sig = builder.import_signature(host_signature);
 
