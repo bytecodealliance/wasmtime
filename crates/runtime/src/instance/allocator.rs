@@ -523,8 +523,6 @@ impl Default for OnDemandInstanceAllocator {
 /// requires that memory to exist in its own instance. Here we bring to life
 /// such a "Frankenstein" instance with the only purpose of exporting a
 /// [`Memory`].
-///
-/// TODO explain how this applies to shared memory
 pub unsafe fn allocate_single_memory_instance(
     req: InstanceAllocationRequest,
     memory: Memory,
