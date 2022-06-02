@@ -109,6 +109,7 @@ impl MatchCx<'_> {
     }
 }
 
+#[cfg_attr(not(feature = "component-model"), allow(dead_code))]
 pub fn entity_ty(
     expected: &EntityType,
     expected_types: &ModuleTypes,
