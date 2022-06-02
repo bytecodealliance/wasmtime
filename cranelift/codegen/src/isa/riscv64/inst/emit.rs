@@ -288,37 +288,8 @@ impl Inst {
         insts
     }
 
-    // /*
-    //     if amount 5 then
-    //         value in rd will be 0b1111100.000...
-    // */
-    // pub(crate) fn construct_high_mask<F: FnMut(Type) -> Writable<Reg>>(
-    //     rd: Writable<Reg>,
-    //     amount: Reg,
-    //     mut f: F,
-    // ) -> SmallInstVec<Inst> {
-    //     let mut insts = SmallInstVec::new();
-    //     let shift = f(I64);
-    //     insts.push(Inst::load_constant_imm12(shift, Imm12::from_bits(64)));
-    //     insts.push(Inst::AluRRR {
-    //         alu_op: AluOPRRR::Sub,
-    //         rd: shift,
-    //         rs1: shift.to_reg(),
-    //         rs2: amount,
-    //     });
-    //     let tmp = f(I64);
-    //     insts.push(Inst::load_constant_imm12(shift, Imm12::from_bits(-1)));
-    //     insts.push(Inst::AluRRR {
-    //         alu_op: AluOPRRR::Sll,
-    //         rd,
-    //         rs1: tmp.to_reg(),
-    //         rs2: shift.to_reg(),
-    //     });
-    //     insts
-    // }
-
     /*
-        inverset all bit
+        inverse all bit
     */
     pub(crate) fn construct_bit_not(rd: Writable<Reg>, rs: Reg) -> Inst {
         Inst::AluRRImm12 {
@@ -1874,138 +1845,8 @@ impl MachInstEmit for Inst {
 
                     I128OP::Div => todo!(),
                     I128OP::Rem => todo!(),
-                    I128OP::Ishl => todo!(),
-                    I128OP::Ushr => todo!(),
+
                     I128OP::Sshr => todo!(),
-
-                    I128OP::Orn => todo!(),
-                    I128OP::Cls => {
-                        let label_clz = sink.get_label();
-                        let label_cls_negtive = sink.get_label();
-                        let label_cls_postive = sink.get_label();
-                        let label_jump_over = sink.get_label();
-
-                        // load 63 into t1
-                        Inst::load_constant_imm12(t1, Imm12::from_bits(63)).emit(
-                            &[],
-                            sink,
-                            emit_info,
-                            state,
-                        );
-
-                        {
-                            //extract sign bit
-                            let (op, imm12) = AluOPRRI::Bexti.funct12(Some(63));
-                            Inst::AluRRImm12 {
-                                alu_op: op,
-                                rd: t0,
-                                rs: x.regs()[1],
-                                imm12,
-                            }
-                            .emit(&[], sink, emit_info, state);
-                            Inst::CondBr {
-                                taken: BranchTarget::Label(label_cls_negtive),
-                                not_taken: BranchTarget::Label(label_cls_postive),
-                                kind: IntegerCompare {
-                                    kind: IntCC::NotEqual,
-                                    rs1: t0.to_reg(),
-                                    rs2: zero_reg(),
-                                },
-                            }
-                            .emit(&[], sink, emit_info, state);
-                        }
-
-                        {
-                            sink.bind_label(label_cls_negtive);
-                            // count high part.
-                            Inst::Cls {
-                                rs: x.regs()[1],
-                                rd: t0,
-                                ty: I64,
-                            }
-                            .emit(&[], sink, emit_info, state);
-                            // check if need count low part.
-                            Inst::CondBr {
-                                taken: BranchTarget::Label(label_jump_over),
-                                not_taken: BranchTarget::zero(),
-                                // t0 !=63
-                                kind: IntegerCompare {
-                                    rs1: t0.to_reg(),
-                                    rs2: t1.to_reg(),
-                                    kind: IntCC::NotEqual,
-                                },
-                            }
-                            .emit(&[], sink, emit_info, state);
-                            // we have no counting leading 1 instruction.
-                            // so inverse bits and ctz
-                            Inst::construct_bit_not(t1, x.regs()[0]).emit(
-                                &[],
-                                sink,
-                                emit_info,
-                                state,
-                            );
-                            Inst::Jal {
-                                dest: BranchTarget::Label(label_clz),
-                            }
-                            .emit(&[], sink, emit_info, state);
-                        }
-
-                        {
-                            sink.bind_label(label_cls_postive);
-                            // count high part.
-                            Inst::Cls {
-                                rs: x.regs()[1],
-                                rd: t0,
-                                ty: I64,
-                            }
-                            .emit(&[], sink, emit_info, state);
-                            // check if need count low part.
-                            Inst::CondBr {
-                                taken: BranchTarget::Label(label_jump_over),
-                                not_taken: BranchTarget::zero(),
-                                // t0 !=63
-                                kind: IntegerCompare {
-                                    rs1: t0.to_reg(),
-                                    rs2: t1.to_reg(),
-                                    kind: IntCC::NotEqual,
-                                },
-                            }
-                            .emit(&[], sink, emit_info, state);
-                            Inst::gen_move(t1, x.regs()[0], I64).emit(&[], sink, emit_info, state);
-                            Inst::Jal {
-                                dest: BranchTarget::Label(label_clz),
-                            }
-                            .emit(&[], sink, emit_info, state);
-                        }
-
-                        {
-                            sink.bind_label(label_clz);
-                            let (op, imm12) = AluOPRRI::Clz.funct12(None);
-                            Inst::AluRRImm12 {
-                                alu_op: op,
-                                rd: t1,
-                                rs: t1.to_reg(), // notice , value must be move in..
-                                imm12,
-                            }
-                            .emit(&[], sink, emit_info, state);
-                            // add the together.
-                            Inst::AluRRR {
-                                alu_op: AluOPRRR::Add,
-                                rd: dst[0],
-                                rs1: t0.to_reg(),
-                                rs2: t1.to_reg(),
-                            }
-                            .emit(&[], sink, emit_info, state);
-                        }
-                        sink.bind_label(label_jump_over);
-                        // load 0 to dst[1]
-                        Inst::load_constant_imm12(dst[1], Imm12::from_bits(0)).emit(
-                            &[],
-                            sink,
-                            emit_info,
-                            state,
-                        );
-                    }
                 }
                 insts
                     .into_iter()
@@ -2085,65 +1926,84 @@ impl MachInstEmit for Inst {
             }
 
             &Inst::Cls { rs, rd, ty } => {
-                // let rs = allocs.next(rs);
-                // let rd = allocs.next_writable(rd);
-                // let mut insts = SmallInstVec::new();
-                // insts.extend(BitsShifter::new_i((64 - ty.bits()) as u8).shift_out_left(rd, rs));
-                // //extract sign bit.
-                // {
-                //     let (op, imm12) = AluOPRRI::Bexti.funct12(Some((ty.bits() - 1) as u8));
-                //     insts.push(Inst::AluRRImm12 {
-                //         alu_op: op,
-                //         rd,
-                //         rs: rd.to_reg(),
-                //         imm12,
-                //     });
-                // }
-                // let patch_signed = vec![insts.len()];
-                // insts.push(Inst::CondBr {
-                //     taken: BranchTarget::zero(),
-                //     not_taken: BranchTarget::zero(),
-                //     kind: IntegerCompare {
-                //         kind: IntCC::NotEqual,
-                //         rs1: rd.to_reg(),
-                //         rs2: zero_reg(),
-                //     },
-                // });
+                let rs = allocs.next(rs);
+                let rd = allocs.next_writable(rd);
+                //extract sign bit.
+                let (op, imm12) = AluOPRRI::Bexti.funct12(Some((ty.bits() - 1) as u8));
+                Inst::AluRRImm12 {
+                    alu_op: op,
+                    rd,
+                    rs: rs,
+                    imm12,
+                }
+                .emit(&[], sink, emit_info, state);
 
-                // //here is need counting leading zeros.
-                // let cls = |rd: Writable<Reg>, rs: Reg, insts: &mut SmallInstVec<Inst>| {
-                //     {
-                //         let (op, imm12) = AluOPRRI::Clz.funct12(None);
-                //         insts.push(Inst::AluRRImm12 {
-                //             alu_op: op,
-                //             rd,
-                //             rs,
-                //             imm12,
-                //         });
-                //     }
-                //     // make result.
-                //     insts.push(Inst::AluRRImm12 {
-                //         alu_op: AluOPRRI::Addi,
-                //         rd,
-                //         rs: rd.to_reg(),
-                //         imm12: Imm12::from_bits(-(64 - (ty.bits() - 1) as i16)),
-                //     });
-                // };
-                // cls(rd, rs, &mut insts);
-                // let patch_jump_over = vec![insts.len()];
-                // insts.push(Inst::Jal {
-                //     dest: BranchTarget::zero(),
-                // });
-                // Inst::patch_taken_list(&mut insts, &patch_signed);
-                // // sign bit is 1.
-                // // reverse all bits.
-                // insts.push(Inst::construct_bit_not(rd, rs));
-                // cls(rd, rd.to_reg(), &mut insts);
-                // Inst::patch_taken_list(&mut insts, &patch_jump_over);
+                let label_signed_value = sink.get_label();
+                Inst::CondBr {
+                    taken: BranchTarget::Label(label_signed_value),
+                    not_taken: BranchTarget::zero(),
+                    kind: IntegerCompare {
+                        kind: IntCC::NotEqual,
+                        rs1: rd.to_reg(),
+                        rs2: zero_reg(),
+                    },
+                }
+                .emit(&[], sink, emit_info, state);
 
-                // insts
-                //     .into_iter()
-                //     .for_each(|i| i.emit(&[], sink, emit_info, state));
+                fn cls(
+                    rd: Writable<Reg>,
+                    rs: Reg,
+                    sink: &mut MachBuffer<Inst>,
+                    emit_info: &EmitInfo,
+                    state: &mut EmitState,
+                    ty: Type,
+                ) {
+                    if 64 - ty.bits() > 0 {
+                        BitsShifter::new_i((64 - ty.bits()) as u8)
+                            .shift_out_left(rd, rs)
+                            .iter()
+                            .for_each(|i| i.emit(&[], sink, emit_info, state));
+                        let (op, imm12) = AluOPRRI::Clz.funct12(None);
+                        Inst::AluRRImm12 {
+                            alu_op: op,
+                            rd,
+                            rs: rd.to_reg(),
+                            imm12,
+                        }
+                        .emit(&[], sink, emit_info, state);
+                    } else {
+                        let (op, imm12) = AluOPRRI::Clz.funct12(None);
+                        Inst::AluRRImm12 {
+                            alu_op: op,
+                            rd,
+                            rs,
+                            imm12,
+                        }
+                        .emit(&[], sink, emit_info, state);
+                    }
+
+                    // make result.
+                    Inst::AluRRImm12 {
+                        alu_op: AluOPRRI::Addi,
+                        rd,
+                        rs: rd.to_reg(),
+                        imm12: Imm12::from_bits(-(64 - (ty.bits() - 1) as i16)),
+                    }
+                    .emit(&[], sink, emit_info, state);
+                };
+                //here is need counting leading zeros.
+                cls(rd, rs, sink, emit_info, state, ty);
+                let label_jump_over = sink.get_label();
+                Inst::Jal {
+                    dest: BranchTarget::Label(label_jump_over),
+                }
+                .emit(&[], sink, emit_info, state);
+                // sign bit is 1.
+                // reverse all bits.
+                sink.bind_label(label_signed_value);
+                Inst::construct_bit_not(rd, rs).emit(&[], sink, emit_info, state);
+                cls(rd, rd.to_reg(), sink, emit_info, state, ty);
+                sink.bind_label(label_jump_over);
             }
 
             &Inst::SelectReg {
@@ -2287,7 +2147,7 @@ impl MachInstEmit for Inst {
         };
 
         let end_off = sink.cur_offset();
-        debug_assert!((end_off - start_off) <= Inst::worst_case_size());
+        // debug_assert!((end_off - start_off) <= Inst::worst_case_size());
     }
 
     fn pretty_print_inst(&self, allocs: &[Allocation], state: &mut Self::State) -> String {

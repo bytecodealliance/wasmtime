@@ -167,32 +167,6 @@ pub fn isa_builder(triple: Triple) -> IsaBuilder {
     }
 }
 
-use log::{Level, LevelFilter, Metadata, Record};
-
-struct SimpleLogger(Level);
-
-static SIMPLE_LOGGER: SimpleLogger = SimpleLogger(Level::Trace);
-
-impl log::Log for SimpleLogger {
-    fn enabled(&self, metadata: &Metadata) -> bool {
-        metadata.level() <= self.0
-    }
-
-    fn log(&self, record: &Record) {
-        if self.enabled(record.metadata()) {
-            println!("{} - {}", record.level(), record.args());
-        }
-    }
-
-    fn flush(&self) {}
-}
-
-fn init_logger() {
-    log::set_logger(&SIMPLE_LOGGER)
-        .map(|()| log::set_max_level(LevelFilter::max()))
-        .unwrap()
-}
-
 #[cfg(test)]
 mod test {
     use alloc::vec;
@@ -210,7 +184,6 @@ mod test {
 
     #[test]
     fn hello_world() {
-        init_logger();
         let name = ExternalName::testcase("test0");
         let mut sig = Signature::new(CallConv::SystemV);
         sig.params.push(AbiParam::new(I32));
@@ -248,7 +221,6 @@ mod test {
 
     #[test]
     fn some_float_compare() {
-        init_logger();
         let name = ExternalName::testcase("test0");
         let mut sig = Signature::new(CallConv::SystemV);
         sig.params.push(AbiParam::new(F32));
@@ -295,44 +267,6 @@ mod test {
     }
 
     #[test]
-    fn test_compile_function() {
-        // let name = ExternalName::testcase("test0");
-        // let mut sig = Signature::new(CallConv::SystemV);
-        // sig.params.push(AbiParam::new(I32));
-        // sig.returns.push(AbiParam::new(I32));
-        // let mut func = Function::with_name_signature(name, sig);
-
-        // let bb0 = func.dfg.make_block();
-        // let arg0 = func.dfg.append_block_param(bb0, I32);
-
-        // let mut pos = FuncCursor::new(&mut func);
-        // pos.insert_block(bb0);
-        // let v0 = pos.ins().iconst(I32, 0x1234);
-        // let v1 = pos.ins().iadd(arg0, v0);
-        // pos.ins().return_(&[v1]);
-
-        // let mut shared_flags_builder = settings::builder();
-        // shared_flags_builder.set("opt_level", "none").unwrap();
-        // let shared_flags = settings::Flags::new(shared_flags_builder);
-        // let isa_flags = aarch64_settings::Flags::new(&shared_flags, aarch64_settings::builder());
-        // let backend = AArch64Backend::new_with_flags(
-        //     Triple::from_str("riscv64").unwrap(),
-        //     shared_flags,
-        //     isa_flags,
-        // );
-        // let buffer = backend.compile_function(&mut func, false).unwrap().buffer;
-        // let code = buffer.data();
-
-        // // mov x1, #0x1234
-        // // add w0, w0, w1
-        // // ret
-        // let golden = vec![
-        //     0x81, 0x46, 0x82, 0xd2, 0x00, 0x00, 0x01, 0x0b, 0xc0, 0x03, 0x5f, 0xd6,
-        // ];
-
-        // assert_eq!(code, &golden[..]);
-    }
-
     #[test]
     fn test_branch_lowering() {
         // let name = ExternalName::testcase("test0");
@@ -563,6 +497,7 @@ mod test {
         file.write_all(_code).unwrap();
     }
 }
+
 ///
 pub static TRIPLE: Triple = Triple {
     architecture: Architecture::Riscv64(Riscv64Architecture::Riscv64),

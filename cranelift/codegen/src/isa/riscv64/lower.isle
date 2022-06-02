@@ -142,9 +142,9 @@
       (alu_rr_imm12 (AluOPRRI.Andi) y x))
 
 (rule (lower (has_type $B128 (band x y)))
-      (b128_binary (AluOPRRR.And) x y))
+      (lower_b128_binary (AluOPRRR.And) x y))
 (rule (lower (has_type $I128 (band x y)))
-      (b128_binary (AluOPRRR.And) x y))
+      (lower_b128_binary (AluOPRRR.And) x y))
 
 
 ;;;; Rules for `or` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -158,9 +158,9 @@
 (rule (lower (has_type (fits_in_64 ty) (bor (imm12_from_value x) y)))
       (alu_rr_imm12 (AluOPRRI.Ori) y x))
 (rule (lower (has_type $B128 (bor x y)))
-      (b128_binary (AluOPRRR.Or) x y))
+      (lower_b128_binary (AluOPRRR.Or) x y))
 (rule (lower (has_type $I128 (bor x y)))
-      (b128_binary (AluOPRRR.Or) x y))
+      (lower_b128_binary (AluOPRRR.Or) x y))
 
 ;;;; Rules for `xor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 ty) (bxor x y)))
@@ -173,18 +173,18 @@
 (rule (lower (has_type (fits_in_64 ty) (bxor (imm12_from_value x) y)))
       (alu_rr_imm12 (AluOPRRI.Xori) y x))
 (rule (lower (has_type $B128 (bxor x y)))
-      (b128_binary (AluOPRRR.Xor) x y))
+      (lower_b128_binary (AluOPRRR.Xor) x y))
 (rule (lower (has_type $I128 (bxor x y)))
-      (b128_binary (AluOPRRR.Xor) x y))
+      (lower_b128_binary (AluOPRRR.Xor) x y))
 
 
 ;;;; Rules for `xor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 ty) (bor_not x y)))
       (alu_rrr (AluOPRRR.Orn)  $I64 x y))
 (rule (lower (has_type $B128 (bor_not x y)))
-      (b128_binary (AluOPRRR.Orn) x y))
+      (lower_b128_binary (AluOPRRR.Orn) x y))
 (rule (lower (has_type $I128 (bor_not x y)))
-      (b128_binary (AluOPRRR.Orn) x y))
+      (lower_b128_binary (AluOPRRR.Orn) x y))
 
 
 ;;;; Rules for `f32const` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -323,14 +323,14 @@
       (alu_rrr  (AluOPRRR.Orn) $I64 x y))  
 
 (rule (lower (has_type  $I128 (bor_not x y)))
-      (i128_arithmetic (I128OP.Orn) x y)) 
+      (lower_b128_binary (AluOPRRR.Orn) x y)) 
 
 
 ;;;; Rules for `cls` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 ty)(cls x)))
       (lower_cls  x ty))
 (rule (lower (has_type  $I128 (cls x)))
-      (lower_cls  x $I128))
+      (lower_cls_i128  x))
 
  
 

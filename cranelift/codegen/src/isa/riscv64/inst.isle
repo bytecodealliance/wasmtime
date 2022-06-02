@@ -250,13 +250,8 @@
   (Mul)
   (Div)
   (Rem)
-  (Ishl)
-  (Ushr)
   (Sshr)
-  (Orn)
-  (Cls)
 ))
-
 
 
 (type IntSelectOP (enum
@@ -731,8 +726,8 @@
 (extern constructor lower_band_not_i128 lower_band_not_i128)
 
 
-(decl b128_binary(AluOPRRR ValueRegs ValueRegs) ValueRegs)
-(extern constructor b128_binary b128_binary)
+(decl lower_b128_binary(AluOPRRR ValueRegs ValueRegs) ValueRegs)
+(extern constructor lower_b128_binary lower_b128_binary)
 
 (decl lower_mlhi (bool Type Reg Reg)Reg)
 (extern constructor lower_mlhi lower_mlhi)
@@ -745,7 +740,7 @@
 (extern constructor lower_rotr lower_rotr)
 
 
-(decl lower_cls(ValueRegs Type) ValueRegs)
+(decl lower_cls(Reg Type) Reg)
 (extern constructor lower_cls lower_cls)
 
 (decl lower_i128_xnor(ValueRegs ValueRegs)ValueRegs)
@@ -776,4 +771,5 @@
 
 (convert ValueRegs Reg valueregs_2_reg)
 
- 
+(decl lower_cls_i128 (ValueRegs)ValueRegs)
+(extern constructor lower_cls_i128 lower_cls_i128)

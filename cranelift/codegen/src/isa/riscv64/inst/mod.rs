@@ -480,7 +480,7 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_early_def(t1);
             collector.reg_uses(x.regs());
             collector.reg_uses(y.regs());
-            collector.reg_defs(&dst[..]);
+            dst.iter().for_each(|r| collector.reg_early_def(*r));
         }
         &Inst::Csr { rd, rs, .. } => {
             if let Some(rs) = rs {

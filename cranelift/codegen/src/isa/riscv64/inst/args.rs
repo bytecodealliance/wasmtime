@@ -1042,15 +1042,15 @@ impl AluOPRRI {
         } else {
             assert!(shamt.is_none());
         }
-        let shamt = shamt.map(|s| s as u32);
+        let mut shamt = shamt.map(|s| s as u32);
         let bits: u32 = match self {
-            Self::Bclri => shamt.unwrap() | 0b010010 << 6,
-            Self::Bexti => shamt.unwrap() | 0b010010 << 6,
-            Self::Binvi => shamt.unwrap() | 0b011010 << 6,
-            Self::Bseti => shamt.unwrap() | 0b001010 << 6,
-            Self::Rori => shamt.unwrap() | 0b011000 << 6,
-            Self::Roriw => shamt.unwrap() | 0b0110000 << 5,
-            Self::SlliUw => shamt.unwrap() | 0b000010 << 6,
+            Self::Bclri => shamt.take().unwrap() | 0b010010 << 6,
+            Self::Bexti => shamt.take().unwrap() | 0b010010 << 6,
+            Self::Binvi => shamt.take().unwrap() | 0b011010 << 6,
+            Self::Bseti => shamt.take().unwrap() | 0b001010 << 6,
+            Self::Rori => shamt.take().unwrap() | 0b011000 << 6,
+            Self::Roriw => shamt.take().unwrap() | 0b0110000 << 5,
+            Self::SlliUw => shamt.take().unwrap() | 0b000010 << 6,
             Self::Clz => 0b011000000000,
             Self::Clzw => 0b011000000000,
             Self::Cpop => 0b011000000010,
@@ -1065,6 +1065,10 @@ impl AluOPRRI {
             Self::Brev8 => 0b0110_1000_0111,
             _ => unreachable!(),
         };
+        /*
+            make sure shamt is been consumed.
+        */
+        assert!(shamt.is_none());
         (self, Imm12::from_bits(bits as i16))
     }
 }
@@ -1663,12 +1667,7 @@ impl I128OP {
             I128OP::Mul => "mul_i128",
             I128OP::Div => "div_i128",
             I128OP::Rem => "rem_i128",
-            I128OP::Ishl => "ishl_i128",
-            I128OP::Ushr => "ushr_i128",
             I128OP::Sshr => "sshr_i128",
-
-            I128OP::Orn => "orn_i128",
-            I128OP::Cls => "cls_i128",
         }
     }
 }

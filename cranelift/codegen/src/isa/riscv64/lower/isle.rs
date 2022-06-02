@@ -3,6 +3,8 @@
 // Pull in the ISLE generated code.
 pub mod generated_code;
 
+use alloc::borrow::ToOwned;
+
 use self::generated_code::I128OP;
 
 // Types that the generated ISLE code uses via `use super::*`.
@@ -527,7 +529,7 @@ where
         }
     }
 
-    fn b128_binary(&mut self, op: &AluOPRRR, a: ValueRegs, b: ValueRegs) -> ValueRegs {
+    fn lower_b128_binary(&mut self, op: &AluOPRRR, a: ValueRegs, b: ValueRegs) -> ValueRegs {
         let op = *op;
         let low = self.temp_writable_reg(I64);
         let high = self.temp_writable_reg(I64);
@@ -733,29 +735,14 @@ where
         rd.to_reg()
     }
 
-    fn lower_cls(&mut self, val: ValueRegs, ty: Type) -> ValueRegs {
+    fn lower_cls(&mut self, val: Reg, ty: Type) -> Reg {
         let tmp = self.temp_writable_reg(I64);
-        if ty.bits() != 128 {
-            self.emit(&MInst::Cls {
-                rs: val.regs()[0],
-                rd: tmp,
-                ty,
-            });
-            ValueRegs::one(tmp.to_reg())
-        } else {
-            let t0 = self.temp_writable_reg(I64);
-            let t1 = self.temp_writable_reg(I64);
-            let tmp_high = self.temp_writable_reg(I64);
-            self.emit(&MInst::I128Arithmetic {
-                op: I128OP::Cls,
-                t0,
-                t1,
-                dst: vec![tmp, tmp_high],
-                x: val,
-                y: ValueRegs::two(zero_reg(), zero_reg()), // not used
-            });
-            ValueRegs::two(tmp.to_reg(), tmp_high.to_reg())
-        }
+        self.emit(&MInst::Cls {
+            rs: val,
+            rd: tmp,
+            ty,
+        });
+        tmp.to_reg()
     }
 
     fn lower_i128_rotate(
@@ -1170,6 +1157,93 @@ where
 
     fn valueregs_2_reg(&mut self, val: Value) -> Option<Reg> {
         Some(self.put_in_regs(val).regs()[0])
+    }
+
+    fn lower_cls_i128(&mut self, val: ValueRegs) -> ValueRegs {
+        // count high part.
+        let result = self.temp_writable_reg(I64);
+        self.emit(&MInst::Cls {
+            rs: val.regs()[1],
+            rd: result,
+            ty: I64,
+        });
+
+        let rest: Reg = {
+            let count_low: Reg = {
+                let count_positive: Reg = {
+                    let tmp = self.temp_writable_reg(I64);
+                    let (op, imm12) = AluOPRRI::Clz.funct12(None);
+                    self.emit(&MInst::AluRRImm12 {
+                        alu_op: op,
+                        rd: tmp,
+                        rs: val.regs()[0],
+                        imm12,
+                    });
+                    tmp.to_reg()
+                };
+                let count_negtive: Reg = {
+                    let tmp = self.temp_writable_reg(I64);
+                    self.emit(&MInst::construct_bit_not(tmp, val.regs()[0]));
+                    let (op, imm12) = AluOPRRI::Clz.funct12(None);
+                    self.emit(&MInst::AluRRImm12 {
+                        alu_op: op,
+                        rd: tmp,
+                        rs: tmp.to_reg(),
+                        imm12,
+                    });
+                    tmp.to_reg()
+                };
+                let tmp = self.temp_writable_reg(I64);
+                self.emit(&MInst::SelectReg {
+                    rd: tmp,
+                    rs1: count_negtive,
+                    rs2: count_positive,
+                    condition: IntegerCompare {
+                        kind: IntCC::SignedLessThan,
+                        rs1: val.regs()[1],
+                        rs2: zero_reg(),
+                    },
+                });
+                tmp.to_reg()
+            };
+
+            let const_63_in_reg: Reg = {
+                let tmp = self.temp_writable_reg(I64);
+                self.emit(&MInst::load_constant_imm12(tmp, Imm12::from_bits(63)));
+                tmp.to_reg()
+            };
+
+            let tmp = self.temp_writable_reg(I64);
+            self.emit(&MInst::SelectReg {
+                rd: tmp,
+                rs1: count_low,
+                rs2: zero_reg(),
+                condition: IntegerCompare {
+                    /*
+                       if we need the low result part.
+                    */
+                    kind: IntCC::Equal,
+                    rs1: const_63_in_reg,
+                    rs2: result.to_reg(),
+                },
+            });
+            tmp.to_reg()
+        };
+
+        // add rest part.
+        self.emit(&MInst::AluRRR {
+            alu_op: AluOPRRR::Add,
+            rd: result,
+            rs1: result.to_reg(),
+            rs2: rest,
+        });
+
+        let result_high = self.temp_writable_reg(I64);
+        self.emit(&MInst::load_constant_imm12(
+            result_high,
+            Imm12::from_bits(0),
+        ));
+        ValueRegs::two(result.to_reg(), result_high.to_reg())
     }
 }
 
