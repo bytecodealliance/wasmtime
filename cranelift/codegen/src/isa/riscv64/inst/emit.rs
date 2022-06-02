@@ -1,7 +1,5 @@
 //! AArch64 ISA: binary code emission.
 
-use core::panic;
-
 use crate::binemit::StackMap;
 use crate::isa::riscv64::inst::*;
 
@@ -988,7 +986,7 @@ impl MachInstEmit for Inst {
                 rn,
                 signed,
                 from_bits,
-                to_bits,
+                to_bits: _to_bits,
             } => {
                 let rn = allocs.next(rn);
                 let rd = allocs.next_writable(rd);
@@ -1030,7 +1028,7 @@ impl MachInstEmit for Inst {
                             });
                         }
                         32 => {
-                            let mut label_signed = sink.get_label();
+                            let label_signed = sink.get_label();
                             insts.push(Inst::CondBr {
                                 taken: BranchTarget::Label(label_signed),
                                 not_taken: BranchTarget::zero(),
@@ -1218,7 +1216,7 @@ impl MachInstEmit for Inst {
                 unimplemented!("what is the trap code\n");
             }
             &Inst::Jal { dest } => {
-                let code: u32 = (0b1101111);
+                let code: u32 = 0b1101111;
                 match dest {
                     BranchTarget::Label(lable) => {
                         sink.use_label_at_offset(start_off, lable, LabelUse::Jal20);
@@ -1635,7 +1633,7 @@ impl MachInstEmit for Inst {
                     .collect();
 
                 let mut insts = SmallInstVec::new();
-                let mut label_false = sink.get_label();
+                let label_false = sink.get_label();
                 insts.push(Inst::CondBr {
                     taken: BranchTarget::Label(label_false),
                     not_taken: BranchTarget::zero(),

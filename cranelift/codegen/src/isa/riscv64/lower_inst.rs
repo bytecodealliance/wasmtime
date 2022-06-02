@@ -16,9 +16,7 @@ use crate::CodegenResult;
 
 use std::boxed::Box;
 
-use crate::ir::types::{
-    B128, B16, B32, B64, B8, F32, F64, FFLAGS, I128, I16, I32, I64, I8, R32, R64,
-};
+use crate::ir::types::{B32, B64, B8, F32, F64, FFLAGS, I128, I16, I32, I64, I8, R32, R64};
 
 use super::lower::*;
 use crate::isa::riscv64::abi::*;

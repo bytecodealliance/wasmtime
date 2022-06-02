@@ -51,35 +51,6 @@ impl Riscv64Backend {
             mach_env,
         }
     }
-    /// Create a new riscv64 backend with the given (shared) flags.
-    pub fn new_test() -> Riscv64Backend {
-        // let mut b = crate::settings::builder();
-        // let shared = crate::settings::Flags::new(b.clone());
-        // let isa_flags = settings::Flags::new(&shared, b.clone());
-        // Riscv64Backend {
-        //     triple: TRIPLE.clone(),
-        //     flags: shared.clone(),
-        //     isa_flags,
-        //     mach_env: crate_reg_eviroment(&shared.clone()),
-        // }
-
-        use super::*;
-        use crate::cursor::{Cursor, FuncCursor};
-        use crate::ir::condcodes::FloatCC;
-        use crate::ir::{types::*, JumpTable, JumpTableData};
-
-        use crate::isa::CallConv;
-        use crate::settings;
-        use crate::settings::Configurable;
-        use std::io;
-
-        let mut shared_flags_builder = settings::builder();
-        shared_flags_builder.set("opt_level", "none").unwrap();
-        let shared_flags = settings::Flags::new(shared_flags_builder);
-        let isa_flags = riscv_settings::Flags::new(&shared_flags, riscv_settings::builder());
-        let backend = Riscv64Backend::new_with_flags(TRIPLE.clone(), shared_flags, isa_flags);
-        backend
-    }
 
     /// This performs lowering to VCode, register-allocates the code, computes block layout and
     /// finalizes branches. The result is ready for binary emission.
@@ -91,14 +62,6 @@ impl Riscv64Backend {
         let emit_info = EmitInfo::new(flags.clone());
         let abi = Box::new(abi::Riscv64Callee::new(func, flags, self.isa_flags())?);
         compile::compile::<Riscv64Backend>(func, self, abi, &self.mach_env, emit_info)
-    }
-    ///dfdfdsfdffdsfds
-    pub fn compile_function_test(
-        &self,
-        func: &Function,
-        want_disasm: bool,
-    ) -> CodegenResult<MachCompileResult> {
-        self.compile_function(func, want_disasm)
     }
 }
 
@@ -182,7 +145,17 @@ impl fmt::Display for Riscv64Backend {
 
 /// Create a new `isa::Builder`.
 pub fn isa_builder(triple: Triple) -> IsaBuilder {
-    assert!(triple.architecture == Architecture::Aarch64(Aarch64Architecture::Aarch64));
+    /*
+    todo:: what is the difference???
+        Riscv64,
+        Riscv64gc,
+        Riscv64imac,
+    */
+    match triple.architecture {
+        Architecture::Riscv64(..) => {}
+        _ => unreachable!(),
+    }
+
     IsaBuilder {
         triple,
         setup: riscv_settings::builder(),

@@ -3,8 +3,6 @@
 // Pull in the ISLE generated code.
 pub mod generated_code;
 
-use alloc::borrow::ToOwned;
-
 use self::generated_code::I128OP;
 
 // Types that the generated ISLE code uses via `use super::*`.

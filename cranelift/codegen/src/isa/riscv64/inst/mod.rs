@@ -15,9 +15,6 @@ use crate::{settings, CodegenError, CodegenResult};
 
 pub use crate::ir::condcodes::FloatCC;
 
-use alloc::fmt::format;
-use regalloc2::Allocation;
-
 use alloc::vec::Vec;
 use regalloc2::VReg;
 use smallvec::{smallvec, SmallVec};
@@ -319,7 +316,7 @@ impl Inst {
     }
 
     /// Generic constructor for a store.
-    pub fn gen_store(mem: AMode, from_reg: Reg, ty: Type, flags: MemFlags) -> Inst {
+    pub fn gen_store(mem: AMode, from_reg: Reg, ty: Type, _flags: MemFlags) -> Inst {
         Inst::Store {
             src: from_reg,
             op: StoreOP::from_type(ty),
@@ -1016,7 +1013,12 @@ impl Inst {
                     rs2,
                 )
             }
-            &Inst::Store { to, src, op, flags } => {
+            &Inst::Store {
+                to,
+                src,
+                op,
+                flags: _flags,
+            } => {
                 let base = to.to_string_may_be_alloc(allocs);
                 let src = format_reg(src, allocs);
                 format!("{} {},{}", op.op_name(), src, base,)
