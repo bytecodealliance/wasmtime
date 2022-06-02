@@ -2238,16 +2238,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::AtomicStore => {
-            // This is a normal store, followed by an `mfence` instruction.
-            let data = put_input_in_reg(ctx, inputs[0]);
-            let addr = lower_to_amode(ctx, inputs[1], 0);
-            let ty_access = ctx.input_ty(insn, 0);
-            assert!(is_valid_atomic_transaction_ty(ty_access));
-
-            ctx.emit(Inst::store(ty_access, data, addr));
-            ctx.emit(Inst::Fence {
-                kind: FenceKind::MFence,
-            });
+            implemented_in_isle(ctx);
         }
 
         Opcode::Fence => {
