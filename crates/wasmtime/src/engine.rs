@@ -226,6 +226,7 @@ impl Engine {
 
     /// Executes `f1` and `f2` in parallel if parallel compilation is enabled at
     /// both runtime and compile time, otherwise runs them synchronously.
+    #[allow(dead_code)] // only used for the component-model feature right now
     pub(crate) fn join_maybe_parallel<T, U>(
         &self,
         f1: impl FnOnce() -> T + Send,
