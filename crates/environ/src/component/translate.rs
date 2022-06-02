@@ -1027,7 +1027,7 @@ impl<'a, 'data> Translator<'a, 'data> {
         self.result
             .component
             .initializers
-            .push(Initializer::ExtractMemory(export));
+            .push(Initializer::ExtractMemory { index, export });
         index
     }
 
@@ -1041,7 +1041,7 @@ impl<'a, 'data> Translator<'a, 'data> {
         self.result
             .component
             .initializers
-            .push(Initializer::ExtractRealloc(def));
+            .push(Initializer::ExtractRealloc { index, def });
         index
     }
 }

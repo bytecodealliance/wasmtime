@@ -30,6 +30,8 @@ use wasmtime_environ::DefinedMemoryIndex;
 use wasmtime_environ::FunctionInfo;
 use wasmtime_environ::SignatureIndex;
 
+#[cfg(feature = "component-model")]
+pub mod component;
 mod export;
 mod externref;
 mod imports;

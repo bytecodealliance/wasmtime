@@ -7,10 +7,11 @@ use std::marker;
 use std::sync::Arc;
 use wasmtime_environ::component::{
     ComponentTypes, CoreDef, CoreExport, Export, ExportItem, Initializer, InstantiateModule,
-    RuntimeImportIndex, RuntimeInstanceIndex, RuntimeMemoryIndex, RuntimeModuleIndex,
+    LowerImport, RuntimeImportIndex, RuntimeInstanceIndex, RuntimeMemoryIndex, RuntimeModuleIndex,
     RuntimeReallocIndex,
 };
-use wasmtime_environ::{EntityIndex, PrimaryMap};
+use wasmtime_environ::{EntityIndex, MemoryIndex, PrimaryMap};
+use wasmtime_runtime::component::{ComponentInstance, OwnedComponentInstance};
 
 /// An instantiated component.
 ///
@@ -30,9 +31,7 @@ pub(crate) struct InstanceData {
     component: Component,
     exported_modules: PrimaryMap<RuntimeModuleIndex, Module>,
 
-    // TODO: move these to `VMComponentContext`
-    memories: PrimaryMap<RuntimeMemoryIndex, wasmtime_runtime::ExportMemory>,
-    reallocs: PrimaryMap<RuntimeReallocIndex, wasmtime_runtime::ExportFunction>,
+    state: OwnedComponentInstance,
 }
 
 impl Instance {
@@ -161,19 +160,12 @@ impl InstanceData {
         instance.get_export_by_index(idx)
     }
 
+    pub fn instance(&self) -> &ComponentInstance {
+        &self.state
+    }
+
     pub fn component_types(&self) -> &Arc<ComponentTypes> {
         self.component.types()
-    }
-
-    pub fn runtime_memory(&self, memory: RuntimeMemoryIndex) -> wasmtime_runtime::ExportMemory {
-        self.memories[memory].clone()
-    }
-
-    pub fn runtime_realloc(
-        &self,
-        realloc: RuntimeReallocIndex,
-    ) -> wasmtime_runtime::ExportFunction {
-        self.reallocs[realloc].clone()
     }
 }
 
@@ -191,6 +183,7 @@ pub enum RuntimeImport {
 impl<'a> Instantiator<'a> {
     fn new(
         component: &'a Component,
+        store: &mut StoreOpaque,
         imports: &'a PrimaryMap<RuntimeImportIndex, RuntimeImport>,
     ) -> Instantiator<'a> {
         let env_component = component.env_component();
@@ -204,8 +197,7 @@ impl<'a> Instantiator<'a> {
                 exported_modules: PrimaryMap::with_capacity(
                     env_component.num_runtime_modules as usize,
                 ),
-                memories: Default::default(),
-                reallocs: Default::default(),
+                state: OwnedComponentInstance::new(env_component, store.traitobj()),
             },
         }
     }
@@ -246,31 +238,14 @@ impl<'a> Instantiator<'a> {
                         unsafe { crate::Instance::new_started(store, module, imports.as_ref())? };
                     self.data.instances.push(i);
                 }
-                Initializer::LowerImport(i) => {
-                    drop(self.component.trampoline_ptr(i.index));
-                    drop(
-                        self.component
-                            .signatures()
-                            .shared_signature(i.canonical_abi)
-                            .unwrap(),
-                    );
-                    unimplemented!()
+                Initializer::LowerImport(import) => self.lower_import(import),
+
+                Initializer::ExtractMemory { index, export } => {
+                    self.extract_memory(store.0, *index, export)
                 }
 
-                Initializer::ExtractMemory(export) => {
-                    let memory = match self.data.lookup_export(store.0, export) {
-                        wasmtime_runtime::Export::Memory(m) => m,
-                        _ => unreachable!(),
-                    };
-                    self.data.memories.push(memory);
-                }
-
-                Initializer::ExtractRealloc(def) => {
-                    let func = match self.data.lookup_def(store.0, def) {
-                        wasmtime_runtime::Export::Function(f) => f,
-                        _ => unreachable!(),
-                    };
-                    self.data.reallocs.push(func);
+                Initializer::ExtractRealloc { index, def } => {
+                    self.extract_realloc(store.0, *index, def)
                 }
 
                 Initializer::SaveModuleUpvar(idx) => {
@@ -278,6 +253,7 @@ impl<'a> Instantiator<'a> {
                         .exported_modules
                         .push(self.component.upvar(*idx).clone());
                 }
+
                 Initializer::SaveModuleImport(idx) => {
                     self.data.exported_modules.push(match &self.imports[*idx] {
                         RuntimeImport::Module(m) => m.clone(),
@@ -286,6 +262,43 @@ impl<'a> Instantiator<'a> {
             }
         }
         Ok(())
+    }
+
+    fn lower_import(&mut self, import: &LowerImport) {
+        drop(self.component.trampoline_ptr(import.index));
+        drop(
+            self.component
+                .signatures()
+                .shared_signature(import.canonical_abi)
+                .unwrap(),
+        );
+        unimplemented!()
+    }
+
+    fn extract_memory(
+        &mut self,
+        store: &mut StoreOpaque,
+        index: RuntimeMemoryIndex,
+        export: &CoreExport<MemoryIndex>,
+    ) {
+        let memory = match self.data.lookup_export(store, export) {
+            wasmtime_runtime::Export::Memory(m) => m,
+            _ => unreachable!(),
+        };
+        self.data.state.set_runtime_memory(index, memory.definition);
+    }
+
+    fn extract_realloc(
+        &mut self,
+        store: &mut StoreOpaque,
+        index: RuntimeReallocIndex,
+        def: &CoreDef,
+    ) {
+        let anyfunc = match self.data.lookup_def(store, def) {
+            wasmtime_runtime::Export::Function(f) => f.anyfunc,
+            _ => unreachable!(),
+        };
+        self.data.state.set_runtime_realloc(index, anyfunc);
     }
 
     fn build_imports<'b>(
@@ -353,7 +366,7 @@ impl<T> InstancePre<T> {
     // TODO: needs more docs
     pub fn instantiate(&self, mut store: impl AsContextMut<Data = T>) -> Result<Instance> {
         let mut store = store.as_context_mut();
-        let mut i = Instantiator::new(&self.component, &self.imports);
+        let mut i = Instantiator::new(&self.component, store.0, &self.imports);
         i.run(&mut store)?;
         let data = Box::new(i.data);
         Ok(Instance(store.0.store_data_mut().insert(Some(data))))
