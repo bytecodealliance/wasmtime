@@ -2866,6 +2866,12 @@
 (rule (x64_xor_mem ty addr val)
       (alu_rm ty (AluRmiROpcode.Xor) addr val))
 
+;;;; Atomics ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl x64_mfence () SideEffectNoResult)
+(rule (x64_mfence)
+      (SideEffectNoResult.Inst (MInst.Fence (FenceKind.MFence))))
+
 ;;;; Automatic conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (convert Gpr InstOutput output_gpr)

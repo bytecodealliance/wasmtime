@@ -2271,9 +2271,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Fence => {
-            ctx.emit(Inst::Fence {
-                kind: FenceKind::MFence,
-            });
+            implemented_in_isle(ctx);
         }
 
         Opcode::FuncAddr => {

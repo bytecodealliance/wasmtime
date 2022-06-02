@@ -2781,3 +2781,8 @@
       (let ((_ RegMemImm (sink_load sink)))
         (side_effect
          (x64_xor_mem ty (to_amode flags addr offset) src2))))
+
+;; Rules for `fence` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (fence))
+      (side_effect (x64_mfence)))
