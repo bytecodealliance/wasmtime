@@ -62,8 +62,6 @@ pub struct VMOffsets<P> {
     pub num_imported_memories: u32,
     /// The number of imported globals in the module.
     pub num_imported_globals: u32,
-    /// The number of defined functions in the module.
-    pub num_defined_functions: u32,
     /// The number of defined tables in the module.
     pub num_defined_tables: u32,
     /// The number of defined memories in the module.
@@ -129,8 +127,6 @@ pub struct VMOffsetsFields<P> {
     pub num_imported_memories: u32,
     /// The number of imported globals in the module.
     pub num_imported_globals: u32,
-    /// The number of defined functions in the module.
-    pub num_defined_functions: u32,
     /// The number of defined tables in the module.
     pub num_defined_tables: u32,
     /// The number of defined memories in the module.
@@ -151,10 +147,11 @@ impl<P: PtrSize> VMOffsets<P> {
             num_imported_tables: cast_to_u32(module.num_imported_tables),
             num_imported_memories: cast_to_u32(module.num_imported_memories),
             num_imported_globals: cast_to_u32(module.num_imported_globals),
-            num_defined_functions: cast_to_u32(module.functions.len()),
-            num_defined_tables: cast_to_u32(module.table_plans.len()),
-            num_defined_memories: cast_to_u32(module.memory_plans.len()),
-            num_defined_globals: cast_to_u32(module.globals.len()),
+            num_defined_tables: cast_to_u32(module.table_plans.len() - module.num_imported_tables),
+            num_defined_memories: cast_to_u32(
+                module.memory_plans.len() - module.num_imported_memories,
+            ),
+            num_defined_globals: cast_to_u32(module.globals.len() - module.num_imported_globals),
             num_escaped_funcs: cast_to_u32(module.num_escaped_funcs),
         })
     }
@@ -183,7 +180,6 @@ impl<P: PtrSize> VMOffsets<P> {
                     num_defined_tables: _,
                     num_defined_globals: _,
                     num_defined_memories: _,
-                    num_defined_functions: _,
                     num_escaped_funcs: _,
 
                     // used as the initial size below
@@ -237,7 +233,6 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
             num_imported_tables: fields.num_imported_tables,
             num_imported_memories: fields.num_imported_memories,
             num_imported_globals: fields.num_imported_globals,
-            num_defined_functions: fields.num_defined_functions,
             num_defined_tables: fields.num_defined_tables,
             num_defined_memories: fields.num_defined_memories,
             num_defined_globals: fields.num_defined_globals,
