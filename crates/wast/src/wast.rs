@@ -39,7 +39,9 @@ pub struct WastContext<T> {
     /// Wast files have a concept of a "current" module, which is the most
     /// recently defined.
     current: Option<Instance>,
-    linker: Linker<T>,
+    core_linker: Linker<T>,
+    #[cfg(feature = "component-model")]
+    component_linker: component::Linker<T>,
     store: Store<T>,
 }
 
@@ -70,11 +72,17 @@ impl<T> WastContext<T> {
         // Spec tests will redefine the same module/name sometimes, so we need
         // to allow shadowing in the linker which picks the most recent
         // definition as what to link when linking.
-        let mut linker = Linker::new(store.engine());
-        linker.allow_shadowing(true);
+        let mut core_linker = Linker::new(store.engine());
+        core_linker.allow_shadowing(true);
         Self {
             current: None,
-            linker,
+            core_linker,
+            #[cfg(feature = "component-model")]
+            component_linker: {
+                let mut linker = component::Linker::new(store.engine());
+                linker.allow_shadowing(true);
+                linker
+            },
             store,
         }
     }
@@ -82,7 +90,7 @@ impl<T> WastContext<T> {
     fn get_export(&mut self, module: Option<&str>, name: &str) -> Result<Extern> {
         match module {
             Some(module) => self
-                .linker
+                .core_linker
                 .get(&mut self.store, module, name)
                 .ok_or_else(|| anyhow!("no item named `{}::{}` found", module, name)),
             None => self
@@ -96,7 +104,7 @@ impl<T> WastContext<T> {
 
     fn instantiate_module(&mut self, module: &[u8]) -> Result<Outcome<Instance>> {
         let module = Module::new(self.store.engine(), module)?;
-        let instance = match self.linker.instantiate(&mut self.store, &module) {
+        let instance = match self.core_linker.instantiate(&mut self.store, &module) {
             Ok(i) => i,
             Err(e) => return e.downcast::<Trap>().map(Outcome::Trap),
         };
@@ -105,8 +113,9 @@ impl<T> WastContext<T> {
 
     #[cfg(feature = "component-model")]
     fn instantiate_component(&mut self, module: &[u8]) -> Result<Outcome<component::Instance>> {
-        let module = component::Component::new(self.store.engine(), module)?;
-        let instance = match component::Instance::new(&mut self.store, &module) {
+        let engine = self.store.engine();
+        let module = component::Component::new(engine, module)?;
+        let instance = match self.component_linker.instantiate(&mut self.store, &module) {
             Ok(i) => i,
             Err(e) => return e.downcast::<Trap>().map(Outcome::Trap),
         };
@@ -115,7 +124,7 @@ impl<T> WastContext<T> {
 
     /// Register "spectest" which is used by the spec testsuite.
     pub fn register_spectest(&mut self) -> Result<()> {
-        link_spectest(&mut self.linker, &mut self.store)?;
+        link_spectest(&mut self.core_linker, &mut self.store)?;
         Ok(())
     }
 
@@ -164,15 +173,28 @@ impl<T> WastContext<T> {
                 Outcome::Trap(e) => return Err(e).context("instantiation failed"),
             };
             if let Some(name) = name {
-                self.linker
+                self.core_linker
                     .instance(&mut self.store, name.name(), instance)?;
             }
             self.current = Some(instance);
         } else {
             #[cfg(feature = "component-model")]
-            match self.instantiate_component(&bytes)? {
-                Outcome::Ok(_) => {}
-                Outcome::Trap(e) => return Err(e).context("instantiation failed"),
+            {
+                let instance = match self.instantiate_component(&bytes)? {
+                    Outcome::Ok(i) => i,
+                    Outcome::Trap(e) => return Err(e).context("instantiation failed"),
+                };
+                if let Some(name) = name {
+                    // TODO: should ideally reflect more than just modules into
+                    // the linker's namespace but that's not easily supported
+                    // today for host functions due to the inability to take a
+                    // function from one instance and put it into the linker
+                    // (must go through the host right now).
+                    let mut linker = self.component_linker.instance(name.name())?;
+                    for (name, module) in instance.modules(&self.store) {
+                        linker.module(name, module)?;
+                    }
+                }
             }
             #[cfg(not(feature = "component-model"))]
             bail!("component-model support not enabled");
@@ -183,13 +205,14 @@ impl<T> WastContext<T> {
     /// Register an instance to make it available for performing actions.
     fn register(&mut self, name: Option<&str>, as_name: &str) -> Result<()> {
         match name {
-            Some(name) => self.linker.alias_module(name, as_name),
+            Some(name) => self.core_linker.alias_module(name, as_name),
             None => {
                 let current = *self
                     .current
                     .as_ref()
                     .ok_or(anyhow!("no previous instance"))?;
-                self.linker.instance(&mut self.store, as_name, current)?;
+                self.core_linker
+                    .instance(&mut self.store, as_name, current)?;
                 Ok(())
             }
         }
