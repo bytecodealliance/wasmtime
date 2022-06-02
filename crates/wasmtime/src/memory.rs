@@ -675,11 +675,11 @@ pub unsafe trait MemoryCreator: Send + Sync {
 /// shared memory:
 ///  1. for imported shared memory, e.g., `(import "env" "memory" (memory 1 1
 ///     shared))`, the user must supply a [`SharedMemory`] with the
-///     externally-created memory and convert it to a [`Memory`] prior to
-///     instantiation (see [Memory::from_shared_memory()]).
+///     externally-created memory as an import to the instance--e.g.,
+///     `shared_memory.into()`.
 ///  2. for private or exported shared memory, e.g., `(export "env" "memory"
 ///     (memory 1 1 shared))`, Wasmtime will create the memory internally during
-///     instantiation.
+///     instantiation--access using [`Instance::get_shared_memory()`].
 ///
 /// [threads proposal]:
 ///     https://github.com/WebAssembly/threads/blob/master/proposals/threads/Overview.md
