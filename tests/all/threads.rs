@@ -1,7 +1,10 @@
 use anyhow::Result;
 use std::{
     collections::{hash_map::RandomState, HashSet},
-    sync::{Arc, RwLock},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, RwLock,
+    },
 };
 use wasmtime::*;
 
@@ -213,4 +216,54 @@ fn test_grow_memory_in_multiple_threads() -> Result<()> {
 
 fn is_sorted(data: &[u32]) -> bool {
     data.windows(2).all(|d| d[0] <= d[1])
+}
+
+#[test]
+fn test_memory_size_accessibility() -> Result<()> {
+    const NUM_GROW_OPS: usize = 1000;
+    let wat = r#"(module
+        (import "env" "memory" (memory $memory 1 1000 shared))
+        (func (export "probe_last_available") (result i32)
+            (local $last_address i32)
+            (local.set $last_address (i32.sub (i32.mul (memory.size) (i32.const 0x10000)) (i32.const 4)))
+            (i32.load $memory (local.get $last_address))
+        )
+    )"#;
+
+    let mut config = Config::new();
+    config.wasm_threads(true);
+    let engine = Engine::new(&config)?;
+    let module = Module::new(&engine, wat)?;
+    let shared_memory = SharedMemory::new(&engine, MemoryType::shared(1, NUM_GROW_OPS as u32))?;
+    let done = Arc::new(AtomicBool::new(false));
+
+    let mut grow_memory = shared_memory.clone();
+    let grow_thread = std::thread::spawn(move || {
+        for i in 0..NUM_GROW_OPS {
+            if grow_memory.grow(1).is_err() {
+                println!("stopping at grow operation #{}", i);
+                break;
+            }
+        }
+    });
+
+    let probe_memory = shared_memory.clone();
+    let probe_done = done.clone();
+    let probe_thread = std::thread::spawn(move || {
+        let mut store = Store::new(&engine, ());
+        let instance = Instance::new(&mut store, &module, &[probe_memory.into()]).unwrap();
+        let probe_fn = instance
+            .get_typed_func::<(), i32, _>(&mut store, "probe_last_available")
+            .unwrap();
+        while !probe_done.load(Ordering::SeqCst) {
+            let value = probe_fn.call(&mut store, ()).unwrap() as u32;
+            assert_eq!(value, 0);
+        }
+    });
+
+    grow_thread.join().unwrap();
+    done.store(true, Ordering::SeqCst);
+    probe_thread.join().unwrap();
+
+    Ok(())
 }
