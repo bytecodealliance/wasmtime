@@ -988,6 +988,10 @@
 (decl amode_offset (Amode u32) Amode)
 (extern constructor amode_offset amode_offset)
 
+;; Return a zero offset as an `Offset32`.
+(decl zero_offset () Offset32)
+(extern constructor zero_offset zero_offset)
+
 ;; Shift kinds.
 
 (type ShiftKind extern
@@ -2865,6 +2869,12 @@
 (decl x64_xor_mem (Type Amode Gpr) SideEffectNoResult)
 (rule (x64_xor_mem ty addr val)
       (alu_rm ty (AluRmiROpcode.Xor) addr val))
+
+;;;; Atomics ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl x64_mfence () SideEffectNoResult)
+(rule (x64_mfence)
+      (SideEffectNoResult.Inst (MInst.Fence (FenceKind.MFence))))
 
 ;;;; Automatic conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

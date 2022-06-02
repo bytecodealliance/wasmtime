@@ -301,6 +301,11 @@ macro_rules! isle_prelude_methods {
         }
 
         #[inline]
+        fn ty_int(&mut self, ty: Type) -> Option<Type> {
+            ty.is_int().then(|| ty)
+        }
+
+        #[inline]
         fn ty_scalar_float(&mut self, ty: Type) -> Option<Type> {
             match ty {
                 F32 | F64 => Some(ty),

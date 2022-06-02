@@ -542,6 +542,11 @@ where
     fn amode_offset(&mut self, addr: &Amode, offset: u32) -> Amode {
         addr.offset(offset)
     }
+
+    #[inline]
+    fn zero_offset(&mut self) -> Offset32 {
+        Offset32::new(0)
+    }
 }
 
 // Since x64 doesn't have 8x16 shifts and we must use a 16x8 shift instead, we
