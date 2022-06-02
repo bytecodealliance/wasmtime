@@ -985,7 +985,7 @@ where
     fn lower_i128_logical_shift(
         &mut self,
         shift_left: bool,
-        bug_is_arithmetic: bool,
+        is_arithmetic: bool,
         val: ValueRegs,
         shift: ValueRegs,
     ) -> ValueRegs {
@@ -1083,7 +1083,7 @@ where
                 });
             } else {
                 insts.push(MInst::AluRRR {
-                    alu_op: if bug_is_arithmetic {
+                    alu_op: if is_arithmetic {
                         AluOPRRR::Sra
                     } else {
                         AluOPRRR::Srl
@@ -1143,12 +1143,37 @@ where
                     rs2: high.to_reg(),
                     condition: condition_shift_less_than_64,
                 });
-                insts.push(MInst::SelectReg {
-                    rd: new_high,
-                    rs1: high.to_reg(),
-                    rs2: zero_reg(),
-                    condition: condition_shift_less_than_64,
-                });
+                if !is_arithmetic {
+                    insts.push(MInst::SelectReg {
+                        rd: new_high,
+                        rs1: high.to_reg(),
+                        rs2: zero_reg(),
+                        condition: condition_shift_less_than_64,
+                    });
+                } else {
+                    let arithmetci_high_value: Reg = {
+                        let all1 = self.temp_writable_reg(I64);
+                        insts.push(MInst::load_constant_imm12(all1, Imm12::from_bits(-1)));
+                        let tmp = self.temp_writable_reg(I64);
+                        insts.push(MInst::SelectReg {
+                            rd: tmp,
+                            rs1: all1.to_reg(),
+                            rs2: zero_reg(),
+                            condition: IntegerCompare {
+                                kind: IntCC::SignedLessThan,
+                                rs1: val.regs()[1],
+                                rs2: zero_reg(),
+                            },
+                        });
+                        tmp.to_reg()
+                    };
+                    insts.push(MInst::SelectReg {
+                        rd: new_high,
+                        rs1: high.to_reg(),
+                        rs2: arithmetci_high_value,
+                        condition: condition_shift_less_than_64,
+                    });
+                }
             }
             insts.iter().for_each(|i| self.emit(i));
             ValueRegs::two(new_low.to_reg(), new_high.to_reg())

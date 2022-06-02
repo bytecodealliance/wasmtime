@@ -278,9 +278,9 @@
 
 
 ;;;; Rules for `sshr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule (lower (has_type (fits_in_32 ty)(sshr x y)))
+(rule (lower (has_type (fits_in_32 ty)(sshr x (valueregs_2_reg y))))
       (alu_rrr (AluOPRRR.Sraw) $I64 x y))
-(rule (lower (has_type (fits_in_64 ty)(sshr x y)))
+(rule (lower (has_type (fits_in_64 ty)(sshr x (valueregs_2_reg y))))
       (alu_rrr (AluOPRRR.Sra) $I64 x y))
 (rule (lower (has_type (fits_in_32 ty)(sshr x (imm12_from_value y))))
       (alu_rr_imm12 (AluOPRRI.SrliW) x y))
