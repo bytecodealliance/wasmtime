@@ -14,7 +14,7 @@ use memoffset::offset_of;
 use std::alloc::{self, Layout};
 use std::marker;
 use std::mem;
-use std::ops::{Deref, DerefMut};
+use std::ops::Deref;
 use std::ptr::{self, NonNull};
 use wasmtime_environ::component::{
     Component, LoweredIndex, RuntimeMemoryIndex, RuntimeReallocIndex, StringEncoding,
@@ -386,18 +386,48 @@ impl OwnedComponentInstance {
             OwnedComponentInstance { ptr }
         }
     }
+
+    // Note that this is technically unsafe due to the fact that it enables
+    // `mem::swap`-ing two component instances which would get all the offsets
+    // mixed up and cause issues. This is scoped to just this module though as a
+    // convenience to forward to `&mut` methods on `ComponentInstance`.
+    unsafe fn instance_mut(&mut self) -> &mut ComponentInstance {
+        &mut *self.ptr.as_ptr()
+    }
+
+    /// See `ComponentInstance::set_runtime_memory`
+    pub fn set_runtime_memory(&mut self, idx: RuntimeMemoryIndex, ptr: *mut VMMemoryDefinition) {
+        unsafe { self.instance_mut().set_runtime_memory(idx, ptr) }
+    }
+
+    /// See `ComponentInstance::set_runtime_realloc`
+    pub fn set_runtime_realloc(
+        &mut self,
+        idx: RuntimeReallocIndex,
+        ptr: NonNull<VMCallerCheckedAnyfunc>,
+    ) {
+        unsafe { self.instance_mut().set_runtime_realloc(idx, ptr) }
+    }
+
+    /// See `ComponentInstance::set_lowering`
+    pub fn set_lowering(
+        &mut self,
+        idx: LoweredIndex,
+        lowering: VMLowering,
+        anyfunc_func_ptr: NonNull<VMFunctionBody>,
+        anyfunc_type_index: VMSharedSignatureIndex,
+    ) {
+        unsafe {
+            self.instance_mut()
+                .set_lowering(idx, lowering, anyfunc_func_ptr, anyfunc_type_index)
+        }
+    }
 }
 
 impl Deref for OwnedComponentInstance {
     type Target = ComponentInstance;
     fn deref(&self) -> &ComponentInstance {
         unsafe { &*self.ptr.as_ptr() }
-    }
-}
-
-impl DerefMut for OwnedComponentInstance {
-    fn deref_mut(&mut self) -> &mut ComponentInstance {
-        unsafe { &mut *self.ptr.as_ptr() }
     }
 }
 
