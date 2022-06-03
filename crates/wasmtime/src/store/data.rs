@@ -217,6 +217,14 @@ impl StoreId {
 
         StoreId(NonZeroU64::new(id + 1).unwrap())
     }
+
+    #[inline]
+    pub fn assert_belongs_to(&self, store: StoreId) {
+        if *self == store {
+            return;
+        }
+        store_id_mismatch();
+    }
 }
 
 #[repr(C)] // used by reference in the C API
@@ -236,11 +244,8 @@ impl<T> Stored<T> {
     }
 
     #[inline]
-    fn assert_belongs_to(&self, store: StoreId) {
-        if self.store_id == store {
-            return;
-        }
-        store_id_mismatch();
+    pub fn assert_belongs_to(&self, store: StoreId) {
+        self.store_id.assert_belongs_to(store)
     }
 
     fn index(&self) -> usize {

@@ -1,4 +1,6 @@
-use crate::component::Func;
+use crate::component::func::{
+    Func, Memory, MemoryMut, Options, MAX_STACK_PARAMS, MAX_STACK_RESULTS,
+};
 use crate::store::StoreOpaque;
 use crate::{AsContext, AsContextMut, StoreContext, StoreContextMut, ValRaw};
 use anyhow::{bail, Result};
@@ -7,56 +9,6 @@ use std::marker;
 use std::mem::{self, MaybeUninit};
 use std::str;
 use wasmtime_environ::component::{ComponentTypes, InterfaceType, StringEncoding};
-
-const MAX_STACK_PARAMS: usize = 16;
-const MAX_STACK_RESULTS: usize = 1;
-
-/// A helper macro to safely map `MaybeUninit<T>` to `MaybeUninit<U>` where `U`
-/// is a field projection within `T`.
-///
-/// This is intended to be invoked as:
-///
-/// ```ignore
-/// struct MyType {
-///     field: u32,
-/// }
-///
-/// let initial: &mut MaybeUninit<MyType> = ...;
-/// let field: &mut MaybeUninit<u32> = map_maybe_uninit!(initial.field);
-/// ```
-///
-/// Note that array accesses are also supported:
-///
-/// ```ignore
-///
-/// let initial: &mut MaybeUninit<[u32; 2]> = ...;
-/// let element: &mut MaybeUninit<u32> = map_maybe_uninit!(initial[1]);
-/// ```
-macro_rules! map_maybe_uninit {
-    ($maybe_uninit:ident $($field:tt)*) => (#[allow(unused_unsafe)] unsafe {
-        let m: &mut MaybeUninit<_> = $maybe_uninit;
-        // Note the usage of `addr_of_mut!` here which is an attempt to "stay
-        // safe" here where we never accidentally create `&mut T` where `T` is
-        // actually uninitialized, hopefully appeasing the Rust unsafe
-        // guidelines gods.
-        m.map(|p| std::ptr::addr_of_mut!((*p)$($field)*))
-    })
-}
-
-trait MaybeUninitExt<T> {
-    /// Maps `MaybeUninit<T>` to `MaybeUninit<U>` using the closure provided.
-    ///
-    /// Note that this is `unsafe` as there is no guarantee that `U` comes from
-    /// `T`.
-    unsafe fn map<U>(&mut self, f: impl FnOnce(*mut T) -> *mut U) -> &mut MaybeUninit<U>;
-}
-
-impl<T> MaybeUninitExt<T> for MaybeUninit<T> {
-    unsafe fn map<U>(&mut self, f: impl FnOnce(*mut T) -> *mut U) -> &mut MaybeUninit<U> {
-        let new_ptr = f(self.as_mut_ptr());
-        mem::transmute::<*mut U, &mut MaybeUninit<U>>(new_ptr)
-    }
-}
 
 /// A statically-typed version of [`Func`] which takes `Params` as input and
 /// returns `Return`.
@@ -216,13 +168,13 @@ where
     /// when the canonical ABI says arguments go through the stack rather than
     /// the heap.
     fn lower_stack_args<T>(
-        &self,
         store: &mut StoreContextMut<'_, T>,
+        options: &Options,
         params: &Params,
         dst: &mut MaybeUninit<<Params::AsTuple as ComponentValue>::Lower>,
     ) -> Result<()> {
         assert!(<Params::AsTuple as ComponentValue>::flatten_count() <= MAX_STACK_PARAMS);
-        params.lower(store, &self.func, dst)?;
+        params.lower(store, options, dst)?;
         Ok(())
     }
 
@@ -233,8 +185,8 @@ where
     /// invoked to allocate space and then parameters are stored at that heap
     /// pointer location.
     fn lower_heap_args<T>(
-        &self,
         store: &mut StoreContextMut<'_, T>,
+        options: &Options,
         params: &Params,
         dst: &mut MaybeUninit<ValRaw>,
     ) -> Result<()> {
@@ -247,7 +199,7 @@ where
         //
         // Note that `realloc` will bake in a check that the returned pointer is
         // in-bounds.
-        let mut memory = MemoryMut::new(store.as_context_mut(), &self.func);
+        let mut memory = MemoryMut::new(store.as_context_mut(), options);
         let ptr = memory.realloc(0, 0, Params::align(), Params::size())?;
         params.store(&mut memory, ptr)?;
 
@@ -270,18 +222,22 @@ where
     ///
     /// This is only used when the result fits in the maximum number of stack
     /// slots.
-    fn lift_stack_result(&self, store: &StoreOpaque, dst: &Return::Lower) -> Result<Return> {
+    fn lift_stack_result(
+        store: &StoreOpaque,
+        options: &Options,
+        dst: &Return::Lower,
+    ) -> Result<Return> {
         assert!(Return::flatten_count() <= MAX_STACK_RESULTS);
-        Return::lift(store, &self.func, dst)
+        Return::lift(store, options, dst)
     }
 
     /// Lift the result of a function where the result is stored indirectly on
     /// the heap.
-    fn lift_heap_result(&self, store: &StoreOpaque, dst: &ValRaw) -> Result<Return> {
+    fn lift_heap_result(store: &StoreOpaque, options: &Options, dst: &ValRaw) -> Result<Return> {
         assert!(Return::flatten_count() > MAX_STACK_RESULTS);
         // FIXME: needs to read an i64 for memory64
         let ptr = usize::try_from(dst.get_u32()).unwrap();
-        let memory = Memory::new(store, &self.func);
+        let memory = Memory::new(store, options);
         let bytes = memory
             .as_slice()
             .get(ptr..)
@@ -303,19 +259,22 @@ where
         store: &mut StoreContextMut<'_, T>,
         params: &Params,
         lower: impl FnOnce(
-            &Self,
             &mut StoreContextMut<'_, T>,
+            &Options,
             &Params,
             &mut MaybeUninit<LowerParams>,
         ) -> Result<()>,
-        lift: impl FnOnce(&Self, &StoreOpaque, &LowerReturn) -> Result<Return>,
+        lift: impl FnOnce(&StoreOpaque, &Options, &LowerReturn) -> Result<Return>,
     ) -> Result<Return>
     where
         LowerParams: Copy,
         LowerReturn: Copy,
     {
         let super::FuncData {
-            trampoline, export, ..
+            trampoline,
+            export,
+            options,
+            ..
         } = store.0[self.func.0];
 
         let space = &mut MaybeUninit::<ParamsAndResults<LowerParams, LowerReturn>>::uninit();
@@ -335,7 +294,7 @@ where
         assert!(mem::align_of_val(map_maybe_uninit!(space.params)) == val_align);
         assert!(mem::align_of_val(map_maybe_uninit!(space.ret)) == val_align);
 
-        lower(self, store, params, map_maybe_uninit!(space.params))?;
+        lower(store, &options, params, map_maybe_uninit!(space.params))?;
 
         unsafe {
             // This is unsafe as we are providing the guarantee that all the
@@ -361,8 +320,8 @@ where
             // for the function we just called (which filled in the return
             // values).
             lift(
-                self,
                 store.0,
+                &options,
                 map_maybe_uninit!(space.ret).assume_init_ref(),
             )
         }
@@ -400,7 +359,11 @@ pub unsafe trait ComponentParams {
     /// Performs a typecheck to ensure that this `ComponentParams` implementor
     /// matches the types of the types in `params`.
     #[doc(hidden)]
-    fn typecheck(params: &[(Option<String>, InterfaceType)], types: &ComponentTypes) -> Result<()>;
+    fn typecheck(
+        params: &[(Option<String>, InterfaceType)],
+        types: &ComponentTypes,
+        op: Op,
+    ) -> Result<()>;
 
     /// Views this instance of `ComponentParams` as a tuple, allowing
     /// delegation to all of the methods in `ComponentValue`.
@@ -413,10 +376,10 @@ pub unsafe trait ComponentParams {
     fn lower<T>(
         &self,
         store: &mut StoreContextMut<T>,
-        func: &Func,
+        options: &Options,
         dst: &mut MaybeUninit<<Self::AsTuple as ComponentValue>::Lower>,
     ) -> Result<()> {
-        self.as_tuple().lower(store, func, dst)
+        self.as_tuple().lower(store, options, dst)
     }
 
     /// Convenience method to `ComponentValue::store` when viewing this
@@ -454,12 +417,13 @@ macro_rules! impl_component_params {
             fn typecheck(
                 params: &[(Option<String>, InterfaceType)],
                 _types: &ComponentTypes,
+                _op: Op,
             ) -> Result<()> {
                 if params.len() != $n {
                     bail!("expected {} types, found {}", $n, params.len());
                 }
                 let mut params = params.iter().map(|i| &i.1);
-                $($t::typecheck(params.next().unwrap(), _types, Op::Lower)?;)*
+                $($t::typecheck(params.next().unwrap(), _types, _op)?;)*
                 debug_assert!(params.next().is_none());
                 Ok(())
             }
@@ -582,7 +546,7 @@ pub unsafe trait ComponentValue {
     fn lower<T>(
         &self,
         store: &mut StoreContextMut<T>,
-        func: &Func,
+        options: &Options,
         dst: &mut MaybeUninit<Self::Lower>,
     ) -> Result<()>;
 
@@ -595,13 +559,13 @@ pub unsafe trait ComponentValue {
     /// Note that this has a default implementation but if `typecheck` passes
     /// for `Op::Lift` this needs to be overridden.
     #[doc(hidden)]
-    fn lift(store: &StoreOpaque, func: &Func, src: &Self::Lower) -> Result<Self>
+    fn lift(store: &StoreOpaque, options: &Options, src: &Self::Lower) -> Result<Self>
     where
         Self: Sized,
     {
         // NB: ideally there would be no default implementation here but to
         // enable `impl ComponentValue for str` this is the way we get it today.
-        drop((store, func, src));
+        drop((store, options, src));
         unreachable!("this should be rejected during typechecking")
     }
 
@@ -657,85 +621,6 @@ pub enum Op {
     Lower,
 }
 
-/// A helper structure to package up proof-of-memory. This holds a store pointer
-/// and a `Func` pointer where the function has the pointers to memory.
-///
-/// Note that one of the purposes of this type is to make `lower_list`
-/// vectorizable by "caching" the last view of memory. CUrrently it doesn't do
-/// that, though, because I couldn't get `lower_list::<u8>` to vectorize. I've
-/// left this in for convenience in the hope that this can be updated in the
-/// future.
-#[doc(hidden)]
-pub struct MemoryMut<'a, T> {
-    store: StoreContextMut<'a, T>,
-    func: &'a Func,
-}
-
-impl<'a, T> MemoryMut<'a, T> {
-    fn new(store: StoreContextMut<'a, T>, func: &'a Func) -> MemoryMut<'a, T> {
-        MemoryMut { func, store }
-    }
-
-    #[inline]
-    fn string_encoding(&self) -> StringEncoding {
-        self.store.0[self.func.0].options.string_encoding
-    }
-
-    #[inline]
-    fn memory(&mut self) -> &mut [u8] {
-        self.func.memory_mut(self.store.0)
-    }
-
-    fn realloc(
-        &mut self,
-        old: usize,
-        old_size: usize,
-        old_align: u32,
-        new_size: usize,
-    ) -> Result<usize> {
-        let ret = self
-            .func
-            .realloc(&mut self.store, old, old_size, old_align, new_size)
-            .map(|(_, ptr)| ptr);
-        return ret;
-    }
-
-    fn get<const N: usize>(&mut self, offset: usize) -> &mut [u8; N] {
-        // FIXME: this bounds check shouldn't actually be necessary, all
-        // callers of `ComponentValue::store` have already performed a bounds
-        // check so we're guaranteed that `offset..offset+N` is in-bounds. That
-        // being said we at least should do bounds checks in debug mode and
-        // it's not clear to me how to easily structure this so that it's
-        // "statically obvious" the bounds check isn't necessary.
-        //
-        // For now I figure we can leave in this bounds check and if it becomes
-        // an issue we can optimize further later, probably with judicious use
-        // of `unsafe`.
-        (&mut self.memory()[offset..][..N]).try_into().unwrap()
-    }
-}
-
-/// Like `MemoryMut` but for a read-only version that's used during lifting.
-#[doc(hidden)]
-pub struct Memory<'a> {
-    store: &'a StoreOpaque,
-    func: &'a Func,
-}
-
-impl<'a> Memory<'a> {
-    fn new(store: &'a StoreOpaque, func: &'a Func) -> Memory<'a> {
-        Memory { store, func }
-    }
-
-    fn as_slice(&self) -> &'a [u8] {
-        self.func.memory(self.store)
-    }
-
-    fn string_encoding(&self) -> StringEncoding {
-        self.store[self.func.0].options.string_encoding
-    }
-}
-
 // Macro to help generate "forwarding implementations" of `ComponentValue` to
 // another type, used for wrappers in Rust like `&T`, `Box<T>`, etc.
 macro_rules! forward_component_param {
@@ -764,10 +649,10 @@ macro_rules! forward_component_param {
             fn lower<U>(
                 &self,
                 store: &mut StoreContextMut<U>,
-                func: &Func,
+        options: &Options,
                 dst: &mut MaybeUninit<Self::Lower>,
             ) -> Result<()> {
-                <$b as ComponentValue>::lower(self, store, func, dst)
+                <$b as ComponentValue>::lower(self, store, options, dst)
             }
 
             #[inline]
@@ -784,7 +669,7 @@ macro_rules! forward_component_param {
                 <$b as ComponentValue>::store(self, memory, offset)
             }
 
-            fn lift(_store: &StoreOpaque, _func: &Func,_src: &Self::Lower) -> Result<Self> {
+            fn lift(_store: &StoreOpaque, _options: &Options, _src: &Self::Lower) -> Result<Self> {
                 unreachable!()
             }
 
@@ -824,7 +709,7 @@ unsafe impl ComponentValue for () {
     fn lower<T>(
         &self,
         _store: &mut StoreContextMut<T>,
-        _func: &Func,
+        _options: &Options,
         _dst: &mut MaybeUninit<Self::Lower>,
     ) -> Result<()> {
         Ok(())
@@ -846,7 +731,7 @@ unsafe impl ComponentValue for () {
     }
 
     #[inline]
-    fn lift(_store: &StoreOpaque, _func: &Func, _src: &Self::Lower) -> Result<Self> {
+    fn lift(_store: &StoreOpaque, _options: &Options, _src: &Self::Lower) -> Result<Self> {
         Ok(())
     }
 
@@ -873,7 +758,7 @@ macro_rules! integers {
             fn lower<T>(
                 &self,
                 _store: &mut StoreContextMut<T>,
-                _func: &Func,
+                _options: &Options,
                 dst: &mut MaybeUninit<Self::Lower>,
             ) -> Result<()> {
                 dst.write(ValRaw::$field(*self as $field));
@@ -896,7 +781,7 @@ macro_rules! integers {
             }
 
             #[inline]
-            fn lift(_store: &StoreOpaque, _func: &Func, src: &Self::Lower) -> Result<Self> {
+            fn lift(_store: &StoreOpaque, _options: &Options, src: &Self::Lower) -> Result<Self> {
                 // Perform a lossless cast from our field storage to the
                 // destination type. Note that `try_from` here is load bearing
                 // which rejects conversions like `500u32` to `u8` because
@@ -951,7 +836,7 @@ macro_rules! floats {
             fn lower<T>(
                 &self,
                 _store: &mut StoreContextMut<T>,
-                _func: &Func,
+                _options: &Options,
                 dst: &mut MaybeUninit<Self::Lower>,
             ) -> Result<()> {
                 dst.write(ValRaw::$float(canonicalize(*self).to_bits()));
@@ -973,7 +858,7 @@ macro_rules! floats {
             }
 
             #[inline]
-            fn lift(_store: &StoreOpaque, _func: &Func, src: &Self::Lower) -> Result<Self> {
+            fn lift(_store: &StoreOpaque, _options: &Options, src: &Self::Lower) -> Result<Self> {
                 Ok(canonicalize($float::from_bits(src.$get_float())))
             }
 
@@ -1003,7 +888,7 @@ unsafe impl ComponentValue for bool {
     fn lower<T>(
         &self,
         _store: &mut StoreContextMut<T>,
-        _func: &Func,
+        _options: &Options,
         dst: &mut MaybeUninit<Self::Lower>,
     ) -> Result<()> {
         dst.write(ValRaw::i32(*self as i32));
@@ -1026,7 +911,7 @@ unsafe impl ComponentValue for bool {
     }
 
     #[inline]
-    fn lift(_store: &StoreOpaque, _func: &Func, src: &Self::Lower) -> Result<Self> {
+    fn lift(_store: &StoreOpaque, _options: &Options, src: &Self::Lower) -> Result<Self> {
         match src.get_i32() {
             0 => Ok(false),
             1 => Ok(true),
@@ -1057,7 +942,7 @@ unsafe impl ComponentValue for char {
     fn lower<T>(
         &self,
         _store: &mut StoreContextMut<T>,
-        _func: &Func,
+        _options: &Options,
         dst: &mut MaybeUninit<Self::Lower>,
     ) -> Result<()> {
         dst.write(ValRaw::u32(u32::from(*self)));
@@ -1080,7 +965,7 @@ unsafe impl ComponentValue for char {
     }
 
     #[inline]
-    fn lift(_store: &StoreOpaque, _func: &Func, src: &Self::Lower) -> Result<Self> {
+    fn lift(_store: &StoreOpaque, _options: &Options, src: &Self::Lower) -> Result<Self> {
         Ok(char::try_from(src.get_u32())?)
     }
 
@@ -1112,10 +997,10 @@ unsafe impl ComponentValue for str {
     fn lower<T>(
         &self,
         store: &mut StoreContextMut<T>,
-        func: &Func,
+        options: &Options,
         dst: &mut MaybeUninit<[ValRaw; 2]>,
     ) -> Result<()> {
-        let (ptr, len) = lower_string(&mut MemoryMut::new(store.as_context_mut(), func), self)?;
+        let (ptr, len) = lower_string(&mut MemoryMut::new(store.as_context_mut(), options), self)?;
         // See "WRITEPTR64" above for why this is always storing a 64-bit
         // integer.
         map_maybe_uninit!(dst[0]).write(ValRaw::i64(ptr as i64));
@@ -1144,13 +1029,13 @@ fn lower_string<T>(mem: &mut MemoryMut<'_, T>, string: &str) -> Result<(usize, u
     match mem.string_encoding() {
         StringEncoding::Utf8 => {
             let ptr = mem.realloc(0, 0, 1, string.len())?;
-            mem.memory()[ptr..][..string.len()].copy_from_slice(string.as_bytes());
+            mem.as_slice_mut()[ptr..][..string.len()].copy_from_slice(string.as_bytes());
             Ok((ptr, string.len()))
         }
         StringEncoding::Utf16 => {
             let size = string.len() * 2;
             let mut ptr = mem.realloc(0, 0, 2, size)?;
-            let bytes = &mut mem.memory()[ptr..][..size];
+            let bytes = &mut mem.as_slice_mut()[ptr..][..size];
             let mut copied = 0;
             for (u, bytes) in string.encode_utf16().zip(bytes.chunks_mut(2)) {
                 let u_bytes = u.to_le_bytes();
@@ -1184,7 +1069,7 @@ fn lower_string<T>(mem: &mut MemoryMut<'_, T>, string: &str) -> Result<(usize, u
 pub struct WasmStr {
     ptr: usize,
     len: usize,
-    func: Func,
+    options: Options,
 }
 
 impl WasmStr {
@@ -1201,7 +1086,7 @@ impl WasmStr {
         Ok(WasmStr {
             ptr,
             len,
-            func: *memory.func,
+            options: *memory.options(),
         })
     }
 
@@ -1231,7 +1116,7 @@ impl WasmStr {
     }
 
     fn _to_str<'a>(&self, store: &'a StoreOpaque) -> Result<Cow<'a, str>> {
-        match store[self.func.0].options.string_encoding {
+        match self.options.string_encoding() {
             StringEncoding::Utf8 => self.decode_utf8(store),
             StringEncoding::Utf16 => self.decode_utf16(store),
             StringEncoding::CompactUtf16 => unimplemented!(),
@@ -1239,7 +1124,7 @@ impl WasmStr {
     }
 
     fn decode_utf8<'a>(&self, store: &'a StoreOpaque) -> Result<Cow<'a, str>> {
-        let memory = self.func.memory(store);
+        let memory = self.options.memory(store);
         // Note that bounds-checking already happen in construction of `WasmStr`
         // so this is never expected to panic. This could theoretically be
         // unchecked indexing if we're feeling wild enough.
@@ -1247,7 +1132,7 @@ impl WasmStr {
     }
 
     fn decode_utf16<'a>(&self, store: &'a StoreOpaque) -> Result<Cow<'a, str>> {
-        let memory = self.func.memory(store);
+        let memory = self.options.memory(store);
         // See notes in `decode_utf8` for why this is panicking indexing.
         let memory = &memory[self.ptr..][..self.len * 2];
         Ok(std::char::decode_utf16(
@@ -1289,7 +1174,7 @@ unsafe impl ComponentValue for WasmStr {
     fn lower<T>(
         &self,
         _store: &mut StoreContextMut<T>,
-        _func: &Func,
+        _options: &Options,
         _dst: &mut MaybeUninit<[ValRaw; 2]>,
     ) -> Result<()> {
         unreachable!()
@@ -1299,12 +1184,12 @@ unsafe impl ComponentValue for WasmStr {
         unreachable!()
     }
 
-    fn lift(store: &StoreOpaque, func: &Func, src: &Self::Lower) -> Result<Self> {
+    fn lift(store: &StoreOpaque, options: &Options, src: &Self::Lower) -> Result<Self> {
         // FIXME: needs memory64 treatment
         let ptr = src[0].get_u32();
         let len = src[1].get_u32();
         let (ptr, len) = (usize::try_from(ptr)?, usize::try_from(len)?);
-        WasmStr::new(ptr, len, &Memory::new(store, func))
+        WasmStr::new(ptr, len, &Memory::new(store, options))
     }
 
     fn load(memory: &Memory<'_>, bytes: &[u8]) -> Result<Self> {
@@ -1338,10 +1223,10 @@ where
     fn lower<U>(
         &self,
         store: &mut StoreContextMut<U>,
-        func: &Func,
+        options: &Options,
         dst: &mut MaybeUninit<[ValRaw; 2]>,
     ) -> Result<()> {
-        let (ptr, len) = lower_list(&mut MemoryMut::new(store.as_context_mut(), func), self)?;
+        let (ptr, len) = lower_list(&mut MemoryMut::new(store.as_context_mut(), options), self)?;
         // See "WRITEPTR64" above for why this is always storing a 64-bit
         // integer.
         map_maybe_uninit!(dst[0]).write(ValRaw::i64(ptr as i64));
@@ -1412,7 +1297,7 @@ where
 pub struct WasmList<T> {
     ptr: usize,
     len: usize,
-    func: Func,
+    options: Options,
     _marker: marker::PhantomData<T>,
 }
 
@@ -1428,7 +1313,7 @@ impl<T: ComponentValue> WasmList<T> {
         Ok(WasmList {
             ptr,
             len,
-            func: *memory.func,
+            options: *memory.options(),
             _marker: marker::PhantomData,
         })
     }
@@ -1456,7 +1341,7 @@ impl<T: ComponentValue> WasmList<T> {
         if index >= self.len {
             return None;
         }
-        let memory = Memory::new(store, &self.func);
+        let memory = Memory::new(store, &self.options);
         // Note that this is using panicking indexing and this is expected to
         // never fail. The bounds-checking here happened during the construction
         // of the `WasmList` itself which means these should always be in-bounds
@@ -1488,7 +1373,7 @@ impl WasmList<u8> {
     /// validity.
     pub fn as_slice<'a, T: 'a>(&self, store: impl Into<StoreContext<'a, T>>) -> &'a [u8] {
         // See comments in `WasmList::get` for the panicking indexing
-        &self.func.memory(store.into().0)[self.ptr..][..self.len]
+        &self.options.memory(store.into().0)[self.ptr..][..self.len]
     }
 }
 
@@ -1521,7 +1406,7 @@ unsafe impl<T: ComponentValue> ComponentValue for WasmList<T> {
     fn lower<U>(
         &self,
         _store: &mut StoreContextMut<U>,
-        _func: &Func,
+        _options: &Options,
         _dst: &mut MaybeUninit<[ValRaw; 2]>,
     ) -> Result<()> {
         unreachable!()
@@ -1531,12 +1416,12 @@ unsafe impl<T: ComponentValue> ComponentValue for WasmList<T> {
         unreachable!()
     }
 
-    fn lift(store: &StoreOpaque, func: &Func, src: &Self::Lower) -> Result<Self> {
+    fn lift(store: &StoreOpaque, options: &Options, src: &Self::Lower) -> Result<Self> {
         // FIXME: needs memory64 treatment
         let ptr = src[0].get_u32();
         let len = src[1].get_u32();
         let (ptr, len) = (usize::try_from(ptr)?, usize::try_from(len)?);
-        WasmList::new(ptr, len, &Memory::new(store, func))
+        WasmList::new(ptr, len, &Memory::new(store, options))
     }
 
     fn load(memory: &Memory<'_>, bytes: &[u8]) -> Result<Self> {
@@ -1571,7 +1456,7 @@ where
     fn lower<U>(
         &self,
         store: &mut StoreContextMut<U>,
-        func: &Func,
+        options: &Options,
         dst: &mut MaybeUninit<Self::Lower>,
     ) -> Result<()> {
         match self {
@@ -1589,7 +1474,7 @@ where
             }
             Some(val) => {
                 map_maybe_uninit!(dst.A1).write(ValRaw::i32(1));
-                val.lower(store, func, map_maybe_uninit!(dst.A2))?;
+                val.lower(store, options, map_maybe_uninit!(dst.A2))?;
             }
         }
         Ok(())
@@ -1618,10 +1503,10 @@ where
         Ok(())
     }
 
-    fn lift(store: &StoreOpaque, func: &Func, src: &Self::Lower) -> Result<Self> {
+    fn lift(store: &StoreOpaque, options: &Options, src: &Self::Lower) -> Result<Self> {
         Ok(match src.A1.get_i32() {
             0 => None,
-            1 => Some(T::lift(store, func, &src.A2)?),
+            1 => Some(T::lift(store, options, &src.A2)?),
             _ => bail!("invalid option discriminant"),
         })
     }
@@ -1673,7 +1558,7 @@ where
     fn lower<U>(
         &self,
         store: &mut StoreContextMut<U>,
-        func: &Func,
+        options: &Options,
         dst: &mut MaybeUninit<Self::Lower>,
     ) -> Result<()> {
         // Start out by zeroing out the payload. This will ensure that if either
@@ -1697,11 +1582,11 @@ where
         match self {
             Ok(e) => {
                 map_maybe_uninit!(dst.tag).write(ValRaw::i32(0));
-                e.lower(store, func, map_maybe_uninit!(dst.payload.ok))?;
+                e.lower(store, options, map_maybe_uninit!(dst.payload.ok))?;
             }
             Err(e) => {
                 map_maybe_uninit!(dst.tag).write(ValRaw::i32(1));
-                e.lower(store, func, map_maybe_uninit!(dst.payload.err))?;
+                e.lower(store, options, map_maybe_uninit!(dst.payload.err))?;
             }
         }
         Ok(())
@@ -1731,7 +1616,7 @@ where
         Ok(())
     }
 
-    fn lift(store: &StoreOpaque, func: &Func, src: &Self::Lower) -> Result<Self> {
+    fn lift(store: &StoreOpaque, options: &Options, src: &Self::Lower) -> Result<Self> {
         // TODO: need to make a case that upper-bits are not validated to be
         // zero.
         //
@@ -1755,8 +1640,8 @@ where
         // didn't have to do that though.
 
         Ok(match src.tag.get_i32() {
-            0 => Ok(unsafe { T::lift(store, func, &src.payload.ok)? }),
-            1 => Err(unsafe { E::lift(store, func, &src.payload.err)? }),
+            0 => Ok(unsafe { T::lift(store, options, &src.payload.ok)? }),
+            1 => Err(unsafe { E::lift(store, options, &src.payload.err)? }),
             _ => bail!("invalid expected discriminant"),
         })
     }
@@ -1819,11 +1704,11 @@ macro_rules! impl_component_ty_for_tuples {
             fn lower<U>(
                 &self,
                 store: &mut StoreContextMut<U>,
-                func: &Func,
+                options: &Options,
                 dst: &mut MaybeUninit<Self::Lower>,
             ) -> Result<()> {
                 let ($($t,)*) = self;
-                $($t.lower(store, func, map_maybe_uninit!(dst.$t))?;)*
+                $($t.lower(store, options, map_maybe_uninit!(dst.$t))?;)*
                 Ok(())
             }
 
@@ -1854,8 +1739,8 @@ macro_rules! impl_component_ty_for_tuples {
                 Ok(())
             }
 
-            fn lift(store: &StoreOpaque, func: &Func, src: &Self::Lower) -> Result<Self> {
-                Ok(($($t::lift(store, func, &src.$t)?,)*))
+            fn lift(store: &StoreOpaque, options: &Options, src: &Self::Lower) -> Result<Self> {
+                Ok(($($t::lift(store, options, &src.$t)?,)*))
             }
 
             fn load(memory: &Memory<'_>, bytes: &[u8]) -> Result<Self> {
