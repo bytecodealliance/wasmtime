@@ -81,12 +81,19 @@
 
 
     (TrapIf
-      (rs1 Reg)
-      (rs2 Reg)
-      (cond Cond)
+      (cc IntCC)
+      (x ValueRegs)
+      (y ValueRegs)
+      (ty Type)
       (trap_code TrapCode))
-  
-    (Trap
+
+    (TrapFf
+      (cc FloatCC)
+      (x Reg)
+      (y Reg)
+      (ty Type)
+      (tmp WritableReg)
+      (tmp2 WritableReg)
       (trap_code TrapCode))
 
     (Jal
@@ -154,6 +161,7 @@
     ;; a float compare 
     (Ffcmp 
       (rd WritableReg)
+      (tmp WritableReg)
       (cc FloatCC)
       (ty Type)
       (rs1 Reg)
@@ -231,8 +239,16 @@
       (is_signed bool)
       (in_type Type)
       (out_type Type))
+    (SelectIf 
+      (if_spectre_guard bool)
+      (rd VecWritableReg)
+      (cmp_x ValueRegs)
+      (cmp_y ValueRegs)
+      (cc IntCC)
+      (cmp_ty Type)
+      (x ValueRegs)
+      (y ValueRegs))
 ))
-
 
 (type CsrOP(enum 
   (Csrrw)
@@ -250,7 +266,6 @@
   (Mul)
   (Div)
   (Rem)
-  (Sshr)
 ))
 
 
@@ -369,7 +384,7 @@
 
   ;; RV32D Standard Extension
   (FsqrtD)
-  (FcvtSd)
+  (FcvtSD)
   (FcvtDS)
   (FclassD)
   (FcvtWD)
@@ -592,28 +607,6 @@
 (type Imm3 (primitive Imm3))
 (type BranchTarget (primitive BranchTarget))
 (type CsrAddress (primitive CsrAddress))
-(type ExtendOp 
-  (enum
-    (UXTB)
-    (UXTH)
-    (UXTW)
-    (UXTD)
-    (SXTB)
-    (SXTH)
-    (SXTW)
-    (SXTD)
-))
-
-(type Cond  
-  (enum
-    (Eq)
-    (Ne)
-    (Lt)
-    (Ltu)
-    (Ge)
-    (Geu)
-))
-
 
 ;; Helper for creating the zero register.
 (decl zero_reg () Reg)

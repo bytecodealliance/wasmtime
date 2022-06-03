@@ -29,7 +29,7 @@
 
 // /// Map Cranelift registers to their corresponding Gimli registers.
 // pub fn map_reg(reg: Reg) -> Result<Register, RegisterMappingError> {
-//     // For AArch64 DWARF register mappings, see:
+//     // For Riscv64 DWARF register mappings, see:
 //     //
 //     // https://developer.arm.com/documentation/ihi0057/e/?lang=en#dwarf-register-names
 //     //

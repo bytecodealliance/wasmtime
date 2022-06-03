@@ -1,14 +1,12 @@
-//! AArch64 ISA: binary code emission.
+//! Riscv64 ISA: binary code emission.
 
 use crate::binemit::StackMap;
 use crate::isa::riscv64::inst::*;
 
 use crate::isa::riscv64::inst::{zero_reg, AluOPRRR};
 use crate::machinst::{AllocationConsumer, Reg, Writable};
-use alloc::borrow::ToOwned;
-use regalloc2::Allocation;
 
-use alloc::vec;
+use regalloc2::Allocation;
 
 pub struct EmitInfo(settings::Flags);
 
@@ -319,6 +317,90 @@ impl Inst {
         insts
     }
 
+    pub(crate) fn lower_br_fcmp(
+        cc: FloatCC,
+        x: Reg,
+        y: Reg,
+        taken: BranchTarget,
+        not_taken: BranchTarget,
+        ty: Type,
+        tmp: Writable<Reg>,
+        tmp2: Writable<Reg>,
+    ) -> SmallInstVec<Inst> {
+        let mut insts = SmallInstVec::new();
+        let cc_bit = FloatCCBit::floatcc_2_mask_bits(cc);
+        let eq_op = if ty == F32 {
+            AluOPRRR::FeqS
+        } else {
+            AluOPRRR::FeqD
+        };
+        let lt_op = if ty == F32 {
+            AluOPRRR::FltS
+        } else {
+            AluOPRRR::FltD
+        };
+        // if eq
+        if cc_bit.constains(FloatCCBit::EQ) {
+            insts.push(Inst::AluRRR {
+                alu_op: eq_op,
+                rd: tmp,
+                rs1: x,
+                rs2: y,
+            });
+            insts.push(Inst::CondBr {
+                taken: taken,
+                not_taken: BranchTarget::zero(),
+                kind: IntegerCompare {
+                    kind: IntCC::NotEqual,
+                    rs1: tmp.to_reg(),
+                    rs2: zero_reg(),
+                },
+            });
+        }
+        // if <
+        if cc_bit.constains(FloatCCBit::LT) {
+            insts.push(Inst::AluRRR {
+                alu_op: lt_op,
+                rd: tmp,
+                rs1: x,
+                rs2: y,
+            });
+            insts.push(Inst::CondBr {
+                taken: taken,
+                not_taken: BranchTarget::zero(),
+                kind: IntegerCompare {
+                    kind: IntCC::NotEqual,
+                    rs1: tmp.to_reg(),
+                    rs2: zero_reg(),
+                },
+            });
+        }
+        // if gt
+        if cc_bit.constains(FloatCCBit::GT) {
+            insts.push(Inst::AluRRR {
+                alu_op: lt_op,
+                rd: tmp,
+                rs1: y, //
+                rs2: x,
+            });
+            insts.push(Inst::CondBr {
+                taken,
+                not_taken: BranchTarget::zero(),
+                kind: IntegerCompare {
+                    kind: IntCC::NotEqual,
+                    rs1: tmp.to_reg(),
+                    rs2: zero_reg(),
+                },
+            });
+        }
+        // if unorder
+        if cc_bit.constains(FloatCCBit::UN) {
+            insts.extend(Inst::lower_float_unordered(
+                tmp, tmp2, ty, x, y, taken, not_taken,
+            ));
+        }
+        insts
+    }
     pub(crate) fn lower_br_icmp(
         cc: IntCC,
         a: ValueRegs<Reg>,
@@ -446,53 +528,26 @@ impl Inst {
         insts
     }
 
-    /*
-        rd == 1 is unordered
-        rd == 0 is ordered
-    */
-    pub(crate) fn generate_float_unordered(
-        sink: &mut MachBuffer<Inst>,
-        emit_info: &EmitInfo,
-        state: &mut EmitState,
-        rd: Writable<Reg>,
+    pub(crate) fn lower_float_unordered(
+        tmp: Writable<Reg>,
+        tmp2: Writable<Reg>,
         ty: Type,
-        left: Reg,
-        right: Reg,
-    ) {
+        x: Reg,
+        y: Reg,
+        taken: BranchTarget,
+        not_taken: BranchTarget,
+    ) -> SmallInstVec<Inst> {
         let mut insts = SmallInstVec::new();
-        let label_true = sink.get_label();
         let class_op = if ty == F32 {
             AluOPRR::FclassS
         } else {
             AluOPRR::FclassD
         };
-        // left
-        insts.push(Inst::AluRR {
-            alu_op: class_op,
-            rd,
-            rs: left,
-        });
-        insts.push(Inst::AluRRImm12 {
-            alu_op: AluOPRRI::Andi,
-            rd,
-            rs: rd.to_reg(),
-            imm12: Imm12::from_bits(FClassResult::is_nan_bits() as i16),
-        });
-        insts.push(Inst::CondBr {
-            taken: BranchTarget::Label(label_true),
-            not_taken: BranchTarget::zero(),
-            kind: IntegerCompare {
-                kind: IntCC::NotEqual,
-                rs1: rd.to_reg(),
-                rs2: zero_reg(),
-            },
-        });
-        //right
-        let tmp = writable_spilltmp_reg();
+        // if x is nan
         insts.push(Inst::AluRR {
             alu_op: class_op,
             rd: tmp,
-            rs: right,
+            rs: x,
         });
         insts.push(Inst::AluRRImm12 {
             alu_op: AluOPRRI::Andi,
@@ -500,9 +555,8 @@ impl Inst {
             rs: tmp.to_reg(),
             imm12: Imm12::from_bits(FClassResult::is_nan_bits() as i16),
         });
-
         insts.push(Inst::CondBr {
-            taken: BranchTarget::Label(label_true),
+            taken,
             not_taken: BranchTarget::zero(),
             kind: IntegerCompare {
                 kind: IntCC::NotEqual,
@@ -510,46 +564,53 @@ impl Inst {
                 rs2: zero_reg(),
             },
         });
-        // left and right is not nan
-        // but there are maybe bother PosInfinite or NegInfinite
-        insts.push(Inst::AluRRR {
-            alu_op: AluOPRRR::And,
-            rd: rd,
-            rs1: rd.to_reg(),
-            rs2: tmp.to_reg(),
+        // if y is nan.
+        insts.push(Inst::AluRR {
+            alu_op: class_op,
+            rd: tmp2,
+            rs: y,
         });
         insts.push(Inst::AluRRImm12 {
             alu_op: AluOPRRI::Andi,
-            rd: rd,
-            rs: rd.to_reg(),
+            rd: tmp2,
+            rs: tmp2.to_reg(),
+            imm12: Imm12::from_bits(FClassResult::is_nan_bits() as i16),
+        });
+
+        insts.push(Inst::CondBr {
+            taken,
+            not_taken: BranchTarget::zero(),
+            kind: IntegerCompare {
+                kind: IntCC::NotEqual,
+                rs1: tmp2.to_reg(),
+                rs2: zero_reg(),
+            },
+        });
+        // x and y is not nan
+        // but there are maybe bother PosInfinite or NegInfinite.
+        insts.push(Inst::AluRRR {
+            alu_op: AluOPRRR::And,
+            rd: tmp,
+            rs1: tmp.to_reg(),
+            rs2: tmp2.to_reg(),
+        });
+        insts.push(Inst::AluRRImm12 {
+            alu_op: AluOPRRI::Andi,
+            rd: tmp,
+            rs: tmp.to_reg(),
             imm12: Imm12::from_bits(FClassResult::is_infinite_bits() as i16),
         });
 
         insts.push(Inst::CondBr {
-            taken: BranchTarget::Label(label_true),
-            not_taken: BranchTarget::zero(),
+            taken,
+            not_taken,
             kind: IntegerCompare {
                 kind: IntCC::NotEqual,
                 rs1: tmp.to_reg(),
                 rs2: zero_reg(),
             },
         });
-
-        // here is false
-        insts.push(Inst::load_constant_imm12(rd, Imm12::form_bool(false)));
-        // jump set true
-        insts.push(Inst::Jal {
-            dest: BranchTarget::offset(Inst::instruction_size() * 2),
-        });
-        insts.drain(..).for_each(|i: Inst| {
-            i.emit(&[], sink, emit_info, state);
-        });
-        sink.bind_label(label_true);
-        // here is true
-        insts.push(Inst::load_constant_imm12(rd, Imm12::form_bool(true)));
-        insts.drain(..).for_each(|i: Inst| {
-            i.emit(&[], sink, emit_info, state);
-        });
+        insts
     }
 
     /*
@@ -813,7 +874,7 @@ impl MachInstEmit for Inst {
                 rd,
                 op,
                 from,
-                flags,
+                flags: _flags,
             } => {
                 let x;
                 let base = from.get_base_register();
@@ -851,7 +912,12 @@ impl MachInstEmit for Inst {
                     .for_each(|inst| inst.emit(&[], sink, emit_info, state));
                 }
             }
-            &Inst::Store { op, src, flags, to } => {
+            &Inst::Store {
+                op,
+                src,
+                flags: _flags,
+                to,
+            } => {
                 let base = to.get_base_register();
                 let base = allocs.next(base);
                 let src = allocs.next(src);
@@ -1175,17 +1241,7 @@ impl MachInstEmit for Inst {
                     .into_iter()
                     .for_each(|i| i.emit(&[], sink, emit_info, state));
             }
-            &Inst::TrapIf {
-                rs1,
-                rs2,
-                cond,
-                trap_code,
-            } => {
-                unimplemented!("trap not implamented.")
-            }
-            &Inst::Trap { trap_code } => {
-                unimplemented!("what is the trap code\n");
-            }
+
             &Inst::Jal { dest } => {
                 let code: u32 = 0b1101111;
                 match dest {
@@ -1415,7 +1471,7 @@ impl MachInstEmit for Inst {
                 let x = 0b0010111 | reg_to_gpr_num(rd.to_reg()) << 7 | imm.as_u32() << 12;
                 sink.put4(x);
             }
-            // &Inst::LoadExtName { rd, name, offset } => todo!(),
+
             &Inst::LoadAddr { rd, mem } => {
                 let base = mem.get_base_register();
                 let base = allocs.next(base);
@@ -1448,143 +1504,50 @@ impl MachInstEmit for Inst {
 
             &Inst::Ffcmp {
                 rd,
+                tmp,
                 cc,
                 ty,
                 rs1,
                 rs2,
             } => {
-                //
                 let rs1 = allocs.next(rs1);
                 let rs2 = allocs.next(rs2);
                 let rd = allocs.next_writable(rd);
-                let cc_bit = FloatCCBit::floatcc_2_mask_bits(cc);
-                let eq_op = if ty == F32 {
-                    AluOPRRR::FeqS
-                } else {
-                    AluOPRRR::FeqD
-                };
-                let lt_op = if ty == F32 {
-                    AluOPRRR::FltS
-                } else {
-                    AluOPRRR::FltD
-                };
-                let le_op = if ty == F32 {
-                    AluOPRRR::FleS
-                } else {
-                    AluOPRRR::FleD
-                };
-                /*
-                    can be implemented by one risc-v instruction.
-                */
-                let one_instruction_can_do = if cc_bit.just_eq() {
-                    Some(eq_op)
-                } else if cc_bit.just_le() {
-                    Some(le_op)
-                } else if cc_bit.just_lt() {
-                    Some(lt_op)
-                } else {
-                    None
-                };
-                if let Some(op) = one_instruction_can_do {
-                    Inst::AluRRR {
-                        alu_op: op,
-                        rd,
-                        rs1,
-                        rs2,
-                    }
-                    .emit(&[], sink, emit_info, state);
-                    return;
-                }
-                // long path
-                let mut insts = SmallInstVec::new();
-                let label_jump_true = sink.get_label();
+                let tmp = allocs.next_writable(tmp);
+                let label_true = sink.get_label();
                 let label_jump_over = sink.get_label();
-                // if eq
-                if cc_bit.test(FloatCCBit::EQ) {
-                    insts.push(Inst::AluRRR {
-                        alu_op: eq_op,
-                        rd,
-                        rs1,
-                        rs2,
-                    });
-                    insts.push(Inst::CondBr {
-                        taken: BranchTarget::Label(label_jump_true),
-                        not_taken: BranchTarget::zero(),
-                        kind: IntegerCompare {
-                            kind: IntCC::NotEqual,
-                            rs1: rd.to_reg(),
-                            rs2: zero_reg(),
-                        },
-                    });
-                }
-                // if <
-                if cc_bit.test(FloatCCBit::LT) {
-                    insts.push(Inst::AluRRR {
-                        alu_op: lt_op,
-                        rd,
-                        rs1,
-                        rs2,
-                    });
-                    insts.push(Inst::CondBr {
-                        taken: BranchTarget::Label(label_jump_true),
-                        not_taken: BranchTarget::zero(),
-                        kind: IntegerCompare {
-                            kind: IntCC::NotEqual,
-                            rs1: rd.to_reg(),
-                            rs2: zero_reg(),
-                        },
-                    });
-                }
-                // if gt
-                if cc_bit.test(FloatCCBit::GT) {
-                    // number is ordered
-                    insts.push(Inst::AluRRR {
-                        alu_op: lt_op,
-                        rd,
-                        rs1: rs2,
-                        rs2: rs1,
-                    });
-                    // could be unorder
-                    insts.push(Inst::CondBr {
-                        taken: BranchTarget::Label(label_jump_true),
-                        not_taken: BranchTarget::zero(),
-                        kind: IntegerCompare {
-                            kind: IntCC::NotEqual,
-                            rs1: rd.to_reg(),
-                            rs2: zero_reg(),
-                        },
-                    });
-                }
-                // if unorder
-                if cc_bit.test(FloatCCBit::UN) {
-                    Inst::generate_float_unordered(sink, emit_info, state, rd, ty, rs1, rs2);
-                    insts.push(Inst::Jal {
-                        dest: BranchTarget::Label(label_jump_over),
-                    });
-                }
-                insts
-                    .into_iter()
-                    .for_each(|inst| inst.emit(&[], sink, emit_info, state));
-
+                Inst::lower_br_fcmp(
+                    cc,
+                    rs1,
+                    rs2,
+                    BranchTarget::Label(label_true),
+                    BranchTarget::zero(),
+                    ty,
+                    rd,
+                    tmp,
+                )
+                .iter()
+                .for_each(|i| i.emit(&[], sink, emit_info, state));
+                // here is not taken.
                 Inst::load_constant_imm12(rd, Imm12::form_bool(false)).emit(
                     &[],
                     sink,
                     emit_info,
                     state,
                 );
+                // jump over.
                 Inst::Jal {
-                    dest: BranchTarget::offset(Inst::instruction_size() * 2),
+                    dest: BranchTarget::Label(label_jump_over),
                 }
                 .emit(&[], sink, emit_info, state);
-                // here is true , load true to rd.
-                sink.bind_label(label_jump_true);
+
+                // here is true
                 Inst::load_constant_imm12(rd, Imm12::form_bool(true)).emit(
                     &[],
                     sink,
                     emit_info,
                     state,
                 );
-                sink.bind_label(label_jump_over);
             }
 
             &Inst::Select {
@@ -1845,8 +1808,6 @@ impl MachInstEmit for Inst {
 
                     I128OP::Div => todo!(),
                     I128OP::Rem => todo!(),
-
-                    I128OP::Sshr => todo!(),
                 }
                 insts
                     .into_iter()
@@ -1990,7 +1951,7 @@ impl MachInstEmit for Inst {
                         imm12: Imm12::from_bits(-(64 - (ty.bits() - 1) as i16)),
                     }
                     .emit(&[], sink, emit_info, state);
-                };
+                }
                 //here is need counting leading zeros.
                 cls(rd, rs, sink, emit_info, state, ty);
                 let label_jump_over = sink.get_label();
@@ -2143,11 +2104,136 @@ impl MachInstEmit for Inst {
                     sink.put8(0);
                 }
             }
-            _ => todo!("{:?}", self),
+
+            &Inst::TrapIf {
+                cc,
+                ref x,
+                ref y,
+                ty,
+                trap_code,
+            } => {
+                let x = alloc_value_regs(x, &mut allocs);
+                let y = alloc_value_regs(y, &mut allocs);
+                let label_trap = sink.get_label();
+                let label_jump_over = sink.get_label();
+                Inst::lower_br_icmp(
+                    cc,
+                    x,
+                    y,
+                    BranchTarget::Label(label_trap),
+                    BranchTarget::Label(label_jump_over),
+                    ty,
+                )
+                .iter()
+                .for_each(|i| i.emit(&[], sink, emit_info, state));
+                // trap
+                sink.bind_label(label_trap);
+                Inst::Udf {
+                    trap_code: trap_code,
+                }
+                .emit(&[], sink, emit_info, state);
+                sink.bind_label(label_jump_over);
+            }
+            &Inst::TrapFf {
+                cc,
+                x,
+                y,
+                ty,
+                trap_code,
+                tmp,
+                tmp2,
+            } => {
+                let x = allocs.next(x);
+                let y = allocs.next(y);
+                let tmp = allocs.next_writable(tmp);
+                let tmp2 = allocs.next_writable(tmp2);
+                let label_trap = sink.get_label();
+                let label_jump_over = sink.get_label();
+                Inst::lower_br_fcmp(
+                    cc,
+                    x,
+                    y,
+                    BranchTarget::Label(label_trap),
+                    BranchTarget::Label(label_jump_over),
+                    ty,
+                    tmp,
+                    tmp2,
+                )
+                .iter()
+                .for_each(|i| i.emit(&[], sink, emit_info, state));
+                // trap
+                sink.bind_label(label_trap);
+                Inst::Udf {
+                    trap_code: trap_code,
+                }
+                .emit(&[], sink, emit_info, state);
+                sink.bind_label(label_jump_over);
+            }
+
+            &Inst::Udf { trap_code } => {
+                let srcloc = state.cur_srcloc();
+                sink.add_trap(srcloc, trap_code);
+                if let Some(s) = state.take_stack_map() {
+                    sink.add_stack_map(StackMapExtent::UpcomingBytes(4), s);
+                }
+                /*
+                    https://github.com/riscv/riscv-isa-manual/issues/850
+                    all zero will cause invalid opcode.
+                */
+                sink.put4(0);
+            }
+            &Inst::SelectIf {
+                if_spectre_guard: _if_spectre_guard,
+                ref rd,
+                ref cmp_x,
+                ref cmp_y,
+                cc,
+                ref x,
+                ref y,
+                cmp_ty,
+            } => {
+                /*
+                    todo:: _if_spectre_guard not used.
+                */
+                let label_select_x = sink.get_label();
+                let label_select_y = sink.get_label();
+                let label_jump_over = sink.get_label();
+                let cmp_x = alloc_value_regs(cmp_x, &mut allocs);
+                let cmp_y = alloc_value_regs(cmp_y, &mut allocs);
+                let x = alloc_value_regs(x, &mut allocs);
+                let y = alloc_value_regs(y, &mut allocs);
+                let rd: Vec<_> = rd.iter().map(|r| allocs.next_writable(*r)).collect();
+                Inst::lower_br_icmp(
+                    cc,
+                    cmp_x,
+                    cmp_y,
+                    BranchTarget::Label(label_select_x),
+                    BranchTarget::Label(label_select_y),
+                    cmp_ty,
+                )
+                .into_iter()
+                .for_each(|i| i.emit(&[], sink, emit_info, state));
+                // here select x.
+                sink.bind_label(label_select_x);
+                gen_moves(&rd[..], x.regs())
+                    .into_iter()
+                    .for_each(|i| i.emit(&[], sink, emit_info, state));
+                // jump over
+                Inst::Jal {
+                    dest: BranchTarget::Label(label_jump_over),
+                }
+                .emit(&[], sink, emit_info, state);
+                // here select y.
+                sink.bind_label(label_select_y);
+                gen_moves(&rd[..], y.regs())
+                    .into_iter()
+                    .for_each(|i| i.emit(&[], sink, emit_info, state));
+                sink.bind_label(label_jump_over);
+            }
         };
 
         let end_off = sink.cur_offset();
-        // debug_assert!((end_off - start_off) <= Inst::worst_case_size());
+        debug_assert!((end_off - start_off) <= Inst::worst_case_size());
     }
 
     fn pretty_print_inst(&self, allocs: &[Allocation], state: &mut Self::State) -> String {

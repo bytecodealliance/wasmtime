@@ -1,4 +1,4 @@
-//! AArch64 ISA definitions: instruction arguments.
+//! Riscv64 ISA definitions: instruction arguments.
 
 // Some variants are never constructed, but we still want them as options in the future.
 #![allow(dead_code)]
@@ -295,7 +295,7 @@ impl AluOPRR {
             Self::FcvtDLu => "fcvt.d.lu",
             Self::FmvDX => "fmv.d.x",
             Self::FsqrtD => "fsqrt.d",
-            Self::FcvtSd => "fcvt.s.d",
+            Self::FcvtSD => "fcvt.s.d",
             Self::FcvtDS => "fcvt.d.s",
             Self::FclassD => "fclass.d",
             Self::FcvtWD => "fcvt.w.d",
@@ -385,7 +385,7 @@ impl AluOPRR {
             | AluOPRR::FmvDX => 0b1010011,
 
             AluOPRR::FsqrtD
-            | AluOPRR::FcvtSd
+            | AluOPRR::FcvtSD
             | AluOPRR::FcvtDS
             | AluOPRR::FclassD
             | AluOPRR::FcvtWD
@@ -419,7 +419,7 @@ impl AluOPRR {
             AluOPRR::FcvtDL => 0b00010,
             AluOPRR::FcvtDLu => 0b00011,
             AluOPRR::FmvDX => 0b00000,
-            AluOPRR::FcvtSd => 0b00001,
+            AluOPRR::FcvtSD => 0b00001,
             AluOPRR::FcvtDS => 0b00000,
             AluOPRR::FclassD => 0b00000,
             AluOPRR::FcvtWD => 0b00000,
@@ -449,7 +449,7 @@ impl AluOPRR {
             AluOPRR::FcvtDL => 0b1101001,
             AluOPRR::FcvtDLu => 0b1101001,
             AluOPRR::FmvDX => 0b1111001,
-            AluOPRR::FcvtSd => 0b0100000,
+            AluOPRR::FcvtSD => 0b0100000,
             AluOPRR::FcvtDS => 0b0100001,
             AluOPRR::FclassD => 0b1110001,
             AluOPRR::FcvtWD => 0b1100001,
@@ -480,7 +480,7 @@ impl AluOPRR {
             AluOPRR::FcvtDL => RISCV_RM_FUNCT3,
             AluOPRR::FcvtDLu => RISCV_RM_FUNCT3,
             AluOPRR::FmvDX => 0b000,
-            AluOPRR::FcvtSd => RISCV_RM_FUNCT3,
+            AluOPRR::FcvtSD => RISCV_RM_FUNCT3,
             AluOPRR::FcvtDS => RISCV_RM_FUNCT3,
             AluOPRR::FclassD => 0b001,
             AluOPRR::FcvtWD => RISCV_RM_FUNCT3,
@@ -1020,7 +1020,7 @@ impl AluOPRRI {
         }
     }
 
-    pub(crate) fn shamt_mask(self, x: u8) -> u8 {
+    pub(crate) fn shamt_mask(self) -> u8 {
         let s = self.need_shamt();
         match s {
             Some(x) => match x {
@@ -1308,8 +1308,7 @@ pub enum FloatCCBit {
 }
 
 impl FloatCCBit {
-    #[inline(always)]
-    pub(crate) fn bit(&self) -> u8 {
+    pub(crate) const fn bit(&self) -> u8 {
         match self {
             FloatCCBit::UN => 1 << 0,
             FloatCCBit::EQ => 1 << 1,
@@ -1345,50 +1344,8 @@ impl FloatCCBit {
     }
 
     #[inline(always)]
-    pub(crate) fn test(&self, o: Self) -> bool {
+    pub(crate) fn constains(&self, o: Self) -> bool {
         (self.bit() & o.bit()) != 0
-    }
-    /*
-       there compare condition can be implemented by just one risc-v instruction.
-    */
-    #[inline(always)]
-    pub(crate) fn just_eq(&self) -> bool {
-        match self {
-            Self::C(_) => self.test(Self::EQ) && self.clone().clean(Self::EQ).is_zero(),
-            _ => false,
-        }
-    }
-    #[inline(always)]
-    pub(crate) fn just_lt(&self) -> bool {
-        match self {
-            Self::C(_) => self.test(Self::LT) && self.clone().clean(Self::LT).is_zero(),
-            _ => false,
-        }
-    }
-    #[inline(always)]
-    pub(crate) fn just_le(&self) -> bool {
-        match self {
-            Self::C(_) => {
-                (self.test(Self::LT) && self.test(Self::EQ))
-                    && self.clone().clean(Self::LT).clean(Self::EQ).is_zero()
-            }
-            _ => false,
-        }
-    }
-    #[inline(always)]
-    fn clean(mut self, o: Self) -> Self {
-        match self {
-            Self::C(ref mut x) => *x = *x & !(o.bit()),
-            _ => unreachable!(),
-        }
-        self
-    }
-    #[inline(always)]
-    fn is_zero(&self) -> bool {
-        match self {
-            Self::C(x) => *x == 0,
-            _ => false,
-        }
     }
 }
 
@@ -1613,6 +1570,7 @@ impl ReferenceValidOP {
             ReferenceValidOP::IsInvalid => "is_invalid",
         }
     }
+
     #[inline(always)]
     pub(crate) fn from_ir_op(op: crate::ir::Opcode) -> Self {
         match op {
@@ -1635,28 +1593,8 @@ pub fn is_type_signed(ty: Type) -> bool {
 }
 
 #[inline(always)]
-pub(crate) fn ir_iflags_conflict(op: crate::ir::Opcode) {
-    unreachable!("ir {} conflict with risc-v iflags", op)
-}
-#[inline(always)]
-pub(crate) fn ir_fflags_conflict(op: crate::ir::Opcode) {
-    unreachable!("ir {} conflict with risc-v fflags", op)
-}
-
-pub(crate) struct FFlags {
-    /*
-
-    The Floating-Point Control and Status Register, fcsr, is a RISC-V control and status register (CSR). The register selects the dynamic rounding mode for floating-point arithmetic operations and holds the accrued exception flags.
-
-      todo:: e holds exception flags, so you must cannot set it, right???
-        */
-    // e: FFlagsException,
-    r: FloatRoundingMode,
-}
-impl FFlags {
-    pub(crate) fn new(r: FloatRoundingMode) -> Self {
-        Self { r }
-    }
+pub(crate) fn ir_conflict_with_riscv_platform(op: crate::ir::Opcode) -> ! {
+    unreachable!("ir {} conflict with risc-v platform.", op)
 }
 
 impl I128OP {
@@ -1667,7 +1605,6 @@ impl I128OP {
             I128OP::Mul => "mul_i128",
             I128OP::Div => "div_i128",
             I128OP::Rem => "rem_i128",
-            I128OP::Sshr => "sshr_i128",
         }
     }
 }
@@ -1834,6 +1771,7 @@ static mut V_LEN: usize = 0;
     it is ugly, but I need this global var to pass the paramter.
 
 */
+
 #[inline]
 pub(crate) fn set_x_len(l: usize) {
     unsafe { V_LEN = l };

@@ -1,4 +1,4 @@
-//! Implementation of a standard AArch64 ABI.
+//! Implementation of a standard Riscv64 ABI.
 
 use core::panic;
 
@@ -24,13 +24,13 @@ use regs::{f_reg, x_reg};
 
 use smallvec::{smallvec, SmallVec};
 
-// We use a generic implementation that factors out AArch64 and x64 ABI commonalities, because
+// We use a generic implementation that factors out Riscv64 and x64 ABI commonalities, because
 // these ABIs are very similar.
 
-/// Support for the AArch64 ABI from the callee side (within a function body).
+/// Support for the Riscv64 ABI from the callee side (within a function body).
 pub(crate) type Riscv64Callee = ABICalleeImpl<Riscv64MachineDeps>;
 
-/// Support for the AArch64 ABI from the caller side (at a callsite).
+/// Support for the Riscv64 ABI from the caller side (at a callsite).
 pub(crate) type Riscv64ABICaller = ABICallerImpl<Riscv64MachineDeps>;
 
 //todo Spidermonkey specific ABI convention.
@@ -59,7 +59,7 @@ pub(crate) type Riscv64ABICaller = ABICallerImpl<Riscv64MachineDeps>;
 /// with 32-bit arithmetic: for now, 128 MB.
 static STACK_ARG_RET_SIZE_LIMIT: u64 = 128 * 1024 * 1024;
 
-/// AArch64-specific ABI behavior. This struct just serves as an implementation
+/// Riscv64-specific ABI behavior. This struct just serves as an implementation
 /// point for the trait; it is never actually instantiated.
 pub(crate) struct Riscv64MachineDeps;
 
@@ -255,7 +255,8 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                     ir::ArgumentExtension::None,
                     ir::ArgumentPurpose::Normal,
                 );
-                x_registers = &x_registers[1..];
+                // we don't need use x_registers any more.
+                // x_registers = &x_registers[1..];
                 abi_args.push(arg);
                 Some(abi_args.len() - 1)
             } else {
@@ -705,7 +706,6 @@ fn compute_clobber_size(clobbers: &[Writable<RealReg>]) -> u32 {
             RegClass::Float => {
                 clobbered_size += 8;
             }
-            _ => unreachable!(),
         }
     }
     align_to(clobbered_size, 16)

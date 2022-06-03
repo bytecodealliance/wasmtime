@@ -53,9 +53,9 @@ pub(crate) type OptionUimm5 = Option<Uimm5>;
 
 use crate::isa::riscv64::lower::isle::generated_code::MInst;
 pub use crate::isa::riscv64::lower::isle::generated_code::{
-    AluOPRR, AluOPRRI, AluOPRRR, AluOPRRRR, AtomicOP, CsrOP, ExtendOp, FClassResult,
-    FFlagsException, FloatFlagOp, FloatRoundingMode, IntSelectOP, LoadOP, MInst as Inst,
-    ReferenceValidOP, StoreOP, I128OP, OPFPFMT,
+    AluOPRR, AluOPRRI, AluOPRRR, AluOPRRRR, AtomicOP, CsrOP, FClassResult, FFlagsException,
+    FloatFlagOp, FloatRoundingMode, IntSelectOP, LoadOP, MInst as Inst, ReferenceValidOP, StoreOP,
+    I128OP, OPFPFMT,
 };
 
 type BoxCallInfo = Box<CallInfo>;
@@ -93,29 +93,7 @@ pub enum BranchTarget {
     /// `lower_branch_group()`.
     Label(MachLabel),
     /// A fixed PC offset.
-    /// todo when to use this??
     ResolvedOffset(i32),
-}
-
-/*
-    if input or output is float,
-    you should use special instruction.
-*/
-pub(crate) fn gen_move(rd: Writable<Reg>, oty: Type, rm: Reg, ity: Type) -> Inst {
-    match (ity.is_float(), oty.is_float()) {
-        (false, false) => Inst::gen_move(rd, rm, oty),
-        (true, true) => Inst::gen_move(rd, rm, oty),
-        (false, true) => Inst::AluRR {
-            alu_op: AluOPRR::move_f_to_x_op(ity),
-            rd: rd,
-            rs: rm,
-        },
-        (true, false) => Inst::AluRR {
-            alu_op: AluOPRR::move_x_to_f_op(ity),
-            rd: rd,
-            rs: rm,
-        },
-    }
 }
 
 impl BranchTarget {
@@ -157,6 +135,41 @@ impl Display for BranchTarget {
             BranchTarget::Label(l) => write!(f, "{}", l.to_string()),
             BranchTarget::ResolvedOffset(off) => write!(f, "{}", off),
         }
+    }
+}
+
+/*
+    rd and src must have the same length and regclass.
+*/
+fn gen_moves(rd: &[Writable<Reg>], src: &[Reg]) -> SmallInstVec<Inst> {
+    let ty = Inst::canonical_type_for_rc(src[0].class());
+    assert!(Inst::canonical_type_for_rc(rd[0].to_reg().class()) == ty);
+    assert!(rd.len() == src.len());
+    let mut insts = SmallInstVec::new();
+    for (dst, src) in rd.iter().zip(src.iter()) {
+        insts.push(gen_move(*dst, ty, *src, ty));
+    }
+    insts
+}
+
+/*
+    if input or output is float,
+    you should use special instruction.
+*/
+pub(crate) fn gen_move(rd: Writable<Reg>, oty: Type, rm: Reg, ity: Type) -> Inst {
+    match (ity.is_float(), oty.is_float()) {
+        (false, false) => Inst::gen_move(rd, rm, oty),
+        (true, true) => Inst::gen_move(rd, rm, oty),
+        (false, true) => Inst::AluRR {
+            alu_op: AluOPRR::move_f_to_x_op(ity),
+            rd: rd,
+            rs: rm,
+        },
+        (true, false) => Inst::AluRR {
+            alu_op: AluOPRR::move_x_to_f_op(ity),
+            rd: rd,
+            rs: rm,
+        },
     }
 }
 
@@ -328,7 +341,6 @@ impl Inst {
 
 //=============================================================================
 // Instructions: get_regs
-// todo如果add_mod 好像是这种指令 x1 = x1 + 1 引用的
 fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCollector<'_, F>) {
     match inst {
         &Inst::Nop0 => {
@@ -377,11 +389,19 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_uses(&info.uses[..]);
             collector.reg_defs(&info.defs[..]);
         }
-        &Inst::TrapIf { rs1, rs2, .. } => {
-            collector.reg_use(rs1);
-            collector.reg_use(rs2);
+        &Inst::TrapIf { ref x, ref y, .. } => {
+            collector.reg_uses(x.regs());
+            collector.reg_uses(y.regs());
         }
-        &Inst::Trap { .. } => {}
+        &Inst::TrapFf {
+            x, y, tmp, tmp2, ..
+        } => {
+            collector.reg_use(x);
+            collector.reg_use(y);
+            collector.reg_early_def(tmp);
+            collector.reg_early_def(tmp2);
+        }
+
         &Inst::Jal { .. } => {}
         &Inst::CondBr { kind, .. } => {
             collector.reg_use(kind.rs1);
@@ -404,7 +424,7 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
         &Inst::FenceI => {}
         &Inst::ECall => {}
         &Inst::EBreak => {}
-        &Inst::Udf { .. } => todo!(),
+        &Inst::Udf { .. } => {}
         &Inst::AluRR { rd, rs, .. } => {
             collector.reg_use(rs);
             collector.reg_def(rd);
@@ -425,10 +445,13 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_use(src);
             collector.reg_def(rd);
         }
-        &Inst::Ffcmp { rd, rs1, rs2, .. } => {
+        &Inst::Ffcmp {
+            rd, rs1, rs2, tmp, ..
+        } => {
             collector.reg_use(rs1);
             collector.reg_use(rs2);
             collector.reg_early_def(rd);
+            collector.reg_early_def(tmp);
         }
         &Inst::Select {
             ref dst,
@@ -513,6 +536,20 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_use(rs);
             collector.reg_def(rd);
             collector.reg_def(tmp);
+        }
+        &Inst::SelectIf {
+            ref rd,
+            ref cmp_x,
+            ref cmp_y,
+            ref x,
+            ref y,
+            ..
+        } => {
+            collector.reg_uses(cmp_x.regs());
+            collector.reg_uses(cmp_y.regs());
+            collector.reg_uses(x.regs());
+            collector.reg_uses(y.regs());
+            rd.iter().for_each(|r| collector.reg_def(*r));
         }
     }
 }
@@ -782,10 +819,42 @@ impl Inst {
             &Inst::Nop4 => {
                 format!(";;fixed 4-size nop")
             }
-            &Inst::Cls { rd, rs, ty, .. } => {
+            &Inst::Cls { rd, rs, ty } => {
                 let rs = format_reg(rs, allocs);
                 let rd = format_reg(rd.to_reg(), allocs);
-                format!("cls {},{}", rd, rs)
+                format!("cls {},{};ty={}", rd, rs, ty)
+            }
+            &Inst::SelectIf {
+                if_spectre_guard,
+                ref rd,
+                ref cmp_x,
+                ref cmp_y,
+                cc,
+                ref x,
+                ref y,
+                cmp_ty,
+            } => {
+                let cmp_x = format_regs(cmp_x.regs(), allocs);
+                let cmp_y = format_regs(cmp_y.regs(), allocs);
+                let x = format_regs(x.regs(), allocs);
+                let y = format_regs(y.regs(), allocs);
+                let rd: Vec<_> = rd.iter().map(|r| r.to_reg()).collect();
+                let rd = format_regs(&rd[..], allocs);
+                format!(
+                    "selectif{} {},{},{}; {} {} {} ty={}",
+                    if if_spectre_guard {
+                        "_spectre_guard"
+                    } else {
+                        ""
+                    },
+                    rd,
+                    x,
+                    y,
+                    cmp_x,
+                    cc,
+                    cmp_y,
+                    cmp_ty,
+                )
             }
             &Inst::FcvtToIntSat {
                 rd,
@@ -841,8 +910,8 @@ impl Inst {
                 let t0 = format_reg(t0.to_reg(), allocs);
                 let dst = format_reg(dst.to_reg(), allocs);
                 format!(
-                    "{} {},{},{},({});; t0={}",
-                    "atomic_cas", dst, e, v, addr, t0
+                    "{} {},{},{},({});; t0={} ty={}",
+                    "atomic_cas", dst, e, v, addr, t0, ty
                 )
             }
             &Inst::Icmp { cc, rd, a, b, ty } => {
@@ -975,7 +1044,7 @@ impl Inst {
                 let rd = format_reg(rd.to_reg(), allocs);
                 if alu_op.is_bit_manip() {
                     if let Some(shamt) = alu_op.need_shamt() {
-                        let shamt = (imm12.as_i16() as u8) & alu_op.shamt_mask(shamt);
+                        let shamt = (imm12.as_i16() as u8) & alu_op.shamt_mask();
                         format!("{} {},{},{}", alu_op.op_name(), rd, rs, shamt)
                     } else {
                         format!("{} {},{}", alu_op.op_name(), rd, rs)
@@ -988,7 +1057,7 @@ impl Inst {
                 rd,
                 op,
                 from,
-                flags,
+                flags: _flags,
             } => {
                 let base = from.to_string_may_be_alloc(allocs);
                 let rd = format_reg(rd.to_reg(), allocs);
@@ -996,6 +1065,7 @@ impl Inst {
             }
             &Inst::Ffcmp {
                 rd,
+                tmp,
                 cc,
                 ty,
                 rs1,
@@ -1004,13 +1074,15 @@ impl Inst {
                 let rs1 = format_reg(rs1, allocs);
                 let rs2 = format_reg(rs2, allocs);
                 let rd = format_reg(rd.to_reg(), allocs);
+                let tmp = format_reg(tmp.to_reg(), allocs);
                 format!(
-                    "{}.{} {},{},{}",
+                    "{}.{} {},{},{};tmp={}",
                     if ty == F32 { "f" } else { "d" },
                     cc,
                     rd,
                     rs1,
                     rs2,
+                    tmp
                 )
             }
             &Inst::Store {
@@ -1054,8 +1126,41 @@ impl Inst {
                 let rd = format_reg(info.rn, allocs);
                 format!("callind {}", rd)
             }
-            &MInst::TrapIf { .. } => todo!(),
-            &MInst::Trap { .. } => todo!(),
+            &MInst::TrapIf {
+                cc,
+                x,
+                y,
+                ty,
+                trap_code,
+            } => format!(
+                "trap_if_{} {} {},{};ty={} trap_code={}",
+                cc.to_static_str(),
+                trap_code,
+                format_regs(x.regs(), allocs),
+                format_regs(y.regs(), allocs),
+                ty,
+                trap_code
+            ),
+            &MInst::TrapFf {
+                cc,
+                x,
+                y,
+                ty,
+                trap_code,
+                tmp,
+                tmp2,
+            } => format!(
+                "trap_ff_{} {} {},{};tmp={} tmp2={} ty={} trap_code={}",
+                cc,
+                trap_code,
+                format_reg(x, allocs),
+                format_reg(y, allocs),
+                format_reg(tmp.to_reg(), allocs),
+                format_reg(tmp2.to_reg(), allocs),
+                ty,
+                trap_code
+            ),
+
             &MInst::Jal { dest, .. } => {
                 format!("{} {}", "j", dest)
             }
@@ -1155,7 +1260,7 @@ impl Inst {
                 format!("select_{} {},{},{};;condition={}", ty, dst, x, y, condition)
             }
 
-            &MInst::Udf { .. } => todo!(),
+            &MInst::Udf { trap_code } => format!("udf ; trap_code={}", trap_code),
             &MInst::EBreak {} => String::from("ebreak"),
             &MInst::ECall {} => String::from("ecall"),
         }
@@ -1186,7 +1291,7 @@ pub enum LabelUse {
 }
 
 impl MachInstLabelUse for LabelUse {
-    /// Alignment for veneer code. Every AArch64 instruction must be 4-byte-aligned.
+    /// Alignment for veneer code. Every Riscv64 instruction must be 4-byte-aligned.
     const ALIGN: CodeOffset = 4;
 
     /// Maximum PC-relative range (positive), inclusive.

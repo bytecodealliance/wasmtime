@@ -1430,9 +1430,7 @@ fn test_riscv64_binemit() {
         "fcvt.s.lu fa0,a0",
     ));
 
-    /////////////////////////
-    ///
-    ///
+    //
     insns.push(TestUnit::new(
         Inst::AluRR {
             alu_op: AluOPRR::FsqrtD,
@@ -1477,7 +1475,7 @@ fn test_riscv64_binemit() {
 
     insns.push(TestUnit::new(
         Inst::AluRR {
-            alu_op: AluOPRR::FcvtSd,
+            alu_op: AluOPRR::FcvtSD,
             rd: writable_fa0(),
             rs: fa0(),
         },

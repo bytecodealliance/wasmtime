@@ -1,9 +1,8 @@
-//! AArch64 ISA definitions: immediate constants.
+//! Riscv64 ISA definitions: immediate constants.
 
 // Some variants are never constructed, but we still want them as options in the future.
 #[allow(dead_code)]
 use std::fmt::{Debug, Display, Formatter, Result};
-use std::string::String;
 
 #[derive(Copy, Clone, Debug)]
 pub struct Imm12 {

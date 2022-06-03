@@ -3,8 +3,6 @@
 // Pull in the ISLE generated code.
 pub mod generated_code;
 
-use alloc::borrow::ToOwned;
-
 use self::generated_code::I128OP;
 
 // Types that the generated ISLE code uses via `use super::*`.
@@ -1094,8 +1092,7 @@ where
                 });
             }
         }
-        let new_low = self.temp_writable_reg(I64);
-        let new_high = self.temp_writable_reg(I64);
+
         let condition_shift_less_than_64 = {
             let constant_64 = {
                 let tmp = self.temp_writable_reg(I64);

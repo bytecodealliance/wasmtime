@@ -1,7 +1,7 @@
 //! Lower a single Cranelift instruction into vcode.
 
 use crate::machinst::Writable;
-use alloc::vec;
+
 use alloc::vec::Vec;
 
 use crate::ir::Inst as IRInst;
@@ -16,7 +16,7 @@ use crate::CodegenResult;
 
 use std::boxed::Box;
 
-use crate::ir::types::{B32, B64, B8, F32, F64, FFLAGS, I128, I16, I32, I64, I8, R32, R64};
+use crate::ir::types::{F32, I128, I16, I32, I64, I8};
 
 use super::lower::*;
 use crate::isa::riscv64::abi::*;
@@ -28,19 +28,6 @@ pub(crate) fn is_valid_atomic_transaction_ty(ty: Type) -> bool {
         _ => false,
     }
 }
-
-// pub(crate) fn lower_icmp<C: LowerCtx<I = Inst>>(
-//     ctx: &mut C,
-//     insn: IRInst,
-//     flags: &Flags,
-//     isa_flags: &aarch64_settings::Flags,
-// ) {
-//     let op = ctx.data(insn).opcode();
-//     assert(op == crate::ir::Opcode::Icmp);
-//     let inputs = insn_inputs(ctx, insn);
-//     let outputs = insn_outputs(ctx, insn);
-//     let ty = ctx.output_ty(insn, 0);
-// }
 
 /// Actually codegen an instruction's results into registers.
 pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
@@ -377,7 +364,6 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let conditon = put_input_in_reg(ctx, inputs[0]);
             let x = ctx.put_input_in_regs(insn, 1);
             let y = ctx.put_input_in_regs(insn, 2);
-
             ctx.emit(Inst::Select {
                 dst,
                 conditon,
@@ -387,7 +373,27 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             });
         }
 
-        Opcode::Selectif | Opcode::SelectifSpectreGuard => ir_iflags_conflict(op),
+        Opcode::Selectif | Opcode::SelectifSpectreGuard => {
+            if let Some(input_as_inst) = maybe_input_insn(ctx, inputs[0], crate::ir::Opcode::Icmp) {
+                let rd = get_output_reg(ctx, outputs[0]);
+                let rd: Vec<_> = rd.regs().iter().map(|r| *r).collect();
+                let x = put_input_in_regs(ctx, inputs[0]);
+                let y = put_input_in_regs(ctx, inputs[1]);
+                let (cc, cmp_x, cmp_y, cmp_ty) = get_icmp_parameters(ctx, input_as_inst);
+                ctx.emit(Inst::SelectIf {
+                    if_spectre_guard: op == crate::ir::Opcode::SelectifSpectreGuard,
+                    rd,
+                    cmp_x,
+                    cmp_y,
+                    cc,
+                    x,
+                    y,
+                    cmp_ty,
+                });
+            } else {
+                ir_conflict_with_riscv_platform(op);
+            }
+        }
 
         Opcode::Bitselect => {
             debug_assert_ne!(Opcode::Vselect, op);
@@ -425,9 +431,37 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             todo!()
         }
 
-        Opcode::Trueif => ir_iflags_conflict(op),
+        Opcode::Trueif => {
+            let (cc, x, y, ty) = maybe_input_insn(ctx, inputs[0], crate::ir::Opcode::Icmp)
+                .map(|inst| get_icmp_parameters(ctx, inst))
+                .unwrap_or_else(|| ir_conflict_with_riscv_platform(op));
+            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+            ctx.emit(Inst::Icmp {
+                cc,
+                rd,
+                a: x,
+                b: y,
+                ty,
+            });
+        }
 
-        Opcode::Trueff => ir_fflags_conflict(op),
+        Opcode::Trueff => {
+            let (cc, x, y, ty) = maybe_input_insn(ctx, inputs[0], crate::ir::Opcode::Fcmp)
+                .map(|inst| get_fcmp_parameters(ctx, inst))
+                .unwrap_or_else(|| ir_conflict_with_riscv_platform(op));
+            let tmp = ctx.alloc_tmp(I64).only_reg().unwrap();
+            let tmp2 = ctx.alloc_tmp(I64).only_reg().unwrap();
+            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+
+            ctx.emit(Inst::Ffcmp {
+                rd,
+                tmp,
+                cc,
+                ty,
+                rs1: x,
+                rs2: y,
+            });
+        }
 
         Opcode::IsNull | Opcode::IsInvalid => {
             let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
@@ -572,17 +606,19 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let rs1 = put_input_in_reg(ctx, inputs[0]);
             let rs2 = put_input_in_reg(ctx, inputs[1]);
             let cc = ctx.data(insn).fp_cond_code().unwrap();
+            let tmp = ctx.alloc_tmp(I64).only_reg().unwrap();
             ctx.emit(Inst::Ffcmp {
                 rd,
                 cc,
                 ty,
                 rs1,
                 rs2,
+                tmp,
             });
         }
 
         Opcode::Debugtrap => {
-            unimplemented!()
+            ctx.emit(Inst::EBreak);
         }
 
         Opcode::Trap | Opcode::ResumableTrap => {
@@ -590,8 +626,40 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             ctx.emit(Inst::Udf { trap_code });
         }
 
-        Opcode::Trapif | Opcode::Trapff => {
-            unimplemented!()
+        Opcode::Trapif => {
+            let trap_code = ctx.data(insn).trap_code().unwrap();
+            if let Some(input_as_inst) = maybe_input_insn(ctx, inputs[0], crate::ir::Opcode::Icmp) {
+                let (cc, x, y, ty) = get_icmp_parameters(ctx, input_as_inst);
+                ctx.emit(Inst::TrapIf {
+                    cc,
+                    x,
+                    y,
+                    ty,
+                    trap_code,
+                });
+            } else {
+                ir_conflict_with_riscv_platform(op);
+            }
+        }
+
+        Opcode::Trapff => {
+            let trap_code = ctx.data(insn).trap_code().unwrap();
+            if let Some(input_as_inst) = maybe_input_insn(ctx, inputs[0], crate::ir::Opcode::Fcmp) {
+                let (cc, x, y, ty) = get_fcmp_parameters(ctx, input_as_inst);
+                let tmp = ctx.alloc_tmp(I64).only_reg().unwrap();
+                let tmp2 = ctx.alloc_tmp(I64).only_reg().unwrap();
+                ctx.emit(Inst::TrapFf {
+                    cc,
+                    x,
+                    y,
+                    ty,
+                    trap_code,
+                    tmp,
+                    tmp2,
+                });
+            } else {
+                ir_conflict_with_riscv_platform(op);
+            }
         }
 
         Opcode::Trapz | Opcode::Trapnz | Opcode::ResumableTrapnz => {
@@ -877,10 +945,9 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 let input_ty = ctx.input_ty(insn, 0);
                 let rs = put_input_in_reg(ctx, inputs[0]);
                 let rd = ctx.get_output(insn, 0).only_reg().unwrap();
-
                 let op = match (input_ty.bits(), ty.bits()) {
                     (32, 64) => AluOPRR::FcvtDS,
-                    (64, 32) => AluOPRR::FcvtSd,
+                    (64, 32) => AluOPRR::FcvtSD,
                     _ => unreachable!(),
                 };
                 ctx.emit(Inst::AluRR { alu_op: op, rd, rs });
@@ -1014,7 +1081,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 unimplemented!()
             } else {
                 let rd = ctx.get_output(insn, 0).only_reg().unwrap();
-                let mut rs = put_input_in_reg(ctx, inputs[0]);
+                let rs = put_input_in_reg(ctx, inputs[0]);
                 let tmp = ctx.alloc_tmp(I64).only_reg().unwrap();
                 ctx.emit(Inst::FcvtToIntSat {
                     rd: rd,
@@ -1184,10 +1251,37 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
                     .for_each(|i| ctx.emit(i));
             }
             Opcode::Brif => {
-                ir_iflags_conflict(op0.opcode());
+                let (cc, x, y, ty) = maybe_input_insn(
+                    ctx,
+                    InsnInput {
+                        insn: branches[0],
+                        input: 0,
+                    },
+                    crate::ir::Opcode::Icmp,
+                )
+                .map(|inst| get_icmp_parameters(ctx, inst))
+                .unwrap_or_else(|| ir_conflict_with_riscv_platform(op0.opcode()));
+
+                Inst::lower_br_icmp(cc, x, y, taken, not_taken, ty)
+                    .into_iter()
+                    .for_each(|i| ctx.emit(i));
             }
             Opcode::Brff => {
-                ir_fflags_conflict(op0.opcode());
+                let (cc, x, y, ty) = maybe_input_insn(
+                    ctx,
+                    InsnInput {
+                        insn: branches[0],
+                        input: 0,
+                    },
+                    crate::ir::Opcode::Fcmp,
+                )
+                .map(|inst| get_fcmp_parameters(ctx, inst))
+                .unwrap_or_else(|| ir_conflict_with_riscv_platform(op0.opcode()));
+                let tmp = ctx.alloc_tmp(I64).only_reg().unwrap();
+                let tmp2 = ctx.alloc_tmp(I64).only_reg().unwrap();
+                Inst::lower_br_fcmp(cc, x, y, taken, not_taken, ty, tmp, tmp2)
+                    .into_iter()
+                    .for_each(|i| ctx.emit(i));
             }
             _ => unreachable!(),
         }
@@ -1229,6 +1323,7 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
     }
     Ok(())
 }
+
 fn gen_load(
     dst: ValueRegs<Writable<Reg>>,
     base: Reg,
@@ -1387,10 +1482,4 @@ pub(crate) fn gen_store(
 
 fn pinned_register_not_used() -> ! {
     unreachable!()
-}
-
-#[cfg(test)]
-mod test {
-    #[test]
-    fn compile_ok() {}
 }

@@ -66,7 +66,7 @@ pub mod x64;
 #[cfg(feature = "arm64")]
 pub(crate) mod aarch64;
 
-#[cfg(feature = "riscv64")]
+// #[cfg(feature = "riscv64")]
 pub mod riscv64;
 
 #[cfg(feature = "s390x")]

@@ -1,6 +1,5 @@
-//! AArch64 ISA definitions: registers.
+//! Riscv64 ISA definitions: registers.
 //!
-use core::fmt::Write;
 
 use crate::machinst::ArgsOrRets;
 use crate::settings;
@@ -170,7 +169,7 @@ pub fn writable_fp_reg() -> Writable<Reg> {
 /// purpose for simplicity; otherwise we need a multi-stage analysis where we first determine how
 /// many spill slots we have, then perhaps remove the reg from the pool and recompute regalloc.
 ///
-/// We use x16 for this (aka IP0 in the AArch64 ABI) because it's a scratch register but is
+/// We use x16 for this (aka IP0 in the Riscv64 ABI) because it's a scratch register but is
 /// slightly special (used for linker veneers). We're free to use it as long as we don't expect it
 /// to live through call instructions.
 #[inline(always)]
@@ -243,6 +242,7 @@ pub fn crate_reg_eviroment(_flags: &settings::Flags) -> MachineEnv {
         fixed_stack_slots,
     }
 }
+
 #[inline(always)]
 pub fn x_reg(enc: usize) -> Reg {
     let p_reg = PReg::new(enc, RegClass::Int);

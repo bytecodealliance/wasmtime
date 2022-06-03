@@ -13,9 +13,7 @@ use crate::settings as shared_settings;
 use alloc::{boxed::Box, vec::Vec};
 use core::fmt;
 use regalloc2::MachineEnv;
-use target_lexicon::{
-    Aarch64Architecture, Architecture, BinaryFormat, OperatingSystem, Riscv64Architecture, Triple,
-};
+use target_lexicon::{Architecture, BinaryFormat, OperatingSystem, Riscv64Architecture, Triple};
 
 // New backend:
 mod abi;
@@ -169,18 +167,16 @@ pub fn isa_builder(triple: Triple) -> IsaBuilder {
 
 #[cfg(test)]
 mod test {
-    use alloc::vec;
 
     use super::*;
     use crate::cursor::{Cursor, FuncCursor};
     use crate::ir::condcodes::FloatCC;
-    use crate::ir::{types::*, JumpTable, JumpTableData};
+    use crate::ir::{types::*, JumpTableData};
     use crate::ir::{AbiParam, ExternalName, Function, InstBuilder, Signature};
     use crate::ir::{StackSlotData, StackSlotKind};
     use crate::isa::CallConv;
     use crate::settings;
     use crate::settings::Configurable;
-    use std::io;
 
     #[test]
     fn hello_world() {
@@ -267,7 +263,6 @@ mod test {
     }
 
     #[test]
-    #[test]
     fn test_branch_lowering() {
         // let name = ExternalName::testcase("test0");
         // let mut sig = Signature::new(CallConv::SystemV);
@@ -336,7 +331,6 @@ mod test {
 
     #[test]
     fn hello_world2() {
-        init_logger();
         let name = ExternalName::testcase("test0");
         let mut sig = Signature::new(CallConv::SystemV);
         sig.returns.push(AbiParam::new(B1));
@@ -361,7 +355,6 @@ mod test {
 
     #[test]
     fn i128_compare() {
-        init_logger();
         let name = ExternalName::testcase("test0");
         let mut sig = Signature::new(CallConv::SystemV);
         sig.returns.push(AbiParam::new(I32));
@@ -414,9 +407,8 @@ mod test {
 
     #[test]
     fn br_table_xxx() {
-        init_logger();
         let name = ExternalName::testcase("test0");
-        let mut sig = Signature::new(CallConv::SystemV);
+        let sig = Signature::new(CallConv::SystemV);
         let mut func = Function::with_name_signature(name, sig);
 
         let bb0 = func.dfg.make_block();
@@ -457,9 +449,8 @@ mod test {
     }
     #[test]
     fn br_table() {
-        init_logger();
         let name = ExternalName::testcase("test0");
-        let mut sig = Signature::new(CallConv::SystemV);
+        let sig = Signature::new(CallConv::SystemV);
         let mut func = Function::with_name_signature(name, sig);
         let bb0 = func.dfg.make_block();
         let bb1 = func.dfg.make_block();
