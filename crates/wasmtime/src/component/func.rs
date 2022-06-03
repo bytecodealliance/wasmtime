@@ -1,16 +1,69 @@
 use crate::component::instance::InstanceData;
 use crate::store::{StoreOpaque, Stored};
-use crate::{AsContext, StoreContextMut};
-use anyhow::{bail, Context, Result};
-use std::convert::TryFrom;
+use crate::AsContext;
+use anyhow::{Context, Result};
+use std::mem::MaybeUninit;
+use std::ptr::NonNull;
 use std::sync::Arc;
-use wasmtime_environ::component::{
-    CanonicalOptions, ComponentTypes, CoreExport, FuncTypeIndex, StringEncoding,
-};
+use wasmtime_environ::component::{CanonicalOptions, ComponentTypes, CoreExport, FuncTypeIndex};
 use wasmtime_environ::FuncIndex;
-use wasmtime_runtime::{Export, ExportFunction, ExportMemory, VMTrampoline};
+use wasmtime_runtime::{Export, ExportFunction, VMTrampoline};
 
+const MAX_STACK_PARAMS: usize = 16;
+const MAX_STACK_RESULTS: usize = 1;
+
+/// A helper macro to safely map `MaybeUninit<T>` to `MaybeUninit<U>` where `U`
+/// is a field projection within `T`.
+///
+/// This is intended to be invoked as:
+///
+/// ```ignore
+/// struct MyType {
+///     field: u32,
+/// }
+///
+/// let initial: &mut MaybeUninit<MyType> = ...;
+/// let field: &mut MaybeUninit<u32> = map_maybe_uninit!(initial.field);
+/// ```
+///
+/// Note that array accesses are also supported:
+///
+/// ```ignore
+///
+/// let initial: &mut MaybeUninit<[u32; 2]> = ...;
+/// let element: &mut MaybeUninit<u32> = map_maybe_uninit!(initial[1]);
+/// ```
+macro_rules! map_maybe_uninit {
+    ($maybe_uninit:ident $($field:tt)*) => (#[allow(unused_unsafe)] unsafe {
+        use crate::component::func::MaybeUninitExt;
+
+        let m: &mut std::mem::MaybeUninit<_> = $maybe_uninit;
+        // Note the usage of `addr_of_mut!` here which is an attempt to "stay
+        // safe" here where we never accidentally create `&mut T` where `T` is
+        // actually uninitialized, hopefully appeasing the Rust unsafe
+        // guidelines gods.
+        m.map(|p| std::ptr::addr_of_mut!((*p)$($field)*))
+    })
+}
+
+trait MaybeUninitExt<T> {
+    /// Maps `MaybeUninit<T>` to `MaybeUninit<U>` using the closure provided.
+    ///
+    /// Note that this is `unsafe` as there is no guarantee that `U` comes from
+    /// `T`.
+    unsafe fn map<U>(&mut self, f: impl FnOnce(*mut T) -> *mut U) -> &mut MaybeUninit<U>;
+}
+
+impl<T> MaybeUninitExt<T> for MaybeUninit<T> {
+    unsafe fn map<U>(&mut self, f: impl FnOnce(*mut T) -> *mut U) -> &mut MaybeUninit<U> {
+        let new_ptr = f(self.as_mut_ptr());
+        std::mem::transmute::<*mut U, &mut MaybeUninit<U>>(new_ptr)
+    }
+}
+
+mod options;
 mod typed;
+pub use self::options::*;
 pub use self::typed::*;
 
 /// A WebAssembly component function.
@@ -28,43 +81,30 @@ pub struct FuncData {
     options: Options,
 }
 
-pub(crate) struct Options {
-    string_encoding: StringEncoding,
-    intrinsics: Option<Intrinsics>,
-}
-
-struct Intrinsics {
-    memory: ExportMemory,
-    realloc: ExportFunction,
-}
-
 impl Func {
     pub(crate) fn from_lifted_func(
         store: &mut StoreOpaque,
-        instance: &InstanceData,
+        data: &InstanceData,
         ty: FuncTypeIndex,
         func: &CoreExport<FuncIndex>,
         options: &CanonicalOptions,
     ) -> Func {
-        let export = match instance.lookup_export(store, func) {
+        let export = match data.lookup_export(store, func) {
             Export::Function(f) => f,
             _ => unreachable!(),
         };
         let trampoline = store.lookup_trampoline(unsafe { export.anyfunc.as_ref() });
-        let intrinsics = options.memory.map(|i| {
-            let memory = instance.runtime_memory(i);
-            let realloc = instance.runtime_realloc(options.realloc.unwrap());
-            Intrinsics { memory, realloc }
-        });
+        let memory = options
+            .memory
+            .map(|i| NonNull::new(data.runtime_memory(i).definition).unwrap());
+        let realloc = options.realloc.map(|i| data.runtime_realloc(i).anyfunc);
+        let options = unsafe { Options::new(store.id(), memory, realloc, options.string_encoding) };
         Func(store.store_data_mut().insert(FuncData {
             trampoline,
             export,
-            options: Options {
-                intrinsics,
-                string_encoding: options.string_encoding,
-            },
+            options,
             ty,
-            types: instance.component_types().clone(),
+            types: data.component_types().clone(),
         }))
     }
 
@@ -167,80 +207,11 @@ impl Func {
         let data = &store[self.0];
         let ty = &data.types[data.ty];
 
-        Params::typecheck(&ty.params, &data.types).context("type mismatch with parameters")?;
+        Params::typecheck(&ty.params, &data.types, Op::Lower)
+            .context("type mismatch with parameters")?;
         Return::typecheck(&ty.result, &data.types, Op::Lift)
             .context("type mismatch with result")?;
 
         Ok(())
-    }
-
-    fn realloc<'a, T>(
-        &self,
-        store: &'a mut StoreContextMut<'_, T>,
-        old: usize,
-        old_size: usize,
-        old_align: u32,
-        new_size: usize,
-    ) -> Result<(&'a mut [u8], usize)> {
-        let (realloc, memory) = match &store.0[self.0].options.intrinsics {
-            Some(Intrinsics {
-                memory, realloc, ..
-            }) => (realloc.clone(), memory.clone()),
-            None => unreachable!(),
-        };
-
-        // Invoke the wasm malloc function using its raw and statically known
-        // signature.
-        let result = unsafe {
-            // FIXME: needs memory64 support
-            assert!(!memory.memory.memory.memory64);
-            usize::try_from(crate::TypedFunc::<(u32, u32, u32, u32), u32>::call_raw(
-                store,
-                realloc.anyfunc,
-                (
-                    u32::try_from(old)?,
-                    u32::try_from(old_size)?,
-                    old_align,
-                    u32::try_from(new_size)?,
-                ),
-            )?)?
-        };
-
-        let memory = self.memory_mut(store.0);
-
-        let result_slice = match memory.get_mut(result..).and_then(|s| s.get_mut(..new_size)) {
-            Some(end) => end,
-            None => bail!("realloc return: beyond end of memory"),
-        };
-
-        Ok((result_slice, result))
-    }
-
-    /// Asserts that this function has an associated memory attached to it and
-    /// then returns the slice of memory tied to the lifetime of the provided
-    /// store.
-    fn memory<'a>(&self, store: &'a StoreOpaque) -> &'a [u8] {
-        let memory = match &store[self.0].options.intrinsics {
-            Some(Intrinsics { memory, .. }) => memory,
-            None => unreachable!(),
-        };
-
-        unsafe {
-            let memory = &*memory.definition;
-            std::slice::from_raw_parts(memory.base, memory.current_length)
-        }
-    }
-
-    /// Same as above, just `_mut`
-    fn memory_mut<'a>(&self, store: &'a mut StoreOpaque) -> &'a mut [u8] {
-        let memory = match &store[self.0].options.intrinsics {
-            Some(Intrinsics { memory, .. }) => memory.clone(),
-            None => unreachable!(),
-        };
-
-        unsafe {
-            let memory = &*memory.definition;
-            std::slice::from_raw_parts_mut(memory.base, memory.current_length)
-        }
     }
 }

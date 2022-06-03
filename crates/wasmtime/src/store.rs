@@ -1105,6 +1105,10 @@ impl<T> StoreInner<T> {
 }
 
 impl StoreOpaque {
+    pub fn id(&self) -> StoreId {
+        self.store_data.id()
+    }
+
     pub fn bump_resource_counts(&mut self, module: &Module) -> Result<()> {
         fn bump(slot: &mut usize, max: usize, amt: usize, desc: &str) -> Result<()> {
             let new = slot.saturating_add(amt);
