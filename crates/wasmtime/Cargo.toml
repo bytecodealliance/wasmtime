@@ -108,4 +108,7 @@ memory-init-cow = ["wasmtime-runtime/memory-init-cow"]
 # Enables in-progress support for the component model. Note that this feature is
 # in-progress, buggy, and incomplete. This is primarily here for internal
 # testing purposes.
-component-model = ["wasmtime-environ/component-model"]
+component-model = [
+  "wasmtime-environ/component-model",
+  "wasmtime-cranelift?/component-model",
+]

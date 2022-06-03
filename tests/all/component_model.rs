@@ -3,6 +3,7 @@ use wasmtime::component::Component;
 use wasmtime::{Config, Engine};
 
 mod func;
+mod import;
 
 fn engine() -> Engine {
     let mut config = Config::new();

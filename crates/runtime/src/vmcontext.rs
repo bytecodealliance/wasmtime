@@ -571,7 +571,7 @@ mod test_vmcaller_checked_anyfunc {
     use super::VMCallerCheckedAnyfunc;
     use memoffset::offset_of;
     use std::mem::size_of;
-    use wasmtime_environ::{Module, VMOffsets};
+    use wasmtime_environ::{Module, PtrSize, VMOffsets};
 
     #[test]
     fn check_vmcaller_checked_anyfunc_offsets() {
@@ -579,19 +579,19 @@ mod test_vmcaller_checked_anyfunc {
         let offsets = VMOffsets::new(size_of::<*mut u8>() as u8, &module);
         assert_eq!(
             size_of::<VMCallerCheckedAnyfunc>(),
-            usize::from(offsets.size_of_vmcaller_checked_anyfunc())
+            usize::from(offsets.ptr.size_of_vmcaller_checked_anyfunc())
         );
         assert_eq!(
             offset_of!(VMCallerCheckedAnyfunc, func_ptr),
-            usize::from(offsets.vmcaller_checked_anyfunc_func_ptr())
+            usize::from(offsets.ptr.vmcaller_checked_anyfunc_func_ptr())
         );
         assert_eq!(
             offset_of!(VMCallerCheckedAnyfunc, type_index),
-            usize::from(offsets.vmcaller_checked_anyfunc_type_index())
+            usize::from(offsets.ptr.vmcaller_checked_anyfunc_type_index())
         );
         assert_eq!(
             offset_of!(VMCallerCheckedAnyfunc, vmctx),
-            usize::from(offsets.vmcaller_checked_anyfunc_vmctx())
+            usize::from(offsets.ptr.vmcaller_checked_anyfunc_vmctx())
         );
     }
 }

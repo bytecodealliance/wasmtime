@@ -34,6 +34,9 @@ use wasmtime_environ::{
     TrapCode, TrapEncodingBuilder, TrapInformation, Tunables, VMOffsets,
 };
 
+#[cfg(feature = "component-model")]
+mod component;
+
 struct CompilerContext {
     func_translator: FuncTranslator,
     codegen_context: Context,
@@ -371,6 +374,11 @@ impl wasmtime_environ::Compiler for Compiler {
             .iter()
             .map(|val| (val.name.to_string(), to_flag_value(val)))
             .collect()
+    }
+
+    #[cfg(feature = "component-model")]
+    fn component_compiler(&self) -> &dyn wasmtime_environ::component::ComponentCompiler {
+        self
     }
 }
 

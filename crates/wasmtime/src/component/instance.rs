@@ -246,7 +246,16 @@ impl<'a> Instantiator<'a> {
                         unsafe { crate::Instance::new_started(store, module, imports.as_ref())? };
                     self.data.instances.push(i);
                 }
-                Initializer::LowerImport(_) => unimplemented!(),
+                Initializer::LowerImport(i) => {
+                    drop(self.component.trampoline_ptr(i.index));
+                    drop(
+                        self.component
+                            .signatures()
+                            .shared_signature(i.canonical_abi)
+                            .unwrap(),
+                    );
+                    unimplemented!()
+                }
 
                 Initializer::ExtractMemory(export) => {
                     let memory = match self.data.lookup_export(store.0, export) {

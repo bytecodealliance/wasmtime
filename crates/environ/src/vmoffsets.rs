@@ -95,6 +95,32 @@ pub struct VMOffsets<P> {
 pub trait PtrSize {
     /// Returns the pointer size, in bytes, for the target.
     fn size(&self) -> u8;
+
+    /// The offset of the `func_ptr` field.
+    #[allow(clippy::erasing_op)]
+    #[inline]
+    fn vmcaller_checked_anyfunc_func_ptr(&self) -> u8 {
+        0 * self.size()
+    }
+
+    /// The offset of the `type_index` field.
+    #[allow(clippy::identity_op)]
+    #[inline]
+    fn vmcaller_checked_anyfunc_type_index(&self) -> u8 {
+        1 * self.size()
+    }
+
+    /// The offset of the `vmctx` field.
+    #[inline]
+    fn vmcaller_checked_anyfunc_vmctx(&self) -> u8 {
+        2 * self.size()
+    }
+
+    /// Return the size of `VMCallerCheckedAnyfunc`.
+    #[inline]
+    fn size_of_vmcaller_checked_anyfunc(&self) -> u8 {
+        3 * self.size()
+    }
 }
 
 /// Type representing the size of a pointer for the current compilation host
@@ -310,7 +336,7 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
                 = cmul(ret.num_defined_globals, ret.size_of_vmglobal_definition()),
             size(defined_anyfuncs) = cmul(
                 ret.num_escaped_funcs,
-                ret.size_of_vmcaller_checked_anyfunc(),
+                ret.ptr.size_of_vmcaller_checked_anyfunc(),
             ),
         }
 
@@ -510,35 +536,6 @@ impl<P: PtrSize> VMOffsets<P> {
     }
 }
 
-/// Offsets for `VMCallerCheckedAnyfunc`.
-impl<P: PtrSize> VMOffsets<P> {
-    /// The offset of the `func_ptr` field.
-    #[allow(clippy::erasing_op)]
-    #[inline]
-    pub fn vmcaller_checked_anyfunc_func_ptr(&self) -> u8 {
-        0 * self.pointer_size()
-    }
-
-    /// The offset of the `type_index` field.
-    #[allow(clippy::identity_op)]
-    #[inline]
-    pub fn vmcaller_checked_anyfunc_type_index(&self) -> u8 {
-        1 * self.pointer_size()
-    }
-
-    /// The offset of the `vmctx` field.
-    #[inline]
-    pub fn vmcaller_checked_anyfunc_vmctx(&self) -> u8 {
-        2 * self.pointer_size()
-    }
-
-    /// Return the size of `VMCallerCheckedAnyfunc`.
-    #[inline]
-    pub fn size_of_vmcaller_checked_anyfunc(&self) -> u8 {
-        3 * self.pointer_size()
-    }
-}
-
 /// Offsets for `VMContext`.
 impl<P: PtrSize> VMOffsets<P> {
     /// Return the offset to the `magic` value in this `VMContext`.
@@ -700,7 +697,7 @@ impl<P: PtrSize> VMOffsets<P> {
         assert!(!index.is_reserved_value());
         assert_lt!(index.as_u32(), self.num_escaped_funcs);
         self.vmctx_anyfuncs_begin()
-            + index.as_u32() * u32::from(self.size_of_vmcaller_checked_anyfunc())
+            + index.as_u32() * u32::from(self.ptr.size_of_vmcaller_checked_anyfunc())
     }
 
     /// Return the offset to the `body` field in `*const VMFunctionBody` index `index`.

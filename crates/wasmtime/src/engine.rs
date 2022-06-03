@@ -224,6 +224,25 @@ impl Engine {
             .collect::<Result<Vec<B>, E>>()
     }
 
+    /// Executes `f1` and `f2` in parallel if parallel compilation is enabled at
+    /// both runtime and compile time, otherwise runs them synchronously.
+    #[allow(dead_code)] // only used for the component-model feature right now
+    pub(crate) fn join_maybe_parallel<T, U>(
+        &self,
+        f1: impl FnOnce() -> T + Send,
+        f2: impl FnOnce() -> U + Send,
+    ) -> (T, U)
+    where
+        T: Send,
+        U: Send,
+    {
+        if self.config().parallel_compilation {
+            #[cfg(feature = "parallel-compilation")]
+            return rayon::join(f1, f2);
+        }
+        (f1(), f2())
+    }
+
     /// Returns the target triple which this engine is compiling code for
     /// and/or running code for.
     pub(crate) fn target(&self) -> target_lexicon::Triple {
