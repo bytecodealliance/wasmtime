@@ -1,12 +1,14 @@
 use crate::component::{Component, ComponentParams, ComponentValue, Func, TypedFunc};
 use crate::instance::OwnedImports;
 use crate::store::{StoreOpaque, Stored};
-use crate::{AsContextMut, Module, StoreContextMut};
+use crate::{AsContextMut, Module, StoreContext, StoreContextMut};
 use anyhow::{anyhow, Context, Result};
+use std::marker;
 use std::sync::Arc;
 use wasmtime_environ::component::{
-    ComponentTypes, CoreDef, CoreExport, Export, ExportItem, Initializer, ModuleToInstantiate,
-    RuntimeInstanceIndex, RuntimeMemoryIndex, RuntimeReallocIndex,
+    ComponentTypes, CoreDef, CoreExport, Export, ExportItem, Initializer, InstantiateModule,
+    RuntimeImportIndex, RuntimeInstanceIndex, RuntimeMemoryIndex, RuntimeModuleIndex,
+    RuntimeReallocIndex,
 };
 use wasmtime_environ::{EntityIndex, PrimaryMap};
 
@@ -26,6 +28,7 @@ pub(crate) struct InstanceData {
     // alive and things like that, instead only the bare minimum necessary
     // should be kept alive here (mostly just `wasmtime_environ::Component`.
     component: Component,
+    exported_modules: PrimaryMap<RuntimeModuleIndex, Module>,
 
     // TODO: move these to `VMComponentContext`
     memories: PrimaryMap<RuntimeMemoryIndex, wasmtime_runtime::ExportMemory>,
@@ -33,21 +36,6 @@ pub(crate) struct InstanceData {
 }
 
 impl Instance {
-    /// Instantiates the `component` provided within the given `store`.
-    ///
-    /// Does not support components which have imports at this time.
-    //
-    // FIXME: need to write more docs here.
-    pub fn new(mut store: impl AsContextMut, component: &Component) -> Result<Instance> {
-        let mut store = store.as_context_mut();
-
-        let mut instantiator = Instantiator::new(component);
-        instantiator.run(&mut store)?;
-
-        let data = Box::new(instantiator.data);
-        Ok(Instance(store.0.store_data_mut().insert(Some(data))))
-    }
-
     /// Looks up a function by name within this [`Instance`].
     ///
     /// The `store` specified must be the store that this instance lives within
@@ -101,6 +89,41 @@ impl Instance {
         Ok(f.typed::<Params, Results, _>(store)
             .with_context(|| format!("failed to convert function `{}` to given type", name))?)
     }
+
+    /// Returns an iterator of all of the exported modules that this instance
+    /// contains.
+    //
+    // FIXME: this should probably be generalized in some form to something else
+    // that either looks like:
+    //
+    // * an iterator over all exports
+    // * an iterator for a `Component` with type information followed by a
+    //   `get_module` function here
+    //
+    // For now this is just quick-and-dirty to get wast support for iterating
+    // over exported modules to work.
+    pub fn modules<'a, T: 'a>(
+        &'a self,
+        store: impl Into<StoreContext<'a, T>>,
+    ) -> impl Iterator<Item = (&'a str, &'a Module)> + 'a {
+        let store = store.into();
+        self._modules(store.0)
+    }
+
+    fn _modules<'a>(
+        &'a self,
+        store: &'a StoreOpaque,
+    ) -> impl Iterator<Item = (&'a str, &'a Module)> + '_ {
+        let data = store.store_data()[self.0].as_ref().unwrap();
+        data.component
+            .env_component()
+            .exports
+            .iter()
+            .filter_map(|(name, export)| match *export {
+                Export::Module(idx) => Some((name.as_str(), &data.exported_modules[idx])),
+                _ => None,
+            })
+    }
 }
 
 impl InstanceData {
@@ -109,6 +132,7 @@ impl InstanceData {
             Export::LiftedFunction { ty, func, options } => {
                 Some(Func::from_lifted_func(store, self, *ty, func, options))
             }
+            Export::Module(_) => None,
         }
     }
 
@@ -156,21 +180,30 @@ impl InstanceData {
 struct Instantiator<'a> {
     component: &'a Component,
     data: InstanceData,
-    imports: OwnedImports,
+    core_imports: OwnedImports,
+    imports: &'a PrimaryMap<RuntimeImportIndex, RuntimeImport>,
+}
+
+pub enum RuntimeImport {
+    Module(Module),
 }
 
 impl<'a> Instantiator<'a> {
-    fn new(component: &'a Component) -> Instantiator<'a> {
+    fn new(
+        component: &'a Component,
+        imports: &'a PrimaryMap<RuntimeImportIndex, RuntimeImport>,
+    ) -> Instantiator<'a> {
         let env_component = component.env_component();
-        if env_component.imports.len() > 0 {
-            unimplemented!("component imports");
-        }
         Instantiator {
             component,
-            imports: OwnedImports::empty(),
+            imports,
+            core_imports: OwnedImports::empty(),
             data: InstanceData {
                 instances: PrimaryMap::with_capacity(env_component.num_runtime_instances as usize),
                 component: component.clone(),
+                exported_modules: PrimaryMap::with_capacity(
+                    env_component.num_runtime_modules as usize,
+                ),
                 memories: Default::default(),
                 reallocs: Default::default(),
             },
@@ -181,16 +214,27 @@ impl<'a> Instantiator<'a> {
         let env_component = self.component.env_component();
         for initializer in env_component.initializers.iter() {
             match initializer {
-                Initializer::InstantiateModule {
-                    instance,
-                    module,
-                    args,
-                } => {
-                    let module = match module {
-                        ModuleToInstantiate::Upvar(module) => self.component.upvar(*module),
-                        ModuleToInstantiate::Import(idx) => {
-                            drop(idx);
-                            unimplemented!("component module imports");
+                Initializer::InstantiateModule(m) => {
+                    let module;
+                    let imports = match m {
+                        // Since upvars are statically know we know that the
+                        // `args` list is already in the right order.
+                        InstantiateModule::Upvar(idx, args) => {
+                            module = self.component.upvar(*idx);
+                            self.build_imports(store.0, module, args.iter())
+                        }
+                        // With imports, unlike upvars, we need to do runtime
+                        // lookups with strings to determine the order of the
+                        // imports since it's whatever the actual module
+                        // requires.
+                        InstantiateModule::Import(idx, args) => {
+                            module = match &self.imports[*idx] {
+                                RuntimeImport::Module(m) => m,
+                            };
+                            let args = module
+                                .imports()
+                                .map(|import| &args[import.module()][import.name()]);
+                            self.build_imports(store.0, module, args)
                         }
                     };
 
@@ -198,42 +242,51 @@ impl<'a> Instantiator<'a> {
                     // validity of the component means that type-checks have
                     // already been performed. This maens that the unsafety due
                     // to imports having the wrong type should not happen here.
-                    let imports = self.build_imports(store.0, module, args);
                     let i =
                         unsafe { crate::Instance::new_started(store, module, imports.as_ref())? };
-                    let idx = self.data.instances.push(i);
-                    assert_eq!(idx, *instance);
+                    self.data.instances.push(i);
                 }
                 Initializer::LowerImport(_) => unimplemented!(),
 
-                Initializer::ExtractMemory { index, export } => {
+                Initializer::ExtractMemory(export) => {
                     let memory = match self.data.lookup_export(store.0, export) {
                         wasmtime_runtime::Export::Memory(m) => m,
                         _ => unreachable!(),
                     };
-                    assert_eq!(*index, self.data.memories.push(memory));
+                    self.data.memories.push(memory);
                 }
 
-                Initializer::ExtractRealloc { index, def } => {
+                Initializer::ExtractRealloc(def) => {
                     let func = match self.data.lookup_def(store.0, def) {
                         wasmtime_runtime::Export::Function(f) => f,
                         _ => unreachable!(),
                     };
-                    assert_eq!(*index, self.data.reallocs.push(func));
+                    self.data.reallocs.push(func);
+                }
+
+                Initializer::SaveModuleUpvar(idx) => {
+                    self.data
+                        .exported_modules
+                        .push(self.component.upvar(*idx).clone());
+                }
+                Initializer::SaveModuleImport(idx) => {
+                    self.data.exported_modules.push(match &self.imports[*idx] {
+                        RuntimeImport::Module(m) => m.clone(),
+                    });
                 }
             }
         }
         Ok(())
     }
 
-    fn build_imports(
+    fn build_imports<'b>(
         &mut self,
         store: &mut StoreOpaque,
         module: &Module,
-        args: &[CoreDef],
+        args: impl Iterator<Item = &'b CoreDef>,
     ) -> &OwnedImports {
-        self.imports.clear();
-        self.imports.reserve(module);
+        self.core_imports.clear();
+        self.core_imports.reserve(module);
 
         for arg in args {
             let export = self.data.lookup_def(store, arg);
@@ -242,10 +295,58 @@ impl<'a> Instantiator<'a> {
             // directly from an instance which should only give us valid export
             // items.
             unsafe {
-                self.imports.push_export(&export);
+                self.core_imports.push_export(&export);
             }
         }
 
-        &self.imports
+        &self.core_imports
+    }
+}
+
+/// A "pre-instantiated" [`Instance`] which has all of its arguments already
+/// supplied and is ready to instantiate.
+///
+/// This structure represents an efficient form of instantiation where import
+/// type-checking and import lookup has all been resolved by the time that this
+/// type is created. This type is primarily created through the
+/// [`Linker::instance_pre`](crate::component::Linker::instance_pre) method.
+pub struct InstancePre<T> {
+    component: Component,
+    imports: PrimaryMap<RuntimeImportIndex, RuntimeImport>,
+    _marker: marker::PhantomData<fn() -> T>,
+}
+
+impl<T> InstancePre<T> {
+    /// This function is `unsafe` since there's no guarantee that the
+    /// `RuntimeImport` items provided are guaranteed to work with the `T` of
+    /// the store.
+    ///
+    /// Additionally there is no static guarantee that the `imports` provided
+    /// satisfy the imports of the `component` provided.
+    pub(crate) unsafe fn new_unchecked(
+        component: Component,
+        imports: PrimaryMap<RuntimeImportIndex, RuntimeImport>,
+    ) -> InstancePre<T> {
+        InstancePre {
+            component,
+            imports,
+            _marker: marker::PhantomData,
+        }
+    }
+
+    /// Returns the underlying component that will be instantiated.
+    pub fn component(&self) -> &Component {
+        &self.component
+    }
+
+    /// Performs the instantiation process into the store specified.
+    //
+    // TODO: needs more docs
+    pub fn instantiate(&self, mut store: impl AsContextMut<Data = T>) -> Result<Instance> {
+        let mut store = store.as_context_mut();
+        let mut i = Instantiator::new(&self.component, &self.imports);
+        i.run(&mut store)?;
+        let data = Box::new(i.data);
+        Ok(Instance(store.0.store_data_mut().insert(Some(data))))
     }
 }

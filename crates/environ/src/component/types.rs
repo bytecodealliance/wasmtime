@@ -130,6 +130,10 @@ indices! {
 
     /// Same as `RuntimeMemoryIndex` except for the `realloc` function.
     pub struct RuntimeReallocIndex(u32);
+
+    /// Index that represents an exported module from a component since that's
+    /// currently the only use for saving the entire module state at runtime.
+    pub struct RuntimeModuleIndex(u32);
 }
 
 // Reexport for convenience some core-wasm indices which are also used in the

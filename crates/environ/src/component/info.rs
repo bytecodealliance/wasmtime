@@ -108,6 +108,10 @@ pub struct Component {
     /// The number of lowered host functions (maximum `LoweredIndex`) needed to
     /// instantiate this component.
     pub num_lowerings: u32,
+
+    /// The number of modules that are required to be saved within an instance
+    /// at runtime, or effectively the number of exported modules.
+    pub num_runtime_modules: u32,
 }
 
 /// Initializer instructions to get processed when instantiating a component
@@ -126,36 +130,13 @@ pub struct Component {
 // all of these instructions.
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Initializer {
-    /// A core was module is being instantiated.
+    /// A core wasm module is being instantiated.
     ///
     /// This will result in a new core wasm instance being created, which may
     /// involve running the `start` function of the instance as well if it's
     /// specified. This largely delegates to the same standard instantiation
     /// process as the rest of the core wasm machinery already uses.
-    InstantiateModule {
-        /// The instance of the index that's being created.
-        ///
-        /// This is guaranteed to be the `n`th `InstantiateModule` instruction
-        /// if the index is `n`.
-        instance: RuntimeInstanceIndex,
-
-        /// The module that's being instantiated, either an "upvar" or an
-        /// imported module.
-        module: ModuleToInstantiate,
-
-        /// The arguments to instantiation and where they're loaded from.
-        ///
-        /// Note that this is a flat list. For "upvars" this list is sorted by
-        /// the actual concrete imports needed by the upvar so the items can be
-        /// passed directly to instantiation. For imports this list is sorted
-        /// by the order of the import names on the type of the module
-        /// declaration in this component.
-        ///
-        /// Each argument is a `CoreDef` which represents that it's either, at
-        /// this time, a lowered imported function or a core wasm item from
-        /// another previously instantiated instance.
-        args: Box<[CoreDef]>,
-    },
+    InstantiateModule(InstantiateModule),
 
     /// A host function is being lowered, creating a core wasm function.
     ///
@@ -173,43 +154,40 @@ pub enum Initializer {
     /// previously created module instance, and stored into the
     /// `VMComponentContext` at the `index` specified. This lowering is then
     /// used in the future by pointers from `CanonicalOptions`.
-    ExtractMemory {
-        /// The index of the memory we're storing.
-        ///
-        /// This is guaranteed to be the `n`th `ExtractMemory` instruction
-        /// if the index is `n`.
-        index: RuntimeMemoryIndex,
-        /// The source of the memory that is stored.
-        export: CoreExport<MemoryIndex>,
-    },
+    ExtractMemory(CoreExport<MemoryIndex>),
 
     /// Same as `ExtractMemory`, except it's extracting a function pointer to be
     /// used as a `realloc` function.
-    ExtractRealloc {
-        /// The index of the realloc function we're storing.
-        ///
-        /// This is guaranteed to be the `n`th `ExtractRealloc` instruction
-        /// if the index is `n`.
-        index: RuntimeReallocIndex,
-        /// The source of the function pointer that is stored.
-        def: CoreDef,
-    },
+    ExtractRealloc(CoreDef),
+
+    /// The `module` specified is saved into the runtime state at the next
+    /// `RuntimeModuleIndex`, referred to later by `Export` definitions.
+    SaveModuleUpvar(ModuleUpvarIndex),
+
+    /// Same as `SaveModuleUpvar`, but for imports.
+    SaveModuleImport(RuntimeImportIndex),
 }
 
-/// Indicator used to refer to what module is being instantiated when
-/// `Initializer::InstantiateModule` is used.
+/// Different methods of instantiating a core wasm module.
 #[derive(Debug, Serialize, Deserialize)]
-pub enum ModuleToInstantiate {
-    /// An "upvar", or a module defined within a component, is being used.
+pub enum InstantiateModule {
+    /// A module defined within this component is being instantiated.
     ///
-    /// The index here is correlated with the `Translation::upvars` map that's
-    /// created during translation of a component.
-    Upvar(ModuleUpvarIndex),
+    /// Note that this is distinct from the case of imported modules because the
+    /// order of imports required is statically known and can be pre-calculated
+    /// to avoid string lookups related to names at runtime, represented by the
+    /// flat list of arguments here.
+    Upvar(ModuleUpvarIndex, Box<[CoreDef]>),
 
-    /// An imported core wasm module is being instantiated.
+    /// An imported module is being instantiated.
     ///
-    /// It's guaranteed that this `RuntimeImportIndex` points to a module.
-    Import(RuntimeImportIndex),
+    /// This is similar to `Upvar` but notably the imports are provided as a
+    /// two-level named map since import resolution order needs to happen at
+    /// runtime.
+    Import(
+        RuntimeImportIndex,
+        IndexMap<String, IndexMap<String, CoreDef>>,
+    ),
 }
 
 /// Description of a lowered import used in conjunction with
@@ -309,6 +287,11 @@ pub enum Export {
         /// Any options, if present, associated with this lifting.
         options: CanonicalOptions,
     },
+    /// A module defined within this component is exported.
+    ///
+    /// The module index here indexes a module recorded with
+    /// `Initializer::SaveModule` above.
+    Module(RuntimeModuleIndex),
 }
 
 /// Canonical ABI options associated with a lifted or lowered function.

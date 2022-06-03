@@ -89,7 +89,7 @@ fn thunks() -> Result<()> {
     let engine = super::engine();
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, ());
-    let instance = Instance::new(&mut store, &component)?;
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
     instance
         .get_typed_func::<(), (), _>(&mut store, "thunk")?
         .call(&mut store, ())?;
@@ -146,7 +146,7 @@ fn typecheck() -> Result<()> {
     let engine = super::engine();
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, ());
-    let instance = Instance::new(&mut store, &component)?;
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
     let thunk = instance.get_func(&mut store, "thunk").unwrap();
     let take_string = instance.get_func(&mut store, "take-string").unwrap();
     let take_two_args = instance.get_func(&mut store, "take-two-args").unwrap();
@@ -252,7 +252,7 @@ fn integers() -> Result<()> {
     let engine = super::engine();
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, ());
-    let instance = Instance::new(&mut store, &component)?;
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
 
     // Passing in 100 is valid for all primitives
     instance
@@ -502,7 +502,7 @@ fn type_layers() -> Result<()> {
     let engine = super::engine();
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, ());
-    let instance = Instance::new(&mut store, &component)?;
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
 
     instance
         .get_typed_func::<(Box<u32>,), (), _>(&mut store, "take-u32")?
@@ -565,7 +565,7 @@ fn floats() -> Result<()> {
     let engine = super::engine();
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, ());
-    let instance = Instance::new(&mut store, &component)?;
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
     let f32_to_u32 = instance.get_typed_func::<(f32,), u32, _>(&mut store, "f32-to-u32")?;
     let f64_to_u64 = instance.get_typed_func::<(f64,), u64, _>(&mut store, "f64-to-u64")?;
     let u32_to_f32 = instance.get_typed_func::<(u32,), f32, _>(&mut store, "u32-to-f32")?;
@@ -622,7 +622,7 @@ fn bools() -> Result<()> {
     let engine = super::engine();
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, ());
-    let instance = Instance::new(&mut store, &component)?;
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
     let u32_to_bool = instance.get_typed_func::<(u32,), bool, _>(&mut store, "u32-to-bool")?;
     let bool_to_u32 = instance.get_typed_func::<(bool,), u32, _>(&mut store, "bool-to-u32")?;
 
@@ -657,7 +657,7 @@ fn chars() -> Result<()> {
     let engine = super::engine();
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, ());
-    let instance = Instance::new(&mut store, &component)?;
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
     let u32_to_char = instance.get_typed_func::<(u32,), char, _>(&mut store, "u32-to-char")?;
     let char_to_u32 = instance.get_typed_func::<(char,), u32, _>(&mut store, "char-to-u32")?;
 
@@ -729,7 +729,7 @@ fn tuple_result() -> Result<()> {
     let engine = super::engine();
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, ());
-    let instance = Instance::new(&mut store, &component)?;
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
 
     let input = (-1, 100, 3.0, 100.0);
     let output = instance
@@ -812,7 +812,7 @@ fn strings() -> Result<()> {
     let engine = super::engine();
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, ());
-    let instance = Instance::new(&mut store, &component)?;
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
     let list8_to_str =
         instance.get_typed_func::<(&[u8],), WasmStr, _>(&mut store, "list8-to-str")?;
     let str_to_list8 =
@@ -936,7 +936,7 @@ fn many_parameters() -> Result<()> {
     let engine = super::engine();
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, ());
-    let instance = Instance::new(&mut store, &component)?;
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
     let func = instance.get_typed_func::<(
         i8,
         u64,
@@ -1138,7 +1138,7 @@ fn some_traps() -> Result<()> {
     let engine = super::engine();
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, ());
-    let instance = Instance::new(&mut store, &component)?;
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
 
     // This should fail when calling the allocator function for the argument
     let err = instance
@@ -1304,7 +1304,7 @@ fn char_bool_memory() -> Result<()> {
     let engine = super::engine();
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, ());
-    let instance = Instance::new(&mut store, &component)?;
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
     let func = instance.get_typed_func::<(u32, u32), (bool, char), _>(&mut store, "ret-tuple")?;
 
     let ret = func.call(&mut store, (0, 'a' as u32))?;
@@ -1362,7 +1362,7 @@ fn string_list_oob() -> Result<()> {
     let engine = super::engine();
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, ());
-    let instance = Instance::new(&mut store, &component)?;
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
     let ret_list_u8 = instance.get_typed_func::<(), WasmList<u8>, _>(&mut store, "ret-list-u8")?;
     let ret_string = instance.get_typed_func::<(), WasmStr, _>(&mut store, "ret-string")?;
 
@@ -1426,7 +1426,7 @@ fn tuples() -> Result<()> {
     let engine = super::engine();
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, ());
-    let instance = Instance::new(&mut store, &component)?;
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
     let foo = instance.get_typed_func::<((i32, f64), (i8,)), (u16,), _>(&mut store, "foo")?;
     assert_eq!(foo.call(&mut store, ((0, 1.0), (2,)))?, (3,));
 
@@ -1546,7 +1546,7 @@ fn option() -> Result<()> {
     let engine = super::engine();
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, ());
-    let instance = Instance::new(&mut store, &component)?;
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
     let option_unit_to_u32 =
         instance.get_typed_func::<(Option<()>,), u32, _>(&mut store, "option-unit-to-u32")?;
     assert_eq!(option_unit_to_u32.call(&mut store, (None,))?, 0);
@@ -1711,7 +1711,7 @@ fn expected() -> Result<()> {
     let engine = super::engine();
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, ());
-    let instance = Instance::new(&mut store, &component)?;
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
     let take_expected_unit =
         instance.get_typed_func::<(Result<(), ()>,), u32, _>(&mut store, "take-expected-unit")?;
     assert_eq!(take_expected_unit.call(&mut store, (Ok(()),))?, 0);
@@ -1813,7 +1813,7 @@ fn fancy_list() -> Result<()> {
     let engine = super::engine();
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, ());
-    let instance = Instance::new(&mut store, &component)?;
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
 
     let func = instance
         .get_typed_func::<(&[(Option<u8>, Result<(), &str>)],), (u32, u32, WasmList<u8>), _>(

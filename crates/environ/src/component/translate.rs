@@ -4,6 +4,7 @@ use crate::{
     Tunables,
 };
 use anyhow::{bail, Result};
+use indexmap::IndexMap;
 use std::collections::HashMap;
 use std::mem;
 use wasmparser::{Chunk, Encoding, Parser, Payload, Validator};
@@ -483,7 +484,7 @@ impl<'a, 'data> Translator<'a, 'data> {
 
     fn module_instance(
         &mut self,
-        module_idx: ModuleIndex,
+        module: ModuleIndex,
         args: &[wasmparser::ModuleArg<'data>],
     ) -> InstanceDef<'data> {
         // Map the flat list of `args` to instead a name-to-instance index.
@@ -496,7 +497,7 @@ impl<'a, 'data> Translator<'a, 'data> {
             }
         }
 
-        let (imports, module) = match self.result.modules[module_idx].clone() {
+        let instantiate = match self.result.modules[module].clone() {
             // A module defined within this component is being instantiated
             // which means we statically know the structure of the module. The
             // list of imports required is ordered by the actual list of imports
@@ -507,8 +508,13 @@ impl<'a, 'data> Translator<'a, 'data> {
                     .module
                     .imports()
                     .map(|(m, n, _)| (m.to_string(), n.to_string()))
-                    .collect::<Vec<_>>();
-                (args, ModuleToInstantiate::Upvar(upvar_idx))
+                    .collect::<Vec<_>>()
+                    .iter()
+                    .map(|(module, name)| {
+                        self.lookup_core_def(instance_by_name[module.as_str()], name)
+                    })
+                    .collect();
+                InstantiateModule::Upvar(upvar_idx, args)
             }
 
             // For imported modules the list of arguments is built to match the
@@ -518,36 +524,27 @@ impl<'a, 'data> Translator<'a, 'data> {
             // imports in a different order.
             ModuleDef::Import { ty, import } => {
                 let import = self.runtime_import_index(import);
-                let args = self.types[ty].imports.keys().cloned().collect();
-                (args, ModuleToInstantiate::Import(import))
+                let mut args = IndexMap::new();
+                let imports = self.types[ty].imports.keys().cloned().collect::<Vec<_>>();
+                for (module, name) in imports {
+                    let def = self.lookup_core_def(instance_by_name[module.as_str()], &name);
+                    let prev = args
+                        .entry(module)
+                        .or_insert(IndexMap::new())
+                        .insert(name, def);
+                    assert!(prev.is_none());
+                }
+                InstantiateModule::Import(import, args)
             }
         };
-
-        // Translate the desired order of import strings to a `CoreDef` used to
-        // instantiate each module. Of the two-level namespace the `module` name
-        // is indicated by the `args` argument to this function and the `name`
-        // is the export of the instance found that's used.
-        let args = imports
-            .iter()
-            .map(|(module, name)| self.lookup_core_def(instance_by_name[module.as_str()], name))
-            .collect();
-
-        // Record initializer information related to this instantiation now that
-        // we've figure out all the arguments.
-        let instance = RuntimeInstanceIndex::from_u32(self.result.component.num_runtime_instances);
-        self.result.component.num_runtime_instances += 1;
         self.result
             .component
             .initializers
-            .push(Initializer::InstantiateModule {
-                instance,
-                module,
-                args,
-            });
-        InstanceDef::Module {
-            instance,
-            module: module_idx,
-        }
+            .push(Initializer::InstantiateModule(instantiate));
+
+        let instance = RuntimeInstanceIndex::from_u32(self.result.component.num_runtime_instances);
+        self.result.component.num_runtime_instances += 1;
+        InstanceDef::Module { instance, module }
     }
 
     /// Calculate the `CoreDef`, a definition of a core wasm item, corresponding
@@ -693,8 +690,17 @@ impl<'a, 'data> Translator<'a, 'data> {
         let export = match export.kind {
             wasmparser::ComponentExportKind::Module(i) => {
                 let idx = ModuleIndex::from_u32(i);
-                drop(idx);
-                unimplemented!("exporting a module");
+                let init = match self.result.modules[idx].clone() {
+                    ModuleDef::Upvar(idx) => Initializer::SaveModuleUpvar(idx),
+                    ModuleDef::Import { import, .. } => {
+                        Initializer::SaveModuleImport(self.runtime_import_index(import))
+                    }
+                };
+                self.result.component.initializers.push(init);
+                let runtime_index =
+                    RuntimeModuleIndex::from_u32(self.result.component.num_runtime_modules);
+                self.result.component.num_runtime_modules += 1;
+                Export::Module(runtime_index)
             }
             wasmparser::ComponentExportKind::Component(i) => {
                 let idx = ComponentIndex::from_u32(i);
@@ -1021,7 +1027,7 @@ impl<'a, 'data> Translator<'a, 'data> {
         self.result
             .component
             .initializers
-            .push(Initializer::ExtractMemory { index, export });
+            .push(Initializer::ExtractMemory(export));
         index
     }
 
@@ -1035,7 +1041,7 @@ impl<'a, 'data> Translator<'a, 'data> {
         self.result
             .component
             .initializers
-            .push(Initializer::ExtractRealloc { index, def });
+            .push(Initializer::ExtractRealloc(def));
         index
     }
 }
