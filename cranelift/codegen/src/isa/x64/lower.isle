@@ -2812,3 +2812,9 @@
       (side_effect (side_effect_concat
        (x64_movrm ty (to_amode flags address (zero_offset)) value)
        (x64_mfence))))
+
+;; Rules for `atomic_cas` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type (and (fits_in_64 ty) (ty_int _))
+                  (atomic_cas flags address expected replacement)))
+      (x64_cmpxchg ty expected replacement (to_amode flags address (zero_offset))))
