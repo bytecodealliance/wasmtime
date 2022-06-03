@@ -1058,7 +1058,7 @@ pub type VMTrampoline =
 /// mode to debug-assert that the casts here are correct and have at least a
 /// little protection against incorrect casts.
 pub struct VMOpaqueContext {
-    magic: u32,
+    pub(crate) magic: u32,
     _marker: marker::PhantomPinned,
 }
 

@@ -111,4 +111,5 @@ memory-init-cow = ["wasmtime-runtime/memory-init-cow"]
 component-model = [
   "wasmtime-environ/component-model",
   "wasmtime-cranelift?/component-model",
+  "wasmtime-runtime/component-model",
 ]

@@ -154,11 +154,21 @@ pub enum Initializer {
     /// previously created module instance, and stored into the
     /// `VMComponentContext` at the `index` specified. This lowering is then
     /// used in the future by pointers from `CanonicalOptions`.
-    ExtractMemory(CoreExport<MemoryIndex>),
+    ExtractMemory {
+        /// The index of the memory being defined.
+        index: RuntimeMemoryIndex,
+        /// Where this memory is being extracted from.
+        export: CoreExport<MemoryIndex>,
+    },
 
     /// Same as `ExtractMemory`, except it's extracting a function pointer to be
     /// used as a `realloc` function.
-    ExtractRealloc(CoreDef),
+    ExtractRealloc {
+        /// The index of the realloc being defined.
+        index: RuntimeReallocIndex,
+        /// Where this realloc is being extracted from.
+        def: CoreDef,
+    },
 
     /// The `module` specified is saved into the runtime state at the next
     /// `RuntimeModuleIndex`, referred to later by `Export` definitions.
