@@ -69,8 +69,10 @@ handle malicious or arbitrary compiler input: in particular, they do not use
 callstack recursion.
 
 Cranelift performs some basic mitigations for Spectre attacks on heap bounds
-checks, table bounds checks, and indirect branch bounds checks; see #1032 for
-more.
+checks, table bounds checks, and indirect branch bounds checks; see
+[#1032] for more.
+
+[#1032]: https://github.com/bytecodealliance/wasmtime/issues/1032
 
 Cranelift's APIs are not yet considered stable, though we do follow
 semantic-versioning (semver) with minor-version patch releases.
