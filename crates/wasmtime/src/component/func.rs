@@ -96,8 +96,8 @@ impl Func {
         let trampoline = store.lookup_trampoline(unsafe { export.anyfunc.as_ref() });
         let memory = options
             .memory
-            .map(|i| NonNull::new(data.runtime_memory(i).definition).unwrap());
-        let realloc = options.realloc.map(|i| data.runtime_realloc(i).anyfunc);
+            .map(|i| NonNull::new(data.instance().runtime_memory(i)).unwrap());
+        let realloc = options.realloc.map(|i| data.instance().runtime_realloc(i));
         let options = unsafe { Options::new(store.id(), memory, realloc, options.string_encoding) };
         Func(store.store_data_mut().insert(FuncData {
             trampoline,
