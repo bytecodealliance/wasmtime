@@ -9,8 +9,7 @@ block0(v0: i8):
 }
 
 ; block0:
-;   rbit w3, w0
-;   lsr w0, w3, #24
+;   brev8 a0,a0
 ;   ret
 
 function %a(i16) -> i16 {
@@ -20,8 +19,9 @@ block0(v0: i16):
 }
 
 ; block0:
-;   rbit w3, w0
-;   lsr w0, w3, #16
+;   rev8 a0,a0
+;   brev8 a0,a0
+;   srli a0,a0,48
 ;   ret
 
 function %a(i32) -> i32 {
@@ -31,7 +31,9 @@ block0(v0: i32):
 }
 
 ; block0:
-;   rbit w0, w0
+;   rev8 a0,a0
+;   brev8 a0,a0
+;   srli a0,a0,32
 ;   ret
 
 function %a(i64) -> i64 {
@@ -41,7 +43,8 @@ block0(v0: i64):
 }
 
 ; block0:
-;   rbit x0, x0
+;   rev8 a0,a0
+;   brev8 a0,a0
 ;   ret
 
 function %a(i128) -> i128 {
@@ -51,9 +54,13 @@ block0(v0: i128):
 }
 
 ; block0:
-;   rbit x6, x0
-;   rbit x0, x1
-;   mov x1, x6
+;   rev8 a3,a0
+;   mov t3,a3
+;   brev8 t3,t3
+;   mov a3,t3
+;   rev8 a0,a1
+;   brev8 a0,a0
+;   mov a1,a3
 ;   ret
 
 function %b(i8) -> i8 {
@@ -63,9 +70,10 @@ block0(v0: i8):
 }
 
 ; block0:
-;   uxtb w3, w0
-;   clz w5, w3
-;   sub w0, w5, #24
+;   slli a1,a0,56
+;   srli a3,a1,56
+;   clzw a0,a3
+;   addi a0,a0,4072
 ;   ret
 
 function %b(i16) -> i16 {
@@ -75,9 +83,10 @@ block0(v0: i16):
 }
 
 ; block0:
-;   uxth w3, w0
-;   clz w5, w3
-;   sub w0, w5, #16
+;   slli a1,a0,48
+;   srli a3,a1,48
+;   clzw a0,a3
+;   addi a0,a0,4080
 ;   ret
 
 function %b(i32) -> i32 {
@@ -87,7 +96,7 @@ block0(v0: i32):
 }
 
 ; block0:
-;   clz w0, w0
+;   clzw a0,a0
 ;   ret
 
 function %b(i64) -> i64 {
@@ -97,7 +106,7 @@ block0(v0: i64):
 }
 
 ; block0:
-;   clz x0, x0
+;   clz a0,a0
 ;   ret
 
 function %b(i128) -> i128 {

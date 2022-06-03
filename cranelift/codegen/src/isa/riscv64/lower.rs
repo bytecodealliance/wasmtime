@@ -46,31 +46,28 @@ pub(crate) fn maybe_input_insn<C: LowerCtx<I = Inst>>(
     None
 }
 
-pub(crate) fn get_icmp_parameters<C: LowerCtx<I = Inst>>(
+pub(crate) fn get_ifcmp_parameters<C: LowerCtx<I = Inst>>(
     c: &mut C,
     input: IRInst,
 ) -> (
-    IntCC,
     ValueRegs<Reg>, /* x */
     ValueRegs<Reg>, /* y  */
     Type,
 ) {
-    let condcode = c.data(input).cond_code().unwrap();
     let x = c.put_input_in_regs(input, 0);
     let y = c.put_input_in_regs(input, 1);
     let ty = c.input_ty(input, 0);
-    (condcode, x, y, ty)
+    (x, y, ty)
 }
 
-pub(crate) fn get_fcmp_parameters<C: LowerCtx<I = Inst>>(
+pub(crate) fn get_ffcmp_parameters<C: LowerCtx<I = Inst>>(
     c: &mut C,
     input: IRInst,
-) -> (FloatCC, Reg /* x */, Reg /* y  */, Type) {
-    let condcode = c.data(input).fp_cond_code().unwrap();
+) -> (Reg /* x */, Reg /* y  */, Type) {
     let x = c.put_input_in_regs(input, 0).only_reg().unwrap();
     let y = c.put_input_in_regs(input, 1).only_reg().unwrap();
     let ty = c.input_ty(input, 0);
-    (condcode, x, y, ty)
+    (x, y, ty)
 }
 
 //=============================================================================

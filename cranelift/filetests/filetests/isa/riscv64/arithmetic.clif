@@ -317,7 +317,9 @@ block0(v0: i128, v1: i128):
 }
 
 ; block0:
-;   add_i128 [a0,a1],[a0,a1],[a2,a3];;t0=t4,t1=t0
+;   mov t1,a0
+;   add_i128 [a0,t3],[t1,a1],[a2,a3];;t0=t4,t1=t0
+;   mov a1,t3
 ;   ret
 
 function %sub_i128(i128, i128) -> i128 {
@@ -327,7 +329,9 @@ block0(v0: i128, v1: i128):
 }
 
 ; block0:
-;   sub_i128 [a0,a1],[a0,a1],[a2,a3];;t0=t4,t1=t0
+;   mov t1,a0
+;   sub_i128 [a0,t3],[t1,a1],[a2,a3];;t0=t4,t1=t0
+;   mov a1,t3
 ;   ret
 
 function %mul_i128(i128, i128) -> i128 {

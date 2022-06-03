@@ -960,15 +960,15 @@ impl MachInstEmit for Inst {
             &Inst::EpiloguePlaceholder => {
                 unimplemented!("what should I Do.");
             }
-            &Inst::ReferenceValid { rd, op, x } => {
+            &Inst::ReferenceCheck { rd, op, x } => {
                 let x = allocs.next(x);
                 let rd = allocs.next_writable(rd);
                 let mut insts = SmallInstVec::new();
                 match op {
-                    ReferenceValidOP::IsNull => {
+                    ReferenceCheckOP::IsNull => {
                         insts.push(Inst::CondBr {
-                            taken: BranchTarget::ResolvedOffset(Inst::instruction_size() * 2),
-                            not_taken: BranchTarget::ResolvedOffset(0),
+                            taken: BranchTarget::ResolvedOffset(Inst::instruction_size() * 3),
+                            not_taken: BranchTarget::zero(),
                             kind: IntegerCompare {
                                 kind: IntCC::Equal,
                                 rs1: zero_reg(),
@@ -984,14 +984,14 @@ impl MachInstEmit for Inst {
                         insts.push(Inst::load_constant_imm12(rd, Imm12::form_bool(true)));
                     }
 
-                    ReferenceValidOP::IsInvalid => {
+                    ReferenceCheckOP::IsInvalid => {
                         /*
                             todo:: right now just check if it is null
                             null is a valid reference??????
                         */
                         insts.push(Inst::CondBr {
-                            taken: BranchTarget::ResolvedOffset(Inst::instruction_size() * 2),
-                            not_taken: BranchTarget::ResolvedOffset(0),
+                            taken: BranchTarget::ResolvedOffset(Inst::instruction_size() * 3),
+                            not_taken: BranchTarget::zero(),
                             kind: IntegerCompare {
                                 kind: IntCC::Equal,
                                 rs1: zero_reg(),
@@ -1502,7 +1502,7 @@ impl MachInstEmit for Inst {
                 }
             }
 
-            &Inst::Ffcmp {
+            &Inst::Fcmp {
                 rd,
                 tmp,
                 cc,

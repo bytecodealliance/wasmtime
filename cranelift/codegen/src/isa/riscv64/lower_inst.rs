@@ -374,25 +374,23 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Selectif | Opcode::SelectifSpectreGuard => {
-            if let Some(input_as_inst) = maybe_input_insn(ctx, inputs[0], crate::ir::Opcode::Icmp) {
-                let rd = get_output_reg(ctx, outputs[0]);
-                let rd: Vec<_> = rd.regs().iter().map(|r| *r).collect();
-                let x = put_input_in_regs(ctx, inputs[0]);
-                let y = put_input_in_regs(ctx, inputs[1]);
-                let (cc, cmp_x, cmp_y, cmp_ty) = get_icmp_parameters(ctx, input_as_inst);
-                ctx.emit(Inst::SelectIf {
-                    if_spectre_guard: op == crate::ir::Opcode::SelectifSpectreGuard,
-                    rd,
-                    cmp_x,
-                    cmp_y,
-                    cc,
-                    x,
-                    y,
-                    cmp_ty,
-                });
-            } else {
-                ir_conflict_with_riscv_platform(op);
-            }
+            let input_as_inst = maybe_input_insn(ctx, inputs[0], crate::ir::Opcode::Ifcmp).unwrap();
+            let rd = get_output_reg(ctx, outputs[0]);
+            let rd: Vec<_> = rd.regs().iter().map(|r| *r).collect();
+            let x = put_input_in_regs(ctx, inputs[1]);
+            let y = put_input_in_regs(ctx, inputs[2]);
+            let (cmp_x, cmp_y, cmp_ty) = get_ifcmp_parameters(ctx, input_as_inst);
+            let cc = ctx.data(insn).cond_code().unwrap();
+            ctx.emit(Inst::SelectIf {
+                if_spectre_guard: op == crate::ir::Opcode::SelectifSpectreGuard,
+                rd,
+                cmp_x,
+                cmp_y,
+                cc,
+                x,
+                y,
+                cmp_ty,
+            });
         }
 
         Opcode::Bitselect => {
@@ -432,10 +430,11 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Trueif => {
-            let (cc, x, y, ty) = maybe_input_insn(ctx, inputs[0], crate::ir::Opcode::Icmp)
-                .map(|inst| get_icmp_parameters(ctx, inst))
-                .unwrap_or_else(|| ir_conflict_with_riscv_platform(op));
+            let (x, y, ty) = maybe_input_insn(ctx, inputs[0], crate::ir::Opcode::Ifcmp)
+                .map(|inst| get_ifcmp_parameters(ctx, inst))
+                .unwrap();
             let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+            let cc = ctx.data(insn).cond_code().unwrap();
             ctx.emit(Inst::Icmp {
                 cc,
                 rd,
@@ -446,14 +445,13 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Trueff => {
-            let (cc, x, y, ty) = maybe_input_insn(ctx, inputs[0], crate::ir::Opcode::Fcmp)
-                .map(|inst| get_fcmp_parameters(ctx, inst))
-                .unwrap_or_else(|| ir_conflict_with_riscv_platform(op));
+            let (x, y, ty) = maybe_input_insn(ctx, inputs[0], crate::ir::Opcode::Ffcmp)
+                .map(|inst| get_ffcmp_parameters(ctx, inst))
+                .unwrap();
             let tmp = ctx.alloc_tmp(I64).only_reg().unwrap();
-            let tmp2 = ctx.alloc_tmp(I64).only_reg().unwrap();
             let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-
-            ctx.emit(Inst::Ffcmp {
+            let cc = ctx.data(insn).fp_cond_code().unwrap();
+            ctx.emit(Inst::Fcmp {
                 rd,
                 tmp,
                 cc,
@@ -467,8 +465,8 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let rs = put_input_in_reg(ctx, inputs[0]);
             let _ty = ctx.input_ty(insn, 0);
-            ctx.emit(Inst::ReferenceValid {
-                op: ReferenceValidOP::from_ir_op(op),
+            ctx.emit(Inst::ReferenceCheck {
+                op: ReferenceCheckOP::from_ir_op(op),
                 rd,
                 x: rs,
             });
@@ -607,7 +605,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let rs2 = put_input_in_reg(ctx, inputs[1]);
             let cc = ctx.data(insn).fp_cond_code().unwrap();
             let tmp = ctx.alloc_tmp(I64).only_reg().unwrap();
-            ctx.emit(Inst::Ffcmp {
+            ctx.emit(Inst::Fcmp {
                 rd,
                 cc,
                 ty,
@@ -628,38 +626,35 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::Trapif => {
             let trap_code = ctx.data(insn).trap_code().unwrap();
-            if let Some(input_as_inst) = maybe_input_insn(ctx, inputs[0], crate::ir::Opcode::Icmp) {
-                let (cc, x, y, ty) = get_icmp_parameters(ctx, input_as_inst);
-                ctx.emit(Inst::TrapIf {
-                    cc,
-                    x,
-                    y,
-                    ty,
-                    trap_code,
-                });
-            } else {
-                ir_conflict_with_riscv_platform(op);
-            }
+            let input_as_inst = maybe_input_insn(ctx, inputs[0], crate::ir::Opcode::Ifcmp).unwrap();
+            let (x, y, ty) = get_ifcmp_parameters(ctx, input_as_inst);
+            let cc = ctx.data(insn).cond_code().unwrap();
+            ctx.emit(Inst::TrapIf {
+                cc,
+                x,
+                y,
+                ty,
+                trap_code,
+            });
         }
 
         Opcode::Trapff => {
             let trap_code = ctx.data(insn).trap_code().unwrap();
-            if let Some(input_as_inst) = maybe_input_insn(ctx, inputs[0], crate::ir::Opcode::Fcmp) {
-                let (cc, x, y, ty) = get_fcmp_parameters(ctx, input_as_inst);
-                let tmp = ctx.alloc_tmp(I64).only_reg().unwrap();
-                let tmp2 = ctx.alloc_tmp(I64).only_reg().unwrap();
-                ctx.emit(Inst::TrapFf {
-                    cc,
-                    x,
-                    y,
-                    ty,
-                    trap_code,
-                    tmp,
-                    tmp2,
-                });
-            } else {
-                ir_conflict_with_riscv_platform(op);
-            }
+            let input_as_inst = maybe_input_insn(ctx, inputs[0], crate::ir::Opcode::Ffcmp).unwrap();
+
+            let (x, y, ty) = get_ffcmp_parameters(ctx, input_as_inst);
+            let tmp = ctx.alloc_tmp(I64).only_reg().unwrap();
+            let tmp2 = ctx.alloc_tmp(I64).only_reg().unwrap();
+            let cc = ctx.data(insn).fp_cond_code().unwrap();
+            ctx.emit(Inst::TrapFf {
+                cc,
+                x,
+                y,
+                ty,
+                trap_code,
+                tmp,
+                tmp2,
+            });
         }
 
         Opcode::Trapz | Opcode::Trapnz | Opcode::ResumableTrapnz => {
@@ -1251,32 +1246,33 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
                     .for_each(|i| ctx.emit(i));
             }
             Opcode::Brif => {
-                let (cc, x, y, ty) = maybe_input_insn(
+                let (x, y, ty) = maybe_input_insn(
                     ctx,
                     InsnInput {
                         insn: branches[0],
                         input: 0,
                     },
-                    crate::ir::Opcode::Icmp,
+                    crate::ir::Opcode::Ifcmp,
                 )
-                .map(|inst| get_icmp_parameters(ctx, inst))
-                .unwrap_or_else(|| ir_conflict_with_riscv_platform(op0.opcode()));
-
+                .map(|inst| get_ifcmp_parameters(ctx, inst))
+                .unwrap();
+                let cc = ctx.data(branches[0]).cond_code().unwrap();
                 Inst::lower_br_icmp(cc, x, y, taken, not_taken, ty)
                     .into_iter()
                     .for_each(|i| ctx.emit(i));
             }
             Opcode::Brff => {
-                let (cc, x, y, ty) = maybe_input_insn(
+                let (x, y, ty) = maybe_input_insn(
                     ctx,
                     InsnInput {
                         insn: branches[0],
                         input: 0,
                     },
-                    crate::ir::Opcode::Fcmp,
+                    crate::ir::Opcode::Ffcmp,
                 )
-                .map(|inst| get_fcmp_parameters(ctx, inst))
-                .unwrap_or_else(|| ir_conflict_with_riscv_platform(op0.opcode()));
+                .map(|inst| get_ffcmp_parameters(ctx, inst))
+                .unwrap();
+                let cc = ctx.data(branches[0]).fp_cond_code().unwrap();
                 let tmp = ctx.alloc_tmp(I64).only_reg().unwrap();
                 let tmp2 = ctx.alloc_tmp(I64).only_reg().unwrap();
                 Inst::lower_br_fcmp(cc, x, y, taken, not_taken, ty, tmp, tmp2)

@@ -1,0 +1,106 @@
+test compile precise-output
+set unwind_info=false
+target riscv64
+
+function %f0(r64) -> r64 {
+block0(v0: r64):
+  return v0
+}
+
+; block0:
+;   ret
+
+function %f1(r64) -> b1 {
+block0(v0: r64):
+  v1 = is_null v0
+  return v1
+}
+
+; block0:
+;   is_null a0,a0
+;   ret
+
+function %f2(r64) -> b1 {
+block0(v0: r64):
+  v1 = is_invalid v0
+  return v1
+}
+
+; block0:
+;   is_invalid a0,a0
+;   ret
+
+function %f3() -> r64 {
+block0:
+  v0 = null.r64
+  return v0
+}
+
+; block0:
+;   ori a0,zero,0
+;   ret
+
+function %f4(r64, r64) -> r64, r64, r64 {
+    fn0 = %f(r64) -> b1
+    ss0 = explicit_slot 8
+
+block0(v0: r64, v1: r64):
+    v2 = call fn0(v0)
+    stack_store.r64 v0, ss0
+    brz v2, block1(v1, v0)
+    jump block2(v0, v1)
+
+block1(v3: r64, v4: r64):
+    jump block3(v3, v4)
+
+block2(v5: r64, v6: r64):
+    jump block3(v5, v6)
+
+block3(v7: r64, v8: r64):
+    v9 = stack_load.r64 ss0
+    return v7, v8, v9
+}
+
+;   addi sp,-8
+;   sd fp,0(sp)
+;   mov fp,sp
+;   addi sp,-48
+;   sd s2,0(sp)
+;   sd s8,8(sp)
+;   sd s11,16(sp)
+; block0:
+;   mov s8,a1
+;   mov s2,a2
+;   mov s11,a0
+;   load_sym a4,%f+0
+;   callind a4
+;   load_addr a7,0(nominal_sp)
+;   mov t2,s11
+;   sd t2,0(a7)
+;   beq a0,zero,taken(label1),not_taken(label3)
+; block1:
+;   j label2
+; block2:
+;   mov t5,s8
+;   mov s8,s11
+;   mov s11,t5
+;   j label5
+; block3:
+;   j label4
+; block4:
+;   j label5
+; block5:
+;   load_addr a4,0(nominal_sp)
+;   ld a6,0(a4)
+;   mov a0,s11
+;   mov a1,s8
+;   mov a2,s2
+;   sd a6,0(a2)
+;   ld s2,0(sp)
+;   ld s8,8(sp)
+;   ld s11,16(sp)
+;   addi sp,48
+;   ld fp,0(sp)
+;   addi sp,8
+;   ret
+

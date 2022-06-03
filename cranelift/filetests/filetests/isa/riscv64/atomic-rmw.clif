@@ -29,20 +29,9 @@ block0(v0: i64, v1: i64):
     return
 }
 
-;   stp fp, lr, [sp, #-16]!
-;   mov fp, sp
-;   str x28, [sp, #-16]!
-;   stp x26, x27, [sp, #-16]!
-;   stp x24, x25, [sp, #-16]!
 ; block0:
-;   mov x25, x0
-;   mov x4, x1
-;   mov x26, x4
-;   1: ldaxr x27, [x25]; sub x28, x27, x26; stlxr w24, x28, [x25]; cbnz w24, 1b
-;   ldp x24, x25, [sp], #16
-;   ldp x26, x27, [sp], #16
-;   ldr x28, [sp], #16
-;   ldp fp, lr, [sp], #16
+;   sub a2,zero,a1
+;   amoadd.d a2,a2,(a0)
 ;   ret
 
 function %atomic_rmw_sub_i32(i64, i32) {
@@ -51,23 +40,10 @@ block0(v0: i64, v1: i32):
     return
 }
 
-;   stp fp, lr, [sp, #-16]!
-;   mov fp, sp
-;   str x28, [sp, #-16]!
-;   stp x26, x27, [sp, #-16]!
-;   stp x24, x25, [sp, #-16]!
 ; block0:
-;   mov x25, x0
-;   mov x4, x1
-;   mov x26, x4
-;   1: ldaxr w27, [x25]; sub w28, w27, w26; stlxr w24, w28, [x25]; cbnz w24, 1b
-;   ldp x24, x25, [sp], #16
-;   ldp x26, x27, [sp], #16
-;   ldr x28, [sp], #16
-;   ldp fp, lr, [sp], #16
+;   subw a2,zero,a1
+;   amoadd.w a2,a2,(a0)
 ;   ret
- 
-
 
 function %atomic_rmw_and_i64(i64, i64) {
 block0(v0: i64, v1: i64):
@@ -75,20 +51,8 @@ block0(v0: i64, v1: i64):
     return
 }
 
-;   stp fp, lr, [sp, #-16]!
-;   mov fp, sp
-;   str x28, [sp, #-16]!
-;   stp x26, x27, [sp, #-16]!
-;   stp x24, x25, [sp, #-16]!
 ; block0:
-;   mov x25, x0
-;   mov x4, x1
-;   mov x26, x4
-;   1: ldaxr x27, [x25]; and x28, x27, x26; stlxr w24, x28, [x25]; cbnz w24, 1b
-;   ldp x24, x25, [sp], #16
-;   ldp x26, x27, [sp], #16
-;   ldr x28, [sp], #16
-;   ldp fp, lr, [sp], #16
+;   amoand.d a1,a1,(a0)
 ;   ret
 
 function %atomic_rmw_and_i32(i64, i32) {
@@ -97,20 +61,8 @@ block0(v0: i64, v1: i32):
     return
 }
 
-;   stp fp, lr, [sp, #-16]!
-;   mov fp, sp
-;   str x28, [sp, #-16]!
-;   stp x26, x27, [sp, #-16]!
-;   stp x24, x25, [sp, #-16]!
 ; block0:
-;   mov x25, x0
-;   mov x4, x1
-;   mov x26, x4
-;   1: ldaxr w27, [x25]; and w28, w27, w26; stlxr w24, w28, [x25]; cbnz w24, 1b
-;   ldp x24, x25, [sp], #16
-;   ldp x26, x27, [sp], #16
-;   ldr x28, [sp], #16
-;   ldp fp, lr, [sp], #16
+;   amoand.w a1,a1,(a0)
 ;   ret
 
 function %atomic_rmw_and_i16(i64, i16) {

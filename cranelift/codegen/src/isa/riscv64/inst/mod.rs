@@ -6,7 +6,9 @@
 
 use crate::binemit::{Addend, CodeOffset, Reloc};
 pub use crate::ir::condcodes::IntCC;
-use crate::ir::types::{B1, B128, B16, B32, B64, B8, F32, F64, I128, I16, I32, I64, I8, R32, R64};
+use crate::ir::types::{
+    B1, B128, B16, B32, B64, B8, F32, F64, FFLAGS, I128, I16, I32, I64, I8, IFLAGS, R32, R64,
+};
 
 pub use crate::ir::{ExternalName, MemFlags, Opcode, SourceLoc, Type, ValueLabel};
 use crate::isa::CallConv;
@@ -54,8 +56,8 @@ pub(crate) type OptionUimm5 = Option<Uimm5>;
 use crate::isa::riscv64::lower::isle::generated_code::MInst;
 pub use crate::isa::riscv64::lower::isle::generated_code::{
     AluOPRR, AluOPRRI, AluOPRRR, AluOPRRRR, AtomicOP, CsrOP, FClassResult, FFlagsException,
-    FloatFlagOp, FloatRoundingMode, IntSelectOP, LoadOP, MInst as Inst, ReferenceValidOP, StoreOP,
-    I128OP, OPFPFMT,
+    FloatRoundingMode, IntSelectOP, LoadOP, MInst as Inst, ReferenceCheckOP, StoreOP, I128OP,
+    OPFPFMT,
 };
 
 type BoxCallInfo = Box<CallInfo>;
@@ -180,8 +182,7 @@ impl Inst {
         value >= (i32::MIN as i64) && value <= (i32::MAX as i64)
     }
 
-    #[inline(always)]
-    pub(crate) fn instruction_size() -> i32 /* less type cast  */ {
+    pub(crate) const fn instruction_size() -> i32 /* less type cast  */ {
         4
     }
 
@@ -298,15 +299,20 @@ impl Inst {
     }
 
     /// Create instructions that load a 64-bit floating-point constant.
-    pub fn load_fp_constant64(rd: Writable<Reg>, const_data: u64) -> SmallVec<[Inst; 4]> {
-        Inst::do_something_with_registers(1, |regs, insts| {
-            insts.extend(Self::load_constant_u64(regs[0], const_data));
-            insts.push(Inst::AluRR {
-                alu_op: AluOPRR::FmvDX,
-                rd,
-                rs: regs[0].to_reg(),
-            });
-        })
+    pub fn load_fp_constant64<F: FnMut(Type) -> Writable<Reg>>(
+        rd: Writable<Reg>,
+        const_data: u64,
+        mut alloc_tmp: F,
+    ) -> SmallVec<[Inst; 4]> {
+        let mut insts = SmallInstVec::new();
+        let tmp = alloc_tmp(I64);
+        insts.extend(Self::load_constant_u64(tmp, const_data));
+        insts.push(Inst::AluRR {
+            alu_op: AluOPRR::move_x_to_f_op(F64),
+            rd,
+            rs: tmp.to_reg(),
+        });
+        insts
     }
 
     /// Create instructions that load a 128-bit vector constant.
@@ -445,7 +451,7 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_use(src);
             collector.reg_def(rd);
         }
-        &Inst::Ffcmp {
+        &Inst::Fcmp {
             rd, rs1, rs2, tmp, ..
         } => {
             collector.reg_use(rs1);
@@ -465,7 +471,7 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_uses(y.regs());
             collector.reg_defs(&dst[..]);
         }
-        &Inst::ReferenceValid { rd, x, .. } => {
+        &Inst::ReferenceCheck { rd, x, .. } => {
             collector.reg_use(x);
             collector.reg_def(rd);
         }
@@ -630,19 +636,17 @@ impl MachInst for Inst {
         to_regs: ValueRegs<Writable<Reg>>,
         mut value: u128,
         ty: Type,
-        _alloc_tmp: F,
+        alloc_tmp: F,
     ) -> SmallVec<[Inst; 4]> {
         if ty.is_bool() && value != 0 {
             value = !0;
         }
-
         if (ty.bits() <= 64 && (ty.is_bool() || ty.is_int())) || ty == R32 || ty == R64 {
             return Inst::load_constant_u64(to_regs.only_reg().unwrap(), value as u64);
         };
-
         match ty {
             F32 => Inst::load_fp_constant32(to_regs.only_reg().unwrap(), value as u32),
-            F64 => Inst::load_fp_constant64(to_regs.only_reg().unwrap(), value as u64),
+            F64 => Inst::load_fp_constant64(to_regs.only_reg().unwrap(), value as u64, alloc_tmp),
             I128 | B128 => {
                 let mut insts = SmallInstVec::new();
                 insts.extend(Inst::load_constant_u64(
@@ -682,6 +686,8 @@ impl MachInst for Inst {
             F64 => Ok((&[RegClass::Float], &[F64])),
             I128 => Ok((&[RegClass::Int, RegClass::Int], &[I64, I64])),
             B128 => Ok((&[RegClass::Int, RegClass::Int], &[B64, B64])),
+            IFLAGS => Ok((&[RegClass::Int], &[IFLAGS])),
+            FFLAGS => Ok((&[RegClass::Int], &[FFLAGS])),
             _ => Err(CodegenError::Unsupported(format!(
                 "Unexpected SSA-value type: {}",
                 ty
@@ -715,12 +721,6 @@ impl MachInst for Inst {
 
 //=============================================================================
 // Pretty-printing of instructions.
-
-impl PrettyPrint for Inst {
-    fn pretty_print(&self, size_bytes: u8, allocs: &mut AllocationConsumer<'_>) -> String {
-        unimplemented!()
-    }
-}
 
 pub fn reg_name(reg: Reg) -> String {
     match reg.to_real_reg() {
@@ -801,14 +801,11 @@ impl Inst {
         };
 
         fn format_extend_op(signed: bool, from_bits: u8, to_bits: u8) -> String {
-            fn short_type_name(bits: u8) -> String {
-                format!("{}", bits)
-            }
             format!(
                 "{}ext_{}_to_{}",
                 if signed { "s" } else { "u" },
-                short_type_name(from_bits),
-                short_type_name(to_bits),
+                from_bits,
+                to_bits,
             )
         }
 
@@ -968,7 +965,6 @@ impl Inst {
                 ref y,
             } => {
                 let dst: Vec<_> = dst.iter().map(|r| r.to_reg()).collect();
-
                 let t0 = format_reg(t0.to_reg(), allocs);
                 let t1 = format_reg(t1.to_reg(), allocs);
                 let x = format_regs(x.regs(), allocs);
@@ -976,7 +972,7 @@ impl Inst {
                 let dst = format_regs(&dst[..], allocs);
                 format!("{} {},{},{};;t0={},t1={}", op.op_name(), dst, x, y, t0, t1)
             }
-            &Inst::ReferenceValid { rd, op, x } => {
+            &Inst::ReferenceCheck { rd, op, x } => {
                 let x = format_reg(x, allocs);
                 let rd = format_reg(rd.to_reg(), allocs);
                 format!("{} {},{}", op.op_name(), rd, x)
@@ -1043,7 +1039,7 @@ impl Inst {
                 let rs = format_reg(rs, allocs);
                 let rd = format_reg(rd.to_reg(), allocs);
                 if alu_op.is_bit_manip() {
-                    if let Some(shamt) = alu_op.need_shamt() {
+                    if let Some(_) = alu_op.need_shamt() {
                         let shamt = (imm12.as_i16() as u8) & alu_op.shamt_mask();
                         format!("{} {},{},{}", alu_op.op_name(), rd, rs, shamt)
                     } else {
@@ -1063,7 +1059,7 @@ impl Inst {
                 let rd = format_reg(rd.to_reg(), allocs);
                 format!("{} {},{}", op.op_name(), rd, base,)
             }
-            &Inst::Ffcmp {
+            &Inst::Fcmp {
                 rd,
                 tmp,
                 cc,
@@ -1354,7 +1350,7 @@ impl MachInstLabelUse for LabelUse {
         unimplemented!("don't support");
     }
 
-    fn from_reloc(reloc: Reloc, addend: Addend) -> Option<LabelUse> {
+    fn from_reloc(_reloc: Reloc, _addend: Addend) -> Option<LabelUse> {
         unimplemented!("don't support");
     }
 }

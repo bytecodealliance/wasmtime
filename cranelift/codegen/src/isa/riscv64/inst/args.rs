@@ -288,7 +288,7 @@ impl AluOPRR {
             Self::FcvtLuS => "fcvt.lu.s",
             Self::FcvtSL => "fcvt.s.l",
             Self::FcvtSLU => "fcvt.s.lu",
-            Self::FcvtLd => "fcvt.l.d",
+            Self::FcvtLD => "fcvt.l.d",
             Self::FcvtLuD => "fcvt.lu.d",
             Self::FmvXD => "fmv.x.d",
             Self::FcvtDL => "fcvt.d.l",
@@ -338,7 +338,7 @@ impl AluOPRR {
             F64 => match (is_type_signed, type_32) {
                 (true, true) => Self::FcvtWD,
                 (true, false) => Self::FcvtWuD,
-                (false, true) => Self::FcvtLd,
+                (false, true) => Self::FcvtLD,
                 (false, false) => Self::FcvtLuD,
             },
             _ => unreachable!("from type:{}", from),
@@ -377,7 +377,7 @@ impl AluOPRR {
 
             AluOPRR::FcvtLS | AluOPRR::FcvtLuS | AluOPRR::FcvtSL | AluOPRR::FcvtSLU => 0b1010011,
 
-            AluOPRR::FcvtLd
+            AluOPRR::FcvtLD
             | AluOPRR::FcvtLuD
             | AluOPRR::FmvXD
             | AluOPRR::FcvtDL
@@ -413,7 +413,7 @@ impl AluOPRR {
             AluOPRR::FcvtLuS => 0b00011,
             AluOPRR::FcvtSL => 0b00010,
             AluOPRR::FcvtSLU => 0b00011,
-            AluOPRR::FcvtLd => 0b00010,
+            AluOPRR::FcvtLD => 0b00010,
             AluOPRR::FcvtLuD => 0b00011,
             AluOPRR::FmvXD => 0b00000,
             AluOPRR::FcvtDL => 0b00010,
@@ -443,7 +443,7 @@ impl AluOPRR {
             AluOPRR::FcvtLuS => 0b1100000,
             AluOPRR::FcvtSL => 0b1101000,
             AluOPRR::FcvtSLU => 0b1101000,
-            AluOPRR::FcvtLd => 0b1100001,
+            AluOPRR::FcvtLD => 0b1100001,
             AluOPRR::FcvtLuD => 0b1100001,
             AluOPRR::FmvXD => 0b1110001,
             AluOPRR::FcvtDL => 0b1101001,
@@ -474,7 +474,7 @@ impl AluOPRR {
             AluOPRR::FcvtLuS => RISCV_RM_FUNCT3,
             AluOPRR::FcvtSL => RISCV_RM_FUNCT3,
             AluOPRR::FcvtSLU => RISCV_RM_FUNCT3,
-            AluOPRR::FcvtLd => RISCV_RM_FUNCT3,
+            AluOPRR::FcvtLD => RISCV_RM_FUNCT3,
             AluOPRR::FcvtLuD => RISCV_RM_FUNCT3,
             AluOPRR::FmvXD => 0b000,
             AluOPRR::FcvtDL => RISCV_RM_FUNCT3,
@@ -1207,56 +1207,6 @@ impl StoreOP {
     }
 }
 
-impl FloatFlagOp {
-    pub(crate) fn funct3(self) -> u32 {
-        match self {
-            FloatFlagOp::Frcsr => 0b010,
-            FloatFlagOp::Frrm => 0b010,
-            FloatFlagOp::Frflags => 0b010,
-            FloatFlagOp::Fsrmi => 0b101,
-            FloatFlagOp::Fsflagsi => 0b101,
-            FloatFlagOp::Fscsr => 0b001,
-            FloatFlagOp::Fsrm => 0b001,
-            FloatFlagOp::Fsflags => 0b001,
-        }
-    }
-    pub(crate) fn use_imm12(self) -> bool {
-        match self {
-            FloatFlagOp::Fsrmi | FloatFlagOp::Fsflagsi => true,
-            _ => false,
-        }
-    }
-    pub(crate) fn imm12(self, imm: OptionImm12) -> u32 {
-        match self {
-            FloatFlagOp::Frcsr => 0b000000000011,
-            FloatFlagOp::Frrm => 0b000000000010,
-            FloatFlagOp::Frflags => 0b000000000001,
-            FloatFlagOp::Fsrmi => imm.unwrap().as_u32(),
-            FloatFlagOp::Fsflagsi => imm.unwrap().as_u32(),
-            FloatFlagOp::Fscsr => 0b000000000011,
-            FloatFlagOp::Fsrm => 0b000000000010,
-            FloatFlagOp::Fsflags => 0b000000000001,
-        }
-    }
-
-    pub(crate) fn op_name(self) -> &'static str {
-        match self {
-            Self::Frcsr => "frcsr",
-            Self::Frrm => "frrm",
-            Self::Frflags => "frflags",
-            Self::Fsrmi => "fsrmi",
-            Self::Fsflagsi => "fsflagsi",
-            Self::Fscsr => "fscsr",
-            Self::Fsrm => "fsrm",
-            Self::Fsflags => "fsflags",
-        }
-    }
-
-    pub(crate) fn op_code(self) -> u32 {
-        0b1110011
-    }
-}
-
 impl FClassResult {
     #[inline]
     pub(crate) fn bit(self) -> u32 {
@@ -1563,11 +1513,11 @@ impl IntSelectOP {
     }
 }
 
-impl ReferenceValidOP {
+impl ReferenceCheckOP {
     pub(crate) fn op_name(self) -> &'static str {
         match self {
-            ReferenceValidOP::IsNull => "is_null",
-            ReferenceValidOP::IsInvalid => "is_invalid",
+            ReferenceCheckOP::IsNull => "is_null",
+            ReferenceCheckOP::IsInvalid => "is_invalid",
         }
     }
 
@@ -1590,11 +1540,6 @@ pub fn is_int_and_type_signed(ty: Type) -> bool {
 pub fn is_type_signed(ty: Type) -> bool {
     assert!(ty.is_int());
     ty == I8 || ty == I16 || ty == I32 || ty == I64 || ty == I128
-}
-
-#[inline(always)]
-pub(crate) fn ir_conflict_with_riscv_platform(op: crate::ir::Opcode) -> ! {
-    unreachable!("ir {} conflict with risc-v platform.", op)
 }
 
 impl I128OP {

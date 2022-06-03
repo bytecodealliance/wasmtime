@@ -159,7 +159,7 @@
     
 
     ;; a float compare 
-    (Ffcmp 
+    (Fcmp 
       (rd WritableReg)
       (tmp WritableReg)
       (cc FloatCC)
@@ -175,9 +175,9 @@
       (x ValueRegs)
       (y ValueRegs))
 
-    (ReferenceValid
+    (ReferenceCheck
       (rd WritableReg)
-      (op ReferenceValidOP)
+      (op ReferenceCheckOP)
       (x Reg))
     
     (BrTable
@@ -277,7 +277,7 @@
 ))
 
 
-(type ReferenceValidOP(enum
+(type ReferenceCheckOP(enum
   (IsNull)
   (IsInvalid)
 ))
@@ -307,17 +307,7 @@
   (AmomaxuD)
 ))
 
-(type FloatFlagOp (enum 
-  (Frcsr)
-  (Frrm)
-  (Frflags)
-  (Fsrmi)
-  (Fsflagsi)
-  (Fscsr)
-  (Fsrm)
-  (Fsflags)
-))
-
+ 
 (type AluOPRRRR(enum 
   ;; float32
   (FmaddS)
@@ -375,7 +365,7 @@
   
 
   ;; RV64D Standard Extension (in addition to RV32D)
-  (FcvtLd)
+  (FcvtLD)
   (FcvtLuD)
   (FmvXD)
   (FcvtDL)

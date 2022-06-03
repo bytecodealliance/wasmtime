@@ -15,6 +15,7 @@ use crate::isa::riscv64::{inst::EmitState, inst::*};
 use crate::isa::CallConv;
 use crate::machinst::*;
 
+use crate::machinst::isle::ValueRegs;
 use crate::settings;
 use crate::CodegenResult;
 use alloc::boxed::Box;
@@ -243,6 +244,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                 _ => todo!("type not supported {}", param.value_type),
             };
         }
+
         abi_args_for_stack.reverse();
         abi_args.extend(abi_args_for_stack.into_iter());
         let pos: Option<usize> = if add_ret_area_ptr {
@@ -333,15 +335,15 @@ impl ABIMachineSpec for Riscv64MachineDeps {
     }
 
     fn gen_stack_lower_bound_trap(limit_reg: Reg) -> SmallInstVec<Inst> {
-        // let mut insts = SmallVec::new();
-        // insts.push(Inst::TrapIf {
-        //     rs1: stacklimit_reg(),
-        //     rs2: limit_reg,
-        //     cond: IntCC::SignedLessThan,
-        //     trap_code: ir::TrapCode::StackOverflow,
-        // });
-        // insts
-        unimplemented!()
+        let mut insts = SmallVec::new();
+        insts.push(Inst::TrapIf {
+            cc: IntCC::UnsignedLessThan,
+            x: ValueRegs::one(stack_reg()),
+            y: ValueRegs::one(limit_reg),
+            ty: I64,
+            trap_code: ir::TrapCode::StackOverflow,
+        });
+        insts
     }
 
     fn gen_epilogue_placeholder() -> Inst {
