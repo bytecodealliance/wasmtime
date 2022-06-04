@@ -199,7 +199,7 @@ impl BitsShifter {
 
 impl Inst {
     /*
-        do something with rouding mode csr.
+        do something with rouding mode.
         this will save, using your "rounding mode" and restore the rounding mode for you.
     */
     pub(crate) fn using_roung_mode<CallBack: FnMut(&mut SmallInstVec<Inst>)>(
@@ -769,7 +769,7 @@ impl MachInstEmit for Inst {
         // (with an `EmitIsland`). We check this in debug builds. This is `mut`
         // to allow disabling the check for `JTSequence`, which is always
         // emitted following an `EmitIsland`.
-        let start_off = sink.cur_offset();
+        let mut start_off = sink.cur_offset();
         match self {
             &Inst::Nop0 => {
                 // do nothing
@@ -1341,18 +1341,14 @@ impl MachInstEmit for Inst {
             } => {
                 let index = allocs.next(index);
                 let tmp1 = allocs.next_writable(tmp1);
+                let mut insts = SmallInstVec::new();
                 {
                     /*
                         if index not match all targets,
                         goto the default.
                     */
                     // index < 0
-                    sink.use_label_at_offset(
-                        sink.cur_offset(),
-                        default_.as_label().unwrap(),
-                        LabelUse::B12,
-                    );
-                    Inst::CondBr {
+                    insts.push(Inst::CondBr {
                         taken: default_,
                         not_taken: BranchTarget::zero(),
                         kind: IntegerCompare {
@@ -1360,21 +1356,10 @@ impl MachInstEmit for Inst {
                             rs1: index,
                             rs2: zero_reg(),
                         },
-                    }
-                    .emit(&[], sink, emit_info, state);
+                    });
                     //index >= targets.len()
-                    Inst::load_constant_u64(tmp1, targets.len() as u64)
-                        .into_iter()
-                        .for_each(|i| {
-                            i.emit(&[], sink, emit_info, state);
-                        });
-
-                    sink.use_label_at_offset(
-                        sink.cur_offset(),
-                        default_.as_label().unwrap(),
-                        LabelUse::B12,
-                    );
-                    Inst::CondBr {
+                    insts.extend(Inst::load_constant_u64(tmp1, targets.len() as u64));
+                    insts.push(Inst::CondBr {
                         taken: default_,
                         not_taken: BranchTarget::zero(),
                         kind: IntegerCompare {
@@ -1382,11 +1367,9 @@ impl MachInstEmit for Inst {
                             rs1: index,
                             rs2: tmp1.to_reg(),
                         },
-                    }
-                    .emit(&[], sink, emit_info, state);
+                    });
                 }
                 {
-                    let mut insts = SmallInstVec::new();
                     /*
                         offst == 0 make no jump at all, but get the current pc.
                     */
@@ -1408,25 +1391,37 @@ impl MachInstEmit for Inst {
                     });
                     // finally goto jumps
                     insts.push(x[1].clone());
-                    insts
-                        .into_iter()
-                        .for_each(|i| i.emit(&[], sink, emit_info, state));
                 }
 
                 /*
-                    here is all the jumps
+                    here is all the jumps.
                 */
+                let mut need_label_use = vec![];
                 for t in targets {
-                    sink.use_label_at_offset(
-                        sink.cur_offset(),
-                        t.as_label().unwrap(),
-                        LabelUse::PCRel32,
-                    );
-                    Inst::construct_auipc_and_jalr(writable_spilltmp_reg(), 0)
-                        .into_iter()
-                        .for_each(|i| i.emit(&[], sink, emit_info, state));
+                    need_label_use.push((insts.len(), t.clone()));
+                    insts.extend(Inst::construct_auipc_and_jalr(writable_spilltmp_reg(), 0));
                 }
+                // emit island if need.
+                if sink.island_needed((insts.len() * 4) as u32) {
+                    sink.emit_island((insts.len() * 4) as u32);
+                }
+                let mut need_label_use = &need_label_use[..];
+                insts.into_iter().enumerate().for_each(|(index, inst)| {
+                    if !need_label_use.is_empty() && need_label_use[0].0 == index {
+                        sink.use_label_at_offset(
+                            sink.cur_offset(),
+                            need_label_use[0].1.as_label().unwrap(),
+                            LabelUse::PCRel32,
+                        );
+                        need_label_use = &need_label_use[1..];
+                    }
+                    inst.emit(&[], sink, emit_info, state);
+                });
+                // emit the island before, so we can safely
+                // disable the worst-case-size check in this case.
+                start_off = sink.cur_offset();
             }
+
             &Inst::VirtualSPOffsetAdj { amount } => {
                 log::trace!(
                     "virtual sp offset adjusted by {} -> {}",
@@ -1456,19 +1451,12 @@ impl MachInstEmit for Inst {
 
                 sink.put4(x);
             }
-
-            /*
-                todo
-                why does fence look like have parameter.
-                0000 pred succ 00000 000 00000 0001111
-                what is pred and succ???????
-            */
             &Inst::Fence => sink.put4(0x0ff0000f),
             &Inst::FenceI => sink.put4(0x0000100f),
             &Inst::Auipc { rd, imm } => {
-                let rd = allocs.next_writable(rd);
-
-                let x = 0b0010111 | reg_to_gpr_num(rd.to_reg()) << 7 | imm.as_u32() << 12;
+                // let rd = allocs.next_writable(rd);
+                // let x = 0b0010111 | reg_to_gpr_num(rd.to_reg()) << 7 | imm.as_u32() << 12;
+                let x = enc_auipc(rd, imm);
                 sink.put4(x);
             }
 
@@ -1542,12 +1530,14 @@ impl MachInstEmit for Inst {
                 .emit(&[], sink, emit_info, state);
 
                 // here is true
+                sink.bind_label(label_true);
                 Inst::load_constant_imm12(rd, Imm12::form_bool(true)).emit(
                     &[],
                     sink,
                     emit_info,
                     state,
                 );
+                sink.bind_label(label_jump_over);
             }
 
             &Inst::Select {
@@ -1622,9 +1612,10 @@ impl MachInstEmit for Inst {
                 sink.bind_label(label_jump_over);
             }
             &Inst::Jalr { rd, base, offset } => {
-                let rd = allocs.next_writable(rd);
-                let base = allocs.next(base);
-                let x = 0b1100111 |  reg_to_gpr_num(rd.to_reg() )  << 7 |  0b000 << 12 /* funct3 */  | reg_to_gpr_num(base) << 15 |  offset.as_u32() << 20;
+                // let rd = allocs.next_writable(rd);
+                // let base = allocs.next(base);
+                // let x = 0b1100111 |  reg_to_gpr_num(rd.to_reg() )  << 7 |  0b000 << 12 /* funct3 */  | reg_to_gpr_num(base) << 15 |  offset.as_u32() << 20;
+                let x = enc_jalr(rd, base, offset);
                 sink.put4(x);
             }
             &Inst::ECall => {
@@ -1988,6 +1979,7 @@ impl MachInstEmit for Inst {
                 Inst::gen_move(rd, rs2, I64).emit(&[], sink, emit_info, state);
                 // and jump over
                 sink.use_label_at_offset(sink.cur_offset(), label_jump_over, LabelUse::Jal20);
+
                 Inst::Jal {
                     dest: BranchTarget::Label(label_jump_over),
                 }
@@ -2231,9 +2223,8 @@ impl MachInstEmit for Inst {
                 sink.bind_label(label_jump_over);
             }
         };
-
         let end_off = sink.cur_offset();
-        debug_assert!((end_off - start_off) <= Inst::worst_case_size());
+        assert!((end_off - start_off) <= Inst::worst_case_size());
     }
 
     fn pretty_print_inst(&self, allocs: &[Allocation], state: &mut Self::State) -> String {

@@ -78,7 +78,7 @@ impl AMode {
         }
     }
 
-    pub(crate) fn to_string_may_be_alloc(&self, allocs: &mut AllocationConsumer<'_>) -> String {
+    pub(crate) fn to_string_with_alloc(&self, allocs: &mut AllocationConsumer<'_>) -> String {
         let reg = self.get_base_register();
         let next = allocs.next(reg);
         let offset = self.get_offset();

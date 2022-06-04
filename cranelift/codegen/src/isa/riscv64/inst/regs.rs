@@ -89,7 +89,10 @@ pub fn fa0() -> Reg {
 pub fn writable_fa0() -> Writable<Reg> {
     Writable::from_reg(fa0())
 }
-
+#[inline(always)]
+pub fn writable_fa1() -> Writable<Reg> {
+    Writable::from_reg(fa1())
+}
 #[inline(always)]
 pub fn fa1() -> Reg {
     f_reg(11)

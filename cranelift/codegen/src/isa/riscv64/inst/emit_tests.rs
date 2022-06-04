@@ -1,3 +1,4 @@
+use crate::ir::LibCall;
 use crate::isa::riscv64::inst::*;
 use crate::settings;
 use alloc::vec::Vec;
@@ -2103,7 +2104,6 @@ impl DebugITypeIns {
         let x = x >> 3;
         let rs = x & 0b1_1111;
         let x = x >> 5;
-
         let imm12 = x & 0b1111_1111_1111;
         let shamt5 = imm12 & 0b1_1111;
         let shamt6 = imm12 & 0b11_1111;
@@ -2138,3 +2138,137 @@ fn xxx() {
     let x = DebugITypeIns::from_u32(x);
     x.print_b();
 }
+
+#[test]
+fn riscv64_worst_case_size_instrcution_size() {
+    let flags = settings::Flags::new(settings::builder());
+    let emit_info = EmitInfo::new(flags);
+    let mut candidates: Vec<MInst> = vec![];
+    /*
+        a load with large offset need more registers.
+        load will push register and pop registers.
+    */
+    candidates.push(Inst::Load {
+        rd: writable_zero_reg(),
+        op: LoadOP::Ld,
+        flags: MemFlags::new(),
+        from: AMode::SPOffset(4096 * 100, I64),
+    });
+    /*
+        call may need load extern names.
+    */
+    candidates.push(Inst::Call {
+        info: Box::new(CallInfo {
+            dest: ExternalName::LibCall(LibCall::IshlI64),
+            uses: vec![],
+            defs: vec![],
+            opcode: crate::ir::Opcode::Call,
+            caller_callconv: crate::isa::CallConv::SystemV,
+            callee_callconv: crate::isa::CallConv::SystemV,
+        }),
+    });
+    //
+    candidates.push(Inst::Fcmp {
+        rd: writable_fa0(),
+        tmp: writable_fa1(),
+        cc: FloatCC::UnorderedOrLessThanOrEqual,
+        ty: F64,
+        rs1: fa1(),
+        rs2: fa0(),
+    });
+
+    candidates.push(Inst::Select {
+        dst: vec![writable_a0(), writable_a1()],
+        ty: I128,
+        conditon: a0(),
+        x: ValueRegs::two(x_reg(1), x_reg(2)),
+        y: ValueRegs::two(x_reg(3), x_reg(4)),
+    });
+
+    // brtable max size is base one how many "targets" it's has.
+
+    // cas
+    candidates.push(Inst::AtomicCas {
+        dst: writable_a0(),
+        ty: I64,
+        t0: writable_a1(),
+        e: a0(),
+        addr: a1(),
+        v: a2(),
+    });
+
+    /*
+        todo:: I128Arithmetic
+    */
+    candidates.push(Inst::IntSelect {
+        dst: vec![writable_a0(), writable_a0()],
+        ty: I128,
+        op: IntSelectOP::Imax,
+        x: ValueRegs::two(x_reg(1), x_reg(2)),
+        y: ValueRegs::two(x_reg(3), x_reg(4)),
+    });
+
+    candidates.push(Inst::Cls {
+        rs: a0(),
+        rd: writable_a1(),
+        ty: I8,
+    });
+
+    candidates.push(Inst::SelectReg {
+        rd: writable_a0(),
+        rs1: a2(),
+        rs2: a7(),
+        condition: IntegerCompare {
+            kind: IntCC::Equal,
+            rs1: x_reg(5),
+            rs2: x_reg(6),
+        },
+    });
+    candidates.push(Inst::SelectIf {
+        if_spectre_guard: true,
+        rd: vec![writable_a0(), writable_a1()],
+        cmp_x: ValueRegs::two(a0(), a1()),
+        cmp_y: ValueRegs::two(a0(), a1()),
+        cc: IntCC::SignedLessThan,
+        cmp_ty: I128,
+        x: ValueRegs::two(x_reg(1), x_reg(2)),
+        y: ValueRegs::two(x_reg(3), x_reg(4)),
+    });
+
+    candidates.push(Inst::SelectIf {
+        if_spectre_guard: true,
+        rd: vec![writable_a0(), writable_a1()],
+        cmp_x: ValueRegs::two(a0(), a1()),
+        cmp_y: ValueRegs::two(a0(), a1()),
+        cc: IntCC::SignedLessThan,
+        cmp_ty: I128,
+        x: ValueRegs::two(x_reg(1), x_reg(2)),
+        y: ValueRegs::two(x_reg(3), x_reg(4)),
+    });
+    candidates.push(Inst::FcvtToIntSat {
+        rd: writable_a0(),
+        rs: fa0(),
+        tmp: writable_a1(),
+        is_signed: true,
+        in_type: F64,
+        out_type: I64,
+    });
+
+    let mut max: (u32, MInst) = (0, Inst::Nop0);
+    for i in candidates {
+        let mut buffer = MachBuffer::new();
+        i.emit(&[], &mut buffer, &emit_info, &mut Default::default());
+        let buffer = buffer.finish();
+        let length = buffer.data().len() as u32;
+        // println!("{:?} size:{}", i, length);
+        if length > max.0 {
+            max = (length, i);
+        }
+    }
+    assert!(max.0 <= Inst::worst_case_size());
+    println!("caculate max size is {}", max.0);
+}
+
+#[test]
+
+fn br_max_fix_size() {}

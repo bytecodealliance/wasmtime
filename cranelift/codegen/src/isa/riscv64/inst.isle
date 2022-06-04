@@ -67,11 +67,9 @@
       (signed bool)
       (from_bits u8)
       (to_bits u8))
-
-      (AjustSp
+  
+    (AjustSp
       (amount i64))
-
-
     (Call
       (info BoxCallInfo))
 

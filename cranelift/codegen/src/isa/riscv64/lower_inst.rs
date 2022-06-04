@@ -1301,6 +1301,7 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
                         input: 0,
                     },
                 );
+
                 let tmp1 = ctx.alloc_tmp(I64).only_reg().unwrap();
                 let jt_targets: Vec<BranchTarget> = targets
                     .iter()

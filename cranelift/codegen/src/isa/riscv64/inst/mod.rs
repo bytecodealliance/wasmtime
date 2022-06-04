@@ -98,6 +98,16 @@ pub enum BranchTarget {
     ResolvedOffset(i32),
 }
 
+pub(crate) fn enc_auipc(rd: Writable<Reg>, imm: Imm20) -> u32 {
+    let x = 0b0010111 | reg_to_gpr_num(rd.to_reg()) << 7 | imm.as_u32() << 12;
+    x
+}
+
+pub(crate) fn enc_jalr(rd: Writable<Reg>, base: Reg, offset: Imm12) -> u32 {
+    let x = 0b1100111 |  reg_to_gpr_num(rd.to_reg() )  << 7 |  0b000 << 12 /* funct3 */  | reg_to_gpr_num(base) << 15 |  offset.as_u32() << 20;
+    x
+}
+
 impl BranchTarget {
     /// Return the target's label, if it is a label-based target.
     pub(crate) fn as_label(self) -> Option<MachLabel> {
@@ -228,19 +238,18 @@ impl Inst {
         insts
     }
 
-    pub(crate) fn construct_auipc_and_jalr(rd: Writable<Reg>, offset: i32) -> SmallInstVec<Inst> {
-        let mut insts = SmallInstVec::new();
-        insts.push(Inst::Auipc {
+    pub(crate) fn construct_auipc_and_jalr(rd: Writable<Reg>, offset: i32) -> [Inst; 2] {
+        let a = Inst::Auipc {
             rd,
             imm: Imm20::from_bits(offset >> 12),
-        });
+        };
 
-        insts.push(Inst::Jalr {
+        let b = Inst::Jalr {
             rd: writable_zero_reg(),
             base: rd.to_reg(),
             offset: Imm12::from_bits((offset & 0xfff) as i16),
-        });
-        insts
+        };
+        [a, b]
     }
 
     /*
@@ -581,11 +590,13 @@ impl MachInst for Inst {
     }
 
     fn is_safepoint(&self) -> bool {
-        /*
-            todo
-        */
-        false
+        match self {
+            &Inst::Call { .. } => true,
+            &Inst::CallInd { .. } => true,
+            _ => false,
+        }
     }
+
     fn get_operands<F: Fn(VReg) -> VReg>(&self, collector: &mut OperandCollector<'_, F>) {
         riscv64_get_operands(self, collector);
     }
@@ -606,9 +617,6 @@ impl MachInst for Inst {
     }
 
     fn is_included_in_clobbers(&self) -> bool {
-        /*
-            default is true , why ???????
-        */
         true
     }
 
@@ -702,16 +710,8 @@ impl MachInst for Inst {
     }
 
     fn worst_case_size() -> CodeOffset {
-        // The maximum size, in bytes, of any `Inst`'s emitted code. We have at least one case of
-        // an 8-instruction sequence (saturating int-to-float conversions) with three embedded
-        // 64-bit f64 constants.
-        //
-        // Note that inline jump-tables handle island/pool insertion separately, so we do not need
-        // to account for them here (otherwise the worst case would be 2^31 * 4, clearly not
-        // feasible for other reasons).
-
-        //todo I don't know yet
-        100
+        //caculate by test function riscv64_worst_case_size_instrcution_size()
+        64
     }
 
     fn ref_type_regclass(_: &settings::Flags) -> RegClass {
@@ -721,7 +721,6 @@ impl MachInst for Inst {
 
 //=============================================================================
 // Pretty-printing of instructions.
-
 pub fn reg_name(reg: Reg) -> String {
     match reg.to_real_reg() {
         Some(real) => match real.class() {
@@ -1055,7 +1054,7 @@ impl Inst {
                 from,
                 flags: _flags,
             } => {
-                let base = from.to_string_may_be_alloc(allocs);
+                let base = from.to_string_with_alloc(allocs);
                 let rd = format_reg(rd.to_reg(), allocs);
                 format!("{} {},{}", op.op_name(), rd, base,)
             }
@@ -1087,7 +1086,7 @@ impl Inst {
                 op,
                 flags: _flags,
             } => {
-                let base = to.to_string_may_be_alloc(allocs);
+                let base = to.to_string_with_alloc(allocs);
                 let src = format_reg(src, allocs);
                 format!("{} {},{}", op.op_name(), src, base,)
             }
@@ -1220,7 +1219,7 @@ impl Inst {
                 format!("load_sym {},{}{:+}", rd, name, offset)
             }
             &MInst::LoadAddr { ref rd, ref mem } => {
-                let mem = mem.to_string_may_be_alloc(allocs);
+                let mem = mem.to_string_with_alloc(allocs);
                 let rd = format_reg(rd.to_reg(), allocs);
                 format!("load_addr {},{}", rd, mem)
             }
@@ -1332,12 +1331,20 @@ impl MachInstLabelUse for LabelUse {
 
     /// Is a veneer supported for this label reference type?
     fn supports_veneer(self) -> bool {
-        false
+        match self {
+            Self::B12 => true,
+            Self::Jal20 => true,
+            _ => false,
+        }
     }
 
     /// How large is the veneer, if supported?
     fn veneer_size(self) -> CodeOffset {
-        0
+        match self {
+            Self::B12 => 8,
+            Self::Jal20 => 8,
+            _ => 0,
+        }
     }
 
     /// Generate a veneer into the buffer, given that this veneer is at `veneer_offset`, and return
@@ -1347,11 +1354,27 @@ impl MachInstLabelUse for LabelUse {
         buffer: &mut [u8],
         veneer_offset: CodeOffset,
     ) -> (CodeOffset, LabelUse) {
-        unimplemented!("don't support");
+        // unimplemented!("generate_veneer:{:?} {:?}", buffer, veneer_offset);
+        let base = writable_spilltmp_reg();
+        {
+            let x = enc_auipc(base, Imm20::from_bits(0)).to_le_bytes();
+            buffer[0] = x[0];
+            buffer[1] = x[1];
+            buffer[2] = x[2];
+            buffer[3] = x[3];
+        }
+        {
+            let x = enc_jalr(writable_zero_reg(), base.to_reg(), Imm12::from_bits(0)).to_le_bytes();
+            buffer[4] = x[0];
+            buffer[5] = x[1];
+            buffer[6] = x[2];
+            buffer[7] = x[3];
+        }
+        (veneer_offset, Self::PCRel32)
     }
 
     fn from_reloc(_reloc: Reloc, _addend: Addend) -> Option<LabelUse> {
-        unimplemented!("don't support");
+        None
     }
 }
 
@@ -1362,6 +1385,9 @@ impl LabelUse {
         let max = self.max_pos_range() as i64;
         offset >= min && offset <= max
     }
+    /*
+
+    */
     fn patch_raw_offset(self, buffer: &mut [u8], offset: i32) {
         // safe to convert long range to short range.
         let offset = offset as u32;
@@ -1393,7 +1419,6 @@ impl LabelUse {
                     }
                 }
             }
-
             LabelUse::B12 => {
                 let raw = &mut buffer[0] as *mut u8 as *mut u32;
                 let v = ((offset >> 11 & 0b1) << 7)
