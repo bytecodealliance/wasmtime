@@ -238,6 +238,9 @@ impl Inst {
         insts
     }
 
+    /*
+        this will discard return address.
+    */
     pub(crate) fn construct_auipc_and_jalr(rd: Writable<Reg>, offset: i32) -> [Inst; 2] {
         let a = Inst::Auipc {
             rd,
@@ -1430,5 +1433,138 @@ impl LabelUse {
                 }
             }
         }
+    }
+}
+
+pub(crate) enum BitsShifter {
+    Reg(Reg),
+    Imm(u8),
+}
+
+impl BitsShifter {
+    pub(crate) fn new_r(r: Reg) -> Self {
+        Self::Reg(r)
+    }
+
+    pub(crate) fn new_i(r: u8) -> Self {
+        Self::Imm(r)
+    }
+
+    /*
+        get rid of all lowest bit value
+    */
+    pub(crate) fn shift_out_right(self, rd: Writable<Reg>, rs: Reg) -> SmallInstVec<Inst> {
+        let mut insts = SmallInstVec::new();
+        match self {
+            Self::Reg(r) => {
+                insts.push(Inst::AluRRR {
+                    alu_op: AluOPRRR::Srl,
+                    rd,
+                    rs1: rs,
+                    rs2: r,
+                });
+                insts.push(Inst::AluRRR {
+                    alu_op: AluOPRRR::Sll,
+                    rd,
+                    rs1: rd.to_reg(),
+                    rs2: r,
+                });
+            }
+            Self::Imm(imm) => {
+                insts.push(Inst::AluRRImm12 {
+                    alu_op: AluOPRRI::Srli,
+                    rd,
+                    rs: rs,
+                    imm12: Imm12::from_bits(imm as i16),
+                });
+                insts.push(Inst::AluRRImm12 {
+                    alu_op: AluOPRRI::Slli,
+                    rd,
+                    rs: rd.to_reg(),
+                    imm12: Imm12::from_bits(imm as i16),
+                });
+            }
+        }
+        insts
+    }
+
+    pub(crate) fn shift_right(self, rd: Writable<Reg>, rs: Reg) -> SmallInstVec<Inst> {
+        let mut insts = SmallInstVec::new();
+        match self {
+            Self::Reg(r) => {
+                insts.push(Inst::AluRRR {
+                    alu_op: AluOPRRR::Srl,
+                    rd,
+                    rs1: rs,
+                    rs2: r,
+                });
+            }
+            Self::Imm(imm) => {
+                insts.push(Inst::AluRRImm12 {
+                    alu_op: AluOPRRI::Srli,
+                    rd,
+                    rs: rs,
+                    imm12: Imm12::from_bits(imm as i16),
+                });
+            }
+        }
+        insts
+    }
+
+    pub(crate) fn shift_out_left(self, rd: Writable<Reg>, rs: Reg) -> SmallInstVec<Inst> {
+        let mut insts = SmallInstVec::new();
+        match self {
+            Self::Reg(amount) => {
+                insts.push(Inst::AluRRR {
+                    alu_op: AluOPRRR::Sll,
+                    rd,
+                    rs1: rs,
+                    rs2: amount,
+                });
+                insts.push(Inst::AluRRR {
+                    alu_op: AluOPRRR::Srl,
+                    rd,
+                    rs1: rd.to_reg(),
+                    rs2: amount,
+                });
+            }
+            Self::Imm(imm) => {
+                insts.push(Inst::AluRRImm12 {
+                    alu_op: AluOPRRI::Slli,
+                    rd,
+                    rs: rs,
+                    imm12: Imm12::from_bits(imm as i16),
+                });
+                insts.push(Inst::AluRRImm12 {
+                    alu_op: AluOPRRI::Srli,
+                    rd,
+                    rs: rd.to_reg(),
+                    imm12: Imm12::from_bits(imm as i16),
+                });
+            }
+        }
+        insts
+    }
+    pub(crate) fn shift_left(self, rd: Writable<Reg>, rs: Reg) -> SmallInstVec<Inst> {
+        let mut insts = SmallInstVec::new();
+        match self {
+            Self::Reg(amount) => {
+                insts.push(Inst::AluRRR {
+                    alu_op: AluOPRRR::Sll,
+                    rd,
+                    rs1: rs,
+                    rs2: amount,
+                });
+            }
+            Self::Imm(imm) => {
+                insts.push(Inst::AluRRImm12 {
+                    alu_op: AluOPRRI::Slli,
+                    rd,
+                    rs: rs,
+                    imm12: Imm12::from_bits(imm as i16),
+                });
+            }
+        }
+        insts
     }
 }

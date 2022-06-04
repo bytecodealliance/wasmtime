@@ -2143,6 +2143,10 @@ fn xxx() {
 fn riscv64_worst_case_size_instrcution_size() {
     let flags = settings::Flags::new(settings::builder());
     let emit_info = EmitInfo::new(flags);
+
+    /*
+        there are all candidates potential generate a lot of bytes.
+    */
     let mut candidates: Vec<MInst> = vec![];
     /*
         a load with large offset need more registers.
@@ -2260,15 +2264,10 @@ fn riscv64_worst_case_size_instrcution_size() {
         i.emit(&[], &mut buffer, &emit_info, &mut Default::default());
         let buffer = buffer.finish();
         let length = buffer.data().len() as u32;
-        // println!("{:?} size:{}", i, length);
         if length > max.0 {
             max = (length, i);
         }
     }
-    assert!(max.0 <= Inst::worst_case_size());
-    println!("caculate max size is {}", max.0);
+    assert!(max.0 == Inst::worst_case_size());
+    println!("caculate max size is {} , inst is {:?}", max.0, max.1);
 }
-
-#[test]
-
-fn br_max_fix_size() {}

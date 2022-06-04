@@ -1254,7 +1254,7 @@ pub enum FloatCCBit {
     EQ,
     LT,
     GT,
-    C(u8),
+    CompareSet(u8),
 }
 
 impl FloatCCBit {
@@ -1264,7 +1264,7 @@ impl FloatCCBit {
             FloatCCBit::EQ => 1 << 1,
             FloatCCBit::LT => 1 << 2,
             FloatCCBit::GT => 1 << 3,
-            FloatCCBit::C(x) => *x,
+            FloatCCBit::CompareSet(x) => *x,
         }
     }
 
@@ -1290,7 +1290,7 @@ impl FloatCCBit {
                 Self::UN.bit() | Self::GT.bit() | Self::EQ.bit()
             }
         };
-        Self::C(v)
+        Self::CompareSet(v)
     }
 
     #[inline(always)]

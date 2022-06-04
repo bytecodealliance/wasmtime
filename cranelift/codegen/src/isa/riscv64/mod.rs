@@ -257,9 +257,6 @@ mod test {
         let disasm = result.disasm.unwrap();
         println!("{}", disasm);
         println!("{:?}", _code);
-        use std::io::Write;
-        let mut file = std::fs::File::create("d://xxx.bin").unwrap();
-        file.write_all(_code).unwrap();
     }
 
     #[test]
@@ -388,9 +385,6 @@ mod test {
             .unwrap();
         let _code = result.buffer.data();
         println!("xxxxxx , {}", result.disasm.unwrap());
-        use std::io::Write;
-        let mut file = std::fs::File::create("d://xxx.bin").unwrap();
-        file.write_all(_code).unwrap();
     }
 
     /*
@@ -443,9 +437,6 @@ mod test {
             .unwrap();
         let _code = result.buffer.data();
         println!("xxxxxx , {}", result.disasm.unwrap());
-        use std::io::Write;
-        let mut file = std::fs::File::create("d://xxx.bin").unwrap();
-        file.write_all(_code).unwrap();
     }
     #[test]
     fn br_table() {
@@ -483,9 +474,6 @@ mod test {
             .unwrap();
         let _code = result.buffer.data();
         println!("xxxxxx , {}", result.disasm.unwrap());
-        use std::io::Write;
-        let mut file = std::fs::File::create("d://xxx.bin").unwrap();
-        file.write_all(_code).unwrap();
     }
 }
 

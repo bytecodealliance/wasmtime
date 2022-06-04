@@ -64,139 +64,6 @@ impl MachInstEmitState<Inst> for EmitState {
     }
 }
 
-pub(crate) enum BitsShifter {
-    Reg(Reg),
-    Imm(u8),
-}
-
-impl BitsShifter {
-    pub(crate) fn new_r(r: Reg) -> Self {
-        Self::Reg(r)
-    }
-
-    pub(crate) fn new_i(r: u8) -> Self {
-        Self::Imm(r)
-    }
-
-    /*
-        get rid of all lowest bit value
-    */
-    pub(crate) fn shift_out_right(self, rd: Writable<Reg>, rs: Reg) -> SmallInstVec<Inst> {
-        let mut insts = SmallInstVec::new();
-        match self {
-            Self::Reg(r) => {
-                insts.push(Inst::AluRRR {
-                    alu_op: AluOPRRR::Srl,
-                    rd,
-                    rs1: rs,
-                    rs2: r,
-                });
-                insts.push(Inst::AluRRR {
-                    alu_op: AluOPRRR::Sll,
-                    rd,
-                    rs1: rd.to_reg(),
-                    rs2: r,
-                });
-            }
-            Self::Imm(imm) => {
-                insts.push(Inst::AluRRImm12 {
-                    alu_op: AluOPRRI::Srli,
-                    rd,
-                    rs: rs,
-                    imm12: Imm12::from_bits(imm as i16),
-                });
-                insts.push(Inst::AluRRImm12 {
-                    alu_op: AluOPRRI::Slli,
-                    rd,
-                    rs: rd.to_reg(),
-                    imm12: Imm12::from_bits(imm as i16),
-                });
-            }
-        }
-        insts
-    }
-
-    pub(crate) fn shift_right(self, rd: Writable<Reg>, rs: Reg) -> SmallInstVec<Inst> {
-        let mut insts = SmallInstVec::new();
-        match self {
-            Self::Reg(r) => {
-                insts.push(Inst::AluRRR {
-                    alu_op: AluOPRRR::Srl,
-                    rd,
-                    rs1: rs,
-                    rs2: r,
-                });
-            }
-            Self::Imm(imm) => {
-                insts.push(Inst::AluRRImm12 {
-                    alu_op: AluOPRRI::Srli,
-                    rd,
-                    rs: rs,
-                    imm12: Imm12::from_bits(imm as i16),
-                });
-            }
-        }
-        insts
-    }
-
-    pub(crate) fn shift_out_left(self, rd: Writable<Reg>, rs: Reg) -> SmallInstVec<Inst> {
-        let mut insts = SmallInstVec::new();
-        match self {
-            Self::Reg(amount) => {
-                insts.push(Inst::AluRRR {
-                    alu_op: AluOPRRR::Sll,
-                    rd,
-                    rs1: rs,
-                    rs2: amount,
-                });
-                insts.push(Inst::AluRRR {
-                    alu_op: AluOPRRR::Srl,
-                    rd,
-                    rs1: rd.to_reg(),
-                    rs2: amount,
-                });
-            }
-            Self::Imm(imm) => {
-                insts.push(Inst::AluRRImm12 {
-                    alu_op: AluOPRRI::Slli,
-                    rd,
-                    rs: rs,
-                    imm12: Imm12::from_bits(imm as i16),
-                });
-                insts.push(Inst::AluRRImm12 {
-                    alu_op: AluOPRRI::Srli,
-                    rd,
-                    rs: rd.to_reg(),
-                    imm12: Imm12::from_bits(imm as i16),
-                });
-            }
-        }
-        insts
-    }
-    pub(crate) fn shift_left(self, rd: Writable<Reg>, rs: Reg) -> SmallInstVec<Inst> {
-        let mut insts = SmallInstVec::new();
-        match self {
-            Self::Reg(amount) => {
-                insts.push(Inst::AluRRR {
-                    alu_op: AluOPRRR::Sll,
-                    rd,
-                    rs1: rs,
-                    rs2: amount,
-                });
-            }
-            Self::Imm(imm) => {
-                insts.push(Inst::AluRRImm12 {
-                    alu_op: AluOPRRI::Slli,
-                    rd,
-                    rs: rs,
-                    imm12: Imm12::from_bits(imm as i16),
-                });
-            }
-        }
-        insts
-    }
-}
-
 impl Inst {
     /*
         do something with rouding mode.
@@ -600,7 +467,6 @@ impl Inst {
             rs: tmp.to_reg(),
             imm12: Imm12::from_bits(FClassResult::is_infinite_bits() as i16),
         });
-
         insts.push(Inst::CondBr {
             taken,
             not_taken,
@@ -701,6 +567,7 @@ impl Inst {
         RISC-V branches. Overflow checking for unsigned addition requires only a single additional
         branch instruction after the addition: add t0, t1, t2; bltu t0, t1, overflow.
             */
+
     fn add_c_u(rd: Writable<Reg>, carry: Writable<Reg>, x: Reg, y: Reg) -> SmallInstVec<Inst> {
         let mut insts = SmallInstVec::new();
         insts.push(Inst::gen_move(carry, x, I64));
@@ -1370,10 +1237,9 @@ impl MachInstEmit for Inst {
                     });
                 }
                 {
-                    /*
-                        offst == 0 make no jump at all, but get the current pc.
-                    */
-                    let x = Inst::construct_auipc_and_jalr(tmp1, 16);
+                    let x = Inst::construct_auipc_and_jalr(
+                        tmp1, 16, /*  for auipc slli add and jalr.   */
+                    );
                     insts.push(x[0].clone());
                     // t *= 8;
                     insts.push(Inst::AluRRImm12 {
@@ -1402,8 +1268,9 @@ impl MachInstEmit for Inst {
                     insts.extend(Inst::construct_auipc_and_jalr(writable_spilltmp_reg(), 0));
                 }
                 // emit island if need.
-                if sink.island_needed((insts.len() * 4) as u32) {
-                    sink.emit_island((insts.len() * 4) as u32);
+                let length = (insts.len() * 4) as u32;
+                if sink.island_needed(length) {
+                    sink.emit_island(length);
                 }
                 let mut need_label_use = &need_label_use[..];
                 insts.into_iter().enumerate().for_each(|(index, inst)| {
@@ -1454,8 +1321,6 @@ impl MachInstEmit for Inst {
             &Inst::Fence => sink.put4(0x0ff0000f),
             &Inst::FenceI => sink.put4(0x0000100f),
             &Inst::Auipc { rd, imm } => {
-                // let rd = allocs.next_writable(rd);
-                // let x = 0b0010111 | reg_to_gpr_num(rd.to_reg()) << 7 | imm.as_u32() << 12;
                 let x = enc_auipc(rd, imm);
                 sink.put4(x);
             }
@@ -1612,9 +1477,6 @@ impl MachInstEmit for Inst {
                 sink.bind_label(label_jump_over);
             }
             &Inst::Jalr { rd, base, offset } => {
-                // let rd = allocs.next_writable(rd);
-                // let base = allocs.next(base);
-                // let x = 0b1100111 |  reg_to_gpr_num(rd.to_reg() )  << 7 |  0b000 << 12 /* funct3 */  | reg_to_gpr_num(base) << 15 |  offset.as_u32() << 20;
                 let x = enc_jalr(rd, base, offset);
                 sink.put4(x);
             }
@@ -1770,6 +1632,7 @@ impl MachInstEmit for Inst {
                             rs1: x.regs()[1],
                             rs2: y.regs()[1],
                         });
+
                         insts.push(Inst::AluRRR {
                             alu_op: AluOPRRR::Add,
                             rd: dst[1],

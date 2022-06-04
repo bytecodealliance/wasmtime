@@ -131,20 +131,55 @@ where
     }
 
     fn i128_arithmetic(&mut self, op: &I128OP, x: ValueRegs, y: ValueRegs) -> ValueRegs {
-        let mut dst = Vec::with_capacity(2);
-        dst.push(self.temp_writable_reg(I64));
-        dst.push(self.temp_writable_reg(I64));
-        let t0 = self.temp_writable_reg(I64);
-        let t1 = self.temp_writable_reg(I64);
-        self.emit(&MInst::I128Arithmetic {
-            op: *op,
-            t0,
-            t1,
-            dst: dst.clone(),
-            x,
-            y,
-        });
-        self.value_regs(dst[0].to_reg(), dst[1].to_reg())
+        if *op == I128OP::Add {
+            let (low, carry) = {
+                let result = self.temp_writable_reg(I64);
+                self.emit(&MInst::AluRRR {
+                    alu_op: AluOPRRR::Add,
+                    rd: result,
+                    rs1: x.regs()[0],
+                    rs2: y.regs()[0],
+                });
+                let carry = self.temp_writable_reg(I64);
+                self.emit(&MInst::AluRRR {
+                    alu_op: AluOPRRR::SltU,
+                    rd: carry,
+                    rs1: result.to_reg(),
+                    rs2: x.regs()[0],
+                });
+
+                (result.to_reg(), carry.to_reg())
+            };
+            let high = self.temp_writable_reg(I64);
+            self.emit(&MInst::AluRRR {
+                alu_op: AluOPRRR::Add,
+                rd: high,
+                rs1: x.regs()[1],
+                rs2: y.regs()[1],
+            });
+            self.emit(&MInst::AluRRR {
+                alu_op: AluOPRRR::Add,
+                rd: high,
+                rs1: high.to_reg(),
+                rs2: carry,
+            });
+            ValueRegs::two(low, high.to_reg())
+        } else {
+            let mut dst = Vec::with_capacity(2);
+            dst.push(self.temp_writable_reg(I64));
+            dst.push(self.temp_writable_reg(I64));
+            let t0 = self.temp_writable_reg(I64);
+            let t1 = self.temp_writable_reg(I64);
+            self.emit(&MInst::I128Arithmetic {
+                op: *op,
+                t0,
+                t1,
+                dst: dst.clone(),
+                x,
+                y,
+            });
+            self.value_regs(dst[0].to_reg(), dst[1].to_reg())
+        }
     }
 
     fn lower_bit_reverse(&mut self, ty: Type, rs: Reg) -> Reg {
