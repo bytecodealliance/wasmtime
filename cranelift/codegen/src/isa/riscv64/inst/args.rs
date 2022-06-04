@@ -226,7 +226,7 @@ impl IntegerCompare {
     }
 }
 
-impl AluOPRRRR {
+impl FpuOPRRRR {
     pub(crate) fn op_name(self) -> &'static str {
         match self {
             Self::FmaddS => "fmadd.s",
@@ -242,31 +242,30 @@ impl AluOPRRRR {
 
     pub(crate) fn funct2(self) -> u32 {
         match self {
-            AluOPRRRR::FmaddS | AluOPRRRR::FmsubS | AluOPRRRR::FnmsubS | AluOPRRRR::FnmaddS => 0,
-            AluOPRRRR::FmaddD | AluOPRRRR::FmsubD | AluOPRRRR::FnmsubD | AluOPRRRR::FnmaddD => 1,
+            FpuOPRRRR::FmaddS | FpuOPRRRR::FmsubS | FpuOPRRRR::FnmsubS | FpuOPRRRR::FnmaddS => 0,
+            FpuOPRRRR::FmaddD | FpuOPRRRR::FmsubD | FpuOPRRRR::FnmsubD | FpuOPRRRR::FnmaddD => 1,
         }
     }
 
     pub(crate) fn funct3(self, rounding_mode: Option<FloatRoundingMode>) -> u32 {
-        let rounding_mode = rounding_mode.unwrap_or_default();
-        rounding_mode.as_u32()
+        rounding_mode.unwrap_or_default().as_u32()
     }
 
     pub(crate) fn op_code(self) -> u32 {
         match self {
-            AluOPRRRR::FmaddS => 0b1000011,
-            AluOPRRRR::FmsubS => 0b1000111,
-            AluOPRRRR::FnmsubS => 0b1001011,
-            AluOPRRRR::FnmaddS => 0b1001111,
-            AluOPRRRR::FmaddD => 0b1000011,
-            AluOPRRRR::FmsubD => 0b1000111,
-            AluOPRRRR::FnmsubD => 0b1001011,
-            AluOPRRRR::FnmaddD => 0b1001111,
+            FpuOPRRRR::FmaddS => 0b1000011,
+            FpuOPRRRR::FmsubS => 0b1000111,
+            FpuOPRRRR::FnmsubS => 0b1001011,
+            FpuOPRRRR::FnmaddS => 0b1001111,
+            FpuOPRRRR::FmaddD => 0b1000011,
+            FpuOPRRRR::FmsubD => 0b1000111,
+            FpuOPRRRR::FnmsubD => 0b1001011,
+            FpuOPRRRR::FnmaddD => 0b1001111,
         }
     }
 }
 
-impl AluOPRR {
+impl FpuOPRR {
     pub(crate) fn op_name(self) -> &'static str {
         match self {
             Self::FsqrtS => "fsqrt.s",
@@ -359,32 +358,32 @@ impl AluOPRR {
 
     pub(crate) fn op_code(self) -> u32 {
         match self {
-            AluOPRR::FsqrtS
-            | AluOPRR::FcvtWS
-            | AluOPRR::FcvtWuS
-            | AluOPRR::FmvXW
-            | AluOPRR::FclassS
-            | AluOPRR::FcvtSw
-            | AluOPRR::FcvtSwU
-            | AluOPRR::FmvWX => 0b1010011,
+            FpuOPRR::FsqrtS
+            | FpuOPRR::FcvtWS
+            | FpuOPRR::FcvtWuS
+            | FpuOPRR::FmvXW
+            | FpuOPRR::FclassS
+            | FpuOPRR::FcvtSw
+            | FpuOPRR::FcvtSwU
+            | FpuOPRR::FmvWX => 0b1010011,
 
-            AluOPRR::FcvtLS | AluOPRR::FcvtLuS | AluOPRR::FcvtSL | AluOPRR::FcvtSLU => 0b1010011,
+            FpuOPRR::FcvtLS | FpuOPRR::FcvtLuS | FpuOPRR::FcvtSL | FpuOPRR::FcvtSLU => 0b1010011,
 
-            AluOPRR::FcvtLD
-            | AluOPRR::FcvtLuD
-            | AluOPRR::FmvXD
-            | AluOPRR::FcvtDL
-            | AluOPRR::FcvtDLu
-            | AluOPRR::FmvDX => 0b1010011,
+            FpuOPRR::FcvtLD
+            | FpuOPRR::FcvtLuD
+            | FpuOPRR::FmvXD
+            | FpuOPRR::FcvtDL
+            | FpuOPRR::FcvtDLu
+            | FpuOPRR::FmvDX => 0b1010011,
 
-            AluOPRR::FsqrtD
-            | AluOPRR::FcvtSD
-            | AluOPRR::FcvtDS
-            | AluOPRR::FclassD
-            | AluOPRR::FcvtWD
-            | AluOPRR::FcvtWuD
-            | AluOPRR::FcvtDW
-            | AluOPRR::FcvtDWU => 0b1010011,
+            FpuOPRR::FsqrtD
+            | FpuOPRR::FcvtSD
+            | FpuOPRR::FcvtDS
+            | FpuOPRR::FclassD
+            | FpuOPRR::FcvtWD
+            | FpuOPRR::FcvtWuD
+            | FpuOPRR::FcvtDW
+            | FpuOPRR::FcvtDWU => 0b1010011,
         }
     }
 
@@ -394,99 +393,224 @@ impl AluOPRR {
         */
     pub(crate) fn rs2(self) -> u32 {
         match self {
-            AluOPRR::FsqrtS => 0b00000,
-            AluOPRR::FcvtWS => 0b00000,
-            AluOPRR::FcvtWuS => 0b00001,
-            AluOPRR::FmvXW => 0b00000,
-            AluOPRR::FclassS => 0b00000,
-            AluOPRR::FcvtSw => 0b00000,
-            AluOPRR::FcvtSwU => 0b00001,
-            AluOPRR::FmvWX => 0b00000,
-            AluOPRR::FcvtLS => 0b00010,
-            AluOPRR::FcvtLuS => 0b00011,
-            AluOPRR::FcvtSL => 0b00010,
-            AluOPRR::FcvtSLU => 0b00011,
-            AluOPRR::FcvtLD => 0b00010,
-            AluOPRR::FcvtLuD => 0b00011,
-            AluOPRR::FmvXD => 0b00000,
-            AluOPRR::FcvtDL => 0b00010,
-            AluOPRR::FcvtDLu => 0b00011,
-            AluOPRR::FmvDX => 0b00000,
-            AluOPRR::FcvtSD => 0b00001,
-            AluOPRR::FcvtDS => 0b00000,
-            AluOPRR::FclassD => 0b00000,
-            AluOPRR::FcvtWD => 0b00000,
-            AluOPRR::FcvtWuD => 0b00001,
-            AluOPRR::FcvtDW => 0b00000,
-            AluOPRR::FcvtDWU => 0b00001,
-            AluOPRR::FsqrtD => 0b00000,
+            FpuOPRR::FsqrtS => 0b00000,
+            FpuOPRR::FcvtWS => 0b00000,
+            FpuOPRR::FcvtWuS => 0b00001,
+            FpuOPRR::FmvXW => 0b00000,
+            FpuOPRR::FclassS => 0b00000,
+            FpuOPRR::FcvtSw => 0b00000,
+            FpuOPRR::FcvtSwU => 0b00001,
+            FpuOPRR::FmvWX => 0b00000,
+            FpuOPRR::FcvtLS => 0b00010,
+            FpuOPRR::FcvtLuS => 0b00011,
+            FpuOPRR::FcvtSL => 0b00010,
+            FpuOPRR::FcvtSLU => 0b00011,
+            FpuOPRR::FcvtLD => 0b00010,
+            FpuOPRR::FcvtLuD => 0b00011,
+            FpuOPRR::FmvXD => 0b00000,
+            FpuOPRR::FcvtDL => 0b00010,
+            FpuOPRR::FcvtDLu => 0b00011,
+            FpuOPRR::FmvDX => 0b00000,
+            FpuOPRR::FcvtSD => 0b00001,
+            FpuOPRR::FcvtDS => 0b00000,
+            FpuOPRR::FclassD => 0b00000,
+            FpuOPRR::FcvtWD => 0b00000,
+            FpuOPRR::FcvtWuD => 0b00001,
+            FpuOPRR::FcvtDW => 0b00000,
+            FpuOPRR::FcvtDWU => 0b00001,
+            FpuOPRR::FsqrtD => 0b00000,
         }
     }
     pub(crate) fn funct7(self) -> u32 {
         match self {
-            AluOPRR::FsqrtS => 0b0101100,
-            AluOPRR::FcvtWS => 0b1100000,
-            AluOPRR::FcvtWuS => 0b1100000,
-            AluOPRR::FmvXW => 0b1110000,
-            AluOPRR::FclassS => 0b1110000,
-            AluOPRR::FcvtSw => 0b1101000,
-            AluOPRR::FcvtSwU => 0b1101000,
-            AluOPRR::FmvWX => 0b1111000,
-            AluOPRR::FcvtLS => 0b1100000,
-            AluOPRR::FcvtLuS => 0b1100000,
-            AluOPRR::FcvtSL => 0b1101000,
-            AluOPRR::FcvtSLU => 0b1101000,
-            AluOPRR::FcvtLD => 0b1100001,
-            AluOPRR::FcvtLuD => 0b1100001,
-            AluOPRR::FmvXD => 0b1110001,
-            AluOPRR::FcvtDL => 0b1101001,
-            AluOPRR::FcvtDLu => 0b1101001,
-            AluOPRR::FmvDX => 0b1111001,
-            AluOPRR::FcvtSD => 0b0100000,
-            AluOPRR::FcvtDS => 0b0100001,
-            AluOPRR::FclassD => 0b1110001,
-            AluOPRR::FcvtWD => 0b1100001,
-            AluOPRR::FcvtWuD => 0b1100001,
-            AluOPRR::FcvtDW => 0b1101001,
-            AluOPRR::FcvtDWU => 0b1101001,
-            AluOPRR::FsqrtD => 0b0101101,
+            FpuOPRR::FsqrtS => 0b0101100,
+            FpuOPRR::FcvtWS => 0b1100000,
+            FpuOPRR::FcvtWuS => 0b1100000,
+            FpuOPRR::FmvXW => 0b1110000,
+            FpuOPRR::FclassS => 0b1110000,
+            FpuOPRR::FcvtSw => 0b1101000,
+            FpuOPRR::FcvtSwU => 0b1101000,
+            FpuOPRR::FmvWX => 0b1111000,
+            FpuOPRR::FcvtLS => 0b1100000,
+            FpuOPRR::FcvtLuS => 0b1100000,
+            FpuOPRR::FcvtSL => 0b1101000,
+            FpuOPRR::FcvtSLU => 0b1101000,
+            FpuOPRR::FcvtLD => 0b1100001,
+            FpuOPRR::FcvtLuD => 0b1100001,
+            FpuOPRR::FmvXD => 0b1110001,
+            FpuOPRR::FcvtDL => 0b1101001,
+            FpuOPRR::FcvtDLu => 0b1101001,
+            FpuOPRR::FmvDX => 0b1111001,
+            FpuOPRR::FcvtSD => 0b0100000,
+            FpuOPRR::FcvtDS => 0b0100001,
+            FpuOPRR::FclassD => 0b1110001,
+            FpuOPRR::FcvtWD => 0b1100001,
+            FpuOPRR::FcvtWuD => 0b1100001,
+            FpuOPRR::FcvtDW => 0b1101001,
+            FpuOPRR::FcvtDWU => 0b1101001,
+            FpuOPRR::FsqrtD => 0b0101101,
         }
     }
 
     pub(crate) fn funct3(self, rounding_mode: Option<FloatRoundingMode>) -> u32 {
-        let rounding_mode = rounding_mode.unwrap_or_default();
-        let rounding_mode = rounding_mode.as_u32();
+        let rounding_mode = rounding_mode.unwrap_or_default().as_u32();
         match self {
-            AluOPRR::FsqrtS => rounding_mode,
-            AluOPRR::FcvtWS => rounding_mode,
-            AluOPRR::FcvtWuS => rounding_mode,
-            AluOPRR::FmvXW => 0b000,
-            AluOPRR::FclassS => 0b001,
-            AluOPRR::FcvtSw => rounding_mode,
-            AluOPRR::FcvtSwU => rounding_mode,
-            AluOPRR::FmvWX => 0b000,
-            AluOPRR::FcvtLS => rounding_mode,
-            AluOPRR::FcvtLuS => rounding_mode,
-            AluOPRR::FcvtSL => rounding_mode,
-            AluOPRR::FcvtSLU => rounding_mode,
-            AluOPRR::FcvtLD => rounding_mode,
-            AluOPRR::FcvtLuD => rounding_mode,
-            AluOPRR::FmvXD => 0b000,
-            AluOPRR::FcvtDL => rounding_mode,
-            AluOPRR::FcvtDLu => rounding_mode,
-            AluOPRR::FmvDX => 0b000,
-            AluOPRR::FcvtSD => rounding_mode,
-            AluOPRR::FcvtDS => rounding_mode,
-            AluOPRR::FclassD => 0b001,
-            AluOPRR::FcvtWD => rounding_mode,
-            AluOPRR::FcvtWuD => rounding_mode,
-            AluOPRR::FcvtDW => rounding_mode,
-            AluOPRR::FcvtDWU => 0b000,
-            AluOPRR::FsqrtD => rounding_mode,
+            FpuOPRR::FsqrtS => rounding_mode,
+            FpuOPRR::FcvtWS => rounding_mode,
+            FpuOPRR::FcvtWuS => rounding_mode,
+            FpuOPRR::FmvXW => 0b000,
+            FpuOPRR::FclassS => 0b001,
+            FpuOPRR::FcvtSw => rounding_mode,
+            FpuOPRR::FcvtSwU => rounding_mode,
+            FpuOPRR::FmvWX => 0b000,
+            FpuOPRR::FcvtLS => rounding_mode,
+            FpuOPRR::FcvtLuS => rounding_mode,
+            FpuOPRR::FcvtSL => rounding_mode,
+            FpuOPRR::FcvtSLU => rounding_mode,
+            FpuOPRR::FcvtLD => rounding_mode,
+            FpuOPRR::FcvtLuD => rounding_mode,
+            FpuOPRR::FmvXD => 0b000,
+            FpuOPRR::FcvtDL => rounding_mode,
+            FpuOPRR::FcvtDLu => rounding_mode,
+            FpuOPRR::FmvDX => 0b000,
+            FpuOPRR::FcvtSD => rounding_mode,
+            FpuOPRR::FcvtDS => rounding_mode,
+            FpuOPRR::FclassD => 0b001,
+            FpuOPRR::FcvtWD => rounding_mode,
+            FpuOPRR::FcvtWuD => rounding_mode,
+            FpuOPRR::FcvtDW => rounding_mode,
+            FpuOPRR::FcvtDWU => 0b000,
+            FpuOPRR::FsqrtD => rounding_mode,
         }
     }
 }
 
+impl FpuOPRRR {
+    pub(crate) const fn op_name(self) -> &'static str {
+        match self {
+            Self::FaddS => "fadd.s",
+            Self::FsubS => "fsub.s",
+            Self::FmulS => "fmul.s",
+            Self::FdivS => "fdiv.s",
+            Self::FsgnjS => "fsgnj.s",
+            Self::FsgnjnS => "fsgnjn.s",
+            Self::FsgnjxS => "fsgnjx.s",
+            Self::FminS => "fmin.s",
+            Self::FmaxS => "fmax.s",
+            Self::FeqS => "feq.s",
+            Self::FltS => "flt.s",
+            Self::FleS => "fle.s",
+            Self::FaddD => "fadd.d",
+            Self::FsubD => "fsub.d",
+            Self::FmulD => "fmul.d",
+            Self::FdivD => "fdiv.d",
+            Self::FsgnjD => "fsgnj.d",
+            Self::FsgnjnD => "fsgnjn.d",
+            Self::FsgnjxD => "fsgnjx.d",
+            Self::FminD => "fmin.d",
+            Self::FmaxD => "fmax.d",
+            Self::FeqD => "feq.d",
+            Self::FltD => "flt.d",
+            Self::FleD => "fle.d",
+        }
+    }
+
+    pub fn funct3(self, rounding_mode: Option<FloatRoundingMode>) -> u32 {
+        let rounding_mode = rounding_mode.unwrap_or_default();
+        let rounding_mode = rounding_mode.as_u32();
+        match self {
+            Self::FaddS => rounding_mode,
+            Self::FsubS => rounding_mode,
+            Self::FmulS => rounding_mode,
+            Self::FdivS => rounding_mode,
+
+            Self::FsgnjS => 0b000,
+            Self::FsgnjnS => 0b001,
+            Self::FsgnjxS => 0b010,
+            Self::FminS => 0b000,
+            Self::FmaxS => 0b001,
+
+            Self::FeqS => 0b010,
+            Self::FltS => 0b001,
+            Self::FleS => 0b000,
+
+            Self::FaddD => rounding_mode,
+            Self::FsubD => rounding_mode,
+            Self::FmulD => rounding_mode,
+            Self::FdivD => rounding_mode,
+
+            Self::FsgnjD => 0b000,
+            Self::FsgnjnD => 0b001,
+            Self::FsgnjxD => 0b010,
+            Self::FminD => 0b000,
+            Self::FmaxD => 0b001,
+            Self::FeqD => 0b010,
+            Self::FltD => 0b001,
+            Self::FleD => 0b000,
+        }
+    }
+
+    pub fn op_code(self) -> u32 {
+        match self {
+            Self::FaddS
+            | Self::FsubS
+            | Self::FmulS
+            | Self::FdivS
+            | Self::FsgnjS
+            | Self::FsgnjnS
+            | Self::FsgnjxS
+            | Self::FminS
+            | Self::FmaxS
+            | Self::FeqS
+            | Self::FltS
+            | Self::FleS => 0b1010011,
+
+            Self::FaddD
+            | Self::FsubD
+            | Self::FmulD
+            | Self::FdivD
+            | Self::FsgnjD
+            | Self::FsgnjnD
+            | Self::FsgnjxD
+            | Self::FminD
+            | Self::FmaxD
+            | Self::FeqD
+            | Self::FltD
+            | Self::FleD => 0b1010011,
+        }
+    }
+
+    pub const fn funct7(self) -> u32 {
+        match self {
+            Self::FaddS => 0b0000000,
+            Self::FsubS => 0b0000100,
+            Self::FmulS => 0b0001000,
+            Self::FdivS => 0b0001100,
+
+            Self::FsgnjS => 0b0010000,
+            Self::FsgnjnS => 0b0010000,
+            Self::FsgnjxS => 0b0010000,
+            Self::FminS => 0b0010100,
+            Self::FmaxS => 0b0010100,
+            Self::FeqS => 0b1010000,
+            Self::FltS => 0b1010000,
+            Self::FleS => 0b1010000,
+            Self::FaddD => 0b0000001,
+            Self::FsubD => 0b0000101,
+            Self::FmulD => 0b0001001,
+            Self::FdivD => 0b0001101,
+
+            Self::FsgnjD => 0b0010001,
+            Self::FsgnjnD => 0b0010001,
+            Self::FsgnjxD => 0b0010001,
+            Self::FminD => 0b0010101,
+            Self::FmaxD => 0b0010101,
+            Self::FeqD => 0b1010001,
+            Self::FltD => 0b1010001,
+            Self::FleD => 0b1010001,
+        }
+    }
+}
 impl AluOPRRR {
     pub(crate) const fn op_name(self) -> &'static str {
         match self {
@@ -518,30 +642,6 @@ impl AluOPRRR {
             Self::Divuw => "divuw",
             Self::Remw => "remw",
             Self::Remuw => "remuw",
-            Self::FaddS => "fadd.s",
-            Self::FsubS => "fsub.s",
-            Self::FmulS => "fmul.s",
-            Self::FdivS => "fdiv.s",
-            Self::FsgnjS => "fsgnj.s",
-            Self::FsgnjnS => "fsgnjn.s",
-            Self::FsgnjxS => "fsgnjx.s",
-            Self::FminS => "fmin.s",
-            Self::FmaxS => "fmax.s",
-            Self::FeqS => "feq.s",
-            Self::FltS => "flt.s",
-            Self::FleS => "fle.s",
-            Self::FaddD => "fadd.d",
-            Self::FsubD => "fsub.d",
-            Self::FmulD => "fmul.d",
-            Self::FdivD => "fdiv.d",
-            Self::FsgnjD => "fsgnj.d",
-            Self::FsgnjnD => "fsgnjn.d",
-            Self::FsgnjxD => "fsgnjx.d",
-            Self::FminD => "fmin.d",
-            Self::FmaxD => "fmax.d",
-            Self::FeqD => "feq.d",
-            Self::FltD => "flt.d",
-            Self::FleD => "fle.d",
             Self::Adduw => "add.uw",
             Self::Andn => "andn",
             Self::Bclr => "bclr",
@@ -570,9 +670,7 @@ impl AluOPRRR {
         }
     }
 
-    pub fn funct3(self, rounding_mode: Option<FloatRoundingMode>) -> u32 {
-        let rounding_mode = rounding_mode.unwrap_or_default();
-        let rounding_mode = rounding_mode.as_u32();
+    pub fn funct3(self) -> u32 {
         match self {
             AluOPRRR::Add => 0b000,
             AluOPRRR::Sll => 0b001,
@@ -606,34 +704,6 @@ impl AluOPRRR {
             AluOPRRR::Remw => 0b110,
             AluOPRRR::Remuw => 0b111,
 
-            AluOPRRR::FaddS => rounding_mode,
-            AluOPRRR::FsubS => rounding_mode,
-            AluOPRRR::FmulS => rounding_mode,
-            AluOPRRR::FdivS => rounding_mode,
-
-            AluOPRRR::FsgnjS => 0b000,
-            AluOPRRR::FsgnjnS => 0b001,
-            AluOPRRR::FsgnjxS => 0b010,
-            AluOPRRR::FminS => 0b000,
-            AluOPRRR::FmaxS => 0b001,
-
-            AluOPRRR::FeqS => 0b010,
-            AluOPRRR::FltS => 0b001,
-            AluOPRRR::FleS => 0b000,
-
-            AluOPRRR::FaddD => rounding_mode,
-            AluOPRRR::FsubD => rounding_mode,
-            AluOPRRR::FmulD => rounding_mode,
-            AluOPRRR::FdivD => rounding_mode,
-
-            AluOPRRR::FsgnjD => 0b000,
-            AluOPRRR::FsgnjnD => 0b001,
-            AluOPRRR::FsgnjxD => 0b010,
-            AluOPRRR::FminD => 0b000,
-            AluOPRRR::FmaxD => 0b001,
-            AluOPRRR::FeqD => 0b010,
-            AluOPRRR::FltD => 0b001,
-            AluOPRRR::FleD => 0b000,
             AluOPRRR::Adduw => 0b000,
             AluOPRRR::Andn => 0b111,
             AluOPRRR::Bclr => 0b001,
@@ -693,32 +763,6 @@ impl AluOPRRR {
             | AluOPRRR::Divuw
             | AluOPRRR::Remw
             | AluOPRRR::Remuw => 0b0111011,
-
-            AluOPRRR::FaddS
-            | AluOPRRR::FsubS
-            | AluOPRRR::FmulS
-            | AluOPRRR::FdivS
-            | AluOPRRR::FsgnjS
-            | AluOPRRR::FsgnjnS
-            | AluOPRRR::FsgnjxS
-            | AluOPRRR::FminS
-            | AluOPRRR::FmaxS
-            | AluOPRRR::FeqS
-            | AluOPRRR::FltS
-            | AluOPRRR::FleS => 0b1010011,
-
-            AluOPRRR::FaddD
-            | AluOPRRR::FsubD
-            | AluOPRRR::FmulD
-            | AluOPRRR::FdivD
-            | AluOPRRR::FsgnjD
-            | AluOPRRR::FsgnjnD
-            | AluOPRRR::FsgnjxD
-            | AluOPRRR::FminD
-            | AluOPRRR::FmaxD
-            | AluOPRRR::FeqD
-            | AluOPRRR::FltD
-            | AluOPRRR::FleD => 0b1010011,
 
             AluOPRRR::Adduw => 0b0111011,
             AluOPRRR::Andn
@@ -782,34 +826,6 @@ impl AluOPRRR {
             AluOPRRR::Divuw => 0b0000001,
             AluOPRRR::Remw => 0b0000001,
             AluOPRRR::Remuw => 0b0000001,
-
-            AluOPRRR::FaddS => 0b0000000,
-            AluOPRRR::FsubS => 0b0000100,
-            AluOPRRR::FmulS => 0b0001000,
-            AluOPRRR::FdivS => 0b0001100,
-
-            AluOPRRR::FsgnjS => 0b0010000,
-            AluOPRRR::FsgnjnS => 0b0010000,
-            AluOPRRR::FsgnjxS => 0b0010000,
-            AluOPRRR::FminS => 0b0010100,
-            AluOPRRR::FmaxS => 0b0010100,
-            AluOPRRR::FeqS => 0b1010000,
-            AluOPRRR::FltS => 0b1010000,
-            AluOPRRR::FleS => 0b1010000,
-            AluOPRRR::FaddD => 0b0000001,
-            AluOPRRR::FsubD => 0b0000101,
-            AluOPRRR::FmulD => 0b0001001,
-            AluOPRRR::FdivD => 0b0001101,
-
-            AluOPRRR::FsgnjD => 0b0010001,
-            AluOPRRR::FsgnjnD => 0b0010001,
-            AluOPRRR::FsgnjxD => 0b0010001,
-            AluOPRRR::FminD => 0b0010101,
-            AluOPRRR::FmaxD => 0b0010101,
-            AluOPRRR::FeqD => 0b1010001,
-            AluOPRRR::FltD => 0b1010001,
-            AluOPRRR::FleD => 0b1010001,
-
             AluOPRRR::Adduw => 0b0000100,
             AluOPRRR::Andn => 0b0100000,
             AluOPRRR::Bclr => 0b0100100,
@@ -1762,3 +1778,9 @@ pub(crate) fn float_sign_bit(ty: Type) -> u8 {
         _ => unreachable!(),
     }
 }
+
+/*
+    FIXME
+
+
+*/

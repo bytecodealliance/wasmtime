@@ -56,8 +56,8 @@ pub(crate) type OptionFloatRoundingMode = Option<FloatRoundingMode>;
 
 use crate::isa::riscv64::lower::isle::generated_code::MInst;
 pub use crate::isa::riscv64::lower::isle::generated_code::{
-    AluOPRR, AluOPRRI, AluOPRRR, AluOPRRRR, AtomicOP, CsrOP, FClassResult, FFlagsException,
-    FloatRoundingMode, IntSelectOP, LoadOP, MInst as Inst, ReferenceCheckOP, StoreOP, I128OP,
+    AluOPRRI, AluOPRRR, AtomicOP, CsrOP, FClassResult, FFlagsException, FloatRoundingMode, FpuOPRR,
+    FpuOPRRR, FpuOPRRRR, IntSelectOP, LoadOP, MInst as Inst, ReferenceCheckOP, StoreOP, I128OP,
     OPFPFMT,
 };
 
@@ -173,15 +173,15 @@ pub(crate) fn gen_move(rd: Writable<Reg>, oty: Type, rm: Reg, ity: Type) -> Inst
     match (ity.is_float(), oty.is_float()) {
         (false, false) => Inst::gen_move(rd, rm, oty),
         (true, true) => Inst::gen_move(rd, rm, oty),
-        (false, true) => Inst::AluRR {
+        (false, true) => Inst::FpuRR {
             float_rounding_mode: None,
-            alu_op: AluOPRR::move_f_to_x_op(ity),
+            alu_op: FpuOPRR::move_f_to_x_op(ity),
             rd: rd,
             rs: rm,
         },
-        (true, false) => Inst::AluRR {
+        (true, false) => Inst::FpuRR {
             float_rounding_mode: None,
-            alu_op: AluOPRR::move_x_to_f_op(ity),
+            alu_op: FpuOPRR::move_x_to_f_op(ity),
             rd: rd,
             rs: rm,
         },
@@ -291,7 +291,6 @@ impl Inst {
             });
             // rd = rd | tmp
             insts.push(Inst::AluRRR {
-                float_rounding_mode: None,
                 alu_op: AluOPRRR::Or,
                 rd: rd,
                 rs1: rd.to_reg(),
@@ -306,9 +305,9 @@ impl Inst {
         let tmp = writable_spilltmp_reg();
         let mut insts = SmallVec::new();
         insts.extend(Self::load_constant_u32(tmp, const_data as u64));
-        insts.push(Inst::AluRR {
+        insts.push(Inst::FpuRR {
             float_rounding_mode: None,
-            alu_op: AluOPRR::move_x_to_f_op(F32),
+            alu_op: FpuOPRR::move_x_to_f_op(F32),
             rd,
             rs: tmp.to_reg(),
         });
@@ -324,9 +323,9 @@ impl Inst {
         let mut insts = SmallInstVec::new();
         let tmp = alloc_tmp(I64);
         insts.extend(Self::load_constant_u64(tmp, const_data));
-        insts.push(Inst::AluRR {
+        insts.push(Inst::FpuRR {
             float_rounding_mode: None,
-            alu_op: AluOPRR::move_x_to_f_op(F64),
+            alu_op: FpuOPRR::move_x_to_f_op(F64),
             rd,
             rs: tmp.to_reg(),
         });
@@ -380,6 +379,11 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
         &Inst::Auipc { rd, .. } => collector.reg_def(rd),
         &Inst::Lui { rd, .. } => collector.reg_def(rd),
         &Inst::AluRRR { rd, rs1, rs2, .. } => {
+            collector.reg_use(rs1);
+            collector.reg_use(rs2);
+            collector.reg_def(rd);
+        }
+        &Inst::FpuRRR { rd, rs1, rs2, .. } => {
             collector.reg_use(rs1);
             collector.reg_use(rs2);
             collector.reg_def(rd);
@@ -449,11 +453,11 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
         &Inst::ECall => {}
         &Inst::EBreak => {}
         &Inst::Udf { .. } => {}
-        &Inst::AluRR { rd, rs, .. } => {
+        &Inst::FpuRR { rd, rs, .. } => {
             collector.reg_use(rs);
             collector.reg_def(rd);
         }
-        &Inst::AluRRRR {
+        &Inst::FpuRRRR {
             rd, rs1, rs2, rs3, ..
         } => {
             collector.reg_uses(&[rs1, rs2, rs3]);
@@ -817,6 +821,8 @@ impl Inst {
             )
         }
         fn format_float_rounding_mode(rounding_mode: Option<FloatRoundingMode>) -> String {
+            return "".into();
+
             if FloatRoundingMode::is_nono_or_using_fcsr(rounding_mode) {
                 "".into()
             } else {
@@ -1003,8 +1009,19 @@ impl Inst {
             &Inst::Lui { rd, ref imm } => {
                 format!("{} {},{}", "lui", format_reg(rd.to_reg(), allocs), imm.bits)
             }
-            &Inst::AluRRR {
+            &Inst::FpuRRR {
+                alu_op,
+                rd,
+                rs1,
+                rs2,
                 float_rounding_mode,
+            } => {
+                let rs1 = format_reg(rs1, allocs);
+                let rs2 = format_reg(rs2, allocs);
+                let rd = format_reg(rd.to_reg(), allocs);
+                format!("{} {},{},{}", alu_op.op_name(), rd, rs1, rs2,)
+            }
+            &Inst::AluRRR {
                 alu_op,
                 rd,
                 rs1,
@@ -1013,16 +1030,9 @@ impl Inst {
                 let rs1 = format_reg(rs1, allocs);
                 let rs2 = format_reg(rs2, allocs);
                 let rd = format_reg(rd.to_reg(), allocs);
-                format!(
-                    "{} {},{},{}{}",
-                    alu_op.op_name(),
-                    rd,
-                    rs1,
-                    rs2,
-                    format_float_rounding_mode(float_rounding_mode)
-                )
+                format!("{} {},{},{}", alu_op.op_name(), rd, rs1, rs2,)
             }
-            &Inst::AluRR {
+            &Inst::FpuRR {
                 float_rounding_mode,
                 alu_op,
                 rd,
@@ -1054,7 +1064,7 @@ impl Inst {
                 }
             }
 
-            &Inst::AluRRRR {
+            &Inst::FpuRRRR {
                 alu_op,
                 rd,
                 rs1,
@@ -1502,14 +1512,12 @@ impl BitsShifter {
         match self {
             Self::Reg(r) => {
                 insts.push(Inst::AluRRR {
-                    float_rounding_mode: None,
                     alu_op: AluOPRRR::Srl,
                     rd,
                     rs1: rs,
                     rs2: r,
                 });
                 insts.push(Inst::AluRRR {
-                    float_rounding_mode: None,
                     alu_op: AluOPRRR::Sll,
                     rd,
                     rs1: rd.to_reg(),
@@ -1539,7 +1547,6 @@ impl BitsShifter {
         match self {
             Self::Reg(r) => {
                 insts.push(Inst::AluRRR {
-                    float_rounding_mode: None,
                     alu_op: AluOPRRR::Srl,
                     rd,
                     rs1: rs,
@@ -1567,10 +1574,8 @@ impl BitsShifter {
                     rd,
                     rs1: rs,
                     rs2: amount,
-                    float_rounding_mode: None,
                 });
                 insts.push(Inst::AluRRR {
-                    float_rounding_mode: None,
                     alu_op: AluOPRRR::Srl,
                     rd,
                     rs1: rd.to_reg(),
@@ -1599,7 +1604,6 @@ impl BitsShifter {
         match self {
             Self::Reg(amount) => {
                 insts.push(Inst::AluRRR {
-                    float_rounding_mode: None,
                     alu_op: AluOPRRR::Sll,
                     rd,
                     rs1: rs,

@@ -205,7 +205,6 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 };
                 let tmp = ctx.alloc_tmp(I64).only_reg().unwrap();
                 ctx.emit(Inst::AluRRR {
-                    float_rounding_mode: None,
                     alu_op: sub_op,
                     rd: tmp,
                     rs1: zero_reg(),
@@ -242,7 +241,6 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 });
                 // tmp = tmp & arg2
                 ctx.emit(Inst::AluRRR {
-                    float_rounding_mode: None,
                     alu_op: AluOPRRR::And,
                     rd: tmp,
                     rs1: tmp.to_reg(),
@@ -405,7 +403,6 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let y = put_input_in_reg(ctx, inputs[2]);
             // get all x part
             ctx.emit(Inst::AluRRR {
-                float_rounding_mode: None,
                 alu_op: AluOPRRR::And,
                 rd: tmp1,
                 rs1: rcond,
@@ -415,14 +412,12 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             ctx.emit(Inst::construct_bit_not(tmp2, rcond));
             // get y  part
             ctx.emit(Inst::AluRRR {
-                float_rounding_mode: None,
                 alu_op: AluOPRRR::And,
                 rd: tmp2,
                 rs1: tmp2.to_reg(),
                 rs2: y,
             });
             ctx.emit(Inst::AluRRR {
-                float_rounding_mode: None,
                 alu_op: AluOPRRR::Or,
                 rd: rd,
                 rs1: tmp1.to_reg(),
@@ -877,53 +872,52 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 let op = match op {
                     Opcode::Fadd => {
                         if ty_32 {
-                            AluOPRRR::FaddS
+                            FpuOPRRR::FaddS
                         } else {
-                            AluOPRRR::FaddD
+                            FpuOPRRR::FaddD
                         }
                     }
                     Opcode::Fsub => {
                         if ty_32 {
-                            AluOPRRR::FsubS
+                            FpuOPRRR::FsubS
                         } else {
-                            AluOPRRR::FsubD
+                            FpuOPRRR::FsubD
                         }
                     }
                     Opcode::Fmul => {
                         if ty_32 {
-                            AluOPRRR::FmulS
+                            FpuOPRRR::FmulS
                         } else {
-                            AluOPRRR::FmulD
+                            FpuOPRRR::FmulD
                         }
                     }
                     Opcode::Fdiv => {
                         if ty_32 {
-                            AluOPRRR::FdivS
+                            FpuOPRRR::FdivS
                         } else {
-                            AluOPRRR::FdivD
+                            FpuOPRRR::FdivD
                         }
                     }
                     Opcode::Fmin => {
                         if ty_32 {
-                            AluOPRRR::FminS
+                            FpuOPRRR::FminS
                         } else {
-                            AluOPRRR::FminD
+                            FpuOPRRR::FminD
                         }
                     }
                     Opcode::Fmax => {
                         if ty_32 {
-                            AluOPRRR::FmaxS
+                            FpuOPRRR::FmaxS
                         } else {
-                            AluOPRRR::FmaxD
+                            FpuOPRRR::FmaxD
                         }
                     }
                     _ => unreachable!(),
                 };
-                ctx.emit(Inst::AluRRR {
-                    float_rounding_mode: None,
+                ctx.emit(Inst::FpuRRR {
                     alu_op: op,
+                    float_rounding_mode: None,
                     rd,
-
                     rs1,
                     rs2,
                 });
@@ -948,11 +942,11 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 let rs = put_input_in_reg(ctx, inputs[0]);
                 let rd = ctx.get_output(insn, 0).only_reg().unwrap();
                 let op = match (input_ty.bits(), ty.bits()) {
-                    (32, 64) => AluOPRR::FcvtDS,
-                    (64, 32) => AluOPRR::FcvtSD,
+                    (32, 64) => FpuOPRR::FcvtDS,
+                    (64, 32) => FpuOPRR::FcvtSD,
                     _ => unreachable!(),
                 };
-                ctx.emit(Inst::AluRR {
+                ctx.emit(Inst::FpuRR {
                     float_rounding_mode: None,
                     alu_op: op,
                     rd,
@@ -981,15 +975,17 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 let mut insts = SmallInstVec::new();
                 let convert_type = I64;
                 let tmp = ctx.alloc_tmp(I64).only_reg().unwrap();
-                insts.push(Inst::AluRR {
+                insts.push(Inst::FpuRR {
                     float_rounding_mode: Some(rounding_mode),
-                    alu_op: AluOPRR::float_convert_2_int_op(input_ty, true, convert_type),
+
+                    alu_op: FpuOPRR::float_convert_2_int_op(input_ty, true, convert_type),
                     rd: tmp,
                     rs: rs,
                 });
-                insts.push(Inst::AluRR {
+                insts.push(Inst::FpuRR {
                     float_rounding_mode: Some(rounding_mode),
-                    alu_op: AluOPRR::int_convert_2_float_op(convert_type, true, ty),
+
+                    alu_op: FpuOPRR::int_convert_2_float_op(convert_type, true, ty),
                     rd: rd,
                     rs: tmp.to_reg(),
                 });
@@ -1012,9 +1008,9 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             } else {
                 let rd = ctx.get_output(insn, 0).only_reg().unwrap();
                 let rs = put_input_in_reg(ctx, inputs[0]);
-                ctx.emit(Inst::AluRR {
+                ctx.emit(Inst::FpuRR {
                     float_rounding_mode: None,
-                    alu_op: AluOPRR::float_convert_2_int_op(
+                    alu_op: FpuOPRR::float_convert_2_int_op(
                         input_ty,
                         if op == Opcode::FcvtToUint {
                             false
@@ -1045,9 +1041,9 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     insts = Inst::narrow_down_int(rd, rs, input_ty);
                     rs = rd.to_reg();
                 };
-                insts.push(Inst::AluRR {
-                    float_rounding_mode: Some(FloatRoundingMode::RNE),
-                    alu_op: AluOPRR::int_convert_2_float_op(
+                insts.push(Inst::FpuRR {
+                    float_rounding_mode: None,
+                    alu_op: FpuOPRR::int_convert_2_float_op(
                         input_ty,
                         if op == Opcode::FcvtFromUint {
                             false

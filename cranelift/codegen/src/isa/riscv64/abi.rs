@@ -326,7 +326,6 @@ impl ABIMachineSpec for Riscv64MachineDeps {
     fn gen_add_imm(into_reg: Writable<Reg>, from_reg: Reg, imm: u32) -> SmallInstVec<Inst> {
         let mut insts = Inst::load_constant_u32(into_reg, imm as u64);
         insts.push(Inst::AluRRR {
-            float_rounding_mode: None,
             alu_op: AluOPRRR::Add,
             rd: into_reg,
             rs1: into_reg.to_reg(),

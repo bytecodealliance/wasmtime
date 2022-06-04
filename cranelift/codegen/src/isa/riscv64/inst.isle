@@ -16,8 +16,8 @@
     
 
     ;; An ALU operation with one register sources and a register destination.
-    (AluRR
-      (alu_op AluOPRR)
+    (FpuRR
+      (alu_op FpuOPRR)
       (float_rounding_mode OptionFloatRoundingMode)
       (rd WritableReg)
       (rs Reg))
@@ -26,14 +26,21 @@
     ;; An ALU operation with two register sources and a register destination.
     (AluRRR
       (alu_op AluOPRRR)
+      (rd WritableReg)
+      (rs1 Reg)
+      (rs2 Reg))
+
+    ;; An ALU operation with two register sources and a register destination.
+    (FpuRRR
+      (alu_op FpuOPRRR)
       (float_rounding_mode OptionFloatRoundingMode)
       (rd WritableReg)
       (rs1 Reg)
       (rs2 Reg))
 
     ;; An ALU operation with three register sources and a register destination.
-    (AluRRRR
-      (alu_op AluOPRRRR)
+    (FpuRRRR
+      (alu_op FpuOPRRRR)
       (float_rounding_mode OptionFloatRoundingMode)
       (rd WritableReg)
       (rs1 Reg)
@@ -278,6 +285,7 @@
 ))
 
 
+
 (type ReferenceCheckOP(enum
   (IsNull)
   (IsInvalid)
@@ -309,7 +317,7 @@
 ))
 
  
-(type AluOPRRRR(enum 
+(type FpuOPRRRR(enum 
   ;; float32
   (FmaddS)
   (FmsubS)
@@ -345,7 +353,7 @@
   (QNaN)
 ))
 
-(type AluOPRR (enum 
+(type FpuOPRR (enum 
   ;; RV32F Standard Extension
   (FsqrtS)
   (FcvtWS)
@@ -355,7 +363,6 @@
   (FcvtSw)
   (FcvtSwU)
   (FmvWX)
-
 
 
   ;; RV64F Standard Extension (in addition to RV32F)
@@ -429,7 +436,6 @@
   (Sraw)
 
   
-  
   ;;RV32M Standard Extension
   (Mul)
   (Mulh)
@@ -447,36 +453,6 @@
   (Divuw)
   (Remw)
   (Remuw)
-
-  ;; RV32F Standard Extension
-
-  (FaddS)
-  (FsubS)
-  (FmulS)
-  (FdivS)
-
-  (FsgnjS)
-  (FsgnjnS)
-  (FsgnjxS)
-  (FminS)
-  (FmaxS)
-  (FeqS)
-  (FltS)
-  (FleS)
- 
-  ;; RV32D Standard Extension
-  (FaddD)
-  (FsubD)
-  (FmulD)
-  (FdivD)
-  (FsgnjD)
-  (FsgnjnD)
-  (FsgnjxD)
-  (FminD)
-  (FmaxD)
-  (FeqD)
-  (FltD)
-  (FleD)
 
   ;; bitmapip
   (Adduw)
@@ -504,8 +480,40 @@
   (Sh3add)
   (Sh3adduw)
   (Xnor)
-
 ))
+
+
+(type FpuOPRRR (enum
+  ;; RV32F Standard Extension
+  (FaddS)
+  (FsubS)
+  (FmulS)
+  (FdivS)
+
+  (FsgnjS)
+  (FsgnjnS)
+  (FsgnjxS)
+  (FminS)
+  (FmaxS)
+  (FeqS)
+  (FltS)
+  (FleS)
+ 
+  ;; RV32D Standard Extension
+  (FaddD)
+  (FsubD)
+  (FmulD)
+  (FdivD)
+  (FsgnjD)
+  (FsgnjnD)
+  (FsgnjxD)
+  (FminD)
+  (FmaxD)
+  (FeqD)
+  (FltD)
+  (FleD)
+))
+
 
 
 (type AluOPRRI (enum 
@@ -630,11 +638,11 @@
 (extern constructor generate_non_float_rounding_mode generate_non_float_rounding_mode)
 
 
-;; Helper for emitting `MInst.AluRR` instructions.
-(decl alu_rr (AluOPRR Type Reg) Reg)
+;; Helper for emitting `MInst.FpuRR` instructions.
+(decl alu_rr (FpuOPRR Type Reg) Reg)
 (rule (alu_rr op ty src )
       (let ((dst WritableReg (temp_writable_reg ty))
-            (_ Unit (emit (MInst.AluRR op (generate_non_float_rounding_mode) dst src))))
+            (_ Unit (emit (MInst.FpuRR op (pack_float_rounding_mode (FloatRoundingMode.RNE)) dst src))))
         dst))
 
 
@@ -642,15 +650,25 @@
 (decl alu_rrr (AluOPRRR Type Reg Reg) Reg)
 (rule (alu_rrr op ty src1 src2)
       (let ((dst WritableReg (temp_writable_reg ty))
-            (_ Unit (emit (MInst.AluRRR op (generate_non_float_rounding_mode) dst src1 src2))))
+            (_ Unit (emit (MInst.AluRRR op dst src1 src2))))
+        dst))
+
+(decl pack_float_rounding_mode(FloatRoundingMode)OptionFloatRoundingMode)
+(extern constructor pack_float_rounding_mode pack_float_rounding_mode)
+
+;; Helper for emitting `MInst.AluRRR` instructions.
+(decl fpu_rrr (FpuOPRRR Type Reg Reg) Reg)
+(rule (fpu_rrr op ty src1 src2)
+      (let ((dst WritableReg (temp_writable_reg ty))
+            (_ Unit (emit (MInst.FpuRRR op (pack_float_rounding_mode (FloatRoundingMode.RNE)) dst src1 src2))))
         dst))
 
 
-;; Helper for emitting `MInst.AluRRRR` instructions.
-(decl alu_rrrr (AluOPRRRR Type Reg Reg Reg) Reg)
+;; Helper for emitting `MInst.FpuRRRR` instructions.
+(decl alu_rrrr (FpuOPRRRR Type Reg Reg Reg) Reg)
 (rule (alu_rrrr op ty src1 src2 src3)
       (let ((dst WritableReg (temp_writable_reg ty))
-            (_ Unit (emit (MInst.AluRRRR op (generate_non_float_rounding_mode) dst src1 src2 src3))))
+            (_ Unit (emit (MInst.FpuRRRR op (pack_float_rounding_mode (FloatRoundingMode.RNE)) dst src1 src2 src3))))
         dst))
 
 

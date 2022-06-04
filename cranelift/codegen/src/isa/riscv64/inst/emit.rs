@@ -68,7 +68,6 @@ impl Inst {
     pub(crate) fn construct_imm_sub_rs(rd: Writable<Reg>, imm: u64, rs: Reg) -> SmallInstVec<Inst> {
         let mut insts = Inst::load_constant_u64(rd, imm);
         insts.push(Inst::AluRRR {
-            float_rounding_mode: None,
             alu_op: AluOPRRR::Sub,
             rd,
             rs1: rd.to_reg(),
@@ -93,7 +92,6 @@ impl Inst {
             // make tmp = 64 - rs
             insts.push(Inst::load_constant_imm12(tmp, Imm12::from_bits(64)));
             insts.push(Inst::AluRRR {
-                float_rounding_mode: None,
                 alu_op: AluOPRRR::Sub,
                 rd: tmp,
                 rs1: tmp.to_reg(),
@@ -102,14 +100,12 @@ impl Inst {
         }
         insts.push(Inst::load_constant_imm12(rd, Imm12::from_bits(-1)));
         insts.push(Inst::AluRRR {
-            float_rounding_mode: None,
             alu_op: AluOPRRR::Sll,
             rd: rd,
             rs1: rd.to_reg(),
             rs2: tmp.to_reg(),
         });
         insts.push(Inst::AluRRR {
-            float_rounding_mode: None,
             alu_op: AluOPRRR::Srl,
             rd: rd,
             rs1: rd.to_reg(),
@@ -170,18 +166,18 @@ impl Inst {
         let mut insts = SmallInstVec::new();
         let cc_bit = FloatCCBit::floatcc_2_mask_bits(cc);
         let eq_op = if ty == F32 {
-            AluOPRRR::FeqS
+            FpuOPRRR::FeqS
         } else {
-            AluOPRRR::FeqD
+            FpuOPRRR::FeqD
         };
         let lt_op = if ty == F32 {
-            AluOPRRR::FltS
+            FpuOPRRR::FltS
         } else {
-            AluOPRRR::FltD
+            FpuOPRRR::FltD
         };
         // if eq
         if cc_bit.constains(FloatCCBit::EQ) {
-            insts.push(Inst::AluRRR {
+            insts.push(Inst::FpuRRR {
                 float_rounding_mode: None,
                 alu_op: eq_op,
                 rd: tmp,
@@ -200,7 +196,7 @@ impl Inst {
         }
         // if <
         if cc_bit.constains(FloatCCBit::LT) {
-            insts.push(Inst::AluRRR {
+            insts.push(Inst::FpuRRR {
                 float_rounding_mode: None,
                 alu_op: lt_op,
                 rd: tmp,
@@ -219,7 +215,7 @@ impl Inst {
         }
         // if gt
         if cc_bit.constains(FloatCCBit::GT) {
-            insts.push(Inst::AluRRR {
+            insts.push(Inst::FpuRRR {
                 float_rounding_mode: None,
                 alu_op: lt_op,
                 rd: tmp,
@@ -382,12 +378,12 @@ impl Inst {
     ) -> SmallInstVec<Inst> {
         let mut insts = SmallInstVec::new();
         let class_op = if ty == F32 {
-            AluOPRR::FclassS
+            FpuOPRR::FclassS
         } else {
-            AluOPRR::FclassD
+            FpuOPRR::FclassD
         };
         // if x is nan
-        insts.push(Inst::AluRR {
+        insts.push(Inst::FpuRR {
             float_rounding_mode: None,
             alu_op: class_op,
             rd: tmp,
@@ -409,7 +405,7 @@ impl Inst {
             },
         });
         // if y is nan.
-        insts.push(Inst::AluRR {
+        insts.push(Inst::FpuRR {
             float_rounding_mode: None,
             alu_op: class_op,
             rd: tmp2,
@@ -434,7 +430,6 @@ impl Inst {
         // x and y is not nan
         // but there are maybe bother PosInfinite or NegInfinite.
         insts.push(Inst::AluRRR {
-            float_rounding_mode: None,
             alu_op: AluOPRRR::And,
             rd: tmp,
             rs1: tmp.to_reg(),
@@ -551,14 +546,12 @@ impl Inst {
         let mut insts = SmallInstVec::new();
         insts.push(Inst::gen_move(carry, x, I64));
         insts.push(Inst::AluRRR {
-            float_rounding_mode: None,
             alu_op: AluOPRRR::Add,
             rd,
             rs1: x,
             rs2: y,
         });
         insts.push(Inst::AluRRR {
-            float_rounding_mode: None,
             alu_op: AluOPRRR::SltU,
             rd: carry,
             rs1: rd.to_reg(),
@@ -585,14 +578,12 @@ impl Inst {
         let mut insts = SmallInstVec::new();
         insts.push(Inst::gen_move(borrow, x, I64));
         insts.push(Inst::AluRRR {
-            float_rounding_mode: None,
             alu_op: AluOPRRR::Sub,
             rd,
             rs1: x,
             rs2: y,
         });
         insts.push(Inst::AluRRR {
-            float_rounding_mode: None,
             alu_op: AluOPRRR::SltU,
             rd: borrow,
             rs1: borrow.to_reg(),
@@ -640,7 +631,7 @@ impl MachInstEmit for Inst {
                 let x: u32 = 0b0110111 | reg_to_gpr_num(rd.to_reg()) << 7 | (imm.as_u32() << 12);
                 sink.put4(x);
             }
-            &Inst::AluRR {
+            &Inst::FpuRR {
                 float_rounding_mode,
                 alu_op,
                 rd,
@@ -656,7 +647,7 @@ impl MachInstEmit for Inst {
                     | alu_op.funct7() << 25;
                 sink.put4(x);
             }
-            &Inst::AluRRRR {
+            &Inst::FpuRRRR {
                 alu_op,
                 rd,
                 rs1,
@@ -678,9 +669,9 @@ impl MachInstEmit for Inst {
 
                 sink.put4(x);
             }
-            &Inst::AluRRR {
-                float_rounding_mode,
+            &Inst::FpuRRR {
                 alu_op,
+                float_rounding_mode,
                 rd,
                 rs1,
                 rs2,
@@ -691,6 +682,24 @@ impl MachInstEmit for Inst {
                 let x: u32 = alu_op.op_code()
                     | reg_to_gpr_num(rd.to_reg()) << 7
                     | (alu_op.funct3(float_rounding_mode)) << 12
+                    | reg_to_gpr_num(rs1) << 15
+                    | reg_to_gpr_num(rs2) << 20
+                    | alu_op.funct7() << 25;
+                sink.put4(x);
+            }
+
+            &Inst::AluRRR {
+                alu_op,
+                rd,
+                rs1,
+                rs2,
+            } => {
+                let rs1 = allocs.next(rs1);
+                let rs2 = allocs.next(rs2);
+                let rd = allocs.next_writable(rd);
+                let x: u32 = alu_op.op_code()
+                    | reg_to_gpr_num(rd.to_reg()) << 7
+                    | (alu_op.funct3()) << 12
                     | reg_to_gpr_num(rs1) << 15
                     | reg_to_gpr_num(rs2) << 20
                     | alu_op.funct7() << 25;
@@ -749,7 +758,6 @@ impl MachInstEmit for Inst {
                     Inst::do_something_with_registers(1, |registers, insts| {
                         insts.extend(Inst::load_constant_u64(registers[0], offset as u64));
                         insts.push(Inst::AluRRR {
-                            float_rounding_mode: None,
                             alu_op: AluOPRRR::Add,
                             rd: registers[0],
                             rs1: registers[0].to_reg(),
@@ -794,7 +802,6 @@ impl MachInstEmit for Inst {
                         insts.extend(Inst::load_constant_u64(registers[0], offset as u64));
                         // registers[0] = base + offset
                         insts.push(Inst::AluRRR {
-                            float_rounding_mode: None,
                             alu_op: AluOPRRR::Add,
                             rd: registers[0],
                             rs1: registers[0].to_reg(),
@@ -965,7 +972,6 @@ impl MachInstEmit for Inst {
                                 imm12: Imm12::from_bits(32),
                             });
                             insts.push(Inst::AluRRR {
-                                float_rounding_mode: None,
                                 alu_op: AluOPRRR::Or,
                                 rd,
                                 rs1: rd.to_reg(),
@@ -1010,7 +1016,6 @@ impl MachInstEmit for Inst {
                     Inst::do_something_with_registers(1, |registers, insts| {
                         insts.extend(Inst::load_constant_u64(registers[0], amount as u64));
                         insts.push(Inst::AluRRR {
-                            float_rounding_mode: None,
                             alu_op: AluOPRRR::Add,
                             rd: writable_stack_reg(),
                             rs1: stack_reg(),
@@ -1168,15 +1173,15 @@ impl MachInstEmit for Inst {
                     let rd = allocs.next_writable(rd);
                     if ty.is_float() {
                         let mut insts = SmallInstVec::new();
-                        insts.push(Inst::AluRR {
+                        insts.push(Inst::FpuRR {
                             float_rounding_mode: None,
-                            alu_op: AluOPRR::move_f_to_x_op(ty),
+                            alu_op: FpuOPRR::move_f_to_x_op(ty),
                             rd: writable_spilltmp_reg(),
                             rs: rm,
                         });
-                        insts.push(Inst::AluRR {
+                        insts.push(Inst::FpuRR {
                             float_rounding_mode: None,
-                            alu_op: AluOPRR::move_x_to_f_op(ty),
+                            alu_op: FpuOPRR::move_x_to_f_op(ty),
                             rd: rd,
                             rs: spilltmp_reg(),
                         });
@@ -1246,7 +1251,6 @@ impl MachInstEmit for Inst {
                     });
                     // tmp1 += t
                     insts.push(Inst::AluRRR {
-                        float_rounding_mode: None,
                         alu_op: AluOPRRR::Add,
                         rd: tmp1,
                         rs1: tmp1.to_reg(),
@@ -1341,7 +1345,6 @@ impl MachInstEmit for Inst {
                         insts.extend(Inst::load_constant_u64(registers[0], offset as u64));
 
                         insts.push(Inst::AluRRR {
-                            float_rounding_mode: None,
                             rd,
                             alu_op: AluOPRRR::Add,
                             rs1: base,
@@ -1625,7 +1628,6 @@ impl MachInstEmit for Inst {
                     I128OP::Add => {
                         insts.extend(Inst::add_c_u(dst[0], t0, x.regs()[0], y.regs()[0]));
                         insts.push(Inst::AluRRR {
-                            float_rounding_mode: None,
                             alu_op: AluOPRRR::Add,
                             rd: dst[1],
                             rs1: x.regs()[1],
@@ -1633,7 +1635,6 @@ impl MachInstEmit for Inst {
                         });
 
                         insts.push(Inst::AluRRR {
-                            float_rounding_mode: None,
                             alu_op: AluOPRRR::Add,
                             rd: dst[1],
                             rs1: dst[1].to_reg(),
@@ -1643,14 +1644,12 @@ impl MachInstEmit for Inst {
                     I128OP::Sub => {
                         insts.extend(Inst::sub_b_u(dst[0], t0, x.regs()[0], y.regs()[0]));
                         insts.push(Inst::AluRRR {
-                            float_rounding_mode: None,
                             alu_op: AluOPRRR::Sub,
                             rd: dst[1],
                             rs1: x.regs()[1],
                             rs2: y.regs()[1],
                         });
                         insts.push(Inst::AluRRR {
-                            float_rounding_mode: None,
                             alu_op: AluOPRRR::Sub,
                             rd: dst[1],
                             rs1: dst[1].to_reg(),
@@ -1866,12 +1865,12 @@ impl MachInstEmit for Inst {
                 let rd = allocs.next_writable(rd);
                 let tmp = allocs.next_writable(tmp);
                 // get class information.
-                Inst::AluRR {
+                Inst::FpuRR {
                     float_rounding_mode: None,
                     alu_op: if in_type == F32 {
-                        AluOPRR::FclassS
+                        FpuOPRR::FclassS
                     } else {
-                        AluOPRR::FclassD
+                        FpuOPRR::FclassD
                     },
                     rd: tmp,
                     rs,
@@ -1899,9 +1898,10 @@ impl MachInstEmit for Inst {
                 .emit(&[], sink, emit_info, state);
                 // convert to int normally.
 
-                Inst::AluRR {
-                    float_rounding_mode: Some(FloatRoundingMode::RNE),
-                    alu_op: AluOPRR::float_convert_2_int_op(in_type, is_signed, out_type),
+                Inst::FpuRR {
+                    float_rounding_mode: None,
+
+                    alu_op: FpuOPRR::float_convert_2_int_op(in_type, is_signed, out_type),
                     rd: rd,
                     rs: rs,
                 }

@@ -349,38 +349,37 @@
 
 ;;;; Rules for `fcopysign` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type $F32 (fcopysign x y)))
-      (alu_rrr (AluOPRRR.FsgnjS) $F64 x y))
+      (fpu_rrr (FpuOPRRR.FsgnjS) $F64 x y))
 (rule (lower (has_type $F64 (fcopysign x y)))
-      (alu_rrr (AluOPRRR.FsgnjD) $F64 x y))
+      (fpu_rrr (FpuOPRRR.FsgnjD) $F64 x y))
 
 
 ;;;; Rules for `fma` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type $F32 (fma  x y z )))
-      (alu_rrrr (AluOPRRRR.FmaddS) $F64 x y z))
+      (alu_rrrr (FpuOPRRRR.FmaddS) $F64 x y z))
 (rule (lower (has_type $F64 (fma  x y z )))
-      (alu_rrrr (AluOPRRRR.FmaddD) $F64 x y z))
+      (alu_rrrr (FpuOPRRRR.FmaddD) $F64 x y z))
 
 ;;;; special instruction provides by isa can used to speed up computation.;;;;;;
 ;;;; Rules for `FmaddS` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type $F32 (fadd (fmul x y) z )))
-      (alu_rrrr (AluOPRRRR.FmaddS) $F64 x y z))
+      (alu_rrrr (FpuOPRRRR.FmaddS) $F64 x y z))
 
 (rule (lower (has_type $F32 (fadd x (fmul y z) )))
-      (alu_rrrr (AluOPRRRR.FmaddS) $F64 y z x))
+      (alu_rrrr (FpuOPRRRR.FmaddS) $F64 y z x))
 
 ;;;; Rules for `FmaddD` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type $F64 (fadd (fmul x y) z )))
-      (alu_rrrr (AluOPRRRR.FmaddD) $F64 x y z))
+      (alu_rrrr (FpuOPRRRR.FmaddD) $F64 x y z))
 
 (rule (lower (has_type $F64 (fadd x (fmul y z) )))
-      (alu_rrrr (AluOPRRRR.FmaddD) $F64 y z x))
+      (alu_rrrr (FpuOPRRRR.FmaddD) $F64 y z x))
 
 ;;;; todo support fnmadd.s .......
 
-
 ;;;; Rules for `sqrt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type $F32 (sqrt x)))
-      (alu_rr (AluOPRR.FsqrtS)$F64 x))
+      (alu_rr (FpuOPRR.FsqrtS)$F64 x))
 
 (rule (lower (has_type $F64 (sqrt x)))
-      (alu_rr (AluOPRR.FsqrtD)$F64 x))
+      (alu_rr (FpuOPRR.FsqrtD)$F64 x))
