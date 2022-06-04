@@ -18,6 +18,7 @@
     ;; An ALU operation with one register sources and a register destination.
     (AluRR
       (alu_op AluOPRR)
+      (float_rounding_mode OptionFloatRoundingMode)
       (rd WritableReg)
       (rs Reg))
 
@@ -25,6 +26,7 @@
     ;; An ALU operation with two register sources and a register destination.
     (AluRRR
       (alu_op AluOPRRR)
+      (float_rounding_mode OptionFloatRoundingMode)
       (rd WritableReg)
       (rs1 Reg)
       (rs2 Reg))
@@ -32,6 +34,7 @@
     ;; An ALU operation with three register sources and a register destination.
     (AluRRRR
       (alu_op AluOPRRRR)
+      (float_rounding_mode OptionFloatRoundingMode)
       (rd WritableReg)
       (rs1 Reg)
       (rs2 Reg)
@@ -565,6 +568,9 @@
   (RUP)
   ;; Round to Nearest, ties to Max Magnitude
   (RMM)
+  ;; In instruction’s rm field, selects dynamic rounding mode;
+  ;;In Rounding Mode register, Invalid.
+  (Fcsr)
 ))
 
 (type FFlagsException (enum
@@ -595,6 +601,7 @@
 (type Imm3 (primitive Imm3))
 (type BranchTarget (primitive BranchTarget))
 (type CsrAddress (primitive CsrAddress))
+(type OptionFloatRoundingMode (primitive OptionFloatRoundingMode))
 
 ;; Helper for creating the zero register.
 (decl zero_reg () Reg)
@@ -618,11 +625,16 @@
 (decl writable_zero_reg () WritableReg)
 (extern constructor writable_zero_reg writable_zero_reg)
 
+
+(decl generate_non_float_rounding_mode()OptionFloatRoundingMode)
+(extern constructor generate_non_float_rounding_mode generate_non_float_rounding_mode)
+
+
 ;; Helper for emitting `MInst.AluRR` instructions.
 (decl alu_rr (AluOPRR Type Reg) Reg)
 (rule (alu_rr op ty src )
       (let ((dst WritableReg (temp_writable_reg ty))
-            (_ Unit (emit (MInst.AluRR op dst src))))
+            (_ Unit (emit (MInst.AluRR op (generate_non_float_rounding_mode) dst src))))
         dst))
 
 
@@ -630,15 +642,15 @@
 (decl alu_rrr (AluOPRRR Type Reg Reg) Reg)
 (rule (alu_rrr op ty src1 src2)
       (let ((dst WritableReg (temp_writable_reg ty))
-            (_ Unit (emit (MInst.AluRRR op dst src1 src2))))
+            (_ Unit (emit (MInst.AluRRR op (generate_non_float_rounding_mode) dst src1 src2))))
         dst))
 
 
-;; Helper for emitting `MInst.AluRRR` instructions.
+;; Helper for emitting `MInst.AluRRRR` instructions.
 (decl alu_rrrr (AluOPRRRR Type Reg Reg Reg) Reg)
 (rule (alu_rrrr op ty src1 src2 src3)
       (let ((dst WritableReg (temp_writable_reg ty))
-            (_ Unit (emit (MInst.AluRRRR op dst src1 src2 src3))))
+            (_ Unit (emit (MInst.AluRRRR op (generate_non_float_rounding_mode) dst src1 src2 src3))))
         dst))
 
 

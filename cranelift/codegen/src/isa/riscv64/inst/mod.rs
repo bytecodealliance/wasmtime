@@ -50,6 +50,7 @@ pub(crate) type OptionReg = Option<Reg>;
 pub(crate) type OptionImm12 = Option<Imm12>;
 pub(crate) type VecBranchTarget = Vec<BranchTarget>;
 pub(crate) type OptionUimm5 = Option<Uimm5>;
+pub(crate) type OptionFloatRoundingMode = Option<FloatRoundingMode>;
 //=============================================================================
 // Instructions (top level): definition
 
@@ -173,11 +174,13 @@ pub(crate) fn gen_move(rd: Writable<Reg>, oty: Type, rm: Reg, ity: Type) -> Inst
         (false, false) => Inst::gen_move(rd, rm, oty),
         (true, true) => Inst::gen_move(rd, rm, oty),
         (false, true) => Inst::AluRR {
+            float_rounding_mode: None,
             alu_op: AluOPRR::move_f_to_x_op(ity),
             rd: rd,
             rs: rm,
         },
         (true, false) => Inst::AluRR {
+            float_rounding_mode: None,
             alu_op: AluOPRR::move_x_to_f_op(ity),
             rd: rd,
             rs: rm,
@@ -288,6 +291,7 @@ impl Inst {
             });
             // rd = rd | tmp
             insts.push(Inst::AluRRR {
+                float_rounding_mode: None,
                 alu_op: AluOPRRR::Or,
                 rd: rd,
                 rs1: rd.to_reg(),
@@ -303,6 +307,7 @@ impl Inst {
         let mut insts = SmallVec::new();
         insts.extend(Self::load_constant_u32(tmp, const_data as u64));
         insts.push(Inst::AluRR {
+            float_rounding_mode: None,
             alu_op: AluOPRR::move_x_to_f_op(F32),
             rd,
             rs: tmp.to_reg(),
@@ -320,6 +325,7 @@ impl Inst {
         let tmp = alloc_tmp(I64);
         insts.extend(Self::load_constant_u64(tmp, const_data));
         insts.push(Inst::AluRR {
+            float_rounding_mode: None,
             alu_op: AluOPRR::move_x_to_f_op(F64),
             rd,
             rs: tmp.to_reg(),
@@ -810,6 +816,16 @@ impl Inst {
                 to_bits,
             )
         }
+        fn format_float_rounding_mode(rounding_mode: Option<FloatRoundingMode>) -> String {
+            if FloatRoundingMode::is_nono_or_using_fcsr(rounding_mode) {
+                "".into()
+            } else {
+                format!(
+                    " ;;float_round_mode={}",
+                    rounding_mode.unwrap().to_static_str()
+                )
+            }
+        }
 
         match self {
             &Inst::Nop0 => {
@@ -988,6 +1004,7 @@ impl Inst {
                 format!("{} {},{}", "lui", format_reg(rd.to_reg(), allocs), imm.bits)
             }
             &Inst::AluRRR {
+                float_rounding_mode,
                 alu_op,
                 rd,
                 rs1,
@@ -996,12 +1013,30 @@ impl Inst {
                 let rs1 = format_reg(rs1, allocs);
                 let rs2 = format_reg(rs2, allocs);
                 let rd = format_reg(rd.to_reg(), allocs);
-                format!("{} {},{},{}", alu_op.op_name(), rd, rs1, rs2,)
+                format!(
+                    "{} {},{},{}{}",
+                    alu_op.op_name(),
+                    rd,
+                    rs1,
+                    rs2,
+                    format_float_rounding_mode(float_rounding_mode)
+                )
             }
-            &Inst::AluRR { alu_op, rd, rs } => {
+            &Inst::AluRR {
+                float_rounding_mode,
+                alu_op,
+                rd,
+                rs,
+            } => {
                 let rs = format_reg(rs, allocs);
                 let rd = format_reg(rd.to_reg(), allocs);
-                format!("{} {},{}", alu_op.op_name(), rd, rs,)
+                format!(
+                    "{} {},{}{}",
+                    alu_op.op_name(),
+                    rd,
+                    rs,
+                    format_float_rounding_mode(float_rounding_mode)
+                )
             }
             &Inst::Csr {
                 csr_op,
@@ -1025,12 +1060,21 @@ impl Inst {
                 rs1,
                 rs2,
                 rs3,
+                float_rounding_mode,
             } => {
                 let rs1 = format_reg(rs1, allocs);
                 let rs2 = format_reg(rs2, allocs);
                 let rs3 = format_reg(rs3, allocs);
                 let rd = format_reg(rd.to_reg(), allocs);
-                format!("{} {},{},{},{}", alu_op.op_name(), rd, rs1, rs2, rs3)
+                format!(
+                    "{} {},{},{},{}{}",
+                    alu_op.op_name(),
+                    rd,
+                    rs1,
+                    rs2,
+                    rs3,
+                    format_float_rounding_mode(float_rounding_mode)
+                )
             }
             &Inst::AluRRImm12 {
                 alu_op,
@@ -1458,12 +1502,14 @@ impl BitsShifter {
         match self {
             Self::Reg(r) => {
                 insts.push(Inst::AluRRR {
+                    float_rounding_mode: None,
                     alu_op: AluOPRRR::Srl,
                     rd,
                     rs1: rs,
                     rs2: r,
                 });
                 insts.push(Inst::AluRRR {
+                    float_rounding_mode: None,
                     alu_op: AluOPRRR::Sll,
                     rd,
                     rs1: rd.to_reg(),
@@ -1493,6 +1539,7 @@ impl BitsShifter {
         match self {
             Self::Reg(r) => {
                 insts.push(Inst::AluRRR {
+                    float_rounding_mode: None,
                     alu_op: AluOPRRR::Srl,
                     rd,
                     rs1: rs,
@@ -1520,8 +1567,10 @@ impl BitsShifter {
                     rd,
                     rs1: rs,
                     rs2: amount,
+                    float_rounding_mode: None,
                 });
                 insts.push(Inst::AluRRR {
+                    float_rounding_mode: None,
                     alu_op: AluOPRRR::Srl,
                     rd,
                     rs1: rd.to_reg(),
@@ -1550,6 +1599,7 @@ impl BitsShifter {
         match self {
             Self::Reg(amount) => {
                 insts.push(Inst::AluRRR {
+                    float_rounding_mode: None,
                     alu_op: AluOPRRR::Sll,
                     rd,
                     rs1: rs,

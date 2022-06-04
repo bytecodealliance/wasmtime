@@ -12,14 +12,6 @@ pub static WORD_SIZE: u8 = 8;
 use crate::isa::riscv64::inst::reg_to_gpr_num;
 
 use std::fmt::{Display, Formatter, Result};
-/*
-    document used this term.
-    short for "remain"?????????
-
-    1100000 00000 rs1 rm rd 1010011 FCVT.W.S
-    1100000 00001 rs1 rm rd 1010011 FCVT.WU.S
-*/
-static RISCV_RM_FUNCT3: u32 = 0b111; /*gnu gcc tool chain use this value.*/
 
 /// An addressing mode specified for a load/store operation.
 #[derive(Clone, Debug, Copy)]
@@ -255,8 +247,9 @@ impl AluOPRRRR {
         }
     }
 
-    pub(crate) fn funct3(self) -> u32 {
-        RISCV_RM_FUNCT3
+    pub(crate) fn funct3(self, rounding_mode: Option<FloatRoundingMode>) -> u32 {
+        let rounding_mode = rounding_mode.unwrap_or_default();
+        rounding_mode.as_u32()
     }
 
     pub(crate) fn op_code(self) -> u32 {
@@ -460,34 +453,36 @@ impl AluOPRR {
         }
     }
 
-    pub(crate) fn funct3(self) -> u32 {
+    pub(crate) fn funct3(self, rounding_mode: Option<FloatRoundingMode>) -> u32 {
+        let rounding_mode = rounding_mode.unwrap_or_default();
+        let rounding_mode = rounding_mode.as_u32();
         match self {
-            AluOPRR::FsqrtS => RISCV_RM_FUNCT3,
-            AluOPRR::FcvtWS => RISCV_RM_FUNCT3,
-            AluOPRR::FcvtWuS => RISCV_RM_FUNCT3,
+            AluOPRR::FsqrtS => rounding_mode,
+            AluOPRR::FcvtWS => rounding_mode,
+            AluOPRR::FcvtWuS => rounding_mode,
             AluOPRR::FmvXW => 0b000,
             AluOPRR::FclassS => 0b001,
-            AluOPRR::FcvtSw => RISCV_RM_FUNCT3,
-            AluOPRR::FcvtSwU => RISCV_RM_FUNCT3,
+            AluOPRR::FcvtSw => rounding_mode,
+            AluOPRR::FcvtSwU => rounding_mode,
             AluOPRR::FmvWX => 0b000,
-            AluOPRR::FcvtLS => RISCV_RM_FUNCT3,
-            AluOPRR::FcvtLuS => RISCV_RM_FUNCT3,
-            AluOPRR::FcvtSL => RISCV_RM_FUNCT3,
-            AluOPRR::FcvtSLU => RISCV_RM_FUNCT3,
-            AluOPRR::FcvtLD => RISCV_RM_FUNCT3,
-            AluOPRR::FcvtLuD => RISCV_RM_FUNCT3,
+            AluOPRR::FcvtLS => rounding_mode,
+            AluOPRR::FcvtLuS => rounding_mode,
+            AluOPRR::FcvtSL => rounding_mode,
+            AluOPRR::FcvtSLU => rounding_mode,
+            AluOPRR::FcvtLD => rounding_mode,
+            AluOPRR::FcvtLuD => rounding_mode,
             AluOPRR::FmvXD => 0b000,
-            AluOPRR::FcvtDL => RISCV_RM_FUNCT3,
-            AluOPRR::FcvtDLu => RISCV_RM_FUNCT3,
+            AluOPRR::FcvtDL => rounding_mode,
+            AluOPRR::FcvtDLu => rounding_mode,
             AluOPRR::FmvDX => 0b000,
-            AluOPRR::FcvtSD => RISCV_RM_FUNCT3,
-            AluOPRR::FcvtDS => RISCV_RM_FUNCT3,
+            AluOPRR::FcvtSD => rounding_mode,
+            AluOPRR::FcvtDS => rounding_mode,
             AluOPRR::FclassD => 0b001,
-            AluOPRR::FcvtWD => RISCV_RM_FUNCT3,
-            AluOPRR::FcvtWuD => RISCV_RM_FUNCT3,
-            AluOPRR::FcvtDW => RISCV_RM_FUNCT3,
+            AluOPRR::FcvtWD => rounding_mode,
+            AluOPRR::FcvtWuD => rounding_mode,
+            AluOPRR::FcvtDW => rounding_mode,
             AluOPRR::FcvtDWU => 0b000,
-            AluOPRR::FsqrtD => RISCV_RM_FUNCT3,
+            AluOPRR::FsqrtD => rounding_mode,
         }
     }
 }
@@ -575,7 +570,9 @@ impl AluOPRRR {
         }
     }
 
-    pub fn funct3(self) -> u32 {
+    pub fn funct3(self, rounding_mode: Option<FloatRoundingMode>) -> u32 {
+        let rounding_mode = rounding_mode.unwrap_or_default();
+        let rounding_mode = rounding_mode.as_u32();
         match self {
             AluOPRRR::Add => 0b000,
             AluOPRRR::Sll => 0b001,
@@ -609,10 +606,10 @@ impl AluOPRRR {
             AluOPRRR::Remw => 0b110,
             AluOPRRR::Remuw => 0b111,
 
-            AluOPRRR::FaddS => RISCV_RM_FUNCT3,
-            AluOPRRR::FsubS => RISCV_RM_FUNCT3,
-            AluOPRRR::FmulS => RISCV_RM_FUNCT3,
-            AluOPRRR::FdivS => RISCV_RM_FUNCT3,
+            AluOPRRR::FaddS => rounding_mode,
+            AluOPRRR::FsubS => rounding_mode,
+            AluOPRRR::FmulS => rounding_mode,
+            AluOPRRR::FdivS => rounding_mode,
 
             AluOPRRR::FsgnjS => 0b000,
             AluOPRRR::FsgnjnS => 0b001,
@@ -624,10 +621,10 @@ impl AluOPRRR {
             AluOPRRR::FltS => 0b001,
             AluOPRRR::FleS => 0b000,
 
-            AluOPRRR::FaddD => RISCV_RM_FUNCT3,
-            AluOPRRR::FsubD => RISCV_RM_FUNCT3,
-            AluOPRRR::FmulD => RISCV_RM_FUNCT3,
-            AluOPRRR::FdivD => RISCV_RM_FUNCT3,
+            AluOPRRR::FaddD => rounding_mode,
+            AluOPRRR::FsubD => rounding_mode,
+            AluOPRRR::FmulD => rounding_mode,
+            AluOPRRR::FdivD => rounding_mode,
 
             AluOPRRR::FsgnjD => 0b000,
             AluOPRRR::FsgnjnD => 0b001,
@@ -1073,15 +1070,40 @@ impl AluOPRRI {
     }
 }
 
+impl Default for FloatRoundingMode {
+    fn default() -> Self {
+        Self::Fcsr
+    }
+}
+
 impl FloatRoundingMode {
+    pub(crate) fn is_nono_or_using_fcsr(x: Option<FloatRoundingMode>) -> bool {
+        match x {
+            Some(x) => x == FloatRoundingMode::Fcsr,
+            None => true,
+        }
+    }
+
+    pub(crate) fn to_static_str(self) -> &'static str {
+        match self {
+            FloatRoundingMode::RNE => "RNE",
+            FloatRoundingMode::RTZ => "RTZ",
+            FloatRoundingMode::RDN => "RDN",
+            FloatRoundingMode::RUP => "RUP",
+            FloatRoundingMode::RMM => "RMM",
+            FloatRoundingMode::Fcsr => "Fcsr",
+        }
+    }
+
     #[inline(always)]
-    pub fn bits(self) -> u8 {
+    pub(crate) fn bits(self) -> u8 {
         match self {
             FloatRoundingMode::RNE => 0b000,
             FloatRoundingMode::RTZ => 0b001,
             FloatRoundingMode::RDN => 0b010,
             FloatRoundingMode::RUP => 0b011,
             FloatRoundingMode::RMM => 0b100,
+            FloatRoundingMode::Fcsr => 0b111,
         }
     }
     /*
@@ -1094,6 +1116,9 @@ impl FloatRoundingMode {
     }
     pub(crate) fn to_uimm5(self) -> Uimm5 {
         Uimm5::from_bits(self.bits())
+    }
+    pub(crate) fn as_u32(self) -> u32 {
+        self.bits() as u32
     }
 }
 

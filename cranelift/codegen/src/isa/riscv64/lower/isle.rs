@@ -135,6 +135,7 @@ where
             let (low, carry) = {
                 let result = self.temp_writable_reg(I64);
                 self.emit(&MInst::AluRRR {
+                    float_rounding_mode: None,
                     alu_op: AluOPRRR::Add,
                     rd: result,
                     rs1: x.regs()[0],
@@ -142,6 +143,7 @@ where
                 });
                 let carry = self.temp_writable_reg(I64);
                 self.emit(&MInst::AluRRR {
+                    float_rounding_mode: None,
                     alu_op: AluOPRRR::SltU,
                     rd: carry,
                     rs1: result.to_reg(),
@@ -152,12 +154,14 @@ where
             };
             let high = self.temp_writable_reg(I64);
             self.emit(&MInst::AluRRR {
+                float_rounding_mode: None,
                 alu_op: AluOPRRR::Add,
                 rd: high,
                 rs1: x.regs()[1],
                 rs2: y.regs()[1],
             });
             self.emit(&MInst::AluRRR {
+                float_rounding_mode: None,
                 alu_op: AluOPRRR::Add,
                 rd: high,
                 rs1: high.to_reg(),
@@ -182,6 +186,9 @@ where
         }
     }
 
+    fn generate_non_float_rounding_mode(&mut self) -> OptionFloatRoundingMode {
+        None
+    }
     fn lower_bit_reverse(&mut self, ty: Type, rs: Reg) -> Reg {
         match ty.bits() {
             64 | 32 | 16 => {
@@ -307,6 +314,7 @@ where
                 });
                 // if lower trailing zeros is less than 64 we know the upper 64-bit no need to count.
                 self.emit(&MInst::AluRRR {
+                    float_rounding_mode: None,
                     alu_op: AluOPRRR::Slt,
                     rd: tmp_src_high,
                     rs1: rd.to_reg(),
@@ -314,6 +322,7 @@ where
                 });
                 // set high part lowest bit.
                 self.emit(&MInst::AluRRR {
+                    float_rounding_mode: None,
                     alu_op: AluOPRRR::Or,
                     rd: tmp_high, /* if tmp2 == 0 we don't change the high part value and need to count ,otherwise
                                   we set lowest bit to 1 , Ctz will return 0 which is the result we want.
@@ -331,6 +340,7 @@ where
                 });
                 // add them togother
                 self.emit(&MInst::AluRRR {
+                    float_rounding_mode: None,
                     alu_op: AluOPRRR::Add,
                     rd,
                     rs1: rd.to_reg(),
@@ -369,6 +379,7 @@ where
                     .for_each(|i| self.emit(&i));
 
                 self.emit(&MInst::AluRRR {
+                    float_rounding_mode: None,
                     alu_op: AluOPRRR::Or,
                     rd,
                     rs1: rd.to_reg(),
@@ -391,12 +402,14 @@ where
         let low = self.temp_writable_reg(I64);
         let high = self.temp_writable_reg(I64);
         self.emit(&MInst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::Andn,
             rd: low,
             rs1: a.regs()[0],
             rs2: b.regs()[0],
         });
         self.emit(&MInst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::Andn,
             rd: high,
             rs1: a.regs()[1],
@@ -424,6 +437,7 @@ where
         });
         // add low and high together.
         self.emit(&MInst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::Add,
             rd: low,
             rs1: low.to_reg(),
@@ -436,12 +450,14 @@ where
         let low = self.temp_writable_reg(I64);
         let high = self.temp_writable_reg(I64);
         self.emit(&MInst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::Xnor,
             rd: low,
             rs1: x.regs()[0],
             rs2: y.regs()[0],
         });
         self.emit(&MInst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::Xnor,
             rd: high,
             rs1: x.regs()[1],
@@ -464,17 +480,20 @@ where
         let move_to_x_reg_op = AluOPRR::move_f_to_x_op(ty);
         // move to x registers
         self.emit(&MInst::AluRR {
+            float_rounding_mode: None,
             alu_op: move_to_x_reg_op,
             rd: tmpx,
             rs: x,
         });
         self.emit(&MInst::AluRR {
+            float_rounding_mode: None,
             alu_op: move_to_x_reg_op,
             rd: tmpy,
             rs: y,
         });
         // xnor
         self.emit(&MInst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::Xnor,
             rd: tmpx,
             rs1: tmpx.to_reg(),
@@ -489,6 +508,7 @@ where
         };
         let result_reg = self.temp_writable_reg(ty);
         self.emit(&MInst::AluRR {
+            float_rounding_mode: None,
             alu_op: move_f_reg_op,
             rd: result_reg,
             rs: tmpx.to_reg(),
@@ -567,12 +587,14 @@ where
         let low = self.temp_writable_reg(I64);
         let high = self.temp_writable_reg(I64);
         self.emit(&MInst::AluRRR {
+            float_rounding_mode: None,
             alu_op: op,
             rd: low,
             rs1: a.regs()[0],
             rs2: b.regs()[0],
         });
         self.emit(&MInst::AluRRR {
+            float_rounding_mode: None,
             alu_op: op,
             rd: high,
             rs1: a.regs()[1],
@@ -586,6 +608,7 @@ where
         match ty.bits() {
             64 => {
                 self.emit(&MInst::AluRRR {
+                    float_rounding_mode: None,
                     alu_op: AluOPRRR::Rol,
                     rd: rd,
                     rs1: rs,
@@ -594,6 +617,7 @@ where
             }
             32 => {
                 self.emit(&MInst::AluRRR {
+                    float_rounding_mode: None,
                     alu_op: AluOPRRR::Rolw,
                     rd: rd,
                     rs1: rs,
@@ -620,6 +644,7 @@ where
                         Imm12::from_bits(ty.bits() as i16),
                     ));
                     self.emit(&MInst::AluRRR {
+                        float_rounding_mode: None,
                         alu_op: AluOPRRR::Sub,
                         rd: len_sub_shamt,
                         rs1: len_sub_shamt.to_reg(),
@@ -628,6 +653,7 @@ where
                     len_sub_shamt.to_reg()
                 };
                 self.emit(&MInst::AluRRR {
+                    float_rounding_mode: None,
                     alu_op: AluOPRRR::Sll,
                     rd: rd,
                     rs1: rs,
@@ -635,6 +661,7 @@ where
                 });
                 let value2 = self.temp_writable_reg(I64);
                 self.emit(&MInst::AluRRR {
+                    float_rounding_mode: None,
                     alu_op: AluOPRRR::Srl,
                     rd: value2,
                     rs1: rs,
@@ -642,6 +669,7 @@ where
                 });
 
                 self.emit(&MInst::AluRRR {
+                    float_rounding_mode: None,
                     alu_op: AluOPRRR::Or,
                     rd: rd,
                     rs1: rd.to_reg(),
@@ -658,6 +686,7 @@ where
         match ty.bits() {
             64 => {
                 self.emit(&MInst::AluRRR {
+                    float_rounding_mode: None,
                     alu_op: AluOPRRR::Ror,
                     rd: rd,
                     rs1: rs,
@@ -666,6 +695,7 @@ where
             }
             32 => {
                 self.emit(&MInst::AluRRR {
+                    float_rounding_mode: None,
                     alu_op: AluOPRRR::Rorw,
                     rd: rd,
                     rs1: rs,
@@ -691,6 +721,7 @@ where
                         Imm12::from_bits(ty.bits() as i16),
                     ));
                     self.emit(&MInst::AluRRR {
+                        float_rounding_mode: None,
                         alu_op: AluOPRRR::Sub,
                         rd: len_sub_shamt,
                         rs1: len_sub_shamt.to_reg(),
@@ -699,6 +730,7 @@ where
                     len_sub_shamt.to_reg()
                 };
                 self.emit(&MInst::AluRRR {
+                    float_rounding_mode: None,
                     alu_op: AluOPRRR::Srl,
                     rd: rd,
                     rs1: rs,
@@ -706,6 +738,7 @@ where
                 });
                 let value2 = self.temp_writable_reg(I64);
                 self.emit(&MInst::AluRRR {
+                    float_rounding_mode: None,
                     alu_op: AluOPRRR::Sll,
                     rd: value2,
                     rs1: rs,
@@ -713,6 +746,7 @@ where
                 });
 
                 self.emit(&MInst::AluRRR {
+                    float_rounding_mode: None,
                     alu_op: AluOPRRR::Or,
                     rd: rd,
                     rs1: rd.to_reg(),
@@ -728,6 +762,7 @@ where
         let rd = self.temp_writable_reg(I64);
         if ty.bits() == 64 {
             self.emit(&MInst::AluRRR {
+                float_rounding_mode: None,
                 alu_op: if is_signed {
                     AluOPRRR::Mulh
                 } else {
@@ -752,6 +787,7 @@ where
                 generated_code::constructor_narrow_int(self, ty, b).unwrap()
             };
             self.emit(&MInst::AluRRR {
+                float_rounding_mode: None,
                 alu_op: AluOPRRR::Mul,
                 rd: rd,
                 rs1: a,
@@ -803,6 +839,7 @@ where
             let tmp = self.temp_writable_reg(I64);
             self.emit(&MInst::load_constant_imm12(tmp, Imm12::from_bits(64)));
             self.emit(&MInst::AluRRR {
+                float_rounding_mode: None,
                 alu_op: AluOPRRR::Sub,
                 rd: tmp,
                 rs1: tmp.to_reg(),
@@ -845,6 +882,7 @@ where
         // low part
         {
             self.emit(&MInst::AluRRR {
+                float_rounding_mode: None,
                 alu_op: first_shift(),
                 rd: low,
                 rs1: val.regs()[0],
@@ -853,6 +891,7 @@ where
             //
             let tmp = self.temp_writable_reg(I64);
             self.emit(&MInst::AluRRR {
+                float_rounding_mode: None,
                 alu_op: second_shift(),
                 rd: tmp,
                 rs1: val.regs()[1],
@@ -870,6 +909,7 @@ where
                 },
             });
             self.emit(&MInst::AluRRR {
+                float_rounding_mode: None,
                 alu_op: AluOPRRR::Or,
                 rd: low,
                 rs1: low.to_reg(),
@@ -881,6 +921,7 @@ where
         // high part
         {
             self.emit(&MInst::AluRRR {
+                float_rounding_mode: None,
                 alu_op: first_shift(),
                 rd: high,
                 rs1: val.regs()[1],
@@ -889,6 +930,7 @@ where
             //
             let tmp = self.temp_writable_reg(I64);
             self.emit(&MInst::AluRRR {
+                float_rounding_mode: None,
                 alu_op: second_shift(),
                 rd: tmp,
                 rs1: val.regs()[0],
@@ -906,6 +948,7 @@ where
                 },
             });
             self.emit(&MInst::AluRRR {
+                float_rounding_mode: None,
                 alu_op: AluOPRRR::Or,
                 rd: high,
                 rs1: high.to_reg(),
@@ -963,6 +1006,7 @@ where
         let tmp = self.temp_writable_reg(I64);
         // move into x register.
         self.emit(&MInst::AluRR {
+            float_rounding_mode: None,
             alu_op: AluOPRR::move_f_to_x_op(ty),
             rd: tmp,
             rs: val,
@@ -980,6 +1024,7 @@ where
         // move back to float register.
         let rd = self.temp_writable_reg(F64);
         self.emit(&MInst::AluRR {
+            float_rounding_mode: None,
             alu_op: AluOPRR::move_x_to_f_op(ty),
             rd,
             rs: tmp.to_reg(),
@@ -991,6 +1036,7 @@ where
         let tmp = self.temp_writable_reg(I64);
         // move into x register.
         self.emit(&MInst::AluRR {
+            float_rounding_mode: None,
             alu_op: AluOPRR::move_f_to_x_op(ty),
             rd: tmp,
             rs: val,
@@ -1008,6 +1054,7 @@ where
         // move back to float register.
         let rd = self.temp_writable_reg(F64);
         self.emit(&MInst::AluRR {
+            float_rounding_mode: None,
             alu_op: AluOPRR::move_x_to_f_op(ty),
             rd,
             rs: tmp.to_reg(),
@@ -1045,6 +1092,7 @@ where
         {
             if shift_left {
                 insts.push(MInst::AluRRR {
+                    float_rounding_mode: None,
                     alu_op: AluOPRRR::Sll,
                     rd: low,
                     rs1: val.regs()[0],
@@ -1052,6 +1100,7 @@ where
                 });
             } else {
                 insts.push(MInst::AluRRR {
+                    float_rounding_mode: None,
                     alu_op: AluOPRRR::Srl,
                     rd: low,
                     rs1: val.regs()[0],
@@ -1059,6 +1108,7 @@ where
                 });
                 let tmp = self.temp_writable_reg(I64);
                 insts.push(MInst::AluRRR {
+                    float_rounding_mode: None,
                     alu_op: AluOPRRR::Sll,
                     rd: tmp,
                     rs1: val.regs()[1],
@@ -1075,6 +1125,7 @@ where
                     },
                 });
                 insts.push(MInst::AluRRR {
+                    float_rounding_mode: None,
                     alu_op: AluOPRRR::Or,
                     rd: low,
                     rs1: low.to_reg(),
@@ -1086,6 +1137,7 @@ where
         {
             if shift_left {
                 insts.push(MInst::AluRRR {
+                    float_rounding_mode: None,
                     alu_op: AluOPRRR::Sll,
                     rd: high,
                     rs1: val.regs()[1],
@@ -1093,6 +1145,7 @@ where
                 });
                 let tmp = self.temp_writable_reg(I64);
                 insts.push(MInst::AluRRR {
+                    float_rounding_mode: None,
                     alu_op: AluOPRRR::Srl,
                     rd: tmp,
                     rs1: val.regs()[0],
@@ -1109,6 +1162,7 @@ where
                     },
                 });
                 insts.push(MInst::AluRRR {
+                    float_rounding_mode: None,
                     alu_op: AluOPRRR::Or,
                     rd: high,
                     rs1: high.to_reg(),
@@ -1116,6 +1170,7 @@ where
                 });
             } else {
                 insts.push(MInst::AluRRR {
+                    float_rounding_mode: None,
                     alu_op: if is_arithmetic {
                         AluOPRRR::Sra
                     } else {
@@ -1289,6 +1344,7 @@ where
 
         // add rest part.
         self.emit(&MInst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::Add,
             rd: result,
             rs1: result.to_reg(),

@@ -247,6 +247,7 @@ fn test_riscv64_binemit() {
     //
     insns.push(TestUnit::new_with_gcc_option(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::Adduw,
             rd: writable_a1(),
             rs1: a0(),
@@ -258,6 +259,7 @@ fn test_riscv64_binemit() {
 
     insns.push(TestUnit::new_with_gcc_option(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::Andn,
             rd: writable_a1(),
             rs1: a0(),
@@ -268,6 +270,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new_with_gcc_option(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::Bclr,
             rd: writable_a1(),
             rs1: a0(),
@@ -279,6 +282,7 @@ fn test_riscv64_binemit() {
 
     insns.push(TestUnit::new_with_gcc_option(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::Bext,
             rd: writable_a1(),
             rs1: a0(),
@@ -290,6 +294,7 @@ fn test_riscv64_binemit() {
 
     insns.push(TestUnit::new_with_gcc_option(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::Binv,
             rd: writable_a1(),
             rs1: a0(),
@@ -300,6 +305,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new_with_gcc_option(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::Bset,
             rd: writable_a1(),
             rs1: a0(),
@@ -311,6 +317,7 @@ fn test_riscv64_binemit() {
 
     insns.push(TestUnit::new_with_gcc_option(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::Clmul,
             rd: writable_a1(),
             rs1: a0(),
@@ -322,6 +329,7 @@ fn test_riscv64_binemit() {
 
     insns.push(TestUnit::new_with_gcc_option(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::Clmulh,
             rd: writable_a1(),
             rs1: a0(),
@@ -333,6 +341,7 @@ fn test_riscv64_binemit() {
 
     insns.push(TestUnit::new_with_gcc_option(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::Clmulr,
             rd: writable_a1(),
             rs1: a0(),
@@ -344,6 +353,7 @@ fn test_riscv64_binemit() {
 
     insns.push(TestUnit::new_with_gcc_option(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::Max,
             rd: writable_a1(),
             rs1: a0(),
@@ -355,6 +365,7 @@ fn test_riscv64_binemit() {
 
     insns.push(TestUnit::new_with_gcc_option(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::Maxu,
             rd: writable_a1(),
             rs1: a0(),
@@ -366,6 +377,7 @@ fn test_riscv64_binemit() {
 
     insns.push(TestUnit::new_with_gcc_option(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::Min,
             rd: writable_a1(),
             rs1: a0(),
@@ -377,6 +389,7 @@ fn test_riscv64_binemit() {
 
     insns.push(TestUnit::new_with_gcc_option(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::Minu,
             rd: writable_a1(),
             rs1: a0(),
@@ -388,6 +401,7 @@ fn test_riscv64_binemit() {
 
     insns.push(TestUnit::new_with_gcc_option(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::Orn,
             rd: writable_a1(),
             rs1: a0(),
@@ -399,6 +413,7 @@ fn test_riscv64_binemit() {
 
     insns.push(TestUnit::new_with_gcc_option(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::Rol,
             rd: writable_a1(),
             rs1: a0(),
@@ -410,6 +425,7 @@ fn test_riscv64_binemit() {
 
     insns.push(TestUnit::new_with_gcc_option(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::Rolw,
             rd: writable_a1(),
             rs1: a0(),
@@ -420,6 +436,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new_with_gcc_option(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::Ror,
             rd: writable_a1(),
             rs1: a0(),
@@ -430,6 +447,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new_with_gcc_option(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::Rorw,
             rd: writable_a1(),
             rs1: a0(),
@@ -440,6 +458,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new_with_gcc_option(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::Sh1add,
             rd: writable_a1(),
             rs1: a0(),
@@ -451,6 +470,7 @@ fn test_riscv64_binemit() {
 
     insns.push(TestUnit::new_with_gcc_option(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::Sh1adduw,
             rd: writable_a1(),
             rs1: a0(),
@@ -461,6 +481,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new_with_gcc_option(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::Sh2add,
             rd: writable_a1(),
             rs1: a0(),
@@ -471,6 +492,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new_with_gcc_option(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::Sh2adduw,
             rd: writable_a1(),
             rs1: a0(),
@@ -481,6 +503,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new_with_gcc_option(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::Sh3add,
             rd: writable_a1(),
             rs1: a0(),
@@ -491,6 +514,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new_with_gcc_option(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::Sh3adduw,
             rd: writable_a1(),
             rs1: a0(),
@@ -501,6 +525,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new_with_gcc_option(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::Xnor,
             rd: writable_a1(),
             rs1: a0(),
@@ -513,6 +538,7 @@ fn test_riscv64_binemit() {
     //
     insns.push(TestUnit::new(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::Add,
             rd: writable_fp_reg(),
             rs1: fp_reg(),
@@ -812,6 +838,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::Add,
             rd: writable_a0(),
             rs1: a0(),
@@ -821,6 +848,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::Sub,
             rd: writable_a0(),
             rs1: a0(),
@@ -830,6 +858,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::Sll,
             rd: writable_a0(),
             rs1: a0(),
@@ -840,6 +869,7 @@ fn test_riscv64_binemit() {
 
     insns.push(TestUnit::new(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::Slt,
             rd: writable_a0(),
             rs1: a0(),
@@ -849,6 +879,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::SltU,
             rd: writable_a0(),
             rs1: a0(),
@@ -858,6 +889,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::Xor,
             rd: writable_a0(),
             rs1: a0(),
@@ -867,6 +899,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::Srl,
             rd: writable_a0(),
             rs1: a0(),
@@ -876,6 +909,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::Sra,
             rd: writable_a0(),
             rs1: a0(),
@@ -885,6 +919,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::Or,
             rd: writable_a0(),
             rs1: a0(),
@@ -894,6 +929,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::And,
             rd: writable_a0(),
             rs1: a0(),
@@ -903,6 +939,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::Addw,
             rd: writable_a0(),
             rs1: a0(),
@@ -912,6 +949,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::Subw,
             rd: writable_a0(),
             rs1: a0(),
@@ -921,6 +959,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::Sllw,
             rd: writable_a0(),
             rs1: a0(),
@@ -930,6 +969,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::Srlw,
             rd: writable_a0(),
             rs1: a0(),
@@ -939,6 +979,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::Sraw,
             rd: writable_a0(),
             rs1: a0(),
@@ -949,6 +990,7 @@ fn test_riscv64_binemit() {
 
     insns.push(TestUnit::new(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::Mul,
             rd: writable_a0(),
             rs1: a0(),
@@ -959,6 +1001,7 @@ fn test_riscv64_binemit() {
 
     insns.push(TestUnit::new(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::Mulh,
             rd: writable_a0(),
             rs1: a0(),
@@ -968,6 +1011,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::Mulhsu,
             rd: writable_a0(),
             rs1: a0(),
@@ -977,6 +1021,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::Mulhu,
             rd: writable_a0(),
             rs1: a0(),
@@ -986,6 +1031,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::Div,
             rd: writable_a0(),
             rs1: a0(),
@@ -995,6 +1041,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::DivU,
             rd: writable_a0(),
             rs1: a0(),
@@ -1004,6 +1051,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::Rem,
             rd: writable_a0(),
             rs1: a0(),
@@ -1013,6 +1061,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::RemU,
             rd: writable_a0(),
             rs1: a0(),
@@ -1023,6 +1072,7 @@ fn test_riscv64_binemit() {
 
     insns.push(TestUnit::new(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::Mulw,
             rd: writable_a0(),
             rs1: a0(),
@@ -1032,6 +1082,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::Divw,
             rd: writable_a0(),
             rs1: a0(),
@@ -1041,6 +1092,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::Remw,
             rd: writable_a0(),
             rs1: a0(),
@@ -1050,6 +1102,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::Remuw,
             rd: writable_a0(),
             rs1: a0(),
@@ -1061,6 +1114,7 @@ fn test_riscv64_binemit() {
     //
     insns.push(TestUnit::new(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::FaddS,
             rd: writable_fa0(),
             rs1: fa0(),
@@ -1070,6 +1124,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::FsubS,
             rd: writable_fa0(),
             rs1: fa0(),
@@ -1079,6 +1134,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::FmulS,
             rd: writable_fa0(),
             rs1: fa0(),
@@ -1088,6 +1144,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::FdivS,
             rd: writable_fa0(),
             rs1: fa0(),
@@ -1097,6 +1154,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::FsgnjS,
             rd: writable_fa0(),
             rs1: fa0(),
@@ -1106,6 +1164,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::FsgnjnS,
             rd: writable_fa0(),
             rs1: fa0(),
@@ -1116,6 +1175,7 @@ fn test_riscv64_binemit() {
 
     insns.push(TestUnit::new(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::FsgnjxS,
             rd: writable_fa0(),
             rs1: fa0(),
@@ -1125,6 +1185,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::FminS,
             rd: writable_fa0(),
             rs1: fa0(),
@@ -1135,6 +1196,7 @@ fn test_riscv64_binemit() {
 
     insns.push(TestUnit::new(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::FmaxS,
             rd: writable_fa0(),
             rs1: fa0(),
@@ -1144,6 +1206,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::FeqS,
             rd: writable_a0(),
             rs1: fa0(),
@@ -1153,6 +1216,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::FltS,
             rd: writable_a0(),
             rs1: fa0(),
@@ -1162,6 +1226,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::FleS,
             rd: writable_a0(),
             rs1: fa0(),
@@ -1173,6 +1238,7 @@ fn test_riscv64_binemit() {
     //
     insns.push(TestUnit::new(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::FaddD,
             rd: writable_fa0(),
             rs1: fa0(),
@@ -1182,6 +1248,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::FsubD,
             rd: writable_fa0(),
             rs1: fa0(),
@@ -1191,6 +1258,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::FmulD,
             rd: writable_fa0(),
             rs1: fa0(),
@@ -1200,6 +1268,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::FdivD,
             rd: writable_fa0(),
             rs1: fa0(),
@@ -1209,6 +1278,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::FsgnjD,
             rd: writable_fa0(),
             rs1: fa0(),
@@ -1218,6 +1288,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::FsgnjnD,
             rd: writable_fa0(),
             rs1: fa0(),
@@ -1228,6 +1299,7 @@ fn test_riscv64_binemit() {
 
     insns.push(TestUnit::new(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::FsgnjxD,
             rd: writable_fa0(),
             rs1: fa0(),
@@ -1237,6 +1309,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::FminD,
             rd: writable_fa0(),
             rs1: fa0(),
@@ -1247,6 +1320,7 @@ fn test_riscv64_binemit() {
 
     insns.push(TestUnit::new(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::FmaxD,
             rd: writable_fa0(),
             rs1: fa0(),
@@ -1256,6 +1330,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::FeqD,
             rd: writable_a0(),
             rs1: fa0(),
@@ -1265,6 +1340,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::FltD,
             rd: writable_a0(),
             rs1: fa0(),
@@ -1274,6 +1350,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRR::FleD,
             rd: writable_a0(),
             rs1: fa0(),
@@ -1285,6 +1362,7 @@ fn test_riscv64_binemit() {
     //
     insns.push(TestUnit::new(
         Inst::AluRR {
+            float_rounding_mode: None,
             alu_op: AluOPRR::FsqrtS,
             rd: writable_fa0(),
             rs: fa1(),
@@ -1293,6 +1371,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRR {
+            float_rounding_mode: None,
             alu_op: AluOPRR::FcvtWS,
             rd: writable_a0(),
             rs: fa1(),
@@ -1302,6 +1381,7 @@ fn test_riscv64_binemit() {
 
     insns.push(TestUnit::new(
         Inst::AluRR {
+            float_rounding_mode: None,
             alu_op: AluOPRR::FcvtWuS,
             rd: writable_a0(),
             rs: fa1(),
@@ -1310,6 +1390,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRR {
+            float_rounding_mode: None,
             alu_op: AluOPRR::FmvXW,
             rd: writable_a0(),
             rs: fa1(),
@@ -1318,6 +1399,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRR {
+            float_rounding_mode: None,
             alu_op: AluOPRR::FclassS,
             rd: writable_a0(),
             rs: fa1(),
@@ -1327,6 +1409,7 @@ fn test_riscv64_binemit() {
 
     insns.push(TestUnit::new(
         Inst::AluRR {
+            float_rounding_mode: None,
             alu_op: AluOPRR::FcvtSw,
             rd: writable_fa0(),
             rs: a0(),
@@ -1335,6 +1418,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRR {
+            float_rounding_mode: None,
             alu_op: AluOPRR::FcvtSwU,
             rd: writable_fa0(),
             rs: a0(),
@@ -1344,6 +1428,7 @@ fn test_riscv64_binemit() {
 
     insns.push(TestUnit::new(
         Inst::AluRR {
+            float_rounding_mode: None,
             alu_op: AluOPRR::FmvWX,
             rd: writable_fa0(),
             rs: a0(),
@@ -1352,6 +1437,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRR {
+            float_rounding_mode: None,
             alu_op: AluOPRR::FcvtLS,
             rd: writable_a0(),
             rs: fa0(),
@@ -1360,6 +1446,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRR {
+            float_rounding_mode: None,
             alu_op: AluOPRR::FcvtLuS,
             rd: writable_a0(),
             rs: fa0(),
@@ -1368,6 +1455,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRR {
+            float_rounding_mode: None,
             alu_op: AluOPRR::FcvtSL,
             rd: writable_fa0(),
             rs: a0(),
@@ -1376,6 +1464,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRR {
+            float_rounding_mode: None,
             alu_op: AluOPRR::FcvtSLU,
             rd: writable_fa0(),
             rs: a0(),
@@ -1386,6 +1475,7 @@ fn test_riscv64_binemit() {
     //
     insns.push(TestUnit::new(
         Inst::AluRR {
+            float_rounding_mode: None,
             alu_op: AluOPRR::FsqrtD,
             rd: writable_fa0(),
             rs: fa1(),
@@ -1394,6 +1484,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRR {
+            float_rounding_mode: None,
             alu_op: AluOPRR::FcvtWD,
             rd: writable_a0(),
             rs: fa1(),
@@ -1403,6 +1494,7 @@ fn test_riscv64_binemit() {
 
     insns.push(TestUnit::new(
         Inst::AluRR {
+            float_rounding_mode: None,
             alu_op: AluOPRR::FcvtWuD,
             rd: writable_a0(),
             rs: fa1(),
@@ -1411,6 +1503,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRR {
+            float_rounding_mode: None,
             alu_op: AluOPRR::FmvXD,
             rd: writable_a0(),
             rs: fa1(),
@@ -1419,6 +1512,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRR {
+            float_rounding_mode: None,
             alu_op: AluOPRR::FclassD,
             rd: writable_a0(),
             rs: fa1(),
@@ -1428,6 +1522,7 @@ fn test_riscv64_binemit() {
 
     insns.push(TestUnit::new(
         Inst::AluRR {
+            float_rounding_mode: None,
             alu_op: AluOPRR::FcvtSD,
             rd: writable_fa0(),
             rs: fa0(),
@@ -1436,6 +1531,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRR {
+            float_rounding_mode: None,
             alu_op: AluOPRR::FcvtDWU,
             rd: writable_fa0(),
             rs: a0(),
@@ -1445,6 +1541,7 @@ fn test_riscv64_binemit() {
 
     insns.push(TestUnit::new(
         Inst::AluRR {
+            float_rounding_mode: None,
             alu_op: AluOPRR::FmvDX,
             rd: writable_fa0(),
             rs: a0(),
@@ -1453,6 +1550,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRR {
+            float_rounding_mode: None,
             alu_op: AluOPRR::FcvtLD,
             rd: writable_a0(),
             rs: fa0(),
@@ -1461,6 +1559,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRR {
+            float_rounding_mode: None,
             alu_op: AluOPRR::FcvtLuD,
             rd: writable_a0(),
             rs: fa0(),
@@ -1469,6 +1568,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRR {
+            float_rounding_mode: None,
             alu_op: AluOPRR::FcvtDL,
             rd: writable_fa0(),
             rs: a0(),
@@ -1477,6 +1577,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRR {
+            float_rounding_mode: None,
             alu_op: AluOPRR::FcvtDLu,
             rd: writable_fa0(),
             rs: a0(),
@@ -1487,6 +1588,7 @@ fn test_riscv64_binemit() {
 
     insns.push(TestUnit::new(
         Inst::AluRRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRRR::FmaddS,
             rd: writable_fa0(),
             rs1: fa0(),
@@ -1497,6 +1599,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRRR::FmsubS,
             rd: writable_fa0(),
             rs1: fa0(),
@@ -1507,6 +1610,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRRR::FnmsubS,
             rd: writable_fa0(),
             rs1: fa0(),
@@ -1517,6 +1621,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRRR::FnmaddS,
             rd: writable_fa0(),
             rs1: fa0(),
@@ -1528,6 +1633,7 @@ fn test_riscv64_binemit() {
 
     insns.push(TestUnit::new(
         Inst::AluRRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRRR::FmaddD,
             rd: writable_fa0(),
             rs1: fa0(),
@@ -1538,6 +1644,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRRR::FmsubD,
             rd: writable_fa0(),
             rs1: fa0(),
@@ -1548,6 +1655,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRRR::FnmsubD,
             rd: writable_fa0(),
             rs1: fa0(),
@@ -1558,6 +1666,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::AluRRRR {
+            float_rounding_mode: None,
             alu_op: AluOPRRRR::FnmaddD,
             rd: writable_fa0(),
             rs1: fa0(),
@@ -2132,6 +2241,7 @@ impl DebugITypeIns {
         println!("funct7:{:b}", self.funct7);
     }
 }
+
 #[test]
 fn xxx() {
     let x = 1240847763;

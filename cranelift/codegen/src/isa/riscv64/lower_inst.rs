@@ -205,6 +205,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 };
                 let tmp = ctx.alloc_tmp(I64).only_reg().unwrap();
                 ctx.emit(Inst::AluRRR {
+                    float_rounding_mode: None,
                     alu_op: sub_op,
                     rd: tmp,
                     rs1: zero_reg(),
@@ -241,6 +242,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 });
                 // tmp = tmp & arg2
                 ctx.emit(Inst::AluRRR {
+                    float_rounding_mode: None,
                     alu_op: AluOPRRR::And,
                     rd: tmp,
                     rs1: tmp.to_reg(),
@@ -403,6 +405,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let y = put_input_in_reg(ctx, inputs[2]);
             // get all x part
             ctx.emit(Inst::AluRRR {
+                float_rounding_mode: None,
                 alu_op: AluOPRRR::And,
                 rd: tmp1,
                 rs1: rcond,
@@ -412,12 +415,14 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             ctx.emit(Inst::construct_bit_not(tmp2, rcond));
             // get y  part
             ctx.emit(Inst::AluRRR {
+                float_rounding_mode: None,
                 alu_op: AluOPRRR::And,
                 rd: tmp2,
                 rs1: tmp2.to_reg(),
                 rs2: y,
             });
             ctx.emit(Inst::AluRRR {
+                float_rounding_mode: None,
                 alu_op: AluOPRRR::Or,
                 rd: rd,
                 rs1: tmp1.to_reg(),
@@ -915,8 +920,10 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     _ => unreachable!(),
                 };
                 ctx.emit(Inst::AluRRR {
+                    float_rounding_mode: None,
                     alu_op: op,
                     rd,
+
                     rs1,
                     rs2,
                 });
@@ -945,7 +952,12 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     (64, 32) => AluOPRR::FcvtSD,
                     _ => unreachable!(),
                 };
-                ctx.emit(Inst::AluRR { alu_op: op, rd, rs });
+                ctx.emit(Inst::AluRR {
+                    float_rounding_mode: None,
+                    alu_op: op,
+                    rd,
+                    rs,
+                });
             }
         }
 
@@ -965,28 +977,22 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 let input_ty = ctx.input_ty(insn, 0);
                 let rs = put_input_in_reg(ctx, inputs[0]);
                 let rd = ctx.get_output(insn, 0).only_reg().unwrap();
-                let insts = Inst::using_roung_mode(
-                    ctx.alloc_tmp(I64).only_reg().unwrap(),
-                    rounding_mode,
-                    |insts| {
-                        //
-                        let tmp = ctx.alloc_tmp(I64).only_reg().unwrap();
-                        // convert into integer
-                        //
-                        let convert_type = if input_ty == F32 { I32 } else { I64 };
-                        insts.push(Inst::AluRR {
-                            alu_op: AluOPRR::float_convert_2_int_op(input_ty, true, convert_type),
-                            rd: tmp,
-                            rs: rs,
-                        });
-                        //convert back
-                        insts.push(Inst::AluRR {
-                            alu_op: AluOPRR::int_convert_2_float_op(convert_type, true, ty),
-                            rd: rd,
-                            rs: tmp.to_reg(),
-                        });
-                    },
-                );
+
+                let mut insts = SmallInstVec::new();
+                let convert_type = I64;
+                let tmp = ctx.alloc_tmp(I64).only_reg().unwrap();
+                insts.push(Inst::AluRR {
+                    float_rounding_mode: Some(rounding_mode),
+                    alu_op: AluOPRR::float_convert_2_int_op(input_ty, true, convert_type),
+                    rd: tmp,
+                    rs: rs,
+                });
+                insts.push(Inst::AluRR {
+                    float_rounding_mode: Some(rounding_mode),
+                    alu_op: AluOPRR::int_convert_2_float_op(convert_type, true, ty),
+                    rd: rd,
+                    rs: tmp.to_reg(),
+                });
                 insts.into_iter().for_each(|i| ctx.emit(i));
             }
         }
@@ -1006,26 +1012,20 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             } else {
                 let rd = ctx.get_output(insn, 0).only_reg().unwrap();
                 let rs = put_input_in_reg(ctx, inputs[0]);
-                let insts = Inst::using_roung_mode(
-                    ctx.alloc_tmp(I64).only_reg().unwrap(),
-                    FloatRoundingMode::RNE,
-                    |insts| {
-                        insts.push(Inst::AluRR {
-                            alu_op: AluOPRR::float_convert_2_int_op(
-                                input_ty,
-                                if op == Opcode::FcvtToUint {
-                                    false
-                                } else {
-                                    true
-                                },
-                                out_ty,
-                            ),
-                            rd,
-                            rs,
-                        });
-                    },
-                );
-                insts.into_iter().for_each(|i| ctx.emit(i));
+                ctx.emit(Inst::AluRR {
+                    float_rounding_mode: None,
+                    alu_op: AluOPRR::float_convert_2_int_op(
+                        input_ty,
+                        if op == Opcode::FcvtToUint {
+                            false
+                        } else {
+                            true
+                        },
+                        out_ty,
+                    ),
+                    rd,
+                    rs,
+                });
             }
         }
 
@@ -1045,25 +1045,20 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     insts = Inst::narrow_down_int(rd, rs, input_ty);
                     rs = rd.to_reg();
                 };
-                insts.extend(Inst::using_roung_mode(
-                    ctx.alloc_tmp(I64).only_reg().unwrap(),
-                    FloatRoundingMode::RNE,
-                    |insts| {
-                        insts.push(Inst::AluRR {
-                            alu_op: AluOPRR::int_convert_2_float_op(
-                                input_ty,
-                                if op == Opcode::FcvtFromUint {
-                                    false
-                                } else {
-                                    true
-                                },
-                                out_ty,
-                            ),
-                            rd,
-                            rs,
-                        });
-                    },
-                ));
+                insts.push(Inst::AluRR {
+                    float_rounding_mode: Some(FloatRoundingMode::RNE),
+                    alu_op: AluOPRR::int_convert_2_float_op(
+                        input_ty,
+                        if op == Opcode::FcvtFromUint {
+                            false
+                        } else {
+                            true
+                        },
+                        out_ty,
+                    ),
+                    rd,
+                    rs,
+                });
                 insts.into_iter().for_each(|i| ctx.emit(i));
             }
         }
