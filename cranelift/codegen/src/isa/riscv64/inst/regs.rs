@@ -143,7 +143,7 @@ pub fn writable_stack_reg() -> Writable<Reg> {
     Writable::from_reg(stack_reg())
 }
 
-/// Get a reference to the link register (x30).
+/// Get a reference to the link register (x1).
 pub fn link_reg() -> Reg {
     x_reg(1)
 }

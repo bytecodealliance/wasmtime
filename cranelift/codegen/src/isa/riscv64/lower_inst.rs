@@ -688,6 +688,9 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Call | Opcode::CallIndirect => {
+            // save ra
+            let tmp = ctx.alloc_tmp(I64).only_reg().unwrap();
+            ctx.emit(Inst::gen_move(tmp, link_reg(), I64));
             let caller_conv = ctx.abi().call_conv();
             let (mut abi, inputs) = match op {
                 Opcode::Call => {
@@ -726,6 +729,8 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 abi.emit_copy_retval_to_regs(ctx, i, retval_regs);
             }
             abi.emit_stack_post_adjust(ctx);
+            // restore ra.
+            ctx.emit(Inst::gen_move(writable_link_reg(), tmp.to_reg(), I64));
         }
 
         Opcode::GetPinnedReg => {
@@ -971,20 +976,17 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 let input_ty = ctx.input_ty(insn, 0);
                 let rs = put_input_in_reg(ctx, inputs[0]);
                 let rd = ctx.get_output(insn, 0).only_reg().unwrap();
-
                 let mut insts = SmallInstVec::new();
                 let convert_type = I64;
                 let tmp = ctx.alloc_tmp(I64).only_reg().unwrap();
                 insts.push(Inst::FpuRR {
                     float_rounding_mode: Some(rounding_mode),
-
                     alu_op: FpuOPRR::float_convert_2_int_op(input_ty, true, convert_type),
                     rd: tmp,
                     rs: rs,
                 });
                 insts.push(Inst::FpuRR {
                     float_rounding_mode: Some(rounding_mode),
-
                     alu_op: FpuOPRR::int_convert_2_float_op(convert_type, true, ty),
                     rd: rd,
                     rs: tmp.to_reg(),

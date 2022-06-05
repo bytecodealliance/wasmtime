@@ -387,11 +387,7 @@ impl FpuOPRR {
         }
     }
 
-    /*
-    todo in rs2 position.
-    What should I call this.
-        */
-    pub(crate) fn rs2(self) -> u32 {
+    pub(crate) fn rs2_funct5(self) -> u32 {
         match self {
             FpuOPRR::FsqrtS => 0b00000,
             FpuOPRR::FcvtWS => 0b00000,
@@ -1028,7 +1024,6 @@ impl AluOPRRI {
             Self::Rori => Some(6),
             Self::Roriw => Some(5),
             Self::SlliUw => Some(6),
-
             _ => None,
         }
     }
@@ -1093,7 +1088,7 @@ impl Default for FloatRoundingMode {
 }
 
 impl FloatRoundingMode {
-    pub(crate) fn is_nono_or_using_fcsr(x: Option<FloatRoundingMode>) -> bool {
+    pub(crate) fn is_none_or_using_fcsr(x: Option<FloatRoundingMode>) -> bool {
         match x {
             Some(x) => x == FloatRoundingMode::Fcsr,
             None => true,
@@ -1121,17 +1116,6 @@ impl FloatRoundingMode {
             FloatRoundingMode::RMM => 0b100,
             FloatRoundingMode::Fcsr => 0b111,
         }
-    }
-    /*
-        use to FSRMI to set rounding mod.
-        todo:: bug!!!!!!!!!!!! remove this.
-    */
-    #[inline(always)]
-    pub(crate) fn to_imm12(self) -> Imm12 {
-        Imm12::from_bits(self.bits() as i16)
-    }
-    pub(crate) fn to_uimm5(self) -> Uimm5 {
-        Uimm5::from_bits(self.bits())
     }
     pub(crate) fn as_u32(self) -> u32 {
         self.bits() as u32
@@ -1218,7 +1202,6 @@ impl StoreOP {
         }
     }
     pub(crate) fn from_type(t: Type) -> Self {
-        println!("!!!!!!!!!!!!!!!!!{}", t);
         if t.is_float() {
             return if t == F32 { Self::Fsw } else { Self::Fsd };
         }
@@ -1249,8 +1232,7 @@ impl StoreOP {
 }
 
 impl FClassResult {
-    #[inline]
-    pub(crate) fn bit(self) -> u32 {
+    pub(crate) const fn bit(self) -> u32 {
         match self {
             FClassResult::NegInfinite => 1 << 0,
             FClassResult::NegNormal => 1 << 1,
@@ -1778,9 +1760,3 @@ pub(crate) fn float_sign_bit(ty: Type) -> u8 {
         _ => unreachable!(),
     }
 }
-
-/*
-    FIXME
-
-
-*/

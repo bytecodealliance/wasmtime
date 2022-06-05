@@ -518,23 +518,50 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         caller_conv: isa::CallConv,
     ) -> SmallVec<[Self::I; 2]> {
         let mut insts = SmallVec::new();
+
+        fn use_direct_call(name: &ir::ExternalName, distance: RelocDistance) -> (u32, u32, bool) {
+            if let &ExternalName::User { namespace, index } = name {
+                if RelocDistance::Near == distance {
+                    return (namespace, index, true);
+                }
+            }
+            (0, 0, false)
+        }
+
         match &dest {
-            &CallDest::ExtName(ref name, ..) => {
-                insts.push(Inst::LoadExtName {
-                    rd: tmp,
-                    name: Box::new(name.clone()),
-                    offset: 0,
-                });
-                insts.push(Inst::CallInd {
-                    info: Box::new(CallIndInfo {
-                        rn: tmp.to_reg(),
-                        uses,
-                        defs,
-                        opcode,
-                        caller_callconv: caller_conv,
-                        callee_callconv: callee_conv,
-                    }),
-                });
+            &CallDest::ExtName(ref name, distance) => {
+                let direct = use_direct_call(name, *distance);
+                if direct.2 {
+                    insts.push(Inst::Call {
+                        info: Box::new(CallInfo {
+                            uses,
+                            defs,
+                            opcode,
+                            caller_callconv: caller_conv,
+                            callee_callconv: callee_conv,
+                            dest: ExternalName::User {
+                                namespace: direct.0,
+                                index: direct.1,
+                            },
+                        }),
+                    });
+                } else {
+                    insts.push(Inst::LoadExtName {
+                        rd: tmp,
+                        name: Box::new(name.clone()),
+                        offset: 0,
+                    });
+                    insts.push(Inst::CallInd {
+                        info: Box::new(CallIndInfo {
+                            rn: tmp.to_reg(),
+                            uses,
+                            defs,
+                            opcode,
+                            caller_callconv: caller_conv,
+                            callee_callconv: callee_conv,
+                        }),
+                    });
+                }
             }
             &CallDest::Reg(reg) => insts.push(Inst::CallInd {
                 info: Box::new(CallIndInfo {
@@ -556,24 +583,27 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         src: Reg,
         size: usize,
     ) -> SmallVec<[Self::I; 8]> {
-        let mut insts = SmallVec::new();
-        let arg0 = writable_a0();
-        let arg1 = writable_a1();
-        let arg2 = writable_a2();
-        insts.push(Inst::gen_move(arg0, dst, I64));
-        insts.push(Inst::gen_move(arg1, src, I64));
-        insts.extend(Inst::load_constant_u64(arg2, size as u64));
-        insts.push(Inst::Call {
-            info: Box::new(CallInfo {
-                dest: ExternalName::LibCall(LibCall::Memcpy),
-                uses: vec![arg0.to_reg(), arg1.to_reg(), arg2.to_reg()],
-                defs: Self::get_regs_clobbered_by_call(call_conv),
-                opcode: Opcode::Call,
-                caller_callconv: call_conv,
-                callee_callconv: call_conv,
-            }),
-        });
-        insts
+        panic!(
+            "libcall call should use indirect call,need a temp register to store Memcpy address."
+        );
+        // let mut insts = SmallVec::new();
+        // let arg0 = writable_a0();
+        // let arg1 = writable_a1();
+        // let arg2 = writable_a2();
+        // insts.push(Inst::gen_move(arg0, dst, I64));
+        // insts.push(Inst::gen_move(arg1, src, I64));
+        // insts.extend(Inst::load_constant_u64(arg2, size as u64));
+        // insts.push(Inst::Call {
+        //     info: Box::new(CallInfo {
+        //         dest: ExternalName::LibCall(LibCall::Memcpy),
+        //         uses: vec![arg0.to_reg(), arg1.to_reg(), arg2.to_reg()],
+        //         defs: Self::get_regs_clobbered_by_call(call_conv),
+        //         opcode: Opcode::Call,
+        //         caller_callconv: call_conv,
+        //         callee_callconv: call_conv,
+        //     }),
+        // });
+        // insts
     }
 
     fn get_number_of_spillslots_for_value(rc: RegClass) -> u32 {

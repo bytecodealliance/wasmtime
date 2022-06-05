@@ -182,7 +182,7 @@ where
         }
     }
 
-    fn generate_non_float_rounding_mode(&mut self) -> OptionFloatRoundingMode {
+    fn gen_default_rm(&mut self) -> OptionFloatRoundingMode {
         None
     }
     fn lower_bit_reverse(&mut self, ty: Type, rs: Reg) -> Reg {

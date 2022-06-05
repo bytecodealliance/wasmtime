@@ -77,52 +77,6 @@ impl Inst {
     }
 
     /*
-        construct a mask
-            if amount = 5 and left_shift = Some(8)
-            value in rd will be  0b...001_1111_0000_0000
-    */
-    pub(crate) fn construct_low_mask(
-        rd: Writable<Reg>,
-        tmp: Writable<Reg>,
-        amount: Reg,
-        left_shift: Option<u8>,
-    ) -> SmallInstVec<Inst> {
-        let mut insts = SmallInstVec::new();
-        {
-            // make tmp = 64 - rs
-            insts.push(Inst::load_constant_imm12(tmp, Imm12::from_bits(64)));
-            insts.push(Inst::AluRRR {
-                alu_op: AluOPRRR::Sub,
-                rd: tmp,
-                rs1: tmp.to_reg(),
-                rs2: amount,
-            });
-        }
-        insts.push(Inst::load_constant_imm12(rd, Imm12::from_bits(-1)));
-        insts.push(Inst::AluRRR {
-            alu_op: AluOPRRR::Sll,
-            rd: rd,
-            rs1: rd.to_reg(),
-            rs2: tmp.to_reg(),
-        });
-        insts.push(Inst::AluRRR {
-            alu_op: AluOPRRR::Srl,
-            rd: rd,
-            rs1: rd.to_reg(),
-            rs2: tmp.to_reg(),
-        });
-        left_shift.map(|x| {
-            insts.push(Inst::AluRRImm12 {
-                alu_op: AluOPRRI::Slli,
-                rd,
-                rs: rd.to_reg(),
-                imm12: Imm12::from_bits(x as i16),
-            });
-        });
-        insts
-    }
-
-    /*
         inverse all bit
     */
     pub(crate) fn construct_bit_not(rd: Writable<Reg>, rs: Reg) -> Inst {
@@ -363,7 +317,6 @@ impl Inst {
             }
             IntCC::Overflow | IntCC::NotOverflow => unreachable!(),
         }
-
         insts
     }
 
@@ -643,7 +596,7 @@ impl MachInstEmit for Inst {
                     | reg_to_gpr_num(rd.to_reg()) << 7
                     | alu_op.funct3(float_rounding_mode) << 12
                     | reg_to_gpr_num(rs) << 15
-                    | alu_op.rs2() << 20
+                    | alu_op.rs2_funct5() << 20
                     | alu_op.funct7() << 25;
                 sink.put4(x);
             }
@@ -824,7 +777,7 @@ impl MachInstEmit for Inst {
                 }
             }
             &Inst::EpiloguePlaceholder => {
-                unimplemented!("what should I Do.");
+                // Noop; this is just a placeholder for epilogues.
             }
             &Inst::ReferenceCheck { rd, op, x } => {
                 let x = allocs.next(x);
@@ -962,7 +915,6 @@ impl MachInstEmit for Inst {
                             insts
                                 .drain(..)
                                 .for_each(|i| i.emit(&[], sink, emit_info, state));
-
                             sink.bind_label(label_signed);
                             insts.push(Inst::load_constant_imm12(rd, Imm12::from_bits(-1)));
                             insts.push(Inst::AluRRImm12 {
@@ -1030,69 +982,30 @@ impl MachInstEmit for Inst {
             }
 
             &Inst::Call { ref info } => {
-                if let Some(s) = state.take_stack_map() {
-                    sink.add_stack_map(StackMapExtent::UpcomingBytes(4), s);
-                }
-                let call_indirect = match info.dest {
-                    ExternalName::User { .. } => None,
-                    ExternalName::TestCase { .. } => Some(Inst::alloc_registers(1)[0]),
-                    ExternalName::LibCall(..) => Some(Inst::alloc_registers(1)[0]),
-                };
-
-                let mut save_reigisters = vec![writable_link_reg()];
-                call_indirect.map(|r| save_reigisters.push(r));
-
-                Inst::push_registers(&save_reigisters)
-                    .into_iter()
-                    .for_each(|i| i.emit(&[], sink, emit_info, state));
-
-                match call_indirect {
-                    Some(r) => {
-                        // load extern name
-                        Inst::LoadExtName {
-                            rd: r,
-                            name: Box::new(info.dest.clone()),
-                            offset: 0,
-                        }
-                        .emit(&[], sink, emit_info, state);
-                        let loc = state.cur_srcloc();
-                        if info.opcode.is_call() {
-                            sink.add_call_site(loc, info.opcode);
-                        }
-                        // call
-                        Inst::Jalr {
-                            rd: writable_link_reg(),
-                            base: r.to_reg(),
-                            offset: Imm12::zero(),
-                        }
-                        .emit(&[], sink, emit_info, state);
-                    }
-                    None => {
-                        //
+                // call
+                match info.dest {
+                    ExternalName::User { .. } => {
                         let srcloc = state.cur_srcloc();
                         if info.opcode.is_call() {
                             sink.add_call_site(srcloc, info.opcode);
                         }
-                        // call
                         sink.add_reloc(srcloc, Reloc::RiscvCall, &info.dest, 0);
+                        if let Some(s) = state.take_stack_map() {
+                            sink.add_stack_map(StackMapExtent::UpcomingBytes(8), s);
+                        }
                         Inst::construct_auipc_and_jalr(writable_link_reg(), 0)
                             .into_iter()
                             .for_each(|i| i.emit(&[], sink, emit_info, state));
                     }
+                    ExternalName::TestCase { .. } => todo!(),
+                    ExternalName::LibCall(..) => todo!(),
                 }
-                Inst::pop_registers(&save_reigisters)
-                    .into_iter()
-                    .for_each(|i| i.emit(&[], sink, emit_info, state));
             }
             &Inst::CallInd { ref info } => {
                 let rn = allocs.next(info.rn);
                 if let Some(s) = state.take_stack_map() {
                     sink.add_stack_map(StackMapExtent::UpcomingBytes(4), s);
                 }
-                let reigisters = vec![writable_link_reg()];
-                Inst::push_registers(&reigisters)
-                    .into_iter()
-                    .for_each(|i| i.emit(&[], sink, emit_info, state));
                 let loc = state.cur_srcloc();
                 if info.opcode.is_call() {
                     sink.add_call_site(loc, info.opcode);
@@ -1103,9 +1016,6 @@ impl MachInstEmit for Inst {
                     offset: Imm12::zero(),
                 }
                 .emit(&[], sink, emit_info, state);
-                Inst::pop_registers(&reigisters)
-                    .into_iter()
-                    .for_each(|i| i.emit(&[], sink, emit_info, state));
             }
 
             &Inst::Jal { dest } => {
@@ -1269,9 +1179,9 @@ impl MachInstEmit for Inst {
                     insts.extend(Inst::construct_auipc_and_jalr(writable_spilltmp_reg(), 0));
                 }
                 // emit island if need.
-                let length = (insts.len() * 4) as u32;
-                if sink.island_needed(length) {
-                    sink.emit_island(length);
+                let distance = (insts.len() * 4) as u32;
+                if sink.island_needed(distance) {
+                    sink.emit_island(distance);
                 }
                 let mut need_label_use = &need_label_use[..];
                 insts.into_iter().enumerate().for_each(|(index, inst)| {

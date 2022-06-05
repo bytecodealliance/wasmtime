@@ -634,17 +634,16 @@
 (extern constructor writable_zero_reg writable_zero_reg)
 
 
-(decl generate_non_float_rounding_mode()OptionFloatRoundingMode)
-(extern constructor generate_non_float_rounding_mode generate_non_float_rounding_mode)
+(decl gen_default_rm() OptionFloatRoundingMode)
+(extern constructor gen_default_rm gen_default_rm)
 
 
 ;; Helper for emitting `MInst.FpuRR` instructions.
 (decl alu_rr (FpuOPRR Type Reg) Reg)
 (rule (alu_rr op ty src )
       (let ((dst WritableReg (temp_writable_reg ty))
-            (_ Unit (emit (MInst.FpuRR op (pack_float_rounding_mode (FloatRoundingMode.RNE)) dst src))))
+            (_ Unit (emit (MInst.FpuRR op (gen_default_rm) dst src))))
         dst))
-
 
 ;; Helper for emitting `MInst.AluRRR` instructions.
 (decl alu_rrr (AluOPRRR Type Reg Reg) Reg)
@@ -660,7 +659,7 @@
 (decl fpu_rrr (FpuOPRRR Type Reg Reg) Reg)
 (rule (fpu_rrr op ty src1 src2)
       (let ((dst WritableReg (temp_writable_reg ty))
-            (_ Unit (emit (MInst.FpuRRR op (pack_float_rounding_mode (FloatRoundingMode.RNE)) dst src1 src2))))
+            (_ Unit (emit (MInst.FpuRRR op (gen_default_rm) dst src1 src2))))
         dst))
 
 
@@ -668,7 +667,7 @@
 (decl alu_rrrr (FpuOPRRRR Type Reg Reg Reg) Reg)
 (rule (alu_rrrr op ty src1 src2 src3)
       (let ((dst WritableReg (temp_writable_reg ty))
-            (_ Unit (emit (MInst.FpuRRRR op (pack_float_rounding_mode (FloatRoundingMode.RNE)) dst src1 src2 src3))))
+            (_ Unit (emit (MInst.FpuRRRR op (gen_default_rm) dst src1 src2 src3))))
         dst))
 
 

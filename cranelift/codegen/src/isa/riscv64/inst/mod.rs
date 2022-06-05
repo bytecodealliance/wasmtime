@@ -823,7 +823,7 @@ impl Inst {
         fn format_float_rounding_mode(rounding_mode: Option<FloatRoundingMode>) -> String {
             return "".into();
 
-            if FloatRoundingMode::is_nono_or_using_fcsr(rounding_mode) {
+            if FloatRoundingMode::is_none_or_using_fcsr(rounding_mode) {
                 "".into()
             } else {
                 format!(
