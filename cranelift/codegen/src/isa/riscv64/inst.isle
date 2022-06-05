@@ -18,7 +18,7 @@
     ;; An ALU operation with one register sources and a register destination.
     (FpuRR
       (alu_op FpuOPRR)
-      (float_rounding_mode OptionFloatRoundingMode)
+      (frm OptionFloatRoundingMode)
       (rd WritableReg)
       (rs Reg))
 
@@ -33,7 +33,7 @@
     ;; An ALU operation with two register sources and a register destination.
     (FpuRRR
       (alu_op FpuOPRRR)
-      (float_rounding_mode OptionFloatRoundingMode)
+      (frm OptionFloatRoundingMode)
       (rd WritableReg)
       (rs1 Reg)
       (rs2 Reg))
@@ -41,7 +41,7 @@
     ;; An ALU operation with three register sources and a register destination.
     (FpuRRRR
       (alu_op FpuOPRRRR)
-      (float_rounding_mode OptionFloatRoundingMode)
+      (frm OptionFloatRoundingMode)
       (rd WritableReg)
       (rs1 Reg)
       (rs2 Reg)
@@ -156,7 +156,7 @@
       (base Reg)
       (offset Imm12))
 
-    ;; 
+    ;; atomic operations.
     (Atomic 
       (op AtomicOP)
       (rd WritableReg)
@@ -210,14 +210,6 @@
       (y ValueRegs)
       (ty Type))
       
-    (I128Arithmetic
-      (op I128OP)
-      (t0 WritableReg)
-      (t1 WritableReg)
-      (dst VecWritableReg)
-      (x ValueRegs)
-      (y ValueRegs))
-    
     (Csr
       (csr_op CsrOP)
       (rd WritableReg)
@@ -565,7 +557,7 @@
 )) 
 
 
-(type FloatRoundingMode (enum 
+(type FRM (enum 
   ;; Round to Nearest, ties to Even
   (RNE)
   ;; Round towards Zero
@@ -652,7 +644,7 @@
             (_ Unit (emit (MInst.AluRRR op dst src1 src2))))
         dst))
 
-(decl pack_float_rounding_mode(FloatRoundingMode)OptionFloatRoundingMode)
+(decl pack_float_rounding_mode(FRM)OptionFloatRoundingMode)
 (extern constructor pack_float_rounding_mode pack_float_rounding_mode)
 
 ;; Helper for emitting `MInst.AluRRR` instructions.

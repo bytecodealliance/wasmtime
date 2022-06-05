@@ -50,15 +50,14 @@ pub(crate) type OptionReg = Option<Reg>;
 pub(crate) type OptionImm12 = Option<Imm12>;
 pub(crate) type VecBranchTarget = Vec<BranchTarget>;
 pub(crate) type OptionUimm5 = Option<Uimm5>;
-pub(crate) type OptionFloatRoundingMode = Option<FloatRoundingMode>;
+pub(crate) type OptionFloatRoundingMode = Option<FRM>;
 //=============================================================================
 // Instructions (top level): definition
 
 use crate::isa::riscv64::lower::isle::generated_code::MInst;
 pub use crate::isa::riscv64::lower::isle::generated_code::{
-    AluOPRRI, AluOPRRR, AtomicOP, CsrOP, FClassResult, FFlagsException, FloatRoundingMode, FpuOPRR,
-    FpuOPRRR, FpuOPRRRR, IntSelectOP, LoadOP, MInst as Inst, ReferenceCheckOP, StoreOP, I128OP,
-    OPFPFMT,
+    AluOPRRI, AluOPRRR, AtomicOP, CsrOP, FClassResult, FFlagsException, FpuOPRR, FpuOPRRR,
+    FpuOPRRRR, IntSelectOP, LoadOP, MInst as Inst, ReferenceCheckOP, StoreOP, FRM, I128OP, OPFPFMT,
 };
 
 type BoxCallInfo = Box<CallInfo>;
@@ -152,15 +151,16 @@ impl Display for BranchTarget {
 }
 
 /*
-    rd and src must have the same length and regclass.
+    rd and src must have the same length.
 */
 fn gen_moves(rd: &[Writable<Reg>], src: &[Reg]) -> SmallInstVec<Inst> {
-    let ty = Inst::canonical_type_for_rc(src[0].class());
-    assert!(Inst::canonical_type_for_rc(rd[0].to_reg().class()) == ty);
     assert!(rd.len() == src.len());
+    assert!(rd.len() > 0);
+    let out_ty = Inst::canonical_type_for_rc(rd[0].to_reg().class());
+    let in_ty = Inst::canonical_type_for_rc(src[0].class());
     let mut insts = SmallInstVec::new();
     for (dst, src) in rd.iter().zip(src.iter()) {
-        insts.push(gen_move(*dst, ty, *src, ty));
+        insts.push(gen_move(*dst, out_ty, *src, in_ty));
     }
     insts
 }
@@ -174,13 +174,13 @@ pub(crate) fn gen_move(rd: Writable<Reg>, oty: Type, rm: Reg, ity: Type) -> Inst
         (false, false) => Inst::gen_move(rd, rm, oty),
         (true, true) => Inst::gen_move(rd, rm, oty),
         (false, true) => Inst::FpuRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: FpuOPRR::move_f_to_x_op(ity),
             rd: rd,
             rs: rm,
         },
         (true, false) => Inst::FpuRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: FpuOPRR::move_x_to_f_op(ity),
             rd: rd,
             rs: rm,
@@ -242,14 +242,13 @@ impl Inst {
     }
 
     /*
-        this will discard return address.
+        this will discard ra register.
     */
     pub(crate) fn construct_auipc_and_jalr(rd: Writable<Reg>, offset: i32) -> [Inst; 2] {
         let a = Inst::Auipc {
             rd,
             imm: Imm20::from_bits(offset >> 12),
         };
-
         let b = Inst::Jalr {
             rd: writable_zero_reg(),
             base: rd.to_reg(),
@@ -306,7 +305,7 @@ impl Inst {
         let mut insts = SmallVec::new();
         insts.extend(Self::load_constant_u32(tmp, const_data as u64));
         insts.push(Inst::FpuRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: FpuOPRR::move_x_to_f_op(F32),
             rd,
             rs: tmp.to_reg(),
@@ -324,7 +323,7 @@ impl Inst {
         let tmp = alloc_tmp(I64);
         insts.extend(Self::load_constant_u64(tmp, const_data));
         insts.push(Inst::FpuRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: FpuOPRR::move_x_to_f_op(F64),
             rd,
             rs: tmp.to_reg(),
@@ -519,20 +518,7 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_uses(y.regs());
             collector.reg_defs(&dst[..]);
         }
-        &Inst::I128Arithmetic {
-            t0,
-            t1,
-            ref dst,
-            ref x,
-            ref y,
-            ..
-        } => {
-            collector.reg_early_def(t0);
-            collector.reg_early_def(t1);
-            collector.reg_uses(x.regs());
-            collector.reg_uses(y.regs());
-            dst.iter().for_each(|r| collector.reg_early_def(*r));
-        }
+
         &Inst::Csr { rd, rs, .. } => {
             if let Some(rs) = rs {
                 collector.reg_use(rs);
@@ -820,16 +806,11 @@ impl Inst {
                 to_bits,
             )
         }
-        fn format_float_rounding_mode(rounding_mode: Option<FloatRoundingMode>) -> String {
-            return "".into();
-
-            if FloatRoundingMode::is_none_or_using_fcsr(rounding_mode) {
+        fn format_frm(rounding_mode: Option<FRM>) -> String {
+            if FRM::is_none_or_using_fcsr(rounding_mode) {
                 "".into()
             } else {
-                format!(
-                    " ;;float_round_mode={}",
-                    rounding_mode.unwrap().to_static_str()
-                )
+                format!(",{}", rounding_mode.unwrap().to_static_str())
             }
         }
 
@@ -910,7 +891,7 @@ impl Inst {
                 let rs2 = format_reg(rs2, allocs);
                 let rd = format_reg(rd.to_reg(), allocs);
                 format!(
-                    "select_reg {},{},{};;conditin={} ",
+                    "select_reg {},{},{};;condition={} ",
                     rd,
                     rs1,
                     rs2,
@@ -980,22 +961,6 @@ impl Inst {
                 )
             }
 
-            &Inst::I128Arithmetic {
-                op,
-                ref t0,
-                t1,
-                ref dst,
-                ref x,
-                ref y,
-            } => {
-                let dst: Vec<_> = dst.iter().map(|r| r.to_reg()).collect();
-                let t0 = format_reg(t0.to_reg(), allocs);
-                let t1 = format_reg(t1.to_reg(), allocs);
-                let x = format_regs(x.regs(), allocs);
-                let y = format_regs(y.regs(), allocs);
-                let dst = format_regs(&dst[..], allocs);
-                format!("{} {},{},{};;t0={},t1={}", op.op_name(), dst, x, y, t0, t1)
-            }
             &Inst::ReferenceCheck { rd, op, x } => {
                 let x = format_reg(x, allocs);
                 let rd = format_reg(rd.to_reg(), allocs);
@@ -1009,18 +974,7 @@ impl Inst {
             &Inst::Lui { rd, ref imm } => {
                 format!("{} {},{}", "lui", format_reg(rd.to_reg(), allocs), imm.bits)
             }
-            &Inst::FpuRRR {
-                alu_op,
-                rd,
-                rs1,
-                rs2,
-                float_rounding_mode,
-            } => {
-                let rs1 = format_reg(rs1, allocs);
-                let rs2 = format_reg(rs2, allocs);
-                let rd = format_reg(rd.to_reg(), allocs);
-                format!("{} {},{},{}", alu_op.op_name(), rd, rs1, rs2,)
-            }
+
             &Inst::AluRRR {
                 alu_op,
                 rd,
@@ -1033,19 +987,32 @@ impl Inst {
                 format!("{} {},{},{}", alu_op.op_name(), rd, rs1, rs2,)
             }
             &Inst::FpuRR {
-                float_rounding_mode,
+                frm,
                 alu_op,
                 rd,
                 rs,
             } => {
                 let rs = format_reg(rs, allocs);
                 let rd = format_reg(rd.to_reg(), allocs);
+                format!("{} {},{}{}", alu_op.op_name(), rd, rs, format_frm(frm))
+            }
+            &Inst::FpuRRR {
+                alu_op,
+                rd,
+                rs1,
+                rs2,
+                frm,
+            } => {
+                let rs1 = format_reg(rs1, allocs);
+                let rs2 = format_reg(rs2, allocs);
+                let rd = format_reg(rd.to_reg(), allocs);
                 format!(
-                    "{} {},{}{}",
+                    "{} {},{},{}{}",
                     alu_op.op_name(),
                     rd,
-                    rs,
-                    format_float_rounding_mode(float_rounding_mode)
+                    rs1,
+                    rs2,
+                    format_frm(frm)
                 )
             }
             &Inst::Csr {
@@ -1070,7 +1037,7 @@ impl Inst {
                 rs1,
                 rs2,
                 rs3,
-                float_rounding_mode,
+                frm,
             } => {
                 let rs1 = format_reg(rs1, allocs);
                 let rs2 = format_reg(rs2, allocs);
@@ -1083,7 +1050,7 @@ impl Inst {
                     rs1,
                     rs2,
                     rs3,
-                    format_float_rounding_mode(float_rounding_mode)
+                    format_frm(frm)
                 )
             }
             &Inst::AluRRImm12 {
@@ -1427,6 +1394,7 @@ impl MachInstLabelUse for LabelUse {
             buffer[6] = x[2];
             buffer[7] = x[3];
         }
+
         (veneer_offset, Self::PCRel32)
     }
 
@@ -1487,138 +1455,5 @@ impl LabelUse {
                 }
             }
         }
-    }
-}
-
-pub(crate) enum BitsShifter {
-    Reg(Reg),
-    Imm(u8),
-}
-
-impl BitsShifter {
-    pub(crate) fn new_r(r: Reg) -> Self {
-        Self::Reg(r)
-    }
-
-    pub(crate) fn new_i(r: u8) -> Self {
-        Self::Imm(r)
-    }
-
-    /*
-        get rid of all lowest bit value
-    */
-    pub(crate) fn shift_out_right(self, rd: Writable<Reg>, rs: Reg) -> SmallInstVec<Inst> {
-        let mut insts = SmallInstVec::new();
-        match self {
-            Self::Reg(r) => {
-                insts.push(Inst::AluRRR {
-                    alu_op: AluOPRRR::Srl,
-                    rd,
-                    rs1: rs,
-                    rs2: r,
-                });
-                insts.push(Inst::AluRRR {
-                    alu_op: AluOPRRR::Sll,
-                    rd,
-                    rs1: rd.to_reg(),
-                    rs2: r,
-                });
-            }
-            Self::Imm(imm) => {
-                insts.push(Inst::AluRRImm12 {
-                    alu_op: AluOPRRI::Srli,
-                    rd,
-                    rs: rs,
-                    imm12: Imm12::from_bits(imm as i16),
-                });
-                insts.push(Inst::AluRRImm12 {
-                    alu_op: AluOPRRI::Slli,
-                    rd,
-                    rs: rd.to_reg(),
-                    imm12: Imm12::from_bits(imm as i16),
-                });
-            }
-        }
-        insts
-    }
-
-    pub(crate) fn shift_right(self, rd: Writable<Reg>, rs: Reg) -> SmallInstVec<Inst> {
-        let mut insts = SmallInstVec::new();
-        match self {
-            Self::Reg(r) => {
-                insts.push(Inst::AluRRR {
-                    alu_op: AluOPRRR::Srl,
-                    rd,
-                    rs1: rs,
-                    rs2: r,
-                });
-            }
-            Self::Imm(imm) => {
-                insts.push(Inst::AluRRImm12 {
-                    alu_op: AluOPRRI::Srli,
-                    rd,
-                    rs: rs,
-                    imm12: Imm12::from_bits(imm as i16),
-                });
-            }
-        }
-        insts
-    }
-
-    pub(crate) fn shift_out_left(self, rd: Writable<Reg>, rs: Reg) -> SmallInstVec<Inst> {
-        let mut insts = SmallInstVec::new();
-        match self {
-            Self::Reg(amount) => {
-                insts.push(Inst::AluRRR {
-                    alu_op: AluOPRRR::Sll,
-                    rd,
-                    rs1: rs,
-                    rs2: amount,
-                });
-                insts.push(Inst::AluRRR {
-                    alu_op: AluOPRRR::Srl,
-                    rd,
-                    rs1: rd.to_reg(),
-                    rs2: amount,
-                });
-            }
-            Self::Imm(imm) => {
-                insts.push(Inst::AluRRImm12 {
-                    alu_op: AluOPRRI::Slli,
-                    rd,
-                    rs: rs,
-                    imm12: Imm12::from_bits(imm as i16),
-                });
-                insts.push(Inst::AluRRImm12 {
-                    alu_op: AluOPRRI::Srli,
-                    rd,
-                    rs: rd.to_reg(),
-                    imm12: Imm12::from_bits(imm as i16),
-                });
-            }
-        }
-        insts
-    }
-    pub(crate) fn shift_left(self, rd: Writable<Reg>, rs: Reg) -> SmallInstVec<Inst> {
-        let mut insts = SmallInstVec::new();
-        match self {
-            Self::Reg(amount) => {
-                insts.push(Inst::AluRRR {
-                    alu_op: AluOPRRR::Sll,
-                    rd,
-                    rs1: rs,
-                    rs2: amount,
-                });
-            }
-            Self::Imm(imm) => {
-                insts.push(Inst::AluRRImm12 {
-                    alu_op: AluOPRRI::Slli,
-                    rd,
-                    rs: rs,
-                    imm12: Imm12::from_bits(imm as i16),
-                });
-            }
-        }
-        insts
     }
 }

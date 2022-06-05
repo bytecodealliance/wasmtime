@@ -247,7 +247,7 @@ impl FpuOPRRRR {
         }
     }
 
-    pub(crate) fn funct3(self, rounding_mode: Option<FloatRoundingMode>) -> u32 {
+    pub(crate) fn funct3(self, rounding_mode: Option<FRM>) -> u32 {
         rounding_mode.unwrap_or_default().as_u32()
     }
 
@@ -448,7 +448,7 @@ impl FpuOPRR {
         }
     }
 
-    pub(crate) fn funct3(self, rounding_mode: Option<FloatRoundingMode>) -> u32 {
+    pub(crate) fn funct3(self, rounding_mode: Option<FRM>) -> u32 {
         let rounding_mode = rounding_mode.unwrap_or_default().as_u32();
         match self {
             FpuOPRR::FsqrtS => rounding_mode,
@@ -511,7 +511,7 @@ impl FpuOPRRR {
         }
     }
 
-    pub fn funct3(self, rounding_mode: Option<FloatRoundingMode>) -> u32 {
+    pub fn funct3(self, rounding_mode: Option<FRM>) -> u32 {
         let rounding_mode = rounding_mode.unwrap_or_default();
         let rounding_mode = rounding_mode.as_u32();
         match self {
@@ -1081,40 +1081,43 @@ impl AluOPRRI {
     }
 }
 
-impl Default for FloatRoundingMode {
+impl Default for FRM {
     fn default() -> Self {
         Self::Fcsr
     }
 }
 
-impl FloatRoundingMode {
-    pub(crate) fn is_none_or_using_fcsr(x: Option<FloatRoundingMode>) -> bool {
+/*
+    float rounding mode.
+*/
+impl FRM {
+    pub(crate) fn is_none_or_using_fcsr(x: Option<FRM>) -> bool {
         match x {
-            Some(x) => x == FloatRoundingMode::Fcsr,
+            Some(x) => x == FRM::Fcsr,
             None => true,
         }
     }
 
     pub(crate) fn to_static_str(self) -> &'static str {
         match self {
-            FloatRoundingMode::RNE => "RNE",
-            FloatRoundingMode::RTZ => "RTZ",
-            FloatRoundingMode::RDN => "RDN",
-            FloatRoundingMode::RUP => "RUP",
-            FloatRoundingMode::RMM => "RMM",
-            FloatRoundingMode::Fcsr => "Fcsr",
+            FRM::RNE => "rne",
+            FRM::RTZ => "rtz",
+            FRM::RDN => "rdn",
+            FRM::RUP => "rup",
+            FRM::RMM => "rmm",
+            FRM::Fcsr => "fcsr",
         }
     }
 
     #[inline(always)]
     pub(crate) fn bits(self) -> u8 {
         match self {
-            FloatRoundingMode::RNE => 0b000,
-            FloatRoundingMode::RTZ => 0b001,
-            FloatRoundingMode::RDN => 0b010,
-            FloatRoundingMode::RUP => 0b011,
-            FloatRoundingMode::RMM => 0b100,
-            FloatRoundingMode::Fcsr => 0b111,
+            FRM::RNE => 0b000,
+            FRM::RTZ => 0b001,
+            FRM::RDN => 0b010,
+            FRM::RUP => 0b011,
+            FRM::RMM => 0b100,
+            FRM::Fcsr => 0b111,
         }
     }
     pub(crate) fn as_u32(self) -> u32 {
@@ -1330,13 +1333,13 @@ impl AtomicOP {
             _ => false,
         }
     }
-    #[inline(always)]
-    pub(crate) fn is_store(self) -> bool {
-        match self {
-            Self::ScW | Self::ScD => true,
-            _ => false,
-        }
-    }
+    // #[inline(always)]
+    // pub(crate) fn is_store(self) -> bool {
+    //     match self {
+    //         Self::ScW | Self::ScD => true,
+    //         _ => false,
+    //     }
+    // }
     pub(crate) fn op_name(self) -> &'static str {
         match self {
             Self::LrW => "lr.w",

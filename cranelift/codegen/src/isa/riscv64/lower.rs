@@ -49,11 +49,7 @@ pub(crate) fn maybe_input_insn<C: LowerCtx<I = Inst>>(
 pub(crate) fn get_ifcmp_parameters<C: LowerCtx<I = Inst>>(
     c: &mut C,
     input: IRInst,
-) -> (
-    ValueRegs<Reg>, /* x */
-    ValueRegs<Reg>, /* y  */
-    Type,
-) {
+) -> (ValueRegs<Reg>, ValueRegs<Reg>, Type) {
     let x = c.put_input_in_regs(input, 0);
     let y = c.put_input_in_regs(input, 1);
     let ty = c.input_ty(input, 0);
@@ -63,7 +59,7 @@ pub(crate) fn get_ifcmp_parameters<C: LowerCtx<I = Inst>>(
 pub(crate) fn get_ffcmp_parameters<C: LowerCtx<I = Inst>>(
     c: &mut C,
     input: IRInst,
-) -> (Reg /* x */, Reg /* y  */, Type) {
+) -> (Reg, Reg, Type) {
     let x = c.put_input_in_regs(input, 0).only_reg().unwrap();
     let y = c.put_input_in_regs(input, 1).only_reg().unwrap();
     let ty = c.input_ty(input, 0);

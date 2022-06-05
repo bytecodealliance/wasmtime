@@ -131,54 +131,86 @@ where
     }
 
     fn i128_arithmetic(&mut self, op: &I128OP, x: ValueRegs, y: ValueRegs) -> ValueRegs {
-        if *op == I128OP::Add {
-            let (low, carry) = {
-                let result = self.temp_writable_reg(I64);
+        match *op {
+            I128OP::Add => {
+                let (low, carry) = {
+                    let result = self.temp_writable_reg(I64);
+                    self.emit(&MInst::AluRRR {
+                        alu_op: AluOPRRR::Add,
+                        rd: result,
+                        rs1: x.regs()[0],
+                        rs2: y.regs()[0],
+                    });
+                    let carry = self.temp_writable_reg(I64);
+                    self.emit(&MInst::AluRRR {
+                        alu_op: AluOPRRR::SltU,
+                        rd: carry,
+                        rs1: result.to_reg(),
+                        rs2: x.regs()[0],
+                    });
+
+                    (result.to_reg(), carry.to_reg())
+                };
+
+                let high = self.temp_writable_reg(I64);
                 self.emit(&MInst::AluRRR {
                     alu_op: AluOPRRR::Add,
-                    rd: result,
-                    rs1: x.regs()[0],
-                    rs2: y.regs()[0],
+                    rd: high,
+                    rs1: x.regs()[1],
+                    rs2: y.regs()[1],
                 });
-                let carry = self.temp_writable_reg(I64);
                 self.emit(&MInst::AluRRR {
-                    alu_op: AluOPRRR::SltU,
-                    rd: carry,
-                    rs1: result.to_reg(),
-                    rs2: x.regs()[0],
+                    alu_op: AluOPRRR::Add,
+                    rd: high,
+                    rs1: high.to_reg(),
+                    rs2: carry,
                 });
+                ValueRegs::two(low, high.to_reg())
+            }
 
-                (result.to_reg(), carry.to_reg())
-            };
-            let high = self.temp_writable_reg(I64);
-            self.emit(&MInst::AluRRR {
-                alu_op: AluOPRRR::Add,
-                rd: high,
-                rs1: x.regs()[1],
-                rs2: y.regs()[1],
-            });
-            self.emit(&MInst::AluRRR {
-                alu_op: AluOPRRR::Add,
-                rd: high,
-                rs1: high.to_reg(),
-                rs2: carry,
-            });
-            ValueRegs::two(low, high.to_reg())
-        } else {
-            let mut dst = Vec::with_capacity(2);
-            dst.push(self.temp_writable_reg(I64));
-            dst.push(self.temp_writable_reg(I64));
-            let t0 = self.temp_writable_reg(I64);
-            let t1 = self.temp_writable_reg(I64);
-            self.emit(&MInst::I128Arithmetic {
-                op: *op,
-                t0,
-                t1,
-                dst: dst.clone(),
-                x,
-                y,
-            });
-            self.value_regs(dst[0].to_reg(), dst[1].to_reg())
+            I128OP::Sub => {
+                let (low, borrow) = {
+                    let result = self.temp_writable_reg(I64);
+                    self.emit(&MInst::AluRRR {
+                        alu_op: AluOPRRR::Sub,
+                        rd: result,
+                        rs1: x.regs()[0],
+                        rs2: y.regs()[0],
+                    });
+                    let borrow = self.temp_writable_reg(I64);
+                    self.emit(&MInst::AluRRR {
+                        alu_op: AluOPRRR::SltU,
+                        rd: borrow,
+                        rs1: x.regs()[0],
+                        rs2: result.to_reg(),
+                    });
+                    (result.to_reg(), borrow.to_reg())
+                };
+
+                let high = self.temp_writable_reg(I64);
+                self.emit(&MInst::AluRRR {
+                    alu_op: AluOPRRR::Sub,
+                    rd: high,
+                    rs1: x.regs()[1],
+                    rs2: y.regs()[1],
+                });
+                self.emit(&MInst::AluRRR {
+                    alu_op: AluOPRRR::Sub,
+                    rd: high,
+                    rs1: high.to_reg(),
+                    rs2: borrow,
+                });
+                ValueRegs::two(low, high.to_reg())
+            }
+            I128OP::Mul => {
+                todo!();
+            }
+            I128OP::Div => {
+                todo!();
+            }
+            I128OP::Rem => {
+                todo!();
+            }
         }
     }
 
@@ -467,13 +499,13 @@ where
         let move_to_x_reg_op = FpuOPRR::move_f_to_x_op(ty);
         // move to x registers
         self.emit(&MInst::FpuRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: move_to_x_reg_op,
             rd: tmpx,
             rs: x,
         });
         self.emit(&MInst::FpuRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: move_to_x_reg_op,
             rd: tmpy,
             rs: y,
@@ -494,7 +526,7 @@ where
         };
         let result_reg = self.temp_writable_reg(ty);
         self.emit(&MInst::FpuRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: move_f_reg_op,
             rd: result_reg,
             rs: tmpx.to_reg(),
@@ -969,7 +1001,7 @@ where
         let tmp = self.temp_writable_reg(I64);
         // move into x register.
         self.emit(&MInst::FpuRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: FpuOPRR::move_f_to_x_op(ty),
             rd: tmp,
             rs: val,
@@ -987,7 +1019,7 @@ where
         // move back to float register.
         let rd = self.temp_writable_reg(F64);
         self.emit(&MInst::FpuRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: FpuOPRR::move_x_to_f_op(ty),
             rd,
             rs: tmp.to_reg(),
@@ -999,7 +1031,7 @@ where
         let tmp = self.temp_writable_reg(I64);
         // move into x register.
         self.emit(&MInst::FpuRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: FpuOPRR::move_f_to_x_op(ty),
             rd: tmp,
             rs: val,
@@ -1017,7 +1049,7 @@ where
         // move back to float register.
         let rd = self.temp_writable_reg(F64);
         self.emit(&MInst::FpuRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: FpuOPRR::move_x_to_f_op(ty),
             rd,
             rs: tmp.to_reg(),
@@ -1313,7 +1345,7 @@ where
         ValueRegs::two(result.to_reg(), result_high.to_reg())
     }
 
-    fn pack_float_rounding_mode(&mut self, f: &FloatRoundingMode) -> OptionFloatRoundingMode {
+    fn pack_float_rounding_mode(&mut self, f: &FRM) -> OptionFloatRoundingMode {
         Some(*f)
     }
 }

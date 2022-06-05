@@ -921,7 +921,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 };
                 ctx.emit(Inst::FpuRRR {
                     alu_op: op,
-                    float_rounding_mode: None,
+                    frm: None,
                     rd,
                     rs1,
                     rs2,
@@ -952,7 +952,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     _ => unreachable!(),
                 };
                 ctx.emit(Inst::FpuRR {
-                    float_rounding_mode: None,
+                    frm: None,
                     alu_op: op,
                     rd,
                     rs,
@@ -966,10 +966,10 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 unimplemented!();
             } else {
                 let rounding_mode = match op {
-                    Opcode::Ceil => FloatRoundingMode::RUP,
-                    Opcode::Floor => FloatRoundingMode::RDN,
-                    Opcode::Trunc => FloatRoundingMode::RTZ,
-                    Opcode::Nearest => FloatRoundingMode::RNE,
+                    Opcode::Ceil => FRM::RUP,
+                    Opcode::Floor => FRM::RDN,
+                    Opcode::Trunc => FRM::RTZ,
+                    Opcode::Nearest => FRM::RNE,
                     _ => unreachable!(),
                 };
 
@@ -980,13 +980,13 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 let convert_type = I64;
                 let tmp = ctx.alloc_tmp(I64).only_reg().unwrap();
                 insts.push(Inst::FpuRR {
-                    float_rounding_mode: Some(rounding_mode),
+                    frm: Some(rounding_mode),
                     alu_op: FpuOPRR::float_convert_2_int_op(input_ty, true, convert_type),
                     rd: tmp,
                     rs: rs,
                 });
                 insts.push(Inst::FpuRR {
-                    float_rounding_mode: Some(rounding_mode),
+                    frm: Some(rounding_mode),
                     alu_op: FpuOPRR::int_convert_2_float_op(convert_type, true, ty),
                     rd: rd,
                     rs: tmp.to_reg(),
@@ -1011,7 +1011,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 let rd = ctx.get_output(insn, 0).only_reg().unwrap();
                 let rs = put_input_in_reg(ctx, inputs[0]);
                 ctx.emit(Inst::FpuRR {
-                    float_rounding_mode: None,
+                    frm: None,
                     alu_op: FpuOPRR::float_convert_2_int_op(
                         input_ty,
                         if op == Opcode::FcvtToUint {
@@ -1044,7 +1044,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     rs = rd.to_reg();
                 };
                 insts.push(Inst::FpuRR {
-                    float_rounding_mode: None,
+                    frm: None,
                     alu_op: FpuOPRR::int_convert_2_float_op(
                         input_ty,
                         if op == Opcode::FcvtFromUint {

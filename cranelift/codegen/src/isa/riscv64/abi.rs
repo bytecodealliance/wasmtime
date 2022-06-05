@@ -6,9 +6,8 @@ use crate::ir;
 
 use crate::ir::types::*;
 use crate::ir::AbiParam;
+use crate::ir::ExternalName;
 use crate::ir::MemFlags;
-use crate::ir::Opcode;
-use crate::ir::{ExternalName, LibCall};
 use crate::isa;
 
 use crate::isa::riscv64::{inst::EmitState, inst::*};
@@ -91,10 +90,9 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         // stack space
         let mut next_stack: i64 = 0;
         let mut abi_args = vec![];
-
         /*
             when run out register , we should use stack space for parameter,
-            we should deal with paramter bakwards.
+            we should deal with paramter backwards.
             but we need result to be the same order with "params".
         */
         let mut abi_args_for_stack = vec![];
@@ -280,6 +278,9 @@ impl ABIMachineSpec for Riscv64MachineDeps {
     }
 
     fn fp_to_arg_offset(_call_conv: isa::CallConv, _flags: &settings::Flags) -> i64 {
+        /*
+            just previous fp saved on stack.
+        */
         8
     }
 
@@ -397,7 +398,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
 
     // add  sp , sp-8   ;; alloc stack sapce for fp
     // st   fp , sp+0   ;; store old fp
-    // move fp , sp    ;; set fp to sp
+    // move fp , sp     ;; set fp to sp
     fn gen_prologue_frame_setup(_flags: &settings::Flags) -> SmallInstVec<Inst> {
         let mut insts = SmallVec::new();
         insts.push(Inst::AjustSp {
@@ -519,19 +520,22 @@ impl ABIMachineSpec for Riscv64MachineDeps {
     ) -> SmallVec<[Self::I; 2]> {
         let mut insts = SmallVec::new();
 
-        fn use_direct_call(name: &ir::ExternalName, distance: RelocDistance) -> (u32, u32, bool) {
-            if let &ExternalName::User { namespace, index } = name {
+        fn use_direct_call(name: &ir::ExternalName, distance: RelocDistance) -> bool {
+            if let &ExternalName::User {
+                namespace: _namespace,
+                index: _index,
+            } = name
+            {
                 if RelocDistance::Near == distance {
-                    return (namespace, index, true);
+                    return true;
                 }
             }
-            (0, 0, false)
+            false
         }
-
         match &dest {
             &CallDest::ExtName(ref name, distance) => {
                 let direct = use_direct_call(name, *distance);
-                if direct.2 {
+                if direct {
                     insts.push(Inst::Call {
                         info: Box::new(CallInfo {
                             uses,
@@ -539,10 +543,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                             opcode,
                             caller_callconv: caller_conv,
                             callee_callconv: callee_conv,
-                            dest: ExternalName::User {
-                                namespace: direct.0,
-                                index: direct.1,
-                            },
+                            dest: name.clone(),
                         }),
                     });
                 } else {
@@ -578,10 +579,10 @@ impl ABIMachineSpec for Riscv64MachineDeps {
     }
 
     fn gen_memcpy(
-        call_conv: isa::CallConv,
-        dst: Reg,
-        src: Reg,
-        size: usize,
+        _call_conv: isa::CallConv,
+        _dst: Reg,
+        _src: Reg,
+        _size: usize,
     ) -> SmallVec<[Self::I; 8]> {
         panic!(
             "libcall call should use indirect call,need a temp register to store Memcpy address."

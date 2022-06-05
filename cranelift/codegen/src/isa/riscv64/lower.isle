@@ -45,8 +45,6 @@
 (rule (lower (has_type $I128 (iadd  x y)))
       (i128_arithmetic (I128OP.Add) x y))
 
-;; i128
-
 
 ;;;; Rules for `isub` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Base case, simply subtracting things in registers.

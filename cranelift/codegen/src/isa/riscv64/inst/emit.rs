@@ -89,7 +89,8 @@ impl Inst {
     }
 
     pub(crate) fn narrow_down_int(rd: Writable<Reg>, rs: Reg, ty: Type) -> SmallInstVec<Inst> {
-        assert!(ty.bits() != 64);
+        assert!(ty.bits() < 64);
+        assert!(ty.is_int());
         let mut insts = SmallInstVec::new();
         let shift = (64 - ty.bits()) as i16;
         insts.push(Inst::AluRRImm12 {
@@ -132,7 +133,7 @@ impl Inst {
         // if eq
         if cc_bit.constains(FloatCCBit::EQ) {
             insts.push(Inst::FpuRRR {
-                float_rounding_mode: None,
+                frm: None,
                 alu_op: eq_op,
                 rd: tmp,
                 rs1: x,
@@ -151,7 +152,7 @@ impl Inst {
         // if <
         if cc_bit.constains(FloatCCBit::LT) {
             insts.push(Inst::FpuRRR {
-                float_rounding_mode: None,
+                frm: None,
                 alu_op: lt_op,
                 rd: tmp,
                 rs1: x,
@@ -170,7 +171,7 @@ impl Inst {
         // if gt
         if cc_bit.constains(FloatCCBit::GT) {
             insts.push(Inst::FpuRRR {
-                float_rounding_mode: None,
+                frm: None,
                 alu_op: lt_op,
                 rd: tmp,
                 rs1: y, //
@@ -320,6 +321,9 @@ impl Inst {
         insts
     }
 
+    /*
+        check if float is unordered.
+    */
     pub(crate) fn lower_float_unordered(
         tmp: Writable<Reg>,
         tmp2: Writable<Reg>,
@@ -337,7 +341,7 @@ impl Inst {
         };
         // if x is nan
         insts.push(Inst::FpuRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: class_op,
             rd: tmp,
             rs: x,
@@ -359,7 +363,7 @@ impl Inst {
         });
         // if y is nan.
         insts.push(Inst::FpuRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: class_op,
             rd: tmp2,
             rs: y,
@@ -426,7 +430,6 @@ impl Inst {
 
     /*
         alloc some registers for load large constant, or something else.
-        if exclusive is given, which we must not include the  exclusive register (it's aleady been allocted or something),so must skip it.
     */
     fn alloc_registers(amount: usize) -> Vec<Writable<Reg>> {
         let mut v = vec![];
@@ -485,65 +488,6 @@ impl Inst {
         });
         insts
     }
-
-    /*
-    riscv document says.
-
-    We did not include special instruction set support for overflow checks on integer arithmetic
-        operations in the base instruction set, as many overflow checks can be cheaply implemented using
-        RISC-V branches. Overflow checking for unsigned addition requires only a single additional
-        branch instruction after the addition: add t0, t1, t2; bltu t0, t1, overflow.
-            */
-
-    fn add_c_u(rd: Writable<Reg>, carry: Writable<Reg>, x: Reg, y: Reg) -> SmallInstVec<Inst> {
-        let mut insts = SmallInstVec::new();
-        insts.push(Inst::gen_move(carry, x, I64));
-        insts.push(Inst::AluRRR {
-            alu_op: AluOPRRR::Add,
-            rd,
-            rs1: x,
-            rs2: y,
-        });
-        insts.push(Inst::AluRRR {
-            alu_op: AluOPRRR::SltU,
-            rd: carry,
-            rs1: rd.to_reg(),
-            rs2: carry.to_reg(),
-        });
-        /*
-        gcc generate this .
-
-        add	a4,a2,a0
-        mv	a6,a4
-        sltu	a6,a6,a2
-            // a6 either be 1 or 0
-            // nothing looks will change
-        slli	a6,a6,32 ??????????
-        srli	a6,a6,32 ??????????????
-
-        add	a5,a3,a1
-        add	a3,a6,a5
-            */
-        insts
-    }
-
-    fn sub_b_u(rd: Writable<Reg>, borrow: Writable<Reg>, x: Reg, y: Reg) -> SmallInstVec<Inst> {
-        let mut insts = SmallInstVec::new();
-        insts.push(Inst::gen_move(borrow, x, I64));
-        insts.push(Inst::AluRRR {
-            alu_op: AluOPRRR::Sub,
-            rd,
-            rs1: x,
-            rs2: y,
-        });
-        insts.push(Inst::AluRRR {
-            alu_op: AluOPRRR::SltU,
-            rd: borrow,
-            rs1: borrow.to_reg(),
-            rs2: rd.to_reg(), // if rd > x then need borrow
-        });
-        insts
-    }
 }
 
 impl MachInstEmit for Inst {
@@ -585,7 +529,7 @@ impl MachInstEmit for Inst {
                 sink.put4(x);
             }
             &Inst::FpuRR {
-                float_rounding_mode,
+                frm,
                 alu_op,
                 rd,
                 rs,
@@ -594,7 +538,7 @@ impl MachInstEmit for Inst {
                 let rd = allocs.next_writable(rd);
                 let x = alu_op.op_code()
                     | reg_to_gpr_num(rd.to_reg()) << 7
-                    | alu_op.funct3(float_rounding_mode) << 12
+                    | alu_op.funct3(frm) << 12
                     | reg_to_gpr_num(rs) << 15
                     | alu_op.rs2_funct5() << 20
                     | alu_op.funct7() << 25;
@@ -606,7 +550,7 @@ impl MachInstEmit for Inst {
                 rs1,
                 rs2,
                 rs3,
-                float_rounding_mode,
+                frm,
             } => {
                 let rs1 = allocs.next(rs1);
                 let rs2 = allocs.next(rs2);
@@ -614,7 +558,7 @@ impl MachInstEmit for Inst {
                 let rd = allocs.next_writable(rd);
                 let x = alu_op.op_code()
                     | reg_to_gpr_num(rd.to_reg()) << 7
-                    | alu_op.funct3(float_rounding_mode) << 12
+                    | alu_op.funct3(frm) << 12
                     | reg_to_gpr_num(rs1) << 15
                     | reg_to_gpr_num(rs2) << 20
                     | alu_op.funct2() << 25
@@ -624,7 +568,7 @@ impl MachInstEmit for Inst {
             }
             &Inst::FpuRRR {
                 alu_op,
-                float_rounding_mode,
+                frm,
                 rd,
                 rs1,
                 rs2,
@@ -634,7 +578,7 @@ impl MachInstEmit for Inst {
                 let rd = allocs.next_writable(rd);
                 let x: u32 = alu_op.op_code()
                     | reg_to_gpr_num(rd.to_reg()) << 7
-                    | (alu_op.funct3(float_rounding_mode)) << 12
+                    | (alu_op.funct3(frm)) << 12
                     | reg_to_gpr_num(rs1) << 15
                     | reg_to_gpr_num(rs2) << 20
                     | alu_op.funct7() << 25;
@@ -1064,10 +1008,12 @@ impl MachInstEmit for Inst {
                             LabelUse::B12.patch_raw_offset(&mut code, offset);
                             sink.put_data(&code[..])
                         } else {
-                            let code = kind.emit();
-                            // jump is zero, this means when condition is met , no jump
-                            // fallthrough to next instruction which is the long jump.
-                            sink.put4(code);
+                            let mut code = kind.emit().to_le_bytes();
+                            /*
+                                jump over the condbr , 4 bytes.
+                            */
+                            LabelUse::B12.patch_raw_offset(&mut code[..], 4);
+                            sink.put_data(&code[..]);
                             Inst::construct_auipc_and_jalr(writable_spilltmp_reg(), offset)
                                 .into_iter()
                                 .for_each(|i| i.emit(&[], sink, emit_info, state));
@@ -1084,13 +1030,13 @@ impl MachInstEmit for Inst {
                     if ty.is_float() {
                         let mut insts = SmallInstVec::new();
                         insts.push(Inst::FpuRR {
-                            float_rounding_mode: None,
+                            frm: None,
                             alu_op: FpuOPRR::move_f_to_x_op(ty),
                             rd: writable_spilltmp_reg(),
                             rs: rm,
                         });
                         insts.push(Inst::FpuRR {
-                            float_rounding_mode: None,
+                            frm: None,
                             alu_op: FpuOPRR::move_x_to_f_op(ty),
                             rd: rd,
                             rs: spilltmp_reg(),
@@ -1107,8 +1053,6 @@ impl MachInstEmit for Inst {
                         };
                         x.emit(&[], sink, emit_info, state);
                     }
-                } else {
-                    log::warn!("a redundancy move why???? {:?}->{:?}", rm, rd.to_reg());
                 }
             }
             &Inst::BrTable {
@@ -1304,7 +1248,6 @@ impl MachInstEmit for Inst {
                     dest: BranchTarget::Label(label_jump_over),
                 }
                 .emit(&[], sink, emit_info, state);
-
                 // here is true
                 sink.bind_label(label_true);
                 Inst::load_constant_imm12(rd, Imm12::form_bool(true)).emit(
@@ -1321,7 +1264,7 @@ impl MachInstEmit for Inst {
                 conditon,
                 ref x,
                 ref y,
-                ty,
+                ty : _ty ,
             } => {
                 let conditon = allocs.next(conditon);
                 let x = alloc_value_regs(x, &mut allocs);
@@ -1345,32 +1288,7 @@ impl MachInstEmit for Inst {
                 });
                 // here is the true
                 // select the first value
-                let select_result = |src: ValueRegs<Reg>| {
-                    let mut insts = SmallInstVec::new();
-                    match ty.bits() {
-                        128 => {
-                            insts.push(Inst::Mov {
-                                rd: dst[0],
-                                rm: src.regs()[0],
-                                ty: I64,
-                            });
-                            insts.push(Inst::Mov {
-                                rd: dst[1],
-                                rm: src.regs()[1],
-                                ty: I64,
-                            });
-                        }
-                        _ => {
-                            insts.push(Inst::Mov {
-                                rd: dst[0],
-                                rm: src.regs()[0],
-                                ty,
-                            });
-                        }
-                    };
-                    insts
-                };
-                insts.extend(select_result(x));
+                insts.extend(gen_moves(&dst[..], x.regs()));
                 let label_jump_over = sink.get_label();
                 insts.push(Inst::Jal {
                     dest: BranchTarget::Label(label_jump_over),
@@ -1381,7 +1299,7 @@ impl MachInstEmit for Inst {
                     .for_each(|i: Inst| i.emit(&[], sink, emit_info, state));
                 sink.bind_label(label_false);
                 // select second value1
-                insts.extend(select_result(y));
+                insts.extend(gen_moves(&dst[..], y.regs()));
                 insts
                     .into_iter()
                     .for_each(|i| i.emit(&[], sink, emit_info, state));
@@ -1520,64 +1438,6 @@ impl MachInstEmit for Inst {
                 .emit(&[], sink, emit_info, state);
                 sink.bind_label(fail_label);
             }
-            &Inst::I128Arithmetic {
-                op,
-                t0,
-                t1,
-                ref dst,
-                ref x,
-                ref y,
-            } => {
-                let t0 = allocs.next_writable(t0);
-                let t1 = allocs.next_writable(t1);
-                let x = alloc_value_regs(x, &mut allocs);
-                let y = alloc_value_regs(y, &mut allocs);
-                let dst: Vec<_> = dst.iter().map(|f| allocs.next_writable(*f)).collect();
-                let mut insts = SmallInstVec::new();
-                match op {
-                    I128OP::Add => {
-                        insts.extend(Inst::add_c_u(dst[0], t0, x.regs()[0], y.regs()[0]));
-                        insts.push(Inst::AluRRR {
-                            alu_op: AluOPRRR::Add,
-                            rd: dst[1],
-                            rs1: x.regs()[1],
-                            rs2: y.regs()[1],
-                        });
-
-                        insts.push(Inst::AluRRR {
-                            alu_op: AluOPRRR::Add,
-                            rd: dst[1],
-                            rs1: dst[1].to_reg(),
-                            rs2: t0.to_reg(),
-                        });
-                    }
-                    I128OP::Sub => {
-                        insts.extend(Inst::sub_b_u(dst[0], t0, x.regs()[0], y.regs()[0]));
-                        insts.push(Inst::AluRRR {
-                            alu_op: AluOPRRR::Sub,
-                            rd: dst[1],
-                            rs1: x.regs()[1],
-                            rs2: y.regs()[1],
-                        });
-                        insts.push(Inst::AluRRR {
-                            alu_op: AluOPRRR::Sub,
-                            rd: dst[1],
-                            rs1: dst[1].to_reg(),
-                            rs2: t0.to_reg(),
-                        });
-                    }
-
-                    I128OP::Mul => {
-                        todo!()
-                    }
-
-                    I128OP::Div => todo!(),
-                    I128OP::Rem => todo!(),
-                }
-                insts
-                    .into_iter()
-                    .for_each(|i| i.emit(&[], sink, emit_info, state));
-            }
             &Inst::IntSelect {
                 op,
                 ref dst,
@@ -1663,7 +1523,6 @@ impl MachInstEmit for Inst {
                     imm12,
                 }
                 .emit(&[], sink, emit_info, state);
-
                 let label_signed_value = sink.get_label();
                 Inst::CondBr {
                     taken: BranchTarget::Label(label_signed_value),
@@ -1685,8 +1544,7 @@ impl MachInstEmit for Inst {
                     ty: Type,
                 ) {
                     if 64 - ty.bits() > 0 {
-                        BitsShifter::new_i((64 - ty.bits()) as u8)
-                            .shift_out_left(rd, rs)
+                        Inst::narrow_down_int(rd, rs, ty)
                             .iter()
                             .for_each(|i| i.emit(&[], sink, emit_info, state));
                         let (op, imm12) = AluOPRRI::Clz.funct12(None);
@@ -1707,7 +1565,6 @@ impl MachInstEmit for Inst {
                         }
                         .emit(&[], sink, emit_info, state);
                     }
-
                     // make result.
                     Inst::AluRRImm12 {
                         alu_op: AluOPRRI::Addi,
@@ -1776,7 +1633,7 @@ impl MachInstEmit for Inst {
                 let tmp = allocs.next_writable(tmp);
                 // get class information.
                 Inst::FpuRR {
-                    float_rounding_mode: None,
+                    frm: None,
                     alu_op: if in_type == F32 {
                         FpuOPRR::FclassS
                     } else {
@@ -1794,7 +1651,7 @@ impl MachInstEmit for Inst {
                     imm12: Imm12::from_bits(FClassResult::is_nan_bits() as i16),
                 }
                 .emit(&[], sink, emit_info, state);
-                // jump t0 nan
+                // jump to nan
                 let label_jump_nan = sink.get_label();
                 Inst::CondBr {
                     taken: BranchTarget::Label(label_jump_nan),
@@ -1807,26 +1664,21 @@ impl MachInstEmit for Inst {
                 }
                 .emit(&[], sink, emit_info, state);
                 // convert to int normally.
-
                 Inst::FpuRR {
-                    float_rounding_mode: None,
-
+                    frm: None,
                     alu_op: FpuOPRR::float_convert_2_int_op(in_type, is_signed, out_type),
                     rd: rd,
                     rs: rs,
                 }
                 .emit(&[], sink, emit_info, state);
-
                 // I already have the result,jump over.
                 let label_jump_over = sink.get_label();
                 Inst::Jal {
                     dest: BranchTarget::Label(label_jump_over),
                 }
                 .emit(&[], sink, emit_info, state);
-
                 // here is nan , move 0 into rd register
                 sink.bind_label(label_jump_nan);
-
                 Inst::load_constant_imm12(rd, Imm12::from_bits(0)).emit(
                     &[],
                     sink,

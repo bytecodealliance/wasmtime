@@ -2,7 +2,7 @@ use crate::ir::LibCall;
 use crate::isa::riscv64::inst::*;
 use crate::settings;
 use alloc::vec::Vec;
-
+use std::process::Command;
 /*
     todo:: more instruction.
 */
@@ -520,15 +520,15 @@ fn test_riscv64_binemit() {
         },
         "add fp,fp,zero",
     ));
-    // insns.push(TestUnit::new(
-    //     Inst::AluRRImm12 {
-    //         alu_op: AluOPRRI::Addi,
-    //         rd: writable_fp_reg(),
-    //         rs: stack_reg(),
-    //         imm12: Imm12::maybe_from_u64(100).unwrap(),
-    //     },
-    //     "addi fp,sp,100",
-    // ));
+    insns.push(TestUnit::new(
+        Inst::AluRRImm12 {
+            alu_op: AluOPRRI::Addi,
+            rd: writable_fp_reg(),
+            rs: stack_reg(),
+            imm12: Imm12::maybe_from_u64(100).unwrap(),
+        },
+        "addi fp,sp,100",
+    ));
     insns.push(TestUnit::new(
         Inst::Lui {
             rd: writable_zero_reg(),
@@ -1061,37 +1061,37 @@ fn test_riscv64_binemit() {
     //
     insns.push(TestUnit::new(
         Inst::FpuRRR {
-            float_rounding_mode: None,
+            frm: Some(FRM::RNE),
             alu_op: FpuOPRRR::FaddS,
             rd: writable_fa0(),
             rs1: fa0(),
             rs2: fa1(),
         },
-        "fadd.s fa0,fa0,fa1",
+        "fadd.s fa0,fa0,fa1,rne",
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRR {
-            float_rounding_mode: None,
+            frm: Some(FRM::RTZ),
             alu_op: FpuOPRRR::FsubS,
             rd: writable_fa0(),
             rs1: fa0(),
             rs2: fa1(),
         },
-        "fsub.s fa0,fa0,fa1",
+        "fsub.s fa0,fa0,fa1,rtz",
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRR {
-            float_rounding_mode: None,
+            frm: Some(FRM::RUP),
             alu_op: FpuOPRRR::FmulS,
             rd: writable_fa0(),
             rs1: fa0(),
             rs2: fa1(),
         },
-        "fmul.s fa0,fa0,fa1",
+        "fmul.s fa0,fa0,fa1,rup",
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: FpuOPRRR::FdivS,
             rd: writable_fa0(),
             rs1: fa0(),
@@ -1101,7 +1101,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: FpuOPRRR::FsgnjS,
             rd: writable_fa0(),
             rs1: fa0(),
@@ -1111,7 +1111,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: FpuOPRRR::FsgnjnS,
             rd: writable_fa0(),
             rs1: fa0(),
@@ -1122,7 +1122,7 @@ fn test_riscv64_binemit() {
 
     insns.push(TestUnit::new(
         Inst::FpuRRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: FpuOPRRR::FsgnjxS,
             rd: writable_fa0(),
             rs1: fa0(),
@@ -1132,7 +1132,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: FpuOPRRR::FminS,
             rd: writable_fa0(),
             rs1: fa0(),
@@ -1143,7 +1143,7 @@ fn test_riscv64_binemit() {
 
     insns.push(TestUnit::new(
         Inst::FpuRRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: FpuOPRRR::FmaxS,
             rd: writable_fa0(),
             rs1: fa0(),
@@ -1153,7 +1153,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: FpuOPRRR::FeqS,
             rd: writable_a0(),
             rs1: fa0(),
@@ -1163,7 +1163,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: FpuOPRRR::FltS,
             rd: writable_a0(),
             rs1: fa0(),
@@ -1173,7 +1173,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: FpuOPRRR::FleS,
             rd: writable_a0(),
             rs1: fa0(),
@@ -1185,7 +1185,7 @@ fn test_riscv64_binemit() {
     //
     insns.push(TestUnit::new(
         Inst::FpuRRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: FpuOPRRR::FaddD,
             rd: writable_fa0(),
             rs1: fa0(),
@@ -1195,7 +1195,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: FpuOPRRR::FsubD,
             rd: writable_fa0(),
             rs1: fa0(),
@@ -1205,7 +1205,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: FpuOPRRR::FmulD,
             rd: writable_fa0(),
             rs1: fa0(),
@@ -1215,7 +1215,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: FpuOPRRR::FdivD,
             rd: writable_fa0(),
             rs1: fa0(),
@@ -1225,7 +1225,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: FpuOPRRR::FsgnjD,
             rd: writable_fa0(),
             rs1: fa0(),
@@ -1235,7 +1235,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: FpuOPRRR::FsgnjnD,
             rd: writable_fa0(),
             rs1: fa0(),
@@ -1246,7 +1246,7 @@ fn test_riscv64_binemit() {
 
     insns.push(TestUnit::new(
         Inst::FpuRRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: FpuOPRRR::FsgnjxD,
             rd: writable_fa0(),
             rs1: fa0(),
@@ -1256,7 +1256,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: FpuOPRRR::FminD,
             rd: writable_fa0(),
             rs1: fa0(),
@@ -1267,7 +1267,7 @@ fn test_riscv64_binemit() {
 
     insns.push(TestUnit::new(
         Inst::FpuRRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: FpuOPRRR::FmaxD,
             rd: writable_fa0(),
             rs1: fa0(),
@@ -1277,7 +1277,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: FpuOPRRR::FeqD,
             rd: writable_a0(),
             rs1: fa0(),
@@ -1287,7 +1287,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: FpuOPRRR::FltD,
             rd: writable_a0(),
             rs1: fa0(),
@@ -1297,7 +1297,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: FpuOPRRR::FleD,
             rd: writable_a0(),
             rs1: fa0(),
@@ -1309,16 +1309,16 @@ fn test_riscv64_binemit() {
     //
     insns.push(TestUnit::new(
         Inst::FpuRR {
-            float_rounding_mode: None,
+            frm: Some(FRM::RNE),
             alu_op: FpuOPRR::FsqrtS,
             rd: writable_fa0(),
             rs: fa1(),
         },
-        "fsqrt.s fa0,fa1",
+        "fsqrt.s fa0,fa1,rne",
     ));
     insns.push(TestUnit::new(
         Inst::FpuRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: FpuOPRR::FcvtWS,
             rd: writable_a0(),
             rs: fa1(),
@@ -1328,7 +1328,7 @@ fn test_riscv64_binemit() {
 
     insns.push(TestUnit::new(
         Inst::FpuRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: FpuOPRR::FcvtWuS,
             rd: writable_a0(),
             rs: fa1(),
@@ -1337,7 +1337,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::FpuRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: FpuOPRR::FmvXW,
             rd: writable_a0(),
             rs: fa1(),
@@ -1346,7 +1346,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::FpuRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: FpuOPRR::FclassS,
             rd: writable_a0(),
             rs: fa1(),
@@ -1356,7 +1356,7 @@ fn test_riscv64_binemit() {
 
     insns.push(TestUnit::new(
         Inst::FpuRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: FpuOPRR::FcvtSw,
             rd: writable_fa0(),
             rs: a0(),
@@ -1365,7 +1365,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::FpuRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: FpuOPRR::FcvtSwU,
             rd: writable_fa0(),
             rs: a0(),
@@ -1375,7 +1375,7 @@ fn test_riscv64_binemit() {
 
     insns.push(TestUnit::new(
         Inst::FpuRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: FpuOPRR::FmvWX,
             rd: writable_fa0(),
             rs: a0(),
@@ -1384,7 +1384,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::FpuRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: FpuOPRR::FcvtLS,
             rd: writable_a0(),
             rs: fa0(),
@@ -1393,7 +1393,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::FpuRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: FpuOPRR::FcvtLuS,
             rd: writable_a0(),
             rs: fa0(),
@@ -1402,7 +1402,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::FpuRR {
-            float_rounding_mode: None,
+            frm: None,
 
             alu_op: FpuOPRR::FcvtSL,
             rd: writable_fa0(),
@@ -1412,7 +1412,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::FpuRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: FpuOPRR::FcvtSLU,
             rd: writable_fa0(),
             rs: a0(),
@@ -1423,7 +1423,7 @@ fn test_riscv64_binemit() {
     //
     insns.push(TestUnit::new(
         Inst::FpuRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: FpuOPRR::FsqrtD,
             rd: writable_fa0(),
             rs: fa1(),
@@ -1432,7 +1432,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::FpuRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: FpuOPRR::FcvtWD,
             rd: writable_a0(),
             rs: fa1(),
@@ -1442,7 +1442,7 @@ fn test_riscv64_binemit() {
 
     insns.push(TestUnit::new(
         Inst::FpuRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: FpuOPRR::FcvtWuD,
             rd: writable_a0(),
             rs: fa1(),
@@ -1451,7 +1451,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::FpuRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: FpuOPRR::FmvXD,
             rd: writable_a0(),
             rs: fa1(),
@@ -1460,7 +1460,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::FpuRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: FpuOPRR::FclassD,
             rd: writable_a0(),
             rs: fa1(),
@@ -1470,7 +1470,7 @@ fn test_riscv64_binemit() {
 
     insns.push(TestUnit::new(
         Inst::FpuRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: FpuOPRR::FcvtSD,
             rd: writable_fa0(),
             rs: fa0(),
@@ -1479,7 +1479,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::FpuRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: FpuOPRR::FcvtDWU,
             rd: writable_fa0(),
             rs: a0(),
@@ -1489,7 +1489,7 @@ fn test_riscv64_binemit() {
 
     insns.push(TestUnit::new(
         Inst::FpuRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: FpuOPRR::FmvDX,
             rd: writable_fa0(),
             rs: a0(),
@@ -1498,7 +1498,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::FpuRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: FpuOPRR::FcvtLD,
             rd: writable_a0(),
             rs: fa0(),
@@ -1507,7 +1507,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::FpuRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: FpuOPRR::FcvtLuD,
             rd: writable_a0(),
             rs: fa0(),
@@ -1516,7 +1516,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::FpuRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: FpuOPRR::FcvtDL,
             rd: writable_fa0(),
             rs: a0(),
@@ -1525,7 +1525,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::FpuRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: FpuOPRR::FcvtDLu,
             rd: writable_fa0(),
             rs: a0(),
@@ -1536,18 +1536,18 @@ fn test_riscv64_binemit() {
 
     insns.push(TestUnit::new(
         Inst::FpuRRRR {
-            float_rounding_mode: None,
+            frm: Some(FRM::RNE),
             alu_op: FpuOPRRRR::FmaddS,
             rd: writable_fa0(),
             rs1: fa0(),
             rs2: fa1(),
             rs3: fa7(),
         },
-        "fmadd.s fa0,fa0,fa1,fa7",
+        "fmadd.s fa0,fa0,fa1,fa7,rne",
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: FpuOPRRRR::FmsubS,
             rd: writable_fa0(),
             rs1: fa0(),
@@ -1558,7 +1558,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: FpuOPRRRR::FnmsubS,
             rd: writable_fa0(),
             rs1: fa0(),
@@ -1569,7 +1569,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: FpuOPRRRR::FnmaddS,
             rd: writable_fa0(),
             rs1: fa0(),
@@ -1581,7 +1581,7 @@ fn test_riscv64_binemit() {
 
     insns.push(TestUnit::new(
         Inst::FpuRRRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: FpuOPRRRR::FmaddD,
             rd: writable_fa0(),
             rs1: fa0(),
@@ -1592,7 +1592,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRRR {
-            float_rounding_mode: None,
+            frm: None,
 
             alu_op: FpuOPRRRR::FmsubD,
             rd: writable_fa0(),
@@ -1604,7 +1604,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: FpuOPRRRR::FnmsubD,
             rd: writable_fa0(),
             rs1: fa0(),
@@ -1615,7 +1615,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRRR {
-            float_rounding_mode: None,
+            frm: None,
             alu_op: FpuOPRRRR::FnmaddD,
             rd: writable_fa0(),
             rs1: fa0(),
@@ -1959,7 +1959,7 @@ fn get_riscv_tool_chain_name() -> (String, String) {
 fn assemble(code: &str, as_option: &Option<Vec<String>>) -> u32 {
     let mut code = String::from(code);
     code.push_str("\n");
-    use std::process::Command;
+
     std::env::set_current_dir(std::env::temp_dir()).expect("set_current_dir {}");
 
     let file_name = "riscv_tmp.s";
@@ -2324,9 +2324,55 @@ fn riscv64_worst_case_size_instrcution_size() {
         let buffer = buffer.finish();
         let length = buffer.data().len() as u32;
         if length > max.0 {
+            let length = buffer.data().len() as u32;
             max = (length, i);
         }
     }
     assert!(max.0 == Inst::worst_case_size());
     println!("caculate max size is {} , inst is {:?}", max.0, max.1);
+}
+
+/*
+    emit an instruction and see objdump assembly code.
+*/
+#[test]
+fn gcc_ass() {
+    let flags = settings::Flags::new(settings::builder());
+    let emit_info = EmitInfo::new(flags);
+    std::env::set_current_dir(std::env::temp_dir()).expect("set_current_dir {}");
+    let file_name = "riscv_tmp.bin";
+    use std::io::Write;
+    /*
+        there are all candidates potential generate a lot of bytes.
+    */
+    let mut insts: Vec<MInst> = vec![];
+    insts.push(Inst::FpuRRR {
+        alu_op: FpuOPRRR::FaddD,
+        frm: Some(FRM::RNE),
+        rd: writable_fa0(),
+        rs1: fa0(),
+        rs2: fa1(),
+    });
+    let (_, dump) = get_riscv_tool_chain_name();
+    for i in insts {
+        let mut buffer = MachBuffer::new();
+        i.emit(&[], &mut buffer, &emit_info, &mut Default::default());
+        let buffer = buffer.finish();
+        let mut file = std::fs::File::create(file_name).unwrap();
+        file.write_all(buffer.data()).expect("write error {}");
+        file.sync_all().unwrap();
+        let mut cmd = Command::new(dump.as_str());
+        cmd.args(&["-b", "binary", "-m", "riscv:rv64", "-D"])
+            .arg(file_name);
+        let output = cmd.output().expect("exec objdump failed , {}");
+        println!("{:?} ############################################", i);
+        println!(
+            "##############################{}",
+            String::from_iter(output.stdout.clone().into_iter().map(|c| c as char))
+        );
+        println!(
+            "##############################{}",
+            String::from_iter(output.stderr.clone().into_iter().map(|c| c as char))
+        );
+    }
 }

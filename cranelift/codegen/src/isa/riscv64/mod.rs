@@ -13,7 +13,7 @@ use crate::settings as shared_settings;
 use alloc::{boxed::Box, vec::Vec};
 use core::fmt;
 use regalloc2::MachineEnv;
-use target_lexicon::{Architecture, BinaryFormat, OperatingSystem, Riscv64Architecture, Triple};
+use target_lexicon::{Architecture, Triple};
 
 // New backend:
 mod abi;
@@ -177,6 +177,16 @@ mod test {
     use crate::isa::CallConv;
     use crate::settings;
     use crate::settings::Configurable;
+    use target_lexicon::{
+        Architecture, BinaryFormat, Environment, OperatingSystem, Riscv64Architecture, Triple,
+    };
+    static TRIPLE: Triple = Triple {
+        architecture: Architecture::Riscv64(Riscv64Architecture::Riscv64),
+        vendor: target_lexicon::Vendor::Unknown,
+        operating_system: OperatingSystem::Unknown,
+        environment: Environment::Unknown,
+        binary_format: BinaryFormat::Unknown,
+    };
 
     #[test]
     fn hello_world() {
@@ -472,16 +482,6 @@ mod test {
         let result = backend
             .compile_function(&mut func, /* want_disasm = */ true)
             .unwrap();
-        let _code = result.buffer.data();
         println!("xxxxxx , {}", result.disasm.unwrap());
     }
 }
-
-///
-pub static TRIPLE: Triple = Triple {
-    architecture: Architecture::Riscv64(Riscv64Architecture::Riscv64),
-    vendor: target_lexicon::Vendor::Unknown,
-    operating_system: OperatingSystem::Unknown,
-    environment: target_lexicon::Environment::Unknown,
-    binary_format: BinaryFormat::Unknown,
-};
