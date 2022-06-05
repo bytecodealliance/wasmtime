@@ -1,6 +1,6 @@
 [package]
 name = "wasi-tokio"
-version = "0.38.0"
+version = "0.39.0"
 authors = ["The Wasmtime Project Developers"]
 description = "WASI implementation in Rust"
 license = "Apache-2.0 WITH LLVM-exception"
@@ -11,9 +11,9 @@ edition = "2021"
 include = ["src/**/*", "LICENSE" ]
 
 [dependencies]
-wasi-common = { path = "../", version = "=0.38.0" }
-wasi-cap-std-sync = { path = "../cap-std-sync", version = "=0.38.0" }
-wiggle = { path = "../../wiggle", version = "=0.38.0" }
+wasi-common = { path = "../", version = "=0.39.0" }
+wasi-cap-std-sync = { path = "../cap-std-sync", version = "=0.39.0" }
+wiggle = { path = "../../wiggle", version = "=0.39.0" }
 tokio = { version = "1.8.0", features = [ "rt", "fs", "time", "io-util", "net", "io-std", "rt-multi-thread"] }
 cap-std = "0.24.1"
 anyhow = "1"
