@@ -242,7 +242,7 @@ fn validate_inbounds<T: ComponentValue>(memory: &[u8], ptr: &ValRaw) -> Result<u
 unsafe fn cast_storage<T>(storage: &mut [ValRaw]) -> &mut MaybeUninit<T> {
     // Assertions that LLVM can easily optimize away but are sanity checks here
     assert!(std::mem::size_of::<T>() % std::mem::size_of::<ValRaw>() == 0);
-    assert!(std::mem::align_of::<T>() == std::mem::size_of::<ValRaw>());
+    assert!(std::mem::align_of::<T>() == std::mem::align_of::<ValRaw>());
     assert!(std::mem::align_of_val(storage) == std::mem::align_of::<T>());
 
     // This is an actual runtime assertion which if performance calls for we may
