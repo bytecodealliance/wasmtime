@@ -123,8 +123,8 @@ where
         retptr: ValRaw,
     }
 
-    /// Representation of argumenst to this function when the return value is
-    /// returned directly, namely the arguemnts and return value all start from
+    /// Representation of arguments to this function when the return value is
+    /// returned directly, namely the arguments and return value all start from
     /// the beginning (aka this is a `union`, not a `struct`).
     #[repr(C)]
     union ReturnStack<T: Copy, U: Copy> {
@@ -157,7 +157,7 @@ where
 
     // There's a 2x2 matrix of whether parameters and results are stored on the
     // stack or on the heap. Each of the 4 branches here have a different
-    // representation of the storage of arguemnts/returns which is represented
+    // representation of the storage of arguments/returns which is represented
     // by the type parameter that we pass to `cast_storage`.
     //
     // Also note that while four branches are listed here only one is taken for
