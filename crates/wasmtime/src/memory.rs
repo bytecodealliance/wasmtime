@@ -751,13 +751,10 @@ impl SharedMemory {
     /// as well. Other threads can call `memory.grow` operations that will
     /// extend the region length but--importantly--this will not be reflected in
     /// the size of region returned by this function.
-    ///
-    /// Write access to the region is available by casting, e.g.: `mem.data() as
-    /// *mut [u8]`.
-    pub fn data(&self) -> *const [u8] {
+    pub fn data(&self) -> *mut [u8] {
         unsafe {
             let definition = &*self.0.vmmemory_ptr();
-            slice::from_raw_parts(definition.base, definition.current_length())
+            slice::from_raw_parts_mut(definition.base, definition.current_length())
         }
     }
 

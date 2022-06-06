@@ -68,7 +68,7 @@ fn test_sharing_of_shared_memory() -> Result<()> {
 
     // Modify the memory in one place.
     unsafe {
-        (*(shared_memory.data() as *mut [u8]))[0] = 42;
+        (*(shared_memory.data()))[0] = 42;
     }
 
     // Verify that the memory is the same in all shared locations.
