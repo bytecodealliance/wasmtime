@@ -5,7 +5,7 @@ use crate::MemoryType;
 use anyhow::{anyhow, Result};
 use std::convert::TryFrom;
 use std::sync::Arc;
-use wasmtime_environ::{EntityIndex, MemoryIndex, MemoryPlan, MemoryStyle, Module, WASM_PAGE_SIZE};
+use wasmtime_environ::{EntityIndex, MemoryPlan, MemoryStyle, Module, WASM_PAGE_SIZE};
 use wasmtime_runtime::{
     allocate_single_memory_instance, DefaultMemoryCreator, Imports, InstanceAllocationRequest,
     InstantiationError, Memory, MemoryImage, RuntimeLinearMemory, RuntimeMemoryCreator,
@@ -31,7 +31,7 @@ pub fn create_memory(
         memory_ty.wasmtime_memory().clone(),
         &store.engine().config().tunables,
     );
-    module.memory_plans.push(plan.clone());
+    let memory_id = module.memory_plans.push(plan.clone());
 
     let memory = match &preallocation {
         // If we are passing in a pre-allocated shared memory, we can clone its
@@ -54,10 +54,11 @@ pub fn create_memory(
     };
 
     // Since we have only associated a single memory with the "frankenstein"
-    // instance, it must be exported at index 0.
+    // instance, it will be exported at index 0.
+    debug_assert_eq!(memory_id.as_u32(), 0);
     module
         .exports
-        .insert(String::new(), EntityIndex::Memory(MemoryIndex::from_u32(0)));
+        .insert(String::new(), EntityIndex::Memory(memory_id));
 
     // We create an instance in the on-demand allocator when creating handles
     // associated with external objects. The configured instance allocator
