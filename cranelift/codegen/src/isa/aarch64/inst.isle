@@ -920,7 +920,9 @@
 
 ;; Helper for calculating the `VectorSize` corresponding to a type
 (decl vector_size (Type) VectorSize)
+(rule (vector_size (multi_lane 8 8)) (VectorSize.Size8x8))
 (rule (vector_size (multi_lane 8 16)) (VectorSize.Size8x16))
+(rule (vector_size (multi_lane 16 4)) (VectorSize.Size16x4))
 (rule (vector_size (multi_lane 16 8)) (VectorSize.Size16x8))
 (rule (vector_size (multi_lane 32 4)) (VectorSize.Size32x4))
 (rule (vector_size (multi_lane 64 2)) (VectorSize.Size64x2))
@@ -1540,6 +1542,13 @@
             (_ Unit (emit (MInst.VecRRRLong op dst src1 src2 high_half))))
         dst))
 
+;; Helper for emitting `MInst.VecRRPairLong` instructions.
+(decl vec_rr_pair_long (VecRRPairLongOp Reg) Reg)
+(rule (vec_rr_pair_long op src)
+      (let ((dst WritableReg (temp_writable_reg $I8X16))
+            (_ Unit (emit (MInst.VecRRPairLong op dst src))))
+        dst))
+
 ;; Helper for emitting `MInst.VecRRRLong` instructions, but for variants
 ;; where the operation both reads and modifies the destination register.
 ;;
@@ -1728,6 +1737,20 @@
 ;; Helper for generating `shll32` instructions.
 (decl shll32 (Reg bool) Reg)
 (rule (shll32 x high_half) (vec_rr_long (VecRRLongOp.Shll32) x high_half))
+
+;; Helpers for generating `addlp` instructions.
+
+(decl saddlp8 (Reg) Reg)
+(rule (saddlp8 x) (vec_rr_pair_long (VecRRPairLongOp.Saddlp8) x))
+
+(decl saddlp16 (Reg) Reg)
+(rule (saddlp16 x) (vec_rr_pair_long (VecRRPairLongOp.Saddlp16) x))
+
+(decl uaddlp8 (Reg) Reg)
+(rule (uaddlp8 x) (vec_rr_pair_long (VecRRPairLongOp.Uaddlp8) x))
+
+(decl uaddlp16 (Reg) Reg)
+(rule (uaddlp16 x) (vec_rr_pair_long (VecRRPairLongOp.Uaddlp16) x))
 
 ;; Helper for generating `umlal32` instructions.
 (decl umlal32 (Reg Reg Reg bool) Reg)

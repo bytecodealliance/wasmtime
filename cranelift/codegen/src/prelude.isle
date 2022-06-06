@@ -371,6 +371,10 @@
 (extractor (unwrap_head_value_list_2 head1 head2 tail)
            (value_list_slice (value_slice_unwrap head1 (value_slice_unwrap head2 tail))))
 
+;; Constructor to test whether two values are same.
+(decl pure same_value (Value Value) Value)
+(extern constructor same_value same_value)
+
 ;; Turn a `Writable<Reg>` into a `Reg` via `Writable::to_reg`.
 (decl writable_reg_to_reg (WritableReg) Reg)
 (extern constructor writable_reg_to_reg writable_reg_to_reg)
