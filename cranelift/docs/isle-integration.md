@@ -16,8 +16,8 @@ Documentation on the ISLE language itself can be found
 
 The build integration is inside of `cranelift/codegen/build.rs`.
 
-The ISLE compiler is built as a dev-dependency, and the build script then uses
-it to compile ISLE source to generated Rust code. In other words, the ISLE
+The ISLE compiler is built as a build-dependency, and the build script then
+uses it to compile ISLE source to generated Rust code. In other words, the ISLE
 compiler behaves as an additional compile step, and ISLE source is rebuilt just
 like any Rust source would be. Nothing special needs to be done when editing
 ISLE.
