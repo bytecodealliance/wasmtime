@@ -1672,6 +1672,7 @@ mod test {
 
         buf.bind_label(label(1));
         let inst = Inst::Udf {
+            use_allocated_encoding: true,
             trap_code: TrapCode::Interrupt,
         };
         inst.emit(&[], &mut buf, &info, &mut state);

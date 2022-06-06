@@ -8,7 +8,7 @@ block0:
 }
 
 ; block0:
-;   udf
+;   udf #0xc11f
 
 function %g(i64) {
 block0(v0: i64):

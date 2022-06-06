@@ -618,10 +618,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             ctx.emit(Inst::Brk);
         }
 
-        Opcode::Trap | Opcode::ResumableTrap => {
-            let trap_code = ctx.data(insn).trap_code().unwrap();
-            ctx.emit(Inst::Udf { trap_code });
-        }
+        Opcode::Trap | Opcode::ResumableTrap => implemented_in_isle(ctx),
 
         Opcode::Trapif | Opcode::Trapff => {
             let trap_code = ctx.data(insn).trap_code().unwrap();
