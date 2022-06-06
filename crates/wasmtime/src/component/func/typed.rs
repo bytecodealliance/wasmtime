@@ -1617,7 +1617,7 @@ where
     }
 
     fn lift(store: &StoreOpaque, options: &Options, src: &Self::Lower) -> Result<Self> {
-        // Note that this implementation specifically isn't tring to actually
+        // Note that this implementation specifically isn't trying to actually
         // reinterpret or alter the bits of `lower` depending on which variant
         // we're lifting. This ends up all working out because the value is
         // stored in little-endian format.
