@@ -815,7 +815,7 @@ impl SharedMemory {
         let shared_memory = memory
             .as_shared_memory()
             .expect("unable to convert from a shared memory");
-        Self(shared_memory, store.engine().clone()) // TODO is this the correct engine?
+        Self(shared_memory, store.engine().clone())
     }
 }
 
