@@ -16,7 +16,50 @@ Unreleased.
 
 ### Added
 
+* Enabling or disabling NaN canonicalization in generated code is now exposed
+  through the C API.
+  [#4154](https://github.com/bytecodealliance/wasmtime/pull/4154)
+
+* A user-defined callback can now be invoked when an epoch interruption happens
+  via the `Store::epoch_deadline_callback` API.
+  [#4152](https://github.com/bytecodealliance/wasmtime/pull/4152)
+
+* Basic alias analysis with redundant-load elimintation and store-to-load
+  forwarding optimizations has been added to Cranelift.
+  [#4163](https://github.com/bytecodealliance/wasmtime/pull/4163)
+
 ### Changed
+
+* Traps originating from epoch-based interruption are now exposed as
+  `TrapCode::Interrupt`.
+  [#4105](https://github.com/bytecodealliance/wasmtime/pull/4105)
+
+* Binary builds for AArch64 now require glibc 2.17 and for s390x require glibc
+  2.16. Previously glibc 2.28 was required.
+  [#4171](https://github.com/bytecodealliance/wasmtime/pull/4171)
+
+* The `wasmtime::ValRaw` now has all of its fields listed as private and instead
+  constructors/accessors are provided for getting at the internal data.
+  [#4186](https://github.com/bytecodealliance/wasmtime/pull/4186)
+
+* The `wasm-backtrace` Cargo feature has been removed in favor of a
+  `Config::wasm_backtrace` runtime configuration option. Additionally backtraces
+  are now only captured when an embedder-generated trap actually reaches a
+  WebAssembly call stack.
+  [#4183](https://github.com/bytecodealliance/wasmtime/pull/4183)
+
+* Usage of `*_unchecked` APIs for `Func` in the `wasmtime` crate and C API now
+  take a `usize` parameter indicating the number of `ValRaw` values behind
+  the associated pointer.
+  [#4192](https://github.com/bytecodealliance/wasmtime/pull/4192)
+
+### Fixed
+
+* An improvement was made to the spill-slot allocation in code generation to fix
+  an issue where some stack slots accidentally weren't reused. This issue was
+  introduced with the landing of regalloc2 in 0.37.0 and may have resulted in
+  larger-than-intended increases in stack frame sizes.
+  [#4222](https://github.com/bytecodealliance/wasmtime/pull/4222)
 
 --------------------------------------------------------------------------------
 
