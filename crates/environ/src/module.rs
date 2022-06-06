@@ -922,10 +922,12 @@ impl Module {
     /// Convert a `DefinedMemoryIndex` into an `OwnedMemoryIndex`. Returns None
     /// if the index is an imported memory.
     #[inline]
-    pub fn owned_memory_index(&self, memory: DefinedMemoryIndex) -> Option<OwnedMemoryIndex> {
-        if memory.index() >= self.memory_plans.len() {
-            return None;
-        }
+    pub fn owned_memory_index(&self, memory: DefinedMemoryIndex) -> OwnedMemoryIndex {
+        assert!(
+            memory.index() < self.memory_plans.len(),
+            "non-shared memory must have an owned index"
+        );
+
         // Once we know that the memory index is not greater than the number of
         // plans, we can iterate through the plans up to the memory index and
         // count how many are not shared (i.e., owned).
@@ -936,7 +938,7 @@ impl Module {
             .take(memory.index())
             .filter(|(_, mp)| !mp.memory.shared)
             .count();
-        Some(OwnedMemoryIndex::new(owned_memory_index))
+        OwnedMemoryIndex::new(owned_memory_index)
     }
 
     /// Test whether the given memory index is for an imported memory.
