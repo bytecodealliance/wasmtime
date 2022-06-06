@@ -1433,11 +1433,49 @@ unsafe impl<T: ComponentValue> ComponentValue for WasmList<T> {
     }
 }
 
+/// Round `a` up to the next multiple of `align`, assuming that `align` is a power of 2.
 #[inline]
 const fn align_to(a: usize, align: u32) -> usize {
     debug_assert!(align.is_power_of_two());
     let align = align as usize;
     (a + (align - 1)) & !(align - 1)
+}
+
+/// For a field of type T starting after `offset` bytes, updates the offset to reflect the correct
+/// alignment and size of T. Returns the correctly aligned offset for the start of the field.
+#[inline]
+pub fn next_field<T: ComponentValue>(offset: &mut usize) -> usize {
+    *offset = align_to(*offset, T::align());
+    let result = *offset;
+    *offset += T::size();
+    result
+}
+
+/// Verify that the given wasm type is a tuple with the expected fields in the right order.
+#[inline]
+fn typecheck_tuple(
+    ty: &InterfaceType,
+    types: &ComponentTypes,
+    op: Op,
+    expected: &[fn(&InterfaceType, &ComponentTypes, Op) -> Result<()>],
+) -> Result<()> {
+    match ty {
+        InterfaceType::Tuple(t) => {
+            let tuple = &types[*t];
+            if tuple.types.len() != expected.len() {
+                bail!(
+                    "expected {}-tuple, found {}-tuple",
+                    expected.len(),
+                    tuple.types.len()
+                );
+            }
+            for (ty, check) in tuple.types.iter().zip(expected) {
+                check(ty, types, op)?;
+            }
+            Ok(())
+        }
+        other => bail!("expected `tuple` found `{}`", desc(other)),
+    }
 }
 
 unsafe impl<T> ComponentValue for Option<T>
@@ -1683,19 +1721,7 @@ macro_rules! impl_component_ty_for_tuples {
                 types: &ComponentTypes,
                 op: Op,
             ) -> Result<()> {
-                match ty {
-                    InterfaceType::Tuple(t) => {
-                        let tuple = &types[*t];
-                        if tuple.types.len() != $n {
-                            bail!("expected {}-tuple, found {}-tuple", $n, tuple.types.len());
-                        }
-                        let mut tuple = tuple.types.iter();
-                        $($t::typecheck(tuple.next().unwrap(), types, op)?;)*
-                        debug_assert!(tuple.next().is_none());
-                        Ok(())
-                    }
-                    other => bail!("expected `tuple` found `{}`", desc(other)),
-                }
+                typecheck_tuple(ty, types, op, &[$($t::typecheck),*])
             }
 
             fn lower<U>(
@@ -1712,7 +1738,7 @@ macro_rules! impl_component_ty_for_tuples {
             #[inline]
             fn size() -> usize {
                 let mut size = 0;
-                $(size = align_to(size, $t::align()) + $t::size();)*
+                $(next_field::<$t>(&mut size);)*
                 size
             }
 
@@ -1727,12 +1753,7 @@ macro_rules! impl_component_ty_for_tuples {
                 let ($($t,)*) = self;
                 // TODO: this requires that `offset` is aligned which we may not
                 // want to do
-                $(
-                    offset = align_to(offset, $t::align());
-                    $t.store(memory, offset)?;
-                    offset += $t::size();
-                )*
-                drop(offset); // silence warning about last assignment
+                $($t.store(memory, next_field::<$t>(&mut offset))?;)*
                 Ok(())
             }
 
@@ -1741,12 +1762,8 @@ macro_rules! impl_component_ty_for_tuples {
             }
 
             fn load(memory: &Memory<'_>, bytes: &[u8]) -> Result<Self> {
-                let mut _offset = 0;
-                $(
-                    _offset = align_to(_offset, $t::align());
-                    let $t = $t::load(memory, &bytes[_offset..][..$t::size()])?;
-                    _offset += $t::size();
-                )*
+                let mut offset = 0;
+                $(let $t = $t::load(memory, &bytes[next_field::<$t>(&mut offset)..][..$t::size()])?;)*
                 Ok(($($t,)*))
             }
         }
