@@ -1058,6 +1058,11 @@
 (decl encode_fcmp_imm (FcmpImm) u8)
 (extern constructor encode_fcmp_imm encode_fcmp_imm)
 
+;;;; Registers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl rax () WritableGpr)
+(extern constructor rax rax)
+
 ;;;; Newtypes for Different Register Classes ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (type Gpr (primitive Gpr))
@@ -2875,6 +2880,11 @@
 (decl x64_mfence () SideEffectNoResult)
 (rule (x64_mfence)
       (SideEffectNoResult.Inst (MInst.Fence (FenceKind.MFence))))
+
+(decl x64_cmpxchg (Type Gpr Gpr SyntheticAmode) Gpr)
+(rule (x64_cmpxchg ty expected replacement addr)
+      (let ((_ Unit (emit (MInst.LockCmpxchg ty replacement expected addr (rax)))))
+        (rax)))
 
 ;;;; Automatic conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

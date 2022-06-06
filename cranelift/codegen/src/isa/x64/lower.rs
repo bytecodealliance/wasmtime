@@ -2205,32 +2205,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::AtomicCas => {
-            // This is very similar to, but not identical to, the `AtomicRmw` case.  As with
-            // `AtomicRmw`, there's no need to zero-extend narrow values here.
-            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let addr = lower_to_amode(ctx, inputs[0], 0);
-            let expected = put_input_in_reg(ctx, inputs[1]);
-            let replacement = put_input_in_reg(ctx, inputs[2]);
-            let ty_access = ty.unwrap();
-            assert!(is_valid_atomic_transaction_ty(ty_access));
-
-            // Move the expected value into %rax.  Because there's only one fixed register on
-            // the input side, we don't have to use `ensure_in_vreg`, as is necessary in the
-            // `AtomicRmw` case.
-            ctx.emit(Inst::gen_move(
-                Writable::from_reg(regs::rax()),
-                expected,
-                types::I64,
-            ));
-            ctx.emit(Inst::LockCmpxchg {
-                ty: ty_access,
-                mem: addr.into(),
-                replacement,
-                expected: regs::rax(),
-                dst_old: Writable::from_reg(regs::rax()),
-            });
-            // And finally, copy the old value at the location to its destination reg.
-            ctx.emit(Inst::gen_move(dst, regs::rax(), types::I64));
+            implemented_in_isle(ctx);
         }
 
         Opcode::AtomicLoad => {
