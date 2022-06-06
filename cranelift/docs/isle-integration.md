@@ -19,21 +19,19 @@ The build integration is inside of `cranelift/codegen/build.rs`.
 For regular builds, we check a manifest that records the file hashes of the ISLE
 source files that went into building a given ISLE-generated Rust file. If the
 hashes of these files on disk don't match the hashes in the manifest, then the
-ISLE-generated Rust file is stale and needs to be rebuilt. In this case, the
-`build.rs` will report a build error. This way, downstream crates that use
-Cranelift don't need to build ISLE, and get fewer transitive dependencies and
+ISLE-generated Rust file is stale and needs to be rebuilt. In this case, the ISLE
+compiler is run on the ISLE sources to create the new versions of the
+ISLE-generated Rust files and update the manifest files. If there is an in issue
+with regeneration, the `build.rs` will report an error. This way, downstream crates
+that use Cranelift don't need to build ISLE, and get fewer transitive dependencies and
 faster build times.
 
-To intentionally rebuild ISLE-generated Rust files, use the `rebuild-isle` Cargo
-feature with `cranelift-codegen`:
+In case of an error, you can intentionally rebuild ISLE-generated Rust files to
+display more error information using the `isle-errors` feature with `cranelift-codegen`:
 
 ```shell
-$ cargo check -p cranelift-codegen --features rebuild-isle
+$ cargo check -p cranelift-codegen --features isle-errors
 ```
-
-When this feature is active, we rerun the ISLE compiler on the ISLE sources to
-create the new versions of the ISLE-generated Rust files and update the manifest
-files.
 
 Additionally, the `cranelift-codegen-meta` crate will automatically generate
 ISLE `extern` declarations and helpers for working with CLIF. The code that does
