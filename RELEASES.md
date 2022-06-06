@@ -56,7 +56,7 @@ Unreleased.
 ### Fixed
 
 * An improvement was made to the spill-slot allocation in code generation to fix
-  an issue where some stack slots weren't accidentally reused. This issue was
+  an issue where some stack slots accidentally weren't reused. This issue was
   introduced with the landing of regalloc2 in 0.37.0 and may have resulted in
   larger-than-intended increases in stack frame sizes.
   [#4222](https://github.com/bytecodealliance/wasmtime/pull/4222)
