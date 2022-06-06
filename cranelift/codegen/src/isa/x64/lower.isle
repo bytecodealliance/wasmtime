@@ -2318,6 +2318,10 @@
 (rule (lower (has_type $F64X2 (sqrt x)))
       (x64_sqrtpd x))
 
+;; Rules for `fpromote` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(rule (lower (has_type $F64 (fpromote x)))
+      (x64_cvtss2sd x))
+
 ;; Rules for `fmin` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type $F32 (fmin x y)))
