@@ -174,12 +174,14 @@ pub struct VMOffsetsFields<P> {
 impl<P: PtrSize> VMOffsets<P> {
     /// Return a new `VMOffsets` instance, for a given pointer size.
     pub fn new(ptr: P, module: &Module) -> Self {
-        let num_shared_memories = module
+        let num_owned_memories = module
             .memory_plans
             .iter()
             .skip(module.num_imported_memories)
-            .filter(|p| p.1.memory.shared)
-            .count();
+            .filter(|p| !p.1.memory.shared)
+            .count()
+            .try_into()
+            .unwrap();
         VMOffsets::from(VMOffsetsFields {
             ptr,
             num_imported_functions: cast_to_u32(module.num_imported_funcs),
@@ -190,9 +192,7 @@ impl<P: PtrSize> VMOffsets<P> {
             num_defined_memories: cast_to_u32(
                 module.memory_plans.len() - module.num_imported_memories,
             ),
-            num_owned_memories: cast_to_u32(
-                module.memory_plans.len() - (module.num_imported_memories + num_shared_memories),
-            ),
+            num_owned_memories,
             num_defined_globals: cast_to_u32(module.globals.len() - module.num_imported_globals),
             num_escaped_funcs: cast_to_u32(module.num_escaped_funcs),
         })
