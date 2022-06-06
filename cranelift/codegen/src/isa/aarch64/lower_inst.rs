@@ -1357,56 +1357,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             });
         }
 
-        Opcode::IaddPairwise => {
-            let ty = ty.unwrap();
-            let lane_type = ty.lane_type();
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-
-            let mut match_long_pair = |ext_low_op, ext_high_op| -> Option<(VecRRPairLongOp, Reg)> {
-                if let Some(lhs) = maybe_input_insn(ctx, inputs[0], ext_low_op) {
-                    if let Some(rhs) = maybe_input_insn(ctx, inputs[1], ext_high_op) {
-                        let lhs_inputs = insn_inputs(ctx, lhs);
-                        let rhs_inputs = insn_inputs(ctx, rhs);
-                        let low = put_input_in_reg(ctx, lhs_inputs[0], NarrowValueMode::None);
-                        let high = put_input_in_reg(ctx, rhs_inputs[0], NarrowValueMode::None);
-                        if low == high {
-                            match (lane_type, ext_low_op) {
-                                (I16, Opcode::SwidenLow) => {
-                                    return Some((VecRRPairLongOp::Saddlp8, low))
-                                }
-                                (I32, Opcode::SwidenLow) => {
-                                    return Some((VecRRPairLongOp::Saddlp16, low))
-                                }
-                                (I16, Opcode::UwidenLow) => {
-                                    return Some((VecRRPairLongOp::Uaddlp8, low))
-                                }
-                                (I32, Opcode::UwidenLow) => {
-                                    return Some((VecRRPairLongOp::Uaddlp16, low))
-                                }
-                                _ => (),
-                            };
-                        }
-                    }
-                }
-                None
-            };
-
-            if let Some((op, rn)) = match_long_pair(Opcode::SwidenLow, Opcode::SwidenHigh) {
-                ctx.emit(Inst::VecRRPairLong { op, rd, rn });
-            } else if let Some((op, rn)) = match_long_pair(Opcode::UwidenLow, Opcode::UwidenHigh) {
-                ctx.emit(Inst::VecRRPairLong { op, rd, rn });
-            } else {
-                let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-                let rm = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
-                ctx.emit(Inst::VecRRR {
-                    alu_op: VecALUOp::Addp,
-                    rd,
-                    rn,
-                    rm,
-                    size: VectorSize::from_ty(ty),
-                });
-            }
-        }
+        Opcode::IaddPairwise => implemented_in_isle(ctx),
 
         Opcode::WideningPairwiseDotProductS => {
             let r_y = get_output_reg(ctx, outputs[0]).only_reg().unwrap();

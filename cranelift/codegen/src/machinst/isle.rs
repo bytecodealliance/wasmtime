@@ -30,6 +30,15 @@ pub type BoxExternalName = Box<ExternalName>;
 macro_rules! isle_prelude_methods {
     () => {
         #[inline]
+        fn same_value(&mut self, a: Value, b: Value) -> Option<Value> {
+            if a == b {
+                Some(a)
+            } else {
+                None
+            }
+        }
+
+        #[inline]
         fn unpack_value_array_2(&mut self, arr: &ValueArray2) -> (Value, Value) {
             let [a, b] = *arr;
             (a, b)

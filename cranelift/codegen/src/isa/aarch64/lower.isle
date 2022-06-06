@@ -99,6 +99,27 @@
           (add_with_flags_paired $I64 x_lo y_lo)
           (adc_paired $I64 x_hi y_hi))))
 
+;;;; Rules for `iadd_pairwise` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I16X8 (iadd_pairwise (swiden_low x) (swiden_high y))))
+      (if-let z (same_value x y))
+      (saddlp8 z))
+
+(rule (lower (has_type $I32X4 (iadd_pairwise (swiden_low x) (swiden_high y))))
+      (if-let z (same_value x y))
+      (saddlp16 z))
+
+(rule (lower (has_type $I16X8 (iadd_pairwise (uwiden_low x) (uwiden_high y))))
+      (if-let z (same_value x y))
+      (uaddlp8 z))
+
+(rule (lower (has_type $I32X4 (iadd_pairwise (uwiden_low x) (uwiden_high y))))
+      (if-let z (same_value x y))
+      (uaddlp16 z))
+
+(rule (lower (has_type ty (iadd_pairwise x y)))
+      (addp x y (vector_size ty)))
+
 ;;;; Rules for `isub` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; `i64` and smaller

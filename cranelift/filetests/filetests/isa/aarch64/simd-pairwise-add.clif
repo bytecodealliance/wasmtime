@@ -107,3 +107,53 @@ block0(v0: i8x16):
 ;   addp v0.8h, v2.8h, v4.8h
 ;   ret
 
+function %fn9(i8x8, i8x8) -> i8x8 {
+block0(v0: i8x8, v1: i8x8):
+  v2 = iadd_pairwise v0, v1
+  return v2
+}
+
+; block0:
+;   addp v0.8b, v0.8b, v1.8b
+;   ret
+
+function %fn10(i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16):
+  v2 = iadd_pairwise v0, v1
+  return v2
+}
+
+; block0:
+;   addp v0.16b, v0.16b, v1.16b
+;   ret
+
+function %fn11(i16x4, i16x4) -> i16x4 {
+block0(v0: i16x4, v1: i16x4):
+  v2 = iadd_pairwise v0, v1
+  return v2
+}
+
+; block0:
+;   addp v0.4h, v0.4h, v1.4h
+;   ret
+
+function %fn12(i16x8, i16x8) -> i16x8 {
+block0(v0: i16x8, v1: i16x8):
+  v2 = iadd_pairwise v0, v1
+  return v2
+}
+
+; block0:
+;   addp v0.8h, v0.8h, v1.8h
+;   ret
+
+function %fn14(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+  v2 = iadd_pairwise v0, v1
+  return v2
+}
+
+; block0:
+;   addp v0.4s, v0.4s, v1.4s
+;   ret
+
