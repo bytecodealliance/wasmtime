@@ -1,6 +1,6 @@
 [package]
 name = "cranelift-module"
-version = "0.85.0"
+version = "0.86.0"
 authors = ["The Cranelift Project Developers"]
 description = "Support for linking functions and data with Cranelift"
 repository = "https://github.com/bytecodealliance/wasmtime"
@@ -11,7 +11,7 @@ readme = "README.md"
 edition = "2021"
 
 [dependencies]
-cranelift-codegen = { path = "../codegen", version = "0.85.0", default-features = false }
+cranelift-codegen = { path = "../codegen", version = "0.86.0", default-features = false }
 hashbrown = { version = "0.11", optional = true }
 anyhow = "1.0"
 
