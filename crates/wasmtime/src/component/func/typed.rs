@@ -1617,28 +1617,25 @@ where
     }
 
     fn lift(store: &StoreOpaque, options: &Options, src: &Self::Lower) -> Result<Self> {
-        // TODO: need to make a case that upper-bits are not validated to be
-        // zero.
+        // Note that this implementation specifically isn't trying to actually
+        // reinterpret or alter the bits of `lower` depending on which variant
+        // we're lifting. This ends up all working out because the value is
+        // stored in little-endian format.
         //
-        // * `Result<u32, u64>` flattens as `i32 i64`
-        // * This impl wants to say `0 u64::MAX` is a valid flattening of
-        //   `Ok(u32::MAX)`.
-        // * Otherwise validation needs to be performed that, where necessary,
-        //   upper bits are zero.
-        // * Points in favor:
-        //   * `Result<u32, (u32, u32)>` flattens as `i32 i32 i32` and
-        //     `Ok(0)` doesn't  validate that the third `i32` is any
-        //     particular value.
-        //   * Padding bytes are ignored in the in-memory representation.
+        // When stored in little-endian format the `{T,E}::Lower`, when each
+        // individual `ValRaw` is read, means that if an i64 value, extended
+        // from an i32 value, was stored then when the i32 value is read it'll
+        // automatically ignore the upper bits.
         //
-        // Otherwise I don't know how to implement the validation for now. This
-        // would need to, at compile time via the Rust trait system, figure out
-        // the flatten lowering for `Result<T, E>` for `T` and `E` and then ask
-        // `T`'s lowered type to validate that it's valid within the context of
-        // the the overall lowered type. This... is trait trickery that is
-        // beyond me but seems like it should be possible. Would be nice if we
-        // didn't have to do that though.
-
+        // This "trick" allows us to seamlessly pass through the `Self::Lower`
+        // representation into the lifting/lowering without trying to handle
+        // "join"ed types as per the canonical ABI. It just so happens that i64
+        // bits will naturally be reinterpreted as f64. Additionally if the
+        // joined type is i64 but only the lower bits are read that's ok and we
+        // don't need to validate the upper bits.
+        //
+        // This is largely enabled by WebAssembly/component-model#35 where no
+        // validation needs to be performed for ignored bits and bytes here.
         Ok(match src.tag.get_i32() {
             0 => Ok(unsafe { T::lift(store, options, &src.payload.ok)? }),
             1 => Err(unsafe { E::lift(store, options, &src.payload.err)? }),
