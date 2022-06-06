@@ -4,6 +4,7 @@ use crate::{AsContext, AsContextMut, Engine, MemoryType, StoreContext, StoreCont
 use anyhow::{bail, Result};
 use std::convert::TryFrom;
 use std::slice;
+use wasmtime_runtime::RuntimeLinearMemory;
 
 /// Error for out of bounds [`Memory`] access.
 #[derive(Debug)]
@@ -736,7 +737,6 @@ impl SharedMemory {
     /// For more information and examples see the documentation on the
     /// [`Memory`] type.
     pub fn data_size(&self) -> usize {
-        use wasmtime_runtime::RuntimeLinearMemory;
         self.0.byte_size()
     }
 
@@ -778,7 +778,6 @@ impl SharedMemory {
     /// [`ResourceLimiter`](crate::ResourceLimiter) is another example of
     /// preventing a memory to grow.
     pub fn grow(&mut self, delta: u64) -> Result<u64> {
-        use wasmtime_runtime::RuntimeLinearMemory;
         match self.0.grow(delta, None)? {
             Some((old_size, _new_size)) => {
                 // For shared memory, the `VMMemoryDefinition` is updated inside
