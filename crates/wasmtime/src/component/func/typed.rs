@@ -57,8 +57,8 @@ impl<Params, Return> Clone for TypedFunc<Params, Return> {
 
 impl<Params, Return> TypedFunc<Params, Return>
 where
-    Params: ComponentParams,
-    Return: ComponentValue,
+    Params: ComponentParams + Lower,
+    Return: Lift,
 {
     /// Creates a new [`TypedFunc`] from the provided component [`Func`],
     /// unsafely asserting that the underlying function takes `Params` as
@@ -126,7 +126,7 @@ where
         // space reserved for the params/results is always of the appropriate
         // size (as the params/results needed differ depending on the "flatten"
         // count)
-        if <Params::AsTuple as ComponentValue>::flatten_count() <= MAX_STACK_PARAMS {
+        if Params::flatten_count() <= MAX_STACK_PARAMS {
             if Return::flatten_count() <= MAX_STACK_RESULTS {
                 self.call_raw(
                     store,
@@ -171,9 +171,9 @@ where
         store: &mut StoreContextMut<'_, T>,
         options: &Options,
         params: &Params,
-        dst: &mut MaybeUninit<<Params::AsTuple as ComponentValue>::Lower>,
+        dst: &mut MaybeUninit<Params::Lower>,
     ) -> Result<()> {
-        assert!(<Params::AsTuple as ComponentValue>::flatten_count() <= MAX_STACK_PARAMS);
+        assert!(Params::flatten_count() <= MAX_STACK_PARAMS);
         params.lower(store, options, dst)?;
         Ok(())
     }
@@ -190,7 +190,7 @@ where
         params: &Params,
         dst: &mut MaybeUninit<ValRaw>,
     ) -> Result<()> {
-        assert!(<Params::AsTuple as ComponentValue>::flatten_count() > MAX_STACK_PARAMS);
+        assert!(Params::flatten_count() > MAX_STACK_PARAMS);
 
         // Memory must exist via validation if the arguments are stored on the
         // heap, so we can create a `MemoryMut` at this point. Afterwards
@@ -369,93 +369,15 @@ union ParamsAndResults<Params: Copy, Return: Copy> {
 // would not be memory safe. The main reason this is `unsafe` is the
 // `typecheck` function which must operate correctly relative to the `AsTuple`
 // interpretation of the implementor.
-pub unsafe trait ComponentParams {
-    /// The tuple type corresponding to this list of parameters if this list is
-    /// interpreted as a tuple in the canonical ABI.
-    #[doc(hidden)]
-    type AsTuple: ComponentValue;
-
+pub unsafe trait ComponentParams: ComponentType {
     /// Performs a typecheck to ensure that this `ComponentParams` implementor
     /// matches the types of the types in `params`.
     #[doc(hidden)]
-    fn typecheck(
+    fn typecheck_params(
         params: &[(Option<String>, InterfaceType)],
         types: &ComponentTypes,
-        op: Op,
     ) -> Result<()>;
-
-    /// Views this instance of `ComponentParams` as a tuple, allowing
-    /// delegation to all of the methods in `ComponentValue`.
-    #[doc(hidden)]
-    fn as_tuple(&self) -> &Self::AsTuple;
-
-    /// Convenience method to `ComponentValue::lower` when viewing this
-    /// parameter list as a tuple.
-    #[doc(hidden)]
-    fn lower<T>(
-        &self,
-        store: &mut StoreContextMut<T>,
-        options: &Options,
-        dst: &mut MaybeUninit<<Self::AsTuple as ComponentValue>::Lower>,
-    ) -> Result<()> {
-        self.as_tuple().lower(store, options, dst)
-    }
-
-    /// Convenience method to `ComponentValue::store` when viewing this
-    /// parameter list as a tuple.
-    #[doc(hidden)]
-    fn store<T>(&self, memory: &mut MemoryMut<'_, T>, offset: usize) -> Result<()> {
-        self.as_tuple().store(memory, offset)
-    }
-
-    /// Convenience function to return the canonical abi alignment of this list
-    /// of parameters when viewed as a tuple.
-    #[doc(hidden)]
-    #[inline]
-    fn align() -> u32 {
-        Self::AsTuple::align()
-    }
-
-    /// Convenience function to return the canonical abi byte size of this list
-    /// of parameters when viewed as a tuple.
-    #[doc(hidden)]
-    #[inline]
-    fn size() -> usize {
-        Self::AsTuple::size()
-    }
 }
-
-// Macro to generate an implementation of `ComponentParams` for all supported
-// lengths of tuples of types in Wasmtime.
-macro_rules! impl_component_params {
-    ($n:tt $($t:ident)*) => {paste::paste!{
-        #[allow(non_snake_case)]
-        unsafe impl<$($t,)*> ComponentParams for ($($t,)*) where $($t: ComponentValue),* {
-            type AsTuple = ($($t,)*);
-
-            fn typecheck(
-                params: &[(Option<String>, InterfaceType)],
-                _types: &ComponentTypes,
-                _op: Op,
-            ) -> Result<()> {
-                if params.len() != $n {
-                    bail!("expected {} types, found {}", $n, params.len());
-                }
-                let mut params = params.iter().map(|i| &i.1);
-                $($t::typecheck(params.next().unwrap(), _types, _op)?;)*
-                debug_assert!(params.next().is_none());
-                Ok(())
-            }
-
-            #[inline]
-            fn as_tuple(&self) -> &Self::AsTuple {
-                self
-            }
-        }
-    }};
-}
-
-for_each_function_signature!(impl_component_params);
 
 /// A trait representing types which can be passed to and read from components
 /// with the canonical ABI.
@@ -498,8 +420,8 @@ for_each_function_signature!(impl_component_params);
 // eventually have a proc macro that generates implementations of this trait
 // for external types in a `#[derive]`-like fashion.
 //
-// FIXME: need to write a #[derive(ComponentValue)]
-pub unsafe trait ComponentValue {
+// FIXME: need to write a #[derive(ComponentType)]
+pub unsafe trait ComponentType {
     /// Representation of the "lowered" form of this component value.
     ///
     /// Lowerings lower into core wasm values which are represented by `ValRaw`.
@@ -521,17 +443,6 @@ pub unsafe trait ComponentValue {
         mem::size_of::<Self::Lower>() / mem::size_of::<ValRaw>()
     }
 
-    /// Performs a type-check to see whether this comopnent value type matches
-    /// the interface type `ty` provided.
-    ///
-    /// The `op` provided is the operations which could be performed with this
-    /// type if the typecheck passes, either lifting or lowering. Some Rust
-    /// types are only valid for one operation and we can't prevent the wrong
-    /// one from being used at compile time so we rely on the runtime check
-    /// here.
-    #[doc(hidden)]
-    fn typecheck(ty: &InterfaceType, types: &ComponentTypes, op: Op) -> Result<()>;
-
     /// Returns the size, in bytes, that this type has in the canonical ABI.
     ///
     /// Note that it's expected that this function is "simple" to be easily
@@ -549,6 +460,28 @@ pub unsafe trait ComponentValue {
     #[doc(hidden)]
     fn align() -> u32;
 
+    /// Performs a type-check to see whether this comopnent value type matches
+    /// the interface type `ty` provided.
+    ///
+    /// The `op` provided is the operations which could be performed with this
+    /// type if the typecheck passes, either lifting or lowering. Some Rust
+    /// types are only valid for one operation and we can't prevent the wrong
+    /// one from being used at compile time so we rely on the runtime check
+    /// here.
+    #[doc(hidden)]
+    fn typecheck(ty: &InterfaceType, types: &ComponentTypes) -> Result<()>;
+}
+
+/// Host types which can be passed to WebAssembly components.
+///
+/// This trait is implemented for all types that can be passed to components
+/// either as parameters of component exports or returns of component imports.
+/// This trait represents the ability to convert from the native host
+/// representation to the canonical ABI.
+//
+// TODO: #[derive(Lower)]
+// TODO: more docs here
+pub unsafe trait Lower: ComponentType {
     /// Performs the "lower" function in the canonical ABI.
     ///
     /// This method will lower the given value into wasm linear memory. The
@@ -569,25 +502,6 @@ pub unsafe trait ComponentValue {
         dst: &mut MaybeUninit<Self::Lower>,
     ) -> Result<()>;
 
-    /// Performs the "lift" oepration in the canonical ABI.
-    ///
-    /// This will read the core wasm values from `src` and use the memory
-    /// specified by `func` and `store` optionally if necessary. An instance of
-    /// `Self` is then created from the values, assuming validation succeeds.
-    ///
-    /// Note that this has a default implementation but if `typecheck` passes
-    /// for `Op::Lift` this needs to be overridden.
-    #[doc(hidden)]
-    fn lift(store: &StoreOpaque, options: &Options, src: &Self::Lower) -> Result<Self>
-    where
-        Self: Sized,
-    {
-        // NB: ideally there would be no default implementation here but to
-        // enable `impl ComponentValue for str` this is the way we get it today.
-        drop((store, options, src));
-        unreachable!("this should be rejected during typechecking")
-    }
-
     /// Performs the "store" operation in the canonical ABI.
     ///
     /// This function will store `self` into the linear memory described by
@@ -603,6 +517,23 @@ pub unsafe trait ComponentValue {
     /// This will only be called if `typecheck` passes for `Op::Lower`.
     #[doc(hidden)]
     fn store<T>(&self, memory: &mut MemoryMut<'_, T>, offset: usize) -> Result<()>;
+}
+
+/// Host types which can be created from the canonical ABI.
+//
+// TODO: #[derive(Lower)]
+// TODO: more docs here
+pub unsafe trait Lift: Sized + ComponentType {
+    /// Performs the "lift" operation in the canonical ABI.
+    ///
+    /// This will read the core wasm values from `src` and use the memory
+    /// specified by `func` and `store` optionally if necessary. An instance of
+    /// `Self` is then created from the values, assuming validation succeeds.
+    ///
+    /// Note that this has a default implementation but if `typecheck` passes
+    /// for `Op::Lift` this needs to be overridden.
+    #[doc(hidden)]
+    fn lift(store: &StoreOpaque, options: &Options, src: &Self::Lower) -> Result<Self>;
 
     /// Performs the "load" operation in the canonical ABI.
     ///
@@ -614,106 +545,66 @@ pub unsafe trait ComponentValue {
     /// Note that this has a default implementation but if `typecheck` passes
     /// for `Op::Lift` this needs to be overridden.
     #[doc(hidden)]
-    fn load(memory: &Memory<'_>, bytes: &[u8]) -> Result<Self>
-    where
-        Self: Sized,
-    {
-        // See `lift` above for why there's a default implementation here
-        drop((memory, bytes));
-        unreachable!("this should be rejected during typechecking")
-    }
+    fn load(memory: &Memory<'_>, bytes: &[u8]) -> Result<Self>;
 }
 
-/// Operational parameter passed to `ComponentValue::typecheck` indicating how a
-/// value will be used in a particular context.
-///
-/// This is used to disallow, at runtime, loading a `&Vec<String>` from wasm
-/// since that can't be done. Instead that has to be `WasmList<WasmStr>`.
-#[doc(hidden)]
-#[derive(Copy, Clone)]
-pub enum Op {
-    /// A "lift" operation will be performed, meaning values will be read from
-    /// wasm.
-    Lift,
-    /// A "lower" operation will be performed, meaning values will be written to
-    /// wasm.
-    Lower,
-}
-
-// Macro to help generate "forwarding implementations" of `ComponentValue` to
-// another type, used for wrappers in Rust like `&T`, `Box<T>`, etc.
-macro_rules! forward_component_param {
+// Macro to help generate "forwarding implementations" of `ComponentType` to
+// another type, used for wrappers in Rust like `&T`, `Box<T>`, etc. Note that
+// these wrappers only implement lowering because lifting native Rust types
+// cannot be done.
+macro_rules! forward_impls {
     ($(($($generics:tt)*) $a:ty => $b:ty,)*) => ($(
-        unsafe impl <$($generics)*> ComponentValue for $a
-        {
-            type Lower = <$b as ComponentValue>::Lower;
+        unsafe impl <$($generics)*> ComponentType for $a {
+            type Lower = <$b as ComponentType>::Lower;
 
             #[inline]
-            fn typecheck(ty: &InterfaceType, types: &ComponentTypes, op: Op) -> Result<()> {
-                match op {
-                    // Lowering rust wrappers is ok since we know how to
-                    // traverse the host to lower the item.
-                    Op::Lower => {}
-
-                    // Lifting, however, is not ok and has no meaning. For
-                    // example we can't create a `&str` from wasm. It also
-                    // doesn't really make sense to create `Arc<T>`, for
-                    // example. In these cases different types need to be used
-                    // such as `WasmList` or `WasmStr`.
-                    Op::Lift => bail!("this type cannot be lifted from wasm"),
-                }
-                <$b as ComponentValue>::typecheck(ty, types, op)
-            }
-
-            fn lower<U>(
-                &self,
-                store: &mut StoreContextMut<U>,
-        options: &Options,
-                dst: &mut MaybeUninit<Self::Lower>,
-            ) -> Result<()> {
-                <$b as ComponentValue>::lower(self, store, options, dst)
+            fn typecheck(ty: &InterfaceType, types: &ComponentTypes) -> Result<()> {
+                <$b as ComponentType>::typecheck(ty, types)
             }
 
             #[inline]
             fn size() -> usize {
-                <$b as ComponentValue>::size()
+                <$b as ComponentType>::size()
             }
 
             #[inline]
             fn align() -> u32 {
-                <$b as ComponentValue>::align()
+                <$b as ComponentType>::align()
+            }
+        }
+
+        unsafe impl <$($generics)*> Lower for $a {
+            fn lower<U>(
+                &self,
+                store: &mut StoreContextMut<U>,
+                options: &Options,
+                dst: &mut MaybeUninit<Self::Lower>,
+            ) -> Result<()> {
+                <$b as Lower>::lower(self, store, options, dst)
             }
 
             fn store<U>(&self, memory: &mut MemoryMut<'_, U>, offset: usize) -> Result<()> {
-                <$b as ComponentValue>::store(self, memory, offset)
-            }
-
-            fn lift(_store: &StoreOpaque, _options: &Options, _src: &Self::Lower) -> Result<Self> {
-                unreachable!()
-            }
-
-            fn load(_mem: &Memory, _bytes: &[u8]) -> Result<Self> {
-                unreachable!()
+                <$b as Lower>::store(self, memory, offset)
             }
         }
     )*)
 }
 
-forward_component_param! {
-    (T: ComponentValue + ?Sized) &'_ T => T,
-    (T: ComponentValue + ?Sized) Box<T> => T,
-    (T: ComponentValue + ?Sized) std::rc::Rc<T> => T,
-    (T: ComponentValue + ?Sized) std::sync::Arc<T> => T,
+forward_impls! {
+    (T: Lower + ?Sized) &'_ T => T,
+    (T: Lower + ?Sized) Box<T> => T,
+    (T: Lower + ?Sized) std::rc::Rc<T> => T,
+    (T: Lower + ?Sized) std::sync::Arc<T> => T,
     () String => str,
-    (T: ComponentValue) Vec<T> => [T],
+    (T: Lower) Vec<T> => [T],
 }
 
-unsafe impl ComponentValue for () {
+unsafe impl ComponentType for () {
     // A 0-sized array is used here to represent that it has zero-size but it
     // still has the alignment of `ValRaw`.
     type Lower = [ValRaw; 0];
 
-    fn typecheck(ty: &InterfaceType, _types: &ComponentTypes, _op: Op) -> Result<()> {
+    fn typecheck(ty: &InterfaceType, _types: &ComponentTypes) -> Result<()> {
         match ty {
             // FIXME(WebAssembly/component-model#21) this may either want to
             // match more types, not actually exist as a trait impl, or
@@ -725,16 +616,6 @@ unsafe impl ComponentValue for () {
     }
 
     #[inline]
-    fn lower<T>(
-        &self,
-        _store: &mut StoreContextMut<T>,
-        _options: &Options,
-        _dst: &mut MaybeUninit<Self::Lower>,
-    ) -> Result<()> {
-        Ok(())
-    }
-
-    #[inline]
     fn size() -> usize {
         0
     }
@@ -743,12 +624,9 @@ unsafe impl ComponentValue for () {
     fn align() -> u32 {
         1
     }
+}
 
-    #[inline]
-    fn store<T>(&self, _memory: &mut MemoryMut<'_, T>, _offset: usize) -> Result<()> {
-        Ok(())
-    }
-
+unsafe impl Lift for () {
     #[inline]
     fn lift(_store: &StoreOpaque, _options: &Options, _src: &Self::Lower) -> Result<Self> {
         Ok(())
@@ -760,28 +638,47 @@ unsafe impl ComponentValue for () {
     }
 }
 
+unsafe impl Lower for () {
+    #[inline]
+    fn lower<T>(
+        &self,
+        _store: &mut StoreContextMut<T>,
+        _options: &Options,
+        _dst: &mut MaybeUninit<Self::Lower>,
+    ) -> Result<()> {
+        Ok(())
+    }
+
+    #[inline]
+    fn store<T>(&self, _memory: &mut MemoryMut<'_, T>, _offset: usize) -> Result<()> {
+        Ok(())
+    }
+}
+
+unsafe impl ComponentParams for () {
+    fn typecheck_params(
+        params: &[(Option<String>, InterfaceType)],
+        _types: &ComponentTypes,
+    ) -> Result<()> {
+        if params.len() != 0 {
+            bail!("expected 0 types, found {}", params.len());
+        }
+        Ok(())
+    }
+}
+
 // Macro to help generate `ComponentValue` implementations for primitive types
 // such as integers, char, bool, etc.
 macro_rules! integers {
     ($($primitive:ident = $ty:ident in $field:ident/$get:ident,)*) => ($(
-        unsafe impl ComponentValue for $primitive {
+        unsafe impl ComponentType for $primitive {
             type Lower = ValRaw;
 
-            fn typecheck(ty: &InterfaceType, _types: &ComponentTypes, _op: Op) -> Result<()> {
+            fn typecheck(ty: &InterfaceType, _types: &ComponentTypes) -> Result<()> {
                 match ty {
                     InterfaceType::$ty => Ok(()),
                     other => bail!("expected `{}` found `{}`", desc(&InterfaceType::$ty), desc(other))
                 }
-            }
-
-            fn lower<T>(
-                &self,
-                _store: &mut StoreContextMut<T>,
-                _options: &Options,
-                dst: &mut MaybeUninit<Self::Lower>,
-            ) -> Result<()> {
-                dst.write(ValRaw::$field(*self as $field));
-                Ok(())
             }
 
             #[inline]
@@ -793,12 +690,26 @@ macro_rules! integers {
             // types.
             #[inline]
             fn align() -> u32 { mem::size_of::<$primitive>() as u32 }
+        }
+
+        unsafe impl Lower for $primitive {
+            fn lower<T>(
+                &self,
+                _store: &mut StoreContextMut<T>,
+                _options: &Options,
+                dst: &mut MaybeUninit<Self::Lower>,
+            ) -> Result<()> {
+                dst.write(ValRaw::$field(*self as $field));
+                Ok(())
+            }
 
             fn store<T>(&self, memory: &mut MemoryMut<'_, T>, offset: usize) -> Result<()> {
                 *memory.get(offset) = self.to_le_bytes();
                 Ok(())
             }
+        }
 
+        unsafe impl Lift for $primitive {
             #[inline]
             fn lift(_store: &StoreOpaque, _options: &Options, src: &Self::Lower) -> Result<Self> {
                 // Perform a lossless cast from our field storage to the
@@ -842,16 +753,26 @@ macro_rules! floats {
             }
         }
 
-        unsafe impl ComponentValue for $float {
+        unsafe impl ComponentType for $float {
             type Lower = ValRaw;
 
-            fn typecheck(ty: &InterfaceType, _types: &ComponentTypes, _op: Op) -> Result<()> {
+            fn typecheck(ty: &InterfaceType, _types: &ComponentTypes) -> Result<()> {
                 match ty {
                     InterfaceType::$ty => Ok(()),
                     other => bail!("expected `{}` found `{}`", desc(&InterfaceType::$ty), desc(other))
                 }
             }
 
+            #[inline]
+            fn size() -> usize { mem::size_of::<$float>() }
+
+            // note that like integers size is used here instead of alignment to
+            // respect the canonical abi, not host platforms.
+            #[inline]
+            fn align() -> u32 { mem::size_of::<$float>() as u32 }
+        }
+
+        unsafe impl Lower for $float {
             fn lower<T>(
                 &self,
                 _store: &mut StoreContextMut<T>,
@@ -862,20 +783,14 @@ macro_rules! floats {
                 Ok(())
             }
 
-            #[inline]
-            fn size() -> usize { mem::size_of::<$float>() }
-
-            // note that like integers size is used here instead of alignment to
-            // respect the canonical abi, not host platforms.
-            #[inline]
-            fn align() -> u32 { mem::size_of::<$float>() as u32 }
-
             fn store<T>(&self, memory: &mut MemoryMut<'_, T>, offset: usize) -> Result<()> {
                 let ptr = memory.get(offset);
                 *ptr = canonicalize(*self).to_bits().to_le_bytes();
                 Ok(())
             }
+        }
 
+        unsafe impl Lift for $float {
             #[inline]
             fn lift(_store: &StoreOpaque, _options: &Options, src: &Self::Lower) -> Result<Self> {
                 Ok(canonicalize($float::from_bits(src.$get_float())))
@@ -894,24 +809,14 @@ floats! {
     f64/get_f64 = Float64
 }
 
-unsafe impl ComponentValue for bool {
+unsafe impl ComponentType for bool {
     type Lower = ValRaw;
 
-    fn typecheck(ty: &InterfaceType, _types: &ComponentTypes, _op: Op) -> Result<()> {
+    fn typecheck(ty: &InterfaceType, _types: &ComponentTypes) -> Result<()> {
         match ty {
             InterfaceType::Bool => Ok(()),
             other => bail!("expected `bool` found `{}`", desc(other)),
         }
-    }
-
-    fn lower<T>(
-        &self,
-        _store: &mut StoreContextMut<T>,
-        _options: &Options,
-        dst: &mut MaybeUninit<Self::Lower>,
-    ) -> Result<()> {
-        dst.write(ValRaw::i32(*self as i32));
-        Ok(())
     }
 
     #[inline]
@@ -923,12 +828,26 @@ unsafe impl ComponentValue for bool {
     fn align() -> u32 {
         1
     }
+}
+
+unsafe impl Lower for bool {
+    fn lower<T>(
+        &self,
+        _store: &mut StoreContextMut<T>,
+        _options: &Options,
+        dst: &mut MaybeUninit<Self::Lower>,
+    ) -> Result<()> {
+        dst.write(ValRaw::i32(*self as i32));
+        Ok(())
+    }
 
     fn store<T>(&self, memory: &mut MemoryMut<'_, T>, offset: usize) -> Result<()> {
         memory.get::<1>(offset)[0] = *self as u8;
         Ok(())
     }
+}
 
+unsafe impl Lift for bool {
     #[inline]
     fn lift(_store: &StoreOpaque, _options: &Options, src: &Self::Lower) -> Result<Self> {
         match src.get_i32() {
@@ -948,24 +867,14 @@ unsafe impl ComponentValue for bool {
     }
 }
 
-unsafe impl ComponentValue for char {
+unsafe impl ComponentType for char {
     type Lower = ValRaw;
 
-    fn typecheck(ty: &InterfaceType, _types: &ComponentTypes, _op: Op) -> Result<()> {
+    fn typecheck(ty: &InterfaceType, _types: &ComponentTypes) -> Result<()> {
         match ty {
             InterfaceType::Char => Ok(()),
             other => bail!("expected `char` found `{}`", desc(other)),
         }
-    }
-
-    fn lower<T>(
-        &self,
-        _store: &mut StoreContextMut<T>,
-        _options: &Options,
-        dst: &mut MaybeUninit<Self::Lower>,
-    ) -> Result<()> {
-        dst.write(ValRaw::u32(u32::from(*self)));
-        Ok(())
     }
 
     #[inline]
@@ -977,12 +886,26 @@ unsafe impl ComponentValue for char {
     fn align() -> u32 {
         4
     }
+}
+
+unsafe impl Lower for char {
+    fn lower<T>(
+        &self,
+        _store: &mut StoreContextMut<T>,
+        _options: &Options,
+        dst: &mut MaybeUninit<Self::Lower>,
+    ) -> Result<()> {
+        dst.write(ValRaw::u32(u32::from(*self)));
+        Ok(())
+    }
 
     fn store<T>(&self, memory: &mut MemoryMut<'_, T>, offset: usize) -> Result<()> {
         *memory.get::<4>(offset) = u32::from(*self).to_le_bytes();
         Ok(())
     }
+}
 
+unsafe impl Lift for char {
     #[inline]
     fn lift(_store: &StoreOpaque, _options: &Options, src: &Self::Lower) -> Result<Self> {
         Ok(char::try_from(src.get_u32())?)
@@ -997,22 +920,25 @@ unsafe impl ComponentValue for char {
 
 // Note that this is similar to `ComponentValue for WasmStr` except it can only
 // be used for lowering, not lifting.
-unsafe impl ComponentValue for str {
+unsafe impl ComponentType for str {
     type Lower = [ValRaw; 2];
 
-    fn typecheck(ty: &InterfaceType, _types: &ComponentTypes, op: Op) -> Result<()> {
-        match op {
-            Op::Lower => {}
-            Op::Lift => {
-                bail!("strings in Rust cannot be lifted from wasm, use `WasmStr` instead")
-            }
-        }
+    fn typecheck(ty: &InterfaceType, _types: &ComponentTypes) -> Result<()> {
         match ty {
             InterfaceType::String => Ok(()),
             other => bail!("expected `string` found `{}`", desc(other)),
         }
     }
+    fn size() -> usize {
+        8
+    }
 
+    fn align() -> u32 {
+        4
+    }
+}
+
+unsafe impl Lower for str {
     fn lower<T>(
         &self,
         store: &mut StoreContextMut<T>,
@@ -1025,14 +951,6 @@ unsafe impl ComponentValue for str {
         map_maybe_uninit!(dst[0]).write(ValRaw::i64(ptr as i64));
         map_maybe_uninit!(dst[1]).write(ValRaw::i64(len as i64));
         Ok(())
-    }
-
-    fn size() -> usize {
-        8
-    }
-
-    fn align() -> u32 {
-        4
     }
 
     fn store<T>(&self, mem: &mut MemoryMut<'_, T>, offset: usize) -> Result<()> {
@@ -1166,43 +1084,28 @@ impl WasmStr {
 
 // Note that this is similar to `ComponentValue for str` except it can only be
 // used for lifting, not lowering.
-unsafe impl ComponentValue for WasmStr {
-    type Lower = [ValRaw; 2];
+unsafe impl ComponentType for WasmStr {
+    type Lower = <str as ComponentType>::Lower;
 
+    #[inline]
     fn size() -> usize {
-        8
+        <str as ComponentType>::size()
     }
 
+    #[inline]
     fn align() -> u32 {
-        4
+        <str as ComponentType>::align()
     }
 
-    fn typecheck(ty: &InterfaceType, _types: &ComponentTypes, op: Op) -> Result<()> {
-        match op {
-            Op::Lift => {}
-            Op::Lower => {
-                bail!("wasm strings cannot be lowered back to wasm, use `&str` instead")
-            }
-        }
+    fn typecheck(ty: &InterfaceType, _types: &ComponentTypes) -> Result<()> {
         match ty {
             InterfaceType::String => Ok(()),
             other => bail!("expected `string` found `{}`", desc(other)),
         }
     }
+}
 
-    fn lower<T>(
-        &self,
-        _store: &mut StoreContextMut<T>,
-        _options: &Options,
-        _dst: &mut MaybeUninit<[ValRaw; 2]>,
-    ) -> Result<()> {
-        unreachable!()
-    }
-
-    fn store<T>(&self, _mem: &mut MemoryMut<'_, T>, _offset: usize) -> Result<()> {
-        unreachable!()
-    }
-
+unsafe impl Lift for WasmStr {
     fn lift(store: &StoreOpaque, options: &Options, src: &Self::Lower) -> Result<Self> {
         // FIXME: needs memory64 treatment
         let ptr = src[0].get_u32();
@@ -1220,25 +1123,34 @@ unsafe impl ComponentValue for WasmStr {
     }
 }
 
-unsafe impl<T> ComponentValue for [T]
+unsafe impl<T> ComponentType for [T]
 where
-    T: ComponentValue,
+    T: ComponentType,
 {
     type Lower = [ValRaw; 2];
 
-    fn typecheck(ty: &InterfaceType, types: &ComponentTypes, op: Op) -> Result<()> {
-        match op {
-            Op::Lower => {}
-            Op::Lift => {
-                bail!("slices in Rust cannot be lifted from wasm, use `WasmList<T>` instead")
-            }
-        }
+    fn typecheck(ty: &InterfaceType, types: &ComponentTypes) -> Result<()> {
         match ty {
-            InterfaceType::List(t) => T::typecheck(&types[*t], types, op),
+            InterfaceType::List(t) => T::typecheck(&types[*t], types),
             other => bail!("expected `list` found `{}`", desc(other)),
         }
     }
 
+    #[inline]
+    fn size() -> usize {
+        8
+    }
+
+    #[inline]
+    fn align() -> u32 {
+        4
+    }
+}
+
+unsafe impl<T> Lower for [T]
+where
+    T: Lower,
+{
     fn lower<U>(
         &self,
         store: &mut StoreContextMut<U>,
@@ -1251,16 +1163,6 @@ where
         map_maybe_uninit!(dst[0]).write(ValRaw::i64(ptr as i64));
         map_maybe_uninit!(dst[1]).write(ValRaw::i64(len as i64));
         Ok(())
-    }
-
-    #[inline]
-    fn size() -> usize {
-        8
-    }
-
-    #[inline]
-    fn align() -> u32 {
-        4
     }
 
     fn store<U>(&self, mem: &mut MemoryMut<'_, U>, offset: usize) -> Result<()> {
@@ -1288,7 +1190,7 @@ where
 // bottleneck in the future.
 fn lower_list<T, U>(mem: &mut MemoryMut<'_, U>, list: &[T]) -> Result<(usize, usize)>
 where
-    T: ComponentValue,
+    T: Lower,
 {
     let elem_size = T::size();
     let size = list
@@ -1320,7 +1222,7 @@ pub struct WasmList<T> {
     _marker: marker::PhantomData<T>,
 }
 
-impl<T: ComponentValue> WasmList<T> {
+impl<T: Lift> WasmList<T> {
     fn new(ptr: usize, len: usize, memory: &Memory<'_>) -> Result<WasmList<T>> {
         match len
             .checked_mul(T::size())
@@ -1398,43 +1300,27 @@ impl WasmList<u8> {
 
 // Note that this is similar to `ComponentValue for str` except it can only be
 // used for lifting, not lowering.
-unsafe impl<T: ComponentValue> ComponentValue for WasmList<T> {
-    type Lower = [ValRaw; 2];
+unsafe impl<T: ComponentType> ComponentType for WasmList<T> {
+    type Lower = <[T] as ComponentType>::Lower;
 
+    #[inline]
     fn size() -> usize {
-        8
+        <[T] as ComponentType>::size()
     }
 
     fn align() -> u32 {
-        4
+        <[T] as ComponentType>::align()
     }
 
-    fn typecheck(ty: &InterfaceType, types: &ComponentTypes, op: Op) -> Result<()> {
-        match op {
-            Op::Lift => {}
-            Op::Lower => {
-                bail!("wasm lists cannot be lowered back to wasm, use `&[T]` instead")
-            }
-        }
+    fn typecheck(ty: &InterfaceType, types: &ComponentTypes) -> Result<()> {
         match ty {
-            InterfaceType::List(t) => T::typecheck(&types[*t], types, op),
+            InterfaceType::List(t) => T::typecheck(&types[*t], types),
             other => bail!("expected `list` found `{}`", desc(other)),
         }
     }
+}
 
-    fn lower<U>(
-        &self,
-        _store: &mut StoreContextMut<U>,
-        _options: &Options,
-        _dst: &mut MaybeUninit<[ValRaw; 2]>,
-    ) -> Result<()> {
-        unreachable!()
-    }
-
-    fn store<U>(&self, _mem: &mut MemoryMut<'_, U>, _offset: usize) -> Result<()> {
-        unreachable!()
-    }
-
+unsafe impl<T: Lift> Lift for WasmList<T> {
     fn lift(store: &StoreOpaque, options: &Options, src: &Self::Lower) -> Result<Self> {
         // FIXME: needs memory64 treatment
         let ptr = src[0].get_u32();
@@ -1463,7 +1349,7 @@ const fn align_to(a: usize, align: u32) -> usize {
 /// For a field of type T starting after `offset` bytes, updates the offset to reflect the correct
 /// alignment and size of T. Returns the correctly aligned offset for the start of the field.
 #[inline]
-pub fn next_field<T: ComponentValue>(offset: &mut usize) -> usize {
+pub fn next_field<T: ComponentType>(offset: &mut usize) -> usize {
     *offset = align_to(*offset, T::align());
     let result = *offset;
     *offset += T::size();
@@ -1475,8 +1361,7 @@ pub fn next_field<T: ComponentValue>(offset: &mut usize) -> usize {
 fn typecheck_tuple(
     ty: &InterfaceType,
     types: &ComponentTypes,
-    op: Op,
-    expected: &[fn(&InterfaceType, &ComponentTypes, Op) -> Result<()>],
+    expected: &[fn(&InterfaceType, &ComponentTypes) -> Result<()>],
 ) -> Result<()> {
     match ty {
         InterfaceType::Tuple(t) => {
@@ -1489,7 +1374,7 @@ fn typecheck_tuple(
                 );
             }
             for (ty, check) in tuple.types.iter().zip(expected) {
-                check(ty, types, op)?;
+                check(ty, types)?;
             }
             Ok(())
         }
@@ -1497,19 +1382,34 @@ fn typecheck_tuple(
     }
 }
 
-unsafe impl<T> ComponentValue for Option<T>
+unsafe impl<T> ComponentType for Option<T>
 where
-    T: ComponentValue,
+    T: ComponentType,
 {
-    type Lower = TupleLower2<<u32 as ComponentValue>::Lower, T::Lower>;
+    type Lower = TupleLower2<<u32 as ComponentType>::Lower, T::Lower>;
 
-    fn typecheck(ty: &InterfaceType, types: &ComponentTypes, op: Op) -> Result<()> {
+    fn typecheck(ty: &InterfaceType, types: &ComponentTypes) -> Result<()> {
         match ty {
-            InterfaceType::Option(t) => T::typecheck(&types[*t], types, op),
+            InterfaceType::Option(t) => T::typecheck(&types[*t], types),
             other => bail!("expected `option` found `{}`", desc(other)),
         }
     }
 
+    #[inline]
+    fn size() -> usize {
+        align_to(1, T::align()) + T::size()
+    }
+
+    #[inline]
+    fn align() -> u32 {
+        T::align()
+    }
+}
+
+unsafe impl<T> Lower for Option<T>
+where
+    T: Lower,
+{
     fn lower<U>(
         &self,
         store: &mut StoreContextMut<U>,
@@ -1537,16 +1437,6 @@ where
         Ok(())
     }
 
-    #[inline]
-    fn size() -> usize {
-        align_to(1, T::align()) + T::size()
-    }
-
-    #[inline]
-    fn align() -> u32 {
-        T::align()
-    }
-
     fn store<U>(&self, mem: &mut MemoryMut<'_, U>, offset: usize) -> Result<()> {
         match self {
             None => {
@@ -1559,7 +1449,12 @@ where
         }
         Ok(())
     }
+}
 
+unsafe impl<T> Lift for Option<T>
+where
+    T: Lift,
+{
     fn lift(store: &StoreOpaque, options: &Options, src: &Self::Lower) -> Result<Self> {
         Ok(match src.A1.get_i32() {
             0 => None,
@@ -1593,25 +1488,41 @@ union ResultLowerPayload<T: Copy, E: Copy> {
     err: E,
 }
 
-unsafe impl<T, E> ComponentValue for Result<T, E>
+unsafe impl<T, E> ComponentType for Result<T, E>
 where
-    T: ComponentValue,
-    E: ComponentValue,
+    T: ComponentType,
+    E: ComponentType,
 {
     type Lower = ResultLower<T::Lower, E::Lower>;
 
-    fn typecheck(ty: &InterfaceType, types: &ComponentTypes, op: Op) -> Result<()> {
+    fn typecheck(ty: &InterfaceType, types: &ComponentTypes) -> Result<()> {
         match ty {
             InterfaceType::Expected(r) => {
                 let expected = &types[*r];
-                T::typecheck(&expected.ok, types, op)?;
-                E::typecheck(&expected.err, types, op)?;
+                T::typecheck(&expected.ok, types)?;
+                E::typecheck(&expected.err, types)?;
                 Ok(())
             }
             other => bail!("expected `expected` found `{}`", desc(other)),
         }
     }
 
+    #[inline]
+    fn size() -> usize {
+        align_to(1, Self::align()) + T::size().max(E::size())
+    }
+
+    #[inline]
+    fn align() -> u32 {
+        T::align().max(E::align())
+    }
+}
+
+unsafe impl<T, E> Lower for Result<T, E>
+where
+    T: Lower,
+    E: Lower,
+{
     fn lower<U>(
         &self,
         store: &mut StoreContextMut<U>,
@@ -1649,16 +1560,6 @@ where
         Ok(())
     }
 
-    #[inline]
-    fn size() -> usize {
-        align_to(1, Self::align()) + T::size().max(E::size())
-    }
-
-    #[inline]
-    fn align() -> u32 {
-        T::align().max(E::align())
-    }
-
     fn store<U>(&self, mem: &mut MemoryMut<'_, U>, offset: usize) -> Result<()> {
         match self {
             Ok(e) => {
@@ -1672,7 +1573,13 @@ where
         }
         Ok(())
     }
+}
 
+unsafe impl<T, E> Lift for Result<T, E>
+where
+    T: Lift,
+    E: Lift,
+{
     fn lift(store: &StoreOpaque, options: &Options, src: &Self::Lower) -> Result<Self> {
         // Note that this implementation specifically isn't trying to actually
         // reinterpret or alter the bits of `lower` depending on which variant
@@ -1701,7 +1608,7 @@ where
     }
 
     fn load(memory: &Memory<'_>, bytes: &[u8]) -> Result<Self> {
-        let align = <Result<T, E> as ComponentValue>::align();
+        let align = <Result<T, E> as ComponentType>::align();
         let discrim = bytes[0];
         let payload = &bytes[align_to(1, align)..];
         match discrim {
@@ -1730,28 +1637,16 @@ macro_rules! impl_component_ty_for_tuples {
         }
 
         #[allow(non_snake_case)]
-        unsafe impl<$($t,)*> ComponentValue for ($($t,)*)
-        where $($t: ComponentValue),*
+        unsafe impl<$($t,)*> ComponentType for ($($t,)*)
+            where $($t: ComponentType),*
         {
             type Lower = [<TupleLower$n>]<$($t::Lower),*>;
 
             fn typecheck(
                 ty: &InterfaceType,
                 types: &ComponentTypes,
-                op: Op,
             ) -> Result<()> {
-                typecheck_tuple(ty, types, op, &[$($t::typecheck),*])
-            }
-
-            fn lower<U>(
-                &self,
-                store: &mut StoreContextMut<U>,
-                options: &Options,
-                dst: &mut MaybeUninit<Self::Lower>,
-            ) -> Result<()> {
-                let ($($t,)*) = self;
-                $($t.lower(store, options, map_maybe_uninit!(dst.$t))?;)*
-                Ok(())
+                typecheck_tuple(ty, types, &[$($t::typecheck),*])
             }
 
             #[inline]
@@ -1767,6 +1662,22 @@ macro_rules! impl_component_ty_for_tuples {
                 $(align = align.max($t::align());)*
                 align
             }
+        }
+
+        #[allow(non_snake_case)]
+        unsafe impl<$($t,)*> Lower for ($($t,)*)
+            where $($t: Lower),*
+        {
+            fn lower<U>(
+                &self,
+                store: &mut StoreContextMut<U>,
+                options: &Options,
+                dst: &mut MaybeUninit<Self::Lower>,
+            ) -> Result<()> {
+                let ($($t,)*) = self;
+                $($t.lower(store, options, map_maybe_uninit!(dst.$t))?;)*
+                Ok(())
+            }
 
             fn store<U>(&self, memory: &mut MemoryMut<'_, U>, mut offset: usize) -> Result<()> {
                 let ($($t,)*) = self;
@@ -1775,7 +1686,12 @@ macro_rules! impl_component_ty_for_tuples {
                 $($t.store(memory, next_field::<$t>(&mut offset))?;)*
                 Ok(())
             }
+        }
 
+        #[allow(non_snake_case)]
+        unsafe impl<$($t,)*> Lift for ($($t,)*)
+            where $($t: Lift),*
+        {
             fn lift(store: &StoreOpaque, options: &Options, src: &Self::Lower) -> Result<Self> {
                 Ok(($($t::lift(store, options, &src.$t)?,)*))
             }
@@ -1784,6 +1700,24 @@ macro_rules! impl_component_ty_for_tuples {
                 let mut offset = 0;
                 $(let $t = $t::load(memory, &bytes[next_field::<$t>(&mut offset)..][..$t::size()])?;)*
                 Ok(($($t,)*))
+            }
+        }
+
+        #[allow(non_snake_case)]
+        unsafe impl<$($t,)*> ComponentParams for ($($t,)*)
+            where $($t: ComponentType),*
+        {
+            fn typecheck_params(
+                params: &[(Option<String>, InterfaceType)],
+                _types: &ComponentTypes,
+            ) -> Result<()> {
+                if params.len() != $n {
+                    bail!("expected {} types, found {}", $n, params.len());
+                }
+                let mut params = params.iter().map(|i| &i.1);
+                $($t::typecheck(params.next().unwrap(), _types)?;)*
+                debug_assert!(params.next().is_none());
+                Ok(())
             }
         }
 

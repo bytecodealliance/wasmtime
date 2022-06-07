@@ -11,7 +11,8 @@ mod matching;
 mod store;
 pub use self::component::Component;
 pub use self::func::{
-    ComponentParams, ComponentValue, Func, IntoComponentFunc, Op, TypedFunc, WasmList, WasmStr,
+    ComponentParams, ComponentType, Func, IntoComponentFunc, Lift, Lower, TypedFunc, WasmList,
+    WasmStr,
 };
 pub use self::instance::{Instance, InstancePre};
 pub use self::linker::Linker;

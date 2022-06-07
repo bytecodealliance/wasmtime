@@ -158,10 +158,6 @@ fn typecheck() -> Result<()> {
     assert!(thunk.typed::<(u32,), (), _>(&store).is_err());
     assert!(thunk.typed::<(), (), _>(&store).is_ok());
     assert!(take_string.typed::<(), (), _>(&store).is_err());
-    assert!(take_string.typed::<(), String, _>(&store).is_err());
-    assert!(take_string
-        .typed::<(String, String), String, _>(&store)
-        .is_err());
     assert!(take_string.typed::<(String,), (), _>(&store).is_ok());
     assert!(take_string.typed::<(&str,), (), _>(&store).is_ok());
     assert!(take_string.typed::<(&[u8],), (), _>(&store).is_err());
@@ -175,11 +171,7 @@ fn typecheck() -> Result<()> {
     assert!(ret_tuple1.typed::<(), (u32,), _>(&store).is_ok());
     assert!(ret_tuple1.typed::<(), u32, _>(&store).is_err());
     assert!(ret_string.typed::<(), (), _>(&store).is_err());
-    assert!(ret_string.typed::<(), String, _>(&store).is_err());
-    assert!(ret_string.typed::<(), &str, _>(&store).is_err());
     assert!(ret_string.typed::<(), WasmStr, _>(&store).is_ok());
-    assert!(ret_list_u8.typed::<(), &[u8], _>(&store).is_err());
-    assert!(ret_list_u8.typed::<(), Vec<u8>, _>(&store).is_err());
     assert!(ret_list_u8.typed::<(), WasmList<u16>, _>(&store).is_err());
     assert!(ret_list_u8.typed::<(), WasmList<i8>, _>(&store).is_err());
     assert!(ret_list_u8.typed::<(), WasmList<u8>, _>(&store).is_ok());

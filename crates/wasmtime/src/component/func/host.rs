@@ -1,5 +1,5 @@
 use crate::component::func::{MAX_STACK_PARAMS, MAX_STACK_RESULTS};
-use crate::component::{ComponentParams, ComponentValue, Memory, MemoryMut, Op, Options};
+use crate::component::{ComponentParams, ComponentType, Lift, Lower, Memory, MemoryMut, Options};
 use crate::{AsContextMut, StoreContextMut, ValRaw};
 use anyhow::{bail, Context, Result};
 use std::any::Any;
@@ -46,8 +46,8 @@ impl HostFunc {
     fn new<F, P, R>(func: F, entrypoint: VMLoweringCallee) -> Arc<HostFunc>
     where
         F: Send + Sync + 'static,
-        P: ComponentParams,
-        R: ComponentValue,
+        P: ComponentParams + Lift,
+        R: Lower,
     {
         Arc::new(HostFunc {
             entrypoint,
@@ -71,12 +71,12 @@ impl HostFunc {
 
 fn typecheck<P, R>(ty: FuncTypeIndex, types: &ComponentTypes) -> Result<()>
 where
-    P: ComponentParams,
-    R: ComponentValue,
+    P: ComponentParams + Lift,
+    R: Lower,
 {
     let ty = &types[ty];
-    P::typecheck(&ty.params, types, Op::Lift).context("type mismatch with parameters")?;
-    R::typecheck(&ty.result, types, Op::Lower).context("type mismatch with result")?;
+    P::typecheck_params(&ty.params, types).context("type mismatch with parameters")?;
+    R::typecheck(&ty.result, types).context("type mismatch with result")?;
     Ok(())
 }
 
@@ -110,8 +110,8 @@ unsafe fn call_host<T, Params, Return, F>(
     closure: F,
 ) -> Result<()>
 where
-    Params: ComponentValue,
-    Return: ComponentValue,
+    Params: Lift,
+    Return: Lower,
     F: FnOnce(StoreContextMut<'_, T>, Params) -> Result<Return>,
 {
     /// Representation of arguments to this function when a return pointer is in
@@ -227,7 +227,7 @@ where
     }
 }
 
-fn validate_inbounds<T: ComponentValue>(memory: &[u8], ptr: &ValRaw) -> Result<usize> {
+fn validate_inbounds<T: ComponentType>(memory: &[u8], ptr: &ValRaw) -> Result<usize> {
     // FIXME: needs memory64 support
     let ptr = usize::try_from(ptr.get_u32())?;
     let end = match ptr.checked_add(T::size()) {
@@ -271,8 +271,8 @@ macro_rules! impl_into_component_func {
         impl<T, F, $($args,)* R> IntoComponentFunc<T, ($($args,)*), R> for F
         where
             F: Fn($($args),*) -> Result<R> + Send + Sync + 'static,
-            ($($args,)*): ComponentParams + ComponentValue,
-            R: ComponentValue,
+            ($($args,)*): ComponentParams + Lift,
+            R: Lower,
         {
             extern "C" fn entrypoint(
                 cx: *mut VMOpaqueContext,
@@ -307,8 +307,8 @@ macro_rules! impl_into_component_func {
         impl<T, F, $($args,)* R> IntoComponentFunc<T, (StoreContextMut<'_, T>, $($args,)*), R> for F
         where
             F: Fn(StoreContextMut<'_, T>, $($args),*) -> Result<R> + Send + Sync + 'static,
-            ($($args,)*): ComponentParams + ComponentValue,
-            R: ComponentValue,
+            ($($args,)*): ComponentParams + Lift,
+            R: Lower,
         {
             extern "C" fn entrypoint(
                 cx: *mut VMOpaqueContext,
