@@ -111,6 +111,10 @@ pub trait RuntimeLinearMemory: Send + Sync {
         if let Some(max) = maximum {
             if new_byte_size > max {
                 if let Some(store) = store {
+                    // FIXME: shared memories may not have an associated store
+                    // to report the growth failure to but the error should not
+                    // be dropped
+                    // (https://github.com/bytecodealliance/wasmtime/issues/4240).
                     store.memory_grow_failed(&format_err!("Memory maximum size exceeded"));
                 }
                 return Ok(None);
@@ -120,6 +124,10 @@ pub trait RuntimeLinearMemory: Send + Sync {
         match self.grow_to(new_byte_size) {
             Ok(_) => Ok(Some((old_byte_size, new_byte_size))),
             Err(e) => {
+                // FIXME: shared memories may not have an associated store to
+                // report the growth failure to but the error should not be
+                // dropped
+                // (https://github.com/bytecodealliance/wasmtime/issues/4240).
                 if let Some(store) = store {
                     store.memory_grow_failed(&e);
                 }
