@@ -25,7 +25,7 @@ use wasmparser::{
     ElementSectionReader, Export, ExportSectionReader, ExternalKind, FunctionSectionReader,
     GlobalSectionReader, GlobalType, ImportSectionReader, MemorySectionReader, MemoryType,
     NameSectionReader, Naming, Operator, TableSectionReader, TableType, TagSectionReader, TagType,
-    TypeDef, TypeRef, TypeSectionReader,
+    Type, TypeRef, TypeSectionReader,
 };
 
 fn memory(ty: MemoryType) -> Memory {
@@ -73,7 +73,7 @@ pub fn parse_type_section<'a>(
 
     for entry in types {
         match entry? {
-            TypeDef::Func(wasm_func_ty) => {
+            Type::Func(wasm_func_ty) => {
                 environ.declare_type_func(wasm_func_ty.clone().try_into()?)?;
                 module_translation_state
                     .wasm_types

@@ -1,6 +1,6 @@
 (assert_unlinkable
   (component
-    (import "undefined-name" (module))
+    (import "undefined-name" (core module))
   )
   "import `undefined-name` not defined")
 (component $i)
@@ -8,7 +8,7 @@
   (import "i" (instance))
 )
 (assert_unlinkable
-  (component (import "i" (module)))
+  (component (import "i" (core module)))
   "expected module found instance")
 (assert_unlinkable
   (component (import "i" (func)))

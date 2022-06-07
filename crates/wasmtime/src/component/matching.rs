@@ -4,7 +4,7 @@ use crate::types::matching;
 use crate::Module;
 use anyhow::{anyhow, bail, Context, Result};
 use wasmtime_environ::component::{
-    ComponentInstanceType, ComponentTypes, FuncTypeIndex, ModuleType, TypeDef,
+    ComponentTypes, TypeComponentInstance, TypeDef, TypeFuncIndex, TypeModule,
 };
 
 pub struct TypeChecker<'a> {
@@ -23,16 +23,19 @@ impl TypeChecker<'_> {
                 Definition::Instance(actual) => self.instance(&self.types[t], actual),
                 _ => bail!("expected instance found {}", actual.desc()),
             },
-            TypeDef::Func(t) => match actual {
+            TypeDef::ComponentFunc(t) => match actual {
                 Definition::Func(actual) => self.func(t, actual),
                 _ => bail!("expected func found {}", actual.desc()),
             },
             TypeDef::Component(_) => bail!("expected component found {}", actual.desc()),
             TypeDef::Interface(_) => bail!("expected type found {}", actual.desc()),
+
+            // not possible for valid components to import
+            TypeDef::CoreFunc(_) => unreachable!(),
         }
     }
 
-    fn module(&self, expected: &ModuleType, actual: &Module) -> Result<()> {
+    fn module(&self, expected: &TypeModule, actual: &Module) -> Result<()> {
         let actual_types = actual.types();
         let actual = actual.env_module();
 
@@ -63,7 +66,7 @@ impl TypeChecker<'_> {
         Ok(())
     }
 
-    fn instance(&self, expected: &ComponentInstanceType, actual: &NameMap) -> Result<()> {
+    fn instance(&self, expected: &TypeComponentInstance, actual: &NameMap) -> Result<()> {
         // Like modules, every export in the expected type must be present in
         // the actual type. It's ok, though, to have extra exports in the actual
         // type.
@@ -79,7 +82,7 @@ impl TypeChecker<'_> {
         Ok(())
     }
 
-    fn func(&self, expected: FuncTypeIndex, actual: &HostFunc) -> Result<()> {
+    fn func(&self, expected: TypeFuncIndex, actual: &HostFunc) -> Result<()> {
         actual.typecheck(expected, self.types)
     }
 }

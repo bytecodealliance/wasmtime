@@ -7,7 +7,7 @@ use std::mem::MaybeUninit;
 use std::panic::{self, AssertUnwindSafe};
 use std::ptr::NonNull;
 use std::sync::Arc;
-use wasmtime_environ::component::{ComponentTypes, FuncTypeIndex, StringEncoding};
+use wasmtime_environ::component::{ComponentTypes, StringEncoding, TypeFuncIndex};
 use wasmtime_runtime::component::{VMComponentContext, VMLowering, VMLoweringCallee};
 use wasmtime_runtime::{VMCallerCheckedAnyfunc, VMMemoryDefinition, VMOpaqueContext};
 
@@ -38,7 +38,7 @@ pub trait IntoComponentFunc<T, Params, Return> {
 
 pub struct HostFunc {
     entrypoint: VMLoweringCallee,
-    typecheck: fn(FuncTypeIndex, &ComponentTypes) -> Result<()>,
+    typecheck: fn(TypeFuncIndex, &ComponentTypes) -> Result<()>,
     func: Box<dyn Any + Send + Sync>,
 }
 
@@ -56,7 +56,7 @@ impl HostFunc {
         })
     }
 
-    pub fn typecheck(&self, ty: FuncTypeIndex, types: &ComponentTypes) -> Result<()> {
+    pub fn typecheck(&self, ty: TypeFuncIndex, types: &ComponentTypes) -> Result<()> {
         (self.typecheck)(ty, types)
     }
 
@@ -69,7 +69,7 @@ impl HostFunc {
     }
 }
 
-fn typecheck<P, R>(ty: FuncTypeIndex, types: &ComponentTypes) -> Result<()>
+fn typecheck<P, R>(ty: TypeFuncIndex, types: &ComponentTypes) -> Result<()>
 where
     P: ComponentParams + Lift,
     R: Lower,

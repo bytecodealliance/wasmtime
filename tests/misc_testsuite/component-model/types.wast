@@ -52,7 +52,8 @@
   (type $empty (func))
   (type (func (param string) (result u32)))
   (type (component))
-  (type (module))
+  (core type (module))
+  (core type (func))
   (type (instance))
 
   (type (component
@@ -62,7 +63,7 @@
 
     (type $t (instance))
 
-    (export "a" (module))
+    (export "a" (core module))
     (export "b" (instance (type $t)))
   ))
 
@@ -73,11 +74,11 @@
 
     (type $t (instance))
 
-    (export "a" (module))
+    (export "a" (core module))
     (export "b" (instance (type $t)))
   ))
 
-  (type (module
+  (core type (module
     (import "" "" (func (param i32)))
     (import "" "1" (func (result i32)))
     (export "1" (global i32))

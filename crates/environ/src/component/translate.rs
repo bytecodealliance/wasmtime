@@ -41,13 +41,19 @@ pub struct Translation<'data> {
     /// Modules and how they're defined (either closed-over or imported)
     modules: PrimaryMap<ModuleIndex, ModuleDef>,
 
-    /// Instances and how they're defined, either as instantiations of modules
-    /// or "synthetically created" as a bag of named items from our other index
-    /// spaces.
-    instances: PrimaryMap<InstanceIndex, InstanceDef<'data>>,
+    /// Instances of components, either direct instantiations or "bundles of
+    /// exports".
+    component_instances: PrimaryMap<ComponentInstanceIndex, ComponentInstanceDef<'data>>,
 
-    /// Both core wasm and component functions, and how they're defined.
+    /// Instances of core wasm modules, either direct instantiations or
+    /// "bundles of exports".
+    module_instances: PrimaryMap<ModuleInstanceIndex, ModuleInstanceDef<'data>>,
+
+    /// The core wasm function index space.
     funcs: PrimaryMap<FuncIndex, Func<'data>>,
+
+    /// The component function index space.
+    component_funcs: PrimaryMap<ComponentFuncIndex, ComponentFunc<'data>>,
 
     /// Core wasm globals, always sourced from a previously module instance.
     globals: PrimaryMap<GlobalIndex, CoreSource<'data>>,
@@ -100,17 +106,17 @@ enum ModuleDef {
     /// nothing is known about it except for its type. The `import_index`
     /// provided here indexes into the `Component`'s import list.
     Import {
-        ty: ModuleTypeIndex,
+        ty: TypeModuleIndex,
         import: RuntimeImport,
     },
 }
 
-/// How instances are defined within a component.
+/// Forms of creation of a core wasm module instance.
 #[derive(Debug, Clone)]
-enum InstanceDef<'data> {
+enum ModuleInstanceDef<'data> {
     /// A module instance created through the instantiation of a previous
     /// module.
-    Module {
+    Instantiated {
         /// The runtime index associated with this instance.
         ///
         /// Not to be confused with `InstanceIndex` which counts "synthetic"
@@ -123,41 +129,27 @@ enum InstanceDef<'data> {
 
     /// A "synthetic" module created as a bag of exports from other items
     /// already defined within this component.
-    ModuleSynthetic(HashMap<&'data str, EntityIndex>),
+    Synthetic(HashMap<&'data str, EntityIndex>),
+}
 
+/// Forms of creation of a component instance.
+#[derive(Debug, Clone)]
+enum ComponentInstanceDef<'data> {
     /// An instance which was imported from the host.
     Import {
         /// The type of the imported instance
-        ty: ComponentInstanceTypeIndex,
+        ty: TypeComponentInstanceIndex,
         /// The description of where this import came from.
         import: RuntimeImport,
     },
 
-    /// Same as `ModuleSynthetic` except for component items.
-    ComponentSynthetic(HashMap<&'data str, ComponentItem>),
+    /// Same as `ModuleInstanceDef::Synthetic` except for component items.
+    Synthetic(HashMap<&'data str, ComponentItem>),
 }
 
 /// Description of the function index space and how functions are defined.
 #[derive(Clone)]
 enum Func<'data> {
-    // component functions
-    //
-    /// A component function that is imported from the host.
-    Import(RuntimeImport),
-
-    /// A component function that is lifted from core wasm function.
-    Lifted {
-        /// The resulting type of the lifted function
-        ty: FuncTypeIndex,
-        /// Which core wasm function is lifted, currently required to be an
-        /// instance export as opposed to a lowered import.
-        func: CoreSource<'data>,
-        /// The options specified when the function was lifted.
-        options: CanonicalOptions,
-    },
-
-    // core function
-    //
     /// A core wasm function that's extracted from a core wasm instance.
     Core(CoreSource<'data>),
     /// A core wasm function created by lowering an imported host function.
@@ -165,6 +157,24 @@ enum Func<'data> {
     /// Note that `LoweredIndex` here refers to the nth
     /// `Initializer::LowerImport`.
     Lowered(LoweredIndex),
+}
+
+/// Description of the function index space and how functions are defined.
+#[derive(Clone)]
+enum ComponentFunc<'data> {
+    /// A component function that is imported from the host.
+    Import(RuntimeImport),
+
+    /// A component function that is lifted from core wasm function.
+    Lifted {
+        /// The resulting type of the lifted function
+        ty: TypeFuncIndex,
+        /// Which core wasm function is lifted, currently required to be an
+        /// instance export as opposed to a lowered import.
+        func: CoreSource<'data>,
+        /// The options specified when the function was lifted.
+        options: CanonicalOptions,
+    },
 }
 
 /// Source of truth for where a core wasm item comes from.
@@ -278,7 +288,7 @@ impl<'a, 'data> Translator<'a, 'data> {
 
                 // Push a new scope for component types so outer aliases know
                 // that the 0th level is this new component.
-                self.types.push_component_types_scope();
+                self.types.push_type_scope();
             }
 
             Payload::End(offset) => {
@@ -304,7 +314,7 @@ impl<'a, 'data> Translator<'a, 'data> {
                 // When leaving a module be sure to pop the types scope to
                 // ensure that when we go back to the previous module outer
                 // type alias indices work correctly again.
-                self.types.pop_component_types_scope();
+                self.types.pop_type_scope();
 
                 match self.parsers.pop() {
                     Some(p) => self.parser = p,
@@ -323,8 +333,15 @@ impl<'a, 'data> Translator<'a, 'data> {
             Payload::ComponentTypeSection(s) => {
                 self.validator.component_type_section(&s)?;
                 for ty in s {
-                    let ty = self.types.component_type_def(&ty?)?;
+                    let ty = self.types.intern_component_type(&ty?)?;
                     self.types.push_component_typedef(ty);
+                }
+            }
+            Payload::CoreTypeSection(s) => {
+                self.validator.core_type_section(&s)?;
+                for ty in s {
+                    let ty = self.types.intern_core_type(&ty?)?;
+                    self.types.push_core_typedef(ty);
                 }
             }
 
@@ -332,8 +349,7 @@ impl<'a, 'data> Translator<'a, 'data> {
                 self.validator.component_import_section(&s)?;
                 for import in s {
                     let import = import?;
-                    let ty = TypeIndex::from_u32(import.ty);
-                    let ty = self.types.component_outer_type(0, ty);
+                    let ty = self.types.component_type_ref(&import.ty);
                     // Record the `ImportIndex` to be associated with this
                     // import and create the `RuntimeImport` representing the
                     // "root" where it has no extra `exports`
@@ -352,11 +368,13 @@ impl<'a, 'data> Translator<'a, 'data> {
                         }
                         TypeDef::ComponentInstance(ty) => {
                             self.result
-                                .instances
-                                .push(InstanceDef::Import { ty, import });
+                                .component_instances
+                                .push(ComponentInstanceDef::Import { ty, import });
                         }
-                        TypeDef::Func(_ty) => {
-                            self.result.funcs.push(Func::Import(import));
+                        TypeDef::ComponentFunc(_ty) => {
+                            self.result
+                                .component_funcs
+                                .push(ComponentFunc::Import(import));
                         }
                         TypeDef::Component(_) => {
                             unimplemented!("imports of components");
@@ -364,32 +382,36 @@ impl<'a, 'data> Translator<'a, 'data> {
                         TypeDef::Interface(_) => {
                             unimplemented!("imports of types");
                         }
+
+                        // not possible with a valid component
+                        TypeDef::CoreFunc(_ty) => unreachable!(),
                     }
                 }
             }
 
-            Payload::ComponentFunctionSection(s) => {
-                self.validator.component_function_section(&s)?;
+            Payload::ComponentCanonicalSection(s) => {
+                self.validator.component_canonical_section(&s)?;
                 for func in s {
-                    let func = match func? {
-                        wasmparser::ComponentFunction::Lift {
+                    match func? {
+                        wasmparser::CanonicalFunction::Lift {
                             type_index,
+                            core_func_index,
+                            options,
+                        } => {
+                            let ty = ComponentTypeIndex::from_u32(type_index);
+                            let func = FuncIndex::from_u32(core_func_index);
+                            let func = self.lift_function(ty, func, &options);
+                            self.result.component_funcs.push(func);
+                        }
+                        wasmparser::CanonicalFunction::Lower {
                             func_index,
                             options,
                         } => {
-                            let ty = TypeIndex::from_u32(type_index);
-                            let func = FuncIndex::from_u32(func_index);
-                            self.lift_function(ty, func, &options)
+                            let func = ComponentFuncIndex::from_u32(func_index);
+                            let func = self.lower_function(func, &options);
+                            self.result.funcs.push(func);
                         }
-                        wasmparser::ComponentFunction::Lower {
-                            func_index,
-                            options,
-                        } => {
-                            let func = FuncIndex::from_u32(func_index);
-                            self.lower_function(func, &options)
-                        }
-                    };
-                    self.result.funcs.push(func);
+                    }
                 }
             }
 
@@ -425,21 +447,33 @@ impl<'a, 'data> Translator<'a, 'data> {
                 self.validator.instance_section(&s)?;
                 for instance in s {
                     let instance = match instance? {
-                        wasmparser::Instance::Module { index, args } => {
-                            self.module_instance(ModuleIndex::from_u32(index), &args)
+                        wasmparser::Instance::Instantiate { module_index, args } => {
+                            self.instantiate_module(ModuleIndex::from_u32(module_index), &args)
                         }
-                        wasmparser::Instance::ModuleFromExports(exports) => {
-                            self.module_instance_from_exports(&exports)
+                        wasmparser::Instance::FromExports(exports) => {
+                            self.instantiate_module_from_exports(&exports)
                         }
-                        wasmparser::Instance::Component { index, args } => {
+                    };
+                    self.result.module_instances.push(instance);
+                }
+            }
+            Payload::ComponentInstanceSection(s) => {
+                self.validator.component_instance_section(&s)?;
+                for instance in s {
+                    let instance = match instance? {
+                        wasmparser::ComponentInstance::Instantiate {
+                            component_index,
+                            args,
+                        } => {
+                            let index = ComponentIndex::from_u32(component_index);
                             drop((index, args));
                             unimplemented!("instantiating a component");
                         }
-                        wasmparser::Instance::ComponentFromExports(exports) => {
-                            self.component_instance_from_exports(&exports)
+                        wasmparser::ComponentInstance::FromExports(exports) => {
+                            self.instantiate_component_from_exports(&exports)
                         }
                     };
-                    self.result.instances.push(instance);
+                    self.result.component_instances.push(instance);
                 }
             }
 
@@ -458,7 +492,35 @@ impl<'a, 'data> Translator<'a, 'data> {
             Payload::AliasSection(s) => {
                 self.validator.alias_section(&s)?;
                 for alias in s {
-                    self.alias(&alias?);
+                    match alias? {
+                        wasmparser::Alias::InstanceExport {
+                            kind,
+                            instance_index,
+                            name,
+                        } => {
+                            let instance = ModuleInstanceIndex::from_u32(instance_index);
+                            self.alias_module_instance_export(kind, instance, name);
+                        }
+                    }
+                }
+            }
+
+            Payload::ComponentAliasSection(s) => {
+                self.validator.component_alias_section(&s)?;
+                for alias in s {
+                    match alias? {
+                        wasmparser::ComponentAlias::InstanceExport {
+                            kind,
+                            instance_index,
+                            name,
+                        } => {
+                            let instance = ComponentInstanceIndex::from_u32(instance_index);
+                            self.alias_component_instance_export(kind, instance, name);
+                        }
+                        wasmparser::ComponentAlias::Outer { kind, count, index } => {
+                            self.alias_component_outer(kind, count, index);
+                        }
+                    }
                 }
             }
 
@@ -482,17 +544,18 @@ impl<'a, 'data> Translator<'a, 'data> {
         Ok(Action::KeepGoing)
     }
 
-    fn module_instance(
+    fn instantiate_module(
         &mut self,
         module: ModuleIndex,
-        args: &[wasmparser::ModuleArg<'data>],
-    ) -> InstanceDef<'data> {
+        args: &[wasmparser::InstantiationArg<'data>],
+    ) -> ModuleInstanceDef<'data> {
         // Map the flat list of `args` to instead a name-to-instance index.
         let mut instance_by_name = HashMap::new();
         for arg in args {
             match arg.kind {
-                wasmparser::ModuleArgKind::Instance(idx) => {
-                    instance_by_name.insert(arg.name, InstanceIndex::from_u32(idx));
+                wasmparser::InstantiationArgKind::Instance => {
+                    let idx = ModuleInstanceIndex::from_u32(arg.index);
+                    instance_by_name.insert(arg.name, idx);
                 }
             }
         }
@@ -544,7 +607,7 @@ impl<'a, 'data> Translator<'a, 'data> {
 
         let instance = RuntimeInstanceIndex::from_u32(self.result.component.num_runtime_instances);
         self.result.component.num_runtime_instances += 1;
-        InstanceDef::Module { instance, module }
+        ModuleInstanceDef::Instantiated { instance, module }
     }
 
     /// Calculate the `CoreDef`, a definition of a core wasm item, corresponding
@@ -555,28 +618,22 @@ impl<'a, 'data> Translator<'a, 'data> {
     /// we know the module), one that must be referred to by name since the
     /// module isn't known, or it's a synthesized lowering or adapter of a
     /// component function.
-    fn lookup_core_def(&mut self, instance: InstanceIndex, name: &str) -> CoreDef {
-        match &self.result.instances[instance] {
-            InstanceDef::Module { module, instance } => {
+    fn lookup_core_def(&mut self, instance: ModuleInstanceIndex, name: &str) -> CoreDef {
+        match &self.result.module_instances[instance] {
+            ModuleInstanceDef::Instantiated { module, instance } => {
                 let (src, _ty) = self.lookup_core_source_in_module(*instance, *module, name);
                 src.to_core_def()
             }
 
-            InstanceDef::ModuleSynthetic(defs) => match defs[&name] {
+            ModuleInstanceDef::Synthetic(defs) => match defs[&name] {
                 EntityIndex::Function(f) => match self.result.funcs[f].clone() {
                     Func::Core(c) => c.to_core_def(),
                     Func::Lowered(i) => CoreDef::Lowered(i),
-
-                    // should not be possible to hit with a valid component
-                    Func::Lifted { .. } | Func::Import { .. } => unreachable!(),
                 },
                 EntityIndex::Global(g) => self.result.globals[g].to_core_def(),
                 EntityIndex::Table(t) => self.result.tables[t].to_core_def(),
                 EntityIndex::Memory(m) => self.result.memories[m].to_core_def(),
             },
-
-            // should not be possible to hit with a valid component
-            InstanceDef::Import { .. } | InstanceDef::ComponentSynthetic(_) => unreachable!(),
         }
     }
 
@@ -616,10 +673,10 @@ impl<'a, 'data> Translator<'a, 'data> {
 
     /// Creates a synthetic module from the list of items currently in the
     /// module and their given names.
-    fn module_instance_from_exports(
+    fn instantiate_module_from_exports(
         &mut self,
         exports: &[wasmparser::Export<'data>],
-    ) -> InstanceDef<'data> {
+    ) -> ModuleInstanceDef<'data> {
         let mut map = HashMap::with_capacity(exports.len());
         for export in exports {
             let idx = match export.kind {
@@ -645,51 +702,51 @@ impl<'a, 'data> Translator<'a, 'data> {
             };
             map.insert(export.name, idx);
         }
-        InstanceDef::ModuleSynthetic(map)
+        ModuleInstanceDef::Synthetic(map)
     }
 
     /// Creates a synthetic module from the list of items currently in the
     /// module and their given names.
-    fn component_instance_from_exports(
+    fn instantiate_component_from_exports(
         &mut self,
         exports: &[wasmparser::ComponentExport<'data>],
-    ) -> InstanceDef<'data> {
+    ) -> ComponentInstanceDef<'data> {
         let mut map = HashMap::with_capacity(exports.len());
         for export in exports {
             let idx = match &export.kind {
-                wasmparser::ComponentArgKind::Function(i) => {
-                    let index = FuncIndex::from_u32(*i);
+                wasmparser::ComponentExternalKind::Func => {
+                    let index = FuncIndex::from_u32(export.index);
                     ComponentItem::Func(index)
                 }
-                wasmparser::ComponentArgKind::Module(i) => {
-                    let index = ModuleIndex::from_u32(*i);
+                wasmparser::ComponentExternalKind::Module => {
+                    let index = ModuleIndex::from_u32(export.index);
                     ComponentItem::Module(index)
                 }
-                wasmparser::ComponentArgKind::Instance(i) => {
-                    let index = InstanceIndex::from_u32(*i);
-                    ComponentItem::Instance(index)
+                wasmparser::ComponentExternalKind::Instance => {
+                    let index = ComponentInstanceIndex::from_u32(export.index);
+                    ComponentItem::ComponentInstance(index)
                 }
-                wasmparser::ComponentArgKind::Component(i) => {
-                    let index = ComponentIndex::from_u32(*i);
+                wasmparser::ComponentExternalKind::Component => {
+                    let index = ComponentIndex::from_u32(export.index);
                     ComponentItem::Component(index)
                 }
-                wasmparser::ComponentArgKind::Value(_) => {
+                wasmparser::ComponentExternalKind::Value => {
                     unimplemented!("component values");
                 }
-                wasmparser::ComponentArgKind::Type(_) => {
+                wasmparser::ComponentExternalKind::Type => {
                     unimplemented!("component type export");
                 }
             };
             map.insert(export.name, idx);
         }
-        InstanceDef::ComponentSynthetic(map)
+        ComponentInstanceDef::Synthetic(map)
     }
 
     fn export(&mut self, export: &wasmparser::ComponentExport<'data>) {
         let name = export.name;
         let export = match export.kind {
-            wasmparser::ComponentExportKind::Module(i) => {
-                let idx = ModuleIndex::from_u32(i);
+            wasmparser::ComponentExternalKind::Module => {
+                let idx = ModuleIndex::from_u32(export.index);
                 let init = match self.result.modules[idx].clone() {
                     ModuleDef::Upvar(idx) => Initializer::SaveModuleUpvar(idx),
                     ModuleDef::Import { import, .. } => {
@@ -702,20 +759,20 @@ impl<'a, 'data> Translator<'a, 'data> {
                 self.result.component.num_runtime_modules += 1;
                 Export::Module(runtime_index)
             }
-            wasmparser::ComponentExportKind::Component(i) => {
-                let idx = ComponentIndex::from_u32(i);
+            wasmparser::ComponentExternalKind::Component => {
+                let idx = ComponentIndex::from_u32(export.index);
                 drop(idx);
                 unimplemented!("exporting a component");
             }
-            wasmparser::ComponentExportKind::Instance(i) => {
-                let idx = InstanceIndex::from_u32(i);
+            wasmparser::ComponentExternalKind::Instance => {
+                let idx = ComponentInstanceIndex::from_u32(export.index);
                 drop(idx);
                 unimplemented!("exporting an instance");
             }
-            wasmparser::ComponentExportKind::Function(i) => {
-                let idx = FuncIndex::from_u32(i);
-                match self.result.funcs[idx].clone() {
-                    Func::Lifted { ty, func, options } => Export::LiftedFunction {
+            wasmparser::ComponentExternalKind::Func => {
+                let idx = ComponentFuncIndex::from_u32(export.index);
+                match self.result.component_funcs[idx].clone() {
+                    ComponentFunc::Lifted { ty, func, options } => Export::LiftedFunction {
                         ty,
                         func: func.to_core_export(|i| match i {
                             EntityIndex::Function(i) => i,
@@ -741,17 +798,14 @@ impl<'a, 'data> Translator<'a, 'data> {
                     // Nevertheless this shouldn't panic, eventually when the
                     // component model implementation is finished this should do
                     // something reasonable.
-                    Func::Import { .. } => unimplemented!("exporting an import"),
-
-                    // should not be possible to hit with a valid module.
-                    Func::Core(_) | Func::Lowered(_) => unreachable!(),
+                    ComponentFunc::Import { .. } => unimplemented!("exporting an import"),
                 }
             }
-            wasmparser::ComponentExportKind::Value(_) => {
+            wasmparser::ComponentExternalKind::Value => {
                 unimplemented!("exporting a value");
             }
-            wasmparser::ComponentExportKind::Type(i) => {
-                let idx = TypeIndex::from_u32(i);
+            wasmparser::ComponentExternalKind::Type => {
+                let idx = TypeIndex::from_u32(export.index);
                 drop(idx);
                 unimplemented!("exporting a type");
             }
@@ -762,23 +816,132 @@ impl<'a, 'data> Translator<'a, 'data> {
             .insert(name.to_string(), export);
     }
 
-    fn alias(&mut self, alias: &wasmparser::Alias<'data>) {
-        match alias {
-            wasmparser::Alias::InstanceExport {
-                kind,
-                instance,
-                name,
-            } => {
-                let instance = InstanceIndex::from_u32(*instance);
-                self.alias_instance_export(*kind, instance, name);
-            }
-            wasmparser::Alias::OuterModule { .. } => {
-                unimplemented!("alias outer module");
-            }
-            wasmparser::Alias::OuterComponent { .. } => {
-                unimplemented!("alias outer component");
+    fn alias_module_instance_export(
+        &mut self,
+        kind: wasmparser::ExternalKind,
+        instance: ModuleInstanceIndex,
+        name: &'data str,
+    ) {
+        match &self.result.module_instances[instance] {
+            // The `instance` points to an instantiated module, meaning we can
+            // lookup the `CoreSource` associated with it and use the type
+            // information to insert it into the appropriate namespace.
+            ModuleInstanceDef::Instantiated { instance, module } => {
+                let (src, ty) = self.lookup_core_source_in_module(*instance, *module, name);
+                match ty {
+                    EntityType::Function(_) => {
+                        assert_eq!(kind, wasmparser::ExternalKind::Func);
+                        self.result.funcs.push(Func::Core(src));
+                    }
+                    EntityType::Global(_) => {
+                        assert_eq!(kind, wasmparser::ExternalKind::Global);
+                        self.result.globals.push(src);
+                    }
+                    EntityType::Memory(_) => {
+                        assert_eq!(kind, wasmparser::ExternalKind::Memory);
+                        self.result.memories.push(src);
+                    }
+                    EntityType::Table(_) => {
+                        assert_eq!(kind, wasmparser::ExternalKind::Table);
+                        self.result.tables.push(src);
+                    }
+                    EntityType::Tag(_) => unimplemented!("wasm exceptions"),
+                }
             }
 
+            // ... and like above for synthetic components aliasing exports from
+            // synthetic modules is also just copying around the identifying
+            // information.
+            ModuleInstanceDef::Synthetic(exports) => match exports[&name] {
+                EntityIndex::Function(i) => {
+                    assert_eq!(kind, wasmparser::ExternalKind::Func);
+                    self.result.funcs.push(self.result.funcs[i].clone());
+                }
+                EntityIndex::Global(i) => {
+                    assert_eq!(kind, wasmparser::ExternalKind::Global);
+                    self.result.globals.push(self.result.globals[i].clone());
+                }
+                EntityIndex::Table(i) => {
+                    assert_eq!(kind, wasmparser::ExternalKind::Table);
+                    self.result.tables.push(self.result.tables[i].clone());
+                }
+                EntityIndex::Memory(i) => {
+                    assert_eq!(kind, wasmparser::ExternalKind::Memory);
+                    self.result.memories.push(self.result.memories[i].clone());
+                }
+            },
+        }
+    }
+
+    fn alias_component_instance_export(
+        &mut self,
+        kind: wasmparser::ComponentExternalKind,
+        instance: ComponentInstanceIndex,
+        name: &'data str,
+    ) {
+        match &self.result.component_instances[instance] {
+            // The `instance` points to an imported component instance, meaning
+            // that the item we're pushing into our index spaces is effectively
+            // another form of import. The `name` is appended to the `import`
+            // found here and then the appropriate namespace of an import is
+            // recorded as well.
+            ComponentInstanceDef::Import { import, ty } => {
+                let import = import.append(name);
+                match self.types[*ty].exports[name] {
+                    TypeDef::Module(ty) => {
+                        assert_eq!(kind, wasmparser::ComponentExternalKind::Module);
+                        self.result.modules.push(ModuleDef::Import { import, ty });
+                    }
+                    TypeDef::ComponentInstance(ty) => {
+                        assert_eq!(kind, wasmparser::ComponentExternalKind::Instance);
+                        self.result
+                            .component_instances
+                            .push(ComponentInstanceDef::Import { import, ty });
+                    }
+                    TypeDef::ComponentFunc(_ty) => {
+                        assert_eq!(kind, wasmparser::ComponentExternalKind::Func);
+                        self.result
+                            .component_funcs
+                            .push(ComponentFunc::Import(import));
+                    }
+                    TypeDef::Interface(_) => unimplemented!("alias type export"),
+                    TypeDef::Component(_) => unimplemented!("alias component export"),
+
+                    // not possible with valid components
+                    TypeDef::CoreFunc(_ty) => unreachable!(),
+                }
+            }
+
+            // For synthetic component/module instances we can just copy the
+            // definition of the original item into a new slot as well to record
+            // that the index describes the same item.
+            ComponentInstanceDef::Synthetic(exports) => match exports[&name] {
+                ComponentItem::Func(i) => {
+                    assert_eq!(kind, wasmparser::ComponentExternalKind::Func);
+                    self.result.funcs.push(self.result.funcs[i].clone());
+                }
+                ComponentItem::Module(i) => {
+                    assert_eq!(kind, wasmparser::ComponentExternalKind::Module);
+                    self.result.modules.push(self.result.modules[i].clone());
+                }
+                ComponentItem::ComponentInstance(i) => {
+                    assert_eq!(kind, wasmparser::ComponentExternalKind::Instance);
+                    self.result
+                        .component_instances
+                        .push(self.result.component_instances[i].clone());
+                }
+                ComponentItem::Component(_) => unimplemented!("aliasing a component export"),
+            },
+        }
+    }
+
+    fn alias_component_outer(
+        &mut self,
+        kind: wasmparser::ComponentOuterAliasKind,
+        count: u32,
+        index: u32,
+    ) {
+        match kind {
             // When aliasing a type the `ComponentTypesBuilder` is used to
             // resolve the outer `count` plus the index, and then once it's
             // resolved we push the type information into our local index
@@ -787,125 +950,34 @@ impl<'a, 'data> Translator<'a, 'data> {
             // Note that this is just copying indices around as all type
             // information is basically a pointer back into the `TypesBuilder`
             // structure (and the eventual `TypeTables` that it produces).
-            wasmparser::Alias::OuterType { count, index } => {
-                let index = TypeIndex::from_u32(*index);
-                let ty = self.types.component_outer_type(*count, index);
+            wasmparser::ComponentOuterAliasKind::CoreType => {
+                let index = TypeIndex::from_u32(index);
+                let ty = self.types.core_outer_type(count, index);
+                self.types.push_core_typedef(ty);
+            }
+            wasmparser::ComponentOuterAliasKind::Type => {
+                let index = ComponentTypeIndex::from_u32(index);
+                let ty = self.types.component_outer_type(count, index);
                 self.types.push_component_typedef(ty);
             }
-        }
-    }
 
-    fn alias_instance_export(
-        &mut self,
-        kind: wasmparser::AliasKind,
-        instance: InstanceIndex,
-        name: &'data str,
-    ) {
-        match &self.result.instances[instance] {
-            // The `instance` points to an imported component instance, meaning
-            // that the item we're pushing into our index spaces is effectively
-            // another form of import. The `name` is appended to the `import`
-            // found here and then the appropriate namespace of an import is
-            // recorded as well.
-            InstanceDef::Import { import, ty } => {
-                let import = import.append(name);
-                match self.types[*ty].exports[name] {
-                    TypeDef::Module(ty) => {
-                        assert_eq!(kind, wasmparser::AliasKind::Module);
-                        self.result.modules.push(ModuleDef::Import { import, ty });
-                    }
-                    TypeDef::ComponentInstance(ty) => {
-                        assert_eq!(kind, wasmparser::AliasKind::Instance);
-                        self.result
-                            .instances
-                            .push(InstanceDef::Import { import, ty });
-                    }
-                    TypeDef::Func(_ty) => {
-                        assert_eq!(kind, wasmparser::AliasKind::ComponentFunc);
-                        self.result.funcs.push(Func::Import(import));
-                    }
-                    TypeDef::Interface(_) => unimplemented!("alias type export"),
-                    TypeDef::Component(_) => unimplemented!("alias component export"),
-                }
+            wasmparser::ComponentOuterAliasKind::CoreModule => {
+                unimplemented!("outer alias to module");
             }
-
-            // The `instance` points to an instantiated module, meaning we can
-            // lookup the `CoreSource` associated with it and use the type
-            // information to insert it into the appropriate namespace.
-            InstanceDef::Module { instance, module } => {
-                let (src, ty) = self.lookup_core_source_in_module(*instance, *module, name);
-                match ty {
-                    EntityType::Function(_) => {
-                        assert_eq!(kind, wasmparser::AliasKind::Func);
-                        self.result.funcs.push(Func::Core(src));
-                    }
-                    EntityType::Global(_) => {
-                        assert_eq!(kind, wasmparser::AliasKind::Global);
-                        self.result.globals.push(src);
-                    }
-                    EntityType::Memory(_) => {
-                        assert_eq!(kind, wasmparser::AliasKind::Memory);
-                        self.result.memories.push(src);
-                    }
-                    EntityType::Table(_) => {
-                        assert_eq!(kind, wasmparser::AliasKind::Table);
-                        self.result.tables.push(src);
-                    }
-                    EntityType::Tag(_) => unimplemented!("wasm exceptions"),
-                }
+            wasmparser::ComponentOuterAliasKind::Component => {
+                unimplemented!("outer alias to component");
             }
-
-            // For synthetic component/module instances we can just copy the
-            // definition of the original item into a new slot as well to record
-            // that the index describes the same item.
-            InstanceDef::ComponentSynthetic(exports) => match exports[&name] {
-                ComponentItem::Func(i) => {
-                    assert_eq!(kind, wasmparser::AliasKind::ComponentFunc);
-                    self.result.funcs.push(self.result.funcs[i].clone());
-                }
-                ComponentItem::Module(i) => {
-                    assert_eq!(kind, wasmparser::AliasKind::Module);
-                    self.result.modules.push(self.result.modules[i].clone());
-                }
-                ComponentItem::Instance(i) => {
-                    assert_eq!(kind, wasmparser::AliasKind::Instance);
-                    self.result.instances.push(self.result.instances[i].clone());
-                }
-                ComponentItem::Component(_) => unimplemented!("aliasing a component export"),
-            },
-
-            // ... and like above for synthetic components aliasing exports from
-            // synthetic modules is also just copying around the identifying
-            // information.
-            InstanceDef::ModuleSynthetic(exports) => match exports[&name] {
-                EntityIndex::Function(i) => {
-                    assert_eq!(kind, wasmparser::AliasKind::Func);
-                    self.result.funcs.push(self.result.funcs[i].clone());
-                }
-                EntityIndex::Global(i) => {
-                    assert_eq!(kind, wasmparser::AliasKind::Global);
-                    self.result.globals.push(self.result.globals[i].clone());
-                }
-                EntityIndex::Table(i) => {
-                    assert_eq!(kind, wasmparser::AliasKind::Table);
-                    self.result.tables.push(self.result.tables[i].clone());
-                }
-                EntityIndex::Memory(i) => {
-                    assert_eq!(kind, wasmparser::AliasKind::Memory);
-                    self.result.memories.push(self.result.memories[i].clone());
-                }
-            },
         }
     }
 
     fn lift_function(
         &mut self,
-        ty: TypeIndex,
+        ty: ComponentTypeIndex,
         func: FuncIndex,
         options: &[wasmparser::CanonicalOption],
-    ) -> Func<'data> {
+    ) -> ComponentFunc<'data> {
         let ty = match self.types.component_outer_type(0, ty) {
-            TypeDef::Func(ty) => ty,
+            TypeDef::ComponentFunc(ty) => ty,
             // should not be possible after validation
             _ => unreachable!(),
         };
@@ -919,22 +991,19 @@ impl<'a, 'data> Translator<'a, 'data> {
             // memory into core wasm (since nothing is around to call
             // deallocation/free functions).
             Func::Lowered(_) => unimplemented!("lifting a lowered function"),
-
-            // should not be possible after validation
-            Func::Lifted { .. } | Func::Import { .. } => unreachable!(),
         };
         let options = self.canonical_options(options);
-        Func::Lifted { ty, func, options }
+        ComponentFunc::Lifted { ty, func, options }
     }
 
     fn lower_function(
         &mut self,
-        func: FuncIndex,
+        func: ComponentFuncIndex,
         options: &[wasmparser::CanonicalOption],
     ) -> Func<'data> {
         let options = self.canonical_options(options);
-        match self.result.funcs[func].clone() {
-            Func::Import(import) => {
+        match self.result.component_funcs[func].clone() {
+            ComponentFunc::Import(import) => {
                 let import = self.runtime_import_index(import);
                 let index = LoweredIndex::from_u32(self.result.component.num_lowerings);
                 self.result.component.num_lowerings += 1;
@@ -961,10 +1030,7 @@ impl<'a, 'data> Translator<'a, 'data> {
             // function that lifts the arguments and then afterwards
             // unconditionally traps. That would mean that this validates the
             // arguments within the context of `options` and then traps.
-            Func::Lifted { .. } => unimplemented!("lower a lifted function"),
-
-            // should not be possible after validation
-            Func::Core(_) | Func::Lowered(_) => unreachable!(),
+            ComponentFunc::Lifted { .. } => unimplemented!("lower a lifted function"),
         }
     }
 
@@ -981,23 +1047,23 @@ impl<'a, 'data> Translator<'a, 'data> {
                 wasmparser::CanonicalOption::CompactUTF16 => {
                     ret.string_encoding = StringEncoding::CompactUtf16;
                 }
-                wasmparser::CanonicalOption::Into(instance) => {
-                    let instance = InstanceIndex::from_u32(*instance);
-
-                    // Note that the `unreachable!()` should not happen for
-                    // components which have passed validation.
-                    let memory =
-                        self.lookup_core_def(instance, "memory")
-                            .unwrap_export(|i| match i {
-                                EntityIndex::Memory(i) => i,
-                                _ => unreachable!(),
-                            });
+                wasmparser::CanonicalOption::Memory(idx) => {
+                    let idx = MemoryIndex::from_u32(*idx);
+                    let memory = self.result.memories[idx].to_core_export(|i| match i {
+                        EntityIndex::Memory(i) => i,
+                        _ => unreachable!(),
+                    });
                     let memory = self.runtime_memory(memory);
                     ret.memory = Some(memory);
-
-                    let realloc = self.lookup_core_def(instance, "canonical_abi_realloc");
+                }
+                wasmparser::CanonicalOption::Realloc(idx) => {
+                    let idx = FuncIndex::from_u32(*idx);
+                    let realloc = self.result.funcs[idx].to_core_def();
                     let realloc = self.runtime_realloc(realloc);
                     ret.realloc = Some(realloc);
+                }
+                wasmparser::CanonicalOption::PostReturn(_) => {
+                    unimplemented!("post-return");
                 }
             }
         }
@@ -1065,22 +1131,11 @@ impl CoreSource<'_> {
     }
 }
 
-impl CoreDef {
-    fn unwrap_export<T>(self, get_index: impl FnOnce(EntityIndex) -> T) -> CoreExport<T> {
-        let export = match self {
-            CoreDef::Export(export) => export,
-            CoreDef::Lowered(_) => unreachable!(),
-        };
-        let instance = export.instance;
-        match export.item {
-            ExportItem::Index(idx) => CoreExport {
-                instance,
-                item: ExportItem::Index(get_index(idx)),
-            },
-            ExportItem::Name(name) => CoreExport {
-                instance,
-                item: ExportItem::Name(name),
-            },
+impl Func<'_> {
+    fn to_core_def(&self) -> CoreDef {
+        match self {
+            Func::Core(src) => src.to_core_def(),
+            Func::Lowered(idx) => CoreDef::Lowered(*idx),
         }
     }
 }

@@ -15,8 +15,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use wasmparser::{
     CustomSectionReader, DataKind, ElementItem, ElementKind, Encoding, ExternalKind, FuncValidator,
-    FunctionBody, NameSectionReader, Naming, Operator, Parser, Payload, TypeDef, TypeRef,
-    Validator, ValidatorResources,
+    FunctionBody, NameSectionReader, Naming, Operator, Parser, Payload, Type, TypeRef, Validator,
+    ValidatorResources,
 };
 
 /// Object containing the standalone environment information.
@@ -130,8 +130,8 @@ pub struct WasmFileInfo {
 #[derive(Debug)]
 #[allow(missing_docs)]
 pub struct FunctionMetadata {
-    pub params: Box<[wasmparser::Type]>,
-    pub locals: Box<[(u32, wasmparser::Type)]>,
+    pub params: Box<[wasmparser::ValType]>,
+    pub locals: Box<[(u32, wasmparser::ValType)]>,
 }
 
 impl<'a, 'data> ModuleEnvironment<'a, 'data> {
@@ -216,7 +216,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
 
                 for ty in types {
                     match ty? {
-                        TypeDef::Func(wasm_func_ty) => {
+                        Type::Func(wasm_func_ty) => {
                             self.declare_type_func(wasm_func_ty.try_into()?)?;
                         }
                     }

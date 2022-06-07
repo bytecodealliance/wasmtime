@@ -291,7 +291,7 @@ pub enum Export {
     /// function.
     LiftedFunction {
         /// The component function type of the function being created.
-        ty: FuncTypeIndex,
+        ty: TypeFuncIndex,
         /// Which core WebAssembly export is being lifted.
         func: CoreExport<FuncIndex>,
         /// Any options, if present, associated with this lifting.

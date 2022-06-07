@@ -1,54 +1,72 @@
 ;; basic function lifting
 (component
-  (module $m
+  (core module $m
     (func (export ""))
   )
-  (instance $i (instantiate (module $m)))
+  (core instance $i (instantiate $m))
 
   (func (export "thunk")
-    (canon.lift (func) (func $i ""))
+    (canon lift (core func $i ""))
   )
 )
 
 ;; use an aliased type
 (component $c
-  (module $m
+  (core module $m
     (func (export ""))
   )
-  (instance $i (instantiate (module $m)))
+  (core instance $i (instantiate $m))
 
   (type $to_alias (func))
   (alias outer $c $to_alias (type $alias))
 
-  (func (export "thunk")
-    (canon.lift (type $alias) (func $i ""))
+  (func (export "thunk") (type $alias)
+    (canon lift (core func $i ""))
   )
 )
 
 ;; test out some various canonical abi
 (component $c
-  (module $m
+  (core module $m
     (func (export "") (param i32 i32))
     (memory (export "memory") 1)
-    (func (export "canonical_abi_realloc") (param i32 i32 i32 i32) (result i32)
+    (func (export "realloc") (param i32 i32 i32 i32) (result i32)
       unreachable)
-    (func (export "canonical_abi_free") (param i32 i32 i32))
   )
-  (instance $i (instantiate (module $m)))
+  (core instance $i (instantiate $m))
 
-  (func (export "thunk")
-    (canon.lift (func (param string)) (into $i) (func $i ""))
-  )
-
-  (func (export "thunk8")
-    (canon.lift (func (param string)) string=utf8 (into $i) (func $i ""))
-  )
-
-  (func (export "thunk16")
-    (canon.lift (func (param string)) string=utf16 (into $i) (func $i ""))
+  (func (export "thunk") (param string)
+    (canon lift
+      (core func $i "")
+      (memory $i "memory")
+      (realloc (func $i "realloc"))
+    )
   )
 
-  (func (export "thunklatin16")
-    (canon.lift (func (param string)) string=latin1+utf16 (into $i) (func $i ""))
+  (func (export "thunk8") (param string)
+    (canon lift
+      (core func $i "")
+      string-encoding=utf8
+      (memory $i "memory")
+      (realloc (func $i "realloc"))
+    )
+  )
+
+  (func (export "thunk16") (param string)
+    (canon lift
+      (core func $i "")
+      string-encoding=utf16
+      (memory $i "memory")
+      (realloc (func $i "realloc"))
+    )
+  )
+
+  (func (export "thunklatin16") (param string)
+    (canon lift
+      (core func $i "")
+      string-encoding=latin1+utf16
+      (memory $i "memory")
+      (realloc (func $i "realloc"))
+    )
   )
 )

@@ -5,7 +5,7 @@ use anyhow::{Context, Result};
 use std::mem::MaybeUninit;
 use std::ptr::NonNull;
 use std::sync::Arc;
-use wasmtime_environ::component::{CanonicalOptions, ComponentTypes, CoreExport, FuncTypeIndex};
+use wasmtime_environ::component::{CanonicalOptions, ComponentTypes, CoreExport, TypeFuncIndex};
 use wasmtime_environ::FuncIndex;
 use wasmtime_runtime::{Export, ExportFunction, VMTrampoline};
 
@@ -78,7 +78,7 @@ pub struct Func(Stored<FuncData>);
 pub struct FuncData {
     trampoline: VMTrampoline,
     export: ExportFunction,
-    ty: FuncTypeIndex,
+    ty: TypeFuncIndex,
     types: Arc<ComponentTypes>,
     options: Options,
     instance: Instance,
@@ -89,7 +89,7 @@ impl Func {
         store: &mut StoreOpaque,
         instance: &Instance,
         data: &InstanceData,
-        ty: FuncTypeIndex,
+        ty: TypeFuncIndex,
         func: &CoreExport<FuncIndex>,
         options: &CanonicalOptions,
     ) -> Func {

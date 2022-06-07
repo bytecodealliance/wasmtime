@@ -7,20 +7,18 @@ use wasmtime::{Store, StoreContextMut, Trap};
 fn can_compile() -> Result<()> {
     let engine = super::engine();
     let libc = r#"
-        (module $libc
+        (core module $libc
             (memory (export "memory") 1)
-            (func (export "canonical_abi_realloc") (param i32 i32 i32 i32) (result i32)
-                unreachable)
-            (func (export "canonical_abi_free") (param i32 i32 i32)
+            (func (export "realloc") (param i32 i32 i32 i32) (result i32)
                 unreachable)
         )
-        (instance $libc (instantiate (module $libc)))
+        (core instance $libc (instantiate $libc))
     "#;
     Component::new(
         &engine,
         r#"(component
             (import "" (func $f))
-            (func (canon.lower (func $f)))
+            (core func (canon lower (func $f)))
         )"#,
     )?;
     Component::new(
@@ -29,7 +27,7 @@ fn can_compile() -> Result<()> {
             r#"(component
                 (import "" (func $f (param string)))
                 {libc}
-                (func (canon.lower (into $libc) (func $f)))
+                (core func (canon lower (func $f) (memory $libc "memory") (realloc (func $libc "realloc"))))
             )"#
         ),
     )?;
@@ -39,14 +37,14 @@ fn can_compile() -> Result<()> {
             r#"(component
                 (import "f1" (func $f1 (param string) (result string)))
                 {libc}
-                (func (canon.lower (into $libc) (func $f1)))
+                (core func (canon lower (func $f1) (memory $libc "memory") (realloc (func $libc "realloc"))))
 
                 (import "f2" (func $f2 (param u32) (result (list u8))))
-                (instance $libc2 (instantiate (module $libc)))
-                (func (canon.lower (into $libc2) (func $f2)))
+                (core instance $libc2 (instantiate $libc))
+                (core func (canon lower (func $f2) (memory $libc2 "memory") (realloc (func $libc2 "realloc"))))
 
-                (func (canon.lower (into $libc2) (func $f1)))
-                (func (canon.lower (into $libc) (func $f2)))
+                (core func (canon lower (func $f1) (memory $libc2 "memory") (realloc (func $libc2 "realloc"))))
+                (core func (canon lower (func $f2) (memory $libc "memory") (realloc (func $libc "realloc"))))
             )"#
         ),
     )?;
@@ -56,9 +54,9 @@ fn can_compile() -> Result<()> {
             r#"(component
                 (import "log" (func $log (param string)))
                 {libc}
-                (func $log_lower (canon.lower (into $libc) (func $log)))
+                (core func $log_lower (canon lower (func $log) (memory $libc "memory") (realloc (func $libc "realloc"))))
 
-                (module $logger
+                (core module $logger
                     (import "host" "log" (func $log (param i32 i32)))
                     (import "libc" "memory" (memory 1))
 
@@ -67,13 +65,13 @@ fn can_compile() -> Result<()> {
                         i32.const 0
                         call $log)
                 )
-                (instance $logger (instantiate (module $logger)
+                (core instance $logger (instantiate $logger
                     (with "host" (instance (export "log" (func $log_lower))))
                     (with "libc" (instance $libc))
                 ))
 
                 (func (export "call")
-                    (canon.lift (func) (func $logger "call"))
+                    (canon lift (core func $logger "call"))
                 )
             )"#
         ),
@@ -87,19 +85,17 @@ fn simple() -> Result<()> {
         (component
             (import "" (func $log (param string)))
 
-            (module $libc
+            (core module $libc
                 (memory (export "memory") 1)
 
-                (func (export "canonical_abi_realloc") (param i32 i32 i32 i32) (result i32)
-                    unreachable)
-                (func (export "canonical_abi_free") (param i32 i32 i32)
+                (func (export "realloc") (param i32 i32 i32 i32) (result i32)
                     unreachable)
             )
-            (instance $libc (instantiate (module $libc)))
-            (func $log_lower
-                (canon.lower (into $libc) (func $log))
+            (core instance $libc (instantiate $libc))
+            (core func $log_lower
+                (canon lower (func $log) (memory $libc "memory") (realloc (func $libc "realloc")))
             )
-            (module $m
+            (core module $m
                 (import "libc" "memory" (memory 1))
                 (import "host" "log" (func $log (param i32 i32)))
 
@@ -110,12 +106,12 @@ fn simple() -> Result<()> {
 
                 (data (i32.const 5) "hello world")
             )
-            (instance $i (instantiate (module $m)
+            (core instance $i (instantiate $m
                 (with "libc" (instance $libc))
                 (with "host" (instance (export "log" (func $log_lower))))
             ))
             (func (export "call")
-                (canon.lift (func) (func $i "call"))
+                (canon lift (core func $i "call"))
             )
         )
     "#;
@@ -150,7 +146,7 @@ fn attempt_to_leave_during_malloc() -> Result<()> {
   (import "thunk" (func $thunk))
   (import "ret-string" (func $ret_string (result string)))
 
-  (module $host_shim
+  (core module $host_shim
     (table (export "table") 2 funcref)
     (func $shim_thunk (export "thunk")
       i32.const 0
@@ -160,19 +156,16 @@ fn attempt_to_leave_during_malloc() -> Result<()> {
       i32.const 1
       call_indirect (param i32))
   )
-  (instance $host_shim (instantiate (module $host_shim)))
+  (core instance $host_shim (instantiate $host_shim))
 
-  (module $m
+  (core module $m
     (import "host" "thunk" (func $thunk))
     (import "host" "ret-string" (func $ret_string (param i32)))
 
     (memory (export "memory") 1)
 
-    (func $realloc (export "canonical_abi_realloc") (param i32 i32 i32 i32) (result i32)
+    (func $realloc (export "realloc") (param i32 i32 i32 i32) (result i32)
       call $thunk
-      unreachable)
-
-    (func (export "canonical_abi_free") (param i32 i32 i32)
       unreachable)
 
     (func $run (export "run")
@@ -182,24 +175,24 @@ fn attempt_to_leave_during_malloc() -> Result<()> {
     (func (export "take-string") (param i32 i32)
         unreachable)
   )
-  (instance $m (instantiate (module $m) (with "host" (instance $host_shim))))
+  (core instance $m (instantiate $m (with "host" (instance $host_shim))))
 
-  (module $host_shim_filler_inner
+  (core module $host_shim_filler_inner
     (import "shim" "table" (table 2 funcref))
     (import "host" "thunk" (func $thunk))
     (import "host" "ret-string" (func $ret_string (param i32)))
     (elem (i32.const 0) $thunk $ret_string)
   )
 
-  (func $thunk_lower
-    (canon.lower (into $m) (func $thunk))
+  (core func $thunk_lower
+    (canon lower (func $thunk) (memory $m "memory") (realloc (func $m "realloc")))
   )
 
-  (func $ret_string_lower
-    (canon.lower (into $m) (func $ret_string))
+  (core func $ret_string_lower
+    (canon lower (func $ret_string) (memory $m "memory") (realloc (func $m "realloc")))
   )
 
-  (instance (instantiate (module $host_shim_filler_inner)
+  (core instance (instantiate $host_shim_filler_inner
     (with "shim" (instance $host_shim))
     (with "host" (instance
       (export "thunk" (func $thunk_lower))
@@ -208,10 +201,10 @@ fn attempt_to_leave_during_malloc() -> Result<()> {
   ))
 
   (func (export "run")
-    (canon.lift (func) (func $m "run"))
+    (canon lift (core func $m "run"))
   )
-  (func (export "take-string")
-    (canon.lift (func (param string)) (into $m) (func $m "take-string"))
+  (func (export "take-string") (param string)
+    (canon lift (core func $m "take-string") (memory $m "memory") (realloc (func $m "realloc")))
   )
 )
     "#;
@@ -287,20 +280,20 @@ fn attempt_to_reenter_during_host() -> Result<()> {
     let component = r#"
 (component
   (import "thunk" (func $thunk))
-  (func $thunk_lower (canon.lower (func $thunk)))
+  (core func $thunk_lower (canon lower (func $thunk)))
 
-  (module $m
+  (core module $m
     (import "host" "thunk" (func $thunk))
 
     (func $run (export "run")
       call $thunk)
   )
-  (instance $m (instantiate (module $m)
+  (core instance $m (instantiate $m
     (with "host" (instance (export "thunk" (func $thunk_lower))))
   ))
 
   (func (export "run")
-    (canon.lift (func) (func $m "run"))
+    (canon lift (core func $m "run"))
   )
 )
     "#;
@@ -348,18 +341,18 @@ fn stack_and_heap_args_and_rets() -> Result<()> {
   (import "f3" (func $f3 (param u32) (result string)))
   (import "f4" (func $f4 (param $many_params) (result string)))
 
-  (module $libc
+  (core module $libc
     {REALLOC_AND_FREE}
     (memory (export "memory") 1)
   )
-  (instance $libc (instantiate (module $libc)))
+  (core instance $libc (instantiate (module $libc)))
 
-  (func $f1_lower (canon.lower (into $libc) (func $f1)))
-  (func $f2_lower (canon.lower (into $libc) (func $f2)))
-  (func $f3_lower (canon.lower (into $libc) (func $f3)))
-  (func $f4_lower (canon.lower (into $libc) (func $f4)))
+  (core func $f1_lower (canon lower (func $f1) (memory $libc "memory") (realloc (func $libc "realloc"))))
+  (core func $f2_lower (canon lower (func $f2) (memory $libc "memory") (realloc (func $libc "realloc"))))
+  (core func $f3_lower (canon lower (func $f3) (memory $libc "memory") (realloc (func $libc "realloc"))))
+  (core func $f4_lower (canon lower (func $f4) (memory $libc "memory") (realloc (func $libc "realloc"))))
 
-  (module $m
+  (core module $m
     (import "host" "f1" (func $f1 (param i32) (result i32)))
     (import "host" "f2" (func $f2 (param i32) (result i32)))
     (import "host" "f3" (func $f3 (param i32 i32)))
@@ -454,7 +447,7 @@ fn stack_and_heap_args_and_rets() -> Result<()> {
 
     (data (i32.const 1000) "abc")
   )
-  (instance $m (instantiate (module $m)
+  (core instance $m (instantiate $m
     (with "libc" (instance $libc))
     (with "host" (instance
       (export "f1" (func $f1_lower))
@@ -465,7 +458,7 @@ fn stack_and_heap_args_and_rets() -> Result<()> {
   ))
 
   (func (export "run")
-    (canon.lift (func) (func $m "run"))
+    (canon lift (core func $m "run"))
   )
 )
         "#
@@ -542,23 +535,21 @@ fn bad_import_alignment() -> Result<()> {
     string
   ))
   (import "unaligned-argptr" (func $unaligned_argptr (param $many_arg)))
-  (module $libc_panic
+  (core module $libc_panic
     (memory (export "memory") 1)
-    (func (export "canonical_abi_realloc") (param i32 i32 i32 i32) (result i32)
-      unreachable)
-    (func (export "canonical_abi_free") (param i32 i32 i32)
+    (func (export "realloc") (param i32 i32 i32 i32) (result i32)
       unreachable)
   )
-  (instance $libc_panic (instantiate (module $libc_panic)))
+  (core instance $libc_panic (instantiate $libc_panic))
 
-  (func $unaligned_retptr_lower
-    (canon.lower (into $libc_panic) (func $unaligned_retptr))
+  (core func $unaligned_retptr_lower
+    (canon lower (func $unaligned_retptr) (memory $libc_panic "memory") (realloc (func $libc_panic "realloc")))
   )
-  (func $unaligned_argptr_lower
-    (canon.lower (into $libc_panic) (func $unaligned_argptr))
+  (core func $unaligned_argptr_lower
+    (canon lower (func $unaligned_argptr) (memory $libc_panic "memory") (realloc (func $libc_panic "realloc")))
   )
 
-  (module $m
+  (core module $m
     (import "host" "unaligned-retptr" (func $unaligned_retptr (param i32)))
     (import "host" "unaligned-argptr" (func $unaligned_argptr (param i32)))
 
@@ -567,7 +558,7 @@ fn bad_import_alignment() -> Result<()> {
     (func (export "unaligned-argptr")
      (call $unaligned_argptr (i32.const 1)))
   )
-  (instance $m (instantiate (module $m)
+  (core instance $m (instantiate $m
     (with "host" (instance
       (export "unaligned-retptr" (func $unaligned_retptr_lower))
       (export "unaligned-argptr" (func $unaligned_argptr_lower))
@@ -575,10 +566,10 @@ fn bad_import_alignment() -> Result<()> {
   ))
 
   (func (export "unaligned-retptr")
-    (canon.lift (func) (func $m "unaligned-retptr"))
+    (canon lift (core func $m "unaligned-retptr"))
   )
   (func (export "unaligned-argptr")
-    (canon.lift (func) (func $m "unaligned-argptr"))
+    (canon lift (core func $m "unaligned-argptr"))
   )
 )
         "#

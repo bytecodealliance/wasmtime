@@ -6,7 +6,7 @@ use std::vec::Vec;
 
 /// Map of signatures to a function's parameter and return types.
 pub(crate) type WasmTypes =
-    PrimaryMap<SignatureIndex, (Box<[wasmparser::Type]>, Box<[wasmparser::Type]>)>;
+    PrimaryMap<SignatureIndex, (Box<[wasmparser::ValType]>, Box<[wasmparser::ValType]>)>;
 
 /// Contains information decoded from the Wasm module that must be referenced
 /// during each Wasm function's translation.
@@ -23,13 +23,13 @@ pub struct ModuleTranslationState {
     pub(crate) wasm_types: WasmTypes,
 }
 
-fn cranelift_to_wasmparser_type(ty: Type) -> WasmResult<wasmparser::Type> {
+fn cranelift_to_wasmparser_type(ty: Type) -> WasmResult<wasmparser::ValType> {
     Ok(match ty {
-        types::I32 => wasmparser::Type::I32,
-        types::I64 => wasmparser::Type::I64,
-        types::F32 => wasmparser::Type::F32,
-        types::F64 => wasmparser::Type::F64,
-        types::R32 | types::R64 => wasmparser::Type::ExternRef,
+        types::I32 => wasmparser::ValType::I32,
+        types::I64 => wasmparser::ValType::I64,
+        types::F32 => wasmparser::ValType::F32,
+        types::F64 => wasmparser::ValType::F64,
+        types::R32 | types::R64 => wasmparser::ValType::ExternRef,
         _ => {
             return Err(WasmError::Unsupported(format!(
                 "Cannot convert Cranelift type to Wasm signature: {:?}",
@@ -54,11 +54,11 @@ impl ModuleTranslationState {
     pub fn from_func_sigs(sigs: &[(&[Type], &[Type])]) -> WasmResult<Self> {
         let mut wasm_types = PrimaryMap::with_capacity(sigs.len());
         for &(ref args, ref results) in sigs {
-            let args: Vec<wasmparser::Type> = args
+            let args: Vec<wasmparser::ValType> = args
                 .iter()
                 .map(|&ty| cranelift_to_wasmparser_type(ty))
                 .collect::<Result<_, _>>()?;
-            let results: Vec<wasmparser::Type> = results
+            let results: Vec<wasmparser::ValType> = results
                 .iter()
                 .map(|&ty| cranelift_to_wasmparser_type(ty))
                 .collect::<Result<_, _>>()?;

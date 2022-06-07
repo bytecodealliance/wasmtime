@@ -19,7 +19,7 @@ cranelift-codegen = { path = "../../cranelift/codegen", version = "0.86.0" }
 cranelift-frontend = { path = "../../cranelift/frontend", version = "0.86.0" }
 cranelift-entity = { path = "../../cranelift/entity", version = "0.86.0" }
 cranelift-native = { path = "../../cranelift/native", version = "0.86.0" }
-wasmparser = "0.85.0"
+wasmparser = "0.86.0"
 target-lexicon = "0.12"
 gimli = { version = "0.26.0", default-features = false, features = ['read', 'std'] }
 object = { version = "0.28.0", default-features = false, features = ['write'] }

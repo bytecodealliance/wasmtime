@@ -171,7 +171,7 @@ fn parse_local_decls<FE: FuncEnvironment + ?Sized>(
         builder.set_srcloc(cur_srcloc(reader));
         let pos = reader.original_position();
         let count = reader.read_var_u32()?;
-        let ty = reader.read_type()?;
+        let ty = reader.read_val_type()?;
         validator.define_locals(pos, count, ty)?;
         declare_locals(builder, count, ty, &mut next_local, environ)?;
     }
@@ -187,12 +187,12 @@ fn parse_local_decls<FE: FuncEnvironment + ?Sized>(
 fn declare_locals<FE: FuncEnvironment + ?Sized>(
     builder: &mut FunctionBuilder,
     count: u32,
-    wasm_type: wasmparser::Type,
+    wasm_type: wasmparser::ValType,
     next_local: &mut usize,
     environ: &mut FE,
 ) -> WasmResult<()> {
     // All locals are initialized to 0.
-    use wasmparser::Type::*;
+    use wasmparser::ValType::*;
     let zeroval = match wasm_type {
         I32 => builder.ins().iconst(ir::types::I32, 0),
         I64 => builder.ins().iconst(ir::types::I64, 0),
