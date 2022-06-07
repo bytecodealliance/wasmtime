@@ -33,27 +33,6 @@ pub(crate) type Riscv64Callee = ABICalleeImpl<Riscv64MachineDeps>;
 /// Support for the Riscv64 ABI from the caller side (at a callsite).
 pub(crate) type Riscv64ABICaller = ABICallerImpl<Riscv64MachineDeps>;
 
-//todo Spidermonkey specific ABI convention.
-
-// /// This is SpiderMonkey's `WasmTableCallSigReg`.
-// static BALdRDASh_SIG_REG: u8 = 10;
-
-// /// This is SpiderMonkey's `WasmTlsReg`.
-// static BALdRDASh_TLS_REG: u8 = 23;
-
-// /// Offset in stack-arg area to callee-TLS slot in Baldrdash-2020 calling convention.
-// static BALdRDASh_CALLEE_TLS_OFFSET: i64 = 0;
-// /// Offset in stack-arg area to caller-TLS slot in Baldrdash-2020 calling convention.
-// static BALdRDASh_CALLER_TLS_OFFSET: i64 = 8;
-
-// These two lists represent the registers the JIT may *not* use at any point in generated code.
-//
-// So these are callee-preserved from the JIT's point of view, and every register not in this list
-// has to be caller-preserved by definition.
-//
-// Keep these lists in sync with the NonAllocatableMask set in Spidermonkey's
-// Architecture-arm64.cpp.
-
 /// This is the limit for the size of argument and return-value areas on the
 /// stack. We place a reasonable limit here to avoid integer overflow issues
 /// with 32-bit arithmetic: for now, 128 MB.
