@@ -468,22 +468,15 @@ pub struct SharedMemory(Arc<RwLock<SharedMemoryInner>>);
 impl SharedMemory {
     /// Construct a new [`SharedMemory`].
     pub fn new(plan: MemoryPlan) -> Result<Self> {
-        assert!(plan.memory.shared);
         assert!(matches!(plan.style, MemoryStyle::Static { .. }));
-
         let (minimum_bytes, maximum_bytes) = Memory::limit_new(&plan, None)?;
         let mut mmap_memory = MmapMemory::new(&plan, minimum_bytes, maximum_bytes, None)?;
-        let def = LongTermVMMemoryDefinition(mmap_memory.vmmemory());
-        let memory: Box<dyn RuntimeLinearMemory> = Box::new(mmap_memory);
-        Ok(Self(Arc::new(RwLock::new(SharedMemoryInner {
-            memory,
-            ty: plan.memory,
-            def,
-        }))))
+        Ok(Self::wrap(mmap_memory, plan.memory))
     }
 
     /// Wrap an existing [Memory] with the locking provided by a [SharedMemory].
     pub fn wrap(mut memory: Box<dyn RuntimeLinearMemory>, ty: wasmtime_environ::Memory) -> Self {
+        assert!(ty.shared);
         assert!(
             memory.as_any_mut().type_id() != std::any::TypeId::of::<SharedMemory>(),
             "cannot re-wrap a shared memory"
