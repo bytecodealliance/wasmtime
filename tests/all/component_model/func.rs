@@ -364,15 +364,12 @@ fn integers() -> Result<()> {
         0
     );
 
-    // Returning -1 should fail for u8 and u16, but succeed for all other types.
-    let err = instance
-        .get_typed_func::<(), u8, _>(&mut store, "retm1-u8")?
-        .call(&mut store, ())
-        .unwrap_err();
-    assert!(
-        err.to_string().contains("out of range integral type"),
-        "{}",
-        err
+    // Returning -1 should reinterpret the bytes as defined by each type.
+    assert_eq!(
+        instance
+            .get_typed_func::<(), u8, _>(&mut store, "retm1-u8")?
+            .call(&mut store, ())?,
+        0xff
     );
     assert_eq!(
         instance
@@ -380,14 +377,11 @@ fn integers() -> Result<()> {
             .call(&mut store, ())?,
         -1
     );
-    let err = instance
-        .get_typed_func::<(), u16, _>(&mut store, "retm1-u16")?
-        .call(&mut store, ())
-        .unwrap_err();
-    assert!(
-        err.to_string().contains("out of range integral type"),
-        "{}",
-        err
+    assert_eq!(
+        instance
+            .get_typed_func::<(), u16, _>(&mut store, "retm1-u16")?
+            .call(&mut store, ())?,
+        0xffff
     );
     assert_eq!(
         instance
@@ -420,54 +414,43 @@ fn integers() -> Result<()> {
         -1
     );
 
-    // Returning 100000 should fail for small primitives but succeed for 32-bit.
-    let err = instance
-        .get_typed_func::<(), u8, _>(&mut store, "retbig-u8")?
-        .call(&mut store, ())
-        .unwrap_err();
-    assert!(
-        err.to_string().contains("out of range integral type"),
-        "{}",
-        err
+    // Returning 100000 should chop off bytes as necessary
+    let ret: u32 = 100000;
+    assert_eq!(
+        instance
+            .get_typed_func::<(), u8, _>(&mut store, "retbig-u8")?
+            .call(&mut store, ())?,
+        ret as u8,
     );
-    let err = instance
-        .get_typed_func::<(), i8, _>(&mut store, "retbig-s8")?
-        .call(&mut store, ())
-        .unwrap_err();
-    assert!(
-        err.to_string().contains("out of range integral type"),
-        "{}",
-        err
+    assert_eq!(
+        instance
+            .get_typed_func::<(), i8, _>(&mut store, "retbig-s8")?
+            .call(&mut store, ())?,
+        ret as i8,
     );
-    let err = instance
-        .get_typed_func::<(), u16, _>(&mut store, "retbig-u16")?
-        .call(&mut store, ())
-        .unwrap_err();
-    assert!(
-        err.to_string().contains("out of range integral type"),
-        "{}",
-        err
+    assert_eq!(
+        instance
+            .get_typed_func::<(), u16, _>(&mut store, "retbig-u16")?
+            .call(&mut store, ())?,
+        ret as u16,
     );
-    let err = instance
-        .get_typed_func::<(), i16, _>(&mut store, "retbig-s16")?
-        .call(&mut store, ())
-        .unwrap_err();
-    assert!(
-        err.to_string().contains("out of range integral type"),
-        "{}",
-        err
+    assert_eq!(
+        instance
+            .get_typed_func::<(), i16, _>(&mut store, "retbig-s16")?
+            .call(&mut store, ())?,
+        ret as i16,
     );
     assert_eq!(
         instance
             .get_typed_func::<(), u32, _>(&mut store, "retbig-u32")?
             .call(&mut store, ())?,
-        100000
+        ret,
     );
     assert_eq!(
         instance
             .get_typed_func::<(), i32, _>(&mut store, "retbig-s32")?
             .call(&mut store, ())?,
-        100000
+        ret as i32,
     );
 
     Ok(())
@@ -622,8 +605,7 @@ fn bools() -> Result<()> {
     assert_eq!(bool_to_u32.call(&mut store, (true,))?, 1);
     assert_eq!(u32_to_bool.call(&mut store, (0,))?, false);
     assert_eq!(u32_to_bool.call(&mut store, (1,))?, true);
-    let err = u32_to_bool.call(&mut store, (2,)).unwrap_err();
-    assert!(err.to_string().contains("invalid boolean"), "{}", err);
+    assert_eq!(u32_to_bool.call(&mut store, (2,))?, true);
 
     Ok(())
 }
@@ -1305,7 +1287,9 @@ fn char_bool_memory() -> Result<()> {
     let ret = func.call(&mut store, (1, '🍰' as u32))?;
     assert_eq!(ret, (true, '🍰'));
 
-    assert!(func.call(&mut store, (2, 'a' as u32)).is_err());
+    let ret = func.call(&mut store, (2, 'a' as u32))?;
+    assert_eq!(ret, (true, 'a'));
+
     assert!(func.call(&mut store, (0, 0xd800)).is_err());
 
     Ok(())

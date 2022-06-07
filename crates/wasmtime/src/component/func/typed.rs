@@ -712,11 +712,7 @@ macro_rules! integers {
         unsafe impl Lift for $primitive {
             #[inline]
             fn lift(_store: &StoreOpaque, _options: &Options, src: &Self::Lower) -> Result<Self> {
-                // Perform a lossless cast from our field storage to the
-                // destination type. Note that `try_from` here is load bearing
-                // which rejects conversions like `500u32` to `u8` because
-                // that's out-of-bounds for `u8`.
-                Ok($primitive::try_from(src.$get())?)
+                Ok(src.$get() as $primitive)
             }
 
             #[inline]
@@ -852,8 +848,7 @@ unsafe impl Lift for bool {
     fn lift(_store: &StoreOpaque, _options: &Options, src: &Self::Lower) -> Result<Self> {
         match src.get_i32() {
             0 => Ok(false),
-            1 => Ok(true),
-            _ => bail!("invalid boolean value"),
+            _ => Ok(true),
         }
     }
 
@@ -861,8 +856,7 @@ unsafe impl Lift for bool {
     fn load(_mem: &Memory<'_>, bytes: &[u8]) -> Result<Self> {
         match bytes[0] {
             0 => Ok(false),
-            1 => Ok(true),
-            _ => bail!("invalid boolean value"),
+            _ => Ok(true),
         }
     }
 }
