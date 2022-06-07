@@ -1,5 +1,4 @@
 import "wasi"
-
-import {Console} from "as-wasi"
-Console.log('Hello World!\n');
-
+// Import the WASI environment and additional WASI-enabled APIs
+console.log('Hello World!\n');
+// Call AssemblyScript console.log which in turn calls WASI
