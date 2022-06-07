@@ -1726,6 +1726,12 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                         i64::from(self.offsets.vmmemory_definition_current_length());
                     let vmmemory_definition_ptr =
                         pos.ins().iadd_imm(vmmemory_ptr, vmmemory_definition_offset);
+                    // This atomic access of the
+                    // `VMMemoryDefinition::current_length` is direct; no bounds
+                    // check is needed. This is possible because shared memory
+                    // has a static size (the maximum is always known). Shared
+                    // memory is thus built with a static memory plan and no
+                    // bounds-checked version of this is implemented.
                     pos.ins().atomic_load(
                         pointer_type,
                         ir::MemFlags::trusted(),
