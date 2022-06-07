@@ -236,7 +236,11 @@ where
     fn lift_heap_result(store: &StoreOpaque, options: &Options, dst: &ValRaw) -> Result<Return> {
         assert!(Return::flatten_count() > MAX_STACK_RESULTS);
         // FIXME: needs to read an i64 for memory64
-        let ptr = usize::try_from(dst.get_u32()).unwrap();
+        let ptr = usize::try_from(dst.get_u32())?;
+        if ptr % usize::try_from(Return::align())? != 0 {
+            bail!("return pointer not aligned");
+        }
+
         let memory = Memory::new(store, options);
         let bytes = memory
             .as_slice()
@@ -704,6 +708,7 @@ macro_rules! integers {
             }
 
             fn store<T>(&self, memory: &mut MemoryMut<'_, T>, offset: usize) -> Result<()> {
+                debug_assert!(offset % Self::size() == 0);
                 *memory.get(offset) = self.to_le_bytes();
                 Ok(())
             }
@@ -721,6 +726,7 @@ macro_rules! integers {
 
             #[inline]
             fn load(_mem: &Memory<'_>, bytes: &[u8]) -> Result<Self> {
+                debug_assert!((bytes.as_ptr() as usize) % Self::size() == 0);
                 Ok($primitive::from_le_bytes(bytes.try_into().unwrap()))
             }
         }
@@ -784,6 +790,7 @@ macro_rules! floats {
             }
 
             fn store<T>(&self, memory: &mut MemoryMut<'_, T>, offset: usize) -> Result<()> {
+                debug_assert!(offset % Self::size() == 0);
                 let ptr = memory.get(offset);
                 *ptr = canonicalize(*self).to_bits().to_le_bytes();
                 Ok(())
@@ -798,6 +805,7 @@ macro_rules! floats {
 
             #[inline]
             fn load(_mem: &Memory<'_>, bytes: &[u8]) -> Result<Self> {
+                debug_assert!((bytes.as_ptr() as usize) % Self::size() == 0);
                 Ok(canonicalize($float::from_le_bytes(bytes.try_into().unwrap())))
             }
         }
@@ -842,6 +850,7 @@ unsafe impl Lower for bool {
     }
 
     fn store<T>(&self, memory: &mut MemoryMut<'_, T>, offset: usize) -> Result<()> {
+        debug_assert!(offset % Self::size() == 0);
         memory.get::<1>(offset)[0] = *self as u8;
         Ok(())
     }
@@ -900,6 +909,7 @@ unsafe impl Lower for char {
     }
 
     fn store<T>(&self, memory: &mut MemoryMut<'_, T>, offset: usize) -> Result<()> {
+        debug_assert!(offset % Self::size() == 0);
         *memory.get::<4>(offset) = u32::from(*self).to_le_bytes();
         Ok(())
     }
@@ -913,6 +923,7 @@ unsafe impl Lift for char {
 
     #[inline]
     fn load(_memory: &Memory<'_>, bytes: &[u8]) -> Result<Self> {
+        debug_assert!((bytes.as_ptr() as usize) % Self::size() == 0);
         let bits = u32::from_le_bytes(bytes.try_into().unwrap());
         Ok(char::try_from(bits)?)
     }
@@ -954,6 +965,7 @@ unsafe impl Lower for str {
     }
 
     fn store<T>(&self, mem: &mut MemoryMut<'_, T>, offset: usize) -> Result<()> {
+        debug_assert!(offset % (Self::align() as usize) == 0);
         let (ptr, len) = lower_string(mem, self)?;
         // FIXME: needs memory64 handling
         *mem.get(offset + 0) = (ptr as i32).to_le_bytes();
@@ -1115,6 +1127,7 @@ unsafe impl Lift for WasmStr {
     }
 
     fn load(memory: &Memory<'_>, bytes: &[u8]) -> Result<Self> {
+        debug_assert!((bytes.as_ptr() as usize) % (Self::align() as usize) == 0);
         // FIXME: needs memory64 treatment
         let ptr = u32::from_le_bytes(bytes[..4].try_into().unwrap());
         let len = u32::from_le_bytes(bytes[4..].try_into().unwrap());
@@ -1166,6 +1179,7 @@ where
     }
 
     fn store<U>(&self, mem: &mut MemoryMut<'_, U>, offset: usize) -> Result<()> {
+        debug_assert!(offset % (Self::align() as usize) == 0);
         let (ptr, len) = lower_list(mem, self)?;
         *mem.get(offset + 0) = (ptr as i32).to_le_bytes();
         *mem.get(offset + 4) = (len as i32).to_le_bytes();
@@ -1230,6 +1244,9 @@ impl<T: Lift> WasmList<T> {
         {
             Some(n) if n <= memory.as_slice().len() => {}
             _ => bail!("list pointer/length out of bounds of memory"),
+        }
+        if ptr % usize::try_from(T::align())? != 0 {
+            bail!("list pointer is not aligned")
         }
         Ok(WasmList {
             ptr,
@@ -1330,6 +1347,7 @@ unsafe impl<T: Lift> Lift for WasmList<T> {
     }
 
     fn load(memory: &Memory<'_>, bytes: &[u8]) -> Result<Self> {
+        debug_assert!((bytes.as_ptr() as usize) % (Self::align() as usize) == 0);
         // FIXME: needs memory64 treatment
         let ptr = u32::from_le_bytes(bytes[..4].try_into().unwrap());
         let len = u32::from_le_bytes(bytes[4..].try_into().unwrap());
@@ -1438,6 +1456,7 @@ where
     }
 
     fn store<U>(&self, mem: &mut MemoryMut<'_, U>, offset: usize) -> Result<()> {
+        debug_assert!(offset % (Self::align() as usize) == 0);
         match self {
             None => {
                 mem.get::<1>(offset)[0] = 0;
@@ -1464,6 +1483,7 @@ where
     }
 
     fn load(memory: &Memory<'_>, bytes: &[u8]) -> Result<Self> {
+        debug_assert!((bytes.as_ptr() as usize) % (Self::align() as usize) == 0);
         let discrim = bytes[0];
         let payload = &bytes[align_to(1, T::align())..];
         match discrim {
@@ -1561,6 +1581,7 @@ where
     }
 
     fn store<U>(&self, mem: &mut MemoryMut<'_, U>, offset: usize) -> Result<()> {
+        debug_assert!(offset % (Self::align() as usize) == 0);
         match self {
             Ok(e) => {
                 mem.get::<1>(offset)[0] = 0;
@@ -1608,7 +1629,8 @@ where
     }
 
     fn load(memory: &Memory<'_>, bytes: &[u8]) -> Result<Self> {
-        let align = <Result<T, E> as ComponentType>::align();
+        debug_assert!((bytes.as_ptr() as usize) % (Self::align() as usize) == 0);
+        let align = Self::align();
         let discrim = bytes[0];
         let payload = &bytes[align_to(1, align)..];
         match discrim {
@@ -1680,9 +1702,8 @@ macro_rules! impl_component_ty_for_tuples {
             }
 
             fn store<U>(&self, memory: &mut MemoryMut<'_, U>, mut offset: usize) -> Result<()> {
+                debug_assert!(offset % (Self::align() as usize) == 0);
                 let ($($t,)*) = self;
-                // TODO: this requires that `offset` is aligned which we may not
-                // want to do
                 $($t.store(memory, next_field::<$t>(&mut offset))?;)*
                 Ok(())
             }
@@ -1697,6 +1718,7 @@ macro_rules! impl_component_ty_for_tuples {
             }
 
             fn load(memory: &Memory<'_>, bytes: &[u8]) -> Result<Self> {
+                debug_assert!((bytes.as_ptr() as usize) % (Self::align() as usize) == 0);
                 let mut offset = 0;
                 $(let $t = $t::load(memory, &bytes[next_field::<$t>(&mut offset)..][..$t::size()])?;)*
                 Ok(($($t,)*))

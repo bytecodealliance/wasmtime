@@ -83,7 +83,7 @@ impl Options {
         // Invoke the wasm malloc function using its raw and statically known
         // signature.
         let result = unsafe {
-            usize::try_from(crate::TypedFunc::<(u32, u32, u32, u32), u32>::call_raw(
+            crate::TypedFunc::<(u32, u32, u32, u32), u32>::call_raw(
                 store,
                 realloc,
                 (
@@ -92,8 +92,13 @@ impl Options {
                     old_align,
                     u32::try_from(new_size)?,
                 ),
-            )?)?
+            )?
         };
+
+        if result % old_align != 0 {
+            bail!("realloc return: result not aligned");
+        }
+        let result = usize::try_from(result)?;
 
         let memory = self.memory_mut(store.0);
 
