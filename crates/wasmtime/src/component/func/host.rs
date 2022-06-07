@@ -145,8 +145,9 @@ where
         string_encoding,
     );
 
-    // Perform a dynamic check that this instance can indeed be left. This can't
-    // happen, for example, if the realloc function calls a canonical import.
+    // Perform a dynamic check that this instance can indeed be left. Exiting
+    // the component is disallowed, for example, when the `realloc` function
+    // calls a canonical import.
     if !*may_leave {
         bail!("cannot leave component instance");
     }
@@ -209,7 +210,7 @@ where
 
     return Ok(());
 
-    unsafe fn unset_and_reset_on_drop(slot: *mut bool) -> impl std::any::Any {
+    unsafe fn unset_and_reset_on_drop(slot: *mut bool) -> impl Drop {
         debug_assert!(*slot);
         *slot = false;
         return Reset(slot);
