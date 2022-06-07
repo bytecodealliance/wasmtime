@@ -230,12 +230,15 @@ where
 fn validate_inbounds<T: ComponentType>(memory: &[u8], ptr: &ValRaw) -> Result<usize> {
     // FIXME: needs memory64 support
     let ptr = usize::try_from(ptr.get_u32())?;
+    if ptr % usize::try_from(T::align())? != 0 {
+        bail!("pointer not aligned");
+    }
     let end = match ptr.checked_add(T::size()) {
         Some(n) => n,
-        None => bail!("return pointer size overflow"),
+        None => bail!("pointer size overflow"),
     };
     if end > memory.len() {
-        bail!("return pointer out of bounds")
+        bail!("pointer out of bounds")
     }
     Ok(ptr)
 }

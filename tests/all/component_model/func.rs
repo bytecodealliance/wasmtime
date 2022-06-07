@@ -1,3 +1,4 @@
+use super::REALLOC_AND_FREE;
 use anyhow::Result;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -6,67 +7,6 @@ use wasmtime::{Store, Trap, TrapCode};
 
 const CANON_32BIT_NAN: u32 = 0b01111111110000000000000000000000;
 const CANON_64BIT_NAN: u64 = 0b0111111111111000000000000000000000000000000000000000000000000000;
-
-// A simple bump allocator which can be used with modules below
-const REALLOC_AND_FREE: &str = r#"
-    (global $last (mut i32) (i32.const 8))
-    (func $realloc (export "canonical_abi_realloc")
-        (param $old_ptr i32)
-        (param $old_size i32)
-        (param $align i32)
-        (param $new_size i32)
-        (result i32)
-
-        ;; Test if the old pointer is non-null
-        local.get $old_ptr
-        if
-            ;; If the old size is bigger than the new size then
-            ;; this is a shrink and transparently allow it
-            local.get $old_size
-            local.get $new_size
-            i32.gt_u
-            if
-                local.get $old_ptr
-                return
-            end
-
-            ;; ... otherwise this is unimplemented
-            unreachable
-        end
-
-        ;; align up `$last`
-        (global.set $last
-            (i32.and
-                (i32.add
-                    (global.get $last)
-                    (i32.add
-                        (local.get $align)
-                        (i32.const -1)))
-                (i32.xor
-                    (i32.add
-                        (local.get $align)
-                        (i32.const -1))
-                    (i32.const -1))))
-
-        ;; save the current value of `$last` as the return value
-        global.get $last
-
-        ;; ensure anything necessary is set to valid data by spraying a bit
-        ;; pattern that is invalid
-        global.get $last
-        i32.const 0xde
-        local.get $new_size
-        memory.fill
-
-        ;; bump our pointer
-        (global.set $last
-            (i32.add
-                (global.get $last)
-                (local.get $new_size)))
-    )
-
-    (func (export "canonical_abi_free") (param i32 i32 i32))
-"#;
 
 #[test]
 fn thunks() -> Result<()> {
@@ -676,7 +616,7 @@ fn tuple_result() -> Result<()> {
                 )
 
                 (func (export "invalid") (result i32)
-                    i32.const -1
+                    i32.const -8
                 )
 
                 (func (export "canonical_abi_realloc") (param i32 i32 i32 i32) (result i32)
@@ -1001,7 +941,7 @@ fn many_parameters() -> Result<()> {
 
 #[test]
 fn some_traps() -> Result<()> {
-    let middle_of_memory = i32::MAX / 2;
+    let middle_of_memory = (i32::MAX / 2) & (!0xff);
     let component = format!(
         r#"(component
             (module $m
@@ -1067,7 +1007,7 @@ fn some_traps() -> Result<()> {
                 (func (export "take-list") (param i32 i32))
 
                 (func (export "canonical_abi_realloc") (param i32 i32 i32 i32) (result i32)
-                    i32.const 65535)
+                    i32.const 65532)
                 (func (export "canonical_abi_free") (param i32 i32 i32)
                     unreachable)
             )
@@ -1194,11 +1134,10 @@ fn some_traps() -> Result<()> {
         .call(&mut store, (&[],))?;
     instance
         .get_typed_func::<(&[u8],), (), _>(&mut store, "take-list-end-oob")?
-        .call(&mut store, (&[1],))?;
-    assert_oob(&err);
+        .call(&mut store, (&[1, 2, 3, 4],))?;
     let err = instance
         .get_typed_func::<(&[u8],), (), _>(&mut store, "take-list-end-oob")?
-        .call(&mut store, (&[1, 2],))
+        .call(&mut store, (&[1, 2, 3, 4, 5],))
         .unwrap_err();
     assert_oob(&err);
     instance
@@ -1206,10 +1145,10 @@ fn some_traps() -> Result<()> {
         .call(&mut store, ("",))?;
     instance
         .get_typed_func::<(&str,), (), _>(&mut store, "take-string-end-oob")?
-        .call(&mut store, ("x",))?;
+        .call(&mut store, ("abcd",))?;
     let err = instance
         .get_typed_func::<(&str,), (), _>(&mut store, "take-string-end-oob")?
-        .call(&mut store, ("xy",))
+        .call(&mut store, ("abcde",))
         .unwrap_err();
     assert_oob(&err);
     let err = instance
@@ -1857,4 +1796,99 @@ impl<'a> SliceExt<'a> for &'a [u8] {
         *self = b;
         a.try_into().unwrap()
     }
+}
+
+#[test]
+fn invalid_alignment() -> Result<()> {
+    let component = format!(
+        r#"(component
+            (module $m
+                (memory (export "memory") 1)
+                (func (export "canonical_abi_realloc") (param i32 i32 i32 i32) (result i32)
+                    i32.const 1)
+                (func (export "canonical_abi_free") (param i32 i32 i32)
+                    unreachable)
+
+
+                (func (export "take-i32") (param i32))
+                (func (export "ret-1") (result i32) i32.const 1)
+                (func (export "ret-unaligned-list") (result i32)
+                    (i32.store offset=0 (i32.const 8) (i32.const 1))
+                    (i32.store offset=4 (i32.const 8) (i32.const 1))
+                    i32.const 8)
+            )
+            (instance $i (instantiate (module $m)))
+
+            (func (export "many-params")
+                (canon.lift
+                    (func
+                        (param string) (param string) (param string) (param string)
+                        (param string) (param string) (param string) (param string)
+                        (param string) (param string) (param string) (param string)
+                    )
+                    (into $i)
+                    (func $i "take-i32")
+                )
+            )
+            (func (export "string-ret")
+                (canon.lift (func (result string)) (into $i) (func $i "ret-1"))
+            )
+            (func (export "list-u32-ret")
+                (canon.lift (func (result (list u32))) (into $i) (func $i "ret-unaligned-list"))
+            )
+        )"#
+    );
+
+    let engine = super::engine();
+    let component = Component::new(&engine, component)?;
+    let mut store = Store::new(&engine, ());
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+
+    let err = instance
+        .get_typed_func::<(
+            &str,
+            &str,
+            &str,
+            &str,
+            &str,
+            &str,
+            &str,
+            &str,
+            &str,
+            &str,
+            &str,
+            &str,
+        ), (), _>(&mut store, "many-params")?
+        .call(&mut store, ("", "", "", "", "", "", "", "", "", "", "", ""))
+        .unwrap_err();
+    assert!(
+        err.to_string()
+            .contains("realloc return: result not aligned"),
+        "{}",
+        err
+    );
+
+    let err = instance
+        .get_typed_func::<(), WasmStr, _>(&mut store, "string-ret")?
+        .call(&mut store, ())
+        .err()
+        .unwrap();
+    assert!(
+        err.to_string().contains("return pointer not aligned"),
+        "{}",
+        err
+    );
+
+    let err = instance
+        .get_typed_func::<(), WasmList<u32>, _>(&mut store, "list-u32-ret")?
+        .call(&mut store, ())
+        .err()
+        .unwrap();
+    assert!(
+        err.to_string().contains("list pointer is not aligned"),
+        "{}",
+        err
+    );
+
+    Ok(())
 }

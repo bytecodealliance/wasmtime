@@ -5,6 +5,67 @@ use wasmtime::{Config, Engine};
 mod func;
 mod import;
 
+// A simple bump allocator which can be used with modules
+const REALLOC_AND_FREE: &str = r#"
+    (global $last (mut i32) (i32.const 8))
+    (func $realloc (export "canonical_abi_realloc")
+        (param $old_ptr i32)
+        (param $old_size i32)
+        (param $align i32)
+        (param $new_size i32)
+        (result i32)
+
+        ;; Test if the old pointer is non-null
+        local.get $old_ptr
+        if
+            ;; If the old size is bigger than the new size then
+            ;; this is a shrink and transparently allow it
+            local.get $old_size
+            local.get $new_size
+            i32.gt_u
+            if
+                local.get $old_ptr
+                return
+            end
+
+            ;; ... otherwise this is unimplemented
+            unreachable
+        end
+
+        ;; align up `$last`
+        (global.set $last
+            (i32.and
+                (i32.add
+                    (global.get $last)
+                    (i32.add
+                        (local.get $align)
+                        (i32.const -1)))
+                (i32.xor
+                    (i32.add
+                        (local.get $align)
+                        (i32.const -1))
+                    (i32.const -1))))
+
+        ;; save the current value of `$last` as the return value
+        global.get $last
+
+        ;; ensure anything necessary is set to valid data by spraying a bit
+        ;; pattern that is invalid
+        global.get $last
+        i32.const 0xde
+        local.get $new_size
+        memory.fill
+
+        ;; bump our pointer
+        (global.set $last
+            (i32.add
+                (global.get $last)
+                (local.get $new_size)))
+    )
+
+    (func (export "canonical_abi_free") (param i32 i32 i32))
+"#;
+
 fn engine() -> Engine {
     let mut config = Config::new();
     config.wasm_component_model(true);
