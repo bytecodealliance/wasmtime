@@ -1,4 +1,4 @@
-use crate::component::instance::InstanceData;
+use crate::component::instance::{Instance, InstanceData};
 use crate::store::{StoreOpaque, Stored};
 use crate::AsContext;
 use anyhow::{Context, Result};
@@ -61,8 +61,10 @@ impl<T> MaybeUninitExt<T> for MaybeUninit<T> {
     }
 }
 
+mod host;
 mod options;
 mod typed;
+pub use self::host::*;
 pub use self::options::*;
 pub use self::typed::*;
 
@@ -79,11 +81,13 @@ pub struct FuncData {
     ty: FuncTypeIndex,
     types: Arc<ComponentTypes>,
     options: Options,
+    instance: Instance,
 }
 
 impl Func {
     pub(crate) fn from_lifted_func(
         store: &mut StoreOpaque,
+        instance: &Instance,
         data: &InstanceData,
         ty: FuncTypeIndex,
         func: &CoreExport<FuncIndex>,
@@ -105,6 +109,7 @@ impl Func {
             options,
             ty,
             types: data.component_types().clone(),
+            instance: *instance,
         }))
     }
 

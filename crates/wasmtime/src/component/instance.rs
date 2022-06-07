@@ -1,3 +1,4 @@
+use crate::component::func::HostFunc;
 use crate::component::{Component, ComponentParams, ComponentValue, Func, TypedFunc};
 use crate::instance::OwnedImports;
 use crate::store::{StoreOpaque, Stored};
@@ -21,17 +22,24 @@ use wasmtime_runtime::component::{ComponentInstance, OwnedComponentInstance};
 //
 // FIXME: need to write more docs here.
 #[derive(Copy, Clone)]
-pub struct Instance(Stored<Option<Box<InstanceData>>>);
+pub struct Instance(pub(crate) Stored<Option<Box<InstanceData>>>);
 
 pub(crate) struct InstanceData {
     instances: PrimaryMap<RuntimeInstanceIndex, crate::Instance>,
     // FIXME: shouldn't store the entire component here which keeps upvars
     // alive and things like that, instead only the bare minimum necessary
-    // should be kept alive here (mostly just `wasmtime_environ::Component`.
+    // should be kept alive here (mostly just `wasmtime_environ::Component`).
     component: Component,
     exported_modules: PrimaryMap<RuntimeModuleIndex, Module>,
 
     state: OwnedComponentInstance,
+
+    /// Functions that this instance used during instantiation.
+    ///
+    /// Strong references are stored to these functions since pointers are saved
+    /// into the functions within the `OwnedComponentInstance` but it's our job
+    /// to keep them alive.
+    funcs: Vec<Arc<HostFunc>>,
 }
 
 impl Instance {
@@ -56,7 +64,7 @@ impl Instance {
         // By moving it out we appease the borrow-checker but take a runtime
         // hit.
         let data = store[self.0].take().unwrap();
-        let result = data.get_func(store, name);
+        let result = data.get_func(store, self, name);
         store[self.0] = Some(data);
         return result;
     }
@@ -126,18 +134,22 @@ impl Instance {
 }
 
 impl InstanceData {
-    fn get_func(&self, store: &mut StoreOpaque, name: &str) -> Option<Func> {
+    fn get_func(&self, store: &mut StoreOpaque, instance: &Instance, name: &str) -> Option<Func> {
         match self.component.env_component().exports.get(name)? {
-            Export::LiftedFunction { ty, func, options } => {
-                Some(Func::from_lifted_func(store, self, *ty, func, options))
-            }
+            Export::LiftedFunction { ty, func, options } => Some(Func::from_lifted_func(
+                store, instance, self, *ty, func, options,
+            )),
             Export::Module(_) => None,
         }
     }
 
-    fn lookup_def(&self, store: &mut StoreOpaque, item: &CoreDef) -> wasmtime_runtime::Export {
-        match item {
-            CoreDef::Lowered(_) => unimplemented!(),
+    fn lookup_def(&self, store: &mut StoreOpaque, def: &CoreDef) -> wasmtime_runtime::Export {
+        match def {
+            CoreDef::Lowered(idx) => {
+                wasmtime_runtime::Export::Function(wasmtime_runtime::ExportFunction {
+                    anyfunc: self.state.lowering_anyfunc(*idx),
+                })
+            }
             CoreDef::Export(e) => self.lookup_export(store, e),
         }
     }
@@ -177,6 +189,7 @@ struct Instantiator<'a> {
 }
 
 pub enum RuntimeImport {
+    Func(Arc<HostFunc>),
     Module(Module),
 }
 
@@ -198,6 +211,7 @@ impl<'a> Instantiator<'a> {
                     env_component.num_runtime_modules as usize,
                 ),
                 state: OwnedComponentInstance::new(env_component, store.traitobj()),
+                funcs: Vec::new(),
             },
         }
     }
@@ -215,6 +229,7 @@ impl<'a> Instantiator<'a> {
                             module = self.component.upvar(*idx);
                             self.build_imports(store.0, module, args.iter())
                         }
+
                         // With imports, unlike upvars, we need to do runtime
                         // lookups with strings to determine the order of the
                         // imports since it's whatever the actual module
@@ -222,6 +237,7 @@ impl<'a> Instantiator<'a> {
                         InstantiateModule::Import(idx, args) => {
                             module = match &self.imports[*idx] {
                                 RuntimeImport::Module(m) => m,
+                                _ => unreachable!(),
                             };
                             let args = module
                                 .imports()
@@ -238,6 +254,7 @@ impl<'a> Instantiator<'a> {
                         unsafe { crate::Instance::new_started(store, module, imports.as_ref())? };
                     self.data.instances.push(i);
                 }
+
                 Initializer::LowerImport(import) => self.lower_import(import),
 
                 Initializer::ExtractMemory { index, export } => {
@@ -257,6 +274,7 @@ impl<'a> Instantiator<'a> {
                 Initializer::SaveModuleImport(idx) => {
                     self.data.exported_modules.push(match &self.imports[*idx] {
                         RuntimeImport::Module(m) => m.clone(),
+                        _ => unreachable!(),
                     });
                 }
             }
@@ -265,14 +283,28 @@ impl<'a> Instantiator<'a> {
     }
 
     fn lower_import(&mut self, import: &LowerImport) {
-        drop(self.component.trampoline_ptr(import.index));
-        drop(
+        let func = match &self.imports[import.import] {
+            RuntimeImport::Func(func) => func,
+            _ => unreachable!(),
+        };
+        self.data.state.set_lowering(
+            import.index,
+            func.lowering(),
+            self.component.trampoline_ptr(import.index),
             self.component
                 .signatures()
                 .shared_signature(import.canonical_abi)
-                .unwrap(),
+                .expect("found unregistered signature"),
         );
-        unimplemented!()
+
+        // The `func` provided here must be retained within the `Store` itself
+        // after instantiation. Otherwise it might be possible to drop the
+        // `Arc<HostFunc>` and possibly result in a use-after-free. This comes
+        // about because the `.lowering()` method returns a structure that
+        // points to an interior pointer within the `func`. By saving the list
+        // of host functions used we can ensure that the function lives long
+        // enough for the whole duration of this instance.
+        self.data.funcs.push(func.clone());
     }
 
     fn extract_memory(
