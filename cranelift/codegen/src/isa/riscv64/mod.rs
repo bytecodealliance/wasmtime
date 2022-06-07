@@ -175,25 +175,7 @@ mod test {
     use crate::settings;
     use crate::settings::Configurable;
     use core::str::FromStr;
-    use target_lexicon::{
-        Architecture, BinaryFormat, Environment, OperatingSystem, Riscv64Architecture, Triple,
-    };
-    static TRIPLE: Triple = Triple {
-        architecture: Architecture::Riscv64(Riscv64Architecture::Riscv64),
-        vendor: target_lexicon::Vendor::Unknown,
-        operating_system: OperatingSystem::Unknown,
-        environment: Environment::Unknown,
-        binary_format: BinaryFormat::Unknown,
-    };
-    /*
-
-        some time I want to write code to a file, So I can examine use gnu tool chain.
-    */
-    fn write_to_a_file(file: &str, data: &[u8]) {
-        use std::io::Write;
-        let mut file = std::fs::File::create(file).expect("create failed");
-        file.write_all(data).expect("write failed");
-    }
+    use target_lexicon::Triple;
 
     #[test]
     fn test_compile_function() {
@@ -270,7 +252,11 @@ mod test {
         shared_flags_builder.set("opt_level", "none").unwrap();
         let shared_flags = settings::Flags::new(shared_flags_builder);
         let isa_flags = riscv_settings::Flags::new(&shared_flags, riscv_settings::builder());
-        let backend = Riscv64Backend::new_with_flags(TRIPLE.clone(), shared_flags, isa_flags);
+        let backend = Riscv64Backend::new_with_flags(
+            Triple::from_str("riscv64gc").unwrap(),
+            shared_flags,
+            isa_flags,
+        );
         let result = backend
             .compile_function(&mut func, /* want_disasm = */ false)
             .unwrap();
@@ -339,12 +325,16 @@ mod test {
         shared_flags_builder.set("enable_verifier", "true").unwrap();
         let shared_flags = settings::Flags::new(shared_flags_builder);
         let isa_flags = riscv_settings::Flags::new(&shared_flags, riscv_settings::builder());
-        let backend = Riscv64Backend::new_with_flags(TRIPLE.clone(), shared_flags, isa_flags);
+        let backend = Riscv64Backend::new_with_flags(
+            Triple::from_str("riscv64gc").unwrap(),
+            shared_flags,
+            isa_flags,
+        );
         let result = backend
             .compile_function(&mut func, /* want_disasm = */ false)
             .unwrap();
         let code = result.buffer.data();
-        write_to_a_file("/home/yuyang/tmp/code.bin", code);
+        // write_to_a_file("/home/yuyang/tmp/code.bin", code);
         // 0:   02054663                bltz    a0,0x2c
         // 4:   00206693                ori     a3,zero,2
         // 8:   02d57263                bgeu    a0,a3,0x2c
@@ -371,5 +361,15 @@ mod test {
         ];
 
         assert_eq!(code, &golden[..]);
+    }
+
+    /*
+        some time I want to write code to a file, So I can examine use gnu tool chain.
+        keep it here, it is fine.
+    */
+    fn write_to_a_file(file: &str, data: &[u8]) {
+        use std::io::Write;
+        let mut file = std::fs::File::create(file).expect("create failed");
+        file.write_all(data).expect("write failed");
     }
 }

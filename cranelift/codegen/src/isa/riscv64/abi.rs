@@ -498,7 +498,6 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         caller_conv: isa::CallConv,
     ) -> SmallVec<[Self::I; 2]> {
         let mut insts = SmallVec::new();
-
         fn use_direct_call(name: &ir::ExternalName, distance: RelocDistance) -> bool {
             if let &ExternalName::User {
                 namespace: _namespace,

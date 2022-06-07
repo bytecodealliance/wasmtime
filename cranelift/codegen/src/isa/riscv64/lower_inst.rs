@@ -641,7 +641,6 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         Opcode::Trapff => {
             let trap_code = ctx.data(insn).trap_code().unwrap();
             let input_as_inst = maybe_input_insn(ctx, inputs[0], crate::ir::Opcode::Ffcmp).unwrap();
-
             let (x, y, ty) = get_ffcmp_parameters(ctx, input_as_inst);
             let tmp = ctx.alloc_tmp(I64).only_reg().unwrap();
             let tmp2 = ctx.alloc_tmp(I64).only_reg().unwrap();

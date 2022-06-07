@@ -189,7 +189,6 @@ pub fn writable_spilltmp_reg() -> Writable<Reg> {
 
 /*
 
-
 */
 pub fn crate_reg_eviroment(_flags: &settings::Flags) -> MachineEnv {
     let preferred_regs_by_class: [Vec<PReg>; 2] = {
