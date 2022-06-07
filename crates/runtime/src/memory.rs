@@ -676,24 +676,23 @@ impl Memory {
             maximum = usize::try_from(1u64 << 32).ok();
         }
 
-        // Inform the store's limiter what's about to happen. This will let the limiter
-        // reject anything if necessary, and this also guarantees that we should
-        // call the limiter for all requested memories, even if our `minimum`
-        // calculation overflowed. This means that the `minimum` we're informing
-        // the limiter is lossy and may not be 100% accurate, but for now the
-        // expected uses of limiter means that's ok.
+        // Inform the store's limiter what's about to happen. This will let the
+        // limiter reject anything if necessary, and this also guarantees that
+        // we should call the limiter for all requested memories, even if our
+        // `minimum` calculation overflowed. This means that the `minimum` we're
+        // informing the limiter is lossy and may not be 100% accurate, but for
+        // now the expected uses of limiter means that's ok.
         if let Some(store) = store {
-            // TODO: the following cannot be asserted since shared memories
-            // created from within a module believe they have a store:
-            // assert!(
-            //     !plan.memory.shared,
-            //     "cannot resource-limit shared memories because they are not attached to a store"
-            // );
-            if !store.memory_growing(0, minimum.unwrap_or(absolute_max), maximum)? {
-                bail!(
-                    "memory minimum size of {} pages exceeds memory limits",
-                    plan.memory.minimum
-                );
+            // We ignore the store limits for shared memories since they are
+            // technically not created within a store (though, trickily, they
+            // may be associated with one in order to get a `vmctx`).
+            if !plan.memory.shared {
+                if !store.memory_growing(0, minimum.unwrap_or(absolute_max), maximum)? {
+                    bail!(
+                        "memory minimum size of {} pages exceeds memory limits",
+                        plan.memory.minimum
+                    );
+                }
             }
         }
 
