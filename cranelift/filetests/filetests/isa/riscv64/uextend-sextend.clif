@@ -9,7 +9,7 @@ block0(v0: i8):
 }
 
 ; block0:
-;   uextb a1,a0
+;   uext.b a1,a0
 ;   mov a0,a1
 ;   ret
 
@@ -20,7 +20,7 @@ block0(v0: i8):
 }
 
 ; block0:
-;   uextb a1,a0
+;   uext.b a1,a0
 ;   mov a0,a1
 ;   ret
 
@@ -31,7 +31,7 @@ block0(v0: i8):
 }
 
 ; block0:
-;   uextb a1,a0
+;   uext.b a1,a0
 ;   mov a0,a1
 ;   ret
 
@@ -42,7 +42,7 @@ block0(v0: i8):
 }
 
 ; block0:
-;   sextb a1,a0
+;   sext.b a1,a0
 ;   mov a0,a1
 ;   ret
 
@@ -53,7 +53,7 @@ block0(v0: i8):
 }
 
 ; block0:
-;   sextb a1,a0
+;   sext.b a1,a0
 ;   mov a0,a1
 ;   ret
 
@@ -64,7 +64,7 @@ block0(v0: i8):
 }
 
 ; block0:
-;   sextb a1,a0
+;   sext.b a1,a0
 ;   mov a0,a1
 ;   ret
 
@@ -75,7 +75,7 @@ block0(v0: i16):
 }
 
 ; block0:
-;   uexth a1,a0
+;   uext.h a1,a0
 ;   mov a0,a1
 ;   ret
 
@@ -86,7 +86,7 @@ block0(v0: i16):
 }
 
 ; block0:
-;   uexth a1,a0
+;   uext.h a1,a0
 ;   mov a0,a1
 ;   ret
 
@@ -97,7 +97,7 @@ block0(v0: i16):
 }
 
 ; block0:
-;   sexth a1,a0
+;   sext.h a1,a0
 ;   mov a0,a1
 ;   ret
 
@@ -108,7 +108,7 @@ block0(v0: i16):
 }
 
 ; block0:
-;   sexth a1,a0
+;   sext.h a1,a0
 ;   mov a0,a1
 ;   ret
 
@@ -119,7 +119,7 @@ block0(v0: i32):
 }
 
 ; block0:
-;   uextw a1,a0
+;   uext.w a1,a0
 ;   mov a0,a1
 ;   ret
 
@@ -130,7 +130,7 @@ block0(v0: i32):
 }
 
 ; block0:
-;   sextw a1,a0
+;   sext.w a1,a0
 ;   mov a0,a1
 ;   ret
 

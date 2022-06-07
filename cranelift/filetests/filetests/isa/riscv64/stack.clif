@@ -16,9 +16,9 @@ block0:
 ;   addi sp,-16
 ; block0:
 ;   load_addr a0,0(nominal_sp)
-;   addi sp,16
+;   addi sp,+16
 ;   ld fp,0(sp)
-;   addi sp,8
+;   addi sp,+8
 ;   ret
 
 function %stack_addr_big() -> i64 {
@@ -36,9 +36,9 @@ block0:
 ;   addi sp,-100016
 ; block0:
 ;   load_addr a0,0(nominal_sp)
-;   addi sp,100016
+;   addi sp,+100016
 ;   ld fp,0(sp)
-;   addi sp,8
+;   addi sp,+8
 ;   ret
 
 function %stack_load_small() -> i64 {
@@ -56,9 +56,9 @@ block0:
 ; block0:
 ;   load_addr t0,0(nominal_sp)
 ;   ld a0,0(t0)
-;   addi sp,16
+;   addi sp,+16
 ;   ld fp,0(sp)
-;   addi sp,8
+;   addi sp,+8
 ;   ret
 
 function %stack_load_big() -> i64 {
@@ -77,9 +77,9 @@ block0:
 ; block0:
 ;   load_addr t0,0(nominal_sp)
 ;   ld a0,0(t0)
-;   addi sp,100016
+;   addi sp,+100016
 ;   ld fp,0(sp)
-;   addi sp,8
+;   addi sp,+8
 ;   ret
 
 function %stack_store_small(i64) {
@@ -97,9 +97,9 @@ block0(v0: i64):
 ; block0:
 ;   load_addr t2,0(nominal_sp)
 ;   sd a0,0(t2)
-;   addi sp,16
+;   addi sp,+16
 ;   ld fp,0(sp)
-;   addi sp,8
+;   addi sp,+8
 ;   ret
 
 function %stack_store_big(i64) {
@@ -118,9 +118,9 @@ block0(v0: i64):
 ; block0:
 ;   load_addr t2,0(nominal_sp)
 ;   sd a0,0(t2)
-;   addi sp,100016
+;   addi sp,+100016
 ;   ld fp,0(sp)
-;   addi sp,8
+;   addi sp,+8
 ;   ret
 
 function %b1_spill_slot(b1) -> b1, i64 {
@@ -449,9 +449,9 @@ block0(v0: b1):
 ;   ld s9,64(sp)
 ;   ld s10,72(sp)
 ;   ld s11,80(sp)
-;   addi sp,1280
+;   addi sp,+1280
 ;   ld fp,0(sp)
-;   addi sp,8
+;   addi sp,+8
 ;   ret
 
 function %i128_stack_store(i128) {
@@ -470,9 +470,9 @@ block0(v0: i128):
 ;   load_addr a2,0(nominal_sp)
 ;   sd a0,0(a2)
 ;   sd a1,8(a2)
-;   addi sp,16
+;   addi sp,+16
 ;   ld fp,0(sp)
-;   addi sp,8
+;   addi sp,+8
 ;   ret
 
 function %i128_stack_store_inst_offset(i128) {
@@ -492,9 +492,9 @@ block0(v0: i128):
 ;   load_addr a2,32(nominal_sp)
 ;   sd a0,0(a2)
 ;   sd a1,8(a2)
-;   addi sp,32
+;   addi sp,+32
 ;   ld fp,0(sp)
-;   addi sp,8
+;   addi sp,+8
 ;   ret
 
 function %i128_stack_store_big(i128) {
@@ -514,9 +514,9 @@ block0(v0: i128):
 ;   load_addr a2,0(nominal_sp)
 ;   sd a0,0(a2)
 ;   sd a1,8(a2)
-;   addi sp,100016
+;   addi sp,+100016
 ;   ld fp,0(sp)
-;   addi sp,8
+;   addi sp,+8
 ;   ret
 
 function %i128_stack_load() -> i128 {
@@ -535,9 +535,9 @@ block0:
 ;   load_addr t0,0(nominal_sp)
 ;   ld a0,0(t0)
 ;   ld a1,8(t0)
-;   addi sp,16
+;   addi sp,+16
 ;   ld fp,0(sp)
-;   addi sp,8
+;   addi sp,+8
 ;   ret
 
 function %i128_stack_load_inst_offset() -> i128 {
@@ -557,9 +557,9 @@ block0:
 ;   load_addr t0,32(nominal_sp)
 ;   ld a0,0(t0)
 ;   ld a1,8(t0)
-;   addi sp,32
+;   addi sp,+32
 ;   ld fp,0(sp)
-;   addi sp,8
+;   addi sp,+8
 ;   ret
 
 function %i128_stack_load_big() -> i128 {
@@ -579,8 +579,8 @@ block0:
 ;   load_addr t0,0(nominal_sp)
 ;   ld a0,0(t0)
 ;   ld a1,8(t0)
-;   addi sp,100016
+;   addi sp,+100016
 ;   ld fp,0(sp)
-;   addi sp,8
+;   addi sp,+8
 ;   ret
 

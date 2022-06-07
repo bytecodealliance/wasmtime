@@ -98,8 +98,8 @@ block3(v7: r64, v8: r64):
 ;   sd t3,0(a2)
 ;   ld s3,0(sp)
 ;   ld s9,8(sp)
-;   addi sp,48
+;   addi sp,+48
 ;   ld fp,0(sp)
-;   addi sp,8
+;   addi sp,+8
 ;   ret
 

@@ -32,6 +32,6 @@ block0(v0: i64):
 
 ; block0:
 ;   lr.w t2,(a0)
-;   uext_32_to_64 a0,t2
+;   uext.w a0,t2
 ;   ret
 

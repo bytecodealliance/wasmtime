@@ -18,16 +18,16 @@ block0(v0: i128, v1: i128):
 ;   sub t4,t4,a7
 ;   srl t2,a0,a7
 ;   sll a3,a1,t4
-;   select_reg a3,zero,a3;;condition=(a7 eq zero) 
+;   select_reg a3,zero,a3;;condition=(a7 eq zero)
 ;   or t2,t2,a3
 ;   srl a5,a1,a7
 ;   sll t3,a0,t4
-;   select_reg t3,zero,t3;;condition=(a7 eq zero) 
+;   select_reg t3,zero,t3;;condition=(a7 eq zero)
 ;   or a5,a5,t3
 ;   ori t1,zero,64
 ;   andi a1,a2,127
-;   select_reg a0,t2,a5;;condition=(a1 ult t1) 
-;   select_reg a1,a5,t2;;condition=(a1 ult t1) 
+;   select_reg a0,t2,a5;;condition=(a1 ult t1)
+;   select_reg a1,a5,t2;;condition=(a1 ult t1)
 ;   ret
 
 function %f0(i64, i64) -> i64 {
@@ -94,16 +94,16 @@ block0(v0: i128, v1: i128):
 ;   sub t4,t4,a7
 ;   sll t2,a0,a7
 ;   srl a3,a1,t4
-;   select_reg a3,zero,a3;;condition=(a7 eq zero) 
+;   select_reg a3,zero,a3;;condition=(a7 eq zero)
 ;   or t2,t2,a3
 ;   sll a5,a1,a7
 ;   srl t3,a0,t4
-;   select_reg t3,zero,t3;;condition=(a7 eq zero) 
+;   select_reg t3,zero,t3;;condition=(a7 eq zero)
 ;   or a5,a5,t3
 ;   ori t1,zero,64
 ;   andi a1,a2,127
-;   select_reg a0,t2,a5;;condition=(a1 ult t1) 
-;   select_reg a1,a5,t2;;condition=(a1 ult t1) 
+;   select_reg a0,t2,a5;;condition=(a1 ult t1)
+;   select_reg a1,a5,t2;;condition=(a1 ult t1)
 ;   ret
 
 function %f4(i64, i64) -> i64 {

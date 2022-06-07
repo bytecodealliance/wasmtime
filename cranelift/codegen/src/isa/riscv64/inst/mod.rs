@@ -802,7 +802,7 @@ impl Inst {
                 32 => "w",
                 _ => unreachable!(),
             };
-            format!("{}ext{}", if signed { "s" } else { "u" }, type_name)
+            format!("{}ext.{}", if signed { "s" } else { "u" }, type_name)
         }
         fn format_frm(rounding_mode: Option<FRM>) -> String {
             if FRM::is_none_or_using_fcsr(rounding_mode) {

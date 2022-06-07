@@ -13,7 +13,7 @@ block0(v0: i64, v1: i32):
 }
 
 ; block0:
-;   uext_32_to_64 t3,a1
+;   uext.w t3,a1
 ;   ld a2,0(a0)
 ;   addi t4,a2,0
 ;   ugt a5,t3,t4;;ty=i64
@@ -21,10 +21,10 @@ block0(v0: i64, v1: i32):
 ; block1:
 ;   add t1,a0,t3
 ;   ori t2,zero,0
-;   selectif_spectre_guard a0,t2,t1; t3 ugt t4 ty=i64
+;   selectif_spectre_guard a0,t2,t1;;t3 ugt t4 ty=i64
 ;   ret
 ; block2:
-;   udf ; trap_code=heap_oob
+;   udf;;trap_code=heap_oob
 
 function %static_heap_check(i64 vmctx, i32) -> i64 {
     gv0 = vmctx
@@ -36,7 +36,7 @@ block0(v0: i64, v1: i32):
 }
 
 ; block0:
-;   uext_32_to_64 t3,a1
+;   uext.w t3,a1
 ;   lui t4,16
 ;   addi t4,t4,0
 ;   ugt a4,t3,t4;;ty=i64
@@ -46,8 +46,8 @@ block0(v0: i64, v1: i32):
 ;   ori t0,zero,0
 ;   lui t2,16
 ;   addi t2,t2,0
-;   selectif_spectre_guard a0,t0,t1; t3 ugt t2 ty=i64
+;   selectif_spectre_guard a0,t0,t1;;t3 ugt t2 ty=i64
 ;   ret
 ; block2:
-;   udf ; trap_code=heap_oob
+;   udf;;trap_code=heap_oob
 

@@ -40,7 +40,7 @@ block0(v0: i32, v1: i8):
 }
 
 ; block0:
-;   sext_8_to_32 a3,a1
+;   sext.b a3,a1
 ;   addw a0,a0,a3
 ;   ret
 
@@ -52,7 +52,7 @@ block0(v0: i64, v1: i32):
 }
 
 ; block0:
-;   sext_32_to_64 a3,a1
+;   sext.w a3,a1
 ;   add a0,a0,a3
 ;   ret
 

@@ -19,8 +19,8 @@ block0(v0: i64, v1: i64):
 ;   callind a1
 ;   mov ra,s7
 ;   ld s7,0(sp)
-;   addi sp,16
+;   addi sp,+16
 ;   ld fp,0(sp)
-;   addi sp,8
+;   addi sp,+8
 ;   ret
 

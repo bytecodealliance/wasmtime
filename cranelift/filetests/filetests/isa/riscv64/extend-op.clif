@@ -11,7 +11,7 @@ block0(v0: i8):
 }
 
 ; block0:
-;   sext_8_to_64 a1,a0
+;   sext.b a1,a0
 ;   addi a0,a1,42
 ;   ret
 
@@ -23,7 +23,7 @@ block0(v0: i8, v1: i64):
 }
 
 ; block0:
-;   sext_8_to_64 a3,a0
+;   sext.b a3,a0
 ;   add a0,a3,a1
 ;   ret
 

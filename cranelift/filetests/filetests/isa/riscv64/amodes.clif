@@ -11,7 +11,7 @@ block0(v0: i64, v1: i32):
 }
 
 ; block0:
-;   sext_32_to_64 a4,a1
+;   sext.w a4,a1
 ;   add a4,a0,a4
 ;   lw a0,0(a4)
 ;   ret
@@ -25,7 +25,7 @@ block0(v0: i64, v1: i32):
 }
 
 ; block0:
-;   sext_32_to_64 a4,a1
+;   sext.w a4,a1
 ;   add a4,a4,a0
 ;   lw a0,0(a4)
 ;   ret
@@ -40,8 +40,8 @@ block0(v0: i32, v1: i32):
 }
 
 ; block0:
-;   uext_32_to_64 a5,a0
-;   uext_32_to_64 a6,a1
+;   uext.w a5,a0
+;   uext.w a6,a1
 ;   add a5,a5,a6
 ;   lw a0,0(a5)
 ;   ret
@@ -58,7 +58,7 @@ block0(v0: i64, v1: i32):
 }
 
 ; block0:
-;   sext_32_to_64 a6,a1
+;   sext.w a6,a1
 ;   addi a6,a6,32
 ;   add a6,a6,a0
 ;   add a6,a6,a6
@@ -164,7 +164,7 @@ block0(v0: i32):
 }
 
 ; block0:
-;   sext_32_to_64 a1,a0
+;   sext.w a1,a0
 ;   lw a0,0(a1)
 ;   ret
 
@@ -178,8 +178,8 @@ block0(v0: i32, v1: i32):
 }
 
 ; block0:
-;   sext_32_to_64 a5,a0
-;   sext_32_to_64 a6,a1
+;   sext.w a5,a0
+;   sext.w a6,a1
 ;   add a5,a5,a6
 ;   lw a0,0(a5)
 ;   ret
@@ -195,7 +195,7 @@ block0(v0: i64, v1: i64, v2: i64):
 ; block0:
 ;   lui a5,1048574
 ;   addi a5,a5,4094
-;   uext_32_to_64 t3,a5
+;   uext.w t3,a5
 ;   lw a0,0(t3)
 ;   ret
 
@@ -210,7 +210,7 @@ block0(v0: i64, v1: i64, v2: i64):
 ; block0:
 ;   lui a5,1
 ;   addi a5,a5,2
-;   uext_32_to_64 t3,a5
+;   uext.w t3,a5
 ;   lw a0,0(t3)
 ;   ret
 
@@ -225,7 +225,7 @@ block0(v0: i64, v1: i64, v2: i64):
 ; block0:
 ;   lui a5,1048574
 ;   addi a5,a5,4094
-;   sext_32_to_64 t3,a5
+;   sext.w t3,a5
 ;   lw a0,0(t3)
 ;   ret
 
@@ -240,7 +240,7 @@ block0(v0: i64, v1: i64, v2: i64):
 ; block0:
 ;   lui a5,1
 ;   addi a5,a5,2
-;   sext_32_to_64 t3,a5
+;   sext.w t3,a5
 ;   lw a0,0(t3)
 ;   ret
 
@@ -333,7 +333,7 @@ block0(v0: i32):
 }
 
 ; block0:
-;   sext_32_to_64 a3,a0
+;   sext.w a3,a0
 ;   ld a0,0(a3)
 ;   ld a1,8(a3)
 ;   sd a0,0(a3)
@@ -351,7 +351,7 @@ block0(v0: i64, v1: i32):
 }
 
 ; block0:
-;   sext_32_to_64 a7,a1
+;   sext.w a7,a1
 ;   add a7,a0,a7
 ;   addi a7,a7,24
 ;   ld a0,0(a7)

@@ -166,9 +166,9 @@ block0(v0: f64):
 ;   fld fs9,64(sp)
 ;   fld fs10,72(sp)
 ;   fld fs11,80(sp)
-;   addi sp,112
+;   addi sp,+112
 ;   ld fp,0(sp)
-;   addi sp,8
+;   addi sp,+8
 ;   ret
 
 function %f2(i64) -> i64 {
@@ -270,8 +270,8 @@ block0(v0: i64):
 ;   ld s9,24(sp)
 ;   ld s10,32(sp)
 ;   ld s11,40(sp)
-;   addi sp,48
+;   addi sp,+48
 ;   ld fp,0(sp)
-;   addi sp,8
+;   addi sp,+8
 ;   ret
 
