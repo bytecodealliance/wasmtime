@@ -468,15 +468,19 @@ pub struct SharedMemory(Arc<RwLock<SharedMemoryInner>>);
 impl SharedMemory {
     /// Construct a new [`SharedMemory`].
     pub fn new(plan: MemoryPlan) -> Result<Self> {
-        assert!(matches!(plan.style, MemoryStyle::Static { .. }));
         let (minimum_bytes, maximum_bytes) = Memory::limit_new(&plan, None)?;
-        let mut mmap_memory = MmapMemory::new(&plan, minimum_bytes, maximum_bytes, None)?;
-        Ok(Self::wrap(mmap_memory, plan.memory))
+        let mmap_memory = MmapMemory::new(&plan, minimum_bytes, maximum_bytes, None)?;
+        Ok(Self::wrap(&plan, Box::new(mmap_memory), plan.memory))
     }
 
     /// Wrap an existing [Memory] with the locking provided by a [SharedMemory].
-    pub fn wrap(mut memory: Box<dyn RuntimeLinearMemory>, ty: wasmtime_environ::Memory) -> Self {
+    pub fn wrap(
+        plan: &MemoryPlan,
+        mut memory: Box<dyn RuntimeLinearMemory>,
+        ty: wasmtime_environ::Memory,
+    ) -> Self {
         assert!(ty.shared);
+        assert!(matches!(plan.style, MemoryStyle::Static { .. }));
         assert!(
             memory.as_any_mut().type_id() != std::any::TypeId::of::<SharedMemory>(),
             "cannot re-wrap a shared memory"
@@ -609,7 +613,7 @@ impl Memory {
         let (minimum, maximum) = Self::limit_new(plan, Some(store))?;
         let allocation = creator.new_memory(plan, minimum, maximum, memory_image)?;
         let allocation = if plan.memory.shared {
-            Box::new(SharedMemory::wrap(allocation, plan.memory))
+            Box::new(SharedMemory::wrap(plan, allocation, plan.memory))
         } else {
             allocation
         };
@@ -629,7 +633,7 @@ impl Memory {
             StaticMemory::new(base, minimum, maximum, make_accessible, memory_image)?;
         let allocation = Box::new(pooled_memory);
         let allocation: Box<dyn RuntimeLinearMemory> = if plan.memory.shared {
-            Box::new(SharedMemory::wrap(allocation, plan.memory))
+            Box::new(SharedMemory::wrap(plan, allocation, plan.memory))
         } else {
             allocation
         };
