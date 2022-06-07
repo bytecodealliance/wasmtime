@@ -15,7 +15,7 @@ libfuzzer-sys = "0.4"
 log = "0.4.14"
 wasm-smith = "0.4.0"
 wasmprinter = "0.2.26"
-wasmtime = "0.34.1"
+wasmtime = "0.35.3"
 
 [dependencies.wizer]
 path = ".."
