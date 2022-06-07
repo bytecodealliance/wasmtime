@@ -546,7 +546,13 @@ impl RuntimeLinearMemory for SharedMemory {
         let result = inner.memory.grow(delta_pages, store)?;
         if let Some((_old_size_in_bytes, new_size_in_bytes)) = result {
             // Store the new size to the `VMMemoryDefinition` for JIT-generated
-            // code to access.
+            // code (and runtime functions) to access. No other code can be
+            // growing this memory due to the write lock, but code in other
+            // threads could have access to this shared memory and we want them
+            // to see the most consistent version of the `current_length`; a
+            // weaker consistency is possible if we accept them seeing an older,
+            // smaller memory size (assumption: memory only grows) but presently
+            // we are aiming for accuracy.
             inner
                 .def
                 .0
