@@ -393,11 +393,13 @@ impl Instance {
         let memory = &mut instance.memories[idx];
 
         let result = unsafe { memory.grow(delta, Some(store)) };
-        let vmmemory = memory.vmmemory();
 
-        // Update the state used by wasm code in case the base pointer and/or
-        // the length changed.
-        instance.set_memory(idx, vmmemory);
+        // Update the state used by a non-shared Wasm memory in case the base
+        // pointer and/or the length changed.
+        if memory.as_shared_memory().is_none() {
+            let vmmemory = memory.vmmemory();
+            instance.set_memory(idx, vmmemory);
+        }
 
         result
     }

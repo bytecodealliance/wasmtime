@@ -586,7 +586,11 @@ impl RuntimeLinearMemory for SharedMemory {
     }
 
     fn vmmemory(&mut self) -> VMMemoryDefinition {
-        self.0.write().unwrap().memory.vmmemory()
+        // `vmmemory()` is used for writing the `VMMemoryDefinition` of a memory
+        // into its `VMContext`; this should never be possible for a shared
+        // memory because the only `VMMemoryDefinition` for it should be stored
+        // in its own `def` field.
+        unreachable!()
     }
 
     fn needs_init(&self) -> bool {
