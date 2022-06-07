@@ -1,5 +1,5 @@
 use crate::component::func::HostFunc;
-use crate::component::{Component, ComponentParams, ComponentValue, Func, TypedFunc};
+use crate::component::{Component, ComponentParams, Func, Lift, Lower, TypedFunc};
 use crate::instance::OwnedImports;
 use crate::store::{StoreOpaque, Stored};
 use crate::{AsContextMut, Module, StoreContext, StoreContextMut};
@@ -86,8 +86,8 @@ impl Instance {
         name: &str,
     ) -> Result<TypedFunc<Params, Results>>
     where
-        Params: ComponentParams,
-        Results: ComponentValue,
+        Params: ComponentParams + Lower,
+        Results: Lift,
         S: AsContextMut,
     {
         let f = self

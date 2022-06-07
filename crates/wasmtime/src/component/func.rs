@@ -196,8 +196,8 @@ impl Func {
     /// ```
     pub fn typed<Params, Return, S>(&self, store: S) -> Result<TypedFunc<Params, Return>>
     where
-        Params: ComponentParams,
-        Return: ComponentValue,
+        Params: ComponentParams + Lower,
+        Return: Lift,
         S: AsContext,
     {
         self.typecheck::<Params, Return>(store.as_context().0)?;
@@ -206,16 +206,15 @@ impl Func {
 
     fn typecheck<Params, Return>(&self, store: &StoreOpaque) -> Result<()>
     where
-        Params: ComponentParams,
-        Return: ComponentValue,
+        Params: ComponentParams + Lower,
+        Return: Lift,
     {
         let data = &store[self.0];
         let ty = &data.types[data.ty];
 
-        Params::typecheck(&ty.params, &data.types, Op::Lower)
+        Params::typecheck_params(&ty.params, &data.types)
             .context("type mismatch with parameters")?;
-        Return::typecheck(&ty.result, &data.types, Op::Lift)
-            .context("type mismatch with result")?;
+        Return::typecheck(&ty.result, &data.types).context("type mismatch with result")?;
 
         Ok(())
     }
