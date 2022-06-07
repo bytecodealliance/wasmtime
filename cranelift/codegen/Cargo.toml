@@ -62,7 +62,7 @@ unwind = ["gimli"]
 x86 = []
 arm64 = []
 s390x = []
-riscv64 = []
+riscv64gc = []
 # Stub feature that does nothing, for Cargo-features compatibility: the new
 # backend is the default now.
 experimental_x64 = []
@@ -72,7 +72,7 @@ all-arch = [
     "x86",
     "arm64",
     "s390x",
-    "riscv64"
+    "riscv64gc"
 ]
 
 # For dependent crates that want to serialize some parts of cranelift
