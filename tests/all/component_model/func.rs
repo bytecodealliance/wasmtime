@@ -62,6 +62,9 @@ fn typecheck() -> Result<()> {
             (func (export "thunk")
                 (canon.lift (func) (func $i "thunk"))
             )
+            (func (export "tuple-thunk")
+                (canon.lift (func (param (tuple)) (result (tuple))) (func $i "thunk"))
+            )
             (func (export "take-string")
                 (canon.lift (func (param string)) (into $i) (func $i "take-string"))
             )
@@ -88,6 +91,7 @@ fn typecheck() -> Result<()> {
     let mut store = Store::new(&engine, ());
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
     let thunk = instance.get_func(&mut store, "thunk").unwrap();
+    let tuple_thunk = instance.get_func(&mut store, "tuple-thunk").unwrap();
     let take_string = instance.get_func(&mut store, "take-string").unwrap();
     let take_two_args = instance.get_func(&mut store, "take-two-args").unwrap();
     let ret_tuple = instance.get_func(&mut store, "ret-tuple").unwrap();
@@ -97,6 +101,8 @@ fn typecheck() -> Result<()> {
     assert!(thunk.typed::<(), u32, _>(&store).is_err());
     assert!(thunk.typed::<(u32,), (), _>(&store).is_err());
     assert!(thunk.typed::<(), (), _>(&store).is_ok());
+    assert!(tuple_thunk.typed::<(), (), _>(&store).is_err());
+    assert!(tuple_thunk.typed::<((),), (), _>(&store).is_ok());
     assert!(take_string.typed::<(), (), _>(&store).is_err());
     assert!(take_string.typed::<(String,), (), _>(&store).is_ok());
     assert!(take_string.typed::<(&str,), (), _>(&store).is_ok());

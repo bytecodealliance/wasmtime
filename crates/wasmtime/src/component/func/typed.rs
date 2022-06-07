@@ -603,74 +603,6 @@ forward_impls! {
     (T: Lower) Vec<T> => [T],
 }
 
-unsafe impl ComponentType for () {
-    // A 0-sized array is used here to represent that it has zero-size but it
-    // still has the alignment of `ValRaw`.
-    type Lower = [ValRaw; 0];
-
-    fn typecheck(ty: &InterfaceType, _types: &ComponentTypes) -> Result<()> {
-        match ty {
-            // FIXME(WebAssembly/component-model#21) this may either want to
-            // match more types, not actually exist as a trait impl, or
-            // something like that. Figuring out on that issue about the
-            // relationship between the 0-tuple, unit, and empty structs.
-            InterfaceType::Unit => Ok(()),
-            other => bail!("expected `unit` found `{}`", desc(other)),
-        }
-    }
-
-    #[inline]
-    fn size() -> usize {
-        0
-    }
-
-    #[inline]
-    fn align() -> u32 {
-        1
-    }
-}
-
-unsafe impl Lift for () {
-    #[inline]
-    fn lift(_store: &StoreOpaque, _options: &Options, _src: &Self::Lower) -> Result<Self> {
-        Ok(())
-    }
-
-    #[inline]
-    fn load(_mem: &Memory, _bytes: &[u8]) -> Result<Self> {
-        Ok(())
-    }
-}
-
-unsafe impl Lower for () {
-    #[inline]
-    fn lower<T>(
-        &self,
-        _store: &mut StoreContextMut<T>,
-        _options: &Options,
-        _dst: &mut MaybeUninit<Self::Lower>,
-    ) -> Result<()> {
-        Ok(())
-    }
-
-    #[inline]
-    fn store<T>(&self, _memory: &mut MemoryMut<'_, T>, _offset: usize) -> Result<()> {
-        Ok(())
-    }
-}
-
-unsafe impl ComponentParams for () {
-    fn typecheck_params(
-        params: &[(Option<String>, InterfaceType)],
-        _types: &ComponentTypes,
-    ) -> Result<()> {
-        if params.len() != 0 {
-            bail!("expected 0 types, found {}", params.len());
-        }
-        Ok(())
-    }
-}
-
 // Macro to help generate `ComponentValue` implementations for primitive types
 // such as integers, char, bool, etc.
 macro_rules! integers {
@@ -1376,9 +1308,16 @@ fn typecheck_tuple(
     expected: &[fn(&InterfaceType, &ComponentTypes) -> Result<()>],
 ) -> Result<()> {
     match ty {
+        InterfaceType::Unit if expected.len() == 0 => Ok(()),
         InterfaceType::Tuple(t) => {
             let tuple = &types[*t];
             if tuple.types.len() != expected.len() {
+                if expected.len() == 0 {
+                    bail!(
+                        "expected unit or 0-tuple, found {}-tuple",
+                        tuple.types.len(),
+                    );
+                }
                 bail!(
                     "expected {}-tuple, found {}-tuple",
                     expected.len(),
@@ -1389,6 +1328,9 @@ fn typecheck_tuple(
                 check(ty, types)?;
             }
             Ok(())
+        }
+        other if expected.len() == 0 => {
+            bail!("expected `unit` or 0-tuple found `{}`", desc(other))
         }
         other => bail!("expected `tuple` found `{}`", desc(other)),
     }
@@ -1636,13 +1578,6 @@ where
 }
 
 macro_rules! impl_component_ty_for_tuples {
-    // the unit tuple goes to the `Unit` type, not the `Tuple` type
-    //
-    // FIXME(WebAssembly/component-model#21) there's some active discussion on
-    // the relationship between the 0-tuple and the unit type in the component
-    // model.
-    (0) => {};
-
     ($n:tt $($t:ident)*) => {paste::paste!{
         #[allow(non_snake_case)]
         #[doc(hidden)]
@@ -1650,6 +1585,7 @@ macro_rules! impl_component_ty_for_tuples {
         #[repr(C)]
         pub struct [<TupleLower$n>]<$($t),*> {
             $($t: $t,)*
+            _align_tuple_lower0_correctly: [ValRaw; 0],
         }
 
         #[allow(non_snake_case)]
@@ -1667,16 +1603,16 @@ macro_rules! impl_component_ty_for_tuples {
 
             #[inline]
             fn size() -> usize {
-                let mut size = 0;
-                $(next_field::<$t>(&mut size);)*
-                size
+                let mut _size = 0;
+                $(next_field::<$t>(&mut _size);)*
+                _size
             }
 
             #[inline]
             fn align() -> u32 {
-                let mut align = 1;
-                $(align = align.max($t::align());)*
-                align
+                let mut _align = 1;
+                $(_align = _align.max($t::align());)*
+                _align
             }
         }
 
@@ -1686,19 +1622,19 @@ macro_rules! impl_component_ty_for_tuples {
         {
             fn lower<U>(
                 &self,
-                store: &mut StoreContextMut<U>,
-                options: &Options,
-                dst: &mut MaybeUninit<Self::Lower>,
+                _store: &mut StoreContextMut<U>,
+                _options: &Options,
+                _dst: &mut MaybeUninit<Self::Lower>,
             ) -> Result<()> {
                 let ($($t,)*) = self;
-                $($t.lower(store, options, map_maybe_uninit!(dst.$t))?;)*
+                $($t.lower(_store, _options, map_maybe_uninit!(_dst.$t))?;)*
                 Ok(())
             }
 
-            fn store<U>(&self, memory: &mut MemoryMut<'_, U>, mut offset: usize) -> Result<()> {
-                debug_assert!(offset % (Self::align() as usize) == 0);
+            fn store<U>(&self, _memory: &mut MemoryMut<'_, U>, mut _offset: usize) -> Result<()> {
+                debug_assert!(_offset % (Self::align() as usize) == 0);
                 let ($($t,)*) = self;
-                $($t.store(memory, next_field::<$t>(&mut offset))?;)*
+                $($t.store(_memory, next_field::<$t>(&mut _offset))?;)*
                 Ok(())
             }
         }
@@ -1707,14 +1643,14 @@ macro_rules! impl_component_ty_for_tuples {
         unsafe impl<$($t,)*> Lift for ($($t,)*)
             where $($t: Lift),*
         {
-            fn lift(store: &StoreOpaque, options: &Options, src: &Self::Lower) -> Result<Self> {
-                Ok(($($t::lift(store, options, &src.$t)?,)*))
+            fn lift(_store: &StoreOpaque, _options: &Options, _src: &Self::Lower) -> Result<Self> {
+                Ok(($($t::lift(_store, _options, &_src.$t)?,)*))
             }
 
-            fn load(memory: &Memory<'_>, bytes: &[u8]) -> Result<Self> {
+            fn load(_memory: &Memory<'_>, bytes: &[u8]) -> Result<Self> {
                 debug_assert!((bytes.as_ptr() as usize) % (Self::align() as usize) == 0);
-                let mut offset = 0;
-                $(let $t = $t::load(memory, &bytes[next_field::<$t>(&mut offset)..][..$t::size()])?;)*
+                let mut _offset = 0;
+                $(let $t = $t::load(_memory, &bytes[next_field::<$t>(&mut _offset)..][..$t::size()])?;)*
                 Ok(($($t,)*))
             }
         }
