@@ -365,12 +365,8 @@ impl Inst {
 // Instructions: get_regs
 fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCollector<'_, F>) {
     match inst {
-        &Inst::Nop0 => {
-            //todo do nothing ok
-        }
-        &Inst::Nop4 => {
-            //todo do nothing ok
-        }
+        &Inst::Nop0 => {}
+        &Inst::Nop4 => {}
         &Inst::BrTable { index, tmp1, .. } => {
             collector.reg_use(index);
             collector.reg_early_def(tmp1);
@@ -798,13 +794,15 @@ impl Inst {
             x
         };
 
-        fn format_extend_op(signed: bool, from_bits: u8, to_bits: u8) -> String {
-            format!(
-                "{}ext_{}_to_{}",
-                if signed { "s" } else { "u" },
-                from_bits,
-                to_bits,
-            )
+        fn format_extend_op(signed: bool, from_bits: u8, _to_bits: u8) -> String {
+            let type_name = match from_bits {
+                1 => "b1",
+                8 => "b",
+                16 => "h",
+                32 => "w",
+                _ => unreachable!(),
+            };
+            format!("{}ext{}", if signed { "s" } else { "u" }, type_name)
         }
         fn format_frm(rounding_mode: Option<FRM>) -> String {
             if FRM::is_none_or_using_fcsr(rounding_mode) {
@@ -824,7 +822,7 @@ impl Inst {
             &Inst::Cls { rd, rs, ty } => {
                 let rs = format_reg(rs, allocs);
                 let rd = format_reg(rd.to_reg(), allocs);
-                format!("cls {},{};ty={}", rd, rs, ty)
+                format!("cls {},{};;ty={}", rd, rs, ty)
             }
             &Inst::SelectIf {
                 if_spectre_guard,
@@ -843,7 +841,7 @@ impl Inst {
                 let rd: Vec<_> = rd.iter().map(|r| r.to_reg()).collect();
                 let rd = format_regs(&rd[..], allocs);
                 format!(
-                    "selectif{} {},{},{}; {} {} {} ty={}",
+                    "selectif{} {},{},{};;{} {} {} ty={}",
                     if if_spectre_guard {
                         "_spectre_guard"
                     } else {
@@ -891,11 +889,11 @@ impl Inst {
                 let rs2 = format_reg(rs2, allocs);
                 let rd = format_reg(rd.to_reg(), allocs);
                 format!(
-                    "select_reg {},{},{};;condition={} ",
+                    "select_reg {},{},{};;condition={}",
                     rd,
                     rs1,
                     rs2,
-                    format!("{} {} {}", c_rs1, condition.kind.to_static_str(), c_rs2),
+                    format!("({} {} {})", c_rs1, condition.kind.to_static_str(), c_rs2),
                 )
             }
             &Inst::AtomicCas {
@@ -912,7 +910,7 @@ impl Inst {
                 let t0 = format_reg(t0.to_reg(), allocs);
                 let dst = format_reg(dst.to_reg(), allocs);
                 format!(
-                    "{} {},{},{},({});; t0={} ty={}",
+                    "{} {},{},{},({});;t0={} ty={}",
                     "atomic_cas", dst, e, v, addr, t0, ty
                 )
             }
@@ -934,7 +932,7 @@ impl Inst {
 
                 let dst: Vec<_> = dst.iter().map(|r| r.to_reg()).collect();
                 let dst = format_regs(&dst[..], allocs);
-                format!("{} {},{},{} ;; ty={}", op.op_name(), dst, x, y, ty,)
+                format!("{} {},{},{};;ty={}", op.op_name(), dst, x, y, ty,)
             }
             &Inst::BrTable {
                 index,
@@ -944,7 +942,7 @@ impl Inst {
             } => {
                 let targets: Vec<_> = targets.iter().map(|x| x.as_label().unwrap()).collect();
                 format!(
-                    "{} {},{},{};; tmp1={}",
+                    "{} {},{},{};;tmp1={}",
                     "br_table",
                     format_reg(index, allocs),
                     default_,
@@ -1095,7 +1093,7 @@ impl Inst {
                 let rd = format_reg(rd.to_reg(), allocs);
                 let tmp = format_reg(tmp.to_reg(), allocs);
                 format!(
-                    "{}.{} {},{},{};tmp={}",
+                    "{}.{} {},{},{};;tmp={}",
                     if ty == F32 { "f" } else { "d" },
                     cc,
                     rd,
@@ -1138,9 +1136,9 @@ impl Inst {
                 )
             }
             &MInst::AjustSp { amount } => {
-                format!("{} sp,{}", "addi", amount)
+                format!("{} sp,{:+}", "addi", amount)
             }
-            &MInst::Call { .. } => todo!(),
+            &MInst::Call { ref info } => format!("call {}", info.dest),
             &MInst::CallInd { ref info } => {
                 let rd = format_reg(info.rn, allocs);
                 format!("callind {}", rd)
@@ -1152,13 +1150,12 @@ impl Inst {
                 ty,
                 trap_code,
             } => format!(
-                "trap_if_{} {} {},{};ty={} trap_code={}",
+                "trap_if_{} {} {},{};;ty={}",
                 cc.to_static_str(),
                 trap_code,
                 format_regs(x.regs(), allocs),
                 format_regs(y.regs(), allocs),
                 ty,
-                trap_code
             ),
             &MInst::TrapFf {
                 cc,
@@ -1169,7 +1166,7 @@ impl Inst {
                 tmp,
                 tmp2,
             } => format!(
-                "trap_ff_{} {} {},{};tmp={} tmp2={} ty={} trap_code={}",
+                "trap_ff_{} {} {},{};;tmp={} tmp2={} ty={}",
                 cc,
                 trap_code,
                 format_reg(x, allocs),
@@ -1177,7 +1174,6 @@ impl Inst {
                 format_reg(tmp.to_reg(), allocs),
                 format_reg(tmp2.to_reg(), allocs),
                 ty,
-                trap_code
             ),
 
             &MInst::Jal { dest, .. } => {
@@ -1191,7 +1187,6 @@ impl Inst {
             } => {
                 let rs1 = format_reg(kind.rs1, allocs);
                 let rs2 = format_reg(kind.rs2, allocs);
-
                 if not_taken.is_zero() && taken.as_label().is_none() {
                     let off = taken.as_offset().unwrap();
                     format!("{} {},{},{}", kind.op_name(), rs1, rs2, off)
@@ -1248,7 +1243,7 @@ impl Inst {
                 format!("load_addr {},{}", rd, mem)
             }
             &MInst::VirtualSPOffsetAdj { amount } => {
-                format!("add virtaul_sp,virtaul_sp,{}", amount)
+                format!("virtual_sp_offset_adj {:+}", amount)
             }
             &MInst::Mov { rd, rm, ty } => {
                 let rd = format_reg(rd.to_reg(), allocs);
@@ -1279,7 +1274,7 @@ impl Inst {
                 format!("select_{} {},{},{};;condition={}", ty, dst, x, y, condition)
             }
 
-            &MInst::Udf { trap_code } => format!("udf ; trap_code={}", trap_code),
+            &MInst::Udf { trap_code } => format!("udf;;trap_code={}", trap_code),
             &MInst::EBreak {} => String::from("ebreak"),
             &MInst::ECall {} => String::from("ecall"),
         }

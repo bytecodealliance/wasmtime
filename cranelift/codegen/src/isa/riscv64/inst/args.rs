@@ -321,18 +321,36 @@ impl FpuOPRR {
     pub(crate) fn float_convert_2_int_op(from: Type, is_type_signed: bool, to: Type) -> Self {
         let type_32 = to.bits() == 32;
         match from {
-            F32 => match (is_type_signed, type_32) {
-                (true, true) => Self::FcvtWS,
-                (true, false) => Self::FcvtWuS,
-                (false, true) => Self::FcvtLS,
-                (false, false) => Self::FcvtLuS,
-            },
-            F64 => match (is_type_signed, type_32) {
-                (true, true) => Self::FcvtWD,
-                (true, false) => Self::FcvtWuD,
-                (false, true) => Self::FcvtLD,
-                (false, false) => Self::FcvtLuD,
-            },
+            F32 => {
+                if is_type_signed {
+                    if type_32 {
+                        Self::FcvtWS
+                    } else {
+                        Self::FcvtLS
+                    }
+                } else {
+                    if type_32 {
+                        Self::FcvtWuS
+                    } else {
+                        Self::FcvtLuS
+                    }
+                }
+            }
+            F64 => {
+                if is_type_signed {
+                    if type_32 {
+                        Self::FcvtWD
+                    } else {
+                        Self::FcvtLD
+                    }
+                } else {
+                    if type_32 {
+                        Self::FcvtWuD
+                    } else {
+                        Self::FcvtLuD
+                    }
+                }
+            }
             _ => unreachable!("from type:{}", from),
         }
     }
@@ -340,18 +358,36 @@ impl FpuOPRR {
     pub(crate) fn int_convert_2_float_op(from: Type, is_type_signed: bool, to: Type) -> Self {
         let type_32 = from.bits() == 32;
         match to {
-            F32 => match (type_32, is_type_signed) {
-                (true, true) => Self::FcvtSw,
-                (true, false) => Self::FcvtSwU,
-                (false, true) => Self::FcvtSL,
-                (false, false) => Self::FcvtSLU,
-            },
-            F64 => match (type_32, is_type_signed) {
-                (true, true) => Self::FcvtDW,
-                (true, false) => Self::FcvtDWU,
-                (false, true) => Self::FcvtDL,
-                (false, false) => Self::FcvtDLu,
-            },
+            F32 => {
+                if is_type_signed {
+                    if type_32 {
+                        Self::FcvtSw
+                    } else {
+                        Self::FcvtSL
+                    }
+                } else {
+                    if type_32 {
+                        Self::FcvtSwU
+                    } else {
+                        Self::FcvtSLU
+                    }
+                }
+            }
+            F64 => {
+                if is_type_signed {
+                    if type_32 {
+                        Self::FcvtDW
+                    } else {
+                        Self::FcvtDL
+                    }
+                } else {
+                    if type_32 {
+                        Self::FcvtDWU
+                    } else {
+                        Self::FcvtDLu
+                    }
+                }
+            }
             _ => unreachable!("to type:{}", to),
         }
     }

@@ -11,9 +11,7 @@ block0(v0: i8):
 ; block0:
 ;   slli a1,a0,56
 ;   srli a1,a1,56
-;   csrrwi a4,0x3,0
 ;   fcvt.s.lu fa0,a1
-;   csrrw zero,0x3,a4
 ;   ret
 
 function u0:0(i8) -> f64 {
@@ -25,9 +23,7 @@ block0(v0: i8):
 ; block0:
 ;   slli a1,a0,56
 ;   srli a1,a1,56
-;   csrrwi a4,0x3,0
 ;   fcvt.d.lu fa0,a1
-;   csrrw zero,0x3,a4
 ;   ret
 
 function u0:0(i16) -> f32 {
@@ -39,9 +35,7 @@ block0(v0: i16):
 ; block0:
 ;   slli a1,a0,48
 ;   srli a1,a1,48
-;   csrrwi a4,0x3,0
 ;   fcvt.s.lu fa0,a1
-;   csrrw zero,0x3,a4
 ;   ret
 
 function u0:0(i16) -> f64 {
@@ -53,9 +47,7 @@ block0(v0: i16):
 ; block0:
 ;   slli a1,a0,48
 ;   srli a1,a1,48
-;   csrrwi a4,0x3,0
 ;   fcvt.d.lu fa0,a1
-;   csrrw zero,0x3,a4
 ;   ret
 
 function u0:0(f32) -> i8 {
@@ -65,9 +57,7 @@ block0(v0: f32):
 }
 
 ; block0:
-;   csrrwi a1,0x3,0
 ;   fcvt.lu.s a0,fa0
-;   csrrw zero,0x3,a1
 ;   ret
 
 function u0:0(f64) -> i8 {
@@ -77,9 +67,7 @@ block0(v0: f64):
 }
 
 ; block0:
-;   csrrwi a1,0x3,0
 ;   fcvt.lu.d a0,fa0
-;   csrrw zero,0x3,a1
 ;   ret
 
 function u0:0(f32) -> i16 {
@@ -89,9 +77,7 @@ block0(v0: f32):
 }
 
 ; block0:
-;   csrrwi a1,0x3,0
 ;   fcvt.lu.s a0,fa0
-;   csrrw zero,0x3,a1
 ;   ret
 
 function u0:0(f64) -> i16 {
@@ -101,8 +87,6 @@ block0(v0: f64):
 }
 
 ; block0:
-;   csrrwi a1,0x3,0
 ;   fcvt.lu.d a0,fa0
-;   csrrw zero,0x3,a1
 ;   ret
 

@@ -971,7 +971,6 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     Opcode::Nearest => FRM::RNE,
                     _ => unreachable!(),
                 };
-
                 let input_ty = ctx.input_ty(insn, 0);
                 let rs = put_input_in_reg(ctx, inputs[0]);
                 let rd = ctx.get_output(insn, 0).only_reg().unwrap();
@@ -1134,9 +1133,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             unimplemented!();
         }
 
-        Opcode::TlsValue => {
-            unimplemented!();
-        }
+        Opcode::TlsValue => {}
 
         Opcode::SqmulRoundSat => {
             unimplemented!();

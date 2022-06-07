@@ -65,40 +65,39 @@ block3(v7: r64, v8: r64):
 ;   sd fp,0(sp)
 ;   mov fp,sp
 ;   addi sp,-48
-;   sd s2,0(sp)
-;   sd s8,8(sp)
-;   sd s11,16(sp)
+;   sd s3,0(sp)
+;   sd s9,8(sp)
 ; block0:
-;   mov s8,a1
-;   mov s2,a2
-;   mov s11,a0
-;   load_sym a4,%f+0
-;   callind a4
-;   load_addr a7,0(nominal_sp)
-;   mov t2,s11
-;   sd t2,0(a7)
+;   sd a1,16(nominal_sp)
+;   mov s9,a2
+;   mov s3,ra
+;   sd a0,8(nominal_sp)
+;   load_sym a6,%f+0
+;   callind a6
+;   mov ra,s3
+;   load_addr t4,0(nominal_sp)
+;   ld a3,8(nominal_sp)
+;   sd a3,0(t4)
 ;   beq a0,zero,taken(label1),not_taken(label3)
 ; block1:
 ;   j label2
 ; block2:
-;   mov t5,s8
-;   mov s8,s11
-;   mov s11,t5
+;   mov a1,a3
+;   ld a0,16(nominal_sp)
 ;   j label5
 ; block3:
 ;   j label4
 ; block4:
+;   mov a0,a3
+;   ld a1,16(nominal_sp)
 ;   j label5
 ; block5:
-;   load_addr a4,0(nominal_sp)
-;   ld a6,0(a4)
-;   mov a0,s11
-;   mov a1,s8
-;   mov a2,s2
-;   sd a6,0(a2)
-;   ld s2,0(sp)
-;   ld s8,8(sp)
-;   ld s11,16(sp)
+;   load_addr a6,0(nominal_sp)
+;   ld t3,0(a6)
+;   mov a2,s9
+;   sd t3,0(a2)
+;   ld s3,0(sp)
+;   ld s9,8(sp)
 ;   addi sp,48
 ;   ld fp,0(sp)
 ;   addi sp,8

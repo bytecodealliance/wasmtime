@@ -1,0 +1,201 @@
+test compile precise-output
+set unwind_info=false
+target riscv64
+
+function %foo() {
+block0:
+    return
+}
+
+; block0:
+;   ret
+
+function %stack_limit_leaf_zero(i64 stack_limit) {
+block0(v0: i64):
+    return
+}
+
+; block0:
+;   ret
+
+function %stack_limit_gv_leaf_zero(i64 vmctx) {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0
+    gv2 = load.i64 notrap aligned gv1+4
+    stack_limit = gv2
+block0(v0: i64):
+    return
+}
+
+; block0:
+;   ret
+
+function %stack_limit_call_zero(i64 stack_limit) {
+    fn0 = %foo()
+block0(v0: i64):
+    call fn0()
+    return
+}
+
+;   addi sp,-8
+;   sd fp,0(sp)
+;   mov fp,sp
+;   trap_if_ult stk_ovf sp,a0;ty=i64 trap_code=stk_ovf
+;   addi sp,-16
+;   sd s5,0(sp)
+; block0:
+;   mov s5,ra
+;   load_sym a1,%foo+0
+;   callind a1
+;   mov ra,s5
+;   ld s5,0(sp)
+;   addi sp,16
+;   ld fp,0(sp)
+;   addi sp,8
+;   ret
+
+function %stack_limit_gv_call_zero(i64 vmctx) {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0
+    gv2 = load.i64 notrap aligned gv1+4
+    stack_limit = gv2
+    fn0 = %foo()
+block0(v0: i64):
+    call fn0()
+    return
+}
+
+;   addi sp,-8
+;   sd fp,0(sp)
+;   mov fp,sp
+;   ld t6,0(a0)
+;   ld t6,4(t6)
+;   trap_if_ult stk_ovf sp,t6;ty=i64 trap_code=stk_ovf
+;   addi sp,-16
+;   sd s5,0(sp)
+; block0:
+;   mov s5,ra
+;   load_sym a1,%foo+0
+;   callind a1
+;   mov ra,s5
+;   ld s5,0(sp)
+;   addi sp,16
+;   ld fp,0(sp)
+;   addi sp,8
+;   ret
+
+function %stack_limit(i64 stack_limit) {
+    ss0 = explicit_slot 168
+block0(v0: i64):
+    return
+}
+
+;   addi sp,-8
+;   sd fp,0(sp)
+;   mov fp,sp
+;   ori t6,zero,176
+;   add t6,t6,a0
+;   trap_if_ult stk_ovf sp,t6;ty=i64 trap_code=stk_ovf
+;   addi sp,-176
+; block0:
+;   addi sp,176
+;   ld fp,0(sp)
+;   addi sp,8
+;   ret
+
+function %huge_stack_limit(i64 stack_limit) {
+    ss0 = explicit_slot 400000
+block0(v0: i64):
+    return
+}
+
+;   addi sp,-8
+;   sd fp,0(sp)
+;   mov fp,sp
+;   trap_if_ult stk_ovf sp,a0;ty=i64 trap_code=stk_ovf
+;   lui t6,97
+;   addi t6,t6,2688
+;   add t6,t6,a0
+;   trap_if_ult stk_ovf sp,t6;ty=i64 trap_code=stk_ovf
+;   addi sp,-400000
+; block0:
+;   addi sp,400000
+;   ld fp,0(sp)
+;   addi sp,8
+;   ret
+
+function %limit_preamble(i64 vmctx) {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0
+    gv2 = load.i64 notrap aligned gv1+4
+    stack_limit = gv2
+    ss0 = explicit_slot 20
+block0(v0: i64):
+    return
+}
+
+;   addi sp,-8
+;   sd fp,0(sp)
+;   mov fp,sp
+;   ld t6,0(a0)
+;   ld t6,4(t6)
+;   ori t6,zero,32
+;   add t6,t6,t6
+;   trap_if_ult stk_ovf sp,t6;ty=i64 trap_code=stk_ovf
+;   addi sp,-32
+; block0:
+;   addi sp,32
+;   ld fp,0(sp)
+;   addi sp,8
+;   ret
+
+function %limit_preamble_huge(i64 vmctx) {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0
+    gv2 = load.i64 notrap aligned gv1+4
+    stack_limit = gv2
+    ss0 = explicit_slot 400000
+block0(v0: i64):
+    return
+}
+
+;   addi sp,-8
+;   sd fp,0(sp)
+;   mov fp,sp
+;   ld t6,0(a0)
+;   ld t6,4(t6)
+;   trap_if_ult stk_ovf sp,t6;ty=i64 trap_code=stk_ovf
+;   lui t6,97
+;   addi t6,t6,2688
+;   add t6,t6,t6
+;   trap_if_ult stk_ovf sp,t6;ty=i64 trap_code=stk_ovf
+;   addi sp,-400000
+; block0:
+;   addi sp,400000
+;   ld fp,0(sp)
+;   addi sp,8
+;   ret
+
+function %limit_preamble_huge_offset(i64 vmctx) {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0+400000
+    stack_limit = gv1
+    ss0 = explicit_slot 20
+block0(v0: i64):
+    return
+}
+
+;   addi sp,-8
+;   sd fp,0(sp)
+;   mov fp,sp
+;   ld t6,400000(a0)
+;   ori t6,zero,32
+;   add t6,t6,t6
+;   trap_if_ult stk_ovf sp,t6;ty=i64 trap_code=stk_ovf
+;   addi sp,-32
+; block0:
+;   addi sp,32
+;   ld fp,0(sp)
+;   addi sp,8
+;   ret
+
