@@ -4,7 +4,7 @@ use crate::{AsContext, AsContextMut, Engine, MemoryType, StoreContext, StoreCont
 use anyhow::{bail, Result};
 use std::convert::TryFrom;
 use std::slice;
-use wasmtime_runtime::RuntimeLinearMemory;
+use wasmtime_runtime::{RuntimeLinearMemory, VMMemoryImport};
 
 /// Error for out of bounds [`Memory`] access.
 #[derive(Debug)]
@@ -228,7 +228,7 @@ impl Memory {
     /// # }
     /// ```
     pub fn new(mut store: impl AsContextMut, ty: MemoryType) -> Result<Memory> {
-        Self::_new(store.as_context_mut().0, ty, None)
+        Self::_new(store.as_context_mut().0, ty)
     }
 
     #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
@@ -253,19 +253,13 @@ impl Memory {
             store.0.async_support(),
             "cannot use `new_async` without enabling async support on the config"
         );
-        store
-            .on_fiber(|store| Self::_new(store.0, ty, None))
-            .await?
+        store.on_fiber(|store| Self::_new(store.0, ty)).await?
     }
 
     /// Helper function for attaching the memory to a "frankenstein" instance
-    fn _new(
-        store: &mut StoreOpaque,
-        ty: MemoryType,
-        preallocation: Option<wasmtime_runtime::SharedMemory>,
-    ) -> Result<Memory> {
+    fn _new(store: &mut StoreOpaque, ty: MemoryType) -> Result<Memory> {
         unsafe {
-            let export = generate_memory_export(store, &ty, preallocation)?;
+            let export = generate_memory_export(store, &ty, None)?;
             Ok(Memory::from_wasmtime_memory(export, store))
         }
     }
@@ -795,9 +789,13 @@ impl SharedMemory {
     /// [`SharedMemory`] into other modules.
     pub(crate) fn vmimport(&self, store: &mut StoreOpaque) -> wasmtime_runtime::VMMemoryImport {
         let runtime_shared_memory = self.clone().0;
-        let owned_memory_handle =
-            Memory::_new(store, self.ty(), Some(runtime_shared_memory)).unwrap();
-        owned_memory_handle.vmimport(store)
+        let export_memory =
+            generate_memory_export(store, &self.ty(), Some(runtime_shared_memory)).unwrap();
+        VMMemoryImport {
+            from: export_memory.definition,
+            vmctx: export_memory.vmctx,
+            index: export_memory.index,
+        }
     }
 
     /// Create a [`SharedMemory`] from an [`ExportMemory`] definition. This
