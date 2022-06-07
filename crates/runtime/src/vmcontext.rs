@@ -226,9 +226,12 @@ pub struct VMMemoryDefinition {
 
 impl VMMemoryDefinition {
     /// Return the current length of the [`VMMemoryDefinition`] by performing a
-    /// relaxed load. Concurrent growth of shared memory may alter the value of
-    /// this field in unexpected ways: do not use this function for situations
-    /// in which a precise length is needed.
+    /// relaxed load; do not use this function for situations in which a precise
+    /// length is needed. Owned memories (i.e., non-shared) will always return a
+    /// precise result (since no concurrent modification is possible) but shared
+    /// memories may see an imprecise value--a `current_length` potentially
+    /// smaller than what some other thread observes. Since Wasm memory only
+    /// grows, this under-estimation may be acceptable in certain cases.
     pub fn current_length(&self) -> usize {
         self.current_length.load(Ordering::Relaxed)
     }
