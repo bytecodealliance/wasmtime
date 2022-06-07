@@ -4,6 +4,7 @@ use crate::{AsContext, AsContextMut, Engine, MemoryType, StoreContext, StoreCont
 use anyhow::{bail, Result};
 use std::convert::TryFrom;
 use std::slice;
+use wasmtime_environ::MemoryPlan;
 use wasmtime_runtime::{RuntimeLinearMemory, VMMemoryImport};
 
 /// Error for out of bounds [`Memory`] access.
@@ -709,8 +710,8 @@ impl SharedMemory {
         debug_assert!(ty.maximum().is_some());
 
         let tunables = &engine.config().tunables;
-        // TODO: check the tunables (only static allocation allowed)
-        let memory = wasmtime_runtime::SharedMemory::new(ty.wasmtime_memory().clone(), tunables)?;
+        let plan = MemoryPlan::for_memory(ty.wasmtime_memory().clone(), tunables);
+        let memory = wasmtime_runtime::SharedMemory::new(plan)?;
         Ok(Self(memory, engine.clone()))
     }
 

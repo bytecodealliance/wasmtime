@@ -13,7 +13,7 @@ use more_asserts::{assert_ge, assert_le};
 use std::convert::TryFrom;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, RwLock};
-use wasmtime_environ::{MemoryPlan, MemoryStyle, Tunables, WASM32_MAX_PAGES, WASM64_MAX_PAGES};
+use wasmtime_environ::{MemoryPlan, MemoryStyle, WASM32_MAX_PAGES, WASM64_MAX_PAGES};
 
 const WASM_PAGE_SIZE: usize = wasmtime_environ::WASM_PAGE_SIZE as usize;
 const WASM_PAGE_SIZE_U64: u64 = wasmtime_environ::WASM_PAGE_SIZE as u64;
@@ -459,16 +459,17 @@ impl RuntimeLinearMemory for StaticMemory {
 pub struct SharedMemory(Arc<RwLock<SharedMemoryInner>>);
 impl SharedMemory {
     /// Construct a new [`SharedMemory`].
-    pub fn new(ty: wasmtime_environ::Memory, tunables: &Tunables) -> Result<Self> {
-        assert!(ty.shared);
-        let plan = MemoryPlan::for_memory(ty, tunables);
+    pub fn new(plan: MemoryPlan) -> Result<Self> {
+        assert!(plan.memory.shared);
+        assert!(matches!(plan.style, MemoryStyle::Static { .. }));
+
         let (minimum_bytes, maximum_bytes) = Memory::limit_new(&plan, None)?;
         let mut mmap_memory = MmapMemory::new(&plan, minimum_bytes, maximum_bytes, None)?;
         let def = LongTermVMMemoryDefinition(mmap_memory.vmmemory());
         let memory: Box<dyn RuntimeLinearMemory> = Box::new(mmap_memory);
         Ok(Self(Arc::new(RwLock::new(SharedMemoryInner {
             memory,
-            ty,
+            ty: plan.memory,
             def,
         }))))
     }
