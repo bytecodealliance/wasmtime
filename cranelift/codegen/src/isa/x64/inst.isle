@@ -981,7 +981,16 @@
 
 ;; Finally, define the toplevel `to_amode`.
 (rule (to_amode flags base offset)
-      (amode_add (amode_initial flags offset) base))
+      (amode_finalize (amode_add (amode_initial flags offset) base)))
+
+;; If an amode has no registers at all and only offsets (a constant
+;; value), we need to "finalize" it by sticking in a zero'd reg in
+;; place of the (invalid_reg) produced by (amode_initial).
+(decl amode_finalize (Amode) Amode)
+(rule 1 (amode_finalize (Amode.ImmReg off (invalid_reg) flags))
+      (Amode.ImmReg off (imm $I64 0) flags))
+(rule 0 (amode_finalize amode)
+      amode)
 
 ;; Offsetting an Amode. Used when we need to do consecutive
 ;; loads/stores to adjacent addresses.
