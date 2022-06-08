@@ -15,23 +15,28 @@ include = ["src/**/*", "README.md", "LICENSE" ]
 wasi-common = { path = "../", version = "=0.39.0" }
 async-trait = "0.1"
 anyhow = "1.0"
-cap-std = "0.24.1"
-cap-fs-ext = "0.24.1"
-cap-time-ext = "0.24.1"
-cap-rand = "0.24.1"
-fs-set-times = "0.15.0"
-system-interface = { version = "0.20.0", features = ["cap_std_impls"] }
+cap-std = "0.25.0"
+cap-fs-ext = "0.25.0"
+cap-time-ext = "0.25.0"
+cap-rand = "0.25.0"
+fs-set-times = "0.17.0"
+system-interface = { version = "0.21.0", features = ["cap_std_impls"] }
 tracing = "0.1.19"
-io-lifetimes = { version = "0.5.0", default-features = false }
-is-terminal = "0.1.0"
+io-lifetimes = { version = "0.7.0", default-features = false }
+is-terminal = "0.3.0"
 
 [target.'cfg(unix)'.dependencies]
-rustix = "0.33.7"
+rustix = { version = "0.35.6", features = ["fs"] }
 
 [target.'cfg(windows)'.dependencies]
-winapi = "0.3"
 lazy_static = "1.4"
-io-extras = "0.13.0"
+io-extras = "0.15.0"
+
+[target.'cfg(windows)'.dependencies.windows-sys]
+version = "0.36.0"
+features = [
+    "Win32_Foundation",
+]
 
 [dev-dependencies]
 tempfile = "3.1.0"

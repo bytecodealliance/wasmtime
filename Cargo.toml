@@ -39,7 +39,7 @@ lazy_static = "1.4.0"
 listenfd = "1.0.0"
 
 [target.'cfg(unix)'.dependencies]
-rustix = "0.33.7"
+rustix = { version = "0.35.6", features = ["mm", "param"] }
 
 [dev-dependencies]
 # depend again on wasmtime to activate its default features for tests

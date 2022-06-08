@@ -295,21 +295,21 @@ pub fn lazy_per_thread_init() -> Result<(), Box<Trap>> {
         let guard_size = page_size;
         let alloc_size = guard_size + MIN_STACK_SIZE;
 
-        let ptr = rustix::io::mmap_anonymous(
+        let ptr = rustix::mm::mmap_anonymous(
             null_mut(),
             alloc_size,
-            rustix::io::ProtFlags::empty(),
-            rustix::io::MapFlags::PRIVATE,
+            rustix::mm::ProtFlags::empty(),
+            rustix::mm::MapFlags::PRIVATE,
         )
         .map_err(|_| Box::new(Trap::oom()))?;
 
         // Prepare the stack with readable/writable memory and then register it
         // with `sigaltstack`.
         let stack_ptr = (ptr as usize + guard_size) as *mut std::ffi::c_void;
-        rustix::io::mprotect(
+        rustix::mm::mprotect(
             stack_ptr,
             MIN_STACK_SIZE,
-            rustix::io::MprotectFlags::READ | rustix::io::MprotectFlags::WRITE,
+            rustix::mm::MprotectFlags::READ | rustix::mm::MprotectFlags::WRITE,
         )
         .expect("mprotect to configure memory for sigaltstack failed");
         let new_stack = libc::stack_t {
@@ -335,7 +335,7 @@ pub fn lazy_per_thread_init() -> Result<(), Box<Trap>> {
         fn drop(&mut self) {
             unsafe {
                 // Deallocate the stack memory.
-                let r = rustix::io::munmap(self.mmap_ptr, self.mmap_size);
+                let r = rustix::mm::munmap(self.mmap_ptr, self.mmap_size);
                 debug_assert!(r.is_ok(), "munmap failed during thread shutdown");
             }
         }

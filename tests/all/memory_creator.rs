@@ -3,7 +3,7 @@ mod not_for_windows {
     use wasmtime::*;
     use wasmtime_environ::{WASM32_MAX_PAGES, WASM_PAGE_SIZE};
 
-    use rustix::io::{mmap_anonymous, mprotect, munmap, MapFlags, MprotectFlags, ProtFlags};
+    use rustix::mm::{mmap_anonymous, mprotect, munmap, MapFlags, MprotectFlags, ProtFlags};
 
     use std::convert::TryFrom;
     use std::ptr::null_mut;
@@ -19,7 +19,7 @@ mod not_for_windows {
 
     impl CustomMemory {
         unsafe fn new(minimum: usize, maximum: usize, glob_counter: Arc<Mutex<usize>>) -> Self {
-            let page_size = rustix::process::page_size();
+            let page_size = rustix::param::page_size();
             let guard_size = page_size;
             let size = maximum + guard_size;
             assert_eq!(size % page_size, 0); // we rely on WASM_PAGE_SIZE being multiple of host page size
