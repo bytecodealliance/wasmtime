@@ -52,12 +52,14 @@ pub use crate::export::*;
 pub use crate::externref::*;
 pub use crate::imports::Imports;
 pub use crate::instance::{
-    InstanceAllocationRequest, InstanceAllocator, InstanceHandle, InstantiationError, LinkError,
-    OnDemandInstanceAllocator, StorePtr,
+    allocate_single_memory_instance, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
+    InstantiationError, LinkError, OnDemandInstanceAllocator, StorePtr,
 };
 #[cfg(feature = "pooling-allocator")]
 pub use crate::instance::{InstanceLimits, PoolingAllocationStrategy, PoolingInstanceAllocator};
-pub use crate::memory::{DefaultMemoryCreator, Memory, RuntimeLinearMemory, RuntimeMemoryCreator};
+pub use crate::memory::{
+    DefaultMemoryCreator, Memory, RuntimeLinearMemory, RuntimeMemoryCreator, SharedMemory,
+};
 pub use crate::mmap::Mmap;
 pub use crate::mmap_vec::MmapVec;
 pub use crate::table::{Table, TableElement};

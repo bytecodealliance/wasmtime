@@ -586,7 +586,7 @@ unsafe fn validate_atomic_addr(
     memory: MemoryIndex,
     addr: usize,
 ) -> Result<(), Trap> {
-    if addr > instance.get_memory(memory).current_length {
+    if addr > instance.get_memory(memory).current_length() {
         return Err(Trap::wasm(TrapCode::HeapOutOfBounds));
     }
     Ok(())

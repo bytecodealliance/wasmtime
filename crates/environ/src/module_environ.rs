@@ -240,9 +240,6 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                             EntityType::Function(sig_index)
                         }
                         TypeRef::Memory(ty) => {
-                            if ty.shared {
-                                return Err(WasmError::Unsupported("shared memories".to_owned()));
-                            }
                             self.result.module.num_imported_memories += 1;
                             EntityType::Memory(ty.into())
                         }
@@ -296,9 +293,6 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
 
                 for entry in memories {
                     let memory = entry?;
-                    if memory.shared {
-                        return Err(WasmError::Unsupported("shared memories".to_owned()));
-                    }
                     let plan = MemoryPlan::for_memory(memory.into(), &self.tunables);
                     self.result.module.memory_plans.push(plan);
                 }

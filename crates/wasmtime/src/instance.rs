@@ -2,8 +2,8 @@ use crate::linker::Definition;
 use crate::store::{InstanceId, StoreOpaque, Stored};
 use crate::types::matching;
 use crate::{
-    AsContextMut, Engine, Export, Extern, Func, Global, Memory, Module, StoreContextMut, Table,
-    Trap, TypedFunc,
+    AsContextMut, Engine, Export, Extern, Func, Global, Memory, Module, SharedMemory,
+    StoreContextMut, Table, Trap, TypedFunc,
 };
 use anyhow::{anyhow, bail, Context, Error, Result};
 use std::mem;
@@ -495,6 +495,23 @@ impl Instance {
         self.get_export(store, name)?.into_memory()
     }
 
+    /// Looks up an exported [`SharedMemory`] value by name.
+    ///
+    /// Returns `None` if there was no export named `name`, or if there was but
+    /// it wasn't a shared memory.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` does not own this instance.
+    pub fn get_shared_memory(
+        &self,
+        mut store: impl AsContextMut,
+        name: &str,
+    ) -> Option<SharedMemory> {
+        let mut store = store.as_context_mut();
+        self.get_export(&mut store, name)?.into_shared_memory()
+    }
+
     /// Looks up an exported [`Global`] value by name.
     ///
     /// Returns `None` if there was no export named `name`, or if there was but
@@ -566,6 +583,9 @@ impl OwnedImports {
             Extern::Memory(i) => {
                 self.memories.push(i.vmimport(store));
             }
+            Extern::SharedMemory(i) => {
+                self.memories.push(i.vmimport(store));
+            }
         }
     }
 
@@ -594,6 +614,7 @@ impl OwnedImports {
                 self.memories.push(VMMemoryImport {
                     from: m.definition,
                     vmctx: m.vmctx,
+                    index: m.index,
                 });
             }
         }

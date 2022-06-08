@@ -1,8 +1,8 @@
 use crate::store::{StoreData, StoreOpaque, Stored};
 use crate::trampoline::{generate_global_export, generate_table_export};
 use crate::{
-    AsContext, AsContextMut, ExternRef, ExternType, Func, GlobalType, Memory, Mutability,
-    TableType, Trap, Val, ValType,
+    AsContext, AsContextMut, Engine, ExternRef, ExternType, Func, GlobalType, Memory, Mutability,
+    SharedMemory, TableType, Trap, Val, ValType,
 };
 use anyhow::{anyhow, bail, Result};
 use std::mem;
@@ -29,6 +29,9 @@ pub enum Extern {
     Table(Table),
     /// A WebAssembly linear memory.
     Memory(Memory),
+    /// A WebAssembly shared memory; these are handled separately from
+    /// [`Memory`].
+    SharedMemory(SharedMemory),
 }
 
 impl Extern {
@@ -72,6 +75,17 @@ impl Extern {
         }
     }
 
+    /// Returns the underlying `SharedMemory`, if this external is a shared
+    /// memory.
+    ///
+    /// Returns `None` if this is not a shared memory.
+    pub fn into_shared_memory(self) -> Option<SharedMemory> {
+        match self {
+            Extern::SharedMemory(memory) => Some(memory),
+            _ => None,
+        }
+    }
+
     /// Returns the type associated with this `Extern`.
     ///
     /// The `store` argument provided must own this `Extern` and is used to look
@@ -85,6 +99,7 @@ impl Extern {
         match self {
             Extern::Func(ft) => ExternType::Func(ft.ty(store)),
             Extern::Memory(ft) => ExternType::Memory(ft.ty(store)),
+            Extern::SharedMemory(ft) => ExternType::Memory(ft.ty()),
             Extern::Table(tt) => ExternType::Table(tt.ty(store)),
             Extern::Global(gt) => ExternType::Global(gt.ty(store)),
         }
@@ -99,7 +114,11 @@ impl Extern {
                 Extern::Func(Func::from_wasmtime_function(f, store))
             }
             wasmtime_runtime::Export::Memory(m) => {
-                Extern::Memory(Memory::from_wasmtime_memory(m, store))
+                if m.memory.memory.shared {
+                    Extern::SharedMemory(SharedMemory::from_wasmtime_memory(m, store))
+                } else {
+                    Extern::Memory(Memory::from_wasmtime_memory(m, store))
+                }
             }
             wasmtime_runtime::Export::Global(g) => {
                 Extern::Global(Global::from_wasmtime_global(g, store))
@@ -115,6 +134,7 @@ impl Extern {
             Extern::Func(f) => f.comes_from_same_store(store),
             Extern::Global(g) => store.store_data().contains(g.0),
             Extern::Memory(m) => m.comes_from_same_store(store),
+            Extern::SharedMemory(m) => Engine::same(m.engine(), store.engine()),
             Extern::Table(t) => store.store_data().contains(t.0),
         }
     }
@@ -124,6 +144,7 @@ impl Extern {
             Extern::Func(_) => "function",
             Extern::Table(_) => "table",
             Extern::Memory(_) => "memory",
+            Extern::SharedMemory(_) => "shared memory",
             Extern::Global(_) => "global",
         }
     }
@@ -144,6 +165,12 @@ impl From<Global> for Extern {
 impl From<Memory> for Extern {
     fn from(r: Memory) -> Self {
         Extern::Memory(r)
+    }
+}
+
+impl From<SharedMemory> for Extern {
+    fn from(r: SharedMemory) -> Self {
+        Extern::SharedMemory(r)
     }
 }
 

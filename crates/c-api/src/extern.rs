@@ -20,6 +20,7 @@ pub extern "C" fn wasm_extern_kind(e: &wasm_extern_t) -> wasm_externkind_t {
         Extern::Global(_) => crate::WASM_EXTERN_GLOBAL,
         Extern::Table(_) => crate::WASM_EXTERN_TABLE,
         Extern::Memory(_) => crate::WASM_EXTERN_MEMORY,
+        Extern::SharedMemory(_) => todo!(),
     }
 }
 
@@ -119,6 +120,7 @@ impl From<Extern> for wasmtime_extern_t {
                 kind: WASMTIME_EXTERN_MEMORY,
                 of: wasmtime_extern_union { memory },
             },
+            Extern::SharedMemory(_memory) => todo!(),
         }
     }
 }

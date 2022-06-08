@@ -373,12 +373,39 @@ impl MemoryType {
         }
     }
 
+    /// Creates a new descriptor for shared WebAssembly memory given the
+    /// specified limits of the memory.
+    ///
+    /// The `minimum` and `maximum`  values here are specified in units of
+    /// WebAssembly pages, which are 64k.
+    ///
+    /// Note that shared memories are part of the threads proposal for
+    /// WebAssembly which is not standardized yet.
+    pub fn shared(minimum: u32, maximum: u32) -> MemoryType {
+        MemoryType {
+            ty: Memory {
+                memory64: false,
+                shared: true,
+                minimum: minimum.into(),
+                maximum: Some(maximum.into()),
+            },
+        }
+    }
+
     /// Returns whether this is a 64-bit memory or not.
     ///
     /// Note that 64-bit memories are part of the memory64 proposal for
     /// WebAssembly which is not standardized yet.
     pub fn is_64(&self) -> bool {
         self.ty.memory64
+    }
+
+    /// Returns whether this is a shared memory or not.
+    ///
+    /// Note that shared memories are part of the threads proposal for
+    /// WebAssembly which is not standardized yet.
+    pub fn is_shared(&self) -> bool {
+        self.ty.shared
     }
 
     /// Returns minimum number of WebAssembly pages this memory must have.

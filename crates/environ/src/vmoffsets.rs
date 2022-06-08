@@ -15,7 +15,8 @@
 //      imported_memories: [VMMemoryImport; module.num_imported_memories],
 //      imported_globals: [VMGlobalImport; module.num_imported_globals],
 //      tables: [VMTableDefinition; module.num_defined_tables],
-//      memories: [VMMemoryDefinition; module.num_defined_memories],
+//      memories: [*mut VMMemoryDefinition; module.num_defined_memories],
+//      owned_memories: [VMMemoryDefinition; module.num_owned_memories],
 //      globals: [VMGlobalDefinition; module.num_defined_globals],
 //      anyfuncs: [VMCallerCheckedAnyfunc; module.num_escaped_funcs],
 // }
@@ -27,6 +28,7 @@ use crate::{
 use cranelift_entity::packed_option::ReservedValue;
 use more_asserts::assert_lt;
 use std::convert::TryFrom;
+use wasmtime_types::OwnedMemoryIndex;
 
 /// Sentinel value indicating that wasm has been interrupted.
 // Note that this has a bit of an odd definition. See the `insert_stack_check`
@@ -66,6 +68,8 @@ pub struct VMOffsets<P> {
     pub num_defined_tables: u32,
     /// The number of defined memories in the module.
     pub num_defined_memories: u32,
+    /// The number of memories owned by the module instance.
+    pub num_owned_memories: u32,
     /// The number of defined globals in the module.
     pub num_defined_globals: u32,
     /// The number of escaped functions in the module, the size of the anyfuncs
@@ -86,6 +90,7 @@ pub struct VMOffsets<P> {
     imported_globals: u32,
     defined_tables: u32,
     defined_memories: u32,
+    owned_memories: u32,
     defined_globals: u32,
     defined_anyfuncs: u32,
     size: u32,
@@ -157,9 +162,11 @@ pub struct VMOffsetsFields<P> {
     pub num_defined_tables: u32,
     /// The number of defined memories in the module.
     pub num_defined_memories: u32,
+    /// The number of memories owned by the module instance.
+    pub num_owned_memories: u32,
     /// The number of defined globals in the module.
     pub num_defined_globals: u32,
-    /// The numbe of escaped functions in the module, the size of the anyfunc
+    /// The number of escaped functions in the module, the size of the anyfunc
     /// array.
     pub num_escaped_funcs: u32,
 }
@@ -167,6 +174,14 @@ pub struct VMOffsetsFields<P> {
 impl<P: PtrSize> VMOffsets<P> {
     /// Return a new `VMOffsets` instance, for a given pointer size.
     pub fn new(ptr: P, module: &Module) -> Self {
+        let num_owned_memories = module
+            .memory_plans
+            .iter()
+            .skip(module.num_imported_memories)
+            .filter(|p| !p.1.memory.shared)
+            .count()
+            .try_into()
+            .unwrap();
         VMOffsets::from(VMOffsetsFields {
             ptr,
             num_imported_functions: cast_to_u32(module.num_imported_funcs),
@@ -177,6 +192,7 @@ impl<P: PtrSize> VMOffsets<P> {
             num_defined_memories: cast_to_u32(
                 module.memory_plans.len() - module.num_imported_memories,
             ),
+            num_owned_memories,
             num_defined_globals: cast_to_u32(module.globals.len() - module.num_imported_globals),
             num_escaped_funcs: cast_to_u32(module.num_escaped_funcs),
         })
@@ -206,12 +222,13 @@ impl<P: PtrSize> VMOffsets<P> {
                     num_defined_tables: _,
                     num_defined_globals: _,
                     num_defined_memories: _,
+                    num_owned_memories: _,
                     num_escaped_funcs: _,
 
                     // used as the initial size below
                     size,
 
-                    // exhaustively match teh rest of the fields with input from
+                    // exhaustively match the rest of the fields with input from
                     // the macro
                     $($name,)*
                 } = *self;
@@ -235,6 +252,7 @@ impl<P: PtrSize> VMOffsets<P> {
             defined_anyfuncs: "module functions",
             defined_globals: "defined globals",
             defined_memories: "defined memories",
+            owned_memories: "owned memories",
             defined_tables: "defined tables",
             imported_globals: "imported globals",
             imported_memories: "imported memories",
@@ -261,6 +279,7 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
             num_imported_globals: fields.num_imported_globals,
             num_defined_tables: fields.num_defined_tables,
             num_defined_memories: fields.num_defined_memories,
+            num_owned_memories: fields.num_owned_memories,
             num_defined_globals: fields.num_defined_globals,
             num_escaped_funcs: fields.num_escaped_funcs,
             magic: 0,
@@ -276,6 +295,7 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
             imported_globals: 0,
             defined_tables: 0,
             defined_memories: 0,
+            owned_memories: 0,
             defined_globals: 0,
             defined_anyfuncs: 0,
             size: 0,
@@ -330,7 +350,9 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
             size(defined_tables)
                 = cmul(ret.num_defined_tables, ret.size_of_vmtable_definition()),
             size(defined_memories)
-                = cmul(ret.num_defined_memories, ret.size_of_vmmemory_definition()),
+                = cmul(ret.num_defined_memories, ret.size_of_vmmemory_pointer()),
+            size(owned_memories)
+                = cmul(ret.num_owned_memories, ret.size_of_vmmemory_definition()),
             align(16),
             size(defined_globals)
                 = cmul(ret.num_defined_globals, ret.size_of_vmglobal_definition()),
@@ -452,7 +474,7 @@ impl<P: PtrSize> VMOffsets<P> {
     /// Return the size of `VMMemoryImport`.
     #[inline]
     pub fn size_of_vmmemory_import(&self) -> u8 {
-        2 * self.pointer_size()
+        3 * self.pointer_size()
     }
 }
 
@@ -476,6 +498,12 @@ impl<P: PtrSize> VMOffsets<P> {
     #[inline]
     pub fn size_of_vmmemory_definition(&self) -> u8 {
         2 * self.pointer_size()
+    }
+
+    /// Return the size of `*mut VMMemoryDefinition`.
+    #[inline]
+    pub fn size_of_vmmemory_pointer(&self) -> u8 {
+        self.pointer_size()
     }
 }
 
@@ -613,6 +641,12 @@ impl<P: PtrSize> VMOffsets<P> {
         self.defined_memories
     }
 
+    /// The offset of the `owned_memories` array.
+    #[inline]
+    pub fn vmctx_owned_memories_begin(&self) -> u32 {
+        self.owned_memories
+    }
+
     /// The offset of the `globals` array.
     #[inline]
     pub fn vmctx_globals_begin(&self) -> u32 {
@@ -676,11 +710,19 @@ impl<P: PtrSize> VMOffsets<P> {
         self.vmctx_tables_begin() + index.as_u32() * u32::from(self.size_of_vmtable_definition())
     }
 
-    /// Return the offset to `VMMemoryDefinition` index `index`.
+    /// Return the offset to the `*mut VMMemoryDefinition` at index `index`.
     #[inline]
-    pub fn vmctx_vmmemory_definition(&self, index: DefinedMemoryIndex) -> u32 {
+    pub fn vmctx_vmmemory_pointer(&self, index: DefinedMemoryIndex) -> u32 {
         assert_lt!(index.as_u32(), self.num_defined_memories);
-        self.vmctx_memories_begin() + index.as_u32() * u32::from(self.size_of_vmmemory_definition())
+        self.vmctx_memories_begin() + index.as_u32() * u32::from(self.size_of_vmmemory_pointer())
+    }
+
+    /// Return the offset to the owned `VMMemoryDefinition` at index `index`.
+    #[inline]
+    pub fn vmctx_vmmemory_definition(&self, index: OwnedMemoryIndex) -> u32 {
+        assert_lt!(index.as_u32(), self.num_owned_memories);
+        self.vmctx_owned_memories_begin()
+            + index.as_u32() * u32::from(self.size_of_vmmemory_definition())
     }
 
     /// Return the offset to the `VMGlobalDefinition` index `index`.
@@ -744,13 +786,13 @@ impl<P: PtrSize> VMOffsets<P> {
 
     /// Return the offset to the `base` field in `VMMemoryDefinition` index `index`.
     #[inline]
-    pub fn vmctx_vmmemory_definition_base(&self, index: DefinedMemoryIndex) -> u32 {
+    pub fn vmctx_vmmemory_definition_base(&self, index: OwnedMemoryIndex) -> u32 {
         self.vmctx_vmmemory_definition(index) + u32::from(self.vmmemory_definition_base())
     }
 
     /// Return the offset to the `current_length` field in `VMMemoryDefinition` index `index`.
     #[inline]
-    pub fn vmctx_vmmemory_definition_current_length(&self, index: DefinedMemoryIndex) -> u32 {
+    pub fn vmctx_vmmemory_definition_current_length(&self, index: OwnedMemoryIndex) -> u32 {
         self.vmctx_vmmemory_definition(index) + u32::from(self.vmmemory_definition_current_length())
     }
 

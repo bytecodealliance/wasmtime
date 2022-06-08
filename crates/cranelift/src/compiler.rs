@@ -16,7 +16,7 @@ use cranelift_codegen::{MachSrcLoc, MachStackMap};
 use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_frontend::FunctionBuilder;
 use cranelift_wasm::{
-    DefinedFuncIndex, DefinedMemoryIndex, FuncIndex, FuncTranslator, MemoryIndex, SignatureIndex,
+    DefinedFuncIndex, FuncIndex, FuncTranslator, MemoryIndex, OwnedMemoryIndex, SignatureIndex,
     WasmFuncType,
 };
 use object::write::{Object, StandardSegment, SymbolId};
@@ -711,8 +711,18 @@ impl Compiler {
         let memory_offset = if ofs.num_imported_memories > 0 {
             ModuleMemoryOffset::Imported(ofs.vmctx_vmmemory_import(MemoryIndex::new(0)))
         } else if ofs.num_defined_memories > 0 {
+            // The addition of shared memory makes the following assumption,
+            // "owned memory index = 0", possibly false. If the first memory
+            // is a shared memory, the base pointer will not be stored in
+            // the `owned_memories` array. The following code should
+            // eventually be fixed to not only handle shared memories but
+            // also multiple memories.
+            assert_eq!(
+                ofs.num_defined_memories, ofs.num_owned_memories,
+                "the memory base pointer may be incorrect due to sharing memory"
+            );
             ModuleMemoryOffset::Defined(
-                ofs.vmctx_vmmemory_definition_base(DefinedMemoryIndex::new(0)),
+                ofs.vmctx_vmmemory_definition_base(OwnedMemoryIndex::new(0)),
             )
         } else {
             ModuleMemoryOffset::None

@@ -1368,18 +1368,37 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
     fn make_heap(&mut self, func: &mut ir::Function, index: MemoryIndex) -> WasmResult<ir::Heap> {
         let pointer_type = self.pointer_type();
-
+        let is_shared = self.module.memory_plans[index].memory.shared;
         let (ptr, base_offset, current_length_offset) = {
             let vmctx = self.vmctx(func);
             if let Some(def_index) = self.module.defined_memory_index(index) {
-                let base_offset =
-                    i32::try_from(self.offsets.vmctx_vmmemory_definition_base(def_index)).unwrap();
-                let current_length_offset = i32::try_from(
-                    self.offsets
-                        .vmctx_vmmemory_definition_current_length(def_index),
-                )
-                .unwrap();
-                (vmctx, base_offset, current_length_offset)
+                if is_shared {
+                    // As with imported memory, the `VMMemoryDefinition` for a
+                    // shared memory is stored elsewhere. We store a `*mut
+                    // VMMemoryDefinition` to it and dereference that when
+                    // atomically growing it.
+                    let from_offset = self.offsets.vmctx_vmmemory_pointer(def_index);
+                    let memory = func.create_global_value(ir::GlobalValueData::Load {
+                        base: vmctx,
+                        offset: Offset32::new(i32::try_from(from_offset).unwrap()),
+                        global_type: pointer_type,
+                        readonly: true,
+                    });
+                    let base_offset = i32::from(self.offsets.vmmemory_definition_base());
+                    let current_length_offset =
+                        i32::from(self.offsets.vmmemory_definition_current_length());
+                    (memory, base_offset, current_length_offset)
+                } else {
+                    let owned_index = self.module.owned_memory_index(def_index);
+                    let owned_base_offset =
+                        self.offsets.vmctx_vmmemory_definition_base(owned_index);
+                    let owned_length_offset = self
+                        .offsets
+                        .vmctx_vmmemory_definition_current_length(owned_index);
+                    let current_base_offset = i32::try_from(owned_base_offset).unwrap();
+                    let current_length_offset = i32::try_from(owned_length_offset).unwrap();
+                    (vmctx, current_base_offset, current_length_offset)
+                }
             } else {
                 let from_offset = self.offsets.vmctx_vmmemory_import_from(index);
                 let memory = func.create_global_value(ir::GlobalValueData::Load {
@@ -1693,28 +1712,65 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     ) -> WasmResult<ir::Value> {
         let pointer_type = self.pointer_type();
         let vmctx = self.vmctx(&mut pos.func);
+        let is_shared = self.module.memory_plans[index].memory.shared;
         let base = pos.ins().global_value(pointer_type, vmctx);
         let current_length_in_bytes = match self.module.defined_memory_index(index) {
             Some(def_index) => {
-                let offset = i32::try_from(
-                    self.offsets
-                        .vmctx_vmmemory_definition_current_length(def_index),
-                )
-                .unwrap();
-                pos.ins()
-                    .load(pointer_type, ir::MemFlags::trusted(), base, offset)
+                if is_shared {
+                    let offset =
+                        i32::try_from(self.offsets.vmctx_vmmemory_pointer(def_index)).unwrap();
+                    let vmmemory_ptr =
+                        pos.ins()
+                            .load(pointer_type, ir::MemFlags::trusted(), base, offset);
+                    let vmmemory_definition_offset =
+                        i64::from(self.offsets.vmmemory_definition_current_length());
+                    let vmmemory_definition_ptr =
+                        pos.ins().iadd_imm(vmmemory_ptr, vmmemory_definition_offset);
+                    // This atomic access of the
+                    // `VMMemoryDefinition::current_length` is direct; no bounds
+                    // check is needed. This is possible because shared memory
+                    // has a static size (the maximum is always known). Shared
+                    // memory is thus built with a static memory plan and no
+                    // bounds-checked version of this is implemented.
+                    pos.ins().atomic_load(
+                        pointer_type,
+                        ir::MemFlags::trusted(),
+                        vmmemory_definition_ptr,
+                    )
+                } else {
+                    let owned_index = self.module.owned_memory_index(def_index);
+                    let offset = i32::try_from(
+                        self.offsets
+                            .vmctx_vmmemory_definition_current_length(owned_index),
+                    )
+                    .unwrap();
+                    pos.ins()
+                        .load(pointer_type, ir::MemFlags::trusted(), base, offset)
+                }
             }
             None => {
                 let offset = i32::try_from(self.offsets.vmctx_vmmemory_import_from(index)).unwrap();
                 let vmmemory_ptr =
                     pos.ins()
                         .load(pointer_type, ir::MemFlags::trusted(), base, offset);
-                pos.ins().load(
-                    pointer_type,
-                    ir::MemFlags::trusted(),
-                    vmmemory_ptr,
-                    i32::from(self.offsets.vmmemory_definition_current_length()),
-                )
+                if is_shared {
+                    let vmmemory_definition_offset =
+                        i64::from(self.offsets.vmmemory_definition_current_length());
+                    let vmmemory_definition_ptr =
+                        pos.ins().iadd_imm(vmmemory_ptr, vmmemory_definition_offset);
+                    pos.ins().atomic_load(
+                        pointer_type,
+                        ir::MemFlags::trusted(),
+                        vmmemory_definition_ptr,
+                    )
+                } else {
+                    pos.ins().load(
+                        pointer_type,
+                        ir::MemFlags::trusted(),
+                        vmmemory_ptr,
+                        i32::from(self.offsets.vmmemory_definition_current_length()),
+                    )
+                }
             }
         };
         let current_length_in_pages = pos
