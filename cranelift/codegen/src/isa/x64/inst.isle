@@ -1067,11 +1067,6 @@
 (decl encode_fcmp_imm (FcmpImm) u8)
 (extern constructor encode_fcmp_imm encode_fcmp_imm)
 
-;;;; Registers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(decl rax () WritableGpr)
-(extern constructor rax rax)
-
 ;;;; Newtypes for Different Register Classes ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (type Gpr (primitive Gpr))
@@ -2906,8 +2901,9 @@
 
 (decl x64_cmpxchg (Type Gpr Gpr SyntheticAmode) Gpr)
 (rule (x64_cmpxchg ty expected replacement addr)
-      (let ((_ Unit (emit (MInst.LockCmpxchg ty replacement expected addr (rax)))))
-        (rax)))
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (MInst.LockCmpxchg ty replacement expected addr dst))))
+        dst))
 
 ;;;; Automatic conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

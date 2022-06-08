@@ -547,12 +547,6 @@ where
     fn zero_offset(&mut self) -> Offset32 {
         Offset32::new(0)
     }
-
-    #[inline]
-    fn rax(&mut self) -> WritableGpr {
-        let gpr = Gpr::new(regs::rax()).unwrap();
-        WritableGpr::from_reg(gpr)
-    }
 }
 
 // Since x64 doesn't have 8x16 shifts and we must use a 16x8 shift instead, we
