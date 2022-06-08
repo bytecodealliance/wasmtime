@@ -2322,6 +2322,10 @@
 (rule (lower (has_type $F64 (fpromote x)))
       (x64_cvtss2sd x))
 
+;; Rules for `fvpromote` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(rule (lower (has_type $F64X2 (fvpromote_low x)))
+      (x64_cvtps2pd (put_in_xmm x)))
+
 ;; Rules for `fmin` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type $F32 (fmin x y)))
