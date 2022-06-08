@@ -633,7 +633,11 @@ impl Memory {
             StaticMemory::new(base, minimum, maximum, make_accessible, memory_image)?;
         let allocation = Box::new(pooled_memory);
         let allocation: Box<dyn RuntimeLinearMemory> = if plan.memory.shared {
-            Box::new(SharedMemory::wrap(plan, allocation, plan.memory))
+            // FIXME: since the pooling allocator owns the memory allocation
+            // (which is torn down with the instance), the current shared memory
+            // implementation will cause problems; see
+            // https://github.com/bytecodealliance/wasmtime/issues/4244.
+            todo!("using shared memory with the pooling allocator is a work in progress");
         } else {
             allocation
         };
