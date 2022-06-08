@@ -637,7 +637,7 @@ impl MachInstEmit for Inst {
                 rd,
                 op,
                 from,
-                flags: _flags,
+                flags,
             } => {
                 let x;
                 let base = from.get_base_register();
@@ -668,19 +668,14 @@ impl MachInstEmit for Inst {
                                 I64,
                             ),
                             rd,
-                            flags: MemFlags::new(),
+                            flags,
                         });
                     })
                     .into_iter()
                     .for_each(|inst| inst.emit(&[], sink, emit_info, state));
                 }
             }
-            &Inst::Store {
-                op,
-                src,
-                flags: _flags,
-                to,
-            } => {
+            &Inst::Store { op, src, flags, to } => {
                 let base = to.get_base_register();
                 let base = allocs.next(base);
                 let src = allocs.next(src);
@@ -713,7 +708,7 @@ impl MachInstEmit for Inst {
                                 I64,
                             ),
                             src,
-                            flags: MemFlags::new(),
+                            flags,
                         });
                     })
                     .into_iter()
@@ -1264,7 +1259,7 @@ impl MachInstEmit for Inst {
                 conditon,
                 ref x,
                 ref y,
-                ty : _ty ,
+                ty: _ty,
             } => {
                 let conditon = allocs.next(conditon);
                 let x = alloc_value_regs(x, &mut allocs);

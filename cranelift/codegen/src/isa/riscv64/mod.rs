@@ -143,17 +143,10 @@ impl fmt::Display for Riscv64Backend {
 
 /// Create a new `isa::Builder`.
 pub fn isa_builder(triple: Triple) -> IsaBuilder {
-    /*
-    todo:: what is the difference???
-        Riscv64,
-        Riscv64gc,
-        Riscv64imac,
-    */
     match triple.architecture {
         Architecture::Riscv64(..) => {}
         _ => unreachable!(),
     }
-
     IsaBuilder {
         triple,
         setup: riscv_settings::builder(),

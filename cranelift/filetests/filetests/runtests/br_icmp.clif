@@ -3,7 +3,7 @@ test run
 target aarch64
 target s390x
 target x86_64
-target riscv64
+target riscv64gc
 
 function %bricmp_eq_i64(i64, i64) -> b1 {
 block0(v0: i64, v1: i64):

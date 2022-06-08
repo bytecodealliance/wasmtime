@@ -1,7 +1,7 @@
 test run
 target aarch64
 target x86_64
-target riscv64
+target riscv64gc
 
 function %bint_b8_i16_true() -> i16 {
 block0:

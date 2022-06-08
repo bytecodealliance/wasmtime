@@ -242,7 +242,7 @@ impl Inst {
     }
 
     /*
-        this will discard ra register.
+        this will discard return address.
     */
     pub(crate) fn construct_auipc_and_jalr(rd: Writable<Reg>, offset: i32) -> [Inst; 2] {
         let a = Inst::Auipc {
