@@ -60,36 +60,51 @@ fn gen_formats(formats: &[&InstructionFormat], fmt: &mut Formatter) {
     fmt.empty_line();
 }
 
-/// Generate the InstructionData enum.
+/// Generate the InstructionData and InstructionImms enums.
+///
+/// `InstructionImms` stores everything about an instruction except for the arguments: in other
+/// words, the `Opcode` and any immediates or other parameters. `InstructionData` stores this, plus
+/// the SSA `Value` arguments.
 ///
 /// Every variant must contain an `opcode` field. The size of `InstructionData` should be kept at
 /// 16 bytes on 64-bit architectures. If more space is needed to represent an instruction, use a
 /// `ValueList` to store the additional information out of line.
 fn gen_instruction_data(formats: &[&InstructionFormat], fmt: &mut Formatter) {
-    fmt.line("#[derive(Clone, Debug)]");
-    fmt.line(r#"#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]"#);
-    fmt.line("#[allow(missing_docs)]");
-    fmt.line("pub enum InstructionData {");
-    fmt.indent(|fmt| {
-        for format in formats {
-            fmtln!(fmt, "{} {{", format.name);
-            fmt.indent(|fmt| {
-                fmt.line("opcode: Opcode,");
-                if format.has_value_list {
-                    fmt.line("args: ValueList,");
-                } else if format.num_value_operands == 1 {
-                    fmt.line("arg: Value,");
-                } else if format.num_value_operands > 0 {
-                    fmtln!(fmt, "args: [Value; {}],", format.num_value_operands);
-                }
-                for field in &format.imm_fields {
-                    fmtln!(fmt, "{}: {},", field.member, field.kind.rust_type);
-                }
-            });
-            fmtln!(fmt, "},");
+    for (name, include_args) in &[("InstructionData", true), ("InstructionImms", false)] {
+        fmt.line("#[derive(Clone, Debug)]");
+        if !include_args {
+            // `InstructionImms` gets some extra derives: it acts like a sort of extended opcode
+            // and we want to allow for hashconsing, sorting, and the like.
+            fmt.line("#[derive(Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]");
         }
-    });
-    fmt.line("}");
+        fmt.line(r#"#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]"#);
+        fmt.line("#[allow(missing_docs)]");
+        // generate `enum InstructionData` or `enum InstructionImms`.
+        // (This comment exists so one can grep for `enum InstructionData`!)
+        fmtln!(fmt, "pub enum {} {{", name);
+        fmt.indent(|fmt| {
+            for format in formats {
+                fmtln!(fmt, "{} {{", format.name);
+                fmt.indent(|fmt| {
+                    fmt.line("opcode: Opcode,");
+                    if *include_args {
+                        if format.has_value_list {
+                            fmt.line("args: ValueList,");
+                        } else if format.num_value_operands == 1 {
+                            fmt.line("arg: Value,");
+                        } else if format.num_value_operands > 0 {
+                            fmtln!(fmt, "args: [Value; {}],", format.num_value_operands);
+                        }
+                    }
+                    for field in &format.imm_fields {
+                        fmtln!(fmt, "{}: {},", field.member, field.kind.rust_type);
+                    }
+                });
+                fmtln!(fmt, "},");
+            }
+        });
+        fmt.line("}");
+    }
 }
 
 fn gen_arguments_method(formats: &[&InstructionFormat], fmt: &mut Formatter, is_mut: bool) {
@@ -148,6 +163,122 @@ fn gen_arguments_method(formats: &[&InstructionFormat], fmt: &mut Formatter, is_
         fmt.add_match(m);
     });
     fmtln!(fmt, "}");
+}
+
+/// Generate the conversion from `InstructionData` to `InstructionImms`, stripping out the
+/// `Value`s.
+fn gen_instruction_data_to_instruction_imms(formats: &[&InstructionFormat], fmt: &mut Formatter) {
+    fmt.line("impl std::convert::From<&InstructionData> for InstructionImms {");
+    fmt.indent(|fmt| {
+        fmt.doc_comment("Convert an `InstructionData` into an `InstructionImms`.");
+        fmt.line("fn from(data: &InstructionData) -> InstructionImms {");
+        fmt.indent(|fmt| {
+            fmt.line("match data {");
+            fmt.indent(|fmt| {
+                for format in formats {
+                    fmtln!(fmt, "InstructionData::{} {{", format.name);
+                    fmt.indent(|fmt| {
+                        fmt.line("opcode,");
+                        for field in &format.imm_fields {
+                            fmtln!(fmt, "{},", field.member);
+                        }
+                        fmt.line("..");
+                    });
+                    fmtln!(fmt, "}} => InstructionImms::{} {{", format.name);
+                    fmt.indent(|fmt| {
+                        fmt.line("opcode: *opcode,");
+                        for field in &format.imm_fields {
+                            fmtln!(fmt, "{}: {}.clone(),", field.member, field.member);
+                        }
+                    });
+                    fmt.line("},");
+                }
+            });
+            fmt.line("}");
+        });
+        fmt.line("}");
+    });
+    fmt.line("}");
+    fmt.empty_line();
+}
+
+/// Generate the conversion from `InstructionImms` to `InstructionData`, adding the
+/// `Value`s.
+fn gen_instruction_imms_to_instruction_data(formats: &[&InstructionFormat], fmt: &mut Formatter) {
+    fmt.line("impl  InstructionImms {");
+    fmt.indent(|fmt| {
+        fmt.doc_comment("Convert an `InstructionImms` into an `InstructionData` by adding args.");
+        fmt.line(
+            "pub fn with_args(&self, values: &[Value], value_list: &mut ValueListPool) -> InstructionData {",
+        );
+        fmt.indent(|fmt| {
+            fmt.line("match self {");
+            fmt.indent(|fmt| {
+                for format in formats {
+                    fmtln!(fmt, "InstructionImms::{} {{", format.name);
+                    fmt.indent(|fmt| {
+                        fmt.line("opcode,");
+                        for field in &format.imm_fields {
+                            fmtln!(fmt, "{},", field.member);
+                        }
+                    });
+                    fmt.line("} => {");
+                    if format.has_value_list {
+                        fmtln!(fmt, "let args = ValueList::from_slice(values, value_list);");
+                    }
+                    fmt.indent(|fmt| {
+                        fmtln!(fmt, "InstructionData::{} {{", format.name);
+                        fmt.indent(|fmt| {
+                            fmt.line("opcode: *opcode,");
+                            for field in &format.imm_fields {
+                                fmtln!(fmt, "{}: {}.clone(),", field.member, field.member);
+                            }
+                            if format.has_value_list {
+                                fmtln!(fmt, "args,");
+                            } else if format.num_value_operands == 1 {
+                                fmtln!(fmt, "arg: values[0],");
+                            } else if format.num_value_operands > 0 {
+                                let mut args = vec![];
+                                for i in 0..format.num_value_operands {
+                                    args.push(format!("values[{}]", i));
+                                }
+                                fmtln!(fmt, "args: [{}],", args.join(", "));
+                            }
+                        });
+                        fmt.line("}");
+                    });
+                    fmt.line("},");
+                }
+            });
+            fmt.line("}");
+        });
+        fmt.line("}");
+    });
+    fmt.line("}");
+    fmt.empty_line();
+}
+
+/// Generate the `opcode` method on InstructionImms.
+fn gen_instruction_imms_impl(formats: &[&InstructionFormat], fmt: &mut Formatter) {
+    fmt.line("impl InstructionImms {");
+    fmt.indent(|fmt| {
+        fmt.doc_comment("Get the opcode of this instruction.");
+        fmt.line("pub fn opcode(&self) -> Opcode {");
+        fmt.indent(|fmt| {
+            let mut m = Match::new("*self");
+            for format in formats {
+                m.arm(
+                    format!("Self::{}", format.name),
+                    vec!["opcode", ".."],
+                    "opcode".to_string(),
+                );
+            }
+            fmt.add_match(m);
+        });
+        fmt.line("}");
+    });
+    fmt.line("}");
+    fmt.empty_line();
 }
 
 /// Generate the boring parts of the InstructionData implementation.
@@ -406,7 +537,7 @@ fn gen_opcodes(all_inst: &AllInstructions, fmt: &mut Formatter) {
     "#,
     );
     fmt.line("#[repr(u16)]");
-    fmt.line("#[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]");
+    fmt.line("#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]");
     fmt.line(
         r#"#[cfg_attr(
             feature = "enable-serde",
@@ -1412,6 +1543,9 @@ pub(crate) fn generate(
     gen_instruction_data(&formats, &mut fmt);
     fmt.empty_line();
     gen_instruction_data_impl(&formats, &mut fmt);
+    gen_instruction_data_to_instruction_imms(&formats, &mut fmt);
+    gen_instruction_imms_impl(&formats, &mut fmt);
+    gen_instruction_imms_to_instruction_data(&formats, &mut fmt);
     fmt.empty_line();
     gen_opcodes(all_inst, &mut fmt);
     fmt.empty_line();

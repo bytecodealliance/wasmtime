@@ -22,7 +22,7 @@ use target_lexicon::{PointerWidth, Triple};
 ///
 /// SIMD vector types have power-of-two lanes, up to 256. Lanes can be any int/float/bool type.
 ///
-#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct Type(u8);
 

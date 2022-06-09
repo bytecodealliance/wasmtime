@@ -13,6 +13,7 @@ use crate::alias_analysis::AliasAnalysis;
 use crate::binemit::CodeInfo;
 use crate::dce::do_dce;
 use crate::dominator_tree::DominatorTree;
+use crate::egg::FuncEGraph;
 use crate::flowgraph::ControlFlowGraph;
 use crate::ir::Function;
 use crate::isa::TargetIsa;
@@ -50,6 +51,9 @@ pub struct Context {
     /// Loop analysis of `func`.
     pub loop_analysis: LoopAnalysis,
 
+    /// Has the function been optimized via `optimize()`?
+    pub optimized: bool,
+
     /// Result of MachBackend compilation, if computed.
     pub mach_compile_result: Option<MachCompileResult>,
 
@@ -76,6 +80,7 @@ impl Context {
             cfg: ControlFlowGraph::new(),
             domtree: DominatorTree::new(),
             loop_analysis: LoopAnalysis::new(),
+            optimized: false,
             mach_compile_result: None,
             want_disasm: false,
         }
@@ -87,6 +92,7 @@ impl Context {
         self.cfg.clear();
         self.domtree.clear();
         self.loop_analysis.clear();
+        self.optimized = false;
         self.mach_compile_result = None;
         self.want_disasm = false;
     }
@@ -123,18 +129,33 @@ impl Context {
 
     /// Compile the function.
     ///
-    /// Run the function through all the passes necessary to generate code for the target ISA
-    /// represented by `isa`. This does not include the final step of emitting machine code into a
-    /// code sink.
+    /// Run the function through all the passes necessary to generate
+    /// code for the target ISA represented by `isa`. Performs any
+    /// optimizations that are enabled, unless `optimize()` was
+    /// already invoked.
     ///
     /// Returns information about the function's code and read-only data.
     pub fn compile(&mut self, isa: &dyn TargetIsa) -> CodegenResult<CodeInfo> {
         let _tt = timing::compile();
         self.verify_if(isa)?;
 
+        if !self.optimized {
+            self.optimize(isa)?;
+        }
+
+        let result = isa.compile_function(&self.func, self.want_disasm)?;
+        let info = result.code_info();
+        self.mach_compile_result = Some(result);
+        Ok(info)
+    }
+
+    /// Optimize the function, performing all compilation steps up to
+    /// but not including machine-code lowering and register
+    /// allocation.
+    pub fn optimize(&mut self, isa: &dyn TargetIsa) -> CodegenResult<()> {
         let opt_level = isa.flags().opt_level();
         log::debug!(
-            "Compiling (opt level {:?}):\n{}",
+            "Optimizing (opt level {:?}):\n{}",
             opt_level,
             self.func.display()
         );
@@ -168,10 +189,20 @@ impl Context {
             self.simple_gvn(isa)?;
         }
 
-        let result = isa.compile_function(&self.func, self.want_disasm)?;
-        let info = result.code_info();
-        self.mach_compile_result = Some(result);
-        Ok(info)
+        if isa.flags().use_egraphs() {
+            log::debug!(
+                "About to optimize with egraph phase:\n{}",
+                self.func.display()
+            );
+            let mut eg = FuncEGraph::new(&self.func, &self.domtree);
+            eg.extract(&self.func);
+            eg.elaborate(&mut self.func);
+            log::debug!("After egraph optimization:\n{}", self.func.display());
+        }
+
+        self.optimized = true;
+
+        Ok(())
     }
 
     /// Emit machine code directly into raw memory.

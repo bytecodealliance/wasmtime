@@ -515,8 +515,9 @@ dependencies = [
  "cranelift-entity",
  "cranelift-isle",
  "criterion",
+ "egg 0.8.1",
  "gimli",
- "hashbrown",
+ "hashbrown 0.11.2",
  "log",
  "miette",
  "regalloc2",
@@ -570,7 +571,7 @@ name = "cranelift-frontend"
 version = "0.85.0"
 dependencies = [
  "cranelift-codegen",
- "hashbrown",
+ "hashbrown 0.11.2",
  "log",
  "smallvec",
  "target-lexicon",
@@ -632,7 +633,7 @@ version = "0.85.0"
 dependencies = [
  "anyhow",
  "cranelift-codegen",
- "hashbrown",
+ "hashbrown 0.11.2",
 ]
 
 [[package]]
@@ -725,7 +726,7 @@ dependencies = [
  "cranelift-codegen",
  "cranelift-entity",
  "cranelift-frontend",
- "hashbrown",
+ "hashbrown 0.11.2",
  "itertools",
  "log",
  "serde",
@@ -1032,6 +1033,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "egg"
+version = "0.8.1"
+source = "git+https://github.com/cfallin/egg?branch=egg-lite#9cfbbfb0bba7a67bef514772612ca8824a35824d"
+dependencies = [
+ "fxhash",
+ "hashbrown 0.12.1",
+ "indexmap",
+ "smallvec",
+]
+
+[[package]]
 name = "either"
 version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1303,6 +1315,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "hashbrown"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "db0d4cf898abf0081f964436dc980e96670a0f36863e4b83aaacdb65c9d7ccc3"
+dependencies = [
+ "ahash",
+]
+
+[[package]]
 name = "heck"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1374,7 +1395,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0f647032dfaa1f8b6dc29bd3edb7bbef4861b8b8007ebb118d6db284fd59f6ee"
 dependencies = [
  "autocfg 1.1.0",
- "hashbrown",
+ "hashbrown 0.11.2",
  "serde",
 ]
 
@@ -1835,7 +1856,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "40bec70ba014595f99f7aa110b84331ffe1ee9aece7fe6f387cc7e3ecda4d456"
 dependencies = [
  "crc32fast",
- "hashbrown",
+ "hashbrown 0.11.2",
  "indexmap",
  "memchr",
 ]
@@ -3233,7 +3254,7 @@ version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "afc948447bea01d54509cb4a6ccbeb7e572c42c4c84f778d286b7633a1c49e86"
 dependencies = [
- "egg",
+ "egg 0.6.0",
  "log",
  "rand 0.8.5",
  "thiserror",

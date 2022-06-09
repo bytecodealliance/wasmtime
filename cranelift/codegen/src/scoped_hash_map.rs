@@ -89,7 +89,7 @@ where
 
     /// Similar to `FxHashMap::entry`, gets the given key's corresponding entry in the map for
     /// in-place manipulation.
-    pub fn entry(&mut self, key: K) -> Entry<K, V> {
+    pub fn entry<'a>(&'a mut self, key: K) -> Entry<'a, K, V> {
         use super::hash_map::Entry::*;
         match self.map.entry(key) {
             Occupied(entry) => Entry::Occupied(OccupiedEntry { entry }),
@@ -100,6 +100,23 @@ where
                     next_key: mem::replace(&mut self.last_insert, Some(clone_key)),
                     depth: self.current_depth,
                 })
+            }
+        }
+    }
+
+    /// Get a value from a key, if present.
+    pub fn get<'a>(&'a self, key: &K) -> Option<&'a V> {
+        self.map.get(key).map(|entry| &entry.value)
+    }
+
+    /// Insert a key-value pair if absent, panicking otherwise.
+    pub fn insert_if_absent(&mut self, key: K, value: V) {
+        match self.entry(key) {
+            Entry::Vacant(v) => {
+                v.insert(value);
+            }
+            Entry::Occupied(_) => {
+                panic!("Key is already present in ScopedHashMap");
             }
         }
     }

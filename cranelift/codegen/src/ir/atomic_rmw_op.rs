@@ -4,7 +4,7 @@ use core::str::FromStr;
 #[cfg(feature = "enable-serde")]
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 /// Describes the arithmetic operation in an atomic memory read-modify-write operation.
 pub enum AtomicRmwOp {

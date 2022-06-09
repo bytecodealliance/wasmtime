@@ -45,7 +45,7 @@ pub use crate::ir::function::{DisplayFunctionAnnotations, Function};
 pub use crate::ir::globalvalue::GlobalValueData;
 pub use crate::ir::heap::{HeapData, HeapStyle};
 pub use crate::ir::instructions::{
-    InstructionData, Opcode, ValueList, ValueListPool, VariableArgs,
+    InstructionData, InstructionImms, Opcode, ValueList, ValueListPool, VariableArgs,
 };
 pub use crate::ir::jumptable::JumpTableData;
 pub use crate::ir::layout::Layout;

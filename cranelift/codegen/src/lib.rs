@@ -97,6 +97,7 @@ mod constant_hash;
 mod context;
 mod dce;
 mod divconst_magic_numbers;
+mod egg;
 mod fx;
 mod inst_predicates;
 mod iterators;

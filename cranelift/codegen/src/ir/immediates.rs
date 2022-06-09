@@ -54,7 +54,7 @@ impl IntoBytes for Vec<u8> {
 ///
 /// An `Imm64` operand can also be used to represent immediate values of smaller integer types by
 /// sign-extending to `i64`.
-#[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct Imm64(i64);
 
@@ -155,7 +155,7 @@ impl FromStr for Imm64 {
 ///
 /// A `Uimm64` operand can also be used to represent immediate values of smaller integer types by
 /// zero-extending to `i64`.
-#[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct Uimm64(u64);
 
@@ -287,7 +287,7 @@ pub type Uimm8 = u8;
 /// A 32-bit unsigned integer immediate operand.
 ///
 /// This is used to represent sizes of memory objects.
-#[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct Uimm32(u32);
 
@@ -383,7 +383,7 @@ impl From<u128> for V128Imm {
 ///
 /// This is used to encode an immediate offset for load/store instructions. All supported ISAs have
 /// a maximum load/store offset that fits in an `i32`.
-#[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct Offset32(i32);
 
@@ -466,7 +466,7 @@ impl FromStr for Offset32 {
 /// containing the bit pattern.
 ///
 /// All bit patterns are allowed.
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+#[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 #[repr(C)]
 pub struct Ieee32(u32);
@@ -475,7 +475,7 @@ pub struct Ieee32(u32);
 /// containing the bit pattern.
 ///
 /// All bit patterns are allowed.
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+#[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 #[repr(C)]
 pub struct Ieee64(u64);
