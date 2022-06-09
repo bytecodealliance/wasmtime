@@ -8,6 +8,17 @@ Unreleased.
 
 ### Changed
 
+* The `Config::strategy`, `Config::cranelift_flag_enable`, `Config::cranelift_flag_set` 
+  and `Config::profiler` APIs now return `&mut Self` instead of `Result<&mut Self>`
+  since the validation is deferred until `Engine::new`.
+  [#4252](https://github.com/bytecodealliance/wasmtime/pull/4252)
+
+### Fixed
+
+* A refactor of `Config` was made to fix an issue that the order of calls to `Config`
+  matters now, which may lead to unexpected behavior.
+  [#4252](https://github.com/bytecodealliance/wasmtime/pull/4252)
+
 --------------------------------------------------------------------------------
 
 ## 0.38.0

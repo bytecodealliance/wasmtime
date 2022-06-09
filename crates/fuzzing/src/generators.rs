@@ -421,8 +421,7 @@ impl Config {
 
         if self.wasmtime.force_jump_veneers {
             unsafe {
-                cfg.cranelift_flag_set("wasmtime_linkopt_force_jump_veneer", "true")
-                    .unwrap();
+                cfg.cranelift_flag_set("wasmtime_linkopt_force_jump_veneer", "true");
             }
         }
 
@@ -431,8 +430,7 @@ impl Config {
                 cfg.cranelift_flag_set(
                     "wasmtime_linkopt_padding_between_functions",
                     &pad.to_string(),
-                )
-                .unwrap();
+                );
             }
         }
 
@@ -658,7 +656,7 @@ impl CodegenSettings {
                 config.target(target).unwrap();
                 for (key, value) in flags {
                     unsafe {
-                        config.cranelift_flag_set(key, value).unwrap();
+                        config.cranelift_flag_set(key, value);
                     }
                 }
             }

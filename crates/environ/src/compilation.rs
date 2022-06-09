@@ -76,9 +76,6 @@ pub enum CompileError {
 /// This is used in Wasmtime to separate compiler implementations, currently
 /// mostly used to separate Cranelift from Wasmtime itself.
 pub trait CompilerBuilder: Send + Sync + fmt::Debug {
-    /// Like the `Clone` trait, but for the boxed trait object.
-    fn clone(&self) -> Box<dyn CompilerBuilder>;
-
     /// Sets the target of compilation to the target specified.
     fn target(&mut self, target: target_lexicon::Triple) -> Result<()>;
 
