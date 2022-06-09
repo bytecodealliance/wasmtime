@@ -516,6 +516,7 @@ libcall_call_conv = "isa_default"
 baldrdash_prologue_words = 0
 probestack_size_log2 = 12
 regalloc_checker = false
+use_egraphs = false
 enable_verifier = true
 is_pic = false
 use_colocated_libcalls = false
