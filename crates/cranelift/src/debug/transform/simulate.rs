@@ -11,7 +11,7 @@ use gimli::{self, LineEncoding};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
-use wasmparser::Type as WasmType;
+use wasmparser::ValType as WasmType;
 use wasmtime_environ::{
     DebugInfoData, DefinedFuncIndex, EntityRef, FuncIndex, FunctionMetadata, WasmFileInfo,
 };

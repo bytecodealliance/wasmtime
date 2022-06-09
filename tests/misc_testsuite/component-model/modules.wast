@@ -1,18 +1,18 @@
 (component $foo
-  (module (export "a-module"))
+  (core module (export "a-module"))
 )
 
 ;; the above instance can be imported into this component
 (component
   (import "foo" (instance
-    (export "a-module" (module))
+    (export "a-module" (core module))
   ))
 )
 
 ;; specifying extra imports is ok
 (component
   (import "foo" (instance
-    (export "a-module" (module
+    (export "a-module" (core module
       (import "foo" "bar" (func))
     ))
   ))
@@ -22,7 +22,7 @@
 (assert_unlinkable
   (component
     (import "foo" (instance
-      (export "a-module" (module
+      (export "a-module" (core module
         (export "the-export" (func))
       ))
     ))
@@ -30,7 +30,7 @@
   "module export `the-export` not defined")
 
 (component $foo
-  (module (export "a-module")
+  (core module (export "a-module")
     (import "env" "something" (func))
   )
 )
@@ -39,14 +39,14 @@
 (assert_unlinkable
   (component
     (import "foo" (instance
-      (export "a-module" (module))
+      (export "a-module" (core module))
     ))
   )
   "module import `env::something` not defined")
 
 (component
   (import "foo" (instance
-    (export "a-module" (module
+    (export "a-module" (core module
       (import "env" "something" (func))
     ))
   ))
@@ -55,7 +55,7 @@
 ;; extra imports still ok
 (component
   (import "foo" (instance
-    (export "a-module" (module
+    (export "a-module" (core module
       (import "env" "something" (func))
       (import "env" "other" (global i32))
     ))
@@ -63,7 +63,7 @@
 )
 
 (component $foo
-  (module (export "a-module")
+  (core module (export "a-module")
     (func (export "f"))
   )
 )
@@ -71,13 +71,13 @@
 ;; dropping exports is ok
 (component
   (import "foo" (instance
-    (export "a-module" (module))
+    (export "a-module" (core module))
   ))
 )
 
 (component
   (import "foo" (instance
-    (export "a-module" (module
+    (export "a-module" (core module
       (export "f" (func))
     ))
   ))
@@ -86,7 +86,7 @@
 (assert_unlinkable
   (component
     (import "foo" (instance
-      (export "a-module" (module
+      (export "a-module" (core module
         (export "f" (func (param i32)))
       ))
     ))
@@ -96,7 +96,7 @@
 (assert_unlinkable
   (component
     (import "foo" (instance
-      (export "a-module" (module
+      (export "a-module" (core module
         (export "f" (global i32))
       ))
     ))
@@ -104,7 +104,7 @@
   "expected global found func")
 
 (component $foo
-  (module (export "m")
+  (core module (export "m")
     (func (export "f"))
     (table (export "t") 1 funcref)
     (memory (export "m") 1)
@@ -116,28 +116,28 @@
 (assert_unlinkable
   (component
     (import "foo" (instance
-      (export "m" (module (export "f" (global i32))))
+      (export "m" (core module (export "f" (global i32))))
     ))
   )
   "expected global found func")
 (assert_unlinkable
   (component
     (import "foo" (instance
-      (export "m" (module (export "t" (func))))
+      (export "m" (core module (export "t" (func))))
     ))
   )
   "expected func found table")
 (assert_unlinkable
   (component
     (import "foo" (instance
-      (export "m" (module (export "m" (func))))
+      (export "m" (core module (export "m" (func))))
     ))
   )
   "expected func found memory")
 (assert_unlinkable
   (component
     (import "foo" (instance
-      (export "m" (module (export "g" (func))))
+      (export "m" (core module (export "g" (func))))
     ))
   )
   "expected func found global")
@@ -146,42 +146,42 @@
 (assert_unlinkable
   (component
     (import "foo" (instance
-      (export "m" (module (export "f" (func (param i32)))))
+      (export "m" (core module (export "f" (func (param i32)))))
     ))
   )
   "export `f` has the wrong type")
 (assert_unlinkable
   (component
     (import "foo" (instance
-      (export "m" (module (export "t" (table 1 externref))))
+      (export "m" (core module (export "t" (table 1 externref))))
     ))
   )
   "export `t` has the wrong type")
 (assert_unlinkable
   (component
     (import "foo" (instance
-      (export "m" (module (export "t" (table 2 funcref))))
+      (export "m" (core module (export "t" (table 2 funcref))))
     ))
   )
   "export `t` has the wrong type")
 (assert_unlinkable
   (component
     (import "foo" (instance
-      (export "m" (module (export "m" (memory 2))))
+      (export "m" (core module (export "m" (memory 2))))
     ))
   )
   "export `m` has the wrong type")
 (assert_unlinkable
   (component
     (import "foo" (instance
-      (export "m" (module (export "g" (global f32))))
+      (export "m" (core module (export "g" (global f32))))
     ))
   )
   "export `g` has the wrong type")
 (assert_unlinkable
   (component
     (import "foo" (instance
-      (export "m" (module (export "g" (global (mut i32)))))
+      (export "m" (core module (export "g" (global (mut i32)))))
     ))
   )
   "export `g` has the wrong type")
@@ -189,7 +189,7 @@
 ;; subtyping ok
 (component
   (import "foo" (instance
-    (export "m" (module
+    (export "m" (core module
       (export "t" (table 0 funcref))
       (export "m" (memory 0))
     ))
@@ -197,38 +197,38 @@
 )
 
 (component $foo
-  (module (export "f") (func (import "" "")))
-  (module (export "t") (table (import "" "") 1 funcref))
-  (module (export "m") (memory (import "" "") 1))
-  (module (export "g") (global (import "" "") i32))
+  (core module (export "f") (func (import "" "")))
+  (core module (export "t") (table (import "" "") 1 funcref))
+  (core module (export "m") (memory (import "" "") 1))
+  (core module (export "g") (global (import "" "") i32))
 )
 
 ;; wrong class of item
 (assert_unlinkable
   (component
     (import "foo" (instance
-      (export "f" (module (import "" "" (global i32))))
+      (export "f" (core module (import "" "" (global i32))))
     ))
   )
   "expected func found global")
 (assert_unlinkable
   (component
     (import "foo" (instance
-      (export "t" (module (import "" "" (func))))
+      (export "t" (core module (import "" "" (func))))
     ))
   )
   "expected table found func")
 (assert_unlinkable
   (component
     (import "foo" (instance
-      (export "m" (module (import "" "" (func))))
+      (export "m" (core module (import "" "" (func))))
     ))
   )
   "expected memory found func")
 (assert_unlinkable
   (component
     (import "foo" (instance
-      (export "g" (module (import "" "" (func))))
+      (export "g" (core module (import "" "" (func))))
     ))
   )
   "expected global found func")
@@ -237,42 +237,42 @@
 (assert_unlinkable
   (component
     (import "foo" (instance
-      (export "f" (module (import "" "" (func (param i32)))))
+      (export "f" (core module (import "" "" (func (param i32)))))
     ))
   )
   "module import `::` has the wrong type")
 (assert_unlinkable
   (component
     (import "foo" (instance
-      (export "t" (module (import "" "" (table 1 externref))))
+      (export "t" (core module (import "" "" (table 1 externref))))
     ))
   )
   "module import `::` has the wrong type")
 (assert_unlinkable
   (component
     (import "foo" (instance
-      (export "t" (module (import "" "" (table 0 funcref))))
+      (export "t" (core module (import "" "" (table 0 funcref))))
     ))
   )
   "module import `::` has the wrong type")
 (assert_unlinkable
   (component
     (import "foo" (instance
-      (export "m" (module (import "" "" (memory 0))))
+      (export "m" (core module (import "" "" (memory 0))))
     ))
   )
   "module import `::` has the wrong type")
 (assert_unlinkable
   (component
     (import "foo" (instance
-      (export "g" (module (import "" "" (global f32))))
+      (export "g" (core module (import "" "" (global f32))))
     ))
   )
   "module import `::` has the wrong type")
 (assert_unlinkable
   (component
     (import "foo" (instance
-      (export "g" (module (import "" "" (global (mut i32)))))
+      (export "g" (core module (import "" "" (global (mut i32)))))
     ))
   )
   "module import `::` has the wrong type")
@@ -280,45 +280,45 @@
 ;; subtyping ok, but in the opposite direction of imports
 (component
   (import "foo" (instance
-    (export "t" (module (import "" "" (table 2 funcref))))
-    (export "m" (module (import "" "" (memory 2))))
+    (export "t" (core module (import "" "" (table 2 funcref))))
+    (export "m" (core module (import "" "" (memory 2))))
   ))
 )
 
 ;; An instance can reexport a module, define a module, and everything can be
 ;; used by something else
 (component $src
-  (module (export "m")
+  (core module (export "m")
     (global (export "g") i32 i32.const 2)
   )
 )
 
 (component $reexport
-  (module $m1
+  (core module $m1
     (global (export "g") i32 i32.const 1)
   )
   (import "src" (instance $src
-    (export "m" (module (export "g" (global i32))))
+    (export "m" (core module (export "g" (global i32))))
   ))
 
-  (module $m3
+  (core module $m3
     (global (export "g") i32 i32.const 3)
   )
 
-  (export "m1" (module $m1))
-  (export "m2" (module $src "m"))
-  (export "m3" (module $m3))
+  (export "m1" (core module $m1))
+  (export "m2" (core module $src "m"))
+  (export "m3" (core module $m3))
 )
 
 (component
-  (type $modulety (module (export "g" (global i32))))
+  (core type $modulety (module (export "g" (global i32))))
   (import "reexport" (instance $reexport
-    (export "m1" (module (type $modulety)))
-    (export "m2" (module (type $modulety)))
-    (export "m3" (module (type $modulety)))
+    (export "m1" (core module (type $modulety)))
+    (export "m2" (core module (type $modulety)))
+    (export "m3" (core module (type $modulety)))
   ))
 
-  (module $assert_ok
+  (core module $assert_ok
     (import "m1" "g" (global $m1 i32))
     (import "m2" "g" (global $m2 i32))
     (import "m3" "g" (global $m3 i32))
@@ -350,11 +350,11 @@
     (start $assert_ok)
   )
 
-  (instance $m1 (instantiate (module $reexport "m1")))
-  (instance $m2 (instantiate (module $reexport "m2")))
-  (instance $m3 (instantiate (module $reexport "m3")))
+  (core instance $m1 (instantiate (module $reexport "m1")))
+  (core instance $m2 (instantiate (module $reexport "m2")))
+  (core instance $m3 (instantiate (module $reexport "m3")))
 
-  (instance (instantiate (module $assert_ok)
+  (core instance (instantiate $assert_ok
     (with "m1" (instance $m1))
     (with "m2" (instance $m2))
     (with "m3" (instance $m3))
@@ -364,7 +364,7 @@
 ;; order of imports and exports can be shuffled between definition site and
 ;; use-site
 (component $provider
-  (module (export "m")
+  (core module (export "m")
     (import "" "1" (global $i1 i32))
     (import "" "2" (global $i2 i32))
     (import "" "3" (global $i3 i32))
@@ -413,7 +413,7 @@
 
 (component
   (import "provider" (instance $provider
-    (export "m" (module
+    (export "m" (core module
       (import "" "4" (global i32))
       (import "" "3" (global i32))
       (import "" "2" (global i32))
@@ -426,18 +426,18 @@
     ))
   ))
 
-  (module $imports
+  (core module $imports
     (global (export "1") i32 (i32.const 1))
     (global (export "3") i32 (i32.const 3))
     (global (export "2") i32 (i32.const 2))
     (global (export "4") i32 (i32.const 4))
   )
-  (instance $imports (instantiate (module $imports)))
-  (instance $m (instantiate (module $provider "m")
+  (core instance $imports (instantiate $imports))
+  (core instance $m (instantiate (module $provider "m")
     (with "" (instance $imports))
   ))
 
-  (module $import_globals
+  (core module $import_globals
     (import "" "g4" (global $g4 i32))
     (import "" "g3" (global $g3 i32))
     (import "" "g2" (global $g2 i32))
@@ -473,5 +473,5 @@
     (start $assert_imports)
   )
 
-  (instance (instantiate (module $import_globals) (with "" (instance $m))))
+  (core instance (instantiate $import_globals (with "" (instance $m))))
 )

@@ -8,7 +8,7 @@ mod import;
 // A simple bump allocator which can be used with modules
 const REALLOC_AND_FREE: &str = r#"
     (global $last (mut i32) (i32.const 8))
-    (func $realloc (export "canonical_abi_realloc")
+    (func $realloc (export "realloc")
         (param $old_ptr i32)
         (param $old_size i32)
         (param $align i32)
@@ -62,8 +62,6 @@ const REALLOC_AND_FREE: &str = r#"
                 (global.get $last)
                 (local.get $new_size)))
     )
-
-    (func (export "canonical_abi_free") (param i32 i32 i32))
 "#;
 
 fn engine() -> Engine {
@@ -83,7 +81,7 @@ fn components_importing_modules() -> Result<()> {
         &engine,
         r#"
             (component
-                (import "" (module))
+                (import "" (core module))
             )
         "#,
     )?;
@@ -92,7 +90,7 @@ fn components_importing_modules() -> Result<()> {
         &engine,
         r#"
             (component
-                (import "" (module $m1
+                (import "" (core module $m1
                     (import "" "" (func))
                     (import "" "x" (global i32))
 
@@ -102,21 +100,21 @@ fn components_importing_modules() -> Result<()> {
                     (export "d" (global i64))
                 ))
 
-                (module $m2
+                (core module $m2
                     (func (export ""))
                     (global (export "x") i32 i32.const 0)
                 )
-                (instance $i2 (instantiate (module $m2)))
-                (instance $i1 (instantiate (module $m1) (with "" (instance $i2))))
+                (core instance $i2 (instantiate (module $m2)))
+                (core instance $i1 (instantiate (module $m1) (with "" (instance $i2))))
 
-                (module $m3
+                (core module $m3
                     (import "mod" "1" (memory 1))
                     (import "mod" "2" (table 1 funcref))
                     (import "mod" "3" (global i64))
                     (import "mod" "4" (func (result f32)))
                 )
 
-                (instance $i3 (instantiate (module $m3)
+                (core instance $i3 (instantiate (module $m3)
                     (with "mod" (instance
                         (export "1" (memory $i1 "b"))
                         (export "2" (table $i1 "a"))

@@ -31,10 +31,10 @@ pub enum WasmType {
     ExternRef,
 }
 
-impl TryFrom<wasmparser::Type> for WasmType {
+impl TryFrom<wasmparser::ValType> for WasmType {
     type Error = WasmError;
-    fn try_from(ty: wasmparser::Type) -> Result<Self, Self::Error> {
-        use wasmparser::Type::*;
+    fn try_from(ty: wasmparser::ValType) -> Result<Self, Self::Error> {
+        use wasmparser::ValType::*;
         match ty {
             I32 => Ok(WasmType::I32),
             I64 => Ok(WasmType::I64),
@@ -47,16 +47,16 @@ impl TryFrom<wasmparser::Type> for WasmType {
     }
 }
 
-impl From<WasmType> for wasmparser::Type {
-    fn from(ty: WasmType) -> wasmparser::Type {
+impl From<WasmType> for wasmparser::ValType {
+    fn from(ty: WasmType) -> wasmparser::ValType {
         match ty {
-            WasmType::I32 => wasmparser::Type::I32,
-            WasmType::I64 => wasmparser::Type::I64,
-            WasmType::F32 => wasmparser::Type::F32,
-            WasmType::F64 => wasmparser::Type::F64,
-            WasmType::V128 => wasmparser::Type::V128,
-            WasmType::FuncRef => wasmparser::Type::FuncRef,
-            WasmType::ExternRef => wasmparser::Type::ExternRef,
+            WasmType::I32 => wasmparser::ValType::I32,
+            WasmType::I64 => wasmparser::ValType::I64,
+            WasmType::F32 => wasmparser::ValType::F32,
+            WasmType::F64 => wasmparser::ValType::F64,
+            WasmType::V128 => wasmparser::ValType::V128,
+            WasmType::FuncRef => wasmparser::ValType::FuncRef,
+            WasmType::ExternRef => wasmparser::ValType::ExternRef,
         }
     }
 }
