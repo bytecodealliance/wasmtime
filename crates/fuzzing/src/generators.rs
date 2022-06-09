@@ -343,7 +343,6 @@ impl Config {
     pub fn set_spectest_compliant(&mut self) {
         let config = &mut self.module_config.config;
         config.memory64_enabled = false;
-        config.simd_enabled = false;
         config.bulk_memory_enabled = true;
         config.reference_types_enabled = true;
         config.multi_value_enabled = true;
@@ -633,6 +632,7 @@ impl<'a> Arbitrary<'a> for ModuleConfig {
         // these are all unconditionally turned off even with
         // `SwarmConfig::arbitrary`.
         config.memory64_enabled = u.arbitrary()?;
+        config.threads_enabled = u.arbitrary()?;
 
         Ok(ModuleConfig { config })
     }
