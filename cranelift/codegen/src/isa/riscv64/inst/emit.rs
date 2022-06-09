@@ -116,7 +116,6 @@ impl Inst {
         not_taken: BranchTarget,
         ty: Type,
         tmp: Writable<Reg>,
-        tmp2: Writable<Reg>,
     ) -> SmallInstVec<Inst> {
         let mut insts = SmallInstVec::new();
         let cc_bit = FloatCCBit::floatcc_2_mask_bits(cc);
@@ -189,9 +188,11 @@ impl Inst {
         }
         // if unorder
         if cc_bit.constains(FloatCCBit::UN) {
-            insts.extend(Inst::lower_float_unordered(
-                tmp, tmp2, ty, x, y, taken, not_taken,
-            ));
+            insts.extend(Inst::lower_float_unordered(tmp, ty, x, y, taken, not_taken));
+        } else {
+            //make sure we goto the not_taken.
+            //finally goto not_taken
+            insts.push(Inst::Jal { dest: not_taken });
         }
         insts
     }
@@ -326,7 +327,6 @@ impl Inst {
     */
     pub(crate) fn lower_float_unordered(
         tmp: Writable<Reg>,
-        tmp2: Writable<Reg>,
         ty: Type,
         x: Reg,
         y: Reg,
@@ -365,38 +365,14 @@ impl Inst {
         insts.push(Inst::FpuRR {
             frm: None,
             alu_op: class_op,
-            rd: tmp2,
-            rs: y,
-        });
-        insts.push(Inst::AluRRImm12 {
-            alu_op: AluOPRRI::Andi,
-            rd: tmp2,
-            rs: tmp2.to_reg(),
-            imm12: Imm12::from_bits(FClassResult::is_nan_bits() as i16),
-        });
-
-        insts.push(Inst::CondBr {
-            taken,
-            not_taken: BranchTarget::zero(),
-            kind: IntegerCompare {
-                kind: IntCC::NotEqual,
-                rs1: tmp2.to_reg(),
-                rs2: zero_reg(),
-            },
-        });
-        // x and y is not nan
-        // but there are maybe bother PosInfinite or NegInfinite.
-        insts.push(Inst::AluRRR {
-            alu_op: AluOPRRR::And,
             rd: tmp,
-            rs1: tmp.to_reg(),
-            rs2: tmp2.to_reg(),
+            rs: y,
         });
         insts.push(Inst::AluRRImm12 {
             alu_op: AluOPRRI::Andi,
             rd: tmp,
             rs: tmp.to_reg(),
-            imm12: Imm12::from_bits(FClassResult::is_infinite_bits() as i16),
+            imm12: Imm12::from_bits(FClassResult::is_nan_bits() as i16),
         });
         insts.push(Inst::CondBr {
             taken,
@@ -1023,22 +999,18 @@ impl MachInstEmit for Inst {
                     let rm = allocs.next(rm);
                     let rd = allocs.next_writable(rd);
                     if ty.is_float() {
-                        let mut insts = SmallInstVec::new();
-                        insts.push(Inst::FpuRR {
+                        Inst::FpuRRR {
+                            alu_op: if ty == F32 {
+                                FpuOPRRR::FsgnjS
+                            } else {
+                                FpuOPRRR::FsgnjD
+                            },
                             frm: None,
-                            alu_op: FpuOPRR::move_f_to_x_op(ty),
-                            rd: writable_spilltmp_reg(),
-                            rs: rm,
-                        });
-                        insts.push(Inst::FpuRR {
-                            frm: None,
-                            alu_op: FpuOPRR::move_x_to_f_op(ty),
                             rd: rd,
-                            rs: spilltmp_reg(),
-                        });
-                        insts
-                            .into_iter()
-                            .for_each(|inst| inst.emit(&[], sink, emit_info, state));
+                            rs1: rm,
+                            rs2: rm,
+                        }
+                        .emit(&[], sink, emit_info, state);
                     } else {
                         let x = Inst::AluRRImm12 {
                             alu_op: AluOPRRI::Ori,
@@ -1207,7 +1179,7 @@ impl MachInstEmit for Inst {
 
             &Inst::Fcmp {
                 rd,
-                tmp,
+
                 cc,
                 ty,
                 rs1,
@@ -1216,7 +1188,6 @@ impl MachInstEmit for Inst {
                 let rs1 = allocs.next(rs1);
                 let rs2 = allocs.next(rs2);
                 let rd = allocs.next_writable(rd);
-                let tmp = allocs.next_writable(tmp);
                 let label_true = sink.get_label();
                 let label_jump_over = sink.get_label();
                 Inst::lower_br_fcmp(
@@ -1227,7 +1198,6 @@ impl MachInstEmit for Inst {
                     BranchTarget::zero(),
                     ty,
                     rd,
-                    tmp,
                 )
                 .iter()
                 .for_each(|i| i.emit(&[], sink, emit_info, state));
@@ -1755,12 +1725,10 @@ impl MachInstEmit for Inst {
                 ty,
                 trap_code,
                 tmp,
-                tmp2,
             } => {
                 let x = allocs.next(x);
                 let y = allocs.next(y);
                 let tmp = allocs.next_writable(tmp);
-                let tmp2 = allocs.next_writable(tmp2);
                 let label_trap = sink.get_label();
                 let label_jump_over = sink.get_label();
                 Inst::lower_br_fcmp(
@@ -1771,7 +1739,6 @@ impl MachInstEmit for Inst {
                     BranchTarget::Label(label_jump_over),
                     ty,
                     tmp,
-                    tmp2,
                 )
                 .iter()
                 .for_each(|i| i.emit(&[], sink, emit_info, state));

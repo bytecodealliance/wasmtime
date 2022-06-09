@@ -448,12 +448,10 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let (x, y, ty) = maybe_input_insn(ctx, inputs[0], crate::ir::Opcode::Ffcmp)
                 .map(|inst| get_ffcmp_parameters(ctx, inst))
                 .unwrap();
-            let tmp = ctx.alloc_tmp(I64).only_reg().unwrap();
             let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let cc = ctx.data(insn).fp_cond_code().unwrap();
             ctx.emit(Inst::Fcmp {
                 rd,
-                tmp,
                 cc,
                 ty,
                 rs1: x,
@@ -604,14 +602,13 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let rs1 = put_input_in_reg(ctx, inputs[0]);
             let rs2 = put_input_in_reg(ctx, inputs[1]);
             let cc = ctx.data(insn).fp_cond_code().unwrap();
-            let tmp = ctx.alloc_tmp(I64).only_reg().unwrap();
+
             ctx.emit(Inst::Fcmp {
                 rd,
                 cc,
                 ty,
                 rs1,
                 rs2,
-                tmp,
             });
         }
 
@@ -643,7 +640,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let input_as_inst = maybe_input_insn(ctx, inputs[0], crate::ir::Opcode::Ffcmp).unwrap();
             let (x, y, ty) = get_ffcmp_parameters(ctx, input_as_inst);
             let tmp = ctx.alloc_tmp(I64).only_reg().unwrap();
-            let tmp2 = ctx.alloc_tmp(I64).only_reg().unwrap();
+
             let cc = ctx.data(insn).fp_cond_code().unwrap();
             ctx.emit(Inst::TrapFf {
                 cc,
@@ -652,7 +649,6 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 ty,
                 trap_code,
                 tmp,
-                tmp2,
             });
         }
 
@@ -1263,8 +1259,8 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
                 .unwrap();
                 let cc = ctx.data(branches[0]).fp_cond_code().unwrap();
                 let tmp = ctx.alloc_tmp(I64).only_reg().unwrap();
-                let tmp2 = ctx.alloc_tmp(I64).only_reg().unwrap();
-                Inst::lower_br_fcmp(cc, x, y, taken, not_taken, ty, tmp, tmp2)
+
+                Inst::lower_br_fcmp(cc, x, y, taken, not_taken, ty, tmp)
                     .into_iter()
                     .for_each(|i| ctx.emit(i));
             }

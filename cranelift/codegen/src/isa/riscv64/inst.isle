@@ -101,7 +101,6 @@
       (y Reg)
       (ty Type)
       (tmp WritableReg)
-      (tmp2 WritableReg)
       (trap_code TrapCode))
 
     (Jal
@@ -169,7 +168,6 @@
     ;; a float compare 
     (Fcmp 
       (rd WritableReg)
-      (tmp WritableReg)
       (cc FloatCC)
       (ty Type)
       (rs1 Reg)

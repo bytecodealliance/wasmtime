@@ -1,0 +1,100 @@
+test interpret
+test run
+target riscv64gc
+
+
+function %f_eq_s(f32 , f32) -> b1 {
+block0(v0: f32 , v1 : f32):
+  v2 = ffcmp v0, v1
+  brff eq v2 ,block1
+  jump block2
+block1:
+    v3 = bconst.b1 true
+    return v3
+block2:
+    v4 = bconst.b1 false
+    return v4
+}
+; run: %f_eq_s(0x1.0 , 0x2.0) == false
+; run: %f_eq_s(0x100.11 , 0x100.11) == true
+; run: %f_eq_s(-0x100.11 , 0x100.11) == false
+; run: %f_eq_s(+0x0.0 , -0x0.0) == true
+
+function %f_eq_d(f64 , f64) -> b1 {
+block0(v0: f64 , v1 : f64):
+  v2 = ffcmp v0, v1
+  brff eq v2 ,block1
+  jump block2
+block1:
+    v3 = bconst.b1 true
+    return v3
+block2:
+    v4 = bconst.b1 false
+    return v4
+}
+; run: %f_eq_d(0x1.0 , 0x2.0) == false
+; run: %f_eq_d(0x100.11 , 0x100.11) == true
+; run: %f_eq_d(-0x100.11 , 0x100.11) == false
+; run: %f_eq_d(+0x0.0 , -0x0.0) == true
+
+
+function %f_order_s(f32 , f32) -> b1 {
+block0(v0: f32 , v1 : f32):
+  v2 = ffcmp v0, v1
+  brff ord v2 ,block1
+  jump block2
+block1:
+    v3 = bconst.b1 true
+    return v3
+block2:
+    v4 = bconst.b1 false
+    return v4
+}
+; run: %f_order_s(0x100.11 , 0x100.11) == true
+; run: %f_order_s(-0x100.11 , 0x100.11) == true
+; run: %f_order_s(+0x0.0 , -0x0.0) == true
+; run: %f_order_s(+NaN , -0x1.0) == false
+; run: %f_order_s(+NaN , -NaN) == false
+; run: %f_order_s(+Inf , +Inf) == true
+
+
+function %f_unorder_s(f32 , f32) -> b1 {
+block0(v0: f32 , v1 : f32):
+  v2 = ffcmp v0, v1
+  brff uno v2 ,block1
+  jump block2
+block1:
+    v3 = bconst.b1 true
+    return v3
+block2:
+    v4 = bconst.b1 false
+    return v4
+}
+; run: %f_unorder_s(0x100.11 , 0x100.11) == false
+; run: %f_unorder_s(-0x100.11 , 0x100.11) == false
+; run: %f_unorder_s(+0x0.0 , -0x0.0) == false 
+; run: %f_unorder_s(+NaN , -0x1.0) == true
+; run: %f_unorder_s(+NaN , -NaN) == true
+; run: %f_unorder_s(+Inf , +Inf) == false
+
+function %f_order_d(f64 , f64) -> b1 {
+block0(v0: f64 , v1 : f64):
+  v2 = ffcmp v0, v1
+  brff ord v2 ,block1
+  jump block2
+block1:
+    v3 = bconst.b1 true
+    return v3
+block2:
+    v4 = bconst.b1 false
+    return v4
+}
+; run: %f_order_d(0x100.11 , 0x100.11) == true
+; run: %f_order_d(-0x100.11 , 0x100.11) == true
+; run: %f_order_d(+0x0.0 , -0x0.0) == true
+; run: %f_order_d(+NaN , -0x1.0) == false
+; run: %f_order_d(+NaN , -NaN) == false
+; run: %f_order_d(+Inf , +Inf) == true
+
+
+ 

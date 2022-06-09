@@ -1,7 +1,7 @@
 test interpret
 test run
 target aarch64
-target riscv64gc
+;; target riscv64gc has_extension_zbb
 ; not implemented on `x86_64`
 
 function %cls_i32(i32) -> i32 {

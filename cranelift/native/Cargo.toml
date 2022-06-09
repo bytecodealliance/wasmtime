@@ -24,3 +24,4 @@ core = ["cranelift-codegen/core"]
 
 [badges]
 maintenance = { status = "experimental" }
+ 

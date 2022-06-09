@@ -2,7 +2,7 @@ test run
 set enable_llvm_abi_extensions=true
 target aarch64
 target x86_64
-target riscv64gc
+;; target riscv64gc has_extension_zbb has_extension_zbkb
 
 function %reverse_bits_zero() -> b1 {
 block0:

@@ -993,66 +993,47 @@ where
             });
             (new_low, new_high)
         };
-
         ValueRegs::two(new_low.to_reg(), new_high.to_reg())
     }
 
     fn lower_float_abs(&mut self, ty: Type, val: Reg) -> Reg {
-        let tmp = self.temp_writable_reg(I64);
-        // move into x register.
-        self.emit(&MInst::FpuRR {
-            frm: None,
-            alu_op: FpuOPRR::move_f_to_x_op(ty),
-            rd: tmp,
-            rs: val,
-        });
-        // clean sign bit.
-        {
-            let (op, imm12) = AluOPRRI::Bclri.funct12(Some(float_sign_bit(ty)));
-            self.emit(&MInst::AluRRImm12 {
-                alu_op: op,
-                rd: tmp,
-                rs: tmp.to_reg(),
-                imm12,
-            });
+        let tmp = self.temp_writable_reg(F64);
+        if ty == F32 {
+            MInst::load_fp_constant32(tmp, f32_to_u64(1.0))
+                .into_iter()
+                .for_each(|ref i| self.emit(i));
+        } else {
+            MInst::load_fp_constant64(tmp, f64_to_u64(1.0), |ty| self.temp_writable_reg(ty))
+                .into_iter()
+                .for_each(|ref i| self.emit(i));
         }
-        // move back to float register.
         let rd = self.temp_writable_reg(F64);
-        self.emit(&MInst::FpuRR {
+        self.emit(&MInst::FpuRRR {
+            alu_op: if ty == F32 {
+                FpuOPRRR::FsgnjS
+            } else {
+                FpuOPRRR::FsgnjD
+            },
             frm: None,
-            alu_op: FpuOPRR::move_x_to_f_op(ty),
-            rd,
-            rs: tmp.to_reg(),
+            rd: rd,
+            rs1: val,
+            rs2: tmp.to_reg(),
         });
         rd.to_reg()
     }
 
     fn lower_float_neg(&mut self, ty: Type, val: Reg) -> Reg {
-        let tmp = self.temp_writable_reg(I64);
-        // move into x register.
-        self.emit(&MInst::FpuRR {
-            frm: None,
-            alu_op: FpuOPRR::move_f_to_x_op(ty),
-            rd: tmp,
-            rs: val,
-        });
-        // invert sign bit.
-        {
-            let (op, imm12) = AluOPRRI::Binvi.funct12(Some(float_sign_bit(ty)));
-            self.emit(&MInst::AluRRImm12 {
-                alu_op: op,
-                rd: tmp,
-                rs: tmp.to_reg(),
-                imm12,
-            });
-        }
-        // move back to float register.
         let rd = self.temp_writable_reg(F64);
-        self.emit(&MInst::FpuRR {
+        self.emit(&MInst::FpuRRR {
+            alu_op: if ty == F32 {
+                FpuOPRRR::FsgnjnS
+            } else {
+                FpuOPRRR::FsgnjnD
+            },
             frm: None,
-            alu_op: FpuOPRR::move_x_to_f_op(ty),
-            rd,
-            rs: tmp.to_reg(),
+            rd: rd,
+            rs1: val,
+            rs2: val,
         });
         rd.to_reg()
     }
@@ -1360,4 +1341,16 @@ where
             self.lower_ctx.emit(i.clone());
         }
     }
+}
+
+/*
+    memory representation of f32.
+*/
+fn f32_to_u64(f: f32) -> u32 {
+    let x = f.to_be_bytes();
+    u32::from_le_bytes(x)
+}
+fn f64_to_u64(f: f64) -> u64 {
+    let x = f.to_be_bytes();
+    u64::from_le_bytes(x)
 }

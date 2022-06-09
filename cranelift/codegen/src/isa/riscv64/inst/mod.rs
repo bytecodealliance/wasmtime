@@ -416,13 +416,10 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_uses(x.regs());
             collector.reg_uses(y.regs());
         }
-        &Inst::TrapFf {
-            x, y, tmp, tmp2, ..
-        } => {
+        &Inst::TrapFf { x, y, tmp, .. } => {
             collector.reg_use(x);
             collector.reg_use(y);
             collector.reg_early_def(tmp);
-            collector.reg_early_def(tmp2);
         }
 
         &Inst::Jal { .. } => {}
@@ -468,13 +465,10 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_use(src);
             collector.reg_def(rd);
         }
-        &Inst::Fcmp {
-            rd, rs1, rs2, tmp, ..
-        } => {
+        &Inst::Fcmp { rd, rs1, rs2, .. } => {
             collector.reg_use(rs1);
             collector.reg_use(rs2);
             collector.reg_early_def(rd);
-            collector.reg_early_def(tmp);
         }
         &Inst::Select {
             ref dst,
@@ -706,7 +700,7 @@ impl MachInst for Inst {
 
     fn worst_case_size() -> CodeOffset {
         //caculate by test function riscv64_worst_case_size_instrcution_size()
-        64
+        52
     }
 
     fn ref_type_regclass(_: &settings::Flags) -> RegClass {
@@ -1082,7 +1076,7 @@ impl Inst {
             }
             &Inst::Fcmp {
                 rd,
-                tmp,
+
                 cc,
                 ty,
                 rs1,
@@ -1091,15 +1085,14 @@ impl Inst {
                 let rs1 = format_reg(rs1, allocs);
                 let rs2 = format_reg(rs2, allocs);
                 let rd = format_reg(rd.to_reg(), allocs);
-                let tmp = format_reg(tmp.to_reg(), allocs);
+
                 format!(
-                    "{}.{} {},{},{};;tmp={}",
+                    "{}.{} {},{},{}",
                     if ty == F32 { "f" } else { "d" },
                     cc,
                     rd,
                     rs1,
                     rs2,
-                    tmp
                 )
             }
             &Inst::Store {
@@ -1164,15 +1157,13 @@ impl Inst {
                 ty,
                 trap_code,
                 tmp,
-                tmp2,
             } => format!(
-                "trap_ff_{} {} {},{};;tmp={} tmp2={} ty={}",
+                "trap_ff_{} {} {},{};;tmp={} ty={}",
                 cc,
                 trap_code,
                 format_reg(x, allocs),
                 format_reg(y, allocs),
                 format_reg(tmp.to_reg(), allocs),
-                format_reg(tmp2.to_reg(), allocs),
                 ty,
             ),
 
