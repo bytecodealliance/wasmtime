@@ -77,7 +77,9 @@ impl<'a> FuncEGraph<'a> {
 
             let side_effect_start = self.side_effect_ids.len() as u32;
             for inst in func.layout.block_insts(block) {
-                let side_effect = has_side_effect(func, inst);
+                let side_effect = has_side_effect(func, inst)
+                    || func.dfg[inst].opcode().can_load()
+                    || func.dfg[inst].opcode().can_store();
 
                 // Build args from SSA values.
                 let args: ArgVec = func
@@ -101,12 +103,14 @@ impl<'a> FuncEGraph<'a> {
 
                 // Create the egraph node.
                 let op = InstructionImms::from(&func.dfg[inst]);
+                let srcloc = func.srclocs[inst];
                 let node = if side_effect {
                     Node::Inst {
                         op,
                         inst,
                         args,
                         types: types.clone(),
+                        srcloc,
                     }
                 } else {
                     Node::Pure {
@@ -129,6 +133,7 @@ impl<'a> FuncEGraph<'a> {
                         value_to_id.insert(one_result, id);
                     }
                     many_results => {
+                        debug_assert!(many_results.len() > 1);
                         for (i, (&result, &ty)) in many_results.iter().zip(types.iter()).enumerate()
                         {
                             let projection = self.egraph.add(Node::Result {

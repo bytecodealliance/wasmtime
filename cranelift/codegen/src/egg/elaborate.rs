@@ -5,7 +5,7 @@ use super::domtree::DomTreeWithChildren;
 use super::extract::Extractor;
 use super::node::Node;
 use crate::dominator_tree::DominatorTree;
-use crate::ir::{Block, Function, Type, Value, ValueList};
+use crate::ir::{Block, Function, SourceLoc, Type, Value, ValueList};
 use crate::scoped_hash_map::ScopedHashMap;
 use egg::{EGraph, Id, Language};
 use smallvec::SmallVec;
@@ -64,7 +64,12 @@ impl<'a> Elaborator<'a> {
             ),
             _ => panic!("Cannot `add_node()` on block param or projection"),
         };
+        let srcloc = match &node {
+            Node::Inst { srcloc, .. } => *srcloc,
+            _ => SourceLoc::default(),
+        };
         let inst = self.func.dfg.make_inst(instdata);
+        self.func.srclocs[inst] = srcloc;
         for &ty in result_tys {
             self.func.dfg.append_result(inst, ty);
         }
@@ -122,7 +127,7 @@ impl<'a> Elaborator<'a> {
         let results_slice = results.as_slice(&self.func.dfg.value_lists);
 
         // Build the result and memoize in the id-to-value map.
-        let result = if results_slice.len() > 0 {
+        let result = if results_slice.len() == 1 {
             IdValue::Value(results_slice[0])
         } else {
             IdValue::Values(results)
@@ -162,6 +167,7 @@ impl<'a> Elaborator<'a> {
         // Clear the instructions in every block, but leave the list
         // of blocks and their layout unmodified.
         self.func.layout.clear_insts();
+        self.func.srclocs.clear();
     }
 
     pub(crate) fn elaborate<'b, PF: Fn(Block) -> &'b [(Id, Type)], RF: Fn(Block) -> &'b [Id]>(

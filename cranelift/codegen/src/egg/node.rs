@@ -1,6 +1,6 @@
 //! Node definition for EGraph representation.
 
-use crate::ir::{Block, Inst, InstructionImms, Opcode, Type};
+use crate::ir::{Block, Inst, InstructionImms, Opcode, SourceLoc, Type};
 use egg::{Id, Language};
 use smallvec::SmallVec;
 
@@ -47,6 +47,8 @@ pub enum Node {
         /// `Inst`s are not deduplicated: every instance is a
         /// logically separate and unique side-effect.
         inst: Inst,
+        /// The source location to preserve.
+        srcloc: SourceLoc,
     },
     /// A projection of one result of an `Inst` or `Pure`.
     Result {
@@ -118,12 +120,14 @@ impl Language for Node {
                     inst,
                     types: _,
                     args: _,
+                    srcloc: _,
                 },
                 Node::Inst {
                     op: _,
                     inst: other_inst,
                     types: _,
                     args: _,
+                    srcloc: _,
                 },
             )
                 // Just the `inst` is enough to uniquely match.
