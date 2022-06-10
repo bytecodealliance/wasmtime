@@ -22,11 +22,33 @@ cargo fuzz run $MY_FUZZ_TARGET
 
 At the time of writing, we have the following fuzz targets:
 
+* `api_calls`: stress the Wasmtime API by executing sequences of API calls; only
+  the subset of the API is currently supported.
 * `compile`: Attempt to compile libFuzzer's raw input bytes with Wasmtime.
-* `instantiate`: Attempt to compile and instantiate libFuzzer's raw input bytes
-  with Wasmtime.
-* `instantiate_translated`: Pass libFuzzer's input bytes to `wasm-opt -ttf` to
-  generate a random, valid Wasm module, and then attempt to instantiate it.
+* `compile-maybe-invalid`: Attempt to compile a wasm-smith-generated Wasm module
+  with code sequences that may be invalid.
+* `cranelift-fuzzgen`: Generate a Cranelift function and check that it returns
+  the same results when compiled to the host and when using the Cranelift
+  interpreter; only a subset of Cranelift IR is currently supported.
+* `cranelift-fuzzgen-verify`: Stress the Cranelift IR verifier by generating a
+  Cranelift function and checking that it is indeed a valid function.
+* `differential`: Generate a Wasm module and check that Wasmtime returns
+  the same results when run with two different configurations.
+* `differential_spec`: Generate a Wasm module and check that Wasmtime returns
+  the same results as the Wasm spec interpreter (see the `wasm-spec-interpreter`
+  crate).
+* `differential_v8`: Generate a Wasm module and check that Wasmtime returns
+  the same results as V8.
+* `differential_wasmi`: Generate a Wasm module and check that Wasmtime returns
+  the same results as the `wasmi` interpreter.
+* `instantiate`: Generate a Wasm module and Wasmtime configuration and attempt
+  to compile and instantiate with them.
+* `instantiate`: Generate many Wasm modules and attempt to compile and
+  instantiate them concurrently.
+* `spectests`: Pick a random spec test and run it with a generated
+  configuration.
+* `table_ops`: Generate a sequence of `externref` table operations and run them
+  in a GC environment.
 
 The canonical list of fuzz targets is the `.rs` files in the `fuzz_targets`
 directory:
@@ -51,7 +73,7 @@ git clone \
     wasmtime/fuzz/corpus
 ```
 
-### Reproducing a Fuzz Bug
+## Reproducing a Fuzz Bug
 
 When investigating a fuzz bug (especially one found by OSS-Fuzz), use the
 following steps to reproduce it locally:
