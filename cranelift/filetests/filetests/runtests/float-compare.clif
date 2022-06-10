@@ -1,7 +1,6 @@
-test interpret
 test run
 target riscv64gc
-
+target x86_64
 
 function %f_eq_s(f32 , f32) -> b1 {
 block0(v0: f32 , v1 : f32):
@@ -58,25 +57,6 @@ block2:
 ; run: %f_order_s(+Inf , +Inf) == true
 
 
-function %f_unorder_s(f32 , f32) -> b1 {
-block0(v0: f32 , v1 : f32):
-  v2 = ffcmp v0, v1
-  brff uno v2 ,block1
-  jump block2
-block1:
-    v3 = bconst.b1 true
-    return v3
-block2:
-    v4 = bconst.b1 false
-    return v4
-}
-; run: %f_unorder_s(0x100.11 , 0x100.11) == false
-; run: %f_unorder_s(-0x100.11 , 0x100.11) == false
-; run: %f_unorder_s(+0x0.0 , -0x0.0) == false 
-; run: %f_unorder_s(+NaN , -0x1.0) == true
-; run: %f_unorder_s(+NaN , -NaN) == true
-; run: %f_unorder_s(+Inf , +Inf) == false
-
 function %f_order_d(f64 , f64) -> b1 {
 block0(v0: f64 , v1 : f64):
   v2 = ffcmp v0, v1
@@ -97,4 +77,508 @@ block2:
 ; run: %f_order_d(+Inf , +Inf) == true
 
 
- 
+function %f_unorder_s(f32 , f32) -> b1 {
+block0(v0: f32 , v1 : f32):
+  v2 = ffcmp v0, v1
+  brff uno v2 ,block1
+  jump block2
+block1:
+    v3 = bconst.b1 true
+    return v3
+block2:
+    v4 = bconst.b1 false
+    return v4
+}
+; run: %f_unorder_s(0x100.11 , 0x100.11) == false
+; run: %f_unorder_s(-0x100.11 , 0x100.11) == false
+; run: %f_unorder_s(+0x0.0 , -0x0.0) == false 
+; run: %f_unorder_s(+NaN , -0x1.0) == true
+; run: %f_unorder_s(+NaN , -NaN) == true
+; run: %f_unorder_s(+Inf , +Inf) == false
+
+
+function %f_unorder_d(f64 , f64) -> b1 {
+block0(v0: f64 , v1 : f64):
+  v2 = ffcmp v0, v1
+  brff uno v2 ,block1
+  jump block2
+block1:
+    v3 = bconst.b1 true
+    return v3
+block2:
+    v4 = bconst.b1 false
+    return v4
+}
+; run: %f_unorder_d(0x100.11 , 0x100.11) == false
+; run: %f_unorder_d(-0x100.11 , 0x100.11) == false
+; run: %f_unorder_d(+0x0.0 , -0x0.0) == false 
+; run: %f_unorder_d(+NaN , -0x1.0) == true
+; run: %f_unorder_d(+NaN , -NaN) == true
+; run: %f_unorder_d(+Inf , +Inf) == false
+
+
+function %f_ne_s(f32 , f32) -> b1 {
+block0(v0: f32 , v1 : f32):
+  v2 = ffcmp v0, v1
+  brff ne v2 ,block1
+  jump block2
+block1:
+    v3 = bconst.b1 true
+    return v3
+block2:
+    v4 = bconst.b1 false
+    return v4
+}
+; run: %f_ne_s(0x100.11 , 0x100.11) == false
+; run: %f_ne_s(-0x100.11 , 0x100.11) == true
+; run: %f_ne_s(+0x234.7654 , +0x234.7654) == false 
+; run: %f_ne_s(+NaN , +NaN) == true
+; run: %f_ne_s(+NaN , -NaN) == true
+; run: %f_ne_s(-Inf , -Inf) == false
+
+function %f_ne_d(f64 , f64) -> b1 {
+block0(v0: f64 , v1 : f64):
+  v2 = ffcmp v0, v1
+  brff ne v2 ,block1
+  jump block2
+block1:
+    v3 = bconst.b1 true
+    return v3
+block2:
+    v4 = bconst.b1 false
+    return v4
+}
+; run: %f_ne_d(0x100.11 , 0x100.11) == false
+; run: %f_ne_d(-0x100.11 , 0x100.11) == true
+; run: %f_ne_d(+0x1234.7654 , +0x1234.7654) == false 
+; run: %f_ne_d(+NaN , +NaN) == true
+; run: %f_ne_d(+NaN , -NaN) == true
+; run: %f_ne_d(-Inf , -Inf) == false
+
+
+function %f_one_s(f32 , f32) -> b1 {
+block0(v0: f32 , v1 : f32):
+  v2 = ffcmp v0, v1
+  brff one v2 ,block1
+  jump block2
+block1:
+    v3 = bconst.b1 true
+    return v3
+block2:
+    v4 = bconst.b1 false
+    return v4
+}
+; run: %f_one_s(0x100.11 , 0x100.11) == false
+; run: %f_one_s(-0x100.11 , 0x100.11) == true
+; run: %f_one_s(-0x1.11 , 0x2.11) == true
+; run: %f_one_s(+0x234.7654 , +0x234.7654) == false 
+; run: %f_one_s(+NaN , -NaN) == false
+; run: %f_one_s(-Inf , -Inf) == false
+
+function %f_one_d(f64 , f64) -> b1 {
+block0(v0: f64 , v1 : f64):
+  v2 = ffcmp v0, v1
+  brff one v2 ,block1
+  jump block2
+block1:
+    v3 = bconst.b1 true
+    return v3
+block2:
+    v4 = bconst.b1 false
+    return v4
+}
+; run: %f_one_d(0x100.11 , 0x100.11) == false
+; run: %f_one_d(-0x100.11 , 0x100.11) == true
+; run: %f_one_d(-0x1.11 , 0x2.11) == true
+; run: %f_one_d(+0x234.7654 , +0x234.7654) == false 
+; run: %f_one_d(+NaN , -NaN) == false
+; run: %f_one_d(-Inf , -Inf) == false
+
+
+function %f_ueq_s(f32 , f32) -> b1 {
+block0(v0: f32 , v1 : f32):
+  v2 = ffcmp v0, v1
+  brff ueq v2 ,block1
+  jump block2
+block1:
+    v3 = bconst.b1 true
+    return v3
+block2:
+    v4 = bconst.b1 false
+    return v4
+}
+; run: %f_ueq_s(0x100.11 , 0x100.11) == true
+; run: %f_ueq_s(-0x100.11 , 0x100.11) == false
+; run: %f_ueq_s(-0x1.11 , 0x2.11) == false
+; run: %f_ueq_s(+0x234.7654 , +0x234.7654) == true 
+; run: %f_ueq_s(+NaN , -NaN) == true
+; run: %f_ueq_s(-Inf , -Inf) == true
+
+
+function %f_ueq_d(f64 , f64) -> b1 {
+block0(v0: f64 , v1 : f64):
+  v2 = ffcmp v0, v1
+  brff ueq v2 ,block1
+  jump block2
+block1:
+    v3 = bconst.b1 true
+    return v3
+block2:
+    v4 = bconst.b1 false
+    return v4
+}
+; run: %f_ueq_d(0x100.11 , 0x100.11) == true
+; run: %f_ueq_d(-0x100.11 , 0x100.11) == false
+; run: %f_ueq_d(-0x1.11 , 0x2.11) == false
+; run: %f_ueq_d(+0x234.7654 , +0x234.7654) == true 
+; run: %f_ueq_d(+NaN , -NaN) == true
+; run: %f_ueq_d(-Inf , -Inf) == true
+
+
+
+
+function %f_lt_s(f32 , f32) -> b1 {
+block0(v0: f32 , v1 : f32):
+  v2 = ffcmp v0, v1
+  brff lt v2 ,block1
+  jump block2
+block1:
+    v3 = bconst.b1 true
+    return v3
+block2:
+    v4 = bconst.b1 false
+    return v4
+}
+; run: %f_lt_s(0x100.11 , 0x100.11) == false
+; run: %f_lt_s(-0x100.11 , 0x100.11) == true
+; run: %f_lt_s(-0x1.11 , 0x2.11) == true
+; run: %f_lt_s(+0x234.7654 , +0x234.7654) == false  
+; run: %f_lt_s(+NaN , -NaN) == false
+; run: %f_lt_s(-Inf , -Inf) == false
+
+function %f_lt_d(f64 , f64) -> b1 {
+block0(v0: f64 , v1 : f64):
+  v2 = ffcmp v0, v1
+  brff lt v2 ,block1
+  jump block2
+block1:
+    v3 = bconst.b1 true
+    return v3
+block2:
+    v4 = bconst.b1 false
+    return v4
+}
+; run: %f_lt_d(0x100.11 , 0x100.11) == false
+; run: %f_lt_d(-0x100.11 , 0x100.11) == true
+; run: %f_lt_d(-0x1.11 , 0x2.11) == true
+; run: %f_lt_d(+0x234.7654 , +0x234.7654) == false  
+; run: %f_lt_d(+NaN , -NaN) == false
+; run: %f_lt_d(-Inf , -Inf) == false
+
+
+function %f_le_s(f32 , f32) -> b1 {
+block0(v0: f32 , v1 : f32):
+  v2 = ffcmp v0, v1
+  brff le v2 ,block1
+  jump block2
+block1:
+    v3 = bconst.b1 true
+    return v3
+block2:
+    v4 = bconst.b1 false
+    return v4
+}
+; run: %f_le_s(0x100.121 , 0x100.11) == false
+; run: %f_le_s(-0x100.11 , 0x100.11) == true
+; run: %f_le_s(-0x1.11 , 0x2.11) == true
+; run: %f_le_s(+0x234.8 , +0x234.7654) == false  
+; run: %f_le_s(+NaN , -NaN) == false
+; run: %f_le_s(-Inf , -Inf) == true
+
+function %f_le_d(f64 , f64) -> b1 {
+block0(v0: f64 , v1 : f64):
+  v2 = ffcmp v0, v1
+  brff le v2 ,block1
+  jump block2
+block1:
+    v3 = bconst.b1 true
+    return v3
+block2:
+    v4 = bconst.b1 false
+    return v4
+}
+; run: %f_le_d(0x100.121 , 0x100.11) == false
+; run: %f_le_d(-0x100.11 , 0x100.11) == true
+; run: %f_le_d(-0x1.11 , 0x2.11) == true
+; run: %f_le_d(+0x234.8 , +0x234.7654) == false  
+; run: %f_le_d(+NaN , -NaN) == false
+; run: %f_le_d(-Inf , -Inf) == true
+
+
+function %f_gt_s(f32 , f32) -> b1 {
+block0(v0: f32 , v1 : f32):
+  v2 = ffcmp v0, v1
+  brff gt v2 ,block1
+  jump block2
+block1:
+    v3 = bconst.b1 true
+    return v3
+block2:
+    v4 = bconst.b1 false
+    return v4
+}
+; run: %f_gt_s(0x100.121 , 0x100.11) == true 
+; run: %f_gt_s(-0x100.11 , 0x100.11) == false
+; run: %f_gt_s(-0x1.11 , 0x2.11) == false
+; run: %f_gt_s(+0x234.8 , +0x234.7654) == true  
+; run: %f_gt_s(+NaN , -NaN) == false
+; run: %f_gt_s(-Inf , -Inf) == false
+
+function %f_gt_d(f64 , f64) -> b1 {
+block0(v0: f64 , v1 : f64):
+  v2 = ffcmp v0, v1
+  brff gt v2 ,block1
+  jump block2
+block1:
+    v3 = bconst.b1 true
+    return v3
+block2:
+    v4 = bconst.b1 false
+    return v4
+}
+; run: %f_gt_d(0x100.121 , 0x100.11) == true 
+; run: %f_gt_d(-0x100.11 , 0x100.11) == false
+; run: %f_gt_d(-0x1.11 , 0x2.11) == false
+; run: %f_gt_d(+0x234.8 , +0x234.7654) == true  
+; run: %f_gt_d(+NaN , -NaN) == false
+; run: %f_gt_d(-Inf , -Inf) == false
+
+
+function %f_ge_s(f32 , f32) -> b1 {
+block0(v0: f32 , v1 : f32):
+  v2 = ffcmp v0, v1
+  brff ge v2 ,block1
+  jump block2
+block1:
+    v3 = bconst.b1 true
+    return v3
+block2:
+    v4 = bconst.b1 false
+    return v4
+}
+; run: %f_ge_s(0x100.121 , 0x100.11) == true 
+; run: %f_ge_s(-0x100.11 , 0x100.11) == false
+; run: %f_ge_s(-0x1.11 , 0x2.11) == false
+; run: %f_ge_s(+0x234.8 , +0x234.7654) == true  
+; run: %f_ge_s(+NaN , -NaN) == false
+; run: %f_ge_s(-Inf , -Inf) == true
+
+function %f_ge_d(f64 , f64) -> b1 {
+block0(v0: f64 , v1 : f64):
+  v2 = ffcmp v0, v1
+  brff ge v2 ,block1
+  jump block2
+block1:
+    v3 = bconst.b1 true
+    return v3
+block2:
+    v4 = bconst.b1 false
+    return v4
+}
+; run: %f_ge_d(0x100.121 , 0x100.11) == true 
+; run: %f_ge_d(-0x100.11 , 0x100.11) == false
+; run: %f_ge_d(-0x1.11 , 0x2.11) == false
+; run: %f_ge_d(+0x234.8 , +0x234.7654) == true  
+; run: %f_ge_d(+NaN , -NaN) == false
+; run: %f_ge_d(-Inf , -Inf) == true
+
+function %f_ult_s(f32 , f32) -> b1 {
+block0(v0: f32 , v1 : f32):
+  v2 = ffcmp v0, v1
+  brff ult v2 ,block1
+  jump block2
+block1:
+    v3 = bconst.b1 true
+    return v3
+block2:
+    v4 = bconst.b1 false
+    return v4
+}
+; run: %f_ult_s(0x100.121 , 0x100.11) == false 
+; run: %f_ult_s(-0x100.11 , 0x100.11) == true
+; run: %f_ult_s(-0x1.11 , 0x2.11) == true
+; run: %f_ult_s(+0x234.8 , +0x234.7654) == false  
+; run: %f_ult_s(+NaN , -NaN) == true
+; run: %f_ult_s(-Inf , -Inf) == false
+
+function %f_ult_d(f64 , f64) -> b1 {
+block0(v0: f64 , v1 : f64):
+  v2 = ffcmp v0, v1
+  brff ult v2 ,block1
+  jump block2
+block1:
+    v3 = bconst.b1 true
+    return v3
+block2:
+    v4 = bconst.b1 false
+    return v4
+}
+; run: %f_ult_d(0x100.121 , 0x100.11) == false 
+; run: %f_ult_d(-0x100.11 , 0x100.11) == true
+; run: %f_ult_d(-0x1.11 , 0x2.11) == true
+; run: %f_ult_d(+0x234.8 , +0x234.7654) == false  
+; run: %f_ult_d(+NaN , -NaN) == true
+; run: %f_ult_d(-Inf , -Inf) == false
+
+
+function %f_ule_s(f32 , f32) -> b1 {
+block0(v0: f32 , v1 : f32):
+  v2 = ffcmp v0, v1
+  brff ule v2 ,block1
+  jump block2
+block1:
+    v3 = bconst.b1 true
+    return v3
+block2:
+    v4 = bconst.b1 false
+    return v4
+}
+; run: %f_ule_s(0x100.121 , 0x100.11) == false 
+; run: %f_ule_s(-0x100.11 , 0x100.11) == true
+; run: %f_ule_s(-0x1.11 , 0x2.11) == true
+; run: %f_ule_s(+0x234.8 , +0x234.7654) == false  
+; run: %f_ule_s(+NaN , -NaN) == true
+; run: %f_ule_s(-Inf , -Inf) == true
+
+
+function %f_ule_d(f64 , f64) -> b1 {
+block0(v0: f64 , v1 : f64):
+  v2 = ffcmp v0, v1
+  brff ule v2 ,block1
+  jump block2
+block1:
+    v3 = bconst.b1 true
+    return v3
+block2:
+    v4 = bconst.b1 false
+    return v4
+}
+; run: %f_ule_d(0x100.121 , 0x100.11) == false 
+; run: %f_ule_d(-0x100.11 , 0x100.11) == true
+; run: %f_ule_d(-0x1.11 , 0x2.11) == true
+; run: %f_ule_d(+0x234.8 , +0x234.7654) == false  
+; run: %f_ule_d(+NaN , -NaN) == true
+; run: %f_ule_d(-Inf , -Inf) == true
+
+
+function %f_ugt_d(f64 , f64) -> b1 {
+block0(v0: f64 , v1 : f64):
+  v2 = ffcmp v0, v1
+  brff ugt v2 ,block1
+  jump block2
+block1:
+    v3 = bconst.b1 true
+    return v3
+block2:
+    v4 = bconst.b1 false
+    return v4
+}
+; run: %f_ugt_d(0x100.121 , 0x100.11) == true 
+; run: %f_ugt_d(-0x100.11 , 0x100.11) == false
+; run: %f_ugt_d(-0x1.11 , 0x2.11) == false
+; run: %f_ugt_d(+0x234.8 , +0x234.7654) == true  
+; run: %f_ugt_d(+NaN , -NaN) == true
+; run: %f_ugt_d(-Inf , -Inf) == false
+
+
+
+function %f_ugt_s(f32 , f32) -> b1 {
+block0(v0: f32 , v1 : f32):
+  v2 = ffcmp v0, v1
+  brff ugt v2 ,block1
+  jump block2
+block1:
+    v3 = bconst.b1 true
+    return v3
+block2:
+    v4 = bconst.b1 false
+    return v4
+}
+; run: %f_ugt_s(0x100.121 , 0x100.11) == true 
+; run: %f_ugt_s(-0x100.11 , 0x100.11) == false
+; run: %f_ugt_s(-0x1.11 , 0x2.11) == false
+; run: %f_ugt_s(+0x234.8 , +0x234.7654) == true  
+; run: %f_ugt_s(+NaN , -NaN) == true
+; run: %f_ugt_s(-Inf , -Inf) == false
+
+
+function %f_ugt_d(f64 , f64) -> b1 {
+block0(v0: f64 , v1 : f64):
+  v2 = ffcmp v0, v1
+  brff ugt v2 ,block1
+  jump block2
+block1:
+    v3 = bconst.b1 true
+    return v3
+block2:
+    v4 = bconst.b1 false
+    return v4
+}
+; run: %f_ugt_d(0x100.121 , 0x100.11) == true 
+; run: %f_ugt_d(-0x100.11 , 0x100.11) == false
+; run: %f_ugt_d(-0x1.11 , 0x2.11) == false
+; run: %f_ugt_d(+0x234.8 , +0x234.7654) == true  
+; run: %f_ugt_d(+NaN , -NaN) == true
+; run: %f_ugt_d(-Inf , -Inf) == false
+
+
+function %f_uge_s(f32 , f32) -> b1 {
+block0(v0: f32 , v1 : f32):
+  v2 = ffcmp v0, v1
+  brff uge v2 ,block1
+  jump block2
+block1:
+    v3 = bconst.b1 true
+    return v3
+block2:
+    v4 = bconst.b1 false
+    return v4
+}
+; run: %f_uge_s(0x100.121 , 0x100.11) == true 
+; run: %f_uge_s(-0x100.11 , 0x100.11) == false
+; run: %f_uge_s(-0x1.11 , 0x2.11) == false
+; run: %f_uge_s(+0x234.8 , +0x234.7654) == true  
+; run: %f_uge_s(+NaN , -NaN) == true
+; run: %f_uge_s(-Inf , -Inf) == true
+
+function %f_uge_d(f64 , f64) -> b1 {
+block0(v0: f64 , v1 : f64):
+  v2 = ffcmp v0, v1
+  brff uge v2 ,block1
+  jump block2
+block1:
+    v3 = bconst.b1 true
+    return v3
+block2:
+    v4 = bconst.b1 false
+    return v4
+}
+; run: %f_uge_d(0x100.121 , 0x100.11) == true 
+; run: %f_uge_d(-0x100.11 , 0x100.11) == false
+; run: %f_uge_d(-0x1.11 , 0x2.11) == false
+; run: %f_uge_d(+0x234.8 , +0x234.7654) == true  
+; run: %f_uge_d(+NaN , -NaN) == true
+; run: %f_uge_d(-Inf , -Inf) == true
+
+
+function %f_uge_s(f32 , f32) -> b1 {
+block0(v0: f32 , v1 : f32):
+  v2 = fcmp  uge v0, v1
+  return v2
+}
+; run: %f_uge_s(0x100.121 , 0x100.11) == true 
+; run: %f_uge_s(-0x100.11 , 0x100.11) == false
+; run: %f_uge_s(-0x1.11 , 0x2.11) == false
+; run: %f_uge_s(+0x234.8 , +0x234.7654) == true  
+; run: %f_uge_s(+NaN , -NaN) == true
+; run: %f_uge_s(-Inf , -Inf) == true
