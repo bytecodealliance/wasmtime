@@ -28,6 +28,7 @@ mod builtin;
 mod compilation;
 mod module;
 mod module_environ;
+mod module_types;
 pub mod obj;
 mod ref_bits;
 mod stack_map;
@@ -40,12 +41,16 @@ pub use crate::builtin::*;
 pub use crate::compilation::*;
 pub use crate::module::*;
 pub use crate::module_environ::*;
+pub use crate::module_types::*;
 pub use crate::ref_bits::*;
 pub use crate::stack_map::StackMap;
 pub use crate::trap_encoding::*;
 pub use crate::tunables::Tunables;
 pub use crate::vmoffsets::*;
 pub use object;
+
+#[cfg(feature = "component-model")]
+pub mod component;
 
 // Reexport all of these type-level since they're quite commonly used and it's
 // much easier to refer to everything through one crate rather than importing
@@ -65,28 +70,3 @@ pub const WASM64_MAX_PAGES: u64 = 1 << 48;
 
 /// Version number of this crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
-
-/// Iterates through all `LibCall` members and all runtime exported functions.
-#[macro_export]
-macro_rules! for_each_libcall {
-    ($op:ident) => {
-        $op![
-            (UdivI64, wasmtime_i64_udiv),
-            (UdivI64, wasmtime_i64_udiv),
-            (SdivI64, wasmtime_i64_sdiv),
-            (UremI64, wasmtime_i64_urem),
-            (SremI64, wasmtime_i64_srem),
-            (IshlI64, wasmtime_i64_ishl),
-            (UshrI64, wasmtime_i64_ushr),
-            (SshrI64, wasmtime_i64_sshr),
-            (CeilF32, wasmtime_f32_ceil),
-            (FloorF32, wasmtime_f32_floor),
-            (TruncF32, wasmtime_f32_trunc),
-            (NearestF32, wasmtime_f32_nearest),
-            (CeilF64, wasmtime_f64_ceil),
-            (FloorF64, wasmtime_f64_floor),
-            (TruncF64, wasmtime_f64_trunc),
-            (NearestF64, wasmtime_f64_nearest)
-        ];
-    };
-}

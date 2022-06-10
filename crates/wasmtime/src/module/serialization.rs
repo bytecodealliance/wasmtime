@@ -7,7 +7,7 @@
 //! There are two main pieces of data associated with a binary artifact:
 //!
 //! 1. The compiled module image, currently an ELF file.
-//! 2. Compilation metadata for the module, including the `TypeTables`
+//! 2. Compilation metadata for the module, including the `ModuleTypes`
 //!    information. This metadata is validated for compilation settings.
 //!
 //! Compiled modules are, at this time, represented as an ELF file. This ELF
@@ -47,7 +47,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::str::FromStr;
-use wasmtime_environ::{FlagValue, Tunables, TypeTables};
+use wasmtime_environ::{FlagValue, ModuleTypes, Tunables};
 use wasmtime_jit::{subslice_range, CompiledModuleInfo};
 use wasmtime_runtime::MmapVec;
 
@@ -166,7 +166,7 @@ struct Metadata<'a> {
     isa_flags: BTreeMap<String, FlagValue>,
     tunables: Tunables,
     features: WasmFeatures,
-    types: MyCow<'a, TypeTables>,
+    types: MyCow<'a, ModuleTypes>,
 }
 
 impl<'a> SerializedModule<'a> {
@@ -180,7 +180,7 @@ impl<'a> SerializedModule<'a> {
     }
 
     #[cfg(compiler)]
-    pub fn from_artifacts(engine: &Engine, artifacts: &'a MmapVec, types: &'a TypeTables) -> Self {
+    pub fn from_artifacts(engine: &Engine, artifacts: &'a MmapVec, types: &'a ModuleTypes) -> Self {
         Self::with_data(engine, MyCow::Borrowed(artifacts), MyCow::Borrowed(types))
     }
 
@@ -188,7 +188,7 @@ impl<'a> SerializedModule<'a> {
     fn with_data(
         engine: &Engine,
         artifacts: MyCow<'a, MmapVec>,
-        types: MyCow<'a, TypeTables>,
+        types: MyCow<'a, ModuleTypes>,
     ) -> Self {
         Self {
             artifacts,
@@ -211,7 +211,7 @@ impl<'a> SerializedModule<'a> {
     pub fn into_parts(
         mut self,
         engine: &Engine,
-    ) -> Result<(MmapVec, Option<CompiledModuleInfo>, TypeTables)> {
+    ) -> Result<(MmapVec, Option<CompiledModuleInfo>, ModuleTypes)> {
         // Verify that the compilation settings in the engine match the
         // compilation settings of the module that's being loaded.
         self.check_triple(engine)?;

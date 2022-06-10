@@ -71,8 +71,8 @@
 
 use crate::entity::SecondaryMap;
 use crate::fx::{FxHashMap, FxHashSet};
+use crate::inst_predicates::visit_block_succs;
 use crate::ir::{Block, Function, Inst, Opcode};
-use crate::machinst::lower::visit_block_succs;
 use crate::machinst::*;
 
 use smallvec::SmallVec;

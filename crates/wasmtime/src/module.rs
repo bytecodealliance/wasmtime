@@ -11,9 +11,11 @@ use std::ops::Range;
 use std::path::Path;
 use std::sync::Arc;
 use wasmparser::{Parser, ValidPayload, Validator};
+#[cfg(feature = "component-model")]
+use wasmtime_environ::component::ComponentTypes;
 use wasmtime_environ::{
-    DefinedFuncIndex, DefinedMemoryIndex, FunctionInfo, ModuleEnvironment, PrimaryMap,
-    SignatureIndex, TypeTables,
+    DefinedFuncIndex, DefinedMemoryIndex, FunctionInfo, ModuleEnvironment, ModuleTranslation,
+    ModuleTypes, PrimaryMap, SignatureIndex,
 };
 use wasmtime_jit::{CompiledModule, CompiledModuleInfo};
 use wasmtime_runtime::{
@@ -105,7 +107,7 @@ struct ModuleInner {
     /// executed.
     module: Arc<CompiledModule>,
     /// Type information of this module.
-    types: TypeTables,
+    types: Types,
     /// Registered shared signature for the module.
     signatures: SignatureCollection,
     /// A set of initialization images for memories, if any.
@@ -340,26 +342,41 @@ impl Module {
     pub(crate) fn build_artifacts(
         engine: &Engine,
         wasm: &[u8],
-    ) -> Result<(MmapVec, Option<CompiledModuleInfo>, TypeTables)> {
+    ) -> Result<(MmapVec, Option<CompiledModuleInfo>, ModuleTypes)> {
         let tunables = &engine.config().tunables;
 
         // First a `ModuleEnvironment` is created which records type information
         // about the wasm module. This is where the WebAssembly is parsed and
         // validated. Afterwards `types` will have all the type information for
         // this module.
-        let (mut translation, types) = ModuleEnvironment::new(tunables, &engine.config().features)
-            .translate(wasm)
+        let mut validator =
+            wasmparser::Validator::new_with_features(engine.config().features.clone());
+        let parser = wasmparser::Parser::new(0);
+        let mut types = Default::default();
+        let translation = ModuleEnvironment::new(tunables, &mut validator, &mut types)
+            .translate(parser, wasm)
             .context("failed to parse WebAssembly module")?;
+        let types = types.finish();
+        let (mmap, info) = Module::compile_functions(engine, translation, &types)?;
+        Ok((mmap, info, types))
+    }
 
-        // Next compile all functions in parallel using rayon. This will perform
-        // the actual validation of all the function bodies.
+    #[cfg(compiler)]
+    pub(crate) fn compile_functions(
+        engine: &Engine,
+        mut translation: ModuleTranslation<'_>,
+        types: &ModuleTypes,
+    ) -> Result<(MmapVec, Option<CompiledModuleInfo>)> {
+        // Compile all functions in parallel using rayon. This will also perform
+        // validation of function bodies.
+        let tunables = &engine.config().tunables;
         let functions = mem::take(&mut translation.function_body_inputs);
         let functions = functions.into_iter().collect::<Vec<_>>();
         let funcs = engine
             .run_maybe_parallel(functions, |(index, func)| {
                 engine
                     .compiler()
-                    .compile_function(&translation, index, func, tunables, &types)
+                    .compile_function(&translation, index, func, tunables, types)
             })?
             .into_iter()
             .collect();
@@ -369,7 +386,7 @@ impl Module {
         let (funcs, trampolines) =
             engine
                 .compiler()
-                .emit_obj(&translation, &types, funcs, tunables, &mut obj)?;
+                .emit_obj(&translation, types, funcs, tunables, &mut obj)?;
 
         // If configured attempt to use static memory initialization which
         // can either at runtime be implemented as a single memcpy to
@@ -389,7 +406,7 @@ impl Module {
         let (mmap, info) =
             wasmtime_jit::finish_compile(translation, obj, funcs, trampolines, tunables)?;
 
-        Ok((mmap, Some(info), types))
+        Ok((mmap, Some(info)))
     }
 
     /// Deserializes an in-memory compiled module previously created with
@@ -467,11 +484,11 @@ impl Module {
         module.into_module(engine)
     }
 
-    fn from_parts(
+    pub(crate) fn from_parts(
         engine: &Engine,
         mmap: MmapVec,
         info: Option<CompiledModuleInfo>,
-        types: TypeTables,
+        types: impl Into<Types>,
     ) -> Result<Self> {
         let module = Arc::new(CompiledModule::from_artifacts(
             mmap,
@@ -483,9 +500,10 @@ impl Module {
         // Validate the module can be used with the current allocator
         engine.allocator().validate(module.module())?;
 
+        let types = types.into();
         let signatures = SignatureCollection::new_for_module(
             engine.signatures(),
-            &types,
+            types.module_types(),
             module.trampolines().map(|(idx, f, _)| (idx, f)),
         );
 
@@ -530,8 +548,14 @@ impl Module {
 
         let mut functions = Vec::new();
         for payload in Parser::new(0).parse_all(binary) {
-            if let ValidPayload::Func(a, b) = validator.payload(&payload?)? {
+            let payload = payload?;
+            if let ValidPayload::Func(a, b) = validator.payload(&payload)? {
                 functions.push((a, b));
+            }
+            if let wasmparser::Payload::Version { encoding, .. } = &payload {
+                if let wasmparser::Encoding::Component = encoding {
+                    bail!("component passed to module validation");
+                }
             }
         }
 
@@ -562,8 +586,8 @@ impl Module {
         self.compiled_module().module()
     }
 
-    pub(crate) fn types(&self) -> &TypeTables {
-        &self.inner.types
+    pub(crate) fn types(&self) -> &ModuleTypes {
+        self.inner.types.module_types()
     }
 
     pub(crate) fn signatures(&self) -> &SignatureCollection {
@@ -1034,6 +1058,35 @@ impl wasmtime_runtime::ModuleRuntimeInfo for BareModuleInfo {
             Some((_, id)) => std::slice::from_ref(id),
             None => &[],
         }
+    }
+}
+
+pub(crate) enum Types {
+    Module(ModuleTypes),
+    #[cfg(feature = "component-model")]
+    Component(Arc<ComponentTypes>),
+}
+
+impl Types {
+    fn module_types(&self) -> &ModuleTypes {
+        match self {
+            Types::Module(m) => m,
+            #[cfg(feature = "component-model")]
+            Types::Component(c) => c.module_types(),
+        }
+    }
+}
+
+impl From<ModuleTypes> for Types {
+    fn from(types: ModuleTypes) -> Types {
+        Types::Module(types)
+    }
+}
+
+#[cfg(feature = "component-model")]
+impl From<Arc<ComponentTypes>> for Types {
+    fn from(types: Arc<ComponentTypes>) -> Types {
+        Types::Component(types)
     }
 }
 

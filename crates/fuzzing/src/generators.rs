@@ -213,6 +213,7 @@ pub struct WasmtimeConfig {
     codegen: CodegenSettings,
     padding_between_functions: Option<u16>,
     generate_address_map: bool,
+    wasm_backtraces: bool,
 }
 
 /// Configuration for linear memories in Wasmtime.
@@ -346,6 +347,7 @@ impl Config {
         config.bulk_memory_enabled = true;
         config.reference_types_enabled = true;
         config.multi_value_enabled = true;
+        config.simd_enabled = true;
         config.max_memories = 1;
         config.max_tables = 5;
 
@@ -386,6 +388,7 @@ impl Config {
             .wasm_multi_memory(self.module_config.config.max_memories > 1)
             .wasm_simd(self.module_config.config.simd_enabled)
             .wasm_memory64(self.module_config.config.memory64_enabled)
+            .wasm_backtrace(self.wasmtime.wasm_backtraces)
             .cranelift_nan_canonicalization(self.wasmtime.canonicalize_nans)
             .cranelift_opt_level(self.wasmtime.opt_level.to_wasmtime())
             .consume_fuel(self.wasmtime.consume_fuel)

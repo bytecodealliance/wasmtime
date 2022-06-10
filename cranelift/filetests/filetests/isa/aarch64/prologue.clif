@@ -81,11 +81,9 @@ block0(v0: f64):
 ;   stp d12, d13, [sp, #-16]!
 ;   stp d10, d11, [sp, #-16]!
 ;   stp d8, d9, [sp, #-16]!
-;   sub sp, sp, #16
 ; block0:
+;   fadd d2, d0, d0
 ;   fadd d4, d0, d0
-;   fadd d6, d0, d0
-;   str q6, [sp]
 ;   fadd d6, d0, d0
 ;   fadd d8, d0, d0
 ;   fadd d10, d0, d0
@@ -98,56 +96,54 @@ block0(v0: f64):
 ;   fadd d9, d0, d0
 ;   fadd d11, d0, d0
 ;   fadd d13, d0, d0
-;   fadd d16, d0, d0
+;   fadd d30, d0, d0
 ;   fadd d15, d0, d0
+;   fadd d18, d0, d0
 ;   fadd d20, d0, d0
 ;   fadd d22, d0, d0
 ;   fadd d24, d0, d0
 ;   fadd d26, d0, d0
 ;   fadd d28, d0, d0
-;   fadd d30, d0, d0
-;   fadd d17, d0, d0
+;   fadd d31, d0, d0
+;   fadd d16, d0, d0
 ;   fadd d19, d0, d0
 ;   fadd d21, d0, d0
 ;   fadd d23, d0, d0
 ;   fadd d25, d0, d0
 ;   fadd d27, d0, d0
 ;   fadd d29, d0, d0
-;   fadd d18, d0, d0
-;   fadd d2, d0, d0
-;   fadd d0, d0, d4
-;   ldr q4, [sp]
-;   fadd d6, d4, d6
+;   fadd d17, d0, d0
+;   fadd d0, d0, d2
+;   fadd d2, d4, d6
 ;   fadd d4, d8, d10
-;   fadd d10, d12, d14
+;   fadd d6, d12, d14
 ;   fadd d8, d1, d3
-;   fadd d14, d5, d7
+;   fadd d10, d5, d7
 ;   fadd d12, d9, d11
-;   fadd d3, d13, d16
-;   fadd d1, d15, d20
-;   fadd d7, d22, d24
-;   fadd d5, d26, d28
-;   fadd d11, d30, d17
-;   fadd d9, d19, d21
-;   fadd d15, d23, d25
-;   fadd d13, d27, d29
-;   fadd d2, d18, d2
-;   fadd d0, d0, d6
-;   fadd d6, d4, d10
-;   fadd d4, d8, d14
-;   fadd d10, d12, d3
-;   fadd d8, d1, d7
-;   fadd d11, d5, d11
-;   fadd d12, d9, d15
-;   fadd d14, d13, d2
-;   fadd d0, d0, d6
-;   fadd d2, d4, d10
-;   fadd d4, d8, d11
+;   fadd d14, d13, d30
+;   fadd d1, d15, d18
+;   fadd d3, d20, d22
+;   fadd d5, d24, d26
+;   fadd d7, d28, d31
+;   fadd d9, d16, d19
+;   fadd d11, d21, d23
+;   fadd d13, d25, d27
+;   fadd d15, d29, d17
+;   fadd d0, d0, d2
+;   fadd d2, d4, d6
+;   fadd d4, d8, d10
+;   fadd d6, d12, d14
+;   fadd d8, d1, d3
+;   fadd d10, d5, d7
+;   fadd d12, d9, d11
+;   fadd d14, d13, d15
+;   fadd d0, d0, d2
+;   fadd d2, d4, d6
+;   fadd d4, d8, d10
 ;   fadd d6, d12, d14
 ;   fadd d8, d0, d2
 ;   fadd d10, d4, d6
 ;   fadd d0, d8, d10
-;   add sp, sp, #16
 ;   ldp d8, d9, [sp], #16
 ;   ldp d10, d11, [sp], #16
 ;   ldp d12, d13, [sp], #16

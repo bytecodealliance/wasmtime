@@ -623,11 +623,12 @@ impl ABIMachineSpec for AArch64MachineDeps {
     }
 
     fn gen_debug_frame_info(
+        call_conv: isa::CallConv,
         flags: &settings::Flags,
         _isa_flags: &Vec<settings::Value>,
     ) -> SmallInstVec<Inst> {
         let mut insts = SmallVec::new();
-        if flags.unwind_info() {
+        if flags.unwind_info() && call_conv.extends_apple_aarch64() {
             insts.push(Inst::Unwind {
                 inst: UnwindInst::Aarch64SetPointerAuth {
                     return_addresses: false,
@@ -936,7 +937,8 @@ impl ABIMachineSpec for AArch64MachineDeps {
         _outgoing_args_size: u32,
     ) -> SmallVec<[Inst; 16]> {
         let mut insts = SmallVec::new();
-        let (clobbered_int, clobbered_vec) = get_regs_restored_in_epilogue(call_conv, clobbers);
+        let (clobbered_int, clobbered_vec) =
+            get_regs_restored_in_epilogue(call_conv, flags, clobbers);
 
         // Free the fixed frame if necessary.
         if fixed_frame_storage_size > 0 {
@@ -1189,12 +1191,13 @@ impl ABIMachineSpec for AArch64MachineDeps {
 
     fn get_clobbered_callee_saves(
         call_conv: isa::CallConv,
+        flags: &settings::Flags,
         regs: &[Writable<RealReg>],
     ) -> Vec<Writable<RealReg>> {
         let mut regs: Vec<Writable<RealReg>> = regs
             .iter()
             .cloned()
-            .filter(|r| is_reg_saved_in_prologue(call_conv, r.to_reg()))
+            .filter(|r| is_reg_saved_in_prologue(call_conv, flags.enable_pinned_reg(), r.to_reg()))
             .collect();
 
         // Sort registers for deterministic code output. We can do an unstable
@@ -1229,7 +1232,7 @@ fn legal_type_for_machine(ty: Type) -> bool {
 
 /// Is the given register saved in the prologue if clobbered, i.e., is it a
 /// callee-save?
-fn is_reg_saved_in_prologue(call_conv: isa::CallConv, r: RealReg) -> bool {
+fn is_reg_saved_in_prologue(call_conv: isa::CallConv, enable_pinned_reg: bool, r: RealReg) -> bool {
     if call_conv.extends_baldrdash() {
         match r.class() {
             RegClass::Int => {
@@ -1246,7 +1249,14 @@ fn is_reg_saved_in_prologue(call_conv: isa::CallConv, r: RealReg) -> bool {
     match r.class() {
         RegClass::Int => {
             // x19 - x28 inclusive are callee-saves.
-            r.hw_enc() >= 19 && r.hw_enc() <= 28
+            // However, x21 is the pinned reg if `enable_pinned_reg`
+            // is set, and is implicitly globally-allocated, hence not
+            // callee-saved in prologues.
+            if enable_pinned_reg && r.hw_enc() == PINNED_REG {
+                false
+            } else {
+                r.hw_enc() >= 19 && r.hw_enc() <= 28
+            }
         }
         RegClass::Float => {
             // v8 - v15 inclusive are callee-saves.
@@ -1260,12 +1270,13 @@ fn is_reg_saved_in_prologue(call_conv: isa::CallConv, r: RealReg) -> bool {
 /// written by the function's body.
 fn get_regs_restored_in_epilogue(
     call_conv: isa::CallConv,
+    flags: &settings::Flags,
     regs: &[Writable<RealReg>],
 ) -> (Vec<Writable<RealReg>>, Vec<Writable<RealReg>>) {
     let mut int_saves = vec![];
     let mut vec_saves = vec![];
     for &reg in regs {
-        if is_reg_saved_in_prologue(call_conv, reg.to_reg()) {
+        if is_reg_saved_in_prologue(call_conv, flags.enable_pinned_reg(), reg.to_reg()) {
             match reg.to_reg().class() {
                 RegClass::Int => int_saves.push(reg),
                 RegClass::Float => vec_saves.push(reg),

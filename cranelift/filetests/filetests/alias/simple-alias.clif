@@ -1,0 +1,54 @@
+test alias-analysis
+set opt_level=speed
+target aarch64
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Redundant-load elimination
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %f0(i64 vmctx, i32) -> i32, i32, i32, i32 {
+    gv0 = vmctx
+    gv1 = load.i64 notrap readonly aligned gv0+8
+    heap0 = static gv1, bound 0x1_0000_0000, offset_guard 0x8000_0000, index_type i32
+    fn0 = %g(i64 vmctx)
+
+block0(v0: i64, v1: i32):
+    v2 = heap_addr.i64 heap0, v1, 0
+    v3 = load.i32 v2+8
+    ;; This should reuse the load above.
+    v4 = heap_addr.i64 heap0, v1, 0
+    v5 = load.i32 v4+8
+    ; check: v5 -> v3
+    
+    call fn0(v0)
+
+    ;; The second load is redundant wrt the first, but the call above
+    ;; is a barrier that prevents reusing v3 or v5.
+    v6 = load.i32 v4+8
+    v7 = load.i32 v4+8
+    ; check: v7 -> v6
+    
+    return v3, v5, v6, v7
+}
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Store-to-load forwarding
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %f1(i64 vmctx, i32) -> i32 {
+    gv0 = vmctx
+    gv1 = load.i64 notrap readonly aligned gv0+8
+    heap0 = static gv1, bound 0x1_0000_0000, offset_guard 0x8000_0000, index_type i32
+    fn0 = %g(i64 vmctx)
+
+block0(v0: i64, v1: i32):
+    v2 = heap_addr.i64 heap0, v1, 0
+    store.i32 v1, v2+8
+
+    ;; This load should pick up the store above.
+    v3 = heap_addr.i64 heap0, v1, 0
+    v4 = load.i32 v3+8
+    ; check: v4 -> v1
+    
+    return v4
+}

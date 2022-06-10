@@ -7,10 +7,10 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::mem;
-use std::ops::{Index, Range};
+use std::ops::Range;
 use wasmtime_types::*;
 
-/// Implemenation styles for WebAssembly linear memory.
+/// Implementation styles for WebAssembly linear memory.
 #[derive(Debug, Clone, Hash, Serialize, Deserialize)]
 pub enum MemoryStyle {
     /// The actual memory can be resized and moved.
@@ -18,7 +18,7 @@ pub enum MemoryStyle {
         /// Extra space to reserve when a memory must be moved due to growth.
         reserve: u64,
     },
-    /// Addresss space is allocated up front.
+    /// Address space is allocated up front.
     Static {
         /// The number of mapped and unmapped pages.
         bound: u64,
@@ -160,7 +160,7 @@ pub enum MemoryInitialization {
     ///   which might reside in a compiled module on disk, available immediately
     ///   in a linear memory's address space.
     ///
-    /// To facilitate the latter fo these techniques the `try_static_init`
+    /// To facilitate the latter of these techniques the `try_static_init`
     /// function below, which creates this variant, takes a host page size
     /// argument which can page-align everything to make mmap-ing possible.
     Static {
@@ -919,6 +919,28 @@ impl Module {
         }
     }
 
+    /// Convert a `DefinedMemoryIndex` into an `OwnedMemoryIndex`. Returns None
+    /// if the index is an imported memory.
+    #[inline]
+    pub fn owned_memory_index(&self, memory: DefinedMemoryIndex) -> OwnedMemoryIndex {
+        assert!(
+            memory.index() < self.memory_plans.len(),
+            "non-shared memory must have an owned index"
+        );
+
+        // Once we know that the memory index is not greater than the number of
+        // plans, we can iterate through the plans up to the memory index and
+        // count how many are not shared (i.e., owned).
+        let owned_memory_index = self
+            .memory_plans
+            .iter()
+            .skip(self.num_imported_memories)
+            .take(memory.index())
+            .filter(|(_, mp)| !mp.memory.shared)
+            .count();
+        OwnedMemoryIndex::new(owned_memory_index)
+    }
+
     /// Test whether the given memory index is for an imported memory.
     #[inline]
     pub fn is_imported_memory(&self, index: MemoryIndex) -> bool {
@@ -987,32 +1009,6 @@ impl Module {
         anyfunc: AnyfuncIndex,
     ) -> FuncIndex {
         self.functions.push(FunctionType { signature, anyfunc })
-    }
-}
-
-/// All types which are recorded for the entirety of a translation.
-///
-/// Note that this is shared amongst all modules coming out of a translation
-/// in the case of nested modules and the module linking proposal.
-#[derive(Default, Debug, Serialize, Deserialize)]
-#[allow(missing_docs)]
-pub struct TypeTables {
-    pub(crate) wasm_signatures: PrimaryMap<SignatureIndex, WasmFuncType>,
-}
-
-impl TypeTables {
-    /// Returns an iterator of all of the core wasm function signatures
-    /// registered in this instance.
-    pub fn wasm_signatures(&self) -> impl Iterator<Item = (SignatureIndex, &WasmFuncType)> {
-        self.wasm_signatures.iter()
-    }
-}
-
-impl Index<SignatureIndex> for TypeTables {
-    type Output = WasmFuncType;
-
-    fn index(&self, idx: SignatureIndex) -> &WasmFuncType {
-        &self.wasm_signatures[idx]
     }
 }
 

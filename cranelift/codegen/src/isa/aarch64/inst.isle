@@ -244,7 +244,9 @@
          (rn Reg)
          (ty Type))
 
-       ;; An atomic compare-and-swap operation. This instruction is sequentially consistent.
+       ;; An atomic compare-and-swap operation. These instructions require the
+       ;; Large System Extension (LSE) ISA support (FEAT_LSE). The instructions have
+       ;; acquire-release semantics.
        (AtomicCAS
          (rs WritableReg)
          (rt Reg)
@@ -918,7 +920,9 @@
 
 ;; Helper for calculating the `VectorSize` corresponding to a type
 (decl vector_size (Type) VectorSize)
+(rule (vector_size (multi_lane 8 8)) (VectorSize.Size8x8))
 (rule (vector_size (multi_lane 8 16)) (VectorSize.Size8x16))
+(rule (vector_size (multi_lane 16 4)) (VectorSize.Size16x4))
 (rule (vector_size (multi_lane 16 8)) (VectorSize.Size16x8))
 (rule (vector_size (multi_lane 32 4)) (VectorSize.Size32x4))
 (rule (vector_size (multi_lane 64 2)) (VectorSize.Size64x2))
@@ -1538,6 +1542,13 @@
             (_ Unit (emit (MInst.VecRRRLong op dst src1 src2 high_half))))
         dst))
 
+;; Helper for emitting `MInst.VecRRPairLong` instructions.
+(decl vec_rr_pair_long (VecRRPairLongOp Reg) Reg)
+(rule (vec_rr_pair_long op src)
+      (let ((dst WritableReg (temp_writable_reg $I8X16))
+            (_ Unit (emit (MInst.VecRRPairLong op dst src))))
+        dst))
+
 ;; Helper for emitting `MInst.VecRRRLong` instructions, but for variants
 ;; where the operation both reads and modifies the destination register.
 ;;
@@ -1726,6 +1737,20 @@
 ;; Helper for generating `shll32` instructions.
 (decl shll32 (Reg bool) Reg)
 (rule (shll32 x high_half) (vec_rr_long (VecRRLongOp.Shll32) x high_half))
+
+;; Helpers for generating `addlp` instructions.
+
+(decl saddlp8 (Reg) Reg)
+(rule (saddlp8 x) (vec_rr_pair_long (VecRRPairLongOp.Saddlp8) x))
+
+(decl saddlp16 (Reg) Reg)
+(rule (saddlp16 x) (vec_rr_pair_long (VecRRPairLongOp.Saddlp16) x))
+
+(decl uaddlp8 (Reg) Reg)
+(rule (uaddlp8 x) (vec_rr_pair_long (VecRRPairLongOp.Uaddlp8) x))
+
+(decl uaddlp16 (Reg) Reg)
+(rule (uaddlp16 x) (vec_rr_pair_long (VecRRPairLongOp.Uaddlp16) x))
 
 ;; Helper for generating `umlal32` instructions.
 (decl umlal32 (Reg Reg Reg bool) Reg)
@@ -2129,6 +2154,16 @@
         )
         dst))
 
+;; Helper for emitting `MInst.AtomicCAS` instructions.
+(decl lse_atomic_cas (Reg Reg Reg Type) Reg)
+(rule (lse_atomic_cas addr expect replace ty)
+      (let (
+            (dst WritableReg (temp_writable_reg ty))
+            (_1 Unit (emit (MInst.Mov (operand_size ty) dst expect)))
+            (_2 Unit (emit (MInst.AtomicCAS dst replace addr ty)))
+          )
+          dst))
+
 ;; Helper for emitting `MInst.AtomicRMWLoop` instructions.
 ;; - Make sure that both args are in virtual regs, since in effect
 ;; we have to do a parallel copy to get them safely to the AtomicRMW input
@@ -2144,4 +2179,28 @@
           (r_arg2 Reg (mov64_to_real 26 v_arg2))
           (_ Unit (emit (MInst.AtomicRMWLoop ty op)))
         )
+        (mov64_from_real 27)))
+
+;; Helper for emitting `MInst.AtomicCASLoop` instructions.
+;; This is very similar to, but not identical to, the AtomicRmw case.  Note
+;; that the AtomicCASLoop sequence does its own masking, so we don't need to worry
+;; about zero-extending narrow (I8/I16/I32) values here.
+;; Make sure that all three args are in virtual regs.  See corresponding comment
+;; for `atomic_rmw_loop` above.
+(decl atomic_cas_loop (Reg Reg Reg Type) Reg)
+(rule (atomic_cas_loop addr expect replace ty)
+      (let (
+          (v_addr Reg (ensure_in_vreg addr $I64))
+          (v_exp Reg (ensure_in_vreg expect $I64))
+          (v_rep Reg (ensure_in_vreg replace $I64))
+          ;; Move the args to the preordained AtomicCASLoop input regs
+          (r_addr Reg (mov64_to_real 25 v_addr))
+          (r_exp Reg (mov64_to_real 26 v_exp))
+          (r_rep Reg (mov64_to_real 28 v_rep))
+          ;; Now the AtomicCASLoop itself, implemented in the normal way, with a
+          ;; load-exclusive, store-exclusive loop
+          (_ Unit (emit (MInst.AtomicCASLoop ty)))
+        )
+        ;; And finally, copy the preordained AtomicCASLoop output reg to its destination.
+        ;; Also, x24 and x28 are trashed.
         (mov64_from_real 27)))

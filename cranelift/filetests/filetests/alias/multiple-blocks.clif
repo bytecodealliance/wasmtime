@@ -1,0 +1,29 @@
+test alias-analysis
+set opt_level=speed
+target aarch64
+
+;; Check RLE across basic blocks.
+
+function %f0(i64 vmctx, i32) -> i32 {
+    gv0 = vmctx
+    gv1 = load.i64 notrap readonly aligned gv0+8
+    heap0 = static gv1, bound 0x1_0000_0000, offset_guard 0x8000_0000, index_type i32
+
+
+block0(v0: i64, v1: i32):
+    v2 = heap_addr.i64 heap0, v1, 0
+    v3 = load.i32 v2+8
+    brz v2, block1
+    jump block2
+
+block1:
+    v4 = load.i32 v2+8
+    ; check: v4 -> v3
+    jump block3(v4)
+
+block2:
+    jump block3(v3)
+
+block3(v5: i32):
+    return v5
+}

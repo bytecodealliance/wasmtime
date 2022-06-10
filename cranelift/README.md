@@ -30,30 +30,56 @@ Status
 
 Cranelift currently supports enough functionality to run a wide variety
 of programs, including all the functionality needed to execute
-WebAssembly MVP functions, although it needs to be used within an
-external WebAssembly embedding to be part of a complete WebAssembly
-implementation.
+WebAssembly (MVP and various extensions like SIMD), although it needs to be
+used within an external WebAssembly embedding such as Wasmtime to be part of a
+complete WebAssembly implementation. It is also usable as a backend for
+non-WebAssembly use cases: for example, there is an effort to build a [Rust
+compiler backend] using Cranelift.
 
-The x86-64 backend is currently the most complete and stable; other
-architectures are in various stages of development. Cranelift currently
-supports both the System V AMD64 ABI calling convention used on many
-platforms and the Windows x64 calling convention. The performance
-of code produced by Cranelift is not yet impressive, though we have plans
-to fix that.
+Cranelift is production-ready, and is used in production in several places, all
+within the context of Wasmtime. It is carefully fuzzed as part of Wasmtime with
+differential comparison against V8 and the executable Wasm spec, and the
+register allocator is separately fuzzed with symbolic verification. There is an
+active effort to formally verify Cranelift's instruction-selection backends. We
+take security seriously and have a [security policy] as a part of Bytecode
+Alliance.
 
-The core codegen crates have minimal dependencies, support no\_std mode
-(see below), and do not require any host floating-point support, and
-do not use callstack recursion.
+Cranelift has three backends: x86-64, aarch64 (aka ARM64), and s390x (aka IBM
+Z). All three backends fully support enough functionality for Wasm MVP, and
+x86-64 and aarch64 fully support SIMD as well. On x86-64, Cranelift supports
+both the System V AMD64 ABI calling convention used on many platforms and the
+Windows x64 calling convention. On aarch64, Cranelift supports the standard
+Linux calling convention and also has specific support for macOS (i.e., M1 /
+Apple Silicon).
 
-Cranelift does not yet perform mitigations for Spectre or related
-security issues, though it may do so in the future. It does not
-currently make any security-relevant instruction timing guarantees. It
-has seen a fair amount of testing and fuzzing, although more work is
-needed before it would be ready for a production use case.
+Cranelift's code quality is within range of competitiveness to browser JIT
+engines' optimizing tiers. A [recent paper] includes third-party benchmarks of
+Cranelift, driven by Wasmtime, against V8 and an LLVM-based Wasm engine, WAVM
+(Fig 22).  The speed of Cranelift's generated code is ~2% slower than that of
+V8 (TurboFan), and ~14% slower than WAVM (LLVM). Its compilation speed, in the
+same paper, is measured as approximately an order of magnitude faster than WAVM
+(LLVM). We continue to work to improve both measures.
 
-Cranelift's APIs are not yet stable.
+[Rust compiler backend]: https://github.com/bjorn3/rustc_codegen_cranelift
+[security policy]: https://bytecodealliance.org/security
+[recent paper]: https://arxiv.org/abs/2011.13127
 
-Cranelift currently requires Rust 1.37 or later to build.
+The core codegen crates have minimal dependencies and are carefully written to
+handle malicious or arbitrary compiler input: in particular, they do not use
+callstack recursion.
+
+Cranelift performs some basic mitigations for Spectre attacks on heap bounds
+checks, table bounds checks, and indirect branch bounds checks; see
+[#1032] for more.
+
+[#1032]: https://github.com/bytecodealliance/wasmtime/issues/1032
+
+Cranelift's APIs are not yet considered stable, though we do follow
+semantic-versioning (semver) with minor-version patch releases.
+
+Cranelift generally requires the latest stable Rust to build as a policy, and
+is tested as such, but we can incorporate fixes for compilation with older Rust
+versions on a best-effort basis.
 
 Contributing
 ------------
@@ -91,57 +117,6 @@ to tell cargo to visit all of the crates.
 
 `test-all.sh` at the top level is a script which runs all the cargo
 tests and also performs code format, lint, and documentation checks.
-
-<details>
-<summary>Building with no_std</summary>
-
-The following crates support \`no\_std\`, although they do depend on liballoc:
- - cranelift-entity
- - cranelift-bforest
- - cranelift-codegen
- - cranelift-frontend
- - cranelift-native
- - cranelift-wasm
- - cranelift-module
- - cranelift-preopt
- - cranelift
-
-To use no\_std mode, disable the std feature and enable the core
-feature. This currently requires nightly rust.
-
-For example, to build \`cranelift-codegen\`:
-
-``` {.sourceCode .sh}
-cd cranelift-codegen
-cargo build --no-default-features --features core
-```
-
-Or, when using cranelift-codegen as a dependency (in Cargo.toml):
-
-``` {.sourceCode .}
-[dependency.cranelift-codegen]
-...
-default-features = false
-features = ["core"]
-```
-
-no\_std support is currently "best effort". We won't try to break it,
-and we'll accept patches fixing problems, however we don't expect all
-developers to build and test no\_std when submitting patches.
-Accordingly, the ./test-all.sh script does not test no\_std.
-
-There is a separate ./test-no\_std.sh script that tests the no\_std
-support in packages which support it.
-
-It's important to note that cranelift still needs liballoc to compile.
-Thus, whatever environment is used must implement an allocator.
-
-Also, to allow the use of HashMaps with no\_std, an external crate
-called hashmap\_core is pulled in (via the core feature). This is mostly
-the same as std::collections::HashMap, except that it doesn't have DOS
-protection. Just something to think about.
-
-</details>
 
 <details>
 <summary>Log configuration</summary>

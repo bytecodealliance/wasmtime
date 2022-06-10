@@ -48,7 +48,6 @@
   - [Wasm Proposals Support](./stability-wasm-proposals-support.md)
 - [Security](security.md)
   - [Disclosure Policy](./security-disclosure.md)
-  - [Sandboxing](./security-sandboxing.md)
 - [Contributing](contributing.md)
   - [Architecture](./contributing-architecture.md)
   - [Building](./contributing-building.md)

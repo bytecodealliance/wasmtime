@@ -981,12 +981,25 @@
 
 ;; Finally, define the toplevel `to_amode`.
 (rule (to_amode flags base offset)
-      (amode_add (amode_initial flags offset) base))
+      (amode_finalize (amode_add (amode_initial flags offset) base)))
+
+;; If an amode has no registers at all and only offsets (a constant
+;; value), we need to "finalize" it by sticking in a zero'd reg in
+;; place of the (invalid_reg) produced by (amode_initial).
+(decl amode_finalize (Amode) Amode)
+(rule 1 (amode_finalize (Amode.ImmReg off (invalid_reg) flags))
+      (Amode.ImmReg off (imm $I64 0) flags))
+(rule 0 (amode_finalize amode)
+      amode)
 
 ;; Offsetting an Amode. Used when we need to do consecutive
 ;; loads/stores to adjacent addresses.
 (decl amode_offset (Amode u32) Amode)
 (extern constructor amode_offset amode_offset)
+
+;; Return a zero offset as an `Offset32`.
+(decl zero_offset () Offset32)
+(extern constructor zero_offset zero_offset)
 
 ;; Shift kinds.
 
@@ -2808,6 +2821,20 @@
             (_ Unit (emit (MInst.XmmUnaryRmR (SseOpcode.Sqrtpd) x dst))))
         dst))
 
+;; Helper for creating `cvtss2sd` instructions.
+(decl x64_cvtss2sd (Xmm) Xmm)
+(rule (x64_cvtss2sd x)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (_ Unit (emit (MInst.XmmUnaryRmR (SseOpcode.Cvtss2sd) x dst))))
+        dst))
+
+;; Helper for creating `cvtps2pd` instructions.
+(decl x64_cvtps2pd (Xmm) Xmm)
+(rule (x64_cvtps2pd x)
+      (let ((dst WritableXmm (temp_writable_xmm))
+           (_ Unit (emit (MInst.XmmUnaryRmR (SseOpcode.Cvtps2pd) x dst))))
+        dst))
+
 ;; Helpers for creating `pcmpeq*` instructions.
 (decl x64_pcmpeq (Type Xmm XmmMem) Xmm)
 (rule (x64_pcmpeq $I8X16 x y) (x64_pcmpeqb x y))
@@ -2865,6 +2892,18 @@
 (decl x64_xor_mem (Type Amode Gpr) SideEffectNoResult)
 (rule (x64_xor_mem ty addr val)
       (alu_rm ty (AluRmiROpcode.Xor) addr val))
+
+;;;; Atomics ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl x64_mfence () SideEffectNoResult)
+(rule (x64_mfence)
+      (SideEffectNoResult.Inst (MInst.Fence (FenceKind.MFence))))
+
+(decl x64_cmpxchg (Type Gpr Gpr SyntheticAmode) Gpr)
+(rule (x64_cmpxchg ty expected replacement addr)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (MInst.LockCmpxchg ty replacement expected addr dst))))
+        dst))
 
 ;;;; Automatic conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

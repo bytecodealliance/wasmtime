@@ -51,7 +51,7 @@ use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{DefinedFuncIndex, FuncIndex, WasmFuncType, WasmType};
 use target_lexicon::CallingConvention;
 use wasmtime_environ::{
-    FilePos, FunctionInfo, InstructionAddressMap, ModuleTranslation, TrapInformation, TypeTables,
+    FilePos, FunctionInfo, InstructionAddressMap, ModuleTranslation, ModuleTypes, TrapInformation,
 };
 
 pub use builder::builder;
@@ -208,7 +208,7 @@ fn indirect_signature(isa: &dyn TargetIsa, wasm: &WasmFuncType) -> ir::Signature
 fn func_signature(
     isa: &dyn TargetIsa,
     translation: &ModuleTranslation,
-    types: &TypeTables,
+    types: &ModuleTypes,
     index: FuncIndex,
 ) -> ir::Signature {
     let func = &translation.module.functions[index];
@@ -217,7 +217,23 @@ fn func_signature(
         // then we can optimize this function to use the fastest calling
         // convention since it's purely an internal implementation detail of
         // the module itself.
-        Some(_idx) if !func.is_escaping() => CallConv::Fast,
+        Some(_idx) if !func.is_escaping() => {
+            let on_apple_aarch64 = isa
+                .triple()
+                .default_calling_convention()
+                .unwrap_or(CallingConvention::SystemV)
+                == CallingConvention::AppleAarch64;
+
+            if on_apple_aarch64 {
+                // FIXME: We need an Apple-specific calling convention, so that
+                // Cranelift's ABI implementation generates unwinding directives
+                // about pointer authentication usage, so we can't just use
+                // `CallConv::Fast`.
+                CallConv::WasmtimeAppleAarch64
+            } else {
+                CallConv::Fast
+            }
+        }
 
         // ... otherwise if it's an imported function or if it's a possibly
         // exported function then we use the default ABI wasmtime would

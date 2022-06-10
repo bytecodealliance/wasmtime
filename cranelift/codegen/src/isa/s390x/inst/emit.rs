@@ -133,7 +133,7 @@ pub fn mem_emit(
     if add_trap && mem.can_trap() {
         let srcloc = state.cur_srcloc();
         if srcloc != SourceLoc::default() {
-            sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
+            sink.add_trap(TrapCode::HeapOutOfBounds);
         }
     }
 
@@ -162,12 +162,10 @@ pub fn mem_emit(
             ref name, offset, ..
         } => {
             let reloc = Reloc::S390xPCRel32Dbl;
-            let srcloc = state.cur_srcloc();
             put_with_reloc(
                 sink,
                 &enc_ril_b(opcode_ril.unwrap(), rd, 0),
                 2,
-                srcloc,
                 reloc,
                 name,
                 offset.into(),
@@ -203,7 +201,7 @@ pub fn mem_rs_emit(
     if add_trap && mem.can_trap() {
         let srcloc = state.cur_srcloc();
         if srcloc != SourceLoc::default() {
-            sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
+            sink.add_trap(TrapCode::HeapOutOfBounds);
         }
     }
 
@@ -245,7 +243,7 @@ pub fn mem_imm8_emit(
     if add_trap && mem.can_trap() {
         let srcloc = state.cur_srcloc();
         if srcloc != SourceLoc::default() {
-            sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
+            sink.add_trap(TrapCode::HeapOutOfBounds);
         }
     }
 
@@ -283,7 +281,7 @@ pub fn mem_imm16_emit(
     if add_trap && mem.can_trap() {
         let srcloc = state.cur_srcloc();
         if srcloc != SourceLoc::default() {
-            sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
+            sink.add_trap(TrapCode::HeapOutOfBounds);
         }
     }
 
@@ -849,12 +847,12 @@ fn put(sink: &mut MachBuffer<Inst>, enc: &[u8]) {
 }
 
 /// Emit encoding to sink, adding a trap on the last byte.
-fn put_with_trap(sink: &mut MachBuffer<Inst>, enc: &[u8], srcloc: SourceLoc, trap_code: TrapCode) {
+fn put_with_trap(sink: &mut MachBuffer<Inst>, enc: &[u8], trap_code: TrapCode) {
     let len = enc.len();
     for i in 0..len - 1 {
         sink.put1(enc[i]);
     }
-    sink.add_trap(srcloc, trap_code);
+    sink.add_trap(trap_code);
     sink.put1(enc[len - 1]);
 }
 
@@ -863,7 +861,6 @@ fn put_with_reloc(
     sink: &mut MachBuffer<Inst>,
     enc: &[u8],
     offset: usize,
-    ri2_srcloc: SourceLoc,
     ri2_reloc: Reloc,
     ri2_name: &ExternalName,
     ri2_offset: i64,
@@ -872,7 +869,7 @@ fn put_with_reloc(
     for i in 0..offset {
         sink.put1(enc[i]);
     }
-    sink.add_reloc(ri2_srcloc, ri2_reloc, ri2_name, ri2_offset + offset as i64);
+    sink.add_reloc(ri2_reloc, ri2_name, ri2_offset + offset as i64);
     for i in offset..len {
         sink.put1(enc[i]);
     }
@@ -1204,33 +1201,29 @@ impl MachInstEmit for Inst {
                 let rn = allocs.next(rn);
 
                 let opcode = 0xb91d; // DSGFR
-                let srcloc = state.cur_srcloc();
                 let trap_code = TrapCode::IntegerDivisionByZero;
-                put_with_trap(sink, &enc_rre(opcode, gpr(0), rn), srcloc, trap_code);
+                put_with_trap(sink, &enc_rre(opcode, gpr(0), rn), trap_code);
             }
             &Inst::SDivMod64 { rn } => {
                 let rn = allocs.next(rn);
 
                 let opcode = 0xb90d; // DSGR
-                let srcloc = state.cur_srcloc();
                 let trap_code = TrapCode::IntegerDivisionByZero;
-                put_with_trap(sink, &enc_rre(opcode, gpr(0), rn), srcloc, trap_code);
+                put_with_trap(sink, &enc_rre(opcode, gpr(0), rn), trap_code);
             }
             &Inst::UDivMod32 { rn } => {
                 let rn = allocs.next(rn);
 
                 let opcode = 0xb997; // DLR
-                let srcloc = state.cur_srcloc();
                 let trap_code = TrapCode::IntegerDivisionByZero;
-                put_with_trap(sink, &enc_rre(opcode, gpr(0), rn), srcloc, trap_code);
+                put_with_trap(sink, &enc_rre(opcode, gpr(0), rn), trap_code);
             }
             &Inst::UDivMod64 { rn } => {
                 let rn = allocs.next(rn);
 
                 let opcode = 0xb987; // DLGR
-                let srcloc = state.cur_srcloc();
                 let trap_code = TrapCode::IntegerDivisionByZero;
-                put_with_trap(sink, &enc_rre(opcode, gpr(0), rn), srcloc, trap_code);
+                put_with_trap(sink, &enc_rre(opcode, gpr(0), rn), trap_code);
             }
             &Inst::Flogr { rn } => {
                 let rn = allocs.next(rn);
@@ -1491,11 +1484,9 @@ impl MachInstEmit for Inst {
                     CmpOp::CmpL64 => 0xb961, // CLGRT
                     _ => unreachable!(),
                 };
-                let srcloc = state.cur_srcloc();
                 put_with_trap(
                     sink,
                     &enc_rrf_cde(opcode, rn, rm, cond.bits(), 0),
-                    srcloc,
                     trap_code,
                 );
             }
@@ -1513,11 +1504,9 @@ impl MachInstEmit for Inst {
                     CmpOp::CmpS64 => 0xec70, // CGIT
                     _ => unreachable!(),
                 };
-                let srcloc = state.cur_srcloc();
                 put_with_trap(
                     sink,
                     &enc_rie_a(opcode, rn, imm as u16, cond.bits()),
-                    srcloc,
                     trap_code,
                 );
             }
@@ -1535,13 +1524,7 @@ impl MachInstEmit for Inst {
                     CmpOp::CmpL64 => 0xec71, // CLGIT
                     _ => unreachable!(),
                 };
-                let srcloc = state.cur_srcloc();
-                put_with_trap(
-                    sink,
-                    &enc_rie_a(opcode, rn, imm, cond.bits()),
-                    srcloc,
-                    trap_code,
-                );
+                put_with_trap(sink, &enc_rie_a(opcode, rn, imm, cond.bits()), trap_code);
             }
 
             &Inst::AtomicRmw {
@@ -1698,7 +1681,7 @@ impl MachInstEmit for Inst {
 
                 let srcloc = state.cur_srcloc();
                 if srcloc != SourceLoc::default() && mem.can_trap() {
-                    sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
+                    sink.add_trap(TrapCode::HeapOutOfBounds);
                 }
 
                 match &mem {
@@ -1781,7 +1764,7 @@ impl MachInstEmit for Inst {
 
                 let srcloc = state.cur_srcloc();
                 if srcloc != SourceLoc::default() && mem.can_trap() {
-                    sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
+                    sink.add_trap(TrapCode::HeapOutOfBounds);
                 }
 
                 match &mem {
@@ -1964,10 +1947,9 @@ impl MachInstEmit for Inst {
                 let rd = allocs.next_writable(rd);
 
                 let opcode = 0xa75; // BRAS
-                let srcloc = state.cur_srcloc();
                 let reg = writable_spilltmp_reg().to_reg();
                 put(sink, &enc_ri_b(opcode, reg, 12));
-                sink.add_reloc(srcloc, Reloc::Abs8, name, offset);
+                sink.add_reloc(Reloc::Abs8, name, offset);
                 if emit_info.flags.emit_all_ones_funcaddrs() {
                     sink.put8(u64::max_value());
                 } else {
@@ -2191,7 +2173,6 @@ impl MachInstEmit for Inst {
 
                 let opcode = 0xc05; // BRASL
                 let reloc = Reloc::S390xPCRel32Dbl;
-                let srcloc = state.cur_srcloc();
                 if let Some(s) = state.take_stack_map() {
                     sink.add_stack_map(StackMapExtent::UpcomingBytes(6), s);
                 }
@@ -2199,13 +2180,12 @@ impl MachInstEmit for Inst {
                     sink,
                     &enc_ril_b(opcode, link.to_reg(), 0),
                     2,
-                    srcloc,
                     reloc,
                     &info.dest,
                     0,
                 );
                 if info.opcode.is_call() {
-                    sink.add_call_site(srcloc, info.opcode);
+                    sink.add_call_site(info.opcode);
                 }
             }
             &Inst::CallInd { link, ref info } => {
@@ -2213,13 +2193,12 @@ impl MachInstEmit for Inst {
                 let rn = allocs.next(info.rn);
 
                 let opcode = 0x0d; // BASR
-                let srcloc = state.cur_srcloc();
                 if let Some(s) = state.take_stack_map() {
                     sink.add_stack_map(StackMapExtent::UpcomingBytes(2), s);
                 }
                 put(sink, &enc_rr(opcode, link.to_reg(), rn));
                 if info.opcode.is_call() {
-                    sink.add_call_site(srcloc, info.opcode);
+                    sink.add_call_site(info.opcode);
                 }
             }
             &Inst::Ret { link, .. } => {
@@ -2282,8 +2261,7 @@ impl MachInstEmit for Inst {
                 if let Some(s) = state.take_stack_map() {
                     sink.add_stack_map(StackMapExtent::UpcomingBytes(2), s);
                 }
-                let srcloc = state.cur_srcloc();
-                put_with_trap(sink, &enc_e(0x0000), srcloc, trap_code);
+                put_with_trap(sink, &enc_e(0x0000), trap_code);
             }
             &Inst::TrapIf { cond, trap_code } => {
                 // Branch over trap if condition is false.
@@ -2293,8 +2271,7 @@ impl MachInstEmit for Inst {
                 if let Some(s) = state.take_stack_map() {
                     sink.add_stack_map(StackMapExtent::UpcomingBytes(2), s);
                 }
-                let srcloc = state.cur_srcloc();
-                put_with_trap(sink, &enc_e(0x0000), srcloc, trap_code);
+                put_with_trap(sink, &enc_e(0x0000), trap_code);
             }
             &Inst::JTSequence { ridx, ref targets } => {
                 let ridx = allocs.next(ridx);

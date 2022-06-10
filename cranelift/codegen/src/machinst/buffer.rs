@@ -1231,13 +1231,7 @@ impl<I: VCodeInst> MachBuffer<I> {
     }
 
     /// Add an external relocation at the current offset.
-    pub fn add_reloc(
-        &mut self,
-        srcloc: SourceLoc,
-        kind: Reloc,
-        name: &ExternalName,
-        addend: Addend,
-    ) {
+    pub fn add_reloc(&mut self, kind: Reloc, name: &ExternalName, addend: Addend) {
         let name = name.clone();
         // FIXME(#3277): This should use `I::LabelUse::from_reloc` to optionally
         // generate a label-use statement to track whether an island is possibly
@@ -1274,7 +1268,6 @@ impl<I: VCodeInst> MachBuffer<I> {
         // actually result in any memory unsafety or anything like that.
         self.relocs.push(MachReloc {
             offset: self.data.len() as CodeOffset,
-            srcloc,
             kind,
             name,
             addend,
@@ -1282,23 +1275,21 @@ impl<I: VCodeInst> MachBuffer<I> {
     }
 
     /// Add a trap record at the current offset.
-    pub fn add_trap(&mut self, srcloc: SourceLoc, code: TrapCode) {
+    pub fn add_trap(&mut self, code: TrapCode) {
         self.traps.push(MachTrap {
             offset: self.data.len() as CodeOffset,
-            srcloc,
             code,
         });
     }
 
     /// Add a call-site record at the current offset.
-    pub fn add_call_site(&mut self, srcloc: SourceLoc, opcode: Opcode) {
+    pub fn add_call_site(&mut self, opcode: Opcode) {
         debug_assert!(
             opcode.is_call(),
             "adding call site info for a non-call instruction."
         );
         self.call_sites.push(MachCallSite {
             ret_addr: self.data.len() as CodeOffset,
-            srcloc,
             opcode,
         });
     }
@@ -1446,8 +1437,6 @@ pub struct MachReloc {
     /// The offset at which the relocation applies, *relative to the
     /// containing section*.
     pub offset: CodeOffset,
-    /// The original source location.
-    pub srcloc: SourceLoc,
     /// The kind of relocation.
     pub kind: Reloc,
     /// The external symbol / name to which this relocation refers.
@@ -1462,8 +1451,6 @@ pub struct MachTrap {
     /// The offset at which the trap instruction occurs, *relative to the
     /// containing section*.
     pub offset: CodeOffset,
-    /// The original source location.
-    pub srcloc: SourceLoc,
     /// The trap code.
     pub code: TrapCode,
 }
@@ -1473,8 +1460,6 @@ pub struct MachTrap {
 pub struct MachCallSite {
     /// The offset of the call's return address, *relative to the containing section*.
     pub ret_addr: CodeOffset,
-    /// The original source location.
-    pub srcloc: SourceLoc,
     /// The call's opcode.
     pub opcode: Opcode,
 }
@@ -1987,24 +1972,14 @@ mod test {
 
         buf.bind_label(label(0));
         buf.put1(1);
-        buf.add_trap(SourceLoc::default(), TrapCode::HeapOutOfBounds);
+        buf.add_trap(TrapCode::HeapOutOfBounds);
         buf.put1(2);
-        buf.add_trap(SourceLoc::default(), TrapCode::IntegerOverflow);
-        buf.add_trap(SourceLoc::default(), TrapCode::IntegerDivisionByZero);
-        buf.add_call_site(SourceLoc::default(), Opcode::Call);
-        buf.add_reloc(
-            SourceLoc::default(),
-            Reloc::Abs4,
-            &ExternalName::user(0, 0),
-            0,
-        );
+        buf.add_trap(TrapCode::IntegerOverflow);
+        buf.add_trap(TrapCode::IntegerDivisionByZero);
+        buf.add_call_site(Opcode::Call);
+        buf.add_reloc(Reloc::Abs4, &ExternalName::user(0, 0), 0);
         buf.put1(3);
-        buf.add_reloc(
-            SourceLoc::default(),
-            Reloc::Abs8,
-            &ExternalName::user(1, 1),
-            1,
-        );
+        buf.add_reloc(Reloc::Abs8, &ExternalName::user(1, 1), 1);
         buf.put1(4);
 
         let buf = buf.finish();

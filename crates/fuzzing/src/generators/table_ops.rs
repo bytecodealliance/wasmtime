@@ -3,7 +3,7 @@
 use arbitrary::{Arbitrary, Result, Unstructured};
 use std::ops::RangeInclusive;
 use wasm_encoder::{
-    CodeSection, EntityType, Export, ExportSection, Function, FunctionSection, GlobalSection,
+    CodeSection, EntityType, ExportKind, ExportSection, Function, FunctionSection, GlobalSection,
     ImportSection, Instruction, Module, TableSection, TableType, TypeSection, ValType,
 };
 
@@ -103,7 +103,7 @@ impl TableOps {
         functions.function(1);
 
         let mut exports = ExportSection::new();
-        exports.export("run", Export::Function(3));
+        exports.export("run", ExportKind::Func, 3);
 
         // Give ourselves one scratch local that we can use in various `TableOp`
         // implementations.

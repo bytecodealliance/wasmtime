@@ -104,7 +104,7 @@ mod tests {
             _ => panic!("expected unwind information"),
         };
 
-        assert_eq!(format!("{:?}", fde), "FrameDescriptionEntry { address: Constant(1234), length: 24, lsda: None, instructions: [(0, ValExpression(Register(34), Expression { operations: [Simple(DwOp(48))] })), (4, CfaOffset(16)), (4, Offset(Register(29), -16)), (4, Offset(Register(30), -8)), (8, CfaRegister(Register(29)))] }");
+        assert_eq!(format!("{:?}", fde), "FrameDescriptionEntry { address: Constant(1234), length: 24, lsda: None, instructions: [(4, CfaOffset(16)), (4, Offset(Register(29), -16)), (4, Offset(Register(30), -8)), (8, CfaRegister(Register(29)))] }");
     }
 
     fn create_function(call_conv: CallConv, stack_slot: Option<StackSlotData>) -> Function {
@@ -146,7 +146,7 @@ mod tests {
 
         assert_eq!(
             format!("{:?}", fde),
-            "FrameDescriptionEntry { address: Constant(4321), length: 16, lsda: None, instructions: [(0, ValExpression(Register(34), Expression { operations: [Simple(DwOp(48))] }))] }"
+            "FrameDescriptionEntry { address: Constant(4321), length: 16, lsda: None, instructions: [] }"
         );
     }
 

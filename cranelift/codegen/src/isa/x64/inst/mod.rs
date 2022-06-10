@@ -524,15 +524,6 @@ impl Inst {
         }
     }
 
-    /// A convenience function to be able to use a RegMem as the source of a move.
-    pub(crate) fn mov64_rm_r(src: RegMem, dst: Writable<Reg>) -> Inst {
-        src.assert_regclass_is(RegClass::Int);
-        match src {
-            RegMem::Reg { reg } => Self::mov_r_r(OperandSize::Size64, reg, dst),
-            RegMem::Mem { addr } => Self::mov64_m_r(addr, dst),
-        }
-    }
-
     pub(crate) fn mov_r_m(size: OperandSize, src: Reg, dst: impl Into<SyntheticAmode>) -> Inst {
         debug_assert!(src.class() == RegClass::Int);
         Inst::MovRM {
@@ -601,9 +592,7 @@ impl Inst {
     }
 
     pub(crate) fn trap(trap_code: TrapCode) -> Inst {
-        Inst::Ud2 {
-            trap_code: trap_code,
-        }
+        Inst::Ud2 { trap_code }
     }
 
     pub(crate) fn setcc(cc: CC, dst: Writable<Reg>) -> Inst {
@@ -2431,10 +2420,6 @@ impl EmitState {
 
     fn clear_post_insn(&mut self) {
         self.stack_map = None;
-    }
-
-    pub(crate) fn cur_srcloc(&self) -> SourceLoc {
-        self.cur_srcloc
     }
 }
 

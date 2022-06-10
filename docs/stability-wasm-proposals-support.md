@@ -11,19 +11,22 @@ of [the WebAssembly standardizations process][phases] and its implementation in
 Wasmtime has been [thoroughly
 vetted](./contributing-implementing-wasm-proposals.html).
 
-| WebAssembly Proposal                        | Supported in Wasmtime?           | Command Line Flag      | [`Config`][config] Method |
-|---------------------------------------------|----------------------------------|------------------------|---------------------------|
-| **[Import and Export Mutable Globals]**     | **Yes.**<br/>Always enabled.     | (none)                 | (none)                    |
-| **[Sign-Extension Operations]**             | **Yes.**<br/>Always enabled.     | (none)                 | (none)                    |
-| **[Non-Trapping Float-to-Int Conversions]** | **Yes.**<br/>Always enabled.     | (none)                 | (none)                    |
-| **[Multi-Value]**                           | **Yes.**<br/>Enabled by default. | `--enable-multi-value` | [`wasm_multi_value`](https://docs.rs/wasmtime/*/wasmtime/struct.Config.html#method.wasm_multi_value) |
-| **[Bulk Memory Operations]**                | **Yes.**<br/>Enabled by default. | `--enable-bulk-memory` | [`wasm_bulk_memory`](https://docs.rs/wasmtime/*/wasmtime/struct.Config.html#method.wasm_bulk_memory) |
-| **[Reference Types]**                       | **Yes.**<br/>Enabled by default. | `--enable-reference-types` | [`wasm_reference_types`](https://docs.rs/wasmtime/*/wasmtime/struct.Config.html#method.wasm_reference_types) |
-| **[Fixed-Width SIMD]**                      | **Yes.**<br/>Enabled by default. | `--enable-simd`        | [`wasm_simd`](https://docs.rs/wasmtime/*/wasmtime/struct.Config.html#method.wasm_simd) |
-| **[Threads and Atomics]**                   | **In progress.**                 | `--enable-threads`     | [`wasm_threads`](https://docs.rs/wasmtime/*/wasmtime/struct.Config.html#method.wasm_threads) |
-| **[Multi-Memory]**                          | **Yes.**                         | `--enable-multi-memory`| [`wasm_multi_memory`](https://docs.rs/wasmtime/*/wasmtime/struct.Config.html#method.wasm_multi_memory) |
-| **[Module Linking]**                        | **Yes.**                         | `--enable-module-linking` | [`wasm_module_linking`](https://docs.rs/wasmtime/*/wasmtime/struct.Config.html#method.wasm_module_linking) |
-| **[Memory64]**                              | **Yes.**                         | `--enable-memory64`    | [`wasm_memory64`](https://docs.rs/wasmtime/*/wasmtime/struct.Config.html#method.wasm_memory64) |
+| WebAssembly Proposal                        | Supported in Wasmtime?           | Command Line Name  | [`Config`][config] Method |
+|---------------------------------------------|----------------------------------|--------------------|---------------------------|
+| **[Import and Export Mutable Globals]**     | **Yes.**<br/>Always enabled.     | (none)             | (none)                    |
+| **[Sign-Extension Operations]**             | **Yes.**<br/>Always enabled.     | (none)             | (none)                    |
+| **[Non-Trapping Float-to-Int Conversions]** | **Yes.**<br/>Always enabled.     | (none)             | (none)                    |
+| **[Multi-Value]**                           | **Yes.**<br/>Enabled by default. | `multi-value`      | [`wasm_multi_value`](https://docs.rs/wasmtime/*/wasmtime/struct.Config.html#method.wasm_multi_value) |
+| **[Bulk Memory Operations]**                | **Yes.**<br/>Enabled by default. | `bulk-memory`      | [`wasm_bulk_memory`](https://docs.rs/wasmtime/*/wasmtime/struct.Config.html#method.wasm_bulk_memory) |
+| **[Reference Types]**                       | **Yes.**<br/>Enabled by default. | `reference-types`  | [`wasm_reference_types`](https://docs.rs/wasmtime/*/wasmtime/struct.Config.html#method.wasm_reference_types) |
+| **[Fixed-Width SIMD]**                      | **Yes.**<br/>Enabled by default. | `simd`             | [`wasm_simd`](https://docs.rs/wasmtime/*/wasmtime/struct.Config.html#method.wasm_simd) |
+| **[Threads and Atomics]**                   | **In progress.**                 | `threads`          | [`wasm_threads`](https://docs.rs/wasmtime/*/wasmtime/struct.Config.html#method.wasm_threads) |
+| **[Multi-Memory]**                          | **Yes.**                         | `multi-memory`     | [`wasm_multi_memory`](https://docs.rs/wasmtime/*/wasmtime/struct.Config.html#method.wasm_multi_memory) |
+| **[Component Model]**                       | **In progress.**                 | `component-model`  | [`wasm_component_model`](https://docs.rs/wasmtime/*/wasmtime/struct.Config.html#method.wasm_component_model) |
+| **[Memory64]**                              | **Yes.**                         | `memory64`         | [`wasm_memory64`](https://docs.rs/wasmtime/*/wasmtime/struct.Config.html#method.wasm_memory64) |
+
+The "Command Line Name" refers to the `--wasm-features` CLI argument of the
+`wasmtime` executable and the name which must be passed to enable it.
 
 [config]: https://docs.rs/wasmtime/*/wasmtime/struct.Config.html
 [Multi-Value]: https://github.com/WebAssembly/spec/blob/master/proposals/multi-value/Overview.md
@@ -36,5 +39,5 @@ vetted](./contributing-implementing-wasm-proposals.html).
 [phases]: https://github.com/WebAssembly/meetings/blob/master/process/phases.md
 [Threads and Atomics]: https://github.com/WebAssembly/threads/blob/master/proposals/threads/Overview.md
 [Multi-Memory]: https://github.com/WebAssembly/multi-memory/blob/master/proposals/multi-memory/Overview.md
-[Module Linking]: https://github.com/WebAssembly/module-linking/blob/master/proposals/module-linking/Explainer.md
+[Component Model]: https://github.com/WebAssembly/component-model/blob/main/design/mvp/Explainer.md
 [Memory64]: https://github.com/WebAssembly/memory64/blob/master/proposals/memory64/Overview.md

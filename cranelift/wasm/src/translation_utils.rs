@@ -21,16 +21,16 @@ pub enum TableElementType {
 
 /// Helper function translating wasmparser types to Cranelift types when possible.
 pub fn type_to_type<PE: TargetEnvironment + ?Sized>(
-    ty: wasmparser::Type,
+    ty: wasmparser::ValType,
     environ: &PE,
 ) -> WasmResult<ir::Type> {
     match ty {
-        wasmparser::Type::I32 => Ok(ir::types::I32),
-        wasmparser::Type::I64 => Ok(ir::types::I64),
-        wasmparser::Type::F32 => Ok(ir::types::F32),
-        wasmparser::Type::F64 => Ok(ir::types::F64),
-        wasmparser::Type::V128 => Ok(ir::types::I8X16),
-        wasmparser::Type::ExternRef | wasmparser::Type::FuncRef => {
+        wasmparser::ValType::I32 => Ok(ir::types::I32),
+        wasmparser::ValType::I64 => Ok(ir::types::I64),
+        wasmparser::ValType::F32 => Ok(ir::types::F32),
+        wasmparser::ValType::F64 => Ok(ir::types::F64),
+        wasmparser::ValType::V128 => Ok(ir::types::I8X16),
+        wasmparser::ValType::ExternRef | wasmparser::ValType::FuncRef => {
             Ok(environ.reference_type(ty.try_into()?))
         }
     }
@@ -39,17 +39,17 @@ pub fn type_to_type<PE: TargetEnvironment + ?Sized>(
 /// Helper function translating wasmparser possible table types to Cranelift types when possible,
 /// or None for Func tables.
 pub fn tabletype_to_type<PE: TargetEnvironment + ?Sized>(
-    ty: wasmparser::Type,
+    ty: wasmparser::ValType,
     environ: &PE,
 ) -> WasmResult<Option<ir::Type>> {
     match ty {
-        wasmparser::Type::I32 => Ok(Some(ir::types::I32)),
-        wasmparser::Type::I64 => Ok(Some(ir::types::I64)),
-        wasmparser::Type::F32 => Ok(Some(ir::types::F32)),
-        wasmparser::Type::F64 => Ok(Some(ir::types::F64)),
-        wasmparser::Type::V128 => Ok(Some(ir::types::I8X16)),
-        wasmparser::Type::ExternRef => Ok(Some(environ.reference_type(ty.try_into()?))),
-        wasmparser::Type::FuncRef => Ok(None),
+        wasmparser::ValType::I32 => Ok(Some(ir::types::I32)),
+        wasmparser::ValType::I64 => Ok(Some(ir::types::I64)),
+        wasmparser::ValType::F32 => Ok(Some(ir::types::F32)),
+        wasmparser::ValType::F64 => Ok(Some(ir::types::F64)),
+        wasmparser::ValType::V128 => Ok(Some(ir::types::I8X16)),
+        wasmparser::ValType::ExternRef => Ok(Some(environ.reference_type(ty.try_into()?))),
+        wasmparser::ValType::FuncRef => Ok(None),
     }
 }
 
@@ -58,31 +58,31 @@ pub fn blocktype_params_results<'a, T>(
     validator: &'a FuncValidator<T>,
     ty: wasmparser::BlockType,
 ) -> WasmResult<(
-    impl ExactSizeIterator<Item = wasmparser::Type> + Clone + 'a,
-    impl ExactSizeIterator<Item = wasmparser::Type> + Clone + 'a,
+    impl ExactSizeIterator<Item = wasmparser::ValType> + Clone + 'a,
+    impl ExactSizeIterator<Item = wasmparser::ValType> + Clone + 'a,
 )>
 where
     T: WasmModuleResources,
 {
     return Ok(match ty {
         wasmparser::BlockType::Empty => {
-            let params: &'static [wasmparser::Type] = &[];
-            let results: &'static [wasmparser::Type] = &[];
+            let params: &'static [wasmparser::ValType] = &[];
+            let results: &'static [wasmparser::ValType] = &[];
             (
                 itertools::Either::Left(params.iter().copied()),
                 itertools::Either::Left(results.iter().copied()),
             )
         }
         wasmparser::BlockType::Type(ty) => {
-            let params: &'static [wasmparser::Type] = &[];
-            let results: &'static [wasmparser::Type] = match ty {
-                wasmparser::Type::I32 => &[wasmparser::Type::I32],
-                wasmparser::Type::I64 => &[wasmparser::Type::I64],
-                wasmparser::Type::F32 => &[wasmparser::Type::F32],
-                wasmparser::Type::F64 => &[wasmparser::Type::F64],
-                wasmparser::Type::V128 => &[wasmparser::Type::V128],
-                wasmparser::Type::ExternRef => &[wasmparser::Type::ExternRef],
-                wasmparser::Type::FuncRef => &[wasmparser::Type::FuncRef],
+            let params: &'static [wasmparser::ValType] = &[];
+            let results: &'static [wasmparser::ValType] = match ty {
+                wasmparser::ValType::I32 => &[wasmparser::ValType::I32],
+                wasmparser::ValType::I64 => &[wasmparser::ValType::I64],
+                wasmparser::ValType::F32 => &[wasmparser::ValType::F32],
+                wasmparser::ValType::F64 => &[wasmparser::ValType::F64],
+                wasmparser::ValType::V128 => &[wasmparser::ValType::V128],
+                wasmparser::ValType::ExternRef => &[wasmparser::ValType::ExternRef],
+                wasmparser::ValType::FuncRef => &[wasmparser::ValType::FuncRef],
             };
             (
                 itertools::Either::Left(params.iter().copied()),
@@ -105,28 +105,28 @@ where
 /// Create a `Block` with the given Wasm parameters.
 pub fn block_with_params<PE: TargetEnvironment + ?Sized>(
     builder: &mut FunctionBuilder,
-    params: impl IntoIterator<Item = wasmparser::Type>,
+    params: impl IntoIterator<Item = wasmparser::ValType>,
     environ: &PE,
 ) -> WasmResult<ir::Block> {
     let block = builder.create_block();
     for ty in params {
         match ty {
-            wasmparser::Type::I32 => {
+            wasmparser::ValType::I32 => {
                 builder.append_block_param(block, ir::types::I32);
             }
-            wasmparser::Type::I64 => {
+            wasmparser::ValType::I64 => {
                 builder.append_block_param(block, ir::types::I64);
             }
-            wasmparser::Type::F32 => {
+            wasmparser::ValType::F32 => {
                 builder.append_block_param(block, ir::types::F32);
             }
-            wasmparser::Type::F64 => {
+            wasmparser::ValType::F64 => {
                 builder.append_block_param(block, ir::types::F64);
             }
-            wasmparser::Type::ExternRef | wasmparser::Type::FuncRef => {
+            wasmparser::ValType::ExternRef | wasmparser::ValType::FuncRef => {
                 builder.append_block_param(block, environ.reference_type(ty.try_into()?));
             }
-            wasmparser::Type::V128 => {
+            wasmparser::ValType::V128 => {
                 builder.append_block_param(block, ir::types::I8X16);
             }
         }

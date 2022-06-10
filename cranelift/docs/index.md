@@ -11,9 +11,6 @@
  - [Cranelift compared to LLVM](compare-llvm.md)
    LLVM and Cranelift have similarities and differences.
 
- - [Cranelift's register allocator](regalloc.md)
-   This page document Cranelift's current register allocator.
-   
 ## Cranelift crate documentation:
 
  - [cranelift](https://docs.rs/cranelift)

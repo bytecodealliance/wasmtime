@@ -13,7 +13,7 @@ use crate::{
     ir::TrapCode,
     isa::x64::inst::{
         args::{Amode, OperandSize},
-        regs, EmitInfo, EmitState, Inst, LabelUse,
+        regs, EmitInfo, Inst, LabelUse,
     },
     machinst::MachBuffer,
 };
@@ -276,7 +276,6 @@ impl Default for LegacyPrefixes {
 /// indicate a 64-bit operation.
 pub(crate) fn emit_std_enc_mem(
     sink: &mut MachBuffer<Inst>,
-    state: &EmitState,
     info: &EmitInfo,
     prefixes: LegacyPrefixes,
     opcodes: u32,
@@ -290,10 +289,9 @@ pub(crate) fn emit_std_enc_mem(
     // 64-bit integer registers, because they are part of an address
     // expression.  But `enc_g` can be derived from a register of any class.
 
-    let srcloc = state.cur_srcloc();
     let can_trap = mem_e.can_trap();
     if can_trap {
-        sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
+        sink.add_trap(TrapCode::HeapOutOfBounds);
     }
 
     prefixes.emit(sink);
@@ -303,7 +301,7 @@ pub(crate) fn emit_std_enc_mem(
             // If this is an access based off of RSP, it may trap with a stack overflow if it's the
             // first touch of a new stack page.
             if *base == regs::rsp() && !can_trap && info.flags.enable_probestack() {
-                sink.add_trap(srcloc, TrapCode::StackOverflow);
+                sink.add_trap(TrapCode::StackOverflow);
             }
 
             // First, the REX byte.
@@ -369,7 +367,7 @@ pub(crate) fn emit_std_enc_mem(
             // If this is an access based off of RSP, it may trap with a stack overflow if it's the
             // first touch of a new stack page.
             if *reg_base == regs::rsp() && !can_trap && info.flags.enable_probestack() {
-                sink.add_trap(srcloc, TrapCode::StackOverflow);
+                sink.add_trap(TrapCode::StackOverflow);
             }
 
             let enc_base = int_reg_enc(*reg_base);
@@ -466,7 +464,6 @@ pub(crate) fn emit_std_enc_enc(
 
 pub(crate) fn emit_std_reg_mem(
     sink: &mut MachBuffer<Inst>,
-    state: &EmitState,
     info: &EmitInfo,
     prefixes: LegacyPrefixes,
     opcodes: u32,
@@ -479,7 +476,6 @@ pub(crate) fn emit_std_reg_mem(
     let enc_g = reg_enc(reg_g);
     emit_std_enc_mem(
         sink,
-        state,
         info,
         prefixes,
         opcodes,

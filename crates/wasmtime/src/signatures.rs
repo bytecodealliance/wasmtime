@@ -6,7 +6,7 @@ use std::{
     sync::RwLock,
 };
 use std::{convert::TryFrom, sync::Arc};
-use wasmtime_environ::{PrimaryMap, SignatureIndex, TypeTables, WasmFuncType};
+use wasmtime_environ::{ModuleTypes, PrimaryMap, SignatureIndex, WasmFuncType};
 use wasmtime_runtime::{VMSharedSignatureIndex, VMTrampoline};
 
 /// Represents a collection of shared signatures.
@@ -27,7 +27,7 @@ impl SignatureCollection {
     /// and trampolines.
     pub fn new_for_module(
         registry: &SignatureRegistry,
-        types: &TypeTables,
+        types: &ModuleTypes,
         trampolines: impl Iterator<Item = (SignatureIndex, VMTrampoline)>,
     ) -> Self {
         let (signatures, trampolines) = registry
@@ -89,7 +89,7 @@ struct SignatureRegistryInner {
 impl SignatureRegistryInner {
     fn register_for_module(
         &mut self,
-        types: &TypeTables,
+        types: &ModuleTypes,
         trampolines: impl Iterator<Item = (SignatureIndex, VMTrampoline)>,
     ) -> (
         PrimaryMap<SignatureIndex, VMSharedSignatureIndex>,

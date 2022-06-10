@@ -1,28 +1,84 @@
 use crate::memory::{LinearMemory, MemoryCreator};
+use crate::module::BareModuleInfo;
 use crate::store::{InstanceId, StoreOpaque};
-use crate::trampoline::create_handle;
 use crate::MemoryType;
 use anyhow::{anyhow, Result};
 use std::convert::TryFrom;
 use std::sync::Arc;
 use wasmtime_environ::{EntityIndex, MemoryPlan, MemoryStyle, Module, WASM_PAGE_SIZE};
 use wasmtime_runtime::{
-    MemoryImage, RuntimeLinearMemory, RuntimeMemoryCreator, VMMemoryDefinition,
+    allocate_single_memory_instance, DefaultMemoryCreator, Imports, InstanceAllocationRequest,
+    InstantiationError, Memory, MemoryImage, RuntimeLinearMemory, RuntimeMemoryCreator,
+    SharedMemory, StorePtr, VMMemoryDefinition,
 };
 
-pub fn create_memory(store: &mut StoreOpaque, memory: &MemoryType) -> Result<InstanceId> {
+/// Create a "frankenstein" instance with a single memory.
+///
+/// This separate instance is necessary because Wasm objects in Wasmtime must be
+/// attached to instances (versus the store, e.g.) and some objects exist
+/// outside: a host-provided memory import, shared memory.
+pub fn create_memory(
+    store: &mut StoreOpaque,
+    memory_ty: &MemoryType,
+    preallocation: Option<SharedMemory>,
+) -> Result<InstanceId> {
     let mut module = Module::new();
 
-    let memory_plan = wasmtime_environ::MemoryPlan::for_memory(
-        memory.wasmtime_memory().clone(),
+    // Create a memory plan for the memory, though it will never be used for
+    // constructing a memory with an allocator: instead the memories are either
+    // preallocated (i.e., shared memory) or allocated manually below.
+    let plan = wasmtime_environ::MemoryPlan::for_memory(
+        memory_ty.wasmtime_memory().clone(),
         &store.engine().config().tunables,
     );
-    let memory_id = module.memory_plans.push(memory_plan);
+    let memory_id = module.memory_plans.push(plan.clone());
+
+    let memory = match &preallocation {
+        // If we are passing in a pre-allocated shared memory, we can clone its
+        // `Arc`. We know that a preallocated memory *must* be shared--it could
+        // be used by several instances.
+        Some(shared_memory) => shared_memory.clone().as_memory(),
+        // If we do not have a pre-allocated memory, then we create it here and
+        // associate it with the "frankenstein" instance, which now owns it.
+        None => {
+            let creator = &DefaultMemoryCreator;
+            let store = unsafe {
+                store
+                    .traitobj()
+                    .as_mut()
+                    .expect("the store pointer cannot be null here")
+            };
+            Memory::new_dynamic(&plan, creator, store, None)
+                .map_err(|err| InstantiationError::Resource(err.into()))?
+        }
+    };
+
+    // Since we have only associated a single memory with the "frankenstein"
+    // instance, it will be exported at index 0.
+    debug_assert_eq!(memory_id.as_u32(), 0);
     module
         .exports
         .insert(String::new(), EntityIndex::Memory(memory_id));
 
-    create_handle(module, store, Box::new(()), &[], None)
+    // We create an instance in the on-demand allocator when creating handles
+    // associated with external objects. The configured instance allocator
+    // should only be used when creating module instances as we don't want host
+    // objects to count towards instance limits.
+    let runtime_info = &BareModuleInfo::maybe_imported_func(Arc::new(module), None).into_traitobj();
+    let host_state = Box::new(());
+    let imports = Imports::default();
+    let request = InstanceAllocationRequest {
+        imports,
+        host_state,
+        store: StorePtr::new(store.traitobj()),
+        runtime_info,
+    };
+
+    unsafe {
+        let handle = allocate_single_memory_instance(request, memory)?;
+        let instance_id = store.add_instance(handle.clone(), true);
+        Ok(instance_id)
+    }
 }
 
 struct LinearMemoryProxy {
@@ -45,7 +101,7 @@ impl RuntimeLinearMemory for LinearMemoryProxy {
     fn vmmemory(&mut self) -> VMMemoryDefinition {
         VMMemoryDefinition {
             base: self.mem.as_ptr(),
-            current_length: self.mem.byte_size(),
+            current_length: self.mem.byte_size().into(),
         }
     }
 
@@ -53,7 +109,6 @@ impl RuntimeLinearMemory for LinearMemoryProxy {
         true
     }
 
-    #[cfg(feature = "pooling-allocator")]
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
         self
     }

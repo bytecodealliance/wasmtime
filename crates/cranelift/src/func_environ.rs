@@ -16,8 +16,8 @@ use std::convert::TryFrom;
 use std::mem;
 use wasmparser::Operator;
 use wasmtime_environ::{
-    BuiltinFunctionIndex, MemoryPlan, MemoryStyle, Module, ModuleTranslation, TableStyle, Tunables,
-    TypeTables, VMOffsets, WASM_PAGE_SIZE,
+    BuiltinFunctionIndex, MemoryPlan, MemoryStyle, Module, ModuleTranslation, ModuleTypes, PtrSize,
+    TableStyle, Tunables, VMOffsets, WASM_PAGE_SIZE,
 };
 use wasmtime_environ::{FUNCREF_INIT_BIT, FUNCREF_MASK};
 
@@ -113,7 +113,7 @@ pub struct FuncEnvironment<'module_environment> {
     isa: &'module_environment (dyn TargetIsa + 'module_environment),
     module: &'module_environment Module,
     translation: &'module_environment ModuleTranslation<'module_environment>,
-    types: &'module_environment TypeTables,
+    types: &'module_environment ModuleTypes,
 
     /// The Cranelift global holding the vmctx address.
     vmctx: Option<ir::GlobalValue>,
@@ -158,7 +158,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     pub fn new(
         isa: &'module_environment (dyn TargetIsa + 'module_environment),
         translation: &'module_environment ModuleTranslation<'module_environment>,
-        types: &'module_environment TypeTables,
+        types: &'module_environment ModuleTypes,
         tunables: &'module_environment Tunables,
     ) -> Self {
         let builtin_function_signatures = BuiltinFunctionSignatures::new(
@@ -279,8 +279,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         let vmctx = self.vmctx(&mut pos.func);
         let base = pos.ins().global_value(pointer_type, vmctx);
 
-        let mut mem_flags = ir::MemFlags::trusted();
-        mem_flags.set_readonly();
+        let mem_flags = ir::MemFlags::trusted().with_readonly();
 
         // Load the base of the array of builtin functions
         let array_offset = i32::try_from(self.offsets.vmctx_builtin_functions()).unwrap();
@@ -766,9 +765,8 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         // if null, we take a slow-path that invokes a
         // libcall.
         let table_entry_addr = builder.ins().table_addr(pointer_type, table, index, 0);
-        let value = builder
-            .ins()
-            .load(pointer_type, ir::MemFlags::trusted(), table_entry_addr, 0);
+        let flags = ir::MemFlags::trusted().with_table();
+        let value = builder.ins().load(pointer_type, flags, table_entry_addr, 0);
         // Mask off the "initialized bit". See documentation on
         // FUNCREF_INIT_BIT in crates/environ/src/ref_bits.rs for more
         // details.
@@ -979,10 +977,8 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
                 // Load the table element.
                 let elem_addr = builder.ins().table_addr(pointer_type, table, index, 0);
-                let elem =
-                    builder
-                        .ins()
-                        .load(reference_type, ir::MemFlags::trusted(), elem_addr, 0);
+                let flags = ir::MemFlags::trusted().with_table();
+                let elem = builder.ins().load(reference_type, flags, elem_addr, 0);
 
                 let elem_is_null = builder.ins().is_null(elem);
                 builder.ins().brnz(elem_is_null, continue_block, &[]);
@@ -1087,12 +1083,10 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                     let value_with_init_bit = builder
                         .ins()
                         .bor_imm(value, Imm64::from(FUNCREF_INIT_BIT as i64));
-                    builder.ins().store(
-                        ir::MemFlags::trusted(),
-                        value_with_init_bit,
-                        table_entry_addr,
-                        0,
-                    );
+                    let flags = ir::MemFlags::trusted().with_table();
+                    builder
+                        .ins()
+                        .store(flags, value_with_init_bit, table_entry_addr, 0);
                     Ok(())
                 }
             },
@@ -1172,13 +1166,9 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 // saving a reference to a deallocated object, and then using it
                 // after its been freed).
                 builder.switch_to_block(check_current_elem_block);
-                let current_elem =
-                    builder
-                        .ins()
-                        .load(pointer_type, ir::MemFlags::trusted(), table_entry_addr, 0);
-                builder
-                    .ins()
-                    .store(ir::MemFlags::trusted(), value, table_entry_addr, 0);
+                let flags = ir::MemFlags::trusted().with_table();
+                let current_elem = builder.ins().load(pointer_type, flags, table_entry_addr, 0);
+                builder.ins().store(flags, value, table_entry_addr, 0);
 
                 // If the current element is non-null, decrement its reference
                 // count. And if its reference count has reached zero, then make
@@ -1378,18 +1368,37 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
     fn make_heap(&mut self, func: &mut ir::Function, index: MemoryIndex) -> WasmResult<ir::Heap> {
         let pointer_type = self.pointer_type();
-
+        let is_shared = self.module.memory_plans[index].memory.shared;
         let (ptr, base_offset, current_length_offset) = {
             let vmctx = self.vmctx(func);
             if let Some(def_index) = self.module.defined_memory_index(index) {
-                let base_offset =
-                    i32::try_from(self.offsets.vmctx_vmmemory_definition_base(def_index)).unwrap();
-                let current_length_offset = i32::try_from(
-                    self.offsets
-                        .vmctx_vmmemory_definition_current_length(def_index),
-                )
-                .unwrap();
-                (vmctx, base_offset, current_length_offset)
+                if is_shared {
+                    // As with imported memory, the `VMMemoryDefinition` for a
+                    // shared memory is stored elsewhere. We store a `*mut
+                    // VMMemoryDefinition` to it and dereference that when
+                    // atomically growing it.
+                    let from_offset = self.offsets.vmctx_vmmemory_pointer(def_index);
+                    let memory = func.create_global_value(ir::GlobalValueData::Load {
+                        base: vmctx,
+                        offset: Offset32::new(i32::try_from(from_offset).unwrap()),
+                        global_type: pointer_type,
+                        readonly: true,
+                    });
+                    let base_offset = i32::from(self.offsets.vmmemory_definition_base());
+                    let current_length_offset =
+                        i32::from(self.offsets.vmmemory_definition_current_length());
+                    (memory, base_offset, current_length_offset)
+                } else {
+                    let owned_index = self.module.owned_memory_index(def_index);
+                    let owned_base_offset =
+                        self.offsets.vmctx_vmmemory_definition_base(owned_index);
+                    let owned_length_offset = self
+                        .offsets
+                        .vmctx_vmmemory_definition_current_length(owned_index);
+                    let current_base_offset = i32::try_from(owned_base_offset).unwrap();
+                    let current_length_offset = i32::try_from(owned_length_offset).unwrap();
+                    (vmctx, current_base_offset, current_length_offset)
+                }
             } else {
                 let from_offset = self.offsets.vmctx_vmmemory_import_from(index);
                 let memory = func.create_global_value(ir::GlobalValueData::Load {
@@ -1546,7 +1555,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             pointer_type,
             mem_flags,
             anyfunc_ptr,
-            i32::from(self.offsets.vmcaller_checked_anyfunc_func_ptr()),
+            i32::from(self.offsets.ptr.vmcaller_checked_anyfunc_func_ptr()),
         );
 
         // If necessary, check the signature.
@@ -1561,8 +1570,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 // `*mut VMCallerCheckedAnyfunc` base pointer from `VMContext`
                 // and then loading, based on `SignatureIndex`, the
                 // corresponding entry.
-                let mut mem_flags = ir::MemFlags::trusted();
-                mem_flags.set_readonly();
+                let mem_flags = ir::MemFlags::trusted().with_readonly();
                 let signatures = builder.ins().load(
                     pointer_type,
                     mem_flags,
@@ -1583,7 +1591,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                     sig_id_type,
                     mem_flags,
                     anyfunc_ptr,
-                    i32::from(self.offsets.vmcaller_checked_anyfunc_type_index()),
+                    i32::from(self.offsets.ptr.vmcaller_checked_anyfunc_type_index()),
                 );
 
                 // Check that they match.
@@ -1605,7 +1613,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             pointer_type,
             mem_flags,
             anyfunc_ptr,
-            i32::from(self.offsets.vmcaller_checked_anyfunc_vmctx()),
+            i32::from(self.offsets.ptr.vmcaller_checked_anyfunc_vmctx()),
         );
         real_call_args.push(vmctx);
         real_call_args.push(caller_vmctx);
@@ -1704,28 +1712,65 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     ) -> WasmResult<ir::Value> {
         let pointer_type = self.pointer_type();
         let vmctx = self.vmctx(&mut pos.func);
+        let is_shared = self.module.memory_plans[index].memory.shared;
         let base = pos.ins().global_value(pointer_type, vmctx);
         let current_length_in_bytes = match self.module.defined_memory_index(index) {
             Some(def_index) => {
-                let offset = i32::try_from(
-                    self.offsets
-                        .vmctx_vmmemory_definition_current_length(def_index),
-                )
-                .unwrap();
-                pos.ins()
-                    .load(pointer_type, ir::MemFlags::trusted(), base, offset)
+                if is_shared {
+                    let offset =
+                        i32::try_from(self.offsets.vmctx_vmmemory_pointer(def_index)).unwrap();
+                    let vmmemory_ptr =
+                        pos.ins()
+                            .load(pointer_type, ir::MemFlags::trusted(), base, offset);
+                    let vmmemory_definition_offset =
+                        i64::from(self.offsets.vmmemory_definition_current_length());
+                    let vmmemory_definition_ptr =
+                        pos.ins().iadd_imm(vmmemory_ptr, vmmemory_definition_offset);
+                    // This atomic access of the
+                    // `VMMemoryDefinition::current_length` is direct; no bounds
+                    // check is needed. This is possible because shared memory
+                    // has a static size (the maximum is always known). Shared
+                    // memory is thus built with a static memory plan and no
+                    // bounds-checked version of this is implemented.
+                    pos.ins().atomic_load(
+                        pointer_type,
+                        ir::MemFlags::trusted(),
+                        vmmemory_definition_ptr,
+                    )
+                } else {
+                    let owned_index = self.module.owned_memory_index(def_index);
+                    let offset = i32::try_from(
+                        self.offsets
+                            .vmctx_vmmemory_definition_current_length(owned_index),
+                    )
+                    .unwrap();
+                    pos.ins()
+                        .load(pointer_type, ir::MemFlags::trusted(), base, offset)
+                }
             }
             None => {
                 let offset = i32::try_from(self.offsets.vmctx_vmmemory_import_from(index)).unwrap();
                 let vmmemory_ptr =
                     pos.ins()
                         .load(pointer_type, ir::MemFlags::trusted(), base, offset);
-                pos.ins().load(
-                    pointer_type,
-                    ir::MemFlags::trusted(),
-                    vmmemory_ptr,
-                    i32::from(self.offsets.vmmemory_definition_current_length()),
-                )
+                if is_shared {
+                    let vmmemory_definition_offset =
+                        i64::from(self.offsets.vmmemory_definition_current_length());
+                    let vmmemory_definition_ptr =
+                        pos.ins().iadd_imm(vmmemory_ptr, vmmemory_definition_offset);
+                    pos.ins().atomic_load(
+                        pointer_type,
+                        ir::MemFlags::trusted(),
+                        vmmemory_definition_ptr,
+                    )
+                } else {
+                    pos.ins().load(
+                        pointer_type,
+                        ir::MemFlags::trusted(),
+                        vmmemory_ptr,
+                        i32::from(self.offsets.vmmemory_definition_current_length()),
+                    )
+                }
             }
         };
         let current_length_in_pages = pos

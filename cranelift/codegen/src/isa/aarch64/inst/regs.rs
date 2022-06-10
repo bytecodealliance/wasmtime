@@ -209,23 +209,8 @@ pub fn create_reg_env(flags: &settings::Flags) -> MachineEnv {
                 preg(vreg(28)),
                 preg(vreg(29)),
                 preg(vreg(30)),
-                // v31 is the scratch reg, to allow for parallel moves.
+                preg(vreg(31)),
             ],
-        ],
-        scratch_by_class: [
-            // We use tmp2 (x17) as the regalloc scratch register,
-            // used to resolve cyclic parallel moves. This is valid
-            // because tmp2 is never live between regalloc-visible
-            // instructions, only within them (i.e. in expansion into
-            // multiple machine instructions when that
-            // occurs). spilltmp is used for moves to/from spillslots,
-            // but tmp2 never is, so it is available for this
-            // purpose. (Its only other use is in prologue stack
-            // checks, and the prologue is prepended after regalloc
-            // runs.)
-            preg(tmp2_reg()),
-            // We use v31 for Float/Vec-class parallel moves.
-            preg(vreg(31)),
         ],
         fixed_stack_slots: vec![],
     };

@@ -208,9 +208,9 @@ block0(v0: i32):
 ;   load_const VCodeConstant(1), %xmm0
 ;   movd    %edi, %xmm5
 ;   psllw   %xmm0, %xmm5, %xmm0
-;   lea     const(VCodeConstant(0)), %rax
+;   lea     const(VCodeConstant(0)), %rsi
 ;   shlq    $4, %rdi, %rdi
-;   movdqu  0(%rax,%rdi,1), %xmm13
+;   movdqu  0(%rsi,%rdi,1), %xmm13
 ;   pand    %xmm0, %xmm13, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -292,14 +292,14 @@ block0(v0: i64x2, v1: i32):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
-;   pextrd.w $0, %xmm0, %r11
-;   pextrd.w $1, %xmm0, %rdi
+;   pextrd.w $0, %xmm0, %r10
+;   pextrd.w $1, %xmm0, %rsi
 ;   movq    %rax, %rcx
-;   sarq    %cl, %r11, %r11
-;   sarq    %cl, %rdi, %rdi
+;   sarq    %cl, %r10, %r10
+;   sarq    %cl, %rsi, %rsi
 ;   uninit  %xmm0
-;   pinsrd.w $0, %xmm0, %r11, %xmm0
-;   pinsrd.w $1, %xmm0, %rdi, %xmm0
+;   pinsrd.w $0, %xmm0, %r10, %xmm0
+;   pinsrd.w $1, %xmm0, %rsi, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

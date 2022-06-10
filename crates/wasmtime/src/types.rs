@@ -1,5 +1,5 @@
 use std::fmt;
-use wasmtime_environ::{EntityType, Global, Memory, Table, TypeTables, WasmFuncType, WasmType};
+use wasmtime_environ::{EntityType, Global, Memory, ModuleTypes, Table, WasmFuncType, WasmType};
 
 pub(crate) mod matching;
 
@@ -147,7 +147,7 @@ impl ExternType {
         (Memory(MemoryType) memory unwrap_memory)
     }
 
-    pub(crate) fn from_wasmtime(types: &TypeTables, ty: &EntityType) -> ExternType {
+    pub(crate) fn from_wasmtime(types: &ModuleTypes, ty: &EntityType) -> ExternType {
         match ty {
             EntityType::Function(idx) => FuncType::from_wasm_func_type(types[*idx].clone()).into(),
             EntityType::Global(ty) => GlobalType::from_wasmtime_global(ty).into(),
@@ -373,12 +373,39 @@ impl MemoryType {
         }
     }
 
+    /// Creates a new descriptor for shared WebAssembly memory given the
+    /// specified limits of the memory.
+    ///
+    /// The `minimum` and `maximum`  values here are specified in units of
+    /// WebAssembly pages, which are 64k.
+    ///
+    /// Note that shared memories are part of the threads proposal for
+    /// WebAssembly which is not standardized yet.
+    pub fn shared(minimum: u32, maximum: u32) -> MemoryType {
+        MemoryType {
+            ty: Memory {
+                memory64: false,
+                shared: true,
+                minimum: minimum.into(),
+                maximum: Some(maximum.into()),
+            },
+        }
+    }
+
     /// Returns whether this is a 64-bit memory or not.
     ///
     /// Note that 64-bit memories are part of the memory64 proposal for
     /// WebAssembly which is not standardized yet.
     pub fn is_64(&self) -> bool {
         self.ty.memory64
+    }
+
+    /// Returns whether this is a shared memory or not.
+    ///
+    /// Note that shared memories are part of the threads proposal for
+    /// WebAssembly which is not standardized yet.
+    pub fn is_shared(&self) -> bool {
+        self.ty.shared
     }
 
     /// Returns minimum number of WebAssembly pages this memory must have.
@@ -427,7 +454,7 @@ pub struct ImportType<'module> {
 
     /// The type of the import.
     ty: EntityType,
-    types: &'module TypeTables,
+    types: &'module ModuleTypes,
 }
 
 impl<'module> ImportType<'module> {
@@ -437,7 +464,7 @@ impl<'module> ImportType<'module> {
         module: &'module str,
         name: &'module str,
         ty: EntityType,
-        types: &'module TypeTables,
+        types: &'module ModuleTypes,
     ) -> ImportType<'module> {
         ImportType {
             module,
@@ -489,7 +516,7 @@ pub struct ExportType<'module> {
 
     /// The type of the export.
     ty: EntityType,
-    types: &'module TypeTables,
+    types: &'module ModuleTypes,
 }
 
 impl<'module> ExportType<'module> {
@@ -498,7 +525,7 @@ impl<'module> ExportType<'module> {
     pub(crate) fn new(
         name: &'module str,
         ty: EntityType,
-        types: &'module TypeTables,
+        types: &'module ModuleTypes,
     ) -> ExportType<'module> {
         ExportType { name, ty, types }
     }

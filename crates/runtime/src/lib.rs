@@ -30,6 +30,8 @@ use wasmtime_environ::DefinedMemoryIndex;
 use wasmtime_environ::FunctionInfo;
 use wasmtime_environ::SignatureIndex;
 
+#[cfg(feature = "component-model")]
+pub mod component;
 mod export;
 mod externref;
 mod imports;
@@ -50,12 +52,14 @@ pub use crate::export::*;
 pub use crate::externref::*;
 pub use crate::imports::Imports;
 pub use crate::instance::{
-    InstanceAllocationRequest, InstanceAllocator, InstanceHandle, InstantiationError, LinkError,
-    OnDemandInstanceAllocator, StorePtr,
+    allocate_single_memory_instance, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
+    InstantiationError, LinkError, OnDemandInstanceAllocator, StorePtr,
 };
 #[cfg(feature = "pooling-allocator")]
 pub use crate::instance::{InstanceLimits, PoolingAllocationStrategy, PoolingInstanceAllocator};
-pub use crate::memory::{DefaultMemoryCreator, Memory, RuntimeLinearMemory, RuntimeMemoryCreator};
+pub use crate::memory::{
+    DefaultMemoryCreator, Memory, RuntimeLinearMemory, RuntimeMemoryCreator, SharedMemory,
+};
 pub use crate::mmap::Mmap;
 pub use crate::mmap_vec::MmapVec;
 pub use crate::table::{Table, TableElement};
@@ -65,8 +69,9 @@ pub use crate::traphandlers::{
 };
 pub use crate::vmcontext::{
     VMCallerCheckedAnyfunc, VMContext, VMFunctionBody, VMFunctionImport, VMGlobalDefinition,
-    VMGlobalImport, VMInvokeArgument, VMMemoryDefinition, VMMemoryImport, VMRuntimeLimits,
-    VMSharedSignatureIndex, VMTableDefinition, VMTableImport, VMTrampoline, ValRaw,
+    VMGlobalImport, VMInvokeArgument, VMMemoryDefinition, VMMemoryImport, VMOpaqueContext,
+    VMRuntimeLimits, VMSharedSignatureIndex, VMTableDefinition, VMTableImport, VMTrampoline,
+    ValRaw,
 };
 
 mod module_id;
