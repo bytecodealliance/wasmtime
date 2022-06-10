@@ -251,8 +251,8 @@ impl<P: PtrSize> VMOffsets<P> {
         calculate_sizes! {
             defined_anyfuncs: "module functions",
             defined_globals: "defined globals",
-            defined_memories: "defined memories",
             owned_memories: "owned memories",
+            defined_memories: "defined memories",
             defined_tables: "defined tables",
             imported_globals: "imported globals",
             imported_memories: "imported memories",
