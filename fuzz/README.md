@@ -50,3 +50,21 @@ git clone \
     https://github.com/bytecodealliance/wasmtime-libfuzzer-corpus.git \
     wasmtime/fuzz/corpus
 ```
+
+### Reproducing a Fuzz Bug
+
+When investigating a fuzz bug (especially one found by OSS-Fuzz), use the
+following steps to reproduce it locally:
+
+1. Download the test case (either the "Minimized Testcase" or "Unminimized
+   Testcase" from OSS-Fuzz will do).
+2. Run the test case in the correct fuzz target:
+    ```shell
+    cargo +nightly fuzz run <target> <test case>
+    ```
+    If all goes well, the bug should reproduce and libFuzzer will dump the
+    failure stack trace to stdout
+3. For more debugging information, run the command above with `RUST_LOG=debug`
+   to print the configuration and WebAssembly input used by the test case (see
+   uses of  `log_wasm` in the `wasmtime-fuzzing` crate).
+
