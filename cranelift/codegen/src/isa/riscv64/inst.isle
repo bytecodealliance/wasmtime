@@ -8,11 +8,11 @@
     ;; load immediate
     (Lui
       (rd WritableReg)
-      (imm Imm20))
+      (imm Umm20))
 
      (Auipc
       (rd WritableReg)
-      (imm Imm20))
+      (imm Umm20))
     
 
     ;; An ALU operation with one register sources and a register destination.
@@ -246,6 +246,7 @@
       (cmp_ty Type)
       (x ValueRegs)
       (y ValueRegs))
+    (RawData (data VecU8))
 ))
 
 (type CsrOP(enum 
@@ -595,11 +596,13 @@
 (type OptionUimm5 (primitive OptionUimm5))
 (type Imm12 (primitive Imm12))
 (type UImm5 (primitive UImm5))
-(type Imm20 (primitive Imm20))
+(type Umm20 (primitive Umm20))
 (type Imm3 (primitive Imm3))
 (type BranchTarget (primitive BranchTarget))
 (type CsrAddress (primitive CsrAddress))
 (type OptionFloatRoundingMode (primitive OptionFloatRoundingMode))
+(type VecU8 (primitive VecU8))
+
 
 ;; Helper for creating the zero register.
 (decl zero_reg () Reg)

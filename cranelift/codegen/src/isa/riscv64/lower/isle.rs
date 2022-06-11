@@ -24,13 +24,11 @@ use crate::{
 
 use std::boxed::Box;
 use std::convert::TryFrom;
-use std::vec::Vec;
 
 use crate::machinst::Reg;
 
 type BoxCallInfo = Box<CallInfo>;
 type BoxCallIndInfo = Box<CallIndInfo>;
-type VecMachLabel = Vec<MachLabel>;
 type BoxExternalName = Box<ExternalName>;
 
 /// The main entry point for lowering with ISLE.

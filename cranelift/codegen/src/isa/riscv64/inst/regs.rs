@@ -200,7 +200,7 @@ pub fn crate_reg_eviroment(_flags: &settings::Flags) -> MachineEnv {
         for i in 10..=17 {
             x_register.push(PReg::new(i, RegClass::Int));
         }
-        for i in 28..=29 {
+        for i in 28..=30 {
             x_register.push(PReg::new(i, RegClass::Int));
         }
 
@@ -211,7 +211,7 @@ pub fn crate_reg_eviroment(_flags: &settings::Flags) -> MachineEnv {
         for i in 10..=17 {
             f_register.push(PReg::new(i, RegClass::Float));
         }
-        for i in 28..=30 {
+        for i in 28..=31 {
             f_register.push(PReg::new(i, RegClass::Float));
         }
         [x_register, f_register]
@@ -233,15 +233,11 @@ pub fn crate_reg_eviroment(_flags: &settings::Flags) -> MachineEnv {
         [x_register, f_register]
     };
 
-    let scratch_by_class: [PReg; 2] =
-        [PReg::new(30, RegClass::Int), PReg::new(31, RegClass::Float)];
-    let fixed_stack_slots: Vec<PReg> = vec![];
-
     MachineEnv {
         preferred_regs_by_class,
         non_preferred_regs_by_class,
-        scratch_by_class,
-        fixed_stack_slots,
+
+        fixed_stack_slots: vec![],
     }
 }
 
@@ -262,4 +258,12 @@ pub fn f_reg(enc: usize) -> Reg {
 pub(crate) fn real_reg_to_reg(x: RealReg) -> Reg {
     let v_reg = VReg::new(x.hw_enc() as usize, x.class());
     Reg::from(v_reg)
+}
+
+pub(crate) fn x_reg_range(start: usize, end: usize) -> Vec<Writable<Reg>> {
+    let mut ret = vec![];
+    for i in start..=end {
+        ret.push(Writable::from_reg(x_reg(i)));
+    }
+    ret
 }

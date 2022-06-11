@@ -260,7 +260,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         /*
             just previous fp saved on stack.
         */
-        8
+        16
     }
 
     fn gen_load_stack(mem: StackAMode, into_reg: Writable<Reg>, ty: Type) -> Inst {
@@ -369,6 +369,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
     }
 
     fn gen_debug_frame_info(
+        _call_conv: isa::CallConv,
         _flags: &settings::Flags,
         _isa_flags: &Vec<settings::Value>,
     ) -> SmallInstVec<Inst> {
@@ -380,6 +381,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
     // move fp , sp     ;; set fp to sp
     fn gen_prologue_frame_setup(_flags: &settings::Flags) -> SmallInstVec<Inst> {
         let mut insts = SmallVec::new();
+        // insts.extend(Inst::push_registers(&vec![Writable::from_reg(x_reg(31))]));
         insts.push(Inst::AjustSp {
             amount: -(Self::word_bytes() as i64),
         });
@@ -408,6 +410,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         insts.push(Inst::AjustSp {
             amount: Self::word_bytes() as i64,
         });
+        // insts.extend(Inst::pop_registers(&vec![Writable::from_reg(x_reg(31))]));
         insts
     }
 
@@ -464,7 +467,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         _outgoing_args_size: u32,
     ) -> SmallVec<[Inst; 16]> {
         let mut insts = SmallVec::new();
-        let clobbered_callee_saves = Self::get_clobbered_callee_saves(call_conv, clobbers);
+        let clobbered_callee_saves = Self::get_clobbered_callee_saves(call_conv, _flags, clobbers);
         let stack_size = fixed_frame_storage_size + compute_clobber_size(&clobbered_callee_saves);
         let mut cur_offset = 0;
         for reg in &clobbered_callee_saves {
@@ -622,6 +625,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
 
     fn get_clobbered_callee_saves(
         call_conv: isa::CallConv,
+        _flags: &settings::Flags,
         regs: &[Writable<RealReg>],
     ) -> Vec<Writable<RealReg>> {
         let mut regs: Vec<Writable<RealReg>> = regs
@@ -641,22 +645,23 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         is_leaf: bool,
         stack_args_size: u32,
         num_clobbered_callee_saves: usize,
+
         fixed_frame_storage_size: u32,
     ) -> bool {
-        !is_leaf
-            // The function arguments that are passed on the stack are addressed
-            // relative to the Frame Pointer.
-            || stack_args_size > 0
-            || num_clobbered_callee_saves > 0
-            || fixed_frame_storage_size > 0
+        true
+        // !is_leaf
+        //     // The function arguments that are passed on the stack are addressed
+        //     // relative to the Frame Pointer.
+        //     || stack_args_size > 0
+        //     || num_clobbered_callee_saves > 0
+        //     || fixed_frame_storage_size > 0
     }
 }
 
 pub fn get_caller_save_x_gpr() -> [bool; 32] {
     let mut x: [bool; 32] = [false; 32];
     for (i, v) in get_callee_save_x_gpr().iter().enumerate() {
-        if i == 0 || i == 3 || i == 4 || i == 30 || i == 31 {
-            // there register caller and called not save at all , always been false.
+        if i == 0 || i == 3 || i == 4 {
             continue;
         }
         x[i] = !v;
@@ -667,9 +672,6 @@ pub fn get_caller_save_x_gpr() -> [bool; 32] {
 pub fn get_caller_save_f_gpr() -> [bool; 32] {
     let mut x: [bool; 32] = [false; 32];
     for (i, v) in get_callee_save_f_gpr().iter().enumerate() {
-        if i == 31 {
-            continue;
-        }
         x[i] = !v;
     }
     x

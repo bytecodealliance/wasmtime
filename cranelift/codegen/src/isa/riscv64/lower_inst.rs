@@ -169,24 +169,18 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let r_dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let r_addr = ctx.put_input_in_regs(insn, 0).only_reg().unwrap();
 
-            let ty_access = ty.unwrap();
-            assert!(is_valid_atomic_transaction_ty(ty_access));
+            let ty = ty.unwrap();
+            assert!(is_valid_atomic_transaction_ty(ty));
             let op = ctx.data(insn).atomic_rmw_op().unwrap();
-            let arg2: Reg = if ty_access == I32
-                && (op == crate::ir::AtomicRmwOp::Umin || op == crate::ir::AtomicRmwOp::Umax)
-            {
-                // we must narrow down int to fit u32
+            let arg2: Reg = ctx.put_input_in_regs(insn, 1).only_reg().unwrap();
+            let arg2 = {
                 let tmp = ctx.alloc_tmp(I64).only_reg().unwrap();
-                let arg2 = ctx.put_input_in_regs(insn, 1).only_reg().unwrap();
-                Inst::narrow_down_int(tmp, arg2, ty_access)
+                Inst::narrow_down_int(tmp, arg2, I32)
                     .into_iter()
                     .for_each(|i| ctx.emit(i));
                 tmp.to_reg()
-            } else {
-                ctx.put_input_in_regs(insn, 1).only_reg().unwrap()
             };
-
-            let risc_op = AtomicOP::from_atomicrmw_type_and_op(ty_access, op);
+            let risc_op = AtomicOP::from_atomicrmw_type_and_op(ty, op);
             if let Some(op) = risc_op {
                 let i = Inst::Atomic {
                     op,
@@ -198,7 +192,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 };
                 ctx.emit(i);
             } else if op == crate::ir::AtomicRmwOp::Sub {
-                let sub_op = if ty_access.bits() == 64 {
+                let sub_op = if ty.bits() == 64 {
                     AluOPRRR::Sub
                 } else {
                     AluOPRRR::Subw
@@ -210,7 +204,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     rs1: zero_reg(),
                     rs2: arg2,
                 });
-                let add_op = if ty_access.bits() == 64 {
+                let add_op = if ty .bits() == 64 {
                     AtomicOP::AmoaddD
                 } else {
                     AtomicOP::AmoaddW
@@ -224,7 +218,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     rl: false,
                 });
             } else if op == crate::ir::AtomicRmwOp::Nand {
-                let lr_op = if ty_access.bits() == 64 {
+                let lr_op = if ty.bits() == 64 {
                     AtomicOP::LrD
                 } else {
                     AtomicOP::LrW
@@ -248,7 +242,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 });
                 // tmp = bit_not tmp;
                 ctx.emit(Inst::construct_bit_not(tmp, tmp.to_reg()));
-                let st_op = if ty_access.bits() == 64 {
+                let st_op = if ty.bits() == 64 {
                     AtomicOP::AmoswapD
                 } else {
                     AtomicOP::AmoswapW

@@ -16,6 +16,56 @@ impl EmitInfo {
     }
 }
 
+#[derive(Clone, Copy)]
+pub(crate) enum LoadConstant {
+    U32(u32),
+    U64(u64),
+}
+
+impl LoadConstant {
+    fn to_le_bytes(self) -> Vec<u8> {
+        match self {
+            LoadConstant::U32(x) => Vec::from_iter(x.to_le_bytes().into_iter()),
+            LoadConstant::U64(x) => Vec::from_iter(x.to_le_bytes().into_iter()),
+        }
+    }
+    fn load_op(self) -> LoadOP {
+        match self {
+            LoadConstant::U32(_) => LoadOP::Lwu,
+            LoadConstant::U64(_) => LoadOP::Ld,
+        }
+    }
+    fn load_ty(self) -> Type {
+        match self {
+            LoadConstant::U32(_) => R32,
+            LoadConstant::U64(_) => R64,
+        }
+    }
+
+    pub(crate) fn generate(self, rd: Writable<Reg>) -> SmallInstVec<Inst> {
+        // get current pc.
+        let mut insts = SmallInstVec::new();
+        insts.push(Inst::Auipc {
+            rd,
+            imm: Umm20 { bits: 0 },
+        });
+        // load
+        insts.push(Inst::Load {
+            rd,
+            op: self.load_op(),
+            flags: MemFlags::new(),
+            from: AMode::RegOffset(rd.to_reg(), 12, self.load_ty()),
+        });
+        // jump over.
+        let data = self.to_le_bytes();
+        insts.push(Inst::Jal {
+            dest: BranchTarget::ResolvedOffset((4 + data.len()) as i32),
+        });
+        insts.push(Inst::RawData { data });
+        insts
+    }
+}
+
 pub(crate) fn reg_to_gpr_num(m: Reg) -> u32 {
     u32::try_from(m.to_real_reg().unwrap().hw_enc() & 31).unwrap()
 }
@@ -407,7 +457,7 @@ impl Inst {
     /*
         alloc some registers for load large constant, or something else.
     */
-    fn alloc_registers(amount: usize) -> Vec<Writable<Reg>> {
+    pub(crate) fn alloc_registers(amount: usize) -> Vec<Writable<Reg>> {
         let mut v = vec![];
         let available = bunch_of_normal_registers();
         debug_assert!(amount <= available.len());
@@ -421,7 +471,7 @@ impl Inst {
     }
 
     // store a list of regisrer
-    fn push_registers(registers: &Vec<Writable<Reg>>) -> SmallInstVec<Inst> {
+    pub(crate) fn push_registers(registers: &Vec<Writable<Reg>>) -> SmallInstVec<Inst> {
         let mut insts = smallvec![];
         // ajust sp ; alloc space
         insts.push(Inst::AjustSp {
@@ -446,7 +496,7 @@ impl Inst {
     }
 
     // restore a list of register
-    fn pop_registers(registers: &Vec<Writable<Reg>>) -> SmallInstVec<Inst> {
+    pub(crate) fn pop_registers(registers: &Vec<Writable<Reg>>) -> SmallInstVec<Inst> {
         let mut insts = smallvec![];
         let mut cur_offset = 0;
         for r in registers {
@@ -498,7 +548,9 @@ impl MachInstEmit for Inst {
                 };
                 x.emit(&[], sink, emit_info, state)
             }
-
+            &Inst::RawData { ref data } => {
+                sink.put_data(&data[..]);
+            }
             &Inst::Lui { rd, ref imm } => {
                 let rd = allocs.next_writable(rd);
                 let x: u32 = 0b0110111 | reg_to_gpr_num(rd.to_reg()) << 7 | (imm.as_u32() << 12);
@@ -900,11 +952,10 @@ impl MachInstEmit for Inst {
                 // call
                 match info.dest {
                     ExternalName::User { .. } => {
-                        let srcloc = state.cur_srcloc();
                         if info.opcode.is_call() {
-                            sink.add_call_site(srcloc, info.opcode);
+                            sink.add_call_site(info.opcode);
                         }
-                        sink.add_reloc(srcloc, Reloc::RiscvCall, &info.dest, 0);
+                        sink.add_reloc(Reloc::RiscvCall, &info.dest, 0);
                         if let Some(s) = state.take_stack_map() {
                             sink.add_stack_map(StackMapExtent::UpcomingBytes(8), s);
                         }
@@ -921,9 +972,9 @@ impl MachInstEmit for Inst {
                 if let Some(s) = state.take_stack_map() {
                     sink.add_stack_map(StackMapExtent::UpcomingBytes(4), s);
                 }
-                let loc = state.cur_srcloc();
+
                 if info.opcode.is_call() {
-                    sink.add_call_site(loc, info.opcode);
+                    sink.add_call_site(info.opcode);
                 }
                 Inst::Jalr {
                     rd: writable_link_reg(),
@@ -1335,73 +1386,95 @@ impl MachInstEmit for Inst {
                 let v = allocs.next(v);
                 let t0 = allocs.next_writable(t0);
                 let dst = allocs.next_writable(dst);
-                /*
-                    # addr holds address of memory location
-                    # e holds expected value
-                    # v holds desired value
-                    # dst holds return value
+                // /*
+                //     # addr holds address of memory location
+                //     # e holds expected value
+                //     # v holds desired value
+                //     # dst holds return value
 
-                cas:
-                    lr.w t0, (addr) # Load original value.
-                    bne t0, e, fail # Doesn’t match, so fail.
-                    sc.w dst, v, (addr) # Try to update.
-                    bne dst , v , cas  # retry
-                fail:
-                                           */
-                let fail_label = sink.get_label();
-                let cas_lebel = sink.get_label();
-                sink.bind_label(cas_lebel);
-                // lr.w t0, (addr)
-                Inst::Atomic {
-                    op: if ty.bits() == 64 {
-                        AtomicOP::LrD
-                    } else {
-                        AtomicOP::LrW
-                    },
-                    rd: t0,
-                    addr,
-                    src: zero_reg(),
-                    aq: true,
-                    rl: false,
-                }
-                .emit(&[], sink, emit_info, state);
-                // bne t0, e, fail
-                Inst::CondBr {
-                    taken: BranchTarget::Label(fail_label),
-                    not_taken: BranchTarget::zero(),
-                    kind: IntegerCompare {
-                        kind: IntCC::NotEqual,
-                        rs1: e,
-                        rs2: t0.to_reg(),
-                    },
-                }
-                .emit(&[], sink, emit_info, state);
-                //  sc.w dst, v, (addr)
-                Inst::Atomic {
-                    op: if ty.bits() == 64 {
-                        AtomicOP::ScD
-                    } else {
-                        AtomicOP::ScW
-                    },
-                    rd: dst,
-                    addr,
+                // cas:
+                //     lr.w t0, (addr) # Load original value.
+                //     bne t0, e, fail # Doesn’t match, so fail.
+                //     sc.w dst, v, (addr) # Try to update.
+                //     bne dst , v , cas  # retry
+                // fail:
+                //                            */
+                // let fail_label = sink.get_label();
+                // let cas_lebel = sink.get_label();
+                // sink.bind_label(cas_lebel);
+                // // lr.w t0, (addr)
+                // Inst::Atomic {
+                //     op: if ty.bits() == 64 {
+                //         AtomicOP::LrD
+                //     } else {
+                //         AtomicOP::LrW
+                //     },
+                //     rd: t0,
+                //     addr,
+                //     src: zero_reg(),
+                //     aq: true,
+                //     rl: false,
+                // }
+                // .emit(&[], sink, emit_info, state);
+                // // bne t0, e, fail
+                // Inst::CondBr {
+                //     taken: BranchTarget::Label(fail_label),
+                //     not_taken: BranchTarget::zero(),
+                //     kind: IntegerCompare {
+                //         kind: IntCC::NotEqual,
+                //         rs1: e,
+                //         rs2: t0.to_reg(),
+                //     },
+                // }
+                // .emit(&[], sink, emit_info, state);
+                // //  sc.w dst, v, (addr)
+                // Inst::Atomic {
+                //     op: if ty.bits() == 64 {
+                //         AtomicOP::ScD
+                //     } else {
+                //         AtomicOP::ScW
+                //     },
+                //     rd: dst,
+                //     addr,
+                //     src: v,
+                //     aq: false,
+                //     rl: true,
+                // }
+                // .emit(&[], sink, emit_info, state);
+                // // load to t0  from addr again.
+                // Inst::Atomic {
+                //     op: if ty.bits() == 64 {
+                //         AtomicOP::LrD
+                //     } else {
+                //         AtomicOP::LrW
+                //     },
+                //     rd: t0,
+                //     addr,
+                //     src: zero_reg(),
+                //     aq: true,
+                //     rl: false,
+                // }
+                // .emit(&[], sink, emit_info, state);
+                // // check is our value stored.
+                // Inst::CondBr {
+                //     taken: BranchTarget::Label(cas_lebel),
+                //     not_taken: BranchTarget::zero(),
+                //     kind: IntegerCompare {
+                //         kind: IntCC::NotEqual,
+                //         rs1: t0.to_reg(),
+                //         rs2: v,
+                //     },
+                // }
+                // .emit(&[], sink, emit_info, state);
+                // sink.bind_label(fail_label);
+
+                Inst::Store {
+                    to: AMode::RegOffset(addr, 0, I64),
+                    op: StoreOP::Sd,
+                    flags: MemFlags::new(),
                     src: v,
-                    aq: false,
-                    rl: true,
                 }
                 .emit(&[], sink, emit_info, state);
-                // bne dst , v , cas retry.
-                Inst::CondBr {
-                    taken: BranchTarget::Label(cas_lebel),
-                    not_taken: BranchTarget::zero(),
-                    kind: IntegerCompare {
-                        kind: IntCC::NotEqual,
-                        rs1: dst.to_reg(),
-                        rs2: v,
-                    },
-                }
-                .emit(&[], sink, emit_info, state);
-                sink.bind_label(fail_label);
             }
             &Inst::IntSelect {
                 op,
@@ -1664,7 +1737,7 @@ impl MachInstEmit for Inst {
                 // get the current pc.
                 Inst::Auipc {
                     rd: rd,
-                    imm: Imm20::from_bits(0),
+                    imm: Umm20::from_bits(0),
                 }
                 .emit(&[], sink, emit_info, state);
                 // load the value.
@@ -1680,8 +1753,8 @@ impl MachInstEmit for Inst {
                     dest: BranchTarget::offset(12 /* jal and abs8 size  */),
                 }
                 .emit(&[], sink, emit_info, state);
-                let srcloc = state.cur_srcloc;
-                sink.add_reloc(srcloc, Reloc::Abs8, name.as_ref(), offset);
+
+                sink.add_reloc(Reloc::Abs8, name.as_ref(), offset);
                 if emit_info.0.emit_all_ones_funcaddrs() {
                     sink.put8(u64::max_value());
                 } else {
@@ -1752,8 +1825,7 @@ impl MachInstEmit for Inst {
             }
 
             &Inst::Udf { trap_code } => {
-                let srcloc = state.cur_srcloc();
-                sink.add_trap(srcloc, trap_code);
+                sink.add_trap(trap_code);
                 if let Some(s) = state.take_stack_map() {
                     sink.add_stack_map(StackMapExtent::UpcomingBytes(4), s);
                 }

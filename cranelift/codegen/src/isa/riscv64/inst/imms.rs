@@ -75,12 +75,12 @@ impl std::ops::Neg for Imm12 {
 
 // singed
 #[derive(Clone, Copy)]
-pub struct Imm20 {
+pub struct Umm20 {
     /// The immediate bits.
     pub bits: i32,
 }
 
-impl Imm20 {
+impl Umm20 {
     #[inline(always)]
     pub fn from_bits(bits: i32) -> Self {
         Self {
@@ -93,13 +93,13 @@ impl Imm20 {
     }
 }
 
-impl Debug for Imm20 {
+impl Debug for Umm20 {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         write!(f, "{}", self.bits)
     }
 }
 
-impl Display for Imm20 {
+impl Display for Umm20 {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         write!(f, "{}", self.bits)
     }

@@ -1,6 +1,6 @@
 test run
 target aarch64
-target riscv64gc
+;; target riscv64gc ;; todo of and nof not implemented.
 
 function %i128_bricmp_eq(i128, i128) -> b1 {
 block0(v0: i128, v1: i128):

@@ -13,10 +13,8 @@ fn define_settings(_shared: &SettingGroup) -> SettingGroup {
 
     setting.add_bool("has_extension_v", "has extension V?", "", false);
 
-    setting.add_bool("has_extension_zba", "has extension zba?", "", false);
-    setting.add_bool("has_extension_zbb", "has extension zbb?", "", false);
-    setting.add_bool("has_extension_zbc", "has extension zbc?", "", false);
-    setting.add_bool("has_extension_zbs", "has extension zbs?", "", false);
+    setting.add_bool("has_extension_b", "has extension B?", "", false);
+
     setting.add_bool("has_extension_zbkb", "has extension zbkb?", "", false);
     setting.build()
 }

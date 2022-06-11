@@ -51,6 +51,8 @@ pub(crate) type OptionImm12 = Option<Imm12>;
 pub(crate) type VecBranchTarget = Vec<BranchTarget>;
 pub(crate) type OptionUimm5 = Option<Uimm5>;
 pub(crate) type OptionFloatRoundingMode = Option<FRM>;
+pub(crate) type VecU8 = Vec<u8>;
+
 //=============================================================================
 // Instructions (top level): definition
 
@@ -98,7 +100,7 @@ pub enum BranchTarget {
     ResolvedOffset(i32),
 }
 
-pub(crate) fn enc_auipc(rd: Writable<Reg>, imm: Imm20) -> u32 {
+pub(crate) fn enc_auipc(rd: Writable<Reg>, imm: Umm20) -> u32 {
     let x = 0b0010111 | reg_to_gpr_num(rd.to_reg()) << 7 | imm.as_u32() << 12;
     x
 }
@@ -189,12 +191,6 @@ pub(crate) fn gen_move(rd: Writable<Reg>, oty: Type, rm: Reg, ity: Type) -> Inst
 }
 
 impl Inst {
-    #[inline(always)]
-    fn in_i32_range(value: u64) -> bool {
-        let value = value as i64;
-        value >= (i32::MIN as i64) && value <= (i32::MAX as i64)
-    }
-
     pub(crate) const fn instruction_size() -> i32 /* less type cast  */ {
         4
     }
@@ -214,29 +210,17 @@ impl Inst {
         if let Some(imm) = Imm12::maybe_from_u64(value) {
             insts.push(Inst::load_constant_imm12(rd, imm));
         } else {
-            /*
-             https://github.com/riscv-non-isa/riscv-asm-manual/blob/master/riscv-asm.md
-             The following example shows the li pseudo instruction which is used to load immediate values:
+            insts.extend(LoadConstant::U32(value as u32).generate(rd))
+        }
+        insts
+    }
 
-                 .equ	CONSTANT, 0xdeadbeef
-                 li	a0, CONSTANT
-
-            Which, for RV32I, generates the following assembler output, as seen by objdump:
-
-                00000000 <.text>:
-                0:	deadc537          	lui	a0,0xdeadc
-                4:	eef50513          	addi	a0,a0,-273 # deadbeef <CONSTANT+0x0>
-                 */
-            insts.push(Inst::Lui {
-                rd: rd,
-                imm: Imm20::from_bits((value as i32) >> 12),
-            });
-            insts.push(Inst::AluRRImm12 {
-                alu_op: AluOPRRI::Addi,
-                rd: rd,
-                rs: rd.to_reg(),
-                imm12: Imm12::from_bits(value as i16),
-            });
+    pub fn load_constant_u64(rd: Writable<Reg>, value: u64) -> SmallInstVec<Inst> {
+        let mut insts = SmallVec::new();
+        if let Some(imm12) = Imm12::maybe_from_u64(value) {
+            insts.push(Inst::load_constant_imm12(rd, imm12));
+        } else {
+            insts.extend(LoadConstant::U64(value).generate(rd))
         }
         insts
     }
@@ -247,7 +231,7 @@ impl Inst {
     pub(crate) fn construct_auipc_and_jalr(rd: Writable<Reg>, offset: i32) -> [Inst; 2] {
         let a = Inst::Auipc {
             rd,
-            imm: Imm20::from_bits(offset >> 12),
+            imm: Umm20::from_bits(offset >> 12),
         };
         let b = Inst::Jalr {
             rd: writable_zero_reg(),
@@ -255,48 +239,6 @@ impl Inst {
             offset: Imm12::from_bits((offset & 0xfff) as i16),
         };
         [a, b]
-    }
-
-    /*
-        todo:: load 64-bit constant must need two register.
-        this is annoying
-        https://www.reddit.com/r/RISCV/comments/63e55h/load_a_large_immediate_constant_in_asm/
-    */
-    pub fn load_constant_u64(rd: Writable<Reg>, value: u64) -> SmallInstVec<Inst> {
-        let mut insts = SmallVec::new();
-        if Inst::in_i32_range(value) {
-            insts.extend(Inst::load_constant_u32(rd, value));
-        } else {
-            let tmp = writable_spilltmp_reg();
-            assert!(tmp != rd);
-            // high part
-            insts.extend(Inst::load_constant_u32(rd, value >> 32));
-            // low part
-
-            insts.extend(Inst::load_constant_u32(tmp, value & 0xffff_ffff));
-            // rd = rd << 32
-            insts.push(Inst::AluRRImm12 {
-                alu_op: AluOPRRI::Slli,
-                rd: rd,
-                rs: rd.to_reg(),
-                imm12: Imm12::from_bits(32),
-            });
-            // tmp = tmp >> 32
-            insts.push(Inst::AluRRImm12 {
-                alu_op: AluOPRRI::Srli,
-                rd: tmp,
-                rs: tmp.to_reg(),
-                imm12: Imm12::from_bits(32),
-            });
-            // rd = rd | tmp
-            insts.push(Inst::AluRRR {
-                alu_op: AluOPRRR::Or,
-                rd: rd,
-                rs1: rd.to_reg(),
-                rs2: tmp.to_reg(),
-            });
-        }
-        insts
     }
 
     /// Create instructions that load a 32-bit floating-point constant.
@@ -555,6 +497,7 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_uses(y.regs());
             rd.iter().for_each(|r| collector.reg_def(*r));
         }
+        &Inst::RawData { .. } => {}
     }
 }
 
@@ -813,6 +756,25 @@ impl Inst {
             &Inst::Nop4 => {
                 format!(";;fixed 4-size nop")
             }
+            &Inst::RawData { ref data } => match data.len() {
+                4 => {
+                    let mut bytes = [0; 4];
+                    for i in 0..4 {
+                        bytes[i] = data[i];
+                    }
+                    format!(".u32 0x{:x}", u32::from_le_bytes(bytes))
+                }
+                8 => {
+                    let mut bytes = [0; 8];
+                    for i in 0..8 {
+                        bytes[i] = data[i];
+                    }
+                    format!(".u64 0x{:x}", u64::from_le_bytes(bytes))
+                }
+                _ => {
+                    format!(".data {:?}", data)
+                }
+            },
             &Inst::Cls { rd, rs, ty } => {
                 let rs = format_reg(rs, allocs);
                 let rd = format_reg(rd.to_reg(), allocs);
@@ -1367,7 +1329,7 @@ impl MachInstLabelUse for LabelUse {
         // unimplemented!("generate_veneer:{:?} {:?}", buffer, veneer_offset);
         let base = writable_spilltmp_reg();
         {
-            let x = enc_auipc(base, Imm20::from_bits(0)).to_le_bytes();
+            let x = enc_auipc(base, Umm20::from_bits(0)).to_le_bytes();
             buffer[0] = x[0];
             buffer[1] = x[1];
             buffer[2] = x[2];
