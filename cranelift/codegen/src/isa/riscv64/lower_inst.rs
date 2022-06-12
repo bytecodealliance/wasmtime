@@ -173,13 +173,6 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             assert!(is_valid_atomic_transaction_ty(ty));
             let op = ctx.data(insn).atomic_rmw_op().unwrap();
             let arg2: Reg = ctx.put_input_in_regs(insn, 1).only_reg().unwrap();
-            let arg2 = {
-                let tmp = ctx.alloc_tmp(I64).only_reg().unwrap();
-                Inst::narrow_down_int(tmp, arg2, I32)
-                    .into_iter()
-                    .for_each(|i| ctx.emit(i));
-                tmp.to_reg()
-            };
             let risc_op = AtomicOP::from_atomicrmw_type_and_op(ty, op);
             if let Some(op) = risc_op {
                 let i = Inst::Atomic {
@@ -187,8 +180,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     rd: r_dst,
                     addr: r_addr,
                     src: arg2,
-                    aq: false,
-                    rl: false,
+                    amo: AMO::Relax,
                 };
                 ctx.emit(i);
             } else if op == crate::ir::AtomicRmwOp::Sub {
@@ -204,7 +196,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     rs1: zero_reg(),
                     rs2: arg2,
                 });
-                let add_op = if ty .bits() == 64 {
+                let add_op = if ty.bits() == 64 {
                     AtomicOP::AmoaddD
                 } else {
                     AtomicOP::AmoaddW
@@ -214,8 +206,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     rd: r_dst,
                     addr: r_addr,
                     src: tmp.to_reg(),
-                    aq: false,
-                    rl: false,
+                    amo: AMO::Relax,
                 });
             } else if op == crate::ir::AtomicRmwOp::Nand {
                 let lr_op = if ty.bits() == 64 {
@@ -230,8 +221,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     rd: tmp,
                     addr: r_addr,
                     src: zero_reg(),
-                    aq: false,
-                    rl: true,
+                    amo: AMO::Relax,
                 });
                 // tmp = tmp & arg2
                 ctx.emit(Inst::AluRRR {
@@ -252,8 +242,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     rd: r_dst,
                     src: tmp.to_reg(),
                     addr: r_addr,
-                    aq: false,
-                    rl: true,
+                    amo: AMO::Relax,
                 });
             } else {
                 unreachable!();
@@ -292,8 +281,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 rd: r_dst,
                 addr: r_addr,
                 src: zero_reg(),
-                aq: false,
-                rl: false,
+                amo: AMO::Relax,
             });
         }
 
@@ -320,8 +308,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 rd: r_dst,
                 addr: r_addr,
                 src: arg2,
-                aq: false,
-                rl: false,
+                amo: AMO::Relax,
             });
         }
 

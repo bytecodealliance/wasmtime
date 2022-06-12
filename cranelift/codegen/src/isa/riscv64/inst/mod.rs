@@ -1160,19 +1160,10 @@ impl Inst {
                 rd,
                 addr,
                 src,
-                aq,
-                rl,
+                amo,
             } => {
                 let mut op_name = String::from(op.op_name());
-                if aq && rl {
-                    unreachable!("aq and rl can not both be true.")
-                }
-                if aq {
-                    op_name.push_str(".aq");
-                }
-                if rl {
-                    op_name.push_str(".rl");
-                }
+                op_name.push_str(amo.to_static_str());
                 let addr = format_reg(addr, allocs);
                 let src = format_reg(src, allocs);
                 let rd = format_reg(rd.to_reg(), allocs);

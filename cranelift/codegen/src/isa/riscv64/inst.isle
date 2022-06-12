@@ -161,8 +161,7 @@
       (rd WritableReg)
       (addr Reg)
       (src Reg)
-      (aq bool)
-      (rl bool))
+      (amo AMO))
     
 
     ;; a float compare 
@@ -602,6 +601,7 @@
 (type CsrAddress (primitive CsrAddress))
 (type OptionFloatRoundingMode (primitive OptionFloatRoundingMode))
 (type VecU8 (primitive VecU8))
+(type AMO (primitive AMO))
 
 
 ;; Helper for creating the zero register.

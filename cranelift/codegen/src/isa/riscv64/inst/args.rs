@@ -1406,16 +1406,10 @@ impl AtomicOP {
     pub(crate) fn op_code(self) -> u32 {
         0b0101111
     }
+
     #[inline(always)]
-    pub(crate) fn funct7(self, aq: bool, rl: bool) -> u32 {
-        let mut x = self.funct5() << 2;
-        if rl {
-            x |= 1;
-        }
-        if aq {
-            x |= 1 << 1;
-        }
-        x
+    pub(crate) fn funct7(self, amo: AMO) -> u32 {
+        self.funct5() << 2 | amo.as_u32()
     }
 
     pub(crate) fn funct3(self) -> u32 {
@@ -1792,10 +1786,25 @@ pub(crate) fn get_x_len() -> usize {
     unsafe { V_LEN }
 }
 
-#[inline]
-pub(crate) fn float_sign_bit(ty: Type) -> u8 {
-    match ty {
-        F32 | F64 => (ty.bits() - 1) as u8,
-        _ => unreachable!(),
+///Atomic Memory ordering.
+#[derive(Copy, Clone, Debug)]
+pub enum AMO {
+    Relax = 0b00,
+    Release = 0b01,
+    Aquire = 0b10,
+    SeqConsistent = 0b11,
+}
+
+impl AMO {
+    pub(crate) fn to_static_str(self) -> &'static str {
+        match self {
+            AMO::Relax => "",
+            AMO::Release => ".rl",
+            AMO::Aquire => ".aq",
+            AMO::SeqConsistent => ".aqrl",
+        }
+    }
+    pub(crate) fn as_u32(self) -> u32 {
+        self as u32
     }
 }

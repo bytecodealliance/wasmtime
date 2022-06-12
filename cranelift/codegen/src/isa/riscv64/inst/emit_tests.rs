@@ -1651,10 +1651,9 @@ fn test_riscv64_binemit() {
             rd: writable_a0(),
             addr: a1(),
             src: zero_reg(),
-            aq: true,
-            rl: false,
+            amo: AMO::Relax,
         },
-        "lr.w.aq a0,(a1)",
+        "lr.w a0,(a1)",
     ));
     insns.push(TestUnit::new(
         Inst::Atomic {
@@ -1662,8 +1661,7 @@ fn test_riscv64_binemit() {
             rd: writable_a0(),
             addr: a1(),
             src: a2(),
-            aq: false,
-            rl: true,
+            amo: AMO::Release,
         },
         "sc.w.rl a0,a2,(a1)",
     ));
@@ -1673,10 +1671,9 @@ fn test_riscv64_binemit() {
             rd: writable_a0(),
             addr: a1(),
             src: a2(),
-            aq: false,
-            rl: false,
+            amo: AMO::Aquire,
         },
-        "amoswap.w a0,a2,(a1)",
+        "amoswap.w.aq a0,a2,(a1)",
     ));
 
     insns.push(TestUnit::new(
@@ -1685,10 +1682,9 @@ fn test_riscv64_binemit() {
             rd: writable_a0(),
             addr: a1(),
             src: a2(),
-            aq: false,
-            rl: false,
+            amo: AMO::SeqConsistent,
         },
-        "amoadd.w a0,a2,(a1)",
+        "amoadd.w.aqrl a0,a2,(a1)",
     ));
     insns.push(TestUnit::new(
         Inst::Atomic {
@@ -1696,8 +1692,7 @@ fn test_riscv64_binemit() {
             rd: writable_a0(),
             addr: a1(),
             src: a2(),
-            aq: false,
-            rl: false,
+            amo: AMO::Relax,
         },
         "amoxor.w a0,a2,(a1)",
     ));
@@ -1707,8 +1702,7 @@ fn test_riscv64_binemit() {
             rd: writable_a0(),
             addr: a1(),
             src: a2(),
-            aq: false,
-            rl: false,
+            amo: AMO::Relax,
         },
         "amoand.w a0,a2,(a1)",
     ));
@@ -1719,8 +1713,7 @@ fn test_riscv64_binemit() {
             rd: writable_a0(),
             addr: a1(),
             src: a2(),
-            aq: false,
-            rl: false,
+            amo: AMO::Relax,
         },
         "amoor.w a0,a2,(a1)",
     ));
@@ -1730,8 +1723,7 @@ fn test_riscv64_binemit() {
             rd: writable_a0(),
             addr: a1(),
             src: a2(),
-            aq: false,
-            rl: false,
+            amo: AMO::Relax,
         },
         "amomin.w a0,a2,(a1)",
     ));
@@ -1741,8 +1733,7 @@ fn test_riscv64_binemit() {
             rd: writable_a0(),
             addr: a1(),
             src: a2(),
-            aq: false,
-            rl: false,
+            amo: AMO::Relax,
         },
         "amomax.w a0,a2,(a1)",
     ));
@@ -1752,8 +1743,7 @@ fn test_riscv64_binemit() {
             rd: writable_a0(),
             addr: a1(),
             src: a2(),
-            aq: false,
-            rl: false,
+            amo: AMO::Relax,
         },
         "amominu.w a0,a2,(a1)",
     ));
@@ -1763,8 +1753,7 @@ fn test_riscv64_binemit() {
             rd: writable_a0(),
             addr: a1(),
             src: a2(),
-            aq: false,
-            rl: false,
+            amo: AMO::Relax,
         },
         "amomaxu.w a0,a2,(a1)",
     ));
@@ -1776,10 +1765,9 @@ fn test_riscv64_binemit() {
             rd: writable_a0(),
             addr: a1(),
             src: zero_reg(),
-            aq: true,
-            rl: false,
+            amo: AMO::Relax,
         },
-        "lr.d.aq a0,(a1)",
+        "lr.d a0,(a1)",
     ));
     insns.push(TestUnit::new(
         Inst::Atomic {
@@ -1787,10 +1775,9 @@ fn test_riscv64_binemit() {
             rd: writable_a0(),
             addr: a1(),
             src: a2(),
-            aq: false,
-            rl: true,
+            amo: AMO::Relax,
         },
-        "sc.d.rl a0,a2,(a1)",
+        "sc.d a0,a2,(a1)",
     ));
     insns.push(TestUnit::new(
         Inst::Atomic {
@@ -1798,8 +1785,7 @@ fn test_riscv64_binemit() {
             rd: writable_a0(),
             addr: a1(),
             src: a2(),
-            aq: false,
-            rl: false,
+            amo: AMO::Relax,
         },
         "amoswap.d a0,a2,(a1)",
     ));
@@ -1810,8 +1796,7 @@ fn test_riscv64_binemit() {
             rd: writable_a0(),
             addr: a1(),
             src: a2(),
-            aq: false,
-            rl: false,
+            amo: AMO::Relax,
         },
         "amoadd.d a0,a2,(a1)",
     ));
@@ -1821,8 +1806,7 @@ fn test_riscv64_binemit() {
             rd: writable_a0(),
             addr: a1(),
             src: a2(),
-            aq: false,
-            rl: false,
+            amo: AMO::Relax,
         },
         "amoxor.d a0,a2,(a1)",
     ));
@@ -1832,8 +1816,7 @@ fn test_riscv64_binemit() {
             rd: writable_a0(),
             addr: a1(),
             src: a2(),
-            aq: false,
-            rl: false,
+            amo: AMO::Relax,
         },
         "amoand.d a0,a2,(a1)",
     ));
@@ -1844,8 +1827,7 @@ fn test_riscv64_binemit() {
             rd: writable_a0(),
             addr: a1(),
             src: a2(),
-            aq: false,
-            rl: false,
+            amo: AMO::Relax,
         },
         "amoor.d a0,a2,(a1)",
     ));
@@ -1855,8 +1837,7 @@ fn test_riscv64_binemit() {
             rd: writable_a0(),
             addr: a1(),
             src: a2(),
-            aq: false,
-            rl: false,
+            amo: AMO::Relax,
         },
         "amomin.d a0,a2,(a1)",
     ));
@@ -1866,8 +1847,7 @@ fn test_riscv64_binemit() {
             rd: writable_a0(),
             addr: a1(),
             src: a2(),
-            aq: false,
-            rl: false,
+            amo: AMO::Relax,
         },
         "amomax.d a0,a2,(a1)",
     ));
@@ -1877,8 +1857,7 @@ fn test_riscv64_binemit() {
             rd: writable_a0(),
             addr: a1(),
             src: a2(),
-            aq: false,
-            rl: false,
+            amo: AMO::Relax,
         },
         "amominu.d a0,a2,(a1)",
     ));
@@ -1888,8 +1867,7 @@ fn test_riscv64_binemit() {
             rd: writable_a0(),
             addr: a1(),
             src: a2(),
-            aq: false,
-            rl: false,
+            amo: AMO::Relax,
         },
         "amomaxu.d a0,a2,(a1)",
     ));
@@ -2268,7 +2246,6 @@ fn riscv64_worst_case_size_instrcution_size() {
     });
 
     // brtable max size is base one how many "targets" it's has.
-
     // cas
     candidates.push(Inst::AtomicCas {
         dst: writable_a0(),
@@ -2371,6 +2348,14 @@ fn gcc_ass() {
         rd: writable_fa0(),
         rs1: fa0(),
         rs2: fa1(),
+    });
+
+    insts.push(Inst::Atomic {
+        op: AtomicOP::AmoaddD,
+        rd: writable_a0(),
+        addr: a0(),
+        src: a0(),
+        amo: AMO::SeqConsistent,
     });
     let (_, dump) = get_riscv_tool_chain_name();
     for i in insts {

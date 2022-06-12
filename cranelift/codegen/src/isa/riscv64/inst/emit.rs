@@ -1176,8 +1176,7 @@ impl MachInstEmit for Inst {
                 rd,
                 addr,
                 src,
-                aq,
-                rl,
+                amo,
             } => {
                 let addr = allocs.next(addr);
                 let src = allocs.next(src);
@@ -1187,13 +1186,14 @@ impl MachInstEmit for Inst {
                     | op.funct3() << 12
                     | reg_to_gpr_num(addr) << 15
                     | reg_to_gpr_num(src) << 20
-                    | op.funct7(aq, rl) << 25;
+                    | op.funct7(amo) << 25;
 
                 sink.put4(x);
             }
             &Inst::Fence => sink.put4(0x0ff0000f),
             &Inst::FenceI => sink.put4(0x0000100f),
             &Inst::Auipc { rd, imm } => {
+                let rd = allocs.next_writable(rd ) ; 
                 let x = enc_auipc(rd, imm);
                 sink.put4(x);
             }
@@ -1386,95 +1386,81 @@ impl MachInstEmit for Inst {
                 let v = allocs.next(v);
                 let t0 = allocs.next_writable(t0);
                 let dst = allocs.next_writable(dst);
-                // /*
-                //     # addr holds address of memory location
-                //     # e holds expected value
-                //     # v holds desired value
-                //     # dst holds return value
+                /*
+                    # addr holds address of memory location
+                    # e holds expected value
+                    # v holds desired value
+                    # dst holds return value
 
-                // cas:
-                //     lr.w t0, (addr) # Load original value.
-                //     bne t0, e, fail # Doesn’t match, so fail.
-                //     sc.w dst, v, (addr) # Try to update.
-                //     bne dst , v , cas  # retry
-                // fail:
-                //                            */
-                // let fail_label = sink.get_label();
-                // let cas_lebel = sink.get_label();
-                // sink.bind_label(cas_lebel);
-                // // lr.w t0, (addr)
-                // Inst::Atomic {
-                //     op: if ty.bits() == 64 {
-                //         AtomicOP::LrD
-                //     } else {
-                //         AtomicOP::LrW
-                //     },
-                //     rd: t0,
-                //     addr,
-                //     src: zero_reg(),
-                //     aq: true,
-                //     rl: false,
-                // }
-                // .emit(&[], sink, emit_info, state);
-                // // bne t0, e, fail
-                // Inst::CondBr {
-                //     taken: BranchTarget::Label(fail_label),
-                //     not_taken: BranchTarget::zero(),
-                //     kind: IntegerCompare {
-                //         kind: IntCC::NotEqual,
-                //         rs1: e,
-                //         rs2: t0.to_reg(),
-                //     },
-                // }
-                // .emit(&[], sink, emit_info, state);
-                // //  sc.w dst, v, (addr)
-                // Inst::Atomic {
-                //     op: if ty.bits() == 64 {
-                //         AtomicOP::ScD
-                //     } else {
-                //         AtomicOP::ScW
-                //     },
-                //     rd: dst,
-                //     addr,
-                //     src: v,
-                //     aq: false,
-                //     rl: true,
-                // }
-                // .emit(&[], sink, emit_info, state);
-                // // load to t0  from addr again.
-                // Inst::Atomic {
-                //     op: if ty.bits() == 64 {
-                //         AtomicOP::LrD
-                //     } else {
-                //         AtomicOP::LrW
-                //     },
-                //     rd: t0,
-                //     addr,
-                //     src: zero_reg(),
-                //     aq: true,
-                //     rl: false,
-                // }
-                // .emit(&[], sink, emit_info, state);
-                // // check is our value stored.
-                // Inst::CondBr {
-                //     taken: BranchTarget::Label(cas_lebel),
-                //     not_taken: BranchTarget::zero(),
-                //     kind: IntegerCompare {
-                //         kind: IntCC::NotEqual,
-                //         rs1: t0.to_reg(),
-                //         rs2: v,
-                //     },
-                // }
-                // .emit(&[], sink, emit_info, state);
-                // sink.bind_label(fail_label);
-
-                Inst::Store {
-                    to: AMode::RegOffset(addr, 0, I64),
-                    op: StoreOP::Sd,
-                    flags: MemFlags::new(),
-                    src: v,
+                cas:
+                    lr.w t0, (addr) # Load original value.
+                    bne t0, e, fail # Doesn’t match, so fail.
+                    sc.w dst, v, (addr) # Try to update.
+                    bne dst , v , cas  # retry
+                fail:
+                                           */
+                let fail_label = sink.get_label();
+                let cas_lebel = sink.get_label();
+                sink.bind_label(cas_lebel);
+                // lr.w t0, (addr)
+                let load_op = if ty.bits() == 64 {
+                    AtomicOP::LrD
+                } else {
+                    AtomicOP::LrW
+                };
+                Inst::Atomic {
+                    op: load_op,
+                    rd: t0,
+                    addr,
+                    src: zero_reg(),
+                    amo: AMO::SeqConsistent,
                 }
                 .emit(&[], sink, emit_info, state);
+                // bne t0, e, fail
+                Inst::CondBr {
+                    taken: BranchTarget::Label(fail_label),
+                    not_taken: BranchTarget::zero(),
+                    kind: IntegerCompare {
+                        kind: IntCC::NotEqual,
+                        rs1: e,
+                        rs2: t0.to_reg(),
+                    },
+                }
+                .emit(&[], sink, emit_info, state);
+                //  sc.w dst, v, (addr)
+                Inst::Atomic {
+                    op: if ty.bits() == 64 {
+                        AtomicOP::ScD
+                    } else {
+                        AtomicOP::ScW
+                    },
+                    rd: dst,
+                    addr,
+                    src: v,
+                    amo: AMO::SeqConsistent,
+                }
+                .emit(&[], sink, emit_info, state);
+                // load to t0  from addr again.
+                Inst::Atomic {
+                    op: load_op,
+                    rd: t0,
+                    addr,
+                    src: zero_reg(),
+                    amo: AMO::SeqConsistent,
+                }
+                .emit(&[], sink, emit_info, state);
+                // check is our value stored.
+                Inst::CondBr {
+                    taken: BranchTarget::Label(cas_lebel),
+                    not_taken: BranchTarget::zero(),
+                    kind: IntegerCompare {
+                        kind: IntCC::NotEqual,
+                        rs1: t0.to_reg(),
+                        rs2: v,
+                    },
+                }
+                .emit(&[], sink, emit_info, state);
+                sink.bind_label(fail_label);
             }
             &Inst::IntSelect {
                 op,

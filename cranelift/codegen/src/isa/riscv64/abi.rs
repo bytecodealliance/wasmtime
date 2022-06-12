@@ -645,16 +645,14 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         is_leaf: bool,
         stack_args_size: u32,
         num_clobbered_callee_saves: usize,
-
         fixed_frame_storage_size: u32,
     ) -> bool {
-        true
-        // !is_leaf
-        //     // The function arguments that are passed on the stack are addressed
-        //     // relative to the Frame Pointer.
-        //     || stack_args_size > 0
-        //     || num_clobbered_callee_saves > 0
-        //     || fixed_frame_storage_size > 0
+        !is_leaf
+            // The function arguments that are passed on the stack are addressed
+            // relative to the Frame Pointer.
+            || stack_args_size > 0
+            || num_clobbered_callee_saves > 0
+            || fixed_frame_storage_size > 0
     }
 }
 
