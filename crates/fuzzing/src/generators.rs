@@ -163,6 +163,11 @@ impl<'a> Arbitrary<'a> for Config {
             ..
         } = &config.wasmtime.strategy
         {
+            // If the pooling allocator is used, do not allow shared memory to
+            // be created. FIXME: see
+            // https://github.com/bytecodealliance/wasmtime/issues/4244.
+            config.module_config.config.threads_enabled = false;
+
             // Force the use of a normal memory config when using the pooling allocator and
             // limit the static memory maximum to be the same as the pooling allocator's memory
             // page limit.
@@ -639,7 +644,9 @@ impl<'a> Arbitrary<'a> for ModuleConfig {
         // these are all unconditionally turned off even with
         // `SwarmConfig::arbitrary`.
         config.memory64_enabled = u.arbitrary()?;
-        // FIXME: to allow threads and memory64 to coexist, see
+
+        // Allow the threads proposal if memory64 is not already enabled. FIXME:
+        // to allow threads and memory64 to coexist, see
         // https://github.com/bytecodealliance/wasmtime/issues/4267.
         config.threads_enabled = !config.memory64_enabled && u.arbitrary()?;
 
