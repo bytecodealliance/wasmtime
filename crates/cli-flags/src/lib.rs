@@ -260,20 +260,20 @@ impl CommonOptions {
             .cranelift_debug_verifier(self.enable_cranelift_debug_verifier)
             .debug_info(self.debug_info)
             .cranelift_opt_level(self.opt_level())
-            .profiler(pick_profiling_strategy(self.jitdump, self.vtune)?)?
+            .profiler(pick_profiling_strategy(self.jitdump, self.vtune)?)
             .cranelift_nan_canonicalization(self.enable_cranelift_nan_canonicalization);
 
         self.enable_wasm_features(&mut config);
 
         for name in &self.cranelift_enable {
             unsafe {
-                config.cranelift_flag_enable(name)?;
+                config.cranelift_flag_enable(name);
             }
         }
 
         for (name, value) in &self.cranelift_set {
             unsafe {
-                config.cranelift_flag_set(name, value)?;
+                config.cranelift_flag_set(name, value);
             }
         }
 

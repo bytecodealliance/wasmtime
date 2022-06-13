@@ -201,7 +201,7 @@ WASMTIME_CONFIG_PROP(void, wasm_memory64, bool)
  * If the compilation strategy selected could not be enabled then an error is
  * returned.
  */
-WASMTIME_CONFIG_PROP(wasmtime_error_t*, strategy, wasmtime_strategy_t)
+WASMTIME_CONFIG_PROP(void, strategy, wasmtime_strategy_t)
 
 /**
  * \brief Configures whether Cranelift's debug verifier is enabled.
@@ -238,7 +238,7 @@ WASMTIME_CONFIG_PROP(void, cranelift_opt_level, wasmtime_opt_level_t)
  *
  * This setting in #WASMTIME_PROFILING_STRATEGY_NONE by default.
  */
-WASMTIME_CONFIG_PROP(wasmtime_error_t*, profiler, wasmtime_profiling_strategy_t)
+WASMTIME_CONFIG_PROP(void, profiler, wasmtime_profiling_strategy_t)
 
 /**
  * \brief Configures the maximum size for memory to be considered "static"

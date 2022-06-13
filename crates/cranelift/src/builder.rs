@@ -9,7 +9,6 @@ use cranelift_codegen::settings::{self, Configurable, SetError};
 use std::fmt;
 use wasmtime_environ::{CompilerBuilder, Setting, SettingKind};
 
-#[derive(Clone)]
 struct Builder {
     flags: settings::Builder,
     isa_flags: isa::Builder,
@@ -53,10 +52,6 @@ pub fn builder() -> Box<dyn CompilerBuilder> {
 impl CompilerBuilder for Builder {
     fn triple(&self) -> &target_lexicon::Triple {
         self.isa_flags.triple()
-    }
-
-    fn clone(&self) -> Box<dyn CompilerBuilder> {
-        Box::new(Clone::clone(self))
     }
 
     fn target(&mut self, target: target_lexicon::Triple) -> Result<()> {

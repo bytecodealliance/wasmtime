@@ -493,7 +493,7 @@ impl Module {
         let module = Arc::new(CompiledModule::from_artifacts(
             mmap,
             info,
-            &*engine.config().profiler,
+            engine.profiler(),
             engine.unique_id_allocator(),
         )?);
 

@@ -127,7 +127,7 @@ where
     let mut code_memory = CodeMemory::new(obj);
     let code = code_memory.publish()?;
 
-    register_trampolines(engine.config().profiler.as_ref(), &code.obj);
+    register_trampolines(engine.profiler(), &code.obj);
 
     // Extract the host/wasm trampolines from the results of compilation since
     // we know their start/length.
