@@ -152,6 +152,6 @@ mod test {
     fn test_imm12() {
         let x = Imm12::zero();
         assert_eq!(0, x.as_u32());
-        Imm12::maybe_from_u64(0xffff_ffff).unwrap();
+        Imm12::maybe_from_u64(0xffff_ffff_ffff_ffff).unwrap();
     }
 }

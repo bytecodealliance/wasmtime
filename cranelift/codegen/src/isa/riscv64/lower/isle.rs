@@ -212,7 +212,7 @@ where
         }
     }
 
-    fn gen_default_rm(&mut self) -> OptionFloatRoundingMode {
+    fn gen_default_frm(&mut self) -> OptionFloatRoundingMode {
         None
     }
     fn lower_bit_reverse(&mut self, ty: Type, rs: Reg) -> Reg {
@@ -1001,7 +1001,7 @@ where
                 .into_iter()
                 .for_each(|ref i| self.emit(i));
         } else {
-            MInst::load_fp_constant64(tmp, f64_to_u64(1.0), |ty| self.temp_writable_reg(ty))
+            MInst::load_fp_constant64(tmp, f64_to_u64(1.0))
                 .into_iter()
                 .for_each(|ref i| self.emit(i));
         }

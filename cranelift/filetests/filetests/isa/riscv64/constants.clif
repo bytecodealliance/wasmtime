@@ -39,8 +39,10 @@ block0:
 }
 
 ; block0:
-;   lui a0,15
-;   addi a0,a0,4095
+;   auipc a0,0
+;   ld a0,12(a0)
+;   j 12
+;   .u64 0xffff
 ;   ret
 
 function %f() -> i64 {
@@ -50,12 +52,10 @@ block0:
 }
 
 ; block0:
-;   ori a0,zero,0
-;   lui t6,1048560
-;   addi t6,t6,0
-;   slli a0,a0,32
-;   srli t6,t6,32
-;   or a0,a0,t6
+;   auipc a0,0
+;   ld a0,12(a0)
+;   j 12
+;   .u64 0xffff0000
 ;   ret
 
 function %f() -> i64 {
@@ -65,12 +65,10 @@ block0:
 }
 
 ; block0:
-;   lui a0,15
-;   addi a0,a0,4095
-;   ori t6,zero,0
-;   slli a0,a0,32
-;   srli t6,t6,32
-;   or a0,a0,t6
+;   auipc a0,0
+;   ld a0,12(a0)
+;   j 12
+;   .u64 0xffff00000000
 ;   ret
 
 function %f() -> i64 {
@@ -80,12 +78,10 @@ block0:
 }
 
 ; block0:
-;   lui a0,1048560
-;   addi a0,a0,0
-;   ori t6,zero,0
-;   slli a0,a0,32
-;   srli t6,t6,32
-;   or a0,a0,t6
+;   auipc a0,0
+;   ld a0,12(a0)
+;   j 12
+;   .u64 0xffff000000000000
 ;   ret
 
 function %f() -> i64 {
@@ -105,8 +101,10 @@ block0:
 }
 
 ; block0:
-;   lui a0,1048560
-;   addi a0,a0,0
+;   auipc a0,0
+;   ld a0,12(a0)
+;   j 12
+;   .u64 0xffffffffffff0000
 ;   ret
 
 function %f() -> i64 {
@@ -116,13 +114,10 @@ block0:
 }
 
 ; block0:
-;   lui a0,1048575
-;   addi a0,a0,4095
-;   lui t6,15
-;   addi t6,t6,4095
-;   slli a0,a0,32
-;   srli t6,t6,32
-;   or a0,a0,t6
+;   auipc a0,0
+;   ld a0,12(a0)
+;   j 12
+;   .u64 0xffffffff0000ffff
 ;   ret
 
 function %f() -> i64 {
@@ -132,13 +127,10 @@ block0:
 }
 
 ; block0:
-;   lui a0,1048560
-;   addi a0,a0,0
-;   lui t6,1048575
-;   addi t6,t6,4095
-;   slli a0,a0,32
-;   srli t6,t6,32
-;   or a0,a0,t6
+;   auipc a0,0
+;   ld a0,12(a0)
+;   j 12
+;   .u64 0xffff0000ffffffff
 ;   ret
 
 function %f() -> i64 {
@@ -148,13 +140,10 @@ block0:
 }
 
 ; block0:
-;   lui a0,15
-;   addi a0,a0,4095
-;   lui t6,1048575
-;   addi t6,t6,4095
-;   slli a0,a0,32
-;   srli t6,t6,32
-;   or a0,a0,t6
+;   auipc a0,0
+;   ld a0,12(a0)
+;   j 12
+;   .u64 0xffffffffffff
 ;   ret
 
 function %f() -> i64 {
@@ -164,13 +153,10 @@ block0:
 }
 
 ; block0:
-;   lui a0,996543
-;   addi a0,a0,163
-;   lui t6,74016
-;   addi t6,t6,58
-;   slli a0,a0,32
-;   srli t6,t6,32
-;   or a0,a0,t6
+;   auipc a0,0
+;   ld a0,12(a0)
+;   j 12
+;   .u64 0xf34bf0a31212003a
 ;   ret
 
 function %f() -> i64 {
@@ -180,13 +166,10 @@ block0:
 }
 
 ; block0:
-;   lui a0,77456
-;   addi a0,a0,0
-;   lui t6,126784
-;   addi t6,t6,0
-;   slli a0,a0,32
-;   srli t6,t6,32
-;   or a0,a0,t6
+;   auipc a0,0
+;   ld a0,12(a0)
+;   j 12
+;   .u64 0x12e900001ef40000
 ;   ret
 
 function %f() -> i64 {
@@ -196,13 +179,10 @@ block0:
 }
 
 ; block0:
-;   lui a0,77471
-;   addi a0,a0,4095
-;   lui t6,126799
-;   addi t6,t6,4095
-;   slli a0,a0,32
-;   srli t6,t6,32
-;   or a0,a0,t6
+;   auipc a0,0
+;   ld a0,12(a0)
+;   j 12
+;   .u64 0x12e9ffff1ef4ffff
 ;   ret
 
 function %f() -> i32 {
@@ -222,12 +202,10 @@ block0:
 }
 
 ; block0:
-;   ori a0,zero,0
-;   lui t6,1048575
-;   addi t6,t6,4087
-;   slli a0,a0,32
-;   srli t6,t6,32
-;   or a0,a0,t6
+;   auipc a0,0
+;   ld a0,12(a0)
+;   j 12
+;   .u64 0xfffffff7
 ;   ret
 
 function %f() -> i64 {
@@ -237,12 +215,10 @@ block0:
 }
 
 ; block0:
-;   ori a0,zero,0
-;   lui t6,1048575
-;   addi t6,t6,4087
-;   slli a0,a0,32
-;   srli t6,t6,32
-;   or a0,a0,t6
+;   auipc a0,0
+;   ld a0,12(a0)
+;   j 12
+;   .u64 0xfffffff7
 ;   ret
 
 function %f() -> i64 {
@@ -262,13 +238,11 @@ block0:
 }
 
 ; block0:
-;   lui t2,261888
-;   addi t2,t2,0
-;   ori t6,zero,0
-;   slli t2,t2,32
-;   srli t6,t6,32
-;   or t2,t2,t6
-;   fmv.d.x fa0,t2
+;   auipc t6,0
+;   ld t6,12(t6)
+;   j 12
+;   .u64 0x3ff0000000000000
+;   fmv.d.x fa0,t6
 ;   ret
 
 function %f() -> f32 {
@@ -278,8 +252,10 @@ block0:
 }
 
 ; block0:
-;   lui t6,264704
-;   addi t6,t6,0
+;   auipc t6,0
+;   lwu t6,12(t6)
+;   j 8
+;   .u32 0x40a00000
 ;   fmv.w.x fa0,t6
 ;   ret
 
@@ -290,13 +266,11 @@ block0:
 }
 
 ; block0:
-;   lui t2,263312
-;   addi t2,t2,0
-;   ori t6,zero,0
-;   slli t2,t2,32
-;   srli t6,t6,32
-;   or t2,t2,t6
-;   fmv.d.x fa0,t2
+;   auipc t6,0
+;   ld t6,12(t6)
+;   j 12
+;   .u64 0x4049000000000000
+;   fmv.d.x fa0,t6
 ;   ret
 
 function %f() -> f32 {
@@ -306,8 +280,10 @@ block0:
 }
 
 ; block0:
-;   lui t6,271488
-;   addi t6,t6,0
+;   auipc t6,0
+;   lwu t6,12(t6)
+;   j 8
+;   .u32 0x42480000
 ;   fmv.w.x fa0,t6
 ;   ret
 
@@ -318,8 +294,8 @@ block0:
 }
 
 ; block0:
-;   ori t2,zero,0
-;   fmv.d.x fa0,t2
+;   ori t6,zero,0
+;   fmv.d.x fa0,t6
 ;   ret
 
 function %f() -> f32 {
@@ -340,13 +316,11 @@ block0:
 }
 
 ; block0:
-;   lui t2,787200
-;   addi t2,t2,0
-;   ori t6,zero,0
-;   slli t2,t2,32
-;   srli t6,t6,32
-;   or t2,t2,t6
-;   fmv.d.x fa0,t2
+;   auipc t6,0
+;   ld t6,12(t6)
+;   j 12
+;   .u64 0xc030000000000000
+;   fmv.d.x fa0,t6
 ;   ret
 
 function %f() -> f32 {
@@ -356,8 +330,10 @@ block0:
 }
 
 ; block0:
-;   lui t6,792576
-;   addi t6,t6,0
+;   auipc t6,0
+;   lwu t6,12(t6)
+;   j 8
+;   .u32 0xc1800000
 ;   fmv.w.x fa0,t6
 ;   ret
 

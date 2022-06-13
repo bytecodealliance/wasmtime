@@ -113,8 +113,10 @@ block0(v0: i64):
 ;   sd fp,0(sp)
 ;   mov fp,sp
 ;   trap_if_ult stk_ovf sp,a0;;ty=i64
-;   lui t6,97
-;   addi t6,t6,2688
+;   auipc t6,0
+;   lwu t6,12(t6)
+;   j 8
+;   .u32 0x61a80
 ;   add t6,t6,a0
 ;   trap_if_ult stk_ovf sp,t6;;ty=i64
 ;   addi sp,-400000
@@ -165,8 +167,10 @@ block0(v0: i64):
 ;   ld t6,0(a0)
 ;   ld t6,4(t6)
 ;   trap_if_ult stk_ovf sp,t6;;ty=i64
-;   lui t6,97
-;   addi t6,t6,2688
+;   auipc t6,0
+;   lwu t6,12(t6)
+;   j 8
+;   .u32 0x61a80
 ;   add t6,t6,t6
 ;   trap_if_ult stk_ovf sp,t6;;ty=i64
 ;   addi sp,-400000

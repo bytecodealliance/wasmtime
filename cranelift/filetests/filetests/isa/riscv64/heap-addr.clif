@@ -19,9 +19,9 @@ block0(v0: i64, v1: i32):
 ;   ugt a5,t3,t4;;ty=i64
 ;   beq a5,zero,taken(label1),not_taken(label2)
 ; block1:
-;   add t1,a0,t3
-;   ori t2,zero,0
-;   selectif_spectre_guard a0,t2,t1;;t3 ugt t4 ty=i64
+;   add t0,a0,t3
+;   ori t1,zero,0
+;   selectif_spectre_guard a0,t1,t0;;t3 ugt t4 ty=i64
 ;   ret
 ; block2:
 ;   udf;;trap_code=heap_oob
@@ -37,16 +37,20 @@ block0(v0: i64, v1: i32):
 
 ; block0:
 ;   uext.w t3,a1
-;   lui t4,16
-;   addi t4,t4,0
-;   ugt a4,t3,t4;;ty=i64
-;   beq a4,zero,taken(label1),not_taken(label2)
+;   auipc t4,0
+;   ld t4,12(t4)
+;   j 12
+;   .u64 0x10000
+;   ugt a6,t3,t4;;ty=i64
+;   beq a6,zero,taken(label1),not_taken(label2)
 ; block1:
-;   add t1,a0,t3
-;   ori t0,zero,0
-;   lui t2,16
-;   addi t2,t2,0
-;   selectif_spectre_guard a0,t0,t1;;t3 ugt t2 ty=i64
+;   add t2,a0,t3
+;   ori t1,zero,0
+;   auipc a0,0
+;   ld a0,12(a0)
+;   j 12
+;   .u64 0x10000
+;   selectif_spectre_guard a0,t1,t2;;t3 ugt a0 ty=i64
 ;   ret
 ; block2:
 ;   udf;;trap_code=heap_oob

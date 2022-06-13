@@ -2216,7 +2216,7 @@ fn riscv64_worst_case_size_instrcution_size() {
         from: AMode::SPOffset(4096 * 100, I64),
     });
     /*
-        call may need load extern names.
+       todo:: current now this will panic.
     */
     // candidates.push(Inst::Call {
     //     info: Box::new(CallInfo {

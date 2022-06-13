@@ -1,4 +1,4 @@
-//! ARM 64-bit Instruction Set Architecture.
+//! risc-v 64-bit Instruction Set Architecture.
 
 use crate::ir::condcodes::IntCC;
 use crate::ir::Function;
@@ -93,7 +93,7 @@ impl TargetIsa for Riscv64Backend {
     }
 
     fn name(&self) -> &'static str {
-        "riscv64"
+        "riscv64gc"
     }
 
     fn triple(&self) -> &Triple {
@@ -196,83 +196,17 @@ mod test {
             shared_flags,
             isa_flags,
         );
-        let buffer = backend.compile_function(&mut func, false).unwrap().buffer;
-        let code = buffer.data();
-        // write_to_a_file("/home/yuyang/tmp/code.bin", code);
+        let buffer = backend.compile_function(&mut func, true).unwrap();
+        // println!("xxxx : {}", buffer.disasm.unwrap());
+        let code = buffer.buffer.data();
+        write_to_a_file("/home/yuyang/tmp/code.bin", code);
         //0:   000015b7                lui     a1,0x1
         //4:   23458593                addi    a1,a1,564 # 0x1234
         //8:   00b5053b                addw    a0,a0,a1
         //c:   00008067                ret
         let golden = vec![
-            183, 21, 0, 0, 147, 133, 69, 35, 59, 5, 181, 0, 103, 128, 0, 0,
-        ];
-
-        assert_eq!(code, &golden[..]);
-    }
-
-    #[test]
-    fn test_branch_lowering() {
-        let name = ExternalName::testcase("test0");
-        let mut sig = Signature::new(CallConv::SystemV);
-        sig.params.push(AbiParam::new(I32));
-        sig.returns.push(AbiParam::new(I32));
-        let mut func = Function::with_name_signature(name, sig);
-
-        let bb0 = func.dfg.make_block();
-        let arg0 = func.dfg.append_block_param(bb0, I32);
-        let bb1 = func.dfg.make_block();
-        let bb2 = func.dfg.make_block();
-        let bb3 = func.dfg.make_block();
-
-        let mut pos = FuncCursor::new(&mut func);
-        pos.insert_block(bb0);
-        let v0 = pos.ins().iconst(I32, 0x1234);
-        let v1 = pos.ins().iadd(arg0, v0);
-        pos.ins().brnz(v1, bb1, &[]);
-        pos.ins().jump(bb2, &[]);
-        pos.insert_block(bb1);
-        pos.ins().brnz(v1, bb2, &[]);
-        pos.ins().jump(bb3, &[]);
-        pos.insert_block(bb2);
-        let v2 = pos.ins().iadd(v1, v0);
-        pos.ins().brnz(v2, bb2, &[]);
-        pos.ins().jump(bb1, &[]);
-        pos.insert_block(bb3);
-        let v3 = pos.ins().isub(v1, v0);
-        pos.ins().return_(&[v3]);
-
-        let mut shared_flags_builder = settings::builder();
-        shared_flags_builder.set("opt_level", "none").unwrap();
-        let shared_flags = settings::Flags::new(shared_flags_builder);
-        let isa_flags = riscv_settings::Flags::new(&shared_flags, riscv_settings::builder());
-        let backend = Riscv64Backend::new_with_flags(
-            Triple::from_str("riscv64gc").unwrap(),
-            shared_flags,
-            isa_flags,
-        );
-        let result = backend
-            .compile_function(&mut func, /* want_disasm = */ false)
-            .unwrap();
-        let code = result.buffer.data();
-        // write_to_a_file("/home/yuyang/tmp/code.bin", code);
-        // 0:   00001737                lui     a4,0x1
-        // 4:   23470713                addi    a4,a4,564 # 0x1234
-        // 8:   00e508bb                addw    a7,a0,a4
-        // c:   00089a63                bnez    a7,0x20
-        //10:   00001e37                lui     t3,0x1  //bb2
-        //14:   234e0e13                addi    t3,t3,564 # 0x1234
-        //18:   01c8833b                addw    t1,a7,t3
-        //1c:   fe031ae3                bnez    t1,0x10
-        //20:   fe0898e3                bnez    a7,0x10  // bb1
-        //24:   000015b7                lui     a1,0x1
-        //28:   23458593                addi    a1,a1,564 # 0x1234
-        //2c:   40b8853b                subw    a0,a7,a1
-        //30:   00008067                ret
-
-        let golden = vec![
-            55, 23, 0, 0, 19, 7, 71, 35, 187, 8, 229, 0, 99, 154, 8, 0, 55, 30, 0, 0, 19, 14, 78,
-            35, 59, 131, 200, 1, 227, 26, 3, 254, 227, 152, 8, 254, 183, 21, 0, 0, 147, 133, 69,
-            35, 59, 133, 184, 64, 103, 128, 0, 0,
+            151, 5, 0, 0, 131, 229, 197, 0, 111, 0, 128, 0, 52, 18, 0, 0, 59, 5, 181, 0, 103, 128,
+            0, 0,
         ];
 
         assert_eq!(code, &golden[..]);

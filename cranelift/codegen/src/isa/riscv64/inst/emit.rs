@@ -2,10 +2,8 @@
 
 use crate::binemit::StackMap;
 use crate::isa::riscv64::inst::*;
-
 use crate::isa::riscv64::inst::{zero_reg, AluOPRRR};
 use crate::machinst::{AllocationConsumer, Reg, Writable};
-
 use regalloc2::Allocation;
 
 pub struct EmitInfo(settings::Flags);
@@ -42,7 +40,7 @@ impl LoadConstant {
         }
     }
 
-    pub(crate) fn generate(self, rd: Writable<Reg>) -> SmallInstVec<Inst> {
+    pub(crate) fn load_constant(self, rd: Writable<Reg>) -> SmallInstVec<Inst> {
         // get current pc.
         let mut insts = SmallInstVec::new();
         insts.push(Inst::Auipc {
@@ -56,12 +54,23 @@ impl LoadConstant {
             flags: MemFlags::new(),
             from: AMode::RegOffset(rd.to_reg(), 12, self.load_ty()),
         });
-        // jump over.
         let data = self.to_le_bytes();
+        // jump over.
         insts.push(Inst::Jal {
-            dest: BranchTarget::ResolvedOffset((4 + data.len()) as i32),
+            dest: BranchTarget::ResolvedOffset(Inst::INSTRUCTION_SIZE + data.len() as i32),
         });
         insts.push(Inst::RawData { data });
+        insts
+    }
+
+    pub(crate) fn load_constant_and_add(self, rd: Writable<Reg>, rs: Reg) -> SmallInstVec<Inst> {
+        let mut insts = self.load_constant(rd);
+        insts.push(Inst::AluRRR {
+            alu_op: AluOPRRR::Add,
+            rd: rd,
+            rs1: rd.to_reg(),
+            rs2: rs,
+        });
         insts
     }
 }
@@ -167,8 +176,9 @@ impl Inst {
         ty: Type,
         tmp: Writable<Reg>,
     ) -> SmallInstVec<Inst> {
+        assert!(tmp.to_reg().class() == RegClass::Int);
         let mut insts = SmallInstVec::new();
-        let cc_bit = FloatCCBit::floatcc_2_mask_bits(cc);
+        let mut cc_bit = FloatCCBit::floatcc_2_mask_bits(cc);
         let eq_op = if ty == F32 {
             FpuOPRRR::FeqS
         } else {
@@ -179,8 +189,55 @@ impl Inst {
         } else {
             FpuOPRRR::FltD
         };
+        let le_op = if ty == F32 {
+            FpuOPRRR::FleS
+        } else {
+            FpuOPRRR::FleD
+        };
+
+        // >=
+
+        if cc_bit.has_and_clear(FloatCCBit::GT | FloatCCBit::EQ) {
+            insts.push(Inst::FpuRRR {
+                frm: None,
+                alu_op: le_op,
+                rd: tmp,
+                rs1: y, /*  x and y order reversed. */
+                rs2: x,
+            });
+            insts.push(Inst::CondBr {
+                taken: taken,
+                not_taken: BranchTarget::zero(),
+                kind: IntegerCompare {
+                    kind: IntCC::NotEqual,
+                    rs1: tmp.to_reg(),
+                    rs2: zero_reg(),
+                },
+            });
+        }
+
+        // <=
+        if cc_bit.has_and_clear(FloatCCBit::LT | FloatCCBit::EQ) {
+            insts.push(Inst::FpuRRR {
+                frm: None,
+                alu_op: le_op,
+                rd: tmp,
+                rs1: x,
+                rs2: y,
+            });
+            insts.push(Inst::CondBr {
+                taken: taken,
+                not_taken: BranchTarget::zero(),
+                kind: IntegerCompare {
+                    kind: IntCC::NotEqual,
+                    rs1: tmp.to_reg(),
+                    rs2: zero_reg(),
+                },
+            });
+        }
+
         // if eq
-        if cc_bit.constains(FloatCCBit::EQ) {
+        if cc_bit.has(FloatCCBit::EQ) {
             insts.push(Inst::FpuRRR {
                 frm: None,
                 alu_op: eq_op,
@@ -199,7 +256,7 @@ impl Inst {
             });
         }
         // if <
-        if cc_bit.constains(FloatCCBit::LT) {
+        if cc_bit.has(FloatCCBit::LT) {
             insts.push(Inst::FpuRRR {
                 frm: None,
                 alu_op: lt_op,
@@ -218,7 +275,7 @@ impl Inst {
             });
         }
         // if gt
-        if cc_bit.constains(FloatCCBit::GT) {
+        if cc_bit.has(FloatCCBit::GT) {
             insts.push(Inst::FpuRRR {
                 frm: None,
                 alu_op: lt_op,
@@ -237,7 +294,7 @@ impl Inst {
             });
         }
         // if unorder
-        if cc_bit.constains(FloatCCBit::UN) {
+        if cc_bit.has(FloatCCBit::UN) {
             insts.extend(Inst::lower_float_unordered(tmp, ty, x, y, taken, not_taken));
         } else {
             //make sure we goto the not_taken.
@@ -266,7 +323,7 @@ impl Inst {
             insts.push(inst);
             return insts;
         }
-
+        // compare i128
         let low = |cc: IntCC| -> IntegerCompare {
             IntegerCompare {
                 rs1: a.regs()[0],
@@ -281,27 +338,6 @@ impl Inst {
                 kind: cc,
             }
         };
-
-        fn remove_eq(cc: IntCC) -> IntCC {
-            match cc {
-                IntCC::SignedGreaterThanOrEqual => IntCC::SignedGreaterThan,
-                IntCC::SignedLessThanOrEqual => IntCC::SignedLessThan,
-                IntCC::UnsignedGreaterThanOrEqual => IntCC::UnsignedGreaterThan,
-                IntCC::UnsignedLessThanOrEqual => IntCC::UnsignedLessThan,
-                _ => cc,
-            }
-        }
-
-        fn remove_signed(cc: IntCC) -> IntCC {
-            let x = match cc {
-                IntCC::SignedLessThan => IntCC::UnsignedLessThan,
-                IntCC::SignedGreaterThanOrEqual => IntCC::UnsignedGreaterThanOrEqual,
-                IntCC::SignedGreaterThan => IntCC::UnsignedGreaterThan,
-                IntCC::SignedLessThanOrEqual => IntCC::UnsignedLessThanOrEqual,
-                _ => cc,
-            };
-            x
-        }
         match cc {
             IntCC::Equal => {
                 /*
@@ -353,7 +389,7 @@ impl Inst {
                 insts.push(Inst::CondBr {
                     taken,
                     not_taken: BranchTarget::zero(),
-                    kind: high(remove_eq(cc)),
+                    kind: high(cc.without_equal()),
                 });
                 //
                 insts.push(Inst::CondBr {
@@ -364,7 +400,7 @@ impl Inst {
                 insts.push(Inst::CondBr {
                     taken,
                     not_taken,
-                    kind: low(remove_signed(cc)),
+                    kind: low(cc.unsigned()),
                 });
             }
             IntCC::Overflow | IntCC::NotOverflow => unreachable!(),
@@ -432,85 +468,6 @@ impl Inst {
                 rs1: tmp.to_reg(),
                 rs2: zero_reg(),
             },
-        });
-        insts
-    }
-
-    /*
-        1: alloc registers
-        2: push into the stack
-        3: do something with these registers
-        4: restore the registers
-    */
-    pub(crate) fn do_something_with_registers(
-        num: usize,
-        mut f: impl std::ops::FnMut(&std::vec::Vec<Writable<Reg>>, &mut SmallInstVec<Inst>),
-    ) -> SmallInstVec<Inst> {
-        let mut insts = SmallInstVec::new();
-        let registers = Self::alloc_registers(num);
-        insts.extend(Self::push_registers(&registers));
-        f(&registers, &mut insts);
-        insts.extend(Self::pop_registers(&registers));
-        insts
-    }
-
-    /*
-        alloc some registers for load large constant, or something else.
-    */
-    pub(crate) fn alloc_registers(amount: usize) -> Vec<Writable<Reg>> {
-        let mut v = vec![];
-        let available = bunch_of_normal_registers();
-        debug_assert!(amount <= available.len());
-        for r in available {
-            v.push(r);
-            if v.len() == amount {
-                return v;
-            }
-        }
-        unreachable!("no enough registers");
-    }
-
-    // store a list of regisrer
-    pub(crate) fn push_registers(registers: &Vec<Writable<Reg>>) -> SmallInstVec<Inst> {
-        let mut insts = smallvec![];
-        // ajust sp ; alloc space
-        insts.push(Inst::AjustSp {
-            amount: -(WORD_SIZE as i64) * (registers.len() as i64),
-        });
-        //
-        let mut cur_offset = 0;
-        for r in registers {
-            insts.push(Inst::Store {
-                // unwrap can check this must be exceed imm12
-                to: AMode::SPOffset(
-                    Imm12::maybe_from_u64(cur_offset).unwrap().as_u32() as i64,
-                    I64,
-                ),
-                op: StoreOP::Sd,
-                src: r.to_reg(),
-                flags: MemFlags::new(),
-            });
-            cur_offset += WORD_SIZE as u64
-        }
-        insts
-    }
-
-    // restore a list of register
-    pub(crate) fn pop_registers(registers: &Vec<Writable<Reg>>) -> SmallInstVec<Inst> {
-        let mut insts = smallvec![];
-        let mut cur_offset = 0;
-        for r in registers {
-            insts.push(Inst::Load {
-                from: AMode::SPOffset(Imm12::maybe_from_u64(cur_offset).unwrap().into(), I64),
-                op: LoadOP::Ld,
-                rd: r.clone(),
-                flags: MemFlags::new(),
-            });
-            cur_offset += WORD_SIZE as u64
-        }
-        // restore sp
-        insts.push(Inst::AjustSp {
-            amount: cur_offset as i64,
         });
         insts
     }
@@ -680,27 +637,18 @@ impl MachInstEmit for Inst {
                         | (imm12.as_u32()) << 20;
                     sink.put4(x);
                 } else {
-                    Inst::do_something_with_registers(1, |registers, insts| {
-                        insts.extend(Inst::load_constant_u64(registers[0], offset as u64));
-                        insts.push(Inst::AluRRR {
-                            alu_op: AluOPRRR::Add,
-                            rd: registers[0],
-                            rs1: registers[0].to_reg(),
-                            rs2: base,
-                        });
-                        insts.push(Inst::Load {
-                            op,
-                            from: AMode::RegOffset(
-                                registers[0].to_reg(),
-                                Imm12::zero().into(),
-                                I64,
-                            ),
-                            rd,
-                            flags,
-                        });
-                    })
-                    .into_iter()
-                    .for_each(|inst| inst.emit(&[], sink, emit_info, state));
+                    let tmp = writable_spilltmp_reg();
+                    let mut insts =
+                        LoadConstant::U64(offset as u64).load_constant_and_add(tmp, base);
+                    insts.push(Inst::Load {
+                        op,
+                        from: AMode::RegOffset(tmp.to_reg(), 0, I64),
+                        rd,
+                        flags,
+                    });
+                    insts
+                        .into_iter()
+                        .for_each(|inst| inst.emit(&[], sink, emit_info, state));
                 }
             }
             &Inst::Store { op, src, flags, to } => {
@@ -718,29 +666,18 @@ impl MachInstEmit for Inst {
                         | (imm12.as_u32() >> 5) << 25;
                     sink.put4(x);
                 } else {
-                    Inst::do_something_with_registers(1, |registers, insts| {
-                        insts.extend(Inst::load_constant_u64(registers[0], offset as u64));
-                        // registers[0] = base + offset
-                        insts.push(Inst::AluRRR {
-                            alu_op: AluOPRRR::Add,
-                            rd: registers[0],
-                            rs1: registers[0].to_reg(),
-                            rs2: base,
-                        });
-                        // st registers[0] , src
-                        insts.push(Inst::Store {
-                            op,
-                            to: AMode::RegOffset(
-                                registers[0].to_reg(),
-                                Imm12::zero().as_i16() as i64,
-                                I64,
-                            ),
-                            src,
-                            flags,
-                        });
-                    })
-                    .into_iter()
-                    .for_each(|inst| inst.emit(&[], sink, emit_info, state));
+                    let tmp = writable_spilltmp_reg();
+                    let mut insts =
+                        LoadConstant::U64(offset as u64).load_constant_and_add(tmp, base);
+                    insts.push(Inst::Store {
+                        op,
+                        to: AMode::RegOffset(tmp.to_reg(), 0, I64),
+                        flags,
+                        src,
+                    });
+                    insts
+                        .into_iter()
+                        .for_each(|inst| inst.emit(&[], sink, emit_info, state));
                 }
             }
             &Inst::EpiloguePlaceholder => {
@@ -753,7 +690,7 @@ impl MachInstEmit for Inst {
                 match op {
                     ReferenceCheckOP::IsNull => {
                         insts.push(Inst::CondBr {
-                            taken: BranchTarget::ResolvedOffset(Inst::instruction_size() * 3),
+                            taken: BranchTarget::ResolvedOffset(Inst::INSTRUCTION_SIZE * 3),
                             not_taken: BranchTarget::zero(),
                             kind: IntegerCompare {
                                 kind: IntCC::Equal,
@@ -764,7 +701,7 @@ impl MachInstEmit for Inst {
                         // here is false
                         insts.push(Inst::load_constant_imm12(rd, Imm12::form_bool(false)));
                         insts.push(Inst::Jal {
-                            dest: BranchTarget::ResolvedOffset(Inst::instruction_size() * 2),
+                            dest: BranchTarget::ResolvedOffset(Inst::INSTRUCTION_SIZE * 2),
                         });
                         // here is true
                         insts.push(Inst::load_constant_imm12(rd, Imm12::form_bool(true)));
@@ -776,7 +713,7 @@ impl MachInstEmit for Inst {
                             null is a valid reference??????
                         */
                         insts.push(Inst::CondBr {
-                            taken: BranchTarget::ResolvedOffset(Inst::instruction_size() * 3),
+                            taken: BranchTarget::ResolvedOffset(Inst::INSTRUCTION_SIZE * 3),
                             not_taken: BranchTarget::zero(),
                             kind: IntegerCompare {
                                 kind: IntCC::Equal,
@@ -787,7 +724,7 @@ impl MachInstEmit for Inst {
                         // here is false
                         insts.push(Inst::load_constant_imm12(rd, Imm12::form_bool(false)));
                         insts.push(Inst::Jal {
-                            dest: BranchTarget::ResolvedOffset(Inst::instruction_size() * 2),
+                            dest: BranchTarget::ResolvedOffset(Inst::INSTRUCTION_SIZE * 2),
                         });
                         // here is true
                         insts.push(Inst::load_constant_imm12(rd, Imm12::form_bool(true)));
@@ -818,7 +755,7 @@ impl MachInstEmit for Inst {
                     match from_bits {
                         1 => {
                             insts.push(Inst::CondBr {
-                                taken: BranchTarget::offset(Inst::instruction_size() * 3),
+                                taken: BranchTarget::offset(Inst::INSTRUCTION_SIZE * 3),
                                 not_taken: BranchTarget::zero(),
                                 kind: IntegerCompare {
                                     rs1: rn,
@@ -828,7 +765,7 @@ impl MachInstEmit for Inst {
                             });
                             insts.push(Inst::load_constant_imm12(rd, Imm12::from_bits(0)));
                             insts.push(Inst::Jal {
-                                dest: BranchTarget::offset(Inst::instruction_size() * 2),
+                                dest: BranchTarget::offset(Inst::INSTRUCTION_SIZE * 2),
                             });
                             insts.push(Inst::load_constant_imm12(rd, Imm12::from_bits(-1)));
                         }
@@ -932,19 +869,17 @@ impl MachInstEmit for Inst {
                     }
                     .emit(&[], sink, emit_info, state);
                 } else {
-                    Inst::do_something_with_registers(1, |registers, insts| {
-                        insts.extend(Inst::load_constant_u64(registers[0], amount as u64));
-                        insts.push(Inst::AluRRR {
-                            alu_op: AluOPRRR::Add,
-                            rd: writable_stack_reg(),
-                            rs1: stack_reg(),
-                            rs2: registers[0].to_reg(),
-                        });
-                    })
-                    .into_iter()
-                    .for_each(|inst| {
-                        inst.emit(&[], sink, emit_info, state);
+                    let tmp = writable_spilltmp_reg();
+                    let mut insts = LoadConstant::U64(amount as u64).load_constant(tmp);
+                    insts.push(Inst::AluRRR {
+                        alu_op: AluOPRRR::Add,
+                        rd: writable_stack_reg(),
+                        rs1: tmp.to_reg(),
+                        rs2: stack_reg(),
                     });
+                    insts
+                        .into_iter()
+                        .for_each(|i| i.emit(&[], sink, emit_info, state));
                 }
             }
 
@@ -1073,6 +1008,7 @@ impl MachInstEmit for Inst {
                     }
                 }
             }
+
             &Inst::BrTable {
                 index,
                 tmp1,
@@ -1131,7 +1067,6 @@ impl MachInstEmit for Inst {
                     // finally goto jumps
                     insts.push(x[1].clone());
                 }
-
                 /*
                     here is all the jumps.
                 */
@@ -1193,7 +1128,7 @@ impl MachInstEmit for Inst {
             &Inst::Fence => sink.put4(0x0ff0000f),
             &Inst::FenceI => sink.put4(0x0000100f),
             &Inst::Auipc { rd, imm } => {
-                let rd = allocs.next_writable(rd ) ; 
+                let rd = allocs.next_writable(rd);
                 let x = enc_auipc(rd, imm);
                 sink.put4(x);
             }
@@ -1212,25 +1147,15 @@ impl MachInstEmit for Inst {
                     }
                     .emit(&[], sink, emit_info, state);
                 } else {
-                    // need more register
-                    Inst::do_something_with_registers(1, |registers, insts| {
-                        insts.extend(Inst::load_constant_u64(registers[0], offset as u64));
-
-                        insts.push(Inst::AluRRR {
-                            rd,
-                            alu_op: AluOPRRR::Add,
-                            rs1: base,
-                            rs2: registers[0].to_reg(),
-                        });
-                    })
-                    .into_iter()
-                    .for_each(|inst| inst.emit(&[], sink, emit_info, state));
+                    let insts = LoadConstant::U64(offset as u64).load_constant_and_add(rd, base);
+                    insts
+                        .into_iter()
+                        .for_each(|i| i.emit(&[], sink, emit_info, state));
                 }
             }
 
             &Inst::Fcmp {
                 rd,
-
                 cc,
                 ty,
                 rs1,
@@ -1322,6 +1247,7 @@ impl MachInstEmit for Inst {
                 sink.bind_label(label_jump_over);
             }
             &Inst::Jalr { rd, base, offset } => {
+                let rd = allocs.next_writable(rd);
                 let x = enc_jalr(rd, base, offset);
                 sink.put4(x);
             }
@@ -1362,7 +1288,7 @@ impl MachInstEmit for Inst {
                     state,
                 );
                 Inst::Jal {
-                    dest: BranchTarget::offset(Inst::instruction_size() * 2),
+                    dest: BranchTarget::offset(Inst::INSTRUCTION_SIZE * 2),
                 }
                 .emit(&[], sink, emit_info, state);
                 sink.bind_label(label_false);

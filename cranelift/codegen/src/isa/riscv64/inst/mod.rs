@@ -19,7 +19,7 @@ pub use crate::ir::condcodes::FloatCC;
 
 use alloc::vec::Vec;
 use regalloc2::VReg;
-use smallvec::{smallvec, SmallVec};
+use smallvec::SmallVec;
 use std::boxed::Box;
 use std::string::String;
 
@@ -59,7 +59,7 @@ pub(crate) type VecU8 = Vec<u8>;
 use crate::isa::riscv64::lower::isle::generated_code::MInst;
 pub use crate::isa::riscv64::lower::isle::generated_code::{
     AluOPRRI, AluOPRRR, AtomicOP, CsrOP, FClassResult, FFlagsException, FpuOPRR, FpuOPRRR,
-    FpuOPRRRR, IntSelectOP, LoadOP, MInst as Inst, ReferenceCheckOP, StoreOP, FRM, I128OP, OPFPFMT,
+    FpuOPRRRR, IntSelectOP, LoadOP, MInst as Inst, ReferenceCheckOP, StoreOP, FRM, OPFPFMT,
 };
 
 type BoxCallInfo = Box<CallInfo>;
@@ -133,7 +133,6 @@ impl BranchTarget {
             BranchTarget::ResolvedOffset(off) => off == 0,
         }
     }
-
     #[inline(always)]
     pub(crate) fn as_offset(self) -> Option<i32> {
         match self {
@@ -191,9 +190,7 @@ pub(crate) fn gen_move(rd: Writable<Reg>, oty: Type, rm: Reg, ity: Type) -> Inst
 }
 
 impl Inst {
-    pub(crate) const fn instruction_size() -> i32 /* less type cast  */ {
-        4
-    }
+    const INSTRUCTION_SIZE: i32 = 4;
 
     #[inline(always)]
     pub(crate) fn load_constant_imm12(rd: Writable<Reg>, imm: Imm12) -> Inst {
@@ -210,7 +207,7 @@ impl Inst {
         if let Some(imm) = Imm12::maybe_from_u64(value) {
             insts.push(Inst::load_constant_imm12(rd, imm));
         } else {
-            insts.extend(LoadConstant::U32(value as u32).generate(rd))
+            insts.extend(LoadConstant::U32(value as u32).load_constant(rd))
         }
         insts
     }
@@ -219,8 +216,10 @@ impl Inst {
         let mut insts = SmallVec::new();
         if let Some(imm12) = Imm12::maybe_from_u64(value) {
             insts.push(Inst::load_constant_imm12(rd, imm12));
+        } else if value >> 32 == 0 {
+            insts.extend(Inst::load_constant_u32(rd, value));
         } else {
-            insts.extend(LoadConstant::U64(value).generate(rd))
+            insts.extend(LoadConstant::U64(value).load_constant(rd))
         }
         insts
     }
@@ -228,14 +227,14 @@ impl Inst {
     /*
         this will discard return address.
     */
-    pub(crate) fn construct_auipc_and_jalr(rd: Writable<Reg>, offset: i32) -> [Inst; 2] {
+    pub(crate) fn construct_auipc_and_jalr(tmp: Writable<Reg>, offset: i32) -> [Inst; 2] {
         let a = Inst::Auipc {
-            rd,
+            rd: tmp,
             imm: Umm20::from_bits(offset >> 12),
         };
         let b = Inst::Jalr {
             rd: writable_zero_reg(),
-            base: rd.to_reg(),
+            base: tmp.to_reg(),
             offset: Imm12::from_bits((offset & 0xfff) as i16),
         };
         [a, b]
@@ -256,13 +255,9 @@ impl Inst {
     }
 
     /// Create instructions that load a 64-bit floating-point constant.
-    pub fn load_fp_constant64<F: FnMut(Type) -> Writable<Reg>>(
-        rd: Writable<Reg>,
-        const_data: u64,
-        mut alloc_tmp: F,
-    ) -> SmallVec<[Inst; 4]> {
+    pub fn load_fp_constant64(rd: Writable<Reg>, const_data: u64) -> SmallVec<[Inst; 4]> {
         let mut insts = SmallInstVec::new();
-        let tmp = alloc_tmp(I64);
+        let tmp = writable_spilltmp_reg();
         insts.extend(Self::load_constant_u64(tmp, const_data));
         insts.push(Inst::FpuRR {
             frm: None,
@@ -293,12 +288,12 @@ impl Inst {
     }
 
     /// Generic constructor for a store.
-    pub fn gen_store(mem: AMode, from_reg: Reg, ty: Type, _flags: MemFlags) -> Inst {
+    pub fn gen_store(mem: AMode, from_reg: Reg, ty: Type, flags: MemFlags) -> Inst {
         Inst::Store {
             src: from_reg,
             op: StoreOP::from_type(ty),
             to: mem,
-            flags: MemFlags::new(),
+            flags,
         }
     }
 }
@@ -307,8 +302,12 @@ impl Inst {
 // Instructions: get_regs
 fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCollector<'_, F>) {
     match inst {
-        &Inst::Nop0 => {}
-        &Inst::Nop4 => {}
+        &Inst::Nop0 => {
+            // do nothing.
+        }
+        &Inst::Nop4 => {
+            // do nothing.
+        }
         &Inst::BrTable { index, tmp1, .. } => {
             collector.reg_use(index);
             collector.reg_early_def(tmp1);
@@ -374,7 +373,7 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
         }
         &Inst::LoadAddr { rd, mem } => {
             collector.reg_use(mem.get_base_register());
-            collector.reg_def(rd);
+            collector.reg_early_def(rd);
         }
 
         &Inst::VirtualSPOffsetAdj { .. } => {}
@@ -514,10 +513,9 @@ impl MachInst for Inst {
     }
 
     fn canonical_type_for_rc(rc: RegClass) -> Type {
-        if rc == RegClass::Float {
-            F64
-        } else {
-            I64
+        match rc {
+            regalloc2::RegClass::Int => I64,
+            regalloc2::RegClass::Float => F64,
         }
     }
 
@@ -576,7 +574,7 @@ impl MachInst for Inst {
         to_regs: ValueRegs<Writable<Reg>>,
         mut value: u128,
         ty: Type,
-        alloc_tmp: F,
+        _alloc_tmp: F,
     ) -> SmallVec<[Inst; 4]> {
         if ty.is_bool() && value != 0 {
             value = !0;
@@ -586,7 +584,7 @@ impl MachInst for Inst {
         };
         match ty {
             F32 => Inst::load_fp_constant32(to_regs.only_reg().unwrap(), value as u32),
-            F64 => Inst::load_fp_constant64(to_regs.only_reg().unwrap(), value as u64, alloc_tmp),
+            F64 => Inst::load_fp_constant64(to_regs.only_reg().unwrap(), value as u64),
             I128 | B128 => {
                 let mut insts = SmallInstVec::new();
                 insts.extend(Inst::load_constant_u64(
@@ -646,7 +644,7 @@ impl MachInst for Inst {
         52
     }
 
-    fn ref_type_regclass(_: &settings::Flags) -> RegClass {
+    fn ref_type_regclass(_settings: &settings::Flags) -> RegClass {
         RegClass::Int
     }
 }
@@ -759,14 +757,14 @@ impl Inst {
             &Inst::RawData { ref data } => match data.len() {
                 4 => {
                     let mut bytes = [0; 4];
-                    for i in 0..4 {
+                    for i in 0..bytes.len() {
                         bytes[i] = data[i];
                     }
                     format!(".u32 0x{:x}", u32::from_le_bytes(bytes))
                 }
                 8 => {
                     let mut bytes = [0; 8];
-                    for i in 0..8 {
+                    for i in 0..bytes.len() {
                         bytes[i] = data[i];
                     }
                     format!(".u64 0x{:x}", u64::from_le_bytes(bytes))
@@ -984,7 +982,6 @@ impl Inst {
                     format!("{} {},{},{}", csr_op.op_name(), rd, csr, imm.unwrap())
                 }
             }
-
             &Inst::FpuRRRR {
                 alu_op,
                 rd,
@@ -1038,7 +1035,6 @@ impl Inst {
             }
             &Inst::Fcmp {
                 rd,
-
                 cc,
                 ty,
                 rs1,
@@ -1047,7 +1043,6 @@ impl Inst {
                 let rs1 = format_reg(rs1, allocs);
                 let rs2 = format_reg(rs2, allocs);
                 let rd = format_reg(rd.to_reg(), allocs);
-
                 format!(
                     "{}.{} {},{},{}",
                     if ty == F32 { "f" } else { "d" },
@@ -1091,7 +1086,7 @@ impl Inst {
                 )
             }
             &MInst::AjustSp { amount } => {
-                format!("{} sp,{:+}", "addi", amount)
+                format!("{} sp,{:+}", "add", amount)
             }
             &MInst::Call { ref info } => format!("call {}", info.dest),
             &MInst::CallInd { ref info } => {
@@ -1128,7 +1123,6 @@ impl Inst {
                 format_reg(tmp.to_reg(), allocs),
                 ty,
             ),
-
             &MInst::Jal { dest, .. } => {
                 format!("{} {}", "j", dest)
             }
@@ -1197,7 +1191,7 @@ impl Inst {
                 } else if ty == F64 {
                     "fmv.d"
                 } else {
-                    "mov"
+                    "mv"
                 };
                 format!("{} {},{}", v, rd, rm)
             }
@@ -1217,7 +1211,6 @@ impl Inst {
                 let dst = format_regs(&dst[..], allocs);
                 format!("select_{} {},{},{};;condition={}", ty, dst, x, y, condition)
             }
-
             &MInst::Udf { trap_code } => format!("udf;;trap_code={}", trap_code),
             &MInst::EBreak {} => String::from("ebreak"),
             &MInst::ECall {} => String::from("ecall"),
@@ -1333,7 +1326,6 @@ impl MachInstLabelUse for LabelUse {
             buffer[6] = x[2];
             buffer[7] = x[3];
         }
-
         (veneer_offset, Self::PCRel32)
     }
 

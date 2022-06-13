@@ -149,9 +149,12 @@ block0(v0: f32):
 }
 
 ; block0:
-;   fmv.x.w a0,fa0
-;   bclri a0,a0,31
-;   fmv.w.x fa0,a0
+;   auipc t6,0
+;   lwu t6,12(t6)
+;   j 8
+;   .u32 0x803f
+;   fmv.w.x ft7,t6
+;   fsgnj.s fa0,fa0,ft7
 ;   ret
 
 function %f17(f64) -> f64 {
@@ -161,9 +164,12 @@ block0(v0: f64):
 }
 
 ; block0:
-;   fmv.x.d a0,fa0
-;   bclri a0,a0,63
-;   fmv.d.x fa0,a0
+;   auipc t6,0
+;   ld t6,12(t6)
+;   j 12
+;   .u64 0xf03f
+;   fmv.d.x ft7,t6
+;   fsgnj.d fa0,fa0,ft7
 ;   ret
 
 function %f18(f32) -> f32 {
@@ -173,9 +179,7 @@ block0(v0: f32):
 }
 
 ; block0:
-;   fmv.x.w a0,fa0
-;   binvi a0,a0,31
-;   fmv.w.x fa0,a0
+;   fsgnjn.s fa0,fa0,fa0
 ;   ret
 
 function %f19(f64) -> f64 {
@@ -185,9 +189,7 @@ block0(v0: f64):
 }
 
 ; block0:
-;   fmv.x.d a0,fa0
-;   binvi a0,a0,63
-;   fmv.d.x fa0,a0
+;   fsgnjn.d fa0,fa0,fa0
 ;   ret
 
 function %f20(f32) -> f64 {

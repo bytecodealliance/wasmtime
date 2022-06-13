@@ -16,6 +16,7 @@ use crate::machinst::*;
 
 use crate::machinst::isle::ValueRegs;
 use crate::settings;
+use crate::CodegenError;
 use crate::CodegenResult;
 use alloc::boxed::Box;
 use alloc::vec;
@@ -67,7 +68,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         let f_registers = param_or_rets_fregs(args_or_rets);
         let mut f_registers = &f_registers[..];
         // stack space
-        let mut next_stack: i64 = 0;
+        let mut next_stack: u64 = 0;
         let mut abi_args = vec![];
         /*
             when run out register , we should use stack space for parameter,
@@ -122,9 +123,9 @@ impl ABIMachineSpec for Riscv64MachineDeps {
             if let ir::ArgumentPurpose::StructArgument(size) = param.purpose {
                 let offset = next_stack;
                 assert!(size % 8 == 0, "StructArgument size is not properly aligned");
-                next_stack += size as i64;
+                next_stack += size as u64;
                 abi_args.push(ABIArg::StructArg {
-                    offset,
+                    offset: offset as i64,
                     size: size as u64,
                     purpose: param.purpose,
                 });
@@ -144,7 +145,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                         f_registers = &f_registers[1..];
                     } else {
                         let arg = ABIArg::stack(
-                            next_stack,
+                            next_stack as i64,
                             param.value_type,
                             param.extension,
                             param.purpose,
@@ -166,7 +167,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                         abi_args.push(arg);
                     } else {
                         let arg = ABIArg::stack(
-                            next_stack,
+                            next_stack as i64,
                             param.value_type,
                             param.extension,
                             param.purpose,
@@ -198,7 +199,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                         });
                         x_registers = &x_registers[1..];
                         slots.push(ABIArgSlot::Stack {
-                            offset: next_stack,
+                            offset: next_stack as i64,
                             ty: elem_type,
                             extension: param.extension,
                         });
@@ -206,7 +207,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                     } else {
                         for _i in 0..2 {
                             slots.push(ABIArgSlot::Stack {
-                                offset: next_stack,
+                                offset: next_stack as i64,
                                 ty: elem_type,
                                 extension: param.extension,
                             });
@@ -240,7 +241,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                 Some(abi_args.len() - 1)
             } else {
                 let arg = ABIArg::stack(
-                    next_stack,
+                    next_stack as i64,
                     I64,
                     ir::ArgumentExtension::None,
                     ir::ArgumentPurpose::Normal,
@@ -252,15 +253,22 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         } else {
             None
         };
-        next_stack = align_to(next_stack, Self::stack_align(call_conv) as i64);
-        CodegenResult::Ok((abi_args, next_stack, pos))
+        next_stack = align_to(next_stack, Self::stack_align(call_conv) as u64);
+
+        // To avoid overflow issues, limit the arg/return size to something
+        // reasonable -- here, 128 MB.
+        if next_stack > STACK_ARG_RET_SIZE_LIMIT {
+            return Err(CodegenError::ImplLimitExceeded);
+        }
+
+        CodegenResult::Ok((abi_args, next_stack as i64, pos))
     }
 
     fn fp_to_arg_offset(_call_conv: isa::CallConv, _flags: &settings::Flags) -> i64 {
         /*
             just previous fp saved on stack.
         */
-        16
+        8
     }
 
     fn gen_load_stack(mem: StackAMode, into_reg: Writable<Reg>, ty: Type) -> Inst {
@@ -303,7 +311,15 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         Inst::Ret { rets }
     }
 
+    fn get_stacklimit_reg() -> Reg {
+        spilltmp_reg()
+    }
+
     fn gen_add_imm(into_reg: Writable<Reg>, from_reg: Reg, imm: u32) -> SmallInstVec<Inst> {
+        /*
+
+        */
+        assert!(into_reg.to_reg() != from_reg);
         let mut insts = Inst::load_constant_u32(into_reg, imm as u64);
         insts.push(Inst::AluRRR {
             alu_op: AluOPRRR::Add,
@@ -335,10 +351,6 @@ impl ABIMachineSpec for Riscv64MachineDeps {
             rd: into_reg,
             mem: mem.into(),
         }
-    }
-
-    fn get_stacklimit_reg() -> Reg {
-        stacklimit_reg()
     }
 
     fn gen_load_base_offset(into_reg: Writable<Reg>, base: Reg, offset: i32, ty: Type) -> Inst {
@@ -566,7 +578,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         _size: usize,
     ) -> SmallVec<[Self::I; 8]> {
         panic!(
-            "libcall call should use indirect call,need a temp register to store Memcpy address."
+            "libcall call should use indirect call,need a temp register to store memcpy address."
         );
         // let mut insts = SmallVec::new();
         // let arg0 = writable_a0();

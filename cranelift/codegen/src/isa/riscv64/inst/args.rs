@@ -2,12 +2,8 @@
 
 // Some variants are never constructed, but we still want them as options in the future.
 #![allow(dead_code)]
-
-use crate::ir::condcodes::{CondCode, FloatCC};
-
 use super::*;
-
-pub static WORD_SIZE: u8 = 8;
+use crate::ir::condcodes::{CondCode, FloatCC};
 
 use crate::isa::riscv64::inst::reg_to_gpr_num;
 
@@ -85,7 +81,6 @@ impl Display for AMode {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
             &AMode::RegOffset(r, offset, ..) => {
-                //todo:: with RegUniverse
                 write!(f, "{}({:?})", offset, r)
             }
             &AMode::SPOffset(offset, ..) => {
@@ -111,7 +106,7 @@ impl Into<AMode> for StackAMode {
     }
 }
 
-/// risc-v always take two register to compar
+/// risc-v always take two register to compare
 /// brz can be compare with zero register which has the value 0
 #[derive(Clone, Copy, Debug)]
 pub struct IntegerCompare {
@@ -201,10 +196,6 @@ impl IntegerCompare {
             IntCC::Overflow => todo!(),
             IntCC::NotOverflow => todo!(),
         }
-    }
-    #[inline(always)]
-    pub(crate) fn set_kind(self, kind: IntCC) -> Self {
-        Self { kind, ..self }
     }
 
     pub(crate) fn emit(self) -> u32 {
@@ -1287,14 +1278,16 @@ impl FClassResult {
     }
 
     #[inline]
-    pub(crate) fn is_nan_bits() -> u32 {
+    pub(crate) const fn is_nan_bits() -> u32 {
         Self::SNaN.bit() | Self::QNaN.bit()
     }
     #[inline]
     pub(crate) fn is_zero_bits() -> u32 {
         Self::NegZero.bit() | Self::PosZero.bit()
     }
+
     #[inline]
+    #[allow(dead_code)]
     pub(crate) fn is_infinite_bits() -> u32 {
         Self::PosInfinite.bit() | Self::NegInfinite.bit()
     }
@@ -1310,7 +1303,7 @@ impl FClassResult {
     LT - x is less than y.
     GT - x is greater than y.
 */
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub enum FloatCCBit {
     UN,
     EQ,
@@ -1320,7 +1313,7 @@ pub enum FloatCCBit {
 }
 
 impl FloatCCBit {
-    pub(crate) const fn bit(&self) -> u8 {
+    pub(crate) const fn bits(&self) -> u8 {
         match self {
             FloatCCBit::UN => 1 << 0,
             FloatCCBit::EQ => 1 << 1,
@@ -1335,29 +1328,54 @@ impl FloatCCBit {
     */
     pub(crate) fn floatcc_2_mask_bits<T: Into<FloatCC>>(t: T) -> Self {
         let v = match t.into() {
-            FloatCC::Ordered => Self::EQ.bit() | Self::LT.bit() | Self::GT.bit(),
-            FloatCC::Unordered => Self::UN.bit(),
-            FloatCC::Equal => Self::EQ.bit(),
-            FloatCC::NotEqual => Self::UN.bit() | Self::LT.bit() | Self::GT.bit(),
-            FloatCC::OrderedNotEqual => Self::LT.bit() | Self::GT.bit(),
-            FloatCC::UnorderedOrEqual => Self::UN.bit() | Self::EQ.bit(),
-            FloatCC::LessThan => Self::LT.bit(),
-            FloatCC::LessThanOrEqual => Self::LT.bit() | Self::EQ.bit(),
-            FloatCC::GreaterThan => Self::GT.bit(),
-            FloatCC::GreaterThanOrEqual => Self::GT.bit() | Self::EQ.bit(),
-            FloatCC::UnorderedOrLessThan => Self::UN.bit() | Self::LT.bit(),
-            FloatCC::UnorderedOrLessThanOrEqual => Self::UN.bit() | Self::LT.bit() | Self::EQ.bit(),
-            FloatCC::UnorderedOrGreaterThan => Self::UN.bit() | Self::GT.bit(),
+            FloatCC::Ordered => Self::EQ.bits() | Self::LT.bits() | Self::GT.bits(),
+            FloatCC::Unordered => Self::UN.bits(),
+            FloatCC::Equal => Self::EQ.bits(),
+            FloatCC::NotEqual => Self::UN.bits() | Self::LT.bits() | Self::GT.bits(),
+            FloatCC::OrderedNotEqual => Self::LT.bits() | Self::GT.bits(),
+            FloatCC::UnorderedOrEqual => Self::UN.bits() | Self::EQ.bits(),
+            FloatCC::LessThan => Self::LT.bits(),
+            FloatCC::LessThanOrEqual => Self::LT.bits() | Self::EQ.bits(),
+            FloatCC::GreaterThan => Self::GT.bits(),
+            FloatCC::GreaterThanOrEqual => Self::GT.bits() | Self::EQ.bits(),
+            FloatCC::UnorderedOrLessThan => Self::UN.bits() | Self::LT.bits(),
+            FloatCC::UnorderedOrLessThanOrEqual => {
+                Self::UN.bits() | Self::LT.bits() | Self::EQ.bits()
+            }
+            FloatCC::UnorderedOrGreaterThan => Self::UN.bits() | Self::GT.bits(),
             FloatCC::UnorderedOrGreaterThanOrEqual => {
-                Self::UN.bit() | Self::GT.bit() | Self::EQ.bit()
+                Self::UN.bits() | Self::GT.bits() | Self::EQ.bits()
             }
         };
         Self::CompareSet(v)
     }
 
-    #[inline(always)]
-    pub(crate) fn constains(&self, o: Self) -> bool {
-        (self.bit() & o.bit()) != 0
+    #[inline]
+    pub(crate) fn has(&self, o: Self) -> bool {
+        (self.bits() & o.bits()) == o.bits()
+    }
+
+    pub(crate) fn has_and_clear(&mut self, other: Self) -> bool {
+        if !self.has(other) {
+            return false;
+        }
+        self.clear_bits(other);
+        return true;
+    }
+
+    #[inline]
+    fn clear_bits(&mut self, c: Self) {
+        match self {
+            Self::CompareSet(ref mut x) => *x = *x & !c.bits(),
+            _ => unreachable!(),
+        }
+    }
+}
+
+impl std::ops::BitOr for FloatCCBit {
+    type Output = Self;
+    fn bitor(self, rhs: Self) -> Self::Output {
+        Self::CompareSet(self.bits() | rhs.bits())
     }
 }
 
@@ -1576,7 +1594,6 @@ impl ReferenceCheckOP {
             ReferenceCheckOP::IsInvalid => "is_invalid",
         }
     }
-
     #[inline(always)]
     pub(crate) fn from_ir_op(op: crate::ir::Opcode) -> Self {
         match op {
@@ -1596,18 +1613,6 @@ pub fn is_int_and_type_signed(ty: Type) -> bool {
 pub fn is_type_signed(ty: Type) -> bool {
     assert!(ty.is_int());
     ty == I8 || ty == I16 || ty == I32 || ty == I64 || ty == I128
-}
-
-impl I128OP {
-    pub(crate) fn op_name(self) -> &'static str {
-        match self {
-            I128OP::Add => "add_i128",
-            I128OP::Sub => "sub_i128",
-            I128OP::Mul => "mul_i128",
-            I128OP::Div => "div_i128",
-            I128OP::Rem => "rem_i128",
-        }
-    }
 }
 
 #[derive(Clone, Copy)]
@@ -1806,5 +1811,24 @@ impl AMO {
     }
     pub(crate) fn as_u32(self) -> u32 {
         self as u32
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::FloatCCBit;
+    #[test]
+    fn float_cc_bit_clear() {
+        let mut x = FloatCCBit::UN | FloatCCBit::GT | FloatCCBit::EQ;
+        assert!(x.has_and_clear(FloatCCBit::UN | FloatCCBit::GT));
+        assert!(x.has(FloatCCBit::EQ));
+        assert!(!x.has(FloatCCBit::UN));
+        assert!(!x.has(FloatCCBit::GT));
+    }
+    #[test]
+    fn float_cc_bit_has() {
+        let x = FloatCCBit::UN | FloatCCBit::GT | FloatCCBit::EQ;
+        assert!(x.has(FloatCCBit::UN | FloatCCBit::GT));
+        assert!(!x.has(FloatCCBit::LT));
     }
 }

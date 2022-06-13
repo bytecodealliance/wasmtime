@@ -34,6 +34,7 @@ pub fn a2() -> Reg {
 pub fn a7() -> Reg {
     x_reg(17)
 }
+
 #[inline(always)]
 pub fn param_or_rets_xregs(args_or_rets: ArgsOrRets) -> Vec<Writable<Reg>> {
     let mut v = vec![];
@@ -61,26 +62,7 @@ pub fn writable_a1() -> Writable<Reg> {
 pub fn writable_a2() -> Writable<Reg> {
     Writable::from_reg(a2())
 }
-#[inline(always)]
-pub fn stacklimit_reg() -> Reg {
-    spilltmp_reg()
-}
 
-/*
-used when more register in code emiting.
-this should not include special purpose register such as fp sp etc.
-*/
-pub fn bunch_of_normal_registers() -> Vec<Writable<Reg>> {
-    let mut v = vec![];
-    /*
-        s2 --------> s11
-    */
-    for enc in x_reg(18).to_real_reg().unwrap().hw_enc()..=x_reg(27).to_real_reg().unwrap().hw_enc()
-    {
-        v.push(Writable::from_reg(x_reg(enc as usize)));
-    }
-    v
-}
 #[inline(always)]
 pub fn fa0() -> Reg {
     f_reg(10)
@@ -171,10 +153,6 @@ pub fn writable_fp_reg() -> Writable<Reg> {
 /// sufficient (+/- 2^11 words). We exclude this register from regalloc and reserve it for this
 /// purpose for simplicity; otherwise we need a multi-stage analysis where we first determine how
 /// many spill slots we have, then perhaps remove the reg from the pool and recompute regalloc.
-///
-/// We use x16 for this (aka IP0 in the Riscv64 ABI) because it's a scratch register but is
-/// slightly special (used for linker veneers). We're free to use it as long as we don't expect it
-/// to live through call instructions.
 #[inline(always)]
 pub fn spilltmp_reg() -> Reg {
     x_reg(31)
@@ -236,7 +214,6 @@ pub fn crate_reg_eviroment(_flags: &settings::Flags) -> MachineEnv {
     MachineEnv {
         preferred_regs_by_class,
         non_preferred_regs_by_class,
-
         fixed_stack_slots: vec![],
     }
 }
@@ -260,6 +237,7 @@ pub(crate) fn real_reg_to_reg(x: RealReg) -> Reg {
     Reg::from(v_reg)
 }
 
+#[allow(dead_code)]
 pub(crate) fn x_reg_range(start: usize, end: usize) -> Vec<Writable<Reg>> {
     let mut ret = vec![];
     for i in start..=end {
