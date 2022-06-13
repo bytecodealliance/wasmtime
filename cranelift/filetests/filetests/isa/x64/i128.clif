@@ -193,100 +193,92 @@ block0(v0: i128, v1: i128):
 ;   movq    %r15, 48(%rsp)
 ; block0:
 ;   cmpq    %rdx, %rdi
-;   setz    %r8b
+;   setz    %al
 ;   cmpq    %rcx, %rsi
-;   setz    %r9b
-;   andq    %r8, %r9, %r8
-;   testq   $1, %r8
+;   setz    %r8b
+;   andq    %rax, %r8, %rax
+;   testq   $1, %rax
 ;   setnz   %al
 ;   cmpq    %rdx, %rdi
-;   setnz   %r9b
+;   setnz   %r8b
 ;   cmpq    %rcx, %rsi
-;   setnz   %r10b
-;   orq     %r9, %r10, %r9
-;   testq   $1, %r9
+;   setnz   %r9b
+;   orq     %r8, %r9, %r8
+;   testq   $1, %r8
 ;   setnz   %r8b
 ;   movq    %r8, rsp(0 + virtual offset)
 ;   cmpq    %rcx, %rsi
-;   setl    %r11b
+;   setl    %r8b
 ;   setz    %r10b
 ;   cmpq    %rdx, %rdi
-;   setb    %r9b
-;   andq    %r9, %r10, %r9
-;   orq     %r9, %r11, %r9
-;   andq    %r9, $1, %r9
-;   setnz   %r9b
+;   setb    %r11b
+;   andq    %r10, %r11, %r10
+;   orq     %r8, %r10, %r8
+;   andq    %r8, $1, %r8
 ;   cmpq    %rcx, %rsi
 ;   setl    %r10b
-;   setz    %bl
+;   setz    %r11b
 ;   cmpq    %rdx, %rdi
-;   setbe   %r11b
-;   andq    %r11, %rbx, %r11
-;   orq     %r11, %r10, %r11
-;   andq    %r11, $1, %r11
-;   setnz   %r10b
+;   setbe   %r13b
+;   andq    %r11, %r13, %r11
+;   orq     %r10, %r11, %r10
+;   andq    %r10, $1, %r10
 ;   cmpq    %rcx, %rsi
 ;   setnle  %r11b
-;   setz    %r12b
-;   cmpq    %rdx, %rdi
-;   setnbe  %r15b
-;   andq    %r15, %r12, %r15
-;   orq     %r15, %r11, %r15
-;   andq    %r15, $1, %r15
-;   setnz   %r11b
-;   cmpq    %rcx, %rsi
-;   setnle  %bl
-;   setz    %r13b
-;   cmpq    %rdx, %rdi
-;   setnb   %r12b
-;   andq    %r12, %r13, %r12
-;   orq     %r12, %rbx, %r12
-;   andq    %r12, $1, %r12
-;   setnz   %bl
-;   cmpq    %rcx, %rsi
-;   setb    %r12b
 ;   setz    %r14b
 ;   cmpq    %rdx, %rdi
-;   setb    %r13b
-;   andq    %r13, %r14, %r13
-;   orq     %r13, %r12, %r13
-;   andq    %r13, $1, %r13
-;   setnz   %r12b
+;   setnbe  %r15b
+;   andq    %r14, %r15, %r14
+;   orq     %r11, %r14, %r11
+;   andq    %r11, $1, %r11
+;   cmpq    %rcx, %rsi
+;   setnle  %r12b
+;   setz    %bl
+;   cmpq    %rdx, %rdi
+;   setnb   %r13b
+;   andq    %rbx, %r13, %rbx
+;   orq     %r12, %rbx, %r12
+;   andq    %r12, $1, %r12
 ;   cmpq    %rcx, %rsi
 ;   setb    %r13b
+;   setz    %r14b
+;   cmpq    %rdx, %rdi
+;   setb    %r15b
+;   andq    %r14, %r15, %r14
+;   orq     %r13, %r14, %r13
+;   andq    %r13, $1, %r13
+;   cmpq    %rcx, %rsi
+;   setb    %bl
 ;   setz    %r15b
 ;   cmpq    %rdx, %rdi
 ;   setbe   %r14b
-;   andq    %r14, %r15, %r14
-;   orq     %r14, %r13, %r14
-;   andq    %r14, $1, %r14
-;   setnz   %r13b
+;   andq    %r15, %r14, %r15
+;   orq     %rbx, %r15, %rbx
+;   andq    %rbx, $1, %rbx
 ;   cmpq    %rcx, %rsi
 ;   setnbe  %r14b
-;   setz    %r8b
+;   setz    %r15b
 ;   cmpq    %rdx, %rdi
-;   setnbe  %r15b
-;   andq    %r15, %r8, %r15
-;   orq     %r15, %r14, %r15
-;   andq    %r15, $1, %r15
-;   setnz   %r14b
+;   setnbe  %r9b
+;   andq    %r15, %r9, %r15
+;   orq     %r14, %r15, %r14
+;   andq    %r14, $1, %r14
 ;   cmpq    %rcx, %rsi
 ;   setnbe  %sil
 ;   setz    %cl
 ;   cmpq    %rdx, %rdi
-;   setnb   %dil
-;   andq    %rdi, %rcx, %rdi
-;   orq     %rdi, %rsi, %rdi
-;   andq    %rdi, $1, %rdi
-;   setnz   %dil
-;   movq    rsp(0 + virtual offset), %rsi
-;   andl    %eax, %esi, %eax
-;   andl    %r9d, %r10d, %r9d
-;   andl    %r11d, %ebx, %r11d
-;   andl    %r12d, %r13d, %r12d
-;   andl    %r14d, %edi, %r14d
+;   setnb   %dl
+;   andq    %rcx, %rdx, %rcx
+;   orq     %rsi, %rcx, %rsi
+;   andq    %rsi, $1, %rsi
+;   movq    rsp(0 + virtual offset), %r9
 ;   andl    %eax, %r9d, %eax
+;   andl    %r8d, %r10d, %r8d
 ;   andl    %r11d, %r12d, %r11d
+;   andl    %r13d, %ebx, %r13d
+;   andl    %r14d, %esi, %r14d
+;   andl    %eax, %r8d, %eax
+;   andl    %r11d, %r13d, %r11d
 ;   andl    %eax, %r11d, %eax
 ;   andl    %eax, %r14d, %eax
 ;   movq    16(%rsp), %rbx

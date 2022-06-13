@@ -1271,6 +1271,26 @@
 (decl lo_gpr (Value) Gpr)
 (rule (lo_gpr regs) (gpr_new (lo_reg regs)))
 
+;;;; Helpers for Working With Integer Comparison Codes ;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+
+;; An extractor that fails if the two arguments are equal. The first argument is
+;; returned when it does not match the second.
+(decl pure intcc_neq (IntCC IntCC) IntCC)
+(extern constructor intcc_neq intcc_neq)
+
+;; This is a direct import of `IntCC::without_equal`.
+;; Get the corresponding IntCC with the equal component removed.
+;; For conditions without a zero component, this is a no-op.
+(decl intcc_without_eq (IntCC) IntCC)
+(extern constructor intcc_without_eq intcc_without_eq)
+
+;; This is a direct import of `IntCC::unsigned`.
+;; Get the corresponding IntCC with the signed component removed.
+;; For conditions without a signed component, this is a no-op.
+(decl intcc_unsigned (IntCC) IntCC)
+(extern constructor intcc_unsigned intcc_unsigned)
+
 ;;;; Helpers for Getting Particular Physical Registers ;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; These should only be used for legalization purposes, when we can't otherwise

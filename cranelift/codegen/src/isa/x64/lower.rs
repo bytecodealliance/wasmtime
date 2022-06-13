@@ -903,16 +903,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::FmaxPseudo => implemented_in_isle(ctx),
 
         Opcode::Icmp => {
-            let condcode = ctx.data(insn).cond_code().unwrap();
-            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let ty = ctx.input_ty(insn, 0);
-            if ty == types::I128 && condcode != IntCC::Equal && condcode != IntCC::NotEqual {
-                let condcode = emit_cmp(ctx, insn, condcode);
-                let cc = CC::from_intcc(condcode);
-                ctx.emit(Inst::setcc(cc, dst));
-            } else {
-                implemented_in_isle(ctx);
-            }
+            implemented_in_isle(ctx);
         }
 
         Opcode::Fcmp => {

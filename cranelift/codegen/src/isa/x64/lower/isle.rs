@@ -512,6 +512,25 @@ where
     }
 
     #[inline]
+    fn intcc_neq(&mut self, x: &IntCC, y: &IntCC) -> Option<IntCC> {
+        if x != y {
+            Some(*x)
+        } else {
+            None
+        }
+    }
+
+    #[inline]
+    fn intcc_without_eq(&mut self, x: &IntCC) -> IntCC {
+        x.without_equal()
+    }
+
+    #[inline]
+    fn intcc_unsigned(&mut self, x: &IntCC) -> IntCC {
+        x.unsigned()
+    }
+
+    #[inline]
     fn intcc_to_cc(&mut self, intcc: &IntCC) -> CC {
         CC::from_intcc(*intcc)
     }
