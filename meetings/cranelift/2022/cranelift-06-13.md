@@ -11,7 +11,7 @@
 1. Announcements
     1. _Submit a PR to add your announcement here_
 1. Other agenda items
-    1. _Submit a PR to add your item here_
+    1. bnjbvr: Maintainance and code ownership of cranelift-jit-demo (e.g. [this PR](https://github.com/bytecodealliance/cranelift-jit-demo/pull/66))
 
 ## Notes
 
