@@ -43,7 +43,7 @@ At the time of writing, we have the following fuzz targets:
   the same results as the `wasmi` interpreter.
 * `instantiate`: Generate a Wasm module and Wasmtime configuration and attempt
   to compile and instantiate with them.
-* `instantiate`: Generate many Wasm modules and attempt to compile and
+* `instantiate-many`: Generate many Wasm modules and attempt to compile and
   instantiate them concurrently.
 * `spectests`: Pick a random spec test and run it with a generated
   configuration.
