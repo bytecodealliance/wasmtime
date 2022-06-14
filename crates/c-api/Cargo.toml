@@ -32,7 +32,8 @@ wasmtime-wasi = { path = "../wasi", optional = true }
 cap-std = { version = "0.24.1", optional = true }
 
 [features]
-default = ['jitdump', 'wat', 'wasi', 'cache']
+default = ['jitdump', 'wat', 'wasi', 'cache', 'parallel-compilation']
 jitdump = ["wasmtime/jitdump"]
 cache = ["wasmtime/cache"]
+parallel-compilation = ['wasmtime/parallel-compilation']
 wasi = ['wasi-cap-std-sync', 'wasmtime-wasi', 'cap-std']
