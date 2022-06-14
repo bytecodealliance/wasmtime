@@ -441,8 +441,16 @@ impl Config {
             }
         }
 
-        // If threads are enabled, we might generate shared memory; shared
-        // memory is less amenable to different memory configurations.
+        // Vary the memory configuration, but only if threads are not enabled.
+        // When the threads proposal is enabled we might generate shared memory,
+        // which is less amenable to different memory configurations:
+        // - shared memories are required to be "static" so fuzzing the various
+        //   memory configurations will mostly result in uninteresting errors.
+        //   The interesting part about shared memories is the runtime so we
+        //   don't fuzz non-default settings.
+        // - shared memories are required to be aligned which means that the
+        //   `CustomUnaligned` variant isn't actually safe to use with a shared
+        //   memory.
         if !self.module_config.config.threads_enabled {
             match &self.wasmtime.memory_config {
                 MemoryConfig::Normal(memory_config) => {
