@@ -2,14 +2,11 @@ use crate::memory::MemoryCreator;
 use crate::trampoline::MemoryCreatorProxy;
 use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 #[cfg(feature = "cache")]
 use std::path::Path;
 use std::sync::Arc;
-use std::{
-    cmp,
-    collections::{HashMap, HashSet},
-};
 use wasmparser::WasmFeatures;
 #[cfg(feature = "cache")]
 use wasmtime_cache::CacheConfig;
@@ -90,10 +87,11 @@ impl Default for ModuleVersionStrategy {
 pub struct Config {
     #[cfg(compiler)]
     compiler_config: CompilerConfig,
+    profiling_strategy: ProfilingStrategy,
+
     pub(crate) tunables: Tunables,
     #[cfg(feature = "cache")]
     pub(crate) cache_config: CacheConfig,
-    pub(crate) profiling_strategy: ProfilingStrategy,
     pub(crate) mem_creator: Option<Arc<dyn RuntimeMemoryCreator>>,
     pub(crate) allocation_strategy: InstanceAllocationStrategy,
     pub(crate) max_wasm_stack: usize,
@@ -504,18 +502,14 @@ impl Config {
     /// abort the process.
     ///
     /// By default this option is 512 KiB.
-    pub fn max_wasm_stack(&mut self, size: usize) -> Result<&mut Self> {
-        #[cfg(feature = "async")]
-        if size > self.async_stack_size {
-            bail!("wasm stack size cannot exceed the async stack size");
-        }
-
-        if size == 0 {
-            bail!("wasm stack size cannot be zero");
-        }
-
+    ///
+    /// # Errors
+    ///
+    /// The `Engine::new` method will fail if the `size` specified here is
+    /// either 0 or larger than the [`Config::async_stack_size`] configuration.
+    pub fn max_wasm_stack(&mut self, size: usize) -> &mut Self {
         self.max_wasm_stack = size;
-        Ok(self)
+        self
     }
 
     /// Configures the size of the stacks used for asynchronous execution.
@@ -529,14 +523,16 @@ impl Config {
     /// stack and abort the process.
     ///
     /// By default this option is 2 MiB.
+    ///
+    /// # Errors
+    ///
+    /// The `Engine::new` method will fail if the value for this option is
+    /// smaller than the [`Config::max_wasm_stack`] option.
     #[cfg(feature = "async")]
     #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
-    pub fn async_stack_size(&mut self, size: usize) -> Result<&mut Self> {
-        if size < self.max_wasm_stack {
-            bail!("async stack size cannot be less than the maximum wasm stack size");
-        }
+    pub fn async_stack_size(&mut self, size: usize) -> &mut Self {
         self.async_stack_size = size;
-        Ok(self)
+        self
     }
 
     /// Configures whether the WebAssembly threads proposal will be enabled for
@@ -1062,14 +1058,12 @@ impl Config {
     /// immediate offset of less than 2GB. On 32-bit platforms this defaults to
     /// 64KB.
     ///
-    /// ## Static vs Dynamic Guard Size
+    /// ## Errors
     ///
-    /// Note that for now the static memory guard size must be at least as large
-    /// as the dynamic memory guard size, so configuring this property to be
-    /// smaller than the dynamic memory guard size will have no effect.
+    /// The `Engine::new` method will return an error if this option is smaller
+    /// than the value configured for [`Config::dynamic_memory_guard_size`].
     pub fn static_memory_guard_size(&mut self, guard_size: u64) -> &mut Self {
         let guard_size = round_up_to_pages(guard_size);
-        let guard_size = cmp::max(guard_size, self.tunables.dynamic_memory_offset_guard_size);
         self.tunables.static_memory_offset_guard_size = guard_size;
         self
     }
@@ -1096,11 +1090,14 @@ impl Config {
     /// ## Default
     ///
     /// This value defaults to 64KB.
+    ///
+    /// ## Errors
+    ///
+    /// The `Engine::new` method will return an error if this option is larger
+    /// than the value configured for [`Config::static_memory_guard_size`].
     pub fn dynamic_memory_guard_size(&mut self, guard_size: u64) -> &mut Self {
         let guard_size = round_up_to_pages(guard_size);
         self.tunables.dynamic_memory_offset_guard_size = guard_size;
-        self.tunables.static_memory_offset_guard_size =
-            cmp::max(guard_size, self.tunables.static_memory_offset_guard_size);
         self
     }
 
@@ -1335,6 +1332,19 @@ impl Config {
         if self.features.threads && !self.features.bulk_memory {
             bail!("feature 'threads' requires 'bulk_memory' to be enabled");
         }
+        #[cfg(feature = "async")]
+        if self.max_wasm_stack > self.async_stack_size {
+            bail!("max_wasm_stack size cannot exceed the async_stack_size");
+        }
+        if self.max_wasm_stack == 0 {
+            bail!("max_wasm_stack size cannot be zero");
+        }
+        if self.tunables.static_memory_offset_guard_size
+            < self.tunables.dynamic_memory_offset_guard_size
+        {
+            bail!("static memory guard size cannot be smaller than dynamic memory guard size");
+        }
+
         Ok(())
     }
 
