@@ -55,12 +55,12 @@ block0(v0: i128):
 
 ; block0:
 ;   rev8 a3,a0
-;   mov t3,a3
+;   mv t3,a3
 ;   brev8 t3,t3
-;   mov a3,t3
+;   mv a3,t3
 ;   rev8 a0,a1
 ;   brev8 a0,a0
-;   mov a1,a3
+;   mv a1,a3
 ;   ret
 
 function %b(i8) -> i8 {

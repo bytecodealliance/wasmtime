@@ -37,21 +37,21 @@ block0(v0: i64):
     return
 }
 
-;   addi sp,-8
+;   add sp,-8
 ;   sd fp,0(sp)
-;   mov fp,sp
+;   mv fp,sp
 ;   trap_if_ult stk_ovf sp,a0;;ty=i64
-;   addi sp,-16
+;   add sp,-16
 ;   sd s5,0(sp)
 ; block0:
-;   mov s5,ra
+;   mv s5,ra
 ;   load_sym a1,%foo+0
 ;   callind a1
-;   mov ra,s5
+;   mv ra,s5
 ;   ld s5,0(sp)
-;   addi sp,+16
+;   add sp,+16
 ;   ld fp,0(sp)
-;   addi sp,+8
+;   add sp,+8
 ;   ret
 
 function %stack_limit_gv_call_zero(i64 vmctx) {
@@ -65,23 +65,23 @@ block0(v0: i64):
     return
 }
 
-;   addi sp,-8
+;   add sp,-8
 ;   sd fp,0(sp)
-;   mov fp,sp
+;   mv fp,sp
 ;   ld t6,0(a0)
 ;   ld t6,4(t6)
 ;   trap_if_ult stk_ovf sp,t6;;ty=i64
-;   addi sp,-16
+;   add sp,-16
 ;   sd s5,0(sp)
 ; block0:
-;   mov s5,ra
+;   mv s5,ra
 ;   load_sym a1,%foo+0
 ;   callind a1
-;   mov ra,s5
+;   mv ra,s5
 ;   ld s5,0(sp)
-;   addi sp,+16
+;   add sp,+16
 ;   ld fp,0(sp)
-;   addi sp,+8
+;   add sp,+8
 ;   ret
 
 function %stack_limit(i64 stack_limit) {
@@ -90,17 +90,17 @@ block0(v0: i64):
     return
 }
 
-;   addi sp,-8
+;   add sp,-8
 ;   sd fp,0(sp)
-;   mov fp,sp
+;   mv fp,sp
 ;   ori t6,zero,176
 ;   add t6,t6,a0
 ;   trap_if_ult stk_ovf sp,t6;;ty=i64
-;   addi sp,-176
+;   add sp,-176
 ; block0:
-;   addi sp,+176
+;   add sp,+176
 ;   ld fp,0(sp)
-;   addi sp,+8
+;   add sp,+8
 ;   ret
 
 function %huge_stack_limit(i64 stack_limit) {
@@ -109,21 +109,19 @@ block0(v0: i64):
     return
 }
 
-;   addi sp,-8
+;   add sp,-8
 ;   sd fp,0(sp)
-;   mov fp,sp
+;   mv fp,sp
 ;   trap_if_ult stk_ovf sp,a0;;ty=i64
-;   auipc t6,0
-;   lwu t6,12(t6)
-;   j 8
-;   .u32 0x61a80
+;   lui t6,98
+;   addi t6,t6,2688
 ;   add t6,t6,a0
 ;   trap_if_ult stk_ovf sp,t6;;ty=i64
-;   addi sp,-400000
+;   add sp,-400000
 ; block0:
-;   addi sp,+400000
+;   add sp,+400000
 ;   ld fp,0(sp)
-;   addi sp,+8
+;   add sp,+8
 ;   ret
 
 function %limit_preamble(i64 vmctx) {

@@ -39,10 +39,8 @@ block0:
 }
 
 ; block0:
-;   auipc a0,0
-;   ld a0,12(a0)
-;   j 12
-;   .u64 0xffff
+;   lui a0,16
+;   addi a0,a0,4095
 ;   ret
 
 function %f() -> i64 {
@@ -101,10 +99,7 @@ block0:
 }
 
 ; block0:
-;   auipc a0,0
-;   ld a0,12(a0)
-;   j 12
-;   .u64 0xffffffffffff0000
+;   lui a0,1048560
 ;   ret
 
 function %f() -> i64 {
@@ -252,10 +247,7 @@ block0:
 }
 
 ; block0:
-;   auipc t6,0
-;   lwu t6,12(t6)
-;   j 8
-;   .u32 0x40a00000
+;   lui t6,264704
 ;   fmv.w.x fa0,t6
 ;   ret
 
@@ -280,10 +272,7 @@ block0:
 }
 
 ; block0:
-;   auipc t6,0
-;   lwu t6,12(t6)
-;   j 8
-;   .u32 0x42480000
+;   lui t6,271488
 ;   fmv.w.x fa0,t6
 ;   ret
 

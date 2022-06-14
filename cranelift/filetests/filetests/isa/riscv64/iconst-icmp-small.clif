@@ -12,15 +12,11 @@ block0:
 }
 
 ; block0:
-;   auipc a0,0
-;   ld a0,12(a0)
-;   j 12
-;   .u64 0xddcc
-;   auipc a5,0
-;   ld a5,12(a5)
-;   j 12
-;   .u64 0xddcc
-;   ne a5,a0,a5;;ty=i16
-;   andi a0,a5,1
+;   lui a0,14
+;   addi a0,a0,3532
+;   lui a3,14
+;   addi a3,a3,3532
+;   ne a1,a0,a3;;ty=i16
+;   andi a0,a1,1
 ;   ret
 

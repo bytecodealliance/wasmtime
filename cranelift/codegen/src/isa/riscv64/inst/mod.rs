@@ -210,13 +210,18 @@ impl Inst {
             let mut insts = SmallVec::new();
             imm20.map(|x| insts.push(Inst::Lui { rd, imm: x }));
             imm12.map(|x| {
-                let rs = if imm20.is_none() {
+                let imm20_is_none = imm20.is_none();
+                let rs = if imm20_is_none {
                     zero_reg()
                 } else {
                     rd.to_reg()
                 };
                 insts.push(Inst::AluRRImm12 {
-                    alu_op: AluOPRRI::Addi,
+                    alu_op: if imm20_is_none {
+                        AluOPRRI::Ori
+                    } else {
+                        AluOPRRI::Addi
+                    },
                     rd,
                     rs,
                     imm12: x,

@@ -37,20 +37,14 @@ block0(v0: i64, v1: i32):
 
 ; block0:
 ;   uext.w t3,a1
-;   auipc t4,0
-;   ld t4,12(t4)
-;   j 12
-;   .u64 0x10000
-;   ugt a6,t3,t4;;ty=i64
-;   beq a6,zero,taken(label1),not_taken(label2)
+;   lui t4,16
+;   ugt a3,t3,t4;;ty=i64
+;   beq a3,zero,taken(label1),not_taken(label2)
 ; block1:
-;   add t2,a0,t3
-;   ori t1,zero,0
-;   auipc a0,0
-;   ld a0,12(a0)
-;   j 12
-;   .u64 0x10000
-;   selectif_spectre_guard a0,t1,t2;;t3 ugt a0 ty=i64
+;   add t5,a0,t3
+;   ori t4,zero,0
+;   lui t0,16
+;   selectif_spectre_guard a0,t4,t5;;t3 ugt t0 ty=i64
 ;   ret
 ; block2:
 ;   udf;;trap_code=heap_oob

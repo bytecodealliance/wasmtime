@@ -75,10 +75,10 @@ block0(v0: f64):
     return v62
 }
 
-;   addi sp,-8
+;   add sp,-8
 ;   sd fp,0(sp)
-;   mov fp,sp
-;   addi sp,-96
+;   mv fp,sp
+;   add sp,-96
 ;   fsd fs0,0(sp)
 ;   fsd fs2,8(sp)
 ;   fsd fs3,16(sp)
@@ -164,9 +164,9 @@ block0(v0: f64):
 ;   fld fs9,64(sp)
 ;   fld fs10,72(sp)
 ;   fld fs11,80(sp)
-;   addi sp,+96
+;   add sp,+96
 ;   ld fp,0(sp)
-;   addi sp,+8
+;   add sp,+8
 ;   ret
 
 function %f2(i64) -> i64 {
@@ -215,10 +215,10 @@ block0(v0: i64):
     return v36
 }
 
-;   addi sp,-8
+;   add sp,-8
 ;   sd fp,0(sp)
-;   mov fp,sp
-;   addi sp,-48
+;   mv fp,sp
+;   add sp,-48
 ;   sd s6,0(sp)
 ;   sd s7,8(sp)
 ;   sd s8,16(sp)
@@ -266,8 +266,8 @@ block0(v0: i64):
 ;   ld s8,16(sp)
 ;   ld s9,24(sp)
 ;   ld s10,32(sp)
-;   addi sp,+48
+;   add sp,+48
 ;   ld fp,0(sp)
-;   addi sp,+8
+;   add sp,+8
 ;   ret
 

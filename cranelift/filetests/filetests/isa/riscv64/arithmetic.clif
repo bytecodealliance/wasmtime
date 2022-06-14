@@ -318,11 +318,11 @@ block0(v0: i128, v1: i128):
 
 ; block0:
 ;   add a7,a0,a2
-;   mov t2,a7
+;   mv t2,a7
 ;   sltu t4,t2,a0
 ;   add a1,a1,a3
 ;   add a1,a1,t4
-;   mov a0,a7
+;   mv a0,a7
 ;   ret
 
 function %sub_i128(i128, i128) -> i128 {
@@ -333,11 +333,11 @@ block0(v0: i128, v1: i128):
 
 ; block0:
 ;   sub a7,a0,a2
-;   mov t2,a7
+;   mv t2,a7
 ;   sltu t4,a0,t2
 ;   sub a1,a1,a3
 ;   sub a1,a1,t4
-;   mov a0,a7
+;   mv a0,a7
 ;   ret
 
 function %mul_i128(i128, i128) -> i128 {

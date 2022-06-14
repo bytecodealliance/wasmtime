@@ -9,18 +9,18 @@ block0(v0: i64, v1: i64):
     return v2
 }
 
-;   addi sp,-8
+;   add sp,-8
 ;   sd fp,0(sp)
-;   mov fp,sp
-;   addi sp,-16
+;   mv fp,sp
+;   add sp,-16
 ;   sd s7,0(sp)
 ; block0:
-;   mov s7,ra
+;   mv s7,ra
 ;   callind a1
-;   mov ra,s7
+;   mv ra,s7
 ;   ld s7,0(sp)
-;   addi sp,+16
+;   add sp,+16
 ;   ld fp,0(sp)
-;   addi sp,+8
+;   add sp,+8
 ;   ret
 

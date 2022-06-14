@@ -32,10 +32,8 @@ block0(v0: i64):
 }
 
 ; block0:
-;   auipc t2,0
-;   ld t2,12(t2)
-;   j 12
-;   .u64 0x3039
+;   lui t2,3
+;   addi t2,t2,57
 ;   sc.d zero,a0,(t2)
 ;   ret
 
@@ -70,10 +68,8 @@ block0(v0: i64):
 }
 
 ; block0:
-;   auipc t2,0
-;   ld t2,12(t2)
-;   j 12
-;   .u64 0x3039
+;   lui t2,3
+;   addi t2,t2,57
 ;   sc.w zero,a0,(t2)
 ;   ret
 

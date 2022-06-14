@@ -231,14 +231,7 @@ mod test {
 
     #[test]
     fn imm20_and_imm12() {
-        // 1981929472
-        let x: i64 = -1981925376;
-        let x = x as u64;
-        Imm20AndImm12::generate(x, |imm20, imm12| {
-            let imm20 = imm20.unwrap();
-            let imm12 = imm12.unwrap();
-
-            println!("{:x} {:?}", imm20.bits, imm12);
-        });
+        assert!(Imm20AndImm12::max() == (i32::MAX - 2048) as i64);
+        assert!(Imm20AndImm12::min() == i32::MIN as i64 - 2048);
     }
 }

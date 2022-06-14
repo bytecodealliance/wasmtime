@@ -57,7 +57,7 @@ block0(v0: i16, v1: i16):
 }
 
 ; block0:
-;   mov t5,a0
+;   mv t5,a0
 ;   andi a3,a1,15
 ;   ori a5,zero,16
 ;   sub a5,a5,a3
@@ -73,7 +73,7 @@ block0(v0: i8, v1: i8):
 }
 
 ; block0:
-;   mov t5,a0
+;   mv t5,a0
 ;   andi a3,a1,7
 ;   ori a5,zero,8
 ;   sub a5,a5,a3
@@ -133,7 +133,7 @@ block0(v0: i16, v1: i16):
 }
 
 ; block0:
-;   mov t5,a0
+;   mv t5,a0
 ;   andi a3,a1,15
 ;   ori a5,zero,16
 ;   sub a5,a5,a3
@@ -149,7 +149,7 @@ block0(v0: i8, v1: i8):
 }
 
 ; block0:
-;   mov t5,a0
+;   mv t5,a0
 ;   andi a3,a1,7
 ;   ori a5,zero,8
 ;   sub a5,a5,a3
@@ -322,7 +322,7 @@ block0(v0: i16):
 }
 
 ; block0:
-;   mov t5,a0
+;   mv t5,a0
 ;   ori a0,zero,10
 ;   andi a3,a0,15
 ;   ori a5,zero,16
@@ -340,7 +340,7 @@ block0(v0: i8):
 }
 
 ; block0:
-;   mov t5,a0
+;   mv t5,a0
 ;   ori a0,zero,3
 ;   andi a3,a0,7
 ;   ori a5,zero,8

@@ -11,20 +11,20 @@ block0(v0: i64):
     return v1
 }
 
-;   addi sp,-8
+;   add sp,-8
 ;   sd fp,0(sp)
-;   mov fp,sp
-;   addi sp,-16
+;   mv fp,sp
+;   add sp,-16
 ;   sd s7,0(sp)
 ; block0:
-;   mov s7,ra
+;   mv s7,ra
 ;   load_sym a4,%g+0
 ;   callind a4
-;   mov ra,s7
+;   mv ra,s7
 ;   ld s7,0(sp)
-;   addi sp,+16
+;   add sp,+16
 ;   ld fp,0(sp)
-;   addi sp,+8
+;   add sp,+8
 ;   ret
 
 function %f2(i32) -> i64 {
@@ -35,22 +35,22 @@ block0(v0: i32):
     return v1
 }
 
-;   addi sp,-8
+;   add sp,-8
 ;   sd fp,0(sp)
-;   mov fp,sp
-;   addi sp,-16
+;   mv fp,sp
+;   add sp,-16
 ;   sd s7,0(sp)
 ; block0:
-;   mov a6,a0
-;   mov s7,ra
+;   mv a6,a0
+;   mv s7,ra
 ;   uext.w a0,a6
 ;   load_sym a4,%g+0
 ;   callind a4
-;   mov ra,s7
+;   mv ra,s7
 ;   ld s7,0(sp)
-;   addi sp,+16
+;   add sp,+16
 ;   ld fp,0(sp)
-;   addi sp,+8
+;   add sp,+8
 ;   ret
 
 function %f3(i32) -> i32 uext  {
@@ -59,7 +59,7 @@ block0(v0: i32):
 }
 
 ; block0:
-;   mov a1,a0
+;   mv a1,a0
 ;   uext.w a0,a1
 ;   ret
 
@@ -71,22 +71,22 @@ block0(v0: i32):
     return v1
 }
 
-;   addi sp,-8
+;   add sp,-8
 ;   sd fp,0(sp)
-;   mov fp,sp
-;   addi sp,-16
+;   mv fp,sp
+;   add sp,-16
 ;   sd s7,0(sp)
 ; block0:
-;   mov a6,a0
-;   mov s7,ra
+;   mv a6,a0
+;   mv s7,ra
 ;   sext.w a0,a6
 ;   load_sym a4,%g+0
 ;   callind a4
-;   mov ra,s7
+;   mv ra,s7
 ;   ld s7,0(sp)
-;   addi sp,+16
+;   add sp,+16
 ;   ld fp,0(sp)
-;   addi sp,+8
+;   add sp,+8
 ;   ret
 
 function %f5(i32) -> i32 sext  {
@@ -95,7 +95,7 @@ block0(v0: i32):
 }
 
 ; block0:
-;   mov a1,a0
+;   mv a1,a0
 ;   sext.w a0,a1
 ;   ret
 
@@ -108,15 +108,15 @@ block0(v0: i8):
     return v2
 }
 
-;   addi sp,-8
+;   add sp,-8
 ;   sd fp,0(sp)
-;   mov fp,sp
-;   addi sp,-16
+;   mv fp,sp
+;   add sp,-16
 ;   sd s4,0(sp)
 ; block0:
-;   mov t3,a0
-;   mov s4,ra
-;   addi sp,-16
+;   mv t3,a0
+;   mv s4,ra
+;   add sp,-16
 ;   virtual_sp_offset_adj +16
 ;   ori a0,zero,42
 ;   ori a1,zero,42
@@ -129,13 +129,13 @@ block0(v0: i8):
 ;   sw t3,0(sp)
 ;   load_sym t3,%g+0
 ;   callind t3
-;   addi sp,+16
+;   add sp,+16
 ;   virtual_sp_offset_adj -16
-;   mov ra,s4
+;   mv ra,s4
 ;   ld s4,0(sp)
-;   addi sp,+16
+;   add sp,+16
 ;   ld fp,0(sp)
-;   addi sp,+8
+;   add sp,+8
 ;   ret
 
 function %f7(i8) -> i32, i32, i32, i32, i32, i32, i32, i32, i8 sext {
@@ -145,8 +145,8 @@ block0(v0: i8):
 }
 
 ; block0:
-;   mov a6,a0
-;   mov t4,a1
+;   mv a6,a0
+;   mv t4,a1
 ;   ori a0,zero,42
 ;   ori a1,zero,42
 ;   ori a2,zero,42
@@ -155,8 +155,8 @@ block0(v0: i8):
 ;   ori t0,zero,42
 ;   ori a3,zero,42
 ;   ori a4,zero,42
-;   mov a7,a6
-;   mov a1,t4
+;   mv a7,a6
+;   mv a1,t4
 ;   sw a2,48(a1)
 ;   sw a5,40(a1)
 ;   sw t3,32(a1)
@@ -184,10 +184,10 @@ block0:
     return
 }
 
-;   addi sp,-8
+;   add sp,-8
 ;   sd fp,0(sp)
-;   mov fp,sp
-;   addi sp,-80
+;   mv fp,sp
+;   add sp,-80
 ;   sd s2,0(sp)
 ;   sd s3,8(sp)
 ;   sd s4,16(sp)
@@ -199,40 +199,40 @@ block0:
 ;   fsd fs8,64(sp)
 ;   fsd fs10,72(sp)
 ; block0:
-;   mov s3,ra
+;   mv s3,ra
 ;   load_sym a0,%g0+0
 ;   callind a0
-;   mov ra,s3
+;   mv ra,s3
 ;   fmv.d fs10,fa0
-;   mov s5,ra
+;   mv s5,ra
 ;   load_sym a3,%g1+0
 ;   callind a3
-;   mov ra,s5
+;   mv ra,s5
 ;   fmv.d fs8,fa0
-;   mov s7,ra
+;   mv s7,ra
 ;   load_sym a6,%g1+0
 ;   callind a6
-;   mov ra,s7
+;   mv ra,s7
 ;   fmv.d fs6,fa0
-;   mov s4,ra
+;   mv s4,ra
 ;   load_sym t4,%g2+0
 ;   callind t4
-;   mov ra,s4
-;   mov s9,ra
+;   mv ra,s4
+;   mv s9,ra
 ;   fmv.d fa0,fs10
 ;   load_sym t1,%g3+0
 ;   callind t1
-;   mov ra,s9
-;   mov s11,ra
+;   mv ra,s9
+;   mv s11,ra
 ;   fmv.d fa0,fs8
 ;   load_sym a1,%g4+0
 ;   callind a1
-;   mov ra,s11
-;   mov s2,ra
+;   mv ra,s11
+;   mv s2,ra
 ;   fmv.d fa0,fs6
 ;   load_sym a4,%g4+0
 ;   callind a4
-;   mov ra,s2
+;   mv ra,s2
 ;   ld s2,0(sp)
 ;   ld s3,8(sp)
 ;   ld s4,16(sp)
@@ -243,9 +243,9 @@ block0:
 ;   fld fs6,56(sp)
 ;   fld fs8,64(sp)
 ;   fld fs10,72(sp)
-;   addi sp,+80
+;   add sp,+80
 ;   ld fp,0(sp)
-;   addi sp,+8
+;   add sp,+8
 ;   ret
 
 function %f9() {
