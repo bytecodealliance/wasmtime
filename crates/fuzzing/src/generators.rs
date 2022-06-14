@@ -163,6 +163,11 @@ impl<'a> Arbitrary<'a> for Config {
             ..
         } = &config.wasmtime.strategy
         {
+            // If the pooling allocator is used, do not allow shared memory to
+            // be created. FIXME: see
+            // https://github.com/bytecodealliance/wasmtime/issues/4244.
+            config.module_config.config.threads_enabled = false;
+
             // Force the use of a normal memory config when using the pooling allocator and
             // limit the static memory maximum to be the same as the pooling allocator's memory
             // page limit.
@@ -296,6 +301,7 @@ impl Config {
         config.reference_types_enabled = false;
         config.simd_enabled = false;
         config.memory64_enabled = false;
+        config.threads_enabled = false;
 
         // If using the pooling allocator, update the instance limits too
         if let InstanceAllocationStrategy::Pooling {
@@ -343,11 +349,11 @@ impl Config {
     pub fn set_spectest_compliant(&mut self) {
         let config = &mut self.module_config.config;
         config.memory64_enabled = false;
-        config.simd_enabled = false;
         config.bulk_memory_enabled = true;
         config.reference_types_enabled = true;
         config.multi_value_enabled = true;
         config.simd_enabled = true;
+        config.threads_enabled = false;
         config.max_memories = 1;
         config.max_tables = 5;
 
@@ -388,6 +394,7 @@ impl Config {
             .wasm_multi_memory(self.module_config.config.max_memories > 1)
             .wasm_simd(self.module_config.config.simd_enabled)
             .wasm_memory64(self.module_config.config.memory64_enabled)
+            .wasm_threads(self.module_config.config.threads_enabled)
             .wasm_backtrace(self.wasmtime.wasm_backtraces)
             .cranelift_nan_canonicalization(self.wasmtime.canonicalize_nans)
             .cranelift_opt_level(self.wasmtime.opt_level.to_wasmtime())
@@ -434,21 +441,33 @@ impl Config {
             }
         }
 
-        match &self.wasmtime.memory_config {
-            MemoryConfig::Normal(memory_config) => {
-                cfg.static_memory_maximum_size(
-                    memory_config.static_memory_maximum_size.unwrap_or(0),
-                )
-                .static_memory_guard_size(memory_config.static_memory_guard_size.unwrap_or(0))
-                .dynamic_memory_guard_size(memory_config.dynamic_memory_guard_size.unwrap_or(0))
-                .guard_before_linear_memory(memory_config.guard_before_linear_memory);
-            }
-            MemoryConfig::CustomUnaligned => {
-                cfg.with_host_memory(Arc::new(UnalignedMemoryCreator))
-                    .static_memory_maximum_size(0)
-                    .dynamic_memory_guard_size(0)
-                    .static_memory_guard_size(0)
-                    .guard_before_linear_memory(false);
+        // Vary the memory configuration, but only if threads are not enabled.
+        // When the threads proposal is enabled we might generate shared memory,
+        // which is less amenable to different memory configurations:
+        // - shared memories are required to be "static" so fuzzing the various
+        //   memory configurations will mostly result in uninteresting errors.
+        //   The interesting part about shared memories is the runtime so we
+        //   don't fuzz non-default settings.
+        // - shared memories are required to be aligned which means that the
+        //   `CustomUnaligned` variant isn't actually safe to use with a shared
+        //   memory.
+        if !self.module_config.config.threads_enabled {
+            match &self.wasmtime.memory_config {
+                MemoryConfig::Normal(memory_config) => {
+                    cfg.static_memory_maximum_size(
+                        memory_config.static_memory_maximum_size.unwrap_or(0),
+                    )
+                    .static_memory_guard_size(memory_config.static_memory_guard_size.unwrap_or(0))
+                    .dynamic_memory_guard_size(memory_config.dynamic_memory_guard_size.unwrap_or(0))
+                    .guard_before_linear_memory(memory_config.guard_before_linear_memory);
+                }
+                MemoryConfig::CustomUnaligned => {
+                    cfg.with_host_memory(Arc::new(UnalignedMemoryCreator))
+                        .static_memory_maximum_size(0)
+                        .dynamic_memory_guard_size(0)
+                        .static_memory_guard_size(0)
+                        .guard_before_linear_memory(false);
+                }
             }
         }
 
@@ -633,6 +652,11 @@ impl<'a> Arbitrary<'a> for ModuleConfig {
         // these are all unconditionally turned off even with
         // `SwarmConfig::arbitrary`.
         config.memory64_enabled = u.arbitrary()?;
+
+        // Allow the threads proposal if memory64 is not already enabled. FIXME:
+        // to allow threads and memory64 to coexist, see
+        // https://github.com/bytecodealliance/wasmtime/issues/4267.
+        config.threads_enabled = !config.memory64_enabled && u.arbitrary()?;
 
         Ok(ModuleConfig { config })
     }
