@@ -13,10 +13,10 @@
 // in the high 4 bits, giving a range of 2-256 lanes.
 
 /// Start of the lane types.
-pub const LANE_BASE: u8 = 0x70;
+pub const LANE_BASE: u16 = 0x70;
 
 /// Base for reference types.
-pub const REFERENCE_BASE: u8 = 0x7E;
+pub const REFERENCE_BASE: u16 = 0x7E;
 
 /// Start of the 2-lane vector types.
-pub const VECTOR_BASE: u8 = 0x80;
+pub const VECTOR_BASE: u16 = 0x80;
