@@ -25,6 +25,26 @@ pub trait WasiFile: Send + Sync {
         Err(Error::badf())
     }
 
+    async fn sock_recv<'a>(
+        &mut self,
+        _ri_data: &mut [std::io::IoSliceMut<'a>],
+        _ri_flags: RiFlags,
+    ) -> Result<(u64, RoFlags), Error> {
+        Err(Error::badf())
+    }
+
+    async fn sock_send<'a>(
+        &mut self,
+        _si_data: &[std::io::IoSlice<'a>],
+        _si_flags: SiFlags,
+    ) -> Result<u64, Error> {
+        Err(Error::badf())
+    }
+
+    async fn sock_shutdown(&mut self, _how: SdFlags) -> Result<(), Error> {
+        Err(Error::badf())
+    }
+
     async fn datasync(&mut self) -> Result<(), Error> {
         Ok(())
     }
@@ -142,6 +162,31 @@ bitflags! {
         const NONBLOCK = 0b100;
         const RSYNC    = 0b1000;
         const SYNC     = 0b10000;
+    }
+}
+
+bitflags! {
+    pub struct SdFlags: u32 {
+        const RD = 0b1;
+        const WR = 0b10;
+    }
+}
+
+bitflags! {
+    pub struct SiFlags: u32 {
+    }
+}
+
+bitflags! {
+    pub struct RiFlags: u32 {
+        const RECV_PEEK    = 0b1;
+        const RECV_WAITALL = 0b10;
+    }
+}
+
+bitflags! {
+    pub struct RoFlags: u32 {
+        const RECV_DATA_TRUNCATED = 0b1;
     }
 }
 
