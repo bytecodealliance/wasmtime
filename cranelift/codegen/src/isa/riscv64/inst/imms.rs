@@ -4,7 +4,7 @@
 #[allow(dead_code)]
 use std::fmt::{Debug, Display, Formatter, Result};
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Default)]
 pub struct Imm12 {
     pub bits: i16,
 }
@@ -74,13 +74,13 @@ impl std::ops::Neg for Imm12 {
 }
 
 // singed
-#[derive(Clone, Copy)]
-pub struct Umm20 {
+#[derive(Clone, Copy, Default)]
+pub struct Imm20 {
     /// The immediate bits.
     pub bits: i32,
 }
 
-impl Umm20 {
+impl Imm20 {
     #[inline(always)]
     pub fn from_bits(bits: i32) -> Self {
         Self {
@@ -93,13 +93,13 @@ impl Umm20 {
     }
 }
 
-impl Debug for Umm20 {
+impl Debug for Imm20 {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         write!(f, "{}", self.bits)
     }
 }
 
-impl Display for Umm20 {
+impl Display for Imm20 {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         write!(f, "{}", self.bits)
     }
@@ -144,6 +144,80 @@ impl Display for Uimm5 {
     }
 }
 
+/*
+    a imm20 immediate and a Imm12 immediate can generate what immediate.
+    imm20 + imm12
+*/
+pub struct Imm20AndImm12 {}
+impl Imm20AndImm12 {
+    pub(crate) fn min() -> i64 {
+        let imm20_max: i64 = (1 << 19) << 12;
+        let imm12_max = 1 << 11;
+        -imm20_max - imm12_max
+    }
+    pub(crate) fn max() -> i64 {
+        let imm20_max: i64 = ((1 << 19) - 1) << 12;
+        let imm12_max = (1 << 11) - 1;
+        imm20_max + imm12_max
+    }
+    pub(crate) fn generate<R>(
+        value: u64,
+        mut handle_imm: impl FnMut(Option<Imm20>, Option<Imm12>) -> R,
+    ) -> Option<R> {
+        if let Some(imm12) = Imm12::maybe_from_u64(value) {
+            /*
+                can be load using single imm12.
+            */
+            let r = handle_imm(None, Some(imm12));
+            return Some(r);
+        }
+        let value = value as i64;
+        if !(value >= Self::min() && value <= Self::max()) {
+            /*
+                not in range, return None.
+            */
+            return None;
+        }
+        const MOD_NUM: i64 = 4096;
+        let (imm20, imm12) = if value > 0 {
+            let mut imm20 = value / MOD_NUM;
+            let mut imm12 = value % MOD_NUM;
+            if imm12 >= 2048 {
+                imm12 -= MOD_NUM;
+                imm20 += 1;
+            }
+            assert!(imm12 >= -2048 && imm12 <= 2047);
+            (imm20, imm12)
+        } else {
+            // this is the abs value.
+            let value_abs = value.abs();
+            let imm20 = value_abs / MOD_NUM;
+            let imm12 = value_abs % MOD_NUM;
+            let mut imm20 = -imm20;
+            let mut imm12 = -imm12;
+            if imm12 < -2048 {
+                imm12 += MOD_NUM;
+                imm20 -= 1;
+            }
+            (imm20, imm12)
+        };
+        assert!(imm20 >= -(0x7_ffff + 1) && imm20 <= 0x7_ffff);
+        assert!(imm20 != 0 || imm12 != 0);
+        Some(handle_imm(
+            if imm20 != 0 {
+                Some(Imm20::from_bits(imm20 as i32))
+            } else {
+                None
+            },
+            if imm12 != 0 {
+                Some(Imm12::from_bits(imm12 as i16))
+            } else {
+                None
+            },
+        ))
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -153,5 +227,18 @@ mod test {
         let x = Imm12::zero();
         assert_eq!(0, x.as_u32());
         Imm12::maybe_from_u64(0xffff_ffff_ffff_ffff).unwrap();
+    }
+
+    #[test]
+    fn imm20_and_imm12() {
+        // 1981929472
+        let x: i64 = -1981925376;
+        let x = x as u64;
+        Imm20AndImm12::generate(x, |imm20, imm12| {
+            let imm20 = imm20.unwrap();
+            let imm12 = imm12.unwrap();
+
+            println!("{:x} {:?}", imm20.bits, imm12);
+        });
     }
 }

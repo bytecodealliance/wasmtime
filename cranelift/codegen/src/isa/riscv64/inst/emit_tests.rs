@@ -552,14 +552,14 @@ fn test_riscv64_binemit() {
     insns.push(TestUnit::new(
         Inst::Lui {
             rd: writable_zero_reg(),
-            imm: Umm20::from_bits(120),
+            imm: Imm20::from_bits(120),
         },
         "lui zero,120",
     ));
     insns.push(TestUnit::new(
         Inst::Auipc {
             rd: writable_zero_reg(),
-            imm: Umm20::from_bits(120),
+            imm: Imm20::from_bits(120),
         },
         "auipc zero,120",
     ));

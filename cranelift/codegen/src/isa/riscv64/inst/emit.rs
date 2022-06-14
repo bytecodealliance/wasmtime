@@ -14,6 +14,8 @@ impl EmitInfo {
     }
 }
 
+/// load constant by put the constant in the code stream.
+/// caculate the pc and using load instruction.
 #[derive(Clone, Copy)]
 pub(crate) enum LoadConstant {
     U32(u32),
@@ -45,7 +47,7 @@ impl LoadConstant {
         let mut insts = SmallInstVec::new();
         insts.push(Inst::Auipc {
             rd,
-            imm: Umm20 { bits: 0 },
+            imm: Imm20 { bits: 0 },
         });
         // load
         insts.push(Inst::Load {
@@ -870,7 +872,7 @@ impl MachInstEmit for Inst {
                     .emit(&[], sink, emit_info, state);
                 } else {
                     let tmp = writable_spilltmp_reg();
-                    let mut insts = LoadConstant::U64(amount as u64).load_constant(tmp);
+                    let mut insts = Inst::load_constant_u64(tmp, amount as u64);
                     insts.push(Inst::AluRRR {
                         alu_op: AluOPRRR::Add,
                         rd: writable_stack_reg(),
@@ -931,7 +933,7 @@ impl MachInstEmit for Inst {
                         if offset != 0 {
                             if LabelUse::Jal20.offset_in_range(offset) {
                                 let mut code = code.to_le_bytes();
-                                LabelUse::Jal20.patch_raw_offset(&mut code, offset);
+                                LabelUse::Jal20.patch_raw_offset(&mut code, offset as i64);
                                 sink.put_data(&code[..]);
                             } else {
                                 Inst::construct_auipc_and_jalr(writable_spilltmp_reg(), offset)
@@ -962,7 +964,7 @@ impl MachInstEmit for Inst {
                         if LabelUse::B12.offset_in_range(offset) {
                             let code = kind.emit();
                             let mut code = code.to_le_bytes();
-                            LabelUse::B12.patch_raw_offset(&mut code, offset);
+                            LabelUse::B12.patch_raw_offset(&mut code, offset as i64);
                             sink.put_data(&code[..])
                         } else {
                             let mut code = kind.emit().to_le_bytes();
@@ -1649,7 +1651,7 @@ impl MachInstEmit for Inst {
                 // get the current pc.
                 Inst::Auipc {
                     rd: rd,
-                    imm: Umm20::from_bits(0),
+                    imm: Imm20::from_bits(0),
                 }
                 .emit(&[], sink, emit_info, state);
                 // load the value.

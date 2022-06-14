@@ -100,7 +100,7 @@ pub enum BranchTarget {
     ResolvedOffset(i32),
 }
 
-pub(crate) fn enc_auipc(rd: Writable<Reg>, imm: Umm20) -> u32 {
+pub(crate) fn enc_auipc(rd: Writable<Reg>, imm: Imm20) -> u32 {
     let x = 0b0010111 | reg_to_gpr_num(rd.to_reg()) << 7 | imm.as_u32() << 12;
     x
 }
@@ -202,26 +202,47 @@ impl Inst {
         }
     }
 
+    /*
+        can be load using lui and addi instructions.
+    */
+    fn can_be_load_using_lui_and_addi(rd: Writable<Reg>, value: u64) -> Option<SmallInstVec<Inst>> {
+        Imm20AndImm12::generate(value, |imm20, imm12| {
+            let mut insts = SmallVec::new();
+            imm20.map(|x| insts.push(Inst::Lui { rd, imm: x }));
+            imm12.map(|x| {
+                let rs = if imm20.is_none() {
+                    zero_reg()
+                } else {
+                    rd.to_reg()
+                };
+                insts.push(Inst::AluRRImm12 {
+                    alu_op: AluOPRRI::Addi,
+                    rd,
+                    rs,
+                    imm12: x,
+                })
+            });
+
+            insts
+        })
+    }
+
     pub(crate) fn load_constant_u32(rd: Writable<Reg>, value: u64) -> SmallInstVec<Inst> {
-        let mut insts = SmallVec::new();
-        if let Some(imm) = Imm12::maybe_from_u64(value) {
-            insts.push(Inst::load_constant_imm12(rd, imm));
+        let insts = Inst::can_be_load_using_lui_and_addi(rd, value);
+        if insts.is_some() {
+            return insts.unwrap();
         } else {
-            insts.extend(LoadConstant::U32(value as u32).load_constant(rd))
+            return LoadConstant::U32(value as u32).load_constant(rd);
         }
-        insts
     }
 
     pub fn load_constant_u64(rd: Writable<Reg>, value: u64) -> SmallInstVec<Inst> {
-        let mut insts = SmallVec::new();
-        if let Some(imm12) = Imm12::maybe_from_u64(value) {
-            insts.push(Inst::load_constant_imm12(rd, imm12));
-        } else if value >> 32 == 0 {
-            insts.extend(Inst::load_constant_u32(rd, value));
+        let insts = Inst::can_be_load_using_lui_and_addi(rd, value);
+        if insts.is_some() {
+            insts.unwrap()
         } else {
-            insts.extend(LoadConstant::U64(value).load_constant(rd))
+            LoadConstant::U64(value).load_constant(rd)
         }
-        insts
     }
 
     /*
@@ -230,7 +251,7 @@ impl Inst {
     pub(crate) fn construct_auipc_and_jalr(tmp: Writable<Reg>, offset: i32) -> [Inst; 2] {
         let a = Inst::Auipc {
             rd: tmp,
-            imm: Umm20::from_bits(offset >> 12),
+            imm: Imm20::from_bits(offset >> 12),
         };
         let b = Inst::Jalr {
             rd: writable_zero_reg(),
@@ -1248,9 +1269,9 @@ impl MachInstLabelUse for LabelUse {
     /// Maximum PC-relative range (positive), inclusive.
     fn max_pos_range(self) -> CodeOffset {
         match self {
-            LabelUse::Jal20 => ((1 << 20) - 1) * 2,
-            LabelUse::PCRel32 => i32::MAX as CodeOffset,
-            LabelUse::B12 => ((1 << 12) - 1) * 2,
+            LabelUse::Jal20 => ((1 << 19) - 1) * 2,
+            LabelUse::PCRel32 => Imm20AndImm12::max() as CodeOffset,
+            LabelUse::B12 => ((1 << 11) - 1) * 2,
         }
     }
 
@@ -1258,7 +1279,7 @@ impl MachInstLabelUse for LabelUse {
     fn max_neg_range(self) -> CodeOffset {
         match self {
             LabelUse::PCRel32 => self.max_pos_range() + 1,
-            _ => self.max_pos_range() + 2,
+            _ => Imm20AndImm12::min().abs() as CodeOffset,
         }
     }
 
@@ -1282,7 +1303,7 @@ impl MachInstLabelUse for LabelUse {
             "offset must not exceed max range."
         );
         // safe to convert long range to short range.
-        self.patch_raw_offset(buffer, offset as i32);
+        self.patch_raw_offset(buffer, offset);
     }
 
     /// Is a veneer supported for this label reference type?
@@ -1313,7 +1334,7 @@ impl MachInstLabelUse for LabelUse {
         // unimplemented!("generate_veneer:{:?} {:?}", buffer, veneer_offset);
         let base = writable_spilltmp_reg();
         {
-            let x = enc_auipc(base, Umm20::from_bits(0)).to_le_bytes();
+            let x = enc_auipc(base, Imm20::from_bits(0)).to_le_bytes();
             buffer[0] = x[0];
             buffer[1] = x[1];
             buffer[2] = x[2];
@@ -1344,11 +1365,10 @@ impl LabelUse {
     /*
 
     */
-    fn patch_raw_offset(self, buffer: &mut [u8], offset: i32) {
-        // safe to convert long range to short range.
-        let offset = offset as u32;
+    fn patch_raw_offset(self, buffer: &mut [u8], offset: i64) {
         match self {
             LabelUse::Jal20 => {
+                let offset = offset as u32;
                 let raw = { &mut buffer[0] as *mut u8 as *mut u32 };
                 let v = ((offset >> 12 & 0b1111_1111) << 12)
                     | ((offset >> 11 & 0b1) << 20)
@@ -1359,23 +1379,27 @@ impl LabelUse {
                 }
             }
             LabelUse::PCRel32 => {
-                // auipc part
-                {
-                    let raw = { &mut buffer[0] as *mut u8 as *mut u32 };
-                    let v = offset & (!0xfff);
+                let auipc = { &mut buffer[0] as *mut u8 as *mut u32 };
+                let jalr = { &mut buffer[4] as *mut u8 as *mut u32 };
+                Imm20AndImm12::generate(offset as u64, |imm20, imm12| {
+                    let imm20 = imm20.unwrap_or_default();
+                    let imm12 = imm12.unwrap_or_default();
+                    /*
+                    zero_reg() is fine, the register parameter must have be in code stream.
+                    because of "|=" zero_reg() would not change the old value.
+                    */
                     unsafe {
-                        *raw |= v;
+                        *auipc |= enc_auipc(writable_zero_reg(), imm20);
                     }
-                }
-                {
-                    let raw = { &mut buffer[4] as *mut u8 as *mut u32 };
-                    let v = (offset & 0xfff) << 20;
                     unsafe {
-                        *raw |= v;
+                        *jalr |= enc_jalr(writable_zero_reg(), zero_reg(), imm12);
                     }
-                }
+                })
+                .unwrap(); /* unwrap make sure we handled. */
             }
+
             LabelUse::B12 => {
+                let offset = offset as u32;
                 let raw = &mut buffer[0] as *mut u8 as *mut u32;
                 let v = ((offset >> 11 & 0b1) << 7)
                     | ((offset >> 1 & 0b1111) << 8)

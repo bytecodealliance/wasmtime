@@ -8,11 +8,11 @@
     ;; load immediate
     (Lui
       (rd WritableReg)
-      (imm Umm20))
+      (imm Imm20))
 
      (Auipc
       (rd WritableReg)
-      (imm Umm20))
+      (imm Imm20))
     
 
     ;; An ALU operation with one register sources and a register destination.
@@ -595,7 +595,7 @@
 (type OptionUimm5 (primitive OptionUimm5))
 (type Imm12 (primitive Imm12))
 (type UImm5 (primitive UImm5))
-(type Umm20 (primitive Umm20))
+(type Imm20 (primitive Imm20))
 (type Imm3 (primitive Imm3))
 (type BranchTarget (primitive BranchTarget))
 (type CsrAddress (primitive CsrAddress))
