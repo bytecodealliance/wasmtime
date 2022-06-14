@@ -1061,7 +1061,7 @@ impl Config {
     /// ## Errors
     ///
     /// The `Engine::new` method will return an error if this option is smaller
-    /// than the value configured for [`Config::dynamic_memory_guard_size`]
+    /// than the value configured for [`Config::dynamic_memory_guard_size`].
     pub fn static_memory_guard_size(&mut self, guard_size: u64) -> &mut Self {
         let guard_size = round_up_to_pages(guard_size);
         self.tunables.static_memory_offset_guard_size = guard_size;
@@ -1094,7 +1094,7 @@ impl Config {
     /// ## Errors
     ///
     /// The `Engine::new` method will return an error if this option is larger
-    /// than the value configured for [`Config::static_memory_guard_size`]
+    /// than the value configured for [`Config::static_memory_guard_size`].
     pub fn dynamic_memory_guard_size(&mut self, guard_size: u64) -> &mut Self {
         let guard_size = round_up_to_pages(guard_size);
         self.tunables.dynamic_memory_offset_guard_size = guard_size;
