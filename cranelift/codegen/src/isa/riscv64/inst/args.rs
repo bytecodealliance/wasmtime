@@ -1303,7 +1303,7 @@ impl FClassResult {
 pub struct FloatCCArgs(pub(crate) u8);
 
 impl FloatCCArgs {
-    // unoder
+    // unorder
     pub(crate) const UN: u8 = 1 << 0;
     // equal
     pub(crate) const EQ: u8 = 1 << 1;

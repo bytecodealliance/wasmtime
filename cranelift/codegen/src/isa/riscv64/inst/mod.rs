@@ -937,7 +937,7 @@ impl Inst {
             &Inst::Jalr { rd, base, offset } => {
                 let base = format_reg(base, allocs);
                 let rd = format_reg(rd.to_reg(), allocs);
-                format!("{} {},{}({})", "jalr", rd, offset.bits, base,)
+                format!("{} {},{}({})", "jalr", rd, offset.bits, base)
             }
             &Inst::Lui { rd, ref imm } => {
                 format!("{} {},{}", "lui", format_reg(rd.to_reg(), allocs), imm.bits)
@@ -1029,7 +1029,7 @@ impl Inst {
                 let rs = format_reg(rs, allocs);
                 let rd = format_reg(rd.to_reg(), allocs);
                 if alu_op.is_bit_manip() {
-                    if let Some(_) = alu_op.need_shamt() {
+                    if alu_op.need_shamt().is_some() {
                         let shamt = (imm12.as_i16() as u8) & alu_op.shamt_mask();
                         format!("{} {},{},{}", alu_op.op_name(), rd, rs, shamt)
                     } else {

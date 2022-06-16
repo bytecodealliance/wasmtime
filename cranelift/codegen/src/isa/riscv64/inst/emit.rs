@@ -43,8 +43,8 @@ impl LoadConstant {
     }
 
     pub(crate) fn load_constant(self, rd: Writable<Reg>) -> SmallInstVec<Inst> {
-        // get current pc.
         let mut insts = SmallInstVec::new();
+        // get current pc.
         insts.push(Inst::Auipc {
             rd,
             imm: Imm20 { bits: 0 },
@@ -180,7 +180,7 @@ impl Inst {
     ) -> SmallInstVec<Inst> {
         assert!(tmp.to_reg().class() == RegClass::Int);
         let mut insts = SmallInstVec::new();
-        let mut cc_bit = FloatCCArgs::from_floatcc(cc);
+        let mut cc_args = FloatCCArgs::from_floatcc(cc);
         let eq_op = if ty == F32 {
             FpuOPRRR::FeqS
         } else {
@@ -198,7 +198,7 @@ impl Inst {
         };
 
         // >=
-        if cc_bit.has_and_clear(FloatCCArgs::GT | FloatCCArgs::EQ) {
+        if cc_args.has_and_clear(FloatCCArgs::GT | FloatCCArgs::EQ) {
             insts.push(Inst::FpuRRR {
                 frm: None,
                 alu_op: le_op,
@@ -218,7 +218,7 @@ impl Inst {
         }
 
         // <=
-        if cc_bit.has_and_clear(FloatCCArgs::LT | FloatCCArgs::EQ) {
+        if cc_args.has_and_clear(FloatCCArgs::LT | FloatCCArgs::EQ) {
             insts.push(Inst::FpuRRR {
                 frm: None,
                 alu_op: le_op,
@@ -238,7 +238,7 @@ impl Inst {
         }
 
         // if eq
-        if cc_bit.has_and_clear(FloatCCArgs::EQ) {
+        if cc_args.has_and_clear(FloatCCArgs::EQ) {
             insts.push(Inst::FpuRRR {
                 frm: None,
                 alu_op: eq_op,
@@ -257,7 +257,7 @@ impl Inst {
             });
         }
         // if ne
-        if cc_bit.has_and_clear(FloatCCArgs::NE) {
+        if cc_args.has_and_clear(FloatCCArgs::NE) {
             insts.push(Inst::FpuRRR {
                 frm: None,
                 alu_op: eq_op,
@@ -277,7 +277,7 @@ impl Inst {
         }
 
         // if <
-        if cc_bit.has_and_clear(FloatCCArgs::LT) {
+        if cc_args.has_and_clear(FloatCCArgs::LT) {
             insts.push(Inst::FpuRRR {
                 frm: None,
                 alu_op: lt_op,
@@ -296,7 +296,7 @@ impl Inst {
             });
         }
         // if gt
-        if cc_bit.has_and_clear(FloatCCArgs::GT) {
+        if cc_args.has_and_clear(FloatCCArgs::GT) {
             insts.push(Inst::FpuRRR {
                 frm: None,
                 alu_op: lt_op,
@@ -315,7 +315,7 @@ impl Inst {
             });
         }
         // if unorder
-        if cc_bit.has_and_clear(FloatCCArgs::UN) {
+        if cc_args.has_and_clear(FloatCCArgs::UN) {
             insts.extend(Inst::lower_float_unordered(tmp, ty, x, y, taken, not_taken));
         } else {
             //make sure we goto the not_taken.
@@ -323,7 +323,7 @@ impl Inst {
             insts.push(Inst::Jal { dest: not_taken });
         }
         // make sure we handle all cases.
-        assert!(cc_bit.0 == 0);
+        assert!(cc_args.0 == 0);
         insts
     }
     pub(crate) fn lower_br_icmp(
@@ -1832,7 +1832,7 @@ impl MachInstEmit for Inst {
         let end_off = sink.cur_offset();
         assert!(
             (end_off - start_off) <= Inst::worst_case_size(),
-            "Inst:{:?} length:{} worst_case_size{}",
+            "Inst:{:?} length:{} worst_case_size:{}",
             self,
             end_off - start_off,
             Inst::worst_case_size()

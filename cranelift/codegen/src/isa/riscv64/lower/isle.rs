@@ -1345,10 +1345,13 @@ where
     memory representation of f32.
 */
 fn f32_to_u64(f: f32) -> u32 {
-    let x = f.to_be_bytes();
+    let x = f.to_le_bytes();
     u32::from_le_bytes(x)
 }
+/*
+    memory representation of f64.
+*/
 fn f64_to_u64(f: f64) -> u64 {
-    let x = f.to_be_bytes();
+    let x = f.to_le_bytes();
     u64::from_le_bytes(x)
 }
