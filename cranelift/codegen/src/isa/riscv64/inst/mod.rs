@@ -205,7 +205,7 @@ impl Inst {
     /*
         can be load using lui and addi instructions.
     */
-    fn can_be_load_using_lui_and_addi(rd: Writable<Reg>, value: u64) -> Option<SmallInstVec<Inst>> {
+    fn load_const_imm(rd: Writable<Reg>, value: u64) -> Option<SmallInstVec<Inst>> {
         Inst::generate_imm(value, |imm20, imm12| {
             let mut insts = SmallVec::new();
             imm20.map(|x| insts.push(Inst::Lui { rd, imm: x }));
@@ -229,29 +229,32 @@ impl Inst {
     }
 
     pub(crate) fn load_constant_u32(rd: Writable<Reg>, value: u64) -> SmallInstVec<Inst> {
-        let insts = Inst::can_be_load_using_lui_and_addi(rd, value);
+        let insts = Inst::load_const_imm(rd, value);
         insts.unwrap_or(LoadConstant::U32(value as u32).load_constant(rd))
     }
 
     pub fn load_constant_u64(rd: Writable<Reg>, value: u64) -> SmallInstVec<Inst> {
-        let insts = Inst::can_be_load_using_lui_and_addi(rd, value);
+        let insts = Inst::load_const_imm(rd, value);
         insts.unwrap_or(LoadConstant::U64(value).load_constant(rd))
     }
 
     /*
         this will discard return address.
     */
-    pub(crate) fn construct_auipc_and_jalr(tmp: Writable<Reg>, offset: i32) -> [Inst; 2] {
-        let a = Inst::Auipc {
-            rd: tmp,
-            imm: Imm20::from_bits(offset >> 12),
-        };
-        let b = Inst::Jalr {
-            rd: writable_zero_reg(),
-            base: tmp.to_reg(),
-            offset: Imm12::from_bits((offset & 0xfff) as i16),
-        };
-        [a, b]
+    pub(crate) fn construct_auipc_and_jalr(tmp: Writable<Reg>, offset: i64) -> [Inst; 2] {
+        Inst::generate_imm(offset as u64, |imm20, imm12| {
+            let a = Inst::Auipc {
+                rd: tmp,
+                imm: imm20.unwrap_or_default(),
+            };
+            let b = Inst::Jalr {
+                rd: writable_zero_reg(),
+                base: tmp.to_reg(),
+                offset: imm12.unwrap_or_default(),
+            };
+            [a, b]
+        })
+        .expect("code range is too big.")
     }
 
     /// Create instructions that load a 32-bit floating-point constant.
@@ -1294,7 +1297,6 @@ impl MachInstLabelUse for LabelUse {
             offset >= -(self.max_neg_range() as i64) && offset <= (self.max_pos_range() as i64),
             "offset must not exceed max range."
         );
-        // safe to convert long range to short range.
         self.patch_raw_offset(buffer, offset);
     }
 
@@ -1312,7 +1314,7 @@ impl MachInstLabelUse for LabelUse {
         match self {
             Self::B12 => 8,
             Self::Jal20 => 8,
-            _ => 0,
+            _ => unreachable!(),
         }
     }
 
@@ -1368,6 +1370,7 @@ impl LabelUse {
                     *raw |= v;
                 }
             }
+
             LabelUse::PCRel32 => {
                 let auipc = { &mut buffer[0] as *mut u8 as *mut u32 };
                 let jalr = { &mut buffer[4] as *mut u8 as *mut u32 };
@@ -1385,7 +1388,8 @@ impl LabelUse {
                         *jalr |= enc_jalr(writable_zero_reg(), zero_reg(), imm12);
                     }
                 })
-                .unwrap(); /* unwrap make sure we handled. */
+                .expect("we have check the range before,this is a compiler error.");
+                /* unwrap make sure we handled. */
             }
 
             LabelUse::B12 => {

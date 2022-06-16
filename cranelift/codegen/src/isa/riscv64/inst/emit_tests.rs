@@ -2417,8 +2417,15 @@ fn riscv64_worst_case_size_instrcution_size() {
     // });
     //
     candidates.push(Inst::Fcmp {
-        rd: writable_fa0(),
+        rd: writable_a0(),
         cc: FloatCC::UnorderedOrLessThanOrEqual,
+        ty: F64,
+        rs1: fa1(),
+        rs2: fa0(),
+    });
+    candidates.push(Inst::Fcmp {
+        rd: writable_a0(),
+        cc: FloatCC::NotEqual,
         ty: F64,
         rs1: fa1(),
         rs2: fa0(),
@@ -2508,8 +2515,9 @@ fn riscv64_worst_case_size_instrcution_size() {
         let length = buffer.data().len() as u32;
         if length > max.0 {
             let length = buffer.data().len() as u32;
-            max = (length, i);
+            max = (length, i.clone());
         }
+        println!("insn:{:?}  length: {}", i, length);
     }
     println!("caculate max size is {} , inst is {:?}", max.0, max.1);
     assert!(max.0 == Inst::worst_case_size());

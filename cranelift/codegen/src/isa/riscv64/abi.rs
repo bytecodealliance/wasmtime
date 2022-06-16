@@ -393,7 +393,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
     // move fp , sp     ;; set fp to sp
     fn gen_prologue_frame_setup(_flags: &settings::Flags) -> SmallInstVec<Inst> {
         let mut insts = SmallVec::new();
-        // insts.extend(Inst::push_registers(&vec![Writable::from_reg(x_reg(31))]));
+
         insts.push(Inst::AjustSp {
             amount: -(Self::word_bytes() as i64),
         });
@@ -422,7 +422,6 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         insts.push(Inst::AjustSp {
             amount: Self::word_bytes() as i64,
         });
-        // insts.extend(Inst::pop_registers(&vec![Writable::from_reg(x_reg(31))]));
         insts
     }
 

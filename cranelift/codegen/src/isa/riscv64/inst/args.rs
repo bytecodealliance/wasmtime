@@ -1284,7 +1284,6 @@ impl FClassResult {
     }
 
     #[inline]
-    #[allow(dead_code)]
     pub(crate) fn is_infinite_bits() -> u32 {
         Self::PosInfinite.bit() | Self::NegInfinite.bit()
     }
@@ -1324,27 +1323,22 @@ impl FloatCCBit {
         mask bit for floatcc
     */
     pub(crate) fn floatcc_2_mask_bits<T: Into<FloatCC>>(t: T) -> Self {
-        let v = match t.into() {
-            FloatCC::Ordered => Self::EQ.bits() | Self::LT.bits() | Self::GT.bits(),
-            FloatCC::Unordered => Self::UN.bits(),
-            FloatCC::Equal => Self::EQ.bits(),
-            FloatCC::NotEqual => Self::UN.bits() | Self::LT.bits() | Self::GT.bits(),
-            FloatCC::OrderedNotEqual => Self::LT.bits() | Self::GT.bits(),
-            FloatCC::UnorderedOrEqual => Self::UN.bits() | Self::EQ.bits(),
-            FloatCC::LessThan => Self::LT.bits(),
-            FloatCC::LessThanOrEqual => Self::LT.bits() | Self::EQ.bits(),
-            FloatCC::GreaterThan => Self::GT.bits(),
-            FloatCC::GreaterThanOrEqual => Self::GT.bits() | Self::EQ.bits(),
-            FloatCC::UnorderedOrLessThan => Self::UN.bits() | Self::LT.bits(),
-            FloatCC::UnorderedOrLessThanOrEqual => {
-                Self::UN.bits() | Self::LT.bits() | Self::EQ.bits()
-            }
-            FloatCC::UnorderedOrGreaterThan => Self::UN.bits() | Self::GT.bits(),
-            FloatCC::UnorderedOrGreaterThanOrEqual => {
-                Self::UN.bits() | Self::GT.bits() | Self::EQ.bits()
-            }
-        };
-        Self::CompareSet(v)
+        match t.into() {
+            FloatCC::Ordered => Self::EQ | Self::LT | Self::GT,
+            FloatCC::Unordered => Self::UN,
+            FloatCC::Equal => Self::EQ,
+            FloatCC::NotEqual => Self::UN | Self::LT | Self::GT,
+            FloatCC::OrderedNotEqual => Self::LT | Self::GT,
+            FloatCC::UnorderedOrEqual => Self::UN | Self::EQ,
+            FloatCC::LessThan => Self::LT,
+            FloatCC::LessThanOrEqual => Self::LT | Self::EQ,
+            FloatCC::GreaterThan => Self::GT,
+            FloatCC::GreaterThanOrEqual => Self::GT | Self::EQ,
+            FloatCC::UnorderedOrLessThan => Self::UN | Self::LT,
+            FloatCC::UnorderedOrLessThanOrEqual => Self::UN | Self::LT | Self::EQ,
+            FloatCC::UnorderedOrGreaterThan => Self::UN | Self::GT,
+            FloatCC::UnorderedOrGreaterThanOrEqual => Self::UN | Self::GT | Self::EQ,
+        }
     }
 
     #[inline]

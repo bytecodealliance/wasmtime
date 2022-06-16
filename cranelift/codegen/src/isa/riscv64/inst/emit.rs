@@ -198,7 +198,6 @@ impl Inst {
         };
 
         // >=
-
         if cc_bit.has_and_clear(FloatCCBit::GT | FloatCCBit::EQ) {
             insts.push(Inst::FpuRRR {
                 frm: None,
@@ -282,7 +281,7 @@ impl Inst {
                 frm: None,
                 alu_op: lt_op,
                 rd: tmp,
-                rs1: y, //
+                rs1: y, /* x and y order reversed. */
                 rs2: x,
             });
             insts.push(Inst::CondBr {
@@ -930,10 +929,11 @@ impl MachInstEmit for Inst {
                         sink.put4(code);
                     }
                     BranchTarget::ResolvedOffset(offset) => {
+                        let offset = offset as i64;
                         if offset != 0 {
-                            if LabelUse::Jal20.offset_in_range(offset as i64 ) {
+                            if LabelUse::Jal20.offset_in_range(offset) {
                                 let mut code = code.to_le_bytes();
-                                LabelUse::Jal20.patch_raw_offset(&mut code, offset as i64);
+                                LabelUse::Jal20.patch_raw_offset(&mut code, offset);
                                 sink.put_data(&code[..]);
                             } else {
                                 Inst::construct_auipc_and_jalr(writable_spilltmp_reg(), offset)
@@ -973,7 +973,7 @@ impl MachInstEmit for Inst {
                             */
                             LabelUse::B12.patch_raw_offset(&mut code[..], 4);
                             sink.put_data(&code[..]);
-                            Inst::construct_auipc_and_jalr(writable_spilltmp_reg(), offset)
+                            Inst::construct_auipc_and_jalr(writable_spilltmp_reg(), offset as i64)
                                 .into_iter()
                                 .for_each(|i| i.emit(&[], sink, emit_info, state));
                         }
@@ -1321,10 +1321,11 @@ impl MachInstEmit for Inst {
                     # dst holds return value
 
                 cas:
-                    lr.w t0, (addr) # Load original value.
-                    bne t0, e, fail # Doesn’t match, so fail.
-                    sc.w dst, v, (addr) # Try to update.
-                    bne dst , v , cas  # retry
+                    lr.w t0, (addr)         # Load original value.
+                    bne t0, e, fail         # Doesn’t match, so fail.
+                    sc.w dst, v, (addr)     # Try to update.
+                    lr.w t0, (addr)         # reload to t0 from addr.
+                    bne t0 , v , cas        # if store not ok,retry.
                 fail:
                                            */
                 let fail_label = sink.get_label();
@@ -1561,8 +1562,6 @@ impl MachInstEmit for Inst {
                 // here is false , use rs2
                 Inst::gen_move(rd, rs2, I64).emit(&[], sink, emit_info, state);
                 // and jump over
-                sink.use_label_at_offset(sink.cur_offset(), label_jump_over, LabelUse::Jal20);
-
                 Inst::Jal {
                     dest: BranchTarget::Label(label_jump_over),
                 }
@@ -1637,7 +1636,6 @@ impl MachInstEmit for Inst {
                     emit_info,
                     state,
                 );
-
                 // bind jump_over
                 sink.bind_label(label_jump_over);
             }
@@ -1799,7 +1797,11 @@ impl MachInstEmit for Inst {
             }
         };
         let end_off = sink.cur_offset();
-        assert!((end_off - start_off) <= Inst::worst_case_size());
+        assert!(
+            (end_off - start_off) <= Inst::worst_case_size(),
+            "Inst:{:?}",
+            self,
+        );
     }
 
     fn pretty_print_inst(&self, allocs: &[Allocation], state: &mut Self::State) -> String {

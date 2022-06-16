@@ -145,7 +145,7 @@ impl Display for Uimm5 {
     }
 }
 
-/// a imm20 immediate and a Imm12 immediate can generate what immediate.
+/// an imm20 immediate and an Imm12 immediate can generate what immediate.
 /// imm20 + imm12
 impl Inst {
     pub(crate) fn imm_min() -> i64 {
@@ -219,7 +219,6 @@ impl Inst {
 #[cfg(test)]
 mod test {
     use super::*;
-
     #[test]
     fn test_imm12() {
         let x = Imm12::zero();
