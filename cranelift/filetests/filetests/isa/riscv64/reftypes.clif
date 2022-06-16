@@ -37,7 +37,7 @@ block0:
 }
 
 ; block0:
-;   ori a0,zero,0
+;   addi a0,zero,0
 ;   ret
 
 function %f4(r64, r64) -> r64, r64, r64 {

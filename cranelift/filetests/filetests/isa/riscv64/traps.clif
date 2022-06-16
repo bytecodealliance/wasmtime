@@ -19,7 +19,7 @@ block0(v0: i64):
 }
 
 ; block0:
-;   ori t2,zero,42
+;   addi t2,zero,42
 ;   trap_if_eq user0 a0,t2;;ty=i64
 ;   ret
 

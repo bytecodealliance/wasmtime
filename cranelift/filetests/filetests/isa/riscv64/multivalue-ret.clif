@@ -11,7 +11,7 @@ block1:
 }
 
 ; block0:
-;   ori a0,zero,1
-;   ori a1,zero,2
+;   addi a0,zero,1
+;   addi a1,zero,2
 ;   ret
 

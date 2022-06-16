@@ -239,9 +239,9 @@ pub(crate) fn real_reg_to_reg(x: RealReg) -> Reg {
 
 #[allow(dead_code)]
 pub(crate) fn x_reg_range(start: usize, end: usize) -> Vec<Writable<Reg>> {
-    let mut ret = vec![];
+    let mut regs = vec![];
     for i in start..=end {
-        ret.push(Writable::from_reg(x_reg(i)));
+        regs.push(Writable::from_reg(x_reg(i)));
     }
-    ret
+    regs
 }

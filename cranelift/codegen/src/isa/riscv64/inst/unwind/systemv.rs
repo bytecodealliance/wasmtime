@@ -1,4 +1,4 @@
-//! Unwind information for System V ABI (Aarch64).
+//! Unwind information for System V ABI (Riscv64).
 
 // use crate::isa::riscv64::inst::regs;
 // use crate::isa::unwind::systemv::RegisterMappingError;

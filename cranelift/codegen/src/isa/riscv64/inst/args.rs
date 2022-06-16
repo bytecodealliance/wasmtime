@@ -1118,11 +1118,8 @@ impl Default for FRM {
     float rounding mode.
 */
 impl FRM {
-    pub(crate) fn is_none_or_using_fcsr(x: Option<FRM>) -> bool {
-        match x {
-            Some(x) => x == FRM::Fcsr,
-            None => true,
-        }
+    pub(crate) fn is_default(x: Option<FRM>) -> bool {
+        x.unwrap_or_default() == Self::Fcsr
     }
 
     pub(crate) fn to_static_str(self) -> &'static str {

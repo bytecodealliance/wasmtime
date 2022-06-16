@@ -931,7 +931,7 @@ impl MachInstEmit for Inst {
                     }
                     BranchTarget::ResolvedOffset(offset) => {
                         if offset != 0 {
-                            if LabelUse::Jal20.offset_in_range(offset) {
+                            if LabelUse::Jal20.offset_in_range(offset as i64 ) {
                                 let mut code = code.to_le_bytes();
                                 LabelUse::Jal20.patch_raw_offset(&mut code, offset as i64);
                                 sink.put_data(&code[..]);
@@ -961,7 +961,7 @@ impl MachInstEmit for Inst {
                         sink.put4(code);
                     }
                     BranchTarget::ResolvedOffset(offset) => {
-                        if LabelUse::B12.offset_in_range(offset) {
+                        if LabelUse::B12.offset_in_range(offset as i64) {
                             let code = kind.emit();
                             let mut code = code.to_le_bytes();
                             LabelUse::B12.patch_raw_offset(&mut code, offset as i64);

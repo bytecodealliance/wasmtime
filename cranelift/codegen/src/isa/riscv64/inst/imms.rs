@@ -1,6 +1,7 @@
 //! Riscv64 ISA definitions: immediate constants.
 
 // Some variants are never constructed, but we still want them as options in the future.
+use super::Inst;
 #[allow(dead_code)]
 use std::fmt::{Debug, Display, Formatter, Result};
 
@@ -144,23 +145,20 @@ impl Display for Uimm5 {
     }
 }
 
-/*
-    a imm20 immediate and a Imm12 immediate can generate what immediate.
-    imm20 + imm12
-*/
-pub struct Imm20AndImm12 {}
-impl Imm20AndImm12 {
-    pub(crate) fn min() -> i64 {
+/// a imm20 immediate and a Imm12 immediate can generate what immediate.
+/// imm20 + imm12
+impl Inst {
+    pub(crate) fn imm_min() -> i64 {
         let imm20_max: i64 = (1 << 19) << 12;
         let imm12_max = 1 << 11;
         -imm20_max - imm12_max
     }
-    pub(crate) fn max() -> i64 {
+    pub(crate) fn imm_max() -> i64 {
         let imm20_max: i64 = ((1 << 19) - 1) << 12;
         let imm12_max = (1 << 11) - 1;
         imm20_max + imm12_max
     }
-    pub(crate) fn generate<R>(
+    pub(crate) fn generate_imm<R>(
         value: u64,
         mut handle_imm: impl FnMut(Option<Imm20>, Option<Imm12>) -> R,
     ) -> Option<R> {
@@ -172,7 +170,7 @@ impl Imm20AndImm12 {
             return Some(r);
         }
         let value = value as i64;
-        if !(value >= Self::min() && value <= Self::max()) {
+        if !(value >= Self::imm_min() && value <= Self::imm_max()) {
             /*
                 not in range, return None.
             */
@@ -231,7 +229,7 @@ mod test {
 
     #[test]
     fn imm20_and_imm12() {
-        assert!(Imm20AndImm12::max() == (i32::MAX - 2048) as i64);
-        assert!(Imm20AndImm12::min() == i32::MIN as i64 - 2048);
+        assert!(Inst::imm_max() == (i32::MAX - 2048) as i64);
+        assert!(Inst::imm_min() == i32::MIN as i64 - 2048);
     }
 }

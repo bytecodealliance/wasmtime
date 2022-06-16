@@ -162,7 +162,7 @@ pub fn isa_builder(triple: Triple) -> IsaBuilder {
 mod test {
     use super::*;
     use crate::cursor::{Cursor, FuncCursor};
-    use crate::ir::{types::* };
+    use crate::ir::types::*;
     use crate::ir::{AbiParam, ExternalName, Function, InstBuilder, Signature};
     use crate::isa::CallConv;
     use crate::settings;

@@ -109,7 +109,7 @@ block0:
 }
 
 ; block0:
-;   ori t2,zero,1234
+;   addi t2,zero,1234
 ;   lw a0,0(t2)
 ;   ret
 

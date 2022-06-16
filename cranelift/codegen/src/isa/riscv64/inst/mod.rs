@@ -100,16 +100,6 @@ pub enum BranchTarget {
     ResolvedOffset(i32),
 }
 
-pub(crate) fn enc_auipc(rd: Writable<Reg>, imm: Imm20) -> u32 {
-    let x = 0b0010111 | reg_to_gpr_num(rd.to_reg()) << 7 | imm.as_u32() << 12;
-    x
-}
-
-pub(crate) fn enc_jalr(rd: Writable<Reg>, base: Reg, offset: Imm12) -> u32 {
-    let x = 0b1100111 |  reg_to_gpr_num(rd.to_reg() )  << 7 |  0b000 << 12 /* funct3 */  | reg_to_gpr_num(base) << 15 |  offset.as_u32() << 20;
-    x
-}
-
 impl BranchTarget {
     /// Return the target's label, if it is a label-based target.
     pub(crate) fn as_label(self) -> Option<MachLabel> {
@@ -149,6 +139,16 @@ impl Display for BranchTarget {
             BranchTarget::ResolvedOffset(off) => write!(f, "{}", off),
         }
     }
+}
+
+pub(crate) fn enc_auipc(rd: Writable<Reg>, imm: Imm20) -> u32 {
+    let x = 0b0010111 | reg_to_gpr_num(rd.to_reg()) << 7 | imm.as_u32() << 12;
+    x
+}
+
+pub(crate) fn enc_jalr(rd: Writable<Reg>, base: Reg, offset: Imm12) -> u32 {
+    let x = 0b1100111 |  reg_to_gpr_num(rd.to_reg() )  << 7 |  0b000 << 12 /* funct3 */  | reg_to_gpr_num(base) << 15 |  offset.as_u32() << 20;
+    x
 }
 
 /*
@@ -206,7 +206,7 @@ impl Inst {
         can be load using lui and addi instructions.
     */
     fn can_be_load_using_lui_and_addi(rd: Writable<Reg>, value: u64) -> Option<SmallInstVec<Inst>> {
-        Imm20AndImm12::generate(value, |imm20, imm12| {
+        Inst::generate_imm(value, |imm20, imm12| {
             let mut insts = SmallVec::new();
             imm20.map(|x| insts.push(Inst::Lui { rd, imm: x }));
             imm12.map(|x| {
@@ -217,11 +217,7 @@ impl Inst {
                     rd.to_reg()
                 };
                 insts.push(Inst::AluRRImm12 {
-                    alu_op: if imm20_is_none {
-                        AluOPRRI::Ori
-                    } else {
-                        AluOPRRI::Addi
-                    },
+                    alu_op: AluOPRRI::Addi,
                     rd,
                     rs,
                     imm12: x,
@@ -234,20 +230,12 @@ impl Inst {
 
     pub(crate) fn load_constant_u32(rd: Writable<Reg>, value: u64) -> SmallInstVec<Inst> {
         let insts = Inst::can_be_load_using_lui_and_addi(rd, value);
-        if insts.is_some() {
-            return insts.unwrap();
-        } else {
-            return LoadConstant::U32(value as u32).load_constant(rd);
-        }
+        insts.unwrap_or(LoadConstant::U32(value as u32).load_constant(rd))
     }
 
     pub fn load_constant_u64(rd: Writable<Reg>, value: u64) -> SmallInstVec<Inst> {
         let insts = Inst::can_be_load_using_lui_and_addi(rd, value);
-        if insts.is_some() {
-            insts.unwrap()
-        } else {
-            LoadConstant::U64(value).load_constant(rd)
-        }
+        insts.unwrap_or(LoadConstant::U64(value).load_constant(rd))
     }
 
     /*
@@ -766,7 +754,7 @@ impl Inst {
             format!("{}ext.{}", if signed { "s" } else { "u" }, type_name)
         }
         fn format_frm(rounding_mode: Option<FRM>) -> String {
-            if FRM::is_none_or_using_fcsr(rounding_mode) {
+            if FRM::is_default(rounding_mode) {
                 "".into()
             } else {
                 format!(",{}", rounding_mode.unwrap().to_static_str())
@@ -909,7 +897,6 @@ impl Inst {
             } => {
                 let x = format_regs(x.regs(), allocs);
                 let y = format_regs(y.regs(), allocs);
-
                 let dst: Vec<_> = dst.iter().map(|r| r.to_reg()).collect();
                 let dst = format_regs(&dst[..], allocs);
                 format!("{} {},{},{};;ty={}", op.op_name(), dst, x, y, ty,)
@@ -1070,8 +1057,8 @@ impl Inst {
                 let rs2 = format_reg(rs2, allocs);
                 let rd = format_reg(rd.to_reg(), allocs);
                 format!(
-                    "{}.{} {},{},{}",
-                    if ty == F32 { "f" } else { "d" },
+                    "f{}.{} {},{},{}",
+                    if ty == F32 { "s" } else { "d" },
                     cc,
                     rd,
                     rs1,
@@ -1275,7 +1262,7 @@ impl MachInstLabelUse for LabelUse {
     fn max_pos_range(self) -> CodeOffset {
         match self {
             LabelUse::Jal20 => ((1 << 19) - 1) * 2,
-            LabelUse::PCRel32 => Imm20AndImm12::max() as CodeOffset,
+            LabelUse::PCRel32 => Inst::imm_max() as CodeOffset,
             LabelUse::B12 => ((1 << 11) - 1) * 2,
         }
     }
@@ -1283,8 +1270,8 @@ impl MachInstLabelUse for LabelUse {
     /// Maximum PC-relative range (negative).
     fn max_neg_range(self) -> CodeOffset {
         match self {
-            LabelUse::PCRel32 => self.max_pos_range() + 1,
-            _ => Imm20AndImm12::min().abs() as CodeOffset,
+            LabelUse::PCRel32 => Inst::imm_min().abs() as CodeOffset,
+            _ => self.max_pos_range() + 2,
         }
     }
 
@@ -1301,7 +1288,7 @@ impl MachInstLabelUse for LabelUse {
     fn patch(self, buffer: &mut [u8], use_offset: CodeOffset, label_offset: CodeOffset) {
         assert!(use_offset % 4 == 0);
         assert!(label_offset % 4 == 0);
-        let offset = (label_offset as i64) - (use_offset as i64); /* todo::verify this*/
+        let offset = (label_offset as i64) - (use_offset as i64);
         //check range
         assert!(
             offset >= -(self.max_neg_range() as i64) && offset <= (self.max_pos_range() as i64),
@@ -1336,7 +1323,6 @@ impl MachInstLabelUse for LabelUse {
         buffer: &mut [u8],
         veneer_offset: CodeOffset,
     ) -> (CodeOffset, LabelUse) {
-        // unimplemented!("generate_veneer:{:?} {:?}", buffer, veneer_offset);
         let base = writable_spilltmp_reg();
         {
             let x = enc_auipc(base, Imm20::from_bits(0)).to_le_bytes();
@@ -1361,8 +1347,7 @@ impl MachInstLabelUse for LabelUse {
 }
 
 impl LabelUse {
-    fn offset_in_range(self, offset: i32) -> bool {
-        let offset = offset as i64;
+    fn offset_in_range(self, offset: i64) -> bool {
         let min = -(self.max_neg_range() as i64);
         let max = self.max_pos_range() as i64;
         offset >= min && offset <= max
@@ -1386,7 +1371,7 @@ impl LabelUse {
             LabelUse::PCRel32 => {
                 let auipc = { &mut buffer[0] as *mut u8 as *mut u32 };
                 let jalr = { &mut buffer[4] as *mut u8 as *mut u32 };
-                Imm20AndImm12::generate(offset as u64, |imm20, imm12| {
+                Inst::generate_imm(offset as u64, |imm20, imm12| {
                     let imm20 = imm20.unwrap_or_default();
                     let imm12 = imm12.unwrap_or_default();
                     /*
@@ -1415,5 +1400,18 @@ impl LabelUse {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    #[test]
+    fn label_use_max_range() {
+        assert!(LabelUse::B12.max_neg_range() == LabelUse::B12.max_pos_range() + 2);
+        assert!(LabelUse::Jal20.max_neg_range() == LabelUse::Jal20.max_pos_range() + 2);
+        assert!(LabelUse::PCRel32.max_pos_range() == (Inst::imm_max() as CodeOffset));
+        assert!(LabelUse::PCRel32.max_neg_range() == (Inst::imm_min().abs() as CodeOffset));
+        assert!(LabelUse::B12.max_pos_range() == ((1 << 11) - 1) * 2);
     }
 }

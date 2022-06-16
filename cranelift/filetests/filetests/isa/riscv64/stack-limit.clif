@@ -93,7 +93,7 @@ block0(v0: i64):
 ;   add sp,-8
 ;   sd fp,0(sp)
 ;   mv fp,sp
-;   ori t6,zero,176
+;   addi t6,zero,176
 ;   add t6,t6,a0
 ;   trap_if_ult stk_ovf sp,t6;;ty=i64
 ;   add sp,-176

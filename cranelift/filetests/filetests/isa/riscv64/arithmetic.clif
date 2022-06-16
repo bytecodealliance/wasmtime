@@ -70,7 +70,7 @@ block0(v0: i64):
 }
 
 ; block0:
-;   ori a1,zero,2
+;   addi a1,zero,2
 ;   div a0,a0,a1
 ;   ret
 
@@ -92,7 +92,7 @@ block0(v0: i64):
 }
 
 ; block0:
-;   ori a1,zero,2
+;   addi a1,zero,2
 ;   divu a0,a0,a1
 ;   ret
 
@@ -134,7 +134,7 @@ block0(v0: i32):
 }
 
 ; block0:
-;   ori a1,zero,2
+;   addi a1,zero,2
 ;   divw a0,a0,a1
 ;   ret
 
@@ -156,7 +156,7 @@ block0(v0: i32):
 }
 
 ; block0:
-;   ori a1,zero,2
+;   addi a1,zero,2
 ;   divuw a0,a0,a1
 ;   ret
 
@@ -271,7 +271,7 @@ block0(v0: i32):
 }
 
 ; block0:
-;   ori a1,zero,-1
+;   addi a1,zero,-1
 ;   addw a0,a0,a1
 ;   ret
 
@@ -283,7 +283,7 @@ block0(v0: i32):
 }
 
 ; block0:
-;   ori a1,zero,-1
+;   addi a1,zero,-1
 ;   subw a0,a0,a1
 ;   ret
 
@@ -306,7 +306,7 @@ block0(v0: i64):
 }
 
 ; block0:
-;   ori a0,zero,1
+;   addi a0,zero,1
 ;   sub a0,zero,a0
 ;   ret
 
