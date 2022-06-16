@@ -658,7 +658,7 @@ impl MachInst for Inst {
 
     fn worst_case_size() -> CodeOffset {
         //caculate by test function riscv64_worst_case_size_instrcution_size()
-        52
+        48
     }
 
     fn ref_type_regclass(_settings: &settings::Flags) -> RegClass {

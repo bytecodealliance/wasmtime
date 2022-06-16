@@ -1300,34 +1300,29 @@ impl FClassResult {
     GT - x is greater than y.
 */
 #[derive(Clone, Copy)]
-pub enum FloatCCBit {
-    UN,
-    EQ,
-    LT,
-    GT,
-    CompareSet(u8),
-}
+pub struct FloatCCArgs(pub(crate) u8);
 
-impl FloatCCBit {
-    pub(crate) const fn bits(&self) -> u8 {
-        match self {
-            FloatCCBit::UN => 1 << 0,
-            FloatCCBit::EQ => 1 << 1,
-            FloatCCBit::LT => 1 << 2,
-            FloatCCBit::GT => 1 << 3,
-            FloatCCBit::CompareSet(x) => *x,
-        }
-    }
+impl FloatCCArgs {
+    // unoder
+    pub(crate) const UN: u8 = 1 << 0;
+    // equal
+    pub(crate) const EQ: u8 = 1 << 1;
+    // less than
+    pub(crate) const LT: u8 = 1 << 2;
+    // greater than
+    pub(crate) const GT: u8 = 1 << 3;
+    // not equal
+    pub(crate) const NE: u8 = 1 << 4;
 
     /*
         mask bit for floatcc
     */
-    pub(crate) fn floatcc_2_mask_bits<T: Into<FloatCC>>(t: T) -> Self {
-        match t.into() {
+    pub(crate) fn from_floatcc<T: Into<FloatCC>>(t: T) -> Self {
+        let x = match t.into() {
             FloatCC::Ordered => Self::EQ | Self::LT | Self::GT,
             FloatCC::Unordered => Self::UN,
             FloatCC::Equal => Self::EQ,
-            FloatCC::NotEqual => Self::UN | Self::LT | Self::GT,
+            FloatCC::NotEqual => Self::NE,
             FloatCC::OrderedNotEqual => Self::LT | Self::GT,
             FloatCC::UnorderedOrEqual => Self::UN | Self::EQ,
             FloatCC::LessThan => Self::LT,
@@ -1338,15 +1333,17 @@ impl FloatCCBit {
             FloatCC::UnorderedOrLessThanOrEqual => Self::UN | Self::LT | Self::EQ,
             FloatCC::UnorderedOrGreaterThan => Self::UN | Self::GT,
             FloatCC::UnorderedOrGreaterThanOrEqual => Self::UN | Self::GT | Self::EQ,
-        }
+        };
+
+        Self(x)
     }
 
     #[inline]
-    pub(crate) fn has(&self, o: Self) -> bool {
-        (self.bits() & o.bits()) == o.bits()
+    pub(crate) fn has(&self, other: u8) -> bool {
+        (self.0 & other) == other
     }
 
-    pub(crate) fn has_and_clear(&mut self, other: Self) -> bool {
+    pub(crate) fn has_and_clear(&mut self, other: u8) -> bool {
         if !self.has(other) {
             return false;
         }
@@ -1355,18 +1352,8 @@ impl FloatCCBit {
     }
 
     #[inline]
-    fn clear_bits(&mut self, c: Self) {
-        match self {
-            Self::CompareSet(ref mut x) => *x = *x & !c.bits(),
-            _ => unreachable!(),
-        }
-    }
-}
-
-impl std::ops::BitOr for FloatCCBit {
-    type Output = Self;
-    fn bitor(self, rhs: Self) -> Self::Output {
-        Self::CompareSet(self.bits() | rhs.bits())
+    fn clear_bits(&mut self, c: u8) {
+        self.0 = self.0 & !c;
     }
 }
 
@@ -1806,19 +1793,20 @@ impl AMO {
 
 #[cfg(test)]
 mod test {
-    use super::FloatCCBit;
+    use super::FloatCCArgs;
     #[test]
+
     fn float_cc_bit_clear() {
-        let mut x = FloatCCBit::UN | FloatCCBit::GT | FloatCCBit::EQ;
-        assert!(x.has_and_clear(FloatCCBit::UN | FloatCCBit::GT));
-        assert!(x.has(FloatCCBit::EQ));
-        assert!(!x.has(FloatCCBit::UN));
-        assert!(!x.has(FloatCCBit::GT));
+        let mut x = FloatCCArgs(FloatCCArgs::UN | FloatCCArgs::GT | FloatCCArgs::EQ);
+        assert!(x.has_and_clear(FloatCCArgs::UN | FloatCCArgs::GT));
+        assert!(x.has(FloatCCArgs::EQ));
+        assert!(!x.has(FloatCCArgs::UN));
+        assert!(!x.has(FloatCCArgs::GT));
     }
     #[test]
     fn float_cc_bit_has() {
-        let x = FloatCCBit::UN | FloatCCBit::GT | FloatCCBit::EQ;
-        assert!(x.has(FloatCCBit::UN | FloatCCBit::GT));
-        assert!(!x.has(FloatCCBit::LT));
+        let x = FloatCCArgs(FloatCCArgs::UN | FloatCCArgs::GT | FloatCCArgs::EQ);
+        assert!(x.has(FloatCCArgs::UN | FloatCCArgs::GT));
+        assert!(!x.has(FloatCCArgs::LT));
     }
 }

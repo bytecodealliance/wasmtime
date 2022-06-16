@@ -2520,7 +2520,7 @@ fn riscv64_worst_case_size_instrcution_size() {
         println!("insn:{:?}  length: {}", i, length);
     }
     println!("caculate max size is {} , inst is {:?}", max.0, max.1);
-    assert!(max.0 == Inst::worst_case_size());
+    assert_eq!(max.0, Inst::worst_case_size());
 }
 
 /*

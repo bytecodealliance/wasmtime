@@ -180,7 +180,7 @@ impl Inst {
     ) -> SmallInstVec<Inst> {
         assert!(tmp.to_reg().class() == RegClass::Int);
         let mut insts = SmallInstVec::new();
-        let mut cc_bit = FloatCCBit::floatcc_2_mask_bits(cc);
+        let mut cc_bit = FloatCCArgs::from_floatcc(cc);
         let eq_op = if ty == F32 {
             FpuOPRRR::FeqS
         } else {
@@ -198,7 +198,7 @@ impl Inst {
         };
 
         // >=
-        if cc_bit.has_and_clear(FloatCCBit::GT | FloatCCBit::EQ) {
+        if cc_bit.has_and_clear(FloatCCArgs::GT | FloatCCArgs::EQ) {
             insts.push(Inst::FpuRRR {
                 frm: None,
                 alu_op: le_op,
@@ -218,7 +218,7 @@ impl Inst {
         }
 
         // <=
-        if cc_bit.has_and_clear(FloatCCBit::LT | FloatCCBit::EQ) {
+        if cc_bit.has_and_clear(FloatCCArgs::LT | FloatCCArgs::EQ) {
             insts.push(Inst::FpuRRR {
                 frm: None,
                 alu_op: le_op,
@@ -238,7 +238,7 @@ impl Inst {
         }
 
         // if eq
-        if cc_bit.has(FloatCCBit::EQ) {
+        if cc_bit.has_and_clear(FloatCCArgs::EQ) {
             insts.push(Inst::FpuRRR {
                 frm: None,
                 alu_op: eq_op,
@@ -256,8 +256,28 @@ impl Inst {
                 },
             });
         }
+        // if ne
+        if cc_bit.has_and_clear(FloatCCArgs::NE) {
+            insts.push(Inst::FpuRRR {
+                frm: None,
+                alu_op: eq_op,
+                rd: tmp,
+                rs1: x,
+                rs2: y,
+            });
+            insts.push(Inst::CondBr {
+                taken: taken,
+                not_taken: BranchTarget::zero(),
+                kind: IntegerCompare {
+                    kind: IntCC::Equal,
+                    rs1: tmp.to_reg(),
+                    rs2: zero_reg(),
+                },
+            });
+        }
+
         // if <
-        if cc_bit.has(FloatCCBit::LT) {
+        if cc_bit.has_and_clear(FloatCCArgs::LT) {
             insts.push(Inst::FpuRRR {
                 frm: None,
                 alu_op: lt_op,
@@ -276,7 +296,7 @@ impl Inst {
             });
         }
         // if gt
-        if cc_bit.has(FloatCCBit::GT) {
+        if cc_bit.has_and_clear(FloatCCArgs::GT) {
             insts.push(Inst::FpuRRR {
                 frm: None,
                 alu_op: lt_op,
@@ -295,13 +315,15 @@ impl Inst {
             });
         }
         // if unorder
-        if cc_bit.has(FloatCCBit::UN) {
+        if cc_bit.has_and_clear(FloatCCArgs::UN) {
             insts.extend(Inst::lower_float_unordered(tmp, ty, x, y, taken, not_taken));
         } else {
             //make sure we goto the not_taken.
             //finally goto not_taken
             insts.push(Inst::Jal { dest: not_taken });
         }
+        // make sure we handle all cases.
+        assert!(cc_bit.0 == 0);
         insts
     }
     pub(crate) fn lower_br_icmp(
@@ -507,7 +529,18 @@ impl MachInstEmit for Inst {
                 x.emit(&[], sink, emit_info, state)
             }
             &Inst::RawData { ref data } => {
+                /*
+                    emit_island if need, right now data is not very long.
+                */
+                let length = data.len() as CodeOffset;
+                if sink.island_needed(length) {
+                    sink.emit_island(length);
+                }
                 sink.put_data(&data[..]);
+                /*
+                    safe to disable code length check.
+                */
+                start_off = sink.cur_offset();
             }
             &Inst::Lui { rd, ref imm } => {
                 let rd = allocs.next_writable(rd);
@@ -1799,8 +1832,10 @@ impl MachInstEmit for Inst {
         let end_off = sink.cur_offset();
         assert!(
             (end_off - start_off) <= Inst::worst_case_size(),
-            "Inst:{:?}",
+            "Inst:{:?} length:{} worst_case_size{}",
             self,
+            end_off - start_off,
+            Inst::worst_case_size()
         );
     }
 
