@@ -219,7 +219,8 @@ fn extend_input_to_reg<C: LowerCtx<I = Inst>>(
     let ext_mode = match (input_size, requested_size) {
         (a, b) if a == b => return put_input_in_reg(ctx, spec),
         (1, 8) => return put_input_in_reg(ctx, spec),
-        (a, b) => ExtMode::new(a, b).unwrap_or_else(|| panic!("invalid extension: {} -> {}", a, b)),
+        (a, b) => ExtMode::new(a.try_into().unwrap(), b.try_into().unwrap())
+            .unwrap_or_else(|| panic!("invalid extension: {} -> {}", a, b)),
     };
 
     let src = input_to_reg_mem(ctx, spec);

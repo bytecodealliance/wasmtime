@@ -76,7 +76,7 @@ impl Imm64 {
 
     /// Sign extend this immediate as if it were a signed integer of the given
     /// power-of-two width.
-    pub fn sign_extend_from_width(&mut self, bit_width: u16) {
+    pub fn sign_extend_from_width(&mut self, bit_width: u32) {
         debug_assert!(bit_width.is_power_of_two());
 
         if bit_width >= 64 {

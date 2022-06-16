@@ -54,7 +54,7 @@ impl Type {
     }
 
     /// Get log_2 of the number of bits in a lane.
-    pub fn log2_lane_bits(self) -> u8 {
+    pub fn log2_lane_bits(self) -> u32 {
         match self.lane_type() {
             B1 => 0,
             B8 | I8 => 3,
@@ -67,7 +67,7 @@ impl Type {
     }
 
     /// Get the number of bits in a lane.
-    pub fn lane_bits(self) -> u8 {
+    pub fn lane_bits(self) -> u32 {
         match self.lane_type() {
             B1 => 1,
             B8 | I8 => 8,
@@ -284,25 +284,25 @@ impl Type {
     /// will be a number in the range 0-8.
     ///
     /// A scalar type is the same as a SIMD vector type with one lane, so it returns 0.
-    pub fn log2_lane_count(self) -> u8 {
-        self.0.saturating_sub(constants::LANE_BASE) >> 4
+    pub fn log2_lane_count(self) -> u32 {
+        (self.0.saturating_sub(constants::LANE_BASE) >> 4) as u32
     }
 
     /// Get the number of lanes in this SIMD vector type.
     ///
     /// A scalar type is the same as a SIMD vector type with one lane, so it returns 1.
-    pub fn lane_count(self) -> u16 {
+    pub fn lane_count(self) -> u32 {
         1 << self.log2_lane_count()
     }
 
     /// Get the total number of bits used to represent this type.
-    pub fn bits(self) -> u16 {
-        u16::from(self.lane_bits()) * self.lane_count()
+    pub fn bits(self) -> u32 {
+        self.lane_bits() * self.lane_count()
     }
 
     /// Get the number of bytes used to store this type in memory.
     pub fn bytes(self) -> u32 {
-        (u32::from(self.bits()) + 7) / 8
+        (self.bits() + 7) / 8
     }
 
     /// Get a SIMD vector type with `n` times more lanes than this one.
@@ -311,7 +311,7 @@ impl Type {
     ///
     /// If this is already a SIMD vector type, this produces a SIMD vector type with `n *
     /// self.lane_count()` lanes.
-    pub fn by(self, n: u16) -> Option<Self> {
+    pub fn by(self, n: u32) -> Option<Self> {
         if self.lane_bits() == 0 || !n.is_power_of_two() {
             return None;
         }
