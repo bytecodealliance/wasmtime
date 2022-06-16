@@ -1,7 +1,7 @@
 name: CI
 on:
   push:
-    branches: [main,risc_v]
+    branches: [main]
     tags-ignore: [dev]
     paths-ignore:
       - 'meetings/**'
