@@ -149,10 +149,9 @@ block0(v0: f32):
 }
 
 ; block0:
-;   lui t6,8
-;   addi t6,t6,63
-;   fmv.w.x ft5,t6
-;   fsgnj.s fa0,fa0,ft5
+;   lui t6,260096
+;   fmv.w.x ft4,t6
+;   fsgnj.s fa0,fa0,ft4
 ;   ret
 
 function %f17(f64) -> f64 {
@@ -162,10 +161,12 @@ block0(v0: f64):
 }
 
 ; block0:
-;   lui t6,15
-;   addi t6,t6,63
-;   fmv.d.x ft5,t6
-;   fsgnj.d fa0,fa0,ft5
+;   auipc t6,0
+;   ld t6,12(t6)
+;   j 12
+;   .u64 0x3ff0000000000000
+;   fmv.d.x ft7,t6
+;   fsgnj.d fa0,fa0,ft7
 ;   ret
 
 function %f18(f32) -> f32 {
@@ -503,7 +504,7 @@ block0(v0: f32):
 }
 
 ; block0:
-;   fcvt_to_uint_sat a0,fa0;;in_ty=f32 out_ty=i32 tmp=a1
+;   fcvt_to_uint_sat a0,fa0##in_ty=f32 out_ty=i32 tmp=a1
 ;   ret
 
 function %f50(f32) -> i32 {
@@ -513,7 +514,7 @@ block0(v0: f32):
 }
 
 ; block0:
-;   fcvt_to_sint_sat a0,fa0;;in_ty=f32 out_ty=i32 tmp=a1
+;   fcvt_to_sint_sat a0,fa0##in_ty=f32 out_ty=i32 tmp=a1
 ;   ret
 
 function %f51(f32) -> i64 {
@@ -523,7 +524,7 @@ block0(v0: f32):
 }
 
 ; block0:
-;   fcvt_to_uint_sat a0,fa0;;in_ty=f32 out_ty=i64 tmp=a1
+;   fcvt_to_uint_sat a0,fa0##in_ty=f32 out_ty=i64 tmp=a1
 ;   ret
 
 function %f52(f32) -> i64 {
@@ -533,7 +534,7 @@ block0(v0: f32):
 }
 
 ; block0:
-;   fcvt_to_sint_sat a0,fa0;;in_ty=f32 out_ty=i64 tmp=a1
+;   fcvt_to_sint_sat a0,fa0##in_ty=f32 out_ty=i64 tmp=a1
 ;   ret
 
 function %f53(f64) -> i32 {
@@ -543,7 +544,7 @@ block0(v0: f64):
 }
 
 ; block0:
-;   fcvt_to_uint_sat a0,fa0;;in_ty=f64 out_ty=i32 tmp=a1
+;   fcvt_to_uint_sat a0,fa0##in_ty=f64 out_ty=i32 tmp=a1
 ;   ret
 
 function %f54(f64) -> i32 {
@@ -553,7 +554,7 @@ block0(v0: f64):
 }
 
 ; block0:
-;   fcvt_to_sint_sat a0,fa0;;in_ty=f64 out_ty=i32 tmp=a1
+;   fcvt_to_sint_sat a0,fa0##in_ty=f64 out_ty=i32 tmp=a1
 ;   ret
 
 function %f55(f64) -> i64 {
@@ -563,7 +564,7 @@ block0(v0: f64):
 }
 
 ; block0:
-;   fcvt_to_uint_sat a0,fa0;;in_ty=f64 out_ty=i64 tmp=a1
+;   fcvt_to_uint_sat a0,fa0##in_ty=f64 out_ty=i64 tmp=a1
 ;   ret
 
 function %f56(f64) -> i64 {
@@ -573,6 +574,6 @@ block0(v0: f64):
 }
 
 ; block0:
-;   fcvt_to_sint_sat a0,fa0;;in_ty=f64 out_ty=i64 tmp=a1
+;   fcvt_to_sint_sat a0,fa0##in_ty=f64 out_ty=i64 tmp=a1
 ;   ret
 

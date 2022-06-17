@@ -9,7 +9,7 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
-;   eq a0,a0,a1;;ty=i64
+;   eq a0,a0,a1##ty=i64
 ;   ret
 
 function %icmp_eq_i128(i128, i128) -> b1 {
@@ -19,7 +19,7 @@ block0(v0: i128, v1: i128):
 }
 
 ; block0:
-;   eq a0,[a0,a1],[a2,a3];;ty=i128
+;   eq a0,[a0,a1],[a2,a3]##ty=i128
 ;   ret
 
 function %icmp_ne_i128(i128, i128) -> b1 {
@@ -29,7 +29,7 @@ block0(v0: i128, v1: i128):
 }
 
 ; block0:
-;   ne a0,[a0,a1],[a2,a3];;ty=i128
+;   ne a0,[a0,a1],[a2,a3]##ty=i128
 ;   ret
 
 function %icmp_slt_i128(i128, i128) -> b1 {
@@ -39,7 +39,7 @@ block0(v0: i128, v1: i128):
 }
 
 ; block0:
-;   slt a0,[a0,a1],[a2,a3];;ty=i128
+;   slt a0,[a0,a1],[a2,a3]##ty=i128
 ;   ret
 
 function %icmp_ult_i128(i128, i128) -> b1 {
@@ -49,7 +49,7 @@ block0(v0: i128, v1: i128):
 }
 
 ; block0:
-;   ult a0,[a0,a1],[a2,a3];;ty=i128
+;   ult a0,[a0,a1],[a2,a3]##ty=i128
 ;   ret
 
 function %icmp_sle_i128(i128, i128) -> b1 {
@@ -59,7 +59,7 @@ block0(v0: i128, v1: i128):
 }
 
 ; block0:
-;   sle a0,[a0,a1],[a2,a3];;ty=i128
+;   sle a0,[a0,a1],[a2,a3]##ty=i128
 ;   ret
 
 function %icmp_ule_i128(i128, i128) -> b1 {
@@ -69,7 +69,7 @@ block0(v0: i128, v1: i128):
 }
 
 ; block0:
-;   ule a0,[a0,a1],[a2,a3];;ty=i128
+;   ule a0,[a0,a1],[a2,a3]##ty=i128
 ;   ret
 
 function %icmp_sgt_i128(i128, i128) -> b1 {
@@ -79,7 +79,7 @@ block0(v0: i128, v1: i128):
 }
 
 ; block0:
-;   sgt a0,[a0,a1],[a2,a3];;ty=i128
+;   sgt a0,[a0,a1],[a2,a3]##ty=i128
 ;   ret
 
 function %icmp_ugt_i128(i128, i128) -> b1 {
@@ -89,7 +89,7 @@ block0(v0: i128, v1: i128):
 }
 
 ; block0:
-;   ugt a0,[a0,a1],[a2,a3];;ty=i128
+;   ugt a0,[a0,a1],[a2,a3]##ty=i128
 ;   ret
 
 function %icmp_sge_i128(i128, i128) -> b1 {
@@ -99,7 +99,7 @@ block0(v0: i128, v1: i128):
 }
 
 ; block0:
-;   sge a0,[a0,a1],[a2,a3];;ty=i128
+;   sge a0,[a0,a1],[a2,a3]##ty=i128
 ;   ret
 
 function %icmp_uge_i128(i128, i128) -> b1 {
@@ -109,7 +109,7 @@ block0(v0: i128, v1: i128):
 }
 
 ; block0:
-;   uge a0,[a0,a1],[a2,a3];;ty=i128
+;   uge a0,[a0,a1],[a2,a3]##ty=i128
 ;   ret
 
 function %icmp_of_i128(i128, i128) -> b1 {

@@ -40,7 +40,7 @@ block0(v0: i64):
 ;   add sp,-8
 ;   sd fp,0(sp)
 ;   mv fp,sp
-;   trap_if_ult stk_ovf sp,a0;;ty=i64
+;   trap_if_ult stk_ovf sp,a0##ty=i64
 ;   add sp,-16
 ;   sd s5,0(sp)
 ; block0:
@@ -70,7 +70,7 @@ block0(v0: i64):
 ;   mv fp,sp
 ;   ld t6,0(a0)
 ;   ld t6,4(t6)
-;   trap_if_ult stk_ovf sp,t6;;ty=i64
+;   trap_if_ult stk_ovf sp,t6##ty=i64
 ;   add sp,-16
 ;   sd s5,0(sp)
 ; block0:
@@ -95,7 +95,7 @@ block0(v0: i64):
 ;   mv fp,sp
 ;   addi t6,zero,176
 ;   add t6,t6,a0
-;   trap_if_ult stk_ovf sp,t6;;ty=i64
+;   trap_if_ult stk_ovf sp,t6##ty=i64
 ;   add sp,-176
 ; block0:
 ;   add sp,+176
@@ -112,11 +112,11 @@ block0(v0: i64):
 ;   add sp,-8
 ;   sd fp,0(sp)
 ;   mv fp,sp
-;   trap_if_ult stk_ovf sp,a0;;ty=i64
+;   trap_if_ult stk_ovf sp,a0##ty=i64
 ;   lui t6,98
 ;   addi t6,t6,2688
 ;   add t6,t6,a0
-;   trap_if_ult stk_ovf sp,t6;;ty=i64
+;   trap_if_ult stk_ovf sp,t6##ty=i64
 ;   add sp,-400000
 ; block0:
 ;   add sp,+400000

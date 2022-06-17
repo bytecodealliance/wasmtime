@@ -12,7 +12,7 @@ block0(v0: i8, v1: i64, v2: i64):
 
 ; block0:
 ;   addi a5,zero,42
-;   selectif a0,a1,a2;;a0 eq a5 ty=i8
+;   selectif a0,a1,a2##a0 eq a5 ty=i8
 ;   ret
 
 function %g(i8) -> b1 {
@@ -25,7 +25,7 @@ block0(v0: i8):
 
 ; block0:
 ;   addi a1,zero,42
-;   eq a0,a0,a1;;ty=i8
+;   eq a0,a0,a1##ty=i8
 ;   ret
 
 function %h(i8, i8, i8) -> i8 {
@@ -48,7 +48,7 @@ block0(v0: b1, v1: i8, v2: i8):
 }
 
 ; block0:
-;   select_i8 a0,a1,a2;;condition=a0
+;   select_i8 a0,a1,a2##condition=a0
 ;   ret
 
 function %i(i32, i8, i8) -> i8 {
@@ -61,8 +61,8 @@ block0(v0: i32, v1: i8, v2: i8):
 
 ; block0:
 ;   addi a6,zero,42
-;   eq a4,a0,a6;;ty=i32
-;   select_i8 a0,a1,a2;;condition=a4
+;   eq a4,a0,a6##ty=i32
+;   select_i8 a0,a1,a2##condition=a4
 ;   ret
 
 function %i128_select(b1, i128, i128) -> i128 {
@@ -72,6 +72,6 @@ block0(v0: b1, v1: i128, v2: i128):
 }
 
 ; block0:
-;   select_i128 [a0,a1],[a1,a2],[a3,a4];;condition=a0
+;   select_i128 [a0,a1],[a1,a2],[a3,a4]##condition=a0
 ;   ret
 

@@ -157,10 +157,10 @@ pub(crate) fn enc_jalr(rd: Writable<Reg>, base: Reg, offset: Imm12) -> u32 {
 fn gen_moves(rd: &[Writable<Reg>], src: &[Reg]) -> SmallInstVec<Inst> {
     assert!(rd.len() == src.len());
     assert!(rd.len() > 0);
-    let out_ty = Inst::canonical_type_for_rc(rd[0].to_reg().class());
-    let in_ty = Inst::canonical_type_for_rc(src[0].class());
     let mut insts = SmallInstVec::new();
     for (dst, src) in rd.iter().zip(src.iter()) {
+        let out_ty = Inst::canonical_type_for_rc(dst.to_reg().class());
+        let in_ty = Inst::canonical_type_for_rc(src.class());
         insts.push(gen_move(*dst, out_ty, *src, in_ty));
     }
     insts
@@ -657,7 +657,7 @@ impl MachInst for Inst {
     }
 
     fn worst_case_size() -> CodeOffset {
-        //caculate by test function riscv64_worst_case_size_instrcution_size()
+        //caculate by test function riscv64_worst_case_instruction_size()
         48
     }
 
@@ -766,10 +766,10 @@ impl Inst {
 
         match self {
             &Inst::Nop0 => {
-                format!(";;zero length nop")
+                format!("##zero length nop")
             }
             &Inst::Nop4 => {
-                format!(";;fixed 4-size nop")
+                format!("##fixed 4-size nop")
             }
             &Inst::RawData { ref data } => match data.len() {
                 4 => {
@@ -793,7 +793,7 @@ impl Inst {
             &Inst::Cls { rd, rs, ty } => {
                 let rs = format_reg(rs, allocs);
                 let rd = format_reg(rd.to_reg(), allocs);
-                format!("cls {},{};;ty={}", rd, rs, ty)
+                format!("cls {},{}##ty={}", rd, rs, ty)
             }
             &Inst::SelectIf {
                 if_spectre_guard,
@@ -812,7 +812,7 @@ impl Inst {
                 let rd: Vec<_> = rd.iter().map(|r| r.to_reg()).collect();
                 let rd = format_regs(&rd[..], allocs);
                 format!(
-                    "selectif{} {},{},{};;{} {} {} ty={}",
+                    "selectif{} {},{},{}##{} {} {} ty={}",
                     if if_spectre_guard {
                         "_spectre_guard"
                     } else {
@@ -839,7 +839,7 @@ impl Inst {
                 let rd = format_reg(rd.to_reg(), allocs);
                 let tmp = format_reg(tmp.to_reg(), allocs);
                 format!(
-                    "fcvt_to_{}int_sat {},{};;in_ty={} out_ty={} tmp={}",
+                    "fcvt_to_{}int_sat {},{}##in_ty={} out_ty={} tmp={}",
                     if is_signed { "s" } else { "u" },
                     rd,
                     rs,
@@ -860,7 +860,7 @@ impl Inst {
                 let rs2 = format_reg(rs2, allocs);
                 let rd = format_reg(rd.to_reg(), allocs);
                 format!(
-                    "select_reg {},{},{};;condition={}",
+                    "select_reg {},{},{}##condition={}",
                     rd,
                     rs1,
                     rs2,
@@ -881,7 +881,7 @@ impl Inst {
                 let t0 = format_reg(t0.to_reg(), allocs);
                 let dst = format_reg(dst.to_reg(), allocs);
                 format!(
-                    "{} {},{},{},({});;t0={} ty={}",
+                    "{} {},{},{},({})##t0={} ty={}",
                     "atomic_cas", dst, e, v, addr, t0, ty
                 )
             }
@@ -889,7 +889,7 @@ impl Inst {
                 let a = format_regs(a.regs(), allocs);
                 let b = format_regs(b.regs(), allocs);
                 let rd = format_reg(rd.to_reg(), allocs);
-                format!("{} {},{},{};;ty={}", cc.to_static_str(), rd, a, b, ty)
+                format!("{} {},{},{}##ty={}", cc.to_static_str(), rd, a, b, ty)
             }
             &Inst::IntSelect {
                 op,
@@ -902,7 +902,7 @@ impl Inst {
                 let y = format_regs(y.regs(), allocs);
                 let dst: Vec<_> = dst.iter().map(|r| r.to_reg()).collect();
                 let dst = format_regs(&dst[..], allocs);
-                format!("{} {},{},{};;ty={}", op.op_name(), dst, x, y, ty,)
+                format!("{} {},{},{}##ty={}", op.op_name(), dst, x, y, ty,)
             }
             &Inst::BrTable {
                 index,
@@ -912,7 +912,7 @@ impl Inst {
             } => {
                 let targets: Vec<_> = targets.iter().map(|x| x.as_label().unwrap()).collect();
                 format!(
-                    "{} {},{},{};;tmp1={}",
+                    "{} {},{},{}##tmp1={}",
                     "br_table",
                     format_reg(index, allocs),
                     default_,
@@ -1116,7 +1116,7 @@ impl Inst {
                 ty,
                 trap_code,
             } => format!(
-                "trap_if_{} {} {},{};;ty={}",
+                "trap_if_{} {} {},{}##ty={}",
                 cc.to_static_str(),
                 trap_code,
                 format_regs(x.regs(), allocs),
@@ -1131,7 +1131,7 @@ impl Inst {
                 trap_code,
                 tmp,
             } => format!(
-                "trap_ff_{} {} {},{};;tmp={} ty={}",
+                "trap_ff_{} {} {},{}##tmp={} ty={}",
                 cc,
                 trap_code,
                 format_reg(x, allocs),
@@ -1172,8 +1172,7 @@ impl Inst {
                 src,
                 amo,
             } => {
-                let mut op_name = String::from(op.op_name());
-                op_name.push_str(amo.to_static_str());
+                let op_name = op.op_name(amo);
                 let addr = format_reg(addr, allocs);
                 let src = format_reg(src, allocs);
                 let rd = format_reg(rd.to_reg(), allocs);
@@ -1225,9 +1224,9 @@ impl Inst {
                 let y = format_regs(y.regs(), allocs);
                 let dst: Vec<_> = dst.clone().into_iter().map(|r| r.to_reg()).collect();
                 let dst = format_regs(&dst[..], allocs);
-                format!("select_{} {},{},{};;condition={}", ty, dst, x, y, condition)
+                format!("select_{} {},{},{}##condition={}", ty, dst, x, y, condition)
             }
-            &MInst::Udf { trap_code } => format!("udf;;trap_code={}", trap_code),
+            &MInst::Udf { trap_code } => format!("udf##trap_code={}", trap_code),
             &MInst::EBreak {} => String::from("ebreak"),
             &MInst::ECall {} => String::from("ecall"),
         }

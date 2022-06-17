@@ -997,11 +997,11 @@ where
     fn lower_float_abs(&mut self, ty: Type, val: Reg) -> Reg {
         let tmp = self.temp_writable_reg(F64);
         if ty == F32 {
-            MInst::load_fp_constant32(tmp, f32_to_u64(1.0))
+            MInst::load_fp_constant32(tmp, f32_rep(1.0))
                 .into_iter()
                 .for_each(|ref i| self.emit(i));
         } else {
-            MInst::load_fp_constant64(tmp, f64_to_u64(1.0))
+            MInst::load_fp_constant64(tmp, f64_rep(1.0))
                 .into_iter()
                 .for_each(|ref i| self.emit(i));
         }
@@ -1344,14 +1344,43 @@ where
 /*
     memory representation of f32.
 */
-fn f32_to_u64(f: f32) -> u32 {
+fn f32_rep(f: f32) -> u32 {
     let x = f.to_le_bytes();
     u32::from_le_bytes(x)
 }
+
 /*
     memory representation of f64.
 */
-fn f64_to_u64(f: f64) -> u64 {
+fn f64_rep(f: f64) -> u64 {
     let x = f.to_le_bytes();
     u64::from_le_bytes(x)
+}
+#[cfg(test)]
+
+mod test {
+    use super::*;
+    #[test]
+    fn float_memory_representation() {
+        fn convert_32(f: f32) {
+            let x = f32::from_le_bytes(f32_rep(f).to_le_bytes());
+            assert!(f == x);
+        }
+        fn convert_64(f: f64) {
+            let x = f64::from_le_bytes(f64_rep(f).to_le_bytes());
+            assert!(f == x);
+        }
+        convert_32(1.0);
+        convert_32(99.111);
+        // todo why nan not pass
+        // convert_32(f32::NAN);
+        convert_32(f32::INFINITY);
+        convert_32(f32::NEG_INFINITY);
+
+        convert_64(1.0);
+        convert_64(99.111);
+        // convert_64(f64::NAN);
+        convert_64(f64::INFINITY);
+        convert_64(f64::NEG_INFINITY);
+    }
 }

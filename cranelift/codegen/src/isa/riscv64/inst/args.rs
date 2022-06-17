@@ -1372,8 +1372,8 @@ impl AtomicOP {
     //         _ => false,
     //     }
     // }
-    pub(crate) fn op_name(self) -> &'static str {
-        match self {
+    pub(crate) fn op_name(self, amo: AMO) -> String {
+        let s = match self {
             Self::LrW => "lr.w",
             Self::ScW => "sc.w",
             Self::AmoswapW => "amoswap.w",
@@ -1396,7 +1396,8 @@ impl AtomicOP {
             Self::AmomaxD => "amomax.d",
             Self::AmominuD => "amominu.d",
             Self::AmomaxuD => "amomaxu.d",
-        }
+        };
+        format!("{}{}", s, amo.to_static_str())
     }
     #[inline(always)]
     pub(crate) fn op_code(self) -> u32 {

@@ -2384,7 +2384,7 @@ fn xxx() {
 }
 
 #[test]
-fn riscv64_worst_case_size_instrcution_size() {
+fn riscv64_worst_case_instruction_size() {
     let flags = settings::Flags::new(settings::builder());
     let emit_info = EmitInfo::new(flags);
 

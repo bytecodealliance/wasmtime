@@ -16,7 +16,7 @@ block0:
 ;   addi a0,a0,3532
 ;   lui a3,14
 ;   addi a3,a3,3532
-;   ne a1,a0,a3;;ty=i16
+;   ne a1,a0,a3##ty=i16
 ;   andi a0,a1,1
 ;   ret
 
