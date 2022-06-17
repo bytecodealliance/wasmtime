@@ -720,7 +720,8 @@ impl<'a> Inliner<'a> {
                             frame.components.push(i.clone());
                         }
                         ComponentItemDef::Instance(i) => {
-                            frame.component_instances.push(i.clone());
+                            let instance = i.clone();
+                            frame.component_instances.push(instance);
                         }
                     },
                 }
