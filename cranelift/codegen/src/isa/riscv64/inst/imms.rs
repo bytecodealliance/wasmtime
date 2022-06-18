@@ -11,6 +11,8 @@ pub struct Imm12 {
 }
 
 impl Imm12 {
+    pub(crate) const FALSE: Self = Self { bits: 0 };
+    pub(crate) const TRUE: Self = Self { bits: -1 };
     pub fn maybe_from_u64(val: u64) -> Option<Imm12> {
         let bit = 1 << 11;
         if val == 0 {
@@ -27,20 +29,10 @@ impl Imm12 {
             None
         }
     }
-
     #[inline(always)]
     pub fn from_bits(bits: i16) -> Self {
         Self { bits: bits & 0xfff }
     }
-    #[inline(always)]
-    pub(crate) fn form_bool(b: bool) -> Self {
-        if b {
-            Self { bits: -1 }
-        } else {
-            Self { bits: 0 }
-        }
-    }
-
     /// Create a zero immediate of this format.
     #[inline(always)]
     pub fn zero() -> Self {

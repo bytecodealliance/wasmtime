@@ -151,9 +151,8 @@ pub(crate) fn enc_jalr(rd: Writable<Reg>, base: Reg, offset: Imm12) -> u32 {
     x
 }
 
-/*
-    rd and src must have the same length.
-*/
+/// rd and src must have the same length.
+///
 fn gen_moves(rd: &[Writable<Reg>], src: &[Reg]) -> SmallInstVec<Inst> {
     assert!(rd.len() == src.len());
     assert!(rd.len() > 0);
@@ -166,10 +165,8 @@ fn gen_moves(rd: &[Writable<Reg>], src: &[Reg]) -> SmallInstVec<Inst> {
     insts
 }
 
-/*
-    if input or output is float,
-    you should use special instruction.
-*/
+/// if input or output is float,
+/// you should use special instruction.
 pub(crate) fn gen_move(rd: Writable<Reg>, oty: Type, rm: Reg, ity: Type) -> Inst {
     match (ity.is_float(), oty.is_float()) {
         (false, false) => Inst::gen_move(rd, rm, oty),
@@ -1028,7 +1025,7 @@ impl Inst {
             } => {
                 let rs = format_reg(rs, allocs);
                 let rd = format_reg(rd.to_reg(), allocs);
-                if alu_op.option_funct12().is_some()  {
+                if alu_op.option_funct12().is_some() {
                     format!("{} {},{}", alu_op.op_name(), rd, rs)
                 } else {
                     format!("{} {},{},{}", alu_op.op_name(), rd, rs, imm12.as_i16())

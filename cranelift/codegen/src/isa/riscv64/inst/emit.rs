@@ -630,33 +630,11 @@ impl MachInstEmit for Inst {
             } => {
                 let rs = allocs.next(rs);
                 let rd = allocs.next_writable(rd);
-                let x = if let Some(funct6) = alu_op.option_funct6(imm12) {
-                    alu_op.op_code()
-                        | reg_to_gpr_num(rd.to_reg()) << 7
-                        | alu_op.funct3() << 12
-                        | reg_to_gpr_num(rs) << 15
-                        | (imm12.as_u32()) << 20
-                        | funct6 << 26
-                } else if let Some(funct7) = alu_op.option_funct7(imm12) {
-                    alu_op.op_code()
-                        | reg_to_gpr_num(rd.to_reg()) << 7
-                        | alu_op.funct3() << 12
-                        | reg_to_gpr_num(rs) << 15
-                        | (imm12.as_u32()) << 20
-                        | funct7 << 25
-                } else if let Some(funct12) = alu_op.option_funct12() {
-                    alu_op.op_code()
-                        | reg_to_gpr_num(rd.to_reg()) << 7
-                        | alu_op.funct3() << 12
-                        | reg_to_gpr_num(rs) << 15
-                        | funct12 << 20
-                } else {
-                    alu_op.op_code()
-                        | reg_to_gpr_num(rd.to_reg()) << 7
-                        | alu_op.funct3() << 12
-                        | reg_to_gpr_num(rs) << 15
-                        | (imm12.as_u32()) << 20
-                };
+                let x = alu_op.op_code()
+                    | reg_to_gpr_num(rd.to_reg()) << 7
+                    | alu_op.funct3() << 12
+                    | reg_to_gpr_num(rs) << 15
+                    | alu_op.imm12(imm12) << 20;
                 sink.put4(x);
             }
             &Inst::Load {
@@ -693,8 +671,7 @@ impl MachInstEmit for Inst {
                 }
             }
             &Inst::Store { op, src, flags, to } => {
-                let base = to.get_base_register();
-                let base = allocs.next(base);
+                let base = allocs.next(to.get_base_register());
                 let src = allocs.next(src);
                 let offset = to.get_offset_with_state(state);
                 let x;
@@ -740,12 +717,12 @@ impl MachInstEmit for Inst {
                             },
                         });
                         // here is false
-                        insts.push(Inst::load_constant_imm12(rd, Imm12::form_bool(false)));
+                        insts.push(Inst::load_constant_imm12(rd, Imm12::FALSE));
                         insts.push(Inst::Jal {
                             dest: BranchTarget::ResolvedOffset(Inst::INSTRUCTION_SIZE * 2),
                         });
                         // here is true
-                        insts.push(Inst::load_constant_imm12(rd, Imm12::form_bool(true)));
+                        insts.push(Inst::load_constant_imm12(rd, Imm12::TRUE));
                     }
 
                     ReferenceCheckOP::IsInvalid => {
@@ -763,12 +740,12 @@ impl MachInstEmit for Inst {
                             },
                         });
                         // here is false
-                        insts.push(Inst::load_constant_imm12(rd, Imm12::form_bool(false)));
+                        insts.push(Inst::load_constant_imm12(rd, Imm12::FALSE));
                         insts.push(Inst::Jal {
                             dest: BranchTarget::ResolvedOffset(Inst::INSTRUCTION_SIZE * 2),
                         });
                         // here is true
-                        insts.push(Inst::load_constant_imm12(rd, Imm12::form_bool(true)));
+                        insts.push(Inst::load_constant_imm12(rd, Imm12::TRUE));
                     }
                 }
 
@@ -1222,12 +1199,7 @@ impl MachInstEmit for Inst {
                 .iter()
                 .for_each(|i| i.emit(&[], sink, emit_info, state));
                 // here is not taken.
-                Inst::load_constant_imm12(rd, Imm12::form_bool(false)).emit(
-                    &[],
-                    sink,
-                    emit_info,
-                    state,
-                );
+                Inst::load_constant_imm12(rd, Imm12::FALSE).emit(&[], sink, emit_info, state);
                 // jump over.
                 Inst::Jal {
                     dest: BranchTarget::Label(label_jump_over),
@@ -1235,12 +1207,7 @@ impl MachInstEmit for Inst {
                 .emit(&[], sink, emit_info, state);
                 // here is true
                 sink.bind_label(label_true);
-                Inst::load_constant_imm12(rd, Imm12::form_bool(true)).emit(
-                    &[],
-                    sink,
-                    emit_info,
-                    state,
-                );
+                Inst::load_constant_imm12(rd, Imm12::TRUE).emit(&[], sink, emit_info, state);
                 sink.bind_label(label_jump_over);
             }
 
