@@ -758,7 +758,7 @@ impl Inst {
         }
         fn format_frm(rounding_mode: Option<FRM>) -> String {
             if FRM::is_default(rounding_mode) {
-                "".into()
+                String::default()
             } else {
                 format!(",{}", rounding_mode.unwrap().to_static_str())
             }
@@ -1028,13 +1028,8 @@ impl Inst {
             } => {
                 let rs = format_reg(rs, allocs);
                 let rd = format_reg(rd.to_reg(), allocs);
-                if alu_op.is_bit_manip() {
-                    if alu_op.need_shamt().is_some() {
-                        let shamt = (imm12.as_i16() as u8) & alu_op.shamt_mask();
-                        format!("{} {},{},{}", alu_op.op_name(), rd, rs, shamt)
-                    } else {
-                        format!("{} {},{}", alu_op.op_name(), rd, rs)
-                    }
+                if alu_op.option_funct12().is_some()  {
+                    format!("{} {},{}", alu_op.op_name(), rd, rs)
                 } else {
                     format!("{} {},{},{}", alu_op.op_name(), rd, rs, imm12.as_i16())
                 }

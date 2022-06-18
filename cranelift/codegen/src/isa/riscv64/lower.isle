@@ -240,11 +240,11 @@
 
 ;;;; Rules for `popcnt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_16 ty) (popcnt x)))
-      (alu_rr_imm12_bit_map (AluOPRRI.Cpopw) (narrow_int ty x) 0))
+      (alu_rr_imm12 (AluOPRRI.Cpopw) (narrow_int ty x) (imm12_const 0)))
 (rule (lower (has_type $I32 (popcnt x)))
-      (alu_rr_imm12_bit_map (AluOPRRI.Cpopw) x 0))
+      (alu_rr_imm12 (AluOPRRI.Cpopw) x (imm12_const 0)))
 (rule (lower (has_type $I64 (popcnt x)))
-      (alu_rr_imm12_bit_map (AluOPRRI.Cpop) x 0))
+      (alu_rr_imm12 (AluOPRRI.Cpop) x (imm12_const 0)))
 (rule (lower (has_type $I128 (popcnt x)))
       (lower_popcnt_i128 x))
 

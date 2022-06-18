@@ -65,6 +65,7 @@ impl LoadConstant {
         insts
     }
 
+    // load and perform an extra add.
     pub(crate) fn load_constant_and_add(self, rd: Writable<Reg>, rs: Reg) -> SmallInstVec<Inst> {
         let mut insts = self.load_constant(rd);
         insts.push(Inst::AluRRR {
@@ -629,20 +630,26 @@ impl MachInstEmit for Inst {
             } => {
                 let rs = allocs.next(rs);
                 let rd = allocs.next_writable(rd);
-                let x = if let Some(funct6) = alu_op.option_funct6() {
+                let x = if let Some(funct6) = alu_op.option_funct6(imm12) {
                     alu_op.op_code()
                         | reg_to_gpr_num(rd.to_reg()) << 7
                         | alu_op.funct3() << 12
                         | reg_to_gpr_num(rs) << 15
                         | (imm12.as_u32()) << 20
                         | funct6 << 26
-                } else if let Some(funct7) = alu_op.option_funct7() {
+                } else if let Some(funct7) = alu_op.option_funct7(imm12) {
                     alu_op.op_code()
                         | reg_to_gpr_num(rd.to_reg()) << 7
                         | alu_op.funct3() << 12
                         | reg_to_gpr_num(rs) << 15
                         | (imm12.as_u32()) << 20
                         | funct7 << 25
+                } else if let Some(funct12) = alu_op.option_funct12() {
+                    alu_op.op_code()
+                        | reg_to_gpr_num(rd.to_reg()) << 7
+                        | alu_op.funct3() << 12
+                        | reg_to_gpr_num(rs) << 15
+                        | funct12 << 20
                 } else {
                     alu_op.op_code()
                         | reg_to_gpr_num(rd.to_reg()) << 7
@@ -804,7 +811,8 @@ impl MachInstEmit for Inst {
                             insts.push(Inst::load_constant_imm12(rd, Imm12::from_bits(-1)));
                         }
                         8 => {
-                            let (op, imm12) = AluOPRRI::Sextb.funct12(None);
+                            let op = AluOPRRI::Sextb;
+                            let imm12 = Imm12::zero();
                             insts.push(Inst::AluRRImm12 {
                                 alu_op: op,
                                 rd,
@@ -813,7 +821,8 @@ impl MachInstEmit for Inst {
                             });
                         }
                         16 => {
-                            let (op, imm12) = AluOPRRI::Sexth.funct12(None);
+                            let op = AluOPRRI::Sexth;
+                            let imm12 = Imm12::zero();
                             insts.push(Inst::AluRRImm12 {
                                 alu_op: op,
                                 rd,
@@ -1501,7 +1510,8 @@ impl MachInstEmit for Inst {
                 let rs = allocs.next(rs);
                 let rd = allocs.next_writable(rd);
                 //extract sign bit.
-                let (op, imm12) = AluOPRRI::Bexti.funct12(Some((ty.bits() - 1) as u8));
+                let op = AluOPRRI::Bexti;
+                let imm12 = Imm12::from_bits((ty.bits() - 1) as i16);
                 Inst::AluRRImm12 {
                     alu_op: op,
                     rd,
@@ -1529,11 +1539,12 @@ impl MachInstEmit for Inst {
                     state: &mut EmitState,
                     ty: Type,
                 ) {
+                    let op = AluOPRRI::Clz;
+                    let imm12 = Imm12::zero();
                     if 64 - ty.bits() > 0 {
                         Inst::narrow_down_int(rd, rs, ty)
                             .iter()
                             .for_each(|i| i.emit(&[], sink, emit_info, state));
-                        let (op, imm12) = AluOPRRI::Clz.funct12(None);
                         Inst::AluRRImm12 {
                             alu_op: op,
                             rd,
@@ -1542,7 +1553,6 @@ impl MachInstEmit for Inst {
                         }
                         .emit(&[], sink, emit_info, state);
                     } else {
-                        let (op, imm12) = AluOPRRI::Clz.funct12(None);
                         Inst::AluRRImm12 {
                             alu_op: op,
                             rd,

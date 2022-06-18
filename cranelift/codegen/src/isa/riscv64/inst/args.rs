@@ -880,24 +880,61 @@ impl AluOPRRR {
 
 impl AluOPRRI {
     /*
-        int 64bit this is 6 bit length, otherwise is 7 bit length
+        option funct6.
     */
-    pub(crate) fn option_funct6(self) -> Option<u32> {
-        match self {
-            AluOPRRI::Slli => Some(0b00_0000),
-            AluOPRRI::Srli => Some(0b00_0000),
-            AluOPRRI::Srai => Some(0b01_0000),
+    pub(crate) fn option_funct6(self, imm12: Imm12) -> Option<u32> {
+        let x: Option<u32> = match self {
+            Self::Slli => Some(0b00_0000),
+            Self::Srli => Some(0b00_0000),
+            Self::Srai => Some(0b01_0000),
+            Self::Bclri => Some(0b010010),
+            Self::Bexti => Some(0b010010),
+            Self::Binvi => Some(0b011010),
+            Self::Bseti => Some(0b001010),
+            Self::Rori => Some(0b011000),
+            Self::SlliUw => Some(0b000010),
             _ => None,
+        };
+        // we can perform some check on imm12
+        // like Slli,imm12 should be in [0,63]
+        if x.is_some() {
+            assert!(imm12.as_u32() <= 63);
         }
+        x
     }
+
     /*
         Slliw .. etc operation on 32-bit value , only need 5-bite shift size.
+        so we have funct7.
     */
-    pub(crate) fn option_funct7(self) -> Option<u32> {
-        match self {
+    pub(crate) fn option_funct7(self, imm12: Imm12) -> Option<u32> {
+        let x = match self {
             Self::Slliw => Some(0b000_0000),
             Self::SrliW => Some(0b000_0000),
             Self::Sraiw => Some(0b010_0000),
+            Self::Roriw => Some(0b0110000),
+            _ => None,
+        };
+        if x.is_some() {
+            assert!(imm12.as_u32() <= 31);
+        }
+        x
+    }
+
+    pub(crate) fn option_funct12(self) -> Option<u32> {
+        match self {
+            Self::Clz => Some(0b011000000000),
+            Self::Clzw => Some(0b011000000000),
+            Self::Cpop => Some(0b011000000010),
+            Self::Cpopw => Some(0b011000000010),
+            Self::Ctz => Some(0b011000000001),
+            Self::Ctzw => Some(0b011000000001),
+            Self::Rev8 => Some(0b011010111000),
+            Self::Sextb => Some(0b011000000100),
+            Self::Sexth => Some(0b011000000101),
+            Self::Zexth => Some(0b000010000000),
+            Self::Orcb => Some(0b001010000111),
+            Self::Brev8 => Some(0b0110_1000_0111),
             _ => None,
         }
     }
@@ -1012,99 +1049,6 @@ impl AluOPRRI {
             | AluOPRRI::Ctzw => 0b0011011,
             AluOPRRI::Zexth => 0b0111011,
         }
-    }
-
-    pub(crate) fn is_bit_manip(self) -> bool {
-        match self {
-            Self::Bclri
-            | Self::Bexti
-            | Self::Binvi
-            | Self::Bseti
-            | Self::Rori
-            | Self::Roriw
-            | Self::SlliUw
-            | Self::Clz
-            | Self::Clzw
-            | Self::Cpop
-            | Self::Cpopw
-            | Self::Ctz
-            | Self::Ctzw
-            | Self::Rev8
-            | Self::Sextb
-            | Self::Sexth
-            | Self::Zexth
-            | Self::Orcb
-            | Self::Brev8 => true,
-            _ => false,
-        }
-    }
-
-    /*
-        return shamt size
-    */
-    pub(crate) fn need_shamt(self) -> Option<u8> {
-        match self {
-            Self::Bclri => Some(6),
-            Self::Bexti => Some(6),
-            Self::Binvi => Some(6),
-            Self::Bseti => Some(6),
-            Self::Rori => Some(6),
-            Self::Roriw => Some(5),
-            Self::SlliUw => Some(6),
-            _ => None,
-        }
-    }
-
-    pub(crate) fn shamt_mask(self) -> u8 {
-        let s = self.need_shamt();
-        match s {
-            Some(x) => match x {
-                5 => 0b1_1111,
-                6 => 0b11_1111,
-                _ => unreachable!(),
-            },
-            None => 0,
-        }
-    }
-
-    /*
-        some instruction use imm12 for function code.
-        return Self and Imm12
-    */
-    pub(crate) fn funct12(self, shamt: Option<u8>) -> (Self, Imm12) {
-        if self.need_shamt().is_some() {
-            assert!(shamt.is_some());
-        } else {
-            assert!(shamt.is_none());
-        }
-        let mut shamt = shamt.map(|s| s as u32);
-        let bits: u32 = match self {
-            Self::Bclri => shamt.take().unwrap() | 0b010010 << 6,
-            Self::Bexti => shamt.take().unwrap() | 0b010010 << 6,
-            Self::Binvi => shamt.take().unwrap() | 0b011010 << 6,
-            Self::Bseti => shamt.take().unwrap() | 0b001010 << 6,
-            Self::Rori => shamt.take().unwrap() | 0b011000 << 6,
-            Self::Roriw => shamt.take().unwrap() | 0b0110000 << 5,
-            Self::SlliUw => shamt.take().unwrap() | 0b000010 << 6,
-            Self::Clz => 0b011000000000,
-            Self::Clzw => 0b011000000000,
-            Self::Cpop => 0b011000000010,
-            Self::Cpopw => 0b011000000010,
-            Self::Ctz => 0b011000000001,
-            Self::Ctzw => 0b011000000001,
-            Self::Rev8 => 0b011010111000,
-            Self::Sextb => 0b011000000100,
-            Self::Sexth => 0b011000000101,
-            Self::Zexth => 0b000010000000,
-            Self::Orcb => 0b001010000111,
-            Self::Brev8 => 0b0110_1000_0111,
-            _ => unreachable!(),
-        };
-        /*
-            make sure shamt is been consumed.
-        */
-        assert!(shamt.is_none());
-        (self, Imm12::from_bits(bits as i16))
     }
 }
 

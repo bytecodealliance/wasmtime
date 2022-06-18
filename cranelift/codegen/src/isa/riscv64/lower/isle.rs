@@ -221,7 +221,7 @@ where
                 let result = self.temp_writable_reg(I64);
                 {
                     // first reverset byte.
-                    let (op, imm12) = AluOPRRI::Rev8.funct12(None);
+                    let (op, imm12) = (AluOPRRI::Rev8, Imm12::zero());
                     self.emit(&MInst::AluRRImm12 {
                         alu_op: op,
                         rd: result,
@@ -232,7 +232,7 @@ where
                 //
                 {
                     //reverset bits.
-                    let (op, imm12) = AluOPRRI::Brev8.funct12(None);
+                    let (op, imm12) = (AluOPRRI::Brev8, Imm12::zero());
                     self.emit(&MInst::AluRRImm12 {
                         alu_op: op,
                         rd: result,
@@ -254,7 +254,7 @@ where
 
             8 => {
                 let result = self.temp_writable_reg(I64);
-                let (op, imm12) = AluOPRRI::Brev8.funct12(None);
+                let (op, imm12) = (AluOPRRI::Brev8, Imm12::zero());
                 self.emit(&MInst::AluRRImm12 {
                     alu_op: op,
                     rd: result,
@@ -274,7 +274,7 @@ where
             let rs = val.regs()[0];
             match ty.bits() {
                 64 => {
-                    let (op, imm12) = AluOPRRI::Clz.funct12(None);
+                    let (op, imm12) = (AluOPRRI::Clz, Imm12::zero());
                     self.emit(&MInst::AluRRImm12 {
                         alu_op: op,
                         rd: tmp,
@@ -283,7 +283,7 @@ where
                     });
                 }
                 32 => {
-                    let (op, imm12) = AluOPRRI::Clzw.funct12(None);
+                    let (op, imm12) = (AluOPRRI::Clzw, Imm12::zero());
                     self.emit(&MInst::AluRRImm12 {
                         alu_op: op,
                         rd: tmp,
@@ -293,7 +293,7 @@ where
                 }
                 16 | 8 => {
                     let rs = generated_code::constructor_narrow_int(self, ty, rs).unwrap();
-                    let (op, imm12) = AluOPRRI::Clzw.funct12(None);
+                    let (op, imm12) = (AluOPRRI::Clzw, Imm12::zero());
                     self.emit(&MInst::AluRRImm12 {
                         alu_op: op,
                         rd: tmp,
@@ -318,7 +318,7 @@ where
 
     fn lower_ctz(&mut self, ty: Type, val: ValueRegs) -> ValueRegs {
         let rd = self.temp_writable_reg(I64);
-        let (op, imm12) = AluOPRRI::Ctz.funct12(None);
+        let (op, imm12) = (AluOPRRI::Ctz, Imm12::zero());
         match ty.bits() {
             128 => {
                 let tmp_high = self.temp_writable_reg(I64);
@@ -407,7 +407,7 @@ where
                     rs1: rd.to_reg(),
                     rs2: val.regs()[0],
                 });
-                let (op, imm12) = AluOPRRI::Ctz.funct12(None);
+                let (op, imm12) = (AluOPRRI::Ctz, Imm12::zero());
                 self.emit(&MInst::AluRRImm12 {
                     alu_op: op,
                     rd,
@@ -441,7 +441,7 @@ where
     fn lower_popcnt_i128(&mut self, val: ValueRegs) -> ValueRegs {
         let low = self.temp_writable_reg(I64);
         let high = self.temp_writable_reg(I64);
-        let (op, imm12) = AluOPRRI::Cpop.funct12(None);
+        let (op, imm12) = (AluOPRRI::Cpop, Imm12::zero());
 
         self.emit(&MInst::AluRRImm12 {
             alu_op: op,
@@ -481,14 +481,6 @@ where
             rs2: y.regs()[1],
         });
         ValueRegs::two(low.to_reg(), high.to_reg())
-    }
-
-    fn bitmaip_imm12(&mut self, op: &AluOPRRI, shamt: u8) -> Imm12 {
-        op.funct12(op.need_shamt().map(|mask| {
-            assert!(mask >= shamt);
-            shamt
-        }))
-        .1
     }
 
     fn lower_float_xnot(&mut self, ty: Type, x: Reg, y: Reg) -> Reg {
@@ -551,7 +543,7 @@ where
                     self.emit(&MInst::gen_move(low, val, I64));
                 }
                 // extract the signed bit
-                let (op, imm12) = AluOPRRI::Bexti.funct12(Some(from_bits - 1));
+                let (op, imm12) = (AluOPRRI::Bexti, Imm12::from_bits((from_bits - 1) as i16));
                 self.emit(&MInst::AluRRImm12 {
                     alu_op: op,
                     rd: tmp,
@@ -597,7 +589,9 @@ where
             }
         }
     }
-
+    fn imm12_const(&mut self, val: i32) -> Imm12 {
+        Imm12::maybe_from_u64(val as u64).unwrap()
+    }
     fn lower_b128_binary(&mut self, op: &AluOPRRR, a: ValueRegs, b: ValueRegs) -> ValueRegs {
         let op = *op;
         let low = self.temp_writable_reg(I64);
@@ -1250,7 +1244,7 @@ where
             let count_low: Reg = {
                 let count_positive: Reg = {
                     let tmp = self.temp_writable_reg(I64);
-                    let (op, imm12) = AluOPRRI::Clz.funct12(None);
+                    let (op, imm12) = (AluOPRRI::Clz, Imm12::zero());
                     self.emit(&MInst::AluRRImm12 {
                         alu_op: op,
                         rd: tmp,
@@ -1262,7 +1256,7 @@ where
                 let count_negtive: Reg = {
                     let tmp = self.temp_writable_reg(I64);
                     self.emit(&MInst::construct_bit_not(tmp, val.regs()[0]));
-                    let (op, imm12) = AluOPRRI::Clz.funct12(None);
+                    let (op, imm12) = (AluOPRRI::Clz, Imm12::zero());
                     self.emit(&MInst::AluRRImm12 {
                         alu_op: op,
                         rd: tmp,

@@ -61,6 +61,7 @@ impl Into<i64> for Imm12 {
         self.bits as i64
     }
 }
+
 impl Display for Imm12 {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         write!(f, "{:+}", self.bits)
@@ -112,15 +113,6 @@ pub struct Uimm5 {
 }
 
 impl Uimm5 {
-    pub fn maybe_from_u64(val: u64) -> Option<Uimm5> {
-        if (val >> 5) == 0 {
-            Some(Self {
-                bits: (val & 0b1_1111) as u8,
-            })
-        } else {
-            None
-        }
-    }
     pub fn from_bits(bits: u8) -> Self {
         Self { bits }
     }

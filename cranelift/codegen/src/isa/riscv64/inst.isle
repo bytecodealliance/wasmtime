@@ -669,12 +669,8 @@
             (_ Unit (emit (MInst.AluRRImm12 op dst src imm))))
         dst))
 
-(decl bitmaip_imm12 (AluOPRRI u8) Imm12)
-(extern constructor bitmaip_imm12 bitmaip_imm12)
+ 
 
-(decl alu_rr_imm12_bit_map (AluOPRRI Reg u8) Reg)
-(rule (alu_rr_imm12_bit_map op src shamt)
-      (alu_rr_imm12 op src (bitmaip_imm12 op shamt)))
 
 
 ;; Helper for narrow down int to it's bits.
@@ -774,3 +770,7 @@
 
 (decl lower_cls_i128 (ValueRegs)ValueRegs)
 (extern constructor lower_cls_i128 lower_cls_i128)
+
+
+(decl imm12_const (i32) Imm12)
+(extern constructor imm12_const imm12_const)
