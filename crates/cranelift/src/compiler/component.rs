@@ -54,6 +54,7 @@ impl ComponentCompiler for Compiler {
         let CanonicalOptions {
             memory,
             realloc,
+            post_return,
             string_encoding,
         } = lowering.options;
 
@@ -93,6 +94,11 @@ impl ComponentCompiler for Compiler {
             ),
             None => builder.ins().iconst(pointer_type, 0),
         });
+
+        // A post-return option is only valid on `canon.lift`'d functions so no
+        // valid component should have this specified for a lowering which this
+        // trampoline compiler is interested in.
+        assert!(post_return.is_none());
 
         // string_encoding: StringEncoding
         host_sig.params.push(ir::AbiParam::new(ir::types::I8));

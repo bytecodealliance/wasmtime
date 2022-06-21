@@ -5,6 +5,7 @@ use wasmtime::{Config, Engine};
 mod func;
 mod import;
 mod nested;
+mod post_return;
 
 // A simple bump allocator which can be used with modules
 const REALLOC_AND_FREE: &str = r#"

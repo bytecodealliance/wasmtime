@@ -7,9 +7,9 @@ use anyhow::{anyhow, Context, Result};
 use std::marker;
 use std::sync::Arc;
 use wasmtime_environ::component::{
-    ComponentTypes, CoreDef, CoreExport, Export, ExportItem, ExtractMemory, ExtractRealloc,
-    GlobalInitializer, InstantiateModule, LowerImport, RuntimeImportIndex, RuntimeInstanceIndex,
-    RuntimeModuleIndex,
+    ComponentTypes, CoreDef, CoreExport, Export, ExportItem, ExtractMemory, ExtractPostReturn,
+    ExtractRealloc, GlobalInitializer, InstantiateModule, LowerImport, RuntimeImportIndex,
+    RuntimeInstanceIndex, RuntimeModuleIndex,
 };
 use wasmtime_environ::{EntityIndex, PrimaryMap};
 use wasmtime_runtime::component::{ComponentInstance, OwnedComponentInstance};
@@ -278,6 +278,10 @@ impl<'a> Instantiator<'a> {
                     self.extract_realloc(store.0, realloc)
                 }
 
+                GlobalInitializer::ExtractPostReturn(post_return) => {
+                    self.extract_post_return(store.0, post_return)
+                }
+
                 GlobalInitializer::SaveStaticModule(idx) => {
                     self.data
                         .exported_modules
@@ -336,6 +340,16 @@ impl<'a> Instantiator<'a> {
             _ => unreachable!(),
         };
         self.data.state.set_runtime_realloc(realloc.index, anyfunc);
+    }
+
+    fn extract_post_return(&mut self, store: &mut StoreOpaque, post_return: &ExtractPostReturn) {
+        let anyfunc = match self.data.lookup_def(store, &post_return.def) {
+            wasmtime_runtime::Export::Function(f) => f.anyfunc,
+            _ => unreachable!(),
+        };
+        self.data
+            .state
+            .set_runtime_post_return(post_return.index, anyfunc);
     }
 
     fn build_imports<'b>(

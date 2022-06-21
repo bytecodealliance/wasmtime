@@ -62,6 +62,7 @@ pub(super) fn run(
         result: Component::default(),
         import_path_interner: Default::default(),
         runtime_realloc_interner: Default::default(),
+        runtime_post_return_interner: Default::default(),
         runtime_memory_interner: Default::default(),
     };
 
@@ -182,6 +183,7 @@ struct Inliner<'a> {
     // runtime instead of multiple times.
     import_path_interner: HashMap<ImportPath<'a>, RuntimeImportIndex>,
     runtime_realloc_interner: HashMap<CoreDef, RuntimeReallocIndex>,
+    runtime_post_return_interner: HashMap<CoreDef, RuntimePostReturnIndex>,
     runtime_memory_interner: HashMap<CoreExport<MemoryIndex>, RuntimeMemoryIndex>,
 }
 
@@ -851,13 +853,29 @@ impl<'a> Inliner<'a> {
                     index
                 })
         });
-        if options.post_return.is_some() {
-            unimplemented!("post-return handling");
-        }
+        let post_return = options.post_return.map(|i| {
+            let def = frame.funcs[i].clone();
+            *self
+                .runtime_post_return_interner
+                .entry(def.clone())
+                .or_insert_with(|| {
+                    let index =
+                        RuntimePostReturnIndex::from_u32(self.result.num_runtime_post_returns);
+                    self.result.num_runtime_post_returns += 1;
+                    self.result
+                        .initializers
+                        .push(GlobalInitializer::ExtractPostReturn(ExtractPostReturn {
+                            index,
+                            def,
+                        }));
+                    index
+                })
+        });
         CanonicalOptions {
             string_encoding: options.string_encoding,
             memory,
             realloc,
+            post_return,
         }
     }
 }
