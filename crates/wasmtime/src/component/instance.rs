@@ -8,7 +8,7 @@ use std::marker;
 use std::sync::Arc;
 use wasmtime_environ::component::{
     ComponentTypes, CoreDef, CoreExport, Export, ExportItem, ExtractMemory, ExtractRealloc,
-    Initializer, InstantiateModule, LowerImport, RuntimeImportIndex, RuntimeInstanceIndex,
+    GlobalInitializer, InstantiateModule, LowerImport, RuntimeImportIndex, RuntimeInstanceIndex,
     RuntimeModuleIndex,
 };
 use wasmtime_environ::{EntityIndex, PrimaryMap};
@@ -230,7 +230,7 @@ impl<'a> Instantiator<'a> {
         let env_component = self.component.env_component();
         for initializer in env_component.initializers.iter() {
             match initializer {
-                Initializer::InstantiateModule(m) => {
+                GlobalInitializer::InstantiateModule(m) => {
                     let module;
                     let imports = match m {
                         // Since upvars are statically know we know that the
@@ -269,19 +269,21 @@ impl<'a> Instantiator<'a> {
                     self.data.instances.push(i);
                 }
 
-                Initializer::LowerImport(import) => self.lower_import(import),
+                GlobalInitializer::LowerImport(import) => self.lower_import(import),
 
-                Initializer::ExtractMemory(mem) => self.extract_memory(store.0, mem),
+                GlobalInitializer::ExtractMemory(mem) => self.extract_memory(store.0, mem),
 
-                Initializer::ExtractRealloc(realloc) => self.extract_realloc(store.0, realloc),
+                GlobalInitializer::ExtractRealloc(realloc) => {
+                    self.extract_realloc(store.0, realloc)
+                }
 
-                Initializer::SaveStaticModule(idx) => {
+                GlobalInitializer::SaveStaticModule(idx) => {
                     self.data
                         .exported_modules
                         .push(self.component.static_module(*idx).clone());
                 }
 
-                Initializer::SaveModuleImport(idx) => {
+                GlobalInitializer::SaveModuleImport(idx) => {
                     self.data.exported_modules.push(match &self.imports[*idx] {
                         RuntimeImport::Module(m) => m.clone(),
                         _ => unreachable!(),

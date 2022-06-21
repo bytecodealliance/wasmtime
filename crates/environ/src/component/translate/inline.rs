@@ -12,10 +12,10 @@
 //! the motivation for this file.
 //!
 //! The second phase of compilation, inlining here, will in a sense interpret
-//! the initializers, at compile time, into a new list of `Initializer` entries
-//! which are a sort of "global initializer". The generated `Initializer` is
+//! the initializers, at compile time, into a new list of `GlobalInitializer` entries
+//! which are a sort of "global initializer". The generated `GlobalInitializer` is
 //! much more specific than the `LocalInitializer` and additionally far fewer
-//! `Initializer` structures are generated (in theory) than there are local
+//! `GlobalInitializer` structures are generated (in theory) than there are local
 //! initializers.
 //!
 //! The "inlining" portion of the name of this module indicates how the
@@ -23,11 +23,12 @@
 //! function's arguments are the imports provided to the instantiation of a
 //! component, and further nested function calls happen on a stack when a
 //! nested component is instantiated. The inlining then refers to how this
-//! stack of instantiations is flatten to one list of `Initializer` entries to
-//! represent the process of instantiating a component, similar to how function
-//! inlining removes call instructions and creates one giant function. Here
-//! there are no inlining heuristics or anything like that, we simply inline
-//! everything into the root component's list of initializers.
+//! stack of instantiations is flattened to one list of `GlobalInitializer`
+//! entries to represent the process of instantiating a component graph,
+//! similar to how function inlining removes call instructions and creates one
+//! giant function for a call graph. Here there are no inlining heuristics or
+//! anything like that, we simply inline everything into the root component's
+//! list of initializers.
 //!
 //! Another primary task this module performs is a form of dataflow analysis
 //! to represent items in each index space with their definition rather than
@@ -41,7 +42,7 @@
 //! where instantiating a nested component pushes a "frame" onto a stack to
 //! start executing and we resume at the old one when we're done. Items are
 //! tracked where they come from and at the end after processing only the
-//! side-effectful initializers are emitted to the `Initializer` list in the
+//! side-effectful initializers are emitted to the `GlobalInitializer` list in the
 //! final `Component`.
 
 use crate::component::translate::*;
@@ -116,9 +117,9 @@ pub(super) fn run(
                 let index = RuntimeModuleIndex::from_u32(inliner.result.num_runtime_modules);
                 inliner.result.num_runtime_modules += 1;
                 let init = match module {
-                    ModuleDef::Static(idx) => Initializer::SaveStaticModule(idx),
+                    ModuleDef::Static(idx) => GlobalInitializer::SaveStaticModule(idx),
                     ModuleDef::Import(path, _) => {
-                        Initializer::SaveModuleImport(inliner.runtime_import(&path))
+                        GlobalInitializer::SaveModuleImport(inliner.runtime_import(&path))
                     }
                 };
                 inliner.result.initializers.push(init);
@@ -464,7 +465,7 @@ impl<'a> Inliner<'a> {
                         let import = self.runtime_import(path);
                         self.result
                             .initializers
-                            .push(Initializer::LowerImport(LowerImport {
+                            .push(GlobalInitializer::LowerImport(LowerImport {
                                 canonical_abi,
                                 import,
                                 index,
@@ -492,7 +493,7 @@ impl<'a> Inliner<'a> {
                     //   not yet happened.
                     //
                     // In general this is almost certainly going to require some
-                    // new variant of `Initializer` in one form or another.
+                    // new variant of `GlobalInitializer` in one form or another.
                     ComponentFuncDef::Lifted { .. } => {
                         unimplemented!("lowering a lifted function")
                     }
@@ -569,7 +570,7 @@ impl<'a> Inliner<'a> {
                 self.result.num_runtime_instances += 1;
                 self.result
                     .initializers
-                    .push(Initializer::InstantiateModule(init));
+                    .push(GlobalInitializer::InstantiateModule(init));
                 frame
                     .module_instances
                     .push(ModuleInstanceDef::Instantiated(idx, *module));
@@ -826,7 +827,10 @@ impl<'a> Inliner<'a> {
                     self.result.num_runtime_memories += 1;
                     self.result
                         .initializers
-                        .push(Initializer::ExtractMemory(ExtractMemory { index, export }));
+                        .push(GlobalInitializer::ExtractMemory(ExtractMemory {
+                            index,
+                            export,
+                        }));
                     index
                 })
         });
@@ -840,7 +844,10 @@ impl<'a> Inliner<'a> {
                     self.result.num_runtime_reallocs += 1;
                     self.result
                         .initializers
-                        .push(Initializer::ExtractRealloc(ExtractRealloc { index, def }));
+                        .push(GlobalInitializer::ExtractRealloc(ExtractRealloc {
+                            index,
+                            def,
+                        }));
                     index
                 })
         });

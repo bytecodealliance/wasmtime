@@ -7,7 +7,7 @@ use std::path::Path;
 use std::ptr::NonNull;
 use std::sync::Arc;
 use wasmtime_environ::component::{
-    ComponentTypes, Initializer, LoweredIndex, StaticModuleIndex, TrampolineInfo, Translator,
+    ComponentTypes, GlobalInitializer, LoweredIndex, StaticModuleIndex, TrampolineInfo, Translator,
 };
 use wasmtime_environ::PrimaryMap;
 use wasmtime_jit::CodeMemory;
@@ -142,7 +142,7 @@ impl Component {
                     .initializers
                     .iter()
                     .filter_map(|init| match init {
-                        Initializer::LowerImport(i) => Some(i),
+                        GlobalInitializer::LowerImport(i) => Some(i),
                         _ => None,
                     })
                     .collect::<Vec<_>>();

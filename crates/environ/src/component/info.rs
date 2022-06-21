@@ -14,7 +14,7 @@
 //   these altogether helps components be lighter weight at runtime and
 //   additionally accelerates instantiation.
 //
-// * Components can have arbitrary nesting an internally do instantiations via
+// * Components can have arbitrary nesting and internally do instantiations via
 //   string-based matching. At instantiation-time, though, we want to do as few
 //   string-lookups in hash maps as much as we can since they're significantly
 //   slower than index-based lookups. Furthermore while the imports of a
@@ -35,12 +35,12 @@
 //
 // Note, however, that the current design of `Component` has fundamental
 // limitations which it was not designed for. For example there is no feasible
-// way to implement either importing or exporting a component itself. Currently
-// we rely on the ability to have static knowledge of what's coming from the
-// host which at this point can only be either functions or core wasm modules.
-// Additionally one flat list of initializers for a component are produced
-// instead of initializers-per-component which would otherwise be required to
-// export a component from a component.
+// way to implement either importing or exporting a component itself from the
+// root component. Currently we rely on the ability to have static knowledge of
+// what's coming from the host which at this point can only be either functions
+// or core wasm modules. Additionally one flat list of initializers for a
+// component are produced instead of initializers-per-component which would
+// otherwise be required to export a component from a component.
 //
 // For now this tradeoff is made as it aligns well with the intended use case
 // for components in an embedding. This may need to be revisited though if the
@@ -108,7 +108,7 @@ pub struct Component {
     /// have instantiations, for example, in addition to entries which
     /// initialize `VMComponentContext` fields with previously instantiated
     /// instances.
-    pub initializers: Vec<Initializer>,
+    pub initializers: Vec<GlobalInitializer>,
 
     /// The number of runtime instances (maximum `RuntimeInstanceIndex`) created
     /// when instantiating this component.
@@ -138,7 +138,7 @@ pub struct Component {
     pub num_runtime_modules: u32,
 }
 
-/// Initializer instructions to get processed when instantiating a component
+/// GlobalInitializer instructions to get processed when instantiating a component
 ///
 /// The variants of this enum are processed during the instantiation phase of
 /// a component in-order from front-to-back. These are otherwise emitted as a
@@ -149,7 +149,7 @@ pub struct Component {
 // performs all of these duties for us and skips the overhead of interpreting
 // all of these instructions.
 #[derive(Debug, Serialize, Deserialize)]
-pub enum Initializer {
+pub enum GlobalInitializer {
     /// A core wasm module is being instantiated.
     ///
     /// This will result in a new core wasm instance being created, which may
@@ -230,7 +230,7 @@ pub enum InstantiateModule {
 }
 
 /// Description of a lowered import used in conjunction with
-/// `Initializer::LowerImport`.
+/// `GlobalInitializer::LowerImport`.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct LowerImport {
     /// The index of the lowered function that's being created.
@@ -266,7 +266,7 @@ pub enum CoreDef {
     Export(CoreExport<EntityIndex>),
     /// This item is a core wasm function with the index specified here. Note
     /// that this `LoweredIndex` corresponds to the nth
-    /// `Initializer::LowerImport` instruction.
+    /// `GlobalInitializer::LowerImport` instruction.
     Lowered(LoweredIndex),
 }
 
@@ -346,7 +346,7 @@ pub enum Export {
     /// A module defined within this component is exported.
     ///
     /// The module index here indexes a module recorded with
-    /// `Initializer::SaveModule` above.
+    /// `GlobalInitializer::SaveModule` above.
     Module(RuntimeModuleIndex),
 }
 
