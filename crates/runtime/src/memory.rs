@@ -470,7 +470,7 @@ impl SharedMemory {
     pub fn new(plan: MemoryPlan) -> Result<Self> {
         let (minimum_bytes, maximum_bytes) = Memory::limit_new(&plan, None)?;
         let mmap_memory = MmapMemory::new(&plan, minimum_bytes, maximum_bytes, None)?;
-        Ok(Self::wrap(&plan, Box::new(mmap_memory), plan.memory))
+        Self::wrap(&plan, Box::new(mmap_memory), plan.memory)
     }
 
     /// Wrap an existing [Memory] with the locking provided by a [SharedMemory].
@@ -478,19 +478,23 @@ impl SharedMemory {
         plan: &MemoryPlan,
         mut memory: Box<dyn RuntimeLinearMemory>,
         ty: wasmtime_environ::Memory,
-    ) -> Self {
-        assert!(ty.shared);
-        assert!(matches!(plan.style, MemoryStyle::Static { .. }));
+    ) -> Result<Self> {
+        if !ty.shared {
+            bail!("shared memory must have a `shared` memory type");
+        }
+        if !matches!(plan.style, MemoryStyle::Static { .. }) {
+            bail!("shared memory can only be built from a static memory allocation")
+        }
         assert!(
             memory.as_any_mut().type_id() != std::any::TypeId::of::<SharedMemory>(),
             "cannot re-wrap a shared memory"
         );
         let def = LongTermVMMemoryDefinition(memory.vmmemory());
-        Self(Arc::new(RwLock::new(SharedMemoryInner {
+        Ok(Self(Arc::new(RwLock::new(SharedMemoryInner {
             memory: memory,
             ty,
             def,
-        })))
+        }))))
     }
 
     /// Return the memory type for this [`SharedMemory`].
@@ -613,7 +617,7 @@ impl Memory {
         let (minimum, maximum) = Self::limit_new(plan, Some(store))?;
         let allocation = creator.new_memory(plan, minimum, maximum, memory_image)?;
         let allocation = if plan.memory.shared {
-            Box::new(SharedMemory::wrap(plan, allocation, plan.memory))
+            Box::new(SharedMemory::wrap(plan, allocation, plan.memory)?)
         } else {
             allocation
         };
