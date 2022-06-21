@@ -1940,7 +1940,7 @@ macro_rules! impl_into_func {
                 /// It reads the arguments out of the incoming `args` array,
                 /// calls the given function pointer, and then stores the result
                 /// back into the `args` array.
-                unsafe extern "C" fn host_trampoline<$($args,)* R>(
+                unsafe extern "C" fn host_to_wasm_trampoline<$($args,)* R>(
                     callee_vmctx: *mut VMOpaqueContext,
                     caller_vmctx: *mut VMContext,
                     ptr: *const VMFunctionBody,
@@ -1977,7 +1977,7 @@ macro_rules! impl_into_func {
 
                 let shared_signature_id = engine.signatures().register(ty.as_wasm_func_type());
 
-                let trampoline = host_trampoline::<$($args,)* R>;
+                let trampoline = host_to_wasm_trampoline::<$($args,)* R>;
 
 
                 let instance = unsafe {
