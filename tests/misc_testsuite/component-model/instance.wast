@@ -119,3 +119,119 @@
     ))
   ))
 )
+
+;; indirect references through a synthetic instance
+(component
+  (core module $m
+    (func (export "a"))
+    (table (export "b") 1 funcref)
+    (memory (export "c") 1)
+    (global (export "d") i32 i32.const 1)
+  )
+  (core instance $i (instantiate $m))
+  (core instance $i2
+    (export "a1" (func $i "a"))
+    (export "a2" (table $i "b"))
+    (export "a3" (memory $i "c"))
+    (export "a4" (global $i "d"))
+  )
+
+  (core module $m2
+    (import "" "1" (func $f))
+    (import "" "2" (table 1 funcref))
+    (import "" "3" (memory 1))
+    (import "" "4" (global $g i32))
+  )
+  (core instance (instantiate $m2
+    (with "" (instance
+      (export "1" (func $i2 "a1"))
+      (export "2" (table $i2 "a2"))
+      (export "3" (memory $i2 "a3"))
+      (export "4" (global $i2 "a4"))
+    ))
+  ))
+)
+
+(component
+  (import "host" (instance $i (export "return-three" (func (result u32)))))
+
+  (core module $m
+    (import "host" "return-three" (func $three (result i32)))
+    (func $start
+      call $three
+      i32.const 3
+      i32.ne
+      if unreachable end
+    )
+    (start $start)
+  )
+  (core func $three_lower
+    (canon lower (func $i "return-three"))
+  )
+  (core instance (instantiate $m
+    (with "host" (instance (export "return-three" (func $three_lower))))
+  ))
+)
+
+(component
+  (import "host" (instance $i
+    (export "nested" (instance
+      (export "return-four" (func (result u32)))
+    ))
+  ))
+
+  (core module $m
+    (import "host" "return-three" (func $three (result i32)))
+    (func $start
+      call $three
+      i32.const 4
+      i32.ne
+      if unreachable end
+    )
+    (start $start)
+  )
+  (core func $three_lower
+    (canon lower (func $i "nested" "return-four"))
+  )
+  (core instance (instantiate $m
+    (with "host" (instance (export "return-three" (func $three_lower))))
+  ))
+)
+
+(component
+  (import "host" (instance $i
+    (export "simple-module" (core module))
+  ))
+
+  (core instance (instantiate (module $i "simple-module")))
+)
+
+(component
+  (import "host" (instance $i
+    (export "simple-module" (core module
+      (export "f" (func (result i32)))
+      (export "g" (global i32))
+    ))
+  ))
+
+  (core instance $i (instantiate (module $i "simple-module")))
+  (core module $verify
+    (import "host" "f" (func $f (result i32)))
+    (import "host" "g" (global $g i32))
+
+    (func $start
+      call $f
+      i32.const 101
+      i32.ne
+      if unreachable end
+
+      global.get $g
+      i32.const 100
+      i32.ne
+      if unreachable end
+    )
+    (start $start)
+  )
+
+  (core instance (instantiate $verify (with "host" (instance $i))))
+)

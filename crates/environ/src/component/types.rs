@@ -94,6 +94,25 @@ indices! {
     pub struct TypeExpectedIndex(u32);
 
     // ========================================================================
+    // Index types used to identify modules and components during compliation.
+
+    /// Index into a "closed over variables" list for components used to
+    /// implement outer aliases. For more information on this see the
+    /// documentation for the `LexicalScope` structure.
+    pub struct ModuleUpvarIndex(u32);
+
+    /// Same as `ModuleUpvarIndex` but for components.
+    pub struct ComponentUpvarIndex(u32);
+
+    /// Index into the global list of modules found within an entire component.
+    /// Module translations are saved on the side to get fully compiled after
+    /// the original component has finished being translated.
+    pub struct StaticModuleIndex(u32);
+
+    /// Same as `StaticModuleIndex` but for components.
+    pub struct StaticComponentIndex(u32);
+
+    // ========================================================================
     // These indices are actually used at runtime when managing a component at
     // this time.
 
@@ -102,14 +121,6 @@ indices! {
     /// This is used to keep track of when instances are created and is able to
     /// refer back to previously created instances for exports and such.
     pub struct RuntimeInstanceIndex(u32);
-
-    /// Index that represents a closed-over-module for a component.
-    ///
-    /// Components which embed modules or otherwise refer to module (such as
-    /// through `alias` annotations) pull in items in to the list of closed over
-    /// modules, and this index indexes, at runtime, which of the upvars is
-    /// referenced.
-    pub struct ModuleUpvarIndex(u32);
 
     /// Used to index imports into a `Component`
     ///
@@ -143,6 +154,9 @@ indices! {
     /// Same as `RuntimeMemoryIndex` except for the `realloc` function.
     pub struct RuntimeReallocIndex(u32);
 
+    /// Same as `RuntimeMemoryIndex` except for the `post-return` function.
+    pub struct RuntimePostReturnIndex(u32);
+
     /// Index that represents an exported module from a component since that's
     /// currently the only use for saving the entire module state at runtime.
     pub struct RuntimeModuleIndex(u32);
@@ -154,10 +168,10 @@ pub use crate::{FuncIndex, GlobalIndex, MemoryIndex, TableIndex, TypeIndex};
 
 /// Equivalent of `EntityIndex` but for the component model instead of core
 /// wasm.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
 #[allow(missing_docs)]
 pub enum ComponentItem {
-    Func(FuncIndex),
+    Func(ComponentFuncIndex),
     Module(ModuleIndex),
     Component(ComponentIndex),
     ComponentInstance(ComponentInstanceIndex),

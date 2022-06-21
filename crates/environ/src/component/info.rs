@@ -1,23 +1,50 @@
 // General runtime type-information about a component.
 //
-// ## Optimizing instantiation
+// Compared to the `Module` structure for core wasm this type is pretty
+// significantly different. The core wasm `Module` corresponds roughly 1-to-1
+// with the structure of the wasm module itself, but instead a `Component` is
+// more of a "compiled" representation where the original structure is thrown
+// away in favor of a more optimized representation. The considerations for this
+// are:
 //
-// One major consideration for the structure of the types in this module is to
-// make instantiation as fast as possible. To facilitate this the representation
-// here avoids the need to create a `PrimaryMap` during instantiation of a
-// component for each index space like the func, global, table, etc, index
-// spaces. Instead a component is simply defined by a list of instantiation
-// instructions, and arguments to the instantiation of each instance are a list
-// of "pointers" into previously created instances. This means that we only need
-// to build up one list of instances during instantiation.
+// * This representation of a `Component` avoids the need to create a
+//   `PrimaryMap` of some form for each of the index spaces within a component.
+//   This is less so an issue about allocations and moreso that this information
+//   generally just isn't needed any time after instantiation. Avoiding creating
+//   these altogether helps components be lighter weight at runtime and
+//   additionally accelerates instantiation.
 //
-// Additionally we also try to avoid string lookups wherever possible. In the
-// component model instantiation and aliasing theoretically deals with lots of
-// string lookups here and there. This is slower than indexing lookup, though,
-// and not actually necessary when the structure of a module is statically
-// known. This means that `ExportItem` below has two variants where we try to
-// use the indexing variant as much as possible, which can be done for
-// everything except imported core wasm modules.
+// * Components can have arbitrary nesting and internally do instantiations via
+//   string-based matching. At instantiation-time, though, we want to do as few
+//   string-lookups in hash maps as much as we can since they're significantly
+//   slower than index-based lookups. Furthermore while the imports of a
+//   component are not statically known the rest of the structure of the
+//   component is statically known which enables the ability to track precisely
+//   what matches up where and do all the string lookups at compile time instead
+//   of instantiation time.
+//
+// * Finally by performing this sort of dataflow analysis we are capable of
+//   identifying what adapters need trampolines for compilation or fusion. For
+//   example this tracks when host functions are lowered which enables us to
+//   enumerate what trampolines are required to enter into a component.
+//   Additionally (eventually) this will track all of the "fused" adapter
+//   functions where a function from one component instance is lifted and then
+//   lowered into another component instance. Altogether this enables Wasmtime's
+//   AOT-compilation where the artifact from compilation is suitable for use in
+//   running the component without the support of a compiler at runtime.
+//
+// Note, however, that the current design of `Component` has fundamental
+// limitations which it was not designed for. For example there is no feasible
+// way to implement either importing or exporting a component itself from the
+// root component. Currently we rely on the ability to have static knowledge of
+// what's coming from the host which at this point can only be either functions
+// or core wasm modules. Additionally one flat list of initializers for a
+// component are produced instead of initializers-per-component which would
+// otherwise be required to export a component from a component.
+//
+// For now this tradeoff is made as it aligns well with the intended use case
+// for components in an embedding. This may need to be revisited though if the
+// requirements of embeddings change over time.
 
 use crate::component::*;
 use crate::{EntityIndex, PrimaryMap, SignatureIndex};
@@ -81,10 +108,7 @@ pub struct Component {
     /// have instantiations, for example, in addition to entries which
     /// initialize `VMComponentContext` fields with previously instantiated
     /// instances.
-    ///
-    /// NB: at this time recursive components are not supported, and that may
-    /// change this somewhat significantly.
-    pub initializers: Vec<Initializer>,
+    pub initializers: Vec<GlobalInitializer>,
 
     /// The number of runtime instances (maximum `RuntimeInstanceIndex`) created
     /// when instantiating this component.
@@ -114,22 +138,18 @@ pub struct Component {
     pub num_runtime_modules: u32,
 }
 
-/// Initializer instructions to get processed when instantiating a component
+/// GlobalInitializer instructions to get processed when instantiating a component
 ///
 /// The variants of this enum are processed during the instantiation phase of
 /// a component in-order from front-to-back. These are otherwise emitted as a
 /// component is parsed and read and translated.
-///
-/// NB: at this time recursive components are not supported, and that may
-/// change this somewhat significantly.
-///
 //
 // FIXME(#2639) if processing this list is ever a bottleneck we could
 // theoretically use cranelift to compile an initialization function which
 // performs all of these duties for us and skips the overhead of interpreting
 // all of these instructions.
 #[derive(Debug, Serialize, Deserialize)]
-pub enum Initializer {
+pub enum GlobalInitializer {
     /// A core wasm module is being instantiated.
     ///
     /// This will result in a new core wasm instance being created, which may
@@ -143,7 +163,7 @@ pub enum Initializer {
     /// This initializer entry is intended to be used to fill out the
     /// `VMComponentContext` and information about this lowering such as the
     /// cranelift-compiled trampoline function pointer, the host function
-    /// pointer the trampline calls, and the canonical ABI options.
+    /// pointer the trampoline calls, and the canonical ABI options.
     LowerImport(LowerImport),
 
     /// A core wasm linear memory is going to be saved into the
@@ -154,28 +174,37 @@ pub enum Initializer {
     /// previously created module instance, and stored into the
     /// `VMComponentContext` at the `index` specified. This lowering is then
     /// used in the future by pointers from `CanonicalOptions`.
-    ExtractMemory {
-        /// The index of the memory being defined.
-        index: RuntimeMemoryIndex,
-        /// Where this memory is being extracted from.
-        export: CoreExport<MemoryIndex>,
-    },
+    ExtractMemory(ExtractMemory),
 
     /// Same as `ExtractMemory`, except it's extracting a function pointer to be
     /// used as a `realloc` function.
-    ExtractRealloc {
-        /// The index of the realloc being defined.
-        index: RuntimeReallocIndex,
-        /// Where this realloc is being extracted from.
-        def: CoreDef,
-    },
+    ExtractRealloc(ExtractRealloc),
 
     /// The `module` specified is saved into the runtime state at the next
     /// `RuntimeModuleIndex`, referred to later by `Export` definitions.
-    SaveModuleUpvar(ModuleUpvarIndex),
+    SaveStaticModule(StaticModuleIndex),
 
     /// Same as `SaveModuleUpvar`, but for imports.
     SaveModuleImport(RuntimeImportIndex),
+}
+
+/// Metadata for extraction of a memory of what's being extracted and where it's
+/// going.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ExtractMemory {
+    /// The index of the memory being defined.
+    pub index: RuntimeMemoryIndex,
+    /// Where this memory is being extracted from.
+    pub export: CoreExport<MemoryIndex>,
+}
+
+/// Same as `ExtractMemory` but for the `realloc` canonical option.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ExtractRealloc {
+    /// The index of the realloc being defined.
+    pub index: RuntimeReallocIndex,
+    /// Where this realloc is being extracted from.
+    pub def: CoreDef,
 }
 
 /// Different methods of instantiating a core wasm module.
@@ -187,7 +216,7 @@ pub enum InstantiateModule {
     /// order of imports required is statically known and can be pre-calculated
     /// to avoid string lookups related to names at runtime, represented by the
     /// flat list of arguments here.
-    Upvar(ModuleUpvarIndex, Box<[CoreDef]>),
+    Static(StaticModuleIndex, Box<[CoreDef]>),
 
     /// An imported module is being instantiated.
     ///
@@ -201,7 +230,7 @@ pub enum InstantiateModule {
 }
 
 /// Description of a lowered import used in conjunction with
-/// `Initializer::LowerImport`.
+/// `GlobalInitializer::LowerImport`.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct LowerImport {
     /// The index of the lowered function that's being created.
@@ -237,13 +266,16 @@ pub enum CoreDef {
     Export(CoreExport<EntityIndex>),
     /// This item is a core wasm function with the index specified here. Note
     /// that this `LoweredIndex` corresponds to the nth
-    /// `Initializer::LowerImport` instruction.
+    /// `GlobalInitializer::LowerImport` instruction.
     Lowered(LoweredIndex),
 }
 
-impl From<CoreExport<EntityIndex>> for CoreDef {
-    fn from(export: CoreExport<EntityIndex>) -> CoreDef {
-        CoreDef::Export(export)
+impl<T> From<CoreExport<T>> for CoreDef
+where
+    EntityIndex: From<T>,
+{
+    fn from(export: CoreExport<T>) -> CoreDef {
+        CoreDef::Export(export.map_index(|i| i.into()))
     }
 }
 
@@ -263,6 +295,20 @@ pub struct CoreExport<T> {
 
     /// The item that this export is referencing, either by name or by index.
     pub item: ExportItem<T>,
+}
+
+impl<T> CoreExport<T> {
+    /// Maps the index type `T` to another type `U` if this export item indeed
+    /// refers to an index `T`.
+    pub fn map_index<U>(self, f: impl FnOnce(T) -> U) -> CoreExport<U> {
+        CoreExport {
+            instance: self.instance,
+            item: match self.item {
+                ExportItem::Index(i) => ExportItem::Index(f(i)),
+                ExportItem::Name(s) => ExportItem::Name(s),
+            },
+        }
+    }
 }
 
 /// An index at which to find an item within a runtime instance.
@@ -300,7 +346,7 @@ pub enum Export {
     /// A module defined within this component is exported.
     ///
     /// The module index here indexes a module recorded with
-    /// `Initializer::SaveModule` above.
+    /// `GlobalInitializer::SaveModule` above.
     Module(RuntimeModuleIndex),
 }
 

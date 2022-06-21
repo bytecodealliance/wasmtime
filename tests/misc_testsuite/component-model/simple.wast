@@ -20,3 +20,15 @@
     (func (export "d") (result f64) f64.const 0)
   )
 )
+
+(assert_invalid
+  (component
+    (import "" (component))
+  )
+  "root-level component imports are not supported")
+
+(assert_invalid
+  (component
+    (component (export ""))
+  )
+  "exporting a component from the root component is not supported")

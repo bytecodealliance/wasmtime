@@ -101,7 +101,7 @@ impl<T> Linker<T> {
     /// [`Component`] specified with the items defined within this linker.
     ///
     /// This method will perform as much work as possible short of actually
-    /// instnatiating an instance. Internally this will use the names defined
+    /// instantiating an instance. Internally this will use the names defined
     /// within this linker to satisfy the imports of the [`Component`] provided.
     /// Additionally this will perform type-checks against the component's
     /// imports against all items defined within this linker.
@@ -215,7 +215,7 @@ impl<T> LinkerInstance<'_, T> {
     /// first parameter.
     ///
     /// Note that `func` must be an `Fn` and must also be `Send + Sync +
-    /// 'static`. Shared state within a func is typically accesed with the `T`
+    /// 'static`. Shared state within a func is typically accessed with the `T`
     /// type parameter from [`Store<T>`](crate::Store) which is accessible
     /// through the leading [`StoreContextMut<'_, T>`](crate::StoreContextMut)
     /// argument which can be provided to the `func` given here.
@@ -248,7 +248,7 @@ impl<T> LinkerInstance<'_, T> {
         self.as_mut().into_instance(name)
     }
 
-    /// Same as [`LinkerInstance::instance`] except with different liftime
+    /// Same as [`LinkerInstance::instance`] except with different lifetime
     /// parameters.
     pub fn into_instance(mut self, name: &str) -> Result<Self> {
         let name = self.strings.intern(name);
