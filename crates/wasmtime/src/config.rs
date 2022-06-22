@@ -494,12 +494,33 @@ impl Config {
     /// If a wasm call (or series of nested wasm calls) take more stack space
     /// than the `size` specified then a stack overflow trap will be raised.
     ///
+    /// Caveat: this knob only limits the stack space consumed by wasm code.
+    /// More importantly, it does not ensure that this much stack space is
+    /// available on the calling thread stack. Exhausting the thread stack
+    /// typically leads to an **abort** of the process.
+    ///
+    /// Here are some examples of how that could happen:
+    ///
+    /// - Let's assume this option is set to 2 MiB and then a thread that has
+    ///   a stack with 512 KiB left.
+    ///
+    ///   If wasm code consumes more than 512 KiB then the process will be aborted.
+    ///
+    /// - Assuming the same conditions, but this time wasm code does not consume
+    ///   any stack but calls into a host function. The host function consumes
+    ///   more than 512 KiB of stack space. The process will be aborted.
+    ///
+    /// There's another gotcha related to recursive calling into wasm: the stack
+    /// space consumed by a host function is counted towards this limit. The
+    /// host functions are not prevented from consuming more than this limit.
+    /// However, if the host function that used more than this limit and called
+    /// back into wasm, then the execution will trap immediatelly because of
+    /// stack overflow.
+    ///
     /// When the `async` feature is enabled, this value cannot exceed the
     /// `async_stack_size` option. Be careful not to set this value too close
     /// to `async_stack_size` as doing so may limit how much stack space
-    /// is available for host functions. Unlike wasm functions that trap
-    /// on stack overflow, a host function that overflows the stack will
-    /// abort the process.
+    /// is available for host functions.
     ///
     /// By default this option is 512 KiB.
     ///
