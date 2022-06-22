@@ -626,6 +626,8 @@ pub struct EmitState {
     stack_map: Option<StackMap>,
     /// Current source-code location corresponding to instruction to be emitted.
     cur_srcloc: SourceLoc,
+    /// Is code generated for the SpiderMonkey WebAssembly convention.
+    is_baldrdash_target: bool,
 }
 
 impl MachInstEmitState<Inst> for EmitState {
@@ -635,6 +637,7 @@ impl MachInstEmitState<Inst> for EmitState {
             nominal_sp_to_fp: abi.frame_size() as i64,
             stack_map: None,
             cur_srcloc: SourceLoc::default(),
+            is_baldrdash_target: abi.call_conv().extends_baldrdash(),
         }
     }
 
@@ -2811,7 +2814,10 @@ impl MachInstEmit for Inst {
                 ));
                 sink.use_label_at_offset(off, label, LabelUse::Branch19);
                 // udf
-                let trap = Inst::Udf { trap_code };
+                let trap = Inst::Udf {
+                    use_allocated_encoding: !state.is_baldrdash_target,
+                    trap_code,
+                };
                 trap.emit(&[], sink, emit_info, state);
                 // LABEL:
                 sink.bind_label(label);
@@ -2827,12 +2833,21 @@ impl MachInstEmit for Inst {
             &Inst::Brk => {
                 sink.put4(0xd4200000);
             }
-            &Inst::Udf { trap_code } => {
+            &Inst::Udf {
+                use_allocated_encoding,
+                trap_code,
+            } => {
+                let encoding = if use_allocated_encoding {
+                    0xc11f
+                } else {
+                    0xd4a00000
+                };
+
                 sink.add_trap(trap_code);
                 if let Some(s) = state.take_stack_map() {
                     sink.add_stack_map(StackMapExtent::UpcomingBytes(4), s);
                 }
-                sink.put4(0xd4a00000);
+                sink.put4(encoding);
             }
             &Inst::Adr { rd, off } => {
                 let rd = allocs.next_writable(rd);

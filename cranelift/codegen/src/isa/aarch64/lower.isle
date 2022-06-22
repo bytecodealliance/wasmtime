@@ -1244,7 +1244,19 @@
             (vec_size VectorSize (vector_size ty)))
           (value_reg (int_cmp_zero_swap cond rn vec_size))))
 
-;;;; Rules for `AtomicRMW` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Rules for `trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (trap trap_code))
+      (let ((use_allocated_encoding bool (is_not_baldrdash_call_conv)))
+         (side_effect (udf use_allocated_encoding trap_code))))
+
+;;;; Rules for `resumable_trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (resumable_trap trap_code))
+      (let ((use_allocated_encoding bool (is_not_baldrdash_call_conv)))
+         (side_effect (udf use_allocated_encoding trap_code))))
+
+;;;; Rules for `AtomicRMW` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule 1 (lower (and (use_lse)
                   (has_type (valid_atomic_transaction ty)

@@ -615,6 +615,9 @@
 (decl avoid_div_traps () Type)
 (extern extractor avoid_div_traps avoid_div_traps)
 
+(decl pure is_not_baldrdash_call_conv () bool)
+(extern constructor is_not_baldrdash_call_conv is_not_baldrdash_call_conv)
+
 ;;;; Helpers for accessing instruction data ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Accessor for `FuncRef`.
