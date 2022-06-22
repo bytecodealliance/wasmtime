@@ -6,7 +6,6 @@ use crate::binemit::{CodeOffset, Reloc, StackMap};
 use crate::ir::types::*;
 use crate::ir::{LibCall, MemFlags, TrapCode};
 use crate::isa::aarch64::inst::*;
-use crate::isa::aarch64::lower::is_valid_atomic_transaction_ty;
 use crate::machinst::{ty_bits, Reg, RegClass, Writable};
 use core::convert::TryFrom;
 
@@ -1374,14 +1373,12 @@ impl MachInstEmit for Inst {
                 sink.put4(enc_ccmp_imm(size, rn, imm, nzcv, cond));
             }
             &Inst::AtomicRMW { ty, op, rs, rt, rn } => {
-                assert!(is_valid_atomic_transaction_ty(ty));
                 let rs = allocs.next(rs);
                 let rt = allocs.next_writable(rt);
                 let rn = allocs.next(rn);
                 sink.put4(enc_acq_rel(ty, op, rs, rt, rn));
             }
             &Inst::AtomicRMWLoop { ty, op } => {
-                assert!(is_valid_atomic_transaction_ty(ty));
                 /* Emit this:
                      again:
                       ldaxr{,b,h}  x/w27, [x25]

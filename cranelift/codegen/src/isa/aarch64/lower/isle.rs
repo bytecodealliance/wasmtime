@@ -21,7 +21,7 @@ use crate::{
         TrapCode, Value, ValueList,
     },
     isa::aarch64::inst::args::{ShiftOp, ShiftOpShiftImm},
-    isa::aarch64::lower::{is_valid_atomic_transaction_ty, writable_xreg, xreg},
+    isa::aarch64::lower::{writable_xreg, xreg},
     isa::unwind::UnwindInst,
     machinst::{ty_bits, InsnOutput, LowerCtx, VCodeConstant, VCodeConstantData},
 };
@@ -123,11 +123,11 @@ where
         }
     }
 
+    /// This is target-word-size dependent.  And it excludes booleans and reftypes.
     fn valid_atomic_transaction(&mut self, ty: Type) -> Option<Type> {
-        if is_valid_atomic_transaction_ty(ty) {
-            Some(ty)
-        } else {
-            None
+        match ty {
+            I8 | I16 | I32 | I64 => Some(ty),
+            _ => None,
         }
     }
 

@@ -1618,6 +1618,11 @@
             (_ Unit (emit (MInst.LoadAcquire ty dst addr))))
         dst))
 
+;; Helper for emitting `MInst.StoreRelease` instructions.
+(decl store_release (Type Reg Reg) SideEffectNoResult)
+(rule (store_release ty src addr)
+      (SideEffectNoResult.Inst (MInst.StoreRelease ty src addr)))
+
 ;; Helper for generating a `tst` instruction.
 ;;
 ;; Produces a `ProducesFlags` rather than a register or emitted instruction

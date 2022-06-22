@@ -241,19 +241,9 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::AtomicCas => implemented_in_isle(ctx),
 
-        Opcode::AtomicLoad => {
-            let rt = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let inst = emit_atomic_load(ctx, rt, insn);
-            ctx.emit(inst);
-        }
+        Opcode::AtomicLoad => implemented_in_isle(ctx),
 
-        Opcode::AtomicStore => {
-            let rt = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-            let rn = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
-            let access_ty = ctx.input_ty(insn, 0);
-            assert!(is_valid_atomic_transaction_ty(access_ty));
-            ctx.emit(Inst::StoreRelease { access_ty, rt, rn });
-        }
+        Opcode::AtomicStore => implemented_in_isle(ctx),
 
         Opcode::Fence => {
             ctx.emit(Inst::Fence {});

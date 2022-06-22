@@ -1477,30 +1477,6 @@ pub(crate) fn materialize_bool_result<C: LowerCtx<I = Inst>>(
     }
 }
 
-/// This is target-word-size dependent.  And it excludes booleans and reftypes.
-pub(crate) fn is_valid_atomic_transaction_ty(ty: Type) -> bool {
-    match ty {
-        I8 | I16 | I32 | I64 => true,
-        _ => false,
-    }
-}
-
-pub(crate) fn emit_atomic_load<C: LowerCtx<I = Inst>>(
-    ctx: &mut C,
-    rt: Writable<Reg>,
-    insn: IRInst,
-) -> Inst {
-    assert!(ctx.data(insn).opcode() == Opcode::AtomicLoad);
-    let inputs = insn_inputs(ctx, insn);
-    let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-    let access_ty = ctx.output_ty(insn, 0);
-    assert!(is_valid_atomic_transaction_ty(access_ty));
-    // We're ignoring the result type of the load because the LoadAcquire will
-    // explicitly zero extend to the nearest word, and also zero the high half
-    // of an X register.
-    Inst::LoadAcquire { access_ty, rt, rn }
-}
-
 fn load_op_to_ty(op: Opcode) -> Option<Type> {
     match op {
         Opcode::Sload8 | Opcode::Uload8 => Some(I8),
