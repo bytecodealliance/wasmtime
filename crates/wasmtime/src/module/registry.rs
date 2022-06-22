@@ -1,5 +1,7 @@
 //! Implements a registry of modules for a store.
 
+#[cfg(feature = "component-model")]
+use crate::component::Component;
 use crate::{Engine, Module};
 use std::{
     collections::BTreeMap,
@@ -24,10 +26,19 @@ lazy_static::lazy_static! {
 #[derive(Default)]
 pub struct ModuleRegistry {
     // Keyed by the end address of the module's code in memory.
-    modules_with_code: BTreeMap<usize, Module>,
+    //
+    // The value here is the start address and the module/component it
+    // corresponds to.
+    modules_with_code: BTreeMap<usize, (usize, ModuleOrComponent)>,
 
     // Preserved for keeping data segments alive or similar
     modules_without_code: Vec<Module>,
+}
+
+enum ModuleOrComponent {
+    Module(Module),
+    #[cfg(feature = "component-model")]
+    Component(Component),
 }
 
 fn start(module: &Module) -> usize {
@@ -42,15 +53,23 @@ impl ModuleRegistry {
     }
 
     fn module(&self, pc: usize) -> Option<&Module> {
-        let (end, module) = self.modules_with_code.range(pc..).next()?;
-        if pc < start(module) || *end < pc {
+        match self.module_or_component(pc)? {
+            ModuleOrComponent::Module(m) => Some(m),
+            #[cfg(feature = "component-model")]
+            ModuleOrComponent::Component(_) => None,
+        }
+    }
+
+    fn module_or_component(&self, pc: usize) -> Option<&ModuleOrComponent> {
+        let (end, (start, module)) = self.modules_with_code.range(pc..).next()?;
+        if pc < *start || *end < pc {
             return None;
         }
         Some(module)
     }
 
     /// Registers a new module with the registry.
-    pub fn register(&mut self, module: &Module) {
+    pub fn register_module(&mut self, module: &Module) {
         let compiled_module = module.compiled_module();
 
         // If there's not actually any functions in this module then we may
@@ -61,39 +80,70 @@ impl ModuleRegistry {
         // modules and retain them.
         if compiled_module.finished_functions().len() == 0 {
             self.modules_without_code.push(module.clone());
+        } else {
+            // The module code range is exclusive for end, so make it inclusive as it
+            // may be a valid PC value
+            let start_addr = start(module);
+            let end_addr = start_addr + compiled_module.code().len() - 1;
+            self.register(
+                start_addr,
+                end_addr,
+                ModuleOrComponent::Module(module.clone()),
+            );
+        }
+    }
+
+    #[cfg(feature = "component-model")]
+    pub fn register_component(&mut self, component: &Component) {
+        // If there's no text section associated with this component (e.g. no
+        // lowered functions) then there's nothing to register, otherwise it's
+        // registered along the same lines as modules above.
+        //
+        // Note that empty components don't need retaining here since it doesn't
+        // have data segments like empty modules.
+        let text = component.text();
+        if text.is_empty() {
             return;
         }
+        let start = text.as_ptr() as usize;
+        self.register(
+            start,
+            start + text.len() - 1,
+            ModuleOrComponent::Component(component.clone()),
+        );
+    }
 
-        // The module code range is exclusive for end, so make it inclusive as it
-        // may be a valid PC value
-        let start_addr = start(module);
-        let end_addr = start_addr + compiled_module.code().len() - 1;
-
+    /// Registers a new module with the registry.
+    fn register(&mut self, start_addr: usize, end_addr: usize, item: ModuleOrComponent) {
         // Ensure the module isn't already present in the registry
         // This is expected when a module is instantiated multiple times in the
         // same store
-        if let Some(m) = self.modules_with_code.get(&end_addr) {
-            assert_eq!(start(m), start_addr);
+        if let Some((other_start, _)) = self.modules_with_code.get(&end_addr) {
+            assert_eq!(*other_start, start_addr);
             return;
         }
 
         // Assert that this module's code doesn't collide with any other
         // registered modules
-        if let Some((_, prev)) = self.modules_with_code.range(end_addr..).next() {
-            assert!(start(prev) > end_addr);
+        if let Some((_, (prev_start, _))) = self.modules_with_code.range(start_addr..).next() {
+            assert!(*prev_start > end_addr);
         }
         if let Some((prev_end, _)) = self.modules_with_code.range(..=start_addr).next_back() {
             assert!(*prev_end < start_addr);
         }
 
-        let prev = self.modules_with_code.insert(end_addr, module.clone());
+        let prev = self.modules_with_code.insert(end_addr, (start_addr, item));
         assert!(prev.is_none());
     }
 
     /// Looks up a trampoline from an anyfunc.
     pub fn lookup_trampoline(&self, anyfunc: &VMCallerCheckedAnyfunc) -> Option<VMTrampoline> {
-        let module = self.module(anyfunc.func_ptr.as_ptr() as usize)?;
-        module.signatures().trampoline(anyfunc.type_index)
+        let signatures = match self.module_or_component(anyfunc.func_ptr.as_ptr() as usize)? {
+            ModuleOrComponent::Module(m) => m.signatures(),
+            #[cfg(feature = "component-model")]
+            ModuleOrComponent::Component(c) => c.signatures(),
+        };
+        signatures.trampoline(anyfunc.type_index)
     }
 }
 

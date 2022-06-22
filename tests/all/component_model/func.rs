@@ -3,7 +3,7 @@ use anyhow::Result;
 use std::rc::Rc;
 use std::sync::Arc;
 use wasmtime::component::*;
-use wasmtime::{Store, Trap, TrapCode};
+use wasmtime::{Store, StoreContextMut, Trap, TrapCode};
 
 const CANON_32BIT_NAN: u32 = 0b01111111110000000000000000000000;
 const CANON_64BIT_NAN: u64 = 0b0111111111111000000000000000000000000000000000000000000000000000;
@@ -1855,6 +1855,61 @@ fn invalid_alignment() -> Result<()> {
         "{}",
         err
     );
+
+    Ok(())
+}
+
+#[test]
+fn drop_component_still_works() -> Result<()> {
+    let component = r#"
+        (component
+            (import "f" (func $f))
+
+            (core func $f_lower
+                (canon lower (func $f))
+            )
+            (core module $m
+                (import "" "" (func $f))
+
+                (func $f2
+                    call $f
+                    call $f
+                )
+
+                (export "f" (func $f2))
+            )
+            (core instance $i (instantiate $m
+                (with "" (instance
+                    (export "" (func $f_lower))
+                ))
+            ))
+            (func (export "f")
+                (canon lift
+                    (core func $i "f")
+                )
+            )
+        )
+    "#;
+
+    let (mut store, instance) = {
+        let engine = super::engine();
+        let component = Component::new(&engine, component)?;
+        let mut store = Store::new(&engine, 0);
+        let mut linker = Linker::new(&engine);
+        linker
+            .root()
+            .func_wrap("f", |mut store: StoreContextMut<'_, u32>| -> Result<()> {
+                *store.data_mut() += 1;
+                Ok(())
+            })?;
+        let instance = linker.instantiate(&mut store, &component)?;
+        (store, instance)
+    };
+
+    let f = instance.get_typed_func::<(), (), _>(&mut store, "f")?;
+    assert_eq!(*store.data(), 0);
+    f.call(&mut store, ())?;
+    assert_eq!(*store.data(), 2);
 
     Ok(())
 }
