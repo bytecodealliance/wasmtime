@@ -155,12 +155,12 @@ impl wasmtime_environ::Compiler for Compiler {
         // The `stack_limit` global value below is the implementation of stack
         // overflow checks in Wasmtime.
         //
-        // Wasm is well-defined to have stack overflow being recoverable and
-        // raising a trap, and there's also an added constraint where as an
-        // embedder you frequently are running host-provided code called from
-        // wasm. WebAssembly and native code currently share the same call
-        // stack, so Wasmtime needs to make sure that host-provided code
-        // will have enough call-stack available to it.
+        // The Wasm spec defines that stack overflows will raise a trap, and
+        // there's also an added constraint where as an embedder you frequently
+        // are running host-provided code called from wasm. WebAssembly and
+        // native code currently share the same call stack, so Wasmtime needs to
+        // make sure that host-provided code will have enough call-stack
+        // available to it.
         //
         // The way that stack overflow is handled here is by adding a prologue
         // check to all functions for how much native stack is remaining. The
