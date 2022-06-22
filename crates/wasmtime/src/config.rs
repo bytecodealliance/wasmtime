@@ -497,19 +497,19 @@ impl Config {
     /// Caveat: this knob only limits the stack space consumed by wasm code.
     /// More importantly, it does not ensure that this much stack space is
     /// available on the calling thread stack. Exhausting the thread stack
-    /// typically leads to an **abort** of the process. 
+    /// typically leads to an **abort** of the process.
     ///
     /// Here are some examples of how that could happen:
     ///
     /// - Let's assume this option is set to 2 MiB and then a thread that has
-    ///   a stack with 512 KiB left. 
+    ///   a stack with 512 KiB left.
     ///
     ///   If wasm code consumes more than 512 KiB then the process will be aborted.
     ///
     /// - Assuming the same conditions, but this time wasm code does not consume
     ///   any stack but calls into a host function. The host function consumes
     ///   more than 512 KiB of stack space. The process will be aborted.
-    /// 
+    ///
     /// - Imagine the wasm code calls into a host function, and the host function
     ///   calls back into wasm. The wasm stack limit applies only to a single call
     ///   into wasm. The second call will have it's limit reset.
