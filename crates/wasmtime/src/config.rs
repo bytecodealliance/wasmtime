@@ -510,9 +510,12 @@ impl Config {
     ///   any stack but calls into a host function. The host function consumes
     ///   more than 512 KiB of stack space. The process will be aborted.
     ///
-    /// - Imagine the wasm code calls into a host function, and the host function
-    ///   calls back into wasm. The wasm stack limit applies only to a single call
-    ///   into wasm. The second call will have it's limit reset.
+    /// There's another gotcha related to recursive calling into wasm: the stack
+    /// space consumed by a host function is counted towards this limit. The
+    /// host functions are not prevented from consuming more than this limit.
+    /// However, if the host function that used more than this limit and called
+    /// back into wasm, then the execution will trap immediatelly because of
+    /// stack overflow.
     ///
     /// When the `async` feature is enabled, this value cannot exceed the
     /// `async_stack_size` option. Be careful not to set this value too close
