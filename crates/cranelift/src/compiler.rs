@@ -152,19 +152,38 @@ impl wasmtime_environ::Compiler for Compiler {
 
         let mut func_env = FuncEnvironment::new(isa, translation, types, tunables);
 
-        // We use these as constant offsets below in
-        // `stack_limit_from_arguments`, so assert their values here. This
-        // allows the closure below to get coerced to a function pointer, as
-        // needed by `ir::Function`.
+        // The `stack_limit` global value below is the implementation of stack
+        // overflow checks in Wasmtime.
         //
-        // Otherwise our stack limit is specially calculated from the vmctx
-        // argument, where we need to load the `*const VMRuntimeLimits`
-        // pointer, and then from that pointer we need to load the stack
-        // limit itself. Note that manual register allocation is needed here
-        // too due to how late in the process this codegen happens.
+        // The Wasm spec defines that stack overflows will raise a trap, and
+        // there's also an added constraint where as an embedder you frequently
+        // are running host-provided code called from wasm. WebAssembly and
+        // native code currently share the same call stack, so Wasmtime needs to
+        // make sure that host-provided code will have enough call-stack
+        // available to it.
         //
-        // For more information about interrupts and stack checks, see the
-        // top of this file.
+        // The way that stack overflow is handled here is by adding a prologue
+        // check to all functions for how much native stack is remaining. The
+        // `VMContext` pointer is the first argument to all functions, and the
+        // first field of this structure is `*const VMRuntimeLimits` and the
+        // first field of that is the stack limit. Note that the stack limit in
+        // this case means "if the stack pointer goes below this, trap". Each
+        // function which consumes stack space or isn't a leaf function starts
+        // off by loading the stack limit, checking it against the stack
+        // pointer, and optionally traps.
+        //
+        // This manual check allows the embedder to give wasm a relatively
+        // precise amount of stack allocation. Using this scheme we reserve a
+        // chunk of stack for wasm code relative from where wasm code was
+        // called. This ensures that native code called by wasm should have
+        // native stack space to run, and the numbers of stack spaces here
+        // should all be configurable for various embeddings.
+        //
+        // Note that this check is independent of each thread's stack guard page
+        // here. If the stack guard page is reached that's still considered an
+        // abort for the whole program since the runtime limits configured by
+        // the embedder should cause wasm to trap before it reaches that
+        // (ensuring the host has enough space as well for its functionality).
         let vmctx = context
             .func
             .create_global_value(ir::GlobalValueData::VMContext);
