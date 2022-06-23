@@ -1,23 +1,18 @@
 use std::env;
-use std::fs;
 
 fn main() {
     let mut build = cc::Build::new();
     let arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap();
-    let family = env::var("CARGO_CFG_TARGET_FAMILY").unwrap();
     let os = env::var("CARGO_CFG_TARGET_OS").unwrap();
-
-    let family_file = format!("src/arch/{}.c", family);
-    let arch_file = format!("src/arch/{}.S", arch);
-    if fs::metadata(&family_file).is_ok() {
-        build.file(&family_file);
-    } else if fs::metadata(&arch_file).is_ok() {
-        build.file(&arch_file);
+    if os == "windows" {
+        build.file("src/windows.c");
+    } else if arch == "s390x" {
+        build.file("src/unix/s390x.S");
     } else {
-        panic!(
-            "wasmtime doesn't support fibers on platform: {}",
-            env::var("TARGET").unwrap()
-        );
+        // assume that this is included via inline assembly in the crate itself,
+        // and the crate will otherwise have a `compile_error!` for unsupported
+        // platforms.
+        return;
     }
     build.define(&format!("CFG_TARGET_OS_{}", os), None);
     build.define(&format!("CFG_TARGET_ARCH_{}", arch), None);

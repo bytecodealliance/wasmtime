@@ -3501,6 +3501,7 @@ version = "0.39.0"
 dependencies = [
  "backtrace",
  "cc",
+ "cfg-if",
  "rustix",
  "winapi",
 ]
