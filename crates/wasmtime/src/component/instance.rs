@@ -210,6 +210,7 @@ impl<'a> Instantiator<'a> {
         imports: &'a PrimaryMap<RuntimeImportIndex, RuntimeImport>,
     ) -> Instantiator<'a> {
         let env_component = component.env_component();
+        store.modules_mut().register_component(component);
         Instantiator {
             component,
             imports,
