@@ -82,6 +82,11 @@ pub struct RunCommand {
     #[clap(long = "allow-unknown-exports")]
     allow_unknown_exports: bool,
 
+    /// Allow the main module to import unknown functions, using an
+    /// implementation that immediately traps, when running commands.
+    #[clap(long = "trap-unknown-imports")]
+    trap_unknown_imports: bool,
+
     /// Allow executing precompiled WebAssembly modules as `*.cwasm` files.
     ///
     /// Note that this option is not safe to pass if the module being passed in
@@ -313,8 +318,13 @@ impl RunCommand {
         }
 
         // Read the wasm module binary either as `*.wat` or a raw binary.
-        // Use "" as a default module name.
         let module = self.load_module(linker.engine(), &self.module)?;
+        // The main module might be allowed to have unknown imports, which
+        // should be defined as traps:
+        if self.trap_unknown_imports {
+            linker.define_unknown_imports_as_traps(&module)?;
+        }
+        // Use "" as a default module name.
         linker
             .module(&mut *store, "", &module)
             .context(format!("failed to instantiate {:?}", self.module))?;
