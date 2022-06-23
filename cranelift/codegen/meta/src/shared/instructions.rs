@@ -718,6 +718,12 @@ pub(crate) fn define(
             .build(),
     );
 
+    let ScalarBool = &TypeVar::new(
+        "ScalarBool",
+        "A scalar boolean type",
+        TypeSetBuilder::new().bools(Interval::All).build(),
+    );
+
     let iB = &TypeVar::new(
         "iB",
         "A scalar integer type",
@@ -3331,13 +3337,10 @@ pub(crate) fn define(
 
     let IntTo = &TypeVar::new(
         "IntTo",
-        "An integer type with the same number of lanes",
-        TypeSetBuilder::new()
-            .ints(Interval::All)
-            .simd_lanes(Interval::All)
-            .build(),
+        "A scalar integer type",
+        TypeSetBuilder::new().ints(Interval::All).build(),
     );
-    let x = &Operand::new("x", Bool);
+    let x = &Operand::new("x", ScalarBool);
     let a = &Operand::new("a", IntTo);
 
     ig.push(
@@ -3346,14 +3349,24 @@ pub(crate) fn define(
             r#"
         Convert `x` to an integer.
 
-        True maps to 1 and false maps to 0. The result type must have the same
-        number of vector lanes as the input.
+        True maps to 1 and false maps to 0.
         "#,
             &formats.unary,
         )
         .operands_in(vec![x])
         .operands_out(vec![a]),
     );
+
+    let IntTo = &TypeVar::new(
+        "IntTo",
+        "An integer type with the same number of lanes",
+        TypeSetBuilder::new()
+            .ints(Interval::All)
+            .simd_lanes(Interval::All)
+            .build(),
+    );
+    let x = &Operand::new("x", Bool);
+    let a = &Operand::new("a", IntTo);
 
     ig.push(
         Inst::new(
