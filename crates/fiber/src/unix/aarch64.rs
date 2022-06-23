@@ -138,6 +138,7 @@ asm_func!(
     "wasmtime_fiber_start",
     "
         .cfi_startproc simple
+        .cfi_def_cfa_offset 0
         .cfi_escape 0x0f,    /* DW_CFA_def_cfa_expression */ \
             5,               /* the byte length of this expression */ \
             0x6f,            /* DW_OP_reg31(%sp) */ \

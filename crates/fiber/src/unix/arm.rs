@@ -50,6 +50,7 @@ asm_func!(
     "wasmtime_fiber_start",
     "
         .cfi_startproc simple
+        .cfi_def_cfa_offset 0
         // See the x86_64 file for more commentary on what these CFI directives
         // are doing. Like over there note that the relative offsets to
         // registers here match the frame layout in `wasmtime_fiber_switch`.

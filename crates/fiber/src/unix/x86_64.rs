@@ -92,6 +92,7 @@ asm_func!(
         // some default settings for the platform are omitted, since this
         // function is so nonstandard
         .cfi_startproc simple
+        .cfi_def_cfa_offset 0
 
         // This is where things get special, we're specifying a custom dwarf
         // expression for how to calculate the CFA. The goal here is that we

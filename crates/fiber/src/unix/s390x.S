@@ -82,6 +82,7 @@ SIZE(wasmtime_fiber_init)
 TYPE(wasmtime_fiber_start)
 FUNCTION(wasmtime_fiber_start):
 .cfi_startproc simple
+.cfi_def_cfa_offset 0
 
     // See the x86_64 file for more commentary on what these CFI directives are
     // doing. Like over there note that the relative offsets to registers here
