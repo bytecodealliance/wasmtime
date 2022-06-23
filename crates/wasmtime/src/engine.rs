@@ -9,6 +9,7 @@ use std::sync::Arc;
 #[cfg(feature = "cache")]
 use wasmtime_cache::CacheConfig;
 use wasmtime_environ::FlagValue;
+use wasmtime_jit::ProfilingAgent;
 use wasmtime_runtime::{debug_builtins, CompiledModuleIdAllocator, InstanceAllocator};
 
 /// An `Engine` which is a global context for compilation and management of wasm
@@ -43,6 +44,7 @@ struct EngineInner {
     #[cfg(compiler)]
     compiler: Box<dyn wasmtime_environ::Compiler>,
     allocator: Box<dyn InstanceAllocator>,
+    profiler: Box<dyn ProfilingAgent>,
     signatures: SignatureRegistry,
     epoch: AtomicU64,
     unique_id_allocator: CompiledModuleIdAllocator,
@@ -55,6 +57,16 @@ struct EngineInner {
 impl Engine {
     /// Creates a new [`Engine`] with the specified compilation and
     /// configuration settings.
+    ///
+    /// # Errors
+    ///
+    /// This method can fail if the `config` is invalid or some
+    /// configurations are incompatible.
+    ///
+    /// For example, feature `reference_types` will need to set
+    /// the compiler setting `enable_safepoints` and `unwind_info`
+    /// to `true`, but explicitly disable these two compiler settings
+    /// will cause errors.
     pub fn new(config: &Config) -> Result<Engine> {
         // Ensure that wasmtime_runtime's signal handlers are configured. This
         // is the per-program initialization required for handling traps, such
@@ -64,15 +76,22 @@ impl Engine {
 
         let registry = SignatureRegistry::new();
         let mut config = config.clone();
+        config.validate()?;
+
+        #[cfg(compiler)]
+        let compiler = config.build_compiler()?;
+
         let allocator = config.build_allocator()?;
         allocator.adjust_tunables(&mut config.tunables);
+        let profiler = config.build_profiler()?;
 
         Ok(Engine {
             inner: Arc::new(EngineInner {
                 #[cfg(compiler)]
-                compiler: config.compiler.build()?,
+                compiler,
                 config,
                 allocator,
+                profiler,
                 signatures: registry,
                 epoch: AtomicU64::new(0),
                 unique_id_allocator: CompiledModuleIdAllocator::new(),
@@ -115,6 +134,10 @@ impl Engine {
 
     pub(crate) fn allocator(&self) -> &dyn InstanceAllocator {
         self.inner.allocator.as_ref()
+    }
+
+    pub(crate) fn profiler(&self) -> &dyn ProfilingAgent {
+        self.inner.profiler.as_ref()
     }
 
     #[cfg(feature = "cache")]

@@ -67,7 +67,7 @@ default = [
 # with the Cranelift compiler. Cranelift is the default compilation backend of
 # Wasmtime. If disabled then WebAssembly modules can only be created from
 # precompiled WebAssembly modules.
-cranelift = ["wasmtime-cranelift"]
+cranelift = ["dep:wasmtime-cranelift"]
 
 # Enables support for the `perf` jitdump profiler
 jitdump = ["wasmtime-jit/jitdump"]
@@ -76,14 +76,14 @@ jitdump = ["wasmtime-jit/jitdump"]
 vtune = ["wasmtime-jit/vtune"]
 
 # Enables parallel compilation of WebAssembly code.
-parallel-compilation = ["rayon"]
+parallel-compilation = ["dep:rayon"]
 
 # Enables support for automatic cache configuration to be enabled in `Config`.
-cache = ["wasmtime-cache"]
+cache = ["dep:wasmtime-cache"]
 
 # Enables support for "async stores" as well as defining host functions as
 # `async fn` and calling functions asynchronously.
-async = ["wasmtime-fiber", "wasmtime-runtime/async", "async-trait"]
+async = ["dep:wasmtime-fiber", "wasmtime-runtime/async", "dep:async-trait"]
 
 # Enables support for the pooling instance allocation strategy
 pooling-allocator = ["wasmtime-runtime/pooling-allocator"]
@@ -91,7 +91,7 @@ pooling-allocator = ["wasmtime-runtime/pooling-allocator"]
 # Enables support for all architectures in Cranelift, allowing
 # cross-compilation using the `wasmtime` crate's API, notably the
 # `Engine::precompile_module` function.
-all-arch = ["wasmtime-cranelift/all-arch"]
+all-arch = ["wasmtime-cranelift?/all-arch"]
 
 # Enables trap handling using POSIX signals instead of Mach exceptions on MacOS.
 # It is useful for applications that do not bind their own exception ports and

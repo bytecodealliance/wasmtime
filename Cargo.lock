@@ -561,6 +561,7 @@ dependencies = [
  "log",
  "memmap2",
  "num_cpus",
+ "similar",
  "target-lexicon",
  "thiserror",
 ]
@@ -2600,6 +2601,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "similar"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2e24979f63a11545f5f2c60141afe249d4f19f84581ea2138065e400941d83d3"
+
+[[package]]
 name = "slice-group-by"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3237,9 +3244,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-smith"
-version = "0.11.0"
+version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4f0ed86e26ccdda3c178e557f8f2874e277c8d4f29c88e3c3320c58db12840ed"
+checksum = "c85cf25be85aac46356216b4662eb5768347046449a45c938ae1443b788665bb"
 dependencies = [
  "arbitrary",
  "flagset",

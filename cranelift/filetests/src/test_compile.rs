@@ -8,6 +8,7 @@ use cranelift_codegen::binemit::CodeInfo;
 use cranelift_codegen::ir;
 use cranelift_reader::{TestCommand, TestOption};
 use log::info;
+use similar::TextDiff;
 use std::borrow::Cow;
 use std::env;
 
@@ -102,17 +103,15 @@ fn check_precise_output(text: &str, context: &Context) -> Result<()> {
         "compilation of function on line {} does not match\n\
          the text expectation\n\
          \n\
-         expected:\n\
-         {:#?}\n\
-         actual:\n\
-         {:#?}\n\
+         {}\n\
          \n\
          This test assertion can be automatically updated by setting the\n\
          CRANELIFT_TEST_BLESS=1 environment variable when running this test.
          ",
         context.details.location.line_number,
-        expected,
-        actual,
+        TextDiff::from_slices(&expected, &actual)
+            .unified_diff()
+            .header("expected", "actual")
     )
 }
 

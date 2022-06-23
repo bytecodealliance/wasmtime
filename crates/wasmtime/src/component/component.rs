@@ -7,8 +7,7 @@ use std::path::Path;
 use std::ptr::NonNull;
 use std::sync::Arc;
 use wasmtime_environ::component::{
-    ComponentTypes, Initializer, LoweredIndex, ModuleUpvarIndex, TrampolineInfo, Translation,
-    Translator,
+    ComponentTypes, GlobalInitializer, LoweredIndex, StaticModuleIndex, TrampolineInfo, Translator,
 };
 use wasmtime_environ::PrimaryMap;
 use wasmtime_jit::CodeMemory;
@@ -28,7 +27,7 @@ struct ComponentInner {
 
     /// Core wasm modules that the component defined internally, indexed by the
     /// compile-time-assigned `ModuleUpvarIndex`.
-    upvars: PrimaryMap<ModuleUpvarIndex, Module>,
+    static_modules: PrimaryMap<StaticModuleIndex, Module>,
 
     /// Registered core wasm signatures of this component, or otherwise the
     /// mapping of the component-local `SignatureIndex` to the engine-local
@@ -111,29 +110,26 @@ impl Component {
         let mut validator =
             wasmparser::Validator::new_with_features(engine.config().features.clone());
         let mut types = Default::default();
-        let translation = Translator::new(tunables, &mut validator, &mut types)
+        let (component, modules) = Translator::new(tunables, &mut validator, &mut types)
             .translate(binary)
             .context("failed to parse WebAssembly module")?;
         let types = Arc::new(types.finish());
 
-        let Translation {
-            component, upvars, ..
-        } = translation;
-        let (upvars, trampolines) = engine.join_maybe_parallel(
+        let (static_modules, trampolines) = engine.join_maybe_parallel(
             // In one (possibly) parallel task all the modules found within this
             // component are compiled. Note that this will further parallelize
             // function compilation internally too.
             || -> Result<_> {
-                let upvars = upvars.into_iter().map(|(_, t)| t).collect::<Vec<_>>();
+                let upvars = modules.into_iter().map(|(_, t)| t).collect::<Vec<_>>();
                 let modules = engine.run_maybe_parallel(upvars, |module| {
                     let (mmap, info) =
                         Module::compile_functions(engine, module, types.module_types())?;
-                    // FIXME: the `SignatureCollection` here is re-registering the
-                    // entire list of wasm types within `types` on each invocation.
-                    // That's ok semantically but is quite slow to do so. This
-                    // should build up a mapping from `SignatureIndex` to
-                    // `VMSharedSignatureIndex` once and then reuse that for each
-                    // module somehow.
+                    // FIXME: the `SignatureCollection` here is re-registering
+                    // the entire list of wasm types within `types` on each
+                    // invocation.  That's ok semantically but is quite slow to
+                    // do so. This should build up a mapping from
+                    // `SignatureIndex` to `VMSharedSignatureIndex` once and
+                    // then reuse that for each module somehow.
                     Module::from_parts(engine, mmap, info, types.clone())
                 })?;
 
@@ -146,7 +142,7 @@ impl Component {
                     .initializers
                     .iter()
                     .filter_map(|init| match init {
-                        Initializer::LowerImport(i) => Some(i),
+                        GlobalInitializer::LowerImport(i) => Some(i),
                         _ => None,
                     })
                     .collect::<Vec<_>>();
@@ -162,7 +158,7 @@ impl Component {
                 Ok((trampolines, wasmtime_jit::mmap_vec_from_obj(obj)?))
             },
         );
-        let upvars = upvars?;
+        let static_modules = static_modules?;
         let (trampolines, trampoline_obj) = trampolines?;
         let mut trampoline_obj = CodeMemory::new(trampoline_obj);
         let code = trampoline_obj.publish()?;
@@ -180,12 +176,12 @@ impl Component {
         Ok(Component {
             inner: Arc::new(ComponentInner {
                 component,
-                upvars,
+                static_modules,
                 types,
-                trampolines,
+                signatures,
                 trampoline_obj,
                 text,
-                signatures,
+                trampolines,
             }),
         })
     }
@@ -194,8 +190,8 @@ impl Component {
         &self.inner.component
     }
 
-    pub(crate) fn upvar(&self, idx: ModuleUpvarIndex) -> &Module {
-        &self.inner.upvars[idx]
+    pub(crate) fn static_module(&self, idx: StaticModuleIndex) -> &Module {
+        &self.inner.static_modules[idx]
     }
 
     pub(crate) fn types(&self) -> &Arc<ComponentTypes> {

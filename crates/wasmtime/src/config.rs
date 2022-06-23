@@ -2,7 +2,7 @@ use crate::memory::MemoryCreator;
 use crate::trampoline::MemoryCreatorProxy;
 use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
-use std::cmp;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 #[cfg(feature = "cache")]
 use std::path::Path;
@@ -10,7 +10,7 @@ use std::sync::Arc;
 use wasmparser::WasmFeatures;
 #[cfg(feature = "cache")]
 use wasmtime_cache::CacheConfig;
-use wasmtime_environ::{CompilerBuilder, Tunables};
+use wasmtime_environ::Tunables;
 use wasmtime_jit::{JitDumpAgent, NullProfilerAgent, ProfilingAgent, VTuneAgent};
 use wasmtime_runtime::{InstanceAllocator, OnDemandInstanceAllocator, RuntimeMemoryCreator};
 
@@ -79,14 +79,19 @@ impl Default for ModuleVersionStrategy {
 /// and customize its behavior.
 ///
 /// This structure exposed a builder-like interface and is primarily consumed by
-/// [`Engine::new()`](crate::Engine::new)
+/// [`Engine::new()`](crate::Engine::new).
+///
+/// The validation of `Config` is deferred until the engine is being built, thus
+/// a problematic config may cause `Engine::new` to fail.
+#[derive(Clone)]
 pub struct Config {
     #[cfg(compiler)]
-    pub(crate) compiler: Box<dyn CompilerBuilder>,
+    compiler_config: CompilerConfig,
+    profiling_strategy: ProfilingStrategy,
+
     pub(crate) tunables: Tunables,
     #[cfg(feature = "cache")]
     pub(crate) cache_config: CacheConfig,
-    pub(crate) profiler: Arc<dyn ProfilingAgent>,
     pub(crate) mem_creator: Option<Arc<dyn RuntimeMemoryCreator>>,
     pub(crate) allocation_strategy: InstanceAllocationStrategy,
     pub(crate) max_wasm_stack: usize,
@@ -103,6 +108,54 @@ pub struct Config {
     pub(crate) force_memory_init_memfd: bool,
 }
 
+/// User-provided configuration for the compiler.
+#[cfg(compiler)]
+#[derive(Debug, Clone)]
+struct CompilerConfig {
+    strategy: Strategy,
+    target: Option<target_lexicon::Triple>,
+    settings: HashMap<String, String>,
+    flags: HashSet<String>,
+}
+
+#[cfg(compiler)]
+impl CompilerConfig {
+    fn new(strategy: Strategy) -> Self {
+        Self {
+            strategy,
+            target: None,
+            settings: HashMap::new(),
+            flags: HashSet::new(),
+        }
+    }
+
+    /// Ensures that the key is not set or equals to the given value.
+    /// If the key is not set, it will be set to the given value.
+    ///
+    /// # Returns
+    ///
+    /// Returns true if successfully set or already had the given setting
+    /// value, or false if the setting was explicitly set to something
+    /// else previously.
+    fn ensure_setting_unset_or_given(&mut self, k: &str, v: &str) -> bool {
+        if let Some(value) = self.settings.get(k) {
+            if value != v {
+                return false;
+            }
+        } else {
+            self.settings.insert(k.to_string(), v.to_string());
+        }
+        true
+    }
+}
+
+#[cfg(compiler)]
+impl Default for CompilerConfig {
+    fn default() -> Self {
+        Self::new(Strategy::Auto)
+    }
+}
+
 impl Config {
     /// Creates a new configuration object with the default configuration
     /// specified.
@@ -110,10 +163,10 @@ impl Config {
         let mut ret = Self {
             tunables: Tunables::default(),
             #[cfg(compiler)]
-            compiler: compiler_builder(Strategy::Auto).unwrap(),
+            compiler_config: CompilerConfig::default(),
             #[cfg(feature = "cache")]
             cache_config: CacheConfig::new_cache_disabled(),
-            profiler: Arc::new(NullProfilerAgent),
+            profiling_strategy: ProfilingStrategy::None,
             mem_creator: None,
             allocation_strategy: InstanceAllocationStrategy::OnDemand,
             // 512k of stack -- note that this is chosen currently to not be too
@@ -166,8 +219,8 @@ impl Config {
     #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
     pub fn target(&mut self, target: &str) -> Result<&mut Self> {
         use std::str::FromStr;
-        self.compiler
-            .target(target_lexicon::Triple::from_str(target).map_err(|e| anyhow::anyhow!(e))?)?;
+        self.compiler_config.target =
+            Some(target_lexicon::Triple::from_str(target).map_err(|e| anyhow::anyhow!(e))?);
 
         Ok(self)
     }
@@ -290,20 +343,6 @@ impl Config {
     /// will always return `None`.
     pub fn wasm_backtrace(&mut self, enable: bool) -> &mut Self {
         self.wasm_backtrace = enable;
-        #[cfg(compiler)]
-        {
-            // unwind_info must be enabled when either backtraces or reference types are enabled:
-            self.compiler
-                .set(
-                    "unwind_info",
-                    if enable || self.features.reference_types {
-                        "true"
-                    } else {
-                        "false"
-                    },
-                )
-                .unwrap();
-        }
         self
     }
 
@@ -455,26 +494,43 @@ impl Config {
     /// If a wasm call (or series of nested wasm calls) take more stack space
     /// than the `size` specified then a stack overflow trap will be raised.
     ///
+    /// Caveat: this knob only limits the stack space consumed by wasm code.
+    /// More importantly, it does not ensure that this much stack space is
+    /// available on the calling thread stack. Exhausting the thread stack
+    /// typically leads to an **abort** of the process.
+    ///
+    /// Here are some examples of how that could happen:
+    ///
+    /// - Let's assume this option is set to 2 MiB and then a thread that has
+    ///   a stack with 512 KiB left.
+    ///
+    ///   If wasm code consumes more than 512 KiB then the process will be aborted.
+    ///
+    /// - Assuming the same conditions, but this time wasm code does not consume
+    ///   any stack but calls into a host function. The host function consumes
+    ///   more than 512 KiB of stack space. The process will be aborted.
+    ///
+    /// There's another gotcha related to recursive calling into wasm: the stack
+    /// space consumed by a host function is counted towards this limit. The
+    /// host functions are not prevented from consuming more than this limit.
+    /// However, if the host function that used more than this limit and called
+    /// back into wasm, then the execution will trap immediatelly because of
+    /// stack overflow.
+    ///
     /// When the `async` feature is enabled, this value cannot exceed the
     /// `async_stack_size` option. Be careful not to set this value too close
     /// to `async_stack_size` as doing so may limit how much stack space
-    /// is available for host functions. Unlike wasm functions that trap
-    /// on stack overflow, a host function that overflows the stack will
-    /// abort the process.
+    /// is available for host functions.
     ///
     /// By default this option is 512 KiB.
-    pub fn max_wasm_stack(&mut self, size: usize) -> Result<&mut Self> {
-        #[cfg(feature = "async")]
-        if size > self.async_stack_size {
-            bail!("wasm stack size cannot exceed the async stack size");
-        }
-
-        if size == 0 {
-            bail!("wasm stack size cannot be zero");
-        }
-
+    ///
+    /// # Errors
+    ///
+    /// The `Engine::new` method will fail if the `size` specified here is
+    /// either 0 or larger than the [`Config::async_stack_size`] configuration.
+    pub fn max_wasm_stack(&mut self, size: usize) -> &mut Self {
         self.max_wasm_stack = size;
-        Ok(self)
+        self
     }
 
     /// Configures the size of the stacks used for asynchronous execution.
@@ -488,14 +544,16 @@ impl Config {
     /// stack and abort the process.
     ///
     /// By default this option is 2 MiB.
+    ///
+    /// # Errors
+    ///
+    /// The `Engine::new` method will fail if the value for this option is
+    /// smaller than the [`Config::max_wasm_stack`] option.
     #[cfg(feature = "async")]
     #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
-    pub fn async_stack_size(&mut self, size: usize) -> Result<&mut Self> {
-        if size < self.max_wasm_stack {
-            bail!("async stack size cannot be less than the maximum wasm stack size");
-        }
+    pub fn async_stack_size(&mut self, size: usize) -> &mut Self {
         self.async_stack_size = size;
-        Ok(self)
+        self
     }
 
     /// Configures whether the WebAssembly threads proposal will be enabled for
@@ -507,8 +565,8 @@ impl Config {
     /// be enabled through this method for appropriate wasm modules.
     ///
     /// This feature gates items such as shared memories and atomic
-    /// instructions. Note that enabling the threads feature will
-    /// also enable the bulk memory feature.
+    /// instructions. Note that the threads feature depends on the
+    /// bulk memory feature, which is enabled by default.
     ///
     /// This is `false` by default.
     ///
@@ -517,13 +575,14 @@ impl Config {
     /// > expected. This should not be enabled in a production setting right
     /// > now.
     ///
+    /// # Errors
+    ///
+    /// The validation of this feature are deferred until the engine is being built,
+    /// and thus may cause `Engine::new` fail if the `bulk_memory` feature is disabled.
+    ///
     /// [threads]: https://github.com/webassembly/threads
     pub fn wasm_threads(&mut self, enable: bool) -> &mut Self {
         self.features.threads = enable;
-        // The threads proposal depends on the bulk memory proposal
-        if enable {
-            self.wasm_bulk_memory(true);
-        }
         self
     }
 
@@ -533,38 +592,18 @@ impl Config {
     /// This feature gates items such as the `externref` and `funcref` types as
     /// well as allowing a module to define multiple tables.
     ///
-    /// Note that enabling the reference types feature will also enable the bulk
-    /// memory feature.
+    /// Note that the reference types proposal depends on the bulk memory proposal.
     ///
     /// This feature is `true` by default.
+    ///
+    /// # Errors
+    ///
+    /// The validation of this feature are deferred until the engine is being built,
+    /// and thus may cause `Engine::new` fail if the `bulk_memory` feature is disabled.
     ///
     /// [proposal]: https://github.com/webassembly/reference-types
     pub fn wasm_reference_types(&mut self, enable: bool) -> &mut Self {
         self.features.reference_types = enable;
-
-        #[cfg(compiler)]
-        {
-            self.compiler
-                .set("enable_safepoints", if enable { "true" } else { "false" })
-                .unwrap();
-            // unwind_info must be enabled when either backtraces or reference types are enabled:
-            self.compiler
-                .set(
-                    "unwind_info",
-                    if enable || self.wasm_backtrace {
-                        "true"
-                    } else {
-                        "false"
-                    },
-                )
-                .unwrap();
-        }
-
-        // The reference types proposal depends on the bulk memory proposal.
-        if enable {
-            self.wasm_bulk_memory(true);
-        }
-
         self
     }
 
@@ -586,13 +625,6 @@ impl Config {
     /// [relaxed simd proposal]: https://github.com/WebAssembly/relaxed-simd
     pub fn wasm_simd(&mut self, enable: bool) -> &mut Self {
         self.features.simd = enable;
-        #[cfg(compiler)]
-        {
-            let val = if enable { "true" } else { "false" };
-            self.compiler
-                .set("enable_simd", val)
-                .expect("should be valid flag");
-        }
         self
     }
 
@@ -603,6 +635,15 @@ impl Config {
     /// data/table segments, etc, being in a module.
     ///
     /// This is `true` by default.
+    ///
+    /// Feature `reference_types`, which is also `true` by default, requires
+    /// this feature to be enabled. Thus disabling this feature must also disable
+    /// `reference_types` as well using [`wasm_reference_types`](crate::Config::wasm_reference_types).
+    ///
+    /// # Errors
+    ///
+    /// Disabling this feature without disabling `reference_types` will cause
+    /// `Engine::new` to fail.
     ///
     /// [proposal]: https://github.com/webassembly/bulk-memory-operations
     pub fn wasm_bulk_memory(&mut self, enable: bool) -> &mut Self {
@@ -674,30 +715,30 @@ impl Config {
     /// and its documentation.
     ///
     /// The default value for this is `Strategy::Auto`.
-    ///
-    /// # Errors
-    ///
-    /// Some compilation strategies require compile-time options of `wasmtime`
-    /// itself to be set, but if they're not set and the strategy is specified
-    /// here then an error will be returned.
     #[cfg(compiler)]
     #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
-    pub fn strategy(&mut self, strategy: Strategy) -> Result<&mut Self> {
-        self.compiler = compiler_builder(strategy)?;
-        Ok(self)
+    pub fn strategy(&mut self, strategy: Strategy) -> &mut Self {
+        self.compiler_config.strategy = strategy;
+        self
     }
 
     /// Creates a default profiler based on the profiling strategy chosen.
     ///
     /// Profiler creation calls the type's default initializer where the purpose is
     /// really just to put in place the type used for profiling.
-    pub fn profiler(&mut self, profile: ProfilingStrategy) -> Result<&mut Self> {
-        self.profiler = match profile {
-            ProfilingStrategy::JitDump => Arc::new(JitDumpAgent::new()?) as Arc<dyn ProfilingAgent>,
-            ProfilingStrategy::VTune => Arc::new(VTuneAgent::new()?) as Arc<dyn ProfilingAgent>,
-            ProfilingStrategy::None => Arc::new(NullProfilerAgent),
-        };
-        Ok(self)
+    ///
+    /// Some [`ProfilingStrategy`] require specific platforms or particular feature
+    /// to be enabled, such as `ProfilingStrategy::JitDump` requires the `jitdump`
+    /// feature.
+    ///
+    /// # Errors
+    ///
+    /// The validation of this field is deferred until the engine is being built, and thus may
+    /// cause `Engine::new` fail if the required feature is disabled, or the platform is not
+    /// supported.
+    pub fn profiler(&mut self, profile: ProfilingStrategy) -> &mut Self {
+        self.profiling_strategy = profile;
+        self
     }
 
     /// Configures whether the debug verifier of Cranelift is enabled or not.
@@ -712,9 +753,9 @@ impl Config {
     #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
     pub fn cranelift_debug_verifier(&mut self, enable: bool) -> &mut Self {
         let val = if enable { "true" } else { "false" };
-        self.compiler
-            .set("enable_verifier", val)
-            .expect("should be valid flag");
+        self.compiler_config
+            .settings
+            .insert("enable_verifier".to_string(), val.to_string());
         self
     }
 
@@ -733,9 +774,9 @@ impl Config {
             OptLevel::Speed => "speed",
             OptLevel::SpeedAndSize => "speed_and_size",
         };
-        self.compiler
-            .set("opt_level", val)
-            .expect("should be valid flag");
+        self.compiler_config
+            .settings
+            .insert("opt_level".to_string(), val.to_string());
         self
     }
 
@@ -751,9 +792,9 @@ impl Config {
     #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
     pub fn cranelift_nan_canonicalization(&mut self, enable: bool) -> &mut Self {
         let val = if enable { "true" } else { "false" };
-        self.compiler
-            .set("enable_nan_canonicalization", val)
-            .expect("should be valid flag");
+        self.compiler_config
+            .settings
+            .insert("enable_nan_canonicalization".to_string(), val.to_string());
         self
     }
 
@@ -770,12 +811,14 @@ impl Config {
     ///
     /// # Errors
     ///
-    /// This method can fail if the flag's name does not exist.
+    /// The validation of the flags are deferred until the engine is being built, and thus may
+    /// cause `Engine::new` fail if the flag's name does not exist, or the value is not appropriate
+    /// for the flag type.
     #[cfg(compiler)]
     #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
-    pub unsafe fn cranelift_flag_enable(&mut self, flag: &str) -> Result<&mut Self> {
-        self.compiler.enable(flag)?;
-        Ok(self)
+    pub unsafe fn cranelift_flag_enable(&mut self, flag: &str) -> &mut Self {
+        self.compiler_config.flags.insert(flag.to_string());
+        self
     }
 
     /// Allows settings another Cranelift flag defined by a flag name and value. This allows
@@ -784,18 +827,26 @@ impl Config {
     /// Since Cranelift flags may be unstable, this method should not be considered to be stable
     /// either; other `Config` functions should be preferred for stability.
     ///
-    /// Note that this is marked as unsafe, because setting the wrong flag might break invariants,
+    /// # Safety
+    ///
+    /// This is marked as unsafe, because setting the wrong flag might break invariants,
     /// resulting in execution hazards.
     ///
     /// # Errors
     ///
-    /// This method can fail if the flag's name does not exist, or the value is not appropriate for
-    /// the flag type.
+    /// The validation of the flags are deferred until the engine is being built, and thus may
+    /// cause `Engine::new` fail if the flag's name does not exist, or incompatible with other
+    /// settings.
+    ///
+    /// For example, feature `wasm_backtrace` will set `unwind_info` to `true`, but if it's
+    /// manually set to false then it will fail.
     #[cfg(compiler)]
     #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
-    pub unsafe fn cranelift_flag_set(&mut self, name: &str, value: &str) -> Result<&mut Self> {
-        self.compiler.set(name, value)?;
-        Ok(self)
+    pub unsafe fn cranelift_flag_set(&mut self, name: &str, value: &str) -> &mut Self {
+        self.compiler_config
+            .settings
+            .insert(name.to_string(), value.to_string());
+        self
     }
 
     /// Loads cache configuration specified at `path`.
@@ -1028,14 +1079,12 @@ impl Config {
     /// immediate offset of less than 2GB. On 32-bit platforms this defaults to
     /// 64KB.
     ///
-    /// ## Static vs Dynamic Guard Size
+    /// ## Errors
     ///
-    /// Note that for now the static memory guard size must be at least as large
-    /// as the dynamic memory guard size, so configuring this property to be
-    /// smaller than the dynamic memory guard size will have no effect.
+    /// The `Engine::new` method will return an error if this option is smaller
+    /// than the value configured for [`Config::dynamic_memory_guard_size`].
     pub fn static_memory_guard_size(&mut self, guard_size: u64) -> &mut Self {
         let guard_size = round_up_to_pages(guard_size);
-        let guard_size = cmp::max(guard_size, self.tunables.dynamic_memory_offset_guard_size);
         self.tunables.static_memory_offset_guard_size = guard_size;
         self
     }
@@ -1062,11 +1111,14 @@ impl Config {
     /// ## Default
     ///
     /// This value defaults to 64KB.
+    ///
+    /// ## Errors
+    ///
+    /// The `Engine::new` method will return an error if this option is larger
+    /// than the value configured for [`Config::static_memory_guard_size`].
     pub fn dynamic_memory_guard_size(&mut self, guard_size: u64) -> &mut Self {
         let guard_size = round_up_to_pages(guard_size);
         self.tunables.dynamic_memory_offset_guard_size = guard_size;
-        self.tunables.static_memory_offset_guard_size =
-            cmp::max(guard_size, self.tunables.static_memory_offset_guard_size);
         self
     }
 
@@ -1294,6 +1346,29 @@ impl Config {
         self
     }
 
+    pub(crate) fn validate(&self) -> Result<()> {
+        if self.features.reference_types && !self.features.bulk_memory {
+            bail!("feature 'reference_types' requires 'bulk_memory' to be enabled");
+        }
+        if self.features.threads && !self.features.bulk_memory {
+            bail!("feature 'threads' requires 'bulk_memory' to be enabled");
+        }
+        #[cfg(feature = "async")]
+        if self.max_wasm_stack > self.async_stack_size {
+            bail!("max_wasm_stack size cannot exceed the async_stack_size");
+        }
+        if self.max_wasm_stack == 0 {
+            bail!("max_wasm_stack size cannot be zero");
+        }
+        if self.tunables.static_memory_offset_guard_size
+            < self.tunables.dynamic_memory_offset_guard_size
+        {
+            bail!("static memory guard size cannot be smaller than dynamic memory guard size");
+        }
+
+        Ok(())
+    }
+
     pub(crate) fn build_allocator(&self) -> Result<Box<dyn InstanceAllocator>> {
         #[cfg(feature = "async")]
         let stack_size = self.async_stack_size;
@@ -1318,12 +1393,59 @@ impl Config {
             )?)),
         }
     }
-}
 
-#[cfg(compiler)]
-fn compiler_builder(strategy: Strategy) -> Result<Box<dyn CompilerBuilder>> {
-    match strategy {
-        Strategy::Auto | Strategy::Cranelift => Ok(wasmtime_cranelift::builder()),
+    pub(crate) fn build_profiler(&self) -> Result<Box<dyn ProfilingAgent>> {
+        Ok(match self.profiling_strategy {
+            ProfilingStrategy::JitDump => Box::new(JitDumpAgent::new()?) as Box<dyn ProfilingAgent>,
+            ProfilingStrategy::VTune => Box::new(VTuneAgent::new()?) as Box<dyn ProfilingAgent>,
+            ProfilingStrategy::None => Box::new(NullProfilerAgent),
+        })
+    }
+
+    #[cfg(compiler)]
+    pub(crate) fn build_compiler(&mut self) -> Result<Box<dyn wasmtime_environ::Compiler>> {
+        let mut compiler = match self.compiler_config.strategy {
+            Strategy::Auto | Strategy::Cranelift => wasmtime_cranelift::builder(),
+        };
+        if let Some(target) = &self.compiler_config.target {
+            compiler.target(target.clone())?;
+        }
+
+        // check for incompatible compiler options and set required values
+        if self.wasm_backtrace || self.features.reference_types {
+            if !self
+                .compiler_config
+                .ensure_setting_unset_or_given("unwind_info", "true")
+            {
+                bail!("compiler option 'unwind_info' must be enabled when either 'backtraces' or 'reference types' are enabled");
+            }
+        }
+        if self.features.reference_types {
+            if !self
+                .compiler_config
+                .ensure_setting_unset_or_given("enable_safepoints", "true")
+            {
+                bail!("compiler option 'enable_safepoints' must be enabled when 'reference types' is enabled");
+            }
+        }
+        if self.features.simd {
+            if !self
+                .compiler_config
+                .ensure_setting_unset_or_given("enable_simd", "true")
+            {
+                bail!("compiler option 'enable_simd' must be enabled when 'simd' is enabled");
+            }
+        }
+
+        // Apply compiler settings and flags
+        for (k, v) in self.compiler_config.settings.iter() {
+            compiler.set(k, v)?;
+        }
+        for flag in self.compiler_config.flags.iter() {
+            compiler.enable(flag)?;
+        }
+
+        compiler.build()
     }
 }
 
@@ -1332,39 +1454,12 @@ fn round_up_to_pages(val: u64) -> u64 {
     debug_assert!(page_size.is_power_of_two());
     val.checked_add(page_size - 1)
         .map(|val| val & !(page_size - 1))
-        .unwrap_or(u64::max_value() / page_size + 1)
+        .unwrap_or(u64::MAX / page_size + 1)
 }
 
 impl Default for Config {
     fn default() -> Config {
         Config::new()
-    }
-}
-
-impl Clone for Config {
-    fn clone(&self) -> Config {
-        Config {
-            #[cfg(compiler)]
-            compiler: self.compiler.clone(),
-            tunables: self.tunables.clone(),
-            #[cfg(feature = "cache")]
-            cache_config: self.cache_config.clone(),
-            profiler: self.profiler.clone(),
-            features: self.features.clone(),
-            mem_creator: self.mem_creator.clone(),
-            allocation_strategy: self.allocation_strategy.clone(),
-            max_wasm_stack: self.max_wasm_stack,
-            wasm_backtrace: self.wasm_backtrace,
-            wasm_backtrace_details_env_used: self.wasm_backtrace_details_env_used,
-            async_support: self.async_support,
-            #[cfg(feature = "async")]
-            async_stack_size: self.async_stack_size,
-            module_version: self.module_version.clone(),
-            parallel_compilation: self.parallel_compilation,
-            memory_init_cow: self.memory_init_cow,
-            memory_guaranteed_dense_image_size: self.memory_guaranteed_dense_image_size,
-            force_memory_init_memfd: self.force_memory_init_memfd,
-        }
     }
 }
 
@@ -1398,7 +1493,7 @@ impl fmt::Debug for Config {
             .field("parallel_compilation", &self.parallel_compilation);
         #[cfg(compiler)]
         {
-            f.field("compiler", &self.compiler);
+            f.field("compiler_config", &self.compiler_config);
         }
         f.finish()
     }
@@ -1408,7 +1503,7 @@ impl fmt::Debug for Config {
 ///
 /// This is used as an argument to the [`Config::strategy`] method.
 #[non_exhaustive]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Copy)]
 pub enum Strategy {
     /// An indicator that the compilation strategy should be automatically
     /// selected.

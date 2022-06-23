@@ -695,6 +695,7 @@
        ;; An instruction guaranteed to always be undefined and to trigger an illegal instruction at
        ;; runtime.
        (Udf
+        (use_allocated_encoding bool)
         (trap_code TrapCode))
 
        ;; Compute the address (using a PC-relative offset) of a memory location, using the `ADR`
@@ -1904,6 +1905,12 @@
             (_1 Unit (emit (MInst.FpuMove128 dst c)))
             (_2 Unit (emit (MInst.VecRRR (VecALUOp.Bsl) dst x y (vector_size ty)))))
         dst))
+
+;; Helper for generating a `udf` instruction.
+
+(decl udf (bool TrapCode) SideEffectNoResult)
+(rule (udf use_allocated_encoding trap_code)
+      (SideEffectNoResult.Inst (MInst.Udf use_allocated_encoding trap_code)))
 
 ;; Immediate value helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

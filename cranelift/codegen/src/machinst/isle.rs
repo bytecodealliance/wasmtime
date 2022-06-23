@@ -463,6 +463,11 @@ macro_rules! isle_prelude_methods {
         }
 
         #[inline]
+        fn is_not_baldrdash_call_conv(&mut self) -> Option<bool> {
+            Some(!self.lower_ctx.abi().call_conv().extends_baldrdash())
+        }
+
+        #[inline]
         fn func_ref_data(&mut self, func_ref: FuncRef) -> (SigRef, ExternalName, RelocDistance) {
             let funcdata = &self.lower_ctx.dfg().ext_funcs[func_ref];
             (

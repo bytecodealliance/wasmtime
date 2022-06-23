@@ -7,11 +7,11 @@ use anyhow::{anyhow, Context, Result};
 use std::marker;
 use std::sync::Arc;
 use wasmtime_environ::component::{
-    ComponentTypes, CoreDef, CoreExport, Export, ExportItem, Initializer, InstantiateModule,
-    LowerImport, RuntimeImportIndex, RuntimeInstanceIndex, RuntimeMemoryIndex, RuntimeModuleIndex,
-    RuntimeReallocIndex,
+    ComponentTypes, CoreDef, CoreExport, Export, ExportItem, ExtractMemory, ExtractRealloc,
+    GlobalInitializer, InstantiateModule, LowerImport, RuntimeImportIndex, RuntimeInstanceIndex,
+    RuntimeModuleIndex,
 };
-use wasmtime_environ::{EntityIndex, MemoryIndex, PrimaryMap};
+use wasmtime_environ::{EntityIndex, PrimaryMap};
 use wasmtime_runtime::component::{ComponentInstance, OwnedComponentInstance};
 
 /// An instantiated component.
@@ -167,6 +167,16 @@ impl InstanceData {
         let instance = store.instance_mut(id);
         let idx = match &item.item {
             ExportItem::Index(idx) => (*idx).into(),
+
+            // FIXME: ideally at runtime we don't actually do any name lookups
+            // here. This will only happen when the host supplies an imported
+            // module so while the structure can't be known at compile time we
+            // do know at `InstancePre` time, for example, what all the host
+            // imports are. In theory we should be able to, as part of
+            // `InstancePre` construction, perform all name=>index mappings
+            // during that phase so the actual instantiation of an `InstancePre`
+            // skips all string lookups. This should probably only be
+            // investigated if this becomes a performance issue though.
             ExportItem::Name(name) => instance.module().exports[name],
         };
         instance.get_export_by_index(idx)
@@ -220,13 +230,13 @@ impl<'a> Instantiator<'a> {
         let env_component = self.component.env_component();
         for initializer in env_component.initializers.iter() {
             match initializer {
-                Initializer::InstantiateModule(m) => {
+                GlobalInitializer::InstantiateModule(m) => {
                     let module;
                     let imports = match m {
                         // Since upvars are statically know we know that the
                         // `args` list is already in the right order.
-                        InstantiateModule::Upvar(idx, args) => {
-                            module = self.component.upvar(*idx);
+                        InstantiateModule::Static(idx, args) => {
+                            module = self.component.static_module(*idx);
                             self.build_imports(store.0, module, args.iter())
                         }
 
@@ -234,6 +244,10 @@ impl<'a> Instantiator<'a> {
                         // lookups with strings to determine the order of the
                         // imports since it's whatever the actual module
                         // requires.
+                        //
+                        // FIXME: see the note in `ExportItem::Name` handling
+                        // above for how we ideally shouldn't do string lookup
+                        // here.
                         InstantiateModule::Import(idx, args) => {
                             module = match &self.imports[*idx] {
                                 RuntimeImport::Module(m) => m,
@@ -255,23 +269,21 @@ impl<'a> Instantiator<'a> {
                     self.data.instances.push(i);
                 }
 
-                Initializer::LowerImport(import) => self.lower_import(import),
+                GlobalInitializer::LowerImport(import) => self.lower_import(import),
 
-                Initializer::ExtractMemory { index, export } => {
-                    self.extract_memory(store.0, *index, export)
+                GlobalInitializer::ExtractMemory(mem) => self.extract_memory(store.0, mem),
+
+                GlobalInitializer::ExtractRealloc(realloc) => {
+                    self.extract_realloc(store.0, realloc)
                 }
 
-                Initializer::ExtractRealloc { index, def } => {
-                    self.extract_realloc(store.0, *index, def)
-                }
-
-                Initializer::SaveModuleUpvar(idx) => {
+                GlobalInitializer::SaveStaticModule(idx) => {
                     self.data
                         .exported_modules
-                        .push(self.component.upvar(*idx).clone());
+                        .push(self.component.static_module(*idx).clone());
                 }
 
-                Initializer::SaveModuleImport(idx) => {
+                GlobalInitializer::SaveModuleImport(idx) => {
                     self.data.exported_modules.push(match &self.imports[*idx] {
                         RuntimeImport::Module(m) => m.clone(),
                         _ => unreachable!(),
@@ -307,30 +319,22 @@ impl<'a> Instantiator<'a> {
         self.data.funcs.push(func.clone());
     }
 
-    fn extract_memory(
-        &mut self,
-        store: &mut StoreOpaque,
-        index: RuntimeMemoryIndex,
-        export: &CoreExport<MemoryIndex>,
-    ) {
-        let memory = match self.data.lookup_export(store, export) {
+    fn extract_memory(&mut self, store: &mut StoreOpaque, memory: &ExtractMemory) {
+        let mem = match self.data.lookup_export(store, &memory.export) {
             wasmtime_runtime::Export::Memory(m) => m,
             _ => unreachable!(),
         };
-        self.data.state.set_runtime_memory(index, memory.definition);
+        self.data
+            .state
+            .set_runtime_memory(memory.index, mem.definition);
     }
 
-    fn extract_realloc(
-        &mut self,
-        store: &mut StoreOpaque,
-        index: RuntimeReallocIndex,
-        def: &CoreDef,
-    ) {
-        let anyfunc = match self.data.lookup_def(store, def) {
+    fn extract_realloc(&mut self, store: &mut StoreOpaque, realloc: &ExtractRealloc) {
+        let anyfunc = match self.data.lookup_def(store, &realloc.def) {
             wasmtime_runtime::Export::Function(f) => f.anyfunc,
             _ => unreachable!(),
         };
-        self.data.state.set_runtime_realloc(index, anyfunc);
+        self.data.state.set_runtime_realloc(realloc.index, anyfunc);
     }
 
     fn build_imports<'b>(

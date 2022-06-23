@@ -8,11 +8,25 @@ Unreleased.
 
 ### Changed
 
+* Some methods on the `Config` structure now return `&mut Self` instead of
+  `Result<&mut Self>` since the validation is deferred until `Engine::new`:
+  `profiler`, `cranelift_flag_enable`, `cranelift_flag_set`, `max_wasm_stack`,
+  `async_stack_size`, and `strategy`.
+  [#4252](https://github.com/bytecodealliance/wasmtime/pull/4252)
+  [#4262](https://github.com/bytecodealliance/wasmtime/pull/4262)
+
+### Fixed
+
+* A refactor of `Config` was made to fix an issue that the order of calls to `Config`
+  matters now, which may lead to unexpected behavior.
+  [#4252](https://github.com/bytecodealliance/wasmtime/pull/4252)
+  [#4262](https://github.com/bytecodealliance/wasmtime/pull/4262)
+
 --------------------------------------------------------------------------------
 
 ## 0.38.0
 
-Unreleased.
+Released 2022-06-21
 
 ### Added
 

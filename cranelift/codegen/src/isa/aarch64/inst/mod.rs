@@ -2564,7 +2564,16 @@ impl Inst {
                 format!("br {}", rn)
             }
             &Inst::Brk => "brk #0".to_string(),
-            &Inst::Udf { .. } => "udf".to_string(),
+            &Inst::Udf {
+                use_allocated_encoding,
+                ..
+            } => {
+                if use_allocated_encoding {
+                    "udf #0xc11f".to_string()
+                } else {
+                    "udf".to_string()
+                }
+            }
             &Inst::TrapIf { ref kind, .. } => match kind {
                 &CondBrKind::Zero(reg) => {
                     let reg = pretty_print_reg(reg, allocs);
