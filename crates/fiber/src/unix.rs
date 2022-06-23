@@ -185,17 +185,10 @@ impl Suspend {
 // visible externally outside of a `*.so`.
 cfg_if::cfg_if! {
     if #[cfg(target_os = "macos")] {
-        cfg_if::cfg_if! {
-            if #[cfg(target_arch = "aarch64")] {
-                macro_rules! macho_func_align { () => (".p2align 2\n") }
-            } else {
-                macro_rules! macho_func_align { () => ("") }
-            }
-        }
         macro_rules! asm_func {
             ($name:tt, $($body:tt)*) => {
                 std::arch::global_asm!(concat!(
-                    macho_func_align!(),
+                    ".align 16\n",
                     ".private_extern _", $name, "\n",
                     ".global _", $name, "\n",
                     "_", $name, ":\n",
@@ -215,19 +208,17 @@ cfg_if::cfg_if! {
                 macro_rules! elf_func_type_header {
                     ($name:tt) => (concat!(".type ", $name, ",%function\n"))
                 }
-                macro_rules! elf_func_align { () => (".p2align 2\n") }
             } else {
                 macro_rules! elf_func_type_header {
                     ($name:tt) => (concat!(".type ", $name, ",@function\n"))
                 }
-                macro_rules! elf_func_align { () => (".align 16\n") }
             }
         }
 
         macro_rules! asm_func {
             ($name:tt, $($body:tt)*) => {
                 std::arch::global_asm!(concat!(
-                    elf_func_align!(),
+                    ".align 16\n",
                     ".hidden ", $name, "\n",
                     ".global ", $name, "\n",
                     elf_func_type_header!($name),
