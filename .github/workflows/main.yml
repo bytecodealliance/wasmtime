@@ -197,6 +197,7 @@ jobs:
     env:
       QEMU_BUILD_VERSION: 6.1.0
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
