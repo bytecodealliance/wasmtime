@@ -8,7 +8,9 @@ use std::panic::{self, AssertUnwindSafe};
 use std::ptr::NonNull;
 use std::sync::Arc;
 use wasmtime_environ::component::{ComponentTypes, StringEncoding, TypeFuncIndex};
-use wasmtime_runtime::component::{VMComponentContext, VMLowering, VMLoweringCallee};
+use wasmtime_runtime::component::{
+    VMComponentContext, VMComponentFlags, VMLowering, VMLoweringCallee,
+};
 use wasmtime_runtime::{VMCallerCheckedAnyfunc, VMMemoryDefinition, VMOpaqueContext};
 
 /// Trait representing host-defined functions that can be imported into a wasm
@@ -134,8 +136,7 @@ where
 
     let cx = VMComponentContext::from_opaque(cx);
     let instance = (*cx).instance();
-    let may_leave = (*instance).may_leave();
-    let may_enter = (*instance).may_enter();
+    let flags = (*instance).flags();
     let mut cx = StoreContextMut::from_raw((*instance).store());
 
     let options = Options::new(
@@ -148,13 +149,13 @@ where
     // Perform a dynamic check that this instance can indeed be left. Exiting
     // the component is disallowed, for example, when the `realloc` function
     // calls a canonical import.
-    if !*may_leave {
+    if !(*flags).may_leave() {
         bail!("cannot leave component instance");
     }
 
     // While we're lifting and lowering this instance cannot be reentered, so
     // unset the flag here. This is also reset back to `true` on exit.
-    let _reset_may_enter = unset_and_reset_on_drop(may_enter);
+    let _reset_may_enter = unset_and_reset_on_drop(flags, VMComponentFlags::set_may_enter);
 
     // There's a 2x2 matrix of whether parameters and results are stored on the
     // stack or on the heap. Each of the 4 branches here have a different
@@ -172,7 +173,7 @@ where
             let storage = cast_storage::<ReturnStack<Params::Lower, Return::Lower>>(storage);
             let params = Params::lift(cx.0, &options, &storage.assume_init_ref().args)?;
             let ret = closure(cx.as_context_mut(), params)?;
-            reset_may_leave = unset_and_reset_on_drop(may_leave);
+            reset_may_leave = unset_and_reset_on_drop(flags, VMComponentFlags::set_may_leave);
             ret.lower(&mut cx, &options, map_maybe_uninit!(storage.ret))?;
         } else {
             let storage = cast_storage::<ReturnPointer<Params::Lower>>(storage).assume_init_ref();
@@ -180,7 +181,7 @@ where
             let ret = closure(cx.as_context_mut(), params)?;
             let mut memory = MemoryMut::new(cx.as_context_mut(), &options);
             let ptr = validate_inbounds::<Return>(memory.as_slice_mut(), &storage.retptr)?;
-            reset_may_leave = unset_and_reset_on_drop(may_leave);
+            reset_may_leave = unset_and_reset_on_drop(flags, VMComponentFlags::set_may_leave);
             ret.store(&mut memory, ptr)?;
         }
     } else {
@@ -191,7 +192,7 @@ where
                 validate_inbounds::<Params>(memory.as_slice(), &storage.assume_init_ref().args)?;
             let params = Params::load(&memory, &memory.as_slice()[ptr..][..Params::size()])?;
             let ret = closure(cx.as_context_mut(), params)?;
-            reset_may_leave = unset_and_reset_on_drop(may_leave);
+            reset_may_leave = unset_and_reset_on_drop(flags, VMComponentFlags::set_may_leave);
             ret.lower(&mut cx, &options, map_maybe_uninit!(storage.ret))?;
         } else {
             let storage = cast_storage::<ReturnPointer<ValRaw>>(storage).assume_init_ref();
@@ -200,27 +201,28 @@ where
             let ret = closure(cx.as_context_mut(), params)?;
             let mut memory = MemoryMut::new(cx.as_context_mut(), &options);
             let ptr = validate_inbounds::<Return>(memory.as_slice_mut(), &storage.retptr)?;
-            reset_may_leave = unset_and_reset_on_drop(may_leave);
+            reset_may_leave = unset_and_reset_on_drop(flags, VMComponentFlags::set_may_leave);
             ret.store(&mut memory, ptr)?;
         }
     }
 
-    // TODO: need to call `post-return` before this `drop`
     drop(reset_may_leave);
 
     return Ok(());
 
-    unsafe fn unset_and_reset_on_drop(slot: *mut bool) -> impl Drop {
-        debug_assert!(*slot);
-        *slot = false;
-        return Reset(slot);
+    unsafe fn unset_and_reset_on_drop(
+        slot: *mut VMComponentFlags,
+        set: fn(&mut VMComponentFlags, bool),
+    ) -> impl Drop {
+        set(&mut *slot, false);
+        return Reset(slot, set);
 
-        struct Reset(*mut bool);
+        struct Reset(*mut VMComponentFlags, fn(&mut VMComponentFlags, bool));
 
         impl Drop for Reset {
             fn drop(&mut self) {
                 unsafe {
-                    (*self.0) = true;
+                    (self.1)(&mut *self.0, true);
                 }
             }
         }

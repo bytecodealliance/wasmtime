@@ -1,6 +1,6 @@
 use crate::component::instance::{Instance, InstanceData};
 use crate::store::{StoreOpaque, Stored};
-use crate::AsContext;
+use crate::{AsContext, ValRaw};
 use anyhow::{Context, Result};
 use std::mem::MaybeUninit;
 use std::ptr::NonNull;
@@ -82,6 +82,8 @@ pub struct FuncData {
     types: Arc<ComponentTypes>,
     options: Options,
     instance: Instance,
+    post_return: Option<(ExportFunction, VMTrampoline)>,
+    post_return_arg: Option<ValRaw>,
 }
 
 impl Func {
@@ -102,6 +104,11 @@ impl Func {
             .memory
             .map(|i| NonNull::new(data.instance().runtime_memory(i)).unwrap());
         let realloc = options.realloc.map(|i| data.instance().runtime_realloc(i));
+        let post_return = options.post_return.map(|i| {
+            let anyfunc = data.instance().runtime_post_return(i);
+            let trampoline = store.lookup_trampoline(unsafe { anyfunc.as_ref() });
+            (ExportFunction { anyfunc }, trampoline)
+        });
         let options = unsafe { Options::new(store.id(), memory, realloc, options.string_encoding) };
         Func(store.store_data_mut().insert(FuncData {
             trampoline,
@@ -110,6 +117,8 @@ impl Func {
             ty,
             types: data.component_types().clone(),
             instance: *instance,
+            post_return,
+            post_return_arg: None,
         }))
     }
 
