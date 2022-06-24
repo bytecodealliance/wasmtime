@@ -669,10 +669,6 @@
             (_ Unit (emit (MInst.AluRRImm12 op dst src imm))))
         dst))
 
- 
-
-
-
 ;; Helper for narrow down int to it's bits.
 (decl narrow_int(Type Reg) Reg)
 (rule (narrow_int $I8 r) (
@@ -771,6 +767,163 @@
 (decl lower_cls_i128 (ValueRegs)ValueRegs)
 (extern constructor lower_cls_i128 lower_cls_i128)
 
-
 (decl imm12_const (i32) Imm12)
 (extern constructor imm12_const imm12_const)
+
+(decl con_amode(Reg i64 Type)AMode)
+(extern constructor con_amode con_amode)
+
+;; helper function to load from memory.
+(decl con_load(Reg i64 LoadOP Type MemFlags)Reg)
+(rule 
+  (con_load base offset op ty flags) 
+  (let
+    (
+      (tmp WritableReg (temp_writable_reg $I64))
+      (_ Unit (emit (MInst.Load tmp op flags (con_amode base offset ty))))
+    )
+    tmp
+  )
+)
+
+;; some instruction have no return value.
+(decl no_return()InstOutput)
+(extern constructor no_return no_return)
+
+
+;; helper function to store to memory.
+(decl con_store(Reg i64 StoreOP Type MemFlags Reg)InstOutput)
+(rule 
+  (con_store base offset op ty flags src)
+  (let
+    (
+      (_ Unit (emit (MInst.Store (con_amode base offset ty) op flags src)))
+    )
+    (no_return)
+  )
+)
+
+
+
+(decl valid_atomic_transaction (Type) Type)
+(extern extractor valid_atomic_transaction valid_atomic_transaction)
+
+;;helper function.
+;;construct an atomic instruction.
+(decl con_atomic (AtomicOP Reg Reg AMO)Reg)
+(rule 
+  (con_atomic op addr src amo)
+  (let
+    (
+      (tmp WritableReg (temp_writable_reg $I64))
+      (_ Unit (emit (MInst.Atomic op tmp addr src amo)))
+    )
+    tmp
+  )
+)
+
+;; helper function 
+(decl get_atomic_rmw_op(Type AtomicRmwOp)AtomicOP)
+(rule 
+  (get_atomic_rmw_op $I32 (AtomicRmwOp.Add))
+  (AtomicOP.AmoaddW)
+)
+(rule 
+  (get_atomic_rmw_op $I64 (AtomicRmwOp.Add))
+  (AtomicOP.AmoaddD)
+)
+
+(rule 
+  (get_atomic_rmw_op $I32 (AtomicRmwOp.And))
+  (AtomicOP.AmoandW)
+)
+
+(rule 
+  (get_atomic_rmw_op $I64 (AtomicRmwOp.And))
+  (AtomicOP.AmoandD)
+)
+
+(rule 
+  (get_atomic_rmw_op $I32 (AtomicRmwOp.Or))
+  (AtomicOP.AmoorW)
+)
+
+(rule 
+  (get_atomic_rmw_op $I64 (AtomicRmwOp.Or))
+  (AtomicOP.AmoorD)
+)
+
+(rule 
+  (get_atomic_rmw_op $I32 (AtomicRmwOp.Smax))
+  (AtomicOP.AmomaxW)
+)
+
+(rule 
+  (get_atomic_rmw_op $I64 (AtomicRmwOp.Smax))
+  (AtomicOP.AmomaxD)
+)
+
+(rule 
+  (get_atomic_rmw_op $I32 (AtomicRmwOp.Smin))
+  (AtomicOP.AmominW)
+)
+
+(rule 
+  (get_atomic_rmw_op $I64 (AtomicRmwOp.Smin))
+  (AtomicOP.AmominD)
+)
+
+(rule 
+  (get_atomic_rmw_op $I32 (AtomicRmwOp.Umax))
+  (AtomicOP.AmomaxuW)
+)
+
+(rule 
+  (get_atomic_rmw_op $I64 (AtomicRmwOp.Umax))
+  (AtomicOP.AmomaxuD)
+)
+
+(rule 
+  (get_atomic_rmw_op $I32 (AtomicRmwOp.Umin))
+  (AtomicOP.AmominuW)
+)
+
+(rule 
+  (get_atomic_rmw_op $I64 (AtomicRmwOp.Umin))
+  (AtomicOP.AmominuD)
+)
+
+(rule 
+  (get_atomic_rmw_op $I32 (AtomicRmwOp.Xchg))
+  (AtomicOP.AmoswapW)
+)
+
+(rule 
+  (get_atomic_rmw_op $I64 (AtomicRmwOp.Xchg))
+  (AtomicOP.AmoswapD)
+)
+
+(rule 
+  (get_atomic_rmw_op $I32 (AtomicRmwOp.Xor))
+  (AtomicOP.AmoxorW)
+)
+
+(rule 
+  (get_atomic_rmw_op $I64 (AtomicRmwOp.Xor))
+  (AtomicOP.AmoxorD)
+)
+
+(decl atomic_rmw_amo()AMO)
+(extern constructor atomic_rmw_amo atomic_rmw_amo)
+
+(decl con_atomic_load(Reg Type)Reg)
+(extern constructor con_atomic_load con_atomic_load)
+
+(decl con_atomic_store(Reg Type Reg)Reg)
+(extern constructor con_atomic_store con_atomic_store)
+
+;; helper function to inverse all bits.
+(decl con_bit_not(Reg)Reg)
+(rule (con_bit_not r) 
+  (alu_rr_imm12 (AluOPRRI.Xori) r (imm12_const -1)))
+

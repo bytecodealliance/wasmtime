@@ -925,9 +925,10 @@ impl AluOPRRI {
         let x = imm12.as_u32();
         if let Some(func) = self.option_funct6(imm12) {
             func << 6 | x
-        } else if let  Some(func) = self.option_funct7(imm12) {
+        } else if let Some(func) = self.option_funct7(imm12) {
             func << 5 | x
-        } else if  let Some(func) = self.option_funct12() {
+        } else if let Some(func) = self.option_funct12() {
+            assert!(x == 0);
             func
         } else {
             x
@@ -1581,9 +1582,6 @@ impl CsrAddress {
 }
 
 pub(crate) struct VType {
-    /*
-        todo::I have no ida vma and vta means.
-    */
     vma: bool,
     vta: bool,
     vsew: Vsew,

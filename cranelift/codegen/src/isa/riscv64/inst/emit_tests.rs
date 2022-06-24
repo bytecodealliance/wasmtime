@@ -2138,9 +2138,6 @@ fn get_riscv_tool_chain_name() -> (String, String) {
     )
 }
 
-/*
-    todo:: make this can be run on windows
-*/
 fn assemble(code: &str, as_option: &Option<Vec<String>>) -> u32 {
     let mut code = String::from(code);
     code.push_str("\n");
@@ -2450,9 +2447,6 @@ fn riscv64_worst_case_instruction_size() {
         v: a2(),
     });
 
-    /*
-        todo:: I128Arithmetic
-    */
     candidates.push(Inst::IntSelect {
         dst: vec![writable_a0(), writable_a0()],
         ty: I128,

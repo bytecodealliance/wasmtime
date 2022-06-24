@@ -86,7 +86,8 @@ impl LowerBackend for Riscv64Backend {
     }
 
     fn maybe_pinned_reg(&self) -> Option<Reg> {
-        //todo what is this??
+        // pinned register is a register that you want put anything in it.
+        // right now riscv64 not support this feature.
         None
     }
 }

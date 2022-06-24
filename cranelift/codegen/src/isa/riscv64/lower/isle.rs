@@ -8,6 +8,7 @@ use self::generated_code::I128OP;
 // Types that the generated ISLE code uses via `use super::*`.
 use super::{writable_zero_reg, zero_reg, Inst as MInst};
 
+use crate::isa::riscv64::lower_inst::is_valid_atomic_transaction_ty;
 use crate::isa::riscv64::settings::Flags as IsaFlags;
 use crate::machinst::{isle::*, MachInst, SmallInstVec};
 use crate::settings::Flags;
@@ -15,8 +16,8 @@ use crate::settings::Flags;
 use crate::machinst::{VCodeConstant, VCodeConstantData};
 use crate::{
     ir::{
-        immediates::*, types::*, ExternalName, Inst, InstructionData, MemFlags, TrapCode, Value,
-        ValueList,
+        immediates::*, types::*, AtomicRmwOp, ExternalName, Inst, InstructionData, MemFlags,
+        TrapCode, Value, ValueList,
     },
     isa::riscv64::inst::*,
     machinst::{InsnOutput, LowerCtx},
@@ -369,11 +370,6 @@ where
                     rs1: rd.to_reg(),
                     rs2: tmp_high.to_reg(),
                 });
-
-                /*
-
-                    todo why return 128-bit value?????
-                */
                 let r = self.temp_writable_reg(I64);
                 self.emit(&MInst::load_constant_imm12(r, Imm12::from_bits(0)));
                 return ValueRegs::two(rd.to_reg(), r.to_reg());
@@ -1321,6 +1317,53 @@ where
     fn pack_float_rounding_mode(&mut self, f: &FRM) -> OptionFloatRoundingMode {
         Some(*f)
     }
+
+    fn con_amode(&mut self, base: Reg, offset: i64, ty: Type) -> AMode {
+        AMode::RegOffset(base, offset, ty)
+    }
+    fn no_return(&mut self) -> InstOutput {
+        InstOutput::default()
+    }
+    fn valid_atomic_transaction(&mut self, ty: Type) -> Option<Type> {
+        if is_valid_atomic_transaction_ty(ty) {
+            Some(ty)
+        } else {
+            panic!("not a valid atomic type.");
+        }
+    }
+    fn atomic_rmw_amo(&mut self) -> AMO {
+        AMO::Relax
+    }
+    fn con_atomic_load(&mut self, addr: Reg, ty: Type) -> Reg {
+        let tmp = self.temp_writable_reg(ty);
+        self.emit(&MInst::Atomic {
+            addr,
+            op: if ty.bits() == 32 {
+                AtomicOP::LrW
+            } else {
+                AtomicOP::LrD
+            },
+            rd: tmp,
+            src: zero_reg(),
+            amo: AMO::Relax,
+        });
+        tmp.to_reg()
+    }
+    fn con_atomic_store(&mut self, addr: Reg, ty: Type, src: Reg) -> Reg {
+        let tmp = self.temp_writable_reg(ty);
+        self.emit(&MInst::Atomic {
+            addr,
+            op: if ty.bits() == 32 {
+                AtomicOP::ScW
+            } else {
+                AtomicOP::ScD
+            },
+            rd: tmp,
+            src: src,
+            amo: AMO::Relax,
+        });
+        tmp.to_reg()
+    }
 }
 
 impl<C> IsleContext<'_, C, Flags, IsaFlags, 6>
@@ -1366,11 +1409,9 @@ mod test {
         }
         convert_32(1.0);
         convert_32(99.111);
-        // todo why nan not pass
         // convert_32(f32::NAN);
         convert_32(f32::INFINITY);
         convert_32(f32::NEG_INFINITY);
-
         convert_64(1.0);
         convert_64(99.111);
         // convert_64(f64::NAN);

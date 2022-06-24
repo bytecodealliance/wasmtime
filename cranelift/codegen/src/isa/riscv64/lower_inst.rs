@@ -162,91 +162,8 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             ctx.emit(inst);
         }
 
-        Opcode::AtomicRmw => {
-            /*
-                todo:: where is the memory ordering parameter. ?????????
-            */
-            let r_dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let r_addr = ctx.put_input_in_regs(insn, 0).only_reg().unwrap();
-
-            let ty = ty.unwrap();
-            assert!(is_valid_atomic_transaction_ty(ty));
-            let op = ctx.data(insn).atomic_rmw_op().unwrap();
-            let arg2: Reg = ctx.put_input_in_regs(insn, 1).only_reg().unwrap();
-            let risc_op = AtomicOP::from_atomicrmw_type_and_op(ty, op);
-            if let Some(op) = risc_op {
-                let i = Inst::Atomic {
-                    op,
-                    rd: r_dst,
-                    addr: r_addr,
-                    src: arg2,
-                    amo: AMO::Relax,
-                };
-                ctx.emit(i);
-            } else if op == crate::ir::AtomicRmwOp::Sub {
-                let sub_op = if ty.bits() == 64 {
-                    AluOPRRR::Sub
-                } else {
-                    AluOPRRR::Subw
-                };
-                let tmp = ctx.alloc_tmp(I64).only_reg().unwrap();
-                ctx.emit(Inst::AluRRR {
-                    alu_op: sub_op,
-                    rd: tmp,
-                    rs1: zero_reg(),
-                    rs2: arg2,
-                });
-                let add_op = if ty.bits() == 64 {
-                    AtomicOP::AmoaddD
-                } else {
-                    AtomicOP::AmoaddW
-                };
-                ctx.emit(Inst::Atomic {
-                    op: add_op,
-                    rd: r_dst,
-                    addr: r_addr,
-                    src: tmp.to_reg(),
-                    amo: AMO::Relax,
-                });
-            } else if op == crate::ir::AtomicRmwOp::Nand {
-                let lr_op = if ty.bits() == 64 {
-                    AtomicOP::LrD
-                } else {
-                    AtomicOP::LrW
-                };
-                // load origin value
-                let tmp = ctx.alloc_tmp(I64).only_reg().unwrap();
-                ctx.emit(Inst::Atomic {
-                    op: lr_op,
-                    rd: tmp,
-                    addr: r_addr,
-                    src: zero_reg(),
-                    amo: AMO::Relax,
-                });
-                // tmp = tmp & arg2
-                ctx.emit(Inst::AluRRR {
-                    alu_op: AluOPRRR::And,
-                    rd: tmp,
-                    rs1: tmp.to_reg(),
-                    rs2: arg2,
-                });
-                // tmp = bit_not tmp;
-                ctx.emit(Inst::construct_bit_not(tmp, tmp.to_reg()));
-                let st_op = if ty.bits() == 64 {
-                    AtomicOP::AmoswapD
-                } else {
-                    AtomicOP::AmoswapW
-                };
-                ctx.emit(Inst::Atomic {
-                    op: st_op,
-                    rd: r_dst,
-                    src: tmp.to_reg(),
-                    addr: r_addr,
-                    amo: AMO::Relax,
-                });
-            } else {
-                unreachable!();
-            }
+        Opcode::AtomicRmw => {  
+            implemented_in_isle(ctx);
         }
 
         Opcode::AtomicCas => {
@@ -709,17 +626,9 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             ctx.emit(Inst::gen_move(writable_link_reg(), tmp.to_reg(), I64));
         }
 
-        Opcode::GetPinnedReg => {
-            // let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            // ctx.emit(Inst::gen_move(rd, x_reg(PINNED_REG), I64));
-            pinned_register_not_used()
-        }
+        Opcode::GetPinnedReg => pinned_register_not_used(),
 
-        Opcode::SetPinnedReg => {
-            // let rm = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-            // ctx.emit(Inst::gen_move(writable_xreg(PINNED_REG), rm, I64));
-            pinned_register_not_used()
-        }
+        Opcode::SetPinnedReg => pinned_register_not_used(),
 
         Opcode::Jump
         | Opcode::Brz
@@ -1132,7 +1041,6 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             unimplemented!();
         }
     }
-
     Ok(())
 }
 
