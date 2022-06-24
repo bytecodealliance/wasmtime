@@ -39,6 +39,8 @@ pub const SUPPORTED_WASM_FEATURES: &[(&str, &str)] = &[
     ("simd", "enables support for proposed SIMD instructions"),
     ("threads", "enables support for WebAssembly threads"),
     ("memory64", "enables support for 64-bit memories"),
+    #[cfg(feature = "component-model")]
+    ("component-model", "enables support for the component model"),
 ];
 
 pub const SUPPORTED_WASI_MODULES: &[(&str, &str)] = &[
@@ -258,20 +260,20 @@ impl CommonOptions {
             .cranelift_debug_verifier(self.enable_cranelift_debug_verifier)
             .debug_info(self.debug_info)
             .cranelift_opt_level(self.opt_level())
-            .profiler(pick_profiling_strategy(self.jitdump, self.vtune)?)?
+            .profiler(pick_profiling_strategy(self.jitdump, self.vtune)?)
             .cranelift_nan_canonicalization(self.enable_cranelift_nan_canonicalization);
 
         self.enable_wasm_features(&mut config);
 
         for name in &self.cranelift_enable {
             unsafe {
-                config.cranelift_flag_enable(name)?;
+                config.cranelift_flag_enable(name);
             }
         }
 
         for (name, value) in &self.cranelift_set {
             unsafe {
-                config.cranelift_flag_set(name, value)?;
+                config.cranelift_flag_set(name, value);
             }
         }
 
@@ -333,6 +335,8 @@ impl CommonOptions {
             threads,
             multi_memory,
             memory64,
+            #[cfg(feature = "component-model")]
+            component_model,
         } = self.wasm_features.unwrap_or_default();
 
         if let Some(enable) = simd {
@@ -342,9 +346,7 @@ impl CommonOptions {
             config.wasm_bulk_memory(enable);
         }
         if let Some(enable) = reference_types {
-            #[cfg(feature = "wasm-backtrace")]
             config.wasm_reference_types(enable);
-            drop(enable); // suppress unused warnings
         }
         if let Some(enable) = multi_value {
             config.wasm_multi_value(enable);
@@ -357,6 +359,10 @@ impl CommonOptions {
         }
         if let Some(enable) = memory64 {
             config.wasm_memory64(enable);
+        }
+        #[cfg(feature = "component-model")]
+        if let Some(enable) = component_model {
+            config.wasm_component_model(enable);
         }
     }
 
@@ -391,6 +397,8 @@ pub struct WasmFeatures {
     pub threads: Option<bool>,
     pub multi_memory: Option<bool>,
     pub memory64: Option<bool>,
+    #[cfg(feature = "component-model")]
+    pub component_model: Option<bool>,
 }
 
 fn parse_wasm_features(features: &str) -> Result<WasmFeatures> {
@@ -439,6 +447,8 @@ fn parse_wasm_features(features: &str) -> Result<WasmFeatures> {
         threads: all.or(values["threads"]),
         multi_memory: all.or(values["multi-memory"]),
         memory64: all.or(values["memory64"]),
+        #[cfg(feature = "component-model")]
+        component_model: all.or(values["component-model"]),
     })
 }
 

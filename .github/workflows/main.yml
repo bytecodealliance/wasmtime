@@ -136,8 +136,9 @@ jobs:
     - run: cargo check -p wasmtime --no-default-features --features async
     - run: cargo check -p wasmtime --no-default-features --features pooling-allocator
     - run: cargo check -p wasmtime --no-default-features --features cranelift
-    - run: cargo check -p wasmtime --no-default-features --features wasm-backtrace
-    - run: cargo check -p wasmtime --no-default-features --features cranelift,wat,async,cache,wasm-backtrace
+    - run: cargo check -p wasmtime --no-default-features --features component-model
+    - run: cargo check -p wasmtime --no-default-features --features cranelift,wat,async,cache
+    - run: cargo check --features component-model
 
     # Check that benchmarks of the cranelift project build
     - run: cargo check --benches -p cranelift-codegen
@@ -210,8 +211,6 @@ jobs:
             gcc: aarch64-linux-gnu-gcc
             qemu: qemu-aarch64 -L /usr/aarch64-linux-gnu
             qemu_target: aarch64-linux-user
-            # FIXME(#3183) shouldn't be necessary to specify this
-            qemu_flags: -cpu max,pauth=off
           - os: ubuntu-latest
             target: s390x-unknown-linux-gnu
             gcc_package: gcc-s390x-linux-gnu
@@ -250,7 +249,7 @@ jobs:
         # Configure Cargo for cross compilation and tell it how it can run
         # cross executables
         upcase=$(echo ${{ matrix.target }} | awk '{ print toupper($0) }' | sed 's/-/_/g')
-        echo CARGO_TARGET_${upcase}_RUNNER=${{ runner.tool_cache }}/qemu/bin/${{ matrix.qemu }} ${{ matrix.qemu_flags }} >> $GITHUB_ENV
+        echo CARGO_TARGET_${upcase}_RUNNER=${{ runner.tool_cache }}/qemu/bin/${{ matrix.qemu }} >> $GITHUB_ENV
         echo CARGO_TARGET_${upcase}_LINKER=${{ matrix.gcc }} >> $GITHUB_ENV
 
         # QEMU emulation is not always the speediest, so total testing time
@@ -296,6 +295,10 @@ jobs:
       if: matrix.os == 'ubuntu-latest' && matrix.target == ''
       env:
         RUST_BACKTRACE: 1
+
+    # Test the component-model related functionality which is gated behind a
+    # compile-time feature
+    - run: cargo test --test all --features component-model component_model
 
   # Build and test the wasi-nn module.
   test_wasi_nn:
@@ -376,29 +379,17 @@ jobs:
         - build: aarch64-linux
           os: ubuntu-latest
           target: aarch64-unknown-linux-gnu
-          gcc_package: gcc-aarch64-linux-gnu
-          gcc: aarch64-linux-gnu-gcc
         - build: s390x-linux
           os: ubuntu-latest
           target: s390x-unknown-linux-gnu
-          gcc_package: gcc-s390x-linux-gnu
-          gcc: s390x-linux-gnu-gcc
     steps:
     - uses: actions/checkout@v2
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
     - uses: ./.github/actions/binary-compatible-builds
-      if: matrix.target == ''
-
-    - name: Install cross-compilation tools
-      run: |
-        set -ex
-        sudo apt-get update
-        sudo apt-get install -y ${{ matrix.gcc_package }}
-        upcase=$(echo ${{ matrix.target }} | awk '{ print toupper($0) }' | sed 's/-/_/g')
-        echo CARGO_TARGET_${upcase}_LINKER=${{ matrix.gcc }} >> $GITHUB_ENV
-      if: matrix.target != '' && matrix.os == 'ubuntu-latest'
+      with:
+        name: ${{ matrix.build }}
     - run: |
         echo CARGO_BUILD_TARGET=${{ matrix.target }} >> $GITHUB_ENV
         rustup target add ${{ matrix.target }}

@@ -13,8 +13,8 @@ use std::sync::Arc;
 use wasmtime_environ::FuncIndex;
 use wasmtime_runtime::{
     raise_user_trap, ExportFunction, InstanceAllocator, InstanceHandle, OnDemandInstanceAllocator,
-    VMCallerCheckedAnyfunc, VMContext, VMFunctionBody, VMFunctionImport, VMSharedSignatureIndex,
-    VMTrampoline,
+    VMCallerCheckedAnyfunc, VMContext, VMFunctionBody, VMFunctionImport, VMOpaqueContext,
+    VMSharedSignatureIndex, VMTrampoline,
 };
 
 /// A WebAssembly function which can be called.
@@ -367,7 +367,7 @@ impl Func {
     pub unsafe fn new_unchecked<T>(
         mut store: impl AsContextMut<Data = T>,
         ty: FuncType,
-        func: impl Fn(Caller<'_, T>, *mut ValRaw) -> Result<(), Trap> + Send + Sync + 'static,
+        func: impl Fn(Caller<'_, T>, &mut [ValRaw]) -> Result<(), Trap> + Send + Sync + 'static,
     ) -> Self {
         let store = store.as_context_mut().0;
         let host = HostFunc::new_unchecked(store.engine(), ty, func);
@@ -813,13 +813,22 @@ impl Func {
     ) -> Result<(), Trap> {
         let mut store = store.as_context_mut();
         let data = &store.0.store_data()[self.0];
-        let trampoline = data.trampoline();
         let anyfunc = data.export().anyfunc;
-        invoke_wasm_and_catch_traps(&mut store, |callee| {
+        let trampoline = data.trampoline();
+        Self::call_unchecked_raw(&mut store, anyfunc, trampoline, params_and_returns)
+    }
+
+    pub(crate) unsafe fn call_unchecked_raw<T>(
+        store: &mut StoreContextMut<'_, T>,
+        anyfunc: NonNull<VMCallerCheckedAnyfunc>,
+        trampoline: VMTrampoline,
+        params_and_returns: *mut ValRaw,
+    ) -> Result<(), Trap> {
+        invoke_wasm_and_catch_traps(store, |callee| {
             trampoline(
-                (*anyfunc.as_ptr()).vmctx,
+                anyfunc.as_ref().vmctx,
                 callee,
-                (*anyfunc.as_ptr()).func_ptr.as_ptr(),
+                anyfunc.as_ref().func_ptr.as_ptr(),
                 params_and_returns,
             )
         })
@@ -957,7 +966,7 @@ impl Func {
         // Store the argument values into `values_vec`.
         let mut values_vec = store.0.take_wasm_val_raw_storage();
         debug_assert!(values_vec.is_empty());
-        values_vec.resize_with(values_vec_size, || ValRaw { i32: 0 });
+        values_vec.resize_with(values_vec_size, || ValRaw::i32(0));
         for (arg, slot) in params.iter().cloned().zip(&mut values_vec) {
             unsafe {
                 *slot = arg.to_raw(&mut *store);
@@ -1015,7 +1024,7 @@ impl Func {
     fn invoke<T>(
         mut caller: Caller<'_, T>,
         ty: &FuncType,
-        values_vec: *mut ValRaw,
+        values_vec: &mut [ValRaw],
         func: &dyn Fn(Caller<'_, T>, &[Val], &mut [Val]) -> Result<(), Trap>,
     ) -> Result<(), Trap> {
         // Translate the raw JIT arguments in `values_vec` into a `Val` which
@@ -1032,7 +1041,7 @@ impl Func {
         let nparams = ty.params().len();
         val_vec.reserve(nparams + ty.results().len());
         for (i, ty) in ty.params().enumerate() {
-            val_vec.push(unsafe { Val::from_raw(&mut caller.store, *values_vec.add(i), ty) })
+            val_vec.push(unsafe { Val::from_raw(&mut caller.store, values_vec[i], ty) })
         }
 
         val_vec.extend((0..ty.results().len()).map(|_| Val::null()));
@@ -1066,7 +1075,7 @@ impl Func {
                 ));
             }
             unsafe {
-                *values_vec.add(i) = ret.to_raw(&mut caller.store);
+                values_vec[i] = ret.to_raw(&mut caller.store);
             }
         }
 
@@ -1226,6 +1235,7 @@ pub(crate) fn invoke_wasm_and_catch_traps<T>(
         }
         let result = wasmtime_runtime::catch_traps(
             store.0.signal_handler(),
+            store.0.engine().config().wasm_backtrace,
             store.0.default_callee(),
             closure,
         );
@@ -1842,7 +1852,7 @@ macro_rules! impl_into_func {
                 /// by Cranelift, since Cranelift is generating raw function
                 /// calls directly to this function.
                 unsafe extern "C" fn wasm_to_host_shim<T, F, $($args,)* R>(
-                    vmctx: *mut VMContext,
+                    vmctx: *mut VMOpaqueContext,
                     caller_vmctx: *mut VMContext,
                     $( $args: $args::Abi, )*
                     retptr: R::Retptr,
@@ -1865,6 +1875,7 @@ macro_rules! impl_into_func {
                     // should be part of this block, and the long-jmp-ing
                     // happens after the block in handling `CallResult`.
                     let result = Caller::with(caller_vmctx, |mut caller| {
+                        let vmctx = VMContext::from_opaque(vmctx);
                         let state = (*vmctx).host_state();
                         // Double-check ourselves in debug mode, but we control
                         // the `Any` here so an unsafe downcast should also
@@ -1930,7 +1941,7 @@ macro_rules! impl_into_func {
                 /// calls the given function pointer, and then stores the result
                 /// back into the `args` array.
                 unsafe extern "C" fn host_trampoline<$($args,)* R>(
-                    callee_vmctx: *mut VMContext,
+                    callee_vmctx: *mut VMOpaqueContext,
                     caller_vmctx: *mut VMContext,
                     ptr: *const VMFunctionBody,
                     args: *mut ValRaw,
@@ -1942,7 +1953,7 @@ macro_rules! impl_into_func {
                     let ptr = mem::transmute::<
                         *const VMFunctionBody,
                         unsafe extern "C" fn(
-                            *mut VMContext,
+                            *mut VMOpaqueContext,
                             *mut VMContext,
                             $( $args::Abi, )*
                             R::Retptr,
@@ -2035,9 +2046,9 @@ impl HostFunc {
     pub unsafe fn new_unchecked<T>(
         engine: &Engine,
         ty: FuncType,
-        func: impl Fn(Caller<'_, T>, *mut ValRaw) -> Result<(), Trap> + Send + Sync + 'static,
+        func: impl Fn(Caller<'_, T>, &mut [ValRaw]) -> Result<(), Trap> + Send + Sync + 'static,
     ) -> Self {
-        let func = move |caller_vmctx, values: *mut ValRaw| {
+        let func = move |caller_vmctx, values: &mut [ValRaw]| {
             Caller::<T>::with(caller_vmctx, |mut caller| {
                 caller.store.0.call_hook(CallHook::CallingHost)?;
                 let result = func(caller.sub_caller(), values)?;
@@ -2063,7 +2074,6 @@ impl HostFunc {
     /// `Engine`. This happens automatically during the above two constructors.
     fn _new(engine: &Engine, mut instance: InstanceHandle, trampoline: VMTrampoline) -> Self {
         let export = instance.get_exported_func(FuncIndex::from_u32(0));
-
         HostFunc {
             instance,
             trampoline,

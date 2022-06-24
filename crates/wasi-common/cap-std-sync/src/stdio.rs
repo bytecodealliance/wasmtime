@@ -48,7 +48,7 @@ impl WasiFile for Stdin {
         }
     }
     async fn read_vectored<'a>(&mut self, bufs: &mut [io::IoSliceMut<'a>]) -> Result<u64, Error> {
-        let n = self.0.as_filelike_view::<File>().read_vectored(bufs)?;
+        let n = (&*self.0.as_filelike_view::<File>()).read_vectored(bufs)?;
         Ok(n.try_into().map_err(|_| Error::range())?)
     }
     async fn read_vectored_at<'a>(
@@ -140,7 +140,7 @@ macro_rules! wasi_file_write_impl {
                 })
             }
             async fn write_vectored<'a>(&mut self, bufs: &[io::IoSlice<'a>]) -> Result<u64, Error> {
-                let n = self.0.as_filelike_view::<File>().write_vectored(bufs)?;
+                let n = (&*self.0.as_filelike_view::<File>()).write_vectored(bufs)?;
                 Ok(n.try_into().map_err(|c| Error::range().context(c))?)
             }
             async fn write_vectored_at<'a>(

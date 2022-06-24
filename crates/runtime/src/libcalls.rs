@@ -507,7 +507,7 @@ pub unsafe extern "C" fn memory_atomic_notify(
         // just to be sure.
         let addr_to_check = addr.checked_add(4).unwrap();
         validate_atomic_addr(instance, memory, addr_to_check).and_then(|()| {
-            Err(Trap::User(anyhow::anyhow!(
+            Err(Trap::user(anyhow::anyhow!(
                 "unimplemented: wasm atomics (fn memory_atomic_notify) unsupported",
             )))
         })
@@ -534,7 +534,7 @@ pub unsafe extern "C" fn memory_atomic_wait32(
         // but we still double-check
         let addr_to_check = addr.checked_add(4).unwrap();
         validate_atomic_addr(instance, memory, addr_to_check).and_then(|()| {
-            Err(Trap::User(anyhow::anyhow!(
+            Err(Trap::user(anyhow::anyhow!(
                 "unimplemented: wasm atomics (fn memory_atomic_wait32) unsupported",
             )))
         })
@@ -561,7 +561,7 @@ pub unsafe extern "C" fn memory_atomic_wait64(
         // but we still double-check
         let addr_to_check = addr.checked_add(8).unwrap();
         validate_atomic_addr(instance, memory, addr_to_check).and_then(|()| {
-            Err(Trap::User(anyhow::anyhow!(
+            Err(Trap::user(anyhow::anyhow!(
                 "unimplemented: wasm atomics (fn memory_atomic_wait64) unsupported",
             )))
         })
@@ -586,7 +586,7 @@ unsafe fn validate_atomic_addr(
     memory: MemoryIndex,
     addr: usize,
 ) -> Result<(), Trap> {
-    if addr > instance.get_memory(memory).current_length {
+    if addr > instance.get_memory(memory).current_length() {
         return Err(Trap::wasm(TrapCode::HeapOutOfBounds));
     }
     Ok(())

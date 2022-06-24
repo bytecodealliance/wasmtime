@@ -171,7 +171,9 @@ impl WasiDir for Dir {
             // can't get a full metadata for.
             #[cfg(windows)]
             let entries = entries.filter(|entry: &Result<_, wasi_common::Error>| {
-                use winapi::shared::winerror::{ERROR_ACCESS_DENIED, ERROR_SHARING_VIOLATION};
+                use windows_sys::Win32::Foundation::{
+                    ERROR_ACCESS_DENIED, ERROR_SHARING_VIOLATION,
+                };
                 if let Err(err) = entry {
                     if let Some(err) = err.downcast_ref::<std::io::Error>() {
                         if err.raw_os_error() == Some(ERROR_SHARING_VIOLATION as i32)

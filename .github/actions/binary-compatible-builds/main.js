@@ -12,14 +12,12 @@ function set_env(name, val) {
 // possible. For now 10.9 is the limit.
 if (process.platform == 'darwin') {
   set_env("MACOSX_DEPLOYMENT_TARGET", "10.9");
-  set_env("python", "python3");
   return;
 }
 
 // On Windows we build against the static CRT to reduce dll dependencies
 if (process.platform == 'win32') {
   set_env("RUSTFLAGS", "-Ctarget-feature=+crt-static");
-  set_env("python", "python");
   return;
 }
 
@@ -28,7 +26,7 @@ if (process.platform == 'win32') {
 // commands in there with the `$CENTOS` env var.
 
 if (process.env.CENTOS !== undefined) {
-  const args = ['exec', '-w', process.cwd(), '-i', 'centos'];
+  const args = ['exec', '-w', process.cwd(), '-i', 'build-container'];
   for (const arg of process.argv.slice(2)) {
     args.push(arg);
   }
@@ -36,40 +34,23 @@ if (process.env.CENTOS !== undefined) {
   return;
 }
 
-// Add our rust mount onto PATH, but also add some stuff to PATH from
-// the packages that we install.
-let path = process.env.PATH;
-path = `${path}:/rust/bin`;
-path = `/opt/rh/devtoolset-8/root/usr/bin:${path}`;
+const name = process.env.INPUT_NAME;
 
-// Spawn a container daemonized in the background which we'll connect to via
-// `docker exec`. This'll have access to the current directory.
+child_process.execFileSync('docker', [
+  'build',
+  '--tag', 'build-image',
+  `${process.cwd()}/ci/docker/${name}`
+], stdio);
+
 child_process.execFileSync('docker', [
   'run',
-  '-di',
-  '--name', 'centos',
+  '--detach',
+  '--interactive',
+  '--name', 'build-container',
   '-v', `${process.cwd()}:${process.cwd()}`,
   '-v', `${child_process.execSync('rustc --print sysroot').toString().trim()}:/rust:ro`,
-  '--env', `PATH=${path}`,
-  // FIXME(rust-lang/rust#80703) this shouldn't be necessary
-  '--env', `LD_LIBRARY_PATH=/rust/lib`,
-  'centos:7',
+  'build-image',
 ], stdio);
 
 // Use ourselves to run future commands
 set_env("CENTOS", __filename);
-
-// See https://edwards.sdsu.edu/research/c11-on-centos-6/ for where these
-const exec = s => {
-  child_process.execSync(`docker exec centos ${s}`, stdio);
-};
-exec('yum install -y centos-release-scl cmake xz epel-release');
-exec('yum install -y python3 patchelf unzip');
-exec('yum install -y devtoolset-8-gcc devtoolset-8-binutils devtoolset-8-gcc-c++');
-exec('yum install -y git');
-
-// Delete `libstdc++.so` to force gcc to link against `libstdc++.a` instead.
-// This is a hack and not the right way to do this, but it ends up doing the
-// right thing for now.
-exec('rm -f /opt/rh/devtoolset-8/root/usr/lib/gcc/x86_64-redhat-linux/8/libstdc++.so');
-set_env("python", "python3");

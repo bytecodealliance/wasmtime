@@ -484,6 +484,8 @@ impl Layout {
     }
 }
 
+/// A single node in the linked-list of blocks.
+// Whenever you add new fields here, don't forget to update the custom serializer for `Layout` too.
 #[derive(Clone, Debug, Default)]
 struct BlockNode {
     prev: PackedOption<Block>,
@@ -803,7 +805,7 @@ impl<'f> DoubleEndedIterator for Insts<'f> {
 ///
 /// ```plain
 /// data = block_data * ;
-/// block_data = "block_id" , "inst_count" , ( "inst_id" * ) ;
+/// block_data = "block_id" , "cold" , "inst_count" , ( "inst_id" * ) ;
 /// ```
 #[cfg(feature = "enable-serde")]
 mod serde {
@@ -821,7 +823,7 @@ mod serde {
         where
             S: Serializer,
         {
-            let size = self.blocks().count() * 2
+            let size = self.blocks().count() * 3
                 + self
                     .blocks()
                     .map(|block| self.block_insts(block).count())
@@ -829,6 +831,7 @@ mod serde {
             let mut seq = serializer.serialize_seq(Some(size))?;
             for block in self.blocks() {
                 seq.serialize_element(&block)?;
+                seq.serialize_element(&self.blocks[block].cold)?;
                 seq.serialize_element(&u32::try_from(self.block_insts(block).count()).unwrap())?;
                 for inst in self.block_insts(block) {
                     seq.serialize_element(&inst)?;
@@ -869,9 +872,15 @@ mod serde {
             while let Some(block) = access.next_element::<Block>()? {
                 layout.append_block(block);
 
+                let cold = access
+                    .next_element::<bool>()?
+                    .ok_or_else(|| Error::missing_field("cold"))?;
+                layout.blocks[block].cold = cold;
+
                 let count = access
                     .next_element::<u32>()?
                     .ok_or_else(|| Error::missing_field("count"))?;
+
                 for _ in 0..count {
                     let inst = access
                         .next_element::<Inst>()?

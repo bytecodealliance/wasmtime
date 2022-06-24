@@ -6,7 +6,7 @@ use std::{
     sync::RwLock,
 };
 use std::{convert::TryFrom, sync::Arc};
-use wasmtime_environ::{PrimaryMap, SignatureIndex, TypeTables, WasmFuncType};
+use wasmtime_environ::{ModuleTypes, PrimaryMap, SignatureIndex, WasmFuncType};
 use wasmtime_runtime::{VMSharedSignatureIndex, VMTrampoline};
 
 /// Represents a collection of shared signatures.
@@ -19,7 +19,7 @@ use wasmtime_runtime::{VMSharedSignatureIndex, VMTrampoline};
 pub struct SignatureCollection {
     registry: Arc<RwLock<SignatureRegistryInner>>,
     signatures: PrimaryMap<SignatureIndex, VMSharedSignatureIndex>,
-    trampolines: HashMap<VMSharedSignatureIndex, (usize, VMTrampoline)>,
+    trampolines: HashMap<VMSharedSignatureIndex, VMTrampoline>,
 }
 
 impl SignatureCollection {
@@ -27,7 +27,7 @@ impl SignatureCollection {
     /// and trampolines.
     pub fn new_for_module(
         registry: &SignatureRegistry,
-        types: &TypeTables,
+        types: &ModuleTypes,
         trampolines: impl Iterator<Item = (SignatureIndex, VMTrampoline)>,
     ) -> Self {
         let (signatures, trampolines) = registry
@@ -59,9 +59,7 @@ impl SignatureCollection {
 
     /// Gets a trampoline for a registered signature.
     pub fn trampoline(&self, index: VMSharedSignatureIndex) -> Option<VMTrampoline> {
-        self.trampolines
-            .get(&index)
-            .map(|(_, trampoline)| *trampoline)
+        self.trampolines.get(&index).copied()
     }
 }
 
@@ -89,11 +87,11 @@ struct SignatureRegistryInner {
 impl SignatureRegistryInner {
     fn register_for_module(
         &mut self,
-        types: &TypeTables,
+        types: &ModuleTypes,
         trampolines: impl Iterator<Item = (SignatureIndex, VMTrampoline)>,
     ) -> (
         PrimaryMap<SignatureIndex, VMSharedSignatureIndex>,
-        HashMap<VMSharedSignatureIndex, (usize, VMTrampoline)>,
+        HashMap<VMSharedSignatureIndex, VMTrampoline>,
     ) {
         let mut sigs = PrimaryMap::default();
         let mut map = HashMap::default();
@@ -104,7 +102,7 @@ impl SignatureRegistryInner {
         }
 
         for (index, trampoline) in trampolines {
-            map.insert(sigs[index], (1, trampoline));
+            map.insert(sigs[index], trampoline);
         }
 
         (sigs, map)
@@ -165,8 +163,8 @@ impl SignatureRegistryInner {
         } else {
             // Otherwise, use the trampolines map, which has reference counts related
             // to the stored index
-            for (index, (count, _)) in collection.trampolines.iter() {
-                self.unregister_entry(*index, *count);
+            for (index, _) in collection.trampolines.iter() {
+                self.unregister_entry(*index, 1);
             }
         }
     }

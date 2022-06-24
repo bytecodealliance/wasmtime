@@ -158,11 +158,11 @@ impl JitDumpFile {
         // To match what some perf examples are doing we keep this `mmap` alive
         // until this agent goes away.
         let map_addr = unsafe {
-            let ptr = rustix::io::mmap(
+            let ptr = rustix::mm::mmap(
                 ptr::null_mut(),
-                rustix::process::page_size(),
-                rustix::io::ProtFlags::EXEC | rustix::io::ProtFlags::READ,
-                rustix::io::MapFlags::PRIVATE,
+                rustix::param::page_size(),
+                rustix::mm::ProtFlags::EXEC | rustix::mm::ProtFlags::READ,
+                rustix::mm::MapFlags::PRIVATE,
                 &jitdump_file,
                 0,
             )?;
@@ -287,7 +287,7 @@ impl JitDumpFile {
 impl Drop for JitDumpFile {
     fn drop(&mut self) {
         unsafe {
-            rustix::io::munmap(self.map_addr as *mut _, rustix::process::page_size()).unwrap();
+            rustix::mm::munmap(self.map_addr as *mut _, rustix::param::page_size()).unwrap();
         }
     }
 }

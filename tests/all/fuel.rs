@@ -1,13 +1,14 @@
 use anyhow::Result;
 use wasmtime::*;
 use wast::parser::{self, Parse, ParseBuffer, Parser};
+use wast::token::Span;
 
 mod kw {
     wast::custom_keyword!(assert_fuel);
 }
 
 struct FuelWast<'a> {
-    assertions: Vec<(wast::Span, u64, wast::Module<'a>)>,
+    assertions: Vec<(Span, u64, wast::core::Module<'a>)>,
 }
 
 impl<'a> Parse<'a> for FuelWast<'a> {

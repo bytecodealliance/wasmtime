@@ -2,8 +2,8 @@
 //! module.
 
 use crate::{
-    DefinedFuncIndex, FilePos, FunctionBodyData, ModuleTranslation, PrimaryMap, SignatureIndex,
-    StackMap, Tunables, TypeTables, WasmError, WasmFuncType,
+    DefinedFuncIndex, FilePos, FunctionBodyData, ModuleTranslation, ModuleTypes, PrimaryMap,
+    SignatureIndex, StackMap, Tunables, WasmError, WasmFuncType,
 };
 use anyhow::Result;
 use object::write::Object;
@@ -76,9 +76,6 @@ pub enum CompileError {
 /// This is used in Wasmtime to separate compiler implementations, currently
 /// mostly used to separate Cranelift from Wasmtime itself.
 pub trait CompilerBuilder: Send + Sync + fmt::Debug {
-    /// Like the `Clone` trait, but for the boxed trait object.
-    fn clone(&self) -> Box<dyn CompilerBuilder>;
-
     /// Sets the target of compilation to the target specified.
     fn target(&mut self, target: target_lexicon::Triple) -> Result<()>;
 
@@ -148,7 +145,7 @@ pub trait Compiler: Send + Sync {
         index: DefinedFuncIndex,
         data: FunctionBodyData<'_>,
         tunables: &Tunables,
-        types: &TypeTables,
+        types: &ModuleTypes,
     ) -> Result<Box<dyn Any + Send>, CompileError>;
 
     /// Collects the results of compilation into an in-memory object.
@@ -169,7 +166,7 @@ pub trait Compiler: Send + Sync {
     fn emit_obj(
         &self,
         module: &ModuleTranslation,
-        types: &TypeTables,
+        types: &ModuleTypes,
         funcs: PrimaryMap<DefinedFuncIndex, Box<dyn Any + Send>>,
         tunables: &Tunables,
         obj: &mut Object<'static>,
@@ -232,6 +229,13 @@ pub trait Compiler: Send + Sync {
 
     /// Same as [`Compiler::flags`], but ISA-specific (a cranelift-ism)
     fn isa_flags(&self) -> BTreeMap<String, FlagValue>;
+
+    /// Returns a suitable compiler usable for component-related compliations.
+    ///
+    /// Note that the `ComponentCompiler` trait can also be implemented for
+    /// `Self` in which case this function would simply return `self`.
+    #[cfg(feature = "component-model")]
+    fn component_compiler(&self) -> &dyn crate::component::ComponentCompiler;
 }
 
 /// Value of a configured setting for a [`Compiler`]

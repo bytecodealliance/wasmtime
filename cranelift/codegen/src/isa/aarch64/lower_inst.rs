@@ -239,50 +239,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::AtomicRmw => implemented_in_isle(ctx),
 
-        Opcode::AtomicCas => {
-            let r_dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let mut r_addr = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-            let mut r_expected = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
-            let mut r_replacement = put_input_in_reg(ctx, inputs[2], NarrowValueMode::None);
-            let ty_access = ty.unwrap();
-            assert!(is_valid_atomic_transaction_ty(ty_access));
-
-            if isa_flags.use_lse() {
-                ctx.emit(Inst::gen_move(r_dst, r_expected, ty_access));
-                ctx.emit(Inst::AtomicCAS {
-                    rs: r_dst,
-                    rt: r_replacement,
-                    rn: r_addr,
-                    ty: ty_access,
-                });
-            } else {
-                // This is very similar to, but not identical to, the AtomicRmw case.  Note
-                // that the AtomicCASLoop sequence does its own masking, so we don't need to worry
-                // about zero-extending narrow (I8/I16/I32) values here.
-                // Make sure that all three args are in virtual regs.  See corresponding comment
-                // for `Opcode::AtomicRmw` above.
-                r_addr = ctx.ensure_in_vreg(r_addr, I64);
-                r_expected = ctx.ensure_in_vreg(r_expected, I64);
-                r_replacement = ctx.ensure_in_vreg(r_replacement, I64);
-                // Move the args to the preordained AtomicCASLoop input regs
-                ctx.emit(Inst::gen_move(Writable::from_reg(xreg(25)), r_addr, I64));
-                ctx.emit(Inst::gen_move(
-                    Writable::from_reg(xreg(26)),
-                    r_expected,
-                    I64,
-                ));
-                ctx.emit(Inst::gen_move(
-                    Writable::from_reg(xreg(28)),
-                    r_replacement,
-                    I64,
-                ));
-                // Now the AtomicCASLoop itself, implemented in the normal way, with an LL-SC loop
-                ctx.emit(Inst::AtomicCASLoop { ty: ty_access });
-                // And finally, copy the preordained AtomicCASLoop output reg to its destination.
-                ctx.emit(Inst::gen_move(r_dst, xreg(27), I64));
-                // Also, x24 and x28 are trashed.  `fn aarch64_get_regs` must mention that.
-            }
-        }
+        Opcode::AtomicCas => implemented_in_isle(ctx),
 
         Opcode::AtomicLoad => {
             let rt = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
@@ -661,10 +618,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             ctx.emit(Inst::Brk);
         }
 
-        Opcode::Trap | Opcode::ResumableTrap => {
-            let trap_code = ctx.data(insn).trap_code().unwrap();
-            ctx.emit(Inst::Udf { trap_code });
-        }
+        Opcode::Trap | Opcode::ResumableTrap => implemented_in_isle(ctx),
 
         Opcode::Trapif | Opcode::Trapff => {
             let trap_code = ctx.data(insn).trap_code().unwrap();
@@ -1400,56 +1354,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             });
         }
 
-        Opcode::IaddPairwise => {
-            let ty = ty.unwrap();
-            let lane_type = ty.lane_type();
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-
-            let mut match_long_pair = |ext_low_op, ext_high_op| -> Option<(VecRRPairLongOp, Reg)> {
-                if let Some(lhs) = maybe_input_insn(ctx, inputs[0], ext_low_op) {
-                    if let Some(rhs) = maybe_input_insn(ctx, inputs[1], ext_high_op) {
-                        let lhs_inputs = insn_inputs(ctx, lhs);
-                        let rhs_inputs = insn_inputs(ctx, rhs);
-                        let low = put_input_in_reg(ctx, lhs_inputs[0], NarrowValueMode::None);
-                        let high = put_input_in_reg(ctx, rhs_inputs[0], NarrowValueMode::None);
-                        if low == high {
-                            match (lane_type, ext_low_op) {
-                                (I16, Opcode::SwidenLow) => {
-                                    return Some((VecRRPairLongOp::Saddlp8, low))
-                                }
-                                (I32, Opcode::SwidenLow) => {
-                                    return Some((VecRRPairLongOp::Saddlp16, low))
-                                }
-                                (I16, Opcode::UwidenLow) => {
-                                    return Some((VecRRPairLongOp::Uaddlp8, low))
-                                }
-                                (I32, Opcode::UwidenLow) => {
-                                    return Some((VecRRPairLongOp::Uaddlp16, low))
-                                }
-                                _ => (),
-                            };
-                        }
-                    }
-                }
-                None
-            };
-
-            if let Some((op, rn)) = match_long_pair(Opcode::SwidenLow, Opcode::SwidenHigh) {
-                ctx.emit(Inst::VecRRPairLong { op, rd, rn });
-            } else if let Some((op, rn)) = match_long_pair(Opcode::UwidenLow, Opcode::UwidenHigh) {
-                ctx.emit(Inst::VecRRPairLong { op, rd, rn });
-            } else {
-                let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-                let rm = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
-                ctx.emit(Inst::VecRRR {
-                    alu_op: VecALUOp::Addp,
-                    rd,
-                    rn,
-                    rm,
-                    size: VectorSize::from_ty(ty),
-                });
-            }
-        }
+        Opcode::IaddPairwise => implemented_in_isle(ctx),
 
         Opcode::WideningPairwiseDotProductS => {
             let r_y = get_output_reg(ctx, outputs[0]).only_reg().unwrap();

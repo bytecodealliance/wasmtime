@@ -406,6 +406,7 @@ pub trait ABIMachineSpec {
     /// Generates extra unwind instructions for a new frame  for this
     /// architecture, whether the frame has a prologue sequence or not.
     fn gen_debug_frame_info(
+        _call_conv: isa::CallConv,
         _flags: &settings::Flags,
         _isa_flags: &Vec<settings::Value>,
     ) -> SmallInstVec<Self::I> {
@@ -428,6 +429,7 @@ pub trait ABIMachineSpec {
     /// contains the registers in a sorted order.
     fn get_clobbered_callee_saves(
         call_conv: isa::CallConv,
+        flags: &settings::Flags,
         regs: &[Writable<RealReg>],
     ) -> Vec<Writable<RealReg>>;
 
@@ -1224,7 +1226,8 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         }
         let mask = M::stack_align(self.call_conv) - 1;
         let total_stacksize = (total_stacksize + mask) & !mask; // 16-align the stack.
-        let clobbered_callee_saves = M::get_clobbered_callee_saves(self.call_conv, &self.clobbered);
+        let clobbered_callee_saves =
+            M::get_clobbered_callee_saves(self.call_conv, &self.flags, &self.clobbered);
         let mut insts = smallvec![];
 
         if !self.call_conv.extends_baldrdash() {
@@ -1236,7 +1239,9 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
                 self.fixed_frame_storage_size,
             );
 
-            insts.extend(M::gen_debug_frame_info(&self.flags, &self.isa_flags).into_iter());
+            insts.extend(
+                M::gen_debug_frame_info(self.call_conv, &self.flags, &self.isa_flags).into_iter(),
+            );
 
             if self.setup_frame {
                 // set up frame

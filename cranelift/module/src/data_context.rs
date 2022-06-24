@@ -2,7 +2,7 @@
 
 use cranelift_codegen::binemit::{Addend, CodeOffset, Reloc};
 use cranelift_codegen::entity::PrimaryMap;
-use cranelift_codegen::ir::{self, SourceLoc};
+use cranelift_codegen::ir;
 use cranelift_codegen::MachReloc;
 use std::borrow::ToOwned;
 use std::boxed::Box;
@@ -66,7 +66,6 @@ impl DataDescription {
             .map(move |&(offset, id)| MachReloc {
                 kind: pointer_reloc,
                 offset,
-                srcloc: SourceLoc::default(),
                 name: self.function_decls[id].clone(),
                 addend: 0,
             });
@@ -76,7 +75,6 @@ impl DataDescription {
             .map(move |&(offset, id, addend)| MachReloc {
                 kind: pointer_reloc,
                 offset,
-                srcloc: SourceLoc::default(),
                 name: self.data_decls[id].clone(),
                 addend,
             });

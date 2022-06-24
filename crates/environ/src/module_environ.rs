@@ -1,11 +1,11 @@
 use crate::module::{
     AnyfuncIndex, Initializer, MemoryInitialization, MemoryInitializer, MemoryPlan, Module,
-    ModuleType, TableInitializer, TablePlan, TypeTables,
+    ModuleType, TableInitializer, TablePlan,
 };
 use crate::{
     DataIndex, DefinedFuncIndex, ElemIndex, EntityIndex, EntityType, FuncIndex, Global,
-    GlobalIndex, GlobalInit, MemoryIndex, PrimaryMap, SignatureIndex, TableIndex,
-    TableInitialization, Tunables, TypeIndex, WasmError, WasmFuncType, WasmResult,
+    GlobalIndex, GlobalInit, MemoryIndex, ModuleTypesBuilder, PrimaryMap, SignatureIndex,
+    TableIndex, TableInitialization, Tunables, TypeIndex, WasmError, WasmFuncType, WasmResult,
 };
 use cranelift_entity::packed_option::ReservedValue;
 use std::borrow::Cow;
@@ -13,26 +13,23 @@ use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
 use std::path::PathBuf;
 use std::sync::Arc;
-use wasmparser::Type as WasmType;
 use wasmparser::{
-    DataKind, ElementItem, ElementKind, ExternalKind, FuncValidator, FunctionBody,
-    NameSectionReader, Naming, Operator, Parser, Payload, TypeDef, TypeRef, Validator,
-    ValidatorResources, WasmFeatures,
+    CustomSectionReader, DataKind, ElementItem, ElementKind, Encoding, ExternalKind, FuncValidator,
+    FunctionBody, NameSectionReader, Naming, Operator, Parser, Payload, Type, TypeRef, Validator,
+    ValidatorResources,
 };
 
 /// Object containing the standalone environment information.
-pub struct ModuleEnvironment<'data> {
+pub struct ModuleEnvironment<'a, 'data> {
     /// The current module being translated
     result: ModuleTranslation<'data>,
 
     /// Intern'd types for this entire translation, shared by all modules.
-    types: TypeTables,
-
-    interned_func_types: HashMap<WasmFuncType, SignatureIndex>,
+    types: &'a mut ModuleTypesBuilder,
 
     // Various bits and pieces of configuration
-    features: WasmFeatures,
-    tunables: Tunables,
+    validator: &'a mut Validator,
+    tunables: &'a Tunables,
 }
 
 /// The result of translating via `ModuleEnvironment`. Function bodies are not
@@ -133,67 +130,63 @@ pub struct WasmFileInfo {
 #[derive(Debug)]
 #[allow(missing_docs)]
 pub struct FunctionMetadata {
-    pub params: Box<[WasmType]>,
-    pub locals: Box<[(u32, WasmType)]>,
+    pub params: Box<[wasmparser::ValType]>,
+    pub locals: Box<[(u32, wasmparser::ValType)]>,
 }
 
-impl<'data> ModuleEnvironment<'data> {
+impl<'a, 'data> ModuleEnvironment<'a, 'data> {
     /// Allocates the environment data structures.
-    pub fn new(tunables: &Tunables, features: &WasmFeatures) -> Self {
+    pub fn new(
+        tunables: &'a Tunables,
+        validator: &'a mut Validator,
+        types: &'a mut ModuleTypesBuilder,
+    ) -> Self {
         Self {
             result: ModuleTranslation::default(),
-            types: Default::default(),
-            tunables: tunables.clone(),
-            features: *features,
-            interned_func_types: Default::default(),
+            types,
+            tunables,
+            validator,
         }
     }
 
     /// Translate a wasm module using this environment.
     ///
-    /// This consumes the `ModuleEnvironment` and produces a list of
-    /// `ModuleTranslation`s as well as a `TypeTables`. The list of module
-    /// translations corresponds to all wasm modules found in the input `data`.
-    /// Note that for MVP modules this will always be a list with one element,
-    /// but with the module linking proposal this may have many elements.
+    /// This function will translate the `data` provided with `parser`,
+    /// validating everything along the way with this environment's validator.
     ///
-    /// For the module linking proposal the top-level module is returned as the
-    /// first return value.
-    ///
-    /// The `TypeTables` structure returned contains intern'd versions of types
-    /// referenced from each module translation. This primarily serves as the
-    /// source of truth for module-linking use cases where modules can refer to
-    /// other module's types. All `SignatureIndex`, `ModuleTypeIndex`, and
-    /// `InstanceTypeIndex` values are resolved through the returned tables.
+    /// The result of translation, [`ModuleTranslation`], contains everything
+    /// necessary to compile functions afterwards as well as learn type
+    /// information about the module at runtime.
     pub fn translate(
         mut self,
+        parser: Parser,
         data: &'data [u8],
-    ) -> WasmResult<(ModuleTranslation<'data>, TypeTables)> {
-        let mut validator = Validator::new_with_features(self.features);
-
-        for payload in Parser::new(0).parse_all(data) {
-            self.translate_payload(&mut validator, payload?)?;
+    ) -> WasmResult<ModuleTranslation<'data>> {
+        for payload in parser.parse_all(data) {
+            self.translate_payload(payload?)?;
         }
 
-        Ok((self.result, self.types))
+        Ok(self.result)
     }
 
-    fn translate_payload(
-        &mut self,
-        validator: &mut Validator,
-        payload: Payload<'data>,
-    ) -> WasmResult<()> {
+    fn translate_payload(&mut self, payload: Payload<'data>) -> WasmResult<()> {
         match payload {
             Payload::Version {
                 num,
                 encoding,
                 range,
             } => {
-                validator.version(num, encoding, &range)?;
+                self.validator.version(num, encoding, &range)?;
+                match encoding {
+                    Encoding::Module => {}
+                    Encoding::Component => {
+                        return Err(WasmError::Unsupported(format!("component model")));
+                    }
+                }
             }
 
             Payload::End(offset) => {
-                validator.end(offset)?;
+                self.validator.end(offset)?;
 
                 // With the `escaped_funcs` set of functions finished
                 // we can calculate the set of signatures that are exported as
@@ -216,14 +209,14 @@ impl<'data> ModuleEnvironment<'data> {
             }
 
             Payload::TypeSection(types) => {
-                validator.type_section(&types)?;
+                self.validator.type_section(&types)?;
                 let num = usize::try_from(types.get_count()).unwrap();
                 self.result.module.types.reserve(num);
-                self.types.wasm_signatures.reserve(num);
+                self.types.reserve_wasm_signatures(num);
 
                 for ty in types {
                     match ty? {
-                        TypeDef::Func(wasm_func_ty) => {
+                        Type::Func(wasm_func_ty) => {
                             self.declare_type_func(wasm_func_ty.try_into()?)?;
                         }
                     }
@@ -231,7 +224,7 @@ impl<'data> ModuleEnvironment<'data> {
             }
 
             Payload::ImportSection(imports) => {
-                validator.import_section(&imports)?;
+                self.validator.import_section(&imports)?;
 
                 let cnt = usize::try_from(imports.get_count()).unwrap();
                 self.result.module.initializers.reserve(cnt);
@@ -247,9 +240,6 @@ impl<'data> ModuleEnvironment<'data> {
                             EntityType::Function(sig_index)
                         }
                         TypeRef::Memory(ty) => {
-                            if ty.shared {
-                                return Err(WasmError::Unsupported("shared memories".to_owned()));
-                            }
                             self.result.module.num_imported_memories += 1;
                             EntityType::Memory(ty.into())
                         }
@@ -270,7 +260,7 @@ impl<'data> ModuleEnvironment<'data> {
             }
 
             Payload::FunctionSection(functions) => {
-                validator.function_section(&functions)?;
+                self.validator.function_section(&functions)?;
 
                 let cnt = usize::try_from(functions.get_count()).unwrap();
                 self.result.module.functions.reserve_exact(cnt);
@@ -284,7 +274,7 @@ impl<'data> ModuleEnvironment<'data> {
             }
 
             Payload::TableSection(tables) => {
-                validator.table_section(&tables)?;
+                self.validator.table_section(&tables)?;
                 let cnt = usize::try_from(tables.get_count()).unwrap();
                 self.result.module.table_plans.reserve_exact(cnt);
 
@@ -296,23 +286,20 @@ impl<'data> ModuleEnvironment<'data> {
             }
 
             Payload::MemorySection(memories) => {
-                validator.memory_section(&memories)?;
+                self.validator.memory_section(&memories)?;
 
                 let cnt = usize::try_from(memories.get_count()).unwrap();
                 self.result.module.memory_plans.reserve_exact(cnt);
 
                 for entry in memories {
                     let memory = entry?;
-                    if memory.shared {
-                        return Err(WasmError::Unsupported("shared memories".to_owned()));
-                    }
                     let plan = MemoryPlan::for_memory(memory.into(), &self.tunables);
                     self.result.module.memory_plans.push(plan);
                 }
             }
 
             Payload::TagSection(tags) => {
-                validator.tag_section(&tags)?;
+                self.validator.tag_section(&tags)?;
 
                 // This feature isn't enabled at this time, so we should
                 // never get here.
@@ -320,7 +307,7 @@ impl<'data> ModuleEnvironment<'data> {
             }
 
             Payload::GlobalSection(globals) => {
-                validator.global_section(&globals)?;
+                self.validator.global_section(&globals)?;
 
                 let cnt = usize::try_from(globals.get_count()).unwrap();
                 self.result.module.globals.reserve_exact(cnt);
@@ -358,7 +345,7 @@ impl<'data> ModuleEnvironment<'data> {
             }
 
             Payload::ExportSection(exports) => {
-                validator.export_section(&exports)?;
+                self.validator.export_section(&exports)?;
 
                 let cnt = usize::try_from(exports.get_count()).unwrap();
                 self.result.module.exports.reserve(cnt);
@@ -386,7 +373,7 @@ impl<'data> ModuleEnvironment<'data> {
             }
 
             Payload::StartSection { func, range } => {
-                validator.start_section(func, &range)?;
+                self.validator.start_section(func, &range)?;
 
                 let func_index = FuncIndex::from_u32(func);
                 self.flag_func_escaped(func_index);
@@ -395,7 +382,7 @@ impl<'data> ModuleEnvironment<'data> {
             }
 
             Payload::ElementSection(elements) => {
-                validator.element_section(&elements)?;
+                self.validator.element_section(&elements)?;
 
                 for (index, entry) in elements.into_iter().enumerate() {
                     let wasmparser::Element {
@@ -488,14 +475,14 @@ impl<'data> ModuleEnvironment<'data> {
             }
 
             Payload::CodeSectionStart { count, range, .. } => {
-                validator.code_section_start(count, &range)?;
+                self.validator.code_section_start(count, &range)?;
                 let cnt = usize::try_from(count).unwrap();
                 self.result.function_body_inputs.reserve_exact(cnt);
                 self.result.debuginfo.wasm_file.code_section_offset = range.start as u64;
             }
 
             Payload::CodeSectionEntry(mut body) => {
-                let validator = validator.code_section_entry(&body)?;
+                let validator = self.validator.code_section_entry(&body)?;
                 let func_index =
                     self.result.code_index + self.result.module.num_imported_funcs as u32;
                 let func_index = FuncIndex::from_u32(func_index);
@@ -516,7 +503,7 @@ impl<'data> ModuleEnvironment<'data> {
                             params: sig.params().iter().cloned().map(|i| i.into()).collect(),
                         });
                 }
-                body.allow_memarg64(self.features.memory64);
+                body.allow_memarg64(self.validator.features().memory64);
                 self.result
                     .function_body_inputs
                     .push(FunctionBodyData { validator, body });
@@ -524,7 +511,7 @@ impl<'data> ModuleEnvironment<'data> {
             }
 
             Payload::DataSection(data) => {
-                validator.data_section(&data)?;
+                self.validator.data_section(&data)?;
 
                 let initializers = match &mut self.result.module.memory_initialization {
                     MemoryInitialization::Segmented(i) => i,
@@ -601,7 +588,7 @@ impl<'data> ModuleEnvironment<'data> {
             }
 
             Payload::DataCountSection { count, range } => {
-                validator.data_count_section(count, &range)?;
+                self.validator.data_count_section(count, &range)?;
 
                 // Note: the count passed in here is the *total* segment count
                 // There is no way to reserve for just the passive segments as
@@ -610,13 +597,8 @@ impl<'data> ModuleEnvironment<'data> {
                 // the passive count, do not reserve anything here.
             }
 
-            Payload::CustomSection {
-                name: "name",
-                data,
-                data_offset,
-                range: _,
-            } => {
-                let result = NameSectionReader::new(data, data_offset)
+            Payload::CustomSection(s) if s.name() == "name" => {
+                let result = NameSectionReader::new(s.data(), s.data_offset())
                     .map_err(|e| e.into())
                     .and_then(|s| self.name_section(s));
                 if let Err(e) = result {
@@ -624,14 +606,9 @@ impl<'data> ModuleEnvironment<'data> {
                 }
             }
 
-            Payload::CustomSection {
-                name: "webidl-bindings",
-                ..
-            }
-            | Payload::CustomSection {
-                name: "wasm-interface-types",
-                ..
-            } => {
+            Payload::CustomSection(s)
+                if s.name() == "webidl-bindings" || s.name() == "wasm-interface-types" =>
+            {
                 return Err(WasmError::Unsupported(
                     "\
 Support for interface types has temporarily been removed from `wasmtime`.
@@ -648,8 +625,8 @@ and for re-adding support for interface types you can see this issue:
                 ))
             }
 
-            Payload::CustomSection { name, data, .. } => {
-                self.register_dwarf_section(name, data);
+            Payload::CustomSection(s) => {
+                self.register_dwarf_section(&s);
             }
 
             // It's expected that validation will probably reject other
@@ -657,14 +634,15 @@ and for re-adding support for interface types you can see this issue:
             // component model. If, however, something gets past validation then
             // that's a bug in Wasmtime as we forgot to implement something.
             other => {
-                validator.payload(&other)?;
+                self.validator.payload(&other)?;
                 panic!("unimplemented section in wasm file {:?}", other);
             }
         }
         Ok(())
     }
 
-    fn register_dwarf_section(&mut self, name: &str, data: &'data [u8]) {
+    fn register_dwarf_section(&mut self, section: &CustomSectionReader<'data>) {
+        let name = section.name();
         if !name.starts_with(".debug_") {
             return;
         }
@@ -675,6 +653,7 @@ and for re-adding support for interface types you can see this issue:
         let info = &mut self.result.debuginfo;
         let dwarf = &mut info.dwarf;
         let endian = gimli::LittleEndian;
+        let data = section.data();
         let slice = gimli::EndianSlice::new(data, endian);
 
         match name {
@@ -761,16 +740,7 @@ and for re-adding support for interface types you can see this issue:
     }
 
     fn declare_type_func(&mut self, wasm: WasmFuncType) -> WasmResult<()> {
-        // Deduplicate wasm function signatures through `interned_func_types`,
-        // which also deduplicates across wasm modules with module linking.
-        let sig_index = match self.interned_func_types.get(&wasm) {
-            Some(idx) => *idx,
-            None => {
-                let sig_index = self.types.wasm_signatures.push(wasm.clone());
-                self.interned_func_types.insert(wasm, sig_index);
-                sig_index
-            }
-        };
+        let sig_index = self.types.wasm_func_type(wasm);
         self.result
             .module
             .types

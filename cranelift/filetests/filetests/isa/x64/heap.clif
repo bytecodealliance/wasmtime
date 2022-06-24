@@ -17,17 +17,17 @@ block0(v0: i32, v1: i64):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movl    %edi, %eax
-;   movq    8(%rsi), %rcx
-;   movq    %rax, %rdx
-;   addq    %rdx, $32768, %rdx
+;   movq    8(%rsi), %rdi
+;   movq    %rax, %rcx
+;   addq    %rcx, $32768, %rcx
 ;   jnb ; ud2 heap_oob ;
-;   cmpq    %rcx, %rdx
+;   cmpq    %rdi, %rcx
 ;   jbe     label1; j label2
 ; block1:
 ;   addq    %rax, 0(%rsi), %rax
-;   xorq    %r8, %r8, %r8
-;   cmpq    %rcx, %rdx
-;   cmovnbeq %r8, %rax, %rax
+;   xorq    %rdx, %rdx, %rdx
+;   cmpq    %rdi, %rcx
+;   cmovnbeq %rdx, %rax, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

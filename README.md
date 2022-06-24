@@ -62,29 +62,48 @@ Hello, world!
 
 ## Features
 
-* **Lightweight**. Wasmtime is a standalone runtime for WebAssembly that scales
-  with your needs. It fits on tiny chips as well as makes use of huge servers.
-  Wasmtime can be [embedded] into almost any application too.
-
 * **Fast**. Wasmtime is built on the optimizing [Cranelift] code generator to
-  quickly generate high-quality machine code at runtime.
+  quickly generate high-quality machine code either at runtime or
+  ahead-of-time. Wasmtime's runtime is also optimized for cases such as
+  efficient instantiation, low-overhead transitions between the embedder and
+  wasm, and scalability of concurrent instances.
 
-* **Configurable**. Whether you need to precompile your wasm ahead of time,
-  or interpret it at runtime, Wasmtime has you covered for all your
-  wasm-executing needs.
+* **[Secure]**. Wasmtime's development is strongly focused on the correctness of
+  its implementation with 24/7 fuzzing donated by [Google's OSS Fuzz],
+  leveraging Rust's API and runtime safety guarantees, careful design of
+  features and APIs through an [RFC process], a [security policy] in place
+  for when things go wrong, and a [release policy] for patching older versions
+  as well. We follow best practices for defense-in-depth and known
+  protections and mitigations for issues like Spectre. Finally, we're working
+  to push the state-of-the-art by collaborating with academic
+  researchers to formally verify critical parts of Wasmtime and Cranelift.
 
-* **WASI**. Wasmtime supports a rich set of APIs for interacting with the host
+* **[Configurable]**. Wastime supports a rich set of APIs and build time
+  configuration to provide many options such as further means of restricting
+  WebAssembly beyond its basic guarantees such as its CPU and Memory
+  consumption. Wasmtime also runs in tiny environments all the way up to massive
+  servers with many concurrent instances.
+
+* **[WASI]**. Wasmtime supports a rich set of APIs for interacting with the host
   environment through the [WASI standard](https://wasi.dev).
 
-* **Standards Compliant**. Wasmtime passes the [official WebAssembly test
+* **[Standards Compliant]**. Wasmtime passes the [official WebAssembly test
   suite](https://github.com/WebAssembly/testsuite), implements the [official C
   API of wasm](https://github.com/WebAssembly/wasm-c-api), and implements
   [future proposals to WebAssembly](https://github.com/WebAssembly/proposals) as
   well. Wasmtime developers are intimately engaged with the WebAssembly
   standards process all along the way too.
 
+[Wasmtime]: https://github.com/bytecodealliance/wasmtime
 [Cranelift]: https://github.com/bytecodealliance/wasmtime/blob/main/cranelift/README.md
-[embedded]: https://bytecodealliance.github.io/wasmtime/lang.html
+[Google's OSS Fuzz]: https://google.github.io/oss-fuzz/
+[security policy]: https://bytecodealliance.org/security
+[RFC process]: https://github.com/bytecodealliance/rfcs
+[release policy]: https://docs.wasmtime.dev/stability-release.html
+[Secure]: https://docs.wasmtime.dev/security.html
+[Configurable]: https://docs.rs/wasmtime/latest/wasmtime/struct.Config.html
+[WASI]: https://docs.rs/wasmtime-wasi/latest/wasmtime_wasi/
+[Standards Compliant]: https://docs.wasmtime.dev/stability-wasm-proposals-support.html
 
 ## Language Support
 

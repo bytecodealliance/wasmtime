@@ -3,47 +3,6 @@
 //! This crate provides an implementation of the `wasmtime_environ::Compiler`
 //! and `wasmtime_environ::CompilerBuilder` traits.
 
-// # How does Wasmtime prevent stack overflow?
-//
-// A few locations throughout the codebase link to this file to explain stack
-// overflow. To start off, let's take a look at stack overflow. Wasm code is
-// well-defined to have stack overflow being recoverable and raising a trap, so
-// we need to handle this somehow! There's also an added constraint where as an
-// embedder you frequently are running host-provided code called from wasm.
-// WebAssembly and native code currently share the same call stack, so you want
-// to make sure that your host-provided code will have enough call-stack
-// available to it.
-//
-// Given all that, the way that stack overflow is handled is by adding a
-// prologue check to all JIT functions for how much native stack is remaining.
-// The `VMContext` pointer is the first argument to all functions, and the first
-// field of this structure is `*const VMRuntimeLimits` and the first field of
-// that is the stack limit. Note that the stack limit in this case means "if the
-// stack pointer goes below this, trap". Each JIT function which consumes stack
-// space or isn't a leaf function starts off by loading the stack limit,
-// checking it against the stack pointer, and optionally traps.
-//
-// This manual check allows the embedder (us) to give wasm a relatively precise
-// amount of stack allocation. Using this scheme we reserve a chunk of stack
-// for wasm code relative from where wasm code was called. This ensures that
-// native code called by wasm should have native stack space to run, and the
-// numbers of stack spaces here should all be configurable for various
-// embeddings.
-//
-// Note that we do not consider each thread's stack guard page here. It's
-// considered that if you hit that you still abort the whole program. This
-// shouldn't happen most of the time because wasm is always stack-bound and
-// it's up to the embedder to bound its own native stack.
-//
-// So all-in-all, that's how we implement stack checks. Note that stack checks
-// cannot be disabled because it's a feature of core wasm semantics. This means
-// that all functions almost always have a stack check prologue, and it's up to
-// us to optimize away that cost as much as we can.
-//
-// For more information about the tricky bits of managing the reserved stack
-// size of wasm, see the implementation in `traphandlers.rs` in the
-// `update_stack_limit` function.
-
 use cranelift_codegen::binemit;
 use cranelift_codegen::ir;
 use cranelift_codegen::isa::{unwind::UnwindInfo, CallConv, TargetIsa};
@@ -51,7 +10,7 @@ use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{DefinedFuncIndex, FuncIndex, WasmFuncType, WasmType};
 use target_lexicon::CallingConvention;
 use wasmtime_environ::{
-    FilePos, FunctionInfo, InstructionAddressMap, ModuleTranslation, TrapInformation, TypeTables,
+    FilePos, FunctionInfo, InstructionAddressMap, ModuleTranslation, ModuleTypes, TrapInformation,
 };
 
 pub use builder::builder;
@@ -208,7 +167,7 @@ fn indirect_signature(isa: &dyn TargetIsa, wasm: &WasmFuncType) -> ir::Signature
 fn func_signature(
     isa: &dyn TargetIsa,
     translation: &ModuleTranslation,
-    types: &TypeTables,
+    types: &ModuleTypes,
     index: FuncIndex,
 ) -> ir::Signature {
     let func = &translation.module.functions[index];
@@ -217,7 +176,23 @@ fn func_signature(
         // then we can optimize this function to use the fastest calling
         // convention since it's purely an internal implementation detail of
         // the module itself.
-        Some(_idx) if !func.is_escaping() => CallConv::Fast,
+        Some(_idx) if !func.is_escaping() => {
+            let on_apple_aarch64 = isa
+                .triple()
+                .default_calling_convention()
+                .unwrap_or(CallingConvention::SystemV)
+                == CallingConvention::AppleAarch64;
+
+            if on_apple_aarch64 {
+                // FIXME: We need an Apple-specific calling convention, so that
+                // Cranelift's ABI implementation generates unwinding directives
+                // about pointer authentication usage, so we can't just use
+                // `CallConv::Fast`.
+                CallConv::WasmtimeAppleAarch64
+            } else {
+                CallConv::Fast
+            }
+        }
 
         // ... otherwise if it's an imported function or if it's a possibly
         // exported function then we use the default ABI wasmtime would

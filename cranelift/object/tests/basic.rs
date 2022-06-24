@@ -199,9 +199,7 @@ fn libcall_function() {
 }
 
 #[test]
-#[should_panic(
-    expected = "Result::unwrap()` on an `Err` value: Backend(Symbol \"function\\u{0}with\\u{0}nul\\u{0}bytes\" has a null byte, which is disallowed"
-)]
+#[should_panic(expected = "has a null byte, which is disallowed")]
 fn reject_nul_byte_symbol_for_func() {
     let flag_builder = settings::builder();
     let isa_builder = cranelift_codegen::isa::lookup_by_name("x86_64-unknown-linux-gnu").unwrap();
@@ -223,9 +221,7 @@ fn reject_nul_byte_symbol_for_func() {
 }
 
 #[test]
-#[should_panic(
-    expected = "Result::unwrap()` on an `Err` value: Backend(Symbol \"data\\u{0}with\\u{0}nul\\u{0}bytes\" has a null byte, which is disallowed"
-)]
+#[should_panic(expected = "has a null byte, which is disallowed")]
 fn reject_nul_byte_symbol_for_data() {
     let flag_builder = settings::builder();
     let isa_builder = cranelift_codegen::isa::lookup_by_name("x86_64-unknown-linux-gnu").unwrap();

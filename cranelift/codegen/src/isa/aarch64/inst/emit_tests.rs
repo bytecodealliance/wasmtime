@@ -41,6 +41,14 @@ fn test_aarch64_binemit() {
     insns.push((Inst::Nop0, "", "nop-zero-len"));
     insns.push((Inst::Nop4, "1F2003D5", "nop"));
     insns.push((
+        Inst::Udf {
+            use_allocated_encoding: false,
+            trap_code: TrapCode::Interrupt,
+        },
+        "0000A0D4",
+        "udf",
+    ));
+    insns.push((
         Inst::AluRRR {
             alu_op: ALUOp::Add,
             size: OperandSize::Size32,
@@ -5124,7 +5132,7 @@ fn test_aarch64_binemit() {
             trap_code: TrapCode::Interrupt,
             kind: CondBrKind::NotZero(xreg(8)),
         },
-        "480000B40000A0D4",
+        "480000B41FC10000",
         "cbz x8, 8 ; udf",
     ));
     insns.push((
@@ -5132,7 +5140,7 @@ fn test_aarch64_binemit() {
             trap_code: TrapCode::Interrupt,
             kind: CondBrKind::Zero(xreg(8)),
         },
-        "480000B50000A0D4",
+        "480000B51FC10000",
         "cbnz x8, 8 ; udf",
     ));
     insns.push((
@@ -5140,7 +5148,7 @@ fn test_aarch64_binemit() {
             trap_code: TrapCode::Interrupt,
             kind: CondBrKind::Cond(Cond::Ne),
         },
-        "400000540000A0D4",
+        "400000541FC10000",
         "b.eq 8 ; udf",
     ));
     insns.push((
@@ -5148,7 +5156,7 @@ fn test_aarch64_binemit() {
             trap_code: TrapCode::Interrupt,
             kind: CondBrKind::Cond(Cond::Eq),
         },
-        "410000540000A0D4",
+        "410000541FC10000",
         "b.ne 8 ; udf",
     ));
     insns.push((
@@ -5156,7 +5164,7 @@ fn test_aarch64_binemit() {
             trap_code: TrapCode::Interrupt,
             kind: CondBrKind::Cond(Cond::Lo),
         },
-        "420000540000A0D4",
+        "420000541FC10000",
         "b.hs 8 ; udf",
     ));
     insns.push((
@@ -5164,7 +5172,7 @@ fn test_aarch64_binemit() {
             trap_code: TrapCode::Interrupt,
             kind: CondBrKind::Cond(Cond::Hs),
         },
-        "430000540000A0D4",
+        "430000541FC10000",
         "b.lo 8 ; udf",
     ));
     insns.push((
@@ -5172,7 +5180,7 @@ fn test_aarch64_binemit() {
             trap_code: TrapCode::Interrupt,
             kind: CondBrKind::Cond(Cond::Pl),
         },
-        "440000540000A0D4",
+        "440000541FC10000",
         "b.mi 8 ; udf",
     ));
     insns.push((
@@ -5180,7 +5188,7 @@ fn test_aarch64_binemit() {
             trap_code: TrapCode::Interrupt,
             kind: CondBrKind::Cond(Cond::Mi),
         },
-        "450000540000A0D4",
+        "450000541FC10000",
         "b.pl 8 ; udf",
     ));
     insns.push((
@@ -5188,7 +5196,7 @@ fn test_aarch64_binemit() {
             trap_code: TrapCode::Interrupt,
             kind: CondBrKind::Cond(Cond::Vc),
         },
-        "460000540000A0D4",
+        "460000541FC10000",
         "b.vs 8 ; udf",
     ));
     insns.push((
@@ -5196,7 +5204,7 @@ fn test_aarch64_binemit() {
             trap_code: TrapCode::Interrupt,
             kind: CondBrKind::Cond(Cond::Vs),
         },
-        "470000540000A0D4",
+        "470000541FC10000",
         "b.vc 8 ; udf",
     ));
     insns.push((
@@ -5204,7 +5212,7 @@ fn test_aarch64_binemit() {
             trap_code: TrapCode::Interrupt,
             kind: CondBrKind::Cond(Cond::Ls),
         },
-        "480000540000A0D4",
+        "480000541FC10000",
         "b.hi 8 ; udf",
     ));
     insns.push((
@@ -5212,7 +5220,7 @@ fn test_aarch64_binemit() {
             trap_code: TrapCode::Interrupt,
             kind: CondBrKind::Cond(Cond::Hi),
         },
-        "490000540000A0D4",
+        "490000541FC10000",
         "b.ls 8 ; udf",
     ));
     insns.push((
@@ -5220,7 +5228,7 @@ fn test_aarch64_binemit() {
             trap_code: TrapCode::Interrupt,
             kind: CondBrKind::Cond(Cond::Lt),
         },
-        "4A0000540000A0D4",
+        "4A0000541FC10000",
         "b.ge 8 ; udf",
     ));
     insns.push((
@@ -5228,7 +5236,7 @@ fn test_aarch64_binemit() {
             trap_code: TrapCode::Interrupt,
             kind: CondBrKind::Cond(Cond::Ge),
         },
-        "4B0000540000A0D4",
+        "4B0000541FC10000",
         "b.lt 8 ; udf",
     ));
     insns.push((
@@ -5236,7 +5244,7 @@ fn test_aarch64_binemit() {
             trap_code: TrapCode::Interrupt,
             kind: CondBrKind::Cond(Cond::Le),
         },
-        "4C0000540000A0D4",
+        "4C0000541FC10000",
         "b.gt 8 ; udf",
     ));
     insns.push((
@@ -5244,7 +5252,7 @@ fn test_aarch64_binemit() {
             trap_code: TrapCode::Interrupt,
             kind: CondBrKind::Cond(Cond::Gt),
         },
-        "4D0000540000A0D4",
+        "4D0000541FC10000",
         "b.le 8 ; udf",
     ));
     insns.push((
@@ -5252,7 +5260,7 @@ fn test_aarch64_binemit() {
             trap_code: TrapCode::Interrupt,
             kind: CondBrKind::Cond(Cond::Nv),
         },
-        "4E0000540000A0D4",
+        "4E0000541FC10000",
         "b.al 8 ; udf",
     ));
     insns.push((
@@ -5260,7 +5268,7 @@ fn test_aarch64_binemit() {
             trap_code: TrapCode::Interrupt,
             kind: CondBrKind::Cond(Cond::Al),
         },
-        "4F0000540000A0D4",
+        "4F0000541FC10000",
         "b.nv 8 ; udf",
     ));
 

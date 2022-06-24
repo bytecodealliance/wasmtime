@@ -4,7 +4,7 @@
 ))]
 mod tests {
     use anyhow::Result;
-    use rustix::io::{mprotect, MprotectFlags};
+    use rustix::mm::{mprotect, MprotectFlags};
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
     use wasmtime::unix::StoreExt;

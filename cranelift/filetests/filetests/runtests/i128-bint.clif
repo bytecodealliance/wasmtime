@@ -1,12 +1,85 @@
+test interpret
 test run
 set enable_llvm_abi_extensions=true
 target aarch64
 target x86_64
 
-function %bint_b8_i128() -> i128 {
+function %bint_b1_i128_true() -> i128 {
+block0:
+  v0 = bconst.b1 true
+  v1 = bint.i128 v0
+  return v1
+}
+; run: %bint_b1_i128_tru() == 1
+
+function %bint_b1_i128_false() -> i128 {
+block0:
+  v0 = bconst.b1 false
+  v1 = bint.i128 v0
+  return v1
+}
+; run: %bint_b1_i128_fal() == 0
+
+function %bint_b8_i128_true() -> i128 {
 block0:
   v0 = bconst.b8 true
   v1 = bint.i128 v0
   return v1
 }
-; run: %bint_b8_i128() == 1
+; run: %bint_b8_i128_tru() == 1
+
+function %bint_b8_i128_false() -> i128 {
+block0:
+  v0 = bconst.b8 false
+  v1 = bint.i128 v0
+  return v1
+}
+; run: %bint_b8_i128_fal() == 0
+
+function %bint_b16_i128_true() -> i128 {
+block0:
+  v0 = bconst.b16 true
+  v1 = bint.i128 v0
+  return v1
+}
+; run: %bint_b16_i128_tr() == 1
+
+function %bint_b16_i128_false() -> i128 {
+block0:
+  v0 = bconst.b16 false
+  v1 = bint.i128 v0
+  return v1
+}
+; run: %bint_b16_i128_fa() == 0
+
+function %bint_b32_i128_true() -> i128 {
+block0:
+  v0 = bconst.b32 true
+  v1 = bint.i128 v0
+  return v1
+}
+; run: %bint_b32_i128_tr() == 1
+
+function %bint_b32_i128_false() -> i128 {
+block0:
+  v0 = bconst.b32 false
+  v1 = bint.i128 v0
+  return v1
+}
+; run: %bint_b32_i128_fa() == 0
+
+function %bint_b64_i128_true() -> i128 {
+block0:
+  v0 = bconst.b64 true
+  v1 = bint.i128 v0
+  return v1
+}
+; run: %bint_b64_i128_tr() == 1
+
+function %bint_b64_i128_false() -> i128 {
+block0:
+  v0 = bconst.b64 false
+  v1 = bint.i128 v0
+  return v1
+}
+; run: %bint_b64_i128_fa() == 0

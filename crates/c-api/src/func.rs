@@ -209,8 +209,12 @@ pub type wasmtime_func_callback_t = extern "C" fn(
     usize,
 ) -> Option<Box<wasm_trap_t>>;
 
-pub type wasmtime_func_unchecked_callback_t =
-    extern "C" fn(*mut c_void, *mut wasmtime_caller_t, *mut ValRaw) -> Option<Box<wasm_trap_t>>;
+pub type wasmtime_func_unchecked_callback_t = extern "C" fn(
+    *mut c_void,
+    *mut wasmtime_caller_t,
+    *mut ValRaw,
+    usize,
+) -> Option<Box<wasm_trap_t>>;
 
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_func_new(
@@ -265,7 +269,7 @@ pub(crate) unsafe fn c_callback_to_rust_fn(
 
         // Translate the `wasmtime_val_t` results into the `results` space
         for (i, result) in out_results.iter().enumerate() {
-            results[i] = unsafe { result.to_val() };
+            results[i] = result.to_val();
         }
 
         // Move our `vals` storage back into the store now that we no longer
@@ -295,12 +299,12 @@ pub(crate) unsafe fn c_unchecked_callback_to_rust_fn(
     callback: wasmtime_func_unchecked_callback_t,
     data: *mut c_void,
     finalizer: Option<extern "C" fn(*mut std::ffi::c_void)>,
-) -> impl Fn(Caller<'_, crate::StoreData>, *mut ValRaw) -> Result<(), Trap> {
+) -> impl Fn(Caller<'_, crate::StoreData>, &mut [ValRaw]) -> Result<(), Trap> {
     let foreign = crate::ForeignData { data, finalizer };
     move |caller, values| {
         drop(&foreign); // move entire foreign into this closure
         let mut caller = wasmtime_caller_t { caller };
-        match callback(foreign.data, &mut caller, values) {
+        match callback(foreign.data, &mut caller, values.as_mut_ptr(), values.len()) {
             None => Ok(()),
             Some(trap) => Err(trap.trap),
         }

@@ -39,13 +39,13 @@ block0(v0: f64, v1: i64):
 ;   movsd   0(%rdi), %xmm12
 ;   ucomisd %xmm12, %xmm0
 ;   setnp   %al
-;   setz    %r8b
-;   andl    %eax, %r8d, %eax
+;   setz    %dl
+;   andl    %eax, %edx, %eax
 ;   andq    %rax, $1, %rax
 ;   ucomisd %xmm0, %xmm12
-;   movdqa  %xmm0, %xmm6
-;   mov z, sd; j%xmm6 $next; mov%xmm0 %xmm0, %xmm0; $next: 
-;   mov np, sd; j%xmm6 $next; mov%xmm0 %xmm0, %xmm0; $next: 
+;   movdqa  %xmm0, %xmm5
+;   mov z, sd; j%xmm5 $next; mov%xmm0 %xmm0, %xmm0; $next: 
+;   mov np, sd; j%xmm5 $next; mov%xmm0 %xmm0, %xmm0; $next: 
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

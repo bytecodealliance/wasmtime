@@ -1,0 +1,299 @@
+;; See https://github.com/bytecodealliance/wasmtime/issues/4234.
+
+test compile
+target x86_64
+
+function u0:31(i64, i32, i32, i8, i8) -> i32, i32 system_v {
+    ss0 = explicit_slot 16
+    ss1 = explicit_slot 16
+    ss2 = explicit_slot 16
+    ss3 = explicit_slot 16
+    ss4 = explicit_slot 16
+    ss5 = explicit_slot 16
+    ss6 = explicit_slot 48
+    ss7 = explicit_slot 48
+    ss8 = explicit_slot 48
+    gv0 = symbol colocated u1:29
+    gv1 = symbol colocated u1:30
+    gv2 = symbol colocated u1:31
+    gv3 = symbol colocated u1:32
+    gv4 = symbol colocated u1:33
+    gv5 = symbol colocated u1:34
+    gv6 = symbol colocated u1:35
+    gv7 = symbol colocated u1:36
+    gv8 = symbol colocated u1:37
+    sig0 = (i64 sret, i64, i64, i64, i64) system_v
+    sig1 = (i64 sret, i64, i64, i64, i64) system_v
+    sig2 = (i64, i64) system_v
+    sig3 = (i64 sret, i64, i64, i64, i64) system_v
+    sig4 = (i64, i64) system_v
+    sig5 = (i64, i64) system_v
+    fn0 = colocated u0:11 sig0
+    fn1 = colocated u0:11 sig1
+    fn2 = u0:110 sig2
+    fn3 = colocated u0:11 sig3
+    fn4 = u0:110 sig4
+    fn5 = u0:110 sig5
+    jt0 = jump_table [block2, block4, block5, block6, block7]
+
+                                block0(v0: i64, v1: i32, v2: i32, v3: i8, v4: i8):
+                                    v34 -> v0
+                                    v40 -> v0
+                                    v46 -> v0
+                                    v52 -> v0
+                                    v58 -> v0
+                                    v64 -> v0
+                                    v70 -> v0
+                                    v76 -> v0
+                                    v82 -> v0
+                                    v35 -> v1
+                                    v41 -> v1
+                                    v47 -> v1
+                                    v53 -> v1
+                                    v59 -> v1
+                                    v65 -> v1
+                                    v71 -> v1
+                                    v77 -> v1
+                                    v83 -> v1
+                                    v36 -> v2
+                                    v42 -> v2
+                                    v48 -> v2
+                                    v54 -> v2
+                                    v60 -> v2
+                                    v66 -> v2
+                                    v72 -> v2
+                                    v78 -> v2
+                                    v84 -> v2
+                                    stack_store v3, ss1
+                                    stack_store v4, ss2
+                                    jump block1
+
+                                block1:
+@0002                               v5 = stack_load.i8 ss1
+@0002                               stack_store v5, ss4
+@0003                               v6 = stack_load.i8 ss2
+@0003                               stack_store v6, ss5
+@0001                               v7 = stack_load.i8 ss4
+@0001                               stack_store v7, ss3
+@0001                               v8 = stack_load.i8 ss5
+@0001                               stack_store v8, ss3+1
+@0001                               v9 = stack_load.i8 ss3
+@0001                               v10 = uextend.i64 v9
+@0005                               jump block37
+
+                                block37:
+@0005                               br_table.i64 v10, block36, jt0
+
+                                block2:
+@0001                               v11 = stack_load.i8 ss3+1
+@0001                               v12 = uextend.i64 v11
+@0005                               brz v12, block15
+@0005                               jump block3
+
+                                block3:
+@0001                               v13 = stack_load.i8 ss3+1
+@0001                               v14 = uextend.i64 v13
+@0005                               v15 = icmp_imm eq v14, 3
+@0005                               brnz v15, block27
+@0005                               jump block38
+
+                                block38:
+@0005                               v16 = icmp_imm.i64 eq v14, 1
+@0005                               brnz v16, block29
+@0005                               jump block8
+
+                                block4:
+@0001                               v17 = stack_load.i8 ss3+1
+@0001                               v18 = uextend.i64 v17
+@0005                               brz v18, block11
+@0005                               jump block3
+
+                                block5:
+@0001                               v19 = stack_load.i8 ss3+1
+@0001                               v20 = uextend.i64 v19
+@0005                               v21 = icmp_imm eq v20, 2
+@0005                               brnz v21, block9
+@0005                               jump block39
+
+                                block39:
+@0005                               brz.i64 v20, block19
+@0005                               jump block3
+
+                                block6:
+@0001                               v22 = stack_load.i8 ss3+1
+@0001                               v23 = uextend.i64 v22
+@0005                               v24 = icmp_imm eq v23, 2
+@0005                               brnz v24, block13
+@0005                               jump block40
+
+                                block40:
+@0005                               brz.i64 v23, block21
+@0005                               jump block3
+
+                                block7:
+@0001                               v25 = stack_load.i8 ss3+1
+@0001                               v26 = uextend.i64 v25
+@0005                               v27 = icmp_imm eq v26, 4
+@0005                               brnz v27, block17
+@0005                               jump block41
+
+                                block41:
+@0005                               v28 = icmp_imm.i64 eq v26, 2
+@0005                               brnz v28, block25
+@0005                               jump block42
+
+                                block42:
+@0005                               brz.i64 v26, block23
+@0005                               jump block3
+
+                                block8:
+@0007                               v29 = global_value.i64 gv0
+@0007                               v30 = iconst.i64 1
+@0006                               v31 = global_value.i64 gv1
+@0006                               v32 = iconst.i64 0
+@0006                               v33 = stack_addr.i64 ss8
+@0006                               call fn0(v33, v29, v30, v31, v32)
+@0006                               jump block31
+
+                                block9:
+@000d                               v37 = atomic_cas.i32 v34, v35, v36
+@000d                               v38 = icmp eq v37, v35
+@000d                               v39 = bint.i8 v38
+@000d                               jump block10
+
+                                block10:
+@000e                               jump block32(v37, v39)
+
+                                block11:
+@0012                               v43 = atomic_cas.i32 v40, v41, v42
+@0012                               v44 = icmp eq v43, v41
+@0012                               v45 = bint.i8 v44
+@0012                               jump block12
+
+                                block12:
+@0013                               jump block32(v43, v45)
+
+                                block13:
+@0017                               v49 = atomic_cas.i32 v46, v47, v48
+@0017                               v50 = icmp eq v49, v47
+@0017                               v51 = bint.i8 v50
+@0017                               jump block14
+
+                                block14:
+@0018                               jump block32(v49, v51)
+
+                                block15:
+@001c                               v55 = atomic_cas.i32 v52, v53, v54
+@001c                               v56 = icmp eq v55, v53
+@001c                               v57 = bint.i8 v56
+@001c                               jump block16
+
+                                block16:
+@001d                               jump block32(v55, v57)
+
+                                block17:
+@0021                               v61 = atomic_cas.i32 v58, v59, v60
+@0021                               v62 = icmp eq v61, v59
+@0021                               v63 = bint.i8 v62
+@0021                               jump block18
+
+                                block18:
+@0022                               jump block32(v61, v63)
+
+                                block19:
+@0026                               v67 = atomic_cas.i32 v64, v65, v66
+@0026                               v68 = icmp eq v67, v65
+@0026                               v69 = bint.i8 v68
+@0026                               jump block20
+
+                                block20:
+@0027                               jump block32(v67, v69)
+
+                                block21:
+@002b                               v73 = atomic_cas.i32 v70, v71, v72
+@002b                               v74 = icmp eq v73, v71
+@002b                               v75 = bint.i8 v74
+@002b                               jump block22
+
+                                block22:
+@002c                               jump block32(v73, v75)
+
+                                block23:
+@0030                               v79 = atomic_cas.i32 v76, v77, v78
+@0030                               v80 = icmp eq v79, v77
+@0030                               v81 = bint.i8 v80
+@0030                               jump block24
+
+                                block24:
+@0031                               jump block32(v79, v81)
+
+                                block25:
+@0035                               v85 = atomic_cas.i32 v82, v83, v84
+@0035                               v86 = icmp eq v85, v83
+@0035                               v87 = bint.i8 v86
+@0035                               jump block26
+
+                                block26:
+@0036                               jump block32(v85, v87)
+
+                                block27:
+@0038                               v88 = global_value.i64 gv2
+@0038                               v89 = iconst.i64 1
+@0037                               v90 = global_value.i64 gv3
+@0037                               v91 = iconst.i64 0
+@0037                               v92 = stack_addr.i64 ss6
+@0037                               call fn1(v92, v88, v89, v90, v91)
+@0037                               jump block28
+
+                                block28 cold:
+@003b                               v93 = global_value.i64 gv4
+@003b                               v94 = stack_addr.i64 ss6
+@003b                               call fn2(v94, v93)
+@003b                               trap unreachable
+
+                                block29:
+@003d                               v95 = global_value.i64 gv5
+@003d                               v96 = iconst.i64 1
+@003c                               v97 = global_value.i64 gv6
+@003c                               v98 = iconst.i64 0
+@003c                               v99 = stack_addr.i64 ss7
+@003c                               call fn3(v99, v95, v96, v97, v98)
+@003c                               jump block30
+
+                                block30 cold:
+@0040                               v100 = global_value.i64 gv7
+@0040                               v101 = stack_addr.i64 ss7
+@0040                               call fn4(v101, v100)
+@0040                               trap unreachable
+
+                                block31 cold:
+@0041                               v102 = global_value.i64 gv8
+@0041                               v103 = stack_addr.i64 ss8
+@0041                               call fn5(v103, v102)
+@0041                               trap unreachable
+
+                                block32(v104: i32, v105: i8):
+                                    v106 -> v104
+                                    v110 -> v104
+@0045                               brz v105, block34
+@0045                               jump block33
+
+                                block33:
+@0048                               stack_store.i32 v106, ss0+4
+@0048                               v107 = iconst.i32 0
+@0048                               stack_store v107, ss0
+@004a                               v108 = stack_load.i32 ss0
+@004a                               v109 = stack_load.i32 ss0+4
+@004a                               return v108, v109
+
+                                block34:
+@004c                               stack_store.i32 v110, ss0+4
+@004c                               v111 = iconst.i32 1
+@004c                               stack_store v111, ss0
+@004a                               v112 = stack_load.i32 ss0
+@004a                               v113 = stack_load.i32 ss0+4
+@004a                               return v112, v113
+
+                                block36:
+@0005                               trap unreachable
+}

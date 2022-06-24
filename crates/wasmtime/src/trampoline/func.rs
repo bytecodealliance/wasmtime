@@ -12,8 +12,8 @@ use wasmtime_environ::{
 use wasmtime_jit::{CodeMemory, ProfilingAgent};
 use wasmtime_runtime::{
     Imports, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
-    OnDemandInstanceAllocator, StorePtr, VMContext, VMFunctionBody, VMSharedSignatureIndex,
-    VMTrampoline,
+    OnDemandInstanceAllocator, StorePtr, VMContext, VMFunctionBody, VMOpaqueContext,
+    VMSharedSignatureIndex, VMTrampoline,
 };
 
 struct TrampolineState<F> {
@@ -23,11 +23,12 @@ struct TrampolineState<F> {
 }
 
 unsafe extern "C" fn stub_fn<F>(
-    vmctx: *mut VMContext,
+    vmctx: *mut VMOpaqueContext,
     caller_vmctx: *mut VMContext,
     values_vec: *mut ValRaw,
+    values_vec_len: usize,
 ) where
-    F: Fn(*mut VMContext, *mut ValRaw) -> Result<(), Trap> + 'static,
+    F: Fn(*mut VMContext, &mut [ValRaw]) -> Result<(), Trap> + 'static,
 {
     // Here we are careful to use `catch_unwind` to ensure Rust panics don't
     // unwind past us. The primary reason for this is that Rust considers it UB
@@ -43,12 +44,14 @@ unsafe extern "C" fn stub_fn<F>(
     // have any. To prevent leaks we avoid having any local destructors by
     // avoiding local variables.
     let result = panic::catch_unwind(AssertUnwindSafe(|| {
+        let vmctx = VMContext::from_opaque(vmctx);
         // Double-check ourselves in debug mode, but we control
         // the `Any` here so an unsafe downcast should also
         // work.
         let state = (*vmctx).host_state();
         debug_assert!(state.is::<TrampolineState<F>>());
         let state = &*(state as *const _ as *const TrampolineState<F>);
+        let values_vec = std::slice::from_raw_parts_mut(values_vec, values_vec_len);
         (state.func)(caller_vmctx, values_vec)
     }));
 
@@ -109,7 +112,7 @@ pub fn create_function<F>(
     engine: &Engine,
 ) -> Result<(InstanceHandle, VMTrampoline)>
 where
-    F: Fn(*mut VMContext, *mut ValRaw) -> Result<(), Trap> + Send + Sync + 'static,
+    F: Fn(*mut VMContext, &mut [ValRaw]) -> Result<(), Trap> + Send + Sync + 'static,
 {
     let mut obj = engine.compiler().object()?;
     let (t1, t2) = engine.compiler().emit_trampoline_obj(
@@ -124,7 +127,7 @@ where
     let mut code_memory = CodeMemory::new(obj);
     let code = code_memory.publish()?;
 
-    register_trampolines(engine.config().profiler.as_ref(), &code.obj);
+    register_trampolines(engine.profiler(), &code.obj);
 
     // Extract the host/wasm trampolines from the results of compilation since
     // we know their start/length.

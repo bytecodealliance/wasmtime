@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-cache"
-version = "0.38.0"
+version = "0.39.0"
 authors = ["The Wasmtime Project Developers"]
 description = "Support for automatic module caching with Wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"
@@ -24,7 +24,7 @@ zstd = { version = "0.11.1", default-features = false }
 winapi = "0.3.7"
 
 [target.'cfg(not(target_os = "windows"))'.dependencies]
-rustix = "0.33.7"
+rustix = { version = "0.35.6", features = ["process"] }
 
 [dev-dependencies]
 filetime = "0.2.7"

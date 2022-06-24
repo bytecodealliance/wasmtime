@@ -1,6 +1,90 @@
+test interpret
 test run
 target aarch64
 target x86_64
+
+function %bint_b1_i8_true() -> i8 {
+block0:
+  v0 = bconst.b1 true
+  v1 = bint.i8 v0
+  return v1
+}
+; run: %bint_b1_i8_true() == 1
+
+function %bint_b1_i8_false() -> i8 {
+block0:
+  v0 = bconst.b1 false
+  v1 = bint.i8 v0
+  return v1
+}
+; run: %bint_b1_i8_false() == 0
+
+function %bint_b1_i16_true() -> i16 {
+block0:
+  v0 = bconst.b1 true
+  v1 = bint.i16 v0
+  return v1
+}
+; run: %bint_b1_i16_true() == 1
+
+function %bint_b1_i16_false() -> i16 {
+block0:
+  v0 = bconst.b1 false
+  v1 = bint.i16 v0
+  return v1
+}
+; run: %bint_b1_i16_fals() == 0
+
+function %bint_b1_i32_true() -> i32 {
+block0:
+  v0 = bconst.b1 true
+  v1 = bint.i32 v0
+  return v1
+}
+; run: %bint_b1_i32_true() == 1
+
+function %bint_b1_i32_false() -> i32 {
+block0:
+  v0 = bconst.b1 false
+  v1 = bint.i32 v0
+  return v1
+}
+; run: %bint_b1_i32_fals() == 0
+
+function %bint_b1_i64_true() -> i64 {
+block0:
+  v0 = bconst.b1 true
+  v1 = bint.i64 v0
+  return v1
+}
+; run: %bint_b1_i64_true() == 1
+
+function %bint_b1_i64_false() -> i64 {
+block0:
+  v0 = bconst.b1 false
+  v1 = bint.i64 v0
+  return v1
+}
+; run: %bint_b1_i64_fals() == 0
+
+
+
+
+function %bint_b8_i8_true() -> i8 {
+block0:
+  v0 = bconst.b8 true
+  v1 = bint.i8 v0
+  return v1
+}
+; run: %bint_b8_i8_true() == 1
+
+function %bint_b8_i8_false() -> i8 {
+block0:
+  v0 = bconst.b8 false
+  v1 = bint.i8 v0
+  return v1
+}
+; run: %bint_b8_i8_false() == 0
 
 function %bint_b8_i16_true() -> i16 {
 block0:
@@ -10,6 +94,65 @@ block0:
 }
 ; run: %bint_b8_i16_true() == 1
 
+function %bint_b8_i16_false() -> i16 {
+block0:
+  v0 = bconst.b8 false
+  v1 = bint.i16 v0
+  return v1
+}
+; run: %bint_b8_i16_fals() == 0
+
+function %bint_b8_i32_true() -> i32 {
+block0:
+  v0 = bconst.b8 true
+  v1 = bint.i32 v0
+  return v1
+}
+; run: %bint_b8_i32_true() == 1
+
+function %bint_b8_i32_false() -> i32 {
+block0:
+  v0 = bconst.b8 false
+  v1 = bint.i32 v0
+  return v1
+}
+; run: %bint_b8_i32_fals() == 0
+
+function %bint_b8_i64_true() -> i64 {
+block0:
+  v0 = bconst.b8 true
+  v1 = bint.i64 v0
+  return v1
+}
+; run: %bint_b8_i64_true() == 1
+
+function %bint_b8_i64_false() -> i64 {
+block0:
+  v0 = bconst.b8 false
+  v1 = bint.i64 v0
+  return v1
+}
+; run: %bint_b8_i64_fals() == 0
+
+
+
+
+
+function %bint_b16_i8_true() -> i8 {
+block0:
+  v0 = bconst.b16 true
+  v1 = bint.i8 v0
+  return v1
+}
+; run: %bint_b16_i8_true() == 1
+
+function %bint_b16_i8_false() -> i8 {
+block0:
+  v0 = bconst.b16 false
+  v1 = bint.i8 v0
+  return v1
+}
+; run: %bint_b16_i8_fals() == 0
 
 function %bint_b16_i16_true() -> i16 {
 block0:
@@ -17,16 +160,7 @@ block0:
   v1 = bint.i16 v0
   return v1
 }
-; run: %bint_b16_i16_true() == 1
-
-function %bint_b8_i16_false() -> i16 {
-block0:
-  v0 = bconst.b8 false
-  v1 = bint.i16 v0
-  return v1
-}
-; run: %bint_b8_i16_false() == 0
-
+; run: %bint_b16_i16_tru() == 1
 
 function %bint_b16_i16_false() -> i16 {
 block0:
@@ -34,4 +168,172 @@ block0:
   v1 = bint.i16 v0
   return v1
 }
-; run: %bint_b16_i16_false() == 0
+; run: %bint_b16_i16_fal() == 0
+
+function %bint_b16_i32_true() -> i32 {
+block0:
+  v0 = bconst.b16 true
+  v1 = bint.i32 v0
+  return v1
+}
+; run: %bint_b16_i32_tru() == 1
+
+function %bint_b16_i32_false() -> i32 {
+block0:
+  v0 = bconst.b16 false
+  v1 = bint.i32 v0
+  return v1
+}
+; run: %bint_b16_i32_fal() == 0
+
+function %bint_b16_i64_true() -> i64 {
+block0:
+  v0 = bconst.b16 true
+  v1 = bint.i64 v0
+  return v1
+}
+; run: %bint_b16_i64_tru() == 1
+
+function %bint_b16_i64_false() -> i64 {
+block0:
+  v0 = bconst.b16 false
+  v1 = bint.i64 v0
+  return v1
+}
+; run: %bint_b16_i64_fal() == 0
+
+
+
+
+function %bint_b32_i8_true() -> i8 {
+block0:
+  v0 = bconst.b32 true
+  v1 = bint.i8 v0
+  return v1
+}
+; run: %bint_b32_i8_true() == 1
+
+function %bint_b32_i8_false() -> i8 {
+block0:
+  v0 = bconst.b32 false
+  v1 = bint.i8 v0
+  return v1
+}
+; run: %bint_b32_i8_fals() == 0
+
+function %bint_b32_i16_true() -> i16 {
+block0:
+  v0 = bconst.b32 true
+  v1 = bint.i16 v0
+  return v1
+}
+; run: %bint_b32_i16_tru() == 1
+
+function %bint_b32_i16_false() -> i16 {
+block0:
+  v0 = bconst.b32 false
+  v1 = bint.i16 v0
+  return v1
+}
+; run: %bint_b32_i16_fal() == 0
+
+function %bint_b32_i32_true() -> i32 {
+block0:
+  v0 = bconst.b32 true
+  v1 = bint.i32 v0
+  return v1
+}
+; run: %bint_b32_i32_tru() == 1
+
+function %bint_b32_i32_false() -> i32 {
+block0:
+  v0 = bconst.b32 false
+  v1 = bint.i32 v0
+  return v1
+}
+; run: %bint_b32_i32_fal() == 0
+
+function %bint_b32_i64_true() -> i64 {
+block0:
+  v0 = bconst.b32 true
+  v1 = bint.i64 v0
+  return v1
+}
+; run: %bint_b32_i64_tru() == 1
+
+function %bint_b32_i64_false() -> i64 {
+block0:
+  v0 = bconst.b32 false
+  v1 = bint.i64 v0
+  return v1
+}
+; run: %bint_b32_i64_fal() == 0
+
+
+
+
+
+
+function %bint_b64_i8_true() -> i8 {
+block0:
+  v0 = bconst.b64 true
+  v1 = bint.i8 v0
+  return v1
+}
+; run: %bint_b64_i8_true() == 1
+
+function %bint_b64_i8_false() -> i8 {
+block0:
+  v0 = bconst.b64 false
+  v1 = bint.i8 v0
+  return v1
+}
+; run: %bint_b64_i8_fals() == 0
+
+function %bint_b64_i16_true() -> i16 {
+block0:
+  v0 = bconst.b64 true
+  v1 = bint.i16 v0
+  return v1
+}
+; run: %bint_b64_i16_tru() == 1
+
+function %bint_b64_i16_false() -> i16 {
+block0:
+  v0 = bconst.b64 false
+  v1 = bint.i16 v0
+  return v1
+}
+; run: %bint_b64_i16_fal() == 0
+
+function %bint_b64_i32_true() -> i32 {
+block0:
+  v0 = bconst.b64 true
+  v1 = bint.i32 v0
+  return v1
+}
+; run: %bint_b64_i32_tru() == 1
+
+function %bint_b64_i32_false() -> i32 {
+block0:
+  v0 = bconst.b64 false
+  v1 = bint.i32 v0
+  return v1
+}
+; run: %bint_b64_i32_fal() == 0
+
+function %bint_b64_i64_true() -> i64 {
+block0:
+  v0 = bconst.b64 true
+  v1 = bint.i64 v0
+  return v1
+}
+; run: %bint_b64_i64_tru() == 1
+
+function %bint_b64_i64_false() -> i64 {
+block0:
+  v0 = bconst.b64 false
+  v1 = bint.i64 v0
+  return v1
+}
+; run: %bint_b64_i64_fal() == 0

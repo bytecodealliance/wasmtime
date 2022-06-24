@@ -2,7 +2,7 @@ use crate::vmcontext::{
     VMCallerCheckedAnyfunc, VMContext, VMGlobalDefinition, VMMemoryDefinition, VMTableDefinition,
 };
 use std::ptr::NonNull;
-use wasmtime_environ::{Global, MemoryPlan, TablePlan};
+use wasmtime_environ::{DefinedMemoryIndex, Global, MemoryPlan, TablePlan};
 
 /// The value of an export passed from one instance to another.
 pub enum Export {
@@ -71,6 +71,8 @@ pub struct ExportMemory {
     pub vmctx: *mut VMContext,
     /// The memory declaration, used for compatibility checking.
     pub memory: MemoryPlan,
+    /// The index at which the memory is defined within the `vmctx`.
+    pub index: DefinedMemoryIndex,
 }
 
 // See docs on send/sync for `ExportFunction` above.

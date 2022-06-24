@@ -903,16 +903,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::FmaxPseudo => implemented_in_isle(ctx),
 
         Opcode::Icmp => {
-            let condcode = ctx.data(insn).cond_code().unwrap();
-            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let ty = ctx.input_ty(insn, 0);
-            if ty == types::I128 && condcode != IntCC::Equal && condcode != IntCC::NotEqual {
-                let condcode = emit_cmp(ctx, insn, condcode);
-                let cc = CC::from_intcc(condcode);
-                ctx.emit(Inst::setcc(cc, dst));
-            } else {
-                implemented_in_isle(ctx);
-            }
+            implemented_in_isle(ctx);
         }
 
         Opcode::Fcmp => {
@@ -1041,21 +1032,11 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Fpromote => {
-            // We can't guarantee the RHS (if a load) is 128-bit aligned, so we
-            // must avoid merging a load here.
-            let src = RegMem::reg(put_input_in_reg(ctx, inputs[0]));
-            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            ctx.emit(Inst::xmm_unary_rm_r(SseOpcode::Cvtss2sd, src, dst));
+            implemented_in_isle(ctx);
         }
 
         Opcode::FvpromoteLow => {
-            let src = RegMem::reg(put_input_in_reg(ctx, inputs[0]));
-            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            ctx.emit(Inst::xmm_unary_rm_r(
-                SseOpcode::Cvtps2pd,
-                RegMem::from(src),
-                dst,
-            ));
+            implemented_in_isle(ctx);
         }
 
         Opcode::Fdemote => {
@@ -2205,75 +2186,19 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::AtomicCas => {
-            // This is very similar to, but not identical to, the `AtomicRmw` case.  As with
-            // `AtomicRmw`, there's no need to zero-extend narrow values here.
-            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let addr = lower_to_amode(ctx, inputs[0], 0);
-            let expected = put_input_in_reg(ctx, inputs[1]);
-            let replacement = put_input_in_reg(ctx, inputs[2]);
-            let ty_access = ty.unwrap();
-            assert!(is_valid_atomic_transaction_ty(ty_access));
-
-            // Move the expected value into %rax.  Because there's only one fixed register on
-            // the input side, we don't have to use `ensure_in_vreg`, as is necessary in the
-            // `AtomicRmw` case.
-            ctx.emit(Inst::gen_move(
-                Writable::from_reg(regs::rax()),
-                expected,
-                types::I64,
-            ));
-            ctx.emit(Inst::LockCmpxchg {
-                ty: ty_access,
-                mem: addr.into(),
-                replacement,
-                expected: regs::rax(),
-                dst_old: Writable::from_reg(regs::rax()),
-            });
-            // And finally, copy the old value at the location to its destination reg.
-            ctx.emit(Inst::gen_move(dst, regs::rax(), types::I64));
+            implemented_in_isle(ctx);
         }
 
         Opcode::AtomicLoad => {
-            // This is a normal load.  The x86-TSO memory model provides sufficient sequencing
-            // to satisfy the CLIF synchronisation requirements for `AtomicLoad` without the
-            // need for any fence instructions.
-            let data = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let addr = lower_to_amode(ctx, inputs[0], 0);
-            let ty_access = ty.unwrap();
-            assert!(is_valid_atomic_transaction_ty(ty_access));
-
-            let rm = RegMem::mem(addr);
-            if ty_access == types::I64 {
-                ctx.emit(Inst::mov64_rm_r(rm, data));
-            } else {
-                let ext_mode = ExtMode::new(ty_access.bits(), 64).unwrap_or_else(|| {
-                    panic!(
-                        "invalid extension during AtomicLoad: {} -> {}",
-                        ty_access.bits(),
-                        64
-                    )
-                });
-                ctx.emit(Inst::movzx_rm_r(ext_mode, rm, data));
-            }
+            implemented_in_isle(ctx);
         }
 
         Opcode::AtomicStore => {
-            // This is a normal store, followed by an `mfence` instruction.
-            let data = put_input_in_reg(ctx, inputs[0]);
-            let addr = lower_to_amode(ctx, inputs[1], 0);
-            let ty_access = ctx.input_ty(insn, 0);
-            assert!(is_valid_atomic_transaction_ty(ty_access));
-
-            ctx.emit(Inst::store(ty_access, data, addr));
-            ctx.emit(Inst::Fence {
-                kind: FenceKind::MFence,
-            });
+            implemented_in_isle(ctx);
         }
 
         Opcode::Fence => {
-            ctx.emit(Inst::Fence {
-                kind: FenceKind::MFence,
-            });
+            implemented_in_isle(ctx);
         }
 
         Opcode::FuncAddr => {

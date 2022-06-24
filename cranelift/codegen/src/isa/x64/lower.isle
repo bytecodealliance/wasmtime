@@ -1459,6 +1459,7 @@
 ;; unset).
 (rule (lower (icmp (IntCC.Equal) a @ (value_type (ty_vec128 ty)) b))
       (x64_pcmpeq ty a b))
+
 ;; To lower a not-equals comparison, we perform an equality comparison
 ;; (PCMPEQ*) and then invert the bits (PXOR with all 1s).
 (rule (lower (icmp (IntCC.NotEqual) a @ (value_type (ty_vec128 ty)) b))
@@ -1552,6 +1553,30 @@
             ;; See comments for `IntCC.Equal`.
             (cmp Reg (x64_or $I64 cmp_lo cmp_hi)))
            (with_flags (x64_test (OperandSize.Size64) (RegMemImm.Imm 1) cmp) (x64_setcc (CC.NZ)))))
+
+;; Result = (a_hi <> b_hi) ||
+;;          (a_hi == b_hi && a_lo <> b_lo)
+(rule (lower (icmp cc a @ (value_type $I128) b))
+      (if (intcc_neq cc (IntCC.Equal)))
+      (if (intcc_neq cc (IntCC.NotEqual)))
+      (let ((a_lo Gpr (value_regs_get_gpr a 0))
+            (a_hi Gpr (value_regs_get_gpr a 1))
+            (b_lo Gpr (value_regs_get_gpr b 0))
+            (b_hi Gpr (value_regs_get_gpr b 1))
+            (cmp_hi ValueRegs (with_flags (x64_cmp (OperandSize.Size64) b_hi a_hi)
+                                       (consumes_flags_concat
+                                                 (x64_setcc (intcc_without_eq cc))
+                                                 (x64_setcc (CC.Z)))))
+            (cc_hi Reg (value_regs_get cmp_hi 0))
+            (eq_hi Reg (value_regs_get cmp_hi 1))
+
+            (cmp_lo Reg (with_flags_reg (x64_cmp (OperandSize.Size64) b_lo a_lo)
+                                        (x64_setcc (intcc_unsigned cc))))
+
+            (res_lo Reg (x64_and $I64 eq_hi cmp_lo))
+            (res Reg (x64_or $I64 cc_hi res_lo)))
+           (x64_and $I64 res (RegMemImm.Imm 1))))
+
 
 ;;;; Rules for `fcmp` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -2318,6 +2343,14 @@
 (rule (lower (has_type $F64X2 (sqrt x)))
       (x64_sqrtpd x))
 
+;; Rules for `fpromote` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(rule (lower (has_type $F64 (fpromote x)))
+      (x64_cvtss2sd x))
+
+;; Rules for `fvpromote` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(rule (lower (has_type $F64X2 (fvpromote_low x)))
+      (x64_cvtps2pd (put_in_xmm x)))
+
 ;; Rules for `fmin` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type $F32 (fmin x y)))
@@ -2578,8 +2611,6 @@
 (rule (lower (has_type $I64X2 (uload32x2 flags address offset)))
       (x64_pmovzxdq (to_amode flags address offset)))
 
-;; TODO: Multi-register loads (I128)
-
 ;; Rules for `store*` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; 8-, 16-, 32- and 64-bit GPR stores.
@@ -2783,3 +2814,40 @@
       (let ((_ RegMemImm (sink_load sink)))
         (side_effect
          (x64_xor_mem ty (to_amode flags addr offset) src2))))
+
+;; Rules for `fence` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (fence))
+      (side_effect (x64_mfence)))
+
+;; Rules for `atomic_load` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; This is a normal load. The x86-TSO memory model provides sufficient
+;; sequencing to satisfy the CLIF synchronisation requirements for `AtomicLoad`
+;; without the need for any fence instructions.
+;;
+;; As described in the `atomic_load` documentation, this lowering is only valid
+;; for I8, I16, I32, and I64. The sub-64-bit types are zero extended, as with a
+;; normal load.
+(rule (lower (has_type $I64 (atomic_load flags address)))
+      (x64_mov (to_amode flags address (zero_offset))))
+(rule (lower (has_type (and (fits_in_32 ty) (ty_int _)) (atomic_load flags address)))
+      (x64_movzx (ext_mode (ty_bits_u16 ty) 64) (to_amode flags address (zero_offset))))
+
+;; Rules for `atomic_store` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; This is a normal store followed by an `mfence` instruction. As described in
+;; the `atomic_load` documentation, this lowering is only valid for I8, I16,
+;; I32, and I64.
+(rule (lower (atomic_store flags
+                           value @ (value_type (and (fits_in_64 ty) (ty_int _)))
+                           address))
+      (side_effect (side_effect_concat
+       (x64_movrm ty (to_amode flags address (zero_offset)) value)
+       (x64_mfence))))
+
+;; Rules for `atomic_cas` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type (and (fits_in_64 ty) (ty_int _))
+                  (atomic_cas flags address expected replacement)))
+      (x64_cmpxchg ty expected replacement (to_amode flags address (zero_offset))))

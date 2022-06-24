@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-fiber"
-version = "0.38.0"
+version = "0.39.0"
 authors = ["The Wasmtime Project Developers"]
 description = "Fiber support for Wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"
@@ -14,7 +14,7 @@ edition = "2021"
 links = "wasmtime-fiber-shims"
 
 [target.'cfg(unix)'.dependencies]
-rustix = "0.33.7"
+rustix = { version = "0.35.6", features = ["mm", "param"] }
 
 [target.'cfg(windows)'.dependencies.winapi]
 version = "0.3.9"

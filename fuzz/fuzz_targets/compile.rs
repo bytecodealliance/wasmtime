@@ -12,7 +12,7 @@ fn create_engine() -> Engine {
     // the generated code at all; it only does extra checking after
     // compilation.
     unsafe {
-        config.cranelift_flag_enable("regalloc_checker").unwrap();
+        config.cranelift_flag_enable("regalloc_checker");
     }
     Engine::new(&config).expect("Could not construct Engine")
 }
