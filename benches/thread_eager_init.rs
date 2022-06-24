@@ -78,7 +78,7 @@ fn lazy_thread_instantiate(engine: Engine, module: Module) -> Duration {
 fn eager_thread_instantiate(engine: Engine, module: Module) -> (Duration, Duration) {
     thread::spawn(move || {
         let init_start = Instant::now();
-        Engine::tls_eager_initialize().expect("eager init");
+        Engine::tls_eager_initialize();
         let init_duration = init_start.elapsed();
 
         (init_duration, duration_of_call(&engine, &module))

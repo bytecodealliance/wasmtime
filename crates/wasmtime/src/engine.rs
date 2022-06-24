@@ -1,5 +1,5 @@
 use crate::signatures::SignatureRegistry;
-use crate::{Config, Trap};
+use crate::Config;
 use anyhow::Result;
 use once_cell::sync::OnceCell;
 #[cfg(feature = "parallel-compilation")]
@@ -71,7 +71,7 @@ impl Engine {
         // Ensure that wasmtime_runtime's signal handlers are configured. This
         // is the per-program initialization required for handling traps, such
         // as configuring signals, vectored exception handlers, etc.
-        wasmtime_runtime::init_traps(crate::module::GlobalModuleRegistry::is_wasm_trap_pc);
+        wasmtime_runtime::init_traps(crate::module::is_wasm_trap_pc);
         debug_builtins::ensure_exported();
 
         let registry = SignatureRegistry::new();
@@ -117,8 +117,8 @@ impl Engine {
     /// on calls into WebAssembly. This is provided for use cases where the
     /// latency of WebAssembly calls are extra-important, which is not
     /// necessarily true of all embeddings.
-    pub fn tls_eager_initialize() -> Result<(), Trap> {
-        wasmtime_runtime::tls_eager_initialize().map_err(Trap::from_runtime_box)
+    pub fn tls_eager_initialize() {
+        wasmtime_runtime::tls_eager_initialize();
     }
 
     /// Returns the configuration settings that this engine is using.
