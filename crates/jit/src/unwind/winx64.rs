@@ -33,7 +33,7 @@ impl UnwindRegistration {
     }
 
     pub fn section_name() -> &'static str {
-        "_wasmtime_winx64_unwind"
+        ".pdata"
     }
 }
 
