@@ -24,13 +24,11 @@ cfg_if::cfg_if! {
         macro_rules! pacia1716 { () => (); }
         macro_rules! paciasp { () => (); }
         macro_rules! autiasp { () => (); }
-    } else if #[cfg(target_os = "linux")] {
+    } else {
         macro_rules! cfi_window_save { () => (".cfi_window_save\n"); }
         macro_rules! pacia1716 { () => ("pacia1716\n"); }
         macro_rules! paciasp { () => ("paciasp\n"); }
         macro_rules! autiasp { () => ("autiasp\n"); }
-    } else {
-        compile_error!("unsupported aarch64 platform");
     }
 }
 
@@ -98,7 +96,7 @@ asm_func!(
 //   wasmtime_fiber_switch(), otherwise the latter would fault
 // * We would like to use an instruction that is executed as a no-op by
 //   processors that do not support PAuth, so that the code is
-//   backward- compatible and there is no duplication; `PACIA1716` is a
+//   backward-compatible and there is no duplication; `PACIA1716` is a
 //   suitable one, which has the following operand register
 //   conventions:
 //   * X17 contains the pointer value to sign
@@ -145,10 +143,10 @@ asm_func!(
             0x06,            /* DW_OP_deref */ \
             0x23, 0xa0, 0x1  /* DW_OP_plus_uconst 0xa0 */
         .cfi_rel_offset x29, -0x10
+        .cfi_rel_offset x30, -0x08
     ",
     cfi_window_save!(),
     "
-        .cfi_rel_offset x30, -0x08
         .cfi_rel_offset x19, -0x18
         .cfi_rel_offset x20, -0x20
         .cfi_rel_offset x21, -0x28

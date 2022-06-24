@@ -188,7 +188,7 @@ cfg_if::cfg_if! {
         macro_rules! asm_func {
             ($name:tt, $($body:tt)*) => {
                 std::arch::global_asm!(concat!(
-                    ".align 16\n",
+                    ".p2align 4\n",
                     ".private_extern _", $name, "\n",
                     ".global _", $name, "\n",
                     "_", $name, ":\n",
@@ -218,7 +218,7 @@ cfg_if::cfg_if! {
         macro_rules! asm_func {
             ($name:tt, $($body:tt)*) => {
                 std::arch::global_asm!(concat!(
-                    ".align 16\n",
+                    ".p2align 4\n",
                     ".hidden ", $name, "\n",
                     ".global ", $name, "\n",
                     elf_func_type_header!($name),
