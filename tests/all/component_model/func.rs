@@ -1,9 +1,9 @@
-use super::REALLOC_AND_FREE;
+use super::{TypedFuncExt, REALLOC_AND_FREE};
 use anyhow::Result;
 use std::rc::Rc;
 use std::sync::Arc;
 use wasmtime::component::*;
-use wasmtime::{AsContextMut, Store, StoreContextMut, Trap, TrapCode};
+use wasmtime::{Store, StoreContextMut, Trap, TrapCode};
 
 const CANON_32BIT_NAN: u32 = 0b01111111110000000000000000000000;
 const CANON_64BIT_NAN: u64 = 0b0111111111111000000000000000000000000000000000000000000000000000;
@@ -398,22 +398,6 @@ fn integers() -> Result<()> {
     );
 
     Ok(())
-}
-
-trait TypedFuncExt<P, R> {
-    fn call_and_post_return(&self, store: impl AsContextMut, params: P) -> Result<R>;
-}
-
-impl<P, R> TypedFuncExt<P, R> for TypedFunc<P, R>
-where
-    P: ComponentParams + Lower,
-    R: Lift,
-{
-    fn call_and_post_return(&self, mut store: impl AsContextMut, params: P) -> Result<R> {
-        let result = self.call(&mut store, params)?;
-        self.post_return(&mut store)?;
-        Ok(result)
-    }
 }
 
 #[test]

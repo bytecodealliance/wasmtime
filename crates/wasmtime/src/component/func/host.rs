@@ -1,5 +1,5 @@
-use crate::component::func::{MAX_STACK_PARAMS, MAX_STACK_RESULTS};
-use crate::component::{ComponentParams, ComponentType, Lift, Lower, Memory, MemoryMut, Options};
+use crate::component::func::{Memory, MemoryMut, Options, MAX_STACK_PARAMS, MAX_STACK_RESULTS};
+use crate::component::{ComponentParams, ComponentType, Lift, Lower};
 use crate::{AsContextMut, StoreContextMut, ValRaw};
 use anyhow::{bail, Context, Result};
 use std::any::Any;

@@ -19,6 +19,7 @@ wasmtime-jit = { path = "../jit", version = "=0.39.0" }
 wasmtime-cache = { path = "../cache", version = "=0.39.0", optional = true }
 wasmtime-fiber = { path = "../fiber", version = "=0.39.0", optional = true }
 wasmtime-cranelift = { path = "../cranelift", version = "=0.39.0", optional = true }
+wasmtime-component-macro = { path = "../component-macro", version = "=0.39.0", optional = true }
 target-lexicon = { version = "0.12.0", default-features = false }
 wasmparser = "0.86.0"
 anyhow = "1.0.19"
@@ -115,4 +116,5 @@ component-model = [
   "wasmtime-environ/component-model",
   "wasmtime-cranelift?/component-model",
   "wasmtime-runtime/component-model",
+  "dep:wasmtime-component-macro",
 ]

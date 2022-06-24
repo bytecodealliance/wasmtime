@@ -196,7 +196,7 @@ impl<'a, T> MemoryMut<'a, T> {
     /// bounds-checks.
     pub fn get<const N: usize>(&mut self, offset: usize) -> &mut [u8; N] {
         // FIXME: this bounds check shouldn't actually be necessary, all
-        // callers of `ComponentValue::store` have already performed a bounds
+        // callers of `ComponentType::store` have already performed a bounds
         // check so we're guaranteed that `offset..offset+N` is in-bounds. That
         // being said we at least should do bounds checks in debug mode and
         // it's not clear to me how to easily structure this so that it's

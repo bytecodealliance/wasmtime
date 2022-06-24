@@ -16,14 +16,21 @@ pub use self::func::{
 };
 pub use self::instance::{Instance, InstancePre};
 pub use self::linker::{Linker, LinkerInstance};
+pub use wasmtime_component_macro::{ComponentType, Lift, Lower};
 
 // These items are expected to be used by an eventual
-// `#[derive(ComponentValue)]`, they are not part of Wasmtime's API stability
+// `#[derive(ComponentType)]`, they are not part of Wasmtime's API stability
 // guarantees
 #[doc(hidden)]
-pub use {
-    self::func::{Memory, MemoryMut, Options},
-    wasmtime_environ,
-};
+pub mod __internal {
+    pub use super::func::{
+        next_field, typecheck_record, MaybeUninitExt, Memory, MemoryMut, Options,
+    };
+    pub use crate::map_maybe_uninit;
+    pub use crate::store::StoreOpaque;
+    pub use anyhow;
+    pub use wasmtime_environ;
+    pub use wasmtime_environ::component::{ComponentTypes, InterfaceType};
+}
 
 pub(crate) use self::store::ComponentStoreData;

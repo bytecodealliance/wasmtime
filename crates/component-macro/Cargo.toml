@@ -1,0 +1,22 @@
+[package]
+name = "wasmtime-component-macro"
+version = "0.39.0"
+authors = ["The Wasmtime Project Developers"]
+description = "Macros for deriving component interface types from Rust types"
+license = "Apache-2.0 WITH LLVM-exception"
+repository = "https://github.com/bytecodealliance/wasmtime"
+documentation = "https://docs.rs/wasmtime-component-macro/"
+categories = ["wasm"]
+keywords = ["webassembly", "wasm"]
+edition = "2021"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1.0"
+quote = "1.0"
+syn = { version = "1.0", features = ["extra-traits"] }
+
+[badges]
+maintenance = { status = "actively-developed" }

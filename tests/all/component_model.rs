@@ -1,11 +1,28 @@
 use anyhow::Result;
-use wasmtime::component::Component;
-use wasmtime::{Config, Engine};
+use wasmtime::component::{Component, ComponentParams, Lift, Lower, TypedFunc};
+use wasmtime::{AsContextMut, Config, Engine};
 
 mod func;
 mod import;
+mod macros;
 mod nested;
 mod post_return;
+
+trait TypedFuncExt<P, R> {
+    fn call_and_post_return(&self, store: impl AsContextMut, params: P) -> Result<R>;
+}
+
+impl<P, R> TypedFuncExt<P, R> for TypedFunc<P, R>
+where
+    P: ComponentParams + Lower,
+    R: Lift,
+{
+    fn call_and_post_return(&self, mut store: impl AsContextMut, params: P) -> Result<R> {
+        let result = self.call(&mut store, params)?;
+        self.post_return(&mut store)?;
+        Ok(result)
+    }
+}
 
 // A simple bump allocator which can be used with modules
 const REALLOC_AND_FREE: &str = r#"
