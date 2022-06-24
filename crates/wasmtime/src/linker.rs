@@ -259,6 +259,8 @@ impl<T> Linker<T> {
     /// # Ok(())
     /// # }
     /// ```
+    #[cfg(compiler)]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
     pub fn define_unknown_imports_as_traps(&mut self, module: &Module) -> anyhow::Result<()> {
         for import in module.imports() {
             if self._get_by_import(&import).is_err() {
