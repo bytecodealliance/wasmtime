@@ -32,6 +32,9 @@ type BoxCallInfo = Box<CallInfo>;
 type BoxCallIndInfo = Box<CallIndInfo>;
 type BoxExternalName = Box<ExternalName>;
 
+pub(crate) const F32_POS_1: u64 = 0x3f800000;
+pub(crate) const F64_POS_1: u64 = 0x3ff0000000000000;
+
 /// The main entry point for lowering with ISLE.
 pub(crate) fn lower<C>(
     lower_ctx: &mut C,
@@ -109,16 +112,6 @@ where
         Imm12::maybe_from_u64(val as u64).unwrap()
     }
 
-    fn lower_float_bnot(&mut self, ty: Type, r: Reg) -> Reg {
-        let tmp_i = self.temp_writable_reg(I64);
-        let inst = gen_move(tmp_i, I64, r, ty);
-        self.emit(&inst);
-        self.emit(&MInst::construct_bit_not(tmp_i, tmp_i.to_reg()));
-        let tmp_f = self.temp_writable_reg(ty);
-        let inst = gen_move(tmp_f, ty, tmp_i.to_reg(), I64);
-        self.emit(&inst);
-        tmp_f.to_reg()
-    }
     fn bnot_128(&mut self, value: ValueRegs) -> ValueRegs {
         let tmp_hight = self.temp_writable_reg(I64);
         let tmp_low = self.temp_writable_reg(I64);
@@ -216,6 +209,7 @@ where
     fn gen_default_frm(&mut self) -> OptionFloatRoundingMode {
         None
     }
+
     fn lower_bit_reverse(&mut self, ty: Type, rs: Reg) -> Reg {
         match ty.bits() {
             64 | 32 | 16 => {
@@ -477,47 +471,6 @@ where
             rs2: y.regs()[1],
         });
         ValueRegs::two(low.to_reg(), high.to_reg())
-    }
-
-    fn lower_float_xnot(&mut self, ty: Type, x: Reg, y: Reg) -> Reg {
-        let tmpx = self.temp_writable_reg(I64);
-        let tmpy = self.temp_writable_reg(I64);
-        let move_to_x_reg_op = FpuOPRR::move_f_to_x_op(ty);
-        // move to x registers
-        self.emit(&MInst::FpuRR {
-            frm: None,
-            alu_op: move_to_x_reg_op,
-            rd: tmpx,
-            rs: x,
-        });
-        self.emit(&MInst::FpuRR {
-            frm: None,
-            alu_op: move_to_x_reg_op,
-            rd: tmpy,
-            rs: y,
-        });
-        // xnor
-        self.emit(&MInst::AluRRR {
-            alu_op: AluOPRRR::Xnor,
-            rd: tmpx,
-            rs1: tmpx.to_reg(),
-            rs2: tmpy.to_reg(),
-        });
-
-        // move back to f register
-        let move_f_reg_op = if ty == F32 {
-            FpuOPRR::FmvWX
-        } else {
-            FpuOPRR::FmvDX
-        };
-        let result_reg = self.temp_writable_reg(ty);
-        self.emit(&MInst::FpuRR {
-            frm: None,
-            alu_op: move_f_reg_op,
-            rd: result_reg,
-            rs: tmpx.to_reg(),
-        });
-        result_reg.to_reg()
     }
 
     fn lower_extend(&mut self, val: Reg, is_signed: bool, from_bits: u8, to_bits: u8) -> ValueRegs {
@@ -984,48 +937,6 @@ where
         ValueRegs::two(new_low.to_reg(), new_high.to_reg())
     }
 
-    fn lower_float_abs(&mut self, ty: Type, val: Reg) -> Reg {
-        let tmp = self.temp_writable_reg(F64);
-        if ty == F32 {
-            MInst::load_fp_constant32(tmp, f32_rep(1.0))
-                .into_iter()
-                .for_each(|ref i| self.emit(i));
-        } else {
-            MInst::load_fp_constant64(tmp, f64_rep(1.0))
-                .into_iter()
-                .for_each(|ref i| self.emit(i));
-        }
-        let rd = self.temp_writable_reg(F64);
-        self.emit(&MInst::FpuRRR {
-            alu_op: if ty == F32 {
-                FpuOPRRR::FsgnjS
-            } else {
-                FpuOPRRR::FsgnjD
-            },
-            frm: None,
-            rd: rd,
-            rs1: val,
-            rs2: tmp.to_reg(),
-        });
-        rd.to_reg()
-    }
-
-    fn lower_float_neg(&mut self, ty: Type, val: Reg) -> Reg {
-        let rd = self.temp_writable_reg(F64);
-        self.emit(&MInst::FpuRRR {
-            alu_op: if ty == F32 {
-                FpuOPRRR::FsgnjnS
-            } else {
-                FpuOPRRR::FsgnjnD
-            },
-            frm: None,
-            rd: rd,
-            rs1: val,
-            rs2: val,
-        });
-        rd.to_reg()
-    }
-
     fn lower_i128_logical_shift(
         &mut self,
         shift_left: bool,
@@ -1200,6 +1111,7 @@ where
                         let tmp = self.temp_writable_reg(I64);
                         insts.push(MInst::SelectReg {
                             rd: tmp,
+
                             rs1: all1.to_reg(),
                             rs2: zero_reg(),
                             condition: IntegerCompare {
@@ -1225,6 +1137,34 @@ where
 
     fn valueregs_2_reg(&mut self, val: Value) -> Option<Reg> {
         Some(self.put_in_regs(val).regs()[0])
+    }
+
+    fn load_float_const(&mut self, val: u64, ty: Type) -> Reg {
+        let result = self.temp_writable_reg(ty);
+
+        if ty == F32 {
+            MInst::load_fp_constant32(result, val as u32)
+                .into_iter()
+                .for_each(|i| self.emit(&i));
+        } else if ty == F64 {
+            MInst::load_fp_constant64(result, val)
+                .into_iter()
+                .for_each(|i| self.emit(&i));
+        } else {
+            unimplemented!()
+        }
+        result.to_reg()
+    }
+    fn move_f_to_x(&mut self, r: Reg, ty: Type) -> Reg {
+        let result = self.temp_writable_reg(I64);
+        self.emit(&gen_move(result, I64, r, ty));
+        result.to_reg()
+    }
+
+    fn move_x_to_f(&mut self, r: Reg, ty: Type) -> Reg {
+        let result = self.temp_writable_reg(ty);
+        self.emit(&gen_move(result, ty, r, I64));
+        result.to_reg()
     }
 
     fn lower_cls_i128(&mut self, val: ValueRegs) -> ValueRegs {
@@ -1328,7 +1268,7 @@ where
         if is_valid_atomic_transaction_ty(ty) {
             Some(ty)
         } else {
-            panic!("not a valid atomic type.");
+            None
         }
     }
     fn atomic_rmw_amo(&mut self) -> AMO {

@@ -16,7 +16,7 @@ use crate::CodegenResult;
 
 use std::boxed::Box;
 
-use crate::ir::types::{F32, I128, I16, I32, I64, I8};
+use crate::ir::types::{ I128, I16, I32, I64, I8};
 
 use super::lower::*;
 use crate::isa::riscv64::abi::*;
@@ -162,7 +162,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             ctx.emit(inst);
         }
 
-        Opcode::AtomicRmw => {  
+        Opcode::AtomicRmw => {
             implemented_in_isle(ctx);
         }
 
@@ -753,67 +753,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Fadd | Opcode::Fsub | Opcode::Fmul | Opcode::Fdiv | Opcode::Fmin | Opcode::Fmax => {
-            let ty = ty.unwrap();
-            let rs1 = put_input_in_reg(ctx, inputs[0]);
-            let rs2 = put_input_in_reg(ctx, inputs[1]);
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            if !ty.is_vector() {
-                let ty_32 = ty == F32;
-                let op = match op {
-                    Opcode::Fadd => {
-                        if ty_32 {
-                            FpuOPRRR::FaddS
-                        } else {
-                            FpuOPRRR::FaddD
-                        }
-                    }
-                    Opcode::Fsub => {
-                        if ty_32 {
-                            FpuOPRRR::FsubS
-                        } else {
-                            FpuOPRRR::FsubD
-                        }
-                    }
-                    Opcode::Fmul => {
-                        if ty_32 {
-                            FpuOPRRR::FmulS
-                        } else {
-                            FpuOPRRR::FmulD
-                        }
-                    }
-                    Opcode::Fdiv => {
-                        if ty_32 {
-                            FpuOPRRR::FdivS
-                        } else {
-                            FpuOPRRR::FdivD
-                        }
-                    }
-                    Opcode::Fmin => {
-                        if ty_32 {
-                            FpuOPRRR::FminS
-                        } else {
-                            FpuOPRRR::FminD
-                        }
-                    }
-                    Opcode::Fmax => {
-                        if ty_32 {
-                            FpuOPRRR::FmaxS
-                        } else {
-                            FpuOPRRR::FmaxD
-                        }
-                    }
-                    _ => unreachable!(),
-                };
-                ctx.emit(Inst::FpuRRR {
-                    alu_op: op,
-                    frm: None,
-                    rd,
-                    rs1,
-                    rs2,
-                });
-            } else {
-                unimplemented!()
-            }
+            implemented_in_isle(ctx);
         }
 
         Opcode::FminPseudo | Opcode::FmaxPseudo => {

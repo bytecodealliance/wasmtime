@@ -1875,6 +1875,49 @@ fn test_riscv64_binemit() {
     insns.push(TestUnit::new(Inst::ECall {}, "ecall"));
     insns.push(TestUnit::new(Inst::EBreak {}, "ebreak"));
 
+    insns.push(TestUnit::new(
+        Inst::FpuRRR {
+            alu_op: FpuOPRRR::FsgnjS,
+            frm: None,
+            rd: writable_fa0(),
+            rs1: fa1(),
+            rs2: fa1(),
+        },
+        "fmv.s fa0,fa1",
+    ));
+    insns.push(TestUnit::new(
+        Inst::FpuRRR {
+            alu_op: FpuOPRRR::FsgnjD,
+            frm: None,
+            rd: writable_fa0(),
+            rs1: fa1(),
+            rs2: fa1(),
+        },
+        "fmv.d fa0,fa1",
+    ));
+
+    insns.push(TestUnit::new(
+        Inst::FpuRRR {
+            alu_op: FpuOPRRR::FsgnjnS,
+            frm: None,
+            rd: writable_fa0(),
+            rs1: fa1(),
+            rs2: fa1(),
+        },
+        "fneg.s fa0,fa1",
+    ));
+    insns.push(TestUnit::new(
+        Inst::FpuRRR {
+            alu_op: FpuOPRRR::FsgnjnD,
+            frm: None,
+            rd: writable_fa0(),
+            rs1: fa1(),
+            rs2: fa1(),
+        },
+        "fneg.d fa0,fa1",
+    ));
+
+    // here to add.
     {
         /*
         notice!!
@@ -2072,6 +2115,10 @@ fn test_riscv64_binemit() {
         insns[185].code = Some(4111);
         insns[186].code = Some(115);
         insns[187].code = Some(1048691);
+        insns[188].code = Some(548767059);
+        insns[189].code = Some(582321491);
+        insns[190].code = Some(548771155);
+        insns[191].code = Some(582325587);
     }
     let flags = settings::Flags::new(settings::builder());
     let emit_info = EmitInfo::new(flags);

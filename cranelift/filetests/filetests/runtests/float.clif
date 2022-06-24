@@ -181,6 +181,7 @@ block0(v0: f32):
   v1 = fabs v0
   return v1
 }
+
 ; run: %fabs_s(0x1.0) == +0x1.0
 ; run: %fabs_s(-0x10.0) == +0x10.0
 ; run: %fabs_s(0x9.0) == 0x9.0

@@ -59,7 +59,7 @@ pub(crate) type VecU8 = Vec<u8>;
 use crate::isa::riscv64::lower::isle::generated_code::MInst;
 pub use crate::isa::riscv64::lower::isle::generated_code::{
     AluOPRRI, AluOPRRR, AtomicOP, CsrOP, FClassResult, FFlagsException, FpuOPRR, FpuOPRRR,
-    FpuOPRRRR, IntSelectOP, LoadOP, MInst as Inst, ReferenceCheckOP, StoreOP, FRM, OPFPFMT,
+    FpuOPRRRR, IntSelectOP, LoadOP, MInst as Inst, ReferenceCheckOP, StoreOP, FRM,
 };
 
 type BoxCallInfo = Box<CallInfo>;
@@ -971,14 +971,32 @@ impl Inst {
                 let rs1 = format_reg(rs1, allocs);
                 let rs2 = format_reg(rs2, allocs);
                 let rd = format_reg(rd.to_reg(), allocs);
-                format!(
-                    "{} {},{},{}{}",
-                    alu_op.op_name(),
-                    rd,
-                    rs1,
-                    rs2,
-                    format_frm(frm)
-                )
+                let rs1_is_rs2 = rs1 == rs2;
+                if rs1_is_rs2 && alu_op.is_copy_sign() {
+                    // this is move instruction.
+                    format!(
+                        "fmv.{} {},{}",
+                        if alu_op.is_32() { "s" } else { "d" },
+                        rd,
+                        rs1
+                    )
+                } else if rs1_is_rs2 && alu_op.is_copy_neg_sign() {
+                    format!(
+                        "fneg.{} {},{}",
+                        if alu_op.is_32() { "s" } else { "d" },
+                        rd,
+                        rs1
+                    )
+                } else {
+                    format!(
+                        "{} {},{},{}{}",
+                        alu_op.op_name(),
+                        rd,
+                        rs1,
+                        rs2,
+                        format_frm(frm)
+                    )
+                }
             }
             &Inst::Csr {
                 csr_op,

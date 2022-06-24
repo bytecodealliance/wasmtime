@@ -618,11 +618,11 @@ impl FpuOPRRR {
             Self::FeqS => 0b1010000,
             Self::FltS => 0b1010000,
             Self::FleS => 0b1010000,
+
             Self::FaddD => 0b0000001,
             Self::FsubD => 0b0000101,
             Self::FmulD => 0b0001001,
             Self::FdivD => 0b0001101,
-
             Self::FsgnjD => 0b0010001,
             Self::FsgnjnD => 0b0010001,
             Self::FsgnjxD => 0b0010001,
@@ -631,6 +631,37 @@ impl FpuOPRRR {
             Self::FeqD => 0b1010001,
             Self::FltD => 0b1010001,
             Self::FleD => 0b1010001,
+        }
+    }
+    pub fn is_32(self) -> bool {
+        match self {
+            Self::FaddS
+            | Self::FsubS
+            | Self::FmulS
+            | Self::FdivS
+            | Self::FsgnjS
+            | Self::FsgnjnS
+            | Self::FsgnjxS
+            | Self::FminS
+            | Self::FmaxS
+            | Self::FeqS
+            | Self::FltS
+            | Self::FleS => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_copy_sign(self) -> bool {
+        match self {
+            Self::FsgnjD | Self::FsgnjS => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_copy_neg_sign(self) -> bool {
+        match self {
+            Self::FsgnjnD | Self::FsgnjnS => true,
+            _ => false,
         }
     }
 }

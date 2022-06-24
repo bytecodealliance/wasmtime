@@ -189,11 +189,19 @@
 
 
 ;;;; Rules for `bnot` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule (lower (has_type $F32 (bnot x)))
-      (lower_float_bnot $F32 x))
-(rule (lower (has_type $F32 (bnot x)))
-      (lower_float_bnot $F64 x))
-
+(rule 
+      (lower (has_type ty (bnot x)))
+      (let 
+            (     ;; move to x register.
+                  (tmp Reg (move_f_to_x x ty))
+                  ;; inverse all bits.
+                  (tmp2 Reg (con_bit_not tmp))
+                  ;; move back to float register.
+                  (result Reg (move_x_to_f tmp2 ty))
+            )
+            result
+      )
+)
 (rule (lower (has_type fits_in_64 (bnot x)))
       (alu_rr_imm12 (AluOPRRI.Xori) x (imm_from_neg_bits -1)))
 
@@ -310,11 +318,21 @@
 (rule (lower (has_type  $I128 (bxor_not x y)))
       (lower_i128_xnor y x));; notice x y order!!!
 
-(rule (lower (has_type  $F32 (bxor_not x y)))
-      (lower_float_xnot $F32 y x))  ;; notice x y order!!!
-(rule (lower (has_type  $F64 (bxor_not x y)))
-      (lower_float_xnot $F64 y x))  ;; notice x y order!!!
-
+(rule (lower (has_type  ty (bxor_not x y)))
+      (let
+            (
+                  ;;; move x.
+                  (tmp_x Reg (move_f_to_x x ty))
+                  ;;; move y.
+                  (tmp_y Reg (move_f_to_x y ty))
+                  ;;; xnor.
+                  (result_x Reg (alu_rrr (AluOPRRR.Xnor) $I64 tmp_y tmp_x))
+                  ;;; move to f register.
+                  (result Reg(move_x_to_f result_x ty))
+            )
+            result
+      )
+)
 
 ;;;; Rules for `bor_not` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 ty)(bor_not x y)))
@@ -330,27 +348,29 @@
 (rule (lower (has_type  $I128 (cls x)))
       (lower_cls_i128  x))
 
- 
 
 ;;;; Rules for `fabs` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule (lower (has_type $F32 (fabs x)))
-      (lower_float_abs $F32 x))
-(rule (lower (has_type $F64 (fabs x)))
-      (lower_float_abs $F64 x))
+(rule 
+      (lower (has_type ty (fabs x)))
+      (let
+            (
+                  ;; load positive 1
+                  (tmp Reg (load_float_const (f_pos_1 ty) ty))
+                  (result Reg (fpu_rrr (f_copysign_op ty) ty x tmp))
+            )
+            result
+      )
+)
 
 ;;;; Rules for `fneg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule (lower (has_type $F32 (fneg x)))
-      (lower_float_neg $F32 x))
-(rule (lower (has_type $F64 (fneg x)))
-      (lower_float_neg $F64 x))
-
+(rule 
+      (lower (has_type ty (fneg x)))
+      (fpu_rrr (f_copy_neg_sign_op ty) ty x x)
+)
 
 ;;;; Rules for `fcopysign` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule (lower (has_type $F32 (fcopysign x y)))
-      (fpu_rrr (FpuOPRRR.FsgnjS) $F64 x y))
-(rule (lower (has_type $F64 (fcopysign x y)))
-      (fpu_rrr (FpuOPRRR.FsgnjD) $F64 x y))
-
+(rule (lower (has_type ty (fcopysign x y)))
+      (fpu_rrr (f_copysign_op ty) ty x y))
 
 ;;;; Rules for `fma` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type $F32 (fma  x y z )))
@@ -426,3 +446,31 @@
             result
       )
 )
+
+;;; rule for float arithmatic
+(rule 
+      (lower (has_type ty (fadd x y)))
+      (fpu_rrr (f_arithmatic_op ty (Opcode.Fadd)) ty x y)
+)
+(rule 
+      (lower (has_type ty (fsub x y)))
+      (fpu_rrr (f_arithmatic_op ty (Opcode.Fsub)) ty x y)
+)
+(rule 
+      (lower (has_type ty (fmul x y)))
+      (fpu_rrr (f_arithmatic_op ty (Opcode.Fmul)) ty x y)
+)
+(rule 
+      (lower (has_type ty (fdiv x y)))
+      (fpu_rrr (f_arithmatic_op ty (Opcode.Fdiv)) ty x y)
+)
+(rule 
+      (lower (has_type ty (fmin x y)))
+      (fpu_rrr (f_arithmatic_op ty (Opcode.Fmin)) ty x y)
+)
+
+(rule 
+      (lower (has_type ty (fmax x y)))
+      (fpu_rrr (f_arithmatic_op ty (Opcode.Fmax)) ty x y)
+)
+

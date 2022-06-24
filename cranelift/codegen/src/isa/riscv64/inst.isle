@@ -541,19 +541,6 @@
   (Brev8)
 ))
 
-;; The 2-bit floating-point format field fmt is encoded as shown in Table 8.3. It is set to S (00) for all
-;; instructions in the F extension.
-(type OPFPFMT (enum 
-  ;; 32-bit single-precision
-  (S)
-  ;;64-bit double-precision
-  (D)
-  ;; reserved
-  ;;(Reserved)
-  ;; 128-bit quad-precision
-  (Q)
-)) 
-
 
 (type FRM (enum 
   ;; Round to Nearest, ties to Even
@@ -693,9 +680,6 @@
 (rule (select_addi (fits_in_32 ty)) (AluOPRRI.Addiw))
 (rule (select_addi (fits_in_64 ty)) (AluOPRRI.Addi))
 
-(decl lower_float_bnot (Type  Reg) Reg)
-(extern constructor lower_float_bnot lower_float_bnot)
-
 (decl bnot_128 (ValueRegs) ValueRegs)
 (extern constructor bnot_128 bnot_128)
 
@@ -725,7 +709,6 @@
 (decl lower_mlhi (bool Type Reg Reg)Reg)
 (extern constructor lower_mlhi lower_mlhi)
 
-
 (decl lower_rotl(Type Reg Reg) Reg)
 (extern constructor lower_rotl lower_rotl)
 
@@ -739,22 +722,11 @@
 (decl lower_i128_xnor(ValueRegs ValueRegs)ValueRegs)
 (extern constructor lower_i128_xnor lower_i128_xnor)
 
-(decl lower_float_xnot (Type Reg Reg) Reg)
-(extern constructor lower_float_xnot lower_float_xnot)
-
 (decl lower_popcnt_i128(ValueRegs) ValueRegs)
 (extern constructor lower_popcnt_i128 lower_popcnt_i128)
 
 (decl lower_i128_rotate(bool ValueRegs ValueRegs) ValueRegs)
 (extern constructor lower_i128_rotate lower_i128_rotate)
-
-
-(decl lower_float_abs (Type  Reg) Reg)
-(extern constructor lower_float_abs lower_float_abs)
-
-(decl lower_float_neg (Type  Reg) Reg)
-(extern constructor lower_float_neg lower_float_neg)
-
 
 (decl lower_i128_logical_shift(bool bool ValueRegs ValueRegs)ValueRegs)
 (extern constructor lower_i128_logical_shift lower_i128_logical_shift)
@@ -802,7 +774,6 @@
     (no_return)
   )
 )
-
 
 
 (decl valid_atomic_transaction (Type) Type)
@@ -926,4 +897,113 @@
 (decl con_bit_not(Reg)Reg)
 (rule (con_bit_not r) 
   (alu_rr_imm12 (AluOPRRI.Xori) r (imm12_const -1)))
+
+
+;; float arithmatic op
+(decl f_arithmatic_op (Type Opcode) FpuOPRRR)
+(rule 
+  (f_arithmatic_op $F32 (Opcode.Fadd))
+  (FpuOPRRR.FaddS)
+)
+(rule 
+  (f_arithmatic_op $F64 (Opcode.Fadd))
+  (FpuOPRRR.FaddD)
+)
+
+(rule 
+  (f_arithmatic_op $F32 (Opcode.Fsub))
+  (FpuOPRRR.FsubS)
+)
+(rule 
+  (f_arithmatic_op $F64 (Opcode.Fsub))
+  (FpuOPRRR.FsubD)
+)
+
+(rule 
+  (f_arithmatic_op $F32 (Opcode.Fmul))
+  (FpuOPRRR.FmulS)
+)
+
+(rule 
+  (f_arithmatic_op $F64 (Opcode.Fmul))
+  (FpuOPRRR.FmulD)
+)
+
+(rule 
+  (f_arithmatic_op $F32 (Opcode.Fdiv))
+  (FpuOPRRR.FdivS)
+)
+
+(rule 
+  (f_arithmatic_op $F64 (Opcode.Fdiv))
+  (FpuOPRRR.FdivD)
+)
+
+(rule 
+  (f_arithmatic_op $F32 (Opcode.Fmin))
+  (FpuOPRRR.FminS)
+)
+
+(rule 
+  (f_arithmatic_op $F64 (Opcode.Fmin))
+  (FpuOPRRR.FminD)
+)
+
+(rule 
+  (f_arithmatic_op $F32 (Opcode.Fmax))
+  (FpuOPRRR.FmaxS)
+)
+
+(rule 
+  (f_arithmatic_op $F64 (Opcode.Fmax))
+  (FpuOPRRR.FmaxD)
+)
+
+(decl is_float(Type)Type)
+(rule 
+  (is_float $F32)
+  $F32
+)
+(rule 
+  (is_float $F64)
+  $F64
+)
+
+
+(decl move_f_to_x(Reg Type) Reg)
+(extern constructor move_f_to_x move_f_to_x)
+
+(decl move_x_to_f(Reg Type) Reg)
+(extern constructor move_x_to_f move_x_to_f)
+
+
+(decl load_float_const (u64 Type) Reg)
+(extern constructor load_float_const load_float_const)
+
+;; some float memory representation.
+(extern const $F32_POS_1 u64)
+(extern const $F64_POS_1 u64)
+
+(decl f_pos_1 (Type)u64)
+(rule
+  (f_pos_1 $F32)
+  $F32_POS_1
+)
+(rule
+  (f_pos_1 $F64)
+  $F64_POS_1
+)
+
+;;float copy sign bit op.
+(decl f_copysign_op (Type)FpuOPRRR)
+(rule (f_copysign_op $F32) (FpuOPRRR.FsgnjS))
+(rule (f_copysign_op $F64) (FpuOPRRR.FsgnjD))
+
+;;float copy neg sign bit op.
+
+(decl f_copy_neg_sign_op (Type)FpuOPRRR)
+(rule (f_copy_neg_sign_op $F32) (FpuOPRRR.FsgnjnS))
+(rule (f_copy_neg_sign_op $F64) (FpuOPRRR.FsgnjnD))
+
+
 
