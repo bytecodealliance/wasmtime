@@ -87,6 +87,13 @@ pub enum TrapCode {
 
     /// Execution has potentially run too long and may be interrupted.
     Interrupt,
+
+    /// When the `component-model` feature is enabled this trap represents a
+    /// function that was `canon lift`'d, then `canon lower`'d, then called.
+    /// This combination of creation of a function in the component model
+    /// generates a function that always traps and, when called, produces this
+    /// flavor of trap.
+    AlwaysTrapAdapter,
 }
 
 impl TrapCode {
@@ -104,6 +111,7 @@ impl TrapCode {
             EnvTrapCode::BadConversionToInteger => TrapCode::BadConversionToInteger,
             EnvTrapCode::UnreachableCodeReached => TrapCode::UnreachableCodeReached,
             EnvTrapCode::Interrupt => TrapCode::Interrupt,
+            EnvTrapCode::AlwaysTrapAdapter => TrapCode::AlwaysTrapAdapter,
         }
     }
 }
@@ -123,6 +131,7 @@ impl fmt::Display for TrapCode {
             BadConversionToInteger => "invalid conversion to integer",
             UnreachableCodeReached => "wasm `unreachable` instruction executed",
             Interrupt => "interrupt",
+            AlwaysTrapAdapter => "degenerate component adapter called",
         };
         write!(f, "{}", desc)
     }

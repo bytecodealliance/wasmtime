@@ -168,12 +168,17 @@ impl<'a> ModuleTextBuilder<'a> {
 
     pub fn trampoline(&mut self, sig: SignatureIndex, func: &'a CompiledFunction) -> Trampoline {
         let name = obj::trampoline_symbol_name(sig);
-        let (_, range) = self.append_func(false, name.into_bytes(), func);
+        let range = self.named_func(&name, func);
         Trampoline {
             signature: sig,
             start: range.start,
             length: u32::try_from(range.end - range.start).unwrap(),
         }
+    }
+
+    pub fn named_func(&mut self, name: &str, func: &'a CompiledFunction) -> Range<u64> {
+        let (_, range) = self.append_func(false, name.as_bytes().to_vec(), func);
+        range
     }
 
     /// Forces "veneers" to be used for inter-function calls in the text

@@ -98,6 +98,10 @@ pub enum TrapCode {
     /// Execution has potentially run too long and may be interrupted.
     /// This trap is resumable.
     Interrupt,
+
+    /// Used for the component model when functions are lifted/lowered in a way
+    /// that generates a function that always traps.
+    AlwaysTrapAdapter,
     // if adding a variant here be sure to update the `check!` macro below
 }
 
@@ -205,6 +209,7 @@ pub fn lookup_trap_code(section: &[u8], offset: usize) -> Option<TrapCode> {
         BadConversionToInteger
         UnreachableCodeReached
         Interrupt
+        AlwaysTrapAdapter
     }
 
     if cfg!(debug_assertions) {
