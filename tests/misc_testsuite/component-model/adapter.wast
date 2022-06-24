@@ -70,3 +70,16 @@
     )
   )
 )
+
+;; lower something then immediately lift it
+(component $c
+  (import "host-return-two" (func $f (result u32)))
+
+  (core func $f_lower
+    (canon lower (func $f))
+  )
+  (func $f2 (result s32)
+    (canon lift (core func $f_lower))
+  )
+  (export "f" (func $f2))
+)

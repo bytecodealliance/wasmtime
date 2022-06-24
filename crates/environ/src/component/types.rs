@@ -122,6 +122,9 @@ indices! {
     /// refer back to previously created instances for exports and such.
     pub struct RuntimeInstanceIndex(u32);
 
+    /// Same as `RuntimeInstanceIndex` but tracks component instances instead.
+    pub struct RuntimeComponentInstanceIndex(u32);
+
     /// Used to index imports into a `Component`
     ///
     /// This does not correspond to anything in the binary format for the

@@ -17,9 +17,10 @@ use std::mem;
 use std::ops::Deref;
 use std::ptr::{self, NonNull};
 use wasmtime_environ::component::{
-    Component, LoweredIndex, RuntimeMemoryIndex, RuntimePostReturnIndex, RuntimeReallocIndex,
-    StringEncoding, VMComponentOffsets, VMCOMPONENT_FLAG_MAY_ENTER, VMCOMPONENT_FLAG_MAY_LEAVE,
-    VMCOMPONENT_FLAG_NEEDS_POST_RETURN, VMCOMPONENT_MAGIC,
+    Component, LoweredIndex, RuntimeComponentInstanceIndex, RuntimeMemoryIndex,
+    RuntimePostReturnIndex, RuntimeReallocIndex, StringEncoding, VMComponentOffsets,
+    VMCOMPONENT_FLAG_MAY_ENTER, VMCOMPONENT_FLAG_MAY_LEAVE, VMCOMPONENT_FLAG_NEEDS_POST_RETURN,
+    VMCOMPONENT_MAGIC,
 };
 use wasmtime_environ::HostPtr;
 
@@ -52,6 +53,8 @@ pub struct ComponentInstance {
 ///   end up being a `VMComponentContext`.
 /// * `data` - this is the data pointer associated with the `VMLowering` for
 ///   which this function pointer was registered.
+/// * `flags` - the component flags for may_enter/leave corresponding to the
+///   component instance that the lowering happened within.
 /// * `opt_memory` - this nullable pointer represents the memory configuration
 ///   option for the canonical ABI options.
 /// * `opt_realloc` - this nullable pointer represents the realloc configuration
@@ -65,13 +68,14 @@ pub struct ComponentInstance {
 /// * `nargs_and_results` - the size, in units of `ValRaw`, of
 ///   `args_and_results`.
 //
-// FIXME: 7 arguments is probably too many. The `data` through `string-encoding`
+// FIXME: 8 arguments is probably too many. The `data` through `string-encoding`
 // parameters should probably get packaged up into the `VMComponentContext`.
 // Needs benchmarking one way or another though to figure out what the best
 // balance is here.
 pub type VMLoweringCallee = extern "C" fn(
     vmctx: *mut VMOpaqueContext,
     data: *mut u8,
+    flags: *mut VMComponentFlags,
     opt_memory: *mut VMMemoryDefinition,
     opt_realloc: *mut VMCallerCheckedAnyfunc,
     string_encoding: StringEncoding,
@@ -170,8 +174,8 @@ impl ComponentInstance {
 
     /// Returns a pointer to the "may leave" flag for this instance specified
     /// for canonical lowering and lifting operations.
-    pub fn flags(&self) -> *mut VMComponentFlags {
-        unsafe { self.vmctx_plus_offset(self.offsets.flags()) }
+    pub fn flags(&self, instance: RuntimeComponentInstanceIndex) -> *mut VMComponentFlags {
+        unsafe { self.vmctx_plus_offset(self.offsets.flags(instance)) }
     }
 
     /// Returns the store that this component was created with.
@@ -338,8 +342,11 @@ impl ComponentInstance {
 
     unsafe fn initialize_vmctx(&mut self, store: *mut dyn Store) {
         *self.vmctx_plus_offset(self.offsets.magic()) = VMCOMPONENT_MAGIC;
-        *self.flags() = VMComponentFlags::new();
         *self.vmctx_plus_offset(self.offsets.store()) = store;
+        for i in 0..self.offsets.num_runtime_component_instances {
+            let i = RuntimeComponentInstanceIndex::from_u32(i);
+            *self.flags(i) = VMComponentFlags::new();
+        }
 
         // In debug mode set non-null bad values to all "pointer looking" bits
         // and pices related to lowering and such. This'll help detect any
@@ -553,5 +560,21 @@ impl VMComponentFlags {
         } else {
             self.0 &= !VMCOMPONENT_FLAG_NEEDS_POST_RETURN;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::mem::size_of;
+
+    #[test]
+    fn size_of_vmcomponent_flags() {
+        let component = Component::default();
+        let offsets = VMComponentOffsets::new(size_of::<*mut u8>() as u8, &component);
+        assert_eq!(
+            size_of::<VMComponentFlags>(),
+            usize::from(offsets.size_of_vmcomponent_flags())
+        );
     }
 }

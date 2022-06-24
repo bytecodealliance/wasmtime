@@ -114,6 +114,10 @@ pub struct Component {
     /// when instantiating this component.
     pub num_runtime_instances: u32,
 
+    /// Same as `num_runtime_instances`, but for `RuntimeComponentInstanceIndex`
+    /// instead.
+    pub num_runtime_component_instances: u32,
+
     /// The number of runtime memories (maximum `RuntimeMemoryIndex`) needed to
     /// instantiate this component.
     ///
@@ -355,7 +359,7 @@ pub enum Export {
         /// The component function type of the function being created.
         ty: TypeFuncIndex,
         /// Which core WebAssembly export is being lifted.
-        func: CoreExport<FuncIndex>,
+        func: CoreDef,
         /// Any options, if present, associated with this lifting.
         options: CanonicalOptions,
     },
@@ -369,6 +373,9 @@ pub enum Export {
 /// Canonical ABI options associated with a lifted or lowered function.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CanonicalOptions {
+    /// The component instance that this bundle was associated with.
+    pub instance: RuntimeComponentInstanceIndex,
+
     /// The encoding used for strings.
     pub string_encoding: StringEncoding,
 
@@ -380,17 +387,6 @@ pub struct CanonicalOptions {
 
     /// The post-return function used by these options, if specified.
     pub post_return: Option<RuntimePostReturnIndex>,
-}
-
-impl Default for CanonicalOptions {
-    fn default() -> CanonicalOptions {
-        CanonicalOptions {
-            string_encoding: StringEncoding::Utf8,
-            memory: None,
-            realloc: None,
-            post_return: None,
-        }
-    }
 }
 
 /// Possible encodings of strings within the component model.

@@ -27,6 +27,7 @@ pub trait IntoComponentFunc<T, Params, Return> {
     extern "C" fn entrypoint(
         cx: *mut VMOpaqueContext,
         data: *mut u8,
+        flags: *mut VMComponentFlags,
         memory: *mut VMMemoryDefinition,
         realloc: *mut VMCallerCheckedAnyfunc,
         string_encoding: StringEncoding,
@@ -105,6 +106,7 @@ where
 /// the select few places it's intended to be called from.
 unsafe fn call_host<T, Params, Return, F>(
     cx: *mut VMOpaqueContext,
+    flags: *mut VMComponentFlags,
     memory: *mut VMMemoryDefinition,
     realloc: *mut VMCallerCheckedAnyfunc,
     string_encoding: StringEncoding,
@@ -136,7 +138,6 @@ where
 
     let cx = VMComponentContext::from_opaque(cx);
     let instance = (*cx).instance();
-    let flags = (*instance).flags();
     let mut cx = StoreContextMut::from_raw((*instance).store());
 
     let options = Options::new(
@@ -282,6 +283,7 @@ macro_rules! impl_into_component_func {
             extern "C" fn entrypoint(
                 cx: *mut VMOpaqueContext,
                 data: *mut u8,
+                flags: *mut VMComponentFlags,
                 memory: *mut VMMemoryDefinition,
                 realloc: *mut VMCallerCheckedAnyfunc,
                 string_encoding: StringEncoding,
@@ -292,6 +294,7 @@ macro_rules! impl_into_component_func {
                 unsafe {
                     handle_result(|| call_host::<T, _, _, _>(
                         cx,
+                        flags,
                         memory,
                         realloc,
                         string_encoding,
@@ -318,6 +321,7 @@ macro_rules! impl_into_component_func {
             extern "C" fn entrypoint(
                 cx: *mut VMOpaqueContext,
                 data: *mut u8,
+                flags: *mut VMComponentFlags,
                 memory: *mut VMMemoryDefinition,
                 realloc: *mut VMCallerCheckedAnyfunc,
                 string_encoding: StringEncoding,
@@ -328,6 +332,7 @@ macro_rules! impl_into_component_func {
                 unsafe {
                     handle_result(|| call_host::<T, _, _, _>(
                         cx,
+                        flags,
                         memory,
                         realloc,
                         string_encoding,

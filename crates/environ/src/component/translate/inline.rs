@@ -104,7 +104,14 @@ pub(super) fn run(
     // initial frame. When the inliner finishes it will return the exports of
     // the root frame which are then used for recording the exports of the
     // component.
-    let mut frames = vec![InlinerFrame::new(result, ComponentClosure::default(), args)];
+    let index = RuntimeComponentInstanceIndex::from_u32(0);
+    inliner.result.num_runtime_component_instances += 1;
+    let mut frames = vec![InlinerFrame::new(
+        index,
+        result,
+        ComponentClosure::default(),
+        args,
+    )];
     let exports = inliner.run(&mut frames)?;
     assert!(frames.is_empty());
 
@@ -195,6 +202,8 @@ struct Inliner<'a> {
 /// inliner frames are stored on the heap to avoid recursion based on user
 /// input.
 struct InlinerFrame<'a> {
+    instance: RuntimeComponentInstanceIndex,
+
     /// The remaining initializers to process when instantiating this component.
     initializers: std::slice::Iter<'a, LocalInitializer<'a>>,
 
@@ -312,7 +321,7 @@ enum ComponentFuncDef<'a> {
     /// A core wasm function was lifted into a component function.
     Lifted {
         ty: TypeFuncIndex,
-        func: CoreExport<FuncIndex>,
+        func: CoreDef,
         options: CanonicalOptions,
     },
 }
@@ -509,19 +518,7 @@ impl<'a> Inliner<'a> {
                 let options = self.canonical_options(frame, options);
                 frame.component_funcs.push(ComponentFuncDef::Lifted {
                     ty: *ty,
-                    func: match frame.funcs[*func].clone() {
-                        CoreDef::Export(e) => e.map_index(|i| match i {
-                            EntityIndex::Function(i) => i,
-                            _ => unreachable!("not possible in valid components"),
-                        }),
-
-                        // TODO: lifting a lowered function only happens within
-                        // one component so this runs afoul of "someone needs to
-                        // really closely interpret the may_{enter,leave} flags"
-                        // in the component model spec. That has not currently
-                        // been done so this is left to panic.
-                        CoreDef::Lowered(_) => unimplemented!("lifting a lowered function"),
-                    },
+                    func: frame.funcs[*func].clone(),
                     options,
                 });
             }
@@ -618,7 +615,12 @@ impl<'a> Inliner<'a> {
             // stack.
             ComponentInstantiate(component, args) => {
                 let component: &ComponentDef<'a> = &frame.components[*component];
+                let index = RuntimeComponentInstanceIndex::from_u32(
+                    self.result.num_runtime_component_instances,
+                );
+                self.result.num_runtime_component_instances += 1;
                 let frame = InlinerFrame::new(
+                    index,
                     &self.nested_components[component.index],
                     component.closure.clone(),
                     args.iter()
@@ -872,6 +874,7 @@ impl<'a> Inliner<'a> {
                 })
         });
         CanonicalOptions {
+            instance: frame.instance,
             string_encoding: options.string_encoding,
             memory,
             realloc,
@@ -882,6 +885,7 @@ impl<'a> Inliner<'a> {
 
 impl<'a> InlinerFrame<'a> {
     fn new(
+        instance: RuntimeComponentInstanceIndex,
         translation: &'a Translation<'a>,
         closure: ComponentClosure<'a>,
         args: HashMap<&'a str, ComponentItemDef<'a>>,
@@ -891,6 +895,7 @@ impl<'a> InlinerFrame<'a> {
         // all the maps below. Given that doing such would be wordy and compile
         // time is otherwise not super crucial it's not done at this time.
         InlinerFrame {
+            instance,
             translation,
             closure,
             args,

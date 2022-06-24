@@ -10,9 +10,9 @@ use object::write::Object;
 use std::any::Any;
 use wasmtime_environ::component::{
     CanonicalOptions, Component, ComponentCompiler, ComponentTypes, LowerImport, LoweredIndex,
-    TrampolineInfo, VMComponentOffsets,
+    LoweringInfo, VMComponentOffsets,
 };
-use wasmtime_environ::PrimaryMap;
+use wasmtime_environ::{PrimaryMap, SignatureIndex, Trampoline};
 
 impl ComponentCompiler for Compiler {
     fn compile_lowered_trampoline(
@@ -52,6 +52,7 @@ impl ComponentCompiler for Compiler {
         let mut host_sig = ir::Signature::new(crate::wasmtime_call_conv(isa));
 
         let CanonicalOptions {
+            instance,
             memory,
             realloc,
             post_return,
@@ -70,6 +71,14 @@ impl ComponentCompiler for Compiler {
             vmctx,
             i32::try_from(offsets.lowering_data(lowering.index)).unwrap(),
         ));
+
+        // flags: *mut VMComponentFlags
+        host_sig.params.push(ir::AbiParam::new(pointer_type));
+        callee_args.push(
+            builder
+                .ins()
+                .iadd_imm(vmctx, i64::from(offsets.flags(instance))),
+        );
 
         // memory: *mut VMMemoryDefinition
         host_sig.params.push(ir::AbiParam::new(pointer_type));
@@ -145,32 +154,42 @@ impl ComponentCompiler for Compiler {
 
     fn emit_obj(
         &self,
-        trampolines: PrimaryMap<LoweredIndex, Box<dyn Any + Send>>,
+        lowerings: PrimaryMap<LoweredIndex, Box<dyn Any + Send>>,
+        trampolines: Vec<(SignatureIndex, Box<dyn Any + Send>)>,
         obj: &mut Object<'static>,
-    ) -> Result<PrimaryMap<LoweredIndex, TrampolineInfo>> {
-        let trampolines: PrimaryMap<LoweredIndex, CompiledFunction> = trampolines
+    ) -> Result<(PrimaryMap<LoweredIndex, LoweringInfo>, Vec<Trampoline>)> {
+        let lowerings: PrimaryMap<LoweredIndex, CompiledFunction> = lowerings
             .into_iter()
             .map(|(_, f)| *f.downcast().unwrap())
             .collect();
+        let trampolines: Vec<(SignatureIndex, CompiledFunction)> = trampolines
+            .into_iter()
+            .map(|(i, f)| (i, *f.downcast().unwrap()))
+            .collect();
+
         let module = Default::default();
         let mut text = ModuleTextBuilder::new(obj, &module, &*self.isa);
         let mut ret = PrimaryMap::new();
-        for (idx, trampoline) in trampolines.iter() {
+        for (idx, lowering) in lowerings.iter() {
             let (_symbol, range) = text.append_func(
                 false,
-                format!("_wasm_component_host_trampoline{}", idx.as_u32()).into_bytes(),
-                &trampoline,
+                format!("_wasm_component_lowering_trampoline{}", idx.as_u32()).into_bytes(),
+                &lowering,
             );
 
-            let i = ret.push(TrampolineInfo {
+            let i = ret.push(LoweringInfo {
                 start: u32::try_from(range.start).unwrap(),
                 length: u32::try_from(range.end - range.start).unwrap(),
             });
             assert_eq!(i, idx);
         }
+        let ret_trampolines = trampolines
+            .iter()
+            .map(|(i, func)| text.trampoline(*i, func))
+            .collect();
 
         text.finish()?;
 
-        Ok(ret)
+        Ok((ret, ret_trampolines))
     }
 }

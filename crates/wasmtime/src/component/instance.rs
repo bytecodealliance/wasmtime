@@ -143,7 +143,7 @@ impl InstanceData {
         }
     }
 
-    fn lookup_def(&self, store: &mut StoreOpaque, def: &CoreDef) -> wasmtime_runtime::Export {
+    pub fn lookup_def(&self, store: &mut StoreOpaque, def: &CoreDef) -> wasmtime_runtime::Export {
         match def {
             CoreDef::Lowered(idx) => {
                 wasmtime_runtime::Export::Function(wasmtime_runtime::ExportFunction {

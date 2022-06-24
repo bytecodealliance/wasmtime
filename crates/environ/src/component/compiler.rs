@@ -1,5 +1,5 @@
 use crate::component::{Component, ComponentTypes, LowerImport, LoweredIndex};
-use crate::PrimaryMap;
+use crate::{PrimaryMap, SignatureIndex, Trampoline};
 use anyhow::Result;
 use object::write::Object;
 use serde::{Deserialize, Serialize};
@@ -8,7 +8,7 @@ use std::any::Any;
 /// Description of where a trampoline is located in the text section of a
 /// compiled image.
 #[derive(Serialize, Deserialize)]
-pub struct TrampolineInfo {
+pub struct LoweringInfo {
     /// The byte offset from the start of the text section where this trampoline
     /// starts.
     pub start: u32,
@@ -42,8 +42,8 @@ pub trait ComponentCompiler: Send + Sync {
         types: &ComponentTypes,
     ) -> Result<Box<dyn Any + Send>>;
 
-    /// Emits the `trampolines` specified into the in-progress ELF object
-    /// specified by `obj`.
+    /// Emits the `lowerings` and `trampolines` specified into the in-progress
+    /// ELF object specified by `obj`.
     ///
     /// Returns a map of trampoline information for where to find them all in
     /// the text section.
@@ -52,7 +52,8 @@ pub trait ComponentCompiler: Send + Sync {
     /// trampolines as necessary.
     fn emit_obj(
         &self,
-        trampolines: PrimaryMap<LoweredIndex, Box<dyn Any + Send>>,
+        lowerings: PrimaryMap<LoweredIndex, Box<dyn Any + Send>>,
+        tramplines: Vec<(SignatureIndex, Box<dyn Any + Send>)>,
         obj: &mut Object<'static>,
-    ) -> Result<PrimaryMap<LoweredIndex, TrampolineInfo>>;
+    ) -> Result<(PrimaryMap<LoweredIndex, LoweringInfo>, Vec<Trampoline>)>;
 }

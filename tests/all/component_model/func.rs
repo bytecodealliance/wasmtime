@@ -2152,5 +2152,120 @@ fn raw_slice_of_various_types() -> Result<()> {
             i64::to_le(0x0f_0e_0d_0c_0b_0a_09_08),
         ]
     );
+
+    Ok(())
+}
+
+#[test]
+fn lower_then_lift() -> Result<()> {
+    // First test simple integers when the import/export ABI happen to line up
+    let component = r#"
+(component $c
+  (import "f" (func $f (result u32)))
+
+  (core func $f_lower
+    (canon lower (func $f))
+  )
+  (func $f2 (result s32)
+    (canon lift (core func $f_lower))
+  )
+  (export "f" (func $f2))
+)
+    "#;
+
+    let engine = super::engine();
+    let component = Component::new(&engine, component)?;
+    let mut store = Store::new(&engine, ());
+    let mut linker = Linker::new(&engine);
+    linker.root().func_wrap("f", || Ok(2u32))?;
+    let instance = linker.instantiate(&mut store, &component)?;
+
+    let f = instance.get_typed_func::<(), i32, _>(&mut store, "f")?;
+    assert_eq!(f.call(&mut store, ())?, 2);
+
+    // First test strings when the import/export ABI happen to line up
+    let component = format!(
+        r#"
+(component $c
+  (import "s" (func $f (param string)))
+
+  (core module $libc
+    (memory (export "memory") 1)
+    {REALLOC_AND_FREE}
+  )
+  (core instance $libc (instantiate $libc))
+
+  (core func $f_lower
+    (canon lower (func $f) (memory $libc "memory"))
+  )
+  (func $f2 (param string)
+    (canon lift (core func $f_lower)
+        (memory $libc "memory")
+        (realloc (func $libc "realloc"))
+    )
+  )
+  (export "f" (func $f2))
+)
+    "#
+    );
+
+    let component = Component::new(&engine, component)?;
+    let mut store = Store::new(&engine, ());
+    linker
+        .root()
+        .func_wrap("s", |store: StoreContextMut<'_, ()>, x: WasmStr| {
+            assert_eq!(x.to_str(&store)?, "hello");
+            Ok(())
+        })?;
+    let instance = linker.instantiate(&mut store, &component)?;
+
+    let f = instance.get_typed_func::<(&str,), (), _>(&mut store, "f")?;
+    f.call(&mut store, ("hello",))?;
+
+    // Next test "type punning" where return values are reinterpreted just
+    // because the return ABI happens to line up.
+    let component = format!(
+        r#"
+(component $c
+  (import "s2" (func $f (param string) (result u32)))
+
+  (core module $libc
+    (memory (export "memory") 1)
+    {REALLOC_AND_FREE}
+  )
+  (core instance $libc (instantiate $libc))
+
+  (core func $f_lower
+    (canon lower (func $f) (memory $libc "memory"))
+  )
+  (func $f2 (param string) (result string)
+    (canon lift (core func $f_lower)
+        (memory $libc "memory")
+        (realloc (func $libc "realloc"))
+    )
+  )
+  (export "f" (func $f2))
+)
+    "#
+    );
+
+    let component = Component::new(&engine, component)?;
+    let mut store = Store::new(&engine, ());
+    linker
+        .root()
+        .func_wrap("s2", |store: StoreContextMut<'_, ()>, x: WasmStr| {
+            assert_eq!(x.to_str(&store)?, "hello");
+            Ok(u32::MAX)
+        })?;
+    let instance = linker.instantiate(&mut store, &component)?;
+
+    let f = instance.get_typed_func::<(&str,), WasmStr, _>(&mut store, "f")?;
+    let err = f.call(&mut store, ("hello",)).err().unwrap();
+    assert!(
+        err.to_string().contains("return pointer not aligned"),
+        "{}",
+        err
+    );
+
     Ok(())
 }
