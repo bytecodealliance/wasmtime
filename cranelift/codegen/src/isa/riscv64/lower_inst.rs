@@ -16,7 +16,7 @@ use crate::CodegenResult;
 
 use std::boxed::Box;
 
-use crate::ir::types::{ I128, I16, I32, I64, I8};
+use crate::ir::types::{I128, I16, I32, I64, I8};
 
 use super::lower::*;
 use crate::isa::riscv64::abi::*;
@@ -198,7 +198,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 rd: r_dst,
                 addr: r_addr,
                 src: zero_reg(),
-                amo: AMO::Relax,
+                amo: AMO::SeqConsistent,
             });
         }
 
@@ -225,7 +225,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 rd: r_dst,
                 addr: r_addr,
                 src: arg2,
-                amo: AMO::Relax,
+                amo: AMO::SeqConsistent,
             });
         }
 

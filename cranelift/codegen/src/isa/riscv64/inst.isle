@@ -681,8 +681,18 @@
 (rule (select_addi (fits_in_64 ty)) (AluOPRRI.Addi))
 
 (decl bnot_128 (ValueRegs) ValueRegs)
-(extern constructor bnot_128 bnot_128)
-
+(rule 
+  (bnot_128 val)
+  (let
+    (
+      ;; low part.
+      (low Reg (con_bit_not (value_regs_get val 0)))
+      ;; high part.
+      (high Reg (con_bit_not (value_regs_get val 1)))
+    )
+    (value_regs low high)
+  )
+)
 
 (decl i128_arithmetic (I128OP ValueRegs ValueRegs) ValueRegs)
 (extern constructor i128_arithmetic i128_arithmetic)
@@ -696,15 +706,37 @@
 (decl lower_clz (Type ValueRegs)Reg)
 (extern constructor lower_clz lower_clz)
 
-(decl lower_extend(Reg bool u8 u8 )ValueRegs)
+;; val is_signed from_bits to_bits
+(decl lower_extend(Reg bool u8 u8)ValueRegs)
 (extern constructor lower_extend lower_extend)
 
 (decl lower_band_not_i128(ValueRegs ValueRegs)ValueRegs)
-(extern constructor lower_band_not_i128 lower_band_not_i128)
-
+(rule 
+  (lower_band_not_i128 a b)
+  (let
+    (
+      ;; low part.
+      (low Reg (alu_rrr (AluOPRRR.Andn) $I64 (value_regs_get a 0) (value_regs_get b 0)))
+      ;; high part.
+      (high Reg (alu_rrr (AluOPRRR.Andn) $I64 (value_regs_get a 1) (value_regs_get b 1)))
+    )
+    (value_regs low high)
+  )
+)
 
 (decl lower_b128_binary(AluOPRRR ValueRegs ValueRegs) ValueRegs)
-(extern constructor lower_b128_binary lower_b128_binary)
+(rule 
+  (lower_b128_binary op a b)
+  (let
+    (
+      ;; low part.
+      (low Reg (alu_rrr op $I64 (value_regs_get a 0) (value_regs_get b 0)))
+      ;; high part.
+      (high Reg (alu_rrr op $I64 (value_regs_get a 1) (value_regs_get b 1)))
+    )
+    (value_regs low high)
+  )
+)
 
 (decl lower_mlhi (bool Type Reg Reg)Reg)
 (extern constructor lower_mlhi lower_mlhi)
@@ -715,15 +747,35 @@
 (decl lower_rotr(Type Reg Reg) Reg)
 (extern constructor lower_rotr lower_rotr)
 
-
 (decl lower_cls(Reg Type) Reg)
-(extern constructor lower_cls lower_cls)
-
-(decl lower_i128_xnor(ValueRegs ValueRegs)ValueRegs)
-(extern constructor lower_i128_xnor lower_i128_xnor)
+(rule
+  (lower_cls r ty)
+  (let
+    (
+      ;; alloc tmp.
+      (tmp WritableReg (temp_writable_reg $I64))
+      ;;
+      (_ Unit (emit (MInst.Cls r tmp ty)))
+    )
+    tmp
+  )
+)
 
 (decl lower_popcnt_i128(ValueRegs) ValueRegs)
-(extern constructor lower_popcnt_i128 lower_popcnt_i128)
+(rule 
+  (lower_popcnt_i128 a)
+  (let
+    (
+      ;; low part.
+      (low Reg (alu_rr_imm12 (AluOPRRI.Cpop) (value_regs_get a 0) (imm12_const 0)))
+      ;; high part.
+      (high Reg (alu_rr_imm12 (AluOPRRI.Cpop) (value_regs_get a 1) (imm12_const 0)))
+      ;; add toghter.
+      (result Reg (alu_rrr (AluOPRRR.Add) $I64 low high))
+    )
+    (value_regs result (zero_reg))
+  )
+)
 
 (decl lower_i128_rotate(bool ValueRegs ValueRegs) ValueRegs)
 (extern constructor lower_i128_rotate lower_i128_rotate)
@@ -762,7 +814,6 @@
 (decl no_return()InstOutput)
 (extern constructor no_return no_return)
 
-
 ;; helper function to store to memory.
 (decl con_store(Reg i64 StoreOP Type MemFlags Reg)InstOutput)
 (rule 
@@ -774,7 +825,6 @@
     (no_return)
   )
 )
-
 
 (decl valid_atomic_transaction (Type) Type)
 (extern extractor valid_atomic_transaction valid_atomic_transaction)
@@ -894,8 +944,8 @@
 (extern constructor con_atomic_store con_atomic_store)
 
 ;; helper function to inverse all bits.
-(decl con_bit_not(Reg)Reg)
-(rule (con_bit_not r) 
+(decl con_bit_not (Reg) Reg)
+(rule (con_bit_not r)
   (alu_rr_imm12 (AluOPRRI.Xori) r (imm12_const -1)))
 
 
@@ -976,7 +1026,6 @@
 (decl move_x_to_f(Reg Type) Reg)
 (extern constructor move_x_to_f move_x_to_f)
 
-
 (decl load_float_const (u64 Type) Reg)
 (extern constructor load_float_const load_float_const)
 
@@ -1000,10 +1049,7 @@
 (rule (f_copysign_op $F64) (FpuOPRRR.FsgnjD))
 
 ;;float copy neg sign bit op.
-
 (decl f_copy_neg_sign_op (Type)FpuOPRRR)
 (rule (f_copy_neg_sign_op $F32) (FpuOPRRR.FsgnjnS))
 (rule (f_copy_neg_sign_op $F64) (FpuOPRRR.FsgnjnD))
-
-
 

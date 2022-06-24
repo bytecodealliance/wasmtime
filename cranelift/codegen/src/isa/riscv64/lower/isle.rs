@@ -112,16 +112,6 @@ where
         Imm12::maybe_from_u64(val as u64).unwrap()
     }
 
-    fn bnot_128(&mut self, value: ValueRegs) -> ValueRegs {
-        let tmp_hight = self.temp_writable_reg(I64);
-        let tmp_low = self.temp_writable_reg(I64);
-        let high = value.regs()[1];
-        let low = value.regs()[0];
-        self.emit(&MInst::construct_bit_not(tmp_hight, high));
-        self.emit(&MInst::construct_bit_not(tmp_low, low));
-        self.value_regs(tmp_low.to_reg(), tmp_hight.to_reg())
-    }
-
     fn i128_arithmetic(&mut self, op: &I128OP, x: ValueRegs, y: ValueRegs) -> ValueRegs {
         match *op {
             I128OP::Add => {
@@ -410,69 +400,6 @@ where
         ValueRegs::one(rd.to_reg())
     }
 
-    fn lower_band_not_i128(&mut self, a: ValueRegs, b: ValueRegs) -> ValueRegs {
-        let low = self.temp_writable_reg(I64);
-        let high = self.temp_writable_reg(I64);
-        self.emit(&MInst::AluRRR {
-            alu_op: AluOPRRR::Andn,
-            rd: low,
-            rs1: a.regs()[0],
-            rs2: b.regs()[0],
-        });
-        self.emit(&MInst::AluRRR {
-            alu_op: AluOPRRR::Andn,
-            rd: high,
-            rs1: a.regs()[1],
-            rs2: b.regs()[1],
-        });
-        ValueRegs::two(low.to_reg(), high.to_reg())
-    }
-
-    fn lower_popcnt_i128(&mut self, val: ValueRegs) -> ValueRegs {
-        let low = self.temp_writable_reg(I64);
-        let high = self.temp_writable_reg(I64);
-        let (op, imm12) = (AluOPRRI::Cpop, Imm12::zero());
-
-        self.emit(&MInst::AluRRImm12 {
-            alu_op: op,
-            rd: low,
-            rs: val.regs()[0],
-            imm12,
-        });
-        self.emit(&MInst::AluRRImm12 {
-            alu_op: op,
-            rd: high,
-            rs: val.regs()[1],
-            imm12,
-        });
-        // add low and high together.
-        self.emit(&MInst::AluRRR {
-            alu_op: AluOPRRR::Add,
-            rd: low,
-            rs1: low.to_reg(),
-            rs2: high.to_reg(),
-        });
-        self.emit(&MInst::load_constant_imm12(high, Imm12::from_bits(0)));
-        ValueRegs::two(low.to_reg(), high.to_reg())
-    }
-    fn lower_i128_xnor(&mut self, x: ValueRegs, y: ValueRegs) -> ValueRegs {
-        let low = self.temp_writable_reg(I64);
-        let high = self.temp_writable_reg(I64);
-        self.emit(&MInst::AluRRR {
-            alu_op: AluOPRRR::Xnor,
-            rd: low,
-            rs1: x.regs()[0],
-            rs2: y.regs()[0],
-        });
-        self.emit(&MInst::AluRRR {
-            alu_op: AluOPRRR::Xnor,
-            rd: high,
-            rs1: x.regs()[1],
-            rs2: y.regs()[1],
-        });
-        ValueRegs::two(low.to_reg(), high.to_reg())
-    }
-
     fn lower_extend(&mut self, val: Reg, is_signed: bool, from_bits: u8, to_bits: u8) -> ValueRegs {
         if is_signed {
             if to_bits == 128 {
@@ -541,25 +468,6 @@ where
     fn imm12_const(&mut self, val: i32) -> Imm12 {
         Imm12::maybe_from_u64(val as u64).unwrap()
     }
-    fn lower_b128_binary(&mut self, op: &AluOPRRR, a: ValueRegs, b: ValueRegs) -> ValueRegs {
-        let op = *op;
-        let low = self.temp_writable_reg(I64);
-        let high = self.temp_writable_reg(I64);
-        self.emit(&MInst::AluRRR {
-            alu_op: op,
-            rd: low,
-            rs1: a.regs()[0],
-            rs2: b.regs()[0],
-        });
-        self.emit(&MInst::AluRRR {
-            alu_op: op,
-            rd: high,
-            rs1: a.regs()[1],
-            rs2: b.regs()[1],
-        });
-        ValueRegs::two(low.to_reg(), high.to_reg())
-    }
-
     fn lower_rotl(&mut self, ty: Type, rs: Reg, amount: Reg) -> Reg {
         let rd = self.temp_writable_reg(I64);
         match ty.bits() {
@@ -745,16 +653,6 @@ where
         }
 
         rd.to_reg()
-    }
-
-    fn lower_cls(&mut self, val: Reg, ty: Type) -> Reg {
-        let tmp = self.temp_writable_reg(I64);
-        self.emit(&MInst::Cls {
-            rs: val,
-            rd: tmp,
-            ty,
-        });
-        tmp.to_reg()
     }
 
     fn lower_i128_rotate(
@@ -1271,8 +1169,9 @@ where
             None
         }
     }
+
     fn atomic_rmw_amo(&mut self) -> AMO {
-        AMO::Relax
+        AMO::SeqConsistent
     }
     fn con_atomic_load(&mut self, addr: Reg, ty: Type) -> Reg {
         let tmp = self.temp_writable_reg(ty);
@@ -1285,7 +1184,7 @@ where
             },
             rd: tmp,
             src: zero_reg(),
-            amo: AMO::Relax,
+            amo: AMO::SeqConsistent,
         });
         tmp.to_reg()
     }
@@ -1300,7 +1199,7 @@ where
             },
             rd: tmp,
             src: src,
-            amo: AMO::Relax,
+            amo: AMO::SeqConsistent,
         });
         tmp.to_reg()
     }

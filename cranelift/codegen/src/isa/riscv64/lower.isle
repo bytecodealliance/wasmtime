@@ -316,7 +316,7 @@
       (alu_rrr  (AluOPRRR.Xnor) $I64 y x))  ;; notice x y order!!!
 
 (rule (lower (has_type  $I128 (bxor_not x y)))
-      (lower_i128_xnor y x));; notice x y order!!!
+      (lower_b128_binary (AluOPRRR.Xnor) y x));; notice x y order!!!
 
 (rule (lower (has_type  ty (bxor_not x y)))
       (let
