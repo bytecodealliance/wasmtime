@@ -168,7 +168,7 @@
               (dst WritableGpr))
 
        ;; XMM conditional move; overwrites the destination register.
-       (XmmCmove (size OperandSize)
+       (XmmCmove (ty Type)
                  (cc CC)
                  (consequent XmmMem)
                  (alternative Xmm)
@@ -1896,10 +1896,9 @@
 
 (decl cmove_xmm (Type CC XmmMem Xmm) ConsumesFlags)
 (rule (cmove_xmm ty cc consequent alternative)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (size OperandSize (operand_size_of_type_32_64 ty)))
+      (let ((dst WritableXmm (temp_writable_xmm)))
         (ConsumesFlags.ConsumesFlagsReturnsReg
-         (MInst.XmmCmove size cc consequent alternative dst)
+         (MInst.XmmCmove ty cc consequent alternative dst)
          dst)))
 
 ;; Helper for creating `cmove` instructions directly from values. This allows us
@@ -1952,9 +1951,8 @@
 (rule (cmove_or_xmm ty cc1 cc2 consequent alternative)
       (let ((dst WritableXmm (temp_writable_xmm))
             (tmp WritableXmm (temp_writable_xmm))
-            (size OperandSize (operand_size_of_type_32_64 ty))
-            (cmove1 MInst (MInst.XmmCmove size cc1 consequent alternative tmp))
-            (cmove2 MInst (MInst.XmmCmove size cc2 consequent tmp dst)))
+            (cmove1 MInst (MInst.XmmCmove ty cc1 consequent alternative tmp))
+            (cmove2 MInst (MInst.XmmCmove ty cc2 consequent tmp dst)))
         (ConsumesFlags.ConsumesFlagsTwiceReturnsValueRegs
          cmove1
          cmove2

@@ -617,14 +617,14 @@ impl Inst {
         }
     }
 
-    pub(crate) fn xmm_cmove(size: OperandSize, cc: CC, src: RegMem, dst: Writable<Reg>) -> Inst {
-        debug_assert!(size.is_one_of(&[OperandSize::Size32, OperandSize::Size64]));
+    pub(crate) fn xmm_cmove(ty: Type, cc: CC, src: RegMem, dst: Writable<Reg>) -> Inst {
+        debug_assert!(ty == types::F32 || ty == types::F64 || ty.is_vector());
         src.assert_regclass_is(RegClass::Float);
         debug_assert!(dst.to_reg().class() == RegClass::Float);
         let src = XmmMem::new(src).unwrap();
         let dst = WritableXmm::from_writable_reg(dst).unwrap();
         Inst::XmmCmove {
-            size,
+            ty,
             cc,
             consequent: src,
             alternative: dst.to_reg(),
@@ -1507,23 +1507,26 @@ impl PrettyPrint for Inst {
             }
 
             Inst::XmmCmove {
-                size,
+                ty,
                 cc,
                 consequent,
                 alternative,
                 dst,
                 ..
             } => {
-                let alternative = pretty_print_reg(alternative.to_reg(), size.to_bytes(), allocs);
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), size.to_bytes(), allocs);
-                let consequent = consequent.pretty_print(size.to_bytes(), allocs);
+                let size = u8::try_from(ty.bytes()).unwrap();
+                let alternative = pretty_print_reg(alternative.to_reg(), size, allocs);
+                let dst = pretty_print_reg(dst.to_reg().to_reg(), size, allocs);
+                let consequent = consequent.pretty_print(size, allocs);
                 format!(
                     "mov {}, {}; j{} $next; mov{} {}, {}; $next: ",
                     cc.invert().to_string(),
-                    if *size == OperandSize::Size64 {
-                        "sd"
-                    } else {
-                        "ss"
+                    match *ty {
+                        types::F64 => "sd",
+                        types::F32 => "ss",
+                        types::F32X4 => "aps",
+                        types::F64X2 => "apd",
+                        _ => "dqa",
                     },
                     consequent,
                     dst,

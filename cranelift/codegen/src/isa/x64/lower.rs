@@ -2271,11 +2271,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 debug_assert!(ty == types::F32 || ty == types::F64);
                 emit_moves(ctx, dst, rhs, ty);
                 ctx.emit(Inst::xmm_cmove(
-                    if ty == types::F64 {
-                        OperandSize::Size64
-                    } else {
-                        OperandSize::Size32
-                    },
+                    ty,
                     cc,
                     RegMem::reg(lhs.only_reg().unwrap()),
                     dst.only_reg().unwrap(),
