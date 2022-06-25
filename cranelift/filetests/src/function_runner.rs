@@ -308,7 +308,14 @@ fn make_trampoline(signature: &ir::Signature, isa: &dyn TargetIsa) -> Function {
             // that we are using the architecture's canonical boolean representation (presumably
             // comparison will emit this).
             if param.value_type.is_bool() {
-                builder.ins().icmp_imm(IntCC::NotEqual, loaded, 0)
+                let b = builder.ins().icmp_imm(IntCC::NotEqual, loaded, 0);
+
+                // icmp_imm always produces a `b1`, `bextend` it if we need a larger bool
+                if param.value_type.bits() > 1 {
+                    builder.ins().bextend(param.value_type, b)
+                } else {
+                    b
+                }
             } else if param.value_type.is_bool_vector() {
                 let zero_constant = builder.func.dfg.constants.insert(vec![0; 16].into());
                 let zero_vec = builder.ins().vconst(ty, zero_constant);
