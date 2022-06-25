@@ -249,12 +249,18 @@ impl<'a> Arbitrary<'a> for NormalMemoryConfig {
     fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
         // This attempts to limit memory and guard sizes to 32-bit ranges so
         // we don't exhaust a 64-bit address space easily.
-        Ok(Self {
+        let mut ret = Self {
             static_memory_maximum_size: <Option<u32> as Arbitrary>::arbitrary(u)?.map(Into::into),
             static_memory_guard_size: <Option<u32> as Arbitrary>::arbitrary(u)?.map(Into::into),
             dynamic_memory_guard_size: <Option<u32> as Arbitrary>::arbitrary(u)?.map(Into::into),
             guard_before_linear_memory: u.arbitrary()?,
-        })
+        };
+
+        if let Some(dynamic) = ret.dynamic_memory_guard_size {
+            let statik = ret.static_memory_guard_size.unwrap_or(2 << 30);
+            ret.static_memory_guard_size = Some(statik.max(dynamic));
+        }
+        Ok(ret)
     }
 }
 
