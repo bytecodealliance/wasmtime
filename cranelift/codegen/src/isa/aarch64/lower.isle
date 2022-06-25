@@ -1109,6 +1109,21 @@
 (rule (lower (has_type ty (cls x)))
       (a64_cls ty x))
 
+;;;; Rules for `bint` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Booleans are stored as all-zeroes (0) or all-ones (-1). We AND
+;; out the LSB to give a 0 / 1-valued integer result.
+
+(rule (lower (has_type $I128 (bint x)))
+      (let ((val ValueRegs x)
+            (in_lo Reg (value_regs_get val 0))
+            (dst_lo Reg (and_imm $I32 in_lo (u64_into_imm_logic $I32 1)))
+            (dst_hi Reg (imm $I64 0)))
+        (value_regs dst_lo dst_hi)))
+
+(rule (lower (bint x))
+      (and_imm $I32 x (u64_into_imm_logic $I32 1)))
+
 ;;;; Rules for `popcnt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; The implementation of `popcnt` for scalar types is done by moving the value
