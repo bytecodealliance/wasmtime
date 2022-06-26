@@ -213,12 +213,12 @@ macro_rules! wasi_stream_write_impl {
                 bufs: &mut [io::IoSliceMut<'a>],
             ) -> Result<u64, Error> {
                 use std::io::Read;
-                let n = Read::read_vectored(&mut *self.as_socketlike_view::<$std_ty>(), bufs)?;
+                let n = Read::read_vectored(&mut &*self.as_socketlike_view::<$std_ty>(), bufs)?;
                 Ok(n.try_into()?)
             }
             async fn write_vectored<'a>(&mut self, bufs: &[io::IoSlice<'a>]) -> Result<u64, Error> {
                 use std::io::Write;
-                let n = Write::write_vectored(&mut *self.as_socketlike_view::<$std_ty>(), bufs)?;
+                let n = Write::write_vectored(&mut &*self.as_socketlike_view::<$std_ty>(), bufs)?;
                 Ok(n.try_into()?)
             }
             async fn peek(&mut self, buf: &mut [u8]) -> Result<u64, Error> {

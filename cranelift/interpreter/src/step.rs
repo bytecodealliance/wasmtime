@@ -716,11 +716,15 @@ where
         | Opcode::ScalarToVector
         | Opcode::Breduce
         | Opcode::Bextend
-        | Opcode::Bint
         | Opcode::Ireduce => assign(Value::convert(
             arg(0)?,
             ValueConversionKind::Exact(ctrl_ty),
         )?),
+        Opcode::Bint => {
+            let bool = arg(0)?.into_bool()?;
+            let int = if bool { 1 } else { 0 };
+            assign(Value::int(int, ctrl_ty)?)
+        }
         Opcode::Snarrow | Opcode::Unarrow | Opcode::Uunarrow => {
             let arg0 = extractlanes(&arg(0)?, ctrl_ty.lane_type())?;
             let arg1 = extractlanes(&arg(1)?, ctrl_ty.lane_type())?;

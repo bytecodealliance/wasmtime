@@ -129,6 +129,9 @@ pub struct Component {
     /// `VMComponentContext`.
     pub num_runtime_reallocs: u32,
 
+    /// Same as `num_runtime_reallocs`, but for post-return functions.
+    pub num_runtime_post_returns: u32,
+
     /// The number of lowered host functions (maximum `LoweredIndex`) needed to
     /// instantiate this component.
     pub num_lowerings: u32,
@@ -180,6 +183,10 @@ pub enum GlobalInitializer {
     /// used as a `realloc` function.
     ExtractRealloc(ExtractRealloc),
 
+    /// Same as `ExtractMemory`, except it's extracting a function pointer to be
+    /// used as a `post-return` function.
+    ExtractPostReturn(ExtractPostReturn),
+
     /// The `module` specified is saved into the runtime state at the next
     /// `RuntimeModuleIndex`, referred to later by `Export` definitions.
     SaveStaticModule(StaticModuleIndex),
@@ -204,6 +211,15 @@ pub struct ExtractRealloc {
     /// The index of the realloc being defined.
     pub index: RuntimeReallocIndex,
     /// Where this realloc is being extracted from.
+    pub def: CoreDef,
+}
+
+/// Same as `ExtractMemory` but for the `post-return` canonical option.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ExtractPostReturn {
+    /// The index of the post-return being defined.
+    pub index: RuntimePostReturnIndex,
+    /// Where this post-return is being extracted from.
     pub def: CoreDef,
 }
 
@@ -361,7 +377,9 @@ pub struct CanonicalOptions {
 
     /// The realloc function used by these options, if specified.
     pub realloc: Option<RuntimeReallocIndex>,
-    // TODO: need to represent post-return here as well
+
+    /// The post-return function used by these options, if specified.
+    pub post_return: Option<RuntimePostReturnIndex>,
 }
 
 impl Default for CanonicalOptions {
@@ -370,6 +388,7 @@ impl Default for CanonicalOptions {
             string_encoding: StringEncoding::Utf8,
             memory: None,
             realloc: None,
+            post_return: None,
         }
     }
 }

@@ -242,7 +242,7 @@ impl Instance {
 
         // Register the module just before instantiation to ensure we keep the module
         // properly referenced while in use by the store.
-        store.modules_mut().register(module);
+        store.modules_mut().register_module(module);
 
         // The first thing we do is issue an instance allocation request
         // to the instance allocator. This, on success, will give us an

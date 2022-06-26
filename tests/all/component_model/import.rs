@@ -614,3 +614,50 @@ fn bad_import_alignment() -> Result<()> {
     assert!(trap.to_string().contains("pointer not aligned"), "{}", trap);
     Ok(())
 }
+
+#[test]
+fn no_actual_wasm_code() -> Result<()> {
+    let component = r#"
+        (component
+            (import "f" (func $f))
+
+            (core func $f_lower
+                (canon lower (func $f))
+            )
+            (core module $m
+                (import "" "" (func $f))
+                (export "f" (func $f))
+            )
+            (core instance $i (instantiate $m
+                (with "" (instance
+                    (export "" (func $f_lower))
+                ))
+            ))
+            (func (export "thunk")
+                (canon lift
+                    (core func $i "f")
+                )
+            )
+        )
+    "#;
+
+    let engine = super::engine();
+    let component = Component::new(&engine, component)?;
+    let mut store = Store::new(&engine, 0);
+    let mut linker = Linker::new(&engine);
+    linker
+        .root()
+        .func_wrap("f", |mut store: StoreContextMut<'_, u32>| -> Result<()> {
+            *store.data_mut() += 1;
+            Ok(())
+        })?;
+
+    let instance = linker.instantiate(&mut store, &component)?;
+    let thunk = instance.get_typed_func::<(), (), _>(&mut store, "thunk")?;
+
+    assert_eq!(*store.data(), 0);
+    thunk.call(&mut store, ())?;
+    assert_eq!(*store.data(), 1);
+
+    Ok(())
+}

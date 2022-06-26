@@ -2,16 +2,18 @@
 //
 // struct VMComponentContext {
 //      magic: u32,
-//      may_enter: u8,
-//      may_leave: u8,
+//      flags: u8,
 //      store: *mut dyn Store,
 //      lowering_anyfuncs: [VMCallerCheckedAnyfunc; component.num_lowerings],
 //      lowerings: [VMLowering; component.num_lowerings],
 //      memories: [*mut VMMemoryDefinition; component.num_memories],
 //      reallocs: [*mut VMCallerCheckedAnyfunc; component.num_reallocs],
+//      post_returns: [*mut VMCallerCheckedAnyfunc; component.num_post_returns],
 // }
 
-use crate::component::{Component, LoweredIndex, RuntimeMemoryIndex, RuntimeReallocIndex};
+use crate::component::{
+    Component, LoweredIndex, RuntimeMemoryIndex, RuntimePostReturnIndex, RuntimeReallocIndex,
+};
 use crate::PtrSize;
 
 /// Equivalent of `VMCONTEXT_MAGIC` except for components.
@@ -19,6 +21,18 @@ use crate::PtrSize;
 /// This is stored at the start of all `VMComponentContext` structures adn
 /// double-checked on `VMComponentContext::from_opaque`.
 pub const VMCOMPONENT_MAGIC: u32 = u32::from_le_bytes(*b"comp");
+
+/// Flag for the `VMComponentContext::flags` field which corresponds to the
+/// canonical ABI flag `may_leave`
+pub const VMCOMPONENT_FLAG_MAY_LEAVE: u8 = 1 << 0;
+
+/// Flag for the `VMComponentContext::flags` field which corresponds to the
+/// canonical ABI flag `may_enter`
+pub const VMCOMPONENT_FLAG_MAY_ENTER: u8 = 1 << 1;
+
+/// Flag for the `VMComponentContext::flags` field which is set whenever a
+/// function is called to indicate that `post_return` must be called next.
+pub const VMCOMPONENT_FLAG_NEEDS_POST_RETURN: u8 = 1 << 2;
 
 /// Runtime offsets within a `VMComponentContext` for a specific component.
 #[derive(Debug, Clone, Copy)]
@@ -32,16 +46,18 @@ pub struct VMComponentOffsets<P> {
     pub num_runtime_memories: u32,
     /// The number of reallocs which are recorded in this component for options.
     pub num_runtime_reallocs: u32,
+    /// The number of post-returns which are recorded in this component for options.
+    pub num_runtime_post_returns: u32,
 
     // precalculated offsets of various member fields
     magic: u32,
-    may_enter: u32,
-    may_leave: u32,
+    flags: u32,
     store: u32,
     lowering_anyfuncs: u32,
     lowerings: u32,
     memories: u32,
     reallocs: u32,
+    post_returns: u32,
     size: u32,
 }
 
@@ -60,14 +76,15 @@ impl<P: PtrSize> VMComponentOffsets<P> {
             num_lowerings: component.num_lowerings.try_into().unwrap(),
             num_runtime_memories: component.num_runtime_memories.try_into().unwrap(),
             num_runtime_reallocs: component.num_runtime_reallocs.try_into().unwrap(),
+            num_runtime_post_returns: component.num_runtime_post_returns.try_into().unwrap(),
             magic: 0,
-            may_enter: 0,
-            may_leave: 0,
+            flags: 0,
             store: 0,
             lowering_anyfuncs: 0,
             lowerings: 0,
             memories: 0,
             reallocs: 0,
+            post_returns: 0,
             size: 0,
         };
 
@@ -97,14 +114,14 @@ impl<P: PtrSize> VMComponentOffsets<P> {
 
         fields! {
             size(magic) = 4u32,
-            size(may_enter) = 1u32,
-            size(may_leave) = 1u32,
+            size(flags) = 1u32,
             align(u32::from(ret.ptr.size())),
             size(store) = cmul(2, ret.ptr.size()),
             size(lowering_anyfuncs) = cmul(ret.num_lowerings, ret.ptr.size_of_vmcaller_checked_anyfunc()),
             size(lowerings) = cmul(ret.num_lowerings, ret.ptr.size() * 2),
             size(memories) = cmul(ret.num_runtime_memories, ret.ptr.size()),
             size(reallocs) = cmul(ret.num_runtime_reallocs, ret.ptr.size()),
+            size(post_returns) = cmul(ret.num_runtime_post_returns, ret.ptr.size()),
         }
 
         ret.size = next_field_offset;
@@ -129,16 +146,10 @@ impl<P: PtrSize> VMComponentOffsets<P> {
         self.magic
     }
 
-    /// The offset of the `may_leave` field.
+    /// The offset of the `flags` field.
     #[inline]
-    pub fn may_leave(&self) -> u32 {
-        self.may_leave
-    }
-
-    /// The offset of the `may_enter` field.
-    #[inline]
-    pub fn may_enter(&self) -> u32 {
-        self.may_enter
+    pub fn flags(&self) -> u32 {
+        self.flags
     }
 
     /// The offset of the `store` field.
@@ -230,6 +241,20 @@ impl<P: PtrSize> VMComponentOffsets<P> {
     pub fn runtime_realloc(&self, index: RuntimeReallocIndex) -> u32 {
         assert!(index.as_u32() < self.num_runtime_reallocs);
         self.runtime_reallocs() + index.as_u32() * u32::from(self.ptr.size())
+    }
+
+    /// The offset of the base of the `runtime_post_returns` field
+    #[inline]
+    pub fn runtime_post_returns(&self) -> u32 {
+        self.post_returns
+    }
+
+    /// The offset of the `*mut VMCallerCheckedAnyfunc` for the runtime index
+    /// provided.
+    #[inline]
+    pub fn runtime_post_return(&self, index: RuntimePostReturnIndex) -> u32 {
+        assert!(index.as_u32() < self.num_runtime_post_returns);
+        self.runtime_post_returns() + index.as_u32() * u32::from(self.ptr.size())
     }
 
     /// Return the size of the `VMComponentContext` allocation.

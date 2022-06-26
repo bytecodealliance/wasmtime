@@ -22,16 +22,22 @@ anyhow = "1.0"
 thiserror = "1.0"
 wiggle = { path = "../wiggle", default-features = false, version = "=0.39.0" }
 tracing = "0.1.19"
-cap-std = "0.24.1"
-cap-rand = "0.24.1"
+cap-std = "0.25.0"
+cap-rand = "0.25.0"
 bitflags = "1.2"
 
 [target.'cfg(unix)'.dependencies]
-rustix = "0.33.7"
+rustix = { version = "0.35.6", features = ["fs"] }
 
 [target.'cfg(windows)'.dependencies]
-io-extras = "0.13.2"
-winapi = "0.3"
+io-extras = "0.15.0"
+
+[target.'cfg(windows)'.dependencies.windows-sys]
+version = "0.36.0"
+features = [
+    "Win32_Foundation",
+    "Win32_Networking_WinSock",
+]
 
 [badges]
 maintenance = { status = "actively-developed" }

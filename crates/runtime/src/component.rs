@@ -17,8 +17,9 @@ use std::mem;
 use std::ops::Deref;
 use std::ptr::{self, NonNull};
 use wasmtime_environ::component::{
-    Component, LoweredIndex, RuntimeMemoryIndex, RuntimeReallocIndex, StringEncoding,
-    VMComponentOffsets, VMCOMPONENT_MAGIC,
+    Component, LoweredIndex, RuntimeMemoryIndex, RuntimePostReturnIndex, RuntimeReallocIndex,
+    StringEncoding, VMComponentOffsets, VMCOMPONENT_FLAG_MAY_ENTER, VMCOMPONENT_FLAG_MAY_LEAVE,
+    VMCOMPONENT_FLAG_NEEDS_POST_RETURN, VMCOMPONENT_MAGIC,
 };
 use wasmtime_environ::HostPtr;
 
@@ -63,6 +64,11 @@ pub struct ComponentInstance {
 ///   signature that this callee corresponds to.
 /// * `nargs_and_results` - the size, in units of `ValRaw`, of
 ///   `args_and_results`.
+//
+// FIXME: 7 arguments is probably too many. The `data` through `string-encoding`
+// parameters should probably get packaged up into the `VMComponentContext`.
+// Needs benchmarking one way or another though to figure out what the best
+// balance is here.
 pub type VMLoweringCallee = extern "C" fn(
     vmctx: *mut VMOpaqueContext,
     data: *mut u8,
@@ -103,6 +109,11 @@ pub struct VMComponentContext {
     /// For more information about this see the equivalent field in `VMContext`
     _marker: marker::PhantomPinned,
 }
+
+/// Flags stored in a `VMComponentContext` with values defined by
+/// `VMCOMPONENT_FLAG_*`
+#[repr(transparent)]
+pub struct VMComponentFlags(u8);
 
 impl ComponentInstance {
     /// Returns the layout corresponding to what would be an allocation of a
@@ -159,14 +170,8 @@ impl ComponentInstance {
 
     /// Returns a pointer to the "may leave" flag for this instance specified
     /// for canonical lowering and lifting operations.
-    pub fn may_leave(&self) -> *mut bool {
-        unsafe { self.vmctx_plus_offset(self.offsets.may_leave()) }
-    }
-
-    /// Returns a pointer to the "may enter" flag for this instance specified
-    /// for canonical lowering and lifting operations.
-    pub fn may_enter(&self) -> *mut bool {
-        unsafe { self.vmctx_plus_offset(self.offsets.may_enter()) }
+    pub fn flags(&self) -> *mut VMComponentFlags {
+        unsafe { self.vmctx_plus_offset(self.offsets.flags()) }
     }
 
     /// Returns the store that this component was created with.
@@ -202,6 +207,22 @@ impl ComponentInstance {
             ret
         }
     }
+
+    /// Returns the post-return pointer corresponding to the index provided.
+    ///
+    /// This can only be called after `idx` has been initialized at runtime
+    /// during the instantiation process of a component.
+    pub fn runtime_post_return(
+        &self,
+        idx: RuntimePostReturnIndex,
+    ) -> NonNull<VMCallerCheckedAnyfunc> {
+        unsafe {
+            let ret = *self.vmctx_plus_offset::<NonNull<_>>(self.offsets.runtime_post_return(idx));
+            debug_assert!(ret.as_ptr() as usize != INVALID_PTR);
+            ret
+        }
+    }
+
     /// Returns the host information for the lowered function at the index
     /// specified.
     ///
@@ -264,6 +285,19 @@ impl ComponentInstance {
         }
     }
 
+    /// Same as `set_runtime_memory` but for post-return function pointers.
+    pub fn set_runtime_post_return(
+        &mut self,
+        idx: RuntimePostReturnIndex,
+        ptr: NonNull<VMCallerCheckedAnyfunc>,
+    ) {
+        unsafe {
+            let storage = self.vmctx_plus_offset(self.offsets.runtime_post_return(idx));
+            debug_assert!(*storage as usize == INVALID_PTR);
+            *storage = ptr.as_ptr();
+        }
+    }
+
     /// Configures a lowered host function with all the pieces necessary.
     ///
     /// * `idx` - the index that's being configured
@@ -304,8 +338,7 @@ impl ComponentInstance {
 
     unsafe fn initialize_vmctx(&mut self, store: *mut dyn Store) {
         *self.vmctx_plus_offset(self.offsets.magic()) = VMCOMPONENT_MAGIC;
-        *self.may_leave() = true;
-        *self.may_enter() = true;
+        *self.flags() = VMComponentFlags::new();
         *self.vmctx_plus_offset(self.offsets.store()) = store;
 
         // In debug mode set non-null bad values to all "pointer looking" bits
@@ -330,6 +363,11 @@ impl ComponentInstance {
             for i in 0..self.offsets.num_runtime_reallocs {
                 let i = RuntimeReallocIndex::from_u32(i);
                 let offset = self.offsets.runtime_realloc(i);
+                *self.vmctx_plus_offset(offset) = INVALID_PTR;
+            }
+            for i in 0..self.offsets.num_runtime_post_returns {
+                let i = RuntimePostReturnIndex::from_u32(i);
+                let offset = self.offsets.runtime_post_return(i);
                 *self.vmctx_plus_offset(offset) = INVALID_PTR;
             }
         }
@@ -409,6 +447,15 @@ impl OwnedComponentInstance {
         unsafe { self.instance_mut().set_runtime_realloc(idx, ptr) }
     }
 
+    /// See `ComponentInstance::set_runtime_post_return`
+    pub fn set_runtime_post_return(
+        &mut self,
+        idx: RuntimePostReturnIndex,
+        ptr: NonNull<VMCallerCheckedAnyfunc>,
+    ) {
+        unsafe { self.instance_mut().set_runtime_post_return(idx, ptr) }
+    }
+
     /// See `ComponentInstance::set_lowering`
     pub fn set_lowering(
         &mut self,
@@ -457,5 +504,54 @@ impl VMOpaqueContext {
     #[inline]
     pub fn from_vmcomponent(ptr: *mut VMComponentContext) -> *mut VMOpaqueContext {
         ptr.cast()
+    }
+}
+
+#[allow(missing_docs)]
+impl VMComponentFlags {
+    fn new() -> VMComponentFlags {
+        VMComponentFlags(VMCOMPONENT_FLAG_MAY_LEAVE | VMCOMPONENT_FLAG_MAY_ENTER)
+    }
+
+    #[inline]
+    pub fn may_leave(&self) -> bool {
+        self.0 & VMCOMPONENT_FLAG_MAY_LEAVE != 0
+    }
+
+    #[inline]
+    pub fn set_may_leave(&mut self, val: bool) {
+        if val {
+            self.0 |= VMCOMPONENT_FLAG_MAY_LEAVE;
+        } else {
+            self.0 &= !VMCOMPONENT_FLAG_MAY_LEAVE;
+        }
+    }
+
+    #[inline]
+    pub fn may_enter(&self) -> bool {
+        self.0 & VMCOMPONENT_FLAG_MAY_ENTER != 0
+    }
+
+    #[inline]
+    pub fn set_may_enter(&mut self, val: bool) {
+        if val {
+            self.0 |= VMCOMPONENT_FLAG_MAY_ENTER;
+        } else {
+            self.0 &= !VMCOMPONENT_FLAG_MAY_ENTER;
+        }
+    }
+
+    #[inline]
+    pub fn needs_post_return(&self) -> bool {
+        self.0 & VMCOMPONENT_FLAG_NEEDS_POST_RETURN != 0
+    }
+
+    #[inline]
+    pub fn set_needs_post_return(&mut self, val: bool) {
+        if val {
+            self.0 |= VMCOMPONENT_FLAG_NEEDS_POST_RETURN;
+        } else {
+            self.0 &= !VMCOMPONENT_FLAG_NEEDS_POST_RETURN;
+        }
     }
 }

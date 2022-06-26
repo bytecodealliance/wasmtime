@@ -1,6 +1,7 @@
 use crate::signatures::SignatureCollection;
 use crate::{Engine, Module};
 use anyhow::{bail, Context, Result};
+use std::collections::HashMap;
 use std::fs;
 use std::ops::Range;
 use std::path::Path;
@@ -164,13 +165,33 @@ impl Component {
         let code = trampoline_obj.publish()?;
         let text = wasmtime_jit::subslice_range(code.text, code.mmap);
 
+        // This map is used to register all known tramplines in the
+        // `SignatureCollection` created below. This is later consulted during
+        // `ModuleRegistry::lookup_trampoline` if a trampoline needs to be
+        // located for a signature index where the original function pointer
+        // is that of the `trampolines` created above.
+        //
+        // This situation arises when a core wasm module imports a lowered
+        // function and then immediately exports it. Wasmtime will lookup an
+        // entry trampoline for the exported function which is actually a
+        // lowered host function, hence an entry in the `trampolines` variable
+        // above, and the type of that function will be stored in this
+        // `vmtrampolines` map since the type is guaranteed to have escaped
+        // from at least one of the modules we compiled prior.
+        let mut vmtrampolines = HashMap::new();
+        for (_, module) in static_modules.iter() {
+            for (idx, trampoline, _) in module.compiled_module().trampolines() {
+                vmtrampolines.insert(idx, trampoline);
+            }
+        }
+
         // FIXME: for the same reason as above where each module is
         // re-registering everything this should only be registered once. This
         // is benign for now but could do with refactorings later on.
         let signatures = SignatureCollection::new_for_module(
             engine.signatures(),
             types.module_types(),
-            [].into_iter(),
+            vmtrampolines.into_iter(),
         );
 
         Ok(Component {
@@ -202,9 +223,13 @@ impl Component {
         &self.inner.signatures
     }
 
+    pub(crate) fn text(&self) -> &[u8] {
+        &self.inner.trampoline_obj.mmap()[self.inner.text.clone()]
+    }
+
     pub(crate) fn trampoline_ptr(&self, index: LoweredIndex) -> NonNull<VMFunctionBody> {
         let info = &self.inner.trampolines[index];
-        let text = &self.inner.trampoline_obj.mmap()[self.inner.text.clone()];
+        let text = self.text();
         let trampoline = &text[info.start as usize..][..info.length as usize];
         NonNull::new(trampoline.as_ptr() as *mut VMFunctionBody).unwrap()
     }
