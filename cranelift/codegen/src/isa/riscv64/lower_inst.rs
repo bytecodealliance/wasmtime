@@ -112,37 +112,11 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::Uload16x4
         | Opcode::Sload32x2
         | Opcode::Uload32x2 => {
-            let out_ty = ctx.output_ty(insn, 0);
-            let flags = ctx
-                .memflags(insn)
-                .expect("Load instruction should have memflags");
-            let base = put_input_in_reg(ctx, inputs[0]);
-            let off = ctx.data(insn).load_store_offset().unwrap() as i64;
-
-            let dst = get_output_reg(ctx, outputs[0]);
-            gen_load(dst, base, off, out_ty, flags)
-                .into_iter()
-                .for_each(|i| ctx.emit(i));
+            implemented_in_isle(ctx);
         }
 
         Opcode::Store | Opcode::Istore8 | Opcode::Istore16 | Opcode::Istore32 => {
-            let flags = ctx
-                .memflags(insn)
-                .expect("Load instruction should have memflags");
-
-            let src = put_input_in_regs(ctx, inputs[0]);
-            let base = put_input_in_reg(ctx, inputs[1]);
-            let off = ctx.data(insn).load_store_offset().unwrap() as i64;
-            let elem_ty = match op {
-                Opcode::Istore8 => I8,
-                Opcode::Istore16 => I16,
-                Opcode::Istore32 => I32,
-                Opcode::Store => ctx.input_ty(insn, 0),
-                _ => unreachable!(),
-            };
-            gen_store(src, base, off, elem_ty, flags)
-                .into_iter()
-                .for_each(|i| ctx.emit(i));
+            implemented_in_isle(ctx);
         }
 
         Opcode::StackAddr => {
@@ -342,27 +316,11 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Icmp => {
-            let ty = ctx.input_ty(insn, 0);
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let a = put_input_in_regs(ctx, inputs[0]);
-            let b = put_input_in_regs(ctx, inputs[1]);
-            let cc = ctx.data(insn).cond_code().unwrap();
-            ctx.emit(Inst::Icmp { cc, rd, a, b, ty });
+            implemented_in_isle(ctx);
         }
 
         Opcode::Fcmp => {
-            let ty = ctx.input_ty(insn, 0);
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let rs1 = put_input_in_reg(ctx, inputs[0]);
-            let rs2 = put_input_in_reg(ctx, inputs[1]);
-            let cc = ctx.data(insn).fp_cond_code().unwrap();
-            ctx.emit(Inst::Fcmp {
-                rd,
-                cc,
-                ty,
-                rs1,
-                rs2,
-            });
+            implemented_in_isle(ctx);
         }
 
         Opcode::Debugtrap => {
@@ -409,14 +367,15 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::FuncAddr => {
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let (extname, _) = ctx.call_target(insn).unwrap();
-            let extname = extname.clone();
-            ctx.emit(Inst::LoadExtName {
-                rd,
-                name: Box::new(extname),
-                offset: 0,
-            });
+            // let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+            // let (extname, _) = ctx.call_target(insn).unwrap();
+            // let extname = extname.clone();
+            // ctx.emit(Inst::LoadExtName {
+            //     rd,
+            //     name: Box::new(extname),
+            //     offset: 0,
+            // });
+            implemented_in_isle(ctx );
         }
 
         Opcode::GlobalValue => {
@@ -891,162 +850,6 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
         }
     }
     Ok(())
-}
-
-fn gen_load(
-    dst: ValueRegs<Writable<Reg>>,
-    base: Reg,
-    off: i64,
-    out_ty: Type,
-    flags: MemFlags,
-) -> SmallInstVec<Inst> {
-    let mut insts = SmallInstVec::new();
-    match out_ty.bits() {
-        128 => {
-            insts.push(Inst::Load {
-                rd: dst.regs()[0],
-                op: LoadOP::Ld,
-                flags,
-                from: AMode::RegOffset(base, off, I64),
-            });
-            insts.push(Inst::Load {
-                rd: dst.regs()[1],
-                op: LoadOP::Ld,
-                flags,
-                from: AMode::RegOffset(base, off + 8, I64),
-            })
-        }
-        64 => {
-            let op = if out_ty.is_float() {
-                LoadOP::Fld
-            } else {
-                LoadOP::Ld
-            };
-            insts.push(Inst::Load {
-                rd: dst.regs()[0],
-                op,
-                flags,
-                from: AMode::RegOffset(base, off, I64),
-            });
-        }
-        32 => {
-            let op = if out_ty.is_float() {
-                LoadOP::Flw
-            } else if is_int_and_type_signed(out_ty) {
-                LoadOP::Lw
-            } else {
-                LoadOP::Lwu
-            };
-            insts.push(Inst::Load {
-                rd: dst.regs()[0],
-                op,
-                flags,
-                from: AMode::RegOffset(base, off, I64),
-            });
-        }
-        16 => {
-            let op = if is_int_and_type_signed(out_ty) {
-                LoadOP::Lh
-            } else {
-                LoadOP::Lhu
-            };
-            insts.push(Inst::Load {
-                rd: dst.regs()[0],
-                op: op,
-                flags,
-                from: AMode::RegOffset(base, off, I64),
-            });
-        }
-        8 | 1 => {
-            let op = if is_int_and_type_signed(out_ty) {
-                LoadOP::Lb
-            } else {
-                LoadOP::Lbu
-            };
-            insts.push(Inst::Load {
-                rd: dst.regs()[0],
-                op: op,
-                flags,
-                from: AMode::RegOffset(base, off, I64),
-            });
-        }
-        _ => unreachable!(),
-    }
-
-    insts
-}
-
-pub(crate) fn gen_store(
-    src: ValueRegs<Reg>,
-    base: Reg,
-    off: i64,
-    elem_ty: Type,
-    flags: MemFlags,
-) -> SmallInstVec<Inst> {
-    let mut insts = SmallInstVec::new();
-    match elem_ty.bits() {
-        128 => {
-            insts.push(Inst::Store {
-                to: AMode::RegOffset(base, off, I64),
-                op: StoreOP::Sd,
-                flags,
-                src: src.regs()[0],
-            });
-            insts.push(Inst::Store {
-                to: AMode::RegOffset(base, off + 8, I64),
-                op: StoreOP::Sd,
-                flags,
-                src: src.regs()[1],
-            });
-        }
-
-        64 => {
-            let op = if elem_ty.is_float() {
-                StoreOP::Fsd
-            } else {
-                StoreOP::Sd
-            };
-            insts.push(Inst::Store {
-                to: AMode::RegOffset(base, off, I64),
-                op,
-                flags,
-                src: src.regs()[0],
-            });
-        }
-        32 => {
-            let op = if elem_ty.is_float() {
-                StoreOP::Fsw
-            } else {
-                StoreOP::Sw
-            };
-            insts.push(Inst::Store {
-                to: AMode::RegOffset(base, off, I64),
-                op,
-                flags,
-                src: src.regs()[0],
-            });
-        }
-        16 => {
-            let op = StoreOP::Sh;
-            insts.push(Inst::Store {
-                to: AMode::RegOffset(base, off, I64),
-                op,
-                flags,
-                src: src.regs()[0],
-            });
-        }
-        8 | 1 => {
-            let op = StoreOP::Sb;
-            insts.push(Inst::Store {
-                to: AMode::RegOffset(base, off, I64),
-                op,
-                flags,
-                src: src.regs()[0],
-            });
-        }
-        _ => unreachable!(),
-    }
-    insts
 }
 
 fn pinned_register_not_used() -> ! {

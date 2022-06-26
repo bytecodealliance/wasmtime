@@ -1126,8 +1126,8 @@ where
         Some(*f)
     }
 
-    fn con_amode(&mut self, base: Reg, offset: i64, ty: Type) -> AMode {
-        AMode::RegOffset(base, offset, ty)
+    fn con_amode(&mut self, base: Reg, offset: Offset32, ty: Type) -> AMode {
+        AMode::RegOffset(base, i64::from(offset), ty)
     }
     fn valid_atomic_transaction(&mut self, ty: Type) -> Option<Type> {
         if is_valid_atomic_transaction_ty(ty) {
@@ -1136,7 +1136,28 @@ where
             None
         }
     }
-
+    fn load_op(&mut self, ty: Type) -> LoadOP {
+        LoadOP::from_type(ty)
+    }
+    fn store_op(&mut self, ty: Type) -> StoreOP {
+        StoreOP::from_type(ty)
+    }
+    fn load_ext_name(&mut self, name: ExternalName, offset: i64) -> Reg {
+        let tmp = self.temp_writable_reg(I64);
+        self.emit(&MInst::LoadExtName {
+            rd: tmp,
+            name: Box::new(name),
+            offset,
+        });
+        tmp.to_reg()
+    }
+    fn offset_add(&mut self, a: Offset32, adden: i64) -> Offset32 {
+        a.try_add_i64(adden).expect("offset exceed range.")
+    }
+    fn value_and_type(&mut self, val: Value) -> (Type, Value) {
+        let ty = self.lower_ctx.value_ty(val);
+        (ty, val)
+    }
     fn gen_stack_addr(&mut self, slot: StackSlot, offset: Offset32) -> Reg {
         let result = self.temp_writable_reg(I64);
         let i = self

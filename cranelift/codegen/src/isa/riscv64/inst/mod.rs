@@ -16,6 +16,7 @@ use crate::machinst::*;
 use crate::{settings, CodegenError, CodegenResult};
 
 pub use crate::ir::condcodes::FloatCC;
+use crate::ir::FuncRef;
 
 use alloc::vec::Vec;
 use regalloc2::VReg;
@@ -1071,8 +1072,8 @@ impl Inst {
                 let rd = format_reg(rd.to_reg(), allocs);
                 format!(
                     "f{}.{} {},{},{}",
-                    if ty == F32 { "s" } else { "d" },
                     cc,
+                    if ty == F32 { "s" } else { "d" },
                     rd,
                     rs1,
                     rs2,

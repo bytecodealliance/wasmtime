@@ -656,3 +656,117 @@
   (lower (resumable_trap code))
   (udf code)
 )
+
+;;;;;  Rules for `uload8`;;;;;;;;;
+(rule
+  (lower (uload8 flags p offset))
+  (con_load p offset (int_load_op $false 8) flags $I64)
+)
+;;;;;  Rules for `sload8`;;;;;;;;;
+(rule
+  (lower (sload8 flags p offset))
+  (con_load p offset (int_load_op $true 8) flags $I64)
+)
+;;;;;  Rules for `uload16`;;;;;;;;;
+(rule
+  (lower (uload16 flags p offset))
+  (con_load p offset (int_load_op $false 16) flags $I64)
+)
+
+;;;;;  Rules for `iload16`;;;;;;;;;
+(rule
+  (lower (sload16 flags p offset))
+  (con_load p offset (int_load_op $true 16) flags $I64)
+)
+
+;;;;;  Rules for `uload32`;;;;;;;;;
+(rule
+  (lower (uload32 flags p offset))
+  (con_load p offset (int_load_op $false 32) flags $I64)
+)
+
+;;;;;  Rules for `iload16`;;;;;;;;;
+(rule
+  (lower (sload32 flags p offset))
+  (con_load p offset (int_load_op $true 32) flags $I64)
+)
+
+(rule
+  (lower (has_type ty (load flags p offset)))
+  (con_load p offset (load_op ty) flags ty)
+)
+;;;; for I128
+(rule
+  (lower (has_type $I128 (load flags p offset)))
+  (con_load_128 p offset flags)
+)
+;;;; for B128
+(rule
+  (lower (has_type $B128 (load flags p offset)))
+  (con_load_128 p offset flags)
+)
+
+;;;;;  Rules for `istore8`;;;;;;;;;
+(rule 
+  (lower (istore8 flags x p offset))
+  (con_store p offset (StoreOP.Sb) flags x)
+)
+;;;;;  Rules for `istore16`;;;;;;;;;
+(rule 
+  (lower (istore16 flags x p offset))
+  (con_store p offset (StoreOP.Sh) flags x)
+)
+
+;;;;;  Rules for `istore32`;;;;;;;;;
+(rule 
+  (lower (istore32 flags x p offset))
+  (con_store p offset (StoreOP.Sw) flags x)
+)
+
+;;;;;  Rules for `store`;;;;;;;;;
+(rule
+  (lower (store flags (value_and_type ty x) p offset))
+  (con_store p offset (store_op ty) flags x)
+)
+
+;;; special for I128
+(rule
+  (lower (store flags (value_and_type $I128 x) p offset))
+  (con_store_128 p offset flags x)
+)
+
+;;; special for B128
+(rule
+  (lower (store flags (value_and_type $B128 x) p offset))
+  (con_store_128 p offset flags x)
+)
+
+;;;;;  Rules for `icmp`;;;;;;;;;
+(rule
+	(lower (icmp cc (value_and_type ty x) y))
+	(let
+		(
+			(result WritableReg (temp_writable_reg $I64))
+			(_ Unit (emit (MInst.Icmp cc result x y ty)))
+		)
+		(writable_reg_to_reg result)
+	)
+)
+
+;;;;;  Rules for `fcmp`;;;;;;;;;
+(rule
+	(lower (fcmp cc (value_and_type ty x) y))
+	(let
+		(
+			(result WritableReg (temp_writable_reg $I64))
+			(_ Unit (emit (MInst.Fcmp cc result x y ty)))
+		)
+		(writable_reg_to_reg result)
+	)
+)
+
+;;;;;  Rules for `func_addr`;;;;;;;;;
+(rule
+  (lower (func_addr (func_ref_data _ name _)))
+  (load_ext_name name 0) 
+)
