@@ -404,30 +404,30 @@
 
 ;;;; Rules for `AtomicRMW` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule 
-      ;; 
-      (lower 
-            (has_type (valid_atomic_transaction ty) (atomic_rmw flags op addr x))
-      )
-      ;;
-      (con_atomic (get_atomic_rmw_op ty op) addr x (atomic_rmw_amo)) 
+    ;; 
+  (lower 
+        (has_type (valid_atomic_transaction ty) (atomic_rmw flags op addr x))
+  )
+  ;;
+  (con_atomic (get_atomic_rmw_op ty op) addr x (atomic_amo)) 
 )
-;;; rule for AtomicRmwOp.Sub
+;;;;;  Rules for `AtomicRmwOp.Sub`
 (rule 
-      (lower 
-            (has_type (valid_atomic_transaction ty) (atomic_rmw flags (AtomicRmwOp.Sub) addr x))
-      )
-      (let
-            (
-                  ;; alloc tmp.
-                  (tmp WritableReg (temp_writable_reg ty))
-                  ;;
-                  (x2 Reg (alu_rrr (AluOPRRR.Sub) ty (zero_reg) x))
-            )
-            (con_atomic (get_atomic_rmw_op ty (AtomicRmwOp.Add)) addr x2 (atomic_rmw_amo))
-      )
+  (lower 
+    (has_type (valid_atomic_transaction ty) (atomic_rmw flags (AtomicRmwOp.Sub) addr x))
+  )
+  (let
+    (
+          ;; alloc tmp.
+          (tmp WritableReg (temp_writable_reg ty))
+          ;;
+          (x2 Reg (alu_rrr (AluOPRRR.Sub) ty (zero_reg) x))
+    )
+    (con_atomic (get_atomic_rmw_op ty (AtomicRmwOp.Add)) addr x2 (atomic_amo))
+  )
 )
 
-;;; rule for AtomicRmwOp.Nand
+;;;;;  Rules for `AtomicRmwOp.Nand`
 (rule 
       (lower 
             (has_type (valid_atomic_transaction ty) (atomic_rmw flags (AtomicRmwOp.Nand) addr x))
@@ -447,7 +447,72 @@
       )
 )
 
-;;; rule for float arithmatic
+;;;;;  Rules for `atomic load`;;;;;;;;;;;;;;;;;
+(rule 
+  (lower (has_type (valid_atomic_transaction ty) (atomic_load flags p)))
+  (let 
+    (
+      (dst WritableReg (temp_writable_reg ty))
+      (_ Unit(emit (MInst.Atomic (atomic_load_op ty) dst p (zero_reg) (atomic_amo))))
+    )
+    (writable_reg_to_reg dst)
+  )
+)
+;;;;;  Rules for `atomic store`;;;;;;;;;;;;;;;;;
+(rule 
+  (lower (has_type (valid_atomic_transaction ty) (atomic_store flags src p)))
+  (let 
+    (
+      (dst WritableReg (temp_writable_reg ty))
+      (_ Unit(emit (MInst.Atomic (atomic_store_op ty) dst p src (atomic_amo))))
+    )
+    (writable_reg_to_reg dst)
+  )
+)
+
+;;;;;  Rules for `atomic cas`;;;;;;;;;;;;;;;;;
+(rule
+  (lower (has_type (valid_atomic_transaction ty) (atomic_cas flags p e x)))
+  (let
+    (
+      (t0 WritableReg (temp_writable_reg ty))
+      (dst WritableReg (temp_writable_reg ty))
+      (_ Unit(emit (MInst.AtomicCas t0 dst e p x ty)))
+    )
+    (writable_reg_to_reg dst)
+  )
+)
+
+;;;;;  Rules for `copy`;;;;;;;;;;;;;;;;;
+(rule
+  (lower(has_type ty (copy x)))
+  (gen_move x ty)
+)
+
+;;;;;  Rules for `breduce`;;;;;;;;;;;;;;;;;
+(rule
+  (lower (has_type ty (breduce x)))
+  (gen_move (value_regs_get x 0) ty)
+)
+
+;;;;;  Rules for `ireduce`;;;;;;;;;;;;;;;;;
+(rule
+  (lower (has_type ty (ireduce x)))
+  (gen_move (value_regs_get x 0) ty)
+)
+
+;;;;;  Rules for `fpromote`;;;;;;;;;;;;;;;;;
+(rule
+  (lower (has_type ty (fpromote x)))
+  (fpu_rr (FpuOPRR.FcvtDS) ty x)
+)
+(rule
+  (lower (has_type ty (fdemote x)))
+  (fpu_rr (FpuOPRR.FcvtSD) ty x)
+)
+
+
+;;;;;  Rules for `for float arithmatic`
 (rule 
       (lower (has_type ty (fadd x y)))
       (fpu_rrr (f_arithmatic_op ty (Opcode.Fadd)) ty x y)
@@ -474,3 +539,120 @@
       (fpu_rrr (f_arithmatic_op ty (Opcode.Fmax)) ty x y)
 )
 
+;;;;;  Rules for `stack_addr`;;;;;;;;;
+(rule 
+      (lower (stack_addr ss offset))
+      (gen_stack_addr ss offset)
+)
+
+
+
+;;;;;  Rules for `is_null`;;;;;;;;;
+(rule
+  (lower (is_null v))
+  (gen_reference_check (ReferenceCheckOP.IsNull) v)
+)
+
+;;;;;  Rules for `is_invalid`;;;;;;;;;
+(rule
+  (lower (is_invalid v))
+  (gen_reference_check (ReferenceCheckOP.IsInvalid) v)
+)
+
+;;;;;  Rules for `select`;;;;;;;;;
+(rule
+  (lower (has_type ty (select c x y)))
+  (gen_select ty c x y)
+)
+
+;;;;;  Rules for `bitselect`;;;;;;;;;
+
+(rule
+  (lower (has_type ty (bitselect c x y)))
+  (gen_bitselect ty c x y)
+)
+
+;;;;;  Rules for `bint`;;;;;;;;;
+(rule
+  (lower (has_type (fits_in_64 ty) (bint (valueregs_2_reg x))))
+  (gen_bint x)
+)
+(rule
+  (lower (has_type $I128 (bint (valueregs_2_reg x))))
+  (let
+      (
+         (tmp Reg (gen_bint x)) 
+      )
+      (value_regs tmp (zero_reg))
+  )
+)
+
+
+;;;;;  Rules for `isplit`;;;;;;;;;
+(rule 
+  (lower (isplit x))
+  (let
+    (
+      (t1 Reg (gen_move (value_regs_get x 0) $I64))
+      (t2 Reg (gen_move (value_regs_get x 1) $I64))
+    )
+    (value_regs t1 t2)
+  )
+)
+;;;;;  Rules for `iconcat`;;;;;;;;;
+(rule 
+  (lower (has_type $I128 (iconcat x y)))
+  (let
+    (
+      (t1 Reg (gen_move x $I64))
+      (t2 Reg (gen_move y $I64))
+    )
+    (value_regs t1 t2)
+  )
+)
+
+;;;;;  Rules for `imax`;;;;;;;;;
+(rule
+  (lower (has_type ty (imax x y)))
+  (gen_int_select ty(IntSelectOP.Imax)x y)
+)
+
+;;;;;  Rules for `imin`;;;;;;;;;
+(rule
+  (lower (has_type ty (imin x y)))
+  (gen_int_select ty(IntSelectOP.Imin)x y)
+)
+;;;;;  Rules for `umax`;;;;;;;;;
+(rule
+  (lower (has_type ty (umax x y)))
+  (gen_int_select ty(IntSelectOP.Umax)x y)
+)
+;;;;;  Rules for `umin`;;;;;;;;;
+(rule
+  (lower (has_type ty (umin x y)))
+  (gen_int_select ty(IntSelectOP.Umin)x y)
+)
+
+;;;;;  Rules for `debugtrap`;;;;;;;;;
+(rule
+  (lower (debugtrap))
+  (side_effect (SideEffectNoResult.Inst(MInst.EBreak)))
+)
+
+;;;;;  Rules for `fence`;;;;;;;;;
+(rule
+  (lower (fence))
+  (side_effect (SideEffectNoResult.Inst(MInst.Fence)))
+)
+
+;;;;;  Rules for `trap`;;;;;;;;;
+(rule
+  (lower (trap code))
+  (udf code)
+)
+
+;;;;;  Rules for `resumable_trap`;;;;;;;;;
+(rule
+  (lower (resumable_trap code))
+  (udf code)
+)

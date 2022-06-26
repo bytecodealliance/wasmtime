@@ -698,7 +698,54 @@
 (extern constructor i128_arithmetic i128_arithmetic)
 
 (decl lower_bit_reverse (Type Reg)Reg)
-(extern constructor lower_bit_reverse lower_bit_reverse)
+
+(rule
+  (lower_bit_reverse $I8 r)
+  (alu_rr_imm12 (AluOPRRI.Brev8) r (imm12_zero))
+)
+
+(rule
+  (lower_bit_reverse $I16 r)
+  (let 
+    (
+      (tmp Reg (alu_rr_imm12 (AluOPRRI.Rev8) r (imm12_zero)))
+      (tmp2 Reg (alu_rr_imm12 (AluOPRRI.Brev8) tmp (imm12_zero)))
+      (result Reg (alu_rr_imm12 (AluOPRRI.Srli) tmp2 (imm12_const 48)))
+    )
+    result
+  )
+)
+
+(rule
+  (lower_bit_reverse $I32 r)
+  (let 
+    (
+      (tmp Reg (alu_rr_imm12 (AluOPRRI.Rev8) r (imm12_zero)))
+      (tmp2 Reg (alu_rr_imm12 (AluOPRRI.Brev8) tmp (imm12_zero)))
+      (result Reg (alu_rr_imm12 (AluOPRRI.Srli) tmp2 (imm12_const 32)))
+    )
+    result
+  )
+)
+
+(rule
+  (lower_bit_reverse $I64 r)
+  (let 
+    (
+      (tmp Reg (alu_rr_imm12 (AluOPRRI.Rev8) r (imm12_zero)))
+      (result Reg (alu_rr_imm12 (AluOPRRI.Brev8) tmp (imm12_zero)))
+    )
+    result
+  )
+)
+
+
+(decl imm12_zero()Imm12)
+(rule 
+  (imm12_zero)
+  (imm12_const 0)
+)
+
 
 (decl lower_ctz (Type ValueRegs)ValueRegs)
 (extern constructor lower_ctz lower_ctz)
@@ -783,10 +830,11 @@
 (decl lower_i128_logical_shift(bool bool ValueRegs ValueRegs)ValueRegs)
 (extern constructor lower_i128_logical_shift lower_i128_logical_shift)
 
+;; extractor let me always extract low part of ValueRegs.
 (decl valueregs_2_reg(Reg) Value)
 (extern extractor valueregs_2_reg valueregs_2_reg)
 
-(convert ValueRegs Reg valueregs_2_reg)
+
 
 (decl lower_cls_i128 (ValueRegs)ValueRegs)
 (extern constructor lower_cls_i128 lower_cls_i128)
@@ -810,20 +858,12 @@
   )
 )
 
-;; some instruction have no return value.
-(decl no_return()InstOutput)
-(extern constructor no_return no_return)
 
 ;; helper function to store to memory.
 (decl con_store(Reg i64 StoreOP Type MemFlags Reg)InstOutput)
 (rule 
   (con_store base offset op ty flags src)
-  (let
-    (
-      (_ Unit (emit (MInst.Store (con_amode base offset ty) op flags src)))
-    )
-    (no_return)
-  )
+  (side_effect (SideEffectNoResult.Inst (MInst.Store (con_amode base offset ty) op flags src)))
 )
 
 (decl valid_atomic_transaction (Type) Type)
@@ -929,13 +969,13 @@
   (AtomicOP.AmoxorW)
 )
 
-(rule 
+(rule
   (get_atomic_rmw_op $I64 (AtomicRmwOp.Xor))
   (AtomicOP.AmoxorD)
 )
 
-(decl atomic_rmw_amo()AMO)
-(extern constructor atomic_rmw_amo atomic_rmw_amo)
+(decl atomic_amo()AMO)
+(extern constructor atomic_amo atomic_amo)
 
 (decl con_atomic_load(Reg Type)Reg)
 (extern constructor con_atomic_load con_atomic_load)
@@ -1053,3 +1093,111 @@
 (rule (f_copy_neg_sign_op $F32) (FpuOPRRR.FsgnjnS))
 (rule (f_copy_neg_sign_op $F64) (FpuOPRRR.FsgnjnD))
 
+(decl gen_stack_addr (StackSlot Offset32) Reg )
+(extern constructor gen_stack_addr gen_stack_addr)
+
+(decl atomic_load_op(Type) AtomicOP)
+(rule
+  (atomic_load_op $I32)
+  (AtomicOP.LrW)
+)
+(rule
+  (atomic_load_op $I64)
+  (AtomicOP.LrD)
+)
+
+(decl atomic_store_op(Type) AtomicOP)
+(rule
+  (atomic_store_op $I32)
+  (AtomicOP.ScW)
+)
+(rule
+  (atomic_store_op $I64)
+  (AtomicOP.ScD)
+)
+
+;; 
+(decl gen_move(Reg Type) Reg)
+(extern constructor gen_move gen_move)
+
+
+;;
+(decl gen_reference_check(ReferenceCheckOP Reg)Reg)
+(rule
+  (gen_reference_check op r)
+  (let
+    (
+      (tmp WritableReg (temp_writable_reg $I64))
+      (_ Unit (emit (MInst.ReferenceCheck tmp op r)))
+    )
+    tmp
+  )
+)
+
+;; 
+(decl gen_select(Type Reg ValueRegs ValueRegs)ValueRegs)
+(rule 
+  (gen_select ty c x y)
+  (let 
+    (
+      (dst VecWritableReg (con_vec_writable ty))
+      ;;
+      (reuslt VecWritableReg (vec_writable_clone dst))
+      (_ Unit (emit (MInst.Select dst ty c x y)))
+    )
+    (vec_regs_to_value_regs reuslt)
+  )
+)
+
+(decl vec_writable_clone(VecWritableReg)VecWritableReg)
+(extern constructor vec_writable_clone vec_writable_clone)
+
+(decl vec_regs_to_value_regs(VecWritableReg)ValueRegs)
+(extern constructor vec_regs_to_value_regs vec_regs_to_value_regs)
+
+(decl con_vec_writable(Type)VecWritableReg)
+(extern constructor con_vec_writable con_vec_writable)
+
+(decl gen_bitselect(Type Reg Reg Reg)Reg)
+(rule
+  (gen_bitselect ty c x y)
+  (let
+    (
+      ;;;get all x part.
+      (tmp_x Reg (alu_rrr (AluOPRRR.And) ty c x))
+      ;;;inverse condition
+      (c_inverse Reg (con_bit_not c))
+      ;;;get all y part.
+      (tmp_y Reg (alu_rrr (AluOPRRR.And) ty c_inverse y))
+      ;;;get reuslt.
+      (result Reg (alu_rrr (AluOPRRR.Or) ty tmp_x tmp_y))
+    )
+    result 
+  )
+)
+
+(decl gen_bint(Reg)Reg)
+(rule 
+  (gen_bint r)
+  (alu_rr_imm12 (AluOPRRI.Andi) r (imm12_const 1))
+)
+
+(decl gen_int_select(Type IntSelectOP ValueRegs ValueRegs)ValueRegs)
+(rule
+  (gen_int_select ty op x y)
+  (let 
+    (
+      ;;;
+      (dst VecWritableReg (con_vec_writable ty))
+      ;;;
+      (_ Unit (emit (MInst.IntSelect op  (vec_writable_clone dst) x y ty)))
+    )
+    (vec_regs_to_value_regs dst)
+  )
+)
+
+(decl udf (TrapCode)InstOutput)
+(rule
+  (udf code)
+  (side_effect (SideEffectNoResult.Inst (MInst.Udf code)))
+)

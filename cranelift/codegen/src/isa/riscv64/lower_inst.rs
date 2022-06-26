@@ -5,7 +5,7 @@ use crate::machinst::Writable;
 use alloc::vec::Vec;
 
 use crate::ir::Inst as IRInst;
-use crate::ir::InstructionData;
+
 use crate::ir::Opcode;
 use crate::isa::riscv64::settings as aarch64_settings;
 use crate::machinst::lower::*;
@@ -16,7 +16,7 @@ use crate::CodegenResult;
 
 use std::boxed::Box;
 
-use crate::ir::types::{I128, I16, I32, I64, I8};
+use crate::ir::types::{I16, I32, I64, I8};
 
 use super::lower::*;
 use crate::isa::riscv64::abi::*;
@@ -146,20 +146,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::StackAddr => {
-            let (stack_slot, offset) = match *ctx.data(insn) {
-                InstructionData::StackLoad {
-                    opcode: Opcode::StackAddr,
-                    stack_slot,
-                    offset,
-                } => (stack_slot, offset),
-                _ => unreachable!(),
-            };
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let offset: i32 = offset.into();
-            let inst = ctx
-                .abi()
-                .stackslot_addr(stack_slot, u32::try_from(offset).unwrap(), rd);
-            ctx.emit(inst);
+            implemented_in_isle(ctx);
         }
 
         Opcode::AtomicRmw => {
@@ -167,70 +154,19 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::AtomicCas => {
-            let ty_access = ty.unwrap();
-            assert!(is_valid_atomic_transaction_ty(ty_access));
-            let r_dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let r_addr = ctx.put_input_in_regs(insn, 0).only_reg().unwrap();
-            let r_expected = ctx.put_input_in_regs(insn, 1).only_reg().unwrap();
-            let r_replacement = ctx.put_input_in_regs(insn, 2).only_reg().unwrap();
-            let t0 = ctx.alloc_tmp(I64).only_reg().unwrap();
-            ctx.emit(Inst::AtomicCas {
-                t0,
-                dst: r_dst,
-                e: r_expected,
-                addr: r_addr,
-                v: r_replacement,
-                ty: ty_access,
-            });
+            implemented_in_isle(ctx);
         }
 
         Opcode::AtomicLoad => {
-            let r_dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let r_addr = ctx.put_input_in_regs(insn, 0).only_reg().unwrap();
-            let ty_access = ty.unwrap();
-            assert!(is_valid_atomic_transaction_ty(ty_access));
-            ctx.emit(Inst::Atomic {
-                op: if ty_access.bits() == 32 {
-                    AtomicOP::LrW
-                } else {
-                    AtomicOP::LrD
-                },
-                rd: r_dst,
-                addr: r_addr,
-                src: zero_reg(),
-                amo: AMO::SeqConsistent,
-            });
+            implemented_in_isle(ctx);
         }
 
         Opcode::AtomicStore => {
-            let r_dst = if outputs.len() > 0 {
-                get_output_reg(ctx, outputs[0]).only_reg().unwrap()
-            } else {
-                writable_zero_reg()
-            };
-            let ty_access = if outputs.len() > 0 {
-                ty.unwrap()
-            } else {
-                ctx.input_ty(insn, 0)
-            };
-            assert!(is_valid_atomic_transaction_ty(ty_access));
-            let r_addr = ctx.put_input_in_regs(insn, 0).only_reg().unwrap();
-            let arg2 = ctx.put_input_in_regs(insn, 1).only_reg().unwrap();
-            ctx.emit(Inst::Atomic {
-                op: if ty_access.bits() == 32 {
-                    AtomicOP::ScW
-                } else {
-                    AtomicOP::ScD
-                },
-                rd: r_dst,
-                addr: r_addr,
-                src: arg2,
-                amo: AMO::SeqConsistent,
-            });
+            implemented_in_isle(ctx);
         }
 
         Opcode::Fence => {
-            ctx.emit(Inst::Fence);
+            implemented_in_isle(ctx);
         }
 
         Opcode::StackLoad | Opcode::StackStore => {
@@ -250,25 +186,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Select => {
-            assert!(ctx.input_ty(insn, 0).is_bool() || ctx.input_ty(insn, 0).is_int());
-            let dst: Vec<_> = ctx
-                .get_output(insn, 0)
-                .regs()
-                .into_iter()
-                .map(|r| r.clone())
-                .collect();
-
-            let ty = ty.unwrap();
-            let conditon = put_input_in_reg(ctx, inputs[0]);
-            let x = ctx.put_input_in_regs(insn, 1);
-            let y = ctx.put_input_in_regs(insn, 2);
-            ctx.emit(Inst::Select {
-                dst,
-                conditon,
-                x,
-                y,
-                ty,
-            });
+            implemented_in_isle(ctx);
         }
 
         Opcode::Selectif | Opcode::SelectifSpectreGuard => {
@@ -292,35 +210,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Bitselect => {
-            debug_assert_ne!(Opcode::Vselect, op);
-            let tmp1 = ctx.alloc_tmp(I64).only_reg().unwrap();
-            let tmp2 = ctx.alloc_tmp(I64).only_reg().unwrap();
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let rcond = put_input_in_reg(ctx, inputs[0]);
-            let x = put_input_in_reg(ctx, inputs[1]);
-            let y = put_input_in_reg(ctx, inputs[2]);
-            // get all x part
-            ctx.emit(Inst::AluRRR {
-                alu_op: AluOPRRR::And,
-                rd: tmp1,
-                rs1: rcond,
-                rs2: x,
-            });
-            // bit not
-            ctx.emit(Inst::construct_bit_not(tmp2, rcond));
-            // get y  part
-            ctx.emit(Inst::AluRRR {
-                alu_op: AluOPRRR::And,
-                rd: tmp2,
-                rs1: tmp2.to_reg(),
-                rs2: y,
-            });
-            ctx.emit(Inst::AluRRR {
-                alu_op: AluOPRRR::Or,
-                rd: rd,
-                rs1: tmp1.to_reg(),
-                rs2: tmp2.to_reg(),
-            });
+            implemented_in_isle(ctx);
         }
 
         Opcode::Vselect => {
@@ -358,29 +248,15 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::IsNull | Opcode::IsInvalid => {
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let rs = put_input_in_reg(ctx, inputs[0]);
-            let _ty = ctx.input_ty(insn, 0);
-            ctx.emit(Inst::ReferenceCheck {
-                op: ReferenceCheckOP::from_ir_op(op),
-                rd,
-                x: rs,
-            });
+            implemented_in_isle(ctx);
         }
 
         Opcode::Copy => {
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let rn = put_input_in_reg(ctx, inputs[0]);
-            let ty = ctx.input_ty(insn, 0);
-            ctx.emit(Inst::gen_move(rd, rn, ty));
+            implemented_in_isle(ctx);
         }
 
         Opcode::Breduce | Opcode::Ireduce => {
-            // Smaller integers/booleans are stored with high-order bits
-            // undefined, so we can simply do a copy.
-            let rn = put_input_in_regs(ctx, inputs[0]).regs()[0];
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            ctx.emit(Inst::gen_move(rd, rn, ty.unwrap()));
+            implemented_in_isle(ctx);
         }
 
         Opcode::Bextend | Opcode::Bmask => {
@@ -413,27 +289,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Bint => {
-            let ty = ty.unwrap();
-            if ty.is_vector() {
-                return Err(CodegenError::Unsupported(format!(
-                    "Bint: Unsupported type: {:?}",
-                    ty
-                )));
-            }
-            let input = put_input_in_regs(ctx, inputs[0]);
-            let output = get_output_reg(ctx, outputs[0]);
-            ctx.emit(Inst::AluRRImm12 {
-                alu_op: AluOPRRI::Andi,
-                rd: Writable::from(output.regs()[0]),
-                rs: input.regs()[0],
-                imm12: Imm12::from_bits(1),
-            });
-            if ty_bits(ty) == 128 {
-                ctx.emit(Inst::load_constant_imm12(
-                    Writable::from(output.regs()[1]),
-                    Imm12::zero(),
-                ));
-            }
+            implemented_in_isle(ctx);
         }
 
         Opcode::Bitcast => {
@@ -500,7 +356,6 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let rs1 = put_input_in_reg(ctx, inputs[0]);
             let rs2 = put_input_in_reg(ctx, inputs[1]);
             let cc = ctx.data(insn).fp_cond_code().unwrap();
-
             ctx.emit(Inst::Fcmp {
                 rd,
                 cc,
@@ -511,12 +366,11 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Debugtrap => {
-            ctx.emit(Inst::EBreak);
+            implemented_in_isle(ctx);
         }
 
         Opcode::Trap | Opcode::ResumableTrap => {
-            let trap_code = ctx.data(insn).trap_code().unwrap();
-            ctx.emit(Inst::Udf { trap_code });
+            implemented_in_isle(ctx);
         }
 
         Opcode::Trapif => {
@@ -685,63 +539,15 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Isplit => {
-            let input_ty = ctx.input_ty(insn, 0);
-            if input_ty != I128 {
-                return Err(CodegenError::Unsupported(format!(
-                    "Isplit: Unsupported type: {:?}",
-                    input_ty
-                )));
-            }
-
-            assert_eq!(ctx.output_ty(insn, 0), I64);
-            assert_eq!(ctx.output_ty(insn, 1), I64);
-
-            let src_regs = put_input_in_regs(ctx, inputs[0]);
-
-            let dst_lo = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let dst_hi = get_output_reg(ctx, outputs[1]).only_reg().unwrap();
-
-            ctx.emit(Inst::gen_move(dst_lo, src_regs.regs()[0], I64));
-            ctx.emit(Inst::gen_move(dst_hi, src_regs.regs()[1], I64));
+            implemented_in_isle(ctx);
         }
 
         Opcode::Iconcat => {
-            let ty = ty.unwrap();
-
-            if ty != I128 {
-                return Err(CodegenError::Unsupported(format!(
-                    "Iconcat: Unsupported type: {:?}",
-                    ty
-                )));
-            }
-            assert_eq!(ctx.input_ty(insn, 0), I64);
-            assert_eq!(ctx.input_ty(insn, 1), I64);
-
-            let src_lo = put_input_in_reg(ctx, inputs[0]);
-            let src_hi = put_input_in_reg(ctx, inputs[1]);
-            let dst = get_output_reg(ctx, outputs[0]);
-
-            ctx.emit(Inst::gen_move(dst.regs()[0], src_lo, I64));
-            ctx.emit(Inst::gen_move(dst.regs()[1], src_hi, I64));
+            implemented_in_isle(ctx);
         }
 
         Opcode::Imax | Opcode::Umax | Opcode::Umin | Opcode::Imin => {
-            let ty = ty.unwrap();
-            if ty.is_int() {
-                let dst = ctx.get_output(insn, 0);
-                let dst: Vec<_> = dst.regs().iter().map(|r| *r).collect();
-                let x = put_input_in_regs(ctx, inputs[0]);
-                let y = put_input_in_regs(ctx, inputs[1]);
-                ctx.emit(Inst::IntSelect {
-                    op: IntSelectOP::from_ir_op(op),
-                    dst: dst,
-                    x,
-                    y,
-                    ty,
-                });
-            } else {
-                unimplemented!()
-            }
+            implemented_in_isle(ctx);
         }
 
         Opcode::IaddPairwise => {
@@ -764,59 +570,11 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             implemented_in_isle(ctx);
         }
         Opcode::Fpromote | Opcode::Fdemote => {
-            let ty = ty.unwrap();
-            if ty.is_vector() {
-                unimplemented!();
-            } else {
-                let input_ty = ctx.input_ty(insn, 0);
-                let rs = put_input_in_reg(ctx, inputs[0]);
-                let rd = ctx.get_output(insn, 0).only_reg().unwrap();
-                let op = match (input_ty.bits(), ty.bits()) {
-                    (32, 64) => FpuOPRR::FcvtDS,
-                    (64, 32) => FpuOPRR::FcvtSD,
-                    _ => unreachable!(),
-                };
-                ctx.emit(Inst::FpuRR {
-                    frm: None,
-                    alu_op: op,
-                    rd,
-                    rs,
-                });
-            }
+            implemented_in_isle(ctx);
         }
 
         Opcode::Ceil | Opcode::Floor | Opcode::Trunc | Opcode::Nearest => {
-            let ty = ty.unwrap();
-            if ty.is_vector() {
-                unimplemented!();
-            } else {
-                let rounding_mode = match op {
-                    Opcode::Ceil => FRM::RUP,
-                    Opcode::Floor => FRM::RDN,
-                    Opcode::Trunc => FRM::RTZ,
-                    Opcode::Nearest => FRM::RNE,
-                    _ => unreachable!(),
-                };
-                let input_ty = ctx.input_ty(insn, 0);
-                let rs = put_input_in_reg(ctx, inputs[0]);
-                let rd = ctx.get_output(insn, 0).only_reg().unwrap();
-                let mut insts = SmallInstVec::new();
-                let convert_type = I64;
-                let tmp = ctx.alloc_tmp(I64).only_reg().unwrap();
-                insts.push(Inst::FpuRR {
-                    frm: Some(rounding_mode),
-                    alu_op: FpuOPRR::float_convert_2_int_op(input_ty, true, convert_type),
-                    rd: tmp,
-                    rs: rs,
-                });
-                insts.push(Inst::FpuRR {
-                    frm: Some(rounding_mode),
-                    alu_op: FpuOPRR::int_convert_2_float_op(convert_type, true, ty),
-                    rd: rd,
-                    rs: tmp.to_reg(),
-                });
-                insts.into_iter().for_each(|i| ctx.emit(i));
-            }
+            implemented_in_isle(ctx);
         }
 
         Opcode::Fma => {

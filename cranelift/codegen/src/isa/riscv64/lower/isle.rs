@@ -17,7 +17,7 @@ use crate::machinst::{VCodeConstant, VCodeConstantData};
 use crate::{
     ir::{
         immediates::*, types::*, AtomicRmwOp, ExternalName, Inst, InstructionData, MemFlags,
-        TrapCode, Value, ValueList,
+        StackSlot, TrapCode, Value, ValueList,
     },
     isa::riscv64::inst::*,
     machinst::{InsnOutput, LowerCtx},
@@ -56,6 +56,29 @@ where
     C: LowerCtx<I = MInst>,
 {
     isle_prelude_methods!();
+    fn vec_regs_to_value_regs(&mut self, val: &VecWritableReg) -> ValueRegs {
+        match val.len() {
+            1 => ValueRegs::one(val[0].to_reg()),
+            2 => ValueRegs::two(val[0].to_reg(), val[1].to_reg()),
+            _ => unreachable!(),
+        }
+    }
+    fn vec_writable_clone(&mut self, v: &VecWritableReg) -> VecWritableReg {
+        v.clone()
+    }
+    fn con_vec_writable(&mut self, ty: Type) -> VecWritableReg {
+        if ty.is_int() {
+            if ty.bits() <= 64 {
+                vec![self.temp_writable_reg(I64)]
+            } else {
+                vec![self.temp_writable_reg(I64), self.temp_writable_reg(I64)]
+            }
+        } else if ty.is_float() {
+            vec![self.temp_writable_reg(ty)]
+        } else {
+            unimplemented!("ty:{:?}", ty)
+        }
+    }
 
     fn imm(&mut self, ty: Type, mut val: u64) -> Reg {
         /*
@@ -200,58 +223,6 @@ where
         None
     }
 
-    fn lower_bit_reverse(&mut self, ty: Type, rs: Reg) -> Reg {
-        match ty.bits() {
-            64 | 32 | 16 => {
-                let result = self.temp_writable_reg(I64);
-                {
-                    // first reverset byte.
-                    let (op, imm12) = (AluOPRRI::Rev8, Imm12::zero());
-                    self.emit(&MInst::AluRRImm12 {
-                        alu_op: op,
-                        rd: result,
-                        rs,
-                        imm12: imm12,
-                    })
-                }
-                //
-                {
-                    //reverset bits.
-                    let (op, imm12) = (AluOPRRI::Brev8, Imm12::zero());
-                    self.emit(&MInst::AluRRImm12 {
-                        alu_op: op,
-                        rd: result,
-                        rs: result.to_reg(),
-                        imm12: imm12,
-                    })
-                }
-                if ty.bits() != 64 {
-                    // shift to it's bits.
-                    self.emit(&MInst::AluRRImm12 {
-                        alu_op: AluOPRRI::Srli,
-                        rd: result,
-                        rs: result.to_reg(),
-                        imm12: Imm12::from_bits((64 - ty.bits()) as i16),
-                    });
-                }
-                result.to_reg()
-            }
-
-            8 => {
-                let result = self.temp_writable_reg(I64);
-                let (op, imm12) = (AluOPRRI::Brev8, Imm12::zero());
-                self.emit(&MInst::AluRRImm12 {
-                    alu_op: op,
-                    rd: result,
-                    rs,
-                    imm12,
-                });
-                result.to_reg()
-            }
-
-            _ => unreachable!(),
-        }
-    }
     fn lower_clz(&mut self, ty: Type, val: ValueRegs) -> Reg {
         assert!(ty.is_int());
         let tmp = self.temp_writable_reg(I64);
@@ -1039,7 +1010,6 @@ where
 
     fn load_float_const(&mut self, val: u64, ty: Type) -> Reg {
         let result = self.temp_writable_reg(ty);
-
         if ty == F32 {
             MInst::load_fp_constant32(result, val as u32)
                 .into_iter()
@@ -1159,9 +1129,6 @@ where
     fn con_amode(&mut self, base: Reg, offset: i64, ty: Type) -> AMode {
         AMode::RegOffset(base, offset, ty)
     }
-    fn no_return(&mut self) -> InstOutput {
-        InstOutput::default()
-    }
     fn valid_atomic_transaction(&mut self, ty: Type) -> Option<Type> {
         if is_valid_atomic_transaction_ty(ty) {
             Some(ty)
@@ -1170,8 +1137,22 @@ where
         }
     }
 
-    fn atomic_rmw_amo(&mut self) -> AMO {
+    fn gen_stack_addr(&mut self, slot: StackSlot, offset: Offset32) -> Reg {
+        let result = self.temp_writable_reg(I64);
+        let i = self
+            .lower_ctx
+            .abi()
+            .stackslot_addr(slot, i64::from(offset) as u32, result);
+        self.emit(&i);
+        result.to_reg()
+    }
+    fn atomic_amo(&mut self) -> AMO {
         AMO::SeqConsistent
+    }
+    fn gen_move(&mut self, r: Reg, ty: Type) -> Reg {
+        let tmp = self.temp_writable_reg(ty);
+        self.emit(&MInst::gen_move(tmp, r, ty));
+        tmp.to_reg()
     }
     fn con_atomic_load(&mut self, addr: Reg, ty: Type) -> Reg {
         let tmp = self.temp_writable_reg(ty);
@@ -1214,47 +1195,5 @@ where
         for i in list {
             self.lower_ctx.emit(i.clone());
         }
-    }
-}
-
-/*
-    memory representation of f32.
-*/
-fn f32_rep(f: f32) -> u32 {
-    let x = f.to_le_bytes();
-    u32::from_le_bytes(x)
-}
-
-/*
-    memory representation of f64.
-*/
-fn f64_rep(f: f64) -> u64 {
-    let x = f.to_le_bytes();
-    u64::from_le_bytes(x)
-}
-#[cfg(test)]
-
-mod test {
-    use super::*;
-    #[test]
-    fn float_memory_representation() {
-        fn convert_32(f: f32) {
-            let x = f32::from_le_bytes(f32_rep(f).to_le_bytes());
-            assert!(f == x);
-        }
-        fn convert_64(f: f64) {
-            let x = f64::from_le_bytes(f64_rep(f).to_le_bytes());
-            assert!(f == x);
-        }
-        convert_32(1.0);
-        convert_32(99.111);
-        // convert_32(f32::NAN);
-        convert_32(f32::INFINITY);
-        convert_32(f32::NEG_INFINITY);
-        convert_64(1.0);
-        convert_64(99.111);
-        // convert_64(f64::NAN);
-        convert_64(f64::INFINITY);
-        convert_64(f64::NEG_INFINITY);
     }
 }
