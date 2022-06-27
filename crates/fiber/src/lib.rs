@@ -4,15 +4,17 @@ use std::io;
 use std::marker::PhantomData;
 use std::panic::{self, AssertUnwindSafe};
 
-#[cfg(windows)]
-mod windows;
-#[cfg(windows)]
-use windows as imp;
-
-#[cfg(unix)]
-mod unix;
-#[cfg(unix)]
-use unix as imp;
+cfg_if::cfg_if! {
+    if #[cfg(windows)] {
+        mod windows;
+        use windows as imp;
+    } else if #[cfg(unix)] {
+        mod unix;
+        use unix as imp;
+    } else {
+        compile_error!("fibers are not supported on this platform");
+    }
+}
 
 /// Represents an execution stack to use for a fiber.
 #[derive(Debug)]

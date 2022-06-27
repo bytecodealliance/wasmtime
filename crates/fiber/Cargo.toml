@@ -13,6 +13,9 @@ edition = "2021"
 # directives or similar to embed a version number of this crate in symbols.
 links = "wasmtime-fiber-shims"
 
+[dependencies]
+cfg-if = "1.0"
+
 [target.'cfg(unix)'.dependencies]
 rustix = { version = "0.35.6", features = ["mm", "param"] }
 
