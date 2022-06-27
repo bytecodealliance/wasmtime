@@ -15,7 +15,7 @@ pub use self::func::{
     WasmStr,
 };
 pub use self::instance::{Instance, InstancePre};
-pub use self::linker::Linker;
+pub use self::linker::{Linker, LinkerInstance};
 
 // These items are expected to be used by an eventual
 // `#[derive(ComponentValue)]`, they are not part of Wasmtime's API stability

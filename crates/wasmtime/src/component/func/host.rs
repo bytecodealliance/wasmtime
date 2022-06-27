@@ -17,7 +17,7 @@ use wasmtime_runtime::{VMCallerCheckedAnyfunc, VMMemoryDefinition, VMOpaqueConte
 /// component.
 ///
 /// For more information see the
-/// [`Linker::func_wrap`](crate::component::Linker::func_wrap) documentation.
+/// [`func_wrap`](crate::component::LinkerInstance::func_wrap) documentation.
 pub trait IntoComponentFunc<T, Params, Return> {
     /// Host entrypoint from a cranelift-generated trampoline.
     ///
