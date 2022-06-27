@@ -80,7 +80,8 @@ pub fn init_traps(is_wasm_pc: fn(usize) -> bool) {
 /// have been previously called. Additionally no Rust destructors can be on the
 /// stack. They will be skipped and not executed.
 pub unsafe fn raise_user_trap(data: Error) -> ! {
-    tls::with(|info| info.unwrap().unwind_with(UnwindReason::UserTrap(data)))
+    let trap = TrapReason::User(data);
+    tls::with(|info| info.unwrap().unwind_with(UnwindReason::Trap(trap)))
 }
 
 /// Raises a trap from inside library code immediately.
@@ -93,8 +94,9 @@ pub unsafe fn raise_user_trap(data: Error) -> ! {
 /// Only safe to call when wasm code is on the stack, aka `catch_traps` must
 /// have been previously called. Additionally no Rust destructors can be on the
 /// stack. They will be skipped and not executed.
-pub unsafe fn raise_lib_trap(trap: Trap) -> ! {
-    tls::with(|info| info.unwrap().unwind_with(UnwindReason::LibTrap(trap)))
+pub unsafe fn raise_lib_trap(trap: TrapCode) -> ! {
+    let trap = TrapReason::Wasm(trap);
+    tls::with(|info| info.unwrap().unwind_with(UnwindReason::Trap(trap)))
 }
 
 /// Carries a Rust panic across wasm code and resumes the panic on the other
@@ -111,74 +113,39 @@ pub unsafe fn resume_panic(payload: Box<dyn Any + Send>) -> ! {
 
 /// Stores trace message with backtrace.
 #[derive(Debug)]
-pub enum Trap {
-    /// A user-raised trap through `raise_user_trap`.
-    User {
-        /// The user-provided error
-        error: Error,
-        /// Native stack backtrace at the time the trap occurred
-        backtrace: Option<Backtrace>,
-    },
+pub struct Trap {
+    /// Original reason from where this trap originated.
+    pub reason: TrapReason,
+    /// Wasm backtrace of the trap, if any.
+    pub backtrace: Option<Backtrace>,
+}
 
-    /// A trap raised from jit code
-    Jit {
-        /// The program counter in JIT code where this trap happened.
-        pc: usize,
-        /// Native stack backtrace at the time the trap occurred
-        backtrace: Option<Backtrace>,
-    },
+/// Enumeration of different methods of raising a trap.
+#[derive(Debug)]
+pub enum TrapReason {
+    /// A user-raised trap through `raise_user_trap`.
+    User(Error),
+
+    /// A trap raised from Cranelift-generated code with the pc listed of where
+    /// the trap came from.
+    Jit(usize),
 
     /// A trap raised from a wasm libcall
-    Wasm {
-        /// Code of the trap.
-        trap_code: TrapCode,
-        /// Native stack backtrace at the time the trap occurred
-        backtrace: Option<Backtrace>,
-    },
+    Wasm(TrapCode),
 
     /// A trap indicating that the runtime was unable to allocate sufficient memory.
-    OOM {
-        /// Native stack backtrace at the time the OOM occurred
-        backtrace: Option<Backtrace>,
-    },
+    OOM,
 }
 
 impl Trap {
-    /// Construct a new Wasm trap with the given trap code.
-    ///
-    /// Internally saves a backtrace when passed across a setjmp boundary, if the
-    /// engine is configured to save backtraces.
-    pub fn wasm(trap_code: TrapCode) -> Self {
-        Trap::Wasm {
-            trap_code,
-            backtrace: None,
-        }
-    }
-
-    /// Construct a new Wasm trap from a user Error.
-    ///
-    /// Internally saves a backtrace when passed across a setjmp boundary, if the
-    /// engine is configured to save backtraces.
-    pub fn user(error: Error) -> Self {
-        Trap::User {
-            error,
-            backtrace: None,
-        }
-    }
     /// Construct a new OOM trap.
     ///
     /// Internally saves a backtrace when passed across a setjmp boundary, if the
     /// engine is configured to save backtraces.
     pub fn oom() -> Self {
-        Trap::OOM { backtrace: None }
-    }
-
-    fn insert_backtrace(&mut self, bt: Backtrace) {
-        match self {
-            Trap::User { backtrace, .. } => *backtrace = Some(bt),
-            Trap::Jit { backtrace, .. } => *backtrace = Some(bt),
-            Trap::Wasm { backtrace, .. } => *backtrace = Some(bt),
-            Trap::OOM { backtrace, .. } => *backtrace = Some(bt),
+        Trap {
+            reason: TrapReason::OOM,
+            backtrace: None,
         }
     }
 }
@@ -226,9 +193,7 @@ pub struct CallThreadState {
 
 enum UnwindReason {
     Panic(Box<dyn Any + Send>),
-    UserTrap(Error),
-    LibTrap(Trap),
-    JitTrap { pc: usize }, // Removed a backtrace here
+    Trap(TrapReason),
 }
 
 impl CallThreadState {
@@ -258,17 +223,12 @@ impl CallThreadState {
 
     #[cold]
     unsafe fn read_trap(&self) -> Box<Trap> {
-        Box::new(match (*self.unwind.get()).as_ptr().read() {
-            (UnwindReason::UserTrap(error), backtrace) => Trap::User { error, backtrace },
-            (UnwindReason::LibTrap(mut trap), backtrace) => {
-                if let Some(backtrace) = backtrace {
-                    trap.insert_backtrace(backtrace);
-                }
-                trap
-            }
-            (UnwindReason::JitTrap { pc }, backtrace) => Trap::Jit { pc, backtrace },
-            (UnwindReason::Panic(panic), _) => std::panic::resume_unwind(panic),
-        })
+        let (unwind_reason, backtrace) = (*self.unwind.get()).as_ptr().read();
+        let reason = match unwind_reason {
+            UnwindReason::Trap(trap) => trap,
+            UnwindReason::Panic(panic) => std::panic::resume_unwind(panic),
+        };
+        Box::new(Trap { reason, backtrace })
     }
 
     fn unwind_with(&self, reason: UnwindReason) -> ! {
@@ -344,10 +304,11 @@ impl CallThreadState {
         } else {
             None
         };
+        let trap = TrapReason::Jit(pc as usize);
         unsafe {
             (*self.unwind.get())
                 .as_mut_ptr()
-                .write((UnwindReason::JitTrap { pc: pc as usize }, backtrace));
+                .write((UnwindReason::Trap(trap), backtrace));
         }
     }
 }
