@@ -13,6 +13,14 @@ Released 2022-06-27.
   including Wasmtime.
   [regalloc2#60](https://github.com/bytecodealliance/regalloc2/pull/60)
 
+* A bug in the 8-bit lowering of integer division on x86-64 was fixed in
+  Cranelift that could cause a register allocator panic due to an undefined
+  value in a register. (The divide instruction does not take a register `rdx`
+  as a source when 8 bits but the metadata incorrectly claimed it did.) No
+  impact on Wasm/Wasmtime users, and impact on direct Cranelift embedders
+  limited to compilation panics.
+  [#4332](https://github.com/bytecodealliance/wasmtime/pull/4332)
+
 --------------------------------------------------------------------------------
 
 ## 0.38.0
