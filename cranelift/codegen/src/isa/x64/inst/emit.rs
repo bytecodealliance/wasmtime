@@ -385,13 +385,15 @@ pub(crate) fn emit(
             dst_remainder,
         } => {
             let dividend_lo = allocs.next(dividend_lo.to_reg());
-            let dividend_hi = allocs.next(dividend_hi.to_reg());
             let dst_quotient = allocs.next(dst_quotient.to_reg().to_reg());
             let dst_remainder = allocs.next(dst_remainder.to_reg().to_reg());
             debug_assert_eq!(dividend_lo, regs::rax());
-            debug_assert_eq!(dividend_hi, regs::rdx());
             debug_assert_eq!(dst_quotient, regs::rax());
             debug_assert_eq!(dst_remainder, regs::rdx());
+            if size.to_bits() > 8 {
+                let dividend_hi = allocs.next(dividend_hi.to_reg());
+                debug_assert_eq!(dividend_hi, regs::rdx());
+            }
 
             let (opcode, prefix) = match size {
                 OperandSize::Size8 => (0xF6, LegacyPrefixes::None),
