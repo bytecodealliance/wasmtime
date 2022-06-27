@@ -1378,16 +1378,55 @@ impl<T: Lift> WasmList<T> {
     }
 }
 
-impl WasmList<u8> {
-    /// Get access to the raw underlying memory for this byte slice.
-    ///
-    /// Note that this is specifically only implemented for a `(list u8)` type
-    /// since it's known to be valid in terms of alignment and representation
-    /// validity.
-    pub fn as_slice<'a, T: 'a>(&self, store: impl Into<StoreContext<'a, T>>) -> &'a [u8] {
-        // See comments in `WasmList::get` for the panicking indexing
-        &self.options.memory(store.into().0)[self.ptr..][..self.len]
-    }
+macro_rules! raw_wasm_list_accessors {
+    ($($i:ident)*) => ($(
+        impl WasmList<$i> {
+            /// Get access to the raw underlying memory for this list.
+            ///
+            /// This method will return a direct slice into the original wasm
+            /// module's linear memory where the data for this slice is stored.
+            /// This allows the embedder to have efficient access to the
+            /// underlying memory if needed and avoid copies and such if
+            /// desired.
+            ///
+            /// Note that multi-byte integers are stored in little-endian format
+            /// so portable processing of this slice must be aware of the host's
+            /// byte-endianness. The `from_le` constructors in the Rust standard
+            /// library should be suitable for converting from little-endian.
+            ///
+            /// # Panics
+            ///
+            /// Panics if the `store` provided is not the one from which this
+            /// slice originated.
+            pub fn as_le_slice<'a, T: 'a>(&self, store: impl Into<StoreContext<'a, T>>) -> &'a [$i] {
+                // See comments in `WasmList::get` for the panicking indexing
+                let byte_size = self.len * mem::size_of::<$i>();
+                let bytes = &self.options.memory(store.into().0)[self.ptr..][..byte_size];
+
+                // The canonical ABI requires that everything is aligned to its
+                // own size, so this should be an aligned array. Furthermore the
+                // alignment of primitive integers for hosts should be smaller
+                // than or equal to the size of the primitive itself, meaning
+                // that a wasm canonical-abi-aligned list is also aligned for
+                // the host. That should mean that the head/tail slices here are
+                // empty.
+                //
+                // Also note that the `unsafe` here is needed since the type
+                // we're aligning to isn't guaranteed to be valid, but in our
+                // case it's just integers and bytes so this should be safe.
+                unsafe {
+                    let (head, body, tail) = bytes.align_to::<$i>();
+                    assert!(head.is_empty() && tail.is_empty());
+                    body
+                }
+            }
+        }
+    )*)
+}
+
+raw_wasm_list_accessors! {
+    i8 i16 i32 i64
+    u8 u16 u32 u64
 }
 
 // Note that this is similar to `ComponentValue for str` except it can only be
