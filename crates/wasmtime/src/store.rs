@@ -1160,6 +1160,11 @@ impl StoreOpaque {
     }
 
     #[inline]
+    pub(crate) fn modules(&self) -> &ModuleRegistry {
+        &self.modules
+    }
+
+    #[inline]
     pub(crate) fn modules_mut(&mut self) -> &mut ModuleRegistry {
         &mut self.modules
     }
@@ -1767,9 +1772,9 @@ impl AsyncCx {
                 Poll::Pending => {}
             }
 
-            let before = wasmtime_runtime::TlsRestore::take().map_err(Trap::from_runtime_box)?;
+            let before = wasmtime_runtime::TlsRestore::take();
             let res = (*suspend).suspend(());
-            before.replace().map_err(Trap::from_runtime_box)?;
+            before.replace();
             res?;
         }
     }

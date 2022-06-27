@@ -1241,7 +1241,7 @@ pub(crate) fn invoke_wasm_and_catch_traps<T>(
         );
         exit_wasm(store, exit);
         store.0.call_hook(CallHook::ReturningFromWasm)?;
-        result.map_err(Trap::from_runtime_box)
+        result.map_err(|t| Trap::from_runtime_box(store.0, t))
     }
 }
 

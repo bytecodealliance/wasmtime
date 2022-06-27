@@ -1,4 +1,4 @@
-use crate::traphandlers::{tls, wasmtime_longjmp, Trap};
+use crate::traphandlers::{tls, wasmtime_longjmp};
 use std::cell::RefCell;
 use std::io;
 use std::mem::{self, MaybeUninit};
@@ -252,7 +252,7 @@ unsafe fn set_pc(cx: *mut libc::c_void, pc: usize, arg1: usize) {
 /// and registering our own alternate stack that is large enough and has a guard
 /// page.
 #[cold]
-pub fn lazy_per_thread_init() -> Result<(), Box<Trap>> {
+pub fn lazy_per_thread_init() {
     // This thread local is purely used to register a `Stack` to get deallocated
     // when the thread exists. Otherwise this function is only ever called at
     // most once per-thread.
@@ -270,11 +270,10 @@ pub fn lazy_per_thread_init() -> Result<(), Box<Trap>> {
     }
 
     return STACK.with(|s| {
-        *s.borrow_mut() = unsafe { allocate_sigaltstack()? };
-        Ok(())
+        *s.borrow_mut() = unsafe { allocate_sigaltstack() };
     });
 
-    unsafe fn allocate_sigaltstack() -> Result<Option<Stack>, Box<Trap>> {
+    unsafe fn allocate_sigaltstack() -> Option<Stack> {
         // Check to see if the existing sigaltstack, if it exists, is big
         // enough. If so we don't need to allocate our own.
         let mut old_stack = mem::zeroed();
@@ -286,7 +285,7 @@ pub fn lazy_per_thread_init() -> Result<(), Box<Trap>> {
             io::Error::last_os_error()
         );
         if old_stack.ss_flags & libc::SS_DISABLE == 0 && old_stack.ss_size >= MIN_STACK_SIZE {
-            return Ok(None);
+            return None;
         }
 
         // ... but failing that we need to allocate our own, so do all that
@@ -301,7 +300,7 @@ pub fn lazy_per_thread_init() -> Result<(), Box<Trap>> {
             rustix::mm::ProtFlags::empty(),
             rustix::mm::MapFlags::PRIVATE,
         )
-        .map_err(|_| Box::new(Trap::oom()))?;
+        .expect("failed to allocate memory for sigaltstack");
 
         // Prepare the stack with readable/writable memory and then register it
         // with `sigaltstack`.
@@ -325,10 +324,10 @@ pub fn lazy_per_thread_init() -> Result<(), Box<Trap>> {
             io::Error::last_os_error()
         );
 
-        Ok(Some(Stack {
+        Some(Stack {
             mmap_ptr: ptr,
             mmap_size: alloc_size,
-        }))
+        })
     }
 
     impl Drop for Stack {

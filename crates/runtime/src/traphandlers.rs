@@ -132,22 +132,6 @@ pub enum TrapReason {
 
     /// A trap raised from a wasm libcall
     Wasm(TrapCode),
-
-    /// A trap indicating that the runtime was unable to allocate sufficient memory.
-    OOM,
-}
-
-impl Trap {
-    /// Construct a new OOM trap.
-    ///
-    /// Internally saves a backtrace when passed across a setjmp boundary, if the
-    /// engine is configured to save backtraces.
-    pub fn oom() -> Self {
-        Trap {
-            reason: TrapReason::OOM,
-            backtrace: None,
-        }
-    }
 }
 
 /// Catches any wasm traps that happen within the execution of `closure`,
@@ -213,7 +197,7 @@ impl CallThreadState {
     }
 
     fn with(self, closure: impl FnOnce(&CallThreadState) -> i32) -> Result<(), Box<Trap>> {
-        let ret = tls::set(&self, || closure(&self))?;
+        let ret = tls::set(&self, || closure(&self));
         if ret != 0 {
             Ok(())
         } else {
@@ -329,7 +313,6 @@ impl<T: Copy> Drop for ResetCell<'_, T> {
 // the caller to the trap site.
 mod tls {
     use super::CallThreadState;
-    use crate::Trap;
     use std::ptr;
 
     pub use raw::Ptr;
@@ -350,7 +333,6 @@ mod tls {
     // these functions are free to be inlined.
     mod raw {
         use super::CallThreadState;
-        use crate::Trap;
         use std::cell::Cell;
         use std::ptr;
 
@@ -365,17 +347,17 @@ mod tls {
 
         #[cfg_attr(feature = "async", inline(never))] // see module docs
         #[cfg_attr(not(feature = "async"), inline)]
-        pub fn replace(val: Ptr) -> Result<Ptr, Box<Trap>> {
+        pub fn replace(val: Ptr) -> Ptr {
             PTR.with(|p| {
                 // When a new value is configured that means that we may be
                 // entering WebAssembly so check to see if this thread has
                 // performed per-thread initialization for traps.
                 let (prev, initialized) = p.get();
                 if !initialized {
-                    super::super::sys::lazy_per_thread_init()?;
+                    super::super::sys::lazy_per_thread_init();
                 }
                 p.set((val, true));
-                Ok(prev)
+                prev
             })
         }
 
@@ -383,15 +365,14 @@ mod tls {
         /// lazily by the runtime if users do not perform it eagerly.
         #[cfg_attr(feature = "async", inline(never))] // see module docs
         #[cfg_attr(not(feature = "async"), inline)]
-        pub fn initialize() -> Result<(), Box<Trap>> {
+        pub fn initialize() {
             PTR.with(|p| {
                 let (state, initialized) = p.get();
                 if initialized {
-                    return Ok(());
+                    return;
                 }
-                super::super::sys::lazy_per_thread_init()?;
+                super::super::sys::lazy_per_thread_init();
                 p.set((state, true));
-                Ok(())
             })
         }
 
@@ -414,7 +395,7 @@ mod tls {
         ///
         /// This is not a safe operation since it's intended to only be used
         /// with stack switching found with fibers and async wasmtime.
-        pub unsafe fn take() -> Result<TlsRestore, Box<Trap>> {
+        pub unsafe fn take() -> TlsRestore {
             // Our tls pointer must be set at this time, and it must not be
             // null. We need to restore the previous pointer since we're
             // removing ourselves from the call-stack, and in the process we
@@ -423,30 +404,29 @@ mod tls {
             let raw = raw::get();
             if !raw.is_null() {
                 let prev = (*raw).prev.replace(ptr::null());
-                raw::replace(prev)?;
+                raw::replace(prev);
             }
             // Null case: we aren't in a wasm context, so theres no tls
             // to save for restoration.
-            Ok(TlsRestore(raw))
+            TlsRestore(raw)
         }
 
         /// Restores a previous tls state back into this thread's TLS.
         ///
         /// This is unsafe because it's intended to only be used within the
         /// context of stack switching within wasmtime.
-        pub unsafe fn replace(self) -> Result<(), Box<super::Trap>> {
+        pub unsafe fn replace(self) {
             // Null case: we aren't in a wasm context, so theres no tls
             // to restore.
             if self.0.is_null() {
-                return Ok(());
+                return;
             }
             // We need to configure our previous TLS pointer to whatever is in
             // TLS at this time, and then we set the current state to ourselves.
             let prev = raw::get();
             assert!((*self.0).prev.get().is_null());
             (*self.0).prev.set(prev);
-            raw::replace(self.0)?;
-            Ok(())
+            raw::replace(self.0);
         }
     }
 
@@ -454,21 +434,20 @@ mod tls {
     /// execution of `closure` any call to `with` will yield `ptr`, unless this
     /// is recursively called again.
     #[inline]
-    pub fn set<R>(state: &CallThreadState, closure: impl FnOnce() -> R) -> Result<R, Box<Trap>> {
+    pub fn set<R>(state: &CallThreadState, closure: impl FnOnce() -> R) -> R {
         struct Reset<'a>(&'a CallThreadState);
 
         impl Drop for Reset<'_> {
             #[inline]
             fn drop(&mut self) {
-                raw::replace(self.0.prev.replace(ptr::null()))
-                    .expect("tls should be previously initialized");
+                raw::replace(self.0.prev.replace(ptr::null()));
             }
         }
 
-        let prev = raw::replace(state)?;
+        let prev = raw::replace(state);
         state.prev.set(prev);
         let _reset = Reset(state);
-        Ok(closure())
+        closure()
     }
 
     /// Returns the last pointer configured with `set` above. Panics if `set`

@@ -413,7 +413,7 @@ pub use crate::instance::{Instance, InstancePre};
 pub use crate::limits::*;
 pub use crate::linker::*;
 pub use crate::memory::*;
-pub use crate::module::{FrameInfo, FrameSymbol, Module};
+pub use crate::module::Module;
 pub use crate::r#ref::ExternRef;
 #[cfg(feature = "async")]
 pub use crate::store::CallHookHandler;

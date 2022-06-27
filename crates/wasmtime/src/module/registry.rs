@@ -2,18 +2,14 @@
 
 #[cfg(feature = "component-model")]
 use crate::component::Component;
-use crate::{Engine, Module};
+use crate::{FrameInfo, Module};
 use std::{
     collections::BTreeMap,
     sync::{Arc, RwLock},
 };
-use wasmtime_environ::{EntityRef, FilePos, TrapCode};
+use wasmtime_environ::TrapCode;
 use wasmtime_jit::CompiledModule;
 use wasmtime_runtime::{ModuleInfo, VMCallerCheckedAnyfunc, VMTrampoline};
-
-lazy_static::lazy_static! {
-    static ref GLOBAL_MODULES: RwLock<GlobalModuleRegistry> = Default::default();
-}
 
 /// Used for registering modules with a store.
 ///
@@ -49,23 +45,23 @@ fn start(module: &Module) -> usize {
 impl ModuleRegistry {
     /// Fetches information about a registered module given a program counter value.
     pub fn lookup_module(&self, pc: usize) -> Option<&dyn ModuleInfo> {
-        self.module(pc).map(|m| m.module_info())
+        self.module(pc).map(|(m, _)| m.module_info())
     }
 
-    fn module(&self, pc: usize) -> Option<&Module> {
+    fn module(&self, pc: usize) -> Option<(&Module, usize)> {
         match self.module_or_component(pc)? {
-            ModuleOrComponent::Module(m) => Some(m),
+            (ModuleOrComponent::Module(m), offset) => Some((m, offset)),
             #[cfg(feature = "component-model")]
-            ModuleOrComponent::Component(_) => None,
+            (ModuleOrComponent::Component(_), _) => None,
         }
     }
 
-    fn module_or_component(&self, pc: usize) -> Option<&ModuleOrComponent> {
+    fn module_or_component(&self, pc: usize) -> Option<(&ModuleOrComponent, usize)> {
         let (end, (start, module)) = self.modules_with_code.range(pc..).next()?;
         if pc < *start || *end < pc {
             return None;
         }
-        Some(module)
+        Some((module, pc - *start))
     }
 
     /// Registers a new module with the registry.
@@ -138,64 +134,21 @@ impl ModuleRegistry {
 
     /// Looks up a trampoline from an anyfunc.
     pub fn lookup_trampoline(&self, anyfunc: &VMCallerCheckedAnyfunc) -> Option<VMTrampoline> {
-        let signatures = match self.module_or_component(anyfunc.func_ptr.as_ptr() as usize)? {
+        let signatures = match self
+            .module_or_component(anyfunc.func_ptr.as_ptr() as usize)?
+            .0
+        {
             ModuleOrComponent::Module(m) => m.signatures(),
             #[cfg(feature = "component-model")]
             ModuleOrComponent::Component(c) => c.signatures(),
         };
         signatures.trampoline(anyfunc.type_index)
     }
-}
 
-// Counterpart to `RegisteredModule`, but stored in the global registry.
-struct GlobalRegisteredModule {
-    start: usize,
-    module: Arc<CompiledModule>,
-    wasm_backtrace_details_env_used: bool,
-}
-
-/// This is the global module registry that stores information for all modules
-/// that are currently in use by any `Store`.
-///
-/// The purpose of this map is to be called from signal handlers to determine
-/// whether a program counter is a wasm trap or not. Specifically macOS has
-/// no contextual information about the thread available, hence the necessity
-/// for global state rather than using thread local state.
-///
-/// This is similar to `ModuleRegistry` except that it has less information and
-/// supports removal. Any time anything is registered with a `ModuleRegistry`
-/// it is also automatically registered with the singleton global module
-/// registry. When a `ModuleRegistry` is destroyed then all of its entries
-/// are removed from the global module registry.
-#[derive(Default)]
-pub struct GlobalModuleRegistry(BTreeMap<usize, GlobalRegisteredModule>);
-
-impl GlobalModuleRegistry {
-    /// Returns whether the `pc`, according to globally registered information,
-    /// is a wasm trap or not.
-    pub(crate) fn is_wasm_trap_pc(pc: usize) -> bool {
-        let (module, text_offset) = match GLOBAL_MODULES.read().unwrap().module(pc) {
-            Some((module, offset)) => (module.module.clone(), offset),
-            None => return false,
-        };
-
-        wasmtime_environ::lookup_trap_code(module.trap_data(), text_offset).is_some()
-    }
-
-    /// Returns, if found, the corresponding module for the `pc` as well as the
-    /// pc transformed to a relative offset within the text section.
-    fn module(&self, pc: usize) -> Option<(&GlobalRegisteredModule, usize)> {
-        let (end, info) = self.0.range(pc..).next()?;
-        if pc < info.start || *end < pc {
-            return None;
-        }
-        Some((info, pc - info.start))
-    }
-
-    // Work with the global instance of `GlobalModuleRegistry`. Note that only
-    // shared access is allowed, this isn't intended to mutate the contents.
-    pub(crate) fn with<R>(f: impl FnOnce(&GlobalModuleRegistry) -> R) -> R {
-        f(&GLOBAL_MODULES.read().unwrap())
+    /// Fetches trap information about a program counter in a backtrace.
+    pub fn lookup_trap_code(&self, pc: usize) -> Option<TrapCode> {
+        let (module, offset) = self.module(pc)?;
+        wasmtime_environ::lookup_trap_code(module.compiled_module().trap_data(), offset)
     }
 
     /// Fetches frame information about a program counter in a backtrace.
@@ -206,22 +159,49 @@ impl GlobalModuleRegistry {
     /// debug information due to the compiler's configuration. The second
     /// boolean indicates whether the engine used to compile this module is
     /// using environment variables to control debuginfo parsing.
-    pub(crate) fn lookup_frame_info(&self, pc: usize) -> Option<(FrameInfo, bool, bool)> {
+    pub(crate) fn lookup_frame_info(&self, pc: usize) -> Option<(FrameInfo, &Module)> {
         let (module, offset) = self.module(pc)?;
-        module.lookup_frame_info(offset).map(|info| {
-            (
-                info,
-                module.has_unparsed_debuginfo(),
-                module.wasm_backtrace_details_env_used,
-            )
-        })
+        let info = FrameInfo::new(module, offset)?;
+        Some((info, module))
     }
+}
 
-    /// Fetches trap information about a program counter in a backtrace.
-    pub(crate) fn lookup_trap_code(&self, pc: usize) -> Option<TrapCode> {
-        let (module, offset) = self.module(pc)?;
-        wasmtime_environ::lookup_trap_code(module.module.trap_data(), offset)
-    }
+// This is the global module registry that stores information for all modules
+// that are currently in use by any `Store`.
+//
+// The purpose of this map is to be called from signal handlers to determine
+// whether a program counter is a wasm trap or not. Specifically macOS has
+// no contextual information about the thread available, hence the necessity
+// for global state rather than using thread local state.
+//
+// This is similar to `ModuleRegistry` except that it has less information and
+// supports removal. Any time anything is registered with a `ModuleRegistry`
+// it is also automatically registered with the singleton global module
+// registry. When a `ModuleRegistry` is destroyed then all of its entries
+// are removed from the global module registry.
+lazy_static::lazy_static! {
+    static ref GLOBAL_MODULES: RwLock<GlobalModuleRegistry> = Default::default();
+}
+
+type GlobalModuleRegistry = BTreeMap<usize, (usize, Arc<CompiledModule>)>;
+
+/// Returns whether the `pc`, according to globally registered information,
+/// is a wasm trap or not.
+pub fn is_wasm_trap_pc(pc: usize) -> bool {
+    let (module, text_offset) = {
+        let all_modules = GLOBAL_MODULES.read().unwrap();
+
+        let (end, (start, module)) = match all_modules.range(pc..).next() {
+            Some(info) => info,
+            None => return false,
+        };
+        if pc < *start || *end < pc {
+            return false;
+        }
+        (module.clone(), pc - *start)
+    };
+
+    wasmtime_environ::lookup_trap_code(module.trap_data(), text_offset).is_some()
 }
 
 /// Registers a new region of code.
@@ -232,19 +212,17 @@ impl GlobalModuleRegistry {
 /// This is required to enable traps to work correctly since the signal handler
 /// will lookup in the `GLOBAL_MODULES` list to determine which a particular pc
 /// is a trap or not.
-pub fn register(engine: &Engine, module: &Arc<CompiledModule>) {
+pub fn register(module: &Arc<CompiledModule>) {
     let code = module.code();
     if code.is_empty() {
         return;
     }
     let start = code.as_ptr() as usize;
     let end = start + code.len() - 1;
-    let module = GlobalRegisteredModule {
-        start,
-        wasm_backtrace_details_env_used: engine.config().wasm_backtrace_details_env_used,
-        module: module.clone(),
-    };
-    let prev = GLOBAL_MODULES.write().unwrap().0.insert(end, module);
+    let prev = GLOBAL_MODULES
+        .write()
+        .unwrap()
+        .insert(end, (start, module.clone()));
     assert!(prev.is_none());
 }
 
@@ -257,236 +235,8 @@ pub fn unregister(module: &Arc<CompiledModule>) {
         return;
     }
     let end = (code.as_ptr() as usize) + code.len() - 1;
-    let module = GLOBAL_MODULES.write().unwrap().0.remove(&end);
+    let module = GLOBAL_MODULES.write().unwrap().remove(&end);
     assert!(module.is_some());
-}
-
-impl GlobalRegisteredModule {
-    /// Determines if the related module has unparsed debug information.
-    pub fn has_unparsed_debuginfo(&self) -> bool {
-        self.module.has_unparsed_debuginfo()
-    }
-
-    /// Fetches frame information about a program counter in a backtrace.
-    ///
-    /// Returns an object if this `pc` is known to this module, or returns `None`
-    /// if no information can be found.
-    pub fn lookup_frame_info(&self, text_offset: usize) -> Option<FrameInfo> {
-        let (index, _func_offset) = self.module.func_by_text_offset(text_offset)?;
-        let info = self.module.func_info(index);
-        let instr = wasmtime_environ::lookup_file_pos(self.module.address_map_data(), text_offset);
-
-        // In debug mode for now assert that we found a mapping for `pc` within
-        // the function, because otherwise something is buggy along the way and
-        // not accounting for all the instructions. This isn't super critical
-        // though so we can omit this check in release mode.
-        //
-        // Note that if the module doesn't even have an address map due to
-        // compilation settings then it's expected that `instr` is `None`.
-        debug_assert!(
-            instr.is_some() || !self.module.has_address_map(),
-            "failed to find instruction for {:#x}",
-            text_offset
-        );
-
-        // Use our wasm-relative pc to symbolize this frame. If there's a
-        // symbolication context (dwarf debug info) available then we can try to
-        // look this up there.
-        //
-        // Note that dwarf pcs are code-section-relative, hence the subtraction
-        // from the location of `instr`. Also note that all errors are ignored
-        // here for now since technically wasm modules can always have any
-        // custom section contents.
-        let mut symbols = Vec::new();
-
-        if let Some(s) = &self.module.symbolize_context().ok().and_then(|c| c) {
-            if let Some(offset) = instr.and_then(|i| i.file_offset()) {
-                let to_lookup = u64::from(offset) - s.code_section_offset();
-                if let Ok(mut frames) = s.addr2line().find_frames(to_lookup) {
-                    while let Ok(Some(frame)) = frames.next() {
-                        symbols.push(FrameSymbol {
-                            name: frame
-                                .function
-                                .as_ref()
-                                .and_then(|l| l.raw_name().ok())
-                                .map(|s| s.to_string()),
-                            file: frame
-                                .location
-                                .as_ref()
-                                .and_then(|l| l.file)
-                                .map(|s| s.to_string()),
-                            line: frame.location.as_ref().and_then(|l| l.line),
-                            column: frame.location.as_ref().and_then(|l| l.column),
-                        });
-                    }
-                }
-            }
-        }
-
-        let module = self.module.module();
-        let index = module.func_index(index);
-
-        Some(FrameInfo {
-            module_name: module.name.clone(),
-            func_index: index.index() as u32,
-            func_name: self.module.func_name(index).map(|s| s.to_string()),
-            instr,
-            func_start: info.start_srcloc,
-            symbols,
-        })
-    }
-}
-
-/// Description of a frame in a backtrace for a [`Trap`].
-///
-/// Whenever a WebAssembly trap occurs an instance of [`Trap`] is created. Each
-/// [`Trap`] has a backtrace of the WebAssembly frames that led to the trap, and
-/// each frame is described by this structure.
-///
-/// [`Trap`]: crate::Trap
-#[derive(Debug)]
-pub struct FrameInfo {
-    module_name: Option<String>,
-    func_index: u32,
-    func_name: Option<String>,
-    func_start: FilePos,
-    instr: Option<FilePos>,
-    symbols: Vec<FrameSymbol>,
-}
-
-impl FrameInfo {
-    /// Returns the WebAssembly function index for this frame.
-    ///
-    /// This function index is the index in the function index space of the
-    /// WebAssembly module that this frame comes from.
-    pub fn func_index(&self) -> u32 {
-        self.func_index
-    }
-
-    /// Returns the identifer of the module that this frame is for.
-    ///
-    /// Module identifiers are present in the `name` section of a WebAssembly
-    /// binary, but this may not return the exact item in the `name` section.
-    /// Module names can be overwritten at construction time or perhaps inferred
-    /// from file names. The primary purpose of this function is to assist in
-    /// debugging and therefore may be tweaked over time.
-    ///
-    /// This function returns `None` when no name can be found or inferred.
-    pub fn module_name(&self) -> Option<&str> {
-        self.module_name.as_deref()
-    }
-
-    /// Returns a descriptive name of the function for this frame, if one is
-    /// available.
-    ///
-    /// The name of this function may come from the `name` section of the
-    /// WebAssembly binary, or wasmtime may try to infer a better name for it if
-    /// not available, for example the name of the export if it's exported.
-    ///
-    /// This return value is primarily used for debugging and human-readable
-    /// purposes for things like traps. Note that the exact return value may be
-    /// tweaked over time here and isn't guaranteed to be something in
-    /// particular about a wasm module due to its primary purpose of assisting
-    /// in debugging.
-    ///
-    /// This function returns `None` when no name could be inferred.
-    pub fn func_name(&self) -> Option<&str> {
-        self.func_name.as_deref()
-    }
-
-    /// Returns the offset within the original wasm module this frame's program
-    /// counter was at.
-    ///
-    /// The offset here is the offset from the beginning of the original wasm
-    /// module to the instruction that this frame points to.
-    ///
-    /// Note that `None` may be returned if the original module was not
-    /// compiled with mapping information to yield this information. This is
-    /// controlled by the
-    /// [`Config::generate_address_map`](crate::Config::generate_address_map)
-    /// configuration option.
-    pub fn module_offset(&self) -> Option<usize> {
-        Some(self.instr?.file_offset()? as usize)
-    }
-
-    /// Returns the offset from the original wasm module's function to this
-    /// frame's program counter.
-    ///
-    /// The offset here is the offset from the beginning of the defining
-    /// function of this frame (within the wasm module) to the instruction this
-    /// frame points to.
-    ///
-    /// Note that `None` may be returned if the original module was not
-    /// compiled with mapping information to yield this information. This is
-    /// controlled by the
-    /// [`Config::generate_address_map`](crate::Config::generate_address_map)
-    /// configuration option.
-    pub fn func_offset(&self) -> Option<usize> {
-        let instr_offset = self.instr?.file_offset()?;
-        Some((instr_offset - self.func_start.file_offset()?) as usize)
-    }
-
-    /// Returns the debug symbols found, if any, for this function frame.
-    ///
-    /// When a wasm program is compiled with DWARF debug information then this
-    /// function may be populated to return symbols which contain extra debug
-    /// information about a frame including the filename and line number. If no
-    /// debug information was found or if it was malformed then this will return
-    /// an empty array.
-    pub fn symbols(&self) -> &[FrameSymbol] {
-        &self.symbols
-    }
-}
-
-/// Debug information for a symbol that is attached to a [`FrameInfo`].
-///
-/// When DWARF debug information is present in a wasm file then this structure
-/// can be found on a [`FrameInfo`] and can be used to learn about filenames,
-/// line numbers, etc, which are the origin of a function in a stack trace.
-#[derive(Debug)]
-pub struct FrameSymbol {
-    name: Option<String>,
-    file: Option<String>,
-    line: Option<u32>,
-    column: Option<u32>,
-}
-
-impl FrameSymbol {
-    /// Returns the function name associated with this symbol.
-    ///
-    /// Note that this may not be present with malformed debug information, or
-    /// the debug information may not include it. Also note that the symbol is
-    /// frequently mangled, so you might need to run some form of demangling
-    /// over it.
-    pub fn name(&self) -> Option<&str> {
-        self.name.as_deref()
-    }
-
-    /// Returns the source code filename this symbol was defined in.
-    ///
-    /// Note that this may not be present with malformed debug information, or
-    /// the debug information may not include it.
-    pub fn file(&self) -> Option<&str> {
-        self.file.as_deref()
-    }
-
-    /// Returns the 1-indexed source code line number this symbol was defined
-    /// on.
-    ///
-    /// Note that this may not be present with malformed debug information, or
-    /// the debug information may not include it.
-    pub fn line(&self) -> Option<u32> {
-        self.line
-    }
-
-    /// Returns the 1-indexed source code column number this symbol was defined
-    /// on.
-    ///
-    /// Note that this may not be present with malformed debug information, or
-    /// the debug information may not include it.
-    pub fn column(&self) -> Option<u32> {
-        self.column
-    }
 }
 
 #[test]
@@ -510,24 +260,27 @@ fn test_frame_info() -> Result<(), anyhow::Error> {
     // Create an instance to ensure the frame information is registered.
     Instance::new(&mut store, &module, &[])?;
 
-    GlobalModuleRegistry::with(|modules| {
-        for (i, alloc) in module.compiled_module().finished_functions() {
-            let (start, end) = unsafe {
-                let ptr = (*alloc).as_ptr();
-                let len = (*alloc).len();
-                (ptr as usize, ptr as usize + len)
-            };
-            for pc in start..end {
-                let (frame, _, _) = modules.lookup_frame_info(pc).unwrap();
-                assert!(
-                    frame.func_index() == i.as_u32(),
-                    "lookup of {:#x} returned {}, expected {}",
-                    pc,
-                    frame.func_index(),
-                    i.as_u32()
-                );
-            }
+    for (i, alloc) in module.compiled_module().finished_functions() {
+        let (start, end) = unsafe {
+            let ptr = (*alloc).as_ptr();
+            let len = (*alloc).len();
+            (ptr as usize, ptr as usize + len)
+        };
+        for pc in start..end {
+            let (frame, _) = store
+                .as_context()
+                .0
+                .modules()
+                .lookup_frame_info(pc)
+                .unwrap();
+            assert!(
+                frame.func_index() == i.as_u32(),
+                "lookup of {:#x} returned {}, expected {}",
+                pc,
+                frame.func_index(),
+                i.as_u32()
+            );
         }
-    });
+    }
     Ok(())
 }
