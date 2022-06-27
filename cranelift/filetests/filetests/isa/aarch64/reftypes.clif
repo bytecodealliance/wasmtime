@@ -72,20 +72,20 @@ block3(v7: r64, v8: r64):
 ;   ldr x3, 8 ; b 12 ; data TestCase { length: 1, ascii: [102, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
 ;   blr x3
 ;   mov x9, sp
-;   ldr x10, [sp, #8]
-;   str x10, [x9]
+;   ldr x11, [sp, #8]
+;   str x11, [x9]
 ;   and w7, w0, #1
 ;   cbz x7, label1 ; b label3
 ; block1:
 ;   b label2
 ; block2:
-;   mov x1, x10
+;   mov x1, x11
 ;   ldr x0, [sp, #16]
 ;   b label5
 ; block3:
 ;   b label4
 ; block4:
-;   mov x0, x10
+;   mov x0, x11
 ;   ldr x1, [sp, #16]
 ;   b label5
 ; block5:
