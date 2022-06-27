@@ -2315,11 +2315,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 debug_assert!(ty == types::F32 || ty == types::F64);
                 emit_moves(ctx, dst, rhs, ty);
                 ctx.emit(Inst::xmm_cmove(
-                    if ty == types::F64 {
-                        OperandSize::Size64
-                    } else {
-                        OperandSize::Size32
-                    },
+                    ty,
                     cc,
                     RegMem::reg(lhs.only_reg().unwrap()),
                     dst.only_reg().unwrap(),
@@ -2602,17 +2598,18 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             ctx.emit(Inst::xmm_load_const(constant, zero_mask, ty));
 
             // Use the `zero_mask` on a writable `swizzle_mask`.
-            let swizzle_mask = Writable::from_reg(swizzle_mask);
+            let swizzle_mask_tmp = ctx.alloc_tmp(types::I8X16).only_reg().unwrap();
+            ctx.emit(Inst::gen_move(swizzle_mask_tmp, swizzle_mask, ty));
             ctx.emit(Inst::xmm_rm_r(
                 SseOpcode::Paddusb,
                 RegMem::from(zero_mask),
-                swizzle_mask,
+                swizzle_mask_tmp,
             ));
 
             // Shuffle `dst` using the fixed-up `swizzle_mask`.
             ctx.emit(Inst::xmm_rm_r(
                 SseOpcode::Pshufb,
-                RegMem::from(swizzle_mask),
+                RegMem::from(swizzle_mask_tmp),
                 dst,
             ));
         }
