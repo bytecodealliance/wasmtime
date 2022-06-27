@@ -13,6 +13,8 @@ Released 2022-06-27.
   including Wasmtime.
   [regalloc2#60](https://github.com/bytecodealliance/regalloc2/pull/60)
 
+--------------------------------------------------------------------------------
+
 ## 0.38.0
 
 Released 2022-06-21.
