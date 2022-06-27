@@ -18,7 +18,7 @@ use crate::{
         settings::Flags,
         unwind::UnwindInst,
         x64::{
-            inst::{args::*, regs},
+            inst::{args::*, regs, CallInfo},
             settings::Flags as IsaFlags,
         },
     },
@@ -26,7 +26,10 @@ use crate::{
         isle::*, AtomicRmwOp, InsnInput, InsnOutput, LowerCtx, VCodeConstant, VCodeConstantData,
     },
 };
+use std::boxed::Box;
 use std::convert::TryFrom;
+
+type BoxCallInfo = Box<CallInfo>;
 
 pub struct SinkableLoad {
     inst: Inst,

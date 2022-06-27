@@ -3572,8 +3572,9 @@ fn test_x64_emit() {
                 namespace: 0,
                 index: 0,
             },
-            Vec::new(),
-            Vec::new(),
+            smallvec![],
+            smallvec![],
+            PRegSet::default(),
             Opcode::Call,
         ),
         "E800000000",
@@ -3583,7 +3584,13 @@ fn test_x64_emit() {
     // ========================================================
     // CallUnknown
     fn call_unknown(rm: RegMem) -> Inst {
-        Inst::call_unknown(rm, Vec::new(), Vec::new(), Opcode::CallIndirect)
+        Inst::call_unknown(
+            rm,
+            smallvec![],
+            smallvec![],
+            PRegSet::default(),
+            Opcode::CallIndirect,
+        )
     }
 
     insns.push((call_unknown(RegMem::reg(rbp)), "FFD5", "call    *%rbp"));

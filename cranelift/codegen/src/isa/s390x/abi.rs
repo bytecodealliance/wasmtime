@@ -71,8 +71,7 @@ use crate::settings;
 use crate::{CodegenError, CodegenResult};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
-use regalloc2::PReg;
-use regalloc2::VReg;
+use regalloc2::{PReg, PRegSet, VReg};
 use smallvec::{smallvec, SmallVec};
 use std::convert::TryFrom;
 
@@ -618,8 +617,9 @@ impl ABIMachineSpec for S390xMachineDeps {
 
     fn gen_call(
         dest: &CallDest,
-        uses: Vec<Reg>,
-        defs: Vec<Writable<Reg>>,
+        uses: SmallVec<[Reg; 8]>,
+        defs: SmallVec<[Writable<Reg>; 8]>,
+        clobbers: PRegSet,
         opcode: ir::Opcode,
         tmp: Writable<Reg>,
         _callee_conv: isa::CallConv,
@@ -633,6 +633,7 @@ impl ABIMachineSpec for S390xMachineDeps {
                     dest: name.clone(),
                     uses,
                     defs,
+                    clobbers,
                     opcode,
                 }),
             }),
@@ -648,6 +649,7 @@ impl ABIMachineSpec for S390xMachineDeps {
                         rn: tmp.to_reg(),
                         uses,
                         defs,
+                        clobbers,
                         opcode,
                     }),
                 });
@@ -658,6 +660,7 @@ impl ABIMachineSpec for S390xMachineDeps {
                     rn: *reg,
                     uses,
                     defs,
+                    clobbers,
                     opcode,
                 }),
             }),
@@ -693,21 +696,8 @@ impl ABIMachineSpec for S390xMachineDeps {
         s.initial_sp_offset
     }
 
-    fn get_regs_clobbered_by_call(call_conv_of_callee: isa::CallConv) -> Vec<Writable<Reg>> {
-        let mut caller_saved = Vec::new();
-        for i in 0..15 {
-            let x = writable_gpr(i);
-            if is_reg_clobbered_by_call(call_conv_of_callee, x.to_reg().to_real_reg().unwrap()) {
-                caller_saved.push(x);
-            }
-        }
-        for i in 0..15 {
-            let v = writable_fpr(i);
-            if is_reg_clobbered_by_call(call_conv_of_callee, v.to_reg().to_real_reg().unwrap()) {
-                caller_saved.push(v);
-            }
-        }
-        caller_saved
+    fn get_regs_clobbered_by_call(_call_conv_of_callee: isa::CallConv) -> PRegSet {
+        CLOBBERS
     }
 
     fn get_ext_mode(
@@ -783,15 +773,22 @@ fn get_regs_saved_in_prologue(
     (int_saves, fpr_saves)
 }
 
-fn is_reg_clobbered_by_call(_call_conv: isa::CallConv, r: RealReg) -> bool {
-    match r.class() {
-        RegClass::Int => {
-            // r0 - r5 inclusive are caller-saves.
-            r.hw_enc() <= 5
-        }
-        RegClass::Float => {
-            // f0 - f7 inclusive are caller-saves.
-            r.hw_enc() <= 7
-        }
-    }
+const fn clobbers() -> PRegSet {
+    PRegSet::empty()
+        .with(gpr_preg(0))
+        .with(gpr_preg(1))
+        .with(gpr_preg(2))
+        .with(gpr_preg(3))
+        .with(gpr_preg(4))
+        .with(gpr_preg(5))
+        .with(fpr_preg(0))
+        .with(fpr_preg(1))
+        .with(fpr_preg(2))
+        .with(fpr_preg(3))
+        .with(fpr_preg(4))
+        .with(fpr_preg(5))
+        .with(fpr_preg(6))
+        .with(fpr_preg(7))
 }
+
+const CLOBBERS: PRegSet = clobbers();

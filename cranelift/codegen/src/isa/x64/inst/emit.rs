@@ -1202,7 +1202,11 @@ pub(crate) fn emit(
             sink.put1(0x58 + (enc_dst & 7));
         }
 
-        Inst::CallKnown { dest, opcode, .. } => {
+        Inst::CallKnown {
+            dest,
+            info: call_info,
+            ..
+        } => {
             if info.flags.enable_probestack() {
                 sink.add_trap(TrapCode::StackOverflow);
             }
@@ -1214,12 +1218,16 @@ pub(crate) fn emit(
             // beginning of the immediate field.
             emit_reloc(sink, Reloc::X86CallPCRel4, &dest, -4);
             sink.put4(0);
-            if opcode.is_call() {
-                sink.add_call_site(*opcode);
+            if call_info.opcode.is_call() {
+                sink.add_call_site(call_info.opcode);
             }
         }
 
-        Inst::CallUnknown { dest, opcode, .. } => {
+        Inst::CallUnknown {
+            dest,
+            info: call_info,
+            ..
+        } => {
             let dest = dest.with_allocs(allocs);
 
             if info.flags.enable_probestack() {
@@ -1258,8 +1266,8 @@ pub(crate) fn emit(
             if let Some(s) = state.take_stack_map() {
                 sink.add_stack_map(StackMapExtent::StartedAtOffset(start_offset), s);
             }
-            if opcode.is_call() {
-                sink.add_call_site(*opcode);
+            if call_info.opcode.is_call() {
+                sink.add_call_site(call_info.opcode);
             }
         }
 

@@ -33,8 +33,11 @@ pub const ENC_R15: u8 = 15;
 // Constructors for Regs.
 
 fn gpr(enc: u8) -> Reg {
-    let preg = PReg::new(enc as usize, RegClass::Int);
+    let preg = gpr_preg(enc);
     Reg::from(VReg::new(preg.index(), RegClass::Int))
+}
+pub(crate) const fn gpr_preg(enc: u8) -> PReg {
+    PReg::new(enc as usize, RegClass::Int)
 }
 
 pub(crate) fn rsi() -> Reg {
@@ -96,8 +99,12 @@ pub(crate) fn pinned_reg() -> Reg {
 }
 
 fn fpr(enc: u8) -> Reg {
-    let preg = PReg::new(enc as usize, RegClass::Float);
+    let preg = fpr_preg(enc);
     Reg::from(VReg::new(preg.index(), RegClass::Float))
+}
+
+pub(crate) const fn fpr_preg(enc: u8) -> PReg {
+    PReg::new(enc as usize, RegClass::Float)
 }
 
 pub(crate) fn xmm0() -> Reg {

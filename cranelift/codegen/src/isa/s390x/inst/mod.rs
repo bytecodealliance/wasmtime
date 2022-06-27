@@ -7,7 +7,7 @@ use crate::{settings, CodegenError, CodegenResult};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::convert::TryFrom;
-use regalloc2::VReg;
+use regalloc2::{PRegSet, VReg};
 use smallvec::{smallvec, SmallVec};
 use std::string::{String, ToString};
 pub mod regs;
@@ -36,8 +36,9 @@ pub use crate::isa::s390x::lower::isle::generated_code::{
 #[derive(Clone, Debug)]
 pub struct CallInfo {
     pub dest: ExternalName,
-    pub uses: Vec<Reg>,
-    pub defs: Vec<Writable<Reg>>,
+    pub uses: SmallVec<[Reg; 8]>,
+    pub defs: SmallVec<[Writable<Reg>; 8]>,
+    pub clobbers: PRegSet,
     pub opcode: Opcode,
 }
 
@@ -46,8 +47,9 @@ pub struct CallInfo {
 #[derive(Clone, Debug)]
 pub struct CallIndInfo {
     pub rn: Reg,
-    pub uses: Vec<Reg>,
-    pub defs: Vec<Writable<Reg>>,
+    pub uses: SmallVec<[Reg; 8]>,
+    pub defs: SmallVec<[Writable<Reg>; 8]>,
+    pub clobbers: PRegSet,
     pub opcode: Opcode,
 }
 
@@ -660,12 +662,14 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
             collector.reg_def(link);
             collector.reg_uses(&*info.uses);
             collector.reg_defs(&*info.defs);
+            collector.reg_clobbers(info.clobbers);
         }
         &Inst::CallInd { link, ref info } => {
             collector.reg_def(link);
             collector.reg_use(info.rn);
             collector.reg_uses(&*info.uses);
             collector.reg_defs(&*info.defs);
+            collector.reg_clobbers(info.clobbers);
         }
         &Inst::Ret { link, ref rets } => {
             collector.reg_use(link);

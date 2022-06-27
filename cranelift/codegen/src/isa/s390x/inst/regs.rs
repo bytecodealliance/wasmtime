@@ -13,9 +13,13 @@ use crate::settings;
 
 /// Get a reference to a GPR (integer register).
 pub fn gpr(num: u8) -> Reg {
-    assert!(num < 16);
-    let preg = PReg::new(num as usize, RegClass::Int);
+    let preg = gpr_preg(num);
     Reg::from(VReg::new(preg.index(), RegClass::Int))
+}
+
+pub(crate) const fn gpr_preg(num: u8) -> PReg {
+    assert!(num < 16);
+    PReg::new(num as usize, RegClass::Int)
 }
 
 /// Get a writable reference to a GPR.
@@ -25,12 +29,17 @@ pub fn writable_gpr(num: u8) -> Writable<Reg> {
 
 /// Get a reference to a FPR (floating-point register).
 pub fn fpr(num: u8) -> Reg {
-    assert!(num < 16);
-    let preg = PReg::new(num as usize, RegClass::Float);
+    let preg = fpr_preg(num);
     Reg::from(VReg::new(preg.index(), RegClass::Float))
 }
 
-/// Get a writable reference to a V-register.
+pub(crate) const fn fpr_preg(num: u8) -> PReg {
+    assert!(num < 16);
+    PReg::new(num as usize, RegClass::Float)
+}
+
+/// Get a writable reference to a FPR.
+#[allow(dead_code)] // used by tests.
 pub fn writable_fpr(num: u8) -> Writable<Reg> {
     Writable::from_reg(fpr(num))
 }

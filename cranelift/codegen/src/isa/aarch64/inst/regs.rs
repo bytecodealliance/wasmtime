@@ -24,9 +24,13 @@ pub const PINNED_REG: u8 = 21;
 /// Get a reference to an X-register (integer register). Do not use
 /// this for xsp / xzr; we have two special registers for those.
 pub fn xreg(num: u8) -> Reg {
+    Reg::from(xreg_preg(num))
+}
+
+/// Get the given X-register as a PReg.
+pub(crate) const fn xreg_preg(num: u8) -> PReg {
     assert!(num < 31);
-    let preg = PReg::new(num as usize, RegClass::Int);
-    Reg::from(VReg::new(preg.index(), RegClass::Int))
+    PReg::new(num as usize, RegClass::Int)
 }
 
 /// Get a writable reference to an X-register.
@@ -36,9 +40,13 @@ pub fn writable_xreg(num: u8) -> Writable<Reg> {
 
 /// Get a reference to a V-register (vector/FP register).
 pub fn vreg(num: u8) -> Reg {
+    Reg::from(vreg_preg(num))
+}
+
+/// Get the given V-register as a PReg.
+pub(crate) const fn vreg_preg(num: u8) -> PReg {
     assert!(num < 32);
-    let preg = PReg::new(num as usize, RegClass::Float);
-    Reg::from(VReg::new(preg.index(), RegClass::Float))
+    PReg::new(num as usize, RegClass::Float)
 }
 
 /// Get a writable reference to a V-register.
