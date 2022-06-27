@@ -464,7 +464,7 @@ impl Table {
             let table = Table::from_wasmtime_table(wasmtime_export, store);
             (*table.wasmtime_table(store, std::iter::empty()))
                 .fill(0, init, ty.minimum())
-                .map_err(Trap::from_runtime)?;
+                .map_err(|c| Trap::new_wasm(c, None))?;
 
             Ok(table)
         }
@@ -653,7 +653,7 @@ impl Table {
         let src_table = src_table.wasmtime_table(store, src_range);
         unsafe {
             runtime::Table::copy(dst_table, src_table, dst_index, src_index, len)
-                .map_err(Trap::from_runtime)?;
+                .map_err(|c| Trap::new_wasm(c, None))?;
         }
         Ok(())
     }
@@ -681,7 +681,9 @@ impl Table {
 
         let table = self.wasmtime_table(store, std::iter::empty());
         unsafe {
-            (*table).fill(dst, val, len).map_err(Trap::from_runtime)?;
+            (*table)
+                .fill(dst, val, len)
+                .map_err(|c| Trap::new_wasm(c, None))?;
         }
 
         Ok(())

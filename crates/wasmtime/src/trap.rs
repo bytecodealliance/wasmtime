@@ -218,15 +218,16 @@ impl Trap {
 
     #[cold] // see Trap::new
     pub(crate) fn from_runtime(runtime_trap: wasmtime_runtime::Trap) -> Self {
-        match runtime_trap {
-            wasmtime_runtime::Trap::User { error, backtrace } => {
+        let wasmtime_runtime::Trap { reason, backtrace } = runtime_trap;
+        match reason {
+            wasmtime_runtime::TrapReason::User(error) => {
                 let trap = Trap::from(error);
                 if let Some(backtrace) = backtrace {
                     trap.record_backtrace(TrapBacktrace::new(backtrace, None));
                 }
                 trap
             }
-            wasmtime_runtime::Trap::Jit { pc, backtrace } => {
+            wasmtime_runtime::TrapReason::Jit(pc) => {
                 let code = GlobalModuleRegistry::with(|modules| {
                     modules
                         .lookup_trap_code(pc)
@@ -235,14 +236,11 @@ impl Trap {
                 let backtrace = backtrace.map(|bt| TrapBacktrace::new(bt, Some(pc)));
                 Trap::new_wasm(code, backtrace)
             }
-            wasmtime_runtime::Trap::Wasm {
-                trap_code,
-                backtrace,
-            } => {
+            wasmtime_runtime::TrapReason::Wasm(trap_code) => {
                 let backtrace = backtrace.map(|bt| TrapBacktrace::new(bt, None));
                 Trap::new_wasm(trap_code, backtrace)
             }
-            wasmtime_runtime::Trap::OOM { backtrace } => {
+            wasmtime_runtime::TrapReason::OOM => {
                 let reason = TrapReason::Message("out of memory".to_string());
                 let backtrace = backtrace.map(|bt| TrapBacktrace::new(bt, None));
                 Trap::new_with_trace(reason, backtrace)

@@ -6,7 +6,6 @@ use crate::export::Export;
 use crate::externref::VMExternRefActivationsTable;
 use crate::memory::{Memory, RuntimeMemoryCreator};
 use crate::table::{Table, TableElement, TableElementType};
-use crate::traphandlers::Trap;
 use crate::vmcontext::{
     VMBuiltinFunctionsArray, VMCallerCheckedAnyfunc, VMContext, VMFunctionImport,
     VMGlobalDefinition, VMGlobalImport, VMMemoryDefinition, VMMemoryImport, VMOpaqueContext,
@@ -561,7 +560,7 @@ impl Instance {
         dst: u32,
         src: u32,
         len: u32,
-    ) -> Result<(), Trap> {
+    ) -> Result<(), TrapCode> {
         // TODO: this `clone()` shouldn't be necessary but is used for now to
         // inform `rustc` that the lifetime of the elements here are
         // disconnected from the lifetime of `self`.
@@ -583,7 +582,7 @@ impl Instance {
         dst: u32,
         src: u32,
         len: u32,
-    ) -> Result<(), Trap> {
+    ) -> Result<(), TrapCode> {
         // https://webassembly.github.io/bulk-memory-operations/core/exec/instructions.html#exec-table-init
 
         let table = unsafe { &mut *self.get_table(table_index) };
@@ -593,7 +592,7 @@ impl Instance {
             .and_then(|s| s.get(..usize::try_from(len).unwrap()))
         {
             Some(elements) => elements,
-            None => return Err(Trap::wasm(TrapCode::TableOutOfBounds)),
+            None => return Err(TrapCode::TableOutOfBounds),
         };
 
         match table.element_type() {
@@ -643,7 +642,7 @@ impl Instance {
         src_index: MemoryIndex,
         src: u64,
         len: u64,
-    ) -> Result<(), Trap> {
+    ) -> Result<(), TrapCode> {
         // https://webassembly.github.io/reference-types/core/exec/instructions.html#exec-memory-copy
 
         let src_mem = self.get_memory(src_index);
@@ -665,8 +664,8 @@ impl Instance {
         Ok(())
     }
 
-    fn validate_inbounds(&self, max: usize, ptr: u64, len: u64) -> Result<usize, Trap> {
-        let oob = || Trap::wasm(TrapCode::HeapOutOfBounds);
+    fn validate_inbounds(&self, max: usize, ptr: u64, len: u64) -> Result<usize, TrapCode> {
+        let oob = || TrapCode::HeapOutOfBounds;
         let end = ptr
             .checked_add(len)
             .and_then(|i| usize::try_from(i).ok())
@@ -689,7 +688,7 @@ impl Instance {
         dst: u64,
         val: u8,
         len: u64,
-    ) -> Result<(), Trap> {
+    ) -> Result<(), TrapCode> {
         let memory = self.get_memory(memory_index);
         let dst = self.validate_inbounds(memory.current_length(), dst, len)?;
 
@@ -719,7 +718,7 @@ impl Instance {
         dst: u64,
         src: u32,
         len: u32,
-    ) -> Result<(), Trap> {
+    ) -> Result<(), TrapCode> {
         let range = match self.module().passive_data_map.get(&data_index).cloned() {
             Some(range) if !self.dropped_data.contains(data_index) => range,
             _ => 0..0,
@@ -738,7 +737,7 @@ impl Instance {
         dst: u64,
         src: u32,
         len: u32,
-    ) -> Result<(), Trap> {
+    ) -> Result<(), TrapCode> {
         // https://webassembly.github.io/bulk-memory-operations/core/exec/instructions.html#exec-memory-init
 
         let memory = self.get_memory(memory_index);
