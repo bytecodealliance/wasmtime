@@ -255,24 +255,12 @@
   (Csrrci)
 ))
 
-
-(type I128OP (enum 
-  (Add)
-  (Sub)
-  (Mul)
-  (Div)
-  (Rem)
-))
-
-
 (type IntSelectOP (enum
   (Imax)
   (Umax)
   (Imin)
   (Umin)
 ))
-
-
 
 (type ReferenceCheckOP(enum
   (IsNull)
@@ -628,6 +616,14 @@
             (_ Unit (emit (MInst.AluRRR op dst src1 src2))))
         dst))
 
+;;Helper for emit rd = rs1 + rs2 for Interger.
+
+(decl alu_add(Reg Reg)Reg)
+(rule
+  (alu_add rs1 rs2)
+  (alu_rrr (AluOPRRR.Add) $I64 rs1 rs2)
+)
+
 (decl pack_float_rounding_mode(FRM)OptionFloatRoundingMode)
 (extern constructor pack_float_rounding_mode pack_float_rounding_mode)
 
@@ -652,6 +648,15 @@
 (rule (alu_rr_imm12 op src imm)
       (let ((dst WritableReg (temp_writable_reg $I64))
             (_ Unit (emit (MInst.AluRRImm12 op dst src imm))))
+        dst))
+
+
+;; some instruction use imm12 as funct12.
+;; so we don't need the imm12 paramter.
+(decl alu_rr_funct12 (AluOPRRI Reg) Reg)
+(rule (alu_rr_funct12 op src)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.AluRRImm12 op dst src (imm12_zero)))))
         dst))
 
 ;; Helper for narrow down int to it's bits.
@@ -692,22 +697,19 @@
   )
 )
 
-(decl i128_arithmetic (I128OP ValueRegs ValueRegs) ValueRegs)
-(extern constructor i128_arithmetic i128_arithmetic)
-
 (decl lower_bit_reverse (Type Reg)Reg)
 
 (rule
   (lower_bit_reverse $I8 r)
-  (alu_rr_imm12 (AluOPRRI.Brev8) r (imm12_zero))
+  (alu_rr_funct12 (AluOPRRI.Brev8) r)
 )
 
 (rule
   (lower_bit_reverse $I16 r)
   (let 
     (
-      (tmp Reg (alu_rr_imm12 (AluOPRRI.Rev8) r (imm12_zero)))
-      (tmp2 Reg (alu_rr_imm12 (AluOPRRI.Brev8) tmp (imm12_zero)))
+      (tmp Reg (alu_rr_funct12 (AluOPRRI.Rev8) r))
+      (tmp2 Reg (alu_rr_funct12 (AluOPRRI.Brev8) tmp))
       (result Reg (alu_rr_imm12 (AluOPRRI.Srli) tmp2 (imm12_const 48)))
     )
     result
@@ -718,8 +720,8 @@
   (lower_bit_reverse $I32 r)
   (let 
     (
-      (tmp Reg (alu_rr_imm12 (AluOPRRI.Rev8) r (imm12_zero)))
-      (tmp2 Reg (alu_rr_imm12 (AluOPRRI.Brev8) tmp (imm12_zero)))
+      (tmp Reg (alu_rr_funct12 (AluOPRRI.Rev8) r))
+      (tmp2 Reg (alu_rr_funct12 (AluOPRRI.Brev8) tmp))
       (result Reg (alu_rr_imm12 (AluOPRRI.Srli) tmp2 (imm12_const 32)))
     )
     result
@@ -730,8 +732,8 @@
   (lower_bit_reverse $I64 r)
   (let 
     (
-      (tmp Reg (alu_rr_imm12 (AluOPRRI.Rev8) r (imm12_zero)))
-      (result Reg (alu_rr_imm12 (AluOPRRI.Brev8) tmp (imm12_zero)))
+      (tmp Reg (alu_rr_funct12 (AluOPRRI.Rev8) r))
+      (result Reg (alu_rr_funct12 (AluOPRRI.Brev8) tmp))
     )
     result
   )
@@ -748,8 +750,78 @@
 (decl lower_ctz (Type ValueRegs)ValueRegs)
 (extern constructor lower_ctz lower_ctz)
 
-(decl lower_clz (Type ValueRegs)Reg)
-(extern constructor lower_clz lower_clz)
+(decl lower_clz (Type Reg)Reg)
+(rule 
+  (lower_clz $I64 r)
+  (alu_rr_funct12 (AluOPRRI.Clz) r) 
+)
+(rule 
+  (lower_clz $I32 r)
+  (alu_rr_funct12 (AluOPRRI.Clzw) r) 
+)
+
+;;; for I8 and I16
+(rule 
+  (lower_clz ty r)
+  (let
+    (
+      ;; narrow int make all upper bits are zeros.
+      (tmp Reg (narrow_int ty r))
+      ;; 
+      (count Reg (alu_rr_funct12 (AluOPRRI.Clz) tmp))
+      ;;make result
+      (result Reg (alu_rr_imm12 (AluOPRRI.Addi) count (imm12_const (ty_unused_bits_neg ty))))
+    )
+    result
+  )
+)
+
+;; paramter is "intcc compare_a compare_b rs1 rs2". 
+(decl con_select_reg (IntCC Reg Reg Reg Reg)Reg)
+(extern constructor con_select_reg con_select_reg)
+
+;; load a constant into reg.
+(decl load_u64_constant (u64)Reg)
+(extern constructor load_u64_constant load_u64_constant)
+
+(decl lower_clz_i128 (ValueRegs)ValueRegs)
+(rule
+  (lower_clz_i128 x)
+  (let
+    (
+      ;; count high part.
+      (high Reg (lower_clz $I64 (value_regs_get x 1)))
+      ;; coumt low part.
+      (low_part Reg (lower_clz $I64 (value_regs_get x 0)))
+      ;;; load constant 64.
+      (constant_64 Reg (load_u64_constant 64))
+      (low Reg (con_select_reg (IntCC.Equal) constant_64 high low_part (zero_reg)))
+      ;; add low and high toghter.
+      (result Reg (alu_add high low))
+    )
+    (value_regs result (zero_reg))
+  )
+)
+
+;;; 
+(decl ty_unused_bits_neg (Type) i32)
+(rule
+  (ty_unused_bits_neg $I8)
+  -56
+)
+(rule
+  (ty_unused_bits_neg $I16)
+  -48
+)
+(rule
+  (ty_unused_bits_neg $I32)
+  -32
+)
+
+
+
+
+
 
 ;; val is_signed from_bits to_bits
 (decl lower_extend(Reg bool u8 u8)ValueRegs)
@@ -816,7 +888,7 @@
       ;; high part.
       (high Reg (alu_rr_imm12 (AluOPRRI.Cpop) (value_regs_get a 1) (imm12_const 0)))
       ;; add toghter.
-      (result Reg (alu_rrr (AluOPRRR.Add) $I64 low high))
+      (result Reg (alu_add low high))
     )
     (value_regs result (zero_reg))
   )
@@ -859,8 +931,8 @@
   (con_load_128 p offset flags)
   (let
     (
-      (low Reg (con_load p offset (LoadOP.Lb) flags $I64))
-      (high Reg (con_load p (offset_add offset 8) (LoadOP.Lb) flags $I64))
+      (low Reg (con_load p offset (LoadOP.Ld) flags $I64))
+      (high Reg (con_load p (offset_add offset 8) (LoadOP.Ld) flags $I64))
     )
     (value_regs low high)
   )
@@ -1268,9 +1340,9 @@
   (LoadOP.Ld)
 )
 
-;;; sometimes I need value And Type
-(decl value_and_type (Type Value)Value)
-(extern extractor infallible value_and_type value_and_type)
+;;; sometimes I need Type of a Value.
+(decl type_and_value (Type Value)Value)
+(extern extractor infallible type_and_value type_and_value)
 
 ;;;; load extern name 
 (decl load_ext_name(ExternalName i64) Reg)
@@ -1296,3 +1368,15 @@
   )
 )
 
+;;;
+(decl gen_ceil(Reg Type)Reg)
+(extern constructor gen_ceil gen_ceil)
+;;; 
+(decl gen_trunc(Reg Type)Reg)
+(extern constructor gen_trunc gen_trunc)
+;;; 
+(decl gen_floor(Reg Type)Reg)
+(extern constructor gen_floor gen_floor)
+;;; 
+(decl gen_nearest(Reg Type)Reg)
+(extern constructor gen_nearest gen_nearest)

@@ -256,30 +256,6 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Bitcast => {
-            // let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            // let ity = ctx.input_ty(insn, 0);
-            // let oty = ctx.output_ty(insn, 0);
-            // let ity_bits = ty_bits(ity);
-            // let ity_vec_reg = ty_has_float_or_vec_representation(ity);
-            // let oty_bits = ty_bits(oty);
-            // let oty_vec_reg = ty_has_float_or_vec_representation(oty);
-            // debug_assert_eq!(ity_bits, oty_bits);
-            // match (ity_vec_reg, oty_vec_reg) {
-            //     (true, true) => {
-            //         unimplemented!()
-            //     }
-            //     (false, false) => {
-            //         let rm = put_input_in_reg(ctx, inputs[0]);
-            //         ctx.emit(gen_move_re_interprete(rd, oty, rm, ity));
-            //     }
-
-            //     (false, true) => {
-            //         unimplemented!()
-            //     }
-            //     (true, false) => {
-            //         unimplemented!()
-            //     }
-            // }
             implemented_in_isle(ctx);
         }
 

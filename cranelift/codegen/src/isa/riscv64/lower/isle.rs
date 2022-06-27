@@ -3,8 +3,6 @@
 // Pull in the ISLE generated code.
 pub mod generated_code;
 
-use self::generated_code::I128OP;
-
 // Types that the generated ISLE code uses via `use super::*`.
 use super::{writable_zero_reg, zero_reg, Inst as MInst};
 
@@ -64,6 +62,19 @@ where
     }
     fn vec_writable_clone(&mut self, v: &VecWritableReg) -> VecWritableReg {
         v.clone()
+    }
+
+    fn gen_ceil(&mut self, rs: Reg, ty: Type) -> Reg {
+        unimplemented!()
+    }
+    fn gen_floor(&mut self, rs: Reg, ty: Type) -> Reg {
+        unimplemented!()
+    }
+    fn gen_trunc(&mut self, rs: Reg, ty: Type) -> Reg {
+        unimplemented!()
+    }
+    fn gen_nearest(&mut self, rs: Reg, ty: Type) -> Reg {
+        unimplemented!()
     }
 
     fn gen_moves(&mut self, rs: ValueRegs, in_ty: Type, out_ty: Type) -> ValueRegs {
@@ -160,143 +171,30 @@ where
         Imm12::maybe_from_u64(val as u64).unwrap()
     }
 
-    fn i128_arithmetic(&mut self, op: &I128OP, x: ValueRegs, y: ValueRegs) -> ValueRegs {
-        match *op {
-            I128OP::Add => {
-                let (low, carry) = {
-                    let result = self.temp_writable_reg(I64);
-                    self.emit(&MInst::AluRRR {
-                        alu_op: AluOPRRR::Add,
-                        rd: result,
-                        rs1: x.regs()[0],
-                        rs2: y.regs()[0],
-                    });
-                    let carry = self.temp_writable_reg(I64);
-                    self.emit(&MInst::AluRRR {
-                        alu_op: AluOPRRR::SltU,
-                        rd: carry,
-                        rs1: result.to_reg(),
-                        rs2: x.regs()[0],
-                    });
-
-                    (result.to_reg(), carry.to_reg())
-                };
-
-                let high = self.temp_writable_reg(I64);
-                self.emit(&MInst::AluRRR {
-                    alu_op: AluOPRRR::Add,
-                    rd: high,
-                    rs1: x.regs()[1],
-                    rs2: y.regs()[1],
-                });
-                self.emit(&MInst::AluRRR {
-                    alu_op: AluOPRRR::Add,
-                    rd: high,
-                    rs1: high.to_reg(),
-                    rs2: carry,
-                });
-                ValueRegs::two(low, high.to_reg())
-            }
-
-            I128OP::Sub => {
-                let (low, borrow) = {
-                    let result = self.temp_writable_reg(I64);
-                    self.emit(&MInst::AluRRR {
-                        alu_op: AluOPRRR::Sub,
-                        rd: result,
-                        rs1: x.regs()[0],
-                        rs2: y.regs()[0],
-                    });
-                    let borrow = self.temp_writable_reg(I64);
-                    self.emit(&MInst::AluRRR {
-                        alu_op: AluOPRRR::SltU,
-                        rd: borrow,
-                        rs1: x.regs()[0],
-                        rs2: result.to_reg(),
-                    });
-                    (result.to_reg(), borrow.to_reg())
-                };
-
-                let high = self.temp_writable_reg(I64);
-                self.emit(&MInst::AluRRR {
-                    alu_op: AluOPRRR::Sub,
-                    rd: high,
-                    rs1: x.regs()[1],
-                    rs2: y.regs()[1],
-                });
-                self.emit(&MInst::AluRRR {
-                    alu_op: AluOPRRR::Sub,
-                    rd: high,
-                    rs1: high.to_reg(),
-                    rs2: borrow,
-                });
-                ValueRegs::two(low, high.to_reg())
-            }
-            I128OP::Mul => {
-                todo!();
-            }
-            I128OP::Div => {
-                todo!();
-            }
-            I128OP::Rem => {
-                todo!();
-            }
-        }
-    }
-
     fn gen_default_frm(&mut self) -> OptionFloatRoundingMode {
         None
     }
-
-    fn lower_clz(&mut self, ty: Type, val: ValueRegs) -> Reg {
-        assert!(ty.is_int());
-        let tmp = self.temp_writable_reg(I64);
-        if ty != I128 {
-            let rs = val.regs()[0];
-            match ty.bits() {
-                64 => {
-                    let (op, imm12) = (AluOPRRI::Clz, Imm12::zero());
-                    self.emit(&MInst::AluRRImm12 {
-                        alu_op: op,
-                        rd: tmp,
-                        rs,
-                        imm12,
-                    });
-                }
-                32 => {
-                    let (op, imm12) = (AluOPRRI::Clzw, Imm12::zero());
-                    self.emit(&MInst::AluRRImm12 {
-                        alu_op: op,
-                        rd: tmp,
-                        rs,
-                        imm12,
-                    });
-                }
-                16 | 8 => {
-                    let rs = generated_code::constructor_narrow_int(self, ty, rs).unwrap();
-                    let (op, imm12) = (AluOPRRI::Clzw, Imm12::zero());
-                    self.emit(&MInst::AluRRImm12 {
-                        alu_op: op,
-                        rd: tmp,
-                        rs,
-                        imm12,
-                    });
-                    self.emit(&MInst::AluRRImm12 {
-                        alu_op: AluOPRRI::Addi,
-                        rd: tmp,
-                        rs: tmp.to_reg(),
-                        imm12: Imm12::from_bits(-(32 - ty.bits() as i16)),
-                    })
-                }
-
-                _ => unreachable!(),
-            }
-        } else {
-            unimplemented!()
-        }
-        tmp.to_reg()
+    fn con_select_reg(&mut self, cc: &IntCC, a: Reg, b: Reg, rs1: Reg, rs2: Reg) -> Reg {
+        let rd = self.temp_writable_reg(MInst::canonical_type_for_rc(rs1.class()));
+        self.emit(&MInst::SelectReg {
+            rd,
+            rs1,
+            rs2,
+            condition: IntegerCompare {
+                kind: *cc,
+                rs1: a,
+                rs2: b,
+            },
+        });
+        rd.to_reg()
     }
-
+    fn load_u64_constant(&mut self, val: u64) -> Reg {
+        let rd = self.temp_writable_reg(I64);
+        MInst::load_constant_u64(rd, val)
+            .iter()
+            .for_each(|i| self.emit(i));
+        rd.to_reg()
+    }
     fn lower_ctz(&mut self, ty: Type, val: ValueRegs) -> ValueRegs {
         let rd = self.temp_writable_reg(I64);
         let (op, imm12) = (AluOPRRI::Ctz, Imm12::zero());
@@ -1184,7 +1082,7 @@ where
     fn offset_add(&mut self, a: Offset32, adden: i64) -> Offset32 {
         a.try_add_i64(adden).expect("offset exceed range.")
     }
-    fn value_and_type(&mut self, val: Value) -> (Type, Value) {
+    fn type_and_value(&mut self, val: Value) -> (Type, Value) {
         let ty = self.lower_ctx.value_ty(val);
         (ty, val)
     }

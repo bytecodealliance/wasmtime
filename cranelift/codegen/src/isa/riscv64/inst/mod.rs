@@ -12,7 +12,6 @@ use crate::ir::types::{
 
 pub use crate::ir::{ExternalName, MemFlags, Opcode, SourceLoc, Type, ValueLabel};
 use crate::isa::CallConv;
-use crate::machinst::isle::VecWritableReg;
 use crate::machinst::*;
 use crate::{settings, CodegenError, CodegenResult};
 
