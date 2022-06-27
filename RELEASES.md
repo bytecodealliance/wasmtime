@@ -12,6 +12,12 @@ Released 2022-06-27.
   impact should be possible for users of Cranelift via the Wasm frontend,
   including Wasmtime.
   [regalloc2#60](https://github.com/bytecodealliance/regalloc2/pull/60)
+  [#4333](https://github.com/bytecodealliance/wasmtime/pull/4333)
+
+* Lowering bugs for the `i8x16.swizzle` and `select`-with-`v128`-inputs
+  instructions were fixed for the x86\_64 code generator. Note that aarch64 and
+  s390x are unaffected.
+  [#4334](https://github.com/bytecodealliance/wasmtime/pull/4334)
 
 * A bug in the 8-bit lowering of integer division on x86-64 was fixed in
   Cranelift that could cause a register allocator panic due to an undefined
