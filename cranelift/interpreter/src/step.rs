@@ -715,10 +715,13 @@ where
         | Opcode::RawBitcast
         | Opcode::ScalarToVector
         | Opcode::Breduce
-        | Opcode::Bextend
-        | Opcode::Ireduce => assign(Value::convert(
+        | Opcode::Bextend => assign(Value::convert(
             arg(0)?,
             ValueConversionKind::Exact(ctrl_ty),
+        )?),
+        Opcode::Ireduce => assign(Value::convert(
+            arg(0)?,
+            ValueConversionKind::Truncate(ctrl_ty),
         )?),
         Opcode::Bint => {
             let bool = arg(0)?.into_bool()?;
