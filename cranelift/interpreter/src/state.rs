@@ -83,6 +83,9 @@ pub trait State<'a, V> {
     /// Given a global value, compute the final value for that global value, applying all operations
     /// in intermediate global values.
     fn resolve_global_value(&self, gv: GlobalValue) -> Result<V, MemoryError>;
+
+    /// Checks if an address is valid and within a known region of memory
+    fn validate_address(&self, address: &Address) -> Result<(), MemoryError>;
 }
 
 #[derive(Error, Debug)]
@@ -178,6 +181,10 @@ where
     }
 
     fn resolve_global_value(&self, _gv: GlobalValue) -> Result<V, MemoryError> {
+        unimplemented!()
+    }
+
+    fn validate_address(&self, _addr: &Address) -> Result<(), MemoryError> {
         unimplemented!()
     }
 }

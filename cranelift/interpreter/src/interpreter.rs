@@ -178,6 +178,10 @@ pub enum InterpreterError {
 
 pub type HeapBacking = Vec<u8>;
 
+/// Represents a registered heap with an interpreter.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct HeapId(u32);
+
 /// Options for initializing a heap memory region
 #[derive(Debug)]
 pub enum HeapInit {
@@ -232,9 +236,8 @@ impl<'a> InterpreterState<'a> {
     /// let backing = Vec::from([10u8; 24]);
     /// let heap1 = state.register_heap(HeapInit::FromBacking(backing));
     /// ```
-    pub fn register_heap(&mut self, init: HeapInit) -> Heap {
-        let heap_id =
-            Heap::with_number(self.heaps.len() as u32).expect("Failed to allocate Heap ID");
+    pub fn register_heap(&mut self, init: HeapInit) -> HeapId {
+        let heap_id = HeapId(self.heaps.len() as u32);
 
         self.heaps.push(match init {
             HeapInit::Zeroed(size) => iter::repeat(0).take(size).collect(),
@@ -250,18 +253,24 @@ impl<'a> InterpreterState<'a> {
     /// # use cranelift_codegen::ir::types::I64;
     /// # use cranelift_interpreter::interpreter::{InterpreterState, HeapInit};
     /// let mut state = InterpreterState::default();
-    /// let heap_ref = state.register_heap(HeapInit::Zeroed(1024));
-    /// let heap_base = state.get_heap_address(I64, heap_ref, 0);
-    /// let heap_bound = state.get_heap_address(I64, heap_ref, 1024);
+    /// let heap_id = state.register_heap(HeapInit::Zeroed(1024));
+    /// let heap_base = state.get_heap_address(I64, heap_id, 0);
+    /// let heap_bound = state.get_heap_address(I64, heap_id, 1024);
     /// ```
     pub fn get_heap_address(
         &self,
         ty: Type,
-        heap: Heap,
+        heap_id: HeapId,
         offset: u64,
     ) -> Result<DataValue, MemoryError> {
         let size = AddressSize::try_from(ty)?;
-        Ok(self.heap_address(size, heap, offset)?.try_into()?)
+        let heap_id = heap_id.0 as u64;
+        let addr = Address::from_parts(size, AddressRegion::Heap, heap_id, offset)?;
+
+        self.validate_address(&addr)?;
+        let dv = addr.try_into()?;
+
+        Ok(dv)
     }
 
     fn current_frame_mut(&mut self) -> &mut Frame<'a> {
@@ -371,37 +380,29 @@ impl<'a> State<'a, DataValue> for InterpreterState<'a> {
         Address::from_parts(size, AddressRegion::Stack, 0, final_offset)
     }
 
+    /// Builds an [Address] for the [Heap] referenced in the currently executing function.
+    ///
+    /// A CLIF Heap is essential a GlobalValue and some metadata about that memory
+    /// region, such as bounds. Since heaps are based on Global Values it means that
+    /// once that GV is resolved we can essentially end up anywhere in memory.
+    ///
+    /// To build an [Address] we perform GV resolution, and try to ensure that we end up
+    /// in a valid region of memory.
     fn heap_address(
         &self,
         size: AddressSize,
         heap: Heap,
         offset: u64,
     ) -> Result<Address, MemoryError> {
-        // It is possible for this function to be called before the interpreter has started
-        // execution (see `InterpreterState::get_heap_address`). If this happens we cannot
-        // perform global value resolution, and have to build an address directly referencing
-        // the `heap` that was provided.
-        let has_current_function = self.frame_stack.len() == 0;
-        let addr = if has_current_function {
-            let heap_id = heap.as_u32() as u64;
-            Address::from_parts(size, AddressRegion::Heap, heap_id, offset)?
-        } else {
-            let heap_data = &self.get_current_function().heaps[heap];
-            let heap_base = self.resolve_global_value(heap_data.base)?;
-            let mut addr = Address::try_from(heap_base)?;
-            addr.size = size;
-            addr.offset += offset;
-            addr
-        };
+        let heap_data = &self.get_current_function().heaps[heap];
+        let heap_base = self.resolve_global_value(heap_data.base)?;
+        let mut addr = Address::try_from(heap_base)?;
+        addr.size = size;
+        addr.offset += offset;
 
-        let heap = &self.heaps[heap.as_u32() as usize];
-        let heap_len = heap.len() as u64;
-        if addr.offset > heap_len {
-            return Err(MemoryError::InvalidOffset {
-                offset: addr.offset,
-                max: heap_len,
-            });
-        }
+        // After resolving the address can point anywhere, we need to check if its
+        // still valid.
+        self.validate_address(&addr)?;
 
         Ok(addr)
     }
@@ -558,6 +559,41 @@ impl<'a> State<'a, DataValue> for InterpreterState<'a> {
                 None => return Ok(current_val),
             }
         }
+    }
+
+    fn validate_address(&self, addr: &Address) -> Result<(), MemoryError> {
+        match addr.region {
+            AddressRegion::Stack => {
+                let stack_len = self.stack.len() as u64;
+
+                if addr.offset > stack_len {
+                    return Err(MemoryError::InvalidEntry {
+                        entry: addr.entry,
+                        max: self.heaps.len() as u64,
+                    });
+                }
+            }
+            AddressRegion::Heap => {
+                let heap_len = self
+                    .heaps
+                    .get(addr.entry as usize)
+                    .ok_or_else(|| MemoryError::InvalidEntry {
+                        entry: addr.entry,
+                        max: self.heaps.len() as u64,
+                    })
+                    .map(|heap| heap.len() as u64)?; //: &HeapBacking
+
+                if addr.offset > heap_len {
+                    return Err(MemoryError::InvalidOffset {
+                        offset: addr.offset,
+                        max: heap_len,
+                    });
+                }
+            }
+            _ => unimplemented!(),
+        }
+
+        Ok(())
     }
 }
 
