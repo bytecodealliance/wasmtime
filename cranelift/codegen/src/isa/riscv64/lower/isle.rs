@@ -8,7 +8,6 @@ use self::generated_code::I128OP;
 // Types that the generated ISLE code uses via `use super::*`.
 use super::{writable_zero_reg, zero_reg, Inst as MInst};
 
-use crate::isa::riscv64::lower_inst::is_valid_atomic_transaction_ty;
 use crate::isa::riscv64::settings::Flags as IsaFlags;
 use crate::machinst::{isle::*, MachInst, SmallInstVec};
 use crate::settings::Flags;
@@ -65,6 +64,32 @@ where
     }
     fn vec_writable_clone(&mut self, v: &VecWritableReg) -> VecWritableReg {
         v.clone()
+    }
+
+    fn gen_moves(&mut self, rs: ValueRegs, in_ty: Type, out_ty: Type) -> ValueRegs {
+        match (in_ty.is_vector(), out_ty.is_vector()) {
+            (true, true) => todo!(),
+            (true, false) => todo!(),
+            (false, true) => todo!(),
+            (false, false) => {
+                assert!(in_ty.bits() == out_ty.bits());
+                match in_ty.bits() {
+                    128 => {
+                        // if 128 must not be a float.
+                        let low = self.temp_writable_reg(out_ty);
+                        let high = self.temp_writable_reg(out_ty);
+                        self.emit(&gen_move_re_interprete(low, I64, rs.regs()[0], I64));
+                        self.emit(&gen_move_re_interprete(high, I64, rs.regs()[1], I64));
+                        ValueRegs::two(low.to_reg(), high.to_reg())
+                    }
+                    _ => {
+                        let rd = self.temp_writable_reg(out_ty);
+                        self.emit(&gen_move_re_interprete(rd, out_ty, rs.regs()[0], in_ty));
+                        ValueRegs::one(rd.to_reg())
+                    }
+                }
+            }
+        }
     }
     fn con_vec_writable(&mut self, ty: Type) -> VecWritableReg {
         if ty.is_int() {
@@ -1025,13 +1050,13 @@ where
     }
     fn move_f_to_x(&mut self, r: Reg, ty: Type) -> Reg {
         let result = self.temp_writable_reg(I64);
-        self.emit(&gen_move(result, I64, r, ty));
+        self.emit(&gen_move_re_interprete(result, I64, r, ty));
         result.to_reg()
     }
 
     fn move_x_to_f(&mut self, r: Reg, ty: Type) -> Reg {
         let result = self.temp_writable_reg(ty);
-        self.emit(&gen_move(result, ty, r, I64));
+        self.emit(&gen_move_re_interprete(result, ty, r, I64));
         result.to_reg()
     }
 
@@ -1125,12 +1150,17 @@ where
     fn pack_float_rounding_mode(&mut self, f: &FRM) -> OptionFloatRoundingMode {
         Some(*f)
     }
-
+    fn float_convert_2_int_op(&mut self, from: Type, is_signed: bool, to: Type) -> FpuOPRR {
+        FpuOPRR::float_convert_2_int_op(from, is_signed, to)
+    }
+    fn int_convert_2_float_op(&mut self, from: Type, is_signed: bool, to: Type) -> FpuOPRR {
+        FpuOPRR::int_convert_2_float_op(from, is_signed, to)
+    }
     fn con_amode(&mut self, base: Reg, offset: Offset32, ty: Type) -> AMode {
         AMode::RegOffset(base, i64::from(offset), ty)
     }
     fn valid_atomic_transaction(&mut self, ty: Type) -> Option<Type> {
-        if is_valid_atomic_transaction_ty(ty) {
+        if ty == I32 || ty == I64 {
             Some(ty)
         } else {
             None
@@ -1172,9 +1202,10 @@ where
     }
     fn gen_move(&mut self, r: Reg, ty: Type) -> Reg {
         let tmp = self.temp_writable_reg(ty);
-        self.emit(&MInst::gen_move(tmp, r, ty));
+        self.emit(&gen_move_re_interprete(tmp, ty, r, ty));
         tmp.to_reg()
     }
+
     fn con_atomic_load(&mut self, addr: Reg, ty: Type) -> Reg {
         let tmp = self.temp_writable_reg(ty);
         self.emit(&MInst::Atomic {

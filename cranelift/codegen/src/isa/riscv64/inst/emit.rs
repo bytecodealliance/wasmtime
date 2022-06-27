@@ -1584,14 +1584,12 @@ impl MachInstEmit for Inst {
             &Inst::FcvtToIntSat {
                 rd,
                 rs,
-                tmp,
                 is_signed,
                 in_type,
                 out_type,
             } => {
                 let rs = allocs.next(rs);
                 let rd = allocs.next_writable(rd);
-                let tmp = allocs.next_writable(tmp);
                 // get class information.
                 Inst::FpuRR {
                     frm: None,
@@ -1600,15 +1598,15 @@ impl MachInstEmit for Inst {
                     } else {
                         FpuOPRR::FclassD
                     },
-                    rd: tmp,
+                    rd,
                     rs,
                 }
                 .emit(&[], sink, emit_info, state);
                 // rd = rd & is_nan()
                 Inst::AluRRImm12 {
                     alu_op: AluOPRRI::Andi,
-                    rd: tmp,
-                    rs: tmp.to_reg(),
+                    rd: rd,
+                    rs: rd.to_reg(),
                     imm12: Imm12::from_bits(FClassResult::is_nan_bits() as i16),
                 }
                 .emit(&[], sink, emit_info, state);
@@ -1620,7 +1618,7 @@ impl MachInstEmit for Inst {
                     kind: IntegerCompare {
                         kind: IntCC::NotEqual,
                         rs1: zero_reg(),
-                        rs2: tmp.to_reg(),
+                        rs2: rd.to_reg(),
                     },
                 }
                 .emit(&[], sink, emit_info, state);
@@ -1628,8 +1626,8 @@ impl MachInstEmit for Inst {
                 Inst::FpuRR {
                     frm: None,
                     alu_op: FpuOPRR::float_convert_2_int_op(in_type, is_signed, out_type),
-                    rd: rd,
-                    rs: rs,
+                    rd,
+                    rs,
                 }
                 .emit(&[], sink, emit_info, state);
                 // I already have the result,jump over.

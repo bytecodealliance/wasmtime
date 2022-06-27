@@ -2542,7 +2542,6 @@ fn riscv64_worst_case_instruction_size() {
     candidates.push(Inst::FcvtToIntSat {
         rd: writable_a0(),
         rs: fa0(),
-        tmp: writable_a1(),
         is_signed: true,
         in_type: F64,
         out_type: I64,

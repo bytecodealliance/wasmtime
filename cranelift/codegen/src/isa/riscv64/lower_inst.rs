@@ -1,7 +1,5 @@
 //! Lower a single Cranelift instruction into vcode.
 
-use crate::machinst::Writable;
-
 use alloc::vec::Vec;
 
 use crate::ir::Inst as IRInst;
@@ -14,20 +12,11 @@ use crate::settings::Flags;
 use crate::CodegenError;
 use crate::CodegenResult;
 
-use std::boxed::Box;
-
 use crate::ir::types::{I16, I32, I64, I8};
 
 use super::lower::*;
 use crate::isa::riscv64::abi::*;
 use crate::isa::riscv64::inst::*;
-
-pub(crate) fn is_valid_atomic_transaction_ty(ty: Type) -> bool {
-    match ty {
-        I32 | I64 => true,
-        _ => false,
-    }
-}
 
 /// Actually codegen an instruction's results into registers.
 pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
@@ -267,30 +256,31 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Bitcast => {
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let ity = ctx.input_ty(insn, 0);
-            let oty = ctx.output_ty(insn, 0);
-            let ity_bits = ty_bits(ity);
-            let ity_vec_reg = ty_has_float_or_vec_representation(ity);
-            let oty_bits = ty_bits(oty);
-            let oty_vec_reg = ty_has_float_or_vec_representation(oty);
-            debug_assert_eq!(ity_bits, oty_bits);
-            match (ity_vec_reg, oty_vec_reg) {
-                (true, true) => {
-                    unimplemented!()
-                }
-                (false, false) => {
-                    let rm = put_input_in_reg(ctx, inputs[0]);
-                    ctx.emit(gen_move(rd, oty, rm, ity));
-                }
+            // let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+            // let ity = ctx.input_ty(insn, 0);
+            // let oty = ctx.output_ty(insn, 0);
+            // let ity_bits = ty_bits(ity);
+            // let ity_vec_reg = ty_has_float_or_vec_representation(ity);
+            // let oty_bits = ty_bits(oty);
+            // let oty_vec_reg = ty_has_float_or_vec_representation(oty);
+            // debug_assert_eq!(ity_bits, oty_bits);
+            // match (ity_vec_reg, oty_vec_reg) {
+            //     (true, true) => {
+            //         unimplemented!()
+            //     }
+            //     (false, false) => {
+            //         let rm = put_input_in_reg(ctx, inputs[0]);
+            //         ctx.emit(gen_move_re_interprete(rd, oty, rm, ity));
+            //     }
 
-                (false, true) => {
-                    unimplemented!()
-                }
-                (true, false) => {
-                    unimplemented!()
-                }
-            }
+            //     (false, true) => {
+            //         unimplemented!()
+            //     }
+            //     (true, false) => {
+            //         unimplemented!()
+            //     }
+            // }
+            implemented_in_isle(ctx);
         }
 
         Opcode::FallthroughReturn | Opcode::Return => {
@@ -367,15 +357,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::FuncAddr => {
-            // let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            // let (extname, _) = ctx.call_target(insn).unwrap();
-            // let extname = extname.clone();
-            // ctx.emit(Inst::LoadExtName {
-            //     rd,
-            //     name: Box::new(extname),
-            //     offset: 0,
-            // });
-            implemented_in_isle(ctx );
+            implemented_in_isle(ctx);
         }
 
         Opcode::GlobalValue => {
@@ -383,14 +365,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::SymbolValue => {
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let (extname, _, offset) = ctx.symbol_value(insn).unwrap();
-            let extname = extname.clone();
-            ctx.emit(Inst::LoadExtName {
-                rd,
-                name: Box::new(extname),
-                offset,
-            });
+            implemented_in_isle(ctx);
         }
 
         Opcode::Call | Opcode::CallIndirect => {
@@ -458,11 +433,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::RawBitcast => {
-            let rm = put_input_in_reg(ctx, inputs[0]);
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let ity = ctx.input_ty(insn, 0);
-            let oty = ctx.output_ty(insn, 0);
-            ctx.emit(gen_move(rd, oty, rm, ity));
+            implemented_in_isle(ctx);
         }
 
         Opcode::Extractlane => {
@@ -544,83 +515,14 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::FcvtToUint | Opcode::FcvtToSint => {
-            let input_ty = ctx.input_ty(insn, 0);
-            let out_ty = ty.unwrap();
-            if input_ty.is_vector() {
-                unimplemented!()
-            } else {
-                let rd = ctx.get_output(insn, 0).only_reg().unwrap();
-                let rs = put_input_in_reg(ctx, inputs[0]);
-                ctx.emit(Inst::FpuRR {
-                    frm: None,
-                    alu_op: FpuOPRR::float_convert_2_int_op(
-                        input_ty,
-                        if op == Opcode::FcvtToUint {
-                            false
-                        } else {
-                            true
-                        },
-                        out_ty,
-                    ),
-                    rd,
-                    rs,
-                });
-            }
+            implemented_in_isle(ctx);
         }
-
         Opcode::FcvtFromUint | Opcode::FcvtFromSint => {
-            let input_ty = ctx.input_ty(insn, 0);
-            let out_ty = ty.unwrap();
-            if input_ty.is_vector() {
-                unimplemented!()
-            } else {
-                let rd = ctx.get_output(insn, 0).only_reg().unwrap();
-                let mut rs = put_input_in_reg(ctx, inputs[0]);
-                //
-                let mut insts = SmallInstVec::new();
-                if op == Opcode::FcvtFromUint && input_ty.bits() < 32 {
-                    // need narrow down value
-                    let rd = ctx.alloc_tmp(I64).only_reg().unwrap();
-                    insts = Inst::narrow_down_int(rd, rs, input_ty);
-                    rs = rd.to_reg();
-                };
-                insts.push(Inst::FpuRR {
-                    frm: None,
-                    alu_op: FpuOPRR::int_convert_2_float_op(
-                        input_ty,
-                        if op == Opcode::FcvtFromUint {
-                            false
-                        } else {
-                            true
-                        },
-                        out_ty,
-                    ),
-                    rd,
-                    rs,
-                });
-                insts.into_iter().for_each(|i| ctx.emit(i));
-            }
+            implemented_in_isle(ctx);
         }
 
         Opcode::FcvtToUintSat | Opcode::FcvtToSintSat => {
-            //need
-            let input_ty = ctx.input_ty(insn, 0);
-            let out_ty = ty.unwrap();
-            if input_ty.is_vector() {
-                unimplemented!()
-            } else {
-                let rd = ctx.get_output(insn, 0).only_reg().unwrap();
-                let rs = put_input_in_reg(ctx, inputs[0]);
-                let tmp = ctx.alloc_tmp(I64).only_reg().unwrap();
-                ctx.emit(Inst::FcvtToIntSat {
-                    rd: rd,
-                    rs: rs,
-                    is_signed: op == Opcode::FcvtToSintSat,
-                    in_type: input_ty,
-                    out_type: out_ty,
-                    tmp,
-                });
-            }
+            implemented_in_isle(ctx);
         }
 
         Opcode::IaddIfcout => {
@@ -853,5 +755,7 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
 }
 
 fn pinned_register_not_used() -> ! {
+    use crate::ir::GlobalValue;
+
     unreachable!()
 }

@@ -12,11 +12,11 @@ use crate::ir::types::{
 
 pub use crate::ir::{ExternalName, MemFlags, Opcode, SourceLoc, Type, ValueLabel};
 use crate::isa::CallConv;
+use crate::machinst::isle::VecWritableReg;
 use crate::machinst::*;
 use crate::{settings, CodegenError, CodegenResult};
 
 pub use crate::ir::condcodes::FloatCC;
-use crate::ir::FuncRef;
 
 use alloc::vec::Vec;
 use regalloc2::VReg;
@@ -153,7 +153,6 @@ pub(crate) fn enc_jalr(rd: Writable<Reg>, base: Reg, offset: Imm12) -> u32 {
 }
 
 /// rd and src must have the same length.
-///
 fn gen_moves(rd: &[Writable<Reg>], src: &[Reg]) -> SmallInstVec<Inst> {
     assert!(rd.len() == src.len());
     assert!(rd.len() > 0);
@@ -161,14 +160,16 @@ fn gen_moves(rd: &[Writable<Reg>], src: &[Reg]) -> SmallInstVec<Inst> {
     for (dst, src) in rd.iter().zip(src.iter()) {
         let out_ty = Inst::canonical_type_for_rc(dst.to_reg().class());
         let in_ty = Inst::canonical_type_for_rc(src.class());
-        insts.push(gen_move(*dst, out_ty, *src, in_ty));
+        assert!(in_ty == out_ty);
+        insts.push(gen_move_re_interprete(*dst, out_ty, *src, in_ty));
     }
     insts
 }
 
 /// if input or output is float,
 /// you should use special instruction.
-pub(crate) fn gen_move(rd: Writable<Reg>, oty: Type, rm: Reg, ity: Type) -> Inst {
+/// genearte a move and re interprete the data.
+pub(crate) fn gen_move_re_interprete(rd: Writable<Reg>, oty: Type, rm: Reg, ity: Type) -> Inst {
     match (ity.is_float(), oty.is_float()) {
         (false, false) => Inst::gen_move(rd, rm, oty),
         (true, true) => Inst::gen_move(rd, rm, oty),
@@ -492,10 +493,9 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_use(rs2);
             collector.reg_def(rd);
         }
-        &Inst::FcvtToIntSat { rd, rs, tmp, .. } => {
+        &Inst::FcvtToIntSat { rd, rs, .. } => {
             collector.reg_use(rs);
             collector.reg_def(rd);
-            collector.reg_def(tmp);
         }
         &Inst::SelectIf {
             ref rd,
@@ -831,19 +831,17 @@ impl Inst {
                 is_signed,
                 in_type,
                 out_type,
-                tmp,
             } => {
                 let rs = format_reg(rs, allocs);
                 let rd = format_reg(rd.to_reg(), allocs);
-                let tmp = format_reg(tmp.to_reg(), allocs);
+
                 format!(
-                    "fcvt_to_{}int_sat {},{}##in_ty={} out_ty={} tmp={}",
+                    "fcvt_to_{}int_sat {},{}##in_ty={} out_ty={}",
                     if is_signed { "s" } else { "u" },
                     rd,
                     rs,
                     in_type,
                     out_type,
-                    tmp
                 )
             }
             &Inst::SelectReg {

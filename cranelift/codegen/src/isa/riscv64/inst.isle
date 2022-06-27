@@ -14,7 +14,6 @@
       (rd WritableReg)
       (imm Imm20))
     
-
     ;; An ALU operation with one register sources and a register destination.
     (FpuRR
       (alu_op FpuOPRR)
@@ -232,7 +231,6 @@
     (FcvtToIntSat
       (rd WritableReg)
       (rs Reg)
-      (tmp WritableReg)
       (is_signed bool)
       (in_type Type)
       (out_type Type))
@@ -1145,6 +1143,10 @@
 (decl gen_move(Reg Type) Reg)
 (extern constructor gen_move gen_move)
 
+;;; generate a move and reinterprete the data
+;; parameter is in_reg in_type out_type
+(decl gen_moves(ValueRegs Type Type) ValueRegs)
+(extern constructor gen_moves gen_moves)
 
 ;;
 (decl gen_reference_check(ReferenceCheckOP Reg)Reg)
@@ -1270,9 +1272,27 @@
 (decl value_and_type (Type Value)Value)
 (extern extractor infallible value_and_type value_and_type)
 
-
-
-
 ;;;; load extern name 
 (decl load_ext_name(ExternalName i64) Reg)
 (extern constructor load_ext_name load_ext_name)
+
+
+(decl float_convert_2_int_op(Type bool Type)FpuOPRR)
+(extern constructor float_convert_2_int_op float_convert_2_int_op)
+
+(decl int_convert_2_float_op(Type bool Type)FpuOPRR)
+(extern constructor int_convert_2_float_op int_convert_2_float_op)
+
+;;;; 
+(decl con_fcvt_int_sat(Reg bool Type Type)Reg)
+(rule
+  (con_fcvt_int_sat rs is_signed in_type out_type)
+  (let
+    (
+      (result WritableReg (temp_writable_reg out_type))
+      (_ Unit(emit (MInst.FcvtToIntSat result rs is_signed in_type out_type)))
+    )
+    result
+  )
+)
+

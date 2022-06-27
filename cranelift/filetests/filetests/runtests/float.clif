@@ -356,7 +356,7 @@ block0(v0: f32):
 ; run: %fcvt_wu_s_sat(0x1.0) == 1
 ; run: %fcvt_wu_s_sat(+0x99.0) == +0x99
 ; run: %fcvt_wu_s_sat(+NaN) == 0
-; run: %fcvt_wu_s_sat(+Inf) == -1
+; run: %fcvt_wu_s_sat(+Inf) == 0x7fff_ffff
 
 function %fcvt_lu_s_sat(f32) -> i64 {
 block0(v0: f32):
@@ -400,7 +400,7 @@ block0(v0: f64):
 ; run: %fcvt_wu_s_sat(0x1.0) == 1
 ; run: %fcvt_wu_s_sat(+0x99.0) == +0x99
 ; run: %fcvt_wu_s_sat(+NaN) == 0
-; run: %fcvt_wu_s_sat(+Inf) == -1
+; run: %fcvt_wu_s_sat(+Inf) == 0xffff_ffff
 
 function %fcvt_lu_s_sat(f64) -> i64 {
 block0(v0: f64):
