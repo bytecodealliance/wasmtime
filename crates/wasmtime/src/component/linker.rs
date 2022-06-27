@@ -210,7 +210,7 @@ impl<T> LinkerInstance<'_, T> {
     ///
     /// The [`IntoComponentFunc`] trait is implemented for functions whose
     /// arguments and return values implement the
-    /// [`ComponentValue`](crate::component::ComponentValue) trait. Additionally
+    /// [`ComponentType`](crate::component::ComponentType) trait. Additionally
     /// the `func` may take a [`StoreContextMut`](crate::StoreContextMut) as its
     /// first parameter.
     ///
