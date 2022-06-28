@@ -731,7 +731,7 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
 }
 
 fn pinned_register_not_used() -> ! {
-    use crate::ir::GlobalValue;
+ 
 
     unreachable!()
 }

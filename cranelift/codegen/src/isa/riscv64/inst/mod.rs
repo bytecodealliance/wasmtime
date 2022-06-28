@@ -476,10 +476,7 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_uses(b.regs());
             collector.reg_def(rd);
         }
-        &Inst::Cls { rs, rd, .. } => {
-            collector.reg_use(rs);
-            collector.reg_early_def(rd);
-        }
+
         &Inst::SelectReg {
             rd,
             rs1,
@@ -787,11 +784,7 @@ impl Inst {
                     format!(".data {:?}", data)
                 }
             },
-            &Inst::Cls { rd, rs, ty } => {
-                let rs = format_reg(rs, allocs);
-                let rd = format_reg(rd.to_reg(), allocs);
-                format!("cls {},{}##ty={}", rd, rs, ty)
-            }
+
             &Inst::SelectIf {
                 if_spectre_guard,
                 ref rd,

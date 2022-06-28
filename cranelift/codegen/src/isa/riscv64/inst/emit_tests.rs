@@ -2502,12 +2502,6 @@ fn riscv64_worst_case_instruction_size() {
         y: ValueRegs::two(x_reg(3), x_reg(4)),
     });
 
-    candidates.push(Inst::Cls {
-        rs: a0(),
-        rd: writable_a1(),
-        ty: I8,
-    });
-
     candidates.push(Inst::SelectReg {
         rd: writable_a0(),
         rs1: a2(),

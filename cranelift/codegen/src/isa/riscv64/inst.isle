@@ -218,10 +218,6 @@
       (a ValueRegs) 
       (b ValueRegs)
       (ty Type))
-    (Cls
-      (rs Reg)
-      (rd WritableReg)
-      (ty Type))
     (SelectReg
       (rd WritableReg)
       (rs1 Reg)
@@ -1057,12 +1053,14 @@
   (lower_cls r ty)
   (let
     (
-      ;; alloc tmp.
-      (tmp WritableReg (temp_writable_reg $I64))
+      ;; extract sign bit.
+      (tmp Reg (alu_rr_imm12 (AluOPRRI.Bexti) r (imm12_const_add (ty_bits ty) -1)))
       ;;
-      (_ Unit (emit (MInst.Cls r tmp ty)))
+      (tmp2 Reg (con_select_reg (IntCC.Equal) tmp (zero_reg) r (con_bit_not r) ))
+      ;; 
+      (tmp3 Reg (lower_clz ty tmp2))
     )
-    tmp
+    (alu_rr_imm12 (AluOPRRI.Addi) tmp3 (imm12_const -1))
   )
 )
 
