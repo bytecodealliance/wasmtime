@@ -25,7 +25,9 @@ use wasmtime_runtime::{
 mod registry;
 mod serialization;
 
-pub use registry::{is_wasm_trap_pc, register_component, unregister_component, ModuleRegistry};
+pub use registry::{is_wasm_trap_pc, ModuleRegistry};
+#[cfg(feature = "component-model")]
+pub use registry::{register_component, unregister_component};
 pub use serialization::SerializedModule;
 
 /// A compiled WebAssembly module, ready to be instantiated.
