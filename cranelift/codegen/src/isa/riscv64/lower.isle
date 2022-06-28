@@ -298,7 +298,7 @@
   (alu_rrr (AluOPRRR.Sll) x y))
 
 (rule (lower (has_type  $I128 (ishl x y)))
-  (lower_i128_logical_shift $true $true x y))
+  (lower_i128_ishl x y))
 
 
 ;;;; Rules for `ushr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -311,7 +311,7 @@
 (rule (lower (has_type (fits_in_64 ty)(ushr x (imm12_from_value y))))
   (alu_rr_imm12 (AluOPRRI.Srli) x y))
 (rule (lower (has_type  $I128 (ushr x y)))
-  (lower_i128_logical_shift $false $false x y))
+  (lower_i128_ushr x y))
 
 
 ;;;; Rules for `sshr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -324,7 +324,7 @@
 (rule (lower (has_type (fits_in_64 ty)(sshr x (imm12_from_value y))))
   (alu_rr_imm12 (AluOPRRI.Srli) x y))
 (rule (lower (has_type  $I128 (sshr x y)))
-  (lower_i128_logical_shift $false $true x y))
+  (lower_i128_sshr x y))
 
 
 ;;;; Rules for `rotl` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

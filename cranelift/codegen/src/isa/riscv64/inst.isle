@@ -1146,8 +1146,101 @@
   )
 )
 
-(decl lower_i128_logical_shift(bool bool ValueRegs ValueRegs)ValueRegs)
-(extern constructor lower_i128_logical_shift lower_i128_logical_shift)
+
+(decl lower_i128_ishl(ValueRegs ValueRegs)ValueRegs)
+(rule
+  (lower_i128_ishl x y)
+  (let
+    (
+      ;;
+      (tmp ValueRegs (con_shamt $I128 (value_regs_get y 0)))
+      (shamt Reg (value_regs_get tmp 0))
+      (len_sub_shamt Reg (value_regs_get tmp 1))
+      ;;
+      (low Reg (alu_rrr (AluOPRRR.Sll) (value_regs_get x 0) shamt))
+      ;; high part.
+      (high_part1 Reg (alu_rrr (AluOPRRR.Srl) (value_regs_get x 0) len_sub_shamt))
+      (high_part2 Reg (con_select_reg (IntCC.Equal) shamt (zero_reg) (zero_reg)  high_part1 ))
+      ;; 
+      (high_part3 Reg (alu_rrr (AluOPRRR.Sll) (value_regs_get x 1) shamt))
+      (high Reg (alu_rrr (AluOPRRR.Or)  high_part2 high_part3 ))
+      ;; 
+      (const64 Reg (load_u64_constant 64))
+    )
+    (value_regs 
+      (con_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt const64 (zero_reg) low)
+      (con_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt const64 low high)
+    )
+  )
+)
+
+(decl lower_i128_ushr(ValueRegs ValueRegs)ValueRegs)
+(rule
+  (lower_i128_ushr x y)
+  (let
+    (
+      ;;
+      (tmp ValueRegs (con_shamt $I128 (value_regs_get y 0)))
+      (shamt Reg (value_regs_get tmp 0))
+      (len_sub_shamt Reg (value_regs_get tmp 1))
+
+      ;; low part.
+      (low_part1 Reg (alu_rrr (AluOPRRR.Sll) (value_regs_get x 1) len_sub_shamt))
+      (low_part2 Reg (con_select_reg (IntCC.Equal) shamt (zero_reg) (zero_reg)  low_part1 ))
+      ;; 
+      (low_part3 Reg (alu_rrr (AluOPRRR.Srl) (value_regs_get x 0) shamt))
+      (low Reg (alu_rrr (AluOPRRR.Or)  low_part2 low_part3 ))
+      ;; 
+      (const64 Reg (load_u64_constant 64))
+
+      ;;
+      (high Reg (alu_rrr (AluOPRRR.Srl) (value_regs_get x 1) shamt))
+    )
+    (value_regs 
+      (con_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt const64 high low)
+      (con_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt const64 (zero_reg) high)
+    )
+  )
+)
+
+
+(decl lower_i128_sshr(ValueRegs ValueRegs)ValueRegs)
+(rule
+  (lower_i128_sshr x y)
+  (let
+    (
+      ;;
+      (tmp ValueRegs (con_shamt $I128 (value_regs_get y 0)))
+      (shamt Reg (value_regs_get tmp 0))
+      (len_sub_shamt Reg (value_regs_get tmp 1))
+
+      ;; low part.
+      (low_part1 Reg (alu_rrr (AluOPRRR.Sll) (value_regs_get x 1) len_sub_shamt))
+      (low_part2 Reg (con_select_reg (IntCC.Equal) shamt (zero_reg) (zero_reg)  low_part1 ))
+      ;; 
+      (low_part3 Reg (alu_rrr (AluOPRRR.Srl) (value_regs_get x 0) shamt))
+      (low Reg (alu_rrr (AluOPRRR.Or)  low_part2 low_part3 ))
+      ;; 
+      (const64 Reg (load_u64_constant 64))
+      ;;
+      (high Reg (alu_rrr (AluOPRRR.Sra) (value_regs_get x 1) shamt))
+      ;;
+      (const_neg_1 Reg(load_imm12 -1))
+      ;;
+      (high_replacement Reg(con_select_reg  (IntCC.SignedLessThan)  (value_regs_get x 1)  (zero_reg) const_neg_1  (zero_reg) ))
+    )
+    (value_regs 
+      (con_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt const64 high low)
+      (con_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt const64 high_replacement high)
+    )
+  )
+)
+
+(decl load_imm12(i32) Reg)
+(rule
+  (load_imm12 x)
+  (alu_rr_imm12 (AluOPRRI.Addi) (zero_reg) (imm12_const x))
+)
 
 ;; extractor let me always extract low part of ValueRegs.
 (decl valueregs_2_reg(Reg) Value)
@@ -1655,3 +1748,10 @@
 ;;; 
 (decl gen_nearest(Reg Type)Reg)
 (extern constructor gen_nearest gen_nearest)
+
+;;; get a value's 
+;;; I think this should provide in prelude.isle
+(decl value_inst(Inst)Value)
+(extern extractor value_inst value_inst)
+
+
