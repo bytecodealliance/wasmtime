@@ -381,12 +381,12 @@ impl Module {
                     .with_context(|| {
                         let index = translation.module.func_index(index);
                         let name = match translation.debuginfo.name_section.func_names.get(&index) {
-                            Some(name) => format!(" (`{}`) ", name),
+                            Some(name) => format!(" (`{}`)", name),
                             None => String::new(),
                         };
                         let index = index.as_u32();
                         format!(
-                            "failed to compile wasm function {index}{name}at offset {offset:#x}"
+                            "failed to compile wasm function {index}{name} at offset {offset:#x}"
                         )
                     })
             })?
