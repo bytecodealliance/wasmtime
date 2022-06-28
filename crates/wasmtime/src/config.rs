@@ -425,6 +425,12 @@ impl Config {
     /// signal handler), then we can ensure that all async code will
     /// yield to the executor within a bounded time.
     ///
+    /// The epoch is checked at the start of every loop, and at the
+    /// start of every function call. This ensures that malicious guest
+    /// code cannot avoid the deadline through infinite loops or recursive
+    /// function calls - the deadline _will_ get checked periodically,
+    /// and cannot be avoided.
+    ///
     /// The [`Store`](crate::Store) tracks the deadline, and controls
     /// what happens when the deadline is reached during
     /// execution. Several behaviors are possible:
