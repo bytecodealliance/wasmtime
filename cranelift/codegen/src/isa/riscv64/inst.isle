@@ -1088,7 +1088,7 @@
   (let
     (
       ;;
-      (tmp ValueRegs (con_shamt $I64 (value_regs_get y 0)))
+      (tmp ValueRegs (con_shamt $I128 (value_regs_get y 0)))
       (shamt Reg (value_regs_get tmp 0))
       (len_sub_shamt Reg (value_regs_get tmp 1))
       ;;
@@ -1103,15 +1103,13 @@
       (high_part3 Reg (con_select_reg (IntCC.Equal) shamt (zero_reg) (zero_reg) high_part2 ))
       (high Reg (alu_rrr (AluOPRRR.Or)  high_part1 high_part3))
       ;;
-      (shamt_127 Reg (alu_rr_imm12 (AluOPRRI.Andi) (value_regs_get y 0) (imm12_const 127) ))
-      ;;
       (const64 Reg (load_u64_constant 64))  
     )
     ;; right now we only rotate less than 64 bits.
     ;; if shamt is greater than 64 , we should switch low and high.
     (value_regs 
-      (con_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_127  const64 high low)
-      (con_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_127  const64 low high)
+      (con_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt  const64 high low)
+      (con_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt  const64 low high)
     )
   )
 )
@@ -1123,7 +1121,7 @@
   (let
     (
       ;;
-      (tmp ValueRegs (con_shamt $I64 (value_regs_get y 0)))
+      (tmp ValueRegs (con_shamt $I128 (value_regs_get y 0)))
       (shamt Reg (value_regs_get tmp 0))
       (len_sub_shamt Reg (value_regs_get tmp 1))
       ;;
@@ -1137,22 +1135,18 @@
       (high_part2 Reg (alu_rrr (AluOPRRR.Sll) (value_regs_get x 0)  len_sub_shamt))
       (high_part3 Reg (con_select_reg (IntCC.Equal) shamt (zero_reg) (zero_reg) high_part2 ))
       (high Reg (alu_rrr (AluOPRRR.Or)  high_part1 high_part3))
-      ;;
-      (shamt_127 Reg (alu_rr_imm12 (AluOPRRI.Andi) (value_regs_get y 0) (imm12_const 127) ))
+
       ;;
       (const64 Reg (load_u64_constant 64))  
     )
     ;; right now we only rotate less than 64 bits.
     ;; if shamt is greater than 64 , we should switch low and high.
     (value_regs 
-      (con_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_127  const64 high low)
-      (con_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_127  const64 low high)
+      (con_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt  const64 high low)
+      (con_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt  const64 low high)
     )
   )
 )
-
-
-
 
 (decl lower_i128_logical_shift(bool bool ValueRegs ValueRegs)ValueRegs)
 (extern constructor lower_i128_logical_shift lower_i128_logical_shift)
