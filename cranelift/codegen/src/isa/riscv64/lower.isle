@@ -80,14 +80,14 @@
 (rule (lower (has_type $I128 (isub x y)))
   (let
     (
-  ;; low part.
-  (low Reg(alu_rrr (AluOPRRR.Sub) (value_regs_get x 0) (value_regs_get y 0)))
-  ;; compute borrow.
-  (borrow Reg (alu_rrr (AluOPRRR.SltU) (value_regs_get x 0) low))
-  ;; 
-  (high_tmp Reg (alu_rrr (AluOPRRR.Sub) (value_regs_get x 1) (value_regs_get y 1)))
-  ;;
-  (high Reg (alu_rrr (AluOPRRR.Sub) high_tmp borrow))
+    ;; low part.
+      (low Reg(alu_rrr (AluOPRRR.Sub) (value_regs_get x 0) (value_regs_get y 0)))
+      ;; compute borrow.
+      (borrow Reg (alu_rrr (AluOPRRR.SltU) (value_regs_get x 0) low))
+      ;; 
+      (high_tmp Reg (alu_rrr (AluOPRRR.Sub) (value_regs_get x 1) (value_regs_get y 1)))
+      ;;
+      (high Reg (alu_rrr (AluOPRRR.Sub) high_tmp borrow))
     )
     (value_regs low high)
   )
@@ -332,14 +332,14 @@
   (lower_rotl ty x y))
 
 (rule (lower (has_type  $I128 (rotl x y)))
-  (lower_i128_rotate $true x y))
+  (lower_i128_rotl x y))
 
 ;;;; Rules for `rotr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 ty)(rotr x y)))
   (lower_rotr ty x y))
 
 (rule (lower (has_type  $I128 (rotr x y)))
-  (lower_i128_rotate $false x y))
+  (lower_i128_rotr  x y))
 
 
 ;;;; Rules for `bxor_not` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

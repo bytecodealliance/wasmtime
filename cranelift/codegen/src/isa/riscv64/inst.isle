@@ -1082,8 +1082,77 @@
   )
 )
 
-(decl lower_i128_rotate(bool ValueRegs ValueRegs) ValueRegs)
-(extern constructor lower_i128_rotate lower_i128_rotate)
+(decl lower_i128_rotl(ValueRegs ValueRegs) ValueRegs)
+(rule
+  (lower_i128_rotl x y)
+  (let
+    (
+      ;;
+      (tmp ValueRegs (con_shamt $I64 (value_regs_get y 0)))
+      (shamt Reg (value_regs_get tmp 0))
+      (len_sub_shamt Reg (value_regs_get tmp 1))
+      ;;
+      (low_part1 Reg (alu_rrr (AluOPRRR.Sll) (value_regs_get x 0)  shamt))
+      (low_part2 Reg (alu_rrr (AluOPRRR.Srl) (value_regs_get x 1) len_sub_shamt))
+      ;;; if shamt == 0 low_part2 will overflow we should zero instead.
+      (low_part3 Reg (con_select_reg (IntCC.Equal) shamt (zero_reg) (zero_reg) low_part2 ))
+      (low Reg (alu_rrr (AluOPRRR.Or)  low_part1  low_part3))
+      ;;
+      (high_part1 Reg (alu_rrr (AluOPRRR.Sll) (value_regs_get x 1)  shamt))
+      (high_part2 Reg (alu_rrr (AluOPRRR.Srl) (value_regs_get x 0)  len_sub_shamt))
+      (high_part3 Reg (con_select_reg (IntCC.Equal) shamt (zero_reg) (zero_reg) high_part2 ))
+      (high Reg (alu_rrr (AluOPRRR.Or)  high_part1 high_part3))
+      ;;
+      (shamt_127 Reg (alu_rr_imm12 (AluOPRRI.Andi) (value_regs_get y 0) (imm12_const 127) ))
+      ;;
+      (const64 Reg (load_u64_constant 64))  
+    )
+    ;; right now we only rotate less than 64 bits.
+    ;; if shamt is greater than 64 , we should switch low and high.
+    (value_regs 
+      (con_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_127  const64 high low)
+      (con_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_127  const64 low high)
+    )
+  )
+)
+
+
+(decl lower_i128_rotr(ValueRegs ValueRegs) ValueRegs)
+(rule
+  (lower_i128_rotr x y)
+  (let
+    (
+      ;;
+      (tmp ValueRegs (con_shamt $I64 (value_regs_get y 0)))
+      (shamt Reg (value_regs_get tmp 0))
+      (len_sub_shamt Reg (value_regs_get tmp 1))
+      ;;
+      (low_part1 Reg (alu_rrr (AluOPRRR.Srl) (value_regs_get x 0)  shamt))
+      (low_part2 Reg (alu_rrr (AluOPRRR.Sll) (value_regs_get x 1) len_sub_shamt))
+      ;;; if shamt == 0 low_part2 will overflow we should zero instead.
+      (low_part3 Reg (con_select_reg (IntCC.Equal) shamt (zero_reg) (zero_reg) low_part2 ))
+      (low Reg (alu_rrr (AluOPRRR.Or)  low_part1  low_part3))
+      ;;
+      (high_part1 Reg (alu_rrr (AluOPRRR.Srl) (value_regs_get x 1)  shamt))
+      (high_part2 Reg (alu_rrr (AluOPRRR.Sll) (value_regs_get x 0)  len_sub_shamt))
+      (high_part3 Reg (con_select_reg (IntCC.Equal) shamt (zero_reg) (zero_reg) high_part2 ))
+      (high Reg (alu_rrr (AluOPRRR.Or)  high_part1 high_part3))
+      ;;
+      (shamt_127 Reg (alu_rr_imm12 (AluOPRRI.Andi) (value_regs_get y 0) (imm12_const 127) ))
+      ;;
+      (const64 Reg (load_u64_constant 64))  
+    )
+    ;; right now we only rotate less than 64 bits.
+    ;; if shamt is greater than 64 , we should switch low and high.
+    (value_regs 
+      (con_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_127  const64 high low)
+      (con_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_127  const64 low high)
+    )
+  )
+)
+
+
+
 
 (decl lower_i128_logical_shift(bool bool ValueRegs ValueRegs)ValueRegs)
 (extern constructor lower_i128_logical_shift lower_i128_logical_shift)
@@ -1487,6 +1556,7 @@
     result 
   )
 )
+
 
 (decl gen_bint(Reg)Reg)
 (rule 
