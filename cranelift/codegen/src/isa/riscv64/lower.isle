@@ -29,7 +29,7 @@
 ;; `i64` and smaller
 
 (rule (lower (has_type (fits_in_32 ty) (iadd x y)))
-  (alu_rrr (AluOPRRR.Addw) $I32 x y))
+  (alu_rrr (AluOPRRR.Addw) x y))
 
 ;; Base case, simply adding things in registers.
 (rule (lower (has_type (fits_in_64 ty) (iadd x y)))
@@ -49,7 +49,7 @@
       ;; low part.
       (low Reg (alu_add (value_regs_get x 0) (value_regs_get y 0)))
       ;; compute carry.
-      (carry Reg(alu_rrr (AluOPRRR.SltU) $I64 low (value_regs_get y 0)))
+      (carry Reg(alu_rrr (AluOPRRR.SltU) low (value_regs_get y 0)))
       ;; 
       (high_tmp Reg (alu_add (value_regs_get x 1) (value_regs_get y 1)))
       ;; add carry.
@@ -64,10 +64,10 @@
 ;; Base case, simply subtracting things in registers.
 
 (rule (lower (has_type (fits_in_64 ty) (isub x y)))
-  (alu_rrr (AluOPRRR.Sub) $I64 x y))
+  (alu_rrr (AluOPRRR.Sub) x y))
 
 (rule (lower (has_type (fits_in_32 ty) (isub x y)))
-  (alu_rrr (AluOPRRR.Subw) $I32 x y))
+  (alu_rrr (AluOPRRR.Subw) x y))
   
 ;; Special case for when one operand is an immediate that fits in 12 bits.
 (rule (lower (has_type (fits_in_64 ty) (isub x (imm12_from_value y))))
@@ -81,13 +81,13 @@
   (let
     (
   ;; low part.
-  (low Reg(alu_rrr (AluOPRRR.Sub) $I64 (value_regs_get x 0) (value_regs_get y 0)))
+  (low Reg(alu_rrr (AluOPRRR.Sub) (value_regs_get x 0) (value_regs_get y 0)))
   ;; compute borrow.
-  (borrow Reg (alu_rrr (AluOPRRR.SltU) $I64 (value_regs_get x 0) low))
+  (borrow Reg (alu_rrr (AluOPRRR.SltU) (value_regs_get x 0) low))
   ;; 
-  (high_tmp Reg (alu_rrr (AluOPRRR.Sub) $I64 (value_regs_get x 1) (value_regs_get y 1)))
+  (high_tmp Reg (alu_rrr (AluOPRRR.Sub) (value_regs_get x 1) (value_regs_get y 1)))
   ;;
-  (high Reg (alu_rrr (AluOPRRR.Sub) $I64 high_tmp borrow))
+  (high Reg (alu_rrr (AluOPRRR.Sub) high_tmp borrow))
     )
     (value_regs low high)
   )
@@ -97,17 +97,17 @@
 
 ;; `i64` and smaller.
 (rule (lower (has_type (fits_in_64 ty) (ineg x)))
-  (alu_rrr (AluOPRRR.Sub) $I64 (zero_reg) x))
+  (alu_rrr (AluOPRRR.Sub) (zero_reg) x))
 (rule (lower (has_type (fits_in_32 ty) (ineg x)))
-  (alu_rrr (AluOPRRR.Subw) $I32 (zero_reg) x))
+  (alu_rrr (AluOPRRR.Subw) (zero_reg) x))
 
 
 ;;;; Rules for `imul` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type (fits_in_64 ty) (imul x y)))
-  (alu_rrr (AluOPRRR.Mul) $I64 x y))
+  (alu_rrr (AluOPRRR.Mul) x y))
 (rule (lower (has_type (fits_in_32 ty) (imul x y)))
-  (alu_rrr (AluOPRRR.Mulw) $I32 x y))
+  (alu_rrr (AluOPRRR.Mulw) x y))
 
 (rule (lower (has_type (fits_in_64 ty) (smulhi x y)))
   (lower_smlhi ty x y))
@@ -123,40 +123,40 @@
 ;;;; Rules for `div` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type (fits_in_16 ty) (udiv x y)))
-  (alu_rrr (AluOPRRR.Divuw) $I64 (narrow_int ty x) (narrow_int ty y)))
+  (alu_rrr (AluOPRRR.Divuw) (narrow_int ty x) (narrow_int ty y)))
 
 (rule (lower (has_type (fits_in_32 ty) (sdiv x y)))
-  (alu_rrr (AluOPRRR.Divw) $I64 x y))
+  (alu_rrr (AluOPRRR.Divw) x y))
 
 (rule (lower (has_type (fits_in_32 ty) (udiv x y)))
-  (alu_rrr (AluOPRRR.Divuw) $I64  x y))
+  (alu_rrr (AluOPRRR.Divuw)  x y))
 
 (rule (lower (has_type (fits_in_64 ty) (sdiv x y)))
-  (alu_rrr (AluOPRRR.Div) $I64 x y))
+  (alu_rrr (AluOPRRR.Div) x y))
 
 (rule (lower (has_type (fits_in_64 ty) (udiv x y)))
-  (alu_rrr (AluOPRRR.DivU) $I64 x y))
+  (alu_rrr (AluOPRRR.DivU) x y))
 
 ;;;; Rules for `rem` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type (fits_in_32 ty) (srem x y)))
-  (alu_rrr (AluOPRRR.Remw) $I64 x y))
+  (alu_rrr (AluOPRRR.Remw) x y))
 
 (rule (lower (has_type (fits_in_16 ty) (urem x y)))
-  (alu_rrr (AluOPRRR.Remuw) $I64 (narrow_int ty x) (narrow_int ty y)))
+  (alu_rrr (AluOPRRR.Remuw) (narrow_int ty x) (narrow_int ty y)))
 
 (rule (lower (has_type (fits_in_32 ty) (urem x y)))
-  (alu_rrr (AluOPRRR.Remuw) $I64 x y))
+  (alu_rrr (AluOPRRR.Remuw) x y))
 
 (rule (lower (has_type (fits_in_64 ty) (srem x y)))
-  (alu_rrr (AluOPRRR.Rem) $I64  x y))
+  (alu_rrr (AluOPRRR.Rem)  x y))
 
 (rule (lower (has_type (fits_in_64 ty) (urem x y)))
-  (alu_rrr (AluOPRRR.RemU) $I64 x y))
+  (alu_rrr (AluOPRRR.RemU) x y))
 
 ;;;; Rules for `and` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 ty) (band x y)))
-  (alu_rrr (AluOPRRR.And) $I64 x y))
+  (alu_rrr (AluOPRRR.And) x y))
 
 ;; Special cases for when one operand is an immediate that fits in 12 bits.
 (rule (lower (has_type (fits_in_64 ty) (band x (imm12_from_value y))))
@@ -173,7 +173,7 @@
 
 ;;;; Rules for `or` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 ty) (bor x y)))
-  (alu_rrr (AluOPRRR.Or) $I64 x y))
+  (alu_rrr (AluOPRRR.Or) x y))
 
 ;; Special cases for when one operand is an immediate that fits in 12 bits.
 (rule (lower (has_type (fits_in_64 ty) (bor x (imm12_from_value y))))
@@ -188,7 +188,7 @@
 
 ;;;; Rules for `xor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 ty) (bxor x y)))
-  (alu_rrr (AluOPRRR.Xor) $I64 x y))
+  (alu_rrr (AluOPRRR.Xor) x y))
 
 ;; Special cases for when one operand is an immediate that fits in 12 bits.
 (rule (lower (has_type (fits_in_64 ty) (bxor x (imm12_from_value y))))
@@ -204,7 +204,7 @@
 
 ;;;; Rules for `xor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 ty) (bor_not x y)))
-  (alu_rrr (AluOPRRR.Orn)  $I64 x y))
+  (alu_rrr (AluOPRRR.Orn) x y))
 (rule (lower (has_type $B128 (bor_not x y)))
   (lower_b128_binary (AluOPRRR.Orn) x y))
 (rule (lower (has_type $I128 (bor_not x y)))
@@ -272,7 +272,7 @@
 
 ;;;; Rules for `band_not` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 ty) (band_not x y)))
-  (alu_rrr (AluOPRRR.Andn) $I64 x y))
+  (alu_rrr (AluOPRRR.Andn) x y))
 
 (rule (lower (has_type  $I128 (band_not x y)))
   (lower_band_not_i128 x y))
@@ -289,13 +289,13 @@
 
 ;;;; Rules for `ishl` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_32 ty)(ishl x (valueregs_2_reg y))))
-  (alu_rrr (AluOPRRR.Sllw) $I64 x y))
+  (alu_rrr (AluOPRRR.Sllw) x y))
 (rule (lower (has_type (fits_in_32 ty)(ishl x (imm12_from_value y))))
   (alu_rr_imm12 (AluOPRRI.Slliw) x y))
 (rule (lower (has_type (fits_in_64 ty)(ishl x (imm12_from_value y))))
   (alu_rr_imm12 (AluOPRRI.Slli) x y))
 (rule (lower (has_type (fits_in_64 ty)(ishl x (valueregs_2_reg y))))
-  (alu_rrr (AluOPRRR.Sll) $I64 x y))
+  (alu_rrr (AluOPRRR.Sll) x y))
 
 (rule (lower (has_type  $I128 (ishl x y)))
   (lower_i128_logical_shift $true $true x y))
@@ -303,9 +303,9 @@
 
 ;;;; Rules for `ushr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_32 ty)(ushr x  (valueregs_2_reg y))))
-  (alu_rrr (AluOPRRR.Srlw) $I64 x y))
+  (alu_rrr (AluOPRRR.Srlw) x y))
 (rule (lower (has_type (fits_in_64 ty)(ushr x (valueregs_2_reg y))))
-  (alu_rrr (AluOPRRR.Srl) $I64 x y))
+  (alu_rrr (AluOPRRR.Srl) x y))
 (rule (lower (has_type (fits_in_32 ty)(ushr x (imm12_from_value y))))
   (alu_rr_imm12 (AluOPRRI.SrliW) x y))
 (rule (lower (has_type (fits_in_64 ty)(ushr x (imm12_from_value y))))
@@ -316,9 +316,9 @@
 
 ;;;; Rules for `sshr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_32 ty)(sshr x (valueregs_2_reg y))))
-  (alu_rrr (AluOPRRR.Sraw) $I64 x y))
+  (alu_rrr (AluOPRRR.Sraw) x y))
 (rule (lower (has_type (fits_in_64 ty)(sshr x (valueregs_2_reg y))))
-  (alu_rrr (AluOPRRR.Sra) $I64 x y))
+  (alu_rrr (AluOPRRR.Sra) x y))
 (rule (lower (has_type (fits_in_32 ty)(sshr x (imm12_from_value y))))
   (alu_rr_imm12 (AluOPRRI.SrliW) x y))
 (rule (lower (has_type (fits_in_64 ty)(sshr x (imm12_from_value y))))
@@ -344,7 +344,7 @@
 
 ;;;; Rules for `bxor_not` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 ty)(bxor_not x y)))
-  (alu_rrr  (AluOPRRR.Xnor) $I64 y x))  ;; notice x y order!!!
+  (alu_rrr  (AluOPRRR.Xnor) y x))  ;; notice x y order!!!
 
 (rule (lower (has_type  $I128 (bxor_not x y)))
   (lower_b128_binary (AluOPRRR.Xnor) y x));; notice x y order!!!
@@ -357,7 +357,7 @@
       ;;; move y.
       (tmp_y Reg (move_f_to_x y ty))
       ;;; xnor.
-      (result_x Reg (alu_rrr (AluOPRRR.Xnor) $I64 tmp_y tmp_x))
+      (result_x Reg (alu_rrr (AluOPRRR.Xnor) tmp_y tmp_x))
       ;;; move to f register.
       (result Reg(move_x_to_f result_x ty))
     )
@@ -367,7 +367,7 @@
 
 ;;;; Rules for `bor_not` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 ty)(bor_not x y)))
-  (alu_rrr  (AluOPRRR.Orn) $I64 x y))  
+  (alu_rrr  (AluOPRRR.Orn) x y))  
 
 (rule (lower (has_type  $I128 (bor_not x y)))
   (lower_b128_binary (AluOPRRR.Orn) x y)) 
@@ -452,7 +452,7 @@
       ;; alloc tmp.
       (tmp WritableReg (temp_writable_reg ty))
       ;;
-      (x2 Reg (alu_rrr (AluOPRRR.Sub) ty (zero_reg) x))
+      (x2 Reg (alu_rrr (AluOPRRR.Sub) (zero_reg) x))
     )
     (con_atomic (get_atomic_rmw_op ty (AtomicRmwOp.Add)) addr x2 (atomic_amo))
   )
@@ -468,7 +468,7 @@
       ;;
       (x1 Reg (con_atomic_load addr ty))
       ;;
-      (tmp Reg (alu_rrr (AluOPRRR.And) ty x1 x))
+      (tmp Reg (alu_rrr (AluOPRRR.And) x1 x))
       ;; 
       (tmp2 Reg (con_bit_not tmp))
       ;;

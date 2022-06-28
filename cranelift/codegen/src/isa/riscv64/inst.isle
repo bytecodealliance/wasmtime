@@ -610,9 +610,9 @@
         dst))
 
 ;; Helper for emitting `MInst.AluRRR` instructions.
-(decl alu_rrr (AluOPRRR Type Reg Reg) Reg)
-(rule (alu_rrr op ty src1 src2)
-      (let ((dst WritableReg (temp_writable_reg ty))
+(decl alu_rrr (AluOPRRR Reg Reg) Reg)
+(rule (alu_rrr op src1 src2)
+      (let ((dst WritableReg (temp_writable_reg $I64))
             (_ Unit (emit (MInst.AluRRR op dst src1 src2))))
         dst))
 
@@ -620,14 +620,14 @@
 (decl alu_add(Reg Reg)Reg)
 (rule
   (alu_add rs1 rs2)
-  (alu_rrr (AluOPRRR.Add) $I64 rs1 rs2)
+  (alu_rrr (AluOPRRR.Add) rs1 rs2)
 )
 
 ;; Helper for emit rd = rs1 - rs2 for Interger.
 (decl alu_sub(Reg Reg)Reg)
 (rule
   (alu_sub rs1 rs2)
-  (alu_rrr (AluOPRRR.Sub) $I64 rs1 rs2)
+  (alu_rrr (AluOPRRR.Sub) rs1 rs2)
 )
 
 (decl pack_float_rounding_mode(FRM)OptionFloatRoundingMode)
@@ -936,9 +936,9 @@
   (let
     (
       ;; low part.
-      (low Reg (alu_rrr (AluOPRRR.Andn) $I64 (value_regs_get a 0) (value_regs_get b 0)))
+      (low Reg (alu_rrr (AluOPRRR.Andn) (value_regs_get a 0) (value_regs_get b 0)))
       ;; high part.
-      (high Reg (alu_rrr (AluOPRRR.Andn) $I64 (value_regs_get a 1) (value_regs_get b 1)))
+      (high Reg (alu_rrr (AluOPRRR.Andn) (value_regs_get a 1) (value_regs_get b 1)))
     )
     (value_regs low high)
   )
@@ -950,9 +950,9 @@
   (let
     (
       ;; low part.
-      (low Reg (alu_rrr op $I64 (value_regs_get a 0) (value_regs_get b 0)))
+      (low Reg (alu_rrr op (value_regs_get a 0) (value_regs_get b 0)))
       ;; high part.
-      (high Reg (alu_rrr op $I64 (value_regs_get a 1) (value_regs_get b 1)))
+      (high Reg (alu_rrr op (value_regs_get a 1) (value_regs_get b 1)))
     )
     (value_regs low high)
   )
@@ -961,14 +961,14 @@
 (decl lower_umlhi (Type Reg Reg)Reg)
 (rule
   (lower_umlhi $I64 rs1 rs2)
-  (alu_rrr (AluOPRRR.Mulhu) $I64 rs1 rs2 )
+  (alu_rrr (AluOPRRR.Mulhu) rs1 rs2 )
 )
 
 (rule
   (lower_umlhi ty rs1 rs2)
   (let
     (
-      (tmp Reg (alu_rrr (AluOPRRR.Mul) $I64 (narrow_int ty rs1)  (narrow_int ty rs2)) )
+      (tmp Reg (alu_rrr (AluOPRRR.Mul) (narrow_int ty rs1)  (narrow_int ty rs2)) )
     )
     (alu_rr_imm12 (AluOPRRI.Srli) tmp (imm12_const (ty_bits ty)) )
   )
@@ -977,13 +977,13 @@
 (decl lower_smlhi (Type Reg Reg)Reg)
 (rule
   (lower_smlhi $I64 rs1 rs2)
-  (alu_rrr (AluOPRRR.Mulh) $I64 rs1 rs2 )
+  (alu_rrr (AluOPRRR.Mulh) rs1 rs2 )
 )
 (rule
   (lower_smlhi ty rs1 rs2)
   (let
     (
-      (tmp Reg (alu_rrr (AluOPRRR.Mul) $I64 rs1   rs2))
+      (tmp Reg (alu_rrr (AluOPRRR.Mul) rs1   rs2))
     )
     (alu_rr_imm12 (AluOPRRI.Srli) tmp (imm12_const (ty_bits ty)) )
   )
@@ -994,12 +994,12 @@
 
 (rule
   (lower_rotl $I64 rs amount)
-  (alu_rrr (AluOPRRR.Rol) $I64 rs amount)
+  (alu_rrr (AluOPRRR.Rol) rs amount)
 )
 
 (rule
   (lower_rotl $I32 rs amount)
-  (alu_rrr (AluOPRRR.Rolw) $I64 rs amount)
+  (alu_rrr (AluOPRRR.Rolw) rs amount)
 )
 
 ;;; for I8 and I16.
@@ -1012,11 +1012,11 @@
       (shamt Reg (value_regs_get x 0))
       (len_sub_shamt Reg (value_regs_get x 1))
       ;;
-      (part1 Reg(alu_rrr (AluOPRRR.Sll) $I64 rs shamt))
+      (part1 Reg(alu_rrr (AluOPRRR.Sll) rs shamt))
       ;;
-      (part2 Reg(alu_rrr (AluOPRRR.Srl) $I64 rs len_sub_shamt))
+      (part2 Reg(alu_rrr (AluOPRRR.Srl) rs len_sub_shamt))
     )
-    (alu_rrr (AluOPRRR.Or) $I64 part1 part2)
+    (alu_rrr (AluOPRRR.Or) part1 part2)
   )
 )
 
@@ -1028,11 +1028,11 @@
 (decl lower_rotr(Type Reg Reg) Reg)
 (rule
   (lower_rotr $I64 rs amount)
-  (alu_rrr (AluOPRRR.Ror) $I64 rs amount)
+  (alu_rrr (AluOPRRR.Ror) rs amount)
 )
 (rule
   (lower_rotr $I32 rs amount)
-  (alu_rrr (AluOPRRR.Rorw) $I64 rs amount)
+  (alu_rrr (AluOPRRR.Rorw) rs amount)
 )
 
 ;;; for I8 and I16.
@@ -1044,11 +1044,11 @@
       (shamt Reg (value_regs_get x 0))
       (len_sub_shamt Reg (value_regs_get x 1))
       ;;
-      (part1 Reg(alu_rrr (AluOPRRR.Srl) $I64 rs shamt))
+      (part1 Reg(alu_rrr (AluOPRRR.Srl) rs shamt))
       ;;
-      (part2 Reg(alu_rrr (AluOPRRR.Sll) $I64 rs len_sub_shamt))
+      (part2 Reg(alu_rrr (AluOPRRR.Sll) rs len_sub_shamt))
     )
-    (alu_rrr (AluOPRRR.Or) $I64 part1 part2)
+    (alu_rrr (AluOPRRR.Or) part1 part2)
   )
 )
 
@@ -1476,13 +1476,13 @@
   (let
     (
       ;;;get all x part.
-      (tmp_x Reg (alu_rrr (AluOPRRR.And) ty c x))
+      (tmp_x Reg (alu_rrr (AluOPRRR.And) c x))
       ;;;inverse condition
       (c_inverse Reg (con_bit_not c))
       ;;;get all y part.
-      (tmp_y Reg (alu_rrr (AluOPRRR.And) ty c_inverse y))
+      (tmp_y Reg (alu_rrr (AluOPRRR.And) c_inverse y))
       ;;;get reuslt.
-      (result Reg (alu_rrr (AluOPRRR.Or) ty tmp_x tmp_y))
+      (result Reg (alu_rrr (AluOPRRR.Or) tmp_x tmp_y))
     )
     result 
   )
