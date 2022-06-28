@@ -308,6 +308,7 @@ where
             export,
             options,
             instance,
+            component_instance,
             ..
         } = store.0[self.func.0];
 
@@ -329,7 +330,7 @@ where
         assert!(mem::align_of_val(map_maybe_uninit!(space.ret)) == val_align);
 
         let instance = store.0[instance.0].as_ref().unwrap().instance();
-        let flags = instance.flags();
+        let flags = instance.flags(component_instance);
 
         unsafe {
             if !(*flags).may_enter() {
@@ -448,9 +449,10 @@ where
         let data = &mut store.0[self.func.0];
         let instance = data.instance;
         let post_return = data.post_return;
+        let component_instance = data.component_instance;
         let post_return_arg = data.post_return_arg.take();
         let instance = store.0[instance.0].as_ref().unwrap().instance();
-        let flags = instance.flags();
+        let flags = instance.flags(component_instance);
 
         unsafe {
             // First assert that the instance is in a "needs post return" state.

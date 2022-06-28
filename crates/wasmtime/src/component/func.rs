@@ -5,8 +5,9 @@ use anyhow::{Context, Result};
 use std::mem::MaybeUninit;
 use std::ptr::NonNull;
 use std::sync::Arc;
-use wasmtime_environ::component::{CanonicalOptions, ComponentTypes, CoreExport, TypeFuncIndex};
-use wasmtime_environ::FuncIndex;
+use wasmtime_environ::component::{
+    CanonicalOptions, ComponentTypes, CoreDef, RuntimeComponentInstanceIndex, TypeFuncIndex,
+};
 use wasmtime_runtime::{Export, ExportFunction, VMTrampoline};
 
 const MAX_STACK_PARAMS: usize = 16;
@@ -82,6 +83,7 @@ pub struct FuncData {
     types: Arc<ComponentTypes>,
     options: Options,
     instance: Instance,
+    component_instance: RuntimeComponentInstanceIndex,
     post_return: Option<(ExportFunction, VMTrampoline)>,
     post_return_arg: Option<ValRaw>,
 }
@@ -92,10 +94,10 @@ impl Func {
         instance: &Instance,
         data: &InstanceData,
         ty: TypeFuncIndex,
-        func: &CoreExport<FuncIndex>,
+        func: &CoreDef,
         options: &CanonicalOptions,
     ) -> Func {
-        let export = match data.lookup_export(store, func) {
+        let export = match data.lookup_def(store, func) {
             Export::Function(f) => f,
             _ => unreachable!(),
         };
@@ -109,6 +111,7 @@ impl Func {
             let trampoline = store.lookup_trampoline(unsafe { anyfunc.as_ref() });
             (ExportFunction { anyfunc }, trampoline)
         });
+        let component_instance = options.instance;
         let options = unsafe { Options::new(store.id(), memory, realloc, options.string_encoding) };
         Func(store.store_data_mut().insert(FuncData {
             trampoline,
@@ -117,6 +120,7 @@ impl Func {
             ty,
             types: data.component_types().clone(),
             instance: *instance,
+            component_instance,
             post_return,
             post_return_arg: None,
         }))

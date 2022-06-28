@@ -2,8 +2,8 @@
 //
 // struct VMComponentContext {
 //      magic: u32,
-//      flags: u8,
 //      store: *mut dyn Store,
+//      flags: [VMComponentFlags; component.num_runtime_component_instances],
 //      lowering_anyfuncs: [VMCallerCheckedAnyfunc; component.num_lowerings],
 //      lowerings: [VMLowering; component.num_lowerings],
 //      memories: [*mut VMMemoryDefinition; component.num_memories],
@@ -12,7 +12,8 @@
 // }
 
 use crate::component::{
-    Component, LoweredIndex, RuntimeMemoryIndex, RuntimePostReturnIndex, RuntimeReallocIndex,
+    Component, LoweredIndex, RuntimeComponentInstanceIndex, RuntimeMemoryIndex,
+    RuntimePostReturnIndex, RuntimeReallocIndex,
 };
 use crate::PtrSize;
 
@@ -48,11 +49,14 @@ pub struct VMComponentOffsets<P> {
     pub num_runtime_reallocs: u32,
     /// The number of post-returns which are recorded in this component for options.
     pub num_runtime_post_returns: u32,
+    /// Number of component instances internally in the component (always at
+    /// least 1).
+    pub num_runtime_component_instances: u32,
 
     // precalculated offsets of various member fields
     magic: u32,
-    flags: u32,
     store: u32,
+    flags: u32,
     lowering_anyfuncs: u32,
     lowerings: u32,
     memories: u32,
@@ -77,9 +81,13 @@ impl<P: PtrSize> VMComponentOffsets<P> {
             num_runtime_memories: component.num_runtime_memories.try_into().unwrap(),
             num_runtime_reallocs: component.num_runtime_reallocs.try_into().unwrap(),
             num_runtime_post_returns: component.num_runtime_post_returns.try_into().unwrap(),
+            num_runtime_component_instances: component
+                .num_runtime_component_instances
+                .try_into()
+                .unwrap(),
             magic: 0,
-            flags: 0,
             store: 0,
+            flags: 0,
             lowering_anyfuncs: 0,
             lowerings: 0,
             memories: 0,
@@ -114,9 +122,10 @@ impl<P: PtrSize> VMComponentOffsets<P> {
 
         fields! {
             size(magic) = 4u32,
-            size(flags) = 1u32,
             align(u32::from(ret.ptr.size())),
             size(store) = cmul(2, ret.ptr.size()),
+            size(flags) = cmul(ret.num_runtime_component_instances, ret.size_of_vmcomponent_flags()),
+            align(u32::from(ret.ptr.size())),
             size(lowering_anyfuncs) = cmul(ret.num_lowerings, ret.ptr.size_of_vmcaller_checked_anyfunc()),
             size(lowerings) = cmul(ret.num_lowerings, ret.ptr.size() * 2),
             size(memories) = cmul(ret.num_runtime_memories, ret.ptr.size()),
@@ -146,10 +155,17 @@ impl<P: PtrSize> VMComponentOffsets<P> {
         self.magic
     }
 
+    /// The size of the `VMComponentFlags` type.
+    #[inline]
+    pub fn size_of_vmcomponent_flags(&self) -> u8 {
+        1
+    }
+
     /// The offset of the `flags` field.
     #[inline]
-    pub fn flags(&self) -> u32 {
-        self.flags
+    pub fn flags(&self, index: RuntimeComponentInstanceIndex) -> u32 {
+        assert!(index.as_u32() < self.num_runtime_component_instances);
+        self.flags + index.as_u32()
     }
 
     /// The offset of the `store` field.

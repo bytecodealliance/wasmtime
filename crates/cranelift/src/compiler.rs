@@ -288,17 +288,29 @@ impl wasmtime_environ::Compiler for Compiler {
         }))
     }
 
+    fn compile_host_to_wasm_trampoline(
+        &self,
+        ty: &WasmFuncType,
+    ) -> Result<Box<dyn Any + Send>, CompileError> {
+        self.host_to_wasm_trampoline(ty)
+            .map(|x| Box::new(x) as Box<_>)
+    }
+
     fn emit_obj(
         &self,
         translation: &ModuleTranslation,
-        types: &ModuleTypes,
         funcs: PrimaryMap<DefinedFuncIndex, Box<dyn Any + Send>>,
+        compiled_trampolines: Vec<Box<dyn Any + Send>>,
         tunables: &Tunables,
         obj: &mut Object<'static>,
     ) -> Result<(PrimaryMap<DefinedFuncIndex, FunctionInfo>, Vec<Trampoline>)> {
         let funcs: CompiledFunctions = funcs
             .into_iter()
             .map(|(_i, f)| *f.downcast().unwrap())
+            .collect();
+        let compiled_trampolines: Vec<CompiledFunction> = compiled_trampolines
+            .into_iter()
+            .map(|f| *f.downcast().unwrap())
             .collect();
 
         let mut builder = ModuleTextBuilder::new(obj, &translation.module, &*self.isa);
@@ -307,11 +319,6 @@ impl wasmtime_environ::Compiler for Compiler {
         }
         let mut addrs = AddressMapSection::default();
         let mut traps = TrapEncodingBuilder::default();
-        let compiled_trampolines = translation
-            .exported_signatures
-            .iter()
-            .map(|i| self.host_to_wasm_trampoline(&types[*i]))
-            .collect::<Result<Vec<_>, _>>()?;
 
         let mut func_starts = Vec::with_capacity(funcs.len());
         for (i, func) in funcs.iter() {
@@ -325,6 +332,10 @@ impl wasmtime_environ::Compiler for Compiler {
         }
 
         // Build trampolines for every signature that can be used by this module.
+        assert_eq!(
+            translation.exported_signatures.len(),
+            compiled_trampolines.len()
+        );
         let mut trampolines = Vec::with_capacity(translation.exported_signatures.len());
         for (i, func) in translation
             .exported_signatures

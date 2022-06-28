@@ -2,13 +2,14 @@ use crate::signatures::SignatureCollection;
 use crate::{Engine, Module};
 use anyhow::{bail, Context, Result};
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::fs;
 use std::ops::Range;
 use std::path::Path;
 use std::ptr::NonNull;
 use std::sync::Arc;
 use wasmtime_environ::component::{
-    ComponentTypes, GlobalInitializer, LoweredIndex, StaticModuleIndex, TrampolineInfo, Translator,
+    ComponentTypes, GlobalInitializer, LoweredIndex, LoweringInfo, StaticModuleIndex, Translator,
 };
 use wasmtime_environ::PrimaryMap;
 use wasmtime_jit::CodeMemory;
@@ -52,7 +53,7 @@ struct ComponentInner {
 
     /// Where trampolines are located within the `text` section of
     /// `trampoline_obj`.
-    trampolines: PrimaryMap<LoweredIndex, TrampolineInfo>,
+    trampolines: PrimaryMap<LoweredIndex, LoweringInfo>,
 }
 
 impl Component {
@@ -116,6 +117,40 @@ impl Component {
             .context("failed to parse WebAssembly module")?;
         let types = Arc::new(types.finish());
 
+        // All lowered functions will require a trampoline to be available in
+        // case they're used when entering wasm. For example a lowered function
+        // could be immediately lifted in which case we'll need a trampoline to
+        // call that lowered function.
+        //
+        // Most of the time trampolines can come from the core wasm modules
+        // since lifted functions come from core wasm. For these esoteric cases
+        // though we may have to compile trampolines specifically into the
+        // component object as well in case core wasm doesn't provide the
+        // necessary trampoline.
+        let lowerings = component
+            .initializers
+            .iter()
+            .filter_map(|init| match init {
+                GlobalInitializer::LowerImport(i) => Some(i),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        let required_trampolines = lowerings
+            .iter()
+            .map(|l| l.canonical_abi)
+            .collect::<HashSet<_>>();
+        let provided_trampolines = modules
+            .iter()
+            .flat_map(|(_, m)| m.exported_signatures.iter().copied())
+            .collect::<HashSet<_>>();
+        let mut trampolines_to_compile = required_trampolines
+            .difference(&provided_trampolines)
+            .collect::<Vec<_>>();
+        // Ensure a deterministically compiled artifact by sorting this list
+        // which was otherwise created with nondeterministically ordered hash
+        // tables.
+        trampolines_to_compile.sort();
+
         let (static_modules, trampolines) = engine.join_maybe_parallel(
             // In one (possibly) parallel task all the modules found within this
             // component are compiled. Note that this will further parallelize
@@ -139,28 +174,40 @@ impl Component {
             // In another (possibly) parallel task we compile lowering
             // trampolines necessary found in the component.
             || -> Result<_> {
-                let lowerings = component
-                    .initializers
-                    .iter()
-                    .filter_map(|init| match init {
-                        GlobalInitializer::LowerImport(i) => Some(i),
-                        _ => None,
-                    })
-                    .collect::<Vec<_>>();
-                let compiler = engine.compiler().component_compiler();
-                let trampolines = engine
-                    .run_maybe_parallel(lowerings, |lowering| {
-                        compiler.compile_lowered_trampoline(&component, lowering, &types)
-                    })?
-                    .into_iter()
-                    .collect();
+                let compiler = engine.compiler();
+                let (lowered_trampolines, core_trampolines) = engine.join_maybe_parallel(
+                    // Compile all the lowered trampolines here which implement
+                    // `canon lower` and are used to exit wasm into the host.
+                    || -> Result<_> {
+                        Ok(engine
+                            .run_maybe_parallel(lowerings, |lowering| {
+                                compiler
+                                    .component_compiler()
+                                    .compile_lowered_trampoline(&component, lowering, &types)
+                            })?
+                            .into_iter()
+                            .collect())
+                    },
+                    // Compile all entry host-to-wasm trampolines here that
+                    // aren't otherwise provided by core wasm modules.
+                    || -> Result<_> {
+                        engine.run_maybe_parallel(trampolines_to_compile.clone(), |i| {
+                            let ty = &types[*i];
+                            Ok((*i, compiler.compile_host_to_wasm_trampoline(ty)?))
+                        })
+                    },
+                );
                 let mut obj = engine.compiler().object()?;
-                let trampolines = compiler.emit_obj(trampolines, &mut obj)?;
+                let trampolines = compiler.component_compiler().emit_obj(
+                    lowered_trampolines?,
+                    core_trampolines?,
+                    &mut obj,
+                )?;
                 Ok((trampolines, wasmtime_jit::mmap_vec_from_obj(obj)?))
             },
         );
         let static_modules = static_modules?;
-        let (trampolines, trampoline_obj) = trampolines?;
+        let ((lowering_trampolines, core_trampolines), trampoline_obj) = trampolines?;
         let mut trampoline_obj = CodeMemory::new(trampoline_obj);
         let code = trampoline_obj.publish()?;
         let text = wasmtime_jit::subslice_range(code.text, code.mmap);
@@ -184,6 +231,13 @@ impl Component {
                 vmtrampolines.insert(idx, trampoline);
             }
         }
+        for (signature, trampoline) in trampolines_to_compile.iter().zip(core_trampolines) {
+            vmtrampolines.insert(**signature, unsafe {
+                let ptr =
+                    code.text[trampoline.start as usize..][..trampoline.length as usize].as_ptr();
+                std::mem::transmute::<*const u8, wasmtime_runtime::VMTrampoline>(ptr)
+            });
+        }
 
         // FIXME: for the same reason as above where each module is
         // re-registering everything this should only be registered once. This
@@ -202,7 +256,7 @@ impl Component {
                 signatures,
                 trampoline_obj,
                 text,
-                trampolines,
+                trampolines: lowering_trampolines,
             }),
         })
     }
