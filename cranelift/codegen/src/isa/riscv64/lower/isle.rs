@@ -195,359 +195,100 @@ where
             .for_each(|i| self.emit(i));
         rd.to_reg()
     }
-    fn lower_ctz(&mut self, ty: Type, val: ValueRegs) -> ValueRegs {
-        let rd = self.temp_writable_reg(I64);
-        let (op, imm12) = (AluOPRRI::Ctz, Imm12::zero());
-        match ty.bits() {
-            128 => {
-                let tmp_high = self.temp_writable_reg(I64);
-                // first count lower trailing zeros
-
-                self.emit(&MInst::AluRRImm12 {
-                    alu_op: op,
-                    rd,
-                    rs: val.regs()[0],
-                    imm12,
-                });
-                let tmp_src_high = self.temp_writable_reg(I64);
-                // load constant 64
-                self.emit(&MInst::AluRRImm12 {
-                    alu_op: AluOPRRI::Ori,
-                    rd: tmp_src_high,
-                    rs: zero_reg(),
-                    imm12: Imm12::from_bits(64),
-                });
-                // if lower trailing zeros is less than 64 we know the upper 64-bit no need to count.
-                self.emit(&MInst::AluRRR {
-                    alu_op: AluOPRRR::Slt,
-                    rd: tmp_src_high,
-                    rs1: rd.to_reg(),
-                    rs2: tmp_src_high.to_reg(),
-                });
-                // set high part lowest bit.
-                self.emit(&MInst::AluRRR {
-                    alu_op: AluOPRRR::Or,
-                    rd: tmp_high, /* if tmp2 == 0 we don't change the high part value and need to count ,otherwise
-                                  we set lowest bit to 1 , Ctz will return 0 which is the result we want.
-                                            */
-                    rs1: val.regs()[1],
-                    rs2: tmp_src_high.to_reg(),
-                });
-                // count hight parts
-
-                self.emit(&MInst::AluRRImm12 {
-                    alu_op: op,
-                    rd: tmp_high,
-                    rs: tmp_high.to_reg(),
-                    imm12: imm12,
-                });
-                // add them togother
-                self.emit(&MInst::AluRRR {
-                    alu_op: AluOPRRR::Add,
-                    rd,
-                    rs1: rd.to_reg(),
-                    rs2: tmp_high.to_reg(),
-                });
-                let r = self.temp_writable_reg(I64);
-                self.emit(&MInst::load_constant_imm12(r, Imm12::from_bits(0)));
-                return ValueRegs::two(rd.to_reg(), r.to_reg());
-            }
-            64 => {
-                self.emit(&MInst::AluRRImm12 {
-                    alu_op: op,
-                    rd,
-                    rs: val.regs()[0],
-                    imm12,
-                });
-            }
-            32 => {
-                self.emit(&MInst::AluRRImm12 {
-                    alu_op: op,
-                    rd,
-                    rs: val.regs()[0],
-                    imm12: imm12,
-                });
-            }
-            16 | 8 => {
-                // first we must make sure all upper bit are 1
-                // so we don't count extra zero.
-                MInst::load_constant_u64(rd, if ty.bits() == 8 { !0xff } else { !0xffff })
-                    .into_iter()
-                    .for_each(|i| self.emit(&i));
-
-                self.emit(&MInst::AluRRR {
-                    alu_op: AluOPRRR::Or,
-                    rd,
-                    rs1: rd.to_reg(),
-                    rs2: val.regs()[0],
-                });
-                let (op, imm12) = (AluOPRRI::Ctz, Imm12::zero());
-                self.emit(&MInst::AluRRImm12 {
-                    alu_op: op,
-                    rd,
-                    rs: val.regs()[0],
-                    imm12,
-                });
-            }
-            _ => unreachable!(),
-        }
-        ValueRegs::one(rd.to_reg())
+    fn u8_as_i32(&mut self, x: u8) -> i32 {
+        x as i32
     }
 
-    fn lower_extend(&mut self, val: Reg, is_signed: bool, from_bits: u8, to_bits: u8) -> ValueRegs {
-        if is_signed {
-            if to_bits == 128 {
-                let low = self.temp_writable_reg(I64);
-                let tmp = self.temp_writable_reg(I64);
-                let high = self.temp_writable_reg(I64);
-                // extend the lower parts if need
-                if from_bits != 64 {
-                    self.emit(&MInst::Extend {
-                        rd: low,
-                        rn: val,
-                        signed: is_signed,
-                        from_bits,
-                        to_bits: 64,
-                    });
-                } else {
-                    self.emit(&MInst::gen_move(low, val, I64));
-                }
-                // extract the signed bit
-                let (op, imm12) = (AluOPRRI::Bexti, Imm12::from_bits((from_bits - 1) as i16));
-                self.emit(&MInst::AluRRImm12 {
-                    alu_op: op,
-                    rd: tmp,
-                    rs: val,
-                    imm12,
-                });
-                //pretend signed extend from b1->b64
-                self.emit(&MInst::Extend {
-                    rd: high,
-                    rn: tmp.to_reg(),
-                    signed: is_signed,
-                    from_bits: 1,
-                    to_bits: 64,
-                });
-                ValueRegs::two(low.to_reg(), high.to_reg())
-            } else {
-                let tmp = self.temp_writable_reg(I64);
-                self.emit(&MInst::Extend {
-                    rd: tmp,
-                    rn: val,
-                    signed: is_signed,
-                    from_bits,
-                    to_bits,
-                });
-                ValueRegs::one(tmp.to_reg())
-            }
-        } else {
-            // this  is unsigned.
-            let tmp = self.temp_writable_reg(I64);
-            self.emit(&MInst::Extend {
-                rd: tmp,
-                rn: val,
-                signed: is_signed,
-                from_bits,
-                to_bits,
-            });
-            if to_bits == 128 {
-                let tmp2 = self.temp_writable_reg(I64);
-                self.emit(&MInst::load_constant_imm12(tmp2, Imm12::from_bits(0)));
-                ValueRegs::two(tmp.to_reg(), tmp2.to_reg())
-            } else {
-                ValueRegs::one(tmp.to_reg())
-            }
-        }
+    fn ext_sign_bit(&mut self, ty: Type, r: Reg) -> Reg {
+        assert!(ty.is_int());
+        let rd = self.temp_writable_reg(I64);
+        self.emit(&MInst::AluRRImm12 {
+            alu_op: AluOPRRI::Bexti,
+            rd,
+            rs: r,
+            imm12: Imm12::from_bits((ty.bits() - 1) as i16),
+        });
+        rd.to_reg()
     }
     fn imm12_const(&mut self, val: i32) -> Imm12 {
         Imm12::maybe_from_u64(val as u64).unwrap()
     }
-    fn lower_rotl(&mut self, ty: Type, rs: Reg, amount: Reg) -> Reg {
-        let rd = self.temp_writable_reg(I64);
-        match ty.bits() {
-            64 => {
-                self.emit(&MInst::AluRRR {
-                    alu_op: AluOPRRR::Rol,
-                    rd: rd,
-                    rs1: rs,
-                    rs2: amount,
-                });
-            }
-            32 => {
-                self.emit(&MInst::AluRRR {
-                    alu_op: AluOPRRR::Rolw,
-                    rd: rd,
-                    rs1: rs,
-                    rs2: amount,
-                });
-            }
-            16 | 8 => {
-                let shamt = {
-                    //shift is bigger than it's bits is useless.
-                    //get rid of.
-                    let shamt = self.temp_writable_reg(I64);
-                    self.emit(&MInst::AluRRImm12 {
-                        alu_op: AluOPRRI::Andi,
-                        rd: shamt,
-                        rs: amount,
-                        imm12: Imm12::from_bits((ty.bits() - 1) as i16),
-                    });
-                    shamt.to_reg()
-                };
-                let len_sub_shamt = {
-                    let len_sub_shamt = self.temp_writable_reg(I64);
-                    self.emit(&MInst::load_constant_imm12(
-                        len_sub_shamt,
-                        Imm12::from_bits(ty.bits() as i16),
-                    ));
-                    self.emit(&MInst::AluRRR {
-                        alu_op: AluOPRRR::Sub,
-                        rd: len_sub_shamt,
-                        rs1: len_sub_shamt.to_reg(),
-                        rs2: shamt,
-                    });
-                    len_sub_shamt.to_reg()
-                };
-                self.emit(&MInst::AluRRR {
-                    alu_op: AluOPRRR::Sll,
-                    rd: rd,
-                    rs1: rs,
-                    rs2: shamt,
-                });
-                let value2 = self.temp_writable_reg(I64);
-                self.emit(&MInst::AluRRR {
-                    alu_op: AluOPRRR::Srl,
-                    rd: value2,
-                    rs1: rs,
-                    rs2: len_sub_shamt,
-                });
-
-                self.emit(&MInst::AluRRR {
-                    alu_op: AluOPRRR::Or,
-                    rd: rd,
-                    rs1: rd.to_reg(),
-                    rs2: value2.to_reg(),
-                });
-            }
-            _ => unreachable!(),
-        }
-        rd.to_reg()
+    fn imm12_const_add(&mut self, val: i32, add: i32) -> Imm12 {
+        Imm12::maybe_from_u64((val + add) as u64).unwrap()
     }
 
-    fn lower_rotr(&mut self, ty: Type, rs: Reg, shamt: Reg) -> Reg {
-        let rd = self.temp_writable_reg(I64);
-        match ty.bits() {
-            64 => {
-                self.emit(&MInst::AluRRR {
-                    alu_op: AluOPRRR::Ror,
-                    rd: rd,
-                    rs1: rs,
-                    rs2: shamt,
-                });
-            }
-            32 => {
-                self.emit(&MInst::AluRRR {
-                    alu_op: AluOPRRR::Rorw,
-                    rd: rd,
-                    rs1: rs,
-                    rs2: shamt,
-                });
-            }
-
-            16 | 8 => {
-                let shamt = {
-                    let tmp = self.temp_writable_reg(I64);
-                    self.emit(&MInst::AluRRImm12 {
-                        alu_op: AluOPRRI::Andi,
-                        rd: tmp,
-                        rs: shamt,
-                        imm12: Imm12::from_bits((ty.bits() - 1) as i16),
-                    });
-                    tmp.to_reg()
-                };
-                let len_sub_shamt = {
-                    let len_sub_shamt = self.temp_writable_reg(I64);
-                    self.emit(&MInst::load_constant_imm12(
-                        len_sub_shamt,
-                        Imm12::from_bits(ty.bits() as i16),
-                    ));
-                    self.emit(&MInst::AluRRR {
-                        alu_op: AluOPRRR::Sub,
-                        rd: len_sub_shamt,
-                        rs1: len_sub_shamt.to_reg(),
-                        rs2: shamt,
-                    });
-                    len_sub_shamt.to_reg()
-                };
-                self.emit(&MInst::AluRRR {
-                    alu_op: AluOPRRR::Srl,
-                    rd: rd,
-                    rs1: rs,
-                    rs2: shamt,
-                });
-                let value2 = self.temp_writable_reg(I64);
-                self.emit(&MInst::AluRRR {
-                    alu_op: AluOPRRR::Sll,
-                    rd: value2,
-                    rs1: rs,
-                    rs2: len_sub_shamt,
-                });
-
-                self.emit(&MInst::AluRRR {
-                    alu_op: AluOPRRR::Or,
-                    rd: rd,
-                    rs1: rd.to_reg(),
-                    rs2: value2.to_reg(),
-                });
-            }
-            _ => unreachable!(),
-        }
-        rd.to_reg()
-    }
-
-    fn lower_mlhi(&mut self, is_signed: bool, ty: Type, a: Reg, b: Reg) -> Reg {
-        let rd = self.temp_writable_reg(I64);
-        if ty.bits() == 64 {
-            self.emit(&MInst::AluRRR {
-                alu_op: if is_signed {
-                    AluOPRRR::Mulh
-                } else {
-                    AluOPRRR::Mulhu
-                },
-                rd: rd,
-                rs1: a,
-                rs2: b,
-            });
-        } else {
-            /*
-                first we must narrow down int,because we perform unsinged multiply.
-            */
-            let a = if is_signed {
-                a
-            } else {
-                generated_code::constructor_narrow_int(self, ty, a).unwrap()
-            };
-            let b = if is_signed {
-                b
-            } else {
-                generated_code::constructor_narrow_int(self, ty, b).unwrap()
-            };
-            self.emit(&MInst::AluRRR {
-                alu_op: AluOPRRR::Mul,
-                rd: rd,
-                rs1: a,
-                rs2: b,
-            });
+    //
+    fn con_shamt(&mut self, ty: Type, shamt: Reg) -> ValueRegs {
+        let shamt = {
+            let tmp = self.temp_writable_reg(I64);
             self.emit(&MInst::AluRRImm12 {
-                alu_op: AluOPRRI::Srli,
-                rd,
-                rs: rd.to_reg(),
-                imm12: Imm12::from_bits(ty.bits() as i16),
+                alu_op: AluOPRRI::Andi,
+                rd: tmp,
+                rs: shamt,
+                imm12: Imm12::from_bits((ty.bits() - 1) as i16),
             });
-        }
-
-        rd.to_reg()
+            tmp.to_reg()
+        };
+        let len_sub_shamt = {
+            let len_sub_shamt = self.temp_writable_reg(I64);
+            self.emit(&MInst::load_constant_imm12(
+                len_sub_shamt,
+                Imm12::from_bits(ty.bits() as i16),
+            ));
+            self.emit(&MInst::AluRRR {
+                alu_op: AluOPRRR::Sub,
+                rd: len_sub_shamt,
+                rs1: len_sub_shamt.to_reg(),
+                rs2: shamt,
+            });
+            len_sub_shamt.to_reg()
+        };
+        ValueRegs::two(shamt, len_sub_shamt)
     }
+
+    // fn lower_mlhi(&mut self, is_signed: bool, ty: Type, a: Reg, b: Reg) -> Reg {
+    //     let rd = self.temp_writable_reg(I64);
+    //     if ty.bits() == 64 {
+    //         self.emit(&MInst::AluRRR {
+    //             alu_op: if is_signed {
+    //                 AluOPRRR::Mulh
+    //             } else {
+    //                 AluOPRRR::Mulhu
+    //             },
+    //             rd: rd,
+    //             rs1: a,
+    //             rs2: b,
+    //         });
+    //     } else {
+    //         /*
+    //             first we must narrow down int,because we perform unsinged multiply.
+    //         */
+    //         let a = if is_signed {
+    //             a
+    //         } else {
+    //             generated_code::constructor_narrow_int(self, ty, a).unwrap()
+    //         };
+    //         let b = if is_signed {
+    //             b
+    //         } else {
+    //             generated_code::constructor_narrow_int(self, ty, b).unwrap()
+    //         };
+    //         self.emit(&MInst::AluRRR {
+    //             alu_op: AluOPRRR::Mul,
+    //             rd: rd,
+    //             rs1: a,
+    //             rs2: b,
+    //         });
+    //         self.emit(&MInst::AluRRImm12 {
+    //             alu_op: AluOPRRI::Srli,
+    //             rd,
+    //             rs: rd.to_reg(),
+    //             imm12: Imm12::from_bits(ty.bits() as i16),
+    //         });
+    //     }
+
+    //     rd.to_reg()
+    // }
 
     fn lower_i128_rotate(
         &mut self,
@@ -927,8 +668,8 @@ where
         }
     }
 
-    fn valueregs_2_reg(&mut self, val: Value) -> Option<Reg> {
-        Some(self.put_in_regs(val).regs()[0])
+    fn valueregs_2_reg(&mut self, val: Value) -> Reg {
+        self.put_in_regs(val).regs()[0]
     }
 
     fn load_float_const(&mut self, val: u64, ty: Type) -> Reg {
@@ -956,93 +697,6 @@ where
         let result = self.temp_writable_reg(ty);
         self.emit(&gen_move_re_interprete(result, ty, r, I64));
         result.to_reg()
-    }
-
-    fn lower_cls_i128(&mut self, val: ValueRegs) -> ValueRegs {
-        // count high part.
-        let result = self.temp_writable_reg(I64);
-        self.emit(&MInst::Cls {
-            rs: val.regs()[1],
-            rd: result,
-            ty: I64,
-        });
-
-        let rest: Reg = {
-            let count_low: Reg = {
-                let count_positive: Reg = {
-                    let tmp = self.temp_writable_reg(I64);
-                    let (op, imm12) = (AluOPRRI::Clz, Imm12::zero());
-                    self.emit(&MInst::AluRRImm12 {
-                        alu_op: op,
-                        rd: tmp,
-                        rs: val.regs()[0],
-                        imm12,
-                    });
-                    tmp.to_reg()
-                };
-                let count_negtive: Reg = {
-                    let tmp = self.temp_writable_reg(I64);
-                    self.emit(&MInst::construct_bit_not(tmp, val.regs()[0]));
-                    let (op, imm12) = (AluOPRRI::Clz, Imm12::zero());
-                    self.emit(&MInst::AluRRImm12 {
-                        alu_op: op,
-                        rd: tmp,
-                        rs: tmp.to_reg(),
-                        imm12,
-                    });
-                    tmp.to_reg()
-                };
-                let tmp = self.temp_writable_reg(I64);
-                self.emit(&MInst::SelectReg {
-                    rd: tmp,
-                    rs1: count_negtive,
-                    rs2: count_positive,
-                    condition: IntegerCompare {
-                        kind: IntCC::SignedLessThan,
-                        rs1: val.regs()[1],
-                        rs2: zero_reg(),
-                    },
-                });
-                tmp.to_reg()
-            };
-
-            let const_63_in_reg: Reg = {
-                let tmp = self.temp_writable_reg(I64);
-                self.emit(&MInst::load_constant_imm12(tmp, Imm12::from_bits(63)));
-                tmp.to_reg()
-            };
-
-            let tmp = self.temp_writable_reg(I64);
-            self.emit(&MInst::SelectReg {
-                rd: tmp,
-                rs1: count_low,
-                rs2: zero_reg(),
-                condition: IntegerCompare {
-                    /*
-                       if we need the low result part.
-                    */
-                    kind: IntCC::Equal,
-                    rs1: const_63_in_reg,
-                    rs2: result.to_reg(),
-                },
-            });
-            tmp.to_reg()
-        };
-
-        // add rest part.
-        self.emit(&MInst::AluRRR {
-            alu_op: AluOPRRR::Add,
-            rd: result,
-            rs1: result.to_reg(),
-            rs2: rest,
-        });
-
-        let result_high = self.temp_writable_reg(I64);
-        self.emit(&MInst::load_constant_imm12(
-            result_high,
-            Imm12::from_bits(0),
-        ));
-        ValueRegs::two(result.to_reg(), result_high.to_reg())
     }
 
     fn pack_float_rounding_mode(&mut self, f: &FRM) -> OptionFloatRoundingMode {
@@ -1079,7 +733,7 @@ where
         });
         tmp.to_reg()
     }
-    fn offset_add(&mut self, a: Offset32, adden: i64) -> Offset32 {
+    fn offset32_add(&mut self, a: Offset32, adden: i64) -> Offset32 {
         a.try_add_i64(adden).expect("offset exceed range.")
     }
     fn type_and_value(&mut self, val: Value) -> (Type, Value) {

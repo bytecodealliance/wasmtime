@@ -193,7 +193,7 @@ impl Inst {
     #[inline(always)]
     pub(crate) fn load_constant_imm12(rd: Writable<Reg>, imm: Imm12) -> Inst {
         Inst::AluRRImm12 {
-            alu_op: AluOPRRI::Ori,
+            alu_op: AluOPRRI::Addi,
             rd: rd,
             rs: zero_reg(),
             imm12: imm,
@@ -1039,12 +1039,17 @@ impl Inst {
                 rs,
                 ref imm12,
             } => {
-                let rs = format_reg(rs, allocs);
+                let rs_s = format_reg(rs, allocs);
                 let rd = format_reg(rd.to_reg(), allocs);
-                if alu_op.option_funct12().is_some() {
-                    format!("{} {},{}", alu_op.op_name(), rd, rs)
+                // check if it is a load constant.
+                if alu_op == AluOPRRI::Addi && rs == zero_reg() {
+                    format!("li {},{}", rd, imm12.as_i16())
                 } else {
-                    format!("{} {},{},{}", alu_op.op_name(), rd, rs, imm12.as_i16())
+                    if alu_op.option_funct12().is_some() {
+                        format!("{} {},{}", alu_op.op_name(), rd, rs_s)
+                    } else {
+                        format!("{} {},{},{}", alu_op.op_name(), rd, rs_s, imm12.as_i16())
+                    }
                 }
             }
             &Inst::Load {

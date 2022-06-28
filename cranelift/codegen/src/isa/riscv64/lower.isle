@@ -110,10 +110,10 @@
   (alu_rrr (AluOPRRR.Mulw) $I32 x y))
 
 (rule (lower (has_type (fits_in_64 ty) (smulhi x y)))
-  (lower_mlhi $true ty x y))
+  (lower_smlhi ty x y))
 
 (rule (lower (has_type (fits_in_64 ty) (umulhi x y)))
-  (lower_mlhi $false ty x y))
+  (lower_umlhi ty x y))
 
 ;; not implemented
 ;; (rule (lower (has_type $I128 (imul x y)))
@@ -251,6 +251,9 @@
 ;;;; Rules for `ctz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type ty (ctz x)))
   (lower_ctz ty x))
+
+(rule (lower (has_type $I128 (ctz x)))
+  (lower_ctz_128 x))
 
 ;;;; Rules for `clz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type ty (clz x)))
