@@ -206,7 +206,7 @@ impl Component {
             .windows(2)
             .all(|window| { window[0].start < window[1].start }));
 
-        crate::module::register_component(code.text.as_ptr() as usize, &always_trap);
+        crate::module::register_component(code.text, &always_trap);
         Ok(Component {
             inner: Arc::new(ComponentInner {
                 component,
@@ -408,6 +408,6 @@ impl ComponentInner {
 
 impl Drop for ComponentInner {
     fn drop(&mut self) {
-        crate::module::unregister_component(self.text().as_ptr() as usize, &self.always_trap);
+        crate::module::unregister_component(self.text());
     }
 }

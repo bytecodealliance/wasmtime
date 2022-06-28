@@ -279,19 +279,16 @@ pub fn unregister_module(module: &Arc<CompiledModule>) {
 
 /// Same as `register_module`, but for components
 #[cfg(feature = "component-model")]
-pub fn register_component(base: usize, traps: &PrimaryMap<RuntimeAlwaysTrapIndex, AlwaysTrapInfo>) {
-    let start = match traps.iter().next() {
-        Some((_, info)) => base + usize::try_from(info.start + info.trap_offset).unwrap(),
-        None => return,
-    };
-    let end = match traps.iter().next_back() {
-        Some((_, info)) => base + usize::try_from(info.start + info.trap_offset).unwrap(),
-        None => return,
-    };
+pub fn register_component(text: &[u8], traps: &PrimaryMap<RuntimeAlwaysTrapIndex, AlwaysTrapInfo>) {
+    if text.is_empty() {
+        return;
+    }
+    let start = text.as_ptr() as usize;
+    let end = start + text.len();
     let info = Arc::new(
         traps
             .iter()
-            .map(|(_, info)| info.trap_offset)
+            .map(|(_, info)| info.start + info.trap_offset)
             .collect::<Vec<_>>(),
     );
     let prev = GLOBAL_MODULES
@@ -303,15 +300,12 @@ pub fn register_component(base: usize, traps: &PrimaryMap<RuntimeAlwaysTrapIndex
 
 /// Same as `unregister_module`, but for components
 #[cfg(feature = "component-model")]
-pub fn unregister_component(
-    base: usize,
-    traps: &PrimaryMap<RuntimeAlwaysTrapIndex, AlwaysTrapInfo>,
-) {
-    let info = match traps.iter().next_back() {
-        Some((_, info)) => info,
-        None => return,
-    };
-    let end = base + usize::try_from(info.start + info.trap_offset).unwrap();
+pub fn unregister_component(text: &[u8]) {
+    if text.is_empty() {
+        return;
+    }
+    let start = text.as_ptr() as usize;
+    let end = start + text.len();
     let info = GLOBAL_MODULES.write().unwrap().remove(&end);
     assert!(info.is_some());
 }
