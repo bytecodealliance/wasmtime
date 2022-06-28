@@ -374,9 +374,21 @@ impl Module {
         let functions = functions.into_iter().collect::<Vec<_>>();
         let funcs = engine
             .run_maybe_parallel(functions, |(index, func)| {
+                let offset = func.body.range().start;
                 engine
                     .compiler()
                     .compile_function(&translation, index, func, tunables, types)
+                    .with_context(|| {
+                        let index = translation.module.func_index(index);
+                        let name = match translation.debuginfo.name_section.func_names.get(&index) {
+                            Some(name) => format!(" (`{}`)", name),
+                            None => String::new(),
+                        };
+                        let index = index.as_u32();
+                        format!(
+                            "failed to compile wasm function {index}{name} at offset {offset:#x}"
+                        )
+                    })
             })?
             .into_iter()
             .collect();
