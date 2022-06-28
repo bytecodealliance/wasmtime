@@ -125,7 +125,6 @@
 
 use super::abi::*;
 use crate::binemit::StackMap;
-use crate::fx::FxHashSet;
 use crate::ir::types::*;
 use crate::ir::{ArgumentExtension, ArgumentPurpose, StackSlot};
 use crate::machinst::*;
@@ -133,6 +132,7 @@ use crate::settings;
 use crate::CodegenResult;
 use crate::{ir, isa};
 use alloc::vec::Vec;
+use regalloc2::{PReg, PRegSet};
 use smallvec::{smallvec, SmallVec};
 use std::convert::TryFrom;
 use std::marker::PhantomData;
@@ -475,8 +475,9 @@ pub trait ABIMachineSpec {
     /// temporary register to use to synthesize the called address, if needed.
     fn gen_call(
         dest: &CallDest,
-        uses: Vec<Reg>,
-        defs: Vec<Writable<Reg>>,
+        uses: SmallVec<[Reg; 8]>,
+        defs: SmallVec<[Writable<Reg>; 8]>,
+        clobbers: PRegSet,
         opcode: ir::Opcode,
         tmp: Writable<Reg>,
         callee_conv: isa::CallConv,
@@ -504,7 +505,7 @@ pub trait ABIMachineSpec {
 
     /// Get all caller-save registers, that is, registers that we expect
     /// not to be saved across a call to a callee with the given ABI.
-    fn get_regs_clobbered_by_call(call_conv_of_callee: isa::CallConv) -> Vec<Writable<Reg>>;
+    fn get_regs_clobbered_by_call(call_conv_of_callee: isa::CallConv) -> PRegSet;
 
     /// Get the needed extension mode, given the mode attached to the argument
     /// in the signature and the calling convention. The input (the attribute in
@@ -1356,15 +1357,17 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
     }
 }
 
-fn abisig_to_uses_and_defs<M: ABIMachineSpec>(sig: &ABISig) -> (Vec<Reg>, Vec<Writable<Reg>>) {
+fn abisig_to_uses_defs_clobbers<M: ABIMachineSpec>(
+    sig: &ABISig,
+) -> (SmallVec<[Reg; 8]>, SmallVec<[Writable<Reg>; 8]>, PRegSet) {
     // Compute uses: all arg regs.
-    let mut uses = FxHashSet::default();
+    let mut uses = smallvec![];
     for arg in &sig.args {
         if let &ABIArg::Slots { ref slots, .. } = arg {
             for slot in slots {
                 match slot {
                     &ABIArgSlot::Reg { reg, .. } => {
-                        uses.insert(Reg::from(reg));
+                        uses.push(Reg::from(reg));
                     }
                     _ => {}
                 }
@@ -1372,16 +1375,19 @@ fn abisig_to_uses_and_defs<M: ABIMachineSpec>(sig: &ABISig) -> (Vec<Reg>, Vec<Wr
         }
     }
 
+    // Get clobbers: all caller-saves. These may include return value
+    // regs, which we will remove from the clobber set below.
+    let mut clobbers = M::get_regs_clobbered_by_call(sig.call_conv);
+
     // Compute defs: all retval regs, and all caller-save (clobbered) regs.
-    let mut defs: FxHashSet<_> = M::get_regs_clobbered_by_call(sig.call_conv)
-        .into_iter()
-        .collect();
+    let mut defs = smallvec![];
     for ret in &sig.rets {
         if let &ABIArg::Slots { ref slots, .. } = ret {
             for slot in slots {
                 match slot {
                     &ABIArgSlot::Reg { reg, .. } => {
-                        defs.insert(Writable::from_reg(Reg::from(reg)));
+                        defs.push(Writable::from_reg(Reg::from(reg)));
+                        clobbers.remove(PReg::from(reg));
                     }
                     _ => {}
                 }
@@ -1389,12 +1395,7 @@ fn abisig_to_uses_and_defs<M: ABIMachineSpec>(sig: &ABISig) -> (Vec<Reg>, Vec<Wr
         }
     }
 
-    let mut uses = uses.into_iter().collect::<Vec<_>>();
-    let mut defs = defs.into_iter().collect::<Vec<_>>();
-    uses.sort_unstable();
-    defs.sort_unstable();
-
-    (uses, defs)
+    (uses, defs, clobbers)
 }
 
 /// ABI object for a callsite.
@@ -1404,9 +1405,11 @@ pub struct ABICallerImpl<M: ABIMachineSpec> {
     /// The called function's signature.
     sig: ABISig,
     /// All uses for the callsite, i.e., function args.
-    uses: Vec<Reg>,
-    /// All defs for the callsite, i.e., return values and caller-saves.
-    defs: Vec<Writable<Reg>>,
+    uses: SmallVec<[Reg; 8]>,
+    /// All defs for the callsite, i.e., return values.
+    defs: SmallVec<[Writable<Reg>; 8]>,
+    /// Caller-save clobbers.
+    clobbers: PRegSet,
     /// Call destination.
     dest: CallDest,
     /// Actual call opcode; used to distinguish various types of calls.
@@ -1439,12 +1442,13 @@ impl<M: ABIMachineSpec> ABICallerImpl<M> {
     ) -> CodegenResult<ABICallerImpl<M>> {
         let ir_sig = ensure_struct_return_ptr_is_returned(sig);
         let sig = ABISig::from_func_sig::<M>(&ir_sig, flags)?;
-        let (uses, defs) = abisig_to_uses_and_defs::<M>(&sig);
+        let (uses, defs, clobbers) = abisig_to_uses_defs_clobbers::<M>(&sig);
         Ok(ABICallerImpl {
             ir_sig,
             sig,
             uses,
             defs,
+            clobbers,
             dest: CallDest::ExtName(extname.clone(), dist),
             opcode: ir::Opcode::Call,
             caller_conv,
@@ -1464,12 +1468,13 @@ impl<M: ABIMachineSpec> ABICallerImpl<M> {
     ) -> CodegenResult<ABICallerImpl<M>> {
         let ir_sig = ensure_struct_return_ptr_is_returned(sig);
         let sig = ABISig::from_func_sig::<M>(&ir_sig, flags)?;
-        let (uses, defs) = abisig_to_uses_and_defs::<M>(&sig);
+        let (uses, defs, clobbers) = abisig_to_uses_defs_clobbers::<M>(&sig);
         Ok(ABICallerImpl {
             ir_sig,
             sig,
             uses,
             defs,
+            clobbers,
             dest: CallDest::Reg(ptr),
             opcode,
             caller_conv,
@@ -1695,6 +1700,7 @@ impl<M: ABIMachineSpec> ABICaller for ABICallerImpl<M> {
             &self.dest,
             uses,
             defs,
+            self.clobbers,
             self.opcode,
             tmp,
             self.sig.call_conv,

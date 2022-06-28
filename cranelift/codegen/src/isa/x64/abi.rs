@@ -11,7 +11,7 @@ use crate::{CodegenError, CodegenResult};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use args::*;
-use regalloc2::VReg;
+use regalloc2::{PRegSet, VReg};
 use smallvec::{smallvec, SmallVec};
 use std::convert::TryFrom;
 
@@ -488,9 +488,12 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         ));
         insts.push(Inst::CallKnown {
             dest: ExternalName::LibCall(LibCall::Probestack),
-            uses: vec![regs::rax()],
-            defs: vec![],
-            opcode: Opcode::Call,
+            info: Box::new(CallInfo {
+                uses: smallvec![regs::rax()],
+                defs: smallvec![],
+                clobbers: PRegSet::empty(),
+                opcode: Opcode::Call,
+            }),
         });
         insts
     }
@@ -633,8 +636,9 @@ impl ABIMachineSpec for X64ABIMachineSpec {
     /// Generate a call instruction/sequence.
     fn gen_call(
         dest: &CallDest,
-        uses: Vec<Reg>,
-        defs: Vec<Writable<Reg>>,
+        uses: SmallVec<[Reg; 8]>,
+        defs: SmallVec<[Writable<Reg>; 8]>,
+        clobbers: PRegSet,
         opcode: ir::Opcode,
         tmp: Writable<Reg>,
         _callee_conv: isa::CallConv,
@@ -643,7 +647,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         let mut insts = SmallVec::new();
         match dest {
             &CallDest::ExtName(ref name, RelocDistance::Near) => {
-                insts.push(Inst::call_known(name.clone(), uses, defs, opcode));
+                insts.push(Inst::call_known(name.clone(), uses, defs, clobbers, opcode));
             }
             &CallDest::ExtName(ref name, RelocDistance::Far) => {
                 insts.push(Inst::LoadExtName {
@@ -655,11 +659,18 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                     RegMem::reg(tmp.to_reg()),
                     uses,
                     defs,
+                    clobbers,
                     opcode,
                 ));
             }
             &CallDest::Reg(reg) => {
-                insts.push(Inst::call_unknown(RegMem::reg(reg), uses, defs, opcode));
+                insts.push(Inst::call_unknown(
+                    RegMem::reg(reg),
+                    uses,
+                    defs,
+                    clobbers,
+                    opcode,
+                ));
             }
         }
         insts
@@ -703,8 +714,9 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         });
         insts.push(Inst::call_unknown(
             RegMem::reg(memcpy_addr),
-            /* uses = */ vec![arg0, arg1, arg2],
-            /* defs = */ Self::get_regs_clobbered_by_call(call_conv),
+            /* uses = */ smallvec![arg0, arg1, arg2],
+            /* defs = */ smallvec![],
+            /* clobbers = */ Self::get_regs_clobbered_by_call(call_conv),
             Opcode::Call,
         ));
         insts
@@ -726,51 +738,21 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         s.nominal_sp_to_fp
     }
 
-    fn get_regs_clobbered_by_call(call_conv_of_callee: isa::CallConv) -> Vec<Writable<Reg>> {
-        let mut caller_saved = vec![
-            // intersection of Systemv and FastCall calling conventions:
-            // - GPR: all except RDI, RSI, RBX, RBP, R12 to R15.
-            //        SysV adds RDI, RSI (FastCall makes these callee-saved).
-            Writable::from_reg(regs::rax()),
-            Writable::from_reg(regs::rcx()),
-            Writable::from_reg(regs::rdx()),
-            Writable::from_reg(regs::r8()),
-            Writable::from_reg(regs::r9()),
-            Writable::from_reg(regs::r10()),
-            Writable::from_reg(regs::r11()),
-            // - XMM: XMM0-5. SysV adds the rest (XMM6-XMM15).
-            Writable::from_reg(regs::xmm0()),
-            Writable::from_reg(regs::xmm1()),
-            Writable::from_reg(regs::xmm2()),
-            Writable::from_reg(regs::xmm3()),
-            Writable::from_reg(regs::xmm4()),
-            Writable::from_reg(regs::xmm5()),
-        ];
-
-        if !call_conv_of_callee.extends_windows_fastcall() {
-            caller_saved.push(Writable::from_reg(regs::rsi()));
-            caller_saved.push(Writable::from_reg(regs::rdi()));
-            caller_saved.push(Writable::from_reg(regs::xmm6()));
-            caller_saved.push(Writable::from_reg(regs::xmm7()));
-            caller_saved.push(Writable::from_reg(regs::xmm8()));
-            caller_saved.push(Writable::from_reg(regs::xmm9()));
-            caller_saved.push(Writable::from_reg(regs::xmm10()));
-            caller_saved.push(Writable::from_reg(regs::xmm11()));
-            caller_saved.push(Writable::from_reg(regs::xmm12()));
-            caller_saved.push(Writable::from_reg(regs::xmm13()));
-            caller_saved.push(Writable::from_reg(regs::xmm14()));
-            caller_saved.push(Writable::from_reg(regs::xmm15()));
-        }
+    fn get_regs_clobbered_by_call(call_conv_of_callee: isa::CallConv) -> PRegSet {
+        let mut clobbers = if call_conv_of_callee.extends_windows_fastcall() {
+            WINDOWS_CLOBBERS
+        } else {
+            SYSV_CLOBBERS
+        };
 
         if call_conv_of_callee.extends_baldrdash() {
-            caller_saved.push(Writable::from_reg(regs::r12()));
-            caller_saved.push(Writable::from_reg(regs::r13()));
-            // Not r14; implicitly preserved in the entry.
-            caller_saved.push(Writable::from_reg(regs::r15()));
-            caller_saved.push(Writable::from_reg(regs::rbx()));
+            clobbers.add(regs::gpr_preg(regs::ENC_R12));
+            clobbers.add(regs::gpr_preg(regs::ENC_R13));
+            clobbers.add(regs::gpr_preg(regs::ENC_R15));
+            clobbers.add(regs::gpr_preg(regs::ENC_RBX));
         }
 
-        caller_saved
+        clobbers
     }
 
     fn get_ext_mode(
@@ -1031,4 +1013,53 @@ fn compute_clobber_size(clobbers: &[Writable<RealReg>]) -> u32 {
         }
     }
     align_to(clobbered_size, 16)
+}
+
+const WINDOWS_CLOBBERS: PRegSet = windows_clobbers();
+const SYSV_CLOBBERS: PRegSet = sysv_clobbers();
+
+const fn windows_clobbers() -> PRegSet {
+    PRegSet::empty()
+        .with(regs::gpr_preg(regs::ENC_RAX))
+        .with(regs::gpr_preg(regs::ENC_RCX))
+        .with(regs::gpr_preg(regs::ENC_RDX))
+        .with(regs::gpr_preg(regs::ENC_R8))
+        .with(regs::gpr_preg(regs::ENC_R9))
+        .with(regs::gpr_preg(regs::ENC_R10))
+        .with(regs::gpr_preg(regs::ENC_R11))
+        .with(regs::fpr_preg(0))
+        .with(regs::fpr_preg(1))
+        .with(regs::fpr_preg(2))
+        .with(regs::fpr_preg(3))
+        .with(regs::fpr_preg(4))
+        .with(regs::fpr_preg(5))
+}
+
+const fn sysv_clobbers() -> PRegSet {
+    PRegSet::empty()
+        .with(regs::gpr_preg(regs::ENC_RAX))
+        .with(regs::gpr_preg(regs::ENC_RCX))
+        .with(regs::gpr_preg(regs::ENC_RDX))
+        .with(regs::gpr_preg(regs::ENC_RSI))
+        .with(regs::gpr_preg(regs::ENC_RDI))
+        .with(regs::gpr_preg(regs::ENC_R8))
+        .with(regs::gpr_preg(regs::ENC_R9))
+        .with(regs::gpr_preg(regs::ENC_R10))
+        .with(regs::gpr_preg(regs::ENC_R11))
+        .with(regs::fpr_preg(0))
+        .with(regs::fpr_preg(1))
+        .with(regs::fpr_preg(2))
+        .with(regs::fpr_preg(3))
+        .with(regs::fpr_preg(4))
+        .with(regs::fpr_preg(5))
+        .with(regs::fpr_preg(6))
+        .with(regs::fpr_preg(7))
+        .with(regs::fpr_preg(8))
+        .with(regs::fpr_preg(9))
+        .with(regs::fpr_preg(10))
+        .with(regs::fpr_preg(11))
+        .with(regs::fpr_preg(12))
+        .with(regs::fpr_preg(13))
+        .with(regs::fpr_preg(14))
+        .with(regs::fpr_preg(15))
 }

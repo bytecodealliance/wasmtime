@@ -24,7 +24,7 @@ use crate::machinst::*;
 use crate::timing;
 use crate::ValueLocRange;
 use regalloc2::{
-    Edit, Function as RegallocFunction, InstOrEdit, InstRange, Operand, OperandKind, PReg,
+    Edit, Function as RegallocFunction, InstOrEdit, InstRange, Operand, OperandKind, PReg, PRegSet,
     RegClass, VReg,
 };
 
@@ -79,12 +79,8 @@ pub struct VCode<I: VCodeInst> {
     /// instruction's operands.
     operand_ranges: Vec<(u32, u32)>,
 
-    /// Clobbers: a sparse map from instruction indices to clobber lists.
-    clobber_ranges: FxHashMap<InsnIndex, (u32, u32)>,
-
-    /// A flat list of clobbered registers, with index ranges held by
-    /// `clobber_ranges`.
-    clobbers: Vec<PReg>,
+    /// Clobbers: a sparse map from instruction indices to clobber masks.
+    clobbers: FxHashMap<InsnIndex, PRegSet>,
 
     /// Move information: for a given InsnIndex, (src, dst) operand pair.
     is_move: FxHashMap<InsnIndex, (Operand, Operand)>,
@@ -568,13 +564,8 @@ impl<I: VCodeInst> VCodeBuilder<I> {
             let (ops, clobbers) = op_collector.finish();
             self.vcode.operand_ranges.push(ops);
 
-            if !clobbers.is_empty() {
-                let start = self.vcode.clobbers.len();
-                self.vcode.clobbers.extend(clobbers.into_iter());
-                let end = self.vcode.clobbers.len();
-                self.vcode
-                    .clobber_ranges
-                    .insert(InsnIndex::new(i), (start as u32, end as u32));
+            if clobbers != PRegSet::default() {
+                self.vcode.clobbers.insert(InsnIndex::new(i), clobbers);
             }
 
             if let Some((dst, src)) = insn.is_move() {
@@ -628,8 +619,7 @@ impl<I: VCodeInst> VCode<I> {
             insts: Vec::with_capacity(10 * n_blocks),
             operands: Vec::with_capacity(30 * n_blocks),
             operand_ranges: Vec::with_capacity(10 * n_blocks),
-            clobber_ranges: FxHashMap::default(),
-            clobbers: vec![],
+            clobbers: FxHashMap::default(),
             is_move: FxHashMap::default(),
             srclocs: Vec::with_capacity(10 * n_blocks),
             entry: BlockIndex::new(0),
@@ -710,13 +700,15 @@ impl<I: VCodeInst> VCode<I> {
             }
 
             // Also add explicitly-clobbered registers.
-            if let Some(&(start, end)) = self.clobber_ranges.get(&InsnIndex::new(i)) {
-                let inst_clobbers = &self.clobbers[(start as usize)..(end as usize)];
-                for &preg in inst_clobbers {
-                    let reg = RealReg::from(preg);
-                    if clobbered_set.insert(reg) {
-                        clobbered.push(Writable::from_reg(reg));
-                    }
+            for preg in self
+                .clobbers
+                .get(&InsnIndex::new(i))
+                .cloned()
+                .unwrap_or_default()
+            {
+                let reg = RealReg::from(preg);
+                if clobbered_set.insert(reg) {
+                    clobbered.push(Writable::from_reg(reg));
                 }
             }
         }
@@ -1192,12 +1184,8 @@ impl<I: VCodeInst> RegallocFunction for VCode<I> {
         &self.operands[start as usize..end as usize]
     }
 
-    fn inst_clobbers(&self, insn: InsnIndex) -> &[PReg] {
-        if let Some(&(start, end)) = self.clobber_ranges.get(&insn) {
-            &self.clobbers[start as usize..end as usize]
-        } else {
-            &[]
-        }
+    fn inst_clobbers(&self, insn: InsnIndex) -> PRegSet {
+        self.clobbers.get(&insn).cloned().unwrap_or_default()
     }
 
     fn num_vregs(&self) -> usize {

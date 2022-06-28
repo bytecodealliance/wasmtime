@@ -16,7 +16,6 @@ pub type ValueArray2 = [Value; 2];
 pub type ValueArray3 = [Value; 3];
 pub type WritableReg = Writable<Reg>;
 pub type VecReg = Vec<Reg>;
-pub type VecWritableReg = Vec<WritableReg>;
 pub type ValueRegs = crate::machinst::ValueRegs<Reg>;
 pub type InstOutput = SmallVec<[ValueRegs; 2]>;
 pub type InstOutputBuilder = Cell<InstOutput>;

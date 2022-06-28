@@ -6804,8 +6804,9 @@ fn test_s390x_binemit() {
             link: writable_gpr(14),
             info: Box::new(CallInfo {
                 dest: ExternalName::testcase("test0"),
-                uses: Vec::new(),
-                defs: Vec::new(),
+                uses: smallvec![],
+                defs: smallvec![],
+                clobbers: PRegSet::empty(),
                 opcode: Opcode::Call,
             }),
         },
@@ -6818,8 +6819,9 @@ fn test_s390x_binemit() {
             link: writable_gpr(14),
             info: Box::new(CallIndInfo {
                 rn: gpr(1),
-                uses: Vec::new(),
-                defs: Vec::new(),
+                uses: smallvec![],
+                defs: smallvec![],
+                clobbers: PRegSet::empty(),
                 opcode: Opcode::CallIndirect,
             }),
         },

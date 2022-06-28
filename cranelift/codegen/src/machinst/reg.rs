@@ -5,7 +5,7 @@
 use crate::machinst::MachInst;
 use alloc::{string::String, vec::Vec};
 use core::{fmt::Debug, hash::Hash};
-use regalloc2::{Allocation, Operand, PReg, VReg};
+use regalloc2::{Allocation, Operand, PReg, PRegSet, VReg};
 use smallvec::{smallvec, SmallVec};
 
 #[cfg(feature = "enable-serde")]
@@ -290,7 +290,7 @@ pub type RegClass = regalloc2::RegClass;
 pub struct OperandCollector<'a, F: Fn(VReg) -> VReg> {
     operands: &'a mut Vec<Operand>,
     operands_start: usize,
-    clobbers: Vec<PReg>,
+    clobbers: PRegSet,
     renamer: F,
 }
 
@@ -301,7 +301,7 @@ impl<'a, F: Fn(VReg) -> VReg> OperandCollector<'a, F> {
         Self {
             operands,
             operands_start,
-            clobbers: vec![],
+            clobbers: PRegSet::default(),
             renamer,
         }
     }
@@ -313,15 +313,10 @@ impl<'a, F: Fn(VReg) -> VReg> OperandCollector<'a, F> {
         self.operands.push(operand);
     }
 
-    /// Add a clobber.
-    fn add_clobber(&mut self, clobber: PReg) {
-        self.clobbers.push(clobber);
-    }
-
     /// Finish the operand collection and return the tuple giving the
     /// range of indices in the flattened operand array, and the
-    /// clobber array.
-    pub fn finish(self) -> ((u32, u32), Vec<PReg>) {
+    /// clobber set.
+    pub fn finish(self) -> ((u32, u32), PRegSet) {
         let start = self.operands_start as u32;
         let end = self.operands.len() as u32;
         ((start, end), self.clobbers)
@@ -403,12 +398,11 @@ impl<'a, F: Fn(VReg) -> VReg> OperandCollector<'a, F> {
         ));
     }
 
-    /// Add a register clobber. This is a register that is written by
-    /// the instruction, so must be reserved (not used) for the whole
-    /// instruction, but is not used afterward.
-    #[allow(dead_code)] // FIXME: use clobbers rather than defs for calls!
-    pub fn reg_clobber(&mut self, reg: Writable<RealReg>) {
-        self.add_clobber(PReg::from(reg.to_reg()));
+    /// Add a register clobber set. This is a set of registers that
+    /// are written by the instruction, so must be reserved (not used)
+    /// for the whole instruction, but are not used afterward.
+    pub fn reg_clobbers(&mut self, regs: PRegSet) {
+        self.clobbers.union_from(regs);
     }
 }
 

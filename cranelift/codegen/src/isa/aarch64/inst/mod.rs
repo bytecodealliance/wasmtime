@@ -13,7 +13,7 @@ use crate::machinst::{PrettyPrint, Reg, RegClass, Writable};
 
 use alloc::vec::Vec;
 use core::convert::TryFrom;
-use regalloc2::VReg;
+use regalloc2::{PRegSet, VReg};
 use smallvec::{smallvec, SmallVec};
 use std::string::{String, ToString};
 
@@ -70,8 +70,9 @@ impl BitOp {
 #[derive(Clone, Debug)]
 pub struct CallInfo {
     pub dest: ExternalName,
-    pub uses: Vec<Reg>,
-    pub defs: Vec<Writable<Reg>>,
+    pub uses: SmallVec<[Reg; 8]>,
+    pub defs: SmallVec<[Writable<Reg>; 8]>,
+    pub clobbers: PRegSet,
     pub opcode: Opcode,
     pub caller_callconv: CallConv,
     pub callee_callconv: CallConv,
@@ -82,8 +83,9 @@ pub struct CallInfo {
 #[derive(Clone, Debug)]
 pub struct CallIndInfo {
     pub rn: Reg,
-    pub uses: Vec<Reg>,
-    pub defs: Vec<Writable<Reg>>,
+    pub uses: SmallVec<[Reg; 8]>,
+    pub defs: SmallVec<[Writable<Reg>; 8]>,
+    pub clobbers: PRegSet,
     pub opcode: Opcode,
     pub caller_callconv: CallConv,
     pub callee_callconv: CallConv,
@@ -983,11 +985,13 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
         &Inst::Call { ref info, .. } => {
             collector.reg_uses(&info.uses[..]);
             collector.reg_defs(&info.defs[..]);
+            collector.reg_clobbers(info.clobbers);
         }
         &Inst::CallInd { ref info, .. } => {
             collector.reg_use(info.rn);
             collector.reg_uses(&info.uses[..]);
             collector.reg_defs(&info.defs[..]);
+            collector.reg_clobbers(info.clobbers);
         }
         &Inst::CondBr { ref kind, .. } => match kind {
             CondBrKind::Zero(rt) | CondBrKind::NotZero(rt) => {
@@ -1028,9 +1032,9 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
         &Inst::VirtualSPOffsetAdj { .. } => {}
 
         &Inst::ElfTlsGetAddr { .. } => {
-            for reg in AArch64MachineDeps::get_regs_clobbered_by_call(CallConv::SystemV) {
-                collector.reg_def(reg);
-            }
+            collector.reg_clobbers(AArch64MachineDeps::get_regs_clobbered_by_call(
+                CallConv::SystemV,
+            ));
         }
         &Inst::Unwind { .. } => {}
         &Inst::EmitIsland { .. } => {}
