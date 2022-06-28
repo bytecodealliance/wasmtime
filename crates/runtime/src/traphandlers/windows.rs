@@ -1,13 +1,11 @@
 use crate::traphandlers::{tls, wasmtime_longjmp};
 use std::io;
-use winapi::um::errhandlingapi::*;
-use winapi::um::minwinbase::*;
-use winapi::um::winnt::*;
-use winapi::vc::excpt::*;
+use windows_sys::Win32::Foundation::*;
+use windows_sys::Win32::System::Diagnostics::Debug::*;
+use windows_sys::Win32::System::Kernel::*;
 
 /// Function which may handle custom signals while processing traps.
-pub type SignalHandler<'a> =
-    dyn Fn(winapi::um::winnt::PEXCEPTION_POINTERS) -> bool + Send + Sync + 'a;
+pub type SignalHandler<'a> = dyn Fn(*mut EXCEPTION_POINTERS) -> bool + Send + Sync + 'a;
 
 pub unsafe fn platform_init() {
     // our trap handler needs to go first, so that we can recover from
@@ -21,7 +19,7 @@ pub unsafe fn platform_init() {
     }
 }
 
-unsafe extern "system" fn exception_handler(exception_info: PEXCEPTION_POINTERS) -> LONG {
+unsafe extern "system" fn exception_handler(exception_info: *mut EXCEPTION_POINTERS) -> i32 {
     // Check the kind of exception, since we only handle a subset within
     // wasm code. If anything else happens we want to defer to whatever
     // the rest of the system wants to do for this exception.
@@ -31,7 +29,7 @@ unsafe extern "system" fn exception_handler(exception_info: PEXCEPTION_POINTERS)
         && record.ExceptionCode != EXCEPTION_INT_DIVIDE_BY_ZERO
         && record.ExceptionCode != EXCEPTION_INT_OVERFLOW
     {
-        return EXCEPTION_CONTINUE_SEARCH;
+        return ExceptionContinueSearch;
     }
 
     // FIXME: this is what the previous C++ did to make sure that TLS
@@ -43,7 +41,7 @@ unsafe extern "system" fn exception_handler(exception_info: PEXCEPTION_POINTERS)
     // Rust.
     //
     // if (!NtCurrentTeb()->Reserved1[sThreadLocalArrayPointerIndex]) {
-    //     return EXCEPTION_CONTINUE_SEARCH;
+    //     return ExceptionContinueSearch;
     // }
 
     // This is basically the same as the unix version above, only with a
@@ -51,7 +49,7 @@ unsafe extern "system" fn exception_handler(exception_info: PEXCEPTION_POINTERS)
     tls::with(|info| {
         let info = match info {
             Some(info) => info,
-            None => return EXCEPTION_CONTINUE_SEARCH,
+            None => return ExceptionContinueSearch,
         };
         cfg_if::cfg_if! {
             if #[cfg(target_arch = "x86_64")] {
@@ -64,9 +62,9 @@ unsafe extern "system" fn exception_handler(exception_info: PEXCEPTION_POINTERS)
         }
         let jmp_buf = info.jmp_buf_if_trap(ip, |handler| handler(exception_info));
         if jmp_buf.is_null() {
-            EXCEPTION_CONTINUE_SEARCH
+            ExceptionContinueSearch
         } else if jmp_buf as usize == 1 {
-            EXCEPTION_CONTINUE_EXECUTION
+            ExceptionContinueExecution
         } else {
             info.capture_backtrace(ip);
             wasmtime_longjmp(jmp_buf)

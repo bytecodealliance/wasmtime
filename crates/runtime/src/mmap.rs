@@ -87,9 +87,10 @@ impl Mmap {
             use std::fs::OpenOptions;
             use std::io;
             use std::os::windows::prelude::*;
-            use winapi::um::handleapi::*;
-            use winapi::um::memoryapi::*;
-            use winapi::um::winnt::*;
+            use windows_sys::Win32::Foundation::*;
+            use windows_sys::Win32::Storage::FileSystem::*;
+            use windows_sys::Win32::System::Memory::*;
+
             unsafe {
                 // Open the file with read/execute access and only share for
                 // read. This will enable us to perform the proper mmap below
@@ -111,14 +112,14 @@ impl Mmap {
                 // Create a file mapping that allows PAGE_EXECUTE_READ which
                 // we'll be using for mapped text sections in ELF images later.
                 let mapping = CreateFileMappingW(
-                    file.as_raw_handle().cast(),
+                    file.as_raw_handle() as isize,
                     ptr::null_mut(),
                     PAGE_EXECUTE_READ,
                     0,
                     0,
                     ptr::null(),
                 );
-                if mapping.is_null() {
+                if mapping == 0 {
                     return Err(io::Error::last_os_error())
                         .context("failed to create file mapping");
                 }
@@ -219,8 +220,7 @@ impl Mmap {
     pub fn accessible_reserved(accessible_size: usize, mapping_size: usize) -> Result<Self> {
         use anyhow::bail;
         use std::io;
-        use winapi::um::memoryapi::VirtualAlloc;
-        use winapi::um::winnt::{MEM_COMMIT, MEM_RESERVE, PAGE_NOACCESS, PAGE_READWRITE};
+        use windows_sys::Win32::System::Memory::*;
 
         if mapping_size == 0 {
             return Ok(Self::new());
@@ -299,10 +299,10 @@ impl Mmap {
     #[cfg(target_os = "windows")]
     pub fn make_accessible(&mut self, start: usize, len: usize) -> Result<()> {
         use anyhow::bail;
+        use std::ffi::c_void;
         use std::io;
-        use winapi::ctypes::c_void;
-        use winapi::um::memoryapi::VirtualAlloc;
-        use winapi::um::winnt::{MEM_COMMIT, PAGE_READWRITE};
+        use windows_sys::Win32::System::Memory::*;
+
         let page_size = region::page::size();
         assert_eq!(start & (page_size - 1), 0);
         assert_eq!(len & (page_size - 1), 0);
@@ -383,8 +383,7 @@ impl Mmap {
         #[cfg(windows)]
         {
             use std::io;
-            use winapi::um::memoryapi::*;
-            use winapi::um::winnt::*;
+            use windows_sys::Win32::System::Memory::*;
 
             if self.file.is_some() {
                 let mut old = 0;
@@ -438,9 +437,9 @@ impl Drop for Mmap {
     #[cfg(target_os = "windows")]
     fn drop(&mut self) {
         if self.len != 0 {
-            use winapi::ctypes::c_void;
-            use winapi::um::memoryapi::*;
-            use winapi::um::winnt::MEM_RELEASE;
+            use std::ffi::c_void;
+            use windows_sys::Win32::System::Memory::*;
+
             if self.file.is_none() {
                 let r = unsafe { VirtualFree(self.ptr as *mut c_void, 0, MEM_RELEASE) };
                 assert_ne!(r, 0);

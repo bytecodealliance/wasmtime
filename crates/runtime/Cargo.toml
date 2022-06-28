@@ -33,8 +33,15 @@ mach = "0.3.2"
 [target.'cfg(unix)'.dependencies]
 rustix = { version = "0.35.6", features = ["mm"] }
 
-[target.'cfg(target_os = "windows")'.dependencies]
-winapi = { version = "0.3.7", features = ["winbase", "memoryapi", "errhandlingapi", "handleapi"] }
+[target.'cfg(target_os = "windows")'.dependencies.windows-sys]
+version = "0.36.0"
+features = [
+  "Win32_System_Kernel",
+  "Win32_System_Memory",
+  "Win32_System_Diagnostics_Debug",
+  "Win32_Storage_FileSystem",
+  "Win32_Security",
+]
 
 [build-dependencies]
 cc = "1.0"

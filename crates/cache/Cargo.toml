@@ -20,8 +20,11 @@ sha2 = "0.9.0"
 toml = "0.5.5"
 zstd = { version = "0.11.1", default-features = false }
 
-[target.'cfg(target_os = "windows")'.dependencies]
-winapi = "0.3.7"
+[target.'cfg(target_os = "windows")'.dependencies.windows-sys]
+version = "0.36.0"
+features = [
+  "Win32_System_Threading",
+]
 
 [target.'cfg(not(target_os = "windows"))'.dependencies]
 rustix = { version = "0.35.6", features = ["process"] }

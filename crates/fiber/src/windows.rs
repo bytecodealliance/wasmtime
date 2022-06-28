@@ -1,12 +1,10 @@
 use crate::RunResult;
 use std::cell::Cell;
+use std::ffi::c_void;
 use std::io;
 use std::ptr;
-use winapi::shared::minwindef::*;
-use winapi::shared::winerror::ERROR_NOT_SUPPORTED;
-use winapi::um::fibersapi::*;
-use winapi::um::processthreadsapi::SetThreadStackGuarantee;
-use winapi::um::winbase::*;
+use windows_sys::Win32::Foundation::*;
+use windows_sys::Win32::System::Threading::*;
 
 #[derive(Debug)]
 pub struct FiberStack(usize);
@@ -26,7 +24,7 @@ impl FiberStack {
 }
 
 pub struct Fiber {
-    fiber: LPVOID,
+    fiber: *mut c_void,
     state: Box<StartState>,
 }
 
@@ -35,18 +33,18 @@ pub struct Suspend {
 }
 
 struct StartState {
-    parent: Cell<LPVOID>,
+    parent: Cell<*mut c_void>,
     initial_closure: Cell<*mut u8>,
     result_location: Cell<*const u8>,
 }
 
-const FIBER_FLAG_FLOAT_SWITCH: DWORD = 1;
+const FIBER_FLAG_FLOAT_SWITCH: u32 = 1;
 
 extern "C" {
-    fn wasmtime_fiber_get_current() -> LPVOID;
+    fn wasmtime_fiber_get_current() -> *mut c_void;
 }
 
-unsafe extern "system" fn fiber_start<F, A, B, C>(data: LPVOID)
+unsafe extern "system" fn fiber_start<F, A, B, C>(data: *mut c_void)
 where
     F: FnOnce(A, &super::Suspend<A, B, C>) -> C,
 {
