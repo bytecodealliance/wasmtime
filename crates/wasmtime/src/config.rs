@@ -449,9 +449,9 @@ impl Config {
     /// not available. This means epoch-based interruption can only
     /// serve as a simple external-interruption mechanism.
     ///
-    /// An initial deadline can be set before executing code by
-    /// calling
-    /// [`Store::set_epoch_deadline`](crate::Store::set_epoch_deadline).
+    /// An initial deadline must be set before executing code by calling
+    /// [`Store::set_epoch_deadline`](crate::Store::set_epoch_deadline). If this
+    /// deadline is not configured then wasm will immediately trap.
     ///
     /// ## When to use fuel vs. epochs
     ///

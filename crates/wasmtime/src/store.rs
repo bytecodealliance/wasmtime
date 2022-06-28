@@ -870,6 +870,10 @@ impl<T> Store<T> {
     /// [`Engine::increment_epoch()`] has been invoked at least
     /// `ticks_beyond_current` times.
     ///
+    /// By default a store will trap immediately with an epoch deadline of 0
+    /// (which has always "elapsed"). This method is required to be configured
+    /// for stores with epochs enabled to some future epoch deadline.
+    ///
     /// See documentation on
     /// [`Config::epoch_interruption()`](crate::Config::epoch_interruption)
     /// for an introduction to epoch-based interruption.
@@ -895,6 +899,10 @@ impl<T> Store<T> {
     /// interruption, but not a deterministic deadline of a fixed,
     /// finite interval. For deterministic interruption, see the
     /// "fuel" mechanism instead.
+    ///
+    /// Note that when this is used it's required to call
+    /// [`Store::set_epoch_deadline`] or otherwise wasm will always immediately
+    /// trap.
     ///
     /// See documentation on
     /// [`Config::epoch_interruption()`](crate::Config::epoch_interruption)
