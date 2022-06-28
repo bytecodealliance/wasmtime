@@ -932,7 +932,7 @@ fn many_parameters() -> Result<()> {
         .as_slice(),
     );
     let (memory, pointer) = func.call(&mut store, input)?;
-    let memory = memory.as_slice(&store);
+    let memory = memory.as_le_slice(&store);
 
     let mut actual = &memory[pointer as usize..][..72];
     assert_eq!(i8::from_le_bytes(*actual.take_n::<1>()), input.0);
@@ -1780,7 +1780,7 @@ fn fancy_list() -> Result<()> {
         (Some(200), Err("general kenobi")),
     ];
     let (ptr, len, list) = func.call(&mut store, (&input,))?;
-    let memory = list.as_slice(&store);
+    let memory = list.as_le_slice(&store);
     let ptr = usize::try_from(ptr).unwrap();
     let len = usize::try_from(len).unwrap();
     let mut array = &memory[ptr..][..len * 16];
@@ -1988,5 +1988,169 @@ fn drop_component_still_works() -> Result<()> {
     f.call(&mut store, ())?;
     assert_eq!(*store.data(), 2);
 
+    Ok(())
+}
+
+#[test]
+fn raw_slice_of_various_types() -> Result<()> {
+    let component = r#"
+        (component
+            (core module $m
+                (memory (export "memory") 1)
+
+                (func (export "list8") (result i32)
+                    (call $setup_list (i32.const 16))
+                )
+                (func (export "list16") (result i32)
+                    (call $setup_list (i32.const 8))
+                )
+                (func (export "list32") (result i32)
+                    (call $setup_list (i32.const 4))
+                )
+                (func (export "list64") (result i32)
+                    (call $setup_list (i32.const 2))
+                )
+
+                (func $setup_list (param i32) (result i32)
+                    (i32.store offset=0 (i32.const 100) (i32.const 8))
+                    (i32.store offset=4 (i32.const 100) (local.get 0))
+                    i32.const 100
+                )
+
+                (data (i32.const 8) "\00\01\02\03\04\05\06\07\08\09\0a\0b\0c\0d\0e\0f")
+            )
+            (core instance $i (instantiate $m))
+            (func (export "list-u8") (result (list u8))
+                (canon lift (core func $i "list8") (memory $i "memory"))
+            )
+            (func (export "list-i8") (result (list s8))
+                (canon lift (core func $i "list8") (memory $i "memory"))
+            )
+            (func (export "list-u16") (result (list u16))
+                (canon lift (core func $i "list16") (memory $i "memory"))
+            )
+            (func (export "list-i16") (result (list s16))
+                (canon lift (core func $i "list16") (memory $i "memory"))
+            )
+            (func (export "list-u32") (result (list u32))
+                (canon lift (core func $i "list32") (memory $i "memory"))
+            )
+            (func (export "list-i32") (result (list s32))
+                (canon lift (core func $i "list32") (memory $i "memory"))
+            )
+            (func (export "list-u64") (result (list u64))
+                (canon lift (core func $i "list64") (memory $i "memory"))
+            )
+            (func (export "list-i64") (result (list s64))
+                (canon lift (core func $i "list64") (memory $i "memory"))
+            )
+        )
+    "#;
+
+    let (mut store, instance) = {
+        let engine = super::engine();
+        let component = Component::new(&engine, component)?;
+        let mut store = Store::new(&engine, ());
+        let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+        (store, instance)
+    };
+
+    let list = instance
+        .get_typed_func::<(), WasmList<u8>, _>(&mut store, "list-u8")?
+        .call_and_post_return(&mut store, ())?;
+    assert_eq!(
+        list.as_le_slice(&store),
+        [
+            0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d,
+            0x0e, 0x0f,
+        ]
+    );
+    let list = instance
+        .get_typed_func::<(), WasmList<i8>, _>(&mut store, "list-i8")?
+        .call_and_post_return(&mut store, ())?;
+    assert_eq!(
+        list.as_le_slice(&store),
+        [
+            0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d,
+            0x0e, 0x0f,
+        ]
+    );
+
+    let list = instance
+        .get_typed_func::<(), WasmList<u16>, _>(&mut store, "list-u16")?
+        .call_and_post_return(&mut store, ())?;
+    assert_eq!(
+        list.as_le_slice(&store),
+        [
+            u16::to_le(0x01_00),
+            u16::to_le(0x03_02),
+            u16::to_le(0x05_04),
+            u16::to_le(0x07_06),
+            u16::to_le(0x09_08),
+            u16::to_le(0x0b_0a),
+            u16::to_le(0x0d_0c),
+            u16::to_le(0x0f_0e),
+        ]
+    );
+    let list = instance
+        .get_typed_func::<(), WasmList<i16>, _>(&mut store, "list-i16")?
+        .call_and_post_return(&mut store, ())?;
+    assert_eq!(
+        list.as_le_slice(&store),
+        [
+            i16::to_le(0x01_00),
+            i16::to_le(0x03_02),
+            i16::to_le(0x05_04),
+            i16::to_le(0x07_06),
+            i16::to_le(0x09_08),
+            i16::to_le(0x0b_0a),
+            i16::to_le(0x0d_0c),
+            i16::to_le(0x0f_0e),
+        ]
+    );
+    let list = instance
+        .get_typed_func::<(), WasmList<u32>, _>(&mut store, "list-u32")?
+        .call_and_post_return(&mut store, ())?;
+    assert_eq!(
+        list.as_le_slice(&store),
+        [
+            u32::to_le(0x03_02_01_00),
+            u32::to_le(0x07_06_05_04),
+            u32::to_le(0x0b_0a_09_08),
+            u32::to_le(0x0f_0e_0d_0c),
+        ]
+    );
+    let list = instance
+        .get_typed_func::<(), WasmList<i32>, _>(&mut store, "list-i32")?
+        .call_and_post_return(&mut store, ())?;
+    assert_eq!(
+        list.as_le_slice(&store),
+        [
+            i32::to_le(0x03_02_01_00),
+            i32::to_le(0x07_06_05_04),
+            i32::to_le(0x0b_0a_09_08),
+            i32::to_le(0x0f_0e_0d_0c),
+        ]
+    );
+    let list = instance
+        .get_typed_func::<(), WasmList<u64>, _>(&mut store, "list-u64")?
+        .call_and_post_return(&mut store, ())?;
+    assert_eq!(
+        list.as_le_slice(&store),
+        [
+            u64::to_le(0x07_06_05_04_03_02_01_00),
+            u64::to_le(0x0f_0e_0d_0c_0b_0a_09_08),
+        ]
+    );
+    let list = instance
+        .get_typed_func::<(), WasmList<i64>, _>(&mut store, "list-i64")?
+        .call_and_post_return(&mut store, ())?;
+    assert_eq!(
+        list.as_le_slice(&store),
+        [
+            i64::to_le(0x07_06_05_04_03_02_01_00),
+            i64::to_le(0x0f_0e_0d_0c_0b_0a_09_08),
+        ]
+    );
     Ok(())
 }
