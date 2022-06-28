@@ -384,6 +384,7 @@ impl Engine {
             | "machine_code_cfg_info"
             | "tls_model" // wasmtime doesn't use tls right now
             | "opt_level" // opt level doesn't change semantics
+            | "enable_alias_analysis" // alias analysis-based opts don't change semantics
             | "probestack_func_adjusts_sp" // probestack above asserted disabled
             | "probestack_size_log2" // probestack above asserted disabled
             | "regalloc" // shouldn't change semantics

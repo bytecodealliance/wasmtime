@@ -163,7 +163,7 @@ impl Context {
 
         self.remove_constant_phis(isa)?;
 
-        if opt_level != OptLevel::None {
+        if opt_level != OptLevel::None && isa.flags().enable_alias_analysis() {
             self.replace_redundant_loads()?;
             self.simple_gvn(isa)?;
         }

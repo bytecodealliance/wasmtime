@@ -32,6 +32,16 @@ pub(crate) fn define() -> SettingGroup {
     );
 
     settings.add_bool(
+        "enable_alias_analysis",
+        "Do redundant-load optimizations with alias analysis.",
+        r#"
+            This enables the use of a simple alias analysis to optimize away redundant loads.
+            Only effective when `opt_level` is `speed` or `speed_and_size`.
+        "#,
+        true,
+    );
+
+    settings.add_bool(
         "enable_verifier",
         "Run the Cranelift IR verifier at strategic times during compilation.",
         r#"
