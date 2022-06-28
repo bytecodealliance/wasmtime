@@ -25,7 +25,7 @@ use wasmtime_runtime::{
 mod registry;
 mod serialization;
 
-pub use registry::{FrameInfo, FrameSymbol, GlobalModuleRegistry, ModuleRegistry};
+pub use registry::{is_wasm_trap_pc, ModuleRegistry};
 pub use serialization::SerializedModule;
 
 /// A compiled WebAssembly module, ready to be instantiated.
@@ -511,7 +511,7 @@ impl Module {
         // into the global registry of modules so we can resolve traps
         // appropriately. Note that the corresponding `unregister` happens below
         // in `Drop for ModuleInner`.
-        registry::register(engine, &module);
+        registry::register(&module);
 
         Ok(Self {
             inner: Arc::new(ModuleInner {

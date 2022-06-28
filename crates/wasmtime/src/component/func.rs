@@ -127,30 +127,26 @@ impl Func {
     ///
     /// This function will perform a type-check at runtime that the [`Func`]
     /// takes `Params` as parameters and returns `Return`. If the type-check
-    /// passes then a [`TypedFunc`] will be returned which can be used to invoke
-    /// the function in an efficient, statically-typed, and ergonomic manner.
+    /// passes then a [`TypedFunc`] will be returned which can be used to
+    /// invoke the function in an efficient, statically-typed, and ergonomic
+    /// manner.
     ///
     /// The `Params` type parameter here is a tuple of the parameters to the
     /// function. A function which takes no arguments should use `()`, a
-    /// function with one argument should use `(T,)`, etc.
+    /// function with one argument should use `(T,)`, etc. Note that all
+    /// `Params` must also implement the [`Lower`] trait since they're going tin
+    /// to wasm.
     ///
     /// The `Return` type parameter is the return value of this function. A
     /// return value of `()` means that there's no return (similar to a Rust
-    /// unit return) and otherwise a type `T` can be specified.
+    /// unit return) and otherwise a type `T` can be specified. Note that the
+    /// `Return` must also implement the [`Lift`] trait since it's coming from
+    /// wasm.
     ///
-    /// Types specified here are mainly those that implement the
-    /// [`ComponentValue`] trait. This trait is implemented for built-in types
-    /// to Rust such as integer primitives, floats, `Option<T>`, `Result<T, E>`,
-    /// strings, and `Vec<T>`. As parameters you'll be passing native Rust
-    /// types.
-    ///
-    /// For the `Return` type parameter many types need to be wrapped in a
-    /// [`Value<T>`]. For example functions which return a string should use the
-    /// `Return` type parameter as `Value<String>` instead of a bare `String`.
-    /// The usage of [`Value`] indicates that a type is stored in linear memory.
-    //
-    // FIXME: Having to remember when to use `Value<T>` vs `T` is going to trip
-    // people up using this API. It's not clear, though, how to fix that.
+    /// Types specified here must implement the [`ComponentType`] trait. This
+    /// trait is implemented for built-in types to Rust such as integer
+    /// primitives, floats, `Option<T>`, `Result<T, E>`, strings, `Vec<T>`, and
+    /// more. As parameters you'll be passing native Rust types.
     ///
     /// # Errors
     ///

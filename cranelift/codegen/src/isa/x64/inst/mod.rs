@@ -617,14 +617,14 @@ impl Inst {
         }
     }
 
-    pub(crate) fn xmm_cmove(size: OperandSize, cc: CC, src: RegMem, dst: Writable<Reg>) -> Inst {
-        debug_assert!(size.is_one_of(&[OperandSize::Size32, OperandSize::Size64]));
+    pub(crate) fn xmm_cmove(ty: Type, cc: CC, src: RegMem, dst: Writable<Reg>) -> Inst {
+        debug_assert!(ty == types::F32 || ty == types::F64 || ty.is_vector());
         src.assert_regclass_is(RegClass::Float);
         debug_assert!(dst.to_reg().class() == RegClass::Float);
         let src = XmmMem::new(src).unwrap();
         let dst = WritableXmm::from_writable_reg(dst).unwrap();
         Inst::XmmCmove {
-            size,
+            ty,
             cc,
             consequent: src,
             alternative: dst.to_reg(),
@@ -966,11 +966,15 @@ impl PrettyPrint for Inst {
                 dst_remainder,
             } => {
                 let dividend_lo = pretty_print_reg(dividend_lo.to_reg(), size.to_bytes(), allocs);
-                let dividend_hi = pretty_print_reg(dividend_hi.to_reg(), size.to_bytes(), allocs);
                 let dst_quotient =
                     pretty_print_reg(dst_quotient.to_reg().to_reg(), size.to_bytes(), allocs);
                 let dst_remainder =
                     pretty_print_reg(dst_remainder.to_reg().to_reg(), size.to_bytes(), allocs);
+                let dividend_hi = if size.to_bits() > 8 {
+                    pretty_print_reg(dividend_hi.to_reg(), size.to_bytes(), allocs)
+                } else {
+                    "(none)".to_string()
+                };
                 let divisor = divisor.pretty_print(size.to_bytes(), allocs);
                 format!(
                     "{} {}, {}, {}, {}, {}",
@@ -1507,23 +1511,26 @@ impl PrettyPrint for Inst {
             }
 
             Inst::XmmCmove {
-                size,
+                ty,
                 cc,
                 consequent,
                 alternative,
                 dst,
                 ..
             } => {
-                let alternative = pretty_print_reg(alternative.to_reg(), size.to_bytes(), allocs);
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), size.to_bytes(), allocs);
-                let consequent = consequent.pretty_print(size.to_bytes(), allocs);
+                let size = u8::try_from(ty.bytes()).unwrap();
+                let alternative = pretty_print_reg(alternative.to_reg(), size, allocs);
+                let dst = pretty_print_reg(dst.to_reg().to_reg(), size, allocs);
+                let consequent = consequent.pretty_print(size, allocs);
                 format!(
                     "mov {}, {}; j{} $next; mov{} {}, {}; $next: ",
                     cc.invert().to_string(),
-                    if *size == OperandSize::Size64 {
-                        "sd"
-                    } else {
-                        "ss"
+                    match *ty {
+                        types::F64 => "sd",
+                        types::F32 => "ss",
+                        types::F32X4 => "aps",
+                        types::F64X2 => "apd",
+                        _ => "dqa",
                     },
                     consequent,
                     dst,
@@ -1715,12 +1722,15 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             dividend_hi,
             dst_quotient,
             dst_remainder,
+            size,
             ..
         } => {
             collector.reg_fixed_use(dividend_lo.to_reg(), regs::rax());
-            collector.reg_fixed_use(dividend_hi.to_reg(), regs::rdx());
             collector.reg_fixed_def(dst_quotient.to_writable_reg(), regs::rax());
             collector.reg_fixed_def(dst_remainder.to_writable_reg(), regs::rdx());
+            if size.to_bits() > 8 {
+                collector.reg_fixed_use(dividend_hi.to_reg(), regs::rdx());
+            }
             divisor.get_operands(collector);
         }
         Inst::MulHi {

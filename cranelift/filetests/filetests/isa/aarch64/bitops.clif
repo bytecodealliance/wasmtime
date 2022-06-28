@@ -121,7 +121,7 @@ block0(v0: i8):
 }
 
 ; block0:
-;   uxtb w3, w0
+;   sxtb w3, w0
 ;   cls w5, w3
 ;   sub w0, w5, #24
 ;   ret
@@ -133,7 +133,7 @@ block0(v0: i16):
 }
 
 ; block0:
-;   uxth w3, w0
+;   sxth w3, w0
 ;   cls w5, w3
 ;   sub w0, w5, #16
 ;   ret
@@ -928,4 +928,3 @@ block0(v0: i128, v1: i128):
 ;   csel x0, x12, x6, ne
 ;   csel x1, x4, x12, ne
 ;   ret
-

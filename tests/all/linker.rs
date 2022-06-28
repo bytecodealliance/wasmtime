@@ -340,3 +340,40 @@ fn instance_pre() -> Result<()> {
     instance_pre.instantiate(&mut store)?;
     Ok(())
 }
+
+#[test]
+fn test_trapping_unknown_import() -> Result<()> {
+    const WAT: &str = r#"
+    (module
+      (type $t0 (func))
+      (import "" "imp" (func $.imp (type $t0)))
+      (func $run call $.imp)
+      (func $other)
+      (export "run" (func $run))
+      (export "other" (func $other))
+    )
+    "#;
+
+    let mut store = Store::<()>::default();
+    let module = Module::new(store.engine(), WAT).expect("failed to create module");
+    let mut linker = Linker::new(store.engine());
+
+    linker.define_unknown_imports_as_traps(&module)?;
+    let instance = linker.instantiate(&mut store, &module)?;
+
+    // "run" calls an import function which will not be defined, so it should trap
+    let run_func = instance
+        .get_func(&mut store, "run")
+        .expect("expected a run func in the module");
+
+    assert!(run_func.call(&mut store, &[], &mut []).is_err());
+
+    // "other" does not call the import function, so it should not trap
+    let other_func = instance
+        .get_func(&mut store, "other")
+        .expect("expected an other func in the module");
+
+    other_func.call(&mut store, &[], &mut [])?;
+
+    Ok(())
+}

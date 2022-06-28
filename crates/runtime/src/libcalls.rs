@@ -59,7 +59,7 @@
 use crate::externref::VMExternRef;
 use crate::instance::Instance;
 use crate::table::{Table, TableElementType};
-use crate::traphandlers::{raise_lib_trap, resume_panic, Trap};
+use crate::traphandlers::{raise_lib_trap, raise_user_trap, resume_panic};
 use crate::vmcontext::{VMCallerCheckedAnyfunc, VMContext};
 use std::mem;
 use std::ptr::{self, NonNull};
@@ -506,14 +506,12 @@ pub unsafe extern "C" fn memory_atomic_notify(
         // or it's been validated to be in-bounds already. Double-check for now
         // just to be sure.
         let addr_to_check = addr.checked_add(4).unwrap();
-        validate_atomic_addr(instance, memory, addr_to_check).and_then(|()| {
-            Err(Trap::user(anyhow::anyhow!(
-                "unimplemented: wasm atomics (fn memory_atomic_notify) unsupported",
-            )))
-        })
+        validate_atomic_addr(instance, memory, addr_to_check)
     };
     match result {
-        Ok(n) => n,
+        Ok(()) => raise_user_trap(anyhow::anyhow!(
+            "unimplemented: wasm atomics (fn memory_atomic_notify) unsupported",
+        )),
         Err(e) => raise_lib_trap(e),
     }
 }
@@ -533,14 +531,12 @@ pub unsafe extern "C" fn memory_atomic_wait32(
         // see wasmtime_memory_atomic_notify for why this shouldn't overflow
         // but we still double-check
         let addr_to_check = addr.checked_add(4).unwrap();
-        validate_atomic_addr(instance, memory, addr_to_check).and_then(|()| {
-            Err(Trap::user(anyhow::anyhow!(
-                "unimplemented: wasm atomics (fn memory_atomic_wait32) unsupported",
-            )))
-        })
+        validate_atomic_addr(instance, memory, addr_to_check)
     };
     match result {
-        Ok(n) => n,
+        Ok(()) => raise_user_trap(anyhow::anyhow!(
+            "unimplemented: wasm atomics (fn memory_atomic_wait32) unsupported",
+        )),
         Err(e) => raise_lib_trap(e),
     }
 }
@@ -560,14 +556,12 @@ pub unsafe extern "C" fn memory_atomic_wait64(
         // see wasmtime_memory_atomic_notify for why this shouldn't overflow
         // but we still double-check
         let addr_to_check = addr.checked_add(8).unwrap();
-        validate_atomic_addr(instance, memory, addr_to_check).and_then(|()| {
-            Err(Trap::user(anyhow::anyhow!(
-                "unimplemented: wasm atomics (fn memory_atomic_wait64) unsupported",
-            )))
-        })
+        validate_atomic_addr(instance, memory, addr_to_check)
     };
     match result {
-        Ok(n) => n,
+        Ok(()) => raise_user_trap(anyhow::anyhow!(
+            "unimplemented: wasm atomics (fn memory_atomic_wait64) unsupported",
+        )),
         Err(e) => raise_lib_trap(e),
     }
 }
@@ -585,9 +579,9 @@ unsafe fn validate_atomic_addr(
     instance: &Instance,
     memory: MemoryIndex,
     addr: usize,
-) -> Result<(), Trap> {
+) -> Result<(), TrapCode> {
     if addr > instance.get_memory(memory).current_length() {
-        return Err(Trap::wasm(TrapCode::HeapOutOfBounds));
+        return Err(TrapCode::HeapOutOfBounds);
     }
     Ok(())
 }

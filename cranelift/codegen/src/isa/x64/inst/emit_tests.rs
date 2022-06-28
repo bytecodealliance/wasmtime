@@ -1750,12 +1750,12 @@ fn test_x64_emit() {
     insns.push((
         Inst::div(OperandSize::Size8, false, RegMem::reg(regs::rax())),
         "F6F0",
-        "div     %al, %dl, %al, %al, %dl",
+        "div     %al, (none), %al, %al, %dl",
     ));
     insns.push((
         Inst::div(OperandSize::Size8, false, RegMem::reg(regs::rsi())),
         "40F6F6",
-        "div     %al, %dl, %sil, %al, %dl",
+        "div     %al, (none), %sil, %al, %dl",
     ));
 
     // ========================================================

@@ -1,4 +1,4 @@
-use crate::traphandlers::{tls, wasmtime_longjmp, Trap};
+use crate::traphandlers::{tls, wasmtime_longjmp};
 use std::io;
 use winapi::um::errhandlingapi::*;
 use winapi::um::minwinbase::*;
@@ -74,7 +74,6 @@ unsafe extern "system" fn exception_handler(exception_info: PEXCEPTION_POINTERS)
     })
 }
 
-pub fn lazy_per_thread_init() -> Result<(), Box<Trap>> {
+pub fn lazy_per_thread_init() {
     // Unused on Windows
-    Ok(())
 }

@@ -33,7 +33,7 @@
 
 #![allow(non_snake_case)]
 
-use crate::traphandlers::{tls, wasmtime_longjmp, Trap};
+use crate::traphandlers::{tls, wasmtime_longjmp};
 use mach::exception_types::*;
 use mach::kern_return::*;
 use mach::mach_init::*;
@@ -410,7 +410,7 @@ unsafe extern "C" fn unwind(wasm_pc: *const u8) -> ! {
 /// task-level port which is where we'd expected things like breakpad/crashpad
 /// exception handlers to get registered.
 #[cold]
-pub fn lazy_per_thread_init() -> Result<(), Box<Trap>> {
+pub fn lazy_per_thread_init() {
     unsafe {
         assert!(WASMTIME_PORT != MACH_PORT_NULL);
         let this_thread = mach_thread_self();
@@ -424,5 +424,4 @@ pub fn lazy_per_thread_init() -> Result<(), Box<Trap>> {
         mach_port_deallocate(mach_task_self(), this_thread);
         assert_eq!(kret, KERN_SUCCESS, "failed to set thread exception port");
     }
-    Ok(())
 }

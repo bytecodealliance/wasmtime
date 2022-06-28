@@ -1078,10 +1078,10 @@
 ;;;; Rules for `cls` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type $I8 (cls x)))
-      (sub_imm $I32 (a64_cls $I32 (put_in_reg_zext32 x)) (u8_into_imm12 24)))
+      (sub_imm $I32 (a64_cls $I32 (put_in_reg_sext32 x)) (u8_into_imm12 24)))
 
 (rule (lower (has_type $I16 (cls x)))
-      (sub_imm $I32 (a64_cls $I32 (put_in_reg_zext32 x)) (u8_into_imm12 16)))
+      (sub_imm $I32 (a64_cls $I32 (put_in_reg_sext32 x)) (u8_into_imm12 16)))
 
 ;; cls lo_cls, lo
 ;; cls hi_cls, hi
@@ -1108,6 +1108,21 @@
 
 (rule (lower (has_type ty (cls x)))
       (a64_cls ty x))
+
+;;;; Rules for `bint` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Booleans are stored as all-zeroes (0) or all-ones (-1). We AND
+;; out the LSB to give a 0 / 1-valued integer result.
+
+(rule (lower (has_type $I128 (bint x)))
+      (let ((val ValueRegs x)
+            (in_lo Reg (value_regs_get val 0))
+            (dst_lo Reg (and_imm $I32 in_lo (u64_into_imm_logic $I32 1)))
+            (dst_hi Reg (imm $I64 0)))
+        (value_regs dst_lo dst_hi)))
+
+(rule (lower (bint x))
+      (and_imm $I32 x (u64_into_imm_logic $I32 1)))
 
 ;;;; Rules for `popcnt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

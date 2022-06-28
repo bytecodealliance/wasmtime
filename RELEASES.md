@@ -24,6 +24,21 @@ Unreleased.
 
 --------------------------------------------------------------------------------
 
+## 0.38.1
+
+Released 2022-06-27.
+
+### Fixed.
+
+* A register allocator bug was fixed that could affect direct users of
+  Cranelift who use struct-return (`sret`) arguments. The bug had to do with
+  the handling of physical register constraints in the function prologue. No
+  impact should be possible for users of Cranelift via the Wasm frontend,
+  including Wasmtime.
+  [regalloc2#60](https://github.com/bytecodealliance/regalloc2/pull/60)
+
+--------------------------------------------------------------------------------
+
 ## 0.38.0
 
 Released 2022-06-21

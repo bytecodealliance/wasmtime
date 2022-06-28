@@ -8,7 +8,13 @@
 // Also at this time this file is heavily based off the x86_64 file, so you'll
 // probably want to read that one as well.
 
-#include "header.h"
+.text
+
+#define GLOBL(fnname) .globl fnname
+#define HIDDEN(fnname) .hidden fnname
+#define TYPE(fnname) .type fnname,@function
+#define FUNCTION(fnname) fnname
+#define SIZE(fnname) .size fnname,.-fnname
 
 // fn(top_of_stack(%x0): *mut u8)
 HIDDEN(wasmtime_fiber_switch)
@@ -76,6 +82,7 @@ SIZE(wasmtime_fiber_init)
 TYPE(wasmtime_fiber_start)
 FUNCTION(wasmtime_fiber_start):
 .cfi_startproc simple
+.cfi_def_cfa_offset 0
 
     // See the x86_64 file for more commentary on what these CFI directives are
     // doing. Like over there note that the relative offsets to registers here
@@ -109,4 +116,5 @@ FUNCTION(wasmtime_fiber_start):
     .cfi_endproc
 SIZE(wasmtime_fiber_start)
 
-FOOTER
+// Mark that we don't need executable stack.
+.section .note.GNU-stack,"",%progbits

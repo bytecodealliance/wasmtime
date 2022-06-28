@@ -3,7 +3,7 @@
 //! `Table` is to WebAssembly tables what `LinearMemory` is to WebAssembly linear memories.
 
 use crate::vmcontext::{VMCallerCheckedAnyfunc, VMTableDefinition};
-use crate::{Store, Trap, VMExternRef};
+use crate::{Store, VMExternRef};
 use anyhow::{bail, format_err, Error, Result};
 use std::convert::{TryFrom, TryInto};
 use std::ops::Range;
@@ -267,7 +267,7 @@ impl Table {
         &mut self,
         dst: u32,
         items: impl ExactSizeIterator<Item = *mut VMCallerCheckedAnyfunc>,
-    ) -> Result<(), Trap> {
+    ) -> Result<(), TrapCode> {
         assert!(self.element_type() == TableElementType::Func);
 
         let elements = match self
@@ -276,7 +276,7 @@ impl Table {
             .and_then(|s| s.get_mut(..items.len()))
         {
             Some(elements) => elements,
-            None => return Err(Trap::wasm(TrapCode::TableOutOfBounds)),
+            None => return Err(TrapCode::TableOutOfBounds),
         };
 
         for (item, slot) in items.zip(elements) {
@@ -288,14 +288,14 @@ impl Table {
     /// Fill `table[dst..dst + len]` with `val`.
     ///
     /// Returns a trap error on out-of-bounds accesses.
-    pub fn fill(&mut self, dst: u32, val: TableElement, len: u32) -> Result<(), Trap> {
+    pub fn fill(&mut self, dst: u32, val: TableElement, len: u32) -> Result<(), TrapCode> {
         let start = dst as usize;
         let end = start
             .checked_add(len as usize)
-            .ok_or_else(|| Trap::wasm(TrapCode::TableOutOfBounds))?;
+            .ok_or_else(|| TrapCode::TableOutOfBounds)?;
 
         if end > self.size() as usize {
-            return Err(Trap::wasm(TrapCode::TableOutOfBounds));
+            return Err(TrapCode::TableOutOfBounds);
         }
 
         debug_assert!(self.type_matches(&val));
@@ -410,7 +410,7 @@ impl Table {
         dst_index: u32,
         src_index: u32,
         len: u32,
-    ) -> Result<(), Trap> {
+    ) -> Result<(), TrapCode> {
         // https://webassembly.github.io/bulk-memory-operations/core/exec/instructions.html#exec-table-copy
 
         if src_index
@@ -420,7 +420,7 @@ impl Table {
                 .checked_add(len)
                 .map_or(true, |m| m > (*dst_table).size())
         {
-            return Err(Trap::wasm(TrapCode::TableOutOfBounds));
+            return Err(TrapCode::TableOutOfBounds);
         }
 
         debug_assert!(

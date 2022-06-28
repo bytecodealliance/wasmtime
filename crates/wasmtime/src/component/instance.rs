@@ -382,7 +382,8 @@ impl<'a> Instantiator<'a> {
 /// This structure represents an efficient form of instantiation where import
 /// type-checking and import lookup has all been resolved by the time that this
 /// type is created. This type is primarily created through the
-/// [`Linker::instance_pre`](crate::component::Linker::instance_pre) method.
+/// [`Linker::instantiate_pre`](crate::component::Linker::instantiate_pre)
+/// method.
 pub struct InstancePre<T> {
     component: Component,
     imports: PrimaryMap<RuntimeImportIndex, RuntimeImport>,
