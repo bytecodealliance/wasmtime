@@ -109,9 +109,7 @@ impl<'a> ModuleTextBuilder<'a> {
         });
 
         if let Some(info) = &func.unwind_info {
-            self.unwind_info.push(off, body_len, info, |data, align| {
-                self.text.append(false, data, Some(align))
-            });
+            self.unwind_info.push(off, body_len, info);
         }
 
         for r in func.relocations.iter() {
@@ -222,7 +220,8 @@ impl<'a> ModuleTextBuilder<'a> {
 /// text section.
 #[derive(Default)]
 struct UnwindInfoBuilder<'a> {
-    windows_unwind_info: Vec<RUNTIME_FUNCTION>,
+    windows_xdata: Vec<u8>,
+    windows_pdata: Vec<RUNTIME_FUNCTION>,
     systemv_unwind_info: Vec<(u64, &'a systemv::UnwindInfo)>,
 }
 
@@ -245,37 +244,47 @@ impl<'a> UnwindInfoBuilder<'a> {
     /// the text section itself, and the function's size is specified by
     /// `function_len`.
     ///
-    /// The `info` should come from Cranelift itself and this function may
-    /// append more data to the text section in which case the `append_data`
-    /// callback will be invoked. The `append_data` callback receives the data
-    /// to append to the text section as well as the alignment it needs to be
-    /// written at. The return value of `append_data` should be the offset
-    /// within the text section for where the data was written.
-    fn push(
-        &mut self,
-        function_offset: u64,
-        function_len: u64,
-        info: &'a UnwindInfo,
-        append_data: impl FnOnce(&[u8], u32) -> u64,
-    ) {
+    /// The `info` should come from Cranelift. and is handled here depending on
+    /// its flavor.
+    fn push(&mut self, function_offset: u64, function_len: u64, info: &'a UnwindInfo) {
         match info {
-            // Windows unwind information is preferred to come after the code
-            // itself. The information is appended here just after the function,
-            // aligned to 4-bytes as required by Windows.
+            // Windows unwind information is stored in two locations:
             //
-            // The location of the unwind info, and the function it describes,
-            // is then recorded in an unwind info table to get embedded into the
-            // object at the end of compilation.
+            // * First is the actual unwinding information which is stored
+            //   in the `.xdata` section. This is where `info`'s emitted
+            //   information will go into.
+            // * Second are pointers to connect all this unwind information,
+            //   stored in the `.pdata` section. The `.pdata` section is an
+            //   array of `RUNTIME_FUNCTION` structures.
+            //
+            // Due to how these will be loaded at runtime the `.pdata` isn't
+            // actually assembled byte-wise here. Instead that's deferred to
+            // happen later during `write_windows_unwind_info` which will apply
+            // a further offset to `unwind_address`.
             UnwindInfo::WindowsX64(info) => {
-                // Windows prefers Unwind info after the code -- writing it here.
                 let unwind_size = info.emit_size();
                 let mut unwind_info = vec![0; unwind_size];
                 info.emit(&mut unwind_info);
-                let unwind_off = append_data(&unwind_info, 4);
-                self.windows_unwind_info.push(RUNTIME_FUNCTION {
+
+                // `.xdata` entries are always 4-byte aligned
+                //
+                // FIXME: in theory we could "intern" the `unwind_info` value
+                // here within the `.xdata` section. Most of our unwind
+                // information for functions is probably pretty similar in which
+                // case the `.xdata` could be quite small and `.pdata` could
+                // have multiple functions point to the same unwinding
+                // information.
+                while self.windows_xdata.len() % 4 != 0 {
+                    self.windows_xdata.push(0x00);
+                }
+                let unwind_address = self.windows_xdata.len();
+                self.windows_xdata.extend_from_slice(&unwind_info);
+
+                // Record a `RUNTIME_FUNCTION` which this will point to.
+                self.windows_pdata.push(RUNTIME_FUNCTION {
                     begin: u32::try_from(function_offset).unwrap(),
                     end: u32::try_from(function_offset + function_len).unwrap(),
-                    unwind_address: u32::try_from(unwind_off).unwrap(),
+                    unwind_address: u32::try_from(unwind_address).unwrap(),
                 });
             }
 
@@ -303,15 +312,16 @@ impl<'a> UnwindInfoBuilder<'a> {
         let text_section_size =
             obj.append_section_data(text_section, &[], isa.code_section_alignment());
 
-        if self.windows_unwind_info.len() > 0 {
+        if self.windows_xdata.len() > 0 {
             assert!(self.systemv_unwind_info.len() == 0);
+            // The `.xdata` section must come first to be just-after the `.text`
+            // section for the reasons documented in `write_windows_unwind_info`
+            // below.
             let segment = obj.segment_name(StandardSegment::Data).to_vec();
-            let section_id = obj.add_section(
-                segment,
-                b"_wasmtime_winx64_unwind".to_vec(),
-                SectionKind::ReadOnlyData,
-            );
-            self.write_windows_unwind_info(obj, section_id);
+            let xdata_id = obj.add_section(segment, b".xdata".to_vec(), SectionKind::ReadOnlyData);
+            let segment = obj.segment_name(StandardSegment::Data).to_vec();
+            let pdata_id = obj.add_section(segment, b".pdata".to_vec(), SectionKind::ReadOnlyData);
+            self.write_windows_unwind_info(obj, xdata_id, pdata_id, text_section_size);
         }
 
         if self.systemv_unwind_info.len() > 0 {
@@ -331,19 +341,46 @@ impl<'a> UnwindInfoBuilder<'a> {
     /// anything on the other end of loading a module from a precompiled object.
     ///
     /// Support for reading this is in `crates/jit/src/unwind/winx64.rs`.
-    fn write_windows_unwind_info(&self, obj: &mut Object<'_>, section_id: SectionId) {
+    fn write_windows_unwind_info(
+        &self,
+        obj: &mut Object<'_>,
+        xdata_id: SectionId,
+        pdata_id: SectionId,
+        text_section_size: u64,
+    ) {
         // Currently the binary format supported here only supports
         // little-endian for x86_64, or at least that's all where it's tested.
         // This may need updates for other platforms.
         assert_eq!(obj.architecture(), Architecture::X86_64);
 
-        let mut unwind_info = Vec::with_capacity(self.windows_unwind_info.len() * 3 * 4);
-        for info in self.windows_unwind_info.iter() {
-            unwind_info.extend_from_slice(&info.begin.to_le_bytes());
-            unwind_info.extend_from_slice(&info.end.to_le_bytes());
-            unwind_info.extend_from_slice(&info.unwind_address.to_le_bytes());
+        // Append the `.xdata` section, or the actual unwinding information
+        // codes and such which were built as we found unwind information for
+        // functions.
+        obj.append_section_data(xdata_id, &self.windows_xdata, 4);
+
+        // Next append the `.pdata` section, or the array of `RUNTIME_FUNCTION`
+        // structures stored in the binary.
+        //
+        // This memory will be passed at runtime to `RtlAddFunctionTable` which
+        // takes a "base address" and the entries within `RUNTIME_FUNCTION` are
+        // all relative to this base address. The base address we pass is the
+        // address of the text section itself so all the pointers here must be
+        // text-section-relative. The `begin` and `end` fields for the function
+        // it describes are already text-section-relative, but the
+        // `unwind_address` field needs to be updated here since the value
+        // stored right now is `xdata`-section-relative. We know that the
+        // `xdata` section follows the `.text` section so the
+        // `text_section_size` is added in to calculate the final
+        // `.text`-section-relative address of the unwind information.
+        let mut pdata = Vec::with_capacity(self.windows_pdata.len() * 3 * 4);
+        for info in self.windows_pdata.iter() {
+            pdata.extend_from_slice(&info.begin.to_le_bytes());
+            pdata.extend_from_slice(&info.end.to_le_bytes());
+            let address = text_section_size + u64::from(info.unwind_address);
+            let address = u32::try_from(address).unwrap();
+            pdata.extend_from_slice(&address.to_le_bytes());
         }
-        obj.append_section_data(section_id, &unwind_info, 4);
+        obj.append_section_data(pdata_id, &pdata, 4);
     }
 
     /// This function appends a nonstandard section to the object which is only
