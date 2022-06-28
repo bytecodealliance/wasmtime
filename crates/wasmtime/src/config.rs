@@ -425,6 +425,10 @@ impl Config {
     /// signal handler), then we can ensure that all async code will
     /// yield to the executor within a bounded time.
     ///
+    /// The deadline check cannot be avoided by malicious wasm code. It is safe
+    /// to use epoch deadlines to limit the execution time of untrusted
+    /// code.
+    ///
     /// The [`Store`](crate::Store) tracks the deadline, and controls
     /// what happens when the deadline is reached during
     /// execution. Several behaviors are possible:
