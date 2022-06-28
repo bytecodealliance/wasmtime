@@ -141,7 +141,9 @@ pub(super) fn run(
                 ComponentFuncDef::Lifted { ty, func, options } => {
                     Export::LiftedFunction { ty, func, options }
                 }
-                ComponentFuncDef::Import(_) => unimplemented!("reexporting a function import"),
+                ComponentFuncDef::Import(_) => {
+                    bail!("component export `{name}` is a reexport of an imported function which is not implemented")
+                }
             },
 
             ComponentItemDef::Instance(_) => unimplemented!("exporting an instance to the host"),
