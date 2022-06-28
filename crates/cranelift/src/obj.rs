@@ -244,12 +244,8 @@ impl<'a> UnwindInfoBuilder<'a> {
     /// the text section itself, and the function's size is specified by
     /// `function_len`.
     ///
-    /// The `info` should come from Cranelift itself and this function may
-    /// append more data to the text section in which case the `append_data`
-    /// callback will be invoked. The `append_data` callback receives the data
-    /// to append to the text section as well as the alignment it needs to be
-    /// written at. The return value of `append_data` should be the offset
-    /// within the text section for where the data was written.
+    /// The `info` should come from Cranelift. and is handled here depending on
+    /// its flavor.
     fn push(&mut self, function_offset: u64, function_len: u64, info: &'a UnwindInfo) {
         match info {
             // Windows unwind information is stored in two locations:
@@ -365,13 +361,17 @@ impl<'a> UnwindInfoBuilder<'a> {
         // Next append the `.pdata` section, or the array of `RUNTIME_FUNCTION`
         // structures stored in the binary.
         //
-        // Note that this section has a "relocation" applied here per-entry
-        // where the size of the text section is added to the `unwind_address`.
-        // The `unwind_address` prior to this is the relative offset from
-        // the start of the `.xdata` section, but the base address passed to
-        // `RtlAddFunctionTable` at runtime is the text section itself. The
-        // `.xdata` section immediately follows the `.text` section to make this
-        // offset work.
+        // This memory will be passed at runtime to `RtlAddFunctionTable` which
+        // takes a "base address" and the entries within `RUNTIME_FUNCTION` are
+        // all relative to this base address. The base address we pass is the
+        // address of the text section itself so all the pointers here must be
+        // text-section-relative. The `begin` and `end` fields for the function
+        // it describes are already text-section-relative, but the
+        // `unwind_address` field needs to be updated here since the value
+        // stored right now is `xdata`-section-relative. We know that the
+        // `xdata` section follows the `.text` section so the
+        // `text_section_size` is added in to calculate the final
+        // `.text`-section-relative address of the unwind information.
         let mut pdata = Vec::with_capacity(self.windows_pdata.len() * 3 * 4);
         for info in self.windows_pdata.iter() {
             pdata.extend_from_slice(&info.begin.to_le_bytes());
