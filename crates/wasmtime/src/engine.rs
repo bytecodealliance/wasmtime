@@ -345,7 +345,6 @@ impl Engine {
             // can affect the way the generated code performs or behaves at
             // runtime.
             "avoid_div_traps" => *value == FlagValue::Bool(true),
-            "unwind_info" => *value == FlagValue::Bool(true),
             "libcall_call_conv" => *value == FlagValue::Enum("isa_default".into()),
 
             // Features wasmtime doesn't use should all be disabled, since
@@ -381,6 +380,7 @@ impl Engine {
             | "enable_verifier"
             | "regalloc_checker"
             | "is_pic"
+            | "unwind_info"
             | "machine_code_cfg_info"
             | "tls_model" // wasmtime doesn't use tls right now
             | "opt_level" // opt level doesn't change semantics

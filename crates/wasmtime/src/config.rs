@@ -1423,6 +1423,10 @@ impl Config {
             {
                 bail!("compiler option 'unwind_info' must be enabled when either 'backtraces' or 'reference types' are enabled");
             }
+        } else {
+            self.compiler_config
+                .settings
+                .insert("unwind_info".to_string(), "false".to_string());
         }
         if self.features.reference_types {
             if !self
