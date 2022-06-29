@@ -24,7 +24,7 @@ pub use wasmtime_component_macro::{ComponentType, Lift, Lower};
 #[doc(hidden)]
 pub mod __internal {
     pub use super::func::{
-        next_field, typecheck_record, MaybeUninitExt, Memory, MemoryMut, Options,
+        align_to, next_field, typecheck_record, MaybeUninitExt, Memory, MemoryMut, Options,
     };
     pub use crate::map_maybe_uninit;
     pub use crate::store::StoreOpaque;
