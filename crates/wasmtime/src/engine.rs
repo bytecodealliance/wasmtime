@@ -519,8 +519,10 @@ impl Default for Engine {
 #[cfg(test)]
 mod tests {
     use crate::{Config, Engine, Module, OptLevel};
+
     use anyhow::Result;
     use tempfile::TempDir;
+    use wasmtime_environ::FlagValue;
 
     #[test]
     fn cache_accounts_for_opt_level() -> Result<()> {
@@ -584,5 +586,21 @@ mod tests {
         }
 
         Ok(())
+    }
+
+    #[test]
+    #[cfg(compiler)]
+    fn test_disable_backtraces() {
+        let engine = Engine::new(
+            Config::new()
+                .wasm_backtrace(false)
+                .wasm_reference_types(false),
+        )
+        .expect("failed to construct engine");
+        assert_eq!(
+            engine.compiler().flags().get("unwind_info"),
+            Some(&FlagValue::Bool(false)),
+            "unwind info should be disabled unless needed"
+        );
     }
 }
