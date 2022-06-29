@@ -221,11 +221,11 @@ fn attempt_to_leave_during_malloc() -> Result<()> {
         })?;
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, ());
-    let instance = linker.instantiate(&mut store, &component)?;
 
     // Assert that during a host import if we return values to wasm that a trap
     // happens if we try to leave the instance.
-    let trap = instance
+    let trap = linker
+        .instantiate(&mut store, &component)?
         .get_typed_func::<(), (), _>(&mut store, "run")?
         .call(&mut store, ())
         .unwrap_err()
@@ -261,7 +261,8 @@ fn attempt_to_leave_during_malloc() -> Result<()> {
     // In addition to the above trap also ensure that when we enter a wasm
     // component if we try to leave while lowering then that's also a dynamic
     // trap.
-    let trap = instance
+    let trap = linker
+        .instantiate(&mut store, &component)?
         .get_typed_func::<(&str,), (), _>(&mut store, "take-string")?
         .call(&mut store, ("x",))
         .unwrap_err()
@@ -599,14 +600,15 @@ fn bad_import_alignment() -> Result<()> {
     )?;
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, ());
-    let instance = linker.instantiate(&mut store, &component)?;
-    let trap = instance
+    let trap = linker
+        .instantiate(&mut store, &component)?
         .get_typed_func::<(), (), _>(&mut store, "unaligned-retptr")?
         .call(&mut store, ())
         .unwrap_err()
         .downcast::<Trap>()?;
     assert!(trap.to_string().contains("pointer not aligned"), "{}", trap);
-    let trap = instance
+    let trap = linker
+        .instantiate(&mut store, &component)?
         .get_typed_func::<(), (), _>(&mut store, "unaligned-argptr")?
         .call(&mut store, ())
         .unwrap_err()

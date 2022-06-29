@@ -1,6 +1,6 @@
 use anyhow::Result;
 use wasmtime::component::*;
-use wasmtime::{Store, StoreContextMut};
+use wasmtime::{Store, StoreContextMut, Trap, TrapCode};
 
 #[test]
 fn invalid_api() -> Result<()> {
@@ -254,6 +254,47 @@ fn post_return_string() -> Result<()> {
     let s = get.call(&mut store, ())?;
     assert_eq!(s.to_str(&store)?, "hello world");
     get.post_return(&mut store)?;
+
+    Ok(())
+}
+
+#[test]
+fn trap_in_post_return_poisons_instance() -> Result<()> {
+    let component = r#"
+        (component
+            (core module $m
+                (func (export "f"))
+                (func (export "post") unreachable)
+            )
+            (core instance $i (instantiate $m))
+            (func (export "f")
+                (canon lift
+                    (core func $i "f")
+                    (post-return (func $i "post"))
+                )
+            )
+        )
+    "#;
+
+    let engine = super::engine();
+    let component = Component::new(&engine, component)?;
+    let mut store = Store::new(&engine, ());
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+    let f = instance.get_typed_func::<(), (), _>(&mut store, "f")?;
+    f.call(&mut store, ())?;
+    let trap = f.post_return(&mut store).unwrap_err().downcast::<Trap>()?;
+    assert_eq!(trap.trap_code(), Some(TrapCode::UnreachableCodeReached));
+    let err = f.call(&mut store, ()).unwrap_err();
+    assert!(
+        err.to_string()
+            .contains("cannot reenter component instance"),
+        "{}",
+        err
+    );
+    assert_panics(
+        || drop(f.post_return(&mut store)),
+        "can only be called after",
+    );
 
     Ok(())
 }
