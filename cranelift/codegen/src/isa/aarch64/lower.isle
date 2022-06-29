@@ -1271,7 +1271,20 @@
       (let ((use_allocated_encoding bool (is_not_baldrdash_call_conv)))
          (side_effect (udf use_allocated_encoding trap_code))))
 
-;;;; Rules for `AtomicRMW` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;; Rules for `AtomicLoad` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(rule (lower (has_type (valid_atomic_transaction ty) (atomic_load flags addr)))
+      (load_acquire ty addr))
+
+
+;;;; Rules for `AtomicStore` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(rule (lower (atomic_store flags
+                src @ (value_type (valid_atomic_transaction ty))
+                addr))
+      (side_effect (store_release ty src addr)))
+
+
+;;;; Rules for `AtomicRMW` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule 1 (lower (and (use_lse)
                   (has_type (valid_atomic_transaction ty)
