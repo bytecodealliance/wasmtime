@@ -3,7 +3,7 @@ use crate::component::func::{
 };
 use crate::store::StoreOpaque;
 use crate::{AsContext, AsContextMut, StoreContext, StoreContextMut, ValRaw};
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use std::borrow::Cow;
 use std::marker;
 use std::mem::{self, MaybeUninit};
@@ -348,8 +348,8 @@ where
             // are all valid since they're coming from our store, and the
             // `params_and_results` should have the correct layout for the core
             // wasm function we're calling. Note that this latter point relies
-            // on the correctness of this module and `ComponentValue`
-            // implementations, hence `ComponentValue` being an `unsafe` trait.
+            // on the correctness of this module and `ComponentType`
+            // implementations, hence `ComponentType` being an `unsafe` trait.
             crate::Func::call_unchecked_raw(
                 store,
                 export.anyfunc,
@@ -615,14 +615,8 @@ pub unsafe trait ComponentType {
     #[doc(hidden)]
     fn align() -> u32;
 
-    /// Performs a type-check to see whether this comopnent value type matches
+    /// Performs a type-check to see whether this component value type matches
     /// the interface type `ty` provided.
-    ///
-    /// The `op` provided is the operations which could be performed with this
-    /// type if the typecheck passes, either lifting or lowering. Some Rust
-    /// types are only valid for one operation and we can't prevent the wrong
-    /// one from being used at compile time so we rely on the runtime check
-    /// here.
     #[doc(hidden)]
     fn typecheck(ty: &InterfaceType, types: &ComponentTypes) -> Result<()>;
 }
@@ -754,7 +748,7 @@ forward_impls! {
     (T: Lower) Vec<T> => [T],
 }
 
-// Macro to help generate `ComponentValue` implementations for primitive types
+// Macro to help generate `ComponentType` implementations for primitive types
 // such as integers, char, bool, etc.
 macro_rules! integers {
     ($($primitive:ident = $ty:ident in $field:ident/$get:ident,)*) => ($(
@@ -1006,7 +1000,7 @@ unsafe impl Lift for char {
     }
 }
 
-// Note that this is similar to `ComponentValue for WasmStr` except it can only
+// Note that this is similar to `ComponentType for WasmStr` except it can only
 // be used for lowering, not lifting.
 unsafe impl ComponentType for str {
     type Lower = [ValRaw; 2];
@@ -1171,7 +1165,7 @@ impl WasmStr {
     }
 }
 
-// Note that this is similar to `ComponentValue for str` except it can only be
+// Note that this is similar to `ComponentType for str` except it can only be
 // used for lifting, not lowering.
 unsafe impl ComponentType for WasmStr {
     type Lower = <str as ComponentType>::Lower;
@@ -1431,7 +1425,7 @@ raw_wasm_list_accessors! {
     u8 u16 u32 u64
 }
 
-// Note that this is similar to `ComponentValue for str` except it can only be
+// Note that this is similar to `ComponentType for str` except it can only be
 // used for lifting, not lowering.
 unsafe impl<T: ComponentType> ComponentType for WasmList<T> {
     type Lower = <[T] as ComponentType>::Lower;
@@ -1491,7 +1485,6 @@ pub fn next_field<T: ComponentType>(offset: &mut usize) -> usize {
 }
 
 /// Verify that the given wasm type is a tuple with the expected fields in the right order.
-#[inline]
 fn typecheck_tuple(
     ty: &InterfaceType,
     types: &ComponentTypes,
@@ -1523,6 +1516,40 @@ fn typecheck_tuple(
             bail!("expected `unit` or 0-tuple found `{}`", desc(other))
         }
         other => bail!("expected `tuple` found `{}`", desc(other)),
+    }
+}
+
+/// Verify that the given wasm type is a record with the expected fields in the right order and with the right
+/// names.
+pub fn typecheck_record(
+    ty: &InterfaceType,
+    types: &ComponentTypes,
+    expected: &[(&str, fn(&InterfaceType, &ComponentTypes) -> Result<()>)],
+) -> Result<()> {
+    match ty {
+        InterfaceType::Record(index) => {
+            let fields = &types[*index].fields;
+
+            if fields.len() != expected.len() {
+                bail!(
+                    "expected record of {} fields, found {} fields",
+                    expected.len(),
+                    fields.len()
+                );
+            }
+
+            for (field, &(name, check)) in fields.iter().zip(expected) {
+                check(&field.ty, types)
+                    .with_context(|| format!("type mismatch for field {}", name))?;
+
+                if field.name != name {
+                    bail!("expected record field named {}, found {}", name, field.name);
+                }
+            }
+
+            Ok(())
+        }
+        other => bail!("expected `record` found `{}`", desc(other)),
     }
 }
 
@@ -1565,7 +1592,7 @@ where
                 map_maybe_uninit!(dst.A1).write(ValRaw::i32(0));
                 // Note that this is unsafe as we're writing an arbitrary
                 // bit-pattern to an arbitrary type, but part of the unsafe
-                // contract of the `ComponentValue` trait is that we can assign
+                // contract of the `ComponentType` trait is that we can assign
                 // any bit-pattern. By writing all zeros here we're ensuring
                 // that the core wasm arguments this translates to will all be
                 // zeros (as the canonical ABI requires).

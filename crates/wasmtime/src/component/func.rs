@@ -34,9 +34,11 @@ const MAX_STACK_RESULTS: usize = 1;
 /// let initial: &mut MaybeUninit<[u32; 2]> = ...;
 /// let element: &mut MaybeUninit<u32> = map_maybe_uninit!(initial[1]);
 /// ```
+#[doc(hidden)]
+#[macro_export]
 macro_rules! map_maybe_uninit {
     ($maybe_uninit:ident $($field:tt)*) => (#[allow(unused_unsafe)] unsafe {
-        use crate::component::func::MaybeUninitExt;
+        use $crate::component::__internal::MaybeUninitExt;
 
         let m: &mut std::mem::MaybeUninit<_> = $maybe_uninit;
         // Note the usage of `addr_of_mut!` here which is an attempt to "stay
@@ -47,7 +49,8 @@ macro_rules! map_maybe_uninit {
     })
 }
 
-trait MaybeUninitExt<T> {
+#[doc(hidden)]
+pub trait MaybeUninitExt<T> {
     /// Maps `MaybeUninit<T>` to `MaybeUninit<U>` using the closure provided.
     ///
     /// Note that this is `unsafe` as there is no guarantee that `U` comes from

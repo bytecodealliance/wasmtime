@@ -1112,6 +1112,7 @@ impl<T> StoreInner<T> {
     }
 }
 
+#[doc(hidden)]
 impl StoreOpaque {
     pub fn id(&self) -> StoreId {
         self.store_data.id()
