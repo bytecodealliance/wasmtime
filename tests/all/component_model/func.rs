@@ -188,7 +188,8 @@ fn integers() -> Result<()> {
     let engine = super::engine();
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, ());
-    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+    let new_instance = |store: &mut Store<()>| Linker::new(&engine).instantiate(store, &component);
+    let instance = new_instance(&mut store)?;
 
     // Passing in 100 is valid for all primitives
     instance
@@ -217,42 +218,42 @@ fn integers() -> Result<()> {
         .call_and_post_return(&mut store, (100,))?;
 
     // This specific wasm instance traps if any value other than 100 is passed
-    instance
+    new_instance(&mut store)?
         .get_typed_func::<(u8,), (), _>(&mut store, "take-u8")?
         .call(&mut store, (101,))
         .unwrap_err()
         .downcast::<Trap>()?;
-    instance
+    new_instance(&mut store)?
         .get_typed_func::<(i8,), (), _>(&mut store, "take-s8")?
         .call(&mut store, (101,))
         .unwrap_err()
         .downcast::<Trap>()?;
-    instance
+    new_instance(&mut store)?
         .get_typed_func::<(u16,), (), _>(&mut store, "take-u16")?
         .call(&mut store, (101,))
         .unwrap_err()
         .downcast::<Trap>()?;
-    instance
+    new_instance(&mut store)?
         .get_typed_func::<(i16,), (), _>(&mut store, "take-s16")?
         .call(&mut store, (101,))
         .unwrap_err()
         .downcast::<Trap>()?;
-    instance
+    new_instance(&mut store)?
         .get_typed_func::<(u32,), (), _>(&mut store, "take-u32")?
         .call(&mut store, (101,))
         .unwrap_err()
         .downcast::<Trap>()?;
-    instance
+    new_instance(&mut store)?
         .get_typed_func::<(i32,), (), _>(&mut store, "take-s32")?
         .call(&mut store, (101,))
         .unwrap_err()
         .downcast::<Trap>()?;
-    instance
+    new_instance(&mut store)?
         .get_typed_func::<(u64,), (), _>(&mut store, "take-u64")?
         .call(&mut store, (101,))
         .unwrap_err()
         .downcast::<Trap>()?;
-    instance
+    new_instance(&mut store)?
         .get_typed_func::<(i64,), (), _>(&mut store, "take-s64")?
         .call(&mut store, (101,))
         .unwrap_err()
@@ -606,13 +607,26 @@ fn chars() -> Result<()> {
     roundtrip('\n')?;
     roundtrip('💝')?;
 
-    let err = u32_to_char.call(&mut store, (0xd800,)).unwrap_err();
+    let u32_to_char = |store: &mut Store<()>| {
+        Linker::new(&engine)
+            .instantiate(&mut *store, &component)?
+            .get_typed_func::<(u32,), char, _>(&mut *store, "u32-to-char")
+    };
+    let err = u32_to_char(&mut store)?
+        .call(&mut store, (0xd800,))
+        .unwrap_err();
     assert!(err.to_string().contains("integer out of range"), "{}", err);
-    let err = u32_to_char.call(&mut store, (0xdfff,)).unwrap_err();
+    let err = u32_to_char(&mut store)?
+        .call(&mut store, (0xdfff,))
+        .unwrap_err();
     assert!(err.to_string().contains("integer out of range"), "{}", err);
-    let err = u32_to_char.call(&mut store, (0x110000,)).unwrap_err();
+    let err = u32_to_char(&mut store)?
+        .call(&mut store, (0x110000,))
+        .unwrap_err();
     assert!(err.to_string().contains("integer out of range"), "{}", err);
-    let err = u32_to_char.call(&mut store, (u32::MAX,)).unwrap_err();
+    let err = u32_to_char(&mut store)?
+        .call(&mut store, (u32::MAX,))
+        .unwrap_err();
     assert!(err.to_string().contains("integer out of range"), "{}", err);
 
     Ok(())
@@ -1068,10 +1082,10 @@ fn some_traps() -> Result<()> {
     let engine = super::engine();
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, ());
-    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+    let instance = |store: &mut Store<()>| Linker::new(&engine).instantiate(store, &component);
 
     // This should fail when calling the allocator function for the argument
-    let err = instance
+    let err = instance(&mut store)?
         .get_typed_func::<(&[u8],), (), _>(&mut store, "take-list-unreachable")?
         .call(&mut store, (&[],))
         .unwrap_err()
@@ -1079,7 +1093,7 @@ fn some_traps() -> Result<()> {
     assert_eq!(err.trap_code(), Some(TrapCode::UnreachableCodeReached));
 
     // This should fail when calling the allocator function for the argument
-    let err = instance
+    let err = instance(&mut store)?
         .get_typed_func::<(&str,), (), _>(&mut store, "take-string-unreachable")?
         .call(&mut store, ("",))
         .unwrap_err()
@@ -1088,7 +1102,7 @@ fn some_traps() -> Result<()> {
 
     // This should fail when calling the allocator function for the space
     // to store the arguments (before arguments are even lowered)
-    let err = instance
+    let err = instance(&mut store)?
         .get_typed_func::<(&str, &str, &str, &str, &str, &str, &str, &str, &str, &str), (), _>(
             &mut store,
             "take-many-unreachable",
@@ -1113,27 +1127,27 @@ fn some_traps() -> Result<()> {
             err,
         );
     }
-    let err = instance
+    let err = instance(&mut store)?
         .get_typed_func::<(&[u8],), (), _>(&mut store, "take-list-base-oob")?
         .call(&mut store, (&[],))
         .unwrap_err();
     assert_oob(&err);
-    let err = instance
+    let err = instance(&mut store)?
         .get_typed_func::<(&[u8],), (), _>(&mut store, "take-list-base-oob")?
         .call(&mut store, (&[1],))
         .unwrap_err();
     assert_oob(&err);
-    let err = instance
+    let err = instance(&mut store)?
         .get_typed_func::<(&str,), (), _>(&mut store, "take-string-base-oob")?
         .call(&mut store, ("",))
         .unwrap_err();
     assert_oob(&err);
-    let err = instance
+    let err = instance(&mut store)?
         .get_typed_func::<(&str,), (), _>(&mut store, "take-string-base-oob")?
         .call(&mut store, ("x",))
         .unwrap_err();
     assert_oob(&err);
-    let err = instance
+    let err = instance(&mut store)?
         .get_typed_func::<(&str, &str, &str, &str, &str, &str, &str, &str, &str, &str), (), _>(
             &mut store,
             "take-many-base-oob",
@@ -1145,29 +1159,29 @@ fn some_traps() -> Result<()> {
     // Test here that when the returned pointer from malloc is one byte from the
     // end of memory that empty things are fine, but larger things are not.
 
-    instance
+    instance(&mut store)?
         .get_typed_func::<(&[u8],), (), _>(&mut store, "take-list-end-oob")?
         .call_and_post_return(&mut store, (&[],))?;
-    instance
+    instance(&mut store)?
         .get_typed_func::<(&[u8],), (), _>(&mut store, "take-list-end-oob")?
         .call_and_post_return(&mut store, (&[1, 2, 3, 4],))?;
-    let err = instance
+    let err = instance(&mut store)?
         .get_typed_func::<(&[u8],), (), _>(&mut store, "take-list-end-oob")?
         .call(&mut store, (&[1, 2, 3, 4, 5],))
         .unwrap_err();
     assert_oob(&err);
-    instance
+    instance(&mut store)?
         .get_typed_func::<(&str,), (), _>(&mut store, "take-string-end-oob")?
         .call_and_post_return(&mut store, ("",))?;
-    instance
+    instance(&mut store)?
         .get_typed_func::<(&str,), (), _>(&mut store, "take-string-end-oob")?
         .call_and_post_return(&mut store, ("abcd",))?;
-    let err = instance
+    let err = instance(&mut store)?
         .get_typed_func::<(&str,), (), _>(&mut store, "take-string-end-oob")?
         .call(&mut store, ("abcde",))
         .unwrap_err();
     assert_oob(&err);
-    let err = instance
+    let err = instance(&mut store)?
         .get_typed_func::<(&str, &str, &str, &str, &str, &str, &str, &str, &str, &str), (), _>(
             &mut store,
             "take-many-end-oob",
@@ -1179,7 +1193,7 @@ fn some_traps() -> Result<()> {
     // For this function the first allocation, the space to store all the
     // arguments, is in-bounds but then all further allocations, such as for
     // each individual string, are all out of bounds.
-    let err = instance
+    let err = instance(&mut store)?
         .get_typed_func::<(&str, &str, &str, &str, &str, &str, &str, &str, &str, &str), (), _>(
             &mut store,
             "take-many-second-oob",
@@ -1304,9 +1318,12 @@ fn string_list_oob() -> Result<()> {
     let engine = super::engine();
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, ());
-    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
-    let ret_list_u8 = instance.get_typed_func::<(), WasmList<u8>, _>(&mut store, "ret-list-u8")?;
-    let ret_string = instance.get_typed_func::<(), WasmStr, _>(&mut store, "ret-string")?;
+    let ret_list_u8 = Linker::new(&engine)
+        .instantiate(&mut store, &component)?
+        .get_typed_func::<(), WasmList<u8>, _>(&mut store, "ret-list-u8")?;
+    let ret_string = Linker::new(&engine)
+        .instantiate(&mut store, &component)?
+        .get_typed_func::<(), WasmStr, _>(&mut store, "ret-string")?;
 
     let err = ret_list_u8.call(&mut store, ()).err().unwrap();
     assert!(err.to_string().contains("out of bounds"), "{}", err);
@@ -1460,7 +1477,8 @@ fn option() -> Result<()> {
     let engine = super::engine();
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, ());
-    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+    let linker = Linker::new(&engine);
+    let instance = linker.instantiate(&mut store, &component)?;
     let option_unit_to_u32 =
         instance.get_typed_func::<(Option<()>,), u32, _>(&mut store, "option-unit-to-u32")?;
     assert_eq!(option_unit_to_u32.call(&mut store, (None,))?, 0);
@@ -1506,6 +1524,7 @@ fn option() -> Result<()> {
     assert_eq!(b.to_str(&store)?, "hello");
     option_string_to_tuple.post_return(&mut store)?;
 
+    let instance = linker.instantiate(&mut store, &component)?;
     let to_option_unit =
         instance.get_typed_func::<(u32,), Option<()>, _>(&mut store, "to-option-unit")?;
     assert_eq!(to_option_unit.call(&mut store, (0,))?, None);
@@ -1515,6 +1534,7 @@ fn option() -> Result<()> {
     let err = to_option_unit.call(&mut store, (2,)).unwrap_err();
     assert!(err.to_string().contains("invalid option"), "{}", err);
 
+    let instance = linker.instantiate(&mut store, &component)?;
     let to_option_u8 =
         instance.get_typed_func::<(u32, u32), Option<u8>, _>(&mut store, "to-option-u8")?;
     assert_eq!(to_option_u8.call(&mut store, (0x00_00, 0))?, None);
@@ -1525,6 +1545,7 @@ fn option() -> Result<()> {
     to_option_u8.post_return(&mut store)?;
     assert!(to_option_u8.call(&mut store, (0x00_02, 0)).is_err());
 
+    let instance = linker.instantiate(&mut store, &component)?;
     let to_option_u32 =
         instance.get_typed_func::<(u32, u32), Option<u32>, _>(&mut store, "to-option-u32")?;
     assert_eq!(to_option_u32.call(&mut store, (0, 0))?, None);
@@ -1538,6 +1559,7 @@ fn option() -> Result<()> {
     to_option_u32.post_return(&mut store)?;
     assert!(to_option_u32.call(&mut store, (2, 0)).is_err());
 
+    let instance = linker.instantiate(&mut store, &component)?;
     let to_option_string = instance
         .get_typed_func::<(u32, &str), Option<WasmStr>, _>(&mut store, "to-option-string")?;
     let ret = to_option_string.call(&mut store, (0, ""))?;
@@ -1637,7 +1659,8 @@ fn expected() -> Result<()> {
     let engine = super::engine();
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, ());
-    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+    let linker = Linker::new(&engine);
+    let instance = linker.instantiate(&mut store, &component)?;
     let take_expected_unit =
         instance.get_typed_func::<(Result<(), ()>,), u32, _>(&mut store, "take-expected-unit")?;
     assert_eq!(take_expected_unit.call(&mut store, (Ok(()),))?, 0);
@@ -1669,6 +1692,7 @@ fn expected() -> Result<()> {
     assert_eq!(b.to_str(&store)?, "goodbye");
     take_expected_string.post_return(&mut store)?;
 
+    let instance = linker.instantiate(&mut store, &component)?;
     let to_expected_unit =
         instance.get_typed_func::<(u32,), Result<(), ()>, _>(&mut store, "to-expected-unit")?;
     assert_eq!(to_expected_unit.call(&mut store, (0,))?, Ok(()));
@@ -1678,6 +1702,7 @@ fn expected() -> Result<()> {
     let err = to_expected_unit.call(&mut store, (2,)).unwrap_err();
     assert!(err.to_string().contains("invalid expected"), "{}", err);
 
+    let instance = linker.instantiate(&mut store, &component)?;
     let to_expected_s16_f32 = instance
         .get_typed_func::<(u32, u32), Result<i16, f32>, _>(&mut store, "to-expected-s16-f32")?;
     assert_eq!(to_expected_s16_f32.call(&mut store, (0, 0))?, Ok(0));
@@ -1869,9 +1894,9 @@ fn invalid_alignment() -> Result<()> {
     let engine = super::engine();
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, ());
-    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+    let instance = |store: &mut Store<()>| Linker::new(&engine).instantiate(store, &component);
 
-    let err = instance
+    let err = instance(&mut store)?
         .get_typed_func::<(
             &str,
             &str,
@@ -1895,7 +1920,7 @@ fn invalid_alignment() -> Result<()> {
         err
     );
 
-    let err = instance
+    let err = instance(&mut store)?
         .get_typed_func::<(), WasmStr, _>(&mut store, "string-ret")?
         .call(&mut store, ())
         .err()
@@ -1906,7 +1931,7 @@ fn invalid_alignment() -> Result<()> {
         err
     );
 
-    let err = instance
+    let err = instance(&mut store)?
         .get_typed_func::<(), WasmList<u32>, _>(&mut store, "list-u32-ret")?
         .call(&mut store, ())
         .err()
@@ -2252,4 +2277,89 @@ fn lower_then_lift() -> Result<()> {
     );
 
     Ok(())
+}
+
+#[test]
+fn errors_that_poison_instance() -> Result<()> {
+    let component = format!(
+        r#"
+(component $c
+  (core module $m1
+    (func (export "f1") unreachable)
+    (func (export "f2"))
+  )
+  (core instance $m1 (instantiate $m1))
+  (func (export "f1") (canon lift (core func $m1 "f1")))
+  (func (export "f2") (canon lift (core func $m1 "f2")))
+
+  (core module $m2
+    (func (export "f") (param i32 i32))
+    (func (export "r") (param i32 i32 i32 i32) (result i32) unreachable)
+    (memory (export "m") 1)
+  )
+  (core instance $m2 (instantiate $m2))
+  (func (export "f3") (param string)
+    (canon lift (core func $m2 "f") (realloc (func $m2 "r")) (memory $m2 "m"))
+  )
+
+  (core module $m3
+    (func (export "f") (result i32) i32.const 1)
+    (memory (export "m") 1)
+  )
+  (core instance $m3 (instantiate $m3))
+  (func (export "f4") (result string)
+    (canon lift (core func $m3 "f") (memory $m3 "m"))
+  )
+)
+    "#
+    );
+
+    let engine = super::engine();
+    let component = Component::new(&engine, component)?;
+    let mut store = Store::new(&engine, ());
+    let linker = Linker::new(&engine);
+    let instance = linker.instantiate(&mut store, &component)?;
+    let f1 = instance.get_typed_func::<(), (), _>(&mut store, "f1")?;
+    let f2 = instance.get_typed_func::<(), (), _>(&mut store, "f2")?;
+    assert_unreachable(f1.call(&mut store, ()));
+    assert_poisoned(f1.call(&mut store, ()));
+    assert_poisoned(f2.call(&mut store, ()));
+
+    let instance = linker.instantiate(&mut store, &component)?;
+    let f3 = instance.get_typed_func::<(&str,), (), _>(&mut store, "f3")?;
+    assert_unreachable(f3.call(&mut store, ("x",)));
+    assert_poisoned(f3.call(&mut store, ("x",)));
+
+    let instance = linker.instantiate(&mut store, &component)?;
+    let f4 = instance.get_typed_func::<(), WasmStr, _>(&mut store, "f4")?;
+    assert!(f4.call(&mut store, ()).is_err());
+    assert_poisoned(f4.call(&mut store, ()));
+
+    return Ok(());
+
+    #[track_caller]
+    fn assert_unreachable<T>(err: Result<T>) {
+        let err = match err {
+            Ok(_) => panic!("expected an error"),
+            Err(e) => e,
+        };
+        assert_eq!(
+            err.downcast::<Trap>().unwrap().trap_code(),
+            Some(TrapCode::UnreachableCodeReached)
+        );
+    }
+
+    #[track_caller]
+    fn assert_poisoned<T>(err: Result<T>) {
+        let err = match err {
+            Ok(_) => panic!("expected an error"),
+            Err(e) => e,
+        };
+        assert!(
+            err.to_string()
+                .contains("cannot reenter component instance"),
+            "{}",
+            err,
+        );
+    }
 }

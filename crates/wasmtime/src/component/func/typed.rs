@@ -333,11 +333,19 @@ where
         let flags = instance.flags(component_instance);
 
         unsafe {
+            // Test the "may enter" flag which is a "lock" on this instance.
+            // This is immediately set to `false` afterwards and note that
+            // there's no on-cleanup setting this flag back to true. That's an
+            // intentional design aspect where if anything goes wrong internally
+            // from this point on the instance is considered "poisoned" and can
+            // never be entered again. The only time this flag is set to `true`
+            // again is after post-return logic has completed successfully.
             if !(*flags).may_enter() {
                 bail!("cannot reenter component instance");
             }
-            debug_assert!((*flags).may_leave());
+            (*flags).set_may_enter(false);
 
+            debug_assert!((*flags).may_leave());
             (*flags).set_may_leave(false);
             let result = lower(store, &options, params, map_maybe_uninit!(space.params));
             (*flags).set_may_leave(true);
@@ -370,41 +378,21 @@ where
             // Lift the result into the host while managing post-return state
             // here as well.
             //
-            // Initially the `may_enter` flag is set to `false` for this
-            // component instance and additionally we set a flag indicating that
-            // a post-return is required. This isn't specified by the component
-            // model itself but is used for our implementation of the API of
-            // `post_return` as a separate function call.
-            //
-            // FIXME(WebAssembly/component-model#55) it's not really clear what
-            // the semantics should be in the face of a lift error/trap. For now
-            // the flags are reset so the instance can continue to be reused in
-            // tests but that probably isn't what's desired.
-            //
-            // Otherwise though after a successful lift the return value of the
-            // function, which is currently required to be 0 or 1 values
-            // according to the canonical ABI, is saved within the `Store`'s
-            // `FuncData`. This'll later get used in post-return.
-            (*flags).set_may_enter(false);
+            // After a successful lift the return value of the function, which
+            // is currently required to be 0 or 1 values according to the
+            // canonical ABI, is saved within the `Store`'s `FuncData`. This'll
+            // later get used in post-return.
             (*flags).set_needs_post_return(true);
-            match lift(store.0, &options, ret) {
-                Ok(val) => {
-                    let ret_slice = cast_storage(ret);
-                    let data = &mut store.0[self.func.0];
-                    assert!(data.post_return_arg.is_none());
-                    match ret_slice.len() {
-                        0 => data.post_return_arg = Some(ValRaw::i32(0)),
-                        1 => data.post_return_arg = Some(ret_slice[0]),
-                        _ => unreachable!(),
-                    }
-                    return Ok(val);
-                }
-                Err(err) => {
-                    (*flags).set_may_enter(true);
-                    (*flags).set_needs_post_return(false);
-                    return Err(err);
-                }
+            let val = lift(store.0, &options, ret)?;
+            let ret_slice = cast_storage(ret);
+            let data = &mut store.0[self.func.0];
+            assert!(data.post_return_arg.is_none());
+            match ret_slice.len() {
+                0 => data.post_return_arg = Some(ValRaw::i32(0)),
+                1 => data.post_return_arg = Some(ret_slice[0]),
+                _ => unreachable!(),
             }
+            return Ok(val);
         }
 
         unsafe fn cast_storage<T>(storage: &T) -> &[ValRaw] {
@@ -480,23 +468,30 @@ where
             // This is a sanity-check assert which shouldn't ever trip.
             assert!(!(*flags).may_enter());
 
-            // With the state of the world validated these flags are updated to
-            // their component-model-defined states.
-            (*flags).set_may_enter(true);
+            // Unset the "needs post return" flag now that post-return is being
+            // processed. This will cause future invocations of this method to
+            // panic, even if the function call below traps.
             (*flags).set_needs_post_return(false);
 
-            // And finally if the function actually had a `post-return`
-            // configured in its canonical options that's executed here.
-            let (func, trampoline) = match post_return {
-                Some(pair) => pair,
-                None => return Ok(()),
-            };
-            crate::Func::call_unchecked_raw(
-                &mut store,
-                func.anyfunc,
-                trampoline,
-                &post_return_arg as *const ValRaw as *mut ValRaw,
-            )?;
+            // If the function actually had a `post-return` configured in its
+            // canonical options that's executed here.
+            //
+            // Note that if this traps (returns an error) this function
+            // intentionally leaves the instance in a "poisoned" state where it
+            // can no longer be entered because `may_enter` is `false`.
+            if let Some((func, trampoline)) = post_return {
+                crate::Func::call_unchecked_raw(
+                    &mut store,
+                    func.anyfunc,
+                    trampoline,
+                    &post_return_arg as *const ValRaw as *mut ValRaw,
+                )?;
+            }
+
+            // And finally if everything completed successfully then the "may
+            // enter" flag is set to `true` again here which enables further use
+            // of the component.
+            (*flags).set_may_enter(true);
         }
         Ok(())
     }
