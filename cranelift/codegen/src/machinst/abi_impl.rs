@@ -520,7 +520,7 @@ pub trait ABIMachineSpec {
 
 /// ABI information shared between body (callee) and caller.
 #[derive(Clone)]
-struct ABISig {
+pub struct ABISig {
     /// Argument locations (regs or stack slots). Stack offsets are relative to
     /// SP on entry to function.
     args: Vec<ABIArg>,
@@ -533,15 +533,21 @@ struct ABISig {
     stack_ret_space: i64,
     /// Index in `args` of the stack-return-value-area argument.
     stack_ret_arg: Option<usize>,
+    /// Specific order for copying into arguments at callsites. We must be
+    /// careful to copy into StructArgs first, because we need to be able
+    /// to invoke memcpy() before we've loaded other arg regs (see above).
+    copy_to_arg_order: SmallVec<[usize; 8]>,
     /// Calling convention used.
     call_conv: isa::CallConv,
 }
 
 impl ABISig {
-    fn from_func_sig<M: ABIMachineSpec>(
+    pub fn from_func_sig<M: ABIMachineSpec>(
         sig: &ir::Signature,
         flags: &settings::Flags,
     ) -> CodegenResult<ABISig> {
+        let sig = ensure_struct_return_ptr_is_returned(sig);
+
         // Compute args and retvals from signature. Handle retvals first,
         // because we may need to add a return-area arg to the args.
         let (rets, stack_ret_space, _) = M::compute_arg_locs(
@@ -560,14 +566,30 @@ impl ABISig {
             need_stack_return_area,
         )?;
 
+        let mut copy_to_arg_order = SmallVec::new();
+        for (i, arg) in args.iter().enumerate() {
+            // Struct args.
+            if arg.is_struct_arg() {
+                copy_to_arg_order.push(i);
+            }
+        }
+        for (i, arg) in args.iter().enumerate() {
+            // Non-struct args. Skip an appended return-area arg for multivalue
+            // returns, if any.
+            if !arg.is_struct_arg() && i < sig.params.len() {
+                copy_to_arg_order.push(i);
+            }
+        }
+
         log::trace!(
-            "ABISig: sig {:?} => args = {:?} rets = {:?} arg stack = {} ret stack = {} stack_ret_arg = {:?}",
+            "ABISig: sig {:?} => args = {:?} rets = {:?} arg stack = {} ret stack = {} stack_ret_arg = {:?} copy_to_arg_order = {:?}",
             sig,
             args,
             rets,
             stack_arg_space,
             stack_ret_space,
-            stack_ret_arg
+            stack_ret_arg,
+            copy_to_arg_order,
         );
 
         Ok(ABISig {
@@ -576,8 +598,98 @@ impl ABISig {
             stack_arg_space,
             stack_ret_space,
             stack_ret_arg,
+            copy_to_arg_order,
             call_conv: sig.call_conv,
         })
+    }
+
+    /// Return all uses (i.e, function args), defs (i.e., return values
+    /// and caller-saved registers), and clobbers for the callsite.
+    pub fn call_uses_defs_clobbers<M: ABIMachineSpec>(
+        &self,
+    ) -> (SmallVec<[Reg; 8]>, SmallVec<[Writable<Reg>; 8]>, PRegSet) {
+        // Compute uses: all arg regs.
+        let mut uses = smallvec![];
+        for arg in &self.args {
+            if let &ABIArg::Slots { ref slots, .. } = arg {
+                for slot in slots {
+                    match slot {
+                        &ABIArgSlot::Reg { reg, .. } => {
+                            uses.push(Reg::from(reg));
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+
+        // Get clobbers: all caller-saves. These may include return value
+        // regs, which we will remove from the clobber set below.
+        let mut clobbers = M::get_regs_clobbered_by_call(self.call_conv);
+
+        // Compute defs: all retval regs, and all caller-save (clobbered) regs.
+        let mut defs = smallvec![];
+        for ret in &self.rets {
+            if let &ABIArg::Slots { ref slots, .. } = ret {
+                for slot in slots {
+                    match slot {
+                        &ABIArgSlot::Reg { reg, .. } => {
+                            defs.push(Writable::from_reg(Reg::from(reg)));
+                            clobbers.remove(PReg::from(reg));
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+
+        (uses, defs, clobbers)
+    }
+
+    /// Specific order for copying into arguments at callsites.
+    pub fn copy_to_arg_order(&self, idx: usize) -> usize {
+        self.copy_to_arg_order[idx]
+    }
+
+    /// Get the number of arguments expected.
+    pub fn num_args(&self) -> usize {
+        if self.stack_ret_arg.is_some() {
+            self.args.len() - 1
+        } else {
+            self.args.len()
+        }
+    }
+
+    /// Get information specifying how to pass one argument.
+    pub fn get_arg(&self, idx: usize) -> ABIArg {
+        self.args[idx].clone()
+    }
+
+    /// Get total stack space required for arguments.
+    pub fn stack_arg_space(&self) -> i64 {
+        self.stack_arg_space
+    }
+
+    /// Get the number of return values expected.
+    pub fn num_rets(&self) -> usize {
+        self.rets.len()
+    }
+
+    /// Get information specifying how to pass one return value.
+    pub fn get_ret(&self, idx: usize) -> ABIArg {
+        self.rets[idx].clone()
+    }
+
+    /// Get total stack space required for return values.
+    pub fn stack_ret_space(&self) -> i64 {
+        self.stack_ret_space
+    }
+
+    /// Get information specifying how to pass the implicit pointer
+    /// to the return-value area on the stack, if required.
+    pub fn get_ret_arg(&self) -> Option<ABIArg> {
+        let ret_arg = self.stack_ret_arg?;
+        Some(self.args[ret_arg].clone())
     }
 }
 
@@ -1357,47 +1469,6 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
     }
 }
 
-fn abisig_to_uses_defs_clobbers<M: ABIMachineSpec>(
-    sig: &ABISig,
-) -> (SmallVec<[Reg; 8]>, SmallVec<[Writable<Reg>; 8]>, PRegSet) {
-    // Compute uses: all arg regs.
-    let mut uses = smallvec![];
-    for arg in &sig.args {
-        if let &ABIArg::Slots { ref slots, .. } = arg {
-            for slot in slots {
-                match slot {
-                    &ABIArgSlot::Reg { reg, .. } => {
-                        uses.push(Reg::from(reg));
-                    }
-                    _ => {}
-                }
-            }
-        }
-    }
-
-    // Get clobbers: all caller-saves. These may include return value
-    // regs, which we will remove from the clobber set below.
-    let mut clobbers = M::get_regs_clobbered_by_call(sig.call_conv);
-
-    // Compute defs: all retval regs, and all caller-save (clobbered) regs.
-    let mut defs = smallvec![];
-    for ret in &sig.rets {
-        if let &ABIArg::Slots { ref slots, .. } = ret {
-            for slot in slots {
-                match slot {
-                    &ABIArgSlot::Reg { reg, .. } => {
-                        defs.push(Writable::from_reg(Reg::from(reg)));
-                        clobbers.remove(PReg::from(reg));
-                    }
-                    _ => {}
-                }
-            }
-        }
-    }
-
-    (uses, defs, clobbers)
-}
-
 /// ABI object for a callsite.
 pub struct ABICallerImpl<M: ABIMachineSpec> {
     /// CLIF-level signature, possibly normalized.
@@ -1442,7 +1513,7 @@ impl<M: ABIMachineSpec> ABICallerImpl<M> {
     ) -> CodegenResult<ABICallerImpl<M>> {
         let ir_sig = ensure_struct_return_ptr_is_returned(sig);
         let sig = ABISig::from_func_sig::<M>(&ir_sig, flags)?;
-        let (uses, defs, clobbers) = abisig_to_uses_defs_clobbers::<M>(&sig);
+        let (uses, defs, clobbers) = sig.call_uses_defs_clobbers::<M>();
         Ok(ABICallerImpl {
             ir_sig,
             sig,
@@ -1468,7 +1539,7 @@ impl<M: ABIMachineSpec> ABICallerImpl<M> {
     ) -> CodegenResult<ABICallerImpl<M>> {
         let ir_sig = ensure_struct_return_ptr_is_returned(sig);
         let sig = ABISig::from_func_sig::<M>(&ir_sig, flags)?;
-        let (uses, defs, clobbers) = abisig_to_uses_defs_clobbers::<M>(&sig);
+        let (uses, defs, clobbers) = sig.call_uses_defs_clobbers::<M>();
         Ok(ABICallerImpl {
             ir_sig,
             sig,
@@ -1629,21 +1700,7 @@ impl<M: ABIMachineSpec> ABICaller for ABICallerImpl<M> {
     }
 
     fn get_copy_to_arg_order(&self) -> SmallVec<[usize; 8]> {
-        let mut ret = SmallVec::new();
-        for (i, arg) in self.sig.args.iter().enumerate() {
-            // Struct args.
-            if arg.is_struct_arg() {
-                ret.push(i);
-            }
-        }
-        for (i, arg) in self.sig.args.iter().enumerate() {
-            // Non-struct args. Skip an appended return-area arg for multivalue
-            // returns, if any.
-            if !arg.is_struct_arg() && i < self.ir_sig.params.len() {
-                ret.push(i);
-            }
-        }
-        ret
+        self.sig.copy_to_arg_order.clone()
     }
 
     fn emit_copy_retval_to_regs<C: LowerCtx<I = Self::I>>(

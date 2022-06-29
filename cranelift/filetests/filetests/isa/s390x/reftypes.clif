@@ -71,13 +71,13 @@ block3(v7: r64, v8: r64):
 ; block0:
 ;   stg %r3, 176(%r15)
 ;   stg %r2, 168(%r15)
-;   bras %r1, 12 ; data %f + 0 ; lg %r5, 0(%r1)
-;   basr %r14, %r5
+;   bras %r1, 12 ; data %f + 0 ; lg %r4, 0(%r1)
+;   basr %r14, %r4
 ;   la %r3, 160(%r15)
 ;   lg %r5, 168(%r15)
 ;   stg %r5, 0(%r3)
-;   llcr %r4, %r2
-;   chi %r4, 0
+;   llcr %r3, %r2
+;   chi %r3, 0
 ;   jgnlh label1 ; jg label3
 ; block1:
 ;   jg label2
@@ -92,8 +92,8 @@ block3(v7: r64, v8: r64):
 ;   lg %r3, 176(%r15)
 ;   jg label5
 ; block5:
-;   la %r4, 160(%r15)
-;   lg %r4, 0(%r4)
+;   la %r5, 160(%r15)
+;   lg %r4, 0(%r5)
 ;   lmg %r14, %r15, 296(%r15)
 ;   br %r14
 

@@ -2215,3 +2215,71 @@
       (side_effect (trap_if_impl (mask_as_cond 3) trap_code)))
 
 
+;;;; Rules for `return` and `fallthrough_return` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (return args))
+      (lower_return (range 0 (value_slice_len args)) args))
+
+(rule (lower (fallthrough_return args))
+      (lower_return (range 0 (value_slice_len args)) args))
+
+(decl lower_return (Range ValueSlice) InstOutput)
+(rule (lower_return (range_empty) _) (output_none))
+(rule (lower_return (range_unwrap head tail) args)
+      (let ((_ Unit (copy_to_regs (retval head) (value_slice_get args head))))
+         (lower_return tail args)))
+
+
+;;;; Rules for `call` and `call_indirect` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Direct call to an in-range function.
+(rule (lower (call (func_ref_data sig_ref name (reloc_distance_near)) args))
+      (let ((abi ABISig (abi_sig sig_ref))
+            (_1 Unit (abi_accumulate_outgoing_args_size abi))
+            (_2 InstOutput (lower_call_args abi (range 0 (abi_num_args abi)) args))
+            (_3 InstOutput (side_effect (abi_call abi name (Opcode.Call)))))
+        (lower_call_rets abi (range 0 (abi_num_rets abi)) (output_builder_new))))
+
+;; Direct call to an out-of-range function (implicitly via pointer).
+(rule (lower (call (func_ref_data sig_ref name _) args))
+      (let ((abi ABISig (abi_sig sig_ref))
+            (_1 Unit (abi_accumulate_outgoing_args_size abi))
+            (_2 InstOutput (lower_call_args abi (range 0 (abi_num_args abi)) args))
+            (target Reg (load_ext_name_far name 0))
+            (_3 InstOutput (side_effect (abi_call_ind abi target (Opcode.Call)))))
+        (lower_call_rets abi (range 0 (abi_num_rets abi)) (output_builder_new))))
+
+;; Indirect call.
+(rule (lower (call_indirect sig_ref ptr args))
+      (let ((abi ABISig (abi_sig sig_ref))
+            (target Reg (put_in_reg ptr))
+            (_1 Unit (abi_accumulate_outgoing_args_size abi))
+            (_2 InstOutput (lower_call_args abi (range 0 (abi_num_args abi)) args))
+            (_3 InstOutput (side_effect (abi_call_ind abi target (Opcode.CallIndirect)))))
+        (lower_call_rets abi (range 0 (abi_num_rets abi)) (output_builder_new))))
+
+;; Lower function arguments by loading them into registers / stack slots.
+(decl lower_call_args (ABISig Range ValueSlice) InstOutput)
+(rule (lower_call_args abi (range_empty) _) (lower_call_ret_arg abi))
+(rule (lower_call_args abi (range_unwrap head tail) args)
+      (let ((idx usize (abi_copy_to_arg_order abi head))
+            (_ Unit (copy_to_arg 0 (abi_get_arg abi idx)
+                                 (value_slice_get args idx))))
+        (lower_call_args abi tail args)))
+
+;; Lower the implicit return-area pointer argument, if present.
+(decl lower_call_ret_arg (ABISig) InstOutput)
+(rule (lower_call_ret_arg (abi_no_ret_arg)) (output_none))
+(rule (lower_call_ret_arg abi @ (abi_ret_arg (abi_arg_only_slot slot)))
+      (let ((ret_arg Reg (load_addr (memarg_stack_off (abi_stack_arg_space abi) 0)))
+            (_ Unit (copy_reg_to_arg_slot 0 slot ret_arg)))
+        (output_none)))
+
+;; Lower function return values by collecting them from registers / stack slots.
+(decl lower_call_rets (ABISig Range InstOutputBuilder) InstOutput)
+(rule (lower_call_rets abi (range_empty) builder) (output_builder_finish builder))
+(rule (lower_call_rets abi (range_unwrap head tail) builder)
+      (let ((ret ValueRegs (copy_from_arg (abi_stack_arg_space abi) (abi_get_ret abi head)))
+            (_ Unit (output_builder_push builder ret)))
+        (lower_call_rets abi tail builder)))
+

@@ -69,7 +69,6 @@ use crate::machinst::*;
 use crate::machinst::{RealReg, Reg, RegClass, Writable};
 use crate::settings;
 use crate::{CodegenError, CodegenResult};
-use alloc::boxed::Box;
 use alloc::vec::Vec;
 use regalloc2::{PReg, PRegSet, VReg};
 use smallvec::{smallvec, SmallVec};
@@ -79,9 +78,6 @@ use std::convert::TryFrom;
 
 /// Support for the S390x ABI from the callee side (within a function body).
 pub type S390xABICallee = ABICalleeImpl<S390xMachineDeps>;
-
-/// Support for the S390x ABI from the caller side (at a callsite).
-pub type S390xABICaller = ABICallerImpl<S390xMachineDeps>;
 
 /// ABI Register usage
 
@@ -616,57 +612,16 @@ impl ABIMachineSpec for S390xMachineDeps {
     }
 
     fn gen_call(
-        dest: &CallDest,
-        uses: SmallVec<[Reg; 8]>,
-        defs: SmallVec<[Writable<Reg>; 8]>,
-        clobbers: PRegSet,
-        opcode: ir::Opcode,
-        tmp: Writable<Reg>,
+        _dest: &CallDest,
+        _uses: SmallVec<[Reg; 8]>,
+        _defs: SmallVec<[Writable<Reg>; 8]>,
+        _clobbers: PRegSet,
+        _opcode: ir::Opcode,
+        _tmp: Writable<Reg>,
         _callee_conv: isa::CallConv,
         _caller_conv: isa::CallConv,
     ) -> SmallVec<[Inst; 2]> {
-        let mut insts = SmallVec::new();
-        match &dest {
-            &CallDest::ExtName(ref name, RelocDistance::Near) => insts.push(Inst::Call {
-                link: writable_gpr(14),
-                info: Box::new(CallInfo {
-                    dest: name.clone(),
-                    uses,
-                    defs,
-                    clobbers,
-                    opcode,
-                }),
-            }),
-            &CallDest::ExtName(ref name, RelocDistance::Far) => {
-                insts.push(Inst::LoadExtNameFar {
-                    rd: tmp,
-                    name: Box::new(name.clone()),
-                    offset: 0,
-                });
-                insts.push(Inst::CallInd {
-                    link: writable_gpr(14),
-                    info: Box::new(CallIndInfo {
-                        rn: tmp.to_reg(),
-                        uses,
-                        defs,
-                        clobbers,
-                        opcode,
-                    }),
-                });
-            }
-            &CallDest::Reg(reg) => insts.push(Inst::CallInd {
-                link: writable_gpr(14),
-                info: Box::new(CallIndInfo {
-                    rn: *reg,
-                    uses,
-                    defs,
-                    clobbers,
-                    opcode,
-                }),
-            }),
-        }
-
-        insts
+        unreachable!();
     }
 
     fn gen_memcpy(

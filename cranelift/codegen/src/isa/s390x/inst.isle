@@ -1124,6 +1124,11 @@
 (decl memarg_symbol (ExternalName i32 MemFlags) MemArg)
 (extern constructor memarg_symbol memarg_symbol)
 
+;; Create a MemArg refering to a stack address formed by
+;; adding a base (relative to SP) and an offset.
+(decl memarg_stack_off (i64 i64) MemArg)
+(extern constructor memarg_stack_off memarg_stack_off)
+
 ;; Form the sum of two offset values, and check that the result is
 ;; a valid `MemArg::Symbol` offset (i.e. is even and fits into i32).
 (decl pure memarg_symbol_offset_sum (i64 i64) i32)
@@ -1736,6 +1741,16 @@
             (_ Unit (emit (MInst.LoadAddr dst mem))))
         dst))
 
+;; Helper for emitting `MInst.Call` instructions.
+(decl call_impl (WritableReg BoxCallInfo) SideEffectNoResult)
+(rule (call_impl reg info)
+      (SideEffectNoResult.Inst (MInst.Call reg info)))
+
+;; Helper for emitting `MInst.CallInd` instructions.
+(decl call_ind_impl (WritableReg BoxCallIndInfo) SideEffectNoResult)
+(rule (call_ind_impl reg info)
+      (SideEffectNoResult.Inst (MInst.CallInd reg info)))
+
 ;; Helper for emitting `MInst.Jump` instructions.
 (decl jump_impl (MachLabel) SideEffectNoResult)
 (rule (jump_impl target)
@@ -1888,6 +1903,81 @@
       (emit (MInst.Load32 dst addr)))
 (rule (emit_load $I64 dst addr)
       (emit (MInst.Load64 dst addr)))
+
+
+;; Helpers for accessing argument / return value slots ;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl emit_side_effect (SideEffectNoResult) Unit)
+(rule (emit_side_effect (SideEffectNoResult.Inst inst)) (emit inst))
+
+(decl emit_arg_store (Type Reg MemArg) Unit)
+(rule (emit_arg_store $I8 reg mem) (emit_side_effect (store8 reg mem)))
+(rule (emit_arg_store $I16 reg mem) (emit_side_effect (store16 reg mem)))
+(rule (emit_arg_store $I32 reg mem) (emit_side_effect (store32 reg mem)))
+(rule (emit_arg_store $I64 reg mem) (emit_side_effect (store64 reg mem)))
+(rule (emit_arg_store $R64 reg mem) (emit_side_effect (store64 reg mem)))
+(rule (emit_arg_store $F32 reg mem) (emit_side_effect (fpu_store32 reg mem)))
+(rule (emit_arg_store $F64 reg mem) (emit_side_effect (fpu_store64 reg mem)))
+
+(decl emit_arg_load (Type MemArg) Reg)
+(rule (emit_arg_load $I8 mem) (zext32_mem $I8 mem))
+(rule (emit_arg_load $I16 mem) (zext32_mem $I16 mem))
+(rule (emit_arg_load $I32 mem) (load32 mem))
+(rule (emit_arg_load $I64 mem) (load64 mem))
+(rule (emit_arg_load $R64 mem) (load64 mem))
+(rule (emit_arg_load $F32 mem) (fpu_load64 mem))
+(rule (emit_arg_load $F64 mem) (fpu_load64 mem))
+
+;; Copy a single argument/return value to its slots.
+(decl copy_to_arg (i64 ABIArg Value) Unit)
+(rule (copy_to_arg base (abi_arg_only_slot slot) val)
+      (copy_val_to_arg_slot base slot val))
+
+;; Copy a single argument/return value from its slots.
+(decl copy_from_arg (i64 ABIArg) ValueRegs)
+(rule (copy_from_arg base (abi_arg_only_slot slot))
+      (value_reg (copy_reg_from_arg_slot base slot)))
+
+;; Copy one component of an argument/return value to its slot.
+(decl copy_val_to_arg_slot (i64 ABIArgSlot Value) Unit)
+(rule (copy_val_to_arg_slot _ (ABIArgSlot.Reg reg ty (ArgumentExtension.None)) val)
+      (emit_mov ty (real_reg_to_writable_reg reg) val))
+(rule (copy_val_to_arg_slot _ (ABIArgSlot.Reg reg _ (ArgumentExtension.Uext)) val)
+      (emit_put_in_reg_zext64 (real_reg_to_writable_reg reg) val))
+(rule (copy_val_to_arg_slot _ (ABIArgSlot.Reg reg _ (ArgumentExtension.Sext)) val)
+      (emit_put_in_reg_sext64 (real_reg_to_writable_reg reg) val))
+(rule (copy_val_to_arg_slot base (ABIArgSlot.Stack offset ty (ArgumentExtension.None)) val)
+      (emit_arg_store ty val (memarg_stack_off base offset)))
+(rule (copy_val_to_arg_slot base (ABIArgSlot.Stack offset _ (ArgumentExtension.Uext)) val)
+      (emit_arg_store $I64 (put_in_reg_zext64 val) (memarg_stack_off base offset)))
+(rule (copy_val_to_arg_slot base (ABIArgSlot.Stack offset _ (ArgumentExtension.Sext)) val)
+      (emit_arg_store $I64 (put_in_reg_sext64 val) (memarg_stack_off base offset)))
+
+;; Copy one component of an argument/return value to its slot, where the
+;; value is already extended and present in a register.
+(decl copy_reg_to_arg_slot (i64 ABIArgSlot Reg) Unit)
+(rule (copy_reg_to_arg_slot _ (ABIArgSlot.Reg reg ty ext) src)
+      (emit_mov (abi_ext_ty ext ty) (real_reg_to_writable_reg reg) src))
+(rule (copy_reg_to_arg_slot base (ABIArgSlot.Stack offset ty ext) src)
+      (emit_arg_store (abi_ext_ty ext ty) src (memarg_stack_off base offset)))
+
+;; Copy one component of an argument/return value from its slot.
+(decl copy_reg_from_arg_slot (i64 ABIArgSlot) Reg)
+(rule (copy_reg_from_arg_slot _ (ABIArgSlot.Reg reg ty ext))
+      (copy_reg (abi_ext_ty ext ty) (real_reg_to_reg reg)))
+(rule (copy_reg_from_arg_slot base (ABIArgSlot.Stack offset ty ext))
+      (emit_arg_load (abi_ext_ty ext ty) (memarg_stack_off base offset)))
+
+;; Helper to compute the type of an implicitly extended argument/return value.
+(decl abi_ext_ty (ArgumentExtension Type) Type)
+(rule (abi_ext_ty (ArgumentExtension.None) ty) ty)
+(rule (abi_ext_ty (ArgumentExtension.Uext) _) $I64)
+(rule (abi_ext_ty (ArgumentExtension.Sext) _) $I64)
+
+;; Copy a return value to a set of registers.
+(decl copy_to_regs (WritableValueRegs Value) Unit)
+(rule (copy_to_regs (only_writable_reg reg) val @ (value_type ty))
+      (emit_mov ty reg val))
 
 
 ;; Helpers for generating immediate values ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -2510,6 +2600,32 @@
 (rule (casloop_subword ib ty flags aligned_addr bitshift val)
       (casloop_rotate_result ty flags bitshift
         (casloop_emit ib ty flags aligned_addr val)))
+
+
+;; Helpers for generating `call` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl abi_sig (SigRef) ABISig)
+(extern constructor abi_sig abi_sig)
+
+(decl abi_call_info (ABISig ExternalName Opcode) BoxCallInfo)
+(extern constructor abi_call_info abi_call_info)
+
+(decl abi_call_ind_info (ABISig Reg Opcode) BoxCallIndInfo)
+(extern constructor abi_call_ind_info abi_call_ind_info)
+
+(decl writable_link_reg () WritableReg)
+(rule (writable_link_reg) (writable_gpr 14))
+
+(decl abi_call (ABISig ExternalName Opcode) SideEffectNoResult)
+(rule (abi_call abi name opcode)
+      (call_impl (writable_link_reg) (abi_call_info abi name opcode)))
+
+(decl abi_call_ind (ABISig Reg Opcode) SideEffectNoResult)
+(rule (abi_call_ind abi target opcode)
+      (call_ind_impl (writable_link_reg) (abi_call_ind_info abi target opcode)))
+
+(decl abi_accumulate_outgoing_args_size (ABISig) Unit)
+(extern constructor abi_accumulate_outgoing_args_size abi_accumulate_outgoing_args_size)
 
 
 ;; Helpers for generating `clz` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

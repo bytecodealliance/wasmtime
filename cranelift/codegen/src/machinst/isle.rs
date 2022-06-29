@@ -1,14 +1,14 @@
 use crate::ir::{types, Inst, Value, ValueList};
-use crate::machinst::{get_output_reg, InsnOutput, LowerCtx, Reg, Writable};
+use crate::machinst::{get_output_reg, InsnOutput, LowerCtx};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use smallvec::SmallVec;
 use std::cell::Cell;
 
 pub use super::MachLabel;
-pub use crate::ir::{ExternalName, FuncRef, GlobalValue, SigRef};
+pub use crate::ir::{ArgumentExtension, ExternalName, FuncRef, GlobalValue, SigRef};
 pub use crate::isa::unwind::UnwindInst;
-pub use crate::machinst::RelocDistance;
+pub use crate::machinst::{ABIArg, ABIArgSlot, ABISig, RealReg, Reg, RelocDistance, Writable};
 
 pub type Unit = ();
 pub type ValueSlice = (ValueList, usize);
@@ -17,10 +17,12 @@ pub type ValueArray3 = [Value; 3];
 pub type WritableReg = Writable<Reg>;
 pub type VecReg = Vec<Reg>;
 pub type ValueRegs = crate::machinst::ValueRegs<Reg>;
+pub type WritableValueRegs = crate::machinst::ValueRegs<WritableReg>;
 pub type InstOutput = SmallVec<[ValueRegs; 2]>;
 pub type InstOutputBuilder = Cell<InstOutput>;
 pub type VecMachLabel = Vec<MachLabel>;
 pub type BoxExternalName = Box<ExternalName>;
+pub type Range = (usize, usize);
 
 /// Helper macro to define methods in `prelude.isle` within `impl Context for
 /// ...` for each backend. These methods are shared amongst all backends.
@@ -571,6 +573,95 @@ macro_rules! isle_prelude_methods {
         fn emit_u64_le_const(&mut self, value: u64) -> VCodeConstant {
             let data = VCodeConstantData::U64(value.to_le_bytes());
             self.lower_ctx.use_constant(data)
+        }
+
+        fn range(&mut self, start: usize, end: usize) -> Range {
+            (start, end)
+        }
+
+        fn range_empty(&mut self, r: Range) -> Option<()> {
+            if r.0 >= r.1 {
+                Some(())
+            } else {
+                None
+            }
+        }
+
+        fn range_unwrap(&mut self, r: Range) -> Option<(usize, Range)> {
+            if r.0 < r.1 {
+                Some((r.0, (r.0 + 1, r.1)))
+            } else {
+                None
+            }
+        }
+
+        fn retval(&mut self, i: usize) -> WritableValueRegs {
+            self.lower_ctx.retval(i)
+        }
+
+        fn only_writable_reg(&mut self, regs: WritableValueRegs) -> Option<WritableReg> {
+            regs.only_reg()
+        }
+
+        fn abi_copy_to_arg_order(&mut self, abi: &ABISig, idx: usize) -> usize {
+            abi.copy_to_arg_order(idx)
+        }
+
+        fn abi_num_args(&mut self, abi: &ABISig) -> usize {
+            abi.num_args()
+        }
+
+        fn abi_get_arg(&mut self, abi: &ABISig, idx: usize) -> ABIArg {
+            abi.get_arg(idx)
+        }
+
+        fn abi_num_rets(&mut self, abi: &ABISig) -> usize {
+            abi.num_rets()
+        }
+
+        fn abi_get_ret(&mut self, abi: &ABISig, idx: usize) -> ABIArg {
+            abi.get_ret(idx)
+        }
+
+        fn abi_ret_arg(&mut self, abi: &ABISig) -> Option<ABIArg> {
+            abi.get_ret_arg()
+        }
+
+        fn abi_no_ret_arg(&mut self, abi: &ABISig) -> Option<()> {
+            if let Some(_) = abi.get_ret_arg() {
+                None
+            } else {
+                Some(())
+            }
+        }
+
+        fn abi_stack_arg_space(&mut self, abi: &ABISig) -> i64 {
+            abi.stack_arg_space()
+        }
+
+        fn abi_stack_ret_space(&mut self, abi: &ABISig) -> i64 {
+            abi.stack_ret_space()
+        }
+
+        fn abi_arg_only_slot(&mut self, arg: &ABIArg) -> Option<ABIArgSlot> {
+            match arg {
+                &ABIArg::Slots { ref slots, .. } => {
+                    if slots.len() == 1 {
+                        Some(slots[0])
+                    } else {
+                        None
+                    }
+                }
+                _ => None,
+            }
+        }
+
+        fn real_reg_to_reg(&mut self, reg: RealReg) -> Reg {
+            Reg::from(reg)
+        }
+
+        fn real_reg_to_writable_reg(&mut self, reg: RealReg) -> WritableReg {
+            Writable::from_reg(Reg::from(reg))
         }
     };
 }
