@@ -46,7 +46,7 @@
 //! final `Component`.
 
 use crate::component::translate::*;
-use crate::{ModuleTranslation, PrimaryMap};
+use crate::{ModuleTranslation, PrimaryMap, SignatureIndex};
 use indexmap::IndexMap;
 
 pub(super) fn run(
@@ -64,6 +64,7 @@ pub(super) fn run(
         runtime_realloc_interner: Default::default(),
         runtime_post_return_interner: Default::default(),
         runtime_memory_interner: Default::default(),
+        runtime_always_trap_interner: Default::default(),
     };
 
     // The initial arguments to the root component are all host imports. This
@@ -192,6 +193,7 @@ struct Inliner<'a> {
     runtime_realloc_interner: HashMap<CoreDef, RuntimeReallocIndex>,
     runtime_post_return_interner: HashMap<CoreDef, RuntimePostReturnIndex>,
     runtime_memory_interner: HashMap<CoreExport<MemoryIndex>, RuntimeMemoryIndex>,
+    runtime_always_trap_interner: HashMap<SignatureIndex, RuntimeAlwaysTrapIndex>,
 }
 
 /// A "stack frame" as part of the inlining process, or the progress through
@@ -510,14 +512,21 @@ impl<'a> Inliner<'a> {
                         options: options_lift,
                         ..
                     } if options_lift.instance == options_lower.instance => {
-                        let index = RuntimeAlwaysTrapIndex::from_u32(self.result.num_always_trap);
-                        self.result.num_always_trap += 1;
-                        self.result
-                            .initializers
-                            .push(GlobalInitializer::AlwaysTrap(AlwaysTrap {
-                                canonical_abi,
-                                index,
-                            }));
+                        let index = *self
+                            .runtime_always_trap_interner
+                            .entry(canonical_abi)
+                            .or_insert_with(|| {
+                                let index =
+                                    RuntimeAlwaysTrapIndex::from_u32(self.result.num_always_trap);
+                                self.result.num_always_trap += 1;
+                                self.result.initializers.push(GlobalInitializer::AlwaysTrap(
+                                    AlwaysTrap {
+                                        canonical_abi,
+                                        index,
+                                    },
+                                ));
+                                index
+                            });
                         CoreDef::AlwaysTrap(index)
                     }
 
