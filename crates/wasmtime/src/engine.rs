@@ -368,6 +368,16 @@ impl Engine {
                 }
             }
 
+            // If reference types or backtraces are enabled, we need unwind info. Otherwise, we
+            // don't care.
+            "unwind_info" => {
+                if self.config().wasm_backtrace || self.config().features.reference_types {
+                    *value == FlagValue::Bool(true)
+                } else {
+                    return Ok(())
+                }
+            }
+
             // These settings don't affect the interface or functionality of
             // the module itself, so their configuration values shouldn't
             // matter.
@@ -380,7 +390,6 @@ impl Engine {
             | "enable_verifier"
             | "regalloc_checker"
             | "is_pic"
-            | "unwind_info"
             | "machine_code_cfg_info"
             | "tls_model" // wasmtime doesn't use tls right now
             | "opt_level" // opt level doesn't change semantics
