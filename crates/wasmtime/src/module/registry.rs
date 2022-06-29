@@ -8,6 +8,11 @@ use std::{
     sync::{Arc, RwLock},
 };
 use wasmtime_environ::TrapCode;
+#[cfg(feature = "component-model")]
+use wasmtime_environ::{
+    component::{AlwaysTrapInfo, RuntimeAlwaysTrapIndex},
+    PrimaryMap,
+};
 use wasmtime_jit::CompiledModule;
 use wasmtime_runtime::{ModuleInfo, VMCallerCheckedAnyfunc, VMTrampoline};
 
@@ -15,7 +20,7 @@ use wasmtime_runtime::{ModuleInfo, VMCallerCheckedAnyfunc, VMTrampoline};
 ///
 /// Note that the primary reason for this registry is to ensure that everything
 /// in `Module` is kept alive for the duration of a `Store`. At this time we
-/// need "basically everything" within a `Moudle` to stay alive once it's
+/// need "basically everything" within a `Module` to stay alive once it's
 /// instantiated within a store. While there's some smaller portions that could
 /// theoretically be omitted as they're not needed by the store they're
 /// currently small enough to not worry much about.
@@ -147,8 +152,13 @@ impl ModuleRegistry {
 
     /// Fetches trap information about a program counter in a backtrace.
     pub fn lookup_trap_code(&self, pc: usize) -> Option<TrapCode> {
-        let (module, offset) = self.module(pc)?;
-        wasmtime_environ::lookup_trap_code(module.compiled_module().trap_data(), offset)
+        match self.module_or_component(pc)? {
+            (ModuleOrComponent::Module(module), offset) => {
+                wasmtime_environ::lookup_trap_code(module.compiled_module().trap_data(), offset)
+            }
+            #[cfg(feature = "component-model")]
+            (ModuleOrComponent::Component(component), offset) => component.lookup_trap_code(offset),
+        }
     }
 
     /// Fetches frame information about a program counter in a backtrace.
@@ -160,9 +170,21 @@ impl ModuleRegistry {
     /// boolean indicates whether the engine used to compile this module is
     /// using environment variables to control debuginfo parsing.
     pub(crate) fn lookup_frame_info(&self, pc: usize) -> Option<(FrameInfo, &Module)> {
-        let (module, offset) = self.module(pc)?;
-        let info = FrameInfo::new(module, offset)?;
-        Some((info, module))
+        match self.module_or_component(pc)? {
+            (ModuleOrComponent::Module(module), offset) => {
+                let info = FrameInfo::new(module, offset)?;
+                Some((info, module))
+            }
+            #[cfg(feature = "component-model")]
+            (ModuleOrComponent::Component(_), _) => {
+                // FIXME: should investigate whether it's worth preserving
+                // frame information on a `Component` to resolve a frame here.
+                // Note that this can be traced back to either a lowered
+                // function via a trampoline or an "always trap" function at
+                // this time which may be useful debugging information to have.
+                None
+            }
+        }
     }
 }
 
@@ -183,12 +205,19 @@ lazy_static::lazy_static! {
     static ref GLOBAL_MODULES: RwLock<GlobalModuleRegistry> = Default::default();
 }
 
-type GlobalModuleRegistry = BTreeMap<usize, (usize, Arc<CompiledModule>)>;
+type GlobalModuleRegistry = BTreeMap<usize, (usize, TrapInfo)>;
+
+#[derive(Clone)]
+enum TrapInfo {
+    Module(Arc<CompiledModule>),
+    #[cfg(feature = "component-model")]
+    Component(Arc<Vec<u32>>),
+}
 
 /// Returns whether the `pc`, according to globally registered information,
 /// is a wasm trap or not.
 pub fn is_wasm_trap_pc(pc: usize) -> bool {
-    let (module, text_offset) = {
+    let (trap_info, text_offset) = {
         let all_modules = GLOBAL_MODULES.read().unwrap();
 
         let (end, (start, module)) = match all_modules.range(pc..).next() {
@@ -201,7 +230,16 @@ pub fn is_wasm_trap_pc(pc: usize) -> bool {
         (module.clone(), pc - *start)
     };
 
-    wasmtime_environ::lookup_trap_code(module.trap_data(), text_offset).is_some()
+    match trap_info {
+        TrapInfo::Module(module) => {
+            wasmtime_environ::lookup_trap_code(module.trap_data(), text_offset).is_some()
+        }
+        #[cfg(feature = "component-model")]
+        TrapInfo::Component(traps) => {
+            let offset = u32::try_from(text_offset).unwrap();
+            traps.binary_search(&offset).is_ok()
+        }
+    }
 }
 
 /// Registers a new region of code.
@@ -212,7 +250,7 @@ pub fn is_wasm_trap_pc(pc: usize) -> bool {
 /// This is required to enable traps to work correctly since the signal handler
 /// will lookup in the `GLOBAL_MODULES` list to determine which a particular pc
 /// is a trap or not.
-pub fn register(module: &Arc<CompiledModule>) {
+pub fn register_module(module: &Arc<CompiledModule>) {
     let code = module.code();
     if code.is_empty() {
         return;
@@ -222,14 +260,14 @@ pub fn register(module: &Arc<CompiledModule>) {
     let prev = GLOBAL_MODULES
         .write()
         .unwrap()
-        .insert(end, (start, module.clone()));
+        .insert(end, (start, TrapInfo::Module(module.clone())));
     assert!(prev.is_none());
 }
 
 /// Unregisters a module from the global map.
 ///
-/// Must hae been previously registered with `register`.
-pub fn unregister(module: &Arc<CompiledModule>) {
+/// Must have been previously registered with `register`.
+pub fn unregister_module(module: &Arc<CompiledModule>) {
     let code = module.code();
     if code.is_empty() {
         return;
@@ -237,6 +275,39 @@ pub fn unregister(module: &Arc<CompiledModule>) {
     let end = (code.as_ptr() as usize) + code.len() - 1;
     let module = GLOBAL_MODULES.write().unwrap().remove(&end);
     assert!(module.is_some());
+}
+
+/// Same as `register_module`, but for components
+#[cfg(feature = "component-model")]
+pub fn register_component(text: &[u8], traps: &PrimaryMap<RuntimeAlwaysTrapIndex, AlwaysTrapInfo>) {
+    if text.is_empty() {
+        return;
+    }
+    let start = text.as_ptr() as usize;
+    let end = start + text.len();
+    let info = Arc::new(
+        traps
+            .iter()
+            .map(|(_, info)| info.start + info.trap_offset)
+            .collect::<Vec<_>>(),
+    );
+    let prev = GLOBAL_MODULES
+        .write()
+        .unwrap()
+        .insert(end, (start, TrapInfo::Component(info)));
+    assert!(prev.is_none());
+}
+
+/// Same as `unregister_module`, but for components
+#[cfg(feature = "component-model")]
+pub fn unregister_component(text: &[u8]) {
+    if text.is_empty() {
+        return;
+    }
+    let start = text.as_ptr() as usize;
+    let end = start + text.len();
+    let info = GLOBAL_MODULES.write().unwrap().remove(&end);
+    assert!(info.is_some());
 }
 
 #[test]

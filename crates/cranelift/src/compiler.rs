@@ -342,6 +342,7 @@ impl wasmtime_environ::Compiler for Compiler {
             .iter()
             .zip(&compiled_trampolines)
         {
+            assert!(func.traps.is_empty());
             trampolines.push(builder.trampoline(*i, &func));
         }
 
@@ -683,19 +684,21 @@ impl Compiler {
         context
             .compile_and_emit(isa, &mut code_buf)
             .map_err(|error| CompileError::Codegen(pretty_error(&context.func, error)))?;
+        let result = context.mach_compile_result.as_ref().unwrap();
 
         // Processing relocations isn't the hardest thing in the world here but
         // no trampoline should currently generate a relocation, so assert that
         // they're all empty and if this ever trips in the future then handling
         // will need to be added here to ensure they make their way into the
         // `CompiledFunction` below.
-        assert!(context
-            .mach_compile_result
-            .as_ref()
-            .unwrap()
+        assert!(result.buffer.relocs().is_empty());
+
+        let traps = result
             .buffer
-            .relocs()
-            .is_empty());
+            .traps()
+            .into_iter()
+            .map(mach_trap_to_trap)
+            .collect::<Vec<_>>();
 
         let unwind_info = if isa.flags().unwind_info() {
             context
@@ -713,7 +716,7 @@ impl Compiler {
             value_labels_ranges: Default::default(),
             info: Default::default(),
             address_map: Default::default(),
-            traps: Vec::new(),
+            traps,
         })
     }
 
@@ -889,6 +892,8 @@ fn mach_reloc_to_reloc(reloc: &MachReloc) -> Relocation {
     }
 }
 
+const ALWAYS_TRAP_CODE: u16 = 100;
+
 fn mach_trap_to_trap(trap: &MachTrap) -> TrapInformation {
     let &MachTrap { offset, code } = trap;
     TrapInformation {
@@ -905,6 +910,7 @@ fn mach_trap_to_trap(trap: &MachTrap) -> TrapInformation {
             ir::TrapCode::BadConversionToInteger => TrapCode::BadConversionToInteger,
             ir::TrapCode::UnreachableCodeReached => TrapCode::UnreachableCodeReached,
             ir::TrapCode::Interrupt => TrapCode::Interrupt,
+            ir::TrapCode::User(ALWAYS_TRAP_CODE) => TrapCode::AlwaysTrapAdapter,
 
             // these should never be emitted by wasmtime-cranelift
             ir::TrapCode::User(_) => unreachable!(),

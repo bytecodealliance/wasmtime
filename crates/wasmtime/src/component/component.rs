@@ -1,6 +1,7 @@
 use crate::signatures::SignatureCollection;
 use crate::{Engine, Module};
 use anyhow::{bail, Context, Result};
+use std::any::Any;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fs;
@@ -9,9 +10,10 @@ use std::path::Path;
 use std::ptr::NonNull;
 use std::sync::Arc;
 use wasmtime_environ::component::{
-    ComponentTypes, GlobalInitializer, LoweredIndex, LoweringInfo, StaticModuleIndex, Translator,
+    AlwaysTrapInfo, ComponentTypes, GlobalInitializer, LoweredIndex, LoweringInfo,
+    RuntimeAlwaysTrapIndex, StaticModuleIndex, Translator,
 };
-use wasmtime_environ::PrimaryMap;
+use wasmtime_environ::{PrimaryMap, SignatureIndex, Trampoline, TrapCode};
 use wasmtime_jit::CodeMemory;
 use wasmtime_runtime::VMFunctionBody;
 
@@ -41,19 +43,27 @@ struct ComponentInner {
     /// this field.
     types: Arc<ComponentTypes>,
 
-    /// The in-memory ELF image of the compiled trampolines for this component.
-    ///
-    /// This is currently only used for wasm-to-host trampolines when
-    /// `canon.lower` is encountered.
+    /// The in-memory ELF image of the compiled functions for this component.
     trampoline_obj: CodeMemory,
 
     /// The index ranges within `trampoline_obj`'s mmap memory for the entire
     /// text section.
     text: Range<usize>,
 
-    /// Where trampolines are located within the `text` section of
-    /// `trampoline_obj`.
-    trampolines: PrimaryMap<LoweredIndex, LoweringInfo>,
+    /// Where lowered function trampolines are located within the `text`
+    /// section of `trampoline_obj`.
+    ///
+    /// These trampolines are the function pointer within the
+    /// `VMCallerCheckedAnyfunc` and will delegate indirectly to a host function
+    /// pointer when called.
+    lowerings: PrimaryMap<LoweredIndex, LoweringInfo>,
+
+    /// Where the "always trap" functions are located within the `text` section
+    /// of `trampoline_obj`.
+    ///
+    /// These functions are "degenerate functions" here solely to implement
+    /// functions that are `canon lift`'d then immediately `canon lower`'d.
+    always_trap: PrimaryMap<RuntimeAlwaysTrapIndex, AlwaysTrapInfo>,
 }
 
 impl Component {
@@ -117,39 +127,10 @@ impl Component {
             .context("failed to parse WebAssembly module")?;
         let types = Arc::new(types.finish());
 
-        // All lowered functions will require a trampoline to be available in
-        // case they're used when entering wasm. For example a lowered function
-        // could be immediately lifted in which case we'll need a trampoline to
-        // call that lowered function.
-        //
-        // Most of the time trampolines can come from the core wasm modules
-        // since lifted functions come from core wasm. For these esoteric cases
-        // though we may have to compile trampolines specifically into the
-        // component object as well in case core wasm doesn't provide the
-        // necessary trampoline.
-        let lowerings = component
-            .initializers
-            .iter()
-            .filter_map(|init| match init {
-                GlobalInitializer::LowerImport(i) => Some(i),
-                _ => None,
-            })
-            .collect::<Vec<_>>();
-        let required_trampolines = lowerings
-            .iter()
-            .map(|l| l.canonical_abi)
-            .collect::<HashSet<_>>();
         let provided_trampolines = modules
             .iter()
             .flat_map(|(_, m)| m.exported_signatures.iter().copied())
             .collect::<HashSet<_>>();
-        let mut trampolines_to_compile = required_trampolines
-            .difference(&provided_trampolines)
-            .collect::<Vec<_>>();
-        // Ensure a deterministically compiled artifact by sorting this list
-        // which was otherwise created with nondeterministically ordered hash
-        // tables.
-        trampolines_to_compile.sort();
 
         let (static_modules, trampolines) = engine.join_maybe_parallel(
             // In one (possibly) parallel task all the modules found within this
@@ -173,41 +154,10 @@ impl Component {
             },
             // In another (possibly) parallel task we compile lowering
             // trampolines necessary found in the component.
-            || -> Result<_> {
-                let compiler = engine.compiler();
-                let (lowered_trampolines, core_trampolines) = engine.join_maybe_parallel(
-                    // Compile all the lowered trampolines here which implement
-                    // `canon lower` and are used to exit wasm into the host.
-                    || -> Result<_> {
-                        Ok(engine
-                            .run_maybe_parallel(lowerings, |lowering| {
-                                compiler
-                                    .component_compiler()
-                                    .compile_lowered_trampoline(&component, lowering, &types)
-                            })?
-                            .into_iter()
-                            .collect())
-                    },
-                    // Compile all entry host-to-wasm trampolines here that
-                    // aren't otherwise provided by core wasm modules.
-                    || -> Result<_> {
-                        engine.run_maybe_parallel(trampolines_to_compile.clone(), |i| {
-                            let ty = &types[*i];
-                            Ok((*i, compiler.compile_host_to_wasm_trampoline(ty)?))
-                        })
-                    },
-                );
-                let mut obj = engine.compiler().object()?;
-                let trampolines = compiler.component_compiler().emit_obj(
-                    lowered_trampolines?,
-                    core_trampolines?,
-                    &mut obj,
-                )?;
-                Ok((trampolines, wasmtime_jit::mmap_vec_from_obj(obj)?))
-            },
+            || Component::compile_component(engine, &component, &types, &provided_trampolines),
         );
         let static_modules = static_modules?;
-        let ((lowering_trampolines, core_trampolines), trampoline_obj) = trampolines?;
+        let (lowerings, always_trap, trampolines, trampoline_obj) = trampolines?;
         let mut trampoline_obj = CodeMemory::new(trampoline_obj);
         let code = trampoline_obj.publish()?;
         let text = wasmtime_jit::subslice_range(code.text, code.mmap);
@@ -231,8 +181,8 @@ impl Component {
                 vmtrampolines.insert(idx, trampoline);
             }
         }
-        for (signature, trampoline) in trampolines_to_compile.iter().zip(core_trampolines) {
-            vmtrampolines.insert(**signature, unsafe {
+        for trampoline in trampolines {
+            vmtrampolines.insert(trampoline.signature, unsafe {
                 let ptr =
                     code.text[trampoline.start as usize..][..trampoline.length as usize].as_ptr();
                 std::mem::transmute::<*const u8, wasmtime_runtime::VMTrampoline>(ptr)
@@ -248,6 +198,15 @@ impl Component {
             vmtrampolines.into_iter(),
         );
 
+        // Assert that this `always_trap` list is sorted which is relied on in
+        // `register_component` as well as `Component::lookup_trap_code` below.
+        assert!(always_trap
+            .values()
+            .as_slice()
+            .windows(2)
+            .all(|window| { window[0].start < window[1].start }));
+
+        crate::module::register_component(code.text, &always_trap);
         Ok(Component {
             inner: Arc::new(ComponentInner {
                 component,
@@ -256,9 +215,134 @@ impl Component {
                 signatures,
                 trampoline_obj,
                 text,
-                trampolines: lowering_trampolines,
+                lowerings,
+                always_trap,
             }),
         })
+    }
+
+    #[cfg(compiler)]
+    fn compile_component(
+        engine: &Engine,
+        component: &wasmtime_environ::component::Component,
+        types: &ComponentTypes,
+        provided_trampolines: &HashSet<SignatureIndex>,
+    ) -> Result<(
+        PrimaryMap<LoweredIndex, LoweringInfo>,
+        PrimaryMap<RuntimeAlwaysTrapIndex, AlwaysTrapInfo>,
+        Vec<Trampoline>,
+        wasmtime_runtime::MmapVec,
+    )> {
+        let results = engine.join_maybe_parallel(
+            || compile_lowerings(engine, component, types),
+            || -> Result<_> {
+                Ok(engine.join_maybe_parallel(
+                    || compile_always_trap(engine, component, types),
+                    || compile_trampolines(engine, component, types, provided_trampolines),
+                ))
+            },
+        );
+        let (lowerings, other) = results;
+        let (always_trap, trampolines) = other?;
+        let mut obj = engine.compiler().object()?;
+        let (lower, traps, trampolines) = engine.compiler().component_compiler().emit_obj(
+            lowerings?,
+            always_trap?,
+            trampolines?,
+            &mut obj,
+        )?;
+        return Ok((
+            lower,
+            traps,
+            trampolines,
+            wasmtime_jit::mmap_vec_from_obj(obj)?,
+        ));
+
+        fn compile_lowerings(
+            engine: &Engine,
+            component: &wasmtime_environ::component::Component,
+            types: &ComponentTypes,
+        ) -> Result<PrimaryMap<LoweredIndex, Box<dyn Any + Send>>> {
+            let lowerings = component
+                .initializers
+                .iter()
+                .filter_map(|init| match init {
+                    GlobalInitializer::LowerImport(i) => Some(i),
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+            Ok(engine
+                .run_maybe_parallel(lowerings, |lowering| {
+                    engine
+                        .compiler()
+                        .component_compiler()
+                        .compile_lowered_trampoline(&component, lowering, &types)
+                })?
+                .into_iter()
+                .collect())
+        }
+
+        fn compile_always_trap(
+            engine: &Engine,
+            component: &wasmtime_environ::component::Component,
+            types: &ComponentTypes,
+        ) -> Result<PrimaryMap<RuntimeAlwaysTrapIndex, Box<dyn Any + Send>>> {
+            let always_trap = component
+                .initializers
+                .iter()
+                .filter_map(|init| match init {
+                    GlobalInitializer::AlwaysTrap(i) => Some(i),
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+            Ok(engine
+                .run_maybe_parallel(always_trap, |info| {
+                    engine
+                        .compiler()
+                        .component_compiler()
+                        .compile_always_trap(&types[info.canonical_abi])
+                })?
+                .into_iter()
+                .collect())
+        }
+
+        fn compile_trampolines(
+            engine: &Engine,
+            component: &wasmtime_environ::component::Component,
+            types: &ComponentTypes,
+            provided_trampolines: &HashSet<SignatureIndex>,
+        ) -> Result<Vec<(SignatureIndex, Box<dyn Any + Send>)>> {
+            // All lowered functions will require a trampoline to be available in
+            // case they're used when entering wasm. For example a lowered function
+            // could be immediately lifted in which case we'll need a trampoline to
+            // call that lowered function.
+            //
+            // Most of the time trampolines can come from the core wasm modules
+            // since lifted functions come from core wasm. For these esoteric cases
+            // though we may have to compile trampolines specifically into the
+            // component object as well in case core wasm doesn't provide the
+            // necessary trampoline.
+            let required_trampolines = component
+                .initializers
+                .iter()
+                .filter_map(|init| match init {
+                    GlobalInitializer::LowerImport(i) => Some(i.canonical_abi),
+                    GlobalInitializer::AlwaysTrap(i) => Some(i.canonical_abi),
+                    _ => None,
+                })
+                .collect::<HashSet<_>>();
+            let mut trampolines_to_compile = required_trampolines
+                .difference(&provided_trampolines)
+                .collect::<Vec<_>>();
+            // Ensure a deterministically compiled artifact by sorting this list
+            // which was otherwise created with nondeterministically ordered hash
+            // tables.
+            trampolines_to_compile.sort();
+            engine.run_maybe_parallel(trampolines_to_compile.clone(), |i| {
+                let ty = &types[*i];
+                Ok((*i, engine.compiler().compile_host_to_wasm_trampoline(ty)?))
+            })
+        }
     }
 
     pub(crate) fn env_component(&self) -> &wasmtime_environ::component::Component {
@@ -278,13 +362,52 @@ impl Component {
     }
 
     pub(crate) fn text(&self) -> &[u8] {
-        &self.inner.trampoline_obj.mmap()[self.inner.text.clone()]
+        self.inner.text()
     }
 
-    pub(crate) fn trampoline_ptr(&self, index: LoweredIndex) -> NonNull<VMFunctionBody> {
-        let info = &self.inner.trampolines[index];
+    pub(crate) fn lowering_ptr(&self, index: LoweredIndex) -> NonNull<VMFunctionBody> {
+        let info = &self.inner.lowerings[index];
+        self.func(info.start, info.length)
+    }
+
+    pub(crate) fn always_trap_ptr(&self, index: RuntimeAlwaysTrapIndex) -> NonNull<VMFunctionBody> {
+        let info = &self.inner.always_trap[index];
+        self.func(info.start, info.length)
+    }
+
+    fn func(&self, start: u32, len: u32) -> NonNull<VMFunctionBody> {
         let text = self.text();
-        let trampoline = &text[info.start as usize..][..info.length as usize];
+        let trampoline = &text[start as usize..][..len as usize];
         NonNull::new(trampoline.as_ptr() as *mut VMFunctionBody).unwrap()
+    }
+
+    /// Looks up a trap code for the instruction at `offset` where the offset
+    /// specified is relative to the start of this component's text section.
+    pub(crate) fn lookup_trap_code(&self, offset: usize) -> Option<TrapCode> {
+        let offset = u32::try_from(offset).ok()?;
+        // Currently traps only come from "always trap" adapters so that map is
+        // the only map that's searched.
+        match self
+            .inner
+            .always_trap
+            .values()
+            .as_slice()
+            .binary_search_by_key(&offset, |info| info.start + info.trap_offset)
+        {
+            Ok(_) => Some(TrapCode::AlwaysTrapAdapter),
+            Err(_) => None,
+        }
+    }
+}
+
+impl ComponentInner {
+    fn text(&self) -> &[u8] {
+        &self.trampoline_obj.mmap()[self.text.clone()]
+    }
+}
+
+impl Drop for ComponentInner {
+    fn drop(&mut self) {
+        crate::module::unregister_component(self.text());
     }
 }

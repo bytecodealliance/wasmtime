@@ -17,10 +17,10 @@ use std::mem;
 use std::ops::Deref;
 use std::ptr::{self, NonNull};
 use wasmtime_environ::component::{
-    Component, LoweredIndex, RuntimeComponentInstanceIndex, RuntimeMemoryIndex,
-    RuntimePostReturnIndex, RuntimeReallocIndex, StringEncoding, VMComponentOffsets,
-    VMCOMPONENT_FLAG_MAY_ENTER, VMCOMPONENT_FLAG_MAY_LEAVE, VMCOMPONENT_FLAG_NEEDS_POST_RETURN,
-    VMCOMPONENT_MAGIC,
+    Component, LoweredIndex, RuntimeAlwaysTrapIndex, RuntimeComponentInstanceIndex,
+    RuntimeMemoryIndex, RuntimePostReturnIndex, RuntimeReallocIndex, StringEncoding,
+    VMComponentOffsets, VMCOMPONENT_FLAG_MAY_ENTER, VMCOMPONENT_FLAG_MAY_LEAVE,
+    VMCOMPONENT_FLAG_NEEDS_POST_RETURN, VMCOMPONENT_MAGIC,
 };
 use wasmtime_environ::HostPtr;
 
@@ -259,6 +259,20 @@ impl ComponentInstance {
         }
     }
 
+    /// Same as `lowering_anyfunc` except for the functions that always trap.
+    pub fn always_trap_anyfunc(
+        &self,
+        idx: RuntimeAlwaysTrapIndex,
+    ) -> NonNull<VMCallerCheckedAnyfunc> {
+        unsafe {
+            let ret = self
+                .vmctx_plus_offset::<VMCallerCheckedAnyfunc>(self.offsets.always_trap_anyfunc(idx));
+            debug_assert!((*ret).func_ptr.as_ptr() as usize != INVALID_PTR);
+            debug_assert!((*ret).vmctx as usize != INVALID_PTR);
+            NonNull::new(ret).unwrap()
+        }
+    }
+
     /// Stores the runtime memory pointer at the index specified.
     ///
     /// This is intended to be called during the instantiation process of a
@@ -340,6 +354,28 @@ impl ComponentInstance {
         }
     }
 
+    /// Same as `set_lowering` but for the "always trap" functions.
+    pub fn set_always_trap(
+        &mut self,
+        idx: RuntimeAlwaysTrapIndex,
+        func_ptr: NonNull<VMFunctionBody>,
+        type_index: VMSharedSignatureIndex,
+    ) {
+        unsafe {
+            debug_assert!(
+                *self.vmctx_plus_offset::<usize>(self.offsets.always_trap_anyfunc(idx))
+                    == INVALID_PTR
+            );
+            let vmctx = self.vmctx();
+            *self.vmctx_plus_offset(self.offsets.always_trap_anyfunc(idx)) =
+                VMCallerCheckedAnyfunc {
+                    func_ptr,
+                    type_index,
+                    vmctx: VMOpaqueContext::from_vmcomponent(vmctx),
+                };
+        }
+    }
+
     unsafe fn initialize_vmctx(&mut self, store: *mut dyn Store) {
         *self.vmctx_plus_offset(self.offsets.magic()) = VMCOMPONENT_MAGIC;
         *self.vmctx_plus_offset(self.offsets.store()) = store;
@@ -360,6 +396,11 @@ impl ComponentInstance {
                 let offset = self.offsets.lowering_data(i);
                 *self.vmctx_plus_offset(offset) = INVALID_PTR;
                 let offset = self.offsets.lowering_anyfunc(i);
+                *self.vmctx_plus_offset(offset) = INVALID_PTR;
+            }
+            for i in 0..self.offsets.num_always_trap {
+                let i = RuntimeAlwaysTrapIndex::from_u32(i);
+                let offset = self.offsets.always_trap_anyfunc(i);
                 *self.vmctx_plus_offset(offset) = INVALID_PTR;
             }
             for i in 0..self.offsets.num_runtime_memories {
@@ -474,6 +515,19 @@ impl OwnedComponentInstance {
         unsafe {
             self.instance_mut()
                 .set_lowering(idx, lowering, anyfunc_func_ptr, anyfunc_type_index)
+        }
+    }
+
+    /// See `ComponentInstance::set_always_trap`
+    pub fn set_always_trap(
+        &mut self,
+        idx: RuntimeAlwaysTrapIndex,
+        func_ptr: NonNull<VMFunctionBody>,
+        type_index: VMSharedSignatureIndex,
+    ) {
+        unsafe {
+            self.instance_mut()
+                .set_always_trap(idx, func_ptr, type_index)
         }
     }
 }

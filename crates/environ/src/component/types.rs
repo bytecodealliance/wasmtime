@@ -145,6 +145,9 @@ indices! {
     /// component model.
     pub struct LoweredIndex(u32);
 
+    /// Same as `LoweredIndex` but for the `CoreDef::AlwaysTrap` variant.
+    pub struct RuntimeAlwaysTrapIndex(u32);
+
     /// Index representing a linear memory extracted from a wasm instance
     /// which is stored in a `VMComponentContext`. This is used to deduplicate
     /// references to the same linear memory where it's only stored once in a

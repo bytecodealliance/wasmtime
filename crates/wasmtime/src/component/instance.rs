@@ -7,9 +7,9 @@ use anyhow::{anyhow, Context, Result};
 use std::marker;
 use std::sync::Arc;
 use wasmtime_environ::component::{
-    ComponentTypes, CoreDef, CoreExport, Export, ExportItem, ExtractMemory, ExtractPostReturn,
-    ExtractRealloc, GlobalInitializer, InstantiateModule, LowerImport, RuntimeImportIndex,
-    RuntimeInstanceIndex, RuntimeModuleIndex,
+    AlwaysTrap, ComponentTypes, CoreDef, CoreExport, Export, ExportItem, ExtractMemory,
+    ExtractPostReturn, ExtractRealloc, GlobalInitializer, InstantiateModule, LowerImport,
+    RuntimeImportIndex, RuntimeInstanceIndex, RuntimeModuleIndex,
 };
 use wasmtime_environ::{EntityIndex, PrimaryMap};
 use wasmtime_runtime::component::{ComponentInstance, OwnedComponentInstance};
@@ -145,12 +145,17 @@ impl InstanceData {
 
     pub fn lookup_def(&self, store: &mut StoreOpaque, def: &CoreDef) -> wasmtime_runtime::Export {
         match def {
+            CoreDef::Export(e) => self.lookup_export(store, e),
             CoreDef::Lowered(idx) => {
                 wasmtime_runtime::Export::Function(wasmtime_runtime::ExportFunction {
                     anyfunc: self.state.lowering_anyfunc(*idx),
                 })
             }
-            CoreDef::Export(e) => self.lookup_export(store, e),
+            CoreDef::AlwaysTrap(idx) => {
+                wasmtime_runtime::Export::Function(wasmtime_runtime::ExportFunction {
+                    anyfunc: self.state.always_trap_anyfunc(*idx),
+                })
+            }
         }
     }
 
@@ -272,6 +277,8 @@ impl<'a> Instantiator<'a> {
 
                 GlobalInitializer::LowerImport(import) => self.lower_import(import),
 
+                GlobalInitializer::AlwaysTrap(trap) => self.always_trap(trap),
+
                 GlobalInitializer::ExtractMemory(mem) => self.extract_memory(store.0, mem),
 
                 GlobalInitializer::ExtractRealloc(realloc) => {
@@ -307,7 +314,7 @@ impl<'a> Instantiator<'a> {
         self.data.state.set_lowering(
             import.index,
             func.lowering(),
-            self.component.trampoline_ptr(import.index),
+            self.component.lowering_ptr(import.index),
             self.component
                 .signatures()
                 .shared_signature(import.canonical_abi)
@@ -322,6 +329,17 @@ impl<'a> Instantiator<'a> {
         // of host functions used we can ensure that the function lives long
         // enough for the whole duration of this instance.
         self.data.funcs.push(func.clone());
+    }
+
+    fn always_trap(&mut self, trap: &AlwaysTrap) {
+        self.data.state.set_always_trap(
+            trap.index,
+            self.component.always_trap_ptr(trap.index),
+            self.component
+                .signatures()
+                .shared_signature(trap.canonical_abi)
+                .expect("found unregistered signature"),
+        );
     }
 
     fn extract_memory(&mut self, store: &mut StoreOpaque, memory: &ExtractMemory) {
