@@ -191,14 +191,14 @@ where
             let storage = cast_storage::<ReturnStack<ValRaw, Return::Lower>>(storage);
             let ptr =
                 validate_inbounds::<Params>(memory.as_slice(), &storage.assume_init_ref().args)?;
-            let params = Params::load(&memory, &memory.as_slice()[ptr..][..Params::size()])?;
+            let params = Params::load(&memory, &memory.as_slice()[ptr..][..Params::SIZE32])?;
             let ret = closure(cx.as_context_mut(), params)?;
             reset_may_leave = unset_and_reset_on_drop(flags, VMComponentFlags::set_may_leave);
             ret.lower(&mut cx, &options, map_maybe_uninit!(storage.ret))?;
         } else {
             let storage = cast_storage::<ReturnPointer<ValRaw>>(storage).assume_init_ref();
             let ptr = validate_inbounds::<Params>(memory.as_slice(), &storage.args)?;
-            let params = Params::load(&memory, &memory.as_slice()[ptr..][..Params::size()])?;
+            let params = Params::load(&memory, &memory.as_slice()[ptr..][..Params::SIZE32])?;
             let ret = closure(cx.as_context_mut(), params)?;
             let mut memory = MemoryMut::new(cx.as_context_mut(), &options);
             let ptr = validate_inbounds::<Return>(memory.as_slice_mut(), &storage.retptr)?;
@@ -233,10 +233,10 @@ where
 fn validate_inbounds<T: ComponentType>(memory: &[u8], ptr: &ValRaw) -> Result<usize> {
     // FIXME: needs memory64 support
     let ptr = usize::try_from(ptr.get_u32())?;
-    if ptr % usize::try_from(T::align())? != 0 {
+    if ptr % usize::try_from(T::ALIGN32)? != 0 {
         bail!("pointer not aligned");
     }
-    let end = match ptr.checked_add(T::size()) {
+    let end = match ptr.checked_add(T::SIZE32) {
         Some(n) => n,
         None => bail!("pointer size overflow"),
     };

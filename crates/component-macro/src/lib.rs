@@ -192,7 +192,7 @@ impl Expander for LiftExpander {
                     memory,
                     &bytes
                         [#internal::next_field::<#ty>(&mut offset)..]
-                        [..<#ty as wasmtime::component::ComponentType>::size()]
+                        [..<#ty as wasmtime::component::ComponentType>::SIZE32]
                 )?,));
         }
 
@@ -217,7 +217,7 @@ impl Expander for LiftExpander {
                 fn load(memory: &#internal::Memory, bytes: &[u8]) -> #internal::anyhow::Result<Self> {
                     debug_assert!(
                         (bytes.as_ptr() as usize)
-                            % (<Self as wasmtime::component::ComponentType>::align() as usize)
+                            % (<Self as wasmtime::component::ComponentType>::ALIGN32 as usize)
                             == 0
                     );
                     let mut offset = 0;
@@ -323,7 +323,10 @@ impl Expander for ComponentTypeExpander {
                 quote!((#literal, <#ty as wasmtime::component::ComponentType>::typecheck),),
             );
 
-            sizes.extend(quote!(#internal::next_field::<#ty>(&mut size);));
+            sizes.extend(quote!(
+                size = #internal::align_to(size, <#ty as wasmtime::component::ComponentType>::ALIGN32);
+                size += <#ty as wasmtime::component::ComponentType>::SIZE32;
+            ));
 
             unique_types.insert(ty);
         }
@@ -331,9 +334,10 @@ impl Expander for ComponentTypeExpander {
         let alignments = unique_types
             .into_iter()
             .map(|ty| {
-                quote!(align = align.max(
-                        <#ty as wasmtime::component::ComponentType>::align()
-                    );)
+                let align = quote!(<#ty as wasmtime::component::ComponentType>::ALIGN32);
+                quote!(if #align > align {
+                    align = #align;
+                })
             })
             .collect::<TokenStream>();
 
@@ -353,26 +357,24 @@ impl Expander for ComponentTypeExpander {
             unsafe impl #impl_generics wasmtime::component::ComponentType for #name #ty_generics #where_clause {
                 type Lower = #lower;
 
+                const SIZE32: usize = {
+                    let mut size = 0;
+                    #sizes
+                    size
+                };
+
+                const ALIGN32: u32 = {
+                    let mut align = 1;
+                    #alignments
+                    align
+                };
+
                 #[inline]
                 fn typecheck(
                     ty: &#internal::InterfaceType,
                     types: &#internal::ComponentTypes,
                 ) -> #internal::anyhow::Result<()> {
                     #internal::typecheck_record(ty, types, &[#field_names_and_checks])
-                }
-
-                #[inline]
-                fn size() -> usize {
-                    let mut size = 0;
-                    #sizes
-                    size
-                }
-
-                #[inline]
-                fn align() -> u32 {
-                    let mut align = 1;
-                    #alignments
-                    align
                 }
             }
         };
