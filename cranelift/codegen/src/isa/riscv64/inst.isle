@@ -819,7 +819,7 @@
       ;; 
       (count Reg (alu_rr_funct12 (AluOPRRI.Clz) tmp))
       ;;make result
-      (result Reg (alu_rr_imm12 (AluOPRRI.Addi) count (imm12_const (ty_unused_bits_neg ty))))
+      (result Reg (alu_rr_imm12 (AluOPRRI.Addi) count (imm12_const_add (ty_bits ty) -64 )))
     )
     result
   )
@@ -851,22 +851,6 @@
     (value_regs result (zero_reg))
   )
 )
-
-;;; 
-(decl ty_unused_bits_neg (Type) i32)
-(rule
-  (ty_unused_bits_neg $I8)
-  -56
-)
-(rule
-  (ty_unused_bits_neg $I16)
-  -48
-)
-(rule
-  (ty_unused_bits_neg $I32)
-  -32
-)
-
 
 (decl con_extend (Reg bool u8 u8) Reg)
 (rule
@@ -1070,9 +1054,9 @@
   (let
     (
       ;; low part.
-      (low Reg (alu_rr_imm12 (AluOPRRI.Cpop) (value_regs_get a 0) (imm12_const 0)))
+      (low Reg (alu_rr_funct12 (AluOPRRI.Cpop) (value_regs_get a 0) ))
       ;; high part.
-      (high Reg (alu_rr_imm12 (AluOPRRI.Cpop) (value_regs_get a 1) (imm12_const 0)))
+      (high Reg (alu_rr_funct12 (AluOPRRI.Cpop) (value_regs_get a 1)  ))
       ;; add toghter.
       (result Reg (alu_add low high))
     )
