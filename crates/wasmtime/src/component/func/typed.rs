@@ -1492,6 +1492,95 @@ pub fn typecheck_record(
     }
 }
 
+/// Verify that the given wasm type is a variant with the expected cases in the right order and with the right
+/// names.
+pub fn typecheck_variant(
+    ty: &InterfaceType,
+    types: &ComponentTypes,
+    expected: &[(&str, fn(&InterfaceType, &ComponentTypes) -> Result<()>)],
+) -> Result<()> {
+    match ty {
+        InterfaceType::Variant(index) => {
+            let cases = &types[*index].cases;
+
+            if cases.len() != expected.len() {
+                bail!(
+                    "expected variant of {} cases, found {} cases",
+                    expected.len(),
+                    cases.len()
+                );
+            }
+
+            for (case, &(name, check)) in cases.iter().zip(expected) {
+                check(&case.ty, types)
+                    .with_context(|| format!("type mismatch for case {}", name))?;
+
+                if case.name != name {
+                    bail!("expected variant case named {}, found {}", name, case.name);
+                }
+            }
+
+            Ok(())
+        }
+        other => bail!("expected `variant` found `{}`", desc(other)),
+    }
+}
+
+/// Verify that the given wasm type is a enum with the expected cases in the right order and with the right
+/// names.
+pub fn typecheck_enum(ty: &InterfaceType, types: &ComponentTypes, expected: &[&str]) -> Result<()> {
+    match ty {
+        InterfaceType::Enum(index) => {
+            let names = &types[*index].names;
+
+            if names.len() != expected.len() {
+                bail!(
+                    "expected enum of {} names, found {} names",
+                    expected.len(),
+                    names.len()
+                );
+            }
+
+            for (name, expected) in names.iter().zip(expected) {
+                if name != expected {
+                    bail!("expected enum case named {}, found {}", expected, name);
+                }
+            }
+
+            Ok(())
+        }
+        other => bail!("expected `enum` found `{}`", desc(other)),
+    }
+}
+
+/// Verify that the given wasm type is a union with the expected cases in the right order.
+pub fn typecheck_union(
+    ty: &InterfaceType,
+    types: &ComponentTypes,
+    expected: &[fn(&InterfaceType, &ComponentTypes) -> Result<()>],
+) -> Result<()> {
+    match ty {
+        InterfaceType::Union(index) => {
+            let union_types = &types[*index].types;
+
+            if union_types.len() != expected.len() {
+                bail!(
+                    "expected union of {} types, found {} types",
+                    expected.len(),
+                    union_types.len()
+                );
+            }
+
+            for (index, (ty, check)) in union_types.iter().zip(expected).enumerate() {
+                check(ty, types).with_context(|| format!("type mismatch for case {}", index))?;
+            }
+
+            Ok(())
+        }
+        other => bail!("expected `union` found `{}`", desc(other)),
+    }
+}
+
 unsafe impl<T> ComponentType for Option<T>
 where
     T: ComponentType,
