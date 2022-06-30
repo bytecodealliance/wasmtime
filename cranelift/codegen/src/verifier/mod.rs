@@ -1646,7 +1646,7 @@ impl<'a> Verifier<'a> {
                 // We must be specific about the opcodes above because other instructions are using
                 // the same formats.
                 let ty = self.func.dfg.value_type(arg);
-                if u16::from(lane) >= ty.lane_count() {
+                if lane as u32 >= ty.lane_count() {
                     errors.fatal((
                         inst,
                         self.context(inst),

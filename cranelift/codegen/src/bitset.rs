@@ -37,7 +37,7 @@ where
     }
 
     /// Check if this BitSet contains the number num
-    pub fn contains(&self, num: u8) -> bool {
+    pub fn contains(&self, num: u32) -> bool {
         debug_assert!((num as usize) < Self::bits());
         debug_assert!((num as usize) < Self::max_bits());
         self.0.into() & (1 << num) != 0

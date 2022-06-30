@@ -208,7 +208,7 @@ macro_rules! isle_prelude_methods {
 
         #[inline]
         fn ty_bits_u16(&mut self, ty: Type) -> u16 {
-            ty.bits()
+            ty.bits().try_into().unwrap()
         }
 
         #[inline]
@@ -410,7 +410,7 @@ macro_rules! isle_prelude_methods {
         }
 
         #[inline]
-        fn multi_lane(&mut self, ty: Type) -> Option<(u8, u16)> {
+        fn multi_lane(&mut self, ty: Type) -> Option<(u32, u32)> {
             if ty.lane_count() > 1 {
                 Some((ty.lane_bits(), ty.lane_count()))
             } else {

@@ -922,7 +922,7 @@ mod simplify {
                             if !const_data.iter().all(|&b| b == 0 || b == 0xFF) {
                                 return;
                             }
-                            let new_type = B8.by(old_cond_type.bytes() as u16).unwrap();
+                            let new_type = B8.by(old_cond_type.bytes()).unwrap();
                             (pos.ins().raw_bitcast(new_type, args[0]), new_type)
                         }
                         _ => return,

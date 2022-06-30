@@ -430,7 +430,7 @@
 
 ;; Match a multi-lane type, extracting (# bits per lane, # lanes) from the given
 ;; type. Will only match when there is more than one lane.
-(decl multi_lane (u8 u16) Type)
+(decl multi_lane (u32 u32) Type)
 (extern extractor multi_lane multi_lane)
 
 ;; Match the instruction that defines the given value, if any.

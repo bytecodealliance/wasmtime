@@ -125,9 +125,7 @@ where
         let inputs = self.lower_ctx.get_value_as_source_or_const(val);
 
         if let Some(c) = inputs.constant {
-            let mask = 1_u64
-                .checked_shl(ty.bits() as u32)
-                .map_or(u64::MAX, |x| x - 1);
+            let mask = 1_u64.checked_shl(ty.bits()).map_or(u64::MAX, |x| x - 1);
             return Imm8Gpr::new(Imm8Reg::Imm8 {
                 imm: (c & mask) as u8,
             })
@@ -218,9 +216,7 @@ where
 
     #[inline]
     fn const_to_type_masked_imm8(&mut self, c: u64, ty: Type) -> Imm8Gpr {
-        let mask = 1_u64
-            .checked_shl(ty.bits() as u32)
-            .map_or(u64::MAX, |x| x - 1);
+        let mask = 1_u64.checked_shl(ty.bits()).map_or(u64::MAX, |x| x - 1);
         Imm8Gpr::new(Imm8Reg::Imm8 {
             imm: (c & mask) as u8,
         })
