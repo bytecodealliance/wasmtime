@@ -49,12 +49,14 @@ impl Backend for TensorflowBackend {
                 for i in 0..unmap.len() {
                     if unmap[i].0 == guest_map_str {
                         //Append the stored mapdir path with the user path.
-                        let full_path = std::fs::canonicalize(Path::new(&unmap[i].1.clone()).join(Path::new(exp_str)));
+                        let full_path = std::fs::canonicalize(
+                            Path::new(&unmap[i].1.clone()).join(Path::new(exp_str)),
+                        );
 
                         //Check that path actually exists
                         let full_path = match full_path {
                             Ok(fp) => fp,
-                            Err(e) => return Err(BackendError::MissingMapDir())
+                            Err(e) => return Err(BackendError::MissingMapDir()),
                         };
 
                         let bundle = SavedModelBundle::load(
