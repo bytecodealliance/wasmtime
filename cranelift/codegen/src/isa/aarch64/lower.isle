@@ -1193,6 +1193,20 @@
 (rule (lower (has_type (ty_vec128 ty) (vselect c x y)))
         (bsl ty c x y))
 
+;;;; Rules for `ireduce` / `breduce` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; T -> I{64,32,16,8}: We can simply pass through the value: values
+;; are always stored with high bits undefined, so we can just leave
+;; them be.
+(rule (lower (has_type (ty_int_bool_ref_scalar_64 ty) (ireduce src)))
+    (value_regs_get src 0))
+
+;; Likewise for breduce.
+
+(rule (lower (has_type (ty_int_bool_ref_scalar_64 ty) (breduce src)))
+      (value_regs_get src 0))
+
+
 ;;;; Rules for `fcmp` 32 bit ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type ty @ (multi_lane _ _) (fcmp (fcmp_zero_cond_not_eq cond) x (splat (f32const (zero_value_f32 y))))))

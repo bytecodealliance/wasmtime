@@ -423,14 +423,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             ctx.emit(Inst::gen_move(rd, rn, ty));
         }
 
-        Opcode::Breduce | Opcode::Ireduce => {
-            // Smaller integers/booleans are stored with high-order bits
-            // undefined, so we can simply do a copy.
-            let rn = put_input_in_regs(ctx, inputs[0]).regs()[0];
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let ty = ctx.input_ty(insn, 0);
-            ctx.emit(Inst::gen_move(rd, rn, ty));
-        }
+        Opcode::Breduce | Opcode::Ireduce => implemented_in_isle(ctx),
 
         Opcode::Bextend | Opcode::Bmask => {
             // Bextend and Bmask both simply sign-extend. This works for:

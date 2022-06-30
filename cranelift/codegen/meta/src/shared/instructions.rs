@@ -3273,20 +3273,14 @@ pub(crate) fn define(
 
     let Bool = &TypeVar::new(
         "Bool",
-        "A scalar or vector boolean type",
-        TypeSetBuilder::new()
-            .bools(Interval::All)
-            .simd_lanes(Interval::All)
-            .build(),
+        "A scalar boolean type",
+        TypeSetBuilder::new().bools(Interval::All).build(),
     );
 
     let BoolTo = &TypeVar::new(
         "BoolTo",
-        "A smaller boolean type with the same number of lanes",
-        TypeSetBuilder::new()
-            .bools(Interval::All)
-            .simd_lanes(Interval::All)
-            .build(),
+        "A smaller boolean type",
+        TypeSetBuilder::new().bools(Interval::All).build(),
     );
 
     let x = &Operand::new("x", Bool);
@@ -3296,11 +3290,7 @@ pub(crate) fn define(
         Inst::new(
             "breduce",
             r#"
-        Convert `x` to a smaller boolean type in the platform-defined way.
-
-        The result type must have the same number of vector lanes as the input,
-        and each lane must not have more bits that the input lanes. If the
-        input and output types are the same, this is a no-op.
+        Convert `x` to a smaller boolean type by discarding the most significant bits.
         "#,
             &formats.unary,
         )
@@ -3308,6 +3298,14 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
+    let Bool = &TypeVar::new(
+        "Bool",
+        "A scalar or vector boolean type",
+        TypeSetBuilder::new()
+            .bools(Interval::All)
+            .simd_lanes(Interval::All)
+            .build(),
+    );
     let BoolTo = &TypeVar::new(
         "BoolTo",
         "A larger boolean type with the same number of lanes",
@@ -3385,20 +3383,14 @@ pub(crate) fn define(
 
     let Int = &TypeVar::new(
         "Int",
-        "A scalar or vector integer type",
-        TypeSetBuilder::new()
-            .ints(Interval::All)
-            .simd_lanes(Interval::All)
-            .build(),
+        "A scalar integer type",
+        TypeSetBuilder::new().ints(Interval::All).build(),
     );
 
     let IntTo = &TypeVar::new(
         "IntTo",
-        "A smaller integer type with the same number of lanes",
-        TypeSetBuilder::new()
-            .ints(Interval::All)
-            .simd_lanes(Interval::All)
-            .build(),
+        "A smaller integer type",
+        TypeSetBuilder::new().ints(Interval::All).build(),
     );
     let x = &Operand::new("x", Int);
     let a = &Operand::new("a", IntTo);
@@ -3407,15 +3399,10 @@ pub(crate) fn define(
         Inst::new(
             "ireduce",
             r#"
-        Convert `x` to a smaller integer type by dropping high bits.
+        Convert `x` to a smaller integer type by discarding
+        the most significant bits.
 
-        Each lane in `x` is converted to a smaller integer type by discarding
-        the most significant bits. This is the same as reducing modulo
-        `2^n`.
-
-        The result type must have the same number of vector lanes as the input,
-        and each lane must not have more bits that the input lanes. If the
-        input and output types are the same, this is a no-op.
+        This is the same as reducing modulo `2^n`.
         "#,
             &formats.unary,
         )
@@ -3855,6 +3842,14 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
+    let Int = &TypeVar::new(
+        "Int",
+        "A scalar or vector integer type",
+        TypeSetBuilder::new()
+            .ints(Interval::All)
+            .simd_lanes(Interval::All)
+            .build(),
+    );
     let x = &Operand::new("x", Int);
     let a = &Operand::new("a", FloatTo);
 
