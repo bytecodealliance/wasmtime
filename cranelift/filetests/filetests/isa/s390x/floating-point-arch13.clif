@@ -1,374 +1,5 @@
 test compile precise-output
-target s390x
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; F32CONST/F64CONST
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-; FIXME: should use FZERO instruction
-; FIXME: should use out-of-line literal pool
-
-function %f32const_zero() -> f32 {
-block0:
-  v1 = f32const 0x0.0
-  return v1
-}
-
-; block0:
-;   bras %r1, 8 ; data.f32 0 ; le %f0, 0(%r1)
-;   br %r14
-
-function %f64const_zero() -> f64 {
-block0:
-  v1 = f64const 0x0.0
-  return v1
-}
-
-; block0:
-;   bras %r1, 12 ; data.f64 0 ; ld %f0, 0(%r1)
-;   br %r14
-
-function %f32const_one() -> f32 {
-block0:
-  v1 = f32const 0x1.0
-  return v1
-}
-
-; block0:
-;   bras %r1, 8 ; data.f32 1 ; le %f0, 0(%r1)
-;   br %r14
-
-function %f64const_one() -> f64 {
-block0:
-  v1 = f64const 0x1.0
-  return v1
-}
-
-; block0:
-;   bras %r1, 12 ; data.f64 1 ; ld %f0, 0(%r1)
-;   br %r14
-
-function %fadd_f32(f32, f32) -> f32 {
-block0(v0: f32, v1: f32):
-  v2 = fadd v0, v1
-  return v2
-}
-
-; block0:
-;   aebr %f0, %f2
-;   br %r14
-
-function %fadd_f64(f64, f64) -> f64 {
-block0(v0: f64, v1: f64):
-  v2 = fadd v0, v1
-  return v2
-}
-
-; block0:
-;   adbr %f0, %f2
-;   br %r14
-
-function %fsub_f32(f32, f32) -> f32 {
-block0(v0: f32, v1: f32):
-  v2 = fsub v0, v1
-  return v2
-}
-
-; block0:
-;   sebr %f0, %f2
-;   br %r14
-
-function %fsub_f64(f64, f64) -> f64 {
-block0(v0: f64, v1: f64):
-  v2 = fsub v0, v1
-  return v2
-}
-
-; block0:
-;   sdbr %f0, %f2
-;   br %r14
-
-function %fmul_f32(f32, f32) -> f32 {
-block0(v0: f32, v1: f32):
-  v2 = fmul v0, v1
-  return v2
-}
-
-; block0:
-;   meebr %f0, %f2
-;   br %r14
-
-function %fmul_f64(f64, f64) -> f64 {
-block0(v0: f64, v1: f64):
-  v2 = fmul v0, v1
-  return v2
-}
-
-; block0:
-;   mdbr %f0, %f2
-;   br %r14
-
-function %fdiv_f32(f32, f32) -> f32 {
-block0(v0: f32, v1: f32):
-  v2 = fdiv v0, v1
-  return v2
-}
-
-; block0:
-;   debr %f0, %f2
-;   br %r14
-
-function %fdiv_f64(f64, f64) -> f64 {
-block0(v0: f64, v1: f64):
-  v2 = fdiv v0, v1
-  return v2
-}
-
-; block0:
-;   ddbr %f0, %f2
-;   br %r14
-
-function %fmin_f32(f32, f32) -> f32 {
-block0(v0: f32, v1: f32):
-  v2 = fmin v0, v1
-  return v2
-}
-
-; block0:
-;   wfminsb %f0, %f0, %f2, 1
-;   br %r14
-
-function %fmin_f64(f64, f64) -> f64 {
-block0(v0: f64, v1: f64):
-  v2 = fmin v0, v1
-  return v2
-}
-
-; block0:
-;   wfmindb %f0, %f0, %f2, 1
-;   br %r14
-
-function %fmax_f32(f32, f32) -> f32 {
-block0(v0: f32, v1: f32):
-  v2 = fmax v0, v1
-  return v2
-}
-
-; block0:
-;   wfmaxsb %f0, %f0, %f2, 1
-;   br %r14
-
-function %fmax_f64(f64, f64) -> f64 {
-block0(v0: f64, v1: f64):
-  v2 = fmax v0, v1
-  return v2
-}
-
-; block0:
-;   wfmaxdb %f0, %f0, %f2, 1
-;   br %r14
-
-function %sqrt_f32(f32) -> f32 {
-block0(v0: f32):
-  v1 = sqrt v0
-  return v1
-}
-
-; block0:
-;   sqebr %f0, %f0
-;   br %r14
-
-function %sqrt_f64(f64) -> f64 {
-block0(v0: f64):
-  v1 = sqrt v0
-  return v1
-}
-
-; block0:
-;   sqdbr %f0, %f0
-;   br %r14
-
-function %fabs_f32(f32) -> f32 {
-block0(v0: f32):
-  v1 = fabs v0
-  return v1
-}
-
-; block0:
-;   lpebr %f0, %f0
-;   br %r14
-
-function %fabs_f64(f64) -> f64 {
-block0(v0: f64):
-  v1 = fabs v0
-  return v1
-}
-
-; block0:
-;   lpdbr %f0, %f0
-;   br %r14
-
-function %fneg_f32(f32) -> f32 {
-block0(v0: f32):
-  v1 = fneg v0
-  return v1
-}
-
-; block0:
-;   lcebr %f0, %f0
-;   br %r14
-
-function %fneg_f64(f64) -> f64 {
-block0(v0: f64):
-  v1 = fneg v0
-  return v1
-}
-
-; block0:
-;   lcdbr %f0, %f0
-;   br %r14
-
-function %fpromote_f32(f32) -> f64 {
-block0(v0: f32):
-  v1 = fpromote.f64 v0
-  return v1
-}
-
-; block0:
-;   ldebr %f0, %f0
-;   br %r14
-
-function %fdemote_f64(f64) -> f32 {
-block0(v0: f64):
-  v1 = fdemote.f32 v0
-  return v1
-}
-
-; block0:
-;   ledbra %f0, %f0, 0
-;   br %r14
-
-function %ceil_f32(f32) -> f32 {
-block0(v0: f32):
-  v1 = ceil v0
-  return v1
-}
-
-; block0:
-;   fiebr %f0, %f0, 6
-;   br %r14
-
-function %ceil_f64(f64) -> f64 {
-block0(v0: f64):
-  v1 = ceil v0
-  return v1
-}
-
-; block0:
-;   fidbr %f0, %f0, 6
-;   br %r14
-
-function %floor_f32(f32) -> f32 {
-block0(v0: f32):
-  v1 = floor v0
-  return v1
-}
-
-; block0:
-;   fiebr %f0, %f0, 7
-;   br %r14
-
-function %floor_f64(f64) -> f64 {
-block0(v0: f64):
-  v1 = floor v0
-  return v1
-}
-
-; block0:
-;   fidbr %f0, %f0, 7
-;   br %r14
-
-function %trunc_f32(f32) -> f32 {
-block0(v0: f32):
-  v1 = trunc v0
-  return v1
-}
-
-; block0:
-;   fiebr %f0, %f0, 5
-;   br %r14
-
-function %trunc_f64(f64) -> f64 {
-block0(v0: f64):
-  v1 = trunc v0
-  return v1
-}
-
-; block0:
-;   fidbr %f0, %f0, 5
-;   br %r14
-
-function %nearest_f32(f32) -> f32 {
-block0(v0: f32):
-  v1 = nearest v0
-  return v1
-}
-
-; block0:
-;   fiebr %f0, %f0, 4
-;   br %r14
-
-function %nearest_f64(f64) -> f64 {
-block0(v0: f64):
-  v1 = nearest v0
-  return v1
-}
-
-; block0:
-;   fidbr %f0, %f0, 4
-;   br %r14
-
-function %fma_f32(f32, f32, f32) -> f32 {
-block0(v0: f32, v1: f32, v2: f32):
-  v3 = fma v0, v1, v2
-  return v3
-}
-
-; block0:
-;   wfmasb %f0, %f0, %f2, %f4
-;   br %r14
-
-function %fma_f64(f64, f64, f64) -> f64 {
-block0(v0: f64, v1: f64, v2: f64):
-  v3 = fma v0, v1, v2
-  return v3
-}
-
-; block0:
-;   wfmadb %f0, %f0, %f2, %f4
-;   br %r14
-
-function %fcopysign_f32(f32, f32) -> f32 {
-block0(v0: f32, v1: f32):
-  v2 = fcopysign v0, v1
-  return v2
-}
-
-; block0:
-;   bras %r1, 8 ; data.f32 NaN ; le %f5, 0(%r1)
-;   vsel %v0, %v0, %v2, %v5
-;   br %r14
-
-function %fcopysign_f64(f64, f64) -> f64 {
-block0(v0: f64, v1: f64):
-  v2 = fcopysign v0, v1
-  return v2
-}
-
-; block0:
-;   bras %r1, 12 ; data.f64 NaN ; ld %f5, 0(%r1)
-;   vsel %v0, %v0, %v2, %v5
-;   br %r14
+target s390x arch13
 
 function %fcvt_to_uint_f32_i8(f32) -> i8 {
 block0(v0: f32):
@@ -385,9 +16,8 @@ block0(v0: f32):
 ;   bras %r1, 8 ; data.f32 -1 ; vlef %v17, 0(%r1), 0
 ;   wfcsb %f0, %v17
 ;   jnle 6 ; trap
-;   wldeb %v21, %f0
-;   wclgdb %v23, %v21, 0, 5
-;   vlgvg %r2, %v23, 0
+;   wclfeb %v21, %f0, 0, 5
+;   vlgvf %r2, %v21, 0
 ;   br %r14
 
 function %fcvt_to_sint_f32_i8(f32) -> i8 {
@@ -405,9 +35,8 @@ block0(v0: f32):
 ;   bras %r1, 8 ; data.f32 -129 ; vlef %v17, 0(%r1), 0
 ;   wfcsb %f0, %v17
 ;   jnle 6 ; trap
-;   wldeb %v21, %f0
-;   wcgdb %v23, %v21, 0, 5
-;   vlgvg %r2, %v23, 0
+;   wcfeb %v21, %f0, 0, 5
+;   vlgvf %r2, %v21, 0
 ;   br %r14
 
 function %fcvt_to_uint_f32_i16(f32) -> i16 {
@@ -425,9 +54,8 @@ block0(v0: f32):
 ;   bras %r1, 8 ; data.f32 -1 ; vlef %v17, 0(%r1), 0
 ;   wfcsb %f0, %v17
 ;   jnle 6 ; trap
-;   wldeb %v21, %f0
-;   wclgdb %v23, %v21, 0, 5
-;   vlgvg %r2, %v23, 0
+;   wclfeb %v21, %f0, 0, 5
+;   vlgvf %r2, %v21, 0
 ;   br %r14
 
 function %fcvt_to_sint_f32_i16(f32) -> i16 {
@@ -445,9 +73,8 @@ block0(v0: f32):
 ;   bras %r1, 8 ; data.f32 -32769 ; vlef %v17, 0(%r1), 0
 ;   wfcsb %f0, %v17
 ;   jnle 6 ; trap
-;   wldeb %v21, %f0
-;   wcgdb %v23, %v21, 0, 5
-;   vlgvg %r2, %v23, 0
+;   wcfeb %v21, %f0, 0, 5
+;   vlgvf %r2, %v21, 0
 ;   br %r14
 
 function %fcvt_to_uint_f32_i32(f32) -> i32 {
@@ -465,9 +92,8 @@ block0(v0: f32):
 ;   bras %r1, 8 ; data.f32 -1 ; vlef %v17, 0(%r1), 0
 ;   wfcsb %f0, %v17
 ;   jnle 6 ; trap
-;   wldeb %v21, %f0
-;   wclgdb %v23, %v21, 0, 5
-;   vlgvg %r2, %v23, 0
+;   wclfeb %v21, %f0, 0, 5
+;   vlgvf %r2, %v21, 0
 ;   br %r14
 
 function %fcvt_to_sint_f32_i32(f32) -> i32 {
@@ -485,9 +111,8 @@ block0(v0: f32):
 ;   bras %r1, 8 ; data.f32 -2147484000 ; vlef %v17, 0(%r1), 0
 ;   wfcsb %f0, %v17
 ;   jnle 6 ; trap
-;   wldeb %v21, %f0
-;   wcgdb %v23, %v21, 0, 5
-;   vlgvg %r2, %v23, 0
+;   wcfeb %v21, %f0, 0, 5
+;   vlgvf %r2, %v21, 0
 ;   br %r14
 
 function %fcvt_to_uint_f32_i64(f32) -> i64 {
@@ -689,10 +314,9 @@ block0(v0: i8):
 }
 
 ; block0:
-;   llgcr %r5, %r2
-;   ldgr %f5, %r5
-;   wcdlgb %f7, %f5, 0, 3
-;   ledbra %f0, %f7, 4
+;   llcr %r5, %r2
+;   vlvgf %v5, %r5, 0
+;   wcelfb %f0, %f5, 0, 4
 ;   br %r14
 
 function %fcvt_from_sint_i8_f32(i8) -> f32 {
@@ -702,10 +326,9 @@ block0(v0: i8):
 }
 
 ; block0:
-;   lgbr %r5, %r2
-;   ldgr %f5, %r5
-;   wcdgb %f7, %f5, 0, 3
-;   ledbra %f0, %f7, 4
+;   lbr %r5, %r2
+;   vlvgf %v5, %r5, 0
+;   wcefb %f0, %f5, 0, 4
 ;   br %r14
 
 function %fcvt_from_uint_i16_f32(i16) -> f32 {
@@ -715,10 +338,9 @@ block0(v0: i16):
 }
 
 ; block0:
-;   llghr %r5, %r2
-;   ldgr %f5, %r5
-;   wcdlgb %f7, %f5, 0, 3
-;   ledbra %f0, %f7, 4
+;   llhr %r5, %r2
+;   vlvgf %v5, %r5, 0
+;   wcelfb %f0, %f5, 0, 4
 ;   br %r14
 
 function %fcvt_from_sint_i16_f32(i16) -> f32 {
@@ -728,10 +350,9 @@ block0(v0: i16):
 }
 
 ; block0:
-;   lghr %r5, %r2
-;   ldgr %f5, %r5
-;   wcdgb %f7, %f5, 0, 3
-;   ledbra %f0, %f7, 4
+;   lhr %r5, %r2
+;   vlvgf %v5, %r5, 0
+;   wcefb %f0, %f5, 0, 4
 ;   br %r14
 
 function %fcvt_from_uint_i32_f32(i32) -> f32 {
@@ -741,10 +362,8 @@ block0(v0: i32):
 }
 
 ; block0:
-;   llgfr %r5, %r2
-;   ldgr %f5, %r5
-;   wcdlgb %f7, %f5, 0, 3
-;   ledbra %f0, %f7, 4
+;   vlvgf %v3, %r2, 0
+;   wcelfb %f0, %f3, 0, 4
 ;   br %r14
 
 function %fcvt_from_sint_i32_f32(i32) -> f32 {
@@ -754,10 +373,8 @@ block0(v0: i32):
 }
 
 ; block0:
-;   lgfr %r5, %r2
-;   ldgr %f5, %r5
-;   wcdgb %f7, %f5, 0, 3
-;   ledbra %f0, %f7, 4
+;   vlvgf %v3, %r2, 0
+;   wcefb %f0, %f3, 0, 4
 ;   br %r14
 
 function %fcvt_from_uint_i64_f32(i64) -> f32 {
@@ -885,12 +502,11 @@ block0(v0: f32):
 }
 
 ; block0:
-;   ldebr %f3, %f0
-;   wclgdb %f5, %f3, 0, 5
-;   lgdr %r5, %f5
-;   lgr %r2, %r5
-;   clgfi %r5, 256
-;   locghih %r2, 255
+;   wclfeb %f3, %f0, 0, 5
+;   vlgvf %r3, %v3, 0
+;   lgr %r2, %r3
+;   clfi %r3, 256
+;   lochih %r2, 255
 ;   br %r14
 
 function %fcvt_to_sint_sat_f32_i8(f32) -> i8 {
@@ -900,17 +516,16 @@ block0(v0: f32):
 }
 
 ; block0:
-;   ldebr %f3, %f0
-;   wcgdb %f5, %f3, 0, 5
-;   lgdr %r5, %f5
+;   wcfeb %f3, %f0, 0, 5
+;   vlgvf %r3, %v3, 0
 ;   cebr %f0, %f0
-;   locghio %r5, 0
-;   lgr %r4, %r5
-;   cghi %r5, 127
-;   locghih %r4, 127
+;   lochio %r3, 0
+;   lgr %r4, %r3
+;   chi %r3, 127
+;   lochih %r4, 127
 ;   lgr %r2, %r4
-;   cghi %r4, -128
-;   locghil %r2, -128
+;   chi %r4, -128
+;   lochil %r2, -128
 ;   br %r14
 
 function %fcvt_to_uint_sat_f32_i16(f32) -> i16 {
@@ -920,12 +535,11 @@ block0(v0: f32):
 }
 
 ; block0:
-;   ldebr %f3, %f0
-;   wclgdb %f5, %f3, 0, 5
-;   lgdr %r5, %f5
-;   lgr %r2, %r5
-;   clgfi %r5, 65535
-;   locghih %r2, -1
+;   wclfeb %f3, %f0, 0, 5
+;   vlgvf %r3, %v3, 0
+;   lgr %r2, %r3
+;   clfi %r3, 65535
+;   lochih %r2, -1
 ;   br %r14
 
 function %fcvt_to_sint_sat_f32_i16(f32) -> i16 {
@@ -935,17 +549,16 @@ block0(v0: f32):
 }
 
 ; block0:
-;   ldebr %f3, %f0
-;   wcgdb %f5, %f3, 0, 5
-;   lgdr %r5, %f5
+;   wcfeb %f3, %f0, 0, 5
+;   vlgvf %r3, %v3, 0
 ;   cebr %f0, %f0
-;   locghio %r5, 0
-;   lgr %r4, %r5
-;   cghi %r5, 32767
-;   locghih %r4, 32767
+;   lochio %r3, 0
+;   lgr %r4, %r3
+;   chi %r3, 32767
+;   lochih %r4, 32767
 ;   lgr %r2, %r4
-;   cghi %r4, -32768
-;   locghil %r2, -32768
+;   chi %r4, -32768
+;   lochil %r2, -32768
 ;   br %r14
 
 function %fcvt_to_uint_sat_f32_i32(f32) -> i32 {
@@ -955,12 +568,8 @@ block0(v0: f32):
 }
 
 ; block0:
-;   ldebr %f3, %f0
-;   wclgdb %f5, %f3, 0, 5
-;   lgdr %r2, %f5
-;   llilf %r3, 4294967295
-;   clgr %r2, %r3
-;   locgrh %r2, %r3
+;   wclfeb %f3, %f0, 0, 5
+;   vlgvf %r2, %v3, 0
 ;   br %r14
 
 function %fcvt_to_sint_sat_f32_i32(f32) -> i32 {
@@ -970,17 +579,10 @@ block0(v0: f32):
 }
 
 ; block0:
-;   ldebr %f3, %f0
-;   wcgdb %f5, %f3, 0, 5
-;   lgdr %r2, %f5
+;   wcfeb %f3, %f0, 0, 5
+;   vlgvf %r2, %v3, 0
 ;   cebr %f0, %f0
-;   locghio %r2, 0
-;   lgfi %r3, 2147483647
-;   cgr %r2, %r3
-;   locgrh %r2, %r3
-;   lgfi %r5, -2147483648
-;   cgr %r2, %r5
-;   locgrl %r2, %r5
+;   lochio %r2, 0
 ;   br %r14
 
 function %fcvt_to_uint_sat_f32_i64(f32) -> i64 {
@@ -1130,45 +732,5 @@ block0(v0: f64):
 ;   lgdr %r2, %f3
 ;   cdbr %f0, %f0
 ;   locghio %r2, 0
-;   br %r14
-
-function %bitcast_i64_f64(i64) -> f64 {
-block0(v0: i64):
-  v1 = bitcast.f64 v0
-  return v1
-}
-
-; block0:
-;   ldgr %f0, %r2
-;   br %r14
-
-function %bitcast_f64_i64(f64) -> i64 {
-block0(v0: f64):
-  v1 = bitcast.i64 v0
-  return v1
-}
-
-; block0:
-;   lgdr %r2, %f0
-;   br %r14
-
-function %bitcast_i32_f32(i32) -> f32 {
-block0(v0: i32):
-  v1 = bitcast.f32 v0
-  return v1
-}
-
-; block0:
-;   vlvgf %v0, %r2, 0
-;   br %r14
-
-function %bitcast_f32_i32(f32) -> i32 {
-block0(v0: f32):
-  v1 = bitcast.i32 v0
-  return v1
-}
-
-; block0:
-;   vlgvf %r2, %v0, 0
 ;   br %r14
 

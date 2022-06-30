@@ -109,10 +109,10 @@ fn get_intreg_for_arg(idx: usize) -> Option<Reg> {
 
 fn get_fltreg_for_arg(idx: usize) -> Option<Reg> {
     match idx {
-        0 => Some(regs::fpr(0)),
-        1 => Some(regs::fpr(2)),
-        2 => Some(regs::fpr(4)),
-        3 => Some(regs::fpr(6)),
+        0 => Some(regs::vr(0)),
+        1 => Some(regs::vr(2)),
+        2 => Some(regs::vr(4)),
+        3 => Some(regs::vr(6)),
         _ => None,
     }
 }
@@ -130,11 +130,11 @@ fn get_intreg_for_ret(idx: usize) -> Option<Reg> {
 
 fn get_fltreg_for_ret(idx: usize) -> Option<Reg> {
     match idx {
-        0 => Some(regs::fpr(0)),
+        0 => Some(regs::vr(0)),
         // ABI extension to support multi-value returns:
-        1 => Some(regs::fpr(2)),
-        2 => Some(regs::fpr(4)),
-        3 => Some(regs::fpr(6)),
+        1 => Some(regs::vr(2)),
+        2 => Some(regs::vr(4)),
+        3 => Some(regs::vr(6)),
         _ => None,
     }
 }
@@ -736,14 +736,30 @@ const fn clobbers() -> PRegSet {
         .with(gpr_preg(3))
         .with(gpr_preg(4))
         .with(gpr_preg(5))
-        .with(fpr_preg(0))
-        .with(fpr_preg(1))
-        .with(fpr_preg(2))
-        .with(fpr_preg(3))
-        .with(fpr_preg(4))
-        .with(fpr_preg(5))
-        .with(fpr_preg(6))
-        .with(fpr_preg(7))
+        .with(vr_preg(0))
+        .with(vr_preg(1))
+        .with(vr_preg(2))
+        .with(vr_preg(3))
+        .with(vr_preg(4))
+        .with(vr_preg(5))
+        .with(vr_preg(6))
+        .with(vr_preg(7))
+        .with(vr_preg(16))
+        .with(vr_preg(17))
+        .with(vr_preg(18))
+        .with(vr_preg(19))
+        .with(vr_preg(20))
+        .with(vr_preg(21))
+        .with(vr_preg(22))
+        .with(vr_preg(23))
+        .with(vr_preg(24))
+        .with(vr_preg(25))
+        .with(vr_preg(26))
+        .with(vr_preg(27))
+        .with(vr_preg(28))
+        .with(vr_preg(29))
+        .with(vr_preg(30))
+        .with(vr_preg(31))
 }
 
 const CLOBBERS: PRegSet = clobbers();

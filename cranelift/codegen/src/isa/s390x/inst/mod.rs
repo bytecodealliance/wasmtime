@@ -27,8 +27,8 @@ mod emit_tests;
 // Instructions (top level): definition
 
 pub use crate::isa::s390x::lower::isle::generated_code::{
-    ALUOp, CmpOp, FPUOp1, FPUOp2, FPUOp3, FpuRoundMode, FpuToIntOp, IntToFpuOp, MInst as Inst,
-    RxSBGOp, ShiftOp, UnaryOp,
+    ALUOp, CmpOp, FPUOp1, FPUOp2, FPUOp3, FpuRoundMode, FpuRoundOp, MInst as Inst, RxSBGOp,
+    ShiftOp, UnaryOp,
 };
 
 /// Additional information for (direct) Call instructions, left out of line to lower the size of
@@ -156,12 +156,13 @@ impl Inst {
             | Inst::FpuMove64 { .. }
             | Inst::FpuCMov32 { .. }
             | Inst::FpuCMov64 { .. }
-            | Inst::MovToFpr { .. }
-            | Inst::MovFromFpr { .. }
+            | Inst::MovToFpr32 { .. }
+            | Inst::MovToFpr64 { .. }
+            | Inst::MovFromFpr32 { .. }
+            | Inst::MovFromFpr64 { .. }
             | Inst::FpuRR { .. }
             | Inst::FpuRRR { .. }
             | Inst::FpuRRRR { .. }
-            | Inst::FpuCopysign { .. }
             | Inst::FpuCmp32 { .. }
             | Inst::FpuCmp64 { .. }
             | Inst::FpuLoad32 { .. }
@@ -170,10 +171,7 @@ impl Inst {
             | Inst::FpuStore64 { .. }
             | Inst::LoadFpuConst32 { .. }
             | Inst::LoadFpuConst64 { .. }
-            | Inst::FpuToInt { .. }
-            | Inst::IntToFpu { .. }
-            | Inst::FpuRound { .. }
-            | Inst::FpuVecRRR { .. }
+            | Inst::VecSelect { .. }
             | Inst::Call { .. }
             | Inst::CallInd { .. }
             | Inst::Ret { .. }
@@ -204,6 +202,11 @@ impl Inst {
             },
             Inst::UnaryRR { op, .. } => match op {
                 UnaryOp::PopcntReg => InstructionSet::MIE2,
+                _ => InstructionSet::Base,
+            },
+            Inst::FpuRound { op, .. } => match op {
+                FpuRoundOp::ToSInt32 | FpuRoundOp::FromSInt32 => InstructionSet::MIE2,
+                FpuRoundOp::ToUInt32 | FpuRoundOp::FromUInt32 => InstructionSet::MIE2,
                 _ => InstructionSet::Base,
             },
 
@@ -576,7 +579,10 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
             collector.reg_mod(rd);
             collector.reg_use(rm);
         }
-        &Inst::MovToFpr { rd, rn } | &Inst::MovFromFpr { rd, rn } => {
+        &Inst::MovToFpr32 { rd, rn }
+        | &Inst::MovToFpr64 { rd, rn }
+        | &Inst::MovFromFpr32 { rd, rn }
+        | &Inst::MovFromFpr64 { rd, rn } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
         }
@@ -584,19 +590,16 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
             collector.reg_def(rd);
             collector.reg_use(rn);
         }
-        &Inst::FpuRRR { rd, rm, .. } => {
-            collector.reg_mod(rd);
-            collector.reg_use(rm);
-        }
-        &Inst::FpuRRRR { rd, rn, rm, .. } => {
-            collector.reg_mod(rd);
-            collector.reg_use(rn);
-            collector.reg_use(rm);
-        }
-        &Inst::FpuCopysign { rd, rn, rm, .. } => {
+        &Inst::FpuRRR { rd, rn, rm, .. } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
             collector.reg_use(rm);
+        }
+        &Inst::FpuRRRR { rd, rn, rm, ra, .. } => {
+            collector.reg_def(rd);
+            collector.reg_use(rn);
+            collector.reg_use(rm);
+            collector.reg_use(ra);
         }
         &Inst::FpuCmp32 { rn, rm } | &Inst::FpuCmp64 { rn, rm } => {
             collector.reg_use(rn);
@@ -637,22 +640,15 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
         &Inst::LoadFpuConst32 { rd, .. } | &Inst::LoadFpuConst64 { rd, .. } => {
             collector.reg_def(rd);
         }
-        &Inst::FpuToInt { rd, rn, .. } => {
-            collector.reg_def(rd);
-            collector.reg_use(rn);
-        }
-        &Inst::IntToFpu { rd, rn, .. } => {
-            collector.reg_def(rd);
-            collector.reg_use(rn);
-        }
         &Inst::FpuRound { rd, rn, .. } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
         }
-        &Inst::FpuVecRRR { rd, rn, rm, .. } => {
+        &Inst::VecSelect { rd, rn, rm, ra, .. } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
             collector.reg_use(rm);
+            collector.reg_use(ra);
         }
         &Inst::Extend { rd, rn, .. } => {
             collector.reg_def(rd);
@@ -1462,9 +1458,7 @@ impl Inst {
             | &Inst::Load64SExt32 { rd, ref mem }
             | &Inst::LoadRev16 { rd, ref mem }
             | &Inst::LoadRev32 { rd, ref mem }
-            | &Inst::LoadRev64 { rd, ref mem }
-            | &Inst::FpuLoad32 { rd, ref mem }
-            | &Inst::FpuLoad64 { rd, ref mem } => {
+            | &Inst::LoadRev64 { rd, ref mem } => {
                 let (opcode_rx, opcode_rxy, opcode_ril) = match self {
                     &Inst::Load32 { .. } => (Some("l"), Some("ly"), Some("lrl")),
                     &Inst::Load32ZExt8 { .. } => (None, Some("llc"), None),
@@ -1481,8 +1475,6 @@ impl Inst {
                     &Inst::LoadRev16 { .. } => (None, Some("lrvh"), None),
                     &Inst::LoadRev32 { .. } => (None, Some("lrv"), None),
                     &Inst::LoadRev64 { .. } => (None, Some("lrvg"), None),
-                    &Inst::FpuLoad32 { .. } => (Some("le"), Some("ley"), None),
-                    &Inst::FpuLoad64 { .. } => (Some("ld"), Some("ldy"), None),
                     _ => unreachable!(),
                 };
 
@@ -1505,17 +1497,42 @@ impl Inst {
                 let mem = mem.pretty_print_default();
                 format!("{}{} {}, {}", mem_str, op.unwrap(), rd, mem)
             }
-            &Inst::FpuLoadRev32 { rd, ref mem } | &Inst::FpuLoadRev64 { rd, ref mem } => {
-                let rd = pretty_print_reg(rd.to_reg(), allocs);
-                let mem = mem.with_allocs(allocs);
-                let (mem_str, mem) = mem_finalize_for_show(&mem, state, true, false, false, true);
-                let op = match self {
-                    &Inst::FpuLoadRev32 { .. } => "vlebrf",
-                    &Inst::FpuLoadRev64 { .. } => "vlebrg",
+            &Inst::FpuLoad32 { rd, ref mem }
+            | &Inst::FpuLoad64 { rd, ref mem }
+            | &Inst::FpuLoadRev32 { rd, ref mem }
+            | &Inst::FpuLoadRev64 { rd, ref mem } => {
+                let (opcode_rx, opcode_rxy, opcode_vrx) = match self {
+                    &Inst::FpuLoad32 { .. } => (Some("le"), Some("ley"), "vlef"),
+                    &Inst::FpuLoad64 { .. } => (Some("ld"), Some("ldy"), "vleg"),
+                    &Inst::FpuLoadRev32 { .. } => (None, None, "vlebrf"),
+                    &Inst::FpuLoadRev64 { .. } => (None, None, "vlebrg"),
                     _ => unreachable!(),
                 };
-                let mem = mem.pretty_print_default();
-                format!("{}{} {}, {}, 0", mem_str, op, rd, mem)
+
+                let (rd, rd_fpr) = pretty_print_fpr(rd.to_reg(), allocs);
+                let mem = mem.with_allocs(allocs);
+                if rd_fpr.is_some() && opcode_rx.is_some() {
+                    let (mem_str, mem) =
+                        mem_finalize_for_show(&mem, state, true, true, false, true);
+                    let op = match &mem {
+                        &MemArg::BXD12 { .. } => opcode_rx,
+                        &MemArg::BXD20 { .. } => opcode_rxy,
+                        _ => unreachable!(),
+                    };
+                    let mem = mem.pretty_print_default();
+                    format!("{}{} {}, {}", mem_str, op.unwrap(), rd_fpr.unwrap(), mem)
+                } else {
+                    let (mem_str, mem) =
+                        mem_finalize_for_show(&mem, state, true, false, false, true);
+                    let mem = mem.pretty_print_default();
+                    format!(
+                        "{}{} {}, {}, 0",
+                        mem_str,
+                        opcode_vrx,
+                        rd_fpr.unwrap_or(rd),
+                        mem
+                    )
+                }
             }
             &Inst::Store8 { rd, ref mem }
             | &Inst::Store16 { rd, ref mem }
@@ -1523,9 +1540,7 @@ impl Inst {
             | &Inst::Store64 { rd, ref mem }
             | &Inst::StoreRev16 { rd, ref mem }
             | &Inst::StoreRev32 { rd, ref mem }
-            | &Inst::StoreRev64 { rd, ref mem }
-            | &Inst::FpuStore32 { rd, ref mem }
-            | &Inst::FpuStore64 { rd, ref mem } => {
+            | &Inst::StoreRev64 { rd, ref mem } => {
                 let (opcode_rx, opcode_rxy, opcode_ril) = match self {
                     &Inst::Store8 { .. } => (Some("stc"), Some("stcy"), None),
                     &Inst::Store16 { .. } => (Some("sth"), Some("sthy"), Some("sthrl")),
@@ -1534,8 +1549,6 @@ impl Inst {
                     &Inst::StoreRev16 { .. } => (None, Some("strvh"), None),
                     &Inst::StoreRev32 { .. } => (None, Some("strv"), None),
                     &Inst::StoreRev64 { .. } => (None, Some("strvg"), None),
-                    &Inst::FpuStore32 { .. } => (Some("ste"), Some("stey"), None),
-                    &Inst::FpuStore64 { .. } => (Some("std"), Some("stdy"), None),
                     _ => unreachable!(),
                 };
 
@@ -1586,18 +1599,42 @@ impl Inst {
 
                 format!("{}{} {}, {}", mem_str, op, mem, imm)
             }
-            &Inst::FpuStoreRev32 { rd, ref mem } | &Inst::FpuStoreRev64 { rd, ref mem } => {
-                let rd = pretty_print_reg(rd, allocs);
-                let mem = mem.with_allocs(allocs);
-                let (mem_str, mem) = mem_finalize_for_show(&mem, state, true, false, false, true);
-                let op = match self {
-                    &Inst::FpuStoreRev32 { .. } => "vstebrf",
-                    &Inst::FpuStoreRev64 { .. } => "vstebrg",
+            &Inst::FpuStore32 { rd, ref mem }
+            | &Inst::FpuStore64 { rd, ref mem }
+            | &Inst::FpuStoreRev32 { rd, ref mem }
+            | &Inst::FpuStoreRev64 { rd, ref mem } => {
+                let (opcode_rx, opcode_rxy, opcode_vrx) = match self {
+                    &Inst::FpuStore32 { .. } => (Some("ste"), Some("stey"), "vstef"),
+                    &Inst::FpuStore64 { .. } => (Some("std"), Some("stdy"), "vsteg"),
+                    &Inst::FpuStoreRev32 { .. } => (None, None, "vstebrf"),
+                    &Inst::FpuStoreRev64 { .. } => (None, None, "vstebrg"),
                     _ => unreachable!(),
                 };
-                let mem = mem.pretty_print_default();
 
-                format!("{}{} {}, {}, 0", mem_str, op, rd, mem)
+                let (rd, rd_fpr) = pretty_print_fpr(rd, allocs);
+                let mem = mem.with_allocs(allocs);
+                if rd_fpr.is_some() && opcode_rx.is_some() {
+                    let (mem_str, mem) =
+                        mem_finalize_for_show(&mem, state, true, true, false, true);
+                    let op = match &mem {
+                        &MemArg::BXD12 { .. } => opcode_rx,
+                        &MemArg::BXD20 { .. } => opcode_rxy,
+                        _ => unreachable!(),
+                    };
+                    let mem = mem.pretty_print_default();
+                    format!("{}{} {}, {}", mem_str, op.unwrap(), rd_fpr.unwrap(), mem)
+                } else {
+                    let (mem_str, mem) =
+                        mem_finalize_for_show(&mem, state, true, false, false, true);
+                    let mem = mem.pretty_print_default();
+                    format!(
+                        "{}{} {}, {}, 0",
+                        mem_str,
+                        opcode_vrx,
+                        rd_fpr.unwrap_or(rd),
+                        mem
+                    )
+                }
             }
             &Inst::LoadMultiple64 { rt, rt2, ref mem } => {
                 let mem = mem.with_allocs(allocs);
@@ -1704,177 +1741,278 @@ impl Inst {
                 format!("locghi{} {}, {}", cond, rd, imm)
             }
             &Inst::FpuMove32 { rd, rn } => {
-                let rd = pretty_print_reg(rd.to_reg(), allocs);
-                let rn = pretty_print_reg(rn, allocs);
-                format!("ler {}, {}", rd, rn)
+                let (rd, rd_fpr) = pretty_print_fpr(rd.to_reg(), allocs);
+                let (rn, rn_fpr) = pretty_print_fpr(rn, allocs);
+                if rd_fpr.is_some() && rn_fpr.is_some() {
+                    format!("ler {}, {}", rd_fpr.unwrap(), rn_fpr.unwrap())
+                } else {
+                    format!("vlr {}, {}", rd, rn)
+                }
             }
             &Inst::FpuMove64 { rd, rn } => {
-                let rd = pretty_print_reg(rd.to_reg(), allocs);
-                let rn = pretty_print_reg(rn, allocs);
-                format!("ldr {}, {}", rd, rn)
+                let (rd, rd_fpr) = pretty_print_fpr(rd.to_reg(), allocs);
+                let (rn, rn_fpr) = pretty_print_fpr(rn, allocs);
+                if rd_fpr.is_some() && rn_fpr.is_some() {
+                    format!("ldr {}, {}", rd_fpr.unwrap(), rn_fpr.unwrap())
+                } else {
+                    format!("vlr {}, {}", rd, rn)
+                }
             }
             &Inst::FpuCMov32 { rd, cond, rm } => {
-                let rd = pretty_print_reg(rd.to_reg(), allocs);
-                let rm = pretty_print_reg(rm, allocs);
-                let cond = cond.invert().pretty_print_default();
-                format!("j{} 6 ; ler {}, {}", cond, rd, rm)
+                let (rd, rd_fpr) = pretty_print_fpr(rd.to_reg(), allocs);
+                let (rm, rm_fpr) = pretty_print_fpr(rm, allocs);
+                if rd_fpr.is_some() && rm_fpr.is_some() {
+                    let cond = cond.invert().pretty_print_default();
+                    format!("j{} 6 ; ler {}, {}", cond, rd_fpr.unwrap(), rm_fpr.unwrap())
+                } else {
+                    let cond = cond.invert().pretty_print_default();
+                    format!("j{} 10 ; vlr {}, {}", cond, rd, rm)
+                }
             }
             &Inst::FpuCMov64 { rd, cond, rm } => {
-                let rd = pretty_print_reg(rd.to_reg(), allocs);
-                let rm = pretty_print_reg(rm, allocs);
-                let cond = cond.invert().pretty_print_default();
-                format!("j{} 6 ; ldr {}, {}", cond, rd, rm)
+                let (rd, rd_fpr) = pretty_print_fpr(rd.to_reg(), allocs);
+                let (rm, rm_fpr) = pretty_print_fpr(rm, allocs);
+                if rd_fpr.is_some() && rm_fpr.is_some() {
+                    let cond = cond.invert().pretty_print_default();
+                    format!("j{} 6 ; ldr {}, {}", cond, rd_fpr.unwrap(), rm_fpr.unwrap())
+                } else {
+                    let cond = cond.invert().pretty_print_default();
+                    format!("j{} 10 ; vlr {}, {}", cond, rd, rm)
+                }
             }
-            &Inst::MovToFpr { rd, rn } => {
+            &Inst::MovToFpr32 { rd, rn } => {
                 let rd = pretty_print_reg(rd.to_reg(), allocs);
                 let rn = pretty_print_reg(rn, allocs);
-                format!("ldgr {}, {}", rd, rn)
+                format!("vlvgf {}, {}, 0", rd, rn)
             }
-            &Inst::MovFromFpr { rd, rn } => {
+            &Inst::MovToFpr64 { rd, rn } => {
+                let (rd, rd_fpr) = pretty_print_fpr(rd.to_reg(), allocs);
+                let rn = pretty_print_reg(rn, allocs);
+                if rd_fpr.is_some() {
+                    format!("ldgr {}, {}", rd_fpr.unwrap(), rn)
+                } else {
+                    format!("vlvgg {}, {}, 0", rd, rn)
+                }
+            }
+            &Inst::MovFromFpr32 { rd, rn } => {
                 let rd = pretty_print_reg(rd.to_reg(), allocs);
                 let rn = pretty_print_reg(rn, allocs);
-                format!("lgdr {}, {}", rd, rn)
+                format!("vlgvf {}, {}, 0", rd, rn)
+            }
+            &Inst::MovFromFpr64 { rd, rn } => {
+                let rd = pretty_print_reg(rd.to_reg(), allocs);
+                let (rn, rn_fpr) = pretty_print_fpr(rn, allocs);
+                if rn_fpr.is_some() {
+                    format!("lgdr {}, {}", rd, rn_fpr.unwrap())
+                } else {
+                    format!("vlgvg {}, {}, 0", rd, rn)
+                }
             }
             &Inst::FpuRR { fpu_op, rd, rn } => {
-                let op = match fpu_op {
-                    FPUOp1::Abs32 => "lpebr",
-                    FPUOp1::Abs64 => "lpdbr",
-                    FPUOp1::Neg32 => "lcebr",
-                    FPUOp1::Neg64 => "lcdbr",
-                    FPUOp1::NegAbs32 => "lnebr",
-                    FPUOp1::NegAbs64 => "lndbr",
-                    FPUOp1::Sqrt32 => "sqebr",
-                    FPUOp1::Sqrt64 => "sqdbr",
-                    FPUOp1::Cvt32To64 => "ldebr",
-                    FPUOp1::Cvt64To32 => "ledbr",
+                let (op, op_fpr) = match fpu_op {
+                    FPUOp1::Abs32 => ("wflpsb", "lpebr"),
+                    FPUOp1::Abs64 => ("wflpdb", "lpdbr"),
+                    FPUOp1::Neg32 => ("wflcsb", "lcebr"),
+                    FPUOp1::Neg64 => ("wflcdb", "lcdbr"),
+                    FPUOp1::NegAbs32 => ("wflnsb", "lnebr"),
+                    FPUOp1::NegAbs64 => ("wflndb", "lndbr"),
+                    FPUOp1::Sqrt32 => ("wfsqsb", "sqebr"),
+                    FPUOp1::Sqrt64 => ("wfsqdb", "sqdbr"),
+                    FPUOp1::Cvt32To64 => ("wldeb", "ldebr"),
                 };
-                let rd = pretty_print_reg(rd.to_reg(), allocs);
-                let rn = pretty_print_reg(rn, allocs);
-                format!("{} {}, {}", op, rd, rn)
+
+                let (rd, rd_fpr) = pretty_print_fpr(rd.to_reg(), allocs);
+                let (rn, rn_fpr) = pretty_print_fpr(rn, allocs);
+                if rd_fpr.is_some() && rn_fpr.is_some() {
+                    format!("{} {}, {}", op_fpr, rd_fpr.unwrap(), rn_fpr.unwrap())
+                } else {
+                    format!("{} {}, {}", op, rd_fpr.unwrap_or(rd), rn_fpr.unwrap_or(rn))
+                }
             }
-            &Inst::FpuRRR { fpu_op, rd, rm } => {
-                let op = match fpu_op {
-                    FPUOp2::Add32 => "aebr",
-                    FPUOp2::Add64 => "adbr",
-                    FPUOp2::Sub32 => "sebr",
-                    FPUOp2::Sub64 => "sdbr",
-                    FPUOp2::Mul32 => "meebr",
-                    FPUOp2::Mul64 => "mdbr",
-                    FPUOp2::Div32 => "debr",
-                    FPUOp2::Div64 => "ddbr",
-                    _ => unimplemented!(),
+            &Inst::FpuRRR { fpu_op, rd, rn, rm } => {
+                let (op, opt_m6, op_fpr) = match fpu_op {
+                    FPUOp2::Add32 => ("wfasb", "", Some("aebr")),
+                    FPUOp2::Add64 => ("wfadb", "", Some("adbr")),
+                    FPUOp2::Sub32 => ("wfssb", "", Some("sebr")),
+                    FPUOp2::Sub64 => ("wfsdb", "", Some("sdbr")),
+                    FPUOp2::Mul32 => ("wfmsb", "", Some("meebr")),
+                    FPUOp2::Mul64 => ("wfmdb", "", Some("mdbr")),
+                    FPUOp2::Div32 => ("wfdsb", "", Some("debr")),
+                    FPUOp2::Div64 => ("wfddb", "", Some("ddbr")),
+                    FPUOp2::Max32 => ("wfmaxsb", ", 1", None),
+                    FPUOp2::Max64 => ("wfmaxdb", ", 1", None),
+                    FPUOp2::Min32 => ("wfminsb", ", 1", None),
+                    FPUOp2::Min64 => ("wfmindb", ", 1", None),
                 };
-                let rd = pretty_print_reg(rd.to_reg(), allocs);
-                let rm = pretty_print_reg(rm, allocs);
-                format!("{} {}, {}", op, rd, rm)
+
+                let (rd, rd_fpr) = pretty_print_fpr(rd.to_reg(), allocs);
+                let (rn, rn_fpr) = pretty_print_fpr(rn, allocs);
+                let (rm, rm_fpr) = pretty_print_fpr(rm, allocs);
+                if op_fpr.is_some() && rd == rn && rd_fpr.is_some() && rm_fpr.is_some() {
+                    format!(
+                        "{} {}, {}",
+                        op_fpr.unwrap(),
+                        rd_fpr.unwrap(),
+                        rm_fpr.unwrap()
+                    )
+                } else {
+                    format!(
+                        "{} {}, {}, {}{}",
+                        op,
+                        rd_fpr.unwrap_or(rd),
+                        rn_fpr.unwrap_or(rn),
+                        rm_fpr.unwrap_or(rm),
+                        opt_m6
+                    )
+                }
             }
-            &Inst::FpuRRRR { fpu_op, rd, rn, rm } => {
-                let op = match fpu_op {
-                    FPUOp3::MAdd32 => "maebr",
-                    FPUOp3::MAdd64 => "madbr",
-                    FPUOp3::MSub32 => "msebr",
-                    FPUOp3::MSub64 => "msdbr",
+            &Inst::FpuRRRR {
+                fpu_op,
+                rd,
+                rn,
+                rm,
+                ra,
+            } => {
+                let (op, op_fpr) = match fpu_op {
+                    FPUOp3::MAdd32 => ("wfmasb", "maebr"),
+                    FPUOp3::MAdd64 => ("wfmadb", "madbr"),
+                    FPUOp3::MSub32 => ("wfmssb", "msebr"),
+                    FPUOp3::MSub64 => ("wfmsdb", "msdbr"),
                 };
-                let rd = pretty_print_reg(rd.to_reg(), allocs);
-                let rn = pretty_print_reg(rn, allocs);
-                let rm = pretty_print_reg(rm, allocs);
-                format!("{} {}, {}, {}", op, rd, rn, rm)
-            }
-            &Inst::FpuCopysign { rd, rn, rm } => {
-                let rd = pretty_print_reg(rd.to_reg(), allocs);
-                let rn = pretty_print_reg(rn, allocs);
-                let rm = pretty_print_reg(rm, allocs);
-                format!("cpsdr {}, {}, {}", rd, rm, rn)
+
+                let (rd, rd_fpr) = pretty_print_fpr(rd.to_reg(), allocs);
+                let (rn, rn_fpr) = pretty_print_fpr(rn, allocs);
+                let (rm, rm_fpr) = pretty_print_fpr(rm, allocs);
+                let (ra, ra_fpr) = pretty_print_fpr(ra, allocs);
+                if rd == ra && rd_fpr.is_some() && rn_fpr.is_some() && rm_fpr.is_some() {
+                    format!(
+                        "{} {}, {}, {}",
+                        op_fpr,
+                        rd_fpr.unwrap(),
+                        rn_fpr.unwrap(),
+                        rm_fpr.unwrap()
+                    )
+                } else {
+                    format!(
+                        "{} {}, {}, {}, {}",
+                        op,
+                        rd_fpr.unwrap_or(rd),
+                        rn_fpr.unwrap_or(rn),
+                        rm_fpr.unwrap_or(rm),
+                        ra_fpr.unwrap_or(ra)
+                    )
+                }
             }
             &Inst::FpuCmp32 { rn, rm } => {
-                let rn = pretty_print_reg(rn, allocs);
-                let rm = pretty_print_reg(rm, allocs);
-                format!("cebr {}, {}", rn, rm)
+                let (rn, rn_fpr) = pretty_print_fpr(rn, allocs);
+                let (rm, rm_fpr) = pretty_print_fpr(rm, allocs);
+                if rn_fpr.is_some() && rm_fpr.is_some() {
+                    format!("cebr {}, {}", rn_fpr.unwrap(), rm_fpr.unwrap())
+                } else {
+                    format!("wfcsb {}, {}", rn_fpr.unwrap_or(rn), rm_fpr.unwrap_or(rm))
+                }
             }
             &Inst::FpuCmp64 { rn, rm } => {
-                let rn = pretty_print_reg(rn, allocs);
-                let rm = pretty_print_reg(rm, allocs);
-                format!("cdbr {}, {}", rn, rm)
+                let (rn, rn_fpr) = pretty_print_fpr(rn, allocs);
+                let (rm, rm_fpr) = pretty_print_fpr(rm, allocs);
+                if rn_fpr.is_some() && rm_fpr.is_some() {
+                    format!("cdbr {}, {}", rn_fpr.unwrap(), rm_fpr.unwrap())
+                } else {
+                    format!("wfcdb {}, {}", rn_fpr.unwrap_or(rn), rm_fpr.unwrap_or(rm))
+                }
             }
             &Inst::LoadFpuConst32 { rd, const_data } => {
-                let rd = pretty_print_reg(rd.to_reg(), allocs);
+                let (rd, rd_fpr) = pretty_print_fpr(rd.to_reg(), allocs);
                 let tmp = pretty_print_reg(writable_spilltmp_reg().to_reg(), &mut empty_allocs);
-                format!(
-                    "bras {}, 8 ; data.f32 {} ; le {}, 0({})",
-                    tmp,
-                    f32::from_bits(const_data),
-                    rd,
-                    tmp
-                )
+                if rd_fpr.is_some() {
+                    format!(
+                        "bras {}, 8 ; data.f32 {} ; le {}, 0({})",
+                        tmp,
+                        f32::from_bits(const_data),
+                        rd_fpr.unwrap(),
+                        tmp
+                    )
+                } else {
+                    format!(
+                        "bras {}, 8 ; data.f32 {} ; vlef {}, 0({}), 0",
+                        tmp,
+                        f32::from_bits(const_data),
+                        rd,
+                        tmp
+                    )
+                }
             }
             &Inst::LoadFpuConst64 { rd, const_data } => {
-                let rd = pretty_print_reg(rd.to_reg(), allocs);
+                let (rd, rd_fpr) = pretty_print_fpr(rd.to_reg(), allocs);
                 let tmp = pretty_print_reg(writable_spilltmp_reg().to_reg(), &mut empty_allocs);
-                format!(
-                    "bras {}, 12 ; data.f64 {} ; ld {}, 0({})",
-                    tmp,
-                    f64::from_bits(const_data),
-                    rd,
-                    tmp
-                )
+                if rd_fpr.is_some() {
+                    format!(
+                        "bras {}, 12 ; data.f64 {} ; ld {}, 0({})",
+                        tmp,
+                        f64::from_bits(const_data),
+                        rd_fpr.unwrap(),
+                        tmp
+                    )
+                } else {
+                    format!(
+                        "bras {}, 12 ; data.f64 {} ; vleg {}, 0({}), 0",
+                        tmp,
+                        f64::from_bits(const_data),
+                        rd,
+                        tmp
+                    )
+                }
             }
-            &Inst::FpuToInt { op, rd, rn } => {
-                let op = match op {
-                    FpuToIntOp::F32ToI32 => "cfebra",
-                    FpuToIntOp::F32ToU32 => "clfebr",
-                    FpuToIntOp::F32ToI64 => "cgebra",
-                    FpuToIntOp::F32ToU64 => "clgebr",
-                    FpuToIntOp::F64ToI32 => "cfdbra",
-                    FpuToIntOp::F64ToU32 => "clfdbr",
-                    FpuToIntOp::F64ToI64 => "cgdbra",
-                    FpuToIntOp::F64ToU64 => "clgdbr",
+            &Inst::FpuRound { op, mode, rd, rn } => {
+                let mode = match mode {
+                    FpuRoundMode::Current => 0,
+                    FpuRoundMode::ToNearest => 1,
+                    FpuRoundMode::ShorterPrecision => 3,
+                    FpuRoundMode::ToNearestTiesToEven => 4,
+                    FpuRoundMode::ToZero => 5,
+                    FpuRoundMode::ToPosInfinity => 6,
+                    FpuRoundMode::ToNegInfinity => 7,
                 };
-                let rd = pretty_print_reg(rd.to_reg(), allocs);
-                let rn = pretty_print_reg(rn, allocs);
-                format!("{} {}, 5, {}, 0", op, rd, rn)
+                let (opcode, opcode_fpr) = match op {
+                    FpuRoundOp::Cvt64To32 => ("wledb", Some("ledbra")),
+                    FpuRoundOp::Round32 => ("wfisb", Some("fiebr")),
+                    FpuRoundOp::Round64 => ("wfidb", Some("fidbr")),
+                    FpuRoundOp::ToSInt32 => ("wcfeb", None),
+                    FpuRoundOp::ToSInt64 => ("wcgdb", None),
+                    FpuRoundOp::ToUInt32 => ("wclfeb", None),
+                    FpuRoundOp::ToUInt64 => ("wclgdb", None),
+                    FpuRoundOp::FromSInt32 => ("wcefb", None),
+                    FpuRoundOp::FromSInt64 => ("wcdgb", None),
+                    FpuRoundOp::FromUInt32 => ("wcelfb", None),
+                    FpuRoundOp::FromUInt64 => ("wcdlgb", None),
+                };
+
+                let (rd, rd_fpr) = pretty_print_fpr(rd.to_reg(), allocs);
+                let (rn, rn_fpr) = pretty_print_fpr(rn, allocs);
+                if opcode_fpr.is_some() && rd_fpr.is_some() && rn_fpr.is_some() {
+                    format!(
+                        "{} {}, {}, {}",
+                        opcode_fpr.unwrap(),
+                        rd_fpr.unwrap(),
+                        rn_fpr.unwrap(),
+                        mode
+                    )
+                } else {
+                    format!(
+                        "{} {}, {}, 0, {}",
+                        opcode,
+                        rd_fpr.unwrap_or(rd),
+                        rn_fpr.unwrap_or(rn),
+                        mode
+                    )
+                }
             }
-            &Inst::IntToFpu { op, rd, rn } => {
-                let op = match op {
-                    IntToFpuOp::I32ToF32 => "cefbra",
-                    IntToFpuOp::U32ToF32 => "celfbr",
-                    IntToFpuOp::I64ToF32 => "cegbra",
-                    IntToFpuOp::U64ToF32 => "celgbr",
-                    IntToFpuOp::I32ToF64 => "cdfbra",
-                    IntToFpuOp::U32ToF64 => "cdlfbr",
-                    IntToFpuOp::I64ToF64 => "cdgbra",
-                    IntToFpuOp::U64ToF64 => "cdlgbr",
-                };
-                let rd = pretty_print_reg(rd.to_reg(), allocs);
-                let rn = pretty_print_reg(rn, allocs);
-                format!("{} {}, 0, {}, 0", op, rd, rn)
-            }
-            &Inst::FpuRound { op, rd, rn } => {
-                let (op, m3) = match op {
-                    FpuRoundMode::Minus32 => ("fiebr", 7),
-                    FpuRoundMode::Minus64 => ("fidbr", 7),
-                    FpuRoundMode::Plus32 => ("fiebr", 6),
-                    FpuRoundMode::Plus64 => ("fidbr", 6),
-                    FpuRoundMode::Zero32 => ("fiebr", 5),
-                    FpuRoundMode::Zero64 => ("fidbr", 5),
-                    FpuRoundMode::Nearest32 => ("fiebr", 4),
-                    FpuRoundMode::Nearest64 => ("fidbr", 4),
-                };
-                let rd = pretty_print_reg(rd.to_reg(), allocs);
-                let rn = pretty_print_reg(rn, allocs);
-                format!("{} {}, {}, {}", op, rd, rn, m3)
-            }
-            &Inst::FpuVecRRR { fpu_op, rd, rn, rm } => {
-                let op = match fpu_op {
-                    FPUOp2::Max32 => "wfmaxsb",
-                    FPUOp2::Max64 => "wfmaxdb",
-                    FPUOp2::Min32 => "wfminsb",
-                    FPUOp2::Min64 => "wfmindb",
-                    _ => unimplemented!(),
-                };
+            &Inst::VecSelect { rd, rn, rm, ra } => {
                 let rd = pretty_print_reg(rd.to_reg(), allocs);
                 let rn = pretty_print_reg(rn, allocs);
                 let rm = pretty_print_reg(rm, allocs);
-                format!("{} {}, {}, {}, 1", op, rd, rn, rm)
+                let ra = pretty_print_reg(ra, allocs);
+                format!("vsel {}, {}, {}, {}", rd, rn, rm, ra)
             }
             &Inst::Extend {
                 rd,
