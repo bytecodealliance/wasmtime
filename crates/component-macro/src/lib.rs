@@ -1,14 +1,30 @@
 use proc_macro2::{Literal, TokenStream, TokenTree};
 use quote::{format_ident, quote};
 use std::collections::HashSet;
+use std::fmt;
 use syn::{parse_macro_input, parse_quote, Data, DeriveInput, Error, Result};
+
+#[derive(Debug, Copy, Clone)]
+enum VariantStyle {
+    Variant,
+    Enum,
+    Union,
+}
+
+impl fmt::Display for VariantStyle {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::Variant => "variant",
+            Self::Enum => "enum",
+            Self::Union => "union",
+        })
+    }
+}
 
 #[derive(Debug, Copy, Clone)]
 enum Style {
     Record,
-    Variant,
-    Enum,
-    Union,
+    Variant(VariantStyle),
 }
 
 fn find_style(input: &DeriveInput) -> Result<Style> {
@@ -50,9 +66,9 @@ fn find_style(input: &DeriveInput) -> Result<Style> {
 
         style = Some(match style_string.as_ref() {
             "record" => Style::Record,
-            "variant" => Style::Variant,
-            "enum" => Style::Enum,
-            "union" => Style::Union,
+            "variant" => Style::Variant(VariantStyle::Variant),
+            "enum" => Style::Variant(VariantStyle::Enum),
+            "union" => Style::Variant(VariantStyle::Union),
             "flags" => {
                 return Err(Error::new_spanned(
                     &attribute.tokens,
@@ -135,17 +151,6 @@ struct VariantCase<'a> {
     ty: Option<&'a syn::Type>,
 }
 
-struct EnumCase<'a> {
-    attrs: &'a [syn::Attribute],
-    ident: &'a syn::Ident,
-}
-
-#[derive(Debug, Copy, Clone)]
-enum VariantStyle {
-    Variant,
-    Union,
-}
-
 trait Expander {
     fn expand_record(&self, input: &DeriveInput, fields: &syn::FieldsNamed) -> Result<TokenStream>;
 
@@ -155,16 +160,12 @@ trait Expander {
         cases: &[VariantCase],
         style: VariantStyle,
     ) -> Result<TokenStream>;
-
-    fn expand_enum(&self, input: &DeriveInput, cases: &[EnumCase]) -> Result<TokenStream>;
 }
 
 fn expand(expander: &dyn Expander, input: &DeriveInput) -> Result<TokenStream> {
     match find_style(input)? {
         Style::Record => expand_record(expander, input),
-        Style::Variant => expand_variant(expander, input),
-        Style::Union => expand_union(expander, input),
-        Style::Enum => expand_enum(expander, input),
+        Style::Variant(style) => expand_variant(expander, input, style),
     }
 }
 
@@ -190,7 +191,11 @@ fn expand_record(expander: &dyn Expander, input: &DeriveInput) -> Result<TokenSt
     }
 }
 
-fn expand_variant(expander: &dyn Expander, input: &DeriveInput) -> Result<TokenStream> {
+fn expand_variant(
+    expander: &dyn Expander,
+    input: &DeriveInput,
+    style: VariantStyle,
+) -> Result<TokenStream> {
     let name = &input.ident;
 
     let body = if let Data::Enum(body) = &input.data {
@@ -198,139 +203,55 @@ fn expand_variant(expander: &dyn Expander, input: &DeriveInput) -> Result<TokenS
     } else {
         return Err(Error::new(
             name.span(),
-            "`variant` component types can only be derived for Rust `enum`s",
+            format!(
+                "`{}` component types can only be derived for Rust `enum`s",
+                style
+            ),
         ));
     };
 
     if body.variants.is_empty() {
         return Err(Error::new(
             name.span(),
-            "`variant` component types can only be derived for Rust `enum`s with at least one variant",
+            format!("`{}` component types can only be derived for Rust `enum`s with at least one variant", style),
         ));
     }
 
-    let cases =
-        body.variants
-            .iter()
-            .map(
-                |syn::Variant {
-                     attrs,
-                     ident,
-                     fields,
-                     ..
-                 }| {
-                    Ok(VariantCase {
-                        attrs,
-                        ident,
-                        ty: match fields {
-                            syn::Fields::Unnamed(fields) if fields.unnamed.len() == 1 => {
-                                Some(&fields.unnamed[0].ty)
-                            }
-                            syn::Fields::Unit => None,
-                            _ => return Err(Error::new(
+    let cases = body
+        .variants
+        .iter()
+        .map(
+            |syn::Variant {
+                 attrs,
+                 ident,
+                 fields,
+                 ..
+             }| {
+                Ok(VariantCase {
+                    attrs,
+                    ident,
+                    ty: match fields {
+                        syn::Fields::Unnamed(fields) if fields.unnamed.len() == 1 => {
+                            Some(&fields.unnamed[0].ty)
+                        }
+                        syn::Fields::Unit => None,
+                        _ => {
+                            return Err(Error::new(
                                 name.span(),
-                                "`variant` component types can only be derived for Rust `enum`s \
-                                 containing variants with at most one unnamed field each",
-                            )),
-                        },
-                    })
-                },
-            )
-            .collect::<Result<Vec<_>>>()?;
-
-    expander.expand_variant(input, &cases, VariantStyle::Variant)
-}
-
-fn expand_enum(expander: &dyn Expander, input: &DeriveInput) -> Result<TokenStream> {
-    let name = &input.ident;
-
-    let body = if let Data::Enum(body) = &input.data {
-        body
-    } else {
-        return Err(Error::new(
-            name.span(),
-            "`enum` component types can only be derived for Rust `enum`s",
-        ));
-    };
-
-    if body.variants.is_empty() {
-        return Err(Error::new(
-            name.span(),
-            "`enum` component types can only be derived for Rust `enum`s with at least one variant",
-        ));
-    }
-
-    let cases = body
-        .variants
-        .iter()
-        .map(
-            |syn::Variant {
-                 attrs,
-                 ident,
-                 fields,
-                 ..
-             }| {
-                match fields {
-                    syn::Fields::Unit => Ok(EnumCase { attrs, ident }),
-                    _ => Err(Error::new(
-                        name.span(),
-                        "`enum` component types can only be derived for Rust `enum`s \
-                         such that no variants contain fields",
-                    )),
-                }
+                                format!(
+                                    "`{}` component types can only be derived for Rust `enum`s \
+                                     containing variants with at most one unnamed field each",
+                                    style
+                                ),
+                            ))
+                        }
+                    },
+                })
             },
         )
         .collect::<Result<Vec<_>>>()?;
 
-    expander.expand_enum(input, &cases)
-}
-
-fn expand_union(expander: &dyn Expander, input: &DeriveInput) -> Result<TokenStream> {
-    let name = &input.ident;
-
-    let body = if let Data::Enum(body) = &input.data {
-        body
-    } else {
-        return Err(Error::new(
-            name.span(),
-            "`union` component types can only be derived for Rust `enum`s",
-        ));
-    };
-
-    if body.variants.is_empty() {
-        return Err(Error::new(
-            name.span(),
-            "`union` component types can only be derived for Rust `enum`s with at least one variant",
-        ));
-    }
-
-    let cases = body
-        .variants
-        .iter()
-        .map(
-            |syn::Variant {
-                 attrs,
-                 ident,
-                 fields,
-                 ..
-             }| {
-                match fields {
-                    syn::Fields::Unnamed(fields) if fields.unnamed.len() == 1 => Ok(VariantCase {
-                        attrs,
-                        ident,
-                        ty: Some(&fields.unnamed[0].ty),
-                    }),
-                    _ => Err(Error::new(
-                        name.span(),
-                        "`union` component types can only be derived for Rust `enum`s \
-                         containing variants with exactly one unnamed field each",
-                    )),
-                }
-            },
-        )
-        .collect::<Result<Vec<_>>>()?;
-
-    expander.expand_variant(input, &cases, VariantStyle::Union)
+    expander.expand_variant(input, &cases, style)
 }
 
 #[proc_macro_derive(Lift, attributes(component))]
@@ -462,58 +383,6 @@ impl Expander for LiftExpander {
                     let discrim = bytes[0];
                     let payload = &bytes[#internal::align_to(1, align)..];
                     Ok(match discrim {
-                        #loads
-                        discrim => #internal::anyhow::bail!("unexpected discriminant: {}", discrim),
-                    })
-                }
-            }
-        };
-
-        Ok(expanded)
-    }
-
-    fn expand_enum(&self, input: &DeriveInput, cases: &[EnumCase]) -> Result<TokenStream> {
-        let internal = quote!(wasmtime::component::__internal);
-
-        let mut lifts = TokenStream::new();
-        let mut loads = TokenStream::new();
-
-        for (index, EnumCase { ident, .. }) in cases.iter().enumerate() {
-            let index_u8 = u8::try_from(index).map_err(|_| {
-                Error::new(
-                    input.ident.span(),
-                    "`enum`s with more than 256 variants not yet supported",
-                )
-            })?;
-
-            let index_i32 = index_u8 as i32;
-
-            lifts.extend(quote!(#index_i32 => Self::#ident,));
-
-            loads.extend(quote!(#index_u8 => Self::#ident,));
-        }
-
-        let name = &input.ident;
-        let generics = add_trait_bounds(&input.generics, parse_quote!(wasmtime::component::Lift));
-        let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
-
-        let expanded = quote! {
-            unsafe impl #impl_generics wasmtime::component::Lift for #name #ty_generics #where_clause {
-                #[inline]
-                fn lift(
-                    store: &#internal::StoreOpaque,
-                    options: &#internal::Options,
-                    src: &Self::Lower,
-                ) -> #internal::anyhow::Result<Self> {
-                    Ok(match src.get_i32() {
-                        #lifts
-                        discrim => #internal::anyhow::bail!("unexpected discriminant: {}", discrim),
-                    })
-                }
-
-                #[inline]
-                fn load(memory: &#internal::Memory, bytes: &[u8]) -> #internal::anyhow::Result<Self> {
-                    Ok(match bytes[0] {
                         #loads
                         discrim => #internal::anyhow::bail!("unexpected discriminant: {}", discrim),
                     })
@@ -668,66 +537,6 @@ impl Expander for LowerExpander {
                     match self {
                         #stores
                     }
-                }
-            }
-        };
-
-        Ok(expanded)
-    }
-
-    fn expand_enum(&self, input: &DeriveInput, cases: &[EnumCase]) -> Result<TokenStream> {
-        let internal = quote!(wasmtime::component::__internal);
-
-        let mut lowers = TokenStream::new();
-        let mut stores = TokenStream::new();
-
-        for (index, EnumCase { ident, .. }) in cases.iter().enumerate() {
-            let index_u8 = u8::try_from(index).map_err(|_| {
-                Error::new(
-                    input.ident.span(),
-                    "`enum`s with more than 256 variants not yet supported",
-                )
-            })?;
-
-            let index_i32 = index_u8 as i32;
-
-            lowers.extend(quote!(Self::#ident => {
-                dst.write(wasmtime::ValRaw::i32(#index_i32));
-            }));
-
-            stores.extend(quote!(Self::#ident => {
-                memory.get::<1>(offset)[0] = #index_u8;
-            }));
-        }
-
-        let name = &input.ident;
-        let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
-
-        let expanded = quote! {
-            unsafe impl #impl_generics wasmtime::component::Lower for #name #ty_generics #where_clause {
-                #[inline]
-                fn lower<T>(
-                    &self,
-                    store: &mut wasmtime::StoreContextMut<T>,
-                    options: &#internal::Options,
-                    dst: &mut std::mem::MaybeUninit<Self::Lower>,
-                ) -> #internal::anyhow::Result<()> {
-                    match self {
-                        #lowers
-                    }
-                    Ok(())
-                }
-
-                #[inline]
-                fn store<T>(
-                    &self,
-                    memory: &mut #internal::MemoryMut<'_, T>,
-                    mut offset: usize
-                ) -> #internal::anyhow::Result<()> {
-                    match self {
-                        #stores
-                    }
-                    Ok(())
                 }
             }
         };
@@ -892,10 +701,19 @@ impl Expander for ComponentTypeExpander {
                     })
                 });
 
-                case_names_and_checks.extend(if let VariantStyle::Union = style {
-                    quote!(<#ty as wasmtime::component::ComponentType>::typecheck,)
-                } else {
-                    quote!((#name, <#ty as wasmtime::component::ComponentType>::typecheck),)
+                case_names_and_checks.extend(match style {
+                    VariantStyle::Variant => {
+                        quote!((#name, <#ty as wasmtime::component::ComponentType>::typecheck),)
+                    }
+                    VariantStyle::Union => {
+                        quote!(<#ty as wasmtime::component::ComponentType>::typecheck,)
+                    }
+                    VariantStyle::Enum => {
+                        return Err(Error::new(
+                            ident.span(),
+                            "payloads are not permitted for `enum` cases",
+                        ))
+                    }
                 });
 
                 let generic = format_ident!("T{}", index);
@@ -908,10 +726,20 @@ impl Expander for ComponentTypeExpander {
 
                 unique_types.insert(ty);
             } else {
-                case_names_and_checks.extend(
-                    quote!((#name, <() as wasmtime::component::ComponentType>::typecheck),),
-                );
+                case_names_and_checks.extend(match style {
+                    VariantStyle::Variant => {
+                        quote!((#name, <() as wasmtime::component::ComponentType>::typecheck),)
+                    }
+                    VariantStyle::Union => {
+                        quote!(<() as wasmtime::component::ComponentType>::typecheck,)
+                    }
+                    VariantStyle::Enum => quote!(#name,),
+                });
             }
+        }
+
+        if lower_payload_case_declarations.is_empty() {
+            lower_payload_case_declarations.extend(quote!(_dummy: ()));
         }
 
         let alignments = unique_types
@@ -924,10 +752,10 @@ impl Expander for ComponentTypeExpander {
             })
             .collect::<TokenStream>();
 
-        let typecheck = if let VariantStyle::Union = style {
-            quote!(typecheck_union)
-        } else {
-            quote!(typecheck_variant)
+        let typecheck = match style {
+            VariantStyle::Variant => quote!(typecheck_variant),
+            VariantStyle::Union => quote!(typecheck_union),
+            VariantStyle::Enum => quote!(typecheck_enum),
         };
 
         let name = &input.ident;
@@ -990,47 +818,5 @@ impl Expander for ComponentTypeExpander {
         };
 
         Ok(quote!(const _: () = { #expanded };))
-    }
-
-    fn expand_enum(&self, input: &DeriveInput, cases: &[EnumCase]) -> Result<TokenStream> {
-        if cases.len() > 256 {
-            return Err(Error::new(
-                input.ident.span(),
-                "`enum`s with more than 256 cases not yet supported",
-            ));
-        };
-
-        let internal = quote!(wasmtime::component::__internal);
-
-        let mut case_names = TokenStream::new();
-
-        for EnumCase { attrs, ident } in cases {
-            let name = find_rename(attrs)?.unwrap_or_else(|| Literal::string(&ident.to_string()));
-
-            case_names.extend(quote!(#name,));
-        }
-
-        let name = &input.ident;
-        let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
-
-        let expanded = quote! {
-            unsafe impl #impl_generics wasmtime::component::ComponentType for #name #ty_generics #where_clause {
-                type Lower = wasmtime::ValRaw;
-
-                #[inline]
-                fn typecheck(
-                    ty: &#internal::InterfaceType,
-                    types: &#internal::ComponentTypes,
-                ) -> #internal::anyhow::Result<()> {
-                    #internal::typecheck_enum(ty, types, &[#case_names])
-                }
-
-                const SIZE32: usize = 1;
-
-                const ALIGN32: u32 = 1;
-            }
-        };
-
-        Ok(expanded)
     }
 }
