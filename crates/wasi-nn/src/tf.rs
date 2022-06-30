@@ -36,21 +36,35 @@ impl Backend for TensorflowBackend {
                 Err(e)
             });
 
-            let unmap = map_dir.as_ref().unwrap();
             let mut graph = Graph::new();
-            let dasbuilders = builders.as_ptr();
-            let export_dir = dasbuilders.read()?.as_slice()?;
-            let exp_str = str::from_utf8(&export_dir).unwrap();
+            let builders = builders.as_ptr();
+            let guest_map = builders.read()?.as_slice()?;
+            let guest_map_str = str::from_utf8(&guest_map).unwrap();
+            let exp_dir = builders.add(1)?.read()?.as_slice()?;
+            let exp_str = str::from_utf8(&exp_dir).unwrap();
 
-            for i in 0..unmap.len() {
-                if unmap[i].0 == exp_str {
-                    let bundle = SavedModelBundle::load(
-                        &SessionOptions::new(),
-                        &["serve"],
-                        &mut graph,
-                        Path::new(&unmap[i].1.clone()),
-                    )?;
-                    return Ok(Box::new(TensorflowGraph(graph, Arc::new(bundle))));
+            // Don't allow navigation outside of the sandbox
+            if !exp_str.contains("..") {
+                let unmap = map_dir.as_ref().unwrap();
+                for i in 0..unmap.len() {
+                    if unmap[i].0 == guest_map_str {
+                        //Append the stored mapdir path with the user path.
+                        let full_path = std::fs::canonicalize(Path::new(&unmap[i].1.clone()).join(Path::new(exp_str)));
+
+                        //Check that path actually exists
+                        let full_path = match full_path {
+                            Ok(fp) => fp,
+                            Err(e) => return Err(BackendError::MissingMapDir())
+                        };
+
+                        let bundle = SavedModelBundle::load(
+                            &SessionOptions::new(),
+                            &["serve"],
+                            &mut graph,
+                            full_path,
+                        )?;
+                        return Ok(Box::new(TensorflowGraph(graph, Arc::new(bundle))));
+                    }
                 }
             }
         }
