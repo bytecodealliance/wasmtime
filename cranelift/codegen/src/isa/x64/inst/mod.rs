@@ -1672,11 +1672,11 @@ impl PrettyPrint for Inst {
             Inst::Ud2 { trap_code } => format!("ud2 {}", trap_code),
 
             Inst::ElfTlsGetAddr { ref symbol } => {
-                format!("elf_tls_get_addr {:?}", symbol)
+                format!("%rax = elf_tls_get_addr {:?}", symbol)
             }
 
             Inst::MachOTlsGetAddr { ref symbol } => {
-                format!("macho_tls_get_addr {:?}", symbol)
+                format!("%rax = macho_tls_get_addr {:?}", symbol)
             }
 
             Inst::Unwind { inst } => {
@@ -2083,15 +2083,16 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
         }
 
         Inst::ElfTlsGetAddr { .. } | Inst::MachOTlsGetAddr { .. } => {
+            collector.reg_def(Writable::from_reg(regs::rax()));
             // All caller-saves are clobbered.
             //
             // We use the SysV calling convention here because the
             // pseudoinstruction (and relocation that it emits) is specific to
             // ELF systems; other x86-64 targets with other conventions (i.e.,
             // Windows) use different TLS strategies.
-            collector.reg_clobbers(X64ABIMachineSpec::get_regs_clobbered_by_call(
-                CallConv::SystemV,
-            ));
+            let mut clobbers = X64ABIMachineSpec::get_regs_clobbered_by_call(CallConv::SystemV);
+            clobbers.remove(regs::gpr_preg(regs::ENC_RAX));
+            collector.reg_clobbers(clobbers);
         }
 
         Inst::Unwind { .. } => {}

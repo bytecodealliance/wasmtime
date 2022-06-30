@@ -4840,7 +4840,7 @@ fn test_x64_emit() {
             },
         },
         "66488D3D00000000666648E800000000",
-        "elf_tls_get_addr User { namespace: 0, index: 0 }",
+        "%rax = elf_tls_get_addr User { namespace: 0, index: 0 }",
     ));
 
     insns.push((
@@ -4851,7 +4851,7 @@ fn test_x64_emit() {
             },
         },
         "488B3D00000000FF17",
-        "macho_tls_get_addr User { namespace: 0, index: 0 }",
+        "%rax = macho_tls_get_addr User { namespace: 0, index: 0 }",
     ));
 
     // ========================================================

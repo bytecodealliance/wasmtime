@@ -19,7 +19,7 @@ block0(v0: i32):
 ;   stp d8, d9, [sp, #-16]!
 ; block0:
 ;   mov x25, x0
-;   elf_tls_get_addr u1:0
+;   x0 = elf_tls_get_addr u1:0
 ;   mov x1, x0
 ;   mov x0, x25
 ;   ldp d8, d9, [sp], #16
