@@ -5,7 +5,9 @@
 //
 // struct VMContext {
 //      magic: u32,
+//      _padding: u32, // (On 64-bit systems)
 //      runtime_limits: *const VMRuntimeLimits,
+//      callee: *mut VMFunctionBody,
 //      externref_activations_table: *mut VMExternRefActivationsTable,
 //      store: *mut dyn Store,
 //      builtins: *mut VMBuiltinFunctionsArray,
@@ -21,12 +23,15 @@
 //      anyfuncs: [VMCallerCheckedAnyfunc; module.num_escaped_funcs],
 // }
 
+mod vm_host_func_offsets;
+
 use crate::{
     AnyfuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex,
     GlobalIndex, MemoryIndex, Module, TableIndex,
 };
 use cranelift_entity::packed_option::ReservedValue;
 use std::convert::TryFrom;
+pub use vm_host_func_offsets::{VMHostFuncOffsets, VM_HOST_FUNC_MAGIC};
 use wasmtime_types::OwnedMemoryIndex;
 
 /// Sentinel value indicating that wasm has been interrupted.
@@ -78,6 +83,7 @@ pub struct VMOffsets<P> {
     // precalculated offsets of various member fields
     magic: u32,
     runtime_limits: u32,
+    callee: u32,
     epoch_ptr: u32,
     externref_activations_table: u32,
     store: u32,
@@ -269,6 +275,7 @@ impl<P: PtrSize> VMOffsets<P> {
             store: "jit store state",
             externref_activations_table: "jit host externref state",
             epoch_ptr: "jit current epoch state",
+            callee: "callee function pointer",
             runtime_limits: "jit runtime limits state",
             magic: "magic value",
         }
@@ -290,6 +297,7 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
             num_escaped_funcs: fields.num_escaped_funcs,
             magic: 0,
             runtime_limits: 0,
+            callee: 0,
             epoch_ptr: 0,
             externref_activations_table: 0,
             store: 0,
@@ -340,6 +348,7 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
             size(magic) = 4u32,
             align(u32::from(ret.ptr.size())),
             size(runtime_limits) = ret.ptr.size(),
+            size(callee) = ret.ptr.size(),
             size(epoch_ptr) = ret.ptr.size(),
             size(externref_activations_table) = ret.ptr.size(),
             size(store) = ret.ptr.size() * 2,
@@ -556,7 +565,22 @@ impl<P: PtrSize> VMOffsets<P> {
     /// Return the offset of the `epoch_deadline` field of `VMRuntimeLimits`
     #[inline]
     pub fn vmruntime_limits_epoch_deadline(&self) -> u8 {
-        self.pointer_size() + 8 // `stack_limit` is a pointer; `fuel_consumed` is an `i64`
+        self.vmruntime_limits_fuel_consumed() + 8 // `stack_limit` is a pointer; `fuel_consumed` is an `i64`
+    }
+
+    /// Return the offset of the `last_wasm_exit_fp` field of `VMRuntimeLimits`.
+    pub fn vmruntime_limits_last_wasm_exit_fp(&self) -> u8 {
+        self.vmruntime_limits_epoch_deadline() + 8
+    }
+
+    /// Return the offset of the `last_wasm_exit_pc` field of `VMRuntimeLimits`.
+    pub fn vmruntime_limits_last_wasm_exit_pc(&self) -> u8 {
+        self.vmruntime_limits_last_wasm_exit_fp() + self.pointer_size()
+    }
+
+    /// Return the offset of the `last_enty_sp` field of `VMRuntimeLimits`.
+    pub fn vmruntime_limits_last_wasm_entry_sp(&self) -> u8 {
+        self.vmruntime_limits_last_wasm_exit_pc() + self.pointer_size()
     }
 }
 
@@ -572,6 +596,11 @@ impl<P: PtrSize> VMOffsets<P> {
     #[inline]
     pub fn vmctx_runtime_limits(&self) -> u32 {
         self.runtime_limits
+    }
+
+    /// Return the offset to the `callee` member in this `VMContext`.
+    pub fn vmctx_callee(&self) -> u32 {
+        self.callee
     }
 
     /// Return the offset to the `*const AtomicU64` epoch-counter

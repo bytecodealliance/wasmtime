@@ -10,11 +10,10 @@ use std::panic::{self, AssertUnwindSafe};
 use std::pin::Pin;
 use std::ptr::NonNull;
 use std::sync::Arc;
-use wasmtime_environ::FuncIndex;
 use wasmtime_runtime::{
-    raise_user_trap, ExportFunction, InstanceAllocator, InstanceHandle, OnDemandInstanceAllocator,
-    VMCallerCheckedAnyfunc, VMContext, VMFunctionBody, VMFunctionImport, VMOpaqueContext,
-    VMSharedSignatureIndex, VMTrampoline,
+    raise_user_trap, ExportFunction, InstanceHandle, VMCallerCheckedAnyfunc, VMContext,
+    VMFunctionBody, VMFunctionImport, VMHostFuncContext, VMOpaqueContext, VMSharedSignatureIndex,
+    VMTrampoline,
 };
 
 /// A WebAssembly function which can be called.
@@ -824,10 +823,11 @@ impl Func {
         trampoline: VMTrampoline,
         params_and_returns: *mut ValRaw,
     ) -> Result<(), Trap> {
-        invoke_wasm_and_catch_traps(store, |callee| {
+        invoke_wasm_and_catch_traps(store, |caller| {
+            let trampoline = wasmtime_runtime::prepare_host_to_wasm_trampoline(caller, trampoline);
             trampoline(
                 anyfunc.as_ref().vmctx,
-                callee,
+                caller,
                 anyfunc.as_ref().func_ptr.as_ptr(),
                 params_and_returns,
             )
@@ -1220,7 +1220,7 @@ impl Func {
 /// raw trampoline or a raw WebAssembly function. This *must* be called to do
 /// things like catch traps and set up GC properly.
 ///
-/// The `closure` provided receives a default "callee" `VMContext` parameter it
+/// The `closure` provided receives a default "caller" `VMContext` parameter it
 /// can pass to the called wasm function, if desired.
 pub(crate) fn invoke_wasm_and_catch_traps<T>(
     store: &mut StoreContextMut<'_, T>,
@@ -1236,7 +1236,7 @@ pub(crate) fn invoke_wasm_and_catch_traps<T>(
         let result = wasmtime_runtime::catch_traps(
             store.0.signal_handler(),
             store.0.engine().config().wasm_backtrace,
-            store.0.default_callee(),
+            store.0.default_caller(),
             closure,
         );
         exit_wasm(store, exit);
@@ -1254,35 +1254,33 @@ pub(crate) fn invoke_wasm_and_catch_traps<T>(
 ///   allocated by WebAssembly code and it's relative to the initial stack
 ///   pointer that called into wasm.
 ///
-/// * Stack canaries for externref gc tracing. Currently the implementation
-///   relies on walking frames but the stack walker isn't always 100% reliable,
-///   so a canary is used to ensure that if the canary is seen then it's
-///   guaranteed all wasm frames have been walked.
-///
 /// This function may fail if the the stack limit can't be set because an
 /// interrupt already happened.
 fn enter_wasm<T>(store: &mut StoreContextMut<'_, T>) -> Option<usize> {
-    // If this is a recursive call, e.g. our stack canary is already set, then
-    // we may be able to skip this function.
+    // TODO FITZGEN: Do we need a non-stack canary way to detect re-entrancy and
+    // early exit here?
     //
-    // For synchronous stores there's nothing else to do because all wasm calls
-    // happen synchronously and on the same stack. This means that the previous
-    // stack limit will suffice for the next recursive call.
-    //
-    // For asynchronous stores then each call happens on a separate native
-    // stack. This means that the previous stack limit is no longer relevant
-    // because we're on a separate stack. In this situation we need to
-    // update the stack limit, but we don't need to update the gc stack canary
-    // in this situation.
-    if store
-        .0
-        .externref_activations_table()
-        .stack_canary()
-        .is_some()
-        && !store.0.async_support()
-    {
-        return None;
-    }
+    // // If this is a recursive call, e.g. our stack canary is already set, then
+    // // we may be able to skip this function.
+    // //
+    // // For synchronous stores there's nothing else to do because all wasm calls
+    // // happen synchronously and on the same stack. This means that the previous
+    // // stack limit will suffice for the next recursive call.
+    // //
+    // // For asynchronous stores then each call happens on a separate native
+    // // stack. This means that the previous stack limit is no longer relevant
+    // // because we're on a separate stack. In this situation we need to
+    // // update the stack limit, but we don't need to update the gc stack canary
+    // // in this situation.
+    // if store
+    //     .0
+    //     .externref_activations_table()
+    //     .stack_canary()
+    //     .is_some()
+    //     && !store.0.async_support()
+    // {
+    //     return None;
+    // }
 
     let stack_pointer = psm::stack_pointer() as usize;
 
@@ -1308,21 +1306,6 @@ fn enter_wasm<T>(store: &mut StoreContextMut<'_, T>) -> Option<usize> {
         )
     };
 
-    // The `usize::max_value()` sentinel is present on recursive calls to
-    // asynchronous stores here. In that situation we don't want to keep
-    // updating the stack canary, so only execute this once at the top.
-    if prev_stack == usize::max_value() {
-        debug_assert!(store
-            .0
-            .externref_activations_table()
-            .stack_canary()
-            .is_none());
-        store
-            .0
-            .externref_activations_table()
-            .set_stack_canary(Some(stack_pointer));
-    }
-
     Some(prev_stack)
 }
 
@@ -1333,13 +1316,6 @@ fn exit_wasm<T>(store: &mut StoreContextMut<'_, T>, prev_stack: Option<usize>) {
         Some(stack) => stack,
         None => return,
     };
-
-    // Only if we're restoring a top-level value do we clear the stack canary
-    // value. Otherwise our purpose here might be restoring a recursive stack
-    // limit but leaving the active canary in place.
-    if prev_stack == usize::max_value() {
-        store.0.externref_activations_table().set_stack_canary(None);
-    }
 
     unsafe {
         *store.0.runtime_limits().stack_limit.get() = prev_stack;
@@ -1642,7 +1618,10 @@ for_each_function_signature!(impl_host_abi);
 /// as an implementation detail of this crate.
 pub trait IntoFunc<T, Params, Results>: Send + Sync + 'static {
     #[doc(hidden)]
-    fn into_func(self, engine: &Engine) -> (InstanceHandle, VMTrampoline);
+    fn into_func(
+        self,
+        engine: &Engine,
+    ) -> (Box<VMHostFuncContext>, VMSharedSignatureIndex, VMTrampoline);
 }
 
 /// A structure representing the caller's context when creating a function
@@ -1827,7 +1806,7 @@ macro_rules! impl_into_func {
             $($args: WasmTy,)*
             R: WasmRet,
         {
-            fn into_func(self, engine: &Engine) -> (InstanceHandle, VMTrampoline) {
+            fn into_func(self, engine: &Engine) -> (Box<VMHostFuncContext>, VMSharedSignatureIndex, VMTrampoline) {
                 let f = move |_: Caller<'_, T>, $($args:$args),*| {
                     self($($args),*)
                 };
@@ -1843,7 +1822,7 @@ macro_rules! impl_into_func {
             $($args: WasmTy,)*
             R: WasmRet,
         {
-            fn into_func(self, engine: &Engine) -> (InstanceHandle, VMTrampoline) {
+            fn into_func(self, engine: &Engine) -> (Box<VMHostFuncContext>, VMSharedSignatureIndex, VMTrampoline) {
                 /// This shim is called by Wasm code, constructs a `Caller`,
                 /// calls the wrapped host function, and returns the translated
                 /// result back to Wasm.
@@ -1875,8 +1854,9 @@ macro_rules! impl_into_func {
                     // should be part of this block, and the long-jmp-ing
                     // happens after the block in handling `CallResult`.
                     let result = Caller::with(caller_vmctx, |mut caller| {
-                        let vmctx = VMContext::from_opaque(vmctx);
+                        let vmctx = VMHostFuncContext::from_opaque(vmctx);
                         let state = (*vmctx).host_state();
+
                         // Double-check ourselves in debug mode, but we control
                         // the `Any` here so an unsafe downcast should also
                         // work.
@@ -1979,20 +1959,15 @@ macro_rules! impl_into_func {
 
                 let trampoline = host_to_wasm_trampoline::<$($args,)* R>;
 
-
-                let instance = unsafe {
-                    crate::trampoline::create_raw_function(
-                        std::slice::from_raw_parts_mut(
-                            wasm_to_host_shim::<T, F, $($args,)* R> as *mut _,
-                            0,
-                        ),
+                let ctx = unsafe {
+                    VMHostFuncContext::new(
+                        NonNull::new(wasm_to_host_shim::<T, F, $($args,)* R> as *mut _).unwrap(),
                         shared_signature_id,
                         Box::new(self),
                     )
-                    .expect("failed to create raw function")
                 };
 
-                (instance, trampoline)
+                (ctx, shared_signature_id, trampoline)
             }
         }
     }
@@ -2011,15 +1986,17 @@ for_each_function_signature!(impl_into_func);
 /// `Store<T>` itself, but that's an unsafe contract of using this for now
 /// rather than part of the struct type (to avoid `Func<T>` in the API).
 pub(crate) struct HostFunc {
-    // Owned `*mut VMContext` allocation. Deallocated when this `HostFunc` is
-    // dropped.
-    instance: InstanceHandle,
+    // The host function context that is shared with our host-to-Wasm
+    // trampoline.
+    ctx: Box<VMHostFuncContext>,
+
+    // The index for this function's signature within the engine-wide shared
+    // signature registry.
+    signature: VMSharedSignatureIndex,
+
     // Trampoline to enter this function from Rust.
-    trampoline: VMTrampoline,
-    // The loaded `ExportFunction` from the above `InstanceHandle` which has raw
-    // pointers and information about how to actually call this function (e.g.
-    // the actual address in JIT code and the vm shared function index).
-    export: ExportFunction,
+    host_to_wasm_trampoline: VMTrampoline,
+
     // Stored to unregister this function's signature with the engine when this
     // is dropped.
     engine: Engine,
@@ -2056,9 +2033,9 @@ impl HostFunc {
                 Ok(result)
             })
         };
-        let (instance, trampoline) = crate::trampoline::create_function(&ty, func, engine)
+        let (ctx, signature, trampoline) = crate::trampoline::create_function(&ty, func, engine)
             .expect("failed to create function");
-        HostFunc::_new(engine, instance, trampoline)
+        HostFunc::_new(engine, ctx, signature, trampoline)
     }
 
     /// Analog of [`Func::wrap`]
@@ -2066,18 +2043,22 @@ impl HostFunc {
         engine: &Engine,
         func: impl IntoFunc<T, Params, Results>,
     ) -> Self {
-        let (instance, trampoline) = func.into_func(engine);
-        HostFunc::_new(engine, instance, trampoline)
+        let (ctx, signature, trampoline) = func.into_func(engine);
+        HostFunc::_new(engine, ctx, signature, trampoline)
     }
 
     /// Requires that this function's signature is already registered within
     /// `Engine`. This happens automatically during the above two constructors.
-    fn _new(engine: &Engine, mut instance: InstanceHandle, trampoline: VMTrampoline) -> Self {
-        let export = instance.get_exported_func(FuncIndex::from_u32(0));
+    fn _new(
+        engine: &Engine,
+        ctx: Box<VMHostFuncContext>,
+        signature: VMSharedSignatureIndex,
+        trampoline: VMTrampoline,
+    ) -> Self {
         HostFunc {
-            instance,
-            trampoline,
-            export,
+            ctx,
+            signature,
+            host_to_wasm_trampoline: trampoline,
             engine: engine.clone(),
         }
     }
@@ -2136,20 +2117,20 @@ impl HostFunc {
     }
 
     pub(crate) fn sig_index(&self) -> VMSharedSignatureIndex {
-        unsafe { self.export.anyfunc.as_ref().type_index }
+        self.signature
+    }
+
+    fn export_func(&self) -> ExportFunction {
+        ExportFunction {
+            anyfunc: self.ctx.wasm_to_host_trampoline(),
+        }
     }
 }
 
 impl Drop for HostFunc {
     fn drop(&mut self) {
         unsafe {
-            self.engine
-                .signatures()
-                .unregister(self.export.anyfunc.as_ref().type_index);
-
-            // Host functions are always allocated with the default (on-demand)
-            // allocator
-            OnDemandInstanceAllocator::default().deallocate(&self.instance);
+            self.engine.signatures().unregister(self.signature);
         }
     }
 }
@@ -2159,14 +2140,14 @@ impl FuncData {
     pub(crate) fn trampoline(&self) -> VMTrampoline {
         match &self.kind {
             FuncKind::StoreOwned { trampoline, .. } => *trampoline,
-            FuncKind::SharedHost(host) => host.trampoline,
-            FuncKind::RootedHost(host) => host.trampoline,
-            FuncKind::Host(host) => host.trampoline,
+            FuncKind::SharedHost(host) => host.host_to_wasm_trampoline,
+            FuncKind::RootedHost(host) => host.host_to_wasm_trampoline,
+            FuncKind::Host(host) => host.host_to_wasm_trampoline,
         }
     }
 
     #[inline]
-    fn export(&self) -> &ExportFunction {
+    fn export(&self) -> ExportFunction {
         self.kind.export()
     }
 
@@ -2177,12 +2158,12 @@ impl FuncData {
 
 impl FuncKind {
     #[inline]
-    fn export(&self) -> &ExportFunction {
+    fn export(&self) -> ExportFunction {
         match self {
-            FuncKind::StoreOwned { export, .. } => export,
-            FuncKind::SharedHost(host) => &host.export,
-            FuncKind::RootedHost(host) => &host.export,
-            FuncKind::Host(host) => &host.export,
+            FuncKind::StoreOwned { export, .. } => *export,
+            FuncKind::SharedHost(host) => host.export_func(),
+            FuncKind::RootedHost(host) => host.export_func(),
+            FuncKind::Host(host) => host.export_func(),
         }
     }
 }

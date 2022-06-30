@@ -13,6 +13,7 @@ use crate::vmcontext::{
 };
 use crate::{
     ExportFunction, ExportGlobal, ExportMemory, ExportTable, Imports, ModuleRuntimeInfo, Store,
+    VMFunctionBody,
 };
 use anyhow::Error;
 use memoffset::offset_of;
@@ -271,6 +272,14 @@ impl Instance {
 
     pub unsafe fn set_store(&mut self, store: *mut dyn Store) {
         *self.vmctx_plus_offset(self.offsets.vmctx_store()) = store;
+        *self.runtime_limits() = (*store).vmruntime_limits();
+        *self.epoch_ptr() = (*store).epoch_ptr();
+        *self.externref_activations_table() = (*store).externref_activations_table().0;
+    }
+
+    pub(crate) unsafe fn set_callee(&mut self, callee: Option<NonNull<VMFunctionBody>>) {
+        *self.vmctx_plus_offset(self.offsets.vmctx_callee()) =
+            callee.map_or(ptr::null_mut(), |c| c.as_ptr());
     }
 
     /// Return a reference to the vmctx used by compiled wasm code.
@@ -869,12 +878,12 @@ impl Instance {
         assert!(std::ptr::eq(module, self.module().as_ref()));
 
         *self.vmctx_plus_offset(self.offsets.vmctx_magic()) = VMCONTEXT_MAGIC;
+        *self.vmctx_plus_offset(self.offsets.vmctx_callee()) = ptr::null_mut::<()>();
 
         if let Some(store) = store.as_raw() {
-            *self.runtime_limits() = (*store).vmruntime_limits();
-            *self.epoch_ptr() = (*store).epoch_ptr();
-            *self.externref_activations_table() = (*store).externref_activations_table().0;
             self.set_store(store);
+        } else {
+            // TODO: set_store variant for poison pattern or nulls
         }
 
         // Initialize shared signatures

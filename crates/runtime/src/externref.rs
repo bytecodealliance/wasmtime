@@ -111,6 +111,8 @@ use std::ptr::{self, NonNull};
 use std::sync::atomic::{self, AtomicUsize, Ordering};
 use wasmtime_environ::StackMap;
 
+use crate::Backtrace;
+
 /// An external reference to some opaque data.
 ///
 /// `VMExternRef`s dereference to their underlying opaque data as `dyn Any`.
@@ -521,14 +523,6 @@ pub struct VMExternRefActivationsTable {
     /// than create a new hash set every GC.
     precise_stack_roots: HashSet<VMExternRefWithTraits>,
 
-    /// A pointer to the youngest host stack frame before we called
-    /// into Wasm for the first time. When walking the stack in garbage
-    /// collection, if we don't find this frame, then we failed to walk every
-    /// Wasm stack frame, which means we failed to find all on-stack,
-    /// inside-a-Wasm-frame roots, and doing a GC could lead to freeing one of
-    /// those missed roots, and use after free.
-    stack_canary: Option<usize>,
-
     /// A debug-only field for asserting that we are in a region of code where
     /// GC is okay to preform.
     #[cfg(debug_assertions)]
@@ -589,7 +583,6 @@ impl VMExternRefActivationsTable {
             },
             over_approximated_stack_roots: HashSet::new(),
             precise_stack_roots: HashSet::new(),
-            stack_canary: None,
             #[cfg(debug_assertions)]
             gc_okay: true,
         }
@@ -771,31 +764,6 @@ impl VMExternRefActivationsTable {
         self.precise_stack_roots.clear();
     }
 
-    /// Fetches the current value of this table's stack canary.
-    ///
-    /// This should only be used in conjunction with setting the stack canary
-    /// below if the return value is `None` typically. This is called from RAII
-    /// guards in `wasmtime::func::invoke_wasm_and_catch_traps`.
-    ///
-    /// For more information on canaries see the gc functions below.
-    #[inline]
-    pub fn stack_canary(&self) -> Option<usize> {
-        self.stack_canary
-    }
-
-    /// Sets the current value of the stack canary.
-    ///
-    /// This is called from RAII guards in
-    /// `wasmtime::func::invoke_wasm_and_catch_traps`. This is used to update
-    /// the stack canary to a concrete value and then reset it back to `None`
-    /// when wasm is finished.
-    ///
-    /// For more information on canaries see the gc functions below.
-    #[inline]
-    pub fn set_stack_canary(&mut self, canary: Option<usize>) {
-        self.stack_canary = canary;
-    }
-
     /// Set whether it is okay to GC or not right now.
     ///
     /// This is provided as a helper for enabling various debug-only assertions
@@ -890,29 +858,7 @@ pub unsafe fn gc(
         externref_activations_table.precise_stack_roots.is_empty()
     });
 
-    // Whenever we call into Wasm from host code for the first time, we set a
-    // stack canary. When we return to that host code, we unset the stack
-    // canary. If there is *not* a stack canary, then there must be zero Wasm
-    // frames on the stack. Therefore, we can simply reset the table without
-    // walking the stack.
-    let stack_canary = match externref_activations_table.stack_canary {
-        None => {
-            if cfg!(debug_assertions) {
-                // Assert that there aren't any Wasm frames on the stack.
-                backtrace::trace(|frame| {
-                    assert!(module_info_lookup.lookup(frame.ip() as usize).is_none());
-                    true
-                });
-            }
-            externref_activations_table.sweep();
-            log::debug!("end GC");
-            return;
-        }
-        Some(canary) => canary,
-    };
-
-    // There is a stack canary, so there must be Wasm frames on the stack. The
-    // rest of this function consists of:
+    // This function proceeds by:
     //
     // * walking the stack,
     //
@@ -921,12 +867,6 @@ pub unsafe fn gc(
     //
     // * resetting our bump-allocated table's over-approximation to the
     //   newly-discovered precise set.
-
-    // The SP of the previous (younger) frame we processed.
-    let mut last_sp: Option<usize> = None;
-
-    // Whether we have found our stack canary or not yet.
-    let mut found_canary = false;
 
     // The `activations_table_set` is used for `debug_assert!`s checking that
     // every reference we read out from the stack via stack maps is actually in
@@ -940,13 +880,17 @@ pub unsafe fn gc(
         });
     }
 
-    backtrace::trace(|frame| {
-        let pc = frame.ip() as usize;
-        let sp = frame.sp() as usize;
+    Backtrace::trace(|frame| {
+        let pc = frame.pc();
+        let fp = frame.fp();
 
         if let Some(module_info) = module_info_lookup.lookup(pc) {
             if let Some(stack_map) = module_info.lookup_stack_map(pc) {
-                debug_assert!(sp != 0, "we should always get a valid SP for Wasm frames");
+                debug_assert!(
+                    fp != 0,
+                    "we should always get a valid frame pointer for Wasm frames"
+                );
+                let sp = fp - stack_map.mapped_words() as usize * mem::size_of::<usize>();
 
                 for i in 0..(stack_map.mapped_words() as usize) {
                     if stack_map.get_bit(i) {
@@ -975,32 +919,10 @@ pub unsafe fn gc(
             }
         }
 
-        if let Some(last_sp) = last_sp {
-            // We've found the stack canary when we walk over the frame that it
-            // is contained within.
-            found_canary |= last_sp <= stack_canary && stack_canary <= sp;
-        }
-        last_sp = Some(sp);
-
-        // Keep walking the stack until we've found the canary, which is the
-        // oldest frame before we ever called into Wasm. We can stop once we've
-        // found it because there won't be any more Wasm frames, and therefore
-        // there won't be anymore on-stack, inside-a-Wasm-frame roots.
-        !found_canary
+        std::ops::ControlFlow::Continue(())
     });
 
-    // Only sweep and reset the table if we found the stack canary, and
-    // therefore know that we discovered all the on-stack, inside-a-Wasm-frame
-    // roots. If we did *not* find the stack canary, then `libunwind` failed to
-    // walk the whole stack, and we might be missing roots. Reseting the table
-    // would free those missing roots while they are still in use, leading to
-    // use-after-free.
-    if found_canary {
-        externref_activations_table.sweep();
-    } else {
-        log::warn!("did not find stack canary; skipping GC sweep");
-        externref_activations_table.precise_stack_roots.clear();
-    }
+    externref_activations_table.sweep();
 
     log::debug!("end GC");
 }

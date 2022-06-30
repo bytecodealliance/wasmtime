@@ -152,10 +152,7 @@ impl TrapBacktrace {
             store.engine().config().wasm_backtrace_details_env_used;
 
         for frame in native_trace.frames() {
-            let pc = frame.ip() as usize;
-            if pc == 0 {
-                continue;
-            }
+            debug_assert!(frame.pc() != 0);
             // Note that we need to be careful about the pc we pass in
             // here to lookup frame information. This program counter is
             // used to translate back to an original source location in
@@ -166,7 +163,11 @@ impl TrapBacktrace {
             // likely a call instruction on the stack). In that case we
             // want to lookup information for the previous instruction
             // (the call instruction) so we subtract one as the lookup.
-            let pc_to_lookup = if Some(pc) == trap_pc { pc } else { pc - 1 };
+            let pc_to_lookup = if Some(frame.pc()) == trap_pc {
+                frame.pc()
+            } else {
+                frame.pc() - 1
+            };
             if let Some((info, module)) = store.modules().lookup_frame_info(pc_to_lookup) {
                 wasm_trace.push(info);
 

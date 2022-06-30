@@ -1,17 +1,16 @@
 //! WebAssembly trap handling, which is built on top of the lower-level
 //! signalhandling mechanisms.
 
-use crate::VMContext;
+use crate::{Backtrace, VMContext, VMRuntimeLimits};
 use anyhow::Error;
 use std::any::Any;
 use std::cell::{Cell, UnsafeCell};
-use std::mem::MaybeUninit;
+use std::mem::{self, MaybeUninit};
 use std::ptr;
 use std::sync::Once;
 use wasmtime_environ::TrapCode;
 
 pub use self::tls::{tls_eager_initialize, TlsRestore};
-pub use backtrace::Backtrace;
 
 #[link(name = "wasmtime-helpers")]
 extern "C" {
@@ -68,6 +67,20 @@ pub fn init_traps(is_wasm_pc: fn(usize) -> bool) {
     });
 }
 
+/// Raises a trap immediately.
+///
+/// This function performs as-if a wasm trap was just executed. This trap
+/// payload is then returned from `catch_traps` below.
+///
+/// # Safety
+///
+/// Only safe to call when wasm code is on the stack, aka `catch_traps` must
+/// have been previously called. Additionally no Rust destructors can be on the
+/// stack. They will be skipped and not executed.
+pub unsafe fn raise_trap(reason: TrapReason) -> ! {
+    tls::with(|info| info.unwrap().unwind_with(UnwindReason::Trap(reason)))
+}
+
 /// Raises a user-defined trap immediately.
 ///
 /// This function performs as-if a wasm trap was just executed, only the trap
@@ -80,8 +93,7 @@ pub fn init_traps(is_wasm_pc: fn(usize) -> bool) {
 /// have been previously called. Additionally no Rust destructors can be on the
 /// stack. They will be skipped and not executed.
 pub unsafe fn raise_user_trap(data: Error) -> ! {
-    let trap = TrapReason::User(data);
-    tls::with(|info| info.unwrap().unwind_with(UnwindReason::Trap(trap)))
+    raise_trap(TrapReason::User(data))
 }
 
 /// Raises a trap from inside library code immediately.
@@ -95,8 +107,7 @@ pub unsafe fn raise_user_trap(data: Error) -> ! {
 /// have been previously called. Additionally no Rust destructors can be on the
 /// stack. They will be skipped and not executed.
 pub unsafe fn raise_lib_trap(trap: TrapCode) -> ! {
-    let trap = TrapReason::Wasm(trap);
-    tls::with(|info| info.unwrap().unwind_with(UnwindReason::Trap(trap)))
+    raise_trap(TrapReason::Wasm(trap))
 }
 
 /// Carries a Rust panic across wasm code and resumes the panic on the other
@@ -134,6 +145,25 @@ pub enum TrapReason {
     Wasm(TrapCode),
 }
 
+impl TrapReason {
+    /// Is this a JIT trap?
+    pub fn is_jit(&self) -> bool {
+        matches!(self, TrapReason::Jit(_))
+    }
+}
+
+impl From<Error> for TrapReason {
+    fn from(err: Error) -> Self {
+        TrapReason::User(err)
+    }
+}
+
+impl From<TrapCode> for TrapReason {
+    fn from(code: TrapCode) -> Self {
+        TrapReason::Wasm(code)
+    }
+}
+
 /// Catches any wasm traps that happen within the execution of `closure`,
 /// returning them as a `Result`.
 ///
@@ -141,26 +171,46 @@ pub enum TrapReason {
 pub unsafe fn catch_traps<'a, F>(
     signal_handler: Option<*const SignalHandler<'static>>,
     capture_backtrace: bool,
-    callee: *mut VMContext,
+    caller: *mut VMContext,
     mut closure: F,
 ) -> Result<(), Box<Trap>>
 where
     F: FnMut(*mut VMContext),
 {
-    return CallThreadState::new(signal_handler, capture_backtrace).with(|cx| {
+    let limits = (*caller).instance().runtime_limits();
+
+    let old_last_wasm_exit_fp = mem::replace(&mut *(**limits).last_wasm_exit_fp.get(), 0);
+    let old_last_wasm_exit_pc = mem::replace(&mut *(**limits).last_wasm_exit_pc.get(), 0);
+    let old_last_wasm_entry_sp = mem::replace(&mut *(**limits).last_wasm_entry_sp.get(), 0);
+
+    let result = CallThreadState::new(
+        signal_handler,
+        capture_backtrace,
+        old_last_wasm_exit_fp,
+        old_last_wasm_exit_pc,
+        old_last_wasm_entry_sp,
+        *limits,
+    )
+    .with(|cx| {
         wasmtime_setjmp(
             cx.jmp_buf.as_ptr(),
             call_closure::<F>,
             &mut closure as *mut F as *mut u8,
-            callee,
+            caller,
         )
     });
 
-    extern "C" fn call_closure<F>(payload: *mut u8, callee: *mut VMContext)
+    *(**limits).last_wasm_exit_fp.get() = old_last_wasm_exit_fp;
+    *(**limits).last_wasm_exit_pc.get() = old_last_wasm_exit_pc;
+    *(**limits).last_wasm_entry_sp.get() = old_last_wasm_entry_sp;
+
+    return result;
+
+    extern "C" fn call_closure<F>(payload: *mut u8, caller: *mut VMContext)
     where
         F: FnMut(*mut VMContext),
     {
-        unsafe { (*(payload as *mut F))(callee) }
+        unsafe { (*(payload as *mut F))(caller) }
     }
 }
 
@@ -173,6 +223,10 @@ pub struct CallThreadState {
     signal_handler: Option<*const SignalHandler<'static>>,
     prev: Cell<tls::Ptr>,
     capture_backtrace: bool,
+    pub(crate) old_last_wasm_exit_fp: usize,
+    pub(crate) old_last_wasm_exit_pc: usize,
+    pub(crate) old_last_wasm_entry_sp: usize,
+    pub(crate) limits: *const VMRuntimeLimits,
 }
 
 enum UnwindReason {
@@ -185,6 +239,10 @@ impl CallThreadState {
     fn new(
         signal_handler: Option<*const SignalHandler<'static>>,
         capture_backtrace: bool,
+        old_last_wasm_exit_fp: usize,
+        old_last_wasm_exit_pc: usize,
+        old_last_wasm_entry_sp: usize,
+        limits: *const VMRuntimeLimits,
     ) -> CallThreadState {
         CallThreadState {
             unwind: UnsafeCell::new(MaybeUninit::uninit()),
@@ -193,6 +251,10 @@ impl CallThreadState {
             signal_handler,
             prev: Cell::new(ptr::null()),
             capture_backtrace,
+            old_last_wasm_exit_fp,
+            old_last_wasm_exit_pc,
+            old_last_wasm_entry_sp,
+            limits,
         }
     }
 
@@ -216,11 +278,7 @@ impl CallThreadState {
     }
 
     fn unwind_with(&self, reason: UnwindReason) -> ! {
-        let backtrace = if self.capture_backtrace {
-            Some(Backtrace::new_unresolved())
-        } else {
-            None
-        };
+        let backtrace = self.capture_backtrace(None);
         unsafe {
             (*self.unwind.get()).as_mut_ptr().write((reason, backtrace));
             wasmtime_longjmp(self.jmp_buf.get());
@@ -282,18 +340,33 @@ impl CallThreadState {
         self.jmp_buf.get()
     }
 
-    fn capture_backtrace(&self, pc: *const u8) {
-        let backtrace = if self.capture_backtrace {
-            Some(Backtrace::new_unresolved())
-        } else {
-            None
-        };
-        let trap = TrapReason::Jit(pc as usize);
+    fn set_jit_trap(&self, pc: *const u8, fp: usize) {
+        unsafe {
+            *(*self.limits).last_wasm_exit_fp.get() = fp;
+        }
+        let backtrace = self.capture_backtrace(Some((pc as usize, fp)));
         unsafe {
             (*self.unwind.get())
                 .as_mut_ptr()
-                .write((UnwindReason::Trap(trap), backtrace));
+                .write((UnwindReason::Trap(TrapReason::Jit(pc as usize)), backtrace));
         }
+    }
+
+    fn capture_backtrace(&self, pc_and_fp: Option<(usize, usize)>) -> Option<Backtrace> {
+        if !self.capture_backtrace {
+            return None;
+        }
+
+        Some(unsafe { Backtrace::new_with_state(self, pc_and_fp) })
+    }
+
+    pub(crate) fn iter<'a>(&'a self) -> impl Iterator<Item = &Self> + 'a {
+        let mut state = Some(self);
+        std::iter::from_fn(move || {
+            let this = state?;
+            state = unsafe { this.prev.get().as_ref() };
+            Some(this)
+        })
     }
 }
 
@@ -311,7 +384,7 @@ impl<T: Copy> Drop for ResetCell<'_, T> {
 // happen which requires us to read some contextual state to figure out what to
 // do with the trap. This `tls` module is used to persist that information from
 // the caller to the trap site.
-mod tls {
+pub(crate) mod tls {
     use super::CallThreadState;
     use std::ptr;
 

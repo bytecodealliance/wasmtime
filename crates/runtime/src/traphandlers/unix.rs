@@ -86,7 +86,7 @@ unsafe extern "C" fn trap_handler(
         // Otherwise flag ourselves as handling a trap, do the trap
         // handling, and reset our trap handling flag. Then we figure
         // out what to do based on the result of the trap handling.
-        let pc = get_pc(context, signum);
+        let (pc, fp) = get_pc_and_fp(context, signum);
         let jmp_buf = info.jmp_buf_if_trap(pc, |handler| handler(signum, siginfo, context));
 
         // Figure out what to do based on the result of this handling of
@@ -99,7 +99,7 @@ unsafe extern "C" fn trap_handler(
         if jmp_buf as usize == 1 {
             return true;
         }
-        info.capture_backtrace(pc);
+        info.set_jit_trap(pc, fp);
         // On macOS this is a bit special, unfortunately. If we were to
         // `siglongjmp` out of the signal handler that notably does
         // *not* reset the sigaltstack state of our signal handler. This
@@ -164,17 +164,26 @@ unsafe extern "C" fn trap_handler(
     }
 }
 
-unsafe fn get_pc(cx: *mut libc::c_void, _signum: libc::c_int) -> *const u8 {
+unsafe fn get_pc_and_fp(cx: *mut libc::c_void, _signum: libc::c_int) -> (*const u8, usize) {
     cfg_if::cfg_if! {
         if #[cfg(all(target_os = "linux", target_arch = "x86_64"))] {
             let cx = &*(cx as *const libc::ucontext_t);
-            cx.uc_mcontext.gregs[libc::REG_RIP as usize] as *const u8
+            (
+                cx.uc_mcontext.gregs[libc::REG_RIP as usize] as *const u8,
+                cx.uc_mcontext.gregs[libc::REG_RBP as usize] as usize
+            )
         } else if #[cfg(all(target_os = "linux", target_arch = "x86"))] {
             let cx = &*(cx as *const libc::ucontext_t);
-            cx.uc_mcontext.gregs[libc::REG_EIP as usize] as *const u8
+            (
+                cx.uc_mcontext.gregs[libc::REG_EIP as usize] as *const u8,
+                cx.uc_mcontext.gregs[libc::REG_EBP as usize] as usize,
+            )
         } else if #[cfg(all(any(target_os = "linux", target_os = "android"), target_arch = "aarch64"))] {
             let cx = &*(cx as *const libc::ucontext_t);
-            cx.uc_mcontext.pc as *const u8
+            (
+                cx.uc_mcontext.pc as *const u8,
+                cx.uc_mcontext.regs[29] as usize,
+            )
         } else if #[cfg(all(target_os = "linux", target_arch = "s390x"))] {
             // On s390x, SIGILL and SIGFPE are delivered with the PSW address
             // pointing *after* the faulting instruction, while SIGSEGV and
@@ -191,19 +200,34 @@ unsafe fn get_pc(cx: *mut libc::c_void, _signum: libc::c_int) -> *const u8 {
                 _ => 0,
             };
             let cx = &*(cx as *const libc::ucontext_t);
-            (cx.uc_mcontext.psw.addr - trap_offset) as *const u8
+            (
+                (cx.uc_mcontext.psw.addr - trap_offset) as *const u8,
+                todo!("fp")
+            )
         } else if #[cfg(all(target_os = "macos", target_arch = "x86_64"))] {
             let cx = &*(cx as *const libc::ucontext_t);
-            (*cx.uc_mcontext).__ss.__rip as *const u8
+            (
+                (*cx.uc_mcontext).__ss.__rip as *const u8,
+                (*cx.uc_mcontext).__ss.__rbp as usize,
+            )
         } else if #[cfg(all(target_os = "macos", target_arch = "x86"))] {
             let cx = &*(cx as *const libc::ucontext_t);
-            (*cx.uc_mcontext).__ss.__eip as *const u8
+            (
+                (*cx.uc_mcontext).__ss.__eip as *const u8,
+                (*cx.uc_mcontext).__ss.__ebp as usize,
+            )
         } else if #[cfg(all(target_os = "macos", target_arch = "aarch64"))] {
             let cx = &*(cx as *const libc::ucontext_t);
-            (*cx.uc_mcontext).__ss.__pc as *const u8
+            (
+                (*cx.uc_mcontext).__ss.__pc as *const u8,
+                (*cx.uc_mcontext).__ss.__opaque_fp as usize,
+            )
         } else if #[cfg(all(target_os = "freebsd", target_arch = "x86_64"))] {
             let cx = &*(cx as *const libc::ucontext_t);
-            cx.uc_mcontext.mc_rip as *const u8
+            (
+                cx.uc_mcontext.mc_rip as *const u8,
+                cx.uc_mcontext.mc_rbp as usize,
+            )
         } else {
             compile_error!("unsupported platform");
         }

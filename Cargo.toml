@@ -126,9 +126,6 @@ harness = false
 name = "tokio"
 required-features = ["wasmtime-wasi/tokio"]
 
-[profile.dev.package.backtrace]
-debug = false # FIXME(#1813)
-
 [[bench]]
 name = "instantiation"
 harness = false

@@ -26,7 +26,6 @@ wasmparser = "0.88.0"
 anyhow = "1.0.19"
 libc = "0.2"
 cfg-if = "1.0"
-backtrace = { version = "0.3.61" }
 log = "0.4.8"
 wat = { version = "1.0.47", optional = true }
 serde = { version = "1.0.94", features = ["derive"] }

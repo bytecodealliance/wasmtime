@@ -1026,23 +1026,6 @@ impl BareModuleInfo {
         }
     }
 
-    pub(crate) fn one_func(
-        module: Arc<wasmtime_environ::Module>,
-        image_base: usize,
-        info: FunctionInfo,
-        signature_id: SignatureIndex,
-        signature: VMSharedSignatureIndex,
-    ) -> Self {
-        let mut function_info = PrimaryMap::with_capacity(1);
-        function_info.push(info);
-        BareModuleInfo {
-            module,
-            image_base,
-            function_info,
-            one_signature: Some((signature_id, signature)),
-        }
-    }
-
     pub(crate) fn into_traitobj(self) -> Arc<dyn wasmtime_runtime::ModuleRuntimeInfo> {
         Arc::new(self)
     }
