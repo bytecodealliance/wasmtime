@@ -4,17 +4,19 @@
 pub mod generated_code;
 
 // Types that the generated ISLE code uses via `use super::*`.
-use super::{
-    CallIndInfo, CallInfo, Cond, Inst as MInst, MachLabel, MemArg, MemFlags, Opcode, Reg,
-    S390xMachineDeps, UImm16Shifted, UImm32Shifted,
+use crate::isa::s390x::abi::S390xMachineDeps;
+use crate::isa::s390x::inst::{
+    stack_reg, writable_gpr, zero_reg, CallIndInfo, CallInfo, Cond, Inst as MInst, MemArg,
+    UImm16Shifted, UImm32Shifted,
 };
 use crate::isa::s390x::settings::Flags as IsaFlags;
 use crate::machinst::isle::*;
+use crate::machinst::{MachLabel, Reg};
 use crate::settings::Flags;
 use crate::{
     ir::{
         condcodes::*, immediates::*, types::*, AtomicRmwOp, Endianness, Inst, InstructionData,
-        StackSlot, TrapCode, Value, ValueList,
+        MemFlags, Opcode, StackSlot, TrapCode, Value, ValueList,
     },
     isa::unwind::UnwindInst,
     machinst::{InsnOutput, LowerCtx, VCodeConstant, VCodeConstantData},
@@ -150,12 +152,12 @@ where
 
     #[inline]
     fn writable_gpr(&mut self, regno: u8) -> WritableReg {
-        super::writable_gpr(regno)
+        writable_gpr(regno)
     }
 
     #[inline]
     fn zero_reg(&mut self) -> Reg {
-        super::zero_reg()
+        zero_reg()
     }
 
     #[inline]
@@ -282,10 +284,7 @@ where
         let inst = self.lower_ctx.dfg().value_def(val).inst()?;
         let constant = self.lower_ctx.get_constant(inst)?;
         let ty = self.lower_ctx.output_ty(inst, 0);
-        Some(super::sign_extend_to_u64(
-            constant,
-            self.ty_bits(ty).unwrap(),
-        ))
+        Some(sign_extend_to_u64(constant, self.ty_bits(ty).unwrap()))
     }
 
     #[inline]
@@ -390,7 +389,7 @@ where
 
     #[inline]
     fn signed(&mut self, cc: &IntCC) -> Option<()> {
-        if super::condcode_is_signed(*cc) {
+        if condcode_is_signed(*cc) {
             Some(())
         } else {
             None
@@ -399,7 +398,7 @@ where
 
     #[inline]
     fn unsigned(&mut self, cc: &IntCC) -> Option<()> {
-        if !super::condcode_is_signed(*cc) {
+        if !condcode_is_signed(*cc) {
             Some(())
         } else {
             None
@@ -468,7 +467,7 @@ where
 
     #[inline]
     fn memarg_stack_off(&mut self, base: i64, off: i64) -> MemArg {
-        MemArg::reg_plus_off(super::stack_reg(), base + off, MemFlags::trusted())
+        MemArg::reg_plus_off(stack_reg(), base + off, MemFlags::trusted())
     }
 
     #[inline]
@@ -553,5 +552,38 @@ where
     #[inline]
     fn emit(&mut self, inst: &MInst) -> Unit {
         self.lower_ctx.emit(inst.clone());
+    }
+}
+
+/// Sign-extend the low `from_bits` bits of `value` to a full u64.
+#[inline]
+fn sign_extend_to_u64(value: u64, from_bits: u8) -> u64 {
+    assert!(from_bits <= 64);
+    if from_bits >= 64 {
+        value
+    } else {
+        (((value << (64 - from_bits)) as i64) >> (64 - from_bits)) as u64
+    }
+}
+
+/// Determines whether this condcode interprets inputs as signed or
+/// unsigned.  See the documentation for the `icmp` instruction in
+/// cranelift-codegen/meta/src/shared/instructions.rs for further insights
+/// into this.
+#[inline]
+fn condcode_is_signed(cc: IntCC) -> bool {
+    match cc {
+        IntCC::Equal => false,
+        IntCC::NotEqual => false,
+        IntCC::SignedGreaterThanOrEqual => true,
+        IntCC::SignedGreaterThan => true,
+        IntCC::SignedLessThanOrEqual => true,
+        IntCC::SignedLessThan => true,
+        IntCC::UnsignedGreaterThanOrEqual => false,
+        IntCC::UnsignedGreaterThan => false,
+        IntCC::UnsignedLessThanOrEqual => false,
+        IntCC::UnsignedLessThan => false,
+        IntCC::Overflow => true,
+        IntCC::NotOverflow => true,
     }
 }
