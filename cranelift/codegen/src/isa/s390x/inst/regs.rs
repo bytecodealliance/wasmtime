@@ -27,21 +27,28 @@ pub fn writable_gpr(num: u8) -> Writable<Reg> {
     Writable::from_reg(gpr(num))
 }
 
-/// Get a reference to a FPR (floating-point register).
-pub fn fpr(num: u8) -> Reg {
-    let preg = fpr_preg(num);
+/// Get a reference to a VR (vector register).
+pub fn vr(num: u8) -> Reg {
+    let preg = vr_preg(num);
     Reg::from(VReg::new(preg.index(), RegClass::Float))
 }
 
-pub(crate) const fn fpr_preg(num: u8) -> PReg {
-    assert!(num < 16);
+pub(crate) const fn vr_preg(num: u8) -> PReg {
+    assert!(num < 32);
     PReg::new(num as usize, RegClass::Float)
 }
 
-/// Get a writable reference to a FPR.
+/// Get a writable reference to a VR.
 #[allow(dead_code)] // used by tests.
-pub fn writable_fpr(num: u8) -> Writable<Reg> {
-    Writable::from_reg(fpr(num))
+pub fn writable_vr(num: u8) -> Writable<Reg> {
+    Writable::from_reg(vr(num))
+}
+
+/// Test whether a vector register is overlapping an FPR.
+pub fn is_fpr(r: Reg) -> bool {
+    let r = r.to_real_reg().unwrap();
+    assert!(r.class() == RegClass::Float);
+    return r.hw_enc() < 16;
 }
 
 /// Get a reference to the stack-pointer register.
@@ -92,14 +99,30 @@ pub fn create_machine_env(_flags: &settings::Flags) -> MachineEnv {
                 preg(gpr(5)),
             ],
             vec![
-                preg(fpr(0)),
-                preg(fpr(1)),
-                preg(fpr(2)),
-                preg(fpr(3)),
-                preg(fpr(4)),
-                preg(fpr(5)),
-                preg(fpr(6)),
-                preg(fpr(7)),
+                preg(vr(0)),
+                preg(vr(1)),
+                preg(vr(2)),
+                preg(vr(3)),
+                preg(vr(4)),
+                preg(vr(5)),
+                preg(vr(6)),
+                preg(vr(7)),
+                preg(vr(16)),
+                preg(vr(17)),
+                preg(vr(18)),
+                preg(vr(19)),
+                preg(vr(20)),
+                preg(vr(21)),
+                preg(vr(22)),
+                preg(vr(23)),
+                preg(vr(24)),
+                preg(vr(25)),
+                preg(vr(26)),
+                preg(vr(27)),
+                preg(vr(28)),
+                preg(vr(29)),
+                preg(vr(30)),
+                preg(vr(31)),
             ],
         ],
         non_preferred_regs_by_class: [
@@ -116,14 +139,14 @@ pub fn create_machine_env(_flags: &settings::Flags) -> MachineEnv {
                 // no r15; it is the stack pointer.
             ],
             vec![
-                preg(fpr(8)),
-                preg(fpr(9)),
-                preg(fpr(10)),
-                preg(fpr(11)),
-                preg(fpr(12)),
-                preg(fpr(13)),
-                preg(fpr(14)),
-                preg(fpr(15)),
+                preg(vr(8)),
+                preg(vr(9)),
+                preg(vr(10)),
+                preg(vr(11)),
+                preg(vr(12)),
+                preg(vr(13)),
+                preg(vr(14)),
+                preg(vr(15)),
             ],
         ],
         fixed_stack_slots: vec![],
@@ -134,14 +157,28 @@ pub fn show_reg(reg: Reg) -> String {
     if let Some(rreg) = reg.to_real_reg() {
         match rreg.class() {
             RegClass::Int => format!("%r{}", rreg.hw_enc()),
-            RegClass::Float => format!("%f{}", rreg.hw_enc()),
+            RegClass::Float => format!("%v{}", rreg.hw_enc()),
         }
     } else {
         format!("%{:?}", reg)
     }
 }
 
+pub fn maybe_show_fpr(reg: Reg) -> Option<String> {
+    if let Some(rreg) = reg.to_real_reg() {
+        if is_fpr(reg) {
+            return Some(format!("%f{}", rreg.hw_enc()));
+        }
+    }
+    None
+}
+
 pub fn pretty_print_reg(reg: Reg, allocs: &mut AllocationConsumer<'_>) -> String {
     let reg = allocs.next(reg);
     show_reg(reg)
+}
+
+pub fn pretty_print_fpr(reg: Reg, allocs: &mut AllocationConsumer<'_>) -> (String, Option<String>) {
+    let reg = allocs.next(reg);
+    (show_reg(reg), maybe_show_fpr(reg))
 }

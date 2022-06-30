@@ -426,6 +426,48 @@ where
     }
 
     #[inline]
+    fn fcvt_to_uint_ub32(&mut self, size: u8) -> u64 {
+        (2.0_f32).powi(size.into()).to_bits() as u64
+    }
+
+    #[inline]
+    fn fcvt_to_uint_lb32(&mut self) -> u64 {
+        (-1.0_f32).to_bits() as u64
+    }
+
+    #[inline]
+    fn fcvt_to_uint_ub64(&mut self, size: u8) -> u64 {
+        (2.0_f64).powi(size.into()).to_bits()
+    }
+
+    #[inline]
+    fn fcvt_to_uint_lb64(&mut self) -> u64 {
+        (-1.0_f64).to_bits()
+    }
+
+    #[inline]
+    fn fcvt_to_sint_ub32(&mut self, size: u8) -> u64 {
+        (2.0_f32).powi((size - 1).into()).to_bits() as u64
+    }
+
+    #[inline]
+    fn fcvt_to_sint_lb32(&mut self, size: u8) -> u64 {
+        let lb = (-2.0_f32).powi((size - 1).into());
+        std::cmp::max(lb.to_bits() + 1, (lb - 1.0).to_bits()) as u64
+    }
+
+    #[inline]
+    fn fcvt_to_sint_ub64(&mut self, size: u8) -> u64 {
+        (2.0_f64).powi((size - 1).into()).to_bits()
+    }
+
+    #[inline]
+    fn fcvt_to_sint_lb64(&mut self, size: u8) -> u64 {
+        let lb = (-2.0_f64).powi((size - 1).into());
+        std::cmp::max(lb.to_bits() + 1, (lb - 1.0).to_bits())
+    }
+
+    #[inline]
     fn littleendian(&mut self, flags: MemFlags) -> Option<()> {
         let endianness = flags.endianness(Endianness::Big);
         if endianness == Endianness::Little {

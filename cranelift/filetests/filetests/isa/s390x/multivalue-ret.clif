@@ -76,9 +76,9 @@ block1:
 ;   bras %r1, 12 ; data.f64 1 ; ld %f2, 0(%r1)
 ;   bras %r1, 12 ; data.f64 2 ; ld %f4, 0(%r1)
 ;   bras %r1, 12 ; data.f64 3 ; ld %f6, 0(%r1)
-;   bras %r1, 12 ; data.f64 4 ; ld %f5, 0(%r1)
-;   bras %r1, 12 ; data.f64 5 ; ld %f7, 0(%r1)
-;   std %f5, 0(%r2)
-;   std %f7, 8(%r2)
+;   bras %r1, 12 ; data.f64 4 ; vleg %v28, 0(%r1), 0
+;   bras %r1, 12 ; data.f64 5 ; vleg %v31, 0(%r1), 0
+;   vsteg %v28, 0(%r2), 0
+;   vsteg %v31, 8(%r2), 0
 ;   br %r14
 

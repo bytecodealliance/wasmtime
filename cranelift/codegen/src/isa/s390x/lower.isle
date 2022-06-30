@@ -963,8 +963,10 @@
 ;;;; Rules for `fcopysign` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Copysign of two registers.
-(rule (lower (has_type ty (fcopysign x y)))
-      (fpu_copysign ty x y))
+(rule (lower (has_type $F32 (fcopysign x y)))
+      (vec_select $F32 x y (imm $F32 2147483647)))
+(rule (lower (has_type $F64 (fcopysign x y)))
+      (vec_select $F64 x y (imm $F64 9223372036854775807)))
 
 
 ;;;; Rules for `fma` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1034,120 +1036,148 @@
 
 ;; Demote a register.
 (rule (lower (has_type dst_ty (fdemote x @ (value_type src_ty))))
-      (fdemote_reg dst_ty src_ty x))
+      (fdemote_reg dst_ty src_ty (FpuRoundMode.Current) x))
 
 
 ;;;; Rules for `fcvt_from_uint` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; Convert an unsigned integer value in a register to floating-point.
-(rule (lower (has_type dst_ty (fcvt_from_uint x @ (value_type src_ty))))
-      (fcvt_from_uint_reg dst_ty (ty_ext32 src_ty)
-                          (put_in_reg_zext32 x)))
+;; Convert a 32-bit or smaller unsigned integer to $F32 (z15 instruction).
+(rule (lower (has_type $F32
+        (fcvt_from_uint x @ (value_type (and (vxrs_ext2_enabled) (fits_in_32 ty))))))
+      (fcvt_from_uint_reg $F32 (FpuRoundMode.ToNearestTiesToEven)
+                          (mov_to_fpr32 (put_in_reg_zext32 x))))
+
+;; Convert a 64-bit or smaller unsigned integer to $F32, via an intermediate $F64.
+(rule (lower (has_type $F32 (fcvt_from_uint x @ (value_type (fits_in_64 ty)))))
+      (fdemote_reg $F32 $F64 (FpuRoundMode.ToNearestTiesToEven)
+                   (fcvt_from_uint_reg $F64 (FpuRoundMode.ShorterPrecision)
+                                       (mov_to_fpr64 (put_in_reg_zext64 x)))))
+
+;; Convert a 64-bit or smaller unsigned integer to $F64.
+(rule (lower (has_type $F64 (fcvt_from_uint x @ (value_type (fits_in_64 ty)))))
+      (fcvt_from_uint_reg $F64 (FpuRoundMode.ToNearestTiesToEven)
+                          (mov_to_fpr64 (put_in_reg_zext64 x))))
 
 
 ;;;; Rules for `fcvt_from_sint` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; Convert a signed integer value in a register to floating-point.
-(rule (lower (has_type dst_ty (fcvt_from_sint x @ (value_type src_ty))))
-      (fcvt_from_sint_reg dst_ty (ty_ext32 src_ty)
-                          (put_in_reg_sext32 x)))
+;; Convert a 32-bit or smaller signed integer to $F32 (z15 instruction).
+(rule (lower (has_type $F32
+        (fcvt_from_sint x @ (value_type (and (vxrs_ext2_enabled) (fits_in_32 ty))))))
+      (fcvt_from_sint_reg $F32 (FpuRoundMode.ToNearestTiesToEven)
+                          (mov_to_fpr32 (put_in_reg_sext32 x))))
+
+;; Convert a 64-bit or smaller signed integer to $F32, via an intermediate $F64.
+(rule (lower (has_type $F32 (fcvt_from_sint x @ (value_type (fits_in_64 ty)))))
+      (fdemote_reg $F32 $F64 (FpuRoundMode.ToNearestTiesToEven)
+                   (fcvt_from_sint_reg $F64 (FpuRoundMode.ShorterPrecision)
+                                       (mov_to_fpr64 (put_in_reg_sext64 x)))))
+
+;; Convert a 64-bit or smaller signed integer to $F64.
+(rule (lower (has_type $F64 (fcvt_from_sint x @ (value_type (fits_in_64 ty)))))
+      (fcvt_from_sint_reg $F64 (FpuRoundMode.ToNearestTiesToEven)
+                          (mov_to_fpr64 (put_in_reg_sext64 x))))
 
 
 ;;;; Rules for `fcvt_to_uint` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Convert a floating-point value in a register to an unsigned integer value.
 ;; Traps if the input cannot be represented in the output type.
-;; FIXME: Add support for 8-/16-bit destination types (needs overflow check).
-(rule (lower (has_type (ty_32_or_64 dst_ty) (fcvt_to_uint x @ (value_type src_ty))))
-      (let ((src Reg x)
+(rule (lower (has_type dst_ty (fcvt_to_uint x @ (value_type src_ty))))
+      (let ((src Reg (put_in_reg x))
             ;; First, check whether the input is a NaN, and trap if so.
-            (_ Reg (trap_if (fcmp_reg src_ty src src)
-                            (floatcc_as_cond (FloatCC.Unordered))
-                            (trap_code_bad_conversion_to_integer)))
-            ;; Perform the conversion.  If this sets CC 3, we have a
-            ;; "special case".  Since we already exluded the case where
-            ;; the input was a NaN, the only other option is that the
-            ;; conversion overflowed the target type.
-            (dst Reg (trap_if (fcvt_to_uint_reg_with_flags dst_ty src_ty src)
-                              (floatcc_as_cond (FloatCC.Unordered))
-                              (trap_code_integer_overflow))))
-        dst))
+            (_1 Reg (trap_if (fcmp_reg src_ty src src)
+                             (floatcc_as_cond (FloatCC.Unordered))
+                             (trap_code_bad_conversion_to_integer)))
+            ;; Now check whether the input is out of range for the target type.
+            (_2 Reg (trap_if (fcmp_reg src_ty src (fcvt_to_uint_ub src_ty dst_ty))
+                             (floatcc_as_cond (FloatCC.GreaterThanOrEqual))
+                             (trap_code_integer_overflow)))
+            (_3 Reg (trap_if (fcmp_reg src_ty src (fcvt_to_uint_lb src_ty))
+                             (floatcc_as_cond (FloatCC.LessThanOrEqual))
+                             (trap_code_integer_overflow)))
+            ;; Perform the conversion using the larger type size.
+            (flt_ty Type (fcvt_flt_ty dst_ty src_ty))
+            (src_ext Reg (fpromote_reg flt_ty src_ty src)))
+        (fcvt_to_uint_reg flt_ty (FpuRoundMode.ToZero) src_ext)))
 
 
 ;;;; Rules for `fcvt_to_sint` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Convert a floating-point value in a register to a signed integer value.
 ;; Traps if the input cannot be represented in the output type.
-;; FIXME: Add support for 8-/16-bit destination types (needs overflow check).
-(rule (lower (has_type (ty_32_or_64 dst_ty) (fcvt_to_sint x @ (value_type src_ty))))
-      (let ((src Reg x)
+(rule (lower (has_type dst_ty (fcvt_to_sint x @ (value_type src_ty))))
+      (let ((src Reg (put_in_reg x))
             ;; First, check whether the input is a NaN, and trap if so.
-            (_ Reg (trap_if (fcmp_reg src_ty src src)
-                            (floatcc_as_cond (FloatCC.Unordered))
-                            (trap_code_bad_conversion_to_integer)))
-            ;; Perform the conversion.  If this sets CC 3, we have a
-            ;; "special case".  Since we already exluded the case where
-            ;; the input was a NaN, the only other option is that the
-            ;; conversion overflowed the target type.
-            (dst Reg (trap_if (fcvt_to_sint_reg_with_flags dst_ty src_ty src)
-                              (floatcc_as_cond (FloatCC.Unordered))
-                              (trap_code_integer_overflow))))
-        dst))
+            (_1 Reg (trap_if (fcmp_reg src_ty src src)
+                             (floatcc_as_cond (FloatCC.Unordered))
+                             (trap_code_bad_conversion_to_integer)))
+            ;; Now check whether the input is out of range for the target type.
+            (_2 Reg (trap_if (fcmp_reg src_ty src (fcvt_to_sint_ub src_ty dst_ty))
+                             (floatcc_as_cond (FloatCC.GreaterThanOrEqual))
+                             (trap_code_integer_overflow)))
+            (_3 Reg (trap_if (fcmp_reg src_ty src (fcvt_to_sint_lb src_ty dst_ty))
+                             (floatcc_as_cond (FloatCC.LessThanOrEqual))
+                             (trap_code_integer_overflow)))
+            ;; Perform the conversion using the larger type size.
+            (flt_ty Type (fcvt_flt_ty dst_ty src_ty))
+            (src_ext Reg (fpromote_reg flt_ty src_ty src)))
+        ;; Perform the conversion.
+        (fcvt_to_sint_reg flt_ty (FpuRoundMode.ToZero) src_ext)))
 
 
 ;;;; Rules for `fcvt_to_uint_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Convert a floating-point value in a register to an unsigned integer value.
-;; FIXME: Add support for 8-/16-bit destination types (needs overflow check).
-(rule (lower (has_type (ty_32_or_64 dst_ty) (fcvt_to_uint_sat x @ (value_type src_ty))))
-      (let ((src Reg x)
-            (dst Reg (fcvt_to_uint_reg dst_ty src_ty src))
-            ;; In most special cases, the Z instruction already yields the
-            ;; result expected by Cranelift semantics.  The only exception
-            ;; it the case where the input was a NaN.  We explicitly check
-            ;; for that and force the output to 0 in that case.
-            (sat Reg (with_flags_reg (fcmp_reg src_ty src src)
-                                     (cmov_imm dst_ty
-                                               (floatcc_as_cond (FloatCC.Unordered)) 0 dst))))
-        sat))
+(rule (lower (has_type dst_ty (fcvt_to_uint_sat x @ (value_type src_ty))))
+      (let ((src Reg (put_in_reg x))
+            ;; Perform the conversion using the larger type size.
+            (flt_ty Type (fcvt_flt_ty dst_ty src_ty))
+            (int_ty Type (fcvt_int_ty dst_ty src_ty))
+            (src_ext Reg (fpromote_reg flt_ty src_ty src))
+            (dst Reg (fcvt_to_uint_reg flt_ty (FpuRoundMode.ToZero) src_ext)))
+        ;; Clamp the output to the destination type bounds.
+        (uint_sat_reg dst_ty int_ty dst)))
 
 
 ;;;; Rules for `fcvt_to_sint_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Convert a floating-point value in a register to a signed integer value.
-;; FIXME: Add support for 8-/16-bit destination types (needs overflow check).
-(rule (lower (has_type (ty_32_or_64 dst_ty) (fcvt_to_sint_sat x @ (value_type src_ty))))
-      (let ((src Reg x)
-            (dst Reg (fcvt_to_sint_reg dst_ty src_ty src))
+(rule (lower (has_type dst_ty (fcvt_to_sint_sat x @ (value_type src_ty))))
+      (let ((src Reg (put_in_reg x))
+            ;; Perform the conversion using the larger type size.
+            (flt_ty Type (fcvt_flt_ty dst_ty src_ty))
+            (int_ty Type (fcvt_int_ty dst_ty src_ty))
+            (src_ext Reg (fpromote_reg flt_ty src_ty src))
+            (dst Reg (fcvt_to_sint_reg flt_ty (FpuRoundMode.ToZero) src_ext))
             ;; In most special cases, the Z instruction already yields the
             ;; result expected by Cranelift semantics.  The only exception
             ;; it the case where the input was a NaN.  We explicitly check
             ;; for that and force the output to 0 in that case.
             (sat Reg (with_flags_reg (fcmp_reg src_ty src src)
-                                     (cmov_imm dst_ty
-                                               (floatcc_as_cond (FloatCC.Unordered)) 0 dst))))
-        sat))
+                                     (cmov_imm int_ty
+                                       (floatcc_as_cond (FloatCC.Unordered)) 0 dst))))
+        ;; Clamp the output to the destination type bounds.
+        (sint_sat_reg dst_ty int_ty sat)))
 
 
 ;;;; Rules for `bitcast` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Reinterpret a 64-bit integer value as floating-point.
 (rule (lower (has_type $F64 (bitcast x @ (value_type $I64))))
-      (mov_to_fpr x))
+      (mov_to_fpr64 x))
 
 ;; Reinterpret a 64-bit floating-point value as integer.
 (rule (lower (has_type $I64 (bitcast x @ (value_type $F64))))
-      (mov_from_fpr x))
+      (mov_from_fpr64 x))
 
 ;; Reinterpret a 32-bit integer value as floating-point (via $I64).
-;; Note that a 32-bit float is located in the high bits of the GPR.
 (rule (lower (has_type $F32 (bitcast x @ (value_type $I32))))
-      (mov_to_fpr (lshl_imm $I64 x 32)))
+      (mov_to_fpr32 x))
 
 ;; Reinterpret a 32-bit floating-point value as integer (via $I64).
-;; Note that a 32-bit float is located in the high bits of the GPR.
 (rule (lower (has_type $I32 (bitcast x @ (value_type $F32))))
-      (lshr_imm $I64 (mov_from_fpr x) 32))
+      (mov_from_fpr32 x))
 
 
 ;;;; Rules for `stack_addr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1232,7 +1262,7 @@
 (rule (lower (has_type (and (vxrs_ext2_disabled) $F32)
                        (load flags @ (littleendian) addr offset)))
       (let ((gpr Reg (loadrev32 (lower_address flags addr offset))))
-        (mov_to_fpr (lshl_imm $I64 gpr 32))))
+        (mov_to_fpr32 gpr)))
 
 ;; Load 64-bit big-endian floating-point values.
 (rule (lower (has_type $F64 (load flags @ (bigendian) addr offset)))
@@ -1247,7 +1277,7 @@
 (rule (lower (has_type (and (vxrs_ext2_disabled) $F64)
                             (load flags @ (littleendian) addr offset)))
       (let ((gpr Reg (loadrev64 (lower_address flags addr offset))))
-        (mov_to_fpr gpr)))
+        (mov_to_fpr64 gpr)))
 
 
 ;;;; Rules for `uload8` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1390,7 +1420,7 @@
 ;; Store 32-bit little-endian floating-point type (via GPR on z14).
 (rule (lower (store flags @ (littleendian)
                     val @ (value_type (and $F32 (vxrs_ext2_disabled))) addr offset))
-      (let ((gpr Reg (lshr_imm $I64 (mov_from_fpr (put_in_reg val)) 32)))
+      (let ((gpr Reg (mov_from_fpr32 (put_in_reg val))))
         (side_effect (storerev32 gpr (lower_address flags addr offset)))))
 
 ;; Store 64-bit big-endian floating-point type.
@@ -1408,7 +1438,7 @@
 ;; Store 64-bit little-endian floating-point type (via GPR on z14).
 (rule (lower (store flags @ (littleendian)
                     val @ (value_type (and $F64 (vxrs_ext2_disabled))) addr offset))
-      (let ((gpr Reg (mov_from_fpr (put_in_reg val))))
+      (let ((gpr Reg (mov_from_fpr64 (put_in_reg val))))
         (side_effect (storerev64 gpr (lower_address flags addr offset)))))
 
 

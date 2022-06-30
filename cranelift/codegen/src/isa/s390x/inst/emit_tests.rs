@@ -6886,451 +6886,627 @@ fn test_s390x_binemit() {
 
     insns.push((
         Inst::FpuMove32 {
-            rd: writable_fpr(8),
-            rn: fpr(4),
+            rd: writable_vr(8),
+            rn: vr(4),
         },
         "3884",
         "ler %f8, %f4",
     ));
     insns.push((
+        Inst::FpuMove32 {
+            rd: writable_vr(8),
+            rn: vr(20),
+        },
+        "E78400000456",
+        "vlr %v8, %v20",
+    ));
+    insns.push((
         Inst::FpuMove64 {
-            rd: writable_fpr(8),
-            rn: fpr(4),
+            rd: writable_vr(8),
+            rn: vr(4),
         },
         "2884",
         "ldr %f8, %f4",
     ));
     insns.push((
+        Inst::FpuMove64 {
+            rd: writable_vr(8),
+            rn: vr(20),
+        },
+        "E78400000456",
+        "vlr %v8, %v20",
+    ));
+    insns.push((
         Inst::FpuCMov32 {
-            rd: writable_fpr(8),
-            rm: fpr(4),
+            rd: writable_vr(8),
+            rm: vr(4),
             cond: Cond::from_mask(1),
         },
         "A7E400033884",
         "jno 6 ; ler %f8, %f4",
     ));
     insns.push((
+        Inst::FpuCMov32 {
+            rd: writable_vr(8),
+            rm: vr(20),
+            cond: Cond::from_mask(1),
+        },
+        "A7E40005E78400000456",
+        "jno 10 ; vlr %v8, %v20",
+    ));
+    insns.push((
         Inst::FpuCMov64 {
-            rd: writable_fpr(8),
-            rm: fpr(4),
+            rd: writable_vr(8),
+            rm: vr(4),
             cond: Cond::from_mask(1),
         },
         "A7E400032884",
         "jno 6 ; ldr %f8, %f4",
     ));
+    insns.push((
+        Inst::FpuCMov64 {
+            rd: writable_vr(8),
+            rm: vr(20),
+            cond: Cond::from_mask(1),
+        },
+        "A7E40005E78400000456",
+        "jno 10 ; vlr %v8, %v20",
+    ));
 
     insns.push((
-        Inst::MovToFpr {
-            rd: writable_fpr(8),
+        Inst::MovToFpr64 {
+            rd: writable_vr(8),
             rn: gpr(4),
         },
         "B3C10084",
         "ldgr %f8, %r4",
     ));
     insns.push((
-        Inst::MovFromFpr {
+        Inst::MovToFpr64 {
+            rd: writable_vr(24),
+            rn: gpr(4),
+        },
+        "E78400003822",
+        "vlvgg %v24, %r4, 0",
+    ));
+    insns.push((
+        Inst::MovToFpr32 {
+            rd: writable_vr(8),
+            rn: gpr(4),
+        },
+        "E78400002022",
+        "vlvgf %v8, %r4, 0",
+    ));
+    insns.push((
+        Inst::MovToFpr32 {
+            rd: writable_vr(24),
+            rn: gpr(4),
+        },
+        "E78400002822",
+        "vlvgf %v24, %r4, 0",
+    ));
+    insns.push((
+        Inst::MovFromFpr64 {
             rd: writable_gpr(8),
-            rn: fpr(4),
+            rn: vr(4),
         },
         "B3CD0084",
         "lgdr %r8, %f4",
+    ));
+    insns.push((
+        Inst::MovFromFpr64 {
+            rd: writable_gpr(8),
+            rn: vr(20),
+        },
+        "E78400003421",
+        "vlgvg %r8, %v20, 0",
+    ));
+    insns.push((
+        Inst::MovFromFpr32 {
+            rd: writable_gpr(8),
+            rn: vr(4),
+        },
+        "E78400002021",
+        "vlgvf %r8, %v4, 0",
+    ));
+    insns.push((
+        Inst::MovFromFpr32 {
+            rd: writable_gpr(8),
+            rn: vr(20),
+        },
+        "E78400002421",
+        "vlgvf %r8, %v20, 0",
     ));
 
     insns.push((
         Inst::FpuRR {
             fpu_op: FPUOp1::Abs32,
-            rd: writable_fpr(8),
-            rn: fpr(12),
+            rd: writable_vr(8),
+            rn: vr(12),
         },
         "B300008C",
         "lpebr %f8, %f12",
     ));
     insns.push((
         Inst::FpuRR {
+            fpu_op: FPUOp1::Abs32,
+            rd: writable_vr(24),
+            rn: vr(12),
+        },
+        "E78C002828CC",
+        "wflpsb %v24, %f12",
+    ));
+    insns.push((
+        Inst::FpuRR {
             fpu_op: FPUOp1::Abs64,
-            rd: writable_fpr(8),
-            rn: fpr(12),
+            rd: writable_vr(8),
+            rn: vr(12),
         },
         "B310008C",
         "lpdbr %f8, %f12",
     ));
     insns.push((
         Inst::FpuRR {
+            fpu_op: FPUOp1::Abs64,
+            rd: writable_vr(24),
+            rn: vr(12),
+        },
+        "E78C002838CC",
+        "wflpdb %v24, %f12",
+    ));
+    insns.push((
+        Inst::FpuRR {
             fpu_op: FPUOp1::Neg32,
-            rd: writable_fpr(8),
-            rn: fpr(12),
+            rd: writable_vr(8),
+            rn: vr(12),
         },
         "B303008C",
         "lcebr %f8, %f12",
     ));
     insns.push((
         Inst::FpuRR {
+            fpu_op: FPUOp1::Neg32,
+            rd: writable_vr(24),
+            rn: vr(12),
+        },
+        "E78C000828CC",
+        "wflcsb %v24, %f12",
+    ));
+    insns.push((
+        Inst::FpuRR {
             fpu_op: FPUOp1::Neg64,
-            rd: writable_fpr(8),
-            rn: fpr(12),
+            rd: writable_vr(8),
+            rn: vr(12),
         },
         "B313008C",
         "lcdbr %f8, %f12",
     ));
     insns.push((
         Inst::FpuRR {
+            fpu_op: FPUOp1::Neg64,
+            rd: writable_vr(24),
+            rn: vr(12),
+        },
+        "E78C000838CC",
+        "wflcdb %v24, %f12",
+    ));
+    insns.push((
+        Inst::FpuRR {
             fpu_op: FPUOp1::NegAbs32,
-            rd: writable_fpr(8),
-            rn: fpr(12),
+            rd: writable_vr(8),
+            rn: vr(12),
         },
         "B301008C",
         "lnebr %f8, %f12",
     ));
     insns.push((
         Inst::FpuRR {
+            fpu_op: FPUOp1::NegAbs32,
+            rd: writable_vr(24),
+            rn: vr(12),
+        },
+        "E78C001828CC",
+        "wflnsb %v24, %f12",
+    ));
+    insns.push((
+        Inst::FpuRR {
             fpu_op: FPUOp1::NegAbs64,
-            rd: writable_fpr(8),
-            rn: fpr(12),
+            rd: writable_vr(8),
+            rn: vr(12),
         },
         "B311008C",
         "lndbr %f8, %f12",
     ));
     insns.push((
         Inst::FpuRR {
+            fpu_op: FPUOp1::NegAbs64,
+            rd: writable_vr(24),
+            rn: vr(12),
+        },
+        "E78C001838CC",
+        "wflndb %v24, %f12",
+    ));
+    insns.push((
+        Inst::FpuRR {
             fpu_op: FPUOp1::Sqrt32,
-            rd: writable_fpr(8),
-            rn: fpr(12),
+            rd: writable_vr(8),
+            rn: vr(12),
         },
         "B314008C",
         "sqebr %f8, %f12",
     ));
     insns.push((
         Inst::FpuRR {
+            fpu_op: FPUOp1::Sqrt32,
+            rd: writable_vr(24),
+            rn: vr(12),
+        },
+        "E78C000828CE",
+        "wfsqsb %v24, %f12",
+    ));
+    insns.push((
+        Inst::FpuRR {
             fpu_op: FPUOp1::Sqrt64,
-            rd: writable_fpr(8),
-            rn: fpr(12),
+            rd: writable_vr(8),
+            rn: vr(12),
         },
         "B315008C",
         "sqdbr %f8, %f12",
     ));
     insns.push((
         Inst::FpuRR {
+            fpu_op: FPUOp1::Sqrt64,
+            rd: writable_vr(24),
+            rn: vr(12),
+        },
+        "E78C000838CE",
+        "wfsqdb %v24, %f12",
+    ));
+    insns.push((
+        Inst::FpuRR {
             fpu_op: FPUOp1::Cvt32To64,
-            rd: writable_fpr(8),
-            rn: fpr(12),
+            rd: writable_vr(8),
+            rn: vr(12),
         },
         "B304008C",
         "ldebr %f8, %f12",
     ));
     insns.push((
         Inst::FpuRR {
-            fpu_op: FPUOp1::Cvt64To32,
-            rd: writable_fpr(8),
-            rn: fpr(12),
+            fpu_op: FPUOp1::Cvt32To64,
+            rd: writable_vr(24),
+            rn: vr(12),
         },
-        "B344008C",
-        "ledbr %f8, %f12",
+        "E78C000828C4",
+        "wldeb %v24, %f12",
     ));
 
     insns.push((
         Inst::FpuRRR {
             fpu_op: FPUOp2::Add32,
-            rd: writable_fpr(8),
-            rm: fpr(12),
+            rd: writable_vr(8),
+            rn: vr(8),
+            rm: vr(12),
         },
         "B30A008C",
         "aebr %f8, %f12",
     ));
     insns.push((
         Inst::FpuRRR {
+            fpu_op: FPUOp2::Add32,
+            rd: writable_vr(20),
+            rn: vr(8),
+            rm: vr(12),
+        },
+        "E748C00828E3",
+        "wfasb %v20, %f8, %f12",
+    ));
+    insns.push((
+        Inst::FpuRRR {
             fpu_op: FPUOp2::Add64,
-            rd: writable_fpr(8),
-            rm: fpr(12),
+            rd: writable_vr(8),
+            rn: vr(8),
+            rm: vr(12),
         },
         "B31A008C",
         "adbr %f8, %f12",
     ));
     insns.push((
         Inst::FpuRRR {
+            fpu_op: FPUOp2::Add64,
+            rd: writable_vr(20),
+            rn: vr(8),
+            rm: vr(12),
+        },
+        "E748C00838E3",
+        "wfadb %v20, %f8, %f12",
+    ));
+    insns.push((
+        Inst::FpuRRR {
             fpu_op: FPUOp2::Sub32,
-            rd: writable_fpr(8),
-            rm: fpr(12),
+            rd: writable_vr(8),
+            rn: vr(8),
+            rm: vr(12),
         },
         "B30B008C",
         "sebr %f8, %f12",
     ));
     insns.push((
         Inst::FpuRRR {
+            fpu_op: FPUOp2::Sub32,
+            rd: writable_vr(20),
+            rn: vr(8),
+            rm: vr(12),
+        },
+        "E748C00828E2",
+        "wfssb %v20, %f8, %f12",
+    ));
+    insns.push((
+        Inst::FpuRRR {
             fpu_op: FPUOp2::Sub64,
-            rd: writable_fpr(8),
-            rm: fpr(12),
+            rd: writable_vr(8),
+            rn: vr(8),
+            rm: vr(12),
         },
         "B31B008C",
         "sdbr %f8, %f12",
     ));
     insns.push((
         Inst::FpuRRR {
+            fpu_op: FPUOp2::Sub64,
+            rd: writable_vr(20),
+            rn: vr(8),
+            rm: vr(12),
+        },
+        "E748C00838E2",
+        "wfsdb %v20, %f8, %f12",
+    ));
+    insns.push((
+        Inst::FpuRRR {
             fpu_op: FPUOp2::Mul32,
-            rd: writable_fpr(8),
-            rm: fpr(12),
+            rd: writable_vr(8),
+            rn: vr(8),
+            rm: vr(12),
         },
         "B317008C",
         "meebr %f8, %f12",
     ));
     insns.push((
         Inst::FpuRRR {
+            fpu_op: FPUOp2::Mul32,
+            rd: writable_vr(20),
+            rn: vr(8),
+            rm: vr(12),
+        },
+        "E748C00828E7",
+        "wfmsb %v20, %f8, %f12",
+    ));
+    insns.push((
+        Inst::FpuRRR {
             fpu_op: FPUOp2::Mul64,
-            rd: writable_fpr(8),
-            rm: fpr(12),
+            rd: writable_vr(8),
+            rn: vr(8),
+            rm: vr(12),
         },
         "B31C008C",
         "mdbr %f8, %f12",
     ));
     insns.push((
         Inst::FpuRRR {
+            fpu_op: FPUOp2::Mul64,
+            rd: writable_vr(20),
+            rn: vr(8),
+            rm: vr(12),
+        },
+        "E748C00838E7",
+        "wfmdb %v20, %f8, %f12",
+    ));
+    insns.push((
+        Inst::FpuRRR {
             fpu_op: FPUOp2::Div32,
-            rd: writable_fpr(8),
-            rm: fpr(12),
+            rd: writable_vr(8),
+            rn: vr(8),
+            rm: vr(12),
         },
         "B30D008C",
         "debr %f8, %f12",
     ));
     insns.push((
         Inst::FpuRRR {
+            fpu_op: FPUOp2::Div32,
+            rd: writable_vr(20),
+            rn: vr(8),
+            rm: vr(12),
+        },
+        "E748C00828E5",
+        "wfdsb %v20, %f8, %f12",
+    ));
+    insns.push((
+        Inst::FpuRRR {
             fpu_op: FPUOp2::Div64,
-            rd: writable_fpr(8),
-            rm: fpr(12),
+            rd: writable_vr(8),
+            rn: vr(8),
+            rm: vr(12),
         },
         "B31D008C",
         "ddbr %f8, %f12",
+    ));
+    insns.push((
+        Inst::FpuRRR {
+            fpu_op: FPUOp2::Div64,
+            rd: writable_vr(20),
+            rn: vr(8),
+            rm: vr(12),
+        },
+        "E748C00838E5",
+        "wfddb %v20, %f8, %f12",
+    ));
+    insns.push((
+        Inst::FpuRRR {
+            fpu_op: FPUOp2::Max32,
+            rd: writable_vr(4),
+            rn: vr(6),
+            rm: vr(8),
+        },
+        "E746801820EF",
+        "wfmaxsb %f4, %f6, %f8, 1",
+    ));
+    insns.push((
+        Inst::FpuRRR {
+            fpu_op: FPUOp2::Max64,
+            rd: writable_vr(4),
+            rn: vr(6),
+            rm: vr(24),
+        },
+        "E746801832EF",
+        "wfmaxdb %f4, %f6, %v24, 1",
+    ));
+    insns.push((
+        Inst::FpuRRR {
+            fpu_op: FPUOp2::Min32,
+            rd: writable_vr(4),
+            rn: vr(6),
+            rm: vr(8),
+        },
+        "E746801820EE",
+        "wfminsb %f4, %f6, %f8, 1",
+    ));
+    insns.push((
+        Inst::FpuRRR {
+            fpu_op: FPUOp2::Min64,
+            rd: writable_vr(4),
+            rn: vr(6),
+            rm: vr(8),
+        },
+        "E746801830EE",
+        "wfmindb %f4, %f6, %f8, 1",
     ));
 
     insns.push((
         Inst::FpuRRRR {
             fpu_op: FPUOp3::MAdd32,
-            rd: writable_fpr(8),
-            rn: fpr(12),
-            rm: fpr(13),
+            rd: writable_vr(8),
+            rn: vr(12),
+            rm: vr(13),
+            ra: vr(8),
         },
         "B30E80CD",
         "maebr %f8, %f12, %f13",
     ));
     insns.push((
         Inst::FpuRRRR {
+            fpu_op: FPUOp3::MAdd32,
+            rd: writable_vr(8),
+            rn: vr(12),
+            rm: vr(13),
+            ra: vr(20),
+        },
+        "E78CD208418F",
+        "wfmasb %f8, %f12, %f13, %v20",
+    ));
+    insns.push((
+        Inst::FpuRRRR {
             fpu_op: FPUOp3::MAdd64,
-            rd: writable_fpr(8),
-            rn: fpr(12),
-            rm: fpr(13),
+            rd: writable_vr(8),
+            rn: vr(12),
+            rm: vr(13),
+            ra: vr(8),
         },
         "B31E80CD",
         "madbr %f8, %f12, %f13",
     ));
     insns.push((
         Inst::FpuRRRR {
+            fpu_op: FPUOp3::MAdd64,
+            rd: writable_vr(8),
+            rn: vr(12),
+            rm: vr(13),
+            ra: vr(20),
+        },
+        "E78CD308418F",
+        "wfmadb %f8, %f12, %f13, %v20",
+    ));
+    insns.push((
+        Inst::FpuRRRR {
             fpu_op: FPUOp3::MSub32,
-            rd: writable_fpr(8),
-            rn: fpr(12),
-            rm: fpr(13),
+            rd: writable_vr(8),
+            rn: vr(12),
+            rm: vr(13),
+            ra: vr(8),
         },
         "B30F80CD",
         "msebr %f8, %f12, %f13",
     ));
     insns.push((
         Inst::FpuRRRR {
+            fpu_op: FPUOp3::MSub32,
+            rd: writable_vr(8),
+            rn: vr(12),
+            rm: vr(13),
+            ra: vr(20),
+        },
+        "E78CD208418E",
+        "wfmssb %f8, %f12, %f13, %v20",
+    ));
+    insns.push((
+        Inst::FpuRRRR {
             fpu_op: FPUOp3::MSub64,
-            rd: writable_fpr(8),
-            rn: fpr(12),
-            rm: fpr(13),
+            rd: writable_vr(8),
+            rn: vr(12),
+            rm: vr(13),
+            ra: vr(8),
         },
         "B31F80CD",
         "msdbr %f8, %f12, %f13",
     ));
-
     insns.push((
-        Inst::FpuToInt {
-            op: FpuToIntOp::F32ToU32,
-            rd: writable_gpr(1),
-            rn: fpr(4),
+        Inst::FpuRRRR {
+            fpu_op: FPUOp3::MSub64,
+            rd: writable_vr(8),
+            rn: vr(12),
+            rm: vr(13),
+            ra: vr(20),
         },
-        "B39C5014",
-        "clfebr %r1, 5, %f4, 0",
-    ));
-
-    insns.push((
-        Inst::FpuToInt {
-            op: FpuToIntOp::F32ToU64,
-            rd: writable_gpr(1),
-            rn: fpr(4),
-        },
-        "B3AC5014",
-        "clgebr %r1, 5, %f4, 0",
-    ));
-
-    insns.push((
-        Inst::FpuToInt {
-            op: FpuToIntOp::F32ToI32,
-            rd: writable_gpr(1),
-            rn: fpr(4),
-        },
-        "B3985014",
-        "cfebra %r1, 5, %f4, 0",
-    ));
-
-    insns.push((
-        Inst::FpuToInt {
-            op: FpuToIntOp::F32ToI64,
-            rd: writable_gpr(1),
-            rn: fpr(4),
-        },
-        "B3A85014",
-        "cgebra %r1, 5, %f4, 0",
-    ));
-
-    insns.push((
-        Inst::FpuToInt {
-            op: FpuToIntOp::F64ToU32,
-            rd: writable_gpr(1),
-            rn: fpr(4),
-        },
-        "B39D5014",
-        "clfdbr %r1, 5, %f4, 0",
-    ));
-
-    insns.push((
-        Inst::FpuToInt {
-            op: FpuToIntOp::F64ToU64,
-            rd: writable_gpr(1),
-            rn: fpr(4),
-        },
-        "B3AD5014",
-        "clgdbr %r1, 5, %f4, 0",
-    ));
-
-    insns.push((
-        Inst::FpuToInt {
-            op: FpuToIntOp::F64ToI32,
-            rd: writable_gpr(1),
-            rn: fpr(4),
-        },
-        "B3995014",
-        "cfdbra %r1, 5, %f4, 0",
-    ));
-
-    insns.push((
-        Inst::FpuToInt {
-            op: FpuToIntOp::F64ToI64,
-            rd: writable_gpr(1),
-            rn: fpr(4),
-        },
-        "B3A95014",
-        "cgdbra %r1, 5, %f4, 0",
-    ));
-
-    insns.push((
-        Inst::IntToFpu {
-            op: IntToFpuOp::U32ToF32,
-            rd: writable_fpr(1),
-            rn: gpr(4),
-        },
-        "B3900014",
-        "celfbr %f1, 0, %r4, 0",
-    ));
-
-    insns.push((
-        Inst::IntToFpu {
-            op: IntToFpuOp::I32ToF32,
-            rd: writable_fpr(1),
-            rn: gpr(4),
-        },
-        "B3940014",
-        "cefbra %f1, 0, %r4, 0",
-    ));
-
-    insns.push((
-        Inst::IntToFpu {
-            op: IntToFpuOp::U32ToF64,
-            rd: writable_fpr(1),
-            rn: gpr(4),
-        },
-        "B3910014",
-        "cdlfbr %f1, 0, %r4, 0",
-    ));
-
-    insns.push((
-        Inst::IntToFpu {
-            op: IntToFpuOp::I32ToF64,
-            rd: writable_fpr(1),
-            rn: gpr(4),
-        },
-        "B3950014",
-        "cdfbra %f1, 0, %r4, 0",
-    ));
-
-    insns.push((
-        Inst::IntToFpu {
-            op: IntToFpuOp::U64ToF32,
-            rd: writable_fpr(1),
-            rn: gpr(4),
-        },
-        "B3A00014",
-        "celgbr %f1, 0, %r4, 0",
-    ));
-
-    insns.push((
-        Inst::IntToFpu {
-            op: IntToFpuOp::I64ToF32,
-            rd: writable_fpr(1),
-            rn: gpr(4),
-        },
-        "B3A40014",
-        "cegbra %f1, 0, %r4, 0",
-    ));
-
-    insns.push((
-        Inst::IntToFpu {
-            op: IntToFpuOp::U64ToF64,
-            rd: writable_fpr(1),
-            rn: gpr(4),
-        },
-        "B3A10014",
-        "cdlgbr %f1, 0, %r4, 0",
-    ));
-
-    insns.push((
-        Inst::IntToFpu {
-            op: IntToFpuOp::I64ToF64,
-            rd: writable_fpr(1),
-            rn: gpr(4),
-        },
-        "B3A50014",
-        "cdgbra %f1, 0, %r4, 0",
-    ));
-
-    insns.push((
-        Inst::FpuCopysign {
-            rd: writable_fpr(4),
-            rn: fpr(8),
-            rm: fpr(12),
-        },
-        "B372C048",
-        "cpsdr %f4, %f12, %f8",
+        "E78CD308418E",
+        "wfmsdb %f8, %f12, %f13, %v20",
     ));
 
     insns.push((
         Inst::FpuCmp32 {
-            rn: fpr(8),
-            rm: fpr(12),
+            rn: vr(8),
+            rm: vr(12),
         },
         "B309008C",
         "cebr %f8, %f12",
     ));
     insns.push((
+        Inst::FpuCmp32 {
+            rn: vr(24),
+            rm: vr(12),
+        },
+        "E78C000028CB",
+        "wfcsb %v24, %f12",
+    ));
+    insns.push((
         Inst::FpuCmp64 {
-            rn: fpr(8),
-            rm: fpr(12),
+            rn: vr(8),
+            rm: vr(12),
         },
         "B319008C",
         "cdbr %f8, %f12",
     ));
+    insns.push((
+        Inst::FpuCmp64 {
+            rn: vr(24),
+            rm: vr(12),
+        },
+        "E78C000038CB",
+        "wfcdb %v24, %f12",
+    ));
 
     insns.push((
         Inst::FpuLoad32 {
-            rd: writable_fpr(1),
+            rd: writable_vr(1),
             mem: MemArg::BXD12 {
                 base: gpr(2),
                 index: zero_reg(),
@@ -7343,7 +7519,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::FpuLoad32 {
-            rd: writable_fpr(1),
+            rd: writable_vr(1),
             mem: MemArg::BXD12 {
                 base: gpr(2),
                 index: zero_reg(),
@@ -7356,7 +7532,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::FpuLoad32 {
-            rd: writable_fpr(1),
+            rd: writable_vr(1),
             mem: MemArg::BXD20 {
                 base: gpr(2),
                 index: zero_reg(),
@@ -7369,7 +7545,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::FpuLoad32 {
-            rd: writable_fpr(1),
+            rd: writable_vr(1),
             mem: MemArg::BXD20 {
                 base: gpr(2),
                 index: zero_reg(),
@@ -7382,7 +7558,33 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::FpuLoad32 {
-            rd: writable_fpr(1),
+            rd: writable_vr(17),
+            mem: MemArg::BXD12 {
+                base: gpr(2),
+                index: zero_reg(),
+                disp: UImm12::zero(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "E71020000803",
+        "vlef %v17, 0(%r2), 0",
+    ));
+    insns.push((
+        Inst::FpuLoad32 {
+            rd: writable_vr(17),
+            mem: MemArg::BXD12 {
+                base: gpr(2),
+                index: zero_reg(),
+                disp: UImm12::maybe_from_u64(4095).unwrap(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "E7102FFF0803",
+        "vlef %v17, 4095(%r2), 0",
+    ));
+    insns.push((
+        Inst::FpuLoad32 {
+            rd: writable_vr(1),
             mem: MemArg::BXD12 {
                 base: gpr(3),
                 index: gpr(2),
@@ -7395,7 +7597,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::FpuLoad32 {
-            rd: writable_fpr(1),
+            rd: writable_vr(1),
             mem: MemArg::BXD12 {
                 base: gpr(3),
                 index: gpr(2),
@@ -7408,7 +7610,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::FpuLoad32 {
-            rd: writable_fpr(1),
+            rd: writable_vr(1),
             mem: MemArg::BXD20 {
                 base: gpr(3),
                 index: gpr(2),
@@ -7421,7 +7623,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::FpuLoad32 {
-            rd: writable_fpr(1),
+            rd: writable_vr(1),
             mem: MemArg::BXD20 {
                 base: gpr(3),
                 index: gpr(2),
@@ -7433,8 +7635,34 @@ fn test_s390x_binemit() {
         "ley %f1, 524287(%r2,%r3)",
     ));
     insns.push((
+        Inst::FpuLoad32 {
+            rd: writable_vr(17),
+            mem: MemArg::BXD12 {
+                base: gpr(3),
+                index: gpr(2),
+                disp: UImm12::zero(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "E71230000803",
+        "vlef %v17, 0(%r2,%r3), 0",
+    ));
+    insns.push((
+        Inst::FpuLoad32 {
+            rd: writable_vr(17),
+            mem: MemArg::BXD12 {
+                base: gpr(3),
+                index: gpr(2),
+                disp: UImm12::maybe_from_u64(4095).unwrap(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "E7123FFF0803",
+        "vlef %v17, 4095(%r2,%r3), 0",
+    ));
+    insns.push((
         Inst::FpuLoad64 {
-            rd: writable_fpr(1),
+            rd: writable_vr(1),
             mem: MemArg::BXD12 {
                 base: gpr(2),
                 index: zero_reg(),
@@ -7447,7 +7675,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::FpuLoad64 {
-            rd: writable_fpr(1),
+            rd: writable_vr(1),
             mem: MemArg::BXD12 {
                 base: gpr(2),
                 index: zero_reg(),
@@ -7460,7 +7688,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::FpuLoad64 {
-            rd: writable_fpr(1),
+            rd: writable_vr(1),
             mem: MemArg::BXD20 {
                 base: gpr(2),
                 index: zero_reg(),
@@ -7473,7 +7701,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::FpuLoad64 {
-            rd: writable_fpr(1),
+            rd: writable_vr(1),
             mem: MemArg::BXD20 {
                 base: gpr(2),
                 index: zero_reg(),
@@ -7486,7 +7714,33 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::FpuLoad64 {
-            rd: writable_fpr(1),
+            rd: writable_vr(17),
+            mem: MemArg::BXD12 {
+                base: gpr(2),
+                index: zero_reg(),
+                disp: UImm12::zero(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "E71020000802",
+        "vleg %v17, 0(%r2), 0",
+    ));
+    insns.push((
+        Inst::FpuLoad64 {
+            rd: writable_vr(17),
+            mem: MemArg::BXD12 {
+                base: gpr(2),
+                index: zero_reg(),
+                disp: UImm12::maybe_from_u64(4095).unwrap(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "E7102FFF0802",
+        "vleg %v17, 4095(%r2), 0",
+    ));
+    insns.push((
+        Inst::FpuLoad64 {
+            rd: writable_vr(1),
             mem: MemArg::BXD12 {
                 base: gpr(3),
                 index: gpr(2),
@@ -7499,7 +7753,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::FpuLoad64 {
-            rd: writable_fpr(1),
+            rd: writable_vr(1),
             mem: MemArg::BXD12 {
                 base: gpr(3),
                 index: gpr(2),
@@ -7512,7 +7766,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::FpuLoad64 {
-            rd: writable_fpr(1),
+            rd: writable_vr(1),
             mem: MemArg::BXD20 {
                 base: gpr(3),
                 index: gpr(2),
@@ -7525,7 +7779,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::FpuLoad64 {
-            rd: writable_fpr(1),
+            rd: writable_vr(1),
             mem: MemArg::BXD20 {
                 base: gpr(3),
                 index: gpr(2),
@@ -7537,8 +7791,34 @@ fn test_s390x_binemit() {
         "ldy %f1, 524287(%r2,%r3)",
     ));
     insns.push((
+        Inst::FpuLoad64 {
+            rd: writable_vr(17),
+            mem: MemArg::BXD12 {
+                base: gpr(3),
+                index: gpr(2),
+                disp: UImm12::zero(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "E71230000802",
+        "vleg %v17, 0(%r2,%r3), 0",
+    ));
+    insns.push((
+        Inst::FpuLoad64 {
+            rd: writable_vr(17),
+            mem: MemArg::BXD12 {
+                base: gpr(3),
+                index: gpr(2),
+                disp: UImm12::maybe_from_u64(4095).unwrap(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "E7123FFF0802",
+        "vleg %v17, 4095(%r2,%r3), 0",
+    ));
+    insns.push((
         Inst::FpuStore32 {
-            rd: fpr(1),
+            rd: vr(1),
             mem: MemArg::BXD12 {
                 base: gpr(2),
                 index: zero_reg(),
@@ -7551,7 +7831,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::FpuStore32 {
-            rd: fpr(1),
+            rd: vr(1),
             mem: MemArg::BXD12 {
                 base: gpr(2),
                 index: zero_reg(),
@@ -7564,7 +7844,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::FpuStore32 {
-            rd: fpr(1),
+            rd: vr(1),
             mem: MemArg::BXD20 {
                 base: gpr(2),
                 index: zero_reg(),
@@ -7577,7 +7857,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::FpuStore32 {
-            rd: fpr(1),
+            rd: vr(1),
             mem: MemArg::BXD20 {
                 base: gpr(2),
                 index: zero_reg(),
@@ -7590,7 +7870,33 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::FpuStore32 {
-            rd: fpr(1),
+            rd: vr(17),
+            mem: MemArg::BXD12 {
+                base: gpr(2),
+                index: zero_reg(),
+                disp: UImm12::zero(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "E7102000080B",
+        "vstef %v17, 0(%r2), 0",
+    ));
+    insns.push((
+        Inst::FpuStore32 {
+            rd: vr(17),
+            mem: MemArg::BXD12 {
+                base: gpr(2),
+                index: zero_reg(),
+                disp: UImm12::maybe_from_u64(4095).unwrap(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "E7102FFF080B",
+        "vstef %v17, 4095(%r2), 0",
+    ));
+    insns.push((
+        Inst::FpuStore32 {
+            rd: vr(1),
             mem: MemArg::BXD12 {
                 base: gpr(3),
                 index: gpr(2),
@@ -7603,7 +7909,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::FpuStore32 {
-            rd: fpr(1),
+            rd: vr(1),
             mem: MemArg::BXD12 {
                 base: gpr(3),
                 index: gpr(2),
@@ -7616,7 +7922,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::FpuStore32 {
-            rd: fpr(1),
+            rd: vr(1),
             mem: MemArg::BXD20 {
                 base: gpr(3),
                 index: gpr(2),
@@ -7629,7 +7935,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::FpuStore32 {
-            rd: fpr(1),
+            rd: vr(1),
             mem: MemArg::BXD20 {
                 base: gpr(3),
                 index: gpr(2),
@@ -7641,8 +7947,34 @@ fn test_s390x_binemit() {
         "stey %f1, 524287(%r2,%r3)",
     ));
     insns.push((
+        Inst::FpuStore32 {
+            rd: vr(17),
+            mem: MemArg::BXD12 {
+                base: gpr(3),
+                index: gpr(2),
+                disp: UImm12::zero(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "E7123000080B",
+        "vstef %v17, 0(%r2,%r3), 0",
+    ));
+    insns.push((
+        Inst::FpuStore32 {
+            rd: vr(17),
+            mem: MemArg::BXD12 {
+                base: gpr(3),
+                index: gpr(2),
+                disp: UImm12::maybe_from_u64(4095).unwrap(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "E7123FFF080B",
+        "vstef %v17, 4095(%r2,%r3), 0",
+    ));
+    insns.push((
         Inst::FpuStore64 {
-            rd: fpr(1),
+            rd: vr(1),
             mem: MemArg::BXD12 {
                 base: gpr(2),
                 index: zero_reg(),
@@ -7655,7 +7987,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::FpuStore64 {
-            rd: fpr(1),
+            rd: vr(1),
             mem: MemArg::BXD12 {
                 base: gpr(2),
                 index: zero_reg(),
@@ -7668,7 +8000,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::FpuStore64 {
-            rd: fpr(1),
+            rd: vr(1),
             mem: MemArg::BXD20 {
                 base: gpr(2),
                 index: zero_reg(),
@@ -7681,7 +8013,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::FpuStore64 {
-            rd: fpr(1),
+            rd: vr(1),
             mem: MemArg::BXD20 {
                 base: gpr(2),
                 index: zero_reg(),
@@ -7694,7 +8026,33 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::FpuStore64 {
-            rd: fpr(1),
+            rd: vr(17),
+            mem: MemArg::BXD12 {
+                base: gpr(2),
+                index: zero_reg(),
+                disp: UImm12::zero(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "E7102000080A",
+        "vsteg %v17, 0(%r2), 0",
+    ));
+    insns.push((
+        Inst::FpuStore64 {
+            rd: vr(17),
+            mem: MemArg::BXD12 {
+                base: gpr(2),
+                index: zero_reg(),
+                disp: UImm12::maybe_from_u64(4095).unwrap(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "E7102FFF080A",
+        "vsteg %v17, 4095(%r2), 0",
+    ));
+    insns.push((
+        Inst::FpuStore64 {
+            rd: vr(1),
             mem: MemArg::BXD12 {
                 base: gpr(3),
                 index: gpr(2),
@@ -7707,7 +8065,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::FpuStore64 {
-            rd: fpr(1),
+            rd: vr(1),
             mem: MemArg::BXD12 {
                 base: gpr(3),
                 index: gpr(2),
@@ -7720,7 +8078,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::FpuStore64 {
-            rd: fpr(1),
+            rd: vr(1),
             mem: MemArg::BXD20 {
                 base: gpr(3),
                 index: gpr(2),
@@ -7733,7 +8091,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::FpuStore64 {
-            rd: fpr(1),
+            rd: vr(1),
             mem: MemArg::BXD20 {
                 base: gpr(3),
                 index: gpr(2),
@@ -7744,10 +8102,36 @@ fn test_s390x_binemit() {
         "ED123FFF7F67",
         "stdy %f1, 524287(%r2,%r3)",
     ));
+    insns.push((
+        Inst::FpuStore64 {
+            rd: vr(17),
+            mem: MemArg::BXD12 {
+                base: gpr(3),
+                index: gpr(2),
+                disp: UImm12::zero(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "E7123000080A",
+        "vsteg %v17, 0(%r2,%r3), 0",
+    ));
+    insns.push((
+        Inst::FpuStore64 {
+            rd: vr(17),
+            mem: MemArg::BXD12 {
+                base: gpr(3),
+                index: gpr(2),
+                disp: UImm12::maybe_from_u64(4095).unwrap(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "E7123FFF080A",
+        "vsteg %v17, 4095(%r2,%r3), 0",
+    ));
 
     insns.push((
         Inst::FpuLoadRev32 {
-            rd: writable_fpr(1),
+            rd: writable_vr(1),
             mem: MemArg::BXD12 {
                 base: gpr(2),
                 index: zero_reg(),
@@ -7760,7 +8144,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::FpuLoadRev32 {
-            rd: writable_fpr(1),
+            rd: writable_vr(1),
             mem: MemArg::BXD12 {
                 base: gpr(2),
                 index: zero_reg(),
@@ -7773,7 +8157,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::FpuLoadRev32 {
-            rd: writable_fpr(1),
+            rd: writable_vr(1),
             mem: MemArg::BXD20 {
                 base: gpr(2),
                 index: zero_reg(),
@@ -7786,7 +8170,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::FpuLoadRev32 {
-            rd: writable_fpr(1),
+            rd: writable_vr(1),
             mem: MemArg::BXD20 {
                 base: gpr(2),
                 index: zero_reg(),
@@ -7799,7 +8183,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::FpuLoadRev32 {
-            rd: writable_fpr(1),
+            rd: writable_vr(1),
             mem: MemArg::BXD12 {
                 base: gpr(3),
                 index: gpr(2),
@@ -7812,7 +8196,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::FpuLoadRev32 {
-            rd: writable_fpr(1),
+            rd: writable_vr(1),
             mem: MemArg::BXD12 {
                 base: gpr(3),
                 index: gpr(2),
@@ -7825,7 +8209,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::FpuLoadRev32 {
-            rd: writable_fpr(1),
+            rd: writable_vr(1),
             mem: MemArg::BXD20 {
                 base: gpr(3),
                 index: gpr(2),
@@ -7838,7 +8222,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::FpuLoadRev32 {
-            rd: writable_fpr(1),
+            rd: writable_vr(1),
             mem: MemArg::BXD20 {
                 base: gpr(3),
                 index: gpr(2),
@@ -7851,7 +8235,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::FpuLoadRev64 {
-            rd: writable_fpr(1),
+            rd: writable_vr(1),
             mem: MemArg::BXD12 {
                 base: gpr(2),
                 index: zero_reg(),
@@ -7864,7 +8248,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::FpuLoadRev64 {
-            rd: writable_fpr(1),
+            rd: writable_vr(1),
             mem: MemArg::BXD12 {
                 base: gpr(2),
                 index: zero_reg(),
@@ -7877,7 +8261,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::FpuLoadRev64 {
-            rd: writable_fpr(1),
+            rd: writable_vr(1),
             mem: MemArg::BXD20 {
                 base: gpr(2),
                 index: zero_reg(),
@@ -7890,7 +8274,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::FpuLoadRev64 {
-            rd: writable_fpr(1),
+            rd: writable_vr(1),
             mem: MemArg::BXD20 {
                 base: gpr(2),
                 index: zero_reg(),
@@ -7903,7 +8287,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::FpuLoadRev64 {
-            rd: writable_fpr(1),
+            rd: writable_vr(1),
             mem: MemArg::BXD12 {
                 base: gpr(3),
                 index: gpr(2),
@@ -7916,7 +8300,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::FpuLoadRev64 {
-            rd: writable_fpr(1),
+            rd: writable_vr(1),
             mem: MemArg::BXD12 {
                 base: gpr(3),
                 index: gpr(2),
@@ -7929,7 +8313,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::FpuLoadRev64 {
-            rd: writable_fpr(1),
+            rd: writable_vr(1),
             mem: MemArg::BXD20 {
                 base: gpr(3),
                 index: gpr(2),
@@ -7942,7 +8326,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::FpuLoadRev64 {
-            rd: writable_fpr(1),
+            rd: writable_vr(1),
             mem: MemArg::BXD20 {
                 base: gpr(3),
                 index: gpr(2),
@@ -7955,7 +8339,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::FpuStoreRev32 {
-            rd: fpr(1),
+            rd: vr(1),
             mem: MemArg::BXD12 {
                 base: gpr(2),
                 index: zero_reg(),
@@ -7968,7 +8352,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::FpuStoreRev32 {
-            rd: fpr(1),
+            rd: vr(1),
             mem: MemArg::BXD12 {
                 base: gpr(2),
                 index: zero_reg(),
@@ -7981,7 +8365,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::FpuStoreRev32 {
-            rd: fpr(1),
+            rd: vr(1),
             mem: MemArg::BXD20 {
                 base: gpr(2),
                 index: zero_reg(),
@@ -7994,7 +8378,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::FpuStoreRev32 {
-            rd: fpr(1),
+            rd: vr(1),
             mem: MemArg::BXD20 {
                 base: gpr(2),
                 index: zero_reg(),
@@ -8007,7 +8391,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::FpuStoreRev32 {
-            rd: fpr(1),
+            rd: vr(1),
             mem: MemArg::BXD12 {
                 base: gpr(3),
                 index: gpr(2),
@@ -8020,7 +8404,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::FpuStoreRev32 {
-            rd: fpr(1),
+            rd: vr(1),
             mem: MemArg::BXD12 {
                 base: gpr(3),
                 index: gpr(2),
@@ -8033,7 +8417,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::FpuStoreRev32 {
-            rd: fpr(1),
+            rd: vr(1),
             mem: MemArg::BXD20 {
                 base: gpr(3),
                 index: gpr(2),
@@ -8046,7 +8430,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::FpuStoreRev32 {
-            rd: fpr(1),
+            rd: vr(1),
             mem: MemArg::BXD20 {
                 base: gpr(3),
                 index: gpr(2),
@@ -8059,7 +8443,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::FpuStoreRev64 {
-            rd: fpr(1),
+            rd: vr(1),
             mem: MemArg::BXD12 {
                 base: gpr(2),
                 index: zero_reg(),
@@ -8072,7 +8456,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::FpuStoreRev64 {
-            rd: fpr(1),
+            rd: vr(1),
             mem: MemArg::BXD12 {
                 base: gpr(2),
                 index: zero_reg(),
@@ -8085,7 +8469,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::FpuStoreRev64 {
-            rd: fpr(1),
+            rd: vr(1),
             mem: MemArg::BXD20 {
                 base: gpr(2),
                 index: zero_reg(),
@@ -8098,7 +8482,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::FpuStoreRev64 {
-            rd: fpr(1),
+            rd: vr(1),
             mem: MemArg::BXD20 {
                 base: gpr(2),
                 index: zero_reg(),
@@ -8111,7 +8495,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::FpuStoreRev64 {
-            rd: fpr(1),
+            rd: vr(1),
             mem: MemArg::BXD12 {
                 base: gpr(3),
                 index: gpr(2),
@@ -8124,7 +8508,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::FpuStoreRev64 {
-            rd: fpr(1),
+            rd: vr(1),
             mem: MemArg::BXD12 {
                 base: gpr(3),
                 index: gpr(2),
@@ -8137,7 +8521,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::FpuStoreRev64 {
-            rd: fpr(1),
+            rd: vr(1),
             mem: MemArg::BXD20 {
                 base: gpr(3),
                 index: gpr(2),
@@ -8150,7 +8534,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::FpuStoreRev64 {
-            rd: fpr(1),
+            rd: vr(1),
             mem: MemArg::BXD20 {
                 base: gpr(3),
                 index: gpr(2),
@@ -8164,133 +8548,297 @@ fn test_s390x_binemit() {
 
     insns.push((
         Inst::LoadFpuConst32 {
-            rd: writable_fpr(8),
+            rd: writable_vr(8),
             const_data: 1.0_f32.to_bits(),
         },
         "A71500043F80000078801000",
         "bras %r1, 8 ; data.f32 1 ; le %f8, 0(%r1)",
     ));
     insns.push((
+        Inst::LoadFpuConst32 {
+            rd: writable_vr(24),
+            const_data: 1.0_f32.to_bits(),
+        },
+        "A71500043F800000E78010000803",
+        "bras %r1, 8 ; data.f32 1 ; vlef %v24, 0(%r1), 0",
+    ));
+    insns.push((
         Inst::LoadFpuConst64 {
-            rd: writable_fpr(8),
+            rd: writable_vr(8),
             const_data: 1.0_f64.to_bits(),
         },
         "A71500063FF000000000000068801000",
         "bras %r1, 12 ; data.f64 1 ; ld %f8, 0(%r1)",
     ));
+    insns.push((
+        Inst::LoadFpuConst64 {
+            rd: writable_vr(24),
+            const_data: 1.0_f64.to_bits(),
+        },
+        "A71500063FF0000000000000E78010000802",
+        "bras %r1, 12 ; data.f64 1 ; vleg %v24, 0(%r1), 0",
+    ));
 
     insns.push((
         Inst::FpuRound {
-            rd: writable_fpr(8),
-            rn: fpr(12),
-            op: FpuRoundMode::Minus32,
+            op: FpuRoundOp::Cvt64To32,
+            mode: FpuRoundMode::Current,
+            rd: writable_vr(8),
+            rn: vr(12),
+        },
+        "B344008C",
+        "ledbra %f8, %f12, 0",
+    ));
+    insns.push((
+        Inst::FpuRound {
+            op: FpuRoundOp::Cvt64To32,
+            mode: FpuRoundMode::ToNearest,
+            rd: writable_vr(24),
+            rn: vr(12),
+        },
+        "E78C001838C5",
+        "wledb %v24, %f12, 0, 1",
+    ));
+    insns.push((
+        Inst::FpuRound {
+            op: FpuRoundOp::Round32,
+            mode: FpuRoundMode::ToNegInfinity,
+            rd: writable_vr(8),
+            rn: vr(12),
         },
         "B357708C",
         "fiebr %f8, %f12, 7",
     ));
     insns.push((
         Inst::FpuRound {
-            rd: writable_fpr(8),
-            rn: fpr(12),
-            op: FpuRoundMode::Minus64,
+            op: FpuRoundOp::Round64,
+            mode: FpuRoundMode::ToNegInfinity,
+            rd: writable_vr(8),
+            rn: vr(12),
         },
         "B35F708C",
         "fidbr %f8, %f12, 7",
     ));
     insns.push((
         Inst::FpuRound {
-            rd: writable_fpr(8),
-            rn: fpr(12),
-            op: FpuRoundMode::Plus32,
+            op: FpuRoundOp::Round32,
+            mode: FpuRoundMode::ToPosInfinity,
+            rd: writable_vr(8),
+            rn: vr(12),
         },
         "B357608C",
         "fiebr %f8, %f12, 6",
     ));
     insns.push((
         Inst::FpuRound {
-            rd: writable_fpr(8),
-            rn: fpr(12),
-            op: FpuRoundMode::Plus64,
+            op: FpuRoundOp::Round64,
+            mode: FpuRoundMode::ToPosInfinity,
+            rd: writable_vr(8),
+            rn: vr(12),
         },
         "B35F608C",
         "fidbr %f8, %f12, 6",
     ));
     insns.push((
         Inst::FpuRound {
-            rd: writable_fpr(8),
-            rn: fpr(12),
-            op: FpuRoundMode::Zero32,
+            op: FpuRoundOp::Round32,
+            mode: FpuRoundMode::ToZero,
+            rd: writable_vr(8),
+            rn: vr(12),
         },
         "B357508C",
         "fiebr %f8, %f12, 5",
     ));
     insns.push((
         Inst::FpuRound {
-            rd: writable_fpr(8),
-            rn: fpr(12),
-            op: FpuRoundMode::Zero64,
+            op: FpuRoundOp::Round64,
+            mode: FpuRoundMode::ToZero,
+            rd: writable_vr(8),
+            rn: vr(12),
         },
         "B35F508C",
         "fidbr %f8, %f12, 5",
     ));
     insns.push((
         Inst::FpuRound {
-            rd: writable_fpr(8),
-            rn: fpr(12),
-            op: FpuRoundMode::Nearest32,
+            op: FpuRoundOp::Round32,
+            mode: FpuRoundMode::ToNearestTiesToEven,
+            rd: writable_vr(8),
+            rn: vr(12),
         },
         "B357408C",
         "fiebr %f8, %f12, 4",
     ));
     insns.push((
         Inst::FpuRound {
-            rd: writable_fpr(8),
-            rn: fpr(12),
-            op: FpuRoundMode::Nearest64,
+            op: FpuRoundOp::Round64,
+            mode: FpuRoundMode::ToNearestTiesToEven,
+            rd: writable_vr(8),
+            rn: vr(12),
         },
         "B35F408C",
         "fidbr %f8, %f12, 4",
     ));
+    insns.push((
+        Inst::FpuRound {
+            op: FpuRoundOp::Round32,
+            mode: FpuRoundMode::ToNearest,
+            rd: writable_vr(24),
+            rn: vr(12),
+        },
+        "E78C001828C7",
+        "wfisb %v24, %f12, 0, 1",
+    ));
+    insns.push((
+        Inst::FpuRound {
+            op: FpuRoundOp::Round64,
+            mode: FpuRoundMode::ToNearest,
+            rd: writable_vr(24),
+            rn: vr(12),
+        },
+        "E78C001838C7",
+        "wfidb %v24, %f12, 0, 1",
+    ));
+    insns.push((
+        Inst::FpuRound {
+            op: FpuRoundOp::ToSInt32,
+            mode: FpuRoundMode::ToNearest,
+            rd: writable_vr(24),
+            rn: vr(12),
+        },
+        "E78C001828C2",
+        "wcfeb %v24, %f12, 0, 1",
+    ));
+    insns.push((
+        Inst::FpuRound {
+            op: FpuRoundOp::ToSInt64,
+            mode: FpuRoundMode::ToNearest,
+            rd: writable_vr(24),
+            rn: vr(12),
+        },
+        "E78C001838C2",
+        "wcgdb %v24, %f12, 0, 1",
+    ));
+    insns.push((
+        Inst::FpuRound {
+            op: FpuRoundOp::ToUInt32,
+            mode: FpuRoundMode::ToNearest,
+            rd: writable_vr(24),
+            rn: vr(12),
+        },
+        "E78C001828C0",
+        "wclfeb %v24, %f12, 0, 1",
+    ));
+    insns.push((
+        Inst::FpuRound {
+            op: FpuRoundOp::ToUInt64,
+            mode: FpuRoundMode::ToNearest,
+            rd: writable_vr(24),
+            rn: vr(12),
+        },
+        "E78C001838C0",
+        "wclgdb %v24, %f12, 0, 1",
+    ));
+    insns.push((
+        Inst::FpuRound {
+            op: FpuRoundOp::FromSInt32,
+            mode: FpuRoundMode::ToNearest,
+            rd: writable_vr(24),
+            rn: vr(12),
+        },
+        "E78C001828C3",
+        "wcefb %v24, %f12, 0, 1",
+    ));
+    insns.push((
+        Inst::FpuRound {
+            op: FpuRoundOp::FromSInt64,
+            mode: FpuRoundMode::ToNearest,
+            rd: writable_vr(24),
+            rn: vr(12),
+        },
+        "E78C001838C3",
+        "wcdgb %v24, %f12, 0, 1",
+    ));
+    insns.push((
+        Inst::FpuRound {
+            op: FpuRoundOp::FromUInt32,
+            mode: FpuRoundMode::ToNearest,
+            rd: writable_vr(24),
+            rn: vr(12),
+        },
+        "E78C001828C1",
+        "wcelfb %v24, %f12, 0, 1",
+    ));
+    insns.push((
+        Inst::FpuRound {
+            op: FpuRoundOp::FromUInt64,
+            mode: FpuRoundMode::ToNearest,
+            rd: writable_vr(24),
+            rn: vr(12),
+        },
+        "E78C001838C1",
+        "wcdlgb %v24, %f12, 0, 1",
+    ));
 
     insns.push((
-        Inst::FpuVecRRR {
-            fpu_op: FPUOp2::Max32,
-            rd: writable_fpr(4),
-            rn: fpr(6),
-            rm: fpr(8),
+        Inst::VecSelect {
+            rd: writable_vr(4),
+            rn: vr(6),
+            rm: vr(8),
+            ra: vr(10),
         },
-        "E746801820EF",
-        "wfmaxsb %f4, %f6, %f8, 1",
+        "E7468000A08D",
+        "vsel %v4, %v6, %v8, %v10",
     ));
     insns.push((
-        Inst::FpuVecRRR {
-            fpu_op: FPUOp2::Max64,
-            rd: writable_fpr(4),
-            rn: fpr(6),
-            rm: fpr(8),
+        Inst::VecSelect {
+            rd: writable_vr(20),
+            rn: vr(6),
+            rm: vr(8),
+            ra: vr(10),
         },
-        "E746801830EF",
-        "wfmaxdb %f4, %f6, %f8, 1",
+        "E7468000A88D",
+        "vsel %v20, %v6, %v8, %v10",
     ));
     insns.push((
-        Inst::FpuVecRRR {
-            fpu_op: FPUOp2::Min32,
-            rd: writable_fpr(4),
-            rn: fpr(6),
-            rm: fpr(8),
+        Inst::VecSelect {
+            rd: writable_vr(4),
+            rn: vr(22),
+            rm: vr(8),
+            ra: vr(10),
         },
-        "E746801820EE",
-        "wfminsb %f4, %f6, %f8, 1",
+        "E7468000A48D",
+        "vsel %v4, %v22, %v8, %v10",
     ));
     insns.push((
-        Inst::FpuVecRRR {
-            fpu_op: FPUOp2::Min64,
-            rd: writable_fpr(4),
-            rn: fpr(6),
-            rm: fpr(8),
+        Inst::VecSelect {
+            rd: writable_vr(4),
+            rn: vr(6),
+            rm: vr(24),
+            ra: vr(10),
         },
-        "E746801830EE",
-        "wfmindb %f4, %f6, %f8, 1",
+        "E7468000A28D",
+        "vsel %v4, %v6, %v24, %v10",
+    ));
+    insns.push((
+        Inst::VecSelect {
+            rd: writable_vr(4),
+            rn: vr(6),
+            rm: vr(8),
+            ra: vr(26),
+        },
+        "E7468000A18D",
+        "vsel %v4, %v6, %v8, %v26",
+    ));
+    insns.push((
+        Inst::VecSelect {
+            rd: writable_vr(20),
+            rn: vr(22),
+            rm: vr(24),
+            ra: vr(26),
+        },
+        "E7468000AF8D",
+        "vsel %v20, %v22, %v24, %v26",
     ));
 
     let flags = settings::Flags::new(settings::builder());
