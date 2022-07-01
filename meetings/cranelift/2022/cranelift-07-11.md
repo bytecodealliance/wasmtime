@@ -11,6 +11,7 @@
 1. Announcements
     1. _Submit a PR to add your announcement here_
 1. Other agenda items
+    1. [E-graph-based mid-end optimization](https://github.com/bytecodealliance/rfcs/pull/27)
     1. _Submit a PR to add your item here_
 
 ## Notes
