@@ -425,44 +425,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::Breduce | Opcode::Ireduce => implemented_in_isle(ctx),
 
-        Opcode::Bextend | Opcode::Bmask => {
-            // Bextend and Bmask both simply sign-extend. This works for:
-            // - Bextend, because booleans are stored as 0 / -1, so we
-            //   sign-extend the -1 to a -1 in the wider width.
-            // - Bmask, because the resulting integer mask value must be
-            //   all-ones (-1) if the argument is true.
-
-            let from_ty = ctx.input_ty(insn, 0);
-            let to_ty = ctx.output_ty(insn, 0);
-            let from_bits = ty_bits(from_ty);
-            let to_bits = ty_bits(to_ty);
-
-            if from_ty.is_vector() || from_bits > 64 || to_bits > 64 {
-                return Err(CodegenError::Unsupported(format!(
-                    "{}: Unsupported type: {:?}",
-                    op, from_ty
-                )));
-            }
-
-            assert!(from_bits <= to_bits);
-
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-
-            if from_bits == to_bits {
-                ctx.emit(Inst::gen_move(rd, rn, to_ty));
-            } else {
-                let to_bits = if to_bits > 32 { 64 } else { 32 };
-                let from_bits = from_bits as u8;
-                ctx.emit(Inst::Extend {
-                    rd,
-                    rn,
-                    signed: true,
-                    from_bits,
-                    to_bits,
-                });
-            }
-        }
+        Opcode::Bextend | Opcode::Bmask => implemented_in_isle(ctx),
 
         Opcode::Bint => implemented_in_isle(ctx),
 
