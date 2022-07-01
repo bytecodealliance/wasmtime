@@ -53,6 +53,7 @@ pub trait Value: Clone + From<DataValue> {
     fn sqrt(self) -> ValueResult<Self>;
     fn fma(self, a: Self, b: Self) -> ValueResult<Self>;
     fn abs(self) -> ValueResult<Self>;
+    fn neg(self) -> ValueResult<Self>;
 
     // Saturating arithmetic.
     fn add_sat(self, other: Self) -> ValueResult<Self>;
@@ -484,6 +485,10 @@ impl Value for DataValue {
 
     fn abs(self) -> ValueResult<Self> {
         unary_match!(abs(&self); [F32, F64])
+    }
+
+    fn neg(self) -> ValueResult<Self> {
+        unary_match!(neg(&self); [F32, F64])
     }
 
     fn add_sat(self, other: Self) -> ValueResult<Self> {

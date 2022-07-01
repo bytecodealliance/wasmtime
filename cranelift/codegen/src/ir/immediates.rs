@@ -12,6 +12,7 @@ use core::str::FromStr;
 use core::{i32, u32};
 #[cfg(feature = "enable-serde")]
 use serde::{Deserialize, Serialize};
+use std::ops::Neg;
 
 /// Convert a type into a vector of bytes; all implementors in this file must use little-endian
 /// orderings of bytes to match WebAssembly's little-endianness.
@@ -822,6 +823,14 @@ impl IntoBytes for Ieee32 {
     }
 }
 
+impl Neg for Ieee32 {
+    type Output = Ieee32;
+
+    fn neg(self) -> Self::Output {
+        Self::with_float(self.as_f32().neg())
+    }
+}
+
 impl Ieee64 {
     /// Create a new `Ieee64` containing the bits of `x`.
     pub fn with_bits(x: u64) -> Self {
@@ -931,6 +940,14 @@ impl From<u64> for Ieee64 {
 impl IntoBytes for Ieee64 {
     fn into_bytes(self) -> Vec<u8> {
         self.0.to_le_bytes().to_vec()
+    }
+}
+
+impl Neg for Ieee64 {
+    type Output = Ieee64;
+
+    fn neg(self) -> Self::Output {
+        Self::with_float(self.as_f64().neg())
     }
 }
 
