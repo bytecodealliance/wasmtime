@@ -162,10 +162,12 @@ impl MemoryImage {
                 // extra-super-sure that it never changes, and because
                 // this costs very little, we use the kernel's "seal" API
                 // to make the memfd image permanently read-only.
-                memfd.add_seal(memfd::FileSeal::SealGrow)?;
-                memfd.add_seal(memfd::FileSeal::SealShrink)?;
-                memfd.add_seal(memfd::FileSeal::SealWrite)?;
-                memfd.add_seal(memfd::FileSeal::SealSeal)?;
+                memfd.add_seals(&[
+                    memfd::FileSeal::SealGrow,
+                    memfd::FileSeal::SealShrink,
+                    memfd::FileSeal::SealWrite,
+                    memfd::FileSeal::SealSeal,
+                ])?;
 
                 Ok(Some(MemoryImage {
                     fd: FdSource::Memfd(memfd),
