@@ -761,7 +761,18 @@ impl Ieee32 {
 
     /// Check if the value is a NaN.
     pub fn is_nan(&self) -> bool {
-        f32::from_bits(self.0).is_nan()
+        self.as_f32().is_nan()
+    }
+
+    /// Converts Self to a rust f32
+    pub fn as_f32(self) -> f32 {
+        f32::from_bits(self.0)
+    }
+
+    /// Fused multiply-add. Computes (self * a) + b with only one rounding error, yielding a
+    /// more accurate result than an unfused multiply-add.
+    pub fn mul_add(&self, a: Self, b: Self) -> Self {
+        Self::with_float(self.as_f32().mul_add(a.as_f32(), b.as_f32()))
     }
 
     /// Returns the square root of self.
@@ -772,7 +783,7 @@ impl Ieee32 {
 
 impl PartialOrd for Ieee32 {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        f32::from_bits(self.0).partial_cmp(&f32::from_bits(other.0))
+        self.as_f32().partial_cmp(&other.as_f32())
     }
 }
 
@@ -851,7 +862,18 @@ impl Ieee64 {
     /// Check if the value is a NaN. For [Ieee64], this means checking that the 11 exponent bits are
     /// all set.
     pub fn is_nan(&self) -> bool {
-        f64::from_bits(self.0).is_nan()
+        self.as_f64().is_nan()
+    }
+
+    /// Converts Self to a rust f64
+    pub fn as_f64(self) -> f64 {
+        f64::from_bits(self.0)
+    }
+
+    /// Fused multiply-add. Computes (self * a) + b with only one rounding error, yielding a
+    /// more accurate result than an unfused multiply-add.
+    pub fn mul_add(&self, a: Self, b: Self) -> Self {
+        Self::with_float(self.as_f64().mul_add(a.as_f64(), b.as_f64()))
     }
 
     /// Returns the square root of self.
@@ -862,7 +884,7 @@ impl Ieee64 {
 
 impl PartialOrd for Ieee64 {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        f64::from_bits(self.0).partial_cmp(&f64::from_bits(other.0))
+        self.as_f64().partial_cmp(&other.as_f64())
     }
 }
 

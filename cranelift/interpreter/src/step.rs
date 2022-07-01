@@ -679,7 +679,7 @@ where
         Opcode::Fmul => binary(Value::mul, arg(0)?, arg(1)?)?,
         Opcode::Fdiv => binary(Value::div, arg(0)?, arg(1)?)?,
         Opcode::Sqrt => assign(Value::sqrt(arg(0)?)?),
-        Opcode::Fma => unimplemented!("Fma"),
+        Opcode::Fma => assign(Value::fma(arg(0)?, arg(1)?, arg(2)?)?),
         Opcode::Fneg => binary(Value::sub, Value::float(0, ctrl_ty)?, arg(0)?)?,
         Opcode::Fabs => unimplemented!("Fabs"),
         Opcode::Fcopysign => unimplemented!("Fcopysign"),
