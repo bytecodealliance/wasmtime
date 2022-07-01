@@ -889,6 +889,8 @@ fn lookup_with_dlsym(name: &str) -> Option<*const u8> {
 
 #[cfg(windows)]
 fn lookup_with_dlsym(name: &str) -> Option<*const u8> {
+    use windows_sys::Win32::System::LibraryLoader;
+
     const MSVCRT_DLL: &[u8] = b"msvcrt.dll\0";
 
     let c_str = CString::new(name).unwrap();
@@ -899,11 +901,11 @@ fn lookup_with_dlsym(name: &str) -> Option<*const u8> {
             // try to find the searched symbol in the currently running executable
             ptr::null_mut(),
             // try to find the searched symbol in local c runtime
-            winapi::um::libloaderapi::GetModuleHandleA(MSVCRT_DLL.as_ptr().cast::<i8>()),
+            LibraryLoader::GetModuleHandleA(MSVCRT_DLL.as_ptr().cast::<i8>()),
         ];
 
         for handle in &handles {
-            let addr = winapi::um::libloaderapi::GetProcAddress(*handle, c_str_ptr);
+            let addr = LibraryLoader::GetProcAddress(*handle, c_str_ptr);
             if addr.is_null() {
                 continue;
             }
