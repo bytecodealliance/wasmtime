@@ -785,6 +785,11 @@ impl Ieee32 {
     pub fn abs(self) -> Self {
         Self::with_float(self.as_f32().abs())
     }
+
+    /// Returns a number composed of the magnitude of self and the sign of sign.
+    pub fn copysign(self, sign: Self) -> Self {
+        Self::with_float(self.as_f32().copysign(sign.as_f32()))
+    }
 }
 
 impl PartialOrd for Ieee32 {
@@ -898,6 +903,11 @@ impl Ieee64 {
     /// Computes the absolute value of self.
     pub fn abs(self) -> Self {
         Self::with_float(self.as_f64().abs())
+    }
+
+    /// Returns a number composed of the magnitude of self and the sign of sign.
+    pub fn copysign(self, sign: Self) -> Self {
+        Self::with_float(self.as_f64().copysign(sign.as_f64()))
     }
 }
 

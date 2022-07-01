@@ -682,7 +682,7 @@ where
         Opcode::Fma => assign(Value::fma(arg(0)?, arg(1)?, arg(2)?)?),
         Opcode::Fneg => assign(Value::neg(arg(0)?)?),
         Opcode::Fabs => assign(Value::abs(arg(0)?)?),
-        Opcode::Fcopysign => unimplemented!("Fcopysign"),
+        Opcode::Fcopysign => binary(Value::copysign, arg(0)?, arg(1)?)?,
         Opcode::Fmin => choose(
             Value::is_nan(&arg(0)?)? || Value::lt(&arg(0)?, &arg(1)?)?,
             arg(0)?,
