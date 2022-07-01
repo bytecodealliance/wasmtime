@@ -901,15 +901,15 @@ fn lookup_with_dlsym(name: &str) -> Option<*const u8> {
             // try to find the searched symbol in the currently running executable
             ptr::null_mut(),
             // try to find the searched symbol in local c runtime
-            LibraryLoader::GetModuleHandleA(MSVCRT_DLL.as_ptr().cast::<i8>()),
+            LibraryLoader::GetModuleHandleA(MSVCRT_DLL.as_ptr()),
         ];
 
         for handle in &handles {
-            let addr = LibraryLoader::GetProcAddress(*handle, c_str_ptr);
-            if addr.is_null() {
-                continue;
+            let addr = LibraryLoader::GetProcAddress(*handle, c_str_ptr.cast());
+            match addr {
+                None => continue,
+                Some(addr) => return Some(addr as *const u8),
             }
-            return Some(addr as *const u8);
         }
 
         None
