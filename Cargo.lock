@@ -624,7 +624,7 @@ dependencies = [
  "memmap2",
  "region",
  "target-lexicon",
- "winapi",
+ "windows-sys",
 ]
 
 [[package]]
