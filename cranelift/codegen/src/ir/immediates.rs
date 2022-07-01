@@ -777,7 +777,12 @@ impl Ieee32 {
 
     /// Returns the square root of self.
     pub fn sqrt(self) -> Self {
-        Self::with_float(f32::from_bits(self.0).sqrt())
+        Self::with_float(self.as_f32().sqrt())
+    }
+
+    /// Computes the absolute value of self.
+    pub fn abs(self) -> Self {
+        Self::with_float(self.as_f32().abs())
     }
 }
 
@@ -878,7 +883,12 @@ impl Ieee64 {
 
     /// Returns the square root of self.
     pub fn sqrt(self) -> Self {
-        Self::with_float(f64::from_bits(self.0).sqrt())
+        Self::with_float(self.as_f64().sqrt())
+    }
+
+    /// Computes the absolute value of self.
+    pub fn abs(self) -> Self {
+        Self::with_float(self.as_f64().abs())
     }
 }
 

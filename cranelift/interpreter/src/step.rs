@@ -681,7 +681,7 @@ where
         Opcode::Sqrt => assign(Value::sqrt(arg(0)?)?),
         Opcode::Fma => assign(Value::fma(arg(0)?, arg(1)?, arg(2)?)?),
         Opcode::Fneg => binary(Value::sub, Value::float(0, ctrl_ty)?, arg(0)?)?,
-        Opcode::Fabs => unimplemented!("Fabs"),
+        Opcode::Fabs => assign(Value::abs(arg(0)?)?),
         Opcode::Fcopysign => unimplemented!("Fcopysign"),
         Opcode::Fmin => choose(
             Value::is_nan(&arg(0)?)? || Value::lt(&arg(0)?, &arg(1)?)?,
