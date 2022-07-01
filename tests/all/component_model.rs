@@ -4,6 +4,7 @@ use wasmtime::{AsContextMut, Config, Engine};
 
 mod func;
 mod import;
+mod instance;
 mod macros;
 mod nested;
 mod post_return;

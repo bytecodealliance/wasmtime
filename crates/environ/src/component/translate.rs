@@ -1,5 +1,7 @@
 use crate::component::*;
-use crate::{EntityIndex, ModuleEnvironment, ModuleTranslation, PrimaryMap, Tunables};
+use crate::{
+    EntityIndex, ModuleEnvironment, ModuleTranslation, PrimaryMap, SignatureIndex, Tunables,
+};
 use anyhow::{bail, Result};
 use std::collections::HashMap;
 use std::mem;
@@ -141,6 +143,9 @@ struct Translation<'data> {
     /// Type information from wasmparser about this component, available after
     /// the component has been completely translated.
     types: Option<wasmparser::types::Types>,
+
+    /// The types of all core wasm functions defined within this component.
+    funcs: PrimaryMap<FuncIndex, SignatureIndex>,
 }
 
 #[allow(missing_docs)]
@@ -304,7 +309,7 @@ impl<'a, 'data> Translator<'a, 'data> {
         // Wasmtime to process at runtime as well (e.g. no string lookups as
         // most everything is done through indices instead).
         let component = inline::run(
-            &mut self.types,
+            &self.types,
             &self.result,
             &self.static_modules,
             &self.static_components,
@@ -338,9 +343,34 @@ impl<'a, 'data> Translator<'a, 'data> {
             }
 
             Payload::End(offset) => {
+                let types = self.validator.end(offset)?;
+
                 // Record type information for this component now that we'll
                 // have it from wasmparser.
-                self.result.types = Some(self.validator.end(offset)?);
+                //
+                // Note that this uses type information from `wasmparser` to
+                // lookup signature of all core wasm functions in this
+                // component.  This avoids us having to reimplement the
+                // translate-interface-types-to-the-canonical-abi logic. The
+                // type of the function is then intern'd to get a
+                // `SignatureIndex` which is later used at runtime for a
+                // `VMSharedSignatureIndex`.
+                for init in self.result.initializers.iter() {
+                    match init {
+                        LocalInitializer::Lower(..) | LocalInitializer::AliasExportFunc(..) => {}
+                        _ => continue,
+                    }
+                    let idx = self.result.funcs.next_key();
+                    let lowered_function_type = types
+                        .function_at(idx.as_u32())
+                        .expect("should be in-bounds");
+                    let ty = self
+                        .types
+                        .module_types_builder()
+                        .wasm_func_type(lowered_function_type.clone().try_into()?);
+                    self.result.funcs.push(ty);
+                }
+                self.result.types = Some(types);
 
                 // When leaving a module be sure to pop the types scope to
                 // ensure that when we go back to the previous module outer

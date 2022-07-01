@@ -235,3 +235,20 @@
 
   (core instance (instantiate $verify (with "host" (instance $i))))
 )
+
+;; export an instance
+(component
+  (core module $m)
+  (instance $i (export "m" (core module $m)))
+  (export "i" (instance $i))
+)
+(component
+  (component $c)
+  (instance $i (instantiate $c))
+  (export "i" (instance $i))
+)
+(component
+  (import "host" (instance $i))
+  (export "i" (instance $i))
+)
+
