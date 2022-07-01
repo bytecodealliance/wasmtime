@@ -763,6 +763,11 @@ impl Ieee32 {
     pub fn is_nan(&self) -> bool {
         f32::from_bits(self.0).is_nan()
     }
+
+    /// Returns the square root of self.
+    pub fn sqrt(self) -> Self {
+        Self::with_float(f32::from_bits(self.0).sqrt())
+    }
 }
 
 impl PartialOrd for Ieee32 {
@@ -847,6 +852,11 @@ impl Ieee64 {
     /// all set.
     pub fn is_nan(&self) -> bool {
         f64::from_bits(self.0).is_nan()
+    }
+
+    /// Returns the square root of self.
+    pub fn sqrt(self) -> Self {
+        Self::with_float(f64::from_bits(self.0).sqrt())
     }
 }
 

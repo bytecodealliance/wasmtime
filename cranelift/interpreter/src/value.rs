@@ -50,6 +50,7 @@ pub trait Value: Clone + From<DataValue> {
     fn mul(self, other: Self) -> ValueResult<Self>;
     fn div(self, other: Self) -> ValueResult<Self>;
     fn rem(self, other: Self) -> ValueResult<Self>;
+    fn sqrt(self) -> ValueResult<Self>;
 
     // Saturating arithmetic.
     fn add_sat(self, other: Self) -> ValueResult<Self>;
@@ -275,6 +276,8 @@ impl Value for DataValue {
                 (DataValue::I64(n), types::I32) => DataValue::I32(i32::try_from(n)?),
                 (DataValue::I64(n), types::I64) => DataValue::I64(n),
                 (DataValue::I64(n), types::I128) => DataValue::I128(n as i128),
+                (DataValue::F32(n), types::I32) => DataValue::I32(n.bits() as i32),
+                (DataValue::F64(n), types::I64) => DataValue::I64(n.bits() as i64),
                 (DataValue::B(b), t) if t.is_bool() => DataValue::B(b),
                 (DataValue::B(b), t) if t.is_int() => {
                     // Bools are represented in memory as all 1's
@@ -459,6 +462,10 @@ impl Value for DataValue {
         }
 
         binary_match!(%(&self, &other); [I8, I16, I32, I64])
+    }
+
+    fn sqrt(self) -> ValueResult<Self> {
+        unary_match!(sqrt(&self); [F32, F64]; [Ieee32, Ieee64])
     }
 
     fn add_sat(self, other: Self) -> ValueResult<Self> {
