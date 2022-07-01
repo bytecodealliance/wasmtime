@@ -1126,6 +1126,12 @@
 
 ;;;; Rules for `bmask`/`bextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; Bextend and Bmask both simply sign-extend. This works for:
+;; - Bextend, because booleans are stored as 0 / -1, so we
+;;   sign-extend the -1 to a -1 in the wider width.
+;; - Bmask, because the resulting integer mask value must be
+;;   all-ones (-1) if the argument is true.
+
 ;; Use a common helper to type cast bools to either bool or integer types.
 (decl cast_bool (Type Type Value) InstOutput)
 (rule (lower (has_type out_ty (bextend x @ (value_type in_ty))))
@@ -1148,13 +1154,13 @@
 (rule (cast_bool (ty_int_bool_128 _in) (fits_in_64 _out) x)
     (value_regs_get x 0))
 
-;; When extending to 128bits since we are dealing we bools we know the top
-;; and bottom register are going to be equal
+;; Extend to 64 bits first, then this will be all 0s or all 1s and we can
+;; duplicate to both halves of 128 bits
 (rule (cast_bool in (ty_int_bool_128 _out) x)
       (let ((tmp Reg (extend x $true (ty_bits in) 64)))
         (value_regs tmp tmp)))
 
-;;;;; Values that fit in a single register are sign extended normally
+;; Values that fit in a single register are sign extended normally
 (rule (cast_bool (fits_in_64 in) (fits_in_64 out) x)
       (extend x $true (ty_bits in) (ty_bits out)))
 
