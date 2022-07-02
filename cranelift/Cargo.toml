@@ -41,7 +41,7 @@ indicatif = "0.13.0"
 thiserror = "1.0.15"
 walkdir = "2.2"
 anyhow = "1.0.32"
-clap = { version = "3.1.12", features = ["derive"] }
+clap = { version = "3.2.0", features = ["derive"] }
 
 [features]
 default = ["disas", "wasm", "cranelift-codegen/all-arch", "souper-harvest"]
