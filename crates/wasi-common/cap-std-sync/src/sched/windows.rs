@@ -146,7 +146,7 @@ struct StdinPoll {
     notify_rx: Receiver<PollState>,
 }
 
-static STDIN_POLL: Lazy<Mutex<StdinPoll>> = Lazy::new(StdinPoll::new());
+static STDIN_POLL: Lazy<Mutex<StdinPoll>> = Lazy::new(StdinPoll::new);
 
 impl StdinPoll {
     pub fn new() -> Mutex<Self> {
