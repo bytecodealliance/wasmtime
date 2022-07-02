@@ -1567,7 +1567,7 @@
 (extern constructor gen_move gen_move)
 
 ;;; generate a move and reinterprete the data
-;; parameter is in_reg in_type out_type
+;; parameter is "rs" "in_type" "out_type"
 (decl gen_moves(ValueRegs Type Type) ValueRegs)
 (extern constructor gen_moves gen_moves)
 
@@ -1737,5 +1737,21 @@
 ;;; I think this should provide in prelude.isle
 (decl value_inst(Inst)Value)
 (extern extractor value_inst value_inst)
+
+(decl ifcmp_parameters(Value Value Type)Value)
+(extern extractor ifcmp_parameters ifcmp_parameters)
+
+(decl ffcmp_parameters(Value Value Type)Value)
+(extern extractor ffcmp_parameters ffcmp_parameters)
+
+;;;; in_type out_type
+(decl pure valid_bextend_ty(Type Type) Unit)
+(extern constructor valid_bextend_ty valid_bextend_ty)
+
+;; 
+(decl gen_return(ValueSlice)InstOutput)
+(extern constructor gen_return gen_return)
+
+
 
 

@@ -1677,7 +1677,7 @@ impl MachInstEmit for Inst {
                 sink.put4(0);
             }
             &Inst::SelectIf {
-                if_spectre_guard: _if_spectre_guard,
+                if_spectre_guard: _if_spectre_guard, /* _if_spectre_guard not use because it is used to not be removed by optimization pass and some other staff. */
                 ref rd,
                 ref cmp_x,
                 ref cmp_y,
@@ -1686,9 +1686,6 @@ impl MachInstEmit for Inst {
                 ref y,
                 cmp_ty,
             } => {
-                /*
-                    todo:: _if_spectre_guard not used.
-                */
                 let label_select_x = sink.get_label();
                 let label_select_y = sink.get_label();
                 let label_jump_over = sink.get_label();

@@ -80,7 +80,7 @@
 (rule (lower (has_type $I128 (isub x y)))
   (let
     (
-    ;; low part.
+      ;; low part.
       (low Reg(alu_rrr (AluOPRRR.Sub) (value_regs_get x 0) (value_regs_get y 0)))
       ;; compute borrow.
       (borrow Reg (alu_rrr (AluOPRRR.SltU) (value_regs_get x 0) low))
@@ -772,9 +772,9 @@
   (con_store_128 p offset flags x)
 )
 
-;;;;;  Rules for `icmp`;;;;;;;;;
+(decl con_icmp(IntCC Value Value Type)Reg)
 (rule
-  (lower (icmp cc (type_and_value ty x) y))
+  (con_icmp cc x y ty)
   (let
     (
       (result WritableReg (temp_writable_reg $I64))
@@ -784,9 +784,15 @@
   )
 )
 
-;;;;;  Rules for `fcmp`;;;;;;;;;
+;;;;;  Rules for `icmp`;;;;;;;;;
 (rule
-  (lower (fcmp cc (type_and_value ty x) y))
+  (lower (has_type ty (icmp cc (type_and_value ty x) y)))
+  (con_icmp cc x y ty)
+)
+
+(decl con_fcmp(FloatCC Value Value Type)Reg)
+(rule
+  (con_fcmp cc x y ty)
   (let
     (
       (result WritableReg (temp_writable_reg $I64))
@@ -794,6 +800,12 @@
     )
     (writable_reg_to_reg result)
   )
+)
+
+;;;;;  Rules for `fcmp`;;;;;;;;;
+(rule
+  (lower (fcmp cc (type_and_value ty x) y))
+  (con_fcmp cc x y ty)
 )
 
 ;;;;;  Rules for `func_addr`;;;;;;;;;
@@ -879,3 +891,93 @@
   (lower (has_type ty (nearest x)))
   (gen_nearest x ty)
 )
+
+
+;;;;;  Rules for `selectif`;;;;;;;;;
+(rule
+  (lower (has_type r_ty (selectif cc (ifcmp_parameters ca cb cty)  a b ) ) )
+  (let
+    (
+      (dst VecWritableReg (con_vec_writable r_ty))
+      (_ Unit (emit (MInst.SelectIf $false (vec_writable_clone dst) ca cb cc cty a b)))
+    )
+    (vec_regs_to_value_regs dst)
+  )
+)
+
+;;;;;  Rules for `selectif_spectre_guard`;;;;;;;;;
+(rule
+  (lower (has_type r_ty (selectif_spectre_guard cc (ifcmp_parameters ca cb cty)  a b ) ) )
+  (let
+    (
+      (dst VecWritableReg (con_vec_writable r_ty))
+      (_ Unit (emit (MInst.SelectIf $true (vec_writable_clone dst) ca cb cc cty a b)))
+    )
+    (vec_regs_to_value_regs dst)
+  )
+)
+
+;;;;;  Rules for `trueif`;;;;;;;;;
+(rule
+  (lower (has_type ty  (trueif cc  (ifcmp_parameters ca cb cty) ) ))
+  (con_icmp cc ca cb cty)
+)
+
+
+;;;;;  Rules for `trueff`;;;;;;;;;
+(rule
+  (lower (has_type ty  (trueff cc  (ffcmp_parameters ca cb cty) ) ))
+  (con_fcmp cc ca cb cty)
+)
+
+
+;;;;;  Rules for `trapif`;;;;;;;;;
+(rule
+  (lower (trapif cc (ifcmp_parameters a b ty) trap_code ))
+  (side_effect (SideEffectNoResult.Inst(MInst.TrapIf cc a b ty trap_code )))
+)
+
+;;;;;  Rules for `trapff`;;;;;;;;;
+(rule
+  (lower (trapff cc (ffcmp_parameters a b ty) trap_code ))
+  (let
+    (
+      (tmp WritableReg (temp_writable_reg $I64))
+    )
+    (side_effect (SideEffectNoResult.Inst(MInst.TrapFf cc a b ty tmp trap_code )))
+  )
+)
+
+;;;;;  Rules for `bmask`;;;;;;;;;
+(rule
+  ;; because we encode bool all 1s.
+  ;; move is just ok.
+  (lower (has_type ty (bmask  (type_and_value ity x )) ))
+  (gen_moves x ity ty)
+)
+
+;;;;;  Rules for `bextend`;;;;;;;;;
+(rule
+  ;; because we encode bool all 1s.
+  ;; move is just ok.
+  (lower (has_type ty (bextend (type_and_value ity x))))
+  ;;extra checks.
+  (if-let _ (valid_bextend_ty ity ty))
+  (gen_moves x ity ty)
+)
+
+;;;;;  Rules for `return`;;;;;;;;;
+(rule
+  (lower (return x))
+  (gen_return x)
+)
+;;;;;  Rules for `fallthrough_return`;;;;;;;;;
+(rule
+  (lower (fallthrough_return x))
+  (gen_return x)
+)
+
+
+
+
+

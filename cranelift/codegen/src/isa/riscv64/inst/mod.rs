@@ -160,7 +160,7 @@ fn gen_moves(rd: &[Writable<Reg>], src: &[Reg]) -> SmallInstVec<Inst> {
         let out_ty = Inst::canonical_type_for_rc(dst.to_reg().class());
         let in_ty = Inst::canonical_type_for_rc(src.class());
         assert!(in_ty == out_ty);
-        insts.push(gen_move_re_interprete(*dst, out_ty, *src, in_ty));
+        insts.push(gen_move(*dst, out_ty, *src, in_ty));
     }
     insts
 }
@@ -168,7 +168,7 @@ fn gen_moves(rd: &[Writable<Reg>], src: &[Reg]) -> SmallInstVec<Inst> {
 /// if input or output is float,
 /// you should use special instruction.
 /// genearte a move and re interprete the data.
-pub(crate) fn gen_move_re_interprete(rd: Writable<Reg>, oty: Type, rm: Reg, ity: Type) -> Inst {
+pub(crate) fn gen_move(rd: Writable<Reg>, oty: Type, rm: Reg, ity: Type) -> Inst {
     match (ity.is_float(), oty.is_float()) {
         (false, false) => Inst::gen_move(rd, rm, oty),
         (true, true) => Inst::gen_move(rd, rm, oty),
@@ -802,7 +802,7 @@ impl Inst {
                 let rd: Vec<_> = rd.iter().map(|r| r.to_reg()).collect();
                 let rd = format_regs(&rd[..], allocs);
                 format!(
-                    "selectif{} {},{},{}##{} {} {} ty={}",
+                    "selectif{} {},{},{}##{} {} {} cmp_ty={}",
                     if if_spectre_guard {
                         "_spectre_guard"
                     } else {

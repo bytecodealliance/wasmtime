@@ -99,7 +99,6 @@ pub fn param_or_rets_fregs(args_or_rets: ArgsOrRets) -> Vec<Writable<Reg>> {
     for enc in fa0..=fa_last {
         v.push(Writable::from_reg(f_reg(enc as usize)));
     }
-
     v
 }
 

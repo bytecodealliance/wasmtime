@@ -3,6 +3,8 @@
 // Pull in the ISLE generated code.
 pub mod generated_code;
 
+use alloc::vec::Vec;
+
 // Types that the generated ISLE code uses via `use super::*`.
 use super::{writable_zero_reg, zero_reg, Inst as MInst};
 
@@ -60,11 +62,41 @@ where
             _ => unreachable!(),
         }
     }
+
+    fn valid_bextend_ty(&mut self, from: Type, to: Type) -> Option<Unit> {
+        if from.is_bool() && to.is_bool() && to.bits() < 128 && from.bits() < to.bits() {
+            Some(())
+        } else {
+            None
+        }
+    }
+    fn gen_return(&mut self, val: ValueSlice) -> InstOutput {
+        // due to owernship error I have to clone ssa_values.
+        let ssa_values: Vec<_> = val
+            .0
+            .as_slice(&self.lower_ctx.dfg().value_lists)
+            .iter()
+            .map(|v| *v)
+            .collect();
+
+        for (i, ssa_value) in ssa_values.iter().enumerate() {
+            let src_reg = self.lower_ctx.put_value_in_regs(*ssa_value);
+            let retval_reg = self.lower_ctx.retval(i);
+            let ty = self.lower_ctx.value_ty(*ssa_value);
+            assert!(src_reg.len() == retval_reg.len());
+            for (&src, &dst) in src_reg.regs().iter().zip(retval_reg.regs().iter()) {
+                let ty = MInst::canonical_type_for_rc(src.class());
+                self.emit(&MInst::gen_move(dst, src, ty));
+            }
+        }
+        InstOutput::default()
+    }
     fn vec_writable_clone(&mut self, v: &VecWritableReg) -> VecWritableReg {
         v.clone()
     }
-    fn value_inst(&mut self, arg0: Value) -> Option<Inst> {
-        unimplemented!()
+    fn value_inst(&mut self, val: Value) -> Option<Inst> {
+        let may = self.lower_ctx.get_value_as_source_or_const(val);
+        may.inst.as_inst().map(|(insn, index)| insn)
     }
 
     fn gen_ceil(&mut self, rs: Reg, ty: Type) -> Reg {
@@ -92,13 +124,13 @@ where
                         // if 128 must not be a float.
                         let low = self.temp_writable_reg(out_ty);
                         let high = self.temp_writable_reg(out_ty);
-                        self.emit(&gen_move_re_interprete(low, I64, rs.regs()[0], I64));
-                        self.emit(&gen_move_re_interprete(high, I64, rs.regs()[1], I64));
+                        self.emit(&gen_move(low, I64, rs.regs()[0], I64));
+                        self.emit(&gen_move(high, I64, rs.regs()[1], I64));
                         ValueRegs::two(low.to_reg(), high.to_reg())
                     }
                     _ => {
                         let rd = self.temp_writable_reg(out_ty);
-                        self.emit(&gen_move_re_interprete(rd, out_ty, rs.regs()[0], in_ty));
+                        self.emit(&gen_move(rd, out_ty, rs.regs()[0], in_ty));
                         ValueRegs::one(rd.to_reg())
                     }
                 }
@@ -253,6 +285,36 @@ where
         self.put_in_regs(val).regs()[0]
     }
 
+    fn ifcmp_parameters(&mut self, val: Value) -> Option<(Value, Value, Type)> {
+        let inst = self.value_inst(val);
+        let inst = match inst {
+            Some(x) => x,
+            None => return None,
+        };
+        let opcode = self.lower_ctx.data(inst).opcode();
+        if opcode != crate::ir::Opcode::Ifcmp {
+            return None;
+        }
+        let a = self.lower_ctx.input_as_value(inst, 0);
+        let b = self.lower_ctx.input_as_value(inst, 1);
+        let ty = self.lower_ctx.input_ty(inst, 0);
+        Some((a, b, ty))
+    }
+    fn ffcmp_parameters(&mut self, val: Value) -> Option<(Value, Value, Type)> {
+        let inst = self.value_inst(val);
+        let inst = match inst {
+            Some(x) => x,
+            None => return None,
+        };
+        let opcode = self.lower_ctx.data(inst).opcode();
+        if opcode != crate::ir::Opcode::Ffcmp {
+            return None;
+        }
+        let a = self.lower_ctx.input_as_value(inst, 0);
+        let b = self.lower_ctx.input_as_value(inst, 1);
+        let ty = self.lower_ctx.input_ty(inst, 0);
+        Some((a, b, ty))
+    }
     fn load_float_const(&mut self, val: u64, ty: Type) -> Reg {
         let result = self.temp_writable_reg(ty);
         if ty == F32 {
@@ -270,13 +332,13 @@ where
     }
     fn move_f_to_x(&mut self, r: Reg, ty: Type) -> Reg {
         let result = self.temp_writable_reg(I64);
-        self.emit(&gen_move_re_interprete(result, I64, r, ty));
+        self.emit(&gen_move(result, I64, r, ty));
         result.to_reg()
     }
 
     fn move_x_to_f(&mut self, r: Reg, ty: Type) -> Reg {
         let result = self.temp_writable_reg(ty);
-        self.emit(&gen_move_re_interprete(result, ty, r, I64));
+        self.emit(&gen_move(result, ty, r, I64));
         result.to_reg()
     }
 
@@ -335,7 +397,7 @@ where
     }
     fn gen_move(&mut self, r: Reg, ty: Type) -> Reg {
         let tmp = self.temp_writable_reg(ty);
-        self.emit(&gen_move_re_interprete(tmp, ty, r, ty));
+        self.emit(&gen_move(tmp, ty, r, ty));
         tmp.to_reg()
     }
 

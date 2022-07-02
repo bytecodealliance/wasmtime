@@ -388,9 +388,9 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         smallvec![]
     }
 
-    // add  sp , sp-8   ;; alloc stack sapce for fp
-    // st   fp , sp+0   ;; store old fp
-    // move fp , sp     ;; set fp to sp
+    /// add  sp , sp-8   ;; alloc stack sapce for fp
+    /// st   fp , sp+0   ;; store old fp
+    /// move fp , sp     ;; set fp to sp
     fn gen_prologue_frame_setup(_flags: &settings::Flags) -> SmallInstVec<Inst> {
         let mut insts = SmallVec::new();
 
@@ -410,8 +410,8 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         insts
     }
 
-    //st fp , sp  ;; restore fp
-    //add sp, sp+8  ;; desalloc stack sapce for fp
+    /// st fp , sp  ;; restore fp
+    /// add sp, sp+8  ;; desalloc stack sapce for fp
     fn gen_epilogue_frame_restore(_: &settings::Flags) -> SmallInstVec<Inst> {
         let mut insts = SmallVec::new();
         insts.push(Self::gen_load_stack(

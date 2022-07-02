@@ -9,7 +9,6 @@ use crate::isa::riscv64::settings as aarch64_settings;
 use crate::machinst::lower::*;
 use crate::machinst::*;
 use crate::settings::Flags;
-use crate::CodegenError;
 use crate::CodegenResult;
 
 use crate::ir::types::{I16, I32, I64, I8};
@@ -153,23 +152,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Selectif | Opcode::SelectifSpectreGuard => {
-            let input_as_inst = maybe_input_insn(ctx, inputs[0], crate::ir::Opcode::Ifcmp).unwrap();
-            let rd = get_output_reg(ctx, outputs[0]);
-            let rd: Vec<_> = rd.regs().iter().map(|r| *r).collect();
-            let x = put_input_in_regs(ctx, inputs[1]);
-            let y = put_input_in_regs(ctx, inputs[2]);
-            let (cmp_x, cmp_y, cmp_ty) = get_ifcmp_parameters(ctx, input_as_inst);
-            let cc = ctx.data(insn).cond_code().unwrap();
-            ctx.emit(Inst::SelectIf {
-                if_spectre_guard: op == crate::ir::Opcode::SelectifSpectreGuard,
-                rd,
-                cmp_x,
-                cmp_y,
-                cc,
-                x,
-                y,
-                cmp_ty,
-            });
+            implemented_in_isle(ctx);
         }
 
         Opcode::Bitselect => {
@@ -181,33 +164,11 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Trueif => {
-            let (x, y, ty) = maybe_input_insn(ctx, inputs[0], crate::ir::Opcode::Ifcmp)
-                .map(|inst| get_ifcmp_parameters(ctx, inst))
-                .unwrap();
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let cc = ctx.data(insn).cond_code().unwrap();
-            ctx.emit(Inst::Icmp {
-                cc,
-                rd,
-                a: x,
-                b: y,
-                ty,
-            });
+            implemented_in_isle(ctx);
         }
 
         Opcode::Trueff => {
-            let (x, y, ty) = maybe_input_insn(ctx, inputs[0], crate::ir::Opcode::Ffcmp)
-                .map(|inst| get_ffcmp_parameters(ctx, inst))
-                .unwrap();
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let cc = ctx.data(insn).fp_cond_code().unwrap();
-            ctx.emit(Inst::Fcmp {
-                rd,
-                cc,
-                ty,
-                rs1: x,
-                rs2: y,
-            });
+            implemented_in_isle(ctx);
         }
 
         Opcode::IsNull | Opcode::IsInvalid => {
@@ -223,32 +184,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Bextend | Opcode::Bmask => {
-            let from_ty = ctx.input_ty(insn, 0);
-            let to_ty = ctx.output_ty(insn, 0);
-            let from_bits = ty_bits(from_ty);
-            let to_bits = ty_bits(to_ty);
-
-            if from_ty.is_vector() || from_bits > 64 || to_bits > 64 {
-                return Err(CodegenError::Unsupported(format!(
-                    "{}: Unsupported type: {:?}",
-                    op, from_ty
-                )));
-            }
-
-            assert!(
-                if op == Opcode::Bextend {
-                    from_bits <= to_bits
-                } else {
-                    true
-                },
-                "{}:{}->{}",
-                op,
-                from_bits,
-                to_bits
-            );
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let rn = put_input_in_reg(ctx, inputs[0]);
-            ctx.emit(Inst::gen_move(rd, rn, to_ty));
+            implemented_in_isle(ctx);
         }
 
         Opcode::Bint => {
@@ -260,21 +196,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::FallthroughReturn | Opcode::Return => {
-            for i in 0..ctx.num_inputs(insn) {
-                let src_reg = ctx.put_input_in_regs(insn, i);
-                let retval_reg = ctx.retval(i);
-                let ty = ctx.input_ty(insn, i);
-                assert!(src_reg.len() == retval_reg.len());
-                let (_, tys) = Inst::rc_for_type(ty)?;
-                for ((&src, &dst), &ty) in src_reg
-                    .regs()
-                    .iter()
-                    .zip(retval_reg.regs().iter())
-                    .zip(tys.iter())
-                {
-                    ctx.emit(Inst::gen_move(dst, src, ty));
-                }
-            }
+            implemented_in_isle(ctx);
         }
 
         Opcode::Ifcmp | Opcode::Ffcmp => {
@@ -298,34 +220,11 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Trapif => {
-            let trap_code = ctx.data(insn).trap_code().unwrap();
-            let input_as_inst = maybe_input_insn(ctx, inputs[0], crate::ir::Opcode::Ifcmp).unwrap();
-            let (x, y, ty) = get_ifcmp_parameters(ctx, input_as_inst);
-            let cc = ctx.data(insn).cond_code().unwrap();
-            ctx.emit(Inst::TrapIf {
-                cc,
-                x,
-                y,
-                ty,
-                trap_code,
-            });
+            implemented_in_isle(ctx);
         }
 
         Opcode::Trapff => {
-            let trap_code = ctx.data(insn).trap_code().unwrap();
-            let input_as_inst = maybe_input_insn(ctx, inputs[0], crate::ir::Opcode::Ffcmp).unwrap();
-            let (x, y, ty) = get_ffcmp_parameters(ctx, input_as_inst);
-            let tmp = ctx.alloc_tmp(I64).only_reg().unwrap();
-
-            let cc = ctx.data(insn).fp_cond_code().unwrap();
-            ctx.emit(Inst::TrapFf {
-                cc,
-                x,
-                y,
-                ty,
-                trap_code,
-                tmp,
-            });
+            implemented_in_isle(ctx);
         }
 
         Opcode::Trapz | Opcode::Trapnz | Opcode::ResumableTrapnz => {
@@ -731,7 +630,5 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
 }
 
 fn pinned_register_not_used() -> ! {
- 
-
     unreachable!()
 }
