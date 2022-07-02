@@ -382,7 +382,7 @@ impl<'a> State<'a, DataValue> for InterpreterState<'a> {
 
     /// Builds an [Address] for the [Heap] referenced in the currently executing function.
     ///
-    /// A CLIF Heap is essential a GlobalValue and some metadata about that memory
+    /// A CLIF Heap is essentially a GlobalValue and some metadata about that memory
     /// region, such as bounds. Since heaps are based on Global Values it means that
     /// once that GV is resolved we can essentially end up anywhere in memory.
     ///
@@ -400,7 +400,7 @@ impl<'a> State<'a, DataValue> for InterpreterState<'a> {
         addr.size = size;
         addr.offset += offset;
 
-        // After resolving the address can point anywhere, we need to check if its
+        // After resolving the address can point anywhere, we need to check if it's
         // still valid.
         self.validate_address(&addr)?;
 
@@ -581,7 +581,7 @@ impl<'a> State<'a, DataValue> for InterpreterState<'a> {
                         entry: addr.entry,
                         max: self.heaps.len() as u64,
                     })
-                    .map(|heap| heap.len() as u64)?; //: &HeapBacking
+                    .map(|heap| heap.len() as u64)?;
 
                 if addr.offset > heap_len {
                     return Err(MemoryError::InvalidOffset {

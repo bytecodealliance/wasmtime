@@ -85,6 +85,9 @@ pub fn register_heaps<'a>(
     let mem = test_env.allocate_memory();
     let vmctx_struct = mem
         .into_iter()
+        // This memory layout (a contiguous list of base + bound ptrs)
+        // is enforced by the RuntestEnvironment when parsing the heap
+        // directives. So we are safe to replicate that here.
         .flat_map(|mem| {
             let heap_len = mem.len() as u64;
             let heap = state.register_heap(HeapInit::FromBacking(mem));
