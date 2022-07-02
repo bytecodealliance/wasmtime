@@ -32,12 +32,12 @@ extern "C" {
     fn __jit_debug_register_code();
 }
 
-// The process controls access to the __jit_debug_descriptor by itself --
-// the GDB/LLDB accesses this structure and its data at the process startup
-// and when paused in __jit_debug_register_code.
-//
-// The GDB_REGISTRATION lock is needed for GdbJitImageRegistration to protect
-// access to the __jit_debug_descriptor within this process.
+/// The process controls access to the __jit_debug_descriptor by itself --
+/// the GDB/LLDB accesses this structure and its data at the process startup
+/// and when paused in __jit_debug_register_code.
+///
+/// The GDB_REGISTRATION lock is needed for GdbJitImageRegistration to protect
+/// access to the __jit_debug_descriptor within this process.
 static GDB_REGISTRATION: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(Default::default()));
 
 /// Registeration for JIT image
