@@ -7,13 +7,11 @@
 //! assert_eq!(results, &[Value::I32(43)]);
 //! ```
 use crate::Value;
-use lazy_static::lazy_static;
 use ocaml_interop::{OCamlRuntime, ToOCaml};
+use once_cell::sync::Lazy;
 use std::sync::Mutex;
 
-lazy_static! {
-    static ref INTERPRET: Mutex<()> = Mutex::new(());
-}
+static INTERPRET: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 
 /// Interpret the first function in the passed WebAssembly module (in Wasm form,
 /// currently, not WAT), optionally with the given parameters. If no parameters

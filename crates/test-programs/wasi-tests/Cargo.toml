@@ -10,7 +10,7 @@ publish = false
 libc = "0.2.65"
 wasi = "0.10.2"
 more-asserts = "0.2.1"
-lazy_static = "1.4"
+once_cell = "1.12.0"
 
 # This crate is built with the wasm32-wasi target, so it's separate
 # from the main Wasmtime build, so use this directive to exclude it

@@ -35,7 +35,7 @@ anyhow = "1.0.19"
 target-lexicon = { version = "0.12.0", default-features = false }
 libc = "0.2.60"
 humantime = "2.0.0"
-lazy_static = "1.4.0"
+once_cell = "1.12"
 listenfd = "1.0.0"
 
 [target.'cfg(unix)'.dependencies]

@@ -31,7 +31,7 @@ rustix = { version = "0.35.6", features = ["process"] }
 
 [dev-dependencies]
 filetime = "0.2.7"
-lazy_static = "1.3.0"
+once_cell = "1.12.0"
 more-asserts = "0.2.1"
 pretty_env_logger = "0.4.0"
 tempfile = "3"

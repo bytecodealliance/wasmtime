@@ -1,3 +1,4 @@
+use once_cell::sync::Lazy;
 use std::path::Path;
 use std::sync::{Condvar, Mutex};
 use wasmtime::{
@@ -118,9 +119,7 @@ fn feature_found(path: &Path, name: &str) -> bool {
 fn lock_pooling() -> impl Drop {
     const MAX_CONCURRENT_POOLING: u32 = 8;
 
-    lazy_static::lazy_static! {
-        static ref ACTIVE: MyState = MyState::default();
-    }
+    static ACTIVE: Lazy<MyState> = Lazy::new(MyState::default);
 
     #[derive(Default)]
     struct MyState {

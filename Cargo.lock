@@ -3101,7 +3101,7 @@ dependencies = [
  "io-extras",
  "io-lifetimes",
  "is-terminal",
- "lazy_static",
+ "once_cell",
  "rustix",
  "system-interface",
  "tempfile",
@@ -3164,7 +3164,6 @@ dependencies = [
  "cap-tempfile",
  "io-extras",
  "io-lifetimes",
- "lazy_static",
  "rustix",
  "tempfile",
  "tokio",
@@ -3268,8 +3267,8 @@ dependencies = [
 name = "wasm-spec-interpreter"
 version = "0.1.0"
 dependencies = [
- "lazy_static",
  "ocaml-interop",
+ "once_cell",
  "wat",
 ]
 
@@ -3326,7 +3325,6 @@ dependencies = [
  "bincode",
  "cfg-if",
  "indexmap",
- "lazy_static",
  "libc",
  "log",
  "object",
@@ -3402,9 +3400,9 @@ dependencies = [
  "directories-next",
  "file-per-thread-logger",
  "filetime",
- "lazy_static",
  "log",
  "more-asserts",
+ "once_cell",
  "pretty_env_logger",
  "rustix",
  "serde",
@@ -3427,7 +3425,6 @@ dependencies = [
  "env_logger 0.9.0",
  "filecheck",
  "humantime 2.1.0",
- "lazy_static",
  "libc",
  "listenfd",
  "memchr",
@@ -3596,8 +3593,8 @@ dependencies = [
 name = "wasmtime-jit-debug"
 version = "0.40.0"
 dependencies = [
- "lazy_static",
  "object",
+ "once_cell",
  "rustix",
 ]
 
