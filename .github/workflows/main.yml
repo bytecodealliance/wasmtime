@@ -401,6 +401,12 @@ jobs:
     # Build `libwasmtime.so`
     - run: $CENTOS cargo build --release --manifest-path crates/c-api/Cargo.toml
 
+    # Prepare and build examples with both static and dynamic linking
+    - run: cmake -S ${{ github.workspace }}/examples -B ${{ github.workspace }}/examples/build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF
+    - run: cmake --build ${{ github.workspace }}/examples/build --config Release
+    - run: cmake -S ${{ github.workspace }}/examples -B ${{ github.workspace }}/examples/build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON
+    - run: cmake --build ${{ github.workspace }}/examples/build --config Release
+
     # Assemble release artifats appropriate for this platform, then upload them
     # unconditionally to this workflow's files so we have a copy of them.
     - run: ./ci/build-tarballs.sh "${{ matrix.build }}" "${{ matrix.target }}"
