@@ -28,6 +28,22 @@
  * as a `lib` directory with both a static archive and a dynamic library of
  * Wasmtime. You can link to either of them as you see fit.
  *
+ * ## Installing the C API through CMake
+ *
+ * CMake can be used to make the process of linking and compiling easier. An
+ * example of this if you have wasmtime as a git submodule at
+ * `third_party/wasmtime`:
+ * ```
+ * add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/third_party/wasmtime/crates/c-api
+ * ${CMAKE_CURRENT_BINARY_DIR}/wasmtime)
+ * ...
+ * target_include_directories(YourProject PUBLIC wasmtime)
+ * target_link_libraries(YourProject PUBLIC wasmtime)
+ * ```
+ * `BUILD_SHARED_LIBS` is provided as a define if you would like to build a
+ * shared library instead. You must distribute the appropriate shared library
+ * for your platform if you do this.
+ *
  * ## Linking against the C API
  *
  * You'll want to arrange the `include` directory of the C API to be in your
@@ -41,7 +57,8 @@
  *
  * * Linux - `-lpthread -ldl -lm`
  * * macOS - no extra flags needed
- * * Windows - `ws2_32.lib advapi32.lib userenv.lib ntdll.lib shell32.lib ole32.lib bcrypt.lib`
+ * * Windows - `ws2_32.lib advapi32.lib userenv.lib ntdll.lib shell32.lib
+ * ole32.lib bcrypt.lib`
  *
  * ## Building from Source
  *
@@ -166,8 +183,8 @@
 
 #include <wasi.h>
 #include <wasmtime/config.h>
-#include <wasmtime/error.h>
 #include <wasmtime/engine.h>
+#include <wasmtime/error.h>
 #include <wasmtime/extern.h>
 #include <wasmtime/func.h>
 #include <wasmtime/global.h>
@@ -187,11 +204,10 @@ extern "C" {
 /**
  * \brief Converts from the text format of WebAssembly to to the binary format.
  *
- * \param wat this it the input pointer with the WebAssembly Text Format inside of
- *   it. This will be parsed and converted to the binary format.
- * \param wat_len this it the length of `wat`, in bytes.
- * \param ret if the conversion is successful, this byte vector is filled in with
- *   the WebAssembly binary format.
+ * \param wat this it the input pointer with the WebAssembly Text Format inside
+ * of it. This will be parsed and converted to the binary format. \param wat_len
+ * this it the length of `wat`, in bytes. \param ret if the conversion is
+ * successful, this byte vector is filled in with the WebAssembly binary format.
  *
  * \return a non-null error if parsing fails, or returns `NULL`. If parsing
  * fails then `ret` isn't touched.
@@ -199,14 +215,11 @@ extern "C" {
  * This function does not take ownership of `wat`, and the caller is expected to
  * deallocate the returned #wasmtime_error_t and #wasm_byte_vec_t.
  */
-WASM_API_EXTERN wasmtime_error_t* wasmtime_wat2wasm(
-    const char *wat,
-    size_t wat_len,
-    wasm_byte_vec_t *ret
-);
+WASM_API_EXTERN wasmtime_error_t *
+wasmtime_wat2wasm(const char *wat, size_t wat_len, wasm_byte_vec_t *ret);
 
 #ifdef __cplusplus
-}  // extern "C"
+} // extern "C"
 #endif
 
 #endif // WASMTIME_API_H
