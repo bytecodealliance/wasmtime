@@ -451,6 +451,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "component-macro-test"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "console"
 version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3413,6 +3422,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "clap 3.1.15",
+ "component-macro-test",
  "criterion",
  "env_logger 0.9.0",
  "filecheck",

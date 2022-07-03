@@ -1,5 +1,6 @@
 use super::TypedFuncExt;
 use anyhow::Result;
+use component_macro_test::add_variants;
 use std::fmt::Write;
 use wasmtime::component::{Component, ComponentType, Lift, Linker, Lower};
 use wasmtime::Store;
@@ -474,6 +475,42 @@ fn enum_derive() -> Result<()> {
     assert!(instance
         .get_typed_func::<(Foo,), Foo, _>(&mut store, "echo")
         .is_err());
+
+    #[add_variants(257)]
+    #[derive(ComponentType, Lift, Lower, PartialEq, Eq, Debug, Copy, Clone)]
+    #[component(enum)]
+    enum Many {}
+
+    let component = Component::new(
+        &engine,
+        make_echo_component(
+            &format!(
+                r#"(type $Foo (enum {}))"#,
+                (0..257)
+                    .map(|index| format!(r#""V{}""#, index))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            ),
+            4,
+        ),
+    )?;
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+    let func = instance.get_typed_func::<(Many,), Many, _>(&mut store, "echo")?;
+
+    for &input in &[Many::V0, Many::V1, Many::V254, Many::V255, Many::V256] {
+        let output = func.call_and_post_return(&mut store, (input,))?;
+
+        assert_eq!(input, output);
+    }
+
+    // TODO: The following case takes forever (i.e. I gave up after 30 minutes) to compile; we'll need to profile
+    // the compiler to find out why, which may point the way to a more efficient option.  On the other hand, this
+    // may not be worth spending time on.  Enums with over 2^16 variants are rare enough.
+
+    // #[add_variants(65537)]
+    // #[derive(ComponentType, Lift, Lower, PartialEq, Eq, Debug, Copy, Clone)]
+    // #[component(enum)]
+    // enum ManyMore {}
 
     Ok(())
 }
