@@ -557,18 +557,10 @@ impl Expander for LowerExpander {
                 #lower
             }));
 
-            let write_bytes = match discriminant_size {
-                DiscriminantSize::Size1 => quote!(memory.get::<1>(offset)[0] = #index_quoted),
-                DiscriminantSize::Size2 => {
-                    quote!(*memory.get::<2>(offset) = #index_quoted.to_le_bytes())
-                }
-                DiscriminantSize::Size4 => {
-                    quote!(*memory.get::<4>(offset) = #index_quoted.to_le_bytes())
-                }
-            };
+            let discriminant_size = u32::from(discriminant_size) as usize;
 
             stores.extend(quote!(#pattern => {
-                #write_bytes;
+                *memory.get::<#discriminant_size>(offset) = #index_quoted.to_le_bytes();
                 #store
             }));
         }
