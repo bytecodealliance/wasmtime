@@ -790,6 +790,16 @@ impl Ieee32 {
     pub fn copysign(self, sign: Self) -> Self {
         Self::with_float(self.as_f32().copysign(sign.as_f32()))
     }
+
+    /// Returns true if self has a negative sign, including -0.0, NaNs with negative sign bit and negative infinity.
+    pub fn is_negative(&self) -> bool {
+        self.as_f32().is_sign_negative()
+    }
+
+    /// Returns true if self is positive or negative zero
+    pub fn is_zero(&self) -> bool {
+        self.as_f32() == 0.0
+    }
 }
 
 impl PartialOrd for Ieee32 {
@@ -908,6 +918,16 @@ impl Ieee64 {
     /// Returns a number composed of the magnitude of self and the sign of sign.
     pub fn copysign(self, sign: Self) -> Self {
         Self::with_float(self.as_f64().copysign(sign.as_f64()))
+    }
+
+    /// Returns true if self has a negative sign, including -0.0, NaNs with negative sign bit and negative infinity.
+    pub fn is_negative(&self) -> bool {
+        self.as_f64().is_sign_negative()
+    }
+
+    /// Returns true if self is positive or negative zero
+    pub fn is_zero(&self) -> bool {
+        self.as_f64() == 0.0
     }
 }
 
