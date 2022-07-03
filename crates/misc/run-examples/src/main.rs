@@ -22,7 +22,7 @@ fn main() -> anyhow::Result<()> {
         .current_dir("crates/c-api"))?;
 
     for (example, is_dir) in examples {
-        if example == "README" {
+        if example == "README" || example == "CMakeLists" {
             continue;
         }
         if let Some(example_to_run) = &example_to_run {
