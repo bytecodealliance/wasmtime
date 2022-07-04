@@ -86,6 +86,11 @@ pub trait State<'a, V> {
 
     /// Checks if an address is valid and within a known region of memory
     fn validate_address(&self, address: &Address) -> Result<(), MemoryError>;
+
+    /// Retrieves the current pinned reg value
+    fn get_pinned_reg(&self) -> V;
+    /// Sets a value for the pinned reg
+    fn set_pinned_reg(&mut self, v: V);
 }
 
 #[derive(Error, Debug)]
@@ -185,6 +190,14 @@ where
     }
 
     fn validate_address(&self, _addr: &Address) -> Result<(), MemoryError> {
+        unimplemented!()
+    }
+
+    fn get_pinned_reg(&self) -> V {
+        unimplemented!()
+    }
+
+    fn set_pinned_reg(&mut self, _v: V) {
         unimplemented!()
     }
 }
