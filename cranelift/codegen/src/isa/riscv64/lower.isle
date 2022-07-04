@@ -98,8 +98,6 @@
 ;; `i64` and smaller.
 (rule (lower (has_type (fits_in_64 ty) (ineg x)))
   (alu_rrr (AluOPRRR.Sub) (zero_reg) x))
-(rule (lower (has_type (fits_in_32 ty) (ineg x)))
-  (alu_rrr (AluOPRRR.Subw) (zero_reg) x))
 
 
 ;;;; Rules for `imul` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -170,6 +168,11 @@
 (rule (lower (has_type $I128 (band x y)))
   (lower_b128_binary (AluOPRRR.And) x y))
 
+(rule (lower (has_type $F32 (band x y)))
+  (lower_float_binary (AluOPRRR.And) x y $F32))
+(rule (lower (has_type $F64 (band x y)))
+  (lower_float_binary (AluOPRRR.And) x y $F64))
+
 
 ;;;; Rules for `or` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 ty) (bor x y)))
@@ -185,6 +188,11 @@
   (lower_b128_binary (AluOPRRR.Or) x y))
 (rule (lower (has_type $I128 (bor x y)))
   (lower_b128_binary (AluOPRRR.Or) x y))
+(rule (lower (has_type $F32 (bor x y)))
+  (lower_float_binary (AluOPRRR.Or) x y $F32))
+(rule (lower (has_type $F64 (bor x y)))
+  (lower_float_binary (AluOPRRR.Or) x y $F64))
+
 
 ;;;; Rules for `xor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 ty) (bxor x y)))
@@ -200,34 +208,18 @@
   (lower_b128_binary (AluOPRRR.Xor) x y))
 (rule (lower (has_type $I128 (bxor x y)))
   (lower_b128_binary (AluOPRRR.Xor) x y))
+(rule (lower (has_type $F32 (bxor x y)))
+  (lower_float_binary (AluOPRRR.Xor) x y $F32))
+(rule (lower (has_type $F64 (bxor x y)))
+  (lower_float_binary (AluOPRRR.Xor) x y $F64))
 
 
-;;;; Rules for `xor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule (lower (has_type (fits_in_64 ty) (bor_not x y)))
-  (alu_rrr (AluOPRRR.Orn) x y))
-(rule (lower (has_type $B128 (bor_not x y)))
-  (lower_b128_binary (AluOPRRR.Orn) x y))
-(rule (lower (has_type $I128 (bor_not x y)))
-  (lower_b128_binary (AluOPRRR.Orn) x y))
 
 
 ;;;; Rules for `f32const` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
 ;;;; Rules for `bnot` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule 
-  (lower (has_type ty (bnot x)))
-  (let 
-    (     ;; move to x register.
-      (tmp Reg (move_f_to_x x ty))
-      ;; inverse all bits.
-      (tmp2 Reg (con_bit_not tmp))
-      ;; move back to float register.
-      (result Reg (move_x_to_f tmp2 ty))
-    )
-    result
-  )
-)
 (rule (lower (has_type fits_in_64 (bnot x)))
   (alu_rr_imm12 (AluOPRRI.Xori) x (imm_from_neg_bits -1)))
 
@@ -235,7 +227,14 @@
   (bnot_128 x))
 (rule (lower (has_type $B128 (bnot x)))
   (bnot_128 x))
-
+(rule 
+  (lower (has_type $F32 (bnot x)))
+  (lower_float_bnot x $F32)
+)
+(rule 
+  (lower (has_type $F64 (bnot x)))
+  (lower_float_bnot x $F64)
+)
 
 ;;;; Rules for `bit_reverse` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type ty (bitrev x)))
@@ -269,21 +268,24 @@
 (rule (lower (has_type out (sextend x @ (value_type in))))
   (lower_extend x $true (ty_bits in) (ty_bits out)))
 
-
 ;;;; Rules for `band_not` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 ty) (band_not x y)))
   (alu_rrr (AluOPRRR.Andn) x y))
-
 (rule (lower (has_type  $I128 (band_not x y)))
-  (lower_band_not_i128 x y))
+  (lower_b128_binary (AluOPRRR.Andn) x y))
+(rule (lower (has_type $F32 (band_not x y)))
+  (lower_float_binary (AluOPRRR.Andn) x y $F32))
+(rule (lower (has_type $F64 (band_not x y)))
+  (lower_float_binary (AluOPRRR.Andn) x y $F64))
+
 
 ;;;; Rules for `popcnt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_16 ty) (popcnt x)))
-  (alu_rr_imm12 (AluOPRRI.Cpopw) (narrow_int ty x) (imm12_const 0)))
+  (alu_rr_funct12 (AluOPRRI.Cpopw) (narrow_int ty x)))
 (rule (lower (has_type $I32 (popcnt x)))
-  (alu_rr_imm12 (AluOPRRI.Cpopw) x (imm12_const 0)))
+  (alu_rr_funct12 (AluOPRRI.Cpopw) x))
 (rule (lower (has_type $I64 (popcnt x)))
-  (alu_rr_imm12 (AluOPRRI.Cpop) x (imm12_const 0)))
+  (alu_rr_funct12 (AluOPRRI.Cpop) x))
 (rule (lower (has_type $I128 (popcnt x)))
   (lower_popcnt_i128 x))
 
@@ -343,27 +345,17 @@
 
 
 ;;;; Rules for `bxor_not` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; notice x y order!!!
 (rule (lower (has_type (fits_in_64 ty)(bxor_not x y)))
-  (alu_rrr  (AluOPRRR.Xnor) y x))  ;; notice x y order!!!
-
+  (alu_rrr  (AluOPRRR.Xnor) y x))
 (rule (lower (has_type  $I128 (bxor_not x y)))
-  (lower_b128_binary (AluOPRRR.Xnor) y x));; notice x y order!!!
+  (lower_b128_binary (AluOPRRR.Xnor) y x))
+(rule (lower (has_type $F32 (bxor_not x y)))
+  (lower_float_binary (AluOPRRR.Xnor) y x $F32))
+(rule (lower (has_type $F64 (bxor_not x y)))
+  (lower_float_binary (AluOPRRR.Xnor) y x $F64))
 
-(rule (lower (has_type  ty (bxor_not x y)))
-  (let
-    (
-      ;;; move x.
-      (tmp_x Reg (move_f_to_x x ty))
-      ;;; move y.
-      (tmp_y Reg (move_f_to_x y ty))
-      ;;; xnor.
-      (result_x Reg (alu_rrr (AluOPRRR.Xnor) tmp_y tmp_x))
-      ;;; move to f register.
-      (result Reg(move_x_to_f result_x ty))
-    )
-    result
-  )
-)
+
 
 ;;;; Rules for `bor_not` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 ty)(bor_not x y)))
@@ -371,6 +363,10 @@
 
 (rule (lower (has_type  $I128 (bor_not x y)))
   (lower_b128_binary (AluOPRRR.Orn) x y)) 
+(rule (lower (has_type $F32 (bor_not x y)))
+  (lower_float_binary (AluOPRRR.Orn) x y $F32))
+(rule (lower (has_type $F64 (bor_not x y)))
+  (lower_float_binary (AluOPRRR.Orn) x y $F64))
 
 
 ;;;; Rules for `cls` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -409,7 +405,6 @@
 (rule (lower (has_type $F64 (fma  x y z )))
   (fpu_rrrr (FpuOPRRRR.FmaddD) $F64 x y z))
 
-;;;; special instruction provides by isa can used to speed up computation.;;;;;;
 ;;;; Rules for `FmaddS` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type $F32 (fadd (fmul x y) z )))
   (fpu_rrrr (FpuOPRRRR.FmaddS) $F64 x y z))
@@ -423,7 +418,6 @@
 
 (rule (lower (has_type $F64 (fadd x (fmul y z) )))
   (fpu_rrrr (FpuOPRRRR.FmaddD) $F64 y z x))
-
 
 ;;;; Rules for `sqrt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type $F32 (sqrt x)))
@@ -483,22 +477,19 @@
   (lower (has_type (valid_atomic_transaction ty) (atomic_load flags p)))
   (let 
     (
-  (dst WritableReg (temp_writable_reg ty))
-  (_ Unit(emit (MInst.Atomic (atomic_load_op ty) dst p (zero_reg) (atomic_amo))))
+      (dst WritableReg (temp_writable_reg ty))
+      (_ Unit(emit (MInst.Atomic (atomic_load_op ty) dst p (zero_reg) (atomic_amo))))
     )
     (writable_reg_to_reg dst)
   )
 )
+
 ;;;;;  Rules for `atomic store`;;;;;;;;;;;;;;;;;
 (rule 
-  (lower (has_type (valid_atomic_transaction ty) (atomic_store flags src p)))
-  (let 
-    (
-  (dst WritableReg (temp_writable_reg ty))
-  (_ Unit(emit (MInst.Atomic (atomic_store_op ty) dst p src (atomic_amo))))
-    )
-    (writable_reg_to_reg dst)
-  )
+  (lower (atomic_store flags (type_and_value (valid_atomic_transaction ty) src) p))
+  (side_effect (SideEffectNoResult.Inst
+    (MInst.Atomic (atomic_store_op ty) (writable_zero_reg) p src (atomic_amo) )
+  ))
 )
 
 ;;;;;  Rules for `atomic cas`;;;;;;;;;;;;;;;;;
@@ -506,9 +497,9 @@
   (lower (has_type (valid_atomic_transaction ty) (atomic_cas flags p e x)))
   (let
     (
-  (t0 WritableReg (temp_writable_reg ty))
-  (dst WritableReg (temp_writable_reg ty))
-  (_ Unit(emit (MInst.AtomicCas t0 dst e p x ty)))
+      (t0 WritableReg (temp_writable_reg ty))
+      (dst WritableReg (temp_writable_reg ty))
+      (_ Unit(emit (MInst.AtomicCas t0 dst e p x ty)))
     )
     (writable_reg_to_reg dst)
   )
@@ -576,8 +567,6 @@
   (gen_stack_addr ss offset)
 )
 
-
-
 ;;;;;  Rules for `is_null`;;;;;;;;;
 (rule
   (lower (is_null v))
@@ -618,14 +607,13 @@
   )
 )
 
-
 ;;;;;  Rules for `isplit`;;;;;;;;;
 (rule 
   (lower (isplit x))
   (let
     (
-  (t1 Reg (gen_move (value_regs_get x 0) $I64))
-  (t2 Reg (gen_move (value_regs_get x 1) $I64))
+      (t1 Reg (gen_move (value_regs_get x 0) $I64))
+      (t2 Reg (gen_move (value_regs_get x 1) $I64))
     )
     (value_regs t1 t2)
   )
@@ -635,8 +623,8 @@
   (lower (has_type $I128 (iconcat x y)))
   (let
     (
-  (t1 Reg (gen_move x $I64))
-  (t2 Reg (gen_move y $I64))
+      (t1 Reg (gen_move x $I64))
+      (t2 Reg (gen_move y $I64))
     )
     (value_regs t1 t2)
   )
@@ -780,13 +768,13 @@
       (result WritableReg (temp_writable_reg $I64))
       (_ Unit (emit (MInst.Icmp cc result x y ty)))
     )
-    (writable_reg_to_reg result)
+    result
   )
 )
 
 ;;;;;  Rules for `icmp`;;;;;;;;;
 (rule
-  (lower (has_type ty (icmp cc (type_and_value ty x) y)))
+  (lower (icmp cc (type_and_value ty x) y))
   (con_icmp cc x y ty)
 )
 

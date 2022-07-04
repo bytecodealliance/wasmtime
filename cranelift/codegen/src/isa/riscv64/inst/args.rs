@@ -1354,13 +1354,13 @@ impl AtomicOP {
             _ => false,
         }
     }
-    // #[inline(always)]
-    // pub(crate) fn is_store(self) -> bool {
-    //     match self {
-    //         Self::ScW | Self::ScD => true,
-    //         _ => false,
-    //     }
-    // }
+    #[inline(always)]
+    pub(crate) fn is_store(self) -> bool {
+        match self {
+            Self::ScW | Self::ScD => true,
+            _ => false,
+        }
+    }
     pub(crate) fn op_name(self, amo: AMO) -> String {
         let s = match self {
             Self::LrW => "lr.w",

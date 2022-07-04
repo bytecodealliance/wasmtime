@@ -205,25 +205,28 @@
       (x ValueRegs)
       (y ValueRegs)
       (ty Type))
-      
+    ;; risc-v csr operations.
     (Csr
       (csr_op CsrOP)
       (rd WritableReg)
       (rs OptionReg)
       (imm OptionUimm5)
       (csr CsrAddress))
+    ;; an integer compare.
     (Icmp
       (cc IntCC)
       (rd WritableReg)
       (a ValueRegs) 
       (b ValueRegs)
       (ty Type))
+    ;; select a reg base on condition.
+    ;; very useful because in lowering stage we can not have condition branch.
     (SelectReg
       (rd WritableReg)
       (rs1 Reg)
       (rs2 Reg)
       (condition IntegerCompare))
-    
+    ;; 
     (FcvtToIntSat
       (rd WritableReg)
       (rs Reg)
@@ -288,7 +291,7 @@
   (AmomaxuD)
 ))
 
- 
+
 (type FpuOPRRRR(enum 
   ;; float32
   (FmaddS)
@@ -905,24 +908,9 @@
   (value_regs (con_extend r $false from_bits 64) (zero_reg))
 )
 
-;;extrat the sign bit of integer.
+;; extrat the sign bit of integer.
 (decl ext_sign_bit(Type Reg) Reg)
 (extern constructor ext_sign_bit ext_sign_bit)
-
-
-(decl lower_band_not_i128(ValueRegs ValueRegs)ValueRegs)
-(rule 
-  (lower_band_not_i128 a b)
-  (let
-    (
-      ;; low part.
-      (low Reg (alu_rrr (AluOPRRR.Andn) (value_regs_get a 0) (value_regs_get b 0)))
-      ;; high part.
-      (high Reg (alu_rrr (AluOPRRR.Andn) (value_regs_get a 1) (value_regs_get b 1)))
-    )
-    (value_regs low high)
-  )
-)
 
 (decl lower_b128_binary(AluOPRRR ValueRegs ValueRegs) ValueRegs)
 (rule 
@@ -1001,7 +989,8 @@
 )
 
 
-;;;;
+;;;; construct shift amount
+;;;; this will return shift amount and (ty_bits - "shift amount")
 (decl con_shamt(Type Reg) ValueRegs)
 (extern constructor con_shamt con_shamt)
 
@@ -1292,7 +1281,6 @@
 (decl offset32_add(Offset32 i64)Offset32)
 (extern constructor offset32_add offset32_add)
 
-
 ;; helper function to store to memory.
 (decl con_store(Reg Offset32 StoreOP MemFlags Reg)InstOutput)
 (rule 
@@ -1515,7 +1503,9 @@
 (extern constructor load_float_const load_float_const)
 
 ;; some float memory representation.
+;; +1.0 f32
 (extern const $F32_POS_1 u64)
+;; +1.0 f64
 (extern const $F64_POS_1 u64)
 
 (decl f_pos_1 (Type)u64)
@@ -1599,6 +1589,8 @@
   )
 )
 
+;;; clone WritableReg 
+;;; if not rust compiler will complain about use moved value.
 (decl vec_writable_clone(VecWritableReg)VecWritableReg)
 (extern constructor vec_writable_clone vec_writable_clone)
 
@@ -1753,5 +1745,39 @@
 (extern constructor gen_return gen_return)
 
 
+;;; some float binary operation 
+;;; 1. need move into x reister.
+;;; 2. do the operation.
+;;; 3. move back.
+(decl lower_float_binary(AluOPRRR Reg Reg Type)Reg)
+(rule
+  (lower_float_binary op rs1 rs2 ty)
+  (let
+    (
+      ;;;
+      (x_rs1 Reg (move_f_to_x rs1 ty))
+      (x_rs2 Reg (move_f_to_x rs2 ty))
+      ;;;
+      (tmp Reg (alu_rrr op x_rs1 x_rs2))
+      ;;; move back.
+    )
+    (move_x_to_f tmp ty)
+  )
+)
 
+;;;;
+(decl lower_float_bnot(Reg Type)Reg)
+(rule 
+  (lower_float_bnot x ty)
+  (let 
+    (
+      ;; move to x register.
+      (tmp Reg (move_f_to_x x ty))
+      ;; inverse all bits.
+      (tmp2 Reg (con_bit_not tmp))  
+    )
+    ;; move back to float register.
+    (move_x_to_f tmp2 ty)
+  )
+)
 

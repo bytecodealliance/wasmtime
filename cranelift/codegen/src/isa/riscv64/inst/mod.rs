@@ -1183,7 +1183,9 @@ impl Inst {
                 let src = format_reg(src, allocs);
                 let rd = format_reg(rd.to_reg(), allocs);
                 if op.is_load() {
-                    format!("{} {},({})", op_name, rd, addr,)
+                    format!("{} {},({})", op_name, rd, addr)
+                } else if op.is_store() {
+                    format!("{} {},({})", op_name, src, addr)
                 } else {
                     format!("{} {},{},({})", op_name, rd, src, addr)
                 }
