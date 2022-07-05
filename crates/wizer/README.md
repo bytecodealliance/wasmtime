@@ -66,7 +66,9 @@ which `wasm-opt` can remove.
 
 ## Install
 
-Install via `cargo`:
+Download the a pre-built release from the [releases](https://github.com/bytecodealliance/wizer/releases) page. Unarchive the binary and place it in your $PATH.
+
+Alternatively you can install via `cargo`:
 
 ```shell-session
 $ cargo install wizer --all-features
