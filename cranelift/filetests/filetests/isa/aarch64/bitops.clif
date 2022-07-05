@@ -317,8 +317,8 @@ block0:
 }
 
 ; block0:
-;   movz x2, #255
-;   sxtb w0, w2
+;   movz x1, #255
+;   sxtb w0, w1
 ;   ret
 
 function %bextend_b1() -> b32 {
@@ -329,8 +329,8 @@ block0:
 }
 
 ; block0:
-;   movz x2, #1
-;   sbfx w0, w2, #0, #1
+;   movz x1, #1
+;   sbfx w0, w1, #0, #1
 ;   ret
 
 function %bnot_i32(i32) -> i32 {

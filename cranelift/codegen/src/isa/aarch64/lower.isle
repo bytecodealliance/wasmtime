@@ -1124,6 +1124,46 @@
 (rule (lower (bint x))
       (and_imm $I32 x (u64_into_imm_logic $I32 1)))
 
+;;;; Rules for `bmask`/`bextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Bextend and Bmask both simply sign-extend. This works for:
+;; - Bextend, because booleans are stored as 0 / -1, so we
+;;   sign-extend the -1 to a -1 in the wider width.
+;; - Bmask, because the resulting integer mask value must be
+;;   all-ones (-1) if the argument is true.
+
+;; Use a common helper to type cast bools to either bool or integer types.
+(decl cast_bool (Type Type Value) InstOutput)
+(rule (lower (has_type out_ty (bextend x @ (value_type in_ty))))
+      (cast_bool in_ty out_ty x))
+(rule (lower (has_type out_ty (bmask x @ (value_type in_ty))))
+      (cast_bool in_ty out_ty x))
+
+
+;; If the target has the same or a smaller size than the source, it's a no-op.
+(rule (cast_bool $B8 $I8 x) x)
+(rule (cast_bool $B16 (fits_in_16 _out) x) x)
+(rule (cast_bool $B32 (fits_in_32 _out) x) x)
+(rule (cast_bool $B64 (fits_in_64 _out) x) x)
+
+;; Casting between 128 bits is a noop
+(rule (cast_bool (ty_int_bool_128 _in) (ty_int_bool_128 _out) x)
+    x)
+
+;; Converting from 128 bits to anything below we just ignore the top register
+(rule (cast_bool (ty_int_bool_128 _in) (fits_in_64 _out) x)
+    (value_regs_get x 0))
+
+;; Extend to 64 bits first, then this will be all 0s or all 1s and we can
+;; duplicate to both halves of 128 bits
+(rule (cast_bool in (ty_int_bool_128 _out) x)
+      (let ((tmp Reg (extend x $true (ty_bits in) 64)))
+        (value_regs tmp tmp)))
+
+;; Values that fit in a single register are sign extended normally
+(rule (cast_bool (fits_in_64 in) (fits_in_64 out) x)
+      (extend x $true (ty_bits in) (ty_bits out)))
+
 ;;;; Rules for `popcnt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; The implementation of `popcnt` for scalar types is done by moving the value

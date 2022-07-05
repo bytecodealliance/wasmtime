@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-component-macro"
-version = "0.39.0"
+version = "0.40.0"
 authors = ["The Wasmtime Project Developers"]
 description = "Macros for deriving component interface types from Rust types"
 license = "Apache-2.0 WITH LLVM-exception"

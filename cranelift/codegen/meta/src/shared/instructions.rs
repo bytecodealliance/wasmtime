@@ -3298,21 +3298,10 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let Bool = &TypeVar::new(
-        "Bool",
-        "A scalar or vector boolean type",
-        TypeSetBuilder::new()
-            .bools(Interval::All)
-            .simd_lanes(Interval::All)
-            .build(),
-    );
     let BoolTo = &TypeVar::new(
         "BoolTo",
-        "A larger boolean type with the same number of lanes",
-        TypeSetBuilder::new()
-            .bools(Interval::All)
-            .simd_lanes(Interval::All)
-            .build(),
+        "A larger boolean type",
+        TypeSetBuilder::new().bools(Interval::All).build(),
     );
     let x = &Operand::new("x", Bool);
     let a = &Operand::new("a", BoolTo);
@@ -3321,11 +3310,7 @@ pub(crate) fn define(
         Inst::new(
             "bextend",
             r#"
-        Convert `x` to a larger boolean type in the platform-defined way.
-
-        The result type must have the same number of vector lanes as the input,
-        and each lane must not have fewer bits that the input lanes. If the
-        input and output types are the same, this is a no-op.
+        Convert `x` to a larger boolean type
         "#,
             &formats.unary,
         )
@@ -3355,6 +3340,14 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
+    let Bool = &TypeVar::new(
+        "Bool",
+        "A scalar or vector boolean type",
+        TypeSetBuilder::new()
+            .bools(Interval::All)
+            .simd_lanes(Interval::All)
+            .build(),
+    );
     let IntTo = &TypeVar::new(
         "IntTo",
         "An integer type with the same number of lanes",

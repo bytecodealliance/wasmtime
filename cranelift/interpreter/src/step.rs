@@ -678,7 +678,7 @@ where
         Opcode::Fsub => binary(Value::sub, arg(0)?, arg(1)?)?,
         Opcode::Fmul => binary(Value::mul, arg(0)?, arg(1)?)?,
         Opcode::Fdiv => binary(Value::div, arg(0)?, arg(1)?)?,
-        Opcode::Sqrt => unimplemented!("Sqrt"),
+        Opcode::Sqrt => assign(Value::sqrt(arg(0)?)?),
         Opcode::Fma => unimplemented!("Fma"),
         Opcode::Fneg => binary(Value::sub, Value::float(0, ctrl_ty)?, arg(0)?)?,
         Opcode::Fabs => unimplemented!("Fabs"),

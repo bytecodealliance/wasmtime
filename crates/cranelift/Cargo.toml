@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-cranelift"
-version = "0.39.0"
+version = "0.40.0"
 authors = ["The Wasmtime Project Developers"]
 description = "Integration between Cranelift and Wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"
@@ -13,12 +13,12 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0"
 log = "0.4"
-wasmtime-environ = { path = "../environ", version = "=0.39.0" }
-cranelift-wasm = { path = "../../cranelift/wasm", version = "0.86.0" }
-cranelift-codegen = { path = "../../cranelift/codegen", version = "0.86.0" }
-cranelift-frontend = { path = "../../cranelift/frontend", version = "0.86.0" }
-cranelift-entity = { path = "../../cranelift/entity", version = "0.86.0" }
-cranelift-native = { path = "../../cranelift/native", version = "0.86.0" }
+wasmtime-environ = { path = "../environ", version = "=0.40.0" }
+cranelift-wasm = { path = "../../cranelift/wasm", version = "0.87.0" }
+cranelift-codegen = { path = "../../cranelift/codegen", version = "0.87.0" }
+cranelift-frontend = { path = "../../cranelift/frontend", version = "0.87.0" }
+cranelift-entity = { path = "../../cranelift/entity", version = "0.87.0" }
+cranelift-native = { path = "../../cranelift/native", version = "0.87.0" }
 wasmparser = "0.86.0"
 target-lexicon = "0.12"
 gimli = { version = "0.26.0", default-features = false, features = ['read', 'std'] }
