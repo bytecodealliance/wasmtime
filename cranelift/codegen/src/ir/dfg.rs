@@ -60,7 +60,7 @@ pub struct DataFlowGraph {
     pub value_lists: ValueListPool,
 
     /// Primary value table with entries for all values.
-    values: PrimaryMap<Value, ValueData>,
+    values: PrimaryMap<Value, ValueDataPacked>,
 
     /// Function signature table. These signatures are referenced by indirect call instructions as
     /// well as the external function references.
@@ -166,12 +166,15 @@ impl DataFlowGraph {
 ///
 /// Find the original SSA value that `value` aliases, or None if an
 /// alias cycle is detected.
-fn maybe_resolve_aliases(values: &PrimaryMap<Value, ValueData>, value: Value) -> Option<Value> {
+fn maybe_resolve_aliases(
+    values: &PrimaryMap<Value, ValueDataPacked>,
+    value: Value,
+) -> Option<Value> {
     let mut v = value;
 
     // Note that values may be empty here.
     for _ in 0..=values.len() {
-        if let ValueData::Alias { original, .. } = values[v] {
+        if let ValueData::Alias { original, .. } = ValueData::from(values[v]) {
             v = original;
         } else {
             return Some(v);
@@ -184,7 +187,7 @@ fn maybe_resolve_aliases(values: &PrimaryMap<Value, ValueData>, value: Value) ->
 /// Resolve value aliases.
 ///
 /// Find the original SSA value that `value` aliases.
-fn resolve_aliases(values: &PrimaryMap<Value, ValueData>, value: Value) -> Value {
+fn resolve_aliases(values: &PrimaryMap<Value, ValueDataPacked>, value: Value) -> Value {
     if let Some(v) = maybe_resolve_aliases(values, value) {
         v
     } else {
@@ -194,15 +197,16 @@ fn resolve_aliases(values: &PrimaryMap<Value, ValueData>, value: Value) -> Value
 
 /// Iterator over all Values in a DFG
 pub struct Values<'a> {
-    inner: entity::Iter<'a, Value, ValueData>,
+    inner: entity::Iter<'a, Value, ValueDataPacked>,
 }
 
 /// Check for non-values
-fn valid_valuedata(data: &ValueData) -> bool {
+fn valid_valuedata(data: ValueDataPacked) -> bool {
+    let data = ValueData::from(data);
     if let ValueData::Alias {
         ty: types::INVALID,
         original,
-    } = *data
+    } = ValueData::from(data)
     {
         if original == Value::reserved_value() {
             return false;
@@ -217,7 +221,7 @@ impl<'a> Iterator for Values<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         self.inner
             .by_ref()
-            .find(|kv| valid_valuedata(kv.1))
+            .find(|kv| valid_valuedata(*kv.1))
             .map(|kv| kv.0)
     }
 }
@@ -228,7 +232,7 @@ impl<'a> Iterator for Values<'a> {
 impl DataFlowGraph {
     /// Allocate an extended value entry.
     fn make_value(&mut self, data: ValueData) -> Value {
-        self.values.push(data)
+        self.values.push(data.into())
     }
 
     /// Get an iterator over all values.
@@ -245,7 +249,7 @@ impl DataFlowGraph {
 
     /// Get the type of a value.
     pub fn value_type(&self, v: Value) -> Type {
-        self.values[v].ty()
+        ValueData::from(self.values[v]).ty()
     }
 
     /// Get the definition of a value.
@@ -253,7 +257,7 @@ impl DataFlowGraph {
     /// This is either the instruction that defined it or the Block that has the value as an
     /// parameter.
     pub fn value_def(&self, v: Value) -> ValueDef {
-        match self.values[v] {
+        match ValueData::from(self.values[v]) {
             ValueData::Inst { inst, num, .. } => ValueDef::Result(inst, num as usize),
             ValueData::Param { block, num, .. } => ValueDef::Param(block, num as usize),
             ValueData::Alias { original, .. } => {
@@ -272,7 +276,7 @@ impl DataFlowGraph {
     /// determine if the original aliased value is attached.
     pub fn value_is_attached(&self, v: Value) -> bool {
         use self::ValueData::*;
-        match self.values[v] {
+        match ValueData::from(self.values[v]) {
             Inst { inst, num, .. } => Some(&v) == self.inst_results(inst).get(num as usize),
             Param { block, num, .. } => Some(&v) == self.block_params(block).get(num as usize),
             Alias { .. } => false,
@@ -327,7 +331,7 @@ impl DataFlowGraph {
         );
         debug_assert_ne!(ty, types::INVALID);
 
-        self.values[dest] = ValueData::Alias { ty, original };
+        self.values[dest] = ValueData::Alias { ty, original }.into();
     }
 
     /// Replace the results of one instruction with aliases to the results of another.
@@ -371,7 +375,7 @@ impl DataFlowGraph {
             );
             debug_assert_ne!(ty, types::INVALID);
 
-            self.values[dest] = ValueData::Alias { ty, original };
+            self.values[dest] = ValueData::Alias { ty, original }.into();
         }
 
         self.clear_results(dest_inst);
@@ -447,6 +451,93 @@ impl ValueData {
             ValueData::Inst { ty, .. }
             | ValueData::Param { ty, .. }
             | ValueData::Alias { ty, .. } => ty,
+        }
+    }
+}
+
+/// Bit-packed version of ValueData, for efficiency.
+///
+/// Layout:
+///
+/// ```plain
+///        | tag:2 |  type:14        |    num:16       | index:32          |
+/// ```
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+struct ValueDataPacked(u64);
+
+impl ValueDataPacked {
+    const INDEX_SHIFT: u64 = 0;
+    const INDEX_BITS: u64 = 32;
+    const NUM_SHIFT: u64 = Self::INDEX_SHIFT + Self::INDEX_BITS;
+    const NUM_BITS: u64 = 16;
+    const TYPE_SHIFT: u64 = Self::NUM_SHIFT + Self::NUM_BITS;
+    const TYPE_BITS: u64 = 14;
+    const TAG_SHIFT: u64 = Self::TYPE_SHIFT + Self::TYPE_BITS;
+    const TAG_BITS: u64 = 2;
+
+    const TAG_INST: u64 = 1;
+    const TAG_PARAM: u64 = 2;
+    const TAG_ALIAS: u64 = 3;
+
+    fn make(tag: u64, ty: Type, num: u16, index: u32) -> ValueDataPacked {
+        debug_assert!(tag < (1 << Self::TAG_BITS));
+        debug_assert!(ty.repr() < (1 << Self::TYPE_BITS));
+
+        ValueDataPacked(
+            (tag << Self::TAG_SHIFT)
+                | ((ty.repr() as u64) << Self::TYPE_SHIFT)
+                | ((num as u64) << Self::NUM_SHIFT)
+                | ((index as u64) << Self::INDEX_SHIFT),
+        )
+    }
+
+    #[inline(always)]
+    fn field(self, shift: u64, bits: u64) -> u64 {
+        (self.0 >> shift) & ((1 << bits) - 1)
+    }
+}
+
+impl From<ValueData> for ValueDataPacked {
+    fn from(data: ValueData) -> Self {
+        match data {
+            ValueData::Inst { ty, num, inst } => {
+                Self::make(Self::TAG_INST, ty, num, inst.as_bits())
+            }
+            ValueData::Param { ty, num, block } => {
+                Self::make(Self::TAG_PARAM, ty, num, block.as_bits())
+            }
+            ValueData::Alias { ty, original } => {
+                Self::make(Self::TAG_ALIAS, ty, 0, original.as_bits())
+            }
+        }
+    }
+}
+
+impl From<ValueDataPacked> for ValueData {
+    fn from(data: ValueDataPacked) -> Self {
+        let tag = data.field(ValueDataPacked::TAG_SHIFT, ValueDataPacked::TAG_BITS);
+        let ty = data.field(ValueDataPacked::TYPE_SHIFT, ValueDataPacked::TYPE_BITS) as u16;
+        let num = data.field(ValueDataPacked::NUM_SHIFT, ValueDataPacked::NUM_BITS) as u16;
+        let index = data.field(ValueDataPacked::INDEX_SHIFT, ValueDataPacked::INDEX_BITS) as u32;
+
+        let ty = Type::from_repr(ty);
+        match tag {
+            ValueDataPacked::TAG_INST => ValueData::Inst {
+                ty,
+                num,
+                inst: Inst::from_bits(index),
+            },
+            ValueDataPacked::TAG_PARAM => ValueData::Param {
+                ty,
+                num,
+                block: Block::from_bits(index),
+            },
+            ValueDataPacked::TAG_ALIAS => ValueData::Alias {
+                ty,
+                original: Value::from_bits(index),
+            },
+            _ => panic!("Invalid tag {} in ValueDataPacked 0x{:x}", tag, data.0),
         }
     }
 }
@@ -620,7 +711,8 @@ impl DataFlowGraph {
             ty,
             num: num as u16,
             inst,
-        };
+        }
+        .into();
     }
 
     /// Replace an instruction result with a new value of type `new_type`.
@@ -631,7 +723,7 @@ impl DataFlowGraph {
     ///
     /// Returns the new value.
     pub fn replace_result(&mut self, old_value: Value, new_type: Type) -> Value {
-        let (num, inst) = match self.values[old_value] {
+        let (num, inst) = match ValueData::from(self.values[old_value]) {
             ValueData::Inst { num, inst, .. } => (num, inst),
             _ => panic!("{} is not an instruction result value", old_value),
         };
@@ -830,11 +922,12 @@ impl DataFlowGraph {
     ///
     /// Panics if `val` is not a block parameter.
     pub fn swap_remove_block_param(&mut self, val: Value) -> usize {
-        let (block, num) = if let ValueData::Param { num, block, .. } = self.values[val] {
-            (block, num)
-        } else {
-            panic!("{} must be a block parameter", val);
-        };
+        let (block, num) =
+            if let ValueData::Param { num, block, .. } = ValueData::from(self.values[val]) {
+                (block, num)
+            } else {
+                panic!("{} must be a block parameter", val);
+            };
         self.blocks[block]
             .params
             .swap_remove(num as usize, &mut self.value_lists);
@@ -843,12 +936,14 @@ impl DataFlowGraph {
             .get(num as usize, &self.value_lists)
         {
             // We update the position of the old last arg.
+            let mut last_arg_data = ValueData::from(self.values[last_arg_val]);
             if let ValueData::Param {
                 num: ref mut old_num,
                 ..
-            } = self.values[last_arg_val]
+            } = &mut last_arg_data
             {
                 *old_num = num;
+                self.values[last_arg_val] = last_arg_data.into();
             } else {
                 panic!("{} should be a Block parameter", last_arg_val);
             }
@@ -859,22 +954,25 @@ impl DataFlowGraph {
     /// Removes `val` from `block`'s parameters by a standard linear time list removal which
     /// preserves ordering. Also updates the values' data.
     pub fn remove_block_param(&mut self, val: Value) {
-        let (block, num) = if let ValueData::Param { num, block, .. } = self.values[val] {
-            (block, num)
-        } else {
-            panic!("{} must be a block parameter", val);
-        };
+        let (block, num) =
+            if let ValueData::Param { num, block, .. } = ValueData::from(self.values[val]) {
+                (block, num)
+            } else {
+                panic!("{} must be a block parameter", val);
+            };
         self.blocks[block]
             .params
             .remove(num as usize, &mut self.value_lists);
         for index in num..(self.num_block_params(block) as u16) {
-            match self.values[self.blocks[block]
+            let packed = &mut self.values[self.blocks[block]
                 .params
                 .get(index as usize, &self.value_lists)
-                .unwrap()]
-            {
+                .unwrap()];
+            let mut data = ValueData::from(*packed);
+            match &mut data {
                 ValueData::Param { ref mut num, .. } => {
                     *num -= 1;
+                    *packed = data.into();
                 }
                 _ => panic!(
                     "{} must be a block parameter",
@@ -901,7 +999,8 @@ impl DataFlowGraph {
             ty,
             num: num as u16,
             block,
-        };
+        }
+        .into();
     }
 
     /// Replace a block parameter with a new value of type `ty`.
@@ -915,11 +1014,12 @@ impl DataFlowGraph {
     /// Returns the new value.
     pub fn replace_block_param(&mut self, old_value: Value, new_type: Type) -> Value {
         // Create new value identical to the old one except for the type.
-        let (block, num) = if let ValueData::Param { num, block, .. } = self.values[old_value] {
-            (block, num)
-        } else {
-            panic!("{} must be a block parameter", old_value);
-        };
+        let (block, num) =
+            if let ValueData::Param { num, block, .. } = ValueData::from(self.values[old_value]) {
+                (block, num)
+            } else {
+                panic!("{} must be a block parameter", old_value);
+            };
         let new_arg = self.make_value(ValueData::Param {
             ty: new_type,
             num,
@@ -999,11 +1099,13 @@ impl DataFlowGraph {
             types::INVALID,
             "this function is only for assigning types to previously invalid values"
         );
-        match self.values[v] {
+        let mut data = ValueData::from(self.values[v]);
+        match &mut data {
             ValueData::Inst { ref mut ty, .. }
             | ValueData::Param { ref mut ty, .. }
             | ValueData::Alias { ref mut ty, .. } => *ty = t,
         }
+        self.values[v] = data.into();
     }
 
     /// Create result values for `inst`, reusing the provided detached values.
@@ -1052,7 +1154,8 @@ impl DataFlowGraph {
             ty,
             num: num as u16,
             block,
-        };
+        }
+        .into();
     }
 
     /// Create a new value alias. This is only for use by the parser to create
@@ -1070,7 +1173,7 @@ impl DataFlowGraph {
             types::INVALID
         };
         let data = ValueData::Alias { ty, original: src };
-        self.values[dest] = data;
+        self.values[dest] = data.into();
     }
 
     /// If `v` is already defined as an alias, return its destination value.
@@ -1078,7 +1181,7 @@ impl DataFlowGraph {
     /// alias definitions, and the printer to identify an alias's immediate target.
     #[cold]
     pub fn value_alias_dest_for_serialization(&self, v: Value) -> Option<Value> {
-        if let ValueData::Alias { original, .. } = self.values[v] {
+        if let ValueData::Alias { original, .. } = ValueData::from(self.values[v]) {
             Some(original)
         } else {
             None
@@ -1121,7 +1224,7 @@ impl DataFlowGraph {
         if !self.value_is_valid(v) {
             return false;
         }
-        if let ValueData::Alias { ty, .. } = self.values[v] {
+        if let ValueData::Alias { ty, .. } = ValueData::from(self.values[v]) {
             ty != types::INVALID
         } else {
             true

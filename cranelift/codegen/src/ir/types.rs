@@ -22,9 +22,12 @@ use target_lexicon::{PointerWidth, Triple};
 ///
 /// SIMD vector types have power-of-two lanes, up to 256. Lanes can be any int/float/bool type.
 ///
+/// Note that this is encoded in a `u16` currently for extensibility,
+/// but allows only 14 bits to be used due to some bitpacking tricks
+/// in the CLIF data structures.
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
-pub struct Type(u8);
+pub struct Type(u16);
 
 /// Not a valid type. Can't be loaded or stored. Can't be part of a SIMD vector.
 pub const INVALID: Type = Type(0);
@@ -318,7 +321,7 @@ impl Type {
         let log2_lanes: u32 = n.trailing_zeros();
         let new_type = u32::from(self.0) + (log2_lanes << 4);
         if new_type < 0x100 {
-            Some(Self(new_type as u8))
+            Some(Self(new_type as u16))
         } else {
             None
         }
@@ -390,6 +393,18 @@ impl Type {
         } else {
             self
         }
+    }
+
+    /// Gets a bit-level representation of the type. Used only
+    /// internally for efficiently storing types.
+    pub(crate) fn repr(self) -> u16 {
+        self.0
+    }
+
+    /// Converts from a bit-level representation of the type back to a
+    /// `Type`.
+    pub(crate) fn from_repr(bits: u16) -> Type {
+        Type(bits)
     }
 }
 
