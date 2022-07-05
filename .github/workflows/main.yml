@@ -310,7 +310,7 @@ jobs:
           submodules: true
       - uses: ./.github/actions/install-rust
       - run: rustup target add wasm32-wasi
-      - uses: ./.github/actions/install-openvino
+      - uses: abrown/install-openvino-action@v3
       - run: ./ci/run-wasi-nn-example.sh
         env:
           RUST_BACKTRACE: 1
