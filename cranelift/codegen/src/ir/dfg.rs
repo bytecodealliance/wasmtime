@@ -501,12 +501,14 @@ impl ValueDataPacked {
 impl From<ValueData> for ValueDataPacked {
     fn from(data: ValueData) -> Self {
         match data {
-            ValueData::Inst { ty, num, inst } => Self::make(Self::TAG_INST, ty, num, inst.as_u32()),
+            ValueData::Inst { ty, num, inst } => {
+                Self::make(Self::TAG_INST, ty, num, inst.as_bits())
+            }
             ValueData::Param { ty, num, block } => {
-                Self::make(Self::TAG_PARAM, ty, num, block.as_u32())
+                Self::make(Self::TAG_PARAM, ty, num, block.as_bits())
             }
             ValueData::Alias { ty, original } => {
-                Self::make(Self::TAG_ALIAS, ty, 0, original.as_u32())
+                Self::make(Self::TAG_ALIAS, ty, 0, original.as_bits())
             }
         }
     }
@@ -524,16 +526,16 @@ impl From<ValueDataPacked> for ValueData {
             ValueDataPacked::TAG_INST => ValueData::Inst {
                 ty,
                 num,
-                inst: Inst::from_u32(index),
+                inst: Inst::from_bits(index),
             },
             ValueDataPacked::TAG_PARAM => ValueData::Param {
                 ty,
                 num,
-                block: Block::from_u32(index),
+                block: Block::from_bits(index),
             },
             ValueDataPacked::TAG_ALIAS => ValueData::Alias {
                 ty,
-                original: Value::from_u32(index),
+                original: Value::from_bits(index),
             },
             _ => panic!("Invalid tag {} in ValueDataPacked 0x{:x}", tag, data.0),
         }
