@@ -1245,34 +1245,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             ctx.emit(Inst::gen_move(dst.regs()[1], src_hi, I64));
         }
 
-        Opcode::Imax | Opcode::Umax | Opcode::Umin | Opcode::Imin => {
-            let ty = ty.unwrap();
-
-            if !ty.is_vector() || ty.lane_bits() == 64 {
-                return Err(CodegenError::Unsupported(format!(
-                    "{}: Unsupported type: {:?}",
-                    op, ty
-                )));
-            }
-
-            let alu_op = match op {
-                Opcode::Umin => VecALUOp::Umin,
-                Opcode::Imin => VecALUOp::Smin,
-                Opcode::Umax => VecALUOp::Umax,
-                Opcode::Imax => VecALUOp::Smax,
-                _ => unreachable!(),
-            };
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-            let rm = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
-            ctx.emit(Inst::VecRRR {
-                alu_op,
-                rd,
-                rn,
-                rm,
-                size: VectorSize::from_ty(ty),
-            });
-        }
+        Opcode::Imax | Opcode::Umax | Opcode::Umin | Opcode::Imin => implemented_in_isle(ctx),
 
         Opcode::IaddPairwise => implemented_in_isle(ctx),
 

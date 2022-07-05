@@ -499,6 +499,20 @@
             (result Reg (msub $I64 div y64 x64)))
         result))
 
+;;; Rules for integer min/max: umin, imin, umax, imax ;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type ty @ (not_i64x2) (imin x y)))
+      (vec_rrr (VecALUOp.Smin) x y (vector_size ty)))
+
+(rule (lower (has_type ty @ (not_i64x2) (umin x y)))
+      (vec_rrr (VecALUOp.Umin) x y (vector_size ty)))
+
+(rule (lower (has_type ty @ (not_i64x2) (imax x y)))
+      (vec_rrr (VecALUOp.Smax) x y (vector_size ty)))
+
+(rule (lower (has_type ty @ (not_i64x2) (umax x y)))
+      (vec_rrr (VecALUOp.Umax) x y (vector_size ty)))
+
 ;;;; Rules for `uextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; General rule for extending input to an output which fits in a single

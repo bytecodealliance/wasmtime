@@ -925,6 +925,7 @@
 (rule (vector_size (multi_lane 8 16)) (VectorSize.Size8x16))
 (rule (vector_size (multi_lane 16 4)) (VectorSize.Size16x4))
 (rule (vector_size (multi_lane 16 8)) (VectorSize.Size16x8))
+(rule (vector_size (multi_lane 32 2)) (VectorSize.Size32x2))
 (rule (vector_size (multi_lane 32 4)) (VectorSize.Size32x4))
 (rule (vector_size (multi_lane 64 2)) (VectorSize.Size64x2))
 
