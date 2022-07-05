@@ -14,7 +14,7 @@ pub use self::func::{
     ComponentParams, ComponentType, Func, IntoComponentFunc, Lift, Lower, TypedFunc, WasmList,
     WasmStr,
 };
-pub use self::instance::{Instance, InstancePre};
+pub use self::instance::{ExportInstance, Exports, Instance, InstancePre};
 pub use self::linker::{Linker, LinkerInstance};
 pub use wasmtime_component_macro::{ComponentType, Lift, Lower};
 

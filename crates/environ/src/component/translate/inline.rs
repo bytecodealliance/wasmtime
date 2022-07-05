@@ -50,7 +50,7 @@ use crate::{ModuleTranslation, PrimaryMap, SignatureIndex};
 use indexmap::IndexMap;
 
 pub(super) fn run(
-    types: &mut ComponentTypesBuilder,
+    types: &ComponentTypesBuilder,
     result: &Translation<'_>,
     nested_modules: &PrimaryMap<StaticModuleIndex, ModuleTranslation<'_>>,
     nested_components: &PrimaryMap<StaticComponentIndex, Translation<'_>>,
@@ -82,23 +82,7 @@ pub(super) fn run(
         };
         let index = inliner.result.import_types.push((name.to_string(), ty));
         let path = ImportPath::root(index);
-        args.insert(
-            name,
-            match ty {
-                TypeDef::Module(ty) => ComponentItemDef::Module(ModuleDef::Import(path, ty)),
-                TypeDef::ComponentInstance(ty) => {
-                    ComponentItemDef::Instance(ComponentInstanceDef::Import(path, ty))
-                }
-                TypeDef::ComponentFunc(_ty) => {
-                    ComponentItemDef::Func(ComponentFuncDef::Import(path))
-                }
-                // FIXME(#4283) should commit one way or another to how this
-                // should be treated.
-                TypeDef::Component(_ty) => bail!("root-level component imports are not supported"),
-                TypeDef::Interface(_ty) => unimplemented!("import of a type"),
-                TypeDef::CoreFunc(_ty) => unreachable!(),
-            },
-        );
+        args.insert(name, ComponentItemDef::from_import(path, ty)?);
     }
 
     // This will run the inliner to completion after being seeded with the
@@ -116,58 +100,18 @@ pub(super) fn run(
     let exports = inliner.run(&mut frames)?;
     assert!(frames.is_empty());
 
+    let mut export_map = Default::default();
     for (name, def) in exports {
-        let export = match def {
-            // Exported modules are currently saved in a `PrimaryMap`, at
-            // runtime, so an index (`RuntimeModuleIndex`) is assigned here and
-            // then an initializer is recorded about where the module comes
-            // from.
-            ComponentItemDef::Module(module) => {
-                let index = RuntimeModuleIndex::from_u32(inliner.result.num_runtime_modules);
-                inliner.result.num_runtime_modules += 1;
-                let init = match module {
-                    ModuleDef::Static(idx) => GlobalInitializer::SaveStaticModule(idx),
-                    ModuleDef::Import(path, _) => {
-                        GlobalInitializer::SaveModuleImport(inliner.runtime_import(&path))
-                    }
-                };
-                inliner.result.initializers.push(init);
-                Export::Module(index)
-            }
-
-            // Currently only exported functions through liftings are supported
-            // which simply record the various lifting options here which get
-            // processed at runtime.
-            ComponentItemDef::Func(func) => match func {
-                ComponentFuncDef::Lifted { ty, func, options } => {
-                    Export::LiftedFunction { ty, func, options }
-                }
-                ComponentFuncDef::Import(_) => {
-                    bail!("component export `{name}` is a reexport of an imported function which is not implemented")
-                }
-            },
-
-            ComponentItemDef::Instance(_) => unimplemented!("exporting an instance to the host"),
-
-            // FIXME(#4283) should make an official decision on whether this is
-            // the final treatment of this or not.
-            ComponentItemDef::Component(_) => {
-                bail!("exporting a component from the root component is not supported")
-            }
-        };
-
-        inliner.result.exports.insert(name.to_string(), export);
+        inliner.record_export(name, def, &mut export_map)?;
     }
+    inliner.result.exports = export_map;
 
     Ok(inliner.result)
 }
 
 struct Inliner<'a> {
     /// Global type information for the entire component.
-    ///
-    /// Note that the mutability is used here to register a `SignatureIndex` for
-    /// the wasm function signature of lowered imports.
-    types: &'a mut ComponentTypesBuilder,
+    types: &'a ComponentTypesBuilder,
 
     /// The list of static modules that were found during initial translation of
     /// the component.
@@ -445,24 +389,7 @@ impl<'a> Inliner<'a> {
             //
             // NB: at this time only lowered imported functions are supported.
             Lower(func, options) => {
-                // Use the type information from `wasmparser` to lookup the core
-                // wasm function signature of the lowered function. This avoids
-                // us having to reimplement the
-                // translate-interface-types-to-the-canonical-abi logic. The
-                // type of the function is then intern'd to get a
-                // `SignatureIndex` which is later used at runtime for a
-                // `VMSharedSignatureIndex`.
-                let lowered_function_type = frame
-                    .translation
-                    .types
-                    .as_ref()
-                    .unwrap()
-                    .function_at(frame.funcs.next_key().as_u32())
-                    .expect("should be in-bounds");
-                let canonical_abi = self
-                    .types
-                    .module_types_builder()
-                    .wasm_func_type(lowered_function_type.clone().try_into()?);
+                let canonical_abi = frame.translation.funcs[frame.funcs.next_key()];
 
                 let options_lower = self.canonical_options(frame, options);
                 let func = match &frame.component_funcs[*func] {
@@ -937,6 +864,89 @@ impl<'a> Inliner<'a> {
             post_return,
         }
     }
+
+    fn record_export(
+        &mut self,
+        name: &str,
+        def: ComponentItemDef<'a>,
+        map: &mut IndexMap<String, Export>,
+    ) -> Result<()> {
+        let export = match def {
+            // Exported modules are currently saved in a `PrimaryMap`, at
+            // runtime, so an index (`RuntimeModuleIndex`) is assigned here and
+            // then an initializer is recorded about where the module comes
+            // from.
+            ComponentItemDef::Module(module) => {
+                let index = RuntimeModuleIndex::from_u32(self.result.num_runtime_modules);
+                self.result.num_runtime_modules += 1;
+                let init = match module {
+                    ModuleDef::Static(idx) => GlobalInitializer::SaveStaticModule(idx),
+                    ModuleDef::Import(path, _) => {
+                        GlobalInitializer::SaveModuleImport(self.runtime_import(&path))
+                    }
+                };
+                self.result.initializers.push(init);
+                Export::Module(index)
+            }
+
+            ComponentItemDef::Func(func) => match func {
+                // If this is a lifted function from something lowered in this
+                // component then the configured options are plumbed through
+                // here.
+                ComponentFuncDef::Lifted { ty, func, options } => {
+                    Export::LiftedFunction { ty, func, options }
+                }
+
+                // Currently reexported functions from an import are not
+                // supported. Being able to actually call these functions is
+                // somewhat tricky and needs something like temporary scratch
+                // space that isn't implemented.
+                ComponentFuncDef::Import(_) => {
+                    bail!("component export `{name}` is a reexport of an imported function which is not implemented")
+                }
+            },
+
+            ComponentItemDef::Instance(instance) => {
+                let mut result = IndexMap::new();
+                match instance {
+                    // If this instance is one that was originally imported by
+                    // the component itself then the imports are translated here
+                    // by converting to a `ComponentItemDef` and then
+                    // recursively recording the export as a reexport.
+                    //
+                    // Note that for now this would only work with
+                    // module-exporting instances.
+                    ComponentInstanceDef::Import(path, ty) => {
+                        for (name, ty) in self.types[ty].exports.iter() {
+                            let mut path = path.clone();
+                            path.path.push(name);
+                            let def = ComponentItemDef::from_import(path, *ty)?;
+                            self.record_export(name, def, &mut result)?;
+                        }
+                    }
+
+                    // An exported instance which is itself a bag of items is
+                    // translated recursively here to our `result` map which is
+                    // the bag of items we're exporting.
+                    ComponentInstanceDef::Items(map) => {
+                        for (name, def) in map {
+                            self.record_export(name, def, &mut result)?;
+                        }
+                    }
+                }
+                Export::Instance(result)
+            }
+
+            // FIXME(#4283) should make an official decision on whether this is
+            // the final treatment of this or not.
+            ComponentItemDef::Component(_) => {
+                bail!("exporting a component from the root component is not supported")
+            }
+        };
+
+        map.insert(name.to_string(), export);
+        Ok(())
+    }
 }
 
 impl<'a> InlinerFrame<'a> {
@@ -1002,5 +1012,23 @@ impl<'a> ImportPath<'a> {
             index,
             path: Vec::new(),
         }
+    }
+}
+
+impl<'a> ComponentItemDef<'a> {
+    fn from_import(path: ImportPath<'a>, ty: TypeDef) -> Result<ComponentItemDef<'a>> {
+        let item = match ty {
+            TypeDef::Module(ty) => ComponentItemDef::Module(ModuleDef::Import(path, ty)),
+            TypeDef::ComponentInstance(ty) => {
+                ComponentItemDef::Instance(ComponentInstanceDef::Import(path, ty))
+            }
+            TypeDef::ComponentFunc(_ty) => ComponentItemDef::Func(ComponentFuncDef::Import(path)),
+            // FIXME(#4283) should commit one way or another to how this
+            // should be treated.
+            TypeDef::Component(_ty) => bail!("root-level component imports are not supported"),
+            TypeDef::Interface(_ty) => unimplemented!("import of a type"),
+            TypeDef::CoreFunc(_ty) => unreachable!(),
+        };
+        Ok(item)
     }
 }
