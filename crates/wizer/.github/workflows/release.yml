@@ -1,0 +1,91 @@
+# This is nearly entirely copied from
+# https://github.com/fastly/Viceroy/blob/b37b89fc07ecd5845f1103380c5e4fae9cc13b30/.github/workflows/release.yml#L1
+# The changes made are to add the `--bin wizer` flag and change the filesystem paths to use wizer instead of viceroy
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        rust-toolchain: [stable]
+        os: [ubuntu-latest, macos-11, windows-latest]
+        arch: [amd64, arm64]
+        exclude:
+          - os: windows-latest
+            arch: arm64
+        include:
+          - os: ubuntu-latest
+            name: linux
+            rust_abi: unknown-linux-gnu
+          - os: macos-11
+            name: darwin
+            rust_abi: apple-darwin
+          - os: windows-latest
+            name: windows
+            rust_abi: pc-windows-msvc
+            extension: .exe
+          - arch: arm64
+            rust_arch: aarch64
+          - arch: amd64
+            rust_arch: x86_64
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          submodules: true
+
+      - name: Install latest Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: ${{ matrix.rust-toolchain }}
+          target: ${{ matrix.rust_arch }}-${{ matrix.rust_abi }}
+          default: true
+          override: true
+
+      - name: Install C cross-compilation toolchain
+        if: ${{ matrix.name == 'linux' && matrix.arch != 'amd64' }}
+        run: |
+          sudo apt-get update
+          sudo apt install -f -y gcc-${{ matrix.rust_arch }}-linux-gnu
+          echo CC=${{ matrix.rust_arch }}-linux-gnu-gcc >> $GITHUB_ENV
+          echo RUSTFLAGS='-C linker=${{ matrix.rust_arch }}-linux-gnu-gcc' >> $GITHUB_ENV
+
+      - name: Extract tag name
+        uses: olegtarasov/get-tag@v2.1
+        id: tagName
+
+      - name: Build
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --release --locked --bin wizer --target=${{ matrix.rust_arch }}-${{ matrix.rust_abi }} --all-features
+
+      - name: Strip symbols (linux)
+        if: ${{ matrix.name == 'linux' }}
+        run: |
+          ${{ matrix.rust_arch }}-linux-gnu-strip target/${{ matrix.rust_arch }}-${{ matrix.rust_abi }}/release/wizer${{ matrix.extension }}
+
+      - name: Strip symbols (non-linux)
+        if: ${{ matrix.name != 'linux' }}
+        run: |
+          strip target/${{ matrix.rust_arch }}-${{ matrix.rust_abi }}/release/wizer${{ matrix.extension }}
+
+      - name: Package
+        run: |
+          cd target/${{ matrix.rust_arch }}-${{ matrix.rust_abi }}/release
+          tar czf wizer_${{ steps.tagName.outputs.tag }}_${{ matrix.name }}-${{ matrix.arch }}.tar.gz wizer${{ matrix.extension }}
+
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            target/${{ matrix.rust_arch }}-${{ matrix.rust_abi }}/release/wizer_${{ steps.tagName.outputs.tag }}_${{ matrix.name }}-${{ matrix.arch }}.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
