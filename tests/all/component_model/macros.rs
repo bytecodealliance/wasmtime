@@ -1,6 +1,6 @@
 use super::TypedFuncExt;
 use anyhow::Result;
-use component_macro_test::add_variants;
+use component_macro_test::{add_variants, flags_test};
 use std::fmt::Write;
 use wasmtime::component::{Component, ComponentType, Lift, Linker, Lower};
 use wasmtime::Store;
@@ -476,6 +476,8 @@ fn enum_derive() -> Result<()> {
         .get_typed_func::<(Foo,), Foo, _>(&mut store, "echo")
         .is_err());
 
+    // Happy path redux, with large enums (i.e. more than 2^8 cases)
+
     #[add_variants(257)]
     #[derive(ComponentType, Lift, Lower, PartialEq, Eq, Debug, Copy, Clone)]
     #[component(enum)]
@@ -511,6 +513,197 @@ fn enum_derive() -> Result<()> {
     // #[derive(ComponentType, Lift, Lower, PartialEq, Eq, Debug, Copy, Clone)]
     // #[component(enum)]
     // enum ManyMore {}
+
+    Ok(())
+}
+
+#[test]
+fn flags() -> Result<()> {
+    wasmtime::component::flags! {
+        #[derive(Lift, Lower)]
+        flags Foo {
+            #[component(name = "foo-bar-baz")]
+            const A;
+            const B;
+            const C;
+        }
+    }
+
+    assert_eq!(Foo::default(), (Foo::A | Foo::B) & Foo::C);
+    assert_eq!(Foo::B, (Foo::A | Foo::B) & Foo::B);
+    assert_eq!(Foo::A, (Foo::A | Foo::B) & Foo::A);
+    assert_eq!(Foo::A | Foo::B, Foo::A ^ Foo::B);
+    assert_eq!(Foo::default(), Foo::A ^ Foo::A);
+    assert_eq!(Foo::B | Foo::C, !Foo::A);
+
+    let engine = super::engine();
+    let mut store = Store::new(&engine, ());
+
+    // Happy path: component type matches flag count and names
+
+    let component = Component::new(
+        &engine,
+        make_echo_component(r#"(type $Foo (flags "foo-bar-baz" "B" "C"))"#, 4),
+    )?;
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+    let func = instance.get_typed_func::<(Foo,), Foo, _>(&mut store, "echo")?;
+
+    for n in 0..8 {
+        let mut input = Foo::default();
+        if (n & 1) != 0 {
+            input |= Foo::A;
+        }
+        if (n & 2) != 0 {
+            input |= Foo::B;
+        }
+        if (n & 4) != 0 {
+            input |= Foo::C;
+        }
+
+        let output = func.call_and_post_return(&mut store, (input,))?;
+
+        assert_eq!(input, output);
+    }
+
+    // Sad path: flag count mismatch (too few)
+
+    let component = Component::new(
+        &engine,
+        make_echo_component(r#"(type $Foo (flags "foo-bar-baz" "B"))"#, 4),
+    )?;
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+
+    assert!(instance
+        .get_typed_func::<(Foo,), Foo, _>(&mut store, "echo")
+        .is_err());
+
+    // Sad path: flag count mismatch (too many)
+
+    let component = Component::new(
+        &engine,
+        make_echo_component(r#"(type $Foo (flags "foo-bar-baz" "B" "C" "D"))"#, 4),
+    )?;
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+
+    assert!(instance
+        .get_typed_func::<(Foo,), Foo, _>(&mut store, "echo")
+        .is_err());
+
+    // Sad path: flag name mismatch
+
+    let component = Component::new(
+        &engine,
+        make_echo_component(r#"(type $Foo (flags "A" "B" "C"))"#, 4),
+    )?;
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+
+    assert!(instance
+        .get_typed_func::<(Foo,), Foo, _>(&mut store, "echo")
+        .is_err());
+
+    // Happy path redux, with large flag count (more than 8)
+
+    flags_test!(Foo16, 9);
+
+    let component = Component::new(
+        &engine,
+        make_echo_component(
+            &format!(
+                r#"(type $Foo (flags {}))"#,
+                (0..9)
+                    .map(|index| format!(r#""F{}""#, index))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            ),
+            4,
+        ),
+    )?;
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+    let func = instance.get_typed_func::<(Foo16,), Foo16, _>(&mut store, "echo")?;
+
+    for &input in &[Foo16::F0, Foo16::F1, Foo16::F6, Foo16::F7, Foo16::F8] {
+        let output = func.call_and_post_return(&mut store, (input,))?;
+
+        assert_eq!(input, output);
+    }
+
+    // Happy path redux, with large flag count (more than 16)
+
+    flags_test!(Foo32, 17);
+
+    let component = Component::new(
+        &engine,
+        make_echo_component(
+            &format!(
+                r#"(type $Foo (flags {}))"#,
+                (0..17)
+                    .map(|index| format!(r#""F{}""#, index))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            ),
+            4,
+        ),
+    )?;
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+    let func = instance.get_typed_func::<(Foo32,), Foo32, _>(&mut store, "echo")?;
+
+    for &input in &[Foo32::F0, Foo32::F1, Foo32::F14, Foo32::F15, Foo32::F16] {
+        let output = func.call_and_post_return(&mut store, (input,))?;
+
+        assert_eq!(input, output);
+    }
+
+    // Happy path redux, with large flag count (more than 32)
+
+    flags_test!(Foo64, 33);
+
+    let component = Component::new(
+        &engine,
+        make_echo_component(
+            &format!(
+                r#"(type $Foo (flags {}))"#,
+                (0..33)
+                    .map(|index| format!(r#""F{}""#, index))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            ),
+            8,
+        ),
+    )?;
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+    let func = instance.get_typed_func::<(Foo64,), Foo64, _>(&mut store, "echo")?;
+
+    for &input in &[Foo64::F0, Foo64::F1, Foo64::F30, Foo64::F31, Foo64::F32] {
+        let output = func.call_and_post_return(&mut store, (input,))?;
+
+        assert_eq!(input, output);
+    }
+
+    // Happy path redux, with large flag count (more than 64)
+
+    flags_test!(Foo96, 65);
+
+    let component = Component::new(
+        &engine,
+        make_echo_component(
+            &format!(
+                r#"(type $Foo (flags {}))"#,
+                (0..65)
+                    .map(|index| format!(r#""F{}""#, index))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            ),
+            12,
+        ),
+    )?;
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+    let func = instance.get_typed_func::<(Foo96,), Foo96, _>(&mut store, "echo")?;
+
+    for &input in &[Foo96::F0, Foo96::F1, Foo96::F62, Foo96::F63, Foo96::F64] {
+        let output = func.call_and_post_return(&mut store, (input,))?;
+
+        assert_eq!(input, output);
+    }
 
     Ok(())
 }

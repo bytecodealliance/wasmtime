@@ -16,7 +16,7 @@ pub use self::func::{
 };
 pub use self::instance::{ExportInstance, Exports, Instance, InstancePre};
 pub use self::linker::{Linker, LinkerInstance};
-pub use wasmtime_component_macro::{ComponentType, Lift, Lower};
+pub use wasmtime_component_macro::{flags, ComponentType, Lift, Lower};
 
 // These items are expected to be used by an eventual
 // `#[derive(ComponentType)]`, they are not part of Wasmtime's API stability
@@ -24,8 +24,8 @@ pub use wasmtime_component_macro::{ComponentType, Lift, Lower};
 #[doc(hidden)]
 pub mod __internal {
     pub use super::func::{
-        align_to, next_field, typecheck_enum, typecheck_record, typecheck_union, typecheck_variant,
-        MaybeUninitExt, Memory, MemoryMut, Options,
+        align_to, format_flags, next_field, typecheck_enum, typecheck_flags, typecheck_record,
+        typecheck_union, typecheck_variant, MaybeUninitExt, Memory, MemoryMut, Options,
     };
     pub use crate::map_maybe_uninit;
     pub use crate::store::StoreOpaque;
