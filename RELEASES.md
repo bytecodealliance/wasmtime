@@ -47,6 +47,10 @@ Unreleased.
   It's recommended to only used the set of named `[features]` for Wasmtime.
   [#4293](https://github.com/bytecodealliance/wasmtime/pull/4293)
 
+* Register allocation has fixed a few issues related to excessive memory usage
+  at compile time.
+  [#4324](https://github.com/bytecodealliance/wasmtime/pull/4324)
+
 ### Fixed
 
 * A refactor of `Config` was made to fix an issue that the order of calls to `Config`
@@ -57,6 +61,10 @@ Unreleased.
 * Wasmtime has been fixed to work on SSE2-only x86\_64 platforms when the
   `simd` feature is disabled in `Config`.
   [#4231](https://github.com/bytecodealliance/wasmtime/pull/4231)
+
+* Generation of platform-specific unwinding information is disabled if
+  `wasm_backtrace` and `wasm_reference_types` are both disabled.
+  [#4351](https://github.com/bytecodealliance/wasmtime/pull/4351)
 
 --------------------------------------------------------------------------------
 
