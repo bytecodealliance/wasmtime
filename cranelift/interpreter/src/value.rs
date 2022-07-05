@@ -51,6 +51,12 @@ pub trait Value: Clone + From<DataValue> {
     fn div(self, other: Self) -> ValueResult<Self>;
     fn rem(self, other: Self) -> ValueResult<Self>;
     fn sqrt(self) -> ValueResult<Self>;
+    fn fma(self, a: Self, b: Self) -> ValueResult<Self>;
+    fn abs(self) -> ValueResult<Self>;
+
+    // Float operations
+    fn neg(self) -> ValueResult<Self>;
+    fn copysign(self, sign: Self) -> ValueResult<Self>;
 
     // Saturating arithmetic.
     fn add_sat(self, other: Self) -> ValueResult<Self>;
@@ -466,6 +472,30 @@ impl Value for DataValue {
 
     fn sqrt(self) -> ValueResult<Self> {
         unary_match!(sqrt(&self); [F32, F64]; [Ieee32, Ieee64])
+    }
+
+    fn fma(self, b: Self, c: Self) -> ValueResult<Self> {
+        match (self, b, c) {
+            (DataValue::F32(a), DataValue::F32(b), DataValue::F32(c)) => {
+                Ok(DataValue::F32(a.mul_add(b, c)))
+            }
+            (DataValue::F64(a), DataValue::F64(b), DataValue::F64(c)) => {
+                Ok(DataValue::F64(a.mul_add(b, c)))
+            }
+            (a, _b, _c) => Err(ValueError::InvalidType(ValueTypeClass::Float, a.ty())),
+        }
+    }
+
+    fn abs(self) -> ValueResult<Self> {
+        unary_match!(abs(&self); [F32, F64])
+    }
+
+    fn neg(self) -> ValueResult<Self> {
+        unary_match!(neg(&self); [F32, F64])
+    }
+
+    fn copysign(self, sign: Self) -> ValueResult<Self> {
+        binary_match!(copysign(&self, &sign); [F32, F64])
     }
 
     fn add_sat(self, other: Self) -> ValueResult<Self> {
