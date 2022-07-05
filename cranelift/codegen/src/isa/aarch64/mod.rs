@@ -3,9 +3,11 @@
 use crate::ir::condcodes::IntCC;
 use crate::ir::Function;
 use crate::isa::aarch64::settings as aarch64_settings;
+#[cfg(feature = "unwind")]
+use crate::isa::unwind::systemv;
 use crate::isa::{Builder as IsaBuilder, TargetIsa};
 use crate::machinst::{
-    compile, MachCompileResult, MachTextSectionBuilder, TextSectionBuilder, VCode,
+    compile, MachCompileResult, MachTextSectionBuilder, Reg, TextSectionBuilder, VCode,
 };
 use crate::result::CodegenResult;
 use crate::settings as shared_settings;
@@ -149,6 +151,11 @@ impl TargetIsa for AArch64Backend {
 
     fn text_section_builder(&self, num_funcs: u32) -> Box<dyn TextSectionBuilder> {
         Box::new(MachTextSectionBuilder::<inst::Inst>::new(num_funcs))
+    }
+
+    #[cfg(feature = "unwind")]
+    fn map_regalloc_reg_to_dwarf(&self, reg: Reg) -> Result<u16, systemv::RegisterMappingError> {
+        inst::unwind::systemv::map_reg(reg).map(|reg| reg.0)
     }
 }
 
