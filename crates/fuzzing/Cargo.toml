@@ -30,7 +30,7 @@ wasmi = "0.7.0"
 # though, so we could use that if we wanted. For now though just simplify a bit
 # and don't depend on this on Windows.  The same applies on s390x.
 [target.'cfg(not(any(windows, target_arch = "s390x")))'.dependencies]
-v8 = "0.41"
+v8 = "0.44.3"
 
 [dev-dependencies]
 wat = "1.0.37"
