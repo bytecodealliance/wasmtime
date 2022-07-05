@@ -1,9 +1,8 @@
 use more_asserts::assert_gt;
 pub mod config;
+use once_cell::sync::Lazy;
 
-lazy_static::lazy_static! {
-    pub static ref TESTCONFIG: config::TestConfig = config::TestConfig::from_env();
-}
+pub static TESTCONFIG: Lazy<config::TestConfig> = Lazy::new(config::TestConfig::from_env);
 
 // The `wasi` crate version 0.9.0 and beyond, doesn't
 // seem to define these constants, so we do it ourselves.

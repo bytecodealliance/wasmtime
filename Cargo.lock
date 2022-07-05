@@ -404,16 +404,16 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "3.1.15"
+version = "3.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "85a35a599b11c089a7f49105658d089b8f2cf0882993c17daf6de15285c2c35d"
+checksum = "190814073e85d238f31ff738fcb0bf6910cedeb73376c87cd69291028966fd83"
 dependencies = [
  "atty",
  "bitflags",
  "clap_derive",
  "clap_lex",
  "indexmap",
- "lazy_static",
+ "once_cell",
  "strsim",
  "termcolor",
  "textwrap 0.15.0",
@@ -421,9 +421,9 @@ dependencies = [
 
 [[package]]
 name = "clap_derive"
-version = "3.1.7"
+version = "3.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a3aab4734e083b809aaf5794e14e756d1c798d2c69c7f7de7a09a2f5214993c1"
+checksum = "759bf187376e1afa7b85b959e6a664a3e7a95203415dba952ad19139e798f902"
 dependencies = [
  "heck",
  "proc-macro-error",
@@ -434,9 +434,9 @@ dependencies = [
 
 [[package]]
 name = "clap_lex"
-version = "0.2.0"
+version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a37c35f1112dad5e6e0b1adaff798507497a18fceeb30cceb3bae7d1427b9213"
+checksum = "2850f2f5a82cbf437dd5af4d49848fbdfc27c157c3d010345776f952765261c5"
 dependencies = [
  "os_str_bytes",
 ]
@@ -688,7 +688,7 @@ dependencies = [
 name = "cranelift-serde"
 version = "0.87.0"
 dependencies = [
- "clap 3.1.15",
+ "clap 3.2.8",
  "cranelift-codegen",
  "cranelift-reader",
  "serde_json",
@@ -701,7 +701,7 @@ dependencies = [
  "anyhow",
  "capstone",
  "cfg-if",
- "clap 3.1.15",
+ "clap 3.2.8",
  "cranelift",
  "cranelift-codegen",
  "cranelift-entity",
@@ -814,26 +814,26 @@ dependencies = [
 
 [[package]]
 name = "crossbeam-epoch"
-version = "0.9.8"
+version = "0.9.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1145cf131a2c6ba0615079ab6a638f7e1973ac9c2634fcbeaaad6114246efe8c"
+checksum = "07db9d94cbd326813772c968ccd25999e5f8ae22f4f8d1b11effa37ef6ce281d"
 dependencies = [
  "autocfg 1.1.0",
  "cfg-if",
  "crossbeam-utils",
- "lazy_static",
  "memoffset",
+ "once_cell",
  "scopeguard",
 ]
 
 [[package]]
 name = "crossbeam-utils"
-version = "0.8.8"
+version = "0.8.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0bf124c720b7686e3c2663cf54062ab0f68a88af2fb6a030e87e30bf721fcb38"
+checksum = "7d82ee10ce34d7bc12c2122495e7593a9c41347ecdd64185af4ecf72cb1a7f83"
 dependencies = [
  "cfg-if",
- "lazy_static",
+ "once_cell",
 ]
 
 [[package]]
@@ -1467,7 +1467,7 @@ dependencies = [
 name = "islec"
 version = "0.1.0"
 dependencies = [
- "clap 3.1.15",
+ "clap 3.2.8",
  "cranelift-isle",
  "env_logger 0.9.0",
  "miette",
@@ -2945,11 +2945,11 @@ dependencies = [
 
 [[package]]
 name = "tracing-core"
-version = "0.1.26"
+version = "0.1.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f54c8ca710e81886d498c2fd3331b56c93aa248d49de2222ad2742247c60072f"
+checksum = "7b7358be39f2f274f322d2aaed611acc57f382e8eb1e5b48cb9ae30933495ce7"
 dependencies = [
- "lazy_static",
+ "once_cell",
  "valuable",
 ]
 
@@ -3101,7 +3101,7 @@ dependencies = [
  "io-extras",
  "io-lifetimes",
  "is-terminal",
- "lazy_static",
+ "once_cell",
  "rustix",
  "system-interface",
  "tempfile",
@@ -3164,7 +3164,6 @@ dependencies = [
  "cap-tempfile",
  "io-extras",
  "io-lifetimes",
- "lazy_static",
  "rustix",
  "tempfile",
  "tokio",
@@ -3268,8 +3267,8 @@ dependencies = [
 name = "wasm-spec-interpreter"
 version = "0.1.0"
 dependencies = [
- "lazy_static",
  "ocaml-interop",
+ "once_cell",
  "wat",
 ]
 
@@ -3326,7 +3325,6 @@ dependencies = [
  "bincode",
  "cfg-if",
  "indexmap",
- "lazy_static",
  "libc",
  "log",
  "object",
@@ -3402,9 +3400,9 @@ dependencies = [
  "directories-next",
  "file-per-thread-logger",
  "filetime",
- "lazy_static",
  "log",
  "more-asserts",
+ "once_cell",
  "pretty_env_logger",
  "rustix",
  "serde",
@@ -3421,13 +3419,12 @@ version = "0.40.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "clap 3.1.15",
+ "clap 3.2.8",
  "component-macro-test",
  "criterion",
  "env_logger 0.9.0",
  "filecheck",
  "humantime 2.1.0",
- "lazy_static",
  "libc",
  "listenfd",
  "memchr",
@@ -3461,7 +3458,7 @@ name = "wasmtime-cli-flags"
 version = "0.40.0"
 dependencies = [
  "anyhow",
- "clap 3.1.15",
+ "clap 3.2.8",
  "file-per-thread-logger",
  "pretty_env_logger",
  "rayon",
@@ -3596,8 +3593,8 @@ dependencies = [
 name = "wasmtime-jit-debug"
 version = "0.40.0"
 dependencies = [
- "lazy_static",
  "object",
+ "once_cell",
  "rustix",
 ]
 

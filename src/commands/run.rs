@@ -2,6 +2,7 @@
 
 use anyhow::{anyhow, bail, Context as _, Result};
 use clap::Parser;
+use once_cell::sync::Lazy;
 use std::fs::File;
 use std::io::Read;
 use std::thread;
@@ -65,11 +66,7 @@ fn parse_preloads(s: &str) -> Result<(String, PathBuf)> {
     Ok((parts[0].into(), parts[1].into()))
 }
 
-lazy_static::lazy_static! {
-    static ref AFTER_HELP: String = {
-        crate::FLAG_EXPLANATIONS.to_string()
-    };
-}
+static AFTER_HELP: Lazy<String> = Lazy::new(|| crate::FLAG_EXPLANATIONS.to_string());
 
 /// Runs a WebAssembly module
 #[derive(Parser)]

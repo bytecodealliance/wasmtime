@@ -23,7 +23,6 @@ io-lifetimes = { version = "0.7.0", default-features = false }
 rustix = { version = "0.35.6", features = ["fs"] }
 
 [target.'cfg(windows)'.dependencies]
-lazy_static = "1.4"
 io-extras = "0.15.0"
 
 [dev-dependencies]
