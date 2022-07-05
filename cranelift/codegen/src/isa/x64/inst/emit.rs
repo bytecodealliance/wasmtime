@@ -2618,11 +2618,10 @@ pub(crate) fn emit(
             temp,
             dst_old,
         } => {
-            // FIXME: use real vregs for this seq.
-            debug_assert_eq!(*address, regs::r9());
-            debug_assert_eq!(*operand, regs::r10());
-            debug_assert_eq!(temp.to_reg(), regs::r11());
-            debug_assert_eq!(dst_old.to_reg(), regs::rax());
+            debug_assert_eq!(allocs.next(*address), regs::r9());
+            debug_assert_eq!(allocs.next(*operand), regs::r10());
+            debug_assert_eq!(allocs.next(temp.to_reg()), regs::r11());
+            debug_assert_eq!(allocs.next(dst_old.to_reg()), regs::rax());
 
             // Emit this:
             //
@@ -2662,13 +2661,14 @@ pub(crate) fn emit(
             i2.emit(&[], sink, info, state);
 
             let r10_rmi = RegMemImm::reg(r10);
+            use inst_common::MachAtomicRmwOp as RmwOp;
             match op {
-                inst_common::AtomicRmwOp::Xchg => {
+                RmwOp::Xchg => {
                     // movq %r10, %r11
                     let i3 = Inst::mov_r_r(OperandSize::Size64, r10, r11_w);
                     i3.emit(&[], sink, info, state);
                 }
-                inst_common::AtomicRmwOp::Nand => {
+                RmwOp::Nand => {
                     // andq %r10, %r11
                     let i3 =
                         Inst::alu_rmi_r(OperandSize::Size64, AluRmiROpcode::And, r10_rmi, r11_w);
@@ -2678,20 +2678,17 @@ pub(crate) fn emit(
                     let i4 = Inst::not(OperandSize::Size64, r11_w);
                     i4.emit(&[], sink, info, state);
                 }
-                inst_common::AtomicRmwOp::Umin
-                | inst_common::AtomicRmwOp::Umax
-                | inst_common::AtomicRmwOp::Smin
-                | inst_common::AtomicRmwOp::Smax => {
+                RmwOp::Umin | RmwOp::Umax | RmwOp::Smin | RmwOp::Smax => {
                     // cmp %r11, %r10
                     let i3 = Inst::cmp_rmi_r(OperandSize::from_ty(*ty), RegMemImm::reg(r11), r10);
                     i3.emit(&[], sink, info, state);
 
                     // cmovcc %r10, %r11
                     let cc = match op {
-                        inst_common::AtomicRmwOp::Umin => CC::BE,
-                        inst_common::AtomicRmwOp::Umax => CC::NB,
-                        inst_common::AtomicRmwOp::Smin => CC::LE,
-                        inst_common::AtomicRmwOp::Smax => CC::NL,
+                        RmwOp::Umin => CC::BE,
+                        RmwOp::Umax => CC::NB,
+                        RmwOp::Smin => CC::LE,
+                        RmwOp::Smax => CC::NL,
                         _ => unreachable!(),
                     };
                     let i4 = Inst::cmove(OperandSize::Size64, cc, RegMem::reg(r10), r11_w);
@@ -2700,17 +2697,17 @@ pub(crate) fn emit(
                 _ => {
                     // opq %r10, %r11
                     let alu_op = match op {
-                        inst_common::AtomicRmwOp::Add => AluRmiROpcode::Add,
-                        inst_common::AtomicRmwOp::Sub => AluRmiROpcode::Sub,
-                        inst_common::AtomicRmwOp::And => AluRmiROpcode::And,
-                        inst_common::AtomicRmwOp::Or => AluRmiROpcode::Or,
-                        inst_common::AtomicRmwOp::Xor => AluRmiROpcode::Xor,
-                        inst_common::AtomicRmwOp::Xchg
-                        | inst_common::AtomicRmwOp::Nand
-                        | inst_common::AtomicRmwOp::Umin
-                        | inst_common::AtomicRmwOp::Umax
-                        | inst_common::AtomicRmwOp::Smin
-                        | inst_common::AtomicRmwOp::Smax => unreachable!(),
+                        RmwOp::Add => AluRmiROpcode::Add,
+                        RmwOp::Sub => AluRmiROpcode::Sub,
+                        RmwOp::And => AluRmiROpcode::And,
+                        RmwOp::Or => AluRmiROpcode::Or,
+                        RmwOp::Xor => AluRmiROpcode::Xor,
+                        RmwOp::Xchg
+                        | RmwOp::Nand
+                        | RmwOp::Umin
+                        | RmwOp::Umax
+                        | RmwOp::Smin
+                        | RmwOp::Smax => unreachable!(),
                     };
                     let i3 = Inst::alu_rmi_r(OperandSize::Size64, alu_op, r10_rmi, r11_w);
                     i3.emit(&[], sink, info, state);

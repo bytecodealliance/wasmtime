@@ -4743,7 +4743,7 @@ fn test_x64_emit() {
     insns.push((
         Inst::AtomicRmwSeq {
             ty: types::I8,
-            op: inst_common::AtomicRmwOp::Or,
+            op: inst_common::MachAtomicRmwOp::Or,
             address: r9,
             operand: r10,
             temp: w_r11,
@@ -4755,7 +4755,7 @@ fn test_x64_emit() {
     insns.push((
         Inst::AtomicRmwSeq {
             ty: types::I16,
-            op: inst_common::AtomicRmwOp::And,
+            op: inst_common::MachAtomicRmwOp::And,
             address: r9,
             operand: r10,
             temp: w_r11,
@@ -4767,7 +4767,7 @@ fn test_x64_emit() {
     insns.push((
         Inst::AtomicRmwSeq {
             ty: types::I32,
-            op: inst_common::AtomicRmwOp::Xchg,
+            op: inst_common::MachAtomicRmwOp::Xchg,
             address: r9,
             operand: r10,
             temp: w_r11,
@@ -4779,7 +4779,7 @@ fn test_x64_emit() {
     insns.push((
         Inst::AtomicRmwSeq {
             ty: types::I32,
-            op: inst_common::AtomicRmwOp::Umin,
+            op: inst_common::MachAtomicRmwOp::Umin,
             address: r9,
             operand: r10,
             temp: w_r11,
@@ -4791,7 +4791,7 @@ fn test_x64_emit() {
     insns.push((
         Inst::AtomicRmwSeq {
             ty: types::I64,
-            op: inst_common::AtomicRmwOp::Add,
+            op: inst_common::MachAtomicRmwOp::Add,
             address: r9,
             operand: r10,
             temp: w_r11,
