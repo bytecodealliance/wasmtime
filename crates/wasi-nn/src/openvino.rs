@@ -87,10 +87,10 @@ impl BackendExecutionContext for OpenvinoExecutionContext {
         // should not have to default to NHWC.
         let desc = TensorDesc::new(Layout::NHWC, &dimensions, precision);
         let data = tensor.data.as_slice()?;
-        let blob = openvino::Blob::new(desc, &data)?;
+        let blob = openvino::Blob::new(&desc, &data)?;
 
         // Actually assign the blob to the request.
-        self.1.set_blob(&input_name, blob)?;
+        self.1.set_blob(&input_name, &blob)?;
         Ok(())
     }
 
