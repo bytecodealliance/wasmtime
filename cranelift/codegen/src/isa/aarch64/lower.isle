@@ -142,6 +142,23 @@
 (rule (lower (has_type ty (iadd_pairwise x y)))
       (addp x y (vector_size ty)))
 
+;;;; Rules for `iabs` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type ty (iabs x)))
+      (abs x (vector_size ty)))
+
+(rule (lower (has_type $I8 (iabs x)))
+      (fp_abs x (ScalarSize.Size32) (VectorSize.Size8x16)))
+
+(rule (lower (has_type $I16 (iabs x)))
+      (fp_abs x (ScalarSize.Size32) (VectorSize.Size16x8)))
+
+(rule (lower (has_type $I32 (iabs x)))
+      (fp_abs x (ScalarSize.Size32) (VectorSize.Size32x4)))
+
+(rule (lower (has_type $I64 (iabs x)))
+      (fp_abs x (ScalarSize.Size64) (VectorSize.Size64x2)))
+
 ;;;; Rules for `isub` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; `i64` and smaller

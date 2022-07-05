@@ -1762,6 +1762,15 @@
 (decl addp (Reg Reg VectorSize) Reg)
 (rule (addp x y size) (vec_rrr (VecALUOp.Addp) x y size))
 
+;; Helper for generating `abs` instructions.
+(decl abs (Reg VectorSize) Reg)
+(rule (abs x size) (vec_misc (VecMisc2.Abs) x size))
+
+;; Helper for generating scalar `abs` instructions.
+(decl fp_abs (Reg ScalarSize VectorSize) Reg)
+(rule (fp_abs x ssize vsize)
+      (mov_from_vec (abs (mov_to_fpu x ssize) vsize) 0 vsize))
+
 ;; Helper for generating `addv` instructions.
 (decl addv (Reg VectorSize) Reg)
 (rule (addv x size) (vec_lanes (VecLanesOp.Addv) x size))
