@@ -27,7 +27,7 @@ wasi-cap-std-sync = { path = "../wasi-common/cap-std-sync" }
 cap-std = "0.25.0"
 
 [dev-dependencies]
-wat = "1.0"
+wat = "1.0.45"
 
 [features]
 default = ["shuffling-allocator"]

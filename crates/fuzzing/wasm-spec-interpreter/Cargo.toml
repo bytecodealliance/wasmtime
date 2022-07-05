@@ -16,7 +16,7 @@ ocaml-interop = { version = "0.8", optional = true }
 lazy_static = { version = "1.4", optional = true }
 
 [dev-dependencies]
-wat = "1.0"
+wat = "1.0.45"
 
 [features]
 build-libinterpret = ["ocaml-interop", "lazy_static"]
