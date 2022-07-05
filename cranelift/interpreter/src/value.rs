@@ -26,6 +26,9 @@ pub trait Value: Clone + From<DataValue> {
     fn convert(self, kind: ValueConversionKind) -> ValueResult<Self>;
     fn concat(self, other: Self) -> ValueResult<Self>;
 
+    fn is_negative(&self) -> ValueResult<bool>;
+    fn is_zero(&self) -> ValueResult<bool>;
+
     fn max(self, other: Self) -> ValueResult<Self>;
     fn min(self, other: Self) -> ValueResult<Self>;
 
@@ -391,6 +394,22 @@ impl Value for DataValue {
                 (((lhs as u64) as u128) | (((rhs as u64) as u128) << 64)) as i128,
             )),
             (lhs, rhs) => unimplemented!("concat: {} -> {}", lhs.ty(), rhs.ty()),
+        }
+    }
+
+    fn is_negative(&self) -> ValueResult<bool> {
+        match self {
+            DataValue::F32(f) => Ok(f.is_negative()),
+            DataValue::F64(f) => Ok(f.is_negative()),
+            _ => Err(ValueError::InvalidType(ValueTypeClass::Float, self.ty())),
+        }
+    }
+
+    fn is_zero(&self) -> ValueResult<bool> {
+        match self {
+            DataValue::F32(f) => Ok(f.is_zero()),
+            DataValue::F64(f) => Ok(f.is_zero()),
+            _ => Err(ValueError::InvalidType(ValueTypeClass::Float, self.ty())),
         }
     }
 
