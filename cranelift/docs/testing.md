@@ -389,7 +389,7 @@ This indicates the following:
 * `static`: We have requested a non-resizable and non-movable static heap.
 * `size=0x1000`: It has to have a size of 4096 bytes.
 * `ptr=vmctx+0`: The pointer to the address to the start of this heap is placed at offset 0 in the `vmctx` struct
-* `bound=vmctx+8`: The pointer to the address to the end of this heap is placed at offset 8 in the `vmctx` struct
+* `bound=vmctx+8`: The bound of this heap (size in bytes) is placed at offset 8 in the `vmctx` struct
 
 The `ptr` and `bound` arguments make explicit the placement of the pointers to the start and end of the heap memory in
 the environment struct. `vmctx+0` means that at offset 0 of the environment struct there will be the pointer to the start
@@ -412,11 +412,11 @@ See the diagram below, on how the `vmctx` struct ends up if with multiple heaps:
  ┌─────────────────────┐ vmctx+0
  │heap0: start address │
  ├─────────────────────┤ vmctx+8
- │heap0: end address   │
+ │heap0: bound         │
  ├─────────────────────┤ vmctx+16
  │heap1: start address │
  ├─────────────────────┤ vmctx+24
- │heap1: end address   │
+ │heap1: bound         │
  ├─────────────────────┤ vmctx+32
  │etc...               │
  └─────────────────────┘
@@ -442,6 +442,21 @@ block0(v0: i64, v1: i64, v2: i32):
 ; heap: static, size=0x1000, ptr=vmctx+0, bound=vmctx+8
 ; run: %heap_load_store(0, 1) == 1
 ```
+
+##### `table` directive
+
+The `table` directive allows a test to request a table to be allocated and passed to the test via the environment struct.
+
+A sample table annotation is the following:
+```
+; table: count=10, entry_size=8, ptr=vmctx+0, bound=vmctx+8
+```
+
+This indicates the following:
+* `count=10`: The table should have 10 entries.
+* `entry_size=8`: Each entry should have a space of 8 bytes.
+* `ptr=vmctx+0`: The pointer to the address to the start of this table is placed at offset 0 in the `vmctx` struct
+* `bound=vmctx+8`: The bound of this table (number of entries) is placed at offset 8 in the `vmctx` struct
 
 
 ### `test interpret`

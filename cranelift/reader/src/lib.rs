@@ -29,10 +29,12 @@ pub use crate::error::{Location, ParseError, ParseResult};
 pub use crate::heap_command::{HeapCommand, HeapType};
 pub use crate::isaspec::{parse_options, IsaSpec, ParseOptionError};
 pub use crate::parser::{
-    parse_functions, parse_heap_command, parse_run_command, parse_test, ParseOptions,
+    parse_functions, parse_heap_command, parse_run_command, parse_table_command, parse_test,
+    ParseOptions,
 };
 pub use crate::run_command::{Comparison, Invocation, RunCommand};
 pub use crate::sourcemap::SourceMap;
+pub use crate::table_command::TableCommand;
 pub use crate::testcommand::{TestCommand, TestOption};
 pub use crate::testfile::{Comment, Details, Feature, TestFile};
 
@@ -43,5 +45,6 @@ mod lexer;
 mod parser;
 mod run_command;
 mod sourcemap;
+mod table_command;
 mod testcommand;
 mod testfile;

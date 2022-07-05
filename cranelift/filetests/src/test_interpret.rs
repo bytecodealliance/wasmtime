@@ -82,28 +82,24 @@ pub fn register_heaps<'a>(
     state: &mut InterpreterState<'a>,
     test_env: &RuntestEnvironment,
 ) -> DataValue {
-    let mem = test_env.allocate_memory();
-    let vmctx_struct = mem
-        .into_iter()
-        // This memory layout (a contiguous list of base + bound ptrs)
-        // is enforced by the RuntestEnvironment when parsing the heap
-        // directives. So we are safe to replicate that here.
-        .flat_map(|mem| {
-            let heap_len = mem.len() as u64;
+    let vmctx_struct = test_env.runtime_struct(
+        |size| {
+            let mem = vec![0u8; size as usize];
             let heap = state.register_heap(HeapInit::FromBacking(mem));
-            [
-                state.get_heap_address(I64, heap, 0).unwrap(),
-                state.get_heap_address(I64, heap, heap_len).unwrap(),
-            ]
-        })
-        .map(|addr| {
+            let addr = state.get_heap_address(I64, heap, 0).unwrap();
+
             let mut mem = [0u8; 8];
             addr.write_to_slice(&mut mem[..]);
-            mem
-        })
-        .flatten()
+            u64::from_ne_bytes(mem)
+        },
+        |_size, _count| unimplemented!(),
+    );
+
+    let vmctx_mem = vmctx_struct
+        .into_iter()
+        .flat_map(|e| e.to_ne_bytes())
         .collect();
 
-    let vmctx_heap = state.register_heap(HeapInit::FromBacking(vmctx_struct));
+    let vmctx_heap = state.register_heap(HeapInit::FromBacking(vmctx_mem));
     state.get_heap_address(I64, vmctx_heap, 0).unwrap()
 }

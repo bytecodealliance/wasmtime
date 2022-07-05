@@ -1,0 +1,163 @@
+test run
+target x86_64
+target s390x
+target aarch64
+
+function %set_get_i64(i64 vmctx, i64, i64) -> i64 {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0
+    gv2 = load.i64 notrap aligned gv0 +8
+    table0 = dynamic gv1, element_size 8, bound gv2, index_type i64
+
+block0(v0: i64, v1: i64, v2: i64):
+    v3 = table_addr.i64 table0, v1, +0
+    store.i64 v2, v3
+    v4 = load.i64 v3
+    return v4
+}
+; table: count=10, entry_size=8, ptr=vmctx+0, bound=vmctx+8
+; run: %set_get_i64(0, 1) == 1
+; run: %set_get_i64(0, 10) == 10
+; run: %set_get_i64(1, 1) == 1
+; run: %set_get_i64(1, 0xC0FFEEEE_DECAFFFF) == 0xC0FFEEEE_DECAFFFF
+; run: %set_get_i64(10, 1) == 1
+; run: %set_get_i64(10, 0xC0FFEEEE_DECAFFFF) == 0xC0FFEEEE_DECAFFFF
+
+function %set_get_i32(i64 vmctx, i64, i32) -> i32 {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0
+    gv2 = load.i64 notrap aligned gv0 +8
+    table0 = dynamic gv1, element_size 8, bound gv2, index_type i64
+
+block0(v0: i64, v1: i64, v2: i32):
+    ;; Note here the offset +4
+    v3 = table_addr.i64 table0, v1, +4
+    store.i32 v2, v3
+    v4 = load.i32 v3
+    return v4
+}
+; table: count=10, entry_size=8, ptr=vmctx+0, bound=vmctx+8
+; run: %set_get_i32(0, 1) == 1
+; run: %set_get_i32(0, 10) == 10
+; run: %set_get_i32(1, 1) == 1
+; run: %set_get_i32(1, 0xC0FFEEEE) == 0xC0FFEEEE
+; run: %set_get_i32(10, 1) == 1
+; run: %set_get_i32(10, 0xC0FFEEEE) == 0xC0FFEEEE
+
+
+function %set_get_i8(i64 vmctx, i64, i8) -> i8 {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0
+    gv2 = load.i64 notrap aligned gv0 +8
+    table0 = dynamic gv1, element_size 1, bound gv2, index_type i64
+
+block0(v0: i64, v1: i64, v2: i8):
+    v3 = table_addr.i64 table0, v1, +0
+    store.i8 v2, v3
+    v4 = load.i8 v3
+    return v4
+}
+; table: count=2, entry_size=1, ptr=vmctx+0, bound=vmctx+8
+; run: %set_get_i8(0, 1) == 1
+; run: %set_get_i8(0, 0xC0) == 0xC0
+; run: %set_get_i8(1, 1) == 1
+; run: %set_get_i8(1, 0xFF) == 0xFF
+
+
+
+function %large_elm_size(i64 vmctx, i64, i64, i8) -> i8 {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0
+    gv2 = load.i64 notrap aligned gv0 +8
+    table0 = dynamic gv1, element_size 10240, bound gv2, index_type i64
+
+block0(v0: i64, v1: i64, v2: i64, v3: i8):
+    v4 = table_addr.i64 table0, v1, +0
+    v5 = iadd.i64 v4, v2
+    store.i8 v3, v5
+    v6 = load.i8 v5
+    return v6
+}
+; table: count=5, entry_size=10240, ptr=vmctx+0, bound=vmctx+8
+; run: %large_elm_size(0, 0, 1) == 1
+; run: %large_elm_size(1, 0, 0xC0) == 0xC0
+; run: %large_elm_size(0, 1, 1) == 1
+; run: %large_elm_size(1, 1, 0xFF) == 0xFF
+; run: %large_elm_size(0, 127, 1) == 1
+; run: %large_elm_size(1, 127, 0xFF) == 0xFF
+; run: %large_elm_size(0, 10239, 1) == 1
+; run: %large_elm_size(1, 10239, 0xBB) == 0xBB
+
+
+; Tests writing a i64 which covers 8 table entries at once
+; Loads the first byte and the last to confirm that the slots were written
+function %multi_elm_write(i64 vmctx, i64, i64) -> i8, i8 {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0
+    gv2 = load.i64 notrap aligned gv0 +8
+    table0 = dynamic gv1, element_size 1, bound gv2, index_type i64
+
+block0(v0: i64, v1: i64, v2: i64):
+    v3 = table_addr.i64 table0, v1, +0
+    v4 = table_addr.i64 table0, v1, +7
+    store.i64 v2, v3
+    v5 = load.i8 v3
+    v6 = load.i8 v4
+    return v5, v6
+}
+; table: count=16, entry_size=1, ptr=vmctx+0, bound=vmctx+8
+
+;; When writing these test cases keep in mind that s390x is big endian!
+;; We just make sure that the first and last byte are the same to deal with that.
+; run: %multi_elm_write(0, 0xC0FFEEEE_FFEEEEC0) == [0xC0, 0xC0]
+; run: %multi_elm_write(1, 0xAABBCCDD_EEFF00AA) == [0xAA, 0xAA]
+
+
+
+; Tests requesting multiple tables and heaps. This is mostly to test the runtest context
+; It also tests functions with a bunch of global values and tables and heaps
+function %multi_tbl_heap(i64 vmctx, i64, i16) -> i16 {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0 +0
+    gv2 = load.i64 notrap aligned gv0 +8
+    gv3 = load.i64 notrap aligned gv0 +16
+    gv4 = load.i64 notrap aligned gv0 +24
+    gv5 = load.i64 notrap aligned gv0 +32
+    gv6 = load.i64 notrap aligned gv0 +40
+    gv7 = load.i64 notrap aligned gv0 +48
+    gv8 = load.i64 notrap aligned gv0 +56
+    gv9 = load.i64 notrap aligned gv0 +64
+    gv10 = load.i64 notrap aligned gv0 +72
+    gv11 = load.i64 notrap aligned gv0 +80
+    gv12 = load.i64 notrap aligned gv0 +88
+    gv13 = load.i64 notrap aligned gv0 +96
+    gv14 = load.i64 notrap aligned gv0 +104
+
+    table0 = dynamic gv1, element_size 1, bound gv2, index_type i64
+    table1 = dynamic gv3, element_size 2, bound gv4, index_type i64
+    heap0 = static gv5, min 0x10, bound 0x10, offset_guard 0, index_type i64
+    heap1 = dynamic gv7, bound gv8, offset_guard 0, index_type i64
+    table2 = dynamic gv9, element_size 3, bound gv10, index_type i64
+    heap2 = dynamic gv11, bound gv12, offset_guard 0, index_type i64
+    table3 = dynamic gv13, element_size 3, bound gv14, index_type i64
+
+
+block0(v0: i64, v1: i64, v2: i16):
+    v3 = table_addr.i64 table3, v1, +0;
+    store.i16 v2, v3
+    v4 = load.i16 v3
+    return v4
+}
+; table: count=1, entry_size=1, ptr=vmctx+0, bound=vmctx+8
+; table: count=23, entry_size=2, ptr=vmctx+16, bound=vmctx+24
+; heap: static, size=0x10, ptr=vmctx+32, bound=vmctx+40
+; heap: dynamic, size=0x20, ptr=vmctx+48, bound=vmctx+56
+; table: count=9, entry_size=3, ptr=vmctx+64, bound=vmctx+72
+; heap: dynamic, size=0x3000, ptr=vmctx+80, bound=vmctx+88
+; table: count=9, entry_size=3, ptr=vmctx+96, bound=vmctx+104
+; run: %multi_tbl_heap(0, 1) == 1
+; run: %multi_tbl_heap(0, 0xC0FF) == 0xC0FF
+; run: %multi_tbl_heap(1, 1) == 1
+; run: %multi_tbl_heap(1, 0xC0FF) == 0xC0FF
+; run: %multi_tbl_heap(9, 1) == 1
+; run: %multi_tbl_heap(9, 0xC0FF) == 0xC0FF

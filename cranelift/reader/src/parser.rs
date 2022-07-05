@@ -6,6 +6,7 @@ use crate::isaspec;
 use crate::lexer::{LexError, Lexer, LocatedError, LocatedToken, Token};
 use crate::run_command::{Comparison, Invocation, RunCommand};
 use crate::sourcemap::SourceMap;
+use crate::table_command::TableCommand;
 use crate::testcommand::TestCommand;
 use crate::testfile::{Comment, Details, Feature, TestFile};
 use cranelift_codegen::data_value::DataValue;
@@ -190,7 +191,7 @@ pub fn parse_run_command<'a>(text: &str, signature: &Signature) -> ParseResult<O
 /// Parse a CLIF comment `text` as a heap command.
 ///
 /// Return:
-///  - `Ok(None)` if the comment is not intended to be a `HeapCommand` (i.e. does not start with `heap`
+///  - `Ok(None)` if the comment is not intended to be a `HeapCommand` (i.e. does not start with `heap`)
 ///  - `Ok(Some(heap))` if the comment is intended as a `HeapCommand` and can be parsed to one
 ///  - `Err` otherwise.
 pub fn parse_heap_command<'a>(text: &str) -> ParseResult<Option<HeapCommand>> {
@@ -201,6 +202,24 @@ pub fn parse_heap_command<'a>(text: &str) -> ParseResult<Option<HeapCommand>> {
     let mut parser = Parser::new(trimmed_text);
     match parser.token() {
         Some(Token::Identifier("heap")) => parser.parse_heap_command().map(|c| Some(c)),
+        Some(_) | None => Ok(None),
+    }
+}
+
+/// Parse a CLIF comment `text` as a table command.
+///
+/// Return:
+///  - `Ok(None)` if the comment is not intended to be a `TableCommand` (i.e. does not start with `table`)
+///  - `Ok(Some(table))` if the comment is intended as a `TableCommand` and can be parsed to one
+///  - `Err` otherwise.
+pub fn parse_table_command<'a>(text: &str) -> ParseResult<Option<TableCommand>> {
+    let _tt = timing::parse_text();
+    // We remove leading spaces and semi-colons for convenience here instead of at the call sites
+    // since this function will be attempting to parse a TableCommand from a CLIF comment.
+    let trimmed_text = text.trim_start_matches(|c| c == ' ' || c == ';');
+    let mut parser = Parser::new(trimmed_text);
+    match parser.token() {
+        Some(Token::Identifier("table")) => parser.parse_table_command().map(|c| Some(c)),
         Some(_) | None => Ok(None),
     }
 }
@@ -2411,6 +2430,66 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Parse a CLIF table command.
+    ///
+    /// table-command ::= "table" ":" entry-size "," entry-count { "," ptr-offset } { "," bound-offset }
+    /// entry-size ::= "entry_size" "=" UImm64(bytes)
+    /// entry-count ::= "count" "=" UImm64(bytes)
+    /// ptr-offset ::= "ptr" "=" "vmctx" "+" UImm64(bytes)
+    /// bound-offset ::= "bound" "=" "vmctx" "+" UImm64(bytes)
+    fn parse_table_command(&mut self) -> ParseResult<TableCommand> {
+        self.match_token(Token::Identifier("table"), "expected a 'table:' command")?;
+        self.match_token(Token::Colon, "expected a ':' after table command")?;
+
+        let mut table_command = TableCommand {
+            entry_size: Uimm64::new(0),
+            entry_count: Uimm64::new(0),
+            ptr_offset: None,
+            bound_offset: None,
+        };
+
+        loop {
+            let identifier = self.match_any_identifier("expected table attribute name")?;
+            self.match_token(Token::Equal, "expected '=' after table attribute name")?;
+
+            match identifier {
+                "entry_size" => {
+                    table_command.entry_size = self.match_uimm64("expected integer entry size")?;
+                }
+                "count" => {
+                    table_command.entry_count = self.match_uimm64("expected integer count")?;
+                }
+                "ptr" => {
+                    table_command.ptr_offset = Some(self.parse_vmctx_offset()?);
+                }
+                "bound" => {
+                    table_command.bound_offset = Some(self.parse_vmctx_offset()?);
+                }
+                t => return err!(self.loc, "unknown table attribute '{}'", t),
+            }
+
+            if !self.optional(Token::Comma) {
+                break;
+            }
+        }
+
+        if table_command.entry_size == Uimm64::new(0) {
+            return err!(
+                self.loc,
+                self.error("Expected a table entry size to be specified")
+            );
+        }
+
+        if table_command.entry_count == Uimm64::new(0) {
+            return err!(
+                self.loc,
+                self.error("Expected a table entry count to be specified")
+            );
+        }
+
+        Ok(table_command)
+    }
+
     /// Parse a CLIF heap command.
     ///
     /// heap-command ::= "heap" ":" heap-type { "," heap-attr }
@@ -3843,6 +3922,34 @@ mod tests {
         assert!(parse("heap: dynamic size=0").is_err());
         assert!(parse("heap: static, size=10, ptr=10").is_err());
         assert!(parse("heap: static, size=10, bound=vmctx-10").is_err());
+    }
+
+    #[test]
+    fn parse_table_commands() {
+        fn parse(text: &str) -> ParseResult<TableCommand> {
+            Parser::new(text).parse_table_command()
+        }
+
+        // Check that we can parse and display the same set of heap commands.
+        fn assert_roundtrip(text: &str) {
+            assert_eq!(parse(text).unwrap().to_string(), text);
+        }
+
+        assert_roundtrip("table: entry_size=8, count=20");
+        assert_roundtrip("table: entry_size=8, count=20, ptr=vmctx+10");
+        assert_roundtrip("table: entry_size=8, count=20, bound=vmctx+10");
+        assert_roundtrip("table: entry_size=8, count=20, ptr=vmctx+10, bound=vmctx+20");
+
+        let sample_table =
+            parse("table: entry_size=8, count=20, ptr=vmctx+10, bound=vmctx+20").unwrap();
+        assert_eq!(sample_table.entry_size, Uimm64::new(8));
+        assert_eq!(sample_table.entry_count, Uimm64::new(20));
+        assert_eq!(sample_table.ptr_offset, Some(Uimm64::new(10)));
+        assert_eq!(sample_table.bound_offset, Some(Uimm64::new(20)));
+
+        assert!(parse("table:").is_err());
+        assert!(parse("table: entry_size=9").is_err());
+        assert!(parse("table: count=9").is_err());
     }
 
     #[test]
