@@ -283,13 +283,13 @@ impl Config {
 
         // Allow a memory to be generated, but don't let it get too large.
         // Additionally require the maximum size to guarantee that the growth
-        // behavior is consisten across engines.
+        // behavior is consistent across engines.
         config.max_memories = 1;
         config.max_memory_pages = 10;
         config.memory_max_size_required = true;
 
         // If tables are generated make sure they don't get too large to avoid
-        // hidding any engine-specific limit. Additionally ensure that the
+        // hitting any engine-specific limit. Additionally ensure that the
         // maximum size is required to guarantee consistent growth across
         // engines.
         //
