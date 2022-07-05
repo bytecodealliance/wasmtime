@@ -718,17 +718,11 @@ pub fn differential_wasmi_execution(wasm: &[u8], config: &generators::Config) ->
     // Introspect wasmtime module to find name of an exported function and of an
     // exported memory.
     let (func_name, ty) = first_exported_function(&wasmtime_module)?;
-    let memory_name = first_exported_memory(&wasmtime_module)?;
 
-    let wasmi_mem_export = wasmi_instance.export_by_name(memory_name).unwrap();
-    let wasmi_mem = wasmi_mem_export.as_memory().unwrap();
     let wasmi_main_export = wasmi_instance.export_by_name(func_name).unwrap();
     let wasmi_main = wasmi_main_export.as_func().unwrap();
     let wasmi_val = wasmi::FuncInstance::invoke(&wasmi_main, &[], &mut wasmi::NopExternals);
 
-    let wasmtime_mem = wasmtime_instance
-        .get_memory(&mut wasmtime_store, memory_name)
-        .expect("memory export is present");
     let wasmtime_main = wasmtime_instance
         .get_func(&mut wasmtime_store, func_name)
         .expect("function export is present");
@@ -758,6 +752,17 @@ pub fn differential_wasmi_execution(wasm: &[u8], config: &generators::Config) ->
             );
         }
     }
+
+    // Compare linear memories if there's an exported linear memory
+    let memory_name = match first_exported_memory(&wasmtime_module) {
+        Some(name) => name,
+        None => return Some(()),
+    };
+    let wasmi_mem_export = wasmi_instance.export_by_name(memory_name).unwrap();
+    let wasmi_mem = wasmi_mem_export.as_memory().unwrap();
+    let wasmtime_mem = wasmtime_instance
+        .get_memory(&mut wasmtime_store, memory_name)
+        .expect("memory export is present");
 
     if wasmi_mem.current_size().0 != wasmtime_mem.size(&wasmtime_store) as usize {
         panic!("resulting memories are not the same size");

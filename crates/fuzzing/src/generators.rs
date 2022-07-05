@@ -272,29 +272,38 @@ impl Config {
         let config = &mut self.module_config.config;
 
         config.allow_start_export = false;
+
         // Make sure there's a type available for the function.
         config.min_types = 1;
-        config.max_types = 1;
+        config.max_types = config.max_types.max(1);
 
-        // Generate one and only one function
+        // Generate at least one function
         config.min_funcs = 1;
-        config.max_funcs = 1;
+        config.max_funcs = config.max_funcs.max(1);
 
-        // Give the function a memory, but keep it small
-        config.min_memories = 1;
+        // Allow a memory to be generated, but don't let it get too large.
+        // Additionally require the maximum size to guarantee that the growth
+        // behavior is consistent across engines.
         config.max_memories = 1;
-        config.max_memory_pages = 1;
+        config.max_memory_pages = 10;
         config.memory_max_size_required = true;
 
-        // While reference types are disabled below, only allow one table
+        // If tables are generated make sure they don't get too large to avoid
+        // hitting any engine-specific limit. Additionally ensure that the
+        // maximum size is required to guarantee consistent growth across
+        // engines.
+        //
+        // Note that while reference types are disabled below, only allow one
+        // table.
         config.max_tables = 1;
+        config.max_table_elements = 1_000;
+        config.table_max_size_required = true;
 
         // Don't allow any imports
         config.max_imports = 0;
 
         // Try to get the function and the memory exported
-        config.min_exports = 2;
-        config.max_exports = 4;
+        config.export_everything = true;
 
         // NaN is canonicalized at the wasm level for differential fuzzing so we
         // can paper over NaN differences between engines.
@@ -317,9 +326,10 @@ impl Config {
         {
             // One single-page memory
             limits.memories = 1;
-            limits.memory_pages = 1;
+            limits.memory_pages = 10;
 
             limits.tables = 1;
+            limits.table_elements = 1_000;
 
             match &mut self.wasmtime.memory_config {
                 MemoryConfig::Normal(config) => {
