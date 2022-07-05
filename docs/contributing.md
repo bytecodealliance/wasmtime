@@ -27,6 +27,11 @@ interested to hear about that!
 As always, you're more than welcome to [open an
 issue](https://github.com/bytecodealliance/wasmtime/issues/new) too!
 
+Finally, we have biweekly project meetings, hosted on Zoom, for Wasmtime and
+Cranelift. For more information, see our [meetings agendas/minutes
+repository](https://github.com/bytecodealliance/meetings). Please feel free to
+contact us via Zulip if you're interested in joining!
+
 ## Finding Something to Hack On
 
 If you're looking for something to do, these are great places to start:
