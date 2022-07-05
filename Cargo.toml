@@ -52,12 +52,12 @@ test-programs = { path = "crates/test-programs" }
 wasmtime-runtime = { path = "crates/runtime" }
 tokio = { version = "1.8.0", features = ["rt", "time", "macros", "rt-multi-thread"] }
 tracing-subscriber = "0.3.1"
-wast = "42.0.0"
+wast = "43.0.0"
 criterion = "0.3.4"
 num_cpus = "1.13.0"
 memchr = "2.4"
 async-trait = "0.1"
-wat = "1.0.43"
+wat = "1.0.45"
 once_cell = "1.9.0"
 rayon = "1.5.0"
 component-macro-test = { path = "crates/misc/component-macro-test" }

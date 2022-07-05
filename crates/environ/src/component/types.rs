@@ -428,6 +428,10 @@ impl ComponentTypesBuilder {
                     );
                     assert!(prev.is_none());
                 }
+                wasmparser::ModuleTypeDeclaration::Alias(alias) => {
+                    drop(alias);
+                    unimplemented!("outer alias in module type");
+                }
             }
         }
 

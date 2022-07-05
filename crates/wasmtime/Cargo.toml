@@ -21,14 +21,14 @@ wasmtime-fiber = { path = "../fiber", version = "=0.40.0", optional = true }
 wasmtime-cranelift = { path = "../cranelift", version = "=0.40.0", optional = true }
 wasmtime-component-macro = { path = "../component-macro", version = "=0.40.0", optional = true }
 target-lexicon = { version = "0.12.0", default-features = false }
-wasmparser = "0.86.0"
+wasmparser = "0.87.0"
 anyhow = "1.0.19"
 region = "2.2.0"
 libc = "0.2"
 cfg-if = "1.0"
 backtrace = { version = "0.3.61" }
 log = "0.4.8"
-wat = { version = "1.0.43", optional = true }
+wat = { version = "1.0.45", optional = true }
 serde = { version = "1.0.94", features = ["derive"] }
 bincode = "1.2.1"
 indexmap = "1.6"

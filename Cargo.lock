@@ -3219,18 +3219,18 @@ checksum = "d554b7f530dee5964d9a9468d95c1f8b8acae4f282807e7d27d4b03099a46744"
 
 [[package]]
 name = "wasm-encoder"
-version = "0.13.0"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "31f0c17267a5ffd6ae3d897589460e21db1673c84fb7016b909c9691369a75ea"
+checksum = "f76068e87fe9b837a6bc2ccded66784173eadb828c4168643e9fddf6f9ed2e61"
 dependencies = [
  "leb128",
 ]
 
 [[package]]
 name = "wasm-mutate"
-version = "0.2.4"
+version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "219c79f95ec42118a63e9df1f8b4858c2092875820d10b4d8e5b324759880212"
+checksum = "fde0df58bcb700325907d1b024b58de418bd9c48abf5de6f802ad63d28c7d08d"
 dependencies = [
  "egg",
  "log",
@@ -3242,9 +3242,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-smith"
-version = "0.11.1"
+version = "0.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c85cf25be85aac46356216b4662eb5768347046449a45c938ae1443b788665bb"
+checksum = "b73250e61e41d0e467b78559c7d761841005d724384bb0b78d52ff974acf5520"
 dependencies = [
  "arbitrary",
  "flagset",
@@ -3289,18 +3289,18 @@ dependencies = [
 
 [[package]]
 name = "wasmparser"
-version = "0.86.0"
+version = "0.87.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4bcbfe95447da2aa7ff171857fc8427513eb57c75a729bb190e974dc695e8f5c"
+checksum = "5c04e207cd2e8ecb6f9bd28a2cf3119b4c6bfeee6fe3a25cc1daf8041d00a875"
 dependencies = [
  "indexmap",
 ]
 
 [[package]]
 name = "wasmprinter"
-version = "0.2.36"
+version = "0.2.37"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aa4cca415278da771add7c9ab7f3391f04b8d98719d2cf28a185d38d5206697e"
+checksum = "550bde1d5aec6aa1584c9f227ca2ab60621e002a4b15b8bee83f92c7c516db87"
 dependencies = [
  "anyhow",
  "wasmparser",
@@ -3439,7 +3439,7 @@ dependencies = [
  "wasmtime-wasi-crypto",
  "wasmtime-wasi-nn",
  "wasmtime-wast",
- "wast 42.0.0",
+ "wast 43.0.0",
  "wat",
  "windows-sys",
 ]
@@ -3663,7 +3663,7 @@ version = "0.40.0"
 dependencies = [
  "anyhow",
  "wasmtime",
- "wast 42.0.0",
+ "wast 43.0.0",
 ]
 
 [[package]]
@@ -3677,9 +3677,9 @@ dependencies = [
 
 [[package]]
 name = "wast"
-version = "42.0.0"
+version = "43.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "badcb03f976f983ff0daf294da9697be659442f61e6b0942bb37a2b6cbfe9dd4"
+checksum = "408feaebf6dbf9d154957873b14d00e8fba4cbc17a8cbb1bc9e4c1db425c50a8"
 dependencies = [
  "leb128",
  "memchr",
@@ -3689,11 +3689,11 @@ dependencies = [
 
 [[package]]
 name = "wat"
-version = "1.0.44"
+version = "1.0.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b92f20b742ac527066c8414bc0637352661b68cab07ef42586cefaba71c965cf"
+checksum = "2b70bfff0cfaf33dc9d641196dbcd0023a2da8b4b9030c59535cb44e2884983b"
 dependencies = [
- "wast 42.0.0",
+ "wast 43.0.0",
 ]
 
 [[package]]
