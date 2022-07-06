@@ -268,7 +268,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         /*
             just previous fp saved on stack.
         */
-        8
+        16
     }
 
     fn gen_load_stack(mem: StackAMode, into_reg: Writable<Reg>, ty: Type) -> Inst {
@@ -388,17 +388,20 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         smallvec![]
     }
 
-    /// add  sp , sp-8   ;; alloc stack sapce for fp
-    /// st   fp , sp+0   ;; store old fp
-    /// move fp , sp     ;; set fp to sp
+    /// add  sp , -16   ;; alloc stack sapce for fp
+    /// st   ra , sp+0  ;; save ra
+    /// st   fp , sp+8  ;; store old fp
+    /// move fp , sp    ;; set fp to sp
     fn gen_prologue_frame_setup(_flags: &settings::Flags) -> SmallInstVec<Inst> {
         let mut insts = SmallVec::new();
-
-        insts.push(Inst::AjustSp {
-            amount: -(Self::word_bytes() as i64),
-        });
+        insts.push(Inst::AjustSp { amount: -16 });
         insts.push(Self::gen_store_stack(
             StackAMode::SPOffset(0, I64),
+            link_reg(),
+            I64,
+        ));
+        insts.push(Self::gen_store_stack(
+            StackAMode::SPOffset(8, I64),
             fp_reg(),
             I64,
         ));
@@ -409,19 +412,20 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         });
         insts
     }
-
-    /// st fp , sp  ;; restore fp
-    /// add sp, sp+8  ;; desalloc stack sapce for fp
+    /// reverse of gen_prologue_frame_setup.
     fn gen_epilogue_frame_restore(_: &settings::Flags) -> SmallInstVec<Inst> {
         let mut insts = SmallVec::new();
         insts.push(Self::gen_load_stack(
-            StackAMode::SPOffset(0, I64),
+            StackAMode::SPOffset(8, I64),
+            writable_link_reg(),
+            I64,
+        ));
+        insts.push(Self::gen_load_stack(
+            StackAMode::SPOffset(8, I64),
             writable_fp_reg(),
             I64,
         ));
-        insts.push(Inst::AjustSp {
-            amount: Self::word_bytes() as i64,
-        });
+        insts.push(Inst::AjustSp { amount: 16 });
         insts
     }
 

@@ -409,6 +409,23 @@ where
         self.emit(&gen_move(tmp, ty, r, ty));
         tmp.to_reg()
     }
+    fn sext_to_i64(&mut self, val: Value) -> Option<(Reg, Type)> {
+        let (ty, val) = self.type_and_value(val);
+        if ty.is_int() && ty.bits() < 64 {
+            let rd = self.temp_writable_reg(I64);
+            let rs = self.put_in_reg(val);
+            self.emit(&MInst::Extend {
+                rd: rd,
+                rn: rs,
+                signed: true,
+                from_bits: ty.bits() as u8,
+                to_bits: 64,
+            });
+            Some((rd.to_reg(), ty))
+        } else {
+            None
+        }
+    }
 }
 
 impl<C> IsleContext<'_, C, Flags, IsaFlags, 6>

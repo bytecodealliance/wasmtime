@@ -1822,3 +1822,7 @@
 
 (decl load_gv_addr(GlobalValue) Reg)
 (extern constructor load_gv_addr load_gv_addr)
+
+;;; I8 I16 I32 can be extend to 64 bit.
+(decl sext_to_i64(Reg Type)Value)
+(extern extractor sext_to_i64 sext_to_i64)

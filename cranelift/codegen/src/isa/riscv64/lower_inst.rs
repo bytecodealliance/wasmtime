@@ -244,9 +244,6 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Call | Opcode::CallIndirect => {
-            // save ra
-            let tmp = ctx.alloc_tmp(I64).only_reg().unwrap();
-            ctx.emit(Inst::gen_move(tmp, link_reg(), I64));
             let caller_conv = ctx.abi().call_conv();
             let (mut abi, inputs) = match op {
                 Opcode::Call => {
@@ -285,8 +282,6 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 abi.emit_copy_retval_to_regs(ctx, i, retval_regs);
             }
             abi.emit_stack_post_adjust(ctx);
-            // restore ra.
-            ctx.emit(Inst::gen_move(writable_link_reg(), tmp.to_reg(), I64));
         }
 
         Opcode::GetPinnedReg => pinned_register_not_used(),

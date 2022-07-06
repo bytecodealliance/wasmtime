@@ -351,7 +351,6 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_use(to.get_base_register());
             collector.reg_use(src);
         }
-
         &Inst::EpiloguePlaceholder => {}
         &Inst::Ret { .. } => {}
         &Inst::Extend { rd, rn, .. } => {

@@ -1336,7 +1336,7 @@ impl MachInstEmit for Inst {
                 }
                 .emit(&[], sink, emit_info, state);
                 //
-                 Inst::AluRRR {
+                Inst::AluRRR {
                     alu_op: AluOPRRR::And,
                     rd: t0,
                     rs1: dst.to_reg(),

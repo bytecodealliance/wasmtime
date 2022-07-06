@@ -11,6 +11,7 @@ fn test_riscv64_binemit() {
         inst: Inst,
         assembly: &'static str,
         code: Option<u32>,
+        // some instruction need enable some option.
         option_for_as: Option<Vec<String>>,
     }
 
