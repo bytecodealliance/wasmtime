@@ -15,40 +15,43 @@ use std::u16;
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Token<'a> {
     Comment(&'a str),
-    LPar,                 // '('
-    RPar,                 // ')'
-    LBrace,               // '{'
-    RBrace,               // '}'
-    LBracket,             // '['
-    RBracket,             // ']'
-    Minus,                // '-'
-    Plus,                 // '+'
-    Comma,                // ','
-    Dot,                  // '.'
-    Colon,                // ':'
-    Equal,                // '='
-    Not,                  // '!'
-    Arrow,                // '->'
-    Float(&'a str),       // Floating point immediate
-    Integer(&'a str),     // Integer immediate
-    Type(types::Type),    // i32, f32, b32x4, ...
-    Value(Value),         // v12, v7
-    Block(Block),         // block3
-    Cold,                 // cold (flag on block)
-    StackSlot(u32),       // ss3
-    GlobalValue(u32),     // gv3
-    Heap(u32),            // heap2
-    Table(u32),           // table2
-    JumpTable(u32),       // jt2
-    Constant(u32),        // const2
-    FuncRef(u32),         // fn2
-    SigRef(u32),          // sig2
-    UserRef(u32),         // u345
-    Name(&'a str),        // %9arbitrary_alphanum, %x3, %0, %function ...
-    String(&'a str),      // "arbitrary quoted string with no escape" ...
-    HexSequence(&'a str), // #89AF
-    Identifier(&'a str),  // Unrecognized identifier (opcode, enumerator, ...)
-    SourceLoc(&'a str),   // @00c7
+    LPar,                  // '('
+    RPar,                  // ')'
+    LBrace,                // '{'
+    RBrace,                // '}'
+    LBracket,              // '['
+    RBracket,              // ']'
+    Minus,                 // '-'
+    Plus,                  // '+'
+    Multiply,              // '*'
+    Comma,                 // ','
+    Dot,                   // '.'
+    Colon,                 // ':'
+    Equal,                 // '='
+    Not,                   // '!'
+    Arrow,                 // '->'
+    Float(&'a str),        // Floating point immediate
+    Integer(&'a str),      // Integer immediate
+    Type(types::Type),     // i32, f32, b32x4, ...
+    DynamicType(u32),      // dt5
+    Value(Value),          // v12, v7
+    Block(Block),          // block3
+    Cold,                  // cold (flag on block)
+    StackSlot(u32),        // ss3
+    DynamicStackSlot(u32), // dss4
+    GlobalValue(u32),      // gv3
+    Heap(u32),             // heap2
+    Table(u32),            // table2
+    JumpTable(u32),        // jt2
+    Constant(u32),         // const2
+    FuncRef(u32),          // fn2
+    SigRef(u32),           // sig2
+    UserRef(u32),          // u345
+    Name(&'a str),         // %9arbitrary_alphanum, %x3, %0, %function ...
+    String(&'a str),       // "arbitrary quoted string with no escape" ...
+    HexSequence(&'a str),  // #89AF
+    Identifier(&'a str),   // Unrecognized identifier (opcode, enumerator, ...)
+    SourceLoc(&'a str),    // @00c7
 }
 
 /// A `Token` with an associated location.
@@ -341,6 +344,8 @@ impl<'a> Lexer<'a> {
             "v" => Value::with_number(number).map(Token::Value),
             "block" => Block::with_number(number).map(Token::Block),
             "ss" => Some(Token::StackSlot(number)),
+            "dss" => Some(Token::DynamicStackSlot(number)),
+            "dt" => Some(Token::DynamicType(number)),
             "gv" => Some(Token::GlobalValue(number)),
             "heap" => Some(Token::Heap(number)),
             "table" => Some(Token::Table(number)),
@@ -482,6 +487,7 @@ impl<'a> Lexer<'a> {
                 Some('=') => Some(self.scan_char(Token::Equal)),
                 Some('!') => Some(self.scan_char(Token::Not)),
                 Some('+') => Some(self.scan_number()),
+                Some('*') => Some(self.scan_char(Token::Multiply)),
                 Some('-') => {
                     if self.looking_at("->") {
                         Some(self.scan_chars(2, Token::Arrow))

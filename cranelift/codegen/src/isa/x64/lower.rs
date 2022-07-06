@@ -2169,6 +2169,8 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             });
         }
 
+        Opcode::DynamicStackAddr => unimplemented!("DynamicStackAddr"),
+
         Opcode::StackAddr => {
             let (stack_slot, offset) = match *ctx.data(insn) {
                 InstructionData::StackLoad {
@@ -2180,9 +2182,9 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             };
             let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let offset: i32 = offset.into();
-            let inst = ctx
-                .abi()
-                .stackslot_addr(stack_slot, u32::try_from(offset).unwrap(), dst);
+            let inst =
+                ctx.abi()
+                    .sized_stackslot_addr(stack_slot, u32::try_from(offset).unwrap(), dst);
             ctx.emit(inst);
         }
 
@@ -2908,7 +2910,11 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         // Unimplemented opcodes below. These are not currently used by Wasm
         // lowering or other known embeddings, but should be either supported or
-        // removed eventually.
+        // removed eventually
+        Opcode::ExtractVector => {
+            unimplemented!("ExtractVector not supported");
+        }
+
         Opcode::Cls => unimplemented!("Cls not supported"),
 
         Opcode::Fma => unimplemented!("Fma not supported"),
@@ -2965,7 +2971,10 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             panic!("ALU+imm and ALU+carry ops should not appear here!");
         }
 
-        Opcode::StackLoad | Opcode::StackStore => {
+        Opcode::StackLoad
+        | Opcode::StackStore
+        | Opcode::DynamicStackStore
+        | Opcode::DynamicStackLoad => {
             panic!("Direct stack memory access not supported; should have been legalized");
         }
 

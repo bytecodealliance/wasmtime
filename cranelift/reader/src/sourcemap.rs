@@ -8,9 +8,10 @@
 
 use crate::error::{Location, ParseResult};
 use crate::lexer::split_entity_name;
-use cranelift_codegen::ir::entities::AnyEntity;
+use cranelift_codegen::ir::entities::{AnyEntity, DynamicType};
 use cranelift_codegen::ir::{
-    Block, Constant, FuncRef, GlobalValue, Heap, JumpTable, SigRef, StackSlot, Table, Value,
+    Block, Constant, DynamicStackSlot, FuncRef, GlobalValue, Heap, JumpTable, SigRef, StackSlot,
+    Table, Value,
 };
 use std::collections::HashMap;
 
@@ -36,6 +37,11 @@ impl SourceMap {
     /// Look up a stack slot entity.
     pub fn contains_ss(&self, ss: StackSlot) -> bool {
         self.locations.contains_key(&ss.into())
+    }
+
+    /// Look up a dynamic stack slot entity.
+    pub fn contains_dss(&self, dss: DynamicStackSlot) -> bool {
+        self.locations.contains_key(&dss.into())
     }
 
     /// Look up a global value entity.
@@ -170,6 +176,16 @@ impl SourceMap {
 
     /// Define the stack slot `entity`.
     pub fn def_ss(&mut self, entity: StackSlot, loc: Location) -> ParseResult<()> {
+        self.def_entity(entity.into(), loc)
+    }
+
+    /// Define the dynamic stack slot `entity`.
+    pub fn def_dss(&mut self, entity: DynamicStackSlot, loc: Location) -> ParseResult<()> {
+        self.def_entity(entity.into(), loc)
+    }
+
+    /// Define the dynamic type `entity`.
+    pub fn def_dt(&mut self, entity: DynamicType, loc: Location) -> ParseResult<()> {
         self.def_entity(entity.into(), loc)
     }
 

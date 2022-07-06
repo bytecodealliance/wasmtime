@@ -301,12 +301,12 @@ impl<'a> State<'a, DataValue> for InterpreterState<'a> {
 
     fn push_frame(&mut self, function: &'a Function) {
         if let Some(frame) = self.frame_stack.iter().last() {
-            self.frame_offset += frame.function.stack_size() as usize;
+            self.frame_offset += frame.function.fixed_stack_size() as usize;
         }
 
         // Grow the stack by the space necessary for this frame
         self.stack
-            .extend(iter::repeat(0).take(function.stack_size() as usize));
+            .extend(iter::repeat(0).take(function.fixed_stack_size() as usize));
 
         self.frame_stack.push(Frame::new(function));
     }
@@ -314,11 +314,11 @@ impl<'a> State<'a, DataValue> for InterpreterState<'a> {
         if let Some(frame) = self.frame_stack.pop() {
             // Shorten the stack after exiting the frame
             self.stack
-                .truncate(self.stack.len() - frame.function.stack_size() as usize);
+                .truncate(self.stack.len() - frame.function.fixed_stack_size() as usize);
 
             // Reset frame_offset to the start of this function
             if let Some(frame) = self.frame_stack.iter().last() {
-                self.frame_offset -= frame.function.stack_size() as usize;
+                self.frame_offset -= frame.function.fixed_stack_size() as usize;
             }
         }
     }
@@ -358,7 +358,7 @@ impl<'a> State<'a, DataValue> for InterpreterState<'a> {
         slot: StackSlot,
         offset: u64,
     ) -> Result<Address, MemoryError> {
-        let stack_slots = &self.get_current_function().stack_slots;
+        let stack_slots = &self.get_current_function().sized_stack_slots;
         let stack_slot = &stack_slots[slot];
 
         // offset must be `0 <= Offset < sizeof(SS)`
@@ -539,6 +539,7 @@ impl<'a> State<'a, DataValue> for InterpreterState<'a> {
                         action_stack.push(ResolveAction::Resolve(base));
                     }
                     GlobalValueData::Symbol { .. } => unimplemented!(),
+                    GlobalValueData::DynScaleTargetConst { .. } => unimplemented!(),
                 },
                 Some(ResolveAction::Add(dv)) => {
                     current_val = current_val

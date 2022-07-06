@@ -1,7 +1,7 @@
 //! Implementation of the standard x64 ABI.
 
 use crate::ir::types::*;
-use crate::ir::{self, types, ExternalName, LibCall, MemFlags, Opcode, TrapCode, Type};
+use crate::ir::{self, types, ExternalName, LibCall, MemFlags, Opcode, Signature, TrapCode, Type};
 use crate::isa;
 use crate::isa::{unwind::UnwindInst, x64::inst::*, CallConv};
 use crate::machinst::abi_impl::*;
@@ -573,6 +573,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
 
     fn gen_clobber_restore(
         call_conv: isa::CallConv,
+        sig: &Signature,
         flags: &settings::Flags,
         clobbers: &[Writable<RealReg>],
         fixed_frame_storage_size: u32,
@@ -580,7 +581,8 @@ impl ABIMachineSpec for X64ABIMachineSpec {
     ) -> SmallVec<[Self::I; 16]> {
         let mut insts = SmallVec::new();
 
-        let clobbered_callee_saves = Self::get_clobbered_callee_saves(call_conv, flags, clobbers);
+        let clobbered_callee_saves =
+            Self::get_clobbered_callee_saves(call_conv, flags, sig, clobbers);
         let stack_size = fixed_frame_storage_size + compute_clobber_size(&clobbered_callee_saves);
 
         // Restore regs by loading from offsets of RSP. RSP will be
@@ -722,11 +724,11 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         insts
     }
 
-    fn get_number_of_spillslots_for_value(rc: RegClass) -> u32 {
+    fn get_number_of_spillslots_for_value(rc: RegClass, vector_scale: u32) -> u32 {
         // We allocate in terms of 8-byte slots.
         match rc {
             RegClass::Int => 1,
-            RegClass::Float => 2,
+            RegClass::Float => vector_scale / 8,
         }
     }
 
@@ -771,6 +773,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
     fn get_clobbered_callee_saves(
         call_conv: CallConv,
         flags: &settings::Flags,
+        _sig: &Signature,
         regs: &[Writable<RealReg>],
     ) -> Vec<Writable<RealReg>> {
         let mut regs: Vec<Writable<RealReg>> = match call_conv {
@@ -805,7 +808,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         _is_leaf: bool,
         _stack_args_size: u32,
         _num_clobbered_callee_saves: usize,
-        _fixed_frame_storage_size: u32,
+        _frame_storage_size: u32,
     ) -> bool {
         true
     }

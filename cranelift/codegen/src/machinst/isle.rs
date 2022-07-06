@@ -6,7 +6,9 @@ use smallvec::SmallVec;
 use std::cell::Cell;
 
 pub use super::MachLabel;
-pub use crate::ir::{ArgumentExtension, ExternalName, FuncRef, GlobalValue, SigRef};
+pub use crate::ir::{
+    ArgumentExtension, DynamicStackSlot, ExternalName, FuncRef, GlobalValue, SigRef, StackSlot,
+};
 pub use crate::isa::unwind::UnwindInst;
 pub use crate::machinst::{ABIArg, ABIArgSlot, ABISig, RealReg, Reg, RelocDistance, Writable};
 
@@ -243,7 +245,18 @@ macro_rules! isle_prelude_methods {
 
         #[inline]
         fn fits_in_32(&mut self, ty: Type) -> Option<Type> {
-            if ty.bits() <= 32 {
+            if ty.bits() <= 32 && !ty.is_dynamic_vector() {
+                Some(ty)
+            } else {
+                None
+            }
+        }
+
+        #[inline]
+        fn lane_fits_in_32(&mut self, ty: Type) -> Option<Type> {
+            if !ty.is_vector() && !ty.is_dynamic_vector() {
+                None
+            } else if ty.lane_type().bits() <= 32 {
                 Some(ty)
             } else {
                 None
@@ -252,7 +265,7 @@ macro_rules! isle_prelude_methods {
 
         #[inline]
         fn fits_in_64(&mut self, ty: Type) -> Option<Type> {
-            if ty.bits() <= 64 {
+            if ty.bits() <= 64 && !ty.is_dynamic_vector() {
                 Some(ty)
             } else {
                 None
@@ -413,6 +426,36 @@ macro_rules! isle_prelude_methods {
         fn multi_lane(&mut self, ty: Type) -> Option<(u32, u32)> {
             if ty.lane_count() > 1 {
                 Some((ty.lane_bits(), ty.lane_count()))
+            } else {
+                None
+            }
+        }
+
+        #[inline]
+        fn dynamic_lane(&mut self, ty: Type) -> Option<(u32, u32)> {
+            if ty.is_dynamic_vector() {
+                Some((ty.lane_bits(), ty.min_lane_count()))
+            } else {
+                None
+            }
+        }
+
+        #[inline]
+        fn dynamic_int_lane(&mut self, ty: Type) -> Option<u32> {
+            if ty.is_dynamic_vector() && crate::machinst::ty_has_int_representation(ty.lane_type())
+            {
+                Some(ty.lane_bits())
+            } else {
+                None
+            }
+        }
+
+        #[inline]
+        fn dynamic_fp_lane(&mut self, ty: Type) -> Option<u32> {
+            if ty.is_dynamic_vector()
+                && crate::machinst::ty_has_float_or_vec_representation(ty.lane_type())
+            {
+                Some(ty.lane_bits())
             } else {
                 None
             }
@@ -635,12 +678,12 @@ macro_rules! isle_prelude_methods {
             }
         }
 
-        fn abi_stack_arg_space(&mut self, abi: &ABISig) -> i64 {
-            abi.stack_arg_space()
+        fn abi_sized_stack_arg_space(&mut self, abi: &ABISig) -> i64 {
+            abi.sized_stack_arg_space()
         }
 
-        fn abi_stack_ret_space(&mut self, abi: &ABISig) -> i64 {
-            abi.stack_ret_space()
+        fn abi_sized_stack_ret_space(&mut self, abi: &ABISig) -> i64 {
+            abi.sized_stack_ret_space()
         }
 
         fn abi_arg_only_slot(&mut self, arg: &ABIArg) -> Option<ABIArgSlot> {
@@ -654,6 +697,31 @@ macro_rules! isle_prelude_methods {
                 }
                 _ => None,
             }
+        }
+
+        fn abi_stackslot_addr(
+            &mut self,
+            dst: WritableReg,
+            stack_slot: StackSlot,
+            offset: Offset32,
+        ) -> MInst {
+            let offset = u32::try_from(i32::from(offset)).unwrap();
+            self.lower_ctx
+                .abi()
+                .sized_stackslot_addr(stack_slot, offset, dst)
+        }
+
+        fn abi_dynamic_stackslot_addr(
+            &mut self,
+            dst: WritableReg,
+            stack_slot: DynamicStackSlot,
+        ) -> MInst {
+            assert!(self
+                .lower_ctx
+                .abi()
+                .dynamic_stackslot_offsets()
+                .is_valid(stack_slot));
+            self.lower_ctx.abi().dynamic_stackslot_addr(stack_slot, dst)
         }
 
         fn real_reg_to_reg(&mut self, reg: RealReg) -> Reg {

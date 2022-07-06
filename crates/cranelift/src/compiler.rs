@@ -264,7 +264,7 @@ impl wasmtime_environ::Compiler for Compiler {
 
         let length = u32::try_from(code_buf.len()).unwrap();
 
-        let stack_slots = std::mem::take(&mut context.func.stack_slots);
+        let sized_stack_slots = std::mem::take(&mut context.func.sized_stack_slots);
 
         self.save_context(CompilerContext {
             func_translator,
@@ -275,7 +275,7 @@ impl wasmtime_environ::Compiler for Compiler {
             body: code_buf,
             relocations: func_relocs,
             value_labels_ranges: ranges.unwrap_or(Default::default()),
-            stack_slots,
+            sized_stack_slots,
             unwind_info,
             traps,
             info: FunctionInfo {
@@ -613,7 +613,7 @@ impl Compiler {
         let values_vec_byte_size = u32::try_from(value_size * values_vec_len).unwrap();
         let values_vec_len = u32::try_from(values_vec_len).unwrap();
 
-        let ss = builder.func.create_stack_slot(ir::StackSlotData::new(
+        let ss = builder.func.create_sized_stack_slot(ir::StackSlotData::new(
             ir::StackSlotKind::ExplicitSlot,
             values_vec_byte_size,
         ));
@@ -712,7 +712,7 @@ impl Compiler {
             body: code_buf,
             unwind_info,
             relocations: Vec::new(),
-            stack_slots: Default::default(),
+            sized_stack_slots: Default::default(),
             value_labels_ranges: Default::default(),
             info: Default::default(),
             address_map: Default::default(),

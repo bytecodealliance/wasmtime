@@ -41,7 +41,12 @@ pub trait FuncWriter {
     fn super_preamble(&mut self, w: &mut dyn Write, func: &Function) -> Result<bool, fmt::Error> {
         let mut any = false;
 
-        for (ss, slot) in func.stack_slots.iter() {
+        for (ss, slot) in func.dynamic_stack_slots.iter() {
+            any = true;
+            self.write_entity_definition(w, func, ss.into(), slot)?;
+        }
+
+        for (ss, slot) in func.sized_stack_slots.iter() {
             any = true;
             self.write_entity_definition(w, func, ss.into(), slot)?;
         }
@@ -493,6 +498,14 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
             offset,
             ..
         } => write!(w, " {}, {}{}", arg, stack_slot, offset),
+        DynamicStackLoad {
+            dynamic_stack_slot, ..
+        } => write!(w, " {}", dynamic_stack_slot),
+        DynamicStackStore {
+            arg,
+            dynamic_stack_slot,
+            ..
+        } => write!(w, " {}, {}", arg, dynamic_stack_slot),
         HeapAddr { heap, arg, imm, .. } => write!(w, " {}, {}, {}", heap, arg, imm),
         TableAddr { table, arg, .. } => write!(w, " {}, {}", table, arg),
         Load {
@@ -570,7 +583,7 @@ mod tests {
         f.name = ExternalName::testcase("foo");
         assert_eq!(f.to_string(), "function %foo() fast {\n}\n");
 
-        f.create_stack_slot(StackSlotData::new(StackSlotKind::ExplicitSlot, 4));
+        f.create_sized_stack_slot(StackSlotData::new(StackSlotKind::ExplicitSlot, 4));
         assert_eq!(
             f.to_string(),
             "function %foo() fast {\n    ss0 = explicit_slot 4\n}\n"

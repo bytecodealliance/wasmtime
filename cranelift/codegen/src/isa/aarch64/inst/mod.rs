@@ -1194,6 +1194,7 @@ impl MachInst for Inst {
                 assert!(ty.bits() <= 128);
                 Ok((&[RegClass::Float], &[I8X16]))
             }
+            _ if ty.is_dynamic_vector() => Ok((&[RegClass::Float], &[I8X16])),
             IFLAGS | FFLAGS => Ok((&[RegClass::Int], &[I64])),
             _ => Err(CodegenError::Unsupported(format!(
                 "Unexpected SSA-value type: {}",

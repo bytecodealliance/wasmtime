@@ -135,6 +135,44 @@ impl StackSlot {
     }
 }
 
+/// An opaque reference to a dynamic stack slot.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+pub struct DynamicStackSlot(u32);
+entity_impl!(DynamicStackSlot, "dss");
+
+impl DynamicStackSlot {
+    /// Create a new stack slot reference from its number.
+    ///
+    /// This method is for use by the parser.
+    pub fn with_number(n: u32) -> Option<Self> {
+        if n < u32::MAX {
+            Some(Self(n))
+        } else {
+            None
+        }
+    }
+}
+
+/// An opaque reference to a dynamic type.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+pub struct DynamicType(u32);
+entity_impl!(DynamicType, "dt");
+
+impl DynamicType {
+    /// Create a new dynamic type reference from its number.
+    ///
+    /// This method is for use by the parser.
+    pub fn with_number(n: u32) -> Option<Self> {
+        if n < u32::MAX {
+            Some(Self(n))
+        } else {
+            None
+        }
+    }
+}
+
 /// An opaque reference to a global value.
 ///
 /// A `GlobalValue` is a [`Value`](Value) that will be live across the entire
@@ -389,6 +427,10 @@ pub enum AnyEntity {
     Value(Value),
     /// A stack slot.
     StackSlot(StackSlot),
+    /// A dynamic stack slot.
+    DynamicStackSlot(DynamicStackSlot),
+    /// A dynamic type
+    DynamicType(DynamicType),
     /// A Global value.
     GlobalValue(GlobalValue),
     /// A jump table.
@@ -415,6 +457,8 @@ impl fmt::Display for AnyEntity {
             Self::Inst(r) => r.fmt(f),
             Self::Value(r) => r.fmt(f),
             Self::StackSlot(r) => r.fmt(f),
+            Self::DynamicStackSlot(r) => r.fmt(f),
+            Self::DynamicType(r) => r.fmt(f),
             Self::GlobalValue(r) => r.fmt(f),
             Self::JumpTable(r) => r.fmt(f),
             Self::Constant(r) => r.fmt(f),
@@ -454,6 +498,18 @@ impl From<Value> for AnyEntity {
 impl From<StackSlot> for AnyEntity {
     fn from(r: StackSlot) -> Self {
         Self::StackSlot(r)
+    }
+}
+
+impl From<DynamicStackSlot> for AnyEntity {
+    fn from(r: DynamicStackSlot) -> Self {
+        Self::DynamicStackSlot(r)
+    }
+}
+
+impl From<DynamicType> for AnyEntity {
+    fn from(r: DynamicType) -> Self {
+        Self::DynamicType(r)
     }
 }
 

@@ -1158,9 +1158,6 @@
 
 ;; Helpers for stack-slot addresses ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(decl abi_stackslot_addr (WritableReg StackSlot Offset32) MInst)
-(extern constructor abi_stackslot_addr abi_stackslot_addr)
-
 (decl stack_addr_impl (Type StackSlot Offset32) Reg)
 (rule (stack_addr_impl ty stack_slot offset)
       (let ((dst WritableReg (temp_writable_reg ty))

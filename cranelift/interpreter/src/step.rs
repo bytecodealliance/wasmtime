@@ -381,6 +381,9 @@ where
                 })
             })
         }
+        Opcode::DynamicStackAddr => unimplemented!("DynamicStackSlot"),
+        Opcode::DynamicStackLoad => unimplemented!("DynamicStackLoad"),
+        Opcode::DynamicStackStore => unimplemented!("DynamicStackStore"),
         Opcode::GlobalValue => {
             if let InstructionData::UnaryGlobalValue { global_value, .. } = inst {
                 assign_or_memtrap(state.resolve_global_value(global_value))
@@ -995,6 +998,9 @@ where
             assign(vectorizelanes(&new_vec, ctrl_ty)?)
         }
         Opcode::IaddPairwise => assign(binary_pairwise(arg(0)?, arg(1)?, ctrl_ty, Value::add)?),
+        Opcode::ExtractVector => {
+            unimplemented!("ExtractVector not supported");
+        }
     })
 }
 

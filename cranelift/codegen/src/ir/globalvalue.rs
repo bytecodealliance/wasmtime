@@ -76,6 +76,13 @@ pub enum GlobalValueData {
         /// Does this symbol refer to a thread local storage value?
         tls: bool,
     },
+
+    /// Value is a multiple of how many instances of `vector_type` will fit in
+    /// a target vector register.
+    DynScaleTargetConst {
+        /// Base vector type.
+        vector_type: Type,
+    },
 }
 
 impl GlobalValueData {
@@ -92,6 +99,7 @@ impl GlobalValueData {
         match *self {
             Self::VMContext { .. } | Self::Symbol { .. } => isa.pointer_type(),
             Self::IAddImm { global_type, .. } | Self::Load { global_type, .. } => global_type,
+            Self::DynScaleTargetConst { .. } => isa.pointer_type(),
         }
     }
 
@@ -153,6 +161,9 @@ impl fmt::Display for GlobalValueData {
                     write!(f, "{}", offset)?;
                 }
                 Ok(())
+            }
+            Self::DynScaleTargetConst { vector_type } => {
+                write!(f, "dyn_scale_target_const.{}", vector_type)
             }
         }
     }

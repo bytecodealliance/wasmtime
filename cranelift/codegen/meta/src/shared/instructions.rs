@@ -427,6 +427,7 @@ fn define_simd_lane_access(
             .floats(Interval::All)
             .bools(Interval::All)
             .simd_lanes(Interval::All)
+            .dynamic_simd_lanes(Interval::All)
             .includes_scalars(false)
             .build(),
     );
@@ -706,6 +707,7 @@ pub(crate) fn define(
         TypeSetBuilder::new()
             .ints(Interval::All)
             .simd_lanes(Interval::All)
+            .dynamic_simd_lanes(Interval::All)
             .build(),
     );
 
@@ -785,6 +787,7 @@ pub(crate) fn define(
             .floats(Interval::All)
             .simd_lanes(Interval::All)
             .refs(Interval::All)
+            .dynamic_simd_lanes(Interval::All)
             .build(),
     );
 
@@ -793,6 +796,7 @@ pub(crate) fn define(
     let addr = &Operand::new("addr", iAddr);
 
     let SS = &Operand::new("SS", &entities.stack_slot);
+    let DSS = &Operand::new("DSS", &entities.dynamic_stack_slot);
     let Offset = &Operand::new("Offset", &imm.offset32).with_doc("Byte offset from base address");
     let x = &Operand::new("x", Mem).with_doc("Value to be stored");
     let a = &Operand::new("a", Mem).with_doc("Value loaded");
@@ -1163,7 +1167,51 @@ pub(crate) fn define(
         .operands_out(vec![addr]),
     );
 
+    ig.push(
+        Inst::new(
+            "dynamic_stack_load",
+            r#"
+        Load a value from a dynamic stack slot.
+
+        This is a polymorphic instruction that can load any value type which
+        has a memory representation.
+        "#,
+            &formats.dynamic_stack_load,
+        )
+        .operands_in(vec![DSS])
+        .operands_out(vec![a])
+        .can_load(true),
+    );
+
+    ig.push(
+        Inst::new(
+            "dynamic_stack_store",
+            r#"
+        Store a value to a dynamic stack slot.
+
+        This is a polymorphic instruction that can store any dynamic value type with a
+        memory representation.
+        "#,
+            &formats.dynamic_stack_store,
+        )
+        .operands_in(vec![x, DSS])
+        .can_store(true),
+    );
+
     let GV = &Operand::new("GV", &entities.global_value);
+    ig.push(
+        Inst::new(
+            "dynamic_stack_addr",
+            r#"
+        Get the address of a dynamic stack slot.
+
+        Compute the absolute address of the first byte of a dynamic stack slot.
+        "#,
+            &formats.dynamic_stack_load,
+        )
+        .operands_in(vec![DSS])
+        .operands_out(vec![addr]),
+    );
 
     ig.push(
         Inst::new(
@@ -2786,6 +2834,7 @@ pub(crate) fn define(
         TypeSetBuilder::new()
             .floats(Interval::All)
             .simd_lanes(Interval::All)
+            .dynamic_simd_lanes(Interval::All)
             .build(),
     );
     let Cond = &Operand::new("Cond", &imm.floatcc);
@@ -3409,6 +3458,7 @@ pub(crate) fn define(
         TypeSetBuilder::new()
             .ints(16..64)
             .simd_lanes(2..8)
+            .dynamic_simd_lanes(2..8)
             .includes_scalars(false)
             .build(),
     );
@@ -3479,6 +3529,7 @@ pub(crate) fn define(
         TypeSetBuilder::new()
             .ints(8..32)
             .simd_lanes(4..16)
+            .dynamic_simd_lanes(4..16)
             .includes_scalars(false)
             .build(),
     );
@@ -4062,5 +4113,31 @@ pub(crate) fn define(
             &formats.nullary,
         )
         .other_side_effects(true),
+    );
+
+    let TxN = &TypeVar::new(
+        "TxN",
+        "A dynamic vector type",
+        TypeSetBuilder::new()
+            .ints(Interval::All)
+            .floats(Interval::All)
+            .bools(Interval::All)
+            .dynamic_simd_lanes(Interval::All)
+            .build(),
+    );
+    let x = &Operand::new("x", TxN).with_doc("The dynamic vector to extract from");
+    let y = &Operand::new("y", &imm.uimm8).with_doc("128-bit vector index");
+    let a = &Operand::new("a", &TxN.dynamic_to_vector()).with_doc("New fixed vector");
+
+    ig.push(
+        Inst::new(
+            "extract_vector",
+            r#"
+        Return a fixed length sub vector, extracted from a dynamic vector.
+        "#,
+            &formats.binary_imm8,
+        )
+        .operands_in(vec![x, y])
+        .operands_out(vec![a]),
     );
 }

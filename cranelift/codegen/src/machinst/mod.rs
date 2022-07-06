@@ -45,7 +45,7 @@
 //! ```
 
 use crate::binemit::{Addend, CodeInfo, CodeOffset, Reloc, StackMap};
-use crate::ir::{SourceLoc, StackSlot, Type};
+use crate::ir::{DynamicStackSlot, SourceLoc, StackSlot, Type};
 use crate::result::CodegenResult;
 use crate::settings::Flags;
 use crate::value_label::ValueLabelsRanges;
@@ -282,7 +282,9 @@ pub struct MachCompileResult {
     /// Debug info: value labels to registers/stackslots at code offsets.
     pub value_labels_ranges: ValueLabelsRanges,
     /// Debug info: stackslots to stack pointer offsets.
-    pub stackslot_offsets: PrimaryMap<StackSlot, u32>,
+    pub sized_stackslot_offsets: PrimaryMap<StackSlot, u32>,
+    /// Debug info: stackslots to stack pointer offsets.
+    pub dynamic_stackslot_offsets: PrimaryMap<DynamicStackSlot, u32>,
     /// Basic-block layout info: block start offsets.
     ///
     /// This info is generated only if the `machine_code_cfg_info`

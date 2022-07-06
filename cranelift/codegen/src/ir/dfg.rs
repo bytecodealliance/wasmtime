@@ -3,12 +3,13 @@
 use crate::entity::{self, PrimaryMap, SecondaryMap};
 use crate::ir;
 use crate::ir::builder::ReplaceBuilder;
+use crate::ir::dynamic_type::{DynamicTypeData, DynamicTypes};
 use crate::ir::extfunc::ExtFuncData;
 use crate::ir::instructions::{BranchInfo, CallInfo, InstructionData};
 use crate::ir::{types, ConstantData, ConstantPool, Immediate};
 use crate::ir::{
-    Block, FuncRef, Inst, SigRef, Signature, SourceLoc, Type, Value, ValueLabelAssignments,
-    ValueList, ValueListPool,
+    Block, DynamicType, FuncRef, Inst, SigRef, Signature, SourceLoc, Type, Value,
+    ValueLabelAssignments, ValueList, ValueListPool,
 };
 use crate::packed_option::ReservedValue;
 use crate::write::write_operands;
@@ -50,6 +51,9 @@ pub struct DataFlowGraph {
     /// instructions contained in each block.
     blocks: PrimaryMap<Block, BlockData>,
 
+    /// Dynamic types created.
+    pub dynamic_types: DynamicTypes,
+
     /// Memory pool of value lists.
     ///
     /// The `ValueList` references into this pool appear in many places:
@@ -89,6 +93,7 @@ impl DataFlowGraph {
             insts: PrimaryMap::new(),
             results: SecondaryMap::new(),
             blocks: PrimaryMap::new(),
+            dynamic_types: DynamicTypes::new(),
             value_lists: ValueListPool::new(),
             values: PrimaryMap::new(),
             signatures: PrimaryMap::new(),
@@ -105,6 +110,7 @@ impl DataFlowGraph {
         self.insts.clear();
         self.results.clear();
         self.blocks.clear();
+        self.dynamic_types.clear();
         self.value_lists.clear();
         self.values.clear();
         self.signatures.clear();
@@ -555,6 +561,11 @@ impl DataFlowGraph {
         let n = self.num_insts() + 1;
         self.results.resize(n);
         self.insts.push(data)
+    }
+
+    /// Declares a dynamic vector type
+    pub fn make_dynamic_ty(&mut self, data: DynamicTypeData) -> DynamicType {
+        self.dynamic_types.push(data)
     }
 
     /// Returns an object that displays `inst`.
@@ -1104,6 +1115,20 @@ impl DataFlowGraph {
         self.values[v].set_type(t);
     }
 
+    /// Check that the given concrete `Type` has been defined in the function.
+    pub fn check_dynamic_type(&mut self, ty: Type) -> Option<Type> {
+        debug_assert!(ty.is_dynamic_vector());
+        if self
+            .dynamic_types
+            .values()
+            .any(|dyn_ty_data| dyn_ty_data.concrete().unwrap() == ty)
+        {
+            Some(ty)
+        } else {
+            None
+        }
+    }
+
     /// Create result values for `inst`, reusing the provided detached values.
     /// This is similar to `make_inst_results_reusing` except it's only for use
     /// in the parser, which needs to reuse previously invalid values.
@@ -1130,6 +1155,10 @@ impl DataFlowGraph {
             let constraints = self.insts[inst].opcode().constraints();
             for res_idx in 0..constraints.num_fixed_results() {
                 let ty = constraints.result_type(res_idx, ctrl_typevar);
+                if ty.is_dynamic_vector() {
+                    self.check_dynamic_type(ty)
+                        .unwrap_or_else(|| panic!("Use of undeclared dynamic type: {}", ty));
+                }
                 if let Some(v) = reuse.get(res_idx) {
                     self.set_value_type_for_parser(*v, ty);
                 }
