@@ -3023,5 +3023,3 @@
 (decl synthetic_amode_to_xmm_mem (SyntheticAmode) XmmMem)
 (rule (synthetic_amode_to_xmm_mem amode)
       (synthetic_amode_to_reg_mem amode))
-
-
