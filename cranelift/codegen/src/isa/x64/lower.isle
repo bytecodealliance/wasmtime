@@ -2866,5 +2866,4 @@
 
 (rule (lower (has_type (and (fits_in_64 ty) (ty_int _))
                   (atomic_rmw flags op address input)))
-      ;; TODO: `flags` is unused--should it be?
-      (x64_atomic_rmw_seq ty op address input))
+      (x64_atomic_rmw_seq ty op (to_amode flags address (zero_offset)) input))

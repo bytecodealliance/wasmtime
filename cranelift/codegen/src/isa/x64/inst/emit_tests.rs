@@ -4611,6 +4611,8 @@ fn test_x64_emit() {
         3,
     )
     .into();
+    // Use `r9` with a 0 offset.
+    let am3: SyntheticAmode = Amode::imm_reg(0, r9).into();
 
     // A general 8-bit case.
     insns.push((
@@ -4744,7 +4746,7 @@ fn test_x64_emit() {
         Inst::AtomicRmwSeq {
             ty: types::I8,
             op: inst_common::MachAtomicRmwOp::Or,
-            address: r9,
+            mem: am3.clone(),
             operand: r10,
             temp: w_r11,
             dst_old: w_rax
@@ -4756,7 +4758,7 @@ fn test_x64_emit() {
         Inst::AtomicRmwSeq {
             ty: types::I16,
             op: inst_common::MachAtomicRmwOp::And,
-            address: r9,
+            mem: am3.clone(),
             operand: r10,
             temp: w_r11,
             dst_old: w_rax
@@ -4768,7 +4770,7 @@ fn test_x64_emit() {
         Inst::AtomicRmwSeq {
             ty: types::I32,
             op: inst_common::MachAtomicRmwOp::Xchg,
-            address: r9,
+            mem: am3.clone(),
             operand: r10,
             temp: w_r11,
             dst_old: w_rax
@@ -4780,7 +4782,7 @@ fn test_x64_emit() {
         Inst::AtomicRmwSeq {
             ty: types::I32,
             op: inst_common::MachAtomicRmwOp::Umin,
-            address: r9,
+            mem: am3.clone(),
             operand: r10,
             temp: w_r11,
             dst_old: w_rax
@@ -4792,7 +4794,7 @@ fn test_x64_emit() {
         Inst::AtomicRmwSeq {
             ty: types::I64,
             op: inst_common::MachAtomicRmwOp::Add,
-            address: r9,
+            mem: am3.clone(),
             operand: r10,
             temp: w_r11,
             dst_old: w_rax

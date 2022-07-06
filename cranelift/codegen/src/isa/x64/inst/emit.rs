@@ -2613,16 +2613,16 @@ pub(crate) fn emit(
         Inst::AtomicRmwSeq {
             ty,
             op,
-            address,
+            mem,
             operand,
             temp,
             dst_old,
         } => {
-            let address = allocs.next(*address);
             let operand = allocs.next(*operand);
             let temp = allocs.next_writable(*temp);
             let dst_old = allocs.next_writable(*dst_old);
             debug_assert_eq!(dst_old.to_reg(), regs::rax());
+            let mem = mem.finalize(state, sink).with_allocs(allocs);
 
             // Emit this: mov{zbq,zwq,zlq,q}     (%r_address), %rax    // rax =
             //    old value again: movq                   %rax, %r_temp
@@ -2643,12 +2643,11 @@ pub(crate) fn emit(
             // TODO: this sequence can be significantly improved (e.g., to `lock
             // <op>`) when it is known that `dst_old` is not used later, see
             // https://github.com/bytecodealliance/wasmtime/issues/2153.
-            let amode = Amode::imm_reg(0, address);
             let again_label = sink.get_label();
 
             // mov{zbq,zwq,zlq,q} (%r_address), %rax
             // No need to call `add_trap` here, since the `i1` emit will do that.
-            let i1 = Inst::load(*ty, amode.clone(), dst_old, ExtKind::ZeroExtend);
+            let i1 = Inst::load(*ty, mem.clone(), dst_old, ExtKind::ZeroExtend);
             i1.emit(&[], sink, info, state);
 
             // again:
@@ -2722,7 +2721,7 @@ pub(crate) fn emit(
                 ty: *ty,
                 replacement: temp.to_reg(),
                 expected: dst_old.to_reg(),
-                mem: amode.into(),
+                mem: mem.into(),
                 dst_old,
             };
             i4.emit(&[], sink, info, state);

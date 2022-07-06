@@ -2053,13 +2053,11 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
         }
 
         Inst::AtomicRmwSeq {
-            address,
             operand,
             temp,
             dst_old,
             ..
         } => {
-            collector.reg_late_use(*address);
             collector.reg_late_use(*operand);
             collector.reg_early_def(*temp);
             // This `fixed_def` is needed because `CMPXCHG` always uses this

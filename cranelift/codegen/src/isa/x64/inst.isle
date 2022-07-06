@@ -430,12 +430,12 @@
        ;; problem.
        ;;
        ;; This instruction sequence has fixed register uses as follows:
-       ;; - %rax  (written) the old value at `address`
+       ;; - %rax  (written) the old value at `mem`
        ;; - %rflags is written.  Do not assume anything about it after the
        ;;   instruction.
        (AtomicRmwSeq (ty Type) ;; I8, I16, I32, or I64
                      (op MachAtomicRmwOp)
-                     (address Reg)
+                     (mem SyntheticAmode)
                      (operand Reg)
                      (temp WritableReg)
                      (dst_old WritableReg))
@@ -2918,11 +2918,11 @@
             (_ Unit (emit (MInst.LockCmpxchg ty replacement expected addr dst))))
         dst))
 
-(decl x64_atomic_rmw_seq (Type MachAtomicRmwOp Gpr Gpr) Gpr)
-(rule (x64_atomic_rmw_seq ty op address input)
+(decl x64_atomic_rmw_seq (Type MachAtomicRmwOp SyntheticAmode Gpr) Gpr)
+(rule (x64_atomic_rmw_seq ty op mem input)
       (let ((dst WritableGpr (temp_writable_gpr))
             (tmp WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.AtomicRmwSeq ty op address input tmp dst))))
+            (_ Unit (emit (MInst.AtomicRmwSeq ty op mem input tmp dst))))
         dst))
 
 ;; CLIF IR has one enumeration for atomic operations (`AtomicRmwOp`) while the
