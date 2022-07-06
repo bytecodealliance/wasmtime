@@ -2064,7 +2064,7 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             // This `fixed_def` is needed because `CMPXCHG` always uses this
             // register implicitly.
             collector.reg_fixed_def(*dst_old, regs::rax());
-            mem.get_operands(collector)
+            mem.get_operands_late(collector)
         }
 
         Inst::Ret { rets } => {
