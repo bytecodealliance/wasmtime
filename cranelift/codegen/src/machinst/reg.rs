@@ -328,6 +328,11 @@ impl<'a, F: Fn(VReg) -> VReg> OperandCollector<'a, F> {
         self.add_operand(Operand::reg_use(reg.into()));
     }
 
+    /// Add a register use, at the end of the instruction (`After` position).
+    pub fn reg_late_use(&mut self, reg: Reg) {
+        self.add_operand(Operand::reg_use_at_end(reg.into()));
+    }
+
     /// Add multiple register uses.
     pub fn reg_uses(&mut self, regs: &[Reg]) {
         for &reg in regs {

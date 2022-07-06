@@ -2059,10 +2059,11 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             dst_old,
             ..
         } => {
-            // TODO: replace hardcoded registers with allocated registers.
-            collector.reg_fixed_use(*address, regs::r9());
-            collector.reg_fixed_use(*operand, regs::r10());
+            collector.reg_late_use(*address);
+            collector.reg_late_use(*operand);
             collector.reg_early_def(*temp);
+            // This `fixed_def` is needed because `CMPXCHG` always uses this
+            // register implicitly.
             collector.reg_fixed_def(*dst_old, regs::rax());
         }
 
