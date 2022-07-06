@@ -50,6 +50,16 @@ impl SubTest for TestRun {
             return Ok(());
         }
 
+        // Disable runtests with pinned reg enabled.
+        // We've had some abi issues that the trampoline isn't quite ready for.
+        if context.flags.enable_pinned_reg() {
+            return Err(anyhow::anyhow!([
+                "Cannot run runtests with pinned_reg enabled.",
+                "See https://github.com/bytecodealliance/wasmtime/issues/4376 for more info"
+            ]
+            .join("\n")));
+        }
+
         let test_env = RuntestEnvironment::parse(&context.details.comments[..])?;
 
         let mut compiler = SingleFunctionCompiler::with_host_isa(context.flags.clone())?;
