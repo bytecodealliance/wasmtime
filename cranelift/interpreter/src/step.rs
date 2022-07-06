@@ -705,7 +705,11 @@ where
             (a, b) if a.is_zero()? && b.is_zero()? && b.is_negative()? => b,
             (a, b) => a.min(b)?,
         }),
-        Opcode::FminPseudo => unimplemented!("FminPseudo"),
+        Opcode::FminPseudo => assign(match (arg(0)?, arg(1)?) {
+            (a, b) if a.is_nan()? || b.is_nan()? => a,
+            (a, b) if a.is_zero()? && b.is_zero()? => a,
+            (a, b) => a.min(b)?,
+        }),
         Opcode::Fmax => assign(match (arg(0)?, arg(1)?) {
             (a, _) if a.is_nan()? => a,
             (_, b) if b.is_nan()? => b,
@@ -713,7 +717,11 @@ where
             (a, b) if a.is_zero()? && b.is_zero()? && b.is_negative()? => a,
             (a, b) => a.max(b)?,
         }),
-        Opcode::FmaxPseudo => unimplemented!("FmaxPseudo"),
+        Opcode::FmaxPseudo => assign(match (arg(0)?, arg(1)?) {
+            (a, b) if a.is_nan()? || b.is_nan()? => a,
+            (a, b) if a.is_zero()? && b.is_zero()? => a,
+            (a, b) => a.max(b)?,
+        }),
         Opcode::Ceil => unimplemented!("Ceil"),
         Opcode::Floor => unimplemented!("Floor"),
         Opcode::Trunc => unimplemented!("Trunc"),
