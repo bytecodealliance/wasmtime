@@ -2618,6 +2618,7 @@ pub(crate) fn emit(
             temp,
             dst_old,
         } => {
+            // TODO: replace hardcoded registers with allocated registers.
             debug_assert_eq!(allocs.next(*address), regs::r9());
             debug_assert_eq!(allocs.next(*operand), regs::r10());
             debug_assert_eq!(allocs.next(temp.to_reg()), regs::r11());
