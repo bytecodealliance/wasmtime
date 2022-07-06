@@ -11,8 +11,9 @@ publish = false
 
 [lib]
 name = "wasmtime_bench_api"
-crate-type = ["rlib", "cdylib"]
-# The rlib is only included here so that `cargo test` will run.
+crate-type = ["cdylib"]
+test = false
+doctest = false
 
 [dependencies]
 anyhow = "1.0"
