@@ -800,6 +800,26 @@ impl Ieee32 {
     pub fn is_zero(&self) -> bool {
         self.as_f32() == 0.0
     }
+
+    /// Returns the smallest integer greater than or equal to `self`.
+    pub fn ceil(self) -> Self {
+        Self::with_float(self.as_f32().ceil())
+    }
+
+    /// Returns the largest integer less than or equal to `self`.
+    pub fn floor(self) -> Self {
+        Self::with_float(self.as_f32().floor())
+    }
+
+    /// Returns the integer part of `self`. This means that non-integer numbers are always truncated towards zero.
+    pub fn trunc(self) -> Self {
+        Self::with_float(self.as_f32().trunc())
+    }
+
+    /// Returns the nearest integer to `self`. Round half-way cases away from `0.0`.
+    pub fn nearest(self) -> Self {
+        Self::with_float(self.as_f32().round())
+    }
 }
 
 impl PartialOrd for Ieee32 {
@@ -928,6 +948,26 @@ impl Ieee64 {
     /// Returns true if self is positive or negative zero
     pub fn is_zero(&self) -> bool {
         self.as_f64() == 0.0
+    }
+
+    /// Returns the smallest integer greater than or equal to `self`.
+    pub fn ceil(self) -> Self {
+        Self::with_float(self.as_f64().ceil())
+    }
+
+    /// Returns the largest integer less than or equal to `self`.
+    pub fn floor(self) -> Self {
+        Self::with_float(self.as_f64().floor())
+    }
+
+    /// Returns the integer part of `self`. This means that non-integer numbers are always truncated towards zero.
+    pub fn trunc(self) -> Self {
+        Self::with_float(self.as_f64().trunc())
+    }
+
+    /// Returns the nearest integer to `self`. Round half-way cases away from `0.0`.
+    pub fn nearest(self) -> Self {
+        Self::with_float(self.as_f64().round())
     }
 }
 

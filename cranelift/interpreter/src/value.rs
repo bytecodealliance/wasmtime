@@ -60,6 +60,10 @@ pub trait Value: Clone + From<DataValue> {
     // Float operations
     fn neg(self) -> ValueResult<Self>;
     fn copysign(self, sign: Self) -> ValueResult<Self>;
+    fn ceil(self) -> ValueResult<Self>;
+    fn floor(self) -> ValueResult<Self>;
+    fn trunc(self) -> ValueResult<Self>;
+    fn nearest(self) -> ValueResult<Self>;
 
     // Saturating arithmetic.
     fn add_sat(self, other: Self) -> ValueResult<Self>;
@@ -515,6 +519,22 @@ impl Value for DataValue {
 
     fn copysign(self, sign: Self) -> ValueResult<Self> {
         binary_match!(copysign(&self, &sign); [F32, F64])
+    }
+
+    fn ceil(self) -> ValueResult<Self> {
+        unary_match!(ceil(&self); [F32, F64])
+    }
+
+    fn floor(self) -> ValueResult<Self> {
+        unary_match!(floor(&self); [F32, F64])
+    }
+
+    fn trunc(self) -> ValueResult<Self> {
+        unary_match!(trunc(&self); [F32, F64])
+    }
+
+    fn nearest(self) -> ValueResult<Self> {
+        unary_match!(nearest(&self); [F32, F64])
     }
 
     fn add_sat(self, other: Self) -> ValueResult<Self> {
