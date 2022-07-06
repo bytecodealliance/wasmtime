@@ -364,6 +364,19 @@ impl<'a, F: Fn(VReg) -> VReg> OperandCollector<'a, F> {
         self.add_operand(Operand::reg_fixed_use(reg.into(), rreg.into()));
     }
 
+    /// Add a register "fixed use", which ties a vreg to a particular
+    /// RealReg at the "late" point of the instruction.
+    pub fn reg_fixed_late_use(&mut self, reg: Reg, rreg: Reg) {
+        let rreg = rreg.to_real_reg().expect("fixed reg is not a RealReg");
+        let operand = Operand::new(
+            reg.into(),
+            regalloc2::OperandConstraint::FixedReg(rreg.into()),
+            regalloc2::OperandKind::Use,
+            regalloc2::OperandPos::Late,
+        );
+        self.add_operand(operand);
+    }
+
     /// Add a register "fixed def", which ties a vreg to a particular
     /// RealReg at this point.
     pub fn reg_fixed_def(&mut self, reg: Writable<Reg>, rreg: Reg) {
