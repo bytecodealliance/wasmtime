@@ -2624,23 +2624,25 @@ pub(crate) fn emit(
             let dst_old = allocs.next_writable(*dst_old);
             debug_assert_eq!(dst_old.to_reg(), regs::rax());
 
-            // Emit this:
-            //    mov{zbq,zwq,zlq,q}     (%r_address), %rax    // rax = old value
-            //   again:
-            //    movq                   %rax, %r_temp         // rax = old value, r_temp = old value
-            //    `op`q                  %r_operand, %r_temp   // rax = old value, r_temp = new value
-            //    lock cmpxchg{b,w,l,q}  %r_temp, (%r_address) // try to store new value
-            //    jnz again // If this is taken, rax will have a "revised" old value
+            // Emit this: mov{zbq,zwq,zlq,q}     (%r_address), %rax    // rax =
+            //    old value again: movq                   %rax, %r_temp
+            //   // rax = old value, r_temp = old value `op`q
+            //    %r_operand, %r_temp   // rax = old value, r_temp = new value
+            //    lock cmpxchg{b,w,l,q}  %r_temp, (%r_address) // try to store
+            //    new value jnz again // If this is taken, rax will have a
+            //    "revised" old value
             //
-            // Operand conventions:
-            //    IN:  %r_address, %r_operand
-            //    OUT: %rax (old value), %r_temp (trashed), %rflags (trashed)
+            // Operand conventions: IN:  %r_address, %r_operand OUT: %rax (old
+            //    value), %r_temp (trashed), %rflags (trashed)
             //
             // In the case where the operation is 'xchg', the "`op`q"
-            // instruction is instead:
-            //   movq                    %r_operand, %r_temp
-            // so that we simply write in the destination, the "2nd arg for
-            // `op`".
+            // instruction is instead: movq                    %r_operand,
+            //   %r_temp so that we simply write in the destination, the "2nd
+            // arg for `op`".
+            //
+            // TODO: this sequence can be significantly improved (e.g., to `lock
+            // <op>`) when it is known that `dst_old` is not used later, see
+            // https://github.com/bytecodealliance/wasmtime/issues/2153.
             let amode = Amode::imm_reg(0, address);
             let again_label = sink.get_label();
 
