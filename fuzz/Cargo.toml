@@ -85,17 +85,22 @@ path = "fuzz_targets/compile-maybe-invalid.rs"
 test = false
 doc = false
 
-[[bin]]
-name = "cranelift-fuzzgen"
-path = "fuzz_targets/cranelift-fuzzgen.rs"
-test = false
-doc = false
+# FIXME: the cranelift-fuzzgen fuzz targets are temporarily disabled until
+# the crashes they're finding are fixed. One issue is #3347 but otherwise the
+# oss-fuzz bots are reporting a 100% crash rate with these fuzzers so there may
+# be more issues as well. It's recommended to locally run these fuzzers for a
+# few hours locally before re-enabling.
+# [[bin]]
+# name = "cranelift-fuzzgen"
+# path = "fuzz_targets/cranelift-fuzzgen.rs"
+# test = false
+# doc = false
 
-[[bin]]
-name = "cranelift-fuzzgen-verify"
-path = "fuzz_targets/cranelift-fuzzgen-verify.rs"
-test = false
-doc = false
+# [[bin]]
+# name = "cranelift-fuzzgen-verify"
+# path = "fuzz_targets/cranelift-fuzzgen-verify.rs"
+# test = false
+# doc = false
 
 [[bin]]
 name = "instantiate-many"
