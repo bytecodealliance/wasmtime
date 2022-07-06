@@ -2624,13 +2624,13 @@ pub(crate) fn emit(
             debug_assert_eq!(dst_old.to_reg(), regs::rax());
             let mem = mem.finalize(state, sink).with_allocs(allocs);
 
-            // Emit this: mov{zbq,zwq,zlq,q}     (%r_address), %rax    // rax =
-            //    old value again: movq                   %rax, %r_temp
-            //   // rax = old value, r_temp = old value `op`q
-            //    %r_operand, %r_temp   // rax = old value, r_temp = new value
-            //    lock cmpxchg{b,w,l,q}  %r_temp, (%r_address) // try to store
-            //    new value jnz again // If this is taken, rax will have a
-            //    "revised" old value
+            // Emit this:
+            //    mov{zbq,zwq,zlq,q}     (%r_address), %rax    // rax = old value
+            //  again:
+            //    movq                   %rax, %r_temp         // rax = old value, r_temp = old value
+            //    `op`q                  %r_operand, %r_temp   // rax = old value, r_temp = new value
+            //    lock cmpxchg{b,w,l,q}  %r_temp, (%r_address) // try to store new value
+            //    jnz again // If this is taken, rax will have a "revised" old value
             //
             // Operand conventions: IN:  %r_address, %r_operand OUT: %rax (old
             //    value), %r_temp (trashed), %rflags (trashed)
