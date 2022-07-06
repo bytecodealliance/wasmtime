@@ -249,7 +249,7 @@ impl DataFlowGraph {
 
     /// Get the type of a value.
     pub fn value_type(&self, v: Value) -> Type {
-        ValueData::from(self.values[v]).ty()
+        self.values[v].ty()
     }
 
     /// Get the definition of a value.
@@ -445,16 +445,6 @@ enum ValueData {
     Alias { ty: Type, original: Value },
 }
 
-impl ValueData {
-    fn ty(&self) -> Type {
-        match *self {
-            ValueData::Inst { ty, .. }
-            | ValueData::Param { ty, .. }
-            | ValueData::Alias { ty, .. } => ty,
-        }
-    }
-}
-
 /// Bit-packed version of ValueData, for efficiency.
 ///
 /// Layout:
@@ -495,6 +485,18 @@ impl ValueDataPacked {
     #[inline(always)]
     fn field(self, shift: u64, bits: u64) -> u64 {
         (self.0 >> shift) & ((1 << bits) - 1)
+    }
+
+    #[inline(always)]
+    fn ty(self) -> Type {
+        let ty = self.field(ValueDataPacked::TYPE_SHIFT, ValueDataPacked::TYPE_BITS) as u16;
+        Type::from_repr(ty)
+    }
+
+    #[inline(always)]
+    fn set_type(&mut self, ty: Type) {
+        self.0 &= !((1 << Self::TYPE_BITS) - 1) << Self::TYPE_SHIFT;
+        self.0 |= (ty.repr() as u64) << Self::TYPE_SHIFT;
     }
 }
 
@@ -1099,13 +1101,7 @@ impl DataFlowGraph {
             types::INVALID,
             "this function is only for assigning types to previously invalid values"
         );
-        let mut data = ValueData::from(self.values[v]);
-        match &mut data {
-            ValueData::Inst { ref mut ty, .. }
-            | ValueData::Param { ref mut ty, .. }
-            | ValueData::Alias { ref mut ty, .. } => *ty = t,
-        }
-        self.values[v] = data.into();
+        self.values[v].set_type(t);
     }
 
     /// Create result values for `inst`, reusing the provided detached values.
