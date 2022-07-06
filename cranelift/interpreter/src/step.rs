@@ -381,7 +381,13 @@ where
                 })
             })
         }
-        Opcode::GlobalValue => unimplemented!("GlobalValue"),
+        Opcode::GlobalValue => {
+            if let InstructionData::UnaryGlobalValue { global_value, .. } = inst {
+                assign_or_memtrap(state.resolve_global_value(global_value))
+            } else {
+                unreachable!()
+            }
+        }
         Opcode::SymbolValue => unimplemented!("SymbolValue"),
         Opcode::TlsValue => unimplemented!("TlsValue"),
         Opcode::HeapAddr => {
