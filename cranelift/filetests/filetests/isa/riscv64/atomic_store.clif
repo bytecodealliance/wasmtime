@@ -8,7 +8,7 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
-;   sc.d.aqrl a0,(a1)
+;   sc.d.aqrl zero,a0,(a1)
 ;   ret
 
 function %atomic_store_i64_sym(i64) {
@@ -21,7 +21,7 @@ block0(v0: i64):
 
 ; block0:
 ;   load_sym t2,%sym+0
-;   sc.d.aqrl a0,(t2)
+;   sc.d.aqrl zero,a0,(t2)
 ;   ret
 
 function %atomic_store_imm_i64(i64) {
@@ -34,7 +34,7 @@ block0(v0: i64):
 ; block0:
 ;   lui t2,3
 ;   addi t2,t2,57
-;   sc.d.aqrl t2,(a0)
+;   sc.d.aqrl zero,t2,(a0)
 ;   ret
 
 function %atomic_store_i32(i32, i64) {
@@ -44,7 +44,7 @@ block0(v0: i32, v1: i64):
 }
 
 ; block0:
-;   sc.w.aqrl a0,(a1)
+;   sc.w.aqrl zero,a0,(a1)
 ;   ret
 
 function %atomic_store_i32_sym(i32) {
@@ -57,7 +57,7 @@ block0(v0: i32):
 
 ; block0:
 ;   load_sym t2,%sym+0
-;   sc.w.aqrl a0,(t2)
+;   sc.w.aqrl zero,a0,(t2)
 ;   ret
 
 function %atomic_store_imm_i32(i64) {
@@ -70,6 +70,6 @@ block0(v0: i64):
 ; block0:
 ;   lui t2,3
 ;   addi t2,t2,57
-;   sc.w.aqrl t2,(a0)
+;   sc.w.aqrl zero,t2,(a0)
 ;   ret
 

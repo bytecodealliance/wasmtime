@@ -6,11 +6,20 @@ use crate::isa::riscv64::inst::{zero_reg, AluOPRRR};
 use crate::machinst::{AllocationConsumer, Reg, Writable};
 use regalloc2::Allocation;
 
-pub struct EmitInfo(settings::Flags);
+pub struct EmitInfo {
+    shared_flag: settings::Flags,
+    isa_flags: super::super::riscv_settings::Flags,
+}
 
 impl EmitInfo {
-    pub(crate) fn new(flags: settings::Flags) -> Self {
-        Self(flags)
+    pub(crate) fn new(
+        shared_flag: settings::Flags,
+        isa_flags: super::super::riscv_settings::Flags,
+    ) -> Self {
+        Self {
+            shared_flag,
+            isa_flags,
+        }
     }
 }
 
@@ -768,99 +777,113 @@ impl MachInstEmit for Inst {
             } => {
                 let rn = allocs.next(rn);
                 let rd = allocs.next_writable(rd);
-                let mut insts = SmallInstVec::new();
                 if signed {
-                    match from_bits {
-                        1 => {
-                            insts.push(Inst::CondBr {
-                                taken: BranchTarget::offset(Inst::INSTRUCTION_SIZE * 3),
-                                not_taken: BranchTarget::zero(),
-                                kind: IntegerCompare {
-                                    rs1: rn,
-                                    rs2: zero_reg(),
-                                    kind: IntCC::NotEqual,
-                                },
-                            });
-                            insts.push(Inst::load_constant_imm12(rd, Imm12::from_bits(0)));
-                            insts.push(Inst::Jal {
-                                dest: BranchTarget::offset(Inst::INSTRUCTION_SIZE * 2),
-                            });
-                            insts.push(Inst::load_constant_imm12(rd, Imm12::from_bits(-1)));
+                    if from_bits == 1 {
+                        let mut insts = SmallInstVec::new();
+                        insts.push(Inst::CondBr {
+                            taken: BranchTarget::offset(Inst::INSTRUCTION_SIZE * 3),
+                            not_taken: BranchTarget::zero(),
+                            kind: IntegerCompare {
+                                rs1: rn,
+                                rs2: zero_reg(),
+                                kind: IntCC::NotEqual,
+                            },
+                        });
+                        insts.push(Inst::load_constant_imm12(rd, Imm12::from_bits(0)));
+                        insts.push(Inst::Jal {
+                            dest: BranchTarget::offset(Inst::INSTRUCTION_SIZE * 2),
+                        });
+                        insts.push(Inst::load_constant_imm12(rd, Imm12::from_bits(-1)));
+                        insts
+                            .drain(..)
+                            .for_each(|i| i.emit(&[], sink, emit_info, state));
+                    } else if emit_info.isa_flags.has_extension_b() && from_bits == 8 {
+                        Inst::AluRRImm12 {
+                            alu_op: AluOPRRI::Sextb,
+                            rd,
+                            rs: rn,
+                            imm12: Imm12::zero(),
                         }
-                        8 => {
-                            let op = AluOPRRI::Sextb;
-                            let imm12 = Imm12::zero();
-                            insts.push(Inst::AluRRImm12 {
-                                alu_op: op,
-                                rd,
-                                rs: rn,
-                                imm12,
-                            });
+                        .emit(&[], sink, emit_info, state);
+                    } else if emit_info.isa_flags.has_extension_b() && from_bits == 16 {
+                        Inst::AluRRImm12 {
+                            alu_op: AluOPRRI::Sexth,
+                            rd,
+                            rs: rn,
+                            imm12: Imm12::zero(),
                         }
-                        16 => {
-                            let op = AluOPRRI::Sexth;
-                            let imm12 = Imm12::zero();
-                            insts.push(Inst::AluRRImm12 {
-                                alu_op: op,
-                                rd,
-                                rs: rn,
-                                imm12,
-                            });
-                        }
-                        32 => {
-                            let label_signed = sink.get_label();
-                            insts.push(Inst::CondBr {
-                                taken: BranchTarget::Label(label_signed),
-                                not_taken: BranchTarget::zero(),
-                                kind: IntegerCompare {
-                                    kind: IntCC::SignedLessThan,
-                                    rs1: rn,
-                                    rs2: zero_reg(),
-                                },
-                            });
+                        .emit(&[], sink, emit_info, state);
+                    } else {
+                        let mut insts = SmallInstVec::new();
+                        // extract sign bit.
+                        {
+                            insts.push(Inst::load_constant_imm12(rd, Imm12::from_bits(1)));
                             insts.push(Inst::AluRRImm12 {
                                 alu_op: AluOPRRI::Slli,
-                                rd,
+                                rd: rd,
                                 rs: rn,
-                                imm12: Imm12::from_bits(32),
-                            });
-                            insts.push(Inst::AluRRImm12 {
-                                alu_op: AluOPRRI::Srli,
-                                rd,
-                                rs: rd.to_reg(),
-                                imm12: Imm12::from_bits(32),
-                            });
-                            let label_jump_over = sink.get_label();
-                            // here are zero extend.
-                            insts.push(Inst::Jal {
-                                dest: BranchTarget::Label(label_jump_over),
-                            });
-
-                            insts
-                                .drain(..)
-                                .for_each(|i| i.emit(&[], sink, emit_info, state));
-                            sink.bind_label(label_signed);
-                            insts.push(Inst::load_constant_imm12(rd, Imm12::from_bits(-1)));
-                            insts.push(Inst::AluRRImm12 {
-                                alu_op: AluOPRRI::Slli,
-                                rd,
-                                rs: rd.to_reg(),
-                                imm12: Imm12::from_bits(32),
+                                imm12: Imm12::from_bits((from_bits - 1) as i16),
                             });
                             insts.push(Inst::AluRRR {
-                                alu_op: AluOPRRR::Or,
-                                rd,
+                                alu_op: AluOPRRR::And,
+                                rd: rd,
                                 rs1: rd.to_reg(),
                                 rs2: rn,
                             });
-                            insts
-                                .drain(..)
-                                .for_each(|i| i.emit(&[], sink, emit_info, state));
-                            sink.bind_label(label_jump_over);
                         }
-                        _ => unreachable!("from_bits:{}", from_bits),
+                        let label_signed = sink.get_label();
+                        insts.push(Inst::CondBr {
+                            taken: BranchTarget::Label(label_signed),
+                            not_taken: BranchTarget::zero(),
+                            kind: IntegerCompare {
+                                kind: IntCC::NotEqual,
+                                rs1: rn,
+                                rs2: zero_reg(),
+                            },
+                        });
+                        // here are zero extend.
+                        insts.push(Inst::AluRRImm12 {
+                            alu_op: AluOPRRI::Slli,
+                            rd,
+                            rs: rn,
+                            imm12: Imm12::from_bits((64 - from_bits) as i16),
+                        });
+                        insts.push(Inst::AluRRImm12 {
+                            alu_op: AluOPRRI::Srli,
+                            rd,
+                            rs: rd.to_reg(),
+                            imm12: Imm12::from_bits((64 - from_bits) as i16),
+                        });
+                        let label_jump_over = sink.get_label();
+                        insts.push(Inst::Jal {
+                            dest: BranchTarget::Label(label_jump_over),
+                        });
+                        insts
+                            .drain(..)
+                            .for_each(|i| i.emit(&[], sink, emit_info, state));
+
+                        sink.bind_label(label_signed);
+                        insts.push(Inst::load_constant_imm12(rd, Imm12::from_bits(-1)));
+                        insts.push(Inst::AluRRImm12 {
+                            alu_op: AluOPRRI::Slli,
+                            rd,
+                            rs: rd.to_reg(),
+                            imm12: Imm12::from_bits((64 - from_bits) as i16),
+                        });
+                        insts.push(Inst::AluRRR {
+                            alu_op: AluOPRRR::Or,
+                            rd,
+                            rs1: rd.to_reg(),
+                            rs2: rn,
+                        });
+
+                        insts
+                            .drain(..)
+                            .for_each(|i| i.emit(&[], sink, emit_info, state));
+                        sink.bind_label(label_jump_over);
                     }
                 } else {
+                    let mut insts = SmallInstVec::new();
                     let shift_bits = (64 - from_bits) as i16;
                     insts.push(Inst::AluRRImm12 {
                         alu_op: AluOPRRI::Slli,
@@ -874,10 +897,10 @@ impl MachInstEmit for Inst {
                         rs: rd.to_reg(),
                         imm12: Imm12::from_bits(shift_bits),
                     });
+                    insts
+                        .into_iter()
+                        .for_each(|i| i.emit(&[], sink, emit_info, state));
                 }
-                insts
-                    .into_iter()
-                    .for_each(|i| i.emit(&[], sink, emit_info, state));
             }
             &Inst::AjustSp { amount } => {
                 if let Some(imm) = Imm12::maybe_from_u64(amount as u64) {
@@ -1146,7 +1169,17 @@ impl MachInstEmit for Inst {
 
                 sink.put4(x);
             }
-            &Inst::Fence => sink.put4(0x0ff0000f),
+            &Inst::Fence { pred, succ, fm } => {
+                let x = 0b0001111
+                    | 0b00000 << 7
+                    | 0b000 << 12
+                    | 0b00000 << 15
+                    | (succ as u32) << 20
+                    | (pred as u32) << 24
+                    | fm.as_u32() << 28;
+
+                sink.put4(x);
+            }
             &Inst::FenceI => sink.put4(0x0000100f),
             &Inst::Auipc { rd, imm } => {
                 let rd = allocs.next_writable(rd);
@@ -1328,63 +1361,41 @@ impl MachInstEmit for Inst {
                     # e holds expected value
                     # v holds desired value
                     # dst holds return value
-
                 cas:
-                    lr.w t0, (addr)         # Load original value.
-                    bne t0, e, fail         # Doesn’t match, so fail.
-                    sc.w dst, v, (addr)     # Try to update.
-                    lr.w t0, (addr)         # reload to t0 from addr.
-                    bne t0 , v , cas        # if store not ok,retry.
+                    lr.w dst, (addr)       # Load original value.
+                    bne dst, e, fail       # Doesn’t match, so fail.
+                    sc.w t0, v, (addr)     # Try to update.
+                    bnez t0 , cas          # if store not ok,retry.
                 fail:
                                            */
                 let fail_label = sink.get_label();
                 let cas_lebel = sink.get_label();
                 sink.bind_label(cas_lebel);
-                // lr.w t0, (addr)
-                let load_op = if ty.bits() == 64 {
-                    AtomicOP::LrD
-                } else {
-                    AtomicOP::LrW
-                };
+
                 Inst::Atomic {
-                    op: load_op,
-                    rd: t0,
+                    op: AtomicOP::load_op(ty),
+                    rd: dst,
                     addr,
                     src: zero_reg(),
-                    amo: AMO::SeqConsistent,
+                    amo: AMO::SeqCst,
                 }
                 .emit(&[], sink, emit_info, state);
-                // bne t0, e, fail
                 Inst::CondBr {
                     taken: BranchTarget::Label(fail_label),
                     not_taken: BranchTarget::zero(),
                     kind: IntegerCompare {
                         kind: IntCC::NotEqual,
                         rs1: e,
-                        rs2: t0.to_reg(),
+                        rs2: dst.to_reg(),
                     },
                 }
                 .emit(&[], sink, emit_info, state);
-                //  sc.w dst, v, (addr)
                 Inst::Atomic {
-                    op: if ty.bits() == 64 {
-                        AtomicOP::ScD
-                    } else {
-                        AtomicOP::ScW
-                    },
-                    rd: dst,
-                    addr,
-                    src: v,
-                    amo: AMO::SeqConsistent,
-                }
-                .emit(&[], sink, emit_info, state);
-                // load to t0  from addr again.
-                Inst::Atomic {
-                    op: load_op,
+                    op: AtomicOP::store_op(ty),
                     rd: t0,
                     addr,
-                    src: zero_reg(),
-                    amo: AMO::SeqConsistent,
+                    src: v,
+                    amo: AMO::SeqCst,
                 }
                 .emit(&[], sink, emit_info, state);
                 // check is our value stored.
@@ -1394,12 +1405,60 @@ impl MachInstEmit for Inst {
                     kind: IntegerCompare {
                         kind: IntCC::NotEqual,
                         rs1: t0.to_reg(),
-                        rs2: v,
+                        rs2: zero_reg(),
                     },
                 }
                 .emit(&[], sink, emit_info, state);
                 sink.bind_label(fail_label);
             }
+            &Inst::AtomicNand { dst, ty, p, x, t0 } => {
+                let p = allocs.next(p);
+                let x = allocs.next(x);
+                let t0 = allocs.next_writable(t0);
+                let dst = allocs.next_writable(dst);
+                let retry = sink.get_label();
+                sink.bind_label(retry);
+                // load old value.
+                Inst::Atomic {
+                    op: AtomicOP::load_op(ty),
+                    rd: dst,
+                    addr: p,
+                    src: zero_reg(),
+                    amo: AMO::SeqCst,
+                }
+                .emit(&[], sink, emit_info, state);
+                //
+                &Inst::AluRRR {
+                    alu_op: AluOPRRR::And,
+                    rd: t0,
+                    rs1: dst.to_reg(),
+                    rs2: x,
+                }
+                .emit(&[], sink, emit_info, state);
+                Inst::construct_bit_not(t0, t0.to_reg()).emit(&[], sink, emit_info, state);
+                // try store.
+                Inst::Atomic {
+                    op: AtomicOP::store_op(ty),
+                    rd: t0,
+                    addr: p,
+                    src: t0.to_reg(),
+                    amo: AMO::SeqCst,
+                }
+                .emit(&[], sink, emit_info, state);
+
+                // if store is not ok,retry.
+                Inst::CondBr {
+                    taken: BranchTarget::Label(retry),
+                    not_taken: BranchTarget::zero(),
+                    kind: IntegerCompare {
+                        kind: IntCC::NotEqual,
+                        rs1: t0.to_reg(),
+                        rs2: zero_reg(),
+                    },
+                }
+                .emit(&[], sink, emit_info, state);
+            }
+
             &Inst::IntSelect {
                 op,
                 ref dst,
@@ -1596,7 +1655,7 @@ impl MachInstEmit for Inst {
                 .emit(&[], sink, emit_info, state);
 
                 sink.add_reloc(Reloc::Abs8, name.as_ref(), offset);
-                if emit_info.0.emit_all_ones_funcaddrs() {
+                if emit_info.shared_flag.emit_all_ones_funcaddrs() {
                     sink.put8(u64::max_value());
                 } else {
                     sink.put8(0);
@@ -1720,6 +1779,47 @@ impl MachInstEmit for Inst {
                     .into_iter()
                     .for_each(|i| i.emit(&[], sink, emit_info, state));
                 sink.bind_label(label_jump_over);
+            }
+            &Inst::AtomicLoad { rd, ty, p } => {
+                let p = allocs.next(p);
+                let rd = allocs.next_writable(rd);
+                // emit the fence.
+                Inst::Fence {
+                    fm: Default::default(),
+                    pred: Inst::FENCE_REQ_R | Inst::FENCE_REQ_W,
+                    succ: Inst::FENCE_REQ_R | Inst::FENCE_REQ_W,
+                }
+                .emit(&[], sink, emit_info, state);
+                Inst::Load {
+                    rd: rd,
+                    op: LoadOP::from_type(ty),
+                    flags: MemFlags::trusted(),
+                    from: AMode::RegOffset(p, 0, ty),
+                }
+                .emit(&[], sink, emit_info, state);
+                Inst::Fence {
+                    fm: Default::default(),
+                    pred: Inst::FENCE_REQ_R,
+                    succ: Inst::FENCE_REQ_R | Inst::FENCE_REQ_W,
+                }
+                .emit(&[], sink, emit_info, state);
+            }
+            &Inst::AtomicStore { src, ty, p } => {
+                let src = allocs.next(src);
+                let p = allocs.next(p);
+                Inst::Fence {
+                    fm: Default::default(),
+                    pred: Inst::FENCE_REQ_R | Inst::FENCE_REQ_W,
+                    succ: Inst::FENCE_REQ_W,
+                }
+                .emit(&[], sink, emit_info, state);
+                Inst::Store {
+                    to: AMode::RegOffset(p, 0, ty),
+                    op: StoreOP::from_type(ty),
+                    flags: MemFlags::trusted(),
+                    src,
+                }
+                .emit(&[], sink, emit_info, state);
             }
         };
         let end_off = sink.cur_offset();

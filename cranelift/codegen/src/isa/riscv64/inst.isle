@@ -86,7 +86,6 @@
     (CallInd
       (info BoxCallIndInfo))
 
-
     (TrapIf
       (cc IntCC)
       (x ValueRegs)
@@ -135,7 +134,10 @@
       (rm Reg)
       (ty Type))
 
-    (Fence)
+    (Fence
+      (fm FenceFm)
+      (pred FenceReq)
+      (succ FenceReq))
 
     (FenceI)
 
@@ -161,7 +163,24 @@
       (addr Reg)
       (src Reg)
       (amo AMO))
-    
+    ;; an atomic store
+    (AtomicStore 
+      (src Reg)
+      (ty Type)
+      (p Reg))
+    ;; an atomic load.
+    (AtomicLoad
+      (rd WritableReg)
+      (ty Type)
+      (p Reg))
+      
+    ;; an atomic nand need using loop to implement.
+    (AtomicNand 
+      (dst WritableReg)
+      (ty Type)
+      (p Reg)
+      (x Reg)
+      (t0 WritableReg))
 
     ;; a float compare 
     (Fcmp 
@@ -556,6 +575,18 @@
   (NX)
 ))
 
+;;;; input output read write
+;;;; SI SO SR SW
+;;;; PI PO PR PW
+;;;; lowest four bit are used.
+(type FenceReq (primitive u8))
+
+(type
+  FenceFm (enum 
+    (None)
+    (Tso)
+  )
+)
 
 (type VecBranchTarget (primitive VecBranchTarget))
 (type BoxCallInfo (primitive BoxCallInfo))
@@ -1253,6 +1284,9 @@
 (decl con_amode(Reg Offset32 Type)AMode)
 (extern constructor con_amode con_amode)
 
+(decl offset32_imm (i32)Offset32)
+(extern constructor offset32_imm offset32_imm)
+
 ;; helper function to load from memory.
 (decl con_load(Reg Offset32 LoadOP MemFlags Type)Reg)
 (rule 
@@ -1277,6 +1311,9 @@
     (value_regs low high)
   )
 )
+
+(decl default_memflags ()MemFlags)
+(extern constructor default_memflags default_memflags)
 
 (decl offset32_add(Offset32 i64)Offset32)
 (extern constructor offset32_add offset32_add)
@@ -1410,11 +1447,32 @@
 (decl atomic_amo()AMO)
 (extern constructor atomic_amo atomic_amo)
 
-(decl con_atomic_load(Reg Type)Reg)
-(extern constructor con_atomic_load con_atomic_load)
 
+(decl con_atomic_load(Reg Type)Reg)
+(rule
+  (con_atomic_load p ty)
+  (let
+    (
+      (tmp WritableReg (temp_writable_reg $I64))
+      (_ Unit (emit (MInst.AtomicLoad tmp ty p) ) )
+    )
+    (writable_reg_to_reg tmp)
+  )
+)
+
+;;; 
 (decl con_atomic_store(Reg Type Reg)Reg)
-(extern constructor con_atomic_store con_atomic_store)
+(rule
+  (con_atomic_store p ty src)
+  (let
+    (
+      (tmp WritableReg (temp_writable_reg $I64))
+      (_ Unit (emit (MInst.AtomicStore src ty p)  ))
+    )
+    (writable_reg_to_reg tmp)
+  )
+)
+
 
 ;; helper function to inverse all bits.
 (decl con_bit_not (Reg) Reg)
@@ -1531,26 +1589,6 @@
 (decl gen_stack_addr (StackSlot Offset32) Reg )
 (extern constructor gen_stack_addr gen_stack_addr)
 
-
-(decl atomic_load_op(Type) AtomicOP)
-(rule
-  (atomic_load_op $I32)
-  (AtomicOP.LrW)
-)
-(rule
-  (atomic_load_op $I64)
-  (AtomicOP.LrD)
-)
-
-(decl atomic_store_op(Type) AtomicOP)
-(rule
-  (atomic_store_op $I32)
-  (AtomicOP.ScW)
-)
-(rule
-  (atomic_store_op $I64)
-  (AtomicOP.ScD)
-)
 
 ;; 
 (decl gen_move(Reg Type) Reg)
@@ -1688,6 +1726,7 @@
 (decl type_and_value (Type Value)Value)
 (extern extractor infallible type_and_value type_and_value)
 
+
 ;;;; load extern name 
 (decl load_ext_name(ExternalName i64) Reg)
 (extern constructor load_ext_name load_ext_name)
@@ -1781,3 +1820,5 @@
   )
 )
 
+(decl load_gv_addr(GlobalValue) Reg)
+(extern constructor load_gv_addr load_gv_addr)

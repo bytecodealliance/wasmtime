@@ -1641,7 +1641,7 @@ fn test_riscv64_binemit() {
         },
         "fnmadd.d fa0,fa0,fa1,fa7",
     ));
-    ///////////
+
     insns.push(TestUnit::new(
         Inst::Atomic {
             op: AtomicOP::LrW,
@@ -1679,7 +1679,7 @@ fn test_riscv64_binemit() {
             rd: writable_a0(),
             addr: a1(),
             src: a2(),
-            amo: AMO::SeqConsistent,
+            amo: AMO::SeqCst,
         },
         "amoadd.w.aqrl a0,a2,(a1)",
     ));
@@ -1755,7 +1755,6 @@ fn test_riscv64_binemit() {
         "amomaxu.w a0,a2,(a1)",
     ));
 
-    /////////////////////
     insns.push(TestUnit::new(
         Inst::Atomic {
             op: AtomicOP::LrD,
@@ -1776,6 +1775,7 @@ fn test_riscv64_binemit() {
         },
         "sc.d a0,a2,(a1)",
     ));
+
     insns.push(TestUnit::new(
         Inst::Atomic {
             op: AtomicOP::AmoswapD,
@@ -1870,7 +1870,14 @@ fn test_riscv64_binemit() {
     ));
 
     /////////
-    insns.push(TestUnit::new(Inst::Fence {}, "fence"));
+    insns.push(TestUnit::new(
+        Inst::Fence {
+            pred: 1,
+            succ: 1 << 1,
+            fm: FenceFm::None,
+        },
+        "fence w,r",
+    ));
     insns.push(TestUnit::new(Inst::FenceI {}, "fence.i"));
     insns.push(TestUnit::new(Inst::ECall {}, "ecall"));
     insns.push(TestUnit::new(Inst::EBreak {}, "ebreak"));
@@ -1927,201 +1934,9 @@ fn test_riscv64_binemit() {
          */
 
         // generated code to speed up the test unit,otherwise you need invode riscv-gun tool chain every time.
-        insns[0].code = Some(548767059);
-        insns[1].code = Some(582321491);
-        insns[2].code = Some(1752520083);
-        insns[3].code = Some(1803900307);
-        insns[4].code = Some(1213535635);
-        insns[5].code = Some(1213552019);
-        insns[6].code = Some(1750406547);
-        insns[7].code = Some(676664723);
-        insns[8].code = Some(1616205203);
-        insns[9].code = Some(1616205211);
-        insns[10].code = Some(139793819);
-        insns[11].code = Some(1610945939);
-        insns[12].code = Some(1610945947);
-        insns[13].code = Some(1613043091);
-        insns[14].code = Some(1613043099);
-        insns[15].code = Some(1611994515);
-        insns[16].code = Some(1611994523);
-        insns[17].code = Some(1615140243);
-        insns[18].code = Some(1616188819);
-        insns[19].code = Some(134563259);
-        insns[20].code = Some(678778259);
-        insns[21].code = Some(134546875);
-        insns[22].code = Some(1074099635);
-        insns[23].code = Some(1208292787);
-        insns[24].code = Some(1208309171);
-        insns[25].code = Some(1745163699);
-        insns[26].code = Some(671421875);
-        insns[27].code = Some(168105395);
-        insns[28].code = Some(168113587);
-        insns[29].code = Some(168109491);
-        insns[30].code = Some(168125875);
-        insns[31].code = Some(168129971);
-        insns[32].code = Some(168117683);
-        insns[33].code = Some(168121779);
-        insns[34].code = Some(1074095539);
-        insns[35].code = Some(1610945971);
-        insns[36].code = Some(1610945979);
-        insns[37].code = Some(1610962355);
-        insns[38].code = Some(1610962363);
-        insns[39].code = Some(537208243);
-        insns[40].code = Some(537208251);
-        insns[41].code = Some(537216435);
-        insns[42].code = Some(537216443);
-        insns[43].code = Some(537224627);
-        insns[44].code = Some(537224635);
-        insns[45].code = Some(1074087347);
-        insns[46].code = Some(263219);
-        insns[47].code = Some(104924179);
-        insns[48].code = Some(491575);
-        insns[49].code = Some(491543);
-        insns[50].code = Some(105186663);
-        insns[51].code = Some(105219331);
-        insns[52].code = Some(105235715);
-        insns[53].code = Some(105223427);
-        insns[54].code = Some(105239811);
-        insns[55].code = Some(105227523);
-        insns[56].code = Some(105243907);
-        insns[57].code = Some(105231619);
-        insns[58].code = Some(105227527);
-        insns[59].code = Some(105231623);
-        insns[60].code = Some(111215139);
-        insns[61].code = Some(111219235);
-        insns[62].code = Some(111223331);
-        insns[63].code = Some(111227427);
-        insns[64].code = Some(111223335);
-        insns[65].code = Some(111227431);
-        insns[66].code = Some(105186579);
-        insns[67].code = Some(105194771);
-        insns[68].code = Some(105198867);
-        insns[69].code = Some(105202963);
-        insns[70].code = Some(105215251);
-        insns[71].code = Some(5575955);
-        insns[72].code = Some(5592339);
-        insns[73].code = Some(1079334163);
-        insns[74].code = Some(126158107);
-        insns[75].code = Some(5575963);
-        insns[76].code = Some(5592347);
-        insns[77].code = Some(1079334171);
-        insns[78].code = Some(1079334171);
-        insns[79].code = Some(11863347);
-        insns[80].code = Some(1085605171);
-        insns[81].code = Some(11867443);
-        insns[82].code = Some(11871539);
-        insns[83].code = Some(11875635);
-        insns[84].code = Some(11879731);
-        insns[85].code = Some(11883827);
-        insns[86].code = Some(1085625651);
-        insns[87].code = Some(11887923);
-        insns[88].code = Some(11892019);
-        insns[89].code = Some(11863355);
-        insns[90].code = Some(1085605179);
-        insns[91].code = Some(11867451);
-        insns[92].code = Some(11883835);
-        insns[93].code = Some(1085625659);
-        insns[94].code = Some(45417779);
-        insns[95].code = Some(45421875);
-        insns[96].code = Some(45425971);
-        insns[97].code = Some(45430067);
-        insns[98].code = Some(45434163);
-        insns[99].code = Some(45438259);
-        insns[100].code = Some(45442355);
-        insns[101].code = Some(45446451);
-        insns[102].code = Some(45417787);
-        insns[103].code = Some(45434171);
-        insns[104].code = Some(45442363);
-        insns[105].code = Some(45446459);
-        insns[106].code = Some(11863379);
-        insns[107].code = Some(146085203);
-        insns[108].code = Some(280311123);
-        insns[109].code = Some(414545235);
-        insns[110].code = Some(548734291);
-        insns[111].code = Some(548738387);
-        insns[112].code = Some(548742483);
-        insns[113].code = Some(682952019);
-        insns[114].code = Some(682956115);
-        insns[115].code = Some(2696226131);
-        insns[116].code = Some(2696222035);
-        insns[117].code = Some(2696217939);
-        insns[118].code = Some(45446483);
-        insns[119].code = Some(179664211);
-        insns[120].code = Some(313881939);
-        insns[121].code = Some(448099667);
-        insns[122].code = Some(582288723);
-        insns[123].code = Some(582292819);
-        insns[124].code = Some(582296915);
-        insns[125].code = Some(716506451);
-        insns[126].code = Some(716510547);
-        insns[127].code = Some(2729780563);
-        insns[128].code = Some(2729776467);
-        insns[129].code = Some(2729772371);
-        insns[130].code = Some(1476756819);
-        insns[131].code = Some(3221615955);
-        insns[132].code = Some(3222664531);
-        insns[133].code = Some(3758458195);
-        insns[134].code = Some(3758462291);
-        insns[135].code = Some(3490018643);
-        insns[136].code = Some(3491067219);
-        insns[137].code = Some(4026860883);
-        insns[138].code = Some(3223680339);
-        insns[139].code = Some(3224728915);
-        insns[140].code = Some(3492115795);
-        insns[141].code = Some(3493164371);
-        insns[142].code = Some(1510339923);
-        insns[143].code = Some(3255170387);
-        insns[144].code = Some(3256218963);
-        insns[145].code = Some(3792012627);
-        insns[146].code = Some(3792016723);
-        insns[147].code = Some(1075148115);
-        insns[148].code = Some(3524592979);
-        insns[149].code = Some(4060415315);
-        insns[150].code = Some(3257234771);
-        insns[151].code = Some(3258283347);
-        insns[152].code = Some(3525670227);
-        insns[153].code = Some(3526718803);
-        insns[154].code = Some(2293564739);
-        insns[155].code = Some(2293593415);
-        insns[156].code = Some(2293593419);
-        insns[157].code = Some(2293593423);
-        insns[158].code = Some(2327147843);
-        insns[159].code = Some(2327147847);
-        insns[160].code = Some(2327147851);
-        insns[161].code = Some(2327147855);
-        insns[162].code = Some(268805423);
-        insns[163].code = Some(449160495);
-        insns[164].code = Some(214279471);
-        insns[165].code = Some(113616175);
-        insns[166].code = Some(549823791);
-        insns[167].code = Some(1623565615);
-        insns[168].code = Some(1086694703);
-        insns[169].code = Some(2160436527);
-        insns[170].code = Some(2697307439);
-        insns[171].code = Some(3234178351);
-        insns[172].code = Some(3771049263);
-        insns[173].code = Some(268809519);
-        insns[174].code = Some(415610159);
-        insns[175].code = Some(147174703);
-        insns[176].code = Some(12956975);
-        insns[177].code = Some(549827887);
-        insns[178].code = Some(1623569711);
-        insns[179].code = Some(1086698799);
-        insns[180].code = Some(2160440623);
-        insns[181].code = Some(2697311535);
-        insns[182].code = Some(3234182447);
-        insns[183].code = Some(3771053359);
-        insns[184].code = Some(267386895);
-        insns[185].code = Some(4111);
-        insns[186].code = Some(115);
-        insns[187].code = Some(1048691);
-        insns[188].code = Some(548767059);
-        insns[189].code = Some(582321491);
-        insns[190].code = Some(548771155);
-        insns[191].code = Some(582325587);
     }
-    let flags = settings::Flags::new(settings::builder());
-    let emit_info = EmitInfo::new(flags);
+    let (flags, isa_flags) = make_test_flags();
+    let emit_info = EmitInfo::new(flags, isa_flags);
     let mut missing_code = vec![];
     for (index, ref mut unit) in insns.into_iter().enumerate() {
         println!("Riscv64: {:?}, {}", unit.inst, unit.assembly);
@@ -2167,6 +1982,14 @@ fn test_riscv64_binemit() {
         }
         println!("");
     }
+}
+
+fn make_test_flags() -> (settings::Flags, super::super::riscv_settings::Flags) {
+    let b = settings::builder();
+    let flags = settings::Flags::new(b.clone());
+    let isa_flags =
+        super::super::riscv_settings::Flags::new(&flags, super::super::riscv_settings::builder());
+    (flags, isa_flags)
 }
 
 #[cfg(target_os = "windows")]
@@ -2429,8 +2252,8 @@ fn xxx() {
 
 #[test]
 fn riscv64_worst_case_instruction_size() {
-    let flags = settings::Flags::new(settings::builder());
-    let emit_info = EmitInfo::new(flags);
+    let (flags, isa_flags) = make_test_flags();
+    let emit_info = EmitInfo::new(flags, isa_flags);
 
     /*
         there are all candidates potential generate a lot of bytes.
@@ -2562,8 +2385,8 @@ fn riscv64_worst_case_instruction_size() {
 */
 #[test]
 fn gcc_ass() {
-    let flags = settings::Flags::new(settings::builder());
-    let emit_info = EmitInfo::new(flags);
+    let flags = make_test_flags();
+    let emit_info = EmitInfo::new(flags.0, flags.1);
     std::env::set_current_dir(std::env::temp_dir()).expect("set_current_dir {}");
     let file_name = "riscv_tmp.bin";
     use std::io::Write;
@@ -2571,20 +2394,11 @@ fn gcc_ass() {
         there are all candidates potential generate a lot of bytes.
     */
     let mut insts: Vec<MInst> = vec![];
-    insts.push(Inst::FpuRRR {
-        alu_op: FpuOPRRR::FaddD,
-        frm: Some(FRM::RNE),
-        rd: writable_fa0(),
-        rs1: fa0(),
-        rs2: fa1(),
-    });
 
-    insts.push(Inst::Atomic {
-        op: AtomicOP::AmoaddD,
-        rd: writable_a0(),
-        addr: a0(),
-        src: a0(),
-        amo: AMO::SeqConsistent,
+    insts.push(Inst::Fence {
+        pred: 1 << 2 | 1 << 3,
+        succ: 1,
+        fm: FenceFm::None,
     });
     let (_, dump) = get_riscv_tool_chain_name();
     for i in insts {

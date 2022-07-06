@@ -1354,17 +1354,13 @@ impl AtomicOP {
             _ => false,
         }
     }
+
     #[inline(always)]
-    pub(crate) fn is_store(self) -> bool {
-        match self {
-            Self::ScW | Self::ScD => true,
-            _ => false,
-        }
-    }
     pub(crate) fn op_name(self, amo: AMO) -> String {
         let s = match self {
             Self::LrW => "lr.w",
             Self::ScW => "sc.w",
+
             Self::AmoswapW => "amoswap.w",
             Self::AmoaddW => "amoadd.w",
             Self::AmoxorW => "amoxor.w",
@@ -1411,7 +1407,6 @@ impl AtomicOP {
             | AtomicOP::AmomaxW
             | AtomicOP::AmominuW
             | AtomicOP::AmomaxuW => 0b010,
-
             AtomicOP::LrD
             | AtomicOP::ScD
             | AtomicOP::AmoswapD
@@ -1449,6 +1444,21 @@ impl AtomicOP {
             AtomicOP::AmomaxD => 0b10100,
             AtomicOP::AmominuD => 0b11000,
             AtomicOP::AmomaxuD => 0b11100,
+        }
+    }
+
+    pub(crate) fn load_op(t: Type) -> Self {
+        if t == I32 {
+            Self::LrW
+        } else {
+            Self::LrD
+        }
+    }
+    pub(crate) fn store_op(t: Type) -> Self {
+        if t == I32 {
+            Self::ScW
+        } else {
+            Self::ScD
         }
     }
 }
@@ -1690,7 +1700,7 @@ pub enum AMO {
     Relax = 0b00,
     Release = 0b01,
     Aquire = 0b10,
-    SeqConsistent = 0b11,
+    SeqCst = 0b11,
 }
 
 impl AMO {
@@ -1699,11 +1709,49 @@ impl AMO {
             AMO::Relax => "",
             AMO::Release => ".rl",
             AMO::Aquire => ".aq",
-            AMO::SeqConsistent => ".aqrl",
+            AMO::SeqCst => ".aqrl",
         }
     }
     pub(crate) fn as_u32(self) -> u32 {
         self as u32
+    }
+}
+
+impl Inst {
+    /// fence request bits.
+    pub(crate) const FENCE_REQ_I: u8 = 1 << 3;
+    pub(crate) const FENCE_REQ_O: u8 = 1 << 2;
+    pub(crate) const FENCE_REQ_R: u8 = 1 << 1;
+    pub(crate) const FENCE_REQ_W: u8 = 1 << 0;
+    pub(crate) fn fence_req_to_static_str(x: u8) -> String {
+        let mut s = String::default();
+        if x & (1 << 3) != 0 {
+            s.push_str("i");
+        }
+        if x & (1 << 2) != 0 {
+            s.push_str("o");
+        }
+        if x & (1 << 1) != 0 {
+            s.push_str("r");
+        }
+        if x & (1 << 0) != 0 {
+            s.push_str("w");
+        }
+        s
+    }
+    // pub(crate) fn check_fencedata(x: u8) -> bool {}
+}
+impl Default for FenceFm {
+    fn default() -> Self {
+        Self::None
+    }
+}
+impl FenceFm {
+    pub(crate) fn as_u32(self) -> u32 {
+        match self {
+            FenceFm::None => 0,
+            FenceFm::Tso => 0b1000,
+        }
     }
 }
 

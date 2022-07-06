@@ -335,7 +335,12 @@ where
         self.emit(&gen_move(result, I64, r, ty));
         result.to_reg()
     }
-
+    fn offset32_imm(&mut self, offset: i32) -> Offset32 {
+        Offset32::new(offset)
+    }
+    fn default_memflags(&mut self) -> MemFlags {
+        MemFlags::new()
+    }
     fn move_x_to_f(&mut self, r: Reg, ty: Type) -> Reg {
         let result = self.temp_writable_reg(ty);
         self.emit(&gen_move(result, ty, r, I64));
@@ -360,6 +365,10 @@ where
         } else {
             None
         }
+    }
+
+    fn load_gv_addr(&mut self, gv: GlobalValue) -> Reg {
+        unimplemented!()
     }
     fn load_op(&mut self, ty: Type) -> LoadOP {
         LoadOP::from_type(ty)
@@ -393,42 +402,11 @@ where
         result.to_reg()
     }
     fn atomic_amo(&mut self) -> AMO {
-        AMO::SeqConsistent
+        AMO::SeqCst
     }
     fn gen_move(&mut self, r: Reg, ty: Type) -> Reg {
         let tmp = self.temp_writable_reg(ty);
         self.emit(&gen_move(tmp, ty, r, ty));
-        tmp.to_reg()
-    }
-
-    fn con_atomic_load(&mut self, addr: Reg, ty: Type) -> Reg {
-        let tmp = self.temp_writable_reg(ty);
-        self.emit(&MInst::Atomic {
-            addr,
-            op: if ty.bits() == 32 {
-                AtomicOP::LrW
-            } else {
-                AtomicOP::LrD
-            },
-            rd: tmp,
-            src: zero_reg(),
-            amo: AMO::SeqConsistent,
-        });
-        tmp.to_reg()
-    }
-    fn con_atomic_store(&mut self, addr: Reg, ty: Type, src: Reg) -> Reg {
-        let tmp = self.temp_writable_reg(ty);
-        self.emit(&MInst::Atomic {
-            addr,
-            op: if ty.bits() == 32 {
-                AtomicOP::ScW
-            } else {
-                AtomicOP::ScD
-            },
-            rd: tmp,
-            src: src,
-            amo: AMO::SeqConsistent,
-        });
         tmp.to_reg()
     }
 }

@@ -25,9 +25,6 @@
 
 
 ;;;; Rules for `iadd` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; `i64` and smaller
-
 (rule (lower (has_type (fits_in_32 ty) (iadd x y)))
   (alu_rrr (AluOPRRR.Addw) x y))
 
@@ -107,9 +104,11 @@
 (rule (lower (has_type (fits_in_32 ty) (imul x y)))
   (alu_rrr (AluOPRRR.Mulw) x y))
 
+;;;; Rules for `smulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 ty) (smulhi x y)))
   (lower_smlhi ty x y))
 
+;;;; Rules for `umulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 ty) (umulhi x y)))
   (lower_umlhi ty x y))
 
@@ -460,36 +459,26 @@
   (let
     (
       ;;
-      (x1 Reg (con_atomic_load addr ty))
+      (dst WritableReg (temp_writable_reg $I64))
       ;;
-      (tmp Reg (alu_rrr (AluOPRRR.And) x1 x))
+      (t0 WritableReg (temp_writable_reg $I64))
       ;; 
-      (tmp2 Reg (con_bit_not tmp))
-      ;;
-      (result Reg (con_atomic_store addr ty tmp2))
+      (_ Unit (emit (MInst.AtomicNand dst ty addr x t0 ))  )
     )
-    result
+    (writable_reg_to_reg dst)
   )
 )
 
 ;;;;;  Rules for `atomic load`;;;;;;;;;;;;;;;;;
 (rule 
   (lower (has_type (valid_atomic_transaction ty) (atomic_load flags p)))
-  (let 
-    (
-      (dst WritableReg (temp_writable_reg ty))
-      (_ Unit(emit (MInst.Atomic (atomic_load_op ty) dst p (zero_reg) (atomic_amo))))
-    )
-    (writable_reg_to_reg dst)
-  )
+  (con_atomic_load p ty)
 )
 
 ;;;;;  Rules for `atomic store`;;;;;;;;;;;;;;;;;
 (rule 
   (lower (atomic_store flags (type_and_value (valid_atomic_transaction ty) src) p))
-  (side_effect (SideEffectNoResult.Inst
-    (MInst.Atomic (atomic_store_op ty) (writable_zero_reg) p src (atomic_amo) )
-  ))
+  (con_atomic_store p ty src)
 )
 
 ;;;;;  Rules for `atomic cas`;;;;;;;;;;;;;;;;;
@@ -661,7 +650,8 @@
 ;;;;;  Rules for `fence`;;;;;;;;;
 (rule
   (lower (fence))
-  (side_effect (SideEffectNoResult.Inst(MInst.Fence)))
+  ;; default is ????
+  (side_effect (SideEffectNoResult.Inst(MInst.Fence (FenceFm.None) 0 0)))
 )
 
 ;;;;;  Rules for `trap`;;;;;;;;;
@@ -965,7 +955,10 @@
   (gen_return x)
 )
 
-
-
+;;;;;  Rules for `fallthrough_return`;;;;;;;;;
+(rule
+  (lower (fallthrough_return x))
+  (gen_return x)
+)
 
 

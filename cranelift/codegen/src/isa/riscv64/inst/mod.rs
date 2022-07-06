@@ -58,7 +58,7 @@ pub(crate) type VecU8 = Vec<u8>;
 
 use crate::isa::riscv64::lower::isle::generated_code::MInst;
 pub use crate::isa::riscv64::lower::isle::generated_code::{
-    AluOPRRI, AluOPRRR, AtomicOP, CsrOP, FClassResult, FFlagsException, FpuOPRR, FpuOPRRR,
+    AluOPRRI, AluOPRRR, AtomicOP, CsrOP, FClassResult, FFlagsException, FenceFm, FpuOPRR, FpuOPRRR,
     FpuOPRRRR, IntSelectOP, LoadOP, MInst as Inst, ReferenceCheckOP, StoreOP, FRM,
 };
 
@@ -396,7 +396,7 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_use(rm);
             collector.reg_def(rd);
         }
-        &Inst::Fence => {}
+        &Inst::Fence { .. } => {}
         &Inst::FenceI => {}
         &Inst::ECall => {}
         &Inst::EBreak => {}
@@ -471,6 +471,7 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             }
             collector.reg_def(rd);
         }
+
         &Inst::Icmp { rd, a, b, .. } => {
             collector.reg_uses(a.regs());
             collector.reg_uses(b.regs());
@@ -508,6 +509,19 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             rd.iter().for_each(|r| collector.reg_def(*r));
         }
         &Inst::RawData { .. } => {}
+        &Inst::AtomicStore { src, p, .. } => {
+            collector.reg_use(src);
+            collector.reg_use(p);
+        }
+        &Inst::AtomicLoad { rd, p, .. } => {
+            collector.reg_use(p);
+            collector.reg_def(rd);
+        }
+        &Inst::AtomicNand { dst, p, x, t0, .. } => {
+            collector.reg_uses(&[p, x]);
+            collector.reg_early_def(t0);
+            collector.reg_early_def(dst);
+        }
     }
 }
 
@@ -765,6 +779,27 @@ impl Inst {
             &Inst::Nop4 => {
                 format!("##fixed 4-size nop")
             }
+            &Inst::AtomicStore { src, ty, p } => {
+                let src = format_reg(src, allocs);
+                let p = format_reg(p, allocs);
+                format!("atomic_store.{} {},({})", ty, src, p)
+            }
+
+            &Inst::AtomicLoad { rd, ty, p } => {
+                let p = format_reg(p, allocs);
+                let rd = format_reg(rd.to_reg(), allocs);
+                format!("atomic_load.{} {},({})", ty, rd, p)
+            }
+
+            &Inst::AtomicNand { dst, ty, p, x, t0 } => {
+                let p = format_reg(p, allocs);
+                let x = format_reg(x, allocs);
+                let t0 = format_reg(t0.to_reg(), allocs);
+                let dst = format_reg(dst.to_reg(), allocs);
+
+                format!("atomic_nand.{} {},{},({})##t0={}", ty, dst, x, p, t0)
+            }
+
             &Inst::RawData { ref data } => match data.len() {
                 4 => {
                     let mut bytes = [0; 4];
@@ -1037,6 +1072,8 @@ impl Inst {
                 // check if it is a load constant.
                 if alu_op == AluOPRRI::Addi && rs == zero_reg() {
                     format!("li {},{}", rd, imm12.as_i16())
+                } else if alu_op == AluOPRRI::Xori && imm12.as_i16() == -1 {
+                    format!("not {},{}", rd, rs_s)
                 } else {
                     if alu_op.option_funct12().is_some() {
                         format!("{} {},{}", alu_op.op_name(), rd, rs_s)
@@ -1184,8 +1221,6 @@ impl Inst {
                 let rd = format_reg(rd.to_reg(), allocs);
                 if op.is_load() {
                     format!("{} {},({})", op_name, rd, addr)
-                } else if op.is_store() {
-                    format!("{} {},({})", op_name, src, addr)
                 } else {
                     format!("{} {},{},({})", op_name, rd, src, addr)
                 }
@@ -1218,7 +1253,13 @@ impl Inst {
                 };
                 format!("{} {},{}", v, rd, rm)
             }
-            &MInst::Fence => "fence".into(),
+            &MInst::Fence { pred, succ, fm } => {
+                format!(
+                    "fence {},{}",
+                    Inst::fence_req_to_static_str(pred),
+                    Inst::fence_req_to_static_str(succ),
+                )
+            }
             &MInst::FenceI => "fence.i".into(),
             &MInst::Select {
                 ref dst,
