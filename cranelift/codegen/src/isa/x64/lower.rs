@@ -44,14 +44,6 @@ fn is_bool_ty(ty: Type) -> bool {
     }
 }
 
-/// This is target-word-size dependent.  And it excludes booleans and reftypes.
-fn is_valid_atomic_transaction_ty(ty: Type) -> bool {
-    match ty {
-        types::I8 | types::I16 | types::I32 | types::I64 => true,
-        _ => false,
-    }
-}
-
 /// Returns whether the given specified `input` is a result produced by an instruction with Opcode
 /// `op`.
 // TODO investigate failures with checking against the result index.
@@ -2136,54 +2128,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::AtomicRmw => {
-            // This is a simple, general-case atomic update, based on a loop involving
-            // `cmpxchg`.  Note that we could do much better than this in the case where the old
-            // value at the location (that is to say, the SSA `Value` computed by this CLIF
-            // instruction) is not required.  In that case, we could instead implement this
-            // using a single `lock`-prefixed x64 read-modify-write instruction.  Also, even in
-            // the case where the old value is required, for the `add` and `sub` cases, we can
-            // use the single instruction `lock xadd`.  However, those improvements have been
-            // left for another day.
-            // TODO: filed as https://github.com/bytecodealliance/wasmtime/issues/2153
-            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let mut addr = put_input_in_reg(ctx, inputs[0]);
-            let mut arg2 = put_input_in_reg(ctx, inputs[1]);
-            let ty_access = ty.unwrap();
-            assert!(is_valid_atomic_transaction_ty(ty_access));
-
-            // Make sure that both args are in virtual regs, since in effect we have to do a
-            // parallel copy to get them safely to the AtomicRmwSeq input regs, and that's not
-            // guaranteed safe if either is in a real reg.
-            addr = ctx.ensure_in_vreg(addr, types::I64);
-            arg2 = ctx.ensure_in_vreg(arg2, types::I64);
-
-            // Move the args to the preordained AtomicRMW input regs.  Note that `AtomicRmwSeq`
-            // operates at whatever width is specified by `ty`, so there's no need to
-            // zero-extend `arg2` in the case of `ty` being I8/I16/I32.
-            ctx.emit(Inst::gen_move(
-                Writable::from_reg(regs::r9()),
-                addr,
-                types::I64,
-            ));
-            ctx.emit(Inst::gen_move(
-                Writable::from_reg(regs::r10()),
-                arg2,
-                types::I64,
-            ));
-
-            // Now the AtomicRmwSeq (pseudo-) instruction itself
-            let op = inst_common::AtomicRmwOp::from(ctx.data(insn).atomic_rmw_op().unwrap());
-            ctx.emit(Inst::AtomicRmwSeq {
-                ty: ty_access,
-                op,
-                address: regs::r9(),
-                operand: regs::r10(),
-                temp: Writable::from_reg(regs::r11()),
-                dst_old: Writable::from_reg(regs::rax()),
-            });
-
-            // And finally, copy the preordained AtomicRmwSeq output reg to its destination.
-            ctx.emit(Inst::gen_move(dst, regs::rax(), types::I64));
+            implemented_in_isle(ctx);
         }
 
         Opcode::AtomicCas => {

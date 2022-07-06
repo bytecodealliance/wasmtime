@@ -2,7 +2,10 @@
 
 // Pull in the ISLE generated code.
 pub(crate) mod generated_code;
-use crate::machinst::{InputSourceInst, Reg, Writable};
+use crate::{
+    ir::AtomicRmwOp,
+    machinst::{InputSourceInst, Reg, Writable},
+};
 use generated_code::MInst;
 
 // Types that the generated ISLE code uses via `use super::*`.
@@ -23,7 +26,7 @@ use crate::{
         },
     },
     machinst::{
-        isle::*, AtomicRmwOp, InsnInput, InsnOutput, LowerCtx, VCodeConstant, VCodeConstantData,
+        isle::*, InsnInput, InsnOutput, LowerCtx, MachAtomicRmwOp, VCodeConstant, VCodeConstantData,
     },
 };
 use std::boxed::Box;
@@ -564,6 +567,11 @@ where
     #[inline]
     fn zero_offset(&mut self) -> Offset32 {
         Offset32::new(0)
+    }
+
+    #[inline]
+    fn atomic_rmw_op_to_mach_atomic_rmw_op(&mut self, op: &AtomicRmwOp) -> MachAtomicRmwOp {
+        MachAtomicRmwOp::from(*op)
     }
 }
 
