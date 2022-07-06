@@ -430,11 +430,7 @@
        ;; problem.
        ;;
        ;; This instruction sequence has fixed register uses as follows:
-       ;;
-       ;; - %r9   (read) address
-       ;; - %r10  (read) second operand for `op`
-       ;; - %r11  (written) scratch reg; value afterwards has no meaning
-       ;; - %rax  (written) the old value at %r9
+       ;; - %rax  (written) the old value at `address`
        ;; - %rflags is written.  Do not assume anything about it after the
        ;;   instruction.
        (AtomicRmwSeq (ty Type) ;; I8, I16, I32, or I64
@@ -2926,9 +2922,6 @@
 (rule (x64_atomic_rmw_seq ty op address input)
       (let ((dst WritableGpr (temp_writable_gpr))
             (tmp WritableGpr (temp_writable_gpr))
-            ;; In a future iteration of this, the sequence itself could be
-            ;; encoded in ISLE and some of the specific register assignments
-            ;; (see `x64_get_operands` in `inst/mod.rs`) could be relaxed.
             (_ Unit (emit (MInst.AtomicRmwSeq ty op address input tmp dst))))
         dst))
 

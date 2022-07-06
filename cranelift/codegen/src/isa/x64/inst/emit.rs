@@ -2625,25 +2625,26 @@ pub(crate) fn emit(
             debug_assert_eq!(dst_old.to_reg(), regs::rax());
 
             // Emit this:
-            //
-            //    mov{zbq,zwq,zlq,q}     (%r9), %rax  // rax = old value
+            //    mov{zbq,zwq,zlq,q}     (%r_address), %rax    // rax = old value
             //   again:
-            //    movq                   %rax, %r11   // rax = old value, r11 = old value
-            //    `op`q                  %r10, %r11   // rax = old value, r11 = new value
-            //    lock cmpxchg{b,w,l,q}  %r11, (%r9)  // try to store new value
+            //    movq                   %rax, %r_temp         // rax = old value, r_temp = old value
+            //    `op`q                  %r_operand, %r_temp   // rax = old value, r_temp = new value
+            //    lock cmpxchg{b,w,l,q}  %r_temp, (%r_address) // try to store new value
             //    jnz again // If this is taken, rax will have a "revised" old value
             //
             // Operand conventions:
-            //    IN:  %r9 (addr), %r10 (2nd arg for `op`)
-            //    OUT: %rax (old value), %r11 (trashed), %rflags (trashed)
+            //    IN:  %r_address, %r_operand
+            //    OUT: %rax (old value), %r_temp (trashed), %rflags (trashed)
             //
-            // In the case where the operation is 'xchg', the "`op`q" instruction is instead
-            //   movq                    %r10, %r11
-            // so that we simply write in the destination, the "2nd arg for `op`".
+            // In the case where the operation is 'xchg', the "`op`q"
+            // instruction is instead:
+            //   movq                    %r_operand, %r_temp
+            // so that we simply write in the destination, the "2nd arg for
+            // `op`".
             let amode = Amode::imm_reg(0, address);
             let again_label = sink.get_label();
 
-            // mov{zbq,zwq,zlq,q} (%r9), %rax
+            // mov{zbq,zwq,zlq,q} (%r_address), %rax
             // No need to call `add_trap` here, since the `i1` emit will do that.
             let i1 = Inst::load(*ty, amode.clone(), dst_old, ExtKind::ZeroExtend);
             i1.emit(&[], sink, info, state);
@@ -2651,7 +2652,7 @@ pub(crate) fn emit(
             // again:
             sink.bind_label(again_label);
 
-            // movq %rax, %r11
+            // movq %rax, %r_temp
             let i2 = Inst::mov_r_r(OperandSize::Size64, dst_old.to_reg(), temp);
             i2.emit(&[], sink, info, state);
 
@@ -2659,22 +2660,22 @@ pub(crate) fn emit(
             use inst_common::MachAtomicRmwOp as RmwOp;
             match op {
                 RmwOp::Xchg => {
-                    // movq %r10, %r11
+                    // movq %r_operand, %r_temp
                     let i3 = Inst::mov_r_r(OperandSize::Size64, operand, temp);
                     i3.emit(&[], sink, info, state);
                 }
                 RmwOp::Nand => {
-                    // andq %r10, %r11
+                    // andq %r_operand, %r_temp
                     let i3 =
                         Inst::alu_rmi_r(OperandSize::Size64, AluRmiROpcode::And, operand_rmi, temp);
                     i3.emit(&[], sink, info, state);
 
-                    // notq %r11
+                    // notq %r_temp
                     let i4 = Inst::not(OperandSize::Size64, temp);
                     i4.emit(&[], sink, info, state);
                 }
                 RmwOp::Umin | RmwOp::Umax | RmwOp::Smin | RmwOp::Smax => {
-                    // cmp %r11, %r10
+                    // cmp %r_temp, %r_operand
                     let i3 = Inst::cmp_rmi_r(
                         OperandSize::from_ty(*ty),
                         RegMemImm::reg(temp.to_reg()),
@@ -2682,7 +2683,7 @@ pub(crate) fn emit(
                     );
                     i3.emit(&[], sink, info, state);
 
-                    // cmovcc %r10, %r11
+                    // cmovcc %r_operand, %r_temp
                     let cc = match op {
                         RmwOp::Umin => CC::BE,
                         RmwOp::Umax => CC::NB,
@@ -2694,7 +2695,7 @@ pub(crate) fn emit(
                     i4.emit(&[], sink, info, state);
                 }
                 _ => {
-                    // opq %r10, %r11
+                    // opq %r_operand, %r_temp
                     let alu_op = match op {
                         RmwOp::Add => AluRmiROpcode::Add,
                         RmwOp::Sub => AluRmiROpcode::Sub,
@@ -2713,7 +2714,7 @@ pub(crate) fn emit(
                 }
             }
 
-            // lock cmpxchg{b,w,l,q} %r11, (%r9)
+            // lock cmpxchg{b,w,l,q} %r_temp, (%r_address)
             // No need to call `add_trap` here, since the `i4` emit will do that.
             let i4 = Inst::LockCmpxchg {
                 ty: *ty,
