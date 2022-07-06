@@ -777,114 +777,22 @@ impl MachInstEmit for Inst {
             } => {
                 let rn = allocs.next(rn);
                 let rd = allocs.next_writable(rd);
+                let mut insts = SmallInstVec::new();
+                let shift_bits = (64 - from_bits) as i16;
                 if signed {
-                    if from_bits == 1 {
-                        let mut insts = SmallInstVec::new();
-                        insts.push(Inst::CondBr {
-                            taken: BranchTarget::offset(Inst::INSTRUCTION_SIZE * 3),
-                            not_taken: BranchTarget::zero(),
-                            kind: IntegerCompare {
-                                rs1: rn,
-                                rs2: zero_reg(),
-                                kind: IntCC::NotEqual,
-                            },
-                        });
-                        insts.push(Inst::load_constant_imm12(rd, Imm12::from_bits(0)));
-                        insts.push(Inst::Jal {
-                            dest: BranchTarget::offset(Inst::INSTRUCTION_SIZE * 2),
-                        });
-                        insts.push(Inst::load_constant_imm12(rd, Imm12::from_bits(-1)));
-                        insts
-                            .drain(..)
-                            .for_each(|i| i.emit(&[], sink, emit_info, state));
-                    } else if emit_info.isa_flags.has_extension_b() && from_bits == 8 {
-                        Inst::AluRRImm12 {
-                            alu_op: AluOPRRI::Sextb,
-                            rd,
-                            rs: rn,
-                            imm12: Imm12::zero(),
-                        }
-                        .emit(&[], sink, emit_info, state);
-                    } else if emit_info.isa_flags.has_extension_b() && from_bits == 16 {
-                        Inst::AluRRImm12 {
-                            alu_op: AluOPRRI::Sexth,
-                            rd,
-                            rs: rn,
-                            imm12: Imm12::zero(),
-                        }
-                        .emit(&[], sink, emit_info, state);
-                    } else {
-                        let mut insts = SmallInstVec::new();
-                        // extract sign bit.
-                        {
-                            insts.push(Inst::load_constant_imm12(rd, Imm12::from_bits(1)));
-                            insts.push(Inst::AluRRImm12 {
-                                alu_op: AluOPRRI::Slli,
-                                rd: rd,
-                                rs: rn,
-                                imm12: Imm12::from_bits((from_bits - 1) as i16),
-                            });
-                            insts.push(Inst::AluRRR {
-                                alu_op: AluOPRRR::And,
-                                rd: rd,
-                                rs1: rd.to_reg(),
-                                rs2: rn,
-                            });
-                        }
-                        let label_signed = sink.get_label();
-                        insts.push(Inst::CondBr {
-                            taken: BranchTarget::Label(label_signed),
-                            not_taken: BranchTarget::zero(),
-                            kind: IntegerCompare {
-                                kind: IntCC::NotEqual,
-                                rs1: rn,
-                                rs2: zero_reg(),
-                            },
-                        });
-                        // here are zero extend.
-                        insts.push(Inst::AluRRImm12 {
-                            alu_op: AluOPRRI::Slli,
-                            rd,
-                            rs: rn,
-                            imm12: Imm12::from_bits((64 - from_bits) as i16),
-                        });
-                        insts.push(Inst::AluRRImm12 {
-                            alu_op: AluOPRRI::Srli,
-                            rd,
-                            rs: rd.to_reg(),
-                            imm12: Imm12::from_bits((64 - from_bits) as i16),
-                        });
-                        let label_jump_over = sink.get_label();
-                        insts.push(Inst::Jal {
-                            dest: BranchTarget::Label(label_jump_over),
-                        });
-                        insts
-                            .drain(..)
-                            .for_each(|i| i.emit(&[], sink, emit_info, state));
-
-                        sink.bind_label(label_signed);
-                        insts.push(Inst::load_constant_imm12(rd, Imm12::from_bits(-1)));
-                        insts.push(Inst::AluRRImm12 {
-                            alu_op: AluOPRRI::Slli,
-                            rd,
-                            rs: rd.to_reg(),
-                            imm12: Imm12::from_bits((64 - from_bits) as i16),
-                        });
-                        insts.push(Inst::AluRRR {
-                            alu_op: AluOPRRR::Or,
-                            rd,
-                            rs1: rd.to_reg(),
-                            rs2: rn,
-                        });
-
-                        insts
-                            .drain(..)
-                            .for_each(|i| i.emit(&[], sink, emit_info, state));
-                        sink.bind_label(label_jump_over);
-                    }
+                    insts.push(Inst::AluRRImm12 {
+                        alu_op: AluOPRRI::Slli,
+                        rd,
+                        rs: rn,
+                        imm12: Imm12::from_bits(shift_bits),
+                    });
+                    insts.push(Inst::AluRRImm12 {
+                        alu_op: AluOPRRI::Srai,
+                        rd,
+                        rs: rd.to_reg(),
+                        imm12: Imm12::from_bits(shift_bits),
+                    });
                 } else {
-                    let mut insts = SmallInstVec::new();
-                    let shift_bits = (64 - from_bits) as i16;
                     insts.push(Inst::AluRRImm12 {
                         alu_op: AluOPRRI::Slli,
                         rd,
@@ -897,10 +805,10 @@ impl MachInstEmit for Inst {
                         rs: rd.to_reg(),
                         imm12: Imm12::from_bits(shift_bits),
                     });
-                    insts
-                        .into_iter()
-                        .for_each(|i| i.emit(&[], sink, emit_info, state));
                 }
+                insts
+                    .into_iter()
+                    .for_each(|i| i.emit(&[], sink, emit_info, state));
             }
             &Inst::AjustSp { amount } => {
                 if let Some(imm) = Imm12::maybe_from_u64(amount as u64) {
@@ -1428,7 +1336,7 @@ impl MachInstEmit for Inst {
                 }
                 .emit(&[], sink, emit_info, state);
                 //
-                &Inst::AluRRR {
+                 Inst::AluRRR {
                     alu_op: AluOPRRR::And,
                     rd: t0,
                     rs1: dst.to_reg(),
