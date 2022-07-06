@@ -2059,6 +2059,7 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             dst_old,
             ..
         } => {
+            // TODO: replace hardcoded registers with allocated registers.
             collector.reg_fixed_use(*address, regs::r9());
             collector.reg_fixed_use(*operand, regs::r10());
             collector.reg_fixed_def(*temp, regs::r11());
