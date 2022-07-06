@@ -2619,10 +2619,13 @@ pub(crate) fn emit(
             dst_old,
         } => {
             // TODO: replace hardcoded registers with allocated registers.
-            debug_assert_eq!(allocs.next(*address), regs::r9());
-            debug_assert_eq!(allocs.next(*operand), regs::r10());
-            debug_assert_eq!(allocs.next(temp.to_reg()), regs::r11());
-            debug_assert_eq!(allocs.next(dst_old.to_reg()), regs::rax());
+            let address = allocs.next(*address);
+            let operand = allocs.next(*operand);
+            let temp = allocs.next_writable(*temp);
+            let dst_old = allocs.next_writable(*dst_old);
+            debug_assert_eq!(address, regs::r9());
+            debug_assert_eq!(operand, regs::r10());
+            debug_assert_eq!(dst_old.to_reg(), regs::rax());
 
             // Emit this:
             //
@@ -2643,9 +2646,7 @@ pub(crate) fn emit(
             let rax = regs::rax();
             let r9 = regs::r9();
             let r10 = regs::r10();
-            let r11 = regs::r11();
             let rax_w = Writable::from_reg(rax);
-            let r11_w = Writable::from_reg(r11);
             let amode = Amode::imm_reg(0, r9);
             let again_label = sink.get_label();
 
@@ -2658,7 +2659,7 @@ pub(crate) fn emit(
             sink.bind_label(again_label);
 
             // movq %rax, %r11
-            let i2 = Inst::mov_r_r(OperandSize::Size64, rax, r11_w);
+            let i2 = Inst::mov_r_r(OperandSize::Size64, rax, temp);
             i2.emit(&[], sink, info, state);
 
             let r10_rmi = RegMemImm::reg(r10);
@@ -2666,22 +2667,26 @@ pub(crate) fn emit(
             match op {
                 RmwOp::Xchg => {
                     // movq %r10, %r11
-                    let i3 = Inst::mov_r_r(OperandSize::Size64, r10, r11_w);
+                    let i3 = Inst::mov_r_r(OperandSize::Size64, r10, temp);
                     i3.emit(&[], sink, info, state);
                 }
                 RmwOp::Nand => {
                     // andq %r10, %r11
                     let i3 =
-                        Inst::alu_rmi_r(OperandSize::Size64, AluRmiROpcode::And, r10_rmi, r11_w);
+                        Inst::alu_rmi_r(OperandSize::Size64, AluRmiROpcode::And, r10_rmi, temp);
                     i3.emit(&[], sink, info, state);
 
                     // notq %r11
-                    let i4 = Inst::not(OperandSize::Size64, r11_w);
+                    let i4 = Inst::not(OperandSize::Size64, temp);
                     i4.emit(&[], sink, info, state);
                 }
                 RmwOp::Umin | RmwOp::Umax | RmwOp::Smin | RmwOp::Smax => {
                     // cmp %r11, %r10
-                    let i3 = Inst::cmp_rmi_r(OperandSize::from_ty(*ty), RegMemImm::reg(r11), r10);
+                    let i3 = Inst::cmp_rmi_r(
+                        OperandSize::from_ty(*ty),
+                        RegMemImm::reg(temp.to_reg()),
+                        r10,
+                    );
                     i3.emit(&[], sink, info, state);
 
                     // cmovcc %r10, %r11
@@ -2692,7 +2697,7 @@ pub(crate) fn emit(
                         RmwOp::Smax => CC::NL,
                         _ => unreachable!(),
                     };
-                    let i4 = Inst::cmove(OperandSize::Size64, cc, RegMem::reg(r10), r11_w);
+                    let i4 = Inst::cmove(OperandSize::Size64, cc, RegMem::reg(r10), temp);
                     i4.emit(&[], sink, info, state);
                 }
                 _ => {
@@ -2710,7 +2715,7 @@ pub(crate) fn emit(
                         | RmwOp::Smin
                         | RmwOp::Smax => unreachable!(),
                     };
-                    let i3 = Inst::alu_rmi_r(OperandSize::Size64, alu_op, r10_rmi, r11_w);
+                    let i3 = Inst::alu_rmi_r(OperandSize::Size64, alu_op, r10_rmi, temp);
                     i3.emit(&[], sink, info, state);
                 }
             }
@@ -2719,7 +2724,7 @@ pub(crate) fn emit(
             // No need to call `add_trap` here, since the `i4` emit will do that.
             let i4 = Inst::LockCmpxchg {
                 ty: *ty,
-                replacement: r11,
+                replacement: temp.to_reg(),
                 expected: regs::rax(),
                 mem: amode.into(),
                 dst_old: Writable::from_reg(regs::rax()),
