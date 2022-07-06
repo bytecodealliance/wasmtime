@@ -44,14 +44,6 @@ fn is_bool_ty(ty: Type) -> bool {
     }
 }
 
-/// This is target-word-size dependent.  And it excludes booleans and reftypes.
-fn is_valid_atomic_transaction_ty(ty: Type) -> bool {
-    match ty {
-        types::I8 | types::I16 | types::I32 | types::I64 => true,
-        _ => false,
-    }
-}
-
 /// Returns whether the given specified `input` is a result produced by an instruction with Opcode
 /// `op`.
 // TODO investigate failures with checking against the result index.
