@@ -3538,7 +3538,6 @@ dependencies = [
  "arbitrary",
  "env_logger 0.9.0",
  "log",
- "once_cell",
  "rand 0.8.5",
  "rayon",
  "target-lexicon",

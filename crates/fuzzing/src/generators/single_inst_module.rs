@@ -1,7 +1,6 @@
 //! Generate Wasm modules that contain a single instruction.
 
 use arbitrary::{Arbitrary, Unstructured};
-use once_cell::sync::Lazy;
 use wasm_encoder::{
     CodeSection, ExportKind, ExportSection, Function, FunctionSection, Instruction, Module,
     TypeSection, ValType,
@@ -17,8 +16,8 @@ const FUNCTION_NAME: &'static str = "test";
 #[derive(Clone, Debug)]
 pub struct SingleInstModule<'a> {
     instruction: Instruction<'a>,
-    parameters: Vec<ValType>,
-    results: Vec<ValType>,
+    parameters: &'a [ValType],
+    results: &'a [ValType],
 }
 
 impl<'a> SingleInstModule<'a> {
@@ -29,7 +28,10 @@ impl<'a> SingleInstModule<'a> {
 
         // Encode the type section.
         let mut types = TypeSection::new();
-        types.function(self.parameters.clone(), self.results.clone());
+        types.function(
+            self.parameters.iter().cloned(),
+            self.results.iter().cloned(),
+        );
         module.section(&types);
 
         // Encode the function section.
@@ -89,8 +91,8 @@ macro_rules! binary {
     ($inst:ident, $from_rust_ty:ident, $from_encoder_ty:expr,  $to_encoder_ty:expr) => {
         SingleInstModule {
             instruction: Instruction::$inst,
-            parameters: vec![$from_encoder_ty, $from_encoder_ty],
-            results: vec![$to_encoder_ty],
+            parameters: &[$from_encoder_ty, $from_encoder_ty],
+            results: &[$to_encoder_ty],
         }
     };
 }
@@ -127,8 +129,8 @@ macro_rules! unary {
     ($inst:ident, $argument_ty:expr, $result_ty:expr, $rust_ty:ident) => {
         SingleInstModule {
             instruction: Instruction::$inst,
-            parameters: vec![$argument_ty],
-            results: vec![$result_ty],
+            parameters: &[$argument_ty],
+            results: &[$result_ty],
         }
     };
 }
@@ -179,157 +181,155 @@ macro_rules! convert {
     };
 }
 
-static INSTRUCTIONS: Lazy<Vec<SingleInstModule>> = Lazy::new(|| {
-    vec![
-        // Integer arithmetic.
-        // I32Const
-        // I64Const
-        // F32Const
-        // F64Const
-        unary!(I32Clz, i32),
-        unary!(I64Clz, i64),
-        unary!(I32Ctz, i32),
-        unary!(I64Ctz, i64),
-        unary!(I32Popcnt, i32),
-        unary!(I64Popcnt, i64),
-        binary!(I32Add, i32),
-        binary!(I64Add, i64),
-        binary!(I32Sub, i32),
-        binary!(I64Sub, i64),
-        binary!(I32Mul, i32),
-        binary!(I64Mul, i64),
-        binary!(I32DivS, i32),
-        binary!(I64DivS, i64),
-        binary!(I32DivU, i32),
-        binary!(I64DivU, i64),
-        binary!(I32RemS, i32),
-        binary!(I64RemS, i64),
-        binary!(I32RemU, i32),
-        binary!(I64RemU, i64),
-        // Integer bitwise.
-        binary!(I32And, i32),
-        binary!(I64And, i64),
-        binary!(I32Or, i32),
-        binary!(I64Or, i64),
-        binary!(I32Xor, i32),
-        binary!(I64Xor, i64),
-        binary!(I32Shl, i32),
-        binary!(I64Shl, i64),
-        binary!(I32ShrS, i32),
-        binary!(I64ShrS, i64),
-        binary!(I32ShrU, i32),
-        binary!(I64ShrU, i64),
-        binary!(I32Rotl, i32),
-        binary!(I64Rotl, i64),
-        binary!(I32Rotr, i32),
-        binary!(I64Rotr, i64),
-        // Integer comparison.
-        unary!(I32Eqz, i32),
-        unary!(I64Eqz, ValType::I64, ValType::I32, i64),
-        compare!(I32Eq, i32),
-        compare!(I64Eq, i64),
-        compare!(I32Ne, i32),
-        compare!(I64Ne, i64),
-        compare!(I32LtS, i32),
-        compare!(I64LtS, i64),
-        compare!(I32LtU, i32),
-        compare!(I64LtU, i64),
-        compare!(I32GtS, i32),
-        compare!(I64GtS, i64),
-        compare!(I32GtU, i32),
-        compare!(I64GtU, i64),
-        compare!(I32LeS, i32),
-        compare!(I64LeS, i64),
-        compare!(I32LeU, i32),
-        compare!(I64LeU, i64),
-        compare!(I32GeS, i32),
-        compare!(I64GeS, i64),
-        compare!(I32GeU, i32),
-        compare!(I64GeU, i64),
-        // Floating-point arithmetic.
-        unary!(F32Abs, f32),
-        unary!(F64Abs, f64),
-        unary!(F32Sqrt, f32),
-        unary!(F64Sqrt, f64),
-        unary!(F32Ceil, f32),
-        unary!(F64Ceil, f64),
-        unary!(F32Floor, f32),
-        unary!(F64Floor, f64),
-        unary!(F32Trunc, f32),
-        unary!(F64Trunc, f64),
-        unary!(F32Nearest, f32),
-        unary!(F64Nearest, f64),
-        unary!(F32Neg, f32),
-        unary!(F64Neg, f64),
-        binary!(F32Add, f32),
-        binary!(F64Add, f64),
-        binary!(F32Sub, f32),
-        binary!(F64Sub, f64),
-        binary!(F32Mul, f32),
-        binary!(F64Mul, f64),
-        binary!(F32Div, f32),
-        binary!(F64Div, f64),
-        binary!(F32Min, f32),
-        binary!(F64Min, f64),
-        binary!(F32Max, f32),
-        binary!(F64Max, f64),
-        binary!(F32Copysign, f32),
-        binary!(F64Copysign, f64),
-        // Floating-point comparison.
-        compare!(F32Eq, f32),
-        compare!(F64Eq, f64),
-        compare!(F32Ne, f32),
-        compare!(F64Ne, f64),
-        compare!(F32Lt, f32),
-        compare!(F64Lt, f64),
-        compare!(F32Gt, f32),
-        compare!(F64Gt, f64),
-        compare!(F32Le, f32),
-        compare!(F64Le, f64),
-        compare!(F32Ge, f32),
-        compare!(F64Ge, f64),
-        // Integer conversions ("to integer").
-        unary!(I32Extend8S, i32),
-        unary!(I32Extend16S, i32),
-        unary!(I64Extend8S, i64),
-        unary!(I64Extend16S, i64),
-        convert!(I64Extend32S, i32 -> i64),
-        convert!(I32WrapI64, i64 -> i32),
-        convert!(I64ExtendI32S, i32 -> i64),
-        convert!(I64ExtendI32U, i32 -> i64),
-        convert!(I32TruncF32S, f32 -> i32),
-        convert!(I32TruncF32U, f32 -> i32),
-        convert!(I32TruncF64S, f64 -> i32),
-        convert!(I32TruncF64U, f64 -> i32),
-        convert!(I64TruncF32S, f32 -> i64),
-        convert!(I64TruncF32U, f32 -> i64),
-        convert!(I64TruncF64S, f64 -> i64),
-        convert!(I64TruncF64U, f64 -> i64),
-        convert!(I32TruncSatF32S, f32 -> i32),
-        convert!(I32TruncSatF32U, f32 -> i32),
-        convert!(I32TruncSatF64S, f64 -> i32),
-        convert!(I32TruncSatF64U, f64 -> i32),
-        convert!(I64TruncSatF32S, f32 -> i64),
-        convert!(I64TruncSatF32U, f32 -> i64),
-        convert!(I64TruncSatF64S, f64 -> i64),
-        convert!(I64TruncSatF64U, f64 -> i64),
-        convert!(I32ReinterpretF32, f32 -> i32),
-        convert!(I64ReinterpretF64, f64 -> i64),
-        // Floating-point conversions ("to float").
-        convert!(F32DemoteF64, f64 -> f32),
-        convert!(F64PromoteF32, f32 -> f64),
-        convert!(F32ConvertI32S, i32 -> f32),
-        convert!(F32ConvertI32U, i32 -> f32),
-        convert!(F32ConvertI64S, i64 -> f32),
-        convert!(F32ConvertI64U, i64 -> f32),
-        convert!(F64ConvertI32S, i32 -> f64),
-        convert!(F64ConvertI32U, i32 -> f64),
-        convert!(F64ConvertI64S, i64 -> f64),
-        convert!(F64ConvertI64U, i64 -> f64),
-        convert!(F32ReinterpretI32, i32 -> f32),
-        convert!(F64ReinterpretI64, i64 -> f64),
-    ]
-});
+static INSTRUCTIONS: &[SingleInstModule] = &[
+    // Integer arithmetic.
+    // I32Const
+    // I64Const
+    // F32Const
+    // F64Const
+    unary!(I32Clz, i32),
+    unary!(I64Clz, i64),
+    unary!(I32Ctz, i32),
+    unary!(I64Ctz, i64),
+    unary!(I32Popcnt, i32),
+    unary!(I64Popcnt, i64),
+    binary!(I32Add, i32),
+    binary!(I64Add, i64),
+    binary!(I32Sub, i32),
+    binary!(I64Sub, i64),
+    binary!(I32Mul, i32),
+    binary!(I64Mul, i64),
+    binary!(I32DivS, i32),
+    binary!(I64DivS, i64),
+    binary!(I32DivU, i32),
+    binary!(I64DivU, i64),
+    binary!(I32RemS, i32),
+    binary!(I64RemS, i64),
+    binary!(I32RemU, i32),
+    binary!(I64RemU, i64),
+    // Integer bitwise.
+    binary!(I32And, i32),
+    binary!(I64And, i64),
+    binary!(I32Or, i32),
+    binary!(I64Or, i64),
+    binary!(I32Xor, i32),
+    binary!(I64Xor, i64),
+    binary!(I32Shl, i32),
+    binary!(I64Shl, i64),
+    binary!(I32ShrS, i32),
+    binary!(I64ShrS, i64),
+    binary!(I32ShrU, i32),
+    binary!(I64ShrU, i64),
+    binary!(I32Rotl, i32),
+    binary!(I64Rotl, i64),
+    binary!(I32Rotr, i32),
+    binary!(I64Rotr, i64),
+    // Integer comparison.
+    unary!(I32Eqz, i32),
+    unary!(I64Eqz, ValType::I64, ValType::I32, i64),
+    compare!(I32Eq, i32),
+    compare!(I64Eq, i64),
+    compare!(I32Ne, i32),
+    compare!(I64Ne, i64),
+    compare!(I32LtS, i32),
+    compare!(I64LtS, i64),
+    compare!(I32LtU, i32),
+    compare!(I64LtU, i64),
+    compare!(I32GtS, i32),
+    compare!(I64GtS, i64),
+    compare!(I32GtU, i32),
+    compare!(I64GtU, i64),
+    compare!(I32LeS, i32),
+    compare!(I64LeS, i64),
+    compare!(I32LeU, i32),
+    compare!(I64LeU, i64),
+    compare!(I32GeS, i32),
+    compare!(I64GeS, i64),
+    compare!(I32GeU, i32),
+    compare!(I64GeU, i64),
+    // Floating-point arithmetic.
+    unary!(F32Abs, f32),
+    unary!(F64Abs, f64),
+    unary!(F32Sqrt, f32),
+    unary!(F64Sqrt, f64),
+    unary!(F32Ceil, f32),
+    unary!(F64Ceil, f64),
+    unary!(F32Floor, f32),
+    unary!(F64Floor, f64),
+    unary!(F32Trunc, f32),
+    unary!(F64Trunc, f64),
+    unary!(F32Nearest, f32),
+    unary!(F64Nearest, f64),
+    unary!(F32Neg, f32),
+    unary!(F64Neg, f64),
+    binary!(F32Add, f32),
+    binary!(F64Add, f64),
+    binary!(F32Sub, f32),
+    binary!(F64Sub, f64),
+    binary!(F32Mul, f32),
+    binary!(F64Mul, f64),
+    binary!(F32Div, f32),
+    binary!(F64Div, f64),
+    binary!(F32Min, f32),
+    binary!(F64Min, f64),
+    binary!(F32Max, f32),
+    binary!(F64Max, f64),
+    binary!(F32Copysign, f32),
+    binary!(F64Copysign, f64),
+    // Floating-point comparison.
+    compare!(F32Eq, f32),
+    compare!(F64Eq, f64),
+    compare!(F32Ne, f32),
+    compare!(F64Ne, f64),
+    compare!(F32Lt, f32),
+    compare!(F64Lt, f64),
+    compare!(F32Gt, f32),
+    compare!(F64Gt, f64),
+    compare!(F32Le, f32),
+    compare!(F64Le, f64),
+    compare!(F32Ge, f32),
+    compare!(F64Ge, f64),
+    // Integer conversions ("to integer").
+    unary!(I32Extend8S, i32),
+    unary!(I32Extend16S, i32),
+    unary!(I64Extend8S, i64),
+    unary!(I64Extend16S, i64),
+    convert!(I64Extend32S, i32 -> i64),
+    convert!(I32WrapI64, i64 -> i32),
+    convert!(I64ExtendI32S, i32 -> i64),
+    convert!(I64ExtendI32U, i32 -> i64),
+    convert!(I32TruncF32S, f32 -> i32),
+    convert!(I32TruncF32U, f32 -> i32),
+    convert!(I32TruncF64S, f64 -> i32),
+    convert!(I32TruncF64U, f64 -> i32),
+    convert!(I64TruncF32S, f32 -> i64),
+    convert!(I64TruncF32U, f32 -> i64),
+    convert!(I64TruncF64S, f64 -> i64),
+    convert!(I64TruncF64U, f64 -> i64),
+    convert!(I32TruncSatF32S, f32 -> i32),
+    convert!(I32TruncSatF32U, f32 -> i32),
+    convert!(I32TruncSatF64S, f64 -> i32),
+    convert!(I32TruncSatF64U, f64 -> i32),
+    convert!(I64TruncSatF32S, f32 -> i64),
+    convert!(I64TruncSatF32U, f32 -> i64),
+    convert!(I64TruncSatF64S, f64 -> i64),
+    convert!(I64TruncSatF64U, f64 -> i64),
+    convert!(I32ReinterpretF32, f32 -> i32),
+    convert!(I64ReinterpretF64, f64 -> i64),
+    // Floating-point conversions ("to float").
+    convert!(F32DemoteF64, f64 -> f32),
+    convert!(F64PromoteF32, f32 -> f64),
+    convert!(F32ConvertI32S, i32 -> f32),
+    convert!(F32ConvertI32U, i32 -> f32),
+    convert!(F32ConvertI64S, i64 -> f32),
+    convert!(F32ConvertI64U, i64 -> f32),
+    convert!(F64ConvertI32S, i32 -> f64),
+    convert!(F64ConvertI32U, i32 -> f64),
+    convert!(F64ConvertI64S, i64 -> f64),
+    convert!(F64ConvertI64U, i64 -> f64),
+    convert!(F32ReinterpretI32, i32 -> f32),
+    convert!(F64ReinterpretI64, i64 -> f64),
+];
 
 #[cfg(test)]
 mod test {
@@ -339,8 +339,8 @@ mod test {
     fn sanity() {
         let sut = SingleInstModule {
             instruction: Instruction::I32Add,
-            parameters: vec![ValType::I32, ValType::I32],
-            results: vec![ValType::I32],
+            parameters: &[ValType::I32, ValType::I32],
+            results: &[ValType::I32],
         };
         let wasm = sut.encode();
         let wat = wasmprinter::print_bytes(wasm).unwrap();
