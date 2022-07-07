@@ -75,58 +75,45 @@ impl<'a> Arbitrary<'a> for SingleInstModule<'_> {
 // instructions compactly and allow for easier changes to the Rust code (e.g.,
 // `SingleInstModule`).
 
+macro_rules! valtype {
+    (i32) => {
+        ValType::I32
+    };
+    (i64) => {
+        ValType::I64
+    };
+    (f32) => {
+        ValType::F32
+    };
+    (f64) => {
+        ValType::F64
+    };
+}
+
 macro_rules! binary {
-    ($inst:ident, i32) => {
-        binary! { $inst, i32, ValType::I32, ValType::I32 }
+    ($inst:ident, $rust_ty:tt) => {
+        binary! { $inst, valtype!($rust_ty), valtype!($rust_ty) }
     };
-    ($inst:ident, i64) => {
-        binary! { $inst, i64, ValType::I64, ValType::I64 }
-    };
-    ($inst:ident, f32) => {
-        binary! { $inst, f32, ValType::F32, ValType::F32 }
-    };
-    ($inst:ident, f64) => {
-        binary! { $inst, f64, ValType::F64, ValType::F64 }
-    };
-    ($inst:ident, $from_rust_ty:ident, $from_encoder_ty:expr,  $to_encoder_ty:expr) => {
+    ($inst:ident, $arguments_ty:expr,  $result_ty:expr) => {
         SingleInstModule {
             instruction: Instruction::$inst,
-            parameters: &[$from_encoder_ty, $from_encoder_ty],
-            results: &[$to_encoder_ty],
+            parameters: &[$arguments_ty, $arguments_ty],
+            results: &[$result_ty],
         }
     };
 }
 
 macro_rules! compare {
-    ($inst:ident, i32) => {
-        binary! { $inst, i32, ValType::I32, ValType::I32 }
-    };
-    ($inst:ident, i64) => {
-        binary! { $inst, i64, ValType::I64, ValType::I32 }
-    };
-    ($inst:ident, f32) => {
-        binary! { $inst, f32, ValType::F32, ValType::I32 }
-    };
-    ($inst:ident, f64) => {
-        binary! { $inst, f64, ValType::F64, ValType::I32 }
+    ($inst:ident, $rust_ty:tt) => {
+        binary! { $inst, valtype!($rust_ty), ValType::I32 }
     };
 }
 
 macro_rules! unary {
-    ($inst:ident, i32) => {
-        unary! { $inst, ValType::I32, ValType::I32, i32 }
+    ($inst:ident, $rust_ty:tt) => {
+        binary! { $inst, valtype!($rust_ty), valtype!($rust_ty) }
     };
-    ($inst:ident, i64) => {
-        unary! { $inst, ValType::I64, ValType::I64, i64 }
-    };
-    ($inst:ident, f32) => {
-        unary! { $inst, ValType::F32, ValType::F32, f32 }
-    };
-    ($inst:ident, f64) => {
-        unary! { $inst, ValType::F64, ValType::F64, f64 }
-    };
-
-    ($inst:ident, $argument_ty:expr, $result_ty:expr, $rust_ty:ident) => {
+    ($inst:ident, $argument_ty:expr, $result_ty:expr) => {
         SingleInstModule {
             instruction: Instruction::$inst,
             parameters: &[$argument_ty],
@@ -136,48 +123,8 @@ macro_rules! unary {
 }
 
 macro_rules! convert {
-    // I32 to...
-    ($inst:ident, i32 -> i64) => {
-        unary! { $inst, ValType::I32, ValType::I64, i32 }
-    };
-    ($inst:ident, i32 -> f32) => {
-        unary! { $inst, ValType::I32, ValType::F32, i32 }
-    };
-    ($inst:ident, i32 -> f64) => {
-        unary! { $inst, ValType::I32, ValType::F64, i32 }
-    };
-
-    // I64 to...
-    ($inst:ident, i64 -> i32) => {
-        unary! { $inst, ValType::I64, ValType::I32, i64 }
-    };
-    ($inst:ident, i64 -> f32) => {
-        unary! { $inst, ValType::I64, ValType::F32, i64 }
-    };
-    ($inst:ident, i64 -> f64) => {
-        unary! { $inst, ValType::I64, ValType::F64, i64 }
-    };
-
-    // F32 to...
-    ($inst:ident, f32 -> f64) => {
-        unary! { $inst, ValType::F32, ValType::F64, f32 }
-    };
-    ($inst:ident, f32 -> i32) => {
-        unary! { $inst, ValType::F32, ValType::I32, f32 }
-    };
-    ($inst:ident, f32 -> i64) => {
-        unary! { $inst, ValType::F32, ValType::I64, f32 }
-    };
-
-    // F64 to...
-    ($inst:ident, f64 -> f32) => {
-        unary! { $inst, ValType::F64, ValType::F32, f64 }
-    };
-    ($inst:ident, f64 -> i32) => {
-        unary! { $inst, ValType::F64, ValType::I32, f64 }
-    };
-    ($inst:ident, f64 -> i64) => {
-        unary! { $inst, ValType::F64, ValType::I64, f64 }
+    ($inst:ident, $from_ty:tt -> $to_ty:tt) => {
+        unary! { $inst, valtype!($from_ty), valtype!($to_ty) }
     };
 }
 
@@ -226,7 +173,7 @@ static INSTRUCTIONS: &[SingleInstModule] = &[
     binary!(I64Rotr, i64),
     // Integer comparison.
     unary!(I32Eqz, i32),
-    unary!(I64Eqz, ValType::I64, ValType::I32, i64),
+    unary!(I64Eqz, ValType::I64, ValType::I32),
     compare!(I32Eq, i32),
     compare!(I64Eq, i64),
     compare!(I32Ne, i32),
