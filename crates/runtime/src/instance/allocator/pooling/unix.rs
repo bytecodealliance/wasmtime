@@ -21,7 +21,7 @@ fn decommit(addr: *mut u8, len: usize, protect: bool) -> Result<()> {
                 madvise(addr as _, len, Advice::LinuxDontNeed)
                     .context("madvise failed to decommit: {}")?;
             } else {
-                use rustix::mm::{mprotect, MprotectFlags};
+                use rustix::mm::{mmap_anonymous, ProtFlags, MapFlags};
 
                 // By creating a new mapping at the same location, this will
                 // discard the mapping for the pages in the given range.
@@ -33,9 +33,9 @@ fn decommit(addr: *mut u8, len: usize, protect: bool) -> Result<()> {
                     if protect {
                         ProtFlags::empty()
                     } else {
-                        ProtFlags::READ | rustix::mm::ProtFlags::WRITE
+                        ProtFlags::READ | ProtFlags::WRITE
                     },
-                    MapFlags::PRIVATE | rustix::mm::MapFlags::FIXED,
+                    MapFlags::PRIVATE | MapFlags::FIXED,
                 )
                 .context("mmap failed to remap pages: {}")?;
             }
