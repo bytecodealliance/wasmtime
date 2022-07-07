@@ -605,6 +605,23 @@ fn flags() -> Result<()> {
 
     flags_test!(Foo16, 9);
 
+    assert_eq!(Foo16::default(), (Foo16::F0 | Foo16::F7) & Foo16::F8);
+    assert_eq!(Foo16::F7, (Foo16::F0 | Foo16::F7) & Foo16::F7);
+    assert_eq!(Foo16::F0, (Foo16::F0 | Foo16::F7) & Foo16::F0);
+    assert_eq!(Foo16::F0 | Foo16::F7, Foo16::F0 ^ Foo16::F7);
+    assert_eq!(Foo16::default(), Foo16::F0 ^ Foo16::F0);
+    assert_eq!(
+        Foo16::F1
+            | Foo16::F2
+            | Foo16::F3
+            | Foo16::F4
+            | Foo16::F5
+            | Foo16::F6
+            | Foo16::F7
+            | Foo16::F8,
+        !Foo16::F0
+    );
+
     let component = Component::new(
         &engine,
         make_echo_component(
@@ -630,6 +647,13 @@ fn flags() -> Result<()> {
     // Happy path redux, with large flag count (more than 16)
 
     flags_test!(Foo32, 17);
+
+    assert_eq!(Foo32::default(), (Foo32::F0 | Foo32::F15) & Foo32::F16);
+    assert_eq!(Foo32::F15, (Foo32::F0 | Foo32::F15) & Foo32::F15);
+    assert_eq!(Foo32::F0, (Foo32::F0 | Foo32::F15) & Foo32::F0);
+    assert_eq!(Foo32::F0 | Foo32::F15, Foo32::F0 ^ Foo32::F15);
+    assert_eq!(Foo32::default(), Foo32::F0 ^ Foo32::F0);
+    assert_eq!(Foo32::F0 | Foo32::F16, !((!Foo32::F0) & (!Foo32::F16)));
 
     let component = Component::new(
         &engine,
@@ -657,6 +681,13 @@ fn flags() -> Result<()> {
 
     flags_test!(Foo64, 33);
 
+    assert_eq!(Foo64::default(), (Foo64::F0 | Foo64::F31) & Foo64::F32);
+    assert_eq!(Foo64::F31, (Foo64::F0 | Foo64::F31) & Foo64::F31);
+    assert_eq!(Foo64::F0, (Foo64::F0 | Foo64::F31) & Foo64::F0);
+    assert_eq!(Foo64::F0 | Foo64::F31, Foo64::F0 ^ Foo64::F31);
+    assert_eq!(Foo64::default(), Foo64::F0 ^ Foo64::F0);
+    assert_eq!(Foo64::F0 | Foo64::F32, !((!Foo64::F0) & (!Foo64::F32)));
+
     let component = Component::new(
         &engine,
         make_echo_component(
@@ -682,6 +713,13 @@ fn flags() -> Result<()> {
     // Happy path redux, with large flag count (more than 64)
 
     flags_test!(Foo96, 65);
+
+    assert_eq!(Foo96::default(), (Foo96::F0 | Foo96::F63) & Foo96::F64);
+    assert_eq!(Foo96::F63, (Foo96::F0 | Foo96::F63) & Foo96::F63);
+    assert_eq!(Foo96::F0, (Foo96::F0 | Foo96::F63) & Foo96::F0);
+    assert_eq!(Foo96::F0 | Foo96::F63, Foo96::F0 ^ Foo96::F63);
+    assert_eq!(Foo96::default(), Foo96::F0 ^ Foo96::F0);
+    assert_eq!(Foo96::F0 | Foo96::F64, !((!Foo96::F0) & (!Foo96::F64)));
 
     let component = Component::new(
         &engine,

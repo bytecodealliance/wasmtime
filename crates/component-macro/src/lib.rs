@@ -1101,7 +1101,7 @@ fn expand_flags(flags: &Flags) -> Result<TokenStream> {
 
                     if index == n - 1 {
                         let mut mask = 0u32;
-                        for index in (n * 32)..flags.flags.len() {
+                        for index in 0..(flags.flags.len() - (index * 32)) {
                             mask |= 1 << index;
                         }
 
