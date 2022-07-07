@@ -1,4 +1,3 @@
-use more_asserts::assert_gt;
 use std::{env, process};
 use wasi_tests::open_scratch_directory;
 
@@ -14,18 +13,16 @@ unsafe fn test_file_unbuffered_write(dir_fd: wasi::Fd) {
         0,
     )
     .expect("create and open file for reading");
-    assert_gt!(
-        fd_read,
-        libc::STDERR_FILENO as wasi::Fd,
+    assert!(
+        fd_read > libc::STDERR_FILENO as wasi::Fd,
         "file descriptor range check",
     );
 
     // Open the same file but for writing
     let fd_write = wasi::path_open(dir_fd, 0, "file", 0, wasi::RIGHTS_FD_WRITE, 0, 0)
         .expect("opening file for writing");
-    assert_gt!(
-        fd_write,
-        libc::STDERR_FILENO as wasi::Fd,
+    assert!(
+        fd_write > libc::STDERR_FILENO as wasi::Fd,
         "file descriptor range check",
     );
 

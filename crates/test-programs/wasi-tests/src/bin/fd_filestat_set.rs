@@ -1,4 +1,3 @@
-use more_asserts::assert_gt;
 use std::{env, process};
 use wasi_tests::open_scratch_directory;
 
@@ -18,9 +17,8 @@ unsafe fn test_fd_filestat_set(dir_fd: wasi::Fd) {
         0,
     )
     .expect("failed to create file");
-    assert_gt!(
-        file_fd,
-        libc::STDERR_FILENO as wasi::Fd,
+    assert!(
+        file_fd > libc::STDERR_FILENO as wasi::Fd,
         "file descriptor range check",
     );
 

@@ -16,7 +16,6 @@ use crate::{
 };
 use anyhow::Error;
 use memoffset::offset_of;
-use more_asserts::assert_lt;
 use std::alloc::Layout;
 use std::any::Any;
 use std::convert::TryFrom;
@@ -364,7 +363,7 @@ impl Instance {
             )
             .unwrap(),
         );
-        assert_lt!(index.index(), self.tables.len());
+        assert!(index.index() < self.tables.len());
         index
     }
 

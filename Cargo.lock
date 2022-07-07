@@ -1737,12 +1737,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "more-asserts"
-version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7843ec2de400bcbc6a6328c958dc38e5359da6e93e72e37bc5246bf1ae776389"
-
-[[package]]
 name = "ntapi"
 version = "0.3.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3402,7 +3396,6 @@ dependencies = [
  "file-per-thread-logger",
  "filetime",
  "log",
- "more-asserts",
  "once_cell",
  "pretty_env_logger",
  "rustix",
@@ -3429,7 +3422,6 @@ dependencies = [
  "libc",
  "listenfd",
  "memchr",
- "more-asserts",
  "num_cpus",
  "once_cell",
  "rayon",
@@ -3492,7 +3484,6 @@ dependencies = [
  "cranelift-wasm",
  "gimli",
  "log",
- "more-asserts",
  "object",
  "target-lexicon",
  "thiserror",
@@ -3509,7 +3500,6 @@ dependencies = [
  "gimli",
  "indexmap",
  "log",
- "more-asserts",
  "object",
  "serde",
  "target-lexicon",
@@ -3620,7 +3610,6 @@ dependencies = [
  "mach",
  "memfd",
  "memoffset",
- "more-asserts",
  "rand 0.8.5",
  "rustix",
  "thiserror",
