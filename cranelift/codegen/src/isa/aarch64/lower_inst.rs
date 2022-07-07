@@ -124,7 +124,10 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     insn,
                     &inputs[..],
                     outputs[0],
-                    |ctx, dst, elem_ty, mem| {
+                    |ctx, dst, mut elem_ty, mem| {
+                        if elem_ty.is_dynamic_vector() {
+                            elem_ty = dynamic_to_fixed(elem_ty);
+                        }
                         let rd = dst.only_reg().unwrap();
                         let is_float = ty_has_float_or_vec_representation(elem_ty);
                         ctx.emit(match (ty_bits(elem_ty), sign_extend, is_float) {
@@ -177,7 +180,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::Store | Opcode::Istore8 | Opcode::Istore16 | Opcode::Istore32 => {
             let off = ctx.data(insn).load_store_offset().unwrap();
-            let elem_ty = match op {
+            let mut elem_ty = match op {
                 Opcode::Istore8 => I8,
                 Opcode::Istore16 => I16,
                 Opcode::Istore32 => I32,
@@ -200,6 +203,9 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     flags,
                 });
             } else {
+                if elem_ty.is_dynamic_vector() {
+                    elem_ty = dynamic_to_fixed(elem_ty);
+                }
                 let rd = dst.only_reg().unwrap();
                 let mem = lower_address(ctx, elem_ty, &inputs[1..], off);
                 ctx.emit(match (ty_bits(elem_ty), is_float) {
@@ -231,11 +237,14 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             };
             let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let offset: i32 = offset.into();
-            let inst = ctx
-                .abi()
-                .stackslot_addr(stack_slot, u32::try_from(offset).unwrap(), rd);
+            assert!(ctx.abi().sized_stackslot_offsets().is_valid(stack_slot));
+            let inst =
+                ctx.abi()
+                    .sized_stackslot_addr(stack_slot, u32::try_from(offset).unwrap(), rd);
             ctx.emit(inst);
         }
+
+        Opcode::DynamicStackAddr => implemented_in_isle(ctx),
 
         Opcode::AtomicRmw => implemented_in_isle(ctx),
 
@@ -249,7 +258,10 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             ctx.emit(Inst::Fence {});
         }
 
-        Opcode::StackLoad | Opcode::StackStore => {
+        Opcode::StackLoad
+        | Opcode::StackStore
+        | Opcode::DynamicStackStore
+        | Opcode::DynamicStackLoad => {
             panic!("Direct stack memory access not supported; should not be used by Wasm");
         }
 
@@ -684,7 +696,8 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 let idx = *imm;
                 let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
                 let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-                let size = VectorSize::from_ty(ctx.input_ty(insn, 0));
+                let input_ty = ctx.input_ty(insn, 0);
+                let size = VectorSize::from_ty(input_ty);
                 let ty = ty.unwrap();
 
                 if ty_has_int_representation(ty) {
@@ -730,7 +743,14 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::Splat => {
             let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let size = VectorSize::from_ty(ty.unwrap());
+            let ty = ty.unwrap();
+            // TODO: Handle SVE Dup.
+            let ty = if ty.is_dynamic_vector() {
+                dynamic_to_fixed(ty)
+            } else {
+                ty
+            };
+            let size = VectorSize::from_ty(ty);
 
             if let Some((_, insn)) = maybe_input_insn_multi(
                 ctx,
@@ -1284,7 +1304,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
             let rm = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
             let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            if !ty.is_vector() {
+            if !ty.is_vector() && !ty.is_dynamic_vector() {
                 let fpu_op = match op {
                     Opcode::Fadd => FPUOp2::Add,
                     Opcode::Fsub => FPUOp2::Sub,
@@ -1336,7 +1356,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
             debug_assert!(lane_type == F32 || lane_type == F64);
 
-            if ty.is_vector() {
+            if ty.is_vector() || ty.is_dynamic_vector() {
                 let size = VectorSize::from_ty(ty);
 
                 // pmin(a,b) => bitsel(b, a, cmpgt(a, b))
@@ -2015,7 +2035,15 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 .map_or(true, |insn| {
                     const_param_to_u128(ctx, insn).expect("Invalid immediate bytes") != 0
                 });
-            let op = match (op, ty.unwrap()) {
+            let ty = ty.unwrap();
+            let ty = if ty.is_dynamic_vector() {
+                ty.dynamic_to_vector()
+                    .unwrap_or_else(|| panic!("Unsupported dynamic type: {}?", ty))
+            } else {
+                ty
+            };
+
+            let op = match (op, ty) {
                 (Opcode::Snarrow, I8X16) => VecRRNarrowOp::Sqxtn16,
                 (Opcode::Snarrow, I16X8) => VecRRNarrowOp::Sqxtn32,
                 (Opcode::Snarrow, I32X4) => VecRRNarrowOp::Sqxtn64,
@@ -2057,7 +2085,14 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         Opcode::SwidenLow | Opcode::SwidenHigh | Opcode::UwidenLow | Opcode::UwidenHigh => {
             let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-            let (t, high_half) = match (ty.unwrap(), op) {
+            let ty = ty.unwrap();
+            let ty = if ty.is_dynamic_vector() {
+                ty.dynamic_to_vector()
+                    .unwrap_or_else(|| panic!("Unsupported dynamic type: {}?", ty))
+            } else {
+                ty
+            };
+            let (t, high_half) = match (ty, op) {
                 (I16X8, Opcode::SwidenLow) => (VecExtendOp::Sxtl8, false),
                 (I16X8, Opcode::SwidenHigh) => (VecExtendOp::Sxtl8, true),
                 (I16X8, Opcode::UwidenLow) => (VecExtendOp::Uxtl8, false),
@@ -2181,6 +2216,8 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 high_half: false,
             });
         }
+
+        Opcode::ExtractVector => implemented_in_isle(ctx),
 
         Opcode::ConstAddr | Opcode::Vconcat | Opcode::Vsplit | Opcode::IfcmpSp => {
             return Err(CodegenError::Unsupported(format!(

@@ -256,6 +256,8 @@
 (extern const $F32X4 Type)
 (extern const $F64X2 Type)
 
+(extern const $I32X4XN Type)
+
 ;; Get the bit width of a given type.
 (decl pure ty_bits (Type) u8)
 (extern constructor ty_bits ty_bits)
@@ -289,6 +291,10 @@
 ;; An extractor that only matches types that can fit in 32 bits.
 (decl fits_in_32 (Type) Type)
 (extern extractor fits_in_32 fits_in_32)
+
+;; An extractor that only matches types that can fit in 32 bits.
+(decl lane_fits_in_32 (Type) Type)
+(extern extractor lane_fits_in_32 lane_fits_in_32)
 
 ;; An extractor that only matches types that can fit in 64 bits.
 (decl fits_in_64 (Type) Type)
@@ -432,6 +438,21 @@
 ;; type. Will only match when there is more than one lane.
 (decl multi_lane (u32 u32) Type)
 (extern extractor multi_lane multi_lane)
+
+;; Match a dynamic-lane type, extracting (# bits per lane) from the given
+;; type.
+(decl dynamic_lane (u32 u32) Type)
+(extern extractor dynamic_lane dynamic_lane)
+
+;; Match a dynamic-lane integer type, extracting (# bits per lane) from the given
+;; type.
+(decl dynamic_int_lane (u32) Type)
+(extern extractor dynamic_int_lane dynamic_int_lane)
+
+;; Match a dynamic-lane floating point type, extracting (# bits per lane)
+;; from the given type.
+(decl dynamic_fp_lane (u32) Type)
+(extern extractor dynamic_fp_lane dynamic_fp_lane)
 
 ;; Match the instruction that defines the given value, if any.
 (decl def_inst (Inst) Value)
@@ -727,12 +748,20 @@
 (extern extractor abi_no_ret_arg abi_no_ret_arg)
 
 ;; Size of the argument area.
-(decl abi_stack_arg_space (ABISig) i64)
-(extern constructor abi_stack_arg_space abi_stack_arg_space)
+(decl abi_sized_stack_arg_space (ABISig) i64)
+(extern constructor abi_sized_stack_arg_space abi_sized_stack_arg_space)
 
 ;; Size of the return-value area.
-(decl abi_stack_ret_space (ABISig) i64)
-(extern constructor abi_stack_ret_space abi_stack_ret_space)
+(decl abi_sized_stack_ret_space (ABISig) i64)
+(extern constructor abi_sized_stack_ret_space abi_sized_stack_ret_space)
+
+;; StackSlot addr
+(decl abi_stackslot_addr (WritableReg StackSlot Offset32) MInst)
+(extern constructor abi_stackslot_addr abi_stackslot_addr)
+
+;; DynamicStackSlot addr
+(decl abi_dynamic_stackslot_addr (WritableReg DynamicStackSlot) MInst)
+(extern constructor abi_dynamic_stackslot_addr abi_dynamic_stackslot_addr)
 
 ;; Extractor to detect the special case where an argument or
 ;; return value only requires a single slot to be passed.

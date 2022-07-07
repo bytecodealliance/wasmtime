@@ -19,7 +19,9 @@
 
 use crate::fx::FxHashMap;
 use crate::fx::FxHashSet;
-use crate::ir::{self, types, Constant, ConstantData, LabelValueLoc, SourceLoc, ValueLabel};
+use crate::ir::{
+    self, types, Constant, ConstantData, DynamicStackSlot, LabelValueLoc, SourceLoc, ValueLabel,
+};
 use crate::machinst::*;
 use crate::timing;
 use crate::ValueLocRange;
@@ -207,8 +209,11 @@ pub struct EmitResult<I: VCodeInst> {
     /// epilogue(s), and makes use of the regalloc results.
     pub disasm: Option<String>,
 
-    /// Offsets of stackslots.
-    pub stackslot_offsets: PrimaryMap<StackSlot, u32>,
+    /// Offsets of sized stackslots.
+    pub sized_stackslot_offsets: PrimaryMap<StackSlot, u32>,
+
+    /// Offsets of dynamic stackslots.
+    pub dynamic_stackslot_offsets: PrimaryMap<DynamicStackSlot, u32>,
 
     /// Value-labels information (debug metadata).
     pub value_labels_ranges: ValueLabelsRanges,
@@ -1038,7 +1043,8 @@ impl<I: VCodeInst> VCode<I> {
             inst_offsets,
             func_body_len,
             disasm: if want_disasm { Some(disasm) } else { None },
-            stackslot_offsets: self.abi.stackslot_offsets().clone(),
+            sized_stackslot_offsets: self.abi.sized_stackslot_offsets().clone(),
+            dynamic_stackslot_offsets: self.abi.dynamic_stackslot_offsets().clone(),
             value_labels_ranges,
             frame_size,
         }

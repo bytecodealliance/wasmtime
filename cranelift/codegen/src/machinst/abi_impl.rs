@@ -126,7 +126,8 @@
 use super::abi::*;
 use crate::binemit::StackMap;
 use crate::ir::types::*;
-use crate::ir::{ArgumentExtension, ArgumentPurpose, StackSlot};
+use crate::ir::{ArgumentExtension, ArgumentPurpose, DynamicStackSlot, Signature, StackSlot};
+use crate::isa::TargetIsa;
 use crate::machinst::*;
 use crate::settings;
 use crate::CodegenResult;
@@ -137,6 +138,8 @@ use smallvec::{smallvec, SmallVec};
 use std::convert::TryFrom;
 use std::marker::PhantomData;
 use std::mem;
+
+use std::collections::HashMap;
 
 /// A location for (part of) an argument or return value. These "storage slots"
 /// are specified for each register-sized part of an argument.
@@ -430,6 +433,7 @@ pub trait ABIMachineSpec {
     fn get_clobbered_callee_saves(
         call_conv: isa::CallConv,
         flags: &settings::Flags,
+        sig: &Signature,
         regs: &[Writable<RealReg>],
     ) -> Vec<Writable<RealReg>>;
 
@@ -465,6 +469,7 @@ pub trait ABIMachineSpec {
     /// clobber-save sequence finished.
     fn gen_clobber_restore(
         call_conv: isa::CallConv,
+        sig: &Signature,
         flags: &settings::Flags,
         clobbers: &[Writable<RealReg>],
         fixed_frame_storage_size: u32,
@@ -495,7 +500,7 @@ pub trait ABIMachineSpec {
     ) -> SmallVec<[Self::I; 8]>;
 
     /// Get the number of spillslots required for the given register-class.
-    fn get_number_of_spillslots_for_value(rc: RegClass) -> u32;
+    fn get_number_of_spillslots_for_value(rc: RegClass, target_vector_bytes: u32) -> u32;
 
     /// Get the current virtual-SP offset from an instruction-emission state.
     fn get_virtual_sp_offset_from_state(s: &<Self::I as MachInstEmit>::State) -> i64;
@@ -528,9 +533,9 @@ pub struct ABISig {
     /// pointer.
     rets: Vec<ABIArg>,
     /// Space on stack used to store arguments.
-    stack_arg_space: i64,
+    sized_stack_arg_space: i64,
     /// Space on stack used to store return values.
-    stack_ret_space: i64,
+    sized_stack_ret_space: i64,
     /// Index in `args` of the stack-return-value-area argument.
     stack_ret_arg: Option<usize>,
     /// Specific order for copying into arguments at callsites. We must be
@@ -550,15 +555,15 @@ impl ABISig {
 
         // Compute args and retvals from signature. Handle retvals first,
         // because we may need to add a return-area arg to the args.
-        let (rets, stack_ret_space, _) = M::compute_arg_locs(
+        let (rets, sized_stack_ret_space, _) = M::compute_arg_locs(
             sig.call_conv,
             flags,
             &sig.returns,
             ArgsOrRets::Rets,
             /* extra ret-area ptr = */ false,
         )?;
-        let need_stack_return_area = stack_ret_space > 0;
-        let (args, stack_arg_space, stack_ret_arg) = M::compute_arg_locs(
+        let need_stack_return_area = sized_stack_ret_space > 0;
+        let (args, sized_stack_arg_space, stack_ret_arg) = M::compute_arg_locs(
             sig.call_conv,
             flags,
             &sig.params,
@@ -586,8 +591,8 @@ impl ABISig {
             sig,
             args,
             rets,
-            stack_arg_space,
-            stack_ret_space,
+            sized_stack_arg_space,
+            sized_stack_ret_space,
             stack_ret_arg,
             copy_to_arg_order,
         );
@@ -595,8 +600,8 @@ impl ABISig {
         Ok(ABISig {
             args,
             rets,
-            stack_arg_space,
-            stack_ret_space,
+            sized_stack_arg_space,
+            sized_stack_ret_space,
             stack_ret_arg,
             copy_to_arg_order,
             call_conv: sig.call_conv,
@@ -666,8 +671,8 @@ impl ABISig {
     }
 
     /// Get total stack space required for arguments.
-    pub fn stack_arg_space(&self) -> i64 {
-        self.stack_arg_space
+    pub fn sized_stack_arg_space(&self) -> i64 {
+        self.sized_stack_arg_space
     }
 
     /// Get the number of return values expected.
@@ -681,8 +686,8 @@ impl ABISig {
     }
 
     /// Get total stack space required for return values.
-    pub fn stack_ret_space(&self) -> i64 {
-        self.stack_ret_space
+    pub fn sized_stack_ret_space(&self) -> i64 {
+        self.sized_stack_ret_space
     }
 
     /// Get information specifying how to pass the implicit pointer
@@ -699,15 +704,19 @@ pub struct ABICalleeImpl<M: ABIMachineSpec> {
     ir_sig: ir::Signature,
     /// Signature: arg and retval regs.
     sig: ABISig,
-    /// Offsets to each stackslot.
-    stackslots: PrimaryMap<StackSlot, u32>,
-    /// Total stack size of all stackslots.
+    /// Defined dynamic types.
+    dynamic_type_sizes: HashMap<Type, u32>,
+    /// Offsets to each dynamic stackslot.
+    dynamic_stackslots: PrimaryMap<DynamicStackSlot, u32>,
+    /// Offsets to each sized stackslot.
+    sized_stackslots: PrimaryMap<StackSlot, u32>,
+    /// Total stack size of all stackslots
     stackslots_size: u32,
     /// Stack size to be reserved for outgoing arguments.
     outgoing_args_size: u32,
     /// Clobbered registers, from regalloc.
     clobbered: Vec<Writable<RealReg>>,
-    /// Total number of spillslots, from regalloc.
+    /// Total number of spillslots, including for 'dynamic' types, from regalloc.
     spillslots: Option<usize>,
     /// Storage allocated for the fixed part of the stack frame.  This is
     /// usually the same as the total frame size below, except in the case
@@ -766,13 +775,10 @@ fn get_special_purpose_param_register(
 
 impl<M: ABIMachineSpec> ABICalleeImpl<M> {
     /// Create a new body ABI instance.
-    pub fn new(
-        f: &ir::Function,
-        flags: settings::Flags,
-        isa_flags: Vec<settings::Value>,
-    ) -> CodegenResult<Self> {
+    pub fn new(f: &ir::Function, isa: &dyn TargetIsa) -> CodegenResult<Self> {
         log::trace!("ABI: func signature {:?}", f.signature);
 
+        let flags = isa.flags().clone();
         let ir_sig = ensure_struct_return_ptr_is_returned(&f.signature);
         let sig = ABISig::from_func_sig::<M>(&ir_sig, &flags)?;
 
@@ -791,16 +797,41 @@ impl<M: ABIMachineSpec> ABICalleeImpl<M> {
             call_conv
         );
 
-        // Compute stackslot locations and total stackslot size.
-        let mut stack_offset: u32 = 0;
-        let mut stackslots = PrimaryMap::new();
-        for (stackslot, data) in f.stack_slots.iter() {
-            let off = stack_offset;
-            stack_offset += data.size;
+        // Compute sized stackslot locations and total stackslot size.
+        let mut sized_stack_offset: u32 = 0;
+        let mut sized_stackslots = PrimaryMap::new();
+        for (stackslot, data) in f.sized_stack_slots.iter() {
+            let off = sized_stack_offset;
+            sized_stack_offset += data.size;
             let mask = M::word_bytes() - 1;
-            stack_offset = (stack_offset + mask) & !mask;
-            debug_assert_eq!(stackslot.as_u32() as usize, stackslots.len());
-            stackslots.push(off);
+            sized_stack_offset = (sized_stack_offset + mask) & !mask;
+            debug_assert_eq!(stackslot.as_u32() as usize, sized_stackslots.len());
+            sized_stackslots.push(off);
+        }
+
+        // Compute dynamic stackslot locations and total stackslot size.
+        let mut dynamic_stackslots = PrimaryMap::new();
+        let mut dynamic_stack_offset: u32 = sized_stack_offset;
+        for (stackslot, data) in f.dynamic_stack_slots.iter() {
+            debug_assert_eq!(stackslot.as_u32() as usize, dynamic_stackslots.len());
+            let off = dynamic_stack_offset;
+            let ty = f
+                .get_concrete_dynamic_ty(data.dyn_ty)
+                .unwrap_or_else(|| panic!("invalid dynamic vector type: {}", data.dyn_ty));
+            dynamic_stack_offset += isa.dynamic_vector_bytes(ty);
+            let mask = M::word_bytes() - 1;
+            dynamic_stack_offset = (dynamic_stack_offset + mask) & !mask;
+            dynamic_stackslots.push(off);
+        }
+        let stackslots_size = dynamic_stack_offset;
+
+        let mut dynamic_type_sizes = HashMap::with_capacity(f.dfg.dynamic_types.len());
+        for (dyn_ty, _data) in f.dfg.dynamic_types.iter() {
+            let ty = f
+                .get_concrete_dynamic_ty(dyn_ty)
+                .unwrap_or_else(|| panic!("invalid dynamic vector type: {}", dyn_ty));
+            let size = isa.dynamic_vector_bytes(ty);
+            dynamic_type_sizes.insert(ty, size);
         }
 
         // Figure out what instructions, if any, will be needed to check the
@@ -827,8 +858,10 @@ impl<M: ABIMachineSpec> ABICalleeImpl<M> {
         Ok(Self {
             ir_sig,
             sig,
-            stackslots,
-            stackslots_size: stack_offset,
+            dynamic_stackslots,
+            dynamic_type_sizes,
+            sized_stackslots,
+            stackslots_size,
             outgoing_args_size: 0,
             clobbered: vec![],
             spillslots: None,
@@ -837,7 +870,7 @@ impl<M: ABIMachineSpec> ABICalleeImpl<M> {
             ret_area_ptr: None,
             call_conv,
             flags,
-            isa_flags,
+            isa_flags: isa.isa_flags(),
             is_leaf: f.is_leaf(),
             stack_limit,
             probestack_min_frame,
@@ -1060,12 +1093,16 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         self.sig.rets.len()
     }
 
-    fn num_stackslots(&self) -> usize {
-        self.stackslots.len()
+    fn num_sized_stackslots(&self) -> usize {
+        self.sized_stackslots.len()
     }
 
-    fn stackslot_offsets(&self) -> &PrimaryMap<StackSlot, u32> {
-        &self.stackslots
+    fn sized_stackslot_offsets(&self) -> &PrimaryMap<StackSlot, u32> {
+        &self.sized_stackslots
+    }
+
+    fn dynamic_stackslot_offsets(&self) -> &PrimaryMap<DynamicStackSlot, u32> {
+        &self.dynamic_stackslots
     }
 
     fn gen_copy_arg_to_regs(
@@ -1256,13 +1293,32 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         self.clobbered = clobbered;
     }
 
-    /// Produce an instruction that computes a stackslot address.
-    fn stackslot_addr(&self, slot: StackSlot, offset: u32, into_reg: Writable<Reg>) -> Self::I {
+    /// Produce an instruction that computes a sized stackslot address.
+    fn sized_stackslot_addr(
+        &self,
+        slot: StackSlot,
+        offset: u32,
+        into_reg: Writable<Reg>,
+    ) -> Self::I {
         // Offset from beginning of stackslot area, which is at nominal SP (see
         // [MemArg::NominalSPOffset] for more details on nominal SP tracking).
-        let stack_off = self.stackslots[slot] as i64;
+        let stack_off = self.sized_stackslots[slot] as i64;
         let sp_off: i64 = stack_off + (offset as i64);
         M::gen_get_stack_addr(StackAMode::NominalSPOffset(sp_off, I8), into_reg, I8)
+    }
+
+    /// Produce an instruction that computes a dynamic stackslot address.
+    fn dynamic_stackslot_addr(&self, slot: DynamicStackSlot, into_reg: Writable<Reg>) -> Self::I {
+        let stack_off = self.dynamic_stackslots[slot] as i64;
+        M::gen_get_stack_addr(
+            StackAMode::NominalSPOffset(stack_off, I64X2XN),
+            into_reg,
+            I64X2XN,
+        )
+    }
+
+    fn dynamic_type_size(&self, ty: Type) -> u32 {
+        self.dynamic_type_sizes[&ty]
     }
 
     /// Load from a spillslot.
@@ -1339,8 +1395,12 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         }
         let mask = M::stack_align(self.call_conv) - 1;
         let total_stacksize = (total_stacksize + mask) & !mask; // 16-align the stack.
-        let clobbered_callee_saves =
-            M::get_clobbered_callee_saves(self.call_conv, &self.flags, &self.clobbered);
+        let clobbered_callee_saves = M::get_clobbered_callee_saves(
+            self.call_conv,
+            &self.flags,
+            self.signature(),
+            &self.clobbered,
+        );
         let mut insts = smallvec![];
 
         if !self.call_conv.extends_baldrdash() {
@@ -1408,6 +1468,7 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         // Restore clobbered registers.
         insts.extend(M::gen_clobber_restore(
             self.call_conv,
+            self.signature(),
             &self.flags,
             &self.clobbered,
             self.fixed_frame_storage_size,
@@ -1441,11 +1502,21 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
     }
 
     fn stack_args_size(&self) -> u32 {
-        self.sig.stack_arg_space as u32
+        self.sig.sized_stack_arg_space as u32
     }
 
     fn get_spillslot_size(&self, rc: RegClass) -> u32 {
-        M::get_number_of_spillslots_for_value(rc)
+        let max = if self.dynamic_type_sizes.len() == 0 {
+            16
+        } else {
+            *self
+                .dynamic_type_sizes
+                .iter()
+                .max_by(|x, y| x.1.cmp(&y.1))
+                .map(|(_k, v)| v)
+                .unwrap()
+        };
+        M::get_number_of_spillslots_for_value(rc, max)
     }
 
     fn gen_spill(&self, to_slot: SpillSlot, from_reg: RealReg) -> Self::I {
@@ -1586,17 +1657,17 @@ impl<M: ABIMachineSpec> ABICaller for ABICallerImpl<M> {
     }
 
     fn accumulate_outgoing_args_size<C: LowerCtx<I = Self::I>>(&self, ctx: &mut C) {
-        let off = self.sig.stack_arg_space + self.sig.stack_ret_space;
+        let off = self.sig.sized_stack_arg_space + self.sig.sized_stack_ret_space;
         ctx.abi().accumulate_outgoing_args_size(off as u32);
     }
 
     fn emit_stack_pre_adjust<C: LowerCtx<I = Self::I>>(&self, ctx: &mut C) {
-        let off = self.sig.stack_arg_space + self.sig.stack_ret_space;
+        let off = self.sig.sized_stack_arg_space + self.sig.sized_stack_ret_space;
         adjust_stack_and_nominal_sp::<M, C>(ctx, off as i32, /* is_sub = */ true)
     }
 
     fn emit_stack_post_adjust<C: LowerCtx<I = Self::I>>(&self, ctx: &mut C) {
-        let off = self.sig.stack_arg_space + self.sig.stack_ret_space;
+        let off = self.sig.sized_stack_arg_space + self.sig.sized_stack_ret_space;
         adjust_stack_and_nominal_sp::<M, C>(ctx, off as i32, /* is_sub = */ false)
     }
 
@@ -1720,7 +1791,7 @@ impl<M: ABIMachineSpec> ABICaller for ABICallerImpl<M> {
                             ctx.emit(M::gen_move(*into_reg, Reg::from(reg), ty));
                         }
                         &ABIArgSlot::Stack { offset, ty, .. } => {
-                            let ret_area_base = self.sig.stack_arg_space;
+                            let ret_area_base = self.sig.sized_stack_arg_space;
                             ctx.emit(M::gen_load_stack(
                                 StackAMode::SPOffset(offset + ret_area_base, ty),
                                 *into_reg,
@@ -1744,7 +1815,7 @@ impl<M: ABIMachineSpec> ABICaller for ABICallerImpl<M> {
         let word_type = M::word_type();
         if let Some(i) = self.sig.stack_ret_arg {
             let rd = ctx.alloc_tmp(word_type).only_reg().unwrap();
-            let ret_area_base = self.sig.stack_arg_space;
+            let ret_area_base = self.sig.sized_stack_arg_space;
             ctx.emit(M::gen_get_stack_addr(
                 StackAMode::SPOffset(ret_area_base, I8),
                 rd,

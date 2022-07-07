@@ -5,7 +5,7 @@ use crate::ir::types;
 use crate::ir::types::*;
 use crate::ir::MemFlags;
 use crate::ir::Opcode;
-use crate::ir::{ExternalName, LibCall};
+use crate::ir::{ExternalName, LibCall, Signature};
 use crate::isa;
 use crate::isa::aarch64::{inst::EmitState, inst::*};
 use crate::isa::unwind::UnwindInst;
@@ -155,6 +155,7 @@ fn saved_reg_stack_size(
     } else {
         vec_reg.len() & 1
     };
+    // FIXME: SVE: ABI is different to Neon, so do we treat all vec regs as Z-regs?
     let vec_save_bytes = (vec_reg.len() + vec_save_padding) * vec_reg_size;
 
     (int_save_bytes, vec_save_bytes)
@@ -365,9 +366,15 @@ impl ABIMachineSpec for AArch64MachineDeps {
                         RegClass::Int => xreg(*next_reg),
                         RegClass::Float => vreg(*next_reg),
                     };
+                    // Overlay Z-regs on V-regs for parameter passing.
+                    let ty = if param.value_type.is_dynamic_vector() {
+                        dynamic_to_fixed(param.value_type)
+                    } else {
+                        param.value_type
+                    };
                     ret.push(ABIArg::reg(
                         reg.to_real_reg().unwrap(),
-                        param.value_type,
+                        ty,
                         param.extension,
                         param.purpose,
                     ));
@@ -558,6 +565,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
     }
 
     fn gen_get_stack_addr(mem: StackAMode, into_reg: Writable<Reg>, _ty: Type) -> Inst {
+        // FIXME: Do something different for dynamic types?
         let mem = mem.into();
         Inst::LoadAddr { rd: into_reg, mem }
     }
@@ -931,6 +939,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
 
     fn gen_clobber_restore(
         call_conv: isa::CallConv,
+        sig: &Signature,
         flags: &settings::Flags,
         clobbers: &[Writable<RealReg>],
         fixed_frame_storage_size: u32,
@@ -938,7 +947,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
     ) -> SmallVec<[Inst; 16]> {
         let mut insts = SmallVec::new();
         let (clobbered_int, clobbered_vec) =
-            get_regs_restored_in_epilogue(call_conv, flags, clobbers);
+            get_regs_restored_in_epilogue(call_conv, flags, sig, clobbers);
 
         // Free the fixed frame if necessary.
         if fixed_frame_storage_size > 0 {
@@ -1146,11 +1155,12 @@ impl ABIMachineSpec for AArch64MachineDeps {
         insts
     }
 
-    fn get_number_of_spillslots_for_value(rc: RegClass) -> u32 {
+    fn get_number_of_spillslots_for_value(rc: RegClass, vector_size: u32) -> u32 {
+        assert_eq!(vector_size % 8, 0);
         // We allocate in terms of 8-byte slots.
         match rc {
             RegClass::Int => 1,
-            RegClass::Float => 2,
+            RegClass::Float => vector_size / 8,
         }
     }
 
@@ -1195,12 +1205,15 @@ impl ABIMachineSpec for AArch64MachineDeps {
     fn get_clobbered_callee_saves(
         call_conv: isa::CallConv,
         flags: &settings::Flags,
+        sig: &Signature,
         regs: &[Writable<RealReg>],
     ) -> Vec<Writable<RealReg>> {
         let mut regs: Vec<Writable<RealReg>> = regs
             .iter()
             .cloned()
-            .filter(|r| is_reg_saved_in_prologue(call_conv, flags.enable_pinned_reg(), r.to_reg()))
+            .filter(|r| {
+                is_reg_saved_in_prologue(call_conv, flags.enable_pinned_reg(), sig, r.to_reg())
+            })
             .collect();
 
         // Sort registers for deterministic code output. We can do an unstable
@@ -1235,7 +1248,12 @@ fn legal_type_for_machine(ty: Type) -> bool {
 
 /// Is the given register saved in the prologue if clobbered, i.e., is it a
 /// callee-save?
-fn is_reg_saved_in_prologue(call_conv: isa::CallConv, enable_pinned_reg: bool, r: RealReg) -> bool {
+fn is_reg_saved_in_prologue(
+    call_conv: isa::CallConv,
+    enable_pinned_reg: bool,
+    sig: &Signature,
+    r: RealReg,
+) -> bool {
     if call_conv.extends_baldrdash() {
         match r.class() {
             RegClass::Int => {
@@ -1248,6 +1266,14 @@ fn is_reg_saved_in_prologue(call_conv: isa::CallConv, enable_pinned_reg: bool, r
             }
         };
     }
+
+    // FIXME: We need to inspect whether a function is returning Z or P regs too.
+    let save_z_regs = sig
+        .params
+        .iter()
+        .filter(|p| p.value_type.is_dynamic_vector())
+        .count()
+        != 0;
 
     match r.class() {
         RegClass::Int => {
@@ -1262,8 +1288,17 @@ fn is_reg_saved_in_prologue(call_conv: isa::CallConv, enable_pinned_reg: bool, r
             }
         }
         RegClass::Float => {
-            // v8 - v15 inclusive are callee-saves.
-            r.hw_enc() >= 8 && r.hw_enc() <= 15
+            // If a subroutine takes at least one argument in scalable vector registers
+            // or scalable predicate registers, or if it is a function that returns
+            // results in such registers, it must ensure that the entire contents of
+            // z8-z23 are preserved across the call. In other cases it need only
+            // preserve the low 64 bits of z8-z15.
+            if save_z_regs {
+                r.hw_enc() >= 8 && r.hw_enc() <= 23
+            } else {
+                // v8 - v15 inclusive are callee-saves.
+                r.hw_enc() >= 8 && r.hw_enc() <= 15
+            }
         }
     }
 }
@@ -1274,12 +1309,13 @@ fn is_reg_saved_in_prologue(call_conv: isa::CallConv, enable_pinned_reg: bool, r
 fn get_regs_restored_in_epilogue(
     call_conv: isa::CallConv,
     flags: &settings::Flags,
+    sig: &Signature,
     regs: &[Writable<RealReg>],
 ) -> (Vec<Writable<RealReg>>, Vec<Writable<RealReg>>) {
     let mut int_saves = vec![];
     let mut vec_saves = vec![];
     for &reg in regs {
-        if is_reg_saved_in_prologue(call_conv, flags.enable_pinned_reg(), reg.to_reg()) {
+        if is_reg_saved_in_prologue(call_conv, flags.enable_pinned_reg(), sig, reg.to_reg()) {
             match reg.to_reg().class() {
                 RegClass::Int => int_saves.push(reg),
                 RegClass::Float => vec_saves.push(reg),

@@ -20,6 +20,7 @@ pub(crate) enum ValueType {
     Reference(ReferenceType),
     Special(SpecialType),
     Vector(VectorType),
+    DynamicVector(DynamicVectorType),
 }
 
 impl ValueType {
@@ -44,6 +45,7 @@ impl ValueType {
             ValueType::Reference(r) => r.doc(),
             ValueType::Special(s) => s.doc(),
             ValueType::Vector(ref v) => v.doc(),
+            ValueType::DynamicVector(ref v) => v.doc(),
         }
     }
 
@@ -54,6 +56,7 @@ impl ValueType {
             ValueType::Reference(r) => r.lane_bits(),
             ValueType::Special(s) => s.lane_bits(),
             ValueType::Vector(ref v) => v.lane_bits(),
+            ValueType::DynamicVector(ref v) => v.lane_bits(),
         }
     }
 
@@ -77,6 +80,7 @@ impl ValueType {
             ValueType::Reference(r) => r.number(),
             ValueType::Special(s) => s.number(),
             ValueType::Vector(ref v) => v.number(),
+            ValueType::DynamicVector(ref v) => v.number(),
         }
     }
 
@@ -98,6 +102,7 @@ impl fmt::Display for ValueType {
             ValueType::Reference(r) => r.fmt(f),
             ValueType::Special(s) => s.fmt(f),
             ValueType::Vector(ref v) => v.fmt(f),
+            ValueType::DynamicVector(ref v) => v.fmt(f),
         }
     }
 }
@@ -127,6 +132,13 @@ impl From<SpecialType> for ValueType {
 impl From<VectorType> for ValueType {
     fn from(vector: VectorType) -> Self {
         ValueType::Vector(vector)
+    }
+}
+
+/// Create a ValueType from a given dynamic vector type.
+impl From<DynamicVectorType> for ValueType {
+    fn from(vector: DynamicVectorType) -> Self {
+        ValueType::DynamicVector(vector)
     }
 }
 
@@ -229,6 +241,10 @@ impl LaneType {
         } else {
             ValueType::Vector(VectorType::new(self, lanes.into()))
         }
+    }
+
+    pub fn to_dynamic(self, lanes: u16) -> ValueType {
+        ValueType::DynamicVector(DynamicVectorType::new(self, lanes.into()))
     }
 }
 
@@ -376,6 +392,80 @@ impl fmt::Debug for VectorType {
             "VectorType(base={}, lanes={})",
             self.base,
             self.lane_count()
+        )
+    }
+}
+
+/// A concrete dynamic SIMD vector type.
+///
+/// A vector type has a lane type which is an instance of `LaneType`,
+/// and a positive number of lanes.
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub(crate) struct DynamicVectorType {
+    base: LaneType,
+    unscaled_lanes: u64,
+}
+
+impl DynamicVectorType {
+    /// Initialize a new type with `base` lane type and a minimum number of lanes.
+    pub fn new(base: LaneType, unscaled_lanes: u64) -> Self {
+        Self {
+            base,
+            unscaled_lanes,
+        }
+    }
+
+    /// Return a string containing the documentation comment for this vector type.
+    pub fn doc(&self) -> String {
+        format!(
+            "A dynamically-scaled SIMD vector with a minimum of {} lanes containing `{}` bits each.",
+            self.unscaled_lanes,
+            self.base
+        )
+    }
+
+    /// Return the number of bits in a lane.
+    pub fn lane_bits(&self) -> u64 {
+        self.base.lane_bits()
+    }
+
+    /// Return the number of lanes.
+    pub fn minimum_lane_count(&self) -> u64 {
+        self.unscaled_lanes
+    }
+
+    /// Return the lane type.
+    pub fn lane_type(&self) -> LaneType {
+        self.base
+    }
+
+    /// Find the unique number associated with this vector type.
+    ///
+    /// Dynamic vector types are encoded in the same manner as `VectorType`,
+    /// with lane type in the low 4 bits and the log2(lane_count). We add the
+    /// `VECTOR_BASE` to move these numbers into the range beyond the fixed
+    /// SIMD types.
+    pub fn number(&self) -> u16 {
+        let base_num = u32::from(self.base.number());
+        let lanes_log_2: u32 = 63 - self.minimum_lane_count().leading_zeros();
+        let num = 0x80 + (lanes_log_2 << 4) + base_num;
+        num as u16
+    }
+}
+
+impl fmt::Display for DynamicVectorType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}x{}xN", self.base, self.minimum_lane_count())
+    }
+}
+
+impl fmt::Debug for DynamicVectorType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "DynamicVectorType(base={}, lanes={})",
+            self.base,
+            self.minimum_lane_count(),
         )
     }
 }

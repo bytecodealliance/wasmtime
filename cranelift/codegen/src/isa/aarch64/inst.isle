@@ -919,6 +919,17 @@
     (Size64x2)
 ))
 
+(type DynamicVectorSize extern
+  (enum
+    (Size8x8xN)
+    (Size8x16xN)
+    (Size16x4xN)
+    (Size16x8xN)
+    (Size32x2xN)
+    (Size32x4xN)
+    (Size64x2xN)
+))
+
 ;; Helper for calculating the `VectorSize` corresponding to a type
 (decl vector_size (Type) VectorSize)
 (rule (vector_size (multi_lane 8 8)) (VectorSize.Size8x8))
@@ -928,6 +939,13 @@
 (rule (vector_size (multi_lane 32 2)) (VectorSize.Size32x2))
 (rule (vector_size (multi_lane 32 4)) (VectorSize.Size32x4))
 (rule (vector_size (multi_lane 64 2)) (VectorSize.Size64x2))
+(rule (vector_size (dynamic_lane 8 8)) (VectorSize.Size8x8))
+(rule (vector_size (dynamic_lane 8 16)) (VectorSize.Size8x16))
+(rule (vector_size (dynamic_lane 16 4)) (VectorSize.Size16x4))
+(rule (vector_size (dynamic_lane 16 8)) (VectorSize.Size16x8))
+(rule (vector_size (dynamic_lane 32 2)) (VectorSize.Size32x2))
+(rule (vector_size (dynamic_lane 32 4)) (VectorSize.Size32x4))
+(rule (vector_size (dynamic_lane 64 2)) (VectorSize.Size64x2))
 
 ;; A floating-point unit (FPU) operation with one arg.
 (type FPUOp1

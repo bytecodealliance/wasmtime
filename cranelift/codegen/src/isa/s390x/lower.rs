@@ -197,7 +197,11 @@ impl LowerBackend for S390xBackend {
             | Opcode::SqmulRoundSat
             | Opcode::FvpromoteLow
             | Opcode::Fvdemote
-            | Opcode::IaddPairwise => {
+            | Opcode::IaddPairwise
+            | Opcode::DynamicStackLoad
+            | Opcode::DynamicStackStore
+            | Opcode::DynamicStackAddr
+            | Opcode::ExtractVector => {
                 unreachable!(
                     "TODO: not yet implemented in ISLE: inst = `{}`, type = `{:?}`",
                     ctx.dfg().display_inst(ir_inst),
