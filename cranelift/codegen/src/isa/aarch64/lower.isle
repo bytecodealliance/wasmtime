@@ -107,6 +107,20 @@
 (rule (lower (has_type vec_i128_ty (swizzle rn rm)))
       (vec_tbl rn rm #f))
 
+;;;; Rules for `isplit` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I64 (isplit x)))
+      (let
+          ((x_regs ValueRegs x)
+           (x_lo ValueRegs (value_regs_get x_regs 0))
+           (x_hi ValueRegs (value_regs_get x_regs 1)))
+        (output_pair x_lo x_hi)))
+
+;;;; Rules for `iconcat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I128 (iconcat lo hi)))
+      (output (value_regs lo hi)))
+
 ;;;; Rules for `iadd_pairwise` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type $I16X8 (iadd_pairwise (swiden_low x) (swiden_high y))))

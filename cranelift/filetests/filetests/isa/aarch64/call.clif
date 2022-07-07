@@ -317,12 +317,12 @@ block0(v0: i64):
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ; block0:
-;   mov x9, x0
+;   mov x7, x0
 ;   movz x0, #42
-;   mov x1, x9
+;   mov x1, x7
 ;   movz x2, #42
-;   ldr x14, 8 ; b 12 ; data TestCase { length: 3, ascii: [102, 49, 49, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
-;   blr x14
+;   ldr x10, 8 ; b 12 ; data TestCase { length: 3, ascii: [102, 49, 49, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   blr x10
 ;   ldp fp, lr, [sp], #16
 ;   ret
 
@@ -349,11 +349,12 @@ block0(v0: i64):
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ; block0:
+;   mov x7, x0
 ;   movz x3, #42
-;   mov x2, x0
 ;   movz x0, #42
-;   ldr x14, 8 ; b 12 ; data TestCase { length: 3, ascii: [102, 49, 50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
-;   blr x14
+;   mov x2, x7
+;   ldr x10, 8 ; b 12 ; data TestCase { length: 3, ascii: [102, 49, 50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   blr x10
 ;   ldp fp, lr, [sp], #16
 ;   ret
 
@@ -380,11 +381,12 @@ block0(v0: i64):
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ; block0:
+;   mov x7, x0
 ;   movz x2, #42
-;   mov x1, x0
 ;   movz x0, #42
-;   ldr x14, 8 ; b 12 ; data TestCase { length: 3, ascii: [102, 49, 51, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
-;   blr x14
+;   mov x1, x7
+;   ldr x10, 8 ; b 12 ; data TestCase { length: 3, ascii: [102, 49, 51, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   blr x10
 ;   ldp fp, lr, [sp], #16
 ;   ret
 
