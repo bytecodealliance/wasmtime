@@ -15,6 +15,7 @@ mod instance_allocation_strategy;
 mod instance_limits;
 mod memory;
 mod module_config;
+mod single_inst_module;
 mod spec_test;
 pub mod table_ops;
 
@@ -24,4 +25,5 @@ pub use instance_allocation_strategy::InstanceAllocationStrategy;
 pub use instance_limits::InstanceLimits;
 pub use memory::{MemoryConfig, NormalMemoryConfig, UnalignedMemory, UnalignedMemoryCreator};
 pub use module_config::ModuleConfig;
+pub use single_inst_module::SingleInstModule;
 pub use spec_test::SpecTest;
