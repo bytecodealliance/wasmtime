@@ -304,4 +304,11 @@ mod test {
 )"#
         )
     }
+
+    #[test]
+    fn instructions_encode_to_valid_modules() {
+        for inst in INSTRUCTIONS {
+            assert!(wat::parse_bytes(&inst.encode()).is_ok());
+        }
+    }
 }
