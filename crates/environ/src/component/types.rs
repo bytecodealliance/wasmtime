@@ -408,51 +408,65 @@ impl ComponentTypesBuilder {
         ty: &[wasmparser::ModuleTypeDeclaration<'_>],
     ) -> Result<TypeModuleIndex> {
         let mut result = TypeModule::default();
-        let mut functypes: PrimaryMap<TypeIndex, SignatureIndex> = PrimaryMap::default();
+        self.push_type_scope();
 
         for item in ty {
             match item {
                 wasmparser::ModuleTypeDeclaration::Type(wasmparser::Type::Func(f)) => {
-                    functypes.push(self.module_types.wasm_func_type(f.clone().try_into()?));
+                    let ty =
+                        TypeDef::CoreFunc(self.module_types.wasm_func_type(f.clone().try_into()?));
+                    self.push_core_typedef(ty);
                 }
                 wasmparser::ModuleTypeDeclaration::Export { name, ty } => {
                     let prev = result
                         .exports
-                        .insert(name.to_string(), type_ref(ty, &functypes)?);
+                        .insert(name.to_string(), self.entity_type(ty)?);
                     assert!(prev.is_none());
                 }
                 wasmparser::ModuleTypeDeclaration::Import(import) => {
                     let prev = result.imports.insert(
                         (import.module.to_string(), import.name.to_string()),
-                        type_ref(&import.ty, &functypes)?,
+                        self.entity_type(&import.ty)?,
                     );
                     assert!(prev.is_none());
                 }
-                wasmparser::ModuleTypeDeclaration::Alias(alias) => {
-                    drop(alias);
-                    unimplemented!("outer alias in module type");
-                }
+                wasmparser::ModuleTypeDeclaration::Alias(alias) => match alias {
+                    wasmparser::Alias::Outer {
+                        kind: wasmparser::OuterAliasKind::Type,
+                        count,
+                        index,
+                    } => {
+                        let ty = self.core_outer_type(*count, TypeIndex::from_u32(*index));
+                        self.push_core_typedef(ty);
+                    }
+                    wasmparser::Alias::InstanceExport { .. } => {
+                        unreachable!("invalid alias {alias:?}")
+                    }
+                },
             }
         }
 
-        return Ok(self.component_types.modules.push(result));
+        self.pop_type_scope();
 
-        fn type_ref(
-            ty: &wasmparser::TypeRef,
-            functypes: &PrimaryMap<TypeIndex, SignatureIndex>,
-        ) -> Result<EntityType> {
-            Ok(match ty {
-                wasmparser::TypeRef::Func(idx) => {
-                    EntityType::Function(functypes[TypeIndex::from_u32(*idx)])
+        Ok(self.component_types.modules.push(result))
+    }
+
+    fn entity_type(&self, ty: &wasmparser::TypeRef) -> Result<EntityType> {
+        Ok(match ty {
+            wasmparser::TypeRef::Func(idx) => {
+                let idx = TypeIndex::from_u32(*idx);
+                match self.core_outer_type(0, idx) {
+                    TypeDef::CoreFunc(idx) => EntityType::Function(idx),
+                    _ => unreachable!(), // not possible with valid components
                 }
-                wasmparser::TypeRef::Table(ty) => EntityType::Table(ty.clone().try_into()?),
-                wasmparser::TypeRef::Memory(ty) => EntityType::Memory(ty.clone().into()),
-                wasmparser::TypeRef::Global(ty) => {
-                    EntityType::Global(Global::new(ty.clone(), GlobalInit::Import)?)
-                }
-                wasmparser::TypeRef::Tag(_) => bail!("exceptions proposal not implemented"),
-            })
-        }
+            }
+            wasmparser::TypeRef::Table(ty) => EntityType::Table(ty.clone().try_into()?),
+            wasmparser::TypeRef::Memory(ty) => EntityType::Memory(ty.clone().into()),
+            wasmparser::TypeRef::Global(ty) => {
+                EntityType::Global(Global::new(ty.clone(), GlobalInit::Import)?)
+            }
+            wasmparser::TypeRef::Tag(_) => bail!("exceptions proposal not implemented"),
+        })
     }
 
     fn component_type(

@@ -583,9 +583,15 @@ impl<'a, 'data> Translator<'a, 'data> {
                             let instance = ModuleInstanceIndex::from_u32(instance_index);
                             self.alias_module_instance_export(kind, instance, name)
                         }
-                        wasmparser::Alias::Outer { kind, count, index } => {
-                            drop((kind, count, index));
-                            unimplemented!("outer core index");
+                        wasmparser::Alias::Outer {
+                            kind: wasmparser::OuterAliasKind::Type,
+                            count,
+                            index,
+                        } => {
+                            let index = TypeIndex::from_u32(index);
+                            let ty = self.types.core_outer_type(count, index);
+                            self.types.push_core_typedef(ty);
+                            continue;
                         }
                     };
                     self.result.initializers.push(init);
