@@ -36,7 +36,7 @@ criterion = "0.3"
 [build-dependencies]
 cranelift-codegen-meta = { path = "meta", version = "0.87.0" }
 cranelift-isle = { path = "../isle/isle", version = "=0.87.0" }
-miette = { version = "4.7.0", features = ["fancy"], optional = true }
+miette = { version = "5.1.0", features = ["fancy"], optional = true }
 
 [features]
 default = ["std", "unwind"]
