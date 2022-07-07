@@ -414,7 +414,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
     fn gen_epilogue_frame_restore(_: &settings::Flags) -> SmallInstVec<Inst> {
         let mut insts = SmallVec::new();
         insts.push(Self::gen_load_stack(
-            StackAMode::SPOffset(8, I64),
+            StackAMode::SPOffset(0, I64),
             writable_link_reg(),
             I64,
         ));

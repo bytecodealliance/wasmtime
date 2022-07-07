@@ -61,45 +61,43 @@ block3(v7: r64, v8: r64):
     return v7, v8, v9
 }
 
-;   add sp,-8
-;   sd fp,0(sp)
+;   add sp,-16
+;   sd ra,0(sp)
+;   sd fp,8(sp)
 ;   mv fp,sp
 ;   add sp,-48
-;   sd s4,0(sp)
-;   sd s9,8(sp)
+;   sd s8,0(sp)
 ; block0:
 ;   sd a1,16(nominal_sp)
-;   mv s9,a2
-;   mv s4,ra
+;   mv s8,a2
 ;   sd a0,8(nominal_sp)
-;   load_sym a5,%f+0
-;   callind a5
-;   mv ra,s4
-;   load_addr a7,0(nominal_sp)
-;   ld a2,8(nominal_sp)
-;   sd a2,0(a7)
+;   load_sym a3,%f+0
+;   callind a3
+;   load_addr a5,0(nominal_sp)
+;   ld t2,8(nominal_sp)
+;   sd t2,0(a5)
 ;   beq a0,zero,taken(label1),not_taken(label3)
 ; block1:
 ;   j label2
 ; block2:
-;   mv a1,a2
+;   mv a1,t2
 ;   ld a0,16(nominal_sp)
 ;   j label5
 ; block3:
 ;   j label4
 ; block4:
-;   mv a0,a2
+;   mv a0,t2
 ;   ld a1,16(nominal_sp)
 ;   j label5
 ; block5:
-;   load_addr t4,0(nominal_sp)
-;   ld t4,0(t4)
-;   mv a2,s9
-;   sd t4,0(a2)
-;   ld s4,0(sp)
-;   ld s9,8(sp)
+;   load_addr a7,0(nominal_sp)
+;   ld a7,0(a7)
+;   mv a2,s8
+;   sd a7,0(a2)
+;   ld s8,0(sp)
 ;   add sp,+48
-;   ld fp,0(sp)
-;   add sp,+8
+;   ld ra,0(sp)
+;   ld fp,8(sp)
+;   add sp,+16
 ;   ret
 
