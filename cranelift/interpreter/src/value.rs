@@ -534,7 +534,7 @@ impl Value for DataValue {
     }
 
     fn nearest(self) -> ValueResult<Self> {
-        unary_match!(nearest(&self); [F32, F64])
+        unary_match!(round_ties_even(&self); [F32, F64])
     }
 
     fn add_sat(self, other: Self) -> ValueResult<Self> {
