@@ -30,8 +30,6 @@ At the time of writing, we have the following fuzz targets:
 * `cranelift-fuzzgen`: Generate a Cranelift function and check that it returns
   the same results when compiled to the host and when using the Cranelift
   interpreter; only a subset of Cranelift IR is currently supported.
-* `cranelift-fuzzgen-verify`: Stress the Cranelift IR verifier by generating a
-  Cranelift function and checking that it is indeed a valid function.
 * `differential`: Generate a Wasm module and check that Wasmtime returns
   the same results when run with two different configurations.
 * `differential_spec`: Generate a Wasm module and check that Wasmtime returns
