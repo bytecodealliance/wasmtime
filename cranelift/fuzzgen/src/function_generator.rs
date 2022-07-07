@@ -496,6 +496,10 @@ where
         builder.seal_all_blocks();
         builder.finalize();
 
+        if std::env::var_os("CRANELIFT_FUZZGEN_DEBUG").filter(|s| !s.is_empty()).is_some() {
+            eprintln!("cranelift-fuzzgen generated:\n{:?}\n", &func);
+        }
+
         Ok(func)
     }
 }
