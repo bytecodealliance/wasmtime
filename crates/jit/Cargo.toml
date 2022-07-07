@@ -14,7 +14,6 @@ edition = "2021"
 wasmtime-environ = { path = "../environ", version = "=0.40.0" }
 wasmtime-jit-debug = { path = "../jit-debug", version = "=0.40.0", features = ["perf_jitdump"], optional = true }
 wasmtime-runtime = { path = "../runtime", version = "=0.40.0" }
-region = "2.2.0"
 thiserror = "1.0.4"
 target-lexicon = { version = "0.12.0", default-features = false }
 anyhow = "1.0"

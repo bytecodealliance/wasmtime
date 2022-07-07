@@ -84,7 +84,7 @@ fn custom_limiter_detect_os_oom_failure() -> Result<()> {
     // The memory_grow_failed hook should show Linux gave OOM:
     let err_msg = store.data().error.as_ref().unwrap();
     assert!(
-        err_msg.starts_with("System call failed: Cannot allocate memory"),
+        err_msg.starts_with("Cannot allocate memory"),
         "unexpected error: {}",
         err_msg
     );
