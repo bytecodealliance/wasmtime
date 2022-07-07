@@ -3,37 +3,21 @@ use crate::ir::LibCall;
 use crate::isa::riscv64::inst::*;
 use crate::settings;
 use alloc::vec::Vec;
-use std::process::Command;
 
 #[test]
 fn test_riscv64_binemit() {
     struct TestUnit {
         inst: Inst,
         assembly: &'static str,
-        code: Option<u32>,
-        // some instruction need enable some option.
-        option_for_as: Option<Vec<String>>,
+        code: u32,
     }
 
     impl TestUnit {
-        fn new(i: Inst, ass: &'static str) -> Self {
+        fn new(i: Inst, ass: &'static str, code: u32) -> Self {
             Self {
                 inst: i,
                 assembly: ass,
-                code: None,
-                option_for_as: None,
-            }
-        }
-        fn new_with_gcc_option(
-            i: Inst,
-            ass: &'static str,
-            option_for_as: Option<Vec<String>>,
-        ) -> Self {
-            Self {
-                inst: i,
-                assembly: ass,
-                code: None,
-                option_for_as,
+                code: code,
             }
         }
     }
@@ -47,6 +31,7 @@ fn test_riscv64_binemit() {
             ty: F32,
         },
         "fmv.s fa0,fa1",
+        0x20b58553,
     ));
 
     insns.push(TestUnit::new(
@@ -56,9 +41,10 @@ fn test_riscv64_binemit() {
             ty: F64,
         },
         "fmv.d fa0,fa1",
+        0x22b58553,
     ));
 
-    insns.push(TestUnit::new_with_gcc_option(
+    insns.push(TestUnit::new(
         Inst::AluRRImm12 {
             alu_op: AluOPRRI::Brev8,
             rd: writable_a1(),
@@ -66,9 +52,9 @@ fn test_riscv64_binemit() {
             imm12: Imm12::zero(),
         },
         "brev8 a1,a0",
-        Some(vec![gcc_aluoprri_march_arg(AluOPRRI::Brev8)]),
+        0x68755593,
     ));
-    insns.push(TestUnit::new_with_gcc_option(
+    insns.push(TestUnit::new(
         Inst::AluRRImm12 {
             alu_op: AluOPRRI::Rev8,
             rd: writable_a1(),
@@ -76,11 +62,11 @@ fn test_riscv64_binemit() {
             imm12: Imm12::zero(),
         },
         "rev8 a1,a0",
-        Some(vec![gcc_aluoprri_march_arg(AluOPRRI::Rev8)]),
+        0x6b855593,
     ));
 
     //
-    insns.push(TestUnit::new_with_gcc_option(
+    insns.push(TestUnit::new(
         Inst::AluRRImm12 {
             alu_op: AluOPRRI::Bclri,
             rd: writable_a1(),
@@ -88,9 +74,9 @@ fn test_riscv64_binemit() {
             imm12: Imm12::from_bits(5),
         },
         "bclri a1,a0,5",
-        Some(vec![gcc_aluoprri_march_arg(AluOPRRI::Bclri)]),
+        0x48551593,
     ));
-    insns.push(TestUnit::new_with_gcc_option(
+    insns.push(TestUnit::new(
         Inst::AluRRImm12 {
             alu_op: AluOPRRI::Bexti,
             rd: writable_a1(),
@@ -98,10 +84,10 @@ fn test_riscv64_binemit() {
             imm12: Imm12::from_bits(5),
         },
         "bexti a1,a0,5",
-        Some(vec![gcc_aluoprri_march_arg(AluOPRRI::Bexti)]),
+        0x48555593,
     ));
 
-    insns.push(TestUnit::new_with_gcc_option(
+    insns.push(TestUnit::new(
         Inst::AluRRImm12 {
             alu_op: AluOPRRI::Binvi,
             rd: writable_a1(),
@@ -109,10 +95,10 @@ fn test_riscv64_binemit() {
             imm12: Imm12::from_bits(5),
         },
         "binvi a1,a0,5",
-        Some(vec![gcc_aluoprri_march_arg(AluOPRRI::Binvi)]),
+        0x68551593,
     ));
 
-    insns.push(TestUnit::new_with_gcc_option(
+    insns.push(TestUnit::new(
         Inst::AluRRImm12 {
             alu_op: AluOPRRI::Bseti,
             rd: writable_a1(),
@@ -120,10 +106,10 @@ fn test_riscv64_binemit() {
             imm12: Imm12::from_bits(5),
         },
         "bseti a1,a0,5",
-        Some(vec![gcc_aluoprri_march_arg(AluOPRRI::Bseti)]),
+        0x28551593,
     ));
 
-    insns.push(TestUnit::new_with_gcc_option(
+    insns.push(TestUnit::new(
         Inst::AluRRImm12 {
             alu_op: AluOPRRI::Rori,
             rd: writable_a1(),
@@ -131,9 +117,9 @@ fn test_riscv64_binemit() {
             imm12: Imm12::from_bits(5),
         },
         "rori a1,a0,5",
-        Some(vec![gcc_aluoprri_march_arg(AluOPRRI::Rori)]),
+        0x60555593,
     ));
-    insns.push(TestUnit::new_with_gcc_option(
+    insns.push(TestUnit::new(
         Inst::AluRRImm12 {
             alu_op: AluOPRRI::Roriw,
             rd: writable_a1(),
@@ -141,10 +127,10 @@ fn test_riscv64_binemit() {
             imm12: Imm12::from_bits(5),
         },
         "roriw a1,a0,5",
-        Some(vec![gcc_aluoprri_march_arg(AluOPRRI::Roriw)]),
+        0x6055559b,
     ));
 
-    insns.push(TestUnit::new_with_gcc_option(
+    insns.push(TestUnit::new(
         Inst::AluRRImm12 {
             alu_op: AluOPRRI::SlliUw,
             rd: writable_a1(),
@@ -152,10 +138,10 @@ fn test_riscv64_binemit() {
             imm12: Imm12::from_bits(5),
         },
         "slli.uw a1,a0,5",
-        Some(vec![gcc_aluoprri_march_arg(AluOPRRI::SlliUw)]),
+        0x855159b,
     ));
 
-    insns.push(TestUnit::new_with_gcc_option(
+    insns.push(TestUnit::new(
         Inst::AluRRImm12 {
             alu_op: AluOPRRI::Clz,
             rd: writable_a1(),
@@ -163,10 +149,10 @@ fn test_riscv64_binemit() {
             imm12: Imm12::zero(),
         },
         "clz a1,a0",
-        Some(vec![gcc_aluoprri_march_arg(AluOPRRI::Clz)]),
+        0x60051593,
     ));
 
-    insns.push(TestUnit::new_with_gcc_option(
+    insns.push(TestUnit::new(
         Inst::AluRRImm12 {
             alu_op: AluOPRRI::Clzw,
             rd: writable_a1(),
@@ -174,10 +160,10 @@ fn test_riscv64_binemit() {
             imm12: Imm12::zero(),
         },
         "clzw a1,a0",
-        Some(vec![gcc_aluoprri_march_arg(AluOPRRI::Clzw)]),
+        0x6005159b,
     ));
 
-    insns.push(TestUnit::new_with_gcc_option(
+    insns.push(TestUnit::new(
         Inst::AluRRImm12 {
             alu_op: AluOPRRI::Cpop,
             rd: writable_a1(),
@@ -185,10 +171,10 @@ fn test_riscv64_binemit() {
             imm12: Imm12::zero(),
         },
         "cpop a1,a0",
-        Some(vec![gcc_aluoprri_march_arg(AluOPRRI::Cpop)]),
+        0x60251593,
     ));
 
-    insns.push(TestUnit::new_with_gcc_option(
+    insns.push(TestUnit::new(
         Inst::AluRRImm12 {
             alu_op: AluOPRRI::Cpopw,
             rd: writable_a1(),
@@ -196,10 +182,10 @@ fn test_riscv64_binemit() {
             imm12: Imm12::zero(),
         },
         "cpopw a1,a0",
-        Some(vec![gcc_aluoprri_march_arg(AluOPRRI::Cpopw)]),
+        0x6025159b,
     ));
 
-    insns.push(TestUnit::new_with_gcc_option(
+    insns.push(TestUnit::new(
         Inst::AluRRImm12 {
             alu_op: AluOPRRI::Ctz,
             rd: writable_a1(),
@@ -207,10 +193,10 @@ fn test_riscv64_binemit() {
             imm12: Imm12::zero(),
         },
         "ctz a1,a0",
-        Some(vec![gcc_aluoprri_march_arg(AluOPRRI::Ctz)]),
+        0x60151593,
     ));
 
-    insns.push(TestUnit::new_with_gcc_option(
+    insns.push(TestUnit::new(
         Inst::AluRRImm12 {
             alu_op: AluOPRRI::Ctzw,
             rd: writable_a1(),
@@ -218,10 +204,10 @@ fn test_riscv64_binemit() {
             imm12: Imm12::zero(),
         },
         "ctzw a1,a0",
-        Some(vec![gcc_aluoprri_march_arg(AluOPRRI::Ctzw)]),
+        0x6015159b,
     ));
 
-    insns.push(TestUnit::new_with_gcc_option(
+    insns.push(TestUnit::new(
         Inst::AluRRImm12 {
             alu_op: AluOPRRI::Sextb,
             rd: writable_a1(),
@@ -229,9 +215,9 @@ fn test_riscv64_binemit() {
             imm12: Imm12::zero(),
         },
         "sext.b a1,a0",
-        Some(vec![gcc_aluoprri_march_arg(AluOPRRI::Sextb)]),
+        0x60451593,
     ));
-    insns.push(TestUnit::new_with_gcc_option(
+    insns.push(TestUnit::new(
         Inst::AluRRImm12 {
             alu_op: AluOPRRI::Sexth,
             rd: writable_a1(),
@@ -239,9 +225,9 @@ fn test_riscv64_binemit() {
             imm12: Imm12::zero(),
         },
         "sext.h a1,a0",
-        Some(vec![gcc_aluoprri_march_arg(AluOPRRI::Sexth)]),
+        0x60551593,
     ));
-    insns.push(TestUnit::new_with_gcc_option(
+    insns.push(TestUnit::new(
         Inst::AluRRImm12 {
             alu_op: AluOPRRI::Zexth,
             rd: writable_a1(),
@@ -249,9 +235,9 @@ fn test_riscv64_binemit() {
             imm12: Imm12::zero(),
         },
         "zext.h a1,a0",
-        Some(vec![gcc_aluoprri_march_arg(AluOPRRI::Zexth)]),
+        0x80545bb,
     ));
-    insns.push(TestUnit::new_with_gcc_option(
+    insns.push(TestUnit::new(
         Inst::AluRRImm12 {
             alu_op: AluOPRRI::Orcb,
             rd: writable_a1(),
@@ -259,11 +245,11 @@ fn test_riscv64_binemit() {
             imm12: Imm12::zero(),
         },
         "orc.b a1,a0",
-        Some(vec![gcc_aluoprri_march_arg(AluOPRRI::Orcb)]),
+        0x28755593,
     ));
 
     //
-    insns.push(TestUnit::new_with_gcc_option(
+    insns.push(TestUnit::new(
         Inst::AluRRR {
             alu_op: AluOPRRR::Adduw,
             rd: writable_a1(),
@@ -271,10 +257,10 @@ fn test_riscv64_binemit() {
             rs2: zero_reg(),
         },
         "add.uw a1,a0,zero",
-        Some(vec![gcc_aluoprrr_march_arg(AluOPRRR::Adduw)]),
+        0x80505bb,
     ));
 
-    insns.push(TestUnit::new_with_gcc_option(
+    insns.push(TestUnit::new(
         Inst::AluRRR {
             alu_op: AluOPRRR::Andn,
             rd: writable_a1(),
@@ -282,9 +268,9 @@ fn test_riscv64_binemit() {
             rs2: zero_reg(),
         },
         "andn a1,a0,zero",
-        Some(vec![gcc_aluoprrr_march_arg(AluOPRRR::Andn)]),
+        0x400575b3,
     ));
-    insns.push(TestUnit::new_with_gcc_option(
+    insns.push(TestUnit::new(
         Inst::AluRRR {
             alu_op: AluOPRRR::Bclr,
             rd: writable_a1(),
@@ -292,10 +278,10 @@ fn test_riscv64_binemit() {
             rs2: zero_reg(),
         },
         "bclr a1,a0,zero",
-        Some(vec![gcc_aluoprrr_march_arg(AluOPRRR::Bclr)]),
+        0x480515b3,
     ));
 
-    insns.push(TestUnit::new_with_gcc_option(
+    insns.push(TestUnit::new(
         Inst::AluRRR {
             alu_op: AluOPRRR::Bext,
             rd: writable_a1(),
@@ -303,10 +289,10 @@ fn test_riscv64_binemit() {
             rs2: zero_reg(),
         },
         "bext a1,a0,zero",
-        Some(vec![gcc_aluoprrr_march_arg(AluOPRRR::Bext)]),
+        0x480555b3,
     ));
 
-    insns.push(TestUnit::new_with_gcc_option(
+    insns.push(TestUnit::new(
         Inst::AluRRR {
             alu_op: AluOPRRR::Binv,
             rd: writable_a1(),
@@ -314,9 +300,9 @@ fn test_riscv64_binemit() {
             rs2: zero_reg(),
         },
         "binv a1,a0,zero",
-        Some(vec![gcc_aluoprrr_march_arg(AluOPRRR::Binv)]),
+        0x680515b3,
     ));
-    insns.push(TestUnit::new_with_gcc_option(
+    insns.push(TestUnit::new(
         Inst::AluRRR {
             alu_op: AluOPRRR::Bset,
             rd: writable_a1(),
@@ -324,10 +310,10 @@ fn test_riscv64_binemit() {
             rs2: zero_reg(),
         },
         "bset a1,a0,zero",
-        Some(vec![gcc_aluoprrr_march_arg(AluOPRRR::Bset)]),
+        0x280515b3,
     ));
 
-    insns.push(TestUnit::new_with_gcc_option(
+    insns.push(TestUnit::new(
         Inst::AluRRR {
             alu_op: AluOPRRR::Clmul,
             rd: writable_a1(),
@@ -335,10 +321,10 @@ fn test_riscv64_binemit() {
             rs2: zero_reg(),
         },
         "clmul a1,a0,zero",
-        Some(vec![gcc_aluoprrr_march_arg(AluOPRRR::Clmul)]),
+        0xa0515b3,
     ));
 
-    insns.push(TestUnit::new_with_gcc_option(
+    insns.push(TestUnit::new(
         Inst::AluRRR {
             alu_op: AluOPRRR::Clmulh,
             rd: writable_a1(),
@@ -346,10 +332,10 @@ fn test_riscv64_binemit() {
             rs2: zero_reg(),
         },
         "clmulh a1,a0,zero",
-        Some(vec![gcc_aluoprrr_march_arg(AluOPRRR::Clmulh)]),
+        0xa0535b3,
     ));
 
-    insns.push(TestUnit::new_with_gcc_option(
+    insns.push(TestUnit::new(
         Inst::AluRRR {
             alu_op: AluOPRRR::Clmulr,
             rd: writable_a1(),
@@ -357,10 +343,10 @@ fn test_riscv64_binemit() {
             rs2: zero_reg(),
         },
         "clmulr a1,a0,zero",
-        Some(vec![gcc_aluoprrr_march_arg(AluOPRRR::Clmulr)]),
+        0xa0525b3,
     ));
 
-    insns.push(TestUnit::new_with_gcc_option(
+    insns.push(TestUnit::new(
         Inst::AluRRR {
             alu_op: AluOPRRR::Max,
             rd: writable_a1(),
@@ -368,10 +354,10 @@ fn test_riscv64_binemit() {
             rs2: zero_reg(),
         },
         "max a1,a0,zero",
-        Some(vec![gcc_aluoprrr_march_arg(AluOPRRR::Max)]),
+        0xa0565b3,
     ));
 
-    insns.push(TestUnit::new_with_gcc_option(
+    insns.push(TestUnit::new(
         Inst::AluRRR {
             alu_op: AluOPRRR::Maxu,
             rd: writable_a1(),
@@ -379,10 +365,10 @@ fn test_riscv64_binemit() {
             rs2: zero_reg(),
         },
         "maxu a1,a0,zero",
-        Some(vec![gcc_aluoprrr_march_arg(AluOPRRR::Maxu)]),
+        0xa0575b3,
     ));
 
-    insns.push(TestUnit::new_with_gcc_option(
+    insns.push(TestUnit::new(
         Inst::AluRRR {
             alu_op: AluOPRRR::Min,
             rd: writable_a1(),
@@ -390,10 +376,10 @@ fn test_riscv64_binemit() {
             rs2: zero_reg(),
         },
         "min a1,a0,zero",
-        Some(vec![gcc_aluoprrr_march_arg(AluOPRRR::Min)]),
+        0xa0545b3,
     ));
 
-    insns.push(TestUnit::new_with_gcc_option(
+    insns.push(TestUnit::new(
         Inst::AluRRR {
             alu_op: AluOPRRR::Minu,
             rd: writable_a1(),
@@ -401,10 +387,10 @@ fn test_riscv64_binemit() {
             rs2: zero_reg(),
         },
         "minu a1,a0,zero",
-        Some(vec![gcc_aluoprrr_march_arg(AluOPRRR::Minu)]),
+        0xa0555b3,
     ));
 
-    insns.push(TestUnit::new_with_gcc_option(
+    insns.push(TestUnit::new(
         Inst::AluRRR {
             alu_op: AluOPRRR::Orn,
             rd: writable_a1(),
@@ -412,10 +398,10 @@ fn test_riscv64_binemit() {
             rs2: zero_reg(),
         },
         "orn a1,a0,zero",
-        Some(vec![gcc_aluoprrr_march_arg(AluOPRRR::Orn)]),
+        0x400565b3,
     ));
 
-    insns.push(TestUnit::new_with_gcc_option(
+    insns.push(TestUnit::new(
         Inst::AluRRR {
             alu_op: AluOPRRR::Rol,
             rd: writable_a1(),
@@ -423,10 +409,10 @@ fn test_riscv64_binemit() {
             rs2: zero_reg(),
         },
         "rol a1,a0,zero",
-        Some(vec![gcc_aluoprrr_march_arg(AluOPRRR::Rol)]),
+        0x600515b3,
     ));
 
-    insns.push(TestUnit::new_with_gcc_option(
+    insns.push(TestUnit::new(
         Inst::AluRRR {
             alu_op: AluOPRRR::Rolw,
             rd: writable_a1(),
@@ -434,9 +420,9 @@ fn test_riscv64_binemit() {
             rs2: zero_reg(),
         },
         "rolw a1,a0,zero",
-        Some(vec![gcc_aluoprrr_march_arg(AluOPRRR::Rolw)]),
+        0x600515bb,
     ));
-    insns.push(TestUnit::new_with_gcc_option(
+    insns.push(TestUnit::new(
         Inst::AluRRR {
             alu_op: AluOPRRR::Ror,
             rd: writable_a1(),
@@ -444,9 +430,9 @@ fn test_riscv64_binemit() {
             rs2: zero_reg(),
         },
         "ror a1,a0,zero",
-        Some(vec![gcc_aluoprrr_march_arg(AluOPRRR::Ror)]),
+        0x600555b3,
     ));
-    insns.push(TestUnit::new_with_gcc_option(
+    insns.push(TestUnit::new(
         Inst::AluRRR {
             alu_op: AluOPRRR::Rorw,
             rd: writable_a1(),
@@ -454,9 +440,9 @@ fn test_riscv64_binemit() {
             rs2: zero_reg(),
         },
         "rorw a1,a0,zero",
-        Some(vec![gcc_aluoprrr_march_arg(AluOPRRR::Rorw)]),
+        0x600555bb,
     ));
-    insns.push(TestUnit::new_with_gcc_option(
+    insns.push(TestUnit::new(
         Inst::AluRRR {
             alu_op: AluOPRRR::Sh1add,
             rd: writable_a1(),
@@ -464,10 +450,10 @@ fn test_riscv64_binemit() {
             rs2: zero_reg(),
         },
         "sh1add a1,a0,zero",
-        Some(vec![gcc_aluoprrr_march_arg(AluOPRRR::Sh1add)]),
+        0x200525b3,
     ));
 
-    insns.push(TestUnit::new_with_gcc_option(
+    insns.push(TestUnit::new(
         Inst::AluRRR {
             alu_op: AluOPRRR::Sh1adduw,
             rd: writable_a1(),
@@ -475,9 +461,9 @@ fn test_riscv64_binemit() {
             rs2: zero_reg(),
         },
         "sh1add.uw a1,a0,zero",
-        Some(vec![gcc_aluoprrr_march_arg(AluOPRRR::Sh1adduw)]),
+        0x200525bb,
     ));
-    insns.push(TestUnit::new_with_gcc_option(
+    insns.push(TestUnit::new(
         Inst::AluRRR {
             alu_op: AluOPRRR::Sh2add,
             rd: writable_a1(),
@@ -485,9 +471,9 @@ fn test_riscv64_binemit() {
             rs2: zero_reg(),
         },
         "sh2add a1,a0,zero",
-        Some(vec![gcc_aluoprrr_march_arg(AluOPRRR::Sh2add)]),
+        0x200545b3,
     ));
-    insns.push(TestUnit::new_with_gcc_option(
+    insns.push(TestUnit::new(
         Inst::AluRRR {
             alu_op: AluOPRRR::Sh2adduw,
             rd: writable_a1(),
@@ -495,9 +481,9 @@ fn test_riscv64_binemit() {
             rs2: zero_reg(),
         },
         "sh2add.uw a1,a0,zero",
-        Some(vec![gcc_aluoprrr_march_arg(AluOPRRR::Sh2adduw)]),
+        0x200545bb,
     ));
-    insns.push(TestUnit::new_with_gcc_option(
+    insns.push(TestUnit::new(
         Inst::AluRRR {
             alu_op: AluOPRRR::Sh3add,
             rd: writable_a1(),
@@ -505,9 +491,9 @@ fn test_riscv64_binemit() {
             rs2: zero_reg(),
         },
         "sh3add a1,a0,zero",
-        Some(vec![gcc_aluoprrr_march_arg(AluOPRRR::Sh3add)]),
+        0x200565b3,
     ));
-    insns.push(TestUnit::new_with_gcc_option(
+    insns.push(TestUnit::new(
         Inst::AluRRR {
             alu_op: AluOPRRR::Sh3adduw,
             rd: writable_a1(),
@@ -515,9 +501,9 @@ fn test_riscv64_binemit() {
             rs2: zero_reg(),
         },
         "sh3add.uw a1,a0,zero",
-        Some(vec![gcc_aluoprrr_march_arg(AluOPRRR::Sh3adduw)]),
+        0x200565bb,
     ));
-    insns.push(TestUnit::new_with_gcc_option(
+    insns.push(TestUnit::new(
         Inst::AluRRR {
             alu_op: AluOPRRR::Xnor,
             rd: writable_a1(),
@@ -525,7 +511,7 @@ fn test_riscv64_binemit() {
             rs2: zero_reg(),
         },
         "xnor a1,a0,zero",
-        Some(vec![gcc_aluoprrr_march_arg(AluOPRRR::Xnor)]),
+        0x400545b3,
     ));
 
     //
@@ -537,6 +523,7 @@ fn test_riscv64_binemit() {
             rs2: zero_reg(),
         },
         "add fp,fp,zero",
+        0x40433,
     ));
     insns.push(TestUnit::new(
         Inst::AluRRImm12 {
@@ -546,6 +533,7 @@ fn test_riscv64_binemit() {
             imm12: Imm12::maybe_from_u64(100).unwrap(),
         },
         "addi fp,sp,100",
+        0x6410413,
     ));
     insns.push(TestUnit::new(
         Inst::Lui {
@@ -553,6 +541,7 @@ fn test_riscv64_binemit() {
             imm: Imm20::from_bits(120),
         },
         "lui zero,120",
+        0x78037,
     ));
     insns.push(TestUnit::new(
         Inst::Auipc {
@@ -560,6 +549,7 @@ fn test_riscv64_binemit() {
             imm: Imm20::from_bits(120),
         },
         "auipc zero,120",
+        0x78017,
     ));
 
     insns.push(TestUnit::new(
@@ -569,6 +559,7 @@ fn test_riscv64_binemit() {
             offset: Imm12::from_bits(100),
         },
         "jalr a0,100(a0)",
+        0x6450567,
     ));
 
     insns.push(TestUnit::new(
@@ -579,6 +570,7 @@ fn test_riscv64_binemit() {
             from: AMode::RegOffset(a1(), 100, I8),
         },
         "lb a0,100(a1)",
+        0x6458503,
     ));
     insns.push(TestUnit::new(
         Inst::Load {
@@ -588,6 +580,7 @@ fn test_riscv64_binemit() {
             from: AMode::RegOffset(a1(), 100, B8),
         },
         "lbu a0,100(a1)",
+        0x645c503,
     ));
     insns.push(TestUnit::new(
         Inst::Load {
@@ -597,6 +590,7 @@ fn test_riscv64_binemit() {
             from: AMode::RegOffset(a1(), 100, I16),
         },
         "lh a0,100(a1)",
+        0x6459503,
     ));
 
     insns.push(TestUnit::new(
@@ -607,6 +601,7 @@ fn test_riscv64_binemit() {
             from: AMode::RegOffset(a1(), 100, B16),
         },
         "lhu a0,100(a1)",
+        0x645d503,
     ));
 
     insns.push(TestUnit::new(
@@ -617,6 +612,7 @@ fn test_riscv64_binemit() {
             from: AMode::RegOffset(a1(), 100, I32),
         },
         "lw a0,100(a1)",
+        0x645a503,
     ));
 
     insns.push(TestUnit::new(
@@ -627,6 +623,7 @@ fn test_riscv64_binemit() {
             from: AMode::RegOffset(a1(), 100, B32),
         },
         "lwu a0,100(a1)",
+        0x645e503,
     ));
     insns.push(TestUnit::new(
         Inst::Load {
@@ -636,6 +633,7 @@ fn test_riscv64_binemit() {
             from: AMode::RegOffset(a1(), 100, I64),
         },
         "ld a0,100(a1)",
+        0x645b503,
     ));
     insns.push(TestUnit::new(
         Inst::Load {
@@ -645,6 +643,7 @@ fn test_riscv64_binemit() {
             from: AMode::RegOffset(a1(), 100, I64),
         },
         "flw fa0,100(a1)",
+        0x645a507,
     ));
 
     insns.push(TestUnit::new(
@@ -655,6 +654,7 @@ fn test_riscv64_binemit() {
             from: AMode::RegOffset(a1(), 100, I64),
         },
         "fld fa0,100(a1)",
+        0x645b507,
     ));
     insns.push(TestUnit::new(
         Inst::Store {
@@ -664,6 +664,7 @@ fn test_riscv64_binemit() {
             src: a0(),
         },
         "sb a0,100(sp)",
+        0x6a10223,
     ));
     insns.push(TestUnit::new(
         Inst::Store {
@@ -673,6 +674,7 @@ fn test_riscv64_binemit() {
             src: a0(),
         },
         "sh a0,100(sp)",
+        0x6a11223,
     ));
     insns.push(TestUnit::new(
         Inst::Store {
@@ -682,6 +684,7 @@ fn test_riscv64_binemit() {
             src: a0(),
         },
         "sw a0,100(sp)",
+        0x6a12223,
     ));
     insns.push(TestUnit::new(
         Inst::Store {
@@ -691,6 +694,7 @@ fn test_riscv64_binemit() {
             src: a0(),
         },
         "sd a0,100(sp)",
+        0x6a13223,
     ));
     insns.push(TestUnit::new(
         Inst::Store {
@@ -700,6 +704,7 @@ fn test_riscv64_binemit() {
             src: fa0(),
         },
         "fsw fa0,100(sp)",
+        0x6a12227,
     ));
     insns.push(TestUnit::new(
         Inst::Store {
@@ -709,6 +714,7 @@ fn test_riscv64_binemit() {
             src: fa0(),
         },
         "fsd fa0,100(sp)",
+        0x6a13227,
     ));
     insns.push(TestUnit::new(
         Inst::AluRRImm12 {
@@ -718,6 +724,7 @@ fn test_riscv64_binemit() {
             imm12: Imm12::from_bits(100),
         },
         "addi a0,a0,100",
+        0x6450513,
     ));
     insns.push(TestUnit::new(
         Inst::AluRRImm12 {
@@ -727,6 +734,7 @@ fn test_riscv64_binemit() {
             imm12: Imm12::from_bits(100),
         },
         "slti a0,a0,100",
+        0x6452513,
     ));
     insns.push(TestUnit::new(
         Inst::AluRRImm12 {
@@ -736,6 +744,7 @@ fn test_riscv64_binemit() {
             imm12: Imm12::from_bits(100),
         },
         "sltiu a0,a0,100",
+        0x6453513,
     ));
     insns.push(TestUnit::new(
         Inst::AluRRImm12 {
@@ -745,6 +754,7 @@ fn test_riscv64_binemit() {
             imm12: Imm12::from_bits(100),
         },
         "xori a0,a0,100",
+        0x6454513,
     ));
     insns.push(TestUnit::new(
         Inst::AluRRImm12 {
@@ -754,6 +764,7 @@ fn test_riscv64_binemit() {
             imm12: Imm12::from_bits(100),
         },
         "andi a0,a0,100",
+        0x6457513,
     ));
     insns.push(TestUnit::new(
         Inst::AluRRImm12 {
@@ -763,6 +774,7 @@ fn test_riscv64_binemit() {
             imm12: Imm12::from_bits(5),
         },
         "slli a0,a0,5",
+        0x551513,
     ));
     insns.push(TestUnit::new(
         Inst::AluRRImm12 {
@@ -772,6 +784,7 @@ fn test_riscv64_binemit() {
             imm12: Imm12::from_bits(5),
         },
         "srli a0,a0,5",
+        0x555513,
     ));
     insns.push(TestUnit::new(
         Inst::AluRRImm12 {
@@ -781,6 +794,7 @@ fn test_riscv64_binemit() {
             imm12: Imm12::from_bits(5),
         },
         "srai a0,a0,5",
+        0x40555513,
     ));
     insns.push(TestUnit::new(
         Inst::AluRRImm12 {
@@ -790,6 +804,7 @@ fn test_riscv64_binemit() {
             imm12: Imm12::from_bits(120),
         },
         "addiw a0,a0,120",
+        0x785051b,
     ));
     insns.push(TestUnit::new(
         Inst::AluRRImm12 {
@@ -799,6 +814,7 @@ fn test_riscv64_binemit() {
             imm12: Imm12::from_bits(5),
         },
         "slliw a0,a0,5",
+        0x55151b,
     ));
     insns.push(TestUnit::new(
         Inst::AluRRImm12 {
@@ -808,6 +824,7 @@ fn test_riscv64_binemit() {
             imm12: Imm12::from_bits(5),
         },
         "srliw a0,a0,5",
+        0x55551b,
     ));
     insns.push(TestUnit::new(
         Inst::AluRRImm12 {
@@ -817,6 +834,7 @@ fn test_riscv64_binemit() {
             imm12: Imm12::from_bits(5),
         },
         "sraiw a0,a0,5",
+        0x4055551b,
     ));
 
     insns.push(TestUnit::new(
@@ -827,6 +845,7 @@ fn test_riscv64_binemit() {
             imm12: Imm12::from_bits(5),
         },
         "sraiw a0,a0,5",
+        0x4055551b,
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
@@ -836,6 +855,7 @@ fn test_riscv64_binemit() {
             rs2: a1(),
         },
         "add a0,a0,a1",
+        0xb50533,
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
@@ -845,6 +865,7 @@ fn test_riscv64_binemit() {
             rs2: a1(),
         },
         "sub a0,a0,a1",
+        0x40b50533,
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
@@ -854,6 +875,7 @@ fn test_riscv64_binemit() {
             rs2: a1(),
         },
         "sll a0,a0,a1",
+        0xb51533,
     ));
 
     insns.push(TestUnit::new(
@@ -864,6 +886,7 @@ fn test_riscv64_binemit() {
             rs2: a1(),
         },
         "slt a0,a0,a1",
+        0xb52533,
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
@@ -873,6 +896,7 @@ fn test_riscv64_binemit() {
             rs2: a1(),
         },
         "sltu a0,a0,a1",
+        0xb53533,
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
@@ -882,6 +906,7 @@ fn test_riscv64_binemit() {
             rs2: a1(),
         },
         "xor a0,a0,a1",
+        0xb54533,
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
@@ -891,6 +916,7 @@ fn test_riscv64_binemit() {
             rs2: a1(),
         },
         "srl a0,a0,a1",
+        0xb55533,
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
@@ -900,6 +926,7 @@ fn test_riscv64_binemit() {
             rs2: a1(),
         },
         "sra a0,a0,a1",
+        0x40b55533,
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
@@ -909,6 +936,7 @@ fn test_riscv64_binemit() {
             rs2: a1(),
         },
         "or a0,a0,a1",
+        0xb56533,
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
@@ -918,6 +946,7 @@ fn test_riscv64_binemit() {
             rs2: a1(),
         },
         "and a0,a0,a1",
+        0xb57533,
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
@@ -927,6 +956,7 @@ fn test_riscv64_binemit() {
             rs2: a1(),
         },
         "addw a0,a0,a1",
+        0xb5053b,
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
@@ -936,6 +966,7 @@ fn test_riscv64_binemit() {
             rs2: a1(),
         },
         "subw a0,a0,a1",
+        0x40b5053b,
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
@@ -945,6 +976,7 @@ fn test_riscv64_binemit() {
             rs2: a1(),
         },
         "sllw a0,a0,a1",
+        0xb5153b,
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
@@ -954,6 +986,7 @@ fn test_riscv64_binemit() {
             rs2: a1(),
         },
         "srlw a0,a0,a1",
+        0xb5553b,
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
@@ -963,6 +996,7 @@ fn test_riscv64_binemit() {
             rs2: a1(),
         },
         "sraw a0,a0,a1",
+        0x40b5553b,
     ));
 
     insns.push(TestUnit::new(
@@ -973,6 +1007,7 @@ fn test_riscv64_binemit() {
             rs2: a1(),
         },
         "mul a0,a0,a1",
+        0x2b50533,
     ));
 
     insns.push(TestUnit::new(
@@ -983,6 +1018,7 @@ fn test_riscv64_binemit() {
             rs2: a1(),
         },
         "mulh a0,a0,a1",
+        0x2b51533,
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
@@ -992,6 +1028,7 @@ fn test_riscv64_binemit() {
             rs2: a1(),
         },
         "mulhsu a0,a0,a1",
+        0x2b52533,
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
@@ -1001,6 +1038,7 @@ fn test_riscv64_binemit() {
             rs2: a1(),
         },
         "mulhu a0,a0,a1",
+        0x2b53533,
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
@@ -1010,6 +1048,7 @@ fn test_riscv64_binemit() {
             rs2: a1(),
         },
         "div a0,a0,a1",
+        0x2b54533,
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
@@ -1019,6 +1058,7 @@ fn test_riscv64_binemit() {
             rs2: a1(),
         },
         "divu a0,a0,a1",
+        0x2b55533,
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
@@ -1028,6 +1068,7 @@ fn test_riscv64_binemit() {
             rs2: a1(),
         },
         "rem a0,a0,a1",
+        0x2b56533,
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
@@ -1037,6 +1078,7 @@ fn test_riscv64_binemit() {
             rs2: a1(),
         },
         "remu a0,a0,a1",
+        0x2b57533,
     ));
 
     insns.push(TestUnit::new(
@@ -1047,6 +1089,7 @@ fn test_riscv64_binemit() {
             rs2: a1(),
         },
         "mulw a0,a0,a1",
+        0x2b5053b,
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
@@ -1056,6 +1099,7 @@ fn test_riscv64_binemit() {
             rs2: a1(),
         },
         "divw a0,a0,a1",
+        0x2b5453b,
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
@@ -1065,6 +1109,7 @@ fn test_riscv64_binemit() {
             rs2: a1(),
         },
         "remw a0,a0,a1",
+        0x2b5653b,
     ));
     insns.push(TestUnit::new(
         Inst::AluRRR {
@@ -1074,6 +1119,7 @@ fn test_riscv64_binemit() {
             rs2: a1(),
         },
         "remuw a0,a0,a1",
+        0x2b5753b,
     ));
 
     //
@@ -1086,6 +1132,7 @@ fn test_riscv64_binemit() {
             rs2: fa1(),
         },
         "fadd.s fa0,fa0,fa1,rne",
+        0xb50553,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRR {
@@ -1096,6 +1143,7 @@ fn test_riscv64_binemit() {
             rs2: fa1(),
         },
         "fsub.s fa0,fa0,fa1,rtz",
+        0x8b51553,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRR {
@@ -1106,6 +1154,7 @@ fn test_riscv64_binemit() {
             rs2: fa1(),
         },
         "fmul.s fa0,fa0,fa1,rup",
+        0x10b53553,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRR {
@@ -1116,6 +1165,7 @@ fn test_riscv64_binemit() {
             rs2: fa1(),
         },
         "fdiv.s fa0,fa0,fa1",
+        0x18b57553,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRR {
@@ -1126,6 +1176,7 @@ fn test_riscv64_binemit() {
             rs2: fa1(),
         },
         "fsgnj.s fa0,fa0,fa1",
+        0x20b50553,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRR {
@@ -1136,6 +1187,7 @@ fn test_riscv64_binemit() {
             rs2: fa1(),
         },
         "fsgnjn.s fa0,fa0,fa1",
+        0x20b51553,
     ));
 
     insns.push(TestUnit::new(
@@ -1147,6 +1199,7 @@ fn test_riscv64_binemit() {
             rs2: fa1(),
         },
         "fsgnjx.s fa0,fa0,fa1",
+        0x20b52553,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRR {
@@ -1157,6 +1210,7 @@ fn test_riscv64_binemit() {
             rs2: fa1(),
         },
         "fmin.s fa0,fa0,fa1",
+        0x28b50553,
     ));
 
     insns.push(TestUnit::new(
@@ -1168,6 +1222,7 @@ fn test_riscv64_binemit() {
             rs2: fa1(),
         },
         "fmax.s fa0,fa0,fa1",
+        0x28b51553,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRR {
@@ -1178,6 +1233,7 @@ fn test_riscv64_binemit() {
             rs2: fa1(),
         },
         "feq.s a0,fa0,fa1",
+        0xa0b52553,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRR {
@@ -1188,6 +1244,7 @@ fn test_riscv64_binemit() {
             rs2: fa1(),
         },
         "flt.s a0,fa0,fa1",
+        0xa0b51553,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRR {
@@ -1198,6 +1255,7 @@ fn test_riscv64_binemit() {
             rs2: fa1(),
         },
         "fle.s a0,fa0,fa1",
+        0xa0b50553,
     ));
 
     //
@@ -1210,6 +1268,7 @@ fn test_riscv64_binemit() {
             rs2: fa1(),
         },
         "fadd.d fa0,fa0,fa1",
+        0x2b57553,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRR {
@@ -1220,6 +1279,7 @@ fn test_riscv64_binemit() {
             rs2: fa1(),
         },
         "fsub.d fa0,fa0,fa1",
+        0xab57553,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRR {
@@ -1230,6 +1290,7 @@ fn test_riscv64_binemit() {
             rs2: fa1(),
         },
         "fmul.d fa0,fa0,fa1",
+        0x12b57553,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRR {
@@ -1240,6 +1301,7 @@ fn test_riscv64_binemit() {
             rs2: fa1(),
         },
         "fdiv.d fa0,fa0,fa1",
+        0x1ab57553,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRR {
@@ -1250,6 +1312,7 @@ fn test_riscv64_binemit() {
             rs2: fa1(),
         },
         "fsgnj.d fa0,fa0,fa1",
+        0x22b50553,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRR {
@@ -1260,6 +1323,7 @@ fn test_riscv64_binemit() {
             rs2: fa1(),
         },
         "fsgnjn.d fa0,fa0,fa1",
+        0x22b51553,
     ));
 
     insns.push(TestUnit::new(
@@ -1271,6 +1335,7 @@ fn test_riscv64_binemit() {
             rs2: fa1(),
         },
         "fsgnjx.d fa0,fa0,fa1",
+        0x22b52553,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRR {
@@ -1281,6 +1346,7 @@ fn test_riscv64_binemit() {
             rs2: fa1(),
         },
         "fmin.d fa0,fa0,fa1",
+        0x2ab50553,
     ));
 
     insns.push(TestUnit::new(
@@ -1292,6 +1358,7 @@ fn test_riscv64_binemit() {
             rs2: fa1(),
         },
         "fmax.d fa0,fa0,fa1",
+        0x2ab51553,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRR {
@@ -1302,6 +1369,7 @@ fn test_riscv64_binemit() {
             rs2: fa1(),
         },
         "feq.d a0,fa0,fa1",
+        0xa2b52553,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRR {
@@ -1312,6 +1380,7 @@ fn test_riscv64_binemit() {
             rs2: fa1(),
         },
         "flt.d a0,fa0,fa1",
+        0xa2b51553,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRR {
@@ -1322,6 +1391,7 @@ fn test_riscv64_binemit() {
             rs2: fa1(),
         },
         "fle.d a0,fa0,fa1",
+        0xa2b50553,
     ));
 
     //
@@ -1333,6 +1403,7 @@ fn test_riscv64_binemit() {
             rs: fa1(),
         },
         "fsqrt.s fa0,fa1,rne",
+        0x58058553,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRR {
@@ -1342,6 +1413,7 @@ fn test_riscv64_binemit() {
             rs: fa1(),
         },
         "fcvt.w.s a0,fa1",
+        0xc005f553,
     ));
 
     insns.push(TestUnit::new(
@@ -1352,6 +1424,7 @@ fn test_riscv64_binemit() {
             rs: fa1(),
         },
         "fcvt.wu.s a0,fa1",
+        0xc015f553,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRR {
@@ -1361,6 +1434,7 @@ fn test_riscv64_binemit() {
             rs: fa1(),
         },
         "fmv.x.w a0,fa1",
+        0xe0058553,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRR {
@@ -1370,6 +1444,7 @@ fn test_riscv64_binemit() {
             rs: fa1(),
         },
         "fclass.s a0,fa1",
+        0xe0059553,
     ));
 
     insns.push(TestUnit::new(
@@ -1380,6 +1455,7 @@ fn test_riscv64_binemit() {
             rs: a0(),
         },
         "fcvt.s.w fa0,a0",
+        0xd0057553,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRR {
@@ -1389,6 +1465,7 @@ fn test_riscv64_binemit() {
             rs: a0(),
         },
         "fcvt.s.wu fa0,a0",
+        0xd0157553,
     ));
 
     insns.push(TestUnit::new(
@@ -1399,6 +1476,7 @@ fn test_riscv64_binemit() {
             rs: a0(),
         },
         "fmv.w.x fa0,a0",
+        0xf0050553,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRR {
@@ -1408,6 +1486,7 @@ fn test_riscv64_binemit() {
             rs: fa0(),
         },
         "fcvt.l.s a0,fa0",
+        0xc0257553,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRR {
@@ -1417,6 +1496,7 @@ fn test_riscv64_binemit() {
             rs: fa0(),
         },
         "fcvt.lu.s a0,fa0",
+        0xc0357553,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRR {
@@ -1427,6 +1507,7 @@ fn test_riscv64_binemit() {
             rs: a0(),
         },
         "fcvt.s.l fa0,a0",
+        0xd0257553,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRR {
@@ -1436,6 +1517,7 @@ fn test_riscv64_binemit() {
             rs: a0(),
         },
         "fcvt.s.lu fa0,a0",
+        0xd0357553,
     ));
 
     //
@@ -1447,6 +1529,7 @@ fn test_riscv64_binemit() {
             rs: fa1(),
         },
         "fsqrt.d fa0,fa1",
+        0x5a05f553,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRR {
@@ -1456,6 +1539,7 @@ fn test_riscv64_binemit() {
             rs: fa1(),
         },
         "fcvt.w.d a0,fa1",
+        0xc205f553,
     ));
 
     insns.push(TestUnit::new(
@@ -1466,6 +1550,7 @@ fn test_riscv64_binemit() {
             rs: fa1(),
         },
         "fcvt.wu.d a0,fa1",
+        0xc215f553,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRR {
@@ -1475,6 +1560,7 @@ fn test_riscv64_binemit() {
             rs: fa1(),
         },
         "fmv.x.d a0,fa1",
+        0xe2058553,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRR {
@@ -1484,6 +1570,7 @@ fn test_riscv64_binemit() {
             rs: fa1(),
         },
         "fclass.d a0,fa1",
+        0xe2059553,
     ));
 
     insns.push(TestUnit::new(
@@ -1494,6 +1581,7 @@ fn test_riscv64_binemit() {
             rs: fa0(),
         },
         "fcvt.s.d fa0,fa0",
+        0x40157553,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRR {
@@ -1503,6 +1591,7 @@ fn test_riscv64_binemit() {
             rs: a0(),
         },
         "fcvt.d.wu fa0,a0",
+        0xd2150553,
     ));
 
     insns.push(TestUnit::new(
@@ -1513,6 +1602,7 @@ fn test_riscv64_binemit() {
             rs: a0(),
         },
         "fmv.d.x fa0,a0",
+        0xf2050553,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRR {
@@ -1522,6 +1612,7 @@ fn test_riscv64_binemit() {
             rs: fa0(),
         },
         "fcvt.l.d a0,fa0",
+        0xc2257553,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRR {
@@ -1531,6 +1622,7 @@ fn test_riscv64_binemit() {
             rs: fa0(),
         },
         "fcvt.lu.d a0,fa0",
+        0xc2357553,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRR {
@@ -1540,6 +1632,7 @@ fn test_riscv64_binemit() {
             rs: a0(),
         },
         "fcvt.d.l fa0,a0",
+        0xd2257553,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRR {
@@ -1549,6 +1642,7 @@ fn test_riscv64_binemit() {
             rs: a0(),
         },
         "fcvt.d.lu fa0,a0",
+        0xd2357553,
     ));
     //////////////////////
 
@@ -1562,6 +1656,7 @@ fn test_riscv64_binemit() {
             rs3: fa7(),
         },
         "fmadd.s fa0,fa0,fa1,fa7,rne",
+        0x88b50543,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRRR {
@@ -1573,6 +1668,7 @@ fn test_riscv64_binemit() {
             rs3: fa7(),
         },
         "fmsub.s fa0,fa0,fa1,fa7",
+        0x88b57547,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRRR {
@@ -1584,6 +1680,7 @@ fn test_riscv64_binemit() {
             rs3: fa7(),
         },
         "fnmsub.s fa0,fa0,fa1,fa7",
+        0x88b5754b,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRRR {
@@ -1595,6 +1692,7 @@ fn test_riscv64_binemit() {
             rs3: fa7(),
         },
         "fnmadd.s fa0,fa0,fa1,fa7",
+        0x88b5754f,
     ));
 
     insns.push(TestUnit::new(
@@ -1607,6 +1705,7 @@ fn test_riscv64_binemit() {
             rs3: fa7(),
         },
         "fmadd.d fa0,fa0,fa1,fa7",
+        0x8ab57543,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRRR {
@@ -1619,6 +1718,7 @@ fn test_riscv64_binemit() {
             rs3: fa7(),
         },
         "fmsub.d fa0,fa0,fa1,fa7",
+        0x8ab57547,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRRR {
@@ -1630,6 +1730,7 @@ fn test_riscv64_binemit() {
             rs3: fa7(),
         },
         "fnmsub.d fa0,fa0,fa1,fa7",
+        0x8ab5754b,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRRR {
@@ -1641,6 +1742,7 @@ fn test_riscv64_binemit() {
             rs3: fa7(),
         },
         "fnmadd.d fa0,fa0,fa1,fa7",
+        0x8ab5754f,
     ));
 
     insns.push(TestUnit::new(
@@ -1652,6 +1754,7 @@ fn test_riscv64_binemit() {
             amo: AMO::Relax,
         },
         "lr.w a0,(a1)",
+        0x1005a52f,
     ));
     insns.push(TestUnit::new(
         Inst::Atomic {
@@ -1662,6 +1765,7 @@ fn test_riscv64_binemit() {
             amo: AMO::Release,
         },
         "sc.w.rl a0,a2,(a1)",
+        0x1ac5a52f,
     ));
     insns.push(TestUnit::new(
         Inst::Atomic {
@@ -1672,6 +1776,7 @@ fn test_riscv64_binemit() {
             amo: AMO::Aquire,
         },
         "amoswap.w.aq a0,a2,(a1)",
+        0xcc5a52f,
     ));
 
     insns.push(TestUnit::new(
@@ -1683,6 +1788,7 @@ fn test_riscv64_binemit() {
             amo: AMO::SeqCst,
         },
         "amoadd.w.aqrl a0,a2,(a1)",
+        0x6c5a52f,
     ));
     insns.push(TestUnit::new(
         Inst::Atomic {
@@ -1693,6 +1799,7 @@ fn test_riscv64_binemit() {
             amo: AMO::Relax,
         },
         "amoxor.w a0,a2,(a1)",
+        0x20c5a52f,
     ));
     insns.push(TestUnit::new(
         Inst::Atomic {
@@ -1703,6 +1810,7 @@ fn test_riscv64_binemit() {
             amo: AMO::Relax,
         },
         "amoand.w a0,a2,(a1)",
+        0x60c5a52f,
     ));
 
     insns.push(TestUnit::new(
@@ -1714,6 +1822,7 @@ fn test_riscv64_binemit() {
             amo: AMO::Relax,
         },
         "amoor.w a0,a2,(a1)",
+        0x40c5a52f,
     ));
     insns.push(TestUnit::new(
         Inst::Atomic {
@@ -1724,6 +1833,7 @@ fn test_riscv64_binemit() {
             amo: AMO::Relax,
         },
         "amomin.w a0,a2,(a1)",
+        0x80c5a52f,
     ));
     insns.push(TestUnit::new(
         Inst::Atomic {
@@ -1734,6 +1844,7 @@ fn test_riscv64_binemit() {
             amo: AMO::Relax,
         },
         "amomax.w a0,a2,(a1)",
+        0xa0c5a52f,
     ));
     insns.push(TestUnit::new(
         Inst::Atomic {
@@ -1744,6 +1855,7 @@ fn test_riscv64_binemit() {
             amo: AMO::Relax,
         },
         "amominu.w a0,a2,(a1)",
+        0xc0c5a52f,
     ));
     insns.push(TestUnit::new(
         Inst::Atomic {
@@ -1754,6 +1866,7 @@ fn test_riscv64_binemit() {
             amo: AMO::Relax,
         },
         "amomaxu.w a0,a2,(a1)",
+        0xe0c5a52f,
     ));
 
     insns.push(TestUnit::new(
@@ -1765,6 +1878,7 @@ fn test_riscv64_binemit() {
             amo: AMO::Relax,
         },
         "lr.d a0,(a1)",
+        0x1005b52f,
     ));
     insns.push(TestUnit::new(
         Inst::Atomic {
@@ -1775,6 +1889,7 @@ fn test_riscv64_binemit() {
             amo: AMO::Relax,
         },
         "sc.d a0,a2,(a1)",
+        0x18c5b52f,
     ));
 
     insns.push(TestUnit::new(
@@ -1786,6 +1901,7 @@ fn test_riscv64_binemit() {
             amo: AMO::Relax,
         },
         "amoswap.d a0,a2,(a1)",
+        0x8c5b52f,
     ));
 
     insns.push(TestUnit::new(
@@ -1797,6 +1913,7 @@ fn test_riscv64_binemit() {
             amo: AMO::Relax,
         },
         "amoadd.d a0,a2,(a1)",
+        0xc5b52f,
     ));
     insns.push(TestUnit::new(
         Inst::Atomic {
@@ -1807,6 +1924,7 @@ fn test_riscv64_binemit() {
             amo: AMO::Relax,
         },
         "amoxor.d a0,a2,(a1)",
+        0x20c5b52f,
     ));
     insns.push(TestUnit::new(
         Inst::Atomic {
@@ -1817,6 +1935,7 @@ fn test_riscv64_binemit() {
             amo: AMO::Relax,
         },
         "amoand.d a0,a2,(a1)",
+        0x60c5b52f,
     ));
 
     insns.push(TestUnit::new(
@@ -1828,6 +1947,7 @@ fn test_riscv64_binemit() {
             amo: AMO::Relax,
         },
         "amoor.d a0,a2,(a1)",
+        0x40c5b52f,
     ));
     insns.push(TestUnit::new(
         Inst::Atomic {
@@ -1838,6 +1958,7 @@ fn test_riscv64_binemit() {
             amo: AMO::Relax,
         },
         "amomin.d a0,a2,(a1)",
+        0x80c5b52f,
     ));
     insns.push(TestUnit::new(
         Inst::Atomic {
@@ -1848,6 +1969,7 @@ fn test_riscv64_binemit() {
             amo: AMO::Relax,
         },
         "amomax.d a0,a2,(a1)",
+        0xa0c5b52f,
     ));
     insns.push(TestUnit::new(
         Inst::Atomic {
@@ -1858,6 +1980,7 @@ fn test_riscv64_binemit() {
             amo: AMO::Relax,
         },
         "amominu.d a0,a2,(a1)",
+        0xc0c5b52f,
     ));
     insns.push(TestUnit::new(
         Inst::Atomic {
@@ -1868,6 +1991,7 @@ fn test_riscv64_binemit() {
             amo: AMO::Relax,
         },
         "amomaxu.d a0,a2,(a1)",
+        0xe0c5b52f,
     ));
 
     /////////
@@ -1878,10 +2002,11 @@ fn test_riscv64_binemit() {
             fm: FenceFm::None,
         },
         "fence w,r",
+        0x120000f,
     ));
-    insns.push(TestUnit::new(Inst::FenceI {}, "fence.i"));
-    insns.push(TestUnit::new(Inst::ECall {}, "ecall"));
-    insns.push(TestUnit::new(Inst::EBreak {}, "ebreak"));
+    insns.push(TestUnit::new(Inst::FenceI {}, "fence.i", 0x100f));
+    insns.push(TestUnit::new(Inst::ECall {}, "ecall", 0x73));
+    insns.push(TestUnit::new(Inst::EBreak {}, "ebreak", 0x100073));
 
     insns.push(TestUnit::new(
         Inst::FpuRRR {
@@ -1892,6 +2017,7 @@ fn test_riscv64_binemit() {
             rs2: fa1(),
         },
         "fmv.s fa0,fa1",
+        0x20b58553,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRR {
@@ -1902,6 +2028,7 @@ fn test_riscv64_binemit() {
             rs2: fa1(),
         },
         "fmv.d fa0,fa1",
+        0x22b58553,
     ));
 
     insns.push(TestUnit::new(
@@ -1913,6 +2040,7 @@ fn test_riscv64_binemit() {
             rs2: fa1(),
         },
         "fneg.s fa0,fa1",
+        0x20b59553,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRR {
@@ -1923,22 +2051,12 @@ fn test_riscv64_binemit() {
             rs2: fa1(),
         },
         "fneg.d fa0,fa1",
+        0x22b59553,
     ));
 
-    // here to add.
-    {
-        /*
-        notice!!
-            some generate code
-            if you modify "insns"
-            please remove all this block source code and regenerated this.
-         */
-
-        // generated code to speed up the test unit,otherwise you need invode riscv-gun tool chain every time.
-    }
     let (flags, isa_flags) = make_test_flags();
     let emit_info = EmitInfo::new(flags, isa_flags);
-    let mut missing_code = vec![];
+
     for (index, ref mut unit) in insns.into_iter().enumerate() {
         println!("Riscv64: {:?}, {}", unit.inst, unit.assembly);
         // Check the printed text is as expected.
@@ -1946,18 +2064,13 @@ fn test_riscv64_binemit() {
             .inst
             .print_with_state(&mut EmitState::default(), &mut AllocationConsumer::new(&[]));
         assert_eq!(unit.assembly, actual_printing);
-        if unit.code.is_none() {
-            let code = assemble(unit.assembly, &unit.option_for_as);
-            missing_code.push((index, code));
-            unit.code = Some(code);
-        }
         let mut buffer = MachBuffer::new();
         unit.inst
             .emit(&[], &mut buffer, &emit_info, &mut Default::default());
         let buffer = buffer.finish();
-        if buffer.data() != unit.code.unwrap().to_le_bytes() {
+        if buffer.data() != unit.code.to_le_bytes() {
             {
-                let gnu = DebugRTypeIns::from_bs(&unit.code.unwrap().to_le_bytes());
+                let gnu = DebugRTypeIns::from_bs(&unit.code.to_le_bytes());
                 let my = DebugRTypeIns::from_bs(buffer.data());
                 println!("gnu:{:?}", gnu);
                 println!("my :{:?}", my);
@@ -1966,22 +2079,15 @@ fn test_riscv64_binemit() {
             }
 
             {
-                let gnu = DebugITypeIns::from_bs(&unit.code.unwrap().to_le_bytes());
+                let gnu = DebugITypeIns::from_bs(&unit.code.to_le_bytes());
                 let my = DebugITypeIns::from_bs(buffer.data());
                 println!("gnu:{:?}", gnu);
                 println!("my :{:?}", my);
                 println!("gnu:{:b}", gnu.op_code);
                 println!("my :{:b}", my.op_code);
             }
-            assert_eq!(buffer.data(), unit.code.unwrap().to_le_bytes());
+            assert_eq!(buffer.data(), unit.code.to_le_bytes());
         }
-    }
-    if missing_code.len() > 0 {
-        println!("// generated code to speed up the test unit,otherwise you need invode riscv-gun tool chain every time.");
-        for i in missing_code {
-            println!("insns[{}].code = Some({});  ", i.0, i.1);
-        }
-        println!("");
     }
 }
 
@@ -1991,161 +2097,6 @@ fn make_test_flags() -> (settings::Flags, super::super::riscv_settings::Flags) {
     let isa_flags =
         super::super::riscv_settings::Flags::new(&flags, super::super::riscv_settings::builder());
     (flags, isa_flags)
-}
-
-#[cfg(target_os = "windows")]
-fn get_riscv_tool_chain_name() -> (String, String) {
-    (
-        String::from("riscv64-unknown-elf-as"),
-        String::from("riscv64-unknown-elf-objdump"),
-    )
-}
-
-#[cfg(target_os = "linux")]
-fn get_riscv_tool_chain_name() -> (String, String) {
-    (
-        String::from("riscv64-unknown-linux-gnu-as"),
-        String::from("riscv64-unknown-linux-gnu-objdump"),
-    )
-}
-
-fn assemble(code: &str, as_option: &Option<Vec<String>>) -> u32 {
-    let mut code = String::from(code);
-    code.push_str("\n");
-
-    std::env::set_current_dir(std::env::temp_dir()).expect("set_current_dir {}");
-
-    let file_name = "riscv_tmp.s";
-    use std::io::Write;
-    let mut file = std::fs::File::create(file_name).unwrap();
-
-    file.write_all(code.as_bytes()).expect("write error {}");
-    file.sync_all().unwrap();
-    let (as_name, objdump_name) = get_riscv_tool_chain_name();
-    let mut cmd = Command::new(as_name.as_str());
-    as_option.clone().map(|ref a| cmd.args(&a[..]));
-    cmd.arg(file_name);
-
-    let _output = cmd.output().expect("exec as failed , {}");
-    let output_file = "a.out";
-
-    let mut cmd = Command::new(objdump_name.as_str());
-    cmd.arg("-d").arg(output_file);
-    let output = cmd.output().expect("exec objdump failed , {}");
-    /*
-        a.out:     file format elf64-littleriscv
-
-    Disassembly of section .text:
-
-    0000000000000000 <.text>:
-       0:   fe010113                addi    sp,sp,-32
-        */
-    let output = output.stdout;
-    // println!(
-    //     "##############################{}",
-    //     String::from_iter(output.clone().into_iter().map(|c| c as char))
-    // );
-    // need parse this
-    // right row only generate one instruction.
-    // so it is easy
-    for mut i in 0..output.len() {
-        // match   0:
-        let mut _match = || -> bool {
-            if output[i] == ('0' as u8) && output[i + 1] == (':' as u8) {
-                // skip 0:
-                i += 2;
-                true
-            } else {
-                false
-            }
-        };
-        if _match() {
-            // skip all white space or \t
-            loop {
-                if output[i] != 32 && output[i] != 9 {
-                    break;
-                }
-                i += 1;
-            }
-            let mut byte_string: String = "".into();
-            loop {
-                if (output[i] >= ('0' as u8) && output[i] <= ('9' as u8))
-                    || (output[i] >= ('a' as u8) && output[i] <= ('f' as u8))
-                {
-                    byte_string.push(output[i] as char);
-                    i += 1;
-                } else {
-                    break;
-                }
-            }
-            return u32::from_str_radix(byte_string.as_str(), 16).unwrap();
-        }
-    }
-    unreachable!()
-}
-
-/*
-    need enable to support bitmanip extension.
-*/
-fn gcc_aluoprrr_march_arg(op: AluOPRRR) -> String {
-    let x = match op {
-        AluOPRRR::Adduw => "-march=rv64g_zba",
-        AluOPRRR::Andn => "-march=rv64g_zbb",
-        AluOPRRR::Bclr => "-march=rv64g_zbs",
-        AluOPRRR::Bext => "-march=rv64g_zbs",
-        AluOPRRR::Binv => "-march=rv64g_zbs",
-        AluOPRRR::Bset => "-march=rv64g_zbs",
-        AluOPRRR::Clmul => "-march=rv64g_zbc",
-        AluOPRRR::Clmulh => "-march=rv64g_zbc",
-        AluOPRRR::Clmulr => "-march=rv64g_zbc",
-        AluOPRRR::Max => "-march=rv64g_zbb",
-        AluOPRRR::Maxu => "-march=rv64g_zbb",
-        AluOPRRR::Min => "-march=rv64g_zbb",
-        AluOPRRR::Minu => "-march=rv64g_zbb",
-        AluOPRRR::Orn => "-march=rv64g_zbb",
-        AluOPRRR::Rol => "-march=rv64g_zbb",
-        AluOPRRR::Rolw => "-march=rv64g_zbb",
-        AluOPRRR::Ror => "-march=rv64g_zbb",
-        AluOPRRR::Rorw => "-march=rv64g_zbb",
-        AluOPRRR::Sh1add => "-march=rv64g_zba",
-        AluOPRRR::Sh1adduw => "-march=rv64g_zba",
-        AluOPRRR::Sh2add => "-march=rv64g_zba",
-        AluOPRRR::Sh2adduw => "-march=rv64g_zba",
-        AluOPRRR::Sh3add => "-march=rv64g_zba",
-        AluOPRRR::Sh3adduw => "-march=rv64g_zba",
-        AluOPRRR::Xnor => "-march=rv64g_zbb",
-        _ => unreachable!(),
-    };
-    x.into()
-}
-
-/*
-    need enable to support bitmanip extension.
-*/
-fn gcc_aluoprri_march_arg(op: AluOPRRI) -> String {
-    let x = match op {
-        AluOPRRI::Bclri => "-march=rv64g_zbs",
-        AluOPRRI::Bexti => "-march=rv64g_zbs",
-        AluOPRRI::Binvi => "-march=rv64g_zbs",
-        AluOPRRI::Bseti => "-march=rv64g_zbs",
-        AluOPRRI::Rori => "-march=rv64g_zbb",
-        AluOPRRI::Roriw => "-march=rv64g_zbb",
-        AluOPRRI::SlliUw => "-march=rv64g_zba",
-        AluOPRRI::Clz => "-march=rv64g_zbb",
-        AluOPRRI::Clzw => "-march=rv64g_zbb",
-        AluOPRRI::Cpop => "-march=rv64g_zbb",
-        AluOPRRI::Cpopw => "-march=rv64g_zbb",
-        AluOPRRI::Ctz => "-march=rv64g_zbb",
-        AluOPRRI::Ctzw => "-march=rv64g_zbb",
-        AluOPRRI::Rev8 => "-march=rv64g_zbb",
-        AluOPRRI::Sextb => "-march=rv64g_zbb",
-        AluOPRRI::Sexth => "-march=rv64g_zbb",
-        AluOPRRI::Zexth => "-march=rv64g_zbb",
-        AluOPRRI::Orcb => "-march=rv64g_zbb",
-        AluOPRRI::Brev8 => "-march=rv64g_zbkb",
-        _ => unreachable!(),
-    };
-    x.into()
 }
 
 #[derive(Debug)]
@@ -2194,7 +2145,6 @@ pub(crate) struct DebugITypeIns {
     funct3: u32,
     rs: u32,
     imm12: u32,
-
     shamt5: u32,
     shamt6: u32,
     funct7: u32,
@@ -2255,7 +2205,6 @@ fn xxx() {
 fn riscv64_worst_case_instruction_size() {
     let (flags, isa_flags) = make_test_flags();
     let emit_info = EmitInfo::new(flags, isa_flags);
-
     /*
         there are all candidates potential generate a lot of bytes.
     */
@@ -2287,13 +2236,6 @@ fn riscv64_worst_case_instruction_size() {
     candidates.push(Inst::Fcmp {
         rd: writable_a0(),
         cc: FloatCC::UnorderedOrLessThanOrEqual,
-        ty: F64,
-        rs1: fa1(),
-        rs2: fa0(),
-    });
-    candidates.push(Inst::Fcmp {
-        rd: writable_a0(),
-        cc: FloatCC::NotEqual,
         ty: F64,
         rs1: fa1(),
         rs2: fa0(),
@@ -2359,48 +2301,4 @@ fn riscv64_worst_case_instruction_size() {
     }
     println!("caculate max size is {} , inst is {:?}", max.0, max.1);
     assert_eq!(max.0, Inst::worst_case_size());
-}
-
-/*
-    emit an instruction and see objdump assembly code.
-*/
-#[test]
-fn gcc_ass() {
-    let flags = make_test_flags();
-    let emit_info = EmitInfo::new(flags.0, flags.1);
-    std::env::set_current_dir(std::env::temp_dir()).expect("set_current_dir {}");
-    let file_name = "riscv_tmp.bin";
-    use std::io::Write;
-    /*
-        there are all candidates potential generate a lot of bytes.
-    */
-    let mut insts: Vec<MInst> = vec![];
-
-    insts.push(Inst::Fence {
-        pred: 1 << 2 | 1 << 3,
-        succ: 1,
-        fm: FenceFm::None,
-    });
-    let (_, dump) = get_riscv_tool_chain_name();
-    for i in insts {
-        let mut buffer = MachBuffer::new();
-        i.emit(&[], &mut buffer, &emit_info, &mut Default::default());
-        let buffer = buffer.finish();
-        let mut file = std::fs::File::create(file_name).unwrap();
-        file.write_all(buffer.data()).expect("write error {}");
-        file.sync_all().unwrap();
-        let mut cmd = Command::new(dump.as_str());
-        cmd.args(&["-b", "binary", "-m", "riscv:rv64", "-D"])
-            .arg(file_name);
-        let output = cmd.output().expect("exec objdump failed , {}");
-        println!("{:?} ############################################", i);
-        println!(
-            "##############################{}",
-            String::from_iter(output.stdout.clone().into_iter().map(|c| c as char))
-        );
-        println!(
-            "##############################{}",
-            String::from_iter(output.stderr.clone().into_iter().map(|c| c as char))
-        );
-    }
 }

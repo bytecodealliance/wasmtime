@@ -1942,17 +1942,22 @@
   (lower_icmp_over_flow x y $I128 )
   (let
     (
-      ;;
+      ;; x sign bit.
       (xs Reg (alu_rr_imm12 (AluOPRRI.Srli) (value_regs_get x 1)  (imm12_const 63)  ))
-      ;;
+      ;; y sign bit.
       (ys Reg (alu_rr_imm12 (AluOPRRI.Srli) (value_regs_get y 1)  (imm12_const 63)  ))
-      ;;
+      ;; 
       (sub_result ValueRegs (i128_sub x y ))
+      ;; result sign bit.
       (rs Reg (alu_rr_imm12 (AluOPRRI.Srli) (value_regs_get sub_result 1)  (imm12_const 63)  ))
       
-      ;;; xs && !ys && !rs
+      ;;; xs && !ys && !rs  
+      ;;; x is positive y is negtive and result is negative.
+      ;;; must overflow
       (tmp1 Reg (alu_and xs (alu_and (con_bit_not ys ) (con_bit_not rs)  ) ) )
       ;;; !xs && ys && rs
+      ;;; x is negative y is positive and result is positive.
+      ;;; overflow 
       (tmp2 Reg (alu_and (con_bit_not xs) (alu_and ys rs)  ) )
       ;;;tmp3
       (tmp3  Reg (alu_rrr (AluOPRRR.Or)  tmp1 tmp2 ) )

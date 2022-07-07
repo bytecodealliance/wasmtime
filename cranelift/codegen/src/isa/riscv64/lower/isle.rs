@@ -1,8 +1,8 @@
 //! ISLE integration glue code for riscv64 lowering.
 
 // Pull in the ISLE generated code.
+#[allow(unused)]
 pub mod generated_code;
-
 use alloc::vec::Vec;
 
 // Types that the generated ISLE code uses via `use super::*`.
@@ -18,6 +18,7 @@ use crate::{
         immediates::*, types::*, AtomicRmwOp, ExternalName, Inst, InstructionData, MemFlags,
         StackSlot, TrapCode, Value, ValueList,
     },
+    isa::riscv64::abi::Riscv64ABICaller,
     isa::riscv64::inst::*,
     machinst::{InsnOutput, LowerCtx},
 };
