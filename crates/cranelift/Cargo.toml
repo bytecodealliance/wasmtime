@@ -22,7 +22,7 @@ cranelift-native = { path = "../../cranelift/native", version = "0.87.0" }
 wasmparser = "0.87.0"
 target-lexicon = "0.12"
 gimli = { version = "0.26.0", default-features = false, features = ['read', 'std'] }
-object = { version = "0.28.0", default-features = false, features = ['write'] }
+object = { version = "0.29.0", default-features = false, features = ['write'] }
 more-asserts = "0.2.1"
 thiserror = "1.0.4"
 

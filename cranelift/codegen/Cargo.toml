@@ -16,7 +16,7 @@ edition = "2021"
 cranelift-codegen-shared = { path = "./shared", version = "0.87.0" }
 cranelift-entity = { path = "../entity", version = "0.87.0" }
 cranelift-bforest = { path = "../bforest", version = "0.87.0" }
-hashbrown = { version = "0.11", optional = true }
+hashbrown = { version = "0.12", optional = true }
 target-lexicon = "0.12"
 log = { version = "0.4.6", default-features = false }
 serde = { version = "1.0.94", features = ["derive"], optional = true }
