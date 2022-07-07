@@ -175,8 +175,8 @@ impl IntegerCompare {
 
             IntCC::UnsignedGreaterThan => (BranchFunct3::Ltu, true),
             IntCC::UnsignedLessThanOrEqual => (BranchFunct3::Geu, true),
-            IntCC::Overflow => todo!(),
-            IntCC::NotOverflow => todo!(),
+            IntCC::Overflow => overflow_already_lowerd(),
+            IntCC::NotOverflow => overflow_already_lowerd(),
         }
     }
 
@@ -193,8 +193,8 @@ impl IntegerCompare {
             IntCC::UnsignedGreaterThanOrEqual => "bgeu",
             IntCC::UnsignedGreaterThan => "bgtu",
             IntCC::UnsignedLessThanOrEqual => "bleu",
-            IntCC::Overflow => todo!(),
-            IntCC::NotOverflow => todo!(),
+            IntCC::Overflow => "bof",
+            IntCC::NotOverflow => "bnof",
         }
     }
 
@@ -672,7 +672,9 @@ impl AluOPRRR {
             Self::Sub => "sub",
             Self::Sll => "sll",
             Self::Slt => "slt",
+            Self::Sgt => "sgt",
             Self::SltU => "sltu",
+            Self::Sgtu => "sgtu",
             Self::Xor => "xor",
             Self::Srl => "srl",
             Self::Sra => "sra",
@@ -729,7 +731,9 @@ impl AluOPRRR {
             AluOPRRR::Add => 0b000,
             AluOPRRR::Sll => 0b001,
             AluOPRRR::Slt => 0b010,
+            AluOPRRR::Sgt => 0b010,
             AluOPRRR::SltU => 0b011,
+            AluOPRRR::Sgtu => 0b011,
             AluOPRRR::Xor => 0b100,
             AluOPRRR::Srl => 0b101,
             AluOPRRR::Sra => 0b101,
@@ -792,7 +796,9 @@ impl AluOPRRR {
             | AluOPRRR::Sub
             | AluOPRRR::Sll
             | AluOPRRR::Slt
+            | AluOPRRR::Sgt
             | AluOPRRR::SltU
+            | AluOPRRR::Sgtu
             | AluOPRRR::Xor
             | AluOPRRR::Srl
             | AluOPRRR::Sra
@@ -853,7 +859,10 @@ impl AluOPRRR {
             AluOPRRR::Sub => 0b0100000,
             AluOPRRR::Sll => 0b0000000,
             AluOPRRR::Slt => 0b0000000,
+            AluOPRRR::Sgt => 0b0000000,
             AluOPRRR::SltU => 0b0000000,
+            AluOPRRR::Sgtu => 0b0000000,
+
             AluOPRRR::Xor => 0b0000000,
             AluOPRRR::Srl => 0b0000000,
             AluOPRRR::Sra => 0b0100000,

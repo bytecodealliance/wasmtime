@@ -409,19 +409,65 @@ where
         self.emit(&gen_move(tmp, ty, r, ty));
         tmp.to_reg()
     }
-    fn sext_to_i64(&mut self, val: Value) -> Option<(Reg, Type)> {
+
+    fn sext_int_if_need(&mut self, val: Value) -> Option<(ValueRegs, Type)> {
         let (ty, val) = self.type_and_value(val);
-        if ty.is_int() && ty.bits() < 64 {
-            let rd = self.temp_writable_reg(I64);
-            let rs = self.put_in_reg(val);
-            self.emit(&MInst::Extend {
-                rd: rd,
-                rn: rs,
-                signed: true,
-                from_bits: ty.bits() as u8,
-                to_bits: 64,
-            });
-            Some((rd.to_reg(), ty))
+        if !ty.is_int() {
+            return None;
+        }
+        match ty.bits() {
+            128 => {
+                let r = self.put_in_regs(val);
+                Some((r, ty))
+            }
+            64 => {
+                let r = self.put_in_reg(val);
+                Some((ValueRegs::one(r), ty))
+            }
+            _ => {
+                let rs = self.put_in_reg(val);
+                let rd = self.temp_writable_reg(I64);
+                self.emit(&MInst::Extend {
+                    rd,
+                    rn: rs,
+                    signed: true,
+                    from_bits: ty.bits() as u8,
+                    to_bits: 64,
+                });
+
+                Some((ValueRegs::one(rd.to_reg()), ty))
+            }
+        }
+    }
+
+    fn intcc_is_signed(&mut self, cc: &IntCC) -> Option<(IntCC, bool)> {
+        let cc = *cc;
+        match cc {
+            IntCC::SignedLessThan => Some((cc, true)),
+            IntCC::SignedGreaterThanOrEqual => Some((cc, true)),
+            IntCC::SignedGreaterThan => Some((cc, true)),
+            IntCC::SignedLessThanOrEqual => Some((cc, true)),
+            //
+            IntCC::UnsignedLessThan => Some((cc, false)),
+            IntCC::UnsignedGreaterThanOrEqual => Some((cc, false)),
+            IntCC::UnsignedGreaterThan => Some((cc, false)),
+            IntCC::UnsignedLessThanOrEqual => Some((cc, false)),
+            _ => None,
+        }
+    }
+    fn intcc_is_eq_or_ne(&mut self, cc: &IntCC) -> Option<IntCC> {
+        let cc = *cc;
+        if cc == IntCC::Equal || cc == IntCC::NotEqual {
+            Some(cc)
+        } else {
+            None
+        }
+    }
+
+    fn intcc_is_overflow_or_nof(&mut self, cc: &IntCC) -> Option<IntCC> {
+        let cc = *cc;
+        if cc == IntCC::Overflow || cc == IntCC::NotOverflow {
+            Some(cc)
         } else {
             None
         }

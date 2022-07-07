@@ -87,12 +87,15 @@
       (info BoxCallIndInfo))
 
     (TrapIf
-      (cc IntCC)
-      (x ValueRegs)
-      (y ValueRegs)
-      (ty Type)
+      (test Reg)
       (trap_code TrapCode))
-
+    
+    ;; use a simple compare to decide to cause trap or not.
+    (TrapIfC
+      (rs1 Reg)
+      (rs2 Reg)
+      (cc IntCC)
+      (trap_code TrapCode))
     (TrapFf
       (cc FloatCC)
       (x Reg)
@@ -255,10 +258,7 @@
     (SelectIf 
       (if_spectre_guard bool)
       (rd VecWritableReg)
-      (cmp_x ValueRegs)
-      (cmp_y ValueRegs)
-      (cc IntCC)
-      (cmp_ty Type)
+      (test Reg)
       (x ValueRegs)
       (y ValueRegs))
     (RawData (data VecU8))
@@ -416,6 +416,8 @@
   (Sll)
   (Slt)
   (SltU)
+  (Sgt)
+  (Sgtu)
   (Xor)
   (Srl)
   (Sra)
@@ -653,6 +655,13 @@
   (alu_rrr (AluOPRRR.Add) rs1 rs2)
 )
 
+(decl alu_and(Reg Reg)Reg)
+(rule
+  (alu_and rs1 rs2)
+  (alu_rrr (AluOPRRR.And) rs1 rs2)
+)
+
+
 ;; Helper for emit rd = rs1 - rs2 for Interger.
 (decl alu_sub(Reg Reg)Reg)
 (rule
@@ -696,13 +705,29 @@
         dst))
 
 ;; Helper for narrow down int to it's bits.
-(decl narrow_int(Type Reg) Reg)
-(rule (narrow_int $I8 r) (
-  alu_rr_imm12 (AluOPRRI.Srli) (alu_rr_imm12 (AluOPRRI.Slli) r (imm_from_bits 56)) (imm_from_bits 56))) 
-(rule (narrow_int $I16 r) (
-  alu_rr_imm12 (AluOPRRI.Srli) (alu_rr_imm12 (AluOPRRI.Slli) r (imm_from_bits 48)) (imm_from_bits 48)))
-(rule (narrow_int $I32 r) (
-  alu_rr_imm12 (AluOPRRI.Srli) (alu_rr_imm12 (AluOPRRI.Slli) r (imm_from_bits 32)) (imm_from_bits 32)))
+;;  
+(decl uext_int_if_need(Type ValueRegs) ValueRegs)
+;;; for I8 and I16 ...
+(rule
+  (uext_int_if_need ty val)
+  (let
+    (
+      ;;
+      (rd WritableReg (temp_writable_reg $I64))
+      (_ Unit (emit (MInst.Extend  rd val $false (ty_bits ty) 64 )))
+    )
+    (writable_reg_to_reg rd)
+  )
+)
+(rule
+  (uext_int_if_need $I64 r)
+  r 
+)
+(rule
+  (uext_int_if_need $I128 r)
+  r 
+)
+
 
 ;; Helper for get negative of Imm12 
 (decl neg_imm12 (Imm12) Imm12)
@@ -849,7 +874,7 @@
   (let
     (
       ;; narrow int make all upper bits are zeros.
-      (tmp Reg (narrow_int ty r))
+      (tmp Reg (uext_int_if_need ty r))
       ;; 
       (count Reg (alu_rr_funct12 (AluOPRRI.Clz) tmp))
       ;;make result
@@ -967,7 +992,7 @@
   (lower_umlhi ty rs1 rs2)
   (let
     (
-      (tmp Reg (alu_rrr (AluOPRRR.Mul) (narrow_int ty rs1)  (narrow_int ty rs2)) )
+      (tmp Reg (alu_rrr (AluOPRRR.Mul) (uext_int_if_need ty rs1)  (uext_int_if_need ty rs2)) )
     )
     (alu_rr_imm12 (AluOPRRI.Srli) tmp (imm12_const (ty_bits ty)) )
   )
@@ -1823,6 +1848,133 @@
 (decl load_gv_addr(GlobalValue) Reg)
 (extern constructor load_gv_addr load_gv_addr)
 
-;;; I8 I16 I32 can be extend to 64 bit.
-(decl sext_to_i64(Reg Type)Value)
-(extern extractor sext_to_i64 sext_to_i64)
+;;; sign extend integet if need.
+;;; some operation like icmp I need extend to value to 64-bit.
+(decl sext_int_if_need(ValueRegs Type) Value)
+(extern extractor sext_int_if_need sext_int_if_need)
+
+(decl convert_valueregs_reg(ValueRegs)Reg)
+(rule
+  (convert_valueregs_reg x)
+  (value_regs_get x 0)
+)
+(convert ValueRegs Reg convert_valueregs_reg)
+
+(decl intcc_is_signed (IntCC bool)IntCC)
+(extern extractor intcc_is_signed intcc_is_signed)
+
+(decl intcc_is_eq_or_ne (IntCC)IntCC)
+(extern extractor intcc_is_eq_or_ne intcc_is_eq_or_ne)
+
+(decl intcc_is_overflow_or_nof (IntCC)IntCC)
+(extern extractor intcc_is_overflow_or_nof intcc_is_overflow_or_nof)
+
+;;; lower icmp 
+(decl lower_icmp(IntCC Value Value Type) Reg)
+;;; eq or ne.
+(rule
+  (lower_icmp (intcc_is_eq_or_ne cc) x y ty)
+  (con_icmp cc (uext_int_if_need ty x) (uext_int_if_need ty y) ty)
+)
+;;;; singed >= ... 
+(rule
+  (lower_icmp (intcc_is_signed cc $true) (sext_int_if_need x _) (sext_int_if_need y _) ty)
+  (con_icmp cc x y ty)
+)
+;;;; unsigned >= ... 
+(rule
+  (lower_icmp (intcc_is_signed cc $false) x y ty)
+  (con_icmp cc (uext_int_if_need ty x) (uext_int_if_need ty y) ty)
+)
+;;; overflow 
+(rule
+  (lower_icmp (intcc_is_overflow_or_nof (IntCC.Overflow) ) x y ty)
+  (lower_icmp_over_flow x y ty )
+)
+;;; not overflow 
+(rule
+  (lower_icmp (intcc_is_overflow_or_nof (IntCC.NotOverflow) ) x y ty)
+  (con_bit_not (lower_icmp_over_flow x y ty))
+)
+
+(decl lower_icmp_over_flow(Value Value Type)Reg)
+
+;;; for I8 I16 I32
+(rule 1
+  (lower_icmp_over_flow (sext_int_if_need x _)  (sext_int_if_need y _)  ty )
+  (let
+    (
+      (tmp Reg (alu_sub x y ))
+      (tmp2 WritableReg (temp_writable_reg $I64))
+      (_ Unit (emit (MInst.Extend tmp2 tmp $true (ty_bits ty) 64 ))  )
+    )
+    (con_icmp (IntCC.NotEqual) (writable_reg_to_reg  tmp2) tmp $I64 )
+  )
+)
+
+;;; $I64
+(rule 3
+  (lower_icmp_over_flow x y $I64 )
+  (let
+    (
+       (y_sign Reg (alu_rrr (AluOPRRR.Sgt) y (zero_reg) ))
+       (sub_result Reg (alu_sub x y ))
+       (tmp Reg (alu_rrr (AluOPRRR.Slt) sub_result x ) )
+    )
+    (con_icmp (IntCC.NotEqual) y_sign tmp $I64 )
+  )
+)
+
+(decl gen_extend(Reg bool u8 u8)Reg)
+(rule
+  (gen_extend r is_signed from_bits to_bits)
+  (let
+    (
+      (rd WritableReg (temp_writable_reg $I64))
+      (_ Unit (emit (MInst.Extend rd r $false from_bits  to_bits )))
+    )
+    (writable_reg_to_reg rd )
+  )
+)
+
+;;; $I128
+(rule 2
+  (lower_icmp_over_flow x y $I128 )
+  (let
+    (
+      ;;
+      (xs Reg (alu_rr_imm12 (AluOPRRI.Srli) (value_regs_get x 1)  (imm12_const 63)  ))
+      ;;
+      (ys Reg (alu_rr_imm12 (AluOPRRI.Srli) (value_regs_get y 1)  (imm12_const 63)  ))
+      ;;
+      (sub_result ValueRegs (i128_sub x y ))
+      (rs Reg (alu_rr_imm12 (AluOPRRI.Srli) (value_regs_get sub_result 1)  (imm12_const 63)  ))
+      
+      ;;; xs && !ys && !rs
+      (tmp1 Reg (alu_and xs (alu_and (con_bit_not ys ) (con_bit_not rs)  ) ) )
+      ;;; !xs && ys && rs
+      (tmp2 Reg (alu_and (con_bit_not xs) (alu_and ys rs)  ) )
+      ;;;tmp3
+      (tmp3  Reg (alu_rrr (AluOPRRR.Or)  tmp1 tmp2 ) )
+    )
+    (gen_extend tmp3 $true 1 64)
+  )
+)
+
+(decl i128_sub (ValueRegs ValueRegs)ValueRegs)
+(rule
+  (i128_sub x y )
+  (let
+    (
+      ;; low part.
+      (low Reg(alu_rrr (AluOPRRR.Sub) (value_regs_get x 0) (value_regs_get y 0)))
+      ;; compute borrow.
+      (borrow Reg (alu_rrr (AluOPRRR.SltU) (value_regs_get x 0) low))
+      ;; 
+      (high_tmp Reg (alu_rrr (AluOPRRR.Sub) (value_regs_get x 1) (value_regs_get y 1)))
+      ;;
+      (high Reg (alu_rrr (AluOPRRR.Sub) high_tmp borrow))
+    )
+    (value_regs low high)
+  )
+)

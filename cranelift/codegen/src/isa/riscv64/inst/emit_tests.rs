@@ -2336,27 +2336,7 @@ fn riscv64_worst_case_instruction_size() {
             rs2: x_reg(6),
         },
     });
-    candidates.push(Inst::SelectIf {
-        if_spectre_guard: true,
-        rd: vec![writable_a0(), writable_a1()],
-        cmp_x: ValueRegs::two(a0(), a1()),
-        cmp_y: ValueRegs::two(a0(), a1()),
-        cc: IntCC::SignedLessThan,
-        cmp_ty: I128,
-        x: ValueRegs::two(x_reg(1), x_reg(2)),
-        y: ValueRegs::two(x_reg(3), x_reg(4)),
-    });
 
-    candidates.push(Inst::SelectIf {
-        if_spectre_guard: true,
-        rd: vec![writable_a0(), writable_a1()],
-        cmp_x: ValueRegs::two(a0(), a1()),
-        cmp_y: ValueRegs::two(a0(), a1()),
-        cc: IntCC::SignedLessThan,
-        cmp_ty: I128,
-        x: ValueRegs::two(x_reg(1), x_reg(2)),
-        y: ValueRegs::two(x_reg(3), x_reg(4)),
-    });
     candidates.push(Inst::FcvtToIntSat {
         rd: writable_a0(),
         rs: fa0(),

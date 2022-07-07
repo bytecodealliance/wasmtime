@@ -367,9 +367,8 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_uses(&info.uses[..]);
             collector.reg_defs(&info.defs[..]);
         }
-        &Inst::TrapIf { ref x, ref y, .. } => {
-            collector.reg_uses(x.regs());
-            collector.reg_uses(y.regs());
+        &Inst::TrapIf { test, .. } => {
+            collector.reg_use(test);
         }
         &Inst::TrapFf { x, y, tmp, .. } => {
             collector.reg_use(x);
@@ -495,14 +494,12 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
         }
         &Inst::SelectIf {
             ref rd,
-            ref cmp_x,
-            ref cmp_y,
+            test,
             ref x,
             ref y,
             ..
         } => {
-            collector.reg_uses(cmp_x.regs());
-            collector.reg_uses(cmp_y.regs());
+            collector.reg_use(test);
             collector.reg_uses(x.regs());
             collector.reg_uses(y.regs());
             rd.iter().for_each(|r| collector.reg_def(*r));
@@ -520,6 +517,10 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_uses(&[p, x]);
             collector.reg_early_def(t0);
             collector.reg_early_def(dst);
+        }
+        &Inst::TrapIfC { rs1, rs2, .. } => {
+            collector.reg_use(rs1);
+            collector.reg_use(rs2);
         }
     }
 }
@@ -759,7 +760,7 @@ impl Inst {
                 8 => "b",
                 16 => "h",
                 32 => "w",
-                _ => unreachable!(),
+                _ => unreachable!("from_bits:{:?}", from_bits),
             };
             format!("{}ext.{}", if signed { "s" } else { "u" }, type_name)
         }
@@ -795,7 +796,6 @@ impl Inst {
                 let x = format_reg(x, allocs);
                 let t0 = format_reg(t0.to_reg(), allocs);
                 let dst = format_reg(dst.to_reg(), allocs);
-
                 format!("atomic_nand.{} {},{},({})##t0={}", ty, dst, x, p, t0)
             }
 
@@ -822,21 +822,17 @@ impl Inst {
             &Inst::SelectIf {
                 if_spectre_guard,
                 ref rd,
-                ref cmp_x,
-                ref cmp_y,
-                cc,
+                test,
                 ref x,
                 ref y,
-                cmp_ty,
             } => {
-                let cmp_x = format_regs(cmp_x.regs(), allocs);
-                let cmp_y = format_regs(cmp_y.regs(), allocs);
+                let test = format_reg(test, allocs);
                 let x = format_regs(x.regs(), allocs);
                 let y = format_regs(y.regs(), allocs);
                 let rd: Vec<_> = rd.iter().map(|r| r.to_reg()).collect();
                 let rd = format_regs(&rd[..], allocs);
                 format!(
-                    "selectif{} {},{},{}##{} {} {} cmp_ty={}",
+                    "selectif{} {},{},{}##test={}",
                     if if_spectre_guard {
                         "_spectre_guard"
                     } else {
@@ -845,10 +841,7 @@ impl Inst {
                     rd,
                     x,
                     y,
-                    cmp_x,
-                    cc,
-                    cmp_y,
-                    cmp_ty,
+                    test
                 )
             }
             &Inst::FcvtToIntSat {
@@ -1151,20 +1144,19 @@ impl Inst {
                 let rd = format_reg(info.rn, allocs);
                 format!("callind {}", rd)
             }
-            &MInst::TrapIf {
+            &MInst::TrapIf { test, trap_code } => {
+                format!("trap_if {},{}", format_reg(test, allocs), trap_code,)
+            }
+            &MInst::TrapIfC {
+                rs1,
+                rs2,
                 cc,
-                x,
-                y,
-                ty,
                 trap_code,
-            } => format!(
-                "trap_if_{} {} {},{}##ty={}",
-                cc.to_static_str(),
-                trap_code,
-                format_regs(x.regs(), allocs),
-                format_regs(y.regs(), allocs),
-                ty,
-            ),
+            } => {
+                let rs1 = format_reg(rs1, allocs);
+                let rs2 = format_reg(rs2, allocs);
+                format!("trap_ifc {}##({} {} {})", trap_code, rs1, cc, rs2)
+            }
             &MInst::TrapFf {
                 cc,
                 x,
@@ -1454,6 +1446,9 @@ impl LabelUse {
     }
 }
 
+pub(crate) fn overflow_already_lowerd() -> ! {
+    unreachable!("overflow and nof should be lowerd at early phase.")
+}
 #[cfg(test)]
 mod test {
     use super::*;

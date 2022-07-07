@@ -14,7 +14,6 @@ use crate::isa::riscv64::{inst::EmitState, inst::*};
 use crate::isa::CallConv;
 use crate::machinst::*;
 
-use crate::machinst::isle::ValueRegs;
 use crate::settings;
 use crate::CodegenError;
 use crate::CodegenResult;
@@ -332,11 +331,10 @@ impl ABIMachineSpec for Riscv64MachineDeps {
 
     fn gen_stack_lower_bound_trap(limit_reg: Reg) -> SmallInstVec<Inst> {
         let mut insts = SmallVec::new();
-        insts.push(Inst::TrapIf {
+        insts.push(Inst::TrapIfC {
             cc: IntCC::UnsignedLessThan,
-            x: ValueRegs::one(stack_reg()),
-            y: ValueRegs::one(limit_reg),
-            ty: I64,
+            rs1: stack_reg(),
+            rs2: limit_reg,
             trap_code: ir::TrapCode::StackOverflow,
         });
         insts

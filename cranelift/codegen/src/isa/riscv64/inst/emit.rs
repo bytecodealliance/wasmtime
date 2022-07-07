@@ -436,7 +436,7 @@ impl Inst {
                     kind: low(cc.unsigned()),
                 });
             }
-            IntCC::Overflow | IntCC::NotOverflow => unreachable!(),
+            IntCC::Overflow | IntCC::NotOverflow => overflow_already_lowerd(),
         }
         insts
     }
@@ -623,13 +623,27 @@ impl MachInstEmit for Inst {
                 let rs1 = allocs.next(rs1);
                 let rs2 = allocs.next(rs2);
                 let rd = allocs.next_writable(rd);
-                let x: u32 = alu_op.op_code()
-                    | reg_to_gpr_num(rd.to_reg()) << 7
-                    | (alu_op.funct3()) << 12
-                    | reg_to_gpr_num(rs1) << 15
-                    | reg_to_gpr_num(rs2) << 20
-                    | alu_op.funct7() << 25;
-                sink.put4(x);
+
+                if alu_op == AluOPRRR::Sgt || alu_op == AluOPRRR::Sgtu {
+                    // special case
+                    // sgt and sgtu is not defined in isa.
+                    // emit should reserver rs1 and rs2.
+                    let x: u32 = alu_op.op_code()
+                        | reg_to_gpr_num(rd.to_reg()) << 7
+                        | (alu_op.funct3()) << 12
+                        | reg_to_gpr_num(rs2) << 15
+                        | reg_to_gpr_num(rs1) << 20
+                        | alu_op.funct7() << 25;
+                    sink.put4(x);
+                } else {
+                    let x: u32 = alu_op.op_code()
+                        | reg_to_gpr_num(rd.to_reg()) << 7
+                        | (alu_op.funct3()) << 12
+                        | reg_to_gpr_num(rs1) << 15
+                        | reg_to_gpr_num(rs2) << 20
+                        | alu_op.funct7() << 25;
+                    sink.put4(x);
+                }
             }
             &Inst::AluRRImm12 {
                 alu_op,
@@ -1569,28 +1583,44 @@ impl MachInstEmit for Inst {
                     sink.put8(0);
                 }
             }
-
-            &Inst::TrapIf {
+            &Inst::TrapIfC {
+                rs1,
+                rs2,
                 cc,
-                ref x,
-                ref y,
-                ty,
                 trap_code,
             } => {
-                let x = alloc_value_regs(x, &mut allocs);
-                let y = alloc_value_regs(y, &mut allocs);
+                let rs1 = allocs.next(rs1);
+                let rs2 = allocs.next(rs2);
                 let label_trap = sink.get_label();
                 let label_jump_over = sink.get_label();
-                Inst::lower_br_icmp(
-                    cc,
-                    x,
-                    y,
-                    BranchTarget::Label(label_trap),
-                    BranchTarget::Label(label_jump_over),
-                    ty,
-                )
-                .iter()
-                .for_each(|i| i.emit(&[], sink, emit_info, state));
+                Inst::CondBr {
+                    taken: BranchTarget::Label(label_trap),
+                    not_taken: BranchTarget::Label(label_jump_over),
+                    kind: IntegerCompare { kind: cc, rs1, rs2 },
+                }
+                .emit(&[], sink, emit_info, state);
+                // trap
+                sink.bind_label(label_trap);
+                Inst::Udf {
+                    trap_code: trap_code,
+                }
+                .emit(&[], sink, emit_info, state);
+                sink.bind_label(label_jump_over);
+            }
+            &Inst::TrapIf { test, trap_code } => {
+                let test = allocs.next(test);
+                let label_trap = sink.get_label();
+                let label_jump_over = sink.get_label();
+                Inst::CondBr {
+                    taken: BranchTarget::Label(label_trap),
+                    not_taken: BranchTarget::Label(label_jump_over),
+                    kind: IntegerCompare {
+                        kind: IntCC::NotEqual,
+                        rs1: test,
+                        rs2: zero_reg(),
+                    },
+                }
+                .emit(&[], sink, emit_info, state);
                 // trap
                 sink.bind_label(label_trap);
                 Inst::Udf {
@@ -1646,31 +1676,28 @@ impl MachInstEmit for Inst {
             &Inst::SelectIf {
                 if_spectre_guard: _if_spectre_guard, /* _if_spectre_guard not use because it is used to not be removed by optimization pass and some other staff. */
                 ref rd,
-                ref cmp_x,
-                ref cmp_y,
-                cc,
+                test,
                 ref x,
                 ref y,
-                cmp_ty,
             } => {
                 let label_select_x = sink.get_label();
                 let label_select_y = sink.get_label();
                 let label_jump_over = sink.get_label();
-                let cmp_x = alloc_value_regs(cmp_x, &mut allocs);
-                let cmp_y = alloc_value_regs(cmp_y, &mut allocs);
+                let test = allocs.next(test);
                 let x = alloc_value_regs(x, &mut allocs);
                 let y = alloc_value_regs(y, &mut allocs);
                 let rd: Vec<_> = rd.iter().map(|r| allocs.next_writable(*r)).collect();
-                Inst::lower_br_icmp(
-                    cc,
-                    cmp_x,
-                    cmp_y,
-                    BranchTarget::Label(label_select_x),
-                    BranchTarget::Label(label_select_y),
-                    cmp_ty,
-                )
-                .into_iter()
-                .for_each(|i| i.emit(&[], sink, emit_info, state));
+                Inst::CondBr {
+                    taken: BranchTarget::Label(label_select_x),
+                    not_taken: BranchTarget::Label(label_select_y),
+                    kind: IntegerCompare {
+                        kind: IntCC::NotEqual,
+                        rs1: test,
+                        rs2: zero_reg(),
+                    },
+                }
+                .emit(&[], sink, emit_info, state);
+
                 // here select x.
                 sink.bind_label(label_select_x);
                 gen_moves(&rd[..], x.regs())
