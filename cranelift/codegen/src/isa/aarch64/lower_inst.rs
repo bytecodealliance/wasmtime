@@ -1190,18 +1190,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             });
         }
 
-        Opcode::Swizzle => {
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let rm = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
-            let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-
-            ctx.emit(Inst::VecTbl {
-                rd,
-                rn,
-                rm,
-                is_extension: false,
-            });
-        }
+        Opcode::Swizzle => implemented_in_isle(ctx),
 
         Opcode::Isplit => {
             let input_ty = ctx.input_ty(insn, 0);

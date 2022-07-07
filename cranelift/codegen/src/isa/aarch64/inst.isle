@@ -1537,6 +1537,13 @@
             (_ Unit (emit (MInst.VecMisc op dst src size))))
         dst))
 
+;; Helper for emitting `MInst.VecTbl` instructions.
+(decl vec_tbl (Reg Reg bool) Reg)
+(rule (vec_tbl rn rm is_extension)
+      (let ((dst WritableReg (temp_writable_reg $I8X16))
+            (_ Unit (emit (MInst.VecTbl dst rn rm is_extension))))
+        dst))
+
 ;; Helper for emitting `MInst.VecRRRLong` instructions.
 (decl vec_rrr_long (VecRRRLongOp Reg Reg bool) Reg)
 (rule (vec_rrr_long op src1 src2 high_half)
