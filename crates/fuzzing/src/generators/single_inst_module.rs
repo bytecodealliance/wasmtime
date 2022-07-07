@@ -62,9 +62,9 @@ impl<'a> SingleInstModule<'a> {
     }
 }
 
-impl<'a> Arbitrary<'a> for SingleInstModule<'_> {
+impl<'a> Arbitrary<'a> for &SingleInstModule<'_> {
     fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
-        u.choose(&INSTRUCTIONS).cloned()
+        u.choose(&INSTRUCTIONS)
     }
 }
 
