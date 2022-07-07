@@ -30,9 +30,6 @@ cfg_if::cfg_if! {
     if #[cfg(windows)] {
         mod windows;
         use windows as imp;
-    } else if #[cfg(target_os = "linux")] {
-        mod linux;
-        use linux as imp;
     } else {
         mod unix;
         use unix as imp;
@@ -217,7 +214,7 @@ impl InstancePool {
         instance_limits: &InstanceLimits,
         tunables: &Tunables,
     ) -> Result<Self> {
-        let page_size = region::page::size();
+        let page_size = crate::page_size();
 
         let instance_size = round_up_to_pow2(instance_limits.size, mem::align_of::<Instance>());
 
@@ -692,7 +689,7 @@ impl MemoryPool {
         };
 
         assert!(
-            memory_size % region::page::size() == 0,
+            memory_size % crate::page_size() == 0,
             "memory size {} is not a multiple of system page size",
             memory_size
         );
@@ -828,7 +825,7 @@ struct TablePool {
 
 impl TablePool {
     fn new(instance_limits: &InstanceLimits) -> Result<Self> {
-        let page_size = region::page::size();
+        let page_size = crate::page_size();
 
         let table_size = round_up_to_pow2(
             mem::size_of::<*mut u8>()
@@ -895,7 +892,9 @@ struct StackPool {
 #[cfg(all(feature = "async", unix))]
 impl StackPool {
     fn new(instance_limits: &InstanceLimits, stack_size: usize) -> Result<Self> {
-        let page_size = region::page::size();
+        use rustix::mm::{mprotect, MprotectFlags};
+
+        let page_size = crate::page_size();
 
         // Add a page to the stack size for the guard page when using fiber stacks
         let stack_size = if stack_size == 0 {
@@ -921,7 +920,7 @@ impl StackPool {
                 for i in 0..max_instances {
                     // Make the stack guard page inaccessible
                     let bottom_of_stack = mapping.as_mut_ptr().add(i * stack_size);
-                    region::protect(bottom_of_stack, page_size, region::Protection::NONE)
+                    mprotect(bottom_of_stack.cast(), page_size, MprotectFlags::empty())
                         .context("failed to protect stack guard page")?;
                 }
             }
@@ -1298,7 +1297,7 @@ mod test {
             ..Default::default()
         })?;
 
-        let host_page_size = region::page::size();
+        let host_page_size = crate::page_size();
 
         assert_eq!(pool.table_size, host_page_size);
         assert_eq!(pool.max_tables, 4);
@@ -1335,7 +1334,7 @@ mod test {
             1,
         )?;
 
-        let native_page_size = region::page::size();
+        let native_page_size = crate::page_size();
         assert_eq!(pool.stack_size, 2 * native_page_size);
         assert_eq!(pool.max_instances, 10);
         assert_eq!(pool.page_size, native_page_size);

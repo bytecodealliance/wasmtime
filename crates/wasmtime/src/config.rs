@@ -1458,7 +1458,7 @@ impl Config {
 }
 
 fn round_up_to_pages(val: u64) -> u64 {
-    let page_size = region::page::size() as u64;
+    let page_size = wasmtime_runtime::page_size() as u64;
     debug_assert!(page_size.is_power_of_two());
     val.checked_add(page_size - 1)
         .map(|val| val & !(page_size - 1))

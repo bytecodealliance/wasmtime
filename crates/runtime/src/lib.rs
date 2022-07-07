@@ -21,10 +21,9 @@
 )]
 #![cfg_attr(not(memory_init_cow), allow(unused_variables, unreachable_code))]
 
-use std::sync::atomic::AtomicU64;
-use std::sync::Arc;
-
 use anyhow::Error;
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::sync::Arc;
 use wasmtime_environ::DefinedFuncIndex;
 use wasmtime_environ::DefinedMemoryIndex;
 use wasmtime_environ::FunctionInfo;
@@ -199,4 +198,36 @@ pub trait ModuleRuntimeInfo: Send + Sync + 'static {
     /// Returns an array, indexed by `SignatureIndex` of all
     /// `VMSharedSignatureIndex` entries corresponding to the `SignatureIndex`.
     fn signature_ids(&self) -> &[VMSharedSignatureIndex];
+}
+
+/// Returns the host OS page size, in bytes.
+pub fn page_size() -> usize {
+    static PAGE_SIZE: AtomicUsize = AtomicUsize::new(0);
+
+    return match PAGE_SIZE.load(Ordering::Relaxed) {
+        0 => {
+            let size = get_page_size();
+            assert!(size != 0);
+            PAGE_SIZE.store(size, Ordering::Relaxed);
+            size
+        }
+        n => n,
+    };
+
+    #[cfg(windows)]
+    fn get_page_size() -> usize {
+        use std::mem::MaybeUninit;
+        use windows_sys::Win32::System::SystemInformation::*;
+
+        unsafe {
+            let mut info = MaybeUninit::uninit();
+            GetSystemInfo(info.as_mut_ptr());
+            info.assume_init_ref().dwPageSize as usize
+        }
+    }
+
+    #[cfg(unix)]
+    fn get_page_size() -> usize {
+        unsafe { libc::sysconf(libc::_SC_PAGESIZE) as usize }
+    }
 }
