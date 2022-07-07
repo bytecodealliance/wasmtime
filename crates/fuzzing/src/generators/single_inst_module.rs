@@ -344,6 +344,17 @@ mod test {
         };
         let wasm = sut.encode();
         let wat = wasmprinter::print_bytes(wasm).unwrap();
-        assert_eq!(wat, "(module\n  (type (;0;) (func (param i32 i32) (result i32)))\n  (func (;0;) (type 0) (param i32 i32) (result i32)\n    local.get 0\n    local.get 1\n    i32.add\n  )\n  (export \"test\" (func 0))\n)")
+        assert_eq!(
+            wat,
+            r#"(module
+  (type (;0;) (func (param i32 i32) (result i32)))
+  (func (;0;) (type 0) (param i32 i32) (result i32)
+    local.get 0
+    local.get 1
+    i32.add
+  )
+  (export "test" (func 0))
+)"#
+        )
     }
 }
