@@ -13,7 +13,7 @@ use crate::machinst::{PrettyPrint, Reg, RegClass, Writable};
 
 use alloc::vec::Vec;
 use core::convert::TryFrom;
-use regalloc2::VReg;
+use regalloc2::{PRegSet, VReg};
 use smallvec::{smallvec, SmallVec};
 use std::string::{String, ToString};
 
@@ -70,8 +70,9 @@ impl BitOp {
 #[derive(Clone, Debug)]
 pub struct CallInfo {
     pub dest: ExternalName,
-    pub uses: Vec<Reg>,
-    pub defs: Vec<Writable<Reg>>,
+    pub uses: SmallVec<[Reg; 8]>,
+    pub defs: SmallVec<[Writable<Reg>; 8]>,
+    pub clobbers: PRegSet,
     pub opcode: Opcode,
     pub caller_callconv: CallConv,
     pub callee_callconv: CallConv,
@@ -82,8 +83,9 @@ pub struct CallInfo {
 #[derive(Clone, Debug)]
 pub struct CallIndInfo {
     pub rn: Reg,
-    pub uses: Vec<Reg>,
-    pub defs: Vec<Writable<Reg>>,
+    pub uses: SmallVec<[Reg; 8]>,
+    pub defs: SmallVec<[Writable<Reg>; 8]>,
+    pub clobbers: PRegSet,
     pub opcode: Opcode,
     pub caller_callconv: CallConv,
     pub callee_callconv: CallConv,
@@ -983,11 +985,13 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
         &Inst::Call { ref info, .. } => {
             collector.reg_uses(&info.uses[..]);
             collector.reg_defs(&info.defs[..]);
+            collector.reg_clobbers(info.clobbers);
         }
         &Inst::CallInd { ref info, .. } => {
             collector.reg_use(info.rn);
             collector.reg_uses(&info.uses[..]);
             collector.reg_defs(&info.defs[..]);
+            collector.reg_clobbers(info.clobbers);
         }
         &Inst::CondBr { ref kind, .. } => match kind {
             CondBrKind::Zero(rt) | CondBrKind::NotZero(rt) => {
@@ -1028,9 +1032,10 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
         &Inst::VirtualSPOffsetAdj { .. } => {}
 
         &Inst::ElfTlsGetAddr { .. } => {
-            for reg in AArch64MachineDeps::get_regs_clobbered_by_call(CallConv::SystemV) {
-                collector.reg_def(reg);
-            }
+            collector.reg_def(Writable::from_reg(regs::xreg(0)));
+            let mut clobbers = AArch64MachineDeps::get_regs_clobbered_by_call(CallConv::SystemV);
+            clobbers.remove(regs::xreg_preg(0));
+            collector.reg_clobbers(clobbers);
         }
         &Inst::Unwind { .. } => {}
         &Inst::EmitIsland { .. } => {}
@@ -1189,6 +1194,7 @@ impl MachInst for Inst {
                 assert!(ty.bits() <= 128);
                 Ok((&[RegClass::Float], &[I8X16]))
             }
+            _ if ty.is_dynamic_vector() => Ok((&[RegClass::Float], &[I8X16])),
             IFLAGS | FFLAGS => Ok((&[RegClass::Int], &[I64])),
             _ => Err(CodegenError::Unsupported(format!(
                 "Unexpected SSA-value type: {}",
@@ -2719,7 +2725,7 @@ impl Inst {
             &Inst::EmitIsland { needed_space } => format!("emit_island {}", needed_space),
 
             &Inst::ElfTlsGetAddr { ref symbol } => {
-                format!("elf_tls_get_addr {}", symbol)
+                format!("x0 = elf_tls_get_addr {}", symbol)
             }
             &Inst::Unwind { ref inst } => {
                 format!("unwind {:?}", inst)

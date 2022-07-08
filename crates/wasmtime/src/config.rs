@@ -425,6 +425,10 @@ impl Config {
     /// signal handler), then we can ensure that all async code will
     /// yield to the executor within a bounded time.
     ///
+    /// The deadline check cannot be avoided by malicious wasm code. It is safe
+    /// to use epoch deadlines to limit the execution time of untrusted
+    /// code.
+    ///
     /// The [`Store`](crate::Store) tracks the deadline, and controls
     /// what happens when the deadline is reached during
     /// execution. Several behaviors are possible:
@@ -449,9 +453,9 @@ impl Config {
     /// not available. This means epoch-based interruption can only
     /// serve as a simple external-interruption mechanism.
     ///
-    /// An initial deadline can be set before executing code by
-    /// calling
-    /// [`Store::set_epoch_deadline`](crate::Store::set_epoch_deadline).
+    /// An initial deadline must be set before executing code by calling
+    /// [`Store::set_epoch_deadline`](crate::Store::set_epoch_deadline). If this
+    /// deadline is not configured then wasm will immediately trap.
     ///
     /// ## When to use fuel vs. epochs
     ///
@@ -1419,6 +1423,10 @@ impl Config {
             {
                 bail!("compiler option 'unwind_info' must be enabled when either 'backtraces' or 'reference types' are enabled");
             }
+        } else {
+            self.compiler_config
+                .settings
+                .insert("unwind_info".to_string(), "false".to_string());
         }
         if self.features.reference_types {
             if !self
@@ -1450,7 +1458,7 @@ impl Config {
 }
 
 fn round_up_to_pages(val: u64) -> u64 {
-    let page_size = region::page::size() as u64;
+    let page_size = wasmtime_runtime::page_size() as u64;
     debug_assert!(page_size.is_power_of_two());
     val.checked_add(page_size - 1)
         .map(|val| val & !(page_size - 1))

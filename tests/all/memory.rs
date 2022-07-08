@@ -266,8 +266,7 @@ unsafe fn assert_faults(ptr: *mut u8) {
     }
     #[cfg(windows)]
     {
-        use winapi::um::memoryapi::*;
-        use winapi::um::winnt::*;
+        use windows_sys::Win32::System::Memory::*;
 
         let mut info = std::mem::MaybeUninit::uninit();
         let r = VirtualQuery(

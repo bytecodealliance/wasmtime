@@ -6,7 +6,6 @@ use crate::binemit::{CodeOffset, Reloc, StackMap};
 use crate::ir::types::*;
 use crate::ir::{LibCall, MemFlags, TrapCode};
 use crate::isa::aarch64::inst::*;
-use crate::isa::aarch64::lower::is_valid_atomic_transaction_ty;
 use crate::machinst::{ty_bits, Reg, RegClass, Writable};
 use core::convert::TryFrom;
 
@@ -90,12 +89,12 @@ pub fn mem_finalize(
 //=============================================================================
 // Instructions and subcomponents: emission
 
-fn machreg_to_gpr(m: Reg) -> u32 {
+pub(crate) fn machreg_to_gpr(m: Reg) -> u32 {
     assert_eq!(m.class(), RegClass::Int);
     u32::try_from(m.to_real_reg().unwrap().hw_enc() & 31).unwrap()
 }
 
-fn machreg_to_vec(m: Reg) -> u32 {
+pub(crate) fn machreg_to_vec(m: Reg) -> u32 {
     assert_eq!(m.class(), RegClass::Float);
     u32::try_from(m.to_real_reg().unwrap().hw_enc()).unwrap()
 }
@@ -1374,14 +1373,12 @@ impl MachInstEmit for Inst {
                 sink.put4(enc_ccmp_imm(size, rn, imm, nzcv, cond));
             }
             &Inst::AtomicRMW { ty, op, rs, rt, rn } => {
-                assert!(is_valid_atomic_transaction_ty(ty));
                 let rs = allocs.next(rs);
                 let rt = allocs.next_writable(rt);
                 let rn = allocs.next(rn);
                 sink.put4(enc_acq_rel(ty, op, rs, rt, rn));
             }
             &Inst::AtomicRMWLoop { ty, op } => {
-                assert!(is_valid_atomic_transaction_ty(ty));
                 /* Emit this:
                      again:
                       ldaxr{,b,h}  x/w27, [x25]
@@ -2262,7 +2259,7 @@ impl MachInstEmit for Inst {
                     VectorSize::Size16x8 => 0b00010,
                     VectorSize::Size32x4 => 0b00100,
                     VectorSize::Size64x2 => 0b01000,
-                    _ => unimplemented!(),
+                    _ => unimplemented!("Unexpected VectorSize: {:?}", size),
                 };
                 sink.put4(
                     0b010_01110000_00000_000011_00000_00000

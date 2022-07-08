@@ -86,3 +86,18 @@
     (export "3" (table 1 funcref))
   ))
 )
+
+;; outer core aliases work
+(component $C
+  (core type $f (func))
+  (core type $m (module))
+
+  (component $C2
+    (alias outer $C $f (core type $my_f))
+    (import "" (core module (type $m)))
+    (import "x" (core module
+      (alias outer $C2 $my_f (type $my_f))
+      (import "" "1" (func (type $my_f)))
+    ))
+  )
+)

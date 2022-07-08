@@ -296,6 +296,38 @@ pub fn mem_imm16_emit(
     }
 }
 
+pub fn mem_vrx_emit(
+    rd: Reg,
+    mem: &MemArg,
+    opcode: u16,
+    m3: u8,
+    add_trap: bool,
+    sink: &mut MachBuffer<Inst>,
+    emit_info: &EmitInfo,
+    state: &mut EmitState,
+) {
+    let (mem_insts, mem) = mem_finalize(mem, state, true, false, false, true);
+    for inst in mem_insts.into_iter() {
+        inst.emit(&[], sink, emit_info, state);
+    }
+
+    if add_trap && mem.can_trap() {
+        let srcloc = state.cur_srcloc();
+        if srcloc != SourceLoc::default() {
+            sink.add_trap(TrapCode::HeapOutOfBounds);
+        }
+    }
+
+    match &mem {
+        &MemArg::BXD12 {
+            base, index, disp, ..
+        } => {
+            put(sink, &enc_vrx(opcode, rd, base, index, disp.bits(), m3));
+        }
+        _ => unreachable!(),
+    }
+}
+
 //=============================================================================
 // Instructions and subcomponents: emission
 
@@ -304,13 +336,48 @@ fn machreg_to_gpr(m: Reg) -> u8 {
     u8::try_from(m.to_real_reg().unwrap().hw_enc()).unwrap()
 }
 
-fn machreg_to_fpr(m: Reg) -> u8 {
+fn machreg_to_vr(m: Reg) -> u8 {
     assert_eq!(m.class(), RegClass::Float);
     u8::try_from(m.to_real_reg().unwrap().hw_enc()).unwrap()
 }
 
-fn machreg_to_gpr_or_fpr(m: Reg) -> u8 {
+fn machreg_to_fpr(m: Reg) -> u8 {
+    assert!(is_fpr(m));
     u8::try_from(m.to_real_reg().unwrap().hw_enc()).unwrap()
+}
+
+fn machreg_to_gpr_or_fpr(m: Reg) -> u8 {
+    let reg = u8::try_from(m.to_real_reg().unwrap().hw_enc()).unwrap();
+    assert!(reg < 16);
+    reg
+}
+
+fn rxb(v1: Option<Reg>, v2: Option<Reg>, v3: Option<Reg>, v4: Option<Reg>) -> u8 {
+    let mut rxb = 0;
+
+    let is_high_vr = |reg| -> bool {
+        if let Some(reg) = reg {
+            if !is_fpr(reg) {
+                return true;
+            }
+        }
+        false
+    };
+
+    if is_high_vr(v1) {
+        rxb = rxb | 8;
+    }
+    if is_high_vr(v2) {
+        rxb = rxb | 4;
+    }
+    if is_high_vr(v3) {
+        rxb = rxb | 2;
+    }
+    if is_high_vr(v4) {
+        rxb = rxb | 1;
+    }
+
+    rxb
 }
 
 /// E-type instructions.
@@ -785,19 +852,45 @@ fn enc_siy(opcode: u16, b1: Reg, d1: u32, i2: u8) -> [u8; 6] {
     enc
 }
 
-/// VRR-type instructions.
+/// VRRa-type instructions.
+///
+///   47      39 35 31 23 19 15 11  7
+///   opcode1 v1 v2 -  m5 m3 m2 rxb opcode2
+///        40 36 32 24 20 16 12   8       0
+///
+fn enc_vrr_a(opcode: u16, v1: Reg, v2: Reg, m3: u8, m4: u8, m5: u8) -> [u8; 6] {
+    let opcode1 = ((opcode >> 8) & 0xff) as u8;
+    let opcode2 = (opcode & 0xff) as u8;
+    let rxb = rxb(Some(v1), Some(v2), None, None);
+    let v1 = machreg_to_vr(v1) & 0x0f;
+    let v2 = machreg_to_vr(v2) & 0x0f;
+    let m3 = m3 & 0x0f;
+    let m4 = m4 & 0x0f;
+    let m5 = m5 & 0x0f;
+
+    let mut enc: [u8; 6] = [0; 6];
+    enc[0] = opcode1;
+    enc[1] = v1 << 4 | v2;
+    enc[2] = 0;
+    enc[3] = m5 << 4 | m4;
+    enc[4] = m3 << 4 | rxb;
+    enc[5] = opcode2;
+    enc
+}
+
+/// VRRc-type instructions.
 ///
 ///   47      39 35 31 27 23 19 15 11  7
 ///   opcode1 v1 v2 v3 -  m6 m5 m4 rxb opcode2
 ///        40 36 32 28 24 20 16 12   8       0
 ///
-fn enc_vrr(opcode: u16, v1: Reg, v2: Reg, v3: Reg, m4: u8, m5: u8, m6: u8) -> [u8; 6] {
+fn enc_vrr_c(opcode: u16, v1: Reg, v2: Reg, v3: Reg, m4: u8, m5: u8, m6: u8) -> [u8; 6] {
     let opcode1 = ((opcode >> 8) & 0xff) as u8;
     let opcode2 = (opcode & 0xff) as u8;
-    let rxb = 0; // FIXME
-    let v1 = machreg_to_fpr(v1) & 0x0f; // FIXME
-    let v2 = machreg_to_fpr(v2) & 0x0f; // FIXME
-    let v3 = machreg_to_fpr(v3) & 0x0f; // FIXME
+    let rxb = rxb(Some(v1), Some(v2), Some(v3), None);
+    let v1 = machreg_to_vr(v1) & 0x0f;
+    let v2 = machreg_to_vr(v2) & 0x0f;
+    let v3 = machreg_to_vr(v3) & 0x0f;
     let m4 = m4 & 0x0f;
     let m5 = m5 & 0x0f;
     let m6 = m6 & 0x0f;
@@ -812,6 +905,87 @@ fn enc_vrr(opcode: u16, v1: Reg, v2: Reg, v3: Reg, m4: u8, m5: u8, m6: u8) -> [u
     enc
 }
 
+/// VRRe-type instructions.
+///
+///   47      39 35 31 27 23 19 15 11  7
+///   opcode1 v1 v2 v3 m6 -  m5 v4 rxb opcode2
+///        40 36 32 28 24 20 16 12   8       0
+///
+fn enc_vrr_e(opcode: u16, v1: Reg, v2: Reg, v3: Reg, v4: Reg, m5: u8, m6: u8) -> [u8; 6] {
+    let opcode1 = ((opcode >> 8) & 0xff) as u8;
+    let opcode2 = (opcode & 0xff) as u8;
+    let rxb = rxb(Some(v1), Some(v2), Some(v3), Some(v4));
+    let v1 = machreg_to_vr(v1) & 0x0f;
+    let v2 = machreg_to_vr(v2) & 0x0f;
+    let v3 = machreg_to_vr(v3) & 0x0f;
+    let v4 = machreg_to_vr(v4) & 0x0f;
+    let m5 = m5 & 0x0f;
+    let m6 = m6 & 0x0f;
+
+    let mut enc: [u8; 6] = [0; 6];
+    enc[0] = opcode1;
+    enc[1] = v1 << 4 | v2;
+    enc[2] = v3 << 4 | m6;
+    enc[3] = m5;
+    enc[4] = v4 << 4 | rxb;
+    enc[5] = opcode2;
+    enc
+}
+
+/// VRSb-type instructions.
+///
+///   47      39 35 31 27 15 11  7
+///   opcode1 v1 r3 b2 d2 m4 rxb opcode2
+///        40 36 32 28 16 12   8       0
+///
+fn enc_vrs_b(opcode: u16, v1: Reg, b2: Reg, d2: u32, r3: Reg, m4: u8) -> [u8; 6] {
+    let opcode1 = ((opcode >> 8) & 0xff) as u8;
+    let opcode2 = (opcode & 0xff) as u8;
+    let rxb = rxb(Some(v1), None, None, None);
+    let v1 = machreg_to_vr(v1) & 0x0f;
+    let b2 = machreg_to_gpr(b2) & 0x0f;
+    let r3 = machreg_to_gpr(r3) & 0x0f;
+    let d2_lo = (d2 & 0xff) as u8;
+    let d2_hi = ((d2 >> 8) & 0x0f) as u8;
+    let m4 = m4 & 0x0f;
+
+    let mut enc: [u8; 6] = [0; 6];
+    enc[0] = opcode1;
+    enc[1] = v1 << 4 | r3;
+    enc[2] = b2 << 4 | d2_hi;
+    enc[3] = d2_lo;
+    enc[4] = m4 << 4 | rxb;
+    enc[5] = opcode2;
+    enc
+}
+
+/// VRSc-type instructions.
+///
+///   47      39 35 31 27 15 11  7
+///   opcode1 r1 v3 b2 d2 m4 rxb opcode2
+///        40 36 32 28 16 12   8       0
+///
+fn enc_vrs_c(opcode: u16, r1: Reg, b2: Reg, d2: u32, v3: Reg, m4: u8) -> [u8; 6] {
+    let opcode1 = ((opcode >> 8) & 0xff) as u8;
+    let opcode2 = (opcode & 0xff) as u8;
+    let rxb = rxb(None, Some(v3), None, None);
+    let r1 = machreg_to_gpr(r1) & 0x0f;
+    let b2 = machreg_to_gpr(b2) & 0x0f;
+    let v3 = machreg_to_vr(v3) & 0x0f;
+    let d2_lo = (d2 & 0xff) as u8;
+    let d2_hi = ((d2 >> 8) & 0x0f) as u8;
+    let m4 = m4 & 0x0f;
+
+    let mut enc: [u8; 6] = [0; 6];
+    enc[0] = opcode1;
+    enc[1] = r1 << 4 | v3;
+    enc[2] = b2 << 4 | d2_hi;
+    enc[3] = d2_lo;
+    enc[4] = m4 << 4 | rxb;
+    enc[5] = opcode2;
+    enc
+}
+
 /// VRX-type instructions.
 ///
 ///   47      39 35 31 27 15 11  7
@@ -821,8 +995,8 @@ fn enc_vrr(opcode: u16, v1: Reg, v2: Reg, v3: Reg, m4: u8, m5: u8, m6: u8) -> [u
 fn enc_vrx(opcode: u16, v1: Reg, b2: Reg, x2: Reg, d2: u32, m3: u8) -> [u8; 6] {
     let opcode1 = ((opcode >> 8) & 0xff) as u8;
     let opcode2 = (opcode & 0xff) as u8;
-    let rxb = 0; // FIXME
-    let v1 = machreg_to_fpr(v1) & 0x0f; // FIXME
+    let rxb = rxb(Some(v1), None, None, None);
+    let v1 = machreg_to_vr(v1) & 0x0f;
     let b2 = machreg_to_gpr(b2) & 0x0f;
     let x2 = machreg_to_gpr(x2) & 0x0f;
     let d2_lo = (d2 & 0xff) as u8;
@@ -1633,9 +1807,7 @@ impl MachInstEmit for Inst {
             | &Inst::Load64SExt32 { rd, ref mem }
             | &Inst::LoadRev16 { rd, ref mem }
             | &Inst::LoadRev32 { rd, ref mem }
-            | &Inst::LoadRev64 { rd, ref mem }
-            | &Inst::FpuLoad32 { rd, ref mem }
-            | &Inst::FpuLoad64 { rd, ref mem } => {
+            | &Inst::LoadRev64 { rd, ref mem } => {
                 let rd = allocs.next_writable(rd);
                 let mem = mem.with_allocs(&mut allocs);
 
@@ -1655,8 +1827,6 @@ impl MachInstEmit for Inst {
                     &Inst::LoadRev16 { .. } => (None, Some(0xe31f), None),     // LRVH
                     &Inst::LoadRev32 { .. } => (None, Some(0xe31e), None),     // LRV
                     &Inst::LoadRev64 { .. } => (None, Some(0xe30f), None),     // LRVG
-                    &Inst::FpuLoad32 { .. } => (Some(0x78), Some(0xed64), None), // LE(Y)
-                    &Inst::FpuLoad64 { .. } => (Some(0x68), Some(0xed65), None), // LD(Y)
                     _ => unreachable!(),
                 };
                 let rd = rd.to_reg();
@@ -1664,36 +1834,27 @@ impl MachInstEmit for Inst {
                     rd, &mem, opcode_rx, opcode_rxy, opcode_ril, true, sink, emit_info, state,
                 );
             }
-            &Inst::FpuLoadRev32 { rd, ref mem } | &Inst::FpuLoadRev64 { rd, ref mem } => {
+            &Inst::FpuLoad32 { rd, ref mem }
+            | &Inst::FpuLoad64 { rd, ref mem }
+            | &Inst::FpuLoadRev32 { rd, ref mem }
+            | &Inst::FpuLoadRev64 { rd, ref mem } => {
                 let rd = allocs.next_writable(rd);
                 let mem = mem.with_allocs(&mut allocs);
 
-                let opcode = match self {
-                    &Inst::FpuLoadRev32 { .. } => 0xe603, // VLEBRF
-                    &Inst::FpuLoadRev64 { .. } => 0xe602, // VLEBRG
+                let (opcode_rx, opcode_rxy, opcode_vrx) = match self {
+                    &Inst::FpuLoad32 { .. } => (Some(0x78), Some(0xed64), 0xe703), // LE(Y), VLEF
+                    &Inst::FpuLoad64 { .. } => (Some(0x68), Some(0xed65), 0xe702), // LD(Y), VLEG
+                    &Inst::FpuLoadRev32 { .. } => (None, None, 0xe603),            // VLEBRF
+                    &Inst::FpuLoadRev64 { .. } => (None, None, 0xe602),            // VLEBRG
                     _ => unreachable!(),
                 };
-
-                let (mem_insts, mem) = mem_finalize(&mem, state, true, false, false, true);
-                for inst in mem_insts.into_iter() {
-                    inst.emit(&[], sink, emit_info, state);
-                }
-
-                let srcloc = state.cur_srcloc();
-                if srcloc != SourceLoc::default() && mem.can_trap() {
-                    sink.add_trap(TrapCode::HeapOutOfBounds);
-                }
-
-                match &mem {
-                    &MemArg::BXD12 {
-                        base, index, disp, ..
-                    } => {
-                        put(
-                            sink,
-                            &enc_vrx(opcode, rd.to_reg(), base, index, disp.bits(), 0),
-                        );
-                    }
-                    _ => unreachable!(),
+                let rd = rd.to_reg();
+                if is_fpr(rd) && opcode_rx.is_some() {
+                    mem_emit(
+                        rd, &mem, opcode_rx, opcode_rxy, None, true, sink, emit_info, state,
+                    );
+                } else {
+                    mem_vrx_emit(rd, &mem, opcode_vrx, 0, true, sink, emit_info, state);
                 }
             }
 
@@ -1703,9 +1864,7 @@ impl MachInstEmit for Inst {
             | &Inst::Store64 { rd, ref mem }
             | &Inst::StoreRev16 { rd, ref mem }
             | &Inst::StoreRev32 { rd, ref mem }
-            | &Inst::StoreRev64 { rd, ref mem }
-            | &Inst::FpuStore32 { rd, ref mem }
-            | &Inst::FpuStore64 { rd, ref mem } => {
+            | &Inst::StoreRev64 { rd, ref mem } => {
                 let rd = allocs.next(rd);
                 let mem = mem.with_allocs(&mut allocs);
 
@@ -1717,8 +1876,6 @@ impl MachInstEmit for Inst {
                     &Inst::StoreRev16 { .. } => (None, Some(0xe33f), None),           // STRVH
                     &Inst::StoreRev32 { .. } => (None, Some(0xe33e), None),           // STRV
                     &Inst::StoreRev64 { .. } => (None, Some(0xe32f), None),           // STRVG
-                    &Inst::FpuStore32 { .. } => (Some(0x70), Some(0xed66), None),     // STE(Y)
-                    &Inst::FpuStore64 { .. } => (Some(0x60), Some(0xed67), None),     // STD(Y)
                     _ => unreachable!(),
                 };
                 mem_emit(
@@ -1747,33 +1904,26 @@ impl MachInstEmit for Inst {
                 };
                 mem_imm16_emit(imm, &mem, opcode, true, sink, emit_info, state);
             }
-            &Inst::FpuStoreRev32 { rd, ref mem } | &Inst::FpuStoreRev64 { rd, ref mem } => {
+            &Inst::FpuStore32 { rd, ref mem }
+            | &Inst::FpuStore64 { rd, ref mem }
+            | &Inst::FpuStoreRev32 { rd, ref mem }
+            | &Inst::FpuStoreRev64 { rd, ref mem } => {
                 let rd = allocs.next(rd);
                 let mem = mem.with_allocs(&mut allocs);
 
-                let opcode = match self {
-                    &Inst::FpuStoreRev32 { .. } => 0xe60b, // VSTEBRF
-                    &Inst::FpuStoreRev64 { .. } => 0xe60a, // VSTEBRG
+                let (opcode_rx, opcode_rxy, opcode_vrx) = match self {
+                    &Inst::FpuStore32 { .. } => (Some(0x70), Some(0xed66), 0xe70b), // STE(Y), VSTEF
+                    &Inst::FpuStore64 { .. } => (Some(0x60), Some(0xed67), 0xe70a), // STD(Y), VSTEG
+                    &Inst::FpuStoreRev32 { .. } => (None, None, 0xe60b),            // VSTEBRF
+                    &Inst::FpuStoreRev64 { .. } => (None, None, 0xe60a),            // VSTEBRG
                     _ => unreachable!(),
                 };
-
-                let (mem_insts, mem) = mem_finalize(&mem, state, true, false, false, true);
-                for inst in mem_insts.into_iter() {
-                    inst.emit(&[], sink, emit_info, state);
-                }
-
-                let srcloc = state.cur_srcloc();
-                if srcloc != SourceLoc::default() && mem.can_trap() {
-                    sink.add_trap(TrapCode::HeapOutOfBounds);
-                }
-
-                match &mem {
-                    &MemArg::BXD12 {
-                        base, index, disp, ..
-                    } => {
-                        put(sink, &enc_vrx(opcode, rd, base, index, disp.bits(), 0));
-                    }
-                    _ => unreachable!(),
+                if is_fpr(rd) && opcode_rx.is_some() {
+                    mem_emit(
+                        rd, &mem, opcode_rx, opcode_rxy, None, true, sink, emit_info, state,
+                    );
+                } else {
+                    mem_vrx_emit(rd, &mem, opcode_vrx, 0, true, sink, emit_info, state);
                 }
             }
 
@@ -1966,47 +2116,95 @@ impl MachInstEmit for Inst {
                 let rd = allocs.next_writable(rd);
                 let rn = allocs.next(rn);
 
-                let opcode = 0x38; // LER
-                put(sink, &enc_rr(opcode, rd.to_reg(), rn));
+                if is_fpr(rd.to_reg()) && is_fpr(rn) {
+                    let opcode = 0x38; // LER
+                    put(sink, &enc_rr(opcode, rd.to_reg(), rn));
+                } else {
+                    let opcode = 0xe756; // VLR
+                    put(sink, &enc_vrr_a(opcode, rd.to_reg(), rn, 0, 0, 0));
+                }
             }
             &Inst::FpuMove64 { rd, rn } => {
                 let rd = allocs.next_writable(rd);
                 let rn = allocs.next(rn);
 
-                let opcode = 0x28; // LDR
-                put(sink, &enc_rr(opcode, rd.to_reg(), rn));
+                if is_fpr(rd.to_reg()) && is_fpr(rn) {
+                    let opcode = 0x28; // LDR
+                    put(sink, &enc_rr(opcode, rd.to_reg(), rn));
+                } else {
+                    let opcode = 0xe756; // VLR
+                    put(sink, &enc_vrr_a(opcode, rd.to_reg(), rn, 0, 0, 0));
+                }
             }
             &Inst::FpuCMov32 { rd, cond, rm } => {
                 let rd = allocs.next_writable(rd);
                 let rm = allocs.next(rm);
 
-                let opcode = 0xa74; // BCR
-                put(sink, &enc_ri_c(opcode, cond.invert().bits(), 4 + 2));
-                let opcode = 0x38; // LER
-                put(sink, &enc_rr(opcode, rd.to_reg(), rm));
+                if is_fpr(rd.to_reg()) && is_fpr(rm) {
+                    let opcode = 0xa74; // BCR
+                    put(sink, &enc_ri_c(opcode, cond.invert().bits(), 4 + 2));
+                    let opcode = 0x38; // LER
+                    put(sink, &enc_rr(opcode, rd.to_reg(), rm));
+                } else {
+                    let opcode = 0xa74; // BCR
+                    put(sink, &enc_ri_c(opcode, cond.invert().bits(), 4 + 6));
+                    let opcode = 0xe756; // VLR
+                    put(sink, &enc_vrr_a(opcode, rd.to_reg(), rm, 0, 0, 0));
+                }
             }
             &Inst::FpuCMov64 { rd, cond, rm } => {
                 let rd = allocs.next_writable(rd);
                 let rm = allocs.next(rm);
 
-                let opcode = 0xa74; // BCR
-                put(sink, &enc_ri_c(opcode, cond.invert().bits(), 4 + 2));
-                let opcode = 0x28; // LDR
-                put(sink, &enc_rr(opcode, rd.to_reg(), rm));
+                if is_fpr(rd.to_reg()) && is_fpr(rm) {
+                    let opcode = 0xa74; // BCR
+                    put(sink, &enc_ri_c(opcode, cond.invert().bits(), 4 + 2));
+                    let opcode = 0x28; // LDR
+                    put(sink, &enc_rr(opcode, rd.to_reg(), rm));
+                } else {
+                    let opcode = 0xa74; // BCR
+                    put(sink, &enc_ri_c(opcode, cond.invert().bits(), 4 + 6));
+                    let opcode = 0xe756; // VLR
+                    put(sink, &enc_vrr_a(opcode, rd.to_reg(), rm, 0, 0, 0));
+                }
             }
-            &Inst::MovToFpr { rd, rn } => {
+            &Inst::MovToFpr32 { rd, rn } => {
                 let rd = allocs.next_writable(rd);
                 let rn = allocs.next(rn);
 
-                let opcode = 0xb3c1; // LDGR
-                put(sink, &enc_rre(opcode, rd.to_reg(), rn));
+                let (opcode, m4) = (0xe722, 2); // VLVG
+                put(sink, &enc_vrs_b(opcode, rd.to_reg(), zero_reg(), 0, rn, m4));
             }
-            &Inst::MovFromFpr { rd, rn } => {
+            &Inst::MovToFpr64 { rd, rn } => {
                 let rd = allocs.next_writable(rd);
                 let rn = allocs.next(rn);
 
-                let opcode = 0xb3cd; // LGDR
-                put(sink, &enc_rre(opcode, rd.to_reg(), rn));
+                if is_fpr(rd.to_reg()) {
+                    let opcode = 0xb3c1; // LDGR
+                    put(sink, &enc_rre(opcode, rd.to_reg(), rn));
+                } else {
+                    let (opcode, m4) = (0xe722, 3); // VLVG
+                    put(sink, &enc_vrs_b(opcode, rd.to_reg(), zero_reg(), 0, rn, m4));
+                }
+            }
+            &Inst::MovFromFpr32 { rd, rn } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
+
+                let (opcode, m4) = (0xe721, 2); // VLGV
+                put(sink, &enc_vrs_c(opcode, rd.to_reg(), zero_reg(), 0, rn, m4));
+            }
+            &Inst::MovFromFpr64 { rd, rn } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
+
+                if is_fpr(rn) {
+                    let opcode = 0xb3cd; // LGDR
+                    put(sink, &enc_rre(opcode, rd.to_reg(), rn));
+                } else {
+                    let (opcode, m4) = (0xe721, 3); // VLVG
+                    put(sink, &enc_vrs_c(opcode, rd.to_reg(), zero_reg(), 0, rn, m4));
+                }
             }
             &Inst::LoadFpuConst32 { rd, const_data } => {
                 let rd = allocs.next_writable(rd);
@@ -2034,138 +2232,143 @@ impl MachInstEmit for Inst {
                 };
                 inst.emit(&[], sink, emit_info, state);
             }
-
-            &Inst::FpuCopysign { rd, rn, rm } => {
-                let rd = allocs.next_writable(rd);
-                let rn = allocs.next(rn);
-                let rm = allocs.next(rm);
-
-                let opcode = 0xb372; // CPSDR
-                put(sink, &enc_rrf_ab(opcode, rd.to_reg(), rn, rm, 0));
-            }
             &Inst::FpuRR { fpu_op, rd, rn } => {
                 let rd = allocs.next_writable(rd);
                 let rn = allocs.next(rn);
 
-                let opcode = match fpu_op {
-                    FPUOp1::Abs32 => 0xb300,     // LPEBR
-                    FPUOp1::Abs64 => 0xb310,     // LPDBR
-                    FPUOp1::Neg32 => 0xb303,     // LCEBR
-                    FPUOp1::Neg64 => 0xb313,     // LCDBR
-                    FPUOp1::NegAbs32 => 0xb301,  // LNEBR
-                    FPUOp1::NegAbs64 => 0xb311,  // LNDBR
-                    FPUOp1::Sqrt32 => 0xb314,    // SQEBR
-                    FPUOp1::Sqrt64 => 0xb315,    // SQDBR
-                    FPUOp1::Cvt32To64 => 0xb304, // LDEBR
-                    FPUOp1::Cvt64To32 => 0xb344, // LEDBR
+                let (opcode, m3, m5, opcode_fpr) = match fpu_op {
+                    FPUOp1::Abs32 => (0xe7cc, 2, 2, 0xb300),     // VFPSO, LPEBR
+                    FPUOp1::Abs64 => (0xe7cc, 3, 2, 0xb310),     // VFPSO, LPDBR
+                    FPUOp1::Neg32 => (0xe7cc, 2, 0, 0xb303),     // VFPSO, LCEBR
+                    FPUOp1::Neg64 => (0xe7cc, 3, 0, 0xb313),     // VFPSO, LCDBR
+                    FPUOp1::NegAbs32 => (0xe7cc, 2, 1, 0xb301),  // VFPSO, LNEBR
+                    FPUOp1::NegAbs64 => (0xe7cc, 3, 1, 0xb311),  // VFPSO, LNDBR
+                    FPUOp1::Sqrt32 => (0xe7ce, 2, 0, 0xb314),    // VFSQ, SQEBR
+                    FPUOp1::Sqrt64 => (0xe7ce, 3, 0, 0xb315),    // VFSQ, SQDBR
+                    FPUOp1::Cvt32To64 => (0xe7c4, 2, 0, 0xb304), // VFLL, LDEBR
                 };
-                put(sink, &enc_rre(opcode, rd.to_reg(), rn));
+                if is_fpr(rd.to_reg()) && is_fpr(rn) {
+                    put(sink, &enc_rre(opcode_fpr, rd.to_reg(), rn));
+                } else {
+                    put(sink, &enc_vrr_a(opcode, rd.to_reg(), rn, m3, 8, m5));
+                }
             }
-            &Inst::FpuRRR { fpu_op, rd, rm } => {
-                let rd = allocs.next_writable(rd);
-                let rm = allocs.next(rm);
-
-                let opcode = match fpu_op {
-                    FPUOp2::Add32 => 0xb30a, // AEBR
-                    FPUOp2::Add64 => 0xb31a, // ADBR
-                    FPUOp2::Sub32 => 0xb30b, // SEBR
-                    FPUOp2::Sub64 => 0xb31b, // SDBR
-                    FPUOp2::Mul32 => 0xb317, // MEEBR
-                    FPUOp2::Mul64 => 0xb31c, // MDBR
-                    FPUOp2::Div32 => 0xb30d, // DEBR
-                    FPUOp2::Div64 => 0xb31d, // DDBR
-                    _ => unimplemented!(),
-                };
-                put(sink, &enc_rre(opcode, rd.to_reg(), rm));
-            }
-            &Inst::FpuRRRR { fpu_op, rd, rn, rm } => {
+            &Inst::FpuRRR { fpu_op, rd, rn, rm } => {
                 let rd = allocs.next_writable(rd);
                 let rn = allocs.next(rn);
                 let rm = allocs.next(rm);
 
-                let opcode = match fpu_op {
-                    FPUOp3::MAdd32 => 0xb30e, // MAEBR
-                    FPUOp3::MAdd64 => 0xb31e, // MADBR
-                    FPUOp3::MSub32 => 0xb30f, // MSEBR
-                    FPUOp3::MSub64 => 0xb31f, // MSDBR
+                let (opcode, m4, m6, opcode_fpr) = match fpu_op {
+                    FPUOp2::Add32 => (0xe7e3, 2, 0, Some(0xb30a)), // VFA, AEBR
+                    FPUOp2::Add64 => (0xe7e3, 3, 0, Some(0xb31a)), // VFA, ADBR
+                    FPUOp2::Sub32 => (0xe7e2, 2, 0, Some(0xb30b)), // VFS, SEBR
+                    FPUOp2::Sub64 => (0xe7e2, 3, 0, Some(0xb31b)), // VFS, SDBR
+                    FPUOp2::Mul32 => (0xe7e7, 2, 0, Some(0xb317)), // VFM, MEEBR
+                    FPUOp2::Mul64 => (0xe7e7, 3, 0, Some(0xb31c)), // VFM, MDBR
+                    FPUOp2::Div32 => (0xe7e5, 2, 0, Some(0xb30d)), // VFD, DEBR
+                    FPUOp2::Div64 => (0xe7e5, 3, 0, Some(0xb31d)), // VFD, DDBR
+                    FPUOp2::Max32 => (0xe7ef, 2, 1, None),         // VFMAX
+                    FPUOp2::Max64 => (0xe7ef, 3, 1, None),         // VFMAX
+                    FPUOp2::Min32 => (0xe7ee, 2, 1, None),         // VFMIN
+                    FPUOp2::Min64 => (0xe7ee, 3, 1, None),         // VFMIN
                 };
-                put(sink, &enc_rrd(opcode, rd.to_reg(), rm, rn));
+                if opcode_fpr.is_some() && rd.to_reg() == rn && is_fpr(rn) && is_fpr(rm) {
+                    put(sink, &enc_rre(opcode_fpr.unwrap(), rd.to_reg(), rm));
+                } else {
+                    put(sink, &enc_vrr_c(opcode, rd.to_reg(), rn, rm, m4, 8, m6));
+                }
             }
-            &Inst::FpuToInt { op, rd, rn } => {
-                let rd = allocs.next_writable(rd);
-                let rn = allocs.next(rn);
-
-                let opcode = match op {
-                    FpuToIntOp::F32ToI32 => 0xb398, // CFEBRA
-                    FpuToIntOp::F32ToU32 => 0xb39c, // CLFEBR
-                    FpuToIntOp::F32ToI64 => 0xb3a8, // CGEBRA
-                    FpuToIntOp::F32ToU64 => 0xb3ac, // CLGEBR
-                    FpuToIntOp::F64ToI32 => 0xb399, // CFDBRA
-                    FpuToIntOp::F64ToU32 => 0xb39d, // CLFDBR
-                    FpuToIntOp::F64ToI64 => 0xb3a9, // CGDBRA
-                    FpuToIntOp::F64ToU64 => 0xb3ad, // CLGDBR
-                };
-                put(sink, &enc_rrf_cde(opcode, rd.to_reg(), rn, 5, 0));
-            }
-            &Inst::IntToFpu { op, rd, rn } => {
-                let rd = allocs.next_writable(rd);
-                let rn = allocs.next(rn);
-
-                let opcode = match op {
-                    IntToFpuOp::I32ToF32 => 0xb394, // CEFBRA
-                    IntToFpuOp::U32ToF32 => 0xb390, // CELFBR
-                    IntToFpuOp::I64ToF32 => 0xb3a4, // CEGBRA
-                    IntToFpuOp::U64ToF32 => 0xb3a0, // CELGBR
-                    IntToFpuOp::I32ToF64 => 0xb395, // CDFBRA
-                    IntToFpuOp::U32ToF64 => 0xb391, // CDLFBR
-                    IntToFpuOp::I64ToF64 => 0xb3a5, // CDGBRA
-                    IntToFpuOp::U64ToF64 => 0xb3a1, // CDLGBR
-                };
-                put(sink, &enc_rrf_cde(opcode, rd.to_reg(), rn, 0, 0));
-            }
-            &Inst::FpuRound { op, rd, rn } => {
-                let rd = allocs.next_writable(rd);
-                let rn = allocs.next(rn);
-
-                let (opcode, m3) = match op {
-                    FpuRoundMode::Minus32 => (0xb357, 7),   // FIEBR
-                    FpuRoundMode::Minus64 => (0xb35f, 7),   // FIDBR
-                    FpuRoundMode::Plus32 => (0xb357, 6),    // FIEBR
-                    FpuRoundMode::Plus64 => (0xb35f, 6),    // FIDBR
-                    FpuRoundMode::Zero32 => (0xb357, 5),    // FIEBR
-                    FpuRoundMode::Zero64 => (0xb35f, 5),    // FIDBR
-                    FpuRoundMode::Nearest32 => (0xb357, 4), // FIEBR
-                    FpuRoundMode::Nearest64 => (0xb35f, 4), // FIDBR
-                };
-                put(sink, &enc_rrf_cde(opcode, rd.to_reg(), rn, m3, 0));
-            }
-            &Inst::FpuVecRRR { fpu_op, rd, rn, rm } => {
+            &Inst::FpuRRRR {
+                fpu_op,
+                rd,
+                rn,
+                rm,
+                ra,
+            } => {
                 let rd = allocs.next_writable(rd);
                 let rn = allocs.next(rn);
                 let rm = allocs.next(rm);
+                let ra = allocs.next(ra);
 
-                let (opcode, m4) = match fpu_op {
-                    FPUOp2::Max32 => (0xe7ef, 2), // VFMAX
-                    FPUOp2::Max64 => (0xe7ef, 3), // VFMAX
-                    FPUOp2::Min32 => (0xe7ee, 2), // VFMIN
-                    FPUOp2::Min64 => (0xe7ee, 3), // VFMIN
-                    _ => unimplemented!(),
+                let (opcode, m6, opcode_fpr) = match fpu_op {
+                    FPUOp3::MAdd32 => (0xe78f, 2, 0xb30e), // VFMA, MAEBR
+                    FPUOp3::MAdd64 => (0xe78f, 3, 0xb31e), // VFMA, MADBR
+                    FPUOp3::MSub32 => (0xe78e, 2, 0xb30f), // VFMS, MSEBR
+                    FPUOp3::MSub64 => (0xe78e, 3, 0xb31f), // VFMS, MSDBR
                 };
-                put(sink, &enc_vrr(opcode, rd.to_reg(), rn, rm, m4, 8, 1));
+                if rd.to_reg() == ra && is_fpr(rn) && is_fpr(rm) && is_fpr(ra) {
+                    put(sink, &enc_rrd(opcode_fpr, rd.to_reg(), rm, rn));
+                } else {
+                    put(sink, &enc_vrr_e(opcode, rd.to_reg(), rn, rm, ra, 8, m6));
+                }
+            }
+            &Inst::FpuRound { op, mode, rd, rn } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
+
+                let mode = match mode {
+                    FpuRoundMode::Current => 0,
+                    FpuRoundMode::ToNearest => 1,
+                    FpuRoundMode::ShorterPrecision => 3,
+                    FpuRoundMode::ToNearestTiesToEven => 4,
+                    FpuRoundMode::ToZero => 5,
+                    FpuRoundMode::ToPosInfinity => 6,
+                    FpuRoundMode::ToNegInfinity => 7,
+                };
+                let (opcode, m3, opcode_fpr) = match op {
+                    FpuRoundOp::Cvt64To32 => (0xe7c5, 3, Some(0xb344)), // VFLR, LEDBR(A)
+                    FpuRoundOp::Round32 => (0xe7c7, 2, Some(0xb357)),   // VFI, FIEBR
+                    FpuRoundOp::Round64 => (0xe7c7, 3, Some(0xb35f)),   // VFI, FIDBR
+                    FpuRoundOp::ToSInt32 => (0xe7c2, 2, None),          // VCSFP
+                    FpuRoundOp::ToSInt64 => (0xe7c2, 3, None),          // VCSFP
+                    FpuRoundOp::ToUInt32 => (0xe7c0, 2, None),          // VCLFP
+                    FpuRoundOp::ToUInt64 => (0xe7c0, 3, None),          // VCLFP
+                    FpuRoundOp::FromSInt32 => (0xe7c3, 2, None),        // VCFPS
+                    FpuRoundOp::FromSInt64 => (0xe7c3, 3, None),        // VCFPS
+                    FpuRoundOp::FromUInt32 => (0xe7c1, 2, None),        // VCFPL
+                    FpuRoundOp::FromUInt64 => (0xe7c1, 3, None),        // VCFPL
+                };
+                if opcode_fpr.is_some() && is_fpr(rd.to_reg()) && is_fpr(rn) {
+                    put(
+                        sink,
+                        &enc_rrf_cde(opcode_fpr.unwrap(), rd.to_reg(), rn, mode, 0),
+                    );
+                } else {
+                    put(sink, &enc_vrr_a(opcode, rd.to_reg(), rn, m3, 8, mode));
+                }
             }
             &Inst::FpuCmp32 { rn, rm } => {
                 let rn = allocs.next(rn);
                 let rm = allocs.next(rm);
 
-                let opcode = 0xb309; // CEBR
-                put(sink, &enc_rre(opcode, rn, rm));
+                if is_fpr(rn) && is_fpr(rm) {
+                    let opcode = 0xb309; // CEBR
+                    put(sink, &enc_rre(opcode, rn, rm));
+                } else {
+                    let opcode = 0xe7cb; // WFC
+                    put(sink, &enc_vrr_a(opcode, rn, rm, 2, 0, 0));
+                }
             }
             &Inst::FpuCmp64 { rn, rm } => {
                 let rn = allocs.next(rn);
                 let rm = allocs.next(rm);
 
-                let opcode = 0xb319; // CDBR
-                put(sink, &enc_rre(opcode, rn, rm));
+                if is_fpr(rn) && is_fpr(rm) {
+                    let opcode = 0xb319; // CDBR
+                    put(sink, &enc_rre(opcode, rn, rm));
+                } else {
+                    let opcode = 0xe7cb; // WFC
+                    put(sink, &enc_vrr_a(opcode, rn, rm, 3, 0, 0));
+                }
+            }
+            &Inst::VecSelect { rd, rn, rm, ra } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
+                let rm = allocs.next(rm);
+                let ra = allocs.next(ra);
+
+                let opcode = 0xe78d; // VSEL
+                put(sink, &enc_vrr_e(opcode, rd.to_reg(), rn, rm, ra, 0, 0));
             }
 
             &Inst::Call { link, ref info } => {

@@ -7,7 +7,7 @@ use std::ops::{Add, BitAnd, Not, Sub};
 
 /// Returns the size (in bits) of a given type.
 pub fn ty_bits(ty: Type) -> usize {
-    usize::from(ty.bits())
+    ty.bits() as usize
 }
 
 /// Is the type represented by an integer (not float) at the machine level?

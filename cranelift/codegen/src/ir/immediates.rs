@@ -12,6 +12,7 @@ use core::str::FromStr;
 use core::{i32, u32};
 #[cfg(feature = "enable-serde")]
 use serde::{Deserialize, Serialize};
+use std::ops::Neg;
 
 /// Convert a type into a vector of bytes; all implementors in this file must use little-endian
 /// orderings of bytes to match WebAssembly's little-endianness.
@@ -76,7 +77,7 @@ impl Imm64 {
 
     /// Sign extend this immediate as if it were a signed integer of the given
     /// power-of-two width.
-    pub fn sign_extend_from_width(&mut self, bit_width: u16) {
+    pub fn sign_extend_from_width(&mut self, bit_width: u32) {
         debug_assert!(bit_width.is_power_of_two());
 
         if bit_width >= 64 {
@@ -761,13 +762,80 @@ impl Ieee32 {
 
     /// Check if the value is a NaN.
     pub fn is_nan(&self) -> bool {
-        f32::from_bits(self.0).is_nan()
+        self.as_f32().is_nan()
+    }
+
+    /// Converts Self to a rust f32
+    pub fn as_f32(self) -> f32 {
+        f32::from_bits(self.0)
+    }
+
+    /// Fused multiply-add. Computes (self * a) + b with only one rounding error, yielding a
+    /// more accurate result than an unfused multiply-add.
+    pub fn mul_add(&self, a: Self, b: Self) -> Self {
+        Self::with_float(self.as_f32().mul_add(a.as_f32(), b.as_f32()))
+    }
+
+    /// Returns the square root of self.
+    pub fn sqrt(self) -> Self {
+        Self::with_float(self.as_f32().sqrt())
+    }
+
+    /// Computes the absolute value of self.
+    pub fn abs(self) -> Self {
+        Self::with_float(self.as_f32().abs())
+    }
+
+    /// Returns a number composed of the magnitude of self and the sign of sign.
+    pub fn copysign(self, sign: Self) -> Self {
+        Self::with_float(self.as_f32().copysign(sign.as_f32()))
+    }
+
+    /// Returns true if self has a negative sign, including -0.0, NaNs with negative sign bit and negative infinity.
+    pub fn is_negative(&self) -> bool {
+        self.as_f32().is_sign_negative()
+    }
+
+    /// Returns true if self is positive or negative zero
+    pub fn is_zero(&self) -> bool {
+        self.as_f32() == 0.0
+    }
+
+    /// Returns the smallest integer greater than or equal to `self`.
+    pub fn ceil(self) -> Self {
+        Self::with_float(self.as_f32().ceil())
+    }
+
+    /// Returns the largest integer less than or equal to `self`.
+    pub fn floor(self) -> Self {
+        Self::with_float(self.as_f32().floor())
+    }
+
+    /// Returns the integer part of `self`. This means that non-integer numbers are always truncated towards zero.
+    pub fn trunc(self) -> Self {
+        Self::with_float(self.as_f32().trunc())
+    }
+
+    /// Returns the nearest integer to `self`. Rounds half-way cases to the number
+    /// with an even least significant digit.
+    pub fn round_ties_even(self) -> Self {
+        // TODO: Replace with the native implementation once
+        // https://github.com/rust-lang/rust/issues/96710 is stabilized
+        let toint_32: f32 = 1.0 / f32::EPSILON;
+
+        let f = self.as_f32();
+        let e = self.0 >> 23 & 0xff;
+        if e >= 0x7f_u32 + 23 {
+            self
+        } else {
+            Self::with_float((f.abs() + toint_32 - toint_32).copysign(f))
+        }
     }
 }
 
 impl PartialOrd for Ieee32 {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        f32::from_bits(self.0).partial_cmp(&f32::from_bits(other.0))
+        self.as_f32().partial_cmp(&other.as_f32())
     }
 }
 
@@ -798,6 +866,14 @@ impl From<f32> for Ieee32 {
 impl IntoBytes for Ieee32 {
     fn into_bytes(self) -> Vec<u8> {
         self.0.to_le_bytes().to_vec()
+    }
+}
+
+impl Neg for Ieee32 {
+    type Output = Ieee32;
+
+    fn neg(self) -> Self::Output {
+        Self::with_float(self.as_f32().neg())
     }
 }
 
@@ -846,13 +922,80 @@ impl Ieee64 {
     /// Check if the value is a NaN. For [Ieee64], this means checking that the 11 exponent bits are
     /// all set.
     pub fn is_nan(&self) -> bool {
-        f64::from_bits(self.0).is_nan()
+        self.as_f64().is_nan()
+    }
+
+    /// Converts Self to a rust f64
+    pub fn as_f64(self) -> f64 {
+        f64::from_bits(self.0)
+    }
+
+    /// Fused multiply-add. Computes (self * a) + b with only one rounding error, yielding a
+    /// more accurate result than an unfused multiply-add.
+    pub fn mul_add(&self, a: Self, b: Self) -> Self {
+        Self::with_float(self.as_f64().mul_add(a.as_f64(), b.as_f64()))
+    }
+
+    /// Returns the square root of self.
+    pub fn sqrt(self) -> Self {
+        Self::with_float(self.as_f64().sqrt())
+    }
+
+    /// Computes the absolute value of self.
+    pub fn abs(self) -> Self {
+        Self::with_float(self.as_f64().abs())
+    }
+
+    /// Returns a number composed of the magnitude of self and the sign of sign.
+    pub fn copysign(self, sign: Self) -> Self {
+        Self::with_float(self.as_f64().copysign(sign.as_f64()))
+    }
+
+    /// Returns true if self has a negative sign, including -0.0, NaNs with negative sign bit and negative infinity.
+    pub fn is_negative(&self) -> bool {
+        self.as_f64().is_sign_negative()
+    }
+
+    /// Returns true if self is positive or negative zero
+    pub fn is_zero(&self) -> bool {
+        self.as_f64() == 0.0
+    }
+
+    /// Returns the smallest integer greater than or equal to `self`.
+    pub fn ceil(self) -> Self {
+        Self::with_float(self.as_f64().ceil())
+    }
+
+    /// Returns the largest integer less than or equal to `self`.
+    pub fn floor(self) -> Self {
+        Self::with_float(self.as_f64().floor())
+    }
+
+    /// Returns the integer part of `self`. This means that non-integer numbers are always truncated towards zero.
+    pub fn trunc(self) -> Self {
+        Self::with_float(self.as_f64().trunc())
+    }
+
+    /// Returns the nearest integer to `self`. Rounds half-way cases to the number
+    /// with an even least significant digit.
+    pub fn round_ties_even(self) -> Self {
+        // TODO: Replace with the native implementation once
+        // https://github.com/rust-lang/rust/issues/96710 is stabilized
+        let toint_64: f64 = 1.0 / f64::EPSILON;
+
+        let f = self.as_f64();
+        let e = self.0 >> 52 & 0x7ff_u64;
+        if e >= 0x3ff_u64 + 52 {
+            self
+        } else {
+            Self::with_float((f.abs() + toint_64 - toint_64).copysign(f))
+        }
     }
 }
 
 impl PartialOrd for Ieee64 {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        f64::from_bits(self.0).partial_cmp(&f64::from_bits(other.0))
+        self.as_f64().partial_cmp(&other.as_f64())
     }
 }
 
@@ -889,6 +1032,14 @@ impl From<u64> for Ieee64 {
 impl IntoBytes for Ieee64 {
     fn into_bytes(self) -> Vec<u8> {
         self.0.to_le_bytes().to_vec()
+    }
+}
+
+impl Neg for Ieee64 {
+    type Output = Ieee64;
+
+    fn neg(self) -> Self::Output {
+        Self::with_float(self.as_f64().neg())
     }
 }
 

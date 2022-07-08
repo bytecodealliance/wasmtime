@@ -359,7 +359,7 @@ For a simple example, consider the following rules:
 ```
 
 This set of rules will rewrite `(A (B (D 42)))` to `(C (D 42))`, then
-to `(E 42)` (via the first and third rules respectively).
+to `(E 42)` (via the first and second rules respectively).
 
 How is this useful? First, rewriting one term to another (here, `C` at
 the top level) that in turn appears in the left-hand side of other

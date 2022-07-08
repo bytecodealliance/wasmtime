@@ -61,6 +61,7 @@ use crate::ir;
 use crate::ir::condcodes::IntCC;
 use crate::ir::types;
 use crate::ir::MemFlags;
+use crate::ir::Signature;
 use crate::ir::Type;
 use crate::isa;
 use crate::isa::s390x::inst::*;
@@ -69,10 +70,8 @@ use crate::machinst::*;
 use crate::machinst::{RealReg, Reg, RegClass, Writable};
 use crate::settings;
 use crate::{CodegenError, CodegenResult};
-use alloc::boxed::Box;
 use alloc::vec::Vec;
-use regalloc2::PReg;
-use regalloc2::VReg;
+use regalloc2::{PReg, PRegSet, VReg};
 use smallvec::{smallvec, SmallVec};
 use std::convert::TryFrom;
 
@@ -80,9 +79,6 @@ use std::convert::TryFrom;
 
 /// Support for the S390x ABI from the callee side (within a function body).
 pub type S390xABICallee = ABICalleeImpl<S390xMachineDeps>;
-
-/// Support for the S390x ABI from the caller side (at a callsite).
-pub type S390xABICaller = ABICallerImpl<S390xMachineDeps>;
 
 /// ABI Register usage
 
@@ -114,10 +110,10 @@ fn get_intreg_for_arg(idx: usize) -> Option<Reg> {
 
 fn get_fltreg_for_arg(idx: usize) -> Option<Reg> {
     match idx {
-        0 => Some(regs::fpr(0)),
-        1 => Some(regs::fpr(2)),
-        2 => Some(regs::fpr(4)),
-        3 => Some(regs::fpr(6)),
+        0 => Some(regs::vr(0)),
+        1 => Some(regs::vr(2)),
+        2 => Some(regs::vr(4)),
+        3 => Some(regs::vr(6)),
         _ => None,
     }
 }
@@ -135,11 +131,11 @@ fn get_intreg_for_ret(idx: usize) -> Option<Reg> {
 
 fn get_fltreg_for_ret(idx: usize) -> Option<Reg> {
     match idx {
-        0 => Some(regs::fpr(0)),
+        0 => Some(regs::vr(0)),
         // ABI extension to support multi-value returns:
-        1 => Some(regs::fpr(2)),
-        2 => Some(regs::fpr(4)),
-        3 => Some(regs::fpr(6)),
+        1 => Some(regs::vr(2)),
+        2 => Some(regs::vr(4)),
+        3 => Some(regs::vr(6)),
         _ => None,
     }
 }
@@ -561,6 +557,7 @@ impl ABIMachineSpec for S390xMachineDeps {
 
     fn gen_clobber_restore(
         call_conv: isa::CallConv,
+        _: &Signature,
         _: &settings::Flags,
         clobbers: &[Writable<RealReg>],
         fixed_frame_storage_size: u32,
@@ -617,53 +614,16 @@ impl ABIMachineSpec for S390xMachineDeps {
     }
 
     fn gen_call(
-        dest: &CallDest,
-        uses: Vec<Reg>,
-        defs: Vec<Writable<Reg>>,
-        opcode: ir::Opcode,
-        tmp: Writable<Reg>,
+        _dest: &CallDest,
+        _uses: SmallVec<[Reg; 8]>,
+        _defs: SmallVec<[Writable<Reg>; 8]>,
+        _clobbers: PRegSet,
+        _opcode: ir::Opcode,
+        _tmp: Writable<Reg>,
         _callee_conv: isa::CallConv,
         _caller_conv: isa::CallConv,
     ) -> SmallVec<[Inst; 2]> {
-        let mut insts = SmallVec::new();
-        match &dest {
-            &CallDest::ExtName(ref name, RelocDistance::Near) => insts.push(Inst::Call {
-                link: writable_gpr(14),
-                info: Box::new(CallInfo {
-                    dest: name.clone(),
-                    uses,
-                    defs,
-                    opcode,
-                }),
-            }),
-            &CallDest::ExtName(ref name, RelocDistance::Far) => {
-                insts.push(Inst::LoadExtNameFar {
-                    rd: tmp,
-                    name: Box::new(name.clone()),
-                    offset: 0,
-                });
-                insts.push(Inst::CallInd {
-                    link: writable_gpr(14),
-                    info: Box::new(CallIndInfo {
-                        rn: tmp.to_reg(),
-                        uses,
-                        defs,
-                        opcode,
-                    }),
-                });
-            }
-            &CallDest::Reg(reg) => insts.push(Inst::CallInd {
-                link: writable_gpr(14),
-                info: Box::new(CallIndInfo {
-                    rn: *reg,
-                    uses,
-                    defs,
-                    opcode,
-                }),
-            }),
-        }
-
-        insts
+        unreachable!();
     }
 
     fn gen_memcpy(
@@ -675,7 +635,7 @@ impl ABIMachineSpec for S390xMachineDeps {
         unimplemented!("StructArgs not implemented for S390X yet");
     }
 
-    fn get_number_of_spillslots_for_value(rc: RegClass) -> u32 {
+    fn get_number_of_spillslots_for_value(rc: RegClass, _vector_scale: u32) -> u32 {
         // We allocate in terms of 8-byte slots.
         match rc {
             RegClass::Int => 1,
@@ -693,21 +653,8 @@ impl ABIMachineSpec for S390xMachineDeps {
         s.initial_sp_offset
     }
 
-    fn get_regs_clobbered_by_call(call_conv_of_callee: isa::CallConv) -> Vec<Writable<Reg>> {
-        let mut caller_saved = Vec::new();
-        for i in 0..15 {
-            let x = writable_gpr(i);
-            if is_reg_clobbered_by_call(call_conv_of_callee, x.to_reg().to_real_reg().unwrap()) {
-                caller_saved.push(x);
-            }
-        }
-        for i in 0..15 {
-            let v = writable_fpr(i);
-            if is_reg_clobbered_by_call(call_conv_of_callee, v.to_reg().to_real_reg().unwrap()) {
-                caller_saved.push(v);
-            }
-        }
-        caller_saved
+    fn get_regs_clobbered_by_call(_call_conv_of_callee: isa::CallConv) -> PRegSet {
+        CLOBBERS
     }
 
     fn get_ext_mode(
@@ -720,6 +667,7 @@ impl ABIMachineSpec for S390xMachineDeps {
     fn get_clobbered_callee_saves(
         call_conv: isa::CallConv,
         flags: &settings::Flags,
+        _sig: &Signature,
         regs: &[Writable<RealReg>],
     ) -> Vec<Writable<RealReg>> {
         assert!(
@@ -743,7 +691,7 @@ impl ABIMachineSpec for S390xMachineDeps {
         _is_leaf: bool,
         _stack_args_size: u32,
         _num_clobbered_callee_saves: usize,
-        _fixed_frame_storage_size: u32,
+        _frame_storage_size: u32,
     ) -> bool {
         // The call frame set-up is handled by gen_clobber_save().
         false
@@ -783,15 +731,38 @@ fn get_regs_saved_in_prologue(
     (int_saves, fpr_saves)
 }
 
-fn is_reg_clobbered_by_call(_call_conv: isa::CallConv, r: RealReg) -> bool {
-    match r.class() {
-        RegClass::Int => {
-            // r0 - r5 inclusive are caller-saves.
-            r.hw_enc() <= 5
-        }
-        RegClass::Float => {
-            // f0 - f7 inclusive are caller-saves.
-            r.hw_enc() <= 7
-        }
-    }
+const fn clobbers() -> PRegSet {
+    PRegSet::empty()
+        .with(gpr_preg(0))
+        .with(gpr_preg(1))
+        .with(gpr_preg(2))
+        .with(gpr_preg(3))
+        .with(gpr_preg(4))
+        .with(gpr_preg(5))
+        .with(vr_preg(0))
+        .with(vr_preg(1))
+        .with(vr_preg(2))
+        .with(vr_preg(3))
+        .with(vr_preg(4))
+        .with(vr_preg(5))
+        .with(vr_preg(6))
+        .with(vr_preg(7))
+        .with(vr_preg(16))
+        .with(vr_preg(17))
+        .with(vr_preg(18))
+        .with(vr_preg(19))
+        .with(vr_preg(20))
+        .with(vr_preg(21))
+        .with(vr_preg(22))
+        .with(vr_preg(23))
+        .with(vr_preg(24))
+        .with(vr_preg(25))
+        .with(vr_preg(26))
+        .with(vr_preg(27))
+        .with(vr_preg(28))
+        .with(vr_preg(29))
+        .with(vr_preg(30))
+        .with(vr_preg(31))
 }
+
+const CLOBBERS: PRegSet = clobbers();

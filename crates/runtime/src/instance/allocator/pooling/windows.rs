@@ -1,6 +1,5 @@
 use anyhow::{bail, Result};
-use winapi::um::memoryapi::{VirtualAlloc, VirtualFree};
-use winapi::um::winnt::{MEM_COMMIT, MEM_DECOMMIT, PAGE_READWRITE};
+use windows_sys::Win32::System::Memory::*;
 
 pub fn commit(addr: *mut u8, len: usize) -> Result<()> {
     if len == 0 {

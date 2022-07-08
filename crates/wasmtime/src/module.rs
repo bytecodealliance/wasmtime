@@ -26,6 +26,8 @@ mod registry;
 mod serialization;
 
 pub use registry::{is_wasm_trap_pc, ModuleRegistry};
+#[cfg(feature = "component-model")]
+pub use registry::{register_component, unregister_component};
 pub use serialization::SerializedModule;
 
 /// A compiled WebAssembly module, ready to be instantiated.
@@ -367,26 +369,52 @@ impl Module {
         mut translation: ModuleTranslation<'_>,
         types: &ModuleTypes,
     ) -> Result<(MmapVec, Option<CompiledModuleInfo>)> {
-        // Compile all functions in parallel using rayon. This will also perform
-        // validation of function bodies.
         let tunables = &engine.config().tunables;
         let functions = mem::take(&mut translation.function_body_inputs);
         let functions = functions.into_iter().collect::<Vec<_>>();
-        let funcs = engine
-            .run_maybe_parallel(functions, |(index, func)| {
-                engine
-                    .compiler()
-                    .compile_function(&translation, index, func, tunables, types)
-            })?
-            .into_iter()
-            .collect();
+        let compiler = engine.compiler();
+        let (funcs, trampolines) = engine.join_maybe_parallel(
+            // In one (possibly) parallel task all wasm functions are compiled
+            // in parallel. Note that this is also where the actual validation
+            // of all function bodies happens as well.
+            || -> Result<_> {
+                let funcs = engine.run_maybe_parallel(functions, |(index, func)| {
+                    let offset = func.body.range().start;
+                    let result =
+                        compiler.compile_function(&translation, index, func, tunables, types);
+                    result.with_context(|| {
+                        let index = translation.module.func_index(index);
+                        let name = match translation.debuginfo.name_section.func_names.get(&index) {
+                            Some(name) => format!(" (`{}`)", name),
+                            None => String::new(),
+                        };
+                        let index = index.as_u32();
+                        format!(
+                            "failed to compile wasm function {index}{name} at offset {offset:#x}"
+                        )
+                    })
+                })?;
+
+                Ok(funcs.into_iter().collect())
+            },
+            // In another (possibly) parallel task all trampolines necessary
+            // for untyped host-to-wasm entry are compiled. Note that this
+            // isn't really expected to take all that long, it's moreso "well
+            // if we're using rayon why not use it here too".
+            || -> Result<_> {
+                engine.run_maybe_parallel(translation.exported_signatures.clone(), |sig| {
+                    let ty = &types[sig];
+                    Ok(compiler.compile_host_to_wasm_trampoline(ty)?)
+                })
+            },
+        );
 
         // Collect all the function results into a final ELF object.
         let mut obj = engine.compiler().object()?;
         let (funcs, trampolines) =
             engine
                 .compiler()
-                .emit_obj(&translation, types, funcs, tunables, &mut obj)?;
+                .emit_obj(&translation, funcs?, trampolines?, tunables, &mut obj)?;
 
         // If configured attempt to use static memory initialization which
         // can either at runtime be implemented as a single memcpy to
@@ -511,7 +539,7 @@ impl Module {
         // into the global registry of modules so we can resolve traps
         // appropriately. Note that the corresponding `unregister` happens below
         // in `Drop for ModuleInner`.
-        registry::register(&module);
+        registry::register_module(&module);
 
         Ok(Self {
             inner: Arc::new(ModuleInner {
@@ -961,7 +989,7 @@ impl wasmtime_runtime::ModuleInfo for ModuleInner {
 
 impl Drop for ModuleInner {
     fn drop(&mut self) {
-        registry::unregister(&self.module);
+        registry::unregister_module(&self.module);
     }
 }
 

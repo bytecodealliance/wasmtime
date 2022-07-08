@@ -2,7 +2,7 @@
 //! the __jit_debug_register_code() and __jit_debug_descriptor to register
 //! or unregister generated object images with debuggers.
 
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use std::pin::Pin;
 use std::ptr;
 use std::sync::Mutex;
@@ -32,15 +32,13 @@ extern "C" {
     fn __jit_debug_register_code();
 }
 
-lazy_static! {
-    // The process controls access to the __jit_debug_descriptor by itself --
-    // the GDB/LLDB accesses this structure and its data at the process startup
-    // and when paused in __jit_debug_register_code.
-    //
-    // The GDB_REGISTRATION lock is needed for GdbJitImageRegistration to protect
-    // access to the __jit_debug_descriptor within this process.
-    pub static ref GDB_REGISTRATION: Mutex<()> = Mutex::new(Default::default());
-}
+/// The process controls access to the __jit_debug_descriptor by itself --
+/// the GDB/LLDB accesses this structure and its data at the process startup
+/// and when paused in __jit_debug_register_code.
+///
+/// The GDB_REGISTRATION lock is needed for GdbJitImageRegistration to protect
+/// access to the __jit_debug_descriptor within this process.
+static GDB_REGISTRATION: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(Default::default()));
 
 /// Registeration for JIT image
 pub struct GdbJitImageRegistration {

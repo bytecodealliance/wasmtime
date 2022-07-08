@@ -2851,3 +2851,19 @@
 (rule (lower (has_type (and (fits_in_64 ty) (ty_int _))
                   (atomic_cas flags address expected replacement)))
       (x64_cmpxchg ty expected replacement (to_amode flags address (zero_offset))))
+
+;; Rules for `atomic_rmw` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; This is a simple, general-case atomic update, based on a loop involving
+;; `cmpxchg`.  Note that we could do much better than this in the case where the
+;; old value at the location (that is to say, the SSA `Value` computed by this
+;; CLIF instruction) is not required.  In that case, we could instead implement
+;; this using a single `lock`-prefixed x64 read-modify-write instruction.  Also,
+;; even in the case where the old value is required, for the `add` and `sub`
+;; cases, we can use the single instruction `lock xadd`.  However, those
+;; improvements have been left for another day. TODO: filed as
+;; https://github.com/bytecodealliance/wasmtime/issues/2153.
+
+(rule (lower (has_type (and (fits_in_64 ty) (ty_int _))
+                  (atomic_rmw flags op address input)))
+      (x64_atomic_rmw_seq ty op (to_amode flags address (zero_offset)) input))

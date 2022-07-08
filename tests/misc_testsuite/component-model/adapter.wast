@@ -70,3 +70,44 @@
     )
   )
 )
+
+;; lower something then immediately lift it
+(component $c
+  (import "host-return-two" (func $f (result u32)))
+
+  (core func $f_lower
+    (canon lower (func $f))
+  )
+  (func $f2 (result s32)
+    (canon lift (core func $f_lower))
+  )
+  (export "f" (func $f2))
+)
+
+;; valid, but odd
+(component
+  (core module $m (func (export "")))
+  (core instance $m (instantiate $m))
+
+  (func $f1 (canon lift (core func $m "")))
+  (core func $f2 (canon lower (func $f1)))
+)
+(assert_trap
+  (component
+    (core module $m (func (export "")))
+    (core instance $m (instantiate $m))
+
+    (func $f1 (canon lift (core func $m "")))
+    (core func $f2 (canon lower (func $f1)))
+
+    (core module $m2
+      (import "" "" (func $f))
+      (func $start
+        call $f)
+      (start $start)
+    )
+    (core instance (instantiate $m2
+      (with "" (instance (export "" (func $f2))))
+    ))
+  )
+  "degenerate component adapter called")

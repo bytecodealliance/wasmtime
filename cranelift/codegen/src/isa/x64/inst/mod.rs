@@ -8,8 +8,9 @@ use crate::isa::x64::settings as x64_settings;
 use crate::isa::CallConv;
 use crate::machinst::*;
 use crate::{settings, CodegenError, CodegenResult};
+use alloc::boxed::Box;
 use alloc::vec::Vec;
-use regalloc2::{Allocation, VReg};
+use regalloc2::{Allocation, PRegSet, VReg};
 use smallvec::{smallvec, SmallVec};
 use std::fmt;
 use std::string::{String, ToString};
@@ -28,6 +29,19 @@ use args::*;
 
 // `Inst` is defined inside ISLE as `MInst`. We publicly re-export it here.
 pub use super::lower::isle::generated_code::MInst as Inst;
+
+// Out-of-line data for calls, to keep the size of `Inst` downn.
+#[derive(Clone, Debug)]
+pub struct CallInfo {
+    /// Register uses of this call.
+    pub uses: SmallVec<[Reg; 8]>,
+    /// Register defs of this call.
+    pub defs: SmallVec<[Writable<Reg>; 8]>,
+    /// Registers clobbered by this call, as per its calling convention.
+    pub clobbers: PRegSet,
+    /// The opcode of this call.
+    pub opcode: Opcode,
+}
 
 pub(crate) fn low32_will_sign_extend_to_64(x: u64) -> bool {
     let xs = x as i64;
@@ -646,30 +660,38 @@ impl Inst {
 
     pub(crate) fn call_known(
         dest: ExternalName,
-        uses: Vec<Reg>,
-        defs: Vec<Writable<Reg>>,
+        uses: SmallVec<[Reg; 8]>,
+        defs: SmallVec<[Writable<Reg>; 8]>,
+        clobbers: PRegSet,
         opcode: Opcode,
     ) -> Inst {
         Inst::CallKnown {
             dest,
-            uses,
-            defs,
-            opcode,
+            info: Box::new(CallInfo {
+                uses,
+                defs,
+                clobbers,
+                opcode,
+            }),
         }
     }
 
     pub(crate) fn call_unknown(
         dest: RegMem,
-        uses: Vec<Reg>,
-        defs: Vec<Writable<Reg>>,
+        uses: SmallVec<[Reg; 8]>,
+        defs: SmallVec<[Writable<Reg>; 8]>,
+        clobbers: PRegSet,
         opcode: Opcode,
     ) -> Inst {
         dest.assert_regclass_is(RegClass::Int);
         Inst::CallUnknown {
             dest,
-            uses,
-            defs,
-            opcode,
+            info: Box::new(CallInfo {
+                uses,
+                defs,
+                clobbers,
+                opcode,
+            }),
         }
     }
 
@@ -1650,11 +1672,11 @@ impl PrettyPrint for Inst {
             Inst::Ud2 { trap_code } => format!("ud2 {}", trap_code),
 
             Inst::ElfTlsGetAddr { ref symbol } => {
-                format!("elf_tls_get_addr {:?}", symbol)
+                format!("%rax = elf_tls_get_addr {:?}", symbol)
             }
 
             Inst::MachOTlsGetAddr { ref symbol } => {
-                format!("macho_tls_get_addr {:?}", symbol)
+                format!("%rax = macho_tls_get_addr {:?}", symbol)
             }
 
             Inst::Unwind { inst } => {
@@ -1977,34 +1999,25 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             collector.reg_def(dst.to_writable_reg());
         }
 
-        Inst::CallKnown {
-            ref uses, ref defs, ..
-        } => {
-            for &u in uses {
+        Inst::CallKnown { ref info, .. } => {
+            for &u in &info.uses {
                 collector.reg_use(u);
             }
-            for &d in defs {
+            for &d in &info.defs {
                 collector.reg_def(d);
             }
-            // FIXME: keep clobbers separate in the Inst and use
-            // `reg_clobber()`.
+            collector.reg_clobbers(info.clobbers);
         }
 
-        Inst::CallUnknown {
-            ref uses,
-            ref defs,
-            dest,
-            ..
-        } => {
+        Inst::CallUnknown { ref info, dest, .. } => {
             dest.get_operands(collector);
-            for &u in uses {
+            for &u in &info.uses {
                 collector.reg_use(u);
             }
-            for &d in defs {
+            for &d in &info.defs {
                 collector.reg_def(d);
             }
-            // FIXME: keep clobbers separate in the Inst and use
-            // `reg_clobber()`.
+            collector.reg_clobbers(info.clobbers);
         }
 
         Inst::JmpTableSeq {
@@ -2039,13 +2052,19 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             mem.get_operands(collector);
         }
 
-        Inst::AtomicRmwSeq { .. } => {
-            // FIXME: take vreg args, not fixed regs, and just use
-            // reg_fixed_use here.
-            collector.reg_use(regs::r9());
-            collector.reg_use(regs::r10());
-            collector.reg_def(Writable::from_reg(regs::r11()));
-            collector.reg_def(Writable::from_reg(regs::rax()));
+        Inst::AtomicRmwSeq {
+            operand,
+            temp,
+            dst_old,
+            mem,
+            ..
+        } => {
+            collector.reg_late_use(*operand);
+            collector.reg_early_def(*temp);
+            // This `fixed_def` is needed because `CMPXCHG` always uses this
+            // register implicitly.
+            collector.reg_fixed_def(*dst_old, regs::rax());
+            mem.get_operands_late(collector)
         }
 
         Inst::Ret { rets } => {
@@ -2070,16 +2089,16 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
         }
 
         Inst::ElfTlsGetAddr { .. } | Inst::MachOTlsGetAddr { .. } => {
+            collector.reg_def(Writable::from_reg(regs::rax()));
             // All caller-saves are clobbered.
             //
             // We use the SysV calling convention here because the
             // pseudoinstruction (and relocation that it emits) is specific to
             // ELF systems; other x86-64 targets with other conventions (i.e.,
             // Windows) use different TLS strategies.
-            for reg in X64ABIMachineSpec::get_regs_clobbered_by_call(CallConv::SystemV) {
-                // FIXME: use actual clobber functionality.
-                collector.reg_def(reg);
-            }
+            let mut clobbers = X64ABIMachineSpec::get_regs_clobbered_by_call(CallConv::SystemV);
+            clobbers.remove(regs::gpr_preg(regs::ENC_RAX));
+            collector.reg_clobbers(clobbers);
         }
 
         Inst::Unwind { .. } => {}

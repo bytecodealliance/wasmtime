@@ -6,10 +6,11 @@ use cranelift_codegen::entity::{EntitySet, SecondaryMap};
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::condcodes::IntCC;
 use cranelift_codegen::ir::{
-    types, AbiParam, Block, DataFlowGraph, ExtFuncData, ExternalName, FuncRef, Function,
-    GlobalValue, GlobalValueData, Heap, HeapData, Inst, InstBuilder, InstBuilderBase,
-    InstructionData, JumpTable, JumpTableData, LibCall, MemFlags, SigRef, Signature, StackSlot,
-    StackSlotData, Type, Value, ValueLabel, ValueLabelAssignments, ValueLabelStart,
+    types, AbiParam, Block, DataFlowGraph, DynamicStackSlot, DynamicStackSlotData, ExtFuncData,
+    ExternalName, FuncRef, Function, GlobalValue, GlobalValueData, Heap, HeapData, Inst,
+    InstBuilder, InstBuilderBase, InstructionData, JumpTable, JumpTableData, LibCall, MemFlags,
+    SigRef, Signature, StackSlot, StackSlotData, Type, Value, ValueLabel, ValueLabelAssignments,
+    ValueLabelStart,
 };
 use cranelift_codegen::isa::TargetFrontendConfig;
 use cranelift_codegen::packed_option::PackedOption;
@@ -370,10 +371,16 @@ impl<'a> FunctionBuilder<'a> {
         self.func.create_jump_table(data)
     }
 
-    /// Creates a stack slot in the function, to be used by `stack_load`, `stack_store` and
+    /// Creates a sized stack slot in the function, to be used by `stack_load`, `stack_store` and
     /// `stack_addr` instructions.
-    pub fn create_stack_slot(&mut self, data: StackSlotData) -> StackSlot {
-        self.func.create_stack_slot(data)
+    pub fn create_sized_stack_slot(&mut self, data: StackSlotData) -> StackSlot {
+        self.func.create_sized_stack_slot(data)
+    }
+
+    /// Creates a dynamic stack slot in the function, to be used by `dynamic_stack_load`,
+    /// `dynamic_stack_store` and `dynamic_stack_addr` instructions.
+    pub fn create_dynamic_stack_slot(&mut self, data: DynamicStackSlotData) -> DynamicStackSlot {
+        self.func.create_dynamic_stack_slot(data)
     }
 
     /// Adds a signature which can later be used to declare an external function import.

@@ -5,8 +5,9 @@ use anyhow::{Context, Result};
 use std::mem::MaybeUninit;
 use std::ptr::NonNull;
 use std::sync::Arc;
-use wasmtime_environ::component::{CanonicalOptions, ComponentTypes, CoreExport, TypeFuncIndex};
-use wasmtime_environ::FuncIndex;
+use wasmtime_environ::component::{
+    CanonicalOptions, ComponentTypes, CoreDef, RuntimeComponentInstanceIndex, TypeFuncIndex,
+};
 use wasmtime_runtime::{Export, ExportFunction, VMTrampoline};
 
 const MAX_STACK_PARAMS: usize = 16;
@@ -33,9 +34,11 @@ const MAX_STACK_RESULTS: usize = 1;
 /// let initial: &mut MaybeUninit<[u32; 2]> = ...;
 /// let element: &mut MaybeUninit<u32> = map_maybe_uninit!(initial[1]);
 /// ```
+#[doc(hidden)]
+#[macro_export]
 macro_rules! map_maybe_uninit {
     ($maybe_uninit:ident $($field:tt)*) => (#[allow(unused_unsafe)] unsafe {
-        use crate::component::func::MaybeUninitExt;
+        use $crate::component::__internal::MaybeUninitExt;
 
         let m: &mut std::mem::MaybeUninit<_> = $maybe_uninit;
         // Note the usage of `addr_of_mut!` here which is an attempt to "stay
@@ -46,7 +49,8 @@ macro_rules! map_maybe_uninit {
     })
 }
 
-trait MaybeUninitExt<T> {
+#[doc(hidden)]
+pub trait MaybeUninitExt<T> {
     /// Maps `MaybeUninit<T>` to `MaybeUninit<U>` using the closure provided.
     ///
     /// Note that this is `unsafe` as there is no guarantee that `U` comes from
@@ -82,6 +86,7 @@ pub struct FuncData {
     types: Arc<ComponentTypes>,
     options: Options,
     instance: Instance,
+    component_instance: RuntimeComponentInstanceIndex,
     post_return: Option<(ExportFunction, VMTrampoline)>,
     post_return_arg: Option<ValRaw>,
 }
@@ -92,10 +97,10 @@ impl Func {
         instance: &Instance,
         data: &InstanceData,
         ty: TypeFuncIndex,
-        func: &CoreExport<FuncIndex>,
+        func: &CoreDef,
         options: &CanonicalOptions,
     ) -> Func {
-        let export = match data.lookup_export(store, func) {
+        let export = match data.lookup_def(store, func) {
             Export::Function(f) => f,
             _ => unreachable!(),
         };
@@ -109,6 +114,7 @@ impl Func {
             let trampoline = store.lookup_trampoline(unsafe { anyfunc.as_ref() });
             (ExportFunction { anyfunc }, trampoline)
         });
+        let component_instance = options.instance;
         let options = unsafe { Options::new(store.id(), memory, realloc, options.string_encoding) };
         Func(store.store_data_mut().insert(FuncData {
             trampoline,
@@ -117,6 +123,7 @@ impl Func {
             ty,
             types: data.component_types().clone(),
             instance: *instance,
+            component_instance,
             post_return,
             post_return_arg: None,
         }))
@@ -205,7 +212,18 @@ impl Func {
         Return: Lift,
         S: AsContext,
     {
-        self.typecheck::<Params, Return>(store.as_context().0)?;
+        self._typed(store.as_context().0)
+    }
+
+    pub(crate) fn _typed<Params, Return>(
+        &self,
+        store: &StoreOpaque,
+    ) -> Result<TypedFunc<Params, Return>>
+    where
+        Params: ComponentParams + Lower,
+        Return: Lift,
+    {
+        self.typecheck::<Params, Return>(store)?;
         unsafe { Ok(TypedFunc::new_unchecked(*self)) }
     }
 

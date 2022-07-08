@@ -1,0 +1,129 @@
+test compile precise-output
+target aarch64
+
+function %store_scale() {
+  gv0 = dyn_scale_target_const.i32x4
+  ss0 = explicit_slot 8
+
+block0:
+  v0 = global_value.i64 gv0
+  stack_store.i64 v0, ss0
+  return
+}
+
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   sub sp, sp, #16
+; block0:
+;   mov x0, sp
+;   movz x2, #1
+;   str x2, [x0]
+;   add sp, sp, #16
+;   ldp fp, lr, [sp], #16
+;   ret
+
+function %store_scale_lt_128() {
+  gv0 = dyn_scale_target_const.i16x4
+  ss0 = explicit_slot 8
+
+block0:
+  v0 = global_value.i64 gv0
+  stack_store.i64 v0, ss0
+  return
+}
+
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   sub sp, sp, #16
+; block0:
+;   mov x0, sp
+;   movz x2, #1
+;   str x2, [x0]
+;   add sp, sp, #16
+;   ldp fp, lr, [sp], #16
+;   ret
+
+function %store_explicit(i32) {
+  gv0 = dyn_scale_target_const.i32x4
+  dt0 = i32x4*gv0
+  dss0 = explicit_dynamic_slot dt0
+
+block0(v0: i32):
+  v1 = splat.dt0 v0
+  dynamic_stack_store.dt0 v1, dss0
+  return
+}
+
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   sub sp, sp, #16
+; block0:
+;   dup v2.4s, w0
+;   mov x4, sp
+;   str q2, [x4]
+;   add sp, sp, #16
+;   ldp fp, lr, [sp], #16
+;   ret
+
+function %load_explicit() -> i32x4 {
+  gv0 = dyn_scale_target_const.i32x4
+  dt0 = i32x4*gv0
+  dss0 = explicit_dynamic_slot dt0
+
+block0:
+  v0 = dynamic_stack_load.dt0 dss0
+  v1 = extract_vector.dt0 v0, 0
+  return v1
+}
+
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   sub sp, sp, #16
+; block0:
+;   mov x3, sp
+;   ldr q0, [x3]
+;   add sp, sp, #16
+;   ldp fp, lr, [sp], #16
+;   ret
+
+function %store_implicit(i32) {
+  gv0 = dyn_scale_target_const.i32x4
+  dt0 = i32x4*gv0
+  dss0 = explicit_dynamic_slot dt0
+
+block0(v0: i32):
+  v1 = splat.dt0 v0
+  dynamic_stack_store v1, dss0
+  return
+}
+
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   sub sp, sp, #16
+; block0:
+;   dup v2.4s, w0
+;   mov x4, sp
+;   str q2, [x4]
+;   add sp, sp, #16
+;   ldp fp, lr, [sp], #16
+;   ret
+
+function %addr() -> i64 {
+  gv0 = dyn_scale_target_const.i32x4
+  dt0 = i32x4*gv0
+  dss0 = explicit_dynamic_slot dt0
+
+block0:
+  v0 = dynamic_stack_addr.i64 dss0
+  return v0
+}
+
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   sub sp, sp, #16
+; block0:
+;   mov x0, sp
+;   add sp, sp, #16
+;   ldp fp, lr, [sp], #16
+;   ret
+

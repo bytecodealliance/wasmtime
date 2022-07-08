@@ -114,6 +114,10 @@ pub struct Component {
     /// when instantiating this component.
     pub num_runtime_instances: u32,
 
+    /// Same as `num_runtime_instances`, but for `RuntimeComponentInstanceIndex`
+    /// instead.
+    pub num_runtime_component_instances: u32,
+
     /// The number of runtime memories (maximum `RuntimeMemoryIndex`) needed to
     /// instantiate this component.
     ///
@@ -139,6 +143,10 @@ pub struct Component {
     /// The number of modules that are required to be saved within an instance
     /// at runtime, or effectively the number of exported modules.
     pub num_runtime_modules: u32,
+
+    /// The number of functions which "always trap" used to implement
+    /// `canon.lower` of `canon.lift`'d functions within the same component.
+    pub num_always_trap: u32,
 }
 
 /// GlobalInitializer instructions to get processed when instantiating a component
@@ -168,6 +176,12 @@ pub enum GlobalInitializer {
     /// cranelift-compiled trampoline function pointer, the host function
     /// pointer the trampoline calls, and the canonical ABI options.
     LowerImport(LowerImport),
+
+    /// A core wasm function was "generated" via `canon lower` of a function
+    /// that was `canon lift`'d in the same component, meaning that the function
+    /// always traps. This is recorded within the `VMComponentContext` as a new
+    /// `VMCallerCheckedAnyfunc` that's available for use.
+    AlwaysTrap(AlwaysTrap),
 
     /// A core wasm linear memory is going to be saved into the
     /// `VMComponentContext`.
@@ -268,6 +282,17 @@ pub struct LowerImport {
     pub options: CanonicalOptions,
 }
 
+/// Description of what to initialize when a `GlobalInitializer::AlwaysTrap` is
+/// encountered.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AlwaysTrap {
+    /// The index of the function that is being initialized in the
+    /// `VMComponentContext`.
+    pub index: RuntimeAlwaysTrapIndex,
+    /// The core wasm signature of the function that's inserted.
+    pub canonical_abi: SignatureIndex,
+}
+
 /// Definition of a core wasm item and where it can come from within a
 /// component.
 ///
@@ -284,6 +309,10 @@ pub enum CoreDef {
     /// that this `LoweredIndex` corresponds to the nth
     /// `GlobalInitializer::LowerImport` instruction.
     Lowered(LoweredIndex),
+    /// This is used to represent a degenerate case of where a `canon lift`'d
+    /// function is immediately `canon lower`'d in the same instance. Such a
+    /// function always traps at runtime.
+    AlwaysTrap(RuntimeAlwaysTrapIndex),
 }
 
 impl<T> From<CoreExport<T>> for CoreDef
@@ -355,7 +384,7 @@ pub enum Export {
         /// The component function type of the function being created.
         ty: TypeFuncIndex,
         /// Which core WebAssembly export is being lifted.
-        func: CoreExport<FuncIndex>,
+        func: CoreDef,
         /// Any options, if present, associated with this lifting.
         options: CanonicalOptions,
     },
@@ -364,11 +393,17 @@ pub enum Export {
     /// The module index here indexes a module recorded with
     /// `GlobalInitializer::SaveModule` above.
     Module(RuntimeModuleIndex),
+    /// A nested instance is being exported which has recursively defined
+    /// `Export` items.
+    Instance(IndexMap<String, Export>),
 }
 
 /// Canonical ABI options associated with a lifted or lowered function.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CanonicalOptions {
+    /// The component instance that this bundle was associated with.
+    pub instance: RuntimeComponentInstanceIndex,
+
     /// The encoding used for strings.
     pub string_encoding: StringEncoding,
 
@@ -380,17 +415,6 @@ pub struct CanonicalOptions {
 
     /// The post-return function used by these options, if specified.
     pub post_return: Option<RuntimePostReturnIndex>,
-}
-
-impl Default for CanonicalOptions {
-    fn default() -> CanonicalOptions {
-        CanonicalOptions {
-            string_encoding: StringEncoding::Utf8,
-            memory: None,
-            realloc: None,
-            post_return: None,
-        }
-    }
 }
 
 /// Possible encodings of strings within the component model.

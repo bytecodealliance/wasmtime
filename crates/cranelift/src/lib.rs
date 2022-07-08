@@ -42,8 +42,9 @@ pub struct CompiledFunction {
 
     relocations: Vec<Relocation>,
     value_labels_ranges: cranelift_codegen::ValueLabelsRanges,
-    stack_slots: ir::StackSlots,
+    sized_stack_slots: ir::StackSlots,
 
+    // TODO: Add dynamic_stack_slots?
     info: FunctionInfo,
 }
 

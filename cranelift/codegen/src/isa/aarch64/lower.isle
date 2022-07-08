@@ -81,6 +81,9 @@
 (rule (lower (has_type ty @ (multi_lane _ _) (iadd x y)))
       (add_vec x y (vector_size ty)))
 
+(rule (lower (has_type ty @ (dynamic_lane _ _) (iadd x y)))
+      (value_reg (vec_rrr (VecALUOp.Add) (put_in_reg x) (put_in_reg y) (vector_size ty))))
+
 ;; `i128`
 (rule (lower (has_type $I128 (iadd x y)))
       (let
@@ -98,6 +101,11 @@
         (with_flags
           (add_with_flags_paired $I64 x_lo y_lo)
           (adc_paired $I64 x_hi y_hi))))
+
+;;;; Rules for `swizzle` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type vec_i128_ty (swizzle rn rm)))
+      (vec_tbl rn rm #f))
 
 ;;;; Rules for `iadd_pairwise` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -152,6 +160,8 @@
 ;; vectors
 (rule (lower (has_type ty @ (multi_lane _ _) (isub x y)))
       (sub_vec x y (vector_size ty)))
+(rule (lower (has_type ty @ (dynamic_lane _ _) (isub x y)))
+      (value_reg (sub_vec (put_in_reg x) (put_in_reg y) (vector_size ty))))
 
 ;; `i128`
 (rule (lower (has_type $I128 (isub x y)))
@@ -238,6 +248,10 @@
 ;; Case for i8x16, i16x8, and i32x4.
 (rule (lower (has_type (ty_vec128 ty @ (not_i64x2)) (imul x y)))
       (mul x y (vector_size ty)))
+
+;; Case for 'dynamic' i8x16, i16x8, and i32x4.
+(rule (lower (has_type ty @ (dynamic_lane _ _) (imul x y)))
+      (value_reg (vec_rrr (VecALUOp.Mul) (put_in_reg x) (put_in_reg y) (vector_size ty))))
 
 ;; Special lowering for i64x2.
 ;;
@@ -498,6 +512,20 @@
             (div Reg (a64_sdiv $I64 x64 y64))
             (result Reg (msub $I64 div y64 x64)))
         result))
+
+;;; Rules for integer min/max: umin, imin, umax, imax ;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type ty @ (not_i64x2) (imin x y)))
+      (vec_rrr (VecALUOp.Smin) x y (vector_size ty)))
+
+(rule (lower (has_type ty @ (not_i64x2) (umin x y)))
+      (vec_rrr (VecALUOp.Umin) x y (vector_size ty)))
+
+(rule (lower (has_type ty @ (not_i64x2) (imax x y)))
+      (vec_rrr (VecALUOp.Smax) x y (vector_size ty)))
+
+(rule (lower (has_type ty @ (not_i64x2) (umax x y)))
+      (vec_rrr (VecALUOp.Umax) x y (vector_size ty)))
 
 ;;;; Rules for `uextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1124,6 +1152,46 @@
 (rule (lower (bint x))
       (and_imm $I32 x (u64_into_imm_logic $I32 1)))
 
+;;;; Rules for `bmask`/`bextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Bextend and Bmask both simply sign-extend. This works for:
+;; - Bextend, because booleans are stored as 0 / -1, so we
+;;   sign-extend the -1 to a -1 in the wider width.
+;; - Bmask, because the resulting integer mask value must be
+;;   all-ones (-1) if the argument is true.
+
+;; Use a common helper to type cast bools to either bool or integer types.
+(decl cast_bool (Type Type Value) InstOutput)
+(rule (lower (has_type out_ty (bextend x @ (value_type in_ty))))
+      (cast_bool in_ty out_ty x))
+(rule (lower (has_type out_ty (bmask x @ (value_type in_ty))))
+      (cast_bool in_ty out_ty x))
+
+
+;; If the target has the same or a smaller size than the source, it's a no-op.
+(rule (cast_bool $B8 $I8 x) x)
+(rule (cast_bool $B16 (fits_in_16 _out) x) x)
+(rule (cast_bool $B32 (fits_in_32 _out) x) x)
+(rule (cast_bool $B64 (fits_in_64 _out) x) x)
+
+;; Casting between 128 bits is a noop
+(rule (cast_bool (ty_int_bool_128 _in) (ty_int_bool_128 _out) x)
+    x)
+
+;; Converting from 128 bits to anything below we just ignore the top register
+(rule (cast_bool (ty_int_bool_128 _in) (fits_in_64 _out) x)
+    (value_regs_get x 0))
+
+;; Extend to 64 bits first, then this will be all 0s or all 1s and we can
+;; duplicate to both halves of 128 bits
+(rule (cast_bool in (ty_int_bool_128 _out) x)
+      (let ((tmp Reg (extend x $true (ty_bits in) 64)))
+        (value_regs tmp tmp)))
+
+;; Values that fit in a single register are sign extended normally
+(rule (cast_bool (fits_in_64 in) (fits_in_64 out) x)
+      (extend x $true (ty_bits in) (ty_bits out)))
+
 ;;;; Rules for `popcnt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; The implementation of `popcnt` for scalar types is done by moving the value
@@ -1192,6 +1260,20 @@
 
 (rule (lower (has_type (ty_vec128 ty) (vselect c x y)))
         (bsl ty c x y))
+
+;;;; Rules for `ireduce` / `breduce` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; T -> I{64,32,16,8}: We can simply pass through the value: values
+;; are always stored with high bits undefined, so we can just leave
+;; them be.
+(rule (lower (has_type (ty_int_bool_ref_scalar_64 ty) (ireduce src)))
+    (value_regs_get src 0))
+
+;; Likewise for breduce.
+
+(rule (lower (has_type (ty_int_bool_ref_scalar_64 ty) (breduce src)))
+      (value_regs_get src 0))
+
 
 ;;;; Rules for `fcmp` 32 bit ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1271,7 +1353,20 @@
       (let ((use_allocated_encoding bool (is_not_baldrdash_call_conv)))
          (side_effect (udf use_allocated_encoding trap_code))))
 
-;;;; Rules for `AtomicRMW` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;; Rules for `AtomicLoad` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(rule (lower (has_type (valid_atomic_transaction ty) (atomic_load flags addr)))
+      (load_acquire ty addr))
+
+
+;;;; Rules for `AtomicStore` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(rule (lower (atomic_store flags
+                src @ (value_type (valid_atomic_transaction ty))
+                addr))
+      (side_effect (store_release ty src addr)))
+
+
+;;;; Rules for `AtomicRMW` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule 1 (lower (and (use_lse)
                   (has_type (valid_atomic_transaction ty)

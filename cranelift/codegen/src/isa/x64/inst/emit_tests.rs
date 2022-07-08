@@ -3572,8 +3572,9 @@ fn test_x64_emit() {
                 namespace: 0,
                 index: 0,
             },
-            Vec::new(),
-            Vec::new(),
+            smallvec![],
+            smallvec![],
+            PRegSet::default(),
             Opcode::Call,
         ),
         "E800000000",
@@ -3583,7 +3584,13 @@ fn test_x64_emit() {
     // ========================================================
     // CallUnknown
     fn call_unknown(rm: RegMem) -> Inst {
-        Inst::call_unknown(rm, Vec::new(), Vec::new(), Opcode::CallIndirect)
+        Inst::call_unknown(
+            rm,
+            smallvec![],
+            smallvec![],
+            PRegSet::default(),
+            Opcode::CallIndirect,
+        )
     }
 
     insns.push((call_unknown(RegMem::reg(rbp)), "FFD5", "call    *%rbp"));
@@ -4604,6 +4611,8 @@ fn test_x64_emit() {
         3,
     )
     .into();
+    // Use `r9` with a 0 offset.
+    let am3: SyntheticAmode = Amode::imm_reg(0, r9).into();
 
     // A general 8-bit case.
     insns.push((
@@ -4736,8 +4745,8 @@ fn test_x64_emit() {
     insns.push((
         Inst::AtomicRmwSeq {
             ty: types::I8,
-            op: inst_common::AtomicRmwOp::Or,
-            address: r9,
+            op: inst_common::MachAtomicRmwOp::Or,
+            mem: am3.clone(),
             operand: r10,
             temp: w_r11,
             dst_old: w_rax
@@ -4748,8 +4757,8 @@ fn test_x64_emit() {
     insns.push((
         Inst::AtomicRmwSeq {
             ty: types::I16,
-            op: inst_common::AtomicRmwOp::And,
-            address: r9,
+            op: inst_common::MachAtomicRmwOp::And,
+            mem: am3.clone(),
             operand: r10,
             temp: w_r11,
             dst_old: w_rax
@@ -4760,8 +4769,8 @@ fn test_x64_emit() {
     insns.push((
         Inst::AtomicRmwSeq {
             ty: types::I32,
-            op: inst_common::AtomicRmwOp::Xchg,
-            address: r9,
+            op: inst_common::MachAtomicRmwOp::Xchg,
+            mem: am3.clone(),
             operand: r10,
             temp: w_r11,
             dst_old: w_rax
@@ -4772,8 +4781,8 @@ fn test_x64_emit() {
     insns.push((
         Inst::AtomicRmwSeq {
             ty: types::I32,
-            op: inst_common::AtomicRmwOp::Umin,
-            address: r9,
+            op: inst_common::MachAtomicRmwOp::Umin,
+            mem: am3.clone(),
             operand: r10,
             temp: w_r11,
             dst_old: w_rax
@@ -4784,8 +4793,8 @@ fn test_x64_emit() {
     insns.push((
         Inst::AtomicRmwSeq {
             ty: types::I64,
-            op: inst_common::AtomicRmwOp::Add,
-            address: r9,
+            op: inst_common::MachAtomicRmwOp::Add,
+            mem: am3.clone(),
             operand: r10,
             temp: w_r11,
             dst_old: w_rax
@@ -4833,7 +4842,7 @@ fn test_x64_emit() {
             },
         },
         "66488D3D00000000666648E800000000",
-        "elf_tls_get_addr User { namespace: 0, index: 0 }",
+        "%rax = elf_tls_get_addr User { namespace: 0, index: 0 }",
     ));
 
     insns.push((
@@ -4844,7 +4853,7 @@ fn test_x64_emit() {
             },
         },
         "488B3D00000000FF17",
-        "macho_tls_get_addr User { namespace: 0, index: 0 }",
+        "%rax = macho_tls_get_addr User { namespace: 0, index: 0 }",
     ));
 
     // ========================================================

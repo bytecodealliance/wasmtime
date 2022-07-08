@@ -26,6 +26,9 @@ pub trait Value: Clone + From<DataValue> {
     fn convert(self, kind: ValueConversionKind) -> ValueResult<Self>;
     fn concat(self, other: Self) -> ValueResult<Self>;
 
+    fn is_negative(&self) -> ValueResult<bool>;
+    fn is_zero(&self) -> ValueResult<bool>;
+
     fn max(self, other: Self) -> ValueResult<Self>;
     fn min(self, other: Self) -> ValueResult<Self>;
 
@@ -50,6 +53,17 @@ pub trait Value: Clone + From<DataValue> {
     fn mul(self, other: Self) -> ValueResult<Self>;
     fn div(self, other: Self) -> ValueResult<Self>;
     fn rem(self, other: Self) -> ValueResult<Self>;
+    fn sqrt(self) -> ValueResult<Self>;
+    fn fma(self, a: Self, b: Self) -> ValueResult<Self>;
+    fn abs(self) -> ValueResult<Self>;
+
+    // Float operations
+    fn neg(self) -> ValueResult<Self>;
+    fn copysign(self, sign: Self) -> ValueResult<Self>;
+    fn ceil(self) -> ValueResult<Self>;
+    fn floor(self) -> ValueResult<Self>;
+    fn trunc(self) -> ValueResult<Self>;
+    fn nearest(self) -> ValueResult<Self>;
 
     // Saturating arithmetic.
     fn add_sat(self, other: Self) -> ValueResult<Self>;
@@ -275,6 +289,8 @@ impl Value for DataValue {
                 (DataValue::I64(n), types::I32) => DataValue::I32(i32::try_from(n)?),
                 (DataValue::I64(n), types::I64) => DataValue::I64(n),
                 (DataValue::I64(n), types::I128) => DataValue::I128(n as i128),
+                (DataValue::F32(n), types::I32) => DataValue::I32(n.bits() as i32),
+                (DataValue::F64(n), types::I64) => DataValue::I64(n.bits() as i64),
                 (DataValue::B(b), t) if t.is_bool() => DataValue::B(b),
                 (DataValue::B(b), t) if t.is_int() => {
                     // Bools are represented in memory as all 1's
@@ -385,6 +401,22 @@ impl Value for DataValue {
         }
     }
 
+    fn is_negative(&self) -> ValueResult<bool> {
+        match self {
+            DataValue::F32(f) => Ok(f.is_negative()),
+            DataValue::F64(f) => Ok(f.is_negative()),
+            _ => Err(ValueError::InvalidType(ValueTypeClass::Float, self.ty())),
+        }
+    }
+
+    fn is_zero(&self) -> ValueResult<bool> {
+        match self {
+            DataValue::F32(f) => Ok(f.is_zero()),
+            DataValue::F64(f) => Ok(f.is_zero()),
+            _ => Err(ValueError::InvalidType(ValueTypeClass::Float, self.ty())),
+        }
+    }
+
     fn max(self, other: Self) -> ValueResult<Self> {
         if Value::gt(&self, &other)? {
             Ok(self)
@@ -459,6 +491,50 @@ impl Value for DataValue {
         }
 
         binary_match!(%(&self, &other); [I8, I16, I32, I64])
+    }
+
+    fn sqrt(self) -> ValueResult<Self> {
+        unary_match!(sqrt(&self); [F32, F64]; [Ieee32, Ieee64])
+    }
+
+    fn fma(self, b: Self, c: Self) -> ValueResult<Self> {
+        match (self, b, c) {
+            (DataValue::F32(a), DataValue::F32(b), DataValue::F32(c)) => {
+                Ok(DataValue::F32(a.mul_add(b, c)))
+            }
+            (DataValue::F64(a), DataValue::F64(b), DataValue::F64(c)) => {
+                Ok(DataValue::F64(a.mul_add(b, c)))
+            }
+            (a, _b, _c) => Err(ValueError::InvalidType(ValueTypeClass::Float, a.ty())),
+        }
+    }
+
+    fn abs(self) -> ValueResult<Self> {
+        unary_match!(abs(&self); [F32, F64])
+    }
+
+    fn neg(self) -> ValueResult<Self> {
+        unary_match!(neg(&self); [F32, F64])
+    }
+
+    fn copysign(self, sign: Self) -> ValueResult<Self> {
+        binary_match!(copysign(&self, &sign); [F32, F64])
+    }
+
+    fn ceil(self) -> ValueResult<Self> {
+        unary_match!(ceil(&self); [F32, F64])
+    }
+
+    fn floor(self) -> ValueResult<Self> {
+        unary_match!(floor(&self); [F32, F64])
+    }
+
+    fn trunc(self) -> ValueResult<Self> {
+        unary_match!(trunc(&self); [F32, F64])
+    }
+
+    fn nearest(self) -> ValueResult<Self> {
+        unary_match!(round_ties_even(&self); [F32, F64])
     }
 
     fn add_sat(self, other: Self) -> ValueResult<Self> {

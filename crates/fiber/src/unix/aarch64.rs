@@ -20,15 +20,19 @@
 
 cfg_if::cfg_if! {
     if #[cfg(target_os = "macos")] {
-        macro_rules! cfi_window_save { () => (); }
-        macro_rules! pacia1716 { () => (); }
-        macro_rules! paciasp { () => (); }
-        macro_rules! autiasp { () => (); }
+        macro_rules! cfi_window_save { () => (""); }
+        macro_rules! pacia1716 { () => (""); }
+        macro_rules! paciasp { () => (""); }
+        macro_rules! autiasp { () => (""); }
+        macro_rules! sym_adrp { ($s:tt) => (concat!("_", $s, "@PAGE")); }
+        macro_rules! sym_add { ($s:tt) => (concat!("_", $s, "@PAGEOFF")); }
     } else {
         macro_rules! cfi_window_save { () => (".cfi_window_save\n"); }
         macro_rules! pacia1716 { () => ("pacia1716\n"); }
         macro_rules! paciasp { () => ("paciasp\n"); }
         macro_rules! autiasp { () => ("autiasp\n"); }
+        macro_rules! sym_adrp { ($s:tt) => (concat!($s, "")); }
+        macro_rules! sym_add { ($s:tt) => (concat!(":lo12:", $s)); }
     }
 }
 
@@ -112,7 +116,8 @@ asm_func!(
         .cfi_startproc
         hint #34 // bti c
         sub x16, x0, #16
-        adr x17, ", asm_sym!("wasmtime_fiber_start"), "
+        adrp x17, ", sym_adrp!("wasmtime_fiber_start"), "
+        add x17, x17, ", sym_add!("wasmtime_fiber_start"), "
     ",
     pacia1716!(),
     "

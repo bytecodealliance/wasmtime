@@ -158,9 +158,12 @@ block0(v0: i128, v1: i128):
 }
 
 ; block0:
-;   adds xzr, x0, x2
-;   adcs xzr, x1, x3
-;   cset x0, vs
+;   subs xzr, x0, x2
+;   sbcs x11, x1, x3
+;   eor x13, x1, x3
+;   eor x11, x1, x11
+;   ands xzr, x13, x11
+;   cset x0, lt
 ;   ret
 
 function %icmp_nof_i128(i128, i128) -> b1 {
@@ -170,9 +173,12 @@ block0(v0: i128, v1: i128):
 }
 
 ; block0:
-;   adds xzr, x0, x2
-;   adcs xzr, x1, x3
-;   cset x0, vc
+;   subs xzr, x0, x2
+;   sbcs x11, x1, x3
+;   eor x13, x1, x3
+;   eor x11, x1, x11
+;   ands xzr, x13, x11
+;   cset x0, ge
 ;   ret
 
 function %f(i64, i64) -> i64 {
@@ -510,9 +516,12 @@ block1:
 }
 
 ; block0:
-;   adds xzr, x0, x2
-;   adcs xzr, x1, x3
-;   b.vs label1 ; b label2
+;   subs xzr, x0, x2
+;   sbcs x9, x1, x3
+;   eor x11, x1, x3
+;   eor x9, x1, x9
+;   ands xzr, x11, x9
+;   b.lt label1 ; b label2
 ; block1:
 ;   b label3
 ; block2:
@@ -530,9 +539,12 @@ block1:
 }
 
 ; block0:
-;   adds xzr, x0, x2
-;   adcs xzr, x1, x3
-;   b.vc label1 ; b label2
+;   subs xzr, x0, x2
+;   sbcs x9, x1, x3
+;   eor x11, x1, x3
+;   eor x9, x1, x9
+;   ands xzr, x11, x9
+;   b.ge label1 ; b label2
 ; block1:
 ;   b label3
 ; block2:

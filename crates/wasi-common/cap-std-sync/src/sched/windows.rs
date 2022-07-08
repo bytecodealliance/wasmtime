@@ -9,6 +9,7 @@
 // taken the time to improve it. See bug #2880.
 
 use anyhow::Context;
+use once_cell::sync::Lazy;
 use std::ops::Deref;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender, TryRecvError};
 use std::sync::Mutex;
@@ -145,9 +146,7 @@ struct StdinPoll {
     notify_rx: Receiver<PollState>,
 }
 
-lazy_static::lazy_static! {
-    static ref STDIN_POLL: Mutex<StdinPoll> = StdinPoll::new();
-}
+static STDIN_POLL: Lazy<Mutex<StdinPoll>> = Lazy::new(StdinPoll::new);
 
 impl StdinPoll {
     pub fn new() -> Mutex<Self> {

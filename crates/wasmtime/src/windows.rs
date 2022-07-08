@@ -10,6 +10,7 @@
 //! available on Windows.
 
 use crate::{AsContextMut, Store};
+use windows_sys::Win32::System::Diagnostics::Debug::EXCEPTION_POINTERS;
 
 /// Extensions for the [`Store`] type only available on Windows.
 pub trait StoreExt {
@@ -18,13 +19,13 @@ pub trait StoreExt {
     /// TODO: needs more documentation.
     unsafe fn set_signal_handler<H>(&mut self, handler: H)
     where
-        H: 'static + Fn(winapi::um::winnt::PEXCEPTION_POINTERS) -> bool + Send + Sync;
+        H: 'static + Fn(*mut EXCEPTION_POINTERS) -> bool + Send + Sync;
 }
 
 impl<T> StoreExt for Store<T> {
     unsafe fn set_signal_handler<H>(&mut self, handler: H)
     where
-        H: 'static + Fn(winapi::um::winnt::PEXCEPTION_POINTERS) -> bool + Send + Sync,
+        H: 'static + Fn(*mut EXCEPTION_POINTERS) -> bool + Send + Sync,
     {
         self.as_context_mut()
             .0

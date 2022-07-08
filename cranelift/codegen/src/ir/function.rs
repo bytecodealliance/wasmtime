@@ -7,12 +7,12 @@ use crate::entity::{PrimaryMap, SecondaryMap};
 use crate::ir;
 use crate::ir::JumpTables;
 use crate::ir::{
-    instructions::BranchInfo, Block, ExtFuncData, FuncRef, GlobalValue, GlobalValueData, Heap,
-    HeapData, Inst, InstructionData, JumpTable, JumpTableData, Opcode, SigRef, StackSlot,
-    StackSlotData, Table, TableData,
+    instructions::BranchInfo, Block, DynamicStackSlot, DynamicStackSlotData, DynamicType,
+    ExtFuncData, FuncRef, GlobalValue, GlobalValueData, Heap, HeapData, Inst, InstructionData,
+    JumpTable, JumpTableData, Opcode, SigRef, StackSlot, StackSlotData, Table, TableData, Type,
 };
 use crate::ir::{DataFlowGraph, ExternalName, Layout, Signature};
-use crate::ir::{SourceLocs, StackSlots};
+use crate::ir::{DynamicStackSlots, SourceLocs, StackSlots};
 use crate::isa::CallConv;
 use crate::value_label::ValueLabelsRanges;
 use crate::write::write_function;
@@ -78,8 +78,11 @@ pub struct Function {
     /// Signature of this function.
     pub signature: Signature,
 
-    /// Stack slots allocated in this function.
-    pub stack_slots: StackSlots,
+    /// Sized stack slots allocated in this function.
+    pub sized_stack_slots: StackSlots,
+
+    /// Dynamic stack slots allocated in this function.
+    pub dynamic_stack_slots: DynamicStackSlots,
 
     /// Global values referenced.
     pub global_values: PrimaryMap<ir::GlobalValue, ir::GlobalValueData>,
@@ -120,7 +123,8 @@ impl Function {
             version_marker: VersionMarker,
             name,
             signature: sig,
-            stack_slots: StackSlots::new(),
+            sized_stack_slots: StackSlots::new(),
+            dynamic_stack_slots: DynamicStackSlots::new(),
             global_values: PrimaryMap::new(),
             heaps: PrimaryMap::new(),
             tables: PrimaryMap::new(),
@@ -135,7 +139,8 @@ impl Function {
     /// Clear all data structures in this function.
     pub fn clear(&mut self) {
         self.signature.clear(CallConv::Fast);
-        self.stack_slots.clear();
+        self.sized_stack_slots.clear();
+        self.dynamic_stack_slots.clear();
         self.global_values.clear();
         self.heaps.clear();
         self.tables.clear();
@@ -156,10 +161,16 @@ impl Function {
         self.jump_tables.push(data)
     }
 
-    /// Creates a stack slot in the function, to be used by `stack_load`, `stack_store` and
-    /// `stack_addr` instructions.
-    pub fn create_stack_slot(&mut self, data: StackSlotData) -> StackSlot {
-        self.stack_slots.push(data)
+    /// Creates a sized stack slot in the function, to be used by `stack_load`, `stack_store`
+    /// and `stack_addr` instructions.
+    pub fn create_sized_stack_slot(&mut self, data: StackSlotData) -> StackSlot {
+        self.sized_stack_slots.push(data)
+    }
+
+    /// Creates a dynamic stack slot in the function, to be used by `dynamic_stack_load`,
+    /// `dynamic_stack_store` and `dynamic_stack_addr` instructions.
+    pub fn create_dynamic_stack_slot(&mut self, data: DynamicStackSlotData) -> DynamicStackSlot {
+        self.dynamic_stack_slots.push(data)
     }
 
     /// Adds a signature which can later be used to declare an external function import.
@@ -175,6 +186,26 @@ impl Function {
     /// Declares a global value accessible to the function.
     pub fn create_global_value(&mut self, data: GlobalValueData) -> GlobalValue {
         self.global_values.push(data)
+    }
+
+    /// Find the global dyn_scale value associated with given DynamicType
+    pub fn get_dyn_scale(&self, ty: DynamicType) -> GlobalValue {
+        self.dfg.dynamic_types.get(ty).unwrap().dynamic_scale
+    }
+
+    /// Find the global dyn_scale for the given stack slot.
+    pub fn get_dynamic_slot_scale(&self, dss: DynamicStackSlot) -> GlobalValue {
+        let dyn_ty = self.dynamic_stack_slots.get(dss).unwrap().dyn_ty;
+        self.get_dyn_scale(dyn_ty)
+    }
+
+    /// Get a concrete `Type` from a user defined `DynamicType`.
+    pub fn get_concrete_dynamic_ty(&self, ty: DynamicType) -> Option<Type> {
+        self.dfg
+            .dynamic_types
+            .get(ty)
+            .unwrap_or_else(|| panic!("Undeclared dynamic vector type: {}", ty))
+            .concrete()
     }
 
     /// Declares a heap accessible to the function.
@@ -322,8 +353,8 @@ impl Function {
     /// Size occupied by all stack slots associated with this function.
     ///
     /// Does not include any padding necessary due to offsets
-    pub fn stack_size(&self) -> u32 {
-        self.stack_slots.values().map(|ss| ss.size).sum()
+    pub fn fixed_stack_size(&self) -> u32 {
+        self.sized_stack_slots.values().map(|ss| ss.size).sum()
     }
 }
 

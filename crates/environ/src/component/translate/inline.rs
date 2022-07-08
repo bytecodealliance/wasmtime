@@ -46,11 +46,11 @@
 //! final `Component`.
 
 use crate::component::translate::*;
-use crate::{ModuleTranslation, PrimaryMap};
+use crate::{ModuleTranslation, PrimaryMap, SignatureIndex};
 use indexmap::IndexMap;
 
 pub(super) fn run(
-    types: &mut ComponentTypesBuilder,
+    types: &ComponentTypesBuilder,
     result: &Translation<'_>,
     nested_modules: &PrimaryMap<StaticModuleIndex, ModuleTranslation<'_>>,
     nested_components: &PrimaryMap<StaticComponentIndex, Translation<'_>>,
@@ -64,6 +64,7 @@ pub(super) fn run(
         runtime_realloc_interner: Default::default(),
         runtime_post_return_interner: Default::default(),
         runtime_memory_interner: Default::default(),
+        runtime_always_trap_interner: Default::default(),
     };
 
     // The initial arguments to the root component are all host imports. This
@@ -81,83 +82,36 @@ pub(super) fn run(
         };
         let index = inliner.result.import_types.push((name.to_string(), ty));
         let path = ImportPath::root(index);
-        args.insert(
-            name,
-            match ty {
-                TypeDef::Module(ty) => ComponentItemDef::Module(ModuleDef::Import(path, ty)),
-                TypeDef::ComponentInstance(ty) => {
-                    ComponentItemDef::Instance(ComponentInstanceDef::Import(path, ty))
-                }
-                TypeDef::ComponentFunc(_ty) => {
-                    ComponentItemDef::Func(ComponentFuncDef::Import(path))
-                }
-                // FIXME(#4283) should commit one way or another to how this
-                // should be treated.
-                TypeDef::Component(_ty) => bail!("root-level component imports are not supported"),
-                TypeDef::Interface(_ty) => unimplemented!("import of a type"),
-                TypeDef::CoreFunc(_ty) => unreachable!(),
-            },
-        );
+        args.insert(name, ComponentItemDef::from_import(path, ty)?);
     }
 
     // This will run the inliner to completion after being seeded with the
     // initial frame. When the inliner finishes it will return the exports of
     // the root frame which are then used for recording the exports of the
     // component.
-    let mut frames = vec![InlinerFrame::new(result, ComponentClosure::default(), args)];
+    let index = RuntimeComponentInstanceIndex::from_u32(0);
+    inliner.result.num_runtime_component_instances += 1;
+    let mut frames = vec![InlinerFrame::new(
+        index,
+        result,
+        ComponentClosure::default(),
+        args,
+    )];
     let exports = inliner.run(&mut frames)?;
     assert!(frames.is_empty());
 
+    let mut export_map = Default::default();
     for (name, def) in exports {
-        let export = match def {
-            // Exported modules are currently saved in a `PrimaryMap`, at
-            // runtime, so an index (`RuntimeModuleIndex`) is assigned here and
-            // then an initializer is recorded about where the module comes
-            // from.
-            ComponentItemDef::Module(module) => {
-                let index = RuntimeModuleIndex::from_u32(inliner.result.num_runtime_modules);
-                inliner.result.num_runtime_modules += 1;
-                let init = match module {
-                    ModuleDef::Static(idx) => GlobalInitializer::SaveStaticModule(idx),
-                    ModuleDef::Import(path, _) => {
-                        GlobalInitializer::SaveModuleImport(inliner.runtime_import(&path))
-                    }
-                };
-                inliner.result.initializers.push(init);
-                Export::Module(index)
-            }
-
-            // Currently only exported functions through liftings are supported
-            // which simply record the various lifting options here which get
-            // processed at runtime.
-            ComponentItemDef::Func(func) => match func {
-                ComponentFuncDef::Lifted { ty, func, options } => {
-                    Export::LiftedFunction { ty, func, options }
-                }
-                ComponentFuncDef::Import(_) => unimplemented!("reexporting a function import"),
-            },
-
-            ComponentItemDef::Instance(_) => unimplemented!("exporting an instance to the host"),
-
-            // FIXME(#4283) should make an official decision on whether this is
-            // the final treatment of this or not.
-            ComponentItemDef::Component(_) => {
-                bail!("exporting a component from the root component is not supported")
-            }
-        };
-
-        inliner.result.exports.insert(name.to_string(), export);
+        inliner.record_export(name, def, &mut export_map)?;
     }
+    inliner.result.exports = export_map;
 
     Ok(inliner.result)
 }
 
 struct Inliner<'a> {
     /// Global type information for the entire component.
-    ///
-    /// Note that the mutability is used here to register a `SignatureIndex` for
-    /// the wasm function signature of lowered imports.
-    types: &'a mut ComponentTypesBuilder,
+    types: &'a ComponentTypesBuilder,
 
     /// The list of static modules that were found during initial translation of
     /// the component.
@@ -185,6 +139,7 @@ struct Inliner<'a> {
     runtime_realloc_interner: HashMap<CoreDef, RuntimeReallocIndex>,
     runtime_post_return_interner: HashMap<CoreDef, RuntimePostReturnIndex>,
     runtime_memory_interner: HashMap<CoreExport<MemoryIndex>, RuntimeMemoryIndex>,
+    runtime_always_trap_interner: HashMap<SignatureIndex, RuntimeAlwaysTrapIndex>,
 }
 
 /// A "stack frame" as part of the inlining process, or the progress through
@@ -195,6 +150,8 @@ struct Inliner<'a> {
 /// inliner frames are stored on the heap to avoid recursion based on user
 /// input.
 struct InlinerFrame<'a> {
+    instance: RuntimeComponentInstanceIndex,
+
     /// The remaining initializers to process when instantiating this component.
     initializers: std::slice::Iter<'a, LocalInitializer<'a>>,
 
@@ -312,7 +269,7 @@ enum ComponentFuncDef<'a> {
     /// A core wasm function was lifted into a component function.
     Lifted {
         ty: TypeFuncIndex,
-        func: CoreExport<FuncIndex>,
+        func: CoreDef,
         options: CanonicalOptions,
     },
 }
@@ -432,38 +389,17 @@ impl<'a> Inliner<'a> {
             //
             // NB: at this time only lowered imported functions are supported.
             Lower(func, options) => {
-                // Assign this lowering a unique index and determine the core
-                // wasm function index we're defining.
-                let index = LoweredIndex::from_u32(self.result.num_lowerings);
-                self.result.num_lowerings += 1;
-                let func_index = frame.funcs.push(CoreDef::Lowered(index));
+                let canonical_abi = frame.translation.funcs[frame.funcs.next_key()];
 
-                // Use the type information from `wasmparser` to lookup the core
-                // wasm function signature of the lowered function. This avoids
-                // us having to reimplement the
-                // translate-interface-types-to-the-canonical-abi logic. The
-                // type of the function is then intern'd to get a
-                // `SignatureIndex` which is later used at runtime for a
-                // `VMSharedSignatureIndex`.
-                let lowered_function_type = frame
-                    .translation
-                    .types
-                    .as_ref()
-                    .unwrap()
-                    .function_at(func_index.as_u32())
-                    .expect("should be in-bounds");
-                let canonical_abi = self
-                    .types
-                    .module_types_builder()
-                    .wasm_func_type(lowered_function_type.clone().try_into()?);
-
-                let options = self.canonical_options(frame, options);
-                match &frame.component_funcs[*func] {
+                let options_lower = self.canonical_options(frame, options);
+                let func = match &frame.component_funcs[*func] {
                     // If this component function was originally a host import
                     // then this is a lowered host function which needs a
                     // trampoline to enter WebAssembly. That's recorded here
                     // with all relevant information.
                     ComponentFuncDef::Import(path) => {
+                        let index = LoweredIndex::from_u32(self.result.num_lowerings);
+                        self.result.num_lowerings += 1;
                         let import = self.runtime_import(path);
                         self.result
                             .initializers
@@ -471,35 +407,91 @@ impl<'a> Inliner<'a> {
                                 canonical_abi,
                                 import,
                                 index,
-                                options,
+                                options: options_lower,
                             }));
+                        CoreDef::Lowered(index)
                     }
 
-                    // TODO: Lowering a lift function could mean one of two
-                    // things:
+                    // This case handles when a lifted function is later
+                    // lowered, and both the lowering and the lifting are
+                    // happening within the same component instance.
                     //
-                    // * This could mean that a "fused adapter" was just
-                    //   identified. If the lifted function here comes from a
-                    //   different component than we're lowering into then we
-                    //   have identified the fusion location of two components
-                    //   talking to each other. Metadata needs to be recorded
-                    //   here about the fusion to get something generated by
-                    //   Cranelift later on.
+                    // In this situation if the `canon.lower`'d function is
+                    // called then it immediately sets `may_enter` to `false`.
+                    // When calling the callee, however, that's `canon.lift`
+                    // which immediately traps if `may_enter` is `false`. That
+                    // means that this pairing of functions creates a function
+                    // that always traps.
                     //
-                    // * Otherwise if the lifted function is in the same
-                    //   component that we're lowering into then that means
-                    //   something "funky" is happening. This needs to be
-                    //   carefully implemented with respect to the
-                    //   may_{enter,leave} flags as specified with the canonical
-                    //   ABI. The careful consideration for how to do this has
-                    //   not yet happened.
+                    // When closely reading the spec though the precise trap
+                    // that comes out can be somewhat variable. Technically the
+                    // function yielded here is one that should validate the
+                    // arguments by lifting them, and then trap. This means that
+                    // the trap could be different depending on whether all
+                    // arguments are valid for now. This was discussed in
+                    // WebAssembly/component-model#51 somewhat and the
+                    // conclusion was that we can probably get away with "always
+                    // trap" here.
                     //
-                    // In general this is almost certainly going to require some
-                    // new variant of `GlobalInitializer` in one form or another.
-                    ComponentFuncDef::Lifted { .. } => {
+                    // The `CoreDef::AlwaysTrap` variant here is used to
+                    // indicate that this function is valid but if something
+                    // actually calls it then it just generates a trap
+                    // immediately.
+                    ComponentFuncDef::Lifted {
+                        options: options_lift,
+                        ..
+                    } if options_lift.instance == options_lower.instance => {
+                        let index = *self
+                            .runtime_always_trap_interner
+                            .entry(canonical_abi)
+                            .or_insert_with(|| {
+                                let index =
+                                    RuntimeAlwaysTrapIndex::from_u32(self.result.num_always_trap);
+                                self.result.num_always_trap += 1;
+                                self.result.initializers.push(GlobalInitializer::AlwaysTrap(
+                                    AlwaysTrap {
+                                        canonical_abi,
+                                        index,
+                                    },
+                                ));
+                                index
+                            });
+                        CoreDef::AlwaysTrap(index)
+                    }
+
+                    // Lowering a lifted function where the destination
+                    // component is different than the source component means
+                    // that a "fused adapter" was just identified.
+                    //
+                    // This is the location where, when this is actually
+                    // implemented, we'll record metadata about this fused
+                    // adapter to get compiled later during the compilation
+                    // process. The fused adapter here will be generated by
+                    // cranelift and will perfom argument validation when
+                    // called, copy the arguments from `options_lower` to
+                    // `options_lift` and then call the `func` specified for the
+                    // lifted options.
+                    //
+                    // When the `func` returns the canonical adapter will verify
+                    // the return values, copy them from `options_lift` to
+                    // `options_lower`, and then return.
+                    ComponentFuncDef::Lifted {
+                        ty,
+                        func,
+                        options: options_lift,
+                    } => {
+                        // These are the various compilation options for lifting
+                        // and lowering.
+                        drop(ty); // component-model function type
+                        drop(func); // original core wasm function that was lifted
+                        drop(options_lift); // options during `canon lift`
+                        drop(options_lower); // options during `canon lower`
+                        drop(canonical_abi); // type signature of created core wasm function
+
                         unimplemented!("lowering a lifted function")
                     }
-                }
+                };
+                frame.funcs.push(func);
             }
 
             // Lifting a core wasm function is relatively easy for now in that
@@ -509,19 +501,7 @@ impl<'a> Inliner<'a> {
                 let options = self.canonical_options(frame, options);
                 frame.component_funcs.push(ComponentFuncDef::Lifted {
                     ty: *ty,
-                    func: match frame.funcs[*func].clone() {
-                        CoreDef::Export(e) => e.map_index(|i| match i {
-                            EntityIndex::Function(i) => i,
-                            _ => unreachable!("not possible in valid components"),
-                        }),
-
-                        // TODO: lifting a lowered function only happens within
-                        // one component so this runs afoul of "someone needs to
-                        // really closely interpret the may_{enter,leave} flags"
-                        // in the component model spec. That has not currently
-                        // been done so this is left to panic.
-                        CoreDef::Lowered(_) => unimplemented!("lifting a lowered function"),
-                    },
+                    func: frame.funcs[*func].clone(),
                     options,
                 });
             }
@@ -618,7 +598,12 @@ impl<'a> Inliner<'a> {
             // stack.
             ComponentInstantiate(component, args) => {
                 let component: &ComponentDef<'a> = &frame.components[*component];
+                let index = RuntimeComponentInstanceIndex::from_u32(
+                    self.result.num_runtime_component_instances,
+                );
+                self.result.num_runtime_component_instances += 1;
                 let frame = InlinerFrame::new(
+                    index,
                     &self.nested_components[component.index],
                     component.closure.clone(),
                     args.iter()
@@ -652,7 +637,7 @@ impl<'a> Inliner<'a> {
                 frame.tables.push(
                     match self.core_def_of_module_instance_export(frame, *instance, *name) {
                         CoreDef::Export(e) => e,
-                        CoreDef::Lowered(_) => unreachable!(),
+                        CoreDef::Lowered(_) | CoreDef::AlwaysTrap(_) => unreachable!(),
                     },
                 );
             }
@@ -661,7 +646,7 @@ impl<'a> Inliner<'a> {
                 frame.globals.push(
                     match self.core_def_of_module_instance_export(frame, *instance, *name) {
                         CoreDef::Export(e) => e,
-                        CoreDef::Lowered(_) => unreachable!(),
+                        CoreDef::Lowered(_) | CoreDef::AlwaysTrap(_) => unreachable!(),
                     },
                 );
             }
@@ -670,7 +655,7 @@ impl<'a> Inliner<'a> {
                 frame.memories.push(
                     match self.core_def_of_module_instance_export(frame, *instance, *name) {
                         CoreDef::Export(e) => e,
-                        CoreDef::Lowered(_) => unreachable!(),
+                        CoreDef::Lowered(_) | CoreDef::AlwaysTrap(_) => unreachable!(),
                     },
                 );
             }
@@ -872,16 +857,101 @@ impl<'a> Inliner<'a> {
                 })
         });
         CanonicalOptions {
+            instance: frame.instance,
             string_encoding: options.string_encoding,
             memory,
             realloc,
             post_return,
         }
     }
+
+    fn record_export(
+        &mut self,
+        name: &str,
+        def: ComponentItemDef<'a>,
+        map: &mut IndexMap<String, Export>,
+    ) -> Result<()> {
+        let export = match def {
+            // Exported modules are currently saved in a `PrimaryMap`, at
+            // runtime, so an index (`RuntimeModuleIndex`) is assigned here and
+            // then an initializer is recorded about where the module comes
+            // from.
+            ComponentItemDef::Module(module) => {
+                let index = RuntimeModuleIndex::from_u32(self.result.num_runtime_modules);
+                self.result.num_runtime_modules += 1;
+                let init = match module {
+                    ModuleDef::Static(idx) => GlobalInitializer::SaveStaticModule(idx),
+                    ModuleDef::Import(path, _) => {
+                        GlobalInitializer::SaveModuleImport(self.runtime_import(&path))
+                    }
+                };
+                self.result.initializers.push(init);
+                Export::Module(index)
+            }
+
+            ComponentItemDef::Func(func) => match func {
+                // If this is a lifted function from something lowered in this
+                // component then the configured options are plumbed through
+                // here.
+                ComponentFuncDef::Lifted { ty, func, options } => {
+                    Export::LiftedFunction { ty, func, options }
+                }
+
+                // Currently reexported functions from an import are not
+                // supported. Being able to actually call these functions is
+                // somewhat tricky and needs something like temporary scratch
+                // space that isn't implemented.
+                ComponentFuncDef::Import(_) => {
+                    bail!("component export `{name}` is a reexport of an imported function which is not implemented")
+                }
+            },
+
+            ComponentItemDef::Instance(instance) => {
+                let mut result = IndexMap::new();
+                match instance {
+                    // If this instance is one that was originally imported by
+                    // the component itself then the imports are translated here
+                    // by converting to a `ComponentItemDef` and then
+                    // recursively recording the export as a reexport.
+                    //
+                    // Note that for now this would only work with
+                    // module-exporting instances.
+                    ComponentInstanceDef::Import(path, ty) => {
+                        for (name, ty) in self.types[ty].exports.iter() {
+                            let mut path = path.clone();
+                            path.path.push(name);
+                            let def = ComponentItemDef::from_import(path, *ty)?;
+                            self.record_export(name, def, &mut result)?;
+                        }
+                    }
+
+                    // An exported instance which is itself a bag of items is
+                    // translated recursively here to our `result` map which is
+                    // the bag of items we're exporting.
+                    ComponentInstanceDef::Items(map) => {
+                        for (name, def) in map {
+                            self.record_export(name, def, &mut result)?;
+                        }
+                    }
+                }
+                Export::Instance(result)
+            }
+
+            // FIXME(#4283) should make an official decision on whether this is
+            // the final treatment of this or not.
+            ComponentItemDef::Component(_) => {
+                bail!("exporting a component from the root component is not supported")
+            }
+        };
+
+        map.insert(name.to_string(), export);
+        Ok(())
+    }
 }
 
 impl<'a> InlinerFrame<'a> {
     fn new(
+        instance: RuntimeComponentInstanceIndex,
         translation: &'a Translation<'a>,
         closure: ComponentClosure<'a>,
         args: HashMap<&'a str, ComponentItemDef<'a>>,
@@ -891,6 +961,7 @@ impl<'a> InlinerFrame<'a> {
         // all the maps below. Given that doing such would be wordy and compile
         // time is otherwise not super crucial it's not done at this time.
         InlinerFrame {
+            instance,
             translation,
             closure,
             args,
@@ -941,5 +1012,23 @@ impl<'a> ImportPath<'a> {
             index,
             path: Vec::new(),
         }
+    }
+}
+
+impl<'a> ComponentItemDef<'a> {
+    fn from_import(path: ImportPath<'a>, ty: TypeDef) -> Result<ComponentItemDef<'a>> {
+        let item = match ty {
+            TypeDef::Module(ty) => ComponentItemDef::Module(ModuleDef::Import(path, ty)),
+            TypeDef::ComponentInstance(ty) => {
+                ComponentItemDef::Instance(ComponentInstanceDef::Import(path, ty))
+            }
+            TypeDef::ComponentFunc(_ty) => ComponentItemDef::Func(ComponentFuncDef::Import(path)),
+            // FIXME(#4283) should commit one way or another to how this
+            // should be treated.
+            TypeDef::Component(_ty) => bail!("root-level component imports are not supported"),
+            TypeDef::Interface(_ty) => unimplemented!("import of a type"),
+            TypeDef::CoreFunc(_ty) => unreachable!(),
+        };
+        Ok(item)
     }
 }
