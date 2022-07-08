@@ -12,6 +12,8 @@ pub struct wasmtime_linker_t {
     linker: Linker<crate::StoreData>,
 }
 
+wasmtime_c_api_macros::declare_own!(wasmtime_linker_t);
+
 #[no_mangle]
 pub extern "C" fn wasmtime_linker_new(engine: &wasm_engine_t) -> Box<wasmtime_linker_t> {
     Box::new(wasmtime_linker_t {
@@ -26,9 +28,6 @@ pub extern "C" fn wasmtime_linker_allow_shadowing(
 ) {
     linker.linker.allow_shadowing(allow_shadowing);
 }
-
-#[no_mangle]
-pub extern "C" fn wasmtime_linker_delete(_linker: Box<wasmtime_linker_t>) {}
 
 macro_rules! to_str {
     ($ptr:expr, $len:expr) => {

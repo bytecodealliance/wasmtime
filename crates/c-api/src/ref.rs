@@ -195,49 +195,9 @@ pub extern "C" fn wasm_ref_as_trap_const(_ref: Option<&wasm_ref_t>) -> Option<&c
 #[repr(C)]
 pub struct wasm_foreign_t {}
 
+wasmtime_c_api_macros::declare_ref!(wasm_foreign_t);
+
 #[no_mangle]
 pub extern "C" fn wasm_foreign_new(_store: &crate::wasm_store_t) -> Box<wasm_foreign_t> {
     abort("wasm_foreign_new")
-}
-
-#[no_mangle]
-pub extern "C" fn wasm_foreign_delete(_foreign: Box<wasm_foreign_t>) {}
-
-#[no_mangle]
-pub extern "C" fn wasm_foreign_copy(r: &wasm_foreign_t) -> Box<wasm_foreign_t> {
-    Box::new(r.clone())
-}
-
-#[no_mangle]
-pub extern "C" fn wasm_foreign_same(_a: &wasm_foreign_t, _b: &wasm_foreign_t) -> bool {
-    abort("wasm_foreign_same")
-}
-
-#[no_mangle]
-pub extern "C" fn wasm_foreign_get_host_info(_foreign: &wasm_foreign_t) -> *mut c_void {
-    std::ptr::null_mut()
-}
-
-#[no_mangle]
-pub extern "C" fn wasm_foreign_set_host_info(_foreign: &wasm_foreign_t, _info: *mut c_void) {
-    abort("wasm_foreign_set_host_info")
-}
-
-#[no_mangle]
-pub extern "C" fn wasm_foreign_set_host_info_with_finalizer(
-    _foreign: &wasm_foreign_t,
-    _info: *mut c_void,
-    _finalizer: Option<extern "C" fn(*mut c_void)>,
-) {
-    abort("wasm_foreign_set_host_info_with_finalizer")
-}
-
-#[no_mangle]
-pub extern "C" fn wasm_foreign_as_ref(_: &wasm_foreign_t) -> &wasm_ref_t {
-    abort("wasm_foreign_as_ref")
-}
-
-#[no_mangle]
-pub extern "C" fn wasm_foreign_as_ref_const(_: &wasm_foreign_t) -> Option<&wasm_ref_t> {
-    abort("wasm_foreign_as_ref_const")
 }
