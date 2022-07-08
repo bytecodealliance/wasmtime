@@ -144,20 +144,14 @@
 
 ;;;; Rules for `iabs` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type ty (iabs x)))
-      (abs x (vector_size ty)))
-
-(rule (lower (has_type $I8 (iabs x)))
-      (fp_abs x (ScalarSize.Size32) (VectorSize.Size8x16)))
-
-(rule (lower (has_type $I16 (iabs x)))
-      (fp_abs x (ScalarSize.Size32) (VectorSize.Size16x8)))
-
-(rule (lower (has_type $I32 (iabs x)))
-      (fp_abs x (ScalarSize.Size32) (VectorSize.Size32x4)))
+(rule (lower (has_type ty @ (multi_lane _ _) (iabs x)))
+      (vec_abs x (vector_size ty)))
 
 (rule (lower (has_type $I64 (iabs x)))
-      (fp_abs x (ScalarSize.Size64) (VectorSize.Size64x2)))
+      (abs (OperandSize.Size64) x))
+
+(rule (lower (has_type (fits_in_32 ty) (iabs x)))
+      (abs (OperandSize.Size32) (put_in_reg_sext32 x)))
 
 ;;;; Rules for `isub` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

@@ -669,6 +669,11 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_use(rn);
             collector.reg_use(rm);
         }
+        &Inst::CSNeg { rd, rn, rm, .. } => {
+            collector.reg_def(rd);
+            collector.reg_use(rn);
+            collector.reg_use(rm);
+        }
         &Inst::CSet { rd, .. } | &Inst::CSetm { rd, .. } => {
             collector.reg_def(rd);
         }
@@ -1509,6 +1514,13 @@ impl Inst {
                 let rm = pretty_print_ireg(rm, OperandSize::Size64, allocs);
                 let cond = cond.pretty_print(0, allocs);
                 format!("csel {}, {}, {}, {}", rd, rn, rm, cond)
+            }
+            &Inst::CSNeg { rd, rn, rm, cond } => {
+                let rd = pretty_print_ireg(rd.to_reg(), OperandSize::Size64, allocs);
+                let rn = pretty_print_ireg(rn, OperandSize::Size64, allocs);
+                let rm = pretty_print_ireg(rm, OperandSize::Size64, allocs);
+                let cond = cond.pretty_print(0, allocs);
+                format!("csneg {}, {}, {}, {}", rd, rn, rm, cond)
             }
             &Inst::CSet { rd, cond } => {
                 let rd = pretty_print_ireg(rd.to_reg(), OperandSize::Size64, allocs);

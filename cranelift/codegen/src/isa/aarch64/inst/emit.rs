@@ -331,12 +331,16 @@ pub(crate) fn enc_adr(off: i32, rd: Writable<Reg>) -> u32 {
     (0b00010000 << 24) | (immlo << 29) | (immhi << 5) | machreg_to_gpr(rd.to_reg())
 }
 
-fn enc_csel(rd: Writable<Reg>, rn: Reg, rm: Reg, cond: Cond) -> u32 {
+fn enc_csel(rd: Writable<Reg>, rn: Reg, rm: Reg, cond: Cond, op: u32, o2: u32) -> u32 {
+    debug_assert_eq!(op & 0b1, op);
+    debug_assert_eq!(o2 & 0b1, o2);
     0b100_11010100_00000_0000_00_00000_00000
+        | (op << 30)
         | (machreg_to_gpr(rm) << 16)
+        | (cond.bits() << 12)
+        | (o2 << 10)
         | (machreg_to_gpr(rn) << 5)
         | machreg_to_gpr(rd.to_reg())
-        | (cond.bits() << 12)
 }
 
 fn enc_fcsel(rd: Writable<Reg>, rn: Reg, rm: Reg, cond: Cond, size: ScalarSize) -> u32 {
@@ -346,18 +350,6 @@ fn enc_fcsel(rd: Writable<Reg>, rn: Reg, rm: Reg, cond: Cond, size: ScalarSize) 
         | (machreg_to_vec(rn) << 5)
         | machreg_to_vec(rd.to_reg())
         | (cond.bits() << 12)
-}
-
-fn enc_cset(rd: Writable<Reg>, cond: Cond) -> u32 {
-    0b100_11010100_11111_0000_01_11111_00000
-        | machreg_to_gpr(rd.to_reg())
-        | (cond.invert().bits() << 12)
-}
-
-fn enc_csetm(rd: Writable<Reg>, cond: Cond) -> u32 {
-    0b110_11010100_11111_0000_00_11111_00000
-        | machreg_to_gpr(rd.to_reg())
-        | (cond.invert().bits() << 12)
 }
 
 fn enc_ccmp_imm(size: OperandSize, rn: Reg, imm: UImm5, nzcv: NZCV, cond: Cond) -> u32 {
@@ -1352,15 +1344,21 @@ impl MachInstEmit for Inst {
                 let rd = allocs.next_writable(rd);
                 let rn = allocs.next(rn);
                 let rm = allocs.next(rm);
-                sink.put4(enc_csel(rd, rn, rm, cond));
+                sink.put4(enc_csel(rd, rn, rm, cond, 0, 0));
+            }
+            &Inst::CSNeg { rd, rn, rm, cond } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
+                let rm = allocs.next(rm);
+                sink.put4(enc_csel(rd, rn, rm, cond, 1, 1));
             }
             &Inst::CSet { rd, cond } => {
                 let rd = allocs.next_writable(rd);
-                sink.put4(enc_cset(rd, cond));
+                sink.put4(enc_csel(rd, zero_reg(), zero_reg(), cond.invert(), 0, 1));
             }
             &Inst::CSetm { rd, cond } => {
                 let rd = allocs.next_writable(rd);
-                sink.put4(enc_csetm(rd, cond));
+                sink.put4(enc_csel(rd, zero_reg(), zero_reg(), cond.invert(), 1, 0));
             }
             &Inst::CCmpImm {
                 size,

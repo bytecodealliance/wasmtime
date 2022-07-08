@@ -71,3 +71,49 @@ block0(v0: i64x2):
 ; block0:
 ;   abs v0.2d, v0.2d
 ;   ret
+
+function %f8(i8) -> i8 {
+block0(v0: i8):
+  v1 = iabs v0
+  return v1
+}
+
+; block0:
+;   sxtb w3, w0
+;   subs wzr, w3, #0
+;   csneg x0, x3, x3, gt
+;   ret
+
+function %f9(i16) -> i16 {
+block0(v0: i16):
+  v1 = iabs v0
+  return v1
+}
+
+; block0:
+;   sxth w3, w0
+;   subs wzr, w3, #0
+;   csneg x0, x3, x3, gt
+;   ret
+
+function %f10(i32) -> i32 {
+block0(v0: i32):
+  v1 = iabs v0
+  return v1
+}
+
+; block0:
+;   subs wzr, w0, #0
+;   csneg x0, x0, x0, gt
+;   ret
+
+function %f11(i64) -> i64 {
+block0(v0: i64):
+  v1 = iabs v0
+  return v1
+}
+
+; block0:
+;   subs xzr, x0, #0
+;   csneg x0, x0, x0, gt
+;   ret
