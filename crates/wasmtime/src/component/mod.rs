@@ -9,6 +9,8 @@ mod instance;
 mod linker;
 mod matching;
 mod store;
+mod types;
+mod values;
 pub use self::component::Component;
 pub use self::func::{
     ComponentParams, ComponentType, Func, IntoComponentFunc, Lift, Lower, TypedFunc, WasmList,
@@ -16,6 +18,8 @@ pub use self::func::{
 };
 pub use self::instance::{ExportInstance, Exports, Instance, InstancePre};
 pub use self::linker::{Linker, LinkerInstance};
+pub use self::types::Type;
+pub use self::values::Val;
 pub use wasmtime_component_macro::{flags, ComponentType, Lift, Lower};
 
 // These items are expected to be used by an eventual
@@ -34,4 +38,5 @@ pub mod __internal {
     pub use wasmtime_environ::component::{ComponentTypes, InterfaceType};
 }
 
+pub(crate) use self::func::lower_string;
 pub(crate) use self::store::ComponentStoreData;

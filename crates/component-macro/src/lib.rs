@@ -5,6 +5,7 @@ use std::fmt;
 use syn::parse::{Parse, ParseStream};
 use syn::punctuated::Punctuated;
 use syn::{braced, parse_macro_input, parse_quote, Data, DeriveInput, Error, Result, Token};
+use wasmtime_component_util::{DiscriminantSize, FlagsSize};
 
 #[derive(Debug, Copy, Clone)]
 enum VariantStyle {
@@ -147,64 +148,6 @@ fn add_trait_bounds(generics: &syn::Generics, bound: syn::TypeParamBound) -> syn
     generics
 }
 
-#[derive(Debug, Copy, Clone)]
-enum DiscriminantSize {
-    Size1,
-    Size2,
-    Size4,
-}
-
-impl DiscriminantSize {
-    fn quote(self, discriminant: usize) -> TokenStream {
-        match self {
-            Self::Size1 => {
-                let discriminant = u8::try_from(discriminant).unwrap();
-                quote!(#discriminant)
-            }
-            Self::Size2 => {
-                let discriminant = u16::try_from(discriminant).unwrap();
-                quote!(#discriminant)
-            }
-            Self::Size4 => {
-                let discriminant = u32::try_from(discriminant).unwrap();
-                quote!(#discriminant)
-            }
-        }
-    }
-}
-
-impl From<DiscriminantSize> for u32 {
-    fn from(size: DiscriminantSize) -> u32 {
-        match size {
-            DiscriminantSize::Size1 => 1,
-            DiscriminantSize::Size2 => 2,
-            DiscriminantSize::Size4 => 4,
-        }
-    }
-}
-
-impl From<DiscriminantSize> for usize {
-    fn from(size: DiscriminantSize) -> usize {
-        match size {
-            DiscriminantSize::Size1 => 1,
-            DiscriminantSize::Size2 => 2,
-            DiscriminantSize::Size4 => 4,
-        }
-    }
-}
-
-fn discriminant_size(case_count: usize) -> Option<DiscriminantSize> {
-    if case_count <= 0xFF {
-        Some(DiscriminantSize::Size1)
-    } else if case_count <= 0xFFFF {
-        Some(DiscriminantSize::Size2)
-    } else if case_count <= 0xFFFF_FFFF {
-        Some(DiscriminantSize::Size4)
-    } else {
-        None
-    }
-}
-
 struct VariantCase<'a> {
     attrs: &'a [syn::Attribute],
     ident: &'a syn::Ident,
@@ -288,7 +231,7 @@ fn expand_variant(
         ));
     }
 
-    let discriminant_size = discriminant_size(body.variants.len()).ok_or_else(|| {
+    let discriminant_size = DiscriminantSize::from_count(body.variants.len()).ok_or_else(|| {
         Error::new(
             input.ident.span(),
             "`enum`s with more than 2^32 variants are not supported",
@@ -417,7 +360,7 @@ fn expand_record_for_component_type(
             const SIZE32: usize = {
                 let mut size = 0;
                 #sizes
-                size
+                #internal::align_to(size, Self::ALIGN32)
             };
 
             const ALIGN32: u32 = {
@@ -437,6 +380,23 @@ fn expand_record_for_component_type(
     };
 
     Ok(quote!(const _: () = { #expanded };))
+}
+
+fn quote(size: DiscriminantSize, discriminant: usize) -> TokenStream {
+    match size {
+        DiscriminantSize::Size1 => {
+            let discriminant = u8::try_from(discriminant).unwrap();
+            quote!(#discriminant)
+        }
+        DiscriminantSize::Size2 => {
+            let discriminant = u16::try_from(discriminant).unwrap();
+            quote!(#discriminant)
+        }
+        DiscriminantSize::Size4 => {
+            let discriminant = u32::try_from(discriminant).unwrap();
+            quote!(#discriminant)
+        }
+    }
 }
 
 #[proc_macro_derive(Lift, attributes(component))]
@@ -523,7 +483,7 @@ impl Expander for LiftExpander {
         for (index, VariantCase { ident, ty, .. }) in cases.iter().enumerate() {
             let index_u32 = u32::try_from(index).unwrap();
 
-            let index_quoted = discriminant_size.quote(index);
+            let index_quoted = quote(discriminant_size, index);
 
             if let Some(ty) = ty {
                 lifts.extend(
@@ -666,7 +626,7 @@ impl Expander for LowerExpander {
         for (index, VariantCase { ident, ty, .. }) in cases.iter().enumerate() {
             let index_u32 = u32::try_from(index).unwrap();
 
-            let index_quoted = discriminant_size.quote(index);
+            let index_quoted = quote(discriminant_size, index);
 
             let discriminant_size = usize::from(discriminant_size);
 
@@ -989,19 +949,6 @@ impl Parse for Flags {
     }
 }
 
-enum FlagsSize {
-    /// Flags can fit in a u8
-    Size1,
-    /// Flags can fit in a u16
-    Size2,
-    /// Flags can fit in a specified number of u32 fields
-    Size4Plus(usize),
-}
-
-fn ceiling_divide(n: usize, d: usize) -> usize {
-    (n + d - 1) / d
-}
-
 #[proc_macro]
 pub fn flags(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     expand_flags(&parse_macro_input!(input as Flags))
@@ -1010,13 +957,7 @@ pub fn flags(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 }
 
 fn expand_flags(flags: &Flags) -> Result<TokenStream> {
-    let size = if flags.flags.len() <= 8 {
-        FlagsSize::Size1
-    } else if flags.flags.len() <= 16 {
-        FlagsSize::Size2
-    } else {
-        FlagsSize::Size4Plus(ceiling_divide(flags.flags.len(), 32))
-    };
+    let size = FlagsSize::from_count(flags.flags.len());
 
     let ty;
     let eq;
