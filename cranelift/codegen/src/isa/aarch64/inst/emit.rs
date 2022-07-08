@@ -1688,7 +1688,7 @@ impl MachInstEmit for Inst {
                 let rd = allocs.next_writable(rd);
                 let rn = allocs.next(rn);
                 sink.put4(enc_fpurr(
-                    0b000_11110_00_1_000000_10000 | (size.ftype() << 13),
+                    0b000_11110_00_1_000000_10000 | (size.ftype() << 12),
                     rd,
                     rn,
                 ));

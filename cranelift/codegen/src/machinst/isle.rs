@@ -300,6 +300,14 @@ macro_rules! isle_prelude_methods {
         }
 
         #[inline]
+        fn int_bool_fits_in_32(&mut self, ty: Type) -> Option<Type> {
+            match ty {
+                I8 | I16 | I32 | B8 | B16 | B32 => Some(ty),
+                _ => None,
+            }
+        }
+
+        #[inline]
         fn ty_int_bool_64(&mut self, ty: Type) -> Option<Type> {
             match ty {
                 I64 | B64 => Some(ty),
