@@ -35,4 +35,4 @@ If you run into trouble, the following discussions might help:
   (lldb) p __vmctx->set()
   (lldb) p *foo
   ```
-  
+- The address of the start of instance memory can be found in `__vmctx->memory`
