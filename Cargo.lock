@@ -219,9 +219,9 @@ dependencies = [
 
 [[package]]
 name = "bumpalo"
-version = "3.9.1"
+version = "3.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4a45a46ab1f2412e53d3a0ade76ffad2025804294569aae387231a0cd6e0899"
+checksum = "37ccbd214614c6783386c1af30caf03192f17891059cecc394b4fb119e363de3"
 
 [[package]]
 name = "byteorder"
@@ -509,13 +509,14 @@ name = "cranelift-codegen"
 version = "0.85.0"
 dependencies = [
  "bincode",
+ "bumpalo",
  "cranelift-bforest",
  "cranelift-codegen-meta",
  "cranelift-codegen-shared",
+ "cranelift-egraph",
  "cranelift-entity",
  "cranelift-isle",
  "criterion",
- "egg 0.8.1",
  "gimli",
  "hashbrown 0.11.2",
  "log",
@@ -537,6 +538,16 @@ dependencies = [
 [[package]]
 name = "cranelift-codegen-shared"
 version = "0.85.0"
+
+[[package]]
+name = "cranelift-egraph"
+version = "0.85.0"
+dependencies = [
+ "cranelift-entity",
+ "indexmap",
+ "log",
+ "smallvec",
+]
 
 [[package]]
 name = "cranelift-entity"
@@ -1033,17 +1044,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "egg"
-version = "0.8.1"
-source = "git+https://github.com/cfallin/egg?branch=egg-lite#9cfbbfb0bba7a67bef514772612ca8824a35824d"
-dependencies = [
- "fxhash",
- "hashbrown 0.12.1",
- "indexmap",
- "smallvec",
-]
-
-[[package]]
 name = "either"
 version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1319,9 +1319,6 @@ name = "hashbrown"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "db0d4cf898abf0081f964436dc980e96670a0f36863e4b83aaacdb65c9d7ccc3"
-dependencies = [
- "ahash",
-]
 
 [[package]]
 name = "heck"
@@ -1390,12 +1387,12 @@ checksum = "25a2bc672d1148e28034f176e01fffebb08b35768468cc954630da77a1449005"
 
 [[package]]
 name = "indexmap"
-version = "1.8.1"
+version = "1.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0f647032dfaa1f8b6dc29bd3edb7bbef4861b8b8007ebb118d6db284fd59f6ee"
+checksum = "10a35a97730320ffe8e2d410b5d3b69279b98d2c14bdb8b70ea89ecf7888d41e"
 dependencies = [
  "autocfg 1.1.0",
- "hashbrown 0.11.2",
+ "hashbrown 0.12.1",
  "serde",
 ]
 
@@ -3254,7 +3251,7 @@ version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "afc948447bea01d54509cb4a6ccbeb7e572c42c4c84f778d286b7633a1c49e86"
 dependencies = [
- "egg 0.6.0",
+ "egg",
  "log",
  "rand 0.8.5",
  "thiserror",

@@ -7,13 +7,13 @@ use super::node::Node;
 use crate::dominator_tree::DominatorTree;
 use crate::ir::{Block, Function, SourceLoc, Type, Value, ValueList};
 use crate::scoped_hash_map::ScopedHashMap;
-use egg::{EGraph, Id, Language};
+use cranelift_egraph::{EGraph, Id, Language};
 use smallvec::SmallVec;
 
 pub(crate) struct Elaborator<'a> {
     func: &'a mut Function,
     domtree: &'a DominatorTree,
-    egraph: &'a EGraph<Node, ()>,
+    egraph: &'a EGraph<Node<'a>>,
     extractor: &'a Extractor,
     id_to_value: ScopedHashMap<Id, IdValue>,
     cur_block: Option<Block>,
@@ -31,7 +31,7 @@ impl<'a> Elaborator<'a> {
     pub(crate) fn new(
         func: &'a mut Function,
         domtree: &'a DominatorTree,
-        egraph: &'a EGraph<Node, ()>,
+        egraph: &'a EGraph<Node>,
         extractor: &'a Extractor,
     ) -> Self {
         Self {
@@ -56,21 +56,20 @@ impl<'a> Elaborator<'a> {
     // nest at which we have input args. Track loop nest as we do
     // domtree traversal?
 
-    fn add_node(&mut self, node: Node, args: &[Value]) -> ValueList {
-        let (instdata, result_tys) = match &node {
-            Node::Pure { op, types, .. } | Node::Inst { op, types, .. } => (
-                op.with_args(args, &mut self.func.dfg.value_lists),
-                &types[..],
-            ),
+    fn add_node(&mut self, node: &Node, args: &[Value]) -> ValueList {
+        let (instdata, result_tys) = match node {
+            Node::Pure { op, types, .. } | Node::Inst { op, types, .. } => {
+                (op.with_args(args, &mut self.func.dfg.value_lists), types)
+            }
             _ => panic!("Cannot `add_node()` on block param or projection"),
         };
-        let srcloc = match &node {
+        let srcloc = match node {
             Node::Inst { srcloc, .. } => *srcloc,
             _ => SourceLoc::default(),
         };
         let inst = self.func.dfg.make_inst(instdata);
         self.func.srclocs[inst] = srcloc;
-        for &ty in result_tys {
+        for &ty in result_tys.iter() {
             self.func.dfg.append_result(inst, ty);
         }
         self.func.layout.append_inst(inst, self.cur_block.unwrap());
@@ -123,7 +122,7 @@ impl<'a> Elaborator<'a> {
             .collect();
 
         // This is an actual operation; emit the node in sequence now.
-        let results = self.add_node(node.clone(), &args[..]);
+        let results = self.add_node(node, &args[..]);
         let results_slice = results.as_slice(&self.func.dfg.value_lists);
 
         // Build the result and memoize in the id-to-value map.

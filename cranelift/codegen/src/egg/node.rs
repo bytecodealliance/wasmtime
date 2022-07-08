@@ -1,17 +1,10 @@
 //! Node definition for EGraph representation.
 
 use crate::ir::{Block, Inst, InstructionImms, Opcode, SourceLoc, Type};
-use egg::{Id, Language};
-use smallvec::SmallVec;
+use cranelift_egraph::{Id, Language};
 
-/// Arguments (eclass IDs) to a node.
-pub type ArgVec = SmallVec<[Id; 4]>;
-
-/// Types produced by a node.
-pub type TypeVec = SmallVec<[Type; 2]>;
-
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum Node {
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Node<'a> {
     /// A blockparam. Effectively an input/root; refers to the
     /// CLIF-level Value.
     Param {
@@ -30,9 +23,9 @@ pub enum Node {
         /// The instruction data, without SSA values.
         op: InstructionImms,
         /// eclass arguments to the operator.
-        args: ArgVec,
-        /// Type(s) of result(s).
-        types: TypeVec,
+        args: &'a mut [Id],
+        /// Types of results.
+        types: &'a [Type],
     },
     /// A CLIF instruction that has side-effects or is otherwise not
     /// representable by `Pure`.
@@ -40,12 +33,15 @@ pub enum Node {
         /// The instruction data, without SSA values.
         op: InstructionImms,
         /// eclass arguments to the operator.
-        args: ArgVec,
-        /// Type(s) of result(s).
-        types: TypeVec,
+        args: &'a mut [Id],
+        /// Types of results.
+        types: &'a [Type],
         /// The original instruction. We include this so that the
         /// `Inst`s are not deduplicated: every instance is a
-        /// logically separate and unique side-effect.
+        /// logically separate and unique side-effect. However,
+        /// because we clear the DataFlowGraph before elaboration,
+        /// this `Inst` is *not* valid to fetch any details from the
+        /// original instruction.
         inst: Inst,
         /// The source location to preserve.
         srcloc: SourceLoc,
@@ -88,7 +84,7 @@ fn op_cost(op: &InstructionImms) -> usize {
     }
 }
 
-impl Node {
+impl<'a> Node<'a> {
     pub(crate) fn cost(&self) -> usize {
         match self {
             // Projections and parameters have no cost: they just
@@ -103,63 +99,11 @@ impl Node {
     }
 }
 
-impl Language for Node {
-    fn matches(&self, other: &Self) -> bool {
-        match (self, other) {
-            (
-                Node::Pure { op, types, args: _ },
-                Node::Pure {
-                    op: other_op,
-                    types: other_types,
-                    args: _,
-                },
-            ) if *op == *other_op && *types == *other_types => true,
-            (
-                Node::Inst {
-                    op: _,
-                    inst,
-                    types: _,
-                    args: _,
-                    srcloc: _,
-                },
-                Node::Inst {
-                    op: _,
-                    inst: other_inst,
-                    types: _,
-                    args: _,
-                    srcloc: _,
-                },
-            )
-                // Just the `inst` is enough to uniquely match.
-                if *inst == *other_inst => true,
-            (
-                Node::Result {
-                    result,
-                    ty,
-                    value: _,
-                },
-                Node::Result {
-                    result: other_result,
-                    ty: other_ty,
-                    value: _,
-                },
-            ) if *result == *other_result && *ty == *other_ty => true,
-            (
-                Node::Param { block, index, ty },
-                Node::Param {
-                    block: other_block,
-                    index: other_index,
-                    ty: other_ty,
-                },
-            ) if *block == *other_block && *index == *other_index && *ty == *other_ty => true,
-            _ => false,
-        }
-    }
-
+impl<'a> Language for Node<'a> {
     fn children(&self) -> &[Id] {
         match self {
             Node::Param { .. } => &[],
-            Node::Pure { args, .. } | Node::Inst { args, .. } => &args[..],
+            Node::Pure { args, .. } | Node::Inst { args, .. } => args,
             Node::Result { value, .. } => std::slice::from_ref(value),
         }
     }
@@ -167,7 +111,7 @@ impl Language for Node {
     fn children_mut(&mut self) -> &mut [Id] {
         match self {
             Node::Param { .. } => &mut [],
-            Node::Pure { args, .. } | Node::Inst { args, .. } => &mut args[..],
+            Node::Pure { args, .. } | Node::Inst { args, .. } => args,
             Node::Result { value, .. } => std::slice::from_mut(value),
         }
     }

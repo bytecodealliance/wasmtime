@@ -7,9 +7,10 @@ use crate::{
     ir::{Block, Function, InstructionImms, Type},
 };
 use alloc::vec::Vec;
+use bumpalo::Bump;
 use core::ops::Range;
+use cranelift_egraph::{EGraph, Id};
 use cranelift_entity::SecondaryMap;
-use egg::{EGraph, Id};
 
 mod domtree;
 mod elaborate;
@@ -18,12 +19,14 @@ mod node;
 
 use elaborate::Elaborator;
 use extract::Extractor;
-use node::{ArgVec, Node, TypeVec};
+use node::Node;
 
-#[derive(Clone)]
 pub struct FuncEGraph<'a> {
     domtree: &'a DominatorTree,
-    egraph: EGraph<Node, ()>,
+    egraph: EGraph<Node<'a>>,
+    /// Backing arena for eclass argument arrays and type arrays for
+    /// nodes.
+    bump: &'a Bump,
     /// Ranges in `side_effect_ids` for sequences of side-effecting
     /// eclasses per block.
     side_effects: SecondaryMap<Block, Range<u32>>,
@@ -40,10 +43,11 @@ impl<'a> FuncEGraph<'a> {
     /// Create a new EGraph for the given function. Requires the
     /// domtree to be precomputed as well; the domtree is used for
     /// scheduling when lowering out of the egraph.
-    pub fn new(func: &Function, domtree: &'a DominatorTree) -> FuncEGraph<'a> {
+    pub fn new(func: &Function, domtree: &'a DominatorTree, bump: &'a Bump) -> FuncEGraph<'a> {
         let mut this = Self {
             domtree,
-            egraph: EGraph::new(()),
+            egraph: EGraph::new(),
+            bump,
             side_effects: SecondaryMap::with_default(0..0),
             side_effect_ids: vec![],
             blockparams: SecondaryMap::with_default(0..0),
@@ -82,24 +86,20 @@ impl<'a> FuncEGraph<'a> {
                     || func.dfg[inst].opcode().can_store();
 
                 // Build args from SSA values.
-                let args: ArgVec = func
-                    .dfg
-                    .inst_args(inst)
-                    .iter()
-                    .map(|&arg| {
+                let args = self
+                    .bump
+                    .alloc_slice_fill_iter(func.dfg.inst_args(inst).iter().map(|&arg| {
                         let arg = func.dfg.resolve_aliases(arg);
                         *value_to_id
                             .get(&arg)
                             .expect("Must have seen def before this use")
-                    })
-                    .collect();
+                    }));
 
-                let types: TypeVec = func
-                    .dfg
-                    .inst_results(inst)
-                    .iter()
-                    .map(|&value| func.dfg.value_type(value))
-                    .collect();
+                let results = func.dfg.inst_results(inst);
+
+                let types = self
+                    .bump
+                    .alloc_slice_fill_iter(results.iter().map(|&val| func.dfg.value_type(val)));
 
                 // Create the egraph node.
                 let op = InstructionImms::from(&func.dfg[inst]);
@@ -109,15 +109,11 @@ impl<'a> FuncEGraph<'a> {
                         op,
                         inst,
                         args,
-                        types: types.clone(),
+                        types,
                         srcloc,
                     }
                 } else {
-                    Node::Pure {
-                        op,
-                        args,
-                        types: types.clone(),
-                    }
+                    Node::Pure { op, args, types }
                 };
                 let id = self.egraph.add(node);
 
@@ -126,7 +122,6 @@ impl<'a> FuncEGraph<'a> {
                 }
 
                 // Create results and save in Value->Id map.
-                let results = func.dfg.inst_results(inst);
                 match results {
                     &[] => {}
                     &[one_result] => {
@@ -134,8 +129,8 @@ impl<'a> FuncEGraph<'a> {
                     }
                     many_results => {
                         debug_assert!(many_results.len() > 1);
-                        for (i, (&result, &ty)) in many_results.iter().zip(types.iter()).enumerate()
-                        {
+                        for (i, &result) in many_results.iter().enumerate() {
+                            let ty = func.dfg.value_type(result);
                             let projection = self.egraph.add(Node::Result {
                                 value: id,
                                 result: i,

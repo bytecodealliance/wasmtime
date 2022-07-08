@@ -33,6 +33,7 @@ use crate::verifier::{verify_context, VerifierErrors, VerifierResult};
 #[cfg(feature = "souper-harvest")]
 use alloc::string::String;
 use alloc::vec::Vec;
+use bumpalo::Bump;
 
 #[cfg(feature = "souper-harvest")]
 use crate::souper_harvest::do_souper_harvest;
@@ -194,7 +195,8 @@ impl Context {
                 "About to optimize with egraph phase:\n{}",
                 self.func.display()
             );
-            let mut eg = FuncEGraph::new(&self.func, &self.domtree);
+            let bump = Bump::new();
+            let mut eg = FuncEGraph::new(&self.func, &self.domtree, &bump);
             eg.extract(&self.func);
             eg.elaborate(&mut self.func);
             log::debug!("After egraph optimization:\n{}", self.func.display());
