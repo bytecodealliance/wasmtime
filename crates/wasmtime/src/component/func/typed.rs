@@ -1615,6 +1615,7 @@ pub fn typecheck_flags(
 
 /// Format the specified bitflags using the specified names for debugging
 pub fn format_flags(bits: &[u32], names: &[&str], f: &mut fmt::Formatter) -> fmt::Result {
+    f.write_str("(")?;
     let mut wrote = false;
     for (index, name) in names.iter().enumerate() {
         if ((bits[index / 32] >> (index % 32)) & 1) != 0 {
@@ -1627,7 +1628,7 @@ pub fn format_flags(bits: &[u32], names: &[&str], f: &mut fmt::Formatter) -> fmt
             f.write_str(name)?;
         }
     }
-    Ok(())
+    f.write_str(")")
 }
 
 unsafe impl<T> ComponentType for Option<T>
