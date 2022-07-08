@@ -1095,24 +1095,22 @@ fn expand_flags(flags: &Flags) -> Result<TokenStream> {
         FlagsSize::Size4Plus(n) => {
             ty = quote!(u32);
 
-            let comparisons = (0..n)
+            let comparisons = (0..(n - 1))
                 .map(|index| {
                     let field = format_ident!("__inner{}", index);
 
-                    if index == n - 1 {
-                        let mut mask = 0u32;
-                        for index in 0..(flags.flags.len() - (index * 32)) {
-                            mask |= 1 << index;
-                        }
-
-                        quote!((self.#field & #mask).eq(&(rhs.#field & #mask)) &&)
-                    } else {
-                        quote!(self.#field.eq(&rhs.#field) &&)
-                    }
+                    quote!(self.#field.eq(&rhs.#field) &&)
                 })
                 .collect::<TokenStream>();
 
-            eq = quote!(#comparisons true);
+            let field = format_ident!("__inner{}", n - 1);
+
+            let mut mask = 0u32;
+            for index in 0..(flags.flags.len() - ((n - 1) * 32)) {
+                mask |= 1 << index;
+            }
+
+            eq = quote!(#comparisons (self.#field & #mask).eq(&(rhs.#field & #mask)));
         }
     }
 
