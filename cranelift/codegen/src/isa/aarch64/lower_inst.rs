@@ -1212,47 +1212,9 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::Swizzle => implemented_in_isle(ctx),
 
-        Opcode::Isplit => {
-            let input_ty = ctx.input_ty(insn, 0);
+        Opcode::Isplit => implemented_in_isle(ctx),
 
-            if input_ty != I128 {
-                return Err(CodegenError::Unsupported(format!(
-                    "Isplit: Unsupported type: {:?}",
-                    input_ty
-                )));
-            }
-
-            assert_eq!(ctx.output_ty(insn, 0), I64);
-            assert_eq!(ctx.output_ty(insn, 1), I64);
-
-            let src_regs = put_input_in_regs(ctx, inputs[0]);
-            let dst_lo = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let dst_hi = get_output_reg(ctx, outputs[1]).only_reg().unwrap();
-
-            ctx.emit(Inst::gen_move(dst_lo, src_regs.regs()[0], I64));
-            ctx.emit(Inst::gen_move(dst_hi, src_regs.regs()[1], I64));
-        }
-
-        Opcode::Iconcat => {
-            let ty = ty.unwrap();
-
-            if ty != I128 {
-                return Err(CodegenError::Unsupported(format!(
-                    "Iconcat: Unsupported type: {:?}",
-                    ty
-                )));
-            }
-
-            assert_eq!(ctx.input_ty(insn, 0), I64);
-            assert_eq!(ctx.input_ty(insn, 1), I64);
-
-            let src_lo = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-            let src_hi = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
-            let dst = get_output_reg(ctx, outputs[0]);
-
-            ctx.emit(Inst::gen_move(dst.regs()[0], src_lo, I64));
-            ctx.emit(Inst::gen_move(dst.regs()[1], src_hi, I64));
-        }
+        Opcode::Iconcat => implemented_in_isle(ctx),
 
         Opcode::Imax | Opcode::Umax | Opcode::Umin | Opcode::Imin => implemented_in_isle(ctx),
 
