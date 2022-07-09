@@ -1,6 +1,7 @@
 test interpret
 test run
 target aarch64
+target s390x
 ; x86_64 panics: `Did not match fcvt input!
 ; thread 'worker #0' panicked at 'register allocation: Analysis(EntryLiveinValues([v2V]))', cranelift/codegen/src/machinst/compile.rs:96:10`
 

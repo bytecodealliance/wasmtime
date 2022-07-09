@@ -43,15 +43,28 @@ impl LowerBackend for S390xBackend {
             | Opcode::Bconst
             | Opcode::F32const
             | Opcode::F64const
+            | Opcode::Vconst
             | Opcode::Null
             | Opcode::Iadd
             | Opcode::IaddIfcout
             | Opcode::Isub
+            | Opcode::UaddSat
+            | Opcode::SaddSat
+            | Opcode::UsubSat
+            | Opcode::SsubSat
+            | Opcode::IaddPairwise
+            | Opcode::Imin
+            | Opcode::Umin
+            | Opcode::Imax
+            | Opcode::Umax
+            | Opcode::AvgRound
             | Opcode::Iabs
             | Opcode::Ineg
             | Opcode::Imul
             | Opcode::Umulhi
             | Opcode::Smulhi
+            | Opcode::WideningPairwiseDotProductS
+            | Opcode::SqmulRoundSat
             | Opcode::Udiv
             | Opcode::Urem
             | Opcode::Sdiv
@@ -64,6 +77,13 @@ impl LowerBackend for S390xBackend {
             | Opcode::Ireduce
             | Opcode::Uextend
             | Opcode::Sextend
+            | Opcode::Snarrow
+            | Opcode::Unarrow
+            | Opcode::Uunarrow
+            | Opcode::SwidenLow
+            | Opcode::SwidenHigh
+            | Opcode::UwidenLow
+            | Opcode::UwidenHigh
             | Opcode::Bnot
             | Opcode::Band
             | Opcode::Bor
@@ -72,6 +92,7 @@ impl LowerBackend for S390xBackend {
             | Opcode::BorNot
             | Opcode::BxorNot
             | Opcode::Bitselect
+            | Opcode::Vselect
             | Opcode::Breduce
             | Opcode::Bextend
             | Opcode::Bmask
@@ -86,11 +107,15 @@ impl LowerBackend for S390xBackend {
             | Opcode::Fdiv
             | Opcode::Fmin
             | Opcode::Fmax
+            | Opcode::FminPseudo
+            | Opcode::FmaxPseudo
             | Opcode::Sqrt
             | Opcode::Fneg
             | Opcode::Fabs
             | Opcode::Fpromote
             | Opcode::Fdemote
+            | Opcode::FvpromoteLow
+            | Opcode::Fvdemote
             | Opcode::Ceil
             | Opcode::Floor
             | Opcode::Trunc
@@ -99,11 +124,20 @@ impl LowerBackend for S390xBackend {
             | Opcode::Fcopysign
             | Opcode::FcvtFromUint
             | Opcode::FcvtFromSint
+            | Opcode::FcvtLowFromSint
             | Opcode::FcvtToUint
             | Opcode::FcvtToSint
             | Opcode::FcvtToUintSat
             | Opcode::FcvtToSintSat
+            | Opcode::Splat
+            | Opcode::Swizzle
+            | Opcode::Shuffle
+            | Opcode::Insertlane
+            | Opcode::Extractlane
+            | Opcode::ScalarToVector
+            | Opcode::VhighBits
             | Opcode::Bitcast
+            | Opcode::RawBitcast
             | Opcode::Load
             | Opcode::Uload8
             | Opcode::Sload8
@@ -111,6 +145,12 @@ impl LowerBackend for S390xBackend {
             | Opcode::Sload16
             | Opcode::Uload32
             | Opcode::Sload32
+            | Opcode::Uload8x8
+            | Opcode::Sload8x8
+            | Opcode::Uload16x4
+            | Opcode::Sload16x4
+            | Opcode::Uload32x2
+            | Opcode::Sload32x2
             | Opcode::Store
             | Opcode::Istore8
             | Opcode::Istore16
@@ -122,6 +162,8 @@ impl LowerBackend for S390xBackend {
             | Opcode::Fence
             | Opcode::Icmp
             | Opcode::Fcmp
+            | Opcode::VanyTrue
+            | Opcode::VallTrue
             | Opcode::IsNull
             | Opcode::IsInvalid
             | Opcode::Select
@@ -147,57 +189,15 @@ impl LowerBackend for S390xBackend {
                 )
             }
 
-            Opcode::UaddSat
-            | Opcode::SaddSat
-            | Opcode::UsubSat
-            | Opcode::SsubSat
-            | Opcode::Bitrev
-            | Opcode::FcvtLowFromSint
+            Opcode::Bitrev
             | Opcode::ConstAddr
             | Opcode::TlsValue
             | Opcode::GetPinnedReg
             | Opcode::SetPinnedReg
             | Opcode::Isplit
             | Opcode::Iconcat
-            | Opcode::RawBitcast
-            | Opcode::Splat
-            | Opcode::Swizzle
-            | Opcode::Insertlane
-            | Opcode::Extractlane
-            | Opcode::Imin
-            | Opcode::Umin
-            | Opcode::Imax
-            | Opcode::Umax
-            | Opcode::AvgRound
-            | Opcode::FminPseudo
-            | Opcode::FmaxPseudo
-            | Opcode::Uload8x8
-            | Opcode::Sload8x8
-            | Opcode::Uload16x4
-            | Opcode::Sload16x4
-            | Opcode::Uload32x2
-            | Opcode::Sload32x2
-            | Opcode::Vconst
-            | Opcode::Shuffle
             | Opcode::Vsplit
             | Opcode::Vconcat
-            | Opcode::Vselect
-            | Opcode::VanyTrue
-            | Opcode::VallTrue
-            | Opcode::VhighBits
-            | Opcode::ScalarToVector
-            | Opcode::Snarrow
-            | Opcode::Unarrow
-            | Opcode::Uunarrow
-            | Opcode::SwidenLow
-            | Opcode::SwidenHigh
-            | Opcode::UwidenLow
-            | Opcode::UwidenHigh
-            | Opcode::WideningPairwiseDotProductS
-            | Opcode::SqmulRoundSat
-            | Opcode::FvpromoteLow
-            | Opcode::Fvdemote
-            | Opcode::IaddPairwise
             | Opcode::DynamicStackLoad
             | Opcode::DynamicStackStore
             | Opcode::DynamicStackAddr

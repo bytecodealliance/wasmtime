@@ -97,6 +97,10 @@ fn in_flt_reg(ty: Type) -> bool {
     }
 }
 
+fn in_vec_reg(ty: Type) -> bool {
+    ty.is_vector() && ty.bits() == 128
+}
+
 fn get_intreg_for_arg(idx: usize) -> Option<Reg> {
     match idx {
         0 => Some(regs::gpr(2)),
@@ -114,6 +118,20 @@ fn get_fltreg_for_arg(idx: usize) -> Option<Reg> {
         1 => Some(regs::vr(2)),
         2 => Some(regs::vr(4)),
         3 => Some(regs::vr(6)),
+        _ => None,
+    }
+}
+
+fn get_vecreg_for_arg(idx: usize) -> Option<Reg> {
+    match idx {
+        0 => Some(regs::vr(24)),
+        1 => Some(regs::vr(25)),
+        2 => Some(regs::vr(26)),
+        3 => Some(regs::vr(27)),
+        4 => Some(regs::vr(28)),
+        5 => Some(regs::vr(29)),
+        6 => Some(regs::vr(30)),
+        7 => Some(regs::vr(31)),
         _ => None,
     }
 }
@@ -136,6 +154,21 @@ fn get_fltreg_for_ret(idx: usize) -> Option<Reg> {
         1 => Some(regs::vr(2)),
         2 => Some(regs::vr(4)),
         3 => Some(regs::vr(6)),
+        _ => None,
+    }
+}
+
+fn get_vecreg_for_ret(idx: usize) -> Option<Reg> {
+    match idx {
+        0 => Some(regs::vr(24)),
+        // ABI extension to support multi-value returns:
+        1 => Some(regs::vr(25)),
+        2 => Some(regs::vr(26)),
+        3 => Some(regs::vr(27)),
+        4 => Some(regs::vr(28)),
+        5 => Some(regs::vr(29)),
+        6 => Some(regs::vr(30)),
+        7 => Some(regs::vr(31)),
         _ => None,
     }
 }
@@ -182,6 +215,7 @@ impl ABIMachineSpec for S390xMachineDeps {
     ) -> CodegenResult<(Vec<ABIArg>, i64, Option<usize>)> {
         let mut next_gpr = 0;
         let mut next_fpr = 0;
+        let mut next_vr = 0;
         let mut next_stack: u64 = 0;
         let mut ret = vec![];
 
@@ -206,8 +240,8 @@ impl ABIMachineSpec for S390xMachineDeps {
 
             let intreg = in_int_reg(param.value_type);
             let fltreg = in_flt_reg(param.value_type);
-            debug_assert!(intreg || fltreg);
-            debug_assert!(!(intreg && fltreg));
+            let vecreg = in_vec_reg(param.value_type);
+            debug_assert!(intreg as i32 + fltreg as i32 + vecreg as i32 == 1);
 
             let (next_reg, candidate) = if intreg {
                 let candidate = match args_or_rets {
@@ -215,12 +249,18 @@ impl ABIMachineSpec for S390xMachineDeps {
                     ArgsOrRets::Rets => get_intreg_for_ret(next_gpr),
                 };
                 (&mut next_gpr, candidate)
-            } else {
+            } else if fltreg {
                 let candidate = match args_or_rets {
                     ArgsOrRets::Args => get_fltreg_for_arg(next_fpr),
                     ArgsOrRets::Rets => get_fltreg_for_ret(next_fpr),
                 };
                 (&mut next_fpr, candidate)
+            } else {
+                let candidate = match args_or_rets {
+                    ArgsOrRets::Args => get_vecreg_for_arg(next_vr),
+                    ArgsOrRets::Rets => get_vecreg_for_ret(next_vr),
+                };
+                (&mut next_vr, candidate)
             };
 
             // In the Wasmtime ABI only the first return value can be in a register.
@@ -252,7 +292,8 @@ impl ABIMachineSpec for S390xMachineDeps {
 
                 // Align the stack slot.
                 debug_assert!(slot_size.is_power_of_two());
-                next_stack = align_to(next_stack, slot_size);
+                let slot_align = std::cmp::min(slot_size, 8);
+                next_stack = align_to(next_stack, slot_align);
 
                 // If the type is actually of smaller size (and the argument
                 // was not extended), it is passed right-aligned.
@@ -477,6 +518,13 @@ impl ABIMachineSpec for S390xMachineDeps {
                 RegClass::Float => clobbered_fpr.push(reg),
             }
         }
+        // We need to save the link register in non-leaf functions.
+        // FIXME: This should be included in the clobber list to begin with,
+        // but isn't because we have have excluded call instructions via the
+        // is_included_in_clobbers callback.
+        if outgoing_args_size > 0 {
+            clobbered_gpr.push(Writable::from_reg(RealReg::from(gpr_preg(14))));
+        }
 
         let mut first_clobbered_gpr = 16;
         for reg in clobbered_gpr {
@@ -534,13 +582,15 @@ impl ABIMachineSpec for S390xMachineDeps {
 
         // Save FPRs.
         for (i, reg) in clobbered_fpr.iter().enumerate() {
-            insts.push(Inst::FpuStore64 {
+            insts.push(Inst::VecStoreLane {
+                size: 64,
                 rd: reg.to_reg().into(),
                 mem: MemArg::reg_plus_off(
                     stack_reg(),
                     (i * 8) as i64 + outgoing_args_size as i64 + fixed_frame_storage_size as i64,
                     MemFlags::trusted(),
                 ),
+                lane_imm: 0,
             });
             if flags.unwind_info() {
                 insts.push(Inst::Unwind {
@@ -566,7 +616,14 @@ impl ABIMachineSpec for S390xMachineDeps {
         let mut insts = SmallVec::new();
 
         // Collect clobbered registers.
-        let (clobbered_gpr, clobbered_fpr) = get_regs_saved_in_prologue(call_conv, clobbers);
+        let (mut clobbered_gpr, clobbered_fpr) = get_regs_saved_in_prologue(call_conv, clobbers);
+        // We need to restore the link register in non-leaf functions.
+        // FIXME: This should be included in the clobber list to begin with,
+        // but isn't because we have have excluded call instructions via the
+        // is_included_in_clobbers callback.
+        if outgoing_args_size > 0 {
+            clobbered_gpr.push(Writable::from_reg(RealReg::from(gpr_preg(14))));
+        }
         let mut first_clobbered_gpr = 16;
         for reg in clobbered_gpr {
             let enc = reg.to_reg().hw_enc();
@@ -578,13 +635,15 @@ impl ABIMachineSpec for S390xMachineDeps {
 
         // Restore FPRs.
         for (i, reg) in clobbered_fpr.iter().enumerate() {
-            insts.push(Inst::FpuLoad64 {
+            insts.push(Inst::VecLoadLaneUndef {
+                size: 64,
                 rd: Writable::from_reg(reg.to_reg().into()),
                 mem: MemArg::reg_plus_off(
                     stack_reg(),
                     (i * 8) as i64 + outgoing_args_size as i64 + fixed_frame_storage_size as i64,
                     MemFlags::trusted(),
                 ),
+                lane_imm: 0,
             });
         }
 
@@ -639,7 +698,7 @@ impl ABIMachineSpec for S390xMachineDeps {
         // We allocate in terms of 8-byte slots.
         match rc {
             RegClass::Int => 1,
-            RegClass::Float => 1,
+            RegClass::Float => 2,
         }
     }
 
@@ -739,6 +798,21 @@ const fn clobbers() -> PRegSet {
         .with(gpr_preg(3))
         .with(gpr_preg(4))
         .with(gpr_preg(5))
+        // v0 - v7 inclusive and v16 - v31 inclusive are
+        // caller-saves. The upper 64 bits of v8 - v15 inclusive are
+        // also caller-saves.  However, because we cannot currently
+        // represent partial registers to regalloc2, we indicate here
+        // that every vector register is caller-save. Because this
+        // function is used at *callsites*, approximating in this
+        // direction (save more than necessary) is conservative and
+        // thus safe.
+        //
+        // Note that we exclude clobbers from a call instruction when
+        // a call instruction's callee has the same ABI as the caller
+        // (the current function body); this is safe (anything
+        // clobbered by callee can be clobbered by caller as well) and
+        // avoids unnecessary saves of v8-v15 in the prologue even
+        // though we include them as defs here.
         .with(vr_preg(0))
         .with(vr_preg(1))
         .with(vr_preg(2))
@@ -747,6 +821,14 @@ const fn clobbers() -> PRegSet {
         .with(vr_preg(5))
         .with(vr_preg(6))
         .with(vr_preg(7))
+        .with(vr_preg(8))
+        .with(vr_preg(9))
+        .with(vr_preg(10))
+        .with(vr_preg(11))
+        .with(vr_preg(12))
+        .with(vr_preg(13))
+        .with(vr_preg(14))
+        .with(vr_preg(15))
         .with(vr_preg(16))
         .with(vr_preg(17))
         .with(vr_preg(18))

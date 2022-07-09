@@ -2,6 +2,7 @@
 
 use crate::binemit::{Addend, CodeOffset, Reloc};
 use crate::ir::{types, ExternalName, Opcode, Type};
+use crate::isa::CallConv;
 use crate::machinst::*;
 use crate::{settings, CodegenError, CodegenResult};
 use alloc::boxed::Box;
@@ -28,7 +29,7 @@ mod emit_tests;
 
 pub use crate::isa::s390x::lower::isle::generated_code::{
     ALUOp, CmpOp, FPUOp1, FPUOp2, FPUOp3, FpuRoundMode, FpuRoundOp, MInst as Inst, RxSBGOp,
-    ShiftOp, UnaryOp,
+    ShiftOp, UnaryOp, VecBinaryOp, VecFloatCmpOp, VecIntCmpOp, VecShiftOp, VecUnaryOp,
 };
 
 /// Additional information for (direct) Call instructions, left out of line to lower the size of
@@ -40,6 +41,8 @@ pub struct CallInfo {
     pub defs: SmallVec<[Writable<Reg>; 8]>,
     pub clobbers: PRegSet,
     pub opcode: Opcode,
+    pub caller_callconv: CallConv,
+    pub callee_callconv: CallConv,
 }
 
 /// Additional information for CallInd instructions, left out of line to lower the size of the Inst
@@ -51,6 +54,8 @@ pub struct CallIndInfo {
     pub defs: SmallVec<[Writable<Reg>; 8]>,
     pub clobbers: PRegSet,
     pub opcode: Opcode,
+    pub caller_callconv: CallConv,
+    pub callee_callconv: CallConv,
 }
 
 #[test]
@@ -156,22 +161,42 @@ impl Inst {
             | Inst::FpuMove64 { .. }
             | Inst::FpuCMov32 { .. }
             | Inst::FpuCMov64 { .. }
-            | Inst::MovToFpr32 { .. }
-            | Inst::MovToFpr64 { .. }
-            | Inst::MovFromFpr32 { .. }
-            | Inst::MovFromFpr64 { .. }
             | Inst::FpuRR { .. }
             | Inst::FpuRRR { .. }
             | Inst::FpuRRRR { .. }
             | Inst::FpuCmp32 { .. }
             | Inst::FpuCmp64 { .. }
-            | Inst::FpuLoad32 { .. }
-            | Inst::FpuStore32 { .. }
-            | Inst::FpuLoad64 { .. }
-            | Inst::FpuStore64 { .. }
             | Inst::LoadFpuConst32 { .. }
             | Inst::LoadFpuConst64 { .. }
+            | Inst::VecRRR { .. }
+            | Inst::VecRR { .. }
+            | Inst::VecShiftRR { .. }
             | Inst::VecSelect { .. }
+            | Inst::VecPermute { .. }
+            | Inst::VecPermuteDWImm { .. }
+            | Inst::VecIntCmp { .. }
+            | Inst::VecIntCmpS { .. }
+            | Inst::VecFloatCmp { .. }
+            | Inst::VecFloatCmpS { .. }
+            | Inst::VecLoad { .. }
+            | Inst::VecStore { .. }
+            | Inst::VecLoadReplicate { .. }
+            | Inst::VecMov { .. }
+            | Inst::VecCMov { .. }
+            | Inst::MovToVec128 { .. }
+            | Inst::VecLoadConst { .. }
+            | Inst::VecLoadConstReplicate { .. }
+            | Inst::VecImmByteMask { .. }
+            | Inst::VecImmBitMask { .. }
+            | Inst::VecImmReplicate { .. }
+            | Inst::VecLoadLane { .. }
+            | Inst::VecLoadLaneUndef { .. }
+            | Inst::VecStoreLane { .. }
+            | Inst::VecInsertLane { .. }
+            | Inst::VecInsertLaneUndef { .. }
+            | Inst::VecExtractLane { .. }
+            | Inst::VecInsertLaneImm { .. }
+            | Inst::VecReplicateLane { .. }
             | Inst::Call { .. }
             | Inst::CallInd { .. }
             | Inst::Ret { .. }
@@ -207,16 +232,30 @@ impl Inst {
             Inst::FpuRound { op, .. } => match op {
                 FpuRoundOp::ToSInt32 | FpuRoundOp::FromSInt32 => InstructionSet::MIE2,
                 FpuRoundOp::ToUInt32 | FpuRoundOp::FromUInt32 => InstructionSet::MIE2,
+                FpuRoundOp::ToSInt32x4 | FpuRoundOp::FromSInt32x4 => InstructionSet::MIE2,
+                FpuRoundOp::ToUInt32x4 | FpuRoundOp::FromUInt32x4 => InstructionSet::MIE2,
                 _ => InstructionSet::Base,
             },
 
             // These are all part of VXRS_EXT2
-            Inst::FpuLoadRev32 { .. }
-            | Inst::FpuStoreRev32 { .. }
-            | Inst::FpuLoadRev64 { .. }
-            | Inst::FpuStoreRev64 { .. } => InstructionSet::VXRS_EXT2,
+            Inst::VecLoadRev { .. }
+            | Inst::VecStoreRev { .. }
+            | Inst::VecLoadReplicateRev { .. }
+            | Inst::VecLoadLaneRev { .. }
+            | Inst::VecLoadLaneRevUndef { .. }
+            | Inst::VecStoreLaneRev { .. } => InstructionSet::VXRS_EXT2,
 
             Inst::DummyUse { .. } => InstructionSet::Base,
+        }
+    }
+
+    /// Create a 128-bit move instruction.
+    pub fn mov128(to_reg: Writable<Reg>, from_reg: Reg) -> Inst {
+        assert!(to_reg.to_reg().class() == RegClass::Float);
+        assert!(from_reg.class() == RegClass::Float);
+        Inst::VecMov {
+            rd: to_reg,
+            rn: from_reg,
         }
     }
 
@@ -323,6 +362,17 @@ impl Inst {
         }
     }
 
+    /// Create an instruction that loads a 128-bit floating-point constant.
+    pub fn load_vec_constant(rd: Writable<Reg>, value: u128) -> Inst {
+        // FIXME: This doesn't special-case constants that can be loaded
+        // without a constant pool, like the ISLE lowering does.  Ideally,
+        // we should not have to duplicate the logic here.
+        Inst::VecLoadConst {
+            rd,
+            const_data: value,
+        }
+    }
+
     /// Generic constructor for a load (zero-extending where appropriate).
     pub fn gen_load(into_reg: Writable<Reg>, mem: MemArg, ty: Type) -> Inst {
         match ty {
@@ -330,8 +380,19 @@ impl Inst {
             types::B16 | types::I16 => Inst::Load64ZExt16 { rd: into_reg, mem },
             types::B32 | types::I32 => Inst::Load64ZExt32 { rd: into_reg, mem },
             types::B64 | types::I64 | types::R64 => Inst::Load64 { rd: into_reg, mem },
-            types::F32 => Inst::FpuLoad32 { rd: into_reg, mem },
-            types::F64 => Inst::FpuLoad64 { rd: into_reg, mem },
+            types::F32 => Inst::VecLoadLaneUndef {
+                size: 32,
+                rd: into_reg,
+                mem,
+                lane_imm: 0,
+            },
+            types::F64 => Inst::VecLoadLaneUndef {
+                size: 64,
+                rd: into_reg,
+                mem,
+                lane_imm: 0,
+            },
+            _ if ty.is_vector() && ty.bits() == 128 => Inst::VecLoad { rd: into_reg, mem },
             _ => unimplemented!("gen_load({})", ty),
         }
     }
@@ -343,8 +404,19 @@ impl Inst {
             types::B16 | types::I16 => Inst::Store16 { rd: from_reg, mem },
             types::B32 | types::I32 => Inst::Store32 { rd: from_reg, mem },
             types::B64 | types::I64 | types::R64 => Inst::Store64 { rd: from_reg, mem },
-            types::F32 => Inst::FpuStore32 { rd: from_reg, mem },
-            types::F64 => Inst::FpuStore64 { rd: from_reg, mem },
+            types::F32 => Inst::VecStoreLane {
+                size: 32,
+                rd: from_reg,
+                mem,
+                lane_imm: 0,
+            },
+            types::F64 => Inst::VecStoreLane {
+                size: 64,
+                rd: from_reg,
+                mem,
+                lane_imm: 0,
+            },
+            _ if ty.is_vector() && ty.bits() == 128 => Inst::VecStore { rd: from_reg, mem },
             _ => unimplemented!("gen_store({})", ty),
         }
     }
@@ -365,6 +437,9 @@ fn memarg_operands<F: Fn(VReg) -> VReg>(memarg: &MemArg, collector: &mut Operand
         }
         &MemArg::InitialSPOffset { .. } | &MemArg::NominalSPOffset { .. } => {}
     }
+    // mem_finalize might require %r1 to hold (part of) the address.
+    // Conservatively assume this will always be necessary here.
+    collector.reg_early_def(writable_gpr(1));
 }
 
 fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCollector<'_, F>) {
@@ -579,13 +654,6 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
             collector.reg_mod(rd);
             collector.reg_use(rm);
         }
-        &Inst::MovToFpr32 { rd, rn }
-        | &Inst::MovToFpr64 { rd, rn }
-        | &Inst::MovFromFpr32 { rd, rn }
-        | &Inst::MovFromFpr64 { rd, rn } => {
-            collector.reg_def(rd);
-            collector.reg_use(rn);
-        }
         &Inst::FpuRR { rd, rn, .. } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
@@ -605,50 +673,158 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
             collector.reg_use(rn);
             collector.reg_use(rm);
         }
-        &Inst::FpuLoad32 { rd, ref mem, .. } => {
-            collector.reg_def(rd);
-            memarg_operands(mem, collector);
-        }
-        &Inst::FpuLoad64 { rd, ref mem, .. } => {
-            collector.reg_def(rd);
-            memarg_operands(mem, collector);
-        }
-        &Inst::FpuStore32 { rd, ref mem, .. } => {
-            collector.reg_use(rd);
-            memarg_operands(mem, collector);
-        }
-        &Inst::FpuStore64 { rd, ref mem, .. } => {
-            collector.reg_use(rd);
-            memarg_operands(mem, collector);
-        }
-        &Inst::FpuLoadRev32 { rd, ref mem, .. } => {
-            collector.reg_def(rd);
-            memarg_operands(mem, collector);
-        }
-        &Inst::FpuLoadRev64 { rd, ref mem, .. } => {
-            collector.reg_def(rd);
-            memarg_operands(mem, collector);
-        }
-        &Inst::FpuStoreRev32 { rd, ref mem, .. } => {
-            collector.reg_use(rd);
-            memarg_operands(mem, collector);
-        }
-        &Inst::FpuStoreRev64 { rd, ref mem, .. } => {
-            collector.reg_use(rd);
-            memarg_operands(mem, collector);
-        }
         &Inst::LoadFpuConst32 { rd, .. } | &Inst::LoadFpuConst64 { rd, .. } => {
             collector.reg_def(rd);
+            collector.reg_def(writable_gpr(1));
         }
         &Inst::FpuRound { rd, rn, .. } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
+        }
+        &Inst::VecRRR { rd, rn, rm, .. } => {
+            collector.reg_def(rd);
+            collector.reg_use(rn);
+            collector.reg_use(rm);
+        }
+        &Inst::VecRR { rd, rn, .. } => {
+            collector.reg_def(rd);
+            collector.reg_use(rn);
+        }
+        &Inst::VecShiftRR {
+            rd, rn, shift_reg, ..
+        } => {
+            collector.reg_def(rd);
+            collector.reg_use(rn);
+            collector.reg_use(shift_reg);
         }
         &Inst::VecSelect { rd, rn, rm, ra, .. } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
             collector.reg_use(rm);
             collector.reg_use(ra);
+        }
+        &Inst::VecPermute { rd, rn, rm, ra, .. } => {
+            collector.reg_def(rd);
+            collector.reg_use(rn);
+            collector.reg_use(rm);
+            collector.reg_use(ra);
+        }
+        &Inst::VecPermuteDWImm { rd, rn, rm, .. } => {
+            collector.reg_def(rd);
+            collector.reg_use(rn);
+            collector.reg_use(rm);
+        }
+        &Inst::VecIntCmp { rd, rn, rm, .. } | &Inst::VecIntCmpS { rd, rn, rm, .. } => {
+            collector.reg_def(rd);
+            collector.reg_use(rn);
+            collector.reg_use(rm);
+        }
+        &Inst::VecFloatCmp { rd, rn, rm, .. } | &Inst::VecFloatCmpS { rd, rn, rm, .. } => {
+            collector.reg_def(rd);
+            collector.reg_use(rn);
+            collector.reg_use(rm);
+        }
+        &Inst::VecLoad { rd, ref mem, .. } => {
+            collector.reg_def(rd);
+            memarg_operands(mem, collector);
+        }
+        &Inst::VecLoadRev { rd, ref mem, .. } => {
+            collector.reg_def(rd);
+            memarg_operands(mem, collector);
+        }
+        &Inst::VecStore { rd, ref mem, .. } => {
+            collector.reg_use(rd);
+            memarg_operands(mem, collector);
+        }
+        &Inst::VecStoreRev { rd, ref mem, .. } => {
+            collector.reg_use(rd);
+            memarg_operands(mem, collector);
+        }
+        &Inst::VecLoadReplicate { rd, ref mem, .. } => {
+            collector.reg_def(rd);
+            memarg_operands(mem, collector);
+        }
+        &Inst::VecLoadReplicateRev { rd, ref mem, .. } => {
+            collector.reg_def(rd);
+            memarg_operands(mem, collector);
+        }
+        &Inst::VecMov { rd, rn } => {
+            collector.reg_def(rd);
+            collector.reg_use(rn);
+        }
+        &Inst::VecCMov { rd, rm, .. } => {
+            collector.reg_mod(rd);
+            collector.reg_use(rm);
+        }
+        &Inst::MovToVec128 { rd, rn, rm } => {
+            collector.reg_def(rd);
+            collector.reg_use(rn);
+            collector.reg_use(rm);
+        }
+        &Inst::VecLoadConst { rd, .. } | &Inst::VecLoadConstReplicate { rd, .. } => {
+            collector.reg_def(rd);
+            collector.reg_def(writable_gpr(1));
+        }
+        &Inst::VecImmByteMask { rd, .. } => {
+            collector.reg_def(rd);
+        }
+        &Inst::VecImmBitMask { rd, .. } => {
+            collector.reg_def(rd);
+        }
+        &Inst::VecImmReplicate { rd, .. } => {
+            collector.reg_def(rd);
+        }
+        &Inst::VecLoadLane { rd, ref mem, .. } => {
+            collector.reg_mod(rd);
+            memarg_operands(mem, collector);
+        }
+        &Inst::VecLoadLaneUndef { rd, ref mem, .. } => {
+            collector.reg_def(rd);
+            memarg_operands(mem, collector);
+        }
+        &Inst::VecStoreLaneRev { rd, ref mem, .. } => {
+            collector.reg_use(rd);
+            memarg_operands(mem, collector);
+        }
+        &Inst::VecLoadLaneRevUndef { rd, ref mem, .. } => {
+            collector.reg_def(rd);
+            memarg_operands(mem, collector);
+        }
+        &Inst::VecStoreLane { rd, ref mem, .. } => {
+            collector.reg_use(rd);
+            memarg_operands(mem, collector);
+        }
+        &Inst::VecLoadLaneRev { rd, ref mem, .. } => {
+            collector.reg_mod(rd);
+            memarg_operands(mem, collector);
+        }
+        &Inst::VecInsertLane {
+            rd, rn, lane_reg, ..
+        } => {
+            collector.reg_mod(rd);
+            collector.reg_use(rn);
+            collector.reg_use(lane_reg);
+        }
+        &Inst::VecInsertLaneUndef {
+            rd, rn, lane_reg, ..
+        } => {
+            collector.reg_def(rd);
+            collector.reg_use(rn);
+            collector.reg_use(lane_reg);
+        }
+        &Inst::VecExtractLane {
+            rd, rn, lane_reg, ..
+        } => {
+            collector.reg_def(rd);
+            collector.reg_use(rn);
+            collector.reg_use(lane_reg);
+        }
+        &Inst::VecInsertLaneImm { rd, .. } => {
+            collector.reg_def(rd);
+        }
+        &Inst::VecReplicateLane { rd, rn, .. } => {
+            collector.reg_def(rd);
+            collector.reg_use(rn);
         }
         &Inst::Extend { rd, rn, .. } => {
             collector.reg_def(rd);
@@ -682,9 +858,11 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
         &Inst::TrapIf { .. } => {}
         &Inst::JTSequence { ridx, .. } => {
             collector.reg_use(ridx);
+            collector.reg_early_def(writable_gpr(1));
         }
         &Inst::LoadExtNameFar { rd, .. } => {
             collector.reg_def(rd);
+            collector.reg_def(writable_gpr(1));
         }
         &Inst::LoadAddr { rd, ref mem } => {
             collector.reg_def(rd);
@@ -720,6 +898,7 @@ impl MachInst for Inst {
             &Inst::Mov64 { rd, rm } => Some((rd, rm)),
             &Inst::FpuMove32 { rd, rn } => Some((rd, rn)),
             &Inst::FpuMove64 { rd, rn } => Some((rd, rn)),
+            &Inst::VecMov { rd, rn } => Some((rd, rn)),
             _ => None,
         }
     }
@@ -729,6 +908,21 @@ impl MachInst for Inst {
             true
         } else {
             false
+        }
+    }
+
+    fn is_included_in_clobbers(&self) -> bool {
+        // We exclude call instructions from the clobber-set when they are calls
+        // from caller to callee with the same ABI. Such calls cannot possibly
+        // force any new registers to be saved in the prologue, because anything
+        // that the callee clobbers, the caller is also allowed to clobber. This
+        // both saves work and enables us to more precisely follow the
+        // half-caller-save, half-callee-save SysV ABI for some vector
+        // registers.
+        match self {
+            &Inst::Call { ref info, .. } => info.caller_callconv != info.callee_callconv,
+            &Inst::CallInd { ref info, .. } => info.caller_callconv != info.callee_callconv,
+            _ => true,
         }
     }
 
@@ -761,11 +955,13 @@ impl MachInst for Inst {
     }
 
     fn gen_move(to_reg: Writable<Reg>, from_reg: Reg, ty: Type) -> Inst {
-        assert!(ty.bits() <= 64);
+        assert!(ty.bits() <= 128);
         if ty.bits() <= 32 {
             Inst::mov32(to_reg, from_reg)
-        } else {
+        } else if ty.bits() <= 64 {
             Inst::mov64(to_reg, from_reg)
+        } else {
+            Inst::mov128(to_reg, from_reg)
         }
     }
 
@@ -778,11 +974,18 @@ impl MachInst for Inst {
         let to_reg = to_regs
             .only_reg()
             .expect("multi-reg values not supported yet");
-        let value = value as u64;
         match ty {
+            _ if ty.is_vector() && ty.bits() == 128 => {
+                let mut ret = SmallVec::new();
+                ret.push(Inst::load_vec_constant(to_reg, value));
+                ret
+            }
             types::F64 => {
                 let mut ret = SmallVec::new();
-                ret.push(Inst::load_fp_constant64(to_reg, f64::from_bits(value)));
+                ret.push(Inst::load_fp_constant64(
+                    to_reg,
+                    f64::from_bits(value as u64),
+                ));
                 ret
             }
             types::F32 => {
@@ -793,7 +996,7 @@ impl MachInst for Inst {
                 ));
                 ret
             }
-            types::I64 | types::B64 | types::R64 => Inst::load_constant64(to_reg, value),
+            types::I64 | types::B64 | types::R64 => Inst::load_constant64(to_reg, value as u64),
             types::B1
             | types::I8
             | types::B8
@@ -832,6 +1035,7 @@ impl MachInst for Inst {
             types::F64 => Ok((&[RegClass::Float], &[types::F64])),
             types::I128 => Ok((&[RegClass::Int, RegClass::Int], &[types::I64, types::I64])),
             types::B128 => Ok((&[RegClass::Int, RegClass::Int], &[types::B64, types::B64])),
+            _ if ty.is_vector() && ty.bits() == 128 => Ok((&[RegClass::Float], &[types::I8X16])),
             // FIXME: We don't really have IFLAGS, but need to allow it here
             // for now to support the SelectifSpectreGuard instruction.
             types::IFLAGS => Ok((&[RegClass::Int], &[types::I64])),
@@ -845,7 +1049,7 @@ impl MachInst for Inst {
     fn canonical_type_for_rc(rc: RegClass) -> Type {
         match rc {
             RegClass::Int => types::I64,
-            RegClass::Float => types::F64,
+            RegClass::Float => types::I8X16,
         }
     }
 
@@ -1497,43 +1701,6 @@ impl Inst {
                 let mem = mem.pretty_print_default();
                 format!("{}{} {}, {}", mem_str, op.unwrap(), rd, mem)
             }
-            &Inst::FpuLoad32 { rd, ref mem }
-            | &Inst::FpuLoad64 { rd, ref mem }
-            | &Inst::FpuLoadRev32 { rd, ref mem }
-            | &Inst::FpuLoadRev64 { rd, ref mem } => {
-                let (opcode_rx, opcode_rxy, opcode_vrx) = match self {
-                    &Inst::FpuLoad32 { .. } => (Some("le"), Some("ley"), "vlef"),
-                    &Inst::FpuLoad64 { .. } => (Some("ld"), Some("ldy"), "vleg"),
-                    &Inst::FpuLoadRev32 { .. } => (None, None, "vlebrf"),
-                    &Inst::FpuLoadRev64 { .. } => (None, None, "vlebrg"),
-                    _ => unreachable!(),
-                };
-
-                let (rd, rd_fpr) = pretty_print_fpr(rd.to_reg(), allocs);
-                let mem = mem.with_allocs(allocs);
-                if rd_fpr.is_some() && opcode_rx.is_some() {
-                    let (mem_str, mem) =
-                        mem_finalize_for_show(&mem, state, true, true, false, true);
-                    let op = match &mem {
-                        &MemArg::BXD12 { .. } => opcode_rx,
-                        &MemArg::BXD20 { .. } => opcode_rxy,
-                        _ => unreachable!(),
-                    };
-                    let mem = mem.pretty_print_default();
-                    format!("{}{} {}, {}", mem_str, op.unwrap(), rd_fpr.unwrap(), mem)
-                } else {
-                    let (mem_str, mem) =
-                        mem_finalize_for_show(&mem, state, true, false, false, true);
-                    let mem = mem.pretty_print_default();
-                    format!(
-                        "{}{} {}, {}, 0",
-                        mem_str,
-                        opcode_vrx,
-                        rd_fpr.unwrap_or(rd),
-                        mem
-                    )
-                }
-            }
             &Inst::Store8 { rd, ref mem }
             | &Inst::Store16 { rd, ref mem }
             | &Inst::Store32 { rd, ref mem }
@@ -1598,43 +1765,6 @@ impl Inst {
                 let mem = mem.pretty_print_default();
 
                 format!("{}{} {}, {}", mem_str, op, mem, imm)
-            }
-            &Inst::FpuStore32 { rd, ref mem }
-            | &Inst::FpuStore64 { rd, ref mem }
-            | &Inst::FpuStoreRev32 { rd, ref mem }
-            | &Inst::FpuStoreRev64 { rd, ref mem } => {
-                let (opcode_rx, opcode_rxy, opcode_vrx) = match self {
-                    &Inst::FpuStore32 { .. } => (Some("ste"), Some("stey"), "vstef"),
-                    &Inst::FpuStore64 { .. } => (Some("std"), Some("stdy"), "vsteg"),
-                    &Inst::FpuStoreRev32 { .. } => (None, None, "vstebrf"),
-                    &Inst::FpuStoreRev64 { .. } => (None, None, "vstebrg"),
-                    _ => unreachable!(),
-                };
-
-                let (rd, rd_fpr) = pretty_print_fpr(rd, allocs);
-                let mem = mem.with_allocs(allocs);
-                if rd_fpr.is_some() && opcode_rx.is_some() {
-                    let (mem_str, mem) =
-                        mem_finalize_for_show(&mem, state, true, true, false, true);
-                    let op = match &mem {
-                        &MemArg::BXD12 { .. } => opcode_rx,
-                        &MemArg::BXD20 { .. } => opcode_rxy,
-                        _ => unreachable!(),
-                    };
-                    let mem = mem.pretty_print_default();
-                    format!("{}{} {}, {}", mem_str, op.unwrap(), rd_fpr.unwrap(), mem)
-                } else {
-                    let (mem_str, mem) =
-                        mem_finalize_for_show(&mem, state, true, false, false, true);
-                    let mem = mem.pretty_print_default();
-                    format!(
-                        "{}{} {}, {}, 0",
-                        mem_str,
-                        opcode_vrx,
-                        rd_fpr.unwrap_or(rd),
-                        mem
-                    )
-                }
             }
             &Inst::LoadMultiple64 { rt, rt2, ref mem } => {
                 let mem = mem.with_allocs(allocs);
@@ -1780,69 +1910,77 @@ impl Inst {
                     format!("j{} 10 ; vlr {}, {}", cond, rd, rm)
                 }
             }
-            &Inst::MovToFpr32 { rd, rn } => {
-                let rd = pretty_print_reg(rd.to_reg(), allocs);
-                let rn = pretty_print_reg(rn, allocs);
-                format!("vlvgf {}, {}, 0", rd, rn)
-            }
-            &Inst::MovToFpr64 { rd, rn } => {
-                let (rd, rd_fpr) = pretty_print_fpr(rd.to_reg(), allocs);
-                let rn = pretty_print_reg(rn, allocs);
-                if rd_fpr.is_some() {
-                    format!("ldgr {}, {}", rd_fpr.unwrap(), rn)
-                } else {
-                    format!("vlvgg {}, {}, 0", rd, rn)
-                }
-            }
-            &Inst::MovFromFpr32 { rd, rn } => {
-                let rd = pretty_print_reg(rd.to_reg(), allocs);
-                let rn = pretty_print_reg(rn, allocs);
-                format!("vlgvf {}, {}, 0", rd, rn)
-            }
-            &Inst::MovFromFpr64 { rd, rn } => {
-                let rd = pretty_print_reg(rd.to_reg(), allocs);
-                let (rn, rn_fpr) = pretty_print_fpr(rn, allocs);
-                if rn_fpr.is_some() {
-                    format!("lgdr {}, {}", rd, rn_fpr.unwrap())
-                } else {
-                    format!("vlgvg {}, {}, 0", rd, rn)
-                }
-            }
             &Inst::FpuRR { fpu_op, rd, rn } => {
                 let (op, op_fpr) = match fpu_op {
-                    FPUOp1::Abs32 => ("wflpsb", "lpebr"),
-                    FPUOp1::Abs64 => ("wflpdb", "lpdbr"),
-                    FPUOp1::Neg32 => ("wflcsb", "lcebr"),
-                    FPUOp1::Neg64 => ("wflcdb", "lcdbr"),
-                    FPUOp1::NegAbs32 => ("wflnsb", "lnebr"),
-                    FPUOp1::NegAbs64 => ("wflndb", "lndbr"),
-                    FPUOp1::Sqrt32 => ("wfsqsb", "sqebr"),
-                    FPUOp1::Sqrt64 => ("wfsqdb", "sqdbr"),
-                    FPUOp1::Cvt32To64 => ("wldeb", "ldebr"),
+                    FPUOp1::Abs32 => ("wflpsb", Some("lpebr")),
+                    FPUOp1::Abs64 => ("wflpdb", Some("lpdbr")),
+                    FPUOp1::Abs32x4 => ("vflpsb", None),
+                    FPUOp1::Abs64x2 => ("vflpdb", None),
+                    FPUOp1::Neg32 => ("wflcsb", Some("lcebr")),
+                    FPUOp1::Neg64 => ("wflcdb", Some("lcdbr")),
+                    FPUOp1::Neg32x4 => ("vflcsb", None),
+                    FPUOp1::Neg64x2 => ("vflcdb", None),
+                    FPUOp1::NegAbs32 => ("wflnsb", Some("lnebr")),
+                    FPUOp1::NegAbs64 => ("wflndb", Some("lndbr")),
+                    FPUOp1::NegAbs32x4 => ("vflnsb", None),
+                    FPUOp1::NegAbs64x2 => ("vflndb", None),
+                    FPUOp1::Sqrt32 => ("wfsqsb", Some("sqebr")),
+                    FPUOp1::Sqrt64 => ("wfsqdb", Some("sqdbr")),
+                    FPUOp1::Sqrt32x4 => ("vfsqsb", None),
+                    FPUOp1::Sqrt64x2 => ("vfsqdb", None),
+                    FPUOp1::Cvt32To64 => ("wldeb", Some("ldebr")),
+                    FPUOp1::Cvt32x4To64x2 => ("vldeb", None),
                 };
 
                 let (rd, rd_fpr) = pretty_print_fpr(rd.to_reg(), allocs);
                 let (rn, rn_fpr) = pretty_print_fpr(rn, allocs);
-                if rd_fpr.is_some() && rn_fpr.is_some() {
-                    format!("{} {}, {}", op_fpr, rd_fpr.unwrap(), rn_fpr.unwrap())
-                } else {
+                if op_fpr.is_some() && rd_fpr.is_some() && rn_fpr.is_some() {
+                    format!(
+                        "{} {}, {}",
+                        op_fpr.unwrap(),
+                        rd_fpr.unwrap(),
+                        rn_fpr.unwrap()
+                    )
+                } else if op.starts_with('w') {
                     format!("{} {}, {}", op, rd_fpr.unwrap_or(rd), rn_fpr.unwrap_or(rn))
+                } else {
+                    format!("{} {}, {}", op, rd, rn)
                 }
             }
             &Inst::FpuRRR { fpu_op, rd, rn, rm } => {
                 let (op, opt_m6, op_fpr) = match fpu_op {
                     FPUOp2::Add32 => ("wfasb", "", Some("aebr")),
                     FPUOp2::Add64 => ("wfadb", "", Some("adbr")),
+                    FPUOp2::Add32x4 => ("vfasb", "", None),
+                    FPUOp2::Add64x2 => ("vfadb", "", None),
                     FPUOp2::Sub32 => ("wfssb", "", Some("sebr")),
                     FPUOp2::Sub64 => ("wfsdb", "", Some("sdbr")),
+                    FPUOp2::Sub32x4 => ("vfssb", "", None),
+                    FPUOp2::Sub64x2 => ("vfsdb", "", None),
                     FPUOp2::Mul32 => ("wfmsb", "", Some("meebr")),
                     FPUOp2::Mul64 => ("wfmdb", "", Some("mdbr")),
+                    FPUOp2::Mul32x4 => ("vfmsb", "", None),
+                    FPUOp2::Mul64x2 => ("vfmdb", "", None),
                     FPUOp2::Div32 => ("wfdsb", "", Some("debr")),
                     FPUOp2::Div64 => ("wfddb", "", Some("ddbr")),
+                    FPUOp2::Div32x4 => ("vfdsb", "", None),
+                    FPUOp2::Div64x2 => ("vfddb", "", None),
                     FPUOp2::Max32 => ("wfmaxsb", ", 1", None),
                     FPUOp2::Max64 => ("wfmaxdb", ", 1", None),
+                    FPUOp2::Max32x4 => ("vfmaxsb", ", 1", None),
+                    FPUOp2::Max64x2 => ("vfmaxdb", ", 1", None),
                     FPUOp2::Min32 => ("wfminsb", ", 1", None),
                     FPUOp2::Min64 => ("wfmindb", ", 1", None),
+                    FPUOp2::Min32x4 => ("vfminsb", ", 1", None),
+                    FPUOp2::Min64x2 => ("vfmindb", ", 1", None),
+                    FPUOp2::MaxPseudo32 => ("wfmaxsb", ", 3", None),
+                    FPUOp2::MaxPseudo64 => ("wfmaxdb", ", 3", None),
+                    FPUOp2::MaxPseudo32x4 => ("vfmaxsb", ", 3", None),
+                    FPUOp2::MaxPseudo64x2 => ("vfmaxdb", ", 3", None),
+                    FPUOp2::MinPseudo32 => ("wfminsb", ", 3", None),
+                    FPUOp2::MinPseudo64 => ("wfmindb", ", 3", None),
+                    FPUOp2::MinPseudo32x4 => ("vfminsb", ", 3", None),
+                    FPUOp2::MinPseudo64x2 => ("vfmindb", ", 3", None),
                 };
 
                 let (rd, rd_fpr) = pretty_print_fpr(rd.to_reg(), allocs);
@@ -1855,7 +1993,7 @@ impl Inst {
                         rd_fpr.unwrap(),
                         rm_fpr.unwrap()
                     )
-                } else {
+                } else if op.starts_with('w') {
                     format!(
                         "{} {}, {}, {}{}",
                         op,
@@ -1864,6 +2002,8 @@ impl Inst {
                         rm_fpr.unwrap_or(rm),
                         opt_m6
                     )
+                } else {
+                    format!("{} {}, {}, {}{}", op, rd, rn, rm, opt_m6)
                 }
             }
             &Inst::FpuRRRR {
@@ -1874,25 +2014,34 @@ impl Inst {
                 ra,
             } => {
                 let (op, op_fpr) = match fpu_op {
-                    FPUOp3::MAdd32 => ("wfmasb", "maebr"),
-                    FPUOp3::MAdd64 => ("wfmadb", "madbr"),
-                    FPUOp3::MSub32 => ("wfmssb", "msebr"),
-                    FPUOp3::MSub64 => ("wfmsdb", "msdbr"),
+                    FPUOp3::MAdd32 => ("wfmasb", Some("maebr")),
+                    FPUOp3::MAdd64 => ("wfmadb", Some("madbr")),
+                    FPUOp3::MAdd32x4 => ("vfmasb", None),
+                    FPUOp3::MAdd64x2 => ("vfmadb", None),
+                    FPUOp3::MSub32 => ("wfmssb", Some("msebr")),
+                    FPUOp3::MSub64 => ("wfmsdb", Some("msdbr")),
+                    FPUOp3::MSub32x4 => ("vfmssb", None),
+                    FPUOp3::MSub64x2 => ("vfmsdb", None),
                 };
 
                 let (rd, rd_fpr) = pretty_print_fpr(rd.to_reg(), allocs);
                 let (rn, rn_fpr) = pretty_print_fpr(rn, allocs);
                 let (rm, rm_fpr) = pretty_print_fpr(rm, allocs);
                 let (ra, ra_fpr) = pretty_print_fpr(ra, allocs);
-                if rd == ra && rd_fpr.is_some() && rn_fpr.is_some() && rm_fpr.is_some() {
+                if op_fpr.is_some()
+                    && rd == ra
+                    && rd_fpr.is_some()
+                    && rn_fpr.is_some()
+                    && rm_fpr.is_some()
+                {
                     format!(
                         "{} {}, {}, {}",
-                        op_fpr,
+                        op_fpr.unwrap(),
                         rd_fpr.unwrap(),
                         rn_fpr.unwrap(),
                         rm_fpr.unwrap()
                     )
-                } else {
+                } else if op.starts_with('w') {
                     format!(
                         "{} {}, {}, {}, {}",
                         op,
@@ -1901,6 +2050,8 @@ impl Inst {
                         rm_fpr.unwrap_or(rm),
                         ra_fpr.unwrap_or(ra)
                     )
+                } else {
+                    format!("{} {}, {}, {}, {}", op, rd, rn, rm, ra)
                 }
             }
             &Inst::FpuCmp32 { rn, rm } => {
@@ -1975,16 +2126,27 @@ impl Inst {
                 };
                 let (opcode, opcode_fpr) = match op {
                     FpuRoundOp::Cvt64To32 => ("wledb", Some("ledbra")),
+                    FpuRoundOp::Cvt64x2To32x4 => ("vledb", None),
                     FpuRoundOp::Round32 => ("wfisb", Some("fiebr")),
                     FpuRoundOp::Round64 => ("wfidb", Some("fidbr")),
+                    FpuRoundOp::Round32x4 => ("vfisb", None),
+                    FpuRoundOp::Round64x2 => ("vfidb", None),
                     FpuRoundOp::ToSInt32 => ("wcfeb", None),
                     FpuRoundOp::ToSInt64 => ("wcgdb", None),
                     FpuRoundOp::ToUInt32 => ("wclfeb", None),
                     FpuRoundOp::ToUInt64 => ("wclgdb", None),
+                    FpuRoundOp::ToSInt32x4 => ("vcfeb", None),
+                    FpuRoundOp::ToSInt64x2 => ("vcgdb", None),
+                    FpuRoundOp::ToUInt32x4 => ("vclfeb", None),
+                    FpuRoundOp::ToUInt64x2 => ("vclgdb", None),
                     FpuRoundOp::FromSInt32 => ("wcefb", None),
                     FpuRoundOp::FromSInt64 => ("wcdgb", None),
                     FpuRoundOp::FromUInt32 => ("wcelfb", None),
                     FpuRoundOp::FromUInt64 => ("wcdlgb", None),
+                    FpuRoundOp::FromSInt32x4 => ("vcefb", None),
+                    FpuRoundOp::FromSInt64x2 => ("vcdgb", None),
+                    FpuRoundOp::FromUInt32x4 => ("vcelfb", None),
+                    FpuRoundOp::FromUInt64x2 => ("vcdlgb", None),
                 };
 
                 let (rd, rd_fpr) = pretty_print_fpr(rd.to_reg(), allocs);
@@ -1997,7 +2159,7 @@ impl Inst {
                         rn_fpr.unwrap(),
                         mode
                     )
-                } else {
+                } else if opcode.starts_with('w') {
                     format!(
                         "{} {}, {}, 0, {}",
                         opcode,
@@ -2005,7 +2167,167 @@ impl Inst {
                         rn_fpr.unwrap_or(rn),
                         mode
                     )
+                } else {
+                    format!("{} {}, {}, 0, {}", opcode, rd, rn, mode)
                 }
+            }
+            &Inst::VecRRR { op, rd, rn, rm } => {
+                let op = match op {
+                    VecBinaryOp::Add8x16 => "vab",
+                    VecBinaryOp::Add16x8 => "vah",
+                    VecBinaryOp::Add32x4 => "vaf",
+                    VecBinaryOp::Add64x2 => "vag",
+                    VecBinaryOp::Sub8x16 => "vsb",
+                    VecBinaryOp::Sub16x8 => "vsh",
+                    VecBinaryOp::Sub32x4 => "vsf",
+                    VecBinaryOp::Sub64x2 => "vsg",
+                    VecBinaryOp::Mul8x16 => "vmlb",
+                    VecBinaryOp::Mul16x8 => "vmlhw",
+                    VecBinaryOp::Mul32x4 => "vmlf",
+                    VecBinaryOp::UMulHi8x16 => "vmlhb",
+                    VecBinaryOp::UMulHi16x8 => "vmlhh",
+                    VecBinaryOp::UMulHi32x4 => "vmlhf",
+                    VecBinaryOp::SMulHi8x16 => "vmhb",
+                    VecBinaryOp::SMulHi16x8 => "vmhh",
+                    VecBinaryOp::SMulHi32x4 => "vmhf",
+                    VecBinaryOp::UMulEven8x16 => "vmleb",
+                    VecBinaryOp::UMulEven16x8 => "vmleh",
+                    VecBinaryOp::UMulEven32x4 => "vmlef",
+                    VecBinaryOp::SMulEven8x16 => "vmeb",
+                    VecBinaryOp::SMulEven16x8 => "vmeh",
+                    VecBinaryOp::SMulEven32x4 => "vmef",
+                    VecBinaryOp::UMulOdd8x16 => "vmlob",
+                    VecBinaryOp::UMulOdd16x8 => "vmloh",
+                    VecBinaryOp::UMulOdd32x4 => "vmlof",
+                    VecBinaryOp::SMulOdd8x16 => "vmob",
+                    VecBinaryOp::SMulOdd16x8 => "vmoh",
+                    VecBinaryOp::SMulOdd32x4 => "vmof",
+                    VecBinaryOp::UMax8x16 => "vmxlb",
+                    VecBinaryOp::UMax16x8 => "vmxlh",
+                    VecBinaryOp::UMax32x4 => "vmxlf",
+                    VecBinaryOp::UMax64x2 => "vmxlg",
+                    VecBinaryOp::SMax8x16 => "vmxb",
+                    VecBinaryOp::SMax16x8 => "vmxh",
+                    VecBinaryOp::SMax32x4 => "vmxf",
+                    VecBinaryOp::SMax64x2 => "vmxg",
+                    VecBinaryOp::UMin8x16 => "vmnlb",
+                    VecBinaryOp::UMin16x8 => "vmnlh",
+                    VecBinaryOp::UMin32x4 => "vmnlf",
+                    VecBinaryOp::UMin64x2 => "vmnlg",
+                    VecBinaryOp::SMin8x16 => "vmnb",
+                    VecBinaryOp::SMin16x8 => "vmnh",
+                    VecBinaryOp::SMin32x4 => "vmnf",
+                    VecBinaryOp::SMin64x2 => "vmng",
+                    VecBinaryOp::UAvg8x16 => "vavglb",
+                    VecBinaryOp::UAvg16x8 => "vavglh",
+                    VecBinaryOp::UAvg32x4 => "vavglf",
+                    VecBinaryOp::UAvg64x2 => "vavglg",
+                    VecBinaryOp::SAvg8x16 => "vavgb",
+                    VecBinaryOp::SAvg16x8 => "vavgh",
+                    VecBinaryOp::SAvg32x4 => "vavgf",
+                    VecBinaryOp::SAvg64x2 => "vavgg",
+                    VecBinaryOp::And128 => "vn",
+                    VecBinaryOp::Orr128 => "vo",
+                    VecBinaryOp::Xor128 => "vx",
+                    VecBinaryOp::NotAnd128 => "vnn",
+                    VecBinaryOp::NotOrr128 => "vno",
+                    VecBinaryOp::NotXor128 => "vnx",
+                    VecBinaryOp::AndNot128 => "vnc",
+                    VecBinaryOp::OrrNot128 => "voc",
+                    VecBinaryOp::BitPermute128 => "vbperm",
+                    VecBinaryOp::LShLByByte128 => "vslb",
+                    VecBinaryOp::LShRByByte128 => "vsrlb",
+                    VecBinaryOp::AShRByByte128 => "vsrab",
+                    VecBinaryOp::LShLByBit128 => "vsl",
+                    VecBinaryOp::LShRByBit128 => "vsrl",
+                    VecBinaryOp::AShRByBit128 => "vsra",
+                    VecBinaryOp::Pack16x8 => "vpkh",
+                    VecBinaryOp::Pack32x4 => "vpkf",
+                    VecBinaryOp::Pack64x2 => "vpkg",
+                    VecBinaryOp::PackUSat16x8 => "vpklsh",
+                    VecBinaryOp::PackUSat32x4 => "vpklsf",
+                    VecBinaryOp::PackUSat64x2 => "vpklsg",
+                    VecBinaryOp::PackSSat16x8 => "vpksh",
+                    VecBinaryOp::PackSSat32x4 => "vpksf",
+                    VecBinaryOp::PackSSat64x2 => "vpksg",
+                    VecBinaryOp::MergeLow8x16 => "vmrlb",
+                    VecBinaryOp::MergeLow16x8 => "vmrlh",
+                    VecBinaryOp::MergeLow32x4 => "vmrlf",
+                    VecBinaryOp::MergeLow64x2 => "vmrlg",
+                    VecBinaryOp::MergeHigh8x16 => "vmrhb",
+                    VecBinaryOp::MergeHigh16x8 => "vmrhh",
+                    VecBinaryOp::MergeHigh32x4 => "vmrhf",
+                    VecBinaryOp::MergeHigh64x2 => "vmrhg",
+                };
+                let rd = pretty_print_reg(rd.to_reg(), allocs);
+                let rn = pretty_print_reg(rn, allocs);
+                let rm = pretty_print_reg(rm, allocs);
+                format!("{} {}, {}, {}", op, rd, rn, rm)
+            }
+            &Inst::VecRR { op, rd, rn } => {
+                let op = match op {
+                    VecUnaryOp::Abs8x16 => "vlpb",
+                    VecUnaryOp::Abs16x8 => "vlph",
+                    VecUnaryOp::Abs32x4 => "vlpf",
+                    VecUnaryOp::Abs64x2 => "vlpg",
+                    VecUnaryOp::Neg8x16 => "vlcb",
+                    VecUnaryOp::Neg16x8 => "vlch",
+                    VecUnaryOp::Neg32x4 => "vlcf",
+                    VecUnaryOp::Neg64x2 => "vlcg",
+                    VecUnaryOp::Popcnt8x16 => "vpopctb",
+                    VecUnaryOp::Popcnt16x8 => "vpopcth",
+                    VecUnaryOp::Popcnt32x4 => "vpopctf",
+                    VecUnaryOp::Popcnt64x2 => "vpopctg",
+                    VecUnaryOp::UnpackULow8x16 => "vupllb",
+                    VecUnaryOp::UnpackULow16x8 => "vupllh",
+                    VecUnaryOp::UnpackULow32x4 => "vupllf",
+                    VecUnaryOp::UnpackUHigh8x16 => "vuplhb",
+                    VecUnaryOp::UnpackUHigh16x8 => "vuplhh",
+                    VecUnaryOp::UnpackUHigh32x4 => "vuplhf",
+                    VecUnaryOp::UnpackSLow8x16 => "vuplb",
+                    VecUnaryOp::UnpackSLow16x8 => "vuplh",
+                    VecUnaryOp::UnpackSLow32x4 => "vuplf",
+                    VecUnaryOp::UnpackSHigh8x16 => "vuphb",
+                    VecUnaryOp::UnpackSHigh16x8 => "vuphh",
+                    VecUnaryOp::UnpackSHigh32x4 => "vuphf",
+                };
+                let rd = pretty_print_reg(rd.to_reg(), allocs);
+                let rn = pretty_print_reg(rn, allocs);
+                format!("{} {}, {}", op, rd, rn)
+            }
+            &Inst::VecShiftRR {
+                shift_op,
+                rd,
+                rn,
+                shift_imm,
+                shift_reg,
+            } => {
+                let op = match shift_op {
+                    VecShiftOp::RotL8x16 => "verllb",
+                    VecShiftOp::RotL16x8 => "verllh",
+                    VecShiftOp::RotL32x4 => "verllf",
+                    VecShiftOp::RotL64x2 => "verllg",
+                    VecShiftOp::LShL8x16 => "veslb",
+                    VecShiftOp::LShL16x8 => "veslh",
+                    VecShiftOp::LShL32x4 => "veslf",
+                    VecShiftOp::LShL64x2 => "veslg",
+                    VecShiftOp::LShR8x16 => "vesrlb",
+                    VecShiftOp::LShR16x8 => "vesrlh",
+                    VecShiftOp::LShR32x4 => "vesrlf",
+                    VecShiftOp::LShR64x2 => "vesrlg",
+                    VecShiftOp::AShR8x16 => "vesrab",
+                    VecShiftOp::AShR16x8 => "vesrah",
+                    VecShiftOp::AShR32x4 => "vesraf",
+                    VecShiftOp::AShR64x2 => "vesrag",
+                };
+                let rd = pretty_print_reg(rd.to_reg(), allocs);
+                let rn = pretty_print_reg(rn, allocs);
+                let shift_reg = if shift_reg != zero_reg() {
+                    format!("({})", pretty_print_reg(shift_reg, allocs))
+                } else {
+                    "".to_string()
+                };
+                format!("{} {}, {}, {}{}", op, rd, rn, shift_imm, shift_reg)
             }
             &Inst::VecSelect { rd, rn, rm, ra } => {
                 let rd = pretty_print_reg(rd.to_reg(), allocs);
@@ -2013,6 +2335,409 @@ impl Inst {
                 let rm = pretty_print_reg(rm, allocs);
                 let ra = pretty_print_reg(ra, allocs);
                 format!("vsel {}, {}, {}, {}", rd, rn, rm, ra)
+            }
+            &Inst::VecPermute { rd, rn, rm, ra } => {
+                let rd = pretty_print_reg(rd.to_reg(), allocs);
+                let rn = pretty_print_reg(rn, allocs);
+                let rm = pretty_print_reg(rm, allocs);
+                let ra = pretty_print_reg(ra, allocs);
+                format!("vperm {}, {}, {}, {}", rd, rn, rm, ra)
+            }
+            &Inst::VecPermuteDWImm {
+                rd,
+                rn,
+                rm,
+                idx1,
+                idx2,
+            } => {
+                let rd = pretty_print_reg(rd.to_reg(), allocs);
+                let rn = pretty_print_reg(rn, allocs);
+                let rm = pretty_print_reg(rm, allocs);
+                let m4 = (idx1 & 1) * 4 + (idx2 & 1);
+                format!("vpdi {}, {}, {}, {}", rd, rn, rm, m4)
+            }
+            &Inst::VecIntCmp { op, rd, rn, rm } | &Inst::VecIntCmpS { op, rd, rn, rm } => {
+                let op = match op {
+                    VecIntCmpOp::CmpEq8x16 => "vceqb",
+                    VecIntCmpOp::CmpEq16x8 => "vceqh",
+                    VecIntCmpOp::CmpEq32x4 => "vceqf",
+                    VecIntCmpOp::CmpEq64x2 => "vceqg",
+                    VecIntCmpOp::SCmpHi8x16 => "vchb",
+                    VecIntCmpOp::SCmpHi16x8 => "vchh",
+                    VecIntCmpOp::SCmpHi32x4 => "vchf",
+                    VecIntCmpOp::SCmpHi64x2 => "vchg",
+                    VecIntCmpOp::UCmpHi8x16 => "vchlb",
+                    VecIntCmpOp::UCmpHi16x8 => "vchlh",
+                    VecIntCmpOp::UCmpHi32x4 => "vchlf",
+                    VecIntCmpOp::UCmpHi64x2 => "vchlg",
+                };
+                let s = match self {
+                    &Inst::VecIntCmp { .. } => "",
+                    &Inst::VecIntCmpS { .. } => "s",
+                    _ => unreachable!(),
+                };
+                let rd = pretty_print_reg(rd.to_reg(), allocs);
+                let rn = pretty_print_reg(rn, allocs);
+                let rm = pretty_print_reg(rm, allocs);
+                format!("{}{} {}, {}, {}", op, s, rd, rn, rm)
+            }
+            &Inst::VecFloatCmp { op, rd, rn, rm } | &Inst::VecFloatCmpS { op, rd, rn, rm } => {
+                let op = match op {
+                    VecFloatCmpOp::CmpEq32x4 => "vfcesb",
+                    VecFloatCmpOp::CmpEq64x2 => "vfcedb",
+                    VecFloatCmpOp::CmpHi32x4 => "vfchsb",
+                    VecFloatCmpOp::CmpHi64x2 => "vfchdb",
+                    VecFloatCmpOp::CmpHiEq32x4 => "vfchesb",
+                    VecFloatCmpOp::CmpHiEq64x2 => "vfchedb",
+                };
+                let s = match self {
+                    &Inst::VecFloatCmp { .. } => "",
+                    &Inst::VecFloatCmpS { .. } => "s",
+                    _ => unreachable!(),
+                };
+                let rd = pretty_print_reg(rd.to_reg(), allocs);
+                let rn = pretty_print_reg(rn, allocs);
+                let rm = pretty_print_reg(rm, allocs);
+                format!("{}{} {}, {}, {}", op, s, rd, rn, rm)
+            }
+            &Inst::VecLoad { rd, ref mem } | &Inst::VecLoadRev { rd, ref mem } => {
+                let opcode = match self {
+                    &Inst::VecLoad { .. } => "vl",
+                    &Inst::VecLoadRev { .. } => "vlbrq",
+                    _ => unreachable!(),
+                };
+
+                let rd = pretty_print_reg(rd.to_reg(), allocs);
+                let mem = mem.with_allocs(allocs);
+                let (mem_str, mem) = mem_finalize_for_show(&mem, state, true, false, false, true);
+                let mem = mem.pretty_print_default();
+                format!("{}{} {}, {}", mem_str, opcode, rd, mem)
+            }
+            &Inst::VecStore { rd, ref mem } | &Inst::VecStoreRev { rd, ref mem } => {
+                let opcode = match self {
+                    &Inst::VecStore { .. } => "vst",
+                    &Inst::VecStoreRev { .. } => "vstbrq",
+                    _ => unreachable!(),
+                };
+
+                let rd = pretty_print_reg(rd, allocs);
+                let mem = mem.with_allocs(allocs);
+                let (mem_str, mem) = mem_finalize_for_show(&mem, state, true, false, false, true);
+                let mem = mem.pretty_print_default();
+                format!("{}{} {}, {}", mem_str, opcode, rd, mem)
+            }
+            &Inst::VecLoadReplicate { size, rd, ref mem }
+            | &Inst::VecLoadReplicateRev { size, rd, ref mem } => {
+                let opcode = match (self, size) {
+                    (&Inst::VecLoadReplicate { .. }, 8) => "vlrepb",
+                    (&Inst::VecLoadReplicate { .. }, 16) => "vlreph",
+                    (&Inst::VecLoadReplicate { .. }, 32) => "vlrepf",
+                    (&Inst::VecLoadReplicate { .. }, 64) => "vlrepg",
+                    (&Inst::VecLoadReplicateRev { .. }, 16) => "vlbrreph",
+                    (&Inst::VecLoadReplicateRev { .. }, 32) => "vlbrrepf",
+                    (&Inst::VecLoadReplicateRev { .. }, 64) => "vlbrrepg",
+                    _ => unreachable!(),
+                };
+
+                let rd = pretty_print_reg(rd.to_reg(), allocs);
+                let mem = mem.with_allocs(allocs);
+                let (mem_str, mem) = mem_finalize_for_show(&mem, state, true, false, false, true);
+                let mem = mem.pretty_print_default();
+                format!("{}{} {}, {}", mem_str, opcode, rd, mem)
+            }
+            &Inst::VecMov { rd, rn } => {
+                let rd = pretty_print_reg(rd.to_reg(), allocs);
+                let rn = pretty_print_reg(rn, allocs);
+                format!("vlr {}, {}", rd, rn)
+            }
+            &Inst::VecCMov { rd, cond, rm } => {
+                let rd = pretty_print_reg(rd.to_reg(), allocs);
+                let rm = pretty_print_reg(rm, allocs);
+                let cond = cond.invert().pretty_print_default();
+                format!("j{} 10 ; vlr {}, {}", cond, rd, rm)
+            }
+            &Inst::MovToVec128 { rd, rn, rm } => {
+                let rd = pretty_print_reg(rd.to_reg(), allocs);
+                let rn = pretty_print_reg(rn, allocs);
+                let rm = pretty_print_reg(rm, allocs);
+                format!("vlvgp {}, {}, {}", rd, rn, rm)
+            }
+            &Inst::VecLoadConst { rd, const_data } => {
+                let rd = pretty_print_reg(rd.to_reg(), allocs);
+                let tmp = pretty_print_reg(writable_spilltmp_reg().to_reg(), &mut empty_allocs);
+                format!(
+                    "bras {}, 20 ; data.u128 0x{:032x} ; vl {}, 0({})",
+                    tmp, const_data, rd, tmp
+                )
+            }
+            &Inst::VecLoadConstReplicate {
+                size,
+                rd,
+                const_data,
+            } => {
+                let rd = pretty_print_reg(rd.to_reg(), allocs);
+                let tmp = pretty_print_reg(writable_spilltmp_reg().to_reg(), &mut empty_allocs);
+                let (opcode, data) = match size {
+                    32 => ("vlrepf", format!("0x{:08x}", const_data as u32)),
+                    64 => ("vlrepg", format!("0x{:016x}", const_data)),
+                    _ => unreachable!(),
+                };
+                format!(
+                    "bras {}, {} ; data.u{} {} ; {} {}, 0({})",
+                    tmp,
+                    4 + size / 8,
+                    size,
+                    data,
+                    opcode,
+                    rd,
+                    tmp
+                )
+            }
+            &Inst::VecImmByteMask { rd, mask } => {
+                let rd = pretty_print_reg(rd.to_reg(), allocs);
+                format!("vgbm {}, {}", rd, mask)
+            }
+            &Inst::VecImmBitMask {
+                size,
+                rd,
+                start_bit,
+                end_bit,
+            } => {
+                let rd = pretty_print_reg(rd.to_reg(), allocs);
+                let op = match size {
+                    8 => "vgmb",
+                    16 => "vgmh",
+                    32 => "vgmf",
+                    64 => "vgmg",
+                    _ => unreachable!(),
+                };
+                format!("{} {}, {}, {}", op, rd, start_bit, end_bit)
+            }
+            &Inst::VecImmReplicate { size, rd, imm } => {
+                let rd = pretty_print_reg(rd.to_reg(), allocs);
+                let op = match size {
+                    8 => "vrepib",
+                    16 => "vrepih",
+                    32 => "vrepif",
+                    64 => "vrepig",
+                    _ => unreachable!(),
+                };
+                format!("{} {}, {}", op, rd, imm)
+            }
+            &Inst::VecLoadLane {
+                size,
+                rd,
+                ref mem,
+                lane_imm,
+            }
+            | &Inst::VecLoadLaneRev {
+                size,
+                rd,
+                ref mem,
+                lane_imm,
+            }
+            | &Inst::VecLoadLaneUndef {
+                size,
+                rd,
+                ref mem,
+                lane_imm,
+            }
+            | &Inst::VecLoadLaneRevUndef {
+                size,
+                rd,
+                ref mem,
+                lane_imm,
+            } => {
+                let (opcode_vrx, opcode_rx, opcode_rxy) = match (self, size) {
+                    (&Inst::VecLoadLane { .. }, 8) => ("vleb", None, None),
+                    (&Inst::VecLoadLane { .. }, 16) => ("vleh", None, None),
+                    (&Inst::VecLoadLane { .. }, 32) => ("vlef", None, None),
+                    (&Inst::VecLoadLane { .. }, 64) => ("vleg", None, None),
+                    (&Inst::VecLoadLaneRev { .. }, 16) => ("vlebrh", None, None),
+                    (&Inst::VecLoadLaneRev { .. }, 32) => ("vlebrf", None, None),
+                    (&Inst::VecLoadLaneRev { .. }, 64) => ("vlebrg", None, None),
+                    (&Inst::VecLoadLaneUndef { .. }, 8) => ("vleb", None, None),
+                    (&Inst::VecLoadLaneUndef { .. }, 16) => ("vleh", None, None),
+                    (&Inst::VecLoadLaneUndef { .. }, 32) => ("vlef", Some("le"), Some("ley")),
+                    (&Inst::VecLoadLaneUndef { .. }, 64) => ("vleg", Some("ld"), Some("ldy")),
+                    (&Inst::VecLoadLaneRevUndef { .. }, 16) => ("vlebrh", None, None),
+                    (&Inst::VecLoadLaneRevUndef { .. }, 32) => ("vlebrf", None, None),
+                    (&Inst::VecLoadLaneRevUndef { .. }, 64) => ("vlebrg", None, None),
+                    _ => unreachable!(),
+                };
+
+                let (rd, rd_fpr) = pretty_print_fpr(rd.to_reg(), allocs);
+                let mem = mem.with_allocs(allocs);
+                if lane_imm == 0 && rd_fpr.is_some() && opcode_rx.is_some() {
+                    let (mem_str, mem) =
+                        mem_finalize_for_show(&mem, state, true, true, false, true);
+                    let op = match &mem {
+                        &MemArg::BXD12 { .. } => opcode_rx,
+                        &MemArg::BXD20 { .. } => opcode_rxy,
+                        _ => unreachable!(),
+                    };
+                    let mem = mem.pretty_print_default();
+                    format!("{}{} {}, {}", mem_str, op.unwrap(), rd_fpr.unwrap(), mem)
+                } else {
+                    let (mem_str, mem) =
+                        mem_finalize_for_show(&mem, state, true, false, false, true);
+                    let mem = mem.pretty_print_default();
+                    format!("{}{} {}, {}, {}", mem_str, opcode_vrx, rd, mem, lane_imm)
+                }
+            }
+            &Inst::VecStoreLane {
+                size,
+                rd,
+                ref mem,
+                lane_imm,
+            }
+            | &Inst::VecStoreLaneRev {
+                size,
+                rd,
+                ref mem,
+                lane_imm,
+            } => {
+                let (opcode_vrx, opcode_rx, opcode_rxy) = match (self, size) {
+                    (&Inst::VecStoreLane { .. }, 8) => ("vsteb", None, None),
+                    (&Inst::VecStoreLane { .. }, 16) => ("vsteh", None, None),
+                    (&Inst::VecStoreLane { .. }, 32) => ("vstef", Some("ste"), Some("stey")),
+                    (&Inst::VecStoreLane { .. }, 64) => ("vsteg", Some("std"), Some("stdy")),
+                    (&Inst::VecStoreLaneRev { .. }, 16) => ("vstebrh", None, None),
+                    (&Inst::VecStoreLaneRev { .. }, 32) => ("vstebrf", None, None),
+                    (&Inst::VecStoreLaneRev { .. }, 64) => ("vstebrg", None, None),
+                    _ => unreachable!(),
+                };
+
+                let (rd, rd_fpr) = pretty_print_fpr(rd, allocs);
+                let mem = mem.with_allocs(allocs);
+                if lane_imm == 0 && rd_fpr.is_some() && opcode_rx.is_some() {
+                    let (mem_str, mem) =
+                        mem_finalize_for_show(&mem, state, true, true, false, true);
+                    let op = match &mem {
+                        &MemArg::BXD12 { .. } => opcode_rx,
+                        &MemArg::BXD20 { .. } => opcode_rxy,
+                        _ => unreachable!(),
+                    };
+                    let mem = mem.pretty_print_default();
+                    format!("{}{} {}, {}", mem_str, op.unwrap(), rd_fpr.unwrap(), mem)
+                } else {
+                    let (mem_str, mem) =
+                        mem_finalize_for_show(&mem, state, true, false, false, true);
+                    let mem = mem.pretty_print_default();
+                    format!("{}{} {}, {}, {}", mem_str, opcode_vrx, rd, mem, lane_imm,)
+                }
+            }
+            &Inst::VecInsertLane {
+                size,
+                rd,
+                rn,
+                lane_imm,
+                lane_reg,
+            } => {
+                let op = match size {
+                    8 => "vlvgb",
+                    16 => "vlvgh",
+                    32 => "vlvgf",
+                    64 => "vlvgg",
+                    _ => unreachable!(),
+                };
+                let rd = pretty_print_reg(rd.to_reg(), allocs);
+                let rn = pretty_print_reg(rn, allocs);
+                let lane_reg = if lane_reg != zero_reg() {
+                    format!("({})", pretty_print_reg(lane_reg, allocs))
+                } else {
+                    "".to_string()
+                };
+                format!("{} {}, {}, {}{}", op, rd, rn, lane_imm, lane_reg)
+            }
+            &Inst::VecInsertLaneUndef {
+                size,
+                rd,
+                rn,
+                lane_imm,
+                lane_reg,
+            } => {
+                let (opcode_vrs, opcode_rre) = match size {
+                    8 => ("vlvgb", None),
+                    16 => ("vlvgh", None),
+                    32 => ("vlvgf", None),
+                    64 => ("vlvgg", Some("ldgr")),
+                    _ => unreachable!(),
+                };
+                let (rd, rd_fpr) = pretty_print_fpr(rd.to_reg(), allocs);
+                let rn = pretty_print_reg(rn, allocs);
+                let lane_reg = if lane_reg != zero_reg() {
+                    format!("({})", pretty_print_reg(lane_reg, allocs))
+                } else {
+                    "".to_string()
+                };
+                if opcode_rre.is_some() && lane_imm == 0 && lane_reg.is_empty() && rd_fpr.is_some()
+                {
+                    format!("{} {}, {}", opcode_rre.unwrap(), rd_fpr.unwrap(), rn)
+                } else {
+                    format!("{} {}, {}, {}{}", opcode_vrs, rd, rn, lane_imm, lane_reg)
+                }
+            }
+            &Inst::VecExtractLane {
+                size,
+                rd,
+                rn,
+                lane_imm,
+                lane_reg,
+            } => {
+                let (opcode_vrs, opcode_rre) = match size {
+                    8 => ("vlgvb", None),
+                    16 => ("vlgvh", None),
+                    32 => ("vlgvf", None),
+                    64 => ("vlgvg", Some("lgdr")),
+                    _ => unreachable!(),
+                };
+                let rd = pretty_print_reg(rd.to_reg(), allocs);
+                let (rn, rn_fpr) = pretty_print_fpr(rn, allocs);
+                let lane_reg = if lane_reg != zero_reg() {
+                    format!("({})", pretty_print_reg(lane_reg, allocs))
+                } else {
+                    "".to_string()
+                };
+                if opcode_rre.is_some() && lane_imm == 0 && lane_reg.is_empty() && rn_fpr.is_some()
+                {
+                    format!("{} {}, {}", opcode_rre.unwrap(), rd, rn_fpr.unwrap())
+                } else {
+                    format!("{} {}, {}, {}{}", opcode_vrs, rd, rn, lane_imm, lane_reg)
+                }
+            }
+            &Inst::VecInsertLaneImm {
+                size,
+                rd,
+                imm,
+                lane_imm,
+            } => {
+                let op = match size {
+                    8 => "vleib",
+                    16 => "vleih",
+                    32 => "vleif",
+                    64 => "vleig",
+                    _ => unreachable!(),
+                };
+                let rd = pretty_print_reg(rd.to_reg(), allocs);
+                format!("{} {}, {}, {}", op, rd, imm, lane_imm)
+            }
+            &Inst::VecReplicateLane {
+                size,
+                rd,
+                rn,
+                lane_imm,
+            } => {
+                let op = match size {
+                    8 => "vrepb",
+                    16 => "vreph",
+                    32 => "vrepf",
+                    64 => "vrepg",
+                    _ => unreachable!(),
+                };
+                let rd = pretty_print_reg(rd.to_reg(), allocs);
+                let rn = pretty_print_reg(rn, allocs);
+                format!("{} {}, {}, {}", op, rd, rn, lane_imm)
             }
             &Inst::Extend {
                 rd,

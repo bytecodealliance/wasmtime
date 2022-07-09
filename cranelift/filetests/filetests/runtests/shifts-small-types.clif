@@ -1,7 +1,8 @@
 test run
 target aarch64
+target s390x
 
-; TODO: Merge this with the main shifts file when x86_64 & s390x passes these.
+; TODO: Merge this with the main shifts file when x86_64 passes these.
 
 function %ishl_i16_i64(i16, i64) -> i16 {
 block0(v0: i16, v1: i64):

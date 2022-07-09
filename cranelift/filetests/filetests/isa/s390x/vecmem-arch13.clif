@@ -1,0 +1,375 @@
+test compile precise-output
+target s390x arch13
+
+function %uload8x8_big(i64) -> i16x8 {
+block0(v0: i64):
+  v1 = uload8x8 big v0
+  return v1
+}
+
+; block0:
+;   ld %f3, 0(%r2)
+;   vuplhb %v24, %v3
+;   br %r14
+
+function %uload16x4_big(i64) -> i32x4 {
+block0(v0: i64):
+  v1 = uload16x4 big v0
+  return v1
+}
+
+; block0:
+;   ld %f3, 0(%r2)
+;   vuplhh %v24, %v3
+;   br %r14
+
+function %uload32x2_big(i64) -> i64x2 {
+block0(v0: i64):
+  v1 = uload32x2 big v0
+  return v1
+}
+
+; block0:
+;   ld %f3, 0(%r2)
+;   vuplhf %v24, %v3
+;   br %r14
+
+function %sload8x8_big(i64) -> i16x8 {
+block0(v0: i64):
+  v1 = sload8x8 big v0
+  return v1
+}
+
+; block0:
+;   ld %f3, 0(%r2)
+;   vuphb %v24, %v3
+;   br %r14
+
+function %sload16x4_big(i64) -> i32x4 {
+block0(v0: i64):
+  v1 = sload16x4 big v0
+  return v1
+}
+
+; block0:
+;   ld %f3, 0(%r2)
+;   vuphh %v24, %v3
+;   br %r14
+
+function %sload32x2_big(i64) -> i64x2 {
+block0(v0: i64):
+  v1 = sload32x2 big v0
+  return v1
+}
+
+; block0:
+;   ld %f3, 0(%r2)
+;   vuphf %v24, %v3
+;   br %r14
+
+function %load_i8x16_big(i64) -> i8x16 {
+block0(v0: i64):
+  v1 = load.i8x16 big v0
+  return v1
+}
+
+; block0:
+;   vl %v24, 0(%r2)
+;   br %r14
+
+function %load_i16x8_big(i64) -> i16x8 {
+block0(v0: i64):
+  v1 = load.i16x8 big v0
+  return v1
+}
+
+; block0:
+;   vl %v24, 0(%r2)
+;   br %r14
+
+function %load_i32x4_big(i64) -> i32x4 {
+block0(v0: i64):
+  v1 = load.i32x4 big v0
+  return v1
+}
+
+; block0:
+;   vl %v24, 0(%r2)
+;   br %r14
+
+function %load_i64x2_big(i64) -> i64x2 {
+block0(v0: i64):
+  v1 = load.i64x2 big v0
+  return v1
+}
+
+; block0:
+;   vl %v24, 0(%r2)
+;   br %r14
+
+function %load_f32x4_big(i64) -> f32x4 {
+block0(v0: i64):
+  v1 = load.f32x4 big v0
+  return v1
+}
+
+; block0:
+;   vl %v24, 0(%r2)
+;   br %r14
+
+function %load_f64x2_big(i64) -> f64x2 {
+block0(v0: i64):
+  v1 = load.f64x2 big v0
+  return v1
+}
+
+; block0:
+;   vl %v24, 0(%r2)
+;   br %r14
+
+function %store_i8x16_big(i8x16, i64) {
+block0(v0: i8x16, v1: i64):
+  store.i8x16 big v0, v1
+  return
+}
+
+; block0:
+;   vst %v24, 0(%r2)
+;   br %r14
+
+function %store_i16x8_big(i16x8, i64) {
+block0(v0: i16x8, v1: i64):
+  store.i16x8 big v0, v1
+  return
+}
+
+; block0:
+;   vst %v24, 0(%r2)
+;   br %r14
+
+function %store_i32x4_big(i32x4, i64) {
+block0(v0: i32x4, v1: i64):
+  store.i32x4 big v0, v1
+  return
+}
+
+; block0:
+;   vst %v24, 0(%r2)
+;   br %r14
+
+function %store_i64x2_big(i64x2, i64) {
+block0(v0: i64x2, v1: i64):
+  store.i64x2 big v0, v1
+  return
+}
+
+; block0:
+;   vst %v24, 0(%r2)
+;   br %r14
+
+function %store_f32x4_big(f32x4, i64) {
+block0(v0: f32x4, v1: i64):
+  store.f32x4 big v0, v1
+  return
+}
+
+; block0:
+;   vst %v24, 0(%r2)
+;   br %r14
+
+function %store_f64x2_big(f64x2, i64) {
+block0(v0: f64x2, v1: i64):
+  store.f64x2 big v0, v1
+  return
+}
+
+; block0:
+;   vst %v24, 0(%r2)
+;   br %r14
+
+function %uload8x8_little(i64) -> i16x8 {
+block0(v0: i64):
+  v1 = uload8x8 little v0
+  return v1
+}
+
+; block0:
+;   vlebrg %v3, 0(%r2), 0
+;   vuplhb %v24, %v3
+;   br %r14
+
+function %uload16x4_little(i64) -> i32x4 {
+block0(v0: i64):
+  v1 = uload16x4 little v0
+  return v1
+}
+
+; block0:
+;   vlebrg %v3, 0(%r2), 0
+;   vuplhh %v24, %v3
+;   br %r14
+
+function %uload32x2_little(i64) -> i64x2 {
+block0(v0: i64):
+  v1 = uload32x2 little v0
+  return v1
+}
+
+; block0:
+;   vlebrg %v3, 0(%r2), 0
+;   vuplhf %v24, %v3
+;   br %r14
+
+function %sload8x8_little(i64) -> i16x8 {
+block0(v0: i64):
+  v1 = sload8x8 little v0
+  return v1
+}
+
+; block0:
+;   vlebrg %v3, 0(%r2), 0
+;   vuphb %v24, %v3
+;   br %r14
+
+function %sload16x4_little(i64) -> i32x4 {
+block0(v0: i64):
+  v1 = sload16x4 little v0
+  return v1
+}
+
+; block0:
+;   vlebrg %v3, 0(%r2), 0
+;   vuphh %v24, %v3
+;   br %r14
+
+function %sload32x2_little(i64) -> i64x2 {
+block0(v0: i64):
+  v1 = sload32x2 little v0
+  return v1
+}
+
+; block0:
+;   vlebrg %v3, 0(%r2), 0
+;   vuphf %v24, %v3
+;   br %r14
+
+function %load_i8x16_little(i64) -> i8x16 {
+block0(v0: i64):
+  v1 = load.i8x16 little v0
+  return v1
+}
+
+; block0:
+;   vlbrq %v24, 0(%r2)
+;   br %r14
+
+function %load_i16x8_little(i64) -> i16x8 {
+block0(v0: i64):
+  v1 = load.i16x8 little v0
+  return v1
+}
+
+; block0:
+;   vlbrq %v24, 0(%r2)
+;   br %r14
+
+function %load_i32x4_little(i64) -> i32x4 {
+block0(v0: i64):
+  v1 = load.i32x4 little v0
+  return v1
+}
+
+; block0:
+;   vlbrq %v24, 0(%r2)
+;   br %r14
+
+function %load_i64x2_little(i64) -> i64x2 {
+block0(v0: i64):
+  v1 = load.i64x2 little v0
+  return v1
+}
+
+; block0:
+;   vlbrq %v24, 0(%r2)
+;   br %r14
+
+function %load_f32x4_little(i64) -> f32x4 {
+block0(v0: i64):
+  v1 = load.f32x4 little v0
+  return v1
+}
+
+; block0:
+;   vlbrq %v24, 0(%r2)
+;   br %r14
+
+function %load_f64x2_little(i64) -> f64x2 {
+block0(v0: i64):
+  v1 = load.f64x2 little v0
+  return v1
+}
+
+; block0:
+;   vlbrq %v24, 0(%r2)
+;   br %r14
+
+function %store_i8x16_little(i8x16, i64) {
+block0(v0: i8x16, v1: i64):
+  store.i8x16 little v0, v1
+  return
+}
+
+; block0:
+;   vstbrq %v24, 0(%r2)
+;   br %r14
+
+function %store_i16x8_little(i16x8, i64) {
+block0(v0: i16x8, v1: i64):
+  store.i16x8 little v0, v1
+  return
+}
+
+; block0:
+;   vstbrq %v24, 0(%r2)
+;   br %r14
+
+function %store_i32x4_little(i32x4, i64) {
+block0(v0: i32x4, v1: i64):
+  store.i32x4 little v0, v1
+  return
+}
+
+; block0:
+;   vstbrq %v24, 0(%r2)
+;   br %r14
+
+function %store_i64x2_little(i64x2, i64) {
+block0(v0: i64x2, v1: i64):
+  store.i64x2 little v0, v1
+  return
+}
+
+; block0:
+;   vstbrq %v24, 0(%r2)
+;   br %r14
+
+function %store_f32x4_little(f32x4, i64) {
+block0(v0: f32x4, v1: i64):
+  store.f32x4 little v0, v1
+  return
+}
+
+; block0:
+;   vstbrq %v24, 0(%r2)
+;   br %r14
+
+function %store_f64x2_little(f64x2, i64) {
+block0(v0: f64x2, v1: i64):
+  store.f64x2 little v0, v1
+  return
+}
+
+; block0:
+;   vstbrq %v24, 0(%r2)
+;   br %r14
+
