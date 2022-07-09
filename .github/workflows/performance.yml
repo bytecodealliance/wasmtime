@@ -1,0 +1,98 @@
+# This is a workflow triggered by PR or triggered manually
+# Runs quick performance tests and reports the comparison against HEAD
+# Test should take less than 10 minutes to run on current self-hosted devices
+name: "Performance Testing"
+
+# Controls when the action will run.
+# This workflow runs when manually triggered using the UI or API.
+on:
+  issue_comment:
+    types: [created, edited]
+  pull_request_review_comment:
+    types: [created, edited]
+  workflow_dispatch:
+      inputs:
+        actor:
+          description: 'User that requested the workflow'
+          type: string
+          required: false
+        pr_number:
+          description: 'Pull request number for where to post the results'
+          type: string
+          required: false
+          default: ''
+        post_results:
+          description: 'Check to post results to the given PR'
+          type: boolean
+          required: false
+          default: false
+        repository:
+          description: 'Repository for the commit'
+          type: string
+          default: 'bytecodealliance/wasmtime'
+          required: true
+        refs:
+          description: 'Ref for the commit'
+          type: string
+          default: 'refs/heads/main'
+          required: true
+        sg_commit:
+          description: 'Sightglass ref'
+          type: string
+          default: '81c425a'
+          required: false
+        message:
+          description: 'Message to print with posted PR comment'
+          type: string
+          default: 'Triggered by wasmtime workflow dispatch'
+          required: false
+
+# Env variables
+env:
+  SG_COMMIT: 649509c
+  TOKEN: ${{ secrets.SIGHTGLASS_BENCHMARKING_TOKEN }}
+  GITHUB_CONTEXT: ${{ toJson(github) }}
+
+jobs:
+  Sightglass_x86-64_from_pr_comment:
+    name: Sightglass x86-64_from_pr_comment
+    runs-on: ubuntu-latest
+    if: |
+      startsWith(github.event.comment.body, '/bench_x64') &&
+      (github.event.issue.pull_request) &&
+      (('abrown' == github.event.comment.user.login)
+        || ('afonso360' == github.event.comment.user.login)
+        || ('akirilov-arm' == github.event.comment.user.login)
+        || ('alexcrichton' == github.event.comment.user.login)
+        || ('bbouvier' == github.event.comment.user.login)
+        || ('bjorn3' == github.event.comment.user.login)
+        || ('cfallin' == github.event.comment.user.login)
+        || ('fitzgen' == github.event.comment.user.login)
+        || ('jlb6740' == github.event.comment.user.login)
+        || ('sparker-arm' == github.event.comment.user.login)
+        || ('uweigand' == github.event.comment.user.login))
+    steps:
+      - run: echo "MESSAGE=Requested from pull request comment." >> $GITHUB_ENV
+      - run: echo "ACTOR=${{ github.event.comment.user.login }}" >> $GITHUB_ENV
+      - run: echo "REPOSITORY=${{ github.repository }}" >> $GITHUB_ENV
+      - run: echo "REFS=${{ github.ref }}" >> $GITHUB_ENV
+      - run: echo "PR_NUMBER=${{ github.event.issue.number }}" >> $GITHUB_ENV
+      - run: echo "PUBLISH=true" >> $GITHUB_ENV
+      - run: echo "$GITHUB_CONTEXT"
+      - run: |
+          curl -X POST -H "Accept: application/vnd.github.v3+json" -H "Authorization: token ${{ env.TOKEN }}" https://api.github.com/repos/bytecodealliance/wasmtime-sightglass-benchmarking/dispatches -d '{"event_type":"bench-sightglass", "client_payload":{"message":"${{ env.MESSAGE }}", "actor":"${{ env.ACTOR }}", "repository":"${{ env.REPOSITORY }}", "ref":"${{ env.REFS }}", "pr_number":"${{ env.PR_NUMBER }}", "publish":"${{ env.PUBLISH }}" }'
+
+  Sightglass_x86-64_from_workflow_dispatch:
+    name: Performance x86-64_from_workflow_dispatch
+    runs-on: ubuntu-latest
+    if: (github.event_name == 'workflow_dispatch')
+    steps:
+      - run: echo "MESSAGE=${{ github.event.inputs.message }}" >> $GITHUB_ENV
+      - run: echo "ACTOR=${{ github.event.inputs.actor }}" >> $GITHUB_ENV
+      - run: echo "REPOSITORY=${{ github.event.inputs.repository }}" >> $GITHUB_ENV
+      - run: echo "REFS=${{ github.event.inputs.refs }}" >> $GITHUB_ENV
+      - run: echo "PR_NUMBER=${{ github.event.inputs.pr_number }}" >> $GITHUB_ENV
+      - run: echo "PUBLISH=${{ github.event.inputs.post_results }}"  >> $GITHUB_ENV
+      - run: echo "$GITHUB_CONTEXT"
+      - run: |
+          curl -X POST -H "Accept: application/vnd.github.v3+json" -H "Authorization: token ${{ env.TOKEN }}" https://api.github.com/repos/bytecodealliance/wasmtime-sightglass-benchmarking/dispatches -d '{"event_type":"bench-sightglass", "client_payload":{"message":"${{ env.MESSAGE }}", "actor":"${{ env.ACTOR }}", "repository":"${{ env.REPOSITORY }}", "ref":"${{ env.REFS }}", "pr_number":"${{ env.PR_NUMBER }}", "publish":"${{ env.PUBLISH }}" }'
