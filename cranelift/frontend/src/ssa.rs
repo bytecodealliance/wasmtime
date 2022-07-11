@@ -17,7 +17,9 @@ use cranelift_codegen::entity::SecondaryMap;
 use cranelift_codegen::ir::immediates::{Ieee32, Ieee64};
 use cranelift_codegen::ir::instructions::BranchInfo;
 use cranelift_codegen::ir::types::{F32, F64};
-use cranelift_codegen::ir::{Block, Function, Inst, InstBuilder, InstructionData, Type, Value};
+use cranelift_codegen::ir::{
+    Block, Function, Inst, InstBuilder, InstructionData, JumpTableData, Type, Value,
+};
 use cranelift_codegen::packed_option::PackedOption;
 use smallvec::SmallVec;
 
@@ -652,7 +654,7 @@ impl SSABuilder {
                 func.dfg.append_inst_arg(jump_inst, val);
                 None
             }
-            BranchInfo::Table(jt, default_block) => {
+            BranchInfo::Table(mut jt, _default_block) => {
                 // In the case of a jump table, the situation is tricky because br_table doesn't
                 // support arguments.
                 // We have to split the critical edge
@@ -662,25 +664,35 @@ impl SSABuilder {
                 self.ssa_blocks[middle_block].add_predecessor(jump_inst_block, jump_inst);
                 self.mark_block_sealed(middle_block);
 
-                if let Some(default_block) = default_block {
-                    if dest_block == default_block {
-                        match func.dfg[jump_inst] {
-                            InstructionData::BranchTable {
-                                destination: ref mut dest,
-                                ..
-                            } => {
-                                *dest = middle_block;
-                            }
-                            _ => panic!("should not happen"),
-                        }
+                let table = &func.jump_tables[jt];
+                let mut copied = JumpTableData::with_capacity(table.len());
+                let mut changed = false;
+                for &destination in table.iter() {
+                    if destination == dest_block {
+                        copied.push_entry(middle_block);
+                        changed = true;
+                    } else {
+                        copied.push_entry(destination);
                     }
                 }
 
-                for old_dest in func.jump_tables[jt].as_mut_slice() {
-                    if *old_dest == dest_block {
-                        *old_dest = middle_block;
-                    }
+                if changed {
+                    jt = func.create_jump_table(copied);
                 }
+
+                // Redo the match from `analyze_branch` but this time capture mutable references
+                match &mut func.dfg[jump_inst] {
+                    InstructionData::BranchTable {
+                        destination, table, ..
+                    } => {
+                        if *destination == dest_block {
+                            *destination = middle_block;
+                        }
+                        *table = jt;
+                    }
+                    _ => unreachable!(),
+                }
+
                 let mut cur = FuncCursor::new(func).at_bottom(middle_block);
                 let middle_jump_inst = cur.ins().jump(dest_block, &[val]);
                 self.def_var(var, val, middle_block);
