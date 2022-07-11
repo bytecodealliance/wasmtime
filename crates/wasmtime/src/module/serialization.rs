@@ -426,6 +426,9 @@ impl<'a> SerializedModule<'a> {
             // setting just fine (it's just a section in the compiled file and
             // whether it's present or not)
             generate_address_map: _,
+
+            // Just a debugging aid, doesn't affect functionality at all.
+            debug_adapter_modules: _,
         } = self.metadata.tunables;
 
         Self::check_int(

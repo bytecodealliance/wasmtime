@@ -12,9 +12,6 @@ use wasmtime_environ::component::{
 };
 use wasmtime_runtime::{Export, ExportFunction, VMTrampoline};
 
-const MAX_STACK_PARAMS: usize = 16;
-const MAX_STACK_RESULTS: usize = 1;
-
 /// A helper macro to safely map `MaybeUninit<T>` to `MaybeUninit<U>` where `U`
 /// is a field projection within `T`.
 ///

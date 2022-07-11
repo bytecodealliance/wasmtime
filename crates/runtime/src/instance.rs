@@ -330,7 +330,6 @@ impl Instance {
             } else {
                 self.imported_global(index).from
             },
-            vmctx: self.vmctx_ptr(),
             global: self.module().globals[index],
         }
     }

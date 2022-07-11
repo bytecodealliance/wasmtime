@@ -12,7 +12,7 @@ use wasmtime_environ::component::{
     ExtractPostReturn, ExtractRealloc, GlobalInitializer, InstantiateModule, LowerImport,
     RuntimeImportIndex, RuntimeInstanceIndex, RuntimeModuleIndex,
 };
-use wasmtime_environ::{EntityIndex, PrimaryMap};
+use wasmtime_environ::{EntityIndex, Global, GlobalInit, PrimaryMap, WasmType};
 use wasmtime_runtime::component::{ComponentInstance, OwnedComponentInstance};
 
 /// An instantiated component.
@@ -132,6 +132,18 @@ impl InstanceData {
                     anyfunc: self.state.always_trap_anyfunc(*idx),
                 })
             }
+            CoreDef::InstanceFlags(idx) => {
+                wasmtime_runtime::Export::Global(wasmtime_runtime::ExportGlobal {
+                    definition: self.state.instance_flags(*idx).as_raw(),
+                    global: Global {
+                        wasm_ty: WasmType::I32,
+                        mutability: true,
+                        initializer: GlobalInit::I32Const(0),
+                    },
+                })
+            }
+            // This should have been processed away during compilation.
+            CoreDef::Adapter(_) => unreachable!(),
         }
     }
 
@@ -354,10 +366,28 @@ impl<'a> Instantiator<'a> {
     ) -> &OwnedImports {
         self.core_imports.clear();
         self.core_imports.reserve(module);
+        let mut imports = module.compiled_module().module().imports();
 
         for arg in args {
-            let export = self.data.lookup_def(store, arg);
+            // The general idea of Wasmtime is that at runtime type-checks for
+            // core wasm instantiations internally within a component are
+            // unnecessary and superfluous. Naturally though mistakes may be
+            // made, so double-check this property of wasmtime in debug mode.
+            if cfg!(debug_assertions) {
+                let export = self.data.lookup_def(store, arg);
+                let (_, _, expected) = imports.next().unwrap();
+                let val = unsafe { crate::Extern::from_wasmtime_export(export, store) };
+                crate::types::matching::MatchCx {
+                    store,
+                    engine: store.engine(),
+                    signatures: module.signatures(),
+                    types: module.types(),
+                }
+                .extern_(&expected, &val)
+                .expect("unexpected typecheck failure");
+            }
 
+            let export = self.data.lookup_def(store, arg);
             // The unsafety here should be ok since the `export` is loaded
             // directly from an instance which should only give us valid export
             // items.
@@ -365,6 +395,7 @@ impl<'a> Instantiator<'a> {
                 self.core_imports.push_export(&export);
             }
         }
+        debug_assert!(imports.next().is_none());
 
         &self.core_imports
     }

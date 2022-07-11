@@ -3514,7 +3514,9 @@ dependencies = [
  "serde",
  "target-lexicon",
  "thiserror",
+ "wasm-encoder",
  "wasmparser",
+ "wasmprinter",
  "wasmtime-types",
 ]
 

@@ -166,6 +166,10 @@ indices! {
     /// Index that represents an exported module from a component since that's
     /// currently the only use for saving the entire module state at runtime.
     pub struct RuntimeModuleIndex(u32);
+
+    /// Index into the list of fused adapters identified during compilation.
+    /// Used in conjuction with the `Adapters` type.
+    pub struct AdapterIndex(u32);
 }
 
 // Reexport for convenience some core-wasm indices which are also used in the
@@ -284,6 +288,11 @@ impl ComponentTypesBuilder {
     pub fn finish(mut self) -> ComponentTypes {
         self.component_types.module_types = self.module_types.finish();
         self.component_types
+    }
+
+    /// Returns the `ComponentTypes`-in-progress.
+    pub fn component_types(&self) -> &ComponentTypes {
+        &self.component_types
     }
 
     /// Returns the underlying builder used to build up core wasm module types.

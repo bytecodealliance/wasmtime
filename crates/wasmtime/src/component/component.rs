@@ -13,7 +13,7 @@ use wasmtime_environ::component::{
     AlwaysTrapInfo, ComponentTypes, GlobalInitializer, LoweredIndex, LoweringInfo,
     RuntimeAlwaysTrapIndex, StaticModuleIndex, Translator,
 };
-use wasmtime_environ::{PrimaryMap, SignatureIndex, Trampoline, TrapCode};
+use wasmtime_environ::{PrimaryMap, ScopeVec, SignatureIndex, Trampoline, TrapCode};
 use wasmtime_jit::CodeMemory;
 use wasmtime_runtime::VMFunctionBody;
 
@@ -119,10 +119,11 @@ impl Component {
 
         let tunables = &engine.config().tunables;
 
+        let scope = ScopeVec::new();
         let mut validator =
             wasmparser::Validator::new_with_features(engine.config().features.clone());
         let mut types = Default::default();
-        let (component, modules) = Translator::new(tunables, &mut validator, &mut types)
+        let (component, modules) = Translator::new(tunables, &mut validator, &mut types, &scope)
             .translate(binary)
             .context("failed to parse WebAssembly module")?;
         let types = Arc::new(types.finish());

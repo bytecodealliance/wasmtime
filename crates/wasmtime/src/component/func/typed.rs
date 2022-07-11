@@ -1,6 +1,4 @@
-use crate::component::func::{
-    Func, Memory, MemoryMut, Options, MAX_STACK_PARAMS, MAX_STACK_RESULTS,
-};
+use crate::component::func::{Func, Memory, MemoryMut, Options};
 use crate::store::StoreOpaque;
 use crate::{AsContext, AsContextMut, StoreContext, StoreContextMut, ValRaw};
 use anyhow::{bail, Context, Result};
@@ -9,7 +7,9 @@ use std::fmt;
 use std::marker;
 use std::mem::{self, MaybeUninit};
 use std::str;
-use wasmtime_environ::component::{ComponentTypes, InterfaceType, StringEncoding};
+use wasmtime_environ::component::{
+    ComponentTypes, InterfaceType, StringEncoding, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
+};
 
 /// A statically-typed version of [`Func`] which takes `Params` as input and
 /// returns `Return`.
@@ -156,8 +156,8 @@ where
         // space reserved for the params/results is always of the appropriate
         // size (as the params/results needed differ depending on the "flatten"
         // count)
-        if Params::flatten_count() <= MAX_STACK_PARAMS {
-            if Return::flatten_count() <= MAX_STACK_RESULTS {
+        if Params::flatten_count() <= MAX_FLAT_PARAMS {
+            if Return::flatten_count() <= MAX_FLAT_RESULTS {
                 self.func.call_raw(
                     store,
                     &params,
@@ -173,7 +173,7 @@ where
                 )
             }
         } else {
-            if Return::flatten_count() <= MAX_STACK_RESULTS {
+            if Return::flatten_count() <= MAX_FLAT_RESULTS {
                 self.func.call_raw(
                     store,
                     &params,
@@ -203,7 +203,7 @@ where
         params: &Params,
         dst: &mut MaybeUninit<Params::Lower>,
     ) -> Result<()> {
-        assert!(Params::flatten_count() <= MAX_STACK_PARAMS);
+        assert!(Params::flatten_count() <= MAX_FLAT_PARAMS);
         params.lower(store, options, dst)?;
         Ok(())
     }
@@ -211,7 +211,7 @@ where
     /// Lower parameters onto a heap-allocated location.
     ///
     /// This is used when the stack space to be used for the arguments is above
-    /// the `MAX_STACK_PARAMS` threshold. Here the wasm's `realloc` function is
+    /// the `MAX_FLAT_PARAMS` threshold. Here the wasm's `realloc` function is
     /// invoked to allocate space and then parameters are stored at that heap
     /// pointer location.
     fn lower_heap_args<T>(
@@ -220,7 +220,7 @@ where
         params: &Params,
         dst: &mut MaybeUninit<ValRaw>,
     ) -> Result<()> {
-        assert!(Params::flatten_count() > MAX_STACK_PARAMS);
+        assert!(Params::flatten_count() > MAX_FLAT_PARAMS);
 
         // Memory must exist via validation if the arguments are stored on the
         // heap, so we can create a `MemoryMut` at this point. Afterwards
@@ -257,14 +257,14 @@ where
         options: &Options,
         dst: &Return::Lower,
     ) -> Result<Return> {
-        assert!(Return::flatten_count() <= MAX_STACK_RESULTS);
+        assert!(Return::flatten_count() <= MAX_FLAT_RESULTS);
         Return::lift(store, options, dst)
     }
 
     /// Lift the result of a function where the result is stored indirectly on
     /// the heap.
     fn lift_heap_result(store: &StoreOpaque, options: &Options, dst: &ValRaw) -> Result<Return> {
-        assert!(Return::flatten_count() > MAX_STACK_RESULTS);
+        assert!(Return::flatten_count() > MAX_FLAT_RESULTS);
         // FIXME: needs to read an i64 for memory64
         let ptr = usize::try_from(dst.get_u32())?;
         if ptr % usize::try_from(Return::ALIGN32)? != 0 {
