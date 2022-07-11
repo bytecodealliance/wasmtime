@@ -467,7 +467,6 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                 },
             });
         }
-
         // Store each clobbered register in order at offsets from SP,
         // placing them above the fixed frame slots.
         if stack_size > 0 {
@@ -479,29 +478,28 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                     inst: UnwindInst::StackAlloc { size: stack_size },
                 });
             }
-        }
-
-        let mut cur_offset = 0;
-        for reg in clobbered_callee_saves {
-            let r_reg = reg.to_reg();
-            let ty = match r_reg.class() {
-                regalloc2::RegClass::Int => I64,
-                regalloc2::RegClass::Float => F64,
-            };
-            if flags.unwind_info() {
-                insts.push(Inst::Unwind {
-                    inst: UnwindInst::SaveReg {
-                        clobber_offset: cur_offset as u32,
-                        reg: r_reg,
-                    },
-                });
+            let mut cur_offset = 0;
+            for reg in clobbered_callee_saves {
+                let r_reg = reg.to_reg();
+                let ty = match r_reg.class() {
+                    regalloc2::RegClass::Int => I64,
+                    regalloc2::RegClass::Float => F64,
+                };
+                if flags.unwind_info() {
+                    insts.push(Inst::Unwind {
+                        inst: UnwindInst::SaveReg {
+                            clobber_offset: cur_offset as u32,
+                            reg: r_reg,
+                        },
+                    });
+                }
+                insts.push(Self::gen_store_stack(
+                    StackAMode::SPOffset(cur_offset, ty),
+                    real_reg_to_reg(reg.to_reg()),
+                    ty,
+                ));
+                cur_offset += 8
             }
-            insts.push(Self::gen_store_stack(
-                StackAMode::SPOffset(cur_offset, ty),
-                real_reg_to_reg(reg.to_reg()),
-                ty,
-            ));
-            cur_offset += 8
         }
         (clobbered_size as u64, insts)
     }
@@ -575,6 +573,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                             caller_callconv: caller_conv,
                             callee_callconv: callee_conv,
                             dest: name.clone(),
+                            clobbers,
                         }),
                     });
                 } else {
@@ -591,6 +590,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                             opcode,
                             caller_callconv: caller_conv,
                             callee_callconv: callee_conv,
+                            clobbers,
                         }),
                     });
                 }
@@ -603,6 +603,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                     opcode,
                     caller_callconv: caller_conv,
                     callee_callconv: callee_conv,
+                    clobbers,
                 }),
             }),
         }

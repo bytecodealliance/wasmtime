@@ -664,6 +664,12 @@ impl FpuOPRRR {
             _ => false,
         }
     }
+    pub fn is_copy_xor_sign(self) -> bool {
+        match self {
+            Self::FsgnjxS | Self::FsgnjxD => true,
+            _ => false,
+        }
+    }
 }
 impl AluOPRRR {
     pub(crate) const fn op_name(self) -> &'static str {

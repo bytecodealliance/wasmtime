@@ -32,9 +32,6 @@ type BoxCallInfo = Box<CallInfo>;
 type BoxCallIndInfo = Box<CallIndInfo>;
 type BoxExternalName = Box<ExternalName>;
 
-pub(crate) const F32_POS_1: u64 = 0x3f800000;
-pub(crate) const F64_POS_1: u64 = 0x3ff0000000000000;
-
 /// The main entry point for lowering with ISLE.
 pub(crate) fn lower<C>(
     lower_ctx: &mut C,
@@ -92,6 +89,9 @@ where
         }
         InstOutput::default()
     }
+    fn output_2(&mut self, x: ValueRegs, y: ValueRegs) -> InstOutput {
+        InstOutput::from_iter([x, y].into_iter())
+    }
     fn vec_writable_clone(&mut self, v: &VecWritableReg) -> VecWritableReg {
         v.clone()
     }
@@ -119,7 +119,6 @@ where
             (true, false) => todo!(),
             (false, true) => todo!(),
             (false, false) => {
-                assert!(in_ty.bits() == out_ty.bits());
                 match in_ty.bits() {
                     128 => {
                         // if 128 must not be a float.
@@ -139,7 +138,7 @@ where
         }
     }
     fn con_vec_writable(&mut self, ty: Type) -> VecWritableReg {
-        if ty.is_int() {
+        if ty.is_int() || ty.is_bool() {
             if ty.bits() <= 64 {
                 vec![self.temp_writable_reg(I64)]
             } else {
@@ -293,13 +292,14 @@ where
             None => return None,
         };
         let opcode = self.lower_ctx.data(inst).opcode();
-        if opcode != crate::ir::Opcode::Ifcmp {
-            return None;
+        if opcode == crate::ir::Opcode::Ifcmp {
+            let a = self.lower_ctx.input_as_value(inst, 0);
+            let b = self.lower_ctx.input_as_value(inst, 1);
+            let ty = self.lower_ctx.input_ty(inst, 0);
+            Some((a, b, ty))
+        } else {
+            unimplemented!("op:{:?}", opcode)
         }
-        let a = self.lower_ctx.input_as_value(inst, 0);
-        let b = self.lower_ctx.input_as_value(inst, 1);
-        let ty = self.lower_ctx.input_ty(inst, 0);
-        Some((a, b, ty))
     }
     fn ffcmp_parameters(&mut self, val: Value) -> Option<(Value, Value, Type)> {
         let inst = self.value_inst(val);

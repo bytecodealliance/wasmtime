@@ -2,7 +2,7 @@ test run
 target aarch64
 target s390x
 target x86_64
-;; target riscv64gc has_b 
+target riscv64gc 
 
 ;;;; basic uextend
 

@@ -1593,22 +1593,6 @@
 (decl load_float_const (u64 Type) Reg)
 (extern constructor load_float_const load_float_const)
 
-;; some float memory representation.
-;; +1.0 f32
-(extern const $F32_POS_1 u64)
-;; +1.0 f64
-(extern const $F64_POS_1 u64)
-
-(decl f_pos_1 (Type)u64)
-(rule
-  (f_pos_1 $F32)
-  $F32_POS_1
-)
-(rule
-  (f_pos_1 $F64)
-  $F64_POS_1
-)
-
 ;;float copy sign bit op.
 (decl f_copysign_op (Type)FpuOPRRR)
 (rule (f_copysign_op $F32) (FpuOPRRR.FsgnjS))
@@ -1618,6 +1602,10 @@
 (decl f_copy_neg_sign_op (Type)FpuOPRRR)
 (rule (f_copy_neg_sign_op $F32) (FpuOPRRR.FsgnjnS))
 (rule (f_copy_neg_sign_op $F64) (FpuOPRRR.FsgnjnD))
+
+(decl fabs_copy_sign(Type)FpuOPRRR)
+(rule (fabs_copy_sign $F32) (FpuOPRRR.FsgnjxS))
+(rule (fabs_copy_sign $F64) (FpuOPRRR.FsgnjxD))
 
 (decl gen_stack_addr (StackSlot Offset32) Reg )
 (extern constructor gen_stack_addr gen_stack_addr)
@@ -1991,3 +1979,8 @@
     (value_regs low high)
   )
 )
+
+;;; some instruction have two output.
+;;; like isplit.
+(decl output_2 (ValueRegs ValueRegs)InstOutput)
+(extern constructor output_2 output_2)

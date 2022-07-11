@@ -18,7 +18,7 @@ use crate::{settings, CodegenError, CodegenResult};
 pub use crate::ir::condcodes::FloatCC;
 
 use alloc::vec::Vec;
-use regalloc2::VReg;
+use regalloc2::{PRegSet, VReg};
 use smallvec::SmallVec;
 use std::boxed::Box;
 use std::string::String;
@@ -75,6 +75,7 @@ pub struct CallInfo {
     pub opcode: Opcode,
     pub caller_callconv: CallConv,
     pub callee_callconv: CallConv,
+    pub clobbers: PRegSet,
 }
 
 /// Additional information for CallInd instructions, left out of line to lower the size of the Inst
@@ -87,6 +88,7 @@ pub struct CallIndInfo {
     pub opcode: Opcode,
     pub caller_callconv: CallConv,
     pub callee_callconv: CallConv,
+    pub clobbers: PRegSet,
 }
 
 /// A branch target. Either unresolved (basic-block index) or resolved (offset
@@ -361,11 +363,13 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
         &Inst::Call { ref info } => {
             collector.reg_uses(&info.uses[..]);
             collector.reg_defs(&info.defs[..]);
+            collector.reg_clobbers(info.clobbers);
         }
         &Inst::CallInd { ref info } => {
             collector.reg_use(info.rn);
             collector.reg_uses(&info.uses[..]);
             collector.reg_defs(&info.defs[..]);
+            collector.reg_clobbers(info.clobbers);
         }
         &Inst::TrapIf { test, .. } => {
             collector.reg_use(test);
@@ -1006,6 +1010,13 @@ impl Inst {
                 } else if rs1_is_rs2 && alu_op.is_copy_neg_sign() {
                     format!(
                         "fneg.{} {},{}",
+                        if alu_op.is_32() { "s" } else { "d" },
+                        rd,
+                        rs1
+                    )
+                } else if rs1_is_rs2 && alu_op.is_copy_xor_sign() {
+                    format!(
+                        "fabs.{} {},{}",
                         if alu_op.is_32() { "s" } else { "d" },
                         rd,
                         rs1

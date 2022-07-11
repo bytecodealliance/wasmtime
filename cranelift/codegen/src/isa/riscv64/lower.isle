@@ -371,14 +371,7 @@
 ;;;; Rules for `fabs` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule 
   (lower (has_type ty (fabs x)))
-  (let
-    (
-      ;; load positive 1
-      (tmp Reg (load_float_const (f_pos_1 ty) ty))
-      (result Reg (fpu_rrr (f_copysign_op ty) ty x tmp))
-    )
-    result
-  )
+  (fpu_rrr (fabs_copy_sign ty) ty x x)
 )
 
 ;;;; Rules for `fneg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -597,7 +590,7 @@
       (t1 Reg (gen_move (value_regs_get x 0) $I64))
       (t2 Reg (gen_move (value_regs_get x 1) $I64))
     )
-    (value_regs t1 t2)
+    (output_2 t1 t2)
   )
 )
 ;;;;;  Rules for `iconcat`;;;;;;;;;
