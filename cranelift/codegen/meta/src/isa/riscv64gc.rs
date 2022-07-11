@@ -6,16 +6,16 @@ use crate::shared::Definitions as SharedDefinitions;
 fn define_settings(_shared: &SettingGroup) -> SettingGroup {
     let mut setting = SettingGroupBuilder::new("riscv64gc");
 
-    setting.add_bool("has_extension_m", "has extension M?", "", false);
-    setting.add_bool("has_extension_a", "has extension A?", "", false);
-    setting.add_bool("has_extension_f", "has extension F?", "", false);
-    setting.add_bool("has_extension_d", "has extension D?", "", false);
+    setting.add_bool("has_m", "has extension M?", "", false);
+    setting.add_bool("has_a", "has extension A?", "", false);
+    setting.add_bool("has_f", "has extension F?", "", false);
+    setting.add_bool("has_d", "has extension D?", "", false);
 
-    setting.add_bool("has_extension_v", "has extension V?", "", false);
+    setting.add_bool("has_v", "has extension V?", "", false);
 
-    setting.add_bool("has_extension_b", "has extension B?", "", false);
+    setting.add_bool("has_b", "has extension B?", "", false);
 
-    setting.add_bool("has_extension_zbkb", "has extension zbkb?", "", false);
+    setting.add_bool("has_zbkb", "has extension zbkb?", "", false);
     setting.build()
 }
 

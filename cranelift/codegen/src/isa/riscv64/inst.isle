@@ -262,6 +262,14 @@
       (x ValueRegs)
       (y ValueRegs))
     (RawData (data VecU8))
+    
+    ;; An unwind pseudo-instruction.
+       (Unwind
+        (inst UnwindInst))
+        
+    ;; A dummy use, useful to keep a value alive.
+       (DummyUse
+        (reg Reg))
 ))
 
 (type CsrOP(enum 

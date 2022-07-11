@@ -1,5 +1,6 @@
 //! risc-v 64-bit Instruction Set Architecture.
 
+use crate::ir;
 use crate::ir::condcodes::IntCC;
 use crate::ir::Function;
 
@@ -58,7 +59,7 @@ impl Riscv64Backend {
         flags: shared_settings::Flags,
     ) -> CodegenResult<(VCode<inst::Inst>, regalloc2::Output)> {
         let emit_info = EmitInfo::new(flags.clone(), self.isa_flags.clone());
-        let abi = Box::new(abi::Riscv64Callee::new(func, flags, self.isa_flags())?);
+        let abi = Box::new(abi::Riscv64Callee::new(func, self)?);
         compile::compile::<Riscv64Backend>(func, self, abi, &self.mach_env, emit_info)
     }
 }
@@ -77,16 +78,20 @@ impl TargetIsa for Riscv64Backend {
         let frame_size = emit_result.frame_size;
         let value_labels_ranges = emit_result.value_labels_ranges;
         let buffer = emit_result.buffer.finish();
-        let stackslot_offsets = emit_result.stackslot_offsets;
-        if want_disasm {
-            log::info!("compiler code:{}", emit_result.disasm.clone().unwrap());
+        let sized_stackslot_offsets = emit_result.sized_stackslot_offsets;
+        let dynamic_stackslot_offsets = emit_result.dynamic_stackslot_offsets;
+
+        if let Some(disasm) = emit_result.disasm.as_ref() {
+            log::debug!("disassembly:\n{}", disasm);
         }
+
         Ok(MachCompileResult {
             buffer,
             frame_size,
             disasm: emit_result.disasm,
             value_labels_ranges,
-            stackslot_offsets,
+            sized_stackslot_offsets,
+            dynamic_stackslot_offsets,
             bb_starts: emit_result.bb_offsets,
             bb_edges: emit_result.bb_edges,
         })
@@ -94,6 +99,9 @@ impl TargetIsa for Riscv64Backend {
 
     fn name(&self) -> &'static str {
         "riscv64gc"
+    }
+    fn dynamic_vector_bytes(&self, dynamic_ty: ir::Type) -> u32 {
+        unimplemented!();
     }
 
     fn triple(&self) -> &Triple {
@@ -115,15 +123,33 @@ impl TargetIsa for Riscv64Backend {
     #[cfg(feature = "unwind")]
     fn emit_unwind_info(
         &self,
-        _result: &MachCompileResult,
-        _kind: crate::machinst::UnwindInfoKind,
+        result: &MachCompileResult,
+        kind: crate::machinst::UnwindInfoKind,
     ) -> CodegenResult<Option<crate::isa::unwind::UnwindInfo>> {
-        unimplemented!()
+        use crate::isa::unwind::UnwindInfo;
+        use crate::machinst::UnwindInfoKind;
+        Ok(match kind {
+            UnwindInfoKind::SystemV => {
+                let mapper = self::inst::unwind::systemv::RegisterMapper;
+                Some(UnwindInfo::SystemV(
+                    crate::isa::unwind::systemv::create_unwind_info_from_insts(
+                        &result.buffer.unwind_info[..],
+                        result.buffer.data().len(),
+                        &mapper,
+                    )?,
+                ))
+            }
+            UnwindInfoKind::Windows => {
+                // TODO: support Windows unwind info on AArch64
+                None
+            }
+            _ => None,
+        })
     }
 
     #[cfg(feature = "unwind")]
     fn create_systemv_cie(&self) -> Option<gimli::write::CommonInformationEntry> {
-        unimplemented!()
+        Some(inst::unwind::systemv::create_cie())
     }
 
     fn text_section_builder(&self, num_funcs: u32) -> Box<dyn TextSectionBuilder> {
@@ -197,9 +223,7 @@ mod test {
             isa_flags,
         );
         let buffer = backend.compile_function(&mut func, true).unwrap();
-        // println!("xxxx : {}", buffer.disasm.unwrap());
         let code = buffer.buffer.data();
-        // write_to_a_file("/home/yuyang/tmp/code.bin", code);
         //0:   000015b7                lui     a1,0x1
         //4:   23458593                addi    a1,a1,564 # 0x1234
         //8:   00b5053b                addw    a0,a0,a1

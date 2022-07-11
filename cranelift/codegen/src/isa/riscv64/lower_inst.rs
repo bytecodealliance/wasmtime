@@ -469,6 +469,10 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         Opcode::ConstAddr | Opcode::Vconcat | Opcode::Vsplit | Opcode::IfcmpSp => {
             unimplemented!();
         }
+        Opcode::DynamicStackLoad => todo!(),
+        Opcode::DynamicStackStore => todo!(),
+        Opcode::DynamicStackAddr => todo!(),
+        Opcode::ExtractVector => todo!(),
     }
     Ok(())
 }
@@ -503,7 +507,7 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
             Opcode::Brz | Opcode::Brnz => {
                 let ty = ctx.input_ty(branches[0], 0);
                 let reg = ctx.put_input_in_regs(branches[0], 0);
-                if ty.bits() as u32 > Riscv64MachineDeps::word_bits() {
+                if ty.bits() > Riscv64MachineDeps::word_bits() {
                     let insts = Inst::lower_br_icmp(
                         if op0.opcode() == Opcode::Brz {
                             IntCC::Equal

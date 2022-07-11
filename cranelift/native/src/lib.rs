@@ -144,19 +144,19 @@ pub fn builder_with_options(infer_native_flags: bool) -> Result<isa::Builder, &'
         }
 
         if std::arch::is_riscv_feature_detected!("m") {
-            isa_builder.enable("has_extension_m").unwrap();
+            isa_builder.enable("has_m").unwrap();
         }
         if std::arch::is_riscv_feature_detected!("a") {
-            isa_builder.enable("has_extension_a").unwrap();
+            isa_builder.enable("has_a").unwrap();
         }
         if std::arch::is_riscv_feature_detected!("f") {
-            isa_builder.enable("has_extension_f").unwrap();
+            isa_builder.enable("has_f").unwrap();
         }
         if std::arch::is_riscv_feature_detected!("d") {
-            isa_builder.enable("has_extension_d").unwrap();
+            isa_builder.enable("has_d").unwrap();
         }
         if std::arch::is_riscv_feature_detected!("v") {
-            isa_builder.enable("has_extension_v").unwrap();
+            isa_builder.enable("has_v").unwrap();
         }
         if std::arch::is_riscv_feature_detected!("zba") {
             isa_builder.enable("has_extendion_zba").unwrap();

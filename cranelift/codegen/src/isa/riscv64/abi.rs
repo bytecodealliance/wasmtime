@@ -14,12 +14,16 @@ use crate::isa::riscv64::{inst::EmitState, inst::*};
 use crate::isa::CallConv;
 use crate::machinst::*;
 
+use crate::ir::Signature;
+use crate::isa::unwind::UnwindInst;
 use crate::settings;
 use crate::CodegenError;
 use crate::CodegenResult;
 use alloc::boxed::Box;
 use alloc::vec;
 use alloc::vec::Vec;
+use regalloc2::PRegSet;
+
 use regs::{f_reg, x_reg};
 
 use smallvec::{smallvec, SmallVec};
@@ -315,9 +319,6 @@ impl ABIMachineSpec for Riscv64MachineDeps {
     }
 
     fn gen_add_imm(into_reg: Writable<Reg>, from_reg: Reg, imm: u32) -> SmallInstVec<Inst> {
-        /*
-
-        */
         assert!(into_reg.to_reg() != from_reg);
         let mut insts = Inst::load_constant_u32(into_reg, imm as u64);
         insts.push(Inst::AluRRR {
@@ -383,26 +384,34 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         _flags: &settings::Flags,
         _isa_flags: &Vec<settings::Value>,
     ) -> SmallInstVec<Inst> {
+        // nothing special.
         smallvec![]
     }
 
     /// add  sp , -16   ;; alloc stack sapce for fp
-    /// st   ra , sp+0  ;; save ra
-    /// st   fp , sp+8  ;; store old fp
-    /// move fp , sp    ;; set fp to sp
-    fn gen_prologue_frame_setup(_flags: &settings::Flags) -> SmallInstVec<Inst> {
+    /// st   ra , sp+8  ;; save ra
+    /// st   fp , sp+0  ;; store old fp
+    /// mv   fp , sp    ;; set fp to sp
+    fn gen_prologue_frame_setup(flags: &settings::Flags) -> SmallInstVec<Inst> {
         let mut insts = SmallVec::new();
         insts.push(Inst::AjustSp { amount: -16 });
         insts.push(Self::gen_store_stack(
-            StackAMode::SPOffset(0, I64),
+            StackAMode::SPOffset(8, I64),
             link_reg(),
             I64,
         ));
         insts.push(Self::gen_store_stack(
-            StackAMode::SPOffset(8, I64),
+            StackAMode::SPOffset(0, I64),
             fp_reg(),
             I64,
         ));
+        if flags.unwind_info() {
+            insts.push(Inst::Unwind {
+                inst: UnwindInst::PushFrameRegs {
+                    offset_upward_to_caller_sp: 16, // FP, LR
+                },
+            });
+        }
         insts.push(Inst::Mov {
             rd: writable_fp_reg(),
             rm: stack_reg(),
@@ -414,12 +423,12 @@ impl ABIMachineSpec for Riscv64MachineDeps {
     fn gen_epilogue_frame_restore(_: &settings::Flags) -> SmallInstVec<Inst> {
         let mut insts = SmallVec::new();
         insts.push(Self::gen_load_stack(
-            StackAMode::SPOffset(0, I64),
+            StackAMode::SPOffset(8, I64),
             writable_link_reg(),
             I64,
         ));
         insts.push(Self::gen_load_stack(
-            StackAMode::SPOffset(8, I64),
+            StackAMode::SPOffset(0, I64),
             writable_fp_reg(),
             I64,
         ));
@@ -436,8 +445,8 @@ impl ABIMachineSpec for Riscv64MachineDeps {
     // nominal SP offset; abi_impl generic code will do that.
     fn gen_clobber_save(
         _call_conv: isa::CallConv,
-        _setup_frame: bool,
-        _flags: &settings::Flags,
+        setup_frame: bool,
+        flags: &settings::Flags,
         clobbered_callee_saves: &[Writable<RealReg>],
         fixed_frame_storage_size: u32,
         _outgoing_args_size: u32,
@@ -447,13 +456,31 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         // Adjust the stack pointer downward for clobbers and the function fixed
         // frame (spillslots and storage slots).
         let stack_size = fixed_frame_storage_size + clobbered_size;
-        // Store each clobbered register in order at offsets from RSP,
+
+        if flags.unwind_info() && setup_frame {
+            // The *unwind* frame (but not the actual frame) starts at the
+            // clobbers, just below the saved FP/LR pair.
+            insts.push(Inst::Unwind {
+                inst: UnwindInst::DefineNewFrame {
+                    offset_downward_to_clobbers: clobbered_size,
+                    offset_upward_to_caller_sp: 16, // FP, LR
+                },
+            });
+        }
+
+        // Store each clobbered register in order at offsets from SP,
         // placing them above the fixed frame slots.
         if stack_size > 0 {
             insts.push(Inst::AjustSp {
                 amount: -(stack_size as i64),
             });
+            if flags.unwind_info() {
+                insts.push(Inst::Unwind {
+                    inst: UnwindInst::StackAlloc { size: stack_size },
+                });
+            }
         }
+
         let mut cur_offset = 0;
         for reg in clobbered_callee_saves {
             let r_reg = reg.to_reg();
@@ -461,7 +488,14 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                 regalloc2::RegClass::Int => I64,
                 regalloc2::RegClass::Float => F64,
             };
-
+            if flags.unwind_info() {
+                insts.push(Inst::Unwind {
+                    inst: UnwindInst::SaveReg {
+                        clobber_offset: cur_offset as u32,
+                        reg: r_reg,
+                    },
+                });
+            }
             insts.push(Self::gen_store_stack(
                 StackAMode::SPOffset(cur_offset, ty),
                 real_reg_to_reg(reg.to_reg()),
@@ -474,13 +508,15 @@ impl ABIMachineSpec for Riscv64MachineDeps {
 
     fn gen_clobber_restore(
         call_conv: isa::CallConv,
+        sig: &Signature,
         _flags: &settings::Flags,
         clobbers: &[Writable<RealReg>],
         fixed_frame_storage_size: u32,
         _outgoing_args_size: u32,
     ) -> SmallVec<[Inst; 16]> {
         let mut insts = SmallVec::new();
-        let clobbered_callee_saves = Self::get_clobbered_callee_saves(call_conv, _flags, clobbers);
+        let clobbered_callee_saves =
+            Self::get_clobbered_callee_saves(call_conv, _flags, sig, clobbers);
         let stack_size = fixed_frame_storage_size + compute_clobber_size(&clobbered_callee_saves);
         let mut cur_offset = 0;
         for reg in &clobbered_callee_saves {
@@ -506,8 +542,9 @@ impl ABIMachineSpec for Riscv64MachineDeps {
 
     fn gen_call(
         dest: &CallDest,
-        uses: Vec<Reg>,
-        defs: Vec<Writable<Reg>>,
+        uses: SmallVec<[Reg; 8]>,
+        defs: SmallVec<[Writable<Reg>; 8]>,
+        clobbers: PRegSet,
         opcode: ir::Opcode,
         tmp: Writable<Reg>,
         callee_conv: isa::CallConv,
@@ -601,7 +638,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         // insts
     }
 
-    fn get_number_of_spillslots_for_value(rc: RegClass) -> u32 {
+    fn get_number_of_spillslots_for_value(rc: RegClass, _target_vector_bytes: u32) -> u32 {
         // We allocate in terms of 8-byte slots.
         match rc {
             RegClass::Int => 1,
@@ -619,19 +656,19 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         s.nominal_sp_to_fp
     }
 
-    fn get_regs_clobbered_by_call(_call_conv_of_callee: isa::CallConv) -> Vec<Writable<Reg>> {
-        let mut v = vec![];
+    fn get_regs_clobbered_by_call(_call_conv_of_callee: isa::CallConv) -> PRegSet {
+        let mut v = PRegSet::empty();
         for (k, need_save) in get_caller_save_x_gpr().iter().enumerate() {
             if !*need_save {
                 continue;
             }
-            v.push(Writable::from_reg(x_reg(k)));
+            v.add(px_reg(k));
         }
         for (k, need_save) in get_caller_save_f_gpr().iter().enumerate() {
             if !*need_save {
                 continue;
             }
-            v.push(Writable::from_reg(f_reg(k)));
+            v.add(pf_reg(k));
         }
         v
     }
@@ -639,6 +676,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
     fn get_clobbered_callee_saves(
         call_conv: isa::CallConv,
         _flags: &settings::Flags,
+        sig: &Signature,
         regs: &[Writable<RealReg>],
     ) -> Vec<Writable<RealReg>> {
         let mut regs: Vec<Writable<RealReg>> = regs
@@ -669,7 +707,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
     }
 }
 
-pub fn get_caller_save_x_gpr() -> [bool; 32] {
+fn get_caller_save_x_gpr() -> [bool; 32] {
     let mut x: [bool; 32] = [false; 32];
     for (i, v) in get_callee_save_x_gpr().iter().enumerate() {
         if i == 0 || i == 3 || i == 4 {
@@ -680,7 +718,7 @@ pub fn get_caller_save_x_gpr() -> [bool; 32] {
     x
 }
 
-pub fn get_caller_save_f_gpr() -> [bool; 32] {
+fn get_caller_save_f_gpr() -> [bool; 32] {
     let mut x: [bool; 32] = [false; 32];
     for (i, v) in get_callee_save_f_gpr().iter().enumerate() {
         x[i] = !v;

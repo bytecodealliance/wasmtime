@@ -52,7 +52,7 @@ pub(crate) type VecBranchTarget = Vec<BranchTarget>;
 pub(crate) type OptionUimm5 = Option<Uimm5>;
 pub(crate) type OptionFloatRoundingMode = Option<FRM>;
 pub(crate) type VecU8 = Vec<u8>;
-
+pub(crate) type VecWritableReg = Vec<Writable<Reg>>;
 //=============================================================================
 // Instructions (top level): definition
 
@@ -70,8 +70,8 @@ type BoxCallIndInfo = Box<CallIndInfo>;
 #[derive(Clone, Debug)]
 pub struct CallInfo {
     pub dest: ExternalName,
-    pub uses: Vec<Reg>,
-    pub defs: Vec<Writable<Reg>>,
+    pub uses: SmallVec<[Reg; 8]>,
+    pub defs: SmallVec<[Writable<Reg>; 8]>,
     pub opcode: Opcode,
     pub caller_callconv: CallConv,
     pub callee_callconv: CallConv,
@@ -82,8 +82,8 @@ pub struct CallInfo {
 #[derive(Clone, Debug)]
 pub struct CallIndInfo {
     pub rn: Reg,
-    pub uses: Vec<Reg>,
-    pub defs: Vec<Writable<Reg>>,
+    pub uses: SmallVec<[Reg; 8]>,
+    pub defs: SmallVec<[Writable<Reg>; 8]>,
     pub opcode: Opcode,
     pub caller_callconv: CallConv,
     pub callee_callconv: CallConv,
@@ -522,6 +522,10 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_use(rs1);
             collector.reg_use(rs2);
         }
+        &Inst::Unwind { .. } => {}
+        &Inst::DummyUse { reg } => {
+            collector.reg_use(reg);
+        }
     }
 }
 
@@ -529,12 +533,7 @@ impl MachInst for Inst {
     type LabelUse = LabelUse;
 
     fn gen_dummy_use(reg: Reg) -> Self {
-        Inst::AluRRImm12 {
-            alu_op: AluOPRRI::Ori,
-            rd: Writable::from_reg(reg),
-            rs: reg,
-            imm12: Imm12::zero(),
-        }
+        Inst::DummyUse { reg }
     }
 
     fn canonical_type_for_rc(rc: RegClass) -> Type {
@@ -784,6 +783,10 @@ impl Inst {
                 let p = format_reg(p, allocs);
                 format!("atomic_store.{} {},({})", ty, src, p)
             }
+            &Inst::DummyUse { reg } => {
+                let reg = format_reg(reg, allocs);
+                format!("dummy_use {}", reg)
+            }
 
             &Inst::AtomicLoad { rd, ty, p } => {
                 let p = format_reg(p, allocs);
@@ -818,7 +821,9 @@ impl Inst {
                     format!(".data {:?}", data)
                 }
             },
-
+            &Inst::Unwind { ref inst } => {
+                format!("unwind {:?}", inst)
+            }
             &Inst::SelectIf {
                 if_spectre_guard,
                 ref rd,

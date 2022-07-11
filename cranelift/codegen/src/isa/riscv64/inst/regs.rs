@@ -222,13 +222,19 @@ pub fn x_reg(enc: usize) -> Reg {
     let v_reg = VReg::new(p_reg.index(), p_reg.class());
     Reg::from(v_reg)
 }
+pub fn px_reg(enc: usize) -> PReg {
+    PReg::new(enc, RegClass::Int)
+}
+
 #[inline(always)]
 pub fn f_reg(enc: usize) -> Reg {
     let p_reg = PReg::new(enc, RegClass::Float);
     let v_reg = VReg::new(p_reg.index(), p_reg.class());
     Reg::from(v_reg)
 }
-
+pub fn pf_reg(enc: usize) -> PReg {
+    PReg::new(enc, RegClass::Float)
+}
 #[inline(always)]
 pub(crate) fn real_reg_to_reg(x: RealReg) -> Reg {
     let v_reg = VReg::new(x.hw_enc() as usize, x.class());

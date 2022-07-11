@@ -1520,17 +1520,6 @@ impl ReferenceCheckOP {
     }
 }
 
-#[inline(always)]
-pub fn is_int_and_type_signed(ty: Type) -> bool {
-    ty.is_int() && is_type_signed(ty)
-}
-
-#[inline(always)]
-pub fn is_type_signed(ty: Type) -> bool {
-    assert!(ty.is_int());
-    ty == I8 || ty == I16 || ty == I32 || ty == I64 || ty == I128
-}
-
 #[derive(Clone, Copy)]
 pub enum CsrAddress {
     Fcsr = 0x3,

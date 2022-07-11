@@ -2,7 +2,7 @@ test run
 set enable_llvm_abi_extensions=true
 target aarch64
 target x86_64
-;; target riscv64gc has_extension_b
+;; target riscv64gc has_b
 
 function %i128_uextend_i64(i64) -> i128 {
 block0(v0: i64):

@@ -2,7 +2,7 @@ test interpret
 test run
 target aarch64
 target x86_64
-;; target riscv64gc has_extension_b has_extension_zbkb
+;; target riscv64gc has_b has_zbkb
 
 function %bitrev_i8(i8) -> i8 {
 block0(v0: i8):

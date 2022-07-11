@@ -3,10 +3,10 @@
 // Pull in the ISLE generated code.
 #[allow(unused)]
 pub mod generated_code;
-use alloc::vec::Vec;
 
 // Types that the generated ISLE code uses via `use super::*`.
 use super::{writable_zero_reg, zero_reg, Inst as MInst};
+use std::vec::Vec;
 
 use crate::isa::riscv64::settings::Flags as IsaFlags;
 use crate::machinst::{isle::*, MachInst, SmallInstVec};
@@ -398,7 +398,7 @@ where
         let i = self
             .lower_ctx
             .abi()
-            .stackslot_addr(slot, i64::from(offset) as u32, result);
+            .sized_stackslot_addr(slot, i64::from(offset) as u32, result);
         self.emit(&i);
         result.to_reg()
     }

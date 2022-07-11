@@ -613,7 +613,12 @@ impl MachInstEmit for Inst {
                     | alu_op.funct7() << 25;
                 sink.put4(x);
             }
-
+            &Inst::Unwind { ref inst } => {
+                sink.add_unwind(inst.clone());
+            }
+            &Inst::DummyUse { reg } => {
+                allocs.next(reg);
+            }
             &Inst::AluRRR {
                 alu_op,
                 rd,
