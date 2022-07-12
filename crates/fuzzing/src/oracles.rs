@@ -11,10 +11,12 @@
 //! panicking.
 
 pub mod dummy;
+mod stacks;
 
 use crate::generators;
 use arbitrary::Arbitrary;
 use log::debug;
+pub use stacks::check_stacks;
 use std::cell::Cell;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
