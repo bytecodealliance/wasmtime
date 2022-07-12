@@ -520,8 +520,7 @@ fn enum_derive() -> Result<()> {
 #[test]
 fn flags() -> Result<()> {
     wasmtime::component::flags! {
-        #[derive(Lift, Lower)]
-        flags Foo {
+        Foo {
             #[component(name = "foo-bar-baz")]
             const A;
             const B;

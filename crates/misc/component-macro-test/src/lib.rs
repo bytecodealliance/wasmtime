@@ -68,8 +68,7 @@ fn expand_flags_test(test: &FlagsTest) -> Result<TokenStream> {
 
     let expanded = quote! {
         wasmtime::component::flags! {
-            #[derive(Lift, Lower)]
-            flags #name {
+            #name {
                 #flags
             }
         }

@@ -2,7 +2,6 @@ use proc_macro2::{Literal, TokenStream, TokenTree};
 use quote::{format_ident, quote};
 use std::collections::HashSet;
 use std::fmt;
-use std::ops::Deref;
 use syn::parse::{Parse, ParseStream};
 use syn::punctuated::Punctuated;
 use syn::{braced, parse_macro_input, parse_quote, Data, DeriveInput, Error, Result, Token};
@@ -176,6 +175,16 @@ impl DiscriminantSize {
 
 impl From<DiscriminantSize> for u32 {
     fn from(size: DiscriminantSize) -> u32 {
+        match size {
+            DiscriminantSize::Size1 => 1,
+            DiscriminantSize::Size2 => 2,
+            DiscriminantSize::Size4 => 4,
+        }
+    }
+}
+
+impl From<DiscriminantSize> for usize {
+    fn from(size: DiscriminantSize) -> usize {
         match size {
             DiscriminantSize::Size1 => 1,
             DiscriminantSize::Size2 => 2,
@@ -544,7 +553,7 @@ impl Expander for LiftExpander {
             DiscriminantSize::Size4 => quote!(u32::from_le_bytes(bytes[0..4].try_into()?)),
         };
 
-        let payload_offset = u32::from(discriminant_size) as usize;
+        let payload_offset = usize::from(discriminant_size);
 
         let expanded = quote! {
             unsafe impl #impl_generics wasmtime::component::Lift for #name #ty_generics #where_clause {
@@ -659,6 +668,8 @@ impl Expander for LowerExpander {
 
             let index_quoted = discriminant_size.quote(index);
 
+            let discriminant_size = usize::from(discriminant_size);
+
             let pattern;
             let lower;
             let store;
@@ -668,7 +679,10 @@ impl Expander for LowerExpander {
                 lower = quote!(value.lower(store, options, #internal::map_maybe_uninit!(dst.payload.#ident)));
                 store = quote!(value.store(
                     memory,
-                    offset + #internal::align_to(1, <Self as wasmtime::component::ComponentType>::ALIGN32)
+                    offset + #internal::align_to(
+                        #discriminant_size,
+                        <Self as wasmtime::component::ComponentType>::ALIGN32
+                    )
                 ));
             } else {
                 pattern = quote!(Self::#ident);
@@ -680,8 +694,6 @@ impl Expander for LowerExpander {
                 #internal::map_maybe_uninit!(dst.tag).write(wasmtime::ValRaw::i32(#index_u32 as i32));
                 #lower
             }));
-
-            let discriminant_size = u32::from(discriminant_size) as usize;
 
             stores.extend(quote!(#pattern => {
                 *memory.get::<#discriminant_size>(offset) = #index_quoted.to_le_bytes();
@@ -957,69 +969,12 @@ impl Parse for Flag {
 
 #[derive(Debug)]
 struct Flags {
-    derive_lift: bool,
-    derive_lower: bool,
     name: String,
     flags: Vec<Flag>,
 }
 
 impl Parse for Flags {
     fn parse(input: ParseStream) -> Result<Self> {
-        let attributes = syn::Attribute::parse_outer(input)?;
-
-        let attribute = if attributes.len() == 1 {
-            attributes.into_iter().next().unwrap()
-        } else {
-            return Err(input.error("expected a single derive attribute"));
-        };
-
-        let syntax_error = || {
-            Err(input
-                .error("expected `#[derive(...)]` attribute containing `Lift`, `Lower` or both"))
-        };
-
-        if let Some(ident) = attribute.path.get_ident() {
-            if "derive" != &ident.to_string() {
-                return syntax_error();
-            }
-        } else {
-            return syntax_error();
-        }
-
-        let traits = if let [TokenTree::Group(group)] =
-            &attribute.tokens.into_iter().collect::<Vec<_>>()[..]
-        {
-            match &group.stream().into_iter().collect::<Vec<_>>()[..] {
-                [TokenTree::Ident(a), TokenTree::Punct(punct), TokenTree::Ident(b)]
-                    if ',' == punct.as_char() =>
-                {
-                    vec![a.to_string(), b.to_string()]
-                }
-                [TokenTree::Ident(a)] => {
-                    vec![a.to_string()]
-                }
-                _ => return syntax_error(),
-            }
-        } else {
-            return syntax_error();
-        };
-
-        let mut derive_lift = false;
-        let mut derive_lower = false;
-        for tr in traits {
-            match tr.deref() {
-                "Lift" => derive_lift = true,
-                "Lower" => derive_lower = true,
-                _ => return syntax_error(),
-            }
-        }
-
-        let keyword = input.parse::<syn::Ident>()?;
-
-        if "flags" != &keyword.to_string() {
-            return Err(Error::new(keyword.span(), "expected `flags` keyword"));
-        }
-
         let name = input.parse::<syn::Ident>()?.to_string();
 
         let content;
@@ -1030,12 +985,7 @@ impl Parse for Flags {
             .into_iter()
             .collect();
 
-        Ok(Self {
-            derive_lift,
-            derive_lower,
-            name,
-            flags,
-        })
+        Ok(Self { name, flags })
     }
 }
 
@@ -1075,20 +1025,14 @@ fn expand_flags(flags: &Flags) -> Result<TokenStream> {
         FlagsSize::Size1 => {
             ty = quote!(u8);
 
-            let mut mask = 0u8;
-            for index in 0..flags.flags.len() {
-                mask |= 1 << index;
-            }
+            let mask = !(0xFF_u8 << flags.flags.len());
 
             eq = quote!((self.__inner0 & #mask).eq(&(rhs.__inner0 & #mask)));
         }
         FlagsSize::Size2 => {
             ty = quote!(u16);
 
-            let mut mask = 0u16;
-            for index in 0..flags.flags.len() {
-                mask |= 1 << index;
-            }
+            let mask = !(0xFFFF_u16 << flags.flags.len());
 
             eq = quote!((self.__inner0 & #mask).eq(&(rhs.__inner0 & #mask)));
         }
@@ -1105,10 +1049,7 @@ fn expand_flags(flags: &Flags) -> Result<TokenStream> {
 
             let field = format_ident!("__inner{}", n - 1);
 
-            let mut mask = 0u32;
-            for index in 0..(flags.flags.len() - ((n - 1) * 32)) {
-                mask |= 1 << index;
-            }
+            let mask = !(0xFFFF_FFFF_u32 << (flags.flags.len() % 32));
 
             eq = quote!(#comparisons (self.#field & #mask).eq(&(rhs.#field & #mask)));
         }
@@ -1248,17 +1189,9 @@ fn expand_flags(flags: &Flags) -> Result<TokenStream> {
         component_names,
     )?;
 
-    let lower_impl = if flags.derive_lower {
-        LowerExpander.expand_record(&name, &generics, &fields)?
-    } else {
-        TokenStream::new()
-    };
+    let lower_impl = LowerExpander.expand_record(&name, &generics, &fields)?;
 
-    let lift_impl = if flags.derive_lift {
-        LiftExpander.expand_record(&name, &generics, &fields)?
-    } else {
-        TokenStream::new()
-    };
+    let lift_impl = LiftExpander.expand_record(&name, &generics, &fields)?;
 
     let internal = quote!(wasmtime::component::__internal);
 
