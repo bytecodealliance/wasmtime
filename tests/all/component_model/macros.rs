@@ -600,6 +600,63 @@ fn flags() -> Result<()> {
         .get_typed_func::<(Foo,), Foo, _>(&mut store, "echo")
         .is_err());
 
+    // Happy path redux, with large flag count (exactly 8)
+
+    flags_test!(Foo8Exact, 8);
+
+    assert_eq!(
+        Foo8Exact::default(),
+        (Foo8Exact::F0 | Foo8Exact::F6) & Foo8Exact::F7
+    );
+    assert_eq!(
+        Foo8Exact::F6,
+        (Foo8Exact::F0 | Foo8Exact::F6) & Foo8Exact::F6
+    );
+    assert_eq!(
+        Foo8Exact::F0,
+        (Foo8Exact::F0 | Foo8Exact::F6) & Foo8Exact::F0
+    );
+    assert_eq!(Foo8Exact::F0 | Foo8Exact::F6, Foo8Exact::F0 ^ Foo8Exact::F6);
+    assert_eq!(Foo8Exact::default(), Foo8Exact::F0 ^ Foo8Exact::F0);
+    assert_eq!(
+        Foo8Exact::F1
+            | Foo8Exact::F2
+            | Foo8Exact::F3
+            | Foo8Exact::F4
+            | Foo8Exact::F5
+            | Foo8Exact::F6
+            | Foo8Exact::F7,
+        !Foo8Exact::F0
+    );
+
+    let component = Component::new(
+        &engine,
+        make_echo_component(
+            &format!(
+                r#"(type $Foo (flags {}))"#,
+                (0..8)
+                    .map(|index| format!(r#""F{}""#, index))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            ),
+            4,
+        ),
+    )?;
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+    let func = instance.get_typed_func::<(Foo8Exact,), Foo8Exact, _>(&mut store, "echo")?;
+
+    for &input in &[
+        Foo8Exact::F0,
+        Foo8Exact::F1,
+        Foo8Exact::F5,
+        Foo8Exact::F6,
+        Foo8Exact::F7,
+    ] {
+        let output = func.call_and_post_return(&mut store, (input,))?;
+
+        assert_eq!(input, output);
+    }
+
     // Happy path redux, with large flag count (more than 8)
 
     flags_test!(Foo16, 9);
@@ -643,6 +700,60 @@ fn flags() -> Result<()> {
         assert_eq!(input, output);
     }
 
+    // Happy path redux, with large flag count (exactly 16)
+
+    flags_test!(Foo16Exact, 16);
+
+    assert_eq!(
+        Foo16Exact::default(),
+        (Foo16Exact::F0 | Foo16Exact::F14) & Foo16Exact::F5
+    );
+    assert_eq!(
+        Foo16Exact::F14,
+        (Foo16Exact::F0 | Foo16Exact::F14) & Foo16Exact::F14
+    );
+    assert_eq!(
+        Foo16Exact::F0,
+        (Foo16Exact::F0 | Foo16Exact::F14) & Foo16Exact::F0
+    );
+    assert_eq!(
+        Foo16Exact::F0 | Foo16Exact::F14,
+        Foo16Exact::F0 ^ Foo16Exact::F14
+    );
+    assert_eq!(Foo16Exact::default(), Foo16Exact::F0 ^ Foo16Exact::F0);
+    assert_eq!(
+        Foo16Exact::F0 | Foo16Exact::F15,
+        !((!Foo16Exact::F0) & (!Foo16Exact::F15))
+    );
+
+    let component = Component::new(
+        &engine,
+        make_echo_component(
+            &format!(
+                r#"(type $Foo (flags {}))"#,
+                (0..16)
+                    .map(|index| format!(r#""F{}""#, index))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            ),
+            4,
+        ),
+    )?;
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+    let func = instance.get_typed_func::<(Foo16Exact,), Foo16Exact, _>(&mut store, "echo")?;
+
+    for &input in &[
+        Foo16Exact::F0,
+        Foo16Exact::F1,
+        Foo16Exact::F13,
+        Foo16Exact::F14,
+        Foo16Exact::F15,
+    ] {
+        let output = func.call_and_post_return(&mut store, (input,))?;
+
+        assert_eq!(input, output);
+    }
+
     // Happy path redux, with large flag count (more than 16)
 
     flags_test!(Foo32, 17);
@@ -671,6 +782,60 @@ fn flags() -> Result<()> {
     let func = instance.get_typed_func::<(Foo32,), Foo32, _>(&mut store, "echo")?;
 
     for &input in &[Foo32::F0, Foo32::F1, Foo32::F14, Foo32::F15, Foo32::F16] {
+        let output = func.call_and_post_return(&mut store, (input,))?;
+
+        assert_eq!(input, output);
+    }
+
+    // Happy path redux, with large flag count (exactly 32)
+
+    flags_test!(Foo32Exact, 32);
+
+    assert_eq!(
+        Foo32Exact::default(),
+        (Foo32Exact::F0 | Foo32Exact::F30) & Foo32Exact::F31
+    );
+    assert_eq!(
+        Foo32Exact::F30,
+        (Foo32Exact::F0 | Foo32Exact::F30) & Foo32Exact::F30
+    );
+    assert_eq!(
+        Foo32Exact::F0,
+        (Foo32Exact::F0 | Foo32Exact::F30) & Foo32Exact::F0
+    );
+    assert_eq!(
+        Foo32Exact::F0 | Foo32Exact::F30,
+        Foo32Exact::F0 ^ Foo32Exact::F30
+    );
+    assert_eq!(Foo32Exact::default(), Foo32Exact::F0 ^ Foo32Exact::F0);
+    assert_eq!(
+        Foo32Exact::F0 | Foo32Exact::F15,
+        !((!Foo32Exact::F0) & (!Foo32Exact::F15))
+    );
+
+    let component = Component::new(
+        &engine,
+        make_echo_component(
+            &format!(
+                r#"(type $Foo (flags {}))"#,
+                (0..32)
+                    .map(|index| format!(r#""F{}""#, index))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            ),
+            4,
+        ),
+    )?;
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+    let func = instance.get_typed_func::<(Foo32Exact,), Foo32Exact, _>(&mut store, "echo")?;
+
+    for &input in &[
+        Foo32Exact::F0,
+        Foo32Exact::F1,
+        Foo32Exact::F29,
+        Foo32Exact::F30,
+        Foo32Exact::F31,
+    ] {
         let output = func.call_and_post_return(&mut store, (input,))?;
 
         assert_eq!(input, output);

@@ -1021,20 +1021,30 @@ fn expand_flags(flags: &Flags) -> Result<TokenStream> {
     let ty;
     let eq;
 
+    let count = flags.flags.len();
+
     match size {
         FlagsSize::Size1 => {
             ty = quote!(u8);
 
-            let mask = !(0xFF_u8 << flags.flags.len());
+            eq = if count == 8 {
+                quote!(self.__inner0.eq(&rhs.__inner0))
+            } else {
+                let mask = !(0xFF_u8 << count);
 
-            eq = quote!((self.__inner0 & #mask).eq(&(rhs.__inner0 & #mask)));
+                quote!((self.__inner0 & #mask).eq(&(rhs.__inner0 & #mask)))
+            };
         }
         FlagsSize::Size2 => {
             ty = quote!(u16);
 
-            let mask = !(0xFFFF_u16 << flags.flags.len());
+            eq = if count == 16 {
+                quote!(self.__inner0.eq(&rhs.__inner0))
+            } else {
+                let mask = !(0xFFFF_u16 << count);
 
-            eq = quote!((self.__inner0 & #mask).eq(&(rhs.__inner0 & #mask)));
+                quote!((self.__inner0 & #mask).eq(&(rhs.__inner0 & #mask)))
+            };
         }
         FlagsSize::Size4Plus(n) => {
             ty = quote!(u32);
@@ -1049,9 +1059,13 @@ fn expand_flags(flags: &Flags) -> Result<TokenStream> {
 
             let field = format_ident!("__inner{}", n - 1);
 
-            let mask = !(0xFFFF_FFFF_u32 << (flags.flags.len() % 32));
+            eq = if count % 32 == 0 {
+                quote!(#comparisons self.#field.eq(&rhs.#field))
+            } else {
+                let mask = !(0xFFFF_FFFF_u32 << (count % 32));
 
-            eq = quote!(#comparisons (self.#field & #mask).eq(&(rhs.#field & #mask)));
+                quote!(#comparisons (self.#field & #mask).eq(&(rhs.#field & #mask)))
+            }
         }
     }
 
