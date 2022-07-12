@@ -1669,10 +1669,6 @@ impl<T> Caller<'_, T> {
 
     /// Looks up an export from the caller's module by the `name` given.
     ///
-    /// Note that this function is only implemented for the `Extern::Memory`
-    /// and the `Extern::Func` types currently. No other exported structures
-    /// can be acquired through this method.
-    ///
     /// Note that when accessing and calling exported functions, one should
     /// adhere to the guidelines of the interface types proposal.  This method
     /// is a temporary mechanism for accessing the caller's information until
@@ -1701,18 +1697,10 @@ impl<T> Caller<'_, T> {
         // back to themselves. If this caller doesn't have that `host_state`
         // then it probably means it was a host-created object like `Func::new`
         // which doesn't have any exports we want to return anyway.
-        match self
-            .caller
+        self.caller
             .host_state()
             .downcast_ref::<Instance>()?
-            .get_export(&mut self.store, name)?
-        {
-            Extern::Func(f) => Some(Extern::Func(f)),
-            Extern::Memory(f) => Some(Extern::Memory(f)),
-            // Intentionally ignore other Extern items here since this API is
-            // supposed to be a temporary stop-gap until interface types.
-            _ => None,
-        }
+            .get_export(&mut self.store, name)
     }
 
     /// Access the underlying data owned by this `Store`.
