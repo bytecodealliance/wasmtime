@@ -26,7 +26,7 @@ impl Backend for TensorflowBackend {
         _target: ExecutionTarget,
         map_dir: &Option<Vec<(String, String)>>,
     ) -> Result<Box<dyn BackendGraph>, BackendError> {
-        if map_dir.as_ref().is_some() {
+        if let Some(dir) = map_dir {
             if builders.len() != 2 {
                 return Err(BackendError::InvalidNumberOfBuilders(2, builders.len()).into());
             }
@@ -45,12 +45,11 @@ impl Backend for TensorflowBackend {
 
             // Don't allow navigation outside of the sandbox
             if !exp_str.contains("..") {
-                let unmap = map_dir.as_ref().unwrap();
-                for i in 0..unmap.len() {
-                    if unmap[i].0 == guest_map_str {
+                for i in 0..dir.len() {
+                    if dir[i].0 == guest_map_str {
                         //Append the stored mapdir path with the user path.
                         let full_path = std::fs::canonicalize(
-                            Path::new(&unmap[i].1.clone()).join(Path::new(exp_str)),
+                            Path::new(&dir[i].1.clone()).join(Path::new(exp_str)),
                         );
 
                         //Check that path actually exists
