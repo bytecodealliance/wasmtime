@@ -33,11 +33,7 @@ impl<'a> WasiEphemeralNn for WasiNnCtx {
     ) -> Result<Graph> {
         let encoding_id: u8 = encoding.into();
         let graph = if let Some(backend) = self.ctx.borrow_mut().backends.get_mut(&encoding_id) {
-            if self.map_dir.is_some() {
-                backend.load(builders, target, &self.map_dir)?
-            } else {
-                backend.load(builders, target, &None)?
-            }
+            backend.load(builders, target, &self.map_dir)?
         } else {
             return Err(UsageError::InvalidEncoding(encoding).into());
         };

@@ -5,7 +5,7 @@ use std::ops::Deref;
 use std::path::Path;
 use std::str;
 use std::sync::Arc;
-use tensorflow::library;
+// use tensorflow::library;
 use tensorflow::Tensor as TFTensor;
 use tensorflow::DEFAULT_SERVING_SIGNATURE_DEF_KEY;
 use tensorflow::{
@@ -31,7 +31,7 @@ impl Backend for TensorflowBackend {
                 return Err(BackendError::InvalidNumberOfBuilders(2, builders.len()).into());
             }
             // Initialize the Tensorflow backend
-            let retval = tensorflow::library::load().or_else(|e| {
+            let _retval = tensorflow::library::load().or_else(|e| {
                 println!("Error loading the TensorFlow backend: \n {}", e);
                 Err(e)
             });
@@ -56,7 +56,7 @@ impl Backend for TensorflowBackend {
                         //Check that path actually exists
                         let full_path = match full_path {
                             Ok(fp) => fp,
-                            Err(e) => return Err(BackendError::MissingMapDir()),
+                            Err(_e) => return Err(BackendError::MissingMapDir()),
                         };
 
                         let bundle = SavedModelBundle::load(
@@ -149,17 +149,17 @@ impl BackendExecutionContext for TensorflowExecutionContext {
         }
 
         destination.copy_from_slice(f32_to_u8(&output[..]));
-        let (max_idx, _max_val) =
-            output
-                .iter()
-                .enumerate()
-                .fold((0, output[0]), |(idx_max, val_max), (idx, val)| {
-                    if &val_max > val {
-                        (idx_max, val_max)
-                    } else {
-                        (idx, *val)
-                    }
-                });
+
+        output
+            .iter()
+            .enumerate()
+            .fold((0, output[0]), |(idx_max, val_max), (idx, val)| {
+                if &val_max > val {
+                    (idx_max, val_max)
+                } else {
+                    (idx, *val)
+                }
+            });
 
         Ok(output.len() as u32)
     }
