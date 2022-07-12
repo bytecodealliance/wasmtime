@@ -3,11 +3,13 @@ use anyhow::Result;
 use arbitrary::{Arbitrary, Unstructured};
 use cranelift::codegen::ir::types::*;
 use cranelift::codegen::ir::{
-    AbiParam, Block, ExternalName, Function, JumpTable, Opcode, Signature, Type, Value,
+    AbiParam, Block, ExternalName, Function, JumpTable, Opcode, Signature, StackSlot, Type, Value,
 };
 use cranelift::codegen::isa::CallConv;
 use cranelift::frontend::{FunctionBuilder, FunctionBuilderContext, Variable};
-use cranelift::prelude::{EntityRef, InstBuilder, IntCC, JumpTableData};
+use cranelift::prelude::{
+    EntityRef, InstBuilder, IntCC, JumpTableData, StackSlotData, StackSlotKind,
+};
 use std::ops::RangeInclusive;
 
 type BlockSignature = Vec<Type>;
@@ -99,6 +101,7 @@ where
     vars: Vec<(Type, Variable)>,
     blocks: Vec<(Block, BlockSignature)>,
     jump_tables: Vec<JumpTable>,
+    static_stack_slots: Vec<StackSlot>,
 }
 
 impl<'r, 'data> FunctionGenerator<'r, 'data>
@@ -112,6 +115,7 @@ where
             vars: vec![],
             blocks: vec![],
             jump_tables: vec![],
+            static_stack_slots: vec![],
         }
     }
 
@@ -381,6 +385,17 @@ where
         Ok(())
     }
 
+    fn generate_stack_slots(&mut self, builder: &mut FunctionBuilder) -> Result<()> {
+        for _ in 0..self.param(&self.config.static_stack_slots_per_function)? {
+            let bytes = self.param(&self.config.static_stack_slot_size)? as u32;
+            let ss_data = StackSlotData::new(StackSlotKind::ExplicitSlot, bytes);
+            let slot = builder.create_sized_stack_slot(ss_data);
+
+            self.static_stack_slots.push(slot);
+        }
+        Ok(())
+    }
+
     /// Creates a random amount of blocks in this function
     fn generate_blocks(
         &mut self,
@@ -467,6 +482,7 @@ where
 
         // Function preamble
         self.generate_jumptables(&mut builder)?;
+        self.generate_stack_slots(&mut builder)?;
 
         // Main instruction generation loop
         for (i, (block, block_sig)) in self.blocks.clone().iter().enumerate() {
