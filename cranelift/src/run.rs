@@ -17,17 +17,12 @@ pub struct Options {
     #[clap(required = true)]
     files: Vec<PathBuf>,
 
-    /// Enable debug output on stderr/stdout
-    #[clap(short)]
-    debug: bool,
-
     /// Be more verbose
     #[clap(short, long)]
     verbose: bool,
 }
 
 pub fn run(options: &Options) -> Result<()> {
-    crate::handle_debug_flag(options.debug);
     let stdin_exist = options
         .files
         .iter()
