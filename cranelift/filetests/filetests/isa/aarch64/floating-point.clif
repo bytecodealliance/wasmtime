@@ -910,3 +910,39 @@ block0(v0: f64x2):
 ; block0:
 ;   frintn v0.2d, v0.2d
 ;   ret
+
+function %f78(f32x4, f32x4, f32x4) -> f32x4 {
+block0(v0: f32x4, v1: f32x4, v2: f32x4):
+  v3 = fma v0, v1, v2
+  return v3
+}
+
+; block0:
+;   mov v17.16b, v0.16b
+;   mov v0.16b, v2.16b
+;   fmla v0.4s, v17.4s, v1.4s
+;   ret
+
+function %f79(f32x2, f32x2, f32x2) -> f32x2 {
+block0(v0: f32x2, v1: f32x2, v2: f32x2):
+  v3 = fma v0, v1, v2
+  return v3
+}
+
+; block0:
+;   mov v17.16b, v0.16b
+;   mov v0.16b, v2.16b
+;   fmla v0.2s, v17.2s, v1.2s
+;   ret
+
+function %f80(f64x2, f64x2, f64x2) -> f64x2 {
+block0(v0: f64x2, v1: f64x2, v2: f64x2):
+  v3 = fma v0, v1, v2
+  return v3
+}
+
+; block0:
+;   mov v17.16b, v0.16b
+;   mov v0.16b, v2.16b
+;   fmla v0.2d, v17.2d, v1.2d
+;   ret

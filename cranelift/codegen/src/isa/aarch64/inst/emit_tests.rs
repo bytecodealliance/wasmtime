@@ -2266,7 +2266,7 @@ fn test_aarch64_binemit() {
             rd: writable_xreg(3),
             rn: vreg(27),
             idx: 14,
-            size: VectorSize::Size8x16,
+            size: ScalarSize::Size8,
         },
         "633F1D0E",
         "umov w3, v27.b[14]",
@@ -2276,7 +2276,7 @@ fn test_aarch64_binemit() {
             rd: writable_xreg(24),
             rn: vreg(5),
             idx: 3,
-            size: VectorSize::Size16x8,
+            size: ScalarSize::Size16,
         },
         "B83C0E0E",
         "umov w24, v5.h[3]",
@@ -2286,7 +2286,7 @@ fn test_aarch64_binemit() {
             rd: writable_xreg(12),
             rn: vreg(17),
             idx: 1,
-            size: VectorSize::Size32x4,
+            size: ScalarSize::Size32,
         },
         "2C3E0C0E",
         "mov w12, v17.s[1]",
@@ -2296,7 +2296,7 @@ fn test_aarch64_binemit() {
             rd: writable_xreg(21),
             rn: vreg(20),
             idx: 0,
-            size: VectorSize::Size64x2,
+            size: ScalarSize::Size64,
         },
         "953E084E",
         "mov x21, v20.d[0]",
@@ -4052,6 +4052,42 @@ fn test_aarch64_binemit() {
         },
         "02DC656E",
         "fmul v2.2d, v0.2d, v5.2d",
+    ));
+
+    insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::Fmla,
+            rd: writable_vreg(2),
+            rn: vreg(0),
+            rm: vreg(5),
+            size: VectorSize::Size32x2,
+        },
+        "02CC250E",
+        "fmla v2.2s, v0.2s, v5.2s",
+    ));
+
+    insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::Fmla,
+            rd: writable_vreg(2),
+            rn: vreg(0),
+            rm: vreg(5),
+            size: VectorSize::Size32x4,
+        },
+        "02CC254E",
+        "fmla v2.4s, v0.4s, v5.4s",
+    ));
+
+    insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::Fmla,
+            rd: writable_vreg(2),
+            rn: vreg(0),
+            rm: vreg(5),
+            size: VectorSize::Size64x2,
+        },
+        "02CC654E",
+        "fmla v2.2d, v0.2d, v5.2d",
     ));
 
     insns.push((
@@ -5911,7 +5947,8 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::FpuRRRR {
-            fpu_op: FPUOp3::MAdd32,
+            fpu_op: FPUOp3::MAdd,
+            size: ScalarSize::Size32,
             rd: writable_vreg(15),
             rn: vreg(30),
             rm: vreg(31),
@@ -5923,7 +5960,8 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::FpuRRRR {
-            fpu_op: FPUOp3::MAdd64,
+            fpu_op: FPUOp3::MAdd,
+            size: ScalarSize::Size64,
             rd: writable_vreg(15),
             rn: vreg(30),
             rm: vreg(31),

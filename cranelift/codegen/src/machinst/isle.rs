@@ -358,6 +358,15 @@ macro_rules! isle_prelude_methods {
         }
 
         #[inline]
+        fn ty_vec64(&mut self, ty: Type) -> Option<Type> {
+            if ty.is_vector() && ty.bits() == 64 {
+                Some(ty)
+            } else {
+                None
+            }
+        }
+
+        #[inline]
         fn ty_vec128(&mut self, ty: Type) -> Option<Type> {
             if ty.is_vector() && ty.bits() == 128 {
                 Some(ty)
@@ -585,6 +594,14 @@ macro_rules! isle_prelude_methods {
                 }
             } else {
                 None
+            }
+        }
+
+        fn not_vec32x2(&mut self, ty: Type) -> Option<Type> {
+            if ty.lane_bits() == 32 && ty.lane_count() == 2 {
+                None
+            } else {
+                Some(ty)
             }
         }
 

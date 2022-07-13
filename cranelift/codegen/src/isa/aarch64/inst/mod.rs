@@ -960,7 +960,7 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
         &Inst::VecRRR {
             alu_op, rd, rn, rm, ..
         } => {
-            if alu_op == VecALUOp::Bsl {
+            if alu_op == VecALUOp::Bsl || alu_op == VecALUOp::Fmla {
                 collector.reg_mod(rd);
             } else {
                 collector.reg_def(rd);
@@ -1705,7 +1705,7 @@ impl Inst {
             }
             &Inst::FpuMoveFromVec { rd, rn, idx, size } => {
                 let rd = pretty_print_vreg_scalar(rd.to_reg(), size.lane_size(), allocs);
-                let rn = pretty_print_vreg_element(rn, idx as usize, size, allocs);
+                let rn = pretty_print_vreg_element(rn, idx as usize, size.lane_size(), allocs);
                 format!("mov {}, {}", rd, rn)
             }
             &Inst::FpuExtend { rd, rn, size } => {
@@ -1777,14 +1777,14 @@ impl Inst {
             }
             &Inst::FpuRRRR {
                 fpu_op,
+                size,
                 rd,
                 rn,
                 rm,
                 ra,
             } => {
-                let (op, size) = match fpu_op {
-                    FPUOp3::MAdd32 => ("fmadd", ScalarSize::Size32),
-                    FPUOp3::MAdd64 => ("fmadd", ScalarSize::Size64),
+                let op = match fpu_op {
+                    FPUOp3::MAdd => "fmadd",
                 };
                 let rd = pretty_print_vreg_scalar(rd.to_reg(), size, allocs);
                 let rn = pretty_print_vreg_scalar(rn, size, allocs);
@@ -1965,16 +1965,17 @@ impl Inst {
                 format!("fmov {}, {}", rd, imm)
             }
             &Inst::MovToVec { rd, rn, idx, size } => {
-                let rd = pretty_print_vreg_element(rd.to_reg(), idx as usize, size, allocs);
+                let rd =
+                    pretty_print_vreg_element(rd.to_reg(), idx as usize, size.lane_size(), allocs);
                 let rn = pretty_print_ireg(rn, size.operand_size(), allocs);
                 format!("mov {}, {}", rd, rn)
             }
             &Inst::MovFromVec { rd, rn, idx, size } => {
                 let op = match size {
-                    VectorSize::Size8x16 => "umov",
-                    VectorSize::Size16x8 => "umov",
-                    VectorSize::Size32x4 => "mov",
-                    VectorSize::Size64x2 => "mov",
+                    ScalarSize::Size8 => "umov",
+                    ScalarSize::Size16 => "umov",
+                    ScalarSize::Size32 => "mov",
+                    ScalarSize::Size64 => "mov",
                     _ => unimplemented!(),
                 };
                 let rd = pretty_print_ireg(rd.to_reg(), size.operand_size(), allocs);
@@ -1989,7 +1990,7 @@ impl Inst {
                 scalar_size,
             } => {
                 let rd = pretty_print_ireg(rd.to_reg(), scalar_size, allocs);
-                let rn = pretty_print_vreg_element(rn, idx as usize, size, allocs);
+                let rn = pretty_print_vreg_element(rn, idx as usize, size.lane_size(), allocs);
                 format!("smov {}, {}", rd, rn)
             }
             &Inst::VecDup { rd, rn, size } => {
@@ -1999,7 +2000,7 @@ impl Inst {
             }
             &Inst::VecDupFromFpu { rd, rn, size } => {
                 let rd = pretty_print_vreg_vector(rd.to_reg(), size, allocs);
-                let rn = pretty_print_vreg_element(rn, 0, size, allocs);
+                let rn = pretty_print_vreg_element(rn, 0, size.lane_size(), allocs);
                 format!("dup {}, {}", rd, rn)
             }
             &Inst::VecDupFPImm { rd, imm, size } => {
@@ -2075,8 +2076,13 @@ impl Inst {
                 src_idx,
                 size,
             } => {
-                let rd = pretty_print_vreg_element(rd.to_reg(), dest_idx as usize, size, allocs);
-                let rn = pretty_print_vreg_element(rn, src_idx as usize, size, allocs);
+                let rd = pretty_print_vreg_element(
+                    rd.to_reg(),
+                    dest_idx as usize,
+                    size.lane_size(),
+                    allocs,
+                );
+                let rn = pretty_print_vreg_element(rn, src_idx as usize, size.lane_size(), allocs);
                 format!("mov {}, {}", rd, rn)
             }
             &Inst::VecRRLong {
@@ -2220,6 +2226,7 @@ impl Inst {
                     VecALUOp::Fmax => ("fmax", size),
                     VecALUOp::Fmin => ("fmin", size),
                     VecALUOp::Fmul => ("fmul", size),
+                    VecALUOp::Fmla => ("fmla", size),
                     VecALUOp::Addp => ("addp", size),
                     VecALUOp::Zip1 => ("zip1", size),
                     VecALUOp::Sqrdmulh => ("sqrdmulh", size),

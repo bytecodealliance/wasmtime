@@ -1790,6 +1790,7 @@ impl MachInstEmit for Inst {
             }
             &Inst::FpuRRRR {
                 fpu_op,
+                size,
                 rd,
                 rn,
                 rm,
@@ -1800,9 +1801,9 @@ impl MachInstEmit for Inst {
                 let rm = allocs.next(rm);
                 let ra = allocs.next(ra);
                 let top17 = match fpu_op {
-                    FPUOp3::MAdd32 => 0b000_11111_00_0_00000_0,
-                    FPUOp3::MAdd64 => 0b000_11111_01_0_00000_0,
+                    FPUOp3::MAdd => 0b000_11111_00_0_00000_0,
                 };
+                let top17 = top17 | size.ftype() << 7;
                 sink.put4(enc_fpurrrr(top17, rd, rn, rm, ra));
             }
             &Inst::VecMisc { op, rd, rn, size } => {
@@ -2209,11 +2210,11 @@ impl MachInstEmit for Inst {
                 let rd = allocs.next_writable(rd);
                 let rn = allocs.next(rn);
                 let (q, imm5, shift, mask) = match size {
-                    VectorSize::Size8x16 => (0b0, 0b00001, 1, 0b1111),
-                    VectorSize::Size16x8 => (0b0, 0b00010, 2, 0b0111),
-                    VectorSize::Size32x4 => (0b0, 0b00100, 3, 0b0011),
-                    VectorSize::Size64x2 => (0b1, 0b01000, 4, 0b0001),
-                    _ => unreachable!(),
+                    ScalarSize::Size8 => (0b0, 0b00001, 1, 0b1111),
+                    ScalarSize::Size16 => (0b0, 0b00010, 2, 0b0111),
+                    ScalarSize::Size32 => (0b0, 0b00100, 3, 0b0011),
+                    ScalarSize::Size64 => (0b1, 0b01000, 4, 0b0001),
+                    _ => panic!("Unexpected scalar FP operand size: {:?}", size),
                 };
                 debug_assert_eq!(idx & mask, idx);
                 let imm5 = imm5 | ((idx as u32) << shift);
@@ -2542,7 +2543,8 @@ impl MachInstEmit for Inst {
                     | VecALUOp::Fdiv
                     | VecALUOp::Fmax
                     | VecALUOp::Fmin
-                    | VecALUOp::Fmul => true,
+                    | VecALUOp::Fmul
+                    | VecALUOp::Fmla => true,
                     _ => false,
                 };
                 let enc_float_size = match (is_float, size) {
@@ -2617,6 +2619,7 @@ impl MachInstEmit for Inst {
                     VecALUOp::Fmax => (0b000_01110_00_1, 0b111101),
                     VecALUOp::Fmin => (0b000_01110_10_1, 0b111101),
                     VecALUOp::Fmul => (0b001_01110_00_1, 0b110111),
+                    VecALUOp::Fmla => (0b000_01110_00_1, 0b110011),
                     VecALUOp::Addp => (0b000_01110_00_1 | enc_size << 1, 0b101111),
                     VecALUOp::Zip1 => (0b01001110_00_0 | enc_size << 1, 0b001110),
                     VecALUOp::Sqrdmulh => {

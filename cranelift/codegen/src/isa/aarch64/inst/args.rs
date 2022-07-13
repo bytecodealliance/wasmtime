@@ -620,7 +620,7 @@ impl ScalarSize {
     /// Convert to an integer operand size.
     pub fn operand_size(&self) -> OperandSize {
         match self {
-            ScalarSize::Size32 => OperandSize::Size32,
+            ScalarSize::Size8 | ScalarSize::Size16 | ScalarSize::Size32 => OperandSize::Size32,
             ScalarSize::Size64 => OperandSize::Size64,
             _ => panic!("Unexpected operand_size request for: {:?}", self),
         }
@@ -687,8 +687,11 @@ impl VectorSize {
         debug_assert!(ty.is_vector());
 
         match ty {
+            B8X8 => VectorSize::Size8x8,
             B8X16 => VectorSize::Size8x16,
+            B16X4 => VectorSize::Size16x4,
             B16X8 => VectorSize::Size16x8,
+            B32X2 => VectorSize::Size32x2,
             B32X4 => VectorSize::Size32x4,
             B64X2 => VectorSize::Size64x2,
             F32X2 => VectorSize::Size32x2,
