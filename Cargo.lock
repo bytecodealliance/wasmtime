@@ -706,7 +706,6 @@ dependencies = [
  "cranelift-preopt",
  "cranelift-reader",
  "cranelift-wasm",
- "file-per-thread-logger",
  "filecheck",
  "indicatif",
  "log",

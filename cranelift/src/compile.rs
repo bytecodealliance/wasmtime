@@ -37,14 +37,9 @@ pub struct Options {
 
     /// Specify an input file to be used. Use '-' for stdin.
     files: Vec<PathBuf>,
-
-    /// Enable debug output on stderr/stdout
-    #[clap(short)]
-    debug: bool,
 }
 
 pub fn run(options: &Options) -> Result<()> {
-    crate::handle_debug_flag(options.debug);
     let parsed = parse_sets_and_triple(&options.settings, &options.target)?;
     for path in &options.files {
         let name = String::from(path.as_os_str().to_string_lossy());
