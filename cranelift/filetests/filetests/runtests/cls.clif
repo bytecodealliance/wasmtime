@@ -1,7 +1,7 @@
 test interpret
 test run
 target aarch64
-;; target riscv64gc has_b
+;; target riscv64 has_b
 ; not implemented on `x86_64`
 
 function %cls_i8(i8) -> i8 {

@@ -4,7 +4,7 @@ target arm
 target s390x
 set avoid_div_traps=false
 target x86_64
-target riscv64gc 
+target riscv64 
 
 
 function %i8(i8, i8) -> i8 {

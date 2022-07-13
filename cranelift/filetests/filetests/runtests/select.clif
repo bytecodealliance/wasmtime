@@ -1,7 +1,7 @@
 test interpret
 test run
 target x86_64
-target riscv64gc
+target riscv64
 
 function %select_eq_f32(f32, f32) -> i32 {
 block0(v0: f32, v1: f32):

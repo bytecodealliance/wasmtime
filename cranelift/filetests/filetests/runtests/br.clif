@@ -4,7 +4,7 @@ target aarch64
 target arm
 target s390x
 target x86_64
-target riscv64gc
+target riscv64
 
 function %jump() -> b1 {
 block0:

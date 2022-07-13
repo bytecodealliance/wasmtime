@@ -1,6 +1,6 @@
 test run
 target aarch64
-target riscv64gc
+target riscv64
 
 ; TODO: Merge this with the main shifts file when x86_64 & s390x passes these.
 

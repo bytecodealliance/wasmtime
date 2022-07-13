@@ -2,7 +2,7 @@ test interpret
 test run
 target aarch64
 target x86_64
-target riscv64gc
+target riscv64
 
 function %bint_b1_i8_true() -> i8 {
 block0:

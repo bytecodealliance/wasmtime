@@ -5,12 +5,8 @@
     missing_docs,
     trivial_numeric_casts,
     unused_extern_crates,
-    // unstable_features
+    unstable_features
 )]
-/*
-    riscv64gc backend have to use  is_riscv_feature_detected which is unstable.
-*/
-#![feature(stdsimd)]
 #![warn(unused_import_braces)]
 #![cfg_attr(feature = "clippy", plugin(clippy(conf_file = "../../clippy.toml")))]
 #![cfg_attr(feature = "cargo-clippy", allow(clippy::new_without_default))]
@@ -132,46 +128,6 @@ pub fn builder_with_options(infer_native_flags: bool) -> Result<isa::Builder, &'
 
         if std::arch::is_aarch64_feature_detected!("lse") {
             isa_builder.enable("has_lse").unwrap();
-        }
-    }
-
-    #[cfg(target_arch = "riscv64")]
-    {
-        use cranelift_codegen::settings::Configurable;
-
-        if !infer_native_flags {
-            return Ok(isa_builder);
-        }
-
-        if std::arch::is_riscv_feature_detected!("m") {
-            isa_builder.enable("has_m").unwrap();
-        }
-        if std::arch::is_riscv_feature_detected!("a") {
-            isa_builder.enable("has_a").unwrap();
-        }
-        if std::arch::is_riscv_feature_detected!("f") {
-            isa_builder.enable("has_f").unwrap();
-        }
-        if std::arch::is_riscv_feature_detected!("d") {
-            isa_builder.enable("has_d").unwrap();
-        }
-        if std::arch::is_riscv_feature_detected!("v") {
-            isa_builder.enable("has_v").unwrap();
-        }
-        if std::arch::is_riscv_feature_detected!("zba") {
-            isa_builder.enable("has_extendion_zba").unwrap();
-        }
-        if std::arch::is_riscv_feature_detected!("zbb") {
-            isa_builder.enable("has_extendion_zbb").unwrap();
-        }
-        if std::arch::is_riscv_feature_detected!("zbc") {
-            isa_builder.enable("has_extendion_zbc").unwrap();
-        }
-        if std::arch::is_riscv_feature_detected!("zbs") {
-            isa_builder.enable("has_extendion_zbs").unwrap();
-        }
-        if std::arch::is_riscv_feature_detected!("zbkb") {
-            isa_builder.enable("has_extendion_zbkb").unwrap();
         }
     }
 

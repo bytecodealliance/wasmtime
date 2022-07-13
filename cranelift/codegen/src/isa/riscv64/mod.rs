@@ -98,7 +98,7 @@ impl TargetIsa for Riscv64Backend {
     }
 
     fn name(&self) -> &'static str {
-        "riscv64gc"
+        "riscv64"
     }
     fn dynamic_vector_bytes(&self, dynamic_ty: ir::Type) -> u32 {
         unimplemented!();
@@ -218,7 +218,7 @@ mod test {
         let shared_flags = settings::Flags::new(shared_flags_builder);
         let isa_flags = riscv_settings::Flags::new(&shared_flags, riscv_settings::builder());
         let backend = Riscv64Backend::new_with_flags(
-            Triple::from_str("riscv64gc").unwrap(),
+            Triple::from_str("riscv64").unwrap(),
             shared_flags,
             isa_flags,
         );
