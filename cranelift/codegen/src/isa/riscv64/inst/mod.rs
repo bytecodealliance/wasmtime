@@ -58,8 +58,9 @@ pub(crate) type VecWritableReg = Vec<Writable<Reg>>;
 
 use crate::isa::riscv64::lower::isle::generated_code::MInst;
 pub use crate::isa::riscv64::lower::isle::generated_code::{
-    AluOPRRI, AluOPRRR, AtomicOP, CsrOP, FClassResult, FFlagsException, FenceFm, FpuOPRR, FpuOPRRR,
-    FpuOPRRRR, IntSelectOP, LoadOP, MInst as Inst, ReferenceCheckOP, StoreOP, FRM,
+    AluOPRRI, AluOPRRR, AtomicOP, CsrOP, FClassResult, FFlagsException, FenceFm, FloatRoundOP,
+    FloatSelectOP, FpuOPRR, FpuOPRRR, FpuOPRRRR, IntSelectOP, LoadOP, MInst as Inst,
+    ReferenceCheckOP, StoreOP, FRM,
 };
 
 type BoxCallInfo = Box<CallInfo>;
@@ -530,6 +531,25 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
         &Inst::DummyUse { reg } => {
             collector.reg_use(reg);
         }
+        &Inst::FloatRound {
+            rd,
+            int_tmp,
+            f_tmp,
+            rs,
+            ..
+        } => {
+            collector.reg_use(rs);
+            collector.reg_early_def(int_tmp);
+            collector.reg_early_def(f_tmp);
+            collector.reg_early_def(rd);
+        }
+        &Inst::FloatSelect {
+            rd, tmp, rs1, rs2, ..
+        } => {
+            collector.reg_uses(&[rs1, rs2]);
+            collector.reg_early_def(tmp);
+            collector.reg_early_def(rd);
+        }
     }
 }
 
@@ -669,7 +689,7 @@ impl MachInst for Inst {
 
     fn worst_case_size() -> CodeOffset {
         // caculate by test function riscv64_worst_case_instruction_size()
-        44
+        100
     }
 
     fn ref_type_regclass(_settings: &settings::Flags) -> RegClass {
@@ -781,6 +801,51 @@ impl Inst {
             }
             &Inst::Nop4 => {
                 format!("##fixed 4-size nop")
+            }
+            &Inst::FloatRound {
+                op,
+                rd,
+                int_tmp,
+                f_tmp,
+                rs,
+                ty,
+            } => {
+                let rs = format_reg(rs, allocs);
+                let int_tmp = format_reg(int_tmp.to_reg(), allocs);
+                let f_tmp = format_reg(f_tmp.to_reg(), allocs);
+                let rd = format_reg(rd.to_reg(), allocs);
+                format!(
+                    "{} {},{}##int_tmp={} f_tmp={} ty={}",
+                    op.op_name(),
+                    rd,
+                    rs,
+                    int_tmp,
+                    f_tmp,
+                    ty
+                )
+            }
+            &Inst::FloatSelect {
+                op,
+                rd,
+                tmp,
+                rs1,
+                rs2,
+                ty,
+            } => {
+                let rs1 = format_reg(rs1, allocs);
+                let rs2 = format_reg(rs2, allocs);
+                let tmp = format_reg(tmp.to_reg(), allocs);
+                let rd = format_reg(rd.to_reg(), allocs);
+                format!(
+                    "f{}.{} {},{},{}##tmp={} ty={}",
+                    op.op_name(),
+                    if ty == F32 { "s" } else { "d" },
+                    rd,
+                    rs1,
+                    rs2,
+                    tmp,
+                    ty
+                )
             }
             &Inst::AtomicStore { src, ty, p } => {
                 let src = format_reg(src, allocs);

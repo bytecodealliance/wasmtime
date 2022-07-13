@@ -61,9 +61,9 @@ where
         }
     }
 
-    fn valid_bextend_ty(&mut self, from: Type, to: Type) -> Option<Unit> {
-        if from.is_bool() && to.is_bool() && to.bits() < 128 && from.bits() < to.bits() {
-            Some(())
+    fn valid_bextend_ty(&mut self, from: Type, to: Type) -> Option<Type> {
+        if from.is_bool() && to.is_bool() && from.bits() < to.bits() {
+            Some(to)
         } else {
             None
         }
@@ -97,20 +97,7 @@ where
     }
     fn value_inst(&mut self, val: Value) -> Option<Inst> {
         let may = self.lower_ctx.get_value_as_source_or_const(val);
-        may.inst.as_inst().map(|(insn, index)| insn)
-    }
-
-    fn gen_ceil(&mut self, rs: Reg, ty: Type) -> Reg {
-        unimplemented!()
-    }
-    fn gen_floor(&mut self, rs: Reg, ty: Type) -> Reg {
-        unimplemented!()
-    }
-    fn gen_trunc(&mut self, rs: Reg, ty: Type) -> Reg {
-        unimplemented!()
-    }
-    fn gen_nearest(&mut self, rs: Reg, ty: Type) -> Reg {
-        unimplemented!()
+        may.inst.as_inst().map(|(insn, _index)| insn)
     }
 
     fn gen_moves(&mut self, rs: ValueRegs, in_ty: Type, out_ty: Type) -> ValueRegs {
@@ -122,8 +109,8 @@ where
                 match in_ty.bits() {
                     128 => {
                         // if 128 must not be a float.
-                        let low = self.temp_writable_reg(out_ty);
-                        let high = self.temp_writable_reg(out_ty);
+                        let low = self.temp_writable_reg(I64);
+                        let high = self.temp_writable_reg(I64);
                         self.emit(&gen_move(low, I64, rs.regs()[0], I64));
                         self.emit(&gen_move(high, I64, rs.regs()[1], I64));
                         ValueRegs::two(low.to_reg(), high.to_reg())
@@ -136,6 +123,9 @@ where
                 }
             }
         }
+    }
+    fn imm12_and(&mut self, imm: Imm12, andn: i32) -> Imm12 {
+        Imm12::from_bits(imm.as_i16() & (andn as i16))
     }
     fn con_vec_writable(&mut self, ty: Type) -> VecWritableReg {
         if ty.is_int() || ty.is_bool() {

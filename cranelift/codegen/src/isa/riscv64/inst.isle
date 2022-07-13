@@ -270,6 +270,36 @@
     ;; A dummy use, useful to keep a value alive.
        (DummyUse
         (reg Reg))
+    ;;; 
+    (FloatRound
+      (op FloatRoundOP) 
+      (rd WritableReg)
+      (int_tmp WritableReg)
+      (f_tmp WritableReg)
+      (rs Reg)
+      (ty Type))
+    ;;;; FMax 
+    (FloatSelect
+      (op FloatSelectOP)
+      (rd WritableReg)
+      ;; a integer register
+      (tmp WritableReg)
+      (rs1 Reg)
+      (rs2 Reg)
+      (ty Type))
+))
+
+
+
+(type FloatSelectOP (enum
+  (Max)
+  (Min)
+))
+(type FloatRoundOP (enum
+  (Nearest)
+  (Ceil)
+  (Floor)
+  (Trunc)
 ))
 
 (type CsrOP(enum 
@@ -598,6 +628,7 @@
   )
 )
 
+
 (type VecBranchTarget (primitive VecBranchTarget))
 (type BoxCallInfo (primitive BoxCallInfo))
 (type BoxCallIndInfo (primitive BoxCallIndInfo))
@@ -620,6 +651,33 @@
 ;; Helper for creating the zero register.
 (decl zero_reg () Reg)
 (extern constructor zero_reg zero_reg)
+
+(decl gen_float_round(FloatRoundOP Reg Type) Reg)
+(rule
+  (gen_float_round op rs ty)
+  (let
+    (
+      (rd WritableReg (temp_writable_reg ty))
+      (tmp WritableReg (temp_writable_reg $I64))
+      (tmp2 WritableReg (temp_writable_reg $F64))
+      (_ Unit (emit (MInst.FloatRound op rd tmp tmp2 rs ty) ) )
+    )
+    (writable_reg_to_reg rd )
+  )
+)
+
+(decl gen_float_select (FloatSelectOP Reg  Reg Type ) Reg)
+(rule
+  (gen_float_select op x y ty)
+  (let
+    (
+      (rd WritableReg (temp_writable_reg ty))
+      (tmp WritableReg (temp_writable_reg $I64))
+      (_ Unit (emit (MInst.FloatSelect op rd tmp x y ty) ) )
+    )
+    (writable_reg_to_reg rd )
+  )
+)
 
 ;; for load immediate
 (decl imm (Type u64) Reg)
@@ -703,6 +761,10 @@
             (_ Unit (emit (MInst.AluRRImm12 op dst src imm))))
         dst))
 
+(decl alu_andi (Reg i32)Reg)
+(rule (alu_andi r i) 
+  (alu_rr_imm12 (AluOPRRI.Andi) r (imm12_const i) )
+)
 
 ;; some instruction use imm12 as funct12.
 ;; so we don't need the imm12 paramter.
@@ -1313,6 +1375,9 @@
 (decl imm12_const_add (i32 i32) Imm12)
 (extern constructor imm12_const_add imm12_const_add)
 
+(decl imm12_and (Imm12 i32) Imm12)
+(extern constructor imm12_and imm12_and)
+
 
 (decl con_amode(Reg Offset32 Type)AMode)
 (extern constructor con_amode con_amode)
@@ -1772,24 +1837,12 @@
   )
 )
 
-;;;
-(decl gen_ceil(Reg Type)Reg)
-(extern constructor gen_ceil gen_ceil)
-;;; 
-(decl gen_trunc(Reg Type)Reg)
-(extern constructor gen_trunc gen_trunc)
-;;; 
-(decl gen_floor(Reg Type)Reg)
-(extern constructor gen_floor gen_floor)
-;;; 
-(decl gen_nearest(Reg Type)Reg)
-(extern constructor gen_nearest gen_nearest)
-
 ;;; get a value's 
 ;;; I think this should provide in prelude.isle
 (decl value_inst(Inst)Value)
 (extern extractor value_inst value_inst)
 
+;;; an ifcmp instruction.
 (decl ifcmp_parameters(Value Value Type)Value)
 (extern extractor ifcmp_parameters ifcmp_parameters)
 
@@ -1797,7 +1850,8 @@
 (extern extractor ffcmp_parameters ffcmp_parameters)
 
 ;;;; in_type out_type
-(decl pure valid_bextend_ty(Type Type) Unit)
+;;;; out_type is returned.
+(decl pure valid_bextend_ty(Type Type) Type)
 (extern constructor valid_bextend_ty valid_bextend_ty)
 
 ;; 
@@ -1927,7 +1981,7 @@
   (let
     (
       (rd WritableReg (temp_writable_reg $I64))
-      (_ Unit (emit (MInst.Extend rd r $false from_bits  to_bits )))
+      (_ Unit (emit (MInst.Extend rd r is_signed from_bits  to_bits )))
     )
     (writable_reg_to_reg rd )
   )
@@ -1984,3 +2038,10 @@
 ;;; like isplit.
 (decl output_2 (ValueRegs ValueRegs)InstOutput)
 (extern constructor output_2 output_2)
+
+
+(decl gen_fabs(Reg Type)Reg)
+(rule
+  (gen_fabs x ty)
+  (fpu_rrr (fabs_copy_sign ty) ty x x)
+)

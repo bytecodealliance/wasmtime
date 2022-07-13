@@ -93,6 +93,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
 
         for i in 0..params.len() {
             let mut param = params[i];
+
             let run_out_of_registers = {
                 (param.value_type.is_float() && f_registers.len() == 0)
                     || (param.value_type.is_int() && x_registers.len() == 0)
@@ -106,10 +107,6 @@ impl ABIMachineSpec for Riscv64MachineDeps {
             match &param.purpose {
                 &ir::ArgumentPurpose::VMContext
                 | &ir::ArgumentPurpose::Normal
-                | &ir::ArgumentPurpose::StackLimit
-                | &ir::ArgumentPurpose::SignatureId
-                | &ir::ArgumentPurpose::CalleeTLS
-                | &ir::ArgumentPurpose::CallerTLS
                 | &ir::ArgumentPurpose::StructReturn
                 | &ir::ArgumentPurpose::FramePointer
                 | &ir::ArgumentPurpose::StructArgument(_) => {}
@@ -123,6 +120,10 @@ impl ABIMachineSpec for Riscv64MachineDeps {
             } else {
                 &mut abi_args
             };
+            if let Some(p) = special_purpose_register(param) {
+                abi_args.push(p);
+                continue;
+            }
             if let ir::ArgumentPurpose::StructArgument(size) = param.purpose {
                 let offset = next_stack;
                 assert!(size % 8 == 0, "StructArgument size is not properly aligned");
@@ -772,4 +773,19 @@ fn compute_clobber_size(clobbers: &[Writable<RealReg>]) -> u32 {
         }
     }
     align_to(clobbered_size, 16)
+}
+
+fn special_purpose_register(p: AbiParam) -> Option<ABIArg> {
+    match p.purpose {
+        ir::ArgumentPurpose::VMContext => {
+            assert!(p.value_type == I64);
+            Some(ABIArg::reg(
+                x_reg(3).to_real_reg().unwrap(),
+                p.value_type,
+                p.extension,
+                p.purpose,
+            ))
+        }
+        _ => None,
+    }
 }

@@ -1729,21 +1729,20 @@ impl Inst {
     pub(crate) const FENCE_REQ_W: u8 = 1 << 0;
     pub(crate) fn fence_req_to_static_str(x: u8) -> String {
         let mut s = String::default();
-        if x & (1 << 3) != 0 {
+        if x & Self::FENCE_REQ_I != 0 {
             s.push_str("i");
         }
-        if x & (1 << 2) != 0 {
+        if x & Self::FENCE_REQ_O != 0 {
             s.push_str("o");
         }
-        if x & (1 << 1) != 0 {
+        if x & Self::FENCE_REQ_R != 0 {
             s.push_str("r");
         }
-        if x & (1 << 0) != 0 {
+        if x & Self::FENCE_REQ_W != 0 {
             s.push_str("w");
         }
         s
     }
-    // pub(crate) fn check_fencedata(x: u8) -> bool {}
 }
 impl Default for FenceFm {
     fn default() -> Self {
@@ -1758,7 +1757,72 @@ impl FenceFm {
         }
     }
 }
+impl FloatRoundOP {
+    pub(crate) fn op_name(self) -> &'static str {
+        match self {
+            FloatRoundOP::Nearest => "nearest",
+            FloatRoundOP::Ceil => "ceil",
+            FloatRoundOP::Floor => "floor",
+            FloatRoundOP::Trunc => "trunc",
+        }
+    }
 
+    pub(crate) fn to_frm(self) -> FRM {
+        match self {
+            FloatRoundOP::Nearest => FRM::RNE,
+            FloatRoundOP::Ceil => FRM::RUP,
+            FloatRoundOP::Floor => FRM::RDN,
+            FloatRoundOP::Trunc => FRM::RTZ,
+        }
+    }
+}
+
+impl FloatSelectOP {
+    pub(crate) fn op_name(self) -> &'static str {
+        match self {
+            FloatSelectOP::Max => "max",
+            FloatSelectOP::Min => "min",
+        }
+    }
+
+    pub(crate) fn to_fpuoprrr(self, ty: Type) -> FpuOPRRR {
+        match self {
+            FloatSelectOP::Max => {
+                if ty == F32 {
+                    FpuOPRRR::FmaxS
+                } else {
+                    FpuOPRRR::FmaxD
+                }
+            }
+            FloatSelectOP::Min => {
+                if ty == F32 {
+                    FpuOPRRR::FminS
+                } else {
+                    FpuOPRRR::FminD
+                }
+            }
+        }
+    }
+    // move qnan bits into int register.
+    pub(crate) fn snan_bits(self, rd: Writable<Reg>, ty: Type) -> SmallInstVec<Inst> {
+        let mut insts = SmallInstVec::new();
+        insts.push(Inst::load_constant_imm12(rd, Imm12::from_bits(-1)));
+        let x = if ty == F32 { 22 } else { 51 };
+        insts.push(Inst::AluRRImm12 {
+            alu_op: AluOPRRI::Srli,
+            rd: rd,
+            rs: rd.to_reg(),
+            imm12: Imm12::from_bits(x),
+        });
+        insts.push(Inst::AluRRImm12 {
+            alu_op: AluOPRRI::Slli,
+            rd: rd,
+            rs: rd.to_reg(),
+            imm12: Imm12::from_bits(x),
+        });
+        insts
+    }
+}
 #[cfg(test)]
 mod test {
     use super::FloatCCArgs;

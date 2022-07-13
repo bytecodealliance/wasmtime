@@ -159,6 +159,47 @@ impl Inst {
         }
     }
 
+    // emit a float is not a nan.
+    pub(crate) fn emit_not_nan(rd: Writable<Reg>, rs: Reg, ty: Type) -> Inst {
+        Inst::FpuRRR {
+            alu_op: if ty == F32 {
+                FpuOPRRR::FeqS
+            } else {
+                FpuOPRRR::FeqD
+            },
+            frm: None,
+            rd: rd,
+            rs1: rs,
+            rs2: rs,
+        }
+    }
+    pub(crate) fn emit_fabs(rd: Writable<Reg>, rs: Reg, ty: Type) -> Inst {
+        Inst::FpuRRR {
+            alu_op: if ty == F32 {
+                FpuOPRRR::FsgnjxS
+            } else {
+                FpuOPRRR::FsgnjxD
+            },
+            frm: None,
+            rd: rd,
+            rs1: rs,
+            rs2: rs,
+        }
+    }
+    pub(crate) fn emit_fneg(rd: Writable<Reg>, rs: Reg, ty: Type) -> Inst {
+        Inst::FpuRRR {
+            alu_op: if ty == F32 {
+                FpuOPRRR::FsgnjnS
+            } else {
+                FpuOPRRR::FsgnjnD
+            },
+            frm: None,
+            rd: rd,
+            rs1: rs,
+            rs2: rs,
+        }
+    }
+
     pub(crate) fn narrow_down_int(rd: Writable<Reg>, rs: Reg, ty: Type) -> SmallInstVec<Inst> {
         assert!(ty.bits() < 64);
         assert!(ty.is_int());
@@ -1760,6 +1801,294 @@ impl MachInstEmit for Inst {
                     src,
                 }
                 .emit(&[], sink, emit_info, state);
+            }
+            &Inst::FloatRound {
+                op,
+                rd,
+                int_tmp,
+                f_tmp,
+                rs,
+                ty,
+            } => {
+                // this code is port from glibc ceil floor ... implmentation.
+                let rs = allocs.next(rs);
+                let int_tmp = allocs.next_writable(int_tmp);
+                let f_tmp = allocs.next_writable(f_tmp);
+                let rd = allocs.next_writable(rd);
+                let label_nan = sink.get_label();
+                let label_x = sink.get_label();
+                let label_jump_over = sink.get_label();
+                // check if is nan.
+                Inst::emit_not_nan(int_tmp, rs, ty).emit(&[], sink, emit_info, state);
+                Inst::CondBr {
+                    taken: BranchTarget::Label(label_nan),
+                    not_taken: BranchTarget::zero(),
+                    kind: IntegerCompare {
+                        kind: IntCC::Equal,
+                        rs1: int_tmp.to_reg(),
+                        rs2: zero_reg(),
+                    },
+                }
+                .emit(&[], sink, emit_info, state);
+                fn max_value_need_round(ty: Type) -> u64 {
+                    match ty {
+                        F32 => {
+                            let x: u64 = 1 << f32::MANTISSA_DIGITS;
+                            let x = x as f32;
+                            let x = u32::from_le_bytes(x.to_le_bytes());
+                            x as u64
+                        }
+                        F64 => {
+                            let x: u64 = 1 << f64::MANTISSA_DIGITS;
+                            let x = x as f64;
+                            u64::from_le_bytes(x.to_le_bytes())
+                        }
+                        _ => unreachable!(),
+                    }
+                }
+                // load max value need to round.
+                if ty == F32 {
+                    Inst::load_fp_constant32(f_tmp, max_value_need_round(ty) as u32)
+                        .into_iter()
+                        .for_each(|i| i.emit(&[], sink, emit_info, state));
+                } else {
+                    Inst::load_fp_constant64(f_tmp, max_value_need_round(ty))
+                        .into_iter()
+                        .for_each(|i| i.emit(&[], sink, emit_info, state));
+                }
+                // get abs value.
+                Inst::emit_fabs(rd, rs, ty).emit(&[], sink, emit_info, state);
+                Inst::lower_br_fcmp(
+                    FloatCC::GreaterThan,
+                    // abs value > max_value_need_round
+                    rd.to_reg(),
+                    f_tmp.to_reg(),
+                    BranchTarget::Label(label_x),
+                    BranchTarget::zero(),
+                    ty,
+                    int_tmp,
+                )
+                .into_iter()
+                .for_each(|i| i.emit(&[], sink, emit_info, state));
+                //convert to int.
+                Inst::FpuRR {
+                    alu_op: FpuOPRR::float_convert_2_int_op(ty, true, I64),
+                    frm: Some(op.to_frm()),
+                    rd: int_tmp,
+                    rs: rs,
+                }
+                .emit(&[], sink, emit_info, state);
+                //convert back.
+                Inst::FpuRR {
+                    alu_op: FpuOPRR::int_convert_2_float_op(I64, true, ty),
+                    frm: Some(op.to_frm()),
+                    rd,
+                    rs: int_tmp.to_reg(),
+                }
+                .emit(&[], sink, emit_info, state);
+                // copy sign.
+                Inst::FpuRRR {
+                    alu_op: if ty == F32 {
+                        FpuOPRRR::FsgnjS
+                    } else {
+                        FpuOPRRR::FsgnjD
+                    },
+                    frm: None,
+                    rd,
+                    rs1: rd.to_reg(),
+                    rs2: rs,
+                }
+                .emit(&[], sink, emit_info, state);
+                // jump over.
+                Inst::Jal {
+                    dest: BranchTarget::Label(label_jump_over),
+                }
+                .emit(&[], sink, emit_info, state);
+                // here is nan.
+                sink.bind_label(label_nan);
+                Inst::FpuRRR {
+                    alu_op: if ty == F32 {
+                        FpuOPRRR::FaddS
+                    } else {
+                        FpuOPRRR::FaddD
+                    },
+                    frm: None,
+                    rd: rd,
+                    rs1: rs,
+                    rs2: rs,
+                }
+                .emit(&[], sink, emit_info, state);
+                Inst::Jal {
+                    dest: BranchTarget::Label(label_jump_over),
+                }
+                .emit(&[], sink, emit_info, state);
+                // here select origin x.
+                sink.bind_label(label_x);
+                Inst::gen_move(rd, rs, ty).emit(&[], sink, emit_info, state);
+                sink.bind_label(label_jump_over);
+            }
+            &Inst::FloatSelect {
+                op,
+                rd,
+                tmp,
+                rs1,
+                rs2,
+                ty,
+            } => {
+                let rs1 = allocs.next(rs1);
+                let rs2 = allocs.next(rs2);
+                let tmp = allocs.next_writable(tmp);
+                let rd = allocs.next_writable(rd);
+                let label_nan = sink.get_label();
+                let label_jump_over = sink.get_label();
+                // check if rs1 is nan.
+                Inst::emit_not_nan(tmp, rs1, ty).emit(&[], sink, emit_info, state);
+                Inst::CondBr {
+                    taken: BranchTarget::Label(label_nan),
+                    not_taken: BranchTarget::zero(),
+                    kind: IntegerCompare {
+                        kind: IntCC::Equal,
+                        rs1: tmp.to_reg(),
+                        rs2: zero_reg(),
+                    },
+                }
+                .emit(&[], sink, emit_info, state);
+                //check if rs2 is nan.
+                Inst::emit_not_nan(tmp, rs2, ty).emit(&[], sink, emit_info, state);
+                Inst::CondBr {
+                    taken: BranchTarget::Label(label_nan),
+                    not_taken: BranchTarget::zero(),
+                    kind: IntegerCompare {
+                        kind: IntCC::Equal,
+                        rs1: tmp.to_reg(),
+                        rs2: zero_reg(),
+                    },
+                }
+                .emit(&[], sink, emit_info, state);
+                // here rs1 and rs2 is not nan.
+                Inst::FpuRRR {
+                    alu_op: op.to_fpuoprrr(ty),
+                    frm: None,
+                    rd: rd,
+                    rs1: rs1,
+                    rs2: rs2,
+                }
+                .emit(&[], sink, emit_info, state);
+                // special handle for +0 or -0.
+                {
+                    let label_done = sink.get_label();
+                    {
+                        // if rs1 == 0
+                        Inst::FpuRR {
+                            alu_op: FpuOPRR::move_f_to_x_op(ty),
+                            frm: None,
+                            rd: tmp,
+                            rs: rs1,
+                        }
+                        .emit(&[], sink, emit_info, state);
+                        // here is rs1 and rs2 all equal to zero.
+                        // sign bit not known.
+                        Inst::AluRRImm12 {
+                            alu_op: AluOPRRI::Slli,
+                            rd: tmp,
+                            rs: tmp.to_reg(),
+                            imm12: Imm12::from_bits(if ty == F32 { 33 } else { 1 }),
+                        }
+                        .emit(&[], sink, emit_info, state);
+                        Inst::CondBr {
+                            taken: BranchTarget::Label(label_done),
+                            not_taken: BranchTarget::zero(),
+                            kind: IntegerCompare {
+                                kind: IntCC::NotEqual,
+                                rs1: tmp.to_reg(),
+                                rs2: zero_reg(),
+                            },
+                        }
+                        .emit(&[], sink, emit_info, state);
+                    }
+                    {
+                        // and if rs2 == 0
+                        Inst::FpuRR {
+                            alu_op: FpuOPRR::move_f_to_x_op(ty),
+                            frm: None,
+                            rd: tmp,
+                            rs: rs2,
+                        }
+                        .emit(&[], sink, emit_info, state);
+                        // sign bit not known.
+                        Inst::AluRRImm12 {
+                            alu_op: AluOPRRI::Slli,
+                            rd: tmp,
+                            rs: tmp.to_reg(),
+                            imm12: Imm12::from_bits(if ty == F32 { 33 } else { 1 }),
+                        }
+                        .emit(&[], sink, emit_info, state);
+                        Inst::CondBr {
+                            taken: BranchTarget::Label(label_done),
+                            not_taken: BranchTarget::zero(),
+                            kind: IntegerCompare {
+                                kind: IntCC::NotEqual,
+                                rs1: tmp.to_reg(),
+                                rs2: zero_reg(),
+                            },
+                        }
+                        .emit(&[], sink, emit_info, state);
+                    }
+                    Inst::FpuRR {
+                        alu_op: FpuOPRR::move_f_to_x_op(ty),
+                        frm: None,
+                        rd: tmp,
+                        rs: rs1,
+                    }
+                    .emit(&[], sink, emit_info, state);
+                    Inst::FpuRR {
+                        alu_op: FpuOPRR::move_f_to_x_op(ty),
+                        frm: None,
+                        rd: writable_spilltmp_reg(),
+                        rs: rs2,
+                    }
+                    .emit(&[], sink, emit_info, state);
+                    Inst::AluRRR {
+                        alu_op: if op == FloatSelectOP::Max {
+                            AluOPRRR::And
+                        } else {
+                            AluOPRRR::Or
+                        },
+                        rd: tmp,
+                        rs1: tmp.to_reg(),
+                        rs2: spilltmp_reg(),
+                    }
+                    .emit(&[], sink, emit_info, state);
+                    // move back to rd.
+                    Inst::FpuRR {
+                        alu_op: FpuOPRR::move_x_to_f_op(ty),
+                        frm: None,
+                        rd,
+                        rs: tmp.to_reg(),
+                    }
+                    .emit(&[], sink, emit_info, state);
+                    //
+                    sink.bind_label(label_done);
+                }
+                // we have the reuslt,jump over.
+                Inst::Jal {
+                    dest: BranchTarget::Label(label_jump_over),
+                }
+                .emit(&[], sink, emit_info, state);
+                // here is nan.
+                sink.bind_label(label_nan);
+                op.snan_bits(tmp, ty)
+                    .into_iter()
+                    .for_each(|i| i.emit(&[], sink, emit_info, state));
+                // move to rd.
+                Inst::FpuRR {
+                    alu_op: FpuOPRR::move_x_to_f_op(ty),
+                    frm: None,
+                    rd,
+                    rs: tmp.to_reg(),
+                }
+                .emit(&[], sink, emit_info, state);
+                sink.bind_label(label_jump_over);
             }
         };
         let end_off = sink.cur_offset();

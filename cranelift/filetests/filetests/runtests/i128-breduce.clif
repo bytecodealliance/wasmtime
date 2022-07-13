@@ -1,4 +1,5 @@
 test interpret
+target riscv64gc
 
 function %breduce_b128_b1(b128) -> b1 {
 block0(v0: b128):
