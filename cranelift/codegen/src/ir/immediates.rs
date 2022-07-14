@@ -8,11 +8,11 @@ use alloc::vec::Vec;
 use core::cmp::Ordering;
 use core::convert::TryFrom;
 use core::fmt::{self, Display, Formatter};
+use core::ops::{Add, Div, Mul, Neg, Sub};
 use core::str::FromStr;
 use core::{i32, u32};
 #[cfg(feature = "enable-serde")]
 use serde::{Deserialize, Serialize};
-use std::ops::Neg;
 
 /// Convert a type into a vector of bytes; all implementors in this file must use little-endian
 /// orderings of bytes to match WebAssembly's little-endianness.
@@ -877,6 +877,38 @@ impl Neg for Ieee32 {
     }
 }
 
+impl Add for Ieee32 {
+    type Output = Ieee32;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Self::with_float(self.as_f32() + rhs.as_f32())
+    }
+}
+
+impl Sub for Ieee32 {
+    type Output = Ieee32;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        Self::with_float(self.as_f32() - rhs.as_f32())
+    }
+}
+
+impl Mul for Ieee32 {
+    type Output = Ieee32;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        Self::with_float(self.as_f32() * rhs.as_f32())
+    }
+}
+
+impl Div for Ieee32 {
+    type Output = Ieee32;
+
+    fn div(self, rhs: Self) -> Self::Output {
+        Self::with_float(self.as_f32() / rhs.as_f32())
+    }
+}
+
 impl Ieee64 {
     /// Create a new `Ieee64` containing the bits of `x`.
     pub fn with_bits(x: u64) -> Self {
@@ -1040,6 +1072,38 @@ impl Neg for Ieee64 {
 
     fn neg(self) -> Self::Output {
         Self::with_float(self.as_f64().neg())
+    }
+}
+
+impl Add for Ieee64 {
+    type Output = Ieee64;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Self::with_float(self.as_f64() + rhs.as_f64())
+    }
+}
+
+impl Sub for Ieee64 {
+    type Output = Ieee64;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        Self::with_float(self.as_f64() - rhs.as_f64())
+    }
+}
+
+impl Mul for Ieee64 {
+    type Output = Ieee64;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        Self::with_float(self.as_f64() * rhs.as_f64())
+    }
+}
+
+impl Div for Ieee64 {
+    type Output = Ieee64;
+
+    fn div(self, rhs: Self) -> Self::Output {
+        Self::with_float(self.as_f64() / rhs.as_f64())
     }
 }
 
