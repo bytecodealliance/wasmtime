@@ -60,6 +60,10 @@ where
                 DataValue::from_integer(imm, ty)?
             }
             ty if ty.is_bool() => DataValue::B(bool::arbitrary(self.u)?),
+            // f{32,64}::arbitrary does not generate a bunch of important values
+            // such as Signaling NaN's / NaN's with payload, so generate floats from integers.
+            F32 => DataValue::F32(Ieee32::with_bits(u32::arbitrary(self.u)?)),
+            F64 => DataValue::F64(Ieee64::with_bits(u64::arbitrary(self.u)?)),
             _ => unimplemented!(),
         })
     }

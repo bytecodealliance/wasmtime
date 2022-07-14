@@ -25,6 +25,27 @@ fn insert_opcode_arity_0(
     Ok(())
 }
 
+fn insert_opcode_arity_1(
+    fgen: &mut FunctionGenerator,
+    builder: &mut FunctionBuilder,
+    opcode: Opcode,
+    args: &'static [Type],
+    rets: &'static [Type],
+) -> Result<()> {
+    let arg0 = fgen.get_variable_of_type(args[0])?;
+    let arg0 = builder.use_var(arg0);
+
+    let typevar = rets[0];
+    let (inst, dfg) = builder.ins().Unary(opcode, typevar, arg0);
+    let results = dfg.inst_results(inst).to_vec();
+
+    for (val, ty) in results.into_iter().zip(rets) {
+        let var = fgen.get_variable_of_type(*ty)?;
+        builder.def_var(var, val);
+    }
+    Ok(())
+}
+
 fn insert_opcode_arity_2(
     fgen: &mut FunctionGenerator,
     builder: &mut FunctionBuilder,
@@ -40,6 +61,33 @@ fn insert_opcode_arity_2(
 
     let typevar = rets[0];
     let (inst, dfg) = builder.ins().Binary(opcode, typevar, arg0, arg1);
+    let results = dfg.inst_results(inst).to_vec();
+
+    for (val, ty) in results.into_iter().zip(rets) {
+        let var = fgen.get_variable_of_type(*ty)?;
+        builder.def_var(var, val);
+    }
+    Ok(())
+}
+
+fn insert_opcode_arity_3(
+    fgen: &mut FunctionGenerator,
+    builder: &mut FunctionBuilder,
+    opcode: Opcode,
+    args: &'static [Type],
+    rets: &'static [Type],
+) -> Result<()> {
+    let arg0 = fgen.get_variable_of_type(args[0])?;
+    let arg0 = builder.use_var(arg0);
+
+    let arg1 = fgen.get_variable_of_type(args[1])?;
+    let arg1 = builder.use_var(arg1);
+
+    let arg2 = fgen.get_variable_of_type(args[1])?;
+    let arg2 = builder.use_var(arg2);
+
+    let typevar = rets[0];
+    let (inst, dfg) = builder.ins().Ternary(opcode, typevar, arg0, arg1, arg2);
     let results = dfg.inst_results(inst).to_vec();
 
     for (val, ty) in results.into_iter().zip(rets) {
@@ -130,6 +178,87 @@ const OPCODE_SIGNATURES: &'static [(
     (Opcode::Sdiv, &[I16, I16], &[I16], insert_opcode_arity_2),
     (Opcode::Sdiv, &[I32, I32], &[I32], insert_opcode_arity_2),
     (Opcode::Sdiv, &[I64, I64], &[I64], insert_opcode_arity_2),
+    // Fadd
+    (Opcode::Fadd, &[F32, F32], &[F32], insert_opcode_arity_2),
+    (Opcode::Fadd, &[F64, F64], &[F64], insert_opcode_arity_2),
+    // Fmul
+    (Opcode::Fmul, &[F32, F32], &[F32], insert_opcode_arity_2),
+    (Opcode::Fmul, &[F64, F64], &[F64], insert_opcode_arity_2),
+    // Fsub
+    (Opcode::Fsub, &[F32, F32], &[F32], insert_opcode_arity_2),
+    (Opcode::Fsub, &[F64, F64], &[F64], insert_opcode_arity_2),
+    // Fdiv
+    (Opcode::Fdiv, &[F32, F32], &[F32], insert_opcode_arity_2),
+    (Opcode::Fdiv, &[F64, F64], &[F64], insert_opcode_arity_2),
+    // Fmin
+    (Opcode::Fmin, &[F32, F32], &[F32], insert_opcode_arity_2),
+    (Opcode::Fmin, &[F64, F64], &[F64], insert_opcode_arity_2),
+    // Fmax
+    (Opcode::Fmax, &[F32, F32], &[F32], insert_opcode_arity_2),
+    (Opcode::Fmax, &[F64, F64], &[F64], insert_opcode_arity_2),
+    // FminPseudo
+    (
+        Opcode::FminPseudo,
+        &[F32, F32],
+        &[F32],
+        insert_opcode_arity_2,
+    ),
+    (
+        Opcode::FminPseudo,
+        &[F64, F64],
+        &[F64],
+        insert_opcode_arity_2,
+    ),
+    // FmaxPseudo
+    (
+        Opcode::FmaxPseudo,
+        &[F32, F32],
+        &[F32],
+        insert_opcode_arity_2,
+    ),
+    (
+        Opcode::FmaxPseudo,
+        &[F64, F64],
+        &[F64],
+        insert_opcode_arity_2,
+    ),
+    // Fcopysign
+    (
+        Opcode::Fcopysign,
+        &[F32, F32],
+        &[F32],
+        insert_opcode_arity_2,
+    ),
+    (
+        Opcode::Fcopysign,
+        &[F64, F64],
+        &[F64],
+        insert_opcode_arity_2,
+    ),
+    // Fma
+    (Opcode::Fma, &[F32, F32, F32], &[F32], insert_opcode_arity_3),
+    (Opcode::Fma, &[F64, F64, F64], &[F64], insert_opcode_arity_3),
+    // Fabs
+    (Opcode::Fabs, &[F32], &[F32], insert_opcode_arity_1),
+    (Opcode::Fabs, &[F64], &[F64], insert_opcode_arity_1),
+    // Fneg
+    (Opcode::Fneg, &[F32], &[F32], insert_opcode_arity_1),
+    (Opcode::Fneg, &[F64], &[F64], insert_opcode_arity_1),
+    // Sqrt
+    (Opcode::Sqrt, &[F32], &[F32], insert_opcode_arity_1),
+    (Opcode::Sqrt, &[F64], &[F64], insert_opcode_arity_1),
+    // Ceil
+    (Opcode::Ceil, &[F32], &[F32], insert_opcode_arity_1),
+    (Opcode::Ceil, &[F64], &[F64], insert_opcode_arity_1),
+    // Floor
+    (Opcode::Floor, &[F32], &[F32], insert_opcode_arity_1),
+    (Opcode::Floor, &[F64], &[F64], insert_opcode_arity_1),
+    // Trunc
+    (Opcode::Trunc, &[F32], &[F32], insert_opcode_arity_1),
+    (Opcode::Trunc, &[F64], &[F64], insert_opcode_arity_1),
+    // Nearest
+    (Opcode::Nearest, &[F32], &[F32], insert_opcode_arity_1),
+    (Opcode::Nearest, &[F64], &[F64], insert_opcode_arity_1),
     // Stack Access
     (Opcode::StackStore, &[I8], &[], insert_stack_store),
     (Opcode::StackStore, &[I16], &[], insert_stack_store),
@@ -202,9 +331,8 @@ where
         let scalars = [
             // IFLAGS, FFLAGS,
             B1, // B8, B16, B32, B64, B128,
-            I8, I16, I32, I64,
-            // I128,
-            // F32, F64,
+            I8, I16, I32, I64, // I128,
+            F32, F64,
             // R32, R64,
         ];
         // TODO: vector types
@@ -284,6 +412,14 @@ where
                 builder.ins().iconst(ty, imm64)
             }
             ty if ty.is_bool() => builder.ins().bconst(ty, bool::arbitrary(self.u)?),
+            // f{32,64}::arbitrary does not generate a bunch of important values
+            // such as Signaling NaN's / NaN's with payload, so generate floats from integers.
+            F32 => builder
+                .ins()
+                .f32const(f32::from_bits(u32::arbitrary(self.u)?)),
+            F64 => builder
+                .ins()
+                .f64const(f64::from_bits(u64::arbitrary(self.u)?)),
             _ => unimplemented!(),
         })
     }
