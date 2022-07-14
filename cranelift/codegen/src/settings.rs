@@ -113,6 +113,17 @@ impl Value {
             _ => None,
         }
     }
+
+    /// Builds a string from the current value
+    pub fn value_string(&self) -> String {
+        match self.kind() {
+            SettingKind::Enum => self.as_enum().map(|b| b.to_string()),
+            SettingKind::Num => self.as_num().map(|b| b.to_string()),
+            SettingKind::Bool => self.as_bool().map(|b| b.to_string()),
+            SettingKind::Preset => unreachable!(),
+        }
+        .unwrap()
+    }
 }
 
 impl fmt::Display for Value {

@@ -6,13 +6,14 @@ use crate::function_runner::SingleFunctionCompiler;
 use crate::runtest_environment::{HeapMemory, RuntestEnvironment};
 use crate::subtest::{Context, SubTest};
 use cranelift_codegen::data_value::DataValue;
-use cranelift_codegen::ir;
 use cranelift_codegen::ir::Type;
+use cranelift_codegen::isa::TargetIsa;
+use cranelift_codegen::settings::Configurable;
+use cranelift_codegen::{ir, settings};
 use cranelift_reader::parse_run_command;
 use cranelift_reader::TestCommand;
 use log::trace;
 use std::borrow::Cow;
-use target_lexicon::Architecture;
 
 struct TestRun;
 
@@ -22,6 +23,68 @@ pub fn subtest(parsed: &TestCommand) -> anyhow::Result<Box<dyn SubTest>> {
         anyhow::bail!("No options allowed on {}", parsed);
     }
     Ok(Box::new(TestRun))
+}
+
+/// Builds a [TargetIsa] for the current host.
+///
+/// ISA Flags can be overridden by passing [Value]'s via `isa_flags`.
+fn build_host_isa(
+    infer_native_flags: bool,
+    flags: settings::Flags,
+    isa_flags: Vec<settings::Value>,
+) -> Box<dyn TargetIsa> {
+    let mut builder = cranelift_native::builder_with_options(infer_native_flags)
+        .expect("Unable to build a TargetIsa for the current host");
+
+    for value in isa_flags {
+        builder.set(value.name, &value.value_string()).unwrap();
+    }
+
+    builder.finish(flags).unwrap()
+}
+
+/// Checks if the host's ISA is compatible with the one requested by the test.
+fn is_isa_compatible(
+    context: &Context,
+    host: &dyn TargetIsa,
+    requested: &dyn TargetIsa,
+) -> Result<(), String> {
+    // If this test requests to run on a completely different
+    // architecture than the host platform then we skip it entirely,
+    // since we won't be able to natively execute machine code.
+    let host_arch = host.triple().architecture;
+    let requested_arch = requested.triple().architecture;
+    if host_arch != requested_arch {
+        return Err(format!(
+            "skipped {}: host can't run {:?} programs",
+            context.file_path, requested_arch
+        ));
+    }
+
+    // We need to check that the requested ISA does not have any flags that
+    // we can't natively support on the host.
+    let requested_flags = requested.isa_flags();
+    for req_value in requested_flags {
+        if let Some(requested) = req_value.as_bool() {
+            let available_in_host = host
+                .isa_flags()
+                .iter()
+                .find(|val| val.name == req_value.name)
+                .and_then(|val| val.as_bool())
+                .unwrap_or(false);
+
+            if requested && !available_in_host {
+                return Err(format!(
+                    "skipped {}: host does not support ISA flag {}",
+                    context.file_path, req_value.name
+                ));
+            }
+        } else {
+            unimplemented!("ISA flag {} of kind {:?}", req_value.name, req_value.kind());
+        }
+    }
+
+    Ok(())
 }
 
 impl SubTest for TestRun {
@@ -38,18 +101,6 @@ impl SubTest for TestRun {
     }
 
     fn run(&self, func: Cow<ir::Function>, context: &Context) -> anyhow::Result<()> {
-        // If this test requests to run on a completely different
-        // architecture than the host platform then we skip it entirely,
-        // since we won't be able to natively execute machine code.
-        let requested_arch = context.isa.unwrap().triple().architecture;
-        if requested_arch != Architecture::host() {
-            println!(
-                "skipped {}: host can't run {:?} programs",
-                context.file_path, requested_arch
-            );
-            return Ok(());
-        }
-
         // Disable runtests with pinned reg enabled.
         // We've had some abi issues that the trampoline isn't quite ready for.
         if context.flags.enable_pinned_reg() {
@@ -60,18 +111,26 @@ impl SubTest for TestRun {
             .join("\n")));
         }
 
+        let host_isa = build_host_isa(true, context.flags.clone(), vec![]);
+        let requested_isa = context.isa.unwrap();
+        if let Err(e) = is_isa_compatible(context, host_isa.as_ref(), requested_isa) {
+            println!("{}", e);
+            return Ok(());
+        }
+
+        // We can't use the requested ISA directly since it does not contain info
+        // about the operating system / calling convention / etc..
+        //
+        // Copy the requested ISA flags into the host ISA and use that.
+        let isa = build_host_isa(false, context.flags.clone(), requested_isa.isa_flags());
+
         let test_env = RuntestEnvironment::parse(&context.details.comments[..])?;
 
-        let mut compiler = SingleFunctionCompiler::with_host_isa(context.flags.clone())?;
+        let mut compiler = SingleFunctionCompiler::new(isa);
         for comment in context.details.comments.iter() {
             if let Some(command) = parse_run_command(comment.text, &func.signature)? {
                 trace!("Parsed run command: {}", command);
 
-                // Note that here we're also explicitly ignoring `context.isa`,
-                // regardless of what's requested. We want to use the native
-                // host ISA no matter what here, so the ISA listed in the file
-                // is only used as a filter to not run into situations like
-                // running x86_64 code on aarch64 platforms.
                 let compiled_fn = compiler.compile(func.clone().into_owned())?;
                 command
                     .run(|_, run_args| {
