@@ -116,26 +116,31 @@ const OPCODE_SIGNATURES: &'static [(
     (Opcode::Iadd, &[I16, I16], &[I16], insert_opcode),
     (Opcode::Iadd, &[I32, I32], &[I32], insert_opcode),
     (Opcode::Iadd, &[I64, I64], &[I64], insert_opcode),
+    (Opcode::Iadd, &[I128, I128], &[I128], insert_opcode),
     // Isub
     (Opcode::Isub, &[I8, I8], &[I8], insert_opcode),
     (Opcode::Isub, &[I16, I16], &[I16], insert_opcode),
     (Opcode::Isub, &[I32, I32], &[I32], insert_opcode),
     (Opcode::Isub, &[I64, I64], &[I64], insert_opcode),
+    (Opcode::Isub, &[I128, I128], &[I128], insert_opcode),
     // Imul
     (Opcode::Imul, &[I8, I8], &[I8], insert_opcode),
     (Opcode::Imul, &[I16, I16], &[I16], insert_opcode),
     (Opcode::Imul, &[I32, I32], &[I32], insert_opcode),
     (Opcode::Imul, &[I64, I64], &[I64], insert_opcode),
+    (Opcode::Imul, &[I128, I128], &[I128], insert_opcode),
     // Udiv
     (Opcode::Udiv, &[I8, I8], &[I8], insert_opcode),
     (Opcode::Udiv, &[I16, I16], &[I16], insert_opcode),
     (Opcode::Udiv, &[I32, I32], &[I32], insert_opcode),
     (Opcode::Udiv, &[I64, I64], &[I64], insert_opcode),
+    (Opcode::Udiv, &[I128, I128], &[I128], insert_opcode),
     // Sdiv
     (Opcode::Sdiv, &[I8, I8], &[I8], insert_opcode),
     (Opcode::Sdiv, &[I16, I16], &[I16], insert_opcode),
     (Opcode::Sdiv, &[I32, I32], &[I32], insert_opcode),
     (Opcode::Sdiv, &[I64, I64], &[I64], insert_opcode),
+    (Opcode::Sdiv, &[I128, I128], &[I128], insert_opcode),
     // Fadd
     (Opcode::Fadd, &[F32, F32], &[F32], insert_opcode),
     (Opcode::Fadd, &[F64, F64], &[F64], insert_opcode),
@@ -193,15 +198,18 @@ const OPCODE_SIGNATURES: &'static [(
     (Opcode::StackStore, &[I16], &[], insert_stack_store),
     (Opcode::StackStore, &[I32], &[], insert_stack_store),
     (Opcode::StackStore, &[I64], &[], insert_stack_store),
+    (Opcode::StackStore, &[I128], &[], insert_stack_store),
     (Opcode::StackLoad, &[], &[I8], insert_stack_load),
     (Opcode::StackLoad, &[], &[I16], insert_stack_load),
     (Opcode::StackLoad, &[], &[I32], insert_stack_load),
     (Opcode::StackLoad, &[], &[I64], insert_stack_load),
+    (Opcode::StackLoad, &[], &[I128], insert_stack_load),
     // Integer Consts
     (Opcode::Iconst, &[], &[I8], insert_const),
     (Opcode::Iconst, &[], &[I16], insert_const),
     (Opcode::Iconst, &[], &[I32], insert_const),
     (Opcode::Iconst, &[], &[I64], insert_const),
+    (Opcode::Iconst, &[], &[I128], insert_const),
     // Float Consts
     (Opcode::F32const, &[], &[F32], insert_const),
     (Opcode::F64const, &[], &[F64], insert_const),
@@ -270,8 +278,7 @@ where
         let scalars = [
             // IFLAGS, FFLAGS,
             B1, // B8, B16, B32, B64, B128,
-            I8, I16, I32, I64, // I128,
-            F32, F64,
+            I8, I16, I32, I64, I128, F32, F64,
             // R32, R64,
         ];
         // TODO: vector types
@@ -340,6 +347,12 @@ where
     /// Generates an instruction(`iconst`/`fconst`/etc...) to introduce a constant value
     fn generate_const(&mut self, builder: &mut FunctionBuilder, ty: Type) -> Result<Value> {
         Ok(match ty {
+            I128 => {
+                // See: https://github.com/bytecodealliance/wasmtime/issues/2906
+                let hi = builder.ins().iconst(I64, self.u.arbitrary::<i64>()?);
+                let lo = builder.ins().iconst(I64, self.u.arbitrary::<i64>()?);
+                builder.ins().iconcat(lo, hi)
+            }
             ty if ty.is_int() => {
                 let imm64 = match ty {
                     I8 => self.u.arbitrary::<i8>()? as i64,
@@ -435,10 +448,7 @@ where
     fn generate_br(&mut self, builder: &mut FunctionBuilder) -> Result<()> {
         let (block, args) = self.generate_target_block(builder)?;
 
-        let condbr_types = [
-            I8, I16, I32, I64, // TODO: I128
-            B1,
-        ];
+        let condbr_types = [I8, I16, I32, I64, I128, B1];
         let _type = *self.u.choose(&condbr_types[..])?;
         let var = self.get_variable_of_type(_type)?;
         let val = builder.use_var(var);
@@ -459,7 +469,9 @@ where
         let cond = self.generate_intcc()?;
 
         let bricmp_types = [
-            I8, I16, I32, I64, // TODO: I128
+            I8, I16, I32,
+            I64,
+            // I128 - TODO: https://github.com/bytecodealliance/wasmtime/issues/4406
         ];
         let _type = *self.u.choose(&bricmp_types[..])?;
 
@@ -479,11 +491,7 @@ where
     }
 
     fn generate_switch(&mut self, builder: &mut FunctionBuilder) -> Result<()> {
-        let _type = *self.u.choose(
-            &[
-                I8, I16, I32, I64, // TODO: I128
-            ][..],
-        )?;
+        let _type = *self.u.choose(&[I8, I16, I32, I64, I128][..])?;
         let switch_var = self.get_variable_of_type(_type)?;
         let switch_val = builder.use_var(switch_var);
 
@@ -579,6 +587,7 @@ where
 
     /// Zero initializes the stack slot by inserting `stack_store`'s.
     fn initialize_stack_slots(&mut self, builder: &mut FunctionBuilder) -> Result<()> {
+        let i128_zero = builder.ins().iconst(I128, 0);
         let i64_zero = builder.ins().iconst(I64, 0);
         let i32_zero = builder.ins().iconst(I32, 0);
         let i16_zero = builder.ins().iconst(I16, 0);
@@ -592,6 +601,7 @@ where
             while size != 0 {
                 let offset = (init_size - size) as i32;
                 let (val, filled) = match size {
+                    sz if sz / 16 > 0 => (i128_zero, 16),
                     sz if sz / 8 > 0 => (i64_zero, 8),
                     sz if sz / 4 > 0 => (i32_zero, 4),
                     sz if sz / 2 > 0 => (i16_zero, 2),
