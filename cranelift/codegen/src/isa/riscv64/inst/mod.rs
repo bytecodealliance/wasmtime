@@ -150,7 +150,11 @@ pub(crate) fn enc_auipc(rd: Writable<Reg>, imm: Imm20) -> u32 {
 }
 
 pub(crate) fn enc_jalr(rd: Writable<Reg>, base: Reg, offset: Imm12) -> u32 {
-    let x = 0b1100111 |  reg_to_gpr_num(rd.to_reg() )  << 7 |  0b000 << 12 /* funct3 */  | reg_to_gpr_num(base) << 15 |  offset.as_u32() << 20;
+    let x = 0b1100111
+        | reg_to_gpr_num(rd.to_reg()) << 7
+        | 0b000 << 12
+        | reg_to_gpr_num(base) << 15
+        | offset.as_u32() << 20;
     x
 }
 
@@ -203,9 +207,7 @@ impl Inst {
         }
     }
 
-    /*
-        can be load using lui and addi instructions.
-    */
+    /// can be load using lui and addi instructions.
     fn load_const_imm(rd: Writable<Reg>, value: u64) -> Option<SmallInstVec<Inst>> {
         Inst::generate_imm(value, |imm20, imm12| {
             let mut insts = SmallVec::new();
@@ -239,9 +241,7 @@ impl Inst {
         insts.unwrap_or(LoadConstant::U64(value).load_constant(rd))
     }
 
-    /*
-        this will discard return address.
-    */
+    /// this will discard return address.
     pub(crate) fn construct_auipc_and_jalr(tmp: Writable<Reg>, offset: i64) -> [Inst; 2] {
         Inst::generate_imm(offset as u64, |imm20, imm12| {
             let a = Inst::Auipc {
@@ -550,6 +550,13 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_early_def(tmp);
             collector.reg_early_def(rd);
         }
+        &Inst::FloatSelectPseudo {
+            rd, tmp, rs1, rs2, ..
+        } => {
+            collector.reg_uses(&[rs1, rs2]);
+            collector.reg_early_def(tmp);
+            collector.reg_early_def(rd);
+        }
     }
 }
 
@@ -788,10 +795,10 @@ impl Inst {
             format!("{}ext.{}", if signed { "s" } else { "u" }, type_name)
         }
         fn format_frm(rounding_mode: Option<FRM>) -> String {
-            if FRM::is_default(rounding_mode) {
-                String::default()
+            if let Some(r) = rounding_mode {
+                format!(",{}", r.to_static_str(),)
             } else {
-                format!(",{}", rounding_mode.unwrap().to_static_str())
+                "".into()
             }
         }
 
@@ -821,6 +828,29 @@ impl Inst {
                     rs,
                     int_tmp,
                     f_tmp,
+                    ty
+                )
+            }
+            &Inst::FloatSelectPseudo {
+                op,
+                rd,
+                tmp,
+                rs1,
+                rs2,
+                ty,
+            } => {
+                let rs1 = format_reg(rs1, allocs);
+                let rs2 = format_reg(rs2, allocs);
+                let tmp = format_reg(tmp.to_reg(), allocs);
+                let rd = format_reg(rd.to_reg(), allocs);
+                format!(
+                    "f{}.{}.pseudo {},{},{}##tmp={} ty={}",
+                    op.op_name(),
+                    if ty == F32 { "s" } else { "d" },
+                    rd,
+                    rs1,
+                    rs2,
+                    tmp,
                     ty
                 )
             }
@@ -1325,7 +1355,7 @@ impl Inst {
                 };
                 format!("{} {},{}", v, rd, rm)
             }
-            &MInst::Fence { pred, succ, fm } => {
+            &MInst::Fence { pred, succ } => {
                 format!(
                     "fence {},{}",
                     Inst::fence_req_to_static_str(pred),
@@ -1361,19 +1391,15 @@ pub enum LabelUse {
     /// signed bits. use in Jal
     Jal20,
 
-    /*
-            The unconditional jump instructions all use PC-relative addressing to help support position independent code. The JALR instruction was defined to enable a two-instruction sequence to
-    jump anywhere in a 32-bit absolute address range. A LUI instruction can first load rs1 with the
-    upper 20 bits of a target address, then JALR can add in the lower bits. Similarly, AUIPC then
-    JALR can jump anywhere in a 32-bit pc-relative address range.
-        */
+    ///         The unconditional jump instructions all use PC-relative addressing to help support position independent code. The JALR instruction was defined to enable a two-instruction sequence to
+    /// jump anywhere in a 32-bit absolute address range. A LUI instruction can first load rs1 with the
+    /// upper 20 bits of a target address, then JALR can add in the lower bits. Similarly, AUIPC then
+    /// JALR can jump anywhere in a 32-bit pc-relative address range.
     PCRel32,
 
-    /*
-        All branch instructions use the B-type instruction format. The 12-bit B-immediate encodes signed
-    offsets in multiples of 2, and is added to the current pc to give the target address. The conditional
-    branch range is ±4 KiB.
-        */
+    ///     All branch instructions use the B-type instruction format. The 12-bit B-immediate encodes signed
+    /// offsets in multiples of 2, and is added to the current pc to give the target address. The conditional
+    /// branch range is ±4 KiB.
     B12,
 }
 
@@ -1474,9 +1500,7 @@ impl LabelUse {
         let max = self.max_pos_range() as i64;
         offset >= min && offset <= max
     }
-    /*
 
-    */
     fn patch_raw_offset(self, buffer: &mut [u8], offset: i64) {
         match self {
             LabelUse::Jal20 => {
@@ -1497,10 +1521,9 @@ impl LabelUse {
                 Inst::generate_imm(offset as u64, |imm20, imm12| {
                     let imm20 = imm20.unwrap_or_default();
                     let imm12 = imm12.unwrap_or_default();
-                    /*
-                    zero_reg() is fine, the register parameter must have be in code stream.
-                    because of "|=" zero_reg() would not change the old value.
-                    */
+
+                    // zero_reg() is fine, the register parameter must have be in code stream.
+                    // because of "|=" zero_reg() would not change the old value.
                     unsafe {
                         *auipc |= enc_auipc(writable_zero_reg(), imm20);
                     }
@@ -1508,8 +1531,8 @@ impl LabelUse {
                         *jalr |= enc_jalr(writable_zero_reg(), zero_reg(), imm12);
                     }
                 })
+                // expect make sure we handled.
                 .expect("we have check the range before,this is a compiler error.");
-                /* unwrap make sure we handled. */
             }
 
             LabelUse::B12 => {

@@ -11,7 +11,7 @@ use crate::machinst::*;
 use crate::settings::Flags;
 use crate::CodegenResult;
 
-use crate::ir::types::{I16, I32, I64, I8};
+use crate::ir::types::I64;
 
 use super::lower::*;
 use crate::isa::riscv64::abi::*;
@@ -396,7 +396,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::IaddIfcout => {
-            unimplemented!();
+            implemented_in_isle(ctx);
         }
 
         Opcode::IaddImm

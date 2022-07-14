@@ -20,8 +20,8 @@ block0(v0: i16):
 
 ; block0:
 ;   rev8 a0,a0
-;   brev8 a0,a0
-;   srli a0,a0,48
+;   brev8 a2,a0
+;   srli a0,a2,48
 ;   ret
 
 function %a(i32) -> i32 {
@@ -32,8 +32,8 @@ block0(v0: i32):
 
 ; block0:
 ;   rev8 a0,a0
-;   brev8 a0,a0
-;   srli a0,a0,32
+;   brev8 a2,a0
+;   srli a0,a2,32
 ;   ret
 
 function %a(i64) -> i64 {
@@ -55,12 +55,10 @@ block0(v0: i128):
 
 ; block0:
 ;   rev8 a3,a0
-;   mv t3,a3
-;   brev8 t3,t3
-;   mv a3,t3
-;   rev8 a0,a1
-;   brev8 a0,a0
-;   mv a1,a3
+;   brev8 a5,a3
+;   rev8 a7,a1
+;   brev8 a0,a7
+;   mv a1,a5
 ;   ret
 
 function %b(i8) -> i8 {
@@ -70,10 +68,9 @@ block0(v0: i8):
 }
 
 ; block0:
-;   slli a1,a0,56
-;   srli a3,a1,56
-;   clzw a0,a3
-;   addi a0,a0,4072
+;   uext.b a0,a0
+;   clz a2,a0
+;   addi a0,a2,-56
 ;   ret
 
 function %b(i16) -> i16 {
@@ -83,10 +80,9 @@ block0(v0: i16):
 }
 
 ; block0:
-;   slli a1,a0,48
-;   srli a3,a1,48
-;   clzw a0,a3
-;   addi a0,a0,4080
+;   uext.h a0,a0
+;   clz a2,a0
+;   addi a0,a2,-48
 ;   ret
 
 function %b(i32) -> i32 {
@@ -116,11 +112,12 @@ block0(v0: i128):
 }
 
 ; block0:
-;   clz x6, x1
-;   clz x8, x0
-;   lsr x10, x6, #6
-;   madd x0, x8, x10, x6
-;   movz x1, #0
+;   clz a3,a1
+;   clz a5,a0
+;   li a7,64
+;   select_reg t4,a5,zero##condition=(a7 eq a3)
+;   add a0,a3,t4
+;   mv a1,zero
 ;   ret
 
 function %c(i8) -> i8 {
@@ -130,9 +127,13 @@ block0(v0: i8):
 }
 
 ; block0:
-;   uxtb w3, w0
-;   cls w5, w3
-;   sub w0, w5, #24
+;   bexti a1,a0,7
+;   not a2,a0
+;   select_reg a4,a0,a2##condition=(a1 eq zero)
+;   uext.b a6,a4
+;   clz t3,a6
+;   addi t0,t3,-56
+;   addi a0,t0,-1
 ;   ret
 
 function %c(i16) -> i16 {
@@ -142,9 +143,13 @@ block0(v0: i16):
 }
 
 ; block0:
-;   uxth w3, w0
-;   cls w5, w3
-;   sub w0, w5, #16
+;   bexti a1,a0,15
+;   not a2,a0
+;   select_reg a4,a0,a2##condition=(a1 eq zero)
+;   uext.h a6,a4
+;   clz t3,a6
+;   addi t0,t3,-48
+;   addi a0,t0,-1
 ;   ret
 
 function %c(i32) -> i32 {
@@ -154,7 +159,11 @@ block0(v0: i32):
 }
 
 ; block0:
-;   cls w0, w0
+;   bexti a1,a0,31
+;   not a2,a0
+;   select_reg a4,a0,a2##condition=(a1 eq zero)
+;   clzw a6,a4
+;   addi a0,a6,-1
 ;   ret
 
 function %c(i64) -> i64 {
@@ -164,7 +173,11 @@ block0(v0: i64):
 }
 
 ; block0:
-;   cls x0, x0
+;   bexti a1,a0,63
+;   not a2,a0
+;   select_reg a4,a0,a2##condition=(a1 eq zero)
+;   clz a6,a4
+;   addi a0,a6,-1
 ;   ret
 
 function %c(i128) -> i128 {
@@ -174,15 +187,17 @@ block0(v0: i128):
 }
 
 ; block0:
-;   cls x6, x0
-;   cls x8, x1
-;   eon x10, x1, x0
-;   lsr x12, x10, #63
-;   madd x14, x6, x12, x12
-;   subs xzr, x8, #63
-;   csel x1, x14, xzr, eq
-;   add x0, x1, x8
-;   movz x1, #0
+;   not a3,a0
+;   select_reg a5,a3,a0##condition=(a1 slt zero)
+;   not a7,a1
+;   select_reg t4,a7,a1##condition=(a1 slt zero)
+;   clz t1,t4
+;   clz a0,a5
+;   li a2,64
+;   select_reg a4,a0,zero##condition=(a2 eq t1)
+;   add a6,t1,a4
+;   addi a0,a6,-1
+;   mv a1,zero
 ;   ret
 
 function %d(i8) -> i8 {
@@ -192,9 +207,8 @@ block0(v0: i8):
 }
 
 ; block0:
-;   rbit w3, w0
-;   orr w5, w3, #8388608
-;   clz w0, w5
+;   bseti a0,a0,8
+;   ctzw a0,a0
 ;   ret
 
 function %d(i16) -> i16 {
@@ -204,9 +218,8 @@ block0(v0: i16):
 }
 
 ; block0:
-;   rbit w3, w0
-;   orr w5, w3, #32768
-;   clz w0, w5
+;   bseti a0,a0,16
+;   ctzw a0,a0
 ;   ret
 
 function %d(i32) -> i32 {
@@ -216,8 +229,7 @@ block0(v0: i32):
 }
 
 ; block0:
-;   rbit w3, w0
-;   clz w0, w3
+;   ctzw a0,a0
 ;   ret
 
 function %d(i64) -> i64 {
@@ -227,8 +239,7 @@ block0(v0: i64):
 }
 
 ; block0:
-;   rbit x3, x0
-;   clz x0, x3
+;   ctz a0,a0
 ;   ret
 
 function %d(i128) -> i128 {
@@ -238,13 +249,12 @@ block0(v0: i128):
 }
 
 ; block0:
-;   rbit x6, x0
-;   rbit x8, x1
-;   clz x10, x6
-;   clz x12, x8
-;   lsr x14, x10, #6
-;   madd x0, x12, x14, x10
-;   movz x1, #0
+;   ctz a3,a0
+;   ctz a5,a1
+;   li a7,64
+;   select_reg t4,a5,zero##condition=(a7 eq a3)
+;   add a0,a3,t4
+;   mv a1,zero
 ;   ret
 
 function %d(i128) -> i128 {
@@ -253,18 +263,11 @@ block0(v0: i128):
     return v1
 }
 
-;   stp fp, lr, [sp, #-16]!
-;   mov fp, sp
-;   stp d11, d13, [sp, #-16]!
 ; block0:
-;   fmov d6, x0
-;   mov v6.d[1], x1
-;   cnt v11.16b, v6.16b
-;   addv b13, v11.16b
-;   umov w0, v13.b[0]
-;   movz x1, #0
-;   ldp d11, d13, [sp], #16
-;   ldp fp, lr, [sp], #16
+;   cpop a3,a0
+;   cpop a5,a1
+;   add a0,a3,a5
+;   mv a1,zero
 ;   ret
 
 function %d(i64) -> i64 {
@@ -274,10 +277,7 @@ block0(v0: i64):
 }
 
 ; block0:
-;   fmov d3, x0
-;   cnt v5.8b, v3.8b
-;   addv b7, v5.8b
-;   umov w0, v7.b[0]
+;   cpop a0,a0
 ;   ret
 
 function %d(i32) -> i32 {
@@ -287,10 +287,7 @@ block0(v0: i32):
 }
 
 ; block0:
-;   fmov s3, w0
-;   cnt v5.8b, v3.8b
-;   addv b7, v5.8b
-;   umov w0, v7.b[0]
+;   cpopw a0,a0
 ;   ret
 
 function %d(i16) -> i16 {
@@ -300,10 +297,8 @@ block0(v0: i16):
 }
 
 ; block0:
-;   fmov s3, w0
-;   cnt v5.8b, v3.8b
-;   addp v7.8b, v5.8b, v5.8b
-;   umov w0, v7.b[0]
+;   uext.h a0,a0
+;   cpopw a0,a0
 ;   ret
 
 function %d(i8) -> i8 {
@@ -313,9 +308,8 @@ block0(v0: i8):
 }
 
 ; block0:
-;   fmov s3, w0
-;   cnt v5.8b, v3.8b
-;   umov w0, v5.b[0]
+;   uext.b a0,a0
+;   cpopw a0,a0
 ;   ret
 
 function %bextend_b8() -> b32 {
@@ -326,8 +320,7 @@ block0:
 }
 
 ; block0:
-;   movz x2, #255
-;   sxtb w0, w2
+;   li a0,-1
 ;   ret
 
 function %bextend_b1() -> b32 {
@@ -338,8 +331,7 @@ block0:
 }
 
 ; block0:
-;   movz x2, #1
-;   sbfx w0, w2, #0, #1
+;   li a0,-1
 ;   ret
 
 function %bnot_i32(i32) -> i32 {
@@ -349,7 +341,7 @@ block0(v0: i32):
 }
 
 ; block0:
-;   orn w0, wzr, w0
+;   not a0,a0
 ;   ret
 
 function %bnot_i64(i64) -> i64 {
@@ -359,7 +351,7 @@ block0(v0: i64):
 }
 
 ; block0:
-;   orn x0, xzr, x0
+;   not a0,a0
 ;   ret
 
 function %bnot_i64_with_shift(i64) -> i64 {
@@ -371,7 +363,8 @@ block0(v0: i64):
 }
 
 ; block0:
-;   orn x0, xzr, x0, LSL 3
+;   slli a1,a0,3
+;   not a0,a1
 ;   ret
 
 function %bnot_i128(i128) -> i128 {
@@ -381,18 +374,8 @@ block0(v0: i128):
 }
 
 ; block0:
-;   orn x0, xzr, x0
-;   orn x1, xzr, x1
-;   ret
-
-function %bnot_i8x16(i8x16) -> i8x16 {
-block0(v0: i8x16):
-    v1 = bnot v0
-    return v1
-}
-
-; block0:
-;   mvn v0.16b, v0.16b
+;   not a0,a0
+;   not a1,a1
 ;   ret
 
 function %band_i32(i32, i32) -> i32 {
@@ -402,7 +385,7 @@ block0(v0: i32, v1: i32):
 }
 
 ; block0:
-;   and w0, w0, w1
+;   and a0,a0,a1
 ;   ret
 
 function %band_i64(i64, i64) -> i64 {
@@ -412,7 +395,7 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
-;   and x0, x0, x1
+;   and a0,a0,a1
 ;   ret
 
 function %band_i128(i128, i128) -> i128 {
@@ -422,18 +405,8 @@ block0(v0: i128, v1: i128):
 }
 
 ; block0:
-;   and x0, x0, x2
-;   and x1, x1, x3
-;   ret
-
-function %band_i8x16(i8x16, i8x16) -> i8x16 {
-block0(v0: i8x16, v1: i8x16):
-    v2 = band v0, v1
-    return v2
-}
-
-; block0:
-;   and v0.16b, v0.16b, v1.16b
+;   and a0,a0,a2
+;   and a1,a1,a3
 ;   ret
 
 function %band_i64_constant(i64) -> i64 {
@@ -444,7 +417,7 @@ block0(v0: i64):
 }
 
 ; block0:
-;   and x0, x0, #3
+;   andi a0,a0,3
 ;   ret
 
 function %band_i64_constant2(i64) -> i64 {
@@ -455,7 +428,7 @@ block0(v0: i64):
 }
 
 ; block0:
-;   and x0, x0, #3
+;   andi a0,a0,3
 ;   ret
 
 function %band_i64_constant_shift(i64, i64) -> i64 {
@@ -467,7 +440,8 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
-;   and x0, x0, x1, LSL 3
+;   slli a3,a1,3
+;   and a0,a0,a3
 ;   ret
 
 function %band_i64_constant_shift2(i64, i64) -> i64 {
@@ -479,7 +453,8 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
-;   and x0, x0, x1, LSL 3
+;   slli a3,a1,3
+;   and a0,a3,a0
 ;   ret
 
 function %bor_i32(i32, i32) -> i32 {
@@ -489,7 +464,7 @@ block0(v0: i32, v1: i32):
 }
 
 ; block0:
-;   orr w0, w0, w1
+;   or a0,a0,a1
 ;   ret
 
 function %bor_i64(i64, i64) -> i64 {
@@ -499,7 +474,7 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
-;   orr x0, x0, x1
+;   or a0,a0,a1
 ;   ret
 
 function %bor_i128(i128, i128) -> i128 {
@@ -509,18 +484,8 @@ block0(v0: i128, v1: i128):
 }
 
 ; block0:
-;   orr x0, x0, x2
-;   orr x1, x1, x3
-;   ret
-
-function %bor_i8x16(i8x16, i8x16) -> i8x16 {
-block0(v0: i8x16, v1: i8x16):
-    v2 = bor v0, v1
-    return v2
-}
-
-; block0:
-;   orr v0.16b, v0.16b, v1.16b
+;   or a0,a0,a2
+;   or a1,a1,a3
 ;   ret
 
 function %bor_i64_constant(i64) -> i64 {
@@ -531,7 +496,7 @@ block0(v0: i64):
 }
 
 ; block0:
-;   orr x0, x0, #3
+;   ori a0,a0,3
 ;   ret
 
 function %bor_i64_constant2(i64) -> i64 {
@@ -542,7 +507,7 @@ block0(v0: i64):
 }
 
 ; block0:
-;   orr x0, x0, #3
+;   ori a0,a0,3
 ;   ret
 
 function %bor_i64_constant_shift(i64, i64) -> i64 {
@@ -554,7 +519,8 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
-;   orr x0, x0, x1, LSL 3
+;   slli a3,a1,3
+;   or a0,a0,a3
 ;   ret
 
 function %bor_i64_constant_shift2(i64, i64) -> i64 {
@@ -566,7 +532,8 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
-;   orr x0, x0, x1, LSL 3
+;   slli a3,a1,3
+;   or a0,a3,a0
 ;   ret
 
 function %bxor_i32(i32, i32) -> i32 {
@@ -576,7 +543,7 @@ block0(v0: i32, v1: i32):
 }
 
 ; block0:
-;   eor w0, w0, w1
+;   xor a0,a0,a1
 ;   ret
 
 function %bxor_i64(i64, i64) -> i64 {
@@ -586,7 +553,7 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
-;   eor x0, x0, x1
+;   xor a0,a0,a1
 ;   ret
 
 function %bxor_i128(i128, i128) -> i128 {
@@ -596,18 +563,8 @@ block0(v0: i128, v1: i128):
 }
 
 ; block0:
-;   eor x0, x0, x2
-;   eor x1, x1, x3
-;   ret
-
-function %bxor_i8x16(i8x16, i8x16) -> i8x16 {
-block0(v0: i8x16, v1: i8x16):
-    v2 = bxor v0, v1
-    return v2
-}
-
-; block0:
-;   eor v0.16b, v0.16b, v1.16b
+;   xor a0,a0,a2
+;   xor a1,a1,a3
 ;   ret
 
 function %bxor_i64_constant(i64) -> i64 {
@@ -618,7 +575,7 @@ block0(v0: i64):
 }
 
 ; block0:
-;   eor x0, x0, #3
+;   xori a0,a0,3
 ;   ret
 
 function %bxor_i64_constant2(i64) -> i64 {
@@ -629,7 +586,7 @@ block0(v0: i64):
 }
 
 ; block0:
-;   eor x0, x0, #3
+;   xori a0,a0,3
 ;   ret
 
 function %bxor_i64_constant_shift(i64, i64) -> i64 {
@@ -641,7 +598,8 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
-;   eor x0, x0, x1, LSL 3
+;   slli a3,a1,3
+;   xor a0,a0,a3
 ;   ret
 
 function %bxor_i64_constant_shift2(i64, i64) -> i64 {
@@ -653,7 +611,8 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
-;   eor x0, x0, x1, LSL 3
+;   slli a3,a1,3
+;   xor a0,a3,a0
 ;   ret
 
 function %band_not_i32(i32, i32) -> i32 {
@@ -663,7 +622,7 @@ block0(v0: i32, v1: i32):
 }
 
 ; block0:
-;   bic w0, w0, w1
+;   andn a0,a0,a1
 ;   ret
 
 function %band_not_i64(i64, i64) -> i64 {
@@ -673,7 +632,7 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
-;   bic x0, x0, x1
+;   andn a0,a0,a1
 ;   ret
 
 function %band_not_i128(i128, i128) -> i128 {
@@ -683,18 +642,8 @@ block0(v0: i128, v1: i128):
 }
 
 ; block0:
-;   bic x0, x0, x2
-;   bic x1, x1, x3
-;   ret
-
-function %band_not_i8x16(i8x16, i8x16) -> i8x16 {
-block0(v0: i8x16, v1: i8x16):
-    v2 = band_not v0, v1
-    return v2
-}
-
-; block0:
-;   bic v0.16b, v0.16b, v1.16b
+;   andn a0,a0,a2
+;   andn a1,a1,a3
 ;   ret
 
 function %band_not_i64_constant(i64) -> i64 {
@@ -705,7 +654,8 @@ block0(v0: i64):
 }
 
 ; block0:
-;   bic x0, x0, #4
+;   li a1,4
+;   andn a0,a0,a1
 ;   ret
 
 function %band_not_i64_constant_shift(i64, i64) -> i64 {
@@ -717,7 +667,8 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
-;   bic x0, x0, x1, LSL 4
+;   slli a3,a1,4
+;   andn a0,a0,a3
 ;   ret
 
 function %bor_not_i32(i32, i32) -> i32 {
@@ -727,7 +678,7 @@ block0(v0: i32, v1: i32):
 }
 
 ; block0:
-;   orn w0, w0, w1
+;   orn a0,a0,a1
 ;   ret
 
 function %bor_not_i64(i64, i64) -> i64 {
@@ -737,7 +688,7 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
-;   orn x0, x0, x1
+;   orn a0,a0,a1
 ;   ret
 
 function %bor_not_i128(i128, i128) -> i128 {
@@ -747,8 +698,8 @@ block0(v0: i128, v1: i128):
 }
 
 ; block0:
-;   orn x0, x0, x2
-;   orn x1, x1, x3
+;   orn a0,a0,a2
+;   orn a1,a1,a3
 ;   ret
 
 function %bor_not_i64_constant(i64) -> i64 {
@@ -759,7 +710,8 @@ block0(v0: i64):
 }
 
 ; block0:
-;   orn x0, x0, #4
+;   li a1,4
+;   orn a0,a0,a1
 ;   ret
 
 function %bor_not_i64_constant_shift(i64, i64) -> i64 {
@@ -771,7 +723,8 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
-;   orn x0, x0, x1, LSL 4
+;   slli a3,a1,4
+;   orn a0,a0,a3
 ;   ret
 
 function %bxor_not_i32(i32, i32) -> i32 {
@@ -781,7 +734,7 @@ block0(v0: i32, v1: i32):
 }
 
 ; block0:
-;   eon w0, w0, w1
+;   xnor a0,a1,a0
 ;   ret
 
 function %bxor_not_i64(i64, i64) -> i64 {
@@ -791,7 +744,7 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
-;   eon x0, x0, x1
+;   xnor a0,a1,a0
 ;   ret
 
 function %bxor_not_i128(i128, i128) -> i128 {
@@ -801,8 +754,8 @@ block0(v0: i128, v1: i128):
 }
 
 ; block0:
-;   eon x0, x0, x2
-;   eon x1, x1, x3
+;   xnor a0,a2,a0
+;   xnor a1,a3,a1
 ;   ret
 
 function %bxor_not_i64_constant(i64) -> i64 {
@@ -813,7 +766,8 @@ block0(v0: i64):
 }
 
 ; block0:
-;   eon x0, x0, #4
+;   li a1,4
+;   xnor a0,a1,a0
 ;   ret
 
 function %bxor_not_i64_constant_shift(i64, i64) -> i64 {
@@ -825,7 +779,8 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
-;   eon x0, x0, x1, LSL 4
+;   slli a3,a1,4
+;   xnor a0,a3,a0
 ;   ret
 
 function %ishl_i128_i8(i128, i8) -> i128 {
@@ -835,15 +790,17 @@ block0(v0: i128, v1: i8):
 }
 
 ; block0:
-;   lsl x8, x0, x2
-;   lsl x10, x1, x2
-;   orn w12, wzr, w2
-;   lsr x14, x0, #1
-;   lsr x0, x14, x12
-;   orr x3, x10, x0
-;   ands xzr, x2, #64
-;   csel x0, xzr, x8, ne
-;   csel x1, x8, x3, ne
+;   andi a5,a2,127
+;   li a7,128
+;   sub a7,a7,a5
+;   sll t0,a0,a5
+;   srl t2,a0,a7
+;   select_reg a2,zero,t2##condition=(a5 eq zero)
+;   sll a3,a1,a5
+;   or a6,a2,a3
+;   li a7,64
+;   select_reg a0,zero,t0##condition=(a5 uge a7)
+;   select_reg a1,t0,a6##condition=(a5 uge a7)
 ;   ret
 
 function %ishl_i128_i128(i128, i128) -> i128 {
@@ -853,15 +810,17 @@ block0(v0: i128, v1: i128):
 }
 
 ; block0:
-;   lsl x10, x0, x2
-;   lsl x12, x1, x2
-;   orn w14, wzr, w2
-;   lsr x0, x0, #1
-;   lsr x3, x0, x14
-;   orr x4, x12, x3
-;   ands xzr, x2, #64
-;   csel x0, xzr, x10, ne
-;   csel x1, x10, x4, ne
+;   andi a7,a2,127
+;   li t4,128
+;   sub t4,t4,a7
+;   sll t2,a0,a7
+;   srl a2,a0,t4
+;   select_reg a3,zero,a2##condition=(a7 eq zero)
+;   sll a5,a1,a7
+;   or t3,a3,a5
+;   li t4,64
+;   select_reg a0,zero,t2##condition=(a7 uge t4)
+;   select_reg a1,t2,t3##condition=(a7 uge t4)
 ;   ret
 
 function %ushr_i128_i8(i128, i8) -> i128 {
@@ -871,15 +830,17 @@ block0(v0: i128, v1: i8):
 }
 
 ; block0:
-;   lsr x8, x0, x2
-;   lsr x10, x1, x2
-;   orn w12, wzr, w2
-;   lsl x14, x1, #1
-;   lsl x0, x14, x12
-;   orr x3, x8, x0
-;   ands xzr, x2, #64
-;   csel x0, x10, x3, ne
-;   csel x1, xzr, x10, ne
+;   andi a5,a2,127
+;   li a7,128
+;   sub a7,a7,a5
+;   sll t0,a1,a7
+;   select_reg t2,zero,t0##condition=(a5 eq zero)
+;   srl a2,a0,a5
+;   or a3,t2,a2
+;   li a6,64
+;   srl a7,a1,a5
+;   select_reg a0,a7,a3##condition=(a5 uge a6)
+;   select_reg a1,zero,a7##condition=(a5 uge a6)
 ;   ret
 
 function %ushr_i128_i128(i128, i128) -> i128 {
@@ -889,15 +850,17 @@ block0(v0: i128, v1: i128):
 }
 
 ; block0:
-;   lsr x10, x0, x2
-;   lsr x12, x1, x2
-;   orn w14, wzr, w2
-;   lsl x0, x1, #1
-;   lsl x3, x0, x14
-;   orr x4, x10, x3
-;   ands xzr, x2, #64
-;   csel x0, x12, x4, ne
-;   csel x1, xzr, x12, ne
+;   andi a7,a2,127
+;   li t4,128
+;   sub t4,t4,a7
+;   sll t2,a1,t4
+;   select_reg a2,zero,t2##condition=(a7 eq zero)
+;   srl a3,a0,a7
+;   or a5,a2,a3
+;   li t3,64
+;   srl t4,a1,a7
+;   select_reg a0,t4,a5##condition=(a7 uge t3)
+;   select_reg a1,zero,t4##condition=(a7 uge t3)
 ;   ret
 
 function %sshr_i128_i8(i128, i8) -> i128 {
@@ -907,16 +870,19 @@ block0(v0: i128, v1: i8):
 }
 
 ; block0:
-;   lsr x8, x0, x2
-;   asr x10, x1, x2
-;   orn w12, wzr, w2
-;   lsl x14, x1, #1
-;   lsl x0, x14, x12
-;   asr x3, x1, #63
-;   orr x4, x8, x0
-;   ands xzr, x2, #64
-;   csel x0, x10, x4, ne
-;   csel x1, x3, x10, ne
+;   andi a5,a2,127
+;   li a7,128
+;   sub a7,a7,a5
+;   sll t0,a1,a7
+;   select_reg t2,zero,t0##condition=(a5 eq zero)
+;   srl a2,a0,a5
+;   or a3,t2,a2
+;   li a6,64
+;   sra a7,a1,a5
+;   li t4,-1
+;   select_reg t1,t4,zero##condition=(a1 slt zero)
+;   select_reg a0,a7,a3##condition=(a5 uge a6)
+;   select_reg a1,t1,a7##condition=(a5 uge a6)
 ;   ret
 
 function %sshr_i128_i128(i128, i128) -> i128 {
@@ -926,15 +892,18 @@ block0(v0: i128, v1: i128):
 }
 
 ; block0:
-;   lsr x10, x0, x2
-;   asr x12, x1, x2
-;   orn w14, wzr, w2
-;   lsl x0, x1, #1
-;   lsl x3, x0, x14
-;   asr x4, x1, #63
-;   orr x6, x10, x3
-;   ands xzr, x2, #64
-;   csel x0, x12, x6, ne
-;   csel x1, x4, x12, ne
+;   andi a7,a2,127
+;   li t4,128
+;   sub t4,t4,a7
+;   sll t2,a1,t4
+;   select_reg a2,zero,t2##condition=(a7 eq zero)
+;   srl a3,a0,a7
+;   or a5,a2,a3
+;   li t3,64
+;   sra t4,a1,a7
+;   li t1,-1
+;   select_reg a1,t1,zero##condition=(a1 slt zero)
+;   select_reg a0,t4,a5##condition=(a7 uge t3)
+;   select_reg a1,a1,t4##condition=(a7 uge t3)
 ;   ret
 

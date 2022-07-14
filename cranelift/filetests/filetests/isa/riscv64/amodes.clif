@@ -97,8 +97,8 @@ block0(v0: i64, v1: i64, v2: i64):
 ;   add t3,t3,a2
 ;   lui a7,1
 ;   addi a7,a7,4
-;   add t5,t3,a7
-;   lw a0,0(t5)
+;   add t0,t3,a7
+;   lw a0,0(t0)
 ;   ret
 
 function %f10() -> i32 {
@@ -109,8 +109,8 @@ block0:
 }
 
 ; block0:
-;   addi t2,zero,1234
-;   lw a0,0(t2)
+;   li t1,1234
+;   lw a0,0(t1)
 ;   ret
 
 function %f11(i64) -> i32 {
@@ -195,7 +195,7 @@ block0(v0: i64, v1: i64, v2: i64):
 ;   lui a5,1048575
 ;   addi a5,a5,4094
 ;   uext.w t3,a5
-;   lw a0,0(t3)
+;   lh a0,0(t3)
 ;   ret
 
 function %f19(i64, i64, i64) -> i32 {
@@ -210,7 +210,7 @@ block0(v0: i64, v1: i64, v2: i64):
 ;   lui a5,1
 ;   addi a5,a5,2
 ;   uext.w t3,a5
-;   lw a0,0(t3)
+;   lh a0,0(t3)
 ;   ret
 
 function %f20(i64, i64, i64) -> i32 {
@@ -225,7 +225,7 @@ block0(v0: i64, v1: i64, v2: i64):
 ;   lui a5,1048575
 ;   addi a5,a5,4094
 ;   sext.w t3,a5
-;   lw a0,0(t3)
+;   lh a0,0(t3)
 ;   ret
 
 function %f21(i64, i64, i64) -> i32 {
@@ -240,7 +240,7 @@ block0(v0: i64, v1: i64, v2: i64):
 ;   lui a5,1
 ;   addi a5,a5,2
 ;   sext.w t3,a5
-;   lw a0,0(t3)
+;   lh a0,0(t3)
 ;   ret
 
 function %i128(i64) -> i128 {
@@ -251,12 +251,13 @@ block0(v0: i64):
 }
 
 ; block0:
-;   ld t2,0(a0)
+;   ld a1,0(a0)
+;   mv a3,a1
 ;   ld a1,8(a0)
-;   mv a5,t2
+;   mv a5,a3
 ;   sd a5,0(a0)
 ;   sd a1,8(a0)
-;   mv a0,t2
+;   mv a0,a3
 ;   ret
 
 function %i128_imm_offset(i64) -> i128 {
@@ -267,12 +268,13 @@ block0(v0: i64):
 }
 
 ; block0:
-;   ld t2,16(a0)
+;   ld a1,16(a0)
+;   mv a3,a1
 ;   ld a1,24(a0)
-;   mv a5,t2
+;   mv a5,a3
 ;   sd a5,16(a0)
 ;   sd a1,24(a0)
-;   mv a0,t2
+;   mv a0,a3
 ;   ret
 
 function %i128_imm_offset_large(i64) -> i128 {
@@ -283,12 +285,13 @@ block0(v0: i64):
 }
 
 ; block0:
-;   ld t2,504(a0)
+;   ld a1,504(a0)
+;   mv a3,a1
 ;   ld a1,512(a0)
-;   mv a5,t2
+;   mv a5,a3
 ;   sd a5,504(a0)
 ;   sd a1,512(a0)
-;   mv a0,t2
+;   mv a0,a3
 ;   ret
 
 function %i128_imm_offset_negative_large(i64) -> i128 {
@@ -299,12 +302,13 @@ block0(v0: i64):
 }
 
 ; block0:
-;   ld t2,-512(a0)
+;   ld a1,-512(a0)
+;   mv a3,a1
 ;   ld a1,-504(a0)
-;   mv a5,t2
+;   mv a5,a3
 ;   sd a5,-512(a0)
 ;   sd a1,-504(a0)
-;   mv a0,t2
+;   mv a0,a3
 ;   ret
 
 function %i128_add_offset(i64) -> i128 {

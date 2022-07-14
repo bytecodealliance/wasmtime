@@ -70,7 +70,7 @@ block0(v0: i64):
 }
 
 ; block0:
-;   addi a1,zero,2
+;   li a1,2
 ;   div a0,a0,a1
 ;   ret
 
@@ -92,7 +92,7 @@ block0(v0: i64):
 }
 
 ; block0:
-;   addi a1,zero,2
+;   li a1,2
 ;   divu a0,a0,a1
 ;   ret
 
@@ -134,7 +134,7 @@ block0(v0: i32):
 }
 
 ; block0:
-;   addi a1,zero,2
+;   li a1,2
 ;   divw a0,a0,a1
 ;   ret
 
@@ -156,7 +156,7 @@ block0(v0: i32):
 }
 
 ; block0:
-;   addi a1,zero,2
+;   li a1,2
 ;   divuw a0,a0,a1
 ;   ret
 
@@ -247,7 +247,7 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
-;   xori a0,a0,-1
+;   not a0,a0
 ;   ret
 
 function %f25(i32, i32) -> i32 {
@@ -271,7 +271,7 @@ block0(v0: i32):
 }
 
 ; block0:
-;   addi a1,zero,-1
+;   li a1,-1
 ;   addw a0,a0,a1
 ;   ret
 
@@ -283,7 +283,7 @@ block0(v0: i32):
 }
 
 ; block0:
-;   addi a1,zero,-1
+;   li a1,-1
 ;   subw a0,a0,a1
 ;   ret
 
@@ -306,7 +306,7 @@ block0(v0: i64):
 }
 
 ; block0:
-;   addi a0,zero,1
+;   li a0,1
 ;   sub a0,zero,a0
 ;   ret
 
@@ -317,12 +317,10 @@ block0(v0: i128, v1: i128):
 }
 
 ; block0:
-;   add a7,a0,a2
-;   mv t2,a7
-;   sltu t4,t2,a0
-;   add a1,a1,a3
-;   add a1,a1,t4
-;   mv a0,a7
+;   add a0,a0,a2
+;   sltu t4,a0,a2
+;   add t1,a1,a3
+;   add a1,t1,t4
 ;   ret
 
 function %sub_i128(i128, i128) -> i128 {
@@ -333,35 +331,11 @@ block0(v0: i128, v1: i128):
 
 ; block0:
 ;   sub a7,a0,a2
-;   mv t2,a7
-;   sltu t4,a0,t2
-;   sub a1,a1,a3
-;   sub a1,a1,t4
+;   mv a2,a7
+;   sltu t4,a0,a2
+;   sub t1,a1,a3
+;   sub a1,t1,t4
 ;   mv a0,a7
-;   ret
-
-function %mul_i128(i128, i128) -> i128 {
-block0(v0: i128, v1: i128):
-    v2 = imul v0, v1
-    return v2
-}
-
-; block0:
-;   umulh x10, x0, x2
-;   madd x12, x0, x3, x10
-;   madd x1, x1, x2, x12
-;   madd x0, x0, x2, xzr
-;   ret
-
-function %add_mul_1(i32, i32, i32) -> i32 {
-block0(v0: i32, v1: i32, v2: i32):
-    v3 = imul v1, v2
-    v4 = iadd v0, v3
-    return v4
-}
-
-; block0:
-;   madd w0, w1, w2, w0
 ;   ret
 
 function %add_mul_2(i32, i32, i32) -> i32 {
@@ -372,7 +346,8 @@ block0(v0: i32, v1: i32, v2: i32):
 }
 
 ; block0:
-;   madd w0, w1, w2, w0
+;   mulw a5,a1,a2
+;   addw a0,a5,a0
 ;   ret
 
 function %msub_i32(i32, i32, i32) -> i32 {
@@ -383,7 +358,8 @@ block0(v0: i32, v1: i32, v2: i32):
 }
 
 ; block0:
-;   msub w0, w1, w2, w0
+;   mulw a5,a1,a2
+;   subw a0,a0,a5
 ;   ret
 
 function %msub_i64(i64, i64, i64) -> i64 {
@@ -394,7 +370,8 @@ block0(v0: i64, v1: i64, v2: i64):
 }
 
 ; block0:
-;   msub x0, x1, x2, x0
+;   mul a5,a1,a2
+;   sub a0,a0,a5
 ;   ret
 
 function %imul_sub_i32(i32, i32, i32) -> i32 {
@@ -405,8 +382,8 @@ block0(v0: i32, v1: i32, v2: i32):
 }
 
 ; block0:
-;   madd w8, w1, w2, wzr
-;   sub w0, w8, w0
+;   mulw a5,a1,a2
+;   subw a0,a5,a0
 ;   ret
 
 function %imul_sub_i64(i64, i64, i64) -> i64 {
@@ -417,8 +394,8 @@ block0(v0: i64, v1: i64, v2: i64):
 }
 
 ; block0:
-;   madd x8, x1, x2, xzr
-;   sub x0, x8, x0
+;   mul a5,a1,a2
+;   sub a0,a5,a0
 ;   ret
 
 function %srem_const (i64) -> i64 {
@@ -429,9 +406,8 @@ block0(v0: i64):
 }
 
 ; block0:
-;   orr x3, xzr, #2
-;   sdiv x5, x0, x3
-;   msub x0, x5, x3, x0
+;   li a1,2
+;   rem a0,a0,a1
 ;   ret
 
 function %urem_const (i64) -> i64 {
@@ -442,9 +418,8 @@ block0(v0: i64):
 }
 
 ; block0:
-;   orr x3, xzr, #2
-;   udiv x5, x0, x3
-;   msub x0, x5, x3, x0
+;   li a1,2
+;   remu a0,a0,a1
 ;   ret
 
 function %sdiv_minus_one(i64) -> i64 {
@@ -455,10 +430,7 @@ block0(v0: i64):
 }
 
 ; block0:
-;   movn x3, #0
-;   adds xzr, x3, #1
-;   ccmp x0, #1, #nzcv, eq
-;   b.vc 8 ; udf
-;   sdiv x0, x0, x3
+;   li a1,-1
+;   div a0,a0,a1
 ;   ret
 

@@ -18,7 +18,6 @@ use crate::{
         immediates::*, types::*, AtomicRmwOp, ExternalName, Inst, InstructionData, MemFlags,
         StackSlot, TrapCode, Value, ValueList,
     },
-    isa::riscv64::abi::Riscv64ABICaller,
     isa::riscv64::inst::*,
     machinst::{InsnOutput, LowerCtx},
 };
@@ -80,7 +79,6 @@ where
         for (i, ssa_value) in ssa_values.iter().enumerate() {
             let src_reg = self.lower_ctx.put_value_in_regs(*ssa_value);
             let retval_reg = self.lower_ctx.retval(i);
-            let ty = self.lower_ctx.value_ty(*ssa_value);
             assert!(src_reg.len() == retval_reg.len());
             for (&src, &dst) in src_reg.regs().iter().zip(retval_reg.regs().iter()) {
                 let ty = MInst::canonical_type_for_rc(src.class());
@@ -127,7 +125,7 @@ where
     fn imm12_and(&mut self, imm: Imm12, andn: i32) -> Imm12 {
         Imm12::from_bits(imm.as_i16() & (andn as i16))
     }
-    fn con_vec_writable(&mut self, ty: Type) -> VecWritableReg {
+    fn alloc_vec_writable(&mut self, ty: Type) -> VecWritableReg {
         if ty.is_int() || ty.is_bool() {
             if ty.bits() <= 64 {
                 vec![self.temp_writable_reg(I64)]
@@ -142,23 +140,21 @@ where
     }
 
     fn imm(&mut self, ty: Type, mut val: u64) -> Reg {
-        /*
-        Boolean types
-        Boolean values are either true or false.
+        // Boolean types
+        // Boolean values are either true or false.
 
-        The b1 type represents an abstract boolean value. It can only exist as an SSA value, and can't be directly stored in memory. It can, however, be converted into an integer with value 0 or 1 by the bint instruction (and converted back with icmp_imm with 0).
+        // The b1 type represents an abstract boolean value. It can only exist as an SSA value, and can't be directly stored in memory. It can, however, be converted into an integer with value 0 or 1 by the bint instruction (and converted back with icmp_imm with 0).
 
-        Several larger boolean types are also defined, primarily to be used as SIMD element types. They can be stored in memory, and are represented as either all zero bits or all one bits.
+        // Several larger boolean types are also defined, primarily to be used as SIMD element types. They can be stored in memory, and are represented as either all zero bits or all one bits.
 
-        b1
-        b8
-        b16
-        b32
-        b64
-        ///////////////////////////////////////////////////////////
-        "represented as either all zero bits or all one bits."
-        \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
-                        */
+        // b1
+        // b8
+        // b16
+        // b32
+        // b64
+        // ///////////////////////////////////////////////////////////
+        // "represented as either all zero bits or all one bits."
+        // \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
         if ty.is_bool() && val != 0 {
             // need all be one
             val = !0;
@@ -199,7 +195,7 @@ where
     fn gen_default_frm(&mut self) -> OptionFloatRoundingMode {
         None
     }
-    fn con_select_reg(&mut self, cc: &IntCC, a: Reg, b: Reg, rs1: Reg, rs2: Reg) -> Reg {
+    fn gen_select_reg(&mut self, cc: &IntCC, a: Reg, b: Reg, rs1: Reg, rs2: Reg) -> Reg {
         let rd = self.temp_writable_reg(MInst::canonical_type_for_rc(rs1.class()));
         self.emit(&MInst::SelectReg {
             rd,
@@ -243,7 +239,7 @@ where
     }
 
     //
-    fn con_shamt(&mut self, ty: Type, shamt: Reg) -> ValueRegs {
+    fn gen_shamt(&mut self, ty: Type, shamt: Reg) -> ValueRegs {
         let shamt = {
             let tmp = self.temp_writable_reg(I64);
             self.emit(&MInst::AluRRImm12 {
@@ -276,11 +272,8 @@ where
     }
 
     fn ifcmp_parameters(&mut self, val: Value) -> Option<(Value, Value, Type)> {
-        let inst = self.value_inst(val);
-        let inst = match inst {
-            Some(x) => x,
-            None => return None,
-        };
+        let inst = self.value_inst(val)?;
+
         let opcode = self.lower_ctx.data(inst).opcode();
         if opcode == crate::ir::Opcode::Ifcmp {
             let a = self.lower_ctx.input_as_value(inst, 0);
@@ -288,9 +281,26 @@ where
             let ty = self.lower_ctx.input_ty(inst, 0);
             Some((a, b, ty))
         } else {
-            unimplemented!("op:{:?}", opcode)
+            None
         }
     }
+
+    fn inst_output_get(&mut self, x: InstOutput, index: u8) -> ValueRegs {
+        x[index as usize]
+    }
+    fn iadd_ifcount_parameter(&mut self, val: Value) -> Option<(Value, Value, Type)> {
+        let inst = self.value_inst(val)?;
+        let opcode = self.lower_ctx.data(inst).opcode();
+        if opcode == crate::ir::Opcode::IaddIfcout {
+            let a = self.lower_ctx.input_as_value(inst, 0);
+            let b = self.lower_ctx.input_as_value(inst, 1);
+            let ty = self.lower_ctx.input_ty(inst, 0);
+            Some((a, b, ty))
+        } else {
+            None
+        }
+    }
+
     fn ffcmp_parameters(&mut self, val: Value) -> Option<(Value, Value, Type)> {
         let inst = self.value_inst(val);
         let inst = match inst {
@@ -347,7 +357,7 @@ where
     fn int_convert_2_float_op(&mut self, from: Type, is_signed: bool, to: Type) -> FpuOPRR {
         FpuOPRR::int_convert_2_float_op(from, is_signed, to)
     }
-    fn con_amode(&mut self, base: Reg, offset: Offset32, ty: Type) -> AMode {
+    fn gen_amode(&mut self, base: Reg, offset: Offset32, ty: Type) -> AMode {
         AMode::RegOffset(base, i64::from(offset), ty)
     }
     fn valid_atomic_transaction(&mut self, ty: Type) -> Option<Type> {
@@ -358,9 +368,6 @@ where
         }
     }
 
-    fn load_gv_addr(&mut self, gv: GlobalValue) -> Reg {
-        unimplemented!()
-    }
     fn load_op(&mut self, ty: Type) -> LoadOP {
         LoadOP::from_type(ty)
     }

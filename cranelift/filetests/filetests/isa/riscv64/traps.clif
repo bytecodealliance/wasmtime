@@ -19,8 +19,9 @@ block0(v0: i64):
 }
 
 ; block0:
-;   addi t2,zero,42
-;   trap_if_eq user0 a0,t2##ty=i64
+;   li t2,42
+;   eq a1,a0,t2##ty=i64
+;   trap_if a1,user0
 ;   ret
 
 function %h() {

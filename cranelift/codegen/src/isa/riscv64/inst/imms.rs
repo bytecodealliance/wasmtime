@@ -147,17 +147,14 @@ impl Inst {
         mut handle_imm: impl FnMut(Option<Imm20>, Option<Imm12>) -> R,
     ) -> Option<R> {
         if let Some(imm12) = Imm12::maybe_from_u64(value) {
-            /*
-                can be load using single imm12.
-            */
+            // can be load using single imm12.
+
             let r = handle_imm(None, Some(imm12));
             return Some(r);
         }
         let value = value as i64;
         if !(value >= Self::imm_min() && value <= Self::imm_max()) {
-            /*
-                not in range, return None.
-            */
+            // not in range, return None.
             return None;
         }
         const MOD_NUM: i64 = 4096;

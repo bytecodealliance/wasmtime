@@ -10,15 +10,17 @@ block0:
   return v0
 }
 
-;   add sp,-8
+;   add sp,-16
+;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ;   add sp,-16
 ; block0:
 ;   load_addr a0,0(nominal_sp)
 ;   add sp,+16
+;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   add sp,+8
+;   add sp,+16
 ;   ret
 
 function %stack_addr_big() -> i64 {
@@ -30,15 +32,17 @@ block0:
   return v0
 }
 
-;   add sp,-8
+;   add sp,-16
+;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ;   add sp,-100016
 ; block0:
 ;   load_addr a0,0(nominal_sp)
 ;   add sp,+100016
+;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   add sp,+8
+;   add sp,+16
 ;   ret
 
 function %stack_load_small() -> i64 {
@@ -49,16 +53,18 @@ block0:
   return v0
 }
 
-;   add sp,-8
+;   add sp,-16
+;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ;   add sp,-16
 ; block0:
-;   load_addr t0,0(nominal_sp)
-;   ld a0,0(t0)
+;   load_addr t2,0(nominal_sp)
+;   ld a0,0(t2)
 ;   add sp,+16
+;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   add sp,+8
+;   add sp,+16
 ;   ret
 
 function %stack_load_big() -> i64 {
@@ -70,16 +76,18 @@ block0:
   return v0
 }
 
-;   add sp,-8
+;   add sp,-16
+;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ;   add sp,-100016
 ; block0:
-;   load_addr t0,0(nominal_sp)
-;   ld a0,0(t0)
+;   load_addr t2,0(nominal_sp)
+;   ld a0,0(t2)
 ;   add sp,+100016
+;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   add sp,+8
+;   add sp,+16
 ;   ret
 
 function %stack_store_small(i64) {
@@ -90,7 +98,8 @@ block0(v0: i64):
   return
 }
 
-;   add sp,-8
+;   add sp,-16
+;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ;   add sp,-16
@@ -98,8 +107,9 @@ block0(v0: i64):
 ;   load_addr t2,0(nominal_sp)
 ;   sd a0,0(t2)
 ;   add sp,+16
+;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   add sp,+8
+;   add sp,+16
 ;   ret
 
 function %stack_store_big(i64) {
@@ -111,7 +121,8 @@ block0(v0: i64):
   return
 }
 
-;   add sp,-8
+;   add sp,-16
+;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ;   add sp,-100016
@@ -119,8 +130,9 @@ block0(v0: i64):
 ;   load_addr t2,0(nominal_sp)
 ;   sd a0,0(t2)
 ;   add sp,+100016
+;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   add sp,+8
+;   add sp,+16
 ;   ret
 
 function %b1_spill_slot(b1) -> b1, i64 {
@@ -274,10 +286,11 @@ block0(v0: b1):
   return v0, v137
 }
 
-;   add sp,-8
+;   add sp,-16
+;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
-;   add sp,-1264
+;   add sp,-1280
 ;   sd s1,0(sp)
 ;   sd s2,8(sp)
 ;   sd s3,16(sp)
@@ -291,148 +304,152 @@ block0(v0: b1):
 ;   sd s11,80(sp)
 ; block0:
 ;   sd a0,1000(nominal_sp)
-;   addi a3,zero,2
-;   addi a6,a3,1
-;   sd a6,1160(nominal_sp)
-;   addi a3,zero,4
-;   addi a7,a3,3
-;   sd a7,1152(nominal_sp)
-;   addi a3,zero,6
-;   addi t3,a3,5
-;   sd t3,1144(nominal_sp)
-;   addi a3,zero,8
-;   addi t4,a3,7
-;   sd t4,1136(nominal_sp)
-;   addi a3,zero,10
-;   addi t5,a3,9
-;   sd t5,1128(nominal_sp)
-;   addi a3,zero,12
-;   addi t0,a3,11
-;   sd t0,1120(nominal_sp)
-;   addi a3,zero,14
-;   addi t1,a3,13
-;   sd t1,1112(nominal_sp)
-;   addi a3,zero,16
-;   addi t2,a3,15
-;   sd t2,1104(nominal_sp)
-;   addi a3,zero,18
-;   addi a1,a3,17
-;   sd a1,1096(nominal_sp)
-;   addi a3,zero,20
-;   addi a2,a3,19
-;   sd a2,1088(nominal_sp)
-;   addi a3,zero,22
-;   addi a3,a3,21
-;   sd a3,1080(nominal_sp)
-;   addi a3,zero,24
-;   addi a4,a3,23
-;   sd a4,1072(nominal_sp)
-;   addi a3,zero,26
-;   addi s8,a3,25
-;   sd s8,1064(nominal_sp)
-;   addi a3,zero,28
-;   addi s9,a3,27
-;   sd s9,1056(nominal_sp)
-;   addi a3,zero,30
-;   addi s10,a3,29
-;   sd s10,1048(nominal_sp)
-;   addi a3,zero,32
-;   addi s11,a3,31
-;   sd s11,1040(nominal_sp)
-;   addi a3,zero,34
-;   addi s1,a3,33
-;   sd s1,1032(nominal_sp)
-;   addi a3,zero,36
-;   addi s2,a3,35
-;   sd s2,1024(nominal_sp)
-;   addi a3,zero,38
-;   addi s3,a3,37
-;   sd s3,1016(nominal_sp)
-;   addi a3,zero,30
-;   addi s4,a3,39
-;   sd s4,1008(nominal_sp)
-;   addi a3,zero,32
-;   addi s4,a3,31
-;   addi a3,zero,34
-;   addi s5,a3,33
-;   addi a3,zero,36
-;   addi s6,a3,35
-;   addi a3,zero,38
-;   addi s7,a3,37
-;   addi a3,zero,30
-;   addi a0,a3,39
-;   addi a3,zero,32
-;   addi a5,a3,31
-;   addi a3,zero,34
-;   addi a6,a3,33
-;   addi a3,zero,36
-;   addi a7,a3,35
-;   addi a3,zero,38
-;   addi t3,a3,37
-;   addi a3,zero,30
-;   addi t4,a3,39
-;   addi a3,zero,32
-;   addi t5,a3,31
-;   addi a3,zero,34
-;   addi t0,a3,33
-;   addi a3,zero,36
-;   addi t1,a3,35
-;   addi a3,zero,38
-;   addi t2,a3,37
-;   ld a1,1160(nominal_sp)
-;   addi a1,a1,39
-;   ld a2,1144(nominal_sp)
-;   ld a3,1152(nominal_sp)
-;   add a2,a3,a2
-;   ld a3,1128(nominal_sp)
-;   ld a4,1136(nominal_sp)
-;   add a3,a4,a3
-;   ld a4,1112(nominal_sp)
-;   ld s3,1120(nominal_sp)
-;   add a4,s3,a4
-;   ld s10,1096(nominal_sp)
-;   ld s8,1104(nominal_sp)
-;   add s8,s8,s10
-;   ld s9,1080(nominal_sp)
-;   ld s2,1088(nominal_sp)
-;   add s9,s2,s9
-;   ld s10,1064(nominal_sp)
-;   ld s11,1072(nominal_sp)
+;   li t0,2
+;   addi a1,t0,1
+;   sd a1,1176(nominal_sp)
+;   li t0,4
+;   addi a2,t0,3
+;   sd a2,1168(nominal_sp)
+;   li t0,6
+;   addi a3,t0,5
+;   sd a3,1160(nominal_sp)
+;   li t0,8
+;   addi a4,t0,7
+;   sd a4,1152(nominal_sp)
+;   li t0,10
+;   addi a5,t0,9
+;   sd a5,1144(nominal_sp)
+;   li t0,12
+;   addi a6,t0,11
+;   sd a6,1136(nominal_sp)
+;   li t0,14
+;   addi a7,t0,13
+;   sd a7,1128(nominal_sp)
+;   li t0,16
+;   addi t3,t0,15
+;   sd t3,1120(nominal_sp)
+;   li t0,18
+;   addi t4,t0,17
+;   sd t4,1112(nominal_sp)
+;   li t0,20
+;   addi t0,t0,19
+;   sd t0,1104(nominal_sp)
+;   li t0,22
+;   addi t1,t0,21
+;   sd t1,1096(nominal_sp)
+;   li t0,24
+;   addi s8,t0,23
+;   sd s8,1088(nominal_sp)
+;   li t0,26
+;   addi s9,t0,25
+;   sd s9,1080(nominal_sp)
+;   li t0,28
+;   addi s10,t0,27
+;   sd s10,1072(nominal_sp)
+;   li t0,30
+;   addi s11,t0,29
+;   sd s11,1064(nominal_sp)
+;   li t0,32
+;   addi s1,t0,31
+;   sd s1,1056(nominal_sp)
+;   li t0,34
+;   addi s2,t0,33
+;   sd s2,1048(nominal_sp)
+;   li t0,36
+;   addi s3,t0,35
+;   sd s3,1040(nominal_sp)
+;   li t0,38
+;   addi s4,t0,37
+;   sd s4,1032(nominal_sp)
+;   li t0,30
+;   addi s5,t0,39
+;   sd s5,1024(nominal_sp)
+;   li t0,32
+;   addi s6,t0,31
+;   sd s6,1016(nominal_sp)
+;   li t0,34
+;   addi s7,t0,33
+;   sd s7,1008(nominal_sp)
+;   li t0,36
+;   addi s7,t0,35
+;   li t0,38
+;   addi a0,t0,37
+;   li t0,30
+;   addi t2,t0,39
+;   li t0,32
+;   addi a1,t0,31
+;   li t0,34
+;   addi a2,t0,33
+;   li t0,36
+;   addi a3,t0,35
+;   li t0,38
+;   addi a4,t0,37
+;   li t0,30
+;   addi a5,t0,39
+;   li t0,32
+;   addi a6,t0,31
+;   li t0,34
+;   addi a7,t0,33
+;   li t0,36
+;   addi t3,t0,35
+;   li t0,38
+;   addi t4,t0,37
+;   ld t0,1176(nominal_sp)
+;   addi t0,t0,39
+;   ld t1,1160(nominal_sp)
+;   ld s4,1168(nominal_sp)
+;   add t1,s4,t1
+;   ld s11,1144(nominal_sp)
+;   ld s9,1152(nominal_sp)
+;   add s8,s9,s11
+;   ld s5,1128(nominal_sp)
+;   ld s3,1136(nominal_sp)
+;   add s9,s3,s5
+;   ld s10,1112(nominal_sp)
+;   ld s11,1120(nominal_sp)
 ;   add s10,s11,s10
-;   ld s3,1048(nominal_sp)
-;   ld s1,1056(nominal_sp)
-;   add s11,s1,s3
-;   ld s1,1032(nominal_sp)
-;   ld s2,1040(nominal_sp)
+;   ld s4,1096(nominal_sp)
+;   ld s2,1104(nominal_sp)
+;   add s11,s2,s4
+;   ld s1,1080(nominal_sp)
+;   ld s2,1088(nominal_sp)
 ;   add s1,s2,s1
-;   ld s3,1016(nominal_sp)
-;   ld s2,1024(nominal_sp)
+;   ld s3,1064(nominal_sp)
+;   ld s2,1072(nominal_sp)
 ;   add s2,s2,s3
-;   ld s3,1008(nominal_sp)
-;   add s3,s3,s4
-;   add s4,s5,s6
-;   add a0,s7,a0
-;   add a5,a5,a6
-;   add a6,a7,t3
-;   add a7,t4,t5
-;   add t3,t0,t1
-;   add t4,t2,a1
-;   add t5,a2,a3
-;   add a4,a4,s8
-;   add t0,s9,s10
-;   add t1,s11,s1
-;   add t2,s2,s3
-;   add a0,s4,a0
-;   add a5,a5,a6
-;   add a6,a7,t3
-;   add a7,t4,t5
-;   add a4,a4,t0
-;   add t3,t1,t2
-;   add a5,a0,a5
-;   add a6,a6,a7
-;   add a4,a4,t3
-;   add a5,a5,a6
-;   add a1,a4,a5
+;   ld s3,1048(nominal_sp)
+;   ld s6,1056(nominal_sp)
+;   add s3,s6,s3
+;   ld s4,1032(nominal_sp)
+;   ld s5,1040(nominal_sp)
+;   add s4,s5,s4
+;   ld s6,1016(nominal_sp)
+;   ld s5,1024(nominal_sp)
+;   add s5,s5,s6
+;   ld s6,1008(nominal_sp)
+;   add s7,s6,s7
+;   add t2,a0,t2
+;   add a0,a1,a2
+;   add a1,a3,a4
+;   add a2,a5,a6
+;   add a3,a7,t3
+;   add a4,t4,t0
+;   add t1,t1,s8
+;   add a5,s9,s10
+;   add a6,s11,s1
+;   add a7,s2,s3
+;   add t3,s4,s5
+;   add t2,s7,t2
+;   add a0,a0,a1
+;   add a1,a2,a3
+;   add t1,a4,t1
+;   add a2,a5,a6
+;   add a3,a7,t3
+;   add t2,t2,a0
+;   add t1,a1,t1
+;   add a0,a2,a3
+;   add t1,t2,t1
+;   add a1,a0,t1
 ;   ld a0,1000(nominal_sp)
 ;   ld s1,0(sp)
 ;   ld s2,8(sp)
@@ -445,9 +462,10 @@ block0(v0: b1):
 ;   ld s9,64(sp)
 ;   ld s10,72(sp)
 ;   ld s11,80(sp)
-;   add sp,+1264
+;   add sp,+1280
+;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   add sp,+8
+;   add sp,+16
 ;   ret
 
 function %i128_stack_store(i128) {
@@ -458,7 +476,8 @@ block0(v0: i128):
   return
 }
 
-;   add sp,-8
+;   add sp,-16
+;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ;   add sp,-16
@@ -467,8 +486,9 @@ block0(v0: i128):
 ;   sd a0,0(a2)
 ;   sd a1,8(a2)
 ;   add sp,+16
+;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   add sp,+8
+;   add sp,+16
 ;   ret
 
 function %i128_stack_store_inst_offset(i128) {
@@ -480,7 +500,8 @@ block0(v0: i128):
   return
 }
 
-;   add sp,-8
+;   add sp,-16
+;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ;   add sp,-32
@@ -489,8 +510,9 @@ block0(v0: i128):
 ;   sd a0,0(a2)
 ;   sd a1,8(a2)
 ;   add sp,+32
+;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   add sp,+8
+;   add sp,+16
 ;   ret
 
 function %i128_stack_store_big(i128) {
@@ -502,7 +524,8 @@ block0(v0: i128):
   return
 }
 
-;   add sp,-8
+;   add sp,-16
+;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ;   add sp,-100016
@@ -511,8 +534,9 @@ block0(v0: i128):
 ;   sd a0,0(a2)
 ;   sd a1,8(a2)
 ;   add sp,+100016
+;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   add sp,+8
+;   add sp,+16
 ;   ret
 
 function %i128_stack_load() -> i128 {
@@ -523,17 +547,19 @@ block0:
   return v0
 }
 
-;   add sp,-8
+;   add sp,-16
+;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ;   add sp,-16
 ; block0:
-;   load_addr t0,0(nominal_sp)
-;   ld a0,0(t0)
-;   ld a1,8(t0)
+;   load_addr a1,0(nominal_sp)
+;   ld a0,0(a1)
+;   ld a1,8(a1)
 ;   add sp,+16
+;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   add sp,+8
+;   add sp,+16
 ;   ret
 
 function %i128_stack_load_inst_offset() -> i128 {
@@ -545,17 +571,19 @@ block0:
   return v0
 }
 
-;   add sp,-8
+;   add sp,-16
+;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ;   add sp,-32
 ; block0:
-;   load_addr t0,32(nominal_sp)
-;   ld a0,0(t0)
-;   ld a1,8(t0)
+;   load_addr a1,32(nominal_sp)
+;   ld a0,0(a1)
+;   ld a1,8(a1)
 ;   add sp,+32
+;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   add sp,+8
+;   add sp,+16
 ;   ret
 
 function %i128_stack_load_big() -> i128 {
@@ -567,16 +595,18 @@ block0:
   return v0
 }
 
-;   add sp,-8
+;   add sp,-16
+;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ;   add sp,-100016
 ; block0:
-;   load_addr t0,0(nominal_sp)
-;   ld a0,0(t0)
-;   ld a1,8(t0)
+;   load_addr a1,0(nominal_sp)
+;   ld a0,0(a1)
+;   ld a1,8(a1)
 ;   add sp,+100016
+;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   add sp,+8
+;   add sp,+16
 ;   ret
 

@@ -37,7 +37,7 @@ pub fn a7() -> Reg {
 
 #[inline(always)]
 pub fn param_or_rets_xregs(args_or_rets: ArgsOrRets) -> Vec<Writable<Reg>> {
-    let mut v = vec![];
+    let mut v = Vec::with_capacity(8);
     let a0 = 10;
     let a_last = if args_or_rets == ArgsOrRets::Args {
         17
@@ -79,17 +79,14 @@ pub fn writable_fa1() -> Writable<Reg> {
 pub fn fa1() -> Reg {
     f_reg(11)
 }
-// #[inline(always)]
-// pub fn fa2() -> Reg {
-//     f_reg(12)
-// }
+
 #[inline(always)]
 pub fn fa7() -> Reg {
     f_reg(17)
 }
 #[inline(always)]
 pub fn param_or_rets_fregs(args_or_rets: ArgsOrRets) -> Vec<Writable<Reg>> {
-    let mut v = vec![];
+    let mut v = Vec::with_capacity(8);
     let fa0 = 10;
     let fa_last = if args_or_rets == ArgsOrRets::Args {
         17
@@ -103,13 +100,13 @@ pub fn param_or_rets_fregs(args_or_rets: ArgsOrRets) -> Vec<Writable<Reg>> {
 }
 
 /// Get a reference to the zero-register.
-/// #[inline(always)]
+#[inline]
 pub fn zero_reg() -> Reg {
     x_reg(0)
 }
 
 /// Get a writable reference to the zero-register (this discards a result).
-/// #[inline(always)]
+#[inline]
 pub fn writable_zero_reg() -> Writable<Reg> {
     Writable::from_reg(zero_reg())
 }
@@ -163,9 +160,17 @@ pub fn writable_spilltmp_reg() -> Writable<Reg> {
     Writable::from_reg(spilltmp_reg())
 }
 
-/*
+#[inline(always)]
+pub fn spilltmp_reg2() -> Reg {
+    x_reg(30)
+}
 
-*/
+/// Get a writable reference to the spilltmp reg.
+#[inline(always)]
+pub fn writable_spilltmp_reg2() -> Writable<Reg> {
+    Writable::from_reg(spilltmp_reg2())
+}
+
 pub fn crate_reg_eviroment(_flags: &settings::Flags) -> MachineEnv {
     let preferred_regs_by_class: [Vec<PReg>; 2] = {
         let mut x_register: Vec<PReg> = vec![];
@@ -176,7 +181,7 @@ pub fn crate_reg_eviroment(_flags: &settings::Flags) -> MachineEnv {
         for i in 10..=17 {
             x_register.push(PReg::new(i, RegClass::Int));
         }
-        for i in 28..=30 {
+        for i in 28..=29 {
             x_register.push(PReg::new(i, RegClass::Int));
         }
 

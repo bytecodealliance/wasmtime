@@ -9,7 +9,7 @@ block0:
 }
 
 ; block0:
-;   addi a0,zero,-1
+;   li a0,-1
 ;   ret
 
 function %f() -> b16 {
@@ -19,7 +19,7 @@ block0:
 }
 
 ; block0:
-;   addi a0,zero,0
+;   li a0,0
 ;   ret
 
 function %f() -> i64 {
@@ -29,7 +29,7 @@ block0:
 }
 
 ; block0:
-;   addi a0,zero,0
+;   li a0,0
 ;   ret
 
 function %f() -> i64 {
@@ -89,7 +89,7 @@ block0:
 }
 
 ; block0:
-;   addi a0,zero,-1
+;   li a0,-1
 ;   ret
 
 function %f() -> i64 {
@@ -187,7 +187,7 @@ block0:
 }
 
 ; block0:
-;   addi a0,zero,-1
+;   li a0,-1
 ;   ret
 
 function %f() -> i32 {
@@ -223,7 +223,7 @@ block0:
 }
 
 ; block0:
-;   addi a0,zero,-9
+;   li a0,-9
 ;   ret
 
 function %f() -> f64 {
@@ -283,7 +283,7 @@ block0:
 }
 
 ; block0:
-;   addi t6,zero,0
+;   li t6,0
 ;   fmv.d.x fa0,t6
 ;   ret
 
@@ -294,7 +294,7 @@ block0:
 }
 
 ; block0:
-;   addi t6,zero,0
+;   li t6,0
 ;   fmv.w.x fa0,t6
 ;   ret
 

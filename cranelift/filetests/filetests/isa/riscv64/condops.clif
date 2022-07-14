@@ -11,8 +11,11 @@ block0(v0: i8, v1: i64, v2: i64):
 }
 
 ; block0:
-;   addi a5,zero,42
-;   selectif a0,a1,a2##a0 eq a5 ty=i8
+;   uext.b a5,a0
+;   li a7,42
+;   uext.b t4,a7
+;   eq t1,a5,t4##ty=i8
+;   selectif a0,a1,a2##test=t1
 ;   ret
 
 function %g(i8) -> b1 {
@@ -24,8 +27,10 @@ block0(v0: i8):
 }
 
 ; block0:
-;   addi a1,zero,42
-;   eq a0,a0,a1##ty=i8
+;   uext.b a0,a0
+;   li a2,42
+;   uext.b a4,a2
+;   eq a0,a0,a4##ty=i8
 ;   ret
 
 function %h(i8, i8, i8) -> i8 {
@@ -35,10 +40,10 @@ block0(v0: i8, v1: i8, v2: i8):
 }
 
 ; block0:
-;   and a5,a0,a1
-;   xori a7,a0,4095
-;   and a7,a7,a2
-;   or a0,a5,a7
+;   and a4,a0,a1
+;   not a6,a0
+;   and t3,a6,a2
+;   or a0,a4,t3
 ;   ret
 
 function %i(b1, i8, i8) -> i8 {
@@ -60,9 +65,11 @@ block0(v0: i32, v1: i8, v2: i8):
 }
 
 ; block0:
-;   addi a6,zero,42
-;   eq a4,a0,a6##ty=i32
-;   select_i8 a0,a1,a2##condition=a4
+;   uext.w a5,a0
+;   li a7,42
+;   uext.w t4,a7
+;   eq t1,a5,t4##ty=i32
+;   select_i8 a0,a1,a2##condition=t1
 ;   ret
 
 function %i128_select(b1, i128, i128) -> i128 {

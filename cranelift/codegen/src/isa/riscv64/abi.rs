@@ -24,7 +24,7 @@ use alloc::vec;
 use alloc::vec::Vec;
 use regalloc2::PRegSet;
 
-use regs::{f_reg, x_reg};
+use regs::x_reg;
 
 use smallvec::{smallvec, SmallVec};
 
@@ -73,11 +73,9 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         // stack space
         let mut next_stack: u64 = 0;
         let mut abi_args = vec![];
-        /*
-            when run out register , we should use stack space for parameter,
-            we should deal with paramter backwards.
-            but we need result to be the same order with "params".
-        */
+        // when run out register , we should use stack space for parameter,
+        // we should deal with paramter backwards.
+        // but we need result to be the same order with "params".
         let mut abi_args_for_stack = vec![];
         let mut step_last_parameter = {
             let mut params_last = if params.len() > 0 {
@@ -109,6 +107,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                 | &ir::ArgumentPurpose::Normal
                 | &ir::ArgumentPurpose::StructReturn
                 | &ir::ArgumentPurpose::FramePointer
+                | &ir::ArgumentPurpose::StackLimit
                 | &ir::ArgumentPurpose::StructArgument(_) => {}
                 _ => panic!(
                     "Unsupported argument purpose {:?} in signature: {:?}",
@@ -269,9 +268,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
     }
 
     fn fp_to_arg_offset(_call_conv: isa::CallConv, _flags: &settings::Flags) -> i64 {
-        /*
-            just previous fp saved on stack.
-        */
+        // just previous fp saved on stack.
         16
     }
 
@@ -316,18 +313,30 @@ impl ABIMachineSpec for Riscv64MachineDeps {
     }
 
     fn get_stacklimit_reg() -> Reg {
-        spilltmp_reg()
+        x_reg(5)
     }
 
     fn gen_add_imm(into_reg: Writable<Reg>, from_reg: Reg, imm: u32) -> SmallInstVec<Inst> {
-        assert!(into_reg.to_reg() != from_reg);
-        let mut insts = Inst::load_constant_u32(into_reg, imm as u64);
-        insts.push(Inst::AluRRR {
-            alu_op: AluOPRRR::Add,
-            rd: into_reg,
-            rs1: into_reg.to_reg(),
-            rs2: from_reg,
-        });
+        let mut insts = SmallInstVec::new();
+        if let Some(imm12) = Imm12::maybe_from_u64(imm as u64) {
+            insts.push(Inst::AluRRImm12 {
+                alu_op: AluOPRRI::Andi,
+                rd: into_reg,
+                rs: from_reg,
+                imm12,
+            });
+        } else {
+            insts.extend(Inst::load_constant_u32(
+                writable_spilltmp_reg2(),
+                imm as u64,
+            ));
+            insts.push(Inst::AluRRR {
+                alu_op: AluOPRRR::Add,
+                rd: into_reg,
+                rs1: spilltmp_reg2(),
+                rs2: from_reg,
+            });
+        }
         insts
     }
 
@@ -438,7 +447,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
     }
 
     fn gen_probestack(_: u32) -> SmallInstVec<Self::I> {
-        // TODO: I don't know this means.
+        //
         smallvec![]
     }
 
@@ -678,7 +687,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
     fn get_clobbered_callee_saves(
         call_conv: isa::CallConv,
         _flags: &settings::Flags,
-        sig: &Signature,
+        _sig: &Signature,
         regs: &[Writable<RealReg>],
     ) -> Vec<Writable<RealReg>> {
         let mut regs: Vec<Writable<RealReg>> = regs

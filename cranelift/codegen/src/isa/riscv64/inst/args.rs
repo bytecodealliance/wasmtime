@@ -157,9 +157,7 @@ impl IntegerCompare {
         0b1100011
     }
 
-    /*
-       funct3 and if need inverse the register
-    */
+    // funct3 and if need inverse the register
     pub(crate) fn funct3(&self) -> (BranchFunct3, bool) {
         match self.kind {
             IntCC::Equal => (BranchFunct3::Eq, false),
@@ -288,9 +286,7 @@ impl FpuOPRR {
         }
     }
 
-    /*
-        move from x register to float register.
-    */
+    // move from x register to float register.
     pub(crate) const fn move_x_to_f_op(ty: Type) -> Self {
         match ty {
             F32 => Self::FmvWX,
@@ -298,9 +294,8 @@ impl FpuOPRR {
             _ => unreachable!(),
         }
     }
-    /*
-        move from f register to x register.
-    */
+
+    // move from f register to x register.
     pub(crate) const fn move_f_to_x_op(ty: Type) -> Self {
         match ty {
             F32 => Self::FmvXW,
@@ -922,13 +917,17 @@ impl AluOPRRR {
             AluOPRRR::Xnor => 0b0100000,
         }
     }
+
+    pub(crate) fn reverse_rs(self) -> bool {
+        // special case
+        // sgt and sgtu is not defined in isa.
+        // emit should reserver rs1 and rs2.
+        self == AluOPRRR::Sgt || self == AluOPRRR::Sgtu
+    }
 }
 
 impl AluOPRRI {
-    /*
-        option funct6.
-    */
-    pub(crate) fn option_funct6(self, imm12: Imm12) -> Option<u32> {
+    pub(crate) fn option_funct6(self) -> Option<u32> {
         let x: Option<u32> = match self {
             Self::Slli => Some(0b00_0000),
             Self::Srli => Some(0b00_0000),
@@ -941,19 +940,10 @@ impl AluOPRRI {
             Self::SlliUw => Some(0b000010),
             _ => None,
         };
-        // we can perform some check on imm12
-        // like Slli,imm12 should be in [0,63]
-        if x.is_some() {
-            assert!(imm12.as_u32() <= 63);
-        }
         x
     }
 
-    /*
-        Slliw .. etc operation on 32-bit value , only need 5-bite shift size.
-        so we have funct7.
-    */
-    pub(crate) fn option_funct7(self, imm12: Imm12) -> Option<u32> {
+    pub(crate) fn option_funct7(self) -> Option<u32> {
         let x = match self {
             Self::Slliw => Some(0b000_0000),
             Self::SrliW => Some(0b000_0000),
@@ -961,20 +951,16 @@ impl AluOPRRI {
             Self::Roriw => Some(0b0110000),
             _ => None,
         };
-        if x.is_some() {
-            assert!(imm12.as_u32() <= 31);
-        }
         x
     }
 
     pub(crate) fn imm12(self, imm12: Imm12) -> u32 {
         let x = imm12.as_u32();
-        if let Some(func) = self.option_funct6(imm12) {
-            func << 6 | x
-        } else if let Some(func) = self.option_funct7(imm12) {
-            func << 5 | x
+        if let Some(func) = self.option_funct6() {
+            func << 6 | (x & 0b11_1111)
+        } else if let Some(func) = self.option_funct7() {
+            func << 5 | (x & 0b1_1111)
         } else if let Some(func) = self.option_funct12() {
-            assert!(x == 0);
             func
         } else {
             x
@@ -1118,14 +1104,8 @@ impl Default for FRM {
     }
 }
 
-/*
-    float rounding mode.
-*/
+/// float rounding mode.
 impl FRM {
-    pub(crate) fn is_default(x: Option<FRM>) -> bool {
-        x.unwrap_or_default() == Self::Fcsr
-    }
-
     pub(crate) fn to_static_str(self) -> &'static str {
         match self {
             FRM::RNE => "rne",
@@ -1293,16 +1273,13 @@ impl FClassResult {
     }
 }
 
-/*
-    Condition code for comparing floating point numbers.
+/// Condition code for comparing floating point numbers.
+/// This condition code is used by the fcmp instruction to compare floating point values. Two IEEE floating point values relate in exactly one of four ways:
+/// UN - unordered when either value is NaN.
+/// EQ - equal numerical value.
+/// LT - x is less than y.
+/// GT - x is greater than y.
 
-    This condition code is used by the fcmp instruction to compare floating point values. Two IEEE floating point values relate in exactly one of four ways:
-
-    UN - unordered when either value is NaN.
-    EQ - equal numerical value.
-    LT - x is less than y.
-    GT - x is greater than y.
-*/
 #[derive(Clone, Copy)]
 pub struct FloatCCArgs(pub(crate) u8);
 
@@ -1318,9 +1295,7 @@ impl FloatCCArgs {
     // not equal
     pub(crate) const NE: u8 = 1 << 4;
 
-    /*
-        mask bit for floatcc
-    */
+    /// mask bit for floatcc
     pub(crate) fn from_floatcc<T: Into<FloatCC>>(t: T) -> Self {
         let x = match t.into() {
             FloatCC::Ordered => Self::EQ | Self::LT | Self::GT,
@@ -1677,13 +1652,10 @@ impl Vcsr {
 
 static mut V_LEN: usize = 0;
 
-/*
-    V_LEN is not contant accroding to riscv document.
+/// V_LEN is not contant accroding to riscv document.
 
-    Each hart supporting a vector extension de nes two parameters: 1. The maximum size in bits of a vector element that any operation can produce or consume, ELEN ≥ 8, which must be a power of 2. 2. The number of bits in a single vector register, VLEN ≥ ELEN, which must be a power of 2, and must be no greater than 216. Standard vector extensions (Section Standard Vector Extensions) and architecture pro les may set further constraints on ELEN and VLEN.
-
-    it is ugly, but I need this global var to pass the paramter.
-*/
+/// Each hart supporting a vector extension de nes two parameters: 1. The maximum size in bits of a vector element that any operation can produce or consume, ELEN ≥ 8, which must be a power of 2. 2. The number of bits in a single vector register, VLEN ≥ ELEN, which must be a power of 2, and must be no greater than 216. Standard vector extensions (Section Standard Vector Extensions) and architecture pro les may set further constraints on ELEN and VLEN.
+/// it is ugly, but I need this global var to pass the paramter.
 
 #[inline]
 pub(crate) fn set_x_len(l: usize) {

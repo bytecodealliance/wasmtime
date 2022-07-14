@@ -1999,7 +1999,6 @@ fn test_riscv64_binemit() {
         Inst::Fence {
             pred: 1,
             succ: 1 << 1,
-            fm: FenceFm::None,
         },
         "fence w,r",
         0x120000f,
@@ -2057,7 +2056,7 @@ fn test_riscv64_binemit() {
     let (flags, isa_flags) = make_test_flags();
     let emit_info = EmitInfo::new(flags, isa_flags);
 
-    for (index, ref mut unit) in insns.into_iter().enumerate() {
+    for unit in insns.iter() {
         println!("Riscv64: {:?}, {}", unit.inst, unit.assembly);
         // Check the printed text is as expected.
         let actual_printing = unit
@@ -2205,48 +2204,16 @@ fn xxx() {
 fn riscv64_worst_case_instruction_size() {
     let (flags, isa_flags) = make_test_flags();
     let emit_info = EmitInfo::new(flags, isa_flags);
-    /*
-        there are all candidates potential generate a lot of bytes.
-    */
+
+    //there are all candidates potential generate a lot of bytes.
     let mut candidates: Vec<MInst> = vec![];
-    /*
-        a load with large offset need more registers.
-        load will push register and pop registers.
-    */
-    candidates.push(Inst::Load {
-        rd: writable_zero_reg(),
-        op: LoadOP::Ld,
-        flags: MemFlags::new(),
-        from: AMode::SPOffset(4096 * 100, I64),
-    });
-    /*
-       todo:: current now this will panic.
-    */
-    // candidates.push(Inst::Call {
-    //     info: Box::new(CallInfo {
-    //         dest: ExternalName::LibCall(LibCall::IshlI64),
-    //         uses: vec![],
-    //         defs: vec![],
-    //         opcode: crate::ir::Opcode::Call,
-    //         caller_callconv: crate::isa::CallConv::SystemV,
-    //         callee_callconv: crate::isa::CallConv::SystemV,
-    //     }),
-    // });
-    //
+
     candidates.push(Inst::Fcmp {
         rd: writable_a0(),
         cc: FloatCC::UnorderedOrLessThanOrEqual,
         ty: F64,
         rs1: fa1(),
         rs2: fa0(),
-    });
-
-    candidates.push(Inst::Select {
-        dst: vec![writable_a0(), writable_a1()],
-        ty: I128,
-        conditon: a0(),
-        x: ValueRegs::two(x_reg(1), x_reg(2)),
-        y: ValueRegs::two(x_reg(3), x_reg(4)),
     });
 
     // brtable max size is base one how many "targets" it's has.
@@ -2268,15 +2235,12 @@ fn riscv64_worst_case_instruction_size() {
         y: ValueRegs::two(x_reg(3), x_reg(4)),
     });
 
-    candidates.push(Inst::SelectReg {
+    candidates.push(Inst::FcvtToIntSat {
         rd: writable_a0(),
-        rs1: a2(),
-        rs2: a7(),
-        condition: IntegerCompare {
-            kind: IntCC::Equal,
-            rs1: x_reg(5),
-            rs2: x_reg(6),
-        },
+        rs: fa0(),
+        is_signed: true,
+        in_type: F64,
+        out_type: I64,
     });
 
     candidates.push(Inst::FcvtToIntSat {
@@ -2285,6 +2249,24 @@ fn riscv64_worst_case_instruction_size() {
         is_signed: true,
         in_type: F64,
         out_type: I64,
+    });
+
+    candidates.push(Inst::FloatRound {
+        op: FloatRoundOP::Trunc,
+        int_tmp: writable_a0(),
+        f_tmp: writable_a0(),
+        rd: writable_fa0(),
+        rs: fa0(),
+        ty: F64,
+    });
+
+    candidates.push(Inst::FloatSelect {
+        op: FloatSelectOP::Max,
+        rd: writable_fa0(),
+        tmp: writable_a0(),
+        rs1: fa0(),
+        rs2: fa0(),
+        ty: F64,
     });
 
     let mut max: (u32, MInst) = (0, Inst::Nop0);
@@ -2300,5 +2282,5 @@ fn riscv64_worst_case_instruction_size() {
         println!("insn:{:?}  length: {}", i, length);
     }
     println!("caculate max size is {} , inst is {:?}", max.0, max.1);
-    assert_eq!(max.0, Inst::worst_case_size());
+    assert!(max.0 <= Inst::worst_case_size());
 }

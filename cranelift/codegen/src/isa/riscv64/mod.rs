@@ -100,7 +100,7 @@ impl TargetIsa for Riscv64Backend {
     fn name(&self) -> &'static str {
         "riscv64"
     }
-    fn dynamic_vector_bytes(&self, dynamic_ty: ir::Type) -> u32 {
+    fn dynamic_vector_bytes(&self, _dynamic_ty: ir::Type) -> u32 {
         unimplemented!();
     }
 

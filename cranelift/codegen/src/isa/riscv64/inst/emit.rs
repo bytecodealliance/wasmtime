@@ -147,9 +147,7 @@ impl Inst {
         insts
     }
 
-    /*
-        inverse all bit
-    */
+    ///  inverse all bit
     pub(crate) fn construct_bit_not(rd: Writable<Reg>, rs: Reg) -> Inst {
         Inst::AluRRImm12 {
             alu_op: AluOPRRI::Xori,
@@ -254,7 +252,7 @@ impl Inst {
                 frm: None,
                 alu_op: le_op,
                 rd: tmp,
-                rs1: y, /*  x and y order reversed. */
+                rs1: y, //  x and y order reversed.
                 rs2: x,
             });
             insts.push(Inst::CondBr {
@@ -352,7 +350,7 @@ impl Inst {
                 frm: None,
                 alu_op: lt_op,
                 rd: tmp,
-                rs1: y, /* x and y order reversed. */
+                rs1: y, // x and y order reversed.
                 rs2: x,
             });
             insts.push(Inst::CondBr {
@@ -414,18 +412,14 @@ impl Inst {
         };
         match cc {
             IntCC::Equal => {
-                /*
-                    if high part not equal,
-                    then we can go to not_taken otherwise fallthrough.
-                */
+                // if high part not equal,
+                // then we can go to not_taken otherwise fallthrough.
                 insts.push(Inst::CondBr {
                     taken: not_taken,
-                    not_taken: BranchTarget::zero(), /*  no branch  */
+                    not_taken: BranchTarget::zero(),
                     kind: high(IntCC::NotEqual),
                 });
-                /*
-                    the rest part.
-                */
+                // the rest part.
                 insts.push(Inst::CondBr {
                     taken,
                     not_taken,
@@ -434,14 +428,12 @@ impl Inst {
             }
 
             IntCC::NotEqual => {
-                /*
-                    if the high part not equal ,
-                    we know the whole must be not equal,
-                    we can goto the taken part , otherwise fallthrought.
-                */
+                // if the high part not equal ,
+                // we know the whole must be not equal,
+                // we can goto the taken part , otherwise fallthrought.
                 insts.push(Inst::CondBr {
                     taken,
-                    not_taken: BranchTarget::zero(), /*  no branch  */
+                    not_taken: BranchTarget::zero(), //  no branch
                     kind: high(IntCC::NotEqual),
                 });
 
@@ -482,9 +474,7 @@ impl Inst {
         insts
     }
 
-    /*
-        check if float is unordered.
-    */
+    // check if float is unordered.
     pub(crate) fn lower_float_unordered(
         tmp: Writable<Reg>,
         ty: Type,
@@ -580,17 +570,14 @@ impl MachInstEmit for Inst {
                 x.emit(&[], sink, emit_info, state)
             }
             &Inst::RawData { ref data } => {
-                /*
-                    emit_island if need, right now data is not very long.
-                */
+                // emit_island if need, right now data is not very long.
+
                 let length = data.len() as CodeOffset;
                 if sink.island_needed(length) {
                     sink.emit_island(length);
                 }
                 sink.put_data(&data[..]);
-                /*
-                    safe to disable code length check.
-                */
+                // safe to disable code length check.
                 start_off = sink.cur_offset();
             }
             &Inst::Lui { rd, ref imm } => {
@@ -669,11 +656,7 @@ impl MachInstEmit for Inst {
                 let rs1 = allocs.next(rs1);
                 let rs2 = allocs.next(rs2);
                 let rd = allocs.next_writable(rd);
-
-                if alu_op == AluOPRRR::Sgt || alu_op == AluOPRRR::Sgtu {
-                    // special case
-                    // sgt and sgtu is not defined in isa.
-                    // emit should reserver rs1 and rs2.
+                if alu_op.reverse_rs() {
                     let x: u32 = alu_op.op_code()
                         | reg_to_gpr_num(rd.to_reg()) << 7
                         | (alu_op.funct3()) << 12
@@ -795,10 +778,8 @@ impl MachInstEmit for Inst {
                     }
 
                     ReferenceCheckOP::IsInvalid => {
-                        /*
-                            todo:: right now just check if it is null
-                            null is a valid reference??????
-                        */
+                        // todo:: right now just check if it is null
+                        // null is a valid reference??????
                         insts.push(Inst::CondBr {
                             taken: BranchTarget::ResolvedOffset(Inst::INSTRUCTION_SIZE * 3),
                             not_taken: BranchTarget::zero(),
@@ -978,9 +959,7 @@ impl MachInstEmit for Inst {
                             sink.put_data(&code[..])
                         } else {
                             let mut code = kind.emit().to_le_bytes();
-                            /*
-                                jump over the condbr , 4 bytes.
-                            */
+                            // jump over the condbr , 4 bytes.
                             LabelUse::B12.patch_raw_offset(&mut code[..], 4);
                             sink.put_data(&code[..]);
                             Inst::construct_auipc_and_jalr(writable_spilltmp_reg(), offset as i64)
@@ -1030,36 +1009,22 @@ impl MachInstEmit for Inst {
                 let index = allocs.next(index);
                 let tmp1 = allocs.next_writable(tmp1);
                 let mut insts = SmallInstVec::new();
-                {
-                    /*
-                        if index not match all targets,
-                        goto the default.
-                    */
-                    // index < 0
-                    insts.push(Inst::CondBr {
-                        taken: default_,
-                        not_taken: BranchTarget::zero(),
-                        kind: IntegerCompare {
-                            kind: IntCC::SignedLessThan,
-                            rs1: index,
-                            rs2: zero_reg(),
-                        },
-                    });
-                    //index >= targets.len()
-                    insts.extend(Inst::load_constant_u64(tmp1, targets.len() as u64));
-                    insts.push(Inst::CondBr {
-                        taken: default_,
-                        not_taken: BranchTarget::zero(),
-                        kind: IntegerCompare {
-                            kind: IntCC::UnsignedGreaterThanOrEqual,
-                            rs1: index,
-                            rs2: tmp1.to_reg(),
-                        },
-                    });
-                }
+
+                //index >= targets.len()
+                insts.extend(Inst::load_constant_u64(tmp1, targets.len() as u64));
+                insts.push(Inst::CondBr {
+                    taken: default_,
+                    not_taken: BranchTarget::zero(),
+                    kind: IntegerCompare {
+                        kind: IntCC::UnsignedGreaterThanOrEqual,
+                        rs1: index,
+                        rs2: tmp1.to_reg(),
+                    },
+                });
+
                 {
                     let x = Inst::construct_auipc_and_jalr(
-                        tmp1, 16, /*  for auipc slli add and jalr.   */
+                        tmp1, 16, //  for auipc slli add and jalr.
                     );
                     insts.push(x[0].clone());
                     // t *= 8;
@@ -1079,9 +1044,7 @@ impl MachInstEmit for Inst {
                     // finally goto jumps
                     insts.push(x[1].clone());
                 }
-                /*
-                    here is all the jumps.
-                */
+                // here is all the jumps.
                 let mut need_label_use = vec![];
                 for t in targets {
                     need_label_use.push((insts.len(), t.clone()));
@@ -1137,14 +1100,13 @@ impl MachInstEmit for Inst {
 
                 sink.put4(x);
             }
-            &Inst::Fence { pred, succ, fm } => {
+            &Inst::Fence { pred, succ } => {
                 let x = 0b0001111
                     | 0b00000 << 7
                     | 0b000 << 12
                     | 0b00000 << 15
                     | (succ as u32) << 20
-                    | (pred as u32) << 24
-                    | fm.as_u32() << 28;
+                    | (pred as u32) << 24;
 
                 sink.put4(x);
             }
@@ -1324,18 +1286,18 @@ impl MachInstEmit for Inst {
                 let v = allocs.next(v);
                 let t0 = allocs.next_writable(t0);
                 let dst = allocs.next_writable(dst);
-                /*
-                    # addr holds address of memory location
-                    # e holds expected value
-                    # v holds desired value
-                    # dst holds return value
-                cas:
-                    lr.w dst, (addr)       # Load original value.
-                    bne dst, e, fail       # Doesn’t match, so fail.
-                    sc.w t0, v, (addr)     # Try to update.
-                    bnez t0 , cas          # if store not ok,retry.
-                fail:
-                                           */
+
+                //     # addr holds address of memory location
+                //     # e holds expected value
+                //     # v holds desired value
+                //     # dst holds return value
+                // cas:
+                //     lr.w dst, (addr)       # Load original value.
+                //     bne dst, e, fail       # Doesn’t match, so fail.
+                //     sc.w t0, v, (addr)     # Try to update.
+                //     bnez t0 , cas          # if store not ok,retry.
+                // fail:
+
                 let fail_label = sink.get_label();
                 let cas_lebel = sink.get_label();
                 sink.bind_label(cas_lebel);
@@ -1613,12 +1575,17 @@ impl MachInstEmit for Inst {
                     rd: rd,
                     op: LoadOP::Ld,
                     flags: MemFlags::trusted(),
-                    from: AMode::RegOffset(rd.to_reg(), 12 /* auipc load and jal */, I64),
+                    from: AMode::RegOffset(
+                        rd.to_reg(),
+                        12, // auipc load and jal.
+                        I64,
+                    ),
                 }
                 .emit(&[], sink, emit_info, state);
                 // jump over.
                 Inst::Jal {
-                    dest: BranchTarget::offset(12 /* jal and abs8 size  */),
+                    // jal and abs8 size for 12.
+                    dest: BranchTarget::offset(12),
                 }
                 .emit(&[], sink, emit_info, state);
 
@@ -1713,14 +1680,12 @@ impl MachInstEmit for Inst {
                 if let Some(s) = state.take_stack_map() {
                     sink.add_stack_map(StackMapExtent::UpcomingBytes(4), s);
                 }
-                /*
-                    https://github.com/riscv/riscv-isa-manual/issues/850
-                    all zero will cause invalid opcode.
-                */
+                // https://github.com/riscv/riscv-isa-manual/issues/850
+                // all zero will cause invalid opcode.
                 sink.put4(0);
             }
             &Inst::SelectIf {
-                if_spectre_guard: _if_spectre_guard, /* _if_spectre_guard not use because it is used to not be removed by optimization pass and some other staff. */
+                if_spectre_guard: _if_spectre_guard, // _if_spectre_guard not use because it is used to not be removed by optimization pass and some other staff.
                 ref rd,
                 test,
                 ref x,
@@ -1766,7 +1731,6 @@ impl MachInstEmit for Inst {
                 let rd = allocs.next_writable(rd);
                 // emit the fence.
                 Inst::Fence {
-                    fm: Default::default(),
                     pred: Inst::FENCE_REQ_R | Inst::FENCE_REQ_W,
                     succ: Inst::FENCE_REQ_R | Inst::FENCE_REQ_W,
                 }
@@ -1779,7 +1743,6 @@ impl MachInstEmit for Inst {
                 }
                 .emit(&[], sink, emit_info, state);
                 Inst::Fence {
-                    fm: Default::default(),
                     pred: Inst::FENCE_REQ_R,
                     succ: Inst::FENCE_REQ_R | Inst::FENCE_REQ_W,
                 }
@@ -1789,7 +1752,6 @@ impl MachInstEmit for Inst {
                 let src = allocs.next(src);
                 let p = allocs.next(p);
                 Inst::Fence {
-                    fm: Default::default(),
                     pred: Inst::FENCE_REQ_R | Inst::FENCE_REQ_W,
                     succ: Inst::FENCE_REQ_W,
                 }
@@ -1927,6 +1889,54 @@ impl MachInstEmit for Inst {
                 Inst::gen_move(rd, rs, ty).emit(&[], sink, emit_info, state);
                 sink.bind_label(label_jump_over);
             }
+            &Inst::FloatSelectPseudo {
+                op,
+                rd,
+                tmp,
+                rs1,
+                rs2,
+                ty,
+            } => {
+                let rs1 = allocs.next(rs1);
+                let rs2 = allocs.next(rs2);
+                let tmp = allocs.next_writable(tmp);
+                let rd = allocs.next_writable(rd);
+                let label_rs2 = sink.get_label();
+                let label_jump_over = sink.get_label();
+                let lt_op = if ty == F32 {
+                    FpuOPRRR::FltS
+                } else {
+                    FpuOPRRR::FltD
+                };
+                Inst::FpuRRR {
+                    alu_op: lt_op,
+                    frm: None,
+                    rd: tmp,
+                    rs1: if op == FloatSelectOP::Max { rs1 } else { rs2 },
+                    rs2: if op == FloatSelectOP::Max { rs2 } else { rs1 },
+                }
+                .emit(&[], sink, emit_info, state);
+                Inst::CondBr {
+                    taken: BranchTarget::Label(label_rs2),
+                    not_taken: BranchTarget::zero(),
+                    kind: IntegerCompare {
+                        kind: IntCC::NotEqual,
+                        rs1: tmp.to_reg(),
+                        rs2: zero_reg(),
+                    },
+                }
+                .emit(&[], sink, emit_info, state);
+                // here select rs1 as result.
+                Inst::gen_move(rd, rs1, ty).emit(&[], sink, emit_info, state);
+                Inst::Jal {
+                    dest: BranchTarget::Label(label_jump_over),
+                }
+                .emit(&[], sink, emit_info, state);
+                sink.bind_label(label_rs2);
+                Inst::gen_move(rd, rs2, ty).emit(&[], sink, emit_info, state);
+                sink.bind_label(label_jump_over);
+            }
+
             &Inst::FloatSelect {
                 op,
                 rd,
