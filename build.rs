@@ -41,7 +41,7 @@ fn main() -> anyhow::Result<()> {
             } else {
                 println!(
                     "cargo:warning=The spec testsuite is disabled. To enable, run `git submodule \
-                 update --remote`."
+                     update --remote`."
                 );
             }
             Ok(())

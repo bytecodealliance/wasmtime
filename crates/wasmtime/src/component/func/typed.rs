@@ -1731,7 +1731,7 @@ macro_rules! impl_component_ty_for_tuples {
                     _size = align_to(_size, $t::ALIGN32);
                     _size += $t::SIZE32;
                 )*
-                _size
+                align_to(_size, Self::ALIGN32)
             };
 
             const ALIGN32: u32 = {

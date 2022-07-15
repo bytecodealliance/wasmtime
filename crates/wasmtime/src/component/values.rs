@@ -604,8 +604,9 @@ impl Val {
             }
             Type::Flags(handle) => {
                 let count = u32::try_from(handle.names().len()).unwrap();
-                assert!(count <= 32);
-                let value = iter::once(u32::lift(store, options, next(src))?).collect();
+                let value = iter::repeat_with(|| u32::lift(store, options, next(src)))
+                    .take(u32_count_for_flag_count(count.try_into()?))
+                    .collect::<Result<_>>()?;
 
                 Val::Flags(Flags {
                     ty: handle.clone(),

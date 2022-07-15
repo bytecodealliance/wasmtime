@@ -1,12 +1,13 @@
 use crate::component::func::HostFunc;
 use crate::component::instance::RuntimeImport;
 use crate::component::matching::TypeChecker;
-use crate::component::{Component, Instance, InstancePre, IntoComponentFunc};
-use crate::{AsContextMut, Engine, Module};
+use crate::component::{Component, Instance, InstancePre, IntoComponentFunc, Val};
+use crate::{AsContextMut, Engine, Module, StoreContextMut};
 use anyhow::{anyhow, bail, Context, Result};
 use std::collections::hash_map::{Entry, HashMap};
 use std::marker;
 use std::sync::Arc;
+use wasmtime_environ::component::TypeDef;
 use wasmtime_environ::PrimaryMap;
 
 /// A type used to instantiate [`Component`]s.
@@ -228,6 +229,37 @@ impl<T> LinkerInstance<'_, T> {
     ) -> Result<()> {
         let name = self.strings.intern(name);
         self.insert(name, Definition::Func(func.into_host_func()))
+    }
+
+    /// Define a new host-provided function using dynamic types.
+    ///
+    /// `name` must refer to a function type import in `component`.  If and when
+    /// that import is invoked by the component, the specified `func` will be
+    /// called, which must return a `Val` which is an instance of the result
+    /// type of the import.
+    pub fn func_new<
+        F: Fn(StoreContextMut<'_, T>, &[Val]) -> Result<Val> + Send + Sync + 'static,
+    >(
+        &mut self,
+        component: &Component,
+        name: &str,
+        func: F,
+    ) -> Result<()> {
+        for (import_name, ty) in component.env_component().import_types.values() {
+            if name == import_name {
+                if let TypeDef::ComponentFunc(index) = ty {
+                    let name = self.strings.intern(name);
+                    return self.insert(
+                        name,
+                        Definition::Func(HostFunc::new_dynamic(func, *index, component.types())),
+                    );
+                } else {
+                    bail!("import `{name}` has the wrong type (expected a function)");
+                }
+            }
+        }
+
+        Err(anyhow!("import `{name}` not found"))
     }
 
     /// Defines a [`Module`] within this instance.
