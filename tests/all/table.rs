@@ -1,3 +1,4 @@
+use anyhow::Result;
 use wasmtime::*;
 
 #[test]
@@ -49,4 +50,28 @@ fn copy_wrong() {
             .unwrap_err(),
         "tables do not have the same element type"
     );
+}
+
+#[test]
+fn null_elem_segment_works_with_imported_table() -> Result<()> {
+    let mut store = Store::<()>::default();
+    let ty = TableType::new(ValType::FuncRef, 1, None);
+    let table = Table::new(&mut store, ty, Val::FuncRef(None))?;
+    let module = Module::new(
+        store.engine(),
+        r#"
+(module
+  (import "" "" (table (;0;) 1 funcref))
+  (func
+    i32.const 0
+    table.get 0
+    drop
+  )
+  (start 0)
+  (elem (;0;) (i32.const 0) funcref (ref.null func))
+)
+"#,
+    )?;
+    Instance::new(&mut store, &module, &[table.into()])?;
+    Ok(())
 }
