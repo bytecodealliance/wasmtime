@@ -89,12 +89,12 @@ pub fn mem_finalize(
 //=============================================================================
 // Instructions and subcomponents: emission
 
-fn machreg_to_gpr(m: Reg) -> u32 {
+pub(crate) fn machreg_to_gpr(m: Reg) -> u32 {
     assert_eq!(m.class(), RegClass::Int);
     u32::try_from(m.to_real_reg().unwrap().hw_enc() & 31).unwrap()
 }
 
-fn machreg_to_vec(m: Reg) -> u32 {
+pub(crate) fn machreg_to_vec(m: Reg) -> u32 {
     assert_eq!(m.class(), RegClass::Float);
     u32::try_from(m.to_real_reg().unwrap().hw_enc()).unwrap()
 }
@@ -2259,7 +2259,7 @@ impl MachInstEmit for Inst {
                     VectorSize::Size16x8 => 0b00010,
                     VectorSize::Size32x4 => 0b00100,
                     VectorSize::Size64x2 => 0b01000,
-                    _ => unimplemented!(),
+                    _ => unimplemented!("Unexpected VectorSize: {:?}", size),
                 };
                 sink.put4(
                     0b010_01110000_00000_000011_00000_00000

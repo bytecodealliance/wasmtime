@@ -212,7 +212,18 @@ impl Func {
         Return: Lift,
         S: AsContext,
     {
-        self.typecheck::<Params, Return>(store.as_context().0)?;
+        self._typed(store.as_context().0)
+    }
+
+    pub(crate) fn _typed<Params, Return>(
+        &self,
+        store: &StoreOpaque,
+    ) -> Result<TypedFunc<Params, Return>>
+    where
+        Params: ComponentParams + Lower,
+        Return: Lift,
+    {
+        self.typecheck::<Params, Return>(store)?;
         unsafe { Ok(TypedFunc::new_unchecked(*self)) }
     }
 

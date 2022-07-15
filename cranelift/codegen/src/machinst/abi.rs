@@ -1,7 +1,7 @@
 //! ABI definitions.
 
 use crate::binemit::StackMap;
-use crate::ir::{Signature, StackSlot};
+use crate::ir::{DynamicStackSlot, Signature, StackSlot};
 use crate::isa::CallConv;
 use crate::machinst::*;
 use crate::settings;
@@ -47,11 +47,17 @@ pub trait ABICallee {
     /// Number of return values.
     fn num_retvals(&self) -> usize;
 
-    /// Number of stack slots (not spill slots).
-    fn num_stackslots(&self) -> usize;
+    /// Number of sized stack slots (not spill slots).
+    fn num_sized_stackslots(&self) -> usize;
 
-    /// The offsets of all stack slots (not spill slots) for debuginfo purposes.
-    fn stackslot_offsets(&self) -> &PrimaryMap<StackSlot, u32>;
+    /// The offsets of all sized stack slots (not spill slots) for debuginfo purposes.
+    fn sized_stackslot_offsets(&self) -> &PrimaryMap<StackSlot, u32>;
+
+    /// The offsets of all dynamic stack slots (not spill slots) for debuginfo purposes.
+    fn dynamic_stackslot_offsets(&self) -> &PrimaryMap<DynamicStackSlot, u32>;
+
+    /// All the defined dynamic types.
+    fn dynamic_type_size(&self, ty: Type) -> u32;
 
     /// Generate an instruction which copies an argument to a destination
     /// register.
@@ -101,8 +107,16 @@ pub trait ABICallee {
     /// Update with the clobbered registers, post-regalloc.
     fn set_clobbered(&mut self, clobbered: Vec<Writable<RealReg>>);
 
-    /// Get the address of a stackslot.
-    fn stackslot_addr(&self, slot: StackSlot, offset: u32, into_reg: Writable<Reg>) -> Self::I;
+    /// Get the address of a sized stackslot.
+    fn sized_stackslot_addr(
+        &self,
+        slot: StackSlot,
+        offset: u32,
+        into_reg: Writable<Reg>,
+    ) -> Self::I;
+
+    /// Get the address of a dynamic stackslot.
+    fn dynamic_stackslot_addr(&self, slot: DynamicStackSlot, into_reg: Writable<Reg>) -> Self::I;
 
     /// Load from a spillslot.
     fn load_spillslot(

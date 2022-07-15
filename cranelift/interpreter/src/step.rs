@@ -7,11 +7,12 @@ use crate::value::{Value, ValueConversionKind, ValueError, ValueResult};
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::{
-    types, Block, FuncRef, Function, InstructionData, Opcode, TrapCode, Value as ValueRef,
+    types, Block, FuncRef, Function, InstructionData, Opcode, TrapCode, Type, Value as ValueRef,
 };
 use log::trace;
 use smallvec::{smallvec, SmallVec};
 use std::convert::{TryFrom, TryInto};
+use std::fmt::Debug;
 use std::ops::RangeFrom;
 use thiserror::Error;
 
@@ -135,11 +136,11 @@ where
         Err(e) => ControlFlow::Trap(CraneliftTrap::User(memerror_to_trap(e))),
     };
 
-    let calculate_addr = |imm: V, args: SmallVec<[V; 1]>| -> ValueResult<u64> {
-        let imm = imm.convert(ValueConversionKind::ZeroExtend(ctrl_ty))?;
+    let calculate_addr = |addr_ty: Type, imm: V, args: SmallVec<[V; 1]>| -> ValueResult<u64> {
+        let imm = imm.convert(ValueConversionKind::ZeroExtend(addr_ty))?;
         let args = args
             .into_iter()
-            .map(|v| v.convert(ValueConversionKind::ZeroExtend(ctrl_ty)))
+            .map(|v| v.convert(ValueConversionKind::ZeroExtend(addr_ty)))
             .collect::<ValueResult<SmallVec<[V; 1]>>>()?;
 
         Ok(sum(imm, args)? as u64)
@@ -315,7 +316,7 @@ where
                 _ => unreachable!(),
             };
 
-            let addr_value = calculate_addr(imm(), args()?)?;
+            let addr_value = calculate_addr(types::I64, imm(), args()?)?;
             let loaded = assign_or_memtrap(
                 Address::try_from(addr_value).and_then(|addr| state.checked_load(addr, load_ty)),
             );
@@ -338,7 +339,7 @@ where
                 _ => unreachable!(),
             };
 
-            let addr_value = calculate_addr(imm(), args_range(1..)?)?;
+            let addr_value = calculate_addr(types::I64, imm(), args_range(1..)?)?;
             let reduced = if let Some(c) = kind {
                 arg(0)?.convert(c)?
             } else {
@@ -380,13 +381,57 @@ where
                 })
             })
         }
-        Opcode::GlobalValue => unimplemented!("GlobalValue"),
+        Opcode::DynamicStackAddr => unimplemented!("DynamicStackSlot"),
+        Opcode::DynamicStackLoad => unimplemented!("DynamicStackLoad"),
+        Opcode::DynamicStackStore => unimplemented!("DynamicStackStore"),
+        Opcode::GlobalValue => {
+            if let InstructionData::UnaryGlobalValue { global_value, .. } = inst {
+                assign_or_memtrap(state.resolve_global_value(global_value))
+            } else {
+                unreachable!()
+            }
+        }
         Opcode::SymbolValue => unimplemented!("SymbolValue"),
         Opcode::TlsValue => unimplemented!("TlsValue"),
-        Opcode::HeapAddr => unimplemented!("HeapAddr"),
+        Opcode::HeapAddr => {
+            if let InstructionData::HeapAddr { heap, .. } = inst {
+                let load_ty = inst_context.controlling_type().unwrap();
+                let offset = calculate_addr(ctrl_ty, imm(), args()?)? as u64;
+                assign_or_memtrap({
+                    AddressSize::try_from(load_ty).and_then(|addr_size| {
+                        let addr = state.heap_address(addr_size, heap, offset)?;
+                        let dv = DataValue::try_from(addr)?;
+                        Ok(dv.into())
+                    })
+                })
+            } else {
+                unreachable!()
+            }
+        }
         Opcode::GetPinnedReg => unimplemented!("GetPinnedReg"),
         Opcode::SetPinnedReg => unimplemented!("SetPinnedReg"),
-        Opcode::TableAddr => unimplemented!("TableAddr"),
+        Opcode::TableAddr => {
+            if let InstructionData::TableAddr { table, offset, .. } = inst {
+                let table = &state.get_current_function().tables[table];
+                let base = state.resolve_global_value(table.base_gv)?;
+                let bound = state.resolve_global_value(table.bound_gv)?;
+                let index_ty = table.index_type;
+                let element_size = V::int(u64::from(table.element_size) as i128, index_ty)?;
+                let inst_offset = V::int(i32::from(offset) as i128, index_ty)?;
+
+                let byte_offset = arg(0)?.mul(element_size.clone())?.add(inst_offset)?;
+                let bound_bytes = bound.mul(element_size)?;
+                if byte_offset.gt(&bound_bytes)? {
+                    return Ok(ControlFlow::Trap(CraneliftTrap::User(
+                        TrapCode::HeapOutOfBounds,
+                    )));
+                }
+
+                assign(base.add(byte_offset)?)
+            } else {
+                unreachable!()
+            }
+        }
         Opcode::Iconst => assign(Value::int(imm().into_int()?, ctrl_ty)?),
         Opcode::F32const => assign(imm()),
         Opcode::F64const => assign(imm()),
@@ -679,26 +724,38 @@ where
         Opcode::Fmul => binary(Value::mul, arg(0)?, arg(1)?)?,
         Opcode::Fdiv => binary(Value::div, arg(0)?, arg(1)?)?,
         Opcode::Sqrt => assign(Value::sqrt(arg(0)?)?),
-        Opcode::Fma => unimplemented!("Fma"),
-        Opcode::Fneg => binary(Value::sub, Value::float(0, ctrl_ty)?, arg(0)?)?,
-        Opcode::Fabs => unimplemented!("Fabs"),
-        Opcode::Fcopysign => unimplemented!("Fcopysign"),
-        Opcode::Fmin => choose(
-            Value::is_nan(&arg(0)?)? || Value::lt(&arg(0)?, &arg(1)?)?,
-            arg(0)?,
-            arg(1)?,
-        ),
-        Opcode::FminPseudo => unimplemented!("FminPseudo"),
-        Opcode::Fmax => choose(
-            Value::is_nan(&arg(0)?)? || Value::gt(&arg(0)?, &arg(1)?)?,
-            arg(0)?,
-            arg(1)?,
-        ),
-        Opcode::FmaxPseudo => unimplemented!("FmaxPseudo"),
-        Opcode::Ceil => unimplemented!("Ceil"),
-        Opcode::Floor => unimplemented!("Floor"),
-        Opcode::Trunc => unimplemented!("Trunc"),
-        Opcode::Nearest => unimplemented!("Nearest"),
+        Opcode::Fma => assign(Value::fma(arg(0)?, arg(1)?, arg(2)?)?),
+        Opcode::Fneg => assign(Value::neg(arg(0)?)?),
+        Opcode::Fabs => assign(Value::abs(arg(0)?)?),
+        Opcode::Fcopysign => binary(Value::copysign, arg(0)?, arg(1)?)?,
+        Opcode::Fmin => assign(match (arg(0)?, arg(1)?) {
+            (a, _) if a.is_nan()? => a,
+            (_, b) if b.is_nan()? => b,
+            (a, b) if a.is_zero()? && b.is_zero()? && a.is_negative()? => a,
+            (a, b) if a.is_zero()? && b.is_zero()? && b.is_negative()? => b,
+            (a, b) => a.min(b)?,
+        }),
+        Opcode::FminPseudo => assign(match (arg(0)?, arg(1)?) {
+            (a, b) if a.is_nan()? || b.is_nan()? => a,
+            (a, b) if a.is_zero()? && b.is_zero()? => a,
+            (a, b) => a.min(b)?,
+        }),
+        Opcode::Fmax => assign(match (arg(0)?, arg(1)?) {
+            (a, _) if a.is_nan()? => a,
+            (_, b) if b.is_nan()? => b,
+            (a, b) if a.is_zero()? && b.is_zero()? && a.is_negative()? => b,
+            (a, b) if a.is_zero()? && b.is_zero()? && b.is_negative()? => a,
+            (a, b) => a.max(b)?,
+        }),
+        Opcode::FmaxPseudo => assign(match (arg(0)?, arg(1)?) {
+            (a, b) if a.is_nan()? || b.is_nan()? => a,
+            (a, b) if a.is_zero()? && b.is_zero()? => a,
+            (a, b) => a.max(b)?,
+        }),
+        Opcode::Ceil => assign(Value::ceil(arg(0)?)?),
+        Opcode::Floor => assign(Value::floor(arg(0)?)?),
+        Opcode::Trunc => assign(Value::trunc(arg(0)?)?),
+        Opcode::Nearest => assign(Value::nearest(arg(0)?)?),
         Opcode::IsNull => unimplemented!("IsNull"),
         Opcode::IsInvalid => unimplemented!("IsInvalid"),
         Opcode::Trueif => choose(
@@ -962,6 +1019,9 @@ where
             assign(vectorizelanes(&new_vec, ctrl_ty)?)
         }
         Opcode::IaddPairwise => assign(binary_pairwise(arg(0)?, arg(1)?, ctrl_ty, Value::add)?),
+        Opcode::ExtractVector => {
+            unimplemented!("ExtractVector not supported");
+        }
     })
 }
 

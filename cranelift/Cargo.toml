@@ -15,33 +15,32 @@ path = "src/clif-util.rs"
 
 [dependencies]
 cfg-if = "1.0"
-cranelift-codegen = { path = "codegen", version = "0.86.0" }
-cranelift-entity = { path = "entity", version = "0.86.0" }
-cranelift-interpreter = { path = "interpreter", version = "0.86.0" }
-cranelift-reader = { path = "reader", version = "0.86.0" }
-cranelift-frontend = { path = "frontend", version = "0.86.0" }
-cranelift-wasm = { path = "wasm", version = "0.86.0", optional = true }
-cranelift-native = { path = "native", version = "0.86.0" }
+cranelift-codegen = { path = "codegen", version = "0.87.0" }
+cranelift-entity = { path = "entity", version = "0.87.0" }
+cranelift-interpreter = { path = "interpreter", version = "0.87.0" }
+cranelift-reader = { path = "reader", version = "0.87.0" }
+cranelift-frontend = { path = "frontend", version = "0.87.0" }
+cranelift-wasm = { path = "wasm", version = "0.87.0", optional = true }
+cranelift-native = { path = "native", version = "0.87.0" }
 cranelift-filetests = { path = "filetests", version = "0.73.0" }
-cranelift-module = { path = "module", version = "0.86.0" }
-cranelift-object = { path = "object", version = "0.86.0" }
-cranelift-jit = { path = "jit", version = "0.86.0" }
-cranelift-preopt = { path = "preopt", version = "0.86.0" }
-cranelift = { path = "umbrella", version = "0.86.0" }
+cranelift-module = { path = "module", version = "0.87.0" }
+cranelift-object = { path = "object", version = "0.87.0" }
+cranelift-jit = { path = "jit", version = "0.87.0" }
+cranelift-preopt = { path = "preopt", version = "0.87.0" }
+cranelift = { path = "umbrella", version = "0.87.0" }
 filecheck = "0.5.0"
 log = "0.4.8"
 termcolor = "1.1.2"
 capstone = { version = "0.9.0", optional = true }
-wat = { version = "1.0.36", optional = true }
+wat = { version = "1.0.45", optional = true }
 target-lexicon = { version = "0.12", features = ["std"] }
 pretty_env_logger = "0.4.0"
 rayon = { version = "1", optional = true }
-file-per-thread-logger = "0.1.2"
 indicatif = "0.13.0"
 thiserror = "1.0.15"
 walkdir = "2.2"
 anyhow = "1.0.32"
-clap = { version = "3.1.12", features = ["derive"] }
+clap = { version = "3.2.0", features = ["derive"] }
 
 [features]
 default = ["disas", "wasm", "cranelift-codegen/all-arch", "souper-harvest"]

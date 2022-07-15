@@ -5,6 +5,7 @@ use crate::store::StoreOpaque;
 use crate::{AsContext, AsContextMut, StoreContext, StoreContextMut, ValRaw};
 use anyhow::{bail, Context, Result};
 use std::borrow::Cow;
+use std::fmt;
 use std::marker;
 use std::mem::{self, MaybeUninit};
 use std::str;
@@ -1579,6 +1580,55 @@ pub fn typecheck_union(
         }
         other => bail!("expected `union` found `{}`", desc(other)),
     }
+}
+
+/// Verify that the given wasm type is a flags type with the expected flags in the right order and with the right
+/// names.
+pub fn typecheck_flags(
+    ty: &InterfaceType,
+    types: &ComponentTypes,
+    expected: &[&str],
+) -> Result<()> {
+    match ty {
+        InterfaceType::Flags(index) => {
+            let names = &types[*index].names;
+
+            if names.len() != expected.len() {
+                bail!(
+                    "expected flags type with {} names, found {} names",
+                    expected.len(),
+                    names.len()
+                );
+            }
+
+            for (name, expected) in names.iter().zip(expected) {
+                if name != expected {
+                    bail!("expected flag named {}, found {}", expected, name);
+                }
+            }
+
+            Ok(())
+        }
+        other => bail!("expected `flags` found `{}`", desc(other)),
+    }
+}
+
+/// Format the specified bitflags using the specified names for debugging
+pub fn format_flags(bits: &[u32], names: &[&str], f: &mut fmt::Formatter) -> fmt::Result {
+    f.write_str("(")?;
+    let mut wrote = false;
+    for (index, name) in names.iter().enumerate() {
+        if ((bits[index / 32] >> (index % 32)) & 1) != 0 {
+            if wrote {
+                f.write_str("|")?;
+            } else {
+                wrote = true;
+            }
+
+            f.write_str(name)?;
+        }
+    }
+    f.write_str(")")
 }
 
 unsafe impl<T> ComponentType for Option<T>

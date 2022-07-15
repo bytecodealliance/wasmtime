@@ -148,7 +148,7 @@ mod tests {
         pos.ins().return_(&[]);
 
         if let Some(stack_slot) = stack_slot {
-            func.stack_slots.push(stack_slot);
+            func.sized_stack_slots.push(stack_slot);
         }
 
         func
@@ -206,7 +206,7 @@ mod tests {
         pos.ins().return_(&[]);
 
         if let Some(stack_slot) = stack_slot {
-            func.stack_slots.push(stack_slot);
+            func.sized_stack_slots.push(stack_slot);
         }
 
         func

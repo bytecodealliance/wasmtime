@@ -61,6 +61,7 @@ use crate::ir;
 use crate::ir::condcodes::IntCC;
 use crate::ir::types;
 use crate::ir::MemFlags;
+use crate::ir::Signature;
 use crate::ir::Type;
 use crate::isa;
 use crate::isa::s390x::inst::*;
@@ -556,6 +557,7 @@ impl ABIMachineSpec for S390xMachineDeps {
 
     fn gen_clobber_restore(
         call_conv: isa::CallConv,
+        _: &Signature,
         _: &settings::Flags,
         clobbers: &[Writable<RealReg>],
         fixed_frame_storage_size: u32,
@@ -633,7 +635,7 @@ impl ABIMachineSpec for S390xMachineDeps {
         unimplemented!("StructArgs not implemented for S390X yet");
     }
 
-    fn get_number_of_spillslots_for_value(rc: RegClass) -> u32 {
+    fn get_number_of_spillslots_for_value(rc: RegClass, _vector_scale: u32) -> u32 {
         // We allocate in terms of 8-byte slots.
         match rc {
             RegClass::Int => 1,
@@ -665,6 +667,7 @@ impl ABIMachineSpec for S390xMachineDeps {
     fn get_clobbered_callee_saves(
         call_conv: isa::CallConv,
         flags: &settings::Flags,
+        _sig: &Signature,
         regs: &[Writable<RealReg>],
     ) -> Vec<Writable<RealReg>> {
         assert!(
@@ -688,7 +691,7 @@ impl ABIMachineSpec for S390xMachineDeps {
         _is_leaf: bool,
         _stack_args_size: u32,
         _num_clobbered_callee_saves: usize,
-        _fixed_frame_storage_size: u32,
+        _frame_storage_size: u32,
     ) -> bool {
         // The call frame set-up is handled by gen_clobber_save().
         false

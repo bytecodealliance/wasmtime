@@ -178,7 +178,7 @@ where
         let frame_info = FunctionFrameInfo {
             value_ranges: &func.value_labels_ranges,
             memory_offset: memory_offset.clone(),
-            stack_slots: &func.stack_slots,
+            sized_stack_slots: &func.sized_stack_slots,
         };
         Some(frame_info)
     } else {

@@ -3,6 +3,7 @@
 #[cfg(feature = "component-model")]
 use crate::component::Component;
 use crate::{FrameInfo, Module};
+use once_cell::sync::Lazy;
 use std::{
     collections::BTreeMap,
     sync::{Arc, RwLock},
@@ -201,9 +202,7 @@ impl ModuleRegistry {
 // it is also automatically registered with the singleton global module
 // registry. When a `ModuleRegistry` is destroyed then all of its entries
 // are removed from the global module registry.
-lazy_static::lazy_static! {
-    static ref GLOBAL_MODULES: RwLock<GlobalModuleRegistry> = Default::default();
-}
+static GLOBAL_MODULES: Lazy<RwLock<GlobalModuleRegistry>> = Lazy::new(Default::default);
 
 type GlobalModuleRegistry = BTreeMap<usize, (usize, TrapInfo)>;
 

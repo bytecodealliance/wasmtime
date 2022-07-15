@@ -127,6 +127,8 @@ pub struct wasmtime_module_t {
     pub(crate) module: Module,
 }
 
+wasmtime_c_api_macros::declare_own!(wasmtime_module_t);
+
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_module_new(
     engine: &wasm_engine_t,
@@ -141,9 +143,6 @@ pub unsafe extern "C" fn wasmtime_module_new(
         },
     )
 }
-
-#[no_mangle]
-pub extern "C" fn wasmtime_module_delete(_module: Box<wasmtime_module_t>) {}
 
 #[no_mangle]
 pub extern "C" fn wasmtime_module_clone(module: &wasmtime_module_t) -> Box<wasmtime_module_t> {

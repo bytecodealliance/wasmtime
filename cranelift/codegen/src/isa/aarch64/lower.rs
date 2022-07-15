@@ -1284,29 +1284,60 @@ pub(crate) fn lower_icmp<C: LowerCtx<I = Inst>>(
                     rn: tmp1.to_reg(),
                     rm: tmp2.to_reg(),
                 });
+                cond
             }
             IntCC::Overflow | IntCC::NotOverflow => {
-                // We can do an 128bit add while throwing away the results
-                // and check the overflow flags at the end.
-                //
-                // adds    xzr, lhs_lo, rhs_lo
-                // adcs    xzr, lhs_hi, rhs_hi
-                // cset    dst, {vs, vc}
+                // cmp     lhs_lo, rhs_lo
+                // sbcs    tmp1, lhs_hi, rhs_hi
+                // eor     tmp2, lhs_hi, rhs_hi
+                // eor     tmp1, lhs_hi, tmp1
+                // tst     tmp2, tmp1
+                // cset    dst, {lt, ge}
 
                 ctx.emit(Inst::AluRRR {
-                    alu_op: ALUOp::AddS,
+                    alu_op: ALUOp::SubS,
                     size: OperandSize::Size64,
                     rd: writable_zero_reg(),
                     rn: lhs.regs()[0],
                     rm: rhs.regs()[0],
                 });
                 ctx.emit(Inst::AluRRR {
-                    alu_op: ALUOp::AdcS,
+                    alu_op: ALUOp::SbcS,
                     size: OperandSize::Size64,
-                    rd: writable_zero_reg(),
+                    rd: tmp1,
                     rn: lhs.regs()[1],
                     rm: rhs.regs()[1],
                 });
+                ctx.emit(Inst::AluRRR {
+                    alu_op: ALUOp::Eor,
+                    size: OperandSize::Size64,
+                    rd: tmp2,
+                    rn: lhs.regs()[1],
+                    rm: rhs.regs()[1],
+                });
+                ctx.emit(Inst::AluRRR {
+                    alu_op: ALUOp::Eor,
+                    size: OperandSize::Size64,
+                    rd: tmp1,
+                    rn: lhs.regs()[1],
+                    rm: tmp1.to_reg(),
+                });
+                ctx.emit(Inst::AluRRR {
+                    alu_op: ALUOp::AndS,
+                    size: OperandSize::Size64,
+                    rd: writable_zero_reg(),
+                    rn: tmp2.to_reg(),
+                    rm: tmp1.to_reg(),
+                });
+
+                // This instruction sequence sets the condition codes
+                // on the lt and ge flags instead of the vs/vc so we
+                // need to signal that
+                if condcode == IntCC::Overflow {
+                    Cond::Lt
+                } else {
+                    Cond::Ge
+                }
             }
             _ => {
                 // cmp     lhs_lo, rhs_lo
@@ -1376,9 +1407,9 @@ pub(crate) fn lower_icmp<C: LowerCtx<I = Inst>>(
 
                 // Prevent a second materialize_bool_result to be emitted at the end of the function
                 should_materialize = false;
+                cond
             }
         }
-        cond
     } else if ty.is_vector() {
         assert_ne!(output, IcmpOutput::CondCode);
         should_materialize = false;
@@ -1437,7 +1468,7 @@ pub(crate) fn lower_icmp<C: LowerCtx<I = Inst>>(
     // in a register we materialize those flags into a register. Some branches do end up producing
     // the result as a register by default, so we ignore those.
     if should_materialize {
-        materialize_bool_result(ctx, insn, rd, cond);
+        materialize_bool_result(ctx, insn, rd, out_condcode);
     }
 
     Ok(match output {

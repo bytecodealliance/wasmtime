@@ -415,10 +415,10 @@
        ;; The sequence consists of an initial "normal" load from `dst`, followed
        ;; by a loop which computes the new value and tries to compare-and-swap
        ;; ("CAS") it into `dst`, using the native instruction `lock
-       ;; cmpxchg{b,w,l,q}` .  The loop iterates until the CAS is successful.
-       ;; If there is no contention, there will be only one pass through the
-       ;; loop body.  The sequence does *not* perform any explicit memory fence
-       ;; instructions (mfence/sfence/lfence).
+       ;; cmpxchg{b,w,l,q}`.  The loop iterates until the CAS is successful. If
+       ;; there is no contention, there will be only one pass through the loop
+       ;; body.  The sequence does *not* perform any explicit memory fence
+       ;; instructions (`mfence`/`sfence`/`lfence`).
        ;;
        ;; Note that the transaction is atomic in the sense that, as observed by
        ;; some other thread, `dst` either has the initial or final value, but no
@@ -430,15 +430,12 @@
        ;; problem.
        ;;
        ;; This instruction sequence has fixed register uses as follows:
-       ;;
-       ;; %r9   (read) address
-       ;; %r10  (read) second operand for `op`
-       ;; %r11  (written) scratch reg; value afterwards has no meaning
-       ;; %rax  (written) the old value at %r9
-       ;; %rflags is written.  Do not assume anything about it after the instruction.
+       ;; - %rax  (written) the old value at `mem`
+       ;; - %rflags is written.  Do not assume anything about it after the
+       ;;   instruction.
        (AtomicRmwSeq (ty Type) ;; I8, I16, I32, or I64
-                     (op AtomicRmwOp)
-                     (address Reg)
+                     (op MachAtomicRmwOp)
+                     (mem SyntheticAmode)
                      (operand Reg)
                      (temp WritableReg)
                      (dst_old WritableReg))
@@ -2921,6 +2918,19 @@
             (_ Unit (emit (MInst.LockCmpxchg ty replacement expected addr dst))))
         dst))
 
+(decl x64_atomic_rmw_seq (Type MachAtomicRmwOp SyntheticAmode Gpr) Gpr)
+(rule (x64_atomic_rmw_seq ty op mem input)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (tmp WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (MInst.AtomicRmwSeq ty op mem input tmp dst))))
+        dst))
+
+;; CLIF IR has one enumeration for atomic operations (`AtomicRmwOp`) while the
+;; mach backend has another (`MachAtomicRmwOp`)--this converts one to the other.
+(type MachAtomicRmwOp extern (enum))
+(decl atomic_rmw_op_to_mach_atomic_rmw_op (AtomicRmwOp) MachAtomicRmwOp)
+(extern constructor atomic_rmw_op_to_mach_atomic_rmw_op atomic_rmw_op_to_mach_atomic_rmw_op)
+
 ;;;; Automatic conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (convert Gpr InstOutput output_gpr)
@@ -2973,6 +2983,7 @@
 (convert SyntheticAmode XmmMem synthetic_amode_to_xmm_mem)
 
 (convert IntCC CC intcc_to_cc)
+(convert AtomicRmwOp MachAtomicRmwOp atomic_rmw_op_to_mach_atomic_rmw_op)
 
 (decl reg_to_xmm_mem (Reg) XmmMem)
 (rule (reg_to_xmm_mem r)

@@ -18,6 +18,7 @@ pub trait Value: Clone + From<DataValue> {
     fn into_int(self) -> ValueResult<i128>;
     fn float(n: u64, ty: Type) -> ValueResult<Self>;
     fn into_float(self) -> ValueResult<f64>;
+    fn is_float(&self) -> bool;
     fn is_nan(&self) -> ValueResult<bool>;
     fn bool(b: bool, ty: Type) -> ValueResult<Self>;
     fn into_bool(self) -> ValueResult<bool>;
@@ -25,6 +26,9 @@ pub trait Value: Clone + From<DataValue> {
     fn into_array(&self) -> ValueResult<[u8; 16]>;
     fn convert(self, kind: ValueConversionKind) -> ValueResult<Self>;
     fn concat(self, other: Self) -> ValueResult<Self>;
+
+    fn is_negative(&self) -> ValueResult<bool>;
+    fn is_zero(&self) -> ValueResult<bool>;
 
     fn max(self, other: Self) -> ValueResult<Self>;
     fn min(self, other: Self) -> ValueResult<Self>;
@@ -51,6 +55,16 @@ pub trait Value: Clone + From<DataValue> {
     fn div(self, other: Self) -> ValueResult<Self>;
     fn rem(self, other: Self) -> ValueResult<Self>;
     fn sqrt(self) -> ValueResult<Self>;
+    fn fma(self, a: Self, b: Self) -> ValueResult<Self>;
+    fn abs(self) -> ValueResult<Self>;
+
+    // Float operations
+    fn neg(self) -> ValueResult<Self>;
+    fn copysign(self, sign: Self) -> ValueResult<Self>;
+    fn ceil(self) -> ValueResult<Self>;
+    fn floor(self) -> ValueResult<Self>;
+    fn trunc(self) -> ValueResult<Self>;
+    fn nearest(self) -> ValueResult<Self>;
 
     // Saturating arithmetic.
     fn add_sat(self, other: Self) -> ValueResult<Self>;
@@ -237,6 +251,13 @@ impl Value for DataValue {
         unimplemented!()
     }
 
+    fn is_float(&self) -> bool {
+        match self {
+            DataValue::F32(_) | DataValue::F64(_) => true,
+            _ => false,
+        }
+    }
+
     fn is_nan(&self) -> ValueResult<bool> {
         match self {
             DataValue::F32(f) => Ok(f.is_nan()),
@@ -388,6 +409,22 @@ impl Value for DataValue {
         }
     }
 
+    fn is_negative(&self) -> ValueResult<bool> {
+        match self {
+            DataValue::F32(f) => Ok(f.is_negative()),
+            DataValue::F64(f) => Ok(f.is_negative()),
+            _ => Err(ValueError::InvalidType(ValueTypeClass::Float, self.ty())),
+        }
+    }
+
+    fn is_zero(&self) -> ValueResult<bool> {
+        match self {
+            DataValue::F32(f) => Ok(f.is_zero()),
+            DataValue::F64(f) => Ok(f.is_zero()),
+            _ => Err(ValueError::InvalidType(ValueTypeClass::Float, self.ty())),
+        }
+    }
+
     fn max(self, other: Self) -> ValueResult<Self> {
         if Value::gt(&self, &other)? {
             Ok(self)
@@ -428,19 +465,34 @@ impl Value for DataValue {
     }
 
     fn add(self, other: Self) -> ValueResult<Self> {
-        // TODO: floats must handle NaNs, +/-0
-        binary_match!(wrapping_add(&self, &other); [I8, I16, I32, I64, I128, U8, U16, U32, U64, U128])
+        if self.is_float() {
+            binary_match!(+(self, other); [F32, F64])
+        } else {
+            binary_match!(wrapping_add(&self, &other); [I8, I16, I32, I64, I128, U8, U16, U32, U64, U128])
+        }
     }
 
     fn sub(self, other: Self) -> ValueResult<Self> {
-        binary_match!(wrapping_sub(&self, &other); [I8, I16, I32, I64, I128]) // TODO: floats must handle NaNs, +/-0
+        if self.is_float() {
+            binary_match!(-(self, other); [F32, F64])
+        } else {
+            binary_match!(wrapping_sub(&self, &other); [I8, I16, I32, I64, I128])
+        }
     }
 
     fn mul(self, other: Self) -> ValueResult<Self> {
-        binary_match!(wrapping_mul(&self, &other); [I8, I16, I32, I64, I128])
+        if self.is_float() {
+            binary_match!(*(self, other); [F32, F64])
+        } else {
+            binary_match!(wrapping_mul(&self, &other); [I8, I16, I32, I64, I128])
+        }
     }
 
     fn div(self, other: Self) -> ValueResult<Self> {
+        if self.is_float() {
+            return binary_match!(/(self, other); [F32, F64]);
+        }
+
         let denominator = other.clone().into_int()?;
 
         // Check if we are dividing INT_MIN / -1. This causes an integer overflow trap.
@@ -466,6 +518,46 @@ impl Value for DataValue {
 
     fn sqrt(self) -> ValueResult<Self> {
         unary_match!(sqrt(&self); [F32, F64]; [Ieee32, Ieee64])
+    }
+
+    fn fma(self, b: Self, c: Self) -> ValueResult<Self> {
+        match (self, b, c) {
+            (DataValue::F32(a), DataValue::F32(b), DataValue::F32(c)) => {
+                Ok(DataValue::F32(a.mul_add(b, c)))
+            }
+            (DataValue::F64(a), DataValue::F64(b), DataValue::F64(c)) => {
+                Ok(DataValue::F64(a.mul_add(b, c)))
+            }
+            (a, _b, _c) => Err(ValueError::InvalidType(ValueTypeClass::Float, a.ty())),
+        }
+    }
+
+    fn abs(self) -> ValueResult<Self> {
+        unary_match!(abs(&self); [F32, F64])
+    }
+
+    fn neg(self) -> ValueResult<Self> {
+        unary_match!(neg(&self); [F32, F64])
+    }
+
+    fn copysign(self, sign: Self) -> ValueResult<Self> {
+        binary_match!(copysign(&self, &sign); [F32, F64])
+    }
+
+    fn ceil(self) -> ValueResult<Self> {
+        unary_match!(ceil(&self); [F32, F64])
+    }
+
+    fn floor(self) -> ValueResult<Self> {
+        unary_match!(floor(&self); [F32, F64])
+    }
+
+    fn trunc(self) -> ValueResult<Self> {
+        unary_match!(trunc(&self); [F32, F64])
+    }
+
+    fn nearest(self) -> ValueResult<Self> {
+        unary_match!(round_ties_even(&self); [F32, F64])
     }
 
     fn add_sat(self, other: Self) -> ValueResult<Self> {

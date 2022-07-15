@@ -306,7 +306,7 @@ impl Amode {
         }
     }
 
-    /// Add the regs mentioned by `self` to `collector`.
+    /// Add the registers mentioned by `self` to `collector`.
     pub(crate) fn get_operands<F: Fn(VReg) -> VReg>(
         &self,
         collector: &mut OperandCollector<'_, F>,
@@ -318,6 +318,25 @@ impl Amode {
             Amode::ImmRegRegShift { base, index, .. } => {
                 collector.reg_use(base.to_reg());
                 collector.reg_use(index.to_reg());
+            }
+            Amode::RipRelative { .. } => {
+                // RIP isn't involved in regalloc.
+            }
+        }
+    }
+
+    /// Same as `get_operands`, but add the registers in the "late" phase.
+    pub(crate) fn get_operands_late<F: Fn(VReg) -> VReg>(
+        &self,
+        collector: &mut OperandCollector<'_, F>,
+    ) {
+        match self {
+            Amode::ImmReg { base, .. } => {
+                collector.reg_late_use(*base);
+            }
+            Amode::ImmRegRegShift { base, index, .. } => {
+                collector.reg_late_use(base.to_reg());
+                collector.reg_late_use(index.to_reg());
             }
             Amode::RipRelative { .. } => {
                 // RIP isn't involved in regalloc.
@@ -426,13 +445,27 @@ impl SyntheticAmode {
         SyntheticAmode::NominalSPOffset { simm32 }
     }
 
-    /// Add the regs mentioned by `self` to `collector`.
+    /// Add the registers mentioned by `self` to `collector`.
     pub(crate) fn get_operands<F: Fn(VReg) -> VReg>(
         &self,
         collector: &mut OperandCollector<'_, F>,
     ) {
         match self {
             SyntheticAmode::Real(addr) => addr.get_operands(collector),
+            SyntheticAmode::NominalSPOffset { .. } => {
+                // Nothing to do; the base is SP and isn't involved in regalloc.
+            }
+            SyntheticAmode::ConstantOffset(_) => {}
+        }
+    }
+
+    /// Same as `get_operands`, but add the register in the "late" phase.
+    pub(crate) fn get_operands_late<F: Fn(VReg) -> VReg>(
+        &self,
+        collector: &mut OperandCollector<'_, F>,
+    ) {
+        match self {
+            SyntheticAmode::Real(addr) => addr.get_operands_late(collector),
             SyntheticAmode::NominalSPOffset { .. } => {
                 // Nothing to do; the base is SP and isn't involved in regalloc.
             }

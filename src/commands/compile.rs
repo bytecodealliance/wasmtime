@@ -2,36 +2,35 @@
 
 use anyhow::{bail, Context, Result};
 use clap::Parser;
+use once_cell::sync::Lazy;
 use std::fs;
 use std::path::PathBuf;
 use target_lexicon::Triple;
 use wasmtime::Engine;
 use wasmtime_cli_flags::CommonOptions;
 
-lazy_static::lazy_static! {
-    static ref AFTER_HELP: String = {
-        format!(
-            "By default, no CPU features or presets will be enabled for the compilation.\n\
-            \n\
-            {}\
-            \n\
-            Usage examples:\n\
-            \n\
-            Compiling a WebAssembly module for the current platform:\n\
-            \n  \
-            wasmtime compile example.wasm
-            \n\
-            Specifying the output file:\n\
-            \n  \
-            wasmtime compile -o output.cwasm input.wasm\n\
-            \n\
-            Compiling for a specific platform (Linux) and CPU preset (Skylake):\n\
-            \n  \
-            wasmtime compile --target x86_64-unknown-linux --cranelift-enable skylake foo.wasm\n",
-            crate::FLAG_EXPLANATIONS.as_str()
-        )
-    };
-}
+static AFTER_HELP: Lazy<String> = Lazy::new(|| {
+    format!(
+        "By default, no CPU features or presets will be enabled for the compilation.\n\
+        \n\
+        {}\
+        \n\
+        Usage examples:\n\
+        \n\
+        Compiling a WebAssembly module for the current platform:\n\
+        \n  \
+        wasmtime compile example.wasm
+        \n\
+        Specifying the output file:\n\
+        \n  \
+        wasmtime compile -o output.cwasm input.wasm\n\
+        \n\
+        Compiling for a specific platform (Linux) and CPU preset (Skylake):\n\
+        \n  \
+        wasmtime compile --target x86_64-unknown-linux --cranelift-enable skylake foo.wasm\n",
+        crate::FLAG_EXPLANATIONS.as_str()
+    )
+});
 
 /// Compiles a WebAssembly module.
 #[derive(Parser)]

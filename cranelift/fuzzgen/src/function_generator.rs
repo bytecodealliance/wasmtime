@@ -3,11 +3,13 @@ use anyhow::Result;
 use arbitrary::{Arbitrary, Unstructured};
 use cranelift::codegen::ir::types::*;
 use cranelift::codegen::ir::{
-    AbiParam, Block, ExternalName, Function, JumpTable, Opcode, Signature, Type, Value,
+    AbiParam, Block, ExternalName, Function, JumpTable, Opcode, Signature, StackSlot, Type, Value,
 };
 use cranelift::codegen::isa::CallConv;
 use cranelift::frontend::{FunctionBuilder, FunctionBuilderContext, Variable};
-use cranelift::prelude::{EntityRef, InstBuilder, IntCC, JumpTableData};
+use cranelift::prelude::{
+    EntityRef, InstBuilder, IntCC, JumpTableData, StackSlotData, StackSlotKind,
+};
 use std::ops::RangeInclusive;
 
 type BlockSignature = Vec<Type>;
@@ -44,6 +46,46 @@ fn insert_opcode_arity_2(
         let var = fgen.get_variable_of_type(*ty)?;
         builder.def_var(var, val);
     }
+    Ok(())
+}
+
+fn insert_stack_load(
+    fgen: &mut FunctionGenerator,
+    builder: &mut FunctionBuilder,
+    _opcode: Opcode,
+    _args: &'static [Type],
+    rets: &'static [Type],
+) -> Result<()> {
+    let typevar = rets[0];
+    let slot = fgen.stack_slot_with_size(builder, typevar.bytes())?;
+    let slot_size = builder.func.sized_stack_slots[slot].size;
+    let type_size = typevar.bytes();
+    let offset = fgen.u.int_in_range(0..=(slot_size - type_size))? as i32;
+
+    let val = builder.ins().stack_load(typevar, slot, offset);
+    let var = fgen.get_variable_of_type(typevar)?;
+    builder.def_var(var, val);
+
+    Ok(())
+}
+
+fn insert_stack_store(
+    fgen: &mut FunctionGenerator,
+    builder: &mut FunctionBuilder,
+    _opcode: Opcode,
+    args: &'static [Type],
+    _rets: &'static [Type],
+) -> Result<()> {
+    let typevar = args[0];
+    let slot = fgen.stack_slot_with_size(builder, typevar.bytes())?;
+    let slot_size = builder.func.sized_stack_slots[slot].size;
+    let type_size = typevar.bytes();
+    let offset = fgen.u.int_in_range(0..=(slot_size - type_size))? as i32;
+
+    let arg0 = fgen.get_variable_of_type(typevar)?;
+    let arg0 = builder.use_var(arg0);
+
+    builder.ins().stack_store(arg0, slot, offset);
     Ok(())
 }
 
@@ -88,6 +130,15 @@ const OPCODE_SIGNATURES: &'static [(
     (Opcode::Sdiv, &[I16, I16], &[I16], insert_opcode_arity_2),
     (Opcode::Sdiv, &[I32, I32], &[I32], insert_opcode_arity_2),
     (Opcode::Sdiv, &[I64, I64], &[I64], insert_opcode_arity_2),
+    // Stack Access
+    (Opcode::StackStore, &[I8], &[], insert_stack_store),
+    (Opcode::StackStore, &[I16], &[], insert_stack_store),
+    (Opcode::StackStore, &[I32], &[], insert_stack_store),
+    (Opcode::StackStore, &[I64], &[], insert_stack_store),
+    (Opcode::StackLoad, &[], &[I8], insert_stack_load),
+    (Opcode::StackLoad, &[], &[I16], insert_stack_load),
+    (Opcode::StackLoad, &[], &[I32], insert_stack_load),
+    (Opcode::StackLoad, &[], &[I64], insert_stack_load),
 ];
 
 pub struct FunctionGenerator<'r, 'data>
@@ -99,6 +150,7 @@ where
     vars: Vec<(Type, Variable)>,
     blocks: Vec<(Block, BlockSignature)>,
     jump_tables: Vec<JumpTable>,
+    static_stack_slots: Vec<StackSlot>,
 }
 
 impl<'r, 'data> FunctionGenerator<'r, 'data>
@@ -112,6 +164,7 @@ where
             vars: vec![],
             blocks: vec![],
             jump_tables: vec![],
+            static_stack_slots: vec![],
         }
     }
 
@@ -181,6 +234,18 @@ where
         Ok(sig)
     }
 
+    /// Finds a stack slot with size of at least n bytes
+    fn stack_slot_with_size(&mut self, builder: &mut FunctionBuilder, n: u32) -> Result<StackSlot> {
+        let opts: Vec<_> = self
+            .static_stack_slots
+            .iter()
+            .filter(|ss| builder.func.sized_stack_slots[**ss].size >= n)
+            .map(|ss| *ss)
+            .collect();
+
+        Ok(*self.u.choose(&opts[..])?)
+    }
+
     /// Creates a new var
     fn create_var(&mut self, builder: &mut FunctionBuilder, ty: Type) -> Result<Variable> {
         let id = self.vars.len();
@@ -218,7 +283,7 @@ where
                 };
                 builder.ins().iconst(ty, imm64)
             }
-            ty if ty.is_bool() => builder.ins().bconst(B1, bool::arbitrary(self.u)?),
+            ty if ty.is_bool() => builder.ins().bconst(ty, bool::arbitrary(self.u)?),
             _ => unimplemented!(),
         })
     }
@@ -381,6 +446,44 @@ where
         Ok(())
     }
 
+    fn generate_stack_slots(&mut self, builder: &mut FunctionBuilder) -> Result<()> {
+        for _ in 0..self.param(&self.config.static_stack_slots_per_function)? {
+            let bytes = self.param(&self.config.static_stack_slot_size)? as u32;
+            let ss_data = StackSlotData::new(StackSlotKind::ExplicitSlot, bytes);
+            let slot = builder.create_sized_stack_slot(ss_data);
+
+            self.static_stack_slots.push(slot);
+        }
+        Ok(())
+    }
+
+    /// Zero initializes the stack slot by inserting `stack_store`'s.
+    fn initialize_stack_slots(&mut self, builder: &mut FunctionBuilder) -> Result<()> {
+        let i64_zero = builder.ins().iconst(I64, 0);
+        let i32_zero = builder.ins().iconst(I32, 0);
+        let i16_zero = builder.ins().iconst(I16, 0);
+        let i8_zero = builder.ins().iconst(I8, 0);
+
+        for &slot in self.static_stack_slots.iter() {
+            let init_size = builder.func.sized_stack_slots[slot].size;
+            let mut size = init_size;
+
+            // Insert the largest available store for the remaining size.
+            while size != 0 {
+                let offset = (init_size - size) as i32;
+                let (val, filled) = match size {
+                    sz if sz / 8 > 0 => (i64_zero, 8),
+                    sz if sz / 4 > 0 => (i32_zero, 4),
+                    sz if sz / 2 > 0 => (i16_zero, 2),
+                    _ => (i8_zero, 1),
+                };
+                builder.ins().stack_store(val, slot, offset);
+                size -= filled;
+            }
+        }
+        Ok(())
+    }
+
     /// Creates a random amount of blocks in this function
     fn generate_blocks(
         &mut self,
@@ -467,6 +570,7 @@ where
 
         // Function preamble
         self.generate_jumptables(&mut builder)?;
+        self.generate_stack_slots(&mut builder)?;
 
         // Main instruction generation loop
         for (i, (block, block_sig)) in self.blocks.clone().iter().enumerate() {
@@ -478,6 +582,10 @@ where
                 // block signature and for the variable pool. Additionally, we must also define
                 // initial values for all variables that are not the function signature.
                 self.build_variable_pool(&mut builder)?;
+
+                // Stack slots have random bytes at the beginning of the function
+                // initialize them to a constant value so that execution stays predictable.
+                self.initialize_stack_slots(&mut builder)?;
             } else {
                 // Define variables for the block params
                 for (i, ty) in block_sig.iter().enumerate() {

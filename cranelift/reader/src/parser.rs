@@ -11,16 +11,17 @@ use crate::testfile::{Comment, Details, Feature, TestFile};
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::entity::EntityRef;
 use cranelift_codegen::ir;
-use cranelift_codegen::ir::entities::AnyEntity;
+use cranelift_codegen::ir::entities::{AnyEntity, DynamicType};
 use cranelift_codegen::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, Uimm32, Uimm64};
 use cranelift_codegen::ir::instructions::{InstructionData, InstructionFormat, VariableArgs};
 use cranelift_codegen::ir::types::INVALID;
 use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{
-    AbiParam, ArgumentExtension, ArgumentPurpose, Block, Constant, ConstantData, ExtFuncData,
-    ExternalName, FuncRef, Function, GlobalValue, GlobalValueData, Heap, HeapData, HeapStyle,
-    JumpTable, JumpTableData, MemFlags, Opcode, SigRef, Signature, StackSlot, StackSlotData,
-    StackSlotKind, Table, TableData, Type, Value,
+    AbiParam, ArgumentExtension, ArgumentPurpose, Block, Constant, ConstantData, DynamicStackSlot,
+    DynamicStackSlotData, DynamicTypeData, ExtFuncData, ExternalName, FuncRef, Function,
+    GlobalValue, GlobalValueData, Heap, HeapData, HeapStyle, JumpTable, JumpTableData, MemFlags,
+    Opcode, SigRef, Signature, StackSlot, StackSlotData, StackSlotKind, Table, TableData, Type,
+    Value,
 };
 use cranelift_codegen::isa::{self, CallConv};
 use cranelift_codegen::packed_option::ReservedValue;
@@ -249,11 +250,11 @@ impl Context {
     // Allocate a new stack slot.
     fn add_ss(&mut self, ss: StackSlot, data: StackSlotData, loc: Location) -> ParseResult<()> {
         self.map.def_ss(ss, loc)?;
-        while self.function.stack_slots.next_key().index() <= ss.index() {
+        while self.function.sized_stack_slots.next_key().index() <= ss.index() {
             self.function
-                .create_stack_slot(StackSlotData::new(StackSlotKind::ExplicitSlot, 0));
+                .create_sized_stack_slot(StackSlotData::new(StackSlotKind::ExplicitSlot, 0));
         }
-        self.function.stack_slots[ss] = data;
+        self.function.sized_stack_slots[ss] = data;
         Ok(())
     }
 
@@ -264,6 +265,47 @@ impl Context {
         } else {
             Ok(())
         }
+    }
+
+    // Allocate a new stack slot.
+    fn add_dss(
+        &mut self,
+        ss: DynamicStackSlot,
+        data: DynamicStackSlotData,
+        loc: Location,
+    ) -> ParseResult<()> {
+        self.map.def_dss(ss, loc)?;
+        while self.function.dynamic_stack_slots.next_key().index() <= ss.index() {
+            self.function
+                .create_dynamic_stack_slot(DynamicStackSlotData::new(
+                    StackSlotKind::ExplicitDynamicSlot,
+                    data.dyn_ty,
+                ));
+        }
+        self.function.dynamic_stack_slots[ss] = data;
+        Ok(())
+    }
+
+    // Resolve a reference to a dynamic stack slot.
+    fn check_dss(&self, dss: DynamicStackSlot, loc: Location) -> ParseResult<()> {
+        if !self.map.contains_dss(dss) {
+            err!(loc, "undefined dynamic stack slot {}", dss)
+        } else {
+            Ok(())
+        }
+    }
+
+    // Allocate a new dynamic type.
+    fn add_dt(&mut self, dt: DynamicType, data: DynamicTypeData, loc: Location) -> ParseResult<()> {
+        self.map.def_dt(dt, loc)?;
+        while self.function.dfg.dynamic_types.next_key().index() <= dt.index() {
+            self.function.dfg.make_dynamic_ty(DynamicTypeData::new(
+                data.base_vector_ty,
+                data.dynamic_scale,
+            ));
+        }
+        self.function.dfg.dynamic_types[dt] = data;
+        Ok(())
     }
 
     // Allocate a global value slot.
@@ -595,6 +637,33 @@ impl<'a> Parser<'a> {
             }
         }
         err!(self.loc, err_msg)
+    }
+
+    // Match and consume a dynamic stack slot reference.
+    fn match_dss(&mut self, err_msg: &str) -> ParseResult<DynamicStackSlot> {
+        if let Some(Token::DynamicStackSlot(ss)) = self.token() {
+            self.consume();
+            if let Some(ss) = DynamicStackSlot::with_number(ss) {
+                return Ok(ss);
+            }
+        }
+        err!(self.loc, err_msg)
+    }
+
+    // Match and consume a dynamic type reference.
+    fn match_dt(&mut self, err_msg: &str) -> ParseResult<DynamicType> {
+        if let Some(Token::DynamicType(dt)) = self.token() {
+            self.consume();
+            if let Some(dt) = DynamicType::with_number(dt) {
+                return Ok(dt);
+            }
+        }
+        err!(self.loc, err_msg)
+    }
+
+    // Extract Type from DynamicType
+    fn concrete_from_dt(&mut self, dt: DynamicType, ctx: &mut Context) -> Option<Type> {
+        ctx.function.get_concrete_dynamic_ty(dt)
     }
 
     // Match and consume a global value reference.
@@ -986,7 +1055,7 @@ impl<'a> Parser<'a> {
             vec![value; lane_size as usize]
         }
 
-        if !ty.is_vector() {
+        if !ty.is_vector() && !ty.is_dynamic_vector() {
             err!(self.loc, "Expected a controlling vector type, not {}", ty)
         } else {
             let constant_data = match ty.lane_type() {
@@ -1386,6 +1455,18 @@ impl<'a> Parser<'a> {
                     self.parse_stack_slot_decl()
                         .and_then(|(ss, dat)| ctx.add_ss(ss, dat, loc))
                 }
+                Some(Token::DynamicStackSlot(..)) => {
+                    self.start_gathering_comments();
+                    let loc = self.loc;
+                    self.parse_dynamic_stack_slot_decl()
+                        .and_then(|(dss, dat)| ctx.add_dss(dss, dat, loc))
+                }
+                Some(Token::DynamicType(..)) => {
+                    self.start_gathering_comments();
+                    let loc = self.loc;
+                    self.parse_dynamic_type_decl()
+                        .and_then(|(dt, dat)| ctx.add_dt(dt, dat, loc))
+                }
                 Some(Token::GlobalValue(..)) => {
                     self.start_gathering_comments();
                     self.parse_global_value_decl()
@@ -1465,6 +1546,39 @@ impl<'a> Parser<'a> {
         Ok((ss, data))
     }
 
+    fn parse_dynamic_stack_slot_decl(
+        &mut self,
+    ) -> ParseResult<(DynamicStackSlot, DynamicStackSlotData)> {
+        let dss = self.match_dss("expected stack slot number: dss«n»")?;
+        self.match_token(Token::Equal, "expected '=' in stack slot declaration")?;
+        let kind = self.match_enum("expected stack slot kind")?;
+        let dt = self.match_dt("expected dynamic type")?;
+        let data = DynamicStackSlotData::new(kind, dt);
+        // Collect any trailing comments.
+        self.token();
+        self.claim_gathered_comments(dss);
+
+        // TBD: stack-slot-decl ::= StackSlot(ss) "=" stack-slot-kind Bytes * {"," stack-slot-flag}
+        Ok((dss, data))
+    }
+
+    fn parse_dynamic_type_decl(&mut self) -> ParseResult<(DynamicType, DynamicTypeData)> {
+        let dt = self.match_dt("expected dynamic type number: dt«n»")?;
+        self.match_token(Token::Equal, "expected '=' in stack slot declaration")?;
+        let vector_base_ty = self.match_type("expected base type")?;
+        assert!(vector_base_ty.is_vector(), "expected vector type");
+        self.match_token(
+            Token::Multiply,
+            "expected '*' followed by a dynamic scale value",
+        )?;
+        let dyn_scale = self.match_gv("expected dynamic scale global value")?;
+        let data = DynamicTypeData::new(vector_base_ty, dyn_scale);
+        // Collect any trailing comments.
+        self.token();
+        self.claim_gathered_comments(dt);
+        Ok((dt, data))
+    }
+
     // Parse a global value decl.
     //
     // global-val-decl ::= * GlobalValue(gv) "=" global-val-desc
@@ -1472,6 +1586,7 @@ impl<'a> Parser<'a> {
     //                   | "load" "." type "notrap" "aligned" GlobalValue(base) [offset]
     //                   | "iadd_imm" "(" GlobalValue(base) ")" imm64
     //                   | "symbol" ["colocated"] name + imm64
+    //                   | "dyn_scale_target_const" "." type
     //
     fn parse_global_value_decl(&mut self) -> ParseResult<(GlobalValue, GlobalValueData)> {
         let gv = self.match_gv("expected global value number: gv«n»")?;
@@ -1529,6 +1644,15 @@ impl<'a> Parser<'a> {
                     colocated,
                     tls,
                 }
+            }
+            "dyn_scale_target_const" => {
+                self.match_token(
+                    Token::Dot,
+                    "expected '.' followed by type in dynamic scale global value decl",
+                )?;
+                let vector_type = self.match_type("expected load type")?;
+                assert!(vector_type.is_vector(), "Expected vector type");
+                GlobalValueData::DynScaleTargetConst { vector_type }
             }
             other => return err!(self.loc, "Unknown global value kind '{}'", other),
         };
@@ -2095,7 +2219,12 @@ impl<'a> Parser<'a> {
         // Look for a controlling type variable annotation.
         // instruction ::=  [inst-results "="] Opcode(opc) * ["." Type] ...
         let explicit_ctrl_type = if self.optional(Token::Dot) {
-            Some(self.match_type("expected type after 'opcode.'")?)
+            if let Some(Token::Type(_t)) = self.token() {
+                Some(self.match_type("expected type after 'opcode.'")?)
+            } else {
+                let dt = self.match_dt("expected dynamic type")?;
+                self.concrete_from_dt(dt, ctx)
+            }
         } else {
             None
         };
@@ -2489,7 +2618,7 @@ impl<'a> Parser<'a> {
             I128 => DataValue::from(self.match_imm128("expected an i128")?),
             F32 => DataValue::from(self.match_ieee32("expected an f32")?),
             F64 => DataValue::from(self.match_ieee64("expected an f64")?),
-            _ if ty.is_vector() => {
+            _ if (ty.is_vector() || ty.is_dynamic_vector()) => {
                 let as_vec = self.match_uimm128(ty)?.into_vec();
                 if as_vec.len() == 16 {
                     let mut as_array = [0; 16];
@@ -2824,6 +2953,25 @@ impl<'a> Parser<'a> {
                     offset,
                 }
             }
+            InstructionFormat::DynamicStackLoad => {
+                let dss = self.match_dss("expected dynamic stack slot number: dss«n»")?;
+                ctx.check_dss(dss, self.loc)?;
+                InstructionData::DynamicStackLoad {
+                    opcode,
+                    dynamic_stack_slot: dss,
+                }
+            }
+            InstructionFormat::DynamicStackStore => {
+                let arg = self.match_value("expected SSA value operand")?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+                let dss = self.match_dss("expected dynamic stack slot number: dss«n»")?;
+                ctx.check_dss(dss, self.loc)?;
+                InstructionData::DynamicStackStore {
+                    opcode,
+                    arg,
+                    dynamic_stack_slot: dss,
+                }
+            }
             InstructionFormat::HeapAddr => {
                 let heap = self.match_heap("expected heap identifier")?;
                 ctx.check_heap(heap, self.loc)?;
@@ -3080,17 +3228,23 @@ mod tests {
         .parse_function()
         .unwrap();
         assert_eq!(func.name.to_string(), "%foo");
-        let mut iter = func.stack_slots.keys();
+        let mut iter = func.sized_stack_slots.keys();
         let _ss0 = iter.next().unwrap();
         let ss1 = iter.next().unwrap();
         assert_eq!(ss1.to_string(), "ss1");
-        assert_eq!(func.stack_slots[ss1].kind, StackSlotKind::ExplicitSlot);
-        assert_eq!(func.stack_slots[ss1].size, 1);
+        assert_eq!(
+            func.sized_stack_slots[ss1].kind,
+            StackSlotKind::ExplicitSlot
+        );
+        assert_eq!(func.sized_stack_slots[ss1].size, 1);
         let _ss2 = iter.next().unwrap();
         let ss3 = iter.next().unwrap();
         assert_eq!(ss3.to_string(), "ss3");
-        assert_eq!(func.stack_slots[ss3].kind, StackSlotKind::ExplicitSlot);
-        assert_eq!(func.stack_slots[ss3].size, 13);
+        assert_eq!(
+            func.sized_stack_slots[ss3].kind,
+            StackSlotKind::ExplicitSlot
+        );
+        assert_eq!(func.sized_stack_slots[ss3].size, 13);
         assert_eq!(iter.next(), None);
 
         // Catch duplicate definitions.

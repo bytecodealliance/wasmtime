@@ -18,6 +18,12 @@ pub struct Config {
     pub block_signature_params: RangeInclusive<usize>,
     pub jump_tables_per_function: RangeInclusive<usize>,
     pub jump_table_entries: RangeInclusive<usize>,
+
+    /// Stack slots.
+    /// The combination of these two determines stack usage per function
+    pub static_stack_slots_per_function: RangeInclusive<usize>,
+    /// Size in bytes
+    pub static_stack_slot_size: RangeInclusive<usize>,
 }
 
 impl Default for Config {
@@ -32,6 +38,8 @@ impl Default for Config {
             block_signature_params: 0..=16,
             jump_tables_per_function: 0..=4,
             jump_table_entries: 0..=16,
+            static_stack_slots_per_function: 0..=8,
+            static_stack_slot_size: 0..=128,
         }
     }
 }

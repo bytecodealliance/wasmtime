@@ -26,7 +26,7 @@ impl UnwindRegistration {
         unwind_len: usize,
     ) -> Result<UnwindRegistration> {
         debug_assert_eq!(
-            unwind_info as usize % region::page::size(),
+            unwind_info as usize % wasmtime_runtime::page_size(),
             0,
             "The unwind info must always be aligned to a page"
         );

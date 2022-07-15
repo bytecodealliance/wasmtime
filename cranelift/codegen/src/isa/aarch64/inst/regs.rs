@@ -332,12 +332,9 @@ pub fn show_vreg_element(reg: Reg, idx: u8, size: VectorSize) -> String {
     assert_eq!(RegClass::Float, reg.class());
     let s = show_reg(reg);
     let suffix = match size {
-        VectorSize::Size8x8 => ".b",
-        VectorSize::Size8x16 => ".b",
-        VectorSize::Size16x4 => ".h",
-        VectorSize::Size16x8 => ".h",
-        VectorSize::Size32x2 => ".s",
-        VectorSize::Size32x4 => ".s",
+        VectorSize::Size8x8 | VectorSize::Size8x16 => ".b",
+        VectorSize::Size16x4 | VectorSize::Size16x8 => ".h",
+        VectorSize::Size32x2 | VectorSize::Size32x4 => ".s",
         VectorSize::Size64x2 => ".d",
     };
     format!("{}{}[{}]", s, suffix, idx)

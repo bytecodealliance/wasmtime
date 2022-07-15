@@ -2301,7 +2301,7 @@
 (decl lower_call_ret_arg (ABISig) InstOutput)
 (rule (lower_call_ret_arg (abi_no_ret_arg)) (output_none))
 (rule (lower_call_ret_arg abi @ (abi_ret_arg (abi_arg_only_slot slot)))
-      (let ((ret_arg Reg (load_addr (memarg_stack_off (abi_stack_arg_space abi) 0)))
+      (let ((ret_arg Reg (load_addr (memarg_stack_off (abi_sized_stack_arg_space abi) 0)))
             (_ Unit (copy_reg_to_arg_slot 0 slot ret_arg)))
         (output_none)))
 
@@ -2309,7 +2309,7 @@
 (decl lower_call_rets (ABISig Range InstOutputBuilder) InstOutput)
 (rule (lower_call_rets abi (range_empty) builder) (output_builder_finish builder))
 (rule (lower_call_rets abi (range_unwrap head tail) builder)
-      (let ((ret ValueRegs (copy_from_arg (abi_stack_arg_space abi) (abi_get_ret abi head)))
+      (let ((ret ValueRegs (copy_from_arg (abi_sized_stack_arg_space abi) (abi_get_ret abi head)))
             (_ Unit (output_builder_push builder ret)))
         (lower_call_rets abi tail builder)))
 

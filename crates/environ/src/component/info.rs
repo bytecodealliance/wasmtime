@@ -393,6 +393,9 @@ pub enum Export {
     /// The module index here indexes a module recorded with
     /// `GlobalInitializer::SaveModule` above.
     Module(RuntimeModuleIndex),
+    /// A nested instance is being exported which has recursively defined
+    /// `Export` items.
+    Instance(IndexMap<String, Export>),
 }
 
 /// Canonical ABI options associated with a lifted or lowered function.

@@ -1,0 +1,30 @@
+
+;;;; Rules for `iadd` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(rule (lower (has_type ty @ (dynamic_lane _ _) (iadd x y)))
+      (value_reg (vec_rrr (VecALUOp.Add) (put_in_reg x) (put_in_reg y) (vector_size ty))))
+
+;;;; Rules for `isub` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(rule (lower (has_type ty @ (dynamic_lane _ _) (isub x y)))
+      (value_reg (vec_rrr (VecALUOp.Sub) (put_in_reg x) (put_in_reg y) (vector_size ty))))
+
+;;;; Rules for `imul` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(rule (lower (has_type (lane_fits_in_32 ty @ (dynamic_lane _ _)) (imul x y)))
+      (value_reg (vec_rrr (VecALUOp.Mul) (put_in_reg x) (put_in_reg y) (vector_size ty))))
+
+;;;; Rules for `fsub` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(rule (lower (has_type ty @ (dynamic_lane _ _) (fadd x y)))
+      (value_reg (vec_rrr (VecALUOp.Fadd) (put_in_reg x) (put_in_reg y) (vector_size ty))))
+
+;;;; Rules for `fsub` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(rule (lower (has_type ty @ (dynamic_lane _ _) (fsub x y)))
+      (value_reg (vec_rrr (VecALUOp.Fsub) (put_in_reg x) (put_in_reg y) (vector_size ty))))
+
+;;; Rules for `dynamic_stack_addr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(rule (lower (dynamic_stack_addr stack_slot))
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (abi_dynamic_stackslot_addr dst stack_slot))))
+        (value_reg dst)))
+
+;;; Rules for `extract_vector` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(rule (lower (extract_vector x 0))
+      (value_reg (fpu_move_128 (put_in_reg x))))
