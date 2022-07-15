@@ -70,6 +70,8 @@ pub fn default_libcall_names() -> Box<dyn Fn(ir::LibCall) -> String + Send + Syn
         ir::LibCall::TruncF64 => "trunc".to_owned(),
         ir::LibCall::NearestF32 => "nearbyintf".to_owned(),
         ir::LibCall::NearestF64 => "nearbyint".to_owned(),
+        ir::LibCall::FmaF32 => "fmaf".to_owned(),
+        ir::LibCall::FmaF64 => "fma".to_owned(),
         ir::LibCall::Memcpy => "memcpy".to_owned(),
         ir::LibCall::Memset => "memset".to_owned(),
         ir::LibCall::Memmove => "memmove".to_owned(),

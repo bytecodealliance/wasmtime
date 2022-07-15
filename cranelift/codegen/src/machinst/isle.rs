@@ -4,6 +4,7 @@ use alloc::boxed::Box;
 use alloc::vec::Vec;
 use smallvec::SmallVec;
 use std::cell::Cell;
+use target_lexicon::Triple;
 
 pub use super::MachLabel;
 pub use crate::ir::{
@@ -899,6 +900,7 @@ where
     [(C::I, bool); N]: smallvec::Array,
 {
     pub lower_ctx: &'a mut C,
+    pub triple: &'a Triple,
     pub flags: &'a F,
     pub isa_flags: &'a I,
 }
@@ -910,6 +912,7 @@ where
 /// lowering.
 pub(crate) fn lower_common<C, F, I, IF, const N: usize>(
     lower_ctx: &mut C,
+    triple: &Triple,
     flags: &F,
     isa_flags: &I,
     outputs: &[InsnOutput],
@@ -925,6 +928,7 @@ where
     // internal heap allocations.
     let mut isle_ctx = IsleContext {
         lower_ctx,
+        triple,
         flags,
         isa_flags,
     };

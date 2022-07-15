@@ -10,6 +10,8 @@ use generated_code::{Context, MInst};
 
 // Types that the generated ISLE code uses via `use super::*`.
 use super::{is_int_or_ref_ty, is_mergeable_load, lower_to_amode};
+use crate::ir::LibCall;
+use crate::isa::x64::lower::emit_vm_call;
 use crate::{
     ir::{
         condcodes::{FloatCC, IntCC},
@@ -35,6 +37,7 @@ use regalloc2::PReg;
 use smallvec::SmallVec;
 use std::boxed::Box;
 use std::convert::TryFrom;
+use target_lexicon::Triple;
 
 type BoxCallInfo = Box<CallInfo>;
 type BoxVecMachLabel = Box<SmallVec<[MachLabel; 4]>>;
@@ -48,6 +51,7 @@ pub struct SinkableLoad {
 /// The main entry point for lowering with ISLE.
 pub(crate) fn lower<C>(
     lower_ctx: &mut C,
+    triple: &Triple,
     flags: &Flags,
     isa_flags: &IsaFlags,
     outputs: &[InsnOutput],
@@ -56,9 +60,15 @@ pub(crate) fn lower<C>(
 where
     C: LowerCtx<I = MInst>,
 {
-    lower_common(lower_ctx, flags, isa_flags, outputs, inst, |cx, insn| {
-        generated_code::constructor_lower(cx, insn)
-    })
+    lower_common(
+        lower_ctx,
+        triple,
+        flags,
+        isa_flags,
+        outputs,
+        inst,
+        |cx, insn| generated_code::constructor_lower(cx, insn),
+    )
 }
 
 impl<C> Context for IsleContext<'_, C, Flags, IsaFlags, 6>
@@ -646,6 +656,24 @@ where
     #[inline]
     fn preg_rsp(&mut self) -> PReg {
         regs::rsp().to_real_reg().unwrap().into()
+    }
+
+    fn libcall_3(&mut self, libcall: &LibCall, a: Reg, b: Reg, c: Reg) -> Reg {
+        let call_conv = self.lower_ctx.abi().call_conv();
+        let ret_ty = libcall.signature(call_conv).returns[0].value_type;
+        let output_reg = self.lower_ctx.alloc_tmp(ret_ty).only_reg().unwrap();
+
+        emit_vm_call(
+            self.lower_ctx,
+            self.flags,
+            self.triple,
+            libcall.clone(),
+            &[a, b, c],
+            &[output_reg],
+        )
+        .expect("Failed to emit LibCall");
+
+        output_reg.to_reg()
     }
 }
 
