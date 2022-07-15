@@ -10,6 +10,8 @@
 // different so the reserved space at the top of the stack is 8 bytes, not 16
 // bytes. Still two pointers though.
 
+use wasmtime_asm_macros::{asm_func, asm_sym};
+
 // fn(top_of_stack: *mut u8)
 asm_func!(
     "wasmtime_fiber_switch",
