@@ -279,13 +279,25 @@ impl Value for DataValue {
     }
 
     fn vector(v: [u8; 16], ty: Type) -> ValueResult<Self> {
-        assert!(ty.is_vector() && ty.bytes() == 16);
-        Ok(DataValue::V128(v))
+        assert!(ty.is_vector() && [8, 16].contains(&ty.bytes()));
+        if ty.bytes() == 16 {
+            Ok(DataValue::V128(v))
+        } else if ty.bytes() == 8 {
+            let v64: [u8; 8] = v[..8].try_into().unwrap();
+            Ok(DataValue::V64(v64))
+        } else {
+            unimplemented!()
+        }
     }
 
     fn into_array(&self) -> ValueResult<[u8; 16]> {
         match *self {
             DataValue::V128(v) => Ok(v),
+            DataValue::V64(v) => {
+                let mut v128 = [0; 16];
+                v128[..8].clone_from_slice(&v);
+                Ok(v128)
+            }
             _ => Err(ValueError::InvalidType(ValueTypeClass::Vector, self.ty())),
         }
     }
