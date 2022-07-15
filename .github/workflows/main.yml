@@ -221,6 +221,7 @@ jobs:
     - uses: actions/checkout@v2
       with:
         submodules: true
+    - uses: ./.github/actions/free-disk-space
     - uses: ./.github/actions/install-rust
 
     # Install targets in order to build various tests throughout the repo
@@ -324,8 +325,7 @@ jobs:
       with:
         submodules: true
     - run: rustup target add wasm32-wasi
-    - name: Install Rust
-      run: rustup update stable && rustup default stable
+    - uses: ./.github/actions/install-rust
     - run: ./ci/run-wasi-crypto-example.sh
       env:
         RUST_BACKTRACE: 1
@@ -338,8 +338,7 @@ jobs:
       with:
         submodules: true
     - run: rustup target add wasm32-wasi
-    - name: Install Rust
-      run: rustup update stable && rustup default stable
+    - uses: ./.github/actions/install-rust
     - run: cargo test --benches --release
 
   # Verify that cranelift's code generation is deterministic
@@ -350,8 +349,7 @@ jobs:
     - uses: actions/checkout@v2
       with:
         submodules: true
-    - name: Install Rust
-      run: rustup update stable && rustup default stable
+    - uses: ./.github/actions/install-rust
     - run: cd cranelift/codegen && cargo build --features all-arch
     - run: ci/ensure_deterministic_build.sh
 
@@ -401,12 +399,6 @@ jobs:
     # Build `libwasmtime.so`
     - run: $CENTOS cargo build --release --manifest-path crates/c-api/Cargo.toml
 
-    # Prepare and build examples with both static and dynamic linking
-    - run: cmake -S ${{ github.workspace }}/examples -B ${{ github.workspace }}/examples/build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF
-    - run: cmake --build ${{ github.workspace }}/examples/build --config Release
-    - run: cmake -S ${{ github.workspace }}/examples -B ${{ github.workspace }}/examples/build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON
-    - run: cmake --build ${{ github.workspace }}/examples/build --config Release
-
     # Assemble release artifats appropriate for this platform, then upload them
     # unconditionally to this workflow's files so we have a copy of them.
     - run: ./ci/build-tarballs.sh "${{ matrix.build }}" "${{ matrix.target }}"
@@ -435,7 +427,7 @@ jobs:
     - uses: actions/checkout@v2
       with:
         submodules: true
-    - run: rustup update stable && rustup default stable
+    - uses: ./.github/actions/install-rust
     - run: |
         cd ${{ runner.tool_cache }}
         curl -L https://github.com/mozilla/sccache/releases/download/0.2.13/sccache-0.2.13-x86_64-unknown-linux-musl.tar.gz | tar xzf -

@@ -14,7 +14,7 @@ function(CREATE_TARGET TARGET TARGET_PATH)
 
 	set_target_properties(wasmtime-${TARGET} PROPERTIES
 		OUTPUT_NAME wasmtime-${TARGET}
-		RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+		RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/$<0:>
 		CXX_VISIBILITY_PRESET hidden
 		POSITION_INDEPENDENT_CODE ON)
 
@@ -35,4 +35,5 @@ create_target(multi multi.c)
 create_target(multimemory multimemory.c)
 create_target(serialize serialize.c)
 create_target(threads threads.c)
+create_target(tokio tokio/main.c)
 create_target(wasi wasi/main.c)

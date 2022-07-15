@@ -16,13 +16,14 @@ fn main() -> anyhow::Result<()> {
         examples.insert((path.file_stem().unwrap().to_str().unwrap().to_owned(), dir));
     }
 
-    println!("======== Building libwasmtime.a ===========");
-    run(Command::new("cargo")
-        .args(&["build"])
-        .current_dir("crates/c-api"))?;
+    println!("======== Prepare C/C++ CMake project ===========");
+    run(Command::new("cmake")
+        .arg("-Sexamples")
+        .arg("-Bexamples/build")
+        .arg("-DBUILD_SHARED_LIBS=OFF"))?;
 
     for (example, is_dir) in examples {
-        if example == "README" || example == "CMakeLists" {
+        if example == "README" || example == "CMakeLists" || example == "build" {
             continue;
         }
         if let Some(example_to_run) = &example_to_run {
@@ -54,57 +55,32 @@ fn main() -> anyhow::Result<()> {
         run(&mut cargo_cmd)?;
 
         println!("======== C/C++ example `{}` ============", example);
-        for extension in ["c", "cc"].iter() {
-            let mut cmd = cc::Build::new()
-                .opt_level(0)
-                .cargo_metadata(false)
-                .target(env!("TARGET"))
-                .host(env!("TARGET"))
-                .include("crates/c-api/include")
-                .include("crates/c-api/wasm-c-api/include")
-                .define("WASM_API_EXTERN", Some("")) // static linkage, not dynamic
-                .warnings(false)
-                .get_compiler()
-                .to_command();
+        let c_file = format!("examples/{}.c", example);
+        if std::path::Path::new(&c_file).exists() {
+            run(Command::new("cmake")
+                .arg("--build")
+                .arg("examples/build")
+                .arg("--target")
+                .arg(format!("wasmtime-{}", example))
+                .arg("--config")
+                .arg("Debug"))?;
 
-            let file = if is_dir {
-                format!("examples/{}/main.{}", example, extension)
+            if cfg!(windows) {
+                run(&mut Command::new(format!(
+                    "examples/build/wasmtime-{}.exe",
+                    example
+                )))?;
             } else {
-                format!("examples/{}.{}", example, extension)
+                run(&mut Command::new(format!(
+                    "examples/build/wasmtime-{}",
+                    example
+                )))?;
             };
-
-            if !std::path::Path::new(&file).exists() {
-                // C and C++ files are optional so we can skip them.
-                continue;
-            }
-
-            cmd.arg(file);
-            let exe = if cfg!(windows) {
-                cmd.arg("target/debug/wasmtime.lib")
-                    .arg("ws2_32.lib")
-                    .arg("advapi32.lib")
-                    .arg("userenv.lib")
-                    .arg("ntdll.lib")
-                    .arg("shell32.lib")
-                    .arg("ole32.lib")
-                    .arg("bcrypt.lib");
-                if is_dir {
-                    "./main.exe".to_string()
-                } else {
-                    format!("./{}.exe", example)
-                }
-            } else {
-                cmd.arg("target/debug/libwasmtime.a").arg("-o").arg("foo");
-                "./foo".to_string()
-            };
-            if cfg!(target_os = "linux") {
-                cmd.arg("-lpthread").arg("-ldl").arg("-lm");
-            }
-            run(&mut cmd)?;
-
-            run(&mut Command::new(exe))?;
         }
     }
+
+    println!("======== Remove examples binaries ===========");
+    std::fs::remove_dir_all("examples/build")?;
 
     Ok(())
 }
