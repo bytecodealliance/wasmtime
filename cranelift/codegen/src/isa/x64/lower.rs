@@ -893,13 +893,14 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::Fmin
         | Opcode::Fmax
         | Opcode::FminPseudo
-        | Opcode::FmaxPseudo => implemented_in_isle(ctx),
-
-        Opcode::Icmp => {
-            implemented_in_isle(ctx);
-        }
-
-        Opcode::Fcmp => {
+        | Opcode::FmaxPseudo
+        | Opcode::Sqrt
+        | Opcode::Fpromote
+        | Opcode::FvpromoteLow
+        | Opcode::Fdemote
+        | Opcode::Fvdemote
+        | Opcode::Icmp
+        | Opcode::Fcmp => {
             implemented_in_isle(ctx);
         }
 
@@ -1018,26 +1019,6 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     FcmpCondResult::InvertedEqualOrConditions(_, _) => unreachable!(),
                 };
             };
-        }
-
-        Opcode::Sqrt => {
-            implemented_in_isle(ctx);
-        }
-
-        Opcode::Fpromote => {
-            implemented_in_isle(ctx);
-        }
-
-        Opcode::FvpromoteLow => {
-            implemented_in_isle(ctx);
-        }
-
-        Opcode::Fdemote => {
-            implemented_in_isle(ctx);
-        }
-
-        Opcode::Fvdemote => {
-            implemented_in_isle(ctx);
         }
 
         Opcode::FcvtFromSint => {
