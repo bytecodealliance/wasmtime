@@ -2855,6 +2855,13 @@
            (_ Unit (emit (MInst.XmmUnaryRmR (SseOpcode.Cvtps2pd) x dst))))
         dst))
 
+;; Helper for creating `cvtpd2ps` instructions.
+(decl x64_cvtpd2ps (Xmm) Xmm)
+(rule (x64_cvtpd2ps x)
+      (let ((dst WritableXmm (temp_writable_xmm))
+           (_ Unit (emit (MInst.XmmUnaryRmR (SseOpcode.Cvtpd2ps) x dst))))
+        dst))
+
 ;; Helpers for creating `pcmpeq*` instructions.
 (decl x64_pcmpeq (Type Xmm XmmMem) Xmm)
 (rule (x64_pcmpeq $I8X16 x y) (x64_pcmpeqb x y))

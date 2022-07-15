@@ -1037,13 +1037,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Fvdemote => {
-            let src = RegMem::reg(put_input_in_reg(ctx, inputs[0]));
-            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            ctx.emit(Inst::xmm_unary_rm_r(
-                SseOpcode::Cvtpd2ps,
-                RegMem::from(src),
-                dst,
-            ));
+            implemented_in_isle(ctx);
         }
 
         Opcode::FcvtFromSint => {
