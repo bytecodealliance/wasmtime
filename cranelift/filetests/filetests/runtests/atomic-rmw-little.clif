@@ -1,5 +1,6 @@
 test run
 target s390x
+target s390x has_mie2
 target aarch64
 target aarch64 has_lse
 target x86_64

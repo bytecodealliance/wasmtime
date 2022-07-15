@@ -1,6 +1,5 @@
 test run
 target aarch64
-target arm
 target s390x
 target x86_64
 

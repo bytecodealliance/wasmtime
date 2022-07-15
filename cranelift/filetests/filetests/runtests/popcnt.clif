@@ -2,7 +2,7 @@ test interpret
 test run
 target aarch64
 target x86_64
-target x86_64 has_popcnt=1
+target x86_64 has_popcnt
 
 function %popcnt_i8(i8) -> i8 {
 block0(v0: i8):
