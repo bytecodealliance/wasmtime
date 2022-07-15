@@ -1,7 +1,7 @@
 //! ARM 64-bit Instruction Set Architecture.
 
 use crate::ir::condcodes::IntCC;
-use crate::ir::Function;
+use crate::ir::{Function, Type};
 use crate::isa::aarch64::settings as aarch64_settings;
 use crate::isa::{Builder as IsaBuilder, TargetIsa};
 use crate::machinst::{
@@ -57,7 +57,7 @@ impl AArch64Backend {
         flags: shared_settings::Flags,
     ) -> CodegenResult<(VCode<inst::Inst>, regalloc2::Output)> {
         let emit_info = EmitInfo::new(flags.clone());
-        let abi = Box::new(abi::AArch64ABICallee::new(func, flags, self.isa_flags())?);
+        let abi = Box::new(abi::AArch64ABICallee::new(func, self)?);
         compile::compile::<AArch64Backend>(func, self, abi, &self.machine_env, emit_info)
     }
 }
@@ -76,7 +76,8 @@ impl TargetIsa for AArch64Backend {
         let frame_size = emit_result.frame_size;
         let value_labels_ranges = emit_result.value_labels_ranges;
         let buffer = emit_result.buffer.finish();
-        let stackslot_offsets = emit_result.stackslot_offsets;
+        let sized_stackslot_offsets = emit_result.sized_stackslot_offsets;
+        let dynamic_stackslot_offsets = emit_result.dynamic_stackslot_offsets;
 
         if let Some(disasm) = emit_result.disasm.as_ref() {
             log::debug!("disassembly:\n{}", disasm);
@@ -87,7 +88,8 @@ impl TargetIsa for AArch64Backend {
             frame_size,
             disasm: emit_result.disasm,
             value_labels_ranges,
-            stackslot_offsets,
+            sized_stackslot_offsets,
+            dynamic_stackslot_offsets,
             bb_starts: emit_result.bb_offsets,
             bb_edges: emit_result.bb_edges,
         })
@@ -107,6 +109,10 @@ impl TargetIsa for AArch64Backend {
 
     fn isa_flags(&self) -> Vec<shared_settings::Value> {
         self.isa_flags.iter().collect()
+    }
+
+    fn dynamic_vector_bytes(&self, _dyn_ty: Type) -> u32 {
+        16
     }
 
     fn unsigned_add_overflow_condition(&self) -> IntCC {

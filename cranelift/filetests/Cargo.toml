@@ -10,12 +10,12 @@ publish = false
 edition = "2021"
 
 [dependencies]
-cranelift-codegen = { path = "../codegen", version = "0.86.0", features = ["testing_hooks"] }
-cranelift-frontend = { path = "../frontend", version = "0.86.0" }
-cranelift-interpreter = { path = "../interpreter", version = "0.86.0" }
-cranelift-native = { path = "../native", version = "0.86.0" }
-cranelift-reader = { path = "../reader", version = "0.86.0" }
-cranelift-preopt = { path = "../preopt", version = "0.86.0" }
+cranelift-codegen = { path = "../codegen", version = "0.87.0", features = ["testing_hooks"] }
+cranelift-frontend = { path = "../frontend", version = "0.87.0" }
+cranelift-interpreter = { path = "../interpreter", version = "0.87.0" }
+cranelift-native = { path = "../native", version = "0.87.0" }
+cranelift-reader = { path = "../reader", version = "0.87.0" }
+cranelift-preopt = { path = "../preopt", version = "0.87.0" }
 file-per-thread-logger = "0.1.2"
 filecheck = "0.5.0"
 gimli = { version = "0.26.0", default-features = false, features = ["read"] }

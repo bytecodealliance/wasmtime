@@ -34,6 +34,8 @@ pub(crate) struct Formats {
     pub(crate) shuffle: Rc<InstructionFormat>,
     pub(crate) stack_load: Rc<InstructionFormat>,
     pub(crate) stack_store: Rc<InstructionFormat>,
+    pub(crate) dynamic_stack_load: Rc<InstructionFormat>,
+    pub(crate) dynamic_stack_store: Rc<InstructionFormat>,
     pub(crate) store: Rc<InstructionFormat>,
     pub(crate) store_no_offset: Rc<InstructionFormat>,
     pub(crate) table_addr: Rc<InstructionFormat>,
@@ -228,6 +230,15 @@ impl Formats {
                 .value()
                 .imm(&entities.stack_slot)
                 .imm(&imm.offset32)
+                .build(),
+
+            dynamic_stack_load: Builder::new("DynamicStackLoad")
+                .imm(&entities.dynamic_stack_slot)
+                .build(),
+
+            dynamic_stack_store: Builder::new("DynamicStackStore")
+                .value()
+                .imm(&entities.dynamic_stack_slot)
                 .build(),
 
             // Accessing a WebAssembly heap.

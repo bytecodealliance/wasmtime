@@ -2052,13 +2052,19 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             mem.get_operands(collector);
         }
 
-        Inst::AtomicRmwSeq { .. } => {
-            // FIXME: take vreg args, not fixed regs, and just use
-            // reg_fixed_use here.
-            collector.reg_use(regs::r9());
-            collector.reg_use(regs::r10());
-            collector.reg_def(Writable::from_reg(regs::r11()));
-            collector.reg_def(Writable::from_reg(regs::rax()));
+        Inst::AtomicRmwSeq {
+            operand,
+            temp,
+            dst_old,
+            mem,
+            ..
+        } => {
+            collector.reg_late_use(*operand);
+            collector.reg_early_def(*temp);
+            // This `fixed_def` is needed because `CMPXCHG` always uses this
+            // register implicitly.
+            collector.reg_fixed_def(*dst_old, regs::rax());
+            mem.get_operands_late(collector)
         }
 
         Inst::Ret { rets } => {

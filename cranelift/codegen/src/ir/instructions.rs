@@ -633,6 +633,8 @@ pub struct ValueTypeSet {
     pub bools: BitSet8,
     /// Allowed ref widths
     pub refs: BitSet8,
+    /// Allowed dynamic vectors minimum lane sizes
+    pub dynamic_lanes: BitSet16,
 }
 
 impl ValueTypeSet {
@@ -656,8 +658,13 @@ impl ValueTypeSet {
 
     /// Does `typ` belong to this set?
     pub fn contains(self, typ: Type) -> bool {
-        let l2l = typ.log2_lane_count();
-        self.lanes.contains(l2l) && self.is_base_type(typ.lane_type())
+        if typ.is_dynamic_vector() {
+            let l2l = typ.log2_min_lane_count();
+            self.dynamic_lanes.contains(l2l) && self.is_base_type(typ.lane_type())
+        } else {
+            let l2l = typ.log2_lane_count();
+            self.lanes.contains(l2l) && self.is_base_type(typ.lane_type())
+        }
     }
 
     /// Get an example member of this type set.
@@ -712,6 +719,9 @@ enum OperandConstraint {
 
     /// This operand is `ctrlType.merge_lanes()`.
     MergeLanes,
+
+    /// This operands is `ctrlType.dynamic_to_vector()`.
+    DynamicToVector,
 }
 
 impl OperandConstraint {
@@ -738,15 +748,48 @@ impl OperandConstraint {
                     .expect("invalid type for half_vector"),
             ),
             DoubleVector => Bound(ctrl_type.by(2).expect("invalid type for double_vector")),
-            SplitLanes => Bound(
+            SplitLanes => {
+                if ctrl_type.is_dynamic_vector() {
+                    Bound(
+                        ctrl_type
+                            .dynamic_to_vector()
+                            .expect("invalid type for dynamic_to_vector")
+                            .split_lanes()
+                            .expect("invalid type for split_lanes")
+                            .vector_to_dynamic()
+                            .expect("invalid dynamic type"),
+                    )
+                } else {
+                    Bound(
+                        ctrl_type
+                            .split_lanes()
+                            .expect("invalid type for split_lanes"),
+                    )
+                }
+            }
+            MergeLanes => {
+                if ctrl_type.is_dynamic_vector() {
+                    Bound(
+                        ctrl_type
+                            .dynamic_to_vector()
+                            .expect("invalid type for dynamic_to_vector")
+                            .merge_lanes()
+                            .expect("invalid type for merge_lanes")
+                            .vector_to_dynamic()
+                            .expect("invalid dynamic type"),
+                    )
+                } else {
+                    Bound(
+                        ctrl_type
+                            .merge_lanes()
+                            .expect("invalid type for merge_lanes"),
+                    )
+                }
+            }
+            DynamicToVector => Bound(
                 ctrl_type
-                    .split_lanes()
-                    .expect("invalid type for split_lanes"),
-            ),
-            MergeLanes => Bound(
-                ctrl_type
-                    .merge_lanes()
-                    .expect("invalid type for merge_lanes"),
+                    .dynamic_to_vector()
+                    .expect("invalid type for dynamic_to_vector"),
             ),
         }
     }
@@ -860,11 +903,13 @@ mod tests {
             floats: BitSet8::from_range(0, 0),
             bools: BitSet8::from_range(3, 7),
             refs: BitSet8::from_range(5, 7),
+            dynamic_lanes: BitSet16::from_range(0, 4),
         };
         assert!(!vts.contains(I8));
         assert!(vts.contains(I32));
         assert!(vts.contains(I64));
         assert!(vts.contains(I32X4));
+        assert!(vts.contains(I32X4XN));
         assert!(!vts.contains(F32));
         assert!(!vts.contains(B1));
         assert!(vts.contains(B8));
@@ -879,6 +924,7 @@ mod tests {
             floats: BitSet8::from_range(5, 7),
             bools: BitSet8::from_range(3, 7),
             refs: BitSet8::from_range(0, 0),
+            dynamic_lanes: BitSet16::from_range(0, 8),
         };
         assert_eq!(vts.example().to_string(), "f32");
 
@@ -888,6 +934,7 @@ mod tests {
             floats: BitSet8::from_range(5, 7),
             bools: BitSet8::from_range(3, 7),
             refs: BitSet8::from_range(0, 0),
+            dynamic_lanes: BitSet16::from_range(0, 8),
         };
         assert_eq!(vts.example().to_string(), "f32x2");
 
@@ -897,9 +944,11 @@ mod tests {
             floats: BitSet8::from_range(0, 0),
             bools: BitSet8::from_range(3, 7),
             refs: BitSet8::from_range(0, 0),
+            dynamic_lanes: BitSet16::from_range(0, 8),
         };
         assert!(!vts.contains(B32X2));
         assert!(vts.contains(B32X4));
+        assert!(vts.contains(B16X4XN));
         assert_eq!(vts.example().to_string(), "b32x4");
 
         let vts = ValueTypeSet {
@@ -909,6 +958,7 @@ mod tests {
             floats: BitSet8::from_range(0, 0),
             bools: BitSet8::from_range(0, 0),
             refs: BitSet8::from_range(0, 0),
+            dynamic_lanes: BitSet16::from_range(0, 8),
         };
         assert!(vts.contains(I32));
         assert!(vts.contains(I32X4));

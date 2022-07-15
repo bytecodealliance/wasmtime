@@ -20,7 +20,7 @@ use crate::PtrSize;
 
 /// Equivalent of `VMCONTEXT_MAGIC` except for components.
 ///
-/// This is stored at the start of all `VMComponentContext` structures adn
+/// This is stored at the start of all `VMComponentContext` structures and
 /// double-checked on `VMComponentContext::from_opaque`.
 pub const VMCOMPONENT_MAGIC: u32 = u32::from_le_bytes(*b"comp");
 

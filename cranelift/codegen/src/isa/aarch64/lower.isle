@@ -81,6 +81,9 @@
 (rule (lower (has_type ty @ (multi_lane _ _) (iadd x y)))
       (add_vec x y (vector_size ty)))
 
+(rule (lower (has_type ty @ (dynamic_lane _ _) (iadd x y)))
+      (value_reg (vec_rrr (VecALUOp.Add) (put_in_reg x) (put_in_reg y) (vector_size ty))))
+
 ;; `i128`
 (rule (lower (has_type $I128 (iadd x y)))
       (let
@@ -98,6 +101,25 @@
         (with_flags
           (add_with_flags_paired $I64 x_lo y_lo)
           (adc_paired $I64 x_hi y_hi))))
+
+;;;; Rules for `swizzle` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type vec_i128_ty (swizzle rn rm)))
+      (vec_tbl rn rm #f))
+
+;;;; Rules for `isplit` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I64 (isplit x)))
+      (let
+          ((x_regs ValueRegs x)
+           (x_lo ValueRegs (value_regs_get x_regs 0))
+           (x_hi ValueRegs (value_regs_get x_regs 1)))
+        (output_pair x_lo x_hi)))
+
+;;;; Rules for `iconcat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I128 (iconcat lo hi)))
+      (output (value_regs lo hi)))
 
 ;;;; Rules for `iadd_pairwise` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -152,6 +174,8 @@
 ;; vectors
 (rule (lower (has_type ty @ (multi_lane _ _) (isub x y)))
       (sub_vec x y (vector_size ty)))
+(rule (lower (has_type ty @ (dynamic_lane _ _) (isub x y)))
+      (value_reg (sub_vec (put_in_reg x) (put_in_reg y) (vector_size ty))))
 
 ;; `i128`
 (rule (lower (has_type $I128 (isub x y)))
@@ -238,6 +262,10 @@
 ;; Case for i8x16, i16x8, and i32x4.
 (rule (lower (has_type (ty_vec128 ty @ (not_i64x2)) (imul x y)))
       (mul x y (vector_size ty)))
+
+;; Case for 'dynamic' i8x16, i16x8, and i32x4.
+(rule (lower (has_type ty @ (dynamic_lane _ _) (imul x y)))
+      (value_reg (vec_rrr (VecALUOp.Mul) (put_in_reg x) (put_in_reg y) (vector_size ty))))
 
 ;; Special lowering for i64x2.
 ;;
@@ -498,6 +526,20 @@
             (div Reg (a64_sdiv $I64 x64 y64))
             (result Reg (msub $I64 div y64 x64)))
         result))
+
+;;; Rules for integer min/max: umin, imin, umax, imax ;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type ty @ (not_i64x2) (imin x y)))
+      (vec_rrr (VecALUOp.Smin) x y (vector_size ty)))
+
+(rule (lower (has_type ty @ (not_i64x2) (umin x y)))
+      (vec_rrr (VecALUOp.Umin) x y (vector_size ty)))
+
+(rule (lower (has_type ty @ (not_i64x2) (imax x y)))
+      (vec_rrr (VecALUOp.Smax) x y (vector_size ty)))
+
+(rule (lower (has_type ty @ (not_i64x2) (umax x y)))
+      (vec_rrr (VecALUOp.Umax) x y (vector_size ty)))
 
 ;;;; Rules for `uextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

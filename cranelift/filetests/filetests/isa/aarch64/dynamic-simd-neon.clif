@@ -1,0 +1,104 @@
+test compile
+target aarch64
+
+function %i8x16_splat_add(i8, i8) -> i8x16 {
+  gv0 = dyn_scale_target_const.i8x16
+  dt0 = i8x16*gv0
+
+block0(v0: i8, v1: i8):
+  v2 = splat.dt0 v0
+  v3 = splat.dt0 v1
+  v4 = iadd v2, v3
+  v5 = extract_vector v4, 0
+  return v5
+}
+
+; check:  dup v4.16b, w0
+; nextln: dup v6.16b, w1
+; nextln: add v0.16b, v4.16b, v6.16b
+; nextln: ret
+
+function %i16x8_splat_add(i16, i16) -> i16x8 {
+  gv0 = dyn_scale_target_const.i16x8
+  dt0 = i16x8*gv0
+
+block0(v0: i16, v1: i16):
+  v2 = splat.dt0 v0
+  v3 = splat.dt0 v1
+  v4 = iadd v2, v3
+  v5 = extract_vector v4, 0
+  return v5
+}
+
+; check:  dup v4.8h, w0
+; nextln: dup v6.8h, w1
+; nextln: add v0.8h, v4.8h, v6.8h
+; nextln: ret
+
+function %i32x4_splat_mul(i32, i32) -> i32x4 {
+  gv0 = dyn_scale_target_const.i32x4
+  dt0 = i32x4*gv0
+
+block0(v0: i32, v1: i32):
+  v2 = splat.dt0 v0
+  v3 = splat.dt0 v1
+  v4 = imul v2, v3
+  v5 = extract_vector v4, 0
+  return v5
+}
+
+; check:  dup v4.4s, w0
+; nextln: dup v6.4s, w1
+; nextln: mul v0.4s, v4.4s, v6.4s
+; nextln: ret
+
+function %i64x2_splat_sub(i64, i64) -> i64x2 {
+  gv0 = dyn_scale_target_const.i64x2
+  dt0 = i64x2*gv0
+
+block0(v0: i64, v1: i64):
+  v2 = splat.dt0 v0
+  v3 = splat.dt0 v1
+  v4 = isub v2, v3
+  v5 = extract_vector v4, 0
+  return v5
+}
+
+; check:  dup v4.2d, x0
+; nextln: dup v6.2d, x1
+; nextln: sub v0.2d, v4.2d, v6.2d
+; nextln: ret
+
+function %f32x4_splat_add(f32, f32) -> f32x4 {
+  gv0 = dyn_scale_target_const.f32x4
+  dt0 = f32x4*gv0
+
+block0(v0: f32, v1: f32):
+  v2 = splat.dt0 v0
+  v3 = splat.dt0 v1
+  v4 = fadd v2, v3
+  v5 = extract_vector v4, 0
+  return v5
+}
+
+; check:  dup v4.4s, v0.s[0]
+; nextln: dup v6.4s, v1.s[0]
+; nextln: fadd v0.4s, v4.4s, v6.4s
+; nextln: ret
+
+function %f64x2_splat_sub(f64, f64) -> f64x2 {
+  gv0 = dyn_scale_target_const.f64x2
+  dt0 = f64x2*gv0
+
+block0(v0: f64, v1: f64):
+  v2 = splat.dt0 v0
+  v3 = splat.dt0 v1
+  v4 = fsub v2, v3
+  v5 = extract_vector v4, 0
+  return v5
+}
+
+; check:  dup v4.2d, v0.d[0]
+; nextln: dup v6.2d, v1.d[0]
+; nextln: fsub v0.2d, v4.2d, v6.2d
+; nextln: ret

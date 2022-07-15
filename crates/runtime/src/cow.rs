@@ -212,7 +212,7 @@ impl ModuleMemoryImages {
             _ => return Ok(None),
         };
         let mut memories = PrimaryMap::with_capacity(map.len());
-        let page_size = region::page::size() as u32;
+        let page_size = crate::page_size() as u32;
         for (memory_index, init) in map {
             // mmap-based-initialization only works for defined memories with a
             // known starting point of all zeros, so bail out if the mmeory is
@@ -596,7 +596,7 @@ mod test {
 
     fn create_memfd_with_data(offset: usize, data: &[u8]) -> Result<MemoryImage> {
         // Offset must be page-aligned.
-        let page_size = region::page::size();
+        let page_size = crate::page_size();
         assert_eq!(offset & (page_size - 1), 0);
         let memfd = create_memfd()?;
         memfd.as_file().write_all(data)?;

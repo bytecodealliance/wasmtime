@@ -193,7 +193,7 @@ impl<T> WastContext<T> {
                     // function from one instance and put it into the linker
                     // (must go through the host right now).
                     let mut linker = self.component_linker.instance(name.name())?;
-                    for (name, module) in instance.modules(&self.store) {
+                    for (name, module) in instance.exports(&mut self.store).root().modules() {
                         linker.module(name, module)?;
                     }
                 }

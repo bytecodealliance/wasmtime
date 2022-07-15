@@ -16,7 +16,7 @@ use crate::settings::Flags;
 use crate::{
     ir::{
         condcodes::*, immediates::*, types::*, AtomicRmwOp, Endianness, Inst, InstructionData,
-        MemFlags, Opcode, StackSlot, TrapCode, Value, ValueList,
+        MemFlags, Opcode, TrapCode, Value, ValueList,
     },
     isa::unwind::UnwindInst,
     machinst::{InsnOutput, LowerCtx, VCodeConstant, VCodeConstantData},
@@ -77,7 +77,7 @@ where
     }
 
     fn abi_accumulate_outgoing_args_size(&mut self, abi: &ABISig) -> Unit {
-        let off = abi.stack_arg_space() + abi.stack_ret_space();
+        let off = abi.sized_stack_arg_space() + abi.sized_stack_ret_space();
         self.lower_ctx
             .abi()
             .accumulate_outgoing_args_size(off as u32);
@@ -529,17 +529,6 @@ where
         } else {
             None
         }
-    }
-
-    #[inline]
-    fn abi_stackslot_addr(
-        &mut self,
-        dst: WritableReg,
-        stack_slot: StackSlot,
-        offset: Offset32,
-    ) -> MInst {
-        let offset = u32::try_from(i32::from(offset)).unwrap();
-        self.lower_ctx.abi().stackslot_addr(stack_slot, offset, dst)
     }
 
     #[inline]

@@ -28,7 +28,21 @@ pub fn expand_global_value(
             readonly,
         } => load_addr(inst, func, base, offset, global_type, readonly, isa),
         ir::GlobalValueData::Symbol { tls, .. } => symbol(inst, func, global_value, isa, tls),
+        ir::GlobalValueData::DynScaleTargetConst { vector_type } => {
+            const_vector_scale(inst, func, vector_type, isa)
+        }
     }
+}
+
+fn const_vector_scale(inst: ir::Inst, func: &mut ir::Function, ty: ir::Type, isa: &dyn TargetIsa) {
+    assert!(ty.bytes() <= 16);
+
+    // Use a minimum of 128-bits for the base type.
+    let base_bytes = std::cmp::max(ty.bytes(), 16);
+    let scale = (isa.dynamic_vector_bytes(ty) / base_bytes) as i64;
+    assert!(scale > 0);
+    let pos = FuncCursor::new(func).at_inst(inst);
+    pos.func.dfg.replace(inst).iconst(isa.pointer_type(), scale);
 }
 
 /// Expand a `global_value` instruction for a vmctx global.

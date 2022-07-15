@@ -5,6 +5,7 @@ mod builder;
 pub mod condcodes;
 pub mod constant;
 pub mod dfg;
+pub mod dynamic_type;
 pub mod entities;
 mod extfunc;
 mod extname;
@@ -33,9 +34,10 @@ pub use crate::ir::builder::{
 };
 pub use crate::ir::constant::{ConstantData, ConstantPool};
 pub use crate::ir::dfg::{DataFlowGraph, ValueDef};
+pub use crate::ir::dynamic_type::{DynamicTypeData, DynamicTypes};
 pub use crate::ir::entities::{
-    Block, Constant, FuncRef, GlobalValue, Heap, Immediate, Inst, JumpTable, SigRef, StackSlot,
-    Table, Value,
+    Block, Constant, DynamicStackSlot, DynamicType, FuncRef, GlobalValue, Heap, Immediate, Inst,
+    JumpTable, SigRef, StackSlot, Table, Value,
 };
 pub use crate::ir::extfunc::{
     AbiParam, ArgumentExtension, ArgumentPurpose, ExtFuncData, Signature,
@@ -53,7 +55,9 @@ pub use crate::ir::libcall::{get_probestack_funcref, LibCall};
 pub use crate::ir::memflags::{Endianness, MemFlags};
 pub use crate::ir::progpoint::{ExpandedProgramPoint, ProgramOrder, ProgramPoint};
 pub use crate::ir::sourceloc::SourceLoc;
-pub use crate::ir::stackslot::{StackSlotData, StackSlotKind, StackSlots};
+pub use crate::ir::stackslot::{
+    DynamicStackSlotData, DynamicStackSlots, StackSlotData, StackSlotKind, StackSlots,
+};
 pub use crate::ir::table::TableData;
 pub use crate::ir::trapcode::TrapCode;
 pub use crate::ir::types::Type;
