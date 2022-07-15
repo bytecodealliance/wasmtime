@@ -36,9 +36,23 @@ fn build_host_isa(
     let mut builder = cranelift_native::builder_with_options(infer_native_flags)
         .expect("Unable to build a TargetIsa for the current host");
 
+    // Copy ISA Flags
     for value in isa_flags {
         builder.set(value.name, &value.value_string()).unwrap();
     }
+
+    // We need to force disable stack probing, since we don't support it yet.
+    let flags = {
+        let mut flags_builder = settings::builder();
+
+        // Copy all flags
+        for flag in flags.iter() {
+            flags_builder.set(flag.name, &flag.value_string()).unwrap();
+        }
+
+        flags_builder.set("enable_probestack", "false").unwrap();
+        settings::Flags::new(flags_builder)
+    };
 
     builder.finish(flags).unwrap()
 }
@@ -118,20 +132,20 @@ impl SubTest for TestRun {
             return Ok(());
         }
 
-        // We can't use the requested ISA directly since it does not contain info
-        // about the operating system / calling convention / etc..
-        //
-        // Copy the requested ISA flags into the host ISA and use that.
-        let isa = build_host_isa(false, context.flags.clone(), requested_isa.isa_flags());
-
         let test_env = RuntestEnvironment::parse(&context.details.comments[..])?;
 
-        let mut compiler = SingleFunctionCompiler::new(isa);
         for comment in context.details.comments.iter() {
             if let Some(command) = parse_run_command(comment.text, &func.signature)? {
                 trace!("Parsed run command: {}", command);
 
-                let compiled_fn = compiler.compile(func.clone().into_owned())?;
+                // We can't use the requested ISA directly since it does not contain info
+                // about the operating system / calling convention / etc..
+                //
+                // Copy the requested ISA flags into the host ISA and use that.
+                let isa = build_host_isa(false, context.flags.clone(), requested_isa.isa_flags());
+
+                let compiled_fn =
+                    SingleFunctionCompiler::new(isa).compile(func.clone().into_owned())?;
                 command
                     .run(|_, run_args| {
                         test_env.validate_signature(&func)?;

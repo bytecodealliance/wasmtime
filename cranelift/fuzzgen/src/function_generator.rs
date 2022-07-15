@@ -691,7 +691,7 @@ where
         let sig = self.generate_signature()?;
 
         let mut fn_builder_ctx = FunctionBuilderContext::new();
-        let mut func = Function::with_name_signature(ExternalName::user(0, 0), sig.clone());
+        let mut func = Function::with_name_signature(ExternalName::user(0, 1), sig.clone());
 
         let mut builder = FunctionBuilder::new(&mut func, &mut fn_builder_ctx);
 

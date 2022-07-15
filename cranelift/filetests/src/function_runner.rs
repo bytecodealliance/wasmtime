@@ -4,13 +4,12 @@ use core::mem;
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::{condcodes::IntCC, Function, InstBuilder, Signature};
 use cranelift_codegen::isa::TargetIsa;
-use cranelift_codegen::{ir, settings, CodegenError, Context};
+use cranelift_codegen::{ir, settings, CodegenError};
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
+use cranelift_jit::{JITBuilder, JITModule};
+use cranelift_module::{FuncId, Linkage, Module, ModuleError};
 use cranelift_native::builder_with_options;
-use log::trace;
-use memmap2::{Mmap, MmapMut};
 use std::cmp::max;
-use std::collections::HashMap;
 use thiserror::Error;
 
 /// Compile a single function.
@@ -25,16 +24,18 @@ use thiserror::Error;
 /// ```
 /// use cranelift_filetests::SingleFunctionCompiler;
 /// use cranelift_reader::parse_functions;
+/// use cranelift_codegen::data_value::DataValue;
 ///
 /// let code = "test run \n function %add(i32, i32) -> i32 {  block0(v0:i32, v1:i32):  v2 = iadd v0, v1  return v2 }".into();
 /// let func = parse_functions(code).unwrap().into_iter().nth(0).unwrap();
-/// let mut compiler = SingleFunctionCompiler::with_default_host_isa().unwrap();
+/// let compiler = SingleFunctionCompiler::with_default_host_isa().unwrap();
 /// let compiled_func = compiler.compile(func).unwrap();
-/// println!("Address of compiled function: {:p}", compiled_func.as_ptr());
+///
+/// let returned = compiled_func.call(&vec![DataValue::I32(2), DataValue::I32(40)]);
+/// assert_eq!(vec![DataValue::I32(42)], returned);
 /// ```
 pub struct SingleFunctionCompiler {
     isa: Box<dyn TargetIsa>,
-    trampolines: HashMap<Signature, Trampoline>,
 }
 
 impl SingleFunctionCompiler {
@@ -42,8 +43,7 @@ impl SingleFunctionCompiler {
     /// host machine, this [TargetIsa] must match the host machine's ISA (see
     /// [SingleFunctionCompiler::with_host_isa]).
     pub fn new(isa: Box<dyn TargetIsa>) -> Self {
-        let trampolines = HashMap::new();
-        Self { isa, trampolines }
+        Self { isa }
     }
 
     /// Build a [SingleFunctionCompiler] using the host machine's ISA and the passed flags.
@@ -66,27 +66,47 @@ impl SingleFunctionCompiler {
     ///  - compile the [Function]
     ///  - compile a `Trampoline` for the [Function]'s signature (or used a cached `Trampoline`;
     ///    this makes it possible to call functions when the signature is not known until runtime.
-    pub fn compile(&mut self, function: Function) -> Result<CompiledFunction, CompilationError> {
+    pub fn compile(self, function: Function) -> Result<CompiledFunction, CompilationError> {
         let signature = function.signature.clone();
         if signature.call_conv != self.isa.default_call_conv() {
             return Err(CompilationError::InvalidTargetIsa);
         }
 
-        // Compile the function itself.
-        let code_page = compile(function, self.isa.as_ref())?;
+        let trampoline = make_trampoline(&signature, self.isa.as_ref());
 
-        // Compile the trampoline to call it, if necessary (it may be cached).
-        let isa = self.isa.as_ref();
-        let trampoline = self
-            .trampolines
-            .entry(signature.clone())
-            .or_insert_with(|| {
-                let ir = make_trampoline(&signature, isa);
-                let code = compile(ir, isa).expect("failed to compile trampoline");
-                Trampoline::new(code)
-            });
+        let builder = JITBuilder::with_isa(self.isa, cranelift_module::default_libcall_names());
+        let mut module = JITModule::new(builder);
+        let mut ctx = module.make_context();
 
-        Ok(CompiledFunction::new(code_page, signature, trampoline))
+        let name = format!("{}", function.name);
+        let func_id = module.declare_function(&name, Linkage::Local, &function.signature)?;
+
+        // Build and declare the trampoline in the module
+        let trampoline_name = format!("{}", trampoline.name);
+        let trampoline_id =
+            module.declare_function(&trampoline_name, Linkage::Local, &trampoline.signature)?;
+
+        // Define both functions
+        let func_signature = function.signature.clone();
+        ctx.func = function;
+        module.define_function(func_id, &mut ctx)?;
+        module.clear_context(&mut ctx);
+
+        ctx.func = trampoline;
+        module.define_function(trampoline_id, &mut ctx)?;
+        module.clear_context(&mut ctx);
+
+        // Finalize the functions which we just defined, which resolves any
+        // outstanding relocations (patching in addresses, now that they're
+        // available).
+        module.finalize_definitions();
+
+        Ok(CompiledFunction::new(
+            module,
+            func_signature,
+            func_id,
+            trampoline_id,
+        ))
     }
 }
 
@@ -100,34 +120,16 @@ pub enum CompilationError {
     /// Cranelift codegen error.
     #[error("Cranelift codegen error")]
     CodegenError(#[from] CodegenError),
+    /// Module Error
+    #[error("Module error")]
+    ModuleError(#[from] ModuleError),
     /// Memory mapping error.
     #[error("Memory mapping error")]
     IoError(#[from] std::io::Error),
 }
 
-/// Contains the compiled code to move memory-allocated [DataValue]s to the correct location (e.g.
-/// register, stack) dictated by the calling convention before calling a [CompiledFunction]. Without
-/// this, it would be quite difficult to correctly place [DataValue]s since both the calling
-/// convention and function signature are not known until runtime. See [make_trampoline] for the
-/// Cranelift IR used to build this.
-pub struct Trampoline {
-    page: Mmap,
-}
-
-impl Trampoline {
-    /// Build a new [Trampoline].
-    pub fn new(page: Mmap) -> Self {
-        Self { page }
-    }
-
-    /// Return a pointer to the compiled code.
-    fn as_ptr(&self) -> *const u8 {
-        self.page.as_ptr()
-    }
-}
-
 /// Container for the compiled code of a [Function]. This wrapper allows users to call the compiled
-/// function through the use of a [Trampoline].
+/// function through the use of a trampoline.
 ///
 /// ```
 /// use cranelift_filetests::SingleFunctionCompiler;
@@ -136,44 +138,59 @@ impl Trampoline {
 ///
 /// let code = "test run \n function %add(i32, i32) -> i32 {  block0(v0:i32, v1:i32):  v2 = iadd v0, v1  return v2 }".into();
 /// let func = parse_functions(code).unwrap().into_iter().nth(0).unwrap();
-/// let mut compiler = SingleFunctionCompiler::with_default_host_isa().unwrap();
+/// let compiler = SingleFunctionCompiler::with_default_host_isa().unwrap();
 /// let compiled_func = compiler.compile(func).unwrap();
 ///
 /// let returned = compiled_func.call(&vec![DataValue::I32(2), DataValue::I32(40)]);
 /// assert_eq!(vec![DataValue::I32(42)], returned);
 /// ```
-pub struct CompiledFunction<'a> {
-    page: Mmap,
+pub struct CompiledFunction {
+    /// We need to store this since it contains the underlying memory for the functions
+    /// Store it in an [Option] so that we can later drop it.
+    module: Option<JITModule>,
     signature: Signature,
-    trampoline: &'a Trampoline,
+    func_id: FuncId,
+    trampoline_id: FuncId,
 }
 
-impl<'a> CompiledFunction<'a> {
+impl CompiledFunction {
     /// Build a new [CompiledFunction].
-    pub fn new(page: Mmap, signature: Signature, trampoline: &'a Trampoline) -> Self {
+    pub fn new(
+        module: JITModule,
+        signature: Signature,
+        func_id: FuncId,
+        trampoline_id: FuncId,
+    ) -> Self {
         Self {
-            page,
+            module: Some(module),
             signature,
-            trampoline,
+            func_id,
+            trampoline_id,
         }
     }
 
-    /// Return a pointer to the compiled code.
-    pub fn as_ptr(&self) -> *const u8 {
-        self.page.as_ptr()
-    }
-
-    /// Call the [CompiledFunction], passing in [DataValue]s using a compiled [Trampoline].
+    /// Call the [CompiledFunction], passing in [DataValue]s using a compiled trampoline.
     pub fn call(&self, arguments: &[DataValue]) -> Vec<DataValue> {
         let mut values = UnboxedValues::make_arguments(arguments, &self.signature);
         let arguments_address = values.as_mut_ptr();
-        let function_address = self.as_ptr();
+
+        let module = self.module.as_ref().unwrap();
+        let function_ptr = module.get_finalized_function(self.func_id);
+        let trampoline_ptr = module.get_finalized_function(self.trampoline_id);
 
         let callable_trampoline: fn(*const u8, *mut u128) -> () =
-            unsafe { mem::transmute(self.trampoline.as_ptr()) };
-        callable_trampoline(function_address, arguments_address);
+            unsafe { mem::transmute(trampoline_ptr) };
+        callable_trampoline(function_ptr, arguments_address);
 
         values.collect_returns(&self.signature)
+    }
+}
+
+impl Drop for CompiledFunction {
+    fn drop(&mut self) {
+        // Freeing the module's memory erases the compiled functions.
+        // This should be safe since their pointers never leave this struct.
+        unsafe { self.module.take().unwrap().free_memory() }
     }
 }
 
@@ -229,32 +246,6 @@ impl UnboxedValues {
 
         returns
     }
-}
-
-/// Compile a [Function] to its executable bytes in memory.
-///
-/// This currently returns a [Mmap], a type from an external crate, so we wrap this up before
-/// exposing it in public APIs.
-fn compile(function: Function, isa: &dyn TargetIsa) -> Result<Mmap, CompilationError> {
-    // Set up the context.
-    let mut context = Context::new();
-    context.func = function;
-
-    // Compile and encode the result to machine code.
-    let compiled_code = context.compile(isa).map_err(|err| err.inner)?;
-    let mut code_page = MmapMut::map_anon(compiled_code.code_info().total_size as usize)?;
-
-    code_page.copy_from_slice(compiled_code.code_buffer());
-
-    let code_page = code_page.make_exec()?;
-    trace!(
-        "Compiled function {} with signature {} at: {:p}",
-        context.func.name,
-        context.func.signature,
-        code_page.as_ptr()
-    );
-
-    Ok(code_page)
 }
 
 /// Build the Cranelift IR for moving the memory-allocated [DataValue]s to their correct location
@@ -383,7 +374,7 @@ mod test {
         let function = test_file.functions[0].0.clone();
 
         // execute function
-        let mut compiler = SingleFunctionCompiler::with_default_host_isa().unwrap();
+        let compiler = SingleFunctionCompiler::with_default_host_isa().unwrap();
         let compiled_function = compiler.compile(function).unwrap();
         let returned = compiled_function.call(&[]);
         assert_eq!(returned, vec![DataValue::B(true)])
