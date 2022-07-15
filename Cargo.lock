@@ -3340,6 +3340,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "wasmtime-asm-macros"
+version = "0.40.0"
+dependencies = [
+ "cfg-if",
+]
+
+[[package]]
 name = "wasmtime-bench-api"
 version = "0.19.0"
 dependencies = [
@@ -3509,6 +3516,7 @@ dependencies = [
  "cc",
  "cfg-if",
  "rustix",
+ "wasmtime-asm-macros",
  "windows-sys",
 ]
 

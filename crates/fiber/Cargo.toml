@@ -18,6 +18,7 @@ cfg-if = "1.0"
 
 [target.'cfg(unix)'.dependencies]
 rustix = { version = "0.35.6", features = ["mm", "param"] }
+wasmtime-asm-macros = { version = "=0.40.0", path = "../asm-macros" }
 
 [target.'cfg(windows)'.dependencies.windows-sys]
 version = "0.36.1"

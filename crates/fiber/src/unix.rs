@@ -177,63 +177,6 @@ impl Suspend {
     }
 }
 
-// This macro itself generates a macro named `asm_func!` which is suitable for
-// generating a single `global_asm!`-defined function. This takes care of
-// platform-specific directives to get the symbol attributes correct (e.g. ELF
-// symbols get a size and are flagged as a function) and additionally handles
-// visibility across platforms. All symbols should be visible to Rust but not
-// visible externally outside of a `*.so`.
-cfg_if::cfg_if! {
-    if #[cfg(target_os = "macos")] {
-        macro_rules! asm_func {
-            ($name:tt, $($body:tt)*) => {
-                std::arch::global_asm!(concat!(
-                    ".p2align 4\n",
-                    ".private_extern _", $name, "\n",
-                    ".global _", $name, "\n",
-                    "_", $name, ":\n",
-                    $($body)*
-                ));
-            };
-        }
-        macro_rules! asm_sym {
-            ($name:tt) => (concat!("_", $name))
-        }
-    } else {
-        // Note that for now this "else" clause just assumes that everything
-        // other than macOS is ELF and has the various directives here for
-        // that.
-        cfg_if::cfg_if! {
-            if #[cfg(target_arch = "arm")] {
-                macro_rules! elf_func_type_header {
-                    ($name:tt) => (concat!(".type ", $name, ",%function\n"))
-                }
-            } else {
-                macro_rules! elf_func_type_header {
-                    ($name:tt) => (concat!(".type ", $name, ",@function\n"))
-                }
-            }
-        }
-
-        macro_rules! asm_func {
-            ($name:tt, $($body:tt)*) => {
-                std::arch::global_asm!(concat!(
-                    ".p2align 4\n",
-                    ".hidden ", $name, "\n",
-                    ".global ", $name, "\n",
-                    elf_func_type_header!($name),
-                    $name, ":\n",
-                    $($body)*
-                    ".size ", $name, ",.-", $name,
-                ));
-            };
-        }
-        macro_rules! asm_sym {
-            ($name:tt) => ($name)
-        }
-    }
-}
-
 cfg_if::cfg_if! {
     if #[cfg(target_arch = "aarch64")] {
         mod aarch64;
