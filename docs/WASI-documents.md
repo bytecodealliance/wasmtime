@@ -20,7 +20,7 @@ For some discussion of WASI's design inspiration, see the [Background document](
 For background on some of the design decisions in WASI, see [the rationale](WASI-rationale.md).
 
 For documentation of the exports required of programs using, see
-[the application ABI](https://github.com/WebAssembly/WASI/blob/master/design/application-abi.md).
+[the application ABI](https://github.com/WebAssembly/WASI/blob/main/legacy/application-abi.md).
 
 For some ideas of things that we may want to change about WASI in the
 short term, see the [possible changes](WASI-some-possible-changes.md) document.
